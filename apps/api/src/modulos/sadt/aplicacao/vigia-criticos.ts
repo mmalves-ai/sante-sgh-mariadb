@@ -4,9 +4,8 @@
 // interface do equipamento ou do apoio — a chave única impede o segundo aviso) e o painel relê pelo canal de eventos.
 // No mesmo ciclo, o aviso sem ciência no prazo sobe ao plantonista e depois ao supervisor (nivelDoAviso).
 // Nenhum dado de pessoa sai daqui: só contagens no log.
-// Pendência (pedido ao 02-09, saida/02-10.json): no banco do cliente a criação do aviso (avisarCriticos) ainda responde
-// 409 modelo-pendente. A falha é isolada por exame: o escalonamento dos avisos existentes segue, o cursor não avança
-// (o exame volta no ciclo seguinte, sem perda) e cada ciclo registra no log quantos exames ficaram sem aviso e o código.
+// A falha ao criar o aviso é isolada por exame: o escalonamento dos avisos existentes segue, o cursor não avança (o
+// exame volta no ciclo seguinte, sem perda) e cada ciclo registra no log quantos exames ficaram sem aviso e o código.
 // Melhoria: a vigia opera no banco do cliente pelo contexto do núcleo (processo automático: sem usuário), e cada aviso
 // e escalonamento vai à trilha_auditoria do cliente na mesma transação, com a tabela do modelo (aviso_valor_critico).
 import { CHAVES_SADT, EVENTOS_AUDITAVEIS, recursoDesligado } from '@sgh/contratos';

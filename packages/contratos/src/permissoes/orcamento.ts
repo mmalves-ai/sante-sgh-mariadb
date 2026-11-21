@@ -1,6 +1,6 @@
 // Permissões do orçamento empresarial, etapa 7 (M54-F7; ficha, seção 7 "Orçamento empresarial"; convencoes.md §12):
 // montar o orçamento anual por centro de custo e item, aprovar a versão e comparar com o realizado. Quem tem a opção no
-// outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES "Gestão de orçamento" (4261;
+// outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem "Gestão de orçamento" (4261;
 // catalogo-legado.json, pc): Tabelas 584 (Parâmetros 585); Lançamentos 586 (Orçamento 587, Gerar orçamento 588);
 // Relatórios 589 (Acompanhamento de orçamento 590, Modelos I a III 591 a 593, Comparativo 594). No pc nenhum grupo tem
 // as opções de Gestão de orçamento (preparo do M54, §2.6): a concessão vai também pelo perfil complementar `controller`

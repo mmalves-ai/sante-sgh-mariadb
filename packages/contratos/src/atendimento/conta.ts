@@ -7,9 +7,9 @@
 import { SITUACOES_CONTA, type SituacaoConta } from './vocabulario.js';
 
 export interface ContaLida {
-  /** FCCTAEXT.FECHADA: N aberta, S fechada, A apresentada; null: o atendimento não tem conta. */
+  /** Situação da conta: N aberta, S fechada, A apresentada; null: o atendimento não tem conta. */
   readonly fechada: string | null;
-  /** FCCTAEXT.IND_EMI: T emitida. */
+  /** Emissão da conta: T emitida. */
   readonly emitida: string | null;
 }
 

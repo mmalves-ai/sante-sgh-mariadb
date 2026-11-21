@@ -53,7 +53,7 @@ const erro = ref<unknown>(null);
 const aviso = ref<string | null>(null);
 const dinheiro = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dia = (d: string) => d.slice(0, 10).split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+const hora = (h: string) => h.slice(0, 5);
 const horaDe = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 

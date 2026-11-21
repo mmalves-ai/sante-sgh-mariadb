@@ -10,8 +10,8 @@
 // Melhoria: a situação do modelo chega à tela como o estado do domínio (estadoDaSituacao), com a versão lida para a
 // trava otimista da mudança de estado; a trilha da gravação direta leva a tabela real gravada e a chave de idempotência
 // da requisição (o reenvio não grava de novo).
-// Pendências de modelo (pedidos do lote 03-01, saida/03-01.json): o pedido do portal do médico externo (conta do portal
-// e versões do pedido) e o registro do ato pela tela (registrarCirurgia) recusam com 409 modelo-pendente.
+// Os pedidos do portal do médico externo vêm da conta do portal no agendamento (conta_portal_profissional_externo_id,
+// com o nome e o nascimento informados) e as versões do pedido corrigido, de agendamento_cirurgico_versao.
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -31,7 +31,7 @@ import {
   portaIndisponivel,
   type TrilhaDaGravacao,
 } from '../exames/public-api.js';
-import { civil, FUSO_PADRAO, instante, lista, n, nn, texto, verdadeiro } from './banco-apoio.js';
+import { civil, dataOuNulo, FUSO_PADRAO, instante, lista, n, nn, texto, verdadeiro } from './banco-apoio.js';
 import {
   type EscritaDireta,
   gravadorCirurgia,
@@ -72,7 +72,7 @@ type Linha = Record<string, unknown>;
 /** Teto das listas do mapa (o resto vem com `truncado`). */
 export const TETO_CIRURGIA = 500;
 /** Situações em que o agendamento ocupa a sala. */
-export const SITUACOES_NA_SALA = ['agendado', 'confirmado', 'em_andamento', 'realizado'] as const;
+export const SITUACOES_NA_SALA = ['agendado', 'confirmado', 'no_bloco', 'em_andamento', 'realizado'] as const;
 const NA_SALA = SITUACOES_NA_SALA.map((s) => `'${s}'`).join(', ');
 /** Funções da equipe lidas da agenda: as da tela mais o pediatra (par próprio da resposta). */
 const FUNCOES_LIDAS: readonly { funcao: string; cod: string; id: string }[] = [
@@ -86,14 +86,15 @@ const SQL_AGENDAMENTO = `
          a.fonte_pagadora_id, a.especialidade_medica_id, a.tipo_anestesia_id, a.reserva_uti, a.observacao,
          a.cirurgiao_profissional_id, a.carater_cirurgia_id, a.situacao, a.solicitado_em, a.cancelado_em,
          a.alterado_em, a.versao, u.login AS usuario, ms.codigo AS motivo,
+         a.conta_portal_profissional_externo_id, a.paciente_informado, a.nascimento_informado,
          (SELECT ap.procedimento_cirurgico_id FROM agendamento_cirurgico_procedimento ap
            WHERE ap.agendamento_cirurgico_id = a.id AND ap.principal = TRUE AND ap.excluido_em IS NULL LIMIT 1) AS procedimento,
          (SELECT COUNT(*) FROM pendencia_agendamento_cirurgico pa
            WHERE pa.agendamento_cirurgico_id = a.id AND pa.excluido_em IS NULL
              AND pa.situacao IN ('aberta', 'em_andamento')) AS pendencias_abertas
     FROM agendamento_cirurgico a
-    JOIN paciente p ON p.id = a.paciente_id
-    JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+    LEFT JOIN paciente p ON p.id = a.paciente_id
+    LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
     LEFT JOIN usuario u ON u.id = a.criado_por
     LEFT JOIN motivo_suspensao_cirurgia ms ON ms.id = a.motivo_suspensao_cirurgia_id
    WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL`;
@@ -302,7 +303,7 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
       especialidade: n(x['especialidade_medica_id']),
       anestesia: n(x['tipo_anestesia_id']),
       pares: eq.get(n(x['id'])) ?? {},
-      recursos: verdadeiro(x['reserva_uti']) ? ['CTI'] : [],
+      recursos: verdadeiro(x['reserva_uti']) ? ['cti'] : [],
       observacao: texto(x['observacao']),
       usuario: texto(x['usuario']),
     }));
@@ -336,7 +337,15 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
       atualizadoEm: civil(x['alterado_em'], fuso),
       pendenciasAbertas: n(x['pendencias_abertas']),
       excecao: false,
-      portal: null,
+      portal:
+        x['conta_portal_profissional_externo_id'] === null ||
+        x['conta_portal_profissional_externo_id'] === undefined
+          ? null
+          : {
+              acesso: n(x['conta_portal_profissional_externo_id']),
+              paciente: texto(x['paciente_informado'] ?? x['paciente']),
+              nascimento: dataOuNulo(x['nascimento_informado']),
+            },
     };
   }
 
@@ -726,27 +735,50 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
     });
   }
 
-  /** O pedido do portal do médico externo aguarda o modelo (pedido de DDL): nenhuma conta do portal tem pedido. */
-  estadosDoPortal(): Promise<PedidoCirurgia[]> {
-    return Promise.reject(
-      new ErroOperacao(
-        409,
-        'modelo-pendente',
-        'Pedidos do portal indisponíveis',
-        'Os pedidos do portal do médico externo aguardam a conta do portal no agendamento cirúrgico (pedido de modelo).',
-      ),
+  /** Os pedidos de uma conta do portal do médico externo desde a data (a solicitação ainda sem paciente cadastrado vem com o nome informado). */
+  estadosDoPortal(c: ContextoPortaM18, acesso: number, desde: string): Promise<PedidoCirurgia[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `${SQL_AGENDAMENTO} AND a.conta_portal_profissional_externo_id = ? AND a.solicitado_em >= ?
+            ORDER BY a.solicitado_em DESC, a.id DESC LIMIT ${TETO_CIRURGIA}`,
+          [est, acesso, instante(`${desde.slice(0, 10)} 00:00`, fuso)],
+        )
+      ).map((x) => this.pedidoDe(x, fuso)),
     );
   }
 
-  versoesDosPedidos(_c: ContextoPortaM18, ids: readonly number[]): Promise<VersaoDoPedido[]> {
+  /** As versões anteriores dos pedidos (a mais nova primeiro em cada pedido), guardadas a cada correção. */
+  versoesDosPedidos(c: ContextoPortaM18, ids: readonly number[]): Promise<VersaoDoPedido[]> {
     if (ids.length === 0) return Promise.resolve([]);
-    return Promise.reject(
-      new ErroOperacao(
-        409,
-        'modelo-pendente',
-        'Versões do pedido indisponíveis',
-        'As versões do pedido do portal aguardam a tabela de versões no modelo (pedido de DDL).',
-      ),
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `SELECT v.agendamento_cirurgico_id, v.numero_versao, v.dados, v.motivo, v.substituida_em
+             FROM agendamento_cirurgico_versao v
+             JOIN agendamento_cirurgico a ON a.id = v.agendamento_cirurgico_id
+            WHERE a.estabelecimento_id = ? AND v.excluido_em IS NULL
+              AND v.agendamento_cirurgico_id IN (${lista(ids.length)})
+            ORDER BY v.agendamento_cirurgico_id, v.numero_versao DESC`,
+          [est, ...ids],
+        )
+      ).map((x) => {
+        const d = (typeof x['dados'] === 'string' ? JSON.parse(x['dados']) : (x['dados'] ?? {})) as Linha;
+        return {
+          idEstado: n(x['agendamento_cirurgico_id']),
+          versao: n(x['numero_versao']),
+          sala: n(d['sala']),
+          inicio: texto(d['inicio']),
+          duracaoMin: n(d['duracaoMin']),
+          procedimento: n(d['procedimento']),
+          convenio: n(d['convenio']),
+          observacao:
+            d['observacao'] === null || d['observacao'] === undefined ? null : texto(d['observacao']),
+          paciente: d['paciente'] === null || d['paciente'] === undefined ? null : texto(d['paciente']),
+          motivo: texto(x['motivo']),
+          substituidaEm: civil(x['substituida_em'], fuso) ?? '',
+        };
+      }),
     );
   }
 

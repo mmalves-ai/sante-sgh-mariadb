@@ -10,11 +10,11 @@
 // e o estorno na janela fechada ('janela-fechada') e o segundo fechamento total ('ja-fechado'), com os mesmos códigos
 // da porta em memória (a tela também confere pelas janelas fechadas, conferirLancamento do domínio); o sinal importado
 // no fechamento só vem de aferição deste estabelecimento e do paciente do balanço.
-// Pendências de modelo (pedido do lote 02-04): o horário da prescrição no lançamento (balanco_lancamento.
-// horario_administracao_id) e a chave do ato (idempotência por lançamento); até lá, o fechamento com ganhos de
-// checagem pendentes é recusado com 'modelo-pendente' e o reenvio do mesmo lançamento não é reconhecido.
+// O ganho da checagem entra no fechamento ligado ao horário da prescrição (balanco_lancamento.horario_administracao_id),
+// uma vez só; o lançamento manual guarda a chave do ato (chave_ato) e o reenvio do mesmo pedido devolve o já gravado.
 import type { DominiosBalanco, FechamentoBalancoLido, LancamentoBalancoLido } from '@sgh/contratos';
-import { type Executor, ErroOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { createHash } from 'node:crypto';
+import { type Executor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import {
   booleano,
@@ -40,7 +40,7 @@ import { afericaoDoSinal, gravacaoDireta } from './gravacao-direta.js';
 import { letraDaSituacao } from './operacoes.js';
 import type { PortaEnfermagem } from './porta.js';
 import type { NucleoEnfermagem } from './porta-propria.js';
-import type { ChecagemParaBalanco, Internado, SinaisParaBalanco } from './tipos.js';
+import type { ChecagemParaBalanco, Internado, PendenteDoFechamento, SinaisParaBalanco } from './tipos.js';
 
 type Linha = Record<string, unknown>;
 
@@ -50,7 +50,7 @@ const INTENSIDADES = [1, 2, 3, 4].map((n) => ({ codigo: n, nome: `${n}+` }));
 const SQL_LANCAMENTOS = `
   SELECT l.id, l.sentido, l.fonte_lancamento, l.grupo_balanco_hidrico_id, v.codigo AS via, l.intensidade, l.aspecto,
          l.estimado, l.volume_ml, l.ocorrido_em, l.descricao, l.afericao_id, l.estornado_balanco_lancamento_id,
-         l.motivo_estorno, l.registrado_sem_conexao, l.registrado_em, b.atendimento_id,
+         l.motivo_estorno, l.registrado_sem_conexao, l.registrado_em, b.atendimento_id, l.horario_administracao_id,
          (SELECT e.id FROM balanco_lancamento e WHERE e.estornado_balanco_lancamento_id = l.id
            AND e.excluido_em IS NULL LIMIT 1) AS estornado_por,
          (SELECT av.id FROM afericao_valor av WHERE av.afericao_id = l.afericao_id AND av.excluido_em IS NULL
@@ -79,7 +79,7 @@ function lancamentoDe(r: Linha, fuso: string): LancamentoBalancoLido & { readonl
     volumeMl: num(r['volume_ml']),
     horaReal: (civilDe(r['ocorrido_em'], fuso) ?? '').slice(0, 16),
     descricao: textoOuNulo(r['descricao']),
-    horario: null,
+    horario: numOuNulo(r['horario_administracao_id']),
     sinal: numOuNulo(r['sinal']),
     estornado: numOuNulo(r['estornado_balanco_lancamento_id']),
     estornadoPor: numOuNulo(r['estornado_por']),
@@ -91,13 +91,9 @@ function lancamentoDe(r: Linha, fuso: string): LancamentoBalancoLido & { readonl
   };
 }
 
-const pendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Gravação indisponível',
-    `${o} aguarda o modelo do banco próprio: nada foi gravado.`,
-  );
+/** A chave do ato no banco (até 80 caracteres): a chave longa vira o seu resumo. */
+const chaveDoAto = (chave: string) =>
+  chave.length <= 80 ? chave : createHash('sha256').update(chave).digest('hex');
 
 export class PortaBalancoPropria implements PortaBalanco {
   readonly destino = 'banco' as const;
@@ -440,9 +436,69 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
     if (!v) throw recusa('via-inexistente', 'A via informada não está no cadastro.');
     return Number(v.id);
   };
+  /**
+   * O ganho de um horário checado (administrado) entra no balanço uma vez só: o horário tem de ser do atendimento, estar
+   * administrado e não ter lançamento vigente (não estornado) ligado a ele; senão a tela mudou e o fechamento recusa.
+   */
+  const ganhoDaChecagem = async (
+    p: PendenteDoFechamento,
+    o: { balanco: number; paciente: number; profissional: number; fuso: string },
+  ) => {
+    const { balanco, paciente, profissional, fuso } = o;
+    const [h] = await tx.consultarParaAtualizar<Linha>(
+      `SELECT h.id, h.prescricao_item_id, pi.via_de_uso_id, pi.item_prescritivel_id,
+              (SELECT COUNT(*) FROM balanco_lancamento l
+                WHERE l.horario_administracao_id = h.id AND l.excluido_em IS NULL AND l.fonte_lancamento <> 'estorno'
+                  AND NOT EXISTS (SELECT 1 FROM balanco_lancamento e WHERE e.estornado_balanco_lancamento_id = l.id
+                                   AND e.excluido_em IS NULL)) AS ja
+         FROM horario_administracao h
+         JOIN situacao_checagem sc ON sc.id = h.situacao_checagem_id
+         JOIN prescricao_item pi ON pi.id = h.prescricao_item_id
+         JOIN atendimento a ON a.id = h.atendimento_id
+        WHERE h.id = ? AND h.estabelecimento_id = ? AND h.excluido_em IS NULL AND a.paciente_id = ?
+          AND sc.categoria IN ('administrado', 'administrado_parcial')`,
+      [p.referencia, est, paciente],
+    );
+    if (!h || num(h['ja']) > 0)
+      throw recusa(
+        'balanco-mudou',
+        'Um ganho da checagem já entrou no balanço ou deixou de estar administrado: confira e feche de novo.',
+      );
+    return tx.incluir('balanco_lancamento', {
+      balanco_hidrico_paciente_id: balanco,
+      sentido: 'ganho',
+      grupo_balanco_hidrico_id: p.grupo,
+      via_de_uso_id: p.via ? await viaId(p.via) : numOuNulo(h['via_de_uso_id']),
+      item_prescritivel_id: numOuNulo(h['item_prescritivel_id']),
+      prescricao_item_id: num(h['prescricao_item_id']),
+      horario_administracao_id: num(h['id']),
+      volume_ml: p.volumeMl,
+      descricao: p.descricao.slice(0, 120),
+      ocorrido_em: instanteDe(p.horaReal, fuso),
+      registrado_em: new Date(),
+      fonte_lancamento: 'checagem',
+      profissional_id: profissional,
+    });
+  };
   return {
     async lancar(x) {
       const profissional = await exigirProfissional(tx, tx.contexto, est);
+      const chave = x.chave ? chaveDoAto(x.chave) : null;
+      if (chave) {
+        const [ja] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT l.id, l.profissional_id, b.atendimento_id FROM balanco_lancamento l
+             JOIN balanco_hidrico_paciente b ON b.id = l.balanco_hidrico_paciente_id
+            WHERE b.estabelecimento_id = ? AND l.chave_ato = ? AND l.excluido_em IS NULL
+            LIMIT 1`,
+          [est, chave],
+        );
+        if (ja && (num(ja['atendimento_id']) !== x.atendimento || num(ja['profissional_id']) !== profissional))
+          throw recusa(
+            'chave-reutilizada',
+            'A chave deste pedido já foi usada em outro lançamento: refaça o lançamento na tela.',
+          );
+        if (ja) return { id: num(ja['id']), repetida: true };
+      }
       const balanco = await balancoDaJanela(x.atendimento, x.paciente, x.janelaInicio);
       if ((await fechamentoTotal(balanco)) !== null)
         throw recusa(
@@ -464,6 +520,7 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
         fonte_lancamento: 'manual',
         registrado_sem_conexao: x.origemOffline,
         profissional_id: profissional,
+        chave_ato: chave,
       });
       return { id, repetida: false };
     },
@@ -501,8 +558,6 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
       });
     },
     async fechar(f) {
-      if (f.pendentes.some((p) => p.origem === 'checagem'))
-        throw pendente('O lançamento dos ganhos da checagem no fechamento');
       const profissional = await exigirProfissional(tx, tx.contexto, est);
       const fuso = await fusoP;
       const inicio = instanteDe(f.inicio, fuso);
@@ -528,6 +583,10 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
         );
       const importados: number[] = [];
       for (const p of f.pendentes) {
+        if (p.origem === 'checagem') {
+          importados.push(await ganhoDaChecagem(p, { balanco, paciente: f.paciente, profissional, fuso }));
+          continue;
+        }
         const afericao = await afericaoDoSinal(tx, est, p.referencia, f.paciente);
         importados.push(
           await tx.incluir('balanco_lancamento', {

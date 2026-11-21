@@ -384,7 +384,7 @@ async function fechar(): Promise<void> {
           · {{ b.leito || t('enfermagem.comum.semLeito') }} ·
           {{ t('enfermagem.comum.atendimento', { numero: b.numero }) }} ·
           <span class="secundario">{{
-            t('enfermagem.balanco.horaCorte', { hora: `${b.horaCorte.slice(0, 2)}:${b.horaCorte.slice(2)}` })
+            t('enfermagem.balanco.horaCorte', { hora: b.horaCorte })
           }}</span>
         </p>
         <SanteAlerta

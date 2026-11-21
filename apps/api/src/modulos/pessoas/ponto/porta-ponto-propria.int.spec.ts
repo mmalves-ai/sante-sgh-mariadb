@@ -265,6 +265,10 @@ describe.skipIf(SEM_BANCO)('porta própria do ponto (MariaDB, cliente f22_o3)', 
   afterAll(async () => {
     await limparMassa(nucleo, m, async (e) => {
       await e.executar('DELETE FROM ajuste_ponto WHERE colaborador_id = ?', [m.colab]);
+      await e.executar('DELETE FROM evento_periodo_ponto WHERE vinculo_trabalho_id IN (?, ?)', [
+        m.vinculo,
+        m.vinculo2,
+      ]);
       await e.executar('DELETE FROM marcacao_ponto WHERE vinculo_trabalho_id IN (?, ?)', [
         m.vinculo,
         m.vinculo2,
@@ -386,7 +390,7 @@ describe.skipIf(SEM_BANCO)('porta própria do ponto (MariaDB, cliente f22_o3)', 
     expect(linha?.fonte).toBe('importacao');
   });
 
-  it('ajuste: pedido por um, recusado ao mesmo, decidido por outro com a versão; desistência; justificativa pendente', async () => {
+  it('ajuste: pedido por um, recusado ao mesmo, decidido por outro com a versão; desistência; abono; trilha do período', async () => {
     const pedir = (tipo: string) =>
       porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'ajuste_ponto'), (g) =>
         g.incluirAjuste({
@@ -436,24 +440,132 @@ describe.skipIf(SEM_BANCO)('porta própria do ponto (MariaDB, cliente f22_o3)', 
       situacao: 'desistido',
       motivoDecisao: 'Pedi errado',
     });
-    expect(await codigo(pedir('justificativa'))).toBe('modelo-pendente');
+    // O abono (justificativa) sem tipo de movimento nem minutos é recusado; completo, grava o vínculo, o tipo e os minutos.
+    expect(await codigo(pedir('justificativa'))).toBe('abono-incompleto');
+    const mov = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+      l.uma<{ id: number }>('SELECT id FROM tipo_movimento_ponto WHERE ativo ORDER BY id LIMIT 1'),
+    );
+    if (mov) {
+      const abono = await porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'ajuste_ponto'), (g) =>
+        g.incluirAjuste({
+          vinculo: m.vinculo,
+          dia: '2026-10-07',
+          tipo: 'justificativa',
+          marcacao: null,
+          instante: null,
+          movimento: Number(mov.id),
+          justificativa: m.justificativa,
+          periodo: null,
+          minutos: 30,
+          motivo: 'Consulta médica',
+          por: 'rh',
+        }),
+      );
+      expect(await porta.ajuste(ctx(m, m.rh), abono)).toMatchObject({
+        vinculo: m.vinculo,
+        dia: '2026-10-07',
+        tipo: 'justificativa',
+        movimento: Number(mov.id),
+        minutos: 30,
+        situacao: 'pendente',
+      });
+    }
+    // A trilha do período: o fechamento e a ciência, que aponta o fechamento.
+    const evento = (acao: 'fechado' | 'ciencia', hash: string | null, concorda: boolean | null) =>
+      porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'evento_periodo_ponto'), (g) =>
+        g.incluirEventoPeriodo({
+          vinculo: m.vinculo,
+          competencia: '2026-10',
+          acao,
+          ref: null,
+          hash,
+          totais: null,
+          concorda,
+          texto: null,
+          por: 'rh',
+        }),
+      );
+    expect(await codigo(evento('fechado', null, null))).not.toBe('ok');
+    const fechado = await evento('fechado', 'a'.repeat(64), null);
+    const ciencia = await evento('ciencia', 'a'.repeat(64), true);
+    const evs = await porta.eventosPeriodo(ctx(m, m.rh), m.vinculo);
+    expect(evs.map((x) => [x.id, x.acao, x.competencia, x.ref])).toEqual([
+      [fechado, 'fechado', '2026-10', null],
+      [ciencia, 'ciencia', '2026-10', fechado],
+    ]);
+    expect((await porta.eventosDaCompetencia(ctx(m, m.rh), '2026-10')).length).toBeGreaterThanOrEqual(2);
+    // O banco de horas: sem regra do regime do colaborador o movimento é recusado (nunca some calado).
     expect(
       await codigo(
-        porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'fechamento_ponto'), (g) =>
-          g.incluirEventoPeriodo({
+        porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'movimento_banco_horas'), (g) =>
+          g.incluirMovimentoBanco({
             vinculo: m.vinculo,
             competencia: '2026-10',
-            acao: 'fechado',
-            ref: null,
-            hash: null,
-            totais: null,
-            concorda: null,
-            texto: null,
+            origem: 'acerto',
+            destino: 2,
+            minutos: 30,
+            fechamento: null,
+            motivo: 'acerto sintético',
             por: 'rh',
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('sem-regra-banco');
+    expect((await porta.saldosBanco(ctx(m, m.rh), [m.vinculo])).get(m.vinculo) ?? 0).toBe(0);
+    // A regra do regime: inclusão, alteração pela versão lida e desativação.
+    const regime = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+      l.uma<{ id: number }>('SELECT id FROM regime_jornada ORDER BY id LIMIT 1'),
+    );
+    if (regime) {
+      const gravar = (versao: number | null, cicloMeses: number) =>
+        porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'regra_banco_horas'), (g) =>
+          g.gravarRegraBanco({
+            regime: Number(regime.id),
+            destino: 2,
+            inicio: 2,
+            desde: '2026-10-01',
+            cicloMeses,
+            faltaDebita: true,
+            versao,
+            por: 'rh',
+          }),
+        );
+      const idRegra = await gravar(null, 6);
+      try {
+        expect(await codigo(gravar(null, 6))).toBe('regra-existente');
+        let regra = (await porta.regrasBanco(ctx(m, m.rh))).find((x) => x.regime === Number(regime.id));
+        expect(regra).toMatchObject({
+          id: idRegra,
+          destino: 2,
+          inicio: 2,
+          cicloMeses: 6,
+          faltaDebita: true,
+          ativo: true,
+        });
+        await gravar(regra!.versao, 12);
+        expect(await codigo(gravar(regra!.versao, 12))).toBe('desatualizado');
+        regra = (await porta.regrasBanco(ctx(m, m.rh))).find((x) => x.regime === Number(regime.id));
+        expect(regra).toMatchObject({ cicloMeses: 12 });
+        await porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'regra_banco_horas'), (g) =>
+          g.situacaoRegraBanco({
+            regime: Number(regime.id),
+            versao: regra!.versao,
+            ativo: false,
+            motivo: 'teste',
+            por: 'rh',
+          }),
+        );
+        expect(
+          (await porta.regrasBanco(ctx(m, m.rh))).find((x) => x.regime === Number(regime.id)),
+        ).toMatchObject({
+          ativo: false,
+        });
+      } finally {
+        await nucleo.escrever({ cliente: CLIENTE, correlacao: 't' }, (e) =>
+          e.executar('DELETE FROM regra_banco_horas WHERE id = ?', [idRegra]),
+        );
+      }
+    }
   });
 
   it('readmissão: a inclusão cai no vínculo vigente na data, não no primeiro; fora do período recusa; reenvio não duplica', async () => {

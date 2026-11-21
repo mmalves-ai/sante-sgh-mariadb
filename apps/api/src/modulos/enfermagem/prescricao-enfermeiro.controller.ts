@@ -220,7 +220,7 @@ export class PrescricaoEnfermeiroController {
     const dia = agora.slice(0, 10);
     const lista = await this.porta.consultasDoProfissional(s.porta, { vinculos: enf, dia });
     // A lista mostra nome e registro dos pacientes do dia: leitura de dado pessoal auditada (só a contagem no alvo).
-    req.sghAlvo = { tabelaAlvo: 'ATCABECATEND', chaveNaturalAlvo: `dia:${dia};n:${String(lista.length)}` };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', chaveNaturalAlvo: `dia:${dia};n:${String(lista.length)}` };
     return lista;
   }
 

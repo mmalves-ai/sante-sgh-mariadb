@@ -257,7 +257,7 @@ export class PessoasController {
   @HttpCode(200)
   @Permissao('pessoas.colaborador.desligar')
   @AuditadoNoHandler(
-    'executor: acesso.bloquearUsuario (TBCABTRILHA e SGH_TRILHA); SGH_PES_VINCULO, SGH_PES_HISTORICO e SGH_OUTBOX com a SGH_TRILHA',
+    'executor: acesso.bloquearUsuario (bloqueio da conta); vinculo_trabalho, o evento do vínculo e a saída com a trilha de auditoria na mesma transação',
   )
   async desligamento(
     @Param('vinculo') vinculo: string,

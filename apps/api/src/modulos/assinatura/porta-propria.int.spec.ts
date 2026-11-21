@@ -2,12 +2,13 @@
 // SINTÉTICA e idempotente (estabelecimentos, conta, profissional e catálogos com o prefixo do lote); no fim, a massa
 // que muda (certificados, provedores, consultas e documentos) é apagada. A trilha fica (é só de inclusão).
 // Contrato de efeito: cada gravação confere as linhas, a versão, a trilha (pela correlação) e as recusas (repetido,
-// versão desatualizada, outro estabelecimento, recurso ainda sem modelo). A mesma bateria do certificado e do provedor
+// versão desatualizada, outro estabelecimento) e o motor inteiro da assinatura (política, pedido, prévia, tentativa, conclusão
+// com envelope e evento, avisos e numeração). A mesma bateria do certificado e do provedor
 // roda também na porta em memória. SGH_NUCLEO_SEM_BANCO=1 pula o banco.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ContextoAssinatura, PortaAssinaturaIcp } from './porta.js';
+import type { ContextoAssinatura, GravadorAssinatura, PortaAssinaturaIcp } from './porta.js';
 import { PortaAssinaturaMemoria } from './porta-memoria.js';
 import { PortaAssinaturaPropria } from './porta-propria.js';
 import { type CertificadoParaGravar, ErroAssinatura, type TrilhaAssinatura } from './tipos.js';
@@ -98,6 +99,27 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
   const limpar = (e: Escritor) =>
     (async () => {
       await e.executar('DELETE FROM consulta_verificacao_documento WHERE codigo_informado LIKE ?', [`${P}%`]);
+      // O motor da assinatura, na ordem das chaves estrangeiras.
+      await e.executar('DELETE FROM aviso_assinatura WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE v FROM validacao_assinatura v JOIN assinatura_icp a ON a.id = v.assinatura_icp_id WHERE a.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('UPDATE documento_prontuario SET documento_assinado_id = NULL WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM assinatura_icp WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM previa_assinatura WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM pedido_assinatura WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM pedido_numeracao_receita WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id WHERE d.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar(
+        'DELETE r FROM regra_politica_assinatura r JOIN politica_assinatura p ON p.id = r.politica_assinatura_id WHERE p.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM politica_assinatura WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM emissao_documento WHERE chave_objeto LIKE ?', [`${P}/%`]);
       await e.executar(
         'DELETE a FROM assinatura_documento a JOIN documento_assinado d ON d.id = a.documento_assinado_id WHERE d.estabelecimento_id = ?',
         [ids.est],
@@ -508,9 +530,11 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       publico.correlacao,
     ]);
     expect(t).toEqual({ usuario_id: null, estabelecimento_id: ids.est });
-    // Resultado que o modelo ainda não guarda: 503 explícito, nada gravado.
-    expect(await erroDe(consulta('pendente', doc))).toBe('modelo-pendente');
-    expect(await ler('SELECT id FROM consulta_verificacao_documento WHERE codigo_informado = ?', [`${P}pendente`])).toHaveLength(0);
+    // Pendente também é guardado, no vocabulário do banco.
+    await consulta('pendente', doc);
+    expect(await ler('SELECT resultado FROM consulta_verificacao_documento WHERE codigo_informado = ?', [`${P}pendente`])).toEqual([
+      { resultado: 'pendente' },
+    ]);
     const resumo = await porta.resumoVerificacoes(ctx, new Date(Date.now() - 86_400_000));
     expect(resumo.find((r) => r.resultado === 'valida')?.consultas).toBeGreaterThanOrEqual(1);
     expect(resumo.find((r) => r.resultado === 'nao-encontrado')?.consultas).toBeGreaterThanOrEqual(1);
@@ -555,36 +579,288 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(rascunho);
   });
 
-  it('o que ainda não tem tabela responde 503 explícito sem gravar (pedido de assinatura, prévia, política)', async () => {
-    const c = novoCtx();
-    expect(
-      await erroDe(
-        porta.gravar(
-          c,
-          (g) =>
-            g.gravarPedido({
-              hospital: ctx.hospital,
-              usuario: LOGIN,
-              finalidade: 'teste',
-              midia: 'a3',
-              provedor: null,
-              certificado: null,
-              stateHash: 'e'.repeat(64),
-              pkceCifrado: null,
-              hashes: [],
-              documentos: [],
-              expiraEm: new Date(Date.now() + 60_000),
-            }),
-          null,
-        ),
+  it('motor ICP: política vigente, pedido de uso único, prévia, tentativa, conclusão com envelope e evento, avisos e numeração', async () => {
+    const H = ctx.hospital;
+    const agora = new Date();
+    const gravar = <T extends { id: number }>(fn: (g: GravadorAssinatura) => Promise<T>, tabela: string, evento: string) => {
+      const c = novoCtx();
+      return porta.gravar(c, fn, trilhaDe(c, tabela, evento));
+    };
+    const sem = <T>(fn: (g: GravadorAssinatura) => Promise<T>) => porta.gravar(novoCtx(), fn, null);
+    const doc = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'l0201-motor' }, (e) =>
+      e.inserir(
+        `INSERT INTO documento_prontuario (estabelecimento_id, paciente_id, tipo_documento_clinico_id,
+           situacao_documento_prontuario_id, entidade_origem, entidade_origem_id, titulo, profissional_id,
+           referencia_em, lancado_em, conteudo, criado_em, versao)
+         VALUES (?, ?, ?, ?, 'registro_assistencial', ?, ?, ?, ?, ?, '{"texto":"sintético"}', ?, 1)`,
+        [ids.est, ids.paciente, ids2.tipoDoc, ids2.situacao, (Date.now() + 7) % 1_000_000_000, `${P} motor`, ids.prof, agora, agora, agora],
       ),
-    ).toBe('modelo-pendente');
-    expect(await ler('SELECT id FROM trilha_auditoria WHERE correlacao = ?', [c.correlacao])).toHaveLength(0);
-    const aviso = await porta.gravar(novoCtx(), (g) => g.gravarAviso({} as never), null).catch((e: unknown) => e);
-    expect(aviso).toBeInstanceOf(ErroOperacao);
-    expect((aviso as ErroOperacao).problema).toMatchObject({ status: 503, codigo: 'modelo-pendente' });
-    expect(await porta.politicas()).toEqual([]);
-    expect(await porta.contagemPendencias()).toEqual({ pendentes: 0, falhas: 0 });
+    );
+    const { id: cert } = await sem((g) => g.gravarCertificado(certificado(H, LOGIN)));
+
+    // Política: a regra vigente por tipo, destino e conselho; a segunda mudança do dia altera a de hoje; inativar tira.
+    const politica = (nivel: 'icp-brasil' | 'eletronica-avancada', ativa: boolean) =>
+      gravar(
+        (g) =>
+          g.gravarPolitica({
+            hospital: H,
+            tipoDocumento: 'atestado',
+            conselho: 'LZCRM',
+            destino: 'interno',
+            nivel,
+            politicaIcp: 'AD-RT',
+            idFormaIcp: null,
+            formato: 'pades',
+            ativa,
+            justificativa: 'Regra sintética L0201',
+            usuario: LOGIN,
+          }),
+        'regra_politica_assinatura',
+        'politica',
+      );
+    const p1 = await politica('icp-brasil', true);
+    const daChave = async () => (await porta.politicas(ctx)).filter((x) => x.conselho === 'LZCRM');
+    expect(await daChave()).toEqual([
+      expect.objectContaining({ id: p1.id, tipoDocumento: 'atestado', nivel: 'icp-brasil', politicaIcp: 'AD-RT', ativa: true, usuario: LOGIN }),
+    ]);
+    expect((await politica('eletronica-avancada', true)).id).toBe(p1.id);
+    expect((await daChave()).map((x) => x.nivel)).toEqual(['eletronica-avancada']);
+    await politica('icp-brasil', false);
+    expect(await daChave()).toEqual([]);
+    expect(await porta.politicas({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` })).toEqual([]);
+
+    // Pedido de autorização: único pelo resumo do estado, gasto uma vez e só pela conta dona.
+    const estado = createHash('sha256').update(randomUUID()).digest('hex');
+    const pedido = {
+      hospital: H,
+      usuario: LOGIN,
+      finalidade: 'documento' as const,
+      midia: 'a3' as const,
+      provedor: null,
+      certificado: cert,
+      stateHash: estado,
+      pkceCifrado: null,
+      hashes: ['f'.repeat(64)],
+      documentos: [doc],
+      expiraEm: new Date(Date.now() + 60_000),
+    };
+    await gravar((g) => g.gravarPedido(pedido), 'pedido_assinatura', 'pedido');
+    expect(await erroDe(sem((g) => g.gravarPedido(pedido)))).toBe('pedido-repetido');
+    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: OUTRO_LOGIN }, new Date()))).toBeNull();
+    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date()))).toMatchObject({
+      finalidade: 'documento',
+      certificado: cert,
+      hashes: ['f'.repeat(64)],
+      documentos: [doc],
+      vencido: false,
+    });
+    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date()))).toBeNull();
+
+    // Prévia: o PDF vira arquivo; a versão vem da coluna pedida ou da emissão registrada para a mesma chave.
+    const [coluna] = await ler(
+      "SELECT COUNT(*) AS q FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'arquivo' AND COLUMN_NAME = 'versao_objeto'",
+    );
+    const temColuna = Number(coluna!['q']) > 0;
+    const emitir = (chave: string, versao: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'l0201-emissao' }, (e) =>
+        e.inserir(
+          `INSERT INTO emissao_documento (estabelecimento_id, codigo, rede, estabelecimento_codigo, modelo, versao_modelo,
+             origem_tipo, origem_registro_id, via, hash_conteudo, chave_objeto, identificador_qr, autor, emitido_em,
+             versao_objeto, situacao, confirmado_em, criado_em, versao)
+           VALUES (?, ?, 'rede-sintetica', ?, 'pep', '1', 'pep-documento', ?, 1, ?, ?, ?, ?, ?, ?, 'emitida', ?, ?, 1)`,
+          [ids.est, randomUUID(), H, doc, '1'.repeat(64), chave, randomUUID(), LOGIN, agora, versao, agora, agora],
+        ),
+      );
+    const chavePrevia = `${P}/previa-${doc}.pdf`;
+    await emitir(chavePrevia, 'v1');
+    const previa = {
+      hospital: H,
+      documento: doc,
+      usuario: LOGIN,
+      certificado: cert,
+      politicaIcp: 'AD-RT' as const,
+      hashPdf: '1'.repeat(64),
+      chaveS3: chavePrevia,
+      versaoS3: 'v1',
+      codigo: `${P}motor${doc}`,
+      assinarEm: agora.toISOString(),
+      profissional: 'Profissional Sintético',
+      registro: 'LZCRM-RJ 201001',
+    };
+    if (!temColuna)
+      expect(await erroDe(sem((g) => g.gravarPrevia({ ...previa, chaveS3: `${P}/sem-emissao.pdf`, codigo: `${P}x${doc}` })))).toBe(
+        'modelo-pendente',
+      );
+    const { id: pv } = await gravar((g) => g.gravarPrevia(previa), 'previa_assinatura', 'previa');
+    expect(await porta.previaMaisRecente(ctx, doc, LOGIN)).toMatchObject({ id: pv, chaveS3: chavePrevia, versaoS3: 'v1', codigo: previa.codigo });
+    expect(await porta.previa({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, pv)).toBeNull();
+
+    // Tentativa pendente com avisos: aparece na fila (mesmo fora dos tipos da política), na contagem e no reprocessamento.
+    const tentativa = {
+      hospital: H,
+      origem: 'documento' as const,
+      documento: doc,
+      hash: '2'.repeat(64),
+      formato: 'pades' as const,
+      politicaIcp: 'AD-RT' as const,
+      midia: 'a3' as const,
+      provedor: null,
+      certificado: cert,
+      usuario: LOGIN,
+      estado: 'pendente' as const,
+      tentativas: 1,
+      falha: 'carimbo-indisponivel',
+      proximaEm: new Date(Date.now() - 1_000),
+      assinatura: Buffer.from('cms sintético').toString('base64'),
+      carimboToken: null,
+      carimboEm: null,
+      carimboSerie: null,
+    };
+    const { id: a } = await gravar(
+      async (g) => {
+        expect(await g.travarDocumentoParaAssinar(H, doc, null)).toBeNull();
+        const r = await g.gravarAssinatura(tentativa);
+        await g.gravarAssinaturaPdf({ assinatura: r.id, previa: pv });
+        await g.gravarAviso({ hospital: H, assinatura: r.id, destinatario: 'autor', usuario: LOGIN, estado: 'pendente', falha: tentativa.falha });
+        await g.gravarAviso({ hospital: H, assinatura: r.id, destinatario: 'diretor-tecnico', usuario: null, estado: 'pendente', falha: tentativa.falha });
+        return r;
+      },
+      'assinatura_icp',
+      'tentativa',
+    );
+    expect((await porta.filaIcp(ctx, LOGIN, 10, [])).itens.find((i) => i.documento === doc)).toMatchObject({
+      assinatura: a,
+      estado: 'pendente',
+      tentativas: 1,
+      falha: 'carimbo-indisponivel',
+    });
+    expect(await porta.pendentesVencidas(ctx, new Date(), 10)).toContainEqual({ id: a, usuario: LOGIN });
+    expect(await porta.contagemPendencias(ctx)).toEqual({ pendentes: 1, falhas: 0 });
+    expect((await porta.assinaturasDosDocumentos(ctx, [doc])).get(doc)).toEqual({ id: a, estado: 'pendente' });
+    const doAutor = await porta.avisos(ctx, { autor: LOGIN });
+    expect(doAutor).toEqual([expect.objectContaining({ assinatura: a, documento: doc, autor: LOGIN, destinatario: 'autor', estado: 'pendente' })]);
+    const daDirecao = await porta.avisos(ctx, 'diretor-tecnico');
+    expect(daDirecao).toHaveLength(1);
+    const todos = [doAutor[0]!.id, daDirecao[0]!.id];
+    expect(await sem((g) => g.marcarAvisosLidos(H, todos, { login: OUTRO_LOGIN, diretorTecnico: false }, new Date()))).toBe(0);
+    expect(await sem((g) => g.marcarAvisosLidos(H, todos, { login: LOGIN, diretorTecnico: false }, new Date()))).toBe(1);
+    expect(await porta.avisos(ctx, { autor: LOGIN })).toEqual([]);
+    expect(await porta.avisos(ctx, 'diretor-tecnico')).toHaveLength(1);
+
+    // Conclusão: a leitura desatualizada não muda nada; a certa conclui, grava o envelope, a assinatura nele e o evento.
+    const conclusao = {
+      id: a,
+      hospital: H,
+      estadoLido: 'pendente' as const,
+      tentativasLidas: 0,
+      estado: 'assinada' as const,
+      tentativas: 2,
+      falha: null,
+      proximaEm: null,
+      carimboToken: Buffer.from('carimbo sintético').toString('base64'),
+      carimboEm: agora,
+      carimboSerie: 'serie-sintetica',
+    };
+    expect(await sem((g) => g.atualizarAssinatura(conclusao, new Date()))).toBe(false);
+    await gravar(
+      async (g) => {
+        expect(await g.travarDocumentoParaAssinar(H, doc, a)).toBeNull();
+        expect(await g.atualizarAssinatura({ ...conclusao, tentativasLidas: 1 }, new Date())).toBe(true);
+        await g.gravarEventoAssinadoIcp({ hospital: H, usuario: LOGIN }, doc, false);
+        await g.gravarValidacao({
+          assinatura: a,
+          momento: 'assinar',
+          resultado: 'valida',
+          cadeia: true,
+          vigencia: true,
+          revogacao: true,
+          cpf: true,
+          assinaturaConfere: true,
+          carimbo: true,
+          motivos: [],
+          usuario: LOGIN,
+          em: new Date(),
+        });
+        return { id: a };
+      },
+      'assinatura_icp',
+      'concluida',
+    );
+    expect(await sem((g) => g.travarDocumentoParaAssinar(H, doc, null))).toBe('assinada');
+    const [envelope] = await ler(
+      `SELECT da.codigo_verificacao, da.situacao, da.nivel_exigido, ad.signatario_usuario_id, ad.nivel, ad.profissional_id
+         FROM documento_prontuario dp
+         JOIN documento_assinado da ON da.id = dp.documento_assinado_id
+         JOIN assinatura_documento ad ON ad.documento_assinado_id = da.id
+        WHERE dp.id = ?`,
+      [doc],
+    );
+    expect(envelope).toEqual({
+      codigo_verificacao: previa.codigo,
+      situacao: 'assinado',
+      nivel_exigido: 'icp-brasil',
+      signatario_usuario_id: ids.usuario,
+      nivel: 'icp-brasil',
+      profissional_id: ids.prof,
+    });
+    expect(await ler('SELECT acao, usuario_id FROM documento_prontuario_evento WHERE documento_prontuario_id = ?', [doc])).toEqual([
+      { acao: 'assinatura', usuario_id: ids.usuario },
+    ]);
+    expect(await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: H }, previa.codigo)).toMatchObject({
+      documento: doc,
+      tipo: 'atestado',
+      assinatura: { estado: 'assinada' },
+    });
+    expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(doc);
+    expect(await porta.contagemPendencias(ctx)).toEqual({ pendentes: 0, falhas: 0 });
+    expect((await porta.assinadosRecentes(ctx, LOGIN)).find((x) => x.assinatura === a)).toMatchObject({
+      documento: doc,
+      tipo: 'atestado',
+      codigo: previa.codigo,
+      temPdf: false,
+      resultado: 'valida',
+    });
+    expect((await porta.assinaturas(ctx, LOGIN, 'documento')).find((x) => x.id === a)).toMatchObject({
+      estado: 'assinada',
+      validacao: { resultado: 'valida', cadeia: true, motivos: [] },
+    });
+
+    // O PDF assinado: uma vez só, e no envelope.
+    const chaveAssinado = `${P}/assinado-${a}.pdf`;
+    await emitir(chaveAssinado, 'v2');
+    const pdf = { assinatura: a, chaveS3: chaveAssinado, versaoS3: 'v2', hashPdf: '3'.repeat(64) };
+    expect(await sem((g) => g.registrarPdfAssinado(pdf, new Date()))).toBe(true);
+    expect(await sem((g) => g.registrarPdfAssinado(pdf, new Date()))).toBe(false);
+    expect(await porta.assinaturaDocumento(ctx, a)).toMatchObject({
+      documento: doc,
+      estado: 'assinada',
+      tentativas: 2,
+      previa: pv,
+      carimboToken: conclusao.carimboToken,
+      pdf: { chaveS3: chaveAssinado, versaoS3: 'v2', hashPdf: '3'.repeat(64) },
+    });
+    const [comPdf] = await ler(
+      'SELECT da.arquivo_assinado_id IS NOT NULL AS tem FROM documento_prontuario dp JOIN documento_assinado da ON da.id = dp.documento_assinado_id WHERE dp.id = ?',
+      [doc],
+    );
+    expect(Number(comPdf!['tem'])).toBe(1);
+
+    // Numeração da receita controlada: o pedido, a resposta uma vez, e o documento aceita um número só.
+    const { id: sn } = await gravar(
+      (g) => g.gravarSolicitacaoSncr({ hospital: H, documento: doc, origemId: 1, tipo: 'controle-especial', medicamentos: 2, usuario: LOGIN }),
+      'pedido_numeracao_receita',
+      'numeracao',
+    );
+    const resposta = { id: sn, hospital: H, situacao: 'numerada' as const, tentativas: 1, numero: 'N-0001', retorno: 'ok' };
+    expect(
+      await sem(async (g) => [await g.atualizarSolicitacaoSncr(resposta, new Date()), await g.gravarNumeroSncr(H, doc, 'N-0001')]),
+    ).toEqual([true, true]);
+    expect(await sem((g) => g.atualizarSolicitacaoSncr(resposta, new Date()))).toBe(false);
+    expect(await sem((g) => g.gravarNumeroSncr(H, doc, 'N-0002'))).toBe(false);
+    expect(await porta.solicitacoesSncr(ctx, doc)).toEqual([
+      { id: sn, documento: doc, situacao: 'numerada', tentativas: 1, numero: 'N-0001', retorno: 'ok' },
+    ]);
+    expect(await porta.solicitacoesSncr({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, doc)).toEqual([]);
   });
 });
 

@@ -142,7 +142,7 @@ const profissional = { conselho: '06', numeroConselho: '900001', uf: '42', cbos:
 const sadt = (numero: string, carteira: string, p: Partial<GuiaSpSadt> = {}): GuiaSpSadt => ({
   tipo: 'sp-sadt',
   numeroGuiaPrestador: numero,
-  beneficiario: { numeroCarteira: carteira, atendimentoRN: 'N' },
+  beneficiario: { numeroCarteira: carteira, atendimentoRN: false },
   nomeContratadoSolicitante: 'LABORATORIO SINTETICO ALFA',
   profissionalSolicitante: profissional,
   cnes: PRESTADOR.cnes ?? '9999999',
@@ -175,7 +175,7 @@ const sadt = (numero: string, carteira: string, p: Partial<GuiaSpSadt> = {}): Gu
 const consulta = (numero: string, carteira: string): GuiaConsulta => ({
   tipo: 'consulta',
   numeroGuiaPrestador: numero,
-  beneficiario: { numeroCarteira: carteira, atendimentoRN: 'N' },
+  beneficiario: { numeroCarteira: carteira, atendimentoRN: false },
   cnes: PRESTADOR.cnes ?? '9999999',
   profissional,
   dataAtendimento: '2026-10-22',

@@ -3,7 +3,7 @@
 //   - quais fichas a imprimir valem para o atendimento: o modelo (com a impressora gráfica ou a matricial) e as
 //     seleções por convênio, especialidade, unidade e grupo de procedimento — numa dimensão com seleções, o modelo só
 //     sai quando o item do atendimento está marcado; sem seleção na dimensão, ela não restringe (a confirmar na
-//     validação: DP-46.8); a clínica pela letra, o retorno (S só no retorno) e a faixa de idade (0 = sem limite);
+//     validação: DP-46.8); a clínica pela letra, o retorno (só no retorno ou em todo atendimento) e a faixa de idade (0 = sem limite);
 //   - a ordem e as cópias de cada modelo;
 //   - o que cada impresso exige (a pulseira sai só com a data de nascimento: dois identificadores legíveis).
 import { IMPRESSOS_ATENDIMENTO, type ImpressoAtendimento } from '@sgh/contratos';
@@ -16,8 +16,8 @@ export interface ModeloFicha {
   readonly ordem: number;
   /** Letras das clínicas atendidas (M, C, O…). */
   readonly clinicas: string;
-  /** S: só no retorno; N: em todo atendimento. */
-  readonly retorno: 'S' | 'N';
+  /** Verdadeiro: só no retorno; falso: em todo atendimento. */
+  readonly soNoRetorno: boolean;
   /** Sai na abertura do atendimento (IMPATE). */
   readonly noAtendimento: boolean;
   readonly idadeInicial: number;
@@ -94,7 +94,7 @@ export function fichasAImprimir(
   return modelos
     .filter((m) => m.grafica === grafica && m.noAtendimento && m.copias > 0)
     .filter((m) => !m.clinicas.trim() || m.clinicas.toUpperCase().includes(a.clinica.trim().toUpperCase()))
-    .filter((m) => m.retorno !== 'S' || a.retorno)
+    .filter((m) => !m.soNoRetorno || a.retorno)
     .filter((m) => passaNaIdade(m, a.idade))
     .filter((m) => DIMENSOES.every((d) => passaNaDimensao(m, selecoes, d, a)))
     .sort((x, y) => x.ordem - y.ordem || x.modelo - y.modelo)

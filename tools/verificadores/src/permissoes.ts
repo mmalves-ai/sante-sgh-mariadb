@@ -38,11 +38,35 @@ const raiz = resolve(import.meta.dirname, '../../..');
 /** Arquivo de dados do catálogo gerado (uma permissão por linha; o teste confere a igualdade com o gerador). */
 export const ARQUIVO_DADOS_CATALOGO = resolve(raiz, 'packages/contratos/src/permissoes/catalogo-legado.json');
 
-export function textoCatalogo(c: CatalogoGerado, estabelecimento: string): string {
+/**
+ * Renomeações de código (F2.4, padrão de permissão em docs/obra/fatias/f24/saida/padroes.md): o código gerado do menu
+ * de origem que trazia nome de tabela ou do sistema de origem ganha nome de negócio. O dado fica no mapa do conector
+ * (conector/mapa/permissoes-renomeadas.tsv), que também alimenta a migração dos perfis gravados
+ * (tools/db/migrar_codigos_permissao.py).
+ */
+export const ARQUIVO_RENOMEACOES = resolve(raiz, 'conector/mapa/permissoes-renomeadas.tsv');
+
+export function lerRenomeacoes(
+  arquivo: string = ARQUIVO_RENOMEACOES,
+): ReadonlyMap<string, { readonly codigo: string; readonly descricao: string }> {
+  const m = new Map<string, { codigo: string; descricao: string }>();
+  if (!existsSync(arquivo)) return m;
+  for (const l of readFileSync(arquivo, 'utf8').split('\n').slice(1)) {
+    const [antigo, novo, descricao] = l.split('\t');
+    if (antigo && novo && descricao) m.set(antigo, { codigo: novo, descricao });
+  }
+  return m;
+}
+
+export function textoCatalogo(
+  c: CatalogoGerado,
+  estabelecimento: string,
+  renomeacoes: ReturnType<typeof lerRenomeacoes> = lerRenomeacoes(),
+): string {
   const linhas = c.permissoes.map((p) =>
     JSON.stringify({
-      codigo: p.codigo,
-      descricao: p.descricao,
+      codigo: renomeacoes.get(p.codigo)?.codigo ?? p.codigo,
+      descricao: renomeacoes.get(p.codigo)?.descricao ?? p.descricao,
       opcoesLegado: p.opcoesLegado,
       concessaoPorPerfil: null,
       categoria: p.categoria,

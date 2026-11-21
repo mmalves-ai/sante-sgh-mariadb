@@ -238,6 +238,15 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     const [lido] = await porta.atos(c(), { requisicao });
     expect(lido).toMatchObject({ estado: 'concluido', profissional: m!.login, segundoProfissional: m!.login2 });
     expect(lido?.sinais.map((s) => s.momento)).toEqual(['antes', 'durante']);
+    // O adendo corrige a medida digitada errado sem mudá-la; momento sem medida é recusado.
+    const adendo = (momento: 'durante' | 'depois') =>
+      g().then((x) => x.adendo({ ato, momento, sinais: { ...SINAIS, fc: 88 }, motivo: 'Frequência digitada errado', usuario: m!.login }));
+    const d = await adendo('durante');
+    expect(await recusada(adendo('depois'))).toBe('momento-sem-medida');
+    expect(await porta.adendos(c(), [ato])).toMatchObject([
+      { id: d.id, ato, momento: 'durante', sinais: { fc: 88 }, motivo: 'Frequência digitada errado', usuario: m!.login },
+    ]);
+    expect((await porta.atos(c(), { requisicao }))[0]?.sinais.find((s) => s.momento === 'durante')?.fc).toBe(SINAIS.fc);
   });
 
   it('reação e notificação: uma vez; outro estabelecimento não acha', async () => {
@@ -321,8 +330,18 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     expect(b?.['destino_em']).not.toBeNull();
   });
 
-  it('cancela a segunda requisição uma vez; a alteração aguarda o modelo (409)', async () => {
+  it('altera a segunda requisição guardando a versão anterior; cancela uma vez; a cancelada não se altera', async () => {
     const r = await novaRequisicao(m!.itens[1], null);
+    const alterar = (volumeMl: number) =>
+      g().then((x) =>
+        x.alterar({ requisicao: r.id, hemocomponente: 'CH', volumeMl, urgencia: 2, programadaPara: null, prazo: null, motivo: 'Volume corrigido sintético', usuario: m!.login }),
+      );
+    expect(await alterar(300)).toMatchObject({ id: r.id, versao: 2 });
+    expect(await recusada(alterar(300))).toBe('requisicao-sem-mudanca');
+    expect(await porta.versoesRequisicao(c(), r.id)).toMatchObject([
+      { versao: 1, hemocomponente: 'CH', volumeMl: 280, urgencia: 'rotina', motivo: 'Volume corrigido sintético', alteradaPor: m!.login },
+    ]);
+    expect(Number((await linha('SELECT volume_ml FROM requisicao_transfusao_item WHERE requisicao_transfusao_id = ?', [r.id]))?.['volume_ml'])).toBe(300);
     const kx = `l0205-cancelar-${Date.now()}`;
     const cancelarComChave = () =>
       g().then((x) => x.cancelar({ requisicao: r.id, motivo: 'Pedido em duplicidade sintético', usuario: m!.login, chave: kx }));
@@ -332,10 +351,11 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     expect((await cancelarComChave()).id).toBe(r.id);
     expect(await linha('SELECT situacao, versao, observacao_cancelamento FROM requisicao_transfusao WHERE id = ?', [r.id])).toMatchObject({
       situacao: 'cancelada',
-      versao: 2,
+      versao: 3,
     });
     expect(await recusada(cancelar())).toBe('ja-cancelada');
     expect((await porta.requisicoes(c(), { agora: agora(), estado: 'cancelada' })).itens.map((x) => x.id)).toContain(r.id);
-    expect(await recusada(g().then((x) => x.alterar({ requisicao: r.id } as never)))).toBe('modelo-pendente');
+    expect(await recusada(alterar(320))).toBe('requisicao-ja-atendida');
+    expect(await porta.versoesRequisicao(c(), r.id)).toHaveLength(1);
   });
 });

@@ -59,7 +59,7 @@ export const LEIAUTE_AFD_PADRAO = '003';
 export const TETO_ARQUIVO_AFD = 1_000_000;
 
 /**
- * Classificação das horas da apuração (domínio POTPHORA do ramo, 9; ref 02). O rótulo lido no domínio vale; este é o
+ * Classificação das horas da apuração (domínio de tipos de hora do ramo, 9; ref 02). O rótulo lido no domínio vale; este é o
  * padrão quando a linha não existir. A apuração usa sempre estes códigos.
  */
 export const CLASSES_HORA = {
@@ -77,7 +77,7 @@ export type ClasseHora = keyof typeof CLASSES_HORA;
 export const CODIGOS_CLASSE_HORA = Object.keys(CLASSES_HORA).map(Number) as ClasseHora[];
 
 /**
- * Tipos de integração com a folha (domínio PETP_INTEGR_EVENTO do ramo, 13; ref 02; regra 13). A exportação leva os
+ * Tipos de integração com a folha (domínio de tipos de integração do ramo, 13; ref 02; regra 13). A exportação leva os
  * minutos de cada tipo; a folha do M53 (DP-10) consome os mesmos códigos.
  */
 export const EVENTOS_FOLHA = {
@@ -98,7 +98,7 @@ export const EVENTOS_FOLHA = {
 export type EventoFolha = keyof typeof EVENTOS_FOLHA;
 export const CODIGOS_EVENTO_FOLHA = Object.keys(EVENTOS_FOLHA).map(Number) as EventoFolha[];
 
-/** Destino das horas no banco (domínio POBANCOHRTP do ramo, 4; regra 14). */
+/** Destino das horas no banco (domínio de destinos do banco de horas do ramo, 4; regra 14). */
 export const DESTINOS_BANCO = {
   1: 'Não se aplica (sem banco de horas)',
   2: 'Banco de horas',
@@ -107,7 +107,7 @@ export const DESTINOS_BANCO = {
 } as const;
 export type DestinoBanco = keyof typeof DESTINOS_BANCO;
 
-/** Como o banco começa cada ciclo (domínio POTPINIBANCO do ramo, 4; regra 14). */
+/** Como o banco começa cada ciclo (domínio de inícios do ciclo do ramo, 4; regra 14). */
 export const INICIOS_BANCO = {
   1: 'Saldo zerado',
   2: 'Saldo residual positivo do ciclo anterior',

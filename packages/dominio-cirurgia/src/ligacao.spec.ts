@@ -1,4 +1,4 @@
-// Agendamento e cirurgia realizada casam por REG, sala e data (regra 9); o que não é exato vai para revisão.
+// Agendamento e cirurgia realizada casam por atendimento, sala e data (regra 9); o que não é exato vai para revisão.
 import { describe, expect, it } from 'vitest';
 import { casar, precisaRevisao, resumirCasamentos } from './ligacao.js';
 
@@ -10,7 +10,7 @@ const ag = [
 ];
 
 describe('casamento agendamento × realizada', () => {
-  it('exato, REG e dia, só REG, ambíguo e nenhum', () => {
+  it('exato, atendimento e dia, só atendimento, ambíguo e nenhum', () => {
     expect(casar({ id: 9, reg: 100, sala: 1, dia: '2026-11-03' }, ag)).toEqual({
       tipo: 'exato',
       agendamento: 1,

@@ -49,7 +49,7 @@ export interface ExameRecenteApa {
 export interface ContextoAnestesiaResposta {
   readonly agendamento: number;
   readonly reg: number;
-  /** O atendimento pelo REG (null: sem atendimento; os fluidos da ficha não vão ao balanço hídrico). */
+  /** O id do atendimento (null: sem atendimento; os fluidos da ficha não vão ao balanço hídrico). */
   readonly atendimento: number | null;
   readonly paciente: number | null;
   /** O nome do paciente (leitura auditada de prontuário); null sem paciente localizado. */
@@ -58,7 +58,7 @@ export interface ContextoAnestesiaResposta {
   readonly dataHora: string;
   readonly procedimento: string | null;
   readonly tipoAnestesiaAgendado: number | null;
-  /** O anestesista do agendamento (ID de TBCBOPRO; null = sentinela, sem anestesista). */
+  /** O anestesista do agendamento (id do registro profissional; null = sem anestesista). */
   readonly anestesistaAgendado: number | null;
   readonly anestesistaAgendadoNome: string | null;
   readonly alergias: readonly AlergiaApa[];
@@ -92,7 +92,7 @@ export interface ApaResposta {
   readonly jejum: readonly JejumAvaliado[];
   readonly conclusao: ConclusaoApa;
   readonly fechaPendencia: boolean;
-  /** O formulário do prontuário (PRCABEVOL.ID) quando o formulário novo do M45 estiver publicado. */
+  /** O formulário do prontuário (id do registro clínico) quando o formulário novo do M45 estiver publicado. */
   readonly registroProntuario: number | null;
   readonly avaliadoPorNome: string | null;
   readonly pesoKg: number | null;

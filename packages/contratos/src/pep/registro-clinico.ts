@@ -153,7 +153,7 @@ export const esquemaSalvarRascunho = z
   .object({
     paciente: esquemaIdPositivo,
     modelo: esquemaIdPositivo,
-    /** Atendimento ou internação (ATCABECATEND) a que o registro pertence (âncora do M20/M21). */
+    /** Atendimento ou internação a que o registro pertence (âncora do M20/M21). */
     atendimento: esquemaIdPositivo,
     /** Rascunho já gravado (atualização) e o carimbo lido (colisão com outro terminal ou sistema). */
     rascunho: z.object({ id: esquemaIdPositivo, versao: z.string().min(1).max(64) }).optional(),

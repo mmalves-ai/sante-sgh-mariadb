@@ -1,0 +1,14 @@
+{
+ "tipo_escopo_acesso": [
+  {
+   "codigo": "setor",
+   "descricao": "Setor",
+   "entidade": "setor"
+  },
+  {
+   "codigo": "bloco_internacao",
+   "descricao": "Bloco de internação",
+   "entidade": "bloco_internacao"
+  }
+ ]
+}

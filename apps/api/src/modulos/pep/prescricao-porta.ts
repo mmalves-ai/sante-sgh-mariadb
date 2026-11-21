@@ -7,7 +7,44 @@
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { SecaoCadastroPrescricao } from '@sgh/contratos';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import type { AlergiaLida, DadosClinicosLidos, ConsultaCadastroLida, AtendimentoDaPrescricao, AtendimentoLido, CabecalhoDocumentoLido, DecisaoLida, FichaAntigaLida, FichaNovaLida, FuturaGravadaLida, GradeClasseLida, GravacaoPrescricao, InclusaoItem, InteracaoLida, ItemDoIndice, ItemPrescricaoLido, KitMedicamentoLido, LiberacaoConsultada, OpcaoDominio, PrescricaoAVencer, PrescricaoCabecalhoLida, PrescritorLido, ProdutoLido, ProtocoloLido, ProvaPrescricaoLida, ReconciliacaoGravacao, ReconciliacaoGravadaLida, RegraAlertaLida, RegraHorarioLida, RetratosAtuais, SuspensaoItem, SuspensaoPrescricao, FuturaProgramada, FichaAvulsa, NovaVersaoRegra, NovaGradeClasse } from './tipos-pep.js';
+import type {
+  AlergiaLida,
+  DadosClinicosLidos,
+  ConsultaCadastroLida,
+  AtendimentoDaPrescricao,
+  AtendimentoLido,
+  CabecalhoDocumentoLido,
+  DecisaoLida,
+  FichaAntigaLida,
+  FichaNovaLida,
+  FuturaGravadaLida,
+  GradeClasseLida,
+  GravacaoPrescricao,
+  InclusaoItem,
+  InteracaoLida,
+  ItemDoIndice,
+  ItemPrescricaoLido,
+  KitMedicamentoLido,
+  LiberacaoConsultada,
+  OpcaoDominio,
+  PrescricaoAVencer,
+  PrescricaoCabecalhoLida,
+  PrescritorLido,
+  ProdutoLido,
+  ProtocoloLido,
+  ProvaPrescricaoLida,
+  ReconciliacaoGravacao,
+  ReconciliacaoGravadaLida,
+  RegraAlertaLida,
+  RegraHorarioLida,
+  RetratosAtuais,
+  SuspensaoItem,
+  SuspensaoPrescricao,
+  FuturaProgramada,
+  FichaAvulsa,
+  NovaVersaoRegra,
+  NovaGradeClasse,
+} from './tipos-pep.js';
 
 export const PORTA_PRESCRICAO = Symbol('PORTA_PRESCRICAO');
 
@@ -46,7 +83,7 @@ export interface PortaPrescricao {
     termo: string | undefined,
   ): Promise<ConsultaCadastroLida>;
   protocolos(c: ContextoPrescricao): Promise<ProtocoloLido[]>;
-  /** As especialidades do profissional do login (TBESPEC pelos CBOs ativos), para o protocolo da especialidade. */
+  /** As especialidades do profissional do login (especialidades médicas das ocupações ativas), para o protocolo da especialidade. */
   especialidadesDoPrescritor(c: ContextoPrescricao, login: string): Promise<number[]>;
   itensDoProtocolo(c: ContextoPrescricao, protocolo: number): Promise<ItemPrescricaoLido[]>;
   prescricoes(c: ContextoPrescricao, atendimento: number): Promise<PrescricaoCabecalhoLida[]>;

@@ -1,7 +1,7 @@
 // Prioridade legal da senha (M19; ficha, regra 3; Anexo A §A.1): o legado grava 0 (acima de 80 anos), 1 (demais
 // prioridades) ou 2 (normal) — 97,9% das senhas são 2. Os grupos detalhados (60 a 79 anos, gestante, lactante, pessoa
 // com deficiência, criança de colo, TEA, obesidade) gravam 1 e o grupo fica no novo até a conferência de que o outro
-// sistema chama na ordem certa as senhas dos 7 grupos nunca usados (TBGRUPOPRIORIDADE 3 a 9).
+// sistema chama na ordem certa as senhas dos 7 grupos nunca usados (grupos de prioridade legal 3 a 9).
 import { GRUPOS_PRIORIDADE, type PrioridadeSenha, prioritaria } from '@sgh/contratos';
 
 export { prioritaria };

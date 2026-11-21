@@ -46,7 +46,7 @@ export interface EmpresaSped {
   readonly telefone: string | null;
   readonly email: string | null;
   readonly cnae: string | null;
-  /** Código do plano referencial (COTIPOPLANOCONTAREFERENCIAL.CODIGO) dos vínculos das contas. */
+  /** Código do plano referencial (catálogo da Receita) dos vínculos das contas. */
   readonly planoReferencial: string | null;
   /** Natureza jurídica (ECF 0030 COD_NAT, 4 dígitos). */
   readonly naturezaJuridica: string | null;
@@ -687,4 +687,44 @@ export function gerarEcf(e: EntradaEcf): ArquivoGerado {
     'Bloco U com as contas analíticas do plano referencial; o programa oficial completa as sintéticas na importação.',
   );
   return { impedimentos, avisos, conteudo, linhas: w.linhas.length, registros, nomeArquivo };
+}
+
+/** Envio anterior da mesma escrituração (empresa, tipo e exercício) para planejar o próximo. */
+export interface EnvioSpedAnterior {
+  readonly id: number;
+  readonly numero: number;
+  readonly situacao: 'gerado' | 'transmitido' | 'cancelado';
+  /** Já apontado por outro envio não cancelado. */
+  readonly substituido: boolean;
+}
+
+export type PlanoEnvioSped =
+  | {
+      readonly ok: true;
+      readonly numero: number;
+      /** O envio que o novo aponta como substituído (null: nenhum). */
+      readonly substituidoId: number | null;
+      /** O apontado era um gerado pendente (não transmitido nem substituído): passa a substituído. */
+      readonly substituiPendente: boolean;
+    }
+  | { readonly ok: false; readonly motivo: 'sem-arquivo-substituido' };
+
+/**
+ * Número e substituição do próximo envio do SPED (regra única das portas de memória e do banco). O número é o maior
+ * já usado mais um (cancelados contam). A escrituração substituta aponta o último envio válido (gerado ou
+ * transmitido) e é recusada sem envio anterior; a nova geração original substitui o último gerado ainda pendente.
+ */
+export function planejarEnvioSped(envios: readonly EnvioSpedAnterior[], substituta: boolean): PlanoEnvioSped {
+  const ordenados = [...envios].sort((a, b) => b.numero - a.numero);
+  const numero = (ordenados[0]?.numero ?? 0) + 1;
+  const vivo = ordenados.find((e) => e.situacao !== 'cancelado');
+  const pendente = ordenados.find((e) => e.situacao === 'gerado' && !e.substituido);
+  const alvo = substituta ? vivo : pendente;
+  if (substituta && !alvo) return { ok: false, motivo: 'sem-arquivo-substituido' };
+  return {
+    ok: true,
+    numero,
+    substituidoId: alvo?.id ?? null,
+    substituiPendente: alvo !== undefined && alvo.situacao === 'gerado' && !alvo.substituido,
+  };
 }

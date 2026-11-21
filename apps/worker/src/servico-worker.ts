@@ -108,7 +108,7 @@ export async function recursoLigadoAqui(l: Leitor, chave: string, estabeleciment
   );
 }
 
-/** Data civil (AAAA-MM-DD) e hora "HHMM" de um instante no fuso (a forma do contrato do movimento do censo). */
+/** Data civil (AAAA-MM-DD) e hora do dia "HH:MM" de um instante no fuso (a forma do contrato do movimento do censo). */
 export function diaEHoraLocal(v: Date, fuso: string): { readonly data: string; readonly dia: Date; readonly hora: string } {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', {
@@ -124,7 +124,7 @@ export function diaEHoraLocal(v: Date, fuso: string): { readonly data: string; r
       .map((x) => [x.type, x.value]),
   ) as Record<string, string>;
   const data = `${p['year']}-${p['month']}-${p['day']}`;
-  return { data, dia: new Date(`${data}T00:00:00Z`), hora: `${p['hour']}${p['minute']}` };
+  return { data, dia: new Date(`${data}T00:00:00Z`), hora: `${p['hour']}:${p['minute']}` };
 }
 
 /** Deslocamento (ms) do fuso num instante: hora de parede menos UTC. */

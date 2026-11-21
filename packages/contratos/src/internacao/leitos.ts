@@ -89,7 +89,7 @@ export const esquemaPainelLeitos = z.object({
   /** Momento da leitura (ISO) e o último ciclo do vigia que a disparou ("dados até", regra 14). */
   lidoEm: z.string(),
   dadosAte: z.string(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
   totais: totaisLeitos.extend({
     /** Ocupados ÷ ativos (%), uma casa; null sem leito ativo. */
     ocupacao: z.number().nullable(),
@@ -133,7 +133,7 @@ export type LiberacaoM16 = z.infer<typeof esquemaLiberacaoM16>;
 
 export const esquemaDivergenciasLeitos = z.object({
   lidoEm: z.string(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
   divergencias: z.array(z.object({ tipo: z.string(), chave: z.string(), orientacao: z.string() })),
   contagens: z.object({
     leitosCadastro: z.number().int(),

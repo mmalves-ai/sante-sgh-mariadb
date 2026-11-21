@@ -69,7 +69,7 @@ const item = (situacao = 'enviado', marcacaoCancelada = false) => ({
   id: '41',
   tipo: 'consulta',
   data: '2026-10-27',
-  hora: '0815',
+  hora: '08:15',
   agenda: 'CARDIOLOGIA - DRA SINTETICO B',
   paciente: { id: 1003, nome: 'PACIENTE SINTETICO', prontuario: 501003 },
   situacao,
@@ -105,6 +105,9 @@ describe('conferência do pré-check-in', () => {
     const w = montar(ConferenciaPreCheckinTela);
     await flushPromises();
     expect(w.get('[data-testid="pre-fila"]').text()).toContain('PACIENTE SINTETICO');
+    // A hora vem no contrato neutro (HH:MM) e sai como chegou, sem ser recortada como quatro dígitos.
+    expect(w.get('[data-testid="pre-fila"]').text()).toContain('08:15');
+    expect(w.text()).not.toContain('08::');
     await w.get('[data-testid="pre-abrir-41"]').trigger('click');
     await flushPromises();
     const celular = w.get('[data-testid="pre-marcar-celular"]').element as HTMLInputElement;

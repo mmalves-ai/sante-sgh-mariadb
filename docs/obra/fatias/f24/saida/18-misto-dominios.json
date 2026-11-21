@@ -1,0 +1,3 @@
+[
+  {"tipo": "codigo", "arquivo": "packages/dominio-cadastro/src/unificacao/referencias-paciente.ts", "pedido": "Incluir na lista de referências ao paciente as chaves novas da etapa compartilhada de DDL: intencao_pagamento_portal.paciente_id (17_INTG/20) e vinculo_responsavel_portal.paciente_id (02_ADM/20), decidindo transferir ou recusar a unificação, com teste.", "motivo": "Sem isso, apps/api/src/modulos/cadastro/porta-propria.int.spec.ts ('fila de duplicidades ... unificação') recusa com unificacao-tabela-nao-coberta em todo cliente com o DDL novo. Falha anterior a este lote (o lote não toca porta-propria.ts nem o domínio de unificação)."}
+]

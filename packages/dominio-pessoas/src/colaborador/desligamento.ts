@@ -1,6 +1,6 @@
 // Regra 2 do M52 (cap-07 §7.1.1; ref 01 §6; ficha, seção 5, `acesso.bloquearUsuario` cenário `desligamento`): o
-// desligamento bloqueia o acesso no mesmo dia, nos dois sistemas (é o mesmo TBUSERS), sem apagar o usuário. Quem
-// trabalha nos dois hospitais tem um TBUSERS em cada banco: cada banco grava em transação própria, só para os
+// desligamento bloqueia o acesso no mesmo dia, nos dois sistemas (é o mesmo usuário), sem apagar o usuário. Quem
+// trabalha nos dois hospitais tem um usuário em cada banco: cada banco grava em transação própria, só para os
 // vínculos daquele hospital. Se a pessoa ainda tem outro vínculo ativo no mesmo hospital, o usuário fica livre
 // (D-DESL-52, POL-5). Usuário já bloqueado: só o lado SGH_ é gravado (cenário `recusa-ja-bloqueado`).
 import { diasEntre } from '../datas.js';
@@ -22,7 +22,7 @@ export interface PedidoDesligamento {
   readonly vinculo: VinculoParaDesligar;
   readonly data: string;
   readonly hoje: string;
-  /** Os usuários da pessoa em cada hospital da Rede, relidos (TBUSERS.BLOQUEADO). */
+  /** Os usuários da pessoa em cada hospital da Rede, relidos (com o bloqueio). */
   readonly usuarios: readonly UsuarioRelido[];
   /** Os OUTROS vínculos ativos da mesma pessoa, com o hospital. */
   readonly outrosVinculosAtivos: readonly { readonly id: number; readonly hospital: string }[];

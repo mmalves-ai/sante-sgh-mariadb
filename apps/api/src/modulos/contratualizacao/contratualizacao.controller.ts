@@ -127,7 +127,9 @@ export interface ItemDominioSus {
   readonly sigla: string | null;
 }
 const VOCABULARIO: Readonly<
-  Partial<Record<ListaDominioContratualizacao, readonly { readonly codigo: number; readonly rotulo: string }[]>>
+  Partial<
+    Record<ListaDominioContratualizacao, readonly { readonly codigo: number; readonly rotulo: string }[]>
+  >
 > = {
   periodicidade: PERIODICIDADES_META_SUS,
   tipo_indicador: TIPOS_INDICADOR_SUS,
@@ -140,35 +142,38 @@ const VOCABULARIO: Readonly<
   componente_orcamento: TIPOS_ORCAMENTO_SUS,
 };
 /**
- * A chave de cada lista na resposta, como a tela e o contrato a leem hoje (pedido de renomear no contrato e na tela,
- * docs/obra/fatias/f22/saida/02-03.json): só a tradução da resposta, nunca nome de tabela do banco.
+ * A chave de cada lista na resposta (a tela lê por ela): o nome de negócio da lista em camelCase, nunca nome de
+ * tabela do banco nem do sistema de origem.
  */
 export const CHAVE_RESPOSTA_DOMINIO: Readonly<Record<ListaDominioContratualizacao, string>> = {
-  periodicidade: 'CMPERIODO',
-  tipo_indicador: 'CMTPINDICADOR',
-  complexidade: 'CMTIPOCOMPLEXIDADESP',
-  tipo_item_indicador: 'CMTPITEMINDIC',
-  rede_assistencial: 'CMREDEASSIST',
-  escore: 'CMESCORE',
-  tipo_afericao: 'CMTPAFERICAO',
-  esfera: 'CMTPCONTRATO',
-  tipo_dado: 'CMTPDADOS',
-  componente_orcamento: 'CMTPORCAMENTO',
-  incentivo: 'CMINCENTIVO',
+  periodicidade: 'periodicidade',
+  tipo_indicador: 'tipoIndicador',
+  complexidade: 'complexidade',
+  tipo_item_indicador: 'tipoItemIndicador',
+  rede_assistencial: 'redeAssistencial',
+  escore: 'escore',
+  tipo_afericao: 'tipoAfericao',
+  esfera: 'esfera',
+  tipo_dado: 'tipoDado',
+  componente_orcamento: 'componenteOrcamento',
+  incentivo: 'incentivo',
 };
 
 export function dominiosComRotulo(d: DominiosContratualizacao): Record<string, ItemDominioSus[]> {
   return Object.fromEntries(
-    (Object.entries(d) as [ListaDominioContratualizacao, DominiosContratualizacao[ListaDominioContratualizacao]][]).map(
-      ([lista, itens]) => [
-        CHAVE_RESPOSTA_DOMINIO[lista] ?? lista,
-        itens.map((x) => ({
-          codigo: x.codigo,
-          rotulo: VOCABULARIO[lista]?.find((y) => y.codigo === x.codigo)?.rotulo ?? x.nome,
-          sigla: x.sigla,
-        })),
-      ],
-    ),
+    (
+      Object.entries(d) as [
+        ListaDominioContratualizacao,
+        DominiosContratualizacao[ListaDominioContratualizacao],
+      ][]
+    ).map(([lista, itens]) => [
+      CHAVE_RESPOSTA_DOMINIO[lista] ?? lista,
+      itens.map((x) => ({
+        codigo: x.codigo,
+        rotulo: VOCABULARIO[lista]?.find((y) => y.codigo === x.codigo)?.rotulo ?? x.nome,
+        sigla: x.sigla,
+      })),
+    ]),
   );
 }
 
@@ -482,7 +487,12 @@ export class ContratualizacaoController {
       s,
       E.metaSusGravada.codigo,
       P.editar,
-      (y: { id: number }) => ({ tabela: 'meta_contratual_sus', id: String(y.id), paciente: null, chave: e.tipo }),
+      (y: { id: number }) => ({
+        tabela: 'meta_contratual_sus',
+        id: String(y.id),
+        paciente: null,
+        chave: e.tipo,
+      }),
       async (g) => {
         const ja = await g.metaPelaChave(chave);
         if (ja) {
@@ -548,9 +558,7 @@ export class ContratualizacaoController {
   @Post('metas/:id/apuracoes')
   @HttpCode(201)
   @Permissao(P.editar)
-  @AuditadoNoHandler(
-    'faturamento.registrarApuracaoSus: afericao_meta_sus com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('faturamento.registrarApuracaoSus: afericao_meta_sus com a trilha na mesma transação')
   async apurar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -716,7 +724,7 @@ export class ContratualizacaoController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ itens: { codigo: string; nome: string }[] }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'TBPROSUS' };
+    req.sghAlvo = { tabelaAlvo: 'procedimento_sigtap' };
     const f = esquemaBuscaSigtapMeta.safeParse({ termo: q['termo'] });
     if (!f.success)
       throw new ErroProblema(

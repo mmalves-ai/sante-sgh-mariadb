@@ -178,7 +178,7 @@ const instanteLocal = z
     const d = new Date(`${v.length === 16 ? `${v}:00` : v}Z`);
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 16) === v.slice(0, 16);
   }, 'Data ou hora inexistente.');
-/** Login do outro sistema (TBUSERS.NOME). */
+/** Login da conta do usuário. */
 const login = z
   .string()
   .trim()
@@ -327,12 +327,12 @@ export type FiltroNotificacoes = z.infer<typeof esquemaFiltroNotificacoes>;
 // ── Leituras e respostas ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Contexto da tela de origem relido pelo servidor (ATCABECATEND pelo ID, com o cadastro do paciente, a unidade e o
+ * Contexto da tela de origem relido pelo servidor (o atendimento pelo id, com o cadastro do paciente, a unidade e o
  * leito). O nome serve só às iniciais dos campos do Notivisa e à tela do NSP; não vai a log nem à trilha.
  */
 export interface ContextoNotificacaoLido {
   readonly atendimento: number;
-  /** RICADPAC.ID. */
+  /** Id do paciente. */
   readonly paciente: number;
   readonly nomePaciente: string;
   readonly prontuario: number | null;
@@ -341,7 +341,7 @@ export interface ContextoNotificacaoLido {
   readonly nascimento: string | null;
   /** `I` internação; `E` externo (ambulatório, pronto atendimento, SADT). */
   readonly tipoAtendimento: 'internacao' | 'externo';
-  /** O registro da internação (COD_ATENDIMENTO quando é internação). */
+  /** O registro da internação (o número do atendimento quando é internação). */
   readonly registro: number | null;
   readonly unidade: number | null;
   readonly nomeUnidade: string | null;

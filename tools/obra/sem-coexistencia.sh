@@ -30,6 +30,9 @@ for a in "$@"; do
 done
 pendentes_arq="tools/obra/sem-coexistencia.pendentes"
 padrao='coexist|onda0|onda[ _-]0\b|sistema antigo|no outro sistema|libera(ção|cao) por setor|ligar o setor|LIGAR_SETOR'
+# No conector/ (o único lugar que fala da origem, regra 1 do AGENTS.md), "sistema antigo" descreve a coluna ou a regra
+# de origem no mapa e nos testes: não é convivência. Os demais padrões valem também lá.
+padrao_conector='coexist|onda0|onda[ _-]0\b|no outro sistema|libera(ção|cao) por setor|ligar o setor|LIGAR_SETOR'
 alvos=(apps packages tools conector)
 proprios='^(tools/obra/sem-coexistencia\.(sh|pendentes)|tools/obra/fatiar_f22\.py|tools/obra/conferir-lote-f22\.sh)$'
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
@@ -39,7 +42,9 @@ git ls-files -z --cached --others --exclude-standard -- "${alvos[@]}" \
   | tr '\0' '\n' | grep -Ev '(^|/)(node_modules|dist|coverage|__pycache__)/' | grep -Ev "$proprios" \
   | while IFS= read -r f; do [ -f "$f" ] && printf '%s\0' "$f"; done > "$tmp/lista"
 # (a menção ao próprio verificador, "sem-coexistencia", não conta)
-{ xargs -0 -r grep -EiH -- "$padrao" < "$tmp/lista" 2>/dev/null || true; } | grep -vi 'sem-coexistencia' \
+{ tr '\0' '\n' < "$tmp/lista" | grep -v '^conector/' | tr '\n' '\0' | xargs -0 -r grep -EiH -- "$padrao" 2>/dev/null || true
+  tr '\0' '\n' < "$tmp/lista" | grep '^conector/' | tr '\n' '\0' | xargs -0 -r grep -EiH -- "$padrao_conector" 2>/dev/null || true
+} | grep -vi 'sem-coexistencia' \
   | awk '{i=index($0,":"); c[substr($0,1,i-1)]++} END{for(f in c) print f" "c[f]}' > "$tmp/conteudo"
 tr '\0' '\n' < "$tmp/lista" | grep -Ei 'coexist|onda0' | awk '{print $0" 1"}' > "$tmp/caminho" || true
 cat "$tmp/conteudo" "$tmp/caminho" | awk '{n=$NF; $NF=""; sub(/ $/,""); t[$0]+=n} END{for(f in t) print f" "t[f]}' | sort > "$tmp/atual"

@@ -2,7 +2,7 @@
 // gravar e respeitando a segregação). Puro: quem chama lê as duas contas ao vivo e grava cada passo pela via de
 // sempre (grupo e papel SBIS pelo executor do legado; perfil do Sante em SGH_ACESSO_PERFIL_USUARIO).
 //
-// Acessos copiados: o grupo (TBUSERS.GRUPO), os papéis SBIS ativos (TBUSERS_TBPAPEL) e as concessões nominais
+// Acessos copiados: o grupo do usuário, os papéis SBIS ativos e as concessões nominais
 // vigentes dos perfis do Sante (com o mesmo fim, se a do modelo for temporária). Modos:
 //   - 'somar': só acrescenta o que falta ao alvo;
 //   - 'igualar': também retira do alvo o papel e o perfil que o modelo não tem.

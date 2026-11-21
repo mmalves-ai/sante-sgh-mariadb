@@ -12,10 +12,11 @@
 // diferença no sentido do modelo (retorno − envio) e a divergência; remessa e baixa com número de negócio; a perda
 // baixa cada peça com o motivo cadastrado e o custo estimado pelo custo unitário; o relógio é o do fuso do
 // estabelecimento; a repetição do pedido é a idempotência do Executor.
-// O modelo da onda 2 (09_HOT/05) trouxe o inventário do enxoval, a composição do kit, as peças do envio, os itens da
-// baixa, o retorno vigente por envio e o motivo do cancelamento em todos os documentos (este já gravado aqui). Falta a
-// porta usar o resto: até lá, o inventário, o kit e a perda de várias peças recusam com "modelo-pendente", e o envio que
-// já teve um retorno (mesmo cancelado) recusa um novo retorno com mensagem de negócio (cancele o envio e registre outro).
+// O inventário é um documento próprio (inventario_enxoval, com a contagem de cada peça em inventario_enxoval_item); o
+// kit guarda a composição em peca_enxoval_composicao (só peças avulsas; a mudança reativa, altera ou exclui as linhas,
+// nunca duplica); a perda grava uma linha de baixa_enxoval_item por peça. O inventário conta peças: o peso não se
+// aplica e é recusado. O envio que já teve um retorno (mesmo cancelado) recusa um novo retorno com mensagem de negócio
+// (cancele o envio e registre outro).
 import { randomUUID } from 'node:crypto';
 import type {
   CategoriaPecaRoupa,
@@ -106,11 +107,11 @@ const TABELAS = [
   'distribuicao_enxoval_item',
   'baixa_enxoval',
   'baixa_enxoval_item',
+  'inventario_enxoval',
+  'inventario_enxoval_item',
+  'peca_enxoval_composicao',
   'sequencia_negocio',
 ];
-
-const modeloPendente = (detalhe: string) =>
-  new ErroOperacao(409, 'modelo-pendente', 'Recurso aguardando o modelo do banco', detalhe);
 
 /** Relógio civil no fuso do estabelecimento ("AAAA-MM-DD" e "AAAA-MM-DDTHH:MM:SS"). */
 export function relogioNoFuso(fuso: string, agora: Date = new Date()): { hoje: string; agora: string } {
@@ -181,7 +182,18 @@ const SQL_DOCUMENTOS = `
          IF(b.situacao = 'cancelada', b.alterado_por, NULL),
          IF(b.situacao = 'cancelada', ${INSTANTE('b.alterado_em')}, NULL), NULL, b.versao
     FROM baixa_enxoval b JOIN motivo_baixa_enxoval mb ON mb.id = b.motivo_baixa_enxoval_id
-   WHERE b.estabelecimento_id = ? AND b.excluido_em IS NULL`;
+   WHERE b.estabelecimento_id = ? AND b.excluido_em IS NULL
+  UNION ALL
+  SELECT v.id * 8 + 6, 'inventario', ${DATA('v.contado_em')}, ${INSTANTE('v.contado_em')}, v.setor_funcional_id, NULL,
+         NULL, (SELECT COALESCE(SUM(vi.quantidade_contada), 0) FROM inventario_enxoval_item vi
+                 WHERE vi.inventario_enxoval_id = v.id AND vi.excluido_em IS NULL),
+         NULL, NULL, NULL, NULL, NULL, 0, v.observacao, v.situacao, v.responsavel_usuario_id,
+         IF(v.situacao = 'cancelado', v.alterado_por, NULL), ${INSTANTE('v.cancelado_em')}, v.motivo_cancelamento,
+         v.versao
+    FROM inventario_enxoval v WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL`;
+
+/** Um parâmetro do estabelecimento por documento do UNION (seis tabelas). */
+const porDocumento = (est: number): unknown[] => Array.from({ length: 6 }, () => est);
 
 /** Os movimentos com os filtros (as condições sobre as colunas comuns; parâmetros literais). */
 function sqlMovimentos(condicoes: readonly string[], ordem = 'm.em DESC, m.numero DESC'): string {
@@ -298,7 +310,7 @@ export class PortaRoupariaPropria implements PortaRouparia {
     const teto = f.teto ?? 200;
     return this.ler(c, async (l, est) => {
       const cond = ['m.data >= ?', 'm.data <= ?'];
-      const p: unknown[] = [est, est, est, est, est, f.de, f.ate];
+      const p: unknown[] = [...porDocumento(est), f.de, f.ate];
       if (f.tipo) {
         cond.push('m.tipo = ?');
         p.push(f.tipo);
@@ -310,14 +322,7 @@ export class PortaRoupariaPropria implements PortaRouparia {
       if (f.antesDe) {
         // Cursor composto (instante, número): o número sozinho não é cronológico entre documentos de tabelas
         // diferentes.
-        const [ref] = await l.consultar(sqlMovimentos(['m.numero = ?']), [
-          est,
-          est,
-          est,
-          est,
-          est,
-          f.antesDe,
-        ]);
+        const [ref] = await l.consultar(sqlMovimentos(['m.numero = ?']), [...porDocumento(est), f.antesDe]);
         if (!ref) return { itens: [], cortada: false };
         cond.push('(m.em < ? OR (m.em = ? AND m.numero < ?))');
         p.push(texto(ref['em']), texto(ref['em']), f.antesDe);
@@ -338,7 +343,7 @@ export class PortaRoupariaPropria implements PortaRouparia {
         l,
         await l.consultar(
           sqlMovimentos(["m.tipo = 'envio'", "m.situacao = 'registrado'"], 'm.em, m.numero'),
-          [est, est, est, est, est],
+          porDocumento(est),
         ),
       ),
     );
@@ -392,9 +397,14 @@ export class PortaRoupariaPropria implements PortaRouparia {
     });
   }
 
-  /** O inventário do enxoval aguarda a tabela no modelo (pedido inventario_enxoval): nenhuma contagem lida. */
-  async inventarios(): Promise<MovimentoRoupa[]> {
-    return [];
+  /** Os inventários do estabelecimento até a data (com a contagem de cada peça), do mais recente ao mais antigo. */
+  inventarios(c: ContextoPortaM18, ate: string): Promise<MovimentoRoupa[]> {
+    return this.ler(c, async (l, est) =>
+      comItens(
+        l,
+        await l.consultar(sqlMovimentos(["m.tipo = 'inventario'", 'm.data <= ?']), [...porDocumento(est), ate]),
+      ),
+    );
   }
 
   setores(c: ContextoPortaM18): Promise<SetorRouparia[]> {
@@ -450,6 +460,15 @@ async function fusoDe(l: Leitor, est: number): Promise<string> {
 }
 
 async function pecasDe(l: Leitor): Promise<PecaRoupa[]> {
+  const composicao = new Map<number, { peca: number; quantidade: number }[]>();
+  for (const x of await l.consultar(
+    `SELECT kit_peca_enxoval_id AS kit, componente_peca_enxoval_id AS peca, quantidade FROM peca_enxoval_composicao
+      WHERE excluido_em IS NULL ORDER BY kit_peca_enxoval_id, id`,
+  ))
+    composicao.set(n(x['kit']), [
+      ...(composicao.get(n(x['kit'])) ?? []),
+      { peca: n(x['peca']), quantidade: n(x['quantidade']) },
+    ]);
   return (
     await l.consultar(
       `SELECT id, descricao, categoria, peso_gramas, custo_unitario, ativo, versao FROM peca_enxoval
@@ -461,8 +480,7 @@ async function pecasDe(l: Leitor): Promise<PecaRoupa[]> {
     categoria: CATEGORIA_NA_TELA(x['categoria']),
     pesoGramas: n(x['peso_gramas']),
     custoReposicaoCentavos: x['custo_unitario'] === null ? null : Math.round(n(x['custo_unitario']) * 100),
-    // A composição do kit aguarda a tabela no modelo (pedido peca_enxoval_composicao).
-    composicao: [],
+    composicao: composicao.get(n(x['id'])) ?? [],
     ativa: verdadeiro(x['ativo']),
     versao: n(x['versao']),
   }));
@@ -479,7 +497,7 @@ async function lavanderiaAtiva(l: Leitor, est: number, id: number): Promise<numb
 
 async function movimentoDe(l: Leitor, est: number, numero: number): Promise<MovimentoRoupa | null> {
   if (!documentoDoMovimento(numero)) return null;
-  const [m] = await l.consultar(sqlMovimentos(['m.numero = ?']), [est, est, est, est, est, numero]);
+  const [m] = await l.consultar(sqlMovimentos(['m.numero = ?']), [...porDocumento(est), numero]);
   return m ? ((await comItens(l, [m]))[0] ?? null) : null;
 }
 
@@ -506,6 +524,14 @@ async function comItens(l: Leitor, linhas: readonly Linha[]): Promise<MovimentoR
       ent,
     ))
       juntar(numeroDoMovimento('entrega', n(x['doc'])), n(x['peca_enxoval_id']), n(x['quantidade_entregue']));
+  const inv = ids('inventario');
+  if (inv.length)
+    for (const x of await l.consultar(
+      `SELECT inventario_enxoval_id AS doc, peca_enxoval_id, quantidade_contada FROM inventario_enxoval_item
+        WHERE inventario_enxoval_id IN (${lista(inv.length)}) AND excluido_em IS NULL ORDER BY sequencia`,
+      inv,
+    ))
+      juntar(numeroDoMovimento('inventario', n(x['doc'])), n(x['peca_enxoval_id']), n(x['quantidade_contada']));
   const bx = ids('perda');
   if (bx.length)
     for (const x of await l.consultar(
@@ -573,12 +599,13 @@ async function travarDocumento(tx: TxOperacao, tabela: string, id: number, est: 
   return r ? { id: n(r['id']), versao: n(r['versao']), situacao: texto(r['situacao']) } : null;
 }
 
-const TABELA_DO_TIPO: Readonly<Record<Exclude<TipoMovimentoRoupa, 'inventario'>, string>> = {
+const TABELA_DO_TIPO: Readonly<Record<TipoMovimentoRoupa, string>> = {
   coleta: 'coleta_roupa_suja',
   envio: 'remessa_lavanderia',
   retorno: 'retorno_lavanderia',
   entrega: 'distribuicao_enxoval',
   perda: 'baixa_enxoval',
+  inventario: 'inventario_enxoval',
 };
 
 function gravador(tx: TxOperacao, est: number): GravadorRouparia {
@@ -590,10 +617,6 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
   };
 
   const camposPeca = (p: PecaRoupaGravada) => {
-    if (p.categoria === 'kit')
-      throw modeloPendente(
-        'O kit do enxoval aguarda a tabela da composição no modelo do banco: cadastre as peças avulsas por enquanto.',
-      );
     return {
       descricao: p.nome,
       categoria: CATEGORIA_NO_MODELO(p.categoria),
@@ -602,6 +625,54 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
       ativo: p.ativa,
     };
   };
+
+  /**
+   * A composição do kit como a tela mandou: a linha que já existe (mesmo excluída, pela chave única kit × peça) é
+   * reativada ou alterada; a que saiu é excluída (lógica, com quem e quando); a nova é incluída. A peça que deixa de ser kit perde a composição.
+   */
+  async function gravarComposicao(kit: number, p: PecaRoupaGravada) {
+    const desejada = new Map(p.categoria === 'kit' ? p.composicao.map((c) => [c.peca, c.quantidade]) : []);
+    if (desejada.size) {
+      const componentes = await tx.consultar(
+        `SELECT id, categoria FROM peca_enxoval WHERE id IN (${lista(desejada.size)}) AND excluido_em IS NULL`,
+        [...desejada.keys()],
+      );
+      if (componentes.length !== desejada.size)
+        throw recusa('peca-inexistente', 'Uma peça da composição do kit não existe no cadastro.');
+      if (componentes.some((x) => x['categoria'] === 'kit'))
+        throw recusa('kit-dentro-de-kit', 'A composição de um kit só leva peças, não outros kits.');
+    }
+    const atuais = await tx.consultarParaAtualizar(
+      `SELECT id, componente_peca_enxoval_id AS peca, quantidade, versao, excluido_em IS NOT NULL AS excluida
+         FROM peca_enxoval_composicao WHERE kit_peca_enxoval_id = ?`,
+      [kit],
+      { teto: 200 },
+    );
+    for (const a of atuais) {
+      const peca = n(a['peca']);
+      const quer = desejada.get(peca);
+      const excluida = n(a['excluida']) === 1;
+      if (quer === undefined) {
+        if (!excluida)
+          await tx.alterar('peca_enxoval_composicao', n(a['id']), n(a['versao']), {
+            excluido_em: paraBanco((await relogio()).agora),
+            excluido_por: tx.contexto.usuario,
+          });
+      } else if (excluida || n(a['quantidade']) !== quer)
+        await tx.alterar('peca_enxoval_composicao', n(a['id']), n(a['versao']), {
+          quantidade: quer,
+          excluido_em: null,
+          excluido_por: null,
+        });
+      desejada.delete(peca);
+    }
+    for (const [peca, quantidade] of desejada)
+      await tx.incluir('peca_enxoval_composicao', {
+        kit_peca_enxoval_id: kit,
+        componente_peca_enxoval_id: peca,
+        quantidade,
+      });
+  }
 
   async function cotaVigente(setor: number, peca: number, hoje: string) {
     const [r] = await tx.consultarParaAtualizar(
@@ -635,10 +706,6 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
       [m.motivoPerda, m.motivoPerda, m.motivoPerda],
     );
     if (m.itens.length === 0) throw recusa('perda-sem-peca', 'Informe a peça perdida e a quantidade.');
-    if (m.itens.length > 1)
-      throw modeloPendente(
-        'A perda de várias peças num documento só aguarda os itens da baixa no modelo do banco: registre uma perda por peça.',
-      );
     if (!motivo)
       throw recusa(
         'motivo-nao-cadastrado',
@@ -652,10 +719,8 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
         )
       ).map((x) => [n(x['id']), x['custo_unitario']]),
     );
-    const [i] = m.itens as [MovimentoRoupaNovo['itens'][number]];
     const num = await numero(tx, 'baixa_enxoval', 'BX-');
-    const custo = pecas.get(i.peca);
-    // A baixa é o cabeçalho; a peça, a quantidade e o custo estimado ficam no item (baixa_enxoval_item).
+    // A baixa é o cabeçalho; cada peça, a quantidade e o custo estimado ficam no item (baixa_enxoval_item).
     const id = await tx.incluir('baixa_enxoval', {
       estabelecimento_id: est,
       numero: num.formatado,
@@ -666,13 +731,40 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
       observacao: m.observacao,
       situacao: 'registrada',
     });
-    await tx.incluir('baixa_enxoval_item', {
-      baixa_enxoval_id: id,
-      sequencia: 1,
-      peca_enxoval_id: i.peca,
-      quantidade: i.quantidade,
-      custo_estimado: custo === null || custo === undefined ? null : (n(custo) * i.quantidade).toFixed(2),
+    for (const [k, i] of m.itens.entries()) {
+      const custo = pecas.get(i.peca);
+      await tx.incluir('baixa_enxoval_item', {
+        baixa_enxoval_id: id,
+        sequencia: k + 1,
+        peca_enxoval_id: i.peca,
+        quantidade: i.quantidade,
+        custo_estimado: custo === null || custo === undefined ? null : (n(custo) * i.quantidade).toFixed(2),
+      });
+    }
+    return id;
+  }
+
+  async function registrarInventario(m: MovimentoRoupaNovo, usuario: number, em: string): Promise<number> {
+    if (m.itens.length === 0) throw recusa('inventario-sem-peca', 'Informe as peças contadas e as quantidades.');
+    if (m.pesoKg !== null)
+      throw recusa('inventario-sem-peso', 'O inventário conta peças: informe as quantidades, sem o peso.');
+    const num = await numero(tx, 'inventario_enxoval', 'IN-');
+    const id = await tx.incluir('inventario_enxoval', {
+      estabelecimento_id: est,
+      numero: num.formatado,
+      contado_em: em,
+      setor_funcional_id: m.centroCusto,
+      responsavel_usuario_id: usuario,
+      situacao: 'registrado',
+      observacao: m.observacao,
     });
+    for (const [k, i] of m.itens.entries())
+      await tx.incluir('inventario_enxoval_item', {
+        inventario_enxoval_id: id,
+        sequencia: k + 1,
+        peca_enxoval_id: i.peca,
+        quantidade_contada: i.quantidade,
+      });
     return id;
   }
 
@@ -682,7 +774,7 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
 
     async movimento(numeroPublico) {
       const doc = documentoDoMovimento(numeroPublico);
-      if (!doc || doc.tipo === 'inventario') return null;
+      if (!doc) return null;
       if (!(await travarDocumento(tx, TABELA_DO_TIPO[doc.tipo], doc.id, est))) return null;
       return movimentoDe(tx, est, numeroPublico);
     },
@@ -691,11 +783,13 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
       const campos = camposPeca(p);
       const codigo = await numero(tx, 'peca_enxoval', 'PE-', true);
       const id = await tx.incluir('peca_enxoval', { codigo: codigo.formatado, ...campos });
+      await gravarComposicao(id, p);
       return { id, versao: 1 };
     },
 
     async alterarPeca(p) {
       const versao = await tx.alterar('peca_enxoval', p.id, p.versaoVista, camposPeca(p));
+      await gravarComposicao(p.id, p);
       return { id: p.id, versao };
     },
 
@@ -852,16 +946,15 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
           id = await registrarPerda(m, usuario);
           break;
         case 'inventario':
-          throw modeloPendente(
-            'O inventário do enxoval aguarda a tabela da contagem no modelo do banco: registre a contagem depois.',
-          );
+          id = await registrarInventario(m, usuario, em);
+          break;
       }
       return { id: numeroDoMovimento(m.tipo, id), versao: 1 };
     },
 
     async cancelarMovimento(c) {
       const doc = documentoDoMovimento(c.id);
-      if (!doc || doc.tipo === 'inventario')
+      if (!doc)
         throw new ErroOperacao(
           404,
           'registro-inexistente',
@@ -876,6 +969,7 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
         retorno: 'cancelado',
         entrega: 'cancelada',
         perda: 'cancelada',
+        inventario: 'cancelado',
       }[doc.tipo];
       const versao = await tx.alterar(tabela, doc.id, c.versaoVista, {
         situacao,

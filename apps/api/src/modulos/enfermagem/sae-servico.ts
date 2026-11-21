@@ -36,7 +36,7 @@ export const TETO_HORARIOS_TURNO = 500;
 
 export interface VinculoDaSessao {
   readonly categoria: 'enfermeiro' | 'tecnico' | 'outro';
-  /** O vínculo (TBCBOPRO) da categoria; nulo sem vínculo de enfermagem. */
+  /** O vínculo profissional (CBO) da categoria; nulo sem vínculo de enfermagem. */
   readonly vinculo: number | null;
 }
 

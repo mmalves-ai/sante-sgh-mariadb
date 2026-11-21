@@ -91,7 +91,7 @@ export const PLANO_SINTETICO: readonly ContaPlanoVersionada[] = [
 
 const fato = (idFato: number, id: number, valorCentavos: number, convenio: number): FatoRegistrado => ({
   idFato,
-  tabela: 'FCCTAEXT',
+  tabela: 'conta_hospitalar',
   id,
   tipo: 'receitaConta',
   origem: 3,
@@ -123,7 +123,7 @@ export class PortaContabilMemoria implements PortaContabil {
   ];
   readonly estados: EstadoFonteFatos[] = [
     {
-      tabela: 'FCCTAEXT',
+      tabela: 'conta_hospitalar',
       marca: 900_003,
       varredura: 1,
       ultimaLeitura: '2026-10-16T01:00:00',

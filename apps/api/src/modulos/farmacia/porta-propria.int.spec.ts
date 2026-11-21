@@ -4,7 +4,8 @@
 // aberta para o prescritor vinculado, três itens prescritos e um farmacêutico com vínculo. Confere as leituras
 // (estabelecimento da sessão, excluídos, validade e saldo), o contrato de efeito da triagem, da decisão, da intervenção
 // e da resposta (linhas, versao, trilha e outbox; recusas de item avaliado, de outro estabelecimento, do autor e de
-// quem não é o prescritor) e as recusas das gravações que esperam o modelo ('modelo-pendente', sem gravar nada).
+// quem não é o prescritor) a pendência de revisão médica (parecer `revisao_medica`, que não fecha o item) e as recusas das gravações que
+// ainda não gravam no banco próprio ('modelo-pendente', sem gravar nada).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type ContextoNucleo, type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -369,7 +370,7 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = ? AND estabelecimento_id = ?', [ponto, ids.est]);
 
   it('triagem e decisão: parecer por item, cabeçalho em avaliação e concluído, trilha, outbox e recusas', async () => {
-    const [item1, item2, item3] = ids.itens as [number, number, number];
+    const [item1, item2] = ids.itens as [number, number, number];
     const triagem = (item: number, destino: 'automatica' | 'humana') => ({
       item,
       horario: null,
@@ -407,9 +408,6 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
           triagem: triagem(item, 'humana'),
         }),
       );
-    // A pendência de revisão médica espera o modelo: nada é gravado.
-    expect(codigoDe(await decidir(ctxF, item3, 'pendencia-revisao-medica').catch((e: unknown) => e))).toBe('modelo-pendente');
-    expect(await contar('SELECT COUNT(*) AS n FROM avaliacao_farmaceutica_item WHERE prescricao_item_id = ?', [item3])).toBe(0);
     const d = await decidir(ctxF, item2, 'nao-aprovado');
     const linha = await ler(
       'SELECT id, parecer, justificativa, liberador_profissional_id, versao FROM avaliacao_farmaceutica_item WHERE prescricao_item_id = ?',
@@ -505,5 +503,61 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
       .catch((e: unknown) => e);
     expect(codigoDe(r)).toBe('modelo-pendente');
     expect(await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est])).toBe(antes);
+    // As leituras dessas telas recusam (não devolvem lista vazia como se fosse real).
+    expect(codigoDe(await porta.filaDaUnidade().catch((e: unknown) => e))).toBe('modelo-pendente');
+    expect(codigoDe(await porta.livroFechado().catch((e: unknown) => e))).toBe('modelo-pendente');
+  });
+  it('pendência de revisão médica: parecer revisao_medica com a justificativa, que não fecha o item', async () => {
+    const [, , item3] = ids.itens as [number, number, number];
+    const triagem = (item: number, destino: 'automatica' | 'humana') => ({
+      item,
+      horario: null,
+      classe: 'comum' as const,
+      destino,
+      prioridade: 0,
+      achados: [],
+      regra: 'baixo-risco',
+    });
+    const decidir = (c: ContextoNucleo, item: number, decisao: 'valido' | 'nao-aprovado' | 'pendencia-revisao-medica') =>
+      porta.gravarSgh(c, null, (g) =>
+        g.decidir({
+          item,
+          decisao,
+          justificativa: 'Dose acima do teto do cadastro (texto sintético)',
+          farmaceutico: 'l0206f.farma',
+          triagem: triagem(item, 'humana'),
+        }),
+      );
+    // A pendência de revisão médica grava o parecer `revisao_medica` com a justificativa e não fecha o item: depois da
+    // revisão do médico o farmacêutico decide de novo (e só então o item conta como avaliado).
+    const rev = await decidir(ctxF, item3, 'pendencia-revisao-medica');
+    expect(await ler('SELECT parecer, justificativa FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id])).toMatchObject({
+      parecer: 'revisao_medica',
+      justificativa: 'Dose acima do teto do cadastro (texto sintético)',
+    });
+    expect((await porta.avaliacoes(ctx, [item3])).get(item3)).toMatchObject({ decisao: 'pendencia-revisao-medica' });
+    // O par avaliação + item é único: a decisão final altera a linha da pendência (a revisão fica na trilha).
+    const cabecalhoDoParecer = (id: number) =>
+      ler(
+        `SELECT a.situacao FROM avaliacao_farmaceutica a JOIN avaliacao_farmaceutica_item ai ON ai.avaliacao_farmaceutica_id = a.id
+          WHERE ai.id = ?`,
+        [id],
+      );
+    // A pendência mantém o cabeçalho em avaliação, mesmo com os demais itens vigentes já decididos.
+    expect(await cabecalhoDoParecer(rev.id)).toMatchObject({ situacao: 'em_avaliacao' });
+    const final = await decidir(ctxF, item3, 'valido');
+    expect(final.id).toBe(rev.id);
+    expect((await cabecalhoDoParecer(rev.id))?.['situacao']).not.toBe('em_avaliacao');
+    expect(await ler('SELECT parecer, versao FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id])).toMatchObject({
+      parecer: 'aprovado',
+      versao: 2,
+    });
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM avaliacao_farmaceutica_item WHERE prescricao_item_id = ? AND parecer IN ('revisao_medica','aprovado')",
+        [item3],
+      ),
+    ).toBe(1);
+    expect(codigoDe(await decidir(ctxF, item3, 'valido').catch((e: unknown) => e))).toBe('ja-avaliado');
   });
 });

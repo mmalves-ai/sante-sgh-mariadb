@@ -1,4 +1,4 @@
-// Regras puras das telas do M21 (testadas em regras-tela.spec.ts): o texto do leito, a hora HHMM, o agrupamento do
+// Regras puras das telas do M21 (testadas em regras-tela.spec.ts): o texto do leito, o agrupamento do
 // mapa por bloco e acomodação, a cor de cada situação, o prazo da limpeza e a leitura da etiqueta do SAME.
 import {
   type CartaoPaciente,
@@ -11,14 +11,14 @@ import {
 
 export const leitoTexto = (l: ChaveLeito) => `${l.bloco} · ${l.acomodacao} · ${l.leito}`;
 
-/** "1430" → "14:30"; vazio → "". */
+/**
+ * Hora para exibir: "14:30" fica como está; "1430" (quatro dígitos, como a API do ADT ainda devolve) vira "14:30";
+ * vazio → "". Some quando a API do ADT passar a devolver HH:MM (pedido em 16-misto-financeiro.json).
+ */
 export function hhmm(h: string | null | undefined): string {
   const s = (h ?? '').trim();
   return /^\d{4}$/.test(s) ? `${s.slice(0, 2)}:${s.slice(2)}` : s;
 }
-
-/** "14:30" → "1430" (a hora como o servidor recebe). */
-export const paraHhmm = (h: string) => h.replace(':', '').slice(0, 4);
 
 export interface GrupoMapa {
   readonly bloco: string;

@@ -1,6 +1,6 @@
 // Retorno do laboratório de apoio (M34; ficha, regra 13; cap-12 §12.2, Laboratório de apoio): o resultado entra
 // ESTRUTURADO, pelo de-para do estabelecimento (o mesmo cadastro que a interface em uso lê: o exame do laboratório
-// em SITBEXHP, os elementos em SITBELHP pelo código do laboratório, ligados pelo nome ao elemento do exame do
+// no de-para de exames, os elementos no de-para de elementos pelo código do laboratório, ligados pelo nome ao elemento do exame do
 // cadastro), é conferido e liberado pelo responsável técnico. Uma interface por estabelecimento de cada vez (a troca
 // da interface em uso para o conector é liberação da Fase 4, reversível). Regras puras.
 import type { ElementoApoio } from '@sgh/contratos';
@@ -15,9 +15,9 @@ export interface ValorRecebido {
 }
 
 export interface ElementoDePara {
-  /** Código do elemento no laboratório (SITBELHP.COD). */
+  /** Código do elemento no laboratório. */
   readonly codigoLaboratorio: string;
-  /** Nome do elemento no de-para (SITBELHP.ELEMENTO_NOME). */
+  /** Nome do elemento no de-para. */
   readonly nome: string | null;
 }
 

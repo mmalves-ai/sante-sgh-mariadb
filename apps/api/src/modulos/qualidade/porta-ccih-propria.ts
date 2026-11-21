@@ -2,7 +2,7 @@
 // Lê o relógio e os setores do estabelecimento. Os registros da vigilância (dispositivo_invasivo_paciente, caso_infeccao,
 // liberacao_antimicrobiano, isolamento_paciente, observacao_higiene_maos, surto_infeccao, verificacao_bundle,
 // fechamento_vigilancia_iras) e as leituras assistenciais (internados, prescrições, culturas, cirurgias, censo) aguardam
-// o mapeamento (pedido em docs/obra/fatias/f22/saida/04-03.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as gravações
+// o mapeamento (pedido em docs/obra/fatias/f22/arquivo-ondas-1a4/saida/04-03.json e docs/obra/fatias/f24/saida/15-qualidade.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as gravações
 // recusam com `modelo-pendente` (nada é gravado pela metade; a tela fica em consulta).
 import { type NucleoQualidade, lerNoEstabelecimento, leituraPendente, liberacaoPendente, modeloPendente, relogioDoEstabelecimento, setoresDoEstabelecimento } from './apoio-propria.js';
 import type { ContextoCcih, PortaCcih } from './porta-ccih.js';

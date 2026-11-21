@@ -4,10 +4,11 @@
 // estabelecimento da sessão (pelo agendamento ou pelo ato) e os registros excluídos; os cadastros são da rede inteira.
 // Melhoria: a ficha e a SRPA ligam-se ao ato e ao agendamento do modelo, sem chave natural em texto; os marcos são linhas
 // próprias (marco_ficha_anestesica), não colunas por marco.
-// Pendência registrada (pedidos do lote 03-01, saida/03-01.json): as GRAVAÇÕES da APA, da ficha e da SRPA recusam com 409
-// modelo-pendente — a ficha e o checklist exigem o ato cirúrgico (ato_cirurgico_id NOT NULL), que só nasce no registro;
-// a APA não tem colunas para o jejum, os critérios de Lee e o plano estruturado; a ficha não tem passagem de
-// responsabilidade, lacuna justificada nem adendo. A tela fica em consulta, com o motivo.
+// Pendência registrada (lote 08-cirurgia, saida/08-cirurgia.json): a estrutura já existe (ficha aberta pelo
+// agendamento antes do ato, colunas do jejum, de Lee e do plano da APA, passagem, lacuna e adendo da ficha), mas as
+// GRAVAÇÕES da APA, da ficha e da SRPA recusam com 409 modelo-pendente até a implementação do gravador sobre ela, que
+// depende da chave de idempotência da requisição chegar ao gravarSgh (pedido de apoio comum do M18). A tela fica em
+// consulta, com o motivo.
 import { ErroOperacao, type Leitor, recusa } from '@sgh/nucleo';
 import type { DestinoAltaSrpa, MarcoFicha, MomentoSrpa } from '@sgh/contratos';
 import { type ContextoPortaM18, type LiberacaoGravacao, portaIndisponivel } from '../exames/public-api.js';
@@ -31,7 +32,7 @@ import type {
 
 type Linha = Record<string, unknown>;
 export const MOTIVO_ANESTESIA_PENDENTE =
-  'As gravações da APA, da ficha anestésica e da SRPA no banco próprio aguardam o modelo (ficha ligada ao agendamento antes do ato, colunas do jejum, de Lee e do plano, passagem, lacuna e adendo da ficha): a tela fica em consulta.';
+  'As gravações da APA, da ficha anestésica e da SRPA no banco próprio aguardam a gravação sobre o modelo (com a chave de idempotência do pedido): a tela fica em consulta.';
 
 export class PortaAnestesiaPropria implements PortaAnestesia {
   readonly destino = 'banco' as const;

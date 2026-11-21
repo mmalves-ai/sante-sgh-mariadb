@@ -63,7 +63,7 @@ export class ParametrosController {
     const login = a.sessao.usuario.login ?? a.sessao.usuario.id;
     const sujeito: SujeitoParametro = {
       rede: a.sessao.rede ?? '',
-      // Empresa (TBEMPHOS) da sessão: o M10 liga; até lá o nível empresa não se aplica à pessoa.
+      // Empresa da sessão: o M10 liga; até lá o nível empresa não se aplica à pessoa.
       empresa: null,
       estabelecimento: hospital,
       unidade:

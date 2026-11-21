@@ -1,5 +1,5 @@
 // Regra 6 do M08 (cap-08 §8.13): exportar exige a permissão `exportar` e trilha; com campo de dado pessoal,
-// exige a justificativa de PRTIPO_JUSTIF_EXPORTACAO (4 justificativas do legado, domínio de auditoria).
+// exige a justificativa do cadastro de justificativas de exportação (4 justificativas, domínio de auditoria).
 // CSV em CP1252-compatível (o conteúdo já é CP1252), separador ';' (padrão do Excel em pt-BR), aspas
 // duplicadas, e neutralização de fórmula (célula que começa com = + - @ ganha apóstrofo).
 import type { CampoDescrito, ItemDominio } from '@sgh/contratos';

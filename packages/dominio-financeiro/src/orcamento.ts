@@ -1,5 +1,5 @@
 // Regra 14 do M54 (manual m23, orçamento empresarial): o orçamento anual por centro de custo e item gerencial, com
-// versões e aprovação, comparado com o realizado (MFLANGSI pela competência, saídas de estoque por centro de destino)
+// versões e aprovação, comparado com o realizado (a classificação gerencial pela competência, saídas de estoque por centro de destino)
 // com o desvio absoluto e percentual e as parcelas de cada total. Regras puras: sem banco, sem HTTP. Tudo em centavos
 // inteiros (nenhuma soma em ponto flutuante).
 //   - validarLinhas: a natureza manda na chave (consumo: centro de custo e sem item; despesa e receita: item gerencial
@@ -47,7 +47,7 @@ export function mesesZerados(): number[] {
 }
 
 export interface ContextoValidacao {
-  /** IDs dos centros de custo do cadastro (TBCENCUS.ID). */
+  /** IDs dos centros de custo do cadastro. */
   readonly centros: ReadonlySet<number>;
   /** Itens gerenciais do cadastro, pela chave `grupo.subgrupo.item`, com a natureza do grupo. */
   readonly itens: ReadonlyMap<string, 'despesa' | 'receita'>;
@@ -439,7 +439,7 @@ export interface RealizadoConvertido {
 }
 
 /**
- * Leva o realizado do banco à chave do orçamento: o código do centro (CDC = TBCENCUS.COD) vira o ID; o documento com
+ * Leva o realizado do banco à chave do orçamento: o código do centro de custo vira o ID; o documento com
  * rateio é repartido pelos percentuais (maiores restos), a sobra fica sem centro. Nada se perde: a soma do convertido
  * é a soma do bruto.
  */

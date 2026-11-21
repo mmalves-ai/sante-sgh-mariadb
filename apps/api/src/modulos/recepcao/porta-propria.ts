@@ -7,11 +7,24 @@
 // local_atendimento, gerador_senha, guiche_recepcao), com as restrições do banco; o guichê em uso é a ocupação
 // vigente (ocupacao_guiche sem fim).
 // Melhoria: indicadores calculados no servidor sobre as senhas do período, só com contagens e tempos (sem pessoa).
-// Pendências do modelo (pedidos ao integrador, docs/obra/fatias/f22/saida/01-01.json): a configuração da fila por
-// serviço (intercalar, tempo-alvo, rótulo e exibição no totem), os dispositivos do perfil Painel/Totem (token,
-// validade, revogação) e os termos de consentimento da recepção não têm tabela no modelo: as gravações respondem
-// "modelo-pendente" e as leituras devolvem vazio, sem contorno.
-import type { AssinaturaTermo, ModeloTermo, SignatarioTermo } from '@sgh/contratos';
+// Melhoria: a configuração da fila por serviço (intercalar, tempo-alvo, rótulo e exibição no totem) mora no próprio
+// gerador_senha; os dispositivos do perfil Painel/Totem (dispositivo_recepcao) guardam só o resumo SHA-256 do token,
+// com validade, revogação, último uso e a conferência do login substituído; os termos de consentimento da recepção
+// são versões de termo_consentimento_modelo (tipos de atendimento preenchidos) e as assinaturas, imutáveis, ficam em
+// termo_consentimento_recepcao (a revogação é fato novo com motivo).
+// Pendência do modelo (pedido em docs/obra/fatias/f24/saida/13-recepcao.json): o vínculo do painel de TV de setor com o
+// painel que ele substitui (portalOrdem) não tem coluna; só esse caso é recusado, nada é descartado em silêncio.
+import { createHash, randomBytes } from 'node:crypto';
+import {
+  type AssinaturaTermo,
+  codificarCp1252,
+  conteudoCanonicoAssinatura,
+  FINALIDADES_CONSENTIMENTO,
+  type ModeloTermo,
+  type SignatarioTermo,
+  type TipoAtendimentoTermo,
+  type VersaoModeloTermo,
+} from '@sgh/contratos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -19,10 +32,13 @@ import {
   type Executor,
   gravarTrilha,
   type Leitor,
+  type Linha,
   recusa,
 } from '@sgh/nucleo';
+import { ErroProblema } from '../../problema.filter.js';
 import {
   bool,
+  civilOuNull,
   dataIso,
   type EstabelecimentoDaSessao,
   estabelecimentoPorCodigo,
@@ -67,13 +83,16 @@ export interface NucleoRecepcao {
   ): Promise<T>;
 }
 
-/** Recusa das gravações que esperam tabela do modelo (pedido registrado ao integrador). */
-export function modeloPendente(recurso: string): never {
+/** Recusa da gravação que espera coluna do modelo (pedido registrado ao integrador). */
+function aguardaModelo(recurso: string): never {
   throw recusa(
     'modelo-pendente',
-    `${recurso} ainda não tem tabela no banco do produto: a gravação fica indisponível até a migração do modelo.`,
+    `${recurso} ainda não tem coluna no banco do produto: a gravação fica indisponível até a migração do modelo.`,
   );
 }
+
+/** Intervalo mínimo entre duas marcas de último uso do mesmo dispositivo. */
+const USO_DISPOSITIVO_MS = 10 * 60_000;
 
 /** Teto de linhas dos indicadores (um período de senhas). */
 const TETO_INDICADORES = 50_000;
@@ -185,7 +204,7 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
         correlacao: (t0?.correlacao ?? 'recepcao').slice(0, 64),
       },
       async (e) => {
-        const r = await fn(gravadorSemModelo());
+        const r = await fn(gravadorProprio(e, est, usuario, new Date(this.agora())));
         const t = typeof trilha === 'function' ? trilha(r) : trilha;
         await gravarTrilha(e, {
           estabelecimento: est.id,
@@ -203,8 +222,16 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
     );
   }
 
-  async marcarUsoDispositivo(): Promise<void> {
-    // Dispositivos sem tabela no modelo (pedido registrado): nada a marcar.
+  async marcarUsoDispositivo(c: ContextoRecepcao, id: number): Promise<void> {
+    // Técnico, sem trilha: no máximo uma gravação a cada 10 minutos por dispositivo.
+    const agora = new Date(this.agora());
+    await this.nucleo.escrever({ ...this.base(c, 'dispositivo-uso') }, (e) =>
+      e.executar(
+        `UPDATE dispositivo_recepcao SET ultimo_uso_em = ?
+          WHERE id = ? AND excluido_em IS NULL AND (ultimo_uso_em IS NULL OR ultimo_uso_em < ?)`,
+        [agora, id, new Date(agora.getTime() - USO_DISPOSITIVO_MS)],
+      ),
+    );
   }
 
   // ── leituras ───────────────────────────────────────────────────────────────────────────────────
@@ -228,7 +255,7 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
       );
       const geradores = await l.consultar(
         `SELECT g.id, g.ponto_recepcao_id, g.prefixo, g.descricao, g.tipo, g.ativo, g.gera_prioritaria, g.limite_dia,
-                g.ordem_lista
+                g.ordem_lista, g.intercalar_prioritarias, g.tempo_alvo_espera_minutos, g.rotulo_totem, g.exibe_no_totem
            FROM gerador_senha g JOIN ponto_recepcao p ON p.id = g.ponto_recepcao_id
           WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL ORDER BY g.descricao, g.id`,
         [est.id],
@@ -266,11 +293,10 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
               prioritaria: bool(g['gera_prioritaria']),
               limiteDia: numOuNull(g['limite_dia']),
               ordem: txt(g['ordem_lista']),
-              // Sem coluna no modelo (pedido registrado): os padrões da fila.
-              intercalar: 2,
-              tempoAlvoMinutos: null,
-              rotuloTotem: null,
-              noTotem: true,
+              intercalar: num(g['intercalar_prioritarias']),
+              tempoAlvoMinutos: numOuNull(g['tempo_alvo_espera_minutos']),
+              rotuloTotem: txtOuNull(g['rotulo_totem']),
+              noTotem: bool(g['exibe_no_totem']),
             })),
           guiches: guiches.filter((g) => num(g['ponto_recepcao_id']) === id).map((g) => num(g['numero'])),
         };
@@ -539,24 +565,74 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
     });
   }
 
-  async dispositivos(): Promise<DispositivoRecepcao[]> {
-    return [];
+  dispositivos(c: ContextoRecepcao): Promise<DispositivoRecepcao[]> {
+    return this.ler(c, (l, est) => dispositivosOnde(l, 'd.estabelecimento_id = ?', [est.id], this.agora()));
   }
 
-  async modelosTermo(): Promise<ModeloTermo[]> {
-    return [];
+  modelosTermo(c: ContextoRecepcao): Promise<ModeloTermo[]> {
+    return this.ler(c, (l, est) => modelosTermoDo(l, est));
   }
 
-  async termosDoPaciente(): Promise<AssinaturaTermo[]> {
-    return [];
+  termosDoPaciente(c: ContextoRecepcao, prontuario: number): Promise<AssinaturaTermo[]> {
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT t.id, t.termo_consentimento_modelo_id, t.senha_emitida_id, t.tipo_atendimento, t.meio,
+                t.tipo_assinante_id, t.nome_signatario, t.resumo_assinatura, t.assinado_em, t.revogado_em,
+                t.motivo_revogacao, m.codigo, m.numero_versao, m.titulo, m.finalidade, pa.numero_prontuario,
+                ur.login AS registrado_por, uv.login AS revogado_por
+           FROM termo_consentimento_recepcao t
+           JOIN termo_consentimento_modelo m ON m.id = t.termo_consentimento_modelo_id
+           JOIN paciente pa ON pa.id = t.paciente_id
+           LEFT JOIN usuario ur ON ur.id = t.criado_por LEFT JOIN usuario uv ON uv.id = t.revogado_por
+          WHERE t.estabelecimento_id = ? AND pa.numero_prontuario = ? AND t.excluido_em IS NULL
+          ORDER BY t.id DESC LIMIT ${TETO_TERMOS}`,
+        [est.id, prontuario],
+      );
+      return ls.map((x): AssinaturaTermo => ({
+        id: num(x['id']),
+        modelo: num(x['termo_consentimento_modelo_id']),
+        codigo: txt(x['codigo']),
+        versao: num(x['numero_versao']),
+        titulo: txt(x['titulo']),
+        finalidade: finalidadeDoBanco(txt(x['finalidade']), txt(x['codigo'])),
+        prontuario: num(x['numero_prontuario']),
+        senha: numOuNull(x['senha_emitida_id']),
+        tipoAtendimento: txtOuNull(x['tipo_atendimento']),
+        meio: meioDoBanco(txt(x['meio'])),
+        signatario: num(x['tipo_assinante_id']),
+        nomeSignatario: txt(x['nome_signatario']),
+        hash: txt(x['resumo_assinatura']),
+        assinadoEm: horaCivil(x['assinado_em'] as Date, est.fuso),
+        registradoPor: txt(x['registrado_por']),
+        revogacao: x['revogado_em']
+          ? {
+              motivo: txt(x['motivo_revogacao']),
+              usuario: txt(x['revogado_por']),
+              em: horaCivil(x['revogado_em'] as Date, est.fuso),
+            }
+          : null,
+      }));
+    });
   }
 
-  async signatariosTermo(): Promise<SignatarioTermo[]> {
-    return [];
+  /** Quem assina: os papéis "paciente" e "responsável legal" do cadastro de tipos de assinante (o código é o id). */
+  signatariosTermo(c: ContextoRecepcao): Promise<SignatarioTermo[]> {
+    return this.ler(c, async (l) => {
+      const ls = await l.consultar(
+        `SELECT id, descricao FROM tipo_assinante WHERE ativo = TRUE AND papel IN ('paciente', 'responsavel_legal')
+          ORDER BY papel = 'paciente' DESC, descricao, id`,
+      );
+      return ls.map((x) => ({ codigo: num(x['id']), rotulo: txt(x['descricao']) }));
+    });
   }
 
-  async dispositivoDoToken(): Promise<DispositivoRecepcao | null> {
-    return null;
+  /** O dispositivo do token (pelo resumo SHA-256; o token nunca é guardado), em qualquer estabelecimento do cliente. */
+  async dispositivoDoToken(token: string): Promise<DispositivoRecepcao | null> {
+    const resumo = createHash('sha256').update(token).digest('hex');
+    const ls = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'dispositivo-token' }, (l) =>
+      dispositivosOnde(l, 'd.resumo_token = ?', [resumo], this.agora()),
+    );
+    return ls[0] ?? null;
   }
 
   /** Converte a hora civil do estabelecimento em instante (para filtros por hora informados pela tela). */
@@ -565,20 +641,579 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
   }
 }
 
-/** Gravador das configurações cujo modelo ainda falta (pedido registrado ao integrador). */
-function gravadorSemModelo(): GravadorRecepcao {
+/** Teto de termos assinados lidos por prontuário. */
+const TETO_TERMOS = 500;
+
+const sha256 = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
+
+/** Finalidade do contrato (com hífen) e do banco (com sublinhado). */
+const finalidadeNoBanco = (f: string) => f.replace(/-/g, '_');
+/**
+ * Finalidade lida do banco. O CHECK da tabela aceita também as finalidades do prontuário (geral, protecao_dados…),
+ * que o contrato da recepção não tem: em vez de trocar o significado em silêncio, a leitura recusa e diz qual é.
+ */
+function finalidadeDoBanco(f: string, codigo: string): ModeloTermo['finalidade'] {
+  const k = f.replace(/_/g, '-');
+  if ((FINALIDADES_CONSENTIMENTO as readonly string[]).includes(k)) return k as ModeloTermo['finalidade'];
+  throw recusa(
+    'termo-finalidade-fora-do-contrato',
+    `O termo ${codigo} tem a finalidade "${f}", que não é de termo da recepção (${FINALIDADES_CONSENTIMENTO.join(', ')}): corrija o cadastro do termo.`,
+    { campos: ['finalidade'] },
+  );
+}
+
+/** Meio da assinatura lido do banco (o CHECK só aceita tela e portal; outro valor é inconsistência, nunca 'tela'). */
+function meioDoBanco(m: string): AssinaturaTermo['meio'] {
+  if (m === 'tela' || m === 'portal') return m;
+  throw recusa('termo-meio-desconhecido', `A assinatura tem o meio "${m}", fora de tela e portal.`, {
+    campos: ['meio'],
+  });
+}
+
+function tiposDoBanco(v: unknown): TipoAtendimentoTermo[] {
+  const x = typeof v === 'string' ? (JSON.parse(v) as unknown) : v;
+  return Array.isArray(x) ? (x.map(String) as TipoAtendimentoTermo[]) : [];
+}
+
+/** Os dispositivos da condição (com os locais e os serviços ligados), no fuso do estabelecimento de cada um. */
+async function dispositivosOnde(
+  l: Leitor,
+  onde: string,
+  p: readonly unknown[],
+  agoraMs: number,
+): Promise<DispositivoRecepcao[]> {
+  const ls = await l.consultar(
+    `SELECT d.id, d.tipo, d.nome, d.ponto_recepcao_id, d.conteudo, d.voz, d.prefixo_token, d.valido_ate, d.revogado_em,
+            d.ultimo_uso_em, d.login_substituido, d.conferido_em, d.criado_em, es.codigo AS hospital,
+            es.fuso_horario, ut.login AS tecnico, uc.login AS criador, uf.login AS conferidor
+       FROM dispositivo_recepcao d JOIN estabelecimento es ON es.id = d.estabelecimento_id
+       LEFT JOIN usuario ut ON ut.id = d.tecnico_usuario_id LEFT JOIN usuario uc ON uc.id = d.criado_por
+       LEFT JOIN usuario uf ON uf.id = d.conferido_por
+      WHERE ${onde} AND d.excluido_em IS NULL ORDER BY d.id`,
+    p,
+  );
+  if (ls.length === 0) return [];
+  const ids = ls.map((x) => num(x['id']));
+  const marcas = ids.map(() => '?').join(', ');
+  const locais = await l.consultar(
+    `SELECT dispositivo_recepcao_id AS d, local_atendimento_id AS v FROM dispositivo_recepcao_local
+      WHERE dispositivo_recepcao_id IN (${marcas}) AND excluido_em IS NULL ORDER BY local_atendimento_id`,
+    ids,
+  );
+  const geradores = await l.consultar(
+    `SELECT dispositivo_recepcao_id AS d, gerador_senha_id AS v FROM dispositivo_recepcao_gerador
+      WHERE dispositivo_recepcao_id IN (${marcas}) AND excluido_em IS NULL ORDER BY gerador_senha_id`,
+    ids,
+  );
+  const de = (xs: Linha[], id: number) => xs.filter((y) => num(y['d']) === id).map((y) => num(y['v']));
+  return ls.map((x) => {
+    const id = num(x['id']);
+    const fuso = txt(x['fuso_horario']) || 'America/Sao_Paulo';
+    const validoAte = x['valido_ate'] as Date;
+    return {
+      id,
+      hospital: txt(x['hospital']),
+      tipo: txt(x['tipo']),
+      nome: txt(x['nome']),
+      recepcao: numOuNull(x['ponto_recepcao_id']),
+      locais: de(locais, id),
+      geradores: de(geradores, id),
+      conteudo: txtOuNull(x['conteudo']),
+      portalOrdem: null,
+      usuarioTecnico: txtOuNull(x['tecnico']),
+      voz: bool(x['voz']),
+      criadoEm: horaCivil(x['criado_em'] as Date, fuso),
+      criadoPor: txt(x['criador']),
+      validoAte: horaCivil(validoAte, fuso),
+      revogadoEm: civilOuNull(x['revogado_em'], fuso),
+      ultimoUso: civilOuNull(x['ultimo_uso_em'], fuso),
+      prefixo: txt(x['prefixo_token']),
+      valido: !x['revogado_em'] && validoAte.getTime() > agoraMs,
+      loginSubstituido: txtOuNull(x['login_substituido']),
+      conferidoEm: civilOuNull(x['conferido_em'], fuso),
+      conferidoPor: txtOuNull(x['conferidor']),
+    };
+  });
+}
+
+/** Os termos da recepção do estabelecimento: as versões de termo_consentimento_modelo com tipos de atendimento. */
+async function modelosTermoDo(l: Leitor, est: EstabelecimentoDaSessao): Promise<ModeloTermo[]> {
+  const ls = await l.consultar(
+    `SELECT m.id, m.codigo, m.numero_versao, m.titulo, m.finalidade, m.tipos_atendimento, m.exigido_recepcao,
+            m.texto_simples, m.resumo_texto, m.ativo, m.criado_em, u.login AS autor
+       FROM termo_consentimento_modelo m LEFT JOIN usuario u ON u.id = m.criado_por
+      WHERE m.estabelecimento_id = ? AND m.tipos_atendimento IS NOT NULL
+      ORDER BY m.codigo, m.numero_versao DESC`,
+    [est.id],
+  );
+  const contagem = await l.consultar(
+    `SELECT termo_consentimento_modelo_id AS modelo, COUNT(*) AS n FROM termo_consentimento_recepcao
+      WHERE estabelecimento_id = ? AND excluido_em IS NULL GROUP BY termo_consentimento_modelo_id`,
+    [est.id],
+  );
+  const porModelo = new Map(contagem.map((x) => [num(x['modelo']), num(x['n'])]));
+  const r = new Map<string, { m: Omit<ModeloTermo, 'versoes'>; versoes: VersaoModeloTermo[] }>();
+  for (const x of ls) {
+    const codigo = txt(x['codigo']);
+    let k = r.get(codigo);
+    if (!k) {
+      // A primeira linha é a versão mais nova: a situação do código é a dela.
+      k = {
+        m: {
+          codigo,
+          finalidade: finalidadeDoBanco(txt(x['finalidade']), codigo),
+          ativo: bool(x['ativo']),
+          assinaturas: 0,
+        },
+        versoes: [],
+      };
+      r.set(codigo, k);
+    }
+    const texto = txt(x['texto_simples']);
+    k.versoes.push({
+      id: num(x['id']),
+      versao: num(x['numero_versao']),
+      titulo: txt(x['titulo']),
+      tiposAtendimento: tiposDoBanco(x['tipos_atendimento']),
+      exigido: bool(x['exigido_recepcao']),
+      texto,
+      hashTexto: txtOuNull(x['resumo_texto']) ?? sha256(codificarCp1252(texto)),
+      criadoPor: txt(x['autor']),
+      criadoEm: horaCivil(x['criado_em'] as Date, est.fuso),
+    });
+  }
+  return [...r.values()].map(({ m, versoes }) => ({
+    ...m,
+    versoes,
+    assinaturas: versoes.reduce((a, v) => a + (porModelo.get(v.id) ?? 0), 0),
+  }));
+}
+
+/**
+ * As gravações de configuração da recepção (fila, dispositivos e termos) na transação da trilha. Tudo filtrado pelo
+ * estabelecimento da sessão; o que não é dele responde como inexistente.
+ */
+function gravadorProprio(
+  e: Escritor,
+  est: EstabelecimentoDaSessao,
+  usuarioSessao: number | null,
+  instante: Date,
+): GravadorRecepcao {
+  const idDoLogin = async (login: string, campo?: string): Promise<number> => {
+    const u = await e.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]);
+    if (!u)
+      throw recusa(
+        'usuario-inexistente',
+        'O usuário não está no cadastro deste cliente.',
+        campo ? { campos: [campo] } : undefined,
+      );
+    return num(u['id']);
+  };
+  const autor = async (login?: string) => (login ? await idDoLogin(login) : usuarioSessao);
+  const validade = (dias: number) => new Date(instante.getTime() + dias * 86_400_000);
+  const novoToken = () => {
+    const token = randomBytes(32).toString('base64url');
+    return { token, resumo: sha256(token), prefixo: token.slice(0, 8) };
+  };
+
+  /** Os ids pedidos que são do estabelecimento (local de atendimento ou serviço); falta algum: recusa. */
+  const conferirDoEstabelecimento = async (
+    tabela: 'local_atendimento' | 'gerador_senha',
+    ids: readonly number[],
+    campo: string,
+  ) => {
+    const unicos = [...new Set(ids)];
+    if (unicos.length === 0) return unicos;
+    const marcas = unicos.map(() => '?').join(', ');
+    const sql =
+      tabela === 'local_atendimento'
+        ? `SELECT id FROM local_atendimento WHERE id IN (${marcas}) AND estabelecimento_id = ? AND excluido_em IS NULL`
+        : `SELECT g.id FROM gerador_senha g JOIN ponto_recepcao p ON p.id = g.ponto_recepcao_id
+            WHERE g.id IN (${marcas}) AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
+    const achados = await e.consultar(sql, [...unicos, est.id]);
+    if (achados.length !== unicos.length)
+      throw recusa('registro-inexistente', 'Há local ou serviço que não é deste estabelecimento.', {
+        campos: [campo],
+      });
+    return unicos;
+  };
+
+  const conferirRecepcao = async (recepcao: number | null) => {
+    if (recepcao === null) return;
+    const p = await e.uma(
+      'SELECT id FROM ponto_recepcao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [recepcao, est.id],
+    );
+    if (!p)
+      throw recusa('registro-inexistente', 'A recepção não é deste estabelecimento.', {
+        campos: ['recepcao'],
+      });
+  };
+
+  /** Liga os locais e os serviços ao dispositivo: reativa os que voltam, inclui os novos e exclui os que saem. */
+  const ligar = async (
+    dispositivo: number,
+    locais: readonly number[],
+    geradores: readonly number[],
+    usuario: number | null,
+  ) => {
+    for (const [tabela, coluna, ids] of [
+      ['dispositivo_recepcao_local', 'local_atendimento_id', locais],
+      ['dispositivo_recepcao_gerador', 'gerador_senha_id', geradores],
+    ] as const) {
+      for (const v of ids)
+        await e.executar(
+          `INSERT INTO ${tabela} (dispositivo_recepcao_id, ${coluna}, criado_em, criado_por, versao) VALUES (?, ?, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE excluido_em = NULL, excluido_por = NULL, alterado_em = IF(excluido_em IS NULL, alterado_em, ?),
+             alterado_por = IF(excluido_em IS NULL, alterado_por, ?), versao = IF(excluido_em IS NULL, versao, versao + 1)`,
+          [dispositivo, v, instante, usuario, instante, usuario],
+        );
+      const fora = ids.length ? `AND ${coluna} NOT IN (${ids.map(() => '?').join(', ')})` : '';
+      await e.executar(
+        `UPDATE ${tabela} SET excluido_em = ?, excluido_por = ?, versao = versao + 1
+          WHERE dispositivo_recepcao_id = ? AND excluido_em IS NULL ${fora}`,
+        [instante, usuario, dispositivo, ...ids],
+      );
+    }
+  };
+
+  /** Atualiza o dispositivo vivo do estabelecimento; nenhum: recusa (inexistente ou revogado). */
+  const atualizarDispositivo = async (
+    id: number,
+    sets: string,
+    valores: readonly unknown[],
+    vigente = false,
+    mensagem = 'O dispositivo não existe ou já foi revogado.',
+  ) => {
+    const n = await e.executar(
+      `UPDATE dispositivo_recepcao SET ${sets}, alterado_em = ?, alterado_por = ?, versao = versao + 1
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND revogado_em IS NULL
+          ${vigente ? 'AND valido_ate > ?' : ''}`,
+      [...valores, instante, usuarioSessao, id, est.id, ...(vigente ? [instante] : [])],
+    );
+    if (n === 0) throw recusa('dispositivo-revogado', mensagem);
+  };
+
+  /** As versões do código do termo, travadas, da mais nova à mais antiga; nenhuma: recusa. */
+  const versoesDoCodigo = async (codigo: string) => {
+    const vs = await e.consultarParaAtualizar(
+      `SELECT id, numero_versao, finalidade, ativo FROM termo_consentimento_modelo
+        WHERE estabelecimento_id = ? AND codigo = ? AND tipos_atendimento IS NOT NULL ORDER BY numero_versao DESC`,
+      [est.id, codigo],
+    );
+    if (vs.length === 0) throw recusa('termo-inexistente', 'Termo não encontrado.');
+    return vs;
+  };
+
+  const incluirVersao = async (
+    x: {
+      codigo: string;
+      titulo: string;
+      finalidade: string;
+      tiposAtendimento: readonly string[];
+      exigido: boolean;
+      texto: string;
+      ativo: boolean;
+      usuario: string;
+    },
+    numero: number,
+  ) =>
+    e.inserir(
+      `INSERT INTO termo_consentimento_modelo (estabelecimento_id, codigo, numero_versao, titulo, finalidade,
+         texto_simples, tipos_atendimento, exigido_recepcao, resumo_texto, vigencia_inicio, ativo, criado_em,
+         criado_por, versao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        est.id,
+        x.codigo,
+        numero,
+        x.titulo,
+        finalidadeNoBanco(x.finalidade),
+        x.texto,
+        JSON.stringify([...x.tiposAtendimento]),
+        x.exigido,
+        sha256(codificarCp1252(x.texto)),
+        horaCivil(instante, est.fuso).slice(0, 10),
+        x.ativo,
+        instante,
+        await idDoLogin(x.usuario),
+      ],
+    );
+
   return {
-    gravarFilaCfg: () => modeloPendente('A configuração da fila por serviço'),
-    criarDispositivo: () => modeloPendente('O dispositivo do perfil Painel/Totem'),
-    renovarDispositivo: () => modeloPendente('O dispositivo do perfil Painel/Totem'),
-    alterarDispositivo: () => modeloPendente('O dispositivo do perfil Painel/Totem'),
-    revogarDispositivo: () => modeloPendente('O dispositivo do perfil Painel/Totem'),
-    conferirDispositivo: () => modeloPendente('O dispositivo do perfil Painel/Totem'),
-    incluirModeloTermo: () => modeloPendente('O termo de consentimento da recepção'),
-    novaVersaoModeloTermo: () => modeloPendente('O termo de consentimento da recepção'),
-    situacaoModeloTermo: () => modeloPendente('O termo de consentimento da recepção'),
-    excluirModeloTermo: () => modeloPendente('O termo de consentimento da recepção'),
-    assinarTermo: () => modeloPendente('O termo de consentimento da recepção'),
-    revogarTermo: () => modeloPendente('O termo de consentimento da recepção'),
+    gravarFilaCfg: async (x) => {
+      const n = await e.executar(
+        `UPDATE gerador_senha g JOIN ponto_recepcao p ON p.id = g.ponto_recepcao_id
+            SET g.ordem_lista = ?, g.intercalar_prioritarias = ?, g.tempo_alvo_espera_minutos = ?, g.rotulo_totem = ?,
+                g.exibe_no_totem = ?, g.alterado_em = ?, g.alterado_por = ?, g.versao = g.versao + 1
+          WHERE g.id = ? AND g.ponto_recepcao_id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
+        [
+          x.ordem,
+          x.intercalar,
+          x.tempoAlvoMinutos > 0 ? x.tempoAlvoMinutos : null,
+          x.rotuloTotem,
+          x.noTotem,
+          instante,
+          await autor(x.usuario),
+          x.gerador,
+          x.recepcao,
+          est.id,
+        ],
+      );
+      if (n === 0) throw recusa('registro-inexistente', 'O gerador de senha não existe mais.');
+    },
+
+    criarDispositivo: async (x) => {
+      if (x.portalOrdem !== null) aguardaModelo('O vínculo do painel de TV com o painel que ele substitui');
+      await conferirRecepcao(x.recepcao);
+      const locais = await conferirDoEstabelecimento('local_atendimento', x.locais, 'locais');
+      const geradores = await conferirDoEstabelecimento('gerador_senha', x.geradores, 'geradores');
+      const tecnico = x.usuarioTecnico ? await idDoLogin(x.usuarioTecnico, 'usuarioLegado') : null;
+      const usuario = await autor(x.usuario);
+      const t = novoToken();
+      const id = await e.inserir(
+        `INSERT INTO dispositivo_recepcao (estabelecimento_id, tipo, nome, ponto_recepcao_id, conteudo,
+           tecnico_usuario_id, voz, resumo_token, prefixo_token, valido_ate, criado_em, criado_por, versao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          est.id,
+          x.tipo,
+          x.nome,
+          x.recepcao,
+          x.conteudo,
+          tecnico,
+          x.voz,
+          t.resumo,
+          t.prefixo,
+          validade(x.validadeDias),
+          instante,
+          usuario,
+        ],
+      );
+      await ligar(id, locais, geradores, usuario);
+      return { id, token: t.token };
+    },
+
+    renovarDispositivo: async (x) => {
+      const t = novoToken();
+      await atualizarDispositivo(x.id, 'resumo_token = ?, prefixo_token = ?, valido_ate = ?', [
+        t.resumo,
+        t.prefixo,
+        validade(x.validadeDias),
+      ]);
+      return t.token;
+    },
+
+    alterarDispositivo: async (x) => {
+      // Token (resumo, prefixo) e validade ficam como estão.
+      await conferirRecepcao(x.recepcao);
+      const locais = await conferirDoEstabelecimento('local_atendimento', x.locais, 'locais');
+      const geradores = await conferirDoEstabelecimento('gerador_senha', x.geradores, 'geradores');
+      await atualizarDispositivo(x.id, 'nome = ?, ponto_recepcao_id = ?, conteudo = ?, voz = ?', [
+        x.nome,
+        x.recepcao,
+        x.conteudo,
+        x.voz,
+      ]);
+      await ligar(x.id, locais, geradores, usuarioSessao);
+    },
+
+    revogarDispositivo: async (x) => {
+      await atualizarDispositivo(x.id, 'revogado_em = ?, revogado_por = ?', [
+        instante,
+        await autor(x.usuario),
+      ]);
+    },
+
+    conferirDispositivo: async (x) => {
+      const login = x.loginSubstituido.trim();
+      const outro = await e.uma(
+        `SELECT id FROM dispositivo_recepcao
+          WHERE id <> ? AND estabelecimento_id = ? AND excluido_em IS NULL AND revogado_em IS NULL
+            AND UPPER(login_substituido) = UPPER(?)`,
+        [x.id, est.id, login],
+      );
+      if (outro)
+        throw recusa(
+          'login-ja-substituido',
+          'Este login já está ligado a outro aparelho válido: revogue aquele antes.',
+        );
+      await atualizarDispositivo(
+        x.id,
+        'login_substituido = ?, conferido_em = ?, conferido_por = ?',
+        [login, instante, await autor(x.usuario)],
+        true,
+        'O dispositivo não existe, foi revogado ou está fora da validade.',
+      );
+    },
+
+    incluirModeloTermo: async (x) => {
+      const ja = await e.uma(
+        'SELECT id FROM termo_consentimento_modelo WHERE estabelecimento_id = ? AND codigo = ?',
+        [est.id, x.codigo],
+      );
+      if (ja)
+        throw recusa('termo-codigo-existe', 'Já existe um termo com este código: altere-o (nova versão).', {
+          campos: ['codigo'],
+        });
+      return incluirVersao({ ...x, ativo: true }, 1);
+    },
+
+    novaVersaoModeloTermo: async (x) => {
+      const vs = await versoesDoCodigo(x.codigo);
+      const atual = vs[0]!;
+      const ultima = num(atual['numero_versao']);
+      if (ultima !== x.versaoVista)
+        throw recusa('termo-concorrente', `Há uma versão mais nova (${ultima}): abra de novo e refaça.`);
+      // A versão anterior fica no histórico, com a vigência encerrada hoje.
+      await e.executar(
+        `UPDATE termo_consentimento_modelo SET vigencia_fim = GREATEST(vigencia_inicio, ?), alterado_em = ?,
+           alterado_por = ?, versao = versao + 1 WHERE id = ? AND vigencia_fim IS NULL`,
+        [horaCivil(instante, est.fuso).slice(0, 10), instante, await idDoLogin(x.usuario), num(atual['id'])],
+      );
+      const id = await incluirVersao(
+        {
+          ...x,
+          finalidade: txt(atual['finalidade']),
+          ativo: bool(atual['ativo']),
+        },
+        ultima + 1,
+      );
+      return { id, versao: ultima + 1 };
+    },
+
+    situacaoModeloTermo: async (x) => {
+      const vs = await versoesDoCodigo(x.codigo);
+      if (bool(vs[0]!['ativo']) === x.ativo)
+        throw recusa('termo-situacao', x.ativo ? 'O termo já está ativo.' : 'O termo já está inativo.');
+      await e.executar(
+        `UPDATE termo_consentimento_modelo SET ativo = ?, alterado_em = ?, alterado_por = ?, versao = versao + 1
+          WHERE estabelecimento_id = ? AND codigo = ? AND tipos_atendimento IS NOT NULL`,
+        [x.ativo, instante, await idDoLogin(x.usuario), est.id, x.codigo],
+      );
+    },
+
+    excluirModeloTermo: async (x) => {
+      const vs = await versoesDoCodigo(x.codigo);
+      const ids = vs.map((v) => num(v['id']));
+      const c = await e.uma(
+        `SELECT COUNT(*) AS n FROM termo_consentimento_recepcao
+          WHERE termo_consentimento_modelo_id IN (${ids.map(() => '?').join(', ')})`,
+        ids,
+      );
+      const n = num(c?.['n'] ?? 0);
+      if (n > 0)
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          'Não gravado',
+          `O termo tem ${n} assinatura(s) de pacientes: não pode ser excluído. Inative-o.`,
+          {
+            codigo: 'com-dependentes',
+            dependentes: [{ rotulo: 'Termos assinados', quantidade: n, amostra: [], origem: 'fk' }],
+            total: n,
+            podeInativar: true,
+          },
+        );
+      // Código nunca assinado: as versões saem (a trilha guarda o motivo); outro uso do modelo barra pela chave.
+      await e.executar(
+        `DELETE FROM termo_consentimento_modelo WHERE id IN (${ids.map(() => '?').join(', ')})`,
+        ids,
+      );
+    },
+
+    assinarTermo: async (x) => {
+      const v = await e.uma(
+        `SELECT id, codigo, numero_versao, ativo, texto_simples, resumo_texto FROM termo_consentimento_modelo
+          WHERE id = ? AND estabelecimento_id = ? AND tipos_atendimento IS NOT NULL`,
+        [x.modelo, est.id],
+      );
+      if (!v) throw recusa('termo-inexistente', 'Termo não encontrado.', { campos: ['modelo'] });
+      if (!bool(v['ativo'])) throw recusa('termo-inativo', 'O termo está inativo.', { campos: ['modelo'] });
+      const nova = await e.uma(
+        `SELECT id FROM termo_consentimento_modelo
+          WHERE estabelecimento_id = ? AND codigo = ? AND numero_versao > ? AND tipos_atendimento IS NOT NULL LIMIT 1`,
+        [est.id, txt(v['codigo']), num(v['numero_versao'])],
+      );
+      if (nova)
+        throw recusa('termo-versao-antiga', 'Há uma versão mais nova deste termo: abra de novo.', {
+          campos: ['modelo'],
+        });
+      const pa = await e.uma('SELECT id FROM paciente WHERE numero_prontuario = ?', [x.prontuario]);
+      if (!pa) throw recusa('paciente-inexistente', 'Prontuário não encontrado.', { campos: ['prontuario'] });
+      const sig = await e.uma(
+        "SELECT id FROM tipo_assinante WHERE id = ? AND ativo = TRUE AND papel IN ('paciente', 'responsavel_legal')",
+        [x.signatario],
+      );
+      if (!sig)
+        throw recusa('signatario-inexistente', 'Quem assina não está no cadastro.', {
+          campos: ['signatario'],
+        });
+      if (x.senha !== null) {
+        const s = await e.uma('SELECT id FROM senha_emitida WHERE id = ? AND estabelecimento_id = ?', [
+          x.senha,
+          est.id,
+        ]);
+        if (!s)
+          throw recusa('registro-inexistente', 'A senha não é deste estabelecimento.', { campos: ['senha'] });
+      }
+      // O instante vai ao segundo: a hora civil do conteúdo canônico é a mesma que a leitura devolve.
+      const assinado = new Date(Math.floor(instante.getTime() / 1000) * 1000);
+      const assinadoEm = horaCivil(assinado, est.fuso);
+      const texto = txt(v['texto_simples']);
+      const imagem = x.imagem ? Buffer.from(x.imagem, 'base64') : null;
+      const hash = sha256(
+        conteudoCanonicoAssinatura({
+          modelo: x.modelo,
+          hashTexto: txtOuNull(v['resumo_texto']) ?? sha256(codificarCp1252(texto)),
+          prontuario: x.prontuario,
+          senha: x.senha,
+          tipoAtendimento: x.tipoAtendimento,
+          meio: x.meio,
+          signatario: x.signatario,
+          nomeSignatario: x.nomeSignatario,
+          assinadoEm,
+          hashImagem: imagem ? sha256(imagem) : null,
+        }),
+      );
+      const id = await e.inserir(
+        `INSERT INTO termo_consentimento_recepcao (estabelecimento_id, termo_consentimento_modelo_id, paciente_id,
+           senha_emitida_id, tipo_atendimento, meio, tipo_assinante_id, nome_signatario, resumo_assinatura,
+           assinado_em, criado_em, criado_por, versao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          est.id,
+          x.modelo,
+          num(pa['id']),
+          x.senha,
+          x.tipoAtendimento,
+          x.meio,
+          x.signatario,
+          x.nomeSignatario,
+          hash,
+          assinado,
+          instante,
+          await idDoLogin(x.usuario),
+        ],
+      );
+      return { id, hash };
+    },
+
+    revogarTermo: async (x) => {
+      const usuario = await idDoLogin(x.usuario);
+      const n = await e.executar(
+        `UPDATE termo_consentimento_recepcao SET revogado_em = ?, revogado_por = ?, motivo_revogacao = ?,
+           alterado_em = ?, alterado_por = ?, versao = versao + 1
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND revogado_em IS NULL`,
+        [instante, usuario, x.motivo, instante, usuario, x.assinatura, est.id],
+      );
+      if (n > 0) return;
+      const a = await e.uma(
+        'SELECT id FROM termo_consentimento_recepcao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.assinatura, est.id],
+      );
+      if (!a) throw recusa('termo-inexistente', 'Termo assinado não encontrado.');
+      throw recusa('termo-revogado', 'Este termo já foi revogado.');
+    },
   };
 }

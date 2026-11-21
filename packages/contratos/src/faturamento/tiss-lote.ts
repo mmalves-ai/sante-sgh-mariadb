@@ -15,7 +15,7 @@ export type NaturezaItem = 'procedimento' | 'diaria' | 'taxa' | 'material' | 'me
 
 export interface ItemContaTiss {
   readonly sequencial: number;
-  /** FCLANEXT.TIPO: 1 diárias e taxas, 2 honorários, 3 SADT, 4 mat/med. */
+  /** Grupo do item: 1 diárias e taxas, 2 honorários, 3 SADT, 4 mat/med. */
   readonly tipo: number;
   readonly natureza: NaturezaItem;
   readonly data: string;
@@ -31,7 +31,8 @@ export interface ContaTiss {
   readonly tipoGuia: 1 | 2 | 3 | 4;
   readonly numeroGuia: string;
   readonly carteira: string;
-  readonly atendimentoRN: 'S' | 'N';
+  /** Atendimento ao recém-nascido (na conta da mãe). */
+  readonly atendimentoRN: boolean;
   readonly inicio: { readonly data: string; readonly hora: string };
   readonly fim: { readonly data: string; readonly hora: string };
   readonly caraterAtendimento: '1' | '2';

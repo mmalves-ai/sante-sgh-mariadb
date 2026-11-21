@@ -8,7 +8,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { lerArgumentos } from './argumentos.ts';
-import { caminhoAlcance, caminhoScript, gerarArtefatos, PlanoPrivilegioRecusado, RAIZ, type Artefatos } from './privilegios.ts';
+import {
+  caminhoAlcance,
+  caminhoScript,
+  gerarArtefatos,
+  PlanoPrivilegioRecusado,
+  RAIZ,
+  type Artefatos,
+} from './privilegios.ts';
 
 const { bandeiras } = lerArgumentos(process.argv.slice(2));
 let a: Artefatos;

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { versaoTexto } from './esquemas.js';
 import type { ContextoFaturamento, PortaFaturamento } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
-import { PortaFaturamentoPropria } from './porta-propria.js';
+import { PortaFaturamentoPropria, TIPO_MOVIMENTO_RECEBIMENTO } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -65,7 +65,10 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     setor: 0,
     tipoPendAlerta: 0,
     tipoMov: 0,
+    tipoMovParticular: 0,
+    formas: [] as number[],
   };
+  const criados = { tipoMovParticular: false };
   let c: ContextoFaturamento;
   const hoje = new Date().toISOString().slice(0, 10);
   const competencia = `${hoje.slice(0, 7)}-01`;
@@ -78,9 +81,10 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
   });
   const contaLida = () =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-02-08' }, (l) =>
-      l.uma<Record<string, unknown>>('SELECT situacao, versao, valor_total FROM conta_hospitalar WHERE id = ?', [
-        ids.conta,
-      ]),
+      l.uma<Record<string, unknown>>(
+        'SELECT situacao, versao, valor_total FROM conta_hospitalar WHERE id = ?',
+        [ids.conta],
+      ),
     );
   const lerUma = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-02-08' }, (l) =>
@@ -95,13 +99,37 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
   const versaoDaConta = async () => versaoTexto(Number((await contaLida())?.['versao']));
   const trilhaDe = (correlacao: string) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-02-08' }, (l) =>
-      l.consultar<Record<string, unknown>>('SELECT entidade, entidade_id FROM trilha_auditoria WHERE correlacao = ?', [
-        correlacao,
-      ]),
+      l.consultar<Record<string, unknown>>(
+        'SELECT entidade, entidade_id FROM trilha_auditoria WHERE correlacao = ?',
+        [correlacao],
+      ),
     );
 
   const limpar = (e: Escritor) =>
     (async () => {
+      await e.executar('DELETE FROM decisao_lancamento_tardio WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM regra_faturabilidade WHERE estabelecimento_id = ?', [ids.est]);
+      // O pacote sintético da rede (sem estabelecimento) do teste de pacote também sai, se ficou de uma falha.
+      const pacotes =
+        "SELECT id FROM pacote WHERE estabelecimento_id = ? OR (estabelecimento_id IS NULL AND codigo = '82080001')";
+      await e.executar(`DELETE FROM pacote_item_incluso WHERE pacote_id IN (${pacotes})`, [ids.est]);
+      await e.executar(`DELETE FROM pacote_contrato WHERE pacote_id IN (${pacotes})`, [ids.est]);
+      await e.executar(
+        "DELETE FROM pacote WHERE estabelecimento_id = ? OR (estabelecimento_id IS NULL AND codigo = '82080001')",
+        [ids.est],
+      );
+      await e.executar('DELETE FROM recibo WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM recebimento_particular WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM movimento_caixa WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE FROM orcamento_particular_item WHERE orcamento_particular_id IN (SELECT id FROM orcamento_particular WHERE estabelecimento_id = ?)',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM orcamento_particular WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        "DELETE FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo IN ('orcamento_particular','recebimento_particular','recibo')",
+        [ids.est],
+      );
       const contas = [ids.conta, ids.contaB, ids.contaC].filter(Boolean);
       if (contas.length) {
         const q = contas.map(() => '?').join(',');
@@ -122,9 +150,14 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       }
       await e.executar('DELETE FROM movimento_caixa WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM sessao_caixa WHERE estabelecimento_id = ?', [ids.est]);
-      await e.executar('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]);
       await e.executar('DELETE FROM competencia_faturamento WHERE estabelecimento_id = ?', [ids.est]);
-      await e.executar('DELETE FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = ?', ['sessao_caixa', ids.est]);
+      await e.executar('DELETE FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = ?', [
+        'sessao_caixa',
+        ids.est,
+      ]);
     })();
 
   beforeAll(async () => {
@@ -151,10 +184,13 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       );
       await limpar(e);
       const pessoa = (nome: string) =>
-        garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [nome], 'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
-          nome,
-          agora,
-        ]);
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
       ids.pessoa = await pessoa('PACIENTE SINTETICO L0208');
       ids.pessoaProf = await pessoa('PROFISSIONAL SINTETICO L0208');
       ids.paciente = await garantir(
@@ -280,6 +316,27 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
         "INSERT INTO tipo_movimento_caixa (codigo, descricao, sentido, criado_em) VALUES (?, ?, 'entrada', ?)",
         [P, 'RECEBIMENTO SINTETICO L0208', agora],
       );
+      const tipoParticular = await e.uma<{ id: number }>(
+        'SELECT id FROM tipo_movimento_caixa WHERE codigo = ?',
+        [TIPO_MOVIMENTO_RECEBIMENTO],
+      );
+      criados.tipoMovParticular = !tipoParticular;
+      ids.tipoMovParticular = tipoParticular
+        ? Number(tipoParticular.id)
+        : await e.inserir(
+            "INSERT INTO tipo_movimento_caixa (codigo, descricao, sentido, criado_em) VALUES (?, ?, 'entrada', ?)",
+            [TIPO_MOVIMENTO_RECEBIMENTO, 'RECEBIMENTO PARTICULAR', agora],
+          );
+      for (const meio of ['dinheiro', 'pix'])
+        ids.formas.push(
+          await garantir(
+            e,
+            'SELECT id FROM forma_recebimento WHERE codigo = ?',
+            [`${P}-${meio}`],
+            "INSERT INTO forma_recebimento (codigo, descricao, meio, uso, criado_em) VALUES (?, ?, ?, 'recebimento', ?)",
+            [`${P}-${meio}`, `FORMA SINTETICA ${meio.toUpperCase()}`, meio, agora],
+          ),
+        );
       ids.tipoAud = await garantir(
         e,
         'SELECT id FROM tipo_auditoria WHERE codigo = ?',
@@ -310,7 +367,18 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
           `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
              tipo_conta_id, tabela_preco_id, natureza, competencia, inicio_em, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?)`,
-          [estab, numero, atend, ids.paciente, ids.fonte, ids.tipoConta, ids.tabela, competencia, agora, agora],
+          [
+            estab,
+            numero,
+            atend,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            ids.tabela,
+            competencia,
+            agora,
+            agora,
+          ],
         );
       ids.conta = await conta(ids.est, ids.atendimento, `${P}-C1`);
       ids.contaB = await conta(ids.outroEst, ids.atendimentoB, `${P}-C2`);
@@ -334,8 +402,18 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       await e.executar('DELETE FROM operador_caixa WHERE caixa_id = ?', [ids.caixa]);
       await e.executar('DELETE FROM caixa WHERE id = ?', [ids.caixa]);
       await e.executar('DELETE FROM tipo_auditoria WHERE id = ?', [ids.tipoAud]);
-      await e.executar('DELETE FROM tipo_pendencia_conta WHERE id IN (?, ?)', [ids.tipoPend, ids.tipoPendAlerta]);
+      await e.executar('DELETE FROM tipo_pendencia_conta WHERE id IN (?, ?)', [
+        ids.tipoPend,
+        ids.tipoPendAlerta,
+      ]);
       await e.executar('DELETE FROM tipo_movimento_caixa WHERE id = ?', [ids.tipoMov]);
+      if (criados.tipoMovParticular)
+        await e.executar('DELETE FROM tipo_movimento_caixa WHERE id = ?', [ids.tipoMovParticular]);
+      if (ids.formas.length)
+        await e.executar(
+          `DELETE FROM forma_recebimento WHERE id IN (${ids.formas.map(() => '?').join(',')})`,
+          ids.formas,
+        );
       await e.executar('DELETE FROM setor_funcional WHERE id = ?', [ids.setor]);
       await e.executar('DELETE FROM preco_procedimento_valor WHERE preco_procedimento_id = ?', [ids.preco]);
       await e.executar('DELETE FROM preco_procedimento WHERE id = ?', [ids.preco]);
@@ -357,7 +435,18 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
   it('leituras: a conta na lista e no detalhe, os convênios, os tipos de pendência; outro estabelecimento não aparece', async () => {
     const l = await porta.contas(
       c,
-      { situacao: null, convenios: null, ano: null, mes: null, tipoConta: 'I', termo: '', sus: false, altaAte: null, pagina: 0, porPagina: 50 },
+      {
+        situacao: null,
+        convenios: null,
+        ano: null,
+        mes: null,
+        tipoConta: 'I',
+        termo: '',
+        sus: false,
+        altaAte: null,
+        pagina: 0,
+        porPagina: 50,
+      },
       hoje,
     );
     expect(l.contas.map((x) => x.id)).toContain(ids.conta);
@@ -375,7 +464,16 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
 
   it('lançar item: preço da tabela, total da conta recalculado, versão, trilha e outbox; sem preço e manual fora da faixa recusados', async () => {
     const antes = Number((await contaLida())?.['versao']);
-    const base = { conta: ids.conta, tipo: 3, codigo: 82_080_001, quantidade: 2, data: hoje, hora: '1030', local: 0, ato: 0 };
+    const base = {
+      conta: ids.conta,
+      tipo: 3,
+      codigo: 82_080_001,
+      quantidade: 2,
+      data: hoje,
+      hora: '10:30',
+      local: 0,
+      ato: 0,
+    };
     const ctx = op();
     const r = await porta.executar(c, 'faturamento.lancarItem', base, ctx);
     expect(r.repetida).toBe(false);
@@ -385,18 +483,21 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     expect(Number(lida?.['versao'])).toBe(antes + 1);
     expect(r.trilha).toBeGreaterThan(0);
     const mensagens = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-02-08' }, (l) =>
-      l.uma<{ n: number }>("SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'faturamento.item.lancado' AND entidade = 'conta_hospitalar_item' AND entidade_id = ?", [
-        Number(r.resultado['id']),
-      ]),
+      l.uma<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'faturamento.item.lancado' AND entidade = 'conta_hospitalar_item' AND entidade_id = ?",
+        [Number(r.resultado['id'])],
+      ),
     );
     expect(Number(mensagens?.n)).toBe(1);
     // A mesma chave repete sem gravar de novo.
     const rep = await porta.executar(c, 'faturamento.lancarItem', base, ctx);
     expect(rep.repetida).toBe(true);
     expect(Number((await contaLida())?.['valor_total'])).toBe(200);
-    expect(codigoDe(await erroDe(porta.executar(c, 'faturamento.lancarItem', { ...base, codigo: 82_080_002 }, op())))).toBe(
-      'item-fora-da-tabela',
-    );
+    expect(
+      codigoDe(
+        await erroDe(porta.executar(c, 'faturamento.lancarItem', { ...base, codigo: 82_080_002 }, op())),
+      ),
+    ).toBe('item-fora-da-tabela');
     const memoria = await lerUma(
       'SELECT tabela_preco_id, valor_unitario_calculado, preco_manual, operacao FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ?',
       [Number(r.resultado['id'])],
@@ -415,7 +516,14 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     expect(codigoDe(fora)).toBe('preco-fora-da-faixa');
     const itens = await porta.itens(c, ids.conta, { pagina: 0, porPagina: 50 });
     expect(itens.itens).toHaveLength(1);
-    expect(itens.itens[0]).toMatchObject({ codigo: 82_080_001, quantidade: 2, unitario: 100, valor: 200, tipo: 3, hora: '10:30' });
+    expect(itens.itens[0]).toMatchObject({
+      codigo: 82_080_001,
+      quantidade: 2,
+      unitario: 100,
+      valor: 200,
+      tipo: 3,
+      hora: '10:30',
+    });
     const exp = await porta.explicar(c, itens.itens[0]!.id);
     expect(exp).toMatchObject({ calculado: 200, gravado: 200, confere: true });
   });
@@ -423,10 +531,20 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
   it('conferir itens: versão velha é conflito; a certa marca conferido e registra a etapa', async () => {
     const [item] = (await porta.itens(c, ids.conta, { pagina: 0, porPagina: 50 })).itens;
     const velho = await erroDe(
-      porta.executar(c, 'faturamento.conferirItem', { conta: ids.conta, itens: [{ id: item!.id, versao: versaoTexto(99) }] }, op()),
+      porta.executar(
+        c,
+        'faturamento.conferirItem',
+        { conta: ids.conta, itens: [{ id: item!.id, versao: versaoTexto(99) }] },
+        op(),
+      ),
     );
     expect(codigoDe(velho)).toBe('conflito-versao');
-    await porta.executar(c, 'faturamento.conferirItem', { conta: ids.conta, itens: [{ id: item!.id, versao: item!.versao }] }, op());
+    await porta.executar(
+      c,
+      'faturamento.conferirItem',
+      { conta: ids.conta, itens: [{ id: item!.id, versao: item!.versao }] },
+      op(),
+    );
     const depois = await porta.itens(c, ids.conta, { pagina: 0, porPagina: 50, naoConferidos: true });
     expect(depois.total).toBe(0);
     const d = await porta.conta(c, ids.conta, hoje);
@@ -438,8 +556,22 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     const cc = { ...c, correlacao: corr };
     const pend = await porta.gravarSgh(
       cc,
-      (id: number) => ({ estabelecimento: ids.est, usuario: ids.usuario, acao: 'inclusao', entidade: 'pendencia_conta', entidadeId: id, correlacao: corr }),
-      (g) => g.registrarPendencia({ conta: ids.conta, tipo: ids.tipoPend, descricao: 'Falta laudo sintético', bloqueante: true, usuario: 'x' }),
+      (id: number) => ({
+        estabelecimento: ids.est,
+        usuario: ids.usuario,
+        acao: 'inclusao',
+        entidade: 'pendencia_conta',
+        entidadeId: id,
+        correlacao: corr,
+      }),
+      (g) =>
+        g.registrarPendencia({
+          conta: ids.conta,
+          tipo: ids.tipoPend,
+          descricao: 'Falta laudo sintético',
+          bloqueante: true,
+          usuario: 'x',
+        }),
     );
     expect(pend).toBeGreaterThan(0);
     expect((await trilhaDe(corr)).map((t) => t['entidade'])).toContain('pendencia_conta');
@@ -450,14 +582,28 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     expect(codigoDe(bloqueada)).toBe('pendencia-bloqueante');
     const r = await porta.gravarSgh(
       c,
-      { estabelecimento: ids.est, usuario: ids.usuario, acao: 'alteracao', entidade: 'pendencia_conta', entidadeId: pend, correlacao: c.correlacao },
+      {
+        estabelecimento: ids.est,
+        usuario: ids.usuario,
+        acao: 'alteracao',
+        entidade: 'pendencia_conta',
+        entidadeId: pend,
+        correlacao: c.correlacao,
+      },
       (g) => g.resolverPendencia({ id: pend, resolucao: 'Laudo anexado', usuario: 'x' }),
     );
     expect(r.conta).toBe(ids.conta);
     // Versão velha: conflito.
-    const velha = await erroDe(porta.executar(c, 'faturamento.fecharConta', { conta: ids.conta, versao: versaoTexto(1) }, op()));
+    const velha = await erroDe(
+      porta.executar(c, 'faturamento.fecharConta', { conta: ids.conta, versao: versaoTexto(1) }, op()),
+    );
     expect(codigoDe(velha)).toBe('conflito-versao');
-    const f = await porta.executar(c, 'faturamento.fecharConta', { conta: ids.conta, versao: await versaoDaConta() }, op());
+    const f = await porta.executar(
+      c,
+      'faturamento.fecharConta',
+      { conta: ids.conta, versao: await versaoDaConta() },
+      op(),
+    );
     expect(f.resultado).toEqual({ conta: ids.conta });
     expect((await contaLida())?.['situacao']).toBe('fechada');
     const fora = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-02-08' }, (l) =>
@@ -472,39 +618,111 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     expect(d?.etapas.map((e) => e.etapa)).toContain('fechamento');
     // Lançar na conta fechada é recusado.
     const lancar = await erroDe(
-      porta.executar(c, 'faturamento.lancarItem', { conta: ids.conta, tipo: 3, codigo: 82_080_001, quantidade: 1, data: hoje, hora: '1000', local: 0, ato: 0 }, op()),
+      porta.executar(
+        c,
+        'faturamento.lancarItem',
+        {
+          conta: ids.conta,
+          tipo: 3,
+          codigo: 82_080_001,
+          quantidade: 1,
+          data: hoje,
+          hora: '10:00',
+          local: 0,
+          ato: 0,
+        },
+        op(),
+      ),
     );
     expect(codigoDe(lancar)).toBe('conta-fechada');
-    await porta.executar(c, 'faturamento.reabrirConta', { conta: ids.conta, versao: await versaoDaConta(), motivo: 'Correção sintética' }, op());
+    await porta.executar(
+      c,
+      'faturamento.reabrirConta',
+      { conta: ids.conta, versao: await versaoDaConta(), motivo: 'Correção sintética' },
+      op(),
+    );
     expect((await contaLida())?.['situacao']).toBe('aberta');
   });
 
   it('etapas: iniciar e concluir a conferência; iniciar duas vezes é recusado', async () => {
-    const t = { estabelecimento: ids.est, usuario: ids.usuario, acao: 'alteracao' as const, entidade: 'conta_hospitalar', entidadeId: ids.conta, correlacao: c.correlacao };
-    await porta.gravarSgh(c, t, (g) => g.registrarEtapa({ conta: ids.conta, etapa: 'conferencia', acao: 'iniciar', observacao: '', usuario: 'x' }));
+    const t = {
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'alteracao' as const,
+      entidade: 'conta_hospitalar',
+      entidadeId: ids.conta,
+      correlacao: c.correlacao,
+    };
+    await porta.gravarSgh(c, t, (g) =>
+      g.registrarEtapa({
+        conta: ids.conta,
+        etapa: 'conferencia',
+        acao: 'iniciar',
+        observacao: '',
+        usuario: 'x',
+      }),
+    );
     expect((await contaLida())?.['situacao']).toBe('em_conferencia');
     const dup = await erroDe(
-      porta.gravarSgh(c, t, (g) => g.registrarEtapa({ conta: ids.conta, etapa: 'conferencia', acao: 'iniciar', observacao: '', usuario: 'x' })),
+      porta.gravarSgh(c, t, (g) =>
+        g.registrarEtapa({
+          conta: ids.conta,
+          etapa: 'conferencia',
+          acao: 'iniciar',
+          observacao: '',
+          usuario: 'x',
+        }),
+      ),
     );
     expect(codigoDe(dup)).toBe('etapa-em-andamento');
-    await porta.gravarSgh(c, t, (g) => g.registrarEtapa({ conta: ids.conta, etapa: 'conferencia', acao: 'concluir', observacao: 'ok', usuario: 'x' }));
+    await porta.gravarSgh(c, t, (g) =>
+      g.registrarEtapa({
+        conta: ids.conta,
+        etapa: 'conferencia',
+        acao: 'concluir',
+        observacao: 'ok',
+        usuario: 'x',
+      }),
+    );
     expect((await contaLida())?.['situacao']).toBe('aberta');
   });
 
   it('auditoria: o parecer abre a auditoria da conta e grava a versão; a leitura traz versões e irregularidades', async () => {
-    const t = (id: number) => ({ estabelecimento: ids.est, usuario: ids.usuario, acao: 'inclusao' as const, entidade: 'auditoria_conta_versao', entidadeId: id, correlacao: c.correlacao });
+    const t = (id: number) => ({
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'auditoria_conta_versao',
+      entidadeId: id,
+      correlacao: c.correlacao,
+    });
     const v = await porta.gravarSgh(c, t, (g) =>
-      g.registrarVersaoAuditoria({ conta: ids.conta, parecer: 'Parecer sintético', papel: 'medico', usuario: 'x' }),
+      g.registrarVersaoAuditoria({
+        conta: ids.conta,
+        parecer: 'Parecer sintético',
+        papel: 'medico',
+        usuario: 'x',
+      }),
     );
     expect(v).toBeGreaterThan(0);
     // O segundo parecer na mesma auditoria (enfermeiro depois do médico) não fere a unicidade (auditoria, momento).
     const v2 = await porta.gravarSgh(c, t, (g) =>
-      g.registrarVersaoAuditoria({ conta: ids.conta, parecer: 'Parecer sintético 2', papel: 'enfermeiro', usuario: 'x' }),
+      g.registrarVersaoAuditoria({
+        conta: ids.conta,
+        parecer: 'Parecer sintético 2',
+        papel: 'enfermeiro',
+        usuario: 'x',
+      }),
     );
     expect(v2).toBe(v);
     const a = await porta.auditoria(c, ids.conta);
     expect(a.versoes).toHaveLength(2);
-    expect(a.versoes[0]).toMatchObject({ papel: 'medico', parecer: 'Parecer sintético', itens: 1, usuario: 'l0208.teste' });
+    expect(a.versoes[0]).toMatchObject({
+      papel: 'medico',
+      parecer: 'Parecer sintético',
+      itens: 1,
+      usuario: 'l0208.teste',
+    });
     expect(a.versoes[1]).toMatchObject({ papel: 'enfermeiro', parecer: 'Parecer sintético 2' });
     const momentos = await lerVarias(
       'SELECT momento, versao FROM auditoria_conta_versao WHERE conta_hospitalar_id = ? ORDER BY momento',
@@ -518,9 +736,18 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
   });
 
   it('caixa: abre com o número da sequência, recusa o segundo aberto e fecha com a diferença', async () => {
-    const t = (id: number) => ({ estabelecimento: ids.est, usuario: ids.usuario, acao: 'inclusao' as const, entidade: 'sessao_caixa', entidadeId: id, correlacao: c.correlacao });
+    const t = (id: number) => ({
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'sessao_caixa',
+      entidadeId: id,
+      correlacao: c.correlacao,
+    });
     const id = await porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 50 }));
-    expect(codigoDe(await erroDe(porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 0 }))))).toBe('caixa-ja-aberto');
+    expect(
+      codigoDe(await erroDe(porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 0 })))),
+    ).toBe('caixa-ja-aberto');
     const f = await porta.gravarSgh(c, { ...t(id), acao: 'alteracao' }, (g) =>
       g.fecharCaixa({ usuario: 'x', id, contado: 45 }),
     );
@@ -531,32 +758,72 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
 
   it('conta C: preço manual com aprovador e setor na memória do cálculo; competência fechada barra lançar e fechar', async () => {
     const cc = { ...c, correlacao: 'teste-02-08-c' };
-    const base = { conta: ids.contaC, tipo: 3, codigo: 82_080_001, quantidade: 1, data: hoje, hora: '0900', local: 0, ato: 0 };
-    const manual = { unitario: 500, justificativa: 'Material especial sintético', aprovador: 'l0208.supervisor' };
-    const r = await porta.executar(cc, 'faturamento.lancarItem', { ...base, local: ids.setor, ato: 2, precoManual: manual }, op(cc));
+    const base = {
+      conta: ids.contaC,
+      tipo: 3,
+      codigo: 82_080_001,
+      quantidade: 1,
+      data: hoje,
+      hora: '09:00',
+      local: 0,
+      ato: 0,
+    };
+    const manual = {
+      unitario: 500,
+      justificativa: 'Material especial sintético',
+      aprovador: 'l0208.supervisor',
+    };
+    const r = await porta.executar(
+      cc,
+      'faturamento.lancarItem',
+      { ...base, local: ids.setor, ato: 2, precoManual: manual },
+      op(cc),
+    );
     const item = Number(r.resultado['id']);
-    expect(await lerUma('SELECT setor_funcional_id, tipo_valorizacao FROM conta_hospitalar_item WHERE id = ?', [item])).toMatchObject({
+    expect(
+      await lerUma('SELECT setor_funcional_id, tipo_valorizacao FROM conta_hospitalar_item WHERE id = ?', [
+        item,
+      ]),
+    ).toMatchObject({
       setor_funcional_id: ids.setor,
       tipo_valorizacao: 'manual',
     });
-    const m = await lerUma('SELECT tabela_preco_id, preco_manual, valor_unitario_calculado, dados FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ?', [item]);
+    const m = await lerUma(
+      'SELECT tabela_preco_id, preco_manual, valor_unitario_calculado, dados FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ?',
+      [item],
+    );
     expect(Number(m?.['preco_manual'])).toBe(1);
     expect(Number(m?.['valor_unitario_calculado'])).toBe(100);
     const dados = typeof m?.['dados'] === 'string' ? JSON.parse(m['dados']) : m?.['dados'];
     expect(dados).toMatchObject({ manual: manual, ato: 2, vigencia: '2020-01-01' });
     // Setor de fora do estabelecimento: recusado.
-    expect(codigoDe(await erroDe(porta.executar(cc, 'faturamento.lancarItem', { ...base, local: 9999 }, op(cc))))).toBe('setor-inexistente');
+    expect(
+      codigoDe(await erroDe(porta.executar(cc, 'faturamento.lancarItem', { ...base, local: 9999 }, op(cc)))),
+    ).toBe('setor-inexistente');
     // Competência do faturamento de convênios fechada: lançar e fechar recusam.
     await escrever(
       "INSERT INTO competencia_faturamento (estabelecimento_id, modulo, competencia, situacao, aberta_em, fechada_em, criado_em) VALUES (?, 'fonte_pagadora', ?, 'fechada', NOW(3), NOW(3), NOW(3))",
       [ids.est, competencia],
     );
-    expect(codigoDe(await erroDe(porta.executar(cc, 'faturamento.lancarItem', base, op(cc))))).toBe('competencia-fechada');
-    const versaoC = async () =>
-      versaoTexto(Number((await lerUma('SELECT versao FROM conta_hospitalar WHERE id = ?', [ids.contaC]))?.['versao']));
-    expect(codigoDe(await erroDe(porta.executar(cc, 'faturamento.fecharConta', { conta: ids.contaC, versao: await versaoC() }, op(cc))))).toBe(
+    expect(codigoDe(await erroDe(porta.executar(cc, 'faturamento.lancarItem', base, op(cc))))).toBe(
       'competencia-fechada',
     );
+    const versaoC = async () =>
+      versaoTexto(
+        Number((await lerUma('SELECT versao FROM conta_hospitalar WHERE id = ?', [ids.contaC]))?.['versao']),
+      );
+    expect(
+      codigoDe(
+        await erroDe(
+          porta.executar(
+            cc,
+            'faturamento.fecharConta',
+            { conta: ids.contaC, versao: await versaoC() },
+            op(cc),
+          ),
+        ),
+      ),
+    ).toBe('competencia-fechada');
     // O fechamento da própria fonte decide quando existe: reaberto para a fonte, a conta fecha.
     await escrever(
       `INSERT INTO fechamento_competencia_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, competencia, data_abertura,
@@ -564,22 +831,56 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
        VALUES (?, ?, ?, ?, 'reaberta', NOW(3), NOW(3), 'Reabertura sintética', NOW(3))`,
       [ids.est, ids.fonte, competencia, competencia],
     );
-    await porta.executar(cc, 'faturamento.fecharConta', { conta: ids.contaC, versao: await versaoC() }, op(cc));
-    expect((await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [ids.contaC]))?.['situacao']).toBe('fechada');
+    await porta.executar(
+      cc,
+      'faturamento.fecharConta',
+      { conta: ids.contaC, versao: await versaoC() },
+      op(cc),
+    );
+    expect(
+      (await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [ids.contaC]))?.['situacao'],
+    ).toBe('fechada');
     await escrever('DELETE FROM competencia_faturamento WHERE estabelecimento_id = ?', [ids.est]);
-    await escrever('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [ids.est]);
+    await escrever('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
   });
 
   it('pendência: o tipo define o bloqueio (a tela só endurece), sem responsável fixado; conta enviada recusa', async () => {
-    const t = (id: number) => ({ estabelecimento: ids.est, usuario: ids.usuario, acao: 'inclusao' as const, entidade: 'pendencia_conta', entidadeId: id, correlacao: c.correlacao });
+    const t = (id: number) => ({
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'pendencia_conta',
+      entidadeId: id,
+      correlacao: c.correlacao,
+    });
     const impede = await porta.gravarSgh(c, t, (g) =>
-      g.registrarPendencia({ conta: ids.contaC, tipo: ids.tipoPend, descricao: 'Tipo que impede', bloqueante: false, usuario: 'x' }),
+      g.registrarPendencia({
+        conta: ids.contaC,
+        tipo: ids.tipoPend,
+        descricao: 'Tipo que impede',
+        bloqueante: false,
+        usuario: 'x',
+      }),
     );
     const alerta = await porta.gravarSgh(c, t, (g) =>
-      g.registrarPendencia({ conta: ids.contaC, tipo: ids.tipoPendAlerta, descricao: 'Só alerta', bloqueante: false, usuario: 'x' }),
+      g.registrarPendencia({
+        conta: ids.contaC,
+        tipo: ids.tipoPendAlerta,
+        descricao: 'Só alerta',
+        bloqueante: false,
+        usuario: 'x',
+      }),
     );
     const endurecida = await porta.gravarSgh(c, t, (g) =>
-      g.registrarPendencia({ conta: ids.contaC, tipo: ids.tipoPendAlerta, descricao: 'Alerta endurecido', bloqueante: true, usuario: 'x' }),
+      g.registrarPendencia({
+        conta: ids.contaC,
+        tipo: ids.tipoPendAlerta,
+        descricao: 'Alerta endurecido',
+        bloqueante: true,
+        usuario: 'x',
+      }),
     );
     const linhas = await lerVarias(
       `SELECT id, bloqueia_fechamento, responsavel_usuario_id FROM pendencia_conta WHERE id IN (?, ?, ?) ORDER BY id`,
@@ -590,7 +891,13 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     await escrever("UPDATE conta_hospitalar SET situacao = 'enviada' WHERE id = ?", [ids.contaC]);
     const recusada = await erroDe(
       porta.gravarSgh(c, t, (g) =>
-        g.registrarPendencia({ conta: ids.contaC, tipo: ids.tipoPend, descricao: 'Depois do envio', bloqueante: true, usuario: 'x' }),
+        g.registrarPendencia({
+          conta: ids.contaC,
+          tipo: ids.tipoPend,
+          descricao: 'Depois do envio',
+          bloqueante: true,
+          usuario: 'x',
+        }),
       ),
     );
     expect(codigoDe(recusada)).toBe('conta-encerrada');
@@ -598,34 +905,330 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
 
   it('pagamentos e caixa: a forma da tela vira a espécie do banco e volta (filtro, lista e totais por forma)', async () => {
     await escrever(
-      "INSERT INTO sessao_caixa (estabelecimento_id, caixa_id, numero, operador_usuario_id, aberta_em, total_cartao_credito, total_cheque, criado_em) VALUES (?, ?, 9020801, ?, NOW(3), 30, 5, NOW(3))",
+      'INSERT INTO sessao_caixa (estabelecimento_id, caixa_id, numero, operador_usuario_id, aberta_em, total_cartao_credito, total_cheque, criado_em) VALUES (?, ?, 9020801, ?, NOW(3), 30, 5, NOW(3))',
       [ids.est, ids.caixa, ids.usuario],
     );
-    const sessao = Number((await lerUma('SELECT id FROM sessao_caixa WHERE estabelecimento_id = ? AND numero = 9020801', [ids.est]))?.['id']);
+    const sessao = Number(
+      (
+        await lerUma('SELECT id FROM sessao_caixa WHERE estabelecimento_id = ? AND numero = 9020801', [
+          ids.est,
+        ])
+      )?.['id'],
+    );
     await escrever(
       "INSERT INTO movimento_caixa (estabelecimento_id, sessao_caixa_id, tipo_movimento_caixa_id, natureza, ocorrido_em, especie, valor, descricao, criado_em) VALUES (?, ?, ?, 'entrada', NOW(3), 'cartao_credito', 30, 'Recebimento sintético', NOW(3))",
       [ids.est, sessao, ids.tipoMov],
     );
-    const cartao = await porta.pagamentos(c, { caixa: sessao, forma: 'cartao-credito', situacao: null, desde: null, ate: null });
+    const cartao = await porta.pagamentos(c, {
+      caixa: sessao,
+      forma: 'cartao-credito',
+      situacao: null,
+      desde: null,
+      ate: null,
+    });
     expect(cartao.map((x) => x.forma)).toEqual(['cartao-credito']);
-    expect(await porta.pagamentos(c, { caixa: sessao, forma: 'pix', situacao: null, desde: null, ate: null })).toEqual([]);
+    expect(
+      await porta.pagamentos(c, { caixa: sessao, forma: 'pix', situacao: null, desde: null, ate: null }),
+    ).toEqual([]);
     const cx = (await porta.caixas(c, null)).find((x) => x.id === sessao);
     expect(cx?.porForma).toEqual({ 'cartao-credito': 30, outras: 5 });
     expect(await porta.contaParticular(c, ids.conta)).toBe(false);
   });
 
   it('outro estabelecimento: a conta de lá não fecha daqui (404); entrada inválida é 400', async () => {
-    const outra = await erroDe(porta.executar(c, 'faturamento.fecharConta', { conta: ids.contaB, versao: versaoTexto(1) }, op()));
+    const outra = await erroDe(
+      porta.executar(c, 'faturamento.fecharConta', { conta: ids.contaB, versao: versaoTexto(1) }, op()),
+    );
     expect(outra.problema.status).toBe(404);
-    const invalida = await erroDe(porta.executar(c, 'faturamento.fecharConta', { conta: ids.conta, versao: 'x' }, op()));
+    const invalida = await erroDe(
+      porta.executar(c, 'faturamento.fecharConta', { conta: ids.conta, versao: 'x' }, op()),
+    );
     expect(invalida.problema.status).toBe(400);
   });
 
-  it('modelo pendente: a fila tardia e o recibo recusam com o motivo, sem gravar', async () => {
-    const t = { estabelecimento: ids.est, usuario: ids.usuario, acao: 'inclusao' as const, entidade: 'recibo', entidadeId: null, correlacao: c.correlacao };
-    const e = await erroDe(porta.gravarSgh(c, t, (g) => g.emitirRecibo({ usuario: 'x', pagamento: 1, pagador: 'Pagador', referente: 'Teste' })));
-    expect(codigoDe(e)).toBe('modelo-pendente');
-    expect(await porta.tardios()).toEqual({ itens: [], total: 0 });
+  const trilha = (entidade: string, acao: 'inclusao' | 'alteracao' = 'inclusao') => ({
+    estabelecimento: ids.est,
+    usuario: ids.usuario,
+    acao,
+    entidade,
+    entidadeId: null,
+    correlacao: c.correlacao,
+  });
+  const fila = (convenios: readonly number[] | null = null) =>
+    porta.tardios(c, { desde: '1900-01-01', convenios, pagina: 0, porPagina: 50 });
+
+  it('fila do lançamento após o fechamento: lê a fila do estabelecimento e grava a decisão uma vez só', async () => {
+    await escrever(
+      'INSERT INTO decisao_lancamento_tardio (estabelecimento_id, conta_hospitalar_id, atendimento_id, chegou_em, criado_em) VALUES (?, ?, ?, NOW(3), NOW(3))',
+      [ids.est, ids.conta, ids.atendimento],
+    );
+    const antes = await fila();
+    expect(antes.total).toBe(1);
+    const reg = antes.itens[0]!;
+    expect(reg).toMatchObject({ conta: ids.conta, convenio: ids.fonte, decisao: null, decididoPor: null });
+    expect((await fila([])).total).toBe(0);
+    const painel = await porta.painelLancamentos(c, {
+      ano: Number(hoje.slice(0, 4)),
+      mes: Number(hoje.slice(5, 7)),
+      desde: '1900-01-01',
+      convenios: null,
+    });
+    expect(painel).toMatchObject({ totalTardios: 1, pendentesDecisao: 1 });
+    const t = trilha('decisao_lancamento_tardio', 'alteracao');
+    const decidir = () =>
+      porta.gravarSgh(c, t, (g) =>
+        g.decidirLancamentoTardio({
+          registro: reg.registro,
+          decisao: 'descartar',
+          motivo: 'Lançamento sintético repetido',
+          usuario: 'x',
+          conta: ids.conta,
+        }),
+      );
+    expect(await decidir()).toBe(reg.registro);
+    const depois = (await fila()).itens[0];
+    expect(depois).toMatchObject({ decisao: 'descartar', motivo: 'Lançamento sintético repetido' });
+    expect(depois?.decididoPor).toBeTruthy();
+    expect(codigoDe(await erroDe(decidir()))).toBe('ja-decidido');
+  });
+
+  it('regras de faturabilidade: grava, lê de volta com o seletor, edita e recusa o nome repetido', async () => {
+    const t = trilha('regra_faturabilidade');
+    const regra = {
+      convenio: ids.fonte,
+      nome: `${P} carteira válida`,
+      exige: 'carteira-valida' as const,
+      seletor: { tipoConta: 'I' as const, grupos: ['sadt' as const], codigos: [82_080_001] },
+      acao: 'avisar' as const,
+      bloqueiaFechamento: true,
+      inicio: '2026-01-01',
+      fim: null,
+    };
+    const id = await porta.gravarSgh(c, t, (g) =>
+      g.editarRegra({ id: null, regra, ativa: true, usuario: 'x' }),
+    );
+    expect((await porta.regras(c)).find((r) => r.id === id)).toMatchObject({
+      convenio: ids.fonte,
+      exige: 'carteira-valida',
+      seletor: { tipoConta: 'I', grupos: ['sadt'], codigos: [82_080_001] },
+      bloqueiaFechamento: true,
+      ativa: true,
+      fim: null,
+    });
+    expect(
+      await lerUma('SELECT exige, natureza_conta FROM regra_faturabilidade WHERE id = ?', [id]),
+    ).toMatchObject({
+      exige: 'carteira_valida',
+      natureza_conta: 'internacao',
+    });
+    await porta.gravarSgh(c, t, (g) =>
+      g.editarRegra({ id, regra: { ...regra, fim: '2026-12-31' }, ativa: false, usuario: 'x' }),
+    );
+    expect((await porta.regras(c)).find((r) => r.id === id)).toMatchObject({
+      fim: '2026-12-31',
+      ativa: false,
+    });
+    const dup = await erroDe(
+      porta.gravarSgh(c, t, (g) => g.editarRegra({ id: null, regra, ativa: true, usuario: 'x' })),
+    );
+    expect(codigoDe(dup)).toBe('regra-duplicada');
+  });
+
+  it('pacote pela tela: cria para a fonte pagadora, edita valor e itens, e recusa item inexistente', async () => {
+    const t = trilha('pacote_contrato');
+    const semPreco = Number(
+      (await lerUma('SELECT codigo FROM item_faturavel WHERE id = ?', [ids.itemSemPreco]))?.['codigo'],
+    );
+    const base = {
+      convenio: ids.fonte,
+      codigo: 82_080_001,
+      nome: 'PACOTE SINTETICO L0208',
+      valor: 500,
+      inicio: '2026-01-01',
+      fim: null,
+      itens: [{ codigo: semPreco, quantidade: 2 }],
+      ativo: true,
+    };
+    const id = await porta.gravarSgh(c, t, (g) => g.editarPacote({ ...base, id: null, usuario: 'x' }));
+    expect((await porta.pacotes(c)).find((x) => x.id === id)).toMatchObject({
+      convenio: ids.fonte,
+      codigo: 82_080_001,
+      valor: 500,
+      ativo: true,
+      itens: [{ codigo: semPreco, quantidade: 2 }],
+    });
+    await porta.gravarSgh(c, t, (g) =>
+      g.editarPacote({ ...base, id, valor: 650, itens: [], ativo: false, usuario: 'x' }),
+    );
+    expect((await porta.pacotes(c)).find((x) => x.id === id)).toMatchObject({
+      valor: 650,
+      ativo: false,
+      itens: [],
+    });
+    const sem = await erroDe(
+      porta.gravarSgh(c, t, (g) =>
+        g.editarPacote({ ...base, id: null, itens: [{ codigo: 99_999_998, quantidade: 1 }], usuario: 'x' }),
+      ),
+    );
+    expect(codigoDe(sem)).toBe('item-inexistente');
+  });
+
+  it('pacote da rede: o estabelecimento grava só o valor da fonte pagadora; nome, situação e itens são recusados', async () => {
+    const t = trilha('pacote_contrato');
+    const semPreco = Number(
+      (await lerUma('SELECT codigo FROM item_faturavel WHERE id = ?', [ids.itemSemPreco]))?.['codigo'],
+    );
+    const pacotes = "SELECT id FROM pacote WHERE codigo = '82080001'";
+    await escrever(`DELETE FROM pacote_item_incluso WHERE pacote_id IN (${pacotes})`, []);
+    await escrever(`DELETE FROM pacote_contrato WHERE pacote_id IN (${pacotes})`, []);
+    await escrever("DELETE FROM pacote WHERE codigo = '82080001'", []);
+    const base = {
+      convenio: ids.fonte,
+      codigo: 82_080_001,
+      nome: 'PACOTE SINTETICO DA REDE',
+      valor: 500,
+      inicio: '2026-01-01',
+      fim: null,
+      itens: [{ codigo: semPreco, quantidade: 2 }],
+      ativo: true,
+    };
+    const id = await porta.gravarSgh(c, t, (g) => g.editarPacote({ ...base, id: null, usuario: 'x' }));
+    await escrever("UPDATE pacote SET estabelecimento_id = NULL WHERE codigo = '82080001'", []);
+    const pacoteDaRede = async () =>
+      lerUma(
+        `SELECT pa.descricao, pa.situacao, COUNT(pi.id) AS itens FROM pacote pa
+           LEFT JOIN pacote_item_incluso pi ON pi.pacote_id = pa.id AND pi.excluido_em IS NULL
+          WHERE pa.codigo = '82080001' GROUP BY pa.id, pa.descricao, pa.situacao`,
+        [],
+      );
+    try {
+      // Valor de outra fonte pagadora? Aqui, a mesma fonte com outro início, e o pacote da rede é reaproveitado.
+      const novo = await porta.gravarSgh(c, t, (g) =>
+        g.editarPacote({ ...base, id: null, inicio: '2026-06-01', valor: 700, usuario: 'x' }),
+      );
+      expect(novo).not.toBe(id);
+      // Editar o valor de um contrato do pacote da rede passa.
+      await porta.gravarSgh(c, t, (g) => g.editarPacote({ ...base, id, valor: 650, usuario: 'x' }));
+      const mudancas = [
+        { nome: 'PACOTE RENOMEADO' },
+        { ativo: false },
+        { itens: [] },
+        { itens: [{ codigo: semPreco, quantidade: 3 }] },
+      ];
+      for (const m of mudancas) {
+        for (const alvo of [null, id]) {
+          const e = await erroDe(
+            porta.gravarSgh(c, t, (g) =>
+              g.editarPacote({ ...base, inicio: '2026-09-01', ...m, id: alvo, usuario: 'x' }),
+            ),
+          );
+          expect(codigoDe(e)).toBe('pacote-da-rede');
+        }
+      }
+      expect(await pacoteDaRede()).toMatchObject({ descricao: base.nome, situacao: 'ativo' });
+      expect(Number((await pacoteDaRede())?.['itens'])).toBe(1);
+      const valores = await lerVarias(
+        `SELECT pc.valor FROM pacote_contrato pc JOIN pacote pa ON pa.id = pc.pacote_id
+          WHERE pa.codigo = '82080001' AND pc.excluido_em IS NULL ORDER BY pc.vigencia_inicio`,
+        [],
+      );
+      expect(valores.map((v) => Number(v['valor']))).toEqual([650, 700]);
+    } finally {
+      await escrever(
+        'UPDATE pacote SET estabelecimento_id = ? WHERE codigo = ? AND estabelecimento_id IS NULL',
+        [ids.est, '82080001'],
+      );
+    }
+  });
+
+  it('orçamento particular → recebimento no caixa com troco → recibo por extenso, uma vez só', async () => {
+    const t = trilha('orcamento_particular');
+    const item = { descricao: 'Consulta sintética', quantidade: 2, unitario: 60 };
+    const orcar = (urgencia: boolean, exigeGarantiaAntes: boolean) =>
+      porta.gravarSgh(c, t, (g) =>
+        g.registrarOrcamento({
+          prontuario: 0,
+          nome: 'Interessado Sintetico',
+          itens: [item],
+          desconto: 20,
+          validadeDias: 30,
+          urgencia,
+          exigeGarantiaAntes,
+          usuario: 'x',
+        }),
+      );
+    expect(codigoDe(await erroDe(orcar(true, true)))).toBe('caucao-proibida');
+    const orc = await orcar(true, false);
+    expect(orc.total).toBe(100);
+    expect((await porta.orcamentos(c, hoje)).find((o) => o.id === orc.id)).toMatchObject({
+      total: 100,
+      desconto: 20,
+      urgencia: true,
+      situacao: 'aberto',
+      pago: 0,
+      itens: [item],
+    });
+    await escrever(
+      "UPDATE sessao_caixa SET situacao = 'fechada', fechada_em = NOW(3) WHERE estabelecimento_id = ? AND situacao = 'aberta'",
+      [ids.est],
+    );
+    const sessao = await porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 50 }));
+    const r = await porta.gravarSgh(c, t, (g) =>
+      g.receberParticular({
+        caixa: sessao,
+        orcamento: orc.id,
+        conta: null,
+        pagamentos: [
+          { forma: 'pix', valor: 40, comprovante: 'PIX-SINT-1', parcelas: 1 },
+          { forma: 'dinheiro', valor: 70, comprovante: null, parcelas: 1 },
+        ],
+        usuario: 'x',
+        simulado: true,
+      }),
+    );
+    expect(r.troco).toBe(10);
+    expect(r.pagamentos).toHaveLength(2);
+    expect((await porta.orcamentos(c, hoje)).find((o) => o.id === orc.id)).toMatchObject({
+      situacao: 'pago',
+      pago: 100,
+    });
+    expect((await porta.caixas(c, null)).find((x) => x.id === sessao)?.porForma).toEqual({
+      dinheiro: 60,
+      pix: 40,
+    });
+    const pags = await porta.pagamentos(c, {
+      caixa: sessao,
+      forma: null,
+      situacao: null,
+      desde: null,
+      ate: null,
+    });
+    expect(pags.map((p) => [p.orcamento, p.recibo])).toEqual([
+      [orc.id, null],
+      [orc.id, null],
+    ]);
+    const emitir = () =>
+      porta.gravarSgh(c, t, (g) =>
+        g.emitirRecibo({
+          usuario: 'x',
+          pagamento: r.pagamentos[1]!,
+          pagador: 'Pagador Sintetico',
+          referente: 'Consulta sintética',
+        }),
+      );
+    const rec = await emitir();
+    expect(await lerUma('SELECT valor_extenso FROM recibo WHERE id = ?', [rec.id])).toMatchObject({
+      valor_extenso: 'sessenta reais',
+    });
+    expect((await porta.recibos(c, false)).find((x) => x.id === rec.id)).toMatchObject({
+      pagamento: r.pagamentos[1],
+      valor: 60,
+    });
+    expect(codigoDe(await erroDe(emitir()))).toBe('recibo-emitido');
+    const fechado = await porta.gravarSgh(c, t, (g) =>
+      g.fecharCaixa({ usuario: 'x', id: sessao, contado: 110 }),
+    );
+    expect(fechado.esperado).toBe(110);
   });
 });
 
@@ -636,7 +1239,14 @@ const fabricas: [string, Fabrica][] = [
     'memória',
     async () => ({
       porta: new PortaFaturamentoMemoria(null),
-      c: { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r', hospital: 'aa' },
+      c: {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        rede: 'r',
+        hospital: 'aa',
+      },
       fim: async () => undefined,
     }),
   ],
@@ -652,7 +1262,14 @@ const fabricas: [string, Fabrica][] = [
             );
             return {
               porta: new PortaFaturamentoPropria(nucleo, CLIENTE),
-              c: { cliente: CLIENTE, estabelecimento: est ? Number(est.id) : null, usuario: null, correlacao: 'teste', rede: 'r', hospital: `${P}A` },
+              c: {
+                cliente: CLIENTE,
+                estabelecimento: est ? Number(est.id) : null,
+                usuario: null,
+                correlacao: 'teste',
+                rede: 'r',
+                hospital: `${P}A`,
+              },
               fim: () => nucleo.encerrar(),
             };
           },
@@ -671,20 +1288,31 @@ describe.each(fabricas)('recusas comuns da conta (%s)', (_nome, fabrica) => {
 
   it('entrada inválida do fechamento é 400 com os campos', async () => {
     const e = await erroDe(
-      f.porta.executar(f.c, 'faturamento.fecharConta', { conta: 0, versao: 'curta' }, {
-        cliente: f.c.cliente,
-        estabelecimento: f.c.estabelecimento,
-        usuario: f.c.usuario,
-        correlacao: 'teste',
-        chaveIdempotencia: `t0208-${randomUUID()}`,
-      }),
+      f.porta.executar(
+        f.c,
+        'faturamento.fecharConta',
+        { conta: 0, versao: 'curta' },
+        {
+          cliente: f.c.cliente,
+          estabelecimento: f.c.estabelecimento,
+          usuario: f.c.usuario,
+          correlacao: 'teste',
+          chaveIdempotencia: `t0208-${randomUUID()}`,
+        },
+      ),
     );
     expect(e.problema.status).toBe(400);
   });
 
   it('conta particular: conta inexistente é nula; a forma da tela volta como forma da tela', async () => {
     expect(await f.porta.contaParticular(f.c, 987_654_321)).toBeNull();
-    const formas = await f.porta.pagamentos(f.c, { caixa: null, forma: 'cartao-credito', situacao: null, desde: null, ate: null });
+    const formas = await f.porta.pagamentos(f.c, {
+      caixa: null,
+      forma: 'cartao-credito',
+      situacao: null,
+      desde: null,
+      ate: null,
+    });
     expect(formas.every((x) => x.forma === 'cartao-credito')).toBe(true);
   });
 
@@ -692,13 +1320,18 @@ describe.each(fabricas)('recusas comuns da conta (%s)', (_nome, fabrica) => {
     const p = await f.porta.podeGravar(f.c, 'faturamento.fecharConta');
     expect(typeof p.pode).toBe('boolean');
     await expect(
-      f.porta.executar(f.c, 'faturamento.inexistente', {}, {
-        cliente: f.c.cliente,
-        estabelecimento: f.c.estabelecimento,
-        usuario: f.c.usuario,
-        correlacao: 'teste',
-        chaveIdempotencia: `t0208-${randomUUID()}`,
-      }),
+      f.porta.executar(
+        f.c,
+        'faturamento.inexistente',
+        {},
+        {
+          cliente: f.c.cliente,
+          estabelecimento: f.c.estabelecimento,
+          usuario: f.c.usuario,
+          correlacao: 'teste',
+          chaveIdempotencia: `t0208-${randomUUID()}`,
+        },
+      ),
     ).rejects.toThrow();
   });
 });

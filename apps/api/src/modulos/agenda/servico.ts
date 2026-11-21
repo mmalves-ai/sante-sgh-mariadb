@@ -31,7 +31,7 @@ import {
   avaliarCobertura,
   candidatosAFalta,
   diasEntre,
-  duracaoMinutos,
+  duracaoEmHoras,
   estadoDaMarcacao,
   estadoDoHorario,
   faixaAntecedencia,
@@ -59,10 +59,8 @@ import {
   canalDoCodigo,
   LeituraAgenda,
   type LinhaEscalaVista,
-  duracaoDigitos,
   linhaEscalaVista,
   type MarcacaoVista,
-  quatroDigitos,
 } from './visao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { agendaNoEscopo, restrito, unidadeDaAgenda } from './escopo.js';
@@ -154,12 +152,12 @@ export function resumoAgenda(a: AgendaVista, ligacao: LigacaoAgenda): AgendaResu
     crm: a.crm,
     procedimento,
     profissional,
-    duracao: formatarHora(a.duracao) || '',
-    ativa: a.ativa === 'S',
-    vigente: a.ativa === 'S' && a.gradeInicio !== null,
+    duracao: a.duracaoMinutos ? duracaoEmHoras(a.duracaoMinutos) : '',
+    ativa: a.ativa,
+    vigente: a.ativa && a.gradeInicio !== null,
     gradeInicio: a.gradeInicio,
     gradeFim: a.gradeFim,
-    teleatendimento: a.teleatendimento === 'S',
+    teleatendimento: a.teleatendimento,
     convenios: a.convenios,
     especialidades: a.especialidades,
     ligacao,
@@ -167,11 +165,11 @@ export function resumoAgenda(a: AgendaVista, ligacao: LigacaoAgenda): AgendaResu
 }
 
 export function linhaEscala(l: LinhaEscalaVista): LinhaEscalaResposta {
-  const sem = l.intervaloInicio === '0000' || l.intervaloInicio === '';
+  const sem = !l.intervaloInicio || !l.intervaloFim;
   return {
     semana: l.semana,
     dia: NOME_DO_DIA[l.semana] ?? String(l.semana),
-    duracao: formatarHora(l.duracao),
+    duracao: l.duracaoMinutos ? duracaoEmHoras(l.duracaoMinutos) : '',
     inicio: formatarHora(l.horaInicio),
     fim: formatarHora(l.horaFim),
     intervaloInicio: sem ? null : formatarHora(l.intervaloInicio),
@@ -183,7 +181,8 @@ export function linhaEscala(l: LinhaEscalaVista): LinhaEscalaResposta {
  * Origem dos dados como o contrato da tela ainda a nomeia ('memoria' = sessão sintética; o outro valor = banco do
  * cliente). Pedido de contrato registrado para o valor neutro.
  */
-const destinoDaTela = (p: PortaAgenda): 'memoria' | 'legado' => (p.destino === 'memoria' ? 'memoria' : 'legado');
+const destinoDaTela = (p: PortaAgenda): 'memoria' | 'legado' =>
+  p.destino === 'memoria' ? 'memoria' : 'legado';
 
 export class ServicoAgenda {
   private readonly leitura: LeituraAgenda;
@@ -312,7 +311,7 @@ export class ServicoAgenda {
     ]);
     return {
       agenda: resumo,
-      versao: { duracao: a.duracao, ativa: a.ativa, teleatendimento: a.teleatendimento },
+      versao: { duracaoMinutos: a.duracaoMinutos, ativa: a.ativa, teleatendimento: a.teleatendimento },
       convenios: conv.map((x) => ({ ...x, particular: x.codigo === 10 })),
       aceitaTodos: conv.length === 0,
       especialidades: esp,
@@ -346,7 +345,7 @@ export class ServicoAgenda {
       this.porta.escalasPlanejadas(c, id),
       this.resumo(c, a),
     ]);
-    const duracaoAgenda = duracaoMinutos(a.duracao);
+    const duracaoAgenda = a.duracaoMinutos;
     return {
       agenda: resumo,
       escala: linhas.map(linhaEscala),
@@ -364,7 +363,7 @@ export class ServicoAgenda {
         em: g.em.replace('T', ' ').slice(0, 16),
         autor: g.autor,
         situacao: 'criacao' as const,
-        duracao: g.duracaoMinutos ? formatarHora(duracaoDigitos(g.duracaoMinutos)) : null,
+        duracao: g.duracaoMinutos ? duracaoEmHoras(g.duracaoMinutos) : null,
         dias: g.diasSemana.map((d) => NOME_DO_DIA[d] ?? ''),
         horarios: g.horarios,
         reversivel: g.revertidaEm === null,
@@ -392,8 +391,8 @@ export class ServicoAgenda {
       semana: l.semana,
       inicio: l.horaInicio,
       fim: l.horaFim,
-      intervaloInicio: l.intervaloInicio && l.intervaloInicio !== '0000' ? l.intervaloInicio : null,
-      intervaloFim: l.intervaloFim && l.intervaloFim !== '0000' ? l.intervaloFim : null,
+      intervaloInicio: l.intervaloInicio && l.intervaloFim ? l.intervaloInicio : null,
+      intervaloFim: l.intervaloInicio && l.intervaloFim ? l.intervaloFim : null,
     }));
   }
 
@@ -423,7 +422,7 @@ export class ServicoAgenda {
         'Escala vazia',
         'A agenda não tem escala: informe as faixas de horário da semana.',
       );
-    const duracao = p.duracaoMinutos ?? duracaoMinutos(a.duracao);
+    const duracao = p.duracaoMinutos ?? a.duracaoMinutos;
     if (!duracao)
       throw new ErroProblema(
         'entrada-invalida',
@@ -437,13 +436,13 @@ export class ServicoAgenda {
         { de: p.de, ate: p.ate, duracaoMinutos: duracao, faixas, incluirFeriados: p.incluirFeriados },
         {
           relogio: r,
-          agendaAtiva: a.ativa === 'S',
+          agendaAtiva: a.ativa,
           feriados,
           bloqueios: bloqueios.map((b) => ({
             inicio: b.inicio,
             fim: b.fim,
-            horaInicio: b.horaInicio ? quatroDigitos(b.horaInicio) : null,
-            horaFim: b.horaFim ? quatroDigitos(b.horaFim) : null,
+            horaInicio: b.horaInicio,
+            horaFim: b.horaFim,
           })),
           existentes: new Set(horarios.itens.map((h) => `${h.data} ${h.hora}`)),
         },
@@ -484,7 +483,16 @@ export class ServicoAgenda {
           existentes: plano.pulados.existentes,
           cortadosHoje: plano.pulados.cortadosHoje.length,
         },
-        escala: plano.escala.map(linhaEscala),
+        escala: plano.escala.map((l) =>
+          linhaEscala({
+            semana: l.semana,
+            duracaoMinutos: duracao,
+            horaInicio: l.horaInicio,
+            horaFim: l.horaFim,
+            intervaloInicio: l.intervaloInicio,
+            intervaloFim: l.intervaloFim,
+          }),
+        ),
         alertas: [...plano.alertas],
         assinatura,
       },
@@ -655,15 +663,14 @@ export class ServicoAgenda {
     mascarar: boolean,
   ): MarcacaoResumo {
     const sinais = { atendido: m.atendido, situacaoHorario: m.situacaoHorario, temSenha: m.temSenha };
-    const hhmm = m.hora.padStart(4, '0');
-    const acoes = acoesDaMarcacao(sinais, { data: m.data, hora: hhmm }, r);
+    const acoes = acoesDaMarcacao(sinais, { data: m.data, hora: m.hora }, r);
     const canal = canalDoCodigo(ext?.canal ?? m.canal);
     return {
       id: m.id,
       agenda: m.agenda ?? 0,
       nomeAgenda: m.nomeAgenda,
       data: m.data,
-      hora: formatarHora(hhmm),
+      hora: formatarHora(m.hora),
       paciente: mascarar ? nomeMascarado(m.paciente) : m.paciente,
       idPaciente: m.idPaciente,
       prontuario: m.prontuario,
@@ -738,7 +745,7 @@ export class ServicoAgenda {
       lista.map((m) => ({
         id: m.id,
         data: m.data,
-        hora: m.hora.padStart(4, '0'),
+        hora: m.hora,
         atendido: m.atendido,
         situacaoHorario: m.situacaoHorario,
         temSenha: m.temSenha,

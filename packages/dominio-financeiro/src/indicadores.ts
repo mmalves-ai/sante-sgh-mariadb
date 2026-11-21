@@ -1,7 +1,7 @@
 // Indicadores do cap-06b §6.8 (M32; ficha, seção 4): os três com as parcelas de cada conta impressas.
-//   - títulos pagos sem aprovação, nos dois sistemas (MFCONPAG × SGH_FIN_APROVACAO);
-//   - contas sem título (FCCTAEXT × MFCTAREC; linha de base 13.260 de 40.693 contas de 2025 ligadas);
-//   - credor não encontrado no cadastro (MFCONPAG.FORN × TBFORNEC; 12,9%).
+//   - títulos pagos sem aprovação (título a pagar × pedido de aprovação);
+//   - contas sem título (conta hospitalar × título a receber; linha de base 13.260 de 40.693 contas de 2025 ligadas);
+//   - credor não encontrado no cadastro (título a pagar × fornecedor; 12,9%).
 export interface Parcela {
   readonly rotulo: string;
   readonly valor: number;

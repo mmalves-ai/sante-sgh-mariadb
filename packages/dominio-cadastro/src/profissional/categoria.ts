@@ -1,8 +1,8 @@
 // Categoria do profissional (ficha do M11, regra 10; cap-06a §6.1; Anexo A): vem do CBO do registro
-// (TBCBOSUS.COD), nunca da sigla do conselho (divergem em 481 de 2.095 registros). Médico: CBO começando em
-// 225 (família 2251–2253 da CBO 2002). A atividade real é TBCBOPRO.ATIVO (T 1.949, F 144, nulo 2);
-// TBPROFIS.SITUACAO (O 758, F 109, E 4) só aparece com a legenda "a confirmar" (DP-46.1). As sentinelas
-// (TBPROFIS IDs 1 e 2, TBCBOPRO IDs 1 e 488) ficam fora das listas.
+// (código da CBO), nunca da sigla do conselho (divergem em 481 de 2.095 registros). Médico: CBO começando em
+// 225 (família 2251–2253 da CBO 2002). A atividade real é a da ocupação do profissional (T 1.949, F 144, nulo 2);
+// A situação do profissional (O 758, F 109, E 4) só aparece com a legenda "a confirmar" (DP-46.1). As sentinelas
+// (profissional IDs 1 e 2, ocupação do profissional IDs 1 e 488) ficam fora das listas.
 import type { CategoriaProfissional } from '@sgh/contratos';
 
 export const SENTINELAS_PROFISSIONAL: ReadonlySet<number> = new Set([1, 2]);
@@ -46,13 +46,13 @@ export function categoriaDoProfissional(
   return PRIORIDADE.find((c) => cats.has(c)) ?? 'outros';
 }
 
-/** TBCBOPRO.ATIVO: T ativo, F inativo, nulo desconhecido (2 registros). */
+/** Ocupação do profissional ativa: T ativo, F inativo, nulo desconhecido (2 registros). */
 export function registroAtivo(valor: unknown): boolean | null {
   const v = String(valor ?? '').trim();
   return v === 'T' ? true : v === 'F' ? false : null;
 }
 
-/** O profissional está ativo se algum registro está (a situação do TBPROFIS é "a confirmar"). */
+/** O profissional está ativo se algum registro está (a situação do profissional é "a confirmar"). */
 export function profissionalAtivo(registros: readonly { readonly ativo: boolean | null }[]): boolean {
   return registros.some((r) => r.ativo === true);
 }

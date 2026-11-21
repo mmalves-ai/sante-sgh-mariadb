@@ -32,7 +32,7 @@ export interface CentroParaApuracao {
   } | null;
 }
 
-/** Um valor de custo direto já pelo TBCENCUS.ID (null: sem centro de custo no movimento). */
+/** Um valor de custo direto já pelo id do centro de custo (null: sem centro de custo no movimento). */
 export interface CustoDiretoLido {
   readonly centro: number | null;
   readonly grupo: GrupoCustoDireto;

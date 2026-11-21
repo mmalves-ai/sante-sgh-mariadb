@@ -39,7 +39,10 @@ export type InventarioRelatorios = z.infer<typeof esquemaInventario>;
 export type RelatorioInventario = InventarioRelatorios['relatorios'][number];
 
 /** Chaves de negócio das áreas donas (as chaves de PAPEIS_TRIAGEM do domínio). */
-export const AREAS_TRIAGEM = Object.keys(PAPEIS_TRIAGEM) as [keyof typeof PAPEIS_TRIAGEM, ...(keyof typeof PAPEIS_TRIAGEM)[]];
+export const AREAS_TRIAGEM = Object.keys(PAPEIS_TRIAGEM) as [
+  keyof typeof PAPEIS_TRIAGEM,
+  ...(keyof typeof PAPEIS_TRIAGEM)[],
+];
 export type AreaTriagem = keyof typeof PAPEIS_TRIAGEM;
 
 /** A chave da área a partir do rótulo do papel dono que o domínio propõe; rótulo desconhecido é erro, nunca nulo. */
@@ -56,7 +59,10 @@ export const esquemaProposta = z.object({
   quantidadeParametros: z.number().int().min(0).max(65535),
   acessoRestrito: z.boolean(),
   destino: z.enum(DESTINOS_TRIAGEM).nullable(),
-  marco: z.string().regex(/^M[0-9]{2}$/).nullable(),
+  marco: z
+    .string()
+    .regex(/^M[0-9]{2}$/)
+    .nullable(),
   artefato: z.string().max(120).nullable(),
   areaDona: z.enum(AREAS_TRIAGEM),
   onda: z.number().int().min(0).max(4).nullable(),
@@ -171,11 +177,22 @@ export const OPERACAO_PROPOR_TRIAGEM = definirOperacao({
       )
         inalteradas++;
       else {
-        await tx.alterar(TABELA_TRIAGEM, Number(atual['id']), Number(atual['versao']), { ...dados, ...decisao });
+        await tx.alterar(TABELA_TRIAGEM, Number(atual['id']), Number(atual['versao']), {
+          ...dados,
+          ...decisao,
+        });
         atualizadas++;
       }
     }
-    return { incluidas, atualizadas, preservadas, inalteradas, excluidasPreservadas, ausentes: ausentes.length, codigosAusentes: ausentes.slice(0, 200).join(',') };
+    return {
+      incluidas,
+      atualizadas,
+      preservadas,
+      inalteradas,
+      excluidasPreservadas,
+      ausentes: ausentes.length,
+      codigosAusentes: ausentes.slice(0, 200).join(','),
+    };
   },
   alvo: () => ({ tabela: TABELA_TRIAGEM, id: null }),
 });

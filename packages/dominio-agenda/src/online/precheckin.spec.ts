@@ -9,7 +9,7 @@ import {
   podeEnviarPreCheckin,
 } from './precheckin.js';
 
-const R = { hoje: '2026-10-25', hhmm: '1000' };
+const R = { hoje: '2026-10-25', hhmm: '10:00' };
 
 describe('conferência', () => {
   const campos = camposParaConferir(

@@ -1,9 +1,7 @@
 // Vocabulário do centro cirúrgico que o novo decide sozinho (POL-1: padrão de mercado como parâmetro; ajustar com a
-// resposta da secretaria e da coordenação do bloco, DP-3): motivos codificados do cancelamento e da suspensão (o
-// legado não guarda motivo do cancelamento: CCAGENDA_EXC_CANC.JUSTIF vazia em 100%), quem pediu, pendências
-// pré-operatórias e os recursos da sala que a agenda marca (as colunas T/F de CCAGENDA: CTI, microscópio,
-// intensificador de imagem, furadeira, câmara, vídeo, torre, ortopedia, eletrocautério, UCO, arco, congelação e
-// raio X; o rótulo é do novo e a coluna é a do legado).
+// resposta da secretaria e da coordenação do bloco, DP-3): motivos codificados do cancelamento e da suspensão, quem
+// pediu, pendências pré-operatórias e os recursos da sala que a agenda marca (CTI, microscópio, intensificador de
+// imagem, furadeira, câmara, vídeo, torre, ortopedia, eletrocautério, UCO, arco, congelação e raio X).
 
 export interface MotivoCirurgia {
   readonly codigo: string;
@@ -50,32 +48,32 @@ export const SITUACOES_PENDENCIA = [
   { codigo: 'dispensada', rotulo: 'Dispensada' },
 ] as const;
 
-/** Recursos da sala marcados no agendamento (coluna T/F do legado → rótulo do novo). */
+/** Recursos da sala marcados no agendamento: o código de negócio e o rótulo da tela. */
 export const RECURSOS_SALA = [
-  { campo: 'cti', coluna: 'CTI', rotulo: 'Vaga de CTI' },
-  { campo: 'microscopio', coluna: 'MIC', rotulo: 'Microscópio' },
-  { campo: 'imagem', coluna: 'IMA', rotulo: 'Intensificador de imagem' },
-  { campo: 'furadeira', coluna: 'FUR', rotulo: 'Furadeira' },
-  { campo: 'camara', coluna: 'CAN', rotulo: 'Câmara' },
-  { campo: 'video', coluna: 'VID', rotulo: 'Vídeo' },
-  { campo: 'torre', coluna: 'TOR', rotulo: 'Torre' },
-  { campo: 'ortopedia', coluna: 'ORT', rotulo: 'Material de ortopedia' },
-  { campo: 'eletrocauterio', coluna: 'ELE', rotulo: 'Eletrocautério' },
-  { campo: 'uco', coluna: 'UCO', rotulo: 'Vaga de unidade coronariana' },
-  { campo: 'arco', coluna: 'ARCO', rotulo: 'Arco cirúrgico' },
-  { campo: 'congelacao', coluna: 'CONGEL', rotulo: 'Congelação (biópsia)' },
-  { campo: 'raioX', coluna: 'RX', rotulo: 'Raio X' },
+  { campo: 'cti', rotulo: 'Vaga de CTI' },
+  { campo: 'microscopio', rotulo: 'Microscópio' },
+  { campo: 'imagem', rotulo: 'Intensificador de imagem' },
+  { campo: 'furadeira', rotulo: 'Furadeira' },
+  { campo: 'camara', rotulo: 'Câmara' },
+  { campo: 'video', rotulo: 'Vídeo' },
+  { campo: 'torre', rotulo: 'Torre' },
+  { campo: 'ortopedia', rotulo: 'Material de ortopedia' },
+  { campo: 'eletrocauterio', rotulo: 'Eletrocautério' },
+  { campo: 'uco', rotulo: 'Vaga de unidade coronariana' },
+  { campo: 'arco', rotulo: 'Arco cirúrgico' },
+  { campo: 'congelacao', rotulo: 'Congelação (biópsia)' },
+  { campo: 'raioX', rotulo: 'Raio X' },
 ] as const;
 export type RecursoSala = (typeof RECURSOS_SALA)[number]['campo'];
 
-/** Caráter da cirurgia (CCTPURGENCIA na cópia pc: 1 Urgência, 2 Eletiva, 3 Acidente; a tela lê a tabela). */
+/** Caráter da cirurgia (cadastro do cliente, por exemplo urgência, eletiva e acidente; a tela lê a tabela). */
 export const CARATERES_CIRURGIA = [
   { codigo: 2, rotulo: 'Eletiva' },
   { codigo: 1, rotulo: 'Urgência' },
   { codigo: 3, rotulo: 'Acidente' },
 ] as const;
 
-/** CCAGENDA.ATEND: I paciente internado (820 de 821), E externo. */
+/** Regime do paciente no agendamento: I internado, E externo. */
 export const ATENDIMENTOS_CIRURGIA = [
   { codigo: 'I', rotulo: 'Paciente internado' },
   { codigo: 'E', rotulo: 'Paciente externo' },

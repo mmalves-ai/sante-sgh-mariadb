@@ -1,6 +1,6 @@
 // Permissões do M53-F0 (ficha do M53, seção 7; convencoes.md §12): ler a folha da competência e os lotes de interface,
 // exportar o lote à folha externa e importar o retorno. Quem tem a opção no outro sistema tem a permissão no novo
-// (regra 1 do M06). Opções da árvore TBOPCOES levantadas no preparo (catalogo-legado.json, pc):
+// (regra 1 do M06). Opções da árvore do menu de origem levantadas no preparo (catalogo-legado.json, pc):
 //   - Folha de pagamento 351 (e as entradas 553 e 4259 do mesmo módulo); Lançamentos 372; Lançamentos › Folha Mensal
 //     384; Lançamentos › Afastamento 389; Exportações 523; Rotinas › Integração 397; Utilitarios › Importações 547 (Importação inicial 548);
 //   - Ponto eletrônico (novo) › Integrações › Integração com folha de pagamento 5084.

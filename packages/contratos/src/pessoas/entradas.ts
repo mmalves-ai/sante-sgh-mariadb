@@ -20,7 +20,7 @@ export const esquemaCpf = z
 
 const tiposVinculo = z.enum(CODIGOS_TIPO_VINCULO as [TipoVinculo, ...TipoVinculo[]]);
 
-/** Lotação: centro de custo (TBCENCUS.COD) e, se houver, a unidade (TBUNIDAD.COD) e o setor de trabalho. */
+/** Lotação: centro de custo (código) e, se houver, a unidade assistencial (código) e o setor de trabalho. */
 export const esquemaLotacao = z
   .object({
     centroCusto: z.number().int().positive(),
@@ -48,9 +48,9 @@ export const esquemaAdmitirColaborador = z
     lotacao: esquemaLotacao,
     /** Matrícula do RH (texto livre, única por estabelecimento). */
     matricula: textoCp1252(20).nullable().default(null),
-    /** Profissional (TBPROFIS.ID) a reusar, da prévia; null: a pessoa não é profissional cadastrado. */
+    /** Profissional de saúde cadastrado (id) a reusar, da prévia; null: a pessoa não é profissional cadastrado. */
     profissional: id.nullable().default(null),
-    /** Usuário (TBUSERS.ID_TBUSERS) a reusar, da prévia; null: sem login no estabelecimento. */
+    /** Usuário de acesso (id) a reusar, da prévia; null: sem login no estabelecimento. */
     usuario: id.nullable().default(null),
   })
   .strict();
@@ -85,7 +85,7 @@ export const esquemaAlterarVinculo = z
 export type AlterarVinculoEntrada = z.infer<typeof esquemaAlterarVinculo>;
 
 /**
- * Desligamento (regra 2): data, motivo do domínio de tipos de rescisão do ramo (FPTIPORESC.ID, 8 linhas no pc) e o
+ * Desligamento (regra 2): data, motivo do domínio de tipos de rescisão do ramo (id) e o
  * texto. O bloqueio do acesso no mesmo dia é consequência, não escolha da tela.
  */
 export const esquemaDesligarColaborador = z
@@ -194,7 +194,7 @@ export type AlterarDependenteEntrada = z.infer<typeof esquemaAlterarDependente>;
 
 /**
  * Validade do conselho acompanhada pelo RH (SGH_PES_HABILITACAO; regra 3). O registro (número, UF, conselho) é o do
- * cadastro de profissionais (TBCBOPRO): aqui só a validade e o documento conferido.
+ * cadastro de profissionais (inscrição no conselho): aqui só a validade e o documento conferido.
  */
 export const esquemaRegistrarHabilitacao = z
   .object({
@@ -214,7 +214,7 @@ export const esquemaFiltroColaboradores = z
   .object({
     termo: textoCp1252(70).optional(),
     centroCusto: z.coerce.number().int().positive().optional(),
-    /** A unidade do estabelecimento (TBUNIDAD.COD) da lotação. */
+    /** A unidade do estabelecimento (código da unidade assistencial) da lotação. */
     unidade: z.coerce.number().int().positive().max(32_767).optional(),
     /** O setor de trabalho da lotação (contém o texto, sem diferença de maiúsculas). */
     setor: textoCp1252(60).optional(),

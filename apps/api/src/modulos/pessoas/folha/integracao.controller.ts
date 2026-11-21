@@ -101,7 +101,7 @@ export class IntegracaoFolhaController {
   @HttpCode(200)
   @Permissao(P.lancar)
   @AuditadoNoHandler(
-    'executor: financeiro.criarTituloPagar (incluir-folha: MFCONPAG, MFLANGSI; SGH_PES_FOLHA_LANCAMENTO, _TITULO, _FATO e SGH_OUTBOX com a SGH_TRILHA)',
+    'executor: financeiro.criarTituloPagar (títulos a pagar da folha, o lançamento, os títulos e os fatos contábeis dele, com a saída e a trilha de auditoria na mesma transação)',
   )
   lancar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoLancamentoFolha> {
     return this.servico.lancar(sessaoDe(req), corpo(esquemaLancarTitulosFolha, b));

@@ -1,7 +1,7 @@
 // Permissões do M21 (ficha, seção 7; convencoes.md §12): internação (pré-internação, admissão, guias, trocas, alta em
 // dois tempos, impressos), mapa de leitos operacional (admitir, transferir, bloquear), higienização (painel,
 // solicitações, aplicativo do profissional, inspeção e liberação, cadastros) e SAME (movimentação física). Quem tem a
-// opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Recepção interna (módulo 7) › Internações 2342: Manutenção 5740 (Alterar 6056, Incluir 6057, Excluir 6058,
 //     Consultar 6059, Cancelar 6060); Pré-internação 5741 (6062 a 6065); Transferências de localização 5742 (6066 a

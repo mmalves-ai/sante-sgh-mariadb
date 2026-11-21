@@ -39,7 +39,7 @@ export const DOMINIOS_ANESTESIA_SINTETICOS: DominiosFicha = {
 };
 
 /**
- * Os registros profissionais (TBCBOPRO) dos logins sintéticos do bloco: o anestesista do agendamento sintético (5002),
+ * Os registros profissionais dos logins sintéticos do bloco: o anestesista do agendamento sintético (5002),
  * um segundo anestesista para a passagem (5006) e o cirurgião (5001), que tem a opção da ficha e não é anestesista.
  */
 export const PROFISSIONAIS_ANESTESIA_SINTETICOS: Readonly<Record<string, ProfissionalDaSessao>> = {

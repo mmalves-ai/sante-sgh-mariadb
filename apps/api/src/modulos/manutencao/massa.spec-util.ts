@@ -61,6 +61,7 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
     ests,
   );
   await e.executar(`DELETE FROM contrato_servico_terceirizado WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM contrato_fornecedor WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM oficina_manutencao WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM equipamento_saude WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar("DELETE FROM fabricante WHERE nome LIKE 'L0303M%'", []);

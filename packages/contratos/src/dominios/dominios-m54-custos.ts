@@ -1,10 +1,10 @@
 // Cadastros da estrutura de custos no CRUD genérico (M54, etapa 4 "estrutura de custos e coleta de estatísticas"; ficha,
 // seção 5, "Receita genérica do CRUD (M08) nas 15 migrar-crud do marco", as 5 do grupo `custos`): contas de receita
-// (CTCTARECEITANCI), grupos de exportação do custeio (CTWGRUPOEXPORTACAO: próprio, ApuraSUS, Federassantas), tipos de dado
-// da estatística (CTTIPODADO: 1 variável, 2 referência), tipos de regra de rateio (CTWTPREGRA) e unidades de mensuração
-// (TBUNIMEN). D-CRUD-544: os grupos de exportação, os tipos de dado e os tipos de regra são lidos por código pelas regras
+// do custeio, grupos de exportação do custeio (próprio, ApuraSUS, Federassantas), tipos de dado
+// da estatística (1 variável, 2 referência), tipos de regra de rateio e unidades de mensuração.
+// D-CRUD-544: os grupos de exportação, os tipos de dado e os tipos de regra são lidos por código pelas regras
 // do custeio (a coleta herda a estatística de referência; a exportação ApuraSUS e Federassantas sai pelo grupo): só se
-// altera o nome. Opções do outro sistema (TBOPCOES, Gestão de custos 4258): Tabelas 295, Parâmetros 296, Centros de custo
+// altera o nome. Opções do outro sistema (menu de origem, Gestão de custos 4258): Tabelas 295, Parâmetros 296, Centros de custo
 // 298, Unidade de mensuração 299 (a das unidades é a da árvore; as demais, inferidas da área Tabelas: conferir na
 // validação). Gravam também o perfil complementar `analista-custos`.
 import type { DominioPublico } from './tipos.js';

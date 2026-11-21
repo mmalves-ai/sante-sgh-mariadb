@@ -33,7 +33,7 @@ import {
   perguntaCompativel,
   planoDePublicacao,
   sugerirReuso,
-  tipoDoTipoperg,
+  tipoDoCodigoDeCampo,
 } from './plano.js';
 import { blocosDoResumo, rtfDoResumo } from './resumo.js';
 import { CONSTANTES_SINTETICAS } from './sintetico.js';
@@ -426,7 +426,7 @@ describe('plano de publicação (pep.publicarFormularioNovo)', () => {
     expect(conduta['UNIDPERG']).toEqual({ classe: 'entrada', valor: '' });
     expect(conduta['ALTURA_COMPONENTE']).toEqual({ classe: 'constante', valor: 0 });
     expect(conduta['LARGURA_COMPONENTE']).toEqual({ classe: 'constante', valor: 0 });
-    const vinculos = plano.linhas.filter((l) => l.tabela === 'PRPADEVOL');
+    const vinculos = plano.linhas.filter((l) => l.tabela === 'modelo_campo' && l.papel === 'vinculo');
     expect(vinculos.every((l) => l.colunas['FONTE']?.classe === 'entrada')).toBe(true);
     expect(vinculos.every((l) => (l.colunas['FONTE'] as { valor: unknown }).valor === 'SINTETICO M45')).toBe(
       true,
@@ -448,9 +448,9 @@ describe('plano de publicação (pep.publicarFormularioNovo)', () => {
     expect(perguntaCompativel(peso, BANCO[0]!)).toBe(true);
     expect(perguntaCompativel({ ...peso, unidade: 'g' }, BANCO[0]!)).toBe(false);
     expect([...sugerirReuso(DEF, BANCO)]).toEqual([['peso', 900]]);
-    expect(tipoDoTipoperg('4')).toBe('escolha');
-    expect(tipoDoTipoperg(' 12 ')).toBe('multipla');
-    expect(tipoDoTipoperg('19')).toBeNull();
+    expect(tipoDoCodigoDeCampo('4')).toBe('escolha');
+    expect(tipoDoCodigoDeCampo(' 12 ')).toBe('multipla');
+    expect(tipoDoCodigoDeCampo('19')).toBeNull();
   });
 
   it('linhas em ordem, com chaves lógicas e reuso; nada é alterado no legado', () => {
@@ -465,16 +465,16 @@ describe('plano de publicação (pep.publicarFormularioNovo)', () => {
     };
     const plano = planoDePublicacao(entrada({ definicao: def }));
     expect(plano.codigoModelo).toBe('SGHESC');
-    const tabelas = plano.linhas.map((l) => l.tabela);
-    expect(tabelas[0]).toBe('PREVOLUCAO');
-    expect(tabelas.lastIndexOf('PRPERGUNTA')).toBeLessThan(tabelas.indexOf('PRPADEVOL'));
+    const tabelas = plano.linhas.map((l) => `${l.tabela}/${l.papel}`);
+    expect(tabelas[0]).toBe('modelo_documento_clinico/modelo');
+    expect(tabelas.lastIndexOf('modelo_campo/banco')).toBeLessThan(tabelas.indexOf('modelo_campo/vinculo'));
     expect(contagemDoPlano(plano)).toEqual({
-      PREVOLUCAO: 1,
-      PRCADRESP: 4, // Limitada, Deambula, Umidade, Fricção (Acamado reaproveitada)
-      PRPERGUNTA: 6, // seção + 5 perguntas novas (peso reaproveitado)
-      PRRESPOSTA: 8, // 3 + 2 opções + total, conduta e data (ORDEM 0)
-      PRPADEVOL: 7,
-      PREVOLESPEC: 2,
+      'modelo_documento_clinico/modelo': 1,
+      'modelo_campo_opcao/banco': 4, // Limitada, Deambula, Umidade, Fricção (Acamado reaproveitada)
+      'modelo_campo/banco': 6, // seção + 5 perguntas novas (peso reaproveitado)
+      'modelo_campo_opcao/vinculo': 8, // 3 + 2 opções + total, conduta e data (ORDEM 0)
+      'modelo_campo/vinculo': 7,
+      'modelo_especialidade/vinculo': 2,
     });
     expect([...plano.reusadas]).toEqual([['peso', 900]]);
     expect([...plano.respostasReusadas]).toEqual([['ACAMADO', 77]]);

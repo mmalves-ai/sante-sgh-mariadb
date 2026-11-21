@@ -1,6 +1,6 @@
 // Permissões do M15 (ficha, seção 7; convencoes.md §12; cap-08 §8.12 e §8.13): prontuário ao vivo (consulta) e
 // o registro de acesso ao prontuário. Quem tem a opção no legado tem a permissão no novo (regra 1 do M06): as
-// opções do módulo do PEP (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json) que abrem o
+// opções do módulo do PEP (menu de origem, retrato tools/verificadores/dados/acesso-legado.pc.json) que abrem o
 // prontuário do paciente: Prontuário Eletrônico do paciente 2582, Localizar paciente 3900 e Selecionar paciente
 // 5146, Histórico do paciente 2635/5544, a consulta dos registros (Evolução 5181, Anamnese 5163, Diagnóstico
 // 5202, Evolução em grupo 5453, Registro cirúrgico 6814), Visualizar Prontuário Completo 6774/6775 e Consulta por
@@ -44,7 +44,7 @@ export const PERMISSOES_PEP_M15: readonly DeclaracaoPermissao[] = [
 ];
 
 // M22 (ficha, seção 7): registros clínicos nos modelos do formulário de origem e a administração do PEP (consulta).
-// Opções inferidas (POL-1b) do módulo do PEP pelo perfil da trilha do legado (TBCABTRILHA, 2026-06 a 2026-07):
+// Opções inferidas (POL-1b) do módulo do PEP pelo perfil da trilha do legado (trilha de auditoria, 2026-06 a 2026-07):
 // a gravação da evolução é registrada na opção 5182 "Confirmar" (2.161 dos 2.394 lançamentos de julho) e 5164 nas
 // anamneses; "Salvar" 4580/4581 e "Novo(a)" 3921/3935 abrem o registro; a suspensão é a 3918 (346 de 498) e a 3913.
 // A administração do PEP: Configurações 2643 › Parâmetros 2644 (Consultar 5921, Confirmar 5355) e o Cadastro de
@@ -102,7 +102,7 @@ export const PERMISSOES_PEP_M22: readonly DeclaracaoPermissao[] = [
   },
 ];
 
-// M24 (ficha, seção 7): prescrição eletrônica (CPOE). Opções do módulo do PEP (TBOPCOES, retrato
+// M24 (ficha, seção 7): prescrição eletrônica (CPOE). Opções do módulo do PEP (menu de origem, retrato
 // tools/verificadores/dados/acesso-legado.pc.json) da "Prescrição geral" 2601: Consultar 5456 e Consulta 5214
 // (ler), Impressão 5222 e Imprimir 2615; Prescrever 5223, Nova 2602, Novo 4585, Salvar 5783, as abas de itens
 // 2603 a 2609, Protocolo padrão 5785, Lançamento de item 5779 e Incluir itens 2611/4586/5216 (criar); Confirmar
@@ -305,8 +305,8 @@ export const PERMISSOES_PEP_M24: readonly DeclaracaoPermissao[] = [
   },
 ];
 
-// M23 (ficha, seção 7): documentos, exames, resultados e multiprofissional. Opções do módulo do PEP (TBOPCOES,
-// retrato tools/verificadores/dados/acesso-legado.pc.json) e a trilha do legado (TBCABTRILHA, 2026-06-01 a
+// M23 (ficha, seção 7): documentos, exames, resultados e multiprofissional. Opções do módulo do PEP (menu de origem,
+// retrato tools/verificadores/dados/acesso-legado.pc.json) e a trilha do legado (trilha de auditoria, 2026-06-01 a
 // 2026-07-05): Localizar paciente 3900 (Selecionar 5146, Encaminhar 3907, Acompanhamento 3909) e a personalização
 // 3343 (Consultar 5923, Confirmar 5360); Solicitação de exame 3926 (Consultar 5462, Nova 4596, Manter 5788,
 // Suspender 4598, Confirmar 5231, Resultados 4601, Resultados Novo/Confirmar/Suspender 5799/5800/5801); Exames
@@ -543,7 +543,7 @@ export const PERMISSOES_PEP_M23: readonly DeclaracaoPermissao[] = [
 ];
 
 // M45, etapa 1 (ficha, seção 7; cap-11 §11.1): construtor de formulários novos. A leitura continua em
-// `pep.admin.ler` (M22). Opções do módulo do PEP (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json),
+// `pep.admin.ler` (M22). Opções do módulo do PEP (menu de origem, retrato tools/verificadores/dados/acesso-legado.pc.json),
 // do cadastro de "Composições (templates)" 4703 (Incluir 4704, Alterar 4705, Excluir 4706) e da "Edição de
 // formulários de composição" 3377 (Confirmar 5394), todas ativas; as do "Cadastro de composições" 2667 a 2670
 // estão inativas no retrato. A aprovação da comissão de prontuário (regra 14, DP-27) usa a mesma opção de

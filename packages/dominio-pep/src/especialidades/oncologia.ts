@@ -12,7 +12,7 @@
 //     diferir da do sistema mais que a tolerância (parâmetro; 5%).
 //   - o tratamento (curso): a sequência e o intervalo valem dentro do curso; o mesmo protocolo recomeça num curso novo
 //     (recaída, nova linha) só no ciclo 1, com o motivo;
-//   - os medicamentos do ciclo são prescritos pela prescrição geral (`pep.prescrever`) e ligados ao ciclo pelo PRPRESC.ID
+//   - os medicamentos do ciclo são prescritos pela prescrição geral (`pep.prescrever`) e ligados ao ciclo pelo id da prescrição
 //     (a prescrição da internação que vale no dia previsto); a validação exige ao menos uma ligada.
 // O tipo de prescrição oncológica do formulário de origem nunca foi usado, e valor nunca visto não é gravado (regra 15).
 // Puro: a API aplica.

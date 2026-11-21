@@ -18,7 +18,7 @@ const chave = (bloco: string, acomodacao: string, leito?: string) =>
     ? `${bloco.trimEnd()}/${acomodacao.trimEnd()}`
     : `${bloco.trimEnd()}/${acomodacao.trimEnd()}/${leito.trimEnd()}`;
 
-/** RILEITOS.STATUS: 'I' inativo; vazio ou 'A' ativo (como o legado trata). */
+/** Situação do cadastro do leito: 'I' inativo; vazio ou 'A' ativo. */
 export function leitoAtivoPainel(status: string | null | undefined): boolean {
   return (status ?? '').trim() !== 'I';
 }
@@ -57,7 +57,7 @@ export interface OpcoesPainel {
   readonly agora: number;
   readonly lidoEm: string;
   readonly dadosAte: string;
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }
 
 function cartao(

@@ -4,15 +4,26 @@
 // estabelecimento da sessão e os registros excluídos; os cadastros do bloco são da rede inteira.
 // Melhoria: o checklist responde por momento e por item do modelo versionado (modelo_checklist_cirurgia), com quem
 // confirmou cada item; o rastreio registra o local anterior, a sala e o responsável em colunas próprias.
-// Pendência registrada (pedidos do lote 03-01, saida/03-01.json): as GRAVAÇÕES do checklist e do rastreio recusam com
-// 409 modelo-pendente (o checklist exige o ato cirúrgico, que só nasce no registro; o rastreio exige a unidade cirúrgica
-// e o atendimento do agendamento e não tem o destino da saída nem a chave do pedido); o código do painel para
-// familiares não tem tabela, e o painel fica sem linhas até o DDL.
+// Pendência registrada (lote 08-cirurgia, saida/08-cirurgia.json): a estrutura já existe (checklist aberto pelo
+// agendamento, destino da saída do bloco, código do painel), mas as GRAVAÇÕES do checklist e do rastreio recusam com
+// 409 modelo-pendente até a implementação do gravador sobre ela, que depende da chave de idempotência da requisição
+// chegar ao gravarSgh (pedido de apoio comum do M18). O painel da família lê codigo_painel_familia.
 import { ErroOperacao, type Leitor, recusa } from '@sgh/nucleo';
 import type { TipoMovimentoBloco } from '@sgh/contratos';
 import { MOMENTO_CHECKLIST, RESPOSTA_CHECKLIST, SITUACAO_CHECKLIST } from './vocabulario-banco.js';
 import { type ContextoPortaM18, type LiberacaoGravacao, portaIndisponivel } from '../exames/public-api.js';
-import { civil, FUSO_PADRAO, instante, lista, n, nn, texto, textoOuNulo, verdadeiro } from './banco-apoio.js';
+import {
+  civil,
+  dataOuNulo,
+  FUSO_PADRAO,
+  instante,
+  lista,
+  n,
+  nn,
+  texto,
+  textoOuNulo,
+  verdadeiro,
+} from './banco-apoio.js';
 import {
   type GravadorBlocoSeguro,
   METODOS_PORTA_BLOCO_SEGURO,
@@ -23,7 +34,7 @@ import type { ChecklistDaCirurgia, CodigoDoPainel, DominiosRastreio, MovimentoDo
 
 type Linha = Record<string, unknown>;
 export const MOTIVO_BLOCO_PENDENTE =
-  'As gravações do checklist de cirurgia segura e do rastreio no banco próprio aguardam o modelo (checklist ligado ao agendamento antes do ato, destino da saída e chave do pedido no rastreio): a tela fica em consulta.';
+  'As gravações do checklist de cirurgia segura e do rastreio no banco próprio aguardam a gravação sobre o modelo (com a chave de idempotência do pedido): a tela fica em consulta.';
 
 export class PortaBlocoSeguroPropria implements PortaBlocoSeguro {
   readonly destino = 'banco' as const;
@@ -231,9 +242,31 @@ export class PortaBlocoSeguroPropria implements PortaBlocoSeguro {
     );
   }
 
-  /** O código do painel para familiares não tem tabela no modelo (pedido de DDL): o painel fica sem linhas. */
-  async codigos(): Promise<Map<number, CodigoDoPainel>> {
-    return new Map();
+  /** Os códigos do painel para familiares ainda válidos em `agora` (o mais recente de cada agendamento). */
+  codigos(
+    c: ContextoPortaM18,
+    agora: string,
+    agendamentos?: readonly number[],
+  ): Promise<Map<number, CodigoDoPainel>> {
+    if (agendamentos && agendamentos.length === 0) return Promise.resolve(new Map());
+    return this.ler(c, async (l, est, fuso) => {
+      const filtro = agendamentos ? ` AND agendamento_cirurgico_id IN (${lista(agendamentos.length)})` : '';
+      const r = await l.consultar(
+        `SELECT agendamento_cirurgico_id, dia, codigo, valido_ate FROM codigo_painel_familia
+          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND valido_ate >= ?${filtro}
+          ORDER BY dia, id LIMIT 2000`,
+        [est, instante(agora, fuso), ...(agendamentos ?? [])],
+      );
+      const m = new Map<number, CodigoDoPainel>();
+      for (const x of r)
+        m.set(n(x['agendamento_cirurgico_id']), {
+          agendamento: n(x['agendamento_cirurgico_id']),
+          dia: dataOuNulo(x['dia']) ?? '',
+          codigo: texto(x['codigo']),
+          validoAte: (civil(x['valido_ate'], fuso) ?? '').replace(' ', 'T'),
+        });
+      return m;
+    });
   }
 }
 

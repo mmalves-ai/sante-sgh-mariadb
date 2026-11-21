@@ -1,7 +1,7 @@
 // Fila do consultório (ficha do M20, seção 4): os atendimentos do dia do local do profissional — agendados e
 // espontâneos — na ordem de chamada: quem está em atendimento no topo, depois os chamados, depois os que aguardam
 // por prioridade legal e pela hora (a marcada, para o agendado que já chegou, ou a chegada); os liberados no fim.
-// A situação vem das letras do fluxo da senha no local (TBFLUXOATEND: C chamar, A atender, L liberar, X cancelar a
+// A situação vem das letras do fluxo da senha no local (C chamar, A atender, L liberar, X cancelar a
 // chamada, N não localizado), como o outro sistema grava; sem senha, da extensão do novo.
 
 export type SituacaoFila = 'aguardando' | 'chamado' | 'emAtendimento' | 'liberado';

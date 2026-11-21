@@ -9,6 +9,8 @@ export const CODIGOS_VALIDACAO = [
   'data.fora-da-faixa',
   'hora.formato',
   'hora.fora-do-intervalo',
+  'instante.formato',
+  'booleano.valor',
   'cp1252.emoji',
   'cp1252.controle',
   'cp1252.caractere',

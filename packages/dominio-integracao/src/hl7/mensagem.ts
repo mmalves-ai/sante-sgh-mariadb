@@ -30,7 +30,7 @@ export function desescapar(texto: string): string {
   );
 }
 
-/** Data e hora HL7 (AAAAMMDDHHMMSS) do relógio de parede (o Date carrega a hora local nos campos UTC). */
+/** Data e hora no formato do padrão HL7 (ano, mês, dia, hora, minuto e segundo, sem separadores) do relógio de parede (o Date carrega a hora local nos campos UTC). */
 export function dataHl7(d: Date): string {
   const p = (n: number, t = 2) => String(n).padStart(t, '0');
   return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
@@ -104,7 +104,7 @@ export interface PedidoApoio {
     readonly sexo: 'M' | 'F' | 'U';
   };
   readonly atendimento: { readonly numero: number; readonly classe: 'I' | 'O' | 'E' };
-  /** O exame do pedido (SILANEXA.ID: o identificador do pedido no Sante SGH e no outro sistema). */
+  /** O exame do pedido (o identificador do pedido no Sante SGH e no outro sistema). */
   readonly pedido: number;
   readonly exame: { readonly codigo: string; readonly nome: string; readonly material: string | null };
   readonly solicitadoEm: Date;

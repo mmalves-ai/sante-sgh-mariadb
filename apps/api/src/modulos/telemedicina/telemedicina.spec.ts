@@ -270,7 +270,7 @@ describe('teleconsulta: sala de espera, início pelo médico, sala e encerrament
       nomeAgenda: 'CARDIOLOGIA',
       crm: 52001,
       data: '2030-03-13',
-      hora: '1000',
+      hora: '10:00',
     });
     expect(tele.trilhas.at(-1)).toMatchObject({
       dadosDepois: { evento: E.teleconsultaAgendada.codigo, chave: 'marcacao=880996' },
@@ -289,7 +289,7 @@ describe('teleconsulta: sala de espera, início pelo médico, sala e encerrament
       nomeAgenda: 'CARDIOLOGIA',
       crm: 52001,
       data: '2030-03-14',
-      hora: '1000',
+      hora: '10:00',
     });
     await servico.aoCancelar(n, 1003, 880_995);
     expect(tele.trilhas.at(-1)).toMatchObject({ dadosDepois: { evento: E.teleconsultaCancelada.codigo } });

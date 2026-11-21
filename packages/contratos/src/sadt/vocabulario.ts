@@ -21,7 +21,7 @@ export const SETORES_SADT = [
 export type SetorSadt = (typeof SETORES_SADT)[number]['codigo'];
 export const CODIGOS_SETOR_SADT = SETORES_SADT.map((s) => s.codigo) as [SetorSadt, ...SetorSadt[]];
 
-/** Atos do legado (SILANEXA.ATO; Anexo A §A.1) com o rótulo de produto e o setor. */
+/** Atos do exame lançado (Anexo A §A.1) com o rótulo de produto e o setor. */
 export const ATOS_SADT: Readonly<Record<number, { readonly rotulo: string; readonly setor: SetorSadt }>> =
   Object.freeze({
     15: { rotulo: 'Patologia clínica', setor: 'laboratorio' },

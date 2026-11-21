@@ -23,7 +23,7 @@
 //   POST /api/acesso/gestao/cache/invalidar                 a mudança vale na hora
 // Toda gravação invalida o cache das permissões (3 min) do afetado (ou do estabelecimento inteiro, quando a
 // mudança vale para um grupo, um papel ou o mapa) e vai à trilha com o ator real (no "como" e no acesso total,
-// a origem da trilha). O que a fonte própria ainda não grava responde "modelo-pendente" ou "adaptador-pendente".
+// a origem da trilha). O que a fonte própria ainda não grava (pedidos e recertificação) responde "adaptador-pendente".
 // Melhoria: a rota das operações da conta deixa de ser a das receitas do sistema de origem; as de grupo são recusadas
 // com o motivo (o modelo próprio não tem grupos).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';

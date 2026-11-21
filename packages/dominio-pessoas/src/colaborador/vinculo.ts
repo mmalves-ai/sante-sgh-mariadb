@@ -1,8 +1,8 @@
-// Regra 1 do M52 (cap-07 §7.1.1): uma pessoa, vários vínculos. Colaborador, profissional (TBPROFIS) e usuário (TBUSERS)
+// Regra 1 do M52 (cap-07 §7.1.1): uma pessoa, vários vínculos. Colaborador, profissional de saúde e usuário de acesso
 // apontam para a mesma pessoa; admitir um CPF já cadastrado reusa o profissional e o usuário existentes, nunca cria
 // segunda pessoa. A API lê o que existe com o CPF (filtro exato), mostra a prévia, e a admissão confere que a prévia
 // não mudou. Na cópia do pc, 697 dos 1.080 usuários com CPF têm profissional com o mesmo CPF; nenhum CPF repete
-// dentro de TBPROFIS nem de TBUSERS.
+// dentro do cadastro de profissionais nem do de usuários.
 import type { TipoVinculo } from '@sgh/contratos';
 
 export interface VinculoExistente {
@@ -15,7 +15,7 @@ export interface VinculoExistente {
   readonly desligamento: string | null;
 }
 
-/** O que existe com o CPF no estabelecimento (lido pela API: TBPROFIS, TBUSERS e SGH_PES_VINCULO). */
+/** O que existe com o CPF no estabelecimento (lido pela API: profissionais, usuários e vínculos de trabalho). */
 export interface PessoaAchada {
   readonly profissionais: readonly { readonly id: number }[];
   readonly usuarios: readonly { readonly id: number; readonly bloqueado: boolean }[];
@@ -48,7 +48,7 @@ export type DecisaoAdmissao =
 /**
  * Teto da carga semanal por tipo de vínculo, em horas: CLT e estatutário 44 (CF art. 7º, XIII), estagiário 30
  * (Lei 11.788/2008, art. 10), residente 60 (Lei 6.932/1981, art. 5º); cooperado, PJ e terceiro não têm jornada
- * contratada pelo hospital e ficam no teto do formulário. O tempo parcial (`POTPCONTTEMP`) é a regra 6, na F2.
+ * contratada pelo hospital e ficam no teto do formulário. O tempo parcial é a regra 6, na F2.
  */
 export function limiteCargaSemanal(tipo: TipoVinculo): number {
   switch (tipo) {

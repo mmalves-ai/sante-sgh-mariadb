@@ -1,7 +1,7 @@
 // Contratos da cobrança e das mensalidades da operadora própria (M56, etapa 3 de 8, fatia F2; ficha, seções 1, 6, 7 e
 // 8, regra 6): a mensalidade da competência (preço da faixa etária da RN 63 com os reajustes do contrato), a
 // coparticipação avulsa (pela regra do produto), a cobrança avulsa, os acordos e parcelamentos (o tipo de cobrança
-// TBTIPOCOBRANCASGO de 1 a 4), a baixa com multa e juros de mora, o cancelamento e o estorno, o reajuste anual do contrato
+// de 1 a 4), a baixa com multa e juros de mora, o cancelamento e o estorno, o reajuste anual do contrato
 // (o teto da ANS no individual ou familiar; o agrupamento dos contratos coletivos pequenos) e a inadimplência (Lei
 // 9.656/1998, art. 13, II; RN ANS 593/2023: notificação até o 50º dia, mais de 60 dias em 12 meses, 10 dias de prazo
 // depois da notificação). Os dados ficam em SGH_OPE_COBRANCA, SGH_OPE_COBRANCA_ITEM e SGH_OPE_REAJUSTE (scripts 0565 a
@@ -27,7 +27,7 @@ export const CODIGOS_SITUACAO_COBRANCA = Object.keys(SITUACOES_COBRANCA) as [
   ...SituacaoCobranca[],
 ];
 
-/** Tipos de cobrança (TBTIPOCOBRANCASGO, regra 6): o código do domínio. */
+/** Tipos de cobrança (regra 6): o código do domínio. */
 export const TIPO_COBRANCA = { mensalidade: 1, coparticipacao: 2, avulsa: 3, acordo: 4 } as const;
 
 /** Meio da notificação de inadimplência (com comprovação; a mensagem pela Hal-AI só com a base legal, regra 6). */

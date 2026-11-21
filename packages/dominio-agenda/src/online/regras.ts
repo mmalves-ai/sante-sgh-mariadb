@@ -18,7 +18,7 @@ export interface ConfigOnline {
   readonly valorParticular: number | null;
 }
 
-/** Minutos entre o relógio e o horário (negativo: já passou). Datas AAAA-MM-DD e horas HHMM, sem fuso. */
+/** Minutos entre o relógio e o horário (negativo: já passou). Datas AAAA-MM-DD e horas HH:MM, sem fuso. */
 export function minutosAte(h: Horario, r: Relogio): number {
   return diasEntre(r.hoje, h.data) * 1440 + paraMinutos(h.hora) - paraMinutos(r.hhmm);
 }

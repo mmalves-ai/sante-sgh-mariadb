@@ -28,7 +28,7 @@ import {
 } from '../api-classificacao.js';
 import ErroClassificacao from '../componentes/ErroClassificacao.vue';
 import { usarAvisosAtendimento } from '../../atendimento/vigia.js';
-import { dataDe, horaDe, horaHhmmParaLocal } from '../formato.js';
+import { dataDe, horaDe, horaDigitadaParaLocal } from '../formato.js';
 
 const { t } = useI18n();
 const avisos = usarAvisosAtendimento(CANAL_CLASSIFICACAO, () => void relogio.refetch());
@@ -151,7 +151,7 @@ async function salvarMeta(): Promise<void> {
         item: a.item,
         tipo: a.tipo,
         feita: feita.value === 'sim',
-        quando: feita.value === 'sim' && hora.value ? horaHhmmParaLocal(d.value!.lidoEm, hora.value) : null,
+        quando: feita.value === 'sim' && hora.value ? horaDigitadaParaLocal(d.value!.lidoEm, hora.value) : null,
         motivo: motivo.value.trim() || null,
       },
       novaChaveClassificacao('meta-protocolo'),

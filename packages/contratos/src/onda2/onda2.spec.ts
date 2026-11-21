@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { recursoDesligado } from '../liberacao/recursos.js';
 import { operacoesDoSetor, SETORES_PRONTIDAO } from '../prontidao/catalogo.js';
 import {
-  CODIGOS_BAIXA_CONFIANCA_ONDA_2,
   esquemaAcompanhamentoOnda2,
   esquemaJanelaSemVersao,
   esquemaConsultaAcompanhamento,
@@ -78,9 +77,6 @@ describe('onda 2: critério de liberação (regra 1 e condições da onda)', () 
 });
 
 describe('onda 2: regras 14, 15 e 16', () => {
-  it('códigos de baixa confiança com valores vistos', () => {
-    for (const c of CODIGOS_BAIXA_CONFIANCA_ONDA_2) expect(c.vistos.length).toBeGreaterThan(0);
-  });
   it('exceções da regra 15 só em tabelas proibidas e operações de setores da onda', () => {
     const setores = SETORES_PRONTIDAO.filter((s) => SETORES_ONDA_2.includes(s.id));
     for (const e of EXCECOES_REGRA_15) {

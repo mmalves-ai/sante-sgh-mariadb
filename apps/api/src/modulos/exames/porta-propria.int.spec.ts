@@ -12,7 +12,7 @@ import type { ContextoPortaM18 } from './apoio-gravacao.js';
 import type { PortaExame } from './porta.js';
 import { PortaExameMemoria } from './porta-memoria.js';
 import { PortaExamePropria } from './porta-propria.js';
-import { civil, instanteCivil } from './relogio.js';
+import { horaCivil, instanteCivil } from './relogio.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -44,12 +44,14 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     catConsulta: 0,
   };
   let ctx: ContextoNucleo;
-  const dia = civil(new Date(Date.now() + 3 * 86_400_000)).data;
+  const dia = horaCivil(new Date(Date.now() + 3 * 86_400_000)).data;
   const opCtx = (c: ContextoNucleo = ctx): ContextoOperacao => ({ ...c, chaveIdempotencia: `t0105-${randomUUID()}` });
 
   const limpar = (e: Escritor) =>
     (async () => {
       const a = [ids.agenda];
+      await e.executar('DELETE FROM agenda_servico_exame WHERE agenda_servico_id = ?', a);
+      await e.executar("DELETE FROM feriado WHERE estabelecimento_id = ? AND nome LIKE 'FERIADO SINTETICO 20%'", [ids.est]);
       await e.executar(
         `DELETE cm FROM cancelamento_marcacao cm JOIN marcacao_horario m ON m.id = cm.marcacao_horario_id
           JOIN horario_agenda h ON h.id = m.horario_agenda_id WHERE h.agenda_servico_id = ?`,
@@ -213,7 +215,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
   it('lista a agenda de exames do estabelecimento (e não a de outro)', async () => {
     const ags = await porta.agendas(ctx);
     const a = ags.find((x) => x.id === ids.agenda);
-    expect(a).toMatchObject({ ativa: true, duracao: '0020', convenios: 0 });
+    expect(a).toMatchObject({ ativa: true, duracao: '00:20', convenios: 0 });
     expect(await porta.agendas({ ...ctx, estabelecimento: ids.outroEst })).not.toContainEqual(
       expect.objectContaining({ id: ids.agenda }),
     );
@@ -224,9 +226,9 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       agenda: ids.agenda,
       de: dia,
       ate: dia,
-      duracao: '0020',
-      horarios: ['0800', '0820', '0840'].map((hora) => ({ data: dia, hora })),
-      escala: [{ semana: 2, duracao: '0020', horaInicio: '0800', horaFim: '0900', intervaloInicio: '0000', intervaloFim: '0000' }],
+      duracao: '00:20',
+      horarios: ['08:00', '08:20', '08:40'].map((hora) => ({ data: dia, hora })),
+      escala: [{ semana: 2, duracao: '00:20', horaInicio: '08:00', horaFim: '09:00', intervaloInicio: null, intervaloFim: null }],
       semanas: ['F', 'T', 'T', 'T', 'T', 'T', 'F'],
     };
     const c = opCtx();
@@ -249,14 +251,14 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     expect(de2.repetida).toBe(true);
     expect(await ler('SELECT id FROM horario_agenda WHERE agenda_servico_id = ?', [ids.agenda])).toHaveLength(3);
     const vagas = await porta.vagas(ctx, { agendas: [ids.agenda], de: dia, ate: dia });
-    expect(vagas.itens.map((v) => v.hora)).toEqual(['0800', '0820', '0840']);
+    expect(vagas.itens.map((v) => v.hora)).toEqual(['08:00', '08:20', '08:40']);
   });
 
   it('marca o exame: marcação numerada, item do exame, horário ocupado com nova versão; recusa o horário ocupado', async () => {
     const entrada = {
       agenda: ids.agenda,
       data: dia,
-      hora: '0800',
+      hora: '08:00',
       paciente: ids.paciente,
       convenio: ids.fonte,
       exame: ids.exame,
@@ -277,7 +279,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     );
     expect(h).toMatchObject({ situacao: 'ocupado', vagas_ocupadas: 1, versao: 2 });
     const grade = await porta.horarios(ctx, ids.agenda, dia, dia);
-    expect(grade.itens[0]).toMatchObject({ hora: '0800', estado: 'marcado', marcacao: id });
+    expect(grade.itens[0]).toMatchObject({ hora: '08:00', estado: 'marcado', marcacao: id });
     const lista = await porta.marcacoesDoDia(ctx, dia, ids.agenda);
     expect(lista.itens).toContainEqual(expect.objectContaining({ id, estado: 'marcado', atendido: false, temSenha: false }));
     const det = await porta.marcacao(ctx, id);
@@ -301,7 +303,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
         {
           agenda: ids.agenda,
           data: dia,
-          hora: '0820',
+          hora: '08:20',
           paciente: ids.paciente,
           convenio: ids.fonte,
           exame: null,
@@ -335,7 +337,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       [id],
     );
     expect(h).toMatchObject({ situacao: 'livre', vagas_ocupadas: 0 });
-    const canc = await porta.cancelamentos(ctx, { de: civil(new Date()).data, ate: civil(new Date()).data, agendas: [ids.agenda], pagina: 1, porPagina: 50 });
+    const canc = await porta.cancelamentos(ctx, { de: horaCivil(new Date()).data, ate: horaCivil(new Date()).data, agendas: [ids.agenda], pagina: 1, porPagina: 50 });
     expect(canc.total).toBeGreaterThanOrEqual(1);
     const nova = await porta.executar(
       ctx,
@@ -343,7 +345,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       {
         agenda: ids.agenda,
         data: dia,
-        hora: '0820',
+        hora: '08:20',
         paciente: ids.paciente,
         convenio: ids.fonte,
         exame: null,
@@ -357,7 +359,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     const r = await porta.executar(
       ctx,
       'agenda.remarcarExame',
-      { marcacao: antiga, destino: { agenda: ids.agenda, data: dia, hora: '0840' }, modo: 'liberar', canal: 'telefone' },
+      { marcacao: antiga, destino: { agenda: ids.agenda, data: dia, hora: '08:40' }, modo: 'liberar', canal: 'telefone' },
       opCtx(),
     );
     const [nv] = await ler('SELECT remarcada_marcacao_horario_id FROM marcacao_horario WHERE id = ?', [r.resultado['marcacao']]);
@@ -391,7 +393,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       {
         agenda: ids.agenda,
         data: dia,
-        hora: '0800',
+        hora: '08:00',
         paciente: ids.paciente,
         convenio: ids.fonte,
         exame: null,
@@ -416,7 +418,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
         .executar(
           ctx,
           'agenda.remarcarExame',
-          { marcacao: id, destino: { agenda: ids.agenda, data: dia, hora: '0840' }, modo: 'liberar', canal: 'telefone' },
+          { marcacao: id, destino: { agenda: ids.agenda, data: dia, hora: '08:40' }, modo: 'liberar', canal: 'telefone' },
           opCtx(),
         )
         .catch((e) => e);
@@ -429,7 +431,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
   });
 
   it('gerar de novo: reativa o horário excluído (mesma linha) e recusa com mensagem o horário extra no mesmo início', async () => {
-    const dia2 = civil(new Date(Date.now() + 5 * 86_400_000)).data;
+    const dia2 = horaCivil(new Date(Date.now() + 5 * 86_400_000)).data;
     const gerar = (hora: string) =>
       porta.executar(
         ctx,
@@ -438,20 +440,20 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
           agenda: ids.agenda,
           de: dia2,
           ate: dia2,
-          duracao: '0020',
+          duracao: '00:20',
           horarios: [{ data: dia2, hora }],
-          escala: [{ semana: 2, duracao: '0020', horaInicio: '0900', horaFim: '1000', intervaloInicio: '0000', intervaloFim: '0000' }],
+          escala: [{ semana: 2, duracao: '00:20', horaInicio: '09:00', horaFim: '10:00', intervaloInicio: null, intervaloFim: null }],
           semanas: ['T', 'T', 'T', 'T', 'T', 'T', 'T'],
         },
         opCtx(),
       );
-    const g1 = await gerar('0900');
+    const g1 = await gerar('09:00');
     const [h1] = await ler<{ id: number }>('SELECT id FROM horario_agenda WHERE geracao_grade_id = ?', [g1.resultado['geracao']]);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-01-05-exclui' }, (e) =>
       e.executar('UPDATE horario_agenda SET excluido_em = NOW(3), versao = versao + 1 WHERE id = ?', [h1?.id]),
     );
     expect((await porta.horarios(ctx, ids.agenda, dia2, dia2)).itens).toEqual([]);
-    const g2 = await gerar('0900');
+    const g2 = await gerar('09:00');
     const [h2] = await ler('SELECT id, excluido_em, geracao_grade_id, situacao, versao FROM horario_agenda WHERE id = ?', [h1?.id]);
     expect(h2).toMatchObject({ excluido_em: null, situacao: 'livre', versao: 3 });
     expect(Number(h2?.['geracao_grade_id'])).toBe(Number(g2.resultado['geracao']));
@@ -460,28 +462,37 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       e.executar(
         `INSERT INTO horario_agenda (estabelecimento_id, agenda_servico_id, data_referencia, inicio_em, fim_em, tipo_horario, criado_em)
          VALUES (?, ?, ?, ?, ?, 'extra', NOW(3))`,
-        [ids.est, ids.agenda, dia2, instanteCivil(dia2, '0920'), instanteCivil(dia2, '0940')],
+        [ids.est, ids.agenda, dia2, instanteCivil(dia2, '09:20'), instanteCivil(dia2, '09:40')],
       ),
     );
-    expect(codigoDe(await gerar('0920').catch((e) => e))).toBe('previa-desatualizada');
-    expect(await porta.horariosExistentes(ctx, ids.agenda, dia2, dia2)).toEqual([`${dia2} 0900`, `${dia2} 0920`].sort());
+    expect(codigoDe(await gerar('09:20').catch((e) => e))).toBe('previa-desatualizada');
+    expect(await porta.horariosExistentes(ctx, ids.agenda, dia2, dia2)).toEqual([`${dia2} 09:00`, `${dia2} 09:20`].sort());
   });
 
   it('escala com pausa, vagas e feriado: a porta entrega tudo e a geração grava as vagas e o pedido de feriados', async () => {
-    const dia3 = civil(new Date(Date.now() + 6 * 86_400_000)).data;
+    const dia3 = horaCivil(new Date(Date.now() + 6 * 86_400_000)).data;
     const semana = new Date(`${dia3}T00:00:00Z`).getUTCDay() + 1;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-01-05-escala' }, (e) =>
       e.executar(
         `INSERT INTO agenda_escala (agenda_servico_id, dia_semana, hora_inicio, hora_fim, intervalo_inicio, intervalo_fim,
            vagas_por_horario, atende_feriado, vigencia_inicio, criado_em)
          VALUES (?, ?, '10:00', '11:00', '10:20', '10:40', 2, TRUE, ?, NOW(3))`,
-        [ids.agenda, semana, civil(new Date()).data],
+        [ids.agenda, semana, horaCivil(new Date()).data],
       ),
     );
     expect(await porta.escala(ctx, ids.agenda, { de: dia3, ate: dia3 })).toEqual([
-      expect.objectContaining({ semana, horaInicio: '1000', horaFim: '1100', intervaloInicio: '1020', intervaloFim: '1040', vagas: 2, atendeFeriado: true }),
+      expect.objectContaining({ semana, horaInicio: '10:00', horaFim: '11:00', intervaloInicio: '10:20', intervaloFim: '10:40', vagas: 2, atendeFeriado: true }),
     ]);
-    expect(await porta.feriados(ctx, dia3, dia3)).toBeNull();
+    // Feriados do calendário do cliente: o do próprio estabelecimento vale; o ponto facultativo não.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-20-feriado' }, async (e) => {
+      await e.executar(
+        `INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, ponto_facultativo, criado_em)
+         VALUES (?, 'FERIADO SINTETICO 20 A', 'estabelecimento', ?, FALSE, NOW(3)),
+                (?, 'FERIADO SINTETICO 20 B', 'estabelecimento', ?, TRUE, NOW(3))`,
+        [dia3, ids.est, dia3, ids.est],
+      );
+    });
+    expect(await porta.feriados(ctx, dia3, dia3)).toEqual([{ data: dia3, nome: 'FERIADO SINTETICO 20 A' }]);
     const r = await porta.executar(
       ctx,
       'agenda.gerarGradeExame',
@@ -489,9 +500,9 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
         agenda: ids.agenda,
         de: dia3,
         ate: dia3,
-        duracao: '0020',
-        horarios: [{ data: dia3, hora: '1000' }, { data: dia3, hora: '1040' }],
-        escala: [{ semana, duracao: '0020', horaInicio: '1000', horaFim: '1100', intervaloInicio: '1020', intervaloFim: '1040' }],
+        duracao: '00:20',
+        horarios: [{ data: dia3, hora: '10:00' }, { data: dia3, hora: '10:40' }],
+        escala: [{ semana, duracao: '00:20', horaInicio: '10:00', horaFim: '11:00', intervaloInicio: '10:20', intervaloFim: '10:40' }],
         semanas: ['T', 'T', 'T', 'T', 'T', 'T', 'T'],
         incluirFeriados: true,
       },
@@ -524,7 +535,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
         porta: new PortaExameMemoria(
           null,
           async () => [{ id: 501, nome: 'PACIENTE SINTETICO', prontuario: 9001, telefone: null, celular: null, ativo: true }],
-          () => ({ hoje: civil(new Date()).data, hhmm: '0000' }),
+          () => ({ hoje: horaCivil(new Date()).data, hora: '00:00' }),
         ),
         ctx: { cliente: 'sintetico', estabelecimento: 1, usuario: 7, correlacao: 'bateria-01-05' },
         agenda: 951,
@@ -540,8 +551,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
   ];
 
   describe.each(fabricas)('bateria comum da porta de exames (%s)', (_nome, fabrica) => {
-    const dia4 = civil(new Date(Date.now() + 60 * 86_400_000)).data;
-    const horas = ['0700', '0720', '0740'];
+    const dia4 = horaCivil(new Date(Date.now() + 60 * 86_400_000)).data;
+    const horas = ['07:00', '07:20', '07:40'];
     const op = (f: Fabrica): ContextoOperacao => ({ ...(f.ctx as ContextoNucleo), chaveIdempotencia: `t0105-b-${randomUUID()}` });
     const marcar = (f: Fabrica, hora: string) =>
       f.porta.executar(
@@ -569,31 +580,66 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
         agenda: f.agenda,
         de: dia4,
         ate: dia4,
-        duracao: '0020',
+        duracao: '00:20',
         horarios: horas.map((hora) => ({ data: dia4, hora })),
-        escala: [{ semana: 2, duracao: '0020', horaInicio: '0700', horaFim: '0800', intervaloInicio: '0000', intervaloFim: '0000' }],
+        escala: [{ semana: 2, duracao: '00:20', horaInicio: '07:00', horaFim: '08:00', intervaloInicio: null, intervaloFim: null }],
         semanas: ['T', 'T', 'T', 'T', 'T', 'T', 'T'],
       };
       const g = await f.porta.executar(f.ctx, 'agenda.gerarGradeExame', gerar, op(f));
       expect(g.resultado['horarios']).toBe(3);
-      expect(await estados(f)).toEqual({ '0700': 'vago', '0720': 'vago', '0740': 'vago' });
+      expect(await estados(f)).toEqual({ '07:00': 'vago', '07:20': 'vago', '07:40': 'vago' });
       expect(codigoDe(await f.porta.executar(f.ctx, 'agenda.gerarGradeExame', gerar, op(f)).catch((e) => e))).toBe(
         'previa-desatualizada',
       );
-      const m1 = Number((await marcar(f, '0700')).resultado['marcacao']);
-      expect((await estados(f))['0700']).toBe('marcado');
-      expect(codigoDe(await marcar(f, '0700').catch((e) => e))).toBe('horario-ocupado');
+      const m1 = Number((await marcar(f, '07:00')).resultado['marcacao']);
+      expect((await estados(f))['07:00']).toBe('marcado');
+      expect(codigoDe(await marcar(f, '07:00').catch((e) => e))).toBe('horario-ocupado');
       await f.porta.executar(f.ctx, 'agenda.cancelarExame', { marcacao: m1, motivo: 'PAC-DESISTIU', solicitante: 'paciente' }, op(f));
-      expect((await estados(f))['0700']).toBe('vago');
-      const m2 = Number((await marcar(f, '0720')).resultado['marcacao']);
+      expect((await estados(f))['07:00']).toBe('vago');
+      const m2 = Number((await marcar(f, '07:20')).resultado['marcacao']);
       const r = await f.porta.executar(
         f.ctx,
         'agenda.remarcarExame',
-        { marcacao: m2, destino: { agenda: f.agenda, data: dia4, hora: '0740' }, modo: 'liberar', canal: 'telefone' },
+        { marcacao: m2, destino: { agenda: f.agenda, data: dia4, hora: '07:40' }, modo: 'liberar', canal: 'telefone' },
         op(f),
       );
       expect(Number(r.resultado['marcacao'])).not.toBe(m2);
-      expect(await estados(f)).toEqual({ '0700': 'vago', '0720': 'vago', '0740': 'marcado' });
+      expect(await estados(f)).toEqual({ '07:00': 'vago', '07:20': 'vago', '07:40': 'marcado' });
     });
+  });
+  it('cobertura por exame: inclui, recusa repetida, retira (exclusão lógica), reativa e grava a trilha junto', async () => {
+    const trilha = (r: number) => ({
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'agenda_servico_exame',
+      entidadeId: r,
+      correlacao: 'teste-20-cobertura',
+    });
+    const alvo = { agenda: ids.agenda, exame: ids.exame, convenio: null };
+    const id = await porta.gravarSgh(ctx, trilha, (g) => g.incluirCobertura(alvo));
+    expect(await porta.cobertura(ctx, ids.agenda)).toEqual([
+      expect.objectContaining({ id, agenda: ids.agenda, exame: ids.exame, convenio: null, convenioNome: null }),
+    ]);
+    expect(await porta.cobertura(ctx, null)).toHaveLength(1);
+    expect(codigoDe(await porta.gravarSgh(ctx, trilha, (g) => g.incluirCobertura(alvo)).catch((e) => e))).toBe('ja-coberto');
+    expect(await porta.gravarSgh(ctx, trilha, (g) => g.encerrarCobertura(alvo))).toBe(1);
+    expect(await porta.cobertura(ctx, ids.agenda)).toEqual([]);
+    expect(await porta.gravarSgh(ctx, trilha, (g) => g.encerrarCobertura(alvo))).toBe(0);
+    // Incluir de novo reativa a mesma linha (a chave única vale também para a excluída).
+    expect(await porta.gravarSgh(ctx, trilha, (g) => g.incluirCobertura(alvo))).toBe(id);
+    expect(
+      codigoDe(
+        await porta
+          .gravarSgh(ctx, trilha, (g) => g.incluirCobertura({ ...alvo, agenda: 2_000_000_000 }))
+          .catch((e) => e),
+      ),
+    ).toBe('agenda-desconhecida');
+    const [n] = await ler<{ k: number }>(
+      "SELECT COUNT(*) AS k FROM trilha_auditoria WHERE entidade = 'agenda_servico_exame' AND entidade_id = ?",
+      [id],
+    );
+    // Inclusão, retirada e reativação: uma linha de trilha cada (a recusa não grava nada).
+    expect(Number(n?.k)).toBe(3);
   });
 });

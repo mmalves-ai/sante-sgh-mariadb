@@ -29,8 +29,8 @@ import {
   FORMATO_DEFINICAO_FORMULARIO_NOVO,
   percorrerPerguntas,
   publicadoIntegro,
-  TIPOPERG_DO_TIPO,
-  tipoDoTipoperg,
+  CODIGO_DO_TIPO_DE_CAMPO,
+  tipoDoCodigoDeCampo,
   type VersaoNoCiclo,
 } from '@sgh/dominio-pep';
 import type { EventoFormularioNovoLido, FormularioNovoLido } from './tipos-pep.js';
@@ -83,7 +83,10 @@ function doLido(v: FormularioNovoLido) {
 }
 
 /** A versão no ciclo do domínio; os autores são todos os que a salvaram (eventos `salvo` da história). */
-export function noCiclo(v: FormularioNovoLido, eventos: readonly EventoFormularioNovoLido[] = []): VersaoNoCiclo {
+export function noCiclo(
+  v: FormularioNovoLido,
+  eventos: readonly EventoFormularioNovoLido[] = [],
+): VersaoNoCiclo {
   const { definicao, casos } = doLido(v);
   return {
     estado: v.estado,
@@ -214,7 +217,7 @@ export class ServicoFormularioNovo {
   /**
    * A entrada da receita `pep.publicarFormularioNovo` (só com a ponte ligada): o plano do domínio sobre o que a porta
    * leu do prontuário (códigos em uso, perguntas reaproveitadas, respostas cadastradas), relido depois na transação.
-   * As constantes de `PREVOLUCAO`/`PRPADEVOL` são as do dublê até a captura do cenário controlado do M36 (a receita fica
+   * As constantes do modelo e dos vínculos dos campos são as do dublê até a captura do cenário controlado do M36 (a receita fica
    * desligada fora de dev e ci até lá).
    */
   async entradaDaPublicacao(
@@ -268,12 +271,16 @@ export class ServicoFormularioNovo {
     tipo: (typeof TIPOS_PERGUNTA_FORMULARIO_NOVO)[number] | null,
   ): Promise<PerguntaDoBanco[]> {
     const tiposperg =
-      tipo === null ? [] : tipo === 'escolha' ? [TIPOPERG_DO_TIPO.escolha, '4'] : [TIPOPERG_DO_TIPO[tipo]];
+      tipo === null
+        ? []
+        : tipo === 'escolha'
+          ? [CODIGO_DO_TIPO_DE_CAMPO.escolha, '4']
+          : [CODIGO_DO_TIPO_DE_CAMPO[tipo]];
     const r = await this.porta.buscarPerguntas(c, termo, tiposperg);
     return r.map((p) => ({
       id: p.id,
       titulo: p.descricao,
-      tipo: tipoDoTipoperg(p.tipoperg),
+      tipo: tipoDoCodigoDeCampo(p.tipoperg),
       unidade: p.unidade,
       opcoes: [...p.opcoes],
       usoEmModelos: p.usoEmModelos,

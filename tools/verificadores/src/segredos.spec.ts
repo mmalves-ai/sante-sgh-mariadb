@@ -36,4 +36,14 @@ describe('verificadores:segredos (regra 2)', () => {
       'X_SENHA',
     ]);
   });
+  it('em código, identificador nu é referência a constante; literal entre aspas e .env continuam achados', () => {
+    const texto = [`  ${k('SENHA')}: SENHA_DE_TESTE,`, `  ${k('SENHA')}: 'literal',`].join('\n');
+    expect(procurarSegredos(texto, 'tools/x.spec.ts').map((a) => a.linha)).toEqual([2]);
+    expect(procurarSegredos(`${k('SENHA')}=SenhaReal01`, '.env.exemplo').map((a) => a.chave)).toEqual([
+      k('SENHA'),
+    ]);
+    expect(procurarSegredos(`${k('SENHA')}: SenhaReal01`, 'config/x.yaml').map((a) => a.chave)).toEqual([
+      k('SENHA'),
+    ]);
+  });
 });

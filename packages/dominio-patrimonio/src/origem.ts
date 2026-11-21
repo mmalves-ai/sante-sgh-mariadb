@@ -19,7 +19,7 @@ export interface ProblemaCadastro {
 
 export interface ItemNotaLido {
   readonly id: number;
-  /** GECADNFS.ID da nota do item. */
+  /** Nota de entrada do item. */
   readonly nota: number;
   readonly quantidade: number;
   readonly valorTotalCent: number;
@@ -28,11 +28,11 @@ export interface ItemNotaLido {
 }
 
 export interface ContextoCadastro {
-  /** Origens do banco (GPORIGEM): id → deprecia. */
+  /** Origens do bem cadastradas: id → deprecia. */
   readonly origens: ReadonlyMap<number, { readonly depreciar: boolean }>;
   readonly tiposResponsavel: ReadonlySet<number>;
   readonly coeficientes: ReadonlySet<number>;
-  /** Centros de custo ativos (TBCENCUS.ID). */
+  /** Centros de custo ativos (ids). */
   readonly centrosAtivos: ReadonlySet<number>;
   readonly empresas: ReadonlySet<number>;
   /**

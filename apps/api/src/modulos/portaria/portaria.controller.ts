@@ -940,6 +940,7 @@ export class PortariaController {
   async expurgo(@Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
     const agora = await this.agora(s);
+    const retencaoDias = await this.retencaoDias(s);
     const r = await this.apoio.sgh(
       s,
       E.visitantesExpurgados.codigo,
@@ -949,7 +950,7 @@ export class PortariaController {
         id: String(x.ids[0] ?? ''),
         chave: `${x.ids.length}`,
       }),
-      (g) => g.expurgarVisitantes({ hoje: agora.slice(0, 10), usuario: s.login, teto: 200 }),
+      (g) => g.expurgarVisitantes({ hoje: agora.slice(0, 10), usuario: s.login, teto: 200, retencaoDias }),
     );
     if (this.fotos) for (const f of r.fotos) await this.fotos.remover(s.hospital, f).catch(() => undefined);
     return {

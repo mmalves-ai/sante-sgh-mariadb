@@ -1,0 +1,95 @@
+{
+ "lote": "09-operadora",
+ "pedidos": [
+  {
+   "tipo": "implementacao",
+   "arquivos": "apps/api/src/modulos/operadora/cobranca-porta-propria.ts, cobranca-porta.ts, cobranca-servico.ts, cobranca-porta-memoria.ts",
+   "tabela": "acordo_inadimplencia, acordo_inadimplencia_fatura (existem)",
+   "motivo": "Acordo e renegociação: o gravador pede proximoAcordo() antes de saber contrato, valores e parcelas, e acordo_inadimplencia exige contrato_plano_id, data_acordo, tipo_operacao, valor_original, valor_acordado e primeiro_vencimento (NOT NULL). Pedido: o gravador recebe o acordo inteiro (registrarAcordo com contrato, cobranças renegociadas, encargos, parcelas) num passo só. cobranca-porta.ts, cobranca-servico.ts e a memória estão fora da .lista do lote."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "fatura_plano",
+   "colunas": "acordo_inadimplencia_id BIGINT UNSIGNED NULL (FK, ON DELETE RESTRICT) + índice",
+   "motivo": "A parcela gerada pelo acordo precisa apontar o acordo (acordoOrigem da tela); hoje só a fatura renegociada entra em acordo_inadimplencia_fatura. Sem a coluna, renegociadas(acordo) e acordoOrigem ficam sem fonte."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivos": "cobranca-porta-propria.ts (notificar)",
+   "tabela": "ocorrencia_inadimplencia, notificacao_inadimplencia, fase_cobranca_inadimplencia (existem)",
+   "motivo": "A notificação de inadimplência exige uma ocorrência (com a fase do cadastro fase_cobranca_inadimplencia) e uma linha por beneficiário notificado. Falta decidir a semente da fase 'notificacao' no criar_cliente (cadastro do cliente) e se o gravador recebe o beneficiário destinatário. Até lá segue 501."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "produto_plano",
+   "colunas": "operadora_saude_id BIGINT UNSIGNED NOT NULL (FK) — já pedido no lote f22 02-10",
+   "motivo": "porta-propria.ts: só a operadora principal do estabelecimento grava produto enquanto o produto não tem a operadora dona; o cartão de desconto (produto sem registro de plano) também pede o tipo de produto (natureza) no modelo."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "protocolo_beneficiario",
+   "colunas": "instancia, natureza, classe, canal, assunto, numero_nip, pedido_escrita_em, enviado_escrita_em, reanalise_em/motivo, prazo_prorrogado_ate/motivo (conferir contra modelo_protocolo_atendimento e etapa_protocolo_beneficiario)",
+   "motivo": "atendimento-porta-propria.ts: registrar, interagir, prorrogar, pedir/enviar escrita e reanálise do protocolo (RN 395 da ANS) seguem 501; o cabeçalho da porta lista as colunas que faltam."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivos": "atendimento-porta-propria.ts (criarAcesso, alterarAcesso, reemitirAcesso, ativarAcesso, trocarCredencial, tentativaPortal, entrada no portal)",
+   "tabela": "conta_portal_prestador (existe) + identidade do módulo de administração",
+   "motivo": "A credencial, a ativação por código de uso único e as tentativas do portal do prestador ficam na identidade própria do módulo de administração (porta-identidade-propria.ts), fora deste lote."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivos": "atendimento-porta-propria.ts, autorizacao-porta-propria.ts, ans-porta-propria.ts",
+   "tabela": "arquivo (armazenamento em disco, ADR 0004)",
+   "motivo": "Anexos da resposta do prestador (atendimento e autorização) e o arquivo do envio à ANS esperam o armazenamento de arquivos no disco da hospedagem (ADR 0004)."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivos": "ans-porta-propria.ts",
+   "tabela": "cobranca_ressarcimento_sus, ressarcimento_sus_atendimento, impugnacao_ressarcimento_sus (existem); envio_ans",
+   "motivo": "Resolvidos nesta rodada: complemento do SIB (leitura e gravação) e base do DIOPS (eventos, de lote_conta_recebida). Faltam: (1) pendências do SIB (beneficiariosSib: página com sexo, CPF, CNS, mãe, vínculo, titular, produto e contrato; sem bloqueio de modelo, só não coube); (2) GRU, decisão e identificação do ressarcimento: o aviso do ressarcimento na tela é um envio_ans (obrigação ressarcimento_sus) e a cobrança é cobranca_ressarcimento_sus; falta a ligação (DDL pedido abaixo) para pagar a GRU e decidir o atendimento sobre a cobrança e não sobre o envio; (3) base do SIP, vigência dos procedimentos do SIP, contraprestações do DIOPS e monitoramento TISS: decidir a origem (fatura_plano para contraprestações; guia_conta_recebida e os itens para SIP e monitoramento; vigência SIP pede a tabela de-para procedimento x grupo SIP com vigência)."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivos": "apps/api/src/modulos/operadora/modulo.ts",
+   "tabela": "-",
+   "motivo": "modulo.ts (fora da .lista) ainda entrega modeloPendente('A busca da autorização pela senha'); com isso apoio-banco.ts não zera mesmo com as portas resolvidas."
+  },
+  {
+   "tipo": "remocao",
+   "arquivos": "packages/dominio-operadora/src/inventario.ts e inventario.spec.ts (apagados), packages/dominio-operadora/src/index.ts (export retirado)",
+   "tabela": "-",
+   "motivo": "O inventário das tabelas do sistema de origem saiu do contrato (só dado do conector); a conferência da premissa de coexistência que o usava é regra do new-sgh, que não vale aqui. Fora da .lista: confirmar."
+  },
+  {
+   "tipo": "teste",
+   "arquivos": "apps/api/src/modulos/operadora/infra/massa-operadora.spec-util.ts",
+   "tabela": "-",
+   "motivo": "Massa sintética passou a semear a sequência recurso_glosa, o caráter de atendimento '1' e um conselho de classe quando o cliente de teste novo não tem a terminologia TISS (não há carregador em catalogos/). O cliente f24_09operadora recebeu a carga 'ibge' de catalogos/carregar.py."
+  },
+  {
+   "tipo": "remocao",
+   "arquivos": "apps/web/src/modulos/operadora/i18n.ts e i18n.spec.ts",
+   "tabela": "-",
+   "motivo": "Os textos dos achados do inventário (tipo AchadoInventario, apagado) saíram junto; sem isso o tsc da web quebrava. Fora da .lista: confirmar."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "recurso_glosa_recebido, recurso_glosa_recebido_item",
+   "colunas": "justificativa_prestador VARCHAR(1000), justificativa_operadora VARCHAR(1000) (nas duas tabelas)",
+   "motivo": "O contrato (esquemaRegistrarRecursoConta, esquemaDecidirRecurso, ...Itens) aceita até 1000 caracteres e as colunas têm 500. A porta não corta mais: acima de 500 recusa 422 texto-longo com o campo, até o DDL alargar as colunas; depois, trocar LIMITE_TEXTO_RECURSO em contas-porta-propria.ts para 1000."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "envio_ans",
+   "colunas": "cobranca_ressarcimento_sus_id BIGINT UNSIGNED NULL (FK, ON DELETE RESTRICT) + índice; CHECK obrigacao = 'ressarcimento_sus' OR cobranca_ressarcimento_sus_id IS NULL",
+   "motivo": "O aviso de ressarcimento da tela é um envio da obrigação ressarcimento_sus; o pagamento da GRU (numero_gru, valor_pago, pago_em) e a decisão de cada atendimento (ressarcimento_sus_atendimento.situacao_validacao e impugnacao_ressarcimento_sus) vivem na cobrança. Sem a ligação, pagar e decidir seguem recusando."
+  },
+  {
+   "tipo": "alteracao-fora-da-lista",
+   "arquivos": "apps/api/src/modulos/operadora/autorizacao.controller.ts, autorizacao-porta.ts, autorizacao-porta-memoria.ts, autorizacao.spec.ts, apps/web/src/modulos/operadora/componentes/AuditoresOperadora.vue e auditores-operadora.spec.ts, contas-porta-memoria.ts",
+   "tabela": "-",
+   "motivo": "Achado da revisão: a alteração do auditor tirou o nome do contrato de ponta a ponta (o nome é o do cadastro do profissional), a mensagem usa o nome devolvido pela porta e o motivo vai para a trilha da operação. A porta de memória das contas passou a usar o mesmo rateio e a mesma regra de parecer do domínio."
+  }
+ ]
+}

@@ -17,7 +17,10 @@ import {
 } from './treino.ts';
 
 const raiz = resolve(import.meta.dirname, '../../..');
-const lista = lerListaPessoais(raiz);
+const lista = lerListaPessoais(
+  raiz,
+  'tools/verificadores/src/__fixtures__/sem-pessoal/colunas-pessoais.yaml',
+);
 const SAIDA_COLUNAS = [
   'C                               RICADPAC|NOME|37|-1|60',
   'C                               RICADPAC|CPF|16|-1|8',

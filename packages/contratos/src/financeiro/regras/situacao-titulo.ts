@@ -41,6 +41,6 @@ export function legendaStatusPagar(status: number | null): string {
 /** STATUS que o outro sistema grava em cada cenário da baixa (só valores vistos; DP-46.3). */
 export const STATUS_DA_BAIXA = { 'pagar-sem-bordero': 1, 'pagar-por-bordero': 0 } as const;
 
-/** Formas de pagamento vistas (MFCONPAG.TP_PGTO e MFCTAREC.TP_PGTO): legenda candidata em TBTIPOPAGFOR (DP-46.3). */
+/** Formas de pagamento vistas nos títulos a pagar e a receber: legenda candidata no cadastro de formas (DP-46.3). */
 export const TP_PGTO_VISTOS = [0, 1, 11, 12, 13, 21, 22, 23, 24, 31, 33, 34, 80, 81, 82, 83, 84, 85] as const;
 export const tpPgtoVisto = (n: number): boolean => (TP_PGTO_VISTOS as readonly number[]).includes(n);

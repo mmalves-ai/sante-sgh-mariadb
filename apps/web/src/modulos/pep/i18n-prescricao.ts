@@ -448,7 +448,7 @@ export const mensagensPrescricao = {
     unidade: 'Unidade (código)',
     classe: 'Classe',
     numDoses: 'Número de doses',
-    horas: 'Horários (HHMM separados por vírgula)',
+    horas: 'Horários (HH:MM separados por vírgula)',
     desde: 'Vigente desde',
     ativa: 'Ativa',
     gravar: 'Gravar a grade',

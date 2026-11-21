@@ -1,4 +1,4 @@
-// Permissões do módulo config (M02 a M04; convencoes.md §12). Recursos novos, sem opção em TBOPCOES:
+// Permissões do módulo config (M02 a M04; convencoes.md §12). Recursos novos, sem opção no menu de origem:
 // concedidos por perfil (ficha do M06, regra 3) ao Administrador do sistema (papel SBIS 1) pelo mapa
 // SGH_ACESSO_MAPA_OPCAO; a revisão por área é do M10.
 import type { DeclaracaoPermissao } from './tipos.js';

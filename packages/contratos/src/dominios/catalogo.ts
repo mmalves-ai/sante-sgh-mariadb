@@ -144,7 +144,7 @@ export const DOMINIOS_DECLARADOS: readonly DominioPublico[] = [
   ...DOMINIOS_M50_SESSOES,
   // M47 (etapa 2): os cadastros da agência transfusional (editáveis só com a agência própria).
   ...DOMINIOS_M47,
-  // M51 (etapa 2): os médicos solicitantes SUS (FAMEDSOL).
+  // M51 (etapa 2): os médicos solicitantes SUS.
   ...DOMINIOS_M51,
   // M53 (etapa F1): rubricas, incidências, tabelas legais, lançamento automático por empresa e rotinas de integração
   // da folha (`pnpm folha:rubricas`).

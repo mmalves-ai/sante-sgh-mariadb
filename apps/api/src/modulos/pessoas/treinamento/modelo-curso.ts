@@ -1,46 +1,21 @@
-// O que o cadastro de cursos do modelo (tabela curso e treinamento_obrigatorio_funcao) ainda não guarda: a mesma recusa
-// na porta própria e na porta em memória, para o dev/ci não esconder o que no banco fica indisponível.
-// Pendente (pedido de DDL em docs/obra/fatias/f22/saida/03-11.json, com prioridade): as categorias `pop` e `gestao`, o
-// público por unidade (setor), o curso obrigatório para todo o estabelecimento (NR-32) e o público de curso não
-// obrigatório recusam com 409 `modelo-pendente` até sair o curso_publico_alvo e a extensão de ck_curso_tipo.
+// A categoria do curso no contrato e o tipo da tabela curso: a mesma tradução na porta própria e na porta em memória.
+// O público fica no banco assim: o curso obrigatório por função em treinamento_obrigatorio_funcao (com vigência); o
+// público por unidade (setor funcional), o curso obrigatório para todo o estabelecimento (sem alvo) e o público do curso
+// não obrigatório em curso_publico_alvo, com a marca de obrigatório da linha.
 import type { CategoriaCurso } from '@sgh/contratos';
-import { recusa } from '@sgh/nucleo';
 import type { CamposCurso } from './tipos-treinamento.js';
 
-export const MODELO_PENDENTE = 'modelo-pendente';
-
-/** A categoria do contrato → o tipo do curso no modelo (as que faltam no modelo ficam de fora). */
-export const TIPO_DA_CATEGORIA: Partial<Record<CategoriaCurso, string>> = {
+/** A categoria do contrato → o tipo do curso no modelo. */
+export const TIPO_DA_CATEGORIA: Readonly<Record<CategoriaCurso, string>> = {
   nr32: 'norma_regulamentadora',
   integracao: 'integracao',
+  pop: 'procedimento_operacional',
   assistencial: 'capacitacao',
+  gestao: 'gestao',
   outro: 'outro',
 };
 
-const pendente = (mensagem: string, campo: string) => recusa(MODELO_PENDENTE, mensagem, { campos: [campo] });
-
-/** Confere a categoria e o público do curso contra o modelo; devolve o tipo do curso no modelo. */
-export function conferirModeloDoCurso(x: Pick<CamposCurso, 'categoria' | 'obrigatorio' | 'alvos'>): string {
-  const tipo = TIPO_DA_CATEGORIA[x.categoria];
-  if (!tipo)
-    throw pendente(
-      `A categoria "${x.categoria}" ainda não tem lugar no cadastro de cursos: escolha outra.`,
-      'categoria',
-    );
-  if (x.alvos.some((a) => a.tipo === 'unidade'))
-    throw pendente(
-      'O público por unidade ainda não tem lugar no cadastro de cursos: indique as funções.',
-      'alvos',
-    );
-  if (x.obrigatorio && x.alvos.length === 0)
-    throw pendente(
-      'O curso obrigatório para todo o estabelecimento ainda não tem lugar no cadastro: indique as funções.',
-      'alvos',
-    );
-  if (!x.obrigatorio && x.alvos.length > 0)
-    throw pendente(
-      'O público só vale para o curso obrigatório: marque como obrigatório ou tire o público.',
-      'alvos',
-    );
-  return tipo;
+/** O tipo do curso no modelo para a categoria do contrato. */
+export function conferirModeloDoCurso(x: Pick<CamposCurso, 'categoria'>): string {
+  return TIPO_DA_CATEGORIA[x.categoria];
 }

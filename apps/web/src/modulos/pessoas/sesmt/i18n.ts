@@ -168,7 +168,7 @@ export const mensagensSesmt = {
       'Use só para o acidente lançado por engano (colaborador ou fato errado). Ele não é apagado: fica anulado no histórico e sai do painel. Se o S-2210 já foi aceito, a fila do eSocial recebe a exclusão (S-3000); o ainda não enviado é descartado e fica guardado.',
     anuladoEm: 'Anulado em {d} por {p}: {m}',
     dadosCat: 'Dados da CAT',
-    horasAntes: 'Horas trabalhadas antes (HHMM)',
+    horasAntes: 'Horas trabalhadas antes (HH:MM)',
     lateralidade: 'Lateralidade',
     lateralidades: { l0: 'Não aplicável', l1: 'Esquerda', l2: 'Direita', l3: 'Ambas' },
     atestadoData: 'Data do atestado',

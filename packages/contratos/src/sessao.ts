@@ -1,4 +1,4 @@
-// Contrato da sessão (M05): login no TBUSERS do estabelecimento escolhido, sessão no servidor (BFF) e o que a
+// Contrato da sessão (M05): login no cadastro de usuários do estabelecimento escolhido, sessão no servidor (BFF) e o que a
 // casca (M07) consome em GET /api/sessao. Nenhum token vai ao corpo: a sessão é um cookie HttpOnly.
 // Permissões (M06): as do legado (grupo, papéis, flags) mais os recursos novos por perfil.
 import { z } from 'zod';
@@ -64,11 +64,11 @@ export type MotivoTrocaSenha = (typeof MOTIVOS_TROCA_SENHA)[number];
 
 export const esquemaSessao = z.object({
   usuario: z.object({
-    /** TBUSERS.ID_TBUSERS como texto. */
+    /** Id do usuário como texto. */
     id: z.string().min(1),
-    /** Nome de exibição (TBUSERS.NOMEC, ou o login quando vazio). */
+    /** Nome de exibição (ou o login quando vazio). */
     nome: z.string().min(1),
-    /** Login exato (TBUSERS.NOME, maiúsculas contam): é o que o executor grava nas colunas USUARIO*. */
+    /** Login exato (maiúsculas contam): é o que o executor grava nas colunas USUARIO*. */
     login: z.string().optional(),
     /**
      * Decisão do dono (2026-11-20, b): 'plataforma' na sessão do administrador da plataforma, que não é usuário do
@@ -82,7 +82,7 @@ export const esquemaSessao = z.object({
   /** Estabelecimentos da rede (exibição; trocar é um novo login). */
   estabelecimentos: z.array(esquemaEstabelecimentoSessao),
   estabelecimentoAtivo: z.string().nullable(),
-  /** Unidades (TBUNIDAD) a que o usuário tem acesso; com mais de uma, a casca pede a escolha. */
+  /** Unidades a que o usuário tem acesso; com mais de uma, a casca pede a escolha. */
   unidades: z.array(esquemaUnidadeSessao).optional(),
   unidadeAtiva: z.number().int().nullable().optional(),
   papeis: z.array(esquemaPapelSessao).optional(),
@@ -92,15 +92,15 @@ export const esquemaSessao = z.object({
   /** M06: perfil proposto pelo grupo e perfis complementares. */
   perfil: esquemaPerfilSessao.optional(),
   /**
-   * M38 (regra 3): grupo do legado do usuário (TBGRUUSU.NOME): o escopo `grupo` das chaves de liberação (a onda 0
+   * M38 (regra 3): perfil de acesso do usuário (nome): o escopo `grupo` das chaves de liberação (a onda 0
    * é de MASTER e MASTER_SEM_FINANCEIRO). Nome de grupo, nunca dado de pessoa; null: sem grupo (plataforma).
    */
   grupoLegado: z.string().max(31).nullable().optional(),
-  /** M06: PRPARAM.REST_ACESS_PACI_NAO_ESTE_ATEND do banco da sessão (vínculo sobre dados do legado). */
+  /** M06: parâmetro de restrição do acesso ao paciente fora do atendimento, do banco da sessão (vínculo sobre dados do legado). */
   restricaoVinculo: z.boolean().optional(),
   /** Verdadeiro só para os usuários sintéticos dos testes (nunca em homolog, treino ou produção). */
   sintetica: z.boolean(),
-  /** Bloqueio por inatividade, em segundos (menor entre TBCFGLOGIN e o padrão do perfil; 0 = desligado). */
+  /** Bloqueio por inatividade, em segundos (menor entre a configuração de login e o padrão do perfil; 0 = desligado). */
   bloqueioInatividadeSegundos: z.number().int().min(0),
   /** Aviso antes do bloqueio, em segundos antes do prazo (0 = sem aviso). */
   avisoInatividadeSegundos: z.number().int().min(0).optional(),
@@ -110,7 +110,7 @@ export const esquemaSessao = z.object({
   expiraEm: z.string().optional(),
   /** Último acesso válido antes deste e falhas desde então (cap-08 §8.8). */
   ultimoAcesso: z.object({ em: z.string().nullable(), falhasDesde: z.number().int().min(0) }).optional(),
-  /** Sem aceite da versão vigente do termo de uso (PRTERMOACEITE): rotas do PEP fechadas. */
+  /** Sem aceite da versão vigente do termo de uso: rotas do PEP fechadas. */
   termoPendente: z.boolean().optional(),
   /** Troca de senha obrigatória antes de seguir. */
   trocaSenha: z.enum(MOTIVOS_TROCA_SENHA).nullable().optional(),

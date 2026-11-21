@@ -1,6 +1,6 @@
 // Estrutura de custos (M54-F4; ficha, seção 8, regra 7 em preparação): a classe de cada centro, a sequência do rateio
 // (auxiliares e administrativos pela ordem; os produtivos só recebem) e as pendências que impedem a apuração do mês
-// (F5). Puro: recebe os centros lidos (TBCENCUS com a classificação de SGH_CUS_CENTRO) e devolve o diagnóstico.
+// (F5). Puro: recebe os centros lidos (o cadastro com a classificação do custeio) e devolve o diagnóstico.
 import {
   type ClasseCentroCusto,
   CLASSES_CENTRO_CUSTO,

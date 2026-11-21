@@ -7,31 +7,31 @@ import { normalizarTrajetorias } from './trajetoria.js';
 describe('alta sentinela e marcas do cálculo', () => {
   const base = movimento(
     [
-      { entrada: ['2026-06-01', '1000'], trechos: [{ unidade: 'ENF', de: ['2026-06-01', '1000'] }] },
+      { entrada: ['2026-06-01', '10:00'], trechos: [{ unidade: 'ENF', de: ['2026-06-01', '10:00'] }] },
       // Alta anterior à entrada: fora do cálculo, marcada.
       {
-        entrada: ['2026-06-05', '1000'],
-        alta: ['2026-06-04', '1000'],
-        trechos: [{ unidade: 'ENF', de: ['2026-06-05', '1000'] }],
+        entrada: ['2026-06-05', '10:00'],
+        alta: ['2026-06-04', '10:00'],
+        trechos: [{ unidade: 'ENF', de: ['2026-06-05', '10:00'] }],
       },
       // Sem trecho: um trecho na posição atual, marcada.
-      { entrada: ['2026-06-02', '1000'], alta: ['2026-06-03', '1000'] },
+      { entrada: ['2026-06-02', '10:00'], alta: ['2026-06-03', '10:00'] },
       // Trecho em aberto com a alta dada; trecho invertido; trecho além da alta.
       {
-        entrada: ['2026-06-02', '1000'],
-        alta: ['2026-06-06', '1000'],
+        entrada: ['2026-06-02', '10:00'],
+        alta: ['2026-06-06', '10:00'],
         trechos: [
-          { unidade: 'ENF', de: ['2026-06-02', '1000'], ate: ['2026-06-01', '1000'] },
-          { unidade: 'APTO', de: ['2026-06-02', '1000'], ate: ['2026-06-08', '1000'] },
+          { unidade: 'ENF', de: ['2026-06-02', '10:00'], ate: ['2026-06-01', '10:00'] },
+          { unidade: 'APTO', de: ['2026-06-02', '10:00'], ate: ['2026-06-08', '10:00'] },
         ],
       },
       {
-        entrada: ['2026-06-03', '1000'],
-        alta: ['2026-06-04', '1000'],
-        trechos: [{ unidade: 'UTI', de: ['2026-06-03', '1000'] }],
+        entrada: ['2026-06-03', '10:00'],
+        alta: ['2026-06-04', '10:00'],
+        trechos: [{ unidade: 'UTI', de: ['2026-06-03', '10:00'] }],
       },
       // No futuro: fora.
-      { entrada: ['2027-01-01', '1000'] },
+      { entrada: ['2027-01-01', '10:00'] },
     ],
     {
       trechosSoltos: [
@@ -42,7 +42,7 @@ describe('alta sentinela e marcas do cálculo', () => {
           acomodacao: 'ENF',
           leito: '02',
           entrada: d('2026-06-01'),
-          horaEntrada: '0000',
+          horaEntrada: '00:00',
           saida: null,
           horaSaida: null,
           tipo: 1,
@@ -52,7 +52,7 @@ describe('alta sentinela e marcas do cálculo', () => {
         {
           reg: 1,
           data: d('2026-06-02'),
-          hora: '1000',
+          hora: '10:00',
           origem: { bloco: '1', acomodacao: 'ENF', leito: '01' },
           destino: { bloco: '1', acomodacao: 'APTO', leito: '01' },
         },
@@ -64,7 +64,7 @@ describe('alta sentinela e marcas do cálculo', () => {
     const m = new MotorInternacao(base, {
       horaFechamento: 24,
       intensivas: [3],
-      agora: em('2026-06-10', '1200'),
+      agora: em('2026-06-10', '12:00'),
     });
     const hoje = m.censoDoDia('2026-06-10').reduce((s, l) => s + l.internados, 0);
     expect(hoje).toBe(1);

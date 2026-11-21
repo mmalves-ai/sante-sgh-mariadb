@@ -1,7 +1,7 @@
 // Regras puras da onda 3 (ficha do M41, seção 8). As regras 1 a 8 do M40 valem para todas as ondas e moram no M40;
-// estas são as próprias da onda: farmácia depois da prescrição (1), motor de estoque do banco (2), acompanhamento dos
-// efeitos dos gatilhos por documento (painel da seção 7), documentos do dia por sistema (seção 4), horários dispensados
-// contra prescritos e a conferência numérica de saldo e preço médio (seção 10). Nada aqui lê o banco.
+// estas são as próprias da onda: farmácia depois da prescrição (1), efeitos do estoque só pelas operações de movimento
+// (2), acompanhamento dos efeitos por documento (painel da seção 7), documentos do dia por sistema (seção 4), horários
+// dispensados contra prescritos e a conferência numérica de saldo e preço médio (seção 10). Nada aqui lê o banco.
 import type {
   AlertaEfeito,
   DivergenciaNumerica,
@@ -11,7 +11,7 @@ import type {
   SetorOnda3,
   TipoDocumentoOnda3,
 } from '../onda3.js';
-import { SETORES_ONDA3, TABELAS_EFEITO_ESTOQUE } from '../onda3.js';
+import { OPERACOES_MOVIMENTO_ESTOQUE, SETORES_ONDA3, TABELAS_EFEITO_ESTOQUE } from '../onda3.js';
 
 // ── Regra 1: farmácia depois da prescrição em uso ─────────────────────────────────────────────────────────
 
@@ -92,24 +92,28 @@ export function operacoesDaOnda3(): { p1: string[]; p2: string[] } {
   return { p1: [...p1].sort(), p2: [...p2].filter((o) => !p1.has(o)).sort() };
 }
 
-// ── Regra 2: o motor de estoque é o do banco ──────────────────────────────────────────────────────────────
+// ── Regra 2: os efeitos do estoque são da operação do domínio ────────────────────────────────────────────────────
 
 export interface OperacaoCatalogada {
   readonly nome: string;
   readonly tabelasGravadas: readonly string[];
 }
 
-/** Operações da onda que gravariam uma tabela de efeito (deve ser vazio: o catálogo é a prova da regra 2). */
+/**
+ * Operações da onda que gravariam uma tabela de efeito sem ser operação de movimento de estoque (deve ser vazio: o
+ * catálogo é a prova da regra 2). As operações de movimento gravam os efeitos na transação do documento e não entram.
+ */
 export function gravacoesEmTabelaDeEfeito(
   operacoes: readonly OperacaoCatalogada[],
 ): { operacao: string; tabela: string }[] {
   const efeito = new Set<string>(TABELAS_EFEITO_ESTOQUE);
   const { p1, p2 } = operacoesDaOnda3();
-  const daOnda = new Set([...p1, ...p2]);
+  const movimento = new Set<string>(OPERACOES_MOVIMENTO_ESTOQUE);
+  const daOnda = new Set([...p1, ...p2].filter((o) => !movimento.has(o)));
   const r: { operacao: string; tabela: string }[] = [];
   for (const o of operacoes) {
     if (!daOnda.has(o.nome)) continue;
-    for (const t of new Set(o.tabelasGravadas.map((x) => x.toUpperCase())))
+    for (const t of new Set(o.tabelasGravadas.map((x) => x.toLowerCase())))
       if (efeito.has(t)) r.push({ operacao: o.nome, tabela: t });
   }
   return r;
@@ -127,11 +131,11 @@ export interface DocumentoLidoParaEfeito {
     readonly rastreavel: boolean;
     readonly comLote: boolean;
   }[];
-  /** Itens com linha no saldo mensal (GESALDOS) da competência do documento. */
+  /** Itens com linha no saldo mensal (saldo_estoque_mensal) da competência do documento. */
   readonly itensComSaldoMensal: readonly number[];
-  /** O documento tem consumo registrado (GEKONCDC); null quando não se aplica (centro técnico, sem centro). */
+  /** O documento tem consumo registrado (consumo_centro_custo); null quando não se aplica (centro técnico, sem centro). */
   readonly comConsumo: boolean | null;
-  /** Itens com saldo no local na competência (GEARMLOC); informativo (D-MOTOR-28). */
+  /** Itens com saldo no local na competência (saldo_estoque); informativo (D-MOTOR-28). */
   readonly itensComSaldoLocal: readonly number[];
 }
 
@@ -144,7 +148,7 @@ const MOVIMENTA_SALDO: ReadonlySet<TipoDocumentoOnda3> = new Set([
 ]);
 
 /**
- * O efeito esperado num documento do novo. O consumo (GEKONCDC) é informativo por padrão: na cópia pc, 274 de 9.619
+ * O efeito esperado num documento do novo. O consumo (consumo_centro_custo) é informativo por padrão: na cópia pc, 274 de 9.619
  * saídas consolidadas de 06/2026 com centro de custo fora de 9901 a 9999 não têm a linha do consumo (a condição do
  * gatilho ainda não foi levantada linha a linha); `exigirConsumo` liga o alerta quando o construtor a fixar.
  */

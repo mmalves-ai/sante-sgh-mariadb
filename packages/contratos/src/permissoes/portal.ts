@@ -1,12 +1,12 @@
 // Permissões do portal do paciente, etapa 1 do M50 (ficha, seção 7; convencoes.md §12). Dois lados:
 //   - telas internas (recepção, atendimento, privacidade): emitir o convite, ver a situação da conta, bloquear,
 //     desbloquear e encerrar, conferir a prova de vínculo do responsável legal. Quem tem a opção no outro sistema tem a
-//     permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+//     permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //     Termo de consentimento do cadastro de pacientes, ambulatório 6533 (Consultar 6534, Incluir 6535, Alterar 6536,
 //     Ações 6537), pesquisa de pacientes 6538 (6539 a 6542) e internação 6589 (6590 a 6593); a área de privacidade
 //     (Privacidade e proteção de dados, opção raiz do módulo de abertura, a mesma do M10). Não há opção de "portal do
 //     paciente" no outro sistema: o portal de lá (PFPORTALLOGIN, 0 linha no pc) é do prestador credenciado.
-//   - portal (identidade própria em SGH_POR_CONTA, nunca TBUSERS): o servidor do portal dá à SESSÃO DO PORTAL os perfis
+//   - portal (identidade própria da conta do portal, nunca o usuário do sistema): o servidor do portal dá à SESSÃO DO PORTAL os perfis
 //     `portal-paciente` (o titular) e `portal-responsavel` (quem tem vínculo vigente); a permissão nunca vem de usuário
 //     interno, e o escopo do vínculo (documentos, consentimentos, pedidos) é conferido em cada pedido.
 import { OPCOES_M10 } from './administracao.js';

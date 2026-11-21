@@ -1,6 +1,6 @@
 // Remessa e retorno bancário (M32; ficha, seção 6; cap-12 §12.1): CNAB 240 de pagamento a fornecedores (segmento A),
 // gerado só contra o SIMULADOR fora de produção (nada sai para banco). O retorno do simulador devolve as ocorrências do
-// domínio de TBTPOCORBANCOPGTO ("00" crédito efetuado).
+// domínio das ocorrências bancárias de pagamento ("00" crédito efetuado).
 import { centavos } from '@sgh/contratos/regras-financeiro';
 
 export interface TituloRemessa {

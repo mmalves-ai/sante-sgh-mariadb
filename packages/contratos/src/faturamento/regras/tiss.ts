@@ -2,7 +2,7 @@
 // recurso e desfecho, indicadores e situação inferida. O adaptador do legado as confere antes de gravar e a API e as
 // telas as usam para explicar; ficam em @sgh/contratos/regras-faturamento (fronteira Nx, como as do M30).
 //   - regra 1: só a 04.03.00 (DP-47.7), inclusive reapresentação e recurso;
-//   - regra 2: numeração pelos contadores do outro sistema (TBSEGUIA, tipo de guia 0), 12 dígitos com zeros à esquerda;
+//   - regra 2: numeração pelos contadores do outro sistema (contador de guias, tipo de guia 0), 12 dígitos com zeros à esquerda;
 //   - regra 5: protocolo normalizado (sem CRLF e TAB, até 12 bytes Latin1); protocolo congela o lote; vazio é '';
 //   - regra 6: GLOSADO='T' é baixa (conciliado); glosa real = VALOR_C − VLR_PG nos itens baixados;
 //   - regra 7: glosa sem motivo (0) não fecha a conciliação no novo; 3095 é motivo de retorno, não de glosa;
@@ -15,10 +15,10 @@ import { centavos, recusaFat, type RecusaFaturamento, reaisTexto } from './recus
 /** A única versão de troca vigente (RN ANS 501/2022; DP-47.7). */
 export const VERSAO_TISS_VIGENTE = '04.03.00';
 
-/** Tipos de guia do outro sistema (TBTISSTPGUIA) que o lote do novo monta. */
+/** Tipos de guia do outro sistema que o lote do novo monta. */
 export const TIPOS_GUIA_LOTE = [1, 2, 3, 4] as const;
 export type TipoGuiaLote = (typeof TIPOS_GUIA_LOTE)[number];
-/** Tipo de guia do recurso de glosa (TBTISSTPGUIA 8). */
+/** Tipo de guia do recurso de glosa (tipo de guia 8). */
 export const TIPO_GUIA_RECURSO = 8;
 
 export const ROTULO_TIPO_GUIA: Readonly<Record<number, string>> = {
@@ -29,11 +29,11 @@ export const ROTULO_TIPO_GUIA: Readonly<Record<number, string>> = {
   8: 'Recurso de glosa',
 };
 
-/** Transação do outro sistema (TBTISSSCHEMA.ID) gravada no lote: 4 envio de lote de guias, 5 recurso de glosa. */
+/** Transação do outro sistema (código da transação TISS) gravada no lote: 4 envio de lote de guias, 5 recurso de glosa. */
 export const SCHEMA_LOTE_GUIAS = 4;
 export const SCHEMA_RECURSO_GLOSA = 5;
 
-/** Contador do outro sistema para os lotes de guia e de recurso (TBSEGUIA.TIPO_GUIA = 0; 36 de 37 convênios conferem). */
+/** Contador do outro sistema para os lotes de guia e de recurso (tipo de guia 0; 36 de 37 convênios conferem). */
 export const TIPO_GUIA_CONTADOR = 0;
 
 /** Motivo 3095 = "recurso de glosa acatado" (retorno, nunca glosa); 0 = não informado. */
@@ -306,7 +306,7 @@ export function conferirValorRecurso(valor: number, padrao: number): RecusaFatur
   return null;
 }
 
-/** Motivo que não admite reapresentação (TBMOTGLO.REAPRESENTA='F'): alerta, nunca bloqueio. */
+/** Motivo que não admite reapresentação (motivo marcado como sem reapresentação): alerta, nunca bloqueio. */
 export function alertaReapresentacao(reapresenta: string | null | undefined): string | null {
   return (reapresenta ?? '').trim().toUpperCase() === 'F'
     ? 'O motivo desta glosa não admite reapresentação pela tabela da operadora: o recurso pode ser negado.'

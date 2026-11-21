@@ -10,9 +10,11 @@
 //   - Documento do prontuário a assinar: documento_prontuario (fila do autor e leitura por id).
 //   - Verificador público: documento_assinado + assinatura_documento (leitura pelo código) e
 //     consulta_verificacao_documento (cada consulta).
-// Pendências de modelo (pedidos do lote 02-01, saida/02-01.json): o pedido de autorização do titular, a tentativa
-// de assinatura com reprocessamento, a validação, a prévia exata, os avisos e a numeração da receita controlada não
-// têm tabela; essas gravações respondem 503 "modelo-pendente" (indisponível, com o motivo) e as leituras voltam vazias. A parte pública do
+// Motor da assinatura (F2.4, lote 20): política por tipo (politica_assinatura + regra_politica_assinatura), pedido de
+// autorização do titular (pedido_assinatura), tentativa com reprocessamento (assinatura_icp), validação
+// (validacao_assinatura), prévia exata (previa_assinatura, PDF em arquivo), avisos (aviso_assinatura), numeração da
+// receita controlada (pedido_numeracao_receita) e, ao concluir, o envelope do documento (documento_assinado +
+// assinatura_documento) e o evento "assinatura" na cadeia do documento (documento_prontuario_evento). A parte pública do
 // certificado (DER) e o identificador do cliente OAuth e as autoridades do provedor usam colunas pedidas: a porta
 // as grava e lê quando o banco já as tem (conferência no information_schema, uma vez por porta).
 // Melhoria: o certificado é identificado pela impressão digital SHA-256 do DER (único por usuário no banco), com
@@ -54,6 +56,20 @@ import {
   type TrilhaDaGravacao,
 } from './porta.js';
 import {
+  type AssinaturaDoDocumento,
+  type AssinaturaRealizada,
+  type AtualizacaoAssinatura,
+  type AvisoAssinatura,
+  type DocumentoAssinadoIcp,
+  type EstadoAssinatura,
+  type FormatoAssinatura,
+  type NivelAssinatura,
+  type PedidoAssinaturaAberto,
+  type PedidoNumeracao,
+  type PoliticaIcp,
+  type PoliticaVigente,
+  type PreviaDoDocumento,
+  type ResultadoValidacao,
   type CertificadoVinculado,
   type DocumentoEmitidoIcp,
   type DocumentoNaFilaIcp,
@@ -83,20 +99,46 @@ const iso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString() : v === null || v === undefined ? null : new Date(String(v)).toISOString();
 const sha256Hex = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
+const simNao = (v: unknown) => (v === null || v === undefined ? null : verdadeiro(v));
+const base64 = (v: unknown) => (v instanceof Uint8Array ? Buffer.from(v).toString('base64') : null);
+/** Lista de textos de uma coluna JSON (o driver devolve o texto). */
+const textos = (v: unknown): string[] => {
+  try {
+    const x: unknown = typeof v === 'string' ? JSON.parse(v) : v;
+    return Array.isArray(x) ? x.map(String) : [];
+  } catch {
+    return [];
+  }
+};
 
 /** Tabelas que as gravações desta porta podem tocar (a transação recusa as outras). */
 export const TABELAS_ASSINATURA = [
   'certificado_usuario',
   'provedor_assinatura_nuvem',
   'consulta_verificacao_documento',
+  'politica_assinatura',
+  'regra_politica_assinatura',
+  'pedido_assinatura',
+  'assinatura_icp',
+  'validacao_assinatura',
+  'previa_assinatura',
+  'aviso_assinatura',
+  'pedido_numeracao_receita',
+  'arquivo',
+  'documento_prontuario',
+  'documento_prontuario_evento',
+  'documento_assinado',
+  'assinatura_documento',
 ] as const;
 
 /** Resultado da consulta pública no vocabulário do banco (CHECK ck_consulta_verificacao_documento_resultado). */
-const RESULTADO_NO_BANCO: Readonly<Partial<Record<ResultadoVerificacao, string>>> = {
+const RESULTADO_NO_BANCO: Readonly<Record<ResultadoVerificacao, string>> = {
   valida: 'autentico',
   invalida: 'alterado',
   'nao-encontrado': 'nao_encontrado',
   barrada: 'bloqueado',
+  indeterminada: 'indeterminado',
+  pendente: 'pendente',
 };
 const RESULTADO_DO_BANCO: Readonly<Record<string, ResultadoVerificacao>> = {
   autentico: 'valida',
@@ -109,13 +151,14 @@ const RESULTADO_DO_BANCO: Readonly<Record<string, ResultadoVerificacao>> = {
 };
 
 const POLITICA_DO_FORMATO: Readonly<Record<string, 'AD-RB' | 'AD-RT'>> = { ad_rb: 'AD-RB', ad_rt: 'AD-RT' };
+const POLITICA_ICP_NO_BANCO: Readonly<Record<PoliticaIcp, string>> = { 'AD-RB': 'ad_rb', 'AD-RT': 'ad_rt' };
 
 /** Os tipos de documento ICP na prioridade do domínio (DP-23), para o ORDER BY FIELD da fila. */
 const TIPOS_POR_PRIORIDADE: readonly string[] = [...TIPOS_DOCUMENTO_ICP].sort(
   (a, b) => prioridadeIcp(a) - prioridadeIcp(b),
 );
 
-/** Recurso cuja tabela ainda não existe no modelo (pedido do lote 02-01): 503 explícito, sem gravar nada. */
+/** Estrutura que ainda falta no modelo (coluna pedida): 503 explícito, sem gravar nada. */
 export function modeloPendente(recurso: string): ErroOperacao {
   return new ErroOperacao(
     503,
@@ -130,13 +173,36 @@ interface ColunasOpcionais {
   readonly certificadoDer: boolean;
   readonly clienteProvedor: boolean;
   readonly autoridadesProvedor: boolean;
+  readonly versaoArquivo: boolean;
 }
 
 const SQL_COLUNAS_OPCIONAIS = `
   SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS
    WHERE TABLE_SCHEMA = DATABASE()
      AND ((TABLE_NAME = 'certificado_usuario' AND COLUMN_NAME = 'certificado_der')
-       OR (TABLE_NAME = 'provedor_assinatura_nuvem' AND COLUMN_NAME IN ('cliente_identificador', 'autoridades')))`;
+       OR (TABLE_NAME = 'provedor_assinatura_nuvem' AND COLUMN_NAME IN ('cliente_identificador', 'autoridades'))
+       OR (TABLE_NAME = 'arquivo' AND COLUMN_NAME = 'versao_objeto'))`;
+
+/** A versão do objeto: a da coluna pedida, ou a que a emissão do documento registrou para a mesma chave. */
+const versaoDoArquivo = (o: ColunasOpcionais, a: string) =>
+  `COALESCE(${o.versaoArquivo ? `${a}.versao_objeto, ` : ''}(SELECT e.versao_objeto FROM emissao_documento e
+     WHERE e.chave_objeto = ${a}.chave_armazenamento ORDER BY e.id DESC LIMIT 1))`;
+
+const SQL_ASSINATURA = `
+  SELECT a.id, a.origem_assinatura, a.documento_prontuario_id, a.hash_assinado, a.politica_icp, a.midia,
+         a.certificado_usuario_id, a.situacao, a.tentativas, a.falha, a.carimbo_tempo_em, a.criado_em,
+         pr.codigo AS provedor
+    FROM assinatura_icp a
+    JOIN usuario u ON u.id = a.usuario_id
+    LEFT JOIN provedor_assinatura_nuvem pr ON pr.id = a.provedor_assinatura_nuvem_id`;
+
+const SQL_PREVIA = (o: ColunasOpcionais) => `
+  SELECT pv.id, pv.documento_prontuario_id, pv.certificado_usuario_id, pv.politica_icp, pv.hash_pdf,
+         pv.codigo_verificacao, pv.assinar_em, pv.profissional_exibido, pv.registro_exibido, pv.criado_em, u.login,
+         ar.chave_armazenamento, ${versaoDoArquivo(o, 'ar')} AS versao_objeto
+    FROM previa_assinatura pv
+    JOIN usuario u ON u.id = pv.usuario_id
+    JOIN arquivo ar ON ar.id = pv.arquivo_id`;
 
 const SQL_CERTIFICADO = (der: boolean) => `
   SELECT cu.id, cu.midia, cu.tipo_certificado_id, cu.numero_serie, cu.emissor, cu.valido_de, cu.valido_ate,
@@ -227,6 +293,7 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           certificadoDer: tem('certificado_usuario', 'certificado_der'),
           clienteProvedor: tem('provedor_assinatura_nuvem', 'cliente_identificador'),
           autoridadesProvedor: tem('provedor_assinatura_nuvem', 'autoridades'),
+          versaoArquivo: tem('arquivo', 'versao_objeto'),
         };
       })
       .catch((e: unknown) => {
@@ -293,29 +360,27 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
   }
 
   private gravador(tx: TxOperacao, c: ContextoAssinatura): GravadorAssinatura {
-    const pendente = (recurso: string) => async (): Promise<never> => {
-      throw modeloPendente(recurso);
-    };
+    const est = () => this.estDaGravacao(tx, c.hospital);
     return {
       gravarCertificado: (x) => this.gravarCertificado(tx, x),
       inativarCertificado: (d) => this.inativarCertificado(tx, d),
-      gravarPolitica: pendente('Política de assinatura por tipo, conselho e destino'),
+      gravarPolitica: (p) => this.gravarPolitica(tx, p),
       gravarProvedor: (p, v) => this.gravarProvedor(tx, c, p, v),
-      gravarPedido: pendente('Pedido de assinatura'),
-      consumirPedido: pendente('Pedido de assinatura'),
-      gravarAssinatura: pendente('Assinatura ICP'),
-      gravarValidacao: pendente('Validação da assinatura'),
-      gravarPrevia: pendente('Prévia da assinatura'),
-      gravarAssinaturaPdf: pendente('Prévia da assinatura'),
-      registrarPdfAssinado: pendente('PDF assinado'),
-      atualizarAssinatura: pendente('Reprocessamento da assinatura'),
-      travarDocumentoParaAssinar: pendente('Assinatura ICP'),
-      gravarEventoAssinadoIcp: pendente('Evento de assinatura do documento'),
-      gravarAviso: pendente('Aviso de assinatura'),
-      marcarAvisosLidos: pendente('Aviso de assinatura'),
-      gravarSolicitacaoSncr: pendente('Numeração da receita controlada'),
-      atualizarSolicitacaoSncr: pendente('Numeração da receita controlada'),
-      gravarNumeroSncr: pendente('Numeração da receita controlada'),
+      gravarPedido: (p) => this.gravarPedido(tx, p),
+      consumirPedido: (h, dono, agora) => this.consumirPedido(tx, h, dono, agora),
+      gravarAssinatura: (a) => this.gravarAssinatura(tx, a),
+      gravarValidacao: async (v) => this.gravarValidacao(tx, await est(), v),
+      gravarPrevia: (p) => this.gravarPrevia(tx, p),
+      gravarAssinaturaPdf: async (a) => this.gravarAssinaturaPdf(tx, await est(), a),
+      registrarPdfAssinado: async (a) => this.registrarPdfAssinado(tx, await est(), a),
+      atualizarAssinatura: (a) => this.atualizarAssinatura(tx, a),
+      travarDocumentoParaAssinar: (h, d, x) => this.travarDocumentoParaAssinar(tx, h, d, x),
+      gravarEventoAssinadoIcp: (ctx, d, suporte) => this.gravarEventoAssinadoIcp(tx, ctx, d, suporte),
+      gravarAviso: (a) => this.gravarAviso(tx, a),
+      marcarAvisosLidos: (h, avs, por, agora) => this.marcarAvisosLidos(tx, h, avs, por, agora),
+      gravarSolicitacaoSncr: (x) => this.gravarSolicitacaoSncr(tx, x),
+      atualizarSolicitacaoSncr: (x) => this.atualizarSolicitacaoSncr(tx, x),
+      gravarNumeroSncr: (h, d, num) => this.gravarNumeroSncr(tx, h, d, num),
       registrarConsultaPublica: (x) => this.registrarConsultaPublica(tx, x),
     };
   }
@@ -467,7 +532,6 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     x: Parameters<GravadorAssinatura['registrarConsultaPublica']>[0],
   ): Promise<{ id: number }> {
     const resultado = RESULTADO_NO_BANCO[x.resultado];
-    if (!resultado) throw modeloPendente(`Consulta pública com resultado "${x.resultado}"`);
     const id = await tx.incluir('consulta_verificacao_documento', {
       documento_assinado_id: x.previa,
       codigo_informado: x.codigo.slice(0, 64),
@@ -477,6 +541,583 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       endereco_ip: x.origemMascarada.slice(0, 45),
     });
     return { id };
+  }
+
+  // ---- motor da assinatura ICP: política, pedido, tentativa, validação, prévia, avisos e numeração ----
+
+  /** O estabelecimento da gravação: o da sessão, ou o do código (agendador, reprocessamento). */
+  private async estDaGravacao(tx: TxOperacao, hospital: string): Promise<number> {
+    const est = tx.contexto.estabelecimento ?? (await this.estabelecimento({ rede: '', hospital }, tx));
+    if (!est) throw recusa('estabelecimento-ausente', 'Escolha o estabelecimento antes de assinar.');
+    return est;
+  }
+
+  private async idDoLogin(e: Leitor, login: string | null): Promise<number | null> {
+    if (!login) return null;
+    const u = await e.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]);
+    return u ? n(u['id']) : null;
+  }
+
+  private async idProvedor(e: Leitor, est: number, codigo: string | null): Promise<number | null> {
+    if (!codigo) return null;
+    const r = await e.uma(
+      `SELECT id FROM provedor_assinatura_nuvem
+        WHERE codigo = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
+        ORDER BY (estabelecimento_id IS NULL) LIMIT 1`,
+      [codigo, est],
+    );
+    if (!r) throw recusa('provedor-desconhecido', 'O provedor de assinatura não existe neste estabelecimento.');
+    return n(r['id']);
+  }
+
+  /**
+   * Política por tipo de documento: o cabeçalho (politica_assinatura, um vigente por tipo e estabelecimento) e a
+   * regra por destino e conselho (regra_politica_assinatura, uma vigente por chave). Mudar a regra encerra a vigente
+   * na véspera e abre outra hoje; a segunda mudança no mesmo dia altera a de hoje (versão nova, trilha completa).
+   */
+  private async gravarPolitica(
+    tx: TxOperacao,
+    p: Parameters<GravadorAssinatura['gravarPolitica']>[0],
+  ): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, p.hospital);
+    const tipo = await tx.uma('SELECT id FROM tipo_documento_clinico WHERE codigo = ?', [p.tipoDocumento]);
+    if (!tipo) throw recusa('tipo-documento-desconhecido', 'O tipo de documento não existe no catálogo.');
+    const conselho = p.conselho
+      ? await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ?', [p.conselho])
+      : null;
+    if (p.conselho && !conselho) throw recusa('conselho-desconhecido', 'O conselho profissional não existe.');
+    const datas = await tx.uma<{ hoje: unknown; ontem: unknown }>(
+      'SELECT CURRENT_DATE AS hoje, CURRENT_DATE - INTERVAL 1 DAY AS ontem',
+      [],
+    );
+    const [cab] = await tx.consultarParaAtualizar(
+      `SELECT id FROM politica_assinatura
+        WHERE estabelecimento_id = ? AND tipo_documento_clinico_id = ? AND ativo AND vigencia_fim IS NULL
+        ORDER BY vigencia_inicio DESC LIMIT 1`,
+      [est, n(tipo['id'])],
+    );
+    const politica = cab
+      ? n(cab['id'])
+      : await tx.incluir('politica_assinatura', {
+          estabelecimento_id: est,
+          tipo_documento_clinico_id: n(tipo['id']),
+          exige_assinatura: true,
+          padrao_assinatura: p.politicaIcp ? POLITICA_ICP_NO_BANCO[p.politicaIcp] : 'ad_rb',
+          quem_assina: 'autor',
+          vigencia_inicio: datas?.hoje,
+          ativo: true,
+        });
+    const escopo = conselho ? n(conselho['id']) : 0;
+    const chave = 'politica_assinatura_id = ? AND destino = ? AND escopo_conselho = ?';
+    const [deHoje] = await tx.consultarParaAtualizar(
+      `SELECT id, versao FROM regra_politica_assinatura WHERE ${chave} AND vigencia_inicio = CURRENT_DATE`,
+      [politica, p.destino, escopo],
+    );
+    const [vigente] = await tx.consultarParaAtualizar(
+      `SELECT id, versao FROM regra_politica_assinatura WHERE ${chave} AND vigente = 1 AND id <> ?`,
+      [politica, p.destino, escopo, deHoje ? n(deHoje['id']) : 0],
+    );
+    if (vigente)
+      await tx.alterar('regra_politica_assinatura', n(vigente['id']), n(vigente['versao']), {
+        vigencia_fim: datas?.ontem,
+      });
+    const valores = {
+      nivel: p.nivel,
+      padrao_assinatura: p.politicaIcp ? POLITICA_ICP_NO_BANCO[p.politicaIcp] : null,
+      formato: p.formato,
+      justificativa: p.justificativa.slice(0, 500),
+      ativo: p.ativa,
+    };
+    if (deHoje) {
+      await tx.alterar('regra_politica_assinatura', n(deHoje['id']), n(deHoje['versao']), {
+        ...valores,
+        vigencia_fim: null,
+      });
+      return { id: n(deHoje['id']) };
+    }
+    const id = await tx.incluir('regra_politica_assinatura', {
+      politica_assinatura_id: politica,
+      conselho_classe_id: conselho ? n(conselho['id']) : null,
+      destino: p.destino,
+      vigencia_inicio: datas?.hoje,
+      ...valores,
+    });
+    return { id };
+  }
+
+  private async gravarPedido(
+    tx: TxOperacao,
+    p: Parameters<GravadorAssinatura['gravarPedido']>[0],
+  ): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, p.hospital);
+    const u = await this.usuarioDoLogin(tx, p.usuario);
+    const id = await tx
+      .incluir('pedido_assinatura', {
+        estabelecimento_id: est,
+        usuario_id: u.id,
+        finalidade: p.finalidade,
+        midia: p.midia,
+        provedor_assinatura_nuvem_id: await this.idProvedor(tx, est, p.provedor),
+        certificado_usuario_id: p.certificado,
+        hash_estado: p.stateHash,
+        verificador_pkce_cifrado: p.pkceCifrado,
+        hashes: JSON.stringify([...p.hashes]),
+        documentos: JSON.stringify([...p.documentos]),
+        expira_em: p.expiraEm,
+      })
+      .catch((e: unknown) => {
+        if (restricaoUnicaViolada(e)) throw new ErroAssinatura('pedido-repetido', 'Pedido de assinatura repetido.');
+        throw e;
+      });
+    return { id };
+  }
+
+  /** Uso único: só o pedido aberto do estabelecimento e da conta; o vencido também é gasto (e volta marcado). */
+  private async consumirPedido(
+    tx: TxOperacao,
+    stateHash: string,
+    dono: { hospital: string; usuario: string },
+    agora: Date,
+  ): Promise<(PedidoAssinaturaAberto & { vencido: boolean }) | null> {
+    const est = await this.estDaGravacao(tx, dono.hospital);
+    const [r] = await tx.consultarParaAtualizar(
+      `SELECT pa.id, pa.versao, pa.finalidade, pa.midia, pa.certificado_usuario_id, pa.hash_estado,
+              pa.verificador_pkce_cifrado, pa.hashes, pa.documentos, pa.expira_em, pr.codigo AS provedor
+         FROM pedido_assinatura pa
+         JOIN usuario u ON u.id = pa.usuario_id
+         LEFT JOIN provedor_assinatura_nuvem pr ON pr.id = pa.provedor_assinatura_nuvem_id
+        WHERE pa.hash_estado = ? AND pa.estabelecimento_id = ? AND u.login = ? AND pa.consumido_em IS NULL`,
+      [stateHash, est, dono.usuario],
+    );
+    if (!r) return null;
+    await tx.alterar('pedido_assinatura', n(r['id']), n(r['versao']), { consumido_em: agora });
+    const expira = new Date(r['expira_em'] as string | Date);
+    return {
+      id: n(r['id']),
+      hospital: dono.hospital,
+      usuario: dono.usuario,
+      finalidade: texto(r['finalidade']) as PedidoAssinaturaAberto['finalidade'],
+      midia: texto(r['midia']) as MidiaCertificado,
+      provedor: textoOuNulo(r['provedor']),
+      certificado: nn(r['certificado_usuario_id']),
+      stateHash: texto(r['hash_estado']),
+      pkceCifrado: textoOuNulo(r['verificador_pkce_cifrado']),
+      hashes: textos(r['hashes']),
+      documentos: textos(r['documentos']).map(Number),
+      expiraEm: expira.toISOString(),
+      vencido: expira.getTime() <= agora.getTime(),
+    };
+  }
+
+  private async documentoDoEstabelecimento(tx: TxOperacao, est: number, documento: number | null): Promise<void> {
+    if (documento === null) return;
+    const d = await tx.uma('SELECT id FROM documento_prontuario WHERE id = ? AND estabelecimento_id = ?', [
+      documento,
+      est,
+    ]);
+    if (!d) throw new ErroAssinatura('nao-encontrado', 'O documento não existe neste estabelecimento.');
+  }
+
+  private async gravarAssinatura(
+    tx: TxOperacao,
+    a: Parameters<GravadorAssinatura['gravarAssinatura']>[0],
+  ): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, a.hospital);
+    const u = await this.usuarioDoLogin(tx, a.usuario);
+    await this.documentoDoEstabelecimento(tx, est, a.documento);
+    const id = await tx.incluir('assinatura_icp', {
+      estabelecimento_id: est,
+      origem_assinatura: a.origem,
+      documento_prontuario_id: a.documento,
+      usuario_id: u.id,
+      certificado_usuario_id: a.certificado,
+      provedor_assinatura_nuvem_id: await this.idProvedor(tx, est, a.provedor),
+      midia: a.midia,
+      formato: a.formato,
+      politica_icp: a.politicaIcp,
+      hash_assinado: a.hash,
+      situacao: a.estado,
+      tentativas: a.tentativas,
+      falha: a.falha?.slice(0, 60) ?? null,
+      proxima_tentativa_em: a.proximaEm,
+      assinatura_cms: a.assinatura ? Buffer.from(a.assinatura, 'base64') : null,
+      carimbo_tempo: a.carimboToken ? Buffer.from(a.carimboToken, 'base64') : null,
+      carimbo_tempo_em: a.carimboEm,
+      carimbo_tempo_serie: a.carimboSerie?.slice(0, 64) ?? null,
+    });
+    return { id };
+  }
+
+  private async gravarValidacao(
+    tx: TxOperacao,
+    est: number,
+    v: Parameters<GravadorAssinatura['gravarValidacao']>[0],
+  ): Promise<{ id: number }> {
+    const a = await tx.uma('SELECT id FROM assinatura_icp WHERE id = ? AND estabelecimento_id = ?', [
+      v.assinatura,
+      est,
+    ]);
+    if (!a) throw new ErroAssinatura('nao-encontrado', 'A assinatura não existe neste estabelecimento.');
+    const id = await tx.incluir('validacao_assinatura', {
+      assinatura_icp_id: v.assinatura,
+      momento: v.momento,
+      resultado: v.resultado,
+      cadeia_ok: v.cadeia,
+      vigencia_ok: v.vigencia,
+      revogacao_ok: v.revogacao,
+      cpf_ok: v.cpf,
+      assinatura_ok: v.assinaturaConfere,
+      carimbo_ok: v.carimbo,
+      motivos: JSON.stringify([...v.motivos]),
+      usuario_id: await this.idDoLogin(tx, v.usuario),
+      validada_em: v.em,
+    });
+    return { id };
+  }
+
+  /**
+   * O PDF no armazenamento vira uma linha de `arquivo` (imutável). A versão do objeto vai na coluna pedida
+   * (arquivo.versao_objeto) quando o banco já a tem; sem ela, só a versão que a emissão do documento registrou para a
+   * mesma chave (emissao_documento) é aceita, porque a leitura sai de lá. Outra versão: 503 explícito, sem gravar.
+   */
+  private async gravarArquivoPdf(
+    tx: TxOperacao,
+    est: number,
+    x: { entidade: string; entidadeId: number | null; finalidade: string; nome: string; chave: string; versao: string; hash: string },
+  ): Promise<number> {
+    const col = await this.opcionais(tx);
+    if (!col.versaoArquivo && x.versao) {
+      const emitida = await tx.uma('SELECT id FROM emissao_documento WHERE chave_objeto = ? AND versao_objeto = ?', [
+        x.chave,
+        x.versao,
+      ]);
+      if (!emitida) throw modeloPendente('Versão do PDF no armazenamento (arquivo.versao_objeto)');
+    }
+    return tx.incluir('arquivo', {
+      estabelecimento_id: est,
+      entidade: x.entidade,
+      entidade_id: x.entidadeId,
+      finalidade: x.finalidade,
+      nome_original: x.nome.slice(0, 255),
+      tipo_mime: 'application/pdf',
+      // O tamanho não chega à porta (o armazenamento guarda o objeto); o resumo SHA-256 identifica o conteúdo.
+      tamanho_bytes: 0,
+      hash_sha256: x.hash,
+      chave_armazenamento: x.chave,
+      imutavel: true,
+      origem: 'sistema',
+      ...(col.versaoArquivo ? { versao_objeto: x.versao.slice(0, 100) } : {}),
+    });
+  }
+
+  private async gravarPrevia(
+    tx: TxOperacao,
+    p: Parameters<GravadorAssinatura['gravarPrevia']>[0],
+  ): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, p.hospital);
+    const u = await this.usuarioDoLogin(tx, p.usuario);
+    await this.documentoDoEstabelecimento(tx, est, p.documento);
+    const arquivo = await this.gravarArquivoPdf(tx, est, {
+      entidade: 'documento_prontuario',
+      entidadeId: p.documento,
+      finalidade: 'previa_assinatura',
+      nome: `previa-${p.codigo}.pdf`,
+      chave: p.chaveS3,
+      versao: p.versaoS3,
+      hash: p.hashPdf,
+    });
+    const id = await tx.incluir('previa_assinatura', {
+      estabelecimento_id: est,
+      documento_prontuario_id: p.documento,
+      usuario_id: u.id,
+      certificado_usuario_id: p.certificado,
+      politica_icp: p.politicaIcp,
+      arquivo_id: arquivo,
+      hash_pdf: p.hashPdf,
+      codigo_verificacao: p.codigo,
+      assinar_em: new Date(p.assinarEm),
+      profissional_exibido: p.profissional?.slice(0, 150) ?? null,
+      registro_exibido: p.registro?.slice(0, 60) ?? null,
+    });
+    return { id };
+  }
+
+  private async assinaturaTravada(tx: TxOperacao, est: number, id: number, extra = ''): Promise<Linha | null> {
+    const [r] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, situacao, tentativas, documento_prontuario_id, previa_assinatura_id, arquivo_assinado_id,
+              assinatura_documento_id
+         FROM assinatura_icp WHERE id = ? AND estabelecimento_id = ? ${extra}`,
+      [id, est],
+    );
+    return r ?? null;
+  }
+
+  private async gravarAssinaturaPdf(tx: TxOperacao, est: number, a: { assinatura: number; previa: number }): Promise<void> {
+    const r = await this.assinaturaTravada(tx, est, a.assinatura);
+    if (!r) throw new ErroAssinatura('nao-encontrado', 'A assinatura não existe neste estabelecimento.');
+    const pv = await tx.uma('SELECT id FROM previa_assinatura WHERE id = ? AND estabelecimento_id = ?', [a.previa, est]);
+    if (!pv) throw new ErroAssinatura('nao-encontrado', 'A prévia não existe neste estabelecimento.');
+    await tx.alterar('assinatura_icp', a.assinatura, n(r['versao']), { previa_assinatura_id: a.previa });
+  }
+
+  /** Uma vez só: o PDF com a assinatura embutida; também no envelope do documento, quando já concluído. */
+  private async registrarPdfAssinado(
+    tx: TxOperacao,
+    est: number,
+    a: { assinatura: number; chaveS3: string; versaoS3: string; hashPdf: string },
+  ): Promise<boolean> {
+    const r = await this.assinaturaTravada(tx, est, a.assinatura);
+    if (!r || r['arquivo_assinado_id'] !== null) return false;
+    const arquivo = await this.gravarArquivoPdf(tx, est, {
+      entidade: 'assinatura_icp',
+      entidadeId: a.assinatura,
+      finalidade: 'documento_assinado',
+      nome: `assinado-${a.assinatura}.pdf`,
+      chave: a.chaveS3,
+      versao: a.versaoS3,
+      hash: a.hashPdf,
+    });
+    await tx.alterar('assinatura_icp', a.assinatura, n(r['versao']), { arquivo_assinado_id: arquivo });
+    if (r['assinatura_documento_id'] !== null) {
+      const [env] = await tx.consultarParaAtualizar(
+        `SELECT da.id, da.versao FROM documento_assinado da JOIN assinatura_documento ad ON ad.documento_assinado_id = da.id
+          WHERE ad.id = ? AND da.arquivo_assinado_id IS NULL`,
+        [n(r['assinatura_documento_id'])],
+      );
+      if (env) await tx.alterar('documento_assinado', n(env['id']), n(env['versao']), { arquivo_assinado_id: arquivo });
+    }
+    return true;
+  }
+
+  /** Controle otimista: só muda a tentativa no estado e na contagem lidos (duas instâncias não repetem). */
+  private async atualizarAssinatura(tx: TxOperacao, a: AtualizacaoAssinatura): Promise<boolean> {
+    const est = await this.estDaGravacao(tx, a.hospital);
+    const [r] = await tx.consultarParaAtualizar(
+      'SELECT id, versao FROM assinatura_icp WHERE id = ? AND estabelecimento_id = ? AND situacao = ? AND tentativas = ?',
+      [a.id, est, a.estadoLido, a.tentativasLidas],
+    );
+    if (!r) return false;
+    await tx.alterar('assinatura_icp', a.id, n(r['versao']), {
+      situacao: a.estado,
+      tentativas: a.tentativas,
+      falha: a.falha?.slice(0, 60) ?? null,
+      proxima_tentativa_em: a.proximaEm,
+      ...(a.carimboToken !== null ? { carimbo_tempo: Buffer.from(a.carimboToken, 'base64') } : {}),
+      ...(a.carimboEm !== null ? { carimbo_tempo_em: a.carimboEm } : {}),
+      ...(a.carimboSerie !== null ? { carimbo_tempo_serie: a.carimboSerie.slice(0, 64) } : {}),
+    });
+    return true;
+  }
+
+  private async travarDocumentoParaAssinar(
+    tx: TxOperacao,
+    hospital: string,
+    documento: number,
+    exceto: number | null,
+  ): Promise<'assinada' | 'pendente' | null> {
+    const est = await this.estDaGravacao(tx, hospital);
+    const [d] = await tx.consultarParaAtualizar(
+      'SELECT id FROM documento_prontuario WHERE id = ? AND estabelecimento_id = ?',
+      [documento, est],
+    );
+    if (!d) throw new ErroAssinatura('nao-encontrado', 'O documento não existe neste estabelecimento.');
+    const ls = await tx.consultar(
+      `SELECT situacao FROM assinatura_icp
+        WHERE documento_prontuario_id = ? AND origem_assinatura = 'documento' AND id <> ?
+          AND situacao IN ('assinada', 'pendente')`,
+      [documento, exceto ?? 0],
+    );
+    return ls.some((x) => x['situacao'] === 'assinada') ? 'assinada' : ls.length ? 'pendente' : null;
+  }
+
+  /**
+   * A conclusão ICP na cadeia do documento: o envelope do documento assinado (documento_assinado, com o código e o PDF
+   * da prévia) e a assinatura nele (assinatura_documento), ligados à tentativa e ao documento do prontuário, e o evento
+   * "assinatura" na cadeia (documento_prontuario_evento). Documento que já tem envelope: só o evento.
+   */
+  private async gravarEventoAssinadoIcp(
+    tx: TxOperacao,
+    ctx: { hospital: string; usuario: string },
+    documento: number,
+    comoSuporte: boolean,
+  ): Promise<void> {
+    const est = await this.estDaGravacao(tx, ctx.hospital);
+    const u = await this.usuarioDoLogin(tx, ctx.usuario);
+    const [d] = await tx.consultarParaAtualizar(
+      `SELECT dp.id, dp.versao, dp.situacao_documento_prontuario_id, dp.documento_assinado_id, dp.paciente_id,
+              dp.atendimento_id, dp.profissional_id, dp.titulo, t.codigo AS tipo
+         FROM documento_prontuario dp JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
+        WHERE dp.id = ? AND dp.estabelecimento_id = ?`,
+      [documento, est],
+    );
+    if (!d) throw new ErroAssinatura('nao-encontrado', 'O documento não existe neste estabelecimento.');
+    const [a] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, certificado_usuario_id, formato, politica_icp, hash_assinado, carimbo_tempo_em,
+              previa_assinatura_id, arquivo_assinado_id, assinatura_documento_id
+         FROM assinatura_icp
+        WHERE documento_prontuario_id = ? AND estabelecimento_id = ? AND origem_assinatura = 'documento'
+          AND situacao = 'assinada'
+        ORDER BY id DESC LIMIT 1`,
+      [documento, est],
+    );
+    if (!a) throw recusa('assinatura-ausente', 'O documento não tem assinatura ICP concluída.');
+    const agora = new Date();
+    const pv = a['previa_assinatura_id']
+      ? await tx.uma(
+          'SELECT codigo_verificacao, arquivo_id, profissional_exibido, criado_em FROM previa_assinatura WHERE id = ?',
+          [n(a['previa_assinatura_id'])],
+        )
+      : null;
+    if (d['documento_assinado_id'] === null && pv && a['assinatura_documento_id'] === null) {
+      const cert = await tx.uma(
+        'SELECT nome_titular, cpf_titular, numero_serie, emissor, valido_ate FROM certificado_usuario WHERE id = ?',
+        [n(a['certificado_usuario_id'])],
+      );
+      const envelope = await tx.incluir('documento_assinado', {
+        estabelecimento_id: est,
+        codigo_verificacao: texto(pv['codigo_verificacao']),
+        tipo_documento: texto(d['tipo']).slice(0, 60),
+        entidade: 'documento_prontuario',
+        entidade_id: documento,
+        paciente_id: nn(d['paciente_id']),
+        atendimento_id: nn(d['atendimento_id']),
+        titulo: texto(d['titulo']).slice(0, 200) || texto(d['tipo']),
+        hash_conteudo: texto(a['hash_assinado']),
+        arquivo_id: n(pv['arquivo_id']),
+        arquivo_assinado_id: nn(a['arquivo_assinado_id']),
+        destino: 'interno',
+        nivel_exigido: 'icp-brasil',
+        formato: texto(a['formato']),
+        politica_icp: texto(a['politica_icp']),
+        assinaturas_exigidas: 1,
+        gerado_em: pv['criado_em'],
+        concluido_em: agora,
+        situacao: 'assinado',
+        origem: 'sistema',
+      });
+      const cpf = textoOuNulo(cert?.['cpf_titular'] ?? null);
+      const assinatura = await tx.incluir('assinatura_documento', {
+        documento_assinado_id: envelope,
+        sequencia: 1,
+        signatario_usuario_id: u.id,
+        profissional_id: comoSuporte ? null : nn(d['profissional_id']),
+        papel: 'autor',
+        nome_signatario: (textoOuNulo(pv['profissional_exibido']) ?? texto(cert?.['nome_titular']) ?? u.nome).slice(0, 150) || u.nome.slice(0, 150),
+        cpf_signatario: cpf && /^\d{11}$/.test(cpf) ? cpf : null,
+        certificado_usuario_id: n(a['certificado_usuario_id']),
+        nivel: 'icp-brasil',
+        formato: texto(a['formato']),
+        politica_icp: texto(a['politica_icp']),
+        numero_serie_certificado: textoOuNulo(cert?.['numero_serie'] ?? null),
+        emissor_certificado: textoOuNulo(cert?.['emissor'] ?? null)?.slice(0, 500) ?? null,
+        certificado_valido_ate: cert?.['valido_ate'] ?? null,
+        hash_assinado: texto(a['hash_assinado']),
+        assinado_em: agora,
+        carimbo_tempo_em: a['carimbo_tempo_em'] ?? null,
+        situacao: 'valida',
+        verificada_em: agora,
+        origem: 'sistema',
+      });
+      await tx.alterar('assinatura_icp', n(a['id']), n(a['versao']), { assinatura_documento_id: assinatura });
+      await tx.alterar('documento_prontuario', documento, n(d['versao']), { documento_assinado_id: envelope });
+    }
+    await tx.incluir('documento_prontuario_evento', {
+      documento_prontuario_id: documento,
+      operacao: 'alteracao',
+      acao: 'assinatura',
+      situacao_documento_prontuario_id: n(d['situacao_documento_prontuario_id']),
+      profissional_id: comoSuporte ? null : nn(d['profissional_id']),
+      evento_em: agora,
+      dados: JSON.stringify({ nivel: 'icp-brasil', assinatura: n(a['id']), comoSuporte }),
+      ocorrido_em: agora,
+      usuario_id: u.id,
+    });
+  }
+
+  private async gravarAviso(tx: TxOperacao, a: Parameters<GravadorAssinatura['gravarAviso']>[0]): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, a.hospital);
+    const id = await tx.incluir('aviso_assinatura', {
+      estabelecimento_id: est,
+      assinatura_icp_id: a.assinatura,
+      destinatario: a.destinatario,
+      usuario_id: await this.idDoLogin(tx, a.usuario),
+      situacao_assinatura: a.estado,
+      falha: a.falha?.slice(0, 60) ?? null,
+    });
+    return { id };
+  }
+
+  private async marcarAvisosLidos(
+    tx: TxOperacao,
+    hospital: string,
+    avisos: readonly number[],
+    por: { login: string; diretorTecnico: boolean },
+    agora: Date,
+  ): Promise<number> {
+    if (avisos.length === 0) return 0;
+    const est = await this.estDaGravacao(tx, hospital);
+    const ls = await tx.consultarParaAtualizar(
+      `SELECT av.id, av.versao FROM aviso_assinatura av LEFT JOIN usuario u ON u.id = av.usuario_id
+        WHERE av.estabelecimento_id = ? AND av.id IN (${lista(avisos.length)}) AND av.lido_em IS NULL
+          AND ((av.destinatario = 'autor' AND u.login = ?) OR (? AND av.destinatario = 'diretor-tecnico'))`,
+      [est, ...avisos, por.login, por.diretorTecnico],
+    );
+    const leitor = await this.idDoLogin(tx, por.login);
+    for (const r of ls) await tx.alterar('aviso_assinatura', n(r['id']), n(r['versao']), { lido_em: agora, lido_por: leitor });
+    return ls.length;
+  }
+
+  private async gravarSolicitacaoSncr(
+    tx: TxOperacao,
+    s: Parameters<GravadorAssinatura['gravarSolicitacaoSncr']>[0],
+  ): Promise<{ id: number }> {
+    const est = await this.estDaGravacao(tx, s.hospital);
+    const u = await this.usuarioDoLogin(tx, s.usuario);
+    await this.documentoDoEstabelecimento(tx, est, s.documento);
+    const id = await tx.incluir('pedido_numeracao_receita', {
+      estabelecimento_id: est,
+      documento_prontuario_id: s.documento,
+      entidade_origem_id: s.origemId,
+      tipo_receita: s.tipo,
+      medicamentos: s.medicamentos,
+      situacao: 'pendente',
+      tentativas: 0,
+      usuario_id: u.id,
+    });
+    return { id };
+  }
+
+  private async atualizarSolicitacaoSncr(
+    tx: TxOperacao,
+    s: Parameters<GravadorAssinatura['atualizarSolicitacaoSncr']>[0],
+  ): Promise<boolean> {
+    const est = await this.estDaGravacao(tx, s.hospital);
+    const [r] = await tx.consultarParaAtualizar(
+      "SELECT id, versao FROM pedido_numeracao_receita WHERE id = ? AND estabelecimento_id = ? AND situacao = 'pendente'",
+      [s.id, est],
+    );
+    if (!r) return false;
+    await tx.alterar('pedido_numeracao_receita', s.id, n(r['versao']), {
+      situacao: s.situacao,
+      tentativas: s.tentativas,
+      numero: s.numero?.slice(0, 40) ?? null,
+      retorno: s.retorno?.slice(0, 60) ?? null,
+    });
+    return true;
+  }
+
+  /**
+   * O número da receita fica no próprio pedido numerado (pedido_numeracao_receita.numero). O documento aceita um número
+   * só: outro pedido do mesmo documento já numerado com número diferente recusa (false).
+   */
+  private async gravarNumeroSncr(tx: TxOperacao, hospital: string, documento: number, numero: string): Promise<boolean> {
+    const est = await this.estDaGravacao(tx, hospital);
+    const outro = await tx.uma(
+      `SELECT id FROM pedido_numeracao_receita
+        WHERE estabelecimento_id = ? AND documento_prontuario_id = ? AND situacao = 'numerada' AND numero <> ? LIMIT 1`,
+      [est, documento, numero],
+    );
+    return !outro;
   }
 
   // ---- identidade e catálogos ----
@@ -619,9 +1260,40 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
 
   // ---- política e provedores ----
 
-  /** Pendência de modelo: a regra por conselho, destino e nível não cabe em politica_assinatura (pedido do lote). */
-  async politicas(): Promise<[]> {
-    return [];
+  /** As regras vigentes (uma por tipo, destino e conselho), com a forma ICP do catálogo pela família e política. */
+  async politicas(c: ContextoAssinatura): Promise<PoliticaVigente[]> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      const ls = await l.consultar(
+        `SELECT r.id, t.codigo AS tipo, cc.sigla AS conselho, r.destino, r.nivel, r.padrao_assinatura, r.formato,
+                r.ativo, r.criado_em, u.login,
+                (SELECT f.id FROM formato_assinatura_icp f
+                  WHERE f.ativo AND f.familia = COALESCE(r.formato, 'pades') AND f.politica = r.padrao_assinatura
+                  ORDER BY f.id LIMIT 1) AS forma
+           FROM regra_politica_assinatura r
+           JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
+           JOIN tipo_documento_clinico t ON t.id = p.tipo_documento_clinico_id
+           LEFT JOIN conselho_classe cc ON cc.id = r.conselho_classe_id
+           LEFT JOIN usuario u ON u.id = COALESCE(r.alterado_por, r.criado_por)
+          WHERE p.estabelecimento_id = ? AND p.ativo AND r.vigente = 1
+          ORDER BY t.codigo, r.id`,
+        [est],
+      );
+      return ls.map((r) => ({
+        id: n(r['id']),
+        tipoDocumento: texto(r['tipo']),
+        conselho: textoOuNulo(r['conselho']),
+        destino: texto(r['destino']) as PoliticaVigente['destino'],
+        nivel: texto(r['nivel']) as NivelAssinatura,
+        politicaIcp: POLITICA_DO_FORMATO[texto(r['padrao_assinatura'])] ?? null,
+        idFormaIcp: nn(r['forma']),
+        formato: (textoOuNulo(r['formato']) ?? 'pades') as FormatoAssinatura,
+        ativa: verdadeiro(r['ativo']),
+        usuario: texto(r['login']),
+        criadoEm: iso(r['criado_em']) ?? '',
+      }));
+    });
   }
 
   private provedorDaLinha(r: Linha): ProvedorNuvem {
@@ -672,9 +1344,60 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     });
   }
 
-  /** Pendência de modelo (tentativa de assinatura): nenhuma assinatura de conferência registrada ainda. */
-  async assinaturas(): Promise<[]> {
-    return [];
+  /** As validações mais recentes de cada tentativa (para juntar à leitura). */
+  private async ultimasValidacoes(l: Leitor, ids: readonly number[]): Promise<Map<number, Linha>> {
+    if (ids.length === 0) return new Map();
+    const ls = await l.consultar(
+      `SELECT v.* FROM validacao_assinatura v
+        WHERE v.id IN (SELECT MAX(id) FROM validacao_assinatura WHERE assinatura_icp_id IN (${lista(ids.length)})
+                        GROUP BY assinatura_icp_id)`,
+      [...ids],
+    );
+    return new Map(ls.map((v) => [n(v['assinatura_icp_id']), v]));
+  }
+
+  async assinaturas(c: ContextoAssinatura, login: string, origem: 'teste' | 'documento'): Promise<AssinaturaRealizada[]> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      const ls = await l.consultar(
+        `${SQL_ASSINATURA} WHERE a.estabelecimento_id = ? AND u.login = ? AND a.origem_assinatura = ?
+          ORDER BY a.id DESC LIMIT 20`,
+        [est, login, origem],
+      );
+      const vs = await this.ultimasValidacoes(l, ls.map((r) => n(r['id'])));
+      return ls.map((a) => {
+        const v = vs.get(n(a['id']));
+        return {
+          id: n(a['id']),
+          origem: texto(a['origem_assinatura']) as AssinaturaRealizada['origem'],
+          documento: nn(a['documento_prontuario_id']),
+          hash: texto(a['hash_assinado']),
+          politicaIcp: texto(a['politica_icp']) as PoliticaIcp,
+          midia: texto(a['midia']) as MidiaCertificado,
+          provedor: textoOuNulo(a['provedor']),
+          certificado: n(a['certificado_usuario_id']),
+          estado: texto(a['situacao']) as EstadoAssinatura,
+          tentativas: n(a['tentativas']),
+          falha: textoOuNulo(a['falha']),
+          carimboEm: iso(a['carimbo_tempo_em']),
+          criadoEm: iso(a['criado_em']) ?? '',
+          validacao: v
+            ? {
+                resultado: texto(v['resultado']) as ResultadoValidacao,
+                em: iso(v['validada_em']) ?? '',
+                cadeia: simNao(v['cadeia_ok']),
+                vigencia: simNao(v['vigencia_ok']),
+                revogacao: simNao(v['revogacao_ok']),
+                cpf: simNao(v['cpf_ok']),
+                assinaturaConfere: simNao(v['assinatura_ok']),
+                carimbo: simNao(v['carimbo_ok']),
+                motivos: textos(v['motivos']),
+              }
+            : null,
+        };
+      });
+    });
   }
 
   // ---- documentos do prontuário ----
@@ -715,25 +1438,44 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     tiposIcp: readonly string[],
   ): Promise<{ itens: DocumentoNaFilaIcp[]; limitado: boolean }> {
     const tipos = tiposIcp.filter((t) => (TIPOS_DOCUMENTO_ICP as readonly string[]).includes(t));
-    if (tipos.length === 0 || teto < 1) return { itens: [], limitado: false };
+    if (teto < 1) return { itens: [], limitado: false };
+    // Sem assinatura: só os tipos que a política manda assinar com ICP; com tentativa pendente ou em falha: sempre.
+    const semAssinatura = tipos.length ? `x.tipo IN (${lista(tipos.length)})` : 'FALSE';
     const ls = await this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       if (!est) return [];
       return l.consultar(
-        `SELECT dp.id, t.codigo AS tipo, dp.paciente_id, dp.lancado_em
-           FROM documento_prontuario dp
-           JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
-           JOIN situacao_documento_prontuario s ON s.id = dp.situacao_documento_prontuario_id
-           JOIN usuario_vinculo_profissional v ON v.profissional_id = dp.profissional_id
-                AND v.estabelecimento_id = dp.estabelecimento_id AND v.excluido_em IS NULL
-                AND v.vigencia_inicio <= CURRENT_DATE AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)
-           JOIN usuario u ON u.id = v.usuario_id AND u.excluido_em IS NULL
-          WHERE dp.estabelecimento_id = ? AND dp.excluido_em IS NULL AND dp.documento_assinado_id IS NULL
-            AND u.login = ? AND t.codigo IN (${lista(tipos.length)})
-            AND s.categoria IN (${lista(CATEGORIAS_ASSINAVEIS.length)})
-          ORDER BY FIELD(t.codigo, ${lista(TIPOS_POR_PRIORIDADE.length)}), dp.id
+        `SELECT x.id, x.tipo, x.paciente_id, x.lancado_em, a.id AS assinatura, a.situacao, a.tentativas, a.falha,
+                a.proxima_tentativa_em
+           FROM (
+             SELECT dp.id, t.codigo AS tipo, dp.paciente_id, dp.lancado_em,
+                    (SELECT ai.id FROM assinatura_icp ai
+                      WHERE ai.documento_prontuario_id = dp.id AND ai.origem_assinatura = 'documento'
+                      ORDER BY (ai.situacao = 'assinada') DESC, ai.id DESC LIMIT 1) AS ultima
+               FROM documento_prontuario dp
+               JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
+               JOIN situacao_documento_prontuario s ON s.id = dp.situacao_documento_prontuario_id
+               JOIN usuario_vinculo_profissional v ON v.profissional_id = dp.profissional_id
+                    AND v.estabelecimento_id = dp.estabelecimento_id AND v.excluido_em IS NULL
+                    AND v.vigencia_inicio <= CURRENT_DATE AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)
+               JOIN usuario u ON u.id = v.usuario_id AND u.excluido_em IS NULL
+              WHERE dp.estabelecimento_id = ? AND dp.excluido_em IS NULL AND dp.documento_assinado_id IS NULL
+                AND u.login = ? AND t.codigo IN (${lista(TIPOS_DOCUMENTO_ICP.length)})
+                AND s.categoria IN (${lista(CATEGORIAS_ASSINAVEIS.length)})
+           ) x
+           LEFT JOIN assinatura_icp a ON a.id = x.ultima
+          WHERE (a.id IS NULL AND ${semAssinatura}) OR a.situacao IN ('pendente', 'falha')
+          ORDER BY FIELD(x.tipo, ${lista(TIPOS_POR_PRIORIDADE.length)}), x.id
           LIMIT ?`,
-        [est, login, ...tipos, ...CATEGORIAS_ASSINAVEIS, ...TIPOS_POR_PRIORIDADE, teto + 1],
+        [
+          est,
+          login,
+          ...TIPOS_DOCUMENTO_ICP,
+          ...CATEGORIAS_ASSINAVEIS,
+          ...tipos,
+          ...TIPOS_POR_PRIORIDADE,
+          teto + 1,
+        ],
       );
     });
     const itens = ls.slice(0, teto).map((r) => ({
@@ -741,50 +1483,242 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       tipo: texto(r['tipo']),
       paciente: n(r['paciente_id']),
       criadoEm: iso(r['lancado_em']) ?? '',
-      assinatura: null,
-      estado: null,
-      tentativas: 0,
-      falha: null,
-      proximaEm: null,
+      assinatura: nn(r['assinatura']),
+      estado: (textoOuNulo(r['situacao']) as 'pendente' | 'falha' | null) ?? null,
+      tentativas: n(r['tentativas']),
+      falha: textoOuNulo(r['falha']),
+      proximaEm: iso(r['proxima_tentativa_em']),
     }));
     return { itens, limitado: ls.length > teto };
   }
 
-  /** Pendência de modelo (tentativa de assinatura): nenhum documento com assinatura em andamento. */
-  async assinaturasDosDocumentos(): Promise<Map<number, { id: number; estado: 'pendente' | 'assinada' | 'falha' }>> {
-    return new Map();
+  /** A tentativa de cada documento: a assinada, se houver; senão, a mais recente. */
+  async assinaturasDosDocumentos(
+    c: ContextoAssinatura,
+    documentos: readonly number[],
+  ): Promise<Map<number, { id: number; estado: 'pendente' | 'assinada' | 'falha' }>> {
+    const m = new Map<number, { id: number; estado: 'pendente' | 'assinada' | 'falha' }>();
+    if (documentos.length === 0) return m;
+    const ls = await this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      return l.consultar(
+        `SELECT id, documento_prontuario_id, situacao FROM assinatura_icp
+          WHERE estabelecimento_id = ? AND origem_assinatura = 'documento'
+            AND documento_prontuario_id IN (${lista(documentos.length)})
+          ORDER BY documento_prontuario_id, (situacao = 'assinada') DESC, id DESC`,
+        [est, ...documentos],
+      );
+    });
+    for (const r of ls) {
+      const d = n(r['documento_prontuario_id']);
+      if (!m.has(d)) m.set(d, { id: n(r['id']), estado: texto(r['situacao']) as EstadoAssinatura });
+    }
+    return m;
   }
 
-  async previaMaisRecente(): Promise<null> {
-    return null;
+  private previaDaLinha(c: ContextoAssinatura, r: Linha): PreviaDoDocumento {
+    return {
+      id: n(r['id']),
+      hospital: c.hospital,
+      documento: n(r['documento_prontuario_id']),
+      usuario: texto(r['login']),
+      certificado: n(r['certificado_usuario_id']),
+      politicaIcp: texto(r['politica_icp']) as PoliticaIcp,
+      hashPdf: texto(r['hash_pdf']),
+      chaveS3: texto(r['chave_armazenamento']),
+      versaoS3: texto(r['versao_objeto']),
+      codigo: texto(r['codigo_verificacao']),
+      assinarEm: iso(r['assinar_em']) ?? '',
+      profissional: textoOuNulo(r['profissional_exibido']),
+      registro: textoOuNulo(r['registro_exibido']),
+      criadoEm: iso(r['criado_em']) ?? '',
+    };
   }
 
-  async previa(): Promise<null> {
-    return null;
+  async previaMaisRecente(c: ContextoAssinatura, documento: number, login: string): Promise<PreviaDoDocumento | null> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return null;
+      const col = await this.opcionais(l);
+      const r = await l.uma(
+        `${SQL_PREVIA(col)} WHERE pv.estabelecimento_id = ? AND pv.documento_prontuario_id = ? AND u.login = ?
+          ORDER BY pv.id DESC LIMIT 1`,
+        [est, documento, login],
+      );
+      return r ? this.previaDaLinha(c, r) : null;
+    });
   }
 
-  async assinaturaDocumento(): Promise<null> {
-    return null;
+  async previa(c: ContextoAssinatura, id: number): Promise<PreviaDoDocumento | null> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return null;
+      const col = await this.opcionais(l);
+      const r = await l.uma(`${SQL_PREVIA(col)} WHERE pv.estabelecimento_id = ? AND pv.id = ?`, [est, id]);
+      return r ? this.previaDaLinha(c, r) : null;
+    });
   }
 
-  async pendentesVencidas(): Promise<[]> {
-    return [];
+  async assinaturaDocumento(c: ContextoAssinatura, id: number): Promise<AssinaturaDoDocumento | null> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return null;
+      const col = await this.opcionais(l);
+      const a = await l.uma(
+        `SELECT a.id, a.documento_prontuario_id, a.hash_assinado, a.politica_icp, a.midia, a.certificado_usuario_id,
+                a.situacao, a.tentativas, a.falha, a.proxima_tentativa_em, a.assinatura_cms, a.carimbo_tempo,
+                a.carimbo_tempo_em, a.criado_em, a.previa_assinatura_id, u.login, pr.codigo AS provedor,
+                ar.chave_armazenamento, ar.hash_sha256, ${versaoDoArquivo(col, 'ar')} AS versao_objeto
+           FROM assinatura_icp a
+           JOIN usuario u ON u.id = a.usuario_id
+           LEFT JOIN provedor_assinatura_nuvem pr ON pr.id = a.provedor_assinatura_nuvem_id
+           LEFT JOIN arquivo ar ON ar.id = a.arquivo_assinado_id
+          WHERE a.id = ? AND a.estabelecimento_id = ? AND a.origem_assinatura = 'documento'`,
+        [id, est],
+      );
+      if (!a) return null;
+      const chave = textoOuNulo(a['chave_armazenamento']);
+      return {
+        id: n(a['id']),
+        hospital: c.hospital,
+        documento: n(a['documento_prontuario_id']),
+        hash: texto(a['hash_assinado']),
+        politicaIcp: texto(a['politica_icp']) as PoliticaIcp,
+        midia: texto(a['midia']) as MidiaCertificado,
+        provedor: textoOuNulo(a['provedor']),
+        certificado: n(a['certificado_usuario_id']),
+        usuario: texto(a['login']),
+        estado: texto(a['situacao']) as EstadoAssinatura,
+        tentativas: n(a['tentativas']),
+        falha: textoOuNulo(a['falha']),
+        proximaEm: iso(a['proxima_tentativa_em']),
+        assinatura: base64(a['assinatura_cms']),
+        carimboToken: base64(a['carimbo_tempo']),
+        carimboEm: iso(a['carimbo_tempo_em']),
+        criadoEm: iso(a['criado_em']) ?? '',
+        previa: nn(a['previa_assinatura_id']),
+        pdf: chave
+          ? { chaveS3: chave, versaoS3: texto(a['versao_objeto']), hashPdf: texto(a['hash_sha256']) }
+          : null,
+      };
+    });
   }
 
-  async assinadosRecentes(): Promise<[]> {
-    return [];
+  async pendentesVencidas(c: ContextoAssinatura, agora: Date, teto: number): Promise<{ id: number; usuario: string }[]> {
+    const ls = await this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est || teto < 1) return [];
+      return l.consultar(
+        `SELECT a.id, u.login FROM assinatura_icp a JOIN usuario u ON u.id = a.usuario_id
+          WHERE a.estabelecimento_id = ? AND a.origem_assinatura = 'documento' AND a.situacao = 'pendente'
+            AND a.proxima_tentativa_em IS NOT NULL AND a.proxima_tentativa_em <= ?
+          ORDER BY a.proxima_tentativa_em, a.id LIMIT ?`,
+        [est, agora, teto],
+      );
+    });
+    return ls.map((r) => ({ id: n(r['id']), usuario: texto(r['login']) }));
   }
 
-  async contagemPendencias(): Promise<{ pendentes: number; falhas: number }> {
-    return { pendentes: 0, falhas: 0 };
+  async assinadosRecentes(c: ContextoAssinatura, login: string): Promise<DocumentoAssinadoIcp[]> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      const ls = await l.consultar(
+        `SELECT a.id, a.documento_prontuario_id, a.politica_icp, a.carimbo_tempo_em, a.arquivo_assinado_id,
+                COALESCE(a.alterado_em, a.criado_em) AS assinado_em, t.codigo AS tipo, dp.paciente_id,
+                pv.codigo_verificacao
+           FROM assinatura_icp a
+           JOIN usuario u ON u.id = a.usuario_id
+           JOIN documento_prontuario dp ON dp.id = a.documento_prontuario_id
+           JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
+           LEFT JOIN previa_assinatura pv ON pv.id = a.previa_assinatura_id
+          WHERE a.estabelecimento_id = ? AND u.login = ? AND a.origem_assinatura = 'documento'
+            AND a.situacao = 'assinada'
+          ORDER BY a.id DESC LIMIT 20`,
+        [est, login],
+      );
+      const vs = await this.ultimasValidacoes(l, ls.map((r) => n(r['id'])));
+      return ls.map((a) => ({
+        assinatura: n(a['id']),
+        documento: n(a['documento_prontuario_id']),
+        tipo: texto(a['tipo']),
+        paciente: n(a['paciente_id']),
+        politicaIcp: texto(a['politica_icp']) as PoliticaIcp,
+        assinadoEm: iso(a['assinado_em']) ?? '',
+        carimboEm: iso(a['carimbo_tempo_em']),
+        codigo: textoOuNulo(a['codigo_verificacao']),
+        temPdf: a['arquivo_assinado_id'] !== null && a['arquivo_assinado_id'] !== undefined,
+        resultado: (textoOuNulo(vs.get(n(a['id']))?.['resultado'] ?? null) as ResultadoValidacao | null) ?? null,
+      }));
+    });
   }
 
-  async avisos(): Promise<[]> {
-    return [];
+  /** As tentativas em aberto (pendente ou em falha) de documentos ainda sem assinatura concluída. */
+  async contagemPendencias(c: ContextoAssinatura): Promise<{ pendentes: number; falhas: number }> {
+    const ls = await this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      return l.consultar(
+        `SELECT a.situacao, COUNT(*) AS q FROM assinatura_icp a
+          WHERE a.estabelecimento_id = ? AND a.origem_assinatura = 'documento' AND a.situacao IN ('pendente', 'falha')
+            AND NOT EXISTS (SELECT 1 FROM assinatura_icp b WHERE b.documento_prontuario_id = a.documento_prontuario_id
+                              AND b.situacao = 'assinada')
+          GROUP BY a.situacao`,
+        [est],
+      );
+    });
+    const q = (s: string) => n(ls.find((r) => r['situacao'] === s)?.['q']);
+    return { pendentes: q('pendente'), falhas: q('falha') };
   }
 
-  async solicitacoesSncr(): Promise<[]> {
-    return [];
+  async avisos(c: ContextoAssinatura, para: { autor: string } | 'diretor-tecnico'): Promise<AvisoAssinatura[]> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      const ls = await l.consultar(
+        `SELECT av.id, av.assinatura_icp_id, av.destinatario, av.situacao_assinatura, av.falha, av.criado_em,
+                a.documento_prontuario_id, ua.login AS autor
+           FROM aviso_assinatura av
+           JOIN assinatura_icp a ON a.id = av.assinatura_icp_id
+           JOIN usuario ua ON ua.id = a.usuario_id
+           LEFT JOIN usuario ud ON ud.id = av.usuario_id
+          WHERE av.estabelecimento_id = ? AND av.lido_em IS NULL
+            AND ${para === 'diretor-tecnico' ? "av.destinatario = 'diretor-tecnico'" : "av.destinatario = 'autor' AND ud.login = ?"}
+          ORDER BY av.id DESC`,
+        para === 'diretor-tecnico' ? [est] : [est, para.autor],
+      );
+      return ls.map((v) => ({
+        id: n(v['id']),
+        assinatura: n(v['assinatura_icp_id']),
+        documento: nn(v['documento_prontuario_id']),
+        destinatario: texto(v['destinatario']) as AvisoAssinatura['destinatario'],
+        estado: texto(v['situacao_assinatura']) as AvisoAssinatura['estado'],
+        falha: textoOuNulo(v['falha']),
+        autor: texto(v['autor']),
+        criadoEm: iso(v['criado_em']) ?? '',
+      }));
+    });
+  }
+
+  async solicitacoesSncr(c: ContextoAssinatura, documento: number): Promise<PedidoNumeracao[]> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      if (!est) return [];
+      const ls = await l.consultar(
+        `SELECT id, documento_prontuario_id, situacao, tentativas, numero, retorno FROM pedido_numeracao_receita
+          WHERE estabelecimento_id = ? AND documento_prontuario_id = ? ORDER BY id DESC`,
+        [est, documento],
+      );
+      return ls.map((x) => ({
+        id: n(x['id']),
+        documento: n(x['documento_prontuario_id']),
+        situacao: texto(x['situacao']) as PedidoNumeracao['situacao'],
+        tentativas: n(x['tentativas']),
+        numero: textoOuNulo(x['numero']),
+        retorno: textoOuNulo(x['retorno']),
+      }));
+    });
   }
 
   // ---- verificador público ----

@@ -1,9 +1,9 @@
-// Horas e datas da agenda (ficha do M17, regras 1 e 4; ref 01 §4.2): o legado guarda a hora do horário como
-// texto 'HHMM' de 4 dígitos (100% das linhas de REPACAGI medidas) e a duração também em HHMM ('0100' são 60
-// minutos, não 100). "08:01" quebraria o gatilho que monta o carimbo da marcação: toda hora passa por aqui.
-// Datas de calendário em AAAA-MM-DD (texto: a comparação lexical é a cronológica), sem fuso (UTC).
+// Horas e datas da agenda. A hora do dia é "HH:MM" (00:00 a 23:59), o formato neutro do produto
+// (`FORMATO_HORA` de @sgh/contratos); a duração de um atendimento é um número de minutos. As funções aceitam
+// também a hora digitada sem os dois-pontos ("0800", "800"), mas devolvem sempre "HH:MM". Datas de calendário em
+// AAAA-MM-DD (texto: a comparação lexical é a cronológica), sem fuso (UTC).
 
-import { FORMATO_HHMM } from '@sgh/contratos';
+import { FORMATO_HORA } from '@sgh/contratos';
 
 const FORMATO_DATA = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -11,53 +11,68 @@ export class ErroTempo extends Error {
   override readonly name = 'ErroTempo';
 }
 
-export function hhmmValido(h: string): boolean {
-  return FORMATO_HHMM.test(h);
+/** A hora está no formato estrito "HH:MM" (00:00 a 23:59)? */
+export function horaValida(h: string): boolean {
+  return FORMATO_HORA.test(h);
 }
 
-/** "08:00", "8:00", "0800" ou "800" → "0800"; recusa o resto. */
+/** "08:00", "8:00", "0800" ou "800" → "08:00"; recusa o resto (hora fora de 00:00 a 23:59 inclusive). */
 export function normalizarHora(h: string): string {
-  const s = h.trim();
-  const m = /^(\d{1,2}):?(\d{2})$/.exec(s);
+  const m = /^(\d{1,2}):?(\d{2})$/.exec(h.trim());
   if (!m) throw new ErroTempo(`Hora inválida: use HH:MM.`);
-  const r = `${m[1]!.padStart(2, '0')}${m[2]}`;
-  if (!hhmmValido(r)) throw new ErroTempo(`Hora inválida: use HH:MM.`);
+  const r = `${m[1]!.padStart(2, '0')}:${m[2]}`;
+  if (!horaValida(r)) throw new ErroTempo(`Hora inválida: use HH:MM.`);
   return r;
 }
 
-/** "0800" → "08:00" (texto vazio fica vazio). */
+/** Hora para a tela, sempre "HH:MM" ("0800" → "08:00"); texto vazio fica vazio; inválida volta como veio. */
 export function formatarHora(h: string | null | undefined): string {
   const s = (h ?? '').trim();
   if (!s) return '';
-  const p = s.padStart(4, '0');
-  return `${p.slice(0, 2)}:${p.slice(2, 4)}`;
+  try {
+    return normalizarHora(s);
+  } catch {
+    return s;
+  }
 }
 
-/** "0815" → 495 (minutos desde a meia-noite). */
-export function paraMinutos(hhmm: string): number {
-  const s = hhmm.trim().padStart(4, '0');
-  if (!hhmmValido(s)) throw new ErroTempo('Hora inválida.');
-  return Number(s.slice(0, 2)) * 60 + Number(s.slice(2, 4));
+/** "08:15" → 495 (minutos desde a meia-noite). */
+export function paraMinutos(hora: string): number {
+  let s: string;
+  try {
+    s = normalizarHora(hora);
+  } catch {
+    throw new ErroTempo('Hora inválida.');
+  }
+  return Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
 }
 
-/** 495 → "0815" (dentro do dia). */
+/** 495 → "08:15" (dentro do dia). */
 export function deMinutos(min: number): string {
   if (!Number.isInteger(min) || min < 0 || min >= 1440) throw new ErroTempo('Hora fora do dia.');
-  return `${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}`;
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 }
 
-/** Duração em minutos → HHMM do legado (60 → "0100"; 15 → "0015"). */
-export function duracaoHHMM(minutos: number): string {
+/**
+ * Duração escrita como horas e minutos ("01:00" são 60 minutos; aceita também "0100") → minutos; "00:00",
+ * vazio ou inválido → null.
+ */
+export function duracaoMinutos(duracao: string | null | undefined): number | null {
+  const s = (duracao ?? '').trim();
+  if (!s) return null;
+  let m: number;
+  try {
+    m = paraMinutos(s);
+  } catch {
+    return null;
+  }
+  return m > 0 ? m : null;
+}
+
+/** Duração em minutos (1 a 1439) → "HH:MM" (60 → "01:00"; 15 → "00:15"). */
+export function duracaoEmHoras(minutos: number): string {
   if (!Number.isInteger(minutos) || minutos < 1 || minutos >= 1440) throw new ErroTempo('Duração inválida.');
   return deMinutos(minutos);
-}
-
-/** Duração HHMM do legado → minutos ("0100" → 60); "0000", vazio ou inválido → null. */
-export function duracaoMinutos(hhmm: string | null | undefined): number | null {
-  const s = (hhmm ?? '').trim();
-  if (!s || !hhmmValido(s.padStart(4, '0'))) return null;
-  const m = paraMinutos(s);
-  return m > 0 ? m : null;
 }
 
 export function dataValida(d: string): boolean {
@@ -73,7 +88,7 @@ function utc(d: string): Date {
   return new Date(`${d}T00:00:00Z`);
 }
 
-/** Dia da semana como o legado (REAGECRI.SEM1..SEM7, RECTRAGE.SEMANA): 1 = domingo … 7 = sábado. */
+/** Dia da semana da escala da agenda: 1 = domingo … 7 = sábado. */
 export function semanaDaData(d: string): number {
   return utc(d).getUTCDay() + 1;
 }
@@ -110,7 +125,11 @@ export function segundaDaSemana(d: string): string {
   return somarDias(d, -recuo);
 }
 
-/** Relógio do BANCO (nunca o do processo): hoje e o minuto corrente 'HHMM'. */
+/**
+ * Relógio do BANCO (nunca o do processo): hoje e o minuto corrente em "HH:MM". O nome do campo `hhmm` fica até a
+ * troca coordenada com os módulos de exames e do portal (pedido na saída do lote 12-agenda da F2.4); o valor já é
+ * "HH:MM" (a leitura aceita também os quatro dígitos).
+ */
 export interface Relogio {
   readonly hoje: string;
   readonly hhmm: string;
@@ -122,11 +141,13 @@ export interface Horario {
 }
 
 /**
- * O horário já começou? O do minuto corrente conta como começado (vigencia.js:292-307): marcar ou remarcar
+ * O horário já começou? O do minuto corrente conta como começado (vigencia.js, linhas 292 a 307): marcar ou remarcar
  * horário que já passou, inclusive o minuto corrente, é recusado.
  */
 export function horarioJaPassou(h: Horario, relogio: Relogio): boolean {
-  return h.data < relogio.hoje || (h.data === relogio.hoje && h.hora.padStart(4, '0') <= relogio.hhmm);
+  return (
+    h.data < relogio.hoje || (h.data === relogio.hoje && paraMinutos(h.hora) <= paraMinutos(relogio.hhmm))
+  );
 }
 
 /** Janela de consulta recortada (até `maxDias`, contados a partir de `de`): recorta, não recusa. */

@@ -19,7 +19,7 @@ export const CARATERES_ATENDIMENTO = { E: 'Eletivo', U: 'Urgência ou emergênci
 export type CaraterAtendimento = keyof typeof CARATERES_ATENDIMENTO;
 export const CODIGOS_CARATER_GUIA = ['E', 'U'] as const;
 
-/** Tipo de guia (CDTPGUIA): o código do domínio do banco. */
+/** Tipo de guia: o código do domínio do banco. */
 export const TIPO_GUIA = { ambulatorio: 1, consulta: 2, internacao: 3, sadt: 4 } as const;
 
 /** Tipo de internação (TISS, tabela de domínio 57). */
@@ -291,8 +291,10 @@ export const esquemaEncerrarAuditor = z
 export type EncerrarAuditorEntrada = z.infer<typeof esquemaEncerrarAuditor>;
 
 /** W0-10: alterar os dados da designação ativa (o usuário e a operadora não mudam: trocar o auditor é encerrar e designar). */
+/** O nome do auditor é o do cadastro do profissional (muda lá, com a trilha dele); a alteração troca a categoria ou o
+ * profissional pela inscrição no conselho, e o motivo vai para a trilha da operação. */
 export const esquemaAlterarAuditor = esquemaDesignarAuditor
-  .pick({ nome: true, categoria: true, numero: true, uf: true })
+  .pick({ categoria: true, numero: true, uf: true })
   .extend({ ...comVersao, motivo: texto(200, 10, 'Descreva o motivo (10 caracteres ou mais).') })
   .strict();
 export type AlterarAuditorEntrada = z.infer<typeof esquemaAlterarAuditor>;
@@ -479,7 +481,7 @@ export const esquemaAutorizacaoDetalhe = z.object({
     })
     .nullable(),
   situacao: z.enum(SITUACOES_AUTORIZACAO),
-  /** A situação da guia (CDGUIASTATUS) que vale para as contas médicas: autorizada ou cancelada; null em análise. */
+  /** A situação da guia que vale para as contas médicas: autorizada ou cancelada; null em análise. */
   situacaoGuia: z.number().int().nullable(),
   solicitadaEm: z.string(),
   prazoTipo: z.enum(TIPOS_PRAZO),

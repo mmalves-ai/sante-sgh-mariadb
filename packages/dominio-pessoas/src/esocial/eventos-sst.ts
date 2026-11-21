@@ -34,7 +34,7 @@ export const TP_ACID: Readonly<Record<TipoAcidenteCat, 1 | 2 | 3>> = { tipico: 1
 export interface AtestadoCatParaEvento {
   /** AAAA-MM-DD. */
   readonly data: string;
-  /** HHMM. */
+  /** HH:MM (o leiaute do eSocial leva quatro dígitos; a conversão é deste gerador). */
   readonly hora: string;
   readonly internacao: boolean;
   /** Duração provável do tratamento, em dias. */
@@ -70,7 +70,7 @@ export interface CatParaEvento {
   /** AAAA-MM-DDTHH:MM. */
   readonly ocorridoEm: string;
   readonly tipo: TipoAcidenteCat;
-  /** HHMM; exigido no típico e no trajeto. */
+  /** Duração em HH:MM (até 99:59); exigida no típico e no trajeto. */
   readonly horasTrabalhadasAntes: string | null;
   /** 1 inicial, 2 reabertura, 3 comunicação de óbito. */
   readonly tipoCat: 1 | 2 | 3 | null;
@@ -94,18 +94,21 @@ export interface CatParaEvento {
 }
 
 const nove = (n: number | null) => (n !== null && /^\d{9}$/.test(String(n)) ? String(n) : null);
-const hhmm = (h: string | null, teto: number) =>
-  h !== null && /^\d{4}$/.test(h) && Number(h.slice(2)) <= 59 && Number(h) <= teto ? h : null;
+/** "HH:MM" (hora do dia ou duração até o teto) → os quatro dígitos do leiaute; null se inválida. */
+const horaLeiaute = (h: string | null, teto: number) => {
+  const m = h === null ? null : /^(\d{2}):([0-5]\d)$/.exec(h);
+  const quatro = m ? `${m[1] ?? ''}${m[2] ?? ''}` : '';
+  return quatro.length === 4 && Number(quatro) <= teto ? quatro : null;
+};
 const sn = (b: boolean) => (b ? 'S' : 'N');
 
 /** O que a CAT precisa ter para sair (além do vínculo e do empregador). */
 export function pendenciasCat(c: CatParaEvento): PendenciaEsocial[] {
   const p: PendenciaEsocial[] = [];
   const exigeHora = c.tipo !== 'doenca';
-  const hora = c.ocorridoEm.slice(11, 13) + c.ocorridoEm.slice(14, 16);
-  if (exigeHora && !hhmm(hora, 2359))
+  if (exigeHora && !horaLeiaute(c.ocorridoEm.slice(11, 16), 2359))
     p.push(pendencia('cat-sem-hora', 'A hora do acidente não está no formato do eSocial.'));
-  if (exigeHora && !hhmm(c.horasTrabalhadasAntes, 9959))
+  if (exigeHora && !horaLeiaute(c.horasTrabalhadasAntes, 9959))
     p.push(pendencia('cat-sem-horas-antes', 'Informe as horas trabalhadas antes do acidente.'));
   if (!c.tipoCat) p.push(pendencia('cat-sem-tipo', 'Informe o tipo da CAT (inicial, reabertura ou óbito).'));
   if ((c.tipoCat === 2 || c.tipoCat === 3) && !c.reciboCatOrigem)
@@ -125,7 +128,8 @@ export function pendenciasCat(c: CatParaEvento): PendenciaEsocial[] {
     p.push(pendencia('cat-sem-atestado', 'Registre o atestado médico do atendimento.'));
     return p;
   }
-  if (!hhmm(a.hora, 2359)) p.push(pendencia('cat-sem-hora-atendimento', 'Informe a hora do atendimento.'));
+  if (!horaLeiaute(a.hora, 2359))
+    p.push(pendencia('cat-sem-hora-atendimento', 'Informe a hora do atendimento.'));
   if (!nove(a.naturezaLesao))
     p.push(pendencia('cat-sem-natureza', 'A natureza da lesão não tem o código do eSocial.'));
   if (!a.cid || !/^[A-Z]\d{2,3}$/.test(a.cid))
@@ -169,8 +173,8 @@ export function montarS2210(
     obrig('cat', [
       obrig('dtAcid', data),
       obrig('tpAcid', TP_ACID[c.tipo]),
-      el('hrAcid', comHora ? c.ocorridoEm.slice(11, 13) + c.ocorridoEm.slice(14, 16) : null),
-      el('hrsTrabAntesAcid', comHora ? c.horasTrabalhadasAntes : null),
+      el('hrAcid', comHora ? horaLeiaute(c.ocorridoEm.slice(11, 16), 2359) : null),
+      el('hrsTrabAntesAcid', comHora ? horaLeiaute(c.horasTrabalhadasAntes, 9959) : null),
       obrig('tpCat', c.tipoCat),
       obrig('indCatObito', sn(c.obito)),
       el('dtObito', c.obito ? c.dataObito : null),
@@ -199,7 +203,7 @@ export function montarS2210(
       obrig('agenteCausador', [obrig('codAgntCausador', nove(c.agenteCausador))]),
       obrig('atestado', [
         obrig('dtAtendimento', a.data),
-        obrig('hrAtendimento', a.hora),
+        obrig('hrAtendimento', horaLeiaute(a.hora, 2359)),
         obrig('indInternacao', sn(a.internacao)),
         obrig('durTrat', a.duracaoDias),
         obrig('indAfast', sn(a.afastamento)),

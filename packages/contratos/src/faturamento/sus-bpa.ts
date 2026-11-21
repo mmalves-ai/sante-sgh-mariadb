@@ -57,11 +57,11 @@ export const esquemaPaginaLinhasBpa = z.object({
 });
 export type PaginaLinhasBpa = z.infer<typeof esquemaPaginaLinhasBpa>;
 
-/** Busca de médico solicitante no cadastro geral (TBMEDSOL, 7.660 na cópia): conselho ou nome, 2 a 60 caracteres. */
+/** Busca de médico solicitante no cadastro geral: conselho ou nome, 2 a 60 caracteres. */
 export const esquemaBuscaMedicoSolicitante = z.object({ termo: z.string().trim().min(2).max(60) }).strict();
 export type BuscaMedicoSolicitante = z.infer<typeof esquemaBuscaMedicoSolicitante>;
 
-/** Um médico solicitante do cadastro geral (TBMEDSOL): número do conselho, nome, UF, CBO e situação. */
+/** Um médico solicitante do cadastro geral: número do conselho, nome, UF, CBO e situação. */
 export const esquemaMedicoSolicitanteAchado = z.object({
   id: z.number().int(),
   conselho: z.number().int(),

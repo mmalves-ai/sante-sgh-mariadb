@@ -49,6 +49,8 @@ export async function limparSesmt(
     `DELETE x FROM exame_ocupacional x JOIN aso a ON a.id = x.aso_id WHERE a.estabelecimento_id IN (${em})`,
     ests,
   );
+  // A retificação liga o ASO ao anterior (FK para a mesma tabela): solta a ligação antes de apagar a massa.
+  await e.executar(`UPDATE aso SET retifica_aso_id = NULL WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM aso WHERE estabelecimento_id IN (${em})`, ests);
   // Os marcos da sorologia (tabela do 15_RH/05) saem antes da exposição; sem a tabela, não há o que apagar.
   const sorologia = await e.uma<{ n: number }>(
@@ -75,7 +77,11 @@ export async function limparSesmt(
     ests,
   );
   if (colaborador !== null)
-    await e.executar('DELETE FROM vacina_colaborador WHERE colaborador_id = ?', [colaborador]);
+    await e.executar(
+      'UPDATE vacina_colaborador SET retifica_vacina_colaborador_id = NULL WHERE colaborador_id = ?',
+      [colaborador],
+    );
+  await e.executar('DELETE FROM vacina_colaborador WHERE colaborador_id = ?', [colaborador]);
   await e.executar(
     `DELETE i FROM incidencia_rubrica i JOIN rubrica r ON r.id = i.rubrica_id WHERE r.estabelecimento_id IN (${em})`,
     ests,

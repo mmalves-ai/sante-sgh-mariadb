@@ -14,8 +14,8 @@ import type {
 } from '@sgh/contratos';
 import { percorrerPerguntas } from './definicao.js';
 
-/** TIPOPERG do formulário de origem por tipo do construtor (ref 04 §1.2, tabela PRTPPERGUNTA, medida na cópia). */
-export const TIPOPERG_DO_TIPO: Readonly<Record<TipoPerguntaFormularioNovo, string>> = {
+/** Código do tipo de campo do modelo de origem por tipo do construtor (ref 04 §1.2, medido na cópia). */
+export const CODIGO_DO_TIPO_DE_CAMPO: Readonly<Record<TipoPerguntaFormularioNovo, string>> = {
   secao: '1',
   'texto-formatado': '5',
   decimal: '6',
@@ -28,17 +28,17 @@ export const TIPOPERG_DO_TIPO: Readonly<Record<TipoPerguntaFormularioNovo, strin
   multipla: '12',
 };
 
-/** Tipo do construtor por TIPOPERG (para mostrar o banco de perguntas); `4` (sim/não) é escolha. */
-export function tipoDoTipoperg(t: string | null): TipoPerguntaFormularioNovo | null {
+/** Tipo do construtor pelo código do tipo de campo (para mostrar o banco de perguntas); `4` (sim/não) é escolha. */
+export function tipoDoCodigoDeCampo(t: string | null): TipoPerguntaFormularioNovo | null {
   const s = (t ?? '').trim();
   if (s === '4') return 'escolha';
-  const achado = (Object.entries(TIPOPERG_DO_TIPO) as [TipoPerguntaFormularioNovo, string][]).find(
+  const achado = (Object.entries(CODIGO_DO_TIPO_DE_CAMPO) as [TipoPerguntaFormularioNovo, string][]).find(
     ([, v]) => v === s,
   );
   return achado ? achado[0] : null;
 }
 
-/** PRTPCOMP (7 linhas na cópia): 1 Diagnóstico, 2 Evolução, 3 Anamnese, 4 Resumo clínico, 6 Sumário de alta. */
+/** Tipo de documento clínico (7 linhas na cópia): 1 Diagnóstico, 2 Evolução, 3 Anamnese, 4 Resumo clínico, 6 Sumário de alta. */
 export const TIPO_COMPOSICAO_DO_REGISTRO: Readonly<Record<TipoRegistroFormularioNovo, number>> = {
   diagnostico: 1,
   evolucao: 2,
@@ -79,7 +79,7 @@ export interface ConstantesDoCenario {
   readonly layoutImpressao: 'E' | 'G';
   readonly manterHistorico: 1 | 2 | 3;
   /**
-   * PRPADEVOL.FONTE (preenchida em 2.832 de 2.832 vínculos na cópia): a fonte do vínculo, como o cenário grava. Nula,
+   * Fonte do vínculo do campo ao modelo (preenchida em 2.832 de 2.832 vínculos na cópia): a fonte do vínculo, como o cenário grava. Nula,
    * o plano recusa (`constantes-pendentes`).
    */
   readonly fonteVinculo: string | null;
@@ -119,7 +119,7 @@ const normal = (s: string | null | undefined) =>
 export function perguntaCompativel(p: PerguntaFormularioNovo, b: PerguntaBancoLegado): boolean {
   if (!b.ativo || p.tipo === 'secao') return false;
   if (normal(p.titulo) !== normal(b.descricao)) return false;
-  if (TIPOPERG_DO_TIPO[p.tipo] !== b.tipoperg.trim()) return false;
+  if (CODIGO_DO_TIPO_DE_CAMPO[p.tipo] !== b.tipoperg.trim()) return false;
   if (normal(p.unidade) !== normal(b.unidade)) return false;
   if (p.opcoes.length !== b.opcoes.length) return false;
   return p.opcoes.every((o, i) => normal(o.texto) === normal(b.opcoes[i]));
@@ -169,8 +169,24 @@ export type ClasseValor =
   | { readonly classe: 'constante'; readonly valor: string | number | null }
   | { readonly classe: 'ligacao'; readonly chave: string };
 
+/**
+ * Papel da linha no plano. As tabelas do modelo próprio guardam o banco de campos e o vínculo na mesma tabela
+ * (`modelo_campo` e `modelo_campo_opcao`), por isso o papel distingue as linhas:
+ * - `modelo`: o próprio modelo de documento clínico;
+ * - `banco`: item do banco reaproveitável (campo cadastrado ou texto de opção cadastrado);
+ * - `vinculo`: ligação ao modelo (opção da pergunta, campo no modelo, especialidade do modelo).
+ */
+export type PapelLinhaPlano = 'modelo' | 'banco' | 'vinculo';
+
+/**
+ * Linha do plano. DÍVIDA (pedido 2 do lote 04-pep-1, decisão do dono): as chaves de `colunas` ainda são as colunas do
+ * formulário de origem (ID_EVOLUCAO, ID_PRPERGUNTA, TIPOPERG, COD...), porque o plano é a ponte com o sistema de origem.
+ * Elas somem quando a ponte for aposentada ou levada para o conector.
+ */
 export interface LinhaPlano {
-  readonly tabela: 'PREVOLUCAO' | 'PRCADRESP' | 'PRPERGUNTA' | 'PRRESPOSTA' | 'PRPADEVOL' | 'PREVOLESPEC';
+  readonly tabela:
+    'modelo_documento_clinico' | 'modelo_campo_opcao' | 'modelo_campo' | 'modelo_especialidade';
+  readonly papel: PapelLinhaPlano;
   /** Chave lógica da linha (outras linhas a citam por `ligacao`). */
   readonly chave: string;
   readonly colunas: Readonly<Record<string, ClasseValor>>;
@@ -217,7 +233,8 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
   const cadPorTexto = new Map(e.respostasCadastradas.map((r) => [normal(r.descricao), r.cod]));
 
   linhas.push({
-    tabela: 'PREVOLUCAO',
+    tabela: 'modelo_documento_clinico',
+    papel: 'modelo',
     chave: 'modelo',
     colunas: {
       ID_EVOLUCAO: GEN,
@@ -245,7 +262,12 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
     if (!chave) {
       chave = `cadresp:${cadNovas.size + 1}`;
       cadNovas.set(n, chave);
-      linhas.push({ tabela: 'PRCADRESP', chave, colunas: { COD: GEN, DESCRICAO: ent(texto.trim()) } });
+      linhas.push({
+        tabela: 'modelo_campo_opcao',
+        papel: 'banco',
+        chave,
+        colunas: { COD: GEN, DESCRICAO: ent(texto.trim()) },
+      });
     }
     return lig(chave);
   };
@@ -267,14 +289,15 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
     const chave = `pergunta:${p.linkId}`;
     perguntaDe.set(p.linkId, lig(chave));
     linhas.push({
-      tabela: 'PRPERGUNTA',
+      tabela: 'modelo_campo',
+      papel: 'banco',
       chave,
       colunas: {
         ID: GEN,
         COD_PERGUNTA: GEN,
         COLUNA: cst(0),
         DESCRICAO: ent(p.titulo.trim()),
-        TIPOPERG: ent(TIPOPERG_DO_TIPO[p.tipo]),
+        TIPOPERG: ent(CODIGO_DO_TIPO_DE_CAMPO[p.tipo]),
         UNIDPERG: ent(p.unidade?.trim() ?? ''),
         ATIVO: cst('T'),
         MANTERHIST: cst(k.manterHistorico),
@@ -287,7 +310,8 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
     if (p.opcoes.length > 0) {
       p.opcoes.forEach((o, i) =>
         linhas.push({
-          tabela: 'PRRESPOSTA',
+          tabela: 'modelo_campo_opcao',
+          papel: 'vinculo',
           chave: `resposta:${p.linkId}:${o.codigo}`,
           colunas: {
             ID_RESPOSTA: GEN,
@@ -300,7 +324,8 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
       );
     } else if (p.tipo !== 'secao') {
       linhas.push({
-        tabela: 'PRRESPOSTA',
+        tabela: 'modelo_campo_opcao',
+        papel: 'vinculo',
         chave: `resposta:${p.linkId}`,
         colunas: {
           ID_RESPOSTA: GEN,
@@ -315,7 +340,8 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
 
   for (const { pergunta: p, ordem } of todas) {
     linhas.push({
-      tabela: 'PRPADEVOL',
+      tabela: 'modelo_campo',
+      papel: 'vinculo',
       chave: `vinculo:${p.linkId}`,
       colunas: {
         ID: GEN,
@@ -335,7 +361,8 @@ export function planoDePublicacao(e: EntradaPlano): PlanoPublicacao {
 
   for (const esp of [...new Set(def.especialidades)].sort((a, b) => a - b))
     linhas.push({
-      tabela: 'PREVOLESPEC',
+      tabela: 'modelo_especialidade',
+      papel: 'vinculo',
       chave: `especialidade:${esp}`,
       colunas: { ID_EVOLUCAO: lig('modelo'), ESPEC: ent(esp) },
     });
@@ -407,9 +434,12 @@ export function entradaDaPublicacao(
   };
 }
 
-/** Contagem de linhas por tabela (o que a assinatura de `pep.publicarFormularioNovo` espera do plano). */
+/** Contagem de linhas por tabela e papel (`tabela/papel`; o que a assinatura de `pep.publicarFormularioNovo` espera). */
 export function contagemDoPlano(p: PlanoPublicacao): Record<string, number> {
   const c: Record<string, number> = {};
-  for (const l of p.linhas) c[l.tabela] = (c[l.tabela] ?? 0) + 1;
+  for (const l of p.linhas) {
+    const k = `${l.tabela}/${l.papel}`;
+    c[k] = (c[k] ?? 0) + 1;
+  }
   return c;
 }

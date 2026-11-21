@@ -1,6 +1,7 @@
 """Comando "criar novo cliente" (ADR 0002, item 9): cria o banco vazio do cliente, aplica as migrações e o
 registra no banco de controle da plataforma. O catálogo de ações do sistema (acao_sistema) é carregado aqui, dos
-contratos do produto (tools/db/carregar_acoes.py; decisão do dono 2026-11-20, a). A carga dos catálogos públicos é um passo seguinte
+contratos do produto (tools/db/carregar_acoes.py; decisão do dono 2026-11-20, a), e as sementes dos domínios básicos
+(db/sementes, por tools/db/carregar_sementes.py: os vocabulários que o produto consulta por código fixo). A carga dos catálogos públicos é um passo seguinte
 (catalogos/carregar.py), e a importação do SPDATA é do conector (só para cliente com origem conector_spdata).
 
 uso: python3 -I tools/db/criar_cliente.py <codigo> "<nome>" [--origem vazio|conector_spdata] [--cnpj N]
@@ -68,9 +69,9 @@ def aplicar_migracoes(banco: str) -> tuple[int, list[str]]:
     return n, erros
 
 
-def carregador_de_acoes():
-    """tools/db/carregar_acoes.py (com -I, a pasta do script não entra no sys.path: carrega pelo caminho)."""
-    spec = importlib.util.spec_from_file_location("carregar_acoes", RAIZ / "tools/db/carregar_acoes.py")
+def carregador(nome="carregar_acoes"):
+    """tools/db/<nome>.py (com -I, a pasta do script não entra no sys.path: carrega pelo caminho)."""
+    spec = importlib.util.spec_from_file_location(nome, RAIZ / f"tools/db/{nome}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -101,15 +102,21 @@ def criar(codigo, nome, origem="vazio", cnpj=None, admin=None):
         sql(None, None, "-e", f"DROP DATABASE {banco}")
         raise Recusa("migracao-falhou", "migrações com erro; banco removido:\n" + "\n".join(erros[:20]))
     try:
-        acoes = carregador_de_acoes().carregar(banco)
+        acoes = carregador().carregar(banco)
     except SystemExit as e:
         sql(None, None, "-e", f"DROP DATABASE {banco}")
         raise Recusa("acoes-falharam", f"{e}; banco removido")
+    try:
+        sementes = carregador("carregar_sementes").carregar(banco)
+    except SystemExit as e:
+        sql(None, None, "-e", f"DROP DATABASE {banco}")
+        raise Recusa("sementes-falharam", f"{e}; banco removido")
     tabelas = sql(None, None, "-N", "-e", f"select count(*) from information_schema.tables where table_schema={q(banco)}").stdout.strip()
     versao = sorted(p.parent.name + "/" + p.name for p in MIG.glob("*/*_chaves.sql"))[-1]
     agora = "UTC_TIMESTAMP(3)"
     adm = str(int(admin)) if admin is not None else "NULL"
-    detalhe = {'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'], 'origem': origem}
+    detalhe = {'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'],
+               'sementes': sementes['sementes'], 'origem': origem}
     r = sql(PLAT, f"""
 INSERT INTO cliente (codigo, nome, documento_cnpj, situacao, banco_nome, versao_migracao, origem_dados, criado_em, criado_por)
 VALUES ({q(codigo)}, {q(nome.strip())}, {q(cnpj) if cnpj else 'NULL'}, 'implantacao', {q(banco)}, {q(versao)}, {q(origem)}, {agora}, {adm});
@@ -120,7 +127,7 @@ VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps(detalhe))}, {agora}, {adm}, {a
         sql(None, None, "-e", f"DROP DATABASE {banco}")
         raise Recusa("registro-falhou", f"registro na plataforma falhou: {r.stderr[:400]}")
     return {"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "acoes_sistema": acoes["ativas"],
-            "origem": origem, "versao_migracao": versao,
+            "sementes": sementes["sementes"], "origem": origem, "versao_migracao": versao,
             "proximo_passo": "catalogos/carregar.py " + codigo + (" e conector" if origem == "conector_spdata" else "")}
 
 

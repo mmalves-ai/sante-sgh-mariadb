@@ -1,0 +1,293 @@
+{
+ "nivel_prioridade": [
+  {
+   "codigo": "vermelho",
+   "descricao": "Emergência",
+   "nome_cor": "Vermelho",
+   "cor_hexadecimal": "#D32F2F",
+   "contexto": "classificacao_risco",
+   "ordem": 1
+  },
+  {
+   "codigo": "laranja",
+   "descricao": "Muito urgente",
+   "nome_cor": "Laranja",
+   "cor_hexadecimal": "#F57C00",
+   "contexto": "classificacao_risco",
+   "ordem": 2
+  },
+  {
+   "codigo": "amarelo",
+   "descricao": "Urgente",
+   "nome_cor": "Amarelo",
+   "cor_hexadecimal": "#FBC02D",
+   "contexto": "classificacao_risco",
+   "ordem": 3
+  },
+  {
+   "codigo": "verde",
+   "descricao": "Pouco urgente",
+   "nome_cor": "Verde",
+   "cor_hexadecimal": "#388E3C",
+   "contexto": "classificacao_risco",
+   "ordem": 4
+  },
+  {
+   "codigo": "azul",
+   "descricao": "Não urgente",
+   "nome_cor": "Azul",
+   "cor_hexadecimal": "#1976D2",
+   "contexto": "classificacao_risco",
+   "ordem": 5
+  }
+ ],
+ "parametro_vital": [
+  {
+   "codigo": "pressao_sistolica",
+   "descricao": "Pressão arterial sistólica",
+   "sigla": "PAS",
+   "tipo": "sinal_vital",
+   "unidade": "mmHg",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 300,
+   "ordem": 1
+  },
+  {
+   "codigo": "pressao_diastolica",
+   "descricao": "Pressão arterial diastólica",
+   "sigla": "PAD",
+   "tipo": "sinal_vital",
+   "unidade": "mmHg",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 250,
+   "ordem": 2
+  },
+  {
+   "codigo": "frequencia_cardiaca",
+   "descricao": "Frequência cardíaca",
+   "sigla": "FC",
+   "tipo": "sinal_vital",
+   "unidade": "bpm",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 300,
+   "ordem": 3
+  },
+  {
+   "codigo": "frequencia_respiratoria",
+   "descricao": "Frequência respiratória",
+   "sigla": "FR",
+   "tipo": "sinal_vital",
+   "unidade": "irpm",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 100,
+   "ordem": 4
+  },
+  {
+   "codigo": "temperatura",
+   "descricao": "Temperatura",
+   "sigla": "T",
+   "tipo": "sinal_vital",
+   "unidade": "°C",
+   "casas_decimais": 1,
+   "valor_minimo": 25,
+   "valor_maximo": 45,
+   "ordem": 5
+  },
+  {
+   "codigo": "saturacao_oxigenio",
+   "descricao": "Saturação de oxigênio",
+   "sigla": "SpO2",
+   "tipo": "sinal_vital",
+   "unidade": "%",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 100,
+   "ordem": 6
+  },
+  {
+   "codigo": "glicemia_capilar",
+   "descricao": "Glicemia capilar",
+   "sigla": "HGT",
+   "tipo": "controle",
+   "unidade": "mg/dL",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 1000,
+   "ordem": 7
+  },
+  {
+   "codigo": "glicemia",
+   "descricao": "Glicemia",
+   "sigla": "GLIC",
+   "tipo": "controle",
+   "unidade": "mg/dL",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 1000,
+   "ordem": 8
+  },
+  {
+   "codigo": "escala_dor",
+   "descricao": "Escala de dor (0 a 10)",
+   "sigla": "DOR",
+   "tipo": "sinal_vital",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 10,
+   "ordem": 9
+  },
+  {
+   "codigo": "escala_glasgow",
+   "descricao": "Escala de coma de Glasgow",
+   "sigla": "ECG",
+   "tipo": "sinal_vital",
+   "casas_decimais": 0,
+   "valor_minimo": 3,
+   "valor_maximo": 15,
+   "ordem": 10
+  },
+  {
+   "codigo": "peso",
+   "descricao": "Peso",
+   "sigla": "PESO",
+   "tipo": "antropometrico",
+   "unidade": "kg",
+   "casas_decimais": 3,
+   "valor_minimo": 0,
+   "valor_maximo": 500,
+   "ordem": 11
+  },
+  {
+   "codigo": "altura",
+   "descricao": "Altura",
+   "sigla": "ALT",
+   "tipo": "antropometrico",
+   "unidade": "cm",
+   "casas_decimais": 1,
+   "valor_minimo": 0,
+   "valor_maximo": 250,
+   "ordem": 12
+  },
+  {
+   "codigo": "diurese",
+   "descricao": "Diurese",
+   "sigla": "DIU",
+   "tipo": "controle",
+   "unidade": "mL",
+   "casas_decimais": 0,
+   "valor_minimo": 0,
+   "valor_maximo": 10000,
+   "ordem": 13
+  }
+ ],
+ "motivo_reclassificacao": [
+  {
+   "codigo": "tempo_alvo_vencido",
+   "descricao": "Tempo-alvo vencido",
+   "tipo": "tempo_alvo_vencido",
+   "exige_complemento": false
+  },
+  {
+   "codigo": "piora_clinica",
+   "descricao": "Piora clínica",
+   "tipo": "piora_clinica",
+   "exige_complemento": false
+  },
+  {
+   "codigo": "novo_sinal_vital",
+   "descricao": "Novo sinal vital",
+   "tipo": "novo_sinal_vital",
+   "exige_complemento": false
+  },
+  {
+   "codigo": "erro_registro",
+   "descricao": "Erro de registro",
+   "tipo": "erro_registro",
+   "exige_complemento": false
+  },
+  {
+   "codigo": "outro",
+   "descricao": "Outro",
+   "tipo": "outro",
+   "exige_complemento": true
+  }
+ ],
+ "situacao_checagem": [
+  {
+   "codigo": "pendente",
+   "descricao": "Pendente",
+   "categoria": "pendente",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": false,
+   "conta_como_realizado": false,
+   "ordem": 1
+  },
+  {
+   "codigo": "administrado",
+   "descricao": "Administrado",
+   "categoria": "administrado",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": false,
+   "conta_como_realizado": true,
+   "ordem": 2
+  },
+  {
+   "codigo": "administrado_parcial",
+   "descricao": "Administrado parcialmente",
+   "categoria": "administrado_parcial",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": true,
+   "conta_como_realizado": true,
+   "ordem": 3
+  },
+  {
+   "codigo": "atrasado",
+   "descricao": "Atrasado",
+   "categoria": "atrasado",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": false,
+   "conta_como_realizado": false,
+   "ordem": 4
+  },
+  {
+   "codigo": "nao_administrado",
+   "descricao": "Não administrado",
+   "categoria": "nao_administrado",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": true,
+   "conta_como_realizado": false,
+   "ordem": 5
+  },
+  {
+   "codigo": "adiado",
+   "descricao": "Adiado",
+   "categoria": "adiado",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": true,
+   "conta_como_realizado": false,
+   "ordem": 6
+  },
+  {
+   "codigo": "suspenso",
+   "descricao": "Suspenso",
+   "categoria": "suspenso",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": true,
+   "conta_como_realizado": false,
+   "ordem": 7
+  },
+  {
+   "codigo": "recusado_paciente",
+   "descricao": "Recusado pelo paciente",
+   "categoria": "recusado_paciente",
+   "processo_enfermagem": "administracao",
+   "exige_motivo": true,
+   "conta_como_realizado": false,
+   "ordem": 8
+  }
+ ]
+}

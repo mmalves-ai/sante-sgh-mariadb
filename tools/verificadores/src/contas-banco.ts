@@ -17,7 +17,9 @@ const raiz = resolve(import.meta.dirname, '../../..');
 const argv = process.argv.slice(2);
 const { bandeiras } = lerArgumentos(argv);
 if (bandeiras.has('relatorio'))
-  console.error('--relatorio: retirado (era o relatório das contas do banco de origem; ADR 0003). Use --gravar.');
+  console.error(
+    '--relatorio: retirado (era o relatório das contas do banco de origem; ADR 0003). Use --gravar.',
+  );
 const env = ambienteDoRepositorio();
 const cliente = clienteDaLeitura(argv, { ...process.env, ...env });
 if (!cliente) {
@@ -40,19 +42,29 @@ try {
     origem: 'banco de dev (information_schema, leitura)',
     contaDaAplicacao: {
       rotulo: '(aplicacao)',
-      privilegios: daAplicacao.map((p) => ({ nivel: p.nivel, alvo: p.alvo, privilegio: p.privilegio, repassa: p.repassa })),
+      privilegios: daAplicacao.map((p) => ({
+        nivel: p.nivel,
+        alvo: p.alvo,
+        privilegio: p.privilegio,
+        repassa: p.repassa,
+      })),
     },
     demaisContasVisiveis: faixaContagem(outras.size),
     desvios,
   };
   for (const p of retrato.contaDaAplicacao.privilegios)
-    console.log(`(aplicacao) ${p.nivel.padEnd(7)} ${p.alvo.padEnd(40)} ${p.privilegio}${p.repassa ? ' +repasse' : ''}`);
+    console.log(
+      `(aplicacao) ${p.nivel.padEnd(7)} ${p.alvo.padEnd(40)} ${p.privilegio}${p.repassa ? ' +repasse' : ''}`,
+    );
   console.log(
     `resumo: ${daAplicacao.length} privilégio(s) da conta da aplicação; demais contas visíveis: ${String(retrato.demaisContasVisiveis)}; ` +
       `excesso ${desvios.excesso.length}; alertas ${desvios.alertas.length}`,
   );
   if (bandeiras.has('gravar')) {
-    writeFileSync(resolve(raiz, `tools/verificadores/dados/contas-banco.${cliente}.json`), `${JSON.stringify(retrato, null, 2)}\n`);
+    writeFileSync(
+      resolve(raiz, `tools/verificadores/dados/contas-banco.${cliente}.json`),
+      `${JSON.stringify(retrato, null, 2)}\n`,
+    );
     console.log(`retrato gravado: tools/verificadores/dados/contas-banco.${cliente}.json`);
   }
 } catch (e) {

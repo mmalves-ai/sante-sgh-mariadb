@@ -1,0 +1,71 @@
+{
+  "lote": "15-qualidade",
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "notificacao_agravo",
+      "colunas": [
+        "origem_gatilho VARCHAR(10) NOT NULL CHECK IN ('cid','exame','obito','manual')",
+        "chave_gatilho VARCHAR(120) NULL UNIQUE (estabelecimento_id, chave_gatilho)",
+        "exame_id BIGINT UNSIGNED NULL FK exame (item de exame que disparou)",
+        "periodicidade VARCHAR(10) NOT NULL CHECK IN ('imediata','semanal')",
+        "gatilho_em DATETIME(3) NOT NULL",
+        "modelo_ficha_agravo_id BIGINT UNSIGNED NULL (o agravo_notificavel da ficha)",
+        "autoridade VARCHAR(5) NULL CHECK IN ('sms','ses','ms')",
+        "canal VARCHAR(60) NULL",
+        "notificada_em DATETIME(3) NULL",
+        "recebido_por VARCHAR(120) NULL",
+        "observacao_notificacao VARCHAR(2000) NULL",
+        "motivo_descarte VARCHAR(40) NULL",
+        "justificativa_descarte VARCHAR(2000) NULL",
+        "encerrado_em DATETIME(3) NULL / encerrado_por BIGINT UNSIGNED NULL FK usuario",
+        "notificante_profissional_id passa a NULL (o caso aberto pelo gatilho automático não tem profissional; quem abre fica em criado_por)",
+        "CHECK: situacao 'descartada' exige motivo_descarte e justificativa_descarte; 'notificada' exige autoridade e notificada_em"
+      ],
+      "motivo": "O caso de agravo do contrato (CasoAgravoRegistrado: origem do gatilho, chave idempotente, exame, periodicidade, prazo, registro da notificação à autoridade e descarte justificado) não cabe em notificacao_agravo como está: faltam essas colunas e o notificante é obrigatório. Sem isso a porta própria da notificação compulsória não pode gravar nem ler casos."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "gatilho_exame_agravo (nova)",
+      "colunas": [
+        "id PK",
+        "estabelecimento_id FK",
+        "padrao VARCHAR(120) NOT NULL (texto/expressão do nome do exame)",
+        "exceto VARCHAR(120) NULL",
+        "codigo_cid10 VARCHAR(6) NOT NULL",
+        "ativo BOOLEAN NOT NULL DEFAULT TRUE",
+        "auditoria + versao + excluido_em",
+        "UNIQUE (estabelecimento_id, padrao, codigo_cid10) entre os não excluídos"
+      ],
+      "motivo": "GatilhoExameRegistrado (configurarGatilhoExame, gatilhosExame): o resultado reagente que abre o caso por CID não tem tabela no modelo."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "agravo_notificavel_cid",
+      "colunas": [
+        "periodicidade_notificacao_id já existe em agravo_notificavel: confirmar a carga versionada (semanal/imediata) no criar novo cliente"
+      ],
+      "motivo": "cidsNotificaveis devolve a periodicidade por CID; o cadastro precisa vir carregado (catálogo oficial do Ministério da Saúde, carregador versionado, regra 7)."
+    },
+    {
+      "tipo": "construcao",
+      "arquivo": "apps/api/src/modulos/qualidade/porta-ccih-propria.ts",
+      "motivo": "45 métodos ainda falham fechados (leituraPendente/modeloPendente). As tabelas existem no modelo (caso_infeccao, dispositivo_invasivo_paciente, liberacao_antimicrobiano, isolamento_paciente, observacao_higiene_maos, surto_infeccao, verificacao_bundle, fechamento_vigilancia_iras). Implementar a porta inteira com SQL próprio e teste de integração é trabalho de um lote de construção dedicado (estimado em 800 a 1.200 linhas mais o .int.spec), não de dívida."
+    },
+    {
+      "tipo": "construcao",
+      "arquivo": "apps/api/src/modulos/qualidade/porta-gestao-propria.ts",
+      "motivo": "46 métodos falham fechados. Tabelas existem (documento_qualidade e satélites, analise_critica_indicador, auditoria_interna, comissao_hospitalar, reuniao_comissao, risco_institucional, nao_conformidade_qualidade, manifestacao_ouvidoria, notificacao_iras_envio, sorteio_revisao_prontuario, revisao_prontuario, pendencia_prontuario). Mesmo caso: lote de construção dedicado, estimado em 1.000 a 1.400 linhas mais o .int.spec."
+    },
+    {
+      "tipo": "construcao",
+      "arquivo": "apps/api/src/modulos/qualidade/porta-propria.ts",
+      "motivo": "Etapa 2 da notificação (análise, plano de ação, queixa técnica, sugestão resolvida: analise_incidente, plano_acao_qualidade, acao_plano_qualidade, queixa_tecnica_produto, sugestao_notificacao_incidente com gatilho_notificacao_incidente) e 7 leituras de outros módulos (candidatos, painelAdesao, historicoRiscos, protocolosGerenciados, expostos, itens, nomesDosItens) que dependem das portas da enfermagem, farmácia, centro cirúrgico e suprimentos. Lote de construção dedicado."
+    },
+    {
+      "tipo": "observacao",
+      "arquivo": "apps/api/src/modulos/qualidade/apoio-propria.ts e seguranca.controller.ts",
+      "motivo": "O mecanismo modeloPendente/leituraPendente/ehLeituraPendente e o `indisponiveis` do painel só podem sair quando as três portas acima estiverem completas; removê-los antes trocaria a recusa por vazio (proibido pelo brief)."
+    }
+  ]
+}

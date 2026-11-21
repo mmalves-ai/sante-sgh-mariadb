@@ -1,6 +1,6 @@
 // Comunicação interna do M27 (ficha, seções 6 e 7; regras 6 a 8): mensagens entre usuários, perfis, setores e
 // unidades; comunicados com vigência e ciência obrigatória; a central de avisos (sino); as mensagens do sistema
-// anterior (só consulta, `TBMENSAG`, parada desde 2024); e o dicionário ortográfico pessoal (`TBDICIONARIO_TBUSERS`,
+// anterior (só consulta, parada desde 2024); e o dicionário ortográfico pessoal (por usuário,
 // o mesmo nos dois sistemas). Regra 7 (cap-08 §8.13): a mensagem não carrega dado clínico no texto; o paciente entra
 // só como link de contexto (o atendimento), que abre pela autorização normal; o conteúdo nunca vai para a trilha.
 import { z } from 'zod';
@@ -62,7 +62,7 @@ export const esquemaEnviarMensagem = z.object({
   texto: textoMensagem,
   destinos: z.array(esquemaDestinoMensagem).min(1, 'Escolha ao menos um destinatário.').max(20),
   cienciaObrigatoria: z.boolean().default(false),
-  /** Link de contexto: o atendimento (ATCABECATEND.ID); abre pela autorização normal do prontuário. */
+  /** Link de contexto: o atendimento (id); abre pela autorização normal do prontuário. */
   contextoAtendimento: z.number().int().positive().nullable().default(null),
 });
 export type EnviarMensagem = z.infer<typeof esquemaEnviarMensagem>;
@@ -188,7 +188,7 @@ export interface CaixaMensagens {
   readonly teto: number;
 }
 
-/** Mensagem do sistema anterior (TBMENSAG; só consulta; 98 linhas de 2020 a 2024 na cópia `pc`). */
+/** Mensagem do sistema anterior (só consulta; importada pelo conector). */
 export interface MensagemAnterior {
   readonly sequencia: number;
   readonly origem: string | null;
@@ -246,7 +246,7 @@ export const esquemaNovoAviso = z.object({
 });
 export type NovoAviso = z.infer<typeof esquemaNovoAviso>;
 
-// ── Dicionário ortográfico pessoal (TBDICIONARIO_TBUSERS) ────────────────────────────────────────────────────
+// ── Dicionário ortográfico pessoal (por usuário) ────────────────────────────────────────────────────
 
 /** Teto de palavras de um usuário (ficha, seção 4: 1.000 palavras). */
 export const TETO_DICIONARIO = 1000;

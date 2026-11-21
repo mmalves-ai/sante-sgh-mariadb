@@ -10,7 +10,7 @@ import { minutoLocal } from '../escala/tempo.js';
 export interface HorarioAej {
   readonly codigo: string;
   readonly duracaoMin: number;
-  /** `HHMM`. */
+  /** Hora em quatro dígitos, sem separador, como o leiaute do AEJ pede. */
   readonly entrada: string;
   readonly saida: string;
 }

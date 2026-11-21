@@ -113,7 +113,7 @@ export interface ItemInventarioDesligamento {
   readonly areaResponsavel: string;
   /** Contas técnicas do banco que o item usa (nomes de usuário Firebird do fornecedor; nenhuma é de pessoa). */
   readonly contas: readonly string[];
-  /** Tabelas do outro sistema que caracterizam o item (só para contagem e para o mapa do preparo). */
+  /** Os dados do outro sistema que caracterizam o item, pelo nome de negócio (o mapa do conector liga cada um à origem). */
   readonly tabelas: readonly string[];
   /** O substituto no novo; null quando não há (a área tem de aceitar perder). */
   readonly substituto: SubstitutoNoNovo | null;
@@ -132,7 +132,7 @@ export const INVENTARIO_DESLIGAMENTO: readonly ItemInventarioDesligamento[] = [
     tipo: 'aplicacao-estacao',
     areaResponsavel: 'coordenação da coexistência',
     contas: [],
-    tabelas: ['TBSGHCONEXAO'],
+    tabelas: ['conexões das estações'],
     substituto: { marco: 'M43', itemMenu: null, aConfirmar: false },
     fonte: 'cap-10 §10.13; cap-15 §15.3.5; ficha do M58, regras 2 e 3',
   },
@@ -141,7 +141,13 @@ export const INVENTARIO_DESLIGAMENTO: readonly ItemInventarioDesligamento[] = [
     tipo: 'servico',
     areaResponsavel: 'SADT',
     contas: ['RESULTADOWEB'],
-    tabelas: ['SILIBERACAOEXAME', 'SIWEBCADPERFIL', 'SIMODULO_SIWEBATOS', 'SIWEBPARLAUDO', 'SICADATE'],
+    tabelas: [
+      'liberação de exames no portal',
+      'perfis do portal de resultados',
+      'atos do portal de resultados',
+      'parâmetros do laudo no portal',
+      'atendimentos do portal de resultados',
+    ],
     substituto: {
       marco: 'M50',
       itemMenu: 'portais.portal-de-resultados-paciente-e-medico-externo',
@@ -154,7 +160,7 @@ export const INVENTARIO_DESLIGAMENTO: readonly ItemInventarioDesligamento[] = [
     tipo: 'painel',
     areaResponsavel: 'TI do hospital',
     contas: [],
-    tabelas: ['PNCONFIGPORTAL'],
+    tabelas: ['configuração dos painéis de TV'],
     substituto: {
       marco: 'M19',
       itemMenu: 'relatorios-e-bi.paineis-de-tv-e-central-de-comando',
@@ -167,7 +173,7 @@ export const INVENTARIO_DESLIGAMENTO: readonly ItemInventarioDesligamento[] = [
     tipo: 'tarefa-agendada',
     areaResponsavel: 'curador do catálogo de relatórios',
     contas: [],
-    tabelas: ['TBEDITREL_AGENDA', 'TBEDITREL_AGENDA_LOG'],
+    tabelas: ['agenda de envio de relatórios', 'histórico do envio de relatórios'],
     substituto: { marco: 'M34', itemMenu: 'relatorios-e-bi.envio-agendado-por-e-mail', aConfirmar: false },
     fonte: 'cap-07 §7.5 (o envio de origem não entrega desde 2020); ficha do M58, regra 2',
   },
@@ -176,7 +182,7 @@ export const INVENTARIO_DESLIGAMENTO: readonly ItemInventarioDesligamento[] = [
     tipo: 'aplicacao-estacao',
     areaResponsavel: 'curador do catálogo de relatórios',
     contas: [],
-    tabelas: ['TBEDITREL'],
+    tabelas: ['modelos do editor de relatórios'],
     substituto: {
       marco: 'M34',
       itemMenu: 'relatorios-e-bi.catalogo-de-relatorios-parametrizados',

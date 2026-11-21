@@ -1,5 +1,5 @@
 // Tipos de negócio do faturamento SUS próprio (M51): o que a porta lê e grava no banco do cliente, sem nada do sistema
-// de origem (sem S/N, hora HHMM, sentinela nem código antigo). Datas em ISO (AAAA-MM-DD), competência AAAAMM, ids
+// de origem (sem S/N, hora de quatro dígitos, sentinela nem código antigo). Datas em ISO (AAAA-MM-DD), competência AAAAMM, ids
 // numéricos do banco próprio, booleanos. O que só vai ao arquivo do gestor (nome, endereço, CNS) nunca vai à tela, à
 // trilha nem ao log.
 // Melhoria: os erros de gravação da porta são de negócio (ErroSus, ErroAih), com o código da recusa; a porta própria

@@ -1,7 +1,7 @@
 // SIGTAP por competência (ficha do M51, regra 2): toda crítica e todo valor usam a tabela da competência do atendimento,
-// nunca a vigente hoje. O legado guarda o procedimento atual em TBPROSUS (com COMP_INICIAL e COMP_FINAL), os
-// atributos de competências anteriores em HTPROSUS (ANO_MES_COMPETENCIA + ID_TBPROSUS) e os valores datados em
-// TBVLRSUS (DATA). O importador do M13 (`catalogo.importarSigtap`) é quem mantém as três.
+// nunca a vigente hoje. O catálogo guarda o procedimento atual (com a competência inicial e a final), os
+// atributos de competências anteriores num histórico por competência e os valores datados numa tabela de
+// valores por vigência. O importador do M13 (`catalogo.importarSigtap`) é quem mantém as três.
 import type { CompetenciaSus } from '@sgh/contratos';
 import { vigenteNaData } from '@sgh/contratos/regras-faturamento';
 import { intervaloDaCompetencia } from './competencia.js';
@@ -19,10 +19,10 @@ export interface AtributosSigtap {
   readonly complexidade: string | null;
 }
 
-/** O procedimento atual (TBPROSUS). */
+/** O procedimento atual. */
 export interface ProcedimentoSigtap {
   readonly id: number;
-  /** Código SIGTAP de 10 dígitos (TBPROSUS.CODSUS ou CODSUS10). */
+  /** Código SIGTAP de 10 dígitos. */
   readonly codigo: string;
   /** AAAAMM; 0 = sem limite. */
   readonly competenciaInicial: number;
@@ -30,13 +30,13 @@ export interface ProcedimentoSigtap {
   readonly atuais: AtributosSigtap;
 }
 
-/** Uma linha de HTPROSUS: os atributos como eram na competência. */
+/** Uma linha do histórico: os atributos como eram na competência. */
 export interface HistoricoSigtap {
   readonly competencia: number;
   readonly atributos: AtributosSigtap;
 }
 
-/** Uma linha de TBVLRSUS (valores em reais; DATA é o início da vigência). */
+/** Uma linha dos valores (em reais; a data é o início da vigência). */
 export interface ValorSigtap {
   readonly data: string;
   readonly servicoHospitalar: number;
@@ -59,8 +59,8 @@ export function limiteIdade(v: number | null | undefined): number | null {
 }
 
 /**
- * O limite de idade do outro sistema em meses. TBPROSUS.IDMIN/IDMAX e HTPROSUS.IDADE_MINIMA/MAXIMA guardam ANOS (na
- * cópia de 2026-10-24: maior IDMAX abaixo de 9999 = 110 e nenhum valor entre 131 e 9998; a SIGTAP oficial, em meses,
+ * O limite de idade do outro sistema em meses. As idades mínima e máxima do procedimento e do histórico guardam ANOS (na
+ * cópia de 2026-10-24: maior idade máxima abaixo de 9999 = 110 e nenhum valor entre 131 e 9998; a SIGTAP oficial, em meses,
  * teria valores até 1560). Decisão do preparo (POL-5): converter anos × 12; 9999 continua "sem limite".
  */
 export function idadeLegadoEmMeses(anos: number | null | undefined): number | null {
@@ -82,8 +82,8 @@ export function procedimentoVigenteNaCompetencia(p: ProcedimentoSigtap, c: Compe
 }
 
 /**
- * Os atributos que valiam na competência (regra 2). Linha de HTPROSUS com ANO_MES_COMPETENCIA = X é o retrato do
- * procedimento durante X. Decisão do preparo (POL-5): depois do último retrato vale o atual (TBPROSUS), porque o
+ * Os atributos que valiam na competência (regra 2). Linha do histórico com competência = X é o retrato do
+ * procedimento durante X. Decisão do preparo (POL-5): depois do último retrato vale o atual, porque o
  * importador só grava o retrato quando a competência muda; até o último retrato vale o maior retrato ≤ c; antes do
  * primeiro retrato, o primeiro (marcado "aproximado", que a crítica avisa). Retrato com competência 0 é ignorado.
  */

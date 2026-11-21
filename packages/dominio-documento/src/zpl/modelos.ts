@@ -52,7 +52,7 @@ export interface DadosPulseira {
   readonly nomeSocial?: string | null;
   /** AAAA-MM-DD */
   readonly nascimento: string;
-  /** RICADPAC.ID (paciente) e prontuário do legado. */
+  /** Id do paciente e número do prontuário. */
   readonly idPaciente: number;
   readonly prontuario: number;
   /** REG do atendimento. */

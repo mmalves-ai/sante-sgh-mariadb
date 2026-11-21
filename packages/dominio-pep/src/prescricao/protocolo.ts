@@ -15,7 +15,7 @@ export interface ProtocoloCadastro {
   readonly pesoMax: number | null;
   /** 'M', 'F' ou null (ambos). */
   readonly sexo: string | null;
-  /** Especialidades do protocolo (PRPROTGERALESP); vazio: qualquer especialidade. */
+  /** Especialidades do protocolo; vazio: qualquer especialidade. */
   readonly especialidades?: readonly number[];
 }
 

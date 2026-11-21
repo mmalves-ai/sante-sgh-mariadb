@@ -1,7 +1,7 @@
-// Entradas das operações só do novo da anestesia (ficha do M46, seção 5, "Operações só SGH_"; etapa 1):
+// Entradas das operações só do novo da anestesia (ficha do M46, seção 5, operações próprias do sistema; etapa 1):
 // cirurgia.registrarApa, cirurgia.registrarFichaAnestesica (lançamentos por parte, marcos, passagem e assinatura) e
-// cirurgia.registrarSrpa. Validadas na tela, na API e no executor (o mesmo Zod). O agendamento é CCAGENDA.ID; o
-// profissional é o ID de TBCBOPRO com o código do par (o mesmo do M18); o medicamento é o item de GEITENS.
+// cirurgia.registrarSrpa. Validadas na tela, na API e no executor (o mesmo Zod). O agendamento é o id do agendamento
+// cirúrgico; o profissional é o id do registro profissional (o mesmo do M18); o medicamento é o id do item do estoque.
 // Datas e horas locais AAAA-MM-DDTHH:mm (o servidor confere contra o relógio do banco).
 import { z } from 'zod';
 import { esquemaChaveAto, esquemaDataHoraLocal } from '../enfermagem/entradas.js';
@@ -58,7 +58,7 @@ export const esquemaJejum = z
 
 export const esquemaPlanoAnestesico = z
   .object({
-    /** Tipo de anestesia planejado (TBANESTESIA.COD; lido da tabela). */
+    /** Tipo de anestesia planejado (id do cadastro de tipos de anestesia; lido da tabela). */
     tipoAnestesia: smallint,
     tecnica: opcional(400),
     medicacaoPreAnestesica: opcional(400),
@@ -122,7 +122,7 @@ export const esquemaLancamentoMedicamento = z
   .object({
     parte: z.literal('medicamento'),
     momento,
-    /** Item do estoque (GEITENS.ID). */
+    /** Item do estoque (id). */
     item: id,
     dose: quantidade,
     unidade: livre(10).pipe(z.string().min(1)),
@@ -195,7 +195,7 @@ export const esquemaLancamentoEquipe = z
     parte: z.literal('equipe'),
     momento,
     profissional: esquemaProfissional,
-    /** Função na equipe (PRTIPO_PROFISSIONAL.ID; lida da tabela). */
+    /** Função na equipe (id do cadastro de funções da equipe cirúrgica; lida da tabela). */
     funcao: smallint,
   })
   .strict();
@@ -205,7 +205,7 @@ export const esquemaLancamentoProcedimento = z
   .object({
     parte: z.literal('procedimento'),
     momento,
-    /** TBPROENF.COD quando o procedimento está no cadastro; null = descrito. */
+    /** Id do procedimento quando ele está no cadastro; null = descrito. */
     codigo: id.nullable().default(null),
     descricao: livre(120).pipe(z.string().min(3, 'Descreva o procedimento.')),
     fim: momento.nullable().default(null),

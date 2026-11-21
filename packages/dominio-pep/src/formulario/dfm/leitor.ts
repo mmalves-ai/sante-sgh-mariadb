@@ -1,5 +1,5 @@
-// Leitor do formato texto do DFM do Delphi (cap-11 §11.1; ref 04 §3). O legado guarda cada componente
-// de formulário em PRFORMULCOMP.COMPONENTE como texto DFM (já decodificado do CP1252 pelo adaptador).
+// Leitor do formato texto do DFM do Delphi (cap-11 §11.1; ref 04 §3). O formulário de origem guarda cada
+// componente do layout do modelo como texto DFM (já decodificado do CP1252 pelo adaptador).
 // Gramática coberta: objetos `object|inherited|inline Nome: Classe [indice]` aninhados até `end`;
 // propriedades `Nome(.Sub)* = valor`; valores texto ('…' com '' e #NNN, concatenados por +), número,
 // identificador, conjunto [a, b], lista ( … ), binário { … } e coleção < item … end >.

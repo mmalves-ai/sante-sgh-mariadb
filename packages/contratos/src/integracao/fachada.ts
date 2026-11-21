@@ -30,7 +30,7 @@ export const AMBIENTE_TOKENS_FACHADA: Readonly<Record<EscopoTokenFachada, string
   auditoria: 'FACHADA_API_TOKEN_AUDITORIA',
 };
 
-/** O usuário de integração que assina toda escrita da Hal-AI (TBUSERS.NOME, sensível a maiúsculas; sem login). */
+/** O usuário de integração que assina toda escrita da Hal-AI (o nome do usuário, sensível a maiúsculas; sem login). */
 export const USUARIO_INTEGRACAO_FACHADA = 'hal-ai';
 
 /** O prefixo das rotas da fachada na API do Sante SGH (sem o `/api` global). */

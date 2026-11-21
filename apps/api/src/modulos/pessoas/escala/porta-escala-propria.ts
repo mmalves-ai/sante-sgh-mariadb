@@ -10,14 +10,13 @@
 // sem banco "sem resposta"; os instantes ficam em UTC no banco e voltam no fuso do estabelecimento; a publicação e o
 // cancelamento da escala ficam em publicacao_escala (número da publicação, motivo, usuário); o motivo do cancelamento
 // do acionamento fica na observação; as violações de restrição viram mensagens de negócio (409) antes do banco.
-// Pendências de modelo (pedidos em docs/obra/fatias/f22/saida/03-04.json): a cobertura mínima por turno e a
-// justificativa do furo na escala, o alerta do conselho, a Rede não conferida, o registro do conselho e a tolerância
+// Melhoria: a cobertura mínima por turno é coluna da escala (cobertura_minima_manha/tarde/noite), gravada na criação e
+// na alteração com a versão conferida; a publicação confere o furo contra ela.
+// Pendências de modelo (pedidos em docs/obra/fatias/f22/saida/03-04.json): o alerta do conselho, a Rede não conferida, o registro do conselho e a tolerância
 // de chegada no plantão, o prazo de chegada e o atendimento do acionamento, os detalhes do cálculo do dimensionamento,
 // o tempo parcial, a folga padrão e o acordo do regime, e o histórico de eventos da escala além da publicação. Até o
 // DDL, esses valores vão só na trilha da gravação (dados da linha) e voltam na leitura como nulo ou falso.
-// Operações indisponíveis até o DDL: gravar a cobertura mínima (criar escala com cobertura acima de zero e alterar a
-// cobertura respondem 409 `modelo-pendente`; a publicação avisa que a conferência de furo não foi feita) e o prazo de
-// chegada do acionamento (lido como nulo: o atraso fica "não calculável", sem alerta falso).
+// O prazo de chegada do acionamento é lido como nulo: o atraso fica "não calculável", sem alerta falso.
 // Melhoria: toda escrita passa por tx.incluir/alterar/excluir, linha a linha, com auditoria de coluna e versão (nada de
 // UPDATE ou DELETE em massa); as vigências de regime ficam contíguas (a inclusão retroativa termina na véspera da
 // seguinte, a anulação reabre a anterior e a mesma data reativa a linha anulada, por causa do UNIQUE).
@@ -170,6 +169,7 @@ const SQL_REGIME = `SELECT r.id, r.codigo, r.descricao, r.tipo_regime, r.jornada
   r.interjornada_minima_minutos, r.ativo, r.versao FROM regime_jornada r`;
 
 const SQL_ESCALA = `SELECT e.id, e.setor_funcional_id, s.nome AS setor, e.competencia, e.tipo, e.situacao, e.publicada_em,
+  e.cobertura_minima_manha, e.cobertura_minima_tarde, e.cobertura_minima_noite,
   up.login AS publicada_por, e.motivo_cancelamento, e.alterado_em, ua.login AS alterado_por_login, e.versao,
   (SELECT COUNT(*) FROM plantao p WHERE p.escala_id = e.id AND p.situacao = 'previsto' AND p.excluido_em IS NULL) AS plantoes,
   (SELECT pe.motivo FROM publicacao_escala pe WHERE pe.escala_id = e.id AND pe.acao = 'publicacao'
@@ -246,11 +246,12 @@ export const ACOES_ESCALA: Readonly<Record<string, AcaoGravacao>> = {
   },
 };
 
-/** Cobertura mínima sem coluna no modelo (pedido 03-04): a gravação recusa, sem fingir que gravou. */
-const MOTIVO_COBERTURA =
-  'A cobertura mínima por turno aguarda as colunas no modelo do banco (pedido de DDL do lote 03-04): por enquanto a escala é criada sem cobertura e a conferência de furo na publicação não é feita.';
-const coberturaPendente = () =>
-  new ErroOperacao(409, 'modelo-pendente', 'Cobertura mínima indisponível', MOTIVO_COBERTURA);
+/** A cobertura mínima por turno nas colunas da escala. */
+const colunasCobertura = (c: { readonly manha: number; readonly tarde: number; readonly noite: number }) => ({
+  cobertura_minima_manha: c.manha,
+  cobertura_minima_tarde: c.tarde,
+  cobertura_minima_noite: c.noite,
+});
 
 // ── Mapeamentos ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -302,8 +303,11 @@ function escalaDe(r: Linha, fuso: string): RegistroEscala {
     competencia: dataIso(r['competencia']).slice(0, 7),
     tipo: texto(r['tipo']),
     estado: situacao,
-    // Pendência de modelo: a cobertura mínima por turno (pedido 03-04).
-    cobertura: { manha: 0, tarde: 0, noite: 0 },
+    cobertura: {
+      manha: num(r['cobertura_minima_manha']),
+      tarde: num(r['cobertura_minima_tarde']),
+      noite: num(r['cobertura_minima_noite']),
+    },
     justificativaFuro: textoOuNulo(r['justificativa_furo']),
     publicadaEm: civilOuNulo(r['publicada_em'], fuso),
     publicadaPor: textoOuNulo(r['publicada_por']),
@@ -710,7 +714,6 @@ function gravadorSobre(
           'escala-existente',
           'Já existe escala deste tipo para a unidade, o setor e a competência.',
         );
-      if (s.cobertura.manha > 0 || s.cobertura.tarde > 0 || s.cobertura.noite > 0) throw coberturaPendente();
       const id = await tx.incluir('escala', {
         estabelecimento_id: est,
         setor_funcional_id: s.unidade,
@@ -719,11 +722,14 @@ function gravadorSobre(
         periodo_fim: ultimoDia(s.competencia),
         tipo: s.tipo,
         situacao: 'rascunho',
+        ...colunasCobertura(s.cobertura),
       });
       return id;
     },
-    async alterarCobertura() {
-      throw coberturaPendente();
+    async alterarCobertura(c) {
+      const e = await exigirEscala(c.id);
+      if (e.versao !== c.versao) throw erroConflitoVersao(['versao']);
+      await tx.alterar('escala', c.id, c.versao, colunasCobertura(c.cobertura));
     },
     async tocarEscala(t) {
       // A mudança num plantão sobe a versão da escala (quem a abriu antes relê): tx.alterar auditado, na versão lida.
@@ -1032,8 +1038,8 @@ function ultimoDia(competencia: string): string {
 
 export class PortaEscalaPropria implements PortaEscala {
   readonly destino = 'banco' as const;
-  /** A cobertura mínima por turno ainda não tem coluna no modelo (pedido 03-04): a publicação não confere furo. */
-  readonly coberturaRegistrada = false;
+  /** A cobertura mínima por turno fica nas colunas da escala: a publicação confere o furo. */
+  readonly coberturaRegistrada = true;
   private readonly executor: Executor;
 
   constructor(

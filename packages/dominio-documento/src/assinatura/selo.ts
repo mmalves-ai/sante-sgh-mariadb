@@ -58,8 +58,8 @@ export const destinoDoTipo = (tipo: string): DestinoDocumento =>
   SAI_DO_HOSPITAL.has(tipo) ? 'externo' : 'interno';
 
 /**
- * D-CONSELHO-49: a sigla do conselho do autor pelo OID de registro em conselho do certificado (TBOID.ID_TBCONSPROF →
- * TBCONSPROF.COD_CONSELHO_PROF): o primeiro OID do certificado (otherName do SubjectAltName) que o cadastro liga a um
+ * D-CONSELHO-49: a sigla do conselho do autor pelo OID de registro em conselho do certificado (OID ligado
+ * ao conselho profissional no cadastro): o primeiro OID do certificado (otherName do SubjectAltName) que o cadastro liga a um
  * conselho. Sem nenhum, null (vale a regra "qualquer conselho").
  */
 export function conselhoPeloCertificado(

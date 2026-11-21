@@ -11,7 +11,7 @@ import { RE_TEXTO_SEM_DADO_PESSOAL } from '../homologacao/homologacao.js';
 const codigoEstabelecimento = z.string().regex(/^[a-z][a-z0-9]{0,9}$/);
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'AAAA-MM-DD');
 const nomeOperacao = z.string().regex(/^[a-z]+\.[a-z][A-Za-z0-9]+$/);
-/** Login da tabela de usuários (TBUSERS.NOME, VARCHAR(31)). */
+/** Login do usuário no sistema de origem (texto de até 31 caracteres). */
 const login = z
   .string()
   .trim()
@@ -236,7 +236,7 @@ export const PERMISSOES_M43 = {
   dispositivoEditar: 'recepcao.dispositivo.editar',
 } as const;
 
-/** Grupos especiais da tabela de grupos (TBGRUUSU.NOME): usuário sem grupo e logins de TV (regras 4 e 5). */
+/** Grupos especiais de usuários do sistema de origem: usuário sem grupo e logins de TV (regras 4 e 5). */
 export const GRUPO_SEM_GRUPO = 'SEM GRUPO';
 export const GRUPO_PAINEIS = 'PAINEIS';
 

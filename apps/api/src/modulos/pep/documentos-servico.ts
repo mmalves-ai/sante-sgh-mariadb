@@ -107,7 +107,14 @@ import {
 import { linhasComMarcaTelemedicina } from '@sgh/dominio-atendimento';
 import { type ConteudoPep, type ModeloPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import { type ContextoGravacaoPep, type DocumentoHistoricoLido, type DocumentoProprioLido, type EpisodioLido, SITUACAO_DOC, TIPO_ATO } from './tipos-pep.js';
+import {
+  type ContextoGravacaoPep,
+  type DocumentoHistoricoLido,
+  type DocumentoProprioLido,
+  type EpisodioLido,
+  SITUACAO_DOC,
+  TIPO_ATO,
+} from './tipos-pep.js';
 import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ErroProblema } from '../../problema.filter.js';
@@ -124,17 +131,19 @@ const RECEITA_SGH = {
 } as const;
 
 /** Origem do documento do novo (tabela de origem) → tipo do documento aberto na tela. */
-export function tipoAbertoDaOrigem(d: Pick<DocumentoProprioLido, 'origemTabela' | 'tipo'>): TipoDocumentoAberto {
+export function tipoAbertoDaOrigem(
+  d: Pick<DocumentoProprioLido, 'origemTabela' | 'tipo'>,
+): TipoDocumentoAberto {
   switch (d.origemTabela) {
-    case 'PRRECEITA':
+    case 'receita_medica':
       return 'receita';
-    case 'PRATESTREQIMP':
+    case 'documento_emitido':
       return d.tipo === 'sumario-alta' ? 'sumario-alta' : 'atestado';
-    case 'PREXAMEASSINATURA':
+    case 'requisicao_exame':
       return 'pedido-exame';
-    case 'PRLANCAMENTOEXAME':
+    case 'exame_lancado_prontuario':
       return 'exame-externo';
-    case 'PRGEDIMP':
+    case 'anexo_prontuario':
       return 'anexo';
     case 'SGH_PEP_TCLE':
       return 'tcle';
@@ -514,8 +523,10 @@ export class ServicoDocumentos {
       this.porta.alergias(c, paciente),
       this.porta.documentosSgh(c, paciente),
     ]);
-    // "Nega alergias" no novo: o documento de alergia sem linha no legado (origem própria; PRCABEVOL nas antigas).
-    const negas = docs.filter((d) => d.tipo === 'alergia' && d.origemTabela !== 'PRALERGIAPAC' && d.criadoEm);
+    // "Nega alergias" no novo: o documento de alergia sem linha no legado (origem própria; o registro clínico nas antigas).
+    const negas = docs.filter(
+      (d) => d.tipo === 'alergia' && d.origemTabela !== 'alergia_paciente' && d.criadoEm,
+    );
     const situacao = situacaoDasAlergias(
       als.map((a) => ({
         id: a.id,
@@ -767,7 +778,7 @@ export class ServicoDocumentos {
         doc: this.documentoHistorico(
           tipo,
           d,
-          await this.provaDe(c, tipo === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP', id),
+          await this.provaDe(c, tipo === 'receita' ? 'receita_medica' : 'documento_emitido', id),
         ),
         autor: categoriaDoCbo(d.cbo),
       };
@@ -776,14 +787,14 @@ export class ServicoDocumentos {
       const d = await this.porta.lerExameExterno(c, id);
       if (!d || d.paciente !== paciente) throw nao();
       return {
-        doc: this.documentoHistorico(tipo, d, await this.provaDe(c, 'PRLANCAMENTOEXAME', id)),
+        doc: this.documentoHistorico(tipo, d, await this.provaDe(c, 'exame_lancado_prontuario', id)),
         autor: categoriaDoCbo(d.cbo),
       };
     }
     if (tipo === 'anexo') {
       const a = (await this.porta.anexos(c, paciente)).find((x) => x.id === id);
       if (!a) throw nao();
-      const p = await this.provaDe(c, 'PRGEDIMP', id);
+      const p = await this.provaDe(c, 'anexo_prontuario', id);
       const doc: DocumentoAberto = {
         tipo,
         id,
@@ -805,7 +816,7 @@ export class ServicoDocumentos {
     if (tipo === 'pedido-exame') {
       const ps = (await this.porta.pedidos(c, paciente)).filter((x) => x.agrupamento === id || x.id === id);
       if (ps.length === 0) throw nao();
-      const p = await this.provaDe(c, 'PREXAMEASSINATURA', ps[0]!.agrupamento ?? id);
+      const p = await this.provaDe(c, 'requisicao_exame', ps[0]!.agrupamento ?? id);
       const doc: DocumentoAberto = {
         tipo,
         id,
@@ -877,7 +888,7 @@ export class ServicoDocumentos {
       this.atendimentos(c, paciente),
       this.porta.documentosSgh(c, paciente).catch(() => []),
     ]);
-    const doNovo = new Set(docs.filter((d) => d.origemTabela === 'PRALERGIAPAC').map((d) => d.origemId));
+    const doNovo = new Set(docs.filter((d) => d.origemTabela === 'alergia_paciente').map((d) => d.origemId));
     const atual = ats.find((a) => a.aberto);
     const registros =
       atual && prof ? await this.porta.registrosParaAlergia(c, atual.id, prof.cbos).catch(() => []) : [];
@@ -1426,7 +1437,7 @@ export class ServicoDocumentos {
       this.porta.documentosSgh(c, paciente).catch(() => []),
       familia === 'atestado' ? this.modelosAtestado(c) : Promise.resolve([]),
     ]);
-    const tabela = familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP';
+    const tabela = familia === 'receita' ? 'receita_medica' : 'documento_emitido';
     const doNovo = new Map(sgh.filter((d) => d.origemTabela === tabela).map((d) => [d.origemId, d]));
     const documentos: DocumentoResumo[] = ds.map((d) => {
       const n = doNovo.get(d.id);

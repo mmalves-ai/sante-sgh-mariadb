@@ -1,6 +1,6 @@
 // Contrato da liberação da onda 3 (ficha do M41, campos 5, 9, 10 e 12): operações da ficha × catálogo de operações e
 // arquivos de assinatura, a ordem dos setores, os itens do critério e os esquemas das consultas.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -20,13 +20,11 @@ import {
 } from './onda3.js';
 
 const raiz = resolve(import.meta.dirname, '../../../..');
-// W0-01: o catálogo é a pasta docs/operacoes/catalogo/ (um arquivo por prefixo); o texto junto basta aqui.
-const pastaCatalogo = resolve(raiz, 'docs/operacoes/catalogo');
-const catalogo = readdirSync(pastaCatalogo)
-  .filter((f) => f.endsWith('.yaml'))
-  .map((f) => readFileSync(resolve(pastaCatalogo, f), 'utf8'))
-  .join('\n');
-const assinaturas = resolve(raiz, 'packages/legado/src/suprimentos/assinaturas');
+// ADR 0003: o catálogo de liberação é o das operações que o produto declara (@sgh/dominio-config, catalogo-operacoes),
+// que aceita só o nome `modulo.operacao` e deixa fora os eventos de convivência (sufixo Legado). As capturas de
+// assinatura trazidas do modelo base ficam em referencias/ (uso interno).
+const NOME_OPERACAO_CATALOGO = /^[a-z][a-zA-Z0-9]*\.[a-z][a-zA-Z0-9]*$/;
+const assinaturas = resolve(raiz, 'referencias/assinaturas-legado/suprimentos');
 
 describe('onda 3: ordem e setores (campo 12)', () => {
   it('a ordem é a do contrato da onda, um setor por passo, todos no catálogo de prontidão na onda 3', () => {
@@ -41,8 +39,11 @@ describe('onda 3: ordem e setores (campo 12)', () => {
 });
 
 describe('onda 3: operações da ficha (campos 5 e 9)', () => {
-  it('cada nome do catálogo existe no catálogo de operações; P1 e P2 batem com os setores do contrato', () => {
-    for (const nome of OPERACOES_CATALOGO_ONDA_3) expect(catalogo).toContain(`- nome: ${nome}\n`);
+  it('cada nome do catálogo entra no catálogo de operações do produto; P1 e P2 batem com os setores do contrato', () => {
+    for (const nome of OPERACOES_CATALOGO_ONDA_3) {
+      expect(nome).toMatch(NOME_OPERACAO_CATALOGO);
+      expect(nome).not.toMatch(/Legado$/);
+    }
     for (const o of OPERACOES_FICHA_ONDA_3)
       for (const s of o.setores) {
         const def = SETORES_ONDA3.find((x) => x.id === s)!;

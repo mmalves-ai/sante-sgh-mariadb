@@ -11,6 +11,8 @@ export type OperacaoSituacao = (typeof OPERACOES_SITUACAO)[number];
 const ORIGEM = { suspender: 'A', reativar: 'I' } as const;
 const ALVO = { suspender: 'I', reativar: 'A' } as const;
 const ROTULO: Readonly<Record<string, string>> = { A: 'ativo', I: 'suspenso' };
+/** O código do contrato da fachada → o valor que a coluna `situacao` da fonte pagadora guarda de fato. */
+const NA_COLUNA: Readonly<Record<string, string>> = { A: 'ativa', I: 'suspensa' };
 
 export const MOTIVOS_SITUACAO = {
   jaNoAlvo: 'ja_esta_no_estado_pedido',
@@ -65,7 +67,7 @@ export function lerCorpoSituacao(corpo: unknown): { cod: number; operacao: Opera
   return { cod: smallint(n, 'convenio'), operacao: op as OperacaoSituacao };
 }
 
-/** A pré-checagem do gatilho de TBCONVEN: diária apontada que não é TIPO 1/SUBTIPO 5 recusa qualquer alteração. */
+/** A pré-checagem do cadastro do convênio: diária apontada que não é TIPO 1/SUBTIPO 5 recusa qualquer alteração. */
 export function conferirDiaria(cod: number, nome: string | null, d: DiariaAcompanhante): void {
   // Como no PSQL do gatilho (`tipo <> 1 or subtipo <> 5`): valor nulo não dispara a recusa.
   if (!d || ((d.tipo === null || d.tipo === 1) && (d.subtipo === null || d.subtipo === 5))) return;
@@ -181,11 +183,12 @@ export function prepararSituacao(
     convenio: { codigo: cod, nome, situacaoAtual: atual, situacaoDepois: alvo },
     operacao,
     efeito: {
-      tabela: 'TBCONVEN',
-      coluna: 'SITUACAO',
-      antes: `${atual} (${ROTULO[atual]})`,
-      depois: `${alvo} (${ROTULO[alvo]})`,
-      observacao: 'Uma linha, uma coluna, um caractere. Nenhuma exclusão é exposta nesta tabela.',
+      tabela: 'fonte_pagadora_estabelecimento',
+      coluna: 'situacao',
+      antes: NA_COLUNA[origem],
+      depois: NA_COLUNA[alvo],
+      observacao:
+        'Uma linha, uma coluna: a situação do vínculo do convênio com o estabelecimento. Nenhuma exclusão é exposta.',
     },
     impacto: {
       agendasDeConsultaQueAceitamOConvenio: retrato.agendasConsulta,
@@ -232,7 +235,12 @@ export function resultadoSituacao(
     operacao: p.operacao,
     situacaoAnterior: p.origem,
     situacaoAtual: situacaoRelida,
-    efeito: { tabela: 'TBCONVEN', coluna: 'SITUACAO' },
+    efeito: {
+      tabela: 'fonte_pagadora_estabelecimento',
+      coluna: 'situacao',
+      antes: NA_COLUNA[p.origem] ?? p.origem,
+      depois: NA_COLUNA[alvo],
+    },
     reversao: p.reversao,
     aviso:
       p.operacao === 'suspender'

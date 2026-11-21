@@ -1,6 +1,6 @@
 // Permissões da contabilidade, etapa 1 (M54-F1; ficha, seção 7; convencoes.md §12): plano de contas e plano
 // referencial, publicação da regra de contabilização versionada e o acompanhamento da leitura dos fatos. Quem tem a
-// opção no outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (catalogo-legado.json, pc;
+// opção no outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (catalogo-legado.json, pc;
 // no pc só o grupo MASTER tem as opções do módulo Contabilidade, conferido em acesso-legado.pc.json em 24/10/2026):
 //   - Contabilidade 3; Tabelas 12 (Parâmetros 13, Empresas 14, Histórico padrão 15, Plano de contas 4297, Plano de
 //     contas referencial 4312 com Manutenção 4313, Contas 4314, Referências 4315, Plano referencial x próprio 4316);

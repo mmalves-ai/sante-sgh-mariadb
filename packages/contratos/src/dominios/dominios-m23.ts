@@ -1,7 +1,7 @@
 // Cadastros de dieta do M23 (ficha, seção 7 e regra 16: "Multiprofissional > Nutrição clínica > Dietas,
 // características e horários de refeição" e "Hotelaria e apoio > Serviço de nutrição e dietética > Dietas e tipos de
 // dieta") no CRUD genérico (M08). A regra da dieta única por paciente é da prescrição (M24); aqui, os cadastros.
-// Opções do legado (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json): as da nutrição do PEP
+// Opções do legado (menu de origem, ver conector/mapa/permissoes.tsv): as da nutrição do PEP
 // (consultar 2675, 5926, 2654, 5925; incluir, alterar e excluir 4656, 5927, 4658, 4657, 5362, 2657) e a de
 // Tabelas › Dietas (3677) na hotelaria.
 import type { DominioPublico } from './tipos.js';

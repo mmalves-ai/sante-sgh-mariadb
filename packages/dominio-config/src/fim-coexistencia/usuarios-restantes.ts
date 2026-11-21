@@ -17,9 +17,9 @@ import {
 export interface UsuarioLido {
   readonly login: string;
   readonly grupo: string | null;
-  /** TBUSERS.STATUS ('T' ativo). */
+  /** Situação do usuário ('T' ativo). */
   readonly status: string | null;
-  /** TBUSERS.BLOQUEADO ('T' bloqueado; 'F' ou nulo, livre). */
+  /** Bloqueio do usuário ('T' bloqueado; 'F' ou nulo, livre). */
   readonly bloqueado: string | null;
 }
 

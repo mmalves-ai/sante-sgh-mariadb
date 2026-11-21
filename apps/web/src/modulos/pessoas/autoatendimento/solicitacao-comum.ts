@@ -1,6 +1,6 @@
 // Comuns das solicitações do autoatendimento (W0-06, parte 6d): o formulário único da tela (um campo por dado de
-// qualquer tipo) vira a entrada do MESMO Zod do servidor; o motivo do diálogo é a observação do pedido. A hora do
-// SanteHora chega em HHMM e vira HH:MM no instante da marcação que faltou.
+// qualquer tipo) vira a entrada do MESMO Zod do servidor; o motivo do diálogo é a observação do pedido. A hora digitada
+// (com ou sem os dois-pontos) vira HH:MM pelo auxiliar comum dos contratos, no instante da marcação que faltou.
 import {
   esquemaDecidirSolicitacao,
   esquemaIncluirSolicitacao,
@@ -9,6 +9,7 @@ import {
   type SolicitacaoPessoaResposta,
   type TipoAjuste,
   type TipoSolicitacaoPessoaContrato,
+  lerHoraDigitada,
 } from '@sgh/contratos';
 
 export interface FormSolicitacao {
@@ -22,7 +23,7 @@ export interface FormSolicitacao {
   dia: string | null;
   ajuste: TipoAjuste;
   marcacao: number | null;
-  /** HHMM (SanteHora). */
+  /** Hora como o campo de hora a devolve (com ou sem os dois-pontos). */
   hora: string | null;
   valorNovo: string;
   emitidoEm: string | null;
@@ -52,10 +53,13 @@ export const formSolicitacaoVazio = (tipo: TipoSolicitacaoPessoaContrato = 'feri
   registroConselho: '',
 });
 
-/** HHMM ou HH:MM → HH:MM; null se não for hora válida. */
+/** Hora digitada (com ou sem os dois-pontos) → HH:MM; null se vazia ou inválida (o Zod do pedido recusa depois). */
 export function horaHhMm(h: string | null): string | null {
-  const m = /^([01]\d|2[0-3]):?([0-5]\d)$/.exec((h ?? '').trim());
-  return m ? `${m[1]}:${m[2]}` : null;
+  try {
+    return lerHoraDigitada(h ?? '');
+  } catch {
+    return null;
+  }
 }
 
 const inteiro = (s: string): number => (/^\d{1,3}$/.test(s.trim()) ? Number(s.trim()) : Number.NaN);

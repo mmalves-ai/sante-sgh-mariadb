@@ -15,8 +15,9 @@
 // com quem e quando (mede o prazo regulatório).
 // Melhoria: o encerramento do auditor com pedidos em análise redistribui na mesma transação, com a troca no histórico.
 // Os procedimentos TUSS e o CID-10 vêm do catálogo oficial (termo_terminologia); sem a carga, nenhum termo.
-// Pendente (pedido ao orquestrador): anexos da resposta do prestador pelo portal
-// (armazenamento de arquivos) e alteração do auditor (o nome e o conselho são do cadastro do profissional) respondem
+// A alteração do auditor troca a categoria ou o profissional (pela inscrição no conselho); o nome é do cadastro do
+// profissional.
+// Pendente (pedido ao orquestrador): anexos da resposta do prestador pelo portal (armazenamento de arquivos) respondem
 // 501 `modelo-pendente`.
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
@@ -572,6 +573,21 @@ export class PortaAutorizacaoOperadoraPropria
     const emAberto = (p: Linha, permitidas: readonly string[], codigo: string, msg: string) => {
       if (!permitidas.includes(txt(p['situacao']))) throw recusa(codigo, msg);
     };
+    // O profissional pela inscrição no conselho (o nome e o conselho são do cadastro do profissional).
+    const profissionalDoConselho = async (d: { conselho: string; numero: string; uf: string }) => {
+      const prof = await tx.uma(
+        `SELECT ic.profissional_id FROM inscricao_conselho ic
+           JOIN conselho_classe cc ON cc.id = ic.conselho_classe_id
+           JOIN unidade_federativa uf ON uf.id = ic.unidade_federativa_id
+          WHERE cc.sigla = ? AND ic.numero_inscricao = ? AND uf.sigla = ? AND ic.excluido_em IS NULL LIMIT 1`,
+        [d.conselho, d.numero, d.uf],
+      );
+      if (!prof)
+        throw recusa('profissional-nao-cadastrado', 'Cadastre o profissional (conselho, número e UF) antes de designá-lo.', {
+          campos: ['numero'],
+        });
+      return prof;
+    };
     return {
       proximoProtocolo: async () => (await tx.proximoNumero('protocolo_autorizacao')).valor,
       proximaSenha: async () => (await tx.proximoNumero('senha_autorizacao')).valor,
@@ -692,17 +708,7 @@ export class PortaAutorizacaoOperadoraPropria
       },
       async designar(d) {
         await exigirOperadora(tx, est, d.operadora);
-        const prof = await tx.uma(
-          `SELECT ic.profissional_id FROM inscricao_conselho ic
-             JOIN conselho_classe cc ON cc.id = ic.conselho_classe_id
-             JOIN unidade_federativa uf ON uf.id = ic.unidade_federativa_id
-            WHERE cc.sigla = ? AND ic.numero_inscricao = ? AND uf.sigla = ? AND ic.excluido_em IS NULL LIMIT 1`,
-          [d.conselho, d.numero, d.uf],
-        );
-        if (!prof)
-          throw recusa('profissional-nao-cadastrado', 'Cadastre o profissional (conselho, número e UF) antes de designá-lo.', {
-            campos: ['numero'],
-          });
+        const prof = await profissionalDoConselho(d);
         const usuario = await tx.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [d.login]);
         if (!usuario) throw recusa('usuario-inexistente', 'O usuário informado não existe.', { campos: ['login'] });
         const id = await tx.incluir('auditor_plano', {
@@ -755,7 +761,27 @@ export class PortaAutorizacaoOperadoraPropria
         });
         return { id: a.id, redistribuidos: para !== null ? pedidos.length : 0 };
       },
-      alterar: () => pendente('Alteração do auditor (nome e conselho são do cadastro do profissional)'),
+      // A designação ativa muda de categoria ou de profissional (pela inscrição no conselho); o nome é o do cadastro do
+      // profissional e muda lá, com as regras e a trilha dele.
+      async alterar(a) {
+        const aud = await versaoDe(tx, 'auditor_plano', a.id, 'O auditor');
+        await exigirOperadora(tx, est, num(aud['operadora_saude_id']));
+        if (txt(aud['situacao']) !== 'ativo' || num(aud['versao']) !== a.versao)
+          throw recusa(
+            'auditor-desatualizado',
+            'A designação mudou depois que você abriu (outra pessoa gravou). Abra de novo e confira.',
+          );
+        const prof = await profissionalDoConselho(a);
+        const versao = await tx.alterar('auditor_plano', a.id, a.versao, {
+          profissional_id: num(prof['profissional_id']),
+          categoria: a.categoria,
+        });
+        const pf = await tx.uma(
+          `SELECT pf.nome FROM profissional p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
+          [num(prof['profissional_id'])],
+        );
+        return { id: a.id, versao, nome: txt(pf?.['nome']) };
+      },
     };
   }
 }

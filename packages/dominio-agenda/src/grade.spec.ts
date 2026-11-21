@@ -14,7 +14,7 @@ import {
 } from './grade.js';
 
 const ctx = (x: Partial<ContextoGrade> = {}): ContextoGrade => ({
-  relogio: { hoje: '2026-10-21', hhmm: '0700' },
+  relogio: { hoje: '2026-10-21', hhmm: '07:00' },
   agendaAtiva: true,
   feriados: [],
   bloqueios: [],
@@ -43,61 +43,63 @@ describe('horários da faixa', () => {
   it('fim exclusivo: 08:00 a 12:00 com 15 min → 16 horários, o último 11:45', () => {
     const p = planejarGrade(pedido(), ctx());
     expect(p.horarios).toHaveLength(16);
-    expect(p.horarios.at(-1)).toEqual({ data: '2026-10-26', hora: '1145' });
-    expect(p.duracao).toBe('0015');
+    expect(p.horarios.at(-1)).toEqual({ data: '2026-10-26', hora: '11:45' });
+    expect(p.duracao).toBe('00:15');
     expect(p.semanas).toEqual(['F', 'T', 'F', 'F', 'F', 'F', 'F']);
   });
   it('intervalo: nenhum horário começa dentro dele; escala com o intervalo', () => {
     const p = planejarGrade(
       pedido({
         duracaoMinutos: 30,
-        faixas: [{ semana: 2, inicio: '0800', fim: '1400', intervaloInicio: '12:00', intervaloFim: '13:00' }],
+        faixas: [
+          { semana: 2, inicio: '08:00', fim: '14:00', intervaloInicio: '12:00', intervaloFim: '13:00' },
+        ],
       }),
       ctx(),
     );
     expect(p.horarios.map((h) => h.hora)).toEqual([
-      '0800',
-      '0830',
-      '0900',
-      '0930',
-      '1000',
-      '1030',
-      '1100',
-      '1130',
-      '1300',
-      '1330',
+      '08:00',
+      '08:30',
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
     ]);
     expect(p.escala).toEqual([
       {
         semana: 2,
-        duracao: '0030',
-        horaInicio: '0800',
-        horaFim: '1400',
-        intervaloInicio: '1200',
-        intervaloFim: '1300',
+        duracao: '00:30',
+        horaInicio: '08:00',
+        horaFim: '14:00',
+        intervaloInicio: '12:00',
+        intervaloFim: '13:00',
       },
     ]);
   });
   it('duração que não alinha: o atendimento termina dentro da faixa', () => {
     const p = planejarGrade(
-      pedido({ duracaoMinutos: 25, faixas: [{ semana: 2, inicio: '0800', fim: '0900' }] }),
+      pedido({ duracaoMinutos: 25, faixas: [{ semana: 2, inicio: '08:00', fim: '09:00' }] }),
       ctx(),
     );
-    expect(p.horarios.map((h) => h.hora)).toEqual(['0800', '0825']);
+    expect(p.horarios.map((h) => h.hora)).toEqual(['08:00', '08:25']);
   });
   it('duas faixas no dia (manhã e tarde), ordenadas', () => {
     const p = planejarGrade(
       pedido({
         duracaoMinutos: 60,
         faixas: [
-          { semana: 2, inicio: '1400', fim: '1600' },
-          { semana: 2, inicio: '0800', fim: '1000' },
+          { semana: 2, inicio: '14:00', fim: '16:00' },
+          { semana: 2, inicio: '08:00', fim: '10:00' },
         ],
       }),
       ctx(),
     );
-    expect(p.porDia[0]?.horarios).toEqual(['0800', '0900', '1400', '1500']);
-    expect(p.escala.map((e) => e.horaInicio)).toEqual(['0800', '1400']);
+    expect(p.porDia[0]?.horarios).toEqual(['08:00', '09:00', '14:00', '15:00']);
+    expect(p.escala.map((e) => e.horaInicio)).toEqual(['08:00', '14:00']);
   });
 });
 
@@ -105,13 +107,13 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
   it('feriado fixo (ano 9999) pulado; datado também; incluirFeriados gera com alerta', () => {
     const feriados = [{ data: '9999-10-26', nome: 'FERIADO FIXO' }];
     const p = planejarGrade(
-      pedido({ ate: '2026-11-02', faixas: [{ semana: 2, inicio: '0800', fim: '0900' }] }),
+      pedido({ ate: '2026-11-02', faixas: [{ semana: 2, inicio: '08:00', fim: '09:00' }] }),
       ctx({ feriados }),
     );
     expect(p.pulados.feriados).toEqual([{ data: '2026-10-26', nome: 'FERIADO FIXO' }]);
     expect(p.horarios.every((h) => h.data === '2026-11-02')).toBe(true);
     const com = planejarGrade(
-      pedido({ incluirFeriados: true, faixas: [{ semana: 2, inicio: '0800', fim: '0900' }] }),
+      pedido({ incluirFeriados: true, faixas: [{ semana: 2, inicio: '08:00', fim: '09:00' }] }),
       ctx({ feriados: [{ data: '2026-10-26', nome: 'DATADO' }] }),
     );
     expect(com.horarios).toHaveLength(4);
@@ -124,7 +126,7 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
         de: '2027-05-27',
         ate: '2027-05-27',
         duracaoMinutos: 30,
-        faixas: [{ semana: 5, inicio: '0800', fim: '0900' }],
+        faixas: [{ semana: 5, inicio: '08:00', fim: '09:00' }],
       },
       ctx(),
     );
@@ -135,8 +137,8 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
     const p = planejarGrade(
       pedido({
         faixas: [
-          { semana: 2, inicio: '0800', fim: '0900' },
-          { semana: 3, inicio: '0800', fim: '0900' },
+          { semana: 2, inicio: '08:00', fim: '09:00' },
+          { semana: 3, inicio: '08:00', fim: '09:00' },
         ],
       }),
       ctx({
@@ -147,17 +149,17 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
       }),
     );
     expect(p.horarios).toEqual([
-      { data: '2026-10-27', hora: '0830' },
-      { data: '2026-10-27', hora: '0845' },
+      { data: '2026-10-27', hora: '08:30' },
+      { data: '2026-10-27', hora: '08:45' },
     ]);
     expect(p.pulados.bloqueados).toBe(6);
   });
   it('horário que já existe é pulado (a chave primária recusaria)', () => {
     const p = planejarGrade(
-      pedido({ faixas: [{ semana: 2, inicio: '0800', fim: '0900' }] }),
+      pedido({ faixas: [{ semana: 2, inicio: '08:00', fim: '09:00' }] }),
       ctx({ existentes: new Set(['2026-10-26 0800', '2026-10-26 0815']) }),
     );
-    expect(p.horarios.map((h) => h.hora)).toEqual(['0830', '0845']);
+    expect(p.horarios.map((h) => h.hora)).toEqual(['08:30', '08:45']);
     expect(p.pulados.existentes).toBe(2);
   });
   it('hoje só a partir de 1 hora à frente; os dias seguintes inteiros', () => {
@@ -166,11 +168,11 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
         de: '2026-10-21',
         ate: '2026-10-28',
         duracaoMinutos: 30,
-        faixas: [{ semana: 4, inicio: '0800', fim: '1200' }],
+        faixas: [{ semana: 4, inicio: '08:00', fim: '12:00' }],
       },
-      ctx({ relogio: { hoje: '2026-10-21', hhmm: '0945' } }),
+      ctx({ relogio: { hoje: '2026-10-21', hhmm: '09:45' } }),
     );
-    expect(p.porDia[0]).toEqual({ data: '2026-10-21', semana: 4, horarios: ['1100', '1130'] });
+    expect(p.porDia[0]).toEqual({ data: '2026-10-21', semana: 4, horarios: ['11:00', '11:30'] });
     expect(p.porDia[1]?.horarios).toHaveLength(8);
     expect(p.pulados.cortadosHoje).toHaveLength(6);
     expect(p.alertas.some((a) => a.codigo === 'corte-hoje')).toBe(true);
@@ -183,9 +185,9 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
         de: '2026-10-21',
         ate: '2026-10-28',
         duracaoMinutos: 30,
-        faixas: [{ semana: 4, inicio: '0800', fim: '2359' }],
+        faixas: [{ semana: 4, inicio: '08:00', fim: '23:59' }],
       },
-      ctx({ relogio: { hoje: '2026-10-21', hhmm: '2310' } }),
+      ctx({ relogio: { hoje: '2026-10-21', hhmm: '23:10' } }),
     );
     expect(p.porDia.find((d) => d.data === '2026-10-21')).toBeUndefined();
     expect(p.porDia.find((d) => d.data === '2026-10-28')?.horarios.length).toBeGreaterThan(0);
@@ -199,9 +201,9 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
             de: '2026-10-21',
             ate: '2026-10-21',
             duracaoMinutos: 30,
-            faixas: [{ semana: 4, inicio: '0800', fim: '1000' }],
+            faixas: [{ semana: 4, inicio: '08:00', fim: '10:00' }],
           },
-          ctx({ relogio: { hoje: '2026-10-21', hhmm: '0945' } }),
+          ctx({ relogio: { hoje: '2026-10-21', hhmm: '09:45' } }),
         );
         return null;
       } catch (e) {
@@ -227,14 +229,14 @@ describe('vetos', () => {
   });
   it('sábado e domingo não vistos no legado são recusados (parâmetro libera)', () => {
     expect(
-      veto(() => planejarGrade(pedido({ faixas: [{ semana: 7, inicio: '0800', fim: '0900' }] }), ctx())),
+      veto(() => planejarGrade(pedido({ faixas: [{ semana: 7, inicio: '08:00', fim: '09:00' }] }), ctx())),
     ).toBe('dia-nao-visto');
     const p = planejarGrade(
       {
         de: '2026-10-24',
         ate: '2026-10-24',
         duracaoMinutos: 30,
-        faixas: [{ semana: 7, inicio: '0800', fim: '0900' }],
+        faixas: [{ semana: 7, inicio: '08:00', fim: '09:00' }],
       },
       ctx({ semanasPermitidas: [7] }),
     );
@@ -243,24 +245,24 @@ describe('vetos', () => {
   it('faixas inválidas', () => {
     const f = (x: object) =>
       veto(() =>
-        planejarGrade(pedido({ faixas: [{ semana: 2, inicio: '0800', fim: '1200', ...x }] }), ctx()),
+        planejarGrade(pedido({ faixas: [{ semana: 2, inicio: '08:00', fim: '12:00', ...x }] }), ctx()),
       );
     expect(f({ semana: 8 })).toBe('faixa-invalida');
-    expect(f({ fim: '0700' })).toBe('faixa-invalida');
-    expect(f({ fim: '0810' })).toBe('faixa-invalida');
+    expect(f({ fim: '07:00' })).toBe('faixa-invalida');
+    expect(f({ fim: '08:10' })).toBe('faixa-invalida');
     expect(f({ inicio: '25:00' })).toBe('faixa-invalida');
-    expect(f({ intervaloInicio: '1000' })).toBe('faixa-invalida');
-    expect(f({ intervaloInicio: '1000', intervaloFim: '0900' })).toBe('faixa-invalida');
-    expect(f({ intervaloInicio: '0700', intervaloFim: '0900' })).toBe('faixa-invalida');
-    expect(f({ intervaloInicio: 'xx', intervaloFim: '0900' })).toBe('faixa-invalida');
+    expect(f({ intervaloInicio: '10:00' })).toBe('faixa-invalida');
+    expect(f({ intervaloInicio: '10:00', intervaloFim: '09:00' })).toBe('faixa-invalida');
+    expect(f({ intervaloInicio: '07:00', intervaloFim: '09:00' })).toBe('faixa-invalida');
+    expect(f({ intervaloInicio: 'xx', intervaloFim: '09:00' })).toBe('faixa-invalida');
     expect(veto(() => planejarGrade(pedido({ faixas: [] }), ctx()))).toBe('faixa-invalida');
     expect(
       veto(() =>
         planejarGrade(
           pedido({
             faixas: [
-              { semana: 2, inicio: '0800', fim: '1000' },
-              { semana: 2, inicio: '0900', fim: '1100' },
+              { semana: 2, inicio: '08:00', fim: '10:00' },
+              { semana: 2, inicio: '09:00', fim: '11:00' },
             ],
           }),
           ctx(),
@@ -272,7 +274,7 @@ describe('vetos', () => {
     expect(
       veto(() =>
         planejarGrade(
-          pedido({ faixas: [{ semana: 2, inicio: '0800', fim: '0815' }] }),
+          pedido({ faixas: [{ semana: 2, inicio: '08:00', fim: '08:15' }] }),
           ctx({ existentes: new Set(['2026-10-26 0800']) }),
         ),
       ),
@@ -280,7 +282,7 @@ describe('vetos', () => {
     expect(
       veto(() =>
         planejarGrade(
-          pedido({ faixas: [{ semana: 3, inicio: '0800', fim: '0815' }], ate: '2026-10-26' }),
+          pedido({ faixas: [{ semana: 3, inicio: '08:00', fim: '08:15' }], ate: '2026-10-26' }),
           ctx(),
         ),
       ),
@@ -315,50 +317,50 @@ describe('feriados móveis e modelo da escala', () => {
     const atual = [
       {
         semana: 2,
-        duracao: '0015',
-        horaInicio: '0800',
-        horaFim: '1100',
-        intervaloInicio: '0000',
-        intervaloFim: '0000',
+        duracao: '00:15',
+        horaInicio: '08:00',
+        horaFim: '11:00',
+        intervaloInicio: '00:00',
+        intervaloFim: '00:00',
       },
       {
         semana: 3,
-        duracao: '0015',
-        horaInicio: '0800',
-        horaFim: '1200',
-        intervaloInicio: '0000',
-        intervaloFim: '0000',
+        duracao: '00:15',
+        horaInicio: '08:00',
+        horaFim: '12:00',
+        intervaloInicio: '00:00',
+        intervaloFim: '00:00',
       },
     ];
     const alvo = [
       {
         semana: 2,
-        duracao: '0015',
-        horaInicio: '0800',
-        horaFim: '1200',
-        intervaloInicio: '0000',
-        intervaloFim: '0000',
+        duracao: '00:15',
+        horaInicio: '08:00',
+        horaFim: '12:00',
+        intervaloInicio: '00:00',
+        intervaloFim: '00:00',
       },
       {
         semana: 3,
-        duracao: '0015',
-        horaInicio: '0800',
-        horaFim: '1200',
-        intervaloInicio: '0000',
-        intervaloFim: '0000',
+        duracao: '00:15',
+        horaInicio: '08:00',
+        horaFim: '12:00',
+        intervaloInicio: '00:00',
+        intervaloFim: '00:00',
       },
       {
         semana: 4,
-        duracao: '0015',
-        horaInicio: '0800',
-        horaFim: '1200',
-        intervaloInicio: '0000',
-        intervaloFim: '0000',
+        duracao: '00:15',
+        horaInicio: '08:00',
+        horaFim: '12:00',
+        intervaloInicio: '00:00',
+        intervaloFim: '00:00',
       },
     ];
     const m = mudancasDaEscala(atual, alvo);
     expect(m.map((x) => x.acao)).toEqual(['alterar', 'manter', 'incluir']);
-    expect(m[0]?.anterior).toEqual({ horaFim: '1100', intervaloInicio: '0000', intervaloFim: '0000' });
+    expect(m[0]?.anterior).toEqual({ horaFim: '11:00', intervaloInicio: '00:00', intervaloFim: '00:00' });
     expect(m[2]?.anterior).toBeNull();
   });
   it('faixas a partir da escala ("0000" = sem intervalo)', () => {
@@ -366,24 +368,24 @@ describe('feriados móveis e modelo da escala', () => {
       faixasDaEscala([
         {
           semana: 2,
-          duracao: '0015',
-          horaInicio: '0800',
-          horaFim: '1200',
-          intervaloInicio: '0000',
-          intervaloFim: '0000',
+          duracao: '00:15',
+          horaInicio: '08:00',
+          horaFim: '12:00',
+          intervaloInicio: '00:00',
+          intervaloFim: '00:00',
         },
         {
           semana: 3,
-          duracao: '0015',
-          horaInicio: '0800',
-          horaFim: '1400',
-          intervaloInicio: '1200',
-          intervaloFim: '1300',
+          duracao: '00:15',
+          horaInicio: '08:00',
+          horaFim: '14:00',
+          intervaloInicio: '12:00',
+          intervaloFim: '13:00',
         },
       ]),
     ).toEqual([
-      { semana: 2, inicio: '0800', fim: '1200', intervaloInicio: null, intervaloFim: null },
-      { semana: 3, inicio: '0800', fim: '1400', intervaloInicio: '1200', intervaloFim: '1300' },
+      { semana: 2, inicio: '08:00', fim: '12:00', intervaloInicio: null, intervaloFim: null },
+      { semana: 3, inicio: '08:00', fim: '14:00', intervaloInicio: '12:00', intervaloFim: '13:00' },
     ]);
   });
 });

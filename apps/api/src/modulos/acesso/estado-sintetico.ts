@@ -122,7 +122,7 @@ export class EstadoAcessoSintetico {
   readonly excecoesDormencia: ExcecaoDormenciaLida[] = [];
   /** W1-01 (parte 11d): conferências do conselho, como a SGH_ACESSO_CONSELHO_CONFER (só inclusão). */
   readonly conferenciasConselho: ConferenciaConselhoLida[] = [];
-  /** W1-01 (parte 9b): última conexão (AAAA-MM-DD) por login, como a TBSGHCONEXAO; ausente = nunca entrou. */
+  /** W1-01 (parte 9b): última conexão (AAAA-MM-DD) por login, pelo registro de acesso; ausente = nunca entrou. */
   readonly ultimoAcesso = new Map<string, string>();
   /** W1-01 (parte 9c2): campanhas de recertificação, como a SGH_ 1206 (nada se apaga). */
   readonly recert = new RecertificacaoMemoria();
@@ -148,7 +148,7 @@ export class EstadoAcessoSintetico {
       const papeis = new Map<number, boolean>();
       for (const p of c.papeis ?? [4]) {
         papeis.set(p, true);
-        // As opções de papel das sementes ficam no papel especial (0 a 3), como em TBPAPEL_TBOPCOES.
+        // As opções de papel das sementes ficam no papel especial (0 a 3), como as permissões do papel de segurança.
         if (p !== 4) {
           const set = this.opcoesPapel.get(p) ?? new Set<number>();
           for (const o of c.opcoesPapel ?? []) set.add(o);

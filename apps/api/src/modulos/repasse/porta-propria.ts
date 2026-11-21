@@ -119,7 +119,7 @@ async function numeroDe(tx: TxOperacao, tipo: string, prefixo: string, est: numb
 }
 
 const SQL_REGRAS = `
-  SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
+  SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.profissional_id, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
          i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.local_atendimento_id,
          i.unidade_assistencial_id, i.centro_custo_id, i.cooperativa_medica_id, i.tipo_lancamento_id, i.escopo_conta,
          i.hora_inicio, i.hora_fim, i.percentual, i.valor_fixo, i.percentual_feriado, i.percentual_fim_semana,
@@ -135,8 +135,8 @@ function regraDe(r: Linha): RegraRepasse {
     id: n(r['id']),
     vigencia: dataIso(r['vigencia_inicio']) ?? '',
     beneficiario: texto(r['beneficiario']) === 'prestador' ? 'P' : 'M',
-    // A regra por profissional aguarda a coluna (pedido do lote); até lá a inclusão recusa a regra de um profissional.
-    profissional: null,
+    // Regra de um profissional (a dimensão mais forte); null: vale para todos.
+    profissional: nn(r['profissional_id']),
     prestador: null,
     convenio: nn(r['fonte_pagadora_id']),
     procedimentoInicial: cod(r['codigo_procedimento_inicial']),
@@ -600,10 +600,17 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
     case 'repasse.incluirRegra': {
       const v = await travar(tx, 'regra_repasse_versao', n(e['versao']), est);
       if (texto(v['situacao']) !== 'aprovada') throw recusa('versao-nao-aprovada', 'Só a versão aprovada é incluída.');
-      // A regra de um profissional (a dimensão mais forte) exige a coluna do profissional no item (pedido do lote):
-      // até lá, recusa em vez de gravar uma regra que valeria para todos os profissionais.
-      if (n(e['prestador']) > 0 || n(e['profissional']) > 0)
-        throw recusa('modelo-pendente', 'A regra de repasse por profissional ainda não pode ser incluída (aguarda o modelo).');
+      // A regra de um profissional (a dimensão mais forte): o prestador é o profissional (id). Os dois informados
+      // têm de ser o mesmo, e o profissional tem de existir; sem nenhum, a regra vale para todos.
+      const prof = n(e['profissional']) > 0 ? n(e['profissional']) : null;
+      const prest = n(e['prestador']) > 0 ? n(e['prestador']) : null;
+      if (prof !== null && prest !== null && prof !== prest)
+        throw recusa('profissional-divergente', 'O prestador e o profissional da regra não são o mesmo.');
+      const profissionalId = prof ?? prest;
+      if (profissionalId !== null) {
+        const pr = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [profissionalId]);
+        if (!pr) throw recusa('profissional-inexistente', 'O profissional da regra não existe.');
+      }
       await exigirEvento(tx, n(e['evento']), est);
       const regra = n(v['regra_repasse_id']);
       const rr = (
@@ -620,6 +627,7 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
       const zeroNulo = (x: unknown) => (n(x) > 0 ? n(x) : null);
       const item = await tx.incluir('regra_repasse_item', {
         regra_repasse_id: regra,
+        profissional_id: profissionalId,
         sequencia: n(seq?.['s']) + 1,
         fonte_pagadora_id: zeroNulo(e['convenio']),
         codigo_procedimento_inicial: n(e['procedimentoInicial']) > 0 ? String(e['procedimentoInicial']) : null,

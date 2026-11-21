@@ -3,7 +3,7 @@
 // /api/faturamento* e /api/precos*); a guarda estática do SQL fica em tools/verificadores
 // (colunas-proibidas.ts), que confere que as duas listas são a mesma.
 
-/** Colunas de credencial (TBTISS, TBTISSWEBSERV, TBCONVEN e TBCODATI), só os nomes das colunas. */
+/** Campos de credencial (troca eletrônica TISS, serviço web TISS, contrato da fonte pagadora e código do prestador), só os nomes. */
 export const COLUNAS_CREDENCIAL: readonly string[] = [
   'SENHA_CERTIFICADO_DIG_WS_TISS',
   'CERTIFICADO_DIG_WS_TISS',

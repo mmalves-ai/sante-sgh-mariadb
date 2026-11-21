@@ -1,6 +1,6 @@
 // Contratos da tela "Usuários" (M10, ficha seção 7; cap-08 §8.9): lista paginada no servidor, ficha com grupo,
 // escopos, papéis SBIS, flags complementares, conexões e situação do termo; gravações pelas receitas do executor
-// do M04 (TBUSERS e as tabelas de escopo, exatamente como o legado grava). Nada aqui leva senha, hash, código de
+// do M04 (e as tabelas de escopo, exatamente como o legado grava). Nada aqui leva senha, hash, código de
 // verificação nem e-mail; a ficha diz se o CPF e a senha estão definidos e só a conta da plataforma recebe o
 // número do CPF (`usuario.cpf`; para os demais, null).
 import { z } from 'zod';
@@ -173,7 +173,7 @@ export const esquemaFichaUsuario = z.object({
     /**
      * O número do CPF (11 dígitos, sem máscara) SÓ para a conta da plataforma (sessão "como" ou acesso total de
      * ator `plataforma`); null para todos os outros (gestor de acessos, suporte, Auditor) e quando não há CPF.
-     * A leitura fica na trilha (acesso.usuario.consultado com o alvo TBUSERS e a marca `cpf:visto`).
+     * A leitura fica na trilha (acesso.usuario.consultado com o alvo usuário e a marca `cpf:visto`).
      */
     cpf: z
       .string()
@@ -209,7 +209,7 @@ export const esquemaFichaUsuario = z.object({
   termo: z.object({ aceitouVigente: z.boolean(), aceitoEm: z.string().nullable() }),
   /** Só para o Auditor: quantas trocas de senha e a data da última (nunca o valor). */
   historicoSenha: z.object({ trocas: z.number().int(), ultima: z.string().nullable() }).nullable(),
-  /** O profissional ligado ao login pelo papel Operador de sistema ativo (TBUSERS_TBPAPEL.ID_TBCBOPRO); null sem vínculo. */
+  /** O profissional ligado ao login pelo papel Operador de sistema ativo (profissional ligado ao papel do usuário); null sem vínculo. */
   profissionalVinculado: z.object({ id: z.number().int(), nome: z.string() }).nullable(),
   operacoes: z.array(esquemaEstadoOperacaoTela),
   destino: z.enum(['banco', 'memoria']),
@@ -226,7 +226,7 @@ const esquemaNomeCompleto = textoCp1252(70).refine((n) => n.trim().length > 0, {
   message: 'Informe o nome completo.',
 });
 
-/** acesso.criarUsuario: TBUSERS (login exato; grupo ativo; CPF opcional, nunca repetido). */
+/** acesso.criarUsuario: usuário (login exato; grupo ativo; CPF opcional, nunca repetido). */
 export const esquemaCriarUsuario = z
   .object({
     login: esquemaLogin,
@@ -241,7 +241,7 @@ export const esquemaCriarUsuario = z
 export type CriarUsuarioEntrada = z.infer<typeof esquemaCriarUsuario>;
 
 /**
- * acesso.alterarUsuario: TBUSERS.NOMEC e, W1-01, TBUSERS.CPF (o grupo troca pela receita própria; nunca NOME nem
+ * acesso.alterarUsuario: nome completo do usuário e, W1-01, o CPF (o grupo troca pela receita própria; nunca NOME nem
  * senha). A troca de CPF exige justificativa (SBIS NGS1.03.09 b), gravada na trilha com o valor anterior; o CPF
  * novo nunca pode ser de outro login (NGS1.03.09 c, e). O CPF fica fora da `versao` (a ficha não o mostra a todos).
  */
@@ -262,7 +262,7 @@ export const esquemaAlterarUsuario = z
   .strict();
 export type AlterarUsuarioEntrada = z.infer<typeof esquemaAlterarUsuario>;
 
-/** acesso.bloquearUsuario / acesso.desbloquearUsuario: TBUSERS.BLOQUEADO. */
+/** acesso.bloquearUsuario / acesso.desbloquearUsuario: marca de bloqueio do usuário. */
 export const esquemaBloquearUsuario = z.object({ login: esquemaLogin }).strict();
 export type BloquearUsuarioEntrada = z.infer<typeof esquemaBloquearUsuario>;
 

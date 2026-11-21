@@ -10,6 +10,7 @@ import {
   CLIENTE,
   CODIGO_EST,
   CODIGO_OUTRO,
+  garantir,
   garantirCliente,
   hojeSP,
   limparMovimento,
@@ -210,19 +211,26 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
         ),
       ),
     ).toBe('guiche-de-outro');
-    // Suspender e "não localizado" esperam a situação "suspensa" no modelo: recusa explícita, nada muda.
-    for (const ev of [{ evento: 'suspender', motivo: 'DOCUMENTO' }, { evento: 'naoLocalizado' }])
-      expect(
-        await recusada(
-          porta.executar(
-            c,
-            'recepcao.registrarEventoSenha',
-            { senha: Number(ch.resultado['senha']), local: m.local, guiche: 1, ...ev },
-            g(),
-          ),
-        ),
-      ).toBe('modelo-pendente');
-    expect((await porta.senha(c, Number(ch.resultado['senha'])))?.situacao).toBe('chamada');
+    // Suspender (aguardando documento) grava a situação "suspensa" com o motivo padronizado.
+    await porta.executar(
+      c,
+      'recepcao.registrarEventoSenha',
+      {
+        senha: Number(ch.resultado['senha']),
+        local: m.local,
+        guiche: 1,
+        evento: 'suspender',
+        motivo: 'DOCUMENTO',
+      },
+      g(),
+    );
+    expect((await porta.senha(c, Number(ch.resultado['senha'])))?.situacao).toBe('suspensa');
+    const susp = await ler<{ situacao: string; motivo_complemento: string | null }>(
+      'SELECT situacao, motivo_complemento FROM senha_emitida WHERE id = ?',
+      [Number(ch.resultado['senha'])],
+    );
+    expect(susp[0]?.situacao).toBe('suspensa');
+    expect(susp[0]?.motivo_complemento).toBeTruthy();
   });
 
   it('recusa a entrada inválida, a senha de outro estabelecimento e a mesma chave com outra entrada', async () => {
@@ -407,32 +415,299 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
     expect(ind.porServico.find((x) => x.gerador === m.gerador)?.senhas).toBe(ind.total);
   });
 
-  it('as gravações sem tabela no modelo respondem "modelo-pendente" e nada gravam', async () => {
-    const trilha = {
-      evento: 'recepcao.fila.configurada',
-      recurso: 'recepcao.gerador',
-      tabela: 'gerador_senha',
-      id: m.gerador,
-      login: LOGIN,
-      correlacao: 'rc0101-fila',
-    };
+  const trilhaDe = (tabela: string, id: number | null = null) => ({
+    evento: 'recepcao.configuracao',
+    recurso: 'recepcao.configuracao',
+    tabela,
+    id,
+    login: LOGIN,
+    correlacao: 'rc0101-config',
+  });
+
+  it('configura a fila do serviço: as colunas do gerador voltam na leitura; o gerador de outro estabelecimento é recusado', async () => {
+    const antes = (await porta.recepcoes(c)).flatMap((r) => r.geradores).find((x) => x.id === m.gerador)!;
+    const fila = (
+      x: Partial<{
+        ordem: string;
+        intercalar: number;
+        tempo: number;
+        rotulo: string | null;
+        noTotem: boolean;
+      }>,
+      cx = c,
+    ) =>
+      porta.gravar(cx, trilhaDe('gerador_senha', m.gerador), (gr) =>
+        gr.gravarFilaCfg({
+          gerador: m.gerador,
+          recepcao: m.recepcao,
+          ordem: x.ordem ?? antes.ordem,
+          intercalar: x.intercalar ?? antes.intercalar,
+          tempoAlvoMinutos: x.tempo ?? antes.tempoAlvoMinutos ?? 0,
+          rotuloTotem: x.rotulo === undefined ? antes.rotuloTotem : x.rotulo,
+          noTotem: x.noTotem ?? antes.noTotem,
+          usuario: LOGIN,
+        }),
+      );
+    try {
+      await fila({
+        ordem: 'intercalada',
+        intercalar: 3,
+        tempo: 15,
+        rotulo: 'Consulta SINTETICO',
+        noTotem: false,
+      });
+      const depois = (await porta.recepcoes(c)).flatMap((r) => r.geradores).find((x) => x.id === m.gerador);
+      expect(depois).toMatchObject({
+        ordem: 'intercalada',
+        intercalar: 3,
+        tempoAlvoMinutos: 15,
+        rotuloTotem: 'Consulta SINTETICO',
+        noTotem: false,
+      });
+      expect(await recusada(fila({}, outro))).toBe('registro-inexistente');
+    } finally {
+      await fila({});
+    }
+  });
+
+  it('dispositivo do painel e do totem: só o resumo do token, locais e serviços ligados, renovação, conferência e revogação', async () => {
+    const criar = (x: Partial<{ portalOrdem: number | null; tipo: 'totem' | 'painel' }> = {}) =>
+      porta.gravar(
+        c,
+        (r: { id: number }) => trilhaDe('dispositivo_recepcao', r.id),
+        (gr) =>
+          gr.criarDispositivo({
+            tipo: x.tipo ?? 'totem',
+            nome: 'Totem SINTETICO',
+            recepcao: m.recepcao,
+            locais: [m.local],
+            geradores: [m.gerador],
+            conteudo: null,
+            portalOrdem: x.portalOrdem ?? null,
+            usuarioTecnico: LOGIN2,
+            voz: true,
+            validadeDias: 30,
+            usuario: LOGIN,
+          }),
+      );
+    const d = await criar();
+    expect(d.token.length).toBeGreaterThan(30);
+    const guardado = await ler<{ resumo_token: string }>(
+      'SELECT resumo_token FROM dispositivo_recepcao WHERE id = ?',
+      [d.id],
+    );
+    expect(guardado[0]?.resumo_token).not.toContain(d.token);
+    const lido = (await porta.dispositivos(c)).find((x) => x.id === d.id);
+    expect(lido).toMatchObject({
+      hospital: CODIGO_EST,
+      tipo: 'totem',
+      locais: [m.local],
+      geradores: [m.gerador],
+      usuarioTecnico: LOGIN2,
+      criadoPor: LOGIN,
+      voz: true,
+      valido: true,
+      prefixo: d.token.slice(0, 8),
+    });
+    expect((await porta.dispositivoDoToken(d.token))?.id).toBe(d.id);
+    await porta.marcarUsoDispositivo(c, d.id);
+    expect((await porta.dispositivos(c)).find((x) => x.id === d.id)?.ultimoUso).not.toBeNull();
+    // Alterar troca os locais (o antigo sai, o novo entra) sem reemitir o token.
+    await porta.gravar(c, trilhaDe('dispositivo_recepcao', d.id), (gr) =>
+      gr.alterarDispositivo({
+        id: d.id,
+        nome: 'Totem 2 SINTETICO',
+        recepcao: m.recepcao,
+        locais: [m.local2],
+        geradores: [m.gerador],
+        conteudo: null,
+        voz: false,
+      }),
+    );
+    expect((await porta.dispositivos(c)).find((x) => x.id === d.id)).toMatchObject({
+      nome: 'Totem 2 SINTETICO',
+      locais: [m.local2],
+      voz: false,
+    });
+    expect((await porta.dispositivoDoToken(d.token))?.id).toBe(d.id);
+    const novo = await porta.gravar(c, trilhaDe('dispositivo_recepcao', d.id), (gr) =>
+      gr.renovarDispositivo({ id: d.id, validadeDias: 10 }),
+    );
+    expect(await porta.dispositivoDoToken(d.token)).toBeNull();
+    expect((await porta.dispositivoDoToken(novo))?.id).toBe(d.id);
+    await porta.gravar(c, trilhaDe('dispositivo_recepcao', d.id), (gr) =>
+      gr.conferirDispositivo({ id: d.id, loginSubstituido: 'tv.recepcao', usuario: LOGIN }),
+    );
+    const outroD = await criar({ tipo: 'painel' });
     expect(
       await recusada(
-        porta.gravar(c, trilha, (x) =>
-          x.gravarFilaCfg({
-            gerador: m.gerador,
-            recepcao: m.recepcao,
-            ordem: 'chegada',
-            intercalar: 2,
-            tempoAlvoMinutos: 10,
-            rotuloTotem: null,
-            noTotem: true,
+        porta.gravar(c, trilhaDe('dispositivo_recepcao', outroD.id), (gr) =>
+          gr.conferirDispositivo({ id: outroD.id, loginSubstituido: 'TV.RECEPCAO', usuario: LOGIN }),
+        ),
+      ),
+    ).toBe('login-ja-substituido');
+    await porta.gravar(c, trilhaDe('dispositivo_recepcao', d.id), (gr) =>
+      gr.revogarDispositivo({ id: d.id, usuario: LOGIN }),
+    );
+    expect((await porta.dispositivos(c)).find((x) => x.id === d.id)).toMatchObject({
+      valido: false,
+      loginSubstituido: 'tv.recepcao',
+      conferidoPor: LOGIN,
+    });
+    expect(
+      await recusada(
+        porta.gravar(c, trilhaDe('dispositivo_recepcao', d.id), (gr) =>
+          gr.revogarDispositivo({ id: d.id, usuario: LOGIN }),
+        ),
+      ),
+    ).toBe('dispositivo-revogado');
+    // O dispositivo não aparece no outro estabelecimento; o vínculo com o painel substituído aguarda coluna.
+    expect((await porta.dispositivos(outro)).some((x) => x.id === d.id)).toBe(false);
+    expect(await recusada(criar({ portalOrdem: 3 }))).toBe('modelo-pendente');
+  });
+
+  it('termos de consentimento: versão nova, assinatura imutável com resumo, revogação única e exclusão só sem assinatura', async () => {
+    const assinante = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'rc0101-assinante' }, (e) =>
+      garantir(
+        e,
+        'tipo_assinante',
+        { codigo: 'paciente_sintetico' },
+        { descricao: 'Paciente', papel: 'paciente' },
+      ),
+    );
+    const gravarT = <T>(fn: Parameters<typeof porta.gravar<T>>[2]) =>
+      porta.gravar<T>(c, trilhaDe('termo_consentimento_modelo'), fn);
+    const texto = 'Autorizo o uso dos meus dados para o atendimento (SINTETICO).';
+    await gravarT((gr) =>
+      gr.incluirModeloTermo({
+        codigo: 'lgpd-sintetico',
+        titulo: 'Termo SINTETICO',
+        finalidade: 'compartilhamento-rede',
+        tiposAtendimento: ['internacao'],
+        exigido: true,
+        texto,
+        usuario: LOGIN,
+      }),
+    );
+    expect(
+      await recusada(
+        gravarT((gr) =>
+          gr.incluirModeloTermo({
+            codigo: 'lgpd-sintetico',
+            titulo: 'Termo SINTETICO',
+            finalidade: 'atendimento',
+            tiposAtendimento: ['internacao'],
+            exigido: true,
+            texto,
             usuario: LOGIN,
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
-    expect(await porta.dispositivos()).toEqual([]);
+    ).toBe('termo-codigo-existe');
+    const v2 = await gravarT((gr) =>
+      gr.novaVersaoModeloTermo({
+        codigo: 'lgpd-sintetico',
+        titulo: 'Termo SINTETICO v2',
+        tiposAtendimento: ['internacao'],
+        exigido: true,
+        texto: `${texto} Versão 2.`,
+        versaoVista: 1,
+        usuario: LOGIN,
+      }),
+    );
+    expect(v2.versao).toBe(2);
+    const modelos = await porta.modelosTermo(c);
+    const mt = modelos.find((x) => x.codigo === 'lgpd-sintetico')!;
+    expect(mt).toMatchObject({ finalidade: 'compartilhamento-rede', ativo: true, assinaturas: 0 });
+    expect(mt.versoes.map((v) => v.versao)).toEqual([2, 1]);
+    expect(mt.versoes[0]).toMatchObject({
+      tiposAtendimento: ['internacao'],
+      exigido: true,
+      criadoPor: LOGIN,
+    });
+    expect((await porta.signatariosTermo(c)).some((s) => s.codigo === assinante)).toBe(true);
+    const assinar = (modelo: number) =>
+      porta.gravar(c, trilhaDe('termo_consentimento_recepcao'), (gr) =>
+        gr.assinarTermo({
+          modelo,
+          prontuario: m.prontuario,
+          senha: null,
+          tipoAtendimento: 'internacao',
+          meio: 'tela',
+          signatario: assinante,
+          nomeSignatario: 'Pessoa SINTETICA',
+          imagem: 'iVBORw0KGgo=',
+          usuario: LOGIN,
+        }),
+      );
+    const v1 = mt.versoes[1]!.id;
+    expect(await recusada(assinar(v1))).toBe('termo-versao-antiga');
+    const a = await assinar(v2.id);
+    expect(a.hash).toMatch(/^[0-9a-f]{64}$/);
+    const doPaciente = await porta.termosDoPaciente(c, m.prontuario);
+    expect(doPaciente[0]).toMatchObject({
+      id: a.id,
+      modelo: v2.id,
+      codigo: 'lgpd-sintetico',
+      versao: 2,
+      prontuario: m.prontuario,
+      signatario: assinante,
+      hash: a.hash,
+      registradoPor: LOGIN,
+      revogacao: null,
+    });
+    expect((await porta.modelosTermo(c)).find((x) => x.codigo === 'lgpd-sintetico')?.assinaturas).toBe(1);
+    // Finalidade fora do contrato da recepção (o CHECK aceita as do prontuário): a leitura recusa, nunca a troca.
+    const finalidade = (f: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'rc0101-finalidade' }, (e) =>
+        e.executar('UPDATE termo_consentimento_modelo SET finalidade = ? WHERE id = ?', [f, v2.id]),
+      );
+    await finalidade('protecao_dados');
+    try {
+      expect(await recusada(porta.modelosTermo(c))).toBe('termo-finalidade-fora-do-contrato');
+      expect(await recusada(porta.termosDoPaciente(c, m.prontuario))).toBe('termo-finalidade-fora-do-contrato');
+    } finally {
+      await finalidade('compartilhamento_rede');
+    }
+    expect((await porta.termosDoPaciente(c, m.prontuario))[0]?.finalidade).toBe('compartilhamento-rede');
+    // Com assinatura, o código não sai (409 com os dependentes); só se inativa.
+    await expect(
+      gravarT((gr) =>
+        gr.excluirModeloTermo({ codigo: 'lgpd-sintetico', motivo: 'Teste de exclusão', usuario: LOGIN }),
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await gravarT((gr) =>
+      gr.situacaoModeloTermo({
+        codigo: 'lgpd-sintetico',
+        ativo: false,
+        motivo: 'Texto em revisão',
+        usuario: LOGIN,
+      }),
+    );
+    expect(await recusada(assinar(v2.id))).toBe('termo-inativo');
+    const revogar = () =>
+      porta.gravar(c, trilhaDe('termo_consentimento_recepcao', a.id), (gr) =>
+        gr.revogarTermo({ assinatura: a.id, motivo: 'Paciente pediu a revogação', usuario: LOGIN }),
+      );
+    await revogar();
+    expect(await recusada(revogar())).toBe('termo-revogado');
+    expect((await porta.termosDoPaciente(c, m.prontuario))[0]?.revogacao).toMatchObject({ usuario: LOGIN });
+    // O código nunca assinado sai inteiro.
+    await gravarT((gr) =>
+      gr.incluirModeloTermo({
+        codigo: 'avulso-sintetico',
+        titulo: 'Avulso SINTETICO',
+        finalidade: 'atendimento',
+        tiposAtendimento: ['internacao'],
+        exigido: false,
+        texto,
+        usuario: LOGIN,
+      }),
+    );
+    await gravarT((gr) =>
+      gr.excluirModeloTermo({ codigo: 'avulso-sintetico', motivo: 'Cadastro errado', usuario: LOGIN }),
+    );
+    expect((await porta.modelosTermo(c)).some((x) => x.codigo === 'avulso-sintetico')).toBe(false);
   });
 
   it('as guias do dia aguardando autorização: fonte que exige guia e sem senha', async () => {

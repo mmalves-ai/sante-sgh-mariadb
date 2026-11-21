@@ -1,5 +1,5 @@
 // Fluxo entre locais e tipos de gerador (M19; ficha, regras 4 e 5): o encaminhamento só vai aos locais que o cadastro
-// permite (TBLOCALENCATE: 12 ↔ 13 e 23 → 13 no pc); o gerador tipo 0 (recepção) segue para a abertura do atendimento e
+// permite (destinos de encaminhamento do cadastro: 12 ↔ 13 e 23 → 13 no pc); o gerador tipo 0 (recepção) segue para a abertura do atendimento e
 // o tipo 5 (serviços diversos) termina no guichê com a liberação; os tipos 1 a 4 existem como colunas vazias e não são
 // usados (0 geradores na cópia).
 import { TIPOS_GERADOR } from '@sgh/contratos';

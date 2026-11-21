@@ -1,7 +1,7 @@
 // CRUD genérico (M08; cap-09 §9.5; roteiro 4.8 e 6.5): a DECLARAÇÃO de um domínio do legado tem duas
 // partes que nascem juntas e um teste confere que casam (packages/dominio-config, declaracao.ts):
 //   - a parte PÚBLICA (aqui, em @sgh/contratos): módulo dono, recurso exposto, rótulos, item da árvore,
-//     natureza, ações e as opções de menu do legado (TBOPCOES) que concedem cada ação; dela saem as
+//     natureza, ações e as opções de menu do legado (menu de origem) que concedem cada ação; dela saem as
 //     permissões `<modulo>.<recurso>.<acao>` (permissoes/dominios.ts) e o índice das telas;
 //   - a parte FÍSICA (em @sgh/legado, no grupo dono: `<grupo>/cadastros/<recurso>.ts`): tabela, chave,
 //     colunas com tipo, tamanho em bytes CP1252, rótulo, estratégia de código, letra de situação, triggers.
@@ -19,7 +19,7 @@ export const NATUREZAS_DOMINIO = [
   'sistema',
   /** Catálogo de fonte oficial (carga-referencia): só consulta; quem grava é o importador (M13). */
   'carga-referencia',
-  /** Enumeração interna (TBDIASEMANA e afins): só consulta. */
+  /** Enumeração interna (dia da semana e afins): só consulta. */
   'enumeracao',
   /**
    * M14 (regra 6): domínio TRAVADO — o código do banco (trigger ou procedure) lê os códigos da lista, ou a
@@ -200,7 +200,7 @@ export function rotaDoDominio(modulo: string, recurso: string): string {
 }
 
 /**
- * De onde vêm as opções de menu do legado: lidas na árvore TBOPCOES (a tela do SPDATA que edita a tabela)
+ * De onde vêm as opções de menu do legado: lidas na árvore do menu de origem
  * ou inferidas (POL-1b): a área genérica "Geral A–L"/"Geral M–Z" do módulo Tabelas, quando a árvore não
  * tem item próprio para a tabela. Inferida é conferida na validação humana.
  */
@@ -216,7 +216,7 @@ export interface DominioPublico {
   readonly natureza: NaturezaDominio;
   /** Ações que a tela oferece; `ler` sempre. Só `editavel` grava. */
   readonly acoes: readonly AcaoDominio[];
-  /** TBOPCOES.ID que concedem cada ação (cap-08 §8.6). */
+  /** Opções do menu de origem que concedem cada ação (cap-08 §8.6). */
   readonly opcoesLegado: Readonly<Partial<Record<AcaoDominio, readonly number[]>>> & {
     readonly ler: readonly number[];
   };
@@ -542,7 +542,7 @@ export const esquemaTextosItem = z.object({
 export type TextosItem = z.infer<typeof esquemaTextosItem>;
 export const esquemaPedidoExportacao = z.object({
   formato: z.enum(['csv']).default('csv'),
-  /** Código de PRTIPO_JUSTIF_EXPORTACAO (domínio de auditoria), quando o domínio tem dado pessoal. */
+  /** Código de tipo de justificativa de exportação (domínio de auditoria), quando o domínio tem dado pessoal. */
   justificativa: z.number().int().positive().optional(),
 });
 
@@ -588,7 +588,7 @@ export interface ContextoPadraoTexto {
   lerBlob(blob: unknown): Promise<Uint8Array>;
   /** Os valores da inclusão (campos da tela). */
   readonly entrada: Readonly<Record<string, unknown>>;
-  /** TBUSERS.NOME de quem inclui. */
+  /** Login de quem inclui. */
   readonly usuario: string;
 }
 
@@ -601,10 +601,10 @@ export interface ColunaDeclarada {
   /** Texto: tamanho em bytes CP1252 (o do catálogo RDB$, ou menor). */
   readonly maxBytes?: number;
   /**
-   * M23: texto com formato fixo do legado (ex.: hora em `HHMM`, sem os dois-pontos). M54.1: `digitos`, texto só com
-   * algarismos (a ordem de 4 dígitos da conta de receita da apuração de custos, CTCTARECEITANCI.ORDEM).
+   * M23: texto com formato fixo: `hora` é a hora do dia em `HH:MM` (esquemaHora de @sgh/contratos). M54.1: `digitos`, texto só com
+   * algarismos (a ordem de 4 dígitos da conta de receita da apuração de custos).
    */
-  readonly formatoTexto?: 'HHMM' | 'digitos';
+  readonly formatoTexto?: 'hora' | 'digitos';
   /** M14: decimal — casas depois da vírgula (escala da coluna). */
   readonly casas?: number;
   readonly minimo?: number;
@@ -633,7 +633,7 @@ export interface ColunaDeclarada {
   readonly padraoNaInclusao?: string | number;
   /**
    * M24: o valor que o legado grava para "vazio" numa coluna sem NULL no perfil (ex.: a data 1899-12-30 da vigência
-   * final "sem fim"; ou o 0 do número não informado, como o CNS e o CRM do FAMEDSOL): a tela mostra vazio e o vazio
+   * final "sem fim"; ou o 0 do número não informado, como o CNS e o CRM do médico solicitante SUS): a tela mostra vazio e o vazio
    * da tela grava a sentinela, na inclusão e na alteração.
    */
   readonly sentinelaVazio?: string | number;
@@ -715,7 +715,7 @@ export interface DeclaracaoDominio {
   /**
    * Regras da referência de perfil para a inclusão (coluna → classe, com o motivo medido), quando o estado
    * atual das linhas não é o da inclusão (ex.: ID_DIGITAL preenchido depois pela integração do fornecedor).
-   * M54.4: `formato` troca o formato que o perfil mediu (ex.: ordem 0001 a 0004 parece hora HHMM e não é).
+   * M54.4: `formato` troca o formato que o perfil mediu (ex.: ordem 0001 a 0004 parece hora de quatro dígitos e não é).
    */
   readonly referenciaPerfil?: Readonly<
     Record<string, { readonly classe: string; readonly motivo: string; readonly formato?: string }>
@@ -727,7 +727,7 @@ export interface DeclaracaoDominio {
    */
   readonly carimbosNaAlteracao?: readonly string[];
   /**
-   * M11: itens de sistema que o novo não altera (o trigger *_BU do legado os protege, ex.: TBCONSPROF 1 a 12
+   * M11: itens de sistema que o novo não altera (o trigger *_BU do legado os protege, ex.: conselho profissional 1 a 12
    * com e_geral_sistema): alterar responde 409 `item-de-sistema` antes de chegar ao banco.
    */
   readonly protegidasNaAlteracao?: { readonly codigos: readonly number[]; readonly evidencia: string };
@@ -764,8 +764,8 @@ export interface DeclaracaoDominio {
    */
   readonly tetoLeitura?: number;
   /**
-   * M14: trilha do legado que o Delphi grava para a tabela (perfil de TBCABTRILHA × TBLANTRILHASGH): tipo
-   * (TBTPACAOAUDIT 2 inclusão, 3 alteração), criticidade e opção por verbo, e a coluna do alvo.
+   * M14: trilha do legado que o Delphi grava para a tabela (perfil do cabeçalho × lançamentos da trilha): tipo
+   * (tipo de ação de auditoria: 2 inclusão, 3 alteração), criticidade e opção por verbo, e a coluna do alvo.
    */
   readonly trilhaLegado?: Readonly<
     Partial<
@@ -801,14 +801,14 @@ export interface DeclaracaoDominio {
     /** W0-02: teto do texto em bytes CP1252 (padrão 1 MiB). */
     readonly maxBytes?: number;
     /**
-     * W1-04: obrigatório na inclusão (o perfil mediu a coluna sempre preenchida, ex.: TBRECEPCAO.TEXTOIMP, o texto
+     * W1-04: obrigatório na inclusão (o perfil mediu a coluna sempre preenchida, ex.: o texto impresso da recepção, o texto
      * impresso na senha). Sem a marca, vazio grava NULL. Na alteração, o texto pedido também não pode ir vazio.
      */
     readonly obrigatorio?: boolean;
     /**
      * W1-04 (D-W104-8): o leiaute que a INCLUSÃO grava nesta coluna (não editável na tela), como o cadastro anterior
-     * o cria: o arquivo de configuração que o executável do painel lê (PNCONFIG.CONFIGURACAO copiada do painel de
-     * atendimento modelo; PNCONFIGPORTAL.CONFIGURACAO do modelo vazio capturado). `gerar` devolve os bytes do BLOB
+     * o cria: o arquivo de configuração que o executável do painel lê (a configuração do painel de chamada copiada do painel de
+     * atendimento modelo; a configuração do painel de TV do modelo vazio capturado). `gerar` devolve os bytes do BLOB
      * (lidos na mesma transação; recusa legível quando não há modelo) e a prova relê os bytes gravados.
      */
     readonly padraoNaInclusao?: {

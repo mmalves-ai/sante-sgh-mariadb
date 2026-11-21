@@ -119,6 +119,60 @@ describe.skipIf(SEM_BANCO)('porta própria do SADT (MariaDB, cliente f22_o2)', (
     expect((await porta.exame(c, m!.itemLiberado))?.estado).toBe('visualizado');
   });
 
+  it('aviso de valor crítico: um por analito, regra da unidade antes da rede, prazo da regra, sem repetir', async () => {
+    const c = contexto(m!);
+    const { r2, r3, regraUnidade, regraExame } = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s09crit' }, async (e) => {
+      const resultado = (item: number) =>
+        e.inserir(
+          `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, forma_entrada, situacao,
+             numero_versao, resultado_em, liberado_em, liberado_por_profissional_id, critico, criado_em, versao)
+           VALUES (?, ?, ?, 'interface', 'liberado', 1, NOW(), NOW(), ?, TRUE, NOW(), 1)`,
+          [item, m!.base.paciente, m!.setorLab, m!.base.profissional],
+        );
+      const regra = (estab: number | null, analito: number | null, prazo: number) =>
+        e.inserir(
+          `INSERT INTO regra_valor_critico (estabelecimento_id, analito_id, exame_id, limite_superior,
+             prazo_comunicacao_minutos, vigencia_inicio, ativo, criado_em, versao)
+           VALUES (?, ?, ?, 6.5, ?, DATE_SUB(CURDATE(), INTERVAL 1 DAY), TRUE, NOW(), 1)`,
+          [estab, analito, m!.exameLab, prazo],
+        );
+      const r2 = await resultado(m!.itemLab2);
+      await e.inserir(
+        `INSERT INTO resultado_analito (resultado_exame_id, sequencia, analito_id, valor_numerico, critico, criado_em, versao)
+         VALUES (?, 1, ?, 7.4, TRUE, NOW(), 1)`,
+        [r2, m!.analito],
+      );
+      const r3 = await resultado(m!.itemLab);
+      await regra(null, m!.analito, 40);
+      const regraUnidade = await regra(m!.base.est, m!.analito, 12);
+      const regraExame = await regra(m!.base.est, null, 20);
+      return { r2, r3, regraUnidade, regraExame };
+    });
+    const avisar = (item: number, id: number) =>
+      porta.gravarSgh(c, linhaTela(m!, 'sadt.critico.avisado', 'aviso_valor_critico', null), (g) =>
+        g.avisarCriticos({ exameItem: item, chave: `${m!.marca}-${id}`, idLiberacao: id, liberadoEm: new Date(), paciente: m!.base.paciente, atendimento: m!.base.atendimento }),
+      );
+    const aviso = (id: number) =>
+      um(
+        `SELECT COUNT(*) AS n, MAX(regra_valor_critico_id) AS regra, MAX(resultado_analito_id) AS ra,
+                MAX(TIMESTAMPDIFF(SECOND, gerado_em, prazo_em)) AS s
+           FROM aviso_valor_critico WHERE resultado_exame_id = ?`,
+        [id],
+      );
+    // Analito crítico: a regra do analito na unidade vence a da rede e a do exame; prazo_em = gerado_em + 12 min.
+    expect(await avisar(m!.itemLab2, r2)).toBe(1);
+    const a2 = await aviso(r2);
+    expect([Number(a2?.['n']), Number(a2?.['regra']), Number(a2?.['s'])]).toEqual([1, regraUnidade, 12 * 60]);
+    expect(a2?.['ra']).not.toBeNull();
+    // Avisar de novo o mesmo resultado não repete.
+    expect(await avisar(m!.itemLab2, r2)).toBe(0);
+    expect(Number((await aviso(r2))?.['n'])).toBe(1);
+    // Crítico do exame sem analito: só a regra do exame vale (prazo 20); o aviso não tem analito.
+    expect(await avisar(m!.itemLab, r3)).toBe(1);
+    const a3 = await aviso(r3);
+    expect([Number(a3?.['n']), Number(a3?.['regra']), Number(a3?.['s']), a3?.['ra']]).toEqual([1, regraExame, 20 * 60, null]);
+  });
+
   it('leituras sem modelo: 409 com o motivo (nada em silêncio)', async () => {
     const c = contexto(m!);
     const e = await porta.digitacao().catch((x: unknown) => x);

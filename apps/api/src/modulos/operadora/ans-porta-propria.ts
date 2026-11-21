@@ -12,13 +12,20 @@
 // Dado da rede inteira: os domínios da ANS (motivos e valores da TPS). Envios filtram pelo estabelecimento da sessão.
 // Melhoria: o retorno aceito exige o recibo (CHECK no banco); o retificador aponta o envio que substitui (CHECK); o
 // envio substituído muda de situação na mesma transação do novo.
-// Pendente (pedido ao orquestrador): arquivo do envio (armazenamento de arquivos), quadros do envio (coluna), GRU e
-// pagamento, decisão do ressarcimento, complemento do SIB, bases do SIP, do DIOPS, do monitoramento e do ressarcimento
-// respondem 501 `modelo-pendente`.
+// Complemento do SIB = complemento_sib_beneficiario (nascido vivo, residência no exterior, itens excluídos, motivo de
+// cancelamento e o último envio aceito), mais o CCO e a cobertura parcial temporária do beneficiário. O endereço é o do
+// cadastro da pessoa (endereco_pessoa, o principal ou o primeiro): uma fonte só; o complemento não o regrava e recusa o
+// endereço diferente do cadastro. O retrato aceito é o registro do beneficiário no último envio SIB aceito (os dados do
+// envio_ans_item), gravado no retorno.
+// Base do DIOPS (eventos) = as contas médicas recebidas da rede (lote_conta_recebida) no período e os pagamentos dela.
+// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos), GRU e decisão do
+// ressarcimento (o aviso do ressarcimento ainda não liga o envio à cobrança), pendências do SIB, bases do SIP, das
+// contraprestações do DIOPS, do monitoramento e do ressarcimento respondem 501 `modelo-pendente`.
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import type { ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
 import {
   BasePortaOperadoraPropria,
+  bool,
   data,
   exigirOperadora,
   inexistente,
@@ -36,6 +43,8 @@ import {
   CAMPOS_SIB,
   type DadosAtivos,
   type DadosBeneficiarioDaOperadora,
+  type DadosComplementoSib,
+  type EntradaComplementoSib,
   type DadosEnvioAns,
   type DadosEnvioAnsResumo,
   type DadosEnvioExistente,
@@ -50,7 +59,31 @@ import {
 } from './dados-portas.js';
 import type { PortaOperadora } from './porta.js';
 
-export const TABELAS_ANS = ['envio_ans', 'envio_ans_item', 'envio_ans_retorno', 'beneficiario_plano'] as const;
+export const TABELAS_ANS = [
+  'envio_ans',
+  'envio_ans_item',
+  'envio_ans_retorno',
+  'beneficiario_plano',
+  'complemento_sib_beneficiario',
+] as const;
+
+/** O endereço residencial do beneficiário no cadastro da pessoa (o principal, senão o primeiro vigente). */
+const SELECT_ENDERECO_BENEFICIARIO = `
+  SELECT e.logradouro, e.numero, e.complemento, COALESCE(e.bairro_nome, ba.descricao) AS bairro, e.cep,
+         mu.codigo_ibge
+    FROM beneficiario_plano b
+    JOIN endereco_pessoa e ON e.pessoa_fisica_id = b.pessoa_fisica_id AND e.excluido_em IS NULL
+                          AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= CURRENT_DATE)
+    LEFT JOIN bairro ba ON ba.id = e.bairro_id
+    LEFT JOIN municipio_ibge mu ON mu.id = e.municipio_ibge_id
+   WHERE b.id = ?
+   ORDER BY e.principal DESC, e.sequencia
+   LIMIT 1`;
+
+const textoOuNulo = (v: unknown): string | null => {
+  const t = txtOuNulo(v)?.trim() ?? '';
+  return t === '' ? null : t.toUpperCase();
+};
 
 export const OBRIGACAO: Readonly<Record<DadosObrigacao, string>> = {
   SIB: 'sib',
@@ -432,8 +465,8 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     return pendente('Pendências do SIB (complemento cadastral do beneficiário)');
   }
 
-  async complementoSib(): Promise<never> {
-    return pendente('Complemento do SIB');
+  complementoSib(c: ContextoAns, beneficiario: number): Promise<DadosComplementoSib | null> {
+    return this.ler(c, (l) => lerComplementoSib(l, c.estabelecimento ?? 0, beneficiario));
   }
 
   beneficiarioDaOperadora(c: ContextoAns, beneficiario: number): Promise<DadosBeneficiarioDaOperadora | null> {
@@ -507,8 +540,41 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     return pendente('Base do DIOPS (contraprestações)');
   }
 
-  async contasDiops(): Promise<never> {
-    return pendente('Base do DIOPS (eventos indenizáveis)');
+  contasDiops(
+    c: ContextoAns,
+    operadora: number,
+    inicio: string,
+    fim: string,
+  ): Promise<{
+    contas: { recebidaEm: string; apresentado: number; glosado: number; situacao: 'recebida' | 'analisada' | 'paga' | 'devolvida' }[];
+    pagamentos: { pagoEm: string; valor: number }[];
+  }> {
+    return this.ler(c, async (l) => {
+      const contas = await l.consultar(
+        `SELECT DATE(recebido_em) AS recebida, valor_apresentado, valor_glosado, situacao
+           FROM lote_conta_recebida
+          WHERE estabelecimento_id = ? AND operadora_saude_id = ? AND excluido_em IS NULL
+            AND situacao <> 'cancelada' AND recebido_em >= ? AND recebido_em < DATE_ADD(?, INTERVAL 1 DAY)
+          ORDER BY recebido_em, id`,
+        [c.estabelecimento ?? 0, operadora, inicio, fim],
+      );
+      const pagos = await l.consultar(
+        `SELECT pago_em, valor_pago FROM lote_conta_recebida
+          WHERE estabelecimento_id = ? AND operadora_saude_id = ? AND excluido_em IS NULL
+            AND pago_em IS NOT NULL AND pago_em BETWEEN ? AND ?
+          ORDER BY pago_em, id`,
+        [c.estabelecimento ?? 0, operadora, inicio, fim],
+      );
+      return {
+        contas: contas.map((k) => ({
+          recebidaEm: data(k['recebida']) ?? '',
+          apresentado: num(k['valor_apresentado']),
+          glosado: num(k['valor_glosado']),
+          situacao: txt(k['situacao']) as 'recebida' | 'analisada' | 'paga' | 'devolvida',
+        })),
+        pagamentos: pagos.map((p) => ({ pagoEm: data(p['pago_em']) ?? '', valor: num(p['valor_pago']) })),
+      };
+    });
   }
 
   async guiasMonitoramento(): Promise<never> {
@@ -604,14 +670,156 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
             const b = await tx.uma('SELECT versao FROM beneficiario_plano WHERE id = ?', [benef]);
             if (b) await tx.alterar('beneficiario_plano', benef, num(b['versao']), { codigo_controle_ans: i.cco });
           }
+          // O retrato aceito pela ANS: o registro deste envio, apontado no complemento do beneficiário.
+          if (a.sib && i.aceito && benef) {
+            const [k] = await tx.consultarParaAtualizar(
+              'SELECT id, versao FROM complemento_sib_beneficiario WHERE beneficiario_plano_id = ? AND excluido_em IS NULL',
+              [benef],
+            );
+            if (k)
+              await tx.alterar('complemento_sib_beneficiario', num(k['id']), num(k['versao']), {
+                aceito_envio_ans_id: a.id,
+                aceito_em: agora,
+              });
+            else
+              await tx.incluir('complemento_sib_beneficiario', {
+                beneficiario_plano_id: benef,
+                aceito_envio_ans_id: a.id,
+                aceito_em: agora,
+              });
+          }
         }
         return { id: a.id, versao };
       },
       pagar: () => pendente('Pagamento da GRU'),
       decidir: () => pendente('Decisão do atendimento do ressarcimento ao SUS'),
-      complemento: () => pendente('Complemento do SIB'),
+      complemento: (x) => gravarComplementoSib(tx, est, x),
     };
   }
+}
+
+/** O complemento do SIB do beneficiário do estabelecimento (null: beneficiário de fora; versão 0: sem complemento). */
+async function lerComplementoSib(l: Leitor, est: number, beneficiario: number): Promise<DadosComplementoSib | null> {
+  const b = await l.uma(
+    `SELECT b.id, b.codigo_controle_ans, b.cobertura_parcial_temporaria,
+            k.versao AS versao_complemento, k.declaracao_nascido_vivo, k.reside_exterior, k.itens_excluidos_cobertura,
+            k.aceito_envio_ans_id, k.aceito_em, mm.codigo_ans AS motivo
+       FROM beneficiario_plano b
+       JOIN contrato_plano kp ON kp.id = b.contrato_plano_id
+       LEFT JOIN complemento_sib_beneficiario k ON k.beneficiario_plano_id = b.id AND k.excluido_em IS NULL
+       LEFT JOIN motivo_movimento_cadastral mm ON mm.id = k.motivo_movimento_cadastral_id
+      WHERE b.id = ? AND kp.estabelecimento_id = ? AND b.excluido_em IS NULL`,
+    [beneficiario, est],
+  );
+  if (!b) return null;
+  const e = await l.uma(SELECT_ENDERECO_BENEFICIARIO, [beneficiario]);
+  const envio = numOuNulo(b['aceito_envio_ans_id']);
+  const registro = envio
+    ? await l.uma(
+        `SELECT dados FROM envio_ans_item
+          WHERE envio_ans_id = ? AND beneficiario_plano_id = ? AND situacao = 'aceito' AND excluido_em IS NULL
+          ORDER BY sequencia DESC LIMIT 1`,
+        [envio, beneficiario],
+      )
+    : null;
+  const retrato = registro ? lerDados(registro['dados'])['dados'] : null;
+  const motivo = txtOuNulo(b['motivo']);
+  return {
+    beneficiario,
+    versao: num(b['versao_complemento']),
+    logradouro: txtOuNulo(e?.['logradouro']),
+    numero: txtOuNulo(e?.['numero']),
+    complemento: txtOuNulo(e?.['complemento']),
+    bairro: txtOuNulo(e?.['bairro']),
+    municipio: numOuNulo(e?.['codigo_ibge']),
+    cep: txtOuNulo(e?.['cep']),
+    resideExterior: bool(b['reside_exterior']),
+    dnv: txtOuNulo(b['declaracao_nascido_vivo']),
+    coberturaParcial: bool(b['cobertura_parcial_temporaria']),
+    itensExcluidos: bool(b['itens_excluidos_cobertura']),
+    cco: txtOuNulo(b['codigo_controle_ans']),
+    motivoCancelamento: motivo && /^\d+$/.test(motivo) ? Number(motivo) : null,
+    aceito: retrato === null || retrato === undefined ? null : typeof retrato === 'string' ? retrato : JSON.stringify(retrato),
+    aceitoEm: instante(b['aceito_em']),
+  };
+}
+
+/**
+ * Grava o complemento do SIB sobre a versão vista (0: ainda sem complemento), o CCO e a cobertura parcial temporária
+ * no beneficiário. O endereço é o do cadastro da pessoa: diferente dele, recusa (o cadastro é a fonte única).
+ */
+async function gravarComplementoSib(
+  tx: TxOperacao,
+  est: number,
+  x: Omit<EntradaComplementoSib, 'hospital'>,
+): Promise<{ id: number; versao: number }> {
+  const atual = await lerComplementoSib(tx as Leitor, est, x.beneficiario);
+  if (!atual) throw inexistente('O beneficiário');
+  const mesmo = (a: unknown, b: unknown) => textoOuNulo(a) === textoOuNulo(b);
+  const enderecoInformado = [x.logradouro, x.numero, x.complemento, x.bairro, x.cep, x.municipio].some(
+    (v) => v !== null && v !== '',
+  );
+  if (
+    enderecoInformado &&
+    !(
+      mesmo(x.logradouro, atual.logradouro) &&
+      mesmo(x.numero, atual.numero) &&
+      mesmo(x.complemento, atual.complemento) &&
+      mesmo(x.bairro, atual.bairro) &&
+      mesmo(x.cep, atual.cep) &&
+      (x.municipio ?? null) === atual.municipio
+    )
+  )
+    throw recusa(
+      'endereco-do-cadastro',
+      'O endereço do beneficiário é o do cadastro da pessoa: altere-o no cadastro e volte ao complemento.',
+      { campos: ['logradouro'] },
+    );
+  let motivo: number | null = null;
+  if (x.motivoCancelamento !== null) {
+    const m = await tx.uma(
+      'SELECT id FROM motivo_movimento_cadastral WHERE codigo_ans = ? AND excluido_em IS NULL LIMIT 1',
+      [String(x.motivoCancelamento)],
+    );
+    if (!m)
+      throw recusa('dominio-nao-cadastrado', 'O cadastro de motivos de movimentação não tem o código informado.', {
+        campos: ['motivoCancelamento'],
+      });
+    motivo = num(m['id']);
+  }
+  const b = await versaoDe(tx, 'beneficiario_plano', x.beneficiario, 'O beneficiário');
+  const op = await tx.uma('SELECT operadora_saude_id FROM contrato_plano WHERE id = ?', [num(b['contrato_plano_id'])]);
+  if (x.cco !== null) {
+    const outro = await tx.uma(
+      `SELECT b.id FROM beneficiario_plano b JOIN contrato_plano k ON k.id = b.contrato_plano_id
+        WHERE b.codigo_controle_ans = ? AND b.id <> ? AND k.operadora_saude_id = ? AND b.excluido_em IS NULL LIMIT 1`,
+      [x.cco, x.beneficiario, num(op?.['operadora_saude_id'])],
+    );
+    if (outro) throw recusa('cco-em-uso', 'Este CCO já é de outro beneficiário da operadora.', { campos: ['cco'] });
+  }
+  if (txtOuNulo(b['codigo_controle_ans']) !== x.cco || bool(b['cobertura_parcial_temporaria']) !== x.coberturaParcial)
+    await tx.alterar('beneficiario_plano', x.beneficiario, num(b['versao']), {
+      codigo_controle_ans: x.cco,
+      cobertura_parcial_temporaria: x.coberturaParcial,
+    });
+  const campos = {
+    declaracao_nascido_vivo: x.dnv,
+    reside_exterior: x.resideExterior,
+    itens_excluidos_cobertura: x.itensExcluidos,
+    motivo_movimento_cadastral_id: motivo,
+  };
+  const [k] = await tx.consultarParaAtualizar(
+    'SELECT id, versao FROM complemento_sib_beneficiario WHERE beneficiario_plano_id = ? AND excluido_em IS NULL',
+    [x.beneficiario],
+  );
+  if ((k ? num(k['versao']) : 0) !== x.versao)
+    throw recusa('envio-desatualizado', 'O complemento mudou depois que você abriu. Abra de novo e confira.');
+  if (!k) {
+    await tx.incluir('complemento_sib_beneficiario', { beneficiario_plano_id: x.beneficiario, ...campos });
+    return { id: x.beneficiario, versao: 1 };
+  }
+  const versao = await tx.alterar('complemento_sib_beneficiario', num(k['id']), x.versao, campos);
+  return { id: x.beneficiario, versao };
 }
 
 function lerDados(v: unknown): Record<string, unknown> {

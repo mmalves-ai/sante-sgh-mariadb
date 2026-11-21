@@ -41,6 +41,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { alvosDoAviso, avisoDoAlvo, type RegraCriticoCandidata } from '@sgh/dominio-sadt';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
@@ -100,7 +101,6 @@ export const LEITURAS_PENDENTES: Readonly<Record<string, string>> = {
 
 /** Gravações diretas que o banco ainda não atende (pedido do lote 02-09). */
 export const GRAVACOES_PENDENTES: Readonly<Record<string, string>> = {
-  avisarCriticos: 'o aviso de valor crítico gerado na liberação (vem com a operação de liberação no banco)',
   registrarOrcamento: 'o orçamento do diagnóstico',
   marcarOrcamentoConvertido: 'a conversão do orçamento em atendimento',
   criarProtocoloPortal: 'o protocolo de acesso do paciente ao portal',
@@ -1205,7 +1205,72 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       });
     },
 
-    avisarCriticos: nao('avisarCriticos'),
+    async avisarCriticos(a) {
+      // A porta lê o resultado, os analitos críticos, os avisos que já existem e as regras vigentes candidatas; quem
+      // escolhe os alvos, a regra (unidade antes da rede, analito antes do exame) e o prazo é o domínio
+      // (@sgh/dominio-sadt, critico/regra-aviso). Avisar de novo o mesmo resultado não repete o aviso.
+      const [re] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT re.id, re.critico, ei.exame_id, r.paciente_id
+           FROM resultado_exame re
+           JOIN exame_item ei ON ei.id = re.exame_item_id
+           JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+          WHERE re.id = ? AND re.exame_item_id = ? AND r.estabelecimento_id = ? AND re.situacao = 'liberado'
+            AND re.excluido_em IS NULL`,
+        [a.idLiberacao, a.exameItem, est],
+      );
+      if (!re) throw recusa('liberacao-inexistente', 'A liberação do exame não está neste estabelecimento.');
+      const resultado = n(re['id']);
+      const exame = n(re['exame_id']);
+      const criticos = (
+        await tx.consultar<Linha>(
+          `SELECT id, analito_id FROM resultado_analito
+            WHERE resultado_exame_id = ? AND critico = TRUE AND excluido_em IS NULL ORDER BY sequencia, id`,
+          [resultado],
+        )
+      ).map((x) => ({ analito: nn(x['analito_id']), resultadoAnalito: n(x['id']) }));
+      const ja = new Set(
+        (
+          await tx.consultar<Linha>(
+            'SELECT resultado_analito_id AS ra FROM aviso_valor_critico WHERE resultado_exame_id = ? AND excluido_em IS NULL',
+            [resultado],
+          )
+        ).map((x) => nn(x['ra'])),
+      );
+      const alvos = alvosDoAviso(criticos, verdadeiro(re['critico']), ja);
+      if (!alvos.length) return 0;
+      const gerado = agora();
+      const analitos = [...new Set(alvos.map((x) => x.analito).filter((x): x is number => x !== null))];
+      const candidatas: RegraCriticoCandidata[] = (
+        await tx.consultar<Linha>(
+          `SELECT id, estabelecimento_id, analito_id, exame_id, prazo_comunicacao_minutos FROM regra_valor_critico
+            WHERE (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND ativo = TRUE
+              AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+              AND (exame_id = ?${analitos.length ? ` OR analito_id IN (${analitos.map(() => '?').join(', ')})` : ''})`,
+          [est, gerado, gerado, exame, ...analitos],
+        )
+      ).map((x) => ({
+        id: n(x['id']),
+        estabelecimento: nn(x['estabelecimento_id']),
+        analito: nn(x['analito_id']),
+        exame: nn(x['exame_id']),
+        prazoMinutos: nn(x['prazo_comunicacao_minutos']),
+      }));
+      for (const x of alvos) {
+        const aviso = avisoDoAlvo(candidatas, { estabelecimento: est, exame, analito: x.analito }, gerado);
+        await tx.incluir('aviso_valor_critico', {
+          estabelecimento_id: est,
+          resultado_exame_id: resultado,
+          resultado_analito_id: x.resultadoAnalito,
+          paciente_id: n(re['paciente_id']),
+          regra_valor_critico_id: aviso.regra,
+          gerado_em: gerado,
+          prazo_em: aviso.prazoEm,
+          situacao: 'pendente',
+          nivel_escalonamento: 0,
+        });
+      }
+      return alvos.length;
+    },
 
     async comunicarAviso(r) {
       const [a] = await tx.consultarParaAtualizar(

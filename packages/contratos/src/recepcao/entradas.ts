@@ -1,6 +1,6 @@
 // Entradas das operações de gravação compatível da recepção (M19, ficha seção 5), validadas na tela, na API e no
-// executor (o mesmo Zod). Vocabulário do novo: o gerador é o ID de TBGERASENHA, a recepção o de TBRECEPCAO, o local
-// o de TBLOCAL, a senha o ID de TBSENHAATEND; o guichê é o número (1 a 99, NUMERIC(2,0)). A data e a hora vêm sempre
+// executor (o mesmo Zod). Vocabulário do produto: o gerador é o id do gerador de senha, a recepção o do ponto de
+// recepção, o local o do local de atendimento e a senha o da senha emitida; o guichê é o número (1 a 99). A data e a hora vêm sempre
 // do relógio do banco (nunca da tela).
 import { z } from 'zod';
 import { esquemaDataIso } from '../preco/entradas.js';
@@ -118,7 +118,7 @@ export const esquemaRegistrarChegada = z
   .object({
     senha: id,
     tipo: z.enum(TIPOS_CHEGADA),
-    /** ID da marcação (REPACAGD para consulta; SIPACAGD para exame). */
+    /** Id da marcação (da agenda de consultas ou da agenda de exames). */
     marcacao: id,
   })
   .strict();

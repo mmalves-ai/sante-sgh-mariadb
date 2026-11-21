@@ -1,5 +1,5 @@
 // Fila da recepção na página inicial (ficha do M27, regra 5; cap-03 §3.5; Anexo A §A.1; Lei 13.466/2017): as senhas
-// pela prioridade legal (TBGRUPOPRIORIDADE: acima de 80 anos antes das demais prioridades, que vêm antes da normal; a
+// pela prioridade legal (grupos de prioridade legal: acima de 80 anos antes das demais prioridades, que vêm antes da normal; a
 // mesma ordem do guichê, `ordenarFila`, com a ordem "prioridade"), dentro do grupo pela chegada; e as guias
 // aguardando autorização do convênio, da mais antiga para a mais nova (quem espera há mais tempo primeiro).
 import {

@@ -25,7 +25,7 @@ export interface Alcance2fa {
   /** Perfil principal (mapa grupo → perfil) ou null. */
   readonly perfil: string | null;
   readonly complementares: readonly string[];
-  /** Grupo do legado (TBGRUUSU.NOME) ou null. */
+  /** Nome do grupo do usuário ou null. */
   readonly grupo: string | null;
 }
 

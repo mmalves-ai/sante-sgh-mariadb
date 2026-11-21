@@ -113,7 +113,7 @@ export class AcessoRedePepController {
     // A abertura na trilha da sessão: o outro estabelecimento, o motivo e a justificativa (nunca o conteúdo).
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: `rede:${est};motivo:${pedido.data.motivo};j:${pedido.data.justificativa}`.slice(
         0,

@@ -47,11 +47,8 @@ describe('vocabulário da anestesia', () => {
     expect(SINAIS_FICHA_OBRIGATORIOS).toEqual(['pas', 'pad', 'fc', 'spo2']);
     for (const s of Object.values(SINAIS_FICHA)) expect(s.minimo).toBeLessThan(s.maximo);
   });
-  it('cada parte da ficha tem a sua tabela SGH_ e nunca uma PRFA_ (regra 12)', () => {
-    for (const p of PARTES_FICHA) {
-      expect(p.tabelaSgh).toMatch(/^SGH_CC_FA_/);
-      expect(p.referencia).toMatch(/^PRFA_LANC_ANEST_/);
-    }
+  it('cada parte da ficha é um código de negócio único (coluna parte do lançamento da ficha)', () => {
+    for (const p of PARTES_FICHA) expect(p.parte).toMatch(/^[a-z][A-Za-z]*$/);
     expect(new Set(PARTES_FICHA.map((p) => p.parte)).size).toBe(PARTES_FICHA.length);
   });
 });

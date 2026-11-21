@@ -1,0 +1,36 @@
+[
+ {
+  "tipo": "ddl",
+  "tabela": "ato_cirurgico (+ ato_cirurgico_dispositivo nova) e ato_cirurgico_procedimento",
+  "colunas": "ato_cirurgico.classificacao_asa_id BIGINT UNSIGNED NULL (FK classificacao_asa), pressao_sistolica SMALLINT UNSIGNED NULL, pressao_diastolica SMALLINT UNSIGNED NULL, frequencia_cardiaca SMALLINT UNSIGNED NULL (CHECK 20 a 250); ato_cirurgico_dispositivo (id, ato_cirurgico_id NOT NULL, dispositivo VARCHAR(30) NOT NULL CHECK IN ('tubo','antimicrobiano','sonda','cateter','puncao'), descricao VARCHAR(35) NULL, auditoria, UNIQUE (ato_cirurgico_id, dispositivo)); ato_cirurgico_procedimento.especialidade_medica_id BIGINT UNSIGNED NULL (FK especialidade_medica)",
+  "motivo": "O registro do ato pela tela (cirurgia.registrarCirurgia) traz a classificação ASA, a pressão e o pulso, os dispositivos usados (tubo, antimicrobiano, sonda, cateter, punção, com descrição) e a especialidade de cada procedimento; o modelo não tem onde gravar. Até o DDL, registrarCirurgia segue em 409 modelo-pendente (operacoes.ts OPERACOES_CIRURGIA_PENDENTES), com o motivo exato na tela."
+ },
+ {
+  "tipo": "apoio",
+  "arquivo": "apps/api/src/modulos/exames/apoio-gravacao.ts",
+  "motivo": "Pré-requisito das gravações da anestesia e do bloco seguro: PortaGravacaoM18.gravarSgh tem de receber a chave de idempotência da requisição (Idempotency-Key). Os gravadores pedem confirmacaoPelaChave/movimentoPelaChave e a chave em passar/justificar/adendo/lancar/registrarApa/registrarSrpa; sem a chave estável no Executor, o reenvio gravaria duas vezes (as tabelas do modelo não têm coluna de chave, e não devem ter: a idempotência é do núcleo)."
+ },
+ {
+  "tipo": "implementacao",
+  "motivo": "Próxima rodada do lote 08 (depois do apoio acima; o DDL já está aplicado: 08_CC/04): os 12 métodos do GravadorAnestesia (APA, ficha aberta pelo agendamento, marcos, lançamentos, encerrar, passagem, lacuna, assinatura com hash, adendo, SRPA) e os 9 do GravadorBlocoSeguro (abrir checklist pelo agendamento, confirmar itens, concluir momento, exceção da incisão, rastreio com unidade cirúrgica pela sala e destino da saída, código do painel). Hoje podeGravar=false e gravarSgh 409 modelo-pendente com o motivo; as leituras já vêm do banco, inclusive o código do painel da família (codigo_painel_familia)."
+ },
+ {
+  "tipo": "contrato",
+  "arquivo": "packages/contratos/src/portal-medico/portal-medico.ts (lote 21)",
+  "motivo": "O pedido do portal ainda manda a hora em quatro dígitos; apps/api/src/modulos/cirurgia/banco-apoio.ts horaDe aceita os dois formatos só até esse contrato migrar para \"HH:MM\". Depois, deixar horaDe estrito (h.slice(0, 5))."
+ },
+ {
+  "tipo": "nota",
+  "motivo": "Arquivos do módulo da cirurgia editados fora da .lista, por fazerem parte da troca de ponta a ponta e não estarem em nenhum outro lote: apps/api/src/modulos/cirurgia/porta-memoria.ts (hora \"HH:MM\" nos pedidos e na conta de minutos), packages/dominio-cirurgia/src/agenda-modelo.ts e .spec.ts (situação no_bloco), e os specs vizinhos (tempo, registro, trava, cirurgia, porta-propria.int)."
+ },
+ {
+  "tipo": "verificador",
+  "arquivo": "tools/obra/divida_f24.py",
+  "motivo": "Pontos cegos achados no módulo da cirurgia: nomes de tabela com prefixo PRFA_ e SGH_CC_ (e SGH_ seguido de maiúsculas em geral), chaves de coluna da origem em dado (ID_CRM, ID_ANEST, ID_TBCBOPRO_*, CRM/CIRUR/ANEST como chave), a sigla REG como nome do atendimento e destino em z.enum(['legado', ...]). O verificador devolvia 0 com tudo isso presente; incluir esses padrões."
+ },
+ {
+  "tipo": "coordenacao",
+  "arquivo": "apps/api/src/modulos/suprimentos/opme.controller.ts (linhas 570 e 678)",
+  "motivo": "A equipe do agendamento cirúrgico ainda circula internamente como pares com chaves de coluna da origem (ID_CRM, ID_ANEST...; domínio equipe.ts, servico.ts, porta-propria.ts, porta-memoria.ts). A troca para chaves de negócio (cirurgiaoId, anestesistaId...) é deste lote, mas o OPME lê a.pares['ID_CRM']: trocar só de um lado deixaria o OPME sem o cirurgião padrão sem erro de tsc. Fazer as duas pontas juntas numa rodada coordenada (ou o OPME passar a ler um campo cirurgiaoId explícito do agendamento)."
+ }
+]

@@ -77,7 +77,7 @@ const post = (s: Sessao, url: string, payload: unknown = {}, k?: string) =>
 const pedido = (extra: Record<string, unknown> = {}) => ({
   sala: 1,
   data: AMANHA,
-  hora: '0700',
+  hora: '07:00',
   duracaoMin: 90,
   paciente: 1003,
   reg: 0,
@@ -134,21 +134,21 @@ describe('agendar, mover, cancelar e suspender', () => {
     );
     expect(a.statusCode).toBe(201);
     const id = a.json().resultado.agendamento as number;
-    const cruza = await post(s, '/agendamentos', pedido({ hora: '0800', paciente: 1001 }));
+    const cruza = await post(s, '/agendamentos', pedido({ hora: '08:00', paciente: 1001 }));
     expect(cruza.statusCode).toBe(409);
     expect(cruza.json().codigo).toBe('sala-ocupada');
     expect((await post(s, '/agendamentos', pedido({ sala: 3, paciente: 1001 }))).json().codigo).toBe(
       'sala-nao-permitida',
     );
     expect(
-      (await post(s, '/agendamentos', pedido({ data: HOJE, hora: '0500', paciente: 1001 }))).json().codigo,
+      (await post(s, '/agendamentos', pedido({ data: HOJE, hora: '05:00', paciente: 1001 }))).json().codigo,
     ).toBe('horario-passado');
     expect(
       (
         await post(
           s,
           '/agendamentos',
-          pedido({ hora: '1200', paciente: 1001, equipe: { cirurgiao: { id: 5001, cod: 1 } } }),
+          pedido({ hora: '12:00', paciente: 1001, equipe: { cirurgiao: { id: 5001, cod: 1 } } }),
         )
       ).json().codigo,
     ).toBe('profissional-invalido');
@@ -159,14 +159,14 @@ describe('agendar, mover, cancelar e suspender', () => {
     expect(d.json().agendamento.recursos).toEqual(['Vídeo']);
     expect(d.json().historico[0].operacao).toBe('Inclusão');
     expect(trilha.eventos.filter((e) => e.evento === 'cirurgia.agenda.lida').at(-1)?.tabelaAlvo).toBe(
-      'CCAGENDA',
+      'agendamento_cirurgico',
     );
     // A remarcação recusa a cirurgia com procedimento adicional ligado ao horário (D-REM-18).
     const mov = await post(s, `/agendamentos/${id}/mover`, {
       sala: 1,
       data: AMANHA,
-      hora: '1300',
-      lido: { sala: 1, data: AMANHA, hora: '0700' },
+      hora: '13:00',
+      lido: { sala: 1, data: AMANHA, hora: '07:00' },
       justificativa: 'Mudança pedida pela equipe',
     });
     expect(mov.json().codigo).toBe('cirurgia-com-adicional');
@@ -177,7 +177,7 @@ describe('agendar, mover, cancelar e suspender', () => {
     const a = await post(
       s,
       '/agendamentos',
-      pedido({ sala: 2, hora: '1400', duracaoMin: 60, paciente: 1001 }),
+      pedido({ sala: 2, hora: '14:00', duracaoMin: 60, paciente: 1001 }),
     );
     expect(a.statusCode).toBe(201);
     const id = a.json().resultado.agendamento as number;
@@ -186,7 +186,7 @@ describe('agendar, mover, cancelar e suspender', () => {
       '/agendamentos',
       pedido({
         sala: 2,
-        hora: '1430',
+        hora: '14:30',
         duracaoMin: 30,
         paciente: 1004,
         carater: 1,
@@ -200,16 +200,16 @@ describe('agendar, mover, cancelar e suspender', () => {
     const velho = await post(s, `/agendamentos/${id}/mover`, {
       sala: 2,
       data: AMANHA,
-      hora: '1600',
-      lido: { sala: 2, data: AMANHA, hora: '1300' },
+      hora: '16:00',
+      lido: { sala: 2, data: AMANHA, hora: '13:00' },
       justificativa: 'Mudança pedida pela equipe',
     });
     expect(velho.statusCode).toBe(409);
     const mov = await post(s, `/agendamentos/${id}/mover`, {
       sala: 2,
       data: AMANHA,
-      hora: '1600',
-      lido: { sala: 2, data: AMANHA, hora: '1400' },
+      hora: '16:00',
+      lido: { sala: 2, data: AMANHA, hora: '14:00' },
       justificativa: 'Mudança pedida pela equipe',
     });
     expect(mov.statusCode).toBe(200);
@@ -253,7 +253,7 @@ describe('solicitação, andamento e pendências', () => {
     const sol = await post(s, '/solicitacoes', {
       sala: 1,
       data: AMANHA,
-      hora: '1500',
+      hora: '15:00',
       duracaoMin: 60,
       paciente: 1007,
       reg: 0,
@@ -280,11 +280,11 @@ describe('solicitação, andamento e pendências', () => {
     const conf = await post(
       s,
       '/agendamentos',
-      pedido({ hora: '1500', duracaoMin: 60, paciente: 1007, solicitacao: idSol }),
+      pedido({ hora: '15:00', duracaoMin: 60, paciente: 1007, solicitacao: idSol }),
     );
     expect(conf.statusCode).toBe(201);
     expect(
-      (await post(s, '/agendamentos', pedido({ hora: '1700', paciente: 1007, solicitacao: idSol }))).json()
+      (await post(s, '/agendamentos', pedido({ hora: '17:00', paciente: 1007, solicitacao: idSol }))).json()
         .codigo,
     ).toBe('solicitacao-encerrada');
     expect((await post(s, `/estados/${idSol}/andamento`, { estado: 'no-bloco' })).statusCode).toBe(200);
@@ -296,7 +296,7 @@ describe('solicitação, andamento e pendências', () => {
       await post(s, '/solicitacoes', {
         sala: 1,
         data: AMANHA,
-        hora: '1900',
+        hora: '19:00',
         duracaoMin: 30,
         paciente: 1001,
         reg: 0,
@@ -314,7 +314,7 @@ describe('solicitação, andamento e pendências', () => {
         await post(s, '/solicitacoes', {
           sala: 3,
           data: AMANHA,
-          hora: '1900',
+          hora: '19:00',
           duracaoMin: 30,
           paciente: 1001,
           reg: 0,
@@ -342,10 +342,10 @@ describe('registro do ato, ligação e salas', () => {
       carater: 1,
       motivoExcecaoIncisao: 'Urgência: abdome agudo sem tempo para a pausa',
       tipoAnestesia: 1,
-      inicio: '0800',
-      fim: '0930',
-      inicioAnestesia: '0745',
-      fimAnestesia: '0940',
+      inicio: '08:00',
+      fim: '09:30',
+      inicioAnestesia: '07:45',
+      fimAnestesia: '09:40',
       cid10: 'K80.2',
       pressao: '120x80',
       pulso: 72,
@@ -365,9 +365,9 @@ describe('registro do ato, ligação e salas', () => {
           equipe: { cirurgiao: { id: 5001, cod: 9001 }, anestesista: { id: 5002, cod: 9002 } },
         },
       ],
-      extensao: { entradaSala: '0740', incisao: '0805', saidaSala: '0950', asa: 2, observacao: null },
+      extensao: { entradaSala: '07:40', incisao: '08:05', saidaSala: '09:50', asa: 2, observacao: null },
     };
-    expect((await post(s, '/realizadas', { ...ato, fim: '0730' })).json().codigo).toBe('tempos-invalidos');
+    expect((await post(s, '/realizadas', { ...ato, fim: '07:30' })).json().codigo).toBe('tempos-invalidos');
     const r = await post(s, '/realizadas', ato);
     expect(r.statusCode).toBe(201);
     const id = r.json().resultado.cirurgia as number;
@@ -391,7 +391,7 @@ describe('registro do ato, ligação e salas', () => {
         .json()
         .itens.find((x: { id: number }) => x.id === 880).ligacao.tipo,
     ).toBe('revisao');
-    // Pelo atendimento (REG) sem período, pela sala e pelo período.
+    // Pelo atendimento sem período, pela sala e pelo período.
     const porReg = (await get(s, '/realizadas?reg=77001')).json();
     expect(porReg.itens.map((x: { id: number }) => x.id)).toEqual([880]);
     expect((await get(s, `/realizadas?de=2026-10-20&ate=${HOJE}&sala=2`)).json().itens).toEqual([]);
@@ -436,7 +436,7 @@ describe('sala permitida nas ações sobre a solicitação', () => {
     const sol = await post(s, '/solicitacoes', {
       sala: 3,
       data: AMANHA,
-      hora: '1300',
+      hora: '13:00',
       duracaoMin: 30,
       paciente: 1001,
       reg: 0,
@@ -457,7 +457,7 @@ describe('sala permitida nas ações sobre a solicitação', () => {
       await post(
         s,
         '/agendamentos',
-        pedido({ hora: '1300', duracaoMin: 30, paciente: 1001, solicitacao: id }),
+        pedido({ hora: '13:00', duracaoMin: 30, paciente: 1001, solicitacao: id }),
       ),
     ];
     for (const r of recusas) {

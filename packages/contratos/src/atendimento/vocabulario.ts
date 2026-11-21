@@ -1,6 +1,6 @@
 // Vocabulário do atendimento externo: ambulatório, pronto atendimento, central de exames e requisição de laboratório
-// (M20; ficha, seções 5 e 8). Os códigos são os do legado (TIPO_ATE do domínio TBITEATE tabela 1, CARACTERS,
-// TIPO_SADT, LAB/PEXT, TBMOTALT); o novo só grava valores já vistos no perfil passivo da cópia. Perfil da cópia pc
+// (M20; ficha, seções 5 e 8). Os códigos são os do sistema anterior (tipo do atendimento, caráter, tipo de guia do
+// SADT, laboratório e motivo de alta); o novo só grava valores já vistos no perfil passivo da cópia. Perfil da cópia pc
 // (só agregados, fichas incluídas de 2025-10 a 2026-09, 31.714):
 //   - TIPO_ATE 4 consulta 20.132, 23 exame 9.488 (9.448 delas requisição de laboratório: LAB S, ESPEC 0), 11 pronto
 //     socorro 1.714, 5 exame ambulatorial 151, 3, 2, 0 (44, "não informado"), 20, 1, 15, 21;
@@ -59,7 +59,7 @@ export function tipoAtendimento(codigo: string): (typeof TIPOS_ATENDIMENTO)[numb
   return TIPOS_ATENDIMENTO.find((t) => t.codigo === codigo);
 }
 
-/** TBITEATE (tabela 1): os tipos do legado lidos nas listas (0 só lido: "não informado"; 23 existe desde 07/2023). */
+/** Tipos de atendimento: os do sistema anterior lidos nas listas (0 só lido: "não informado"; 23 existe desde 07/2023). */
 export const TIPOS_ATE_LEGADO: Readonly<Record<number, string>> = Object.freeze({
   0: 'Não informado',
   1: 'Remoção',
@@ -93,7 +93,7 @@ export function caraterLido(gravado: number | null | undefined): Carater | null 
   return CARATERES.find((c) => c.gravado === gravado)?.codigo ?? null;
 }
 
-/** Tipo de guia do SADT (RECADATE.TIPO_SADT): só os valores vistos, com a legenda "a confirmar" (DP-46.6). */
+/** Tipo de guia do SADT (SADT: serviço de apoio ao diagnóstico e terapia): só os valores vistos, com a legenda "a confirmar" (DP-46.6). */
 export const TIPOS_SADT = [
   { codigo: 'H', rotulo: 'Guia H (a confirmar)' },
   { codigo: 'E', rotulo: 'Guia E (a confirmar)' },
@@ -101,12 +101,12 @@ export const TIPOS_SADT = [
 ] as const;
 export type TipoSadt = (typeof TIPOS_SADT)[number]['codigo'];
 
-/** Termo de consentimento do cabeçalho (ATCABECATEND.TCLE): 1 em 100% do perfil; constante 1 (DP-46.7). */
+/** Termo de consentimento do cabeçalho (TCLE: termo de consentimento livre e esclarecido): 1 em 100% do perfil; constante 1 (DP-46.7). */
 export const TCLE_VISTO = 1 as const;
 
 /**
  * Desfecho codificado do atendimento externo (SGH_ATD_DESFECHO; ficha, `encerrarAtendimento`). O legado não codifica
- * o desfecho do externo desde 04/2020 (REALTA parada): o motivo de alta do legado (TBMOTALT) que corresponde a cada um
+ * o desfecho do externo desde 04/2020 (o registro de alta parou): o motivo de alta do legado que corresponde a cada um
  * fica junto no novo para os indicadores. Ato médico (Lei 12.842/2013): alta, encaminhamento, internação,
  * transferência e óbito só por profissional com conselho ativo; a recepção registra a evasão e o encerramento
  * administrativo.
@@ -165,7 +165,7 @@ export type ColunaQuadroPa = (typeof COLUNAS_QUADRO_PA)[number]['codigo'];
 export const OBSERVACAO_LIMITE_HORAS = 24 as const;
 export const OBSERVACAO_AVISO_HORAS = 20 as const;
 
-/** Situação da conta externa (FCCTAEXT.FECHADA, IND_EMI) e o que permite (regra 2). */
+/** Situação da conta externa (fechamento e emissão) e o que permite (regra 2). */
 export const SITUACOES_CONTA = [
   { codigo: 'aberta', rotulo: 'Conta aberta', permiteLancar: true },
   { codigo: 'fechada', rotulo: 'Conta fechada', permiteLancar: false },
@@ -187,7 +187,7 @@ export const CODIGOS_IMPRESSO = IMPRESSOS_ATENDIMENTO.map((i) => i.codigo) as [
   ...ImpressoAtendimento[],
 ];
 
-/** Herança do atendimento anterior (REPARATE): o que cada marca copia (nomes de produto). */
+/** Herança do atendimento anterior: o que cada marca copia (nomes de produto). */
 export const HERANCAS = [
   { coluna: 'CONV_ANT', campo: 'convenio', rotulo: 'Convênio' },
   { coluna: 'CRM_ANT', campo: 'profissional', rotulo: 'Profissional' },

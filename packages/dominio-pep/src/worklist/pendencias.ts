@@ -12,7 +12,7 @@ export interface ResultadoDoPaciente {
   /** ISO da liberação (do novo ou do outro sistema). */
   readonly liberadoEm: string | null;
   readonly critico: boolean;
-  /** O outro sistema registrou a visualização (SILIBERACAOEXAME.DATA_HORA_VISUALIZACAO). */
+  /** O outro sistema registrou a visualização (data e hora da visualização na liberação do exame). */
   readonly visualizadoNoOutroSistema: boolean;
   /** O médico da fila abriu o resultado no prontuário do novo. */
   readonly vistoPeloMedico: boolean;

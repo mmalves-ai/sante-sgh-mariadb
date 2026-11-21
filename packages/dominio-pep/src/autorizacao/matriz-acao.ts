@@ -65,7 +65,7 @@ const MULTIPROFISSIONAL: ReadonlySet<AcaoClinica> = new Set([
 
 export interface Profissional {
   readonly categoria: CategoriaAssistencial | null;
-  /** Registro no conselho ativo (TBCBOPRO ativo, com sigla e número). */
+  /** Registro no conselho ativo (inscrição no conselho ativa, com sigla e número). */
   readonly conselhoAtivo: boolean;
 }
 

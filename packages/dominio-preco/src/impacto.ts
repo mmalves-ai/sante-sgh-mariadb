@@ -8,9 +8,9 @@ export interface ConvenioDaTabela {
   readonly codigo: number;
   readonly nome: string;
   readonly ativo: boolean;
-  /** Tabela de honorários da conta de internação (TBCONVEN.THM). */
+  /** Tabela de honorários da conta de internação (contrato da fonte pagadora). */
   readonly honorariosInternacao: number | null;
-  /** Tabela de honorários da conta externa (TBCONVEN.THM_E). */
+  /** Tabela de honorários da conta externa (contrato da fonte pagadora). */
   readonly honorariosExterna: number | null;
   readonly diarias?: number | null;
   readonly matmed?: number | null;

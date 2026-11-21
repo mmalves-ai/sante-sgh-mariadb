@@ -225,6 +225,7 @@ export interface FechamentoBalancoLido {
   readonly tipo: TipoFechamentoBalanco;
   readonly inicio: string;
   readonly fim: string;
+  /** Hora de corte da unidade no fechamento (HH:MM). */
   readonly horaCorte: string;
   readonly ganhosMl: number;
   readonly perdasMl: number;
@@ -258,7 +259,7 @@ export interface BalancoDoPaciente {
   readonly leito: string;
   readonly unidade: string;
   readonly agora: string;
-  /** Hora de corte da unidade (HHMM; padrão 0700). */
+  /** Hora de corte da unidade (HH:MM; padrão 07:00). */
   readonly horaCorte: string;
   /** A entrada da internação (AAAA-MM-DDTHH:mm; nula sem a data): o lançamento de antes dela é recusado. */
   readonly internadoDesde: string | null;

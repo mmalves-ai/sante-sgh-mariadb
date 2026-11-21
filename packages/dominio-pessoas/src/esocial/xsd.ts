@@ -2,7 +2,7 @@
 // O XSD é o pacote oficial publicado pelo eSocial (pasta `xsd/<versão>`, bytes originais, conferidos pelo SHA256SUMS:
 // arquivo alterado ou faltando recusa a validação), validado pelo libxml2 em WebAssembly (xmllint-wasm), sem rede.
 //
-// D-XSD-536 (POL-5): o catálogo de esquemas do banco (FPESOCARQXSD, 373) traz o XSD de cada evento, mas não o
+// D-XSD-536 (POL-5): o catálogo de esquemas do banco (373 esquemas) traz o XSD de cada evento, mas não o
 // `tipos.xsd` que todos incluem desde o leiaute S-1.0; sem ele nenhum evento valida. O pacote oficial completo fica
 // versionado aqui e o catálogo do banco é lido só para mostrar a versão vigente de cada evento (o importador do M13
 // mantém o catálogo).

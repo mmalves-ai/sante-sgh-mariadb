@@ -27,7 +27,7 @@ export function diferencaMinutos(de: string, ate: string): number {
   return minutos(ate) - minutos(de);
 }
 
-/** HH:mm (ou HHMM) → minutos do dia. */
+/** "HH:MM" → minutos do dia. Os dois-pontos ainda são opcionais enquanto os padrões de turno não migram (pedido no lote 16). */
 export function minutosDoDia(hhmm: string): number {
   const m = /^([01]\d|2[0-3]):?([0-5]\d)$/.exec(hhmm.trim());
   if (!m) throw new ErroHora(`Hora do dia fora do formato HH:mm: ${hhmm}`);

@@ -6,7 +6,6 @@ import type { ItemFormulario } from '../formulario/dfm/mapeamento.js';
 import { pareceRtf, rtfParaTexto, textoCorrido } from '../prontuario/rtf.js';
 import {
   ErroGravacao,
-  horaLegado,
   type LinhaGravada,
   linhasDasRespostas,
   numeroFormulario,
@@ -103,7 +102,7 @@ const ops = [
 ];
 
 describe('gravador: uma coluna por classe do DFM (regra 2)', () => {
-  it('TfRespTexto (5): texto formatado em CONTEVOL, no RTF do formulário de origem', () => {
+  it('TfRespTexto (5): texto formatado na linha, em RTF', () => {
     const [l] = gravar(item({ tipo: '5', classe: 'TfRespTexto', tipoItem: 'text' }), {
       tipo: 'texto',
       texto: 'Sem queixas\nDieta aceita',
@@ -113,7 +112,7 @@ describe('gravador: uma coluna por classe do DFM (regra 2)', () => {
     expect(textoCorrido(rtfParaTexto(l!.texto!))).toBe('Sem queixas\nDieta aceita');
     expect(l).toMatchObject({ seq: 0, unidade: '', alfa: null, indice: null, autopreenchido: false });
   });
-  it('TfRespData (2): data em RESPDATA', () => {
+  it('TfRespData (2): data na coluna de data da resposta', () => {
     expect(
       gravar(item({ tipo: '2', classe: 'TfRespData', tipoItem: 'date' }), {
         tipo: 'data',
@@ -124,14 +123,13 @@ describe('gravador: uma coluna por classe do DFM (regra 2)', () => {
       hora: null,
     });
   });
-  it('TfRespHora (3): hora HHMM em RESPHORA', () => {
+  it('TfRespHora (3): hora HH:MM na coluna de hora da resposta', () => {
     expect(
       gravar(item({ tipo: '3', classe: 'TfRespHora', tipoItem: 'time' }), { tipo: 'hora', hora: '07:05' })[0]!
         .hora,
-    ).toBe('0705');
-    expect(horaLegado('23:59')).toBe('2359');
+    ).toBe('07:05');
   });
-  it('TfRespComboBox Sim/Não (4): índice em RESPSNAO, ID da resposta da pergunta, texto em RESPALFA; complemento em SEQ 1', () => {
+  it('TfRespComboBox Sim/Não (4): índice da opção, ID da resposta da pergunta e texto da opção; complemento na sequência 1', () => {
     const i = item({
       tipo: '4',
       classe: 'TfRespComboBox',
@@ -217,10 +215,10 @@ describe('gravador: uma coluna por classe do DFM (regra 2)', () => {
     });
     expect(ls.map((l) => [l.seq, l.idResposta, l.hora, l.alfa, l.valor])).toEqual([
       [0, i['x-legacy'].idResposta, null, null, null],
-      [0, 130, '0800', null, null],
+      [0, 130, '08:00', null, null],
       [0, 132, null, '120/80', null],
       [0, 133, null, null, 72],
-      [1, 130, '1400', null, null],
+      [1, 130, '14:00', null, null],
       [1, 133, null, null, 80.5],
     ]);
     expect(() => gravar(i, { tipo: 'grade', linhas: [['8h', null, null]] })).toThrow('Hora inválida');

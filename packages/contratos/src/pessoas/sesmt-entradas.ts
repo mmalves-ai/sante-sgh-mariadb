@@ -4,6 +4,7 @@
 // identifica paciente (a fonte do material biológico é só "conhecida" ou "desconhecida").
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import {
   CODIGOS_DOSE_VACINA_SESMT,
   CODIGOS_MARCO_SOROLOGIA,
@@ -177,7 +178,7 @@ export const esquemaSorologia = z
 export type SorologiaEntrada = z.infer<typeof esquemaSorologia>;
 
 /** Emissão da CAT (tipo inicial, reabertura ou óbito; o número do recibo do eSocial ou do INSS). */
-const hhmm = z.string().regex(/^([01]\d|2[0-3])[0-5]\d$/, 'Hora no formato HHMM.');
+const horaDoDia = esquemaHora;
 
 /**
  * W0-06: os dados da CAT que o S-2210 do eSocial pede e o registro do acidente não pedia (local, atestado com o CID e o
@@ -187,7 +188,7 @@ export const esquemaDadosCat = z
   .object({
     horasAntes: z
       .string()
-      .regex(/^\d{2}[0-5]\d$/, 'Horas trabalhadas no formato HHMM.')
+      .regex(/^\d{2}:[0-5]\d$/, 'Horas trabalhadas no formato HH:MM (até 99:59).')
       .nullable()
       .default(null),
     lateralidade: z.number().int().min(0).max(3).nullable().default(null),
@@ -230,7 +231,7 @@ export const esquemaDadosCat = z
       .nullable()
       .default(null),
     atestadoData: data.nullable().default(null),
-    atestadoHora: hhmm.nullable().default(null),
+    atestadoHora: horaDoDia.nullable().default(null),
     internacao: z.boolean().default(false),
     duracaoDias: z.number().int().min(0).max(9999).nullable().default(null),
     complementoLesao: textoOpcional(200),

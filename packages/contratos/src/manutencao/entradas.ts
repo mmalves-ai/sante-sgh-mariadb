@@ -86,7 +86,7 @@ const camposEquipamento = {
     .regex(/^\d{11}$/, 'O registro na Anvisa tem 11 dígitos.')
     .nullable()
     .default(null),
-  /** Unidade (TBUNIDAD.COD) e setor (TBCENCUS.COD) onde o equipamento fica. */
+  /** Unidade e setor (centro de custo) onde o equipamento fica. */
   unidade: smallint.nullable().default(null),
   centroCusto: id,
   localizacao: textoCp1252(80).nullable().default(null),
@@ -153,7 +153,7 @@ export const esquemaAbrirOs = z
     natureza: enumDe<NaturezaOs>(NATUREZAS_ABERTURA),
     equipamento: id.nullable().default(null),
     codigoEquipamento: esquemaCodigoEquipamento.nullable().default(null),
-    /** Setor do solicitante (TBCENCUS.COD); o servidor confere contra os centros de custo do usuário. */
+    /** Setor do solicitante (centro de custo); o servidor confere contra os centros de custo do usuário. */
     centroCusto: id,
     local: textoCp1252(80).nullable().default(null),
     descricao,
@@ -360,8 +360,8 @@ export const esquemaRegistrarExecucao = z
 export type RegistrarExecucaoEntrada = z.infer<typeof esquemaRegistrarExecucao>;
 
 /**
- * Cobertura por contrato de manutenção (F1). O fornecedor é o do cadastro de compras (M28) pelo código; quando a F3
- * chegar, a cobertura passa a apontar o contrato de fornecedor (`contrato`).
+ * Cobertura por contrato de manutenção (F1). O fornecedor é o do cadastro de compras (M28) pelo código; a cobertura
+ * pode apontar o contrato de fornecedor de suprimentos (`contrato`), do mesmo fornecedor.
  */
 export const esquemaCoberturaContrato = z
   .object({

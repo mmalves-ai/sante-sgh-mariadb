@@ -1,5 +1,5 @@
 // Entradas das operações de gravação compatível do M12 (ficha, seção 5) e os campos editáveis do contrato do
-// convênio (parte pública: nomes no vocabulário do novo; as colunas de TBCONVEN ficam em @sgh/legado).
+// convênio (parte pública: nomes no vocabulário do novo; a correspondência com a origem fica no conector).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { ABAS_EDITAVEIS, ITENS_POR_TRANSACAO } from './constantes.js';
@@ -226,8 +226,8 @@ export const esquemaAlterarContratoConvenio = z
       if (!(nome in e.lidos))
         ctx.addIssue({ code: 'custom', path: ['lidos', nome], message: 'Falta o valor lido pela tela.' });
       if (v === null || v === '') {
-        // Campo de domínio (opção): o vazio gravaria 0 ou '' fora do domínio do legado (CLASSIF_C 1 a 4,
-        // VAL_CART F/T, SENHA_OBRIGATORIA_CONV 1/4, UF sem vazio no perfil): só uma das opções.
+        // Campo de domínio (opção): o vazio gravaria 0 ou '' fora do domínio (classificação 1 a 4, validade da
+        // carteirinha sim/não, senha obrigatória do convênio, UF sem vazio no perfil): só uma das opções.
         if (c.obrigatorio || c.tipo === 'opcao')
           ctx.addIssue({
             code: 'custom',
@@ -255,7 +255,7 @@ export const esquemaAlterarContratoConvenio = z
   });
 export type AlterarContratoConvenioEntrada = z.infer<typeof esquemaAlterarContratoConvenio>;
 
-// ── Reajuste e desfazer (TBVLRTHM) ─────────────────────────────────────────────────────────────────────
+// ── Reajuste e desfazer (vigência de valor) ─────────────────────────────────────────────────────────────────────
 
 const valor = z.number().finite().min(0);
 export const esquemaComponentes = z

@@ -19,7 +19,14 @@ import { cifrarSenha } from '@sgh/dominio-acesso';
 import { ambienteEfetivo, caminhoArquivoAmbiente, NucleoProprio } from '@sgh/nucleo';
 import { lerArgumentos } from './argumentos.ts';
 import { lerSinteticos, procurarDadoReal } from './treino-sem-dado-real.ts';
-import { ErroTreino, lerListaPessoais, mascarar, PASSOS_REINICIO, reiniciarTreino, type ExecutorTreino } from './treino.ts';
+import {
+  ErroTreino,
+  lerListaPessoais,
+  mascarar,
+  PASSOS_REINICIO,
+  reiniciarTreino,
+  type ExecutorTreino,
+} from './treino.ts';
 import { CLIENTE_TREINO, recriarTurmaTreino } from './treino-turma.ts';
 
 /** Docker real (o falso fica nos testes de treino.ts). */
@@ -38,7 +45,11 @@ const dockerReal: ExecutorTreino = {
 const CARGA_CONCLUIDA = ['concluido', 'concluido_com_rejeicoes'];
 
 /** A última carga concluída do conector, no cliente de treino, a partir da imagem de treino (null se nenhuma). */
-async function ultimaCargaDaImagem(nucleo: NucleoProprio, cliente: string, imagem: string): Promise<number | null> {
+async function ultimaCargaDaImagem(
+  nucleo: NucleoProprio,
+  cliente: string,
+  imagem: string,
+): Promise<number | null> {
   const l = await nucleo.lerSomente({ cliente, correlacao: 'treino-reiniciar' }, (x) =>
     x.uma<{ fim: Date | string | null } & Record<string, unknown>>(
       `SELECT MAX(fim_em) AS fim FROM lote_carga_legado
@@ -101,7 +112,8 @@ async function principal(): Promise<number> {
         [codigoEst],
       ),
     );
-    if (!est) throw new ErroTreino(`Bloqueado: estabelecimento ${codigoEst} não existe no cliente ${cliente}.`, true);
+    if (!est)
+      throw new ErroTreino(`Bloqueado: estabelecimento ${codigoEst} não existe no cliente ${cliente}.`, true);
     // A ponte imagem mascarada -> banco próprio é do conector. Sem carga dele a partir da imagem de treino, a turma
     // (banco próprio) e a massa mascarada (imagem) ficariam em mundos diferentes: bloqueado antes de qualquer passo.
     if ((await ultimaCargaDaImagem(nucleo, cliente, container)) === null)
@@ -164,7 +176,9 @@ async function principal(): Promise<number> {
           'pelo conector a partir dela; sem essa carga o treino não está verde.',
         true,
       );
-    console.log(`[treino:reiniciar] verde em ${Math.round(passos.reduce((t, p) => t + p.ms, 0) / 60_000)} min.`);
+    console.log(
+      `[treino:reiniciar] verde em ${Math.round(passos.reduce((t, p) => t + p.ms, 0) / 60_000)} min.`,
+    );
     return 0;
   } finally {
     await nucleo.encerrar();

@@ -70,7 +70,7 @@ const envio = (o: Record<string, unknown> = {}) => ({
   enderecos: 2,
   enderecosMascarados: ['di***@ex***.invalid', 'co***@ex***.invalid'],
   periodicidade: 'diaria',
-  hora: 700,
+  hora: '07:00',
   diaSemana: null,
   diaMes: null,
   ativo: true,
@@ -277,7 +277,7 @@ describe('envio agendado (W0-09)', () => {
     expect(alt?.corpo).toMatchObject({
       relatorio: 'censoDiarioUnidade',
       titulo: 'Censo das 7h',
-      hora: 700,
+      hora: '07:00',
       grupos: ['DIRETORIA'],
       enderecos: [],
       manterEnderecos: true,

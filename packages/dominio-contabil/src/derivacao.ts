@@ -25,7 +25,7 @@ export interface FatoBase {
 }
 
 export interface ContextoDerivacao {
-  /** Empresa contábil do estabelecimento (as fontes gravam a empresa de formas diferentes; FCCTAEXT.EMPRESA é texto). */
+  /** Empresa contábil do estabelecimento (as fontes gravam a empresa de formas diferentes; na conta hospitalar ela é texto). */
   readonly empresa: number;
 }
 

@@ -2,13 +2,13 @@
 // de SQL livre, pedidos de relatório, envio agendado, as integrações novas (endpoints, FHIR R4 e RNDS, HL7 v2 e o
 // motor de integração, parceiros, mensagens pela Hal-AI, monitor de filas), o laboratório de apoio, as interfaces de
 // equipamento e a prescrição digital externa. Quem tem a opção no legado tem a permissão no novo (regra 1 do M06).
-// Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - Editor de relatórios v1.0 4240 e 4246 e v2.0 4243 e 4247 (módulo de abertura e Gerador de relatórios v2.0): o
-//     curador e quem configura o envio agendado (TBEDITREL_AGENDA é do editor); Emissão de relatórios v1.0 4241 e
+//     curador e quem configura o envio agendado (o agendamento é do editor); Emissão de relatórios v1.0 4241 e
 //     4248, v2.0 4244 e 4249;
 //   - cada relatório do catálogo: as opções dos relatórios que ele substitui ("Meus relatórios" de cada módulo e o
 //     relatório do usuário: RELATORIOS_CATALOGO.opcoesLegado); o acesso por grupo e usuário de cada relatório de origem
-//     (TBEDITREL_GRUUSU, TBEDITREL_TBUSERS) restringe ainda mais na execução (ninguém ganha acesso que não tinha);
+//     (grupos e usuários liberados no relatório) restringe ainda mais na execução (ninguém ganha acesso que não tinha);
 //   - Tabelas › Cadastro de Endpoint 6339 (Gerenciamento 6340); S.A.D.T. › Interfaceamento 2964 (as interfaces dos
 //     laboratórios de apoio); S.M.S. › Lançamentos 4995 (Enviar 4996, Reenviar 4997, Agendar envio 4998) e Cadastrar
 //     cenário 4993;

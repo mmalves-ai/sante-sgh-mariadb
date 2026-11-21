@@ -97,8 +97,25 @@ export function periodicidadeDosMeses(meses: number): number | null {
 }
 
 /** Formato da resposta do indicador (meta_contratual_sus.formato_resposta) ↔ o código da tela. */
-export const FORMATO_DA_TELA: Readonly<Record<number, 'sim_nao' | 'numero'>> = { 2: 'sim_nao', 6: 'numero' };
-export const FORMATO_DO_BANCO: Readonly<Record<string, number>> = { sim_nao: 2, numero: 6 };
+export const FORMATO_DA_TELA: Readonly<Record<number, 'sim_nao' | 'numero' | 'inteiro'>> = {
+  2: 'sim_nao',
+  6: 'numero',
+  7: 'inteiro',
+};
+export const FORMATO_DO_BANCO: Readonly<Record<string, number>> = { sim_nao: 2, numero: 6, inteiro: 7 };
+
+/** A origem do realizado da apuração (afericao_meta_sus.origem_realizado) ↔ o código do contrato. */
+export const ORIGEM_REALIZADO_DO_CONTRATO = {
+  'faturamento-sus': 'faturamento_sus',
+  'contas-sus': 'contas_sus',
+  informado: 'informado',
+} as const;
+export const ORIGEM_REALIZADO_DO_BANCO: Readonly<Record<string, keyof typeof ORIGEM_REALIZADO_DO_CONTRATO>> =
+  {
+    faturamento_sus: 'faturamento-sus',
+    contas_sus: 'contas-sus',
+    informado: 'informado',
+  };
 
 /** A fonte da aferição gravada na meta (meta_contratual_sus.fonte_afericao) a partir da escolha da tela. */
 export const FONTE_AFERICAO_DA_TELA: Readonly<Record<number, string>> = {
@@ -146,7 +163,9 @@ const rotulos = <T extends { readonly codigo: number; readonly rotulo: string }>
 ): ItemCargaContratualizacao[] =>
   itens.flatMap((x, i) => {
     const codigo = codigoNeutro(lista, x.codigo);
-    return codigo ? [{ lista, codigo, descricao: x.rotulo, mesesPeriodo: meses?.(x) ?? null, ordem: i + 1 }] : [];
+    return codigo
+      ? [{ lista, codigo, descricao: x.rotulo, mesesPeriodo: meses?.(x) ?? null, ordem: i + 1 }]
+      : [];
   });
 
 /**

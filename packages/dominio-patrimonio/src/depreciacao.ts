@@ -1,5 +1,5 @@
 // Depreciação mensal (M54, etapa 6; ficha, regra 12): linear, com o coeficiente acelerado por turno
-// (GPCOEFICIENTE_DEPREC: 1 turno 1,0; 2 turnos 1,5; 3 turnos 2,0 no pc) quando o parâmetro da empresa manda aplicar, e
+// (cadastro de coeficientes por turno, por exemplo 1 turno 1,0; 2 turnos 1,5; 3 turnos 2,0) quando o parâmetro da empresa manda aplicar, e
 // o valor residual descontado da base quando o parâmetro manda considerar. A cota de cada mês é a diferença entre a
 // acumulada ESPERADA até a competência e a acumulada já gravada:
 //   esperada(c) = mín(base − residual, arred((base − residual) × coeficiente × meses(c) ÷ vida útil))

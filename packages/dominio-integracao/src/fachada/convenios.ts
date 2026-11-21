@@ -5,7 +5,7 @@ import { CODIGOS_ERRO_FACHADA as E, LIMITES_FACHADA } from '@sgh/contratos';
 import { filtrarPorRelevancia, sugerirAgendas } from './busca.js';
 import { erroFachada, erroValidacao, smallint } from './erros.js';
 
-/** A linha lida de TBCONVEN (COD, NOME aparado, SITUACAO aparada, PERMITE_ATEND). */
+/** A linha lida do cadastro do convênio (código, nome aparado, situação aparada e se permite atendimento). */
 export interface LinhaConvenioFachada {
   readonly cod: number;
   readonly nome: string | null;

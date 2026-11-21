@@ -177,7 +177,7 @@ export const HISTORIAS: readonly Historia[] = [
   {
     id: 'hora',
     componente: 'SanteHora',
-    titulo: 'Hora legada HHMM',
+    titulo: 'Hora (quatro dígitos, até a troca do componente)',
     render: () => [h(SanteHora, { modelValue: '0801' }), horaEditavel()],
   },
   {

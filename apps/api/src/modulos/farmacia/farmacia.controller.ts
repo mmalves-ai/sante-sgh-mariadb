@@ -219,7 +219,7 @@ export class FarmaciaController {
   @Auditar(EVENTOS_AUDITAVEIS.suprimentosFilaDispensacaoLida.codigo)
   fila(@Query('unidade') u: string | undefined, @Req() req: RequisicaoAutorizada): Promise<FilaDispensacao> {
     const unidade = unidadeDe(u);
-    req.sghAlvo = { tabelaAlvo: 'PRCHKGERAL', idAlvo: `unidade ${unidade}` };
+    req.sghAlvo = { tabelaAlvo: 'dispensacao', idAlvo: `unidade ${unidade}` };
     return this.servico.fila(sessaoDe(req), unidade);
   }
 
@@ -240,7 +240,7 @@ export class FarmaciaController {
   @Auditar(EVENTOS_AUDITAVEIS.suprimentosFilaDispensacaoLida.codigo)
   doses(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada) {
     const r = idDaRota(reg);
-    req.sghAlvo = { tabelaAlvo: 'GEDISPHOR', idAlvo: `atendimento ${r}` };
+    req.sghAlvo = { tabelaAlvo: 'dispensacao_item', idAlvo: `atendimento ${r}` };
     return this.servico.dosesDoAtendimento(sessaoDe(req), r);
   }
 
@@ -281,7 +281,7 @@ export class FarmaciaController {
   entregas(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada) {
     const situacao = q['situacao'] === '8' ? 8 : q['situacao'] === '9' ? 9 : 7;
     const centro = Number(q['centro'] ?? 0);
-    req.sghAlvo = { tabelaAlvo: 'GECTRLENTREGADOCSAIDA', idAlvo: `situação ${situacao}` };
+    req.sghAlvo = { tabelaAlvo: 'documento_estoque', idAlvo: `situação ${situacao}` };
     return this.servico.entregas(sessaoDe(req), situacao, centro > 0 ? centro : undefined);
   }
 
@@ -316,7 +316,7 @@ export class FarmaciaController {
   @Auditar(EVENTOS_AUDITAVEIS.suprimentosAvaliacaoLida.codigo)
   async avaliacao(@Query('unidade') u: string | undefined, @Req() req: RequisicaoAutorizada) {
     const unidade = unidadeDe(u);
-    req.sghAlvo = { tabelaAlvo: 'PREXTRATOITEM_TBSITFARM', idAlvo: `unidade ${unidade}` };
+    req.sghAlvo = { tabelaAlvo: 'avaliacao_farmaceutica', idAlvo: `unidade ${unidade}` };
     const { triagens, ...f } = await this.servico.filaAvaliacao(sessaoDe(req), unidade);
     return { ...f, novos: triagens.length };
   }
@@ -552,7 +552,7 @@ export class FarmaciaController {
     const s = sessaoDe(req);
     const item = idDaRota(i);
     const p = await this.periodo(s, q);
-    req.sghAlvo = { tabelaAlvo: 'GELANSAI', idAlvo: `controlado ${item} ${p.inicio}..${p.fim}` };
+    req.sghAlvo = { tabelaAlvo: 'movimento_estoque', idAlvo: `controlado ${item} ${p.inicio}..${p.fim}` };
     return { ...p, movimentos: await this.servico.movimentosDoControlado(s, item, p.inicio, p.fim) };
   }
 

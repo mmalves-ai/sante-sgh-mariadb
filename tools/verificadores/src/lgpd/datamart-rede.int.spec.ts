@@ -42,7 +42,9 @@ const LEITURAS: LeiturasDaCarga = {
       dadosAte: new Date(AGORA),
     }) as unknown as MovimentoInternacao,
   demografia: async () => new Map(),
-  atendimentos: async () => [{ mes: '2026-06', tipo: 'ambulatorio', convenio: 1, especialidade: 2, quantidade: 7 }],
+  atendimentos: async () => [
+    { mes: '2026-06', tipo: 'ambulatorio', convenio: 1, especialidade: 2, quantidade: 7 },
+  ],
   itens: async () => [],
   dispensacoes: async () => [{ mes: '2026-06', registros: 3, quantidade: 9 }],
   pessoas: async () => new Map(),
@@ -59,11 +61,16 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
     try {
       await nucleo.cliente(CLIENTE);
     } catch {
-      execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste F2.2 onda 5'], { cwd: raiz, stdio: 'ignore' });
+      execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste F2.2 onda 5'], {
+        cwd: raiz,
+        stdio: 'ignore',
+      });
       nucleo.esquecerCliente(CLIENTE);
     }
     const r = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'preparo-05-10' }, (l) =>
-      l.consultar<{ id: number | string; codigo: string }>('SELECT id, codigo FROM estabelecimento ORDER BY id LIMIT 1'),
+      l.consultar<{ id: number | string; codigo: string }>(
+        'SELECT id, codigo FROM estabelecimento ORDER BY id LIMIT 1',
+      ),
     );
     est = r[0] ? { id: Number(r[0].id), codigo: String(r[0].codigo) } : null;
     mkdirSync(pasta, { recursive: true });
@@ -73,7 +80,8 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
     rmSync(pasta, { recursive: true, force: true });
     if (nucleo && (criados.chaves.length || criados.prerequisitos.length))
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-05-10' }, async (e) => {
-        for (const id of criados.prerequisitos) await e.executar('DELETE FROM recurso_prerequisito WHERE id = ?', [id]);
+        for (const id of criados.prerequisitos)
+          await e.executar('DELETE FROM recurso_prerequisito WHERE id = ?', [id]);
         for (const id of criados.chaves) await e.executar('DELETE FROM liberacao_chave WHERE id = ?', [id]);
       });
     await nucleo?.encerrar();
@@ -88,15 +96,17 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
     const e = est!;
     const carga = nucleoDaCarga(nucleo, CLIENTE);
     const existentes = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'preparo-05-10' }, (l) =>
-      l.consultar("SELECT id FROM liberacao_chave WHERE estabelecimento_id = ? AND tipo = 'recurso' AND chave = ?", [
-        e.id,
-        CHAVE_LIBERACAO_BI_REDE,
-      ]),
+      l.consultar(
+        "SELECT id FROM liberacao_chave WHERE estabelecimento_id = ? AND tipo = 'recurso' AND chave = ?",
+        [e.id, CHAVE_LIBERACAO_BI_REDE],
+      ),
     );
     expect(await biRedeLiberado(carga, ['codigo_inexistente'])).toEqual([false]);
     if (existentes.length > 0) return; // estado de outro teste: não mexe
     expect(await biRedeLiberado(carga, [e.codigo])).toEqual([false]);
-    const declarados = (recursoDesligado(CHAVE_LIBERACAO_BI_REDE)?.prerequisitos ?? []) as readonly { tipo: string }[];
+    const declarados = (recursoDesligado(CHAVE_LIBERACAO_BI_REDE)?.prerequisitos ?? []) as readonly {
+      tipo: string;
+    }[];
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-05-10' }, async (w) => {
       await w.executar(
         "INSERT INTO liberacao_chave (estabelecimento_id, tipo, chave, escopo, valor, ligada, criado_em) VALUES (?, 'recurso', ?, 'hospital', '*', TRUE, NOW(3))",
@@ -113,7 +123,9 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
           "INSERT INTO recurso_prerequisito (estabelecimento_id, recurso, tipo, situacao, criado_em) VALUES (?, ?, ?, 'cumprido', NOW(3))",
           [e.id, CHAVE_LIBERACAO_BI_REDE, tipo],
         );
-        criados.prerequisitos.push(Number((await w.uma<{ id: number }>('SELECT LAST_INSERT_ID() AS id'))?.id));
+        criados.prerequisitos.push(
+          Number((await w.uma<{ id: number }>('SELECT LAST_INSERT_ID() AS id'))?.id),
+        );
       }
     });
     expect(await biRedeLiberado(carga, [e.codigo])).toEqual([true]);
@@ -126,7 +138,13 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
     const carga = nucleoDaCarga(nucleo, CLIENTE);
     const r = await carregarEstabelecimento(
       carga,
-      { hospital: e.codigo, chave: 'chave-sintetica-05-10', modo: 'por-estabelecimento', pasta, agora: AGORA },
+      {
+        hospital: e.codigo,
+        chave: 'chave-sintetica-05-10',
+        modo: 'por-estabelecimento',
+        pasta,
+        agora: AGORA,
+      },
       LEITURAS,
     );
     expect(r).toMatchObject({ internacoes: 0, atendimentos: 1, dispensacoes: 1 });
@@ -134,14 +152,17 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
     expect(rede.estabelecimentos).toEqual([e.codigo]);
     const db = new DatabaseSync(arquivoDaRede(pasta), { readOnly: true });
     try {
-      const tabelas = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(
-        (t) => ({
-          nome: t.name,
-          colunas: Object.fromEntries(
-            (db.prepare(`PRAGMA table_info(${t.name})`).all() as { name: string }[]).map((c) => [c.name, 'texto' as const]),
-          ),
-        }),
-      );
+      const tabelas = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]
+      ).map((t) => ({
+        nome: t.name,
+        colunas: Object.fromEntries(
+          (db.prepare(`PRAGMA table_info(${t.name})`).all() as { name: string }[]).map((c) => [
+            c.name,
+            'texto' as const,
+          ]),
+        ),
+      }));
       expect(colunasIdentificadoras(tabelas)).toEqual([]);
     } finally {
       db.close();
@@ -176,9 +197,14 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
         await tx;
       }
       const comTransacao = c.conexoesDoNovo.filter((x) => x.transacaoMaisLongaMs >= 200);
-      expect(comTransacao.length, 'a coleta precisa ver a transação aberta (PROCESS na conta do vigia)').toBeGreaterThanOrEqual(1);
+      expect(
+        comTransacao.length,
+        'a coleta precisa ver a transação aberta (PROCESS na conta do vigia)',
+      ).toBeGreaterThanOrEqual(1);
       expect(c.porProcesso.reduce((s, p) => s + p.travas, 0)).toBeGreaterThanOrEqual(1);
-      console.log(`coletor: ${c.conexoesDoNovo.length} conexão(ões), ${comTransacao.length} com transação aberta, ${c.alertas.length} alerta(s)`);
+      console.log(
+        `coletor: ${c.conexoesDoNovo.length} conexão(ões), ${comTransacao.length} com transação aberta, ${c.alertas.length} alerta(s)`,
+      );
     } finally {
       await vigia.encerrar();
     }
@@ -186,10 +212,14 @@ describe.skipIf(SEM_BANCO)('ferramentas de leitura contra o MariaDB (cliente f22
 
   it('privilégios da conta da aplicação lidos do information_schema', async () => {
     const conta = lerConfiguracaoNucleo(ambienteDoRepositorio()).usuario.trim();
-    const p = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'guardas-teste' }, (l) => lerPrivilegiosDaConta(l));
+    const p = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'guardas-teste' }, (l) =>
+      lerPrivilegiosDaConta(l),
+    );
     expect(p.some((x) => nomeDaConta(x.conta) === conta)).toBe(true);
     const d = desviosDaConta(p, conta);
-    console.log(`privilégios: ${p.length} linha(s); excesso ${d.excesso.length}; alertas ${d.alertas.length}`);
+    console.log(
+      `privilégios: ${p.length} linha(s); excesso ${d.excesso.length}; alertas ${d.alertas.length}`,
+    );
   });
 
   it('valores de controle da internação (contagens e chaves sem leitura no modelo)', async () => {

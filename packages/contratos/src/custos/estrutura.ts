@@ -1,5 +1,5 @@
 // Contratos da estrutura de custos e da coleta de estatísticas (M54, etapa 4: fatia F4; ficha, seções 4, 6, 7 e 8,
-// regra 7 em preparação): cada centro de custo (TBCENCUS, lido onde está) classificado em produtivo, auxiliar ou
+// regra 7 em preparação): cada centro de custo (do cadastro de centros de custo) classificado em produtivo, auxiliar ou
 // administrativo, com a ordem do rateio sequencial e o critério (a estatística que reparte o custo do centro), e as
 // estatísticas por centro e competência (paciente-dia, horas de sala, exames, requisições, colaboradores, leitos, m², kg
 // de roupa, refeições), coletadas das fontes do banco (agregadas no banco, nunca linha de paciente) ou lançadas à mão.
@@ -50,7 +50,7 @@ export const ROTULOS_FONTE_ESTATISTICA: Readonly<Record<FonteEstatistica, string
 };
 
 /**
- * Tipo de dado da estatística, pelos códigos do domínio de custos do banco (CTTIPODADO): 1 Lançamento (vale só na
+ * Tipo de dado da estatística, pelos códigos do domínio de custos: 1 Lançamento (vale só na
  * competência), 2 Referência (vale da competência em diante, até ser trocada; por exemplo a área em m²).
  */
 export const TIPOS_DADO_ESTATISTICA = { lancamento: 1, referencia: 2 } as const;
@@ -205,9 +205,9 @@ export interface ClassificacaoCentro {
 }
 
 export interface CentroCustoEstrutura {
-  /** TBCENCUS.ID (a chave que o SGH_ guarda). */
+  /** Id do centro de custo. */
   readonly id: number;
-  /** TBCENCUS.COD (o código que os movimentos usam). */
+  /** Código do centro de custo (o que os movimentos usam). */
   readonly codigo: number;
   readonly nome: string;
   readonly sigla: string | null;
@@ -354,7 +354,7 @@ export type ColetarEstatisticas = z.infer<typeof esquemaColetarEstatisticas>;
 export const esquemaLancarEstatistica = z
   .object({
     competencia: esquemaCompetenciaCustos,
-    /** TBCENCUS.ID. */
+    /** Id do centro de custo. */
     centro: z.number().int().positive(),
     codigo: z.enum(CODIGOS_ESTATISTICA),
     quantidade: z

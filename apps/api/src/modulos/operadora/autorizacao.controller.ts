@@ -159,9 +159,13 @@ export class AutorizacaoOperadoraController {
     operacao: string,
     tabela: string,
     fn: (g: GravadorAutorizacao) => Promise<T>,
+    motivo?: string,
   ): Promise<T> {
-    const linha = (r: T): RegistroTrilhaTela =>
-      linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id) });
+    // O motivo da tela (alteração do auditor) vai para a trilha da operação, na mesma transação.
+    const linha = (r: T): RegistroTrilhaTela => ({
+      ...linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id) }),
+      ...(motivo ? { motivo } : {}),
+    });
     const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw recusaComDependentes(e) ?? problemaDoCadastro(e);
     });
@@ -599,7 +603,6 @@ export class AutorizacaoOperadoraController {
         g.alterar({
           id: n,
           versao: e.versao,
-          nome: e.nome,
           categoria: e.categoria,
           conselho,
           numero: e.numero,
@@ -607,11 +610,12 @@ export class AutorizacaoOperadoraController {
           motivo: e.motivo,
           usuario: s.login,
         }),
+      e.motivo,
     );
     return {
       ok: true,
       id: r.id,
-      mensagem: `Designação de ${e.nome} alterada (${conselho} ${e.numero}/${e.uf}).`,
+      mensagem: `Designação de ${r.nome} alterada (${conselho} ${e.numero}/${e.uf}).`,
     };
   }
 }

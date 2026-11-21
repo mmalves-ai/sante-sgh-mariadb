@@ -14,7 +14,7 @@ export type TipoMovimento =
   | 'requisicao'
   | 'venda';
 
-/** Códigos de `GELOCUSU.TIPO_MOV` (uma linha por usuário, local e tipo; contagens na cópia pc). */
+/** Tipos de movimento do escopo do usuário no estoque (uma linha por usuário, local e tipo). */
 export const TIPOS_MOVIMENTO_CADASTRO: Readonly<Record<string, TipoMovimento>> = {
   S: 'saida',
   E: 'entrada',

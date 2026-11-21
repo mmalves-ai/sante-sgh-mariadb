@@ -81,7 +81,7 @@ export interface LeitoLido {
   readonly acomodacao: string;
   readonly leito: string;
   readonly ativo: boolean;
-  /** Ocupação (RILEITOS.REG > 0): só leitura no cadastro (regra 14). */
+  /** Ocupação (leito com internação): só leitura no cadastro (regra 14). */
   readonly ocupado: boolean;
   readonly ramal: number | null;
 }

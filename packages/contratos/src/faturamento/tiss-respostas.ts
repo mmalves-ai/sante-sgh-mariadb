@@ -158,7 +158,7 @@ export interface ItemDemonstrativoLido {
 export interface ItemGlosaLido {
   readonly item: number;
   readonly versao: string;
-  /** O sequencial do item na guia enviada (FCLANEXTSEQITEM): é por ele que o demonstrativo casa. */
+  /** O sequencial do item na guia enviada: é por ele que o demonstrativo casa. */
   readonly sequencial: number | null;
   readonly conta: number;
   readonly convenio: number;

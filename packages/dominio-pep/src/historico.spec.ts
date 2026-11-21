@@ -1,4 +1,4 @@
-// Regra 7 (MANTERHIST) e regra 10 (horários) da ficha do M22.
+// Regra 7 (nível de histórico do vínculo) e regra 10 (horários) da ficha do M22.
 import type { CampoRegistro, RespostaRegistro } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { mostraHistorico, preencherPeloHistorico } from './historico.js';
@@ -24,7 +24,7 @@ const campo = (vinculo: number, manterHistorico: number, itens: CampoRegistro[] 
   itens,
 });
 
-describe('pré-preenchimento por MANTERHIST (regra 7; DP-28)', () => {
+describe('pré-preenchimento pelo nível de histórico (regra 7; DP-28)', () => {
   const campos = [campo(1, 0, [campo(2, 1), campo(3, 2), campo(4, 3)])];
   const ultimas: RespostaRegistro[] = [2, 3, 4, 9].map((v) => ({
     vinculo: v,

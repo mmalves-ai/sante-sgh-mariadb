@@ -269,7 +269,7 @@ export function podePublicarVersao(
 // ── Regra 9: códigos de baixa confiança da onda ──────────────────────────────────────────────────────────
 
 export interface CodigoBaixaConfianca {
-  /** TABELA.COLUNA do outro sistema. */
+  /** Campo do produto que recebe o código (a correspondência com a origem fica no conector). */
   readonly coluna: string;
   /** Decisão pendente que confirma a legenda. */
   readonly dp: 'DP-46.3' | 'DP-46.4' | 'DP-46.5';
@@ -281,14 +281,14 @@ export interface CodigoBaixaConfianca {
 
 /** Os códigos da onda 4 (ficha do M42, regra 9; Anexo A; respostas/fiscal.md FIS-08 a FIS-10). */
 export const CODIGOS_BAIXA_CONFIANCA_ONDA_4: readonly CodigoBaixaConfianca[] = [
-  { coluna: 'MFCONPAG.STATUS', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
-  { coluna: 'MFCONPAG.TP_PGTO', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
-  { coluna: 'MFCTAREC.ORIGEM', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['F', 'E'] },
-  { coluna: 'MFLANCTO.TIPO_TRF', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['I', 'T', 'C', 'D'] },
-  { coluna: 'FCCTAEXT.TIPO_NOTA', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },
-  { coluna: 'FCCTAEXT.PACOTE', dp: 'DP-46.5', pergunta: 'FIS-10', citados: ['P', 'D', 'F'] },
-  { coluna: 'FCLANEXT.FPA', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },
-  { coluna: 'FCLANEXT.VEIO', dp: 'DP-46.5', pergunta: 'FIS-10', citados: ['B', 'P', 'D'] },
+  { coluna: 'contaPagar.situacao', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
+  { coluna: 'contaPagar.formaPagamento', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
+  { coluna: 'contaReceber.origem', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['F', 'E'] },
+  { coluna: 'movimentoBancario.tipoTransferencia', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['I', 'T', 'C', 'D'] },
+  { coluna: 'contaHospitalar.tipoNota', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },
+  { coluna: 'contaHospitalar.pacote', dp: 'DP-46.5', pergunta: 'FIS-10', citados: ['P', 'D', 'F'] },
+  { coluna: 'itemConta.fpa', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },
+  { coluna: 'itemConta.origemLancamento', dp: 'DP-46.5', pergunta: 'FIS-10', citados: ['B', 'P', 'D'] },
 ];
 
 export interface CodigoConferido {
@@ -326,7 +326,7 @@ export function conferirCodigoOnda4(
 
 // ── Acompanhamento da competência ────────────────────────────────────────────────────────────────────────
 
-/** Situação da conta no outro sistema (FCCTAEXT.FECHADA): N aberta, S fechada, A apresentada (em lote). */
+/** Situação da conta no outro sistema: N aberta, S fechada, A apresentada (em lote). */
 export const SITUACOES_CONTA_ONDA = ['N', 'S', 'A'] as const;
 export type SituacaoContaOnda = (typeof SITUACOES_CONTA_ONDA)[number];
 

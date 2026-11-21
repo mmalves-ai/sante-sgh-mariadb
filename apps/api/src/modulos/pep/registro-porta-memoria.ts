@@ -5,7 +5,20 @@
 // gravador do domínio), guardado em memória por estabelecimento; nada vai à cópia. Marca "SINTETICO".
 import { createHash } from 'node:crypto';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
-import { type AtendimentoLido, type CabecalhoDocumentoLido, type CabecalhoRegistroLido, type DefinicaoFormularioLida, type GravacaoEvolucao, type GravacaoRascunho, type LinhaGravacao, type LinhaRespostaLida, type ModeloDoRegistro, type ProfissionalDoRegistro, type RascunhoLido, loginDaOperacao } from './tipos-pep.js';
+import {
+  type AtendimentoLido,
+  type CabecalhoDocumentoLido,
+  type CabecalhoRegistroLido,
+  type DefinicaoFormularioLida,
+  type GravacaoEvolucao,
+  type GravacaoRascunho,
+  type LinhaGravacao,
+  type LinhaRespostaLida,
+  type ModeloDoRegistro,
+  type ProfissionalDoRegistro,
+  type RascunhoLido,
+  loginDaOperacao,
+} from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { ContextoRegistro, PortaRegistro, ProvaLida } from './registro-porta.js';
 
@@ -785,7 +798,11 @@ export class PortaRegistroMemoria implements PortaRegistro {
       suspensoEm: null,
       justificativaSuspensao: null,
     });
-    await this.auditar(c, ctx, 'pep.evolucao.registrada', { tabela: 'PRCABEVOL', id, paciente: e.paciente });
+    await this.auditar(c, ctx, 'pep.evolucao.registrada', {
+      tabela: 'registro_assistencial',
+      id,
+      paciente: e.paciente,
+    });
     this.ouvinte?.(c.hospital, {
       id,
       paciente: e.paciente,
@@ -831,7 +848,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
     if (anterior) anterior.fechado = 'arquivado';
     this.rasc(c.hospital).push(r);
     await this.auditar(c, ctx, 'pep.rascunho.salvo', {
-      tabela: 'PRCABEVOLTMP',
+      tabela: 'registro_assistencial_rascunho',
       id: r.id,
       paciente: e.paciente,
     });
@@ -858,7 +875,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
     });
     r.fechado = 'excluido';
     await this.auditar(c, ctx, 'pep.rascunho.descartado', {
-      tabela: 'PRCABEVOLTMP',
+      tabela: 'registro_assistencial_rascunho',
       id: r.id,
       paciente: r.paciente,
     });
@@ -893,7 +910,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
     if (e.comoSuporte) r.comoSuporte.push('suspenso');
     r.justificativaSuspensao = e.justificativa;
     await this.auditar(c, ctx, 'pep.evolucao.suspensa', {
-      tabela: 'PRCABEVOL',
+      tabela: 'registro_assistencial',
       id: r.id,
       paciente: r.paciente,
     });

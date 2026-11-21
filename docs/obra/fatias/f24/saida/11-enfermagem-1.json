@@ -1,0 +1,72 @@
+[
+  {
+    "tipo": "ddl",
+    "tabela": "horario_administracao_evento",
+    "colunas": [
+      "CHECK ck_horario_administracao_evento_evento: acrescentar 'infusao_retomada' e 'infusao_troca_bolsa'"
+    ],
+    "motivo": "O contrato da infusão contínua tem seis eventos (início, pausa, retomada, troca de bolsa, mudança de velocidade, fim); o CHECK do banco só aceita quatro. A retomada e a troca de bolsa continuam recusadas com modelo-pendente em apps/api/src/modulos/enfermagem/porta-propria.ts (gravarEventoInfusao). Só amplia o CHECK: as linhas gravadas continuam válidas."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "registro_assistencial_extensao (nova) ou colunas em registro_assistencial_resposta",
+    "colunas": [
+      "registro_assistencial_id",
+      "componente (sinal_vital, mapa_corporal, anexo; CHECK)",
+      "chave VARCHAR(80)",
+      "valor TEXT NULL",
+      "referencia_id BIGINT NULL",
+      "auditoria padrão",
+      "UNIQUE (registro_assistencial_id, componente, chave)"
+    ],
+    "motivo": "A resposta de extensão do formulário (gravarRespostaExt: sinal vital, mapa corporal ou anexo ligado ao registro) não tem estrutura no modelo; segue recusada com modelo-pendente em porta-propria.ts."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "inclusao_protocolo_evento",
+    "colunas": [
+      "CHECK ck_inclusao_protocolo_evento_evento: acrescentar 'meta' e 'checklist'"
+    ],
+    "motivo": "A meta de tempo e o item do checklist do protocolo gerenciado do internado são fatos do evento da inclusão, mas o CHECK só aceita sugestao, aceite, descarte, troca_etapa, nao_conformidade, avaliacao_justificativa, saida e reabertura. Até lá, eventoProtocoloInternado com meta ou checklist recusa modelo-pendente (inclusão, encerramento e inativação já gravam)."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "lesao_pele_avaliacao e lesao_pele_paciente",
+    "colunas": [
+      "lesao_pele_avaliacao.dados TEXT NULL (a ficha e o curativo em JSON, até 2.000 caracteres; observacao VARCHAR(400) não cabe e não se corta)",
+      "lesao_pele_avaliacao.tipo_avaliacao: acrescentar 'foto' ao CHECK (a foto com anexo_prontuario_id) ou tabela lesao_pele_foto (lesao_pele_paciente_id, lesao_pele_avaliacao_id NULL, anexo_prontuario_id, tirada_em, auditoria)",
+      "inativada BOOLEAN NOT NULL DEFAULT FALSE e motivo_inativacao VARCHAR(300) NULL em lesao_pele_paciente e lesao_pele_avaliacao (o lançado errado fica visível, inativo)"
+    ],
+    "motivo": "As 7 gravações da lesão de pele (ficha, versão, curativo, correção, foto, encerramento, inativação) seguem com modelo-pendente: a ficha tem até 2.000 caracteres e a coluna lida hoje (observacao) tem 400; a foto e a inativação não têm onde ficar."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "acionamento_resposta_rapida_evento (nova)",
+    "colunas": [
+      "acionamento_resposta_rapida_id",
+      "tipo (chegada, desfecho; CHECK)",
+      "ocorrido_em DATETIME(3) NULL",
+      "desfecho VARCHAR(30) NULL",
+      "anterior_evento_id NULL (a retificação aponta a versão corrigida)",
+      "motivo VARCHAR(500) NULL",
+      "inativado BOOLEAN, motivo_inativacao VARCHAR(300) NULL",
+      "auditoria padrão"
+    ],
+    "motivo": "A retificação da chegada ou do desfecho do TRR e a inativação do evento pedem o evento versionado (hoje chegada_em e desfecho são colunas do acionamento, sem versão nem autor). Seguem com modelo-pendente: retificarEventoTrr e inativarTrr com origem 'evento'."
+  },
+  {
+    "tipo": "pendente-do-lote",
+    "arquivos": [
+      "apps/api/src/modulos/enfermagem/escores-porta-propria.ts"
+    ],
+    "motivo": "decidirProfilaxia e retificarProfilaxia seguem com modelo-pendente: profilaxia_tev_decisao pende de profilaxia_tev_avaliacao (perfil, risco de TEV e de sangramento, profilaxia indicada, todos NOT NULL), que o escore não traz, e o CHECK da decisão (aceita, modificada, recusada) não tem a anulação do contrato (prescrita, nao-prescrita, anulada). Falta decidir: criar a avaliação a partir do escore (com quais valores) ou ampliar o CHECK com 'anulada'."
+  },
+  {
+    "tipo": "pendente-do-lote",
+    "arquivos": [
+      "apps/api/src/modulos/enfermagem/sae-porta-propria.ts",
+      "apps/api/src/modulos/enfermagem/sae-porta-propria.int.spec.ts"
+    ],
+    "motivo": "7 gravações da SAE seguem com modelo-pendente (prescrever, suspender, checar e estornar o cuidado; carregar a terminologia licenciada; receita do enfermeiro e sua inativação). A estrutura candidata exige desenho próprio: a atividade da intervenção vira prescricao (de enfermagem) + prescricao_item + prescricao_item_cuidado (cuidado_enfermagem pela atividade_intervencao_enfermagem) + horario_administracao, ligada em plano_intervencao_enfermagem.prescricao_item_id; a terminologia em terminologia_edicao + termo_terminologia + terminologia_licenca_estabelecimento; a receita em receita_medica(_item) com protocolo_receita_enfermagem. Não coube nesta rodada (turnos gastos nas escalas, UTI, protocolo e PCR)."
+  }
+]

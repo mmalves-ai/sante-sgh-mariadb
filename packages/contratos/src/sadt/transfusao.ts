@@ -256,7 +256,7 @@ export const esquemaSinaisTransfusao = sinais;
 // sadt.requisitarTransfusao (regra 1)
 export const esquemaRequisitarTransfusao = z
   .object({
-    /** Item de hemoterapia da prescrição (PRPRESCHEMO.ID). */
+    /** Item de hemoterapia da prescrição. */
     itemHemoterapia: id,
     atendimento: idLongo,
     quantidadeBolsas: z.number().int().min(1).max(20),
@@ -313,7 +313,7 @@ export type RegistrarAmostraTransfusionalEntrada = z.infer<typeof esquemaRegistr
 export const esquemaIniciarTransfusao = z
   .object({
     requisicao: idLongo,
-    /** Horário de checagem do item no outro sistema (PRCHKGERAL.ID), quando nasceu. */
+    /** Horário de checagem do item na prescrição, quando nasceu. */
     horario: id.nullable(),
     pulseira: leituraPulseira,
     bolsa: z

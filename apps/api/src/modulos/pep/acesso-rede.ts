@@ -135,7 +135,7 @@ export class AcessoProntuarioRede {
         recurso: 'pep.prontuario',
         resultado: 'sucesso',
         paciente: v.idRemoto,
-        tabelaAlvo: 'RICADPAC',
+        tabelaAlvo: 'paciente',
         idAlvo: String(v.idRemoto),
         chaveNaturalAlvo: `rede;de:${s.hospital};por:${s.login};motivo:${pedido.motivo};parte:linha-do-tempo`,
         ...(confirmado ? {} : { usuarioNaoConfirmado: true }),

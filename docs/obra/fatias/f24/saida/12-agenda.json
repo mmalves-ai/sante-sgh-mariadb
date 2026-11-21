@@ -1,0 +1,29 @@
+{
+  "lote": "12-agenda",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "lote_alvo": "20-misto-preco",
+      "arquivos": ["apps/api/src/modulos/exames/relogio.ts", "apps/api/src/modulos/exames/tipos.ts", "apps/api/src/modulos/exames/porta-propria.ts", "apps/api/src/modulos/exames/porta-memoria.ts", "apps/api/src/modulos/exames/servico.ts"],
+      "motivo": "Trocar o relógio e os tipos dos exames para hora \"HH:MM\" e intervalo nulo. Depois disso, em packages/contratos/src/agenda/exame.ts, trocar horaExame/horarioExame/linhaEscalaExame (transição que aceita as duas formas e entrega quatro dígitos) por esquemaHora, esquemaHorario e esquemaLinhaEscala da agenda."
+    },
+    {
+      "tipo": "codigo",
+      "lote_alvo": "21-misto-farmacia",
+      "arquivos": ["packages/contratos/src/portal-medico/portal-medico.ts"],
+      "motivo": "Importar esquemaHora (\"HH:MM\") no lugar de esquemaHhmm. O alias esquemaHhmm em contratos/agenda/entradas.ts está marcado @deprecated e sai quando ninguém mais o importar."
+    },
+    {
+      "tipo": "codigo",
+      "lote_alvo": "23-misto-coexistencia",
+      "arquivos": ["apps/api/src/modulos/portal-paciente/agenda/servico.ts", "packages/contratos/src/portal/agenda-online.ts"],
+      "motivo": "Mandar \"HH:MM\" à agenda (paraHhmm sai; o domínio da agenda já devolve e compara \"HH:MM\" e aceita os quatro dígitos só na leitura). Depois disso, esquemaHoraAgenda (contratos/agenda/entradas.ts) vira esquemaHora estrito."
+    },
+    {
+      "tipo": "codigo",
+      "lote_alvo": "etapa coordenada",
+      "arquivos": ["packages/dominio-agenda/src/tempo.ts", "apps/api/src/modulos/exames/*", "apps/api/src/modulos/portal-paciente/agenda/servico.ts", "apps/api/src/modulos/cirurgia/*"],
+      "motivo": "Renomear o campo Relogio.hhmm do domínio da agenda para hora (o valor já é \"HH:MM\"). Não foi feito no lote para não quebrar o tsc dos lotes 20 e 23, que montam esse relógio."
+    }
+  ]
+}

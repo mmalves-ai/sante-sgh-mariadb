@@ -1351,7 +1351,7 @@ export class ServicoPessoas {
       (x: { id: number }) => ({
         tabela: 'SGH_PES_HABILITACAO',
         id: String(x.id),
-        chave: `TBCBOPRO:${e.registro}`,
+        chave: `inscricao_conselho:${e.registro}`,
       }),
       (g) =>
         g.gravarHabilitacao({

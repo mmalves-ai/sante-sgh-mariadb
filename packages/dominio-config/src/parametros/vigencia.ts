@@ -63,7 +63,7 @@ export function planejarDefinicao(
     };
   const invalido = conferirValor(def, pedido.valor);
   if (invalido) return { codigo: 'valor-invalido', status: 422, mensagem: invalido };
-  // Unidade (TBUNIDAD.COD) e empresa (TBEMPHOS.COD) são SMALLINT no legado: alvo tem de ser o código.
+  // Unidade e empresa são identificadas por código numérico (SMALLINT): o alvo tem de ser o código.
   if ((pedido.nivel === 'unidade' || pedido.nivel === 'empresa') && !/^\d{1,5}$/.test(pedido.alvo))
     return {
       codigo: 'alvo-invalido',

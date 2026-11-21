@@ -35,7 +35,6 @@ import {
   vencimentoDaGuia,
 } from '@sgh/dominio-internacao';
 import { ErroProblema } from '../../problema.filter.js';
-import { destinoDoContrato } from '../exames/public-api.js';
 import type { ContextoAdt, EtapaDaLimpeza, OpcoesListaInternacoes, PortaAdt } from './porta.js';
 
 const ms = (iso: string) => {
@@ -157,7 +156,7 @@ export class ServicoAdt {
       agora: t,
       lidoEm: new Date(t).toISOString(),
       dadosAte: new Date(t).toISOString(),
-      destino: destinoDoContrato(this.porta.destino),
+      destino: this.porta.destino === 'memoria' ? 'memoria' : 'banco',
     });
     return montarMapaOperacional(
       painel,

@@ -84,7 +84,7 @@ export class WorklistRecepcaoController {
         throw problemaDoCadastro(e);
       });
     req.sghAlvo = {
-      tabelaAlvo: 'TBSENHAATEND',
+      tabelaAlvo: 'senha_emitida',
       chaveNaturalAlvo: `worklist-recepcao;senhas:${r.senhas.length};guias:${r.guias.length}`,
     };
     return r;

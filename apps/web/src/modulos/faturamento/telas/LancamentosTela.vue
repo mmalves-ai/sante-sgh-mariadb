@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { lerHoraDigitada } from '@sgh/contratos';
 // Lançamentos da conta (ficha do M30, seção 7): `/faturamento/contas/:id/lancamentos`. A grade dos itens com a
 // paginação no servidor (500 por página), a origem de cada item (legenda "a confirmar" nos códigos de baixa confiança,
 // DP-46.5), "Explicar preço" (somente leitura; regra 8), a conferência em bloco (só os marcados, com a versão de cada
@@ -49,7 +50,7 @@ const novo = ref({
   codigo: '',
   quantidade: '1',
   data: '',
-  hora: '0800',
+  hora: '08:00',
   local: '0',
   ato: '0',
   manual: '',
@@ -96,7 +97,7 @@ const lancar = () =>
         codigo: Number(novo.value.codigo),
         quantidade: numero(novo.value.quantidade),
         data: novo.value.data || apoio.data.value?.hoje,
-        hora: novo.value.hora,
+        hora: lerHoraDigitada(novo.value.hora) ?? novo.value.hora,
         local: Number(novo.value.local),
         ato: Number(novo.value.ato),
         precoManual: novo.value.manual
@@ -270,7 +271,7 @@ const lancar = () =>
         /></span>
         <span class="campo"
           ><label for="lan-n-hora">{{ t('faturamento.hora') }}</label
-          ><input id="lan-n-hora" v-model="novo.hora" maxlength="4" size="5" data-testid="lan-n-hora"
+          ><input id="lan-n-hora" v-model="novo.hora" maxlength="5" size="5" data-testid="lan-n-hora"
         /></span>
         <span class="campo"
           ><label for="lan-n-local">{{ t('faturamento.itens.local') }}</label

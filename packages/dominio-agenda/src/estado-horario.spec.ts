@@ -15,7 +15,7 @@ import {
   vagaOferecida,
 } from './estado-horario.js';
 
-const relogio = { hoje: '2026-10-21', hhmm: '1000' };
+const relogio = { hoje: '2026-10-21', hhmm: '10:00' };
 const h = (x: Partial<LinhaGrade> = {}): LinhaGrade => ({
   data: '2026-10-22',
   hora: '0800',

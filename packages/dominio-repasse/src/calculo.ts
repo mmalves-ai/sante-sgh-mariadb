@@ -92,7 +92,7 @@ export function calcularItem(
   };
 }
 
-/** Itens já integrados (FCINTEGRPA) não entram de novo (ficha, seção 5, repasse.integrarItens). */
+/** Itens já integrados à apuração não entram de novo (ficha, seção 5, repasse.integrarItens). */
 export function calcularPeriodo(
   itens: readonly ItemProducao[],
   regras: readonly RegraRepasse[],

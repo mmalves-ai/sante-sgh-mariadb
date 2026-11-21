@@ -83,7 +83,9 @@ describe.skipIf(SEM_BANCO)('turma de treino no banco próprio (cliente f22_o5)',
   });
 
   it('só roda em cliente de treino (treino_<código>): recusa outro cliente sem gravar', async () => {
-    await expect(recriarTurmaTreino(nucleo.criarExecutor(), CLIENTE, pedido(ALUNOS))).rejects.toThrow(/não é cliente de treino/);
+    await expect(recriarTurmaTreino(nucleo.criarExecutor(), CLIENTE, pedido(ALUNOS))).rejects.toThrow(
+      /não é cliente de treino/,
+    );
     expect((await contas()).length).toBe(0);
   });
 
@@ -91,7 +93,15 @@ describe.skipIf(SEM_BANCO)('turma de treino no banco próprio (cliente f22_o5)',
     const s = await executarRecriarTurma(nucleo.criarExecutor(), CLIENTE, pedido(ALUNOS));
     expect(s.resultado).toEqual({ criados: 2, reativados: 0 });
     const c = await contas();
-    expect(c.map((x) => [x.login, x.situacao, Number(x.dispensa_cpf), Number(x.exige_troca_senha), Number(x.versao)])).toEqual([
+    expect(
+      c.map((x) => [
+        x.login,
+        x.situacao,
+        Number(x.dispensa_cpf),
+        Number(x.exige_troca_senha),
+        Number(x.versao),
+      ]),
+    ).toEqual([
       ['t0511.aluno1', 'ativo', 1, 1, 1],
       ['t0511.aluno2', 'ativo', 1, 1, 1],
     ]);
@@ -109,7 +119,16 @@ describe.skipIf(SEM_BANCO)('turma de treino no banco próprio (cliente f22_o5)',
 
   it('o aluno tem acesso vigente ao estabelecimento de treino (padrão) e entra com a senha inicial', async () => {
     const a = await acessos();
-    expect(a.map((x) => [x['login'], Number(x['estabelecimento_id']), Number(x['padrao']), Number(x['vigente_inicio']), Number(x['vigente_fim']), Number(x['troca_obrigatoria'])])).toEqual([
+    expect(
+      a.map((x) => [
+        x['login'],
+        Number(x['estabelecimento_id']),
+        Number(x['padrao']),
+        Number(x['vigente_inicio']),
+        Number(x['vigente_fim']),
+        Number(x['troca_obrigatoria']),
+      ]),
+    ).toEqual([
       ['t0511.aluno1', est, 1, 1, 1, 1],
       ['t0511.aluno2', est, 1, 1, 1, 1],
     ]);
@@ -137,13 +156,21 @@ describe.skipIf(SEM_BANCO)('turma de treino no banco próprio (cliente f22_o5)',
     const ex = nucleo.criarExecutor();
     await expect(executarRecriarTurma(ex, CLIENTE, pedido([ALUNOS[0]!, ALHEIO]))).rejects.toThrow();
     await expect(executarRecriarTurma(ex, CLIENTE, pedido(['a:b']))).rejects.toThrow();
-    await expect(executarRecriarTurma(ex, CLIENTE, { ...pedido(ALUNOS), resumoSenha: SENHA_TESTE })).rejects.toThrow();
+    await expect(
+      executarRecriarTurma(ex, CLIENTE, { ...pedido(ALUNOS), resumoSenha: SENHA_TESTE }),
+    ).rejects.toThrow();
     await expect(
       ex.executar(
         (await import('./treino-turma.ts')).OPERACAO_RECRIAR_TURMA,
         CLIENTE,
         { logins: ALUNOS, validadeDias: 7, resumoSenha: resumo },
-        { cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: 'f22-05-11', chaveIdempotencia: `t-${Date.now()}` },
+        {
+          cliente: CLIENTE,
+          estabelecimento: null,
+          usuario: null,
+          correlacao: 'f22-05-11',
+          chaveIdempotencia: `t-${Date.now()}`,
+        },
       ),
     ).rejects.toThrow();
     const c = await contas();

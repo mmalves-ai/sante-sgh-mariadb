@@ -33,7 +33,7 @@ import {
   type ResultadoAgenda,
   type ResultadoLote,
 } from '@sgh/contratos';
-import { avaliarEncaixe, duracaoMinutos, nomeMascarado, normalizarHora } from '@sgh/dominio-agenda';
+import { avaliarEncaixe, nomeMascarado, normalizarHora } from '@sgh/dominio-agenda';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import { definicaoParametro } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -148,8 +148,8 @@ export class MarcacoesController {
     const ant = await this.parametro(s, 'agenda.antecedenciaMinimaMinutos');
     if (ant <= 0) return;
     const r = await this.leitura.relogio(ctxAgenda(s));
-    const agora = Date.parse(`${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2)}:00Z`);
-    const alvo = Date.parse(`${data}T${hora.slice(0, 2)}:${hora.slice(2)}:00Z`);
+    const agora = Date.parse(`${r.hoje}T${normalizarHora(r.hhmm)}:00Z`);
+    const alvo = Date.parse(`${data}T${normalizarHora(hora)}:00Z`);
     if (alvo - agora < ant * 60_000)
       throw new ErroProblema(
         'recusa-de-negocio',
@@ -184,10 +184,10 @@ export class MarcacoesController {
       { data, hora },
       {
         relogio: r,
-        agendaAtiva: a.ativa === 'S',
+        agendaAtiva: a.ativa,
         gradeDoDia: h.itens.map((x) => ({ ...x })),
         marcadasNoDia: marcadas,
-        duracaoAgendaMin: duracaoMinutos(a.duracao),
+        duracaoAgendaMin: a.duracaoMinutos,
         pacienteTemProntuario: true,
         prontuarioAmbiguo: false,
         limitePorTurno: limite > 0 ? limite : null,
@@ -267,9 +267,7 @@ export class MarcacoesController {
   @Post('marcacoes/:id/confirmar')
   @HttpCode(200)
   @Permissao('agenda.marcacao.confirmar')
-  @AuditadoNoHandler(
-    'confirmado pelo executor; as demais tentativas com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('confirmado pelo executor; as demais tentativas com a trilha na mesma transação')
   async confirmar(
     @Param('id') id: string,
     @Body() b: unknown,

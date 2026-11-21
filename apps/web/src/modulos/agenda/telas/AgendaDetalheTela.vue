@@ -41,9 +41,8 @@ watch(
   d,
   (v) => {
     if (!v) return;
-    const s = v.versao.duracao.padStart(4, '0');
-    duracao.value = String(Number(s.slice(0, 2)) * 60 + Number(s.slice(2)) || 15);
-    tele.value = v.versao.teleatendimento === 'S';
+    duracao.value = String(v.versao.duracaoMinutos || 15);
+    tele.value = v.versao.teleatendimento;
   },
   { immediate: true },
 );
@@ -70,17 +69,13 @@ async function rodar(fn: () => Promise<{ mensagem: string }>): Promise<boolean> 
     return false;
   }
 }
-const hhmm = (min: number) =>
-  `${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}`;
-
 function gravarDados(): Promise<boolean> {
   const v = d.value;
   if (!v) return Promise.resolve(false);
-  const valores: Record<string, string> = {};
-  const novaDuracao = hhmm(Number(duracao.value));
-  if (novaDuracao !== v.versao.duracao) valores['duracao'] = novaDuracao;
-  const t2 = tele.value ? 'S' : 'N';
-  if (t2 !== v.versao.teleatendimento) valores['teleatendimento'] = t2;
+  const valores: { duracaoMinutos?: number; teleatendimento?: boolean } = {};
+  const novaDuracao = Number(duracao.value);
+  if (novaDuracao !== v.versao.duracaoMinutos) valores.duracaoMinutos = novaDuracao;
+  if (tele.value !== v.versao.teleatendimento) valores.teleatendimento = tele.value;
   return rodar(() => alterarAgenda(v.agenda.id, { lidos: v.versao, valores }, novaChave('alterar')));
 }
 function trocarSituacao(): Promise<boolean> {
@@ -89,7 +84,7 @@ function trocarSituacao(): Promise<boolean> {
   return rodar(() =>
     alterarAgenda(
       v.agenda.id,
-      { lidos: v.versao, valores: { ativa: v.agenda.ativa ? 'N' : 'S' } },
+      { lidos: v.versao, valores: { ativa: !v.agenda.ativa } },
       novaChave('situacao'),
     ),
   );
@@ -252,7 +247,7 @@ function removerEspecialidade(codigo: number): Promise<boolean> {
               v-model="duracao"
               type="number"
               min="5"
-              max="240"
+              max="480"
               step="5"
               :disabled="!podeAlterar"
             />

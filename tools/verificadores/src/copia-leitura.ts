@@ -47,7 +47,11 @@ export function clienteDaLeitura(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | null {
-  const v = (argv.find((a) => a.startsWith('--cliente='))?.slice(10) ?? env['SGH_CLIENTE_LEITURA'] ?? '').trim();
+  const v = (
+    argv.find((a) => a.startsWith('--cliente='))?.slice(10) ??
+    env['SGH_CLIENTE_LEITURA'] ??
+    ''
+  ).trim();
   if (!v) return null;
   if (!FORMATO_CLIENTE.test(v)) throw new Error('--cliente: código em minúsculas, de 2 a 40 caracteres.');
   return v;

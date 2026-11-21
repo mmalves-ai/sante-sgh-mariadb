@@ -36,13 +36,14 @@ import {
   esquemaDesfazerEncaixe,
   esquemaEncaixar,
   esquemaGerarGrade,
+  esquemaHora,
   esquemaIncluirAgenda,
   esquemaRegistrarFalta,
   esquemaRemarcarConsulta,
   esquemaReverterGrade,
   textoDoMotivo,
 } from '@sgh/contratos';
-import { duracaoHHMM, feriadosMoveis } from '@sgh/dominio-agenda';
+import { feriadosMoveis, normalizarHora } from '@sgh/dominio-agenda';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -101,7 +102,11 @@ const operacao = <E, S extends ResultadoOperacao>(op: Operacao<E, S>): Operacao<
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoAgenda {
   lerSomente<T>(
-    contexto: { readonly cliente: string; readonly correlacao: string; readonly estabelecimento?: number | null },
+    contexto: {
+      readonly cliente: string;
+      readonly correlacao: string;
+      readonly estabelecimento?: number | null;
+    },
     fn: (l: Leitor) => Promise<T>,
   ): Promise<T>;
   criarExecutor(): Executor;
@@ -130,7 +135,11 @@ function partesLocais(fuso: string, instante: Date) {
     hourCycle: 'h23',
   }).formatToParts(instante);
   const v = (t: string) => p.find((x) => x.type === t)?.value ?? '00';
-  return { data: `${v('year')}-${v('month')}-${v('day')}`, hora: `${v('hour')}:${v('minute')}`, seg: v('second') };
+  return {
+    data: `${v('year')}-${v('month')}-${v('day')}`,
+    hora: `${v('hour')}:${v('minute')}`,
+    seg: v('second'),
+  };
 }
 
 /** Data e hora (HH:MM) locais do instante. */
@@ -158,17 +167,27 @@ const somarDias = (d: string, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 const diaSemana = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() + 1;
-/** 4 dígitos (contrato) → HH:MM. */
-const hora = (h: string) => `${h.padStart(4, '0').slice(0, 2)}:${h.padStart(4, '0').slice(2, 4)}`;
-const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(-2));
-const horaDeTime = (v: unknown): string | null => (v === null || v === undefined ? null : String(v).slice(0, 5));
+/** Hora do contrato → "HH:MM" (recusa a inválida). */
+const hora = (h: string) => normalizarHora(h);
+/** Duração em horas e minutos ("01:00") → minutos. */
+const minutos = (h: string) => {
+  const n = normalizarHora(h);
+  return Number(n.slice(0, 2)) * 60 + Number(n.slice(3, 5));
+};
+const horaDeTime = (v: unknown): string | null =>
+  v === null || v === undefined ? null : String(v).slice(0, 5);
 const dataIso = (v: unknown): string | null =>
-  v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+  v === null || v === undefined
+    ? null
+    : v instanceof Date
+      ? v.toISOString().slice(0, 10)
+      : String(v).slice(0, 10);
 const num = (v: unknown) => Number(v);
 const numOuNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const bool = (v: unknown) => v === true || Number(v) === 1;
 const txt = (v: unknown) => (v === null || v === undefined ? null : String(v));
-const codigoNum = (v: unknown) => (v !== null && v !== undefined && /^\d{1,9}$/.test(String(v)) ? Number(v) : null);
+const codigoNum = (v: unknown) =>
+  v !== null && v !== undefined && /^\d{1,9}$/.test(String(v)) ? Number(v) : null;
 const instante = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
 const marcadores = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 
@@ -253,11 +272,20 @@ export class PortaAgendaPropria implements PortaAgenda {
   private async estab(c: ContextoAgenda): Promise<Estab> {
     const ja = this.estabs.get(c.hospital);
     if (ja) return ja;
-    const l = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'agenda-estabelecimento' }, (x) =>
-      x.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [c.hospital]),
+    const l = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'agenda-estabelecimento' },
+      (x) =>
+        x.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+          c.hospital,
+        ]),
     );
     if (!l)
-      throw new ErroOperacao(403, 'estabelecimento-desconhecido', 'Estabelecimento', 'O estabelecimento da sessão não existe no cliente.');
+      throw new ErroOperacao(
+        403,
+        'estabelecimento-desconhecido',
+        'Estabelecimento',
+        'O estabelecimento da sessão não existe no cliente.',
+      );
     const e = { id: num(l['id']), fuso: String(l['fuso_horario'] || 'America/Sao_Paulo') };
     this.estabs.set(c.hospital, e);
     this.fusos.set(e.id, e.fuso);
@@ -300,8 +328,14 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   async podeGravar(c: ContextoAgenda, operacao: string, login: string): Promise<LiberacaoGravacao> {
     const op = Object.hasOwn(this.operacoes, operacao) ? this.operacoes[operacao] : undefined;
-    if (!op) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação da agenda desconhecida.' };
-    const ctx = await this.contexto({ ...c, login, correlacao: 'agenda-liberacao', chaveIdempotencia: 'liberacao-consulta' });
+    if (!op)
+      return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação da agenda desconhecida.' };
+    const ctx = await this.contexto({
+      ...c,
+      login,
+      correlacao: 'agenda-liberacao',
+      chaveIdempotencia: 'liberacao-consulta',
+    });
     return this.executor.liberacao(op, ctx);
   }
 
@@ -310,7 +344,11 @@ export class PortaAgendaPropria implements PortaAgenda {
     const op = this.operacoes[operacao];
     if (!op) throw recusa('operacao-desconhecida', 'Operação da agenda desconhecida.');
     const r = await this.executor.executar(op, this.cliente, entrada, await this.contexto(c));
-    return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha === null ? null : String(r.trilha) };
+    return {
+      resultado: r.resultado,
+      repetida: r.repetida,
+      trilha: r.trilha === null ? null : String(r.trilha),
+    };
   }
 
   async gravar<T>(c: ContextoGravacao, fn: (g: GravadorAgenda) => Promise<T>): Promise<T> {
@@ -396,7 +434,14 @@ export class PortaAgendaPropria implements PortaAgenda {
         const codigo = codigoNum(x['codigo']);
         return codigo === null
           ? []
-          : [{ codigo, nome: String(x['nome']), ativo: x['situacao'] === 'ativa', marcadosFuturos: num(x['futuros']) }];
+          : [
+              {
+                codigo,
+                nome: String(x['nome']),
+                ativo: x['situacao'] === 'ativa',
+                marcadosFuturos: num(x['futuros']),
+              },
+            ];
       }),
     );
   }
@@ -443,7 +488,9 @@ export class PortaAgendaPropria implements PortaAgenda {
     return this.ler(c, async (l, e) => {
       // Fontes pagadoras e especialidades são da rede inteira (cadastro único do cliente).
       const [conv, esp, loc, uni] = await Promise.all([
-        l.consultar('SELECT codigo, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome'),
+        l.consultar(
+          'SELECT codigo, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome',
+        ),
         l.consultar('SELECT codigo, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao'),
         l.consultar(
           'SELECT id, descricao FROM local_atendimento WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY descricao',
@@ -457,7 +504,9 @@ export class PortaAgendaPropria implements PortaAgenda {
       return {
         convenios: conv.flatMap((x) => {
           const codigo = codigoNum(x['codigo']);
-          return codigo === null ? [] : [{ codigo, nome: String(x['nome']), ativo: x['situacao'] === 'ativa' }];
+          return codigo === null
+            ? []
+            : [{ codigo, nome: String(x['nome']), ativo: x['situacao'] === 'ativa' }];
         }),
         especialidades: esp.flatMap((x) => {
           const codigo = codigoNum(x['codigo']);
@@ -687,7 +736,10 @@ export class PortaAgendaPropria implements PortaAgenda {
   ): Promise<{ marcacao: Marcacao; contato: ContatoMarcacao } | null> {
     return this.ler(c, async (l, e) => {
       // A marcação cancelada também se lê pelo id (detalhe e histórico).
-      const x = await l.uma(`${SELECT_MARCACAO.replace(` AND ${MARCACAO_NA_GRADE}`, '')} AND m.id = ?`, [e.id, id]);
+      const x = await l.uma(`${SELECT_MARCACAO.replace(` AND ${MARCACAO_NA_GRADE}`, '')} AND m.id = ?`, [
+        e.id,
+        id,
+      ]);
       if (!x) return null;
       let telefone = txt(x['pc_telefone']);
       let celular = txt(x['pc_celular']);
@@ -717,7 +769,10 @@ export class PortaAgendaPropria implements PortaAgenda {
            WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND pc.paciente_id = ? ORDER BY h.inicio_em DESC LIMIT 100`,
           [e.id, id],
         )
-      ).map((x): PreCadastroMarcado => ({ nomeAgenda: String(x['nome']), data: dataIso(x['data_referencia']) })),
+      ).map((x): PreCadastroMarcado => ({
+        nomeAgenda: String(x['nome']),
+        data: dataIso(x['data_referencia']),
+      })),
     );
     return { ...r, preCadastros };
   }
@@ -753,7 +808,12 @@ export class PortaAgendaPropria implements PortaAgenda {
     });
   }
 
-  async proximasVagas(c: ContextoAgenda, agendas: readonly number[], depoisDe: string, ate: string): Promise<Vaga[]> {
+  async proximasVagas(
+    c: ContextoAgenda,
+    agendas: readonly number[],
+    depoisDe: string,
+    ate: string,
+  ): Promise<Vaga[]> {
     const r: Vaga[] = [];
     for (const a of agendas) {
       const v = await this.vagas(c, { agendas: [a], de: somarDias(depoisDe, 1), ate, limite: 1 });
@@ -866,7 +926,8 @@ export class PortaAgendaPropria implements PortaAgenda {
         if (!x['marcado_em']) return 'nao-informada';
         const marcada = localDe(e.fuso, instante(x['marcado_em'])).data;
         const d = Math.round(
-          (Date.parse(`${dataIso(x['data_referencia'])}T00:00:00Z`) - Date.parse(`${marcada}T00:00:00Z`)) / 86_400_000,
+          (Date.parse(`${dataIso(x['data_referencia'])}T00:00:00Z`) - Date.parse(`${marcada}T00:00:00Z`)) /
+            86_400_000,
         );
         return d <= 0 ? 'mesmo-dia' : d <= 7 ? 'ate-7' : d <= 30 ? 'de-8-a-30' : 'mais-de-30';
       };
@@ -883,7 +944,11 @@ export class PortaAgendaPropria implements PortaAgenda {
       };
       const soma = (k: string) => hs.reduce((t, x) => t + num(x[k] ?? 0), 0);
       return {
-        ocupacao: hs.map((x) => ({ agenda: String(x['nome']), horarios: num(x['horarios']), ocupados: num(x['ocupados']) })),
+        ocupacao: hs.map((x) => ({
+          agenda: String(x['nome']),
+          horarios: num(x['horarios']),
+          ocupados: num(x['ocupados']),
+        })),
         porAntecedencia: contar(faixa),
         porAgenda: contar((x) => String(x['nome'])),
         funil: {
@@ -909,7 +974,11 @@ export class PortaAgendaPropria implements PortaAgenda {
            WHERE p.excluido_em IS NULL AND p.id IN (${marcadores(ids.length)})`,
           [...ids],
         )
-      ).map((x) => ({ id: num(x['id']), nome: String(x['nome']), prontuario: codigoNum(x['numero_prontuario']) })),
+      ).map((x) => ({
+        id: num(x['id']),
+        nome: String(x['nome']),
+        prontuario: codigoNum(x['numero_prontuario']),
+      })),
     );
   }
 
@@ -977,7 +1046,8 @@ export class PortaAgendaPropria implements PortaAgenda {
         const ini = localDe(e.fuso, instante(x['inicio_em']));
         const fimInst = instante(x['fim_em']);
         const fim = localDe(e.fuso, fimInst);
-        const fimDia = fim.hora === '00:00' ? localDe(e.fuso, new Date(fimInst.getTime() - 1)).data : fim.data;
+        const fimDia =
+          fim.hora === '00:00' ? localDe(e.fuso, new Date(fimInst.getTime() - 1)).data : fim.data;
         return {
           id: num(x['id']),
           agenda: num(x['agenda_servico_id']),
@@ -1006,7 +1076,10 @@ export class PortaAgendaPropria implements PortaAgenda {
            WHERE bloqueio_agenda_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL ORDER BY inicio_em`,
           [id, e.id],
         )
-      ).map((x) => ({ data: dataIso(x['data_referencia']) ?? '', hora: localDe(e.fuso, instante(x['inicio_em'])).hora })),
+      ).map((x) => ({
+        data: dataIso(x['data_referencia']) ?? '',
+        hora: localDe(e.fuso, instante(x['inicio_em'])).hora,
+      })),
     );
   }
 
@@ -1061,7 +1134,10 @@ export class PortaAgendaPropria implements PortaAgenda {
       return linhas.map((x) => {
         let oferta: ItemListaEspera['oferta'] = null;
         if (x['situacao'] === 'ofertado' && x['oferta']) {
-          const o = (typeof x['oferta'] === 'string' ? JSON.parse(x['oferta']) : x['oferta']) as Record<string, unknown>;
+          const o = (typeof x['oferta'] === 'string' ? JSON.parse(x['oferta']) : x['oferta']) as Record<
+            string,
+            unknown
+          >;
           oferta = { agenda: num(o['agenda']), data: String(o['data']), hora: String(o['hora']) };
         }
         return {
@@ -1135,7 +1211,10 @@ export class PortaAgendaPropria implements PortaAgenda {
         >,
         gravar: async (tx, e, ctx) => {
           if ('teleconsulta' in e && e.teleconsulta)
-            throw recusa('teleconsulta-fora-do-modulo', 'A teleconsulta do portal é marcada pelo módulo do portal.');
+            throw recusa(
+              'teleconsulta-fora-do-modulo',
+              'A teleconsulta do portal é marcada pelo módulo do portal.',
+            );
           const encaixe = nome === 'agenda.encaixar';
           const m = await this.marcarNoHorario(tx, ctx, {
             agenda: e.agenda,
@@ -1157,7 +1236,9 @@ export class PortaAgendaPropria implements PortaAgenda {
       operacao({
         nome,
         tabelas: ['horario_agenda', 'marcacao_horario', 'cancelamento_marcacao'],
-        entrada: (nome === 'agenda.desfazerEncaixe' ? esquemaDesfazerEncaixe : esquemaCancelarConsulta) as z.ZodType<
+        entrada: (nome === 'agenda.desfazerEncaixe'
+          ? esquemaDesfazerEncaixe
+          : esquemaCancelarConsulta) as z.ZodType<
           z.infer<typeof esquemaDesfazerEncaixe> & { solicitante?: string }
         >,
         gravar: async (tx, e, ctx) => {
@@ -1209,9 +1290,15 @@ export class PortaAgendaPropria implements PortaAgenda {
             });
           } else {
             if (sig !== 'aguardando' && sig !== 'confirmada')
-              throw recusa('situacao-mudou', 'A marcação já tem outra situação (falta, chegada ou transferência).');
+              throw recusa(
+                'situacao-mudou',
+                'A marcação já tem outra situação (falta, chegada ou transferência).',
+              );
             if (!passou)
-              throw recusa('consulta-futura', 'A consulta ainda não aconteceu: a falta só se registra depois do horário.');
+              throw recusa(
+                'consulta-futura',
+                'A consulta ainda não aconteceu: a falta só se registra depois do horário.',
+              );
             await tx.alterar('marcacao_horario', num(m['id']), num(m['versao']), {
               situacao_marcacao_id: await this.situacaoMarcacao(tx, 'falta'),
               falta_registrada_em: agora,
@@ -1225,7 +1312,9 @@ export class PortaAgendaPropria implements PortaAgenda {
       operacao({
         nome,
         tabelas: nome === 'agenda.definirCobertura' ? ['agenda_fonte_pagadora'] : ['agenda_especialidade'],
-        entrada: (nome === 'agenda.definirCobertura' ? esquemaDefinirCobertura : esquemaDefinirEspecialidade) as z.ZodType<{
+        entrada: (nome === 'agenda.definirCobertura'
+          ? esquemaDefinirCobertura
+          : esquemaDefinirEspecialidade) as z.ZodType<{
           agenda: number;
           acao: 'incluir' | 'remover';
           convenio?: number;
@@ -1259,7 +1348,10 @@ export class PortaAgendaPropria implements PortaAgenda {
                 cob ? 'O convênio já está na lista da agenda.' : 'A especialidade já está ligada à agenda.',
               );
             if (minha)
-              await tx.alterar(tabela, num(minha['id']), num(minha['versao']), { excluido_em: null, excluido_por: null });
+              await tx.alterar(tabela, num(minha['id']), num(minha['versao']), {
+                excluido_em: null,
+                excluido_por: null,
+              });
             else
               await tx.incluir(tabela, {
                 agenda_servico_id: e.agenda,
@@ -1282,7 +1374,9 @@ export class PortaAgendaPropria implements PortaAgenda {
               excluido_por: ctx.usuario,
             });
           }
-          return cob ? { agenda: e.agenda, convenio: Number(cod) } : { agenda: e.agenda, especialidade: Number(cod) };
+          return cob
+            ? { agenda: e.agenda, convenio: Number(cod) }
+            : { agenda: e.agenda, especialidade: Number(cod) };
         },
         alvo: (e) => ({ tabela: 'agenda_servico', id: e.agenda }),
       });
@@ -1293,7 +1387,8 @@ export class PortaAgendaPropria implements PortaAgenda {
         entrada: esquemaGerarGrade,
         gravar: async (tx, e, ctx) => {
           const a = await this.travarAgenda(tx, ctx, e.agenda);
-          if (!bool(a['ativo'])) throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
+          if (!bool(a['ativo']))
+            throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
           const fuso = this.fuso(ctx.estabelecimento);
           const dur = minutos(e.duracao);
           const agora = this.agora();
@@ -1308,7 +1403,9 @@ export class PortaAgendaPropria implements PortaAgenda {
               )
             ).map((x) => instante(x['inicio_em']).getTime()),
           );
-          if (inicios.some((h) => h.inicio.getTime() <= agora.getTime() || existentes.has(h.inicio.getTime())))
+          if (
+            inicios.some((h) => h.inicio.getTime() <= agora.getTime() || existentes.has(h.inicio.getTime()))
+          )
             throw recusa(
               'previa-desatualizada',
               'A agenda mudou desde a prévia (um horário apareceu em outro terminal): refaça a prévia.',
@@ -1326,7 +1423,7 @@ export class PortaAgendaPropria implements PortaAgenda {
             horarios_gerados: inicios.length,
           });
           for (const [i, l] of e.escala.entries()) {
-            const intervalo = l.intervaloInicio !== '0000' && l.intervaloFim !== '0000';
+            const intervalo = l.intervaloInicio !== null && l.intervaloFim !== null;
             await tx.incluir('geracao_grade_periodo', {
               geracao_grade_id: geracao,
               sequencia: i + 1,
@@ -1335,8 +1432,8 @@ export class PortaAgendaPropria implements PortaAgenda {
               dia_semana: l.semana,
               hora_inicio: `${hora(l.horaInicio)}:00`,
               hora_fim: `${hora(l.horaFim)}:00`,
-              intervalo_inicio: intervalo ? `${hora(l.intervaloInicio)}:00` : null,
-              intervalo_fim: intervalo ? `${hora(l.intervaloFim)}:00` : null,
+              intervalo_inicio: intervalo && l.intervaloInicio ? `${hora(l.intervaloInicio)}:00` : null,
+              intervalo_fim: intervalo && l.intervaloFim ? `${hora(l.intervaloFim)}:00` : null,
               situacao: 'concluido',
             });
           }
@@ -1353,17 +1450,29 @@ export class PortaAgendaPropria implements PortaAgenda {
           return { agenda: e.agenda, geracao, horarios: inicios.length };
         },
         alvo: (_e, r) => ({ tabela: 'geracao_grade', id: Number(r.geracao) }),
-        eventos: (e, r) => [{ tipo: 'agenda.grade.gerada', carga: { agenda: e.agenda, geracao: Number(r.geracao) } }],
+        eventos: (e, r) => [
+          { tipo: 'agenda.grade.gerada', carga: { agenda: e.agenda, geracao: Number(r.geracao) } },
+        ],
       }),
       'agenda.reverterGrade': operacao({
         nome: 'agenda.reverterGrade',
         tabelas: ['geracao_grade', 'horario_agenda'],
         entrada: esquemaReverterGrade,
-        travar: (e) => ({ tabela: 'geracao_grade', id: e.geracao, colunas: ['estabelecimento_id', 'situacao'] }),
+        travar: (e) => ({
+          tabela: 'geracao_grade',
+          id: e.geracao,
+          colunas: ['estabelecimento_id', 'situacao'],
+        }),
         conferir: async (_tx, _e, ctx, relido) => {
           if (!relido || num(relido['estabelecimento_id']) !== ctx.estabelecimento)
-            throw new ErroOperacao(404, 'registro-inexistente', 'Geração não encontrada', 'A geração não existe.');
-          if (relido['situacao'] === 'revertida') throw recusa('geracao-revertida', 'A geração já foi revertida.');
+            throw new ErroOperacao(
+              404,
+              'registro-inexistente',
+              'Geração não encontrada',
+              'A geração não existe.',
+            );
+          if (relido['situacao'] === 'revertida')
+            throw recusa('geracao-revertida', 'A geração já foi revertida.');
         },
         gravar: async (tx, e, ctx) => {
           const agora = this.agora();
@@ -1406,7 +1515,8 @@ export class PortaAgendaPropria implements PortaAgenda {
         gravar: async (tx, e, ctx) => {
           const m = await this.travarMarcacao(tx, ctx, e.marcacao);
           const convenio = e.convenio ?? codigoNum(m['convenio']);
-          if (convenio === null) throw recusa('convenio-inexistente', 'O convênio da marcação não tem código de negócio.');
+          if (convenio === null)
+            throw recusa('convenio-inexistente', 'O convênio da marcação não tem código de negócio.');
           const nova = await this.marcarNoHorario(tx, ctx, {
             agenda: e.destino.agenda,
             data: e.destino.data,
@@ -1450,14 +1560,22 @@ export class PortaAgendaPropria implements PortaAgenda {
             );
             if (!h) throw recusa('horario-inexistente', 'Um dos horários não existe mais na grade.');
             if (num(h['vagas_ocupadas']) > 0)
-              throw recusa('horario-ocupado', 'Um dos horários tem paciente marcado: remarque antes de bloquear.');
+              throw recusa(
+                'horario-ocupado',
+                'Um dos horários tem paciente marcado: remarque antes de bloquear.',
+              );
             if (h['situacao'] !== (bloquear ? 'livre' : 'bloqueado'))
-              throw recusa('situacao-mudou', `Um dos horários já está ${bloquear ? 'bloqueado' : 'desbloqueado'}.`);
+              throw recusa(
+                'situacao-mudou',
+                `Um dos horários já está ${bloquear ? 'bloqueado' : 'desbloqueado'}.`,
+              );
             alvos.push(h);
           }
           const agora = this.agora();
           if (bloquear) {
-            const motivo = await tx.uma('SELECT id FROM motivo_bloqueio_agenda WHERE codigo = ? AND ativo', [e.motivo]);
+            const motivo = await tx.uma('SELECT id FROM motivo_bloqueio_agenda WHERE codigo = ? AND ativo', [
+              e.motivo,
+            ]);
             if (!motivo) throw configuracaoIncompleta(`motivo de bloqueio "${e.motivo}"`);
             const bloqueio = await tx.incluir('bloqueio_agenda', {
               estabelecimento_id: ctx.estabelecimento,
@@ -1476,7 +1594,9 @@ export class PortaAgendaPropria implements PortaAgenda {
                 bloqueio_agenda_id: bloqueio,
               });
           } else {
-            const bloqueios = new Set(alvos.map((h) => numOuNull(h['bloqueio_agenda_id'])).filter((x) => x !== null));
+            const bloqueios = new Set(
+              alvos.map((h) => numOuNull(h['bloqueio_agenda_id'])).filter((x) => x !== null),
+            );
             for (const h of alvos)
               await tx.alterar('horario_agenda', num(h['id']), num(h['versao']), {
                 situacao: 'livre',
@@ -1528,23 +1648,29 @@ export class PortaAgendaPropria implements PortaAgenda {
         gravar: async (tx, e, ctx) => {
           const a = await this.travarAgenda(tx, ctx, e.agenda);
           const atual = {
-            duracao: a['duracao_horario_minutos'] ? duracaoHHMM(num(a['duracao_horario_minutos'])) : '',
-            ativa: bool(a['ativo']) ? 'S' : 'N',
-            teleatendimento: bool(a['teleatendimento']) ? 'S' : 'N',
+            duracaoMinutos: numOuNull(a['duracao_horario_minutos']) || null,
+            ativa: bool(a['ativo']),
+            teleatendimento: bool(a['teleatendimento']),
           };
-          const mudou = (['duracao', 'ativa', 'teleatendimento'] as const).filter((k) => atual[k] !== e.lidos[k]);
+          const mudou = (['duracaoMinutos', 'ativa', 'teleatendimento'] as const).filter(
+            (k) => atual[k] !== e.lidos[k],
+          );
           if (mudou.length > 0) throw erroConflitoVersao([...mudou]);
           const novo = {
-            duracao: e.valores.duracao ?? atual.duracao,
+            duracaoMinutos: e.valores.duracaoMinutos ?? atual.duracaoMinutos,
             ativa: e.valores.ativa ?? atual.ativa,
             teleatendimento: e.valores.teleatendimento ?? atual.teleatendimento,
           };
-          if (novo.duracao === atual.duracao && novo.ativa === atual.ativa && novo.teleatendimento === atual.teleatendimento)
+          if (
+            novo.duracaoMinutos === atual.duracaoMinutos &&
+            novo.ativa === atual.ativa &&
+            novo.teleatendimento === atual.teleatendimento
+          )
             throw recusa('sem-efeito', 'Nenhum campo muda de valor.');
           await tx.alterar('agenda_servico', e.agenda, num(a['versao']), {
-            duracao_horario_minutos: minutos(novo.duracao),
-            ativo: novo.ativa === 'S',
-            teleatendimento: novo.teleatendimento === 'S',
+            duracao_horario_minutos: novo.duracaoMinutos,
+            ativo: novo.ativa,
+            teleatendimento: novo.teleatendimento,
           });
           return { agenda: e.agenda, campos: Object.keys(e.valores).length };
         },
@@ -1555,16 +1681,15 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   private definirApoio() {
     const id = z.number().int().positive();
-    const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
     const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
     const faixa = z
       .object({
         diaSemana: z.number().int().min(1).max(7),
         duracaoMinutos: z.number().int().min(5).max(480).nullable(),
-        inicio: hhmm,
-        fim: hhmm,
-        intervaloInicio: hhmm.nullable(),
-        intervaloFim: hhmm.nullable(),
+        inicio: esquemaHora,
+        fim: esquemaHora,
+        intervaloInicio: esquemaHora.nullable(),
+        intervaloFim: esquemaHora.nullable(),
       })
       .strict();
     return {
@@ -1624,7 +1749,7 @@ export class PortaAgendaPropria implements PortaAgenda {
             [e.agenda],
           );
           const alvo = linhas.find((x) => num(x['id']) === e.id);
-          const desde = alvo ? dataIso(alvo['vigencia_inicio']) ?? '' : '';
+          const desde = alvo ? (dataIso(alvo['vigencia_inicio']) ?? '') : '';
           if (!alvo || desde <= hoje)
             throw recusa('escala-inexistente', 'A escala planejada não existe ou já foi cancelada.');
           const fimDoGrupo = dataIso(alvo['vigencia_fim']);
@@ -1682,8 +1807,8 @@ export class PortaAgendaPropria implements PortaAgenda {
             agenda: id,
             inicio: data,
             fim: data,
-            horaInicio: hhmm.nullable(),
-            horaFim: hhmm.nullable(),
+            horaInicio: esquemaHora.nullable(),
+            horaFim: esquemaHora.nullable(),
             motivo: z.string().min(1).max(30),
             complemento: z.string().max(500).nullable(),
             previsaoRetorno: data.nullable(),
@@ -1693,14 +1818,18 @@ export class PortaAgendaPropria implements PortaAgenda {
         gravar: async (tx, e, ctx) => {
           await this.travarAgenda(tx, ctx, e.agenda);
           const fuso = this.fuso(ctx.estabelecimento);
-          const motivo = await tx.uma('SELECT id FROM motivo_bloqueio_agenda WHERE codigo = ? AND ativo', [e.motivo]);
+          const motivo = await tx.uma('SELECT id FROM motivo_bloqueio_agenda WHERE codigo = ? AND ativo', [
+            e.motivo,
+          ]);
           if (!motivo) throw configuracaoIncompleta(`motivo de bloqueio "${e.motivo}"`);
           const n = await tx.incluir('bloqueio_agenda', {
             estabelecimento_id: ctx.estabelecimento,
             agenda_servico_id: e.agenda,
             motivo_bloqueio_agenda_id: motivo['id'],
             inicio_em: instanteDe(fuso, e.inicio, e.horaInicio ?? '00:00'),
-            fim_em: e.horaFim ? instanteDe(fuso, e.fim, e.horaFim) : instanteDe(fuso, somarDias(e.fim, 1), '00:00'),
+            fim_em: e.horaFim
+              ? instanteDe(fuso, e.fim, e.horaFim)
+              : instanteDe(fuso, somarDias(e.fim, 1), '00:00'),
             previsao_retorno: e.previsaoRetorno,
             situacao: 'ativo',
             observacao: e.complemento,
@@ -1748,8 +1877,11 @@ export class PortaAgendaPropria implements PortaAgenda {
           const esp =
             e.especialidade === null
               ? null
-              : await tx.uma('SELECT id FROM especialidade_medica WHERE codigo = ? AND ativo', [String(e.especialidade)]);
-          if (e.especialidade !== null && !esp) throw recusa('especialidade-inexistente', 'A especialidade não existe.');
+              : await tx.uma('SELECT id FROM especialidade_medica WHERE codigo = ? AND ativo', [
+                  String(e.especialidade),
+                ]);
+          if (e.especialidade !== null && !esp)
+            throw recusa('especialidade-inexistente', 'A especialidade não existe.');
           const agora = this.agora();
           const n = await tx.incluir('lista_espera', {
             estabelecimento_id: ctx.estabelecimento,
@@ -1770,11 +1902,15 @@ export class PortaAgendaPropria implements PortaAgenda {
       ofertarEspera: operacao({
         nome: 'agenda.ofertarEspera',
         tabelas: ['lista_espera', 'lista_espera_historico'],
-        entrada: z.object({ id, agenda: id, data, hora: hhmm }).strict(),
+        entrada: z.object({ id, agenda: id, data, hora: esquemaHora }).strict(),
         gravar: async (tx, e, ctx) => {
           const x = await this.travarEspera(tx, ctx, e.id);
           await tx.alterar('lista_espera', e.id, num(x['versao']), { situacao: 'ofertado' });
-          await this.historicoEspera(tx, ctx, e.id, 'alteracao', 'oferta', { agenda: e.agenda, data: e.data, hora: e.hora });
+          await this.historicoEspera(tx, ctx, e.id, 'alteracao', 'oferta', {
+            agenda: e.agenda,
+            data: e.data,
+            hora: e.hora,
+          });
           return { id: e.id };
         },
         alvo: (e) => ({ tabela: 'lista_espera', id: e.id }),
@@ -1793,7 +1929,8 @@ export class PortaAgendaPropria implements PortaAgenda {
             marcacao_horario_id: e.marcacao,
             encerrada_em: fim ? this.agora() : null,
           });
-          const evento = e.situacao === 'atendido' ? 'marcacao' : e.situacao === 'cancelado' ? 'cancelamento' : 'recusa';
+          const evento =
+            e.situacao === 'atendido' ? 'marcacao' : e.situacao === 'cancelado' ? 'cancelamento' : 'recusa';
           await this.historicoEspera(tx, ctx, e.id, 'alteracao', evento, { marcacao: e.marcacao });
           return { id: e.id };
         },
@@ -1821,9 +1958,13 @@ export class PortaAgendaPropria implements PortaAgenda {
               [e.local, ctx.estabelecimento],
             ))
           )
-            throw recusa('local-de-outro-estabelecimento', 'O local de atendimento não é deste estabelecimento.', {
-              campos: ['local'],
-            });
+            throw recusa(
+              'local-de-outro-estabelecimento',
+              'O local de atendimento não é deste estabelecimento.',
+              {
+                campos: ['local'],
+              },
+            );
           if (
             e.unidade !== null &&
             !(await tx.uma(
@@ -1831,9 +1972,13 @@ export class PortaAgendaPropria implements PortaAgenda {
               [e.unidade, ctx.estabelecimento],
             ))
           )
-            throw recusa('local-de-outro-estabelecimento', 'A unidade assistencial não é deste estabelecimento.', {
-              campos: ['unidade'],
-            });
+            throw recusa(
+              'local-de-outro-estabelecimento',
+              'A unidade assistencial não é deste estabelecimento.',
+              {
+                campos: ['unidade'],
+              },
+            );
           await tx.alterar('agenda_servico', e.agenda, num(a['versao']), {
             profissional_id: e.profissional,
             local_atendimento_id: e.local,
@@ -1859,7 +2004,9 @@ export class PortaAgendaPropria implements PortaAgenda {
                   excluido_por: null,
                 });
               else if (!esta && bool(x['principal']))
-                await tx.alterar('agenda_especialidade', num(x['id']), num(x['versao']), { principal: false });
+                await tx.alterar('agenda_especialidade', num(x['id']), num(x['versao']), {
+                  principal: false,
+                });
             }
             if (!achou)
               await tx.incluir('agenda_especialidade', {
@@ -1885,7 +2032,13 @@ export class PortaAgendaPropria implements PortaAgenda {
       [id, ctx.estabelecimento],
       { teto: 1 },
     );
-    if (!a) throw new ErroOperacao(404, 'registro-inexistente', 'Agenda não encontrada', 'A agenda não existe mais.');
+    if (!a)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Agenda não encontrada',
+        'A agenda não existe mais.',
+      );
     return a;
   }
 
@@ -1900,7 +2053,12 @@ export class PortaAgendaPropria implements PortaAgenda {
       { teto: 1 },
     );
     if (!m)
-      throw new ErroOperacao(404, 'registro-inexistente', 'Marcação não encontrada', 'A marcação não existe mais.');
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Marcação não encontrada',
+        'A marcação não existe mais.',
+      );
     const sig = String(m['significado']);
     if (sig === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada ou remarcada.');
     if (m['atendido_em'] !== null || sig === 'realizada')
@@ -1953,7 +2111,11 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   private async situacaoConfirmacao(tx: TxOperacao, resultado: string): Promise<number> {
     const significado =
-      resultado === 'confirmado' ? 'confirmada' : resultado === 'nao-confirmado' ? 'sem_resposta' : 'recusada';
+      resultado === 'confirmado'
+        ? 'confirmada'
+        : resultado === 'nao-confirmado'
+          ? 'sem_resposta'
+          : 'recusada';
     const x =
       (await tx.uma('SELECT id FROM situacao_confirmacao WHERE codigo = ? AND ativo', [resultado])) ??
       (await tx.uma(
@@ -1983,25 +2145,36 @@ export class PortaAgendaPropria implements PortaAgenda {
     },
   ): Promise<number> {
     const a = await this.travarAgenda(tx, ctx, p.agenda);
-    if (!bool(a['ativo'])) throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
+    if (!bool(a['ativo']))
+      throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
     const fuso = this.fuso(ctx.estabelecimento);
     const inicio = instanteDe(fuso, p.data, p.hora);
     if (inicio.getTime() <= this.agora().getTime())
       throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
-    const pac = await tx.uma('SELECT id, numero_prontuario, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [
-      p.paciente,
-    ]);
-    if (!pac) throw new ErroOperacao(404, 'registro-inexistente', 'Paciente não encontrado', 'O cadastro não existe.');
+    const pac = await tx.uma(
+      'SELECT id, numero_prontuario, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [p.paciente],
+    );
+    if (!pac)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Paciente não encontrado',
+        'O cadastro não existe.',
+      );
     if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
       throw recusa('paciente-inativo', 'O cadastro do paciente está inativo ou foi unificado em outro.');
     if (pac['numero_prontuario'] === null)
       throw recusa('sem-prontuario', 'O paciente não tem prontuário: complete o cadastro antes de marcar.');
-    const fp = await tx.uma('SELECT id, situacao FROM fonte_pagadora WHERE codigo = ? AND excluido_em IS NULL', [
-      String(p.convenio),
-    ]);
+    const fp = await tx.uma(
+      'SELECT id, situacao FROM fonte_pagadora WHERE codigo = ? AND excluido_em IS NULL',
+      [String(p.convenio)],
+    );
     if (!fp) throw recusa('convenio-inexistente', 'O convênio não existe.', { campos: ['convenio'] });
     if (fp['situacao'] !== 'ativa')
-      throw recusa('convenio-inativo', 'O convênio está suspenso: não aceita marcação.', { campos: ['convenio'] });
+      throw recusa('convenio-inativo', 'O convênio está suspenso: não aceita marcação.', {
+        campos: ['convenio'],
+      });
     const aceitos = await tx.consultar(
       'SELECT fonte_pagadora_id FROM agenda_fonte_pagadora WHERE agenda_servico_id = ? AND excluido_em IS NULL',
       [p.agenda],
@@ -2016,8 +2189,12 @@ export class PortaAgendaPropria implements PortaAgenda {
     if (!canal) throw configuracaoIncompleta(`canal de marcação "${p.canal}"`);
     const natureza = p.encaixe !== null ? 'encaixe' : p.retorno ? 'retorno' : 'primeira_vez';
     const tipo =
-      (await tx.uma('SELECT id FROM tipo_marcacao WHERE natureza = ? AND ativo ORDER BY id LIMIT 1', [natureza])) ??
-      (await tx.uma("SELECT id FROM tipo_marcacao WHERE natureza = 'primeira_vez' AND ativo ORDER BY id LIMIT 1"));
+      (await tx.uma('SELECT id FROM tipo_marcacao WHERE natureza = ? AND ativo ORDER BY id LIMIT 1', [
+        natureza,
+      ])) ??
+      (await tx.uma(
+        "SELECT id FROM tipo_marcacao WHERE natureza = 'primeira_vez' AND ativo ORDER BY id LIMIT 1",
+      ));
     if (!tipo) throw configuracaoIncompleta(`tipo de marcação "${natureza}"`);
     const esp = await tx.uma(
       'SELECT especialidade_medica_id FROM agenda_especialidade WHERE agenda_servico_id = ? AND excluido_em IS NULL ORDER BY principal DESC, id LIMIT 1',
@@ -2042,7 +2219,10 @@ export class PortaAgendaPropria implements PortaAgenda {
       );
       const veto = vetoDeBloqueioNoEncaixe(inicio.getTime(), {
         horarioBloqueado: bloqueado !== null,
-        bloqueios: periodos.map((b) => ({ inicio: instante(b['inicio_em']).getTime(), fim: instante(b['fim_em']).getTime() })),
+        bloqueios: periodos.map((b) => ({
+          inicio: instante(b['inicio_em']).getTime(),
+          fim: instante(b['fim_em']).getTime(),
+        })),
       });
       if (veto) throw recusa(veto, TEXTO_HORARIO_BLOQUEADO);
       if (a['encaixes_por_dia'] !== null) {
@@ -2125,9 +2305,17 @@ export class PortaAgendaPropria implements PortaAgenda {
     tx: TxOperacao,
     ctx: ContextoOperacao,
     m: Linha,
-    p: { motivo: string; complemento: string | null; solicitante: string; liberar: boolean; nova: number | null },
+    p: {
+      motivo: string;
+      complemento: string | null;
+      solicitante: string;
+      liberar: boolean;
+      nova: number | null;
+    },
   ): Promise<number> {
-    const motivo = await tx.uma('SELECT id FROM motivo_cancelamento_operacao WHERE codigo = ? AND ativo', [p.motivo]);
+    const motivo = await tx.uma('SELECT id FROM motivo_cancelamento_operacao WHERE codigo = ? AND ativo', [
+      p.motivo,
+    ]);
     if (!motivo) throw configuracaoIncompleta(`motivo de cancelamento "${p.motivo}"`);
     const protocolo = await tx.incluir('cancelamento_marcacao', {
       estabelecimento_id: ctx.estabelecimento,
@@ -2172,7 +2360,11 @@ function configuracaoIncompleta(o: string): ErroOperacao {
 
 function resultadoDaSituacao(codigo: string, significado: string): string {
   if (RESULTADOS_CONFIRMACAO.some((r) => r.codigo === codigo)) return codigo;
-  return significado === 'confirmada' ? 'confirmado' : significado === 'recusada' ? 'refutado' : 'nao-confirmado';
+  return significado === 'confirmada'
+    ? 'confirmado'
+    : significado === 'recusada'
+      ? 'refutado'
+      : 'nao-confirmado';
 }
 
 /** Dia da semana (1 = domingo) de uma data ISO; exportado para os testes. */

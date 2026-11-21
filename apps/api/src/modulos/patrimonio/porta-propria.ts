@@ -14,8 +14,9 @@
 // Melhoria: a baixa grava o motivo de baixa do cadastro (motivo_baixa_bem, pela FK), não o motivo em texto livre; o
 // texto fica como a justificativa.
 // Melhoria: a semente dos grupos (IN RFB) entra no cadastro do cliente na primeira gravação, na mesma transação.
+// O laudo do bem grava em laudo_bem (o PDF fica no armazenamento, pela chave do SHA-256).
 // Pendente (pedido ao orquestrador, DDL em docs/obra/fatias/f22/saida/02-11.json): cálculo e estorno da depreciação
-// (cabeçalho do cálculo), ajuste de valor e laudo do bem, nome do responsável e doador do termo, referência da
+// (cabeçalho do cálculo), ajuste de valor do bem, nome do responsável e doador do termo, referência da
 // devolução, centro lido e resumo do inventário. Até lá, a gravação recusa com o código
 // `modelo-pendente` (nada é gravado pela metade) e as leituras devolvem vazio.
 import { GRUPOS_BEM, type VersaoGrupoBem } from '@sgh/contratos';
@@ -148,6 +149,28 @@ const modeloPendente = (oQue: string) =>
 const desatualizado = (o = 'O bem') =>
   recusa('desatualizado', `${o} mudou depois que você abriu. Abra de novo.`);
 const naoEncontrado = (o: string) => new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
+
+const SQL_LAUDO = `
+  SELECT d.id, d.bem_patrimonial_id, d.nome_arquivo, d.descricao, d.chave_armazenamento, d.sha256, d.tamanho_bytes,
+         d.criado_em, u.login
+    FROM laudo_bem d
+    JOIN bem_patrimonial b ON b.id = d.bem_patrimonial_id
+    LEFT JOIN usuario u ON u.id = d.criado_por
+   WHERE b.estabelecimento_id = ? AND d.excluido_em IS NULL`;
+
+function laudoDe(x: Record<string, unknown>): LaudoDoBem {
+  return {
+    id: inteiro(x['id']),
+    bem: inteiro(x['bem_patrimonial_id']),
+    nome: texto(x['nome_arquivo']) ?? '',
+    descricao: texto(x['descricao']) ?? '',
+    chave: texto(x['chave_armazenamento']) ?? '',
+    sha256: texto(x['sha256']) ?? '',
+    tamanho: inteiro(x['tamanho_bytes']),
+    enviadoPor: texto(x['login']) ?? '',
+    enviadoEm: instante(x['criado_em']) ?? '',
+  };
+}
 
 // ── Leituras: SQL ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -794,6 +817,47 @@ const opCancelarMov = definirOperacao({
   trilha: (x) => ({ acao: 'alteracao', motivo: x.motivo, dados: x.dados }),
 });
 
+const anexarLaudoZ = z.object({
+  bem: z.number().int().positive(),
+  nome: z.string().trim().min(1).max(150),
+  descricao: z.string().trim().max(300),
+  chave: z.string().min(1).max(300),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  tamanho: z.number().int().positive(),
+  dados: dadosZ,
+});
+
+const opAnexarLaudo = definirOperacao({
+  nome: 'patrimonio.laudo.anexar',
+  tabelas: ['laudo_bem'],
+  entrada: anexarLaudoZ,
+  travar: (x) => ({ tabela: 'bem_patrimonial', id: x.bem, colunas: ['estabelecimento_id'] }),
+  async conferir(_tx, _x, ctx, relido) {
+    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento) throw naoEncontrado('Bem');
+  },
+  async gravar(tx, x) {
+    // O mesmo PDF no mesmo bem é o mesmo laudo (UNIQUE bem + SHA-256): devolve o já anexado, sem segunda linha.
+    const ja = await tx.uma<{ id: unknown; excluido_em: unknown }>(
+      'SELECT id, excluido_em FROM laudo_bem WHERE bem_patrimonial_id = ? AND sha256 = ?',
+      [x.bem, x.sha256],
+    );
+    if (ja && ja.excluido_em !== null)
+      throw recusa('laudo-excluido', 'Este PDF já foi anexado ao bem e excluído; anexe outro arquivo.');
+    if (ja) return { id: inteiro(ja.id) };
+    const id = await tx.incluir('laudo_bem', {
+      bem_patrimonial_id: x.bem,
+      nome_arquivo: x.nome,
+      descricao: x.descricao,
+      chave_armazenamento: x.chave,
+      sha256: x.sha256,
+      tamanho_bytes: x.tamanho,
+    });
+    return { id };
+  },
+  alvo: (_x, r) => ({ tabela: 'laudo_bem', id: r.id }),
+  trilha: (x) => ({ acao: 'inclusao', dados: x.dados }),
+});
+
 const opAbrirInv = definirOperacao({
   nome: 'patrimonio.inventario.abrir',
   tabelas: ['inventario_bem', 'sequencia_negocio'],
@@ -1297,7 +1361,7 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     });
   }
 
-  // O cálculo da depreciação, o estorno, o ajuste e o laudo pedem modelo (pedido ao orquestrador): sem registro.
+  // O cálculo da depreciação, o estorno e o ajuste pedem modelo (pedido ao orquestrador): sem registro.
   async calculos(): Promise<{ daCompetencia: CalculoRegistrado | null; ultimo: CalculoRegistrado | null }> {
     return { daCompetencia: null, ultimo: null };
   }
@@ -1314,12 +1378,17 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return [];
   }
 
-  async laudos(): Promise<LaudoDoBem[]> {
-    return [];
+  laudos(c: ContextoPatrimonio, bem: number): Promise<LaudoDoBem[]> {
+    return this.ler(c, async (l, est) =>
+      (await l.consultar(`${SQL_LAUDO} AND b.id = ? ORDER BY d.id DESC`, [est, bem])).map(laudoDe),
+    );
   }
 
-  async laudo(): Promise<LaudoDoBem | null> {
-    return null;
+  laudo(c: ContextoPatrimonio, id: number): Promise<LaudoDoBem | null> {
+    return this.ler(c, async (l, est) => {
+      const x = await l.uma(`${SQL_LAUDO} AND d.id = ?`, [est, id]);
+      return x ? laudoDe(x) : null;
+    });
   }
 
   movimentos(c: ContextoPatrimonio, f: { situacao?: string | undefined; bem?: number | undefined }): Promise<MovimentoRegistrado[]> {
@@ -1727,8 +1796,16 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     throw modeloPendente('O ajuste de valor do bem');
   }
 
-  async anexarLaudo(): Promise<never> {
-    throw modeloPendente('O laudo anexado ao bem');
+  async anexarLaudo(
+    c: ContextoPatrimonio,
+    x: { bem: number; nome: string; descricao: string; chave: string; sha256: string; tamanho: number },
+    _por: string,
+    trilha: RegistroTrilhaTela,
+  ): Promise<LaudoDoBem> {
+    const { id } = await this.gravar(c, opAnexarLaudo, { ...x, dados: trilha.dadosDepois }, trilha);
+    const laudo = await this.laudo(c, id);
+    if (!laudo) throw naoEncontrado('Laudo');
+    return laudo;
   }
 
   async estornarAjuste(): Promise<never> {

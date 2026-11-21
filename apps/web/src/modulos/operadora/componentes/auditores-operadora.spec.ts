@@ -126,7 +126,6 @@ describe('W0-10: auditores da operadora', () => {
     await clicar('aut-alt-gravar');
     expect(api.alterarAuditor).toHaveBeenCalledWith(4, {
       versao: 2,
-      nome: 'Auditora Sintética',
       categoria: 'medico',
       numero: '900012',
       uf: 'SC',

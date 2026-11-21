@@ -1,15 +1,15 @@
 // Tipos de negócio da agenda de exames (M18): o que a porta entrega ao serviço, sem forma de tabela nem código do
 // sistema de origem. Agenda, horário e marcação são identificados por id; situação vira booleano ou estado nomeado.
-// Horas e durações seguem o formato do contrato da tela (`esquemaHhmm` de @sgh/contratos, "HHMM"), que o motor da
-// agenda (@sgh/dominio-agenda) também usa; a troca para minutos/ISO acompanha o contrato (pendência da onda 2).
+// Horas do dia e durações em "HH:MM" (o formato neutro de @sgh/contratos, o mesmo do motor da agenda em
+// @sgh/dominio-agenda); instantes no fuso do estabelecimento (relogio.ts).
 // Melhoria: agenda por id (não mais pelo par nome + registro do médico); "ativa", "atendido" e "senha" booleanos;
 // o estado do horário já vem nomeado (vago, marcado, confirmado…), sem letra de situação.
 import type { EstadoHorarioExame } from '@sgh/dominio-agenda';
 
-/** Relógio do estabelecimento (data ISO e hora "HHMM" do contrato). */
+/** Relógio do estabelecimento: data ISO e a hora corrente "HH:MM". */
 export interface RelogioEstabelecimento {
   readonly hoje: string;
-  readonly hhmm: string;
+  readonly hora: string;
 }
 
 export interface AgendaExame {
@@ -21,7 +21,7 @@ export interface AgendaExame {
   readonly exame: string;
   /** Categoria da agenda (id). */
   readonly categoria: number;
-  /** Duração padrão do horário ("HHMM"). */
+  /** Duração padrão do horário ("HH:MM"). */
   readonly duracao: string;
   readonly ativa: boolean;
   /** Unidade assistencial (0 = sem unidade: vale para todos os escopos). */
@@ -40,7 +40,7 @@ export interface LinhaEscalaExame {
   readonly horaInicio: string;
   readonly horaFim: string;
   readonly exame: string;
-  /** Pausa dentro da faixa (HHMM), sem horários; null = sem pausa. */
+  /** Pausa dentro da faixa ("HH:MM"), sem horários; null = sem pausa. */
   readonly intervaloInicio: string | null;
   readonly intervaloFim: string | null;
   /** Vagas de cada horário gerado pela faixa (≥ 1). */
@@ -58,7 +58,7 @@ export interface GeracaoGrade {
   readonly situacao: SituacaoGeracao;
   readonly inicio: string;
   readonly fim: string;
-  /** Data e hora ("HHMM") do pedido. */
+  /** Data e hora ("HH:MM") do pedido. */
   readonly em: string;
   readonly hora: string;
   readonly duracao: string;

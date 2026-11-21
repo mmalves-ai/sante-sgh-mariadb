@@ -1,6 +1,6 @@
-// Respostas da API do M12 (validadas pela tela). Nenhum nome de tabela do legado; as colunas de TBCONVEN que
-// aparecem em consulta vão pelo campo público (camelCase) e, nas abas de consulta, com o código do legado
-// como referência para quem confere no SPDATA. Credenciais nunca (regra 8).
+// Respostas da API do M12 (validadas pela tela). Nenhum nome de tabela da origem; os campos do contrato da fonte pagadora que
+// aparecem em consulta vão pelo campo público (camelCase) e, nas abas de consulta, com o código da origem como
+// referência para quem confere na base de origem. Credenciais nunca (regra 8).
 import { z } from 'zod';
 import { esquemaComponentes } from './entradas.js';
 
@@ -33,7 +33,7 @@ export type ListaConvenios = z.infer<typeof esquemaListaConvenios>;
 export const esquemaCampoContratoDescrito = z.object({
   campo: z.string(),
   rotulo: z.string(),
-  /** Código da coluna no legado (só nas abas de consulta, para conferir no SPDATA). */
+  /** Código do campo na origem (só nas abas de consulta, para conferir na base de origem). */
   codigoLegado: z.string().nullable(),
   tema: z.number(),
   valor: z.union([z.string(), z.number(), z.null()]),
@@ -231,7 +231,7 @@ export const esquemaVigenciasItem = z.object({
 });
 export type VigenciasItem = z.infer<typeof esquemaVigenciasItem>;
 
-/** Vigências de diária/taxa (TBVLRDTH) ou de mat/med (TBVLRMEM): o valor de cada data, sem autoria do novo. */
+/** Vigências de diária/taxa ou de materiais e medicamentos: o valor de cada data, sem autoria do novo. */
 export const esquemaVigenciasValor = z.object({
   tipo: z.enum(['diaria', 'matmed']),
   tabela: z.number(),
@@ -352,7 +352,7 @@ export const esquemaValorVigente = z.object({
   dataBase: z.string(),
   vigencia: z.string().nullable(),
   valores: esquemaComponentes.nullable(),
-  /** Regra da sante-api (valores.js): soma dos 5 componentes de TBVLRTHM na vigência; igual à grade. */
+  /** Soma dos 5 componentes da vigência de valor do procedimento; igual à grade. */
   total: z.number().nullable(),
   modelo: z.enum(['VALOR', 'PORTE', 'CH']).nullable(),
   /**

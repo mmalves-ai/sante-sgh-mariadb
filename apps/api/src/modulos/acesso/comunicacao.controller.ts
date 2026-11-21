@@ -273,7 +273,7 @@ export class ComunicacaoController implements OnModuleDestroy {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVES_INICIO.mensagens);
     const mensagens = await this.servico.anteriores(s.porta, s.login).catch(traduzir);
-    req.sghAlvo = { tabelaAlvo: 'TBMENSAG', chaveNaturalAlvo: `n:${mensagens.length}` };
+    req.sghAlvo = { tabelaAlvo: 'mensagem_interna', chaveNaturalAlvo: `n:${mensagens.length}` };
     return { mensagens, teto: 100 };
   }
 

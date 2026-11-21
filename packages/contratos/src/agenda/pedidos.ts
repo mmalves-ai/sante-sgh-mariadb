@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
-import { esquemaCanal, esquemaHhmm, esquemaMotivoCancelamento, MODOS_REMARCACAO } from './entradas.js';
+import { esquemaCanal, esquemaHoraAgenda, esquemaMotivoCancelamento, MODOS_REMARCACAO } from './entradas.js';
 import { MOTIVOS_BLOQUEIO, PRIORIDADES_ESPERA, RESULTADOS_CONFIRMACAO } from './vocabulario.js';
 
 const id = z.number().int().positive().max(2_147_483_647);
@@ -16,10 +16,10 @@ const texto200 = textoCp1252(200)
 export const esquemaFaixaPedido = z
   .object({
     semana: z.number().int().min(1).max(7),
-    inicio: esquemaHhmm,
-    fim: esquemaHhmm,
-    intervaloInicio: esquemaHhmm.nullable().optional(),
-    intervaloFim: esquemaHhmm.nullable().optional(),
+    inicio: esquemaHoraAgenda,
+    fim: esquemaHoraAgenda,
+    intervaloInicio: esquemaHoraAgenda.nullable().optional(),
+    intervaloFim: esquemaHoraAgenda.nullable().optional(),
   })
   .strict();
 export type FaixaPedido = z.infer<typeof esquemaFaixaPedido>;
@@ -59,8 +59,8 @@ export const esquemaPedidoPeriodoBloqueio = z
     agenda: id,
     inicio: esquemaDataIso,
     fim: esquemaDataIso,
-    horaInicio: esquemaHhmm.nullable().optional(),
-    horaFim: esquemaHhmm.nullable().optional(),
+    horaInicio: esquemaHoraAgenda.nullable().optional(),
+    horaFim: esquemaHoraAgenda.nullable().optional(),
   })
   .strict()
   .refine((p) => p.fim >= p.inicio, { message: 'O fim vem antes do início.', path: ['fim'] })
@@ -75,8 +75,8 @@ export const esquemaPedidoBloqueio = z
     agenda: id,
     inicio: esquemaDataIso,
     fim: esquemaDataIso,
-    horaInicio: esquemaHhmm.nullable().optional(),
-    horaFim: esquemaHhmm.nullable().optional(),
+    horaInicio: esquemaHoraAgenda.nullable().optional(),
+    horaFim: esquemaHoraAgenda.nullable().optional(),
     motivo: z.enum(codigosBloqueio),
     complemento: texto200,
     previsaoRetorno: esquemaDataIso.nullable().optional(),
@@ -119,7 +119,7 @@ export const esquemaPedidoEspera = z
 export type PedidoEspera = z.infer<typeof esquemaPedidoEspera>;
 
 export const esquemaPedidoOfertaEspera = z
-  .object({ agenda: id, data: esquemaDataIso, hora: esquemaHhmm })
+  .object({ agenda: id, data: esquemaDataIso, hora: esquemaHoraAgenda })
   .strict();
 export type PedidoOfertaEspera = z.infer<typeof esquemaPedidoOfertaEspera>;
 
@@ -127,7 +127,7 @@ export const esquemaPedidoMarcarEspera = z
   .object({
     agenda: id,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHoraAgenda,
     convenio: z.number().int().min(0).max(32767),
     canal: esquemaCanal,
   })
@@ -145,7 +145,7 @@ export const esquemaPedidoRemarcarLote = z
         z
           .object({
             marcacao: id,
-            destino: z.object({ agenda: id, data: esquemaDataIso, hora: esquemaHhmm }).strict(),
+            destino: z.object({ agenda: id, data: esquemaDataIso, hora: esquemaHoraAgenda }).strict(),
           })
           .strict(),
       )

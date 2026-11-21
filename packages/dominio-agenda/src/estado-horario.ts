@@ -1,10 +1,10 @@
 // Estado do horário e da marcação (ficha do M17, regras 1, 2, 3 e 8; Anexo A §A.3; ref 01 §2.1 e §9.1).
 //   - Vaga = PACIENTE vazio (nunca LIVRE): LIVRE='N' é bloqueado e LIVRE continua 'S' com paciente.
-//   - A legenda de SITUACAO é a de TBSITAGE: 'C' é Confirmado (não Cancelado: o cancelado sai da grade e vai
+//   - A legenda da situação do horário: 'C' é Confirmado (não Cancelado: o cancelado sai da grade e vai
 //     para o histórico de cancelamentos). O novo grava só '', 'C', 'F' e 'T' (transferência na remarcação, o
 //     caminho do Delphi medido no perfil); 'A' e 'S' são da recepção e do atendimento (M19/M20).
-//   - Encaixe (TIPOHR 'E') nunca vira vaga pública.
-//   - Comparecimento é REPACAGD.ATENDIDO em S/N; vigência = ativa e com horário que ainda não começou.
+//   - Encaixe (tipo de horário 'E') nunca vira vaga pública.
+//   - Comparecimento é o sinal "atendido" da marcação; vigência = ativa e com horário que ainda não começou.
 import { horarioJaPassou, type Horario, type Relogio } from './tempo.js';
 
 export interface SituacaoAgenda {
@@ -16,7 +16,7 @@ export interface SituacaoAgenda {
   readonly ocupa: boolean;
 }
 
-/** TBSITAGE completa (16 linhas na cópia; 'N' e '' são "não informado"). */
+/** Legenda completa das situações do horário (16 situações; 'N' e '' são "não informado"). */
 export const SITUACOES_AGENDA: readonly SituacaoAgenda[] = [
   { codigo: '', rotulo: 'Marcado', gravadaPeloNovo: true, ocupa: true },
   { codigo: 'C', rotulo: 'Confirmado', gravadaPeloNovo: true, ocupa: true },
@@ -45,7 +45,7 @@ export function rotuloSituacao(codigo: string | null | undefined): string {
   return situacao(codigo)?.rotulo ?? `Código ${(codigo ?? '').trim() || 'vazio'}`;
 }
 
-/** Linha da grade (REPACAGI) como as leituras a devolvem (texto aparado). */
+/** Linha da grade de horários como as leituras a devolvem (texto aparado). */
 export interface LinhaGrade extends Horario {
   readonly paciente: string;
   /** 'S' disponível; 'N' bloqueado. */
@@ -87,7 +87,7 @@ export function podeDesbloquear(h: LinhaGrade): boolean {
   return vazio(h.paciente) && h.livre.trim() === 'N';
 }
 
-/** Marcação (REPACAGD) com o estado da grade ao lado. */
+/** Marcação com o estado da grade ao lado. */
 export interface SinaisMarcacao {
   readonly atendido: string;
   readonly situacaoHorario: string;

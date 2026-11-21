@@ -129,15 +129,10 @@ export class UsuariosController {
     const s = sessaoDe(req);
     // Sem convivência com sistema anterior (ADR 0003): não há registro de fim a consultar.
     const fontes = { recepcao: this.recepcao, raizFim: null };
-    await conferirLoginDePainel(
-      fontes,
-      { rede: s.rede, hospital: s.hospital },
-      login,
-      async () => {
-        const f = await this.fonte.fichaUsuario(c, login, false);
-        return f ? (f.grupo ?? null) : undefined;
-      },
-    );
+    await conferirLoginDePainel(fontes, { rede: s.rede, hospital: s.hospital }, login, async () => {
+      const f = await this.fonte.fichaUsuario(c, login, false);
+      return f ? (f.grupo ?? null) : undefined;
+    });
   }
 
   private login(bruto: string): string {
@@ -243,7 +238,7 @@ export class UsuariosController {
     const cpf = plataforma ? cpfDaPlataforma(f.cpf) : null;
     // A trilha da consulta (@Auditar) passa a dizer QUAL usuário foi lido e se o CPF foi mostrado (sem o valor).
     req.sghAlvo = {
-      tabelaAlvo: 'TBUSERS',
+      tabelaAlvo: 'usuario',
       idAlvo: String(f.id),
       ...(cpf === null ? {} : { chaveNaturalAlvo: 'ficha;cpf:visto' }),
     };
@@ -308,7 +303,7 @@ export class UsuariosController {
   @Post('usuarios')
   @HttpCode(201)
   @Permissao(C.usuarioCriar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async criar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoUsuario> {
     const p = analisar(esquemaPedidoUsuario, corpo);
     this.segregacao(req, 'criar-usuario', null);
@@ -326,7 +321,7 @@ export class UsuariosController {
   @Post('usuarios/:login/nome')
   @HttpCode(200)
   @Permissao(C.usuarioEditar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async nome(
     @Param('login') bruto: string,
     @Body() corpo: unknown,
@@ -342,7 +337,7 @@ export class UsuariosController {
   @Post('usuarios/:login/grupo')
   @HttpCode(200)
   @Permissao(C.usuarioEditar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async grupo(
     @Param('login') bruto: string,
     @Body() corpo: unknown,
@@ -369,7 +364,7 @@ export class UsuariosController {
   @Post('usuarios/:login/bloqueio')
   @HttpCode(200)
   @Permissao(C.usuarioBloquear)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async bloqueio(
     @Param('login') bruto: string,
     @Body() corpo: unknown,
@@ -395,7 +390,7 @@ export class UsuariosController {
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
   @Permissao(C.usuarioBloquear)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async redefinirSenha(
     @Param('login') bruto: string,
     @Body() corpo: unknown,
@@ -438,7 +433,7 @@ export class UsuariosController {
   @Post('usuarios/:login/escopos')
   @HttpCode(200)
   @Permissao(C.escopoEditar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async escopo(
     @Param('login') bruto: string,
     @Body() corpo: unknown,
@@ -456,7 +451,7 @@ export class UsuariosController {
   @Post('usuarios/:login/flags')
   @HttpCode(200)
   @Permissao(C.usuarioEditar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 17) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
   async flags(
     @Param('login') bruto: string,
     @Body() corpo: unknown,

@@ -127,7 +127,7 @@ const PARAMETROS = {
 };
 
 const CAT: DadosCatEntrada = {
-  horasAntes: '0530',
+  horasAntes: '05:30',
   lateralidade: 2,
   comunicouPolicia: false,
   dataObito: null,
@@ -141,7 +141,7 @@ const CAT: DadosCatEntrada = {
   municipio: '3106200',
   uf: 'MG',
   atestadoData: '2026-10-20',
-  atestadoHora: '1500',
+  atestadoHora: '15:00',
   internacao: false,
   duracaoDias: 2,
   complementoLesao: null,

@@ -18,7 +18,7 @@ const dados = (cnes = '9999999', registroAns = '999999'): DadosLoteTiss => ({
       tipoGuia: 2,
       numeroGuia: 'SINT-1',
       carteira: 'SINTETICO0001',
-      atendimentoRN: 'N',
+      atendimentoRN: false,
       inicio: { data: '2026-10-01', hora: '08:00:00' },
       fim: { data: '2026-10-01', hora: '09:00:00' },
       caraterAtendimento: '1',

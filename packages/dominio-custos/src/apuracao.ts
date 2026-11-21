@@ -16,7 +16,7 @@ import { custearContas, type ItemContaLido } from './custo-conta.js';
 import { avaliarCompletude } from './parcial.js';
 import { centesimos } from './estatistica.js';
 
-/** Um grupo agregado no banco pelo código do centro de custo do movimento (TBCENCUS.COD). */
+/** Um grupo agregado no banco pelo código do centro de custo do movimento (o código do cadastro). */
 export interface GrupoCustoPorCodigo {
   readonly cdc: number | null;
   readonly centavos: number;
@@ -36,7 +36,7 @@ export interface FontesCusteio {
   readonly devolucoesAtipicas?: readonly GrupoCustoPorCodigo[];
   /** Despesas do financeiro (sem as notas de entrada de estoque e sem a folha), pelo CDC gravado (0: sem centro). */
   readonly despesas: readonly GrupoCustoPorCodigo[];
-  /** Proventos da folha da competência pela lotação (já pelo TBCENCUS.ID; null: sem lotação). */
+  /** Proventos da folha da competência pela lotação (já pelo id do centro de custo; null: sem lotação). */
   readonly pessoal: readonly {
     readonly centro: number | null;
     readonly centavos: number;

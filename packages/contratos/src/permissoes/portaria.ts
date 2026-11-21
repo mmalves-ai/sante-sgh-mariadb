@@ -1,5 +1,5 @@
 // Permissões da portaria e dos visitantes (M50, etapa 5; ficha, seção 7). Quem tem a opção no legado tem a permissão no
-// novo (regra 1 do M06). Opções do módulo "Controle de acesso" (35) do outro sistema (TBOPCOES, retrato
+// novo (regra 1 do M06). Opções do módulo "Controle de acesso" (35) do outro sistema (menu de origem, retrato
 // tools/verificadores/dados/acesso-legado.pc.json; todas ativas, concedidas a 2 grupos no `pc`): Tabelas 4528 (Parâmetros
 // do módulo 4529, Crachás 4530, Portarias 4532, Locais 4533, Configuração de locais 4534, Motivos de bloqueio/limitar
 // visitantes 4538, Terminais 4540 › Tecnibra 5611 e TopData 5612 › Manutenção 5613 e Biometria 5614); Movimentações 4541

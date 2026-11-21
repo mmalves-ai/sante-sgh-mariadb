@@ -23,7 +23,7 @@ export interface SetorOnda3 {
   /** Ordem recomendada de liberação (campo 12). */
   readonly ordem: number;
   readonly nome: string;
-  /** Grupos funcionais (TBGRUUSU.NOME, sem acento) de quem começa no setor (cap-15 §15.4.1). */
+  /** Grupos funcionais (nome do perfil de acesso, sem acento) de quem começa no setor (cap-15 §15.4.1). */
   readonly grupos: readonly string[];
   /** Funcionalidades (chaves POL-3) que o setor liga. */
   readonly recursos: readonly string[];
@@ -131,33 +131,48 @@ export const SETORES_ONDA3: readonly SetorOnda3[] = [
 export const RECURSOS_FORA_DA_ONDA3 = ['suprimentos.ambulatorial', 'suprimentos.livroControlados'] as const;
 
 /**
- * Regra 2 (motor de estoque é o do banco): tabelas que só os gatilhos (ou a consolidação do outro sistema) produzem.
- * O catálogo de operações nunca as lista entre as gravadas pelo novo. GEARMLOC e FCLANEXT: o outro sistema as grava
- * na consolidação sem gatilho (D-MOTOR-28); até o cenário controlado do M36, ficam fora das gravadas e as operações
- * que dependem delas ficam `especificada`.
+ * Efeitos do movimento de estoque: tabelas derivadas do estoque (saldo por local, saldo mensal, saldo e custo médio do
+ * insumo, consumo por centro de custo e histórico do custo médio). Sem gatilho (regra de ouro 2), quem as atualiza é a
+ * operação de movimento de estoque do domínio, na mesma transação do documento. A numeração do documento e o
+ * lançamento contábil são de outros domínios (núcleo e financeiro) e ficam fora desta lista.
  */
 export const TABELAS_EFEITO_ESTOQUE = [
-  'GEARMLOC',
-  'GESALDOS',
-  'GEITENS',
-  'GEKONCDC',
-  'GECONITL',
-  'FCLANEXT',
-  'GEULTDOCGER',
+  'saldo_estoque',
+  'saldo_estoque_mensal',
+  'insumo',
+  'consumo_centro_custo',
+  'custo_medio_historico',
+] as const;
+
+/**
+ * Operações de movimento de estoque: as únicas da onda que podem gravar as tabelas de efeito (regra 2). Cada uma move
+ * quantidade ou fecha a competência e atualiza os efeitos na transação do próprio documento.
+ */
+export const OPERACOES_MOVIMENTO_ESTOQUE = [
+  ...DOCUMENTOS_ESTOQUE,
+  'suprimentos.registrarEntradaNF',
+  'suprimentos.registrarMovimentoDireto',
+  'suprimentos.registrarBalanco',
+  'suprimentos.fecharMes',
+  'suprimentos.reabrirMes',
+  'suprimentos.dispensarHorario',
+  'suprimentos.devolverDose',
+  'suprimentos.cancelarDispensacao',
+  'suprimentos.registrarPerdaControlado',
 ] as const;
 
 /** Tipos de documento acompanhados pelo painel da onda (cabeçalho e operação do novo que o grava). */
 export const DOCUMENTOS_ONDA3 = [
-  { tipo: 'saida', tabela: 'GECADSAI', rotulo: 'Saídas e requisições' },
-  { tipo: 'devolucao', tabela: 'GECADDEV', rotulo: 'Devoluções' },
-  { tipo: 'transferencia', tabela: 'GECADTRA', rotulo: 'Transferências' },
-  { tipo: 'nota', tabela: 'GECADNFS', rotulo: 'Entradas por nota fiscal' },
-  { tipo: 'dispensacao', tabela: 'GECADDISPENSACAO', rotulo: 'Dispensações por horário' },
+  { tipo: 'saida', tabela: 'documento_estoque', rotulo: 'Saídas e requisições' },
+  { tipo: 'devolucao', tabela: 'documento_estoque', rotulo: 'Devoluções' },
+  { tipo: 'transferencia', tabela: 'documento_estoque', rotulo: 'Transferências' },
+  { tipo: 'nota', tabela: 'nota_entrada', rotulo: 'Entradas por nota fiscal' },
+  { tipo: 'dispensacao', tabela: 'dispensacao', rotulo: 'Dispensações por horário' },
 ] as const;
 export const TIPOS_DOCUMENTO_ONDA3 = ['saida', 'devolucao', 'transferencia', 'nota', 'dispensacao'] as const;
 export type TipoDocumentoOnda3 = (typeof TIPOS_DOCUMENTO_ONDA3)[number];
 
-/** Módulo de estoque nas conexões ao banco (TBSGHCONEXAO.MODULO = TBMODULO.ID "Gestão de estoque"). */
+/** Módulo de estoque nas conexões ao banco (o módulo "Gestão de estoque"). */
 export const MODULO_CONEXAO_ESTOQUE = 1;
 
 /** Tetos das leituras da onda (campo 4). */
@@ -188,11 +203,11 @@ export type DocumentosPorSistema = z.infer<typeof esquemaDocumentosPorSistema>;
 
 /** Efeitos esperados dos gatilhos num documento consolidado (null: não se aplica ao documento). */
 export const esquemaEfeitosDocumento = z.object({
-  /** TRG_GELANSAI_BIU/TRG_GELANDEV_BIU: o item valorizado pelo custo médio (VLRMED > 0 em todos os itens). */
+  /** O item valorizado pelo custo médio (custo médio maior que zero em todos os itens). */
   valorizado: z.boolean().nullable(),
-  /** GESALDOS do mês com o item. */
+  /** Saldo mensal do item na competência. */
   saldoMensal: z.boolean().nullable(),
-  /** GEKONCDC com o documento (centros de custo fora de 9901 a 9999). */
+  /** Consumo por centro de custo com o documento (centros de custo fora de 9901 a 9999). */
   consumo: z.boolean().nullable(),
   /** Lote do item rastreável ligado ao documento. */
   lote: z.boolean().nullable(),
@@ -486,18 +501,6 @@ export const RECURSOS_SO_NO_NOVO_ONDA_3: Readonly<Record<string, string>> = {
   'suprimentos.controlados': 'a dupla conferência de controlados',
   'suprimentos.kits': 'o lacre e a conferência do carrinho de parada',
 };
-
-/** Códigos de baixa confiança da onda (ref 02 §2.5): gravados só no caso de uso visto no perfil; "a confirmar". */
-export const CODIGOS_BAIXA_CONFIANCA_ONDA_3 = [
-  {
-    tabela: 'GECADSAI',
-    coluna: 'ORIGEM',
-    vistos: ['E', 'P'],
-    decisao: 'ref 02 §2.5',
-    confirma: 'almoxarifado',
-  },
-  { tabela: 'GECADSAI', coluna: 'TCE', vistos: ['C'], decisao: 'ref 02 §2.5', confirma: 'almoxarifado' },
-] as const;
 
 /** Motivo de cada recurso fora da liberação da onda (construído e desligado). */
 export const MOTIVO_FORA_DA_ONDA3: Readonly<Record<(typeof RECURSOS_FORA_DA_ONDA3)[number], string>> = {

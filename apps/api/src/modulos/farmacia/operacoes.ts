@@ -1,5 +1,5 @@
 // Operações de gravação da farmácia (M29) pelo Executor: o nome da operação e o Zod da entrada (contrato das telas).
-// A porta em memória aplica o mesmo Zod; a porta própria recusa com 'modelo-pendente' as que ainda esperam o modelo.
+// A porta em memória aplica o mesmo Zod; a porta própria recusa com 'modelo-pendente' as que ainda não gravam no banco próprio.
 import {
   esquemaAvaliarPrescricao,
   esquemaCancelarDispensacao,

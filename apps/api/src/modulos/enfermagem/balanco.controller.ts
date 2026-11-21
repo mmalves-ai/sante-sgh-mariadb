@@ -178,7 +178,7 @@ export class BalancoController {
     const u = unidade.trim();
     if (!UNIDADE.test(u))
       throw new ErroProblema('entrada-invalida', 400, 'Unidade inválida', 'Escolha a unidade.');
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return (await this.enfermagem.internados(sessaoDe(req).porta, u)).map((i) => ({
       paciente: i.paciente,
       atendimento: i.atendimento,
@@ -211,7 +211,7 @@ export class BalancoController {
       }),
       this.gravacao(s),
     ]);
-    return this.servico.resposta(m, c.parametros.horaCorte.replace(':', ''), g);
+    return this.servico.resposta(m, c.parametros.horaCorte, g);
   }
 
   @Post(':atendimento/lancamentos')

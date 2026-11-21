@@ -1,5 +1,5 @@
 // Permissões do M17 (ficha, seção 7; convencoes.md §12): agenda de consultas. Quem tem a opção no legado tem a
-// permissão no novo (regra 1 do M06): as opções do módulo Recepção externa › Agenda da árvore TBOPCOES (retrato
+// permissão no novo (regra 1 do M06): as opções do módulo Recepção externa › Agenda da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json): Agenda 3310, Manutenção/criação 3311 (cadastro de agendas,
 // escala e geração da grade), Agendamento 3312, Consulta 3313 (por paciente 3314, por data 3315, primeiro horário
 // livre 3316), Listagem 3317 e Horários cancelados 3325, Dias indisponíveis 3328, Reagendamento diário 3329,

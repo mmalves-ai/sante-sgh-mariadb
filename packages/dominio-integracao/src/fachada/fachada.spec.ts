@@ -398,7 +398,12 @@ describe('ação de situação do convênio', () => {
       situacaoAtual: 'A',
       situacaoDepois: 'I',
     });
-    expect(p.corpo.efeito.depois).toBe('I (suspenso)');
+    expect(p.corpo.efeito).toMatchObject({
+      tabela: 'fonte_pagadora_estabelecimento',
+      coluna: 'situacao',
+      antes: 'ativa',
+      depois: 'suspensa',
+    });
     expect(p.corpo.impacto.agendamentosFuturosConsulta).toBe(3);
     expect(p.corpo.reversao.corpo).toEqual({ convenio: 315, operacao: 'reativar' });
     expect(p.corpo.alertas.length).toBe(5);
@@ -422,7 +427,11 @@ describe('ação de situação do convênio', () => {
 
   it('resultado só com a prova (situação relida = alvo)', () => {
     const base = { cod: 315, operacao: 'reativar' as const, nome: 'G', origem: 'I', reversao: {} };
-    expect(resultadoSituacao(base, 'A')).toMatchObject({ situacaoAnterior: 'I', situacaoAtual: 'A' });
+    expect(resultadoSituacao(base, 'A')).toMatchObject({
+      situacaoAnterior: 'I',
+      situacaoAtual: 'A',
+      efeito: { tabela: 'fonte_pagadora_estabelecimento', coluna: 'situacao', antes: 'suspensa', depois: 'ativa' },
+    });
     expect(capturar(() => resultadoSituacao(base, 'I'))).toMatchObject({
       extra: { motivo: 'update_sem_efeito' },
     });

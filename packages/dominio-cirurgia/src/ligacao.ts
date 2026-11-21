@@ -1,8 +1,8 @@
-// Ligação agendamento ↔ cirurgia realizada (ficha do M18, regra 9; cap-05a §5.5). O legado não tem chave direta:
-// a cirurgia realizada (CCCADCIR) casa com o agendamento (CCAGENDA) pelo REG da internação, pela sala e pela data.
-// Medido na cópia pc (573 cirurgias desde 10/2025): 263 casam por REG, dia e sala; 234 por REG e dia (sala
-// diferente); 21 só pelo REG; 55 não casam. O novo grava a ligação na SGH_CC_LIGACAO quando registra pelo
-// agendamento; as do outro sistema vão para revisão com a sugestão.
+// Ligação agendamento ↔ cirurgia realizada (ficha do M18, regra 9; cap-05a §5.5). A base de origem não tem chave direta:
+// a cirurgia realizada casa com o agendamento pelo atendimento, pela sala e pela data.
+// Medido na cópia pc (573 cirurgias desde 10/2025): 263 casam por atendimento, dia e sala; 234 por atendimento e
+// dia (sala diferente); 21 só pelo atendimento; 55 não casam. O sistema grava a ligação no próprio ato cirúrgico
+// (agendamento_cirurgico_id) quando registra pelo agendamento; as do outro sistema vão para revisão com a sugestão.
 
 export interface AgendamentoParaLigar {
   readonly id: number;

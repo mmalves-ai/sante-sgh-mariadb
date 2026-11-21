@@ -1,9 +1,7 @@
-// Registro do ato cirúrgico (ficha do M18, `cirurgia.registrarCirurgia`; Anexo A). CCCADCIR guarda o porte em TIPO_CIR
-// (P/M/G, CHECK no banco), o potencial de contaminação em POT_CONT (L limpa 557 de 573, P potencialmente contaminada
-// 15, C contaminada; I infectada é a quarta classe clássica, nunca vista: recusada), a duração em HHMM e as horas de
-// início e fim (HORA_I/HORA_T) e de anestesia (HORA_IA/HORA_TA) em HHMM. O que o legado não tem coluna (entrada e
-// saída de sala, incisão, ASA) vai à SGH_CC_REGISTRO_EXT.
-import { duracaoEntre, minutosDeHhmm } from './tempo.js';
+// Registro do ato cirúrgico (ficha do M18, `cirurgia.registrarCirurgia`; Anexo A): o porte (pequeno, médio, grande),
+// o potencial de contaminação (limpa, potencialmente contaminada, contaminada; infectada é recusada) e as horas do
+// dia "HH:MM" de início e fim da cirurgia e da anestesia (o fim pode passar da meia-noite).
+import { duracaoEntre, minutosDaHora } from './tempo.js';
 
 export const PORTES = [
   { codigo: 'P', rotulo: 'Pequeno porte' },
@@ -19,7 +17,7 @@ export const POTENCIAIS_CONTAMINACAO = [
 ] as const;
 export type PotencialContaminacao = (typeof POTENCIAIS_CONTAMINACAO)[number]['codigo'];
 
-/** Técnica do procedimento (CCLANCIR.TECNICA: 0 510, 1 50, 2 35 desde 10/2025; rótulos a confirmar com o bloco, DP-3). */
+/** Técnica do procedimento (rótulos a confirmar com o bloco, DP-3). */
 export const TECNICAS = [
   { codigo: 0, rotulo: 'Convencional' },
   { codigo: 1, rotulo: 'Videolaparoscopia' },
@@ -27,7 +25,7 @@ export const TECNICAS = [
 ] as const;
 
 export interface TemposDoAto {
-  /** HHMM. */
+  /** Hora do dia "HH:MM". */
   readonly inicio: string;
   readonly fim: string;
   readonly inicioAnestesia?: string | null;
@@ -36,20 +34,20 @@ export interface TemposDoAto {
 
 export type Problema = { readonly campo: string; readonly texto: string };
 
-/** Confere os tempos do ato: horas HHMM válidas, anestesia envolvendo a cirurgia; devolve a duração em minutos. */
+/** Confere os tempos do ato: horas "HH:MM" válidas, anestesia envolvendo a cirurgia; devolve a duração em minutos. */
 export function conferirTempos(t: TemposDoAto): { duracaoMin: number | null; problemas: Problema[] } {
   const problemas: Problema[] = [];
-  if (minutosDeHhmm(t.inicio) === null)
+  if (minutosDaHora(t.inicio) === null)
     problemas.push({ campo: 'inicio', texto: 'Hora de início inválida.' });
-  if (minutosDeHhmm(t.fim) === null) problemas.push({ campo: 'fim', texto: 'Hora de término inválida.' });
+  if (minutosDaHora(t.fim) === null) problemas.push({ campo: 'fim', texto: 'Hora de término inválida.' });
   const duracaoMin = duracaoEntre(t.inicio, t.fim);
   if (problemas.length === 0 && duracaoMin === null)
     problemas.push({ campo: 'fim', texto: 'O término tem de vir depois do início.' });
   const ia = t.inicioAnestesia ?? null;
   const fa = t.fimAnestesia ?? null;
-  if (ia !== null && minutosDeHhmm(ia) === null)
+  if (ia !== null && minutosDaHora(ia) === null)
     problemas.push({ campo: 'inicioAnestesia', texto: 'Hora de início da anestesia inválida.' });
-  if (fa !== null && minutosDeHhmm(fa) === null)
+  if (fa !== null && minutosDaHora(fa) === null)
     problemas.push({ campo: 'fimAnestesia', texto: 'Hora de término da anestesia inválida.' });
   if (
     ia !== null &&

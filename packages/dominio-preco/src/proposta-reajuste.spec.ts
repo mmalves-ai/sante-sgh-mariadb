@@ -127,7 +127,7 @@ describe('proposta de reajuste (preço nunca sobrescrito; vetos e alertas)', () 
       expect.arrayContaining(['sem-mudanca-em-alguns', 'vigencia-futura-existente']),
     );
   });
-  it('tabela compartilhada (10) e com percentual em TBPERTHM exigem confirmação; 625 a confirmar', () => {
+  it('tabela compartilhada (10) e com percentual por procedimento exigem confirmação; 625 a confirmar', () => {
     const dois: UsoDaTabela[] = [
       { codigo: 1, nome: 'SUS SINTÉTICO', ativo: true, usos: ['externa'] },
       { codigo: 10, nome: 'PARTICULAR SINTÉTICO', ativo: true, usos: ['externa'] },

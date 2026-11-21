@@ -1,13 +1,13 @@
 // Contratos do orçamento empresarial (M54, etapa 7: fatia F7; ficha, seções 4, 6, 7 e 8, regra 14; manual m23): o
 // orçamento anual por centro de custo e item, com versões e aprovação, comparado com o realizado do mesmo banco.
-//   - Linha do orçamento: centro de custo (TBCENCUS.ID; 0 = o hospital inteiro, sem centro) × natureza × item gerencial
-//     (TBITEDES: GRUPO, SUBGRUPO, ITEM) × 12 meses, em centavos (inteiros; nenhum arredondamento de ponto flutuante).
-//   - Naturezas: `despesa` (MFLANGSI TP_LAN 0, a apropriação gerencial dos documentos a pagar), `receita` (MFLANGSI
-//     TP_LAN 1, a dos títulos a receber) e `consumo` (as saídas de estoque valorizadas pelo custo médio, por centro de
-//     custo de destino, GEKONCDC; sem item gerencial: GRUPO/SUBGRUPO/ITEM = 0).
-//   - Realizado pela competência (MFLANGSI.DATA, a emissão; GEKONCDC.ANO/MES). O MFLANGSI grava CDC 0 em 100% do
-//     perfil: o realizado de despesa e receita vai ao centro pelo rateio do documento no novo (SGH_FIN_RATEIO) e, sem
-//     rateio, fica "sem centro" (centro 0), com a parcela impressa.
+//   - Linha do orçamento: centro de custo (id; 0 = o hospital inteiro, sem centro) × natureza × item gerencial
+//     (grupo, subgrupo, item) × 12 meses, em centavos (inteiros; nenhum arredondamento de ponto flutuante).
+//   - Naturezas: `despesa` (a apropriação gerencial dos documentos a pagar), `receita` (a dos títulos a receber) e
+//     `consumo` (as saídas de estoque valorizadas pelo custo médio, por centro de custo de destino; sem item
+//     gerencial: grupo, subgrupo e item = 0).
+//   - Realizado pela competência (a data de emissão do documento; o ano e o mês do consumo). Sem centro de custo no
+//     documento, o realizado de despesa e receita vai ao centro pelo rateio do documento e, sem rateio, fica "sem
+//     centro" (centro 0), com a parcela impressa.
 //   - Desvio = realizado − orçado (absoluto) e desvio ÷ orçado (percentual, nulo com orçado 0); favorável quando a
 //     despesa ou o consumo ficam abaixo do orçado e a receita acima. Todo total vem com as parcelas.
 // Nada aqui toca tabela do outro sistema: o orçamento fica em SGH_ORC_* (script 0549); o realizado é só leitura.
@@ -132,7 +132,7 @@ export const esquemaConsultaComparativo = z.object({
   mesAte: numeroQuery(1, 12).optional(),
   /** Visão: linha a linha (centro × item), por centro ou por item. */
   visao: z.enum(['linha', 'centro', 'item']).default('linha'),
-  /** Recorte por centro de custo (TBCENCUS.ID; 0 é o "sem centro"); sem ele, todos. */
+  /** Recorte por centro de custo (id; 0 é o "sem centro"); sem ele, todos. */
   centro: z
     .string()
     .regex(/^\d{1,10}$/u, 'Centro de custo inválido.')
@@ -197,7 +197,7 @@ export interface ItemGerencialOrcamento {
   readonly item: number;
   readonly nome: string;
   readonly grupoNome: string;
-  /** R receita, D despesa (TBGRUDES.CLASSIF); a natureza da linha segue a do grupo. */
+  /** R receita, D despesa (classificação do grupo); a natureza da linha segue a do grupo. */
   readonly natureza: 'despesa' | 'receita';
   readonly ativo: boolean;
 }

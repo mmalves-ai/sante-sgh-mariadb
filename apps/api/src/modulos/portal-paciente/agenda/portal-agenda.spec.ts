@@ -794,7 +794,7 @@ describe('correções da revisão do M50.2', () => {
           tipo: 'consulta',
           agenda: 902,
           data: '2099-01-05',
-          hora: '0900',
+          hora: '09:00',
           convenio: 10,
         }),
         p(cinthya, 'PUT', `/pre-checkin/consulta/${id}`, envio('(22) 98888-0005')),

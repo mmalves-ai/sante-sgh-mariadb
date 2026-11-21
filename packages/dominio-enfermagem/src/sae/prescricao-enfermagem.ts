@@ -26,8 +26,8 @@ const hhmm = (n: number) =>
   `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 
 /**
- * A proposta dos horários da atividade: a grade de horários-padrão da unidade para o número de vezes ao dia (HHMM ou
- * HH:mm, na ordem do cadastro); sem grade para esse número, a partir do primeiro horário (padrão 08:00) em intervalos
+ * A proposta dos horários da atividade: a grade de horários-padrão da unidade para o número de vezes ao dia (HH:MM,
+ * na ordem do cadastro); sem grade para esse número, a partir do primeiro horário (padrão 08:00) em intervalos
  * iguais. "Se necessário" (0): nenhum.
  */
 export function proporHorariosCuidado(

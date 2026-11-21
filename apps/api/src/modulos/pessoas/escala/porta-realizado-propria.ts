@@ -16,10 +16,9 @@
 // Pendências de modelo (pedido em docs/obra/fatias/f22/saida/03-04.json), com as operações indisponíveis até o DDL:
 //   - lançar no repasse e estornar: o plantão não guarda o lançamento (lancamento_repasse não tem o plantão) nem o
 //     estorno; `repasse.lancarEvento` e o estorno respondem 409 `modelo-pendente`;
-//   - incluir tarifa: valor_hora_plantao não tem o tipo de plantão; a inclusão responde 409, e a tarifa existente,
-//     sem tipo, vale para todos os tipos (lida uma vez por tipo);
-//   - o motivo da recusa e a fonte do realizado (ponto ou informado) vão só na trilha da gravação; a leitura devolve
-//     motivo nulo e fonte 'informado'.
+// A tarifa incluída grava o tipo de plantão (valor_hora_plantao.tipo_plantao); a tarifa sem tipo vale para todos os
+// tipos (lida uma vez por tipo). A fonte do realizado (informado ou ponto) e o motivo da recusa ficam no plantão
+// (fonte_realizado e motivo_recusa_realizado) e voltam na leitura.
 import { tarifaVigente, valorRealizado } from '@sgh/dominio-pessoas';
 import {
   ErroOperacao,
@@ -53,11 +52,9 @@ import type { RegistroPlantaoParaRealizado, RegistroRealizado, RegistroTarifaPla
 
 const pendente = (titulo: string, motivo: string) => new ErroOperacao(409, 'modelo-pendente', titulo, motivo);
 const MOTIVO_LANCAMENTO =
-  'O lançamento do plantão no repasse aguarda no modelo do banco a ligação do plantão ao lançamento (pedido de DDL do lote 03-04): o realizado aprovado fica no relatório, sem lançar.';
+  'O lançamento do plantão no repasse aguarda a ligação ao módulo do repasse (favorecido e evento do lançamento): o realizado aprovado fica no relatório, sem lançar.';
 const MOTIVO_ESTORNO =
-  'O estorno do realizado aguarda no modelo do banco o registro do estorno e do lançamento negativo no plantão (pedido de DDL do lote 03-04).';
-const MOTIVO_TARIFA =
-  'A inclusão de tarifa aguarda o tipo de plantão na tabela de valor da hora (pedido de DDL do lote 03-04): por enquanto vale a tarifa já cadastrada, para todos os tipos.';
+  'O estorno do realizado aguarda a ligação ao módulo do repasse (o lançamento negativo do estorno), que vem junto com o lançamento.';
 
 /** Uma operação do Executor por ação da tela do realizado. */
 export const ACOES_REALIZADO: Readonly<Record<string, AcaoGravacao>> = {
@@ -88,7 +85,8 @@ const SQL_PLANTAO = `SELECT p.id, p.escala_id, e.situacao AS estado_escala, e.se
 /** O realizado é o plantão com o horário real registrado (revisado), fora do cancelado. */
 const SQL_REALIZADO = `SELECT p.id, p.colaborador_id, p.setor_funcional_id, p.tipo, p.entrada_registrada_em,
   p.saida_registrada_em, p.observacao, p.revisado_em, ur.login AS informado_por, p.revisado_por_usuario_id,
-  p.aprovado, p.aprovado_em, ua.login AS decidido_por, p.versao, v.id AS vinculo
+  p.aprovado, p.aprovado_em, ua.login AS decidido_por, p.versao, v.id AS vinculo, p.fonte_realizado,
+  p.motivo_recusa_realizado
   FROM plantao p
   LEFT JOIN usuario ur ON ur.id = p.revisado_por_usuario_id
   LEFT JOIN usuario ua ON ua.id = p.aprovado_por_usuario_id
@@ -97,8 +95,8 @@ const SQL_REALIZADO = `SELECT p.id, p.colaborador_id, p.setor_funcional_id, p.ti
     AND p.entrada_registrada_em IS NOT NULL AND p.saida_registrada_em IS NOT NULL`;
 
 /** A tarifa por hora geral do setor (ou de todos os setores), sem os recortes que a tela do realizado não usa. */
-const SQL_TARIFA = `SELECT t.id, t.setor_funcional_id, t.vigencia_inicio, t.vigencia_fim, t.valor_hora, t.versao,
-  u.login AS criado_por_login
+const SQL_TARIFA = `SELECT t.id, t.setor_funcional_id, t.tipo_plantao, t.vigencia_inicio, t.vigencia_fim, t.valor_hora,
+  t.versao, u.login AS criado_por_login
   FROM valor_hora_plantao t LEFT JOIN usuario u ON u.id = t.criado_por
   WHERE t.estabelecimento_id = ? AND t.ativo = TRUE AND t.forma_pagamento = 'hora' AND t.profissional_id IS NULL
     AND t.grupo_setor_plantao_id IS NULL AND t.especialidade_medica_id IS NULL AND t.tipo_dia = 'todos'
@@ -136,7 +134,10 @@ function plantaoDe(r: Record<string, unknown>, fuso: string): RegistroPlantaoPar
 
 function tarifasDe(rs: readonly Record<string, unknown>[]): RegistroTarifaPlantao[] {
   return rs.flatMap((r) =>
-    TIPOS_PLANTAO.map((tipo) => ({
+    (r['tipo_plantao'] === null || r['tipo_plantao'] === undefined
+      ? TIPOS_PLANTAO
+      : [texto(r['tipo_plantao'])]
+    ).map((tipo) => ({
       id: num(r['id']),
       tipo,
       unidade: numOuNulo(r['setor_funcional_id']),
@@ -177,14 +178,14 @@ function realizadoDe(
     inicio,
     fim,
     minutos,
-    origem: 'informado',
+    origem: (textoOuNulo(r['fonte_realizado']) ?? 'informado') as RegistroRealizado['origem'],
     observacao: textoOuNulo(r['observacao']),
     situacao,
     informadoPor: texto(r['informado_por']),
     informadoEm: civilDoUtc(r['revisado_em'], fuso),
     decididoPor: decidido ? textoOuNulo(r['decidido_por']) : null,
     decididoEm: decidido ? civilDoUtc(r['aprovado_em'], fuso) : null,
-    motivo: null,
+    motivo: decidido && !aprovado ? textoOuNulo(r['motivo_recusa_realizado']) : null,
     tarifa: t?.id ?? null,
     valorHora: t?.valorHora ?? null,
     valor: v?.valor ?? null,
@@ -304,9 +305,10 @@ function gravadorSobre(
         aprovado: false,
         aprovado_por_usuario_id: null,
         aprovado_em: null,
+        fonte_realizado: r.origem,
+        motivo_recusa_realizado: null,
       });
       x.dados['realizado'] = { minutos: r.minutos };
-      if (r.origem !== 'informado') x.pendentes.push({ alvo: 'plantao', id: r.plantao, fonte: r.origem });
       return r.plantao;
     },
     async decidirRealizado(d) {
@@ -331,13 +333,35 @@ function gravadorSobre(
         aprovado_por_usuario_id: usuario,
         aprovado_em: agora(),
         // A recusa devolve o plantão a previsto: a coordenação registra de novo.
-        ...(aprova ? {} : { situacao: 'previsto' }),
+        ...(aprova ? {} : { situacao: 'previsto', motivo_recusa_realizado: d.motivo }),
       });
       x.dados['decisao'] = { situacao: d.situacao, tarifa: d.tarifa, valorHora: d.valorHora, valor: d.valor };
-      if (!aprova && d.motivo) x.pendentes.push({ alvo: 'plantao', id: d.id, motivoRecusa: d.motivo });
     },
-    async incluirTarifa() {
-      throw pendente('Inclusão de tarifa indisponível', MOTIVO_TARIFA);
+    async incluirTarifa(t) {
+      if (!(TIPOS_PLANTAO as readonly string[]).includes(t.tipo))
+        throw recusa(
+          'tipo-plantao-invalido',
+          'O tipo de plantão da tarifa é presencial, sobreaviso ou diarista.',
+        );
+      if (t.unidade !== null) {
+        const u = await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?', [
+          t.unidade,
+          est,
+        ]);
+        if (!u) throw recusa('unidade-inexistente', 'O setor da tarifa não existe neste estabelecimento.');
+      }
+      // Tarifa geral por hora (sem profissional, grupo, especialidade, faixa de horário ou tipo de dia): a que a tela usa.
+      return tx.incluir('valor_hora_plantao', {
+        estabelecimento_id: est,
+        descricao: `Valor da hora do plantão ${t.tipo}`,
+        setor_funcional_id: t.unidade,
+        tipo_plantao: t.tipo,
+        tipo_dia: 'todos',
+        forma_pagamento: 'hora',
+        valor_hora: t.valorHora,
+        vigencia_inicio: t.inicio,
+        vigencia_fim: t.fim,
+      });
     },
     async encerrarTarifa(t) {
       const l = (

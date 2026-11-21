@@ -184,14 +184,14 @@ function traduzir(e: unknown): never {
 }
 
 const TABELA_DO_TIPO: Readonly<Record<TipoDocumentoAberto, string>> = {
-  registro: 'PRCABEVOL',
-  receita: 'PRRECEITA',
-  atestado: 'PRATESTREQIMP',
-  'pedido-exame': 'PREXAMEASSINATURA',
-  'exame-externo': 'PRLANCAMENTOEXAME',
-  anexo: 'PRGEDIMP',
+  registro: 'registro_assistencial',
+  receita: 'receita_medica',
+  atestado: 'documento_emitido',
+  'pedido-exame': 'requisicao_exame',
+  'exame-externo': 'exame_lancado_prontuario',
+  anexo: 'anexo_prontuario',
   tcle: 'SGH_PEP_TCLE',
-  'sumario-alta': 'PRATESTREQIMP',
+  'sumario-alta': 'documento_emitido',
   'rel-transferencia': 'SGH_PEP_REL_TRANSF',
   'declaracao-obito': 'SGH_PEP_OBITO',
 };
@@ -326,7 +326,7 @@ export class DocumentosPepController {
       profissional: vinculo === 'todos' ? null : await this.prof(s),
     });
     req.sghAlvo = {
-      tabelaAlvo: 'ATCABECATEND',
+      tabelaAlvo: 'atendimento',
       chaveNaturalAlvo: `painel;unidade:${f.unidade ?? '*'};vinculo:${vinculo};n:${r.total}`,
     };
     return {
@@ -355,7 +355,7 @@ export class DocumentosPepController {
     const r = await this.servico.cabecalho(this.c(s), paciente, await this.prof(s), s.login);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: 'parte:cabecalho',
     };
@@ -376,7 +376,7 @@ export class DocumentosPepController {
     const r = await this.servico.linhaTempo(this.c(s), paciente, f, await this.prof(s));
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRCABEVOL',
+      tabelaAlvo: 'registro_assistencial',
       chaveNaturalAlvo: `parte:linha-do-tempo;pagina:${r.pagina};n:${r.eventos.length}`,
     };
     return r;
@@ -531,7 +531,7 @@ export class DocumentosPepController {
     }
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: `exportado;linhas:${linhas.length};justificativa:${e.tipoJustificativa ?? 'texto'}`,
     };
@@ -554,7 +554,7 @@ export class DocumentosPepController {
     const r = await this.servico.alergias(this.c(s), paciente, await this.prof(s), { criar, inativar });
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRALERGIAPAC',
+      tabelaAlvo: 'alergia_paciente',
       chaveNaturalAlvo: `parte:alergias;n:${r.ativas.length}`,
     };
     return r;
@@ -676,7 +676,7 @@ export class DocumentosPepController {
     const r = await this.servico.pedidos(this.c(s), paciente, termo, criar);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'SILANEXA',
+      tabelaAlvo: 'exame_item',
       chaveNaturalAlvo: `parte:pedidos;n:${r.pedidos.length}`,
     };
     return r;
@@ -717,7 +717,7 @@ export class DocumentosPepController {
     const r = await this.servico.resultados(this.c(s), paciente, { ciencia, externo });
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'SIRES01',
+      tabelaAlvo: 'resultado_exame',
       chaveNaturalAlvo: `parte:resultados;n:${r.resultados.length}`,
     };
     return r;
@@ -823,7 +823,7 @@ export class DocumentosPepController {
     const r = await this.servico.documentos(this.c(s), paciente, familia, { emitir, suspender });
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP',
+      tabelaAlvo: familia === 'receita' ? 'receita_medica' : 'documento_emitido',
       chaveNaturalAlvo: `parte:${familia};n:${r.documentos.length}`,
     };
     return r;
@@ -1122,7 +1122,11 @@ export class DocumentosPepController {
     const paciente = await this.paciente(s, p, 'pep.anexo.ler', true);
     const criar = await this.acao(s, 'pep.anexo.criar', RECURSOS_M23.anexo, 'pep.anexarDocumento');
     const r = await this.servico.anexos(this.c(s), paciente, criar);
-    req.sghAlvo = { paciente, tabelaAlvo: 'PRGEDIMP', chaveNaturalAlvo: `parte:anexos;n:${r.anexos.length}` };
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'anexo_prontuario',
+      chaveNaturalAlvo: `parte:anexos;n:${r.anexos.length}`,
+    };
     return r;
   }
 
@@ -1143,7 +1147,7 @@ export class DocumentosPepController {
     if (!a || a.paciente !== paciente) throw new ErroProblema('nao-encontrado', 404, 'Anexo não encontrado');
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRGEDIMP',
+      tabelaAlvo: 'anexo_prontuario',
       idAlvo: String(id),
       chaveNaturalAlvo: 'documento:anexo',
     };
@@ -1179,7 +1183,11 @@ export class DocumentosPepController {
     const s = sessaoDe(req);
     const paciente = await this.paciente(s, p, 'pep.tempoEvento.ler', true);
     const r = await this.servico.tempos(this.c(s), paciente);
-    req.sghAlvo = { paciente, tabelaAlvo: 'PRTEMPOEVENTO', chaveNaturalAlvo: `parte:tempos;n:${r.length}` };
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'registro_tempo_evento',
+      chaveNaturalAlvo: `parte:tempos;n:${r.length}`,
+    };
     return r;
   }
 

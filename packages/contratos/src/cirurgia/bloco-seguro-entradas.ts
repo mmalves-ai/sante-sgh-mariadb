@@ -1,7 +1,7 @@
 // Entradas das operações só do novo da cirurgia segura e do rastreio no bloco (ficha do M46, etapa 2; seção 5,
-// "Operações só SGH_"): cirurgia.confirmarItemChecklist, cirurgia.concluirMomentoChecklist, a exceção da trava da
+// operações próprias do sistema): cirurgia.confirmarItemChecklist, cirurgia.concluirMomentoChecklist, a exceção da trava da
 // incisão (urgência, por supervisor, com motivo) e cirurgia.moverPacienteBloco. Validadas na tela, na API e na gravação
-// (o mesmo Zod). O agendamento é CCAGENDA.ID; o local e o tipo de movimentação são os IDs do cadastro do bloco.
+// (o mesmo Zod). O agendamento é o id do agendamento cirúrgico; o local e o tipo de movimentação são os IDs do cadastro do bloco.
 // Datas e horas locais AAAA-MM-DDTHH:mm (o servidor confere contra o relógio do banco).
 import { z } from 'zod';
 import { esquemaChaveAto, esquemaDataHoraLocal } from '../enfermagem/entradas.js';

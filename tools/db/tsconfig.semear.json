@@ -4,9 +4,6 @@
   "compilerOptions": {
     "erasableSyntaxOnly": false
   },
-  "include": [
-    "semear-acesso.ts",
-    "semear-acesso.spec.ts"
-  ],
+  "include": ["semear-acesso.ts", "semear-acesso.spec.ts"],
   "exclude": []
 }

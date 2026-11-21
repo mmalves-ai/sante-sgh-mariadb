@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { lerHoraDigitada } from '@sgh/contratos';
 // Conferência do pré-check-in pela recepção (M50, etapa 2; ficha, seção 7: `/recepcao/pre-checkin`,
 // `recepcao.precheckin.conferir`; regra 4). A fila do dia (ou da data escolhida) por situação, em páginas; ao abrir: o
 // que o paciente enviou ao lado do que está no cadastro, campo a campo (os que mudam vêm marcados), os documentos
@@ -51,7 +52,14 @@ const motivo = ref('');
 const erro = ref<unknown>(null);
 const feito = ref<string | null>(null);
 const dia = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+// A hora chega como HH:MM (contrato neutro); lerHoraDigitada também aceita a forma de quatro dígitos e nunca quebra a tela.
+const hora = (h: string) => {
+  try {
+    return lerHoraDigitada(h) ?? '';
+  } catch {
+    return h;
+  }
+};
 
 async function abrir(id: string): Promise<void> {
   erro.value = null;

@@ -15,7 +15,7 @@ const ROTULO_VIA: Record<ViaOpme, string> = {
 };
 
 export interface DadosEtiquetaOpme {
-  /** O consumo (SGH_SUP_OPME_RASTREIO.ID) e o lançamento da saída do estoque (GELANSAI.ID_GELANSAI). */
+  /** O consumo (id do rastreio da OPME) e o lançamento da saída do estoque (id da saída). */
   readonly consumo: number;
   readonly lancamento: number;
   readonly atendimento: number;

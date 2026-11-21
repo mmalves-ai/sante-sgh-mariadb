@@ -1,4 +1,4 @@
-// Fonética do dicionário ortográfico pessoal (M27; TBDICIONARIO_TBUSERS.FONETICA, o mesmo dicionário nos dois
+// Fonética do dicionário ortográfico pessoal (M27; coluna da fonética, o mesmo dicionário nos dois
 // sistemas): a chave que o outro sistema grava ao lado de cada palavra e usa para sugerir a grafia. Medida na cópia
 // `pc` em 22/10/2026 (só contagens: as 77 palavras de 8 usuários, 77 de 77 reproduzidas): minúsculas; "ç" antes de
 // "ã"/"õ" vira "s" (o "ç" das demais sílabas segue como "c"); sem acento; "qu" → "k"; "c" antes de a/o/u → "k" e antes
@@ -9,7 +9,7 @@
 /** Preposições com fonética vazia (7 de 7 fonéticas vazias da cópia). */
 const PREPOSICOES = new Set(['de', 'da', 'do', 'das', 'dos']);
 
-/** Tamanho de TBDICIONARIO_TBUSERS.PALAVRA e .FONETICA (VARCHAR(50)). */
+/** Tamanho da palavra e da fonética no dicionário (50 caracteres). */
 export const TAMANHO_PALAVRA_DICIONARIO = 50;
 
 /** A palavra como o outro sistema grava: sem espaço nas pontas e em minúsculas. */
@@ -17,7 +17,7 @@ export function palavraDoDicionario(palavra: string): string {
   return palavra.normalize('NFC').trim().toLowerCase();
 }
 
-/** A fonética da palavra (TBDICIONARIO_TBUSERS.FONETICA). */
+/** A fonética da palavra. */
 export function foneticaDoDicionario(palavra: string): string {
   const p = palavraDoDicionario(palavra);
   if (PREPOSICOES.has(p)) return '';

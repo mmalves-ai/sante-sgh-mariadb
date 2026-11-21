@@ -11,9 +11,11 @@
 // recebe pendência; os pareceres da auditoria vivem no retrato 'depois' da auditoria em andamento (o 'antes' é gravado
 // ao abri-la), sem ferir a unicidade (auditoria, momento); a forma de pagamento da tela e a espécie do caixa se
 // traduzem por lista branca; a conta particular é a da fonte pagadora de tipo 'particular'.
-// Pendências de modelo (pedidos do lote 02-08): a fila do lançamento após o fechamento, as regras de faturabilidade
-// por convênio, o item livre do orçamento particular, o recebimento particular e o recibo, a edição de pacotes pela
-// tela da conta e a nota de sala: até lá, as leituras saem vazias e as gravações recusam com "modelo-pendente".
+// A fila do lançamento após o fechamento (decisao_lancamento_tardio), as regras de faturabilidade por fonte pagadora
+// (regra_faturabilidade), o orçamento particular com item livre e urgência, o recebimento particular (movimento_caixa
+// ligado ao orçamento ou à conta, com o recebimento_particular de cada forma) e o recibo dele (recibo, com o valor por
+// extenso) gravam no modelo próprio. A edição do pacote pela tela grava o pacote, o valor por fonte pagadora
+// (pacote_contrato) e os itens inclusos. A nota de sala é leitura do centro cirúrgico (pedido ao lote dele).
 import { randomUUID } from 'node:crypto';
 import type {
   AuditoriaConta,
@@ -35,11 +37,21 @@ import type {
   RegraLida,
   WorklistFaturamento,
 } from '@sgh/contratos';
-import { grupoDoItem, ROTULO_GRUPO, ROTULO_SITUACAO } from '@sgh/dominio-faturamento';
+import {
+  conferirRecebimento,
+  conferirSemCaucao,
+  grupoDoItem,
+  ROTULO_GRUPO,
+  ROTULO_SITUACAO,
+  totalOrcamento,
+  troco,
+  valorPorExtenso,
+} from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
   definirOperacao,
   ErroOperacao,
+  garantirSequencia,
   type Leitor,
   type NucleoProprio,
   recusa,
@@ -60,6 +72,7 @@ import type {
 } from './porta.js';
 import {
   conferirFechamentoConta,
+  conferirRecebimentoDaConta,
   conferirRegistroPendencia,
   ESPECIE_DA_FORMA,
   filtroDaSituacao,
@@ -114,8 +127,95 @@ const json = (v: unknown): Record<string, unknown> => {
 /** Pendências "abertas" no modelo (as que ainda pedem tratamento). */
 const PENDENCIA_ABERTA = "('aberta','em_tratamento')";
 
-const modeloPendente = (titulo: string, detalhe: string) =>
-  new ErroOperacao(409, 'modelo-pendente', titulo, detalhe);
+/** A exigência da regra: o código da tela (com hífen) ↔ o código do banco (snake_case). */
+const exigeDoBanco = (v: string) => v.replace(/-/g, '_');
+const exigeDaTela = (v: unknown) => texto(v).replace(/_/g, '-');
+/** O tipo de movimento do caixa que o recebimento particular usa (cadastro de configuração do caixa). */
+export const TIPO_MOVIMENTO_RECEBIMENTO = 'recebimento_particular';
+/** A coluna do total da sessão do caixa por espécie; as demais espécies somam em total_outras_formas. */
+const TOTAL_DA_ESPECIE: Readonly<Record<string, string>> = {
+  dinheiro: 'total_dinheiro',
+  cartao_debito: 'total_cartao_debito',
+  cartao_credito: 'total_cartao_credito',
+  pix: 'total_pix',
+  cheque: 'total_cheque',
+};
+const somarDias = (data: string, dias: number) =>
+  new Date(Date.parse(`${data}T00:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+
+/** Uma entrada da fila do lançamento após o fechamento, como a tela lê. */
+const tardioLido = (x: Linha): LancamentoTardio => ({
+  registro: n(x['id']),
+  data: dataIso(x['chegou_em']) ?? '',
+  convenio: n(x['fonte_pagadora_id']),
+  conta: nn(x['conta_id']),
+  contaSituacao: ROTULO_SITUACAO[situacaoNaTela(texto(x['situacao']), verdadeiro(x['em_lote']))],
+  paciente: texto(x['paciente_nome']),
+  decisao: x['decisao'] === null || x['decisao'] === undefined ? null : texto(x['decisao']),
+  decididoPor:
+    x['decidido_por'] === null || x['decidido_por'] === undefined ? null : texto(x['decidido_por']),
+  motivo: x['motivo'] === null || x['motivo'] === undefined ? null : texto(x['motivo']),
+});
+
+/** Filtro da fila: estabelecimento, chegada desde a data e, quando há escopo, as fontes pagadoras dele. */
+function ondeFila(est: number, desde: string, convenios: readonly number[] | null) {
+  const onde = ['d.estabelecimento_id = ?', 'd.excluido_em IS NULL', 'd.chegou_em >= ?'];
+  const p: unknown[] = [est, desde];
+  if (convenios !== null) {
+    onde.push(`ch.fonte_pagadora_id IN (${lista(convenios.length)})`);
+    p.push(...convenios);
+  }
+  return { onde: onde.join(' AND '), p };
+}
+
+/** A fila do lançamento após o fechamento, as sem decisão primeiro (escopo vazio: nada). */
+async function filaTardia(
+  l: Leitor,
+  est: number,
+  o: { desde: string; convenios: readonly number[] | null; pagina: number; porPagina: number },
+): Promise<{ itens: LancamentoTardio[]; total: number }> {
+  if (o.convenios !== null && o.convenios.length === 0) return { itens: [], total: 0 };
+  const { onde, p } = ondeFila(est, o.desde, o.convenios);
+  const total = await l.uma<Linha>(
+    `SELECT COUNT(*) AS n FROM decisao_lancamento_tardio d JOIN conta_hospitalar ch ON ch.id = d.conta_hospitalar_id
+      WHERE ${onde}`,
+    p,
+  );
+  const porPagina = Math.min(500, Math.max(1, o.porPagina));
+  const r = await l.consultar<Linha>(
+    `SELECT d.id, d.chegou_em, d.decisao, d.motivo, ch.id AS conta_id, ch.fonte_pagadora_id, ch.situacao,
+            EXISTS (SELECT 1 FROM lote_tiss_conta lt WHERE lt.conta_hospitalar_id = ch.id AND lt.excluido_em IS NULL)
+              AS em_lote,
+            COALESCE(NULLIF(pa.nome_social, ''), pf.nome) AS paciente_nome, u.login AS decidido_por
+       FROM decisao_lancamento_tardio d
+       JOIN conta_hospitalar ch ON ch.id = d.conta_hospitalar_id
+       LEFT JOIN paciente pa ON pa.id = ch.paciente_id
+       LEFT JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+       LEFT JOIN usuario u ON u.id = d.decidido_por_usuario_id
+      WHERE ${onde}
+      ORDER BY d.decisao IS NOT NULL, d.chegou_em DESC, d.id DESC LIMIT ? OFFSET ?`,
+    [...p, porPagina, Math.max(0, o.pagina) * porPagina],
+    { teto: porPagina },
+  );
+  return { itens: r.map(tardioLido), total: n(total?.['n']) };
+}
+
+/** Quantas entradas da fila ainda esperam a decisão do faturista. */
+async function tardiosSemDecisao(
+  l: Leitor,
+  est: number,
+  desde: string,
+  convenios: readonly number[] | null,
+): Promise<number> {
+  if (convenios !== null && convenios.length === 0) return 0;
+  const { onde, p } = ondeFila(est, desde, convenios);
+  const r = await l.uma<Linha>(
+    `SELECT COUNT(*) AS n FROM decisao_lancamento_tardio d JOIN conta_hospitalar ch ON ch.id = d.conta_hospitalar_id
+      WHERE ${onde} AND d.decisao IS NULL`,
+    p,
+  );
+  return n(r?.['n']);
+}
 
 /**
  * Os pareceres da auditoria, na ordem: o retrato 'depois' de cada auditoria guarda a lista dos pareceres; o 'antes' é
@@ -149,6 +249,17 @@ export const TABELAS_GRAVACAO_DIRETA = [
   'auditoria_conta',
   'auditoria_conta_versao',
   'sessao_caixa',
+  'movimento_caixa',
+  'recebimento_particular',
+  'recibo',
+  'orcamento_particular',
+  'orcamento_particular_item',
+  'decisao_lancamento_tardio',
+  'regra_faturabilidade',
+  'pacote',
+  'pacote_contrato',
+  'pacote_item_incluso',
+  'sequencia_negocio',
 ] as const;
 
 const SELECAO_CONTA = `
@@ -327,13 +438,18 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = `direta:${randomUUID()}`;
-    await this.executor.executar(op, this.cliente, { chave }, {
-      cliente: this.cliente,
-      estabelecimento: est,
-      usuario: c.usuario,
-      correlacao: this.contexto(c).correlacao,
-      chaveIdempotencia: chave,
-    });
+    await this.executor.executar(
+      op,
+      this.cliente,
+      { chave },
+      {
+        cliente: this.cliente,
+        estabelecimento: est,
+        usuario: c.usuario,
+        correlacao: this.contexto(c).correlacao,
+        chaveIdempotencia: chave,
+      },
+    );
     if (!saida) throw new Error('Gravação direta sem resultado.');
     return (saida as { valor: T }).valor;
   }
@@ -359,16 +475,22 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
 
   contas(c: ContextoFaturamento, f: FiltroContas, hoje: string): Promise<ListaContas> {
     return this.ler(c, async (l, est) => {
-      const onde: string[] = ['ch.estabelecimento_id = ?', 'ch.excluido_em IS NULL', "ch.situacao <> 'cancelada'"];
+      const onde: string[] = [
+        'ch.estabelecimento_id = ?',
+        'ch.excluido_em IS NULL',
+        "ch.situacao <> 'cancelada'",
+      ];
       const p: unknown[] = [est];
       if (f.convenios !== null) {
-        if (f.convenios.length === 0) return { contas: [], total: 0, pagina: f.pagina, porPagina: f.porPagina, regua: 'competencia' };
+        if (f.convenios.length === 0)
+          return { contas: [], total: 0, pagina: f.pagina, porPagina: f.porPagina, regua: 'competencia' };
         onde.push(`ch.fonte_pagadora_id IN (${lista(f.convenios.length)})`);
         p.push(...f.convenios);
       }
       if (f.situacao) {
         const s = filtroDaSituacao(f.situacao);
-        if (!s) return { contas: [], total: 0, pagina: f.pagina, porPagina: f.porPagina, regua: 'competencia' };
+        if (!s)
+          return { contas: [], total: 0, pagina: f.pagina, porPagina: f.porPagina, regua: 'competencia' };
         onde.push(`ch.situacao IN (${lista(s.situacoes.length)})`);
         p.push(...s.situacoes);
         if (s.emLote !== null)
@@ -399,7 +521,11 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       const termo = f.termo.trim();
       if (termo) {
         onde.push('(pf.nome LIKE ? OR ch.numero = ? OR p.numero_prontuario = ?)');
-        p.push(`%${termo.replace(/[\\%_]/g, (m) => `\\${m}`)}%`, termo, /^\d+$/.test(termo) ? Number(termo) : -1);
+        p.push(
+          `%${termo.replace(/[\\%_]/g, (m) => `\\${m}`)}%`,
+          termo,
+          /^\d+$/.test(termo) ? Number(termo) : -1,
+        );
       }
       const where = onde.join(' AND ');
       const total = await l.uma<Linha>(
@@ -648,7 +774,9 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
         conclusao: confere
           ? 'O valor gravado confere com unitário × quantidade × percentual, mais acréscimo e menos desconto.'
           : 'O valor gravado não confere com o cálculo do item.',
-        causa: confere ? '' : 'O item foi alterado depois do cálculo ou tem componente fora do valor unitário.',
+        causa: confere
+          ? ''
+          : 'O item foi alterado depois do cálculo ou tem componente fora do valor unitário.',
       };
     });
   }
@@ -740,6 +868,12 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
         p,
         { teto: 500 },
       );
+      const fila = await filaTardia(l, est, {
+        desde: o.desde,
+        convenios: o.convenios,
+        pagina: 0,
+        porPagina: 50,
+      });
       return {
         porOrigem: r.map((x) => ({
           veio: texto(x['veio']),
@@ -748,16 +882,19 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
           itens: n(x['itens']),
           valor: n(x['valor']),
         })),
-        tardios: [],
-        totalTardios: 0,
-        pendentesDecisao: 0,
+        tardios: fila.itens,
+        totalTardios: fila.total,
+        pendentesDecisao: await tardiosSemDecisao(l, est, o.desde, o.convenios),
       };
     });
   }
 
-  /** A fila do lançamento após o fechamento aguarda o modelo (pedido de DDL): vazia. */
-  async tardios(): Promise<{ itens: LancamentoTardio[]; total: number }> {
-    return { itens: [], total: 0 };
+  /** A fila do lançamento após o fechamento (escopo por fonte pagadora; as sem decisão primeiro). */
+  tardios(
+    c: ContextoFaturamento,
+    o: { desde: string; convenios: readonly number[] | null; pagina: number; porPagina: number },
+  ): Promise<{ itens: LancamentoTardio[]; total: number }> {
+    return this.ler(c, (l, est) => filaTardia(l, est, o));
   }
 
   auditoria(c: ContextoFaturamento, conta: number): Promise<AuditoriaConta> {
@@ -819,10 +956,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       return r.map((x) => ({
         id: n(x['id']),
         nome: texto(x['descricao']),
-        modulos: texto(x['modulos'])
-          .split(',')
-          .filter(Boolean)
-          .map(Number),
+        modulos: texto(x['modulos']).split(',').filter(Boolean).map(Number),
       }));
     });
   }
@@ -839,9 +973,40 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
     };
   }
 
-  /** As regras de faturabilidade por convênio aguardam o modelo (pedido de DDL): vazia. */
-  async regras(): Promise<RegraLida[]> {
-    return [];
+  /** As regras de faturabilidade do estabelecimento, por fonte pagadora (o autor é quem gravou por último). */
+  regras(c: ContextoFaturamento): Promise<RegraLida[]> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar<Linha>(
+        `SELECT r.id, r.fonte_pagadora_id, r.nome, r.exige, r.seletor, r.bloqueia_fechamento, r.vigencia_inicio,
+                r.vigencia_fim, r.ativo, COALESCE(ua.login, uc.login) AS autor
+           FROM regra_faturabilidade r
+           LEFT JOIN usuario ua ON ua.id = r.alterado_por
+           LEFT JOIN usuario uc ON uc.id = r.criado_por
+          WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL ORDER BY r.nome, r.id`,
+        [est],
+        { teto: 5_000 },
+      );
+      return r.map((x) => {
+        const sel = json(x['seletor']);
+        const tipo = texto(sel['tipoConta']);
+        return {
+          id: n(x['id']),
+          convenio: n(x['fonte_pagadora_id']),
+          nome: texto(x['nome']),
+          exige: exigeDaTela(x['exige']),
+          seletor: {
+            tipoConta: tipo === 'E' || tipo === 'I' ? tipo : null,
+            grupos: Array.isArray(sel['grupos']) ? (sel['grupos'] as unknown[]).map(texto) : [],
+            codigos: Array.isArray(sel['codigos']) ? (sel['codigos'] as unknown[]).map(n) : [],
+          },
+          bloqueiaFechamento: verdadeiro(x['bloqueia_fechamento']),
+          inicio: dataIso(x['vigencia_inicio']) ?? '',
+          fim: dataIso(x['vigencia_fim']),
+          ativa: verdadeiro(x['ativo']),
+          autor: texto(x['autor']),
+        };
+      });
+    });
   }
 
   /** Pacotes do estabelecimento (ou da rede inteira) com o valor por fonte pagadora. */
@@ -896,7 +1061,9 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
     return this.ler(c, async (l, est) => {
       const r = await l.consultar<Linha>(
         `SELECT o.id, o.situacao, o.validade_ate, o.valor_total, o.valor_desconto, o.criado_em, o.nome_interessado,
-                p.numero_prontuario, COALESCE(NULLIF(p.nome_social, ''), pf.nome) AS paciente_nome, u.login
+                o.urgencia, p.numero_prontuario, COALESCE(NULLIF(p.nome_social, ''), pf.nome) AS paciente_nome, u.login,
+                (SELECT COALESCE(SUM(m.valor), 0) FROM movimento_caixa m WHERE m.orcamento_particular_id = o.id
+                    AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago
            FROM orcamento_particular o
            LEFT JOIN paciente p ON p.id = o.paciente_id
            LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
@@ -908,7 +1075,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       const ids = r.map((x) => n(x['id']));
       const itens = ids.length
         ? await l.consultar<Linha>(
-            `SELECT oi.orcamento_particular_id, COALESCE(i.descricao, g.descricao, oi.tipo_item) AS descricao,
+            `SELECT oi.orcamento_particular_id, COALESCE(oi.descricao, i.descricao, g.descricao, oi.tipo_item) AS descricao,
                     oi.quantidade, oi.valor_unitario
                FROM orcamento_particular_item oi
                LEFT JOIN item_faturavel i ON i.id = oi.item_faturavel_id
@@ -937,9 +1104,9 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
           total: n(x['valor_total']),
           desconto: n(x['valor_desconto']),
           validoAte: validade,
-          urgencia: false,
+          urgencia: verdadeiro(x['urgencia']),
           situacao,
-          pago: 0,
+          pago: n(x['pago']),
           itens: itens
             .filter((i) => n(i['orcamento_particular_id']) === n(x['id']))
             .map((i) => ({
@@ -1001,7 +1168,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
     return this.ler(c, async (l, est) => {
       const porPagina = Math.min(300, Math.max(1, f.porPagina ?? 300));
       const pagina = Math.max(0, f.pagina ?? 0);
-      const onde = ["m.estabelecimento_id = ?", "m.natureza = 'entrada'", 'm.excluido_em IS NULL'];
+      const onde = ['m.estabelecimento_id = ?', "m.natureza = 'entrada'", 'm.excluido_em IS NULL'];
       const p: unknown[] = [est];
       if (f.caixa) {
         onde.push('m.sessao_caixa_id = ?');
@@ -1027,8 +1194,12 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       }
       const r = await l.consultar<Linha>(
         `SELECT m.id, m.sessao_caixa_id, m.especie, m.valor, m.situacao, m.numero_documento, m.ocorrido_em,
-                (SELECT MIN(rc.id) FROM recibo rc WHERE rc.recebimento_id = m.recebimento_id
-                    AND m.recebimento_id IS NOT NULL AND rc.excluido_em IS NULL) AS recibo
+                m.orcamento_particular_id, m.conta_hospitalar_id, m.parcelas,
+                COALESCE(
+                  (SELECT MIN(rc.id) FROM recibo rc JOIN recebimento_particular rp ON rp.id = rc.recebimento_particular_id
+                    WHERE rp.movimento_caixa_id = m.id AND rc.situacao = 'emitido' AND rc.excluido_em IS NULL),
+                  (SELECT MIN(rc.id) FROM recibo rc WHERE rc.recebimento_id = m.recebimento_id
+                    AND m.recebimento_id IS NOT NULL AND rc.excluido_em IS NULL)) AS recibo
            FROM movimento_caixa m WHERE ${onde.join(' AND ')} ORDER BY m.id DESC LIMIT ? OFFSET ?`,
         [...p, porPagina, pagina * porPagina],
         { teto: porPagina },
@@ -1036,11 +1207,11 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       return r.map((x) => ({
         id: n(x['id']),
         caixa: n(x['sessao_caixa_id']),
-        orcamento: null,
-        conta: null,
+        orcamento: nn(x['orcamento_particular_id']),
+        conta: nn(x['conta_hospitalar_id']),
         forma: formaDaEspecie(texto(x['especie'])),
         valor: n(x['valor']),
-        parcelas: 1,
+        parcelas: n(x['parcelas']) || 1,
         situacao: texto(x['situacao']) === 'ativo' ? ('aprovado' as const) : ('estornado' as const),
         comprovante: texto(x['numero_documento']),
         conector: 'manual',
@@ -1055,8 +1226,9 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
     void antigos;
     return this.ler(c, async (l, est) => {
       const r = await l.consultar<Linha>(
-        `SELECT rc.id, rc.numero, rc.pagador_nome, rc.referente, rc.valor, rc.emitido_em, u.login
+        `SELECT rc.id, rc.numero, rc.pagador_nome, rc.referente, rc.valor, rc.emitido_em, u.login, rp.movimento_caixa_id
            FROM recibo rc LEFT JOIN usuario u ON u.id = rc.criado_por
+           LEFT JOIN recebimento_particular rp ON rp.id = rc.recebimento_particular_id
           WHERE rc.estabelecimento_id = ? AND rc.excluido_em IS NULL ORDER BY rc.id DESC`,
         [est],
         { teto: 2_000 },
@@ -1064,7 +1236,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
       return r.map((x) => ({
         id: n(x['id']),
         numero: codigoNumerico(x['numero'], n(x['id'])),
-        pagamento: null,
+        pagamento: nn(x['movimento_caixa_id']),
         pagador: texto(x['pagador_nome']),
         referente: texto(x['referente']),
         valor: n(x['valor']),
@@ -1122,7 +1294,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
         porSituacao: [...por.entries()].map(([situacao, v]) => ({ situacao, ...v })),
         porPrazo: [{ faixa: `Até ${o.prazoDias} dias da alta`, contas: n(prazo?.['n']) }],
         comPendencia: n(pend?.['n']),
-        tardiosPendentes: 0,
+        tardiosPendentes: await tardiosSemDecisao(l, est, o.desde, o.convenios),
         emAuditoria: por.get('em-auditoria')?.contas ?? 0,
       };
     });
@@ -1131,7 +1303,14 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
   /** Simulador: o preço vigente do item na tabela de preço da fonte pagadora, na data. */
   simular(
     c: ContextoFaturamento,
-    s: { convenio: number; tipoConta: 'E' | 'I'; tipo: 1 | 2 | 3 | 4; codigo: number; quantidade: number; data: string },
+    s: {
+      convenio: number;
+      tipoConta: 'E' | 'I';
+      tipo: 1 | 2 | 3 | 4;
+      codigo: number;
+      quantidade: number;
+      data: string;
+    },
   ) {
     return this.ler(c, async (l, est) => {
       const tipos = tiposDoGrupo(s.tipo);
@@ -1177,7 +1356,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       { teto: 1 },
     );
     if (!x) throw new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
-    return { id: n(x['id']), versao: n(x['versao']), situacao: texto(x['situacao']), total: n(x['valor_total']) };
+    return {
+      id: n(x['id']),
+      versao: n(x['versao']),
+      situacao: texto(x['situacao']),
+      total: n(x['valor_total']),
+    };
   };
   const etapa = (
     conta: { id: number; situacao: string; total: number },
@@ -1199,17 +1383,39 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       ocorrido_em: agora(),
       usuario_id: usuario,
     });
-  const naoLiberada = (titulo: string, detalhe: string) => Promise.reject(modeloPendente(titulo, detalhe));
+  const carimbo = () => ({ usuario, agora: agora() });
+  /** O próximo número de negócio do tipo (a sequência é criada na primeira vez, com o prefixo). */
+  const numeroDe = async (tipo: string, prefixo: string | null) => {
+    await garantirSequencia(tx, { tipo, estabelecimento: est, prefixo }, carimbo());
+    return tx.proximoNumero(tipo);
+  };
+  /** O item faturável ativo pelo código (null: não existe). */
+  const itemPorCodigo = async (codigo: number) => {
+    const x = await tx.uma<Linha>(
+      "SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL AND situacao = 'ativo' ORDER BY id",
+      [String(codigo)],
+    );
+    return x ? n(x['id']) : null;
+  };
+  const exigirFonte = async (id: number, campo: string) => {
+    if (!(await tx.uma<Linha>('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [id])))
+      throw recusa('convenio-inexistente', 'A fonte pagadora não existe.', { campos: [campo] });
+  };
   return {
     async registrarPendencia(p) {
       const conta = await contaTravada(p.conta);
       const naConta = conferirRegistroPendencia(conta.situacao);
-      if (naConta) throw recusa(naConta.codigo, naConta.mensagem, naConta.campos ? { campos: naConta.campos } : {});
+      if (naConta)
+        throw recusa(naConta.codigo, naConta.mensagem, naConta.campos ? { campos: naConta.campos } : {});
       // Tipo de pendência: cadastro da rede inteira.
-      const tipo = await tx.uma<Linha>('SELECT id, controle FROM tipo_pendencia_conta WHERE id = ? AND ativo = 1', [
-        p.tipo,
-      ]);
-      if (!tipo) throw recusa('tipo-pendencia-inexistente', 'O tipo de pendência não existe ou está inativo.', { campos: ['tipo'] });
+      const tipo = await tx.uma<Linha>(
+        'SELECT id, controle FROM tipo_pendencia_conta WHERE id = ? AND ativo = 1',
+        [p.tipo],
+      );
+      if (!tipo)
+        throw recusa('tipo-pendencia-inexistente', 'O tipo de pendência não existe ou está inativo.', {
+          campos: ['tipo'],
+        });
       return tx.incluir('pendencia_conta', {
         estabelecimento_id: est,
         conta_hospitalar_id: conta.id,
@@ -1229,7 +1435,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
         [r.id, est],
         { teto: 1 },
       );
-      if (!x) throw new ErroOperacao(404, 'registro-inexistente', 'Pendência inexistente', 'A pendência não existe.');
+      if (!x)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Pendência inexistente',
+          'A pendência não existe.',
+        );
       const sit = texto(x['situacao']);
       if (sit !== 'aberta' && sit !== 'em_tratamento')
         throw recusa('pendencia-encerrada', 'A pendência já foi resolvida ou cancelada.');
@@ -1253,21 +1465,223 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
         x.observacao,
       );
     },
-    decidirLancamentoTardio: () =>
-      naoLiberada(
-        'Fila do lançamento após o fechamento indisponível',
-        'A decisão sobre o lançamento depois do fechamento aguarda a tabela no modelo do banco.',
-      ),
-    editarRegra: () =>
-      naoLiberada(
-        'Regras de faturabilidade indisponíveis',
-        'As regras de faturabilidade por convênio aguardam a tabela no modelo do banco.',
-      ),
-    editarPacote: () =>
-      naoLiberada(
-        'Edição de pacote indisponível nesta tela',
-        'O pacote e o valor por fonte pagadora são cadastrados nos contratos (pacote e pacote_contrato).',
-      ),
+    async decidirLancamentoTardio(d) {
+      const decisor = exigirUsuario();
+      const [x] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, decisao FROM decisao_lancamento_tardio
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [d.registro, est],
+        { teto: 1 },
+      );
+      if (!x)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Lançamento inexistente',
+          'O lançamento não está na fila.',
+        );
+      if (x['decisao'] !== null && x['decisao'] !== undefined)
+        throw recusa('ja-decidido', 'A decisão deste lançamento já foi registrada.');
+      await tx.alterar('decisao_lancamento_tardio', d.registro, n(x['versao']), {
+        decisao: d.decisao,
+        motivo: d.motivo,
+        decidido_em: agora(),
+        decidido_por_usuario_id: decisor,
+      });
+      return d.registro;
+    },
+    async editarRegra(r) {
+      await exigirFonte(r.regra.convenio, 'regra.convenio');
+      const mesmoNome = await tx.uma<Linha>(
+        `SELECT id FROM regra_faturabilidade WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND nome = ?
+            AND id <> ?`,
+        [est, r.regra.convenio, r.regra.nome, r.id ?? 0],
+      );
+      if (mesmoNome)
+        throw recusa('regra-duplicada', 'Já existe uma regra com este nome para a fonte pagadora.', {
+          campos: ['regra.nome'],
+        });
+      const valores = {
+        fonte_pagadora_id: r.regra.convenio,
+        nome: r.regra.nome,
+        exige: exigeDoBanco(r.regra.exige),
+        // Internação tem natureza própria; a conta externa (várias naturezas) fica só no seletor.
+        natureza_conta: r.regra.seletor.tipoConta === 'I' ? 'internacao' : null,
+        seletor: JSON.stringify({
+          tipoConta: r.regra.seletor.tipoConta,
+          grupos: r.regra.seletor.grupos,
+          codigos: r.regra.seletor.codigos,
+        }),
+        bloqueia_fechamento: r.regra.bloqueiaFechamento,
+        vigencia_inicio: r.regra.inicio,
+        vigencia_fim: r.regra.fim,
+        ativo: r.ativa,
+      };
+      if (r.id === null) return tx.incluir('regra_faturabilidade', { estabelecimento_id: est, ...valores });
+      const [x] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT id, versao FROM regra_faturabilidade WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [r.id, est],
+        { teto: 1 },
+      );
+      if (!x) throw new ErroOperacao(404, 'registro-inexistente', 'Regra inexistente', 'A regra não existe.');
+      await tx.alterar('regra_faturabilidade', r.id, n(x['versao']), valores);
+      return r.id;
+    },
+    async editarPacote(p) {
+      await exigirFonte(p.convenio, 'convenio');
+      const itens: { item: number; quantidade: number }[] = [];
+      for (const i of p.itens) {
+        const item = await itemPorCodigo(i.codigo);
+        if (item === null)
+          throw recusa('item-inexistente', `O item ${i.codigo} não existe no cadastro de itens faturáveis.`, {
+            campos: ['itens'],
+          });
+        itens.push({ item, quantidade: i.quantidade });
+      }
+      if (new Set(itens.map((x) => x.item)).size !== itens.length)
+        throw recusa('item-repetido', 'O mesmo item aparece duas vezes no pacote.', { campos: ['itens'] });
+      let pacote: number;
+      let contrato: number;
+      if (p.id === null) {
+        // Pacote novo para a fonte pagadora: o mesmo código reaproveita o pacote já cadastrado na rede ou aqui.
+        const existente = await tx.uma<Linha>(
+          'SELECT id, estabelecimento_id FROM pacote WHERE codigo = ? AND excluido_em IS NULL',
+          [String(p.codigo)],
+        );
+        if (
+          existente &&
+          existente['estabelecimento_id'] !== null &&
+          n(existente['estabelecimento_id']) !== est
+        )
+          throw recusa(
+            'pacote-de-outro-estabelecimento',
+            'Este código de pacote é de outro estabelecimento.',
+            {
+              campos: ['codigo'],
+            },
+          );
+        if (existente) pacote = n(existente['id']);
+        else {
+          const cobranca = await itemPorCodigo(p.codigo);
+          if (cobranca === null)
+            throw recusa(
+              'item-do-pacote-inexistente',
+              `Cadastre o item faturável do pacote (código ${p.codigo}) antes de criar o pacote.`,
+              { campos: ['codigo'] },
+            );
+          pacote = await tx.incluir('pacote', {
+            estabelecimento_id: est,
+            codigo: String(p.codigo),
+            descricao: p.nome,
+            tipo_pacote: 'outro',
+            item_faturavel_id: cobranca,
+            cobranca_item_faturavel_id: cobranca,
+            vigencia_inicio: p.inicio,
+            vigencia_fim: p.fim,
+            situacao: p.ativo ? 'ativo' : 'suspenso',
+          });
+        }
+        const repetido = await tx.uma<Linha>(
+          `SELECT id FROM pacote_contrato WHERE pacote_id = ? AND fonte_pagadora_id = ? AND vigencia_inicio = ?
+              AND plano_fonte_pagadora_id IS NULL AND excluido_em IS NULL`,
+          [pacote, p.convenio, p.inicio],
+        );
+        if (repetido)
+          throw recusa(
+            'pacote-ja-cadastrado',
+            'O pacote já tem valor para esta fonte pagadora com o mesmo início.',
+            {
+              campos: ['inicio'],
+            },
+          );
+        contrato = await tx.incluir('pacote_contrato', {
+          pacote_id: pacote,
+          fonte_pagadora_id: p.convenio,
+          valor: p.valor,
+          vigencia_inicio: p.inicio,
+          vigencia_fim: p.fim,
+        });
+      } else {
+        const [pc] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT pc.id, pc.versao, pc.pacote_id FROM pacote_contrato pc JOIN pacote pa ON pa.id = pc.pacote_id
+            WHERE pc.id = ? AND pc.excluido_em IS NULL AND pa.excluido_em IS NULL
+              AND (pa.estabelecimento_id = ? OR pa.estabelecimento_id IS NULL)`,
+          [p.id, est],
+          { teto: 1 },
+        );
+        if (!pc)
+          throw new ErroOperacao(404, 'registro-inexistente', 'Pacote inexistente', 'O pacote não existe.');
+        contrato = p.id;
+        pacote = n(pc['pacote_id']);
+        await tx.alterar('pacote_contrato', contrato, n(pc['versao']), {
+          fonte_pagadora_id: p.convenio,
+          valor: p.valor,
+          vigencia_inicio: p.inicio,
+          vigencia_fim: p.fim,
+        });
+      }
+      const [pa] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT id, versao, codigo, estabelecimento_id, descricao, situacao FROM pacote WHERE id = ?',
+        [pacote],
+        {
+          teto: 1,
+        },
+      );
+      if (codigoNumerico(pa?.['codigo']) !== p.codigo)
+        throw recusa('pacote-codigo-imutavel', 'O código do pacote não muda: crie outro pacote.', {
+          campos: ['codigo'],
+        });
+      // Itens inclusos: os da tela ficam (quantidade atualizada ou item novo no fim); os que saíram são excluídos.
+      const atuais = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, item_faturavel_id, sequencia, quantidade_limite, excluido_em
+           FROM pacote_item_incluso WHERE pacote_id = ?`,
+        [pacote],
+        { teto: 5_000 },
+      );
+      const ativos = atuais.filter((x) => x['excluido_em'] === null || x['excluido_em'] === undefined);
+      // Pacote da rede (sem estabelecimento): nome, situação e itens são comuns a todos os estabelecimentos e a todas
+      // as fontes pagadoras. Daqui só se grava o valor e a vigência da fonte pagadora; mudar o pacote em si é recusado.
+      if (pa?.['estabelecimento_id'] === null || pa?.['estabelecimento_id'] === undefined) {
+        const mesmaSituacao = (pa?.['situacao'] === 'ativo') === p.ativo;
+        const mesmosItens =
+          ativos.length === itens.length &&
+          itens.every((i) =>
+            ativos.some(
+              (x) => nn(x['item_faturavel_id']) === i.item && Number(x['quantidade_limite']) === i.quantidade,
+            ),
+          );
+        if (String(pa?.['descricao'] ?? '') !== p.nome || !mesmaSituacao || !mesmosItens)
+          throw recusa(
+            'pacote-da-rede',
+            'Este pacote é da rede: daqui só se altera o valor e a vigência da fonte pagadora. O nome, a situação e os itens inclusos são mantidos pela administração da rede.',
+            { campos: ['nome', 'ativo', 'itens'] },
+          );
+        return contrato;
+      }
+      await tx.alterar('pacote', pacote, n(pa['versao']), {
+        descricao: p.nome,
+        situacao: p.ativo ? 'ativo' : 'suspenso',
+      });
+      let sequencia = atuais.reduce((m, x) => Math.max(m, n(x['sequencia'])), 0);
+      for (const i of itens) {
+        const ja = ativos.find((x) => nn(x['item_faturavel_id']) === i.item);
+        if (ja)
+          await tx.alterar('pacote_item_incluso', n(ja['id']), n(ja['versao']), {
+            quantidade_limite: i.quantidade,
+          });
+        else
+          await tx.incluir('pacote_item_incluso', {
+            pacote_id: pacote,
+            sequencia: (sequencia += 1),
+            item_faturavel_id: i.item,
+            quantidade_limite: i.quantidade,
+          });
+      }
+      for (const x of ativos)
+        if (!itens.some((i) => i.item === nn(x['item_faturavel_id'])))
+          await tx.excluir('pacote_item_incluso', n(x['id']), n(x['versao']));
+      return contrato;
+    },
     async registrarVersaoAuditoria(v) {
       const auditor = exigirUsuario();
       const conta = await contaTravada(v.conta);
@@ -1285,7 +1699,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       let auditoria = aud ? n(aud['id']) : 0;
       const retrato = { itens: n(itens?.['n']), total: conta.total };
       if (!aud) {
-        const tipo = await tx.uma<Linha>("SELECT id FROM tipo_auditoria WHERE ativo = 1 ORDER BY externa, id", []);
+        const tipo = await tx.uma<Linha>(
+          'SELECT id FROM tipo_auditoria WHERE ativo = 1 ORDER BY externa, id',
+          [],
+        );
         if (!tipo)
           throw recusa(
             'tipo-auditoria-inexistente',
@@ -1347,17 +1764,64 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       await tx.alterar('auditoria_conta_versao', n(depois['id']), n(depois['versao']), {
         valor_total_conta: conta.total,
         operacao: 'alteracao',
-        dados: JSON.stringify({ retrato, pareceres: [...(Array.isArray(anteriores) ? anteriores : []), parecer] }),
+        dados: JSON.stringify({
+          retrato,
+          pareceres: [...(Array.isArray(anteriores) ? anteriores : []), parecer],
+        }),
         ocorrido_em: agora(),
         usuario_id: auditor,
       });
       return n(depois['id']);
     },
-    registrarOrcamento: () =>
-      naoLiberada(
-        'Orçamento particular indisponível',
-        'O item livre do orçamento (descrição digitada) e a urgência aguardam colunas no modelo do banco.',
-      ),
+    async registrarOrcamento(o) {
+      const caucao = conferirSemCaucao({ urgencia: o.urgencia, exigeGarantiaAntes: o.exigeGarantiaAntes });
+      if (caucao) throw recusa(caucao.codigo, caucao.mensagem);
+      let paciente: number | null = null;
+      if (o.prontuario > 0) {
+        const pac = await tx.uma<Linha>(
+          'SELECT id FROM paciente WHERE numero_prontuario = ? AND excluido_em IS NULL',
+          [o.prontuario],
+        );
+        if (!pac)
+          throw recusa('paciente-inexistente', 'Não há paciente com este prontuário.', {
+            campos: ['prontuario'],
+          });
+        paciente = n(pac['id']);
+      }
+      const bruto = totalOrcamento(o.itens, 0);
+      if (o.desconto > bruto)
+        throw recusa('desconto-acima-do-total', 'O desconto é maior que o valor dos itens.', {
+          campos: ['desconto'],
+        });
+      const total = totalOrcamento(o.itens, o.desconto);
+      const numero = await numeroDe('orcamento_particular', 'OP-');
+      const hoje = civil(agora()).data;
+      const id = await tx.incluir('orcamento_particular', {
+        estabelecimento_id: est,
+        numero: numero.formatado,
+        paciente_id: paciente,
+        nome_interessado: o.nome,
+        data_orcamento: hoje,
+        validade_ate: somarDias(hoje, o.validadeDias),
+        valor_bruto: bruto,
+        valor_desconto: r2(bruto - total),
+        valor_total: total,
+        situacao: 'emitido',
+        urgencia: o.urgencia,
+        exige_garantia_antes: o.exigeGarantiaAntes,
+      });
+      for (const [k, i] of o.itens.entries())
+        await tx.incluir('orcamento_particular_item', {
+          orcamento_particular_id: id,
+          sequencia: k + 1,
+          tipo_item: 'outro',
+          descricao: i.descricao,
+          quantidade: i.quantidade,
+          valor_unitario: i.unitario,
+          valor_total: r2(i.quantidade * i.unitario),
+        });
+      return { id, total };
+    },
     async abrirCaixa(c) {
       const operador = exigirUsuario();
       const aberta = await tx.uma<Linha>(
@@ -1365,7 +1829,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
             AND situacao IN ('aberta','reaberta') AND excluido_em IS NULL`,
         [est, operador],
       );
-      if (aberta) throw recusa('caixa-ja-aberto', 'Você já tem um caixa aberto: feche-o antes de abrir outro.');
+      if (aberta)
+        throw recusa('caixa-ja-aberto', 'Você já tem um caixa aberto: feche-o antes de abrir outro.');
       const caixa = await tx.uma<Linha>(
         `SELECT cx.id FROM operador_caixa oc JOIN caixa cx ON cx.id = oc.caixa_id
           WHERE oc.usuario_id = ? AND cx.estabelecimento_id = ? AND cx.ativo = 1 AND cx.permite_recebimento = 1
@@ -1375,7 +1840,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
         [operador, est],
       );
       if (!caixa)
-        throw recusa('sem-caixa', 'Você não é operador de nenhum caixa de recebimento ativo neste estabelecimento.');
+        throw recusa(
+          'sem-caixa',
+          'Você não é operador de nenhum caixa de recebimento ativo neste estabelecimento.',
+        );
       const numero = await tx.proximoNumero('sessao_caixa');
       return tx.incluir('sessao_caixa', {
         estabelecimento_id: est,
@@ -1413,15 +1881,204 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       });
       return { esperado };
     },
-    receberParticular: () =>
-      naoLiberada(
-        'Recebimento particular indisponível',
-        'O recebimento do orçamento particular pelo caixa aguarda o vínculo do orçamento no modelo do banco.',
-      ),
-    emitirRecibo: () =>
-      naoLiberada(
-        'Recibo indisponível',
-        'O recibo do recebimento particular depende do recebimento, que aguarda o modelo do banco.',
-      ),
+    async receberParticular(r) {
+      const operador = exigirUsuario();
+      const [sessao] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, situacao, operador_usuario_id, caixa_id, total_dinheiro, total_cartao_debito,
+                total_cartao_credito, total_pix, total_cheque, total_outras_formas
+           FROM sessao_caixa WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [r.caixa, est],
+        { teto: 1 },
+      );
+      if (
+        !sessao ||
+        !['aberta', 'reaberta'].includes(texto(sessao['situacao'])) ||
+        n(sessao['operador_usuario_id']) !== operador
+      )
+        throw recusa('caixa-fechado', 'Abra o seu caixa antes de receber.', { campos: ['caixa'] });
+      let saldo: number;
+      let pagador: string;
+      let paciente: number | null;
+      let orcamento: Linha | undefined;
+      let rotulo: string;
+      if (r.orcamento) {
+        [orcamento] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT o.id, o.versao, o.numero, o.situacao, o.valor_total, o.aceito_em, o.paciente_id,
+                  COALESCE(NULLIF(pa.nome_social, ''), pf.nome, o.nome_interessado) AS pagador,
+                  (SELECT COALESCE(SUM(m.valor), 0) FROM movimento_caixa m WHERE m.orcamento_particular_id = o.id
+                      AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago
+             FROM orcamento_particular o
+             LEFT JOIN paciente pa ON pa.id = o.paciente_id
+             LEFT JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE o.id = ? AND o.estabelecimento_id = ? AND o.excluido_em IS NULL`,
+          [r.orcamento, est],
+          { teto: 1 },
+        );
+        if (!orcamento)
+          throw recusa('orcamento-inexistente', 'O orçamento não existe.', { campos: ['orcamento'] });
+        if (!['rascunho', 'emitido', 'aceito'].includes(texto(orcamento['situacao'])))
+          throw recusa('orcamento-fechado', 'O orçamento já foi pago ou cancelado.');
+        saldo = r2(n(orcamento['valor_total']) - n(orcamento['pago']));
+        pagador = texto(orcamento['pagador']);
+        paciente = nn(orcamento['paciente_id']);
+        rotulo = `Recebimento do orçamento ${texto(orcamento['numero'])}`;
+      } else {
+        const [conta] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT ch.id, ch.numero, ch.valor_total, ch.paciente_id, fp.tipo AS fonte_tipo,
+                  COALESCE(NULLIF(pa.nome_social, ''), pf.nome) AS pagador,
+                  (SELECT COALESCE(SUM(m.valor), 0) FROM movimento_caixa m WHERE m.conta_hospitalar_id = ch.id
+                      AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago
+             FROM conta_hospitalar ch
+             JOIN fonte_pagadora fp ON fp.id = ch.fonte_pagadora_id
+             LEFT JOIN paciente pa ON pa.id = ch.paciente_id
+             LEFT JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE ch.id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL`,
+          [r.conta, est],
+          { teto: 1 },
+        );
+        if (!conta)
+          throw new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
+        const np = conferirRecebimentoDaConta(texto(conta['fonte_tipo']) === 'particular');
+        if (np) throw recusa(np.codigo, np.mensagem, { campos: ['conta'] });
+        saldo = r2(n(conta['valor_total']) - n(conta['pago']));
+        pagador = texto(conta['pagador']);
+        paciente = nn(conta['paciente_id']);
+        rotulo = `Recebimento da conta ${texto(conta['numero'])}`;
+      }
+      const ok = conferirRecebimento({ saldo, pagamentos: r.pagamentos });
+      if (ok) throw recusa(ok.codigo, ok.mensagem);
+      const tipo = await tx.uma<Linha>(
+        'SELECT id FROM tipo_movimento_caixa WHERE codigo = ? AND ativo = TRUE',
+        [TIPO_MOVIMENTO_RECEBIMENTO],
+      );
+      if (!tipo)
+        throw recusa(
+          'tipo-movimento-inexistente',
+          `Cadastre o tipo de movimento de caixa "${TIPO_MOVIMENTO_RECEBIMENTO}" (entrada) antes de receber.`,
+        );
+      // O troco sai do dinheiro: cada pagamento em dinheiro abate dele o que cabe, na ordem.
+      const devolver = troco(saldo, r.pagamentos);
+      let aAbater = devolver;
+      const totais: Record<string, number> = {};
+      const ids: number[] = [];
+      let recebido = 0;
+      for (const p of r.pagamentos) {
+        const eletronico = p.forma === 'pix' || p.forma.startsWith('cartao');
+        if (eletronico && !p.comprovante && !r.simulado)
+          throw recusa(
+            'sem-conector',
+            'O conector de Pix e cartão não está configurado: registre o comprovante à mão.',
+            { campos: ['pagamentos'] },
+          );
+        const especie = ESPECIE_DA_FORMA[p.forma];
+        const forma = await tx.uma<Linha>(
+          `SELECT id FROM forma_recebimento WHERE meio = ? AND ativo = TRUE AND uso IN ('recebimento','ambos')
+            ORDER BY padrao DESC, id`,
+          [especie],
+        );
+        if (!forma)
+          throw recusa(
+            'forma-recebimento-inexistente',
+            `Cadastre uma forma de recebimento ativa para "${especie}".`,
+            {
+              campos: ['pagamentos'],
+            },
+          );
+        const abate = p.forma === 'dinheiro' ? Math.min(aAbater, p.valor) : 0;
+        aAbater = r2(aAbater - abate);
+        const liquido = r2(p.valor - abate);
+        if (liquido <= 0) continue;
+        const comprovante = p.comprovante ?? (eletronico ? 'simulado' : null);
+        const mov = await tx.incluir('movimento_caixa', {
+          estabelecimento_id: est,
+          sessao_caixa_id: r.caixa,
+          tipo_movimento_caixa_id: n(tipo['id']),
+          natureza: 'entrada',
+          ocorrido_em: agora(),
+          especie,
+          forma_recebimento_id: n(forma['id']),
+          valor: liquido,
+          parcelas: p.parcelas,
+          descricao: rotulo.slice(0, 300),
+          numero_documento: comprovante,
+          orcamento_particular_id: r.orcamento,
+          conta_hospitalar_id: r.orcamento ? null : r.conta,
+          responsavel_nome: pagador.slice(0, 150) || null,
+        });
+        const numero = await numeroDe('recebimento_particular', 'RP-');
+        await tx.incluir('recebimento_particular', {
+          estabelecimento_id: est,
+          numero: numero.formatado,
+          recebido_em: agora(),
+          finalidade: r.orcamento ? 'avulso' : 'conta',
+          paciente_id: paciente,
+          pagador_nome: (pagador || 'Pagador não identificado').slice(0, 150),
+          conta_hospitalar_id: r.orcamento ? null : r.conta,
+          caixa_id: n(sessao['caixa_id']),
+          movimento_caixa_id: mov,
+          forma_recebimento_id: n(forma['id']),
+          valor: p.valor,
+          valor_troco: abate,
+          cartao_autorizacao: eletronico ? comprovante : null,
+          cartao_parcelas: p.forma.startsWith('cartao') ? p.parcelas : null,
+        });
+        const coluna = TOTAL_DA_ESPECIE[especie] ?? 'total_outras_formas';
+        totais[coluna] = r2((totais[coluna] ?? n(sessao[coluna])) + liquido);
+        recebido = r2(recebido + liquido);
+        ids.push(mov);
+      }
+      if (Object.keys(totais).length) await tx.alterar('sessao_caixa', r.caixa, n(sessao['versao']), totais);
+      if (orcamento) {
+        const quitado = r2(n(orcamento['pago']) + recebido) >= n(orcamento['valor_total']);
+        const aceito = orcamento['aceito_em'] ?? agora();
+        await tx.alterar('orcamento_particular', n(orcamento['id']), n(orcamento['versao']), {
+          situacao: quitado ? 'realizado' : 'aceito',
+          aceito_em: aceito,
+          realizado_em: quitado ? civil(agora()).data : null,
+        });
+      }
+      return { pagamentos: ids, troco: devolver };
+    },
+    async emitirRecibo(x) {
+      const [m] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT m.id, m.valor, m.situacao, rp.id AS recebimento, rp.paciente_id, rp.conta_hospitalar_id
+           FROM movimento_caixa m JOIN recebimento_particular rp ON rp.movimento_caixa_id = m.id AND rp.excluido_em IS NULL
+          WHERE m.id = ? AND m.estabelecimento_id = ? AND m.excluido_em IS NULL`,
+        [x.pagamento, est],
+        { teto: 1 },
+      );
+      if (!m)
+        throw recusa('pagamento-inexistente', 'O pagamento não existe ou não é um recebimento particular.');
+      if (texto(m['situacao']) !== 'ativo')
+        throw recusa(
+          'pagamento-estornado',
+          'O pagamento foi estornado ou cancelado: não há recibo a emitir.',
+        );
+      const ja = await tx.uma<Linha>(
+        "SELECT numero FROM recibo WHERE recebimento_particular_id = ? AND situacao = 'emitido' AND excluido_em IS NULL",
+        [m['recebimento']],
+      );
+      if (ja)
+        throw recusa(
+          'recibo-emitido',
+          `O recibo deste pagamento já foi emitido (nº ${texto(ja['numero'])}).`,
+        );
+      const numero = await numeroDe('recibo', null);
+      const valor = n(m['valor']);
+      const id = await tx.incluir('recibo', {
+        estabelecimento_id: est,
+        numero: numero.formatado,
+        tipo: 'recebimento',
+        emitido_em: agora(),
+        valor,
+        valor_extenso: valorPorExtenso(valor),
+        pagador_nome: x.pagador,
+        paciente_id: nn(m['paciente_id']),
+        referente: x.referente,
+        recebimento_particular_id: n(m['recebimento']),
+        conta_hospitalar_id: nn(m['conta_hospitalar_id']),
+      });
+      return { id, numero: numero.valor };
+    },
   };
 }

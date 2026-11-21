@@ -1,5 +1,5 @@
 // Prova dos 42 grupos (ficha do M06, regra 4 e critério de aceite): para cada grupo com permissões, o
-// conjunto de opções que o legado concede (TBPERUSU) e o que as permissões do novo cobrem têm de bater.
+// conjunto de opções que o grupo concede no sistema de origem e o que as permissões do novo cobrem têm de bater.
 // Ganho (opção que o grupo passa a ter no novo) só se justifica por agrupamento da MESMA função em outro
 // executável do mesmo módulo do Sante SGH (regra 2: recepção interna e externa); perda (opção do legado sem
 // permissão no novo) só por opção inativa ou de sistema SGO/SGS sem uso. Qualquer outra diferença reprova.

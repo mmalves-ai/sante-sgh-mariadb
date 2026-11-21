@@ -1,5 +1,5 @@
-// Tempo de sessão (cap-08 §8.8): inatividade pelo menor valor entre TBCFGLOGIN.TEMPO_MAX_INATIVO_ENC_SESSAO e o
-// padrão do perfil (15 min assistência, 30 administrativo), aviso antes (TEMPO_AVISO_ENC_SESSAO) e duração
+// Tempo de sessão (cap-08 §8.8): inatividade pelo menor valor entre o tempo máximo de inatividade da configuração de login e o
+// padrão do perfil (15 min assistência, 30 administrativo), aviso antes (tempo de aviso da configuração) e duração
 // máxima de 12 h. Sem perfil conhecido (o mapa de perfis é do M06), vale o mais restritivo (assistência).
 
 export type PerfilSessao = 'assistencial' | 'administrativo';

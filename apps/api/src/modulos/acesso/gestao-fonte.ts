@@ -172,7 +172,7 @@ export interface FonteGestao {
     p: NovaExcecaoDormencia,
     t: TrilhaGestao,
   ): Promise<{ id: string; anterior: string | null; atual: string | null }>;
-  /** W1-01 (parte 11d): registros de conselho do papel ativo do usuário (TBUSERS_TBPAPEL → TBCBOPRO). */
+  /** W1-01 (parte 11d): inscrições no conselho do profissional que a conta representa. */
   registrosConselho(rede: string, hospital: string, login: string): Promise<RegistroConselhoUsuario[]>;
   /** W1-01 (parte 11d): conferências do conselho do usuário (SGH_ACESSO_CONSELHO_CONFER), mais nova primeiro. */
   conferenciasConselho(rede: string, hospital: string, login: string): Promise<ConferenciaConselhoLida[]>;

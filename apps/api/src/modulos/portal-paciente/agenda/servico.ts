@@ -20,6 +20,7 @@ import {
   CAMPOS_PRECHECKIN,
   type CampoPreCheckin,
   CHAVE_PORTAL_AGENDA,
+  lerHoraDigitada,
   CHAVE_PORTAL_PAGAMENTO,
   type CobrancaPortal,
   type ConferirPreCheckin,
@@ -190,10 +191,10 @@ export function estadoPelaSituacao(
 }
 
 /**
- * A hora no formato do contrato do portal e das regras do domínio da agenda (HHMM): a porta da agenda de consultas
- * devolve HH:MM e a de exames, HHMM. Pedido na saída do lote: unificar o formato no contrato e no domínio.
+ * A hora do dia no formato do contrato do portal ("HH:MM"): a porta da agenda de consultas já devolve "HH:MM" e a de
+ * exames ainda devolve os quatro dígitos; as duas formas viram "HH:MM" aqui (as regras do domínio leem as duas).
  */
-const paraHhmm = (h: string): string => h.replace(':', '');
+const paraHora = (h: string): string => lerHoraDigitada(h) ?? h;
 
 /** Registro do profissional da agenda (consulta: o do conselho; exame: o da agenda; 0 = agenda de recurso). */
 const registroDaAgenda = (a: { registroProfissional?: number | null; crm?: number }): number =>
@@ -267,10 +268,10 @@ export class ServicoAgendaPortal {
     return this.porta.destino;
   }
 
-  /** O relógio do estabelecimento (porta da agenda, HH:MM) no formato das regras do domínio da agenda. */
+  /** O relógio do estabelecimento (porta da agenda) com a hora em "HH:MM", como as regras do domínio da agenda leem. */
   private async relogio(c: ContextoAgenda): Promise<RelogioDominio> {
     const r = await this.agenda.relogio(c);
-    return { hoje: r.hoje, hhmm: paraHhmm(r.hora) };
+    return { hoje: r.hoje, hhmm: paraHora(r.hora) };
   }
 
   /** O contexto da gravação na agenda de consultas: o usuário de integração do portal e a chave do pedido. */
@@ -675,7 +676,7 @@ export class ServicoAgendaPortal {
       agenda: v.agenda,
       nomeAgenda: v.nomeAgenda,
       data: v.data,
-      hora: paraHhmm(v.hora),
+      hora: paraHora(v.hora),
     }));
   }
 
@@ -889,7 +890,7 @@ export class ServicoAgendaPortal {
         nomeAgenda: m.nomeAgenda,
         crm: m.agenda === null ? 0 : (regC.get(m.agenda) ?? 0),
         data: m.data,
-        hora: paraHhmm(m.hora),
+        hora: paraHora(m.hora),
         paciente: m.idPaciente,
         convenio: m.convenio,
         estado: estadoPelaSituacao(m.situacao),
@@ -903,7 +904,7 @@ export class ServicoAgendaPortal {
         nomeAgenda: m.nomeAgenda,
         crm: m.agenda === null ? 0 : (regE.get(m.agenda) ?? 0),
         data: m.data,
-        hora: paraHhmm(m.hora),
+        hora: paraHora(m.hora),
         paciente: m.idPaciente,
         convenio: m.convenio,
         estado: estadoPelaSituacao(m.situacao, m.atendido, m.temSenha),

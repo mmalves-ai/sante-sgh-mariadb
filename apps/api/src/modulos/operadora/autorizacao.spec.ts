@@ -598,7 +598,6 @@ describe('autorização de guias da operadora (etapa 5, F4), pela HTTP', { timeo
     // Alteração dos dados: motivo obrigatório, sobre a versão vista; o conselho segue a categoria.
     const semMotivo = await gestor.post(`${O}/auditores/${ativo.id}/alteracao`, {
       versao: ativo.versao,
-      nome: 'Auditora Sintética Alterada',
       categoria: 'medico',
       numero: '900012',
       uf: 'PR',
@@ -606,7 +605,6 @@ describe('autorização de guias da operadora (etapa 5, F4), pela HTTP', { timeo
     expect(semMotivo.statusCode).toBe(400);
     const alt = await gestor.post(`${O}/auditores/${ativo.id}/alteracao`, {
       versao: ativo.versao,
-      nome: 'Auditora Sintética Alterada',
       categoria: 'medico',
       numero: '900012',
       uf: 'PR',
@@ -614,9 +612,10 @@ describe('autorização de guias da operadora (etapa 5, F4), pela HTTP', { timeo
     });
     expect(alt.statusCode, alt.body).toBe(200);
     expect(alt.json().mensagem).toContain('CRM 900012/PR');
+    // O nome é o do cadastro: a alteração não o troca, e a mensagem usa o nome cadastrado.
+    expect(alt.json().mensagem).toContain(ativo.nome);
     const velha = await gestor.post(`${O}/auditores/${ativo.id}/alteracao`, {
       versao: ativo.versao,
-      nome: 'Outra',
       categoria: 'medico',
       numero: '1',
       uf: 'SC',
@@ -636,7 +635,7 @@ describe('autorização de guias da operadora (etapa 5, F4), pela HTTP', { timeo
     expect(comPedido).toMatchObject({
       emAnalise: 1,
       versao: ativo.versao + 1,
-      nome: 'Auditora Sintética Alterada',
+      nome: ativo.nome,
     });
 
     // Encerrar (trocar) sem a redistribuição: 409 com a contagem e o protocolo; nada muda.

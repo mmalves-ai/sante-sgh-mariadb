@@ -7,14 +7,23 @@
 // Melhoria: o estado da solicitação vem do cadastro de situações do pedido de leito (cada situação aponta o estado do
 // NIR): o "de-para" aprovado é a própria coluna `estado`, sem tabela à parte; a reserva vigente única por leito é
 // garantida pelo banco (coluna vigente); a exclusão é lógica, com o retrato na trilha.
-// Pendências (pedidos do lote 03-01): limites de permanência por clínica, CID ou procedimento e a calibragem pelos
-// histogramas aguardam DDL (limite_permanencia); as cirurgias que pedem UTI aguardam o vínculo do agendamento
-// cirúrgico ao pedido de leito. Até lá, leitura vazia e gravação recusada com "modelo-pendente".
+// Os limites de permanência por clínica, CID ou procedimento ficam em limite_permanencia (um por chave e
+// estabelecimento; a remoção volta ao padrão, com o retrato na trilha).
+// Pendências: a calibragem pelos histogramas e as cirurgias que pedem UTI aguardam o vínculo do agendamento cirúrgico ao
+// pedido de leito (por ora, sem linhas).
 // Melhoria: o responsável da barreira de alta é o usuário (login) ou o setor do estabelecimento, nas colunas próprias,
 // e a descrição fica limpa; as gravações das barreiras travam a linha pela internação do estabelecimento da sessão.
 // Melhoria: a gravação direta leva a chave de idempotência da requisição (apoio-idempotente.ts).
 import { randomUUID } from 'node:crypto';
-import type { ChaveLeito, EstadoSolicitacaoNir, OrigemSolicitacaoNir, PrioridadeNir, SituacaoReserva, TipoBarreiraAlta } from '@sgh/contratos';
+import type {
+  ChaveLeito,
+  EscopoLimitePermanencia,
+  EstadoSolicitacaoNir,
+  OrigemSolicitacaoNir,
+  PrioridadeNir,
+  SituacaoReserva,
+  TipoBarreiraAlta,
+} from '@sgh/contratos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -49,6 +58,7 @@ import { chaveDaGravacaoDireta, type ComIdempotencia } from './apoio-idempotente
 export type NucleoNir = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 type Linha = Record<string, unknown>;
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
+const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ? String(v) : null);
 const TETO = 500;
 
@@ -75,7 +85,16 @@ const PRIORIDADE_DO_BANCO: Readonly<Record<string, PrioridadeNir>> = {
 };
 const PRIORIDADE_DA_TELA: Readonly<Record<string, string>> = { emergencia: 'emergencia', urgente: 'alta', prioritario: 'media', eletivo: 'baixa' };
 
-const TABELAS_NIR = ['pedido_leito', 'reserva_leito', 'previsao_alta', 'barreira_alta', 'situacao_pedido_leito', 'solicitacao_regulacao', 'internacao'];
+const TABELAS_NIR = [
+  'pedido_leito',
+  'reserva_leito',
+  'previsao_alta',
+  'barreira_alta',
+  'situacao_pedido_leito',
+  'solicitacao_regulacao',
+  'internacao',
+  'limite_permanencia',
+];
 
 const SQL_PEDIDO = `
   SELECT pl.id, pl.versao, pl.setor_origem, pl.paciente_id, p.numero_prontuario, COALESCE(p.nome_social, pf.nome) AS nome,
@@ -155,9 +174,6 @@ const reservaDe = (r: Linha): ReservaLeitoNir => ({
   conflitoEm: iso(r['conflito_em']),
   conflitoReg: nn(r['conflito_internacao_id']),
 });
-
-const modeloPendente = (o: string) =>
-  new ErroOperacao(409, 'modelo-pendente', 'Recurso aguardando o modelo', `${o} aguarda a estrutura no modelo do banco.`);
 
 export class PortaNirPropria implements PortaNir {
   readonly destino: DestinoPorta = 'banco';
@@ -409,9 +425,24 @@ export class PortaNirPropria implements PortaNir {
     });
   }
 
-  /** Pendente: os limites de permanência aguardam a tabela no modelo (vale o padrão dos parâmetros). */
-  async limites() {
-    return [];
+  /** Os limites próprios do estabelecimento; a chave sem limite próprio segue o padrão dos parâmetros. */
+  limites(c: ContextoNir) {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT escopo, chave, amarelo_dias, vermelho_dias, forma, amostra FROM limite_permanencia
+            WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY escopo, chave`,
+          [est],
+        )
+      ).map((r) => ({
+        escopo: texto(r['escopo']) as EscopoLimitePermanencia,
+        chave: texto(r['chave']),
+        amareloDias: n(r['amarelo_dias']),
+        vermelhoDias: n(r['vermelho_dias']),
+        origem: texto(r['forma']),
+        amostra: nn(r['amostra']),
+      })),
+    );
   }
 
   depara(c: ContextoNir) {
@@ -655,8 +686,27 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         resolucao: b.observacao,
       });
     },
-    async gravarLimite() {
-      throw modeloPendente('O limite de permanência');
+    async gravarLimite(lim) {
+      const [atual] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, amarelo_dias, vermelho_dias, forma, amostra, ativo FROM limite_permanencia WHERE estabelecimento_id = ? AND escopo = ? AND chave = ?',
+        [est, lim.escopo, lim.chave],
+      );
+      const novo = { amarelo_dias: lim.amareloDias, vermelho_dias: lim.vermelhoDias, forma: lim.origem, amostra: lim.amostra };
+      if (!atual) {
+        await tx.incluir('limite_permanencia', { estabelecimento_id: est, escopo: lim.escopo, chave: lim.chave, ...novo, ativo: true });
+        return;
+      }
+      const muda =
+        n(atual['amarelo_dias']) !== novo.amarelo_dias ||
+        n(atual['vermelho_dias']) !== novo.vermelho_dias ||
+        texto(atual['forma']) !== novo.forma ||
+        nn(atual['amostra']) !== novo.amostra ||
+        !verdadeiro(atual['ativo']);
+      if (!muda) return;
+      // A alteração leva o motivo; o valor anterior fica na trilha da operação.
+      if (verdadeiro(atual['ativo']) && !lim.motivo?.trim())
+        throw recusa('motivo-obrigatorio', 'Informe o motivo da alteração: o valor anterior fica no histórico, com quem o definiu.');
+      await tx.alterar('limite_permanencia', n(atual['id']), n(atual['versao']), { ...novo, ativo: true });
     },
     async aprovarDepara(d) {
       const [s] = await tx.consultarParaAtualizar('SELECT id, versao FROM situacao_pedido_leito WHERE id = ?', [d.situacao]);
@@ -739,8 +789,14 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         ...(b.prazo !== null ? { prazo_em: new Date(b.prazo) } : {}),
       });
     },
-    async removerLimite() {
-      throw modeloPendente('O limite de permanência');
+    async removerLimite(lim) {
+      const [atual] = await tx.consultarParaAtualizar(
+        'SELECT id, versao FROM limite_permanencia WHERE estabelecimento_id = ? AND escopo = ? AND chave = ? AND ativo = TRUE',
+        [est, lim.escopo, lim.chave],
+      );
+      if (!atual) throw recusa('limite-inexistente', 'Não há limite próprio para esta chave: já vale o padrão.');
+      await tx.excluir('limite_permanencia', n(atual['id']), n(atual['versao']));
+      return 1;
     },
     async registrarRegulacao(r) {
       const p = await tx.uma('SELECT paciente_id, internacao_id FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [r.solicitacao, est]);

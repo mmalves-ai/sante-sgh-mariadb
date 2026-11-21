@@ -257,9 +257,15 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
         evento: ids.evento, procedimentoInicial: 99304000, procedimentoFinal: 99304099, ...e,
       }, octx(gestor));
     const v = await aprovar({ vigencia: '2026-01-01', beneficiario: 'M', evento: ids.evento, convenio: ids.fonte, percentual: 30 });
-    // A regra de um profissional aguarda o modelo: recusada, sem gravar a regra genérica; o evento de outro estabelecimento também.
-    expect(await recusada(incluir(v, { prestador: ids.profissional }))).toBe('modelo-pendente');
+    // O evento de outro estabelecimento é recusado; o prestador e o profissional da regra têm de ser o mesmo e existir.
     expect(await recusada(incluir(v, { evento: ids.eventoOutro }))).toBe('evento-inexistente');
+    expect(await recusada(incluir(v, { prestador: ids.profissional, profissional: ids.profissional + 1_000_000 }))).toBe('profissional-divergente');
+    expect(await recusada(incluir(v, { profissional: 2_000_000_000 }))).toBe('profissional-inexistente');
+    // A regra de um profissional é gravada com ele (em outra faixa, para não disputar o item da regra genérica).
+    const vp = await aprovar({ vigencia: '2026-01-01', beneficiario: 'M', evento: ids.evento, convenio: ids.fonte, percentual: 40 });
+    const doProfissional = Number((await incluir(vp, { prestador: ids.profissional, percentual: 40, procedimentoInicial: 99306000, procedimentoFinal: 99306099 })).resultado['regra']);
+    const comProfissional = (await porta.todasRegras(ctx, { convenio: ids.fonte, data: '2026-10-15' })).find((x) => x.id === doProfissional);
+    expect([comProfissional?.profissional, comProfissional?.percentual]).toEqual([ids.profissional, 40]);
     const faixa = Number((await incluir(v)).resultado['regra']);
     const { itens } = await porta.producao(ctx, comp, 0);
     const item = itens.find((x) => x.id === ids.producao)!;

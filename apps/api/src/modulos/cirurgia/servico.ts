@@ -44,10 +44,10 @@ import {
 } from '@sgh/dominio-cirurgia';
 import type { AgendamentoDaSala, FiltroRealizadas, PedidoCirurgia, SalaDoBloco } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { type ContextoPortaM18, destinoDoContrato } from '../exames/public-api.js';
+import { type ContextoPortaM18 } from '../exames/public-api.js';
 import type { PortaCirurgia } from './porta.js';
 
-const ROTULO_RECURSO = new Map<string, string>(RECURSOS_SALA.map((r) => [r.coluna, r.rotulo]));
+const ROTULO_RECURSO = new Map<string, string>(RECURSOS_SALA.map((r) => [r.campo, r.rotulo]));
 const hhmmDe = (inicio: string) => inicio.slice(11, 16);
 const rotuloOperacao = (op: string) => (op === 'A' ? 'Inclusão' : op === 'R' ? 'Remarcação' : op);
 const PEDIATRA = { funcao: 'pediatra', cod: '__SEM_COD__', id: 'ID_TBCBOPRO_PEDIATRA' };
@@ -306,7 +306,7 @@ export class ServicoCirurgia {
       sobreposicoes: sobre.length,
       datasImpossiveis: ags.itens.filter((a) => !a.inicio || dataImpossivel(a.inicio)).length,
       preparoMinimoMin: f.preparoMinimoMin,
-      destino: destinoDoContrato(this.porta.destino),
+      destino: this.porta.destino === 'memoria' ? 'memoria' : 'banco',
     };
   }
 

@@ -356,7 +356,7 @@ export class AnestesiaController {
   ): Promise<CirurgiasParaAnestesiaResposta> {
     const s = sessaoDe(req);
     const dia = data && DATA.test(data) ? data : (await this.agora(s)).slice(0, 10);
-    req.sghAlvo = { tabelaAlvo: 'CCAGENDA' };
+    req.sghAlvo = { tabelaAlvo: 'agendamento_cirurgico' };
     const { itens, truncado } = await this.cirurgia.agendamentos(s.porta, dia, dia, null);
     const [sit, procs] = await Promise.all([
       this.porta.situacoes(

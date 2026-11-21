@@ -178,7 +178,7 @@ describe('conta do paciente pela HTTP (memória)', () => {
       codigo: 40302199,
       quantidade: 1,
       data: hoje,
-      hora: '1000',
+      hora: '10:00',
       local: 1,
       ato: 15,
     });
@@ -320,7 +320,7 @@ describe('correções do M30 (memória)', () => {
         codigo: 40302199,
         quantidade: 1,
         data: hoje,
-        hora: '1000',
+        hora: '10:00',
         local: 1,
         ato: 15,
         precoManual: { unitario: 999, justificativa: 'acordo com a operadora', aprovador },

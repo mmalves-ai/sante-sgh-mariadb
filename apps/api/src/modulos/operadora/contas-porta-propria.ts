@@ -11,9 +11,11 @@
 // Dado da rede inteira: os motivos de glosa (terminologia oficial). Contas filtram pelo estabelecimento da sessão.
 // Melhoria: o lote é único por operadora, prestador e número do prestador (UNIQUE no banco: o mesmo lote não entra
 // duas vezes); a glosa nunca passa do apresentado (CHECK); a devolução exige o motivo (CHECK).
-// Pendente (pedido ao orquestrador): recurso de glosa (por guia e por item) e o arquivo do lote (armazenamento de
-// arquivos) respondem 501 `modelo-pendente`.
+// Recurso de glosa = recurso_glosa_recebido (objeto `guia` ou `item`, um por guia, protocolo pela numeração de negócio
+// `recurso_glosa` do estabelecimento) com as linhas em recurso_glosa_recebido_item; a decisão é de outro usuário (quem
+// registrou não decide), grava a decisão de cada linha e o valor acatado na guia.
 import type { MotivoGlosaLido } from '@sgh/contratos';
+import { problemasDoParecerDoRecurso, rateioDoAcatado, situacaoDoRecurso } from '@sgh/dominio-operadora';
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
@@ -25,7 +27,6 @@ import {
   type NucleoOperadora,
   num,
   numOuNulo,
-  pendente,
   primeiroDia,
   txt,
   txtOuNulo,
@@ -59,7 +60,34 @@ export const TABELAS_CONTAS = [
   'guia_conta_recebida',
   'guia_conta_recebida_item',
   'glosa_conta_recebida',
+  'recurso_glosa_recebido',
+  'recurso_glosa_recebido_item',
 ] as const;
+
+/** Situação do recurso no banco → na tela (recebido e em análise: pendente). */
+const SITUACAO_RECURSO: Readonly<Record<string, 'pendente' | 'acatado' | 'parcial' | 'mantido'>> = {
+  recebido: 'pendente',
+  em_analise: 'pendente',
+  acatado: 'acatado',
+  acatado_parcial: 'parcial',
+  negado: 'mantido',
+};
+/**
+ * Texto do recurso que cabe na coluna (VARCHAR(500) hoje; DDL para 1000 pedido na saída do lote): acima disso a
+ * gravação recusa com o campo, nunca corta em silêncio.
+ */
+const LIMITE_TEXTO_RECURSO = 500;
+function textoDoRecurso(t: string, campo: string): string {
+  if (t.length > LIMITE_TEXTO_RECURSO)
+    throw recusa('texto-longo', `O texto passa de ${LIMITE_TEXTO_RECURSO} caracteres: resuma e grave de novo.`, {
+      campos: [campo],
+    });
+  return t;
+}
+
+/** Decisão da tela → situação do recurso e decisão do item no banco. */
+const DECISAO_PARA_BANCO = { acatado: 'acatado', parcial: 'acatado_parcial', mantido: 'negado' } as const;
+const RECURSO_PENDENTE = "r.situacao IN ('recebido','em_analise') AND r.excluido_em IS NULL";
 
 const TIPO_GUIA = (t: DadosTipoGuiaConta): string => t.replace('-', '_');
 const TIPO_GUIA_DO_BANCO = (t: string): DadosTipoGuiaConta => t.replace('_', '-') as DadosTipoGuiaConta;
@@ -67,7 +95,12 @@ const SITUACAO_DO_BANCO = (s: string): SituacaoContaPorta =>
   (['recebida', 'analisada', 'paga', 'devolvida'] as const).find((x) => x === s) ?? 'devolvida';
 
 const SELECT_LOTE = `
-  SELECT l.*, pr.nome AS prestador_nome, COALESCE(pr.cnpj, pr.cpf) AS prestador_documento, pr.codigo_cnes AS prestador_cnes,
+  SELECT l.*,
+         (SELECT COUNT(*) FROM recurso_glosa_recebido r WHERE r.lote_conta_recebida_id = l.id AND ${RECURSO_PENDENTE})
+           AS recursos_pendentes,
+         (SELECT COALESCE(SUM(g.valor_acatado_recurso), 0) FROM guia_conta_recebida g
+           WHERE g.lote_conta_recebida_id = l.id AND g.excluido_em IS NULL) AS valor_acatado,
+         pr.nome AS prestador_nome, COALESCE(pr.cnpj, pr.cpf) AS prestador_documento, pr.codigo_cnes AS prestador_cnes,
          o.nome AS operadora_nome, o.registro_ans, pj.cnpj AS operadora_cnpj, ua.login AS auditor_login
     FROM lote_conta_recebida l
     JOIN operadora_saude o ON o.id = l.operadora_saude_id
@@ -94,9 +127,9 @@ function resumoDe(l: Linha, hoje: string): DadosContaResumo {
     situacao,
     apresentado: num(l['valor_apresentado']),
     glosado: num(l['valor_glosado']),
-    acatado: 0,
+    acatado: num(l['valor_acatado']),
     pago: num(l['valor_pago']),
-    recursosPendentes: 0,
+    recursosPendentes: num(l['recursos_pendentes']),
     versao: num(l['versao']),
   };
 }
@@ -227,7 +260,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       p.push(f.situacao);
     }
     if (f.vencidas) cond.push("l.situacao IN ('recebida','analisada') AND l.prazo_pagamento < CURRENT_DATE");
-    if (f.recursos) cond.push('FALSE');
+    if (f.recursos)
+      cond.push(`EXISTS (SELECT 1 FROM recurso_glosa_recebido r WHERE r.lote_conta_recebida_id = l.id AND ${RECURSO_PENDENTE})`);
     if (f.apos) {
       cond.push('l.id < ?');
       p.push(f.apos);
@@ -281,11 +315,15 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
            FROM lote_conta_recebida WHERE estabelecimento_id = ? AND excluido_em IS NULL`,
         [c.estabelecimento ?? 0],
       );
+      const r = await l.uma(
+        `SELECT COUNT(*) AS n FROM recurso_glosa_recebido r WHERE r.estabelecimento_id = ? AND ${RECURSO_PENDENTE}`,
+        [c.estabelecimento ?? 0],
+      );
       return {
         emAnalise: num(t?.['em_analise']),
         aPagar: num(t?.['a_pagar']),
         vencidas: num(t?.['vencidas']),
-        recursosPendentes: 0,
+        recursosPendentes: num(r?.['n']),
         valorEmAnalise: num(t?.['valor_em_analise']),
         valorAPagar: num(t?.['valor_a_pagar']),
       };
@@ -337,6 +375,7 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           ORDER BY g.ordem_lote`,
         [id, c.estabelecimento ?? 0],
       );
+      const recursos = await recursosDasGuias(l, id);
       return linhas.map((g) => ({
         id: num(g['id']),
         ordem: num(g['ordem_lote']),
@@ -357,7 +396,7 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         apresentado: num(g['valor_apresentado']),
         glosado: num(g['valor_glosado']),
         acatado: num(g['valor_acatado_recurso']),
-        recurso: null,
+        recurso: recursos.get(num(g['id'])) ?? null,
       }));
     });
   }
@@ -492,6 +531,83 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       if (num(x['estabelecimento_id']) !== est) throw inexistente('A conta');
       return x;
     };
+    // O recurso só cabe na conta analisada ou paga (o prestador recorre do que foi glosado).
+    const loteDoRecurso = async (id: number) => {
+      const x = await lote(id);
+      if (!['analisada', 'paga'].includes(txt(x['situacao'])))
+        throw recusa('conta-nao-analisada', 'Só a conta analisada ou paga recebe recurso de glosa.');
+      return x;
+    };
+    const guiaDoLote = async (loteId: number, guia: number) => {
+      const g = await tx.uma(
+        `SELECT id, valor_glosado, numero_guia_prestador, numero_guia_operadora FROM guia_conta_recebida
+          WHERE id = ? AND lote_conta_recebida_id = ? AND excluido_em IS NULL`,
+        [guia, loteId],
+      );
+      if (!g) throw recusa('guia-nao-encontrada', 'A guia não é deste lote.');
+      const ja = await tx.uma(
+        `SELECT r.id FROM recurso_glosa_recebido r JOIN recurso_glosa_recebido_item i ON i.recurso_glosa_recebido_id = r.id
+          WHERE i.guia_conta_recebida_id = ? AND r.situacao <> 'cancelado' AND r.excluido_em IS NULL AND i.excluido_em IS NULL
+          LIMIT 1`,
+        [guia],
+      );
+      if (ja) throw recusa('recurso-ja-registrado', 'A guia já tem recurso de glosa (um por guia).');
+      return g;
+    };
+    const incluirRecurso = async (x: Linha, objeto: 'guia' | 'item', valor: number, justificativa: string) =>
+      tx.incluir('recurso_glosa_recebido', {
+        estabelecimento_id: est,
+        numero_protocolo: (await tx.proximoNumero('recurso_glosa')).valor,
+        prestador_rede_id: num(x['prestador_rede_id']),
+        lote_conta_recebida_id: num(x['id']),
+        // As duas colunas do lote têm o mesmo tamanho (VARCHAR(20)) das do recurso: cópia sem corte.
+        numero_lote_prestador: txtOuNulo(x['numero_lote_prestador']),
+        numero_protocolo_recursado: txtOuNulo(x['numero_protocolo']),
+        objeto,
+        justificativa_prestador: textoDoRecurso(justificativa, 'justificativa'),
+        recebido_em: new Date(),
+        valor_recursado: valor,
+        situacao: 'recebido',
+      });
+    const recursoPendente = async (loteId: number, guia: number) => {
+      const [r] = await tx.consultarParaAtualizar(
+        `SELECT r.* FROM recurso_glosa_recebido r
+          WHERE r.lote_conta_recebida_id = ? AND ${RECURSO_PENDENTE}
+            AND EXISTS (SELECT 1 FROM recurso_glosa_recebido_item i WHERE i.recurso_glosa_recebido_id = r.id
+                          AND i.guia_conta_recebida_id = ? AND i.excluido_em IS NULL)
+          LIMIT 1`,
+        [loteId, guia],
+      );
+      if (!r) throw recusa('sem-recurso-pendente', 'A guia não tem recurso pendente.');
+      if (num(r['criado_por']) === Number(tx.contexto.usuario))
+        throw recusa(
+          'recurso-do-proprio-auditor',
+          'Quem registrou o recurso de glosa não o decide: outro auditor designado da operadora decide.',
+        );
+      return r;
+    };
+    // Fecha o recurso (situação, valor, quem e quando), grava o acatado na guia e a situação da conta. As regras
+    // (parecer obrigatório, decisão pelo valor, rateio) são do domínio; aqui fica a gravação com as travas.
+    const decidir = async (
+      a: { id: number; versao: number; guia: number; valorAcatado: number; parecer: string; situacao: string },
+      r: Linha,
+      decisaoTela: DecisaoRecursoItem,
+    ): Promise<number> => {
+      if (problemasDoParecerDoRecurso(decisaoTela, a.parecer).length > 0)
+        throw recusa('parecer-obrigatorio', 'Informe o parecer do recurso mantido ou acatado em parte.', {
+          campos: ['parecer'],
+        });
+      await tx.alterar('recurso_glosa_recebido', num(r['id']), num(r['versao']), {
+        situacao: DECISAO_PARA_BANCO[decisaoTela],
+        valor_acatado: a.valorAcatado,
+        decidido_em: new Date(),
+        analista_usuario_id: tx.contexto.usuario,
+        justificativa_operadora: textoDoRecurso(a.parecer, 'parecer') || null,
+      });
+      const g = await versaoDe(tx, 'guia_conta_recebida', a.guia, 'A guia');
+      await tx.alterar('guia_conta_recebida', a.guia, num(g['versao']), { valor_acatado_recurso: a.valorAcatado });
+      return tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao });
+    };
     return {
       proximoProtocolo: async () => (await tx.proximoNumero('protocolo_conta')).valor,
       receber: (r) => receberLote(tx, est, r),
@@ -576,12 +692,167 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         });
         return { id: a.id, versao };
       },
-      registrarRecurso: () => pendente('Recurso de glosa da guia'),
-      decidirRecurso: () => pendente('Decisão do recurso de glosa da guia'),
-      registrarRecursoItens: () => pendente('Recurso de glosa por item'),
-      decidirRecursoItens: () => pendente('Decisão do recurso de glosa por item'),
+      registrarRecurso: async (a) => {
+        const x = await loteDoRecurso(a.id);
+        const guia = await guiaDoLote(a.id, a.guia);
+        if (!(a.valor > 0) || a.valor > num(guia['valor_glosado']))
+          throw recusa('recurso-incoerente', 'O valor recorrido vai de um centavo até o valor glosado da guia.', {
+            campos: ['valor'],
+          });
+        const recurso = await incluirRecurso(x, 'guia', a.valor, a.justificativa);
+        await tx.incluir('recurso_glosa_recebido_item', {
+          recurso_glosa_recebido_id: recurso,
+          sequencia: 1,
+          guia_conta_recebida_id: a.guia,
+          numero_guia_prestador: txtOuNulo(guia['numero_guia_prestador']),
+          numero_guia_operadora: txtOuNulo(guia['numero_guia_operadora']),
+          valor_recursado: a.valor,
+          justificativa_prestador: textoDoRecurso(a.justificativa, 'justificativa'),
+        });
+        return { id: a.id, versao: await tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao }) };
+      },
+      decidirRecurso: async (a) => {
+        await loteDoRecurso(a.id);
+        const r = await recursoPendente(a.id, a.guia);
+        if (a.valorAcatado < 0 || a.valorAcatado > num(r['valor_recursado']))
+          throw recusa('recurso-incoerente', 'O valor acatado vai de zero até o valor recorrido.', {
+            campos: ['valorAcatado'],
+          });
+        const linhas = await tx.consultarParaAtualizar(
+          'SELECT id, versao, valor_recursado FROM recurso_glosa_recebido_item WHERE recurso_glosa_recebido_id = ? AND excluido_em IS NULL ORDER BY sequencia, id',
+          [num(r['id'])],
+        );
+        // A decisão pela guia vale para cada linha, repartida pelo domínio (acatado: o recorrido; parcial: pelo peso).
+        const partes = rateioDoAcatado(
+          linhas.map((it) => num(it['valor_recursado'])),
+          a.situacaoRecurso,
+          a.valorAcatado,
+        );
+        const parecer = textoDoRecurso(a.parecer, 'parecer');
+        for (const [i, it] of linhas.entries())
+          await tx.alterar('recurso_glosa_recebido_item', num(it['id']), num(it['versao']), {
+            decisao: DECISAO_PARA_BANCO[a.situacaoRecurso],
+            valor_acatado: partes[i] ?? 0,
+            justificativa_operadora: parecer || null,
+          });
+        return { id: a.id, versao: await decidir(a, r, a.situacaoRecurso) };
+      },
+      registrarRecursoItens: async (a) => {
+        const x = await loteDoRecurso(a.id);
+        if (a.itens.length === 0 || new Set(a.itens.map((i) => i.item)).size !== a.itens.length)
+          throw recusa('recurso-item-incoerente', 'Escolha cada item glosado uma vez.');
+        const guia = await guiaDoLote(a.id, a.guia);
+        const itens = [];
+        for (const i of a.itens) {
+          const it = await tx.uma(
+            `SELECT i.id, i.valor_glosado, i.procedimento_termo_terminologia_id AS termo,
+                    (SELECT gl.id FROM glosa_conta_recebida gl WHERE gl.guia_conta_recebida_item_id = i.id
+                        AND gl.excluido_em IS NULL ORDER BY gl.sequencia DESC LIMIT 1) AS glosa,
+                    (SELECT gl.motivo_glosa_id FROM glosa_conta_recebida gl WHERE gl.guia_conta_recebida_item_id = i.id
+                        AND gl.excluido_em IS NULL ORDER BY gl.sequencia DESC LIMIT 1) AS motivo
+               FROM guia_conta_recebida_item i WHERE i.id = ? AND i.guia_conta_recebida_id = ? AND i.excluido_em IS NULL`,
+            [i.item, a.guia],
+          );
+          if (!it) throw recusa('item-nao-encontrado', 'O item não é desta guia.');
+          if (num(it['valor_glosado']) <= 0 || !(i.valor > 0) || i.valor > num(it['valor_glosado']))
+            throw recusa('recurso-item-incoerente', 'O valor recorrido do item vai de um centavo até o valor glosado.');
+          itens.push({ i, it });
+        }
+        const soma = Math.round(a.itens.reduce((t, i) => t + Math.round(i.valor * 100), 0)) / 100;
+        const recurso = await incluirRecurso(x, 'item', soma, a.justificativa);
+        const recursos: number[] = [];
+        for (const [n, { i, it }] of itens.entries())
+          recursos.push(
+            await tx.incluir('recurso_glosa_recebido_item', {
+              recurso_glosa_recebido_id: recurso,
+              sequencia: n + 1,
+              guia_conta_recebida_id: a.guia,
+              guia_conta_recebida_item_id: i.item,
+              glosa_conta_recebida_id: numOuNulo(it['glosa']),
+              motivo_glosa_id: numOuNulo(it['motivo']),
+              termo_terminologia_id: numOuNulo(it['termo']),
+              numero_guia_prestador: txtOuNulo(guia['numero_guia_prestador']),
+              numero_guia_operadora: txtOuNulo(guia['numero_guia_operadora']),
+              valor_recursado: i.valor,
+              justificativa_prestador: textoDoRecurso(i.justificativa, 'justificativa'),
+            }),
+          );
+        const versao = await tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao });
+        return { id: a.id, versao, recursos };
+      },
+      decidirRecursoItens: async (a) => {
+        await loteDoRecurso(a.id);
+        const r = await recursoPendente(a.id, a.guia);
+        if (txt(r['objeto']) !== 'item')
+          throw recusa('sem-recurso-por-item', 'O recurso desta guia não foi feito por item: decida pela guia.');
+        const pendentes = await tx.consultarParaAtualizar(
+          `SELECT id, versao, guia_conta_recebida_item_id AS item, valor_recursado FROM recurso_glosa_recebido_item
+            WHERE recurso_glosa_recebido_id = ? AND decisao = 'pendente' AND excluido_em IS NULL`,
+          [num(r['id'])],
+        );
+        const porItem = new Map(a.decisoes.map((d) => [d.item, d]));
+        if (porItem.size !== a.decisoes.length || porItem.size !== pendentes.length)
+          throw recusa('recurso-item-incoerente', 'Decida cada item recorrido, uma vez cada.');
+        const linhas = pendentes.map((p) => {
+          const d = porItem.get(num(p['item']));
+          const recorrido = num(p['valor_recursado']);
+          if (!d || d.valorAcatado < 0 || d.valorAcatado > recorrido)
+            throw recusa('recurso-item-incoerente', 'O valor acatado do item vai de zero até o valor recorrido.');
+          const decisao = situacaoDoRecurso(recorrido, d.valorAcatado) as DecisaoRecursoItem;
+          if (problemasDoParecerDoRecurso(decisao, d.parecer).length > 0)
+            throw recusa('parecer-obrigatorio', 'Informe o parecer do item mantido ou acatado em parte.', {
+              campos: ['parecer'],
+            });
+          return { p, d, decisao };
+        });
+        for (const { p, d, decisao } of linhas)
+          await tx.alterar('recurso_glosa_recebido_item', num(p['id']), num(p['versao']), {
+            decisao: DECISAO_PARA_BANCO[decisao],
+            valor_acatado: d.valorAcatado,
+            justificativa_operadora: textoDoRecurso(d.parecer, 'parecer') || null,
+          });
+        const valorAcatado = Math.round(linhas.reduce((t, l) => t + Math.round(l.d.valorAcatado * 100), 0)) / 100;
+        const decisao: DecisaoRecursoItem = linhas.every((l) => l.decisao === 'acatado')
+          ? 'acatado'
+          : linhas.every((l) => l.decisao === 'mantido')
+            ? 'mantido'
+            : 'parcial';
+        const versao = await decidir({ ...a, valorAcatado }, r, decisao);
+        return { id: a.id, versao, decisao, valorAcatado };
+      },
     };
   }
+}
+
+/** O recurso de cada guia do lote (um por guia; o cancelado não conta), com quem registrou e quem decidiu. */
+async function recursosDasGuias(l: Leitor, lote: number): Promise<Map<number, NonNullable<DadosGuiaConta['recurso']>>> {
+  const linhas = await l.consultar(
+    `SELECT r.id, r.situacao, r.valor_recursado, r.justificativa_prestador, r.recebido_em, r.justificativa_operadora,
+            r.decidido_em, uc.login AS registrado_login, ua.login AS analista_login,
+            (SELECT MIN(i.guia_conta_recebida_id) FROM recurso_glosa_recebido_item i
+              WHERE i.recurso_glosa_recebido_id = r.id AND i.excluido_em IS NULL) AS guia
+       FROM recurso_glosa_recebido r
+       LEFT JOIN usuario uc ON uc.id = r.criado_por
+       LEFT JOIN usuario ua ON ua.id = r.analista_usuario_id
+      WHERE r.lote_conta_recebida_id = ? AND r.situacao <> 'cancelado' AND r.excluido_em IS NULL`,
+    [lote],
+  );
+  const m = new Map<number, NonNullable<DadosGuiaConta['recurso']>>();
+  for (const r of linhas) {
+    const situacao = SITUACAO_RECURSO[txt(r['situacao'])];
+    if (!situacao || r['guia'] === null) continue;
+    m.set(num(r['guia']), {
+      situacao,
+      valor: num(r['valor_recursado']),
+      justificativa: txt(r['justificativa_prestador']),
+      registradoEm: instante(r['recebido_em']) ?? '',
+      registradoPor: txt(r['registrado_login']),
+      parecer: txtOuNulo(r['justificativa_operadora']),
+      decididoEm: instante(r['decidido_em']),
+      decididoPor: txtOuNulo(r['analista_login']),
+    });
+  }
+  return m;
 }
 
 /** Soma as guias e o lote depois da glosa (a soma é do banco, na mesma transação). */

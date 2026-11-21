@@ -20,7 +20,7 @@ export type TipoDiferenca = (typeof TIPOS_DIFERENCA)[number];
 export const esquemaDiferenca = z
   .object({
     tipo: z.enum(TIPOS_DIFERENCA),
-    /** Caminho estável do elemento (ex.: `SIPACAGD.colunas.ID_RICADPAC`). */
+    /** Caminho estável do elemento (ex.: `marcacao_horario.colunas.paciente_id`). */
     elemento: z.string().min(1),
     esperado: z.string(),
     obtido: z.string(),

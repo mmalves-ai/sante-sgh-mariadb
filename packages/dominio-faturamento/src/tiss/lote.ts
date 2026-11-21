@@ -24,7 +24,8 @@ export interface Cabecalho {
 
 export interface Beneficiario {
   readonly numeroCarteira: string;
-  readonly atendimentoRN: 'S' | 'N';
+  /** Atendimento ao recém-nascido; o XML da TISS (dmSimNao) recebe S ou N. */
+  readonly atendimentoRN: boolean;
 }
 
 export interface Profissional {
@@ -163,11 +164,14 @@ export function dinheiro(v: number): string {
 const soma = (itens: readonly ItemExecutado[]) =>
   itens.reduce((s, i) => s + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
 
+/** O booleano no domínio dmSimNao do XML da TISS. */
+const simNao = (v: boolean): string => (v ? 'S' : 'N');
+
 function beneficiario(b: Beneficiario): Elemento {
   return el(
     'dadosBeneficiario',
     el('numeroCarteira', b.numeroCarteira),
-    el('atendimentoRN', b.atendimentoRN),
+    el('atendimentoRN', simNao(b.atendimentoRN)),
   );
 }
 
@@ -370,7 +374,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
         el(
           'beneficiario',
           el('numeroCarteira', g.beneficiario.numeroCarteira),
-          el('atendimentoRN', g.beneficiario.atendimentoRN),
+          el('atendimentoRN', simNao(g.beneficiario.atendimentoRN)),
         ),
         el(
           'localContratado',

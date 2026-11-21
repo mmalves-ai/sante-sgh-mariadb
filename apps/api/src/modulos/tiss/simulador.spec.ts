@@ -14,7 +14,7 @@ const cab = {
 const guia = {
   tipo: 'consulta' as const,
   numeroGuiaPrestador: 'SINT-1',
-  beneficiario: { numeroCarteira: 'SINTETICO0001', atendimentoRN: 'N' as const },
+  beneficiario: { numeroCarteira: 'SINTETICO0001', atendimentoRN: false },
   cnes: '9999999',
   profissional: { conselho: '06', numeroConselho: '0', uf: '33', cbos: '225125' },
   dataAtendimento: '2026-10-20',

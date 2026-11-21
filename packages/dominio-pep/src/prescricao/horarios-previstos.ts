@@ -15,12 +15,12 @@ export interface PedidoHorarios {
   readonly vigencia: Periodo;
   /** Momento da prescrição (relógio do banco, hora local). */
   readonly agora: string;
-  /** Grade da unidade por número de doses (HHMM, na ordem do cadastro). */
+  /** Grade da unidade por número de doses (HH:MM, na ordem do cadastro). */
   readonly grade: ReadonlyMap<number, readonly string[]>;
   readonly iniciarAgora?: boolean;
   /** Primeiro horário escolhido (HH:MM): desloca a grade pelo intervalo. */
   readonly primeiroHorario?: string | null;
-  /** Horários das âncoras relativas escolhidas (id, HHMM). */
+  /** Horários das âncoras relativas escolhidas (id, HH:MM). */
   readonly relativos?: readonly { readonly id: number; readonly horario: string }[];
 }
 

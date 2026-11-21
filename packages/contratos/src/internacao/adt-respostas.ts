@@ -316,7 +316,7 @@ export const esquemaPainelHigienizacao = z.object({
   /** As solicitações antigas paradas no primeiro estado (o legado não as fecha): só a contagem, fora da fila. */
   paradasAntigas: z.number().int(),
   /**
-   * Na fila de quem só executa: o profissional ligado ao login (CHPROFISLIMP.USUARIO_SISTEMA). A etapa sai sempre em
+   * Na fila de quem só executa: o profissional ligado ao login (o cadastro do profissional da limpeza). A etapa sai sempre em
    * nome dele; ausente para o supervisor, que escolhe.
    */
   profissionalDaSessao: z.number().int().nullable().optional(),

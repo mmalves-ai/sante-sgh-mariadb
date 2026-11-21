@@ -123,6 +123,28 @@ describe.skipIf(SEM_BANCO)('porta própria da autorização prévia (MariaDB, cl
       g.designar({ operadora: m.operadora, login: 'l0209.teste', nome: 'x', categoria: 'medico', conselho: conselho.sigla, numero: '902090', uf: conselho.uf, inicio: '2026-01-02', usuario: 'x' }),
     );
     expect((await porta.designacoes(contexto(m), 'l0209.teste')).map((x) => x.id)).toEqual(expect.arrayContaining([a1.id, a2.id]));
+    const T2 = (r: { id: number }) => ({ ...trilhaTela(m, 'auditor_plano', 'x')(r), motivo: 'categoria corrigida' });
+    const semCadastro = await porta
+      .gravar(contexto(m), T2, (g) => g.alterar({ id: a2.id, versao: 1, usuario: 'x', categoria: 'enfermeiro', conselho: conselho.sigla, numero: '999999999', uf: conselho.uf, motivo: 'x' }))
+      .catch((e: unknown) => codigoDe(e));
+    expect(semCadastro).toBe('profissional-nao-cadastrado');
+    const alt = await porta.gravar(contexto(m), T2, (g) =>
+      g.alterar({ id: a2.id, versao: 1, usuario: 'x', categoria: 'enfermeiro', conselho: conselho.sigla, numero: '902090', uf: conselho.uf, motivo: 'categoria corrigida' }),
+    );
+    // O nome devolvido é o do cadastro do profissional; o motivo fica na trilha da operação.
+    expect(alt).toEqual({ id: a2.id, versao: 2, nome: expect.any(String) });
+    expect(alt.nome.length).toBeGreaterThan(0);
+    expect(
+      await ler(
+        "SELECT motivo FROM trilha_auditoria WHERE entidade = 'auditor_plano' AND entidade_id = ? AND motivo IS NOT NULL",
+        [a2.id],
+      ),
+    ).toEqual([{ motivo: 'categoria corrigida' }]);
+    expect(await ler('SELECT categoria FROM auditor_plano WHERE id = ?', [a2.id])).toEqual([{ categoria: 'enfermeiro' }]);
+    const velha = await porta
+      .gravar(contexto(m), T2, (g) => g.alterar({ id: a2.id, versao: 1, usuario: 'x', categoria: 'medico', conselho: conselho.sigla, numero: '902090', uf: conselho.uf, motivo: 'x' }))
+      .catch((e: unknown) => codigoDe(e));
+    expect(velha).toBe('auditor-desatualizado');
     const r = await registrar('L0209-A2');
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't0209' }, (e) =>
       e.executar('UPDATE pedido_autorizacao_plano SET auditor_plano_id = ? WHERE id = ?', [a1.id, r.id]),

@@ -6,7 +6,7 @@
 // receber existente); nenhuma pendência bloqueante. A reabertura só de S para N, fora de lote, com supervisor e motivo.
 import { recusaFat, type RecusaFaturamento, TOLERANCIA_CENTAVO, reaisTexto } from './recusa.js';
 
-/** Valores de FCCTAEXT.PACOTE já vistos (Anexo A); P, D e F "a confirmar" (DP-46.5). */
+/** Valores da marca de pacote da conta já vistos (Anexo A); P, D e F "a confirmar" (DP-46.5). */
 export const PACOTES_CONTA_VISTOS = ['N', 'C', 'P', 'D', 'F', ''] as const;
 
 /** O retrato da conta relido sob a trava (o que os vetos leem). */

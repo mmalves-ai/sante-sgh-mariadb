@@ -1,11 +1,11 @@
 // Produção ambulatorial (ficha do M51, regra 4; cap-05a §5.3; referência 01 §2.4): a requisição de laboratório
-// (RECADATE com LAB='S' e ESPEC=0) não é atendimento e não entra na CIHA nem no BPA. A consulta no banco já filtra
-// ESPEC > 0; esta regra confere de novo cada linha lida (e é a que o teste prova).
+// (atendimento marcado como laboratório e sem especialidade) não é atendimento e não entra na CIHA nem no BPA. A consulta no banco já filtra
+// especialidade > 0; esta regra confere de novo cada linha lida (e é a que o teste prova).
 
 export interface FichaAmbulatorial {
-  /** RECADATE.LAB ('S' na requisição de laboratório). */
+  /** Marca de laboratório ('S' na requisição de laboratório). */
   readonly lab: string | null;
-  /** RECADATE.ESPEC (0 na requisição). */
+  /** Especialidade do atendimento (0 na requisição). */
   readonly especialidade: number | null;
 }
 

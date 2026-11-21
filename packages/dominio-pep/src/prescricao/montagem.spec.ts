@@ -276,8 +276,8 @@ describe('montarItem (M24)', () => {
   });
 
   it('horários próprios da dieta a partir de agora; kit que casa pela faixa e pelo tipo de atendimento', () => {
-    expect(horariosDaGrade(['0700', '1800'], VIG, '2026-10-22T08:00').map((h) => h.dataHora)).toEqual([]);
-    expect(horariosDaGrade(['1800', '1800'], VIG, '2026-10-21T10:00')).toHaveLength(1);
+    expect(horariosDaGrade(['07:00', '18:00'], VIG, '2026-10-22T08:00').map((h) => h.dataHora)).toEqual([]);
+    expect(horariosDaGrade(['18:00', '18:00'], VIG, '2026-10-21T10:00')).toHaveLength(1);
     const kits = [
       {
         produto: 1,

@@ -2,7 +2,7 @@
 // vocabulário, entradas e respostas do motor de protocolo (Manchester licenciado ou ACCR próprio, DP-18), da
 // classificação e da reclassificação. O protocolo é dado (regra 2): versão publicada imutável, com autor, aprovador e
 // licença; a classificação guarda a versão usada. As cores do novo vivem na versão do protocolo (SGH_PA_PROTOCOLO_COR);
-// a tabela de cores do sistema anterior (PRMANCHESTER, 7 linhas) é só consulta e referência opcional.
+// a tabela de cores do sistema anterior (7 linhas) é só consulta e referência opcional.
 // O formulário de classificação do prontuário (modelo E08, 28.755 registros) continua recebendo a classificação pelo
 // registro clínico do M22 (pep.registrarEvolucao), com a cor convertida para a opção de "Prioridade clínica" por um
 // de-para aprovado pela enfermagem (regra 7): só índices já vistos no perfil; cor sem opção grava só no novo.
@@ -61,7 +61,7 @@ export type MotivoReclassificacao = (typeof MOTIVOS_RECLASSIFICACAO)[number];
  */
 export const CHAVE_LIBERACAO_CLASSIFICACAO = 'pa.classificacao';
 export const CHAVE_CLASSIFICACAO_EXTERNA = 'integracao.classificacaoExterna';
-/** Código do modelo do formulário de classificação do prontuário (PREVOLUCAO.COD). */
+/** Código do modelo do formulário de classificação do prontuário. */
 export const MODELO_E08 = 'E08';
 
 // ── Sinais vitais da classificação (variáveis das regras dos discriminadores) ─────────────────────
@@ -136,7 +136,7 @@ export const esquemaCorProtocolo = z
     tempoAlvoMin: z.number().int().min(0).max(1_440),
     /** Índice da opção de "Prioridade clínica" do formulário de classificação do prontuário (null: sem opção). */
     opcaoE08: z.number().int().min(0).max(99).nullable(),
-    /** Referência opcional à cor equivalente da tabela de cores antiga (PRMANCHESTER.ID). */
+    /** Referência opcional à cor equivalente da tabela de cores antiga (o id do nível de prioridade). */
     corLegado: z.number().int().min(1).max(9).nullable().default(null),
   })
   .strict();
@@ -213,7 +213,7 @@ const justificativa = textoCp1252(500).pipe(
 );
 
 const camposClassificacao = {
-  /** Número do atendimento do PA (RECADATE.REG). */
+  /** Número do atendimento do pronto atendimento (id do atendimento). */
   atendimento: id,
   /** Versão publicada do protocolo usada (a classificação a guarda; regra 2). */
   versaoProtocolo: id,

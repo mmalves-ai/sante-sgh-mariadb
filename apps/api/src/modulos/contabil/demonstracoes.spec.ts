@@ -382,6 +382,31 @@ describe('contabilidade, etapa 3 (demonstrações, apuração e SPED)', () => {
     expect((await get(c, `${C}/sped/arquivo?empresa=1&id=999`)).statusCode).toBe(404);
   });
 
+  it('SPED na memória: substituta sem envio anterior recusa (sem-arquivo-substituido), como na porta do banco', () => {
+    const novo = {
+      empresa: 1,
+      tipo: 'ecd' as const,
+      exercicio: 2031,
+      leiaute: '9.00',
+      nomeArquivo: 'ECD_SINT_2031.txt',
+      conteudoCifrado: 'x',
+      tamanho: 1,
+      linhas: 1,
+      hash: '0'.repeat(64),
+      parametros: '{}',
+      usuario: 'SINT.CONTADOR',
+    };
+    let erro: unknown = null;
+    try {
+      porta.f3.gravar({ ...novo, substituta: true });
+    } catch (e) {
+      erro = e;
+    }
+    expect(JSON.stringify(erro)).toContain('sem-arquivo-substituido');
+    expect(porta.f3.gravar({ ...novo, substituta: false })).toMatchObject({ numero: 1, substituidos: 0 });
+    expect(porta.f3.gravar({ ...novo, substituta: true })).toMatchObject({ numero: 2, substituidos: 1 });
+  });
+
   it('ECF: lucro real recusado com o motivo; a da isenta gerada; sem signatário contador, 400', async () => {
     const c = await entrar('SINT.CONTADOR');
     const g = { empresa: 1, tipo: 'ecf', exercicio: 2025, signatarios: SIGNATARIOS, tipoEntidadeEcf: '05' };

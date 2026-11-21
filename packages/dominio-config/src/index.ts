@@ -11,6 +11,7 @@ export * from './parametros/vigencia.js';
 export * from './liberacao/prerequisito-chave.js';
 export * from './liberacao/lote.js';
 export * from './liberacao/recurso.js';
+export * from './liberacao/catalogo-operacoes.js';
 // M61: liberação full na instalação (planejador do comando liberacao:ligar-tudo) e as conferências ao ligar (API e comando).
 export * from './liberacao/liberacao-full.js';
 export * from './liberacao/conferencias-ligar.js';

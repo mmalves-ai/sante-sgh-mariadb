@@ -2,7 +2,7 @@
 // (códigos "C0301"; nenhuma pessoa real): contrato de efeito do agendamento, da remarcação, do cancelamento, da
 // permissão da sala e da gravação direta (solicitação, pendência e andamento) — linhas, versão, histórico e trilha —,
 // as recusas (sala ocupada, versão vista, entrada inválida, outro estabelecimento, operação pendente do modelo) e as
-// leituras da anestesia e do bloco seguro (gravações destas recusam com modelo-pendente, sem gravar nada). Também: as
+// leituras da anestesia e do bloco seguro (gravações destas ainda recusam com modelo-pendente, sem gravar nada). Também: as
 // regras de horário do domínio sob a trava da sala (passado, mesmo horário, vedado, duração mínima, preparo da sala),
 // duas marcações concorrentes, o andamento confirmado → em sala → realizado com o estado e a versão vistos, a chave de
 // idempotência da requisição na gravação direta e a trilha pela tabela real.
@@ -56,6 +56,11 @@ async function limpar(e: Escritor, ests: readonly number[]) {
   const em = ests.map(() => '?').join(', ');
   const ags = `SELECT id FROM agendamento_cirurgico WHERE estabelecimento_id IN (${em})`;
   await e.executar(`DELETE FROM reagendamento_cirurgico WHERE agendamento_cirurgico_id IN (${ags})`, ests);
+  await e.executar(
+    `DELETE FROM agendamento_cirurgico_versao WHERE agendamento_cirurgico_id IN (${ags})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM codigo_painel_familia WHERE agendamento_cirurgico_id IN (${ags})`, ests);
   await e.executar(
     `DELETE FROM pendencia_agendamento_cirurgico WHERE agendamento_cirurgico_id IN (${ags})`,
     ests,
@@ -238,7 +243,12 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
   });
 
   it('agendar: a linha, o procedimento principal, a equipe pela função, o histórico e a trilha; a leitura do mapa', async () => {
-    const r = await porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('0800'), op(m.est));
+    const r = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('08:00'),
+      op(m.est),
+    );
     const id = Number(r.resultado['agendamento']);
     expect(r.repetida).toBe(false);
     expect(r.trilha).not.toBeNull();
@@ -287,7 +297,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
 
   it('recusas: sala ocupada, entrada inválida e o mesmo pedido em outro estabelecimento', async () => {
     await expect(
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('0830'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('08:30'), op(m.est)),
     ).rejects.toThrow(/sala-ocupada/);
     await expect(
       porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', { sala: m.sala }, op(m.est)),
@@ -317,7 +327,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
       agendamento: id,
       sala: m.sala,
       data: amanha(),
-      hora: '1000',
+      hora: '10:00',
       justificativa: 'Troca de horário do teste',
       excecao: null,
     };
@@ -325,14 +335,14 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
       porta.executar(
         ctx(m.est),
         'cirurgia.remarcarCirurgia',
-        { ...base, lido: { sala: m.sala, data: amanha(), hora: '0900' } },
+        { ...base, lido: { sala: m.sala, data: amanha(), hora: '09:00' } },
         op(m.est),
       ),
     ).rejects.toMatchObject({ problema: { status: 409 } });
     await porta.executar(
       ctx(m.est),
       'cirurgia.remarcarCirurgia',
-      { ...base, lido: { sala: m.sala, data: amanha(), hora: '0800' } },
+      { ...base, lido: { sala: m.sala, data: amanha(), hora: '08:00' } },
       op(m.est),
     );
     const [a] = await ler<Record<string, unknown>>('SELECT versao FROM agendamento_cirurgico WHERE id = ?', [
@@ -380,7 +390,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
       g.solicitar({
         sala: m.sala,
         data: amanha(),
-        hora: '1400',
+        hora: '14:00',
         duracaoMin: 90,
         reg: 0,
         pront: 930301,
@@ -438,20 +448,113 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
       'teste-03-01',
     ]);
     expect(trilhaPend).not.toHaveLength(0);
+    // O pedido interno não é de conta do portal: a retirada pelo portal recusa sem gravar.
     await expect(
       porta.gravarSgh(ctx(m.est), trilha, (g) =>
         g.retirarPedidoPortal({ id, acesso: 1, complemento: null, usuario: m.login }),
       ),
-    ).rejects.toThrow(/modelo-pendente/);
-    await expect(
-      porta.gravarSgh(ctx(m.est), trilha, (g) =>
-        g.retirarPedidoPortal({ id, acesso: 1, complemento: null, usuario: m.login }),
-      ),
-    ).rejects.toThrow(/modelo-pendente/);
+    ).rejects.toThrow(/registro-inexistente/);
   });
 
-  it('andamento no banco: confirmado → em sala → realizado; "no bloco" fica indisponível com o motivo; volta proibida', async () => {
-    const r = await porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('1800'), op(m.est));
+  it('pedido do portal do médico externo: a conta e o paciente informado, a alteração com a versão guardada e a retirada', async () => {
+    const trilha = {
+      estabelecimento: m.est,
+      usuario: m.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'tela',
+      entidadeId: 0,
+      correlacao: 'teste-08-portal',
+    };
+    // A conta do portal (sintética) do cirurgião: criada uma vez no cliente de teste.
+    const login = `portal.${P.toLowerCase()}@exemplo.invalid`;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'conta-portal-08' }, async (e) => {
+      const [pf] = await e.consultar('SELECT pessoa_fisica_id FROM profissional WHERE id = ?', [m.cirurgiao]);
+      await e.executar(
+        `INSERT INTO conta_portal_profissional_externo (profissional_id, pessoa_fisica_id, login, email, criado_em)
+         SELECT ?, ?, ?, ?, NOW(3) FROM DUAL
+          WHERE NOT EXISTS (SELECT 1 FROM conta_portal_profissional_externo WHERE login = ?)`,
+        [m.cirurgiao, pf!['pessoa_fisica_id'], login, login, login],
+      );
+    });
+    const [conta] = await ler<Record<string, unknown>>(
+      'SELECT id FROM conta_portal_profissional_externo WHERE login = ?',
+      [login],
+    );
+    const acesso = Number(conta!['id']);
+    const id = await porta.gravarSgh(ctx(m.est), trilha, (g) =>
+      g.solicitar({
+        sala: m.sala,
+        data: amanha(),
+        hora: '15:00',
+        duracaoMin: 60,
+        reg: 0,
+        pront: 0,
+        idPaciente: null,
+        procedimento: m.procedimento,
+        convenio: m.convenio,
+        cirurgiao: m.cirurgiao,
+        carater: m.carater,
+        anestesia: m.anestesia,
+        observacao: null,
+        usuario: m.login,
+        portal: { acesso, paciente: `PACIENTE INFORMADO ${P}`, nascimento: '1980-02-03' },
+      }),
+    );
+    const doPortal = await porta.estadosDoPortal(ctx(m.est), acesso, new Date().toISOString().slice(0, 10));
+    expect(doPortal.map((x) => x.id)).toContain(id);
+    expect(doPortal.find((x) => x.id === id)).toMatchObject({
+      estado: 'solicitado',
+      idPaciente: null,
+      portal: { acesso, paciente: `PACIENTE INFORMADO ${P}`, nascimento: '1980-02-03' },
+    });
+    const alteracao = {
+      id,
+      acesso,
+      versao: 1,
+      sala: m.sala,
+      data: amanha(),
+      hora: '16:00',
+      duracaoMin: 90,
+      procedimento: m.procedimento,
+      convenio: m.convenio,
+      cirurgiao: m.cirurgiao,
+      carater: m.carater,
+      anestesia: m.anestesia,
+      observacao: 'Ajuste de horário',
+      paciente: `PACIENTE INFORMADO ${P}`,
+      nascimento: '1980-02-03',
+      motivo: 'Mudança de horário pedida pela equipe',
+      usuario: m.login,
+    };
+    expect(await porta.gravarSgh(ctx(m.est), trilha, (g) => g.alterarPedidoPortal(alteracao))).toBe(2);
+    // A versão vista ficou velha: a segunda alteração com versão 1 recusa.
+    await expect(
+      porta.gravarSgh(ctx(m.est), trilha, (g) => g.alterarPedidoPortal(alteracao)),
+    ).rejects.toThrow(/versao-desatualizada/);
+    const versoes = await porta.versoesDosPedidos(ctx(m.est), [id]);
+    expect(versoes).toHaveLength(1);
+    expect(versoes[0]).toMatchObject({ idEstado: id, versao: 1, duracaoMin: 60, motivo: alteracao.motivo });
+    expect(versoes[0]!.inicio.slice(11, 16)).toBe('15:00');
+    expect((await porta.estado(ctx(m.est), id))?.duracaoMin).toBe(90);
+    // Outra conta não retira; a própria retira e o pedido fica cancelado.
+    await expect(
+      porta.gravarSgh(ctx(m.est), trilha, (g) =>
+        g.retirarPedidoPortal({ id, acesso: acesso + 1, complemento: null, usuario: m.login }),
+      ),
+    ).rejects.toThrow(/registro-inexistente/);
+    await porta.gravarSgh(ctx(m.est), trilha, (g) =>
+      g.retirarPedidoPortal({ id, acesso, complemento: 'Paciente desistiu', usuario: m.login }),
+    );
+    expect(await porta.estado(ctx(m.est), id)).toMatchObject({ estado: 'cancelado' });
+  });
+
+  it('andamento no banco: confirmado → no bloco → em sala → realizado; volta proibida', async () => {
+    const r = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('18:00'),
+      op(m.est),
+    );
     const id = Number(r.resultado['agendamento']);
     const trilha = {
       estabelecimento: m.est,
@@ -463,21 +566,21 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     };
     const e1 = await porta.estado(ctx(m.est), id);
     expect(e1).toMatchObject({ estado: 'confirmado', agendamento: id });
-    await expect(
-      porta.gravarSgh(ctx(m.est), trilha, (g) =>
-        g.mudarEstado({
-          id,
-          estado: 'no-bloco',
-          visto: { estado: 'confirmado', versao: e1!.versao ?? null },
-          usuario: m.login,
-        }),
-      ),
-    ).rejects.toThrow(/modelo-pendente/);
+    await porta.gravarSgh(ctx(m.est), trilha, (g) =>
+      g.mudarEstado({
+        id,
+        estado: 'no-bloco',
+        visto: { estado: 'confirmado', versao: e1!.versao ?? null },
+        usuario: m.login,
+      }),
+    );
+    const eb = await porta.estado(ctx(m.est), id);
+    expect(eb).toMatchObject({ estado: 'no-bloco', agendamento: id });
     await porta.gravarSgh(ctx(m.est), trilha, (g) =>
       g.mudarEstado({
         id,
         estado: 'em-sala',
-        visto: { estado: 'confirmado', versao: e1!.versao ?? null },
+        visto: { estado: 'no-bloco', versao: eb!.versao ?? null },
         usuario: m.login,
       }),
     );
@@ -526,7 +629,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
         g.solicitar({
           sala: m.sala,
           data: amanha(),
-          hora: '1500',
+          hora: '15:00',
           duracaoMin: 60,
           reg: 0,
           pront: 930301,
@@ -555,10 +658,10 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     const ontem = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
     const agendar = (hora: string, extra: Record<string, unknown> = {}) =>
       porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar(hora, extra), op(m.est));
-    await expect(agendar('1000', { data: ontem })).rejects.toThrow(/horario-passado/);
-    const r = await agendar('2000');
+    await expect(agendar('10:00', { data: ontem })).rejects.toThrow(/horario-passado/);
+    const r = await agendar('20:00');
     const id = Number(r.resultado['agendamento']);
-    const lido = { sala: m.sala, data: amanha(), hora: '2000' };
+    const lido = { sala: m.sala, data: amanha(), hora: '20:00' };
     await expect(
       porta.executar(
         ctx(m.est),
@@ -567,7 +670,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
           agendamento: id,
           sala: m.sala,
           data: amanha(),
-          hora: '2000',
+          hora: '20:00',
           justificativa: 'Mesmo horário',
           excecao: null,
           lido,
@@ -582,15 +685,15 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
       );
     });
     // 21:00 começa depois do fim (21:00) mas dentro do preparo de 45 min da sala.
-    await expect(agendar('2100')).rejects.toThrow(/sala-ocupada/);
-    await expect(agendar('2200', { duracaoMin: 20 })).rejects.toThrow(/duracao-abaixo-do-minimo/);
+    await expect(agendar('21:00')).rejects.toThrow(/sala-ocupada/);
+    await expect(agendar('22:00', { duracaoMin: 20 })).rejects.toThrow(/duracao-abaixo-do-minimo/);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-01' }, async (e) => {
       await e.inserir(
         "INSERT INTO sala_cirurgica_procedimento (sala_cirurgica_id, procedimento_cirurgico_id, regra, criado_em) VALUES (?, ?, 'vedado', ?)",
         [m.sala, m.procedimento, new Date()],
       );
     });
-    await expect(agendar('2300')).rejects.toThrow(/procedimento-vedado-na-sala/);
+    await expect(agendar('23:00')).rejects.toThrow(/procedimento-vedado-na-sala/);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-01' }, (e) =>
       limpar(e, [m.est, m.outro]),
     );
@@ -598,8 +701,8 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
 
   it('duas marcações concorrentes na mesma sala e horário: uma grava, a outra recusa (sala travada)', async () => {
     const r = await Promise.allSettled([
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('0700'), op(m.est)),
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('0700'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('07:00'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('07:00'), op(m.est)),
     ]);
     expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
     const recusada = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;

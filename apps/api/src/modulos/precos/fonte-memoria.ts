@@ -1069,7 +1069,7 @@ export class FontePrecosMemoria implements FontePrecos {
     }
   }
 
-  /** Para os testes: um lançamento de conta do item (FCLANEXT) na vigência. */
+  /** Para os testes: um lançamento do item na conta hospitalar, na vigência. */
   readonly usadosEmConta = new Set<string>();
 
   private desfazer(e: Record<string, unknown>, ctx: ContextoGravacaoPreco): ResultadoOperacao {

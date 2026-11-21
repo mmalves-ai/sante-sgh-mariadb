@@ -42,12 +42,12 @@ describe('resolverRegra', () => {
   });
 
   it('sem regra que valha: null com os motivos de cada uma', () => {
-    const r = resolverRegra(item({ tipoConta: 'E', hora: '2300' }), [
+    const r = resolverRegra(item({ tipoConta: 'E', hora: '23:00' }), [
       regra({ id: 1, profissional: 99 }),
       regra({ id: 2, procedimentoInicial: 20000000 }),
       regra({ id: 3, convenio: 400 }),
       regra({ id: 4, tipoConta: 'I' }),
-      regra({ id: 5, horaInicial: '0700', horaFinal: '1900' }),
+      regra({ id: 5, horaInicial: '07:00', horaFinal: '19:00' }),
     ]);
     expect(r.regra).toBeNull();
     expect(r.dimensoes).toEqual([]);

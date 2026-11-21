@@ -5,12 +5,12 @@ import { z } from 'zod';
 import { esquemaCodigoEstabelecimento } from '../sessao.js';
 import { problemasCp1252, textoCp1252 } from '../texto-cp1252.js';
 
-/** Tamanho de TBUSERS.NOME (VARCHAR(31)). */
+/** Tamanho máximo do login (31 caracteres). */
 export const TAMANHO_LOGIN = 31;
-/** Tamanho de TBUSERS.SENHA (VARCHAR(100)). */
+/** Tamanho máximo da senha digitada (100 caracteres). */
 export const TAMANHO_SENHA = 100;
 
-/** Login exato do legado (TBUSERS.NOME): sem espaço nas pontas, maiúsculas contam. */
+/** Login exato do cadastro de usuários: sem espaço nas pontas, maiúsculas contam. */
 export const esquemaLogin = textoCp1252(TAMANHO_LOGIN)
   .refine((l) => l.length > 0 && l.trim() === l, {
     message: 'Informe o login sem espaços nas pontas.',

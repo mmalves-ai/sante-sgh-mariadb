@@ -89,7 +89,9 @@ ALTER TABLE regra_visita
   });
 
   it('recusa nome de tabela fora do padrão de identificador', () => {
-    expect(() => privilegiosDoPapel([{ tabela: 'tb"; DROP', exclusaoLogica: false }])).toThrow(/nome inválido/);
+    expect(() => privilegiosDoPapel([{ tabela: 'tb"; DROP', exclusaoLogica: false }])).toThrow(
+      /nome inválido/,
+    );
   });
 
   it('o anexo só cria o papel, concede e retira (convergente); a conferência acusa a tabela nova e o papel ausente', () => {
@@ -100,14 +102,19 @@ ALTER TABLE regra_visita
       .filter((l) => l.trim() && !l.startsWith('--'))
       .join('\n');
     expect(comandos).not.toMatch(/\b(ALTER|DROP|CREATE TABLE|DELETE FROM|UPDATE \w+ SET|INSERT INTO)\b/i);
-    expect(comandos.split('\n').every((l) => /^(CREATE ROLE IF NOT EXISTS|GRANT|REVOKE) /.test(l))).toBe(true);
+    expect(comandos.split('\n').every((l) => /^(CREATE ROLE IF NOT EXISTS|GRANT|REVOKE) /.test(l))).toBe(
+      true,
+    );
     // Cada REVOKE vem logo depois do GRANT da mesma tabela (o REVOKE nunca falha por falta de concessão).
     const linhas = comandos.split('\n');
     linhas.forEach((l, i) => {
-      if (l.startsWith('REVOKE')) expect(linhas[i - 1]).toMatch(new RegExp(`^GRANT .* ON ${l.split(' ON ')[1]!.split(' ')[0]} TO`));
+      if (l.startsWith('REVOKE'))
+        expect(linhas[i - 1]).toMatch(new RegExp(`^GRANT .* ON ${l.split(' ON ')[1]!.split(' ')[0]} TO`));
     });
     expect(sql).toContain(COMANDO_PAPEL);
-    expect(conferirAnexoPrivilegios(sql.replace(`REVOKE DELETE ON paciente FROM ${PAPEL};`, ''), itens)).toEqual(['paciente']);
+    expect(
+      conferirAnexoPrivilegios(sql.replace(`REVOKE DELETE ON paciente FROM ${PAPEL};`, ''), itens),
+    ).toEqual(['paciente']);
     expect(conferirAnexoPrivilegios(sql, itens)).toEqual([]);
     const mais = privilegiosDoPapel([...tabelasDoDdl(DDL), { tabela: 'nova', exclusaoLogica: false }]);
     expect(conferirAnexoPrivilegios(sql, mais)).toEqual(['nova']);
@@ -131,10 +138,14 @@ ALTER TABLE regra_visita
     const p = privilegiosDoRepositorio(raiz);
     const fontes = lerFontes([resolve(raiz, 'apps'), resolve(raiz, 'packages')]);
     const apagadas = new Set(
-      fontes.flatMap((f) => [...f.matchAll(/\.excluir\(\s*['"`]([a-z][a-z0-9_]*)['"`]\s*,/g)].map((m) => m[1]!)),
+      fontes.flatMap((f) =>
+        [...f.matchAll(/\.excluir\(\s*['"`]([a-z][a-z0-9_]*)['"`]\s*,/g)].map((m) => m[1]!),
+      ),
     );
     expect(apagadas.size).toBeGreaterThan(0);
-    const semDelete = [...apagadas].filter((t) => !p.cliente.find((i) => i.tabela === t)?.acoes.includes('DELETE'));
+    const semDelete = [...apagadas].filter(
+      (t) => !p.cliente.find((i) => i.tabela === t)?.acoes.includes('DELETE'),
+    );
     expect(semDelete).toEqual([]);
     for (const banco of ['cliente', 'plataforma'] as const) {
       const anexo = resolve(raiz, ANEXOS_PRIVILEGIOS[banco]);
@@ -146,7 +157,12 @@ ALTER TABLE regra_visita
   it('o banco da plataforma tem o seu anexo: clientes, credencial e fila do conector; a linha do tempo só de acréscimo', () => {
     const p = privilegiosDoRepositorio(raiz).plataforma;
     expect(p.map((i) => i.tabela)).toEqual(
-      expect.arrayContaining(['cliente', 'administrador_plataforma', 'credencial_administrador_plataforma', 'conector_execucao']),
+      expect.arrayContaining([
+        'cliente',
+        'administrador_plataforma',
+        'credencial_administrador_plataforma',
+        'conector_execucao',
+      ]),
     );
     expect(p.find((i) => i.tabela === 'cliente_evento')?.acoes).toEqual(['SELECT', 'INSERT']);
     expect(anexoDePrivilegios(p, 'plataforma')).toContain('banco da PLATAFORMA');

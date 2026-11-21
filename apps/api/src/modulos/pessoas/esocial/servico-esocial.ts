@@ -251,7 +251,7 @@ export const vigenciaNa = (vs: readonly EmpregadorEsocialLido[], empresa: number
     .filter((v) => v.empresa === empresa && v.inicio <= competencia)
     .sort((a, b) => b.inicio.localeCompare(a.inicio))[0] ?? null;
 
-/** AAAAMMDDHHMMSS do relógio do banco (o identificador do evento). */
+/** Data e hora do banco em 14 dígitos (ano, mês, dia, hora, minuto, segundo): o leiaute do Id do evento. */
 const instanteEsocial = (agora: string) => agora.replace(/\D/g, '').padEnd(14, '0').slice(0, 14);
 const pad5 = (n: number) => (n % 99_999) + 1;
 

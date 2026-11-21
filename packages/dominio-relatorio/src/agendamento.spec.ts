@@ -15,19 +15,19 @@ describe('envio agendado (regra 5)', () => {
   it('diário: hoje se ainda não passou, senão amanhã', () => {
     expect(
       proximoEnvio(
-        { periodicidade: 'diaria', hora: 700, diaSemana: null, diaMes: null },
+        { periodicidade: 'diaria', hora: '07:00', diaSemana: null, diaMes: null },
         T('2026-10-22T06:00:00'),
       ),
     ).toEqual(T('2026-10-22T07:00:00'));
     expect(
       proximoEnvio(
-        { periodicidade: 'diaria', hora: 700, diaSemana: null, diaMes: null },
+        { periodicidade: 'diaria', hora: '07:00', diaSemana: null, diaMes: null },
         T('2026-10-22T07:00:00'),
       ),
     ).toEqual(T('2026-10-23T07:00:00'));
     expect(() =>
       proximoEnvio(
-        { periodicidade: 'diaria', hora: 2460, diaSemana: null, diaMes: null },
+        { periodicidade: 'diaria', hora: '24:60', diaSemana: null, diaMes: null },
         T('2026-10-22T06:00:00'),
       ),
     ).toThrow();
@@ -36,25 +36,25 @@ describe('envio agendado (regra 5)', () => {
     // 2026-10-22 é quinta-feira.
     expect(
       proximoEnvio(
-        { periodicidade: 'semanal', hora: 800, diaSemana: 1, diaMes: null },
+        { periodicidade: 'semanal', hora: '08:00', diaSemana: 1, diaMes: null },
         T('2026-10-22T10:00:00'),
       ),
     ).toEqual(T('2026-10-26T08:00:00'));
     expect(
       proximoEnvio(
-        { periodicidade: 'semanal', hora: 1100, diaSemana: 4, diaMes: null },
+        { periodicidade: 'semanal', hora: '11:00', diaSemana: 4, diaMes: null },
         T('2026-10-22T10:00:00'),
       ),
     ).toEqual(T('2026-10-22T11:00:00'));
     expect(
       proximoEnvio(
-        { periodicidade: 'semanal', hora: 900, diaSemana: 4, diaMes: null },
+        { periodicidade: 'semanal', hora: '09:00', diaSemana: 4, diaMes: null },
         T('2026-10-22T10:00:00'),
       ),
     ).toEqual(T('2026-10-29T09:00:00'));
     expect(() =>
       proximoEnvio(
-        { periodicidade: 'semanal', hora: 800, diaSemana: null, diaMes: null },
+        { periodicidade: 'semanal', hora: '08:00', diaSemana: null, diaMes: null },
         T('2026-10-22T10:00:00'),
       ),
     ).toThrow();
@@ -62,19 +62,19 @@ describe('envio agendado (regra 5)', () => {
   it('mensal: o dia do mês (1 a 28) deste mês ou do seguinte', () => {
     expect(
       proximoEnvio(
-        { periodicidade: 'mensal', hora: 600, diaSemana: null, diaMes: 5 },
+        { periodicidade: 'mensal', hora: '06:00', diaSemana: null, diaMes: 5 },
         T('2026-10-22T10:00:00'),
       ),
     ).toEqual(T('2026-11-05T06:00:00'));
     expect(
       proximoEnvio(
-        { periodicidade: 'mensal', hora: 600, diaSemana: null, diaMes: 25 },
+        { periodicidade: 'mensal', hora: '06:00', diaSemana: null, diaMes: 25 },
         T('2026-10-22T10:00:00'),
       ),
     ).toEqual(T('2026-10-25T06:00:00'));
     expect(() =>
       proximoEnvio(
-        { periodicidade: 'mensal', hora: 600, diaSemana: null, diaMes: 31 },
+        { periodicidade: 'mensal', hora: '06:00', diaSemana: null, diaMes: 31 },
         T('2026-10-22T10:00:00'),
       ),
     ).toThrow();

@@ -1,7 +1,7 @@
 // Alergias e reações adversas (ficha do M23, regra 4; cap-05b §5.6): por agente, reação, gravidade e origem da
 // informação (CBARA); "nega alergias" é registro explícito; a alergia ativa vale para o cabeçalho e é exposta à
 // prescrição (M24); a superada fica no histórico (nada se apaga). No banco do estabelecimento a alergia nasce DENTRO
-// de um registro clínico (PRALERGIAPAC.ID_PRCABEVOL, só agente, observação e a marca de retirada); reação,
+// de um registro clínico (a alergia aponta o registro clínico, só agente, observação e a marca de retirada); reação,
 // gravidade, origem e o "nega alergias" ficam no novo (o legado não tem a coluna nem um agente de negação).
 import { sha256Hex } from '@sgh/contratos';
 import type { GravidadeAlergia, OrigemAlergia, SituacaoAlergias } from '@sgh/contratos';

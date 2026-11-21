@@ -117,7 +117,7 @@ export class HigienizacaoController {
 
   /**
    * Quem só executa (sem liberar nem supervisionar) age em nome do profissional ligado ao próprio login
-   * (CHPROFISLIMP.USUARIO_SISTEMA): o número dele; null para o supervisor, que escolhe o profissional. Sem ligação, 403.
+   * (profissional da higienização com o usuário do sistema): o número dele; null para o supervisor, que escolhe o profissional. Sem ligação, 403.
    */
   private async profissionalDoExecutor(s: SessaoCadastro): Promise<number | null> {
     if (s.pode('hotelaria.limpeza.liberar')) return null;

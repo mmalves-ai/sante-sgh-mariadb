@@ -7,7 +7,7 @@ services:
     container_name: sante-sgh-oracle
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${ORACLE_PORTA:-1521}:1521"
+      - '127.0.0.1:${ORACLE_PORTA:-1521}:1521'
     environment:
       ORACLE_PASSWORD: ${ORACLE_SENHA}
     volumes:
@@ -15,7 +15,7 @@ services:
       - ./dump:/opt/oracle/dump
     shm_size: 1g
     healthcheck:
-      test: ["CMD", "healthcheck.sh"]
+      test: ['CMD', 'healthcheck.sh']
       interval: 15s
       timeout: 10s
       retries: 40
@@ -25,15 +25,20 @@ services:
     container_name: sante-sgh-mariadb
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${MARIADB_PORTA:-3410}:3306"
+      - '127.0.0.1:${MARIADB_PORTA:-3410}:3306'
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_SENHA}
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_uca1400_ai_ci", "--default-time-zone=+00:00"]
+    command:
+      [
+        '--character-set-server=utf8mb4',
+        '--collation-server=utf8mb4_uca1400_ai_ci',
+        '--default-time-zone=+00:00',
+      ]
     volumes:
       - sante-sgh-mariadb-data:/var/lib/mysql
       - ./db:/db:ro
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
       interval: 10s
       timeout: 5s
       retries: 30

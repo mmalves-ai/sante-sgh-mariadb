@@ -1,4 +1,4 @@
-// Tempo do movimento (M16): o legado guarda a data sem fuso e a hora como texto "HHMM". O motor trabalha com o
+// Tempo do movimento (M16): a data de calendário sem fuso e a hora "HH:MM" do estabelecimento. O motor trabalha com o
 // relógio de parede do estabelecimento codificado em milissegundos "como se fosse UTC" (Date.UTC dos campos), o
 // que torna dia, mês e hora aritmética simples, sem horário de verão (o processo roda em TZ=UTC; codec.ts).
 
@@ -6,18 +6,16 @@ export const MINUTO = 60_000;
 export const HORA = 60 * MINUTO;
 export const DIA = 24 * HORA;
 
-/** "HHMM" (ou "HH:MM") → minutos do dia; vazio ou inválido → 0 (meia-noite, como o legado lê). */
+/** Hora "HH:MM" → minutos do dia; sem hora (null ou vazio) vale a meia-noite da data. Formato inválido é recusado. */
 export function minutosDaHora(hora: string | null | undefined): number {
-  const t = (hora ?? '').replace(':', '').trim();
-  if (!/^\d{3,4}$/.test(t)) return 0;
-  const n = t.padStart(4, '0');
-  const h = Number(n.slice(0, 2));
-  const m = Number(n.slice(2, 4));
-  if (h > 23 || m > 59) return 0;
-  return h * 60 + m;
+  const t = (hora ?? '').trim();
+  if (t === '') return 0;
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t);
+  if (!m) throw new RangeError(`hora.formato: "${t}" não é uma hora HH:MM.`);
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
-/** Data de calendário (meia-noite UTC) + hora "HHMM" → instante do relógio de parede (ms). */
+/** Data de calendário (meia-noite UTC) + hora "HH:MM" → instante do relógio de parede (ms). */
 export function instante(data: Date, hora: string | null | undefined): number {
   return (
     Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate()) + minutosDaHora(hora) * MINUTO

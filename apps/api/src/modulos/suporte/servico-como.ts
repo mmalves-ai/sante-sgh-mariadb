@@ -193,7 +193,7 @@ export class ServicoComo {
 
   /**
    * Abre a sessão "como". Ordem: (1) conta, função, atribuição e rede; (2) a conta-alvo pela MESMA regra do
-   * modal (existe, ativa, não bloqueada, de grupo ativo do TBGRUUSU), e o login fora dela é recusado sem
+   * modal (existe, ativa, não bloqueada, de grupo de usuários ativo), e o login fora dela é recusado sem
    * sessão de suporte nem aviso (a tentativa vai só à auditoria das contas); (3) a sessão de suporte
    * (sessao_suporte); (4) a sessão do alvo; (5) o aviso ao Auditor, com a carga completa (outbox ou fila).
    * Sem o aviso registrado, a sessão do alvo é desfeita (falha fechada).
@@ -702,7 +702,7 @@ export class ServicoComo {
     }
   }
 
-  /** R3: a TBCABTRILHA da janela da sessão, com o autor real. */
+  /** R3: a trilha de auditoria da janela da sessão, com o autor real. */
   async cruzamento(c: ContaComAtribuicoes, idSessao: string): Promise<CruzamentoTrilhaTela[]> {
     const s = await this.tentar(() => this.repo.sessaoComo(idSessao));
     if (!s) throw new ErroPlataforma('nao-encontrado', 'Sessão não encontrada.');

@@ -1,19 +1,19 @@
 // Contratos da tela "Perfis e permissões" (ADR 0022; docs/modulos/acesso.md › Perfis e permissões): ver as
-// permissões efetivas de um usuário do SPDATA com a origem de cada uma, conceder e revogar perfis do Sante SGH
+// permissões efetivas de um usuário com a origem de cada uma, conceder e revogar perfis do Sante SGH
 // (SGH_ACESSO_PERFIL_USUARIO), decidir o mapa grupo → perfil e perfil → permissão (SGH_ACESSO_MAPA_OPCAO) e
-// administrar as permissões do PRÓPRIO legado pelas receitas do executor do M04 (TBPERUSU, TBPAPEL_TBOPCOES,
-// TBUSERS_TBPAPEL, TBUSERS.GRUPO, TBGRUUSU), gravadas exatamente como o SPDATA grava. Nada aqui leva senha
+// administrar as permissões da conta pelas operações do executor do M04 (permissões do grupo e do papel, papéis do
+// usuário, grupo do usuário e cadastro de grupos). Nada aqui leva senha
 // guardada, hash nem dado de pessoa além do login e do nome de exibição.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaLogin, esquemaSenhaDigitada } from './entrada.js';
 
-/** TBGRUUSU.NOME (VARCHAR(50)): exato, sem espaço nas pontas (o legado tem nome com espaço no meio). */
+/** Nome do grupo (até 50 caracteres): exato, sem espaço nas pontas (há nomes com espaço no meio). */
 export const esquemaNomeGrupo = textoCp1252(50).refine((g) => g.length > 0 && g.trim() === g, {
   message: 'Informe o nome do grupo sem espaços nas pontas.',
 });
 
-/** TBPAPEL.COD_PAPEL: 0 Gestor de acessos, 1 Administrador, 2 Auditor, 3 Operador de backup, 4 Operador. */
+/** Código do papel de segurança: 0 Gestor de acessos, 1 Administrador, 2 Auditor, 3 Operador de backup, 4 Operador. */
 export const CODIGOS_PAPEL = [0, 1, 2, 3, 4] as const;
 export const esquemaCodigoPapel = z.literal(CODIGOS_PAPEL);
 
@@ -25,10 +25,10 @@ const esquemaOpcoes = z
 
 // ── Entradas das receitas do legado (executor do M04) ────────────────────────────────────────────
 // Uma receita por tabela e ação (a referência de perfil do M03 compara um passo por operação): conceder é
-// INSERT, revogar é DELETE nas tabelas de opções (sem gatilho, como o SPDATA), e UPDATE de ATIVO nas de papel
+// INSERT, revogar é DELETE nas tabelas de opções (sem gatilho, como no sistema de origem), e UPDATE de ATIVO nas de papel
 // e de grupo (a trilha do legado referencia a linha do papel; o grupo tem FK de usuários e permissões).
 
-/** acesso.concederOpcoesGrupo / acesso.revogarOpcoesGrupo: TBPERUSU (GRUPO, ID_TBOPCOES). */
+/** acesso.concederOpcoesGrupo / acesso.revogarOpcoesGrupo: permissões do grupo (grupo e opção). */
 /**
  * M37 (condução opcional de um setor, regra 6): com `conducao`, a retirada grava cada par em SGH_CFG_COEX_CONDUCAO
  * (estado anterior, lote, autorização) e a concessão marca o par retirado como devolvido, NA MESMA transação.
@@ -48,33 +48,33 @@ export const esquemaOpcoesGrupo = z
   .strict();
 export type OpcoesGrupoEntrada = z.infer<typeof esquemaOpcoesGrupo>;
 
-/** acesso.concederOpcoesPapel / acesso.revogarOpcoesPapel: TBPAPEL_TBOPCOES (pelo COD_PAPEL). */
+/** acesso.concederOpcoesPapel / acesso.revogarOpcoesPapel: permissões do papel de segurança (pelo código do papel). */
 export const esquemaOpcoesPapel = z.object({ papel: esquemaCodigoPapel, opcoes: esquemaOpcoes }).strict();
 export type OpcoesPapelEntrada = z.infer<typeof esquemaOpcoesPapel>;
 
-/** acesso.concederPapelUsuario: TBUSERS_TBPAPEL nova (o par nunca existiu; o inativo é reativado). */
+/** acesso.concederPapelUsuario: papel do usuário novo (o par nunca existiu; o inativo é reativado). */
 export const esquemaConcederPapelUsuario = z
   .object({ login: esquemaLogin, papel: esquemaCodigoPapel, idCbo: z.number().int().positive().optional() })
   .strict();
 export type ConcederPapelUsuarioEntrada = z.infer<typeof esquemaConcederPapelUsuario>;
 
-/** acesso.revogarPapelUsuario / acesso.reativarPapelUsuario: TBUSERS_TBPAPEL.ATIVO (nunca DELETE). */
+/** acesso.revogarPapelUsuario / acesso.reativarPapelUsuario: situação do papel do usuário (nunca apaga). */
 export const esquemaPapelUsuario = z.object({ login: esquemaLogin, papel: esquemaCodigoPapel }).strict();
 export type PapelUsuarioEntrada = z.infer<typeof esquemaPapelUsuario>;
 
-/** acesso.trocarGrupoUsuario: TBUSERS.GRUPO (só para grupo ativo do TBGRUUSU). */
+/** acesso.trocarGrupoUsuario: grupo do usuário (só para grupo ativo). */
 export const esquemaTrocarGrupoUsuario = z.object({ login: esquemaLogin, grupo: esquemaNomeGrupo }).strict();
 export type TrocarGrupoUsuarioEntrada = z.infer<typeof esquemaTrocarGrupoUsuario>;
 
-/** acesso.criarGrupo: TBGRUUSU (NOME, ATIVO = 'T'), sem opções (concedidas depois). */
+/** acesso.criarGrupo: grupo novo (nome, ativo), sem opções (concedidas depois). */
 export const esquemaCriarGrupo = z.object({ nome: esquemaNomeGrupo }).strict();
 export type CriarGrupoEntrada = z.infer<typeof esquemaCriarGrupo>;
 
-/** acesso.desativarGrupo / acesso.reativarGrupo: TBGRUUSU.ATIVO (o TRG_TBGRUUSU_BU recusa com usuário ativo). */
+/** acesso.desativarGrupo / acesso.reativarGrupo: situação do grupo (recusado com usuário ativo no grupo). */
 export const esquemaGrupo = z.object({ nome: esquemaNomeGrupo }).strict();
 export type GrupoEntrada = z.infer<typeof esquemaGrupo>;
 
-/** W1-01: acesso.renomearGrupo — TBGRUUSU.NOME (a chave) só sem dependente nenhum (D-W101-18). */
+/** W1-01: acesso.renomearGrupo — o nome do grupo (a chave) só sem dependente nenhum (D-W101-18). */
 export const esquemaRenomearGrupo = z
   .object({ nome: esquemaNomeGrupo, novoNome: esquemaNomeGrupo })
   .strict()
@@ -109,7 +109,7 @@ export type DescreverGrupo = z.infer<typeof esquemaDescreverGrupo>;
 
 /**
  * W1-01 (parte 5): publicar a versão nova da política de senha do Sante (SGH_ACESSO_POLITICA_SENHA), que só aperta
- * TBCFGLOGIN. Com reautenticação e motivo; vigência agora ou no futuro (ISO); a publicada não se edita.
+ * configuração de login do estabelecimento. Com reautenticação e motivo; vigência agora ou no futuro (ISO); a publicada não se edita.
  */
 export const esquemaPublicarPoliticaSenha = z
   .object({
@@ -197,7 +197,7 @@ export interface VersaoPoliticaSenhaTela {
   readonly motivoCancelamento: string | null;
 }
 
-/** W1-01 (parte 5): a tela da política: TBCFGLOGIN (só leitura aqui), o mínimo do novo e as versões do Sante. */
+/** W1-01 (parte 5): a tela da política: a configuração de login (só leitura aqui), o mínimo do novo e as versões do Sante. */
 export interface PoliticaSenhaGestaoTela {
   readonly legado: {
     readonly minimoCaracteres: number | null;

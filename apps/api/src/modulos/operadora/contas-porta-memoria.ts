@@ -6,6 +6,7 @@
 // versão vista e situação de partida, item de outro lote, um recurso por guia) e a transação desfeita por inteiro quando
 // a função falha. Nada vai ao banco. A trilha da memória é registrada pela API (como na rede).
 import { CRITICAS_CONTA, type MotivoGlosaLido } from '@sgh/contratos';
+import { problemasDoParecerDoRecurso, rateioDoAcatado, situacaoDoRecurso } from '@sgh/dominio-operadora';
 import { ErroOperacao } from '@sgh/nucleo';
 import { type DadosAuditor, type DadosAutorizacaoDaSenha, type DadosConta, type DadosContaResumo, type DadosEventoConta, type DadosGuiaConta, type DadosItemConta, type DadosRecursoItem, type FiltroContasPorta, type FiltroPagamentosPorta, LIMITE_PAGINA_CONTAS, type SituacaoContaPorta } from './dados-portas.js';
 import type { ContextoContas, GravadorContas, PortaContasOperadora } from './contas-porta.js';
@@ -560,6 +561,29 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
             'recurso-do-proprio-auditor',
             'Quem registrou o recurso de glosa não o decide: outro auditor designado da operadora decide.',
           );
+        if (problemasDoParecerDoRecurso(x.situacaoRecurso, x.parecer).length > 0)
+          throw recusa('parecer-obrigatorio', 'Informe o parecer do recurso mantido ou acatado em parte.');
+        // As mesmas regras da porta própria (domínio): a decisão pela guia vale para cada linha ainda pendente do
+        // recurso por item, repartida pelo peso do recorrido.
+        const linhasPendentes = e.recursosItens.filter(
+          (r) => r.hospital === h && r.conta === x.id && r.guia === x.guia && !r.decisao,
+        );
+        const partes = rateioDoAcatado(
+          linhasPendentes.map((r) => r.valor),
+          x.situacaoRecurso,
+          x.valorAcatado,
+        );
+        linhasPendentes.forEach((r, i) =>
+          Object.assign(r, {
+            decisao: {
+              decisao: x.situacaoRecurso,
+              valorAcatado: partes[i] ?? 0,
+              parecer: x.parecer,
+              em: agora(),
+              por: x.usuario,
+            },
+          }),
+        );
         g.recurso = {
           ...g.recurso,
           situacao: x.situacaoRecurso,
@@ -652,8 +676,9 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
               'recurso-item-incoerente',
               'O valor acatado do item vai de zero até o valor recorrido.',
             );
-          const decisao: 'acatado' | 'parcial' | 'mantido' =
-            c2(d.valorAcatado) <= 0 ? 'mantido' : c2(d.valorAcatado) >= c2(r.valor) ? 'acatado' : 'parcial';
+          const decisao = situacaoDoRecurso(r.valor, d.valorAcatado) as 'acatado' | 'parcial' | 'mantido';
+          if (problemasDoParecerDoRecurso(decisao, d.parecer).length > 0)
+            throw recusa('parecer-obrigatorio', 'Informe o parecer do item mantido ou acatado em parte.');
           return { r, d, decisao };
         });
         const valorAcatado = r2(linhas.reduce((t, l) => t + c2(l.d.valorAcatado), 0));

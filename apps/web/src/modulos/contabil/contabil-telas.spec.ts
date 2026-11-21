@@ -204,7 +204,7 @@ const SIMULACAO: SimulacaoRegra = {
   parcial: false,
   porSituacao: { pendente: 0, contabilizado: 2, semRegra: 0, semConta: 1, substituido: 0, ignorado: 0 },
   lancamentos: [],
-  recusas: [{ fato: 'MFCONPAG:9', situacao: 'semConta', motivo: 'A tabela de integração não tem a conta.' }],
+  recusas: [{ fato: 'titulo_pagar:9', situacao: 'semConta', motivo: 'A tabela de integração não tem a conta.' }],
   totais: {
     debitos: 15000,
     creditos: 15000,
@@ -567,7 +567,7 @@ describe('tela dos lançamentos automáticos (aba Fatos)', () => {
   const RESUMO: ResumoFatosContabeis = {
     fontes: [
       {
-        fonte: 'MFCONPAG',
+        fonte: 'titulo_pagar',
         tipos: ['Título a pagar', 'Pagamento de título'],
         marca: 1200,
         ultimaLeitura: '2026-10-28T03:00:00Z',
@@ -589,7 +589,7 @@ describe('tela dos lançamentos automáticos (aba Fatos)', () => {
   };
   const fato = (id: number, extra: Partial<FatoListado> = {}): FatoListado => ({
     id,
-    fonte: 'MFCONPAG',
+    fonte: 'titulo_pagar',
     tipo: 'tituloPagar',
     tipoRotulo: 'Título a pagar',
     origem: 1,
@@ -635,9 +635,9 @@ describe('tela dos lançamentos automáticos (aba Fatos)', () => {
     rotaFatos();
     const w = montar(FatosContabeisTela);
     await flushPromises();
-    const linha = w.find('[data-testid="resumo-fonte-MFCONPAG"]').text();
+    const linha = w.find('[data-testid="resumo-fonte-titulo_pagar"]').text();
     expect(linha).toContain('Contas a pagar');
-    expect(linha).not.toContain('MFCONPAG');
+    expect(linha).not.toContain('titulo_pagar');
     expect(w.find('[data-testid="resumo-fonte-SGH_PES_FOLHA_FATO"]').text()).toContain('Ainda não lida');
     expect(w.find('[data-testid="resumo-total"]').text()).toContain(
       'Total: 12 fatos (Contabilizado 8 + Regra sem conta',

@@ -92,7 +92,7 @@ describe('regra 18: a vacina aplicada e o envio RIA', () => {
     expect(ex.cortada).toBe(false);
     expect(ex.itens.map((x) => x.atendimento)).toContain(CONSULTA_ENFERMAGEM_SINTETICA);
     const lida = a.trilha.eventos.filter(
-      (l) => l.evento === 'enfermagem.vacina.lida' && l.tabelaAlvo === 'ATCABECATEND',
+      (l) => l.evento === 'enfermagem.vacina.lida' && l.tabelaAlvo === 'atendimento',
     );
     expect(lida).toHaveLength(1);
     expect(lida[0]?.chaveNaturalAlvo).toMatch(/^dia:\d{4}-\d{2}-\d{2};n:2$/);

@@ -47,7 +47,7 @@ export const esquemaLocalRecepcao = z.object({
   cod: n,
   descricao: txt,
   ativo: z.boolean(),
-  /** Locais para onde este local encaminha (TBLOCALENCATE). */
+  /** Locais para onde este local encaminha (destinos de encaminhamento do cadastro). */
   encaminha: z.array(n),
 });
 export type LocalRecepcao = z.infer<typeof esquemaLocalRecepcao>;

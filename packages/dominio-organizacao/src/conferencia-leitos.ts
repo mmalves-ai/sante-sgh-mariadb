@@ -1,6 +1,6 @@
 // Conferência dos dois modelos de leito (ficha do M10, regra 13; cap-06a §6.1, "Atenção"; cap-10 §10.2): o
-// cadastro que o novo grava (RIBLOCOS, RIACOMOD, RILEITOS) e o espelho que os triggers do legado mantêm
-// (TBACOMODLEITO, TBLEITO). O novo nunca grava o espelho; a conferência mostra, leito a leito pela chave
+// cadastro que o novo grava (blocos, acomodações e leitos) e o espelho que os triggers do legado mantêm
+// (acomodação × leito e leito). O novo nunca grava o espelho; a conferência mostra, leito a leito pela chave
 // textual bloco + acomodação + leito, onde os dois discordam, para a enfermagem e a hotelaria sanearem pela
 // tela de cadastro (vale para os dois sistemas). Leito do espelho de atendimento externo (TP_ATENDIMENTO 'E')
 // não tem par no cadastro de internação: é contado à parte, não é divergência.
@@ -10,7 +10,7 @@ export interface LeitoCadastro {
   readonly bloco: string;
   readonly acomodacao: string;
   readonly leito: string;
-  /** RILEITOS.STATUS = 'A' (ou vazio, que o legado trata como ativo). */
+  /** Situação do leito 'A' (ou vazio, que o legado trata como ativo). */
   readonly ativo: boolean;
   readonly ramal: number | null;
 }
@@ -19,7 +19,7 @@ export interface LeitoEspelho {
   readonly bloco: string | null;
   readonly acomodacao: string;
   readonly leito: string;
-  /** TBACOMODLEITO.TP_ATENDIMENTO: 'I' internação (espelho do RILEITOS) ou 'E' externo. */
+  /** Tipo de atendimento do espelho: 'I' internação (espelho do cadastro de leitos) ou 'E' externo. */
   readonly tipoAtendimento: 'I' | 'E';
   readonly ativo: boolean;
   readonly ramal: number | null;
@@ -155,7 +155,7 @@ export function conferirLeitos(
   };
 }
 
-/** RILEITOS.STATUS: 'A' ativo, 'I' inativo; vazio conta como ativo (como o trigger do espelho trata). */
+/** Situação do leito: 'A' ativo, 'I' inativo; vazio conta como ativo (como o trigger do espelho trata). */
 export function leitoAtivo(status: string | null | undefined): boolean {
   return (status ?? '').trim() !== 'I';
 }

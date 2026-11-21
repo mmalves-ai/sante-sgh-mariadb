@@ -28,7 +28,7 @@ export const ETAPAS_ENSAIO_UTF8 = [
   'conversao',
   /** Contagem por tabela e resumo por coluna de texto decodificada, antes e depois (passo 3). */
   'equivalencia',
-  /** Colunas que já guardam UTF-8 dentro de NONE (`PRCONTEVOL.EVOLUCAO_XML`): sem nova transliteração (passo 4). */
+  /** Colunas que já guardam UTF-8 dentro de NONE (como o XML da evolução clínica): sem nova transliteração (passo 4). */
   'utf8-catalogadas',
   /** BLOB RTF e os demais BLOBs mantidos em bytes; o RTF continua com `\ansicpg1252` e abre (passo 5). */
   'rtf',

@@ -1,4 +1,4 @@
-// Ficha anestésica (M46, regra 3): a montagem do que a tela recebe a partir da ficha lida (as SGH_CC_FA*): a descrição de
+// Ficha anestésica (M46, regra 3): a montagem do que a tela recebe a partir da ficha lida (a ficha_anestesica e os seus lançamentos): a descrição de
 // cada lançamento no vocabulário do novo, as lacunas da grade de 5 minutos com as justificativas, a linha de
 // responsabilidade, os totais de fluidos, os abertos (gás e infusão sem fim), os anestesistas da cirurgia e o que impede
 // a assinatura para quem está na sessão. Regras puras (a receita reconfere na transação o que vale).
@@ -147,7 +147,7 @@ export interface FichaMontada {
 
 /**
  * A ficha para a tela e para a conferência da receita. `agora` fecha a grade quando a anestesia ainda não terminou;
- * `sessao` são os registros profissionais (TBCBOPRO) de quem está na sessão.
+ * `sessao` são os registros profissionais de quem está na sessão.
  */
 export function montarFicha(
   f: FichaParaMontar,

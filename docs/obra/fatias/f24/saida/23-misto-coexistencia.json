@@ -1,0 +1,35 @@
+{
+ "lote": "23-misto-coexistencia",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "remessa e linhas do faturamento SUS (13_SUS: critica_sus, remessa_*, apac, conta_aih, faixa_numeracao_aih, retorno)",
+   "colunas": "o conjunto pedido em docs/obra/fatias/f22/saida/03-05.json e ainda não aplicado: crítica prévia por conta (alvo conta, regra, detalhe, justificativa); arquivo gerado (chave do objeto e versão) com as linhas do BPA, da APAC e da CIHA ligadas ao arquivo; ciclo da AIH (laudo, autorização, conta) e da APAC pela tela; faixa de AIH (órgão emissor, data de liberação, motivo do cancelamento); retorno do gestor por linha e o seu tratamento",
+   "motivo": "apps/api/src/modulos/sus/porta-propria.ts recusa 18 operações com modelo-pendente; não constam em ddl-aplicado.md. A porta será ligada no lote seguinte ao DDL."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "carga de tabela de preço (12_FAT): carga_tabela_preco + carga_tabela_preco_linha, ou decisão de reusar carga_catalogo/carga_catalogo_linha",
+   "colunas": "cabeçalho (tabela_preco_id, fonte, arquivo_id, hash, situacao com CHECK recebida/conferida/aplicada/rejeitada, vigencia_inicio, auditoria) e linhas (codigo_item, item_faturavel_id NULL, valor, divergencia, situacao)",
+   "motivo": "apps/api/src/modulos/precos/fonte-propria.ts recusa gravarCarga e mudarSituacaoCarga (linhas da carga) e os campos do contrato da fonte pagadora sem coluna (COLUNA_FONTE) com modelo-pendente."
+  },
+  {
+   "tipo": "codigo",
+   "arquivos": [
+    "apps/api/src/modulos/enfermagem/contencao.controller.ts",
+    "apps/api/src/modulos/enfermagem/sae.controller.ts",
+    "apps/api/src/modulos/enfermagem/escores.controller.ts"
+   ],
+   "pedido": "trocar `/^\\d{4}$/.test(v) ? v : '0700'` por `lerHoraDigitada` (aceita HH:MM) com padrão '07:00': o parâmetro enfermagem.inicioTurnoDiurno passou a HH:MM (padrão '07:00'); hoje um valor HH:MM gravado cai no padrão 07:00. minutosDoDia e horaDoCorte já leem as duas formas.",
+   "motivo": "lote 11-enfermagem-1 é dono desses arquivos"
+  },
+  {
+   "tipo": "codigo",
+   "arquivos": [
+    "apps/web/e2e (portal do paciente)"
+   ],
+   "pedido": "conferir os e2e do portal que digitam ou comparam hora de quatro dígitos: o contrato do portal agora exige HH:MM",
+   "motivo": "contrato packages/contratos/src/portal/agenda-online.ts"
+  }
+ ]
+}

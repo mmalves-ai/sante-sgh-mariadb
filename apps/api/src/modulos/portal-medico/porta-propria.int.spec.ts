@@ -9,10 +9,12 @@
 //     no banco; sem ela, a recusa explícita 409 modelo-pendente, nunca 'profissional-em-outra-conta');
 //   - a mesma bateria do vínculo vigente sobre a memória e o banco (describe.each);
 //   - o ato do hospital sobre a conta (bloqueio e desbloqueio) com a situação do modelo e o motivo na trilha;
-//   - a leitura auditada (trilha de consulta) e as operações sem modelo (409 modelo-pendente, nada lido vazio).
+//   - a leitura auditada (trilha de consulta); a troca do e-mail (pedido, novo pedido cancela o anterior, confirmação
+//     pelo resumo do código, link inválido) e a notificação do crítico (leitura por conta, aviso inexistente);
+//   - as operações ainda sem banco (409 com o código, nada lido vazio).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortalMedico, PortaPortalMedico, TrilhaPortalMedico } from './porta.js';
 import { PortaPortalMedicoMemoria } from './porta-memoria.js';
@@ -49,6 +51,11 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 
 async function limpar(e: Escritor): Promise<void> {
   const em = NOMES.map(() => '?').join(', ');
+  await e.executar(
+    `DELETE t FROM troca_email_conta_portal t JOIN conta_portal_profissional_externo cp
+        ON cp.id = t.conta_portal_profissional_externo_id WHERE cp.login IN (${LOGINS.map(() => '?').join(', ')})`,
+    LOGINS,
+  );
   await e.executar(
     `DELETE FROM conta_portal_profissional_externo WHERE login IN (${LOGINS.map(() => '?').join(', ')})`,
     LOGINS,
@@ -335,7 +342,7 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
     expect(l2!.situacao).toBe('ativa');
   });
 
-  it('a leitura auditada vai à trilha; as operações sem modelo recusam com 409 modelo-pendente', async () => {
+  it('a leitura auditada vai à trilha; as operações ainda sem banco recusam com 409', async () => {
     const ctx = c();
     await porta.registrarLeitura(
       ctx,
@@ -347,18 +354,79 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
     expect(tr.map((x) => x.acao)).toContain('consulta');
     const pend = { problema: { codigo: 'modelo-pendente' } };
     await expect(porta.atosConta()).rejects.toMatchObject(pend);
-    await expect(porta.trocaEmailPendente()).rejects.toMatchObject(pend);
-    await expect(porta.notificacoesCritico()).rejects.toMatchObject(pend);
+    await expect(
+      porta.gravar(c(), (g) => g.trocarSenha({ acesso: m.contas[0]!, senhaResumo: 'x', por: 'l0402' }), null),
+    ).rejects.toMatchObject({ problema: { status: 409, codigo: 'modelo-pendente' } });
+  });
+
+  it('a troca do e-mail: pedido, novo pedido cancela o anterior, confirmação e link inválido', async () => {
+    // Uma conta ativa da massa (as outras passam por bloqueio e encerramento nos testes anteriores).
+    const [ativa] = await ler<{ id: number }>(
+      `SELECT id FROM conta_portal_profissional_externo WHERE id IN (${m.contas.map(() => '?').join(', ')})
+          AND situacao = 'ativa' ORDER BY id LIMIT 1`,
+      [...m.contas],
+    );
+    const conta = Number(ativa!.id);
+    const resumo = (t: string) => createHash('sha256').update(t).digest('hex');
+    const pedir = (token: string, emailNovo: string, validoAte: Date) =>
+      porta.gravar(
+        c(),
+        (g) => g.pedirTrocaEmail({ acesso: conta, emailNovo, tokenResumo: resumo(token), validoAte, envio: 'halai' }),
+        null,
+      );
+    const amanha = new Date(Date.now() + 86_400_000);
+    const p1 = await pedir(`l0402-a-${randomUUID()}`, 'l0402.novo.a@exemplo.invalid', amanha);
+    const tokenB = `l0402-b-${randomUUID()}`;
+    const p2 = await pedir(tokenB, 'l0402.novo.b@exemplo.invalid', amanha);
+    const linhas = await ler<{ id: number; situacao: string; envio: string }>(
+      'SELECT id, situacao, envio FROM troca_email_conta_portal WHERE id IN (?, ?) ORDER BY id',
+      [p1.id, p2.id],
+    );
+    expect(linhas.map((x) => [x.situacao, x.envio])).toEqual([
+      ['cancelada', 'plataforma'],
+      ['pendente', 'plataforma'],
+    ]);
+    expect(await porta.trocaEmailPendente(c(), conta)).toMatchObject({
+      id: p2.id,
+      acesso: conta,
+      emailNovo: 'l0402.novo.b@exemplo.invalid',
+      envio: 'halai',
+      situacao: 'pendente',
+    });
+    await expect(
+      porta.gravar(c(), (g) => g.confirmarTrocaEmail({ tokenResumo: resumo('outro'), agora: new Date(), por: 'l0402' }), null),
+    ).rejects.toMatchObject({ problema: { codigo: 'link-invalido' } });
+    const ok = await porta.gravar(
+      c(),
+      (g) => g.confirmarTrocaEmail({ tokenResumo: resumo(tokenB), agora: new Date(), por: 'l0402' }),
+      null,
+    );
+    expect(ok).toEqual({ acesso: conta, emailNovo: 'l0402.novo.b@exemplo.invalid', id: p2.id });
+    const [cp] = await ler<{ email: string }>('SELECT email FROM conta_portal_profissional_externo WHERE id = ?', [conta]);
+    expect(cp?.email).toBe('l0402.novo.b@exemplo.invalid');
+    expect((await porta.trocaEmailPorToken(c(), resumo(tokenB)))?.situacao).toBe('confirmada');
+    expect(await porta.trocaEmailPendente(c(), conta)).toBeNull();
+    await expect(
+      porta.gravar(c(), (g) => g.cancelarTrocaEmail(p2.id), null),
+    ).rejects.toMatchObject({ problema: { codigo: 'troca-nao-pendente' } });
+  });
+
+  it('a notificação do crítico: leitura por conta e as recusas', async () => {
+    expect(await porta.notificacoesCritico(c(), m.contas[0]!)).toEqual([]);
     await expect(
       porta.gravar(
         c(),
-        (g) => g.notificarCritico({ aviso: 1, acesso: m.contas[0]!, envio: 'simulador', motivo: null }),
+        (g) => g.notificarCritico({ aviso: 1, acesso: m.contas[0]!, envio: 'desligado', motivo: null }),
         null,
       ),
-    ).rejects.toMatchObject(pend);
+    ).rejects.toMatchObject({ problema: { codigo: 'motivo-obrigatorio' } });
     await expect(
-      porta.gravar(c(), (g) => g.trocarSenha({ acesso: m.contas[0]!, senhaResumo: 'x', por: 'l0402' }), null),
-    ).rejects.toMatchObject(pend);
+      porta.gravar(
+        c(),
+        (g) => g.notificarCritico({ aviso: 2_000_000_000, acesso: m.contas[0]!, envio: 'simulador', motivo: null }),
+        null,
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'aviso-inexistente' } });
   });
 });
 

@@ -14,7 +14,7 @@ import {
   TETO_FAIXA,
 } from './ciclo.js';
 
-const T = 'MFCONPAG';
+const T = 'titulo_pagar';
 const titulo = (
   id: number,
   valor: number,
@@ -195,7 +195,7 @@ describe('ciclo da leitura dos fatos', () => {
       4,
     );
     expect(d).toBe(
-      'fonte=MFCONPAG;novos=2;acima=10;revisao=1-10;varredura=-;alterados=1;fatos=3;estornos=1;gravados=4;marca=12',
+      'fonte=titulo_pagar;novos=2;acima=10;revisao=1-10;varredura=-;alterados=1;fatos=3;estornos=1;gravados=4;marca=12',
     );
   });
 });

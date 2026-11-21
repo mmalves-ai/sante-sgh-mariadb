@@ -81,7 +81,7 @@ export function conferirInicioTransfusao(c: {
   readonly sinaisAntesEm: string | null;
   readonly bolsa: ConferenciaBolsa;
   readonly bolsaJaUsada: boolean;
-  /** Situação do horário no outro sistema (PRCHKGERAL), quando nasceu; null = o item não tem horário. */
+  /** Situação do horário de checagem da prescrição, quando nasceu; null = o item não tem horário. */
   readonly situacaoHorario: string | null;
 }): ConferenciaInicio {
   const b: BloqueioInicio[] = [];

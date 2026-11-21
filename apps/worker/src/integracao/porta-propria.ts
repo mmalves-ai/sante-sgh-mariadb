@@ -329,7 +329,7 @@ async function pontoDeSaida(tx: TxOperacao, est: number, p: Linha): Promise<{ po
     'SELECT id FROM padrao_troca WHERE familia = ? AND ativo ORDER BY id LIMIT 1',
     [familia],
   );
-  if (!padrao) throw recusa('modelo-pendente', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
+  if (!padrao) throw recusa('padrao-troca-ausente', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
   const ponto = await tx.incluir('ponto_integracao', {
     estabelecimento_id: est,
     codigo,

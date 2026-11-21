@@ -223,7 +223,7 @@ export type VincularLoginProfissionalEntrada = z.infer<typeof esquemaVincularLog
 
 // ── Login único por profissional (pergunta do dono, 18/11/2026: "por que tem 3 logins?") ────────────────
 // O login liga-se a UM registro (ocupação) do profissional, como o cadastro anterior (papel Operador de sistema,
-// TBUSERS_TBPAPEL.ID_TBCBOPRO; 679 logins medidos, cada um num registro). O profissional com o mesmo conselho em
+// profissional ligado ao papel do usuário; 679 logins medidos, cada um num registro). O profissional com o mesmo conselho em
 // várias ocupações (vários CBOs) continua com UM login: trocar a ocupação move a ligação; ligar um SEGUNDO login, a
 // outro registro do mesmo profissional, é recusado. A mesma regra no executor, na memória da API e na tela.
 

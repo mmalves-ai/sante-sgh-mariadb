@@ -191,8 +191,8 @@ export function regraDaProposta(id: number, p: ProporRegraRepasseEntrada): Regra
     cooperativa: null,
     tipoLancamento: p.tipoLancamento,
     tipoConta: p.tipoConta,
-    horaInicial: '0000',
-    horaFinal: '2359',
+    horaInicial: '00:00',
+    horaFinal: '23:59',
     percentual: p.percentual,
     valorFixo: p.valorFixo,
     percentualFeriado: p.percentualFeriado,
@@ -395,7 +395,7 @@ export class ServicoRepasse {
     const item: ItemProducao = {
       id: 0,
       data: e.data,
-      hora: '1000',
+      hora: '10:00',
       convenio: e.convenio,
       procedimento: e.procedimento,
       especialidade: null,
@@ -753,7 +753,7 @@ export class ServicoRepasse {
     };
   }
 
-  /** O registro (TBCBOPRO.ID) do médico pelo código do prestador. */
+  /** O id do profissional (médico) pelo código do prestador. */
   private registroDoPrestador(s: SessaoCadastro, prestador: number): Promise<number | null> {
     return this.porta.registroDoPrestador(ctx(s), prestador);
   }

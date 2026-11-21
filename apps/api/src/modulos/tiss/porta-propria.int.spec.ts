@@ -996,6 +996,72 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     ).toBe('operacao-pendente');
     expect(await porta.contasBancariasDoEscopo(c, 'l0316.teste')).toEqual([]);
   });
+
+  it('glosa: recorrer grava a evidência do prontuário, a leitura auditada a devolve e a lista só diz que existe; aceitar grava sem evidência', async () => {
+    const [recorrido, aceito] = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-evidencia' }, async (e) => {
+      const agora = new Date();
+      const item = (seq: number) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+             valor_unitario, valor_total, criado_em)
+           VALUES (?, ?, ?, ?, 1, 100, 100, ?)`,
+          [ids.conta, seq, ids.item, agora, agora],
+        );
+      const i8 = await item(8);
+      const i9 = await item(9);
+      const glosa = await e.inserir(
+        `INSERT INTO glosa (estabelecimento_id, numero, fonte_pagadora_id, procedencia, conta_hospitalar_id, data_glosa,
+           competencia, valor_apresentado, valor_glosado, data_limite_recurso, criado_em)
+         VALUES (?, ?, ?, 'digitacao', ?, ?, ?, 200, 80, ?, ?)`,
+        [ids.est, `${P}-G9`, ids.fonte, ids.conta, hoje, competencia, hoje, agora],
+      );
+      for (const [seq, it] of [
+        [1, i8],
+        [2, i9],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO glosa_item (glosa_id, sequencia, conta_hospitalar_item_id, motivo_glosa_id, quantidade_apresentada,
+             quantidade_glosada, valor_apresentado, valor_glosado, criado_em)
+           VALUES (?, ?, ?, ?, 1, 1, 100, 40, ?)`,
+          [glosa, seq, it, ids.motivo, agora],
+        );
+      return [i8, i9];
+    });
+    const trilhaDe = (x: { id: number }) => ({
+      ...base,
+      acao: 'alteracao' as const,
+      entidade: 'glosa_item',
+      entidadeId: x.id,
+      motivo: 'decisão da glosa com evidência (teste)',
+    });
+    const decidir = (item: number, decisao: 'recorrer' | 'aceitar') =>
+      porta.gravarSgh(c, trilhaDe, (g) =>
+        g.decidirGlosa({
+          item,
+          decisao,
+          texto: decisao === 'recorrer' ? 'procedimento registrado em evolução' : 'glosa procedente',
+          evidencia: '  Evolução sintética do dia 2 registra o procedimento  ',
+          usuario: 'x',
+          prazo: null,
+        }),
+      );
+    const r1 = await decidir(recorrido, 'recorrer');
+    const r2 = await decidir(aceito, 'aceitar');
+    const coluna = async (id: number) =>
+      (await lerUma('SELECT evidencia_prontuario AS e FROM glosa_item WHERE id = ?', [id]))?.['e'] ?? null;
+    expect(await coluna(r1.id)).toBe('Evolução sintética do dia 2 registra o procedimento');
+    expect(await coluna(r2.id)).toBeNull();
+    expect(await porta.evidenciaDoItem(c, recorrido)).toMatchObject({
+      item: recorrido,
+      evidencia: 'Evolução sintética do dia 2 registra o procedimento',
+    });
+    expect(await porta.evidenciaDoItem(c, aceito)).toBeNull();
+    const itens = await porta.itensDaConta(c, ids.conta, '');
+    expect(itens.find((x) => x.item === recorrido)?.decisao).toMatchObject({ temEvidencia: true });
+    expect(itens.find((x) => x.item === aceito)?.decisao).toMatchObject({ temEvidencia: false });
+    // A evidência é dado clínico: a lista não a carrega.
+    expect(JSON.stringify(itens)).not.toContain('Evolução sintética');
+  });
 });
 
 // A mesma bateria nas duas fábricas: entrada inválida recusa (400) e a lista de situações do protocolo existe.

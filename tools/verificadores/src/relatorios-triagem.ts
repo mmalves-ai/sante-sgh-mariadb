@@ -39,7 +39,9 @@ const nucleo = new NucleoProprio();
 let ok = true;
 try {
   const est = await nucleo.lerSomente({ cliente, correlacao: 'relatorios-triagem' }, (l) =>
-    l.uma<{ id: number } & Record<string, unknown>>('SELECT id FROM estabelecimento WHERE codigo = ?', [codigoEst]),
+    l.uma<{ id: number } & Record<string, unknown>>('SELECT id FROM estabelecimento WHERE codigo = ?', [
+      codigoEst,
+    ]),
   );
   if (!est) throw new Error(`Estabelecimento ${codigoEst} não cadastrado no cliente ${cliente}.`);
   const propostas = inventario.relatorios.map(propostaDoRelatorio);

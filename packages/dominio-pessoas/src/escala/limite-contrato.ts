@@ -1,4 +1,4 @@
-// Regra 6 do M52 (ref 02; cap-07 §7.1.2): limite de horas do contrato. No tempo parcial (domínio POTPCONTTEMP: 1 = 25 h,
+// Regra 6 do M52 (ref 02; cap-07 §7.1.2): limite de horas do contrato. No tempo parcial (domínio de tempo parcial: 1 = 25 h,
 // 2 = 30 h, 3 = 26 h semanais) vale o limite do domínio; fora dele, o limite semanal do regime; sem regime, o teto do
 // tipo de vínculo (D-CARGA-52). A conta é por semana de segunda a domingo, só com as jornadas (presencial e diarista),
 // dividindo o plantão que atravessa a virada da semana (D-LIM-52). Teste: `limite-contrato.spec.ts`.
@@ -8,7 +8,7 @@ import { OK, recusar, type Conferencia, type PlantaoProposto } from './plantao.j
 import { minutosPorSemana } from './tempo.js';
 
 export interface RegraLimite {
-  /** POTPCONTTEMP.ID do regime (0: não é tempo parcial). */
+  /** Código de tempo parcial do regime (0: não é tempo parcial). */
   readonly contratoParcial: number;
   /** O limite semanal lido no domínio para o código (null: a coluna veio vazia; vale a legenda da ref 02). */
   readonly limiteParcialDominio: number | null;

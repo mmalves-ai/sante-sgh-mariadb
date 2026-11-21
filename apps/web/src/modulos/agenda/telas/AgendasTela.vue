@@ -57,11 +57,9 @@ const mensagem = ref<string | null>(null);
 async function incluir(): Promise<void> {
   erro.value = null;
   mensagem.value = null;
-  const min = Number(duracao.value);
-  const hhmm = `${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}`;
   try {
     const r = await incluirAgenda(
-      { nome: nome.value, duracao: hhmm, teleatendimento: tele.value },
+      { nome: nome.value, duracaoMinutos: Number(duracao.value), teleatendimento: tele.value },
       chave.value,
     );
     mensagem.value = t('agenda.agendas.incluida');
@@ -157,7 +155,7 @@ async function incluir(): Promise<void> {
         <SanteCampoTexto v-model="nome" :rotulo="t('agenda.agendas.nome')" :max-bytes="40" obrigatorio />
         <div class="campo">
           <label for="agendas-duracao">{{ t('agenda.agendas.duracao') }}</label>
-          <input id="agendas-duracao" v-model="duracao" type="number" min="5" max="240" step="5" required />
+          <input id="agendas-duracao" v-model="duracao" type="number" min="5" max="480" step="5" required />
         </div>
         <label><input v-model="tele" type="checkbox" /> {{ t('agenda.agendas.tele') }}</label>
         <SanteBotao tipo="submit" :rotulo="t('agenda.salvar')" />

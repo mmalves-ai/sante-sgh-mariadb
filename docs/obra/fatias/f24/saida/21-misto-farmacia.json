@@ -1,0 +1,66 @@
+{
+  "lote": "21-misto-farmacia",
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "conta_portal_profissional_externo",
+      "colunas": [
+        "profissional_vigente_chave BIGINT UNSIGNED AS (IF(situacao IN ('ativa','bloqueada','suspensa') AND autorizada_em IS NOT NULL AND excluido_em IS NULL, profissional_id, NULL)) PERSISTENT",
+        "UNIQUE uq_conta_portal_profissional_externo_profissional_vigente (profissional_vigente_chave)",
+        "DROP INDEX uq_conta_portal_profissional_externo_profissional"
+      ],
+      "motivo": "Religar o profissional a outra conta depois de desligar ou encerrar a antiga: a UNIQUE atual cobre o profissional de qualquer conta (também a histórica). Destrava OPERACOES_PENDENTES.religar em apps/api/src/modulos/portal-medico/porta-propria.ts (a porta já traduz a violação de chave com 'vigente' no nome para profissional-em-outra-conta)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ato_conta_portal_profissional_externo (nova)",
+      "colunas": [
+        "id",
+        "conta_portal_profissional_externo_id FK",
+        "ato VARCHAR(20) CHECK (bloqueio, desbloqueio, encerramento, troca_senha, troca_email)",
+        "motivo VARCHAR(500) NULL",
+        "decisao_pedidos VARCHAR(10) NULL CHECK (retirar, manter)",
+        "pedidos_pendentes SMALLINT UNSIGNED NOT NULL DEFAULT 0",
+        "usuario_id FK NULL",
+        "ocorrido_em DATETIME(3)",
+        "auditoria padrão"
+      ],
+      "motivo": "Histórico dos atos da conta do médico externo (atosConta e o id do ato devolvido pelo atoConta/confirmarTrocaEmail). Hoje o ato só vai à trilha; a tela pede a lista. Destrava OPERACOES_PENDENTES.atosConta."
+    },
+    {
+      "tipo": "codigo",
+      "arquivos": [
+        "apps/api/src/modulos/contabil/porta-propria.ts",
+        "apps/worker/src/contabil/porta-propria.ts"
+      ],
+      "motivo": "A contabilização automática no worker: ler (regras publicadas em versao_regra_contabil, que já existe) e gravar (lançamento automático com partidas e situação do fato) são da porta da API (lote 14-contabil). Pedido: mover regras()/marcarSituacao()/gravarLancamento() para um pacote comum (ex.: packages/persistencia ou packages/contabil-banco) e o worker usar a mesma escrita, sem cópia. Até lá, ler/gravar do worker seguem recusando com 'modelo-pendente' (2 linhas em porta-propria.ts e 2 em leitura-fatos.service.ts, que só descrevem essa recusa)."
+    },
+    {
+      "tipo": "codigo",
+      "arquivos": [
+        "apps/api/src/modulos/farmacia/porta-propria.ts",
+        "apps/api/src/modulos/farmacia/tipos.ts",
+        "packages/contratos/src/suprimentos/*"
+      ],
+      "motivo": "Farmácia hospitalar ainda sem escrita no banco próprio (recusa 409 'modelo-pendente', contada pelo verificador; a estrutura já existe: dispensacao(_item), documento_estoque, movimento_estoque, conferencia_controlado, livro_controlado, envio_controlado_nacional(_item), receita_controlada): fila de dispensação por horário, dispensar/entregar/devolver/cancelar dose e avaliação pelo horário (o contrato ainda usa números de situação e documento por ano/mês: precisa de contrato novo com vocabulário neutro); perda e conferência do controlado; dispensação ambulatorial; escrituração do envio nacional; fechamento do livro (depende também do armazém de arquivos, ADR 0004). As leituras principais dessas telas também recusam com 409 'modelo-pendente' até lá. É trabalho de um lote próprio da farmácia (contrato + porta + testes), maior que este lote misto."
+    },
+    {
+      "tipo": "semente",
+      "tabela": "canal_notificacao",
+      "colunas": [
+        "codigo='portal_medico_externo'",
+        "tipo_canal='painel'",
+        "ativo=TRUE"
+      ],
+      "motivo": "A notificação do crítico ao médico externo grava a tentativa no canal 'portal_medico_externo'; sem a linha, notificarCritico recusa 'canal-inexistente' (409). Entra no comando 'criar novo cliente'. Segurança do paciente: sem a linha, nenhum aviso de crítico é notificado ao médico externo; o ciclo devolve a recusa em 'recusas' e a registra no log."
+    },
+    {
+      "tipo": "codigo",
+      "arquivos": [
+        "apps/api/src/modulos/adt/porta-propria.ts",
+        "apps/api/src/modulos/digitalizacao/porta-propria.ts"
+      ],
+      "motivo": "tsc: 'hhmm' não existe mais no retorno de civil() de exames/relogio.ts (agora {data, hora}); 15 erros nesses arquivos, que não são de nenhum lote. A farmácia (deste lote) já foi ajustada."
+    }
+  ]
+}

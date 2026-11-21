@@ -5,8 +5,11 @@ import tseslint from 'typescript-eslint';
 import vue from 'eslint-plugin-vue';
 import vueParser from 'vue-eslint-parser';
 
-// Só @sgh/legado conhece o driver Firebird.
+// Nenhum projeto TypeScript fala com o Firebird: só o conector/ (Python) lê as imagens (AGENTS.md, regra 3).
 const driversFirebird = ['node-firebird', 'node-firebird-*', 'node-firebird-driver*'];
+// Só a infraestrutura (@sgh/nucleo, tipo:infra; depois o packages/persistencia) fala com o MariaDB (regra 3).
+const driversMariadb = ['mariadb', 'mariadb/*', 'mysql', 'mysql2', 'mysql2/*'];
+const driversBanco = [...driversFirebird, ...driversMariadb];
 // Biblioteca de componentes de base só dentro de @sgh/ui (DP-51: as telas nunca a importam direto).
 const bibliotecaDeComponentes = [
   'primevue',
@@ -17,15 +20,7 @@ const bibliotecaDeComponentes = [
   '@openvue/*',
 ];
 // Regras puras (dominio-*) sem Nest, banco ou HTTP.
-const proibidosNoDominio = [
-  ...driversFirebird,
-  '@nestjs/*',
-  'fastify',
-  '@fastify/*',
-  'axios',
-  'undici',
-  'vue',
-];
+const proibidosNoDominio = [...driversBanco, '@nestjs/*', 'fastify', '@fastify/*', 'axios', 'undici', 'vue'];
 
 export default tseslint.config(
   {
@@ -149,30 +144,32 @@ export default tseslint.config(
               bannedExternalImports: proibidosNoDominio,
             },
             {
-              sourceTag: 'tipo:legado',
-              onlyDependOnLibsWithTags: ['tipo:contratos'],
+              // Núcleo de infraestrutura (F2.1, extraído do adaptador do modelo base): o único que abre o MariaDB.
+              sourceTag: 'tipo:infra',
+              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:infra'],
+              bannedExternalImports: driversFirebird,
             },
             {
               sourceTag: 'tipo:ui',
               onlyDependOnLibsWithTags: ['tipo:contratos'],
-              bannedExternalImports: [...driversFirebird, '@nestjs/*'],
+              bannedExternalImports: [...driversBanco, '@nestjs/*'],
             },
             {
               sourceTag: 'tipo:web',
               onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:ui', 'tipo:dominio'],
-              bannedExternalImports: [...driversFirebird, ...bibliotecaDeComponentes, '@nestjs/*', 'pino'],
+              bannedExternalImports: [...driversBanco, ...bibliotecaDeComponentes, '@nestjs/*', 'pino'],
             },
             {
               sourceTag: 'tipo:api',
-              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:legado'],
-              bannedExternalImports: driversFirebird,
+              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:infra'],
+              bannedExternalImports: driversBanco,
             },
             {
               sourceTag: 'tipo:worker',
-              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:legado'],
+              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:infra'],
               // O worker não abre HTTP (ARQ-1): nada de servidor Nest/Fastify nem cliente/servidor HTTP cru.
               bannedExternalImports: [
-                ...driversFirebird,
+                ...driversBanco,
                 '@nestjs/platform-*',
                 'fastify',
                 '@fastify/*',
@@ -184,15 +181,15 @@ export default tseslint.config(
             },
             {
               sourceTag: 'tipo:testes',
-              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:legado'],
-              bannedExternalImports: driversFirebird,
+              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:infra'],
+              bannedExternalImports: driversBanco,
             },
             {
               sourceTag: 'tipo:ferramenta',
               // M09: as ferramentas de conversão (formularios:converter) usam as regras puras dos domínios.
-              // M04: o assinatura:testar monta os cenários com a massa sintética de packages/testes.
-              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:legado', 'tipo:testes'],
-              bannedExternalImports: driversFirebird,
+              // As ferramentas usam o núcleo (tipo:infra) para ler e gravar no MariaDB, sem importar o driver direto.
+              onlyDependOnLibsWithTags: ['tipo:contratos', 'tipo:dominio', 'tipo:infra', 'tipo:testes'],
+              bannedExternalImports: driversBanco,
             },
           ],
         },

@@ -18,39 +18,39 @@ import {
   teleconsultaAberta,
 } from './regras.js';
 
-const agora = { hoje: '2026-11-10', hhmm: '1000' };
+const agora = { hoje: '2026-11-10', hora: '10:00' };
 const medico = { ligada: true, podeRealizar: true, profissional: { conselhoAtivo: true } };
 
 describe('sala de espera (TELE-02)', () => {
   it('abre 30 minutos antes e fecha 2 horas depois do horário', () => {
-    expect(janelaSalaEspera({ data: '2026-11-10', hora: '1031' }, agora).aberta).toBe(false);
-    expect(janelaSalaEspera({ data: '2026-11-10', hora: '1030' }, agora)).toEqual({
+    expect(janelaSalaEspera({ data: '2026-11-10', hora: '10:31' }, agora).aberta).toBe(false);
+    expect(janelaSalaEspera({ data: '2026-11-10', hora: '10:30' }, agora)).toEqual({
       aberta: true,
       abreEm: '2026-11-10T10:00',
       fechaEm: '2026-11-10T12:30',
       motivo: null,
     });
-    expect(janelaSalaEspera({ data: '2026-11-10', hora: '0800' }, agora).aberta).toBe(true);
-    const passou = janelaSalaEspera({ data: '2026-11-10', hora: '0759' }, agora);
+    expect(janelaSalaEspera({ data: '2026-11-10', hora: '08:00' }, agora).aberta).toBe(true);
+    const passou = janelaSalaEspera({ data: '2026-11-10', hora: '07:59' }, agora);
     expect(passou.aberta).toBe(false);
     expect(passou.motivo).toMatch(/já passou/);
-    expect(janelaSalaEspera({ data: '2026-11-11', hora: '1000' }, agora).motivo).toMatch(/30 minutos/);
+    expect(janelaSalaEspera({ data: '2026-11-11', hora: '10:00' }, agora).motivo).toMatch(/30 minutos/);
   });
 
   it('entra só aberta, com a chave ligada; com o médico na sala, entra depois da janela', () => {
-    const t = { situacao: 'agendada' as const, data: '2026-11-10', hora: '1015' };
+    const t = { situacao: 'agendada' as const, data: '2026-11-10', hora: '10:15' };
     expect(podeEntrarSalaEspera(t, agora, true).pode).toBe(true);
     expect(podeEntrarSalaEspera(t, agora, false).motivo).toMatch(/liberada/);
     expect(podeEntrarSalaEspera({ ...t, situacao: 'cancelada' }, agora, true).motivo).toMatch(/cancelada/);
     expect(podeEntrarSalaEspera({ ...t, situacao: 'encerrada' }, agora, true).motivo).toMatch(/encerrada/);
-    const tarde = { data: '2026-11-10', hora: '0700' };
+    const tarde = { data: '2026-11-10', hora: '07:00' };
     expect(podeEntrarSalaEspera({ ...tarde, situacao: 'aguardando' }, agora, true).pode).toBe(false);
     expect(podeEntrarSalaEspera({ ...tarde, situacao: 'em-andamento' }, agora, true).pode).toBe(true);
     expect(podeEntrarSalaEspera({ ...tarde, situacao: 'sala-aberta' }, agora, true).pode).toBe(true);
   });
 
   it('minutos civis sem fuso', () => {
-    expect(minutosCivis('1970-01-01', '0001')).toBe(1);
+    expect(minutosCivis('1970-01-01', '00:01')).toBe(1);
     expect(teleconsultaAberta('respondida')).toBe(false);
   });
 });

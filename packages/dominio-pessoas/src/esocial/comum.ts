@@ -40,7 +40,7 @@ export const raizCnpj = (cnpj: string): string => cnpj.slice(0, 8);
 
 /**
  * O identificador do evento: "ID" + tipo de inscrição + inscrição do empregador com 14 posições (a raiz do CNPJ
- * completada com zeros à direita, como no S-1000) + AAAAMMDDHHMMSS + sequência de 5 dígitos (36 posições).
+ * completada com zeros à direita, como no S-1000) + data e hora em 14 dígitos (ano, mês, dia, hora, minuto e segundo) + sequência de 5 dígitos (36 posições).
  */
 export function idEventoEsocial(nrInscEmpregador: string, instante: string, sequencia: number): string {
   if (!Number.isInteger(sequencia) || sequencia < 1 || sequencia > 99_999)

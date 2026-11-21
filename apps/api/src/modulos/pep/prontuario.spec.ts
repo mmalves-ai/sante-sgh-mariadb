@@ -210,7 +210,7 @@ describe('prontuário ao vivo (consulta)', () => {
     expect(depois.length - antes).toBe(3);
     expect(depois.at(-1)).toMatchObject({
       paciente: 1003,
-      tabelaAlvo: 'PRCABEVOL',
+      tabelaAlvo: 'registro_assistencial',
       idAlvo: String(R2026),
       chaveNaturalAlvo: 'parte:respostas;motivo:assistencia',
     });

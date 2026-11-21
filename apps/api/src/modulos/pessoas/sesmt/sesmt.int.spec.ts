@@ -1,7 +1,7 @@
 // Integração da porta PRÓPRIA do SESMT (F2.2, lote 03-10) contra o MariaDB do cliente de teste da onda 3 (f22_o3), com
 // massa SINTÉTICA: o contrato de efeito de cada gravação (as linhas, a versão e a trilha com o motivo e a correção) e as
-// recusas (vínculo de outro estabelecimento, versão desatualizada, EPI fora do cadastro), mais as operações que aguardam
-// o modelo (recusa `modelo-pendente`, nunca silêncio). Cada gravação confere a linha da trilha (ação, entidade e
+// recusas (vínculo de outro estabelecimento, versão desatualizada, EPI fora do cadastro), mais a leitura do dosímetro,
+// que aguarda o contrato endereçar o registro pelo tipo (recusa 409, nunca silêncio). Cada gravação confere a linha da trilha (ação, entidade e
 // entidade_id) e a versão; a hora do acidente perto da meia-noite prova o fuso do estabelecimento; o mapa de riscos usa
 // um fator semeado e dois ambientes (o do setor da função, o ambíguo e o inexistente).
 import { chaveFuncao } from '@sgh/dominio-pessoas';
@@ -194,7 +194,11 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('ok');
+    expect((await porta.vacinas(c, m.vinculo)).find((x) => x.registro === 'anti-hbs')).toMatchObject({
+      antiHbs: 50,
+      dose: null,
+    });
     expect(
       await codigo(
         porta.gravarSgh(c, trilha('entrega_epi'), (g) =>
@@ -351,7 +355,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
         afastamento: true,
         obito: false,
         catPrazo: '2026-03-03',
-        cat: { ...DADOS_CAT_VAZIOS, horasAntes: '0230', lateralidade: 1 },
+        cat: { ...DADOS_CAT_VAZIOS, horasAntes: '02:30', lateralidade: 1 },
         por: m.login,
       });
       await g.registrarCorrecao({
@@ -366,7 +370,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
     });
     a = await porta.acidente(c, id);
     expect(a).toMatchObject({ local: 'Posto 3', afastamento: true, versao: 3 });
-    expect(a?.cat).toMatchObject({ horasAntes: '0230', lateralidade: 1 });
+    expect(a?.cat).toMatchObject({ horasAntes: '02:30', lateralidade: 1 });
     const cs = await porta.correcoes(c, 'comunicacao_acidente', [id]);
     expect(cs).toHaveLength(1);
     expect(cs[0]).toMatchObject({
@@ -377,18 +381,29 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
     });
     expect(cs[0]?.motivo).toContain('local corrigido');
     expect((await conferirTrilha('comunicacao_acidente', id))?.motivo).toContain('local corrigido');
+    // O acidente sem material biológico também se encerra (na comunicação, com quem e o motivo).
+    await porta.gravarSgh(c, trilha('comunicacao_acidente', id), (g) =>
+      g.encerrarAcidente({ id, versao: 3, motivo: 'fim', por: m.login }),
+    );
+    a = await porta.acidente(c, id);
+    expect(a).toMatchObject({
+      estado: 'encerrado',
+      encerradoPor: m.login,
+      motivoEncerramento: 'fim',
+      versao: 4,
+    });
     expect(
       await codigo(
         porta.gravarSgh(c, trilha('comunicacao_acidente'), (g) =>
-          g.encerrarAcidente({ id, versao: 3, motivo: 'fim', por: m.login }),
+          g.encerrarAcidente({ id, versao: 4, motivo: 'de novo', por: m.login }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('acidente-encerrado');
     await porta.gravarSgh(c, trilha('comunicacao_acidente', id), (g) =>
-      g.anularAcidente({ id, versao: 3, motivo: 'lançado em duplicidade', por: m.login }),
+      g.anularAcidente({ id, versao: 4, motivo: 'lançado em duplicidade', por: m.login }),
     );
     a = await porta.acidente(c, id);
-    expect(a).toMatchObject({ anuladoPor: m.login, versao: 4 });
+    expect(a).toMatchObject({ anuladoPor: m.login, versao: 5 });
     expect((await conferirTrilha('comunicacao_acidente', id))?.motivo).toContain('anulação');
     expect(
       (await porta.listarAcidentes(c, { estado: 'todos', vinculo: m.vinculo, limite: 10 })).itens.map(
@@ -503,24 +518,15 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
       }),
     );
     a = await porta.acidente(c, id);
-    expect(a).toMatchObject({ profilaxia: 'iniciada', versao: 2 });
-    // O acompanhamento sorológico: com a tabela no modelo, o marco grava; sem ela, a recusa diz o que falta.
-    const [tem] = await ler<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sorologia_exposicao'",
-      [],
-    );
+    expect(a).toMatchObject({ profilaxia: 'iniciada', profilaxiaEm: '2026-04-01', versao: 2 });
+    // O acompanhamento sorológico: o marco grava e é lido.
     const s = await codigo(
       porta.gravarSgh(c, trilha('sorologia_exposicao'), (g) =>
         g.incluirSorologia({ acidente: id, marco: 'd0', prevista: '2026-04-01' }),
       ),
     );
-    if (Number(tem?.n) > 0) {
-      expect(s).toBe('ok');
-      expect((await porta.sorologias(c, [id])).map((x) => x.marco)).toEqual(['d0']);
-    } else {
-      expect(s).toBe('modelo-pendente');
-      expect(await porta.sorologias(c, [id])).toEqual([]);
-    }
+    expect(s).toBe('ok');
+    expect((await porta.sorologias(c, [id])).map((x) => x.marco)).toEqual(['d0']);
     await porta.gravarSgh(c, trilha('comunicacao_acidente', id), (g) =>
       g.encerrarAcidente({ id, versao: 2, motivo: 'alta do acompanhamento', por: m.login }),
     );

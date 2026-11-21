@@ -18,14 +18,40 @@ export interface PrivilegioBanco {
 
 /** Privilégios de administração do servidor: nunca na conta da aplicação. */
 export const PRIVILEGIOS_ADMINISTRATIVOS: readonly string[] = [
-  'SUPER', 'FILE', 'SHUTDOWN', 'PROCESS', 'RELOAD', 'CREATE USER', 'CREATE TABLESPACE', 'REPLICATION SLAVE',
-  'REPLICATION CLIENT', 'BINLOG ADMIN', 'BINLOG MONITOR', 'BINLOG REPLAY', 'CONNECTION ADMIN', 'FEDERATED ADMIN',
-  'READ_ONLY ADMIN', 'REPLICATION MASTER ADMIN', 'REPLICATION SLAVE ADMIN', 'SET USER', 'SLAVE MONITOR',
+  'SUPER',
+  'FILE',
+  'SHUTDOWN',
+  'PROCESS',
+  'RELOAD',
+  'CREATE USER',
+  'CREATE TABLESPACE',
+  'REPLICATION SLAVE',
+  'REPLICATION CLIENT',
+  'BINLOG ADMIN',
+  'BINLOG MONITOR',
+  'BINLOG REPLAY',
+  'CONNECTION ADMIN',
+  'FEDERATED ADMIN',
+  'READ_ONLY ADMIN',
+  'REPLICATION MASTER ADMIN',
+  'REPLICATION SLAVE ADMIN',
+  'SET USER',
+  'SLAVE MONITOR',
 ];
 /** Privilégios de estrutura: só a conta das migrações, nunca a da aplicação. */
 export const PRIVILEGIOS_ESTRUTURA: readonly string[] = [
-  'CREATE', 'DROP', 'ALTER', 'INDEX', 'REFERENCES', 'CREATE VIEW', 'TRIGGER', 'EVENT', 'CREATE ROUTINE',
-  'ALTER ROUTINE', 'CREATE TEMPORARY TABLES', 'DELETE HISTORY',
+  'CREATE',
+  'DROP',
+  'ALTER',
+  'INDEX',
+  'REFERENCES',
+  'CREATE VIEW',
+  'TRIGGER',
+  'EVENT',
+  'CREATE ROUTINE',
+  'ALTER ROUTINE',
+  'CREATE TEMPORARY TABLES',
+  'DELETE HISTORY',
 ];
 
 type LinhaPrivilegio = { conta: string; nivel: string; alvo: string; privilegio: string; repassa: string };

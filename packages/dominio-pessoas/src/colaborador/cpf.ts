@@ -1,6 +1,6 @@
 // CPF do colaborador (ficha, seção 4: "CPF só como filtro exato, nunca exibido inteiro em lista"; cap-08 §8.13).
-// No outro sistema o CPF do profissional está em TBPROFIS.CNPJ_CPF (869 de 871 no pc; TBPROFIS.CPF está vazio) e o
-// do usuário em TBUSERS.CPF (1.080 de 1.087), ambos numéricos: 0 e nulo são "sem CPF".
+// No sistema de origem o CPF do profissional vem do documento do cadastro de profissionais (o campo de CPF está
+// vazio) e o do usuário, do cadastro de usuários; ambos numéricos: 0 e nulo são "sem CPF".
 import { cpfValido, somenteDigitos } from '@sgh/contratos';
 
 /** O valor numérico do outro sistema como 11 dígitos; null quando não há CPF (0, vazio, nulo, fora da faixa). */

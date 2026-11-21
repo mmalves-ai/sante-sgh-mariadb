@@ -260,7 +260,7 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
     expect(mov.internacoes.map((i) => i.bloco).sort()).toEqual(['F515UI', 'F515UTI']);
     expect(mov.transferencias).toHaveLength(1);
     expect(mov.transferencias[0]).toMatchObject({ origem: { bloco: 'F515UI', acomodacao: '101' }, destino: { bloco: 'F515UTI', acomodacao: '101' } });
-    expect(mov.trechos.find((t) => t.horaEntrada === '0800')).toMatchObject({ bloco: 'F515UTI', tipo: catUti });
+    expect(mov.trechos.find((t) => t.horaEntrada === '08:00')).toMatchObject({ bloco: 'F515UTI', tipo: catUti });
     expect(mov.unidades.map((x) => [x.bloco, x.acomodacao, x.leitos]).sort()).toEqual([
       ['F515UI', '101', 2],
       ['F515UTI', '101', 1],

@@ -2,12 +2,12 @@
 // habilitação, leito, instrumento e quantidade, pela SIGTAP da competência"; regra 2). As compatibilidades vêm das
 // tabelas que o importador do M13 mantém no outro sistema, cada linha com a vigência (COMP_INICIAL e COMP_FINAL,
 // AAAAMM; 0 ou vazio = sem limite):
-//   - TBSUSCID (procedimento × CID): com lista vigente, o CID principal tem de estar nela;
-//   - TBSUSCBO (procedimento × CBO): com lista vigente, o CBO do executante tem de estar nela;
-//   - TBPROHAB (procedimento × habilitação): com lista vigente, o estabelecimento precisa de uma das habilitações (as do
+//   - procedimento × CID: com lista vigente, o CID principal tem de estar nela;
+//   - procedimento × CBO: com lista vigente, o CBO do executante tem de estar nela;
+//   - procedimento × habilitação: com lista vigente, o estabelecimento precisa de uma das habilitações (as do
 //     CNES, parâmetro `faturamento.sus.habilitacoes`; o outro sistema não as guarda);
-//   - TBPROLEI (procedimento × especialidade do leito): com lista, o leito da internação tem de estar nela (AIH);
-//   - TBPROREG (procedimento × instrumento de registro): o instrumento de saída tem de ser um dos registros;
+//   - procedimento × especialidade do leito: com lista, o leito da internação tem de estar nela (AIH);
+//   - procedimento × instrumento de registro: o instrumento de saída tem de ser um dos registros;
 //   - sexo, idade e quantidade máxima: os atributos da competência (sigtap-competencia.ts).
 // Sem lista (o procedimento não restringe), passa. Puro: as leituras ficam no adaptador.
 import type { CompetenciaSus, RegraCriticaSus } from '@sgh/contratos';
@@ -18,7 +18,7 @@ import { type AtributosNaCompetencia, incompatibilidades } from './sigtap-compet
 
 /** Uma linha de compatibilidade como o banco guarda (o código já resolvido: CID, CBO, habilitação ou leito). */
 export interface CompatibilidadeLida {
-  /** TBPROSUS.ID. */
+  /** Id do procedimento SIGTAP. */
   readonly id: number;
   readonly codigo: string;
   readonly competenciaInicial: number;
@@ -110,7 +110,7 @@ export interface OcorrenciaSus {
   /** CBO do executante (null: não informado). */
   readonly cbo: string | null;
   readonly conferirCbo?: boolean;
-  /** Especialidade do leito (TBESPLEI.COD) na internação; null fora dela. */
+  /** Especialidade do leito na internação; null fora dela. */
   readonly leito?: string | number | null;
 }
 

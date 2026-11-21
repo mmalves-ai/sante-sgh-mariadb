@@ -65,13 +65,13 @@ export const ROTULOS_SITUACAO_APURACAO: Readonly<Record<SituacaoApuracao, string
 
 /** Um rateio recebido de um centro que veio antes na sequência. */
 export interface ParcelaRateio {
-  /** TBCENCUS.ID de quem repartiu. */
+  /** Id do centro de custo que repartiu. */
   readonly de: number;
   readonly centavos: number;
 }
 
 export interface LinhaApuracaoCentro {
-  /** TBCENCUS.ID. */
+  /** Id do centro de custo. */
   readonly centro: number;
   readonly codigo: number;
   readonly nome: string;
@@ -229,9 +229,9 @@ export type AprovarApuracao = z.infer<typeof esquemaAprovarApuracao>;
 // ── Custo por conta e resultado ───────────────────────────────────────────────────────────────────────────────────────
 
 export interface CustoConta {
-  /** FCCTAEXT.ID. */
+  /** Id da conta do paciente. */
   readonly conta: number;
-  /** FCCTAEXT.COD (o número da conta). */
+  /** O número da conta. */
   readonly numero: number;
   readonly tipoConta: string | null;
   readonly convenio: number | null;
@@ -326,7 +326,7 @@ export const esquemaConsultaContasCusto = z
     competencia: esquemaCompetenciaCustos,
     convenio: z.coerce.number().int().min(0).max(999_999).optional(),
     procedimento: textoCp1252(20).pipe(z.string().trim().min(1)).optional(),
-    /** O número da conta (FCCTAEXT.COD). */
+    /** O número da conta. */
     numero: z.coerce.number().int().min(1).max(999_999_999).optional(),
     /** O prontuário do paciente: as contas dele na competência (D-PACIENTE-545). */
     prontuario: z.coerce.number().int().min(1).max(999_999_999).optional(),

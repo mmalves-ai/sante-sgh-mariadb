@@ -13,14 +13,16 @@
 // Melhoria: o motivo da revogação do bloqueio e do fim do acompanhamento vai à trilha da operação (motivo).
 // Melhoria: o visitante bloqueado ou restrito no cadastro, ou com bloqueio da pessoa no estabelecimento, não entra;
 // o bloqueio do paciente sem atendimento informado vale em qualquer internação dele.
-// Melhoria: a visita a outro destino aponta o setor do estabelecimento (o banco exige o visitado); o local que não é
-// setor cadastrado aguarda o modelo (pedido do lote 02-12: local_destino).
+// Melhoria: a visita a outro destino aponta o setor do estabelecimento quando o local é setor cadastrado; senão, o
+// local vai a visita.local_destino (o banco exige um visitado).
 // Melhoria: as gravações usam a Idempotency-Key do pedido: o reenvio devolve o mesmo resultado (visita "repetida").
-// Pendências de modelo (pedidos do lote 02-12, saida/02-12.json): validade do crachá e chave do pedido na visita (hoje
-// a validade é derivada da regra vigente e o reenvio do mesmo pedido é recusado como "já em visita"); idade mínima,
-// isolamento, duração e observação da regra; limite, inclusão do acompanhante e documento do bloqueio; prazo de
-// guarda e anonimização do visitante (o expurgo responde "modelo-pendente"); o visitante no acompanhante (hoje pelo
-// documento); o evento da catraca ligado ao terminal (hoje responde "modelo-pendente").
+// Melhoria: a regra guarda a idade mínima, a conduta no isolamento, a duração máxima e a observação; o bloqueio guarda
+// o limite de visitantes (abrangência "limite" é o bloqueio do paciente com limite_visitantes), a inclusão do
+// acompanhante e o documento da ordem judicial. A guarda do visitante vale por pessoa_portaria.guarda_ate (ou, sem ela,
+// pela última visita mais o prazo padrão); o expurgo anonimiza o cadastro (anonimizada_em) e devolve as fotos a apagar.
+// A passagem pela catraca grava evento_acesso_portaria, que se liga ao dispositivo de integração: o terminal da
+// portaria (terminal_acesso) ainda não tem essa ligação no modelo (pedido em docs/obra/fatias/f24/saida/
+// 24-misto-especialidades.json), e o registro da passagem recusa até lá, sem gravar nada.
 import { RETENCAO_PADRAO_DIAS, type MotivoBloqueioVisita, type SentidoTerminal } from '@sgh/contratos';
 import { regraDaUnidade, REGRA_PADRAO, type RegraVisita, validadeDoCracha } from '@sgh/dominio-internacao';
 import {
@@ -155,9 +157,19 @@ const SQL_INTERNADOS = `
    WHERE i.estabelecimento_id = ? AND i.situacao IN ('ativa', 'alta_medica') AND i.excluido_em IS NULL`;
 
 // O visitante é da rede inteira (pessoa_portaria não tem estabelecimento): a mesma pessoa volta em qualquer unidade.
+/** A guarda do cadastro venceu (parâmetro: o corte da guarda derivada, a data de hoje); sem visita aberta. */
+const SQL_GUARDA_VENCIDA = `
+  pp.excluido_em IS NULL AND pp.anonimizada_em IS NULL AND pp.situacao <> 'inativo'
+  AND IF(pp.guarda_ate IS NULL,
+         GREATEST(pp.criado_em, COALESCE((SELECT MAX(v.entrada_em) FROM visita v
+               WHERE v.pessoa_portaria_id = pp.id AND v.excluido_em IS NULL), pp.criado_em)) < ?,
+         pp.guarda_ate < ?)
+  AND NOT EXISTS (SELECT 1 FROM visita a WHERE a.pessoa_portaria_id = pp.id AND a.saida_em IS NULL
+        AND a.situacao = 'em_andamento' AND a.excluido_em IS NULL)`;
+
 const SQL_VISITANTE = `
   SELECT pp.id, pp.nome, pp.cpf, td.codigo AS tipo_documento, pp.numero_documento, pp.data_nascimento, pp.telefone,
-         pp.tipo_visitante_id, a.chave_armazenamento AS foto, pp.criado_em,
+         pp.tipo_visitante_id, a.chave_armazenamento AS foto, pp.criado_em, pp.guarda_ate,
          (SELECT MAX(v.entrada_em) FROM visita v WHERE v.pessoa_portaria_id = pp.id AND v.excluido_em IS NULL) AS ultima
     FROM pessoa_portaria pp
     LEFT JOIN tipo_documento_identificacao td ON td.id = pp.tipo_documento_identificacao_id
@@ -197,7 +209,8 @@ const SQL_ACOMPANHANTES = `
 
 const SQL_BLOQUEIOS = `
   SELECT b.id, b.abrangencia, b.pessoa_portaria_id, pp.nome AS pessoa_nome, b.paciente_id, b.inicio_em, b.fim_em,
-         b.ativo, b.observacao, m.codigo AS motivo, u.login, i.id AS internacao
+         b.ativo, b.observacao, b.limite_visitantes, b.inclui_acompanhante, b.documento_referencia, m.codigo AS motivo,
+         u.login, i.id AS internacao
     FROM bloqueio_visitante b
     JOIN motivo_bloqueio_visita m ON m.id = b.motivo_bloqueio_visita_id
     JOIN internacao i ON i.estabelecimento_id = b.estabelecimento_id AND i.excluido_em IS NULL
@@ -208,13 +221,14 @@ const SQL_BLOQUEIOS = `
    WHERE b.estabelecimento_id = ? AND b.ativo = TRUE AND b.excluido_em IS NULL AND b.abrangencia <> 'pessoa'`;
 
 const SQL_REGRAS = `
-  SELECT r.id, ui.codigo AS unidade, ui.intensiva, r.maximo_visitantes, r.horarios, r.versao,
+  SELECT r.id, ui.codigo AS unidade, ui.intensiva, r.maximo_visitantes, r.horarios, r.versao, r.idade_minima_anos,
+         r.duracao_maxima_minutos, r.conduta_isolamento, r.observacao,
          COALESCE(r.alterado_em, r.criado_em) AS em, COALESCE(ua.login, uc.login) AS login
     FROM regra_visita_unidade r
     LEFT JOIN unidade_internacao ui ON ui.id = r.unidade_internacao_id
     LEFT JOIN usuario ua ON ua.id = r.alterado_por
     LEFT JOIN usuario uc ON uc.id = r.criado_por
-   WHERE r.estabelecimento_id = ? AND r.ativo = TRUE`;
+   WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.excluido_em IS NULL`;
 
 /** Documento do visitante como a tela o vê. */
 function documentoDe(r: Linha): { tipo: VisitanteRegistrado['tipoDocumento']; numero: string } {
@@ -453,13 +467,13 @@ export class PortaPortariaPropria implements PortaPortaria {
             internacao: n(r['internacao']),
             paciente: n(r['paciente_id']),
             motivo,
-            abrangencia: texto(r['abrangencia']) === 'pessoa_paciente' ? ('visitante' as const) : ('todos' as const),
+            abrangencia: abrangenciaDe(r),
             visitante: nn(r['pessoa_portaria_id']),
             visitanteNome: textoN(r['pessoa_nome']),
-            limite: null,
-            incluiAcompanhante: false,
+            limite: nn(r['limite_visitantes']),
+            incluiAcompanhante: verdadeiro(r['inclui_acompanhante']),
             justificativa: texto(r['observacao']),
-            documento: null,
+            documento: textoN(r['documento_referencia']),
             inicio: local(r['inicio_em'], fuso) ?? '',
             fim: local(r['fim_em'], fuso),
             revogado: !verdadeiro(r['ativo']),
@@ -507,13 +521,8 @@ export class PortaPortariaPropria implements PortaPortaria {
     return this.ler(c, async (l, _est, fuso) => {
       const corte = instante(`${somarDias(hoje, -retencaoDias)}T00:00`, fuso);
       const r = await l.uma<{ total: unknown }>(
-        `SELECT COUNT(*) AS total FROM pessoa_portaria pp
-          WHERE pp.excluido_em IS NULL AND pp.situacao <> 'inativo'
-            AND GREATEST(pp.criado_em, COALESCE((SELECT MAX(v.entrada_em) FROM visita v
-                  WHERE v.pessoa_portaria_id = pp.id AND v.excluido_em IS NULL), pp.criado_em)) < ?
-            AND NOT EXISTS (SELECT 1 FROM visita a WHERE a.pessoa_portaria_id = pp.id AND a.saida_em IS NULL
-                  AND a.situacao = 'em_andamento' AND a.excluido_em IS NULL)`,
-        [corte],
+        `SELECT COUNT(*) AS total FROM pessoa_portaria pp WHERE ${SQL_GUARDA_VENCIDA}`,
+        [corte, hoje],
       );
       return n(r?.total);
     });
@@ -678,12 +687,12 @@ async function regrasDe(l: Leitor, est: number, fuso: string): Promise<RegraVisi
       horaInicio: j.inicio,
       horaFim: j.fim,
       maxSimultaneos: n(r['maximo_visitantes']),
-      // Pendência de modelo: idade mínima, isolamento, duração e observação da regra (pedido); vale o padrão.
-      idadeMinima: REGRA_PADRAO.idadeMinima,
+      // A regra gravada antes das colunas (nulas) vale o padrão de mercado.
+      idadeMinima: nn(r['idade_minima_anos']) ?? REGRA_PADRAO.idadeMinima,
       uti: verdadeiro(r['intensiva']),
-      isolamento: REGRA_PADRAO.isolamento,
-      duracaoMaxMin: REGRA_PADRAO.duracaoMaxMin,
-      observacao: null,
+      isolamento: texto(r['conduta_isolamento']) === 'bloquear' ? 'bloquear' : 'orientar',
+      duracaoMaxMin: nn(r['duracao_maxima_minutos']) ?? REGRA_PADRAO.duracaoMaxMin,
+      observacao: textoN(r['observacao']),
       versao: n(r['versao']),
       atualizadoPor: texto(r['login']),
       atualizadoEm: local(r['em'], fuso) ?? '',
@@ -704,8 +713,8 @@ function visitanteDe(r: Linha, fuso: string): VisitanteRegistrado {
     telefone: textoN(r['telefone']),
     tipoVisitante: n(r['tipo_visitante_id']),
     fotoChave: textoN(r['foto']),
-    // Pendência de modelo: o prazo de guarda (pedido); derivado da última visita e do prazo padrão.
-    reterAte: base ? somarDias(base, RETENCAO_PADRAO_DIAS) : '',
+    // O prazo de guarda gravado; sem ele, derivado da última visita e do prazo padrão.
+    reterAte: dataIso(r['guarda_ate']) ?? (base ? somarDias(base, RETENCAO_PADRAO_DIAS) : ''),
     ultimaVisita: ultima,
   };
 }
@@ -911,8 +920,40 @@ function gravadorSobre(
       return { id, novo: true, fotoAnterior: null };
     },
 
-    async expurgarVisitantes() {
-      throw modeloPendente('A anonimização dos visitantes com a guarda vencida');
+    async expurgarVisitantes(x) {
+      // A anonimização apaga o que identifica a pessoa e guarda o instante; as visitas ficam, ligadas ao cadastro
+      // anônimo (o histórico da portaria continua contável). As fotos voltam para o chamador apagar o arquivo.
+      const corte = instante(`${somarDias(x.hoje, -(x.retencaoDias ?? RETENCAO_PADRAO_DIAS))}T00:00`, fuso);
+      const vencidos = await tx.consultarParaAtualizar<Linha>(
+        `SELECT pp.id, pp.versao, a.chave_armazenamento AS foto FROM pessoa_portaria pp
+           LEFT JOIN arquivo a ON a.id = pp.foto_arquivo_id AND a.excluido_em IS NULL
+          WHERE ${SQL_GUARDA_VENCIDA} ORDER BY pp.id LIMIT ${Math.max(1, Math.trunc(x.teto))}`,
+        [corte, x.hoje],
+        { teto: Math.max(1, Math.trunc(x.teto)) },
+      );
+      const ids: number[] = [];
+      const fotos: string[] = [];
+      for (const v of vencidos) {
+        await tx.alterar('pessoa_portaria', n(v['id']), n(v['versao']), {
+          nome: 'VISITANTE ANONIMIZADO',
+          nome_social: null,
+          usa_nome_social: false,
+          data_nascimento: null,
+          cpf: null,
+          tipo_documento_identificacao_id: null,
+          numero_documento: null,
+          telefone: null,
+          email: null,
+          empresa_nome: null,
+          foto_arquivo_id: null,
+          restricao_motivo: null,
+          anonimizada_em: new Date(),
+        });
+        ids.push(n(v['id']));
+        const foto = textoN(v['foto']);
+        if (foto) fotos.push(foto);
+      }
+      return { ids, fotos };
     },
 
     async registrarVisita(v, avaliar) {
@@ -939,6 +980,7 @@ function gravadorSobre(
       if (barrado) throw recusa('visitante-bloqueado', 'O visitante está bloqueado neste estabelecimento.');
       // O outro destino é um setor do estabelecimento (o visitado exige paciente, setor ou colaborador).
       let setor: number | null = null;
+      let localDestino: string | null = null;
       if (v.destino.tipo === 'outro') {
         const local = v.destino.local.trim();
         const s = local
@@ -950,8 +992,9 @@ function gravadorSobre(
               [est, local, local, local, local],
             )
           : null;
-        if (!s) throw modeloPendente(`O destino "${local.slice(0, 60)}", que não é setor cadastrado do estabelecimento,`);
-        setor = n(s.id);
+        if (!local) throw recusa('destino-obrigatorio', 'Informe o local visitado.', { campos: ['destino'] });
+        if (s) setor = n(s.id);
+        else localDestino = local.slice(0, 150);
       }
       const regras = await regrasDe(tx, est, fuso);
       // A visita anterior do visitante com o crachá vencido e sem a saída: encerrada na validade (expirada).
@@ -1022,6 +1065,7 @@ function gravadorSobre(
         tipo_visitado_id: v.tipoVisitado,
         paciente_id: internacao ? n(internacao['paciente_id']) : null,
         setor_funcional_id: setor,
+        local_destino: localDestino,
         atendimento_id: internacao ? nn(internacao['atendimento_id']) : null,
         internacao_id: internacao ? n(internacao['id']) : null,
         acompanhante_internacao_id: papel === 'acompanhante' ? acompanhanteId : null,
@@ -1053,13 +1097,6 @@ function gravadorSobre(
     },
 
     async definirRegra(r) {
-      if (
-        r.idadeMinima !== REGRA_PADRAO.idadeMinima ||
-        r.isolamento !== REGRA_PADRAO.isolamento ||
-        r.duracaoMaxMin !== REGRA_PADRAO.duracaoMaxMin ||
-        (r.observacao ?? null) !== null
-      )
-        throw modeloPendente('A idade mínima, o isolamento, a duração e a observação da regra de visita');
       let unidade: number | null = null;
       if (r.unidade !== '*') {
         const u = await tx.uma<{ id: unknown }>(
@@ -1077,6 +1114,10 @@ function gravadorSobre(
       const mudou = () => recusa('regra-mudou', 'A regra desta unidade mudou depois que você abriu: abra de novo.');
       const valores = {
         maximo_visitantes: r.maxSimultaneos,
+        idade_minima_anos: r.idadeMinima,
+        duracao_maxima_minutos: r.duracaoMaxMin,
+        conduta_isolamento: r.isolamento,
+        observacao: r.observacao ?? null,
         horarios: JSON.stringify(
           [1, 2, 3, 4, 5, 6, 7].map((d) => ({ dia_semana: d, publico: 'visitante', inicio: r.horaInicio, fim: r.horaFim })),
         ),
@@ -1097,10 +1138,10 @@ function gravadorSobre(
     },
 
     async bloquear(b) {
-      if (b.abrangencia === 'limite' || b.limite !== null)
-        throw modeloPendente('O limite de visitantes por bloqueio');
-      if (b.incluiAcompanhante) throw modeloPendente('O bloqueio que inclui o acompanhante');
-      if (b.documento !== null) throw modeloPendente('O documento do bloqueio (ordem judicial)');
+      if ((b.abrangencia === 'limite') !== (b.limite !== null))
+        throw recusa('limite-invalido', 'O limite de visitantes vale só para o bloqueio por limite, e ele o exige.', {
+          campos: ['limite'],
+        });
       const i = await travarInternacao(b.internacao);
       if (!i) throw recusa('sem-internacao', 'O paciente não está mais internado.');
       const motivo = await tx.uma<{ id: unknown }>(
@@ -1124,6 +1165,9 @@ function gravadorSobre(
         fim_em: b.fim ? instante(b.fim.length === 10 ? `${b.fim}T23:59` : b.fim, fuso) : null,
         determinante_usuario_id: usuario,
         observacao: b.justificativa.slice(0, 500),
+        limite_visitantes: b.abrangencia === 'limite' ? b.limite : null,
+        inclui_acompanhante: b.incluiAcompanhante,
+        documento_referencia: b.documento,
       });
     },
 
@@ -1265,7 +1309,8 @@ async function bloqueiosRelidos(
 ): Promise<BloqueioRelido[]> {
   // O bloqueio do atendimento ou, sem atendimento informado, o do paciente (vale em qualquer internação dele).
   const linhas = await tx.consultar(
-    `SELECT b.id, b.abrangencia, b.pessoa_portaria_id, b.inicio_em, b.fim_em, b.ativo, m.codigo AS motivo
+    `SELECT b.id, b.abrangencia, b.pessoa_portaria_id, b.inicio_em, b.fim_em, b.ativo, b.limite_visitantes,
+            b.inclui_acompanhante, m.codigo AS motivo
        FROM bloqueio_visitante b JOIN motivo_bloqueio_visita m ON m.id = b.motivo_bloqueio_visita_id
       WHERE b.estabelecimento_id = ? AND b.ativo = TRUE AND b.excluido_em IS NULL AND b.abrangencia <> 'pessoa'
         AND (b.atendimento_id = ? OR (b.atendimento_id IS NULL AND b.paciente_id = ?))`,
@@ -1279,16 +1324,22 @@ async function bloqueiosRelidos(
       {
         id: n(r['id']),
         motivo,
-        abrangencia: texto(r['abrangencia']) === 'pessoa_paciente' ? ('visitante' as const) : ('todos' as const),
+        abrangencia: abrangenciaDe(r),
         visitante: nn(r['pessoa_portaria_id']),
-        limite: null,
-        incluiAcompanhante: false,
+        limite: nn(r['limite_visitantes']),
+        incluiAcompanhante: verdadeiro(r['inclui_acompanhante']),
         inicio: local(r['inicio_em'], fuso) ?? '',
         fim: local(r['fim_em'], fuso),
         revogado: false,
       },
     ];
   });
+}
+
+/** Abrangência da tela: o bloqueio do visitante; o do paciente com limite de visitantes; ou o de todos. */
+function abrangenciaDe(r: Linha): 'visitante' | 'limite' | 'todos' {
+  if (texto(r['abrangencia']) === 'pessoa_paciente') return 'visitante';
+  return r['limite_visitantes'] === null || r['limite_visitantes'] === undefined ? 'todos' : 'limite';
 }
 
 /** Código de negócio a partir do nome (letras, dígitos e hífen; até 30). */

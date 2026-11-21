@@ -1,0 +1,41 @@
+{
+ "lote": "24-misto-especialidades",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "evento_acesso_portaria",
+   "colunas": "terminal_acesso_id BIGINT UNSIGNED NULL (FK terminal_acesso, ON DELETE RESTRICT, índice com ocorrido_em); dispositivo_acesso_id passa a NULL; CHECK (dispositivo_acesso_id IS NOT NULL OR terminal_acesso_id IS NOT NULL)",
+   "motivo": "A passagem pela catraca da portaria vem do terminal cadastrado na tela (terminal_acesso), mas o evento só se liga a dispositivo_acesso (integração). Sem a ligação, registrarEventoCatraca e a leitura eventos() da portaria seguem recusando com modelo-pendente (apps/api/src/modulos/portaria/porta-propria.ts)."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "packages/contratos/src/onda2/onda2.ts; packages/dominio-config/src/onda2/onda2.ts e onda2.spec.ts; packages/contratos/src/onda2/onda2.spec.ts",
+   "mudanca": "Remover a regra 15 da onda 2 (TABELAS_NUNCA_GRAVADAS, ExcecaoRegra15, EXCECOES_REGRA_15, violacoesRegra15, TabelaGravada, ViolacaoRegra15 e os testes delas).",
+   "motivo": "A regra dizia quais tabelas do sistema de origem o produto nunca grava porque os gatilhos de lá gravam (coexistência). No banco próprio não há gatilho nem tabela de origem: a regra é obsoleta e é o que resta de nome de origem em onda2.ts (17 ocorrências). dominio-config não está em nenhum lote; é um agente só, em sequência."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "packages/contratos/src/formatacao/hora-legada.ts (+ .spec.ts) e o export em packages/contratos/src/index.ts",
+   "mudanca": "Apagar quando packages/contratos/src/agenda/exame.ts (esquemaHoraLegada) e packages/contratos/src/portal/agenda-online.ts (FORMATO_HHMM) migrarem para formatacao/hora.ts.",
+   "motivo": "padroes.md seção 1: o hora-legada.ts fica até os lotes migrarem os usos e o conferidor apaga. Os dois consumidores são de outros lotes."
+  },
+  {
+   "tipo": "ui",
+   "arquivo": "packages/ui/src/componentes/SanteHora.vue",
+   "mudanca": "Passar o modelo do componente de \"HHMM\" para \"HH:MM\" (lerHoraDigitada e esquemaHora), junto com a remoção do hora-legada.ts.",
+   "motivo": "O verificador não lê .vue, mas o componente ainda carrega a hora em quatro dígitos. A história do catálogo (historias.ts) segue em \"0801\" e passa a \"08:01\" junto com o componente."
+  }
+ ],
+ "fora_da_lista": [
+  {
+   "arquivo": "apps/web/src/modulos/sessoes/telas/AgendaSessoesTela.vue; apps/web/e2e/m50-6.spec.ts",
+   "mudanca": "hora inicial 08:00 e campo de 5 caracteres; e2e digita HH:MM",
+   "motivo": "o contrato agenda/sessoes.ts (lote 12-agenda) já exige HH:MM; sem dono em nenhum lote"
+  },
+  {
+   "arquivo": "apps/api/src/modulos/portaria/porta.ts; portaria.controller.ts",
+   "mudanca": "expurgarVisitantes recebe retencaoDias do estabelecimento",
+   "motivo": "expurgo e contagem de vencidos com o mesmo prazo; sem dono em nenhum lote"
+  }
+ ]
+}

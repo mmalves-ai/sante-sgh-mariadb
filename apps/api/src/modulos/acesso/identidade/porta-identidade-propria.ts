@@ -15,15 +15,16 @@
 //   mesmo com dois logins simultâneos), e a revogação descarta o segredo.
 // Melhoria: a exigência do segundo fator vem do cadastro do perfil (perfil_acesso.exige_segundo_fator OU privilegiado,
 //   como diz o DDL), por estabelecimento ou da rede inteira, como ADESÃO sem prazo (origem 'cadastro-perfil'): quem
-//   não tem segundo fator entra e é levado ao cadastro; o obrigatório só vem da política por onda (pendente).
-// Pendências de modelo (saida/02-03.json): a política do segundo fator por onda, com início e prazo de adesão
-//   (politica_segundo_fator; até lá incluir, alterar e encerrar respondem "modelo-pendente"), e a coluna do segredo
-//   cifrado do autenticador (hoje o envelope cifrado fica em referencia_cofre com o prefixo "envelope:").
+//   não tem segundo fator entra e é levado ao cadastro; o obrigatório vem da política por onda (politica_segundo_fator).
+// Melhoria: a política por onda (início, prazo de adesão, alvo por perfil ou todos) é só por inclusão: encerrar marca
+//   quem, quando e o motivo; alterar encerra a vigente ("Alterada: <motivo>") e liga a nova (substituida_por_id) na
+//   mesma transação. O modelo próprio não tem grupos: a política por grupo é recusada (sem-grupos).
+// Melhoria: o segredo do autenticador fica cifrado em envelope na coluna própria (segredo_cifrado); a referência ao
+//   cofre fica nula. As linhas antigas, com o envelope em referencia_cofre (prefixo "envelope:"), continuam lidas.
 import { TOTP_PADRAO } from '@sgh/dominio-acesso';
 import {
   type ContextoOperacao,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -57,9 +58,9 @@ const dia = (v: unknown): string =>
     ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
     : texto(v).slice(0, 10);
 
-/** Prefixo do envelope cifrado do segredo TOTP guardado em referencia_cofre (pendência de modelo). */
+/** Prefixo do envelope cifrado nas linhas antigas, que o guardavam em referencia_cofre. */
 const PREFIXO_ENVELOPE = 'envelope:';
-/** Marca do segredo descartado na revogação (o CHECK do autenticador exige referencia_cofre preenchida). */
+/** Marca do segredo descartado na revogação (o segredo cifrado é apagado). */
 const SEGREDO_DESCARTADO = 'descartado';
 const TIPO_AUTENTICADOR = 'aplicativo_autenticador';
 const FORTE = 'argon2id';
@@ -133,10 +134,11 @@ function situacao2fa(v: unknown): SituacaoSegundoFatorRegistrado {
 
 function segundoFatorDe(r: Linha): SegundoFatorRegistrado {
   const ref = texto(r['referencia_cofre']);
+  const cifrado = texto(r['segredo_cifrado']);
   return {
     id: texto(r['id']),
     situacao: situacao2fa(r['situacao']),
-    segredoEnvelope: ref.startsWith(PREFIXO_ENVELOPE) ? ref.slice(PREFIXO_ENVELOPE.length) : '',
+    segredoEnvelope: cifrado || (ref.startsWith(PREFIXO_ENVELOPE) ? ref.slice(PREFIXO_ENVELOPE.length) : ''),
     digitos: TOTP_PADRAO.digitos,
     passoSegundos: TOTP_PADRAO.passoSegundos,
     criadoEm: data(r['cadastrado_em']),
@@ -144,15 +146,6 @@ function segundoFatorDe(r: Linha): SegundoFatorRegistrado {
     ultimaVerificacao: data(r['ultimo_uso_em']),
   };
 }
-
-export const modeloPendentePolitica2fa = () =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    'A política do segundo fator por onda (início e prazo de adesão) aguarda a tabela no modelo do banco (pedido ' +
-      'registrado): nada foi gravado. Até lá, a exigência vem do cadastro do perfil de acesso (exige segundo fator).',
-  );
 
 /** Entrada das gravações: a chave do pedido e o alvo (os valores sensíveis ficam no fecho, nunca na idempotência). */
 const ENTRADA = z.object({ chave: z.string().min(1).max(120) });
@@ -314,7 +307,7 @@ export class PortaIdentidadePropria implements PortaIdentidade {
   segundoFator = (_h: string, login: string, id: number) =>
     this.ler(async (l) => {
       const r = await l.uma(
-        `SELECT f.id, f.situacao, f.referencia_cofre, f.cadastrado_em, f.confirmado_em, f.ultimo_uso_em
+        `SELECT f.id, f.situacao, f.referencia_cofre, f.segredo_cifrado, f.cadastrado_em, f.confirmado_em, f.ultimo_uso_em
            FROM segundo_fator_usuario f JOIN usuario u ON u.id = f.usuario_id
           WHERE f.usuario_id = ? AND u.login = ? AND f.tipo = ? AND f.excluido_em IS NULL
           ORDER BY f.id DESC LIMIT 1`,
@@ -342,7 +335,8 @@ export class PortaIdentidadePropria implements PortaIdentidade {
         const pendente = vivos[0];
         if (pendente) {
           await tx.alterar('segundo_fator_usuario', Number(pendente['id']), Number(pendente['versao']), {
-            referencia_cofre: PREFIXO_ENVELOPE + c.segredoEnvelope,
+            segredo_cifrado: c.segredoEnvelope,
+            referencia_cofre: null,
             cadastrado_em: agora,
           });
           return { id: Number(pendente['id']), ja: false };
@@ -351,7 +345,7 @@ export class PortaIdentidadePropria implements PortaIdentidade {
           usuario_id: c.idUsuario,
           tipo: TIPO_AUTENTICADOR,
           nome_dispositivo: 'Aplicativo autenticador',
-          referencia_cofre: PREFIXO_ENVELOPE + c.segredoEnvelope,
+          segredo_cifrado: c.segredoEnvelope,
           situacao: 'pendente',
           preferencial: false,
           cadastrado_em: agora,
@@ -408,6 +402,7 @@ export class PortaIdentidadePropria implements PortaIdentidade {
       motivo_revogacao: t.evento.slice(0, 500),
       preferencial: false,
       referencia_cofre: SEGREDO_DESCARTADO,
+      segredo_cifrado: null,
     }));
 
   /** Anti-repetição: grava o passo só se for posterior ao último usado (no próprio UPDATE). */
@@ -456,7 +451,32 @@ export class PortaIdentidadePropria implements PortaIdentidade {
         [est],
         { teto: 500 },
       );
-      return linhas.map(
+      const ondas = await l.consultar(
+        `SELECT p.id, p.alvo, pa.codigo, p.onda, DATE_FORMAT(p.inicio, '%Y-%m-%d') AS inicio, p.prazo_adesao_dias, p.motivo,
+                u.login AS criada_por, p.criado_em, p.encerrada_em
+           FROM politica_segundo_fator p LEFT JOIN perfil_acesso pa ON pa.id = p.perfil_acesso_id
+           LEFT JOIN usuario u ON u.id = p.criado_por
+          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL
+          ORDER BY p.id DESC`,
+        [est],
+        { teto: 500 },
+      );
+      const porOnda = ondas.map(
+        (r): LinhaPolitica2faRegistrada => ({
+          id: texto(r['id']),
+          hospital: h,
+          alvo: texto(r['alvo']) === 'todos' ? 'todos' : 'perfil',
+          valor: texto(r['alvo']) === 'todos' ? null : texto(r['codigo']),
+          onda: Number(r['onda']) === 2 ? 2 : 1,
+          inicio: texto(r['inicio']),
+          prazoAdesaoDias: Number(r['prazo_adesao_dias']),
+          motivo: texto(r['motivo']),
+          criadaPor: texto(r['criada_por']),
+          criadaEm: data(r['criado_em']),
+          encerradaEm: data(r['encerrada_em']),
+        }),
+      );
+      return [...porOnda, ...linhas.map(
         (r): LinhaPolitica2faRegistrada => ({
           id: `perfil-${texto(r['id'])}`,
           hospital: h,
@@ -471,12 +491,109 @@ export class PortaIdentidadePropria implements PortaIdentidade {
           encerradaEm: null,
           origem: 'cadastro-perfil',
         }),
-      );
+      )];
     });
 
-  incluirPolitica: PortaIdentidade['incluirPolitica'] = () => Promise.reject(modeloPendentePolitica2fa());
-  encerrarPolitica: PortaIdentidade['encerrarPolitica'] = () => Promise.reject(modeloPendentePolitica2fa());
-  alterarPolitica: PortaIdentidade['alterarPolitica'] = () => Promise.reject(modeloPendentePolitica2fa());
+  /** O perfil do alvo da política (do estabelecimento ou da rede inteira); 'todos' não tem perfil; grupo não existe. */
+  private async perfilDaPolitica(tx: TxOperacao, est: number, alvo: string, valor: string | null): Promise<number | null> {
+    if (alvo === 'todos') return null;
+    if (alvo !== 'perfil') throw recusa('sem-grupos', 'O modelo próprio não tem grupos: a política vale por perfil ou para todos.');
+    const p = await tx.uma<{ id: number }>(
+      `SELECT id FROM perfil_acesso WHERE codigo = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
+         AND excluido_em IS NULL ORDER BY estabelecimento_id IS NULL LIMIT 1`,
+      [valor ?? '', est],
+    );
+    if (!p) throw recusa('perfil-inexistente', 'O perfil da política não está cadastrado neste estabelecimento.');
+    return Number(p.id);
+  }
+
+  /** A linha vigente da política por onda, travada (null: inexistente, encerrada ou de outro estabelecimento). */
+  private async politicaTravada(tx: TxOperacao, est: number, id: string): Promise<Linha | null> {
+    if (!/^\d{1,18}$/.test(id)) return null;
+    const [p] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, onda, inicio FROM politica_segundo_fator
+        WHERE id = ? AND estabelecimento_id = ? AND encerrada_em IS NULL AND excluido_em IS NULL`,
+      [Number(id), est],
+    );
+    return p ?? null;
+  }
+
+  incluirPolitica: PortaIdentidade['incluirPolitica'] = async (h, p, t) => {
+    const r = await this.gravar(
+      h,
+      t.idUsuario,
+      t.correlacao,
+      'acesso.identidade.incluir-politica-segundo-fator',
+      'politica_segundo_fator',
+      async (tx, est) => ({
+        id: await tx.incluir('politica_segundo_fator', {
+          estabelecimento_id: est,
+          alvo: p.alvo,
+          perfil_acesso_id: await this.perfilDaPolitica(tx, est, p.alvo, p.valor),
+          onda: p.onda,
+          inicio: p.inicio,
+          prazo_adesao_dias: p.prazoAdesaoDias,
+          motivo: p.motivo.slice(0, 500),
+        }),
+      }),
+      { evento: t.evento, alvo: p.alvo, valor: p.valor, onda: p.onda, inicio: p.inicio, prazoAdesaoDias: p.prazoAdesaoDias },
+    );
+    return { id: String(r.id) };
+  };
+
+  encerrarPolitica: PortaIdentidade['encerrarPolitica'] = async (h, c, t) => {
+    const r = await this.gravar(
+      h,
+      t.idUsuario,
+      t.correlacao,
+      'acesso.identidade.encerrar-politica-segundo-fator',
+      'politica_segundo_fator',
+      async (tx, est) => {
+        const atual = await this.politicaTravada(tx, est, c.id);
+        if (!atual) return { id: null, encerrou: false };
+        await tx.alterar('politica_segundo_fator', Number(atual['id']), Number(atual['versao']), {
+          encerrada_em: new Date(),
+          encerrada_por_usuario_id: t.idUsuario,
+          motivo_encerramento: c.motivo.slice(0, 500),
+        });
+        return { id: Number(atual['id']), encerrou: true };
+      },
+      { evento: t.evento, motivo: c.motivo.slice(0, 500) },
+    );
+    return r.encerrou === true;
+  };
+
+  alterarPolitica: PortaIdentidade['alterarPolitica'] = async (h, a, t) => {
+    const r = await this.gravar(
+      h,
+      t.idUsuario,
+      t.correlacao,
+      'acesso.identidade.alterar-politica-segundo-fator',
+      'politica_segundo_fator',
+      async (tx, est) => {
+        const atual = await this.politicaTravada(tx, est, a.id);
+        if (!atual) return { id: null, anterior: null };
+        const nova = await tx.incluir('politica_segundo_fator', {
+          estabelecimento_id: est,
+          alvo: a.alvo,
+          perfil_acesso_id: await this.perfilDaPolitica(tx, est, a.alvo, a.valor),
+          onda: Number(atual['onda']),
+          inicio: dia(atual['inicio']),
+          prazo_adesao_dias: a.prazoAdesaoDias,
+          motivo: a.motivo.slice(0, 500),
+        });
+        await tx.alterar('politica_segundo_fator', Number(atual['id']), Number(atual['versao']), {
+          encerrada_em: new Date(),
+          encerrada_por_usuario_id: t.idUsuario,
+          motivo_encerramento: `Alterada: ${a.motivo}`.slice(0, 500),
+          substituida_por_id: nova,
+        });
+        return { id: nova, anterior: String(atual['id']) };
+      },
+      { evento: t.evento, alvo: a.alvo, valor: a.valor, prazoAdesaoDias: a.prazoAdesaoDias },
+    );
+    return r.id === null || r.anterior === null ? null : { id: String(r.id), anterior: r.anterior };
+  };
 
   // ── gestão ───────────────────────────────────────────────────────────────────────────────────
 

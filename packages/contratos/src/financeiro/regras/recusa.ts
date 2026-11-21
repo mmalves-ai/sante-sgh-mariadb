@@ -47,6 +47,6 @@ export function diasEntre(a: string, b: string): number {
 /** Dia da semana (0 = domingo) de uma data AAAA-MM-DD. */
 export const diaDaSemana = (data: string): number => new Date(`${data.slice(0, 10)}T12:00:00Z`).getUTCDay();
 
-/** Login comparável (TBUSERS.NOME é sensível a maiúsculas no banco; para a segregação, pessoa é pessoa). */
+/** Login comparável (o login pode chegar com caixa diferente; para a segregação, pessoa é pessoa). */
 export const mesmaPessoa = (a: string | null | undefined, b: string | null | undefined): boolean =>
   !!a && !!b && a.trim().toUpperCase() === b.trim().toUpperCase();

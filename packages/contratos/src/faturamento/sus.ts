@@ -207,7 +207,7 @@ export const esquemaFiltroCriticasSus = z
 export type FiltroCriticasSus = z.infer<typeof esquemaFiltroCriticasSus>;
 
 /**
- * faturamento.registrarEquivalenciaSus: o procedimento do hospital (FCLANEXT.ID_TBPROCTO, o procedimento unificado de
+ * faturamento.registrarEquivalenciaSus: o procedimento do hospital (o procedimento unificado de
  * uma tabela do convênio; o mesmo código PROCTO é outro procedimento em outra tabela) → o código SIGTAP (10 dígitos).
  * `versao`: a da equivalência que a tela leu, obrigatória quando já existe uma (ativa ou desativada) para o procedimento.
  */
@@ -239,7 +239,7 @@ export const esquemaFiltroEquivalenciasSus = z
   .strict();
 export type FiltroEquivalenciasSus = z.infer<typeof esquemaFiltroEquivalenciasSus>;
 
-/** Busca no servidor (lista grande: TBPROSUS e o cadastro de procedimentos do hospital), de 2 a 60 caracteres. */
+/** Busca no servidor (lista grande: o catálogo SIGTAP e o cadastro de procedimentos do hospital), de 2 a 60 caracteres. */
 export const esquemaBuscaProcedimentoSus = z
   .object({
     termo: z.string().trim().min(2).max(60),
@@ -249,7 +249,7 @@ export const esquemaBuscaProcedimentoSus = z
   .strict();
 export type BuscaProcedimentoSus = z.infer<typeof esquemaBuscaProcedimentoSus>;
 
-/** Um procedimento SIGTAP achado na busca (TBPROSUS). */
+/** Um procedimento SIGTAP achado na busca. */
 export const esquemaSigtapAchado = z.object({
   id: z.number().int(),
   codigo: z.string(),
@@ -259,7 +259,7 @@ export const esquemaSigtapAchado = z.object({
 });
 export type SigtapAchado = z.infer<typeof esquemaSigtapAchado>;
 
-/** Um procedimento do hospital (TBPROCTO: o código na tabela do convênio, o nome e a tabela). */
+/** Um procedimento do hospital (o código na tabela do convênio, o nome e a tabela). */
 export const esquemaProcedimentoHospitalSus = z.object({
   id: z.number().int(),
   codigo: z.number().int(),
@@ -368,7 +368,7 @@ export type ArquivoSusGerado = z.infer<typeof esquemaArquivoSusGerado>;
 /** A equivalência SIGTAP registrada no Sante para um procedimento do hospital (sem dado pessoal). */
 export const esquemaEquivalenciaSusLida = z.object({
   id: z.number().int(),
-  /** O procedimento do hospital (TBPROCTO.ID). */
+  /** O procedimento do hospital. */
   procedimento: z.number().int(),
   /** Código, nome e tabela do procedimento do hospital (null quando o cadastro não o tem mais). */
   procedimentoCodigo: z.number().int().nullable(),

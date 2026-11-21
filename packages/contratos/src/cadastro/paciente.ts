@@ -52,7 +52,7 @@ export const esquemaCadastrarPaciente = z
       .overwrite((t) => t.trim().toLowerCase())
       .pipe(z.email())
       .optional(),
-    /** M11: responsável/contato (RICADPAC.CONTATO e FCONT; o trigger retrata o telefone do contato). */
+    /** M11: responsável/contato (contato e telefone do contato; o trigger retrata o telefone do contato). */
     contatoNome: maiusculas(40).optional(),
     contatoTelefone: z.string().transform(somenteDigitos).pipe(z.string().min(10).max(15)).optional(),
   })
@@ -75,7 +75,7 @@ const telefoneOuApagar = z
 const textoOuApagar = (max: number) => z.union([maiusculas(max), z.null()]).optional();
 
 /**
- * Campos que a ficha altera: só os que o perfil das alterações recentes confirma (RICADPAC × HTPACIENTE,
+ * Campos que a ficha altera: só os que o perfil das alterações recentes confirma (cadastro × versões do paciente,
  * 20.521 pares de versão de 2025-10 a 2026-09: nome 181, nascimento 37, sexo 21, mãe 37, CPF 17, CEP 100,
  * logradouro 272, número 119, complemento 360, bairro 188, e-mail 8, naturalidade 4, estado civil 27,
  * identidade 45; telefones pelo retrato). CNS, raça/cor, religião e nome social não mudaram em nenhum par
@@ -103,7 +103,7 @@ export const esquemaAlteracoesPaciente = z
       .refine(cpfValido, 'CPF inválido: confira os dígitos (sequência repetida não é CPF).')
       .optional(),
     identidade: textoOuApagar(15),
-    /** TBECIV.ID (só os valores já vistos em RICADPAC.ECIV). */
+    /** Estado civil (só os valores já vistos no cadastro do paciente). */
     estadoCivil: z.union([z.number().int().min(1).max(99), z.null()]).optional(),
     /** CEP de 8 dígitos existente em TBCEP (a FK do legado; o endereço é completado por ele). */
     cep: z

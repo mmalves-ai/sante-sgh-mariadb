@@ -88,14 +88,14 @@ export type LaudoNefrologia = z.infer<typeof esquemaLaudoNefrologia>;
 /** O laudo de solicitação (transcrito do laudo do médico; a chave do atendimento diz o paciente). */
 export const esquemaLaudoApac = z
   .object({
-    /** O registro do atendimento ambulatorial do laudo (RECADATE.REG). */
+    /** O registro do atendimento ambulatorial do laudo. */
     registro: z.number().int().positive().max(2_147_483_647),
     /** O procedimento principal SIGTAP (10 dígitos). */
     procedimento: z.string().regex(/^\d{10}$/),
     cidPrincipal: cid,
     cidSecundario: cid.nullable().default(null),
     cidAssociado: cid.nullable().default(null),
-    /** O médico solicitante SUS (FAMEDSOL), pela chave opaca que a busca dos solicitantes devolve. */
+    /** O médico solicitante SUS (cadastro de solicitantes SUS), pela chave opaca que a busca dos solicitantes devolve. */
     solicitante: chaveSolicitante,
     dataSolicitacao: data,
     justificativa: justificativaLaudo,
@@ -267,7 +267,7 @@ export const esquemaDominiosApac = z.object({
 });
 export type DominiosApac = z.infer<typeof esquemaDominiosApac>;
 
-/** O médico solicitante SUS achado para o laudo (FAMEDSOL): a chave opaca, o nome, o CRM e se o CNS é válido. */
+/** O médico solicitante SUS achado para o laudo (cadastro de solicitantes SUS): a chave opaca, o nome, o CRM e se o CNS é válido. */
 export const esquemaSolicitanteApac = z.object({
   /** Opaca (selada no servidor): o CPF do cadastro não vai ao navegador. */
   chave: z.string(),

@@ -96,7 +96,7 @@ describe('ficha de usuários: CPF só para a conta da plataforma', () => {
     expect(f.usuario.cpf).toBe(CPF);
     expect(f.usuario.cpfInformado).toBe(true);
     expect(fichaUsuario.mock.calls[0]?.[3]).toEqual({ cpf: true });
-    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'TBUSERS', idAlvo: '77', chaveNaturalAlvo: 'ficha;cpf:visto' });
+    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'usuario', idAlvo: '77', chaveNaturalAlvo: 'ficha;cpf:visto' });
     expect(JSON.stringify(req.sghAlvo)).not.toContain(CPF);
   });
 
@@ -111,7 +111,7 @@ describe('ficha de usuários: CPF só para a conta da plataforma', () => {
     const req = requisicao({ perfil: null, como: { atorTipo: 'plataforma', modo: 'acesso-total' } });
     const f = await ctl.ficha('SINT.MEDICO', req);
     expect(f.usuario).toMatchObject({ cpf: null, cpfInformado: false });
-    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'TBUSERS', idAlvo: '77' });
+    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'usuario', idAlvo: '77' });
   });
 
   it('gestor de acessos não vê (a fonte nem lê o número)', async () => {
@@ -121,7 +121,7 @@ describe('ficha de usuários: CPF só para a conta da plataforma', () => {
     expect(f.usuario).toMatchObject({ cpf: null, cpfInformado: true });
     expect(fichaUsuario.mock.calls[0]?.[3]).toEqual({ cpf: false });
     expect(JSON.stringify(f)).not.toContain(CPF);
-    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'TBUSERS', idAlvo: '77' });
+    expect(req.sghAlvo).toEqual({ tabelaAlvo: 'usuario', idAlvo: '77' });
   });
 
   it('suporte técnico na sessão "como" não vê', async () => {

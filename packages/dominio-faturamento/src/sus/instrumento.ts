@@ -1,5 +1,5 @@
 // Instrumento de saída (ficha do M51, regra 1; cap-06b §6.6, Regras): a conta é uma só, com financiador; o instrumento
-// é escolhido pelo financiador e pelo instrumento de registro do procedimento na SIGTAP (TBPROREG, a
+// é escolhido pelo financiador e pelo instrumento de registro do procedimento na SIGTAP (a
 // rl_procedimento_registro da SIGTAP). Convênio sai em guia TISS (M31), particular em recibo (M30) e os dois entram na
 // CIHA; o SUS sai em BPA, APAC ou AIH, conforme o registro, e não entra na CIHA.
 
@@ -24,13 +24,13 @@ export function registroSigtap(codigo: string | number | null | undefined): Regi
   return REGISTROS_SIGTAP[k] ?? null;
 }
 
-/** O financiador da conta: o convênio SUS (TBCONVEN 1 nos dois hospitais), o particular (10) ou outro convênio. */
+/** O financiador da conta: o convênio SUS (convênio de código 1 nos dois hospitais), o particular (10) ou outro convênio. */
 export type Financiador = 'sus' | 'particular' | 'convenio';
 
 export interface ConveniosEspeciais {
-  /** Códigos de TBCONVEN do SUS (parâmetro por estabelecimento; padrão [1]). */
+  /** Códigos de convênio do SUS (parâmetro por estabelecimento; padrão [1]). */
   readonly sus: readonly number[];
-  /** Códigos de TBCONVEN do particular (padrão [10], o mesmo do M30). */
+  /** Códigos de convênio do particular (padrão [10], o mesmo do M30). */
   readonly particular: readonly number[];
 }
 

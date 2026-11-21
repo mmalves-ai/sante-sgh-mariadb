@@ -10,7 +10,7 @@ export const cabecalho: Cabecalho = {
   registroANS: '999999',
 };
 
-const beneficiario = { numeroCarteira: 'SINTETICO0000001', atendimentoRN: 'N' as const };
+const beneficiario = { numeroCarteira: 'SINTETICO0000001', atendimentoRN: false };
 const profissional = { conselho: '06', numeroConselho: '000000', uf: '33', cbos: '225125' };
 
 export const consulta: GuiaConsulta = {

@@ -10,6 +10,7 @@
 //     convidado; cancela só quem pediu, antes do parecer.
 import {
   DIAS_ALERTA_CRONICO,
+  horaParaMinutos,
   MARCA_TELEMEDICINA,
   MINUTOS_ANTES_SALA_ESPERA,
   MINUTOS_DEPOIS_SALA_ESPERA,
@@ -26,18 +27,17 @@ export interface Decisao {
 const sim: Decisao = { pode: true, motivo: null };
 const nao = (motivo: string): Decisao => ({ pode: false, motivo });
 
-/** O relógio do estabelecimento (data AAAA-MM-DD e hora HHMM), como o do banco. */
+/** O relógio do estabelecimento: data AAAA-MM-DD e hora do dia HH:MM, no fuso do estabelecimento. */
 export interface RelogioTele {
   readonly hoje: string;
-  readonly hhmm: string;
+  readonly hora: string;
 }
 
 /** Minutos desde 1970 de uma data e hora civis (sem fuso: tudo no relógio do estabelecimento). */
-export function minutosCivis(data: string, hhmm: string): number {
+export function minutosCivis(data: string, hora: string): number {
   const [a, m, d] = data.split('-').map(Number);
-  const h = Number(hhmm.slice(0, 2));
-  const mi = Number(hhmm.slice(2, 4));
-  return Math.floor(Date.UTC(a ?? 1970, (m ?? 1) - 1, d ?? 1, h, mi) / 60_000);
+  // Hora fora de HH:MM é recusada (hora.formato), nunca lida como zero.
+  return Math.floor(Date.UTC(a ?? 1970, (m ?? 1) - 1, d ?? 1) / 60_000) + horaParaMinutos(hora);
 }
 
 const civil = (min: number) => new Date(min * 60_000).toISOString().slice(0, 16);
@@ -55,7 +55,7 @@ export function janelaSalaEspera(t: { data: string; hora: string }, r: RelogioTe
   const marcado = minutosCivis(t.data, t.hora);
   const abre = marcado - MINUTOS_ANTES_SALA_ESPERA;
   const fecha = marcado + MINUTOS_DEPOIS_SALA_ESPERA;
-  const agora = minutosCivis(r.hoje, r.hhmm);
+  const agora = minutosCivis(r.hoje, r.hora);
   const base = { abreEm: civil(abre), fechaEm: civil(fecha) };
   if (agora < abre)
     return {

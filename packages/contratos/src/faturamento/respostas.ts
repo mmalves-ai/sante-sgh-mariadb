@@ -50,7 +50,7 @@ export const esquemaPendenciaConta = z.object({
   registradaPor: texto,
   registradaEm: texto,
   resolucao: nulo(texto),
-  /** "novo" (SGH_FAT_PENDENCIA) ou "outro" (FCIRREGULARID, até 03/2022, só leitura). */
+  /** "novo" (pendência do produto) ou "outro" (pendência importada, até 03/2022, só leitura). */
   origem: z.enum(['novo', 'outro']),
 });
 export type PendenciaConta = z.infer<typeof esquemaPendenciaConta>;
@@ -300,7 +300,7 @@ export const esquemaReciboLido = z.object({
   valor: n,
   em: texto,
   emitidoPor: texto,
-  /** "novo" (SGH_FAT_RECIBO) ou "antigo" (FCRECIBO, 2020 a 05/2021, só leitura). */
+  /** "novo" (recibo do produto) ou "antigo" (recibo importado, 2020 a 05/2021, só leitura). */
   origem: z.enum(['novo', 'antigo']),
 });
 export type ReciboLido = z.infer<typeof esquemaReciboLido>;

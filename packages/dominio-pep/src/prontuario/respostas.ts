@@ -1,9 +1,9 @@
 // Leitura estruturada das respostas de um registro (regra 5 da ficha do M15; cap-11 §11.1 "Leitura
 // estruturada"): o caminho de cada valor é modelo + ORDEM → vínculo do modelo (inclusive os inativos) → tipo da
-// pergunta → coluna. A escolha grava o índice do combo (RESPSNAO) e o ID da resposta: a leitura resolve pelo ID
+// pergunta → coluna. A escolha grava o índice da opção na lista e o ID da resposta: a leitura resolve pelo ID
 // da resposta (100% dos casos válidos na cópia) e, sem ele, pelo índice na lista do formulário (DFM) ou pela
 // ordem das respostas cadastradas; SEQ é a linha da grade; o CID vem do retrato; a sentinela 1899-12-30 vira
-// vazio e a hora HHMM vira HH:MM. O que não se resolve com certeza fica marcado "a confirmar" (DP-28), nunca
+// vazio e a hora sai em HH:MM. O que não se resolve com certeza fica marcado "a confirmar" (DP-28), nunca
 // adivinhado. Puras: a API monta a entrada com o que o adaptador leu.
 import type { ItemResposta, Respostas } from '@sgh/contratos';
 import type { EntradaModelo, ItemFormulario, RepresentacaoFormulario } from '../formulario/dfm/mapeamento.js';

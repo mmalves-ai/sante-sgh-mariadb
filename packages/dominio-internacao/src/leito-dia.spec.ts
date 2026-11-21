@@ -16,7 +16,7 @@ describe('leito-dia operacional', () => {
     const m = new MotorInternacao(mov, {
       horaFechamento: 24,
       intensivas: [3],
-      agora: em('2026-02-10', '1200'),
+      agora: em('2026-02-10', '12:00'),
     });
     const [fev] = m.basesMensais('2026-02', '2026-02');
     expect(fev?.grandezas.dias).toBe(10);

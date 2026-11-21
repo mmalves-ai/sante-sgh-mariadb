@@ -1,14 +1,12 @@
-// Equipe cirúrgica (ficha do M18, regra 6; cap-05a §5.5). CCAGENDA guarda sete pares (código do profissional, ID em
-// TBCBOPRO) mais o pediatra (só o ID); o gatilho TRG_CCAGENDA_BIU confere cada par contra TBCBOPRO e recusa o par que
-// não casa (E_GERAL_ID_PROFIS_INVALIDO). Profissional ausente = par (0, 1): TBCBOPRO ID 1 tem COD 0 (690 de 830
-// agendamentos desde 10/2025 com os seis apoios em 1 e o pediatra 1). O par (0, 488) é o da trilha (CCHISAGE.ID_CRM
-// 488 em 100%) e também aparece nos agendamentos do agendamento pela internet (136). O sentinela nunca aparece na tela.
-// CCLANCIR (registro) tem oito pares: cirurgião, três auxiliares, instrumentador, anestesista, pediatra e circulante,
-// mais o quarto auxiliar só por ID.
+// Equipe cirúrgica (ficha do M18, regra 6; cap-05a §5.5). O agendamento tem sete funções (cada uma com o id do registro
+// profissional e o número do registro) mais o pediatra (só o id); o domínio confere cada par contra o cadastro de
+// profissionais e recusa o que não casa. Profissional ausente = par (0, 1), o registro "não informado"; o par (0, 488)
+// é o da trilha. O "não informado" nunca aparece na tela. O registro do ato tem oito funções: cirurgião, três
+// auxiliares, instrumentador, anestesista, pediatra e circulante, mais o quarto auxiliar só por id.
 
 export const SENTINELA_PROFISSIONAL = 1;
 export const SENTINELA_TRILHA = 488;
-/** IDs de TBCBOPRO que significam "não informado" (COD 0). */
+/** Ids do registro profissional que significam "não informado" (número 0). */
 export const SENTINELAS = new Set([SENTINELA_PROFISSIONAL, SENTINELA_TRILHA]);
 
 export const FUNCOES_AGENDA = [
@@ -34,7 +32,7 @@ export const FUNCOES_REGISTRO = [
 ] as const;
 export type FuncaoRegistro = (typeof FUNCOES_REGISTRO)[number]['funcao'];
 
-/** Profissional escolhido na tela: o ID de TBCBOPRO e o código (COD) que o par exige. */
+/** Profissional escolhido na tela: o id do registro profissional e o número do registro que o par exige. */
 export interface Profissional {
   readonly id: number;
   readonly cod: number;
@@ -57,7 +55,7 @@ export function paresDaAgenda(
   return pares;
 }
 
-/** Pares do registro (CCLANCIR); o quarto auxiliar só por ID (1 = ausente). */
+/** Pares do registro do ato; o quarto auxiliar só por id (1 = ausente). */
 export function paresDoRegistro(
   equipe: Partial<Record<FuncaoRegistro, Profissional | null>>,
   auxiliar4: number | null = null,

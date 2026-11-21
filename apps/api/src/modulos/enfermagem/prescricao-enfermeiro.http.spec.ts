@@ -38,7 +38,7 @@ describe('regra 17: a prescrição de medicamento pelo enfermeiro', () => {
     expect(cs.map((c: { atendimento: number }) => c.atendimento)).toEqual([CONSULTA_ENFERMAGEM_SINTETICA]);
     // A lista com nome e registro dos pacientes do dia deixa a linha de leitura na trilha (só a contagem no alvo).
     const lida = a.trilha.eventos.filter(
-      (l) => l.evento === 'enfermagem.prescricaoMedicamento.lida' && l.tabelaAlvo === 'ATCABECATEND',
+      (l) => l.evento === 'enfermagem.prescricaoMedicamento.lida' && l.tabelaAlvo === 'atendimento',
     );
     expect(lida).toHaveLength(1);
     expect(lida[0]).toMatchObject({ usuario: 'SINT.ENF.PLANTAO', resultado: 'sucesso' });

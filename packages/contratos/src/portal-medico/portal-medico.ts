@@ -4,9 +4,9 @@
 // bloco confirma pela agenda do M18). O portal nunca manda o ID do profissional nem o código de prestador: o servidor
 // tira os dois do vínculo da conta, decidido por uma pessoa do hospital. Vocabulário do novo; nenhum nome de tabela.
 import { z } from 'zod';
-import { esquemaHhmm } from '../agenda/entradas.js';
 import { esquemaDuracaoMin, esquemaSala } from '../cirurgia/entradas.js';
 import { esquemaDataIso } from '../preco/entradas.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import type {
   CertificadoVinculadoResumo,
   ExigenciaAssinatura,
@@ -35,7 +35,7 @@ export const esquemaPedidoCirurgiaPortal = z
   .object({
     sala: esquemaSala,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHora,
     duracaoMin: esquemaDuracaoMin,
     procedimento: id,
     convenio: smallint,
@@ -142,7 +142,7 @@ export interface PedidoPortalMedico {
   readonly edicao: {
     readonly sala: number;
     readonly data: string;
-    /** HHMM. */
+    /** Hora do dia "HH:MM" no fuso do estabelecimento. */
     readonly hora: string;
     readonly duracaoMin: number;
     readonly procedimento: number;

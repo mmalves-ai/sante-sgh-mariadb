@@ -278,7 +278,7 @@ export class SuprimentosController {
     const lote = (q['lote'] ?? '').trim().slice(0, 30);
     if (!item || !lote)
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Informe o item e o lote.');
-    req.sghAlvo = { tabelaAlvo: 'GEVALMEM', idAlvo: `${item}/${lote}` };
+    req.sghAlvo = { tabelaAlvo: 'lote_insumo', idAlvo: `${item}/${lote}` };
     return this.porta.rastreio(ctx(sessaoDe(req)), item, lote);
   }
 
@@ -290,7 +290,7 @@ export class SuprimentosController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<LotesDoPaciente> {
     const atendimento = idDaRota(a);
-    req.sghAlvo = { tabelaAlvo: 'GECADSAI', idAlvo: `atendimento ${atendimento}` };
+    req.sghAlvo = { tabelaAlvo: 'documento_estoque', idAlvo: `atendimento ${atendimento}` };
     return this.porta.lotesDoPaciente(ctx(sessaoDe(req)), atendimento);
   }
 
@@ -327,7 +327,7 @@ export class SuprimentosController {
     if (inicio > fim)
       throw new ErroProblema('entrada-invalida', 400, 'Período inválido', 'O início é depois do fim.');
     const pagina = paginaOu(q['pagina']);
-    req.sghAlvo = { tabelaAlvo: 'GECADSAI', idAlvo: `${tipo} ${inicio}..${fim} p${pagina}` };
+    req.sghAlvo = { tabelaAlvo: 'documento_estoque', idAlvo: `${tipo} ${inicio}..${fim} p${pagina}` };
     const l = await this.porta.documentos(ctx(s), { tipo, ...(local ? { local } : {}), inicio, fim, pagina });
     return { ...l, pagina };
   }
@@ -352,7 +352,7 @@ export class SuprimentosController {
     });
     if (!d) throw new ErroProblema('nao-encontrado', 404, 'Documento não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'GECADSAI',
+      tabelaAlvo: 'documento_estoque',
       idAlvo: String(d.id),
       ...(d.paciente ? { paciente: d.paciente.atendimento } : {}),
     };
@@ -423,7 +423,7 @@ export class SuprimentosController {
     const s = sessaoDe(req);
     const r = await this.porta.relogio(ctx(s));
     const local = localOu(l);
-    req.sghAlvo = { tabelaAlvo: 'GECADSAI', idAlvo: `requisicoes ${local ?? 'todos'}` };
+    req.sghAlvo = { tabelaAlvo: 'requisicao_material', idAlvo: `requisicoes ${local ?? 'todos'}` };
     return this.porta.requisicoes(ctx(s), { ...(local ? { local } : {}), hoje: r.hoje });
   }
 
@@ -726,7 +726,7 @@ export class SuprimentosController {
     @Res({ passthrough: true }) res: { setHeader(k: string, v: string): void },
   ): Promise<string> {
     const h = await this.porta.historicoCompras(ctx(sessaoDe(req)), idDaRota(item));
-    req.sghAlvo = { tabelaAlvo: 'GECOMPRA', idAlvo: `item ${h.item} (csv)` };
+    req.sghAlvo = { tabelaAlvo: 'pedido_compra_item', idAlvo: `item ${h.item} (csv)` };
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="historico-compras-${h.item}.csv"`);
     const linhas = h.compras.map((c) =>
@@ -811,7 +811,10 @@ export class SuprimentosController {
     @Res({ passthrough: true }) res: { setHeader(k: string, v: string): void },
   ): Promise<string> {
     const c = await this.consumo(q, req);
-    req.sghAlvo = { tabelaAlvo: 'GEKONCDC', idAlvo: `${c.competencia.mes}/${c.competencia.ano} (csv)` };
+    req.sghAlvo = {
+      tabelaAlvo: 'consumo_centro_custo',
+      idAlvo: `${c.competencia.mes}/${c.competencia.ano} (csv)`,
+    };
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader(
       'Content-Disposition',

@@ -5,7 +5,7 @@
 // receita genérica": nenhuma das tabelas tem trigger nem generator (o código é digitado, nunca MAX+1); só o OID ganha
 // inclusão (um OID novo de uma versão nova do DOC-ICP-04.01); os demais só se alteram (os códigos são os das APIs dos
 // provedores e do cadastro do outro sistema). As formas de assinatura ICP (AD-RB e AD-RT) são só leitura (consulta do
-// item). Opções do outro sistema (TBOPCOES): Tabelas › Geral A–L › Assinatura avançada 6922 (Gerenciamento 6923): o
+// item). Opções do outro sistema (menu de origem): Tabelas › Geral A–L › Assinatura avançada 6922 (Gerenciamento 6923): o
 // cadastro de apoio da assinatura; a tela própria dos OIDs não tem opção separada na árvore (inferida: conferir na
 // validação). As permissões `documento.cadastro.ler/.editar` da tela vêm do mesmo par de opções.
 import type { DominioPublico } from './tipos.js';

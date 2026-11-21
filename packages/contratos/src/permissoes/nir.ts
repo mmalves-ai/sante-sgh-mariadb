@@ -1,6 +1,6 @@
 // Permissões do M44, etapa 2 (ficha, seção 7; convencoes.md §12): o NIR (solicitação de leito, fila priorizada,
 // reserva, alta prevista e barreiras, quadro de permanência e os limites). Quem tem a opção no sistema anterior tem a
-// permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 // Recepção interna › Internações 2342 › Leitos 2322 (Manutenção 2323, Painel de leitos 3990, Controle Central de Leitos
 // 2483) — a coordenação de leitos opera por elas hoje; a "Regulação de leitos" (4574, 4565) está inativa e o módulo
 // "Central de Regulação" não tem opção concedida a grupo (ficha, regra comum 9): ficam para a etapa 3 (regulação).

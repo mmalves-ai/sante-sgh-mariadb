@@ -7,7 +7,7 @@ import { leituras } from './painel.spec-util.js';
 
 const op = {
   intensivas: [3, 7],
-  agora: em('2026-10-21', '1000'),
+  agora: em('2026-10-21', '10:00'),
   lidoEm: '2026-10-21T13:00:00.000Z',
   dadosAte: '2026-10-21T13:00:00.000Z',
   destino: 'memoria' as const,

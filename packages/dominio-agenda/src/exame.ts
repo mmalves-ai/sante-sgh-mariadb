@@ -1,26 +1,25 @@
 // Agenda de exames (ficha do M18, regras 1 a 4; ref 01 §2.1, §9.1 e §9.2; cap-05a §5.1; cap-10 §10.3). Regras puras,
 // sem banco, medidas na cópia pc (só agregados):
-//   - a categoria da agenda é SIAGENDA.ID_TBTABATO (21 Endoscopia digestiva, 24 Ultrassonografia, 42 Outros; o
-//     catálogo do SADT conhece também 15, 16, 25, 26, 27 e o ato 90, Métodos gráficos, que não tem linha em TBTABATO
-//     e é rotulado aqui);
-//   - SIPACAGD.TP_AGE é a categoria da marcação: 90 quando o horário é de EXAME 'O' (Outros: 4.593 de 4.594 nas
-//     agendas 42 e 587 numa de ultrassom) e a categoria da agenda nos demais (21 e 24): a chave única da marcação
-//     inclui TP_AGE;
-//   - o exame grava o horário (SIPACAGI) E a marcação (SIPACAGD, com o prontuário): em 2026, todo horário ocupado tem
-//     a marcação; um horário com SITUACAO 'C' e PACIENTE vazio é resíduo da sante-api ('C' é Confirmado: X é
-//     Cancelado);
-//   - o vínculo com o paciente é o PRONT (87% em 2026); o casamento por nome é só sugestão com confirmação;
-//   - SIPACAGD.ATENDIDO usa T/F (F na marcação; nunca S/N) e PROCED é 0 nas duas tabelas.
+//   - a categoria da agenda é a do ato do catálogo de exames (21 Endoscopia digestiva, 24 Ultrassonografia, 42
+//     Outros; o catálogo do SADT conhece também 15, 16, 25, 26, 27 e o ato 90, Métodos gráficos, que não tem linha no
+//     cadastro de atos e é rotulado aqui);
+//   - a categoria da marcação é 90 quando o horário é do tipo 'O' (Outros: 4.593 de 4.594 nas agendas 42 e 587 numa
+//     de ultrassom) e a categoria da agenda nos demais (21 e 24): a chave única da marcação inclui a categoria;
+//   - o exame grava o horário E a marcação (com o prontuário): em 2026, todo horário ocupado tem a marcação; um
+//     horário com situação 'C' e paciente vazio é resíduo do sistema anterior ('C' é Confirmado: X é Cancelado);
+//   - o vínculo com o paciente é o prontuário (87% em 2026); o casamento por nome é só sugestão com confirmação;
+//   - o comparecimento da marcação de exame é um sinal próprio (falso na marcação) e o procedimento fica zerado nas
+//     duas linhas.
 import { formatarHora } from './tempo.js';
 
 export interface CategoriaExame {
   readonly codigo: number;
   readonly rotulo: string;
-  /** O código existe em TBTABATO (o ato 90 não existe: rótulo do novo). */
+  /** O código existe no cadastro de atos (o ato 90 não existe: rótulo do produto). */
   readonly noCatalogo: boolean;
 }
 
-/** As categorias que as agendas de exame e o catálogo do SADT (SITABPRO.ATO) usam. */
+/** As categorias que as agendas de exame e o catálogo do SADT (ato do exame) usam. */
 export const CATEGORIAS_EXAME: readonly CategoriaExame[] = [
   { codigo: 15, rotulo: 'Patologia clínica', noCatalogo: true },
   { codigo: 16, rotulo: 'Radiodiagnóstico', noCatalogo: true },
@@ -41,7 +40,7 @@ export function rotuloCategoria(codigo: number | null | undefined): string {
   return categoriaExame(codigo)?.rotulo ?? `Categoria ${codigo ?? 'não informada'}`;
 }
 
-/** SIAGENDA.EXAME / SIPACAGI.EXAME: o tipo de horário (E, U e O vistos; o resto é recusado). */
+/** O tipo de horário da agenda e da grade de exames (E, U e O vistos; o resto é recusado). */
 export const TIPOS_HORARIO_EXAME = [
   { codigo: 'E', rotulo: 'Endoscopia' },
   { codigo: 'U', rotulo: 'Ultrassonografia' },
@@ -58,14 +57,14 @@ export function rotuloTipoHorario(t: string | null | undefined): string {
 }
 
 /** O ato do horário do tipo 'O' (Outros) na marcação: Métodos gráficos. */
-export const TP_AGE_OUTROS = 90;
+export const CATEGORIA_OUTROS = 90;
 
-/** SIPACAGD.TP_AGE da marcação: 90 para o horário de EXAME 'O'; senão a categoria da agenda. */
-export function tpAgeDaMarcacao(categoriaAgenda: number, exameDoHorario: string): number {
-  return exameDoHorario.trim() === 'O' ? TP_AGE_OUTROS : categoriaAgenda;
+/** A categoria da marcação: 90 para o horário do tipo 'O'; senão a categoria da agenda. */
+export function categoriaDaMarcacao(categoriaAgenda: number, exameDoHorario: string): number {
+  return exameDoHorario.trim() === 'O' ? CATEGORIA_OUTROS : categoriaAgenda;
 }
 
-/** TBSITAGE no exame: C é Confirmado; X é Cancelado (a sante-api usava C como cancelado). */
+/** Situação do horário de exame: C é Confirmado; X é Cancelado (o sistema anterior usava C como cancelado). */
 export const SITUACAO_CONFIRMADO = 'C';
 export const SITUACAO_CANCELADO = 'X';
 
@@ -77,7 +76,7 @@ export interface HorarioExameLido {
   readonly livre: string;
   readonly situacao: string;
   readonly tipo: string;
-  /** Há marcação (SIPACAGD) no horário. */
+  /** Há marcação no horário. */
   readonly temMarcacao: boolean;
 }
 
@@ -94,7 +93,7 @@ export type EstadoHorarioExame =
 
 /**
  * Estado do horário de exame para a tela. Vaga = PACIENTE vazio, sem situação, livre e normal. "Marcação incompleta"
- * = ocupado sem SIPACAGD (o que a sante-api grava hoje); "confirmado sem paciente" = 'C' com PACIENTE vazio (o
+ * = ocupado sem marcação (o que o sistema anterior grava hoje); "confirmado sem paciente" = 'C' com PACIENTE vazio (o
  * cancelamento da sante-api).
  */
 export function estadoDoHorarioExame(h: HorarioExameLido): EstadoHorarioExame {
@@ -133,7 +132,7 @@ export function aceitaMarcacao(h: HorarioExameLido): boolean {
 export interface ResiduoExame {
   /** Horários 'C' com PACIENTE vazio (cancelamento da sante-api). */
   readonly confirmadosSemPaciente: number;
-  /** Horários ocupados sem a marcação (SIPACAGD). */
+  /** Horários ocupados sem a marcação. */
   readonly ocupadosSemMarcacao: number;
   readonly total: number;
 }

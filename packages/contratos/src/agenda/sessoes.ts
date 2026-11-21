@@ -1,11 +1,10 @@
 // Agenda de sessões e recursos (M50, etapa 6; ficha, seções 4, 5, 7 e 8; regra 11; cap-05a §5.1): a série de sessões
 // de um plano terapêutico (quimioterapia, infusão, fisioterapia, hemodiálise…) em cadeira ou sala, sem sobreposição do
-// recurso nem do paciente, com a complexidade e a duração dos domínios do agendamento (AGCOMPLEXIDADE, AGDURACAO) e a
-// faixa etária do recurso. Os recursos são as cadeiras e salas do cadastro de agendas do agendamento (AGCADAGENDA e
-// AGCADEIRA, pelo CRUD genérico); as sessões ficam só no novo (SGH_AGE_SESSAO). Desligada até o serviço existir (chave
-// `sessoes`, DP-32; POL-1, POL-3).
+// recurso nem do paciente, com a complexidade e a duração dos cadastros do agendamento e a faixa etária do recurso.
+// Os recursos são as cadeiras e salas do cadastro de agendas de sessão (pelo CRUD genérico); as sessões ficam no modelo
+// próprio. Desligada até o serviço existir (chave `sessoes`, DP-32; POL-1, POL-3).
 import { z } from 'zod';
-import { FORMATO_HHMM } from '../formatacao/hora-legada.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 
 export const CHAVE_LIBERACAO_SESSOES = 'sessoes';
@@ -36,25 +35,24 @@ export const DIAS_GRADE_SESSOES = 14;
 export const TETO_GRADE_SESSOES = 500;
 /** Sessões futuras de um paciente devolvidas na ficha do paciente. */
 export const TETO_SESSOES_PACIENTE = 100;
-/** A duração da sessão em minutos (a categoria curta, média ou longa vem do domínio AGDURACAO). */
+/** A duração da sessão em minutos (a categoria curta, média ou longa vem do cadastro de durações). */
 export const DURACAO_SESSAO_MIN = { minimo: 10, maximo: 720 } as const;
 
 const id = z.number().int().positive().max(2_147_483_647);
 const idLongo = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
-const hhmm = z.string().regex(FORMATO_HHMM, 'Hora no formato HHMM.');
 
 // ── Agendar a série (`agenda.agendarSessao`) ─────────────────────────────────────────────────────────────────────
 
 export const esquemaAgendarSessao = z
   .object({
-    /** RICADPAC.ID do paciente (escolhido pela busca do cadastro). */
+    /** O paciente do cadastro único (escolhido pela busca do cadastro). */
     paciente: id,
-    /** O recurso (AGCADEIRA.ID_CADEIRA): a cadeira ou a sala; a agenda vem dele. */
+    /** O recurso: a cadeira ou a sala; a agenda vem dele. */
     recurso: id,
-    /** AGCOMPLEXIDADE.ID_COMPLEXIDADE da sessão (1 a 3; 0 = "todas" não é complexidade de sessão). */
+    /** A complexidade da sessão no cadastro de complexidades (1 a 3; 0 = "todas" não é complexidade de sessão). */
     complexidade: z.number().int().min(1).max(32767),
-    /** AGDURACAO.ID_DURACAO da sessão (1 a 3). */
+    /** A categoria de duração da sessão no cadastro de durações (1 a 3). */
     duracao: z.number().int().min(1).max(32767),
     duracaoMin: z.number().int().min(DURACAO_SESSAO_MIN.minimo).max(DURACAO_SESSAO_MIN.maximo),
     planoTipo: z.enum(TIPOS_PLANO_SESSAO),
@@ -62,7 +60,7 @@ export const esquemaAgendarSessao = z
     plano: textoCp1252(200).pipe(z.string().trim().min(3)),
     /** Primeira sessão. */
     inicio: data,
-    hora: hhmm,
+    hora: esquemaHora,
     sessoes: z.number().int().min(1).max(TETO_SESSOES_SERIE),
     /** Dias entre uma sessão e a seguinte (1 = diária; 7 = semanal; 21 = ciclo de 21 dias). */
     intervaloDias: z.number().int().min(1).max(60),
@@ -106,7 +104,7 @@ export interface DominioSessao {
   readonly nome: string;
 }
 
-/** Uma cadeira ou sala (AGCADEIRA) com a agenda (AGCADAGENDA) a que pertence. */
+/** Uma cadeira ou sala com a agenda de sessões a que pertence. */
 export interface RecursoSessao {
   readonly recurso: number;
   readonly identificacao: string;

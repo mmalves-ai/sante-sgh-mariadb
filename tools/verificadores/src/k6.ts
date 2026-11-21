@@ -179,7 +179,10 @@ function sair(msg: string, codigo = 1): never {
 class FalhaK6 extends Error {}
 
 if (!/^[a-z0-9-]+$/.test(cenario) || !existsSync(resolve(raiz, 'infra/k6', `${cenario}.js`))) {
-  sair(`Uso: pnpm k6 -- <cenario> --cliente=<código> (infra/k6/<cenario>.js). Cenário "${cenario}" não existe.`, 2);
+  sair(
+    `Uso: pnpm k6 -- <cenario> --cliente=<código> (infra/k6/<cenario>.js). Cenário "${cenario}" não existe.`,
+    2,
+  );
 }
 
 // M39: o pico da recepção COM GRAVAÇÃO grava pelas rotas reais (COMMIT): só em AMBIENTE=homolog, pela TI (DP-15),
@@ -192,7 +195,8 @@ if (cenario === 'pico-recepcao-gravacao') {
 const env = ambienteDoRepositorio();
 const recusa = motivoRecusaBancoDev(env);
 if (recusa) sair(`k6 recusado: ${recusa} (DP-15).`);
-const cliente = clienteDaLeitura(argv, { ...process.env, ...env }) ?? sair('Informe o cliente: --cliente=<código>.', 2);
+const cliente =
+  clienteDaLeitura(argv, { ...process.env, ...env }) ?? sair('Informe o cliente: --cliente=<código>.', 2);
 
 /** Limite da transação do processo medido (VIGIA_LIMITE_TRANSACAO_MS; padrão 5 s; faixa validada). */
 function limiteTransacao(): number {
@@ -278,10 +282,14 @@ async function aguardarPartida(n: NucleoProprio, banco: string, limiteMs: number
       const c = await n.lerSomente({ cliente, correlacao: 'k6-partida' }, (l) =>
         coletarTransacoes(l, { banco, limiteTransacaoMs: limiteMs }),
       );
-      const longas = c.conexoesDoNovo.filter((x) => conexaoDoK6(x.marca) && x.transacaoMaisLongaMs > limiteMs);
+      const longas = c.conexoesDoNovo.filter(
+        (x) => conexaoDoK6(x.marca) && x.transacaoMaisLongaMs > limiteMs,
+      );
       if (longas.length === 0) {
         if (ultima)
-          console.log(`▶ partida do processo medido concluída (${Math.round((Date.now() - inicio) / 1000)} s de espera)`);
+          console.log(
+            `▶ partida do processo medido concluída (${Math.round((Date.now() - inicio) / 1000)} s de espera)`,
+          );
         return;
       }
       const agora = longas
@@ -318,14 +326,25 @@ async function principal(): Promise<number> {
   let saida: string | null = null;
   try {
     const banco = (await vigia.cliente(cliente)).banco;
-    filhos.push(subir('api', 'apps/api/dist/main.js', { SGH_PROCESSO: PROCESSOS_DO_K6.api, API_PORTA: String(PORTA_API) }));
     filhos.push(
-      subir('worker', 'apps/worker/dist/main.js', { SGH_PROCESSO: PROCESSOS_DO_K6.worker, VIGIA_INTERVALO_MS: '5000' }),
+      subir('api', 'apps/api/dist/main.js', {
+        SGH_PROCESSO: PROCESSOS_DO_K6.api,
+        API_PORTA: String(PORTA_API),
+      }),
+    );
+    filhos.push(
+      subir('worker', 'apps/worker/dist/main.js', {
+        SGH_PROCESSO: PROCESSOS_DO_K6.worker,
+        VIGIA_INTERVALO_MS: '5000',
+      }),
     );
     for (let i = 0; i < 90 && !(await respondendo(`${API}/api/carga/login/0`)); i++) await espera(1_000);
-    if (!(await respondendo(`${API}/api/carga/login/0`))) throw new FalhaK6('A API não respondeu em /api/carga/login.');
+    if (!(await respondendo(`${API}/api/carga/login/0`)))
+      throw new FalhaK6('A API não respondeu em /api/carga/login.');
     const pool = lerConfiguracaoNucleo(env);
-    console.log(`▶ API no ar (pool ${pool.tetoPorBanco} conexões por banco, espera ${pool.esperaConexaoMs} ms)`);
+    console.log(
+      `▶ API no ar (pool ${pool.tetoPorBanco} conexões por banco, espera ${pool.esperaConexaoMs} ms)`,
+    );
     const vig = vigiar(vigia, banco, limiteMs);
     // M34: a partida do processo medido termina antes de o k6 começar: o critério mede o regime, não a partida.
     await aguardarPartida(vigia, banco, limiteMs);
@@ -341,9 +360,24 @@ async function principal(): Promise<number> {
       const p = spawn(
         'docker',
         [
-          'run', '--rm', '--name', `sgh-k6-${process.pid}`, '--network', 'host',
-          '-v', `${resolve(raiz, 'infra/k6')}:/scripts:ro`, '-v', `${saida}:/saida`,
-          IMAGEM_K6, 'run', '--quiet', '--no-usage-report', '-e', `BASE=${API}`, ...vars, `/scripts/${cenario}.js`,
+          'run',
+          '--rm',
+          '--name',
+          `sgh-k6-${process.pid}`,
+          '--network',
+          'host',
+          '-v',
+          `${resolve(raiz, 'infra/k6')}:/scripts:ro`,
+          '-v',
+          `${saida}:/saida`,
+          IMAGEM_K6,
+          'run',
+          '--quiet',
+          '--no-usage-report',
+          '-e',
+          `BASE=${API}`,
+          ...vars,
+          `/scripts/${cenario}.js`,
         ],
         { cwd: raiz, stdio: ['ignore', 'inherit', 'inherit'] },
       );
@@ -374,7 +408,14 @@ async function principal(): Promise<number> {
       cliente,
       usuarios: Number(
         process.env['USUARIOS'] ??
-          (['cadastro-busca', 'prontuario', 'painel-leitos', 'agenda', 'portal-agenda', 'prescricao'].includes(cenario)
+          ([
+            'cadastro-busca',
+            'prontuario',
+            'painel-leitos',
+            'agenda',
+            'portal-agenda',
+            'prescricao',
+          ].includes(cenario)
             ? 60
             : cenario === 'dispensar'
               ? 8
@@ -387,7 +428,9 @@ async function principal(): Promise<number> {
         saida: k6,
         iteracoes: Math.round(resumo.metrics['iterations']?.values['count'] ?? 0),
         requisicoes: Math.round(resumo.metrics['http_reqs']?.values['count'] ?? 0),
-        vusMax: Math.round(resumo.metrics['vus_max']?.values['max'] ?? resumo.metrics['vus_max']?.values['value'] ?? 0),
+        vusMax: Math.round(
+          resumo.metrics['vus_max']?.values['max'] ?? resumo.metrics['vus_max']?.values['value'] ?? 0,
+        ),
         falhasPct: Number(((resumo.metrics['http_req_failed']?.values['rate'] ?? 0) * 100).toFixed(2)),
         jornadas: Object.fromEntries(
           Object.entries(JORNADAS_DO_CENARIO[cenario] ?? {}).map(([nome, tag]) => [nome, jornada(tag)]),
@@ -400,7 +443,11 @@ async function principal(): Promise<number> {
               const v = resumo.metrics[m]!.values;
               return [
                 m === 'sgh_executor_ms' ? 'executor' : 'esperaPool',
-                { p50_ms: Math.round(v['p(50)'] ?? 0), p95_ms: Math.round(v['p(95)'] ?? 0), max_ms: Math.round(v['max'] ?? 0) },
+                {
+                  p50_ms: Math.round(v['p(50)'] ?? 0),
+                  p95_ms: Math.round(v['p(95)'] ?? 0),
+                  max_ms: Math.round(v['max'] ?? 0),
+                },
               ];
             }),
         ),

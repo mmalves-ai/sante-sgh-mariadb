@@ -92,7 +92,7 @@ export interface BlocoRegistro {
 }
 
 /**
- * Texto formatado do registro inteiro (PRCONTEVOL.EVOLUCAO): seção em \cf1 (negrito quando a fonte do vínculo é
+ * Texto formatado do registro inteiro: seção em \cf1 (negrito quando a fonte do vínculo é
  * negrito), pergunta em \li200 e o valor em \li600 \cf0, uma linha em branco depois de cada valor.
  */
 export function rtfDoRegistro(blocos: readonly BlocoRegistro[]): string {

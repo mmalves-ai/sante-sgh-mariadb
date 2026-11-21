@@ -62,7 +62,8 @@ export interface GrupoFonteEstatistica {
 export interface FontesEstatistica {
   readonly censo: { readonly grupos: GrupoFonteEstatistica[]; readonly diasFechados: number };
   readonly internacoes: GrupoFonteEstatistica[];
-  readonly cirurgias: { cdc: number | null; duracao: string | null; n: number }[];
+  /** Cirurgias pela duração em minutos (null: sem duração válida). */
+  readonly cirurgias: { cdc: number | null; minutos: number | null; n: number }[];
   readonly exames: GrupoFonteEstatistica[];
   readonly requisicoes: GrupoFonteEstatistica[];
   readonly colaboradores: { centro: number; n: number; horas: number }[];

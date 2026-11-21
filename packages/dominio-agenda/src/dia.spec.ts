@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { candidatosAFalta, type MarcacaoDoDia, proximaVaga, resumoDoDia, turnoDaHora } from './dia.js';
 
-const relogio = { hoje: '2026-10-21', hhmm: '1100' };
+const relogio = { hoje: '2026-10-21', hhmm: '11:00' };
 const m = (id: number, x: Partial<MarcacaoDoDia> = {}): MarcacaoDoDia => ({
   id,
   data: '2026-10-21',

@@ -1,9 +1,9 @@
 // Vínculo assistencial (ficha do M06, regra 7; cap-08 §8.5): sobre dados do legado segue o parâmetro
-// PRPARAM.REST_ACESS_PACI_NAO_ESTE_ATEND, igual nos dois sistemas (se o novo restringisse o que o legado
-// libera, a pessoa abriria pelo SPDATA sem justificativa nem alerta); nos recursos novos vale sempre. A
+// de restrição de acesso ao paciente fora deste atendimento, igual nos dois sistemas (se o novo restringisse o que o legado
+// libera, a pessoa abriria pelo sistema de origem sem justificativa nem alerta); nos recursos novos vale sempre. A
 // porta responde se há vínculo; até o M15/M21 é servida por massa sintética.
 
-/** Paciente do legado pelo ID (RICADPAC.ID) e, quando houver, o atendimento (REG). */
+/** Paciente pelo ID do cadastro e, quando houver, o atendimento (REG). */
 export interface PacienteAlvo {
   readonly idPaciente: number;
   readonly atendimento?: number | null;

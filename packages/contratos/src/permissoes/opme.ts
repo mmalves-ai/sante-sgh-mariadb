@@ -1,6 +1,6 @@
 // Permissões do M46, etapa 3 (ficha, seção 7; convencoes.md §12): OPME (solicitação ligada à agenda, autorização da
 // operadora e consignação, consumo em sala com o rastreio, conciliação com a conta). Quem tem a opção no sistema anterior
-// tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - Gestão de estoque: Saídas 1840 (paciente interno 5733, Listagem 1845), Requisições de saída 1895 (paciente interno
 //     1896), Lançamentos 1929 (paciente interno 5736), Pedidos 2123 (Manutenção 2124, Autorização dos pedidos 4491),
 //     Entrada de nota fiscal 5722 e Rastreabilidade 2055;

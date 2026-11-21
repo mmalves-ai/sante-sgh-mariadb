@@ -4,7 +4,7 @@
 // sistema anterior): o item é o do cadastro de itens do estoque (a classe 50, OPME), o agendamento é o da agenda
 // cirúrgica e o código do procedimento de saúde é o TUSS (oito dígitos).
 
-/** A classe dos itens de OPME no cadastro de itens do estoque (TBCLASSI 50). */
+/** A classe dos itens de OPME no cadastro de itens do estoque (classe de OPME). */
 export const CLASSE_OPME = 50;
 
 /** As situações da solicitação (a máquina de estados do domínio; SGH_SUP_OPME_SOLIC.SITUACAO). */

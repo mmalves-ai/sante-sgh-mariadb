@@ -53,10 +53,11 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
     comando: 'node',
     args: ['tools/verificadores/src/treino-sem-dado-real.ts'],
   },
-  // M04: guardas do legado (SQL legado fora do adaptador, escrita fora do executor, DDL fora de SGH_,
-  // trigger e FK proibidos, MAX+1, função em coluna indexada, generator e procedimento com efeito) e, desde
-  // o M04, também as colunas de credencial de TBTISS, TBTISSWEBSERV e TBCONVEN (regra 8 do M09).
-  { nome: 'guardas:legado', comando: 'node', args: ['tools/verificadores/src/guardas-legado.ts'] },
+  // Retirados na adaptação da CI ao sante-sgh (docs/obra/ci-verde.md, 2026-11-21), por serem do modelo base sobre o
+  // Firebird: guardas:legado (SQL do legado, prefixo SGH_, packages/legado), conferencia:verificar e pentest:verificar
+  // (tools/assinatura do legado), matriz:verificar (cobertura das 1.503 tabelas do legado, tools/matriz) e
+  // implantacao:manual --conferir (manual de implantação do legado; o do produto próprio volta a ser conferido quando
+  // for escrito).
   // F4 L4: mapa declarativo do conector (tabela sem destino nem descarte justificado, ciclo não declarado,
   // tabela ou coluna de destino inexistente no DDL, regra ou de-para desconhecidos, mapa gerado desatualizado).
   { nome: 'conector:mapa', comando: 'python3', args: ['-I', 'conector/verificar_mapa.py'] },
@@ -75,21 +76,6 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
       'tools/instalacao/src/gerar.ts',
       '--conferir',
     ],
-  },
-  // M36 (regra 4 e regra 8): registro de conferência que sustenta cada `conferida` e a matriz do pentest no esquema.
-  {
-    nome: 'conferencia:verificar',
-    comando: 'node',
-    args: [
-      '--import',
-      './tools/verificadores/src/caminhos-sgh.ts',
-      'tools/assinatura/src/cli/conferencia.ts',
-    ],
-  },
-  {
-    nome: 'pentest:verificar (estrutura)',
-    comando: 'node',
-    args: ['--import', './tools/verificadores/src/caminhos-sgh.ts', 'tools/assinatura/src/cli/pentest.ts'],
   },
   // M16 (regra 17): data mart sem coluna identificadora (esquema declarado e arquivos carregados).
   {
@@ -118,18 +104,6 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
       '--conferir',
     ],
   },
-  // M60.3: o manual de implantação tem as 12 seções, cita os itens e as seções dos testes pós-implantação, as variáveis
-  // obrigatórias e os anexos, e o PDF foi gerado das fontes atuais.
-  {
-    nome: 'implantacao:manual --conferir',
-    comando: 'node',
-    args: [
-      '--import',
-      './tools/verificadores/src/caminhos-sgh.ts',
-      'tools/implantacao/src/gerar-manual.ts',
-      '--conferir',
-    ],
-  },
   // Combos com busca (decisão do dono, 23/10/2026; ADR 0027): nada de <select> cru nem combo da base nas telas.
   { nome: 'combos', comando: 'node', args: ['tools/verificadores/src/combos.ts'] },
   // M59.5 (regras 9 e 10): suíte de conformidade SBIS, matriz requisito → funcionalidade → teste → resultado. No
@@ -155,12 +129,6 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
       'tools/verificadores/src/permissoes.ts',
       '--retrato',
     ],
-  },
-  // M08 (regra 11): matriz de cobertura das 1.503 tabelas (retrato versionado das povoadas; sem cópia no CI).
-  {
-    nome: 'matriz:verificar (retrato)',
-    comando: 'node',
-    args: ['--import', './tools/verificadores/src/caminhos-sgh.ts', 'tools/matriz/src/cli/verificar.ts'],
   },
 ];
 

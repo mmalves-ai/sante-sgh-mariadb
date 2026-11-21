@@ -2,7 +2,7 @@
 //   - o contrato com o gestor só vale para metas e apurações quando está ativo, na vigência, com o CNES do
 //     estabelecimento e a habilitação SUS em dia (regra 11: "só com contrato e habilitação SUS ativos");
 //   - metas quantitativas por código SIGTAP (grupo, subgrupo, forma de organização ou procedimento) e qualitativas por
-//     indicador, cada uma com periodicidade (CMPERIODO, mensal ou maior), pontos e escore (CMESCORE);
+//     indicador, cada uma com periodicidade (mensal ou maior), pontos e escore;
 //   - o período da meta conta da competência inicial dela, em blocos do tamanho da periodicidade;
 //   - realizado quantitativo = a soma da produção do período cujo código começa com o da meta (na modalidade da meta);
 //   - cumprimento = realizado ÷ meta do período (na qualitativa "quanto menor, melhor": meta ÷ realizado), com a conta;

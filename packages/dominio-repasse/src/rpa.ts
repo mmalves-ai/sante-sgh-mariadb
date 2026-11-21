@@ -1,5 +1,5 @@
 // Regra 7 do M33: retenções do RPA. INSS do contribuinte individual com teto do salário de contribuição e acúmulo
-// entre as empresas que somam impostos (RPEMPCALCIMP); IRRF pela tabela progressiva vigente sobre o bruto menos o
+// entre as empresas que somam impostos; IRRF pela tabela progressiva vigente sobre o bruto menos o
 // INSS; ISS do município sobre o bruto. As alíquotas e tabelas vêm dos parâmetros (nunca constante no código); sem
 // elas, o RPA não é emitido. Líquido = bruto − INSS − IRRF − ISS, com as parcelas devolvidas.
 import { aplicarPercentual, centavos } from './dinheiro.js';
@@ -73,7 +73,7 @@ export interface CalculoRpa {
 export function calcularRpa(
   entrada: {
     readonly brutoCentavos: number;
-    /** Base de INSS já usada no mês nas outras empresas que somam impostos (RPEMPCALCIMP). */
+    /** Base de INSS já usada no mês nas outras empresas que somam impostos. */
     readonly baseInssOutrasEmpresasCentavos: number;
   },
   p: ParametrosRpa,

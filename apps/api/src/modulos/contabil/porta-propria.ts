@@ -21,12 +21,16 @@
 // recusada; a trilha aponta para a tabela gravada (conta_contabil, lancamento_contabil...).
 // Melhoria: o fato marcado como contabilizado tem de terminar a transação com o lançamento automático ativo, e o fato
 // que sai de contabilizado não pode ficar com lançamento automático ativo (estorne antes).
-// Pendências de modelo (pedidos do lote 04-01, saida/04-01.json): versões publicadas das regras de contabilização
-// (regras() e publicarRegra recusadas com "modelo-pendente": a contabilização automática, o reprocessamento, a
-// simulação e a publicação ficam indisponíveis no banco); o conteúdo, o leiaute, as linhas e os parâmetros
-// do arquivo SPED (gravarArquivoSped e conteudoSped com "modelo-pendente"); a regra e a versão que geraram o
-// lançamento e o fato (regraId/regra nulos); a observação do encerramento; o NIRE do estabelecimento.
+// Regras de contabilização: cada versão publicada é uma linha de versao_regra_contabil (só inclusão; a anterior fica),
+// com a forma canônica e a impressão; a versão aplicada fica no fato e no lançamento automático
+// (versao_regra_contabil_id). O tipo de fato da regra é o evento_contabil do mesmo código (o evento nativo é criado na
+// primeira publicação, se o catálogo ainda não o tiver).
+// Arquivo SPED: o registro em arquivo_sped_contabil (leiaute, linhas, parâmetros, substituição) e o conteúdo cifrado no
+// armazém de arquivos, ligado pela tabela arquivo. Sem armazém configurado, gravar e ler o conteúdo recusam com 503
+// (armazem-indisponivel): nunca um arquivo gerado sem guarda. Ainda fora do modelo: a observação do encerramento (só na
+// trilha) e o NIRE do estabelecimento.
 import { createHash, randomUUID } from 'node:crypto';
+import { planejarEnvioSped } from '@sgh/dominio-contabil';
 import { avisoDoBloqueio, bloqueioDoLancamento } from './bloqueio-periodo.js';
 import {
   type GrupoConta,
@@ -101,7 +105,8 @@ const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const num = (v: unknown): number => Number(v ?? 0);
 const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
-const textoOuNulo = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v));
+const textoOuNulo = (v: unknown): string | null =>
+  v === null || v === undefined || v === '' ? null : String(v);
 const bool = (v: unknown): boolean => v === true || Number(v) === 1;
 const corta = (s: string | null, n: number) => (s === null ? null : s.slice(0, n));
 /** Competência AAAA-MM ↔ primeiro dia do mês. */
@@ -119,8 +124,35 @@ const TABELAS_GRAVACAO = [
   'periodo_contabil',
   'conciliacao_conta_contabil',
   'arquivo_sped_contabil',
+  'arquivo',
+  'versao_regra_contabil',
+  'evento_contabil',
   'sequencia_negocio',
 ];
+
+/**
+ * Armazém do conteúdo do arquivo SPED (o texto já cifrado pela API). A chave é única e o conteúdo guardado não é
+ * reescrito; no banco fica só a chave, o tamanho e o hash (tabela arquivo).
+ */
+export interface ArmazemArquivoSped {
+  guardar(chave: string, conteudo: Uint8Array): Promise<void>;
+  ler(chave: string): Promise<Uint8Array | null>;
+}
+
+/** Módulo que publica o fato, pela origem do lançamento (evento_contabil.modulo). */
+const MODULO_DA_ORIGEM: Readonly<Record<number, string>> = {
+  1: 'financeiro',
+  2: 'faturamento',
+  3: 'faturamento',
+  4: 'faturamento',
+  5: 'faturamento',
+  6: 'faturamento',
+  7: 'patrimonio',
+  8: 'folha',
+  9: 'estoque',
+  10: 'financeiro',
+  11: 'contabilidade',
+};
 
 /** Grupo da tela ↔ natureza da conta no modelo. */
 const NATUREZA_DO_GRUPO: Readonly<Record<GrupoConta, string>> = {
@@ -147,7 +179,8 @@ const SITUACAO_FATO_MODELO: Readonly<Record<SituacaoFato, string>> = {
   ignorado: 'ignorado',
 };
 const situacaoFatoDe = (s: unknown): SituacaoFato =>
-  ((Object.keys(SITUACAO_FATO_MODELO) as SituacaoFato[]).find((k) => SITUACAO_FATO_MODELO[k] === s) ?? 'pendente');
+  (Object.keys(SITUACAO_FATO_MODELO) as SituacaoFato[]).find((k) => SITUACAO_FATO_MODELO[k] === s) ??
+  'pendente';
 
 const ladoDe = (lado: unknown): LadoPartida => (lado === 'credito' ? 'C' : 'D');
 const ladoModelo = (lado: LadoPartida) => (lado === 'C' ? 'credito' : 'debito');
@@ -164,12 +197,12 @@ export function chaveDoLancamento(estabelecimento: number, chave: string): strin
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-const modeloPendente = (operacao: string) =>
+const armazemIndisponivel = () =>
   new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Operação indisponível',
-    `${operacao} aguarda a atualização do banco do cliente (pedido de modelo registrado).`,
+    503,
+    'armazem-indisponivel',
+    'Armazém de arquivos indisponível',
+    'O armazém de arquivos do ambiente não está configurado: o arquivo SPED não pode ser guardado nem lido.',
   );
 
 function contextoDe(c: ContextoContabil): ContextoNucleo {
@@ -207,7 +240,8 @@ const SQL_CONTAS = `SELECT c.id, c.classificacao, c.descricao, c.natureza, c.nat
 const SQL_FATOS = `SELECT f.id, f.estabelecimento_id, f.entidade_origem, f.entidade_origem_id, ev.codigo AS tipo,
     DATE_FORMAT(f.data_fato, '%Y-%m-%d') AS data_fato, DATE_FORMAT(f.competencia, '%Y-%m') AS competencia,
     ${CENTAVOS('f.valor')} AS centavos, f.centro_custo_id, f.documento, f.campos, f.impressao, f.estorno,
-    fe.impressao AS referencia, f.situacao, f.motivo, DATE_FORMAT(f.criado_em, ${INSTANTE}) AS lido_em
+    fe.impressao AS referencia, f.situacao, f.motivo, f.versao_regra_contabil_id,
+    DATE_FORMAT(f.criado_em, ${INSTANTE}) AS lido_em
   FROM fato_contabil f
   JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
   LEFT JOIN fato_contabil fe ON fe.id = f.estornado_fato_contabil_id
@@ -225,12 +259,14 @@ const SQL_LANCAMENTOS = `SELECT l.id, l.estabelecimento_id, l.chave_idempotencia
     (SELECT ${CENTAVOS('SUM(p.valor)')} FROM partida_contabil p
       WHERE p.lancamento_contabil_id = l.id AND p.lado = 'credito' AND p.excluido_em IS NULL) AS creditos,
     f.entidade_origem AS fato_tabela, ev.codigo AS fato_tipo, f.documento AS fato_documento,
-    DATE_FORMAT(f.data_fato, '%Y-%m-%d') AS fato_data
+    DATE_FORMAT(f.data_fato, '%Y-%m-%d') AS fato_data,
+    l.versao_regra_contabil_id, vr.nome AS regra_nome, vr.numero_versao AS regra_versao
   FROM lancamento_contabil l
   JOIN periodo_contabil pe ON pe.id = l.periodo_contabil_id
   LEFT JOIN usuario u ON u.id = l.criado_por
   LEFT JOIN fato_contabil f ON f.id = l.fato_contabil_id
   LEFT JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
+  LEFT JOIN versao_regra_contabil vr ON vr.id = l.versao_regra_contabil_id
   WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL`;
 
 const SQL_PARTIDAS = `SELECT p.id, p.lancamento_contabil_id, p.sequencia, p.lado, c.classificacao,
@@ -265,13 +301,36 @@ const SQL_CONCILIACOES = `SELECT k.id, c.classificacao, k.situacao, ${CENTAVOS('
 const SQL_ARQUIVOS_SPED = `SELECT s.id, s.tipo_escrituracao, s.exercicio, s.sequencia_envio, s.situacao, s.finalidade,
     s.hash_sha256, s.recibo, DATE_FORMAT(s.transmitido_em, ${INSTANTE}) AS transmitido_em, s.mensagem_validacao,
     DATE_FORMAT(s.gerado_em, ${INSTANTE}) AS gerado_em, COALESCE(u.login, '') AS gerado_por,
-    a.nome_original, a.tamanho_bytes,
+    s.leiaute, s.leiaute_conferido, s.quantidade_linhas, s.parametros,
+    a.nome_original, a.tamanho_bytes, a.chave_armazenamento,
     (SELECT COUNT(*) FROM arquivo_sped_contabil n WHERE n.arquivo_substituido_id = s.id AND n.excluido_em IS NULL
       AND n.situacao <> 'cancelado') AS substituido
   FROM arquivo_sped_contabil s
   LEFT JOIN arquivo a ON a.id = s.arquivo_id
   LEFT JOIN usuario u ON u.id = s.gerador_usuario_id
   WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL`;
+
+const SQL_REGRAS = `SELECT v.id, v.conteudo, v.impressao, v.justificativa, COALESCE(u.login, '') AS publicada_por,
+    DATE_FORMAT(v.publicada_em, ${INSTANTE}) AS publicada_em
+  FROM versao_regra_contabil v
+  JOIN evento_contabil ev ON ev.id = v.evento_contabil_id
+  LEFT JOIN usuario u ON u.id = v.publicador_usuario_id
+  WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL`;
+
+function regraPublicadaDe(r: Linha): RegraPublicada {
+  const conteudo = r['conteudo'];
+  return {
+    id: num(r['id']),
+    regra: (typeof conteudo === 'string' ? JSON.parse(conteudo) : conteudo) as RegraPublicada['regra'],
+    impressao: texto(r['impressao']),
+    justificativa: texto(r['justificativa']),
+    publicadaPor: texto(r['publicada_por']),
+    publicadaEm: texto(r['publicada_em']),
+  };
+}
+
+const parametrosDe = (v: unknown): string =>
+  v === null || v === undefined ? '{}' : typeof v === 'string' ? v : JSON.stringify(v);
 
 function contaDe(r: Linha, est: number): ContaPlanoVersionada {
   return {
@@ -319,7 +378,7 @@ function fatoDe(r: Linha): FatoRegistrado {
     idFato: num(r['id']),
     situacao: situacaoFatoDe(r['situacao']),
     motivo: textoOuNulo(r['motivo']),
-    regraId: null,
+    regraId: numOuNulo(r['versao_regra_contabil_id']),
     lidoEm: texto(r['lido_em']),
   };
 }
@@ -337,8 +396,8 @@ function lancamentoDe(r: Linha): LancamentoRegistrado {
     debitos: num(r['debitos']),
     creditos: num(r['creditos']),
     fatoId: numOuNulo(r['fato_contabil_id']),
-    regraId: null,
-    regra: null,
+    regraId: numOuNulo(r['versao_regra_contabil_id']),
+    regra: r['regra_nome'] == null ? null : { nome: texto(r['regra_nome']), versao: num(r['regra_versao']) },
     estornaId: numOuNulo(r['estornado_lancamento_contabil_id']),
     estornadoPor: numOuNulo(r['estornado_por']),
     justificativa: textoOuNulo(r['complemento']),
@@ -382,7 +441,10 @@ function periodoDe(r: Linha, est: number): PeriodoRegistrado {
     debitos: num(r['debitos']),
     creditos: num(r['creditos']),
     observacao:
-      [avisoDoBloqueio({ situacao: texto(r['situacao']), bloqueadoAte: textoOuNulo(r['bloqueado_ate']) }), textoOuNulo(r['justificativa_reabertura'])]
+      [
+        avisoDoBloqueio({ situacao: texto(r['situacao']), bloqueadoAte: textoOuNulo(r['bloqueado_ate']) }),
+        textoOuNulo(r['justificativa_reabertura']),
+      ]
         .filter((x): x is string => x !== null)
         .join(' ') || null,
     encerradoPor: textoOuNulo(r['encerrado_por']),
@@ -413,7 +475,13 @@ function conciliacaoDe(r: Linha, est: number): ConciliacaoRegistrada {
 function arquivoSpedDe(r: Linha, est: number): ArquivoSpedRegistrado {
   const s = texto(r['situacao']);
   const situacao: SituacaoArquivoSped =
-    s === 'cancelado' ? 'cancelado' : s === 'transmitido' ? 'transmitido' : num(r['substituido']) > 0 ? 'substituido' : 'gerado';
+    s === 'cancelado'
+      ? 'cancelado'
+      : s === 'transmitido'
+        ? 'transmitido'
+        : num(r['substituido']) > 0
+          ? 'substituido'
+          : 'gerado';
   return {
     id: num(r['id']),
     empresa: est,
@@ -421,14 +489,14 @@ function arquivoSpedDe(r: Linha, est: number): ArquivoSpedRegistrado {
     exercicio: num(r['exercicio']),
     numero: num(r['sequencia_envio']),
     situacao,
-    leiaute: '',
-    leiauteConferido: false,
+    leiaute: texto(r['leiaute']),
+    leiauteConferido: bool(r['leiaute_conferido']),
     substituta: r['finalidade'] === 'substituta',
     nomeArquivo: texto(r['nome_original']),
     tamanho: num(r['tamanho_bytes']),
-    linhas: 0,
+    linhas: num(r['quantidade_linhas']),
     hash: texto(r['hash_sha256']),
-    parametros: '{}',
+    parametros: parametrosDe(r['parametros']),
     geradoPor: texto(r['gerado_por']),
     geradoEm: texto(r['gerado_em']),
     recibo: textoOuNulo(r['recibo']),
@@ -447,7 +515,11 @@ export class PortaContabilPropria implements PortaContabil {
   readonly destino = 'banco' as const;
   private executorCriado: Executor | null = null;
 
-  constructor(private readonly nucleo: NucleoContabil) {}
+  constructor(
+    private readonly nucleo: NucleoContabil,
+    /** Onde fica o conteúdo do arquivo SPED; null: gravar e ler o conteúdo recusam com 503. */
+    private readonly armazemSped: ArmazemArquivoSped | null = null,
+  ) {}
 
   private get executor(): Executor {
     return (this.executorCriado ??= this.nucleo.criarExecutor());
@@ -455,12 +527,20 @@ export class PortaContabilPropria implements PortaContabil {
 
   private ler<T>(c: ContextoContabil, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
-    return this.nucleo.lerSomente({ cliente: c.cliente, correlacao: contextoDe(c).correlacao }, (l) => fn(l, est));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    return this.nucleo.lerSomente({ cliente: c.cliente, correlacao: contextoDe(c).correlacao }, (l) =>
+      fn(l, est),
+    );
   }
 
   /** Leitura de uma "empresa": só a do estabelecimento da sessão (outra empresa não vê nada). */
-  private lerEmpresa<T>(c: ContextoContabil, empresa: number, vazio: T, fn: (l: Leitor, est: number) => Promise<T>) {
+  private lerEmpresa<T>(
+    c: ContextoContabil,
+    empresa: number,
+    vazio: T,
+    fn: (l: Leitor, est: number) => Promise<T>,
+  ) {
     return this.ler(c, (l, est) => (empresa === est ? fn(l, est) : Promise.resolve(vazio)));
   }
 
@@ -468,12 +548,16 @@ export class PortaContabilPropria implements PortaContabil {
     return numOuNulo((await l.uma(SQL_PLANO, [est]))?.['id']);
   }
 
-  private static async partidasDe(l: Leitor, ids: readonly number[]): Promise<Map<number, PartidaRegistrada[]>> {
+  private static async partidasDe(
+    l: Leitor,
+    ids: readonly number[],
+  ): Promise<Map<number, PartidaRegistrada[]>> {
     const m = new Map<number, PartidaRegistrada[]>();
     if (ids.length === 0) return m;
-    const linhas = await l.consultar(`${SQL_PARTIDAS} (${lista(ids.length)}) ORDER BY p.lancamento_contabil_id, p.sequencia`, [
-      ...ids,
-    ]);
+    const linhas = await l.consultar(
+      `${SQL_PARTIDAS} (${lista(ids.length)}) ORDER BY p.lancamento_contabil_id, p.sequencia`,
+      [...ids],
+    );
     for (const r of linhas) {
       const p = partidaDe(r);
       m.set(p.lancamento, [...(m.get(p.lancamento) ?? []), p]);
@@ -483,8 +567,13 @@ export class PortaContabilPropria implements PortaContabil {
 
   hoje(c: ContextoContabil): Promise<string> {
     return this.ler(c, async (l, est) => {
-      const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
-      return new Intl.DateTimeFormat('en-CA', { timeZone: r?.fuso_horario || 'America/Sao_Paulo' }).format(new Date());
+      const r = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
+      return new Intl.DateTimeFormat('en-CA', { timeZone: r?.fuso_horario || 'America/Sao_Paulo' }).format(
+        new Date(),
+      );
     });
   }
 
@@ -542,9 +631,10 @@ export class PortaContabilPropria implements PortaContabil {
   centrosCusto(c: ContextoContabil): Promise<{ codigo: number; nome: string; ativo: boolean }[]> {
     return this.ler(c, async (l, est) =>
       (
-        await l.consultar('SELECT id, nome, ativo FROM centro_custo WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome', [
-          est,
-        ])
+        await l.consultar(
+          'SELECT id, nome, ativo FROM centro_custo WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome',
+          [est],
+        )
       ).map((r) => ({ codigo: num(r['id']), nome: texto(r['nome']), ativo: bool(r['ativo']) })),
     );
   }
@@ -553,23 +643,28 @@ export class PortaContabilPropria implements PortaContabil {
     return this.lerEmpresa(c, empresa, [], async (l, est) => {
       const plano = await PortaContabilPropria.plano(l, est);
       if (plano === null) return [];
-      return (await l.consultar(`${SQL_CONTAS} ORDER BY c.classificacao`, [plano])).map((r) => contaDe(r, est));
+      return (await l.consultar(`${SQL_CONTAS} ORDER BY c.classificacao`, [plano])).map((r) =>
+        contaDe(r, est),
+      );
     });
   }
 
-  /**
-   * Versões publicadas das regras: a porta ainda não lê o modelo (regra_contabilizacao com os itens e
-   * versao_regra_contabilizacao; a leitura do fato fica em leitura_fato_contabil; a integração da onda 4 recusou a
-   * tabela paralela versao_regra_contabil, que duplicaria essas). Recusa
-   * com "modelo-pendente" em vez de lista vazia: com zero regras a contabilização marcaria todo fato como "sem regra" e o
-   * reprocessamento tiraria os contabilizados do lançamento. Ficam indisponíveis a lista, a simulação, a publicação, a
-   * contabilização automática e o reprocessamento.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a leitura aguarda o lote de continuação
-  regras(c: ContextoContabil, empresa: number, _f: FiltroRegrasPorta): Promise<RegraPublicada[]> {
-    return this.lerEmpresa(c, empresa, [] as RegraPublicada[], () =>
-      Promise.reject(modeloPendente('As regras de contabilização (lista, simulação, contabilização e reprocessamento)')),
-    );
+  /** Versões publicadas das regras (todas, para o domínio conferir a versão seguinte e a vigência). */
+  regras(c: ContextoContabil, empresa: number, f: FiltroRegrasPorta): Promise<RegraPublicada[]> {
+    return this.lerEmpresa(c, empresa, [] as RegraPublicada[], async (l, est) => {
+      const tipos =
+        f.tipoFato !== undefined ? [f.tipoFato] : f.origem !== undefined ? tiposDaOrigem(f.origem) : null;
+      if (tipos !== null && tipos.length === 0) return [];
+      const filtro = tipos === null ? '' : ` AND ev.codigo IN (${lista(tipos.length)})`;
+      return (
+        await l.consultar(`${SQL_REGRAS}${filtro} ORDER BY ev.codigo, v.nome, v.numero_versao, v.id`, [
+          est,
+          ...(tipos ?? []),
+        ])
+      )
+        .map(regraPublicadaDe)
+        .filter((r) => f.origem === undefined || r.regra.origem === f.origem);
+    });
   }
 
   fontes(c: ContextoContabil): Promise<EstadoFonteFatos[]> {
@@ -608,7 +703,9 @@ export class PortaContabilPropria implements PortaContabil {
         x[situacaoFatoDe(r['situacao'])] = num(r['n']);
         m.set(t, x);
       }
-      return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([tabela, porSituacao]) => ({ tabela, porSituacao }));
+      return [...m.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([tabela, porSituacao]) => ({ tabela, porSituacao }));
     });
   }
 
@@ -657,7 +754,13 @@ export class PortaContabilPropria implements PortaContabil {
 
   fatosDaCompetencia(c: ContextoContabil, empresa: number, competencia: string, teto: number) {
     return this.lerEmpresa(c, empresa, [] as FatoRegistrado[], async (l, est) =>
-      (await l.consultar(`${SQL_FATOS} AND f.competencia = ? ORDER BY f.id LIMIT ?`, [est, diaUm(competencia), teto])).map(fatoDe),
+      (
+        await l.consultar(`${SQL_FATOS} AND f.competencia = ? ORDER BY f.id LIMIT ?`, [
+          est,
+          diaUm(competencia),
+          teto,
+        ])
+      ).map(fatoDe),
     );
   }
 
@@ -668,10 +771,14 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   movimentoPorCompetencia(c: ContextoContabil, empresa: number) {
-    return this.lerEmpresa(c, empresa, [] as { competencia: string; lancamentos: number; debitos: number; creditos: number }[], async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT DATE_FORMAT(pe.competencia, '%Y-%m') AS competencia, COUNT(DISTINCT l.id) AS n,
+    return this.lerEmpresa(
+      c,
+      empresa,
+      [] as { competencia: string; lancamentos: number; debitos: number; creditos: number }[],
+      async (l, est) =>
+        (
+          await l.consultar(
+            `SELECT DATE_FORMAT(pe.competencia, '%Y-%m') AS competencia, COUNT(DISTINCT l.id) AS n,
                   ${CENTAVOS("SUM(CASE WHEN p.lado = 'debito' THEN p.valor ELSE 0 END)")} AS debitos,
                   ${CENTAVOS("SUM(CASE WHEN p.lado = 'credito' THEN p.valor ELSE 0 END)")} AS creditos
              FROM lancamento_contabil l
@@ -679,20 +786,23 @@ export class PortaContabilPropria implements PortaContabil {
              JOIN partida_contabil p ON p.lancamento_contabil_id = l.id AND p.excluido_em IS NULL
             WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL
             GROUP BY pe.competencia ORDER BY pe.competencia`,
-          [est],
-        )
-      ).map((r) => ({
-        competencia: texto(r['competencia']),
-        lancamentos: num(r['n']),
-        debitos: num(r['debitos']),
-        creditos: num(r['creditos']),
-      })),
+            [est],
+          )
+        ).map((r) => ({
+          competencia: texto(r['competencia']),
+          lancamentos: num(r['n']),
+          debitos: num(r['debitos']),
+          creditos: num(r['creditos']),
+        })),
     );
   }
 
   totaisDoPeriodo(c: ContextoContabil, empresa: number, competencia: string) {
-    return this.lerEmpresa(c, empresa, [] as { tipo: TipoLancamento; lancamentos: number; debitos: number; creditos: number }[], (l, est) =>
-      PortaContabilPropria.totaisPorTipo(l, est, competencia),
+    return this.lerEmpresa(
+      c,
+      empresa,
+      [] as { tipo: TipoLancamento; lancamentos: number; debitos: number; creditos: number }[],
+      (l, est) => PortaContabilPropria.totaisPorTipo(l, est, competencia),
     );
   }
 
@@ -735,40 +845,44 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   lancamentos(c: ContextoContabil, f: FiltroLancamentosPorta, pagina: number, tamanho: number) {
-    return this.lerEmpresa(c, f.empresa, { itens: [] as LancamentoRegistrado[], total: 0 }, async (l, est) => {
-      let where = '';
-      const p: unknown[] = [est];
-      if (f.competencia) {
-        where += ' AND pe.competencia = ?';
-        p.push(diaUm(f.competencia));
-      }
-      if (f.tipo) {
-        where += ' AND l.tipo = ?';
-        p.push(f.tipo);
-      }
-      if (f.conta) {
-        where += ` AND EXISTS (SELECT 1 FROM partida_contabil x JOIN conta_contabil cc ON cc.id = x.conta_contabil_id
+    return this.lerEmpresa(
+      c,
+      f.empresa,
+      { itens: [] as LancamentoRegistrado[], total: 0 },
+      async (l, est) => {
+        let where = '';
+        const p: unknown[] = [est];
+        if (f.competencia) {
+          where += ' AND pe.competencia = ?';
+          p.push(diaUm(f.competencia));
+        }
+        if (f.tipo) {
+          where += ' AND l.tipo = ?';
+          p.push(f.tipo);
+        }
+        if (f.conta) {
+          where += ` AND EXISTS (SELECT 1 FROM partida_contabil x JOIN conta_contabil cc ON cc.id = x.conta_contabil_id
                     WHERE x.lancamento_contabil_id = l.id AND x.excluido_em IS NULL AND cc.classificacao = ?)`;
-        p.push(f.conta);
-      }
-      const total = num(
-        (
-          await l.uma(
-            `SELECT COUNT(*) AS n FROM lancamento_contabil l JOIN periodo_contabil pe ON pe.id = l.periodo_contabil_id
+          p.push(f.conta);
+        }
+        const total = num(
+          (
+            await l.uma(
+              `SELECT COUNT(*) AS n FROM lancamento_contabil l JOIN periodo_contabil pe ON pe.id = l.periodo_contabil_id
               WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL${where}`,
-            p,
+              p,
+            )
+          )?.['n'],
+        );
+        const itens = (
+          await l.consultar(
+            `${SQL_LANCAMENTOS}${where} ORDER BY l.data_lancamento DESC, l.id DESC LIMIT ? OFFSET ?`,
+            [...p, tamanho, (Math.max(1, pagina) - 1) * tamanho],
           )
-        )?.['n'],
-      );
-      const itens = (
-        await l.consultar(`${SQL_LANCAMENTOS}${where} ORDER BY l.data_lancamento DESC, l.id DESC LIMIT ? OFFSET ?`, [
-          ...p,
-          tamanho,
-          (Math.max(1, pagina) - 1) * tamanho,
-        ])
-      ).map(lancamentoDe);
-      return { itens, total };
-    });
+        ).map(lancamentoDe);
+        return { itens, total };
+      },
+    );
   }
 
   lancamento(c: ContextoContabil, id: number) {
@@ -790,7 +904,10 @@ export class PortaContabilPropria implements PortaContabil {
             AND fato_contabil_id IN (${lista(idsFato.length)}) ORDER BY id`,
         [est, ...idsFato],
       );
-      const partidas = await PortaContabilPropria.partidasDe(l, ls.map((x) => num(x['id'])));
+      const partidas = await PortaContabilPropria.partidasDe(
+        l,
+        ls.map((x) => num(x['id'])),
+      );
       for (const x of ls)
         m.set(num(x['fato_contabil_id']), {
           partidas: (partidas.get(num(x['id'])) ?? []).map((p) => ({
@@ -810,7 +927,13 @@ export class PortaContabilPropria implements PortaContabil {
     const vazio: RazaoLido = { anterior: zero, totais: zero, antesDaPagina: zero, movimentos: [] };
     return this.lerEmpresa(c, f.empresa, vazio, async (l, est) => {
       const plano = await PortaContabilPropria.plano(l, est);
-      const conta = plano === null ? null : await l.uma('SELECT id FROM conta_contabil WHERE plano_contas_id = ? AND classificacao = ?', [plano, f.conta]);
+      const conta =
+        plano === null
+          ? null
+          : await l.uma('SELECT id FROM conta_contabil WHERE plano_contas_id = ? AND classificacao = ?', [
+              plano,
+              f.conta,
+            ]);
       if (!conta) return vazio;
       const base = `FROM partida_contabil p JOIN lancamento_contabil l ON l.id = p.lancamento_contabil_id
         WHERE p.conta_contabil_id = ? AND p.excluido_em IS NULL AND l.estabelecimento_id = ? AND l.excluido_em IS NULL${
@@ -821,7 +944,9 @@ export class PortaContabilPropria implements PortaContabil {
         ${CENTAVOS("SUM(CASE WHEN p.lado = 'credito' THEN p.valor ELSE 0 END)")} AS creditos`;
       const par = (r: Linha | null) => ({ debitos: num(r?.['debitos']), creditos: num(r?.['creditos']) });
       const anterior = par(await l.uma(`SELECT ${somas} ${base} AND l.data_lancamento < ?`, [...pb, f.de]));
-      const totais = par(await l.uma(`SELECT ${somas} ${base} AND l.data_lancamento BETWEEN ? AND ?`, [...pb, f.de, f.ate]));
+      const totais = par(
+        await l.uma(`SELECT ${somas} ${base} AND l.data_lancamento BETWEEN ? AND ?`, [...pb, f.de, f.ate]),
+      );
       const pular = (Math.max(1, pagina) - 1) * teto;
       const ordem = 'ORDER BY l.data_lancamento, l.id, p.sequencia';
       const antesDaPagina =
@@ -853,13 +978,20 @@ export class PortaContabilPropria implements PortaContabil {
         centroCusto: numOuNulo(r['centro_custo_id']),
         lado: ladoDe(r['lado']),
         valorCentavos: num(r['centavos']),
-        conciliado: r['conciliacao_conta_contabil_id'] !== null && r['conciliacao_conta_contabil_id'] !== undefined,
+        conciliado:
+          r['conciliacao_conta_contabil_id'] !== null && r['conciliacao_conta_contabil_id'] !== undefined,
       }));
       return { anterior, totais, antesDaPagina, movimentos };
     });
   }
 
-  pendentesConciliacao(c: ContextoContabil, empresa: number, conta: string, ate: string | null, teto: number) {
+  pendentesConciliacao(
+    c: ContextoContabil,
+    empresa: number,
+    conta: string,
+    ate: string | null,
+    teto: number,
+  ) {
     return this.lerEmpresa(c, empresa, [] as PartidaPendente[], async (l, est) => {
       const plano = await PortaContabilPropria.plano(l, est);
       if (plano === null) return [];
@@ -890,9 +1022,13 @@ export class PortaContabilPropria implements PortaContabil {
 
   conciliacoes(c: ContextoContabil, empresa: number, conta: string, teto: number) {
     return this.lerEmpresa(c, empresa, [] as ConciliacaoRegistrada[], async (l, est) =>
-      (await l.consultar(`${SQL_CONCILIACOES} AND c.classificacao = ? ORDER BY k.id DESC LIMIT ?`, [est, conta, teto])).map((r) =>
-        conciliacaoDe(r, est),
-      ),
+      (
+        await l.consultar(`${SQL_CONCILIACOES} AND c.classificacao = ? ORDER BY k.id DESC LIMIT ?`, [
+          est,
+          conta,
+          teto,
+        ])
+      ).map((r) => conciliacaoDe(r, est)),
     );
   }
 
@@ -903,7 +1039,12 @@ export class PortaContabilPropria implements PortaContabil {
     competencia: string | null,
     lote: number,
   ): Promise<LeituraParaContabilizar> {
-    const vazio: LeituraParaContabilizar = { candidatos: [], registrados: [], lancamentos: new Map(), restam: false };
+    const vazio: LeituraParaContabilizar = {
+      candidatos: [],
+      registrados: [],
+      lancamentos: new Map(),
+      restam: false,
+    };
     return this.lerEmpresa(c, empresa, vazio, async (l, est) => {
       if (situacoes.length === 0) return vazio;
       const p: unknown[] = [est, ...situacoes.map((s) => SITUACAO_FATO_MODELO[s])];
@@ -916,7 +1057,9 @@ export class PortaContabilPropria implements PortaContabil {
         )
       ).map(fatoDe);
       const candidatos = lidos.slice(0, lote);
-      const origens = [...new Set(candidatos.map((f) => `${f.tabela}\u0000${f.id}`))].map((k) => k.split('\u0000'));
+      const origens = [...new Set(candidatos.map((f) => `${f.tabela}\u0000${f.id}`))].map((k) =>
+        k.split('\u0000'),
+      );
       const registrados: FatoRegistrado[] = [];
       for (let i = 0; i < origens.length; i += 200) {
         const parte = origens.slice(i, i + 200);
@@ -929,7 +1072,10 @@ export class PortaContabilPropria implements PortaContabil {
           ).map(fatoDe),
         );
       }
-      const lancamentos = new Map<number, { id: number; idFato: number; partidas: PartidaGerada[]; estornadoPor: number | null }>();
+      const lancamentos = new Map<
+        number,
+        { id: number; idFato: number; partidas: PartidaGerada[]; estornadoPor: number | null }
+      >();
       const ids = registrados.map((f) => f.idFato);
       if (ids.length > 0) {
         const ls = await l.consultar(
@@ -940,7 +1086,10 @@ export class PortaContabilPropria implements PortaContabil {
               AND l.fato_contabil_id IN (${lista(ids.length)}) ORDER BY l.id`,
           [est, ...ids],
         );
-        const partidas = await PortaContabilPropria.partidasDe(l, ls.map((x) => num(x['id'])));
+        const partidas = await PortaContabilPropria.partidasDe(
+          l,
+          ls.map((x) => num(x['id'])),
+        );
         for (const x of ls)
           lancamentos.set(num(x['fato_contabil_id']), {
             id: num(x['id']),
@@ -1016,7 +1165,10 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   private static async doDiario(l: Leitor, linhas: Linha[]): Promise<LancamentoDoDiario[]> {
-    const partidas = await PortaContabilPropria.partidasDe(l, linhas.map((r) => num(r['id'])));
+    const partidas = await PortaContabilPropria.partidasDe(
+      l,
+      linhas.map((r) => num(r['id'])),
+    );
     return linhas.map((r) => {
       const x = lancamentoDe(r);
       return {
@@ -1040,56 +1192,74 @@ export class PortaContabilPropria implements PortaContabil {
     });
   }
 
-  diario(c: ContextoContabil, empresa: number, de: string, ate: string, teto: number, pagina: number): Promise<DiarioPorta> {
-    return this.lerEmpresa(c, empresa, { lancamentos: [], porTipo: [], parcial: false } as DiarioPorta, async (l, est) => {
-      const linhas = await l.consultar(
-        `${SQL_LANCAMENTOS} AND l.data_lancamento BETWEEN ? AND ? ORDER BY l.data_lancamento, l.id LIMIT ? OFFSET ?`,
-        [est, de, ate, teto + 1, (Math.max(1, pagina) - 1) * teto],
-        { teto: teto + 1 },
-      );
-      const porTipo = (
-        await l.consultar(
-          `SELECT l.tipo, COUNT(DISTINCT l.id) AS n,
+  diario(
+    c: ContextoContabil,
+    empresa: number,
+    de: string,
+    ate: string,
+    teto: number,
+    pagina: number,
+  ): Promise<DiarioPorta> {
+    return this.lerEmpresa(
+      c,
+      empresa,
+      { lancamentos: [], porTipo: [], parcial: false } as DiarioPorta,
+      async (l, est) => {
+        const linhas = await l.consultar(
+          `${SQL_LANCAMENTOS} AND l.data_lancamento BETWEEN ? AND ? ORDER BY l.data_lancamento, l.id LIMIT ? OFFSET ?`,
+          [est, de, ate, teto + 1, (Math.max(1, pagina) - 1) * teto],
+          { teto: teto + 1 },
+        );
+        const porTipo = (
+          await l.consultar(
+            `SELECT l.tipo, COUNT(DISTINCT l.id) AS n,
                   ${CENTAVOS("SUM(CASE WHEN p.lado = 'debito' THEN p.valor ELSE 0 END)")} AS debitos,
                   ${CENTAVOS("SUM(CASE WHEN p.lado = 'credito' THEN p.valor ELSE 0 END)")} AS creditos
              FROM lancamento_contabil l JOIN partida_contabil p ON p.lancamento_contabil_id = l.id AND p.excluido_em IS NULL
             WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND l.data_lancamento BETWEEN ? AND ?
             GROUP BY l.tipo ORDER BY l.tipo`,
-          [est, de, ate],
-        )
-      ).map((r) => ({
-        tipo: texto(r['tipo']) as TipoLancamento,
-        lancamentos: num(r['n']),
-        debitos: num(r['debitos']),
-        creditos: num(r['creditos']),
-      }));
-      return {
-        lancamentos: await PortaContabilPropria.doDiario(l, linhas.slice(0, teto)),
-        porTipo,
-        parcial: linhas.length > teto,
-      };
-    });
+            [est, de, ate],
+          )
+        ).map((r) => ({
+          tipo: texto(r['tipo']) as TipoLancamento,
+          lancamentos: num(r['n']),
+          debitos: num(r['debitos']),
+          creditos: num(r['creditos']),
+        }));
+        return {
+          lancamentos: await PortaContabilPropria.doDiario(l, linhas.slice(0, teto)),
+          porTipo,
+          parcial: linhas.length > teto,
+        };
+      },
+    );
   }
 
   lancamentosDoExercicio(c: ContextoContabil, empresa: number, exercicio: number, tetoPartidas: number) {
-    return this.lerEmpresa(c, empresa, { lancamentos: [] as LancamentoDoDiario[], parcial: false }, async (l, est) => {
-      const n = num(
-        (
-          await l.uma(
-            `SELECT COUNT(*) AS n FROM partida_contabil p JOIN lancamento_contabil l ON l.id = p.lancamento_contabil_id
+    return this.lerEmpresa(
+      c,
+      empresa,
+      { lancamentos: [] as LancamentoDoDiario[], parcial: false },
+      async (l, est) => {
+        const n = num(
+          (
+            await l.uma(
+              `SELECT COUNT(*) AS n FROM partida_contabil p JOIN lancamento_contabil l ON l.id = p.lancamento_contabil_id
               WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND p.excluido_em IS NULL AND YEAR(l.data_lancamento) = ?`,
-            [est, exercicio],
-          )
-        )?.['n'],
-      );
-      // Acima do teto, nada é cortado: a parte que chama recusa (o arquivo sai inteiro ou não sai).
-      if (n > tetoPartidas) return { lancamentos: [], parcial: true };
-      const linhas = await l.consultar(`${SQL_LANCAMENTOS} AND YEAR(l.data_lancamento) = ? ORDER BY l.data_lancamento, l.id`, [
-        est,
-        exercicio,
-      ], { teto: Math.max(1, tetoPartidas) });
-      return { lancamentos: await PortaContabilPropria.doDiario(l, linhas), parcial: false };
-    });
+              [est, exercicio],
+            )
+          )?.['n'],
+        );
+        // Acima do teto, nada é cortado: a parte que chama recusa (o arquivo sai inteiro ou não sai).
+        if (n > tetoPartidas) return { lancamentos: [], parcial: true };
+        const linhas = await l.consultar(
+          `${SQL_LANCAMENTOS} AND YEAR(l.data_lancamento) = ? ORDER BY l.data_lancamento, l.id`,
+          [est, exercicio],
+          { teto: Math.max(1, tetoPartidas) },
+        );
+        return { lancamentos: await PortaContabilPropria.doDiario(l, linhas), parcial: false };
+      },
+    );
   }
 
   empresaSped(c: ContextoContabil, empresa: number): Promise<EmpresaSped | null> {
@@ -1129,18 +1299,33 @@ export class PortaContabilPropria implements PortaContabil {
 
   arquivosSped(c: ContextoContabil, empresa: number, teto: number) {
     return this.lerEmpresa(c, empresa, [] as ArquivoSpedRegistrado[], async (l, est) =>
-      (await l.consultar(`${SQL_ARQUIVOS_SPED} ORDER BY s.exercicio DESC, s.id DESC LIMIT ?`, [est, teto])).map((r) =>
-        arquivoSpedDe(r, est),
-      ),
+      (
+        await l.consultar(`${SQL_ARQUIVOS_SPED} ORDER BY s.exercicio DESC, s.id DESC LIMIT ?`, [est, teto])
+      ).map((r) => arquivoSpedDe(r, est)),
     );
   }
 
-  /** O conteúdo do arquivo SPED ainda não tem onde ficar no modelo (pedido do lote 04-01). */
-  conteudoSped(c: ContextoContabil, empresa: number, id: number): Promise<(ArquivoSpedRegistrado & { conteudoCifrado: string }) | null> {
+  /** O conteúdo cifrado do arquivo SPED, lido do armazém pela chave guardada na tabela arquivo. */
+  conteudoSped(
+    c: ContextoContabil,
+    empresa: number,
+    id: number,
+  ): Promise<(ArquivoSpedRegistrado & { conteudoCifrado: string }) | null> {
     return this.lerEmpresa(c, empresa, null, async (l, est) => {
       const r = await l.uma(`${SQL_ARQUIVOS_SPED} AND s.id = ?`, [est, id]);
       if (!r) return null;
-      throw modeloPendente('A leitura do arquivo SPED gerado');
+      const armazem = this.armazemSped;
+      if (!armazem) throw armazemIndisponivel();
+      const chave = textoOuNulo(r['chave_armazenamento']);
+      const bytes = chave === null ? null : await armazem.ler(chave);
+      if (bytes === null)
+        throw new ErroOperacao(
+          410,
+          'arquivo-ausente',
+          'Arquivo ausente',
+          'O conteúdo do arquivo SPED não está no armazém.',
+        );
+      return { ...arquivoSpedDe(r, est), conteudoCifrado: Buffer.from(bytes).toString('utf8') };
     });
   }
 
@@ -1153,7 +1338,9 @@ export class PortaContabilPropria implements PortaContabil {
     const est = c.estabelecimento;
     if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
     if (!/^contabil\.[A-Za-z]{3,60}$/.test(pedido.operacao))
-      throw new Error(`Operação de gravação da contabilidade sem nome válido: ${pedido.operacao.slice(0, 80)}.`);
+      throw new Error(
+        `Operação de gravação da contabilidade sem nome válido: ${pedido.operacao.slice(0, 80)}.`,
+      );
     // contabil.incluirConta → contabil.incluir_conta (o nome da operação no banco é minúsculo).
     const nome = pedido.operacao.replace(/[A-Z]/g, (x) => `_${x.toLowerCase()}`);
     let saida: { valor: T } | null = null;
@@ -1162,6 +1349,7 @@ export class PortaContabilPropria implements PortaContabil {
       if (!saida) throw new Error('Gravação da contabilidade sem resultado para a trilha.');
       return trilha(saida.valor);
     };
+    const armazemSped = this.armazemSped;
     const op = definirOperacao({
       nome,
       tabelas: TABELAS_GRAVACAO,
@@ -1169,7 +1357,7 @@ export class PortaContabilPropria implements PortaContabil {
       entrada: z.object({ pedido: z.string().regex(/^[0-9a-f]{64}$/) }),
       async gravar(tx) {
         try {
-          const { gravador, concluir } = gravadorSobre(tx, est, c.gravaPlanoDaRede === true);
+          const { gravador, concluir } = gravadorSobre(tx, est, c.gravaPlanoDaRede === true, armazemSped);
           const valor = await fn(gravador);
           await concluir();
           saida = { valor };
@@ -1189,7 +1377,10 @@ export class PortaContabilPropria implements PortaContabil {
     // Sem a Idempotency-Key da tela, uma chave nova por pedido (o lançamento tem a própria chave idempotente).
     const chave = c.chaveIdempotencia ?? `contabil:${randomUUID()}`;
     const entrada = { pedido: createHash('sha256').update(jsonCanonico(pedido.pedido)).digest('hex') };
-    const r = await this.executor.executar(op, c.cliente, entrada, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(op, c.cliente, entrada, {
+      ...contextoDe(c),
+      chaveIdempotencia: chave,
+    });
     if (!r.repetida) {
       if (!saida) throw new Error('Gravação da contabilidade sem resultado.');
       return (saida as { valor: T }).valor;
@@ -1226,10 +1417,11 @@ function gravadorSobre(
   tx: TxOperacao,
   est: number,
   gravaPlanoDaRede: boolean,
+  armazemSped: ArmazemArquivoSped | null,
 ): { gravador: GravadorContabil; concluir: () => Promise<void> } {
   const usuario = tx.contexto.usuario;
   /** Fatos marcados como contabilizados nesta transação à espera do lançamento automático. */
-  const aguardamLancamento = new Map<number, string | null>();
+  const aguardamLancamento = new Map<number, { motivo: string | null; regraId: number | null }>();
   /** Fatos que saíram de contabilizado nesta transação (não podem terminar com lançamento automático ativo). */
   const saidosDeContabilizado = new Set<number>();
   const lancamentoAtivoDoFato = async (idFato: number) =>
@@ -1263,7 +1455,8 @@ function gravadorSobre(
     return usuario;
   };
   const exigirEmpresa = (empresa: number) => {
-    if (empresa !== est) throw recusa('outro-estabelecimento', 'A empresa informada não é a do estabelecimento da sessão.');
+    if (empresa !== est)
+      throw recusa('outro-estabelecimento', 'A empresa informada não é a do estabelecimento da sessão.');
   };
   const plano = async () => {
     const p = numOuNulo((await tx.uma(SQL_PLANO, [est]))?.['id']);
@@ -1272,7 +1465,9 @@ function gravadorSobre(
   };
   const contaPorCodigo = async (p: number, codigo: string, travar = false) => {
     const sql = `${SQL_CONTAS} AND c.classificacao = ?`;
-    const [r] = travar ? await tx.consultarParaAtualizar(sql, [p, codigo], { teto: 1 }) : await tx.consultar(sql, [p, codigo], { teto: 1 });
+    const [r] = travar
+      ? await tx.consultarParaAtualizar(sql, [p, codigo], { teto: 1 })
+      : await tx.consultar(sql, [p, codigo], { teto: 1 });
     return r ?? null;
   };
   const referencial = async (tipo: number | null, codigo: string | null) => {
@@ -1283,7 +1478,11 @@ function gravadorSobre(
          ${tipo !== null ? 'AND plano_referencial_id = ?' : ''} ORDER BY vigencia_inicio DESC LIMIT 1`,
       [codigo, ...(tipo !== null ? [tipo] : [])],
     );
-    if (!r) throw recusa('conta-referencial-inexistente', 'A conta referencial informada não existe no plano referencial.');
+    if (!r)
+      throw recusa(
+        'conta-referencial-inexistente',
+        'A conta referencial informada não existe no plano referencial.',
+      );
     return num(r['id']);
   };
   const travarPeriodo = async (competencia: string, criar: boolean) => {
@@ -1300,7 +1499,11 @@ function gravadorSobre(
         versao: num(r['versao']),
         bloqueadoAte: textoOuNulo(r['bloqueado_ate']),
       };
-    if (!criar) throw recusa('periodo-inexistente', `A competência ${competencia} não tem movimento nem período aberto.`);
+    if (!criar)
+      throw recusa(
+        'periodo-inexistente',
+        `A competência ${competencia} não tem movimento nem período aberto.`,
+      );
     const id = await tx.incluir('periodo_contabil', {
       estabelecimento_id: est,
       competencia: diaUm(competencia),
@@ -1323,12 +1526,32 @@ function gravadorSobre(
     return arquivoSpedDe(r, est);
   };
 
+  /** O evento do tipo de fato (catálogo da rede); o evento nativo é criado na primeira regra publicada para o tipo. */
+  const eventoDoTipo = async (tipo: string): Promise<number> => {
+    const e = await tx.uma('SELECT id FROM evento_contabil WHERE codigo = ?', [tipo]);
+    if (e) return num(e['id']);
+    const def = (TIPOS_FATO as Readonly<Record<string, { origem: number; rotulo: string }>>)[tipo];
+    if (!def) throw recusa('tipo-fato-inexistente', 'O tipo de fato da regra não existe.');
+    return tx.incluir('evento_contabil', {
+      codigo: tipo,
+      descricao: def.rotulo,
+      modulo: MODULO_DA_ORIGEM[def.origem] ?? 'contabilidade',
+      nativo: true,
+    });
+  };
+
   const concluir = async () => {
     if (aguardamLancamento.size)
-      throw recusa('fato-sem-lancamento', 'O fato não tem lançamento automático ativo para ser marcado como contabilizado.');
+      throw recusa(
+        'fato-sem-lancamento',
+        'O fato não tem lançamento automático ativo para ser marcado como contabilizado.',
+      );
     for (const idFato of saidosDeContabilizado)
       if ((await lancamentoAtivoDoFato(idFato)) !== null)
-        throw recusa('fato-com-lancamento', 'O fato tem lançamento automático ativo: estorne-o antes de mudar a situação.');
+        throw recusa(
+          'fato-com-lancamento',
+          'O fato tem lançamento automático ativo: estorne-o antes de mudar a situação.',
+        );
   };
 
   const gravador: GravadorContabil = {
@@ -1336,12 +1559,15 @@ function gravadorSobre(
       exigirEmpresa(x.conta.empresa);
       const p = await plano();
       await exigirPlanoGravavel(p);
-      if (await contaPorCodigo(p, x.conta.codigo)) throw recusa('conta-ja-existe', 'Já existe uma conta com este código no plano.');
+      if (await contaPorCodigo(p, x.conta.codigo))
+        throw recusa('conta-ja-existe', 'Já existe uma conta com este código no plano.');
       const partes = x.conta.codigo.split('.');
       const codigoPai = partes.slice(0, -1).join('.');
       const pai = codigoPai ? await contaPorCodigo(p, codigoPai) : null;
-      if (codigoPai && !pai) throw recusa('conta-sem-superior', `A conta superior ${codigoPai} não existe no plano.`);
-      if (pai && pai['tipo'] !== 'sintetica') throw recusa('superior-analitica', 'A conta superior é analítica: não aceita contas abaixo.');
+      if (codigoPai && !pai)
+        throw recusa('conta-sem-superior', `A conta superior ${codigoPai} não existe no plano.`);
+      if (pai && pai['tipo'] !== 'sintetica')
+        throw recusa('superior-analitica', 'A conta superior é analítica: não aceita contas abaixo.');
       const id = await tx.incluir('conta_contabil', {
         plano_contas_id: p,
         classificacao: x.conta.codigo,
@@ -1374,14 +1600,43 @@ function gravadorSobre(
       });
       return { antes, versao };
     },
-    publicarRegra() {
-      return Promise.reject(modeloPendente('A publicação da regra de contabilização'));
+    async publicarRegra(x) {
+      const r = x.regra;
+      exigirEmpresa(r.empresa);
+      const publicador = exigirUsuario();
+      const evento = await eventoDoTipo(r.tipoFato);
+      const repetida = await tx.uma(
+        `SELECT id FROM versao_regra_contabil WHERE estabelecimento_id = ? AND evento_contabil_id = ? AND nome = ?
+           AND numero_versao = ?`,
+        [est, evento, r.nome, r.versao],
+      );
+      if (repetida)
+        throw recusa(
+          'versao-concorrente',
+          'Outra versão desta regra foi publicada agora. Abra de novo e confira antes de publicar.',
+        );
+      const id = await tx.incluir('versao_regra_contabil', {
+        estabelecimento_id: est,
+        evento_contabil_id: evento,
+        nome: r.nome,
+        numero_versao: r.versao,
+        prioridade: r.prioridade,
+        vigencia_inicio: r.vigenciaInicio,
+        vigencia_fim: r.vigenciaFim,
+        conteudo: x.conteudo,
+        impressao: x.impressao,
+        justificativa: x.justificativa.slice(0, 500),
+        situacao: 'publicada',
+        publicada_em: new Date(),
+        publicador_usuario_id: publicador,
+      });
+      return { id, versao: r.versao };
     },
     async marcarSituacao(x) {
-      const atual = await tx.uma('SELECT situacao FROM fato_contabil WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [
-        x.idFato,
-        est,
-      ]);
+      const atual = await tx.uma(
+        'SELECT situacao FROM fato_contabil WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.idFato, est],
+      );
       // O lançamento automático do fato: o já gravado, ou o que esta mesma transação gravar em seguida (Contabilizar
       // marca a situação condicionada à lida e só então lança; concluir() confere que o lançamento veio).
       const lancamento = x.situacao === 'contabilizado' ? await lancamentoAtivoDoFato(x.idFato) : null;
@@ -1394,18 +1649,19 @@ function gravadorSobre(
             WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${lida ? ' AND situacao = ?' : ''}`,
           [new Date(), usuario, x.idFato, est, ...(lida ? [SITUACAO_FATO_MODELO[lida]] : [])],
         );
-        if (n > 0) aguardamLancamento.set(x.idFato, corta(x.motivo, 500));
+        if (n > 0) aguardamLancamento.set(x.idFato, { motivo: corta(x.motivo, 500), regraId: x.regraId });
         return n > 0;
       }
       const n = await tx.executar(
         `UPDATE fato_contabil SET situacao = ?, motivo = ?, lancamento_contabil_id = ?, contabilizado_em = ?,
-                versao = versao + 1, alterado_em = ?, alterado_por = ?
+                versao_regra_contabil_id = ?, versao = versao + 1, alterado_em = ?, alterado_por = ?
           WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${lida ? ' AND situacao = ?' : ''}`,
         [
           SITUACAO_FATO_MODELO[x.situacao],
           corta(x.motivo, 500),
           lancamento,
           lancamento === null ? null : new Date(),
+          x.regraId,
           new Date(),
           usuario,
           x.idFato,
@@ -1413,13 +1669,16 @@ function gravadorSobre(
           ...(lida ? [SITUACAO_FATO_MODELO[lida]] : []),
         ],
       );
-      if (n > 0 && x.situacao !== 'contabilizado' && atual?.['situacao'] === 'contabilizado') saidosDeContabilizado.add(x.idFato);
+      if (n > 0 && x.situacao !== 'contabilizado' && atual?.['situacao'] === 'contabilizado')
+        saidosDeContabilizado.add(x.idFato);
       return n > 0;
     },
     async gravarLancamento(l: LancamentoParaGravar) {
       exigirEmpresa(l.empresa);
       const chave = chaveDoLancamento(est, l.chave);
-      const existente = await tx.uma('SELECT id FROM lancamento_contabil WHERE chave_idempotencia = ?', [chave]);
+      const existente = await tx.uma('SELECT id FROM lancamento_contabil WHERE chave_idempotencia = ?', [
+        chave,
+      ]);
       if (existente) return { id: num(existente['id']), repetido: true };
       const periodo = await travarPeriodo(l.competencia, true);
       const bloqueio = bloqueioDoLancamento(periodo, l.data, l.competencia);
@@ -1437,26 +1696,51 @@ function gravadorSobre(
         if (!bool(r['aceita_lancamento_manual'])) semManual.push(texto(r['classificacao']));
       }
       const falta = codigos.filter((k) => !contas.has(k));
-      if (falta.length) throw recusa('conta-inexistente', `Conta sem cadastro analítico ativo no plano: ${falta.join(', ')}.`);
+      if (falta.length)
+        throw recusa(
+          'conta-inexistente',
+          `Conta sem cadastro analítico ativo no plano: ${falta.join(', ')}.`,
+        );
       if (l.tipo === 'manual' && semManual.length)
-        throw recusa('conta-sem-lancamento-manual', `A conta não aceita lançamento manual: ${semManual.join(', ')}.`);
+        throw recusa(
+          'conta-sem-lancamento-manual',
+          `A conta não aceita lançamento manual: ${semManual.join(', ')}.`,
+        );
       const debitos = l.partidas.filter((x) => x.lado === 'D').reduce((s, x) => s + x.valorCentavos, 0);
       const creditos = l.partidas.filter((x) => x.lado === 'C').reduce((s, x) => s + x.valorCentavos, 0);
       if (debitos !== creditos || debitos <= 0)
-        throw recusa('lancamento-desbalanceado', 'A soma dos débitos tem de ser igual à dos créditos e maior que zero.');
-      const fato = l.fatoId === null ? null : await tx.uma('SELECT entidade_origem, entidade_origem_id FROM fato_contabil WHERE id = ? AND estabelecimento_id = ?', [l.fatoId, est]);
-      if (l.fatoId !== null && !fato) throw recusa('fato-inexistente', 'O fato de origem não existe neste estabelecimento.');
+        throw recusa(
+          'lancamento-desbalanceado',
+          'A soma dos débitos tem de ser igual à dos créditos e maior que zero.',
+        );
+      const fato =
+        l.fatoId === null
+          ? null
+          : await tx.uma(
+              'SELECT entidade_origem, entidade_origem_id FROM fato_contabil WHERE id = ? AND estabelecimento_id = ?',
+              [l.fatoId, est],
+            );
+      if (l.fatoId !== null && !fato)
+        throw recusa('fato-inexistente', 'O fato de origem não existe neste estabelecimento.');
       if (l.estornaId !== null) {
         const [o] = await tx.consultarParaAtualizar(
           'SELECT id, versao, situacao FROM lancamento_contabil WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [l.estornaId, est],
           { teto: 1 },
         );
-        if (!o) throw recusa('lancamento-inexistente', 'O lançamento a estornar não existe neste estabelecimento.');
+        if (!o)
+          throw recusa('lancamento-inexistente', 'O lançamento a estornar não existe neste estabelecimento.');
         if (o['situacao'] === 'estornado') throw recusa('ja-estornado', 'O lançamento já foi estornado.');
-        await tx.alterar('lancamento_contabil', l.estornaId, num(o['versao']), { situacao: 'estornado', estornado_em: new Date() });
+        await tx.alterar('lancamento_contabil', l.estornaId, num(o['versao']), {
+          situacao: 'estornado',
+          estornado_em: new Date(),
+        });
       }
-      await garantirSequencia(tx, { tipo: 'lancamento_contabil', estabelecimento: est }, { usuario, agora: new Date() });
+      await garantirSequencia(
+        tx,
+        { tipo: 'lancamento_contabil', estabelecimento: est },
+        { usuario, agora: new Date() },
+      );
       const numero = await tx.proximoNumero('lancamento_contabil');
       const id = await tx.incluir('lancamento_contabil', {
         estabelecimento_id: est,
@@ -1471,6 +1755,7 @@ function gravadorSobre(
         entidade_origem: fato ? texto(fato['entidade_origem']) : null,
         entidade_origem_id: fato ? num(fato['entidade_origem_id']) : null,
         estornado_lancamento_contabil_id: l.estornaId,
+        versao_regra_contabil_id: l.regraId,
         situacao: 'ativo',
         chave_idempotencia: chave,
       });
@@ -1487,9 +1772,18 @@ function gravadorSobre(
       if (l.fatoId !== null && l.tipo === 'automatico' && aguardamLancamento.has(l.fatoId)) {
         await tx.executar(
           `UPDATE fato_contabil SET situacao = 'contabilizado', motivo = ?, lancamento_contabil_id = ?, contabilizado_em = ?,
-                  alterado_em = ?, alterado_por = ?
+                  versao_regra_contabil_id = ?, alterado_em = ?, alterado_por = ?
             WHERE id = ? AND estabelecimento_id = ?`,
-          [aguardamLancamento.get(l.fatoId) ?? null, id, new Date(), new Date(), usuario, l.fatoId, est],
+          [
+            aguardamLancamento.get(l.fatoId)?.motivo ?? null,
+            id,
+            new Date(),
+            aguardamLancamento.get(l.fatoId)?.regraId ?? l.regraId,
+            new Date(),
+            usuario,
+            l.fatoId,
+            est,
+          ],
         );
         aguardamLancamento.delete(l.fatoId);
       }
@@ -1499,7 +1793,9 @@ function gravadorSobre(
       exigirEmpresa(x.empresa);
       const encerrante = exigirUsuario();
       const periodo = await travarPeriodo(x.competencia, false);
-      const [lido] = (await tx.consultar(`${SQL_PERIODOS} AND p.id = ?`, [est, periodo.id])).map((r) => periodoDe(r, est));
+      const [lido] = (await tx.consultar(`${SQL_PERIODOS} AND p.id = ?`, [est, periodo.id])).map((r) =>
+        periodoDe(r, est),
+      );
       const fatos = await PortaContabilPropria['fatosPorSituacao'](tx, est, x.competencia);
       const tipos = await PortaContabilPropria['totaisPorTipo'](tx, est, x.competencia);
       const anterior = competenciaAnterior(x.competencia);
@@ -1517,7 +1813,8 @@ function gravadorSobre(
         lancamentos: tipos.reduce((s, t) => s + t.lancamentos, 0),
         debitos: tipos.reduce((s, t) => s + t.debitos, 0),
         creditos: tipos.reduce((s, t) => s + t.creditos, 0),
-        anteriorAbertaComMovimento: pa && pa['situacao'] !== 'encerrado' && num(pa['movimento']) > 0 ? anterior : null,
+        anteriorAbertaComMovimento:
+          pa && pa['situacao'] !== 'encerrado' && num(pa['movimento']) > 0 ? anterior : null,
       };
       const impedimentos = x.conferir(d);
       if (impedimentos.length)
@@ -1578,7 +1875,9 @@ function gravadorSobre(
       if (problemas.length) throw recusa('conciliacao-recusada', problemas.join(' '));
       const conta = await contaPorCodigo(p, x.conta);
       if (!conta) throw recusa('conta-inexistente', 'A conta não existe no plano.');
-      const ultima = [...achadas].sort((a, b) => String(a['data_lancamento']).localeCompare(String(b['data_lancamento']))).pop()!;
+      const ultima = [...achadas]
+        .sort((a, b) => String(a['data_lancamento']).localeCompare(String(b['data_lancamento'])))
+        .pop()!;
       const valor = lidas.filter((y) => y.lado === 'D').reduce((s, y) => s + y.valorCentavos, 0);
       const valores = {
         saldo_contabil: reais(valor),
@@ -1616,7 +1915,8 @@ function gravadorSobre(
       exigirEmpresa(x.empresa);
       exigirUsuario();
       const antes = await conciliacaoLida(x.id);
-      if (antes.situacao === 'desfeita') throw recusa('conciliacao-desfeita', 'A conciliação já foi desfeita.');
+      if (antes.situacao === 'desfeita')
+        throw recusa('conciliacao-desfeita', 'A conciliação já foi desfeita.');
       const v = await tx.uma('SELECT versao FROM conciliacao_conta_contabil WHERE id = ?', [x.id]);
       await tx.executar(
         `UPDATE partida_contabil SET conciliacao_conta_contabil_id = NULL, versao = versao + 1, alterado_em = ?, alterado_por = ?
@@ -1629,8 +1929,72 @@ function gravadorSobre(
       });
       return conciliacaoLida(x.id);
     },
-    gravarArquivoSped() {
-      return Promise.reject(modeloPendente('A gravação do arquivo SPED'));
+    async gravarArquivoSped(x) {
+      exigirEmpresa(x.empresa);
+      const gerador = exigirUsuario();
+      if (!armazemSped) throw armazemIndisponivel();
+      if (x.parametros.length > 400)
+        throw recusa('parametros-longos', 'Os parâmetros da geração não cabem no registro.');
+      const inicio = `${x.exercicio}-01-01`;
+      // Os envios do mesmo exercício, travados: o número do envio e a substituição saem da mesma leitura.
+      const envios = await tx.consultarParaAtualizar(
+        `SELECT s.id, s.sequencia_envio, s.situacao,
+                (SELECT COUNT(*) FROM arquivo_sped_contabil n WHERE n.arquivo_substituido_id = s.id AND n.excluido_em IS NULL
+                   AND n.situacao <> 'cancelado') AS substituido
+           FROM arquivo_sped_contabil s
+          WHERE s.estabelecimento_id = ? AND s.tipo_escrituracao = ? AND s.exercicio = ? AND s.excluido_em IS NULL
+          ORDER BY s.sequencia_envio DESC`,
+        [est, x.tipo, x.exercicio],
+        { teto: 1000 },
+      );
+      // O número do envio e a substituição saem da regra do domínio (a mesma da porta de memória).
+      const plano = planejarEnvioSped(
+        envios.map((e) => ({
+          id: num(e['id']),
+          numero: num(e['sequencia_envio']),
+          situacao: texto(e['situacao']) as 'gerado' | 'transmitido' | 'cancelado',
+          substituido: num(e['substituido']) > 0,
+        })),
+        x.substituta,
+      );
+      if (!plano.ok)
+        throw recusa(plano.motivo, 'A escrituração substituta exige um envio anterior do mesmo exercício.');
+      const numero = plano.numero;
+      const id = await tx.incluir('arquivo_sped_contabil', {
+        estabelecimento_id: est,
+        tipo_escrituracao: x.tipo,
+        exercicio: x.exercicio,
+        periodo_inicio: inicio,
+        periodo_fim: `${x.exercicio}-12-31`,
+        sequencia_envio: numero,
+        finalidade: x.substituta ? 'substituta' : 'original',
+        leiaute: x.leiaute.slice(0, 10),
+        quantidade_linhas: x.linhas,
+        parametros: x.parametros,
+        arquivo_substituido_id: plano.substituidoId,
+        hash_sha256: x.hash,
+        situacao: 'gerado',
+        gerado_em: new Date(),
+        gerador_usuario_id: gerador,
+      });
+      const bytes = Buffer.from(x.conteudoCifrado, 'utf8');
+      const hashGuardado = createHash('sha256').update(bytes).digest('hex');
+      const chave = `contabil/sped/estabelecimento-${est}/${x.exercicio}/${x.tipo}-${numero}-${id}-${hashGuardado.slice(0, 16)}.txt`;
+      await armazemSped.guardar(chave, bytes);
+      const arquivo = await tx.incluir('arquivo', {
+        estabelecimento_id: est,
+        entidade: 'arquivo_sped_contabil',
+        entidade_id: id,
+        finalidade: 'escrituracao_sped',
+        nome_original: x.nomeArquivo.slice(0, 255),
+        tipo_mime: 'text/plain',
+        tamanho_bytes: bytes.length,
+        hash_sha256: hashGuardado,
+        chave_armazenamento: chave,
+        imutavel: true,
+      });
+      await tx.executar('UPDATE arquivo_sped_contabil SET arquivo_id = ? WHERE id = ?', [arquivo, id]);
+      return { id, numero, substituidos: plano.substituiPendente ? 1 : 0 };
     },
     async situacaoArquivoSped(x) {
       exigirEmpresa(x.empresa);
@@ -1642,7 +2006,11 @@ function gravadorSobre(
         x.id,
         num(v?.['versao']),
         x.acao === 'recibo'
-          ? { situacao: 'transmitido', recibo: x.recibo, transmitido_em: x.transmitidoEm ? new Date(x.transmitidoEm) : new Date() }
+          ? {
+              situacao: 'transmitido',
+              recibo: x.recibo,
+              transmitido_em: x.transmitidoEm ? new Date(x.transmitidoEm) : new Date(),
+            }
           : { situacao: 'cancelado', mensagem_validacao: x.motivo },
       );
       return arquivoLido(x.id);

@@ -1,9 +1,9 @@
 {
-  "descricao": "Metadados do .env da raiz (do legado, opção B). Só permissão, tamanho e data: o conteúdo nunca é lido.",
+  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat).",
   "fonte": "stat -c '%a %s %Y' .env",
-  "registradoEm": "2026-10-19",
-  "raiz": "/home/mmalves/workspace/redesante/new-sgh",
+  "registradoEm": "2026-11-21",
+  "raiz": "/home/mmalves/workspace/redesante/sante-sgh",
   "permissao": "600",
-  "tamanho": 1448,
-  "mtime": 1792420537
+  "tamanho": 851,
+  "mtime": 1795222681
 }

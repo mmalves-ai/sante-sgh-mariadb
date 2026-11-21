@@ -1,6 +1,6 @@
 // Concessão direta (ficha do M06, regra 1; cap-08 §8.6): o usuário tem a permissão P se o legado lhe concede
-// uma opção de P.opcoesLegado (pelo grupo em TBPERUSU ou por papel em TBPAPEL_TBOPCOES) ou uma flag listada
-// (TBUSUCPL, GEUSERS, FCPARUSU); perde quando perde no legado (o novo lê ao vivo, com cache curto). Recurso
+// uma opção de P.opcoesLegado (pelo grupo ou pelo papel de segurança) ou uma marca de usuário listada
+// (complemento do usuário, usuário do estoque, parâmetros do financeiro); perde quando perde no legado (o novo lê ao vivo, com cache curto). Recurso
 // novo (sem opção legada) só por perfil complementar (regra 3): os perfis vêm dos papéis SBIS do legado,
 // da categoria com conselho e das concessões de SGH_ACESSO_PERFIL_USUARIO, e o que cada perfil concede
 // vem do catálogo e do mapa SGH_ACESSO_MAPA_OPCAO. Depois, a segregação (regra 9) retira o que
@@ -9,7 +9,7 @@ import type { DeclaracaoPermissao, PerfilComplementar } from '@sgh/contratos';
 import { CATEGORIAS_COM_CONSELHO, type DestinoGrupo, destinoDoGrupo } from './mapa-grupos.js';
 import { aplicarSegregacao, type Conflito, type Retirada } from './segregacao.js';
 
-/** Papéis SBIS do legado (TBPAPEL.COD_PAPEL) → perfil complementar do novo (cap-08 §8.3.4). */
+/** Papéis SBIS (código do papel de segurança) → perfil complementar do novo (cap-08 §8.3.4). */
 export const PERFIL_DO_PAPEL: Readonly<Record<number, PerfilComplementar>> = {
   0: 'gestor-acessos',
   1: 'administrador-sistema',

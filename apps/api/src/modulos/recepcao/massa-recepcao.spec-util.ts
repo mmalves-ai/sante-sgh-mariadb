@@ -486,6 +486,21 @@ export async function limparMovimento(nucleo: NucleoProprio, m: Massa): Promise<
     const ests = [m.est, m.outroEst];
     const em = ests.map(() => '?').join(', ');
     const senhas = `SELECT id FROM senha_emitida WHERE estabelecimento_id IN (${em})`;
+    await e.executar(`DELETE FROM termo_consentimento_recepcao WHERE estabelecimento_id IN (${em})`, ests);
+    await e.executar(
+      `DELETE FROM termo_consentimento_modelo WHERE estabelecimento_id IN (${em}) AND tipos_atendimento IS NOT NULL`,
+      ests,
+    );
+    const disp = `SELECT id FROM dispositivo_recepcao WHERE estabelecimento_id IN (${em})`;
+    await e.executar(
+      `DELETE FROM dispositivo_recepcao_local WHERE dispositivo_recepcao_id IN (${disp})`,
+      ests,
+    );
+    await e.executar(
+      `DELETE FROM dispositivo_recepcao_gerador WHERE dispositivo_recepcao_id IN (${disp})`,
+      ests,
+    );
+    await e.executar(`DELETE FROM dispositivo_recepcao WHERE estabelecimento_id IN (${em})`, ests);
     await e.executar(`DELETE FROM evento_senha WHERE senha_emitida_id IN (${senhas})`, ests);
     await e.executar(`DELETE FROM senha_emitida_marcacao WHERE senha_emitida_id IN (${senhas})`, ests);
     await e.executar(`DELETE FROM atendimento_senha WHERE senha_emitida_id IN (${senhas})`, ests);
@@ -512,6 +527,10 @@ export async function limparMovimento(nucleo: NucleoProprio, m: Massa): Promise<
     );
     await e.executar(`DELETE FROM classificacao_risco_evento WHERE classificacao_risco_id IN (${cls})`, ests);
     await e.executar(
+      `DELETE FROM aviso_estouro_classificacao WHERE classificacao_risco_id IN (${cls})`,
+      ests,
+    );
+    await e.executar(
       `UPDATE classificacao_risco SET anterior_classificacao_risco_id = NULL, motivo_reclassificacao_id = NULL
         WHERE estabelecimento_id IN (${em})`,
       ests,
@@ -520,6 +539,10 @@ export async function limparMovimento(nucleo: NucleoProprio, m: Massa): Promise<
     const inc = `SELECT id FROM inclusao_protocolo_paciente WHERE estabelecimento_id IN (${em})`;
     await e.executar(
       `DELETE FROM inclusao_protocolo_criterio WHERE inclusao_protocolo_paciente_id IN (${inc})`,
+      ests,
+    );
+    await e.executar(
+      `DELETE FROM inclusao_protocolo_registro WHERE inclusao_protocolo_paciente_id IN (${inc})`,
       ests,
     );
     await e.executar(`DELETE FROM inclusao_protocolo_paciente WHERE estabelecimento_id IN (${em})`, ests);

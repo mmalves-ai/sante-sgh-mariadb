@@ -600,7 +600,8 @@ export class ServicoProntuario {
           usuario: a.usuario,
           estacao: a.estacao,
           paciente: a.paciente,
-          registro: a.tabela === 'PRCABEVOL' && /^\d+$/.test(a.alvo ?? '') ? Number(a.alvo) : null,
+          registro:
+            a.tabela === 'registro_assistencial' && /^\d+$/.test(a.alvo ?? '') ? Number(a.alvo) : null,
           parte: parte ?? rotuloEvento(a.evento),
           motivo,
           resultado: a.resultado,

@@ -1,5 +1,5 @@
 // Vocabulário do SESMT, fatia F5 (M52; ficha, seções 6 a 8, regras 16 a 19 e 22; cap-07 §7.1.4; NR-32, NR-7). Os
-// códigos dos domínios do outro sistema (FPASOTIPO, FPASORESULTADO, FPVACINA, FPDOSE_VACINA, FPCAT*, FPGRUPORISCO,
+// códigos dos domínios do outro sistema (tipos e resultados do ASO, vacinas e doses, CAT, grupos de risco,
 // FPEPC) foram levantados na cópia do pc em 26/10/2026 (só os rótulos dos domínios; nenhum dado de pessoa). A tela
 // mostra o rótulo, nunca o código cru nem o nome da tabela (ADR 0023).
 

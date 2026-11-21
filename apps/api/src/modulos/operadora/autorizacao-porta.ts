@@ -54,17 +54,16 @@ export interface GravadorAutorizacao {
   encerrar(
     a: AcaoPorta & { motivo: string; redistribuirPara?: number | null },
   ): Promise<{ id: number; redistribuidos: number }>;
-  /** W0-10: os dados da designação ativa, sobre a versão vista. */
+  /** W0-10: os dados da designação ativa, sobre a versão vista. Devolve o nome do cadastro do profissional. */
   alterar(
     a: AcaoPorta & {
-      nome: string;
       categoria: 'medico' | 'enfermeiro';
       conselho: string;
       numero: string;
       uf: string;
       motivo: string;
     },
-  ): Promise<{ id: number; versao: number }>;
+  ): Promise<{ id: number; versao: number; nome: string }>;
 }
 
 export interface PortaAutorizacaoOperadora {

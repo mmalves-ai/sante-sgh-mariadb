@@ -70,7 +70,7 @@ export type TurnoEscala = keyof typeof TURNOS_ESCALA;
 export const CODIGOS_TURNO_ESCALA = Object.keys(TURNOS_ESCALA) as TurnoEscala[];
 
 /**
- * Contrato em tempo parcial (domínio POTPCONTTEMP do ramo; ref 02): 0 = não é tempo parcial; 1 = 25 h; 2 = 30 h;
+ * Contrato em tempo parcial (domínio de tempo parcial do ramo; ref 02): 0 = não é tempo parcial; 1 = 25 h; 2 = 30 h;
  * 3 = 26 h semanais (regra 6). O limite lido no domínio vale; esta tabela é o padrão quando a coluna vier vazia.
  */
 export const LIMITES_TEMPO_PARCIAL: Readonly<Record<number, number | null>> = {

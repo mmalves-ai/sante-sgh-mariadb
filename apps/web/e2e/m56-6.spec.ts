@@ -255,7 +255,7 @@ test.describe('operadora própria, etapa 6: contas médicas, glosa e pagamento @
       const sadt = (numero: string, carteira: string, senha: string | null): GuiaSpSadt => ({
         tipo: 'sp-sadt',
         numeroGuiaPrestador: numero,
-        beneficiario: { numeroCarteira: carteira, atendimentoRN: 'N' },
+        beneficiario: { numeroCarteira: carteira, atendimentoRN: false },
         nomeContratadoSolicitante: 'LABORATORIO SINTETICO ALFA',
         profissionalSolicitante: { conselho: '06', numeroConselho: '900062', uf: '42', cbos: '225125' },
         cnes: '9000001',

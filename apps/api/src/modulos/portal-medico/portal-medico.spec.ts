@@ -181,7 +181,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const p = await doPortal.post(medico, '/pedidos', {
       sala: 1,
       data: somar(new Date().toISOString().slice(0, 10), 7),
-      hora: '0800',
+      hora: '08:00',
       duracaoMin: 90,
       procedimento: 30101271,
       convenio: 10,
@@ -355,7 +355,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const pedido = {
       sala: 2,
       data,
-      hora: '1400',
+      hora: '14:00',
       duracaoMin: 90,
       procedimento: 30101271,
       convenio: 10,
@@ -402,7 +402,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     });
     expect(det.pacienteNome).toBe('PACIENTE INFORMADO SINTETICO');
     // W0-10: o médico altera o pedido não confirmado (versão vista e motivo); a versão anterior fica visível.
-    const alt = { ...pedido, hora: '1500', sala: 1, versao: 1, motivo: 'Paciente pediu a tarde' };
+    const alt = { ...pedido, hora: '15:00', sala: 1, versao: 1, motivo: 'Paciente pediu a tarde' };
     expect((await doPortal.post(medico, `/pedidos/${id}/alteracao`, alt, false)).statusCode).toBe(403);
     expect(
       (await doPortal.post(medico, `/pedidos/${id}/alteracao`, { ...alt, motivo: 'x' })).statusCode,
@@ -412,7 +412,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const alterado = await doPortal.post(medico, `/pedidos/${id}/alteracao`, alt);
     expect(alterado.statusCode).toBe(200);
     expect(alterado.json().mensagem).toMatch(/versão 2/);
-    const velha = await doPortal.post(medico, `/pedidos/${id}/alteracao`, { ...alt, hora: '1600' });
+    const velha = await doPortal.post(medico, `/pedidos/${id}/alteracao`, { ...alt, hora: '16:00' });
     expect(velha.statusCode).toBe(409);
     expect(velha.json().codigo).toBe('versao-desatualizada');
     expect((await doPortal.post(medico, '/pedidos/999999/alteracao', { ...alt, versao: 1 })).statusCode).toBe(
@@ -423,7 +423,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
       id,
       hora: '15:00',
       versao: 2,
-      edicao: expect.objectContaining({ sala: 1, hora: '1500', procedimento: 30101271, convenio: 10 }),
+      edicao: expect.objectContaining({ sala: 1, hora: '15:00', procedimento: 30101271, convenio: 10 }),
     });
     expect(agAlt.pedidos[0].versoes).toEqual([
       expect.objectContaining({ versao: 1, hora: '14:00', motivo: 'Paciente pediu a tarde' }),
@@ -445,7 +445,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const ok = await doPortal.post(medico, '/pedidos', {
       sala: 1,
       data,
-      hora: '0900',
+      hora: '09:00',
       duracaoMin: 60,
       procedimento: 30101271,
       convenio: 10,
@@ -477,7 +477,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const conf = await post(bloco, '/cirurgia/agendamentos', {
       sala: 1,
       data,
-      hora: '0900',
+      hora: '09:00',
       duracaoMin: 60,
       paciente: 1003,
       reg: 0,
@@ -506,7 +506,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     const altConf = await doPortal.post(medico, `/pedidos/${id}/alteracao`, {
       sala: 1,
       data,
-      hora: '1000',
+      hora: '10:00',
       duracaoMin: 60,
       procedimento: 30101271,
       convenio: 10,
@@ -531,7 +531,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
       doPortal.post(medico, '/pedidos', {
         sala: 1,
         data: somar(op.hoje, 20 + k),
-        hora: '1000',
+        hora: '10:00',
         duracaoMin: 60,
         procedimento: 30101271,
         convenio: 10,

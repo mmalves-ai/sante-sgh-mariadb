@@ -179,6 +179,21 @@ describe.skipIf(SEM_BANCO)('porta própria da cobrança da operadora (MariaDB, c
     expect((await porta.reajuste(contexto(m), r.id))?.situacao).toBe('cancelado');
   });
 
+  it('base das mensalidades: contrato vigente na competência com beneficiários, reajustes e se já foi gerada', async () => {
+    const f = { operadora: m.operadora, competencia: '2026-10', primeiroDia: '2026-10-01', ultimoDia: '2026-10-31', contrato: m.contrato };
+    const r = await porta.baseMensalidades(contexto(m), f);
+    expect(r.proxima).toBeNull();
+    expect(r.itens).toHaveLength(1);
+    const k = r.itens[0]!;
+    expect(k).toMatchObject({ id: m.contrato, operadora: m.operadora, produto: m.produto });
+    expect(k.beneficiarios.map((b) => b.id)).toContain(m.beneficiario);
+    expect(k.precos === null || Array.isArray(k.precos)).toBe(true);
+    expect(typeof k.jaGerada).toBe('boolean');
+    expect((await porta.baseMensalidades(contexto(m, m.outroEst), f)).itens).toEqual([]);
+    // Antes do início de vigência de qualquer contrato da massa: nada a gerar.
+    expect((await porta.baseMensalidades(contexto(m), { ...f, competencia: '1990-01', primeiroDia: '1990-01-01', ultimoDia: '1990-01-31' })).itens).toEqual([]);
+  });
+
   it('o que o modelo ainda não tem responde 501 modelo-pendente', async () => {
     const e = await porta.renegociadas(contexto(m), 1).catch((x: unknown) => codigoDe(x));
     expect(e).toBe('modelo-pendente');

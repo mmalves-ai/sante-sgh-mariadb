@@ -1,6 +1,6 @@
 // Exportação dos eventos de ponto para a folha (M53-F0; ficha do M53, regra 5; ref 02; cap-07 §7.1.3). A apuração do
-// M52 (regra 13) já classifica o tempo pelos tipos de hora (POTPHORA) e o reparte pelos 13 tipos de integração com a
-// folha (PETP_INTEGR_EVENTO), com as faixas de hora extra no parâmetro da apuração; o fechamento do período grava esses
+// M52 (regra 13) já classifica o tempo pelos tipos de hora da apuração e o reparte pelos 13 tipos de integração com a
+// folha, com as faixas de hora extra no parâmetro da apuração; o fechamento do período grava esses
 // minutos (SGH_PES_PONTO_FECHAMENTO.TOTAIS, `eventos`, e a classificação em `classes`). A exportação leva exatamente o
 // que foi fechado: um evento por vínculo e tipo de integração, sem novo de-para (D-PONTO-531: um só lugar decide a
 // faixa, a apuração), e, informativo, os minutos por vínculo e tipo de hora (D-HORAS-531).
@@ -18,7 +18,7 @@ import {
 export interface FechamentoPontoVinculo {
   readonly vinculo: number;
   readonly eventos: Readonly<Record<string, number>> | null;
-  /** Os minutos por tipo de hora da apuração (POTPHORA) gravados no mesmo fechamento (`classes`); ausente: nenhum. */
+  /** Os minutos por tipo de hora da apuração gravados no mesmo fechamento (`classes`); ausente: nenhum. */
   readonly horas?: Readonly<Record<string, number>> | null;
 }
 
@@ -29,7 +29,7 @@ export interface EventoIndisponivelPonto {
 
 export interface ResultadoExportacaoPonto {
   readonly eventos: readonly EventoPontoExportado[];
-  /** Regra 5: os minutos fechados por vínculo e tipo de hora (POTPHORA), em ordem, sem os zerados. */
+  /** Regra 5: os minutos fechados por vínculo e tipo de hora da apuração, em ordem, sem os zerados. */
   readonly horas: readonly HoraPontoExportada[];
   /** Vínculos sem o período fechado (ordem crescente). */
   readonly semFechamento: readonly number[];
@@ -67,7 +67,7 @@ export function exportarEventosPonto(
       semFechamento.push(f.vinculo);
       continue;
     }
-    // A classificação da apuração usa sempre os códigos de POTPHORA: outro código é erro de programação.
+    // A classificação da apuração usa sempre os códigos dos tipos de hora: outro código é erro de programação.
     for (const tipoHora of Object.keys(f.horas ?? {})
       .map(Number)
       .sort((a, b) => a - b)) {
@@ -129,7 +129,7 @@ export function eventosDoFechamento(totais: string | null): Record<string, numbe
   return blocoDoFechamento(totais, 'eventos');
 }
 
-/** Os minutos por tipo de hora (POTPHORA) gravados no fechamento (`{"classes": {...}}`); ilegível ou ausente: null. */
+/** Os minutos por tipo de hora da apuração gravados no fechamento (`{"classes": {...}}`); ilegível ou ausente: null. */
 export function horasDoFechamento(totais: string | null): Record<string, number> | null {
   return blocoDoFechamento(totais, 'classes');
 }

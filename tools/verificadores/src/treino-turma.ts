@@ -21,7 +21,8 @@ export const LOGIN_TURMA = /^[A-Za-z0-9._-]{3,60}$/;
 export const VALIDADE_TURMA_DIAS = 7;
 /** O cliente de treino no banco próprio: nunca outro cliente. */
 export const CLIENTE_TREINO = /^treino_[a-z0-9_]{1,40}$/;
-export const MOTIVO_DISPENSA_CPF = 'Turma de treino: contas fictícias, sem pessoa real; CPF dispensado (dispensa_cpf).';
+export const MOTIVO_DISPENSA_CPF =
+  'Turma de treino: contas fictícias, sem pessoa real; CPF dispensado (dispensa_cpf).';
 
 const entrada = z.object({
   logins: z.array(z.string().regex(LOGIN_TURMA)).min(1).max(200),
@@ -31,7 +32,10 @@ const entrada = z.object({
     .string()
     .max(255)
     .regex(/^\$argon2id\$v=19\$m=(\d{4,7}),t=\d{1,2},p=\d{1,2}\$[A-Za-z0-9+/]{16,}\$[A-Za-z0-9+/]{16,}$/)
-    .refine((x) => Number(/m=(\d+)/.exec(x)?.[1]) >= 8192, 'Resumo de senha fraco (memória do argon2id abaixo de 8192).'),
+    .refine(
+      (x) => Number(/m=(\d+)/.exec(x)?.[1]) >= 8192,
+      'Resumo de senha fraco (memória do argon2id abaixo de 8192).',
+    ),
 });
 export type EntradaTurma = z.infer<typeof entrada>;
 
@@ -151,7 +155,11 @@ export interface PedidoTurma {
 }
 
 /** Recria a turma no cliente de treino (só treino_<código>); devolve a saída do executor (resultado e trilha). */
-export async function recriarTurmaTreino(executor: Pick<Executor, 'executar'>, cliente: string, p: PedidoTurma) {
+export async function recriarTurmaTreino(
+  executor: Pick<Executor, 'executar'>,
+  cliente: string,
+  p: PedidoTurma,
+) {
   if (!CLIENTE_TREINO.test(cliente))
     throw new ErroTurma(`Recusado: ${cliente} não é cliente de treino (treino_<código>).`);
   return executarRecriarTurma(executor, cliente, p);
@@ -165,7 +173,11 @@ export function executarRecriarTurma(executor: Pick<Executor, 'executar'>, clien
   return executor.executar(
     OPERACAO_RECRIAR_TURMA,
     cliente,
-    { logins: [...p.logins], validadeDias: p.validadeDias ?? VALIDADE_TURMA_DIAS, resumoSenha: p.resumoSenha },
+    {
+      logins: [...p.logins],
+      validadeDias: p.validadeDias ?? VALIDADE_TURMA_DIAS,
+      resumoSenha: p.resumoSenha,
+    },
     {
       cliente,
       estabelecimento: p.estabelecimento,

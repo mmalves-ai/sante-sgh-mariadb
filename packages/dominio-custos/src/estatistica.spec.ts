@@ -6,7 +6,6 @@ import {
   centesimos,
   competenciaFutura,
   deCentesimos,
-  duracaoEmMinutos,
   type FontesLidas,
   intervaloDaCompetencia,
   montarMatriz,
@@ -31,14 +30,9 @@ describe('competência e quantidades', () => {
     expect(competenciaFutura('2026-11', '2026-10-28')).toBe(true);
     expect(competenciaFutura('2026-10', '2026-10-28')).toBe(false);
   });
-  it('centésimos e duração HHMM', () => {
+  it('centésimos', () => {
     expect(centesimos(12.345)).toBe(1235);
     expect(deCentesimos(1235)).toBe(12.35);
-    expect(duracaoEmMinutos('0130')).toBe(90);
-    expect(duracaoEmMinutos(' 0015 ')).toBe(15);
-    expect(duracaoEmMinutos('0075')).toBeNull();
-    expect(duracaoEmMinutos('1:30')).toBeNull();
-    expect(duracaoEmMinutos(null)).toBeNull();
   });
 });
 
@@ -93,10 +87,10 @@ describe('coleta da competência', () => {
       {
         ...vazio,
         cirurgias: [
-          { cdc: 300310, duracao: '0130', n: 2 },
-          { cdc: 300310, duracao: '0030', n: 1 },
-          { cdc: 300310, duracao: 'xx', n: 4 },
-          { cdc: null, duracao: '0100', n: 1 },
+          { cdc: 300310, minutos: 90, n: 2 },
+          { cdc: 300310, minutos: 30, n: 1 },
+          { cdc: 300310, minutos: null, n: 4 },
+          { cdc: null, minutos: 60, n: 1 },
         ],
       },
       centros,

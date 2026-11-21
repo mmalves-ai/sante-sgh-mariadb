@@ -78,8 +78,11 @@ export interface ListaPessoais {
   readonly textoLivreAcimaDe: number;
 }
 
-export function lerListaPessoais(raiz: string): ListaPessoais {
-  const y = parse(readFileSync(resolve(raiz, 'tools/assinatura/colunas-pessoais.yaml'), 'utf8')) as {
+export function lerListaPessoais(
+  raiz: string,
+  arquivo = 'tools/assinatura/colunas-pessoais.yaml',
+): ListaPessoais {
+  const y = parse(readFileSync(resolve(raiz, arquivo), 'utf8')) as {
     pessoais?: string[];
     sensiveis?: string[];
     texto_livre_acima_de?: number;

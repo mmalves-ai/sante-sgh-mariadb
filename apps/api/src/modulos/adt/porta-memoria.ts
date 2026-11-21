@@ -574,7 +574,7 @@ export class PortaAdtMemoria implements PortaAdt {
         const i = await this.internacao(c, x.internacao);
         aberta(i);
         conferirVersao(i, x.versao);
-        const h = x.horaSaida ?? hora;
+        const h = x.horaSaida?.replace(':', '') ?? hora;
         if (h > hora) throw recusa('hora-futura', 'A hora da saída não pode ser depois de agora.');
         i.alta = r.hoje;
         i.horaSaida = h;
@@ -702,7 +702,7 @@ export class PortaAdtMemoria implements PortaAdt {
           prontuario: p.prontuario,
           nome: p.nome,
           data: x.dataPrevista ?? DATA_SEM_DATA_PRE,
-          hora: x.horaPrevista ?? '0000',
+          hora: x.horaPrevista?.replace(':', '') ?? '0000',
           convenio: x.convenio,
           especialidade: x.especialidade,
           clinica: x.clinica,

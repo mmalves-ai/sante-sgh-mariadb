@@ -4,11 +4,11 @@
 // combinada com o parceiro: rotação) e, com o período de contingência DESLIGADO, a coluna antiga recebe o valor "vazio"
 // (integracao.cifrarSegredoLegado). O valor antigo nunca é lido pelo Sante: nem para copiar, nem para mostrar.
 //
-// Exceções (regra 7): TBINFBANCO é lido por 4 gatilhos que escrevem em banco externo e fica como está enquanto eles
+// Exceções (regra 7): a tabela de informações bancárias é lida por 4 gatilhos que escrevem em banco externo e fica como está enquanto eles
 // existirem (ou a TI desliga a integração, DP-16); as contas citadas em SP_MODULO_USUARIO (procedure que não pode ser
 // alterada) só são rotacionadas depois de provar na cópia que o banco não depende delas.
 //
-// As senhas secundárias de TBUSUCPL (cancelamento de nota fiscal e a secundária) deixam de existir
+// As senhas secundárias do usuário (cancelamento de nota fiscal e a secundária) deixam de existir
 // (acesso.retirarSenhaSecundaria): o Sante pede a reautenticação no lugar delas.
 import { z } from 'zod';
 import { esquemaLogin } from '../acesso/entrada.js';
@@ -30,7 +30,7 @@ export interface SegredoLegadoCatalogado {
   readonly rotulo: string;
 }
 
-/** Os segredos de parceiro de TBCONVEN, TBTISSWEBSERV, TBCODATI, TBHOSPIT, GEUSERS, PREMAILCFG e SITPEQV. */
+/** Os segredos de parceiro guardados no sistema anterior (convênio, serviço TISS, atividade, estabelecimento, estoque, e-mail e equipamento de laboratório). */
 export const SEGREDOS_LEGADO: readonly SegredoLegadoCatalogado[] = [
   {
     tabela: 'TBCONVEN',
@@ -107,7 +107,7 @@ export const EXCECOES_SEGREDO_LEGADO: readonly { readonly objeto: string; readon
   },
 ];
 
-/** Colunas de senha secundária de TBUSUCPL (chave EMPRESA + USUARIO). */
+/** Colunas de senha secundária do complemento do usuário (chave: empresa e usuário). */
 export const COLUNAS_SENHA_SECUNDARIA = ['SENHA_SEC', 'SENHA_CAN_NF'] as const;
 
 export const segredoCatalogado = (tabela: string): SegredoLegadoCatalogado | null =>

@@ -12,8 +12,10 @@ describe('formatos da agenda', () => {
     expect(horaBr('8')).toBe('8');
   });
   it('hora digitada para o contrato', () => {
-    expect(horaDoContrato('08:15')).toBe('0815');
-    expect(horaDoContrato('815')).toBe('0815');
+    expect(horaDoContrato('08:15')).toBe('08:15');
+    expect(horaDoContrato('0815')).toBe('08:15');
+    expect(horaDoContrato('815')).toBe('08:15');
+    expect(horaDoContrato('8:15')).toBe('08:15');
     expect(horaDoContrato('2400')).toBeNull();
     expect(horaDoContrato('1260')).toBeNull();
     expect(horaDoContrato('ab')).toBeNull();

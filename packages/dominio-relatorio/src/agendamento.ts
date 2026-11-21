@@ -3,12 +3,12 @@
 // registrada, conta as seguidas e alerta o dono do envio (o legado acumulou 2.600 "não enviado" sem ninguém saber);
 // fora de produção, o e-mail só vai ao coletor local. As horas são do relógio de parede (os campos UTC do Date
 // carregam a hora local, como no banco). Regras puras.
-import type { Periodicidade } from '@sgh/contratos';
+import { horaParaMinutos, type Periodicidade } from '@sgh/contratos';
 
 export interface Agenda {
   readonly periodicidade: Periodicidade;
-  /** HHMM. */
-  readonly hora: number;
+  /** Hora do dia, "HH:MM". */
+  readonly hora: string;
   /** 1 (segunda) a 7 (domingo), no semanal. */
   readonly diaSemana: number | null;
   /** 1 a 28, no mensal. */
@@ -17,9 +17,14 @@ export interface Agenda {
 
 /** O próximo envio estritamente depois de `depoisDe` (relógio de parede). */
 export function proximoEnvio(a: Agenda, depoisDe: Date): Date {
-  const h = Math.floor(a.hora / 100);
-  const m = a.hora % 100;
-  if (h > 23 || m > 59) throw new Error('Hora do envio inválida.');
+  let minutos: number;
+  try {
+    minutos = horaParaMinutos(a.hora);
+  } catch {
+    throw new Error('Hora do envio inválida.');
+  }
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
   const base = new Date(
     Date.UTC(depoisDe.getUTCFullYear(), depoisDe.getUTCMonth(), depoisDe.getUTCDate(), h, m, 0),
   );

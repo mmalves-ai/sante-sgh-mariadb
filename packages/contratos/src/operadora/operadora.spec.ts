@@ -1,6 +1,5 @@
 // Contratos da operadora própria (M56, etapa F0): inventário das 80 tabelas igual ao do marco na matriz, chaves por
 // fatia desligadas no catálogo POL-3, permissões no catálogo e vocabulário dos domínios.
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RECURSOS_DESLIGADOS, recursoDesligado } from '../liberacao/recursos.js';
 import { DOMINIOS_M56 } from '../dominios/dominios-m56.gerado.js';
@@ -13,14 +12,7 @@ import {
 } from '../permissoes/operadora.js';
 import { FORMATO_CODIGO_PERMISSAO } from '../permissoes/tipos.js';
 import { CHAVE_MODULO_OPERADORA, CHAVES_FATIA_OPERADORA, CHAVES_OPERADORA } from './chaves.js';
-import {
-  INVENTARIO_OPERADORA,
-  inventarioPorDestino,
-  TABELAS_BENEFICIARIO_FICTICIO,
-  TABELAS_OPERADORA_NAO_USADAS,
-  TABELAS_SGH_OPERADORA,
-  TELAS_OPERADORA,
-} from './inventario.js';
+import { TELAS_OPERADORA } from './inventario.js';
 import {
   CODIGOS_OBRIGACAO_ANS,
   OBRIGACOES_ANS,
@@ -29,77 +21,10 @@ import {
   VINCULOS_TITULAR,
 } from './vocabulario.js';
 
-const marcosYaml = readFileSync(new URL('../../../../tools/matriz/marcos.yaml', import.meta.url), 'utf8');
-
-function tabelasDoMarco(id: string): string[] {
-  const ini = marcosYaml.indexOf(`\n  ${id}:`);
-  if (ini < 0) return [];
-  const resto = marcosYaml.slice(ini + id.length + 4);
-  const fim = resto.search(/\n {2}(?:#|M\d{2}:)/);
-  return (fim < 0 ? resto : resto.slice(0, fim)).match(/[A-Z][A-Z0-9_]+/g) ?? [];
-}
-
-describe('inventário da operadora (F0)', () => {
-  it('tem as 80 tabelas do marco na matriz, sem repetição', () => {
-    const doMarco = tabelasDoMarco('M56').sort();
-    const nomes = INVENTARIO_OPERADORA.map((t) => t.tabela);
-    expect(new Set(nomes).size).toBe(nomes.length);
-    expect([...nomes].sort()).toEqual(doMarco);
-    expect(nomes).toHaveLength(80);
-  });
-
-  it('63 vão ao CRUD genérico, 14 ao importador e 3 só à consulta (ficha, seção 3)', () => {
-    expect(inventarioPorDestino('crud')).toHaveLength(63);
-    expect(inventarioPorDestino('referencia')).toHaveLength(14);
-    expect(inventarioPorDestino('leitura')).toHaveLength(3);
-  });
-
-  it('cada tela da ficha tem as suas tabelas e existe na árvore do menu', () => {
-    const porTela = (t: keyof typeof TELAS_OPERADORA) =>
-      INVENTARIO_OPERADORA.filter((x) => x.tela === t).map((x) => x.tabela);
-    expect(porTela('dominios')).toHaveLength(55);
-    expect(porTela('portal').sort()).toEqual(['PFPORTALOPCAO', 'PFTPATEND']);
-    expect(porTela('cobranca').sort()).toEqual(['TBTIPOCOBRANCASGO', 'TBTPEMAILPLS']);
-    expect(porTela('ans')).toContain('TBSIPANSPROC');
+describe('telas da operadora', () => {
+  it('cada tela da operadora existe na árvore do menu', () => {
     const itens = new Set(ARVORE_MENU.map((i) => i.id));
     for (const id of Object.values(TELAS_OPERADORA)) expect(itens.has(id), id).toBe(true);
-  });
-
-  it('os registros fictícios de beneficiário e a tabela de login vazia ficam fora (regra 4)', () => {
-    const nomes = new Set(INVENTARIO_OPERADORA.map((t) => t.tabela));
-    for (const t of [...TABELAS_BENEFICIARIO_FICTICIO, ...TABELAS_OPERADORA_NAO_USADAS])
-      expect(nomes.has(t), t).toBe(false);
-    expect(tabelasDoMarco('M56')).not.toContain('PSBENEFI');
-  });
-
-  it('linhas e gatilhos do retrato pc: só domínios pequenos, o maior é a lista de procedimentos do SIP', () => {
-    const maior = [...INVENTARIO_OPERADORA].sort((a, b) => b.linhas - a.linhas)[0];
-    expect(maior?.tabela).toBe('TBSIPANSPROC');
-    expect(INVENTARIO_OPERADORA.filter((t) => t.linhas > 100).map((t) => t.tabela)).toEqual([
-      'PSPRCANS',
-      'TBSIPANSPROC',
-    ]);
-    expect(INVENTARIO_OPERADORA.reduce((s, t) => s + t.gatilhos, 0)).toBe(54);
-    for (const t of INVENTARIO_OPERADORA) expect(t.rotulo.length, t.tabela).toBeGreaterThan(3);
-  });
-
-  it('48 tabelas têm gatilho que recusa toda escrita (domínio fixo): o CRUD só escreve nas 23 livres ou condicionadas', () => {
-    const conta = (d: string, e: string) =>
-      INVENTARIO_OPERADORA.filter((t) => t.destino === d && t.escrita === e).length;
-    expect(INVENTARIO_OPERADORA.filter((t) => t.escrita === 'bloqueada')).toHaveLength(48);
-    expect(conta('crud', 'bloqueada')).toBe(40);
-    expect(conta('crud', 'livre') + conta('crud', 'condicionada')).toBe(23);
-    expect(conta('referencia', 'bloqueada')).toBe(7);
-    for (const t of INVENTARIO_OPERADORA.filter((x) => x.escrita !== 'livre'))
-      expect(t.gatilhos, t.tabela).toBeGreaterThan(0);
-  });
-
-  it('as 9 tabelas novas têm o prefixo SGH_OPE_ e uma fatia', () => {
-    for (const [t, f] of Object.entries(TABELAS_SGH_OPERADORA)) {
-      expect(t).toMatch(/^SGH_OPE_[A-Z_]+$/);
-      expect(f).toMatch(/^F[1-8]$/);
-    }
-    expect(Object.keys(TABELAS_SGH_OPERADORA)).toHaveLength(9);
   });
 });
 

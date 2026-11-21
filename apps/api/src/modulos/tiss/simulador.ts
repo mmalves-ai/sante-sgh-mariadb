@@ -14,7 +14,7 @@ export interface RespostaOperadora {
   readonly aceito: boolean;
   readonly protocolo: string | null;
   readonly recibo: string | null;
-  /** TBTISSSITPROT: 1 recebido. */
+  /** Situação do protocolo na operadora: 1 recebido. */
   readonly situacao: number | null;
   readonly erros: readonly string[];
 }

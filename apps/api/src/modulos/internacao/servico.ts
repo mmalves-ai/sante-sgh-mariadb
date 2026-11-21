@@ -52,7 +52,7 @@ import {
 } from '@sgh/dominio-relatorio';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ParametrosM16 } from './configuracao.js';
-import { type CtxInternacao, destinoNoContrato, type FonteInternacao } from './fonte.js';
+import { type CtxInternacao, type DestinoFonte, destinoNoContrato, type FonteInternacao } from './fonte.js';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
 import type { MotorVigia } from './vigia.js';
 
@@ -86,7 +86,7 @@ export class ServicoInternacao {
     private readonly armazem: ArmazemSessao | null = null,
   ) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): DestinoFonte {
     return destinoNoContrato(this.fonte.destino);
   }
 

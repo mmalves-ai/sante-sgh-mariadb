@@ -30,7 +30,15 @@ const proposta = (codigo: string, x: Partial<PropostaGravavel> = {}): PropostaGr
   motivo: 'proposta de teste',
   ...x,
 });
-const vazio = { incluidas: 0, atualizadas: 0, preservadas: 0, inalteradas: 0, excluidasPreservadas: 0, ausentes: 0, codigosAusentes: '' };
+const vazio = {
+  incluidas: 0,
+  atualizadas: 0,
+  preservadas: 0,
+  inalteradas: 0,
+  excluidasPreservadas: 0,
+  ausentes: 0,
+  codigosAusentes: '',
+};
 
 describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f22_o5)', () => {
   let nucleo: NucleoProprio;
@@ -55,11 +63,10 @@ describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f
     const l = await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [codigo]);
     return l
       ? Number(l.id)
-      : e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, NOW(3))', [
-          codigo,
-          `Hospital de teste ${codigo}`,
-          `Hospital de teste ${codigo} (ficticio)`,
-        ]);
+      : e.inserir(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, NOW(3))',
+          [codigo, `Hospital de teste ${codigo}`, `Hospital de teste ${codigo} (ficticio)`],
+        );
   };
   const limpar = () =>
     nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-05-11-limpeza' }, (e) =>
@@ -87,7 +94,16 @@ describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f
     ]);
     expect(s.resultado).toEqual({ ...vazio, incluidas: 2 });
     const l = await linhas();
-    expect(l.map((x) => [x['codigo'], x['situacao'], x['destino'], x['area'], x['dono_papel_seguranca_id'], Number(x['versao'])])).toEqual([
+    expect(
+      l.map((x) => [
+        x['codigo'],
+        x['situacao'],
+        x['destino'],
+        x['area'],
+        x['dono_papel_seguranca_id'],
+        Number(x['versao']),
+      ]),
+    ).toEqual([
       ['R1', 'proposta', 'catalogo', 'faturamento', null, 1],
       ['R2', 'pendente', null, 'bloco', null, 1],
     ]);
@@ -124,7 +140,11 @@ describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f
       ['R2', 'proposta', 2],
       ['R3', 'proposta', 1],
     ]);
-    expect(await resumoTriagemGravada(nucleo, CLIENTE, est)).toEqual({ total: 3, semDono: 0, confirmadas: 1 });
+    expect(await resumoTriagemGravada(nucleo, CLIENTE, est)).toEqual({
+      total: 3,
+      semDono: 0,
+      confirmadas: 1,
+    });
   });
 
   it('relatório excluído pela área que volta no inventário fica excluído, sem quebrar a chave única', async () => {
@@ -139,13 +159,26 @@ describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f
       proposta('R2', { destino: 'descartado', marco: null }),
       proposta('R3', { motivo: 'voltou' }),
     ]);
-    expect(s.resultado).toEqual({ ...vazio, inalteradas: 1, excluidasPreservadas: 1, ausentes: 1, codigosAusentes: 'R1' });
+    expect(s.resultado).toEqual({
+      ...vazio,
+      inalteradas: 1,
+      excluidasPreservadas: 1,
+      ausentes: 1,
+      codigosAusentes: 'R1',
+    });
     expect((await linhas()).map((x) => x['codigo'])).toEqual(['R1', 'R2']);
   });
 
   it('grava a proposta do domínio para relatórios de todos os módulos (todas as áreas donas), sem nenhum sem dono', async () => {
     const propostas = MODULOS.map((modulo, i) =>
-      propostaDoRelatorio({ id: 500 + i, nome: `Relatorio sintetico ${i}`, modulo, tipo: 2, quantidadeParametros: 0, acessoRestrito: false }),
+      propostaDoRelatorio({
+        id: 500 + i,
+        nome: `Relatorio sintetico ${i}`,
+        modulo,
+        tipo: 2,
+        quantidadeParametros: 0,
+        acessoRestrito: false,
+      }),
     );
     const s = await gravarPropostasTriagem(nucleo.criarExecutor(), CLIENTE, ctx(est2), propostas);
     expect(s.resultado.incluidas).toBe(MODULOS.length);
@@ -157,7 +190,9 @@ describe.skipIf(SEM_BANCO)('triagem dos relatórios no banco próprio (cliente f
   });
 
   it('recusa sem estabelecimento na sessão, com entrada inválida e com código repetido, sem gravar', async () => {
-    await expect(gravarPropostasTriagem(nucleo.criarExecutor(), CLIENTE, ctx(null), [proposta('R9')])).rejects.toThrow();
+    await expect(
+      gravarPropostasTriagem(nucleo.criarExecutor(), CLIENTE, ctx(null), [proposta('R9')]),
+    ).rejects.toThrow();
     await expect(
       gravarPropostasTriagem(nucleo.criarExecutor(), CLIENTE, ctx(est), [proposta('R9', { marco: 'X9' })]),
     ).rejects.toThrow();

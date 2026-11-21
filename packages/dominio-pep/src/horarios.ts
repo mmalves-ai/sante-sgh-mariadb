@@ -1,9 +1,9 @@
 // Horário clínico × horário de gravação (regra 10 da ficha do M22; cap-11 §11.1; ref 04): o registro guarda o
 // horário clínico (o que o profissional informa) e o de gravação (o relógio do banco). Nunca no futuro; o
 // retroativo além da tolerância exige justificativa (o legado tem 106.365 registros retroativos, 14%), e só para
-// quem o cadastro do profissional permite lançamento retroativo (PRLOCPACDEFAULT.PERMITE_LANC_RETROATIVO; 63 de
+// quem o cadastro do profissional permite lançamento retroativo (preferência do profissional no prontuário; 63 de
 // 524 com F). A tolerância é parâmetro (pep.evolucao.toleranciaRetroativoMinutos; padrão 15, pelo perfil).
-// Residente com preceptor (coassinatura, ID_TBPROFIS_ACOMP_RESP): 663 registros, todos de 2020 e 2021 (perfil
+// Residente com preceptor (coassinatura do preceptor responsável): 663 registros, todos de 2020 e 2021 (perfil
 // medido pelo corretor); o novo não oferece (decisão D-PREC-1): o residente registra sem preceptor, como hoje no
 // banco desde 2022.
 

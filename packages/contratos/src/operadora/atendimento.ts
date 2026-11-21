@@ -8,12 +8,12 @@
 //   - a resposta tem a conclusão (favorável, parcial, desfavorável ou informativa) e, quando nega no todo ou em parte, o
 //     fundamento (cláusula do contrato ou dispositivo legal); o beneficiário pode pedir a resposta por escrito, que sai
 //     no prazo em horas contado da resposta; só a ouvidoria prorroga o prazo, uma vez, com o motivo acordado;
-//   - o portal do prestador: a conta de acesso é da operadora (identidade própria em SGH_OPE_PORTAL_ACESSO, nunca usuário
-//     interno), ligada a um prestador da rede, com as funções que o credenciamento libera (PFPORTALOPCAO), ativada com o
+//   - o portal do prestador: a conta de acesso é da operadora (identidade própria, nunca usuário
+//     interno), ligada a um prestador da rede, com as funções que o credenciamento libera, ativada com o
 //     código de uso único, a senha própria e o segundo fator; o prestador consulta e pede autorizações, cancela o pedido
 //     dele e consulta protocolos, sempre só os dele.
-// Os dados ficam em SGH_OPE_PROTOCOLO, _EVT e SGH_OPE_PORTAL_ACESSO (scripts 0960 e 0961). Nenhuma escrita em tabela
-// legada (seção 5); SPORIGEM_ATEND, PFPORTALOPCAO e PFTPATEND são só lidos.
+// Os dados ficam nas tabelas próprias do protocolo e do portal do prestador. A origem do atendimento,
+// as funções do portal e os tipos de atendimento são domínios do cliente, só lidos.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import {
@@ -162,7 +162,7 @@ export const EVENTOS_PROTOCOLO = [
 ] as const;
 export type EventoProtocolo = (typeof EVENTOS_PROTOCOLO)[number];
 
-/** Funções do portal que o credenciamento pode liberar (PFPORTALOPCAO; D-PORTAL-FUNCOES-568). */
+/** Funções do portal que o credenciamento pode liberar (D-PORTAL-FUNCOES-568). */
 export const FUNCOES_PORTAL_LIBERAVEIS = [1, 2, 3, 7] as const;
 export type FuncaoPortalLiberavel = (typeof FUNCOES_PORTAL_LIBERAVEIS)[number];
 export const FUNCAO_PORTAL = { solicitar: 1, cancelar: 2, consultar: 3, protocolo: 7 } as const;
@@ -189,7 +189,7 @@ export const esquemaRegistrarProtocoloOpe = z
     instancia: z.enum(INSTANCIAS_PROTOCOLO),
     natureza: z.enum(NATUREZAS_PROTOCOLO),
     canal: z.enum(CANAIS_PROTOCOLO),
-    /** Origem do atendimento (SPORIGEM_ATEND), conferida no domínio do banco. */
+    /** Origem do atendimento, conferida no domínio do banco. */
     origem: z.number().int().min(1).max(32_767),
     solicitante: z.enum(SOLICITANTES_PROTOCOLO),
     /** Carteirinha do beneficiário (obrigatória, menos na informação pedida por quem não é beneficiário). */
@@ -294,7 +294,7 @@ export const esquemaConsultaNumeroProtocolo = z.object({
 });
 
 // Contas do portal (credenciamento da operadora).
-/** As funções liberadas (códigos de PFPORTALOPCAO; o servidor confere as liberáveis e o domínio do banco). */
+/** As funções liberadas (códigos; o servidor confere as liberáveis e o domínio do banco). */
 const funcoes = z
   .array(z.number().int().min(1).max(32_767))
   .min(1, 'Libere ao menos uma função do portal.')
@@ -313,7 +313,7 @@ export const esquemaCriarAcessoPortal = z
     login,
     nome: texto(120, 3, 'Informe o nome do responsável no prestador.'),
     funcoes,
-    /** Tipo de atendimento (PFTPATEND), conferido no domínio do banco. */
+    /** Tipo de atendimento, conferido no domínio do banco. */
     tipoAtendimento: z.number().int().min(1).max(32_767),
   })
   .strict();
@@ -612,7 +612,7 @@ export const esquemaAcessosPortal = z.object({
   ligada: z.boolean(),
   motivo: z.string().nullable(),
   podeEditar: z.boolean(),
-  /** Funções do portal (PFPORTALOPCAO) e tipos de atendimento (PFTPATEND) do banco; `liberavel` marca as liberáveis. */
+  /** Funções do portal e tipos de atendimento do banco; `liberavel` marca as liberáveis. */
   funcoes: z.array(esquemaOpcao.extend({ liberavel: z.boolean() })),
   tiposAtendimento: z.array(esquemaOpcao),
   prestadores: z.array(z.object({ id: z.number().int(), nome: z.string() })),

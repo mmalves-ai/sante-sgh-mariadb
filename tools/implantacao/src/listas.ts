@@ -60,7 +60,8 @@ export function lerMigracoes(raiz: string): MigracaoBanco[] {
   return r;
 }
 
-const porCaminho = (a: MigracaoBanco, b: MigracaoBanco) => (a.arquivo < b.arquivo ? -1 : a.arquivo > b.arquivo ? 1 : 0);
+const porCaminho = (a: MigracaoBanco, b: MigracaoBanco) =>
+  a.arquivo < b.arquivo ? -1 : a.arquivo > b.arquivo ? 1 : 0;
 
 /** A ordem do "criar novo cliente": todas as tabelas, depois todas as chaves; em cada etapa, pelo caminho. */
 export function ordemDeAplicacao(migracoes: readonly MigracaoBanco[]): MigracaoBanco[] {

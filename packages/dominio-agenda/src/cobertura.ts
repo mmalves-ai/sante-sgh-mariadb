@@ -6,7 +6,7 @@
 // PARTICULAR avisa.
 import { partesDoNome } from './nome-agenda.js';
 
-/** TBCONVEN.COD do particular (ref 01 §3.6; cobertura.js). */
+/** Código do convênio particular no cadastro de convênios (ref 01 §3.6; cobertura.js). */
 export const CONVENIO_PARTICULAR = 10;
 export const MAX_ACEITOS_NA_RESPOSTA = 8;
 

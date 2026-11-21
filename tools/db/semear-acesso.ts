@@ -32,7 +32,12 @@ export const PERFIS = [
 ] as const;
 
 export interface EntradaSemeador {
-  readonly admin: { readonly login: string; readonly senha: string; readonly email: string; readonly nome: string };
+  readonly admin: {
+    readonly login: string;
+    readonly senha: string;
+    readonly email: string;
+    readonly nome: string;
+  };
   readonly teste: { readonly login: string; readonly senha: string };
 }
 
@@ -135,7 +140,9 @@ export async function semearCliente(
 ): Promise<ResumoCliente> {
   const id = (l: { id: unknown } | null): number | null => (l ? Number(l.id) : null);
   let estId = id(
-    await w.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE excluido_em IS NULL ORDER BY id LIMIT 1'),
+    await w.uma<{ id: number }>(
+      'SELECT id FROM estabelecimento WHERE excluido_em IS NULL ORDER BY id LIMIT 1',
+    ),
   );
   const estabelecimento: Situacao = estId === null ? 'criado' : 'existente';
   estId ??= await w.inserir(
@@ -190,7 +197,8 @@ export async function semearCliente(
     [teste.login, 'Usuário de teste', agora],
   );
 
-  const vigente = 'vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)';
+  const vigente =
+    'vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)';
   const temVinculo = await w.uma(
     `SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ? AND ${vigente}`,
     [usuarioId, estId],
@@ -287,7 +295,9 @@ async function principal(argv: readonly string[]): Promise<number> {
     }),
   );
   if (resumoCliente.acoes_consulta_no_catalogo === 0)
-    console.error('aviso: acao_sistema sem ações de consulta (rode o "criar novo cliente", que carrega o catálogo)');
+    console.error(
+      'aviso: acao_sistema sem ações de consulta (rode o "criar novo cliente", que carrega o catálogo)',
+    );
   return 0;
 }
 
@@ -299,7 +309,9 @@ if ((import.meta as { main?: boolean }).main) {
       const m = e instanceof Error ? e.message : '';
       const codigo = (e as { code?: unknown } | null)?.code;
       console.error(
-        m.startsWith('semeador recusado') ? m : `falhou: ${e instanceof Error ? e.name : 'erro'} ${String(codigo ?? '')}`,
+        m.startsWith('semeador recusado')
+          ? m
+          : `falhou: ${e instanceof Error ? e.name : 'erro'} ${String(codigo ?? '')}`,
       );
       process.exit(1);
     },

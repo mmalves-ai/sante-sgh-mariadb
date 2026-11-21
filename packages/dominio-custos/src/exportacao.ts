@@ -12,9 +12,9 @@ export function envioPermitido(ambiente: string): boolean {
 
 export interface CentroParaExportacao {
   readonly id: number;
-  /** TBCENCUS.COD_APURASUS. */
+  /** Código do centro no programa nacional de apuração de custos. */
   readonly codigoApurasus: string | null;
-  /** TBUNIMEN.COD_APURASUS da unidade de mensuração do centro. */
+  /** Código da unidade de mensuração do centro no programa nacional de apuração de custos. */
   readonly unidadeApurasus: string | null;
 }
 

@@ -217,7 +217,7 @@ export const buscarContasDormentes = (buscar: typeof fetch = fetch) =>
 
 /** W1-01 (parte 9b2b): incluir, trocar o prazo ou retirar a exceção de uma conta (linha nova, motivo e senha). */
 export const registrarExcecaoDormencia = (p: ExcecaoDormencia, buscar: typeof fetch = fetch) =>
-  gravar<{ id: string; anterior: string | null; atual: string | null; destino: 'legado' | 'memoria' }>(
+  gravar<{ id: string; anterior: string | null; atual: string | null; destino: 'banco' | 'memoria' }>(
     '/contas-dormentes/excecoes',
     p,
     buscar,
@@ -237,7 +237,7 @@ export const buscarRecertificacao = (id: string, buscar: typeof fetch = fetch) =
 
 /** W1-01 (parte 9c2b): abrir a campanha (escopo, prazo, motivo e senha). */
 export const abrirRecertificacao = (p: AbrirRecert, buscar: typeof fetch = fetch) =>
-  gravar<{ id: string; itens: number; destino: 'legado' | 'memoria' }>('/recertificacoes', p, buscar);
+  gravar<{ id: string; itens: number; destino: 'banco' | 'memoria' }>('/recertificacoes', p, buscar);
 
 /** W1-01 (parte 9c2b): decidir uma conta (manter; retirar com bloqueio ou revogação de perfil, já aplicado). */
 export const decidirRecertificacao = (id: string, p: DecidirRecert, buscar: typeof fetch = fetch) =>
@@ -249,7 +249,7 @@ export const fecharRecertificacao = (id: string, p: FecharRecert, buscar: typeof
     id: string;
     situacao: 'encerrada' | 'cancelada';
     pendentes: number;
-    destino: 'legado' | 'memoria';
+    destino: 'banco' | 'memoria';
   }>(`/recertificacoes/${encodeURIComponent(id)}/fechar`, p, buscar);
 
 // ── W1-01 (parte 10c): pedido de acesso (a própria pessoa em /api/acesso/pedidos; a gestão em …/gestao/pedidos) ──
@@ -261,7 +261,7 @@ export const buscarMeusPedidosAcesso = (buscar: typeof fetch = fetch) =>
 
 /** Pedir um perfil (perfil, setor, primeiro e último dia, motivo). */
 export const pedirAcesso = (p: NovoPedidoAcessoCorpo, buscar: typeof fetch = fetch) =>
-  gravar<{ id: string; destino: 'legado' | 'memoria' }>('', p, buscar, PEDIDOS);
+  gravar<{ id: string; destino: 'banco' | 'memoria' }>('', p, buscar, PEDIDOS);
 
 /** Cancelar o próprio pedido antes da concessão (motivo e senha). */
 export const cancelarPedidoAcesso = (
@@ -269,7 +269,7 @@ export const cancelarPedidoAcesso = (
   p: CancelarPedidoAcessoCorpo,
   buscar: typeof fetch = fetch,
 ) =>
-  gravar<{ id: string; situacao: 'cancelado'; destino: 'legado' | 'memoria' }>(
+  gravar<{ id: string; situacao: 'cancelado'; destino: 'banco' | 'memoria' }>(
     `/${encodeURIComponent(id)}/cancelar`,
     p,
     buscar,
@@ -307,7 +307,7 @@ export const buscarPerfisCargoRh = (buscar: typeof fetch = fetch) =>
 
 /** Incluir, trocar ou retirar (perfil null) a sugestão de perfil de um cargo (linha nova, motivo e senha). */
 export const definirPerfilCargoRh = (p: DefinirPerfilCargoRhCorpo, buscar: typeof fetch = fetch) =>
-  gravar<{ id: string; anterior: string | null; perfil: string | null; destino: 'legado' | 'memoria' }>(
+  gravar<{ id: string; anterior: string | null; perfil: string | null; destino: 'banco' | 'memoria' }>(
     '/rh/perfis-cargo',
     p,
     buscar,

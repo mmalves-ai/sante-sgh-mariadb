@@ -1,7 +1,7 @@
 // Ficha anestésica (M46, regra 3): o de-para dos fluidos e das perdas para o balanço hídrico do M45 e o conteúdo
 // canônico que a assinatura cobre (o SHA-256 gravado na ficha). Regras puras.
-//   - De-para (D-BAL-46): o balanço classifica o ganho pelo grupo (PRAGRUPBALANCO) e a perda pelo tipo de eliminação
-//     (PRBHTPELIMINA), domínios do estabelecimento lidos do banco, sem ID fixo no código. O fluido e a perda da ficha
+//   - De-para (D-BAL-46): o balanço classifica o ganho pelo grupo do balanço e a perda pelo tipo de eliminação,
+//     domínios do estabelecimento lidos do banco, sem ID fixo no código. O fluido e a perda da ficha
 //     acham o seu pelo nome (hemocomponente → grupo de sangue ou hemoderivado; o resto → soro, hidratação ou infusão;
 //     sangramento, diurese e aspiração pelo nome); sem correspondência, o primeiro do domínio. Domínio vazio: o item
 //     fica fora do balanço (a ficha mostra "fora do balanço").

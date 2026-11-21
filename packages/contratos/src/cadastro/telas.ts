@@ -184,7 +184,7 @@ export const esquemaHistoricoCadastro = z.object({
     z.object({
       id: z.number().int(),
       em: z.string(),
-      /** Login de quem alterou (TBUSERS), quando o legado gravou. */
+      /** Login de quem alterou, quando o legado gravou. */
       usuario: z.string().nullable(),
       mudancas: z.array(
         z.object({
@@ -349,9 +349,9 @@ export const esquemaProfissionalResumo = z.object({
   nome: z.string(),
   categoria: z.enum(CATEGORIAS_PROFISSIONAL),
   registros: z.array(esquemaRegistroProfissional),
-  /** TBPROFIS.SITUACAO, baixa confiança (DP-46.1): o código e a legenda "a confirmar". */
+  /** Situação do profissional, baixa confiança (DP-46.1): o código e a legenda "a confirmar". */
   situacaoLegado: z.object({ codigo: z.string().nullable(), aConfirmar: z.literal(true) }),
-  /** Atividade real: algum registro ativo (TBCBOPRO.ATIVO). */
+  /** Atividade real: algum registro ativo (ocupação do profissional ativa). */
   ativo: z.boolean(),
 });
 export type ProfissionalResumo = z.infer<typeof esquemaProfissionalResumo>;

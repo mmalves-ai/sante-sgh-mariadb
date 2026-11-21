@@ -4,13 +4,13 @@
 //   - SIB (mensal): os movimentos do cadastro de beneficiários (inclusão, retificação, mudança contratual, cancelamento e
 //     reativação), derivados do cadastro atual contra o último aceito pela ANS (SGH_OPE_BENEF_SIB); o retorno da ANS
 //     dá o código de controle operacional (CCO) de cada beneficiário;
-//   - SIP (trimestral): eventos e despesas assistenciais por grupo do SIP (TBSIPANSATO e TBSIPANSPROC do banco), pela
+//   - SIP (trimestral): eventos e despesas assistenciais por grupo do SIP, pela
 //     segmentação e pela UF, com os beneficiários expostos, a partir das contas médicas recebidas (F5);
 //   - DIOPS (trimestral): as contraprestações emitidas e recebidas (F2), os eventos avisados, glosados e pagos (F5), os
 //     beneficiários e o balancete informado pela contabilidade da operadora, com o ativo igual ao passivo mais o
 //     patrimônio líquido;
 //   - TPS (trimestral): a taxa de saúde suplementar pela média de beneficiários de cada plano no trimestre e o valor
-//     trimestral vigente (PSTPSVIGENCIA do banco), com o desconto de cada plano, e a GRU do recolhimento;
+//     trimestral vigente, com o desconto de cada plano, e a GRU do recolhimento;
 //   - monitoramento TISS (mensal): as guias das contas médicas analisadas na competência, com os valores informados,
 //     glosados e pagos;
 //   - ressarcimento ao SUS (sob demanda): o aviso de beneficiário identificado (ABI) com os atendimentos no SUS, a
@@ -53,8 +53,8 @@ export type MovimentoSib = keyof typeof MOVIMENTOS_SIB;
 export const CODIGOS_MOVIMENTO_SIB = Object.keys(MOVIMENTOS_SIB) as MovimentoSib[];
 
 /**
- * Motivos de movimentação cadastral (CDMOTMOVIMCAD do banco: 12 linhas, conferidas na cópia em 26/10/2026). O grupo é a
- * coluna ID_CDSTATUSCAD: 1 inclusão, 2 alteração, 3 cancelamento, 4 reativação.
+ * Motivos de movimentação cadastral (12 linhas, conferidas na cópia em 26/10/2026). O grupo é o
+ * movimento cadastral: 1 inclusão, 2 alteração, 3 cancelamento, 4 reativação.
  */
 export const MOTIVOS_CANCELAMENTO_SIB = [5, 6, 7, 8, 9, 10] as const;
 export const MOTIVO_INCLUSAO_SIB = 1;
@@ -70,7 +70,7 @@ export const GRUPO_MOTIVO_SIB: Readonly<Record<MovimentoSib, number>> = {
 };
 
 /**
- * Campos do beneficiário que a retificação do SIB declara (PSSIBCAMPOALT do banco: 19 linhas, conferidas na cópia em
+ * Campos do beneficiário que a retificação do SIB declara (19 linhas, conferidas na cópia em
  * 26/10/2026; o código é o ID da tabela).
  */
 export const CAMPOS_SIB = {

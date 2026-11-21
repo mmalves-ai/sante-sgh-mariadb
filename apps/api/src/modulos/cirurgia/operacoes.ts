@@ -39,6 +39,7 @@ import {
 } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, horaDe, instante, n, nn, texto } from './banco-apoio.js';
 import type { GravadorSghCirurgia } from './porta.js';
+import { conferirAlteracaoPedido } from './regras.js';
 
 type Linha = Record<string, unknown>;
 
@@ -49,12 +50,13 @@ export const SITUACOES_AGENDAMENTO = [
   'reprovado',
   'agendado',
   'confirmado',
+  'no_bloco',
   'em_andamento',
   'realizado',
   'suspenso',
   'cancelado',
 ] as const;
-const OCUPA_SALA = "('agendado', 'confirmado', 'em_andamento', 'realizado')";
+const OCUPA_SALA = "('agendado', 'confirmado', 'no_bloco', 'em_andamento', 'realizado')";
 
 export const TABELAS_AGENDA = [
   'agendamento_cirurgico',
@@ -65,6 +67,7 @@ export const TABELAS_AGENDA = [
 export const TABELAS_GRAVACAO_DIRETA = [
   ...TABELAS_AGENDA,
   'pendencia_agendamento_cirurgico',
+  'agendamento_cirurgico_versao',
   'ato_cirurgico',
 ];
 
@@ -102,6 +105,24 @@ async function agendamentoDe(tx: TxOperacao, id: number): Promise<Linha> {
       'O agendamento não existe neste estabelecimento.',
     );
   return l;
+}
+/** O pedido do portal relido sob a transação (FOR UPDATE), conferida a conta; `exigir`: recusa se não houver. */
+async function pedidoDoPortal(
+  tx: TxOperacao,
+  id: number,
+  acesso: number,
+  exigir = true,
+): Promise<Linha | null> {
+  const [a] = await tx.consultarParaAtualizar(
+    `SELECT id, versao, situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, fonte_pagadora_id,
+            observacao, paciente_informado, conta_portal_profissional_externo_id
+       FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [id, est(tx)],
+    { teto: 1 },
+  );
+  if (a && nn(a['conta_portal_profissional_externo_id']) === acesso) return a;
+  if (!exigir) return null;
+  throw recusa('registro-inexistente', 'O pedido não existe ou não é desta conta.');
 }
 async function idPorCodigo(
   tx: TxOperacao,
@@ -295,11 +316,7 @@ export function gravadorCirurgia(
   };
   return {
     async solicitar(r) {
-      if (r.portal)
-        throw modeloPendente(
-          'O pedido pelo portal do médico externo aguarda a conta do portal no agendamento cirúrgico (pedido de modelo).',
-        );
-      if (r.idPaciente === null)
+      if (!r.portal && r.idPaciente === null)
         throw recusa('paciente-obrigatorio', 'Informe o paciente do pedido.', { campos: ['paciente'] });
       if (r.cirurgiao === null)
         throw recusa('cirurgiao-obrigatorio', 'Informe o cirurgião do pedido.', { campos: ['cirurgiao'] });
@@ -323,6 +340,14 @@ export function gravadorCirurgia(
         duracao_prevista_minutos: r.duracaoMin,
         situacao: 'solicitado',
         observacao: r.observacao,
+        ...(r.portal
+          ? {
+              canal_solicitacao: 'portal',
+              conta_portal_profissional_externo_id: r.portal.acesso,
+              paciente_informado: r.portal.paciente,
+              nascimento_informado: r.portal.nascimento,
+            }
+          : {}),
       });
       await incluirProcedimentos(tx, id, r.procedimento, []);
       await historico(tx, id, 'inclusao', {
@@ -333,22 +358,93 @@ export function gravadorCirurgia(
       });
       return anotar('agendamento_cirurgico', id);
     },
-    async retirarPedidoPortal() {
-      throw modeloPendente(
-        'A retirada do pedido pelo portal do médico externo aguarda a conta do portal no agendamento cirúrgico (pedido de modelo).',
-      );
+    async retirarPedidoPortal(r) {
+      const a = (await pedidoDoPortal(tx, r.id, r.acesso)) as Linha;
+      if (texto(a['situacao']) !== 'solicitado')
+        throw recusa('solicitacao-encerrada', 'O pedido já foi confirmado, cancelado ou suspenso.');
+      await tx.alterar('agendamento_cirurgico', r.id, n(a['versao']), {
+        situacao: 'cancelado',
+        cancelado_em: new Date(),
+        observacao: r.complemento ?? a['observacao'] ?? null,
+      });
+      await historico(tx, r.id, 'exclusao', { antes: a, nova: 'cancelado', justificativa: r.complemento });
+      anotar('agendamento_cirurgico', r.id);
     },
-    async alterarPedidoPortal() {
-      throw modeloPendente(
-        'A alteração do pedido pelo portal do médico externo aguarda as versões do pedido no modelo (pedido de DDL).',
+    async alterarPedidoPortal(r) {
+      const a = await pedidoDoPortal(tx, r.id, r.acesso, false);
+      const guardadas = n(
+        (
+          await tx.uma<{ q: number }>(
+            'SELECT COUNT(*) AS q FROM agendamento_cirurgico_versao WHERE agendamento_cirurgico_id = ? AND excluido_em IS NULL',
+            [r.id],
+          )
+        )?.q,
       );
+      conferirAlteracaoPedido(
+        a
+          ? {
+              acesso: nn(a['conta_portal_profissional_externo_id']),
+              estado: texto(a['situacao']),
+              agendamento: null,
+              versao: guardadas + 1,
+            }
+          : null,
+        r,
+      );
+      const atual = a as Linha;
+      await exigirSala(tx, r.sala);
+      const fuso = await fusoDe(tx);
+      const procAtual = await tx.uma<{ id: number; versao: number; p: number }>(
+        `SELECT id, versao, procedimento_cirurgico_id AS p FROM agendamento_cirurgico_procedimento
+          WHERE agendamento_cirurgico_id = ? AND principal = TRUE AND excluido_em IS NULL LIMIT 1`,
+        [r.id],
+      );
+      await tx.incluir('agendamento_cirurgico_versao', {
+        agendamento_cirurgico_id: r.id,
+        numero_versao: guardadas + 1,
+        dados: JSON.stringify({
+          sala: nn(atual['sala_cirurgica_id']),
+          inicio: civil(atual['inicio_previsto_em'], fuso),
+          duracaoMin: nn(atual['duracao_prevista_minutos']),
+          procedimento: nn(procAtual?.p),
+          convenio: nn(atual['fonte_pagadora_id']),
+          observacao: atual['observacao'] ?? null,
+          paciente: atual['paciente_informado'] ?? null,
+        }),
+        motivo: r.motivo.trim(),
+        substituida_em: new Date(),
+      });
+      const inicioNovo = instante(`${r.data} ${horaDe(r.hora)}`, fuso);
+      await tx.alterar('agendamento_cirurgico', r.id, n(atual['versao']), {
+        sala_cirurgica_id: r.sala,
+        inicio_previsto_em: inicioNovo,
+        duracao_prevista_minutos: r.duracaoMin,
+        fonte_pagadora_id: r.convenio,
+        cirurgiao_profissional_id: r.cirurgiao,
+        carater_cirurgia_id: r.carater,
+        tipo_anestesia_id: r.anestesia > 0 ? r.anestesia : null,
+        observacao: r.observacao,
+        paciente_informado: r.paciente,
+        nascimento_informado: r.nascimento,
+      });
+      if (procAtual && n(procAtual.p) !== r.procedimento)
+        await tx.alterar('agendamento_cirurgico_procedimento', n(procAtual.id), n(procAtual.versao), {
+          procedimento_cirurgico_id: r.procedimento,
+        });
+      else if (!procAtual) await incluirProcedimentos(tx, r.id, r.procedimento, []);
+      await historico(tx, r.id, 'alteracao', {
+        antes: atual,
+        sala: r.sala,
+        inicio: inicioNovo,
+        duracao: r.duracaoMin,
+        nova: 'solicitado',
+        justificativa: r.motivo.trim(),
+      });
+      anotar('agendamento_cirurgico', r.id);
+      return guardadas + 2;
     },
     async mudarEstado(r) {
       const nova = situacaoDoEstado(r.estado);
-      if (nova === null)
-        throw modeloPendente(
-          'A marcação "no bloco" aguarda a situação no agendamento cirúrgico (pedido de DDL do lote 03-01); use "em sala".',
-        );
       const a = await agendamentoDe(tx, r.id);
       anotar('agendamento_cirurgico', r.id);
       if (r.visto?.versao != null && r.visto.versao !== n(a['versao'])) throw erroConflitoVersao(['versao']);
@@ -651,5 +747,5 @@ export const OPERACOES_CIRURGIA: Readonly<Record<string, Operacao<never, Resulta
 /** Operações que aguardam o modelo ou a implementação sobre ele (o motivo vai à tela; nada é gravado). */
 export const OPERACOES_CIRURGIA_PENDENTES: Readonly<Record<string, string>> = Object.freeze({
   'cirurgia.registrarCirurgia':
-    'O registro do ato cirúrgico pela tela aguarda o mapeamento dos usos, dos tempos em HHMM e do porte/contaminação em letras do contrato para ato_cirurgico, ato_cirurgico_procedimento e participante_cirurgia (pedido do lote 03-01).',
+    'O registro do ato cirúrgico pela tela aguarda as colunas do ato para os dispositivos usados (tubo, antimicrobiano, sonda, cateter, punção), a pressão e o pulso, a classificação ASA e a especialidade de cada procedimento (pedido de modelo do lote 08-cirurgia).',
 });

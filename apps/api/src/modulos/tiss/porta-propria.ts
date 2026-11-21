@@ -159,6 +159,7 @@ const SQL_ITENS_GLOSA = `
          gi.id AS glosa_item, gi.versao AS versao_glosa, gi.valor_apresentado, gi.valor_glosado, gi.quantidade_apresentada,
          gi.quantidade_glosada, gi.decisao, gi.valor_recursado, gi.quantidade_recursada, gi.valor_recuperado,
          gi.data_recuperacao, gi.justificativa, gi.decidido_em, gi.recurso_glosa_id, ud.login AS decidido_por,
+         gi.evidencia_prontuario IS NOT NULL AS tem_evidencia,
          gl.data_glosa, gl.data_limite_recurso, mg.codigo_tuss, mg.descricao AS motivo_nome,
          mg.permite_reapresentacao, rg.enviado_em AS recurso_em, rg.situacao AS situacao_recurso
     FROM conta_hospitalar_item ci
@@ -232,7 +233,8 @@ function itemGlosaDe(r: Linha, prazoParametro: string): ItemGlosaLido {
           motivo: texto(r['justificativa']),
           por: texto(r['decidido_por']),
           em: instante(r['decidido_em']) ?? '',
-          temEvidencia: false,
+          // A evidência (dado clínico) só sai pela leitura auditada (evidenciaDoItem); aqui, só se existe.
+          temEvidencia: n(r['tem_evidencia']) === 1,
         }
       : null,
   };
@@ -891,10 +893,22 @@ export class PortaTissPropria implements PortaTiss {
     );
   }
 
-  /** A evidência do prontuário da decisão aguarda a coluna no modelo (pedido do lote 03-16): nenhuma é lida. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo
-  async evidenciaDoItem(_c: ContextoTiss, _item: number): Promise<EvidenciaGlosaLida | null> {
-    return null;
+  /** A evidência do prontuário gravada na decisão de recorrer a glosa viva do item (null quando não há). */
+  evidenciaDoItem(c: ContextoTiss, item: number): Promise<EvidenciaGlosaLida | null> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma<Linha>(
+        `SELECT gi.evidencia_prontuario, gi.decidido_em, ud.login AS decidido_por
+           FROM conta_hospitalar_item ci
+           JOIN conta_hospitalar ch ON ch.id = ci.conta_hospitalar_id
+           JOIN glosa_item gi ON gi.id = ${glosaVivaDoItem('ci.id')}
+           LEFT JOIN usuario ud ON ud.id = gi.decidido_por_usuario_id
+          WHERE ci.id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL AND gi.evidencia_prontuario IS NOT NULL`,
+        [item, est],
+      );
+      return r
+        ? { item, evidencia: texto(r['evidencia_prontuario']), decididoPor: texto(r['decidido_por']), decididoEm: instante(r['decidido_em']) ?? '' }
+        : null;
+    });
   }
 
   convenioDaConta(c: ContextoTiss, conta: number): Promise<number | null> {
@@ -1394,18 +1408,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghTiss {
         texto: d.texto,
       });
       if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: [...r.campos] } : {});
-      if (d.evidencia.trim())
-        throw new ErroOperacao(
-          409,
-          'modelo-pendente',
-          'Evidência indisponível',
-          'A evidência do prontuário na decisão da glosa aguarda a coluna no modelo do banco: registre a decisão sem a evidência.',
-          { campos: ['evidencia'] },
-        );
       const id = n(gi!['id']);
       await tx.alterar('glosa_item', id, n(gi!['versao']), {
         decisao: d.decisao,
         justificativa: d.texto,
+        // A evidência do prontuário acompanha só a decisão de recorrer (a mesma regra da porta de memória).
+        evidencia_prontuario: d.decisao === 'recorrer' ? d.evidencia.trim().slice(0, 250) || null : null,
         valor_aceito: d.decisao === 'aceitar' ? glosa : 0,
         decidido_por_usuario_id: tx.contexto.usuario,
         decidido_em: new Date(),

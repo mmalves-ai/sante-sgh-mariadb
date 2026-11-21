@@ -1,18 +1,18 @@
 // Regra 6 (cap-07 §7.2, Nota): a exportação ao contador (M32) e a contabilidade própria usam o MESMO de-para.
-// O de-para do banco (TBINTCRC, chave EMPRESA + CONV + TIPO_CONTA + TIPO_LANC + TIPO_ATO + SUBTIPO_DIARIA →
-// CTA_CONTABIL inteiro; RPINTEVE para o repasse; TBINTIMP para os impostos) fala de "conta contábil do escritório", um
-// inteiro. O plano próprio liga cada conta a esse inteiro por `contaExportacao`. A regra de contabilização com conta
+// O de-para da exportação (chave estabelecimento + fonte pagadora + tipo de conta + tipo de lançamento + tipo de ato +
+// subtipo de diária → conta contábil inteira; outro de-para para o repasse e outro para os impostos) fala de "conta
+// contábil do escritório", um inteiro. O plano próprio liga cada conta a esse inteiro por `contaExportacao`. A regra de contabilização com conta
 // `dePara` pega a chave de um campo do fato e chega ao código do plano por esse vínculo.
 //
-// Achado do preparo (cópia pc, 24/10/2026): as 2.422 linhas de TBINTCRC estão SEM conta contábil (CTA_CONTABIL nulo ou
-// zero) e nenhum dos 99 centros de custo tem a conta contábil (TBCENCUS.CONTABIL). Sem de-para preenchido, o fato fica
+// Achado do preparo (cópia de desenvolvimento, 24/10/2026): as 2.422 linhas do de-para estão SEM conta contábil (nula ou
+// zero) e nenhum dos 99 centros de custo tem a conta contábil. Sem de-para preenchido, o fato fica
 // "semConta" (nunca uma conta inventada) e a tela mostra a lista para o cadastro.
 import type { ContaPlano } from '@sgh/contratos';
 
 export interface ItemDePara {
   /** Chave canônica do de-para (montada por `chaveDePara`). */
   readonly chave: string;
-  /** Conta do escritório (TBINTCRC.CTA_CONTABIL); null ou 0 = sem conta. */
+  /** Conta do escritório no de-para da exportação; null ou 0 = sem conta. */
   readonly contaExportacao: number | null;
 }
 

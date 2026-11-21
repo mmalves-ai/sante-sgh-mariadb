@@ -16,7 +16,7 @@ import {
   valorDoPortal,
 } from './regras.js';
 
-const R = { hoje: '2026-10-25', hhmm: '1000' };
+const R = { hoje: '2026-10-25', hhmm: '10:00' };
 const CFG: ConfigOnline = {
   agenda: 41,
   ativa: true,

@@ -551,7 +551,7 @@ describe('correções da revisão: permissões de agir, autor do desfecho e tril
     const m = (await get(s, '/atendimento/marcacoes/880001')).json();
     expect(m).toMatchObject({ hoje: true, registro: 0, convenio: 306, crm: 0, especialidade: 15 });
     expect(m.paciente.id).toBe(1007);
-    expect(trilha.eventos.slice(antes).some((l) => l.tabelaAlvo === 'REPACAGD')).toBe(true);
+    expect(trilha.eventos.slice(antes).some((l) => l.tabelaAlvo === 'marcacao_horario')).toBe(true);
     const abertura = {
       ...CONSULTA,
       paciente: 1007,

@@ -1,22 +1,22 @@
 // Gerador de horários da agenda (ficha do M17, `agenda.gerarGrade` e regras 4 e 5; ref 01 §2.1, §3.2 e §4.2;
 // sante-api: src/services/acoes-grade.js, como especificação de regra, nunca de dado). Monta a PRÉVIA que a
 // pessoa aprova antes de gravar; a receita reconfere sob a trava da agenda e grava exatamente a prévia.
-//   - Faixa da escala: início inclusivo, fim EXCLUSIVO (08:00 a 12:00 com 15 min → último 11:45), como
-//     RECTRAGE.HOR_FIN; intervalo: nenhum horário COMEÇA dentro de [início, fim).
-//   - Duração em minutos (5 a 240), gravada em HHMM; uma duração por geração (REAGECRI guarda uma só).
+//   - Faixa da escala: início inclusivo, fim EXCLUSIVO (08:00 a 12:00 com 15 min → último 11:45); intervalo:
+//     nenhum horário COMEÇA dentro de [início, fim). Horas em "HH:MM".
+//   - Duração em minutos (5 a 240); uma duração por geração.
 //   - Janela até 120 dias e 400 horários; começa hoje ou depois; hoje só a partir de 1 h à frente do relógio do
 //     banco (o resto da janela vale inteiro).
-//   - Feriados de TBFERIAD pulados (ano 9999 = todo ano); feriado móvel não cadastrado no ano vira alerta (o
-//     legado só tem os móveis de 2020: Carnaval, Sexta-feira Santa e Corpus Christi vazam na grade).
-//   - Bloqueios do novo (SGH_AGE_BLOQUEIO) pulados; horário que já existe na chave (NOME, CRM, DATA, HORA) é
-//     pulado (a chave primária recusaria e derrubaria a transação).
-//   - Sábado e domingo: o legado nunca gerou (SEM1 e SEM7 'F' em 100% das gerações; RECTRAGE só de 2 a 6):
-//     recusados enquanto o valor não for visto (parâmetro `semanasPermitidas`).
+//   - Feriados do cadastro pulados (ano 9999 = todo ano); feriado móvel não cadastrado no ano vira alerta (a base
+//     de origem só tem os móveis de 2020: Carnaval, Sexta-feira Santa e Corpus Christi vazam na grade).
+//   - Bloqueios da agenda pulados; horário que já existe na agenda (mesmo dia e hora) é pulado (a unicidade
+//     recusaria e derrubaria a transação).
+//   - Sábado e domingo: nunca vistos nas gerações da base de origem (escalas só de segunda a sexta): recusados
+//     enquanto o valor não for visto (parâmetro `semanasPermitidas`).
 import {
   datasEntre,
   deMinutos,
   diasEntre,
-  duracaoHHMM,
+  duracaoEmHoras,
   ErroTempo,
   normalizarHora,
   paraMinutos,
@@ -44,11 +44,11 @@ export const NOME_DO_DIA: Readonly<Record<number, string>> = {
 };
 
 export interface FaixaEscala {
-  /** 1 = domingo … 7 = sábado (o índice de RECTRAGE.SEMANA). */
+  /** 1 = domingo … 7 = sábado. */
   readonly semana: number;
-  /** HHMM ou HH:MM. */
+  /** "HH:MM" (a leitura aceita também a hora digitada sem os dois-pontos). */
   readonly inicio: string;
-  /** Fim exclusivo da faixa (HOR_FIN). */
+  /** Fim exclusivo da faixa. */
   readonly fim: string;
   readonly intervaloInicio?: string | null;
   readonly intervaloFim?: string | null;
@@ -82,7 +82,7 @@ export interface ContextoGrade {
   readonly agendaAtiva: boolean;
   readonly feriados: readonly Feriado[];
   readonly bloqueios: readonly BloqueioPeriodo[];
-  /** Chaves 'AAAA-MM-DD HHMM' que já existem na agenda (qualquer tipo de horário). */
+  /** Chaves 'AAAA-MM-DD HH:MM' que já existem na agenda (qualquer tipo de horário). */
   readonly existentes: ReadonlySet<string>;
   readonly semanasPermitidas?: readonly number[];
   readonly teto?: number;
@@ -115,13 +115,13 @@ export interface HorarioPlanejado {
 
 export interface LinhaEscalaPlanejada {
   readonly semana: number;
-  /** HHMM. */
+  /** Duração de um atendimento em horas e minutos ("00:15"). */
   readonly duracao: string;
   readonly horaInicio: string;
   readonly horaFim: string;
-  /** '0000' = sem intervalo (o valor do legado). */
-  readonly intervaloInicio: string;
-  readonly intervaloFim: string;
+  /** null = sem intervalo. */
+  readonly intervaloInicio: string | null;
+  readonly intervaloFim: string | null;
 }
 
 export interface AlertaGrade {
@@ -140,12 +140,13 @@ export interface PlanoGrade {
     readonly cortadosHoje: readonly string[];
   };
   readonly escala: readonly LinhaEscalaPlanejada[];
-  /** SEM1..SEM7 de REAGECRI ('T'/'F'). */
+  /** Dias da semana da geração, de domingo a sábado ('T' = gera, 'F' = não gera). */
   readonly semanas: readonly ('T' | 'F')[];
   readonly alertas: readonly AlertaGrade[];
 }
 
-const SEM_INTERVALO = '0000';
+/** Intervalo ausente na escala lida (vazio, nulo ou meia-noite nas duas pontas). */
+const semIntervalo = (h: string | null | undefined) => !h || paraMinutos(h) === 0;
 
 /** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher, calendário gregoriano). */
 export function pascoa(ano: number): string {
@@ -227,8 +228,8 @@ function normalizarFaixa(f: FaixaEscala, duracao: number, permitidas: readonly n
     throw new VetoGrade('faixa-invalida', 'A faixa é menor que a duração de um atendimento.');
   let ivIni: number | null = null;
   let ivFim: number | null = null;
-  let intervaloInicio = SEM_INTERVALO;
-  let intervaloFim = SEM_INTERVALO;
+  let intervaloInicio: string | null = null;
+  let intervaloFim: string | null = null;
   if (f.intervaloInicio && f.intervaloFim) {
     try {
       intervaloInicio = normalizarHora(f.intervaloInicio);
@@ -305,6 +306,13 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
         );
   const teto = c.teto ?? TETO_HORARIOS_GERACAO;
   const primeiroHoje = paraMinutos(c.relogio.hhmm) + ANTECEDENCIA_HOJE_MIN;
+  // As chaves existentes comparadas na mesma forma ("AAAA-MM-DD HH:MM"), venham com ou sem os dois-pontos.
+  const jaExistem = new Set(
+    [...c.existentes].map((k) => {
+      const [d, h] = k.split(' ');
+      return `${d} ${h ? normalizarHora(h) : ''}`;
+    }),
+  );
   const horarios: HorarioPlanejado[] = [];
   const porDia: { data: string; semana: number; horarios: string[] }[] = [];
   const feriadosPulados: { data: string; nome: string }[] = [];
@@ -344,7 +352,7 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
           cortadosHoje.push(hora);
           continue;
         }
-        if (c.existentes.has(`${data} ${hora}`)) {
+        if (jaExistem.has(`${data} ${hora}`)) {
           existentes++;
           continue;
         }
@@ -381,8 +389,8 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
     codigo: 'agendavel-imediatamente',
     texto: `Os ${horarios.length} horários ficam disponíveis para marcação assim que a geração for gravada.`,
   });
-  const dur = duracaoHHMM(duracao);
-  // O modelo da semana (RECTRAGE) é o da escala pedida inteira, também no dia pulado por feriado.
+  const dur = duracaoEmHoras(duracao);
+  // O modelo da semana é o da escala pedida inteira, também no dia pulado por feriado.
   const escala = faixas
     .map((f) => ({ ...f.linha, duracao: dur }))
     .sort((a, b) => a.semana - b.semana || a.horaInicio.localeCompare(b.horaInicio));
@@ -398,14 +406,14 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
   };
 }
 
-/** Linha do modelo da escala (RECTRAGE) como lida. */
+/** Linha do modelo da escala como lida (horas "HH:MM"; intervalo nulo = sem intervalo). */
 export interface LinhaEscala {
   readonly semana: number;
   readonly duracao: string;
   readonly horaInicio: string;
   readonly horaFim: string;
-  readonly intervaloInicio: string;
-  readonly intervaloFim: string;
+  readonly intervaloInicio: string | null;
+  readonly intervaloFim: string | null;
 }
 
 export interface MudancaEscala {
@@ -415,7 +423,7 @@ export interface MudancaEscala {
   readonly anterior: Pick<LinhaEscala, 'horaFim' | 'intervaloInicio' | 'intervaloFim'> | null;
 }
 
-/** Comparação do modelo: a chave é (SEMANA, DURACAO, HOR_INC); alterar só HOR_FIN e o intervalo. */
+/** Comparação do modelo: a chave é (dia da semana, duração, início); alterar só o fim e o intervalo. */
 export function mudancasDaEscala(
   atual: readonly LinhaEscala[],
   alvo: readonly LinhaEscalaPlanejada[],
@@ -435,13 +443,14 @@ export function mudancasDaEscala(
   });
 }
 
-/** Faixas da escala (RECTRAGE) como pedido de geração. */
+/** Faixas da escala como pedido de geração. */
 export function faixasDaEscala(linhas: readonly LinhaEscala[]): FaixaEscala[] {
   return linhas.map((l) => ({
     semana: l.semana,
     inicio: l.horaInicio,
     fim: l.horaFim,
-    intervaloInicio: l.intervaloInicio === SEM_INTERVALO ? null : l.intervaloInicio,
-    intervaloFim: l.intervaloFim === SEM_INTERVALO ? null : l.intervaloFim,
+    intervaloInicio:
+      semIntervalo(l.intervaloInicio) || semIntervalo(l.intervaloFim) ? null : l.intervaloInicio,
+    intervaloFim: semIntervalo(l.intervaloInicio) || semIntervalo(l.intervaloFim) ? null : l.intervaloFim,
   }));
 }

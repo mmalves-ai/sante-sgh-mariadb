@@ -1,9 +1,9 @@
 // Entradas das operações de gravação compatível da agenda de consultas (M17, ficha seção 5), validadas na tela,
-// na API e no executor (o mesmo Zod). Vocabulário do novo: a agenda é o ID de REAGENDA (a receita resolve o NOME
-// e o CRM sob a trava), o paciente é o ID do cadastro único, a marcação é o ID de REPACAGD. Horas em HHMM de 4
-// dígitos (a tela converte de HH:MM); datas AAAA-MM-DD; textos restritos ao CP1252 com o tamanho da coluna.
+// na API e no executor (o mesmo Zod). Vocabulário neutro: a agenda, o paciente (cadastro único) e a marcação são
+// IDs do modelo próprio; horas do dia em "HH:MM" (a tela aceita a hora digitada sem os dois-pontos e converte);
+// durações de agenda em minutos; datas AAAA-MM-DD; textos restritos ao CP1252 com o tamanho da coluna.
 import { z } from 'zod';
-import { FORMATO_HHMM } from '../formatacao/hora-legada.js';
+import { lerHoraDigitada } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { CANAIS_MARCACAO, MOTIVOS_BLOQUEIO, MOTIVOS_CANCELAMENTO } from './vocabulario.js';
@@ -12,8 +12,34 @@ export const TETO_HORARIOS_POR_GRAVACAO = 400;
 
 const id = z.number().int().positive().max(2_147_483_647);
 const smallint = z.number().int().min(0).max(32767);
-export const esquemaHhmm = z.string().regex(FORMATO_HHMM, 'Hora no formato HHMM (00:00 a 23:59).');
-export const esquemaHorario = z.object({ data: esquemaDataIso, hora: esquemaHhmm }).strict();
+/**
+ * @deprecated Transição: só o contrato do portal do médico externo ainda o importa (pedido ao lote 21 da F2.4 para
+ * trocar por `esquemaHora`). Mantém, sem mudança, a regra antiga desse contrato (hora de quatro dígitos sem os
+ * dois-pontos). A agenda não o usa.
+ */
+export const esquemaHhmm = z
+  .string()
+  .regex(/^([01]\d|2[0-3])[0-5]\d$/, 'Hora com quatro dígitos (0000 a 2359).');
+
+/**
+ * Hora do dia da agenda: entrega sempre "HH:MM". Aceita também a hora sem os dois-pontos ("0830" ou "830"), que o
+ * portal do paciente e os testes de outros módulos ainda mandam durante a F2.4; a inválida é recusada com a mensagem
+ * de `lerHoraDigitada`. Quando todos os chamadores mandarem "HH:MM", vira `esquemaHora` (estrito).
+ */
+export const esquemaHoraAgenda = z.string().transform((v, ctx) => {
+  try {
+    const h = lerHoraDigitada(v);
+    if (h !== null) return h;
+    ctx.addIssue({ code: 'custom', message: 'Hora obrigatória (HH:MM).' });
+  } catch (e) {
+    ctx.addIssue({ code: 'custom', message: (e as Error).message });
+  }
+  return z.NEVER;
+});
+
+/** Duração de um atendimento da agenda, em minutos (5 a 480, a faixa do banco; a geração da grade limita a 240). */
+export const esquemaDuracaoAgendaMinutos = z.number().int().min(5).max(480);
+export const esquemaHorario = z.object({ data: esquemaDataIso, hora: esquemaHoraAgenda }).strict();
 export type HorarioAgenda = z.infer<typeof esquemaHorario>;
 
 const codigosMotivo = MOTIVOS_CANCELAMENTO.map((m) => m.codigo) as [string, ...string[]];
@@ -24,7 +50,7 @@ export const esquemaCanal = z.enum(codigosCanal);
 export const esquemaMotivoCancelamento = z.enum(codigosMotivo);
 export const SOLICITANTES_CANCELAMENTO = ['paciente', 'hospital', 'profissional'] as const;
 
-/** Recado do balcão (REPACAGD.OBS, BLOB): até 500 caracteres CP1252. */
+/** Recado do balcão na marcação: até 500 caracteres CP1252. */
 const observacao = textoCp1252(500)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())
   .nullable();
@@ -37,11 +63,13 @@ const complemento = textoCp1252(200)
 export const esquemaLinhaEscala = z
   .object({
     semana: z.number().int().min(1).max(7),
-    duracao: esquemaHhmm,
-    horaInicio: esquemaHhmm,
-    horaFim: esquemaHhmm,
-    intervaloInicio: esquemaHhmm,
-    intervaloFim: esquemaHhmm,
+    /** Duração de um atendimento em horas e minutos ("00:15"). */
+    duracao: esquemaHoraAgenda,
+    horaInicio: esquemaHoraAgenda,
+    horaFim: esquemaHoraAgenda,
+    /** null = sem intervalo. */
+    intervaloInicio: esquemaHoraAgenda.nullable(),
+    intervaloFim: esquemaHoraAgenda.nullable(),
   })
   .strict();
 export type LinhaEscalaEntrada = z.infer<typeof esquemaLinhaEscala>;
@@ -55,7 +83,7 @@ export const esquemaGerarGrade = z
     agenda: id,
     de: esquemaDataIso,
     ate: esquemaDataIso,
-    duracao: esquemaHhmm,
+    duracao: esquemaHoraAgenda,
     horarios: z.array(esquemaHorario).min(1).max(TETO_HORARIOS_POR_GRAVACAO),
     escala: z.array(esquemaLinhaEscala).min(1).max(21),
     semanas: z.array(z.enum(['T', 'F'])).length(7),
@@ -81,8 +109,8 @@ export type ReverterGradeEntrada = z.infer<typeof esquemaReverterGrade>;
 const baseMarcacao = {
   agenda: id,
   data: esquemaDataIso,
-  hora: esquemaHhmm,
-  /** Cadastro único (RICADPAC.ID): o prontuário e o contato vêm dele. */
+  hora: esquemaHoraAgenda,
+  /** Paciente do cadastro único: o prontuário e o contato vêm dele. */
   paciente: id,
   convenio: smallint,
   retorno: z.boolean(),
@@ -145,7 +173,7 @@ export const MODOS_REMARCACAO = ['transferir', 'liberar'] as const;
 export const esquemaRemarcarConsulta = z
   .object({
     marcacao: id,
-    destino: z.object({ agenda: id, data: esquemaDataIso, hora: esquemaHhmm }).strict(),
+    destino: z.object({ agenda: id, data: esquemaDataIso, hora: esquemaHoraAgenda }).strict(),
     modo: z.enum(MODOS_REMARCACAO),
     convenio: smallint.optional(),
     observacao: observacao.optional(),
@@ -203,7 +231,7 @@ export const esquemaNomeAgenda = textoCp1252(40)
 export const esquemaIncluirAgenda = z
   .object({
     nome: esquemaNomeAgenda,
-    duracao: esquemaHhmm,
+    duracaoMinutos: esquemaDuracaoAgendaMinutos,
     teleatendimento: z.boolean(),
     observacao: textoCp1252(2000)
       .overwrite((t) => t.trim())
@@ -218,13 +246,17 @@ export const esquemaAlterarAgenda = z
     agenda: id,
     /** Valores que a tela leu (controle otimista). */
     lidos: z
-      .object({ duracao: z.string().max(4), ativa: z.string().max(1), teleatendimento: z.string().max(1) })
+      .object({
+        duracaoMinutos: z.number().int().positive().nullable(),
+        ativa: z.boolean(),
+        teleatendimento: z.boolean(),
+      })
       .strict(),
     valores: z
       .object({
-        duracao: esquemaHhmm.optional(),
-        ativa: z.enum(['S', 'N']).optional(),
-        teleatendimento: z.enum(['S', 'N']).optional(),
+        duracaoMinutos: esquemaDuracaoAgendaMinutos.optional(),
+        ativa: z.boolean().optional(),
+        teleatendimento: z.boolean().optional(),
       })
       .strict()
       .refine((v) => Object.keys(v).length > 0, 'Nada a alterar.'),
@@ -237,7 +269,7 @@ export const esquemaAgendarSemProntuario = z
   .object({
     agenda: id,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHoraAgenda,
     nome: textoCp1252(70)
       .overwrite((t) => t.replace(/\s+/g, ' ').trim().toUpperCase())
       .pipe(z.string().min(3)),

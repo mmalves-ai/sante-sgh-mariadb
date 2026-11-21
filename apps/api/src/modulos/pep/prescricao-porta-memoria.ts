@@ -4,7 +4,34 @@
 // montados pelo domínio, os horários previstos e o evento da prova), guardado em memória por estabelecimento; nada vai
 // à cópia. As recusas são as mesmas da receita (uma ativa por período, origem alterada, item já suspenso).
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
-import { type AlergiaLida, type DadosClinicosLidos, type AtendimentoDaPrescricao, type AtendimentoLido, type CabecalhoDocumentoLido, type ConsultaCadastroLida, type DecisaoLida, type FichaNovaLida, type FuturaGravadaLida, type GradeClasseLida, type GravacaoPrescricao, type HorarioPadraoLido, type InclusaoItem, type ItemGravacao, type ItemPrescricaoLido, type KitMedicamentoLido, type OpcaoDominio, type PrescricaoCabecalhoLida, type ProdutoLido, type ProtocoloLido, type ReconciliacaoGravadaLida, type RegraAlertaLida, type RegraHorarioLida, type SuspensaoItem, type SuspensaoPrescricao, loginDaOperacao } from './tipos-pep.js';
+import {
+  type AlergiaLida,
+  type DadosClinicosLidos,
+  type AtendimentoDaPrescricao,
+  type AtendimentoLido,
+  type CabecalhoDocumentoLido,
+  type ConsultaCadastroLida,
+  type DecisaoLida,
+  type FichaNovaLida,
+  type FuturaGravadaLida,
+  type GradeClasseLida,
+  type GravacaoPrescricao,
+  type HorarioPadraoLido,
+  type InclusaoItem,
+  type ItemGravacao,
+  type ItemPrescricaoLido,
+  type KitMedicamentoLido,
+  type OpcaoDominio,
+  type PrescricaoCabecalhoLida,
+  type ProdutoLido,
+  type ProtocoloLido,
+  type ReconciliacaoGravadaLida,
+  type RegraAlertaLida,
+  type RegraHorarioLida,
+  type SuspensaoItem,
+  type SuspensaoPrescricao,
+  loginDaOperacao,
+} from './tipos-pep.js';
 import { ROTULOS_TIPO_ITEM, type SecaoCadastroPrescricao, tipoDoPlano } from '@sgh/contratos';
 import { frequencia as frequenciaDe } from '@sgh/dominio-pep';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -41,7 +68,7 @@ const PRODUTOS: readonly ProdutoLido[] = [
     psicotropico: true,
     portaria: 'A1',
     potencialmentePerigoso: true,
-    // Faixa de dose do cadastro (GEUNIPRESC) na unidade de prescrição, sintética.
+    // Faixa de dose do cadastro do insumo na unidade de prescrição, sintética.
     faixasDose: [{ unidade: 'MG', minima: 1, maxima: 10 }],
   }),
   produto(504, `CLORETO DE SÓDIO ${M} 0,9%`, 'ML', [{ id: 14, nome: 'CLORETO DE SÓDIO' }], ['EV']),
@@ -366,7 +393,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       correlacao: (ctx.correlacao || evento).slice(0, 64),
       recurso: 'pep.prescricao',
       resultado: 'sucesso',
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       idAlvo: String(id),
       paciente,
     });
@@ -1113,7 +1140,13 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     );
     p.itens[i] = { ...it, horarios, corrigidoEm: e.correcao ? agoraLocal() : null };
     if (e.correcao) p.itens.push(this.lido(p.cab.id, e.correcao, e.cbo, agoraLocal()));
-    this.selar(p, e.correcao ? 'item-corrigido' : 'item-suspenso', it.id, loginDaOperacao(ctx), e.comoSuporte);
+    this.selar(
+      p,
+      e.correcao ? 'item-corrigido' : 'item-suspenso',
+      it.id,
+      loginDaOperacao(ctx),
+      e.comoSuporte,
+    );
     await this.auditar(c, ctx, 'pep.item.suspenso', p.cab.id, e.paciente);
     return { horarios: n };
   }

@@ -1,12 +1,12 @@
 // Permissões do M29 (ficha, seção 7; convencoes.md §12): farmácia hospitalar, dispensação e farmácia clínica. Quem tem
-// a opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// a opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json, levantado na primeira hora do marco):
 //   - Gestão de estoque (1): Dispensação por horário 1951; Lista de trabalho para dispensação 6548; Horários de
 //     medicação 1737; Tipo de dispensa 1776; Etiquetas 1757 e 1867; Entrega de documentos 6545 (Entrega 6546, Estorno
 //     6547); Devoluções 1873 (paciente interno 5735); Medicamentos controlados 2018 (Sintético 2019, Analítico 2021, por
 //     paciente 2028); Gerenciamento de livro 5566;
 //   - P.E.P. (23): Avaliação da prescrição 6747 (Consultar 6748; Avaliar prescrição 6752, inativa na cópia).
-// A marca do usuário do estoque "lançar controlado" (GEUSERS.PERM_LAN_MAT_MED_CONT) concede a conferência e a perda do
+// A marca do usuário do estoque "lançar controlado" concede a conferência e a perda do
 // controlado. A devolução de dose usa as permissões da devolução do M28 (`suprimentos.devolucao.ler` e
 // `.registrar`). A avaliação farmacêutica e a farmácia ambulatorial são recursos novos (SGH_ACESSO_MAPA_OPCAO): a decisão
 // e a intervenção vão também ao perfil complementar de quem tem conselho (o farmacêutico clínico).

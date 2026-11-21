@@ -210,7 +210,7 @@ export const mensagensPortalMedico = {
       'O pedido de cirurgia pelo portal ainda não foi liberado neste hospital: fale com o bloco cirúrgico.',
     sala: 'Sala preferida',
     data: 'Data',
-    hora: 'Início (HHMM)',
+    hora: 'Início (HH:MM)',
     duracao: 'Duração (min)',
     procedimento: 'Procedimento (nome ou código)',
     buscar: 'Buscar procedimento',

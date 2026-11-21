@@ -43,9 +43,9 @@ export interface DeclaracaoPermissao {
   /** Código `modulo.recurso.acao`. */
   readonly codigo: string;
   readonly descricao: string;
-  /** Opções de TBOPCOES que concedem a permissão (cap-08 §8.6). Vazio = recurso só do novo. */
+  /** Opções do menu de origem que concedem a permissão (cap-08 §8.6). Vazio = recurso próprio do produto. */
   readonly opcoesLegado: readonly number[];
-  /** Flags de TBUSUCPL, GEUSERS ou FCPARUSU que também concedem. */
+  /** Marcas do usuário na origem que também concedem. */
   readonly flagsLegado?: readonly FlagLegado[];
   /**
    * Recurso só do novo: concedido por perfil (SGH_ACESSO_MAPA_OPCAO e SGH_ACESSO_PERFIL_USUARIO).

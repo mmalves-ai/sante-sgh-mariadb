@@ -32,7 +32,7 @@ import {
 } from '@sgh/contratos';
 import { nomeMascarado, podeBloquear, podeDesbloquear, somarDias } from '@sgh/dominio-agenda';
 import type { BloqueioAgenda } from './tipos.js';
-import { type AgendaVista, horaIso, horaIsoOuNull, LeituraAgenda, quatroDigitos } from './visao.js';
+import { type AgendaVista, horaIso, horaIsoOuNull, LeituraAgenda } from './visao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -52,7 +52,6 @@ import { ServicoAgenda } from './servico.js';
 
 /** Tabela real da lista de espera (script 0185), também na linha da trilha. */
 const TABELA_ESPERA = 'lista_espera';
-const hhmm = (h: string | null) => (h && h.length === 4 ? `${h.slice(0, 2)}:${h.slice(2)}` : h);
 const rotuloBloqueio = (c: string) => MOTIVOS_BLOQUEIO.find((m) => m.codigo === c)?.rotulo ?? c;
 
 export function bloqueioResposta(b: BloqueioAgenda): Bloqueio {
@@ -62,8 +61,8 @@ export function bloqueioResposta(b: BloqueioAgenda): Bloqueio {
     nomeAgenda: b.nomeAgenda,
     inicio: b.inicio,
     fim: b.fim,
-    horaInicio: hhmm(b.horaInicio),
-    horaFim: hhmm(b.horaFim),
+    horaInicio: b.horaInicio,
+    horaFim: b.horaFim,
     motivo: b.motivo,
     rotuloMotivo: rotuloBloqueio(b.motivo),
     complemento: b.complemento,
@@ -131,16 +130,14 @@ export class ApoioAgendaController {
       this.leitura.horarios(ctxAgenda(s), a.id, de, p.fim),
       this.leitura.marcacoesDaJanela(ctxAgenda(s), a.id, de, p.fim),
     ]);
-    const hi = p.horaInicio ? quatroDigitos(p.horaInicio) : null;
-    const hf = p.horaFim ? quatroDigitos(p.horaFim) : null;
+    const hi = p.horaInicio ? horaIso(p.horaInicio) : null;
+    const hf = p.horaFim ? horaIso(p.horaFim) : null;
     const noRecorte = h.itens.filter(
       (x) => dentroDasHoras(x.hora, hi, hf) && (x.data > r.hoje || x.hora > r.hhmm),
     );
     const livres = noRecorte.filter((x) => podeBloquear(x)).map((x) => ({ data: x.data, hora: x.hora }));
     const jaBloqueados = noRecorte.filter((x) => podeDesbloquear(x)).length;
-    const marcados = m.itens.filter(
-      (x) => dentroDasHoras(x.hora, hi, hf) && x.atendido.trim() !== 'S',
-    );
+    const marcados = m.itens.filter((x) => dentroDasHoras(x.hora, hi, hf) && x.atendido.trim() !== 'S');
     return { livres, marcados, jaBloqueados, relogio: r };
   }
 
@@ -158,7 +155,7 @@ export class ApoioAgendaController {
       x.marcados.map((m) => m.id),
     );
     return {
-      horariosLivres: x.livres.map((h) => ({ data: h.data, hora: hhmm(h.hora) ?? h.hora })),
+      horariosLivres: x.livres.map((h) => ({ data: h.data, hora: h.hora })),
       marcados: x.marcados.map((m) => this.servico.resumoMarcacao(m, ext.get(m.id), x.relogio, true)),
       jaBloqueados: x.jaBloqueados,
     };
@@ -225,7 +222,9 @@ export class ApoioAgendaController {
   @Post('bloqueios/:agenda/:id/encerrar')
   @HttpCode(200)
   @Permissao('agenda.bloqueio.criar')
-  @AuditadoNoHandler('agenda.bloquearHorarios (desbloquear) pelo executor; o período sem horários, em bloqueio_agenda')
+  @AuditadoNoHandler(
+    'agenda.bloquearHorarios (desbloquear) pelo executor; o período sem horários, em bloqueio_agenda',
+  )
   async encerrar(
     @Param('agenda') agendaRota: string,
     @Param('id') idRota: string,
@@ -248,7 +247,7 @@ export class ApoioAgendaController {
         de <= (datas.at(-1) as string)
           ? await this.leitura.horarios(ctxAgenda(s), a.id, de, datas.at(-1) as string)
           : { itens: [] };
-      const chaves = new Set(lista.map((h) => `${h.data} ${quatroDigitos(h.hora)}`));
+      const chaves = new Set(lista.map((h) => `${h.data} ${horaIso(h.hora)}`));
       for (const h of atual.itens)
         if (chaves.has(`${h.data} ${h.hora}`) && podeDesbloquear(h))
           restantes.push({ data: h.data, hora: h.hora });
@@ -337,7 +336,9 @@ export class ApoioAgendaController {
       situacao: sit(e.situacao),
       desde: e.desde,
       observacao: e.observacao,
-      oferta: e.oferta ? { agenda: e.oferta.agenda, data: e.oferta.data, hora: horaIso(e.oferta.hora) } : null,
+      oferta: e.oferta
+        ? { agenda: e.oferta.agenda, data: e.oferta.data, hora: horaIso(e.oferta.hora) }
+        : null,
       posicao: null,
     }));
     const fila = ordemDaFila(itens);

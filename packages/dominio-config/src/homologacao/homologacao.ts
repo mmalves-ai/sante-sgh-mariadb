@@ -265,7 +265,7 @@ export interface OperacaoDoRoteiro {
   readonly motivo: string;
   /** Grava no banco (tabelas_gravadas do catálogo): só então entra o cenário de colisão. */
   readonly escrita: boolean;
-  /** Tabelas gravadas e a ação (`SIPACAGD (INSERT)`), para a TI localizar o que abrir. */
+  /** Tabelas gravadas e a ação (`agendamento (INSERT)`), para a TI localizar o que abrir. */
   readonly tabelas?: readonly string[];
   /** O que a operação faz (descrição do catálogo): o que deve aparecer no outro sistema. */
   readonly descricao?: string;

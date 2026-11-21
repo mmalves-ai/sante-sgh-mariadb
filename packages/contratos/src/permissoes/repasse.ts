@@ -1,6 +1,6 @@
 // Permissões do M33 (ficha, seção 7; convencoes.md §12): regras de repasse e simulador, apuração e demonstrativo,
 // lançamento de eventos, RPA, integração contábil, configurações, cooperativas e o extrato do médico. Quem tem a opção no
-// outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES levantadas no preparo do marco
+// outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem levantadas no preparo do marco
 // (catalogo-legado.json, pc):
 //   - Tabelas › Geral M - Z › Percentual de repasse 3728 (regras); Tabelas › Geral A - L › Cooperativas 3675;
 //   - Gestão de repasses e terceiros 6609: Tabelas 3025 (Parâmetros 3026, Cadastro de eventos 3027, Integração 3031,
@@ -143,7 +143,7 @@ export const PERMISSOES_REPASSE_M33: readonly DeclaracaoPermissao[] = [
   ]),
   p('repasse.cooperativa.editar', 'Manter cooperativas, cooperados e credenciamentos', [O.cooperativas]),
   // Extrato do médico (regra 12): todo perfil de pessoa pode abrir, mas só vê o que é do próprio vínculo com o
-  // usuário com o profissional (TBPROFIS; o filtro é do servidor; sem vínculo, a lista vem vazia; o escopo 'vinculo' do
+  // usuário com o profissional (o filtro é do servidor; sem vínculo, a lista vem vazia; o escopo 'vinculo' do
   // catálogo é o assistencial, com paciente, e não serve aqui). Nenhum outro perfil assistencial vê repasse.
   p('repasse.extrato.ler', 'Ver o próprio extrato de produção e repasse', [], {
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',

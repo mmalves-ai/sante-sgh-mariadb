@@ -1,5 +1,5 @@
 // Portal do paciente, etapa 1 do M50 (ficha, seções 4, 5, 7 e 8; regras 1, 5, 8 e 13; cap-07 §7.6; LGPD art. 14 e 18;
-// SBIS-24): um domínio de identidade separado dos usuários internos (SGH_POR_CONTA, nunca TBUSERS).
+// SBIS-24): um domínio de identidade separado dos usuários internos (conta própria do portal, nunca a tabela de usuários internos).
 //   - conta por convite do hospital (o código sai impresso: nenhuma mensagem ao paciente; DP-44 a), ativada com e-mail,
 //     senha (Argon2id), aceite do termo de uso e da política e o segundo fator do aplicativo autenticador (TOTP; o
 //     segredo fica cifrado com a chave mestra); entrada com e-mail, senha e código, com limite de tentativas por conta e

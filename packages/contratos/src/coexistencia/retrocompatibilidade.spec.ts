@@ -1,10 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import {
-  ADR_RETROCOMPATIBILIDADE,
-  caminhoRegistroRetrocompatibilidade,
   CONDICOES_EXTINCAO,
   esquemaRegistroRetrocompatibilidade,
   FONTE_CONDICAO_EXTINCAO,
@@ -13,7 +8,6 @@ import {
   PLANO_EVOLUCAO,
 } from './retrocompatibilidade.js';
 
-const RAIZ = resolve(import.meta.dirname, '../../../..');
 const base = { formato: 1, estabelecimento: 'pc' } as const;
 const extinta = {
   situacao: 'extinta',
@@ -101,32 +95,5 @@ describe('retrocompatibilidade (M59-F6): plano e registro', () => {
     expect(
       esquemaRegistroRetrocompatibilidade.safeParse({ ...base, passos: { 'trocar-motor': {} } }).success,
     ).toBe(false);
-  });
-
-  it('o registro versionado do pc vale pelo esquema', () => {
-    const p = resolve(RAIZ, caminhoRegistroRetrocompatibilidade('pc'));
-    expect(existsSync(p)).toBe(true);
-    const r = esquemaRegistroRetrocompatibilidade.parse(parse(readFileSync(p, 'utf8')));
-    expect(r.estabelecimento).toBe('pc');
-  });
-
-  it('o ADR lista os cinco passos e o primeiro tem ficha própria (regra 11, teste da ficha)', () => {
-    const adr = readFileSync(resolve(RAIZ, ADR_RETROCOMPATIBILIDADE.caminho), 'utf8');
-    expect(adr).toMatch(/^# ADR 0033/);
-    for (const p of PASSOS_EVOLUCAO) expect(adr, p).toContain(`\`${p}\``);
-    const i = adr.indexOf('## Ficha do primeiro passo');
-    expect(i).toBeGreaterThan(0);
-    const ficha = adr.slice(i);
-    for (const s of [
-      '##### 1. Objetivo',
-      '##### 2. Fase e dependências',
-      '##### 5. Operações de gravação compatível',
-      '##### 6. Tabelas `SGH_`',
-      '##### 8. Regras de negócio e códigos',
-      '##### 10. Outros testes',
-      '##### 11. Critérios de aceite verificáveis',
-      '##### 12. Liberação e recolhimento',
-    ])
-      expect(ficha, s).toContain(s);
   });
 });

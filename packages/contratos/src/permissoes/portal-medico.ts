@@ -3,7 +3,7 @@
 //   - tela interna: ver as contas do portal do médico externo e ligar a conta ao profissional do corpo clínico (de onde
 //     saem o extrato do repasse e a agenda do bloco). Quem aprova o autocadastro no outro sistema (opção "Web - acesso
 //     do médico solicitante", 4748, a mesma do M26) tem as permissões no novo (regra 1 do M06);
-//   - portal (identidade própria em SGH_SADT_PORTAL_ACESSO, nunca TBUSERS): a SESSÃO DO PORTAL do perfil
+//   - portal (identidade própria do acesso ao portal, nunca o usuário do sistema): a SESSÃO DO PORTAL do perfil
 //     `portal-medico-externo` vê só o extrato e a agenda do profissional ligado e pede cirurgia; nunca vem de usuário
 //     interno.
 import { OPCOES_SADT } from './sadt.js';

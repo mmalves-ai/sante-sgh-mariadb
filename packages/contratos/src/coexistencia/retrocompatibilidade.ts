@@ -18,14 +18,10 @@ const textoRegistro = z
   .string()
   .regex(RE_TEXTO_SEM_DADO_PESSOAL, 'texto sem dado pessoal (até 600 caracteres)');
 
-/** O ADR da decisão (docs/adr). O teste do ADR confere que ele lista os passos e a ficha do primeiro. */
+/** O número do ADR que a extinção registrada tem de citar (o esquema do registro recusa outro). */
 export const ADR_RETROCOMPATIBILIDADE = {
   numero: '0033',
-  caminho: 'docs/adr/0033-retrocompatibilidade-e-evolucao-do-modelo.md',
 } as const;
-
-export const caminhoRegistroRetrocompatibilidade = (estabelecimento: string): string =>
-  `docs/coexistencia/retrocompatibilidade/${estabelecimento}.yaml`;
 
 // ── Condições para extinguir (regra 11; regra 1 e DP-6) ──────────────────────────────────────────────────────────
 

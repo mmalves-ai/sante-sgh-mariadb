@@ -1,10 +1,9 @@
 // Entradas das operações do centro cirúrgico (M18, ficha seção 5) e os pedidos das gravações só do novo, validados na
-// tela, na API e no executor (o mesmo Zod). Vocabulário do novo: o agendamento é o ID de CCAGENDA, a sala é o código
-// de CCSALAS, o profissional é o ID de TBCBOPRO com o código (COD) que o par do gatilho exige, o paciente é o ID do
-// cadastro único (RICADPAC), o atendimento é o REG. Datas AAAA-MM-DD e horas HHMM (a tela converte de HH:MM);
-// duração e intervalo em minutos (a receita grava o TIMESTAMP 1899-12-30 HH:MM do legado).
+// tela, na API e no executor (o mesmo Zod). Vocabulário neutro: o agendamento, a sala, o profissional e o paciente são
+// ids do modelo (o profissional leva também o número do registro), o atendimento é o id do atendimento. Datas
+// AAAA-MM-DD e horas do dia "HH:MM"; duração e intervalo em minutos.
 import { z } from 'zod';
-import { esquemaHhmm } from '../agenda/entradas.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import {
@@ -23,7 +22,7 @@ export const esquemaSala = z.number().int().min(1).max(32767);
 export const esquemaDuracaoMin = z.number().int().min(1, 'Duração de ao menos 1 minuto.').max(1439);
 export const esquemaIntervaloMin = z.number().int().min(0).max(240);
 
-/** Profissional escolhido: o ID (TBCBOPRO) e o código do par. */
+/** Profissional escolhido: o id do registro profissional e o número do registro. */
 export const esquemaProfissional = z.object({ id, cod: inteiro }).strict();
 
 const funcoesAgenda = {
@@ -41,7 +40,7 @@ export type EquipeAgendaEntrada = z.infer<typeof esquemaEquipeAgenda>;
 const codigosMotivo = MOTIVOS_CANCELAMENTO_CIRURGIA.map((m) => m.codigo) as [string, ...string[]];
 const camposRecurso = RECURSOS_SALA.map((r) => r.campo) as [string, ...string[]];
 
-/** Urgência em sala ocupada: só com o supervisor e o motivo (vai à SGH_CC_EXCECAO). */
+/** Urgência em sala ocupada: só com o supervisor e o motivo (fica registrada como exceção, com quem autorizou). */
 export const esquemaExcecaoSobreposicao = z
   .object({
     motivo: textoCp1252(200)
@@ -60,22 +59,22 @@ export const esquemaAgendarCirurgia = z
   .object({
     sala: esquemaSala,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHora,
     duracaoMin: esquemaDuracaoMin,
     intervaloMin: esquemaIntervaloMin.default(0),
     /** Cadastro único: prontuário, nome, documento, nascimento e contato vêm dele. */
     paciente: id,
-    /** REG do atendimento ou da internação (0 = ainda sem atendimento: o legado tem 199 de 821 assim). */
+    /** Id do atendimento ou da internação (0 = ainda sem atendimento). */
     reg: inteiro,
     atendimento: z.enum(['I', 'E']),
     especialidade: smallint,
     convenio: smallint,
     /** Procedimento principal (código do procedimento). */
     procedimento: inteiro,
-    /** Tipo de anestesia (TBANESTESIA.COD; 0 = não informado). */
+    /** Tipo de anestesia (id do cadastro; 0 = não informado). */
     anestesia: smallint,
     equipe: esquemaEquipeAgenda,
-    /** Pediatra (TBCBOPRO.ID); null = sem pediatra (o par fica no sentinela 1). */
+    /** Pediatra (id do registro profissional); null = sem pediatra. */
     pediatra: id.nullable().default(null),
     recursos: z.array(z.enum(camposRecurso)).max(13).default([]),
     procedimentosAdicionais: z
@@ -83,7 +82,7 @@ export const esquemaAgendarCirurgia = z
       .max(10)
       .default([]),
     observacao: observacao.optional(),
-    /** Caráter (CCTPURGENCIA) e a solicitação que é confirmada (vão ao estado do novo). */
+    /** Caráter da cirurgia (id do cadastro) e a solicitação que é confirmada. */
     carater: smallint.default(2),
     solicitacao: id.nullable().default(null),
     excecao: esquemaExcecaoSobreposicao.nullable().default(null),
@@ -127,10 +126,10 @@ export const esquemaRemarcarCirurgia = z
     agendamento: id,
     sala: esquemaSala,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHora,
     duracaoMin: esquemaDuracaoMin.optional(),
     /** O que a tela leu (controle otimista: se mudou por fora, 409). */
-    lido: z.object({ sala: esquemaSala, data: esquemaDataIso, hora: esquemaHhmm }).strict(),
+    lido: z.object({ sala: esquemaSala, data: esquemaDataIso, hora: esquemaHora }).strict(),
     justificativa: textoCp1252(150)
       .overwrite((t) => t.replace(/\s+/g, ' ').trim())
       .pipe(z.string().min(5, 'Diga o motivo da mudança (ao menos 5 caracteres).')),
@@ -174,7 +173,7 @@ const usoComTexto = z
 
 export const esquemaRegistrarCirurgia = z
   .object({
-    /** O agendamento (CCAGENDA.ID) de que o ato nasceu; null = registro sem agendamento (urgência). */
+    /** O agendamento de que o ato nasceu; null = registro sem agendamento (urgência). */
     agendamento: id.nullable(),
     reg: id,
     data: esquemaDataIso,
@@ -184,10 +183,10 @@ export const esquemaRegistrarCirurgia = z
     potencialContaminacao: z.enum(['L', 'P', 'C']),
     carater: smallint,
     tipoAnestesia: smallint,
-    inicio: esquemaHhmm,
-    fim: esquemaHhmm,
-    inicioAnestesia: esquemaHhmm.nullable(),
-    fimAnestesia: esquemaHhmm.nullable(),
+    inicio: esquemaHora,
+    fim: esquemaHora,
+    inicioAnestesia: esquemaHora.nullable(),
+    fimAnestesia: esquemaHora.nullable(),
     cid10: z
       .string()
       .regex(/^[A-Z]\d{2}(\.?\d{0,2})?$/, 'CID-10 no formato A00 ou A00.0.')
@@ -216,12 +215,12 @@ export const esquemaRegistrarCirurgia = z
       .overwrite((t) => t.replace(/\s+/g, ' ').trim())
       .nullable()
       .optional(),
-    /** Tempos e dados sem coluna no legado (vão ao registro do novo). */
+    /** Tempos de sala, incisão, classificação ASA e observação do ato. */
     extensao: z
       .object({
-        entradaSala: esquemaHhmm.nullable(),
-        incisao: esquemaHhmm.nullable(),
-        saidaSala: esquemaHhmm.nullable(),
+        entradaSala: esquemaHora.nullable(),
+        incisao: esquemaHora.nullable(),
+        saidaSala: esquemaHora.nullable(),
         asa: z.number().int().min(1).max(6).nullable(),
         observacao: textoCp1252(400)
           .overwrite((t) => t.trim())
@@ -241,7 +240,7 @@ export type RegistrarCirurgiaEntrada = z.infer<typeof esquemaRegistrarCirurgia>;
 export const esquemaDefinirSalaUsuario = z
   .object({
     sala: esquemaSala,
-    /** TBUSERS.NOME (login do outro sistema; sensível a maiúsculas como lá). */
+    /** Login do usuário (sensível a maiúsculas). */
     usuario: z
       .string()
       .min(1)
@@ -259,7 +258,7 @@ export const esquemaPedidoSolicitarCirurgia = z
   .object({
     sala: esquemaSala,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: esquemaHora,
     duracaoMin: esquemaDuracaoMin,
     paciente: id,
     reg: inteiro,
@@ -294,6 +293,6 @@ export const esquemaPedidoPendencia = z
   .strict();
 export type PedidoPendencia = z.infer<typeof esquemaPedidoPendencia>;
 
-/** Revisão humana da ligação cirurgia realizada → agendamento (casamento por REG, sala e data). */
+/** Revisão humana da ligação cirurgia realizada → agendamento (casamento por atendimento, sala e data). */
 export const esquemaPedidoLigacaoCirurgia = z.object({ realizada: id, agendamento: id.nullable() }).strict();
 export type PedidoLigacaoCirurgia = z.infer<typeof esquemaPedidoLigacaoCirurgia>;

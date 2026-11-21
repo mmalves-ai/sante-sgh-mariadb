@@ -3,7 +3,7 @@
 //   - ocupação = marcados / horários ofertados (vaga = PACIENTE vazio; LIVRE='S' não serve);
 //   - cancelamento = cancelados / (marcados + cancelados) (o cancelamento remove a marcação);
 //   - absenteísmo = (marcados − compareceu) / marcados, comparecimento por ATENDIDO='S';
-//   - agrupar falta pela especialidade do NOME da agenda, nunca por REPACAGD.ESPEC (só se preenche na chegada);
+//   - agrupar falta pela especialidade do NOME da agenda, nunca pela especialidade gravada na marcação (só se preenche na chegada);
 //   - risco de falta pela antecedência (DT_AGE → DATA): mesmo dia 7,9%; 1-7 d 37,2%; 8-30 d 40,2%; 31+ d 55,3%.
 import { partesDoNome } from './nome-agenda.js';
 import { diasEntre } from './tempo.js';

@@ -18,7 +18,7 @@ export type SituacaoTreinamento = 'valido' | 'aVencer' | 'vencido' | 'pendente';
 
 export interface AlvoCurso {
   readonly tipo: 'unidade' | 'funcao';
-  /** Código da unidade (TBUNIDAD.COD) ou a chave da função (`chaveFuncao`). */
+  /** Código da unidade assistencial ou a chave da função (`chaveFuncao`). */
   readonly valor: string;
 }
 

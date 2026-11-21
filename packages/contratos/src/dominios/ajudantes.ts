@@ -4,7 +4,7 @@
 // Cabeçalho original de catalogo.ts:
 // Parte pública das declarações do CRUD genérico: o lote-piloto do M08 (20 domínios `migrar-crud`; ficha,
 // seção 3). A parte física (tabela, colunas) mora no grupo dono em @sgh/legado (`<grupo>/cadastros/`).
-// Opções de menu (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json):
+// Opções de menu (menu de origem, ver conector/mapa/permissoes.tsv):
 //   - próprias da tabela, quando a árvore do SPDATA tem a tela (Religiões 3739, Motivo de exclusão 3590,
 //     Tipos de alergia 6333–6338, Alergias 5441, Tipo de anestesia 5618, Higienização 5003–5006);
 //   - inferidas (POL-1b), quando a árvore não tem item da tabela: a área genérica do módulo Tabelas que
@@ -143,24 +143,24 @@ export const TISS_AUX = [6460];
 
 export const SUS_UNIFICADA = [6921];
 
-// M19 (ficha, seção 5, "Cadastros pelo CRUD genérico"): recepções (TBRECEPCAO 11; Tabelas › Painel eletrônico ›
-// Recepção 3725), geradores de senha (TBGERASENHA 36; Opções de geração de senha 3726 e Recepção externa › Gerador
-// de senhas 3308), configuração dos painéis de chamada (PNCONFIG 5; Painel eletrônico 3724, Painel atendimento ›
-// Salvar configurações 3971), tipos de painel (PNTIPO 3, travado: o legado lê os códigos 1 a 3) e os painéis de TV de
-// outros setores (PNCONFIGPORTAL 19; Painel portal 3972, Salvar configurações 3973). A recepção, o painel e o painel
+// M19 (ficha, seção 5, "Cadastros pelo CRUD genérico"): recepções (11; Tabelas › Painel eletrônico ›
+// Recepção 3725), geradores de senha (36; Opções de geração de senha 3726 e Recepção externa › Gerador
+// de senhas 3308), configuração dos painéis de chamada (5; Painel eletrônico 3724, Painel atendimento ›
+// Salvar configurações 3971), tipos de painel (3, travado: o legado lê os códigos 1 a 3) e os painéis de TV de
+// outros setores (19; Painel portal 3972, Salvar configurações 3973). A recepção, o painel e o painel
 // de TV nascem no outro sistema com o texto de impressão ou o leiaute da TV (campos que este cadastro não edita): só
 // alteração aqui.
 export const M19 = (d: DominioPublico): DominioPublico => ({ ...d, marco: 'M19' });
 
-// M18 (ficha, seção 5, "Cadastros pelo CRUD genérico"): a agenda de exames (SIAGENDA), a escala semanal da agenda de
-// exames (SICTRAGE) e as salas cirúrgicas (CCSALAS), com as opções do SADT › Agenda › Manutenção (2759, 2760) e do
-// Bloco Cirúrgico › Tabelas › Salas (2233). Os usuários permitidos por sala (CCSALAS_TBUSERS) têm receita própria
+// M18 (ficha, seção 5, "Cadastros pelo CRUD genérico"): a agenda de exames, a escala semanal da agenda de
+// exames e as salas cirúrgicas, com as opções do SADT › Agenda › Manutenção (2759, 2760) e do
+// Bloco Cirúrgico › Tabelas › Salas (2233). Os usuários permitidos por sala têm receita própria
 // (cirurgia.definirSalaUsuario): a tabela só tem a chave (incluir e excluir).
 export const M18 = (d: DominioPublico): DominioPublico => ({ ...d, marco: 'M18' });
 
 // M20: configuração do atendimento externo pelo CRUD genérico (ficha do M20, seção 5, "Cadastros pelo CRUD genérico"):
 // as fichas a imprimir (modelo, título e as seleções por convênio, especialidade, unidade e grupo; Recepção externa ›
-// Tabelas › Fichas a imprimir, TBOPCOES 3230, e Criação de fichas 3225) e os leitos de observação do pronto
+// Tabelas › Fichas a imprimir, menu de origem 3230, e Criação de fichas 3225) e os leitos de observação do pronto
 // atendimento (Leitos › Manutenção 4554, Tipos de leito 4553). O modelo e o título nascem com o leiaute de impressão,
 // que este cadastro não grava: só alteração. O local do leito nasce com a acomodação do mapa de leitos: só alteração.
 export const M20 = (d: DominioPublico): DominioPublico => ({ ...d, marco: 'M20' });
@@ -188,7 +188,7 @@ export const selecaoFicha = (recurso: string, singular: string, plural: string):
 
 // M26: cadastros do SADT e do portal de resultados pelo CRUD genérico (ficha do M26, seção 5, "Sem gravação nova no
 // legado": receita genérica, uma assinatura por declaração): as modalidades de imagem (Integração com PACs › Equipamento,
-// TBOPCOES 4742), as grandezas do laudo estruturado do eco (Tabelas do S.A.D.T. 2677: sem item próprio, inferida), a
+// menu de origem 4742), as grandezas do laudo estruturado do eco (Tabelas do S.A.D.T. 2677: sem item próprio, inferida), a
 // configuração do portal (Integração Resultados web 4743: cadastro de perfil 4744, perfil por usuário 4745,
 // configurações gerais 4747) e o autocadastro de médico solicitante do portal do outro sistema (Acesso médico
 // solicitante 4748; a aprovação liga ao médico do cadastro de solicitantes).
@@ -220,8 +220,8 @@ export const SEM_INCLUSAO_FICHA_INT =
 
 export const VINCULO = ['ler', 'criar', 'exportar'] as const;
 
-// M25 (ficha, seção 5): os procedimentos e cuidados de enfermagem prescritíveis (TBPROENF, 200, com a restrição de sexo e
-// idade) e os kits de material por procedimento (TBKITPRO, 13), pelo CRUD genérico. Opções do módulo Tabelas: os
+// M25 (ficha, seção 5): os procedimentos e cuidados de enfermagem prescritíveis (200, com a restrição de sexo e
+// idade) e os kits de material por procedimento (13), pelo CRUD genérico. Opções do módulo Tabelas: os
 // procedimentos clínicos 3736 e as três áreas de kit 3679, 3689 e 3738 (inferidas pelo título "Kit", POL-1b: conferir
 // na validação com a TI, DP-3). Quem edita é a supervisão de enfermagem.
 export const M25 = (d: DominioPublico): DominioPublico => ({ ...d, marco: 'M25' });

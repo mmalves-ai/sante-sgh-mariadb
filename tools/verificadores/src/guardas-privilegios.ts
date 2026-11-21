@@ -6,7 +6,12 @@
 // Melhoria: confere o banco real do produto, sem plano versionado do sistema de origem.
 import { lerConfiguracaoNucleo } from '@sgh/nucleo';
 import { lerArgumentos } from './argumentos.ts';
-import { abrirBancoDev, ambienteDoRepositorio, clienteDaLeitura, motivoRecusaBancoDev } from './copia-leitura.ts';
+import {
+  abrirBancoDev,
+  ambienteDoRepositorio,
+  clienteDaLeitura,
+  motivoRecusaBancoDev,
+} from './copia-leitura.ts';
 import { desviosDaConta, lerPrivilegiosDaConta } from './privilegios-banco.ts';
 
 export async function principalPrivilegios(argv: readonly string[]): Promise<number> {
@@ -27,7 +32,8 @@ export async function principalPrivilegios(argv: readonly string[]): Promise<num
       lerPrivilegiosDaConta(l),
     );
     const d = desviosDaConta(privilegios, conta);
-    for (const x of d.excesso.slice(0, 40)) console.error(`[guardas --privilegios] Desvio: conta da aplicação com ${x}`);
+    for (const x of d.excesso.slice(0, 40))
+      console.error(`[guardas --privilegios] Desvio: conta da aplicação com ${x}`);
     for (const x of d.alertas.slice(0, 40)) console.log(`[guardas --privilegios] Alerta: ${x}`);
     const vermelho = d.excesso.length > 0 || (bandeiras.has('estrito') && d.alertas.length > 0);
     console.log(

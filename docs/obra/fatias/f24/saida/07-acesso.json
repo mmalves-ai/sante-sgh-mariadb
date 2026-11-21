@@ -1,0 +1,35 @@
+{
+  "lote": "07-acesso",
+  "pedidos": [
+    {
+      "tipo": "compartilhado",
+      "arquivo": "packages/contratos/src/acesso/tabelas-clinicas.gerado.ts, packages/contratos/src/acesso/imutabilidade.ts, tools/verificadores/src/imutabilidade-gerar.ts",
+      "motivo": "A lista gerada das tabelas clínicas (54 nomes) e a constante TABELAS_CLINICAS_LEGADO são do modelo de origem e vêm da matriz das tabelas de origem. Pedido: gerar a lista a partir do catálogo do modelo próprio (docs/analise/rodada2/final/catalogo.tsv: módulos clínicos PEP, SADT, CC; natureza movimento, histórico, vínculo, auditoria), renomear a constante (TABELAS_CLINICAS) e trocar a regra por prefixo SGH_ em ehTabelaClinica pela lista própria. Gerador em tools/ e contrato fora deste lote."
+    },
+    {
+      "tipo": "compartilhado",
+      "arquivo": "apps/web/src/modulos/acesso/i18n-segredos.ts (+ o contrato do inventário de segredos e a API de contas-banco/segredos)",
+      "motivo": "As chaves de colunas, excecoes e excecoesMotivo são tabela.coluna de origem porque o inventário de segredos do contrato e da API usa esses nomes (segredos.spec.ts confere colunas[s.tabela][c]). Pedido: inventário de segredos com identificador de negócio próprio (ex.: operadora.senha-portal, servidor-email.senha) de ponta a ponta (contrato, API, web, testes); a correspondência com a origem vai para o mapa do conector."
+    },
+    {
+      "tipo": "compartilhado",
+      "arquivo": "apps/api/src/modulos/acesso/fonte-sintetica.ts (linhas das flags 'GEUSERS.*')",
+      "motivo": "As marcas de usuário das sementes sintéticas são FlagLegado (tabela.coluna de origem). Dependem da etapa coordenada da seção 5 de padroes.md (tirar opcoesLegado e flagsLegado de DeclaracaoPermissao); trocar só aqui quebra a concessão sintética."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/sessao/fonte-propria.ts e apps/api/src/modulos/administracao/fonte-propria.ts",
+      "motivo": "A política de senha em vigor ainda é lida só de politica_senha. Com as versões publicadas agora gravadas em politica_senha_versao (e os limites em limite_sessao_perfil), a sessão precisa combinar a versão publicada com vigente_desde <= agora (a mais exigente, como politicaEfetiva do domínio) e aplicar o limite de sessões por perfil. Fora deste lote. Até isso ser feito, publicarPoliticaSenha e definirLimiteSessao do banco próprio recusam com 'aplicacao-pendente' (travas SESSAO_APLICA_POLITICA_VERSIONADA e SESSAO_APLICA_LIMITE_POR_PERFIL em apps/api/src/modulos/acesso/gestao-fonte-propria.ts); virar as travas junto com a ligação na sessão e repor o teste de gravação em gestao-fonte-propria.int.spec.ts."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/acesso/gestao-fonte-propria.ts (pedidos de acesso e recertificação)",
+      "motivo": "As tabelas existem; o adaptador próprio ainda não foi escrito e responde 'adaptador-pendente' (não é modelo-pendente). Fica para uma rodada própria."
+    },
+    {
+      "tipo": "verificador",
+      "arquivo": "tools/obra/divida_f24.py",
+      "motivo": "O verificador da F2.4 só procura nomes de tabela e coluna de origem; não pega o nome do sistema de origem escrito em comentário (achado em packages/contratos/src/acesso/gestao.ts, já corrigido). Conferir se o verificador de nomes proibidos da esteira cobre isso."
+    }
+  ]
+}

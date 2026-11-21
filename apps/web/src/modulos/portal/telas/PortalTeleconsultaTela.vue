@@ -10,6 +10,7 @@ import {
   type TeleconsultaDoPortal,
   UFS,
   VERSAO_TERMO_TELECONSULTA,
+  lerHoraDigitada,
 } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
@@ -56,7 +57,14 @@ const opcoesTipo = computed(() =>
   TIPOS_LOCAL_PACIENTE.map((x) => ({ valor: x, rotulo: t(`portal.teleconsulta.sala.tipos.${x}`) })),
 );
 const dia = (d: string) => d.split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+// A hora chega como HH:MM (contrato neutro); lerHoraDigitada também aceita a forma de quatro dígitos e nunca quebra a tela.
+const hora = (h: string) => {
+  try {
+    return lerHoraDigitada(h) ?? '';
+  } catch {
+    return h;
+  }
+};
 const instante = (s: string) => `${dia(s.slice(0, 10))} ${s.slice(11, 16)}`;
 const aberta = computed(
   () => dados.value?.situacao === 'sala-aberta' || dados.value?.situacao === 'em-andamento',

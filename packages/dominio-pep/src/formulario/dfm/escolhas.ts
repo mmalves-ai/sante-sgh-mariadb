@@ -1,7 +1,7 @@
 // Escolhas gravam índice, não código (regra 3 da ficha do M09; cap-11 §11.1; ref 04 §1.2): o Delphi grava
-// em PREVOLPAC.RESPSNAO o ItemIndex do combo (ou da lista de marcação) e o texto em RESPALFA. O parser
+// na resposta do registro (campo da escolha) o ItemIndex do combo (ou da lista de marcação) e o texto no campo alfanumérico. O parser
 // resolve cada índice pela lista Items do DFM, confirmada pelo ID_RESPOSTA do combo oculto
-// (cbxId_Resposta) ou por PRRESPOSTA.ORDEM; o que não resolver vai ao relatório como pendência, nunca
+// (cbxId_Resposta) ou pela ordem da opção do campo; o que não resolver vai ao relatório como pendência, nunca
 // adivinhado. Sim/Não (TIPOPERG 4): índice 1 = Não, 2 = Sim, conferido pelo rótulo de cada pergunta.
 import { filhoPorNome, listaTextos, type ObjetoDfm } from './leitor.js';
 
@@ -10,7 +10,7 @@ export interface RespostaLegado {
   readonly cod: number | null;
   readonly ordem: number;
   readonly ativo: boolean;
-  /** PRCADRESP.DESCRICAO da resposta (rótulo cadastrado), quando houver. */
+  /** Descrição da opção cadastrada (rótulo cadastrado), quando houver. */
   readonly descricao: string | null;
 }
 
@@ -146,7 +146,7 @@ export function resolverEscolhas(
       continue;
     }
     let motivo: string;
-    if (porIdResposta) motivo = 'rótulo do DFM diferente do cadastro da resposta (PRCADRESP)';
+    if (porIdResposta) motivo = 'rótulo do DFM diferente do cadastro da opção de resposta';
     else if (id !== null && id > 0) motivo = 'ID_RESPOSTA do DFM não pertence à pergunta';
     else if (!ids) motivo = 'sem cbxId_Resposta e sem resposta na mesma ordem com o mesmo rótulo';
     else motivo = 'índice sem ID_RESPOSTA e sem resposta na mesma ordem com o mesmo rótulo';

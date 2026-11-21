@@ -1,4 +1,4 @@
-// Pacote (ficha do M30, regra 10; Anexo A; cap-06b §6.5): FCCTAEXT.PACOTE C = conta por pacote (o total é o do pacote,
+// Pacote (ficha do M30, regra 10; Anexo A; cap-06b §6.5): marca de pacote da conta C = conta por pacote (o total é o do pacote,
 // menor que a soma dos itens); no item, S incluso no pacote, X excluído (cobrado fora); P, D e F "a confirmar"
 // (DP-46.5). O novo confere a conta pacote contra o pacote vigente do contrato (SGH_FAT_PACOTE) sem mudar o cálculo.
 

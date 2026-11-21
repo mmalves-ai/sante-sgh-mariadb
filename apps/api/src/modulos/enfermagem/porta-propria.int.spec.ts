@@ -315,6 +315,8 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
     ])
       await g('parametro_vital', 'codigo', codigo, { descricao: `${codigo} sintético`, unidade });
     const news = await g('escala_clinica', 'codigo', 'news2', { descricao: 'NEWS2' });
+    await g('escala_clinica', 'codigo', 'braden', { descricao: 'BRADEN' });
+    await g('escala_clinica', 'codigo', 'morse', { descricao: 'MORSE' });
     for (const [i, v] of ['fr', 'spo2'].entries())
       await garantir(
         e,
@@ -400,6 +402,8 @@ async function limpar(nucleo: NucleoProprio, m: Massa | null): Promise<void> {
     await x(
       `DELETE d FROM administracao_dupla_checagem d JOIN horario_administracao h ON h.id = d.horario_administracao_id WHERE h.${em}`,
     );
+    await x(`DELETE FROM conflito_sincronizacao_checagem WHERE ${em}`);
+    await x(`DELETE FROM aparelho_beira_leito WHERE ${em}`);
     await x(`DELETE FROM horario_administracao WHERE ${em}`);
     await x(`DELETE pi FROM prescricao_item pi JOIN prescricao p ON p.id = pi.prescricao_id WHERE p.${em}`);
     await x(`DELETE FROM prescricao WHERE ${em}`);
@@ -413,13 +417,27 @@ async function limpar(nucleo: NucleoProprio, m: Massa | null): Promise<void> {
       `DELETE l FROM balanco_lancamento l JOIN balanco_hidrico_paciente b ON b.id = l.balanco_hidrico_paciente_id WHERE b.${em}`,
     );
     await x(`DELETE FROM balanco_hidrico_paciente WHERE ${em}`);
+    await x(`UPDATE parada_cardiorrespiratoria_ficha SET anterior_ficha_id = NULL WHERE ${em}`);
+    await x(`DELETE FROM parada_cardiorrespiratoria_ficha WHERE ${em}`);
     await x(`DELETE FROM acionamento_resposta_rapida WHERE ${em}`);
+    await x(
+      `DELETE ev FROM inclusao_protocolo_evento ev JOIN inclusao_protocolo_paciente ip ON ip.id = ev.inclusao_protocolo_paciente_id WHERE ip.${em}`,
+    );
+    await x(`DELETE FROM inclusao_protocolo_paciente WHERE ${em}`);
+    await x(`DELETE FROM protocolo_gerenciado WHERE ${em}`);
+    await x(`DELETE FROM reavaliacao_escala WHERE ${em}`);
+    await x(`DELETE FROM classificacao_paciente WHERE ${em}`);
+    await x(`DELETE FROM indice_gravidade_uti WHERE ${em}`);
     await x(
       `DELETE i FROM aplicacao_escala_item i JOIN aplicacao_escala a ON a.id = i.aplicacao_escala_id WHERE a.${em}`,
     );
     await x(`DELETE FROM aplicacao_escala WHERE ${em}`);
     await x(`DELETE v FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id WHERE a.${em}`);
     await x(`DELETE FROM afericao WHERE ${em}`);
+    await x(
+      `DELETE d FROM contencao_paciente_avaliacao_adendo d JOIN contencao_paciente_avaliacao a ON a.id = d.contencao_paciente_avaliacao_id
+         JOIN contencao_paciente c ON c.id = a.contencao_paciente_id WHERE c.${em}`,
+    );
     await x(
       `DELETE a FROM contencao_paciente_avaliacao a JOIN contencao_paciente c ON c.id = a.contencao_paciente_id WHERE c.${em}`,
     );
@@ -697,7 +715,14 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
       );
       const s = await enf.sinais(c, { paciente: m!.paciente, de: civil(-60), ate: civil(1) });
       expect(s.itens).toEqual([
-        expect.objectContaining({ id, tipo: 'spo2', valor: 88, foraDaFaixa: true, versao: 1, anterior: null }),
+        expect.objectContaining({
+          id,
+          tipo: 'spo2',
+          valor: 88,
+          foraDaFaixa: true,
+          versao: 1,
+          anterior: null,
+        }),
       ]);
       // O ato repetido (a mesma chave do aparelho, o mesmo conteúdo) devolve o sinal da primeira vez, sem gravar.
       const sinalNovo = {
@@ -728,9 +753,10 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
       const s2 = await enf.gravarSgh(ca, trilhaSinal, (g) => g.gravarSinal(sinalNovo));
       expect([s2, ca.ato.repetida]).toEqual([s1, true]);
       expect(
-        await uma('SELECT COUNT(*) AS n FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id WHERE a.paciente_id = ?', [
-          m!.paciente,
-        ]),
+        await uma(
+          'SELECT COUNT(*) AS n FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id WHERE a.paciente_id = ?',
+          [m!.paciente],
+        ),
       ).toMatchObject({ n: 2 });
       // A mesma chave com outro conteúdo é recusada.
       await expect(
@@ -743,7 +769,9 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         enf.gravarSgh(ctx(m!, m!.outroEst), trilhaSinal, (g) => g.gravarSinal(sinalNovo)),
       ).rejects.toMatchObject({ problema: { codigo: 'atendimento-inexistente' } });
       await expect(
-        enf.gravarSgh(c, trilhaSinal, (g) => g.gravarSinal({ ...sinalNovo, paciente: m!.paciente + 999_999 })),
+        enf.gravarSgh(c, trilhaSinal, (g) =>
+          g.gravarSinal({ ...sinalNovo, paciente: m!.paciente + 999_999 }),
+        ),
       ).rejects.toMatchObject({ problema: { codigo: 'atendimento-de-outro-paciente' } });
       // A retificação: linha nova; a anterior fica guardada com o valor original; a justificativa na trilha.
       const trilhaRetificacao = (r: number) => ({ ...trilhaSinal(r), acao: 'alteracao' as const });
@@ -772,10 +800,16 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         justificativa: 'Oxímetro mal posicionado',
       });
       expect(
-        await uma('SELECT valor_numerico, nivel_alerta, excluido_em IS NOT NULL AS substituido FROM afericao_valor WHERE id = ?', [id]),
+        await uma(
+          'SELECT valor_numerico, nivel_alerta, excluido_em IS NOT NULL AS substituido FROM afericao_valor WHERE id = ?',
+          [id],
+        ),
       ).toMatchObject({ valor_numerico: '88.0000', nivel_alerta: 'atencao', substituido: 1 });
       expect(
-        await uma("SELECT motivo FROM trilha_auditoria WHERE entidade = 'afericao_valor' AND entidade_id = ?", [novo]),
+        await uma(
+          "SELECT motivo FROM trilha_auditoria WHERE entidade = 'afericao_valor' AND entidade_id = ?",
+          [novo],
+        ),
       ).toMatchObject({ motivo: 'Oxímetro mal posicionado' });
       await expect(retificar(id, 1)).rejects.toMatchObject({ problema: { codigo: 'sinal-ja-retificado' } });
       // O sinal, o ato da chave (o reenvio não grava) e a retificação: três linhas na trilha.
@@ -888,6 +922,121 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
       ).rejects.toMatchObject({ problema: { codigo: 'atendimento-de-outro-paciente' } });
       expect(await uma('SELECT versao FROM passagem_turno WHERE id = ?', [pid])).toMatchObject({ versao: 2 });
     });
+
+    it('autoriza o aparelho da beira do leito (só o resumo do identificador) e registra e resolve o conflito', async () => {
+      const c = ctx(m!);
+      const trilha = (entidade: string) => ({
+        estabelecimento: m!.est,
+        usuario: m!.usuario,
+        acao: 'inclusao' as const,
+        entidade,
+        entidadeId: null,
+        correlacao: c.correlacao,
+      });
+      const ident = `TABLET-SINTETICO-${Date.now()}`;
+      const gravar = () =>
+        enf.gravarSgh(c, trilha('aparelho_beira_leito'), (g) =>
+          g.gravarDispositivo({
+            nome: 'Tablet do posto',
+            unidade: UNIDADE,
+            tipo: 'tablet',
+            identificador: ident,
+            usuario: m!.login,
+          }),
+        );
+      const id = await gravar();
+      await expect(gravar()).rejects.toMatchObject({ problema: { codigo: 'dispositivo-existente' } });
+      expect(
+        await uma('SELECT identificador_hash FROM aparelho_beira_leito WHERE id = ?', [id]),
+      ).not.toMatchObject({ identificador_hash: ident });
+      expect(await enf.dispositivoAutorizado(c, ident)).toMatchObject({
+        id,
+        nome: 'Tablet do posto',
+        unidade: UNIDADE,
+        ativo: true,
+        cadastradoPor: m!.login,
+      });
+      expect(await enf.dispositivoAutorizado(ctx(m!, m!.outroEst), ident)).toBeNull();
+      expect(
+        await enf.gravarSgh(c, trilha('aparelho_beira_leito'), (g) =>
+          g.marcarSincronismo({ identificador: ident }),
+        ),
+      ).toBe(true);
+      expect((await enf.dispositivos(c)).find((d) => d.id === id)?.ultimoSincronismo).not.toBeNull();
+      // O conflito do ato feito sem conexão: uma vez por chave; resolvido uma vez.
+      const chave = `conflito-${Date.now()}`;
+      const conflito = () =>
+        enf.gravarSgh(c, trilha('conflito_sincronizacao_checagem'), (g) =>
+          g.registrarConflito({
+            horario: m!.horarios[1],
+            paciente: m!.paciente,
+            chave,
+            tipo: 'jaChecado',
+            situacaoEncontrada: 'A',
+            desfechoTentado: 'A',
+            horaReal: civil(-5),
+            dispositivo: ident,
+            aparelhoExigido: true,
+            usuario: m!.login,
+          }),
+        );
+      const k = await conflito();
+      expect(k.novo).toBe(true);
+      expect(await conflito()).toEqual({ id: k.id, novo: false });
+      expect((await enf.conflitos(c, { abertos: true })).find((x) => x.id === k.id)).toMatchObject({
+        tipo: 'jaChecado',
+        situacaoEncontrada: 'A',
+        dispositivo: 'Tablet do posto',
+        usuario: m!.login,
+        resolucao: null,
+      });
+      const resolver = () =>
+        enf.gravarSgh(c, trilha('conflito_sincronizacao_checagem'), (g) =>
+          g.resolverConflito({
+            id: k.id,
+            resolucao: 'mantido',
+            observacao: 'Conferido com a equipe',
+            usuario: m!.login,
+          }),
+        );
+      await resolver();
+      await expect(resolver()).rejects.toMatchObject({ problema: { codigo: 'conflito-resolvido' } });
+      expect((await enf.conflitos(c, { abertos: true })).some((x) => x.id === k.id)).toBe(false);
+      // Com leitura vinculada, o aparelho não se exclui: inativa-se com o motivo.
+      await expect(
+        enf.gravarSgh(c, trilha('aparelho_beira_leito'), (g) =>
+          g.excluirDispositivo({ id, motivo: 'Aparelho trocado', usuario: m!.login }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'dispositivo-com-leituras' } });
+      await enf.gravarSgh(c, trilha('aparelho_beira_leito'), (g) =>
+        g.alterarDispositivo({
+          id,
+          ativo: false,
+          motivo: 'Aparelho recolhido para manutenção',
+          usuario: m!.login,
+        }),
+      );
+      expect(await enf.dispositivoAutorizado(c, ident)).toBeNull();
+      // O evento da infusão contínua vai ao evento do horário, com a velocidade.
+      const infusao = (evento: string) =>
+        enf.gravarSgh(c, trilha('horario_administracao_evento'), (g) =>
+          g.gravarEventoInfusao({
+            horario: m!.horarios[1],
+            solucao: null,
+            paciente: m!.paciente,
+            evento,
+            velocidadeMlH: 42,
+            volumeMl: null,
+            observacao: null,
+            horaReal: civil(-3),
+            usuario: m!.login,
+          }),
+        );
+      const ev = await infusao('inicio');
+      expect(await enf.eventosInfusao(c, [m!.horarios[1]])).toMatchObject([
+        { id: ev, evento: 'inicio', velocidadeMlH: 42, usuario: m!.login },
+      ]);
+    });
   });
 
   describe('balanço hídrico', () => {
@@ -896,7 +1045,13 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
       const dom = await bal.dominios(c);
       const ganho = dom.grupos.find((x) => x.nome === 'Endovenoso')!.codigo;
       const janela = civil(-120);
-      const lancarEm = (cx: ContextoNucleo, vol: number, jan = janela, hora = civil(-20)) =>
+      const lancarEm = (
+        cx: ContextoNucleo,
+        vol: number,
+        jan = janela,
+        hora = civil(-20),
+        chave: string | null = null,
+      ) =>
         bal.gravarSgh(
           cx,
           {
@@ -923,13 +1078,19 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
               descricao: 'Soro sintético',
               origemOffline: false,
               usuario: m!.login,
-              chave: null,
+              chave,
               janelaInicio: jan,
             }),
         );
       const lancar = (vol: number) => lancarEm(c, vol);
       const a = await lancar(250);
       const b = await lancar(100);
+      // A chave do ato: o reenvio do mesmo pedido devolve o lançamento já gravado (numa janela antiga, fora do fechamento).
+      const antiga = civil(-3 * 1440);
+      const k = `chave-ato-${Date.now()}`;
+      const k1 = await lancarEm(c, 40, antiga, civil(-3 * 1440 + 30), k);
+      expect(k1.repetida).toBe(false);
+      expect(await lancarEm(c, 40, antiga, civil(-3 * 1440 + 30), k)).toEqual({ id: k1.id, repetida: true });
       const est = await bal.gravarSgh(
         c,
         {
@@ -1151,7 +1312,9 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
           corrigidaPor: m!.login,
         }),
       ]);
-      expect(await uma('SELECT observacao, volume_ml FROM bolsa_hemocomponente WHERE id = ?', [r.id])).toMatchObject({
+      expect(
+        await uma('SELECT observacao, volume_ml FROM bolsa_hemocomponente WHERE id = ?', [r.id]),
+      ).toMatchObject({
         observacao: null,
         volume_ml: 300,
       });
@@ -1178,21 +1341,24 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         null,
         null,
       ]);
-      const r = await ag.gravarSgh(c, (x: { id: number }) => ({ ...trilha, entidadeId: x.id }), (g) =>
-        g.registrarImuno({
-          tipo: 'aboRh',
-          paciente: m!.paciente,
-          requisicao: null,
-          metodo: 'gelTeste',
-          origem: 'digitado',
-          exameLancado: null,
-          observacao: null,
-          direta: { antiA: 0, antiB: 0, antiD: 4, controle: 0 },
-          reversa: { hemaciaA1: 4, hemaciaB: 4 },
-          tipagem: { abo: 'O', rh: 'positivo' },
-          usuario: m!.login,
-          chave: null,
-        }),
+      const r = await ag.gravarSgh(
+        c,
+        (x: { id: number }) => ({ ...trilha, entidadeId: x.id }),
+        (g) =>
+          g.registrarImuno({
+            tipo: 'aboRh',
+            paciente: m!.paciente,
+            requisicao: null,
+            metodo: 'gelTeste',
+            origem: 'digitado',
+            exameLancado: null,
+            observacao: null,
+            direta: { antiA: 0, antiB: 0, antiD: 4, controle: 0 },
+            reversa: { hemaciaA1: 4, hemaciaB: 4 },
+            tipagem: { abo: 'O', rh: 'positivo' },
+            usuario: m!.login,
+            chave: null,
+          }),
       );
       expect((await ag.imunos(c, { id: r.id })).itens[0]).toMatchObject({
         tipo: 'aboRh',
@@ -1338,13 +1504,21 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
           [m!.est, `aviso:news2.alerta:${r.id}:${m!.login2}`],
         ),
       ).toMatchObject({ n: 1 });
-      // O NEWS2 de 5 grava o escore; as reavaliações programadas vão ao outbox (uma por escala), nunca recusam.
+      // O NEWS2 de 5 grava o escore e as reavaliações programadas (uma por escala, pendentes).
       expect(
         await uma(
-          "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'enfermagem.reavaliacao.programada' AND estabelecimento_id = ? AND referencia_externa LIKE ?",
-          [m!.est, `reavaliacao:%:quadro:news2:${r.id}`],
+          "SELECT COUNT(*) AS n FROM reavaliacao_escala WHERE estabelecimento_id = ? AND situacao = 'pendente' AND motivo = 'mudanca_quadro' AND chave LIKE ?",
+          [m!.est, `${m!.paciente}:%:quadro:news2:${r.id}`],
         ),
       ).toMatchObject({ n: 2 });
+      expect(
+        (await esc.reavaliacoes(c, [m!.paciente], civil(-60)))
+          .map((x) => [x.escala, x.motivo, x.situacao])
+          .sort(),
+      ).toEqual([
+        ['braden', 'mudanca-quadro', 'pendente'],
+        ['morse', 'mudanca-quadro', 'pendente'],
+      ]);
       expect(
         await uma('SELECT interpretacao FROM aplicacao_escala WHERE id = ?', [r.id]).then((x) =>
           JSON.parse(String(x?.['interpretacao'])),
@@ -1402,6 +1576,85 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         uti: true,
       });
       expect(await esc.escoresComTrr(c, [r.id])).toEqual(new Set([r.id]));
+      // A ficha da PCR do acionamento: a versão 1 (rascunho), a 2 finalizada, a correção com a justificativa e a inativação.
+      const ficha = {
+        paciente: m!.paciente,
+        atendimento: m!.atendimento,
+        unidade: null,
+        uti: false,
+        trr: t.id,
+        anterior: null,
+        situacao: 'rascunho' as const,
+        colapsoEm: civil(-2),
+        dados: JSON.stringify({ ritmoInicial: 'fv' }),
+        autor: m!.login,
+      };
+      const pcrTrilha = { ...trilha, entidade: 'parada_cardiorrespiratoria_ficha' };
+      const v1 = await esc.gravarSgh(c, pcrTrilha, (g) => g.gravarFichaPcr(ficha));
+      expect(v1.versao).toBe(1);
+      await expect(esc.gravarSgh(c, pcrTrilha, (g) => g.gravarFichaPcr(ficha))).rejects.toMatchObject({
+        problema: { codigo: 'pcr-ja-aberta' },
+      });
+      const v2 = await esc.gravarSgh(c, pcrTrilha, (g) =>
+        g.gravarFichaPcr({
+          ...ficha,
+          anterior: v1.id,
+          situacao: 'finalizada',
+          dados: JSON.stringify({ ritmoInicial: 'fv', rosc: true }),
+        }),
+      );
+      expect(v2.versao).toBe(2);
+      await expect(
+        esc.gravarSgh(c, pcrTrilha, (g) => g.gravarFichaPcr({ ...ficha, anterior: v1.id })),
+      ).rejects.toMatchObject({ problema: { codigo: 'versao-desatualizada' } });
+      await expect(
+        esc.gravarSgh(c, pcrTrilha, (g) =>
+          g.gravarFichaPcr({ ...ficha, anterior: v2.id, situacao: 'finalizada', motivo: 'curto' }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'motivo-obrigatorio' } });
+      await expect(
+        esc.gravarSgh(ctx(m!, m!.est, m!.usuario2), pcrTrilha, (g) =>
+          g.gravarFichaPcr({
+            ...ficha,
+            anterior: v2.id,
+            situacao: 'finalizada',
+            motivo: 'Correção do horário do colapso',
+          }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'so-o-autor' } });
+      const v3 = await esc.gravarSgh(c, pcrTrilha, (g) =>
+        g.gravarFichaPcr({
+          ...ficha,
+          anterior: v2.id,
+          situacao: 'finalizada',
+          motivo: 'Correção do horário do colapso',
+        }),
+      );
+      expect(
+        (await esc.versoesPcr(c, { atendimentos: [m!.atendimento] })).map((x) => [
+          x.versao,
+          x.situacao,
+          x.trr,
+        ]),
+      ).toEqual([
+        [3, 'finalizada', t.id],
+        [2, 'finalizada', t.id],
+        [1, 'rascunho', t.id],
+      ]);
+      await esc.gravarSgh(c, pcrTrilha, (g) =>
+        g.inativarTrr({ origem: 'pcr', id: v3.id, motivo: 'Ficha do paciente errado', usuario: m!.login }),
+      );
+      expect((await esc.versoesPcr(c, { id: v3.id }))[0]).toMatchObject({
+        motivo: 'Correção do horário do colapso',
+        inativacao: { motivo: 'Ficha do paciente errado', usuario: m!.login },
+        dados: JSON.stringify({ ritmoInicial: 'fv' }),
+      });
+      await expect(
+        esc.gravarSgh(c, pcrTrilha, (g) =>
+          g.inativarTrr({ origem: 'pcr', id: v3.id, motivo: 'De novo', usuario: m!.login }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-inativado' } });
+      expect(await esc.versoesPcr(ctx(m!, m!.outroEst), { atendimentos: [m!.atendimento] })).toEqual([]);
       // O estorno guarda o motivo (na trilha, até a coluna do pedido) e o original fica inativado.
       await esc.gravarSgh(c, { ...trilha, acao: 'alteracao' as const, entidadeId: r.id }, (g) =>
         g.estornarRegistro({
@@ -1415,7 +1668,9 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
           usuario: m!.login,
         }),
       );
-      expect((await esc.escores(c, [m!.paciente], civil(-60))).find((x) => x.id === r.id)?.estorno).toMatchObject({
+      expect(
+        (await esc.escores(c, [m!.paciente], civil(-60))).find((x) => x.id === r.id)?.estorno,
+      ).toMatchObject({
         motivo: 'Registrado no paciente errado',
       });
     });
@@ -1471,6 +1726,29 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         [horarios[0], true],
         [horarios[1], null],
       ]);
+      // O adendo é do autor da checagem; a checagem original não muda e o adendo é lido junto.
+      const adendo = {
+        contencao: id,
+        previsto: horarios[0]!,
+        achados: { perfusao: 'normal', pele: 'normal', posicao: 'normal', necessidades: 'normal' } as const,
+        observacao: 'Hiperemia era do esparadrapo',
+        motivo: 'Achado da pele corrigido',
+        usuario: m!.login,
+      };
+      await esc.gravarSgh(c, trilha, (g) => g.adendoChecagemContencao(adendo));
+      const [o2] = await esc.contencoes(c, { atendimentos: [m!.atendimento], desde: civil(-60) });
+      expect(o2!.horarios[0]!.checagem).toMatchObject({
+        alterado: true,
+        adendos: [{ alterado: false, motivo: 'Achado da pele corrigido', usuario: m!.login }],
+      });
+      await expect(
+        esc.gravarSgh(ctx(m!, m!.est, m!.usuario2), trilha, (g) =>
+          g.adendoChecagemContencao({ ...adendo, usuario: m!.login2 }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'so-o-autor' } });
+      await expect(
+        esc.gravarSgh(c, trilha, (g) => g.adendoChecagemContencao({ ...adendo, previsto: horarios[1]! })),
+      ).rejects.toMatchObject({ problema: { codigo: 'checagem-inexistente' } });
       await esc.gravarSgh(c, trilha, (g) =>
         g.encerrarContencao({
           contencao: id,
@@ -1494,6 +1772,289 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
         problema: { codigo: 'contencao-encerrada' },
       });
       expect(await esc.contencao(ctx(m!, m!.outroEst), id)).toBeNull();
+    });
+
+    it('a reavaliação programada e dispensada, a classificação de pacientes e o índice da UTI com validação e estorno', async () => {
+      const c = ctx(m!);
+      const trilha = (entidade: string) => ({
+        estabelecimento: m!.est,
+        usuario: m!.usuario,
+        acao: 'inclusao' as const,
+        entidade,
+        entidadeId: null,
+        correlacao: c.correlacao,
+      });
+      const reg = Number(
+        (await uma('SELECT id FROM internacao WHERE atendimento_id = ?', [m!.atendimento]))?.['id'],
+      );
+      const nova = {
+        paciente: m!.paciente,
+        reg,
+        unidade: UNIDADE,
+        escala: 'braden' as const,
+        motivo: 'diaria' as const,
+        chave: `diaria:${civil(0).slice(0, 10)}`,
+        devidaEm: civil(-10),
+        prazoEm: civil(120),
+        observacao: null,
+        usuario: m!.login,
+      };
+      const rid = await esc.gravarSgh(c, trilha('reavaliacao_escala'), (g) => g.programarReavaliacao(nova));
+      await expect(
+        esc.gravarSgh(c, trilha('reavaliacao_escala'), (g) => g.programarReavaliacao(nova)),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-programada' } });
+      expect((await esc.reavaliacoes(c, [m!.paciente], civil(-60))).find((x) => x.id === rid)).toMatchObject({
+        reg,
+        escala: 'braden',
+        motivo: 'diaria',
+        situacao: 'pendente',
+        devidaEm: `${civil(-10)}:00`,
+      });
+      expect(
+        await esc.gravarSgh(c, trilha('reavaliacao_escala'), (g) =>
+          g.dispensarReavaliacao({
+            id: rid,
+            motivo: 'Paciente em alta',
+            quando: civil(0),
+            usuario: m!.login,
+          }),
+        ),
+      ).toEqual({ paciente: m!.paciente });
+      await expect(
+        esc.gravarSgh(c, trilha('reavaliacao_escala'), (g) =>
+          g.dispensarReavaliacao({ id: rid, motivo: 'De novo', quando: civil(0), usuario: m!.login }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'reavaliacao-encerrada' } });
+      expect((await esc.reavaliacoes(c, [m!.paciente], civil(-60))).find((x) => x.id === rid)?.situacao).toBe(
+        'dispensada',
+      );
+
+      // Classificação de pacientes: uma por instrumento, turno e internação; o estorno libera o turno.
+      const dia = civil(0).slice(0, 10);
+      const cl = {
+        paciente: m!.paciente,
+        reg,
+        atendimento: m!.atendimento,
+        unidade: UNIDADE,
+        data: dia,
+        turno: 'diurno' as const,
+        instrumento: 'fugulin' as const,
+        versao: 1,
+        itens: { estadoMental: 2, oxigenacao: 3 },
+        total: 21,
+        categoria: 'intermediario',
+        horas24h: 5.6,
+        usuario: m!.login,
+      };
+      const cid = await esc.gravarSgh(c, trilha('classificacao_paciente'), (g) => g.classificar(cl));
+      await expect(
+        esc.gravarSgh(c, trilha('classificacao_paciente'), (g) => g.classificar(cl)),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-classificado' } });
+      expect(await esc.classificacoes(c, UNIDADE, dia, 'diurno')).toMatchObject([
+        {
+          id: cid,
+          reg,
+          instrumento: 'fugulin',
+          itens: { estadoMental: 2, oxigenacao: 3 },
+          total: 21,
+          horas24h: 5.6,
+          data: dia,
+          estorno: null,
+        },
+      ]);
+      await esc.gravarSgh(
+        c,
+        { ...trilha('classificacao_paciente'), acao: 'alteracao' as const, entidadeId: cid },
+        (g) =>
+          g.estornarRegistro({
+            origem: 'classificacao',
+            id: cid,
+            paciente: m!.paciente,
+            tipo: 'invalidacao',
+            motivo: 'Itens trocados',
+            alerta: null,
+            escoreMantem: null,
+            usuario: m!.login,
+          }),
+      );
+      expect((await esc.classificacoes(c, UNIDADE, dia, 'diurno'))[0]?.estorno).toMatchObject({
+        tipo: 'invalidacao',
+        motivo: 'Itens trocados',
+        usuario: m!.login,
+      });
+      expect(await esc.registroParaEstorno(c, 'classificacao', cid)).toMatchObject({
+        estornado: true,
+        escala: 'fugulin',
+      });
+      await esc.gravarSgh(c, trilha('classificacao_paciente'), (g) => g.classificar(cl));
+
+      // Índice da UTI: registrado, validado e estornado (a validação some do período do APACHE II).
+      const ix = {
+        paciente: m!.paciente,
+        reg,
+        atendimento: m!.atendimento,
+        unidade: UNIDADE,
+        indice: 'apache2' as const,
+        variaveis: { idade: 60, temperatura: 38.5 },
+        pontuacao: 18,
+        categoria: 3,
+        tipoAdmissao: 'clinica',
+        mortalidade: 0.2537,
+        impressaoConfig: 'cfg-1',
+        coletadoEm: civil(-5),
+        usuario: m!.login,
+      };
+      const iid = await esc.gravarSgh(c, trilha('indice_gravidade_uti'), (g) => g.registrarIndice(ix));
+      expect((await esc.indicesDoPaciente(c, m!.paciente))[0]).toMatchObject({
+        id: iid,
+        reg,
+        variaveis: { idade: 60, temperatura: 38.5 },
+        mortalidade: 0.2537,
+        impressaoConfig: 'cfg-1',
+        situacao: 'registrado',
+        registradoPor: m!.login,
+        estorno: null,
+      });
+      await esc.gravarSgh(c, trilha('indice_gravidade_uti'), (g) =>
+        g.validarIndice({ id: iid, validadoPor: m!.login, vinculo: 0, quando: civil(0) }),
+      );
+      await expect(
+        esc.gravarSgh(c, trilha('indice_gravidade_uti'), (g) =>
+          g.validarIndice({ id: iid, validadoPor: m!.login, vinculo: 0, quando: civil(0) }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-validado' } });
+      expect((await esc.apachesDoPeriodo(c, dia, dia)).map((x) => x.id)).toEqual([iid]);
+      await esc.gravarSgh(
+        c,
+        { ...trilha('indice_gravidade_uti'), acao: 'alteracao' as const, entidadeId: iid },
+        (g) =>
+          g.estornarRegistro({
+            origem: 'indiceUti',
+            id: iid,
+            paciente: m!.paciente,
+            tipo: 'estorno',
+            motivo: 'Coleta do paciente errado',
+            alerta: null,
+            escoreMantem: null,
+            usuario: m!.login,
+          }),
+      );
+      expect((await esc.indicesDoPaciente(c, m!.paciente))[0]).toMatchObject({
+        situacao: 'validado',
+        estorno: { tipo: 'estorno', motivo: 'Coleta do paciente errado' },
+      });
+      expect(await esc.apachesDoPeriodo(c, dia, dia)).toEqual([]);
+      await expect(
+        esc.gravarSgh(c, trilha('indice_gravidade_uti'), (g) =>
+          g.validarIndice({ id: iid, validadoPor: m!.login, vinculo: 0, quando: civil(0) }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'indice-estornado' } });
+      expect(await esc.indicesDoPaciente(ctx(m!, m!.outroEst), m!.paciente)).toEqual([]);
+    });
+
+    it('o protocolo gerenciado do internado: inclusão, uma aberta por tipo, encerramento e inativação por engano', async () => {
+      const c = ctx(m!);
+      const trilha = {
+        estabelecimento: m!.est,
+        usuario: m!.usuario,
+        acao: 'inclusao' as const,
+        entidade: 'inclusao_protocolo_paciente',
+        entidadeId: null,
+        correlacao: c.correlacao,
+      };
+      const gerenciado = await uma(
+        'SELECT id FROM protocolo_gerenciado WHERE estabelecimento_id = ? AND codigo = ?',
+        [m!.est, `${P}-SEPSE`],
+      ).then(async (x) =>
+        x
+          ? Number(x['id'])
+          : await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-protocolo` }, (e) =>
+              e.inserir(
+                "INSERT INTO protocolo_gerenciado (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SEPSE SINTETICO', 'sepse', ?)",
+                [m!.est, `${P}-SEPSE`, new Date()],
+              ),
+            ),
+      );
+      const inclusao = {
+        paciente: m!.paciente,
+        atendimento: m!.atendimento,
+        unidade: UNIDADE,
+        local: 'uti' as const,
+        tipo: 'sepse' as const,
+        gerenciado,
+        origem: 'suspeita' as const,
+        escore: null,
+        criterios: ['febre', 'taquicardia'],
+        observacao: 'Suspeita clínica',
+        reconhecidoEm: civil(-20),
+        autor: m!.login,
+        vinculo: 0,
+      };
+      const id = await esc.gravarSgh(c, trilha, (g) => g.incluirProtocoloInternado(inclusao));
+      await expect(
+        esc.gravarSgh(c, trilha, (g) => g.incluirProtocoloInternado(inclusao)),
+      ).rejects.toMatchObject({
+        problema: { codigo: 'protocolo-ja-aberto' },
+      });
+      expect(await esc.protocoloInternado(c, id)).toMatchObject({
+        id,
+        tipo: 'sepse',
+        gerenciado,
+        origem: 'suspeita',
+        criterios: ['febre', 'taquicardia'],
+        reconhecidoEm: civil(-20),
+        incluidoPor: m!.login,
+        eventos: [],
+      });
+      const evento = {
+        protocolo: id,
+        codigo: '',
+        situacao: '',
+        ocorridoEm: civil(0),
+        prazoEm: null,
+        motivo: null,
+        por: m!.login,
+      };
+      await expect(
+        esc.gravarSgh(c, trilha, (g) =>
+          g.eventoProtocoloInternado({ ...evento, tipoEvento: 'meta', codigo: 'lactato' }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+      await esc.gravarSgh(c, trilha, (g) =>
+        g.eventoProtocoloInternado({ ...evento, tipoEvento: 'encerramento', situacao: 'alta' }),
+      );
+      await expect(
+        esc.gravarSgh(c, trilha, (g) =>
+          g.eventoProtocoloInternado({ ...evento, tipoEvento: 'encerramento' }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-encerrado' } });
+      // Encerrado, o atendimento pode abrir outra inclusão do mesmo tipo; a lançada por engano é inativada e fica visível.
+      const id2 = await esc.gravarSgh(c, trilha, (g) => g.incluirProtocoloInternado(inclusao));
+      await esc.gravarSgh(c, trilha, (g) =>
+        g.eventoProtocoloInternado({
+          ...evento,
+          protocolo: id2,
+          tipoEvento: 'inativacao',
+          motivo: 'Paciente errado',
+        }),
+      );
+      expect((await esc.protocoloInternado(c, id2))?.eventos).toMatchObject([
+        { tipo: 'inativacao', motivo: 'Paciente errado', por: m!.login },
+      ]);
+      expect((await esc.protocoloInternado(c, id))?.eventos).toMatchObject([
+        { tipo: 'encerramento', situacao: 'alta', quando: `${civil(0)}:00` },
+      ]);
+      await expect(
+        esc.gravarSgh(c, trilha, (g) =>
+          g.eventoProtocoloInternado({
+            ...evento,
+            protocolo: id2,
+            tipoEvento: 'inativacao',
+            motivo: 'De novo',
+          }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'ja-inativado' } });
+      expect(await esc.protocoloInternado(ctx(m!, m!.outroEst), id)).toBeNull();
     });
   });
 });

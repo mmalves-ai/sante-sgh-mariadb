@@ -25,7 +25,7 @@ export type PapelTreinamento = (typeof PAPEIS_TREINAMENTO)[number];
 export interface DefinicaoPapel {
   readonly id: PapelTreinamento;
   readonly nome: string;
-  /** Grupos funcionais (TBGRUUSU.NOME, chave sem acento) que compõem o papel. */
+  /** Perfis de acesso (nome, chave sem acento) que compõem o papel. */
   readonly grupos: readonly string[];
   /** Parcelas de referência do cap-15 §15.4.1 no `pc` (grupo → usuários), para conferir a medida. */
   readonly referencia: Readonly<Record<string, number>>;

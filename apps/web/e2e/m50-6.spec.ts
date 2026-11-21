@@ -85,7 +85,7 @@ test.describe('agenda de sessões e digitalização certificada @M50 @M50.6 @fas
 
     // A série de 3 sessões semanais na CADEIRA 01 para o paciente sintético.
     await buscarPaciente(page, 'JOSÉ DA SILVA', 1001);
-    await preencherSerie(page, br, '0800');
+    await preencherSerie(page, br, '08:00');
     await expect(page.getByTestId('serie-agendar')).toBeDisabled();
     await page.getByTestId('serie-previa').click();
     await expect(page.getByTestId('serie-previa-resultado')).toContainText('Todas as sessões estão livres.');
@@ -108,7 +108,7 @@ test.describe('agenda de sessões e digitalização certificada @M50 @M50.6 @fas
     // Outro paciente na mesma cadeira e horário: a prévia mostra a cadeira ocupada e não deixa agendar.
     await page.getByRole('button', { name: 'Trocar o paciente' }).click();
     await buscarPaciente(page, 'CINTHYA', 1003);
-    await preencherSerie(page, br, '0830');
+    await preencherSerie(page, br, '08:30');
     await page.getByTestId('serie-previa').click();
     await expect(page.getByTestId('previa-1')).toContainText('cadeira ou sala ocupada');
     await expect(page.getByTestId('serie-agendar')).toBeDisabled();

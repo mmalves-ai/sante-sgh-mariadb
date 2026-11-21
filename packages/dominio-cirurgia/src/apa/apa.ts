@@ -73,7 +73,7 @@ export interface ConferenciaApa {
   readonly recusas: readonly RecusaAnestesia[];
   readonly jejum: readonly JejumAvaliado[];
   readonly lee: ReturnType<typeof indiceLee>;
-  /** Pendências do agendamento (SGH_CC_PENDENCIA, M18) que a APA resolve ao gravar. */
+  /** Pendências do agendamento (pendencia_agendamento_cirurgico, M18) que a APA resolve ao gravar. */
   readonly pendenciasResolvidas: readonly TipoPendencia[];
   /**
    * Revisão do M46.1: as que esta versão deixa (ou devolve a) pendente. A pendência segue a versão vigente: uma nova

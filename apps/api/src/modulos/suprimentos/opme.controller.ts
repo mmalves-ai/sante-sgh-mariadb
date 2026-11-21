@@ -335,8 +335,8 @@ export class OpmeController {
   }
 
   /**
-   * O fornecedor, o pedido de compra e a nota fiscal citados existem no cadastro (ficha, seção 6: o pedido de GECADPED,
-   * a NF de GECADNFS); o pedido e a nota são do fornecedor da solicitação quando ele é conhecido.
+   * O fornecedor, o pedido de compra e a nota fiscal citados existem no cadastro (ficha, seção 6: o pedido de compra
+   * e a nota de entrada); o pedido e a nota são do fornecedor da solicitação quando ele é conhecido.
    */
   private async conferirDocumentos(
     s: SessaoCadastro,

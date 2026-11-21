@@ -1,0 +1,55 @@
+{
+  "lote": "10-suprimentos",
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "evento_processo_licitatorio",
+      "colunas": "CHECK de tipo passa a aceitar também 'parecer','publicacao','esclarecimento','ata','pedido' (o 'avanco' é a mudança de etapa); resultado VARCHAR(20) NULL CHECK IN ('favoravel','ressalvas','desfavoravel','provido','nao_provido'); veiculo_publicacao VARCHAR(20) NULL CHECK IN ('pncp','diario_oficial','jornal','sitio'); empresa_fornecedora_id BIGINT UNSIGNED NULL FK empresa_fornecedora; pedido_compra_id BIGINT UNSIGNED NULL FK pedido_compra + UNIQUE (processo_licitatorio_id, pedido_compra_id); arquivo_id BIGINT UNSIGNED NULL FK arquivo (o documento do parecer, recurso, ata); CHECKs: parecer e decisao_recurso exigem resultado; recurso exige empresa_fornecedora_id; pedido exige pedido_compra_id; publicacao exige veiculo_publicacao e referencia. A data informada vai em ocorrido_em e a validade da ata em prazo (colunas que já existem).",
+      "motivo": "A tabela criada na etapa compartilhada não guarda o que as regras do domínio leem: o parecer desfavorável impede a publicação (resultado), o recurso é de um licitante (fornecedor), a decisão provida volta à sessão (resultado), o pedido ligado só uma vez e do vencedor (pedido), e o tipo do evento não cobre parecer, publicação, esclarecimento, ata nem pedido. Guardar isso no texto da descrição seria regra lendo texto livre. Sem o pedido, a porta própria da licitação não grava eventos nem avanços."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "processo_licitatorio",
+      "colunas": "metodo_estimativa VARCHAR(30) NOT NULL DEFAULT 'mediana' CHECK IN ('mediana','media','menor'); julgado_em DATE NULL; julgado_por_usuario_id BIGINT UNSIGNED NULL FK usuario; homologado_em DATETIME(3) NULL; homologado_por_usuario_id BIGINT UNSIGNED NULL FK usuario; CHECK (etapa <> 'homologado' OR homologado_por_usuario_id IS NOT NULL); CHECK (julgado_em IS NULL OR julgado_por_usuario_id IS NOT NULL). A data de abertura da sessão usa sessao_em (já existe).",
+      "motivo": "O método da estimativa é fixado na abertura do processo (parâmetro do estabelecimento naquele momento) e a homologação por outra pessoa (regra do domínio podeHomologar) precisa saber quem julgou e quem homologou. data_homologacao (DATE) sozinha não diz quem."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "processo_licitatorio_item",
+      "colunas": "valor_unitario_adjudicado DECIMAL(19,6) NULL CHECK (valor_unitario_adjudicado IS NULL OR valor_unitario_adjudicado >= 0). O vencedor usa vencedora_proposta_licitacao_item_id e o resultado usa situacao (aberto, adjudicado, fracassado, deserto), que já existem.",
+      "motivo": "O valor adjudicado do item (o lance ou a proposta vencedora, já com o desempate) é o resultado do julgamento gravado; valor_homologado do item da proposta é de outra etapa."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pesquisa_preco_item",
+      "colunas": "motivo_desconsideracao de VARCHAR(250) para VARCHAR(1000); desconsiderado_em DATETIME(3) NULL; desconsiderado_por_usuario_id BIGINT UNSIGNED NULL FK usuario; CHECK (considerado OR (motivo_desconsideracao IS NOT NULL AND desconsiderado_por_usuario_id IS NOT NULL)).",
+      "motivo": "O contrato aceita justificativa de descarte de até 1000 letras (IN SEGES 65/2021); com 250 a porta teria de cortar o texto. Quem descartou e quando aparecem na tela."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "proposta_licitacao_item",
+      "colunas": "nota_tecnica DECIMAL(5,2) NULL CHECK (nota_tecnica IS NULL OR nota_tecnica BETWEEN 0 AND 100).",
+      "motivo": "Técnica e preço e melhor técnica (Lei 14.133, art. 36) julgam pela nota técnica; o julgamento do domínio (julgarLicitacao) a lê."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/suprimentos/licitacao.ts",
+      "motivo": "Fora da lista do lote. Os comentários ainda citam as tabelas do new-sgh (SGH_SUP_LICITACAO*, SGH_SUP_LICITACAO_EVENTO.TIPO, SGH_CFG_PARAMETRO) e o sistema anterior (as 13 tabelas GC*); o verificador não pega porque esses nomes não estão em conector/mapa/tabelas.tsv. Reescrever com processo_licitatorio, evento_processo_licitatorio e parâmetros do estabelecimento."
+    },
+    {
+      "tipo": "montagem",
+      "arquivo": "apps/api/src/modulos/suprimentos/modulo.ts",
+      "motivo": "Reforço do pedido f22 03-13: LicitacaoController, ContratoController e ConsignadoController (e PORTA_LICITACAO, PORTA_CONTRATO, PORTA_CONSIGNADO) não são montados por nenhum módulo da API; só o app de teste HTTP os monta. A licitação segue sem porta própria (bloqueada pelo DDL acima)."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/suprimentos/entradas.ts e respostas.ts (+ web de suprimentos)",
+      "motivo": "As 15 operações de OPERACOES_SUPRIMENTOS_PENDENTES, as 30 leituras de LEITURAS_SUPRIMENTOS_PENDENTES, a OPME e a manipulação seguem em modelo-pendente porque o contrato da tela endereça o documento pela chave de origem (ano, mês e número) e o item pelo código numérico, e o modelo grava documento_estoque e insumo por id. A troca é de ponta a ponta (contrato, API, web, memória e testes) e não cabe neste lote: pede uma rodada própria do estoque."
+    },
+    {
+      "tipo": "nome-origem",
+      "arquivo": "apps/web/src/modulos/suprimentos/telas/UsuariosEstoqueTela.vue:3",
+      "motivo": "Comentário cita uma tabela do sistema de origem; reescrever com o termo de negócio (usuários do estoque). Fora da .lista deste lote."
+    }
+  ]
+}

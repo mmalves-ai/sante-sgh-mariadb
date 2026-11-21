@@ -16,7 +16,7 @@
 //   GET /api/cadastros/profissionais?termo&ativos            lista (nome pela chave normalizada; registro e CBO;
 //                                     conselho + UF + número por `conselho`, `uf`, `numero` ou "CRM 12345 SP")
 //   GET /api/cadastros/profissionais/:id                     ficha (registros, especialidades, lotação, credenciamentos, logins)
-//   GET /api/cadastros/profissionais/:id/historico           histórico (HTPROFIS)
+//   GET /api/cadastros/profissionais/:id/historico           histórico
 //   GET /api/cadastros/solicitantes?termo                     solicitantes externos (duplicados e incompletos
 //                                     marcados; nome pela chave normalizada ou conselho + UF + número)
 //   POST /api/cadastros/solicitantes                          revisão do M39 (onda 1): inclusão do solicitante externo
@@ -25,8 +25,8 @@
 //   GET /api/cadastros/pessoas?documento                      pessoas por CPF ou CNPJ e onde são usadas
 //   GET /api/cadastros/especialidades/:cod/procedimentos     procedimentos por especialidade (paginado no servidor)
 //   GET /api/cadastros/conselhos/siglas                       siglas válidas por conselho
-// Dados bancários e de repasse do profissional nunca saem (regra 11). Situação do TBPROFIS com a legenda
-// "a confirmar" (DP-46.1); a atividade real é a do registro (TBCBOPRO.ATIVO).
+// Dados bancários e de repasse do profissional nunca saem (regra 11). Situação do profissional com a legenda
+// "a confirmar" (DP-46.1); a atividade real é a do registro (ocupação do profissional ativa).
 import {
   Body,
   Controller,
@@ -123,7 +123,7 @@ const POR_PAGINA = 50;
 /**
  * Revisão da D-PROF-39: ligar, trocar e desligar o login do profissional é conceder a identidade clínica (com o
  * vínculo o login prescreve e assina com o registro do profissional): exige a gestão de acessos (a mesma permissão
- * que concede papéis em TBUSERS_TBPAPEL), não a de editar o cadastro.
+ * que concede papéis ao usuário), não a de editar o cadastro.
  */
 export const PERMISSAO_VINCULO_LOGIN = PERMISSOES_ACESSO.perfilGerir;
 
@@ -200,7 +200,9 @@ export class ProfissionaisController {
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) private readonly configuracao: FonteConfiguracao | null = null,
-    @Optional() @Inject(CATALOGO_OPERACOES) private readonly catalogo: CatalogoOperacoesLiberacao | null = null,
+    @Optional()
+    @Inject(CATALOGO_OPERACOES)
+    private readonly catalogo: CatalogoOperacoesLiberacao | null = null,
   ) {}
 
   @Get('profissionais')
@@ -305,7 +307,7 @@ export class ProfissionaisController {
     const n = idDaRota(id);
     const f = await this.porta.fichaProfissional(s.porta, n);
     if (!f) throw new ErroProblema('nao-encontrado', 404, 'Profissional não encontrado');
-    req.sghAlvo = { tabelaAlvo: 'TBPROFIS', idAlvo: String(n) };
+    req.sghAlvo = { tabelaAlvo: 'profissional', idAlvo: String(n) };
     const resumo = resumoDoProfissional(f);
     // D-PROF-39: quem edita recebe os dados editáveis e as versões do controle otimista (sem documento; regra 11).
     const editar = s.pode('cadastro.profissional.editar');
@@ -323,7 +325,9 @@ export class ProfissionaisController {
       ? await Promise.all(
           OPERACOES_PROFISSIONAL_TELA.map(async (operacao) => ({
             operacao,
-            ligada: await operacaoLiberada(fonte, catalogo, s.rede, s.hospital, s.login, operacao).catch(() => false),
+            ligada: await operacaoLiberada(fonte, catalogo, s.rede, s.hospital, s.login, operacao).catch(
+              () => false,
+            ),
           })),
         )
       : null;
@@ -749,7 +753,7 @@ export class ProfissionaisController {
     if (h.nome === null) throw new ErroProblema('nao-encontrado', 404, 'Profissional não encontrado');
     const perm = permissoesDaFicha(s.pode);
     const permite = { documento: perm.verDocumento, sensivel: perm.verSensivel };
-    req.sghAlvo = { tabelaAlvo: 'HTPROFIS', idAlvo: String(n) };
+    req.sghAlvo = { tabelaAlvo: 'profissional_versao', idAlvo: String(n) };
     return {
       id: n,
       nome: h.nome,
@@ -834,7 +838,7 @@ export class ProfissionaisController {
   @HttpCode(201)
   @Permissao('cadastro.solicitante.criar')
   @AuditadoNoHandler(
-    'executor: TBCABTRILHA e SGH_TRILHA na mesma transação da receita (memória: registrador da API)',
+    'executor: trilha de auditoria na mesma transação da receita (memória: registrador da API)',
   )
   async incluirSolicitante(
     @Body() corpo: unknown,
@@ -902,7 +906,7 @@ export class ProfissionaisController {
       );
     const r = await this.porta.buscarPessoas(s.porta, d);
     const verDocumento = s.pode('cadastro.paciente.verDocumento');
-    req.sghAlvo = { tabelaAlvo: 'TBPESSOA', chaveNaturalAlvo: `busca:documento;n:${r.length}` };
+    req.sghAlvo = { tabelaAlvo: 'pessoa_fisica', chaveNaturalAlvo: `busca:documento;n:${r.length}` };
     return {
       itens: r.map((p) => ({
         id: p.id,

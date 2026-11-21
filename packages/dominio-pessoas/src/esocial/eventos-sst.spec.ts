@@ -18,7 +18,7 @@ const cat: CatParaEvento = {
   id: 7,
   ocorridoEm: '2026-11-10T14:35',
   tipo: 'tipico',
-  horasTrabalhadasAntes: '0430',
+  horasTrabalhadasAntes: '04:30',
   tipoCat: 1,
   obito: false,
   dataObito: null,
@@ -41,7 +41,7 @@ const cat: CatParaEvento = {
   agenteCausador: 302010600,
   atestado: {
     data: '2026-11-10',
-    hora: '1510',
+    hora: '15:10',
     internacao: false,
     duracaoDias: 1,
     afastamento: false,
@@ -167,7 +167,7 @@ describe('S-2210: pendências', () => {
       trabalhador,
       {
         ...cat,
-        atestado: { ...cat.atestado!, cid: 'W46.0', naturezaLesao: 1, emitenteNumero: null, hora: '2460' },
+        atestado: { ...cat.atestado!, cid: 'W46.0', naturezaLesao: 1, emitenteNumero: null, hora: '24:60' },
       },
       null,
     );

@@ -4,8 +4,8 @@
 //   - Número: 13 dígitos (UF 2, ano 2, tipo 1, sequência 7 e o dígito verificador), da faixa liberada pelo gestor. O
 //     dígito é o resto da divisão dos 12 primeiros por 11 (resto 10 vira 0: D-DV-AIH-51).
 //   - Regra 6: a AIH só com laudo autorizado (número da faixa); não fecha sem autorização, com CID compatível e com
-//     permanência coerente; as diárias de UTI vêm da trajetória (RICTRLOC nas acomodações de UTI), pelo tipo de UTI do
-//     SIH e com leito habilitado (FHLEITOUTI).
+//     permanência coerente; as diárias de UTI vêm da trajetória (passagens pelas acomodações de UTI), pelo tipo de UTI do
+//     SIH e com leito habilitado.
 //   - O procedimento principal é o realizado (ou o solicitado) e tem de ter o registro "AIH principal" na SIGTAP da
 //     competência; os itens da conta com vínculo SIGTAP de registro "AIH secundário" ou "AIH especial" vão como
 //     secundários e especiais; os do grupo 07 (órteses, próteses e materiais especiais) como OPM.
@@ -131,10 +131,10 @@ export function acaoPermitida(acao: keyof typeof ORIGEM_DA_ACAO_AIH, situacao: S
 
 // ── Diárias de UTI e permanência ─────────────────────────────────────────────────────────────────────
 
-/** Acomodações de UTI do outro sistema (TBTIPOACOMOD): UTI, CTI, unidade coronária, CTI cardiovascular, UTI neonatal. */
+/** Acomodações de UTI do outro sistema: UTI, CTI, unidade coronária, CTI cardiovascular, UTI neonatal. */
 export const ACOMODACOES_UTI: ReadonlySet<number> = new Set([3, 7, 8, 9, 17]);
 
-/** Uma passagem da trajetória (RICTRLOC): datas AAAA-MM-DD e o tipo de acomodação. */
+/** Uma passagem da trajetória: datas AAAA-MM-DD e o tipo de acomodação. */
 export interface PassagemLeito {
   readonly entrada: string;
   readonly saida: string | null;
@@ -235,7 +235,7 @@ export function diariasUtiDaTrajetoria(
 
 // ── Montagem (fechamento e crítica) ──────────────────────────────────────────────────────────────────
 
-/** Um item da conta da internação (FCLANEXT) com o vínculo SIGTAP e o executante. */
+/** Um item da conta da internação com o vínculo SIGTAP e o executante. */
 export interface ItemContaAih {
   readonly item: number;
   readonly sigtap: number | null;
@@ -267,7 +267,7 @@ export interface AihRegistrada {
   readonly dataAutorizacao: string | null;
 }
 
-/** A internação (RICADINT) com a conta, o paciente e a especialidade do leito. */
+/** A internação com a conta, o paciente e a especialidade do leito. */
 export interface InternacaoAih {
   readonly registro: number;
   readonly conta: number | null;
@@ -276,7 +276,7 @@ export interface InternacaoAih {
   readonly entrada: string | null;
   readonly alta: string | null;
   readonly motivoSaida: number | null;
-  /** Especialidade do leito (TBESPLEI.COD), para o validador. */
+  /** Especialidade do leito (código), para o validador. */
   readonly especialidadeLeito: number | null;
   readonly paciente: PacienteAih;
   readonly itens: readonly ItemContaAih[];
@@ -284,13 +284,13 @@ export interface InternacaoAih {
 }
 
 export interface ContextoAih {
-  /** O procedimento SIGTAP pelo ID (TBPROSUS), com os atributos na competência da alta. */
+  /** O procedimento SIGTAP pelo ID, com os atributos na competência da alta. */
   readonly procedimento: (id: number) => ProcedimentoNaCiha | null;
   /** O procedimento SIGTAP pelo código de 10 dígitos (o principal digitado e as diárias de UTI). */
   readonly porCodigo: (codigo: string) => ProcedimentoNaCiha | null;
   readonly compatibilidades: CompatibilidadesDaCompetencia;
   readonly habilitacoes: ReadonlySet<string>;
-  /** Leitos de UTI habilitados por tipo do SIH (FHLEITOUTI: soma de QTDE_LEITO). */
+  /** Leitos de UTI habilitados por tipo do SIH (soma das quantidades de leitos). */
   readonly leitosUti: ReadonlyMap<number, number>;
   readonly utiPorAcomodacao: ReadonlyMap<number, UtiDaAcomodacao>;
   readonly cnsValido: ValidadorCns;
@@ -301,7 +301,7 @@ export interface ContextoAih {
 export interface LinhaAihMontada {
   readonly tipo: 'principal' | 'secundario' | 'especial' | 'opm' | 'diaria-uti';
   readonly procedimento: string;
-  /** TBPROSUS.ID (para os valores da competência); null quando o código não está no catálogo. */
+  /** Id do procedimento SIGTAP (para os valores da competência); null quando o código não está no catálogo. */
   readonly sigtap: number | null;
   readonly quantidade: number;
   readonly cbo: string | null;

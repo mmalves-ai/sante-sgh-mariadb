@@ -47,7 +47,7 @@ const conta = (tipoGuia: 1 | 2 | 3 | 4, n = 1): ContaTiss => ({
   tipoGuia,
   numeroGuia: `SINT-${tipoGuia}-${n}`,
   carteira: 'SINTETICO0000001',
-  atendimentoRN: 'N',
+  atendimentoRN: false,
   inicio: { data: '2026-10-10', hora: '08:00:00' },
   fim: { data: '2026-10-15', hora: '12:00:00' },
   caraterAtendimento: '1',

@@ -1,7 +1,7 @@
 // Permissões do M52, fatia F4 (ficha, seção 7, tela "Ponto: importação e tratamento"; convencoes.md §12): consultar o
 // ponto, importar o AFD, lançar e aprovar ajustes e justificativas, fechar o período, exportar o AEJ e os eventos para
 // a folha, e a ciência do próprio espelho. Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06).
-// Opções do Ponto eletrônico (novo) na árvore TBOPCOES (catalogo-legado.json, pc): Importações › AFD (5067) e
+// Opções do Ponto eletrônico (novo) na árvore do menu de origem (catalogo-legado.json, pc): Importações › AFD (5067) e
 // Importações de falhas (5068); Gerenciamento › Abertura de período (5071), Autorização de trabalho/folga (5074), Painel
 // de processamentos (5075), Manutenção individual (5076), Banco de horas (5077 a 5079); Solicitações (5069); Relatórios
 // › Espelho de ponto (5082); Exportações (5085) › AFDT (5086) e ACJEF (5087); Integrações › Integração com folha (5084).

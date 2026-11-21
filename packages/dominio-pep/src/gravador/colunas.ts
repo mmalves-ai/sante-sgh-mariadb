@@ -1,14 +1,15 @@
-// Gravador das respostas no formato do formulário de origem (regras 1 a 4 e 7 da ficha do M22; cap-11 §11.1,
+// Gravador das respostas do formulário (regras 1 a 4 e 7 da ficha do M22; cap-11 §11.1,
 // tabela das 13 classes): o tipo da pergunta decide a coluna. Medido na cópia `pc` (últimos 3.000 registros,
 // 2026-10-21; só contagens e padrões mascarados): uma linha por pergunta respondida e uma por título de seção
-// que tem resposta embaixo (todas as colunas vazias); UNIDRESP nunca nulo (texto em branco sem unidade);
-// AUTOPREENCHIDO sempre T ou F; RESPSNAO é o índice da lista do formulário (99% das linhas: o índice resolvido
-// pelo parser do M09); escolha grava o ID da resposta escolhida e o texto em RESPALFA; seleção múltipla grava UMA
-// LINHA POR ITEM MARCADO (mesma ordem, SEQ 0), com o texto formatado da lista inteira em CONTEVOL; resposta com
-// texto grava índice, texto da opção e o texto formatado (o digitado, ou a opção); Sim/Não grava o ID da resposta
-// da pergunta e, havendo complemento, uma segunda linha (SEQ 1) com o texto; data em RESPDATA; hora em RESPHORA
-// (HHMM); número em RESPVALOR; grade = uma linha da pergunta da grade (vazia) e uma por célula preenchida, na
-// resposta da coluna, com SEQ = linha da grade. O adaptador converte cada valor para a coluna (codec CP1252,
+// que tem resposta embaixo (todas as colunas vazias); unidade da resposta nunca nula (texto em branco sem
+// unidade); autopreenchido sempre verdadeiro ou falso; o índice da opção é o da lista do formulário (99% das
+// linhas: o índice resolvido pelo parser do M09); escolha grava o ID da resposta escolhida e o texto da opção;
+// seleção múltipla grava UMA LINHA POR ITEM MARCADO (mesma ordem, sequência 0), com o texto formatado da lista
+// inteira na linha; resposta com texto grava índice, texto da opção e o texto formatado (o digitado, ou a opção);
+// Sim/Não grava o ID da resposta da pergunta e, havendo complemento, uma segunda linha (sequência 1) com o texto;
+// data na coluna de data da resposta; hora na coluna de hora da resposta (HH:MM, a mesma do contrato); número na
+// coluna de valor da resposta; grade = uma linha da pergunta da grade (vazia) e uma por célula preenchida, na
+// resposta da coluna, com a sequência = linha da grade. O adaptador converte cada valor para a coluna (codec CP1252,
 // sentinela, carimbo) e resolve o CID pelo retrato do catálogo.
 import type { Paragrafo, RespostaRegistro, ValorResposta } from '@sgh/contratos';
 import type { ItemFormulario, RepresentacaoFormulario } from '../formulario/dfm/mapeamento.js';
@@ -20,7 +21,7 @@ export interface LinhaGravada {
   readonly idResposta: number;
   /** AAAA-MM-DD. */
   readonly data: string | null;
-  /** HHMM. */
+  /** HH:MM. */
   readonly hora: string | null;
   readonly indice: string | null;
   readonly valor: number | null;
@@ -134,11 +135,6 @@ function exigir(cond: unknown, codigo: CodigoRecusaGravacao, msg: string, vincul
 /** Número como o formulário mostra (pt-BR, até 3 casas, sem separador de milhar). */
 export function numeroFormulario(v: number): string {
   return v.toLocaleString('pt-BR', { maximumFractionDigits: 3, useGrouping: false });
-}
-
-/** "HH:MM" → "HHMM". */
-export function horaLegado(hora: string): string {
-  return hora.replace(':', '');
 }
 
 /** Parágrafos do valor de texto (formatado ou digitado). */
@@ -264,7 +260,7 @@ function gravarResposta(
             ordem,
             seq: 0,
             idResposta: comId(idPergunta),
-            hora: horaLegado(v.hora),
+            hora: v.hora,
             autopreenchido: auto,
           }),
         ],
@@ -405,7 +401,7 @@ function gravarResposta(
               `Hora inválida em ${c.titulo}.`,
               vinc,
             );
-            l.push(linha({ ordem, seq, idResposta: id, hora: horaLegado(cel) }));
+            l.push(linha({ ordem, seq, idResposta: id, hora: cel }));
           } else if (c.tipo === '5' || c.tipo === '6' || c.tipo === '7') {
             const n = Number(cel.replace(',', '.'));
             exigir(Number.isFinite(n), 'tipo-incompativel', `Número inválido em ${c.titulo}.`, vinc);

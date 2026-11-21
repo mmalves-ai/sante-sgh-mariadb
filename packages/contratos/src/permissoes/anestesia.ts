@@ -1,6 +1,6 @@
 // Permissões do M46, etapa 1 (ficha, seção 7; convencoes.md §12): avaliação pré-anestésica (APA), ficha anestésica e
 // recuperação pós-anestésica (SRPA). Quem tem a opção no sistema anterior tem a permissão no novo (regra 1 do M06).
-// Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - P.E.P. › Movimentações › Registro cirúrgico 6813: Consultar 6814, Nova 6820, Manter 6821, Salvar 6823,
 //     Corrigir 6828, Ficha anestésica 6829 (a ficha anestésica antiga mora dentro do registro cirúrgico do PEP);
 //   - Bloco Cirúrgico: o módulo 2227 e o mapa 2293 (quem acompanha o bloco lê a SRPA).

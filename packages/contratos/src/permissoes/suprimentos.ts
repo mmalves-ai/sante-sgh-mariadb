@@ -1,29 +1,8 @@
-// Permissões do M28 (ficha, seção 7; convencoes.md §12): estoque, almoxarifado e compras. Quem tem a opção no legado
-// tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES do módulo Gestão de estoque (1) (retrato
-// tools/verificadores/dados/acesso-legado.pc.json, levantado na primeira hora do marco):
-//   - Tabelas 1641: Parâmetros 1642; Itens 1643 (Gerenciamento 1644, Limites por local 1664, Referência código de barras
-//     1720); Grupos 1724; Subgrupos 1725; Referências 1726; Nome comercial 1727 (Gerenciamento 1728); Locais de
-//     armazenagem 1734 (Gerenciamento 5563); Usuários 1738; Kits 1739 (Tabela de kits 1740, Itens por kit 1741 com
-//     Alterar 1742, Incluir 1743, Excluir 1744; Rastreável 4478); Destinos de compra 1764; Condições de pagamento 1765;
-//     Transportadoras 1766;
-//   - Movimentos 1785: Inventário 1786 (Estoque inicial 1787, Balanço 1791 com Manutenção 1792, Contagem 1800 com
-//     Manutenção 1801); Entradas 1806 (Entrada de nota fiscal 5722, Manutenção 1807, Relação de notas 1810); Saídas 1840
-//     (paciente interno 5733, externo 5734, CDC 1843, Listagem 1845); Devoluções 1873 (interno 5735, externo 5737, CDC
-//     1876, Listagem 1879); Transferências 1887 (Manutenção 1888, Listagem para conferência 1889); Requisições 1894 (de
-//     saída 1895: interno 1896, externo 1897, CDC 1898; de transferência 1908 com Manutenção 1909); Venda externa 1911
-//     (Terceiros 1913); Lançamentos 1929 (paciente interno 5736, externo 5738);
-//   - Relatórios 1955: Movimento por CDC sintético 1964 e analítico 1982; Rastreabilidade 2055; Curva ABC 2029; Curva XYZ
-//     4486; Validade de medicamentos 2033;
-//   - Gestão de compras 2058: Últimas compras 2087; Necessidade de compra 2091 (Geração 2092, Manutenção 2093,
-//     Autorização 4487); Pedidos 2123 (Manutenção 2124, Definição de vencedores 2125, Mapa de cotação 2160, Tela de cotação
-//     2165, Autorização dos Pedidos 4491, Exportar para portal de compras 4492, Bionexo 4489); Estoque mínimo 2063;
-//     Consumo médio 2080;
-//   - Utilitários 2166: Desconsolidação 2167 (nota fiscal 5723); Fechamento mensal 2168; Cancelar fechamento mensal 2169;
-//     Itens › Acerto › Rastreabilidade 2178 (Atualiza quantidade lote validade 4494); Cálculo de estoque 2187 (de segurança
-//     2188, ponto de pedido 4497); Gerar saldo de itens 2177.
-// As flags do usuário do estoque (GEUSERS) concedem as ações de alçada: autorizar requisição (AUT_REQ), autorizar pedido
-// (PERMITIR_AUTORIZAR_PEDIDO, <5 usuários na cópia), desbloquear o fechamento (PERMITIR_DESBLOQUEIO_FECHAMENTO); os
-// locais por tipo de movimento (GELOCUSU) são escopo (`localEstoque`), conferido no servidor.
+// Permissões do M28 (ficha, seção 7; convencoes.md §12): estoque, almoxarifado e compras. Quem tem a opção no menu de
+// origem tem a permissão (regra 1 do M06); a correspondência está em conector/mapa/permissoes.tsv. Os números em
+// OPCOES_* ficam até a etapa coordenada que tira a procedência da declaração (padroes.md da F2.4, seção 5).
+// As alçadas do usuário do estoque concedem as ações de alçada: autorizar requisição, autorizar pedido e desbloquear o
+// fechamento; os locais de estoque do usuário por tipo de movimento são escopo (`localEstoque`), conferido no servidor.
 import type { DeclaracaoPermissao, FlagLegado } from './tipos.js';
 
 export const OPCOES_SUPRIMENTOS = {
@@ -142,7 +121,7 @@ const p = (
   ...extra,
 });
 
-// Os escopos do módulo (ESCOPOS_DO_MODULO): o local de estoque (GELOCUSU) e o centro de custo do requisitante.
+// Os escopos do módulo (ESCOPOS_DO_MODULO): o local de estoque do usuário e o centro de custo do requisitante.
 const ESCOPO_LOCAL = { escopos: ['localEstoque', 'centroCusto'] as const };
 
 export const PERMISSOES_SUPRIMENTOS_M28: readonly DeclaracaoPermissao[] = [

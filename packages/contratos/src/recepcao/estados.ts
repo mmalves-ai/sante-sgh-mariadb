@@ -1,5 +1,5 @@
 // Máquina de estados da senha sobre as letras do legado (M19; ficha, seção 5, "Regras comuns"): a situação da senha
-// (TBSENHAATEND.SITUACAO) e o que cada evento grava, medidos no perfil passivo da cópia pc (só agregados; sequências
+// (situação da senha emitida) e o que cada evento grava, medidos no perfil passivo da cópia pc (só agregados; sequências
 // de eventos por senha desde 2024):
 //   - no guichê (a senha ainda sem atendimento): a chamada põe o guichê e o usuário na senha, sem linha no fluxo
 //     (98,5% das senhas "diversos" terminam só com L; o atendimento começa com A); chamar de novo grava C no local do
@@ -12,13 +12,13 @@
 import type { EventoSenha, LetraFluxo } from './vocabulario.js';
 
 export interface EstadoSenha {
-  /** TBSENHAATEND.SITUACAO ('' tratado como G). */
+  /** Situação da senha emitida (vazio tratado como G). */
   readonly situacao: string;
   /** Guichê que chamou (0 = ninguém). */
   readonly guiche: number;
   /** Tem atendimento aberto (vínculo senha × atendimento). */
   readonly atendida: boolean;
-  /** TBGERASENHA.TIPO ('0' recepção, '5' diversos). */
+  /** Tipo do gerador de senha ('0' recepção, '5' diversos). */
   readonly tipoGerador: string;
 }
 

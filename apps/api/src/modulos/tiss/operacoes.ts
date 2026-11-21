@@ -340,7 +340,7 @@ async function contaTiss(
       tipoGuia,
       numeroGuia: (texto(guia?.['numero_guia_prestador']) || texto(ct['numero'])).slice(0, 20),
       carteira: texto(carteira?.['numero_carteira']),
-      atendimentoRN: recemNascido ? 'S' : 'N',
+      atendimentoRN: recemNascido,
       inicio: { data: dataIso(inicio), hora: horaIso(inicio) },
       fim: { data: dataIso(fim), hora: horaIso(fim) },
       caraterAtendimento: carater!,

@@ -86,7 +86,7 @@ const SERIE = {
   planoTipo: 'quimioterapia',
   plano: 'PROTOCOLO SINTETICO C1 D1',
   inicio: '2027-03-01',
-  hora: '0800',
+  hora: '08:00',
   sessoes: 4,
   intervaloDias: 7,
   pularFimDeSemana: true,
@@ -158,7 +158,7 @@ describe('agenda de sessões e recursos (M50, etapa 6)', () => {
     ids = r.json().sessoes;
     expect(ids).toHaveLength(4);
     expect(eventos(E.sessaoAgendada.codigo)).toBe(antes + 1);
-    const outro = { ...SERIE, paciente: 1003, hora: '0830', sessoes: 1 };
+    const outro = { ...SERIE, paciente: 1003, hora: '08:30', sessoes: 1 };
     const pr = await post(terapias, '/sessoes/previa', outro);
     expect(pr.json()).toMatchObject({ ok: false, datas: [{ conflito: 'recurso' }] });
     const ocupada = await post(terapias, '/sessoes', outro);
@@ -170,11 +170,11 @@ describe('agenda de sessões e recursos (M50, etapa 6)', () => {
       complexidade: 1,
       duracao: 1,
       sessoes: 1,
-      hora: '0900',
+      hora: '09:00',
     });
     expect(mesmoPaciente.statusCode).toBe(409);
     expect(mesmoPaciente.json()).toMatchObject({ codigo: 'paciente-ocupado' });
-    const livre = await post(terapias, '/sessoes', { ...outro, hora: '0930' });
+    const livre = await post(terapias, '/sessoes', { ...outro, hora: '09:30' });
     expect(livre.statusCode, livre.body).toBe(201);
     const g = (await get(terapias, '/sessoes/grade?de=2027-03-01&dias=14')).json();
     // [01/03, 15/03): as sessões 1 e 2 da série e a do outro paciente às 09:30.

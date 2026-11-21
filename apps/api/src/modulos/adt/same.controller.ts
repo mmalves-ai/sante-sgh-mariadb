@@ -84,7 +84,7 @@ export class SameController {
         },
       );
     const l = await this.servico.localizacao(ctxAdt(s), n, await this.opcoes(s));
-    req.sghAlvo = { tabelaAlvo: 'GDPRONTMOVIM', idAlvo: String(l.conta) };
+    req.sghAlvo = { tabelaAlvo: 'movimento_prontuario', idAlvo: String(l.conta) };
     return l;
   }
 

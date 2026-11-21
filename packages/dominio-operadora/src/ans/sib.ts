@@ -1,10 +1,10 @@
 // SIB, o cadastro de beneficiários na ANS (M56, etapa 7, F6; regra 7). O movimento de cada beneficiário sai do cadastro
 // atual contra o último retrato aceito pela ANS (SGH_OPE_BENEF_SIB.ENVIADO), sem fila de eventos nas fatias anteriores:
 //   - sem retrato aceito: inclusão (o excluído que nunca foi à ANS não vai);
-//   - aceito ativo e agora excluído: cancelamento, com o motivo do SIB (CDMOTMOVIMCAD 5 a 10);
+//   - aceito ativo e agora excluído: cancelamento, com o motivo do SIB;
 //   - aceito cancelado e agora ativo (ou suspenso): reativação;
 //   - plano ou contrato trocados: mudança contratual;
-//   - outro campo do SIB mudou: retificação, com os campos (PSSIBCAMPOALT).
+//   - outro campo do SIB mudou: retificação, com os campos.
 // O cartão de desconto não é plano e não vai ao SIB (regra 2). A conferência de cada beneficiário (CPF a partir de 18
 // anos, CNS ou DNV do menor sem CPF, endereço, registro do plano, CCO para o que não é inclusão, motivo do cancelamento,
 // CNPJ do contratante coletivo, titular com CCO) só tira o beneficiário do arquivo: os outros seguem. O retorno da ANS
@@ -116,7 +116,7 @@ export function retratoSib(b: BeneficiarioSib): RetratoSib {
   };
 }
 
-/** Os campos do SIB que mudaram entre o retrato aceito e o atual, na ordem de PSSIBCAMPOALT. */
+/** Os campos do SIB que mudaram entre o retrato aceito e o atual, na ordem da declaração da ANS. */
 export function camposAlterados(aceito: RetratoSib, atual: RetratoSib): CampoSib[] {
   return (Object.keys(CAMPOS_SIB) as CampoSib[]).filter(
     (k) => (aceito.campos[k] ?? null) !== (atual.campos[k] ?? null),

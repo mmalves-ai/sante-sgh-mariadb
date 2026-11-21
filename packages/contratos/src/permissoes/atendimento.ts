@@ -1,5 +1,5 @@
 // Permissões do M20 (ficha, seção 7; convencoes.md §12): atendimento externo e pronto atendimento. Quem tem a opção no
-// legado tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// legado tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Recepção externa (módulo 8) › Cadastros › Atendimentos 5739 (Alterar 5746, Incluir 5745, Excluir 5747, Consultar
 //     6026, Cancelar 6028); Lista de atendimentos 6543; Atendimentos anteriores 3299; Alteração de convênio 3291;

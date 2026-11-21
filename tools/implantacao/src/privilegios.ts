@@ -50,7 +50,9 @@ const semComentarios = (sql: string) =>
 /** As tabelas de um DDL (`CREATE TABLE <nome> (...)`), com a marca da exclusão lógica do próprio CREATE. */
 export function tabelasDoDdl(sql: string): TabelaDoModelo[] {
   const r: TabelaDoModelo[] = [];
-  const partes = semComentarios(sql).split(/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?/i).slice(1);
+  const partes = semComentarios(sql)
+    .split(/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?/i)
+    .slice(1);
   for (const p of partes) {
     const nome = /^`?([A-Za-z0-9_]+)`?/.exec(p)?.[1] ?? '';
     const corpo = p.split(/\b(?:ALTER|CREATE)\s+TABLE\b/i)[0] ?? '';
@@ -64,7 +66,8 @@ export function exclusaoLogicaPorAlter(sql: string): Set<string> {
   const r = new Set<string>();
   for (const cmd of semComentarios(sql).split(';')) {
     const t = /^\s*ALTER\s+TABLE\s+`?([A-Za-z0-9_]+)`?/i.exec(cmd)?.[1];
-    if (t && /\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?`?excluido_em`?\s/i.test(cmd)) r.add(t.toLowerCase());
+    if (t && /\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?`?excluido_em`?\s/i.test(cmd))
+      r.add(t.toLowerCase());
   }
   return r;
 }
@@ -145,7 +148,10 @@ const CABECALHO: Readonly<Record<BancoDoAnexo, readonly string[]>> = {
 };
 
 /** O anexo SQL, para a TI (administrador do banco), conectada ao banco do anexo, depois de cada migração. */
-export function anexoDePrivilegios(itens: readonly PrivilegioTabela[], banco: BancoDoAnexo = 'cliente'): string {
+export function anexoDePrivilegios(
+  itens: readonly PrivilegioTabela[],
+  banco: BancoDoAnexo = 'cliente',
+): string {
   return [
     ...CABECALHO[banco],
     '-- Gerado por `pnpm implantacao:listas`; não edite à mão.',
@@ -166,7 +172,9 @@ export function anexoDePrivilegios(itens: readonly PrivilegioTabela[], banco: Ba
 export function conferirAnexoPrivilegios(texto: string, itens: readonly PrivilegioTabela[]): string[] {
   const linhas = new Set(texto.split('\n').map((l) => l.trim()));
   const faltam = itens
-    .filter((i) => !linhas.has(comandoGrant(i)) || (comandoRevoke(i) !== null && !linhas.has(comandoRevoke(i)!)))
+    .filter(
+      (i) => !linhas.has(comandoGrant(i)) || (comandoRevoke(i) !== null && !linhas.has(comandoRevoke(i)!)),
+    )
     .map((i) => i.tabela);
   if (!linhas.has(COMANDO_PAPEL)) faltam.push('(papel)');
   return faltam;
@@ -180,7 +188,8 @@ export function lerFontes(pastas: readonly string[]): string[] {
       if (n === 'node_modules' || n === 'dist' || n.startsWith('.')) continue;
       const c = join(p, n);
       if (statSync(c).isDirectory()) andar(c);
-      else if (n.endsWith('.ts') && !n.endsWith('.spec.ts') && !n.endsWith('.spec-util.ts')) r.push(readFileSync(c, 'utf8'));
+      else if (n.endsWith('.ts') && !n.endsWith('.spec.ts') && !n.endsWith('.spec-util.ts'))
+        r.push(readFileSync(c, 'utf8'));
     }
   };
   for (const p of pastas) if (existsSync(p)) andar(p);
@@ -206,7 +215,9 @@ export function privilegiosDoRepositorio(raiz: string): Readonly<Record<BancoDoA
   const fisica = tabelasComExclusaoFisica(lerFontes([resolve(raiz, 'apps'), resolve(raiz, 'packages')]));
   return {
     cliente: privilegiosDoPapel(
-      tabelasDoModelo(lerMigracoes(raiz).map((m) => readFileSync(resolve(raiz, 'db/migracoes', m.arquivo), 'utf8'))),
+      tabelasDoModelo(
+        lerMigracoes(raiz).map((m) => readFileSync(resolve(raiz, 'db/migracoes', m.arquivo), 'utf8')),
+      ),
       fisica,
     ),
     plataforma: privilegiosDoPapel(tabelasDoModelo(sqlsDe(resolve(raiz, 'db/plataforma'))), fisica),

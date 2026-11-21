@@ -19,11 +19,14 @@
 // trilha de cada exame), e eles continuam no prontuário.
 // Melhoria: as correções (valor anterior e novo) são lidas pela chave da trilha (entidade e entidade_id, indexada),
 // nunca varrendo a trilha do estabelecimento.
-// Pendências de modelo (pedidos do lote 03-10, em docs/obra/fatias/f22/saida/03-10.json): a sorologia do acompanhamento
-// (sorologia_exposicao), o encerramento do acidente sem material biológico, a situação, a data e a observação da
-// profilaxia, o título do anti-HBs, a dosimetria e a exposição a quimioterápico, e o vínculo da retificação. Cada operação
-// sem modelo recusa com `modelo-pendente` (409), dizendo o que falta; nenhuma devolve vazio calado, salvo a leitura da
-// sorologia enquanto a tabela não existe (dita no cabeçalho e no pedido).
+// O acompanhamento sorológico é sorologia_exposicao; o encerramento do acidente (com ou sem material biológico) fica
+// na comunicação (encerrado_em, quem e o motivo) e, com exposição, a exposição recebe a alta; a profilaxia guarda a
+// situação, a data e a observação; o anti-HBs é a dose "sorologia" com o título; a retificação liga o registro novo ao
+// anterior (retifica_aso_id com o motivo, retifica_vacina_colaborador_id).
+// Pendência de contrato (pedido em docs/obra/fatias/f24/saida/02-pessoas-2.json): a leitura do dosímetro e a exposição
+// a quimioterápico têm tabela própria, mas o registro de proteção do contrato é endereçado só pelo id, que se repetiria
+// entre as três tabelas (o cancelamento pegaria o registro errado). Até o contrato levar o tipo junto do id, as duas
+// gravações recusam com 409, dizendo o motivo.
 import { DOSES_VACINA_SESMT, type DoseVacinaSesmt, VACINAS_SESMT, type VacinaSesmt } from '@sgh/contratos';
 import { chaveFuncao, prazoCat } from '@sgh/dominio-pessoas';
 import {
@@ -219,18 +222,15 @@ const TABELAS_AGENTES = ['14', '15'];
 const TABELA_SITUACOES = '16';
 const TABELA_NATUREZAS = '17';
 
-/** "HHMM" da tela → minutos guardados (e o caminho de volta). */
-function minutosDe(hhmm: string | null): number | null {
-  if (!hhmm) return null;
-  const d = hhmm.replace(':', '');
-  if (!/^\d{3,4}$/.test(d)) return null;
-  const v = d.padStart(4, '0');
-  return Number(v.slice(0, 2)) * 60 + Number(v.slice(2));
+/** Duração "HH:MM" do contrato (até 99:59) → minutos guardados (e o caminho de volta). */
+function minutosDe(duracao: string | null): number | null {
+  const m = duracao === null ? null : /^(\d{2}):([0-5]\d)$/.exec(duracao);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
-function hhmmDe(min: unknown): string | null {
+function duracaoDe(min: unknown): string | null {
   if (min === null || min === undefined) return null;
   const m = Number(min);
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}`;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
 const modeloPendente = (operacao: string, falta: string) =>
@@ -242,13 +242,13 @@ const modeloPendente = (operacao: string, falta: string) =>
   );
 const naoEncontrado = (o: string) =>
   new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
-const tabelaAusente = (e: unknown) => (e as { errno?: number })?.errno === 1146;
 
 // ── SQL das leituras ──────────────────────────────────────────────────────────────────────────────────────────
 
 const SQL_ASO = `
   SELECT a.id, a.vinculo_trabalho_id, a.tipo, a.data_exame, a.conclusao, a.restricoes, a.medico_nome,
-         a.medico_registro_conselho, a.validade_ate, a.observacao, a.criado_em, u.login AS criado_login
+         a.medico_registro_conselho, a.validade_ate, a.observacao, a.criado_em, a.retifica_aso_id,
+         a.motivo_retificacao, u.login AS criado_login
     FROM aso a LEFT JOIN usuario u ON u.id = a.criado_por
    WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.vinculo_trabalho_id IS NOT NULL`;
 
@@ -261,7 +261,7 @@ const SQL_EXAME = `
 /** A vacina é do colaborador (vale na rede inteira); o vínculo da sessão filtra o estabelecimento. */
 const SQL_VACINA = `
   SELECT vc.id, v.id AS vinculo, vc.dose, vc.data_aplicacao, vc.lote, vc.validade_lote, vc.observacao,
-         vo.codigo AS vacina, u.login AS criado_login
+         vc.titulo_anti_hbs, vc.retifica_vacina_colaborador_id, vo.codigo AS vacina, u.login AS criado_login
     FROM vacina_colaborador vc
     JOIN vacina_ocupacional vo ON vo.id = vc.vacina_ocupacional_id
     JOIN vinculo_trabalho v ON v.colaborador_id = vc.colaborador_id
@@ -279,12 +279,14 @@ const SQL_ACIDENTE = `
          ca.numero_recibo, ca.situacao, ca.versao, ca.alterado_em,
          e.id AS exposicao_id, e.tipo_exposicao, e.material_biologico, e.fonte_conhecida, e.fonte_hiv,
          e.profilaxia_antirretroviral, e.conduta, e.situacao AS situacao_exposicao, e.data_alta,
-         uc.login AS criado_login, ue.login AS emissor_login, ua.login AS alterado_login
+         e.situacao_profilaxia, e.profilaxia_em, e.observacao_profilaxia, ca.encerrado_em, ca.motivo_encerramento,
+         uc.login AS criado_login, ue.login AS emissor_login, ua.login AS alterado_login, un.login AS encerrado_login
     FROM comunicacao_acidente ca
     LEFT JOIN exposicao_biologica e ON e.comunicacao_acidente_id = ca.id AND e.excluido_em IS NULL
     LEFT JOIN usuario uc ON uc.id = ca.criado_por
     LEFT JOIN usuario ue ON ue.id = ca.emissor_usuario_id
     LEFT JOIN usuario ua ON ua.id = ca.alterado_por
+    LEFT JOIN usuario un ON un.id = ca.encerrado_por
    WHERE ca.estabelecimento_id = ? AND ca.excluido_em IS NULL AND ca.vinculo_trabalho_id IS NOT NULL`;
 
 const SQL_ENTREGA = `
@@ -345,8 +347,8 @@ function asoDe(r: Linha, fuso: string): RegistroOcupacional {
     medicoConselho: ou(r['medico_registro_conselho']),
     proximo: dataIso(r['validade_ate']),
     observacao: ou(r['observacao']),
-    retifica: null,
-    motivoRetificacao: null,
+    retifica: num(r['retifica_aso_id']),
+    motivoRetificacao: ou(r['motivo_retificacao']),
     criadoPor: texto(r['criado_login']),
     criadoEm: dataHora(r['criado_em'], fuso) ?? '',
   };
@@ -388,9 +390,9 @@ function vacinaDe(r: Linha): DoseVacinaColaborador {
     data: dataIso(r['data_aplicacao']) ?? '',
     lote: ou(r['lote']),
     validadeLote: dataIso(r['validade_lote']),
-    antiHbs: null,
+    antiHbs: antiHbs ? num(r['titulo_anti_hbs']) : null,
     observacao: ou(r['observacao']),
-    retifica: null,
+    retifica: num(r['retifica_vacina_colaborador_id']),
     motivoRetificacao: null,
     criadoPor: texto(r['criado_login']),
   };
@@ -399,7 +401,7 @@ function vacinaDe(r: Linha): DoseVacinaColaborador {
 function catDe(r: Linha, fuso: string): DadosCat {
   const atendido = dataHora(r['atendido_em'], fuso);
   return {
-    horasAntes: hhmmDe(r['minutos_trabalhados_antes']),
+    horasAntes: duracaoDe(r['minutos_trabalhados_antes']),
     lateralidade: num(CODIGO_LATERALIDADE[texto(r['lateralidade'])] ?? null),
     comunicouPolicia: sim(r['comunicado_policia']),
     dataObito: dataIso(r['obito_em']),
@@ -413,7 +415,7 @@ function catDe(r: Linha, fuso: string): DadosCat {
     municipio: null,
     uf: null,
     atestadoData: atendido ? atendido.slice(0, 10) : null,
-    atestadoHora: atendido ? atendido.slice(11, 16).replace(':', '') : null,
+    atestadoHora: atendido ? atendido.slice(11, 16) : null,
     internacao: sim(r['internacao']),
     duracaoDias: num(r['duracao_tratamento_dias']),
     complementoLesao: ou(r['descricao_lesao']),
@@ -427,6 +429,10 @@ function catDe(r: Linha, fuso: string): DadosCat {
 }
 
 function profilaxiaDe(r: Linha): string {
+  const situacao = texto(r['situacao_profilaxia']).replace(/_/g, '-');
+  // A situação gravada vale; a linha anterior à coluna fica com o padrão do banco e cai na conduta.
+  if (SITUACOES_PROFILAXIA.has(situacao) && (situacao !== 'nao-indicada' || r['profilaxia_em'] !== null))
+    return situacao;
   const conduta = texto(r['conduta']);
   if (SITUACOES_PROFILAXIA.has(conduta)) return conduta;
   return sim(r['profilaxia_antirretroviral']) ? 'iniciada' : 'nao-indicada';
@@ -438,7 +444,8 @@ function acidenteDe(r: Linha, fuso: string): AcidenteTrabalho {
   const emitida = situacao !== 'rascunho' && situacao !== 'cancelada' && r['emitida_em'] !== null;
   const exposicao = texto(r['tipo_exposicao']);
   const ocorridoEm = dataHora(r['acidente_em'], fuso) ?? '';
-  const encerrado = biologico && texto(r['situacao_exposicao']) === 'alta';
+  const encerradoNaComunicacao = r['encerrado_em'] !== null && r['encerrado_em'] !== undefined;
+  const encerrado = encerradoNaComunicacao || (biologico && texto(r['situacao_exposicao']) === 'alta');
   return {
     id: Number(r['id']),
     vinculo: Number(r['vinculo_trabalho_id']),
@@ -460,8 +467,8 @@ function acidenteDe(r: Linha, fuso: string): AcidenteTrabalho {
     afastamento: sim(r['houve_afastamento']),
     obito: sim(r['houve_obito']),
     profilaxia: biologico ? profilaxiaDe(r) : 'nao-indicada',
-    profilaxiaEm: null,
-    profilaxiaObs: null,
+    profilaxiaEm: biologico ? dataIso(r['profilaxia_em']) : null,
+    profilaxiaObs: biologico ? ou(r['observacao_profilaxia']) : null,
     catPrazo: ocorridoEm ? prazoCat(ocorridoEm, sim(r['houve_obito'])) : '',
     tipoCat: emitida ? num(CODIGO_TIPO_CAT[texto(r['tipo'])] ?? null) : null,
     iniciativaCat: emitida ? num(CODIGO_INICIATIVA[texto(r['iniciativa'])] ?? null) : null,
@@ -469,9 +476,13 @@ function acidenteDe(r: Linha, fuso: string): AcidenteTrabalho {
     catEmitidaEm: emitida ? dataCivil(r['emitida_em'], fuso) : null,
     catEmitidaPor: emitida ? ou(r['emissor_login']) : null,
     estado: encerrado ? 'encerrado' : 'aberto',
-    encerradoEm: encerrado ? dataIso(r['data_alta']) : null,
-    encerradoPor: null,
-    motivoEncerramento: null,
+    encerradoEm: encerradoNaComunicacao
+      ? dataCivil(r['encerrado_em'], fuso)
+      : encerrado
+        ? dataIso(r['data_alta'])
+        : null,
+    encerradoPor: encerradoNaComunicacao ? ou(r['encerrado_login']) : null,
+    motivoEncerramento: encerradoNaComunicacao ? ou(r['motivo_encerramento']) : null,
     versao: Number(r['versao']),
     criadoPor: texto(r['criado_login']),
     cat: catDe(r, fuso),
@@ -584,18 +595,12 @@ async function acidentePorId(l: Ler, est: number, id: number): Promise<AcidenteT
 
 async function sorologiasDe(l: Ler, est: number, acidentes: readonly number[]): Promise<SorologiaAcidente[]> {
   if (acidentes.length === 0) return [];
-  try {
-    return (
-      await l.consultar(
-        `${SQL_SOROLOGIA} AND ca.id IN (${marcas(acidentes.length)}) ORDER BY so.data_prevista, so.id`,
-        [est, ...acidentes],
-      )
-    ).map(sorologiaDe);
-  } catch (e) {
-    // Enquanto a tabela do acompanhamento sorológico não existe no modelo (pedido do lote 03-10), não há marcos.
-    if (tabelaAusente(e)) return [];
-    throw e;
-  }
+  return (
+    await l.consultar(
+      `${SQL_SOROLOGIA} AND ca.id IN (${marcas(acidentes.length)}) ORDER BY so.data_prevista, so.id`,
+      [est, ...acidentes],
+    )
+  ).map(sorologiaDe);
 }
 
 async function entregaPorId(l: Ler, est: number, id: number): Promise<RegistroProtecao | null> {
@@ -643,7 +648,7 @@ export class PortaSesmtPropria implements PortaSesmt {
     _e: unknown,
     _ctx: ContextoOperacao,
   ): Promise<GravacaoFeita> {
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     throw new ErroOperacao(
       409,
       'operacao-desconhecida',
@@ -781,8 +786,9 @@ export class PortaSesmtPropria implements PortaSesmt {
         onde.push('ca.id < ?');
         p.push(f.depois);
       }
-      if (f.estado === 'encerrado') onde.push("e.situacao = 'alta'");
-      if (f.estado === 'aberto') onde.push("(e.id IS NULL OR e.situacao <> 'alta')");
+      if (f.estado === 'encerrado') onde.push("(ca.encerrado_em IS NOT NULL OR e.situacao = 'alta')");
+      if (f.estado === 'aberto')
+        onde.push("ca.encerrado_em IS NULL AND (e.id IS NULL OR e.situacao <> 'alta')");
       const limite = Math.max(1, Math.min(200, f.limite));
       const linhas = await l.consultar(
         `${SQL_ACIDENTE}${onde.map((o) => ` AND ${o}`).join('')} ORDER BY ca.id DESC LIMIT ${limite + 1}`,
@@ -965,7 +971,7 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
 
   const linhaAcidente = async (id: number) => {
     const [r] = await tx.consultarParaAtualizar<Linha>(
-      `SELECT ca.id, ca.versao, ca.situacao, ca.acidente_em, ca.houve_obito, e.id AS exposicao_id, e.versao AS versao_exposicao
+      `SELECT ca.id, ca.versao, ca.situacao, ca.acidente_em, ca.houve_obito, ca.encerrado_em, e.id AS exposicao_id, e.versao AS versao_exposicao
          FROM comunicacao_acidente ca
          LEFT JOIN exposicao_biologica e ON e.comunicacao_acidente_id = ca.id AND e.excluido_em IS NULL
         WHERE ca.id = ? AND ca.estabelecimento_id = ? AND ca.excluido_em IS NULL`,
@@ -1072,6 +1078,8 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
         restricoes: a.restricoes,
         validade_ate: a.proximo,
         observacao: a.observacao,
+        retifica_aso_id: a.retifica,
+        motivo_retificacao: a.retifica !== null ? (a.motivoRetificacao ?? 'retificação').slice(0, 500) : null,
       });
       if (a.retifica !== null) {
         // Os exames complementares do ASO retificado passam ao ASO novo (cada um pela própria versão, com a trilha).
@@ -1109,8 +1117,8 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
     },
 
     async incluirVacina(x) {
-      if (x.registro === 'anti-hbs')
-        throw modeloPendente('O registro do anti-HBs', 'título do anti-HBs em vacina_colaborador');
+      if (x.registro === 'anti-hbs' && (x.antiHbs === null || x.antiHbs < 0))
+        throw recusa('anti-hbs-sem-titulo', 'Informe o título do anti-HBs (mUI/mL).');
       const v = await vinculoOu(x.vinculo);
       let vacina: number | null = null;
       if (x.codigoVacina !== null) {
@@ -1146,17 +1154,20 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM vacina_colaborador WHERE colaborador_id = ?',
         [v.colaborador],
       );
-      const dose = DOSE_MODELO[x.dose ?? 'unica'] ?? 'unica';
+      const antiHbs = x.registro === 'anti-hbs';
+      const dose = antiHbs ? 'sorologia' : (DOSE_MODELO[x.dose ?? 'unica'] ?? 'unica');
       return tx.incluir('vacina_colaborador', {
         colaborador_id: v.colaborador,
         sequencia: Number(seq?.s ?? 1),
         vacina_ocupacional_id: vacina,
         dose,
-        numero_dose: /^\d+$/.test(x.dose ?? '') ? Number(x.dose) : null,
+        numero_dose: !antiHbs && /^\d+$/.test(x.dose ?? '') ? Number(x.dose) : null,
         data_aplicacao: x.data,
-        lote: x.lote,
-        validade_lote: x.validadeLote,
+        lote: antiHbs ? null : x.lote,
+        validade_lote: antiHbs ? null : x.validadeLote,
         observacao: x.observacao,
+        titulo_anti_hbs: antiHbs ? x.antiHbs : null,
+        retifica_vacina_colaborador_id: x.retifica,
       });
     },
 
@@ -1204,6 +1215,9 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
           imunoglobulina_hepatite_b: false,
           vacina_hepatite_b: false,
           conduta: a.profilaxia,
+          situacao_profilaxia: SITUACOES_PROFILAXIA.has(a.profilaxia)
+            ? a.profilaxia.replace(/-/g, '_')
+            : 'nao_indicada',
           comunicacao_acidente_id: id,
           soroconversao: false,
           situacao: 'aberta',
@@ -1216,17 +1230,11 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
       const r = await linhaAcidente(x.acidente);
       if (r['exposicao_id'] === null)
         throw recusa('sem-exposicao', 'O acidente não teve material biológico.');
-      try {
-        return await tx.incluir('sorologia_exposicao', {
-          exposicao_biologica_id: Number(r['exposicao_id']),
-          marco: x.marco,
-          data_prevista: x.prevista,
-        });
-      } catch (e) {
-        if (tabelaAusente(e))
-          throw modeloPendente('O acompanhamento sorológico', 'tabela sorologia_exposicao');
-        throw e;
-      }
+      return tx.incluir('sorologia_exposicao', {
+        exposicao_biologica_id: Number(r['exposicao_id']),
+        marco: x.marco,
+        data_prevista: x.prevista,
+      });
     },
 
     async atualizarProfilaxia(x) {
@@ -1237,6 +1245,9 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
       await tx.alterar('exposicao_biologica', Number(r['exposicao_id']), Number(r['versao_exposicao']), {
         profilaxia_antirretroviral: x.profilaxia === 'iniciada',
         conduta: x.profilaxia,
+        situacao_profilaxia: x.profilaxia.replace(/-/g, '_'),
+        profilaxia_em: x.profilaxiaEm,
+        observacao_profilaxia: x.observacao?.slice(0, 500) ?? null,
         situacao: 'em_acompanhamento',
       });
       if (x.observacao) motivo(`profilaxia: ${x.observacao}`);
@@ -1246,7 +1257,7 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
       const r = await linhaAcidente(x.acidente);
       if (r['exposicao_id'] === null)
         throw recusa('sem-exposicao', 'O acidente não teve material biológico.');
-      try {
+      {
         const [so] = await tx.consultarParaAtualizar<Linha>(
           'SELECT id, versao, data_realizada FROM sorologia_exposicao WHERE exposicao_biologica_id = ? AND marco = ? AND excluido_em IS NULL',
           [Number(r['exposicao_id']), x.marco],
@@ -1265,9 +1276,6 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
             soroconversao: true,
           });
         return Number(so['id']);
-      } catch (e) {
-        if (tabelaAusente(e)) throw modeloPendente('O resultado da sorologia', 'tabela sorologia_exposicao');
-        throw e;
       }
     },
 
@@ -1293,16 +1301,18 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
 
     async encerrarAcidente(x) {
       const r = await linhaAcidente(x.id);
-      if (r['exposicao_id'] === null)
-        throw modeloPendente(
-          'O encerramento do acidente sem material biológico',
-          'comunicacao_acidente.encerrado_em e motivo_encerramento',
-        );
-      await tocarAcidente(x.id, x.versao, texto(r['situacao']));
-      await tx.alterar('exposicao_biologica', Number(r['exposicao_id']), Number(r['versao_exposicao']), {
-        situacao: 'alta',
-        data_alta: civil(new Date(), await fuso()).data,
+      if (r['encerrado_em'] !== null && r['encerrado_em'] !== undefined)
+        throw recusa('acidente-encerrado', 'O acidente já foi encerrado.');
+      await tx.alterar('comunicacao_acidente', x.id, x.versao, {
+        encerrado_em: new Date(),
+        encerrado_por: usuario,
+        motivo_encerramento: x.motivo.slice(0, 500),
       });
+      if (r['exposicao_id'] !== null)
+        await tx.alterar('exposicao_biologica', Number(r['exposicao_id']), Number(r['versao_exposicao']), {
+          situacao: 'alta',
+          data_alta: civil(new Date(), await fuso()).data,
+        });
       motivo(`encerramento: ${x.motivo}`);
     },
 
@@ -1389,7 +1399,7 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
       if (x.tipo !== 'epi')
         throw modeloPendente(
           x.tipo === 'dosimetria' ? 'A leitura do dosímetro' : 'A exposição a quimioterápico',
-          x.tipo === 'dosimetria' ? 'tabela leitura_dosimetria' : 'tabela exposicao_quimioterapico',
+          'o registro de proteção do contrato precisa levar o tipo junto do id (pedido de contrato registrado)',
         );
       const v = await vinculoOu(x.vinculo);
       const ep = await equipamento(x.epi ?? '');

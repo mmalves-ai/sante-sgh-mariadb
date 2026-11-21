@@ -380,7 +380,7 @@ export class RegistroClinicoController {
     });
     // Na trilha, só o tipo e a quantidade (nunca o termo).
     req.sghAlvo = {
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length};registro`,
     };
     return r;
@@ -397,7 +397,11 @@ export class RegistroClinicoController {
     await this.exigirAcesso(s, paciente, 'pep.evolucao.criar', null);
     const par = await this.parametros(s);
     const r = await this.servico.modelosParaRegistro(s.porta, await this.profissional(s), par.liberados);
-    req.sghAlvo = { paciente, tabelaAlvo: 'PREVOLUCAO', chaveNaturalAlvo: `parte:modelos;n:${r.length}` };
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'modelo_documento_clinico',
+      chaveNaturalAlvo: `parte:modelos;n:${r.length}`,
+    };
     return r;
   }
 
@@ -444,7 +448,7 @@ export class RegistroClinicoController {
     );
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PREVOLUCAO',
+      tabelaAlvo: 'modelo_documento_clinico',
       idAlvo: String(modelo),
       chaveNaturalAlvo: chaveLeitura(
         'registro',
@@ -475,7 +479,7 @@ export class RegistroClinicoController {
     const r = await this.servico.historico(s.porta, paciente, idDaRota(mo), idDaRota(v));
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PREVOLPAC',
+      tabelaAlvo: 'registro_assistencial_resposta',
       chaveNaturalAlvo: `parte:historico;n:${r.valores.length}`,
     };
     return r;
@@ -559,7 +563,10 @@ export class RegistroClinicoController {
     const s = sessaoDe(req);
     await this.exigirLiberacao(s);
     const r = await this.servico.rascunhos(s.porta, await this.profissional(s));
-    req.sghAlvo = { tabelaAlvo: 'PRCABEVOLTMP', chaveNaturalAlvo: `parte:rascunhos;n:${r.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'registro_assistencial_rascunho',
+      chaveNaturalAlvo: `parte:rascunhos;n:${r.length}`,
+    };
     return r;
   }
 
@@ -610,7 +617,7 @@ export class RegistroClinicoController {
     this.estado.registrarMotivo(chaveSessao(s), paciente, m.data.motivo);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: chaveLeitura('registro', m.data.motivo, 'motivo-informado'),
     };
@@ -654,7 +661,7 @@ export class RegistroClinicoController {
     );
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRCABEVOL',
+      tabelaAlvo: 'registro_assistencial',
       idAlvo: String(registro),
       chaveNaturalAlvo: chaveLeitura('registro', motivo),
     };
@@ -711,7 +718,7 @@ export class RegistroClinicoController {
   async modelosAdmin(@Req() req: RequisicaoAutorizada): Promise<ModeloAdmin[]> {
     const s = sessaoDe(req);
     const r = await this.servico.modelosAdmin(s.porta);
-    req.sghAlvo = { tabelaAlvo: 'PREVOLUCAO', chaveNaturalAlvo: `parte:modelos;n:${r.length}` };
+    req.sghAlvo = { tabelaAlvo: 'modelo_documento_clinico', chaveNaturalAlvo: `parte:modelos;n:${r.length}` };
     return r;
   }
 
@@ -722,7 +729,11 @@ export class RegistroClinicoController {
     const s = sessaoDe(req);
     const id = idDaRota(i);
     const r = await this.servico.modeloAdmin(s.porta, id);
-    req.sghAlvo = { tabelaAlvo: 'PREVOLUCAO', idAlvo: String(id), chaveNaturalAlvo: 'parte:modelo' };
+    req.sghAlvo = {
+      tabelaAlvo: 'modelo_documento_clinico',
+      idAlvo: String(id),
+      chaveNaturalAlvo: 'parte:modelo',
+    };
     return r;
   }
 
@@ -734,7 +745,10 @@ export class RegistroClinicoController {
   ): Promise<{ fichas: ModeloImpressao[]; relatorios: ModeloImpressao[] }> {
     const s = sessaoDe(req);
     const r = await this.servico.impressao(s.porta);
-    req.sghAlvo = { tabelaAlvo: 'PRFICHAREL', chaveNaturalAlvo: `parte:impressao;n:${r.fichas.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'modelo_impressao_clinica',
+      chaveNaturalAlvo: `parte:impressao;n:${r.fichas.length}`,
+    };
     return r;
   }
 }

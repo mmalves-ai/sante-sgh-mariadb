@@ -1,12 +1,12 @@
-// Vocabulário da contabilidade (M54-F1; ficha, seções 4, 6 e 8; cap-07 §7.2). Os códigos de origem são os que o
-// outro sistema grava em COTP_ORIGEM_LANCAMENTO (11 linhas na cópia pc, conferidas em 24/10/2026, só configuração):
-// a tela mostra o rótulo, nunca o código cru nem o nome da tabela.
+// Vocabulário da contabilidade (M54-F1; ficha, seções 4, 6 e 8; cap-07 §7.2). Os códigos de origem do lançamento são
+// os do catálogo de origens (origem_lancamento_contabil): a tela mostra o rótulo, nunca o código cru nem o nome da
+// tabela.
 //
-// Regra 1 da ficha: nenhum módulo grava direto na contabilidade. A contabilização LÊ os fatos nas tabelas onde eles
-// estão (gravados por qualquer sistema) e grava o resultado só em SGH_CTB_*. As fontes abaixo são as da seção 4
-// ("Fatos contábeis novos"), com a chave, o carimbo e a situação do índice levantados no catálogo do banco.
+// Regra 1 da ficha: nenhum módulo grava direto na contabilidade. O módulo dono publica o fato (fato_contabil) e a
+// contabilização grava o resultado só nas tabelas contábeis. As fontes abaixo são as entidades do modelo próprio que
+// publicam fatos, identificadas pelo nome da tabela dona (fato_contabil.entidade_origem).
 
-/** Origem do lançamento (COTP_ORIGEM_LANCAMENTO.ID → rótulo de produto). */
+/** Origem do lançamento (código do catálogo de origens → rótulo de produto). */
 export const ORIGENS_LANCAMENTO = {
   1: 'Financeiro',
   2: 'Faturamento',
@@ -47,17 +47,20 @@ export type TipoFato = keyof typeof TIPOS_FATO;
 export const CODIGOS_TIPO_FATO = Object.keys(TIPOS_FATO) as TipoFato[];
 
 /**
- * Fonte de fato no banco (seção 4). `carimbo` é a coluna de última atualização quando existe; nenhuma delas é indexada
- * no banco (indices-legados.json), por isso a leitura incremental anda pela chave (indexada) e o carimbo só filtra
- * dentro de uma faixa de chaves (nunca varredura pelo carimbo). `semCarimbo` é a contagem de linhas sem carimbo na cópia
- * pc em 24/10/2026: essas linhas só são vistas pela chave e pela impressão do conteúdo.
+ * Fonte de fato no banco (seção 4): a tabela do modelo próprio que publica o fato, a chave e o carimbo de última
+ * atualização. A leitura incremental anda pela chave e o carimbo só filtra dentro de uma faixa de chaves (nunca varredura
+ * pelo carimbo). Os derivadores (`DERIVADORES`) ainda leem o leiaute da origem até a decisão pedida no lote 14-contabil
+ * (conector ou reescrita sobre as entidades próprias); até lá o worker recusa a leitura.
  */
 export interface FonteFato {
   readonly tabela: string;
   readonly chave: string;
   readonly carimbo: string | null;
   readonly tipos: readonly TipoFato[];
-  /** Linhas e linhas sem carimbo na cópia pc (24/10/2026). */
+  /**
+   * Medida histórica da migração, não do modelo próprio: linhas e linhas sem carimbo da tabela correspondente na cópia
+   * da origem em 24/10/2026 (dimensiona a primeira carga pelo conector).
+   */
   readonly linhasPc: number;
   readonly semCarimboPc: number | null;
   /** Dona da fonte (marco que a lê) quando é tabela SGH_ de outro marco. */
@@ -66,64 +69,64 @@ export interface FonteFato {
 
 export const FONTES_FATO: readonly FonteFato[] = [
   {
-    tabela: 'FCCTAEXT',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'conta_hospitalar',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['receitaConta'],
     linhasPc: 213_641,
     semCarimboPc: 2_425,
   },
   {
-    tabela: 'FCLANEXT',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'conta_hospitalar_item',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['ajusteGlosa', 'ajusteRecurso'],
     linhasPc: 4_322_504,
     semCarimboPc: 3_528,
   },
   {
-    tabela: 'MFCONPAG',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'titulo_pagar',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['tituloPagar', 'baixaTituloPagar'],
     linhasPc: 71_267,
     semCarimboPc: 2_687,
   },
   {
-    tabela: 'MFCTAREC',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'titulo_receber',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['tituloReceber', 'baixaTituloReceber'],
     linhasPc: 25_059,
     semCarimboPc: 2_869,
   },
   {
-    tabela: 'MFLANCTO',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'movimento_bancario',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['movimentoBancario'],
     linhasPc: 36_385,
     semCarimboPc: 26_571,
   },
   {
-    tabela: 'GELANSAI',
-    chave: 'ID_GELANSAI',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'movimento_estoque',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['saidaEstoque'],
     linhasPc: 3_558_508,
     semCarimboPc: 67,
   },
   {
-    tabela: 'GECADNFS',
-    chave: 'ID',
-    carimbo: 'DATA_HORA_ULTIMA_ATUALIZACAO',
+    tabela: 'nota_entrada',
+    chave: 'id',
+    carimbo: 'alterado_em',
     tipos: ['notaEntrada'],
     linhasPc: 13_794,
     semCarimboPc: 0,
   },
   {
-    tabela: 'RPRPA',
-    chave: 'ID_RPRPA',
+    tabela: 'recibo_autonomo',
+    chave: 'id',
     carimbo: null,
     tipos: ['recibo'],
     linhasPc: 5_243,
@@ -133,7 +136,7 @@ export const FONTES_FATO: readonly FonteFato[] = [
     // D-M54-CUSTO-539 (M53.9): o custo de pessoal da folha calculada fica em SGH_PES_FOLHA_FATO (por centro de custo,
     // rotina e natureza); SGH_PES_FOLHA_RESUMO só recebe o retorno da folha externa e não é fonte (D-FOLHAFATO-541).
     tabela: 'SGH_PES_FOLHA_FATO',
-    chave: 'ID',
+    chave: 'id',
     carimbo: null,
     tipos: ['folha'],
     linhasPc: 0,
@@ -144,7 +147,7 @@ export const FONTES_FATO: readonly FonteFato[] = [
     // M54.6 (F6, regra 12): a cota mensal da depreciação de cada bem, gravada pelo cálculo do patrimônio (imutável:
     // só SELECT e INSERT); um fato de origem 7 (Patrimônio) por cota, pelo centro de custo onde o bem estava.
     tabela: 'SGH_PAT_DEPRECIACAO',
-    chave: 'ID',
+    chave: 'id',
     carimbo: null,
     tipos: ['depreciacao'],
     linhasPc: 0,
@@ -156,7 +159,7 @@ export const FONTES_FATO: readonly FonteFato[] = [
     // impairment vira fato (origem 7); a revisão de estimativa e a reavaliação são eventos sem lançamento. O estorno
     // (SGH_PAT_AJUSTE_ESTORNO) faz a conciliação lançar o estorno, como na depreciação.
     tabela: 'SGH_PAT_AJUSTE',
-    chave: 'ID',
+    chave: 'id',
     carimbo: null,
     tipos: ['impairment'],
     linhasPc: 0,
@@ -197,8 +200,8 @@ export const TIPOS_CONTA = { sintetica: 'Sintética', analitica: 'Analítica' } 
 export type TipoConta = keyof typeof TIPOS_CONTA;
 
 /**
- * Tipo de plano referencial (COTIPOPLANOCONTAREFERENCIAL: 14 linhas no pc; CODIGO e PLANOECF). O código "10" aparece
- * duas vezes no banco (Receita Federal e Financeiras - Lucro Presumido): a referência é sempre pelo ID.
+ * Tipo de plano referencial (catálogo da Receita: código e plano da escrituração fiscal). O mesmo código pode aparecer
+ * em mais de um plano (Receita Federal e Financeiras - Lucro Presumido): a referência é sempre pelo ID.
  */
 export const REFERENCIAL_POR_ID = true;
 

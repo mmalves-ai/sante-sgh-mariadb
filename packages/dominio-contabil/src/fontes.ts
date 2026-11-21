@@ -1,17 +1,17 @@
 // Derivadores das fontes de fato que não são a conta do paciente (M54-F1; ficha, seção 4). As colunas lidas são só as
 // do efeito contábil (data, valor, centro de custo, tipo de lançamento, conta bancária, IDs); nunca nome, documento de
-// pessoa ou credor por nome (MFCTAREC.NOME e MFCONPAG.FAVORECIDO ficam fora da leitura).
+// pessoa ou credor por nome (o nome do devedor e o favorecido do título ficam fora da leitura).
 //
 // Colunas "a confirmar" pelo construtor no teste dourado contra o lote do M32 (a mesma competência; preparo-e1.md §5):
-//   - MFCONPAG: lançamento pela EMISSAO e VALOR; baixa por DT_PGTO e PAGO.
-//   - MFCTAREC: lançamento pela APRES e VALOR; baixa por PGTO e VLR_PAG.
-//   - MFLANCTO: DATA e VALOR; transferência entre contas próprias (TIPO_TRF T e F) é um fato como os demais (a regra
-//     decide as contas; o M32 já a exclui do fluxo de caixa).
-//   - GELANSAI: competência por ANO e MES; valor QTDE × VLRMED (preço médio dos gatilhos, regra 9). A linha não tem
-//     data nem centro de custo: a leitura junta o cabeçalho da saída (centro de custo de destino) e traz DATA_SAIDA.
-//   - GECADNFS: DATA e TOTAL.
-//   - RPRPA: EMISSAO e o valor dos títulos do recibo (MFCONPAG.ID_RPRPA), somado na leitura (VALOR_TITULOS);
-//     STATUS = 'C' lido como cancelado (sem fato).
+//   - título a pagar: lançamento pela emissão e pelo valor; baixa pela data e pelo valor do pagamento.
+//   - título a receber: lançamento pela apresentação e pelo valor; baixa pela data e pelo valor do recebimento.
+//   - movimento bancário: data e valor; transferência entre contas próprias é um fato como os demais (a regra decide
+//     as contas; o M32 já a exclui do fluxo de caixa).
+//   - saída de estoque: competência por ano e mês; valor quantidade × preço médio (regra 9). A linha não tem data nem
+//     centro de custo: a leitura junta o cabeçalho da saída (centro de custo de destino) e traz a data da saída.
+//   - nota fiscal de entrada: data e total.
+//   - recibo de autônomo: emissão e o valor dos títulos a pagar do recibo, somado na leitura; a situação 'C' é lida
+//     como cancelado (sem fato).
 import type { LinhaFonte } from '@sgh/contratos';
 import { paraCentavos } from './dinheiro.js';
 import { dataValida, inteiroOuNulo, textoOuVazio, type Derivador, type FatoBase } from './derivacao.js';
@@ -291,16 +291,20 @@ export const derivarImpairment: Derivador = Object.assign(
   },
 );
 
-/** Derivador por tabela de fonte (FONTES_FATO). */
+/**
+ * Derivador por tabela de fonte (FONTES_FATO). As chaves já são as tabelas do modelo próprio, mas o corpo dos
+ * derivadores ainda lê o leiaute da origem: a decisão (conector ou reescrita sobre as entidades próprias) está pedida no
+ * lote 14-contabil da F2.4, e até lá o worker recusa a leitura das fontes.
+ */
 export const DERIVADORES: Readonly<Record<string, Derivador>> = {
-  FCCTAEXT: derivarConta,
-  FCLANEXT: derivarItemConta,
-  MFCONPAG: derivarTituloPagar,
-  MFCTAREC: derivarTituloReceber,
-  MFLANCTO: derivarMovimentoBancario,
-  GELANSAI: derivarSaidaEstoque,
-  GECADNFS: derivarNotaEntrada,
-  RPRPA: derivarRecibo,
+  conta_hospitalar: derivarConta,
+  conta_hospitalar_item: derivarItemConta,
+  titulo_pagar: derivarTituloPagar,
+  titulo_receber: derivarTituloReceber,
+  movimento_bancario: derivarMovimentoBancario,
+  movimento_estoque: derivarSaidaEstoque,
+  nota_entrada: derivarNotaEntrada,
+  recibo_autonomo: derivarRecibo,
   SGH_PES_FOLHA_FATO: derivarFolha,
   SGH_PAT_DEPRECIACAO: derivarDepreciacao,
   SGH_PAT_AJUSTE: derivarImpairment,

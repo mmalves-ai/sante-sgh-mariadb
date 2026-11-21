@@ -1,7 +1,7 @@
 // Fluxo de caixa realizado e projetado (M32; ficha, seções 4 e 7; regra 11): o realizado é o movimento e as baixas
-// nas datas; o projetado são os títulos em aberto pela data prevista (DATA_PREVISTA_PGTO, que o gatilho põe no
-// vencimento), o recebível de convênio ajustado pela glosa histórica (GLOSADO = 'T', regra 12) e pelo atraso médio
-// do convênio. Agregado por dia, semana ou mês; o saldo inicial é o último saldo fechado (MFSALDOS) mais o realizado.
+// nas datas; o projetado são os títulos em aberto pela data prevista de pagamento (o vencimento, quando não há
+// outra), o recebível de convênio ajustado pela glosa histórica (itens com retorno, regra 12) e pelo atraso médio
+// do convênio. Agregado por dia, semana ou mês; o saldo inicial é o último saldo bancário fechado mais o realizado.
 import { centavos, diasEntre, somarDias } from '@sgh/contratos/regras-financeiro';
 
 export type Agrupamento = 'dia' | 'semana' | 'mes';

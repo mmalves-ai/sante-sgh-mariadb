@@ -1,12 +1,13 @@
 // Três modelos de honorário (ficha do M12, regra 3; cap-06a §6.2; cap-11 §11.3; ref 05 §1.3 e §1.4): o valor
 // de um procedimento vem
-//   - VALOR: dos cinco componentes datados de TBVLRTHM (VALOR_CH, VALOR_CO, VALOR_FILME, VALOR_ANES,
-//     VALOR_OUTROS), que somados dão o total (sante-api: valores.js);
-//   - PORTE (CBHPM): do valor do porte do convênio (TBPORMED) vezes a fração do porte do item (PPORTE), mais
+//   - VALOR: dos cinco componentes datados da vigência de valor do procedimento (honorário, custo operacional,
+//     filme, anestesia e outros), que somados dão o total;
+//   - PORTE (CBHPM): do valor do porte do convênio vezes a fração do porte do item, mais
 //     custo operacional e filme pelos índices;
-//   - CH (AMB): do coeficiente CH do item (TBTABTHM.CH ≠ 0) vezes o valor do CH do convênio (TBINDICE), mais
-//     o filme pelo índice de filme (SPINDVAL: índice × (CH + COPE) + índice do filme × FILME).
-// `TBTABTHM.CH` muda de sentido conforme a tabela: no modelo VALOR é 0 e o preço está em TBVLRTHM.VALOR_CH.
+//   - CH (AMB): do coeficiente CH do item (≠ 0) vezes o valor do CH do convênio (índices do convênio), mais
+//     o filme pelo índice de filme (índice × (CH + custo operacional) + índice do filme × filme).
+// O coeficiente CH do item muda de sentido conforme a tabela: no modelo VALOR é 0 e o preço está no componente
+// de honorário da vigência de valor.
 // O novo nunca calcula a conta (o motor é o do legado): a explicação aqui serve à consulta e ao veto do
 // reajuste (o reajuste do modelo CH é pelo índice: preco.registrarIndice, especificada para a onda 4).
 
@@ -22,10 +23,10 @@ export interface Componentes {
 
 export const COMPONENTES_ZERO: Componentes = { ch: 0, co: 0, filme: 0, anes: 0, outros: 0 };
 
-/** Os cinco componentes, na ordem de TBVLRTHM. */
+/** Os cinco componentes, na ordem da vigência de valor do procedimento. */
 export const NOMES_COMPONENTES: readonly (keyof Componentes)[] = ['ch', 'co', 'filme', 'anes', 'outros'];
 
-/** Soma dos cinco componentes (total de TBVLRTHM), sem arredondar (arredondar é da apresentação). */
+/** Soma dos cinco componentes (total da vigência de valor), sem arredondar (arredondar é da apresentação). */
 export function totalComponentes(c: Componentes): number {
   return c.ch + c.co + c.filme + c.anes + c.outros;
 }
@@ -36,7 +37,7 @@ export function centavos(v: number): number {
 }
 
 export interface PerfilTabelaHonorario {
-  /** Itens da tabela em TBTABTHM. */
+  /** Itens da tabela de honorários. */
   readonly itens: number;
   /** Itens com CH ≠ 0 (coeficiente AMB). */
   readonly comCh: number;
@@ -65,24 +66,24 @@ export function modeloDoItem(i: ItemHonorarioModelo): ModeloHonorario {
 }
 
 export interface IndicesConvenio {
-  /** Valor do CH (TBINDICE IND 1/2 ou IND = ATO do item). */
+  /** Valor do CH (índice do convênio para o CH, ou o índice do ato do item). */
   readonly ch?: number | null;
-  /** Valor do m² de filme (TBINDICE IND 4). */
+  /** Valor do m² de filme (índice do convênio para o filme). */
   readonly filme?: number | null;
-  /** Valor da UCO (TBINDICE IND 5). */
+  /** Valor da UCO (índice do convênio para o custo operacional). */
   readonly uco?: number | null;
-  /** Valor do porte do convênio (TBPORMED) para o porte do item. */
+  /** Valor do porte do convênio para o porte do item. */
   readonly porte?: number | null;
 }
 
 export interface ItemParaValor {
   readonly ch: number;
   readonly porte?: string | null;
-  /** Fração do porte (TBTABTHM.PPORTE: 0,01 / 0,04 / 0,10…); null = porte inteiro. */
+  /** Fração do porte do item (0,01 / 0,04 / 0,10…); null = porte inteiro. */
   readonly fracaoPorte?: number | null;
-  /** Custo operacional em UCO (TBTABTHM.COPE). */
+  /** Custo operacional do item em UCO. */
   readonly cope?: number | null;
-  /** Filme em m² (TBTABTHM.FILME). */
+  /** Filme do item em m². */
   readonly filmeM2?: number | null;
 }
 
@@ -108,7 +109,7 @@ export function explicarValor(
       return {
         modelo,
         total: null,
-        passos: ['Modelo VALOR: o preço é a vigência de TBVLRTHM na data.'],
+        passos: ['Modelo VALOR: o preço é a vigência de valor do procedimento na data.'],
         falta: ['vigência na data'],
       };
     const total = totalComponentes(vigente);

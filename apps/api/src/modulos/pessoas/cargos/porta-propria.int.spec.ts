@@ -11,7 +11,7 @@
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../../exames/public-api.js';
-import type { PortaCargos } from './porta-cargos.js';
+import type { GravadorCargos, PortaCargos } from './porta-cargos.js';
 import { PortaCargosMemoria } from './porta-cargos-memoria.js';
 import { DEPENDENCIAS_CARGO, PortaCargosPropria } from './porta-propria.js';
 
@@ -277,10 +277,18 @@ describe.skipIf(SEM_BANCO)('porta própria de cargos e salários (MariaDB, clien
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-03' }, async (e) => {
       await limparReferencias(e);
       const ests = [ids.est, ids.est2];
+      const faixasDosEsts =
+        'tabela_salarial_id IN (SELECT id FROM tabela_salarial WHERE estabelecimento_id IN (?, ?))';
       await e.executar(
-        'DELETE FROM faixa_salarial WHERE tabela_salarial_id IN (SELECT id FROM tabela_salarial WHERE estabelecimento_id IN (?, ?))',
+        `UPDATE faixa_salarial SET faixa_salarial_anterior_id = NULL WHERE ${faixasDosEsts}`,
         ests,
       );
+      await e.executar(`DELETE FROM faixa_salarial WHERE ${faixasDosEsts}`, ests);
+      await e.executar(
+        'UPDATE quadro_vaga SET quadro_vaga_anterior_id = NULL WHERE estabelecimento_id IN (?, ?)',
+        ests,
+      );
+      await e.executar('DELETE FROM quadro_vaga WHERE estabelecimento_id IN (?, ?)', ests);
       await e.executar('DELETE FROM tabela_salarial WHERE estabelecimento_id IN (?, ?)', ests);
       await e.executar('DELETE FROM cargo WHERE ocupacao_cbo_id IN (?, ?)', [ids.cbo, ids.cbo2]);
       await e.executar('DELETE FROM colaborador WHERE id = ?', [ids.colaborador]);
@@ -672,7 +680,7 @@ describe.skipIf(SEM_BANCO)('porta própria de cargos e salários (MariaDB, clien
       }
     });
 
-    it('recusas: CBO e conselho fora do cadastro; faixa e quadro sem modelo (409 modelo-pendente, nada gravado)', async () => {
+    it('recusas: CBO e conselho fora do cadastro; nível da faixa não numérico e centro de custo de outro estabelecimento', async () => {
       const incluir = (cbo: string, conselho: string | null) =>
         codigoDe(
           propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'cargo'), (g) =>
@@ -688,20 +696,159 @@ describe.skipIf(SEM_BANCO)('porta própria de cargos e salários (MariaDB, clien
         );
       expect(await incluir('000001', null)).toBe('cbo-inexistente');
       expect(await incluir(CBO, 'NAOEXISTE')).toBe('conselho-inexistente');
-      const faixa = { cargo: 1, faixa: 'A', nivel: 'I', valor: 1000, desde: '2026-01-01', por: 'x' };
-      expect(
-        await codigoDe(
-          propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'faixa_salarial'), (g) => g.incluirFaixa(faixa)),
-        ),
-      ).toBe('modelo-pendente');
+      const cargo = await novoCargo('CARGO RECUSA FAIXA');
+      const faixa = (nivel: string, desde = '2026-02-01') =>
+        codigoDe(
+          propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'faixa_salarial'), (g) =>
+            g.incluirFaixa({ cargo, faixa: 'R', nivel, valor: 1000, desde, por: 'x' }),
+          ),
+        );
+      expect(await faixa('I')).toBe('faixa-nivel-invalido');
+      expect(await faixa('1', '2020-01-01')).toBe('tabela-salarial-ausente');
+      // A tabela futura (vigente a partir de 2099) e o rascunho não recebem faixa: ela vai para a vigente já começada e
+      // volta ativa, senão a versão, a situação e a duplicidade do serviço não a enxergariam.
+      const futura = await propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'faixa_salarial'), (g) =>
+        g.incluirFaixa({ cargo, faixa: 'R', nivel: '7', valor: 1000, desde: '2099-02-01', por: 'x' }),
+      );
+      expect(await propria.faixa(ctxBanco, futura)).toMatchObject({ desde: '2099-02-01', ativo: true });
+      const tabFutura = await nucleo.lerSomente(ctxBanco, (l) =>
+        l.uma('SELECT tabela_salarial_id FROM faixa_salarial WHERE id = ?', [futura]),
+      );
+      expect(Number(tabFutura?.['tabela_salarial_id'])).toBe(ids.tabela);
+      await escrever((e) => e.executar('DELETE FROM faixa_salarial WHERE id = ?', [futura]));
       expect(
         await codigoDe(
           propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'quadro_vaga'), (g) =>
-            g.incluirVaga({ cargo: 1, centroCusto: 1, quantidade: 1, desde: '2026-01-01', por: 'x' }),
+            g.incluirVaga({ cargo, centroCusto: ids.ccB, quantidade: 1, desde: '2026-01-01', por: 'x' }),
           ),
         ),
-      ).toBe('modelo-pendente');
-      expect(await propria.vagas()).toEqual([]);
+      ).toBe('centro-custo-inexistente');
+      expect((await propria.faixas(ctxBanco, cargo)).length).toBe(0);
+      expect(await propria.vagas(ctxBanco, cargo)).toEqual([]);
+    });
+
+    it('faixa salarial: inclui na tabela vigente, versiona (a anterior acaba na véspera), inativa e exclui só sem versão ligada', async () => {
+      const cargo = await novoCargo('CARGO VERSAO FAIXA');
+      const gravar = <T>(fn: (g: GravadorCargos) => Promise<T>) =>
+        propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'faixa_salarial'), fn);
+      const id = await gravar((g) =>
+        g.incluirFaixa({ cargo, faixa: 'V', nivel: '2', valor: 450_075, desde: '2026-03-01', por: 'x' }),
+      );
+      const f1 = await propria.faixa(ctxBanco, id);
+      expect(f1).toMatchObject({
+        cargo,
+        faixa: 'V',
+        nivel: '2',
+        valor: 450_075,
+        desde: '2026-03-01',
+        ate: null,
+      });
+      expect(f1).toMatchObject({ anterior: null, ativo: true });
+      const tab = await nucleo.lerSomente(ctxBanco, (l) =>
+        l.uma('SELECT tabela_salarial_id FROM faixa_salarial WHERE id = ?', [id]),
+      );
+      expect(Number(tab?.['tabela_salarial_id'])).toBe(ids.tabela);
+      expect(
+        await codigoDe(
+          gravar((g) =>
+            g.incluirFaixa({ cargo, faixa: 'V', nivel: '2', valor: 1, desde: '2026-03-01', por: 'x' }),
+          ),
+        ),
+      ).toBe('faixa-ja-existe');
+      const id2 = await gravar((g) =>
+        g.versionarFaixa({ anterior: f1!, valor: 500_000, desde: '2026-06-01', motivo: MOTIVO, por: 'x' }),
+      );
+      expect(await propria.faixa(ctxBanco, id)).toMatchObject({ ate: '2026-05-31', versao: f1!.versao + 1 });
+      expect(await propria.faixa(ctxBanco, id2)).toMatchObject({
+        anterior: id,
+        motivo: MOTIVO,
+        valor: 500_000,
+        desde: '2026-06-01',
+        ate: null,
+      });
+      // A versão antiga lida antes não versiona de novo (já tem sucessora).
+      expect(
+        await codigoDe(
+          gravar((g) =>
+            g.versionarFaixa({ anterior: f1!, valor: 1, desde: '2026-07-01', motivo: MOTIVO, por: 'x' }),
+          ),
+        ),
+      ).toBe('desatualizado');
+      expect(await propria.dependencias(ctxBanco, 'salario-faixa', id)).toEqual([
+        {
+          grupo: 'Versão posterior da faixa',
+          tabela: 'faixa_salarial',
+          coluna: 'faixa_salarial_anterior_id',
+          quantidade: 1,
+        },
+      ]);
+      const f2 = await propria.faixa(ctxBanco, id2);
+      expect(
+        await codigoDe(
+          gravar((g) =>
+            g.excluir({ tabela: 'faixa_salarial', id: id2, versao: f2!.versao, motivo: MOTIVO, por: 'x' }),
+          ),
+        ),
+      ).toBe('salario-faixa-com-vinculos');
+      await gravar((g) =>
+        g.situacao({
+          tabela: 'faixa_salarial',
+          id: id2,
+          versao: f2!.versao,
+          ativo: false,
+          motivo: MOTIVO,
+          por: 'x',
+        }),
+      );
+      expect(await propria.faixa(ctxBanco, id2)).toMatchObject({ ativo: false, motivoSituacao: MOTIVO });
+      // Outro estabelecimento não vê nem grava a faixa.
+      const ctxB = { ...ctxBanco, estabelecimento: ids.est2 };
+      expect(await propria.faixa(ctxB, id2)).toBeNull();
+    });
+
+    it('quadro de vagas: inclui por cargo e centro de custo, versiona, recusa repetida e exclui a versão solta', async () => {
+      const cargo = await novoCargo('CARGO QUADRO');
+      const gravar = <T>(fn: (g: GravadorCargos) => Promise<T>) =>
+        propria.gravarSgh(ctxBanco, trilha(ctxBanco, 'quadro_vaga'), fn);
+      const id = await gravar((g) =>
+        g.incluirVaga({ cargo, centroCusto: ids.cc1, quantidade: 3, desde: '2026-01-01', por: 'x' }),
+      );
+      const v1 = await propria.vaga(ctxBanco, id);
+      expect(v1).toMatchObject({
+        cargo,
+        centroCusto: ids.cc1,
+        quantidade: 3,
+        desde: '2026-01-01',
+        ate: null,
+      });
+      expect(
+        await codigoDe(
+          gravar((g) =>
+            g.incluirVaga({ cargo, centroCusto: ids.cc1, quantidade: 1, desde: '2026-01-01', por: 'x' }),
+          ),
+        ),
+      ).toBe('vaga-ja-existe');
+      const id2 = await gravar((g) =>
+        g.versionarVaga({ anterior: v1!, quantidade: 5, desde: '2026-04-01', motivo: MOTIVO, por: 'x' }),
+      );
+      const vs = await propria.vagas(ctxBanco, cargo);
+      expect(vs.map((v) => [v.id, v.quantidade, v.desde, v.ate, v.anterior])).toEqual([
+        [id, 3, '2026-01-01', '2026-03-31', null],
+        [id2, 5, '2026-04-01', null, id],
+      ]);
+      expect(await propria.vagas({ ...ctxBanco, estabelecimento: ids.est2 }, cargo)).toEqual([]);
+      const solta = await gravar((g) =>
+        g.incluirVaga({ cargo, centroCusto: ids.cc2, quantidade: 1, desde: '2026-01-01', por: 'x' }),
+      );
+      const vs2 = await propria.vaga(ctxBanco, solta);
+      await gravar((g) =>
+        g.excluir({ tabela: 'quadro_vaga', id: solta, versao: vs2!.versao, motivo: MOTIVO, por: 'x' }),
+      );
+      expect(await propria.vaga(ctxBanco, solta)).toBeNull();
+      // O cargo com quadro não se exclui.
+      expect((await propria.dependencias(ctxBanco, 'cargo', cargo)).map((d) => d.tabela)).toContain(
+        'quadro_vaga',
+      );
     });
 
     it('CBO e conselhos do cadastro oficial; ocupação exige o estabelecimento da sessão', async () => {

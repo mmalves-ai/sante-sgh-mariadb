@@ -1,9 +1,9 @@
 // Regra 4 (cap-07 §7.2; cap-11): a receita é reconhecida no FECHAMENTO da conta; glosa e recurso são AJUSTES de
-// receita, não exclusão. Semântica das colunas (ref 02 §2, FCCTAEXT.FECHADA; ref 01 §13 e tabela de colunas):
-//   - FCCTAEXT.FECHADA: N = aberta, S = fechada (DATA_FEC preenchida em 100%), A = apresentada à operadora (também
-//     reconhecida), F = 1 conta anômala no pc (tratada como erro de dado: sem fato). Valor: TOTAL_CONTA.
-//   - FCLANEXT: glosa = VALOR_C − VLR_PG no item baixado (GLOSADO = 'T' é "baixado/conciliado", não glosa); recurso
-//     acatado = VLR_RP, só quando DT_RP está gravada (só é gravada quando entra dinheiro).
+// receita, não exclusão. Semântica dos campos (ref 02 §2; ref 01 §13 e tabela de colunas):
+//   - situação da conta hospitalar: N = aberta, S = fechada (data de fechamento preenchida em 100%), A = apresentada à
+//     operadora (também reconhecida), F = situação anômala (tratada como erro de dado: sem fato). Valor: total da conta.
+//   - item da conta: glosa = valor cobrado − valor pago no item baixado (a marca 'T' é "baixado/conciliado", não glosa);
+//     recurso acatado = valor do recurso, só quando a data do recurso está gravada (só é gravada quando entra dinheiro).
 // Conta reaberta (S/A → N) deixa de ter o fato de receita: a conciliação (derivacao.ts) gera o estorno no período aberto.
 import type { LinhaFonte } from '@sgh/contratos';
 import { paraCentavos } from './dinheiro.js';

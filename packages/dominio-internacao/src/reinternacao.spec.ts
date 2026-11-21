@@ -6,14 +6,14 @@ import { MotorInternacao } from './motor.js';
 
 const estada = (paciente: number, ini: string, fim?: string, motivo = 12) => ({
   paciente,
-  entrada: [ini, '1000'] as [string, string],
-  ...(fim ? { alta: [fim, '1000'] as [string, string] } : {}),
+  entrada: [ini, '10:00'] as [string, string],
+  ...(fim ? { alta: [fim, '10:00'] as [string, string] } : {}),
   motivo,
   trechos: [
     {
       unidade: 'ENF' as const,
-      de: [ini, '1000'] as [string, string],
-      ...(fim ? { ate: [fim, '1000'] as [string, string] } : {}),
+      de: [ini, '10:00'] as [string, string],
+      ...(fim ? { ate: [fim, '10:00'] as [string, string] } : {}),
     },
   ],
 });

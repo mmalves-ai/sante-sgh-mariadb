@@ -3,7 +3,7 @@
 // domínios das mensagens (tipos de erro, tipos de agendamento e situações de envio), os perfis de prioridade da
 // classificação de risco externa (dado do fornecedor: o banco recusa gravar) e os domínios dos webservices
 // (operações e padrões). Editar o de-para aqui tem o mesmo efeito de editar no outro sistema: os dois usam a mesma
-// tabela (cap-12 §12.2). Opções do legado (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json):
+// tabela (cap-12 §12.2). Opções do legado (menu de origem, ver conector/mapa/permissoes.tsv):
 // S.A.D.T. › Interfaceamento 2964 (o de-para das interfaces dos laboratórios de apoio); S.M.S. › Lançamentos 4995 e
 // Cadastrar cenário 4993; Tabelas › Cadastro de Endpoint 6339 e Gerenciamento 6340 (webservices, inferida: a árvore
 // não tem item dos dois domínios); classificação de risco externa sem tela no legado: Tabelas › Geral M–Z 3698

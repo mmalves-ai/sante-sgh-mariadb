@@ -1,8 +1,8 @@
 // W1-01 (parte 3c; matriz de governança, linha "Profissional / usuário do sistema": sempre ≥1 administrador ativo;
 // mercado: "inativar sem excluir e garantir um administrador mínimo"): nenhuma operação deixa o estabelecimento sem
 // gestor de acessos ativo. Gestor de acessos ativo = conta ativa e não bloqueada com pelo menos uma destas fontes:
-//   - grupo de acesso total (TBUSERS.GRUPO = MASTER, a chave GRUPO_ADMINISTRADORES);
-//   - papel SBIS "Gestor de acessos" ativo (TBUSERS_TBPAPEL com TBPAPEL.COD_PAPEL 0; PERFIL_DO_PAPEL);
+//   - grupo de acesso total (grupo MASTER, a chave GRUPO_ADMINISTRADORES);
+//   - papel SBIS "Gestor de acessos" ativo (papel de segurança 0 do usuário; PERFIL_DO_PAPEL);
 //   - concessão nominal vigente do perfil `gestor-acessos` (SGH_ACESSO_PERFIL_USUARIO).
 // Recusa bloquear, rebaixar (trocar de grupo para fora do acesso total ou retirar o papel 0) ou retirar o perfil
 // quando a ação zeraria o conjunto. Puro: quem chama lê o conjunto ao vivo, sem cache (falha fechada se não ler).
@@ -11,7 +11,7 @@ import { mesmoLogin } from './login.js';
 
 /** A chave do grupo de acesso total (igual a GRUPO_ADMINISTRADORES dos contratos do saneamento). */
 export const GRUPO_ACESSO_TOTAL = 'MASTER';
-/** TBPAPEL.COD_PAPEL do papel SBIS "Gestor de acessos" (PERFIL_DO_PAPEL[0] = 'gestor-acessos'). */
+/** Código do papel de segurança SBIS "Gestor de acessos" (PERFIL_DO_PAPEL[0] = 'gestor-acessos'). */
 export const PAPEL_GESTOR_ACESSOS = 0;
 export const PERFIL_GESTOR_ACESSOS = 'gestor-acessos';
 

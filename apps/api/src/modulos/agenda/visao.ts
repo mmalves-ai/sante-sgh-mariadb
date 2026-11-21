@@ -1,26 +1,23 @@
 // Ponte de transição: monta, a partir dos tipos neutros da porta (tipos.ts), as "vistas" que as regras puras de
-// @sgh/dominio-agenda e os contratos de @sgh/contratos/agenda ainda esperam (hora em 4 dígitos, sinais de texto da
-// grade e da marcação). Fica SÓ aqui, entre a porta e o serviço: a porta e o banco não conhecem estes sinais. Sai
-// quando o domínio e os contratos da agenda migrarem para o vocabulário neutro (pedido registrado na saída do
-// lote 01-04).
+// @sgh/dominio-agenda ainda esperam (sinais de texto da situação na grade e da marcação). As horas já trafegam em
+// "HH:MM", a duração da agenda em minutos e os sinais de sim ou não em booleano. Fica SÓ aqui, entre a porta e o
+// serviço: a porta e o banco não conhecem estes sinais. Sai quando o domínio da agenda trocar os sinais de texto
+// pela situação neutra (pedido registrado na saída do lote 01-04).
 import { canalMarcacao, CANAIS_MARCACAO, type CanalMarcacao } from '@sgh/contratos';
-import { duracaoHHMM, duracaoMinutos, normalizarHora } from '@sgh/dominio-agenda';
+import { duracaoEmHoras, normalizarHora } from '@sgh/dominio-agenda';
 import type { ContextoAgenda, PortaAgenda } from './porta.js';
 import type { Agenda, FaixaEscala, Horario, Marcacao, Relogio, SituacaoMarcacao, Vaga } from './tipos.js';
 
-/** HH:MM → 4 dígitos (o que o domínio da agenda compara). */
-export const quatroDigitos = (h: string | null | undefined): string => (h ? h.replace(':', '').padStart(4, '0') : '');
-/** 4 dígitos ou HH:MM → HH:MM. */
-export const horaIso = (h: string): string => {
-  const s = normalizarHora(h);
-  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
-};
+/** Hora digitada ou lida → "HH:MM" (recusa a inválida). */
+export const horaIso = (h: string): string => normalizarHora(h);
 /** Sem hora, ou meia-noite como "sem intervalo" da tela: null. */
-export const horaIsoOuNull = (h: string | null | undefined): string | null =>
-  h && h.replace(':', '') !== '0000' ? horaIso(h) : null;
-/** Minutos → 4 dígitos ("" sem duração). */
-export const duracaoDigitos = (m: number | null | undefined): string => (m ? duracaoHHMM(m) : '');
-export const minutosDaDuracao = (d: string | null | undefined): number | null => duracaoMinutos(d ?? '');
+export const horaIsoOuNull = (h: string | null | undefined): string | null => {
+  if (!h) return null;
+  const n = normalizarHora(h);
+  return n === '00:00' ? null : n;
+};
+/** Minutos → duração em horas e minutos ("00:15"; "" sem duração). */
+const duracaoTexto = (m: number | null | undefined): string => (m ? duracaoEmHoras(m) : '');
 
 /** Sinal de texto da situação na grade (legenda que o domínio da agenda ainda usa). */
 const SINAL_SITUACAO: Readonly<Record<SituacaoMarcacao, string>> = {
@@ -38,6 +35,7 @@ export const canalDoCodigo = (codigo: string | null | undefined): CanalMarcacao 
 
 export interface RelogioVista {
   readonly hoje: string;
+  /** O minuto corrente em "HH:MM" (o nome do campo segue o do relógio do domínio). */
   readonly hhmm: string;
 }
 
@@ -45,9 +43,9 @@ export interface AgendaVista {
   readonly id: number;
   readonly nome: string;
   readonly crm: number;
-  readonly ativa: 'S' | 'N';
-  readonly duracao: string;
-  readonly teleatendimento: 'S' | 'N';
+  readonly ativa: boolean;
+  readonly duracaoMinutos: number | null;
+  readonly teleatendimento: boolean;
   readonly gradeInicio: string | null;
   readonly gradeFim: string | null;
   readonly convenios: number;
@@ -58,11 +56,11 @@ export interface AgendaVista {
 
 export interface LinhaEscalaVista {
   readonly semana: number;
-  readonly duracao: string;
+  readonly duracaoMinutos: number | null;
   readonly horaInicio: string;
   readonly horaFim: string;
-  readonly intervaloInicio: string;
-  readonly intervaloFim: string;
+  readonly intervaloInicio: string | null;
+  readonly intervaloFim: string | null;
 }
 
 export interface HorarioVista {
@@ -105,15 +103,15 @@ export interface VagaVista {
   readonly hora: string;
 }
 
-export const relogioVista = (r: Relogio): RelogioVista => ({ hoje: r.hoje, hhmm: quatroDigitos(r.hora) });
+export const relogioVista = (r: Relogio): RelogioVista => ({ hoje: r.hoje, hhmm: normalizarHora(r.hora) });
 
 export const agendaVista = (a: Agenda): AgendaVista => ({
   id: a.id,
   nome: a.nome,
   crm: a.registroProfissional ?? 0,
-  ativa: a.ativa ? 'S' : 'N',
-  duracao: duracaoDigitos(a.duracaoMinutos),
-  teleatendimento: a.teleatendimento ? 'S' : 'N',
+  ativa: a.ativa,
+  duracaoMinutos: a.duracaoMinutos,
+  teleatendimento: a.teleatendimento,
   gradeInicio: a.gradeInicio,
   gradeFim: a.gradeFim,
   convenios: a.convenios,
@@ -124,34 +122,21 @@ export const agendaVista = (a: Agenda): AgendaVista => ({
 
 export const linhaEscalaVista = (f: FaixaEscala, duracaoAgenda: number | null = null): LinhaEscalaVista => ({
   semana: f.diaSemana,
-  duracao: duracaoDigitos(f.duracaoMinutos ?? duracaoAgenda),
-  horaInicio: quatroDigitos(f.inicio),
-  horaFim: quatroDigitos(f.fim),
-  intervaloInicio: quatroDigitos(f.intervaloInicio),
-  intervaloFim: quatroDigitos(f.intervaloFim),
+  duracaoMinutos: f.duracaoMinutos ?? duracaoAgenda,
+  horaInicio: horaIso(f.inicio),
+  horaFim: horaIso(f.fim),
+  intervaloInicio: f.intervaloInicio && f.intervaloFim ? horaIsoOuNull(f.intervaloInicio) : null,
+  intervaloFim: f.intervaloInicio && f.intervaloFim ? horaIsoOuNull(f.intervaloFim) : null,
 });
-
-/** Linha de escala do contrato (4 dígitos; intervalo vazio ou "0000" = sem intervalo) → faixa neutra. */
-export function faixaDaLinha(l: LinhaEscalaVista): FaixaEscala {
-  const sem = !l.intervaloInicio || l.intervaloInicio === '0000' || !l.intervaloFim || l.intervaloFim === '0000';
-  return {
-    diaSemana: l.semana,
-    duracaoMinutos: minutosDaDuracao(l.duracao),
-    inicio: horaIso(l.horaInicio),
-    fim: horaIso(l.horaFim),
-    intervaloInicio: sem ? null : horaIso(l.intervaloInicio),
-    intervaloFim: sem ? null : horaIso(l.intervaloFim),
-  };
-}
 
 export const horarioVista = (h: Horario): HorarioVista => ({
   data: h.data,
-  hora: quatroDigitos(h.hora),
+  hora: horaIso(h.hora),
   paciente: h.paciente ?? '',
   livre: h.bloqueado ? 'N' : 'S',
   situacao: h.situacao ? SINAL_SITUACAO[h.situacao] : '',
   tipo: h.encaixe ? 'E' : '',
-  duracao: duracaoDigitos(h.duracaoMinutos),
+  duracao: duracaoTexto(h.duracaoMinutos),
   convenio: h.convenio,
   marcacao: h.marcacao,
 });
@@ -161,7 +146,7 @@ export const marcacaoVista = (m: Marcacao): MarcacaoVista => ({
   agenda: m.agenda,
   nomeAgenda: m.nomeAgenda,
   data: m.data,
-  hora: quatroDigitos(m.hora),
+  hora: horaIso(m.hora),
   paciente: m.paciente,
   idPaciente: m.idPaciente,
   prontuario: m.prontuario,
@@ -177,7 +162,7 @@ export const marcacaoVista = (m: Marcacao): MarcacaoVista => ({
   temSenha: m.situacao === 'chegou' || m.situacao === 'em_atendimento',
 });
 
-export const vagaVista = (v: Vaga): VagaVista => ({ ...v, hora: quatroDigitos(v.hora) });
+export const vagaVista = (v: Vaga): VagaVista => ({ ...v, hora: horaIso(v.hora) });
 
 /** As leituras que o serviço e os controladores consomem como vistas (as demais vão direto à porta). */
 export class LeituraAgenda {
@@ -193,16 +178,18 @@ export class LeituraAgenda {
     const a = await this.porta.agenda(c, id);
     return a ? agendaVista(a) : null;
   }
-  async escala(c: ContextoAgenda, a: Pick<AgendaVista, 'id' | 'duracao'>): Promise<LinhaEscalaVista[]> {
-    const d = minutosDaDuracao(a.duracao);
-    return (await this.porta.escala(c, a.id)).map((f) => linhaEscalaVista(f, d));
+  async escala(
+    c: ContextoAgenda,
+    a: Pick<AgendaVista, 'id' | 'duracaoMinutos'>,
+  ): Promise<LinhaEscalaVista[]> {
+    return (await this.porta.escala(c, a.id)).map((f) => linhaEscalaVista(f, a.duracaoMinutos));
   }
   async horarios(c: ContextoAgenda, agenda: number, de: string, ate: string) {
     const r = await this.porta.horarios(c, agenda, de, ate);
     return { itens: r.itens.map(horarioVista), truncado: r.truncado };
   }
   async horasMarcadas(c: ContextoAgenda, agenda: number, data: string): Promise<string[]> {
-    return (await this.porta.horasMarcadas(c, agenda, data)).map(quatroDigitos);
+    return (await this.porta.horasMarcadas(c, agenda, data)).map(horaIso);
   }
   async marcacoesDaJanela(c: ContextoAgenda, agenda: number, de: string, ate: string) {
     const r = await this.porta.marcacoesDaJanela(c, agenda, de, ate);

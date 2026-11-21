@@ -106,7 +106,7 @@ export interface DecisaoTriagem {
   readonly motivo: string;
 }
 
-/** Os dados de um envio agendado (hora no formato da tela: HHMM, de 0 a 2359). */
+/** Os dados de um envio agendado (hora do dia em "HH:MM", de 00:00 a 23:59). */
 export interface DadosAgendamento {
   readonly relatorio: string;
   readonly titulo: string;
@@ -115,7 +115,7 @@ export interface DadosAgendamento {
   readonly grupos: readonly string[];
   readonly enderecos: readonly string[];
   readonly periodicidade: string;
-  readonly hora: number;
+  readonly hora: string;
   readonly diaSemana: number | null;
   readonly diaMes: number | null;
 }

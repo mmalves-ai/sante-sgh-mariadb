@@ -1,5 +1,5 @@
 // Permissões do balanço hídrico (M45, etapa 3; ficha, seção 7). Quem tem a opção no legado tem a permissão no novo
-// (regra 1 do M06). Opções do módulo do PEP (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json), todas
+// (regra 1 do M06). Opções do módulo do PEP (menu de origem, retrato tools/verificadores/dados/acesso-legado.pc.json), todas
 // ativas: Balanço hídrico 2641 (Consultar 5539, Novo balanço 5316, Lançamento 5322 › Incluir outros líquidos 5323 e
 // Incluir perdas 5325, Alterar 4629, Fechar balanço 5317 › parcial 5318 e total 5319). As opções antigas do mesmo
 // módulo (4622 a 4632, 5315, 5541) estão inativas no retrato e não entram. O estorno de um lançamento é do mesmo

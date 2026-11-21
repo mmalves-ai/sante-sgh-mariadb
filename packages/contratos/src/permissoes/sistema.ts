@@ -1,6 +1,6 @@
 // Permissões dos recursos novos do M09 (convencoes.md §12): painéis de saúde e documentos de prova. Recursos
-// só do novo, sem opção em TBOPCOES: concedidos por perfil (ficha do M06, regra 3) ao Administrador do
-// sistema (papel SBIS 1) pelo mapa SGH_ACESSO_MAPA_OPCAO.
+// próprios do produto, sem opção no menu de origem: concedidos por perfil (ficha do M06, regra 3) ao Administrador do
+// sistema (papel SBIS 1).
 import type { DeclaracaoPermissao } from './tipos.js';
 
 const ADMIN = ['administrador-sistema'] as const;

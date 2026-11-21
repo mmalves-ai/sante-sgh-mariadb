@@ -356,7 +356,7 @@ export const esquemaCicloOncologicoLido = z.object({
   /** O tratamento (curso) do ciclo, 1 no primeiro, e o motivo do tratamento novo. */
   curso: z.number().int(),
   motivoCurso: z.string().nullable(),
-  /** O número (PRPRESC.ID) das prescrições gerais ligadas ao ciclo. */
+  /** O número (id da prescrição) das prescrições gerais ligadas ao ciclo. */
   prescricoes: z.array(z.number().int()),
   /** W0-05: ativo, suspenso ou cancelado (fato novo com o motivo); os eventos do ciclo, o mais recente primeiro. */
   andamento: z.enum(ANDAMENTOS_CICLO),
@@ -371,7 +371,7 @@ export const esquemaOncologiaPaciente = z.object({
 });
 export type OncologiaPaciente = z.infer<typeof esquemaOncologiaPaciente>;
 
-/** POST /api/especialidades/oncologia/ciclos/:id/prescricoes: liga a prescrição geral (PRPRESC.ID) ao ciclo. */
+/** POST /api/especialidades/oncologia/ciclos/:id/prescricoes: liga a prescrição geral (pelo id) ao ciclo. */
 export const esquemaVincularPrescricaoCiclo = z.object({ prescricao: id }).strict();
 export type VincularPrescricaoCicloEntrada = z.infer<typeof esquemaVincularPrescricaoCiclo>;
 

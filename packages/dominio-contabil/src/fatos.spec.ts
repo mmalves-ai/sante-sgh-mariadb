@@ -13,12 +13,12 @@ const o = { lote: 500, folga: 100, faixaVarredura: 1000 };
 
 describe('leitura incremental (seção 10: sem perder linha alterada durante a leitura)', () => {
   it('primeiro ciclo: só novos', () => {
-    const p = planoDoCiclo({ tabela: 'MFCONPAG', marca: 0, varredura: 1 }, o);
+    const p = planoDoCiclo({ tabela: 'titulo_pagar', marca: 0, varredura: 1 }, o);
     expect(p).toEqual({ novos: { acimaDe: 0, lote: 500 }, revisao: null, varredura: null });
   });
 
   it('janela de revisão logo abaixo da marca e varredura abaixo dela', () => {
-    const p = planoDoCiclo({ tabela: 'MFCONPAG', marca: 5000, varredura: 1 }, o);
+    const p = planoDoCiclo({ tabela: 'titulo_pagar', marca: 5000, varredura: 1 }, o);
     expect(p.revisao).toEqual({ de: 4901, ate: 5000 });
     expect(p.varredura).toEqual({ de: 1, ate: 1000 });
   });

@@ -43,7 +43,7 @@ export interface SetorOnda4 {
   readonly operacoes: readonly string[];
   /** Funcionalidades (POL-3) que o setor liga junto. */
   readonly recursos: readonly string[];
-  /** Grupos funcionais (TBGRUUSU.NOME) acompanhados em "quem ainda usa o outro sistema". */
+  /** Perfis de acesso (nome) acompanhados em "quem ainda usa o outro sistema". */
   readonly grupos: readonly string[];
   /** Respostas do questionário que viram cenário antes da liberação da parte (regra 8). */
   readonly respostas: readonly string[];
@@ -431,7 +431,7 @@ export const esquemaTitulosAcompanhamento = z
     disponivel: z.literal(true),
     aPagar: z.object({ titulos: n0, valor, pagos: n0, valorPago: valor }).strict().nullable(),
     aReceber: z.object({ titulos: n0, valor, recebidos: n0, valorRecebido: valor }).strict().nullable(),
-    /** Movimento bancário do mês por `MFLANCTO.TIPO_TRF` cru; a legenda é "a confirmar" (regra 9). */
+    /** Movimento bancário do mês pelo tipo de transferência cru da origem; a legenda é "a confirmar" (regra 9). */
     movimento: z
       .array(z.object({ tipo: z.string(), rotulo: z.string(), lancamentos: n0, valor }).strict())
       .nullable(),

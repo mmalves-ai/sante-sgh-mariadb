@@ -21,7 +21,6 @@ import {
 import AvisoAdt from '../componentes/AvisoAdt.vue';
 import ErroAdt from '../componentes/ErroAdt.vue';
 import ResumoInternacao from '../componentes/ResumoInternacao.vue';
-import { paraHhmm } from '../regras-tela.js';
 import { usarAdt } from '../usar-adt.js';
 import { usarInternacao } from '../usar-internacao.js';
 
@@ -79,7 +78,7 @@ const registrar = () =>
       {
         motivo: Number(motivoMedica.value),
         destino: destino.value,
-        ...(previsao.value ? { previsaoSaida: paraHhmm(previsao.value) } : {}),
+        ...(previsao.value ? { previsaoSaida: previsao.value } : {}),
         ...(observacao.value.trim() ? { observacao: observacao.value.trim() } : {}),
       },
       novaChave('alta-medica'),
@@ -104,7 +103,7 @@ const saida = () => {
       reg.value,
       {
         versao: f.versao,
-        ...(horaSaida.value ? { horaSaida: paraHhmm(horaSaida.value) } : {}),
+        ...(horaSaida.value ? { horaSaida: horaSaida.value } : {}),
         ...(motivoSaida.value ? { motivo: Number(motivoSaida.value) } : {}),
       },
       novaChave('saida'),

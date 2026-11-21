@@ -160,4 +160,60 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
     expect((await porta.camposSib()).length).toBeGreaterThan(10);
     expect(await porta.arquivo().catch((e: unknown) => codigoDe(e))).toBe('modelo-pendente');
   });
+
+  it('complemento do SIB: inclui, altera sobre a versão vista, CCO único e o retrato aceito; endereço só do cadastro', async () => {
+    const T = trilhaTela(m, 'complemento_sib_beneficiario', 'operadora.ans.complemento');
+    // O retorno aceito do caso anterior já criou o complemento, com o retrato aceito (o registro do envio).
+    const vazio = await porta.complementoSib(contexto(m), m.beneficiario);
+    expect(vazio).toMatchObject({ beneficiario: m.beneficiario, versao: 1, dnv: null, itensExcluidos: false });
+    expect(vazio!.aceito).not.toBeNull();
+    expect(vazio!.aceitoEm).not.toBeNull();
+    const v = vazio!.versao;
+    expect(await porta.complementoSib(contexto(m, m.outroEst), m.beneficiario)).toBeNull();
+    const base = {
+      beneficiario: m.beneficiario,
+      logradouro: vazio!.logradouro,
+      numero: vazio!.numero,
+      complemento: vazio!.complemento,
+      bairro: vazio!.bairro,
+      municipio: vazio!.municipio,
+      cep: vazio!.cep,
+      resideExterior: false,
+      dnv: '12345678901',
+      coberturaParcial: true,
+      itensExcluidos: true,
+      cco: '90209000077',
+      motivoCancelamento: null,
+      usuario: 'x',
+    };
+    expect(await porta.gravar(contexto(m), T, (g) => g.complemento({ ...base, versao: v }))).toEqual({ id: m.beneficiario, versao: v + 1 });
+    expect(await porta.complementoSib(contexto(m), m.beneficiario)).toMatchObject({
+      versao: v + 1,
+      dnv: '12345678901',
+      coberturaParcial: true,
+      itensExcluidos: true,
+      cco: '90209000077',
+    });
+    const velha = await porta.gravar(contexto(m), T, (g) => g.complemento({ ...base, versao: v })).catch((e: unknown) => codigoDe(e));
+    expect(velha).toBe('envio-desatualizado');
+    const endereco = await porta
+      .gravar(contexto(m), T, (g) => g.complemento({ ...base, versao: v + 1, logradouro: 'Rua Sintética Diferente', cep: '01001000' }))
+      .catch((e: unknown) => codigoDe(e));
+    expect(endereco).toBe('endereco-do-cadastro');
+    expect(await porta.gravar(contexto(m), T, (g) => g.complemento({ ...base, versao: v + 1, dnv: null }))).toEqual({ id: m.beneficiario, versao: v + 2 });
+    expect(await ler('SELECT codigo_controle_ans, cobertura_parcial_temporaria FROM beneficiario_plano WHERE id = ?', [m.beneficiario])).toEqual([
+      { codigo_controle_ans: '90209000077', cobertura_parcial_temporaria: 1 },
+    ]);
+    expect((await ler("SELECT id FROM trilha_auditoria WHERE entidade = 'complemento_sib_beneficiario'")).length).toBeGreaterThanOrEqual(2);
+    // Desfaz o CCO para não colidir com os outros casos.
+    await porta.gravar(contexto(m), T, (g) => g.complemento({ ...base, versao: v + 2, cco: null, coberturaParcial: false }));
+  });
+
+  it('base do DIOPS (eventos): contas recebidas da rede no período, sem as de outro estabelecimento', async () => {
+    const r = await porta.contasDiops(contexto(m), m.operadora, '2000-01-01', '2099-12-31');
+    expect(Array.isArray(r.contas)).toBe(true);
+    expect(Array.isArray(r.pagamentos)).toBe(true);
+    for (const k of r.contas) expect(['recebida', 'analisada', 'paga', 'devolvida']).toContain(k.situacao);
+    expect(await porta.contasDiops(contexto(m), m.operadora, '1990-01-01', '1990-01-31')).toEqual({ contas: [], pagamentos: [] });
+  });
 });

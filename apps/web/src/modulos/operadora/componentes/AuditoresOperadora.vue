@@ -156,7 +156,6 @@ async function encerrar(): Promise<void> {
 
 const alterando = ref<AuditorOperadora | null>(null);
 const fa = reactive({
-  nome: '',
   categoria: 'medico' as string | null,
   numero: '',
   uf: 'SC' as string | null,
@@ -171,7 +170,6 @@ const dialogoAlterar = computed({
 });
 const alteracaoCompleta = computed(
   () =>
-    fa.nome.trim().length >= 3 &&
     fa.categoria !== null &&
     /^\d{1,15}$/.test(fa.numero.trim()) &&
     fa.uf !== null &&
@@ -179,7 +177,7 @@ const alteracaoCompleta = computed(
 );
 function abrirAlterar(a: AuditorOperadora): void {
   alterando.value = a;
-  Object.assign(fa, { nome: a.nome, categoria: a.categoria, numero: a.numero, uf: a.uf, motivo: '' });
+  Object.assign(fa, { categoria: a.categoria, numero: a.numero, uf: a.uf, motivo: '' });
   confirmandoAlterar.value = false;
   recusa.value = null;
   erro.value = null;
@@ -192,7 +190,6 @@ async function alterar(): Promise<void> {
   try {
     const r = await alterarAuditor(a.id, {
       versao: a.versao,
-      nome: fa.nome,
       categoria: fa.categoria,
       numero: fa.numero.trim(),
       uf: fa.uf,
@@ -440,13 +437,6 @@ async function alterar(): Promise<void> {
       largura="44rem"
     >
       <form class="campos" data-testid="form-alterar-auditor" @submit.prevent>
-        <SanteCampoTexto
-          id="aut-alt-nome"
-          v-model="fa.nome"
-          :rotulo="t('operadoraAutorizacao.auditores.nome')"
-          :max-bytes="120"
-          obrigatorio
-        />
         <SanteSelecao
           v-model="fa.categoria"
           :rotulo="t('operadoraAutorizacao.auditores.categoria')"
@@ -486,7 +476,7 @@ async function alterar(): Promise<void> {
             {{
               t('operadoraAutorizacao.auditores.confirmarAlterar', {
                 antes: `${alterando?.nome ?? ''} (${alterando?.conselho ?? ''} ${alterando?.numero ?? ''}/${alterando?.uf ?? ''})`,
-                depois: `${fa.nome} (${fa.categoria === 'enfermeiro' ? 'COREN' : 'CRM'} ${fa.numero.trim()}/${fa.uf ?? ''})`,
+                depois: `${fa.categoria === 'enfermeiro' ? 'COREN' : 'CRM'} ${fa.numero.trim()}/${fa.uf ?? ''}`,
               })
             }}
           </p>

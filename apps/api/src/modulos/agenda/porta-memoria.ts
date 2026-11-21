@@ -100,6 +100,20 @@ export function relogioCivil(agora = new Date()): Relogio {
 const iso = (h: string) => `${h.padStart(4, '0').slice(0, 2)}:${h.padStart(4, '0').slice(2, 4)}`;
 const digitos = (h: string) => h.replace(':', '').padStart(4, '0');
 const minutosOuNull = (h: string | null | undefined) => (h && min(h) > 0 ? min(h) : null);
+/**
+ * A entrada do contrato (horas "HH:MM", duração da agenda em minutos, sinais em booleano) no formato do estado
+ * interno deste dublê em memória (quatro dígitos e sinais de texto). Só aqui: o contrato e a porta própria não o
+ * conhecem.
+ */
+function paraOInterno(v: unknown): unknown {
+  if (typeof v === 'string') return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v.replace(':', '') : v;
+  if (Array.isArray(v)) return v.map(paraOInterno);
+  if (v && typeof v === 'object')
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, paraOInterno(x)]));
+  return v;
+}
+const sinal = (b: boolean | undefined) => (b === undefined ? undefined : b ? 'S' : 'N');
+const duracaoInterna = (m: number | null | undefined) => (m ? hhmm(m) : m === null ? '' : undefined);
 const passou = (h: { data: string; hora: string }, r: RelogioM) =>
   h.data < r.hoje || (h.data === r.hoje && h.hora <= r.hhmm);
 
@@ -658,7 +672,13 @@ export class PortaAgendaMemoria implements PortaAgenda {
     this.aplicarPorFora(s);
     let resultado: ResultadoOperacao;
     try {
-      resultado = await this.aplicar(c, s, op, analise.data as Record<string, unknown>, c.login);
+      resultado = await this.aplicar(
+        c,
+        s,
+        op,
+        paraOInterno(analise.data) as Record<string, unknown>,
+        c.login,
+      );
     } catch (erro) {
       // M39: as recusas contam nos indicadores de disputa como no executor do banco (desfecho e código).
       if (erro instanceof ErroOperacao)
@@ -764,7 +784,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
         let h: HorarioM;
         if (op === 'agenda.encaixar') {
           // O encaixe não passa por cima de bloqueio de período ativo (instante local como relógio de parede).
-          const parede = (data: string, hhmm: string) => Date.parse(`${data}T${hhmm.replace(':', '').replace(/^(\d\d)(\d\d)$/, '$1:$2')}:00Z`);
+          const parede = (data: string, hhmm: string) =>
+            Date.parse(`${data}T${hhmm.replace(':', '').replace(/^(\d\d)(\d\d)$/, '$1:$2')}:00Z`);
           const veto = vetoDeBloqueioNoEncaixe(parede(e['data'], e['hora']), {
             horarioBloqueado: false,
             bloqueios: s.bloqueios
@@ -879,7 +900,12 @@ export class PortaAgendaMemoria implements PortaAgenda {
           if (passou(m, r)) throw recusa('horario-passado', 'A consulta já passou.');
           h.situacao = 'C';
           const lista = s.confirmacoes.get(m.id) ?? [];
-          lista.unshift({ resultado: 'confirmado', canal: 'telefone', em: new Date().toISOString(), por: login });
+          lista.unshift({
+            resultado: 'confirmado',
+            canal: 'telefone',
+            em: new Date().toISOString(),
+            por: login,
+          });
           s.confirmacoes.set(m.id, lista);
         } else {
           if (h.situacao && h.situacao !== 'C')
@@ -989,7 +1015,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
           nome: e['nome'],
           crm: 0,
           ativa: 'S',
-          duracao: e['duracao'],
+          duracao: hhmm(e['duracaoMinutos'] as number),
           tele: e['teleatendimento'] ? 'S' : 'N',
           convenios: [],
           especialidades: [],
@@ -998,10 +1024,15 @@ export class PortaAgendaMemoria implements PortaAgenda {
       }
       case 'agenda.alterarAgenda': {
         const a = this.agendaM(s, e['agenda']);
-        const lidos = e['lidos'] as { duracao: string; ativa: string; teleatendimento: string };
+        const l = e['lidos'] as { duracaoMinutos: number | null; ativa: boolean; teleatendimento: boolean };
+        const lidos = {
+          duracao: duracaoInterna(l.duracaoMinutos) ?? '',
+          ativa: sinal(l.ativa),
+          teleatendimento: sinal(l.teleatendimento),
+        };
         const mudou = (
           [
-            ['duracao', a.duracao, lidos.duracao],
+            ['duracaoMinutos', a.duracao, lidos.duracao],
             ['ativa', a.ativa, lidos.ativa],
             ['teleatendimento', a.tele, lidos.teleatendimento],
           ] as const
@@ -1016,7 +1047,14 @@ export class PortaAgendaMemoria implements PortaAgenda {
               colunas: mudou.map(([k]) => k),
             },
           );
-        const v = e['valores'] as { duracao?: string; ativa?: string; teleatendimento?: string };
+        const vb = e['valores'] as { duracaoMinutos?: number; ativa?: boolean; teleatendimento?: boolean };
+        const v = Object.fromEntries(
+          Object.entries({
+            duracao: duracaoInterna(vb.duracaoMinutos),
+            ativa: sinal(vb.ativa),
+            teleatendimento: sinal(vb.teleatendimento),
+          }).filter(([, x]) => x !== undefined),
+        ) as { duracao?: string; ativa?: string; teleatendimento?: string };
         if (
           (v.duracao ?? a.duracao) === a.duracao &&
           (v.ativa ?? a.ativa) === a.ativa &&
@@ -1309,7 +1347,11 @@ export class PortaAgendaMemoria implements PortaAgenda {
       nomeConvenio: CONVENIOS_SINTETICOS.find((x) => x.codigo === m.conv)?.nome ?? null,
       retorno: m.retorno === 'S',
       encaixe: h?.tipo === 'E',
-      situacao: h ? (this.situacaoNoHorario(h, m) ?? 'marcada') : m.atendido === 'S' ? 'realizada' : 'marcada',
+      situacao: h
+        ? (this.situacaoNoHorario(h, m) ?? 'marcada')
+        : m.atendido === 'S'
+          ? 'realizada'
+          : 'marcada',
       canal: m.canal,
       marcadaEm: m.dtAge,
       marcadaPor: m.usuario,

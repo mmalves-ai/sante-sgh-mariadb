@@ -43,6 +43,8 @@ export interface GravadorPortaria {
     readonly hoje: string;
     readonly usuario: string;
     readonly teto: number;
+    /** Prazo de guarda do estabelecimento, em dias (o mesmo de `vencidos`); sem ele, o prazo padrão. */
+    readonly retencaoDias?: number;
   }): Promise<{ ids: number[]; fotos: string[] }>;
   registrarVisita(
     v: NovaVisita,

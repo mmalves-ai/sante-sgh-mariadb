@@ -10,7 +10,7 @@ import { situacaoHabilitacao } from '../habilitacao/validade.js';
 
 export interface RegistroDoProfissional {
   readonly registro: number;
-  /** Sigla do conselho (TBCBOPRO.CONS_PROF): CRM, COREN… */
+  /** Sigla do conselho de classe: CRM, COREN… */
   readonly conselho: string | null;
   readonly ativo: boolean | null;
   readonly validade: string | null;

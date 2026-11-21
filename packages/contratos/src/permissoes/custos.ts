@@ -1,6 +1,6 @@
 // Permissões dos custos hospitalares, etapa 4 (M54-F4; ficha, seção 7 "Centros de custo e rateio"; convencoes.md §12):
 // a estrutura de custos (classificação dos centros, ordem e critério do rateio) e a coleta e o lançamento das
-// estatísticas. Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES
+// estatísticas. Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem
 // "Gestão de custos" (4258; catalogo-legado.json, pc): Tabelas 295 (Parâmetros 296, Tabela de ocupação 297, Centros de
 // custo 298, Unidade de mensuração 299); Lançamentos › Gerar lançamentos 304 › Buscar produção 307 (SADT 308, Internação
 // 312, Bloco cirúrgico 313); Calcular itens de produção 319; Consultas › Centro de custo 321. No pc nenhum grupo tem as

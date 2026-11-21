@@ -37,6 +37,7 @@ import {
   type ExcluirInternacaoEntrada,
   type MovimentarProntuarioEntrada,
   type PreInternarEntrada,
+  dataHoraParaInstante,
 } from '@sgh/contratos';
 import {
   type ContextoOperacao,
@@ -643,7 +644,7 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
     let altaEm = agora;
     if (e.horaSaida) {
       const fuso = await fusoDe(tx, est);
-      altaEm = instanteCivil(relogioNoFuso(fuso, agora).hoje, e.horaSaida, fuso);
+      altaEm = new Date(dataHoraParaInstante(relogioNoFuso(fuso, agora).hoje, e.horaSaida, fuso));
       if (altaEm.getTime() > agora.getTime())
         throw recusa('hora-futura', 'A hora de saída ainda não chegou.', { campos: ['horaSaida'] });
       if (altaEm.getTime() < new Date(i['data_hora_entrada'] as Date).getTime())
@@ -870,7 +871,7 @@ const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOpe
 async function previsaoDe(tx: TxOperacao, est: number, data: string | undefined, hora: string | undefined) {
   if (!data) return { previsto: new Date(), situacao: 'em_espera' };
   const fuso = await fusoDe(tx, est);
-  return { previsto: instanteCivil(data, hora ?? '0700', fuso), situacao: 'solicitado' };
+  return { previsto: new Date(dataHoraParaInstante(data, hora ?? '07:00', fuso)), situacao: 'solicitado' };
 }
 
 const SITUACOES_PRE_PENDENTES = ['solicitado', 'aguardando_autorizacao', 'autorizado', 'confirmado', 'em_espera'];

@@ -1,5 +1,6 @@
 // Relatório de saneamento das regras de preço (ficha do M12, regra 9; cap-11 §11.3, Saneamento): datas
-// inválidas em regras datadas (TBPERMEM: 448 linhas, com anos como 0218 e 2201; TBINDICE: 2; TBPERTHM: 2)
+// inválidas em regras datadas (percentuais de materiais e medicamentos: 448 linhas, com anos como 0218 e 2201; índices do
+// convênio: 2; percentuais por procedimento: 2)
 // aparecem num relatório; o novo não corrige sozinho (a correção destas regras entra no saneamento da onda 4, com o faturamento). Saída só
 // com chaves de regra (convênio, tabela, item, data), nunca dado de pessoa.
 import { DATA_SENTINELA } from '@sgh/contratos';

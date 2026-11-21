@@ -63,7 +63,7 @@ describe('escolhas gravam índice, não código (regra 3)', () => {
     });
   });
 
-  it('resolve pelo ID_RESPOSTA do combo oculto e, na falta, por PRRESPOSTA.ORDEM', () => {
+  it('resolve pelo ID_RESPOSTA do combo oculto e, na falta, pela ordem da opção do campo', () => {
     const o = lerDfm(
       combo('cmp3', '0102', 'Nivel', ['', 'Leve', 'Moderado', 'Grave'], ['0', '3001', '3002', '9999']),
     );
@@ -91,7 +91,7 @@ describe('escolhas gravam índice, não código (regra 3)', () => {
       {
         indice: 2,
         texto: 'Outro rotulo',
-        motivo: 'rótulo do DFM diferente do cadastro da resposta (PRCADRESP)',
+        motivo: 'rótulo do DFM diferente do cadastro da opção de resposta',
       },
       {
         indice: 3,

@@ -1,7 +1,7 @@
 // Apuração do ponto, regra 13 do M52 (cap-07 §7.1.3; ref 02): o previsto vem da escala PUBLICADA (plantão presencial
 // ou diarista, não cancelado; o sobreaviso não é jornada sem acionamento), as marcações efetivas vêm do relógio e dos
-// ajustes aprovados (regra 11), e as horas são classificadas pelos tipos do domínio de horas do ramo (POTPHORA) e
-// somadas pelos 13 tipos de integração com a folha (PETP_INTEGR_EVENTO). Tudo em minutos de relógio local de Brasília.
+// ajustes aprovados (regra 11), e as horas são classificadas pelos tipos do domínio de horas do ramo e
+// somadas pelos 13 tipos de integração com a folha. Tudo em minutos de relógio local de Brasília.
 //
 // Regras de cálculo (CLT; padrões de mercado como parâmetro, D-APURA-524):
 //   - tolerância (art. 58, §1º; Súmula 366 do TST): variação de até 5 min por marcação, no máximo 10 min no dia, não

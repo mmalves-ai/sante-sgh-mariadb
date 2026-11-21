@@ -6,6 +6,7 @@ import { PLANO } from './demonstracoes.spec-util.js';
 import { planoDaApuracao } from './demonstracoes.js';
 import {
   dataSped,
+  planejarEnvioSped,
   type EmpresaSped,
   type EntradaSped,
   gerarEcd,
@@ -275,5 +276,45 @@ describe('ECF', () => {
     });
     expect(ret.nomeArquivo).toContain('_RETIFICADORA');
     expect(linhasDe(ret.conteudo)[0]).toContain('|S|H1|');
+  });
+});
+
+describe('planejarEnvioSped', () => {
+  const e = (id: number, situacao: 'gerado' | 'transmitido' | 'cancelado', substituido = false) => ({
+    id,
+    numero: id,
+    situacao,
+    substituido,
+  });
+  it('primeiro envio original: número 1, sem substituição', () => {
+    expect(planejarEnvioSped([], false)).toEqual({
+      ok: true,
+      numero: 1,
+      substituidoId: null,
+      substituiPendente: false,
+    });
+  });
+  it('substituta sem envio anterior (ou só cancelados) é recusada', () => {
+    expect(planejarEnvioSped([], true)).toEqual({ ok: false, motivo: 'sem-arquivo-substituido' });
+    expect(planejarEnvioSped([e(1, 'cancelado')], true)).toEqual({
+      ok: false,
+      motivo: 'sem-arquivo-substituido',
+    });
+  });
+  it('nova original substitui o último gerado pendente; cancelado conta no número', () => {
+    expect(planejarEnvioSped([e(1, 'gerado', true), e(2, 'gerado'), e(3, 'cancelado')], false)).toEqual({
+      ok: true,
+      numero: 4,
+      substituidoId: 2,
+      substituiPendente: true,
+    });
+  });
+  it('substituta aponta o último válido (transmitido) sem marcá-lo substituído', () => {
+    expect(planejarEnvioSped([e(1, 'transmitido'), e(2, 'cancelado')], true)).toEqual({
+      ok: true,
+      numero: 3,
+      substituidoId: 1,
+      substituiPendente: false,
+    });
   });
 });

@@ -40,7 +40,7 @@ export interface GravadorBlocoSeguro {
     readonly momento: MomentoChecklist;
     readonly em: string;
     readonly usuario: string;
-    /** A chave natural da cirurgia: liga o ato registrado (CCCADCIR pelo REG), quando há. */
+    /** A cirurgia do checklist: liga o ato registrado pelo atendimento, pela sala e pelo dia, quando há. */
     readonly cirurgia?: {
       readonly agendamento: number;
       readonly sala: number;

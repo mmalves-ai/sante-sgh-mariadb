@@ -1,0 +1,60 @@
+{
+ "situacao_marcacao": [
+  {
+   "codigo": "aguardando",
+   "descricao": "Agendada",
+   "significado": "aguardando",
+   "cor": "#1976D2",
+   "ordem": 1
+  },
+  {
+   "codigo": "confirmada",
+   "descricao": "Confirmada",
+   "significado": "confirmada",
+   "cor": "#0288D1",
+   "ordem": 2
+  },
+  {
+   "codigo": "chegou",
+   "descricao": "Paciente chegou",
+   "significado": "chegou",
+   "cor": "#388E3C",
+   "ordem": 3
+  },
+  {
+   "codigo": "em_atendimento",
+   "descricao": "Em atendimento",
+   "significado": "em_atendimento",
+   "cor": "#F57C00",
+   "ordem": 4
+  },
+  {
+   "codigo": "realizada",
+   "descricao": "Realizada",
+   "significado": "realizada",
+   "cor": "#455A64",
+   "ordem": 5
+  },
+  {
+   "codigo": "cancelada",
+   "descricao": "Cancelada",
+   "significado": "cancelada",
+   "cor": "#9E9E9E",
+   "ordem": 6
+  },
+  {
+   "codigo": "falta",
+   "descricao": "Faltou",
+   "significado": "falta",
+   "cor": "#D32F2F",
+   "ordem": 7
+  },
+  {
+   "codigo": "bloqueada",
+   "descricao": "Bloqueada",
+   "significado": "bloqueada",
+   "cor": "#616161",
+   "ordem": 8
+  }
+ ]
+}

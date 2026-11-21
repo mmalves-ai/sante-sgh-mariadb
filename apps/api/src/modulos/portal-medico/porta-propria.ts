@@ -14,8 +14,12 @@
 // compartilhado entre cadastros, e o "código repetido" do sistema de origem deixa de existir.
 // Melhoria: o ato do hospital sobre a conta (bloqueio, desbloqueio, encerramento) passa pela regra do domínio do módulo
 // (regras-conta.ts) e vai à trilha com o motivo e a decisão sobre os pedidos pendentes.
-// Pendências (nada em silêncio; a tela recebe 409 modelo-pendente com o motivo; pedido de DDL na saída do lote 04-02):
-// OPERACOES_PENDENTES abaixo.
+// Melhoria: a troca do e-mail da conta grava o pedido em troca_email_conta_portal (o código nunca é guardado, só o
+// resumo; um pedido pendente por conta, CHECK e UNIQUE do banco) e a confirmação passa a conta ao e-mail novo.
+// Melhoria: a notificação do aviso de crítico ao médico externo é uma tentativa de contato do aviso
+// (aviso_valor_critico_tentativa, uma por aviso e conta do portal, UNIQUE do banco), com o envio e o motivo.
+// Pendências (nada em silêncio; a tela recebe 409 com o motivo; pedidos em
+// docs/obra/fatias/f24/saida/21-misto-farmacia.json): OPERACOES_PENDENTES abaixo.
 import {
   type ContextoNucleo,
   definirOperacao,
@@ -29,12 +33,16 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { portaIndisponivel } from '../exames/public-api.js';
 import {
   type ContextoPortalMedico,
+  type EnvioCriticoMedico,
+  type EnvioTrocaEmailMedico,
   type GravadorPortalMedico,
+  type NotificacaoCriticoMedico,
+  type TrocaEmailMedico,
   METODOS_PORTA_PORTAL_MEDICO,
   type PortaPortalMedico,
   type ProfissionalCorpoClinico,
@@ -48,21 +56,19 @@ import { conferirAtoContaMedico, SITUACAO_DO_MODELO, situacaoDaTela } from './re
 export type NucleoPortalMedico = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 export const TABELA_CONTA = 'conta_portal_profissional_externo';
-const TABELAS_GRAVACAO = [TABELA_CONTA] as const;
+const TABELAS_GRAVACAO = [TABELA_CONTA, 'troca_email_conta_portal', 'aviso_valor_critico_tentativa'] as const;
+/** O canal da notificação do crítico pelo portal do médico externo (cadastro canal_notificacao do cliente). */
+export const CANAL_CRITICO_PORTAL_MEDICO = 'portal_medico_externo';
 const TETO_BUSCA = 20;
 
-/** Operações que o modelo ainda não atende, com o que falta (pedido de DDL do lote 04-02). */
+/** Operações que o banco próprio ainda não atende, com o que falta (pedidos do lote 21-misto-farmacia da F2.4). */
 export const OPERACOES_PENDENTES: Readonly<Record<string, string>> = {
   atosConta:
     'o histórico dos atos da conta do médico externo (a tabela do histórico ainda não existe no modelo)',
   trocarSenha:
     'a troca de senha da conta do médico externo (a senha fica no provedor de identidade, ainda não ligado)',
-  trocaEmail:
-    'a troca do e-mail da conta do médico externo (a tabela do pedido de troca ainda não existe no modelo)',
   religar:
     'religar o profissional a outra conta depois de desligar ou encerrar a antiga (a chave única do profissional ainda cobre a conta não vigente)',
-  notificacoesCritico:
-    'a notificação do resultado crítico ao médico externo (a notificação por conta do portal ainda não existe no modelo)',
 };
 
 const id = z.number().int().positive();
@@ -94,6 +100,50 @@ const pendente = (o: string): ErroOperacao =>
     'Recurso ainda não disponível no banco',
     `${o.slice(0, 1).toUpperCase()}${o.slice(1)} ainda não está disponível neste banco.`,
   );
+
+const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
+const comoData = (v: unknown): Date | null =>
+  v instanceof Date ? v : v === null || v === undefined ? null : new Date(String(v).replace(' ', 'T') + 'Z');
+
+/** O envio da tela → o do banco (sem nome de fornecedor no modelo: a plataforma de mensagens é `plataforma`). */
+const ENVIO_TROCA_PARA_BANCO: Readonly<Record<EnvioTrocaEmailMedico, string>> = {
+  simulador: 'simulador',
+  halai: 'plataforma',
+};
+const ENVIO_CRITICO_PARA_BANCO: Readonly<Record<EnvioCriticoMedico, string>> = {
+  simulador: 'simulador',
+  halai: 'plataforma',
+  desligado: 'desligado',
+};
+const ENVIO_TROCA_DO_BANCO: Readonly<Record<string, EnvioTrocaEmailMedico>> = {
+  simulador: 'simulador',
+  plataforma: 'halai',
+};
+const ENVIO_CRITICO_DO_BANCO: Readonly<Record<string, EnvioCriticoMedico>> = {
+  simulador: 'simulador',
+  plataforma: 'halai',
+  desligado: 'desligado',
+};
+const resumo64 = z.string().regex(/^[0-9a-f]{64}$/);
+const ENTRADA_PEDIR_TROCA = z
+  .object({
+    acesso: z.number().int().positive(),
+    emailNovo: z.string().email().max(254),
+    tokenResumo: resumo64,
+    validoAte: z.string().datetime(),
+    envio: z.enum(['simulador', 'halai']),
+  })
+  .strict();
+const ENTRADA_CANCELAR_TROCA = z.object({ troca: z.number().int().positive() }).strict();
+const ENTRADA_CONFIRMAR_TROCA = z.object({ tokenResumo: resumo64, agora: z.string().datetime() }).strict();
+const ENTRADA_NOTIFICAR = z
+  .object({
+    aviso: z.number().int().positive(),
+    acesso: z.number().int().positive(),
+    envio: z.enum(['simulador', 'halai', 'desligado']),
+    motivo: z.string().max(500).nullable(),
+  })
+  .strict();
 
 const n = (v: unknown) => Number(v ?? 0);
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
@@ -276,10 +326,162 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
           },
         ),
       trocarSenha: () => Promise.reject(pendente(OPERACOES_PENDENTES['trocarSenha']!)),
-      pedirTrocaEmail: () => Promise.reject(pendente(OPERACOES_PENDENTES['trocaEmail']!)),
-      cancelarTrocaEmail: () => Promise.reject(pendente(OPERACOES_PENDENTES['trocaEmail']!)),
-      confirmarTrocaEmail: () => Promise.reject(pendente(OPERACOES_PENDENTES['trocaEmail']!)),
-      notificarCritico: () => Promise.reject(pendente(OPERACOES_PENDENTES['notificacoesCritico']!)),
+      pedirTrocaEmail: (x) =>
+        this.operar(
+          c,
+          'portal-medico.troca-email.pedir',
+          ENTRADA_PEDIR_TROCA,
+          {
+            acesso: x.acesso,
+            emailNovo: x.emailNovo.trim(),
+            tokenResumo: x.tokenResumo,
+            validoAte: x.validoAte.toISOString(),
+            envio: x.envio,
+          },
+          trilha(),
+          async (tx, e) => {
+            const conta = await this.contaTravada(tx, e.acesso);
+            if (String(conta['situacao']) !== SITUACAO_DO_MODELO.ativo)
+              throw recusa('conta-nao-ativa', 'Só a conta ativa troca o e-mail.');
+            // O pedido novo cancela o pendente anterior (um pendente por conta, UNIQUE do banco).
+            const agora = new Date();
+            const antigos = await tx.consultarParaAtualizar(
+              `SELECT id, versao FROM troca_email_conta_portal
+                WHERE conta_portal_profissional_externo_id = ? AND situacao = 'pendente' AND excluido_em IS NULL`,
+              [e.acesso],
+            );
+            for (const a of antigos)
+              await tx.alterar('troca_email_conta_portal', n(a['id']), n(a['versao']), {
+                situacao: 'cancelada',
+                decidido_em: agora,
+              });
+            const id = await tx.incluir('troca_email_conta_portal', {
+              conta_portal_profissional_externo_id: e.acesso,
+              email_novo: e.emailNovo,
+              email_novo_resumo: sha256(e.emailNovo.toLowerCase()),
+              codigo_resumo: e.tokenResumo,
+              valido_ate: new Date(e.validoAte),
+              canal_pedido: 'portal',
+              motivo: 'Troca pedida pelo médico no portal',
+              envio: ENVIO_TROCA_PARA_BANCO[e.envio],
+              situacao: 'pendente',
+            });
+            return { id };
+          },
+        ),
+      cancelarTrocaEmail: async (troca) => {
+        await this.operar(
+          c,
+          'portal-medico.troca-email.cancelar',
+          ENTRADA_CANCELAR_TROCA,
+          { troca },
+          trilha(),
+          async (tx, e) => {
+            const [t] = await tx.consultarParaAtualizar(
+              `SELECT id, versao, situacao FROM troca_email_conta_portal
+                WHERE id = ? AND conta_portal_profissional_externo_id IS NOT NULL AND excluido_em IS NULL`,
+              [e.troca],
+            );
+            if (!t || String(t['situacao']) !== 'pendente')
+              throw recusa('troca-nao-pendente', 'O pedido de troca do e-mail não está mais pendente.');
+            await tx.alterar('troca_email_conta_portal', e.troca, n(t['versao']), {
+              situacao: 'cancelada',
+              decidido_em: new Date(),
+            });
+            return {};
+          },
+        );
+      },
+      confirmarTrocaEmail: (x) =>
+        this.operar(
+          c,
+          'portal-medico.troca-email.confirmar',
+          ENTRADA_CONFIRMAR_TROCA,
+          { tokenResumo: x.tokenResumo, agora: x.agora.toISOString() },
+          trilha(),
+          async (tx, e) => {
+            const [t] = await tx.consultarParaAtualizar(
+              `SELECT id, versao, situacao, valido_ate, email_novo, conta_portal_profissional_externo_id
+                 FROM troca_email_conta_portal
+                WHERE codigo_resumo = ? AND conta_portal_profissional_externo_id IS NOT NULL AND excluido_em IS NULL`,
+              [e.tokenResumo],
+            );
+            const validoAte = t ? comoData(t['valido_ate']) : null;
+            if (!t || String(t['situacao']) !== 'pendente' || !validoAte || validoAte <= new Date(e.agora))
+              throw recusa('link-invalido', 'Este link de confirmação não vale mais. Peça a troca do e-mail de novo.');
+            const acesso = n(t['conta_portal_profissional_externo_id']);
+            const conta = await this.contaTravada(tx, acesso);
+            if (String(conta['situacao']) !== SITUACAO_DO_MODELO.ativo)
+              throw recusa('conta-nao-ativa', 'Só a conta ativa troca o e-mail.');
+            const emailNovo = String(t['email_novo']);
+            await tx.alterar(TABELA_CONTA, acesso, n(conta['versao']), { email: emailNovo });
+            const id = n(t['id']);
+            await tx.alterar('troca_email_conta_portal', id, n(t['versao']), {
+              situacao: 'confirmada',
+              decidido_em: new Date(),
+            });
+            return { acesso, emailNovo, id };
+          },
+        ),
+      notificarCritico: (x) =>
+        this.operar(
+          c,
+          'portal-medico.critico.notificar',
+          ENTRADA_NOTIFICAR,
+          { aviso: x.aviso, acesso: x.acesso, envio: x.envio, motivo: x.motivo?.trim() || null },
+          trilha(),
+          async (tx, e) => {
+            if (e.envio === 'desligado' && !e.motivo)
+              throw recusa('motivo-obrigatorio', 'A notificação desligada guarda o motivo.', { campos: ['motivo'] });
+            const conta = await this.contaTravada(tx, e.acesso);
+            const [a] = await tx.consultarParaAtualizar(
+              `SELECT id, nivel_escalonamento FROM aviso_valor_critico WHERE id = ? AND excluido_em IS NULL`,
+              [e.aviso],
+            );
+            if (!a) throw recusa('aviso-inexistente', 'O aviso de crítico não existe.');
+            const ja = await tx.uma(
+              `SELECT id FROM aviso_valor_critico_tentativa
+                WHERE aviso_valor_critico_id = ? AND conta_portal_profissional_externo_id = ?`,
+              [e.aviso, e.acesso],
+            );
+            if (ja) return { nova: false };
+            const canal = await tx.uma('SELECT id FROM canal_notificacao WHERE codigo = ? AND ativo = TRUE', [
+              CANAL_CRITICO_PORTAL_MEDICO,
+            ]);
+            if (!canal)
+              throw recusa(
+                'canal-inexistente',
+                'O canal da notificação do portal do médico externo não está cadastrado neste cliente.',
+              );
+            const [seq] = await tx.consultar(
+              'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM aviso_valor_critico_tentativa WHERE aviso_valor_critico_id = ?',
+              [e.aviso],
+            );
+            try {
+              await tx.incluir('aviso_valor_critico_tentativa', {
+                aviso_valor_critico_id: e.aviso,
+                operacao: 'inclusao',
+                ocorrido_em: new Date(),
+                usuario_id: c.usuario,
+                sequencia: n(seq?.['s']),
+                canal_notificacao_id: n(canal['id']),
+                destinatario_profissional_id: conta['profissional_id'] ?? null,
+                destinatario_descricao: `conta ${e.acesso} do portal do médico externo`,
+                nivel_escalonamento: n(a['nivel_escalonamento']),
+                // A mensagem deixada no portal não confirma a leitura (a ciência é registrada à parte); a desligada não
+                // saiu, e o motivo fica na observação.
+                resultado: e.envio === 'desligado' ? 'sem_resposta' : 'recado',
+                observacao: e.motivo,
+                conta_portal_profissional_externo_id: e.acesso,
+                envio: ENVIO_CRITICO_PARA_BANCO[e.envio],
+              });
+            } catch (erro) {
+              if (restricaoUnicaViolada(erro)) return { nova: false };
+              throw erro;
+            }
+            return { nova: true };
+          },
+        ).then((r) => r.nova),
     };
   }
 
@@ -479,16 +681,53 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
     return Promise.reject(pendente(OPERACOES_PENDENTES['atosConta']!));
   }
 
-  trocaEmailPendente(): Promise<never> {
-    return Promise.reject(pendente(OPERACOES_PENDENTES['trocaEmail']!));
+  private trocaEmail(c: ContextoPortalMedico, filtro: string, p: unknown[]): Promise<TrocaEmailMedico | null> {
+    return this.ler(c, async (l) => {
+      const t = await l.uma<Linha>(
+        `SELECT id, conta_portal_profissional_externo_id, email_novo, valido_ate, envio, situacao
+           FROM troca_email_conta_portal
+          WHERE ${filtro} AND conta_portal_profissional_externo_id IS NOT NULL AND excluido_em IS NULL
+          ORDER BY id DESC LIMIT 1`,
+        p,
+      );
+      if (!t) return null;
+      const situacao = String(t['situacao']);
+      return {
+        id: n(t['id']),
+        acesso: n(t['conta_portal_profissional_externo_id']),
+        emailNovo: String(t['email_novo']),
+        validoAte: comoData(t['valido_ate']) ?? new Date(0),
+        envio: ENVIO_TROCA_DO_BANCO[String(t['envio'])] ?? 'simulador',
+        // A expirada no banco é, para a tela, um pedido que não vale mais (como o cancelado).
+        situacao: situacao === 'pendente' || situacao === 'confirmada' ? situacao : 'cancelada',
+      };
+    });
   }
 
-  trocaEmailPorToken(): Promise<never> {
-    return Promise.reject(pendente(OPERACOES_PENDENTES['trocaEmail']!));
+  trocaEmailPendente(c: ContextoPortalMedico, acesso: number): Promise<TrocaEmailMedico | null> {
+    return this.trocaEmail(c, "conta_portal_profissional_externo_id = ? AND situacao = 'pendente'", [acesso]);
   }
 
-  notificacoesCritico(): Promise<never> {
-    return Promise.reject(pendente(OPERACOES_PENDENTES['notificacoesCritico']!));
+  trocaEmailPorToken(c: ContextoPortalMedico, tokenResumo: string): Promise<TrocaEmailMedico | null> {
+    return this.trocaEmail(c, 'codigo_resumo = ?', [tokenResumo]);
+  }
+
+  notificacoesCritico(c: ContextoPortalMedico, acesso: number): Promise<NotificacaoCriticoMedico[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT aviso_valor_critico_id, envio, observacao, ocorrido_em FROM aviso_valor_critico_tentativa
+            WHERE conta_portal_profissional_externo_id = ? ORDER BY ocorrido_em DESC, id DESC`,
+          [acesso],
+          { teto: 500 },
+        )
+      ).map((x) => ({
+        aviso: n(x['aviso_valor_critico_id']),
+        envio: ENVIO_CRITICO_DO_BANCO[String(x['envio'])] ?? 'simulador',
+        motivo: x['observacao'] === null || x['observacao'] === undefined ? null : String(x['observacao']),
+        em: instante(x['ocorrido_em']) ?? '',
+      })),
+    );
   }
 }
 

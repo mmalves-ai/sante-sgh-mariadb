@@ -14,7 +14,7 @@
 // Melhoria: o início é reentrante: a teleconsulta com o atendimento já ligado e a sala aberta termina a vinculação.
 // Melhoria: violação de restrição do banco vira mensagem de negócio (traduzirErro), nunca erro cru.
 import { randomUUID } from 'node:crypto';
-import type { MotivoEncerramentoTeleconsulta, SituacaoTeleconsulta } from '@sgh/contratos';
+import { esquemaHora, horaParaMinutos, type MotivoEncerramentoTeleconsulta, type SituacaoTeleconsulta } from '@sgh/contratos';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -71,22 +71,17 @@ function partes(fuso: string, d: Date) {
   return { data: `${v('year')}-${v('month')}-${v('day')}`, hh: v('hour'), mi: v('minute'), ss: v('second') };
 }
 
-/** O instante no fuso: data civil, hora em HHMM e o carimbo local (AAAA-MM-DDTHH:MM:SS). */
-export function civilNoFuso(fuso: string, d: Date): { data: string; hhmm: string; carimbo: string } {
+/** O instante no fuso: data civil, hora do dia "HH:MM" e o carimbo local (AAAA-MM-DDTHH:MM:SS). */
+export function civilNoFuso(fuso: string, d: Date): { data: string; hora: string; carimbo: string } {
   const p = partes(fuso, d);
-  return { data: p.data, hhmm: `${p.hh}${p.mi}`, carimbo: `${p.data}T${p.hh}:${p.mi}:${p.ss}` };
+  return { data: p.data, hora: `${p.hh}:${p.mi}`, carimbo: `${p.data}T${p.hh}:${p.mi}:${p.ss}` };
 }
 
-/** A data civil e a hora (HHMM) no fuso do estabelecimento como instante. */
-export function instanteNoFuso(fuso: string, data: string, hhmm: string): Date {
+/** A data civil e a hora do dia ("HH:MM", recusada fora do formato) no fuso do estabelecimento como instante. */
+export function instanteNoFuso(fuso: string, data: string, hora: string): Date {
   const [a, m, d] = data.split('-').map(Number);
-  const palpite = Date.UTC(
-    a ?? 1970,
-    (m ?? 1) - 1,
-    d ?? 1,
-    Number(hhmm.slice(0, 2)),
-    Number(hhmm.slice(2, 4)),
-  );
+  const minutos = horaParaMinutos(hora);
+  const palpite = Date.UTC(a ?? 1970, (m ?? 1) - 1, d ?? 1, Math.floor(minutos / 60), minutos % 60);
   const p = partes(fuso, new Date(palpite));
   const comoUtc = Date.UTC(
     Number(p.data.slice(0, 4)),
@@ -163,7 +158,7 @@ function teleconsultaDe(r: Linha, fuso: string): Teleconsulta {
     nomeAgenda: tele ? nomeProf : '',
     profissionalAgenda: tele ? numOuNulo(r['profissional_id']) : null,
     data: civil.data,
-    hora: civil.hhmm,
+    hora: civil.hora,
     paciente: Number(r['paciente_id']),
     atendimento: numOuNulo(r['atendimento_id']),
     termo: termo ? { versao: termo, aceitoEm: quando(r['termo_aceito_em']) ?? '' } : null,
@@ -311,7 +306,7 @@ export class PortaTelemedicinaPropria implements PortaTelemedicina {
   async doDia(c: ContextoTelemedicina, f: { data: string; profissional: number | null; teto: number }) {
     const b = this.base(c);
     const fuso = await this.nucleo.lerSomente(b, (l) => fusoDe(l, b.estabelecimento));
-    const de = instanteNoFuso(fuso, f.data, '0000');
+    const de = instanteNoFuso(fuso, f.data, '00:00');
     const ate = new Date(de.getTime() + 86_400_000);
     return this.lista(
       c,
@@ -457,7 +452,8 @@ const corpo =
 const idPositivo = z.number().int().positive().max(2_147_483_647);
 const versaoZ = z.number().int().positive().max(2_147_483_647);
 const dataZ = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const horaZ = z.string().regex(/^([01]\d|2[0-3])[0-5]\d$/);
+/** Hora do dia "HH:MM" (o auxiliar neutro do contrato). */
+const horaZ = esquemaHora;
 const provedorZ = z.enum(['simulado', 'provedor']);
 const motivoZ = z.enum(['concluida', 'paciente-ausente', 'falha-conexao', 'presencial-indicado']);
 

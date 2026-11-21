@@ -1,6 +1,6 @@
 // Textos das telas da classificação de risco no pronto atendimento (M44, etapa 1). Sem nome de sistema antigo
-// (ADR 0023): o formulário E08 é "o formulário de classificação do prontuário"; a tabela PRMANCHESTER é "a tabela de
-// cores anterior". A cor nunca aparece sozinha: sempre com o nome escrito (acessibilidade e painel de TV).
+// (ADR 0023): o formulário de origem é "o formulário de classificação do prontuário"; a tabela de cores de origem é
+// "a tabela de cores anterior". A cor nunca aparece sozinha: sempre com o nome escrito (acessibilidade e painel de TV).
 export const mensagensClassificacao = {
   carregando: 'Carregando…',
   nenhum: 'Ninguém aguardando classificação.',

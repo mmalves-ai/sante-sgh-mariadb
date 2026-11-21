@@ -1,4 +1,4 @@
-// Situação da conta (ficha do M30, regras 2 e 3; Anexo A, A.5). FCCTAEXT.FECHADA: N aberta, S fechada e não
+// Situação da conta (ficha do M30, regras 2 e 3; Anexo A, A.5). Marca de fechamento: N aberta, S fechada e não
 // apresentada, A apresentada à operadora; F é uma conta anômala (erro de dado, 1 linha na cópia), só mostrada. O novo
 // grava só N e S neste marco. A situação da tela é DERIVADA de FECHADA, IND_EMI, do vínculo com o lote TISS, do
 // protocolo, dos valores de retorno e de recurso dos itens e das etapas do novo (SGH_FAT_CONTA_ETAPA); o que só o outro
@@ -73,7 +73,7 @@ export const ROTULO_SITUACAO: Readonly<Record<SituacaoDerivada, string>> = {
 export interface FatosSituacao {
   readonly fechada: string | null;
   readonly indEmi: string | null;
-  /** A conta está em algum lote TISS (FCCTAEXT_FCTISSLOTEPROT). */
+  /** A conta está em algum lote TISS. */
   readonly emLote: boolean;
   /** O lote da conta tem protocolo da operadora. */
   readonly protocolada: boolean;

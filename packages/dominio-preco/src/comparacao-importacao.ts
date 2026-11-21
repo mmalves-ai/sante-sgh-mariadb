@@ -2,7 +2,7 @@
 // carga em três passos): o arquivo entra na área de preparação, é validado (leiaute, totais, códigos
 // repetidos, números) e comparado com a vigência que vale hoje (novos, removidos, alterados, iguais). A
 // publicação dos itens EXISTENTES é o `preco.reajustar` em modo "por arquivo"; os novos e os removidos
-// aparecem na comparação e não são publicados (o novo nunca grava TBTABTHM; operação ainda não disponível).
+// aparecem na comparação e não são publicados (a inclusão e a retirada de itens da tabela ainda não estão disponíveis).
 //
 // Leiaute (CSV, separador ";" ou ","; decimal com vírgula quando o separador é ";"):
 //   codigo;valor_ch[;valor_co;valor_filme;valor_anes;valor_outros]
@@ -176,7 +176,7 @@ export interface Comparacao {
 }
 
 /**
- * Compara o arquivo com a vigência atual da tabela: código fora de TBTABTHM é `novo` (não publicado: o novo nunca grava TBTABTHM);
+ * Compara o arquivo com a vigência atual da tabela: código fora dos itens da tabela é `novo` (não publicado: a inclusão de itens ainda não existe);
  * item ativo com preço que não está no arquivo é `removido` (nada muda no novo); os demais `alterado` ou
  * `igual` (só os componentes do arquivo contam; os ausentes ficam como estão).
  */

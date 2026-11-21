@@ -16,7 +16,7 @@ export function dadosDoBuild(agora: Date = new Date()): DadosDeBuild {
 }
 
 /**
- * Identificação rastreável (cap-14 §14.10): `<versão>+<commit>` ou, sem git, `<versão>+build.<AAAAMMDDHHMMSS>`.
+ * Identificação rastreável (cap-14 §14.10): `<versão>+<commit>` ou, sem git, `<versão>+build.<carimbo>` (carimbo: data e hora UTC em 14 dígitos, ano a segundo).
  */
 export function identificar(dados: DadosDeBuild): string {
   if (dados.commit) return `${dados.versao}+${dados.commit}`;

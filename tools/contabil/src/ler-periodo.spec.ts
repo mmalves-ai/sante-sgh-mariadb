@@ -35,7 +35,7 @@ function dubleDe(fatos: { idFato: number; situacao: string; estorno?: boolean }[
   return { fonte, pedidos };
 }
 
-const c = contextoDe({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: 1 });
+const c = contextoDe({ cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5', estabelecimento: 1 });
 
 describe('lerPeriodo', () => {
   it('pede um a mais que o teto e marca parcial quando passa', async () => {
@@ -63,22 +63,52 @@ describe('pedidoDe', () => {
   it('confere período, cliente e estabelecimento', () => {
     expect(pedidoDe({ periodo: '2026-13', cliente: 'x', estabelecimento: '1' })).toMatch(/periodo/);
     expect(pedidoDe({ periodo: '2026-01', cliente: 'X; DROP', estabelecimento: '1' })).toMatch(/cliente/);
-    expect(pedidoDe({ periodo: '2026-01', cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: '0' })).toMatch(/estabelecimento/);
-    expect(pedidoDe({ periodo: '2026-01', cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: '7' })).toEqual({
-      cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'),
+    expect(
+      pedidoDe({
+        periodo: '2026-01',
+        cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
+        estabelecimento: '0',
+      }),
+    ).toMatch(/estabelecimento/);
+    expect(
+      pedidoDe({
+        periodo: '2026-01',
+        cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
+        estabelecimento: '7',
+      }),
+    ).toEqual({
+      cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
       estabelecimento: 7,
       periodo: '2026-01',
     });
   });
 
   it('recusa --empresa: a empresa contábil é o estabelecimento (separada, a porta leria zero fatos)', () => {
-    expect(pedidoDe({ periodo: '2026-01', cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: '7', empresa: '1' })).toMatch(/empresa/);
-    expect(pedidoDe({ periodo: '2026-01', cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: '7', empresa: '7' })).toMatch(/empresa/);
+    expect(
+      pedidoDe({
+        periodo: '2026-01',
+        cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
+        estabelecimento: '7',
+        empresa: '1',
+      }),
+    ).toMatch(/empresa/);
+    expect(
+      pedidoDe({
+        periodo: '2026-01',
+        cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
+        estabelecimento: '7',
+        empresa: '7',
+      }),
+    ).toMatch(/empresa/);
   });
 });
 
 describe('reprocessar (dublês do núcleo e da porta)', () => {
-  const p = { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), estabelecimento: 7, periodo: '2026-01' };
+  const p = {
+    cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5',
+    estabelecimento: 7,
+    periodo: '2026-01',
+  };
   const nucleo = (existe: boolean) =>
     ({
       lerSomente: async (_c: unknown, fn: (l: { uma: () => Promise<unknown> }) => Promise<unknown>) =>
@@ -103,11 +133,16 @@ describe('reprocessar (dublês do núcleo e da porta)', () => {
 
   it('modelo pendente na porta: saída 69 com a mensagem da operação; outro erro sobe', async () => {
     const { fonte } = dubleDe([]);
-    const pendente = Object.assign(new Error('x'), { problema: { codigo: 'modelo-pendente', detail: 'As regras aguardam.' } });
+    const pendente = Object.assign(new Error('x'), {
+      problema: { codigo: 'modelo-pendente', detail: 'As regras aguardam.' },
+    });
     const r = await reprocessar(nucleo(true), { ...fonte, regras: () => Promise.reject(pendente) }, p);
-    expect(r).toEqual({ saida: SAIDA.indisponivel, texto: 'conferência indisponível no banco do cliente: As regras aguardam.' });
-    await expect(reprocessar(nucleo(true), { ...fonte, regras: () => Promise.reject(new Error('falha')) }, p)).rejects.toThrow(
-      'falha',
-    );
+    expect(r).toEqual({
+      saida: SAIDA.indisponivel,
+      texto: 'conferência indisponível no banco do cliente: As regras aguardam.',
+    });
+    await expect(
+      reprocessar(nucleo(true), { ...fonte, regras: () => Promise.reject(new Error('falha')) }, p),
+    ).rejects.toThrow('falha');
   });
 });

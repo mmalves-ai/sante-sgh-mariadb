@@ -4,7 +4,7 @@
 //   GET  /api/cadastros/pacientes/:id                     ficha (registro de acesso; documentos e sensíveis por perfil)
 //   POST /api/cadastros/pacientes                         cadastrar (executor: cadastro.cadastrarPaciente)
 //   PUT  /api/cadastros/pacientes/:id                     alterar (executor: cadastro.alterarPaciente; colisão 409)
-//   GET  /api/cadastros/pacientes/:id/historico           linha do tempo (HTPACIENTE) e unificações do legado
+//   GET  /api/cadastros/pacientes/:id/historico           linha do tempo e unificações do legado
 //   GET|POST /api/cadastros/pacientes/:id/consentimentos  consentimentos (SGH_CAD_CONSENTIMENTO)
 //   GET  /api/cadastros/pacientes/duplicidades[/:id]      fila e comparação lado a lado (registro de acesso)
 //   GET  /api/cadastros/pacientes/gravacao                cadastrar grava agora? (passo 0 do executor; motivo)
@@ -182,7 +182,7 @@ export class PacientesController {
       throw problemaDoCadastro(e);
     });
     // Na trilha, só o tipo e a quantidade (nunca o termo: pode ser nome ou documento).
-    req.sghAlvo = { tabelaAlvo: 'RICADPAC', chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length}` };
+    req.sghAlvo = { tabelaAlvo: 'paciente', chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length}` };
     return r;
   }
 
@@ -202,7 +202,7 @@ export class PacientesController {
       });
     const r = await candidatosDoCpf(this.porta, s.porta, Number(d));
     req.sghAlvo = {
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       chaveNaturalAlvo: `busca:cpf-candidatos;n:${r.candidatos.length}`,
     };
     return r;
@@ -439,7 +439,7 @@ export class PacientesController {
     const n = idDaRota(id);
     const f = await montarFicha(this.porta, s.porta, n, permissoesDaFicha(s.pode), s.login);
     if (!f) throw new ErroProblema('nao-encontrado', 404, 'Paciente não encontrado');
-    req.sghAlvo = { paciente: n, tabelaAlvo: 'RICADPAC', idAlvo: String(n) };
+    req.sghAlvo = { paciente: n, tabelaAlvo: 'paciente', idAlvo: String(n) };
     return f;
   }
 
@@ -447,7 +447,7 @@ export class PacientesController {
   @HttpCode(201)
   @Permissao('cadastro.paciente.criar')
   @AuditadoNoHandler(
-    'executor: TBCABTRILHA e SGH_TRILHA na mesma transação da receita (memória: registrador da API)',
+    'executor: trilha de auditoria na mesma transação da receita (memória: registrador da API)',
   )
   async cadastrar(
     @Body() corpo: unknown,
@@ -475,7 +475,7 @@ export class PacientesController {
   @Put(':id')
   @Permissao('cadastro.paciente.editar')
   @AuditadoNoHandler(
-    'executor: TBCABTRILHA e SGH_TRILHA na mesma transação da receita (memória: registrador da API)',
+    'executor: trilha de auditoria na mesma transação da receita (memória: registrador da API)',
   )
   async alterar(
     @Param('id') id: string,
@@ -517,7 +517,7 @@ export class PacientesController {
     const perm = permissoesDaFicha(s.pode);
     const h = await montarHistorico(this.porta, s.porta, n, pagina(p), POR_PAGINA_HISTORICO, perm);
     if (!h) throw new ErroProblema('nao-encontrado', 404, 'Paciente não encontrado');
-    req.sghAlvo = { paciente: n, tabelaAlvo: 'HTPACIENTE', idAlvo: String(n) };
+    req.sghAlvo = { paciente: n, tabelaAlvo: 'paciente_versao', idAlvo: String(n) };
     return h;
   }
 

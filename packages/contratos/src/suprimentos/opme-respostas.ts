@@ -180,7 +180,7 @@ export interface ExpostoOpme {
 }
 
 /**
- * Uma saída do estoque do lote (GERASVALSAIDLOTE → GELANSAI → GECADSAI), feita no consumo em sala ou por outro caminho
+ * Uma saída do estoque do lote (lote, item e documento de saída do estoque), feita no consumo em sala ou por outro caminho
  * do estoque durante a coexistência: o atendimento e o paciente da saída, para o recall.
  */
 export interface SaidaLoteOpme {

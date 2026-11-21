@@ -16,7 +16,12 @@ const ok = {
 describe('variáveis do semeador', () => {
   it('lê as obrigatórias e usa o nome padrão do administrador', () => {
     const e = lerEntradaSemeador(ok);
-    expect(e.admin).toEqual({ login: 'dono', senha: SENHA_A, email: 'dono@exemplo.invalid', nome: 'Administrador da plataforma' });
+    expect(e.admin).toEqual({
+      login: 'dono',
+      senha: SENHA_A,
+      email: 'dono@exemplo.invalid',
+      nome: 'Administrador da plataforma',
+    });
     expect(e.teste).toEqual({ login: 'TESTE', senha: SENHA_T });
   });
 
@@ -24,7 +29,12 @@ describe('variáveis do semeador', () => {
     const curta = 'a'.repeat(MINIMO_SENHA_INICIAL - 1);
     let msg = '';
     try {
-      lerEntradaSemeador({ ...ok, SEMEAR_ADMIN_SENHA: undefined, SEMEAR_TESTE_SENHA: curta, SEMEAR_ADMIN_EMAIL: 'x' });
+      lerEntradaSemeador({
+        ...ok,
+        SEMEAR_ADMIN_SENHA: undefined,
+        SEMEAR_TESTE_SENHA: curta,
+        SEMEAR_ADMIN_EMAIL: 'x',
+      });
     } catch (e) {
       msg = (e as Error).message;
     }
@@ -32,7 +42,9 @@ describe('variáveis do semeador', () => {
     expect(msg).toMatch(/SEMEAR_TESTE_SENHA precisa/);
     expect(msg).toMatch(/SEMEAR_ADMIN_EMAIL fora do formato/);
     expect(msg).not.toContain(curta);
-    expect(() => lerEntradaSemeador({ ...ok, SEMEAR_TESTE_LOGIN: 'plataforma:x' })).toThrow(/SEMEAR_TESTE_LOGIN/);
+    expect(() => lerEntradaSemeador({ ...ok, SEMEAR_TESTE_LOGIN: 'plataforma:x' })).toThrow(
+      /SEMEAR_TESTE_LOGIN/,
+    );
     expect(() => lerEntradaSemeador({ ...ok, SEMEAR_ADMIN_LOGIN: ' dono' })).toThrow(/SEMEAR_ADMIN_LOGIN/);
   });
 });
@@ -50,7 +62,9 @@ describe('SQL do banco plataforma', () => {
     const sql = sqlPlataforma(e, resumo, false);
     expect(sql).toContain(resumo);
     expect(sql).not.toContain(SENHA_A);
-    expect(sql).toMatch(/troca_obrigatoria, criado_em\)\s+SELECT @adm, 'dono', '\$argon2id\$[^']+', @agora, TRUE/);
+    expect(sql).toMatch(
+      /troca_obrigatoria, criado_em\)\s+SELECT @adm, 'dono', '\$argon2id\$[^']+', @agora, TRUE/,
+    );
     expect(sql).toMatch(/AND @tinha_cred = 1 AND FALSE;/);
     expect(sqlPlataforma(e, resumo, true)).toMatch(/AND @tinha_cred = 1 AND TRUE;/);
     expect(() => sqlPlataforma(e, 'texto-puro', false)).toThrow();

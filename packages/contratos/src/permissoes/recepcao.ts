@@ -1,5 +1,5 @@
 // Permissões do M19 (ficha, seção 7; convencoes.md §12): recepção, senhas, guichês, totens e painéis. Quem tem a
-// opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Recepção externa (módulo 8): Gerador de senhas 3308 (a emissão no balcão), Atendimentos 5739 (Incluir 5745,
 //     Consultar 6026: o balcão chama a senha e abre o atendimento), Controle de encaminhamento e localização 6034

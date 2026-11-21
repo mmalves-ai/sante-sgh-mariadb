@@ -1,7 +1,7 @@
 // Mapa cirúrgico (ficha do M18, seção 4: "Mapa cirúrgico do dia e da semana", 7 dias por consulta). Monta os blocos
 // de cada sala num dia (posição e altura em minutos desde a abertura do mapa), com o alerta de sobreposição (as que o
-// outro sistema gravou) e de data impossível. Sem banco: a API lê CCAGENDA e as SGH_ e a tela desenha.
-import { diaDoInstante, minutosAbsolutos, minutosDeHhmm, somarMinutos } from './tempo.js';
+// outro sistema gravou) e de data impossível. Sem banco: a API lê a agenda e a tela desenha.
+import { diaDoInstante, minutosAbsolutos, minutosDaHora, somarMinutos } from './tempo.js';
 import { idsSobrepostos, type OcupacaoSala, sobreposicoesNoMapa } from './sobreposicao.js';
 
 export interface BlocoDoMapa {
@@ -29,13 +29,13 @@ export function montarMapa(
   salas: readonly number[],
   ocupacoes: readonly OcupacaoSala[],
   preparoMinimoMin = 0,
-  abertura = '0700',
-  fechamento = '2100',
+  abertura = '07:00',
+  fechamento = '21:00',
 ): MapaDoDia {
   const doDia = ocupacoes.filter((o) => diaDoInstante(o.inicio) === dia);
   const sobre = sobreposicoesNoMapa(doDia, preparoMinimoMin);
   const marcados = idsSobrepostos(sobre);
-  const ab = minutosAbsolutos(`${dia} ${hhmmParaHora(abertura)}`);
+  const ab = minutosAbsolutos(`${dia} ${horaValida(abertura)}`);
   const blocos = doDia.map((o) => {
     const ini = minutosAbsolutos(o.inicio);
     return {
@@ -50,8 +50,8 @@ export function montarMapa(
   });
   return {
     dia,
-    abertura: hhmmParaHora(abertura),
-    fechamento: hhmmParaHora(fechamento),
+    abertura: horaValida(abertura),
+    fechamento: horaValida(fechamento),
     salas: salas.map((s) => ({
       sala: s,
       blocos: blocos.filter((b) => b.sala === s).sort((a, b) => a.topo - b.topo),
@@ -60,8 +60,8 @@ export function montarMapa(
   };
 }
 
-function hhmmParaHora(h: string): string {
-  const m = minutosDeHhmm(h);
+function horaValida(h: string): string {
+  const m = minutosDaHora(h);
   if (m === null) return '07:00';
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }

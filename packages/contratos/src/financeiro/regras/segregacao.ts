@@ -1,11 +1,11 @@
 // Regra 4 do M32 (cap-06b §6.8, Perfis; cap-08 §8.1): segregação de funções no título. Quem lança não aprova, quem
-// aprova não paga, quem paga não concilia. A pessoa é o login do outro sistema (TBUSERS.NOME), comparado sem caixa.
+// aprova não paga, quem paga não concilia. A pessoa é o login do usuário, comparado sem caixa.
 import { mesmaPessoa, recusaFin, type RecusaFinanceiro } from './recusa.js';
 
 export type AcaoTitulo = 'aprovar' | 'pagar' | 'conciliar';
 
 export interface HistoricoTitulo {
-  /** Quem lançou (MFCONPAG.USUARIO). */
+  /** Quem lançou (login). */
   readonly lancou: string | null;
   /** Quem aprovou (SGH_FIN_APROVACAO). */
   readonly aprovaram: readonly string[];

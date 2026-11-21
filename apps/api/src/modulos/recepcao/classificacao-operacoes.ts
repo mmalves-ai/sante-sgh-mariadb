@@ -21,7 +21,6 @@ import {
 } from '@sgh/nucleo';
 import { bool, instanteDaHoraCivil, num, txt } from './banco.js';
 import type { VinculoDaSessao } from './classificacao-porta.js';
-import { modeloPendente } from './porta-propria.js';
 import type { MotivoClassificacao, SinaisVitais } from './tipos.js';
 
 /** Parâmetro vital de cada sinal da classificação (parametro_vital.codigo, catálogo do produto). */
@@ -331,13 +330,27 @@ interface ConteudoPublicado {
   }[];
 }
 
-/** Conferências da publicação antes de gravar: licença (modelo pendente) e códigos que o modelo comporta. */
+/** Conferências da publicação antes de gravar: a licença (registro, titular e validade) e os códigos que o modelo comporta. */
 export function conferirPublicacao(p: {
   licenca: unknown;
   conteudo: unknown;
   discriminadores: readonly { fluxograma: string }[];
 }): void {
-  if (p.licenca !== null) modeloPendente('A licença do protocolo de classificação');
+  const lic = p.licenca as { registro: string; titular: string; validaAte: string } | null;
+  if (lic !== null) {
+    if (
+      !lic.registro.trim() ||
+      lic.registro.trim().length > 60 ||
+      !lic.titular.trim() ||
+      lic.titular.trim().length > 150
+    )
+      throw recusa(
+        'licenca-invalida',
+        'A licença do protocolo precisa do registro (até 60) e do titular (até 150).',
+      );
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(lic.validaAte.slice(0, 10)))
+      throw recusa('licenca-invalida', 'A validade da licença do protocolo deve ser uma data (AAAA-MM-DD).');
+  }
   const codigos = [
     ...((p.conteudo as ConteudoPublicado | null)?.fluxogramas ?? []).map((f) => f.codigo),
     ...p.discriminadores.map((d) => d.fluxograma),
@@ -420,6 +433,13 @@ export const opPublicarProtocolo = definirOperacao({
       vigencia_inicio: agora,
       motivo_publicacao: p.notas.slice(0, 500),
       publicado_por_usuario_id: aprovador,
+      ...(p.licenca
+        ? {
+            licenca_registro: p.licenca.registro.trim(),
+            licenca_titular: p.licenca.titular.trim(),
+            licenca_valida_ate: p.licenca.validaAte.slice(0, 10),
+          }
+        : {}),
     });
     // Desdobra o conteúdo nas tabelas do modelo: níveis da versão, fluxogramas (todos, na ordem do conteúdo) e
     // discriminadores (a sequência dentro do fluxograma é a do conteúdo publicado).

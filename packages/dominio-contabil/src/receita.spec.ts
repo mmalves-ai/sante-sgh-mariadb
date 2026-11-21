@@ -13,7 +13,7 @@ import { derivarConta, derivarItemConta } from './receita.js';
 
 const ctx = { empresa: 1 };
 const contaFechada = (extra: Record<string, string | number | null> = {}) =>
-  linha('FCCTAEXT', 10, {
+  linha('conta_hospitalar', 10, {
     FECHADA: 'S',
     DATA_FEC: '2027-01-20',
     TOTAL_CONTA: 1500.5,
@@ -75,7 +75,7 @@ describe('receita da conta (regra 4)', () => {
 
 describe('glosa e recurso como ajuste (regra 4)', () => {
   const item = (extra: Record<string, string | number | null> = {}) =>
-    linha('FCLANEXT', 500, {
+    linha('conta_hospitalar_item', 500, {
       ID_FCCTAEXT: 10,
       CONVENIO: 5,
       CDC: 3,

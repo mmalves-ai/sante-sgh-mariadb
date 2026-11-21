@@ -54,9 +54,9 @@ export const atendimentoDaConta = (tipoConta: 'E' | 'I'): AtendimentoOrigem => t
 export const ORIGEM_GRAVADA_PELO_NOVO: OrigemReceber = 'V';
 
 export interface ContaParaTitulo {
-  /** FCCTAEXT.FECHADA: S fechada, A apresentada (as que geram título), N aberta. */
+  /** Situação da conta hospitalar: S fechada, A apresentada (as que geram título), N aberta. */
   readonly fechada: string;
-  /** FCCTAEXT.ID_MFCTAREC: o título já ligado (0 ou nulo: sem título). */
+  /** O título a receber já ligado à conta (0 ou nulo: sem título). */
   readonly titulo: number | null;
   readonly valor: number;
 }

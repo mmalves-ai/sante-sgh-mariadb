@@ -2,7 +2,7 @@
 // alterada durante a leitura"). O worker lê cada fonte em ciclos curtos, fora do pico, e grava só em SGH_CTB_FATO.
 //
 // Por que a chave e não o carimbo: nenhuma coluna DATA_HORA_ULTIMA_ATUALIZACAO das fontes é indexada (catálogo do
-// banco), e ~2 a 73% das linhas de algumas fontes não têm carimbo (MFLANCTO: 26.571 de 36.385 no pc). Então:
+// banco), e ~2 a 73% das linhas de algumas fontes não têm carimbo (movimento bancário: 26.571 de 36.385 na cópia de desenvolvimento). Então:
 //   1. NOVOS: `chave > marca ORDER BY chave` em lotes (índice da chave).
 //   2. REVISÃO: a faixa `(marca − folga, marca]` é relida a cada ciclo. Ela pega
 //      (a) a linha cuja chave saiu do gerador antes, mas cuja transação confirmou DEPOIS do lote que avançou a marca

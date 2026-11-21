@@ -3,7 +3,7 @@
 //   - `fatosAtivos`: os fatos que valem hoje para cada linha e tipo (o não estornado que nenhum estorno referencia);
 //   - `impressaoSemColisao`: a idempotência de SGH_CTB_FATO é (linha, tipo, impressão, estorno). Um fato que volta ao
 //     que era (A → B → A) teria a impressão de um fato já estornado: a nova ocorrência leva um sufixo (D-REOCORRE-541);
-//   - `contextoDeAplicacao`: o de-para da exportação (TBINTCRC, o MESMO do M32; regra 6) como mapa para `contabilizar`;
+//   - `contextoDeAplicacao`: o de-para da exportação (o MESMO do M32; regra 6) como mapa para `contabilizar`;
 //   - `simularRegra`: aplica a regra (rascunho ou publicada) aos fatos de uma competência, sem gravar, e devolve as
 //     contagens por situação, uma amostra e os totais com as parcelas (regra 5).
 import {
@@ -67,7 +67,7 @@ export function fatosParaGravar(
   });
 }
 
-/** Item do de-para da exportação como a leitura do banco devolve (TBINTCRC). */
+/** Item do de-para da exportação como a leitura do banco devolve. */
 export interface ItemDeParaExportacao {
   readonly convenio: number | null;
   readonly tipoConta: string;

@@ -429,8 +429,12 @@ tools/instalacao/src/pacote.ts 1
 tools/instalacao/src/variaveis.ts 2
 tools/verificadores/src/contas-banco.ts 1
 tools/verificadores/src/faturamento-reproduzir.ts 1
-tools/verificadores/src/guardas-legado.ts 3
 tools/verificadores/src/sbis-matriz.ts 1
 tools/verificadores/src/textos-de-produto.spec.ts 8
 tools/verificadores/src/textos-de-produto.ts 7
 tools/verificadores/src/verificar.ts 2
+# Acréscimo da adaptação da CI (docs/obra/ci-verde.md, 2026-11-21): ocorrências que entraram depois da linha de base e
+# não podem ser removidas nesta trilha (apps/ é da F2.4; a liberação por setor sai com a onda 5 da F2.2). Pendência da
+# F2.4: tirar o texto e apagar estas duas linhas.
+apps/api/src/modulos/cirurgia/tipos.ts 2
+tools/instalacao/src/liberacao-propria.ts 1

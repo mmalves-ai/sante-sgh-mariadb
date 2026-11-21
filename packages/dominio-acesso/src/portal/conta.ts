@@ -1,5 +1,5 @@
 // Conta do portal do paciente (M50 etapa 1; ficha, seção 5 `portal.criarConta` e regras 1 e 5; cap-07 §7.6; cap-08 §8.3):
-// identidade própria em SGH_POR_CONTA (nunca TBUSERS), nascida de um convite do hospital (o código sai impresso: nenhuma
+// identidade própria em SGH_POR_CONTA (nunca o cadastro de usuários do hospital), nascida de um convite do hospital (o código sai impresso: nenhuma
 // mensagem ao paciente até a DP-44 a, e toda mensagem só pela Hal-AI), ativada com senha, aceite dos termos e o segundo
 // fator do aplicativo autenticador. Abaixo da idade da conta própria o acesso é só pelo responsável legal. Regras puras:
 // sem banco, sem relógio (o "agora" vem de fora), sem aleatoriedade (os bytes vêm de fora).

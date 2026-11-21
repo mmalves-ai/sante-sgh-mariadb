@@ -1,0 +1,32 @@
+{
+ "lote": "16-misto-financeiro",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "atributo_categoria_acomodacao (nova, 07_INT)",
+   "colunas": "id; estabelecimento_id (FK); categoria_acomodacao_id (FK); sexo_permitido VARCHAR(20) com CHECK como leito_hospitalar ('qualquer','masculino','feminino'); criticidade VARCHAR(20) com o CHECK do leito; idade_minima_dias e idade_maxima_dias INT UNSIGNED NULL com CHECK minima <= maxima; andar, ramal NULL; terapia_intensiva BOOLEAN NULL; auditoria (criado_em, criado_por, alterado_em, alterado_por, versao); UNIQUE (estabelecimento_id, categoria_acomodacao_id)",
+   "motivo": "adt/porta-propria.ts gravarAtributo e limparAtributos com escopo 'tipo' recusam com modelo-pendente: os atributos padrão por tipo de acomodação (herdados pelos leitos sem atributo próprio) não têm onde ficar. categoria_acomodacao é cadastro do cliente inteiro (sem estabelecimento), por isso tabela própria e não colunas nela."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "ocorrencia_arquivo_prontuario (nova, 09_HOT, ao lado de movimento_prontuario)",
+   "colunas": "id; estabelecimento_id (FK); atendimento_id (FK); movimento_prontuario_id (FK) NULL; tipo VARCHAR(20) CHECK IN ('exclusao','remessa','aceite','cobranca','ocorrencia','descarte'); motivo VARCHAR(500) NULL; protocolo VARCHAR(60) NULL; prazo_devolucao DATE NULL; aval_comissao VARCHAR(200) NULL; registrado_em DATETIME(3); usuario_id (FK); auditoria e exclusão lógica",
+   "motivo": "adt/porta-propria.ts gravarSameExt recusa com modelo-pendente: ocorrência, aceite, cobrança, remessa, exclusão e descarte do SAME (arquivo de prontuários) não são movimento físico de volume (movimento_prontuario exige volume e operação). É a última recusa do lote: o contador da F2.4 só zera aqui com esta tabela e a porta ligada."
+  },
+  {
+   "tipo": "compartilhado",
+   "arquivo": "packages/dominio-enfermagem/src/turno/linha-do-tempo.ts e src/contencao/contencao.ts",
+   "motivo": "Os padrões de início do turno são '0700' (quatro dígitos). Pedido: passar a '07:00'; depois disso tempo.ts (minutosDoDia, deste lote) fica estrito em HH:MM e o tempo.spec.ts deixa de aceitar '0730'."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/financeiro/aplicacao/massa-banco.spec-util.ts",
+   "motivo": "Já editado (2 linhas): a limpeza apaga glosa_titulo_receber e arquivo_fiscal_gerado antes de titulo_receber. Conferir se nenhum outro lote mexe no arquivo."
+  },
+  {
+   "tipo": "compartilhado",
+   "arquivo": "apps/api/src/modulos/adt (porta-propria.ts, porta-memoria.ts, servico.ts), packages/contratos/src/internacao/adt.ts (diariasFaturaveis) e apps/web/src/modulos/adt (PreInternacaoTela.vue, ResumoInternacao.vue, TrocasTela.vue, HistoricoOcupacaoTela.vue)",
+   "motivo": "As respostas do ADT (horaEntrada, horaSaida, horaPrevista e hora das trocas) ainda saem em HHMM, por civil().hhmm. A troca para HH:MM tem de ser coordenada: API, contrato, memória e as quatro telas juntos. Até lá, regras-tela.ts mantém hhmm() para exibir, aceitando as duas formas. As quatro telas não estão em nenhuma .lista."
+  }
+ ]
+}

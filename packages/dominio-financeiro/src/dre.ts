@@ -1,5 +1,5 @@
 // Regra 16 do M32 (cap-06b §6.8; ref 01 §0 achado 11): a DRE gerencial com DUAS réguas declaradas.
-//   - competência: a receita da conta pela competência dela (FCCTAEXT.ANOPRO*100 + MESPRO), menos a glosa aceita;
+//   - competência: a receita da conta hospitalar pela competência dela (ano e mês), menos a glosa aceita;
 //   - caixa: o que entrou e saiu nas datas de recebimento e de pagamento.
 // A divergência mensal entre as réguas de receita chega a 55% (o recebimento atrasa meses): a tela mostra as duas, a
 // régua escolhida e a divergência; nunca soma uma com a outra.
@@ -19,7 +19,7 @@ export interface MovimentoCaixa {
   readonly data: string;
   readonly valor: number;
   readonly natureza: 'receita' | 'despesa';
-  /** Grupo gerencial (TBGRUDES) para a abertura da DRE. */
+  /** Grupo gerencial para a abertura da DRE. */
   readonly grupo: number;
 }
 

@@ -1,6 +1,6 @@
 // Telas de Administração › Acesso do M10 (ficha seção 7), além de "Usuários":
 //   GET  /api/administracao/acesso/permissoes              grupos, papéis SBIS, política de senha (só consulta)
-//   GET  /api/administracao/acesso/permissoes/arvore       árvore de TBOPCOES (regra 5) com as opções do grupo/papel
+//   GET  /api/administracao/acesso/permissoes/arvore       árvore do menu de origem (regra 5) com as opções do grupo/papel
 //   POST /api/administracao/acesso/permissoes/conceder     acesso.concederOpcoesGrupo (ADR 0022) pela árvore
 //   POST /api/administracao/acesso/permissoes/revogar      acesso.revogarOpcoesGrupo
 //   GET  /api/administracao/acesso/grupos/propostas        proposta do mapa grupo → perfil (regra 6)
@@ -122,7 +122,7 @@ export class PermissoesController {
     @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao,
   ) {}
 
-  /** A árvore de TBOPCOES em cache por poucos minutos (ficha, seção 4: metadado, muda raramente). */
+  /** A árvore do menu de origem em cache por poucos minutos (ficha, seção 4: metadado, muda raramente). */
   private async arvoreLida(req: RequisicaoAutorizada) {
     const c = ctxDe(req, 'acesso-permissoes');
     const agora = Date.now();
@@ -509,7 +509,12 @@ export class PermissoesController {
     await this.fonte
       .revisarQuebra(
         c,
-        { idEmergencia: id, idUsuario: eu?.id ?? s.usuario ?? 0, login: s.login, classificacao: p.classificacao },
+        {
+          idEmergencia: id,
+          idUsuario: eu?.id ?? s.usuario ?? 0,
+          login: s.login,
+          classificacao: p.classificacao,
+        },
         trilhaDe(
           req,
           EVENTOS_AUDITAVEIS.emergenciaRevisada.codigo,

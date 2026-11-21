@@ -8,7 +8,7 @@ export const MINUTOS_JANELA = 24 * 60;
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 
-/** HHMM (ou HH:mm) → HH:mm, recusando a hora fora do formato. */
+/** A hora de corte normalizada em HH:MM, recusando a hora fora do formato. */
 export function horaDoCorte(hhmm: string): string {
   const m = minutosDoDia(hhmm);
   return `${p2(Math.floor(m / 60))}:${p2(m % 60)}`;

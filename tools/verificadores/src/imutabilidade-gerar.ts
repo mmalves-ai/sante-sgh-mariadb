@@ -37,12 +37,19 @@ let decide: (t: string) => boolean;
 try {
   const clinicas = tabelasClinicasDoModelo();
   decide = decisorDeleteClinico(clinicas);
-  console.log(`${clinicas.length} tabela(s) clínica(s) reconhecida(s) no modelo (db/migracoes/{${MODULOS_CLINICOS_DDL.join(',')}} e núcleo)`);
+  console.log(
+    `${clinicas.length} tabela(s) clínica(s) reconhecida(s) no modelo (db/migracoes/{${MODULOS_CLINICOS_DDL.join(',')}} e núcleo)`,
+  );
 } catch (e) {
-  console.error(e instanceof ErroSemTabelasClinicas ? e.message : `lista clínica do modelo: ${(e as Error).message}`);
+  console.error(
+    e instanceof ErroSemTabelasClinicas ? e.message : `lista clínica do modelo: ${(e as Error).message}`,
+  );
   process.exit(1);
 }
-const achados = [...operacoesComDeleteClinico(undefined, decide), ...grantsDeleteClinicoSgh(scriptsSghDoRepositorio(), decide)];
+const achados = [
+  ...operacoesComDeleteClinico(undefined, decide),
+  ...grantsDeleteClinicoSgh(scriptsSghDoRepositorio(), decide),
+];
 for (const a of achados) console.error(`DELETE clínico: ${a.origem} ${a.onde} → ${a.tabela}`);
 let falha = achados.length > 0;
 try {
@@ -56,7 +63,9 @@ try {
 const caminho = resolve(RAIZ, CAMINHO_TABELAS_CLINICAS);
 let emDia = true;
 if (!existsSync(resolve(RAIZ, CAMINHO_MATRIZ))) {
-  console.warn(`aviso: ${CAMINHO_MATRIZ} ausente; ${CAMINHO_TABELAS_CLINICAS} não foi regenerado (a guarda usa a lista do modelo)`);
+  console.warn(
+    `aviso: ${CAMINHO_MATRIZ} ausente; ${CAMINHO_TABELAS_CLINICAS} não foi regenerado (a guarda usa a lista do modelo)`,
+  );
 } else {
   const texto = gerarTabelasClinicas();
   emDia = existsSync(caminho) && readFileSync(caminho, 'utf8') === texto;
@@ -66,5 +75,6 @@ if (!existsSync(resolve(RAIZ, CAMINHO_MATRIZ))) {
     emDia = true;
   }
 }
-if (bandeiras.has('conferir') && !emDia) console.error(`desatualizado: ${CAMINHO_TABELAS_CLINICAS} (rode pnpm imutabilidade:gerar)`);
+if (bandeiras.has('conferir') && !emDia)
+  console.error(`desatualizado: ${CAMINHO_TABELAS_CLINICAS} (rode pnpm imutabilidade:gerar)`);
 process.exit(falha || !emDia ? 1 : 0);

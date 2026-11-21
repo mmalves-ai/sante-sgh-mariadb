@@ -51,7 +51,7 @@ describe('quadro de permanência (regra 13)', () => {
     expect(diasInternado312('2026-10-24', '2026-10-24')).toBe(1);
     expect(diasInternado312('2026-10-20T10:00:00', '2026-10-24')).toBe(4);
     // As diárias faturáveis contam a entrada e a alta (um dia a mais): réguas diferentes, nomes diferentes.
-    expect(diariasFaturaveis('2026-10-20', '2026-10-24', '1300')).toBe(5);
+    expect(diariasFaturaveis('2026-10-20', '2026-10-24', '13:00')).toBe(5);
     const trechos = [
       { tipo: 1, entrada: '2026-10-18', saida: '2026-10-20' },
       { tipo: 3, entrada: '2026-10-20', saida: '2026-10-23' },

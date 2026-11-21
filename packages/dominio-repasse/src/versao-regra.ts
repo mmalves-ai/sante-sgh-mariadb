@@ -1,6 +1,6 @@
 // Regra 3 do M33: regra com vigência; no novo, regra usada não muda e a nova versão só vale aprovada. A versão nasce
 // como rascunho em SGH_REP_REGRA_VERSAO, passa pelo simulador, é aprovada por outra pessoa (supervisor) e só então é
-// incluída em TBREPGER (incluir antes faria o outro sistema já usá-la). Recusada não volta.
+// incluída como regra (incluir antes faria o outro sistema já usá-la). Recusada não volta.
 import type { EstadoVersaoRegra } from '@sgh/contratos';
 
 export type AcaoVersaoRegra = 'editar' | 'simular' | 'aprovar' | 'recusar' | 'incluir';

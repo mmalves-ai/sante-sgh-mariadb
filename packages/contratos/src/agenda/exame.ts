@@ -1,17 +1,14 @@
 // Agenda de exames (M18, ficha seções 4, 5 e 7): entradas das operações de gravação compatível, pedidos das telas e
-// respostas da API, validados na tela, na API e no executor (o mesmo Zod). Vocabulário do novo: a agenda é o ID de
-// SIAGENDA (a receita resolve NOME, CRM e EXAME sob a trava), o paciente é o ID do cadastro único, a marcação é o ID
-// de SIPACAGD, o exame escolhido é o ID do catálogo do SADT (SITABPRO). Horas em HHMM de 4 dígitos (a tela converte
-// de HH:MM); datas AAAA-MM-DD; textos restritos ao CP1252 com o tamanho da coluna. Nas respostas, nenhum nome de
+// respostas da API, validados na tela, na API e no executor (o mesmo Zod). Vocabulário neutro: a agenda de exames, o
+// paciente (cadastro único), a marcação e o exame escolhido (catálogo do SADT) são IDs do modelo próprio. Horas do
+// dia em "HH:MM" (a tela aceita a hora digitada sem os dois-pontos e converte); datas AAAA-MM-DD; textos restritos ao CP1252 com o tamanho da coluna. Nas respostas, nenhum nome de
 // tabela ou coluna; nome e contato do paciente mascarados nas listas.
 import { z } from 'zod';
+import { esquemaHoraLegada } from '../formatacao/hora-legada.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import {
   esquemaCanal,
-  esquemaHhmm,
-  esquemaHorario,
-  esquemaLinhaEscala,
   esquemaMotivoCancelamento,
   MODOS_REMARCACAO,
   SOLICITANTES_CANCELAMENTO,
@@ -26,7 +23,25 @@ const n = z.number().int();
 const txt = z.string();
 const nul = <T extends z.ZodType>(t: T) => t.nullable();
 
-/** SICANAGE.MOTIVO tem 30 posições (o texto livre do legado tem de 1 a 24 caracteres em 2026). */
+// Transição (F2.4, lote 12-agenda): a tela e a agenda de consultas já mandam a hora do dia em "HH:MM", mas o módulo
+// de exames da API ainda trabalha com a hora sem os dois-pontos. As entradas das operações de exame aceitam as duas
+// formas e entregam a forma antiga ao módulo, até o lote 20 trocar o relógio e os tipos dos exames para "HH:MM"
+// (pedido na saída do lote 12-agenda). Depois disso, estas três linhas voltam a ser `esquemaHora`, `esquemaHorario`
+// e `esquemaLinhaEscala` da agenda.
+const horaExame = esquemaHoraLegada;
+const horarioExame = z.object({ data: esquemaDataIso, hora: horaExame }).strict();
+const linhaEscalaExame = z
+  .object({
+    semana: z.number().int().min(1).max(7),
+    duracao: horaExame,
+    horaInicio: horaExame,
+    horaFim: horaExame,
+    intervaloInicio: horaExame.nullable(),
+    intervaloFim: horaExame.nullable(),
+  })
+  .strict();
+
+/** O motivo do cancelamento do exame tem 30 posições (o texto livre da base de origem tem de 1 a 24 caracteres em 2026). */
 export const TAMANHO_MOTIVO_EXAME = 30;
 
 const MOTIVOS_CURTOS: Readonly<Record<string, string>> = {
@@ -76,7 +91,7 @@ export const esquemaAgendarExame = z
   .object({
     agenda: id,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: horaExame,
     paciente: id,
     convenio: smallint,
     /** Exame escolhido no catálogo do SADT; null = ainda não definido (a recepção define na chegada). */
@@ -107,7 +122,7 @@ export type CancelarExameEntrada = z.infer<typeof esquemaCancelarExame>;
 export const esquemaRemarcarExame = z
   .object({
     marcacao: id,
-    destino: z.object({ agenda: id, data: esquemaDataIso, hora: esquemaHhmm }).strict(),
+    destino: z.object({ agenda: id, data: esquemaDataIso, hora: horaExame }).strict(),
     modo: z.enum(MODOS_REMARCACAO),
     convenio: smallint.optional(),
     observacao: observacao.optional(),
@@ -124,9 +139,9 @@ export const esquemaGerarGradeExame = z
     agenda: id,
     de: esquemaDataIso,
     ate: esquemaDataIso,
-    duracao: esquemaHhmm,
-    horarios: z.array(esquemaHorario).min(1).max(TETO_HORARIOS_POR_GRAVACAO),
-    escala: z.array(esquemaLinhaEscala).min(1).max(21),
+    duracao: horaExame,
+    horarios: z.array(horarioExame).min(1).max(TETO_HORARIOS_POR_GRAVACAO),
+    escala: z.array(linhaEscalaExame).min(1).max(21),
     semanas: z.array(z.enum(['T', 'F'])).length(7),
     /** A prévia incluiu os feriados (a geração grava o pedido como foi feito). */
     incluirFeriados: z.boolean().optional(),
@@ -162,7 +177,7 @@ export const esquemaAgendarExameSemProntuario = z
   .object({
     agenda: id,
     data: esquemaDataIso,
-    hora: esquemaHhmm,
+    hora: horaExame,
     nome: textoCp1252(70)
       .overwrite((t) => t.replace(/\s+/g, ' ').trim().toUpperCase())
       .pipe(z.string().min(3)),

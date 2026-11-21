@@ -6,7 +6,7 @@ import { indexarCatalogo, type IndiceCatalogo, type PermissaoDoPerfil } from '@s
 
 export const CATALOGO_COMPLETO: readonly DeclaracaoPermissao[] = [...CATALOGO_LEGADO, ...CATALOGO_DECLARADO];
 
-/** Flags do legado que alguma permissão declara (só elas são lidas de TBUSUCPL, GEUSERS e FCPARUSU). */
+/** Marcas do usuário na origem que alguma permissão declara (só elas são lidas). */
 export const FLAGS_DECLARADAS: readonly FlagLegado[] = [
   ...new Map(
     CATALOGO_COMPLETO.flatMap((p) => p.flagsLegado ?? []).map((f) => [`${f.tabela}.${f.coluna}`, f]),

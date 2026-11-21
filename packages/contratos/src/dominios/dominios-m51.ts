@@ -1,11 +1,11 @@
 // Cadastro dos médicos solicitantes SUS no CRUD genérico (M51, etapa 2; ficha, seção 5, "Receita genérica do CRUD para
-// FHLEITOUTI e FAMEDSOL": o FAMEDSOL nesta etapa; os leitos de UTI habilitados na etapa 4). FAMEDSOL (1 linha na cópia
+// leitos de UTI habilitados e médicos solicitantes SUS": os médicos nesta etapa; os leitos na etapa 4). Médicos (1 linha na cópia
 // `pc`): CPF (chave, DOUBLE PRECISION, digitado), nome, CNS e CRM; sem trigger nem generator no catálogo RDB$. Substitui a
-// consulta provisória do M14 (`faturamento.medicoSolicitanteExterno`). Opções do outro sistema (TBOPCOES, módulo
-// Faturamento A.P.A.C.): Tabelas 920 e "Importa tabela FAMEDSOL" 1100 para gravar; com a raiz do módulo 4262 para ler.
+// consulta provisória do M14 (`faturamento.medicoSolicitanteExterno`). Opções do outro sistema (menu de origem, módulo
+// Faturamento A.P.A.C.): Tabelas 920 e "Importa tabela de médicos solicitantes" 1100 para gravar; com a raiz do módulo 4262 para ler.
 import type { DominioPublico } from './tipos.js';
 
-// Etapa 4: os leitos de UTI habilitados (FHLEITOUTI, 12 linhas): opções do módulo Faturamento A.I.H. (Tabelas 643 e
+// Etapa 4: os leitos de UTI habilitados (12 linhas): opções do módulo Faturamento A.I.H. (Tabelas 643 e
 // Parâmetros 644 para gravar; a raiz 4252 para ler).
 const AIH_RAIZ = 4252;
 const AIH_TABELAS = 643;

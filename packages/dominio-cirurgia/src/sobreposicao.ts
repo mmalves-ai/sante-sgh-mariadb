@@ -2,7 +2,7 @@
 // cirurgias que se cruzam na mesma sala (a chave única é só SALA + DATA_HORA): em 2026 a cópia tem 65 cirurgias
 // sobrepostas. O novo recusa a sobreposição (exceção de urgência só com supervisor, registrada à parte) e mostra com
 // alerta as que o outro sistema já gravou. A ocupação de um agendamento vai do início ao fim da duração MAIS o
-// intervalo de preparo (o do agendamento, CCAGENDA.INTERVALO, e o mínimo do parâmetro do estabelecimento).
+// intervalo de preparo (o do agendamento e o mínimo do parâmetro do estabelecimento).
 import { dataImpossivel, minutosAbsolutos } from './tempo.js';
 
 export interface OcupacaoSala {
@@ -11,7 +11,7 @@ export interface OcupacaoSala {
   /** "AAAA-MM-DD HH:MM". */
   readonly inicio: string;
   readonly duracaoMin: number;
-  /** CCAGENDA.INTERVALO em minutos (0 em 100% hoje). */
+  /** Intervalo de preparo do agendamento, em minutos. */
   readonly intervaloMin: number;
 }
 

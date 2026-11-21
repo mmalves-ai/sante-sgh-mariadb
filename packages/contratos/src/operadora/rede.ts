@@ -3,14 +3,14 @@
 // direta ou indireta, disponibilidade, urgência, regime, modelo de remuneração), o contrato escrito com a forma e o mês
 // do reajuste (Lei 13.003/2014), o próprio hospital da Rede como prestador (ligado ao convênio que representa a
 // operadora no faturamento do hospital), o descredenciamento com substituto, aviso aos beneficiários e prazo, a
-// reinclusão e os movimentos da rede que vão ao RPS da ANS (inclusão, alteração, exclusão, reinclusão; TBSTATUSCREPLS).
+// reinclusão e os movimentos da rede que vão ao RPS da ANS (inclusão, alteração, exclusão, reinclusão).
 // Os dados ficam em SGH_OPE_PRESTADOR e SGH_OPE_PRESTADOR_MOV (scripts 0568 e 0569); os códigos são os dos domínios do
 // banco do estabelecimento, conferidos no servidor contra o domínio lido. Nenhuma escrita em tabela legada (seção 5).
 import { z } from 'zod';
 import { UFS } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 
-/** Classificação do estabelecimento na rede (TBCLASSIFCREPLS; código 1 é a assistência hospitalar). */
+/** Classificação do estabelecimento na rede (código 1 é a assistência hospitalar). */
 export const CLASSIFICACOES_REDE = {
   1: 'Assistência hospitalar',
   2: 'Serviços de alta complexidade',
@@ -19,22 +19,22 @@ export const CLASSIFICACOES_REDE = {
 export type ClassificacaoRede = keyof typeof CLASSIFICACOES_REDE;
 export const CLASSIFICACAO_HOSPITALAR = 1 as const satisfies ClassificacaoRede;
 
-/** Disponibilidade dos serviços do prestador para a operadora (TBDISPONIBILSERV). */
+/** Disponibilidade dos serviços do prestador para a operadora. */
 export const DISPONIBILIDADES_SERVICO = { 1: 'Total', 2: 'Parcial' } as const;
 export type DisponibilidadeServico = keyof typeof DISPONIBILIDADES_SERVICO;
 
-/** Indicador de isenção de ônus do prestador (TBISENCAOONUS). */
+/** Indicador de isenção de ônus do prestador. */
 export const ISENCOES_ONUS = { 1: 'Sem informação', 2: 'Sim', 3: 'Não' } as const;
 export type IsencaoOnus = keyof typeof ISENCOES_ONUS;
 
-/** Código do tipo de prestador "hospital geral" (TBTPPRESTADOR). */
+/** Código do tipo de prestador "hospital geral". */
 export const TIPO_PRESTADOR_HOSPITAL = 3 as const;
 /** Tipos de prestador que admitem pessoa física (consultório médico, consultório dentário, reembolso). */
 export const TIPOS_PRESTADOR_PESSOA_FISICA: readonly number[] = [1, 5, 8];
-/** Contratação indireta (TBTPCONTRATOCREPLS 2): pela rede de outra operadora, com o registro dela na ANS. */
+/** Contratação indireta: pela rede de outra operadora, com o registro dela na ANS. */
 export const CONTRATACAO_INDIRETA = 2 as const;
 
-/** Movimentos da rede que vão ao RPS da ANS (TBSTATUSCREPLS): o código do domínio. */
+/** Movimentos da rede que vão ao RPS da ANS: o código do domínio. */
 export const MOVIMENTO_RPS = { inclusao: 1, alteracao: 2, exclusao: 3, reinclusao: 4 } as const;
 export type CodigoMovimentoRps = (typeof MOVIMENTO_RPS)[keyof typeof MOVIMENTO_RPS];
 

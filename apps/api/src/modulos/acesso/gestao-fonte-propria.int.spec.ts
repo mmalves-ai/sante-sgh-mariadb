@@ -40,7 +40,14 @@ describe.skipIf(SEM_BANCO)('fonte própria da gestão de acessos contra o MariaD
     const u = usuarios();
     await e.executar('DELETE FROM usuario_situacao_historico WHERE usuario_id IN (?, ?, ?)', u);
     await e.executar('DELETE FROM usuario_papel_seguranca WHERE usuario_id IN (?, ?, ?)', u);
+    await e.executar(
+      'DELETE a FROM usuario_perfil_alteracao a JOIN usuario_perfil up ON up.id = a.usuario_perfil_id WHERE up.usuario_id IN (?, ?, ?)',
+      u,
+    );
     await e.executar('DELETE FROM usuario_perfil WHERE usuario_id IN (?, ?, ?)', u);
+    await e.executar('DELETE FROM excecao_conta_dormente WHERE usuario_id IN (?, ?, ?)', u);
+    for (const t of ['politica_senha_versao', 'limite_sessao_perfil'])
+      await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outro]);
     await e.executar("UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL WHERE id IN (?, ?, ?)", u);
   }
   const ler = (sql: string, p: unknown[]) =>
@@ -251,9 +258,55 @@ describe.skipIf(SEM_BANCO)('fonte própria da gestão de acessos contra o MariaD
     expect(await codigo(fonte.executar('acesso.trocarGrupoUsuario', EST, { login: ALVO, grupo: 'X' }, ctx()))).toBe('sem-grupos');
     expect(fonte.receita('acesso.criarGrupo', EST).ligada).toBe(false);
     expect(await codigo(fonte.executar('acesso.bloquearUsuario', EST, { login: 1 }, ctx()))).toBe('entrada-invalida');
-    expect(await codigo(fonte.publicarPoliticaSenha('teste', EST, {} as never, new Date(), trilha()))).toBe('modelo-pendente');
+    expect(await codigo(fonte.publicarPoliticaSenha('teste', EST, {} as never, new Date(), trilha()))).toBe('entrada-invalida');
     expect(await codigo(fonte.pedidosAcesso('teste', EST))).toBe('adaptador-pendente');
     expect(await fonte.grupos('teste', EST)).toEqual([]);
+  });
+
+  it('tabelas da gestão: alteração e revogação da concessão, política de senha, limite de sessão, dormência e RH', async () => {
+    const { id } = await fonte.concederPerfil('teste', EST, {
+      idUsuario: ids.alvo, login: ALVO, perfil: 'gestor-acessos', concedidoPor: OP, areaAprovou: 'TI',
+      inicio: new Date('2026-03-01T12:00:00Z'), fim: null, motivo: 'Concessão sintética F2.4',
+    }, trilha());
+    await fonte.alterarPerfil('teste', EST, {
+      id, inicio: new Date('2026-03-01T12:00:00Z'), fim: new Date('2027-03-01T12:00:00Z'), motivo: 'Prazo sintético', justificativa: 'Ajuste F2.4', por: OP,
+    }, trilha());
+    const alts = await fonte.alteracoesPerfil('teste', EST, id);
+    expect(alts).toHaveLength(1);
+    expect(alts[0]).toMatchObject({ motivoAntes: 'Concessão sintética F2.4', fimAntes: null, motivo: 'Prazo sintético', justificativa: 'Ajuste F2.4', alteradoPor: OP });
+    await fonte.revogarPerfil('teste', EST, id, OP, trilha(), 'Revogação sintética F2.4');
+    expect((await fonte.historicoPerfis('teste', EST, ALVO)).find((x) => x.id === id)).toMatchObject({ revogadoMotivo: 'Revogação sintética F2.4', revogadoPor: OP });
+
+    const agora = new Date();
+    const futura = new Date(agora.getTime() + 86_400_000);
+    const regras = {
+      minimoCaracteres: 10, exigeEspecial: true, exigeMinuscula: true, exigeMaiuscula: true, trocaDias: 90, reusoDias: 365,
+      recusaNome: true, recusaNascimento: true, recusaComuns: true, senhasProibidas: ['sintetica123', 'sintetica123', ' '],
+      hospital: EST, por: OP,
+    };
+    // A sessão ainda não aplica a versão publicada nem o limite por perfil: a gravação recusa e nada entra no banco.
+    expect(await codigo(fonte.publicarPoliticaSenha('teste', EST, { ...regras, vigenteDesde: futura, motivo: 'Política sintética' }, agora, trilha()))).toBe('aplicacao-pendente');
+    expect(await fonte.versoesPoliticaSenha('teste', EST)).toEqual([]);
+    expect(await codigo(fonte.cancelarPoliticaSenha('teste', EST, { versao: 1, motivo: 'Sem versão', por: OP }, agora, trilha()))).toBe('nao-encontrado');
+    expect(await codigo(fonte.definirLimiteSessao('teste', EST, { hospital: EST, perfil: '*', limite: 3, motivo: 'Limite sintético', por: OP }, trilha()))).toBe('aplicacao-pendente');
+    expect(await codigo(fonte.definirLimiteSessao('teste', EST, { hospital: EST, perfil: PERFIL, limite: 2, motivo: 'Limite do perfil', por: OP }, trilha()))).toBe('aplicacao-pendente');
+    expect(await fonte.historicoLimitesSessao('teste', EST)).toEqual([]);
+
+    const excecao = (ate: string | null, retirar: boolean, motivo: string) =>
+      fonte.registrarExcecaoDormencia('teste', EST, { hospital: EST, login: ALVO, ate, retirar, motivo, por: OP }, trilha());
+    expect(await codigo(excecao(null, false, 'Exceção sintética sem prazo'))).toBe('prazo-obrigatorio');
+    expect(await excecao('2027-01-31', false, 'Exceção sintética com prazo')).toMatchObject({ anterior: null, atual: '2027-01-31' });
+    expect(await codigo(excecao('2027-01-31', false, 'Exceção sintética repetida'))).toBe('sem-mudanca');
+    expect(await excecao(null, true, 'Retirada sintética da exceção')).toMatchObject({ anterior: '2027-01-31', atual: null });
+    expect(await codigo(excecao(null, true, 'Retirada sintética repetida'))).toBe('sem-excecao');
+    expect((await fonte.historicoExcecoesDormencia('teste', EST)).filter((x) => x.login === ALVO).map((x) => x.situacao)).toEqual(['retirada', 'vigente']);
+
+    expect(await fonte.registrosConselho('teste', EST, ALVO)).toEqual([]);
+    expect(await codigo(fonte.registrarConferenciaConselho('teste', EST, {
+      hospital: EST, login: ALVO, registro: 1, situacao: 'ativo', conferidoEm: '2026-01-02', fonte: 'documento', observacao: 'Conferência sintética', por: OP, hoje: '2026-11-21',
+    }, trilha()))).toBe('registro-nao-vinculado');
+    expect(await codigo(fonte.definirPerfilCargoRh('teste', EST, { hospital: EST, cargo: 'CARGO SINTETICO INEXISTENTE', perfil: PERFIL, motivo: 'Teste', por: OP }, trilha()))).toBe('cargo-inexistente');
+    expect(await fonte.dadosRh('teste', EST)).toMatchObject({ vinculos: [], mudancas: [], afastamentos: [], resolucoes: [] });
   });
 
   // A mesma bateria nas duas fontes: a memória responde null/situação, o banco lança o código; o desfecho é o mesmo.

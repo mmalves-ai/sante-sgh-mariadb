@@ -1,7 +1,7 @@
 // Contratos do suporte técnico e do "login como" (ADR 0021; docs/modulos/acesso.md › Suporte técnico e login
-// como). Contas PRÓPRIAS do Sante SGH (separadas do TBUSERS do legado): PLATAFORMA (o dono) e SUPORTE
+// como). Contas PRÓPRIAS do Sante SGH (separadas dos usuários do sistema de origem): PLATAFORMA (o dono) e SUPORTE
 // (pessoas identificadas por e-mail, com estabelecimentos atribuídos). Depois do próprio login, a conta abre
-// uma sessão "como" um usuário do SPDATA: a sessão do ALVO (permissões reais do M06) marcada com o ator real.
+// uma sessão "como" um usuário do sistema de origem: a sessão do ALVO (permissões reais do M06) marcada com o ator real.
 // Nada aqui leva senha, hash, segredo TOTP nem token de sessão.
 import { z } from 'zod';
 import { esquemaLogin } from '../acesso/entrada.js';
@@ -100,8 +100,8 @@ export const esquemaAceitarConvite = z.object({
 });
 
 /**
- * POST /api/plataforma/como. `modo` `acesso-total` (ADR 0022): só a PLATAFORMA; `login` é o usuário do SPDATA
- * "em nome de quem gravar" (TBUSERS.NOME nas colunas de usuário, na trilha e nos gatilhos do legado); a
+ * POST /api/plataforma/como. `modo` `acesso-total` (ADR 0022): só a PLATAFORMA; `login` é o usuário do sistema de origem
+ * "em nome de quem gravar" (o login nas colunas de usuário e na trilha); a
  * auditoria registra o ator real.
  */
 export const esquemaEntrarComo = z.object({
@@ -130,7 +130,7 @@ export interface EmNomeDePadrao {
   readonly login: string | null;
 }
 
-/** Grupo ativo do TBGRUUSU com a contagem de logins não bloqueados. */
+/** Grupo de usuários ativo com a contagem de logins não bloqueados. */
 export interface GrupoComo {
   readonly grupo: string;
   readonly usuarios: number;
@@ -246,7 +246,7 @@ export const esquemaCorrigir = z
   });
 export type PedidoCorrecao = z.infer<typeof esquemaCorrigir>;
 
-/** Linha do relatório que cruza a TBCABTRILHA com a auditoria do "como" (R3). */
+/** Linha do relatório que cruza a trilha de auditoria com a auditoria do "como" (R3). */
 export interface CruzamentoTrilhaTela {
   readonly idTrilhaLegado: string;
   readonly dataHora: string;
@@ -362,7 +362,7 @@ export interface CargaAlertaSuporte {
   readonly estabelecimento: string;
   readonly idSessao: string;
   readonly atorTipo: string;
-  /** TBUSERS.ID_TBUSERS do alvo. */
+  /** Id do usuário alvo. */
   readonly idUsuario: string;
   readonly motivo: string;
   readonly inicio: string;

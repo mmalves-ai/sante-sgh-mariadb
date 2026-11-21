@@ -157,7 +157,8 @@ function traduzir(e: unknown): never {
   throw e;
 }
 
-const hhmmDe = (agora: string) => `${agora.slice(11, 13)}${agora.slice(14, 16)}`;
+/** A hora do dia "HH:MM" do carimbo local (AAAA-MM-DDTHH:MM:SS) do relógio do estabelecimento. */
+const horaDoCarimbo = (agora: string) => agora.slice(11, 16);
 const diasAntes = (hoje: string, n: number) =>
   new Date(Date.parse(`${hoje}T12:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
 const nomeDe = (p: PacienteFicha | undefined) => (p ? (p.nomeSocial ?? p.nome) : '');
@@ -245,7 +246,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
 
   private async relogio(c: ContextoTelemedicina) {
     const r = await this.atendimento.relogio(contextoPorta(c));
-    return { hoje: r.hoje, hhmm: hhmmDe(r.agora) };
+    return { hoje: r.hoje, hora: horaDoCarimbo(r.agora) };
   }
 
   private async gravarSgh<T>(
@@ -712,7 +713,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           atendimento: e.atendimento,
           paciente,
           data: r.hoje,
-          hora: r.hhmm,
+          hora: r.hora,
           convidado: p.id,
           nomeConvidado: p.nome,
           motivo: e.motivo,
@@ -873,7 +874,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
 
   private paraPortal(
     l: Teleconsulta,
-    r: { hoje: string; hhmm: string },
+    r: { hoje: string; hora: string },
     ligada: boolean,
   ): TeleconsultaDoPortal {
     const j = janelaSalaEspera(l, r);

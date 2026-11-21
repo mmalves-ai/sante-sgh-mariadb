@@ -103,11 +103,11 @@ describe('marcação, disputa, detalhe auditado e cancelamento', () => {
     const v = await get(s, `/vagas?agenda=901&de=${AMANHA}&ate=${AMANHA}`);
     expect(v.statusCode).toBe(200);
     expect(v.json().vagas.length).toBe(16);
-    const m = await marcar(s, '0800');
+    const m = await marcar(s, '08:00');
     expect(m.statusCode).toBe(201);
     const id = m.json().resultado.marcacao as number;
     expect(id).toBeGreaterThan(0);
-    const de_novo = await marcar(s, '0800', { paciente: 1002 });
+    const de_novo = await marcar(s, '08:00', { paciente: 1002 });
     expect(de_novo.statusCode).toBe(409);
     expect((await get(s, `/vagas?agenda=901&de=${AMANHA}&ate=${AMANHA}`)).json().vagas.length).toBe(15);
     const d = await get(s, `/marcacoes/${id}`);
@@ -121,12 +121,12 @@ describe('marcação, disputa, detalhe auditado e cancelamento', () => {
   it('valida a entrada (hora fora do formato, canal desconhecido): 400', async () => {
     const s = await entrar('SINT.AGENDA');
     expect((await marcar(s, '25:00')).statusCode).toBe(400);
-    expect((await marcar(s, '0815', { canal: 'pombo' })).statusCode).toBe(400);
+    expect((await marcar(s, '08:15', { canal: 'pombo' })).statusCode).toBe(400);
   });
 
   it('cancela com motivo padronizado; "Outro" sem descrição é 400; aparece nos cancelamentos', async () => {
     const s = await entrar('SINT.AGENDA');
-    const id = (await marcar(s, '0830')).json().resultado.marcacao as number;
+    const id = (await marcar(s, '08:30')).json().resultado.marcacao as number;
     const sem = await post(s, `/marcacoes/${id}/cancelar`, { motivo: 'OUTRO', solicitante: 'paciente' });
     expect(sem.statusCode).toBe(400);
     const c = await post(s, `/marcacoes/${id}/cancelar`, { motivo: 'PAC-DESISTIU', solicitante: 'paciente' });
@@ -143,7 +143,7 @@ describe('encaixe, remarcação, confirmação e falta', () => {
     const base = {
       agenda: 901,
       data: AMANHA,
-      hora: '0807',
+      hora: '08:07',
       paciente: 1002,
       convenio: 10,
       retorno: false,
@@ -162,9 +162,9 @@ describe('encaixe, remarcação, confirmação e falta', () => {
 
   it('remarca transferindo; confirma; tentativa sem contato fica só no novo', async () => {
     const s = await entrar('SINT.AGENDA');
-    const id = (await marcar(s, '0900')).json().resultado.marcacao as number;
+    const id = (await marcar(s, '09:00')).json().resultado.marcacao as number;
     const r = await post(s, `/marcacoes/${id}/remarcar`, {
-      destino: { agenda: 901, data: AMANHA, hora: '0915' },
+      destino: { agenda: 901, data: AMANHA, hora: '09:15' },
       modo: 'transferir',
       canal: 'telefone',
     });
@@ -185,7 +185,7 @@ describe('encaixe, remarcação, confirmação e falta', () => {
 
   it('falta antes da hora é recusada; o painel do dia lista as marcações de amanhã', async () => {
     const s = await entrar('SINT.AGENDA');
-    const id = (await marcar(s, '1000')).json().resultado.marcacao as number;
+    const id = (await marcar(s, '10:00')).json().resultado.marcacao as number;
     const f = await post(s, `/marcacoes/${id}/falta`);
     expect(f.statusCode).toBe(409);
     const p = await get(s, `/dia?data=${AMANHA}&agenda=901`);
@@ -195,11 +195,11 @@ describe('encaixe, remarcação, confirmação e falta', () => {
 
   it('remarcação em lote: um item por transação, com o resultado de cada um', async () => {
     const s = await entrar('SINT.AGENDA');
-    const a = (await marcar(s, '1030')).json().resultado.marcacao as number;
+    const a = (await marcar(s, '10:30')).json().resultado.marcacao as number;
     const r = await post(s, '/remarcar-lote', {
       itens: [
-        { marcacao: a, destino: { agenda: 901, data: AMANHA, hora: '1045' } },
-        { marcacao: a, destino: { agenda: 901, data: AMANHA, hora: '1100' } },
+        { marcacao: a, destino: { agenda: 901, data: AMANHA, hora: '10:45' } },
+        { marcacao: a, destino: { agenda: 901, data: AMANHA, hora: '11:00' } },
       ],
       modo: 'liberar',
       canal: 'telefone',
@@ -239,7 +239,7 @@ describe('bloqueio, lista de espera, grade, escala e indicadores', () => {
     const m = await post(s, `/espera/${id}/marcar`, {
       agenda: 902,
       data: AMANHA,
-      hora: '0800',
+      hora: '08:00',
       convenio: 10,
       canal: 'telefone',
     });
@@ -262,7 +262,7 @@ describe('bloqueio, lista de espera, grade, escala e indicadores', () => {
 
   it('planeja a escala com vigência futura; data passada é 400', async () => {
     const s = await entrar('SINT.AGENDA');
-    const faixas = [{ semana: 2, inicio: '0800', fim: '1200' }];
+    const faixas = [{ semana: 2, inicio: '08:00', fim: '12:00' }];
     expect(
       (await post(s, '/escalas/901', { vigenteDesde: '2026-10-01', duracaoMinutos: 15, faixas })).statusCode,
     ).toBe(400);
@@ -288,7 +288,7 @@ describe('escopo da sessão (unidade e tipo de agenda) no servidor', () => {
       await post(todos, '/marcacoes', {
         agenda: 903,
         data: dia,
-        hora: '1400',
+        hora: '14:00',
         paciente: 1004,
         convenio: 10,
         retorno: false,
@@ -317,7 +317,7 @@ describe('escopo da sessão (unidade e tipo de agenda) no servidor', () => {
     const marcarFora = await post(u2, '/marcacoes', {
       agenda: 903,
       data: dia,
-      hora: '1420',
+      hora: '14:20',
       paciente: 1004,
       convenio: 10,
       retorno: false,
@@ -334,7 +334,7 @@ describe('escopo da sessão (unidade e tipo de agenda) no servidor', () => {
     const t5 = await entrar('SINT.AGENDA.T5');
     expect((await get(t5, '/agendas')).json().itens).toEqual([]);
     expect((await get(t5, `/vagas?de=${AMANHA}&ate=${AMANHA}`)).json().vagas).toEqual([]);
-    expect((await marcar(t5, '1130')).statusCode).toBe(403);
+    expect((await marcar(t5, '11:30')).statusCode).toBe(403);
     expect((await get(t5, `/cancelamentos?de=${HOJE}&ate=${HOJE}`)).json().itens).toEqual([]);
   });
 
@@ -369,7 +369,7 @@ describe('escopo da sessão (unidade e tipo de agenda) no servidor', () => {
 describe('cancelamentos por motivo e lista de espera mascarada', () => {
   it('filtra os cancelamentos pelo motivo padronizado', async () => {
     const s = await entrar('SINT.AGENDA');
-    const id = (await marcar(s, '1145')).json().resultado.marcacao as number;
+    const id = (await marcar(s, '11:45')).json().resultado.marcacao as number;
     await post(s, `/marcacoes/${id}/cancelar`, { motivo: 'CONV-NAO-AUTORIZOU', solicitante: 'paciente' });
     const so = (await get(s, `/cancelamentos?de=${HOJE}&ate=${HOJE}&motivo=CONV-NAO-AUTORIZOU`)).json();
     expect(so.itens.length).toBeGreaterThanOrEqual(1);
@@ -397,7 +397,7 @@ describe('cancelamentos por motivo e lista de espera mascarada', () => {
 describe('cobertura: marcados com o convênio e o histórico do paciente', () => {
   it('lista as marcações futuras com o convênio (nome mascarado) e o histórico traz as possíveis à parte', async () => {
     const s = await entrar('SINT.AGENDA');
-    const id = (await marcar(s, '1115', { paciente: 1005, convenio: 306 })).json().resultado
+    const id = (await marcar(s, '11:15', { paciente: 1005, convenio: 306 })).json().resultado
       .marcacao as number;
     const r = await get(s, '/agendas/901/convenios/306/marcados');
     expect(r.statusCode).toBe(200);

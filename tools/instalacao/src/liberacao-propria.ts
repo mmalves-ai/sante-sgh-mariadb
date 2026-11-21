@@ -34,7 +34,12 @@ import {
   recusa,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import type { LinhaChaveFull, PedidoLoteFull, PortaLiberacaoFull, PrerequisitoLidoFull } from './liberacao-full.ts';
+import type {
+  LinhaChaveFull,
+  PedidoLoteFull,
+  PortaLiberacaoFull,
+  PrerequisitoLidoFull,
+} from './liberacao-full.ts';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoLiberacao {
@@ -52,7 +57,8 @@ const COLUNAS_CHAVE = `c.id, c.tipo, c.chave, c.escopo, c.valor, c.ligada, c.lig
   FROM liberacao_chave c
   LEFT JOIN liberacao_lote l ON l.id = c.liberacao_lote_id`;
 
-const COLUNAS_PREREQUISITO = 'p.recurso, p.tipo, p.situacao, p.validade, p.evidencia FROM recurso_prerequisito p';
+const COLUNAS_PREREQUISITO =
+  'p.recurso, p.tipo, p.situacao, p.validade, p.evidencia FROM recurso_prerequisito p';
 
 const txt = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 const boolOuNull = (v: unknown): boolean | null =>
@@ -60,7 +66,7 @@ const boolOuNull = (v: unknown): boolean | null =>
 const dia = (v: unknown): string | null =>
   v instanceof Date
     ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
-    : txt(v)?.slice(0, 10) ?? null;
+    : (txt(v)?.slice(0, 10) ?? null);
 
 function paraChave(r: Linha): LinhaChaveFull {
   return {
@@ -103,7 +109,10 @@ const esquemaPrerequisito = z.object({
   recurso: z.string().min(1).max(120),
   tipo: z.enum(['certificado', 'credenciamento', 'contrato', 'aprovacao']),
   situacao: z.enum(['pendente', 'cumprido', 'dispensado']),
-  validade: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  validade: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
   evidencia: z.string().max(200).nullable(),
 });
 
@@ -129,9 +138,13 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
   /** Os estabelecimentos ativos do cliente (códigos). */
   estabelecimentos(): Promise<string[]> {
     return this.ler(async (l) =>
-      (await l.consultar('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], { teto: 500 })).map(
-        (r) => String(r['codigo']),
-      ),
+      (
+        await l.consultar(
+          'SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo',
+          [],
+          { teto: 500 },
+        )
+      ).map((r) => String(r['codigo'])),
     );
   }
 
@@ -139,7 +152,9 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
     const ja = this.ids.get(hospital);
     if (ja !== undefined) return ja;
     const r = await this.ler((l) =>
-      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [hospital]),
+      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        hospital,
+      ]),
     );
     if (!r) throw recusa('estabelecimento-desconhecido', 'Estabelecimento não cadastrado neste cliente.');
     const id = Number(r.id);
@@ -186,9 +201,13 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
     const est = await this.estabelecimento(hospital);
     return this.ler(async (l) =>
       (
-        await l.consultar(`SELECT ${COLUNAS_PREREQUISITO} WHERE p.estabelecimento_id = ? ORDER BY p.recurso, p.tipo LIMIT 2000`, [est], {
-          teto: 2000,
-        })
+        await l.consultar(
+          `SELECT ${COLUNAS_PREREQUISITO} WHERE p.estabelecimento_id = ? ORDER BY p.recurso, p.tipo LIMIT 2000`,
+          [est],
+          {
+            teto: 2000,
+          },
+        )
       ).map(paraPrerequisito),
     );
   }
@@ -216,7 +235,9 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
     const ctx = await this.contexto(hospital);
     let recusaDoPlano: unknown = null;
     const codigoEvento =
-      evento === 'alterada' ? EVENTOS_AUDITAVEIS.liberacaoAlterada.codigo : EVENTOS_AUDITAVEIS.liberacaoRevertida.codigo;
+      evento === 'alterada'
+        ? EVENTOS_AUDITAVEIS.liberacaoAlterada.codigo
+        : EVENTOS_AUDITAVEIS.liberacaoRevertida.codigo;
     const op = definirOperacao({
       nome: evento === 'alterada' ? 'config.liberacao.ligar-tudo' : 'config.liberacao.reverter-ligar-tudo',
       tabelas: ['liberacao_chave', 'liberacao_lote', 'sequencia_negocio'],
@@ -227,18 +248,29 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
         for (const [i, pe] of e.pedidos.entries()) {
           const pedido = pedidos[i]!;
           const todas = (
-            await tx.consultarParaAtualizar(`SELECT ${COLUNAS_CHAVE} WHERE c.estabelecimento_id = ? AND c.chave = ?`, [est, pe.chave], {
-              teto: 1000,
-            })
+            await tx.consultarParaAtualizar(
+              `SELECT ${COLUNAS_CHAVE} WHERE c.estabelecimento_id = ? AND c.chave = ?`,
+              [est, pe.chave],
+              {
+                teto: 1000,
+              },
+            )
           ).map((x) => ({ linha: paraChave(x), id: Number(x['id']), versao: Number(x['versao']) }));
           if (todas.some((x) => x.linha.tipo !== pe.tipo))
-            throw recusa('chave-de-outro-tipo', 'Já existe uma chave com este nome de outro tipo (operação × recurso).');
+            throw recusa(
+              'chave-de-outro-tipo',
+              'Já existe uma chave com este nome de outro tipo (operação × recurso).',
+            );
           const prerequisitos =
             pe.tipo === 'recurso'
               ? (
-                  await tx.consultarParaAtualizar(`SELECT ${COLUNAS_PREREQUISITO} WHERE p.estabelecimento_id = ? AND p.recurso = ?`, [est, pe.chave], {
-                    teto: 100,
-                  })
+                  await tx.consultarParaAtualizar(
+                    `SELECT ${COLUNAS_PREREQUISITO} WHERE p.estabelecimento_id = ? AND p.recurso = ?`,
+                    [est, pe.chave],
+                    {
+                      teto: 100,
+                    },
+                  )
                 ).map(paraPrerequisito)
               : [];
           let mudancas;
@@ -252,7 +284,11 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
             r.push(':0');
             continue;
           }
-          await garantirSequencia(tx, { tipo: 'liberacao_lote', estabelecimento: est }, { usuario: null, agora: new Date() });
+          await garantirSequencia(
+            tx,
+            { tipo: 'liberacao_lote', estabelecimento: est },
+            { usuario: null, agora: new Date() },
+          );
           const numero = await tx.proximoNumero('liberacao_lote');
           const loteId = await tx.incluir('liberacao_lote', {
             estabelecimento_id: est,
@@ -297,7 +333,12 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
         op,
         this.cliente,
         {
-          pedidos: pedidos.map((p) => ({ tipo: p.tipo, chave: p.chave, justificativa: p.justificativa, referencia: p.referencia })),
+          pedidos: pedidos.map((p) => ({
+            tipo: p.tipo,
+            chave: p.chave,
+            justificativa: p.justificativa,
+            referencia: p.referencia,
+          })),
         },
         ctx,
       );
@@ -332,8 +373,14 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
         )[0];
         const valores = { situacao: e.situacao, validade: e.validade, evidencia: e.evidencia };
         const id = atual
-          ? (await tx.alterar('recurso_prerequisito', Number(atual['id']), Number(atual['versao']), valores), Number(atual['id']))
-          : await tx.incluir('recurso_prerequisito', { estabelecimento_id: c.estabelecimento, recurso: e.recurso, tipo: e.tipo, ...valores });
+          ? (await tx.alterar('recurso_prerequisito', Number(atual['id']), Number(atual['versao']), valores),
+            Number(atual['id']))
+          : await tx.incluir('recurso_prerequisito', {
+              estabelecimento_id: c.estabelecimento,
+              recurso: e.recurso,
+              tipo: e.tipo,
+              ...valores,
+            });
         return { id };
       },
       alvo: (_e, r) => ({ tabela: 'recurso_prerequisito', id: Number(r.id) }),
@@ -350,7 +397,13 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
     await this.executor.executar(
       op,
       this.cliente,
-      { recurso: p.recurso, tipo: p.tipo, situacao: p.situacao, validade: p.validade, evidencia: p.evidencia },
+      {
+        recurso: p.recurso,
+        tipo: p.tipo,
+        situacao: p.situacao,
+        validade: p.validade,
+        evidencia: p.evidencia,
+      },
       ctx,
     );
   }
@@ -359,7 +412,11 @@ export class PortaLiberacaoPropria implements PortaLiberacaoFull {
    * M41, regra 1: a leitura do banco próprio (lerRegraFarmacia) e a decisão do domínio (motivoLigarRegraFarmacia), a mesma
    * regra da tela de chaves. A chave que não é da regra 1 não lê nada.
    */
-  async regraFarmacia(hospital: string, _tipo: 'recurso' | 'operacao', chave: string): Promise<string | null> {
+  async regraFarmacia(
+    hospital: string,
+    _tipo: 'recurso' | 'operacao',
+    chave: string,
+  ): Promise<string | null> {
     if (!chaveExigePrescricao(chave)) return null;
     const est = await this.estabelecimento(hospital);
     const { leitura, chaves } = await this.ler((l) => lerRegraFarmacia(l, est, new Date()));
@@ -412,12 +469,17 @@ export async function lerRegraFarmacia(
   );
   const porPar = new Map<string, { local: number; unidade: string; dispensacoes: number }>();
   for (const r of dispensadas) {
-    const a = { local: Number(r['local']), unidade: String(r['unidade']).trim(), dispensacoes: Number(r['n']) };
+    const a = {
+      local: Number(r['local']),
+      unidade: String(r['unidade']).trim(),
+      dispensacoes: Number(r['n']),
+    };
     porPar.set(`${a.local}|${a.unidade}`, a);
   }
   for (const r of roteadas) {
     const k = `${Number(r['local'])}|${String(r['unidade']).trim()}`;
-    if (!porPar.has(k)) porPar.set(k, { local: Number(r['local']), unidade: String(r['unidade']).trim(), dispensacoes: 1 });
+    if (!porPar.has(k))
+      porPar.set(k, { local: Number(r['local']), unidade: String(r['unidade']).trim(), dispensacoes: 1 });
   }
   const limite = new Date(agora.getTime() - DIAS_PRESCRICAO_EM_USO * 86_400_000);
   const prescricoes = await l.consultar(
@@ -439,6 +501,10 @@ export async function lerRegraFarmacia(
       atendidas: [...porPar.values()],
       prescricoes: prescricoes.map((r) => ({ unidade: String(r['unidade']).trim(), n: Number(r['n']) })),
     },
-    chaves: chaves.map((r) => ({ escopo: String(r['escopo']), valor: String(r['valor']), ligada: boolOuNull(r['ligada']) })),
+    chaves: chaves.map((r) => ({
+      escopo: String(r['escopo']),
+      valor: String(r['valor']),
+      ligada: boolOuNull(r['ligada']),
+    })),
   };
 }

@@ -11,10 +11,10 @@ export interface ItemParaSaida {
   readonly quantidade: number;
   /** Saldo do item no local (o que a tela leu). */
   readonly saldoLocal: number;
-  /** `GEITENS.ESTOQUE` e `GEITENS.TOTAL` (saldo e valor do item na empresa). */
+  /** O saldo e o valor do insumo na empresa. */
   readonly estoque: number;
   readonly total: number;
-  /** `GEITENS.VLRMED`: item de custo zero (abaixo de 0,01) sai sem valor, como o gatilho aceita. */
+  /** O custo médio do insumo: item de custo zero (abaixo de 0,01) sai sem valor. */
   readonly custoMedio?: number;
   /** Item de fornecedor consignado: o gatilho não confere saldo nem valor. */
   readonly consignado?: boolean;

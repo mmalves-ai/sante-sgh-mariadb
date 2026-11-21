@@ -1,7 +1,7 @@
 // Vocabulário do repasse médico (M33; ficha, seções 5 a 8; cap-06b §6.7). Os códigos são os que o outro sistema grava
 // (levantados na cópia em 23/10/2026, só contagens): a tela mostra o rótulo, nunca o código cru nem o nome da tabela.
 
-/** Tipo de prestador do repasse (RPTIPOPRESTADOR.COD; 6 linhas no pc). */
+/** Tipo de prestador do repasse (6 tipos na cópia). */
 export const TIPOS_PRESTADOR_REPASSE = {
   E: 'Empresa médica',
   F: 'Fornecedor (prestador)',
@@ -13,25 +13,25 @@ export const TIPOS_PRESTADOR_REPASSE = {
 export type TipoPrestadorRepasse = keyof typeof TIPOS_PRESTADOR_REPASSE;
 
 /**
- * Tipo de credor do título a pagar que nasce do repasse (MFCONPAG.TIPO com ONDE='R'; ref 01 §2.5): M (médico,
+ * Tipo de credor do título a pagar que nasce do repasse (ref 01 §2.5): M (médico,
  * exige o vínculo com o profissional) ou E (empresa médica). Na cópia: 5.027 títulos M e 431 E, todos com RPA.
  */
 export const TIPOS_CREDOR_REPASSE = ['M', 'E'] as const;
 export type TipoCredorRepasse = (typeof TIPOS_CREDOR_REPASSE)[number];
 
-/** Beneficiário da regra (TBREPGER.MED_PRS): médico ou prestador. */
+/** Beneficiário da regra: médico ou prestador. */
 export const BENEFICIARIOS_REGRA = { M: 'Médico', P: 'Prestador' } as const;
 export type BeneficiarioRegra = keyof typeof BENEFICIARIOS_REGRA;
 
 /**
- * Tipo de conta da regra (TBREPGER.TIPO_CTA): A 756, E 38.525, I 66.149 regras no pc. A conta só tem E e I
- * (FCCTAEXT); "A" é lido como "as duas" (vale para qualquer conta), a confirmar no teste dourado.
+ * Tipo de conta da regra: A 756, E 38.525, I 66.149 regras na cópia. A conta só tem E e I
+ * (externa e internação); "A" é lido como "as duas" (vale para qualquer conta), a confirmar no teste dourado.
  */
 export const TIPOS_CONTA_REGRA = { A: 'Externa e internação', E: 'Externa', I: 'Internação' } as const;
 export type TipoContaRegra = keyof typeof TIPOS_CONTA_REGRA;
 
 /**
- * Valor do item que a apuração integrou (FCINTEGRPA.ID_TBTIPOLANCVLR → TBTIPOLANCVLR). No pc: 6.016 linhas de valor
+ * Valor do item que a apuração integrou (tipo de valor do lançamento). Na cópia: 6.016 linhas de valor
  * faturado (3.914 com valor, R$ 508.581,47), 4.707 de valor pago e 3 de valor apresentado pago, todas sem valor.
  */
 export const TIPOS_VALOR_INTEGRADO = {

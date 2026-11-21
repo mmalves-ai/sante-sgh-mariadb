@@ -1,4 +1,4 @@
-// Regra 6 do M33: adicionais de feriado e de fim de semana da regra (TBREPGER.PERC_FERIADO e PERC_FIM_SEMANA). Sem
+// Regra 6 do M33: adicionais de feriado e de fim de semana da regra (percentual de feriado e de fim de semana). Sem
 // resposta da DP-33 vale o padrão de mercado (FAT-10): acréscimo da regra, com o modo no parâmetro
 // repasse.adicionalModo ("sobre-valor": valor × (1 + adicional); "pontos": percentual + adicional). Os dois não se
 // somam: no feriado que cai no fim de semana vale o feriado. No pc nenhuma regra usa adicional (0 de 105.430).

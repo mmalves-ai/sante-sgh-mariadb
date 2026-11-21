@@ -1,13 +1,13 @@
 // Cadastros das agendas de sessões e dos recursos no CRUD genérico (M50, etapa 6; ficha, seção 5, "Receita genérica do
 // CRUD para as 8 tabelas do marco": os 2 das sessões; os 6 da portaria são da etapa 5). Pelo catálogo RDB$ e pelo
 // levantamento da cópia `pc` (1 linha "não informado" em cada):
-//   - agendas de sessões (AGCADAGENDA): o banco gera o código (gen_idagenda em laço); nome, tipo de agenda da recepção
-//     (RETPAGEN), unidade de atendimento (TBUNIDAD), situação (A/I, sem CHECK: o perfil vê "A"), atendimento domiciliar
-//     (CHECK F/T) e o centro de custo (TBCENCUS);
-//   - recursos de sessão (AGCADEIRA): as cadeiras e salas de cada agenda; o banco gera o código (GEN_IDCADEIRA em laço;
-//     CHECK código > 0); a identificação, o tipo e a prioridade, a faixa etária aceita, a complexidade (AGCOMPLEXIDADE) e
-//     a duração (AGDURACAO) aceitas (0 = todas) e a situação.
-// Opções do outro sistema (TBOPCOES, módulo Agendamento): Configurações 4831 › Manutenção/criação de agendas 4834 para
+//   - agendas de sessões: o banco gera o código (gen_idagenda em laço); nome, tipo de agenda da recepção,
+//     unidade de atendimento, situação (A/I, sem CHECK: o perfil vê "A"), atendimento domiciliar
+//     (CHECK F/T) e o centro de custo;
+//   - recursos de sessão: as cadeiras e salas de cada agenda; o banco gera o código (GEN_IDCADEIRA em laço;
+//     CHECK código > 0); a identificação, o tipo e a prioridade, a faixa etária aceita, a complexidade e
+//     a duração aceitas (0 = todas) e a situação.
+// Opções do outro sistema (menu de origem, módulo Agendamento): Configurações 4831 › Manutenção/criação de agendas 4834 para
 // gravar; com a Agenda de quimioterapia 4842 e os Horários livres 4856 para ler (inferidas: conferir na validação).
 import type { DominioPublico } from './tipos.js';
 

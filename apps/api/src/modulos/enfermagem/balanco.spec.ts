@@ -34,7 +34,7 @@ describe('balanço hídrico (M45, etapa 3)', () => {
     const ps = await a.get(s, '/enfermagem/balanco/unidades/UTI/pacientes');
     expect(ps.json().map((p: { atendimento: number }) => p.atendimento)).toContain(AT);
     const b = await ler(s);
-    expect(b).toMatchObject({ atendimento: AT, horaCorte: '0700', janela: { inicio: ATUAL, atual: true } });
+    expect(b).toMatchObject({ atendimento: AT, horaCorte: '07:00', janela: { inicio: ATUAL, atual: true } });
     expect(b.janelas.map((j) => j.inicio)).toEqual([ATUAL, ANTERIOR, somarMinutos(ANTERIOR, -24 * 60)]);
     expect(b.gravacao.operacoes['fechar']?.pode).toBe(true);
     expect(b.dominios.tiposEliminacao.find((t) => t.codigo === 3)?.pedeIntensidade).toBe(true);

@@ -7,8 +7,8 @@
 // - regra 4: na exportação, o sistema externo é dono dos dados contratuais (salário, rubricas, encargos) e o Sante SGH
 //   dos assistenciais (conselho, escala, habilitação); por isso o lote exportado NÃO leva salário nem rubrica, e o
 //   retorno NÃO traz conselho, escala nem habilitação;
-// - regra 5: os eventos de ponto saem pelos 13 tipos de integração da folha (PETP_INTEGR_EVENTO.COD_INTEGR_EVENTO) e a
-//   origem de cada um pelos tipos de hora da apuração (POTPHORA.ID);
+// - regra 5: os eventos de ponto saem pelos 13 tipos de integração da folha (código do tipo de integração) e a
+//   origem de cada um pelos tipos de hora da apuração (id);
 // - regra 6: os dois lotes têm contagem e soma conferíveis (o retorno ecoa os totais que recebeu); qualquer divergência
 //   barra o lançamento dos títulos (a conferência é do @sgh/dominio-pessoas);
 // - valores em centavos inteiros (soma exata, sem arredondamento de ponto flutuante); tempo em minutos inteiros.
@@ -61,7 +61,7 @@ export const MODALIDADES_PLANTAO = ['presencial', 'sobreaviso', 'diarista'] as c
 export type ModalidadePlantao = (typeof MODALIDADES_PLANTAO)[number];
 
 /**
- * Tipos de integração de evento de ponto com a folha (PETP_INTEGR_EVENTO, 13 linhas no pc; ref 02). Os rótulos de 1 a
+ * Tipos de integração de evento de ponto com a folha (13 tipos; ref 02). Os rótulos de 1 a
  * 7 são os da referência; os de 8 a 13 são lidos da tabela na hora (a tela mostra o rótulo lido, nunca o código cru).
  */
 export const CODIGOS_EVENTO_PONTO_FOLHA = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;
@@ -76,7 +76,7 @@ export const ROTULOS_EVENTO_PONTO_CONHECIDOS: Readonly<Partial<Record<CodigoEven
   7: '2ª hora extra em feriado',
 };
 
-/** Tipos de hora da apuração (POTPHORA, 9 linhas no pc; ref 02). Rótulos de 1 a 5 da referência; os demais, lidos. */
+/** Tipos de hora da apuração (9 tipos; ref 02). Rótulos de 1 a 5 da referência; os demais, lidos. */
 export const CODIGOS_TIPO_HORA = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export type CodigoTipoHora = (typeof CODIGOS_TIPO_HORA)[number];
 export const ROTULOS_TIPO_HORA_CONHECIDOS: Readonly<Partial<Record<CodigoTipoHora, string>>> = {
@@ -136,7 +136,7 @@ export const esquemaColaboradorExportado = z
     tipoVinculo: z.enum(TIPOS_VINCULO_TRABALHO),
     admissao: data,
     desligamento: data.nullable(),
-    /** Lotação: centro de custo (TBCENCUS.ID) e setor (TBUNIDAD.ID), na competência. */
+    /** Lotação: centro de custo (id) e unidade assistencial (id), na competência. */
     centroCusto: id,
     setor: id.nullable(),
     cbo: z
@@ -148,7 +148,7 @@ export const esquemaColaboradorExportado = z
   .strict();
 export type ColaboradorExportado = z.infer<typeof esquemaColaboradorExportado>;
 
-/** Afastamento na competência (motivo de FPMOTAFAST.ID, 21 linhas no pc). */
+/** Afastamento na competência (id do motivo de afastamento). */
 export const esquemaAfastamentoExportado = z
   .object({
     vinculo: id,
@@ -176,7 +176,7 @@ export const esquemaEventoPontoExportado = z
 export type EventoPontoExportado = z.infer<typeof esquemaEventoPontoExportado>;
 
 /**
- * Minutos do período fechado por tipo de hora da apuração (POTPHORA; regra 5): a classificação de que os eventos de
+ * Minutos do período fechado por tipo de hora da apuração (regra 5): a classificação de que os eventos de
  * integração saíram, para a folha externa conferir. Informativo: o que se paga são os eventos (não entra na soma).
  */
 export const esquemaHoraPontoExportada = z
@@ -224,7 +224,7 @@ export const esquemaLoteExportacaoFolha = z
     leiaute: z.literal(VERSAO_LEIAUTE_FOLHA_INTERFACE),
     /** Identificador do lote (SGH_PES_FOLHA_INTERFACE.ID). */
     lote: id,
-    /** Empresa do outro sistema (TBEMPHOS.COD_EMP) e estabelecimento da Rede. */
+    /** Empresa do outro sistema (código da empresa) e estabelecimento da Rede. */
     empresa: smallint,
     estabelecimento: z.string().min(1).max(10),
     competencia,

@@ -12,7 +12,6 @@ import {
   hhmm,
   leitoTexto,
   minutosAtePrazo,
-  paraHhmm,
   proximasEtapas,
 } from './regras-tela.js';
 
@@ -108,10 +107,11 @@ describe('mapa operacional na tela', () => {
 });
 
 describe('horas, prazo e etiqueta', () => {
-  it('HHMM ida e volta; prazo em minutos (negativo atrasado); a etiqueta só com dígitos', () => {
+  it('hora para exibir; prazo em minutos (negativo atrasado); a etiqueta só com dígitos', () => {
     expect(hhmm('1430')).toBe('14:30');
+    expect(hhmm('14:30')).toBe('14:30');
     expect(hhmm('')).toBe('');
-    expect(paraHhmm('07:05')).toBe('0705');
+    expect(hhmm(null)).toBe('');
     const agora = Date.parse('2026-10-22T10:00:00Z');
     expect(minutosAtePrazo('2026-10-22T10:30:00', agora)).toBe(30);
     expect(minutosAtePrazo('2026-10-22T09:45:00', agora)).toBe(-15);

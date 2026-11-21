@@ -1,6 +1,6 @@
 // Correspondências entre o cadastro do Sante SGH (a ficha do eSocial e a modalidade da rescisão) e os códigos dos
 // leiautes das obrigações anteriores ao eSocial (M53-F7). Os códigos são os dos catálogos oficiais que o banco já
-// tem (FPCAT_SEFIP, FPRESC_SEFIP, FPRESC_CAGED, FPTP_ADM_CAG, FPVINC_RAIS, FPRESC_RAIS, FPTP_ADM_RAIS, lidos onde
+// tem (categorias e movimentações da SEFIP, do CAGED e da RAIS, lidos onde
 // estão): a geração confere cada código usado contra o catálogo e recusa o que não estiver nele
 // (`codigo-fora-do-catalogo`). Código sem correspondência gera a pendência `categoria-sem-correspondencia`.
 //
@@ -9,7 +9,7 @@
 // dispensa sem justa causa na SEFIP (I1) e no CAGED (31), que não têm código próprio, e como 20 na RAIS.
 import type { FichaEsocialVinculo, ModalidadeRescisao } from '@sgh/contratos';
 
-/** Categoria do eSocial (tabela 1) → categoria da SEFIP (FPCAT_SEFIP). */
+/** Categoria do eSocial (tabela 1) → categoria da SEFIP. */
 export const CATEGORIA_SEFIP: Readonly<Record<string, string>> = {
   '101': '01',
   '103': '07',
@@ -21,7 +21,7 @@ export const CATEGORIA_SEFIP: Readonly<Record<string, string>> = {
   '701': '13',
 };
 
-/** Modalidade da rescisão → código de movimentação da SEFIP (FPRESC_SEFIP). */
+/** Modalidade da rescisão → código de movimentação da SEFIP. */
 export const MOVIMENTACAO_SEFIP: Readonly<Record<ModalidadeRescisao, string>> = {
   'sem-justa-causa': 'I1',
   'justa-causa': 'H',
@@ -35,7 +35,7 @@ export const MOVIMENTACAO_SEFIP: Readonly<Record<ModalidadeRescisao, string>> = 
   falecimento: 'S2',
 };
 
-/** Modalidade da rescisão → tipo de movimento de desligamento do CAGED (FPRESC_CAGED). */
+/** Modalidade da rescisão → tipo de movimento de desligamento do CAGED. */
 export const DESLIGAMENTO_CAGED: Readonly<Record<ModalidadeRescisao, string>> = {
   'sem-justa-causa': '31',
   'justa-causa': '32',
@@ -49,7 +49,7 @@ export const DESLIGAMENTO_CAGED: Readonly<Record<ModalidadeRescisao, string>> = 
   falecimento: '60',
 };
 
-/** Modalidade da rescisão → causa do desligamento da RAIS (FPRESC_RAIS). */
+/** Modalidade da rescisão → causa do desligamento da RAIS. */
 export const DESLIGAMENTO_RAIS: Readonly<Record<ModalidadeRescisao, string>> = {
   'sem-justa-causa': '11',
   'justa-causa': '10',
@@ -66,18 +66,18 @@ export const DESLIGAMENTO_RAIS: Readonly<Record<ModalidadeRescisao, string>> = {
 /** Tipo de admissão do eSocial (tpAdmissao) que é transferência (do grupo, sucessão, incorporação). */
 const TRANSFERENCIA = [2, 3, 4, 6];
 
-/** Tipo de movimento de admissão do CAGED (FPTP_ADM_CAG). */
+/** Tipo de movimento de admissão do CAGED. */
 export function admissaoCaged(f: Pick<FichaEsocialVinculo, 'tipoAdmissao' | 'tipoContrato'>): string {
   if (TRANSFERENCIA.includes(f.tipoAdmissao)) return '70';
   if (f.tipoContrato !== 1) return '25';
   return '20';
 }
 
-/** Tipo de admissão da RAIS (FPTP_ADM_RAIS). */
+/** Tipo de admissão da RAIS. */
 export const admissaoRais = (f: Pick<FichaEsocialVinculo, 'tipoAdmissao'>): string =>
   TRANSFERENCIA.includes(f.tipoAdmissao) ? '3' : '2';
 
-/** Vínculo empregatício da RAIS (FPVINC_RAIS) pela categoria e pelo tipo de contrato. */
+/** Vínculo empregatício da RAIS pela categoria e pelo tipo de contrato. */
 export function vinculoRais(f: Pick<FichaEsocialVinculo, 'categoria' | 'tipoContrato'>): string | null {
   switch (f.categoria) {
     case '101':

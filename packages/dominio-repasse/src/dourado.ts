@@ -1,5 +1,5 @@
 // Regra 2 do M33: comparador do teste dourado. O motor recalcula os itens da apuração gravada pelo outro sistema
-// (FCINTEGRPA, valor faturado com valor: 3.914 itens, R$ 508.581,47 no pc) e compara item a item com o gravado; cada
+// (valor faturado com valor: 3.914 itens, R$ 508.581,47 na cópia) e compara item a item com o gravado; cada
 // divergência sai classificada por causa, sem dado pessoal (IDs e valores agregados). A meta vem do parâmetro
 // repasse.douradoMetaPct (padrão 97%, a aprovar até a DP-33).
 import type { CausaDivergenciaRepasse, LinhaGravadaRepasse } from '@sgh/contratos';

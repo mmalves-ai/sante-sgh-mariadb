@@ -64,8 +64,8 @@ export function conferirExcecao(c: ChecklistLido | null, carater: number | null)
   return null;
 }
 
-/** A incisão do registro do ato (HHMM no dia do ato) como instante local. */
-export function instanteDaIncisao(data: string, hhmm: string | null): string | null {
-  if (!hhmm || !/^\d{4}$/.test(hhmm)) return null;
-  return `${data}T${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
+/** A incisão do registro do ato (hora "HH:MM" no dia do ato) como instante local. */
+export function instanteDaIncisao(data: string, hora: string | null): string | null {
+  if (!hora || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return null;
+  return `${data}T${hora}`;
 }

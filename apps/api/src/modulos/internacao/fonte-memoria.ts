@@ -62,9 +62,9 @@ function gerador(semente: number): () => number {
 }
 
 const d0 = (t: number) => new Date(Math.floor(t / DIA) * DIA);
-const hhmm = (t: number) => {
+const horaDoDia = (t: number) => {
   const m = Math.floor((t % DIA) / 60_000);
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}`;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
 
 interface Estada {
@@ -328,9 +328,9 @@ export class FonteInternacaoMemoria implements FonteInternacao {
         acomodacao: ult.ac.acomodacao,
         leito: ult.leito,
         entrada: d0(e.ini),
-        horaEntrada: hhmm(e.ini),
+        horaEntrada: horaDoDia(e.ini),
         alta: e.fim === null ? null : d0(e.fim),
-        horaAlta: e.fim === null ? null : hhmm(e.fim),
+        horaAlta: e.fim === null ? null : horaDoDia(e.fim),
         motivo: e.fim === null ? null : e.motivo,
         carater: e.carater,
         clinica: e.clinica,
@@ -344,9 +344,9 @@ export class FonteInternacaoMemoria implements FonteInternacao {
           acomodacao: t.ac.acomodacao,
           leito: t.leito,
           entrada: d0(t.ini),
-          horaEntrada: hhmm(t.ini),
+          horaEntrada: horaDoDia(t.ini),
           saida: t.fim === null ? null : d0(t.fim),
-          horaSaida: t.fim === null ? null : hhmm(t.fim),
+          horaSaida: t.fim === null ? null : horaDoDia(t.fim),
           tipo: t.ac.tipo,
         });
         const prox = e.trechos[k + 1];
@@ -354,7 +354,7 @@ export class FonteInternacaoMemoria implements FonteInternacao {
           transferencias.push({
             reg: e.reg,
             data: d0(prox.ini),
-            hora: hhmm(prox.ini),
+            hora: horaDoDia(prox.ini),
             origem: { bloco: t.ac.bloco, acomodacao: t.ac.acomodacao, leito: t.leito },
             destino: { bloco: prox.ac.bloco, acomodacao: prox.ac.acomodacao, leito: prox.leito },
           });

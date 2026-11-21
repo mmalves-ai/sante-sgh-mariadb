@@ -1,8 +1,8 @@
 // Integração da porta PRÓPRIA das solicitações do autoatendimento (F2.2, lote 03-02) contra o MariaDB do cliente de
 // teste da onda 3 (f22_o3), com massa SINTÉTICA: o contrato de efeito do pedido, da decisão e da desistência (a linha, o
 // detalhe, a versão, quem pediu e quem decidiu, e a trilha), as recusas (decisão do próprio solicitante, desistência de
-// outra pessoa, versão desatualizada) e o que aguarda o modelo (atestado; efeito no ponto sem o gravador ligado), que
-// desfaz a operação inteira.
+// outra pessoa, versão desatualizada) o atestado com a trilha de leitura, e o que aguarda o
+// modelo (efeito no ponto sem o gravador ligado), que desfaz a operação inteira.
 import { ErroOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../../exames/public-api.js';
@@ -55,8 +55,9 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do autoatendimento contra o MariaD
   let eu: ContextoAutoatendimento;
   let gestor: ContextoAutoatendimento;
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 't' }, (l) =>
-      l.consultar<Record<string, unknown>>(sql, p),
+    m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3', correlacao: 't' },
+      (l) => l.consultar<Record<string, unknown>>(sql, p),
     );
   const pedir = () =>
     porta.gravarSgh(
@@ -202,37 +203,99 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do autoatendimento contra o MariaD
     expect(Number(l?.['desistiu'])).toBe(1);
   });
 
-  it('o atestado e o efeito sem o gravador ligado recusam com modelo-pendente e desfazem o pedido inteiro', async () => {
+  it('atestado: grava com o CID do catálogo e o anexo; cada leitura fica na trilha e o CID só sai a quem pede', async () => {
+    const atestado = (n: number, cid: string | null) => ({
+      emitidoEm: '2026-10-20',
+      dias: 2,
+      cid,
+      emitente: 'Médica sintética',
+      registroConselho: 'CRM 0000',
+      arquivo: {
+        chave: `teste/atestado-${n}.pdf`,
+        hash: 'a'.repeat(64),
+        tipo: 'application/pdf' as const,
+        tamanho: 1234,
+      },
+      solicitacao: n,
+      por: m.login,
+    });
+    const n = await porta.gravarSgh(
+      eu,
+      (x: number) => trilha(x),
+      async (g) => {
+        const s = await g.incluirSolicitacao({
+          ...abono,
+          tipo: 'atestado',
+          vinculo: m.vinculo,
+          por: m.login,
+        });
+        await g.incluirAtestado(atestado(s, null));
+        return s;
+      },
+    );
+    expect(await porta.solicitacao(eu, n)).toMatchObject({ temAtestado: true });
+    expect(await codigo(porta.gravarSgh(eu, trilha(), (g) => g.incluirAtestado(atestado(n, null))))).toBe(
+      'atestado-repetido',
+    );
+    // O CID fora do catálogo recusa e desfaz o pedido inteiro.
+    expect(
+      await codigo(
+        porta.gravarSgh(eu, trilha(), async (g) => {
+          const s = await g.incluirSolicitacao({
+            ...abono,
+            tipo: 'atestado',
+            vinculo: m.vinculo,
+            por: m.login,
+          });
+          await g.incluirAtestado(atestado(s, 'U99.9'));
+        }),
+      ),
+    ).toBe('cid-inexistente');
+    // A solicitação de outro tipo não recebe atestado.
+    const outra = await pedir();
+    expect(await codigo(porta.gravarSgh(eu, trilha(), (g) => g.incluirAtestado(atestado(outra, null))))).toBe(
+      'atestado-fora-do-tipo',
+    );
+    const sem = await porta.gravarSgh(gestor, trilha(n), (g) =>
+      g.atestado({ solicitacao: n, verCid: false, finalidade: 'Conferência do RH', por: m.loginGestor }),
+    );
+    expect(sem).toMatchObject({
+      solicitacao: n,
+      emitidoEm: '2026-10-20',
+      dias: 2,
+      cid: null,
+      temCid: false,
+      emitente: 'Médica sintética',
+      registroConselho: 'CRM 0000',
+      arquivo: { chave: `teste/atestado-${n}.pdf`, tipo: 'application/pdf', tamanho: 1234 },
+      criadoPor: m.login,
+    });
+    await porta.gravarSgh(gestor, trilha(n), (g) =>
+      g.atestado({ solicitacao: n, verCid: true, finalidade: 'Medicina do trabalho', por: m.loginGestor }),
+    );
+    const acessos = await porta.acessosAtestado(eu, n);
+    expect(acessos.map((a) => [a.acessadoPor, a.viuCid, a.finalidade])).toEqual(
+      expect.arrayContaining([
+        [m.loginGestor, false, 'Conferência do RH'],
+        [m.loginGestor, true, 'Medicina do trabalho'],
+      ]),
+    );
+    expect(acessos).toHaveLength(2);
+    expect(
+      await porta.gravarSgh(gestor, trilha(), (g) =>
+        g.atestado({ solicitacao: outra, verCid: false, finalidade: 'x', por: m.loginGestor }),
+      ),
+    ).toBeNull();
+  });
+
+  it('o efeito sem o gravador ligado recusa com modelo-pendente e desfaz o pedido inteiro', async () => {
     const antes = (
       await ler('SELECT COUNT(*) AS q FROM solicitacao_colaborador WHERE estabelecimento_id = ?', [m.est])
     )[0]?.['q'];
     expect(
       await codigo(
         porta.gravarSgh(eu, trilha(), async (g) => {
-          const n = await g.incluirSolicitacao({
-            ...abono,
-            tipo: 'atestado',
-            vinculo: m.vinculo,
-            por: m.login,
-          });
-          await g.incluirAtestado({
-            emitidoEm: '2026-10-20',
-            dias: 2,
-            cid: null,
-            emitente: 'Médica sintética',
-            registroConselho: null,
-            arquivo: null,
-            solicitacao: n,
-            por: m.login,
-          } as never);
-          return n;
-        }),
-      ),
-    ).toBe('modelo-pendente');
-    expect(
-      await codigo(
-        porta.gravarSgh(eu, trilha(), async (g) => {
-          await pedir();
+          await g.incluirSolicitacao({ ...abono, vinculo: m.vinculo, por: m.login });
           await g.ponto.travarPessoa(1 as never);
         }),
       ),
@@ -240,7 +303,6 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do autoatendimento contra o MariaD
     const depois = (
       await ler('SELECT COUNT(*) AS q FROM solicitacao_colaborador WHERE estabelecimento_id = ?', [m.est])
     )[0]?.['q'];
-    expect(Number(depois)).toBe(Number(antes) + 1);
-    expect(await porta.acessosAtestado(eu, 1)).toEqual([]);
+    expect(Number(depois)).toBe(Number(antes));
   });
 });

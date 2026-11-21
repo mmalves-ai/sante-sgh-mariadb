@@ -1,7 +1,7 @@
 // Permissões da operadora própria (M56; ficha, seção 7; convencoes.md §12). A operadora é empresa distinta na
 // hierarquia da Rede, com perfis e trilha próprios (regra 3; cap-07 §7.4): nenhuma permissão vem de opção do outro
 // sistema. No retrato pc (tools/verificadores/dados/acesso-legado.pc.json) os 15 módulos do sistema de operadora em
-// TBMODULO têm 233 opções (abertura 53, controle financeiro 177, gerador de relatórios 3) e NENHUMA concessão a grupo
+// módulos de origem têm 233 opções (abertura 53, controle financeiro 177, gerador de relatórios 3) e NENHUMA concessão a grupo
 // ou papel; o catálogo do M06 já as deixa de fora (motivo `sistema-sgo-sgs`). Por isso tudo aqui é recurso do novo,
 // concedido por perfil próprio da operadora (D-PERM-56, POL-5). A consulta somente leitura dos domínios do M14
 // (`operadora.consulta.ler`, opção 4134) continua como está.

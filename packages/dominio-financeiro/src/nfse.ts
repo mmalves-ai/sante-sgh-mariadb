@@ -1,6 +1,6 @@
 // Regra 17 do M32 (cap-06b §6.8, Fiscal e Nota): a NFS-e por fatura, na apresentação ou no recebimento conforme o
 // contrato, com o ISS (alíquota de 2% a 5%, retido ou não) e a transição da reforma tributária: IBS e CBS destacados
-// (alíquotas de teste de 2026: CBS 0,9% e IBS 0,1%; a classificação de NFSECLASSIFICACAO_TRIBUTARIA e TBINTIMP). Emissão
+// (alíquotas de teste de 2026: CBS 0,9% e IBS 0,1%; a classificação tributária e o de-para do imposto). Emissão
 // real só depois da DP-38; fora de produção, o simulador da prefeitura responde e nada sai.
 import { centavos, recusaFin, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
 

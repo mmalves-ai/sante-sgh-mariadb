@@ -1,6 +1,6 @@
 // Permissões do M46, etapa 2 (ficha, seção 7; convencoes.md §12): checklist de cirurgia segura (OMS), rastreio do
 // paciente no bloco e quadro do bloco. Quem tem a opção no sistema anterior tem a permissão no novo (regra 1 do M06).
-// Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - P.E.P. › Movimentações › Registro cirúrgico 6813: Consultar 6814, Nova 6820, Manter 6821, Salvar 6823, Corrigir
 //     6828 (o checklist é conduzido pela enfermagem do bloco, a mesma que grava o registro cirúrgico);
 //   - Bloco Cirúrgico: o módulo 2227, o mapa 2293, os movimentos 2236 (a movimentação do paciente no bloco) e os

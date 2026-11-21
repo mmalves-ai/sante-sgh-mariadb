@@ -16,7 +16,7 @@ export interface OpcaoPessoas {
   readonly rotulo: string;
 }
 
-/** Lotação lida: centro de custo e unidade com o nome (TBCENCUS e TBUNIDAD). */
+/** Lotação lida: centro de custo e unidade com o nome. */
 export interface LotacaoLida {
   /** Nulo: vínculo sem centro de custo. */
   readonly centroCusto: number | null;
@@ -47,7 +47,7 @@ export interface ListaColaboradores {
   readonly depois: number | null;
 }
 
-/** Registro no conselho do lado assistencial (TBCBOPRO) com a validade acompanhada pelo RH. */
+/** Registro no conselho do lado assistencial (inscrição no conselho) com a validade acompanhada pelo RH. */
 export interface RegistroConselhoLido {
   readonly registro: number;
   readonly conselho: ConselhoClasse | string | null;
@@ -55,12 +55,12 @@ export interface RegistroConselhoLido {
   readonly uf: string | null;
   readonly cbo: string | null;
   readonly cboDescricao: string | null;
-  /** TBCBOPRO.ATIVO: a atividade real do registro (regra 4). */
+  /** Se a inscrição está ativa: a atividade real do registro (regra 4). */
   readonly ativo: boolean | null;
   readonly validade: string | null;
   readonly situacao: SituacaoHabilitacao;
   readonly diasParaVencer: number | null;
-  /** Onde o profissional atende por este registro (TBCBOPRO_TBUNIDAD × TBUNIDAD). */
+  /** Onde o profissional atende por este registro (unidades assistenciais da inscrição). */
   readonly unidades: readonly UnidadeDoRegistro[];
 }
 
@@ -70,7 +70,7 @@ export interface UnidadeDoRegistro {
   readonly ativo: boolean;
 }
 
-/** Usuário de acesso ligado à pessoa, por hospital da Rede (o mesmo TBUSERS dos dois sistemas). */
+/** Usuário de acesso ligado à pessoa, por hospital da Rede (o mesmo usuário nos dois sistemas). */
 export interface UsuarioDaPessoa {
   readonly hospital: string;
   readonly login: string;

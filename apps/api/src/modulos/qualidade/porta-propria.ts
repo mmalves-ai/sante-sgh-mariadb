@@ -23,7 +23,7 @@
 // travada de uma linha que outra transação mudou depois do instantâneo (isolamento por instantâneo: erro 1020) ou a trava
 // ocupada, a gravação inteira é desfeita e refeita (até 3 vezes) — nada fica pela metade.
 // Melhoria: o painel das análises conta pelos prazos e conclusões gravados na própria notificação.
-// Pendente (pedido em docs/obra/fatias/f22/saida/04-03.json): a análise (analise_incidente), o plano de ação
+// Pendente (pedido em docs/obra/fatias/f22/arquivo-ondas-1a4/saida/04-03.json e docs/obra/fatias/f24/saida/15-qualidade.json): a análise (analise_incidente), o plano de ação
 // (plano_acao_qualidade e acao_plano_qualidade), a queixa técnica (queixa_tecnica_produto) e a sugestão resolvida
 // (sugestao_notificacao_incidente, que pede o gatilho): as gravações recusam com `modelo-pendente`. Como nada disso pode
 // ter sido gravado neste banco, a leitura deles é de fato vazia (nenhuma análise, ação ou queixa existe); as leituras

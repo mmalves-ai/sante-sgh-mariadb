@@ -19,7 +19,7 @@
 // a área que só aceita o destino proposto não vira a autora da decisão.
 // Recusa explícita (pedido-indisponivel) enquanto a tabela pedido_relatorio não existir no banco do cliente.
 import { createHash, randomUUID } from 'node:crypto';
-import { mascararEnderecoEmail } from '@sgh/contratos';
+import { FORMATO_HORA, mascararEnderecoEmail } from '@sgh/contratos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -128,13 +128,10 @@ async function fusoDe(l: Leitor, est: number): Promise<string> {
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
-/** HHMM da tela → TIME do banco (recusa hora inválida). */
-export function horaNoBanco(hhmm: number): string {
-  const h = Math.floor(hhmm / 100);
-  const m = hhmm % 100;
-  if (!Number.isInteger(hhmm) || h > 23 || m > 59 || hhmm < 0)
-    throw recusa('hora-invalida', 'Hora do envio inválida: use de 00:00 a 23:59.');
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+/** Hora do dia "HH:MM" → TIME do banco (recusa hora inválida). */
+export function horaNoBanco(hora: string): string {
+  if (!FORMATO_HORA.test(hora)) throw recusa('hora-invalida', 'Hora do envio inválida: use de 00:00 a 23:59.');
+  return `${hora}:00`;
 }
 
 export const resumoDosParametros = (texto: string) => createHash('sha256').update(texto).digest('hex');
@@ -182,7 +179,7 @@ function itemTriagem(x: Linha, fuso: string): ItemTriagem {
 }
 
 const SQL_AGENDAMENTO = `SELECT a.id, r.codigo AS relatorio, a.nome, a.parametros, a.periodicidade,
-       HOUR(a.hora_envio) * 100 + MINUTE(a.hora_envio) AS hora, a.dia_semana, a.dia_mes, a.ativo, a.versao,
+       TIME_FORMAT(a.hora_envio, '%H:%i') AS hora, a.dia_semana, a.dia_mes, a.ativo, a.versao,
        u.login AS dono, ${ISO('a.proximo_envio_em')} AS proximo, ${ISO('a.ultimo_envio_em')} AS ultimo,
        (SELECT e.situacao FROM envio_relatorio e WHERE e.agendamento_relatorio_id = a.id
          ORDER BY e.ocorrido_em DESC, e.id DESC LIMIT 1) AS ultima_situacao,
@@ -229,7 +226,7 @@ async function agendamentosDe(
         .map((d) => texto(d['codigo'])),
       enderecos: meus.filter((d) => d['tipo_destinatario'] === 'endereco').map((d) => texto(d['email'])),
       periodicidade: texto(x['periodicidade']),
-      hora: n(x['hora']),
+      hora: texto(x['hora']),
       diaSemana: nn(x['dia_semana']),
       diaMes: nn(x['dia_mes']),
       ativo: verdadeiro(x['ativo']),

@@ -1,26 +1,24 @@
 // Catálogo de eventos auditáveis do Sante SGH (ficha do M06; cap-08 §8.12). Cada evento vai à SGH_TRILHA
 // (trilha própria, só de inclusão, cadeia de hash) e, quando o Delphi registraria o mesmo evento, também a
-// TBCABTRILHA/TBLANTRILHASGH como o Delphi grava (trilha dupla): tipo de TBTPACAOAUDIT, criticidade de
-// TBNVLCRITICID e opção de TBOPCOES vistos no perfil passivo (06 a 07/2026). Tipos novos da SBIS v5.2
+// a trilha do sistema de origem como o Delphi grava (trilha dupla): tipo de ação auditada, criticidade
+// e opção de menu de origem vistos no perfil passivo (06 a 07/2026). Tipos novos da SBIS v5.2
 // (quebra de vidro, consentimento, falha de assinatura) ficam só na trilha própria. Nunca o tipo 14
 // "Conexão BD" (é do Delphi). Nenhum dado clínico nem nome: só identificadores (SBIS-18).
-import { z } from 'zod';
-import { textoCp1252 } from '../texto-cp1252.js';
 
-/** Tipos de TBTPACAOAUDIT que o novo grava no legado (ficha do M06, seção 5). */
+/** Tipos de ação auditada da trilha de origem (ficha do M06, seção 5). */
 // ADR 0022: 17 (gerenciamento de usuários), 18 (de grupos) e 25 (de permissões), como o Delphi grava na
-// administração de acessos (TBCABTRILHA da cópia pc: 2.919, 4 e 811 eventos).
+// administração de acessos (trilha de origem da cópia pc: 2.919, 4 e 811 eventos).
 export const TIPOS_EVENTO_LEGADO = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17, 18, 24, 25] as const;
 export type TipoEventoLegado = (typeof TIPOS_EVENTO_LEGADO)[number];
 
-/** Criticidades de TBNVLCRITICID usadas pelo legado na trilha (informativo, erro, alerta). */
+/** Criticidades usadas pelo legado na trilha (informativo, erro, alerta). */
 export const CRITICIDADES_LEGADO = [7, 4, 2] as const;
 export type CriticidadeLegado = (typeof CRITICIDADES_LEGADO)[number];
 
 export interface EventoLegado {
   readonly tipo: TipoEventoLegado;
   readonly criticidade: CriticidadeLegado;
-  /** TBOPCOES.ID que o Delphi registra para o evento (a mais frequente na janela do perfil). */
+  /** Opção de menu de origem que o sistema de origem registra para o evento (a mais frequente na janela do perfil). */
   readonly opcao: number;
 }
 
@@ -32,7 +30,7 @@ export interface EventoAuditavel {
 }
 
 /**
- * Opções do perfil passivo (TBCABTRILHA, 2026-06-01 a 2026-07-05): login e fim de sessão pelo módulo de
+ * Opções do perfil passivo (trilha de origem, 2026-06-01 a 2026-07-05): login e fim de sessão pelo módulo de
  * abertura (5416 Login, 5417 Logout); bloqueio e desbloqueio pela opção do PEP (5143, 5144), a mais usada
  * (o módulo de abertura não tem as duas).
  */
@@ -108,8 +106,8 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M22: registros clínicos nos modelos do formulário de origem. A finalização é registrada pelo Delphi na trilha
-  // dele como inclusão (tipo 2) e ação (tipo 24) na opção 5182 "Confirmar", com o registro em TBLANTRILHASGH
-  // (PRCABEVOL.ID_CABEVOL); a suspensão como alteração (tipo 3, opção 3918). Rascunho, abertura do formulário e
+  // dele como inclusão (tipo 2) e ação (tipo 24) na opção 5182 "Confirmar", com o registro no detalhe
+  // da trilha (id da evolução); a suspensão como alteração (tipo 3, opção 3918). Rascunho, abertura do formulário e
   // leitura do histórico ficam só na trilha própria (o Delphi não os registra).
   evolucaoCoassinada: {
     codigo: 'pep.evolucao.coassinada',
@@ -474,10 +472,10 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M12: convênios, contratos e preços (só na trilha própria: o Delphi não registra estes eventos na
-  // TBCABTRILHA; a autoria das mudanças de preço e de convênio vai também à SGH_PRECO_AUTORIA).
+  // trilha de origem; a autoria das mudanças de preço e de convênio vai também à SGH_PRECO_AUTORIA).
   convenioSituacaoAlterada: {
     codigo: 'convenio.situacao.alterada',
-    descricao: 'Convênio suspenso ou reativado (TBCONVEN.SITUACAO), com justificativa',
+    descricao: 'Convênio suspenso ou reativado (situação do convênio), com justificativa',
     legado: null,
   },
   convenioContratoAlterado: {
@@ -534,7 +532,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // ADR 0021: suporte técnico e login como (só na trilha própria). Dentro do "como", toda linha da SGH_TRILHA
-  // leva o ator real na ORIGEM ("SUPORTE:<tipo>:<conta>:S<sessão>"); o USUARIO é o alvo, como na TBCABTRILHA.
+  // leva o ator real na ORIGEM ("SUPORTE:<tipo>:<conta>:S<sessão>"); o USUARIO é o alvo, como na trilha de origem.
   suporteSessaoAberta: {
     codigo: 'suporte.sessao.aberta',
     descricao: 'Sessão "como" aberta pela plataforma ou pelo suporte técnico (o alvo não fez login)',
@@ -829,7 +827,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M24: prescrição eletrônica (CPOE). O Delphi registra a prescrição como inclusão (tipo 2) na opção 5223
-  // "Prescrever" com PRPRESC.ID em TBLANTRILHASGH (5.436 eventos em 2026-06/07); a suspensão da prescrição como
+  // "Prescrever" com o id da prescrição no detalhe da trilha (5.436 eventos em 2026-06/07); a suspensão da prescrição como
   // alteração (tipo 3) na 5219 "Suspender prescrição confirmada" (236); a manutenção (incluir, suspender e corrigir
   // item) como alteração na 5658 "Manutenção" (615). Alertas, reconciliação, prescrição futura e ficha de
   // antimicrobiano ficam só na trilha própria (o legado não os tem).
@@ -953,7 +951,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M17: agenda de consultas. O Delphi não registra a agenda na trilha dele (0 eventos nas opções 3310 a 3406
-  // em TBCABTRILHA da cópia pc): os eventos ficam só na trilha própria, com identificadores (nunca nome nem contato).
+  // em trilha de origem da cópia pc): os eventos ficam só na trilha própria, com identificadores (nunca nome nem contato).
   agendaGradeGerada: {
     codigo: 'agenda.grade.gerada',
     descricao: 'Horários da agenda gerados por período (agenda, período e quantidade)',
@@ -1040,10 +1038,10 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M23: documentos, exames, resultados e multiprofissional. O Delphi registra na trilha dele a receita (inclusão,
-  // tipo 2, opção 5251, com PRRECEITA.ID_RECEITA; antes, a ação 24 na 2632 "Nova"), o atestado (inclusão na 4239,
-  // com PRATESTREQIMP.ID; antes, a ação 24 na 3933 "Novo"), a suspensão (alteração, tipo 3: 4606 na receita, 4605 no
-  // atestado), o pedido de exame (inclusão na 5231 "Confirmar", com SILANEXA.ID; antes, a ação 24 na 4596 "Nova") e o
-  // anexo (inclusão na 4636 "Inserir arquivo", com PRGEDIMP.ID): perfil de TBCABTRILHA × TBLANTRILHASGH de 2026-06-01
+  // tipo 2, opção 5251, com o id da receita; antes, a ação 24 na 2632 "Nova"), o atestado (inclusão na 4239,
+  // com o id do atestado; antes, a ação 24 na 3933 "Novo"), a suspensão (alteração, tipo 3: 4606 na receita, 4605 no
+  // atestado), o pedido de exame (inclusão na 5231 "Confirmar", com o id do pedido de exame; antes, a ação 24 na 4596 "Nova") e o
+  // anexo (inclusão na 4636 "Inserir arquivo", com o id do anexo): perfil de trilha do sistema de origem de 2026-06-01
   // a 2026-07-05. A alergia é gravada dentro do registro clínico (o Delphi não registra à parte); lista de problemas,
   // ciência de crítico, fila de parecer, TCLE, sumário, óbito e assinatura ficam só na trilha própria.
   painelLido: {
@@ -1212,7 +1210,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M19: recepção, senhas, guichês, totens e painéis. O Delphi não registra a emissão nem a chamada do guichê na
-  // trilha dele (0 eventos nas opções 3308, 5739, 3969 a 3973 em TBCABTRILHA desde 2025 na cópia pc): os eventos
+  // trilha dele (0 eventos nas opções 3308, 5739, 3969 a 3973 em trilha de origem desde 2025 na cópia pc): os eventos
   // ficam na trilha própria, com identificadores (nunca o nome do paciente).
   recepcaoSenhaEmitida: {
     codigo: 'recepcao.senha.emitida',
@@ -1282,7 +1280,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M18: agenda de exames e centro cirúrgico. O Delphi não registra estas opções na trilha dele (0 eventos nas
-  // opções do SADT › Agenda e do Bloco Cirúrgico em TBCABTRILHA da cópia pc): só a trilha própria, com identificadores.
+  // opções do SADT › Agenda e do Bloco Cirúrgico em trilha de origem da cópia pc): só a trilha própria, com identificadores.
   agendaExameMarcado: {
     codigo: 'agenda.exame.marcado',
     descricao: 'Exame marcado em horário vago (agenda, horário, paciente, exame e canal)',
@@ -1625,7 +1623,7 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Fila do consultório ou quadro do pronto atendimento aberto (lista com nomes de pacientes)',
     legado: null,
   },
-  // M26: SADT, laudos e portal. Trilha do legado medida (TBCABTRILHA da cópia pc, 2026-06-01 a 2026-07-05, só
+  // M26: SADT, laudos e portal. Trilha do legado medida (trilha de origem da cópia pc, 2026-06-01 a 2026-07-05, só
   // contagens): recebimento do pedido do prontuário na opção 6230 (tipo 3), lançamento direto por setor na de Incluir
   // do setor (6116 laboratório externo, 6161 internado; tipo 2) e inclusão de resultado de laboratório na 6211 (tipo
   // 2); as opções variam com o setor (a receita escolhe pela entrada). Liberação, emissão, orçamento, visualização no
@@ -1750,7 +1748,7 @@ export const EVENTOS_AUDITAVEIS = {
   },
   // M27: filas de trabalho, mensagens internas, comunicados, central de avisos e dicionário pessoal. Só na trilha
   // própria: o outro sistema não registra a leitura das filas (são recurso novo) nem as mensagens do novo; o dicionário
-  // não vai à TBCABTRILHA no outro sistema (perfil da trilha de 2026-06-01 a 2026-07-05: 0 evento das palavras). O
+  // não vai à trilha de origem no outro sistema (perfil da trilha de 2026-06-01 a 2026-07-05: 0 evento das palavras). O
   // conteúdo da mensagem nunca vai à trilha (regra 7): só o evento, o remetente e a contagem de destinatários.
   inicioWorklistMedicoLida: {
     codigo: 'pep.worklist.lida',
@@ -1826,7 +1824,7 @@ export const EVENTOS_AUDITAVEIS = {
   },
   // M21: internação, leitos, higienização e SAME. O Delphi registra na trilha dele a admissão (6057), a transferência
   // (6067), a alta (6071), a pré-internação (6063), as alterações (6075) e o cancelamento da alta (6074), tipo 2 ou 3
-  // (perfil de TBCABTRILHA desde 2026-06: 188, 172, 190, 55, 5 e 1 eventos): a trilha dupla. Os demais (guia,
+  // (perfil de trilha de origem desde 2026-06: 188, 172, 190, 55, 5 e 1 eventos): a trilha dupla. Os demais (guia,
   // higienização, SAME, alta médica, bloqueio do leito) ficam só na trilha própria (o Delphi não os registra).
   internacaoAdmitida: {
     codigo: 'internacao.internacao.admitida',
@@ -1955,7 +1953,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M25: enfermagem beira-leito. O Delphi registra na trilha dele a checagem do horário na opção 5302 "Checar", tipo 3
-  // (alteração), com o horário como alvo (perfil de TBCABTRILHA × TBLANTRILHASGH: 58 eventos em 2026): a trilha dupla.
+  // (alteração), com o horário como alvo (perfil de trilha do sistema de origem: 58 eventos em 2026): a trilha dupla.
   // Os demais (aprazamento no novo, sinais vitais, infusão, conflitos, plantão, dispositivos) ficam só na trilha própria.
   enfermagemDoseChecada: {
     codigo: 'enfermagem.administracao.checada',
@@ -2863,7 +2861,7 @@ export const EVENTOS_AUDITAVEIS = {
     legado: null,
   },
   // M52.1 (gestão de pessoas, F1): o vínculo, o histórico, os dependentes e a validade do conselho em SGH_PES_* (só na
-  // trilha própria); o bloqueio do acesso no desligamento vai pela receita do M10 (TBCABTRILHA e SGH_TRILHA dela). A
+  // trilha própria); o bloqueio do acesso no desligamento vai pela receita do M10 (trilha de origem e trilha própria dela). A
   // ficha (CPF mascarado, dependentes) e a prévia pelo CPF são leituras auditadas de dado pessoal.
   pessoasColaboradorAdmitido: {
     codigo: 'pessoas.colaborador.admitido',
@@ -4176,7 +4174,7 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Imuno-hematologia ou estoque de bolsas aberto (lista com nomes de pacientes)',
     legado: null,
   },
-  // M50 etapa 1 (ficha, regra 13): portal do paciente. Só na trilha própria (identidade fora de TBUSERS; o outro
+  // M50 etapa 1 (ficha, regra 13): portal do paciente. Só na trilha própria (identidade fora do cadastro de usuários; o outro
   // sistema não tem portal do paciente). Nenhum dado pessoal: a conta, o vínculo e o paciente vão por identificador.
   portalContaConvidada: {
     codigo: 'portal.conta.convidada',
@@ -6139,51 +6137,3 @@ export const CATALOGO_EVENTOS: readonly EventoAuditavel[] = Object.values(EVENTO
 export function eventoAuditavel(codigo: string): EventoAuditavel | null {
   return CATALOGO_EVENTOS.find((e) => e.codigo === codigo) ?? null;
 }
-
-/** Tabela.coluna do registro afetado em TBLANTRILHASGH (só identificadores; valores vistos no perfil). */
-export const ALVOS_TRILHA_LEGADO = [
-  'RICADPAC.ID',
-  'RECADATE.REG',
-  'RICADINT.REG',
-  // M21: a transferência de leito e as alterações da internação (perfil de TBCABTRILHA × TBLANTRILHASGH, 2026-06).
-  'RITRANSF.REGISTRO',
-  'RICONTAS.REG',
-  'PRCABEVOL.ID_CABEVOL',
-  'PRPRESC.ID',
-  'TBUSERS.ID_TBUSERS',
-  // M14: os domínios em que o Delphi grava a trilha (perfil de TBCABTRILHA × TBLANTRILHASGH).
-  'TBALERGIA.ID',
-  'TBPRINC.COD',
-  'SITABPRO.ID',
-  // M23: receita, atestado, pedido de exame e anexo (perfil de TBCABTRILHA × TBLANTRILHASGH, 2026-06 e 07).
-  'PRRECEITA.ID_RECEITA',
-  'PRATESTREQIMP.ID',
-  'SILANEXA.ID',
-  'PRGEDIMP.ID',
-  // M26: o resultado incluído (perfil de TBCABTRILHA × TBLANTRILHASGH, 2026-06 e 07: opção 6211 com SIRES01.ID).
-  'SIRES01.ID',
-  'SICADATE.ID',
-  // M25: o horário checado (perfil de TBCABTRILHA × TBLANTRILHASGH: opção 5302 com PRCHKGERAL.ID).
-  'PRCHKGERAL.ID',
-] as const;
-
-/** Entrada de auditoria.registrarEventoLegado (operação do protocolo; ficha do M06, seção 5). */
-export const esquemaRegistrarEventoLegado = z.object({
-  tipo: z.literal(TIPOS_EVENTO_LEGADO),
-  criticidade: z.literal(CRITICIDADES_LEGADO),
-  opcao: z.number().int().positive(),
-  /** MAQUINA_USUARIO: estação e origem ("ESTACAO:origem", como o Delphi grava "MAQUINA:conta"). */
-  estacao: textoCp1252(100).pipe(z.string().min(3)),
-  /** Atendimento (ATCABECATEND.ID) quando o evento tem; nunca o nome do paciente. */
-  atendimento: z.number().int().positive().optional(),
-  /** Código do evento no catálogo do novo (SGH_TRILHA.EVENTO). */
-  evento: z
-    .string()
-    .regex(/^[a-z]+\.[a-zA-Z]+\.[a-zA-Z]+$/)
-    .optional(),
-  alvos: z
-    .array(z.object({ tabelaCampo: z.enum(ALVOS_TRILHA_LEGADO), id: z.number().int().positive() }))
-    .max(20)
-    .optional(),
-});
-export type RegistrarEventoLegadoEntrada = z.infer<typeof esquemaRegistrarEventoLegado>;

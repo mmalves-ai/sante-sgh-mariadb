@@ -1,16 +1,10 @@
 // Permissões da agenda de sessões e da digitalização certificada (M50, etapa 6; ficha, seção 7). Quem tem a opção no
-// legado tem a permissão no novo (regra 1 do M06). Opções do outro sistema (TBOPCOES, retrato
-// tools/verificadores/dados/acesso-legado.pc.json; todas ativas):
-//   - Agendamento (módulo 31): Agendamento 4830 › Configurações 4831 (Manutenção/criação de agendas 4834); Agenda de
-//     quimioterapia 4842 › Pacientes agendados 4843 (Alterar 4844, Atender 4847, Desagendar 4848), Planejamentos do
-//     paciente 4850, Agendar 4852 (Incluir protocolo 4853, Confirmar agendamento 4855), Horários livres 4856. A agenda de
-//     quimioterapia do outro sistema é a das cadeiras (AGCADEIRA): a agenda de sessões é a mesma ideia, para qualquer
-//     terapia em série;
-//   - SAME: Recepção interna (7) › Controle de prontuários 2361 (Manutenção 2362, Controle I 2363, Controle II 2364),
-//     Relatório do SAME 2468, Controle de prontuários 2488; PEP (23) › Importação documentos paciente (Anexos) 4635
-//     (Inserir arquivo 4636, Visualizar arquivo 4638) e o Utilitário de importação de arquivos 4726 (Inserir 4727,
-//     Visualizar 4729). A digitalização com valor legal não existe no outro sistema: as opções são as de quem guarda o
-//     prontuário em papel e de quem importa arquivos (inferidas: conferir na validação, D-PERM-506).
+// menu de origem tem a permissão (regra 1 do M06); a correspondência está em conector/mapa/permissoes.tsv. A agenda de
+// sessões generaliza a agenda das cadeiras de quimioterapia para qualquer terapia em série; a digitalização certificada
+// segue o controle de prontuários do SAME (serviço de arquivo médico). Os números em OPCOES_* ficam até a etapa
+// coordenada que tira a procedência da declaração (padroes.md da F2.4, seção 5).
+// A digitalização com valor legal é recurso próprio: as opções de origem são as de quem guarda o prontuário em papel e
+// de quem importa arquivos (inferidas: conferir na validação, D-PERM-506).
 import type { DeclaracaoPermissao } from './tipos.js';
 
 export const OPCOES_SESSOES = {

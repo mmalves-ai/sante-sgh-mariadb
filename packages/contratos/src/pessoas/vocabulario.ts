@@ -27,7 +27,7 @@ export const ESTADOS_VINCULO = ['ativo', 'desligado'] as const;
 export type EstadoVinculo = (typeof ESTADOS_VINCULO)[number];
 
 /**
- * `TBPROFIS.SITUACAO` (DP-46.1; ref 02; Anexo A): na cópia do pc, O 758, F 109 e E 4 profissionais. Baixa confiança:
+ * Situação do profissional de saúde no cadastro de origem (DP-46.1; ref 02; Anexo A). Baixa confiança:
  * NÃO define vínculo trabalhista (regra 4). A tela mostra a legenda com "a confirmar" ao lado.
  */
 export const SITUACOES_PROFISSIONAL_LEGADO = {
@@ -38,7 +38,7 @@ export const SITUACOES_PROFISSIONAL_LEGADO = {
 export type SituacaoProfissionalLegado = keyof typeof SITUACOES_PROFISSIONAL_LEGADO;
 
 /**
- * Conselhos de classe vistos em `TBCBOPRO.CONS_PROF` na cópia do pc (2.095 registros: CRM 1.211, COREN 694,
+ * Conselhos de classe vistos nas inscrições no conselho da cópia do pc (2.095 registros: CRM 1.211, COREN 694,
  * CREFITO 54, CRF 46, CRO 46, CRN 24, CRP 8, OUT 6, CRB <5, CRBIO <5, vazio <5). "OUT" é "outro conselho".
  */
 export const CONSELHOS_CLASSE = {

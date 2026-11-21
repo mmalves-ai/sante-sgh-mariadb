@@ -183,9 +183,11 @@ export async function limparMassa(nucleo: NucleoProprio, m: MassaEnfermagem | nu
     const ests = [m.est, m.outroEst];
     const emEst = 'estabelecimento_id IN (?, ?)';
     await e.executar(`DELETE FROM reacao_transfusional WHERE ${emEst}`, ests);
+    await e.executar(`DELETE d FROM ato_transfusional_adendo d JOIN ato_transfusional a ON a.id = d.ato_transfusional_id WHERE a.${emEst}`, ests);
     await e.executar(`DELETE mt FROM monitoramento_transfusao mt JOIN ato_transfusional a ON a.id = mt.ato_transfusional_id WHERE a.${emEst}`, ests);
     await e.executar(`DELETE FROM ato_transfusional WHERE ${emEst}`, ests);
     await e.executar(`DELETE FROM amostra_pre_transfusional WHERE ${emEst}`, ests);
+    await e.executar(`DELETE v FROM requisicao_transfusao_versao v JOIN requisicao_transfusao r ON r.id = v.requisicao_transfusao_id WHERE r.${emEst}`, ests);
     await e.executar(`DELETE ri FROM requisicao_transfusao_item ri JOIN requisicao_transfusao r ON r.id = ri.requisicao_transfusao_id WHERE r.${emEst}`, ests);
     await e.executar(`DELETE FROM requisicao_transfusao WHERE ${emEst}`, ests);
     await e.executar(`DELETE FROM bolsa_hemocomponente WHERE ${emEst}`, ests);

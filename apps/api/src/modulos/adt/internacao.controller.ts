@@ -160,7 +160,7 @@ export class InternacaoController {
   @Auditar(EVENTOS_AUDITAVEIS.internacaoLida.codigo)
   incoerencias(@Req() req: RequisicaoAutorizada) {
     // Agregados e a lista (registro, prontuário e datas, como a leitura da internação) para o SAME e a coordenação.
-    req.sghAlvo = { tabelaAlvo: 'RICADINT', idAlvo: 'incoerencias' };
+    req.sghAlvo = { tabelaAlvo: 'internacao', idAlvo: 'incoerencias' };
     return this.porta.incoerencias(ctxAdt(sessaoDe(req)));
   }
 
@@ -168,7 +168,7 @@ export class InternacaoController {
   @Permissao('internacao.pre.ler')
   @Auditar(EVENTOS_AUDITAVEIS.internacaoLida.codigo)
   pre(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<PreInternacoes> {
-    req.sghAlvo = { tabelaAlvo: 'RIPREINT', idAlvo: 'lista' };
+    req.sghAlvo = { tabelaAlvo: 'agendamento_internacao', idAlvo: 'lista' };
     return this.porta.preInternacoes(ctxAdt(sessaoDe(req)), {
       situacao: q['situacao'] === 'todas' ? 'todas' : 'pendente',
       ...(q['problema'] === 'saneamento' ? { problema: 'saneamento' as const } : {}),
@@ -180,7 +180,7 @@ export class InternacaoController {
   @Auditar(EVENTOS_AUDITAVEIS.internacaoLida.codigo)
   async preDoPaciente(@Param('paciente') paciente: string, @Req() req: RequisicaoAutorizada) {
     const id = idDaRota(paciente);
-    req.sghAlvo = { paciente: id, tabelaAlvo: 'RIPREINT', idAlvo: String(id) };
+    req.sghAlvo = { paciente: id, tabelaAlvo: 'agendamento_internacao', idAlvo: String(id) };
     return { pre: await this.porta.preDoPaciente(ctxAdt(sessaoDe(req)), id) };
   }
 
@@ -220,7 +220,7 @@ export class InternacaoController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<InternacoesLista> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'RICADINT', idAlvo: 'lista' };
+    req.sghAlvo = { tabelaAlvo: 'internacao', idAlvo: 'lista' };
     // A situação: os internados (padrão), as com alta no período (o cancelamento da alta e as consultas depois da
     // saída) ou todas; o período da alta vai até 366 dias (padrão: os últimos 30).
     const situacao = q['situacao'] === 'alta' || q['situacao'] === 'todas' ? q['situacao'] : 'internados';
@@ -301,7 +301,7 @@ export class InternacaoController {
   async detalhe(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada): Promise<InternacaoDetalhe> {
     const s = sessaoDe(req);
     const d = await this.servico.detalhe(ctxAdt(s), idDaRota(reg), await intensivasDe(this.cfg16, s));
-    req.sghAlvo = { paciente: d.paciente, tabelaAlvo: 'RICADINT', idAlvo: String(d.reg) };
+    req.sghAlvo = { paciente: d.paciente, tabelaAlvo: 'internacao', idAlvo: String(d.reg) };
     return d;
   }
 
@@ -607,7 +607,7 @@ export class InternacaoController {
       correlacao: correlacaoDaRequisicao(s.req, 'impresso-internacao').slice(0, 64),
       recurso: 'internacao.impresso.emitir',
       resultado: 'sucesso',
-      tabelaAlvo: 'RICADINT',
+      tabelaAlvo: 'internacao',
       idAlvo: String(d.reg),
       paciente: d.idPaciente,
       chaveNaturalAlvo: `${e.impresso}:${e.copias}:${createHash('sha256').update(gerado.conteudo).digest('hex').slice(0, 16)}`,

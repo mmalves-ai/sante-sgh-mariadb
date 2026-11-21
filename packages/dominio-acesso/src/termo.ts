@@ -1,9 +1,9 @@
-// Termo de uso (cap-08 §8.8; ficha do M05, regra 12): sem aceite da versão vigente em PRTERMOACEITE, a sessão
-// sai com termoPendente e as rotas do PEP ficam fechadas. Quem aceitou no SPDATA não aceita de novo. Com
-// aceite periódico ligado (TBCFGLOGIN.SOLIC_TERMO_ACEITE_PERIODICO), o aceite vence após o período.
+// Termo de uso (cap-08 §8.8; ficha do M05, regra 12): sem aceite da versão vigente (aceite do termo), a sessão
+// sai com termoPendente e as rotas do PEP ficam fechadas. Quem aceitou no sistema de origem não aceita de novo. Com
+// aceite periódico ligado (na configuração de login), o aceite vence após o período.
 
 export interface SituacaoTermo {
-  /** Há termo vigente (PRTERMOCAD ativo). */
+  /** Há termo vigente (cadastro do termo ativo). */
   readonly vigente: boolean;
   /** Data do último aceite do usuário para o termo vigente (null: nunca aceitou). */
   readonly aceitoEm: Date | null;

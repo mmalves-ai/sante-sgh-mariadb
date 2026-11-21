@@ -531,16 +531,16 @@ describe('menu gerado da árvore (regra 12)', () => {
     );
   });
 
-  it('nenhum nome de tabela do legado no contrato (fronteira: só @sgh/legado conhece o SPDATA)', () => {
-    const matriz = readFileSync(
-      resolve(import.meta.dirname, '../../../../planejamento/referencias/matriz-cobertura-1503-tabelas.tsv'),
+  it('nenhum nome de tabela do sistema de origem no contrato (fronteira: só o conector conhece a origem)', () => {
+    // O dicionário de colunas da origem (referencias/, uso interno): TABELA|COLUNA|... por linha.
+    const dicionario = readFileSync(
+      resolve(import.meta.dirname, '../../../../referencias/spdata-colunas-raw.txt'),
       'utf8',
     );
     const tabelas = new Set(
-      matriz
+      dicionario
         .split('\n')
-        .slice(1)
-        .map((l) => l.split('\t')[0]!)
+        .map((l) => l.split('|')[0]!)
         .filter(Boolean),
     );
     expect(tabelas.size).toBeGreaterThan(1500);

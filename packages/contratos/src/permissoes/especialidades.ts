@@ -1,5 +1,5 @@
 // Permissões do M45, etapa 6 (ficha, seção 7; convencoes.md §12): as especialidades sob demanda (DP-32) e o lactário.
-// Quem tem a opção no sistema anterior tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// Quem tem a opção no sistema anterior tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json, módulo do prontuário):
 //   - oftalmologia: Planejamento oftalmológico (2600; Consultar 5496; Nova 5280; Salvar 6558), Exames oftalmológicos
 //     complementares (4714; Consultar 5967; Incluir 4715) e Resultados de exames oftalmológicos padrão (4718; Consultar

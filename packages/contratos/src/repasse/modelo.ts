@@ -1,18 +1,18 @@
-// Forma da regra de repasse e do item de produção como o motor (@sgh/dominio-repasse) os vê e a leitura do legado
-// (@sgh/legado, repasse/repositorios) os entrega: TBREPGER, TBREPGER_TBCBOPRO e FCLANEXT traduzidos, com o "0" do outro
-// sistema, que quer dizer "qualquer", como null. Sem dado de pessoa: só códigos e valores.
+// Forma da regra de repasse e do item de produção como o motor (@sgh/dominio-repasse) os vê e a porta do banco os
+// entrega: a regra (com o profissional), o item faturado com o executante e o "qualquer" como null. Sem dado de pessoa:
+// só códigos e valores. Horas no formato "HH:MM".
 import type { BaseCalculoRepasse, BeneficiarioRegra, TipoContaRegra } from './vocabulario.js';
 
 export interface RegraRepasse {
-  /** TBREPGER.ID (ou o ID da versão em rascunho, negativo, no simulador). */
+  /** Id da regra (ou o da versão em rascunho, negativo, no simulador). */
   readonly id: number;
-  /** Início da vigência (TBREPGER.DATA), AAAA-MM-DD. */
+  /** Início da vigência, AAAA-MM-DD. */
   readonly vigencia: string;
   readonly beneficiario: BeneficiarioRegra;
-  /** Profissional do vínculo (TBREPGER_TBCBOPRO.ID_TBCBOPRO), casado com o executante do item; null: qualquer. */
+  /** Profissional da regra (id), casado com o executante do item; null: qualquer. */
   readonly profissional: number | null;
   /**
-   * Código do prestador (TBREPGER.COD; 103.957 regras com COD e 98.406 com vínculo no pc). Só informativo: o motor casa
+   * Código do prestador (103.957 regras com código e 98.406 com profissional na cópia). Só informativo: o motor casa
    * pelo vínculo; se o teste dourado mostrar que o outro sistema casa pelo COD, a leitura passa a preencher o
    * profissional a partir dele.
    */
@@ -29,7 +29,7 @@ export interface RegraRepasse {
   readonly cooperativa: number | null;
   readonly tipoLancamento: number | null;
   readonly tipoConta: TipoContaRegra;
-  /** Janela de horário HHMM (TBREPGER.HORA_INI/HORA_FIN; no pc todas 0000–2359). */
+  /** Janela de horário "HH:MM" (na cópia, todas de 00:00 a 23:59). */
   readonly horaInicial: string;
   readonly horaFinal: string;
   /** Percentual (até 4 casas) ou valor fixo em reais: um dos dois maior que zero. */
@@ -39,15 +39,15 @@ export interface RegraRepasse {
   readonly percentualFimDeSemana: number;
   /** Base explícita da regra; null: a do parâmetro repasse.basePadrao. */
   readonly base: BaseCalculoRepasse | null;
-  /** Evento de RPA (TBREPGER.ID_RPEVENTOS). */
+  /** Evento de RPA (id do evento de repasse). */
   readonly evento: number | null;
 }
 
-/** Item faturado com o executante (FCLANEXT + FCCTAEXT; regra 5). */
+/** Item faturado com o executante (item da conta; regra 5). */
 export interface ItemProducao {
-  /** FCLANEXT.ID. */
+  /** Id do item da produção. */
   readonly id: number;
-  /** Data e hora da realização (AAAA-MM-DD e HHMM). */
+  /** Data e hora da realização (AAAA-MM-DD e "HH:MM"). */
   readonly data: string;
   readonly hora: string;
   readonly convenio: number;
@@ -70,11 +70,11 @@ export interface ItemProducao {
   readonly conciliado: boolean;
 }
 
-/** Linha da apuração gravada pelo outro sistema (FCINTEGRPA, valor faturado com valor), para o teste dourado. */
+/** Linha da apuração gravada pelo outro sistema (valor faturado com valor), para o teste dourado. */
 export interface LinhaGravadaRepasse {
-  /** FCLANEXT.ID. */
+  /** Id do item da produção. */
   readonly item: number;
-  /** TBREPGER.ID; null quando a linha não guarda a regra. */
+  /** Id da regra; null quando a linha não guarda a regra. */
   readonly regra: number | null;
   readonly percentual: number;
   readonly valorCentavos: number;

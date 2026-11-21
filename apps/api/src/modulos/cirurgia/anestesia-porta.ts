@@ -84,7 +84,7 @@ export interface GravadorAnestesia {
   registrarSrpa(s: SemHospital<RegistroSrpa>): Promise<{ id: number; repetida: boolean }>;
 }
 
-/** O profissional da sessão (os registros TBCBOPRO ativos); null sem cadastro de profissional. */
+/** O profissional da sessão (os registros profissionais ativos); null sem cadastro de profissional. */
 export interface ProfissionalDaSessao {
   readonly nome: string | null;
   readonly registros: readonly number[];

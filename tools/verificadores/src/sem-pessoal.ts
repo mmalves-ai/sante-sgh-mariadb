@@ -38,8 +38,11 @@ export interface ListaPessoais {
 const CONTAGEM_MINIMA = 5;
 const pequena = (v: unknown) => typeof v === 'number' && v > 0 && v < CONTAGEM_MINIMA;
 
-export function lerListaPessoais(raiz: string): ListaPessoais {
-  const y = parse(readFileSync(resolve(raiz, 'tools/assinatura/colunas-pessoais.yaml'), 'utf8')) as {
+export function lerListaPessoais(
+  raiz: string,
+  arquivo = 'tools/assinatura/colunas-pessoais.yaml',
+): ListaPessoais {
+  const y = parse(readFileSync(resolve(raiz, arquivo), 'utf8')) as {
     pessoais: string[];
     sensiveis?: string[];
     identificadores: string[];
@@ -224,8 +227,11 @@ function arquivosDoRepositorio(raiz: string): string[] {
 }
 
 export function verificarRepositorio(raiz: string): { arquivos: number; achados: AchadoPessoal[] } {
-  const lista = lerListaPessoais(raiz);
   const alvos = arquivosDoRepositorio(raiz).filter(cobertoPelaRegra);
+  // Sem arquivo coberto (o sante-sgh ainda não versiona captura de assinatura nem perfil), não há o que conferir. A
+  // lista de colunas pessoais só é lida quando há alvo; se houver alvo e faltar a lista, a leitura falha (vermelho).
+  if (alvos.length === 0) return { arquivos: 0, achados: [] };
+  const lista = lerListaPessoais(raiz);
   const achados: AchadoPessoal[] = [];
   for (const a of alvos) {
     const p = join(raiz, a);

@@ -15,11 +15,17 @@
 // Melhoria: o escore só se liga a atendimento e aferição deste estabelecimento e do mesmo paciente; a interpretação
 // guarda faixa, gatilho e versão da regra inteiros (nunca um JSON cortado; os cuidados vão à trilha); o motivo do
 // estorno fica na trilha da gravação e é lido dela; o NEWS2 de 5 ou mais grava o escore, os sinais e os avisos, e as
-// reavaliações programadas vão ao outbox (enfermagem.reavaliacao.programada) até a tabela do pedido existir.
-// Pendências de modelo (pedido do lote 02-04): reavaliações programadas, classificação de pacientes (Fugulin/NAS),
-// índices da UTI (APACHE II, SOFA), decisão da profilaxia de TEV sobre o escore, ficha da PCR (Utstein), adendo da
-// checagem da contenção, gatilho e versão da regra na aplicação da escala, fotos e eventos da lesão. Lidos vazios e
-// gravações recusadas com 'modelo-pendente' até as tabelas existirem.
+// reavaliações programadas e cumpridas ficam em reavaliacao_escala (o estorno do escore reabre a cumprida por ele).
+// Classificação de pacientes (Fugulin e NAS) em classificacao_paciente, índices da UTI (APACHE II, SOFA) em
+// indice_gravidade_uti (com a validação e o estorno) e o adendo da checagem da contenção em
+// contencao_paciente_avaliacao_adendo (a checagem original não muda).
+// Ainda recusadas com 'modelo-pendente' (a estrutura existe, falta ligar a porta): a decisão e a retificação da
+// profilaxia de TEV, a retificação e a inativação do evento do TRR, a lesão de pele (ficha, versão,
+// curativo, correção, foto, encerramento, inativação) e a meta e o item do checklist do protocolo gerenciado (o CHECK
+// do evento da inclusão não tem esses fatos: pedido de DDL). A inclusão no protocolo, o encerramento e a inativação por
+// engano gravam em inclusao_protocolo_paciente e inclusao_protocolo_evento; a ficha da PCR (Utstein), por versão, e a
+// inativação dela em parada_cardiorrespiratoria_ficha.
+import { createHash } from 'node:crypto';
 import { CONFIGURACAO_INDICES_SINTETICA } from '@sgh/dominio-pep';
 import { ErroOperacao, type Executor, gravarOutbox, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
@@ -54,14 +60,19 @@ import {
 import type { NucleoEnfermagem } from './porta-propria.js';
 import type {
   AcionamentoTrrRegistrado,
+  AdendoChecagemLido,
+  ClassificacaoRegistrada,
   ContencaoParaGravar,
   ContencaoRegistrada,
   EscoreRegistrado,
   HorarioContencao,
+  IndiceUtiRegistrado,
   InternacaoParaEscore,
   LesaoRegistrada,
   ProtocoloInternadoRegistrado,
+  ReavaliacaoRegistrada,
   RegistroParaEstorno,
+  VersaoPcrRegistrada,
   RegraEscoreRegistrada,
 } from './tipos.js';
 
@@ -93,6 +104,65 @@ function lerJson<T>(v: unknown): T | null {
   } catch {
     return null;
   }
+}
+
+/** A chave da reavaliação no estabelecimento (paciente, escala e chave da tela); a longa vira o resumo, nunca cortada. */
+function chaveReavaliacao(paciente: number, escala: string, chave: string): string {
+  const k = `${paciente}:${escala}:${chave}`;
+  return k.length <= 80 ? k : createHash('sha256').update(k).digest('hex');
+}
+const MOTIVO_REAVALIACAO_BANCO: Readonly<Record<string, string>> = {
+  admissao: 'admissao',
+  diaria: 'diaria',
+  'mudanca-quadro': 'mudanca_quadro',
+};
+const segundos = (v: unknown, fuso: string) => (civilDe(v, fuso) ?? '').slice(0, 19);
+/** O tipo e o motivo do estorno gravados na trilha da operação (a tabela guarda só a situação). */
+const ESTORNO_NA_TRILHA = (entidade: string, id: string) => `
+  (SELECT JSON_OBJECT('motivo', t.motivo, 'tipo', JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.dados.estorno.tipo')))
+     FROM trilha_auditoria t WHERE t.entidade = '${entidade}' AND t.entidade_id = ${id} AND t.motivo IS NOT NULL
+     AND JSON_EXTRACT(t.dados_depois, '$.dados.estorno') IS NOT NULL ORDER BY t.id DESC LIMIT 1)`;
+
+const SQL_INDICES = `
+  SELECT x.*, ${LOGIN_DE('x.criado_por')} AS login, ${LOGIN_DE('x.alterado_por')} AS alterado_login,
+         ${LOGIN_DO_PROFISSIONAL('x.validado_por_profissional_id', 'x.estabelecimento_id')} AS validado_login,
+         ${ESTORNO_NA_TRILHA('indice_gravidade_uti', 'x.id')} AS estorno
+    FROM indice_gravidade_uti x
+   WHERE x.estabelecimento_id = ? AND x.excluido_em IS NULL`;
+
+function indiceDe(r: Linha, fuso: string): IndiceUtiRegistrado {
+  const v = lerJson<{ valores?: unknown; configuracao?: string }>(r['variaveis']) ?? {};
+  const e = lerJson<{ motivo?: string; tipo?: string }>(r['estorno']);
+  const mortalidade = numOuNulo(r['mortalidade_estimada']);
+  return {
+    id: num(r['id']),
+    paciente: num(r['paciente_id']),
+    reg: numOuNulo(r['internacao_id']),
+    indice: texto(r['indice']) === 'sofa' ? 'sofa' : 'apache2',
+    variaveis: v.valores ?? null,
+    pontuacao: num(r['pontuacao']),
+    categoria: numOuNulo(r['categoria_diagnostica']),
+    tipoAdmissao: textoOuNulo(r['tipo_admissao']),
+    // Guardada em percentual (duas casas), devolvida na fração da tela (quatro casas).
+    mortalidade: mortalidade === null ? null : Math.round(mortalidade * 100) / 10_000,
+    impressaoConfig: v.configuracao ?? '',
+    coletadoEm: segundos(r['coletado_em'], fuso),
+    registradoPor: texto(r['login']),
+    situacao: r['validado_em'] ? 'validado' : 'registrado',
+    validadoPor: r['validado_em'] ? texto(r['validado_login']) : null,
+    validadoEm: r['validado_em'] ? segundos(r['validado_em'], fuso) : null,
+    estorno:
+      r['situacao'] === 'estornado'
+        ? {
+            tipo: e?.tipo === 'invalidacao' ? 'invalidacao' : 'estorno',
+            motivo: e?.motivo ?? '',
+            usuario: texto(r['alterado_login']),
+            em: civilDe(r['alterado_em'], fuso) ?? '',
+            alerta: null,
+            escoreMantem: null,
+          }
+        : null,
+  };
 }
 
 const pendente = (o: string) =>
@@ -198,9 +268,15 @@ export class PortaEscoresPropria implements PortaEscores {
         'escala_clinica_versao',
         'contencao_paciente',
         'contencao_paciente_avaliacao',
+        'contencao_paciente_avaliacao_adendo',
+        'reavaliacao_escala',
+        'classificacao_paciente',
+        'indice_gravidade_uti',
         'acionamento_resposta_rapida',
+        'parada_cardiorrespiratoria_ficha',
         'inclusao_protocolo_paciente',
         'inclusao_protocolo_evento',
+        'protocolo_gerenciado',
         'lesao_pele_paciente',
         'lesao_pele_avaliacao',
         'integracao_mensagem',
@@ -315,8 +391,39 @@ export class PortaEscoresPropria implements PortaEscores {
     return this.lerEscores(c, pacientes, desde, true);
   }
 
-  reavaliacoes(): Promise<[]> {
-    return Promise.resolve([]);
+  reavaliacoes(
+    c: ContextoEscores,
+    pacientes: readonly number[],
+    desde: string,
+  ): Promise<ReavaliacaoRegistrada[]> {
+    if (pacientes.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT r.*, e.codigo AS escala FROM reavaliacao_escala r JOIN escala_clinica e ON e.id = r.escala_clinica_id
+          WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND r.paciente_id IN (${marcadores(pacientes.length)})
+            AND (r.situacao = 'pendente' OR r.cumprida_em >= ?)
+          ORDER BY r.devida_em, r.id LIMIT ${TETO}`,
+        [est, ...pacientes, instanteDe(desde, fuso)],
+      );
+      return rs.map((r): ReavaliacaoRegistrada => {
+        const situacao = texto(r['situacao']) as ReavaliacaoRegistrada['situacao'];
+        const escore = numOuNulo(r['aplicacao_escala_id']);
+        return {
+          id: num(r['id']),
+          paciente: num(r['paciente_id']),
+          reg: numOuNulo(r['internacao_id']),
+          escala: texto(r['escala']) === 'morse' ? 'morse' : 'braden',
+          motivo:
+            texto(r['motivo']) === 'mudanca_quadro' ? 'mudanca-quadro' : (texto(r['motivo']) as 'admissao'),
+          devidaEm: segundos(r['devida_em'], fuso),
+          prazoEm: segundos(r['prazo_em'], fuso),
+          situacao,
+          cumpridaEm: r['cumprida_em'] ? segundos(r['cumprida_em'], fuso) : null,
+          cumpridaPor: situacao !== 'cumprida' ? null : escore !== null ? 'escore' : 'formulario',
+          escore,
+        };
+      });
+    });
   }
 
   escalasEmFormulario(): Promise<[]> {
@@ -340,8 +447,50 @@ export class PortaEscoresPropria implements PortaEscores {
     });
   }
 
-  classificacoes(): Promise<[]> {
-    return Promise.resolve([]);
+  classificacoes(
+    c: ContextoEscores,
+    unidade: string,
+    data: string,
+    turno: string,
+  ): Promise<ClassificacaoRegistrada[]> {
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT x.*, ${LOGIN_DE('x.criado_por')} AS login, ${LOGIN_DE('x.alterado_por')} AS alterado_login,
+                ${ESTORNO_NA_TRILHA('classificacao_paciente', 'x.id')} AS estorno
+           FROM classificacao_paciente x JOIN unidade_internacao u ON u.id = x.unidade_internacao_id
+          WHERE x.estabelecimento_id = ? AND x.excluido_em IS NULL AND u.codigo = ? AND x.data_referencia = ?
+            AND x.turno = ? ORDER BY x.id LIMIT ${TETO}`,
+        [est, unidade, data.slice(0, 10), turno],
+      );
+      return rs.map((r): ClassificacaoRegistrada => {
+        const e = lerJson<{ tipo?: string }>(r['estorno']);
+        return {
+          id: num(r['id']),
+          paciente: num(r['paciente_id']),
+          reg: num(r['internacao_id']),
+          instrumento: texto(r['instrumento']) === 'nas' ? 'nas' : 'fugulin',
+          itens: lerJson<Record<string, number | string>>(r['itens']) ?? {},
+          total: num(r['total']),
+          categoria: texto(r['categoria']),
+          horas24h: num(r['horas_24h']),
+          usuario: texto(r['login']),
+          criadoEm: civilDe(r['criado_em'], fuso) ?? '',
+          data: (civilDe(r['data_referencia'], 'UTC') ?? texto(r['data_referencia'])).slice(0, 10),
+          turno: texto(r['turno']),
+          estorno:
+            r['situacao'] === 'estornada'
+              ? {
+                  tipo: e?.tipo === 'invalidacao' ? 'invalidacao' : 'estorno',
+                  motivo: texto(r['motivo_estorno']),
+                  usuario: texto(r['alterado_login']),
+                  em: civilDe(r['alterado_em'], fuso) ?? '',
+                  alerta: null,
+                  escoreMantem: null,
+                }
+              : null,
+        };
+      });
+    });
   }
 
   async configuracaoIndices() {
@@ -349,12 +498,31 @@ export class PortaEscoresPropria implements PortaEscores {
     return CONFIGURACAO_INDICES_SINTETICA;
   }
 
-  indicesDoPaciente(): Promise<[]> {
-    return Promise.resolve([]);
+  indicesDoPaciente(c: ContextoEscores, paciente: number): Promise<IndiceUtiRegistrado[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `${SQL_INDICES} AND x.paciente_id = ? ORDER BY x.coletado_em DESC, x.id DESC LIMIT ${TETO}`,
+          [est, paciente],
+        )
+      ).map((r) => indiceDe(r, fuso)),
+    );
   }
 
-  apachesDoPeriodo(): Promise<[]> {
-    return Promise.resolve([]);
+  apachesDoPeriodo(c: ContextoEscores, de: string, ate: string): Promise<IndiceUtiRegistrado[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `${SQL_INDICES} AND x.indice = 'apache2' AND x.situacao = 'validado' AND x.coletado_em >= ? AND x.coletado_em < ?
+            ORDER BY x.coletado_em, x.id LIMIT ${TETO}`,
+          [
+            est,
+            instanteDe(de.slice(0, 10), fuso),
+            new Date(instanteDe(ate.slice(0, 10), fuso).getTime() + 86_400_000),
+          ],
+        )
+      ).map((r) => indiceDe(r, fuso)),
+    );
   }
 
   vinculo(c: ContextoEscores, login: string): Promise<VinculoAssistencial | null> {
@@ -382,6 +550,39 @@ export class PortaEscoresPropria implements PortaEscores {
   }
 
   registroParaEstorno(c: ContextoEscores, origem: string, id: number): Promise<RegistroParaEstorno | null> {
+    if (origem === 'indiceUti')
+      return this.ler(c, async (l, est, fuso) => {
+        const r = await l.uma(`${SQL_INDICES} AND x.id = ?`, [est, id]);
+        if (!r) return null;
+        const x = indiceDe(r, fuso);
+        return {
+          id,
+          paciente: x.paciente,
+          usuario: x.registradoPor,
+          escala: x.indice,
+          gatilho: null,
+          quando: x.coletadoEm,
+          estornado: x.estorno !== null,
+        };
+      });
+    if (origem === 'classificacao')
+      return this.ler(c, async (l, est, fuso) => {
+        const r = await l.uma(
+          `SELECT x.id, x.paciente_id, x.instrumento, x.situacao, x.criado_em, ${LOGIN_DE('x.criado_por')} AS login
+             FROM classificacao_paciente x WHERE x.estabelecimento_id = ? AND x.id = ? AND x.excluido_em IS NULL`,
+          [est, id],
+        );
+        if (!r) return null;
+        return {
+          id,
+          paciente: num(r['paciente_id']),
+          usuario: texto(r['login']),
+          escala: texto(r['instrumento']),
+          gatilho: null,
+          quando: civilDe(r['criado_em'], fuso) ?? '',
+          estornado: r['situacao'] === 'estornada',
+        };
+      });
     if (origem !== 'escore') return Promise.resolve(null);
     return this.ler(c, async (l, est, fuso) => {
       const r = await l.uma(`${SQL_ESCORES} AND a.id = ?`, [est, id]);
@@ -412,7 +613,10 @@ export class PortaEscoresPropria implements PortaEscores {
     return this.ler(c, async (l, est, fuso) => {
       const filtros = ['c.inicio_em >= ?'];
       const p: unknown[] = [est, instanteDe(f.desde, fuso)];
-      if (f.ate) { filtros.push('c.inicio_em <= ?'); p.push(instanteDe(f.ate, fuso)); }
+      if (f.ate) {
+        filtros.push('c.inicio_em <= ?');
+        p.push(instanteDe(f.ate, fuso));
+      }
       if (f.atendimentos) {
         if (f.atendimentos.length === 0) return [];
         filtros.push(`c.atendimento_id IN (${marcadores(f.atendimentos.length)})`);
@@ -443,6 +647,30 @@ export class PortaEscoresPropria implements PortaEscores {
           ORDER BY a.contencao_paciente_id, a.previsto_em`,
         ids,
       );
+      const avaliacoes = hs.map((h) => num(h['id']));
+      const adendos = new Map<number, AdendoChecagemLido[]>();
+      if (avaliacoes.length > 0)
+        for (const a of await l.consultar(
+          `SELECT d.*, ${LOGIN_DE('d.usuario_id')} AS login FROM contencao_paciente_avaliacao_adendo d
+            WHERE d.contencao_paciente_avaliacao_id IN (${marcadores(avaliacoes.length)}) ORDER BY d.ocorrido_em, d.id`,
+          avaliacoes,
+        )) {
+          const k = num(a['contencao_paciente_avaliacao_id']);
+          const dados =
+            lerJson<{ achados?: Record<string, string>; observacao?: string | null }>(a['dados']) ?? {};
+          const achados = dados.achados ?? {};
+          adendos.set(k, [
+            ...(adendos.get(k) ?? []),
+            {
+              achados,
+              alterado: Object.values(achados).includes('alterado'),
+              observacao: dados.observacao ?? null,
+              motivo: texto(a['texto']),
+              usuario: texto(a['login']),
+              em: civilDe(a['ocorrido_em'], fuso) ?? '',
+            },
+          ]);
+        }
       for (const h of hs) {
         const k = num(h['contencao_paciente_id']);
         const achados = Object.fromEntries(ACHADOS.map((a) => [a, texto(h[`achado_${a}`]) || 'normal']));
@@ -459,7 +687,7 @@ export class PortaEscoresPropria implements PortaEscores {
                     observacao: textoOuNulo(h['observacao']),
                     usuario: texto(h['login']),
                     feitaEm: (civilDe(h['avaliado_em'], fuso) ?? '').slice(0, 16),
-                    adendos: [],
+                    adendos: adendos.get(num(h['id'])) ?? [],
                   }
                 : null,
           },
@@ -548,7 +776,10 @@ export class PortaEscoresPropria implements PortaEscores {
     return this.ler(c, async (l, est, fuso) => {
       const p: unknown[] = [est, instanteDe(f.desde, fuso)];
       let filtro = 't.acionado_em >= ?';
-      if (f.ate) { (filtro += ' AND t.acionado_em <= ?'); p.push(instanteDe(f.ate, fuso)); }
+      if (f.ate) {
+        filtro += ' AND t.acionado_em <= ?';
+        p.push(instanteDe(f.ate, fuso));
+      }
       const rs = await l.consultar(`${SQL_TRR} AND ${filtro} ORDER BY t.acionado_em, t.id LIMIT ?`, [
         ...p,
         TETO,
@@ -572,8 +803,65 @@ export class PortaEscoresPropria implements PortaEscores {
     });
   }
 
-  versoesPcr(): Promise<[]> {
-    return Promise.resolve([]);
+  versoesPcr(
+    c: ContextoEscores,
+    f: { id?: number; atendimentos?: readonly number[]; unidade?: string; desde?: string; ate?: string },
+  ): Promise<VersaoPcrRegistrada[]> {
+    return this.ler(c, async (l, est, fuso) => {
+      const filtros: string[] = [];
+      const p: unknown[] = [est];
+      if (f.id !== undefined) {
+        filtros.push('x.id = ?');
+        p.push(f.id);
+      } else if (f.atendimentos) {
+        if (f.atendimentos.length === 0) return [];
+        filtros.push(`x.atendimento_id IN (${marcadores(f.atendimentos.length)})`);
+        p.push(...f.atendimentos);
+      } else {
+        if (f.desde) {
+          filtros.push('x.colapso_em >= ?');
+          p.push(instanteDe(f.desde, fuso));
+        }
+        if (f.ate) {
+          filtros.push('x.colapso_em < ?');
+          p.push(instanteDe(f.ate, fuso));
+        }
+        if (f.unidade) {
+          filtros.push('u.codigo = ?');
+          p.push(f.unidade);
+        }
+      }
+      const rs = await l.consultar(
+        `SELECT x.*, u.codigo AS unidade, ${LOGIN_DE('x.criado_por')} AS login, ${LOGIN_DE('x.alterado_por')} AS alterado_login
+           FROM parada_cardiorrespiratoria_ficha x LEFT JOIN unidade_internacao u ON u.id = x.unidade_internacao_id
+          WHERE x.estabelecimento_id = ? AND x.excluido_em IS NULL ${filtros.length ? `AND ${filtros.join(' AND ')}` : ''}
+          ORDER BY x.colapso_em DESC, x.numero_versao DESC, x.id DESC LIMIT ${TETO}`,
+        p,
+      );
+      return rs.map((r): VersaoPcrRegistrada => ({
+        id: num(r['id']),
+        paciente: num(r['paciente_id']),
+        atendimento: num(r['atendimento_id']),
+        unidade: textoOuNulo(r['unidade']),
+        uti: booleano(r['em_uti']),
+        trr: numOuNulo(r['acionamento_resposta_rapida_id']),
+        anterior: numOuNulo(r['anterior_ficha_id']),
+        versao: num(r['numero_versao']),
+        situacao: r['situacao'] === 'finalizada' ? 'finalizada' : 'rascunho',
+        colapsoEm: (civilDe(r['colapso_em'], fuso) ?? '').slice(0, 16),
+        dados: typeof r['dados'] === 'string' ? r['dados'] : JSON.stringify(r['dados']),
+        autor: texto(r['login']),
+        criadoEm: civilDe(r['criado_em'], fuso) ?? '',
+        motivo: textoOuNulo(r['motivo_correcao']),
+        inativacao: booleano(r['inativada'])
+          ? {
+              motivo: texto(r['motivo_inativacao']),
+              usuario: texto(r['alterado_login']),
+              em: (civilDe(r['alterado_em'], fuso) ?? '').slice(0, 16),
+            }
+          : null,
+      }));
+    });
   }
 
   acionamentosDosEscores(c: ContextoEscores, escores: readonly number[]) {
@@ -629,8 +917,14 @@ export class PortaEscoresPropria implements PortaEscores {
         p.push(...f.atendimentos);
       }
       if (f.escores) return [];
-      if (f.desde) { filtros.push('ip.horario_zero_em >= ?'); p.push(instanteDe(f.desde, fuso)); }
-      if (f.ate) { filtros.push('ip.horario_zero_em <= ?'); p.push(instanteDe(f.ate, fuso)); }
+      if (f.desde) {
+        filtros.push('ip.horario_zero_em >= ?');
+        p.push(instanteDe(f.desde, fuso));
+      }
+      if (f.ate) {
+        filtros.push('ip.horario_zero_em <= ?');
+        p.push(instanteDe(f.ate, fuso));
+      }
       return this.lerProtocolos(l, est, fuso, filtros, p);
     });
   }
@@ -726,14 +1020,23 @@ export class PortaEscoresPropria implements PortaEscores {
     return this.ler(c, async (l, est, fuso) => {
       const filtros: string[] = [];
       const p: unknown[] = [est];
-      if (f.id !== undefined) { filtros.push('lp.id = ?'); p.push(f.id); }
+      if (f.id !== undefined) {
+        filtros.push('lp.id = ?');
+        p.push(f.id);
+      }
       if (f.atendimentos) {
         if (f.atendimentos.length === 0) return [];
         filtros.push(`lp.atendimento_id IN (${marcadores(f.atendimentos.length)})`);
         p.push(...f.atendimentos);
       }
-      if (f.desde) { filtros.push('lp.identificada_em >= ?'); p.push(instanteDe(f.desde, fuso)); }
-      if (f.ate) { filtros.push('lp.identificada_em <= ?'); p.push(instanteDe(f.ate, fuso)); }
+      if (f.desde) {
+        filtros.push('lp.identificada_em >= ?');
+        p.push(instanteDe(f.desde, fuso));
+      }
+      if (f.ate) {
+        filtros.push('lp.identificada_em <= ?');
+        p.push(instanteDe(f.ate, fuso));
+      }
       const rs = await l.consultar(
         `SELECT lp.*, ${LOGIN_DO_PROFISSIONAL('lp.responsavel_profissional_id', 'lp.estabelecimento_id')} AS autor,
                 ${UNIDADE_NO_INSTANTE('lp.atendimento_id', 'lp.identificada_em')} AS unidade,
@@ -912,6 +1215,62 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
     }
     return n;
   };
+  /** A internação é deste estabelecimento e do paciente (travada: serializa a classificação do turno). */
+  const internacaoDoPaciente = async (reg: number, paciente: number) => {
+    const [i] = await tx.consultarParaAtualizar<{ id: number; paciente_id: number }>(
+      'SELECT id, paciente_id FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [reg, est],
+    );
+    if (!i) throw recusa('internacao-inexistente', 'A internação não é deste estabelecimento.');
+    if (Number(i.paciente_id) !== paciente)
+      throw recusa('registro-de-outro-paciente', 'A internação não é deste paciente.');
+    return Number(i.id);
+  };
+  const unidadeDoCodigo = async (codigo: string) => {
+    const u = await tx.uma<{ id: number }>(
+      'SELECT id FROM unidade_internacao WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
+      [est, codigo],
+    );
+    if (!u) throw recusa('unidade-inexistente', 'A unidade de internação não é deste estabelecimento.');
+    return Number(u.id);
+  };
+  /** Programa a reavaliação (a mesma chave do paciente e da escala é reconhecida: devolve a já programada). */
+  const programar = async (r: {
+    paciente: number;
+    reg: number | null;
+    escala: string;
+    motivo: string;
+    chave: string;
+    devidaEm: string;
+    prazoEm: string;
+    observacao?: string | null;
+  }): Promise<{ id: number; nova: boolean }> => {
+    const chave = chaveReavaliacao(r.paciente, r.escala, r.chave);
+    const ja = await tx.uma<{ id: number }>(
+      'SELECT id FROM reavaliacao_escala WHERE estabelecimento_id = ? AND chave = ? AND excluido_em IS NULL',
+      [est, chave],
+    );
+    if (ja) return { id: Number(ja.id), nova: false };
+    const devida = await quando(r.devidaEm);
+    const prazo = await quando(r.prazoEm);
+    if (prazo.getTime() < devida.getTime())
+      throw recusa('prazo-invalido', 'O prazo da reavaliação não pode ser anterior à hora devida.');
+    const motivo = MOTIVO_REAVALIACAO_BANCO[r.motivo];
+    if (!motivo) throw recusa('motivo-invalido', 'O motivo da reavaliação não é conhecido.');
+    const id = await tx.incluir('reavaliacao_escala', {
+      estabelecimento_id: est,
+      paciente_id: r.paciente,
+      internacao_id: r.reg === null ? null : await internacaoDoPaciente(r.reg, r.paciente),
+      escala_clinica_id: Number((await escala(r.escala)).id),
+      motivo,
+      chave,
+      devida_em: devida,
+      prazo_em: prazo,
+      situacao: 'pendente',
+      observacao: r.observacao?.trim().slice(0, 300) || null,
+    });
+    return { id, nova: true };
+  };
   const contencaoTravada = async (id: number) => {
     const [c] = await tx.consultarParaAtualizar<Linha>(
       'SELECT id, versao, situacao, inicio_em, vence_em FROM contencao_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -958,7 +1317,8 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
         );
       }
       const e = r.escore;
-      if (afericao === null && e.sinalVital) afericao = await afericaoDoSinal(tx, est, e.sinalVital, e.paciente);
+      if (afericao === null && e.sinalVital)
+        afericao = await afericaoDoSinal(tx, est, e.sinalVital, e.paciente);
       const esc = await escala(e.escala);
       // Até as colunas do pedido (faixa, gatilho, versão da regra), a interpretação guarda só esses quatro campos, que
       // cabem na coluna; nunca um JSON cortado. Os cuidados decididos vão aos dados da trilha da gravação.
@@ -969,7 +1329,10 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
         suspeitaInfeccao: e.suspeitaInfeccao,
       });
       if (interpretacao.length > 300)
-        throw recusa('interpretacao-longa', 'A faixa do escore passa do tamanho guardado: confira a regra da escala.');
+        throw recusa(
+          'interpretacao-longa',
+          'A faixa do escore passa do tamanho guardado: confira a regra da escala.',
+        );
       if (r.cuidados.length > 0) anotacao.dados = { ...(anotacao.dados ?? {}), cuidados: r.cuidados };
       const id = await tx.incluir('aplicacao_escala', {
         estabelecimento_id: est,
@@ -1003,13 +1366,35 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
           pontos,
         });
       }
-      // As reavaliações programadas pelo escore (NEWS2 de 5 ou mais: mudança de quadro) vão ao outbox até a tabela
-      // reavaliacao_escala do pedido existir; o escore, os sinais e os avisos nunca são recusados por causa delas.
+      // O escore cumpre as reavaliações pendentes da escala já devidas na hora da aferição.
+      if (r.cumprir) {
+        const feito = await quando(r.cumprir.quando);
+        const pendentes = await tx.consultarParaAtualizar<{ id: number; versao: number }>(
+          `SELECT r.id, r.versao FROM reavaliacao_escala r JOIN escala_clinica e ON e.id = r.escala_clinica_id
+            WHERE r.estabelecimento_id = ? AND r.paciente_id = ? AND e.codigo = ? AND r.situacao = 'pendente'
+              AND r.devida_em <= ? AND r.excluido_em IS NULL`,
+          [est, e.paciente, r.cumprir.escala, feito],
+        );
+        for (const p of pendentes)
+          await tx.alterar('reavaliacao_escala', Number(p.id), Number(p.versao), {
+            situacao: 'cumprida',
+            cumprida_em: feito,
+            aplicacao_escala_id: id,
+          });
+      }
+      // As reavaliações programadas pelo escore (NEWS2 de 5 ou mais: mudança de quadro); a chave repetida é ignorada.
+      // O escore, os sinais e os avisos nunca são recusados por causa delas: a escala que falta no cadastro deixa o
+      // pedido na fila de saída (enfermagem.reavaliacao.sem-cadastro), para o administrador carregar a escala.
       for (const p of r.programar) {
         const chave = p.chave(id);
+        const existe = await tx.uma('SELECT id FROM escala_clinica WHERE codigo = ? AND ativo', [p.escala]);
+        if (existe) {
+          await programar({ ...p, chave });
+          continue;
+        }
         await gravarOutbox(tx, {
           estabelecimento: est,
-          ponto: 'enfermagem.reavaliacao.programada',
+          ponto: 'enfermagem.reavaliacao.sem-cadastro',
           entidade: 'aplicacao_escala',
           entidadeId: id,
           chave: `reavaliacao:${p.escala}:${chave}`.slice(0, 120),
@@ -1017,12 +1402,9 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
             escore: id,
             paciente: p.paciente,
             internacao: p.reg,
-            unidade: p.unidade,
             escala: p.escala,
             motivo: p.motivo,
             chave,
-            devidaEm: p.devidaEm,
-            prazoEm: p.prazoEm,
           },
           usuario: tx.contexto.usuario,
           agora: new Date(),
@@ -1031,11 +1413,32 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       const avisos = await avisar(r.avisos.map((a) => a(id)));
       return { id, sinais, avisos };
     },
-    programarReavaliacao: async () => {
-      throw pendente('A reavaliação programada da escala');
+    async programarReavaliacao(r) {
+      const p = await programar(r);
+      if (!p.nova) throw recusa('ja-programada', 'Esta reavaliação já está programada para o paciente.');
+      return p.id;
     },
-    dispensarReavaliacao: async () => {
-      throw pendente('A dispensa da reavaliação');
+    async dispensarReavaliacao(d) {
+      const [r] = await tx.consultarParaAtualizar<{
+        id: number;
+        versao: number;
+        situacao: string;
+        paciente_id: number;
+      }>(
+        'SELECT id, versao, situacao, paciente_id FROM reavaliacao_escala WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [d.id, est],
+      );
+      if (!r) throw recusa('nao-encontrado', 'A reavaliação não existe neste estabelecimento.');
+      if (r.situacao !== 'pendente')
+        throw recusa('reavaliacao-encerrada', 'Esta reavaliação já foi cumprida ou dispensada.');
+      const motivo = d.motivo.trim();
+      if (!motivo) throw recusa('motivo-obrigatorio', 'A dispensa exige o motivo.');
+      await tx.alterar('reavaliacao_escala', Number(r.id), Number(r.versao), {
+        situacao: 'dispensada',
+        cumprida_em: await quando(d.quando),
+        motivo_dispensa: motivo.slice(0, 300),
+      });
+      return { paciente: Number(r.paciente_id) };
     },
     async publicarRegra(p) {
       const esc = await escala(p.escala);
@@ -1057,14 +1460,79 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       await tx.alterar('escala_clinica', Number(esc.id), Number(esc.versao), { numero_versao_atual: numero });
       return { id, versao: numero };
     },
-    classificar: async () => {
-      throw pendente('A classificação de pacientes (Fugulin e NAS)');
+    async classificar(x) {
+      const reg = await internacaoDoPaciente(x.reg, x.paciente);
+      const unidade = await unidadeDoCodigo(x.unidade);
+      const ja = await tx.uma(
+        `SELECT id FROM classificacao_paciente WHERE estabelecimento_id = ? AND paciente_id = ? AND internacao_id = ?
+            AND data_referencia = ? AND turno = ? AND instrumento = ? AND situacao = 'valida' AND excluido_em IS NULL`,
+        [est, x.paciente, reg, x.data.slice(0, 10), x.turno, x.instrumento],
+      );
+      if (ja)
+        throw recusa(
+          'ja-classificado',
+          'Este paciente já foi classificado por este instrumento neste turno.',
+        );
+      // A versão do instrumento vai à trilha da gravação (a tabela guarda os itens, o total e a categoria).
+      anotacao.dados = { ...(anotacao.dados ?? {}), versaoInstrumento: x.versao };
+      return tx.incluir('classificacao_paciente', {
+        estabelecimento_id: est,
+        paciente_id: x.paciente,
+        internacao_id: reg,
+        unidade_internacao_id: unidade,
+        data_referencia: x.data.slice(0, 10),
+        turno: x.turno,
+        instrumento: x.instrumento,
+        itens: JSON.stringify(x.itens),
+        total: x.total,
+        categoria: x.categoria.slice(0, 30),
+        horas_24h: x.horas24h,
+        situacao: 'valida',
+      });
     },
-    registrarIndice: async () => {
-      throw pendente('O índice de gravidade da UTI');
+    async registrarIndice(x) {
+      // A mortalidade estimada (fração) é guardada em percentual com duas casas: a precisão da fração de quatro casas.
+      return tx.incluir('indice_gravidade_uti', {
+        estabelecimento_id: est,
+        paciente_id: x.paciente,
+        internacao_id: x.reg === null ? null : await internacaoDoPaciente(x.reg, x.paciente),
+        indice: x.indice,
+        variaveis: JSON.stringify({ valores: x.variaveis, configuracao: x.impressaoConfig }),
+        pontuacao: x.pontuacao,
+        categoria_diagnostica: x.categoria,
+        tipo_admissao: x.tipoAdmissao?.slice(0, 20) ?? null,
+        mortalidade_estimada: x.mortalidade === null ? null : Math.round(x.mortalidade * 10_000) / 100,
+        coletado_em: await quando(x.coletadoEm),
+        situacao: 'registrado',
+      });
     },
     async estornarRegistro(r) {
-      if (r.origem !== 'escore') throw pendente('O estorno da classificação e do índice da UTI');
+      if (r.origem !== 'escore') {
+        const tabela = r.origem === 'classificacao' ? 'classificacao_paciente' : 'indice_gravidade_uti';
+        const estornada = r.origem === 'classificacao' ? 'estornada' : 'estornado';
+        const [x] = await tx.consultarParaAtualizar<{
+          id: number;
+          versao: number;
+          situacao: string;
+          paciente_id: number;
+        }>(
+          `SELECT id, versao, situacao, paciente_id FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+          [r.id, est],
+        );
+        if (!x) throw recusa('registro-inexistente', 'O registro não foi encontrado.');
+        if (Number(x.paciente_id) !== r.paciente)
+          throw recusa('registro-de-outro-paciente', 'O registro não é deste paciente.');
+        if (x.situacao === estornada) throw recusa('registro-ja-estornado', 'O registro já foi estornado.');
+        const motivo = r.motivo.trim();
+        if (!motivo) throw recusa('motivo-obrigatorio', 'O estorno exige o motivo.');
+        await tx.alterar(tabela, r.id, Number(x.versao), {
+          situacao: estornada,
+          ...(r.origem === 'classificacao' ? { motivo_estorno: motivo.slice(0, 300) } : {}),
+        });
+        anotacao.motivo = motivo;
+        anotacao.dados = { estorno: { tipo: r.tipo } };
+        return r.id;
+      }
       const [a] = await tx.consultarParaAtualizar<{ id: number; versao: number; situacao: string }>(
         'SELECT id, versao, situacao FROM aplicacao_escala WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [r.id, est],
@@ -1074,6 +1542,39 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       const motivo = r.motivo.trim();
       if (!motivo) throw recusa('motivo-obrigatorio', 'O estorno exige o motivo.');
       await tx.alterar('aplicacao_escala', r.id, Number(a.versao), { situacao: 'inativada' });
+      // A reavaliação cumprida por este escore fica (a baixa é histórica) e volta numa linha nova: cumprida pelo escore
+      // válido seguinte da mesma escala, aferido depois da hora devida, ou pendente outra vez.
+      const cumpridas = await tx.consultar<Linha>(
+        `SELECT r.*, e.codigo AS escala FROM reavaliacao_escala r JOIN escala_clinica e ON e.id = r.escala_clinica_id
+          WHERE r.estabelecimento_id = ? AND r.aplicacao_escala_id = ? AND r.situacao = 'cumprida' AND r.excluido_em IS NULL`,
+        [est, r.id],
+      );
+      for (const c of cumpridas) {
+        const sub = await tx.uma<{ id: number; aplicado_em: Date }>(
+          `SELECT id, aplicado_em FROM aplicacao_escala WHERE estabelecimento_id = ? AND paciente_id = ?
+              AND escala_clinica_id = ? AND id <> ? AND situacao = 'finalizada' AND aplicado_em >= ? AND excluido_em IS NULL
+            ORDER BY aplicado_em, id LIMIT 1`,
+          [est, c['paciente_id'], c['escala_clinica_id'], r.id, c['devida_em']],
+        );
+        await tx.incluir('reavaliacao_escala', {
+          estabelecimento_id: est,
+          paciente_id: c['paciente_id'],
+          internacao_id: c['internacao_id'],
+          escala_clinica_id: c['escala_clinica_id'],
+          motivo: c['motivo'],
+          chave: chaveReavaliacao(
+            num(c['paciente_id']),
+            texto(c['escala']),
+            `${texto(c['chave'])}:r${num(c['id'])}`,
+          ),
+          devida_em: c['devida_em'],
+          prazo_em: c['prazo_em'],
+          situacao: sub ? 'cumprida' : 'pendente',
+          cumprida_em: sub ? sub.aplicado_em : null,
+          aplicacao_escala_id: sub ? Number(sub.id) : null,
+          observacao: c['observacao'] ?? null,
+        });
+      }
       // Até a coluna motivo_inativacao do pedido, o motivo, o alerta reavaliado e o escore mantido ficam na trilha.
       anotacao.motivo = motivo;
       anotacao.dados = { estorno: { tipo: r.tipo, alerta: r.alerta, escoreMantem: r.escoreMantem } };
@@ -1143,8 +1644,29 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       });
       return Number(h.id);
     },
-    adendoChecagemContencao: async () => {
-      throw pendente('O adendo da checagem da contenção');
+    async adendoChecagemContencao(x) {
+      const h = await tx.uma<{ id: number; situacao: string; profissional_id: number | null }>(
+        `SELECT a.id, a.situacao, a.profissional_id FROM contencao_paciente_avaliacao a
+           JOIN contencao_paciente c ON c.id = a.contencao_paciente_id
+          WHERE a.contencao_paciente_id = ? AND c.estabelecimento_id = ? AND a.previsto_em = ? AND a.excluido_em IS NULL`,
+        [x.contencao, est, await quando(x.previsto)],
+      );
+      if (!h || h.situacao !== 'realizada')
+        throw recusa('checagem-inexistente', 'Este horário ainda não foi checado: não há o que corrigir.');
+      if (Number(h.profissional_id) !== (await profissional()))
+        throw recusa(
+          'so-o-autor',
+          'Só quem registrou a checagem faz o adendo (correção do próprio registro).',
+        );
+      const motivo = x.motivo.trim();
+      if (!motivo) throw recusa('motivo-obrigatorio', 'O adendo exige o motivo.');
+      return tx.incluir('contencao_paciente_avaliacao_adendo', {
+        contencao_paciente_avaliacao_id: Number(h.id),
+        texto: motivo.slice(0, 2000),
+        dados: JSON.stringify({ achados: x.achados, observacao: x.observacao }),
+        ocorrido_em: new Date(),
+        usuario_id: tx.contexto.usuario,
+      });
     },
     async encerrarContencao(x) {
       const c = await contencaoTravada(x.contencao);
@@ -1213,14 +1735,116 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       }
       return x.trr;
     },
-    gravarFichaPcr: async () => {
-      throw pendente('A ficha da parada cardiorrespiratória (Utstein)');
+    async gravarFichaPcr(f) {
+      try {
+        JSON.parse(f.dados);
+      } catch {
+        throw recusa('dados-invalidos', 'Os campos da ficha da parada chegaram fora do formato JSON.');
+      }
+      await conferirAtendimento(tx, est, f.atendimento, f.paciente);
+      let versao = 1;
+      let unidade: number | null = f.unidade ? await unidadeDoCodigo(f.unidade) : null;
+      let uti = f.uti;
+      let motivo: string | null = null;
+      if (f.anterior !== null) {
+        const [a] = await tx.consultarParaAtualizar<Linha>(
+          'SELECT * FROM parada_cardiorrespiratoria_ficha WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [f.anterior, est],
+        );
+        if (!a) throw recusa('pcr-inexistente', 'A ficha da parada não foi encontrada.');
+        if (num(a['atendimento_id']) !== f.atendimento)
+          throw recusa('pcr-de-outro-atendimento', 'A ficha é de outro atendimento.');
+        if (num(a['criado_por']) !== tx.contexto.usuario)
+          throw recusa('so-o-autor', 'Só o autor da ficha a continua ou corrige.');
+        if (booleano(a['inativada']))
+          throw recusa('pcr-inativada', 'A ficha foi inativada (lançada errada): relance uma ficha nova.');
+        if (
+          await tx.uma('SELECT id FROM parada_cardiorrespiratoria_ficha WHERE anterior_ficha_id = ?', [
+            f.anterior,
+          ])
+        )
+          throw recusa('versao-desatualizada', 'Há uma versão mais nova da ficha: abra a versão atual.');
+        if (a['situacao'] === 'finalizada') {
+          motivo = (f.motivo ?? '').replace(/\s+/g, ' ').trim();
+          if (motivo.length < 10)
+            throw recusa('motivo-obrigatorio', 'A correção da ficha finalizada exige a justificativa.');
+          if (f.situacao !== 'finalizada')
+            throw recusa(
+              'correcao-finaliza',
+              'A correção da ficha finalizada é gravada finalizada (a ficha não volta a rascunho).',
+            );
+        }
+        versao = num(a['numero_versao']) + 1;
+        unidade = numOuNulo(a['unidade_internacao_id']);
+        uti = booleano(a['em_uti']);
+      } else if (f.trr !== null) {
+        const [t] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT t.id, t.atendimento_id, t.situacao,
+                  (SELECT o.unidade_internacao_id FROM ocupacao_leito o JOIN internacao i ON i.id = o.internacao_id
+                    WHERE i.atendimento_id = t.atendimento_id AND o.excluido_em IS NULL AND o.data_hora_inicio <= t.acionado_em
+                    ORDER BY o.data_hora_inicio DESC LIMIT 1) AS unidade_internacao_id,
+                  ${UTI_NO_INSTANTE('t.atendimento_id', 't.acionado_em')} AS em_uti
+             FROM acionamento_resposta_rapida t WHERE t.id = ? AND t.estabelecimento_id = ? AND t.excluido_em IS NULL`,
+          [f.trr, est],
+        );
+        if (!t || num(t['atendimento_id']) !== f.atendimento)
+          throw recusa('trr-de-outro-atendimento', 'O acionamento do time é de outro atendimento.');
+        if (t['situacao'] === 'inativado')
+          throw recusa('trr-inativado', 'O acionamento foi inativado (lançado errado).');
+        const aberta = await tx.uma(
+          `SELECT p.id FROM parada_cardiorrespiratoria_ficha p
+            WHERE p.acionamento_resposta_rapida_id = ? AND NOT p.inativada AND p.excluido_em IS NULL
+              AND NOT EXISTS (SELECT 1 FROM parada_cardiorrespiratoria_ficha s WHERE s.anterior_ficha_id = p.id)`,
+          [f.trr],
+        );
+        if (aberta)
+          throw recusa('pcr-ja-aberta', 'Este acionamento já tem a ficha da parada: abra a ficha existente.');
+        unidade = numOuNulo(t['unidade_internacao_id']) ?? unidade;
+        uti = t['em_uti'] === null ? uti : booleano(t['em_uti']);
+      }
+      const id = await tx.incluir('parada_cardiorrespiratoria_ficha', {
+        estabelecimento_id: est,
+        paciente_id: f.paciente,
+        atendimento_id: f.atendimento,
+        acionamento_resposta_rapida_id: f.trr,
+        anterior_ficha_id: f.anterior,
+        numero_versao: versao,
+        situacao: f.situacao,
+        colapso_em: await quando(f.colapsoEm),
+        unidade_internacao_id: unidade,
+        em_uti: uti,
+        dados: f.dados,
+        motivo_correcao: motivo?.slice(0, 500) ?? null,
+        inativada: false,
+      });
+      return { id, versao };
     },
     retificarEventoTrr: async () => {
       throw pendente('A retificação da chegada ou do desfecho do TRR');
     },
     async inativarTrr(x) {
-      if (x.origem !== 'trr') throw pendente('A inativação do evento e da ficha da PCR');
+      if (x.origem === 'evento') throw pendente('A inativação do evento do TRR');
+      if (x.origem === 'pcr') {
+        const [p] = await tx.consultarParaAtualizar<Linha>(
+          'SELECT id, versao, paciente_id, criado_por, inativada FROM parada_cardiorrespiratoria_ficha WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [x.id, est],
+        );
+        if (!p) throw recusa('pcr-inexistente', 'A ficha da parada não foi encontrada.');
+        if (
+          await tx.uma('SELECT id FROM parada_cardiorrespiratoria_ficha WHERE anterior_ficha_id = ?', [x.id])
+        )
+          throw recusa('versao-desatualizada', 'Há uma versão mais nova da ficha: abra a versão atual.');
+        if (num(p['criado_por']) !== tx.contexto.usuario)
+          throw recusa('so-o-autor', 'Só quem lançou inativa o registro (lançamento errado).');
+        if (booleano(p['inativada'])) throw recusa('ja-inativado', 'O registro já foi inativado.');
+        const motivo = x.motivo.trim();
+        if (!motivo) throw recusa('motivo-obrigatorio', 'A inativação exige o motivo.');
+        await tx.alterar('parada_cardiorrespiratoria_ficha', x.id, num(p['versao']), {
+          inativada: true,
+          motivo_inativacao: motivo.slice(0, 300),
+        });
+        return { id: x.id, paciente: num(p['paciente_id']) };
+      }
       const [t] = await tx.consultarParaAtualizar<Linha>(
         'SELECT id, versao, situacao, paciente_id FROM acionamento_resposta_rapida WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [x.id, est],
@@ -1254,14 +1878,130 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
     inativarLesao: async () => {
       throw pendente('A inativação da lesão, do curativo ou da foto');
     },
-    incluirProtocoloInternado: async () => {
-      throw pendente('A inclusão do internado no protocolo gerenciado');
+    async incluirProtocoloInternado(p) {
+      if (p.origem === 'news2' && (p.escore === null || p.tipo !== 'sepse'))
+        throw recusa('escore-obrigatorio', 'O alerta do NEWS2 abre o protocolo de sepse, com o escore.');
+      await conferirAtendimento(tx, est, p.atendimento, p.paciente);
+      const pg = await tx.uma<{ id: number }>(
+        `SELECT id FROM protocolo_gerenciado WHERE id = ? AND tipo = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+            AND excluido_em IS NULL`,
+        [p.gerenciado, p.tipo, est],
+      );
+      if (!pg)
+        throw recusa('protocolo-inexistente', 'A definição do protocolo gerenciado não foi encontrada.');
+      // As inclusões do atendimento são travadas: uma aberta por tipo (a inativada ou encerrada não conta).
+      const abertas = await tx.consultarParaAtualizar<{
+        id: number;
+        tipo: string;
+        escore: unknown;
+        situacao: string;
+      }>(
+        `SELECT ip.id, g.tipo, JSON_VALUE(ip.regra_avaliada, '$.escore') AS escore, ip.situacao,
+                (SELECT COUNT(*) FROM inclusao_protocolo_evento e WHERE e.inclusao_protocolo_paciente_id = ip.id
+                  AND JSON_VALUE(e.dados, '$.tipo') = 'inativacao') AS inativada
+           FROM inclusao_protocolo_paciente ip JOIN protocolo_gerenciado g ON g.id = ip.protocolo_gerenciado_id
+          WHERE ip.estabelecimento_id = ? AND ip.atendimento_id = ? AND ip.excluido_em IS NULL`,
+        [est, p.atendimento],
+      );
+      if (
+        abertas.some(
+          (x) =>
+            x.tipo === p.tipo &&
+            ['sugerido', 'ativo'].includes(x.situacao) &&
+            !num((x as unknown as Linha)['inativada']),
+        )
+      )
+        throw recusa('protocolo-ja-aberto', 'O paciente já está neste protocolo neste atendimento.');
+      if (p.escore !== null && abertas.some((x) => x.tipo === p.tipo && numOuNulo(x.escore) === p.escore))
+        throw recusa('alerta-ja-usado', 'Este alerta do NEWS2 já abriu o protocolo de sepse.');
+      const agora = new Date();
+      return tx.incluir('inclusao_protocolo_paciente', {
+        estabelecimento_id: est,
+        protocolo_gerenciado_id: Number(pg.id),
+        paciente_id: p.paciente,
+        atendimento_id: p.atendimento,
+        forma_inclusao: p.origem === 'news2' ? 'alerta_automatico' : 'manual',
+        horario_zero_em: await quando(p.reconhecidoEm),
+        situacao: 'ativo',
+        aceito_por_usuario_id: tx.contexto.usuario,
+        aceito_em: agora,
+        regra_avaliada: JSON.stringify({
+          origem: p.origem,
+          escore: p.escore,
+          criterios: p.criterios,
+          observacao: p.observacao,
+        }),
+      });
     },
-    eventoProtocoloInternado: async () => {
-      throw pendente('O evento do protocolo do internado');
+    async eventoProtocoloInternado(x) {
+      if (x.tipoEvento === 'meta' || x.tipoEvento === 'checklist')
+        throw pendente('A meta e o item do checklist do protocolo do internado');
+      const [p] = await tx.consultarParaAtualizar<{ id: number; versao: number; situacao: string }>(
+        'SELECT id, versao, situacao FROM inclusao_protocolo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.protocolo, est],
+      );
+      if (!p)
+        throw recusa('protocolo-inexistente', 'O protocolo do paciente não existe neste estabelecimento.');
+      const inativada = await tx.uma(
+        "SELECT id FROM inclusao_protocolo_evento WHERE inclusao_protocolo_paciente_id = ? AND JSON_VALUE(dados, '$.tipo') = 'inativacao'",
+        [p.id],
+      );
+      if (inativada)
+        throw recusa(
+          x.tipoEvento === 'inativacao' ? 'ja-inativado' : 'protocolo-inativado',
+          'Esta inclusão foi inativada (lançada por engano): nada mais se registra nela.',
+        );
+      const encerrada = ['concluido', 'encerrado'].includes(p.situacao);
+      if (encerrada && x.tipoEvento === 'encerramento')
+        throw recusa('ja-encerrado', 'O protocolo deste paciente já foi encerrado.');
+      const motivo = x.motivo?.trim() || null;
+      if (x.tipoEvento === 'inativacao' && !motivo)
+        throw recusa('motivo-obrigatorio', 'A inativação exige o motivo.');
+      const agora = new Date();
+      if (x.tipoEvento === 'encerramento')
+        await tx.alterar('inclusao_protocolo_paciente', Number(p.id), Number(p.versao), {
+          situacao: 'encerrado',
+          encerrado_em: x.ocorridoEm ? await quando(x.ocorridoEm) : agora,
+          encerrado_por_usuario_id: tx.contexto.usuario,
+        });
+      const comSegundos = (t: string | null) => (t ? (t.length === 16 ? `${t}:00` : t.slice(0, 19)) : null);
+      // A inativação por engano não muda a inclusão (fica visível, com o evento); a saída é o encerramento.
+      return tx.incluir('inclusao_protocolo_evento', {
+        inclusao_protocolo_paciente_id: Number(p.id),
+        operacao: 'inclusao',
+        dados: JSON.stringify({
+          tipo: x.tipoEvento,
+          codigo: x.codigo,
+          situacao: x.situacao,
+          quando: comSegundos(x.ocorridoEm),
+          prazoEm: comSegundos(x.prazoEm),
+        }),
+        ocorrido_em: agora,
+        usuario_id: tx.contexto.usuario,
+        evento: x.tipoEvento === 'encerramento' ? 'saida' : 'descarte',
+        justificativa: motivo,
+      });
     },
-    validarIndice: async () => {
-      throw pendente('A validação do índice da UTI');
+    async validarIndice(v) {
+      const [i] = await tx.consultarParaAtualizar<{
+        id: number;
+        versao: number;
+        situacao: string;
+        paciente_id: number;
+      }>(
+        'SELECT id, versao, situacao, paciente_id FROM indice_gravidade_uti WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [v.id, est],
+      );
+      if (!i) throw recusa('nao-encontrado', 'O índice não existe neste estabelecimento.');
+      if (i.situacao === 'estornado')
+        throw recusa('indice-estornado', 'Este índice foi estornado ou invalidado e não pode ser validado.');
+      if (i.situacao !== 'registrado') throw recusa('ja-validado', 'Este índice já foi validado.');
+      await tx.alterar('indice_gravidade_uti', Number(i.id), Number(i.versao), {
+        situacao: 'validado',
+        validado_por_profissional_id: await profissional(),
+        validado_em: await quando(v.quando),
+      });
+      return { paciente: Number(i.paciente_id) };
     },
   };
 }

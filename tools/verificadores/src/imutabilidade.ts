@@ -72,7 +72,15 @@ export interface AchadoImutabilidade {
 
 /** Operações a conferir: cada uma com os passos (tabela e ação) que executa. */
 export type CatalogoOperacoes = Readonly<
-  Record<string, { readonly receita: { readonly nome: string; readonly passos: readonly { readonly tabela: string; readonly acao: string }[] } }>
+  Record<
+    string,
+    {
+      readonly receita: {
+        readonly nome: string;
+        readonly passos: readonly { readonly tabela: string; readonly acao: string }[];
+      };
+    }
+  >
 >;
 
 const PASTAS_DE_CODIGO = ['apps/api/src', 'apps/worker/src', 'packages'];
@@ -103,7 +111,10 @@ export function operacoesDoRepositorio(raiz = RAIZ): CatalogoOperacoes {
   const r: Record<string, CatalogoOperacoes[string]> = {};
   for (const pasta of PASTAS_DE_CODIGO)
     for (const arq of arquivosDe(resolve(raiz, pasta), '.ts')) {
-      const passos = [...readFileSync(arq, 'utf8').matchAll(DELETE_SQL)].map((m) => ({ tabela: m[1] ?? '', acao: 'DELETE' }));
+      const passos = [...readFileSync(arq, 'utf8').matchAll(DELETE_SQL)].map((m) => ({
+        tabela: m[1] ?? '',
+        acao: 'DELETE',
+      }));
       if (passos.length === 0) continue;
       const nome = relative(raiz, arq);
       r[nome] = { receita: { nome, passos } };
@@ -123,7 +134,8 @@ export const IMUTAVEIS_DO_NUCLEO = ['trilha_auditoria'] as const;
  * Tabelas do modelo com DELETE legítimo, com o motivo (o que se apaga não é registro do paciente). Toda exceção nova
  * entra aqui com o motivo (pedido do lote 05-10: levar a lista para packages/contratos/src/acesso).
  */
-export const EXCECOES_DELETE_CLINICO_MODELO: readonly { readonly tabela: string; readonly motivo: string }[] = [];
+export const EXCECOES_DELETE_CLINICO_MODELO: readonly { readonly tabela: string; readonly motivo: string }[] =
+  [];
 
 const CRIAR_TABELA = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-z][a-z0-9_]*)`?\s*\(([\s\S]*?)\n\)/gi;
 
@@ -132,7 +144,8 @@ export function tabelasClinicasDoDdl(sql: string): string[] {
   const saida = new Set<string>();
   for (const m of sql.matchAll(CRIAR_TABELA)) {
     const corpo = m[2] ?? '';
-    if (COLUNAS_DO_PACIENTE.some((c) => new RegExp(`^\\s*\`?${c}\`?\\s`, 'm').test(corpo))) saida.add((m[1] ?? '').toLowerCase());
+    if (COLUNAS_DO_PACIENTE.some((c) => new RegExp(`^\\s*\`?${c}\`?\\s`, 'm').test(corpo)))
+      saida.add((m[1] ?? '').toLowerCase());
   }
   return [...saida].sort();
 }
@@ -158,7 +171,9 @@ export class ErroSemTabelasClinicas extends Error {
 }
 
 /** A decisão por tabela: clínica do modelo (fora das exceções) ou clínica pelo critério do contrato. */
-export function decisorDeleteClinico(clinicas: readonly string[] = tabelasClinicasDoModelo()): (t: string) => boolean {
+export function decisorDeleteClinico(
+  clinicas: readonly string[] = tabelasClinicasDoModelo(),
+): (t: string) => boolean {
   const modelo = new Set(clinicas.map((x) => x.toLowerCase()));
   if (modelo.size <= IMUTAVEIS_DO_NUCLEO.length) throw new ErroSemTabelasClinicas();
   const excecoes = new Set(EXCECOES_DELETE_CLINICO_MODELO.map((e) => e.tabela));

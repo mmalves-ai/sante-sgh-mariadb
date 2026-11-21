@@ -50,7 +50,7 @@ export function cboValido(cbo: string | null | undefined): boolean {
   return /^\d{4}[0-9A-Z]\d$/.test((cbo ?? '').trim().toUpperCase());
 }
 
-/** CNES do estabelecimento: 7 dígitos, nunca zero (no banco de dev, TBEMPHOS.CNES está zerado: vem do parâmetro). */
+/** CNES do estabelecimento: 7 dígitos, nunca zero (o cadastro de origem pode trazê-lo zerado: vem do parâmetro). */
 export function cnesValido(cnes: string | number | null | undefined): boolean {
   const d = somenteDigitos(String(cnes ?? ''));
   return /^\d{1,7}$/.test(d) && Number(d) > 0;

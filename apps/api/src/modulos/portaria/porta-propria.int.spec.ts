@@ -37,6 +37,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   let porta: PortaPortariaPropria;
   const ids = {
     est: 0,
+    anonimizado: 0,
     outroEst: 0,
     usuario: 0,
     internacao: 0,
@@ -89,6 +90,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
         `${P}-PORT`,
       ]);
       await e.executar("DELETE FROM pessoa_portaria WHERE numero_documento LIKE 'L0212-%'");
+      if (ids.anonimizado) await e.executar('DELETE FROM pessoa_portaria WHERE id = ?', [ids.anonimizado]);
       await e.executar("DELETE FROM arquivo WHERE finalidade = 'foto_visitante' AND chave_armazenamento LIKE 'visitante/l0212-%'");
     })();
 
@@ -392,9 +394,42 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(lido).toMatchObject({ tipoDocumento: 'rg', documento: 'L0212-RG1', tipoVisitante: ids.tipoVisitante, nascimento: '1980-05-01' });
     expect(await porta.foto(ctx, r1.id)).toBe('visitante/l0212-00000000-0000-0000-0000-000000000002.jpg');
     expect((await porta.buscarVisitantes(ctx, { documento: { tipo: 'rg', numero: 'L0212-RG1' }, nomeBusca: null })).map((v) => v.id)).toEqual([r1.id]);
-    expect(await recusada(porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) => g.expurgarVisitantes({ hoje: '2030-01-01', usuario: 'x', teto: 1 })))).toBe(
-      'modelo-pendente',
+    // A guarda vencida (gravada) anonimiza o cadastro; o visitante recente fica como está.
+    const { id: velho } = await visitante('L0212-RG90');
+    ids.anonimizado = velho;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'guarda-teste-02-12' }, (e) =>
+      e.executar("UPDATE pessoa_portaria SET guarda_ate = '2000-01-01' WHERE id = ?", [velho]),
     );
+    const hoje = agoraLocal().slice(0, 10);
+    expect(await porta.vencidos(ctx, hoje)).toBeGreaterThanOrEqual(1);
+    const exp = await porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
+      g.expurgarVisitantes({ hoje, usuario: 'x', teto: 50 }),
+    );
+    expect(exp.ids).toContain(velho);
+    expect(exp.ids).not.toContain(r1.id);
+    const anon = await ler<Record<string, unknown>>(
+      'SELECT nome, cpf, numero_documento, telefone, anonimizada_em FROM pessoa_portaria WHERE id = ?',
+      [velho],
+    );
+    expect(anon).toMatchObject({ nome: 'VISITANTE ANONIMIZADO', cpf: null, numero_documento: null, telefone: null });
+    expect(anon?.['anonimizada_em']).not.toBeNull();
+    expect(await porta.vencidos(ctx, hoje)).toBe(0);
+    // Sem guarda gravada, vale o prazo do estabelecimento, o mesmo na contagem e no expurgo.
+    const { id: medio } = await visitante('L0212-RG91');
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'guarda-teste-02-12b' }, (e) =>
+      e.executar('UPDATE pessoa_portaria SET criado_em = DATE_SUB(NOW(), INTERVAL 100 DAY), guarda_ate = NULL WHERE id = ?', [medio]),
+    );
+    expect(await porta.vencidos(ctx, hoje, 1825)).toBe(0);
+    const longo = await porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
+      g.expurgarVisitantes({ hoje, usuario: 'x', teto: 50, retencaoDias: 1825 }),
+    );
+    expect(longo.ids).not.toContain(medio);
+    expect(await porta.vencidos(ctx, hoje, 90)).toBe(1);
+    const curto = await porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
+      g.expurgarVisitantes({ hoje, usuario: 'x', teto: 50, retencaoDias: 90 }),
+    );
+    expect(curto.ids).toEqual([medio]);
+    expect(await porta.vencidos(ctx, hoje, 90)).toBe(0);
   });
 
   it('visita ao paciente: crachá emitido, uma visita aberta por visitante, saída uma vez só', async () => {
@@ -429,9 +464,17 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(periodo.map((x) => x.id)).toContain(v.id);
   });
 
-  it('visita a outro destino: o setor do estabelecimento; o local que não é setor aguarda o modelo', async () => {
+  it('visita a outro destino: o setor do estabelecimento; o local que não é setor vai ao local visitado', async () => {
     const { id: pessoa } = await visitante('L0212-RG6');
-    expect(await recusada(visitaAOutroDestino(pessoa, 'L0212CRACHA20', 'ALMOXARIFADO INEXISTENTE'))).toBe('modelo-pendente');
+    const fora = await visitaAOutroDestino(pessoa, 'L0212CRACHA20', 'ALMOXARIFADO INEXISTENTE');
+    const lf = await ler<{ setor_funcional_id: unknown; local_destino: unknown }>(
+      'SELECT setor_funcional_id, local_destino FROM visita WHERE id = ?',
+      [fora.id],
+    );
+    expect(lf).toEqual({ setor_funcional_id: null, local_destino: 'ALMOXARIFADO INEXISTENTE' });
+    await porta.gravarSgh(ctx, trilha('visita'), (g) =>
+      g.encerrarVisita({ id: fora.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }),
+    );
     const v = await visitaAOutroDestino(pessoa, 'L0212CRACHA21', 'FARMACIA SINTETICA L0212');
     const linha = await ler<{ setor_funcional_id: number; paciente_id: number | null }>(
       'SELECT setor_funcional_id, paciente_id FROM visita WHERE id = ?',
@@ -492,7 +535,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(await recusada(visitaAOutroDestino(livre, 'L0212CRACHA44', `${P}-FARM`))).toBeNull();
   });
 
-  it('regra da unidade pela versão; o que o modelo ainda não guarda é recusado', async () => {
+  it('regra da unidade pela versão, com idade mínima, isolamento, duração e observação', async () => {
     const base = {
       unidade: `${P}-UI`,
       horaInicio: '10:00',
@@ -500,9 +543,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       maxSimultaneos: 3,
       idadeMinima: 12,
       uti: false,
-      isolamento: 'orientar' as const,
+      isolamento: 'orientar' as 'orientar' | 'bloquear',
       duracaoMaxMin: 120,
-      observacao: null,
+      observacao: null as string | null,
       usuario: 'x',
     };
     const gravar = (r: typeof base & { versao: number | null }) => porta.gravarSgh(ctx, trilha('regra_visita_unidade'), (g) => g.definirRegra(r));
@@ -512,9 +555,28 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     const r2 = await gravar({ ...base, maxSimultaneos: 4, versao: 1 });
     expect(r2).toEqual({ id: r1.id, versao: 2 });
     expect(await recusada(gravar({ ...base, versao: 1 }))).toBe('regra-mudou');
-    expect(await recusada(gravar({ ...base, idadeMinima: 16, versao: 2 }))).toBe('modelo-pendente');
+    const r3 = await gravar({
+      ...base,
+      maxSimultaneos: 4,
+      idadeMinima: 16,
+      isolamento: 'bloquear' as const,
+      duracaoMaxMin: 90,
+      observacao: 'Regra SINTETICA',
+      versao: 2,
+    });
+    expect(r3).toEqual({ id: r1.id, versao: 3 });
     const lida = (await porta.regras(ctx)).find((r) => r.id === r1.id);
-    expect(lida).toMatchObject({ unidade: `${P}-UI`, horaInicio: '10:00', horaFim: '21:00', maxSimultaneos: 4, versao: 2 });
+    expect(lida).toMatchObject({
+      unidade: `${P}-UI`,
+      horaInicio: '10:00',
+      horaFim: '21:00',
+      maxSimultaneos: 4,
+      idadeMinima: 16,
+      isolamento: 'bloquear',
+      duracaoMaxMin: 90,
+      observacao: 'Regra SINTETICA',
+      versao: 3,
+    });
     expect((await porta.regras(outro)).some((r) => r.id === r1.id)).toBe(false);
   });
 
@@ -538,7 +600,17 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
           ...b,
         }),
       );
-    expect(await recusada(bloquear({ abrangencia: 'limite', limite: 1 }))).toBe('modelo-pendente');
+    expect(await recusada(bloquear({ abrangencia: 'todos', limite: 1 }))).toBe('limite-invalido');
+    const lim = await bloquear({ abrangencia: 'limite', limite: 1, incluiAcompanhante: true, documento: 'PROC-SINT-1' });
+    expect((await porta.bloqueios(ctx, ids.internacao)).find((b) => b.id === lim)).toMatchObject({
+      abrangencia: 'limite',
+      limite: 1,
+      incluiAcompanhante: true,
+      documento: 'PROC-SINT-1',
+    });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-limite-0212' }, (e) =>
+      e.executar('DELETE FROM bloqueio_visitante WHERE id = ?', [lim]),
+    );
     const id = await bloquear({});
     const lidos = await porta.bloqueios(ctx, ids.internacao);
     expect(lidos.find((b) => b.id === id)).toMatchObject({ motivo: 'pedido', abrangencia: 'todos', revogado: false, internacao: ids.internacao });

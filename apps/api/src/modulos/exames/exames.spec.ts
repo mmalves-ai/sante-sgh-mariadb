@@ -25,7 +25,7 @@ const exame = new PortaExameMemoria(
   (c, ids) => cadastro.lerPacientes({ ...c, rede: '', hospital: '' }, ids),
   () => ({
     hoje: HOJE,
-    hhmm: '0600',
+    hora: '06:00',
   }),
 );
 let app: NestFastifyApplication;
@@ -135,16 +135,16 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     expect((await get(s, `/vagas?agenda=951&exame=7003&de=${AMANHA}&ate=${AMANHA}`)).json().itens).toEqual(
       [],
     );
-    const m = await marcar(s, 951, '0700', {
+    const m = await marcar(s, 951, '07:00', {
       exame: 7001,
       solicitante: { crm: 12345, uf: 'MG', nome: 'MEDICO SOLICITANTE' },
     });
     expect(m.statusCode).toBe(201);
     const id = m.json().resultado.marcacao as number;
-    expect((await marcar(s, 951, '0700', { paciente: 1002 })).statusCode).toBe(409);
-    expect((await marcar(s, 951, '0720', { exame: 7003 })).json().codigo).toBe('exame-nao-feito');
-    expect((await marcar(s, 952, '0700', { convenio: 305 })).json().codigo).toBe('convenio-nao-aceito');
-    expect((await marcar(s, 954, '0700')).statusCode).toBe(409);
+    expect((await marcar(s, 951, '07:00', { paciente: 1002 })).statusCode).toBe(409);
+    expect((await marcar(s, 951, '07:20', { exame: 7003 })).json().codigo).toBe('exame-nao-feito');
+    expect((await marcar(s, 952, '07:00', { convenio: 305 })).json().codigo).toBe('convenio-nao-aceito');
+    expect((await marcar(s, 954, '07:00')).statusCode).toBe(409);
     const d = await get(s, `/marcacoes/${id}`);
     expect(d.statusCode).toBe(200);
     expect(d.json().exameEscolhido).toEqual({ id: 7001, nome: 'ULTRASSONOGRAFIA DE ABDOME TOTAL' });
@@ -170,11 +170,11 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
 
   it('remarca transferindo (o horário antigo fica "transferido") e cancela com motivo (o horário volta vago)', async () => {
     const s = await entrar('SINT.EXAME');
-    const m = await marcar(s, 953, '1330');
+    const m = await marcar(s, 953, '13:30');
     expect(m.statusCode).toBe(201);
     const id = m.json().resultado.marcacao as number;
     const r = await post(s, `/marcacoes/${id}/remarcar`, {
-      destino: { agenda: 953, data: AMANHA, hora: '1345' },
+      destino: { agenda: 953, data: AMANHA, hora: '13:45' },
       modo: 'transferir',
       canal: 'telefone',
     });
@@ -211,7 +211,7 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
       {
         agenda: 951,
         data: AMANHA,
-        hora: '0800',
+        hora: '08:00',
         paciente: 1003,
         convenio: 10,
         exame: null,
@@ -227,7 +227,7 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
       {
         agenda: 951,
         data: AMANHA,
-        hora: '0800',
+        hora: '08:00',
         paciente: 1003,
         convenio: 10,
         exame: null,
@@ -245,7 +245,7 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
       {
         agenda: 951,
         data: AMANHA,
-        hora: '0820',
+        hora: '08:20',
         paciente: 1003,
         convenio: 10,
         exame: null,
@@ -263,7 +263,7 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     const r = await post(s, '/marcacoes/sem-prontuario', {
       agenda: 951,
       data: AMANHA,
-      hora: '0840',
+      hora: '08:40',
       nome: 'PACIENTE SINTETICO NOVO',
       telefone: '31999990000',
       convenio: 10,
@@ -327,13 +327,13 @@ describe('cobertura, grade e resíduo', () => {
       de: '2026-11-23',
       ate: '2026-11-27',
       duracaoMinutos: 20,
-      faixas: [{ semana: 2, inicio: '1300', fim: '1500' }],
+      faixas: [{ semana: 2, inicio: '13:00', fim: '15:00' }],
     };
     // Melhoria (F2.2): a faixa fora dos valores que a escala já usa não é mais recusada ("fora do padrão" era contorno
     // do sistema de origem); a prévia mostra os horários e nada grava.
     const fora = await post(s, '/grade/previa', {
       ...pedido,
-      faixas: [{ semana: 2, inicio: '0715', fim: '1200' }],
+      faixas: [{ semana: 2, inicio: '07:15', fim: '12:00' }],
     });
     expect(fora.statusCode).toBe(200);
     expect(JSON.stringify(fora.json())).not.toMatch(/SPDATA|legado|sistema atual/i);
@@ -346,7 +346,7 @@ describe('cobertura, grade e resíduo', () => {
     const de_novo = await post(s, '/grade/gerar', { ...pedido, assinatura: p.json().assinatura });
     expect(de_novo.statusCode).toBe(409);
     expect(
-      (await post(s, '/grade/previa', { ...pedido, faixas: [{ semana: 7, inicio: '0800', fim: '1000' }] }))
+      (await post(s, '/grade/previa', { ...pedido, faixas: [{ semana: 7, inicio: '08:00', fim: '10:00' }] }))
         .statusCode,
     ).toBe(409);
   });

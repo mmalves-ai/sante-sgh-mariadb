@@ -8,7 +8,7 @@ export type ModoAceite = 'leitura' | 'tablet';
 
 /** Regra 5: o aceite da entrega. */
 export function conferirAceiteEntrega(c: {
-  /** A última situação do documento em GECTRLENTREGADOCSAIDA (7, 8 ou 9). */
+  /** A última situação de entrega do documento de saída (7, 8 ou 9). */
   situacao: number | null;
   modo: ModoAceite;
   /** O conteúdo lido da etiqueta (modo leitura). */
@@ -52,12 +52,12 @@ export function conferirAceiteEntrega(c: {
 }
 
 export interface DoseDispensada {
-  /** GEDISPHOR.ID. */
+  /** O id da dose dispensada. */
   readonly dose: number;
   readonly horario: number | null;
   readonly item: number;
   readonly quantidade: number;
-  /** A saída que levou a dose (GELANSAI). */
+  /** O item da saída do estoque que levou a dose. */
   readonly itemSaida: number | null;
   readonly lote: string | null;
   readonly validade: string | null;

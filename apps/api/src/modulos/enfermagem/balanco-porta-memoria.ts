@@ -5,7 +5,7 @@
 // fechamentos ficam em memória, com as mesmas recusas da gravação SGH_ (janela fechada, estorno uma vez só, lançamentos
 // mudados, a mesma origem uma vez só, a chave do ato repetida). Nada é de pessoa real (marca "SINTETICO M45").
 import { type DominiosBalanco, type FechamentoBalancoLido, type LancamentoBalancoLido } from '@sgh/contratos';
-import { janelaDoInstante, somarMinutos } from '@sgh/dominio-enfermagem';
+import { horaDoCorte, janelaDoInstante, somarMinutos } from '@sgh/dominio-enfermagem';
 import { type ChecagemParaBalanco, type SinaisParaBalanco } from './tipos.js';
 import { type ContextoOperacao, recusa } from '@sgh/nucleo';
 import { type LiberacaoGravacao } from '../exames/public-api.js';
@@ -338,7 +338,7 @@ export class PortaBalancoMemoria implements PortaBalanco {
           tipo: f.tipo,
           inicio: f.inicio,
           fim: f.fim,
-          horaCorte: f.horaCorte.replace(':', ''),
+          horaCorte: horaDoCorte(f.horaCorte),
           ganhosMl: f.ganhosMl,
           perdasMl: f.perdasMl,
           insensiveisMl: f.insensiveisMl,

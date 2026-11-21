@@ -1,12 +1,11 @@
 // Regra 19 do M32 (cap-06b §6.8, Decisão; cap-07 §7.2): sem contabilidade própria nesta fase. A exportação ao sistema
-// do contador leva o de-para (TBINTCRC: o evento do financeiro → conta contábil; TBINTIMP: o imposto; RPINTEVE: o
-// evento do repasse) e um lote com CONTAGEM e SOMA conferíveis (débitos = créditos). O lançamento sem de-para não sai:
+// do contador leva o de-para (o evento do financeiro → conta contábil; o imposto; o evento do repasse) e um lote com CONTAGEM e SOMA conferíveis (débitos = créditos). O lançamento sem de-para não sai:
 // fica na lista "sem de-para" para o cadastro (CRUD genérico).
 import { centavos } from '@sgh/contratos/regras-financeiro';
 
 export interface EventoFinanceiro {
   readonly data: string;
-  /** Chave do de-para: o tipo de lançamento (MFTIPOLANC) ou o item gerencial. */
+  /** Chave do de-para: o tipo de lançamento financeiro ou o item gerencial. */
   readonly evento: string;
   readonly valor: number;
   readonly historico: string;

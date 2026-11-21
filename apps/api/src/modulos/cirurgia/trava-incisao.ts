@@ -3,7 +3,7 @@
 // `cirurgia.registrarCirurgia`) nem no marco "início da cirurgia" da ficha anestésica (M46.1) — sem a pausa cirúrgica
 // do checklist concluída antes dela, ou a exceção em urgência registrada pelo supervisor. A recusa vai à trilha
 // (`cirurgia.incisao.recusada`); o ato sem agendamento informado pelo supervisor também (`INCISAO_EXCECAO`). A trava não
-// muda nada na gravação do legado (assinatura `com-checklist` idêntica à sem checklist).
+// muda nada na gravação (assinatura `com-checklist` idêntica à sem checklist).
 import {
   EVENTOS_AUDITAVEIS,
   PERMISSOES_BLOCO_SEGURO_CODIGOS as P,

@@ -435,7 +435,7 @@ export class ServicoExame {
       })),
       canais: CANAIS_MARCACAO.map((x) => ({ codigo: x.codigo, rotulo: x.rotulo, aConfirmar: x.aConfirmar })),
       hoje: r.hoje,
-      agora: formatarHora(r.hhmm),
+      agora: formatarHora(r.hora),
     };
   }
 
@@ -503,7 +503,8 @@ export class ServicoExame {
       plano = planejarGrade(
         { de: p.de, ate: p.ate, duracaoMinutos: duracao, faixas, incluirFeriados: p.incluirFeriados },
         {
-          relogio: r,
+          // O `Relogio` do motor da agenda ainda chama a hora "HH:MM" de `hhmm` (troca pedida ao lote 12-agenda).
+          relogio: { hoje: r.hoje, hhmm: r.hora },
           agendaAtiva: a.ativa,
           feriados: feriados ?? [],
           bloqueios: [],
@@ -564,8 +565,8 @@ export class ServicoExame {
           duracao: formatarHora(l.duracao),
           inicio: formatarHora(l.horaInicio),
           fim: formatarHora(l.horaFim),
-          intervaloInicio: l.intervaloInicio === '0000' ? null : formatarHora(l.intervaloInicio),
-          intervaloFim: l.intervaloFim === '0000' ? null : formatarHora(l.intervaloFim),
+          intervaloInicio: l.intervaloInicio ? formatarHora(l.intervaloInicio) : null,
+          intervaloFim: l.intervaloFim ? formatarHora(l.intervaloFim) : null,
         })),
         alertas,
         assinatura,

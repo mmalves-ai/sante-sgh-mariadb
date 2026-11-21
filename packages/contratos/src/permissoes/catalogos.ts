@@ -1,6 +1,6 @@
 // Permissões do M13 (ficha, seção 7; convencoes.md §12): painel e cargas dos catálogos oficiais, consulta dos
 // catálogos, mapeamentos editáveis pelo CRUD genérico e os leiautes de importação de CEP. Quem tem a opção no
-// legado tem a permissão no novo: as opções vêm da árvore TBOPCOES (retrato
+// legado tem a permissão no novo: as opções vêm da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - importação de tabelas: Utilitários › Importações (3766) › Tabelas (3768), Referência TUSS (3777),
 //     Tabelas auxiliares padrão TISS (6460); Tabelas › SUS (6920) › Tabela unificada (6921);

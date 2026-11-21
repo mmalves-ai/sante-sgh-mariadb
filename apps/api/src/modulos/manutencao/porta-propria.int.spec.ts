@@ -424,6 +424,43 @@ describe.skipIf(SEM_BANCO_MAN)(`porta própria da manutenção (MariaDB, cliente
     expect(await lerBanco(M(), 'SELECT excluido_em IS NOT NULL AS excluido FROM contrato_servico_terceirizado WHERE id = ?', [k2.id])).toMatchObject({ excluido: 1 });
   });
 
+  it('contrato de manutenção ligado ao contrato de suprimentos: o do mesmo fornecedor e unidade grava e é relido; outro recusa', async () => {
+    const cf = (est: number, fornecedor: number, numero: string) =>
+      escreverBanco(
+        M(),
+        `INSERT INTO contrato_fornecedor (estabelecimento_id, numero, objeto, empresa_fornecedora_id, tipo, data_emissao,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'Manutenção de equipamentos (teste)', ?, 'manutencao', '2026-01-01', '2026-01-01', NOW())`,
+        [est, numero, fornecedor],
+      );
+    const outroFornecedor =
+      Number((await lerBanco(M(), 'SELECT id FROM empresa_fornecedora WHERE cnpj = ?', ['99030300000200']))?.['id'] ?? 0) ||
+      (await escreverBanco(
+        M(),
+        "INSERT INTO empresa_fornecedora (tipo_pessoa, cnpj, razao_social, nome_fantasia, criado_em) VALUES ('juridica', ?, 'OUTRA ENGENHARIA SINTETICA L0303', 'OUTRA ENG L0303', NOW())",
+        ['99030300000200'],
+      ));
+    const doFornecedor = await cf(M().est, M().fornecedor, 'L0303-CF1');
+    const deOutroFornecedor = await cf(M().est, outroFornecedor, 'L0303-CF2');
+    const deOutraUnidade = await cf(M().outro, M().fornecedor, 'L0303-CF3');
+    const a = await novoEquipamento('L0303-EQ12');
+    const base = { fornecedor: M().fornecedor, cobertura: 'integral' as const, inicio: '2026-01-01', fim: '2026-12-31', slaHoras: 24, valorMensalCent: null, usuario: M().loginUsuario };
+    const k = await porta.gravarSgh(c(), trilhaMan(M(), 'contrato_servico_terceirizado'), (g) =>
+      g.incluirCobertura({ ...base, numero: 'L0303-C11', contrato: doFornecedor, equipamentos: [a.id] }),
+    );
+    expect(Number((await lerBanco(M(), 'SELECT contrato_fornecedor_id AS c FROM contrato_servico_terceirizado WHERE id = ?', [k.id]))?.['c'])).toBe(doFornecedor);
+    expect((await porta.coberturas(c(), { ids: [k.id] }))[0]).toMatchObject({ contrato: doFornecedor });
+    for (const [contrato, numero] of [
+      [deOutroFornecedor, 'L0303-C12'],
+      [deOutraUnidade, 'L0303-C13'],
+    ] as const)
+      await expect(
+        porta.gravarSgh(c(), trilhaMan(M(), 'contrato_servico_terceirizado'), (g) => g.incluirCobertura({ ...base, numero, contrato, equipamentos: [] })),
+      ).rejects.toSatisfy((e) => codigoDe(e) === 'contrato-fornecedor-invalido');
+    expect(
+      await lerBanco(M(), "SELECT COUNT(*) AS n FROM contrato_servico_terceirizado WHERE estabelecimento_id = ? AND numero IN ('L0303-C12', 'L0303-C13')", [M().est]),
+    ).toMatchObject({ n: 0 });
+  });
+
   it('pendentes de modelo: a gravação recusa e desfaz tudo o que a mesma transação já tinha gravado', async () => {
     await expect(
       porta.gravarSgh(c(), trilhaMan(M(), 'equipamento_saude'), async (g) => {

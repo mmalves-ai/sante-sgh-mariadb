@@ -29,7 +29,7 @@ const k = (s: string, p?: Record<string, unknown>) => t(`contratualizacaoSus.${s
 const inicio = useQuery({ queryKey: ['contratualizacao', 'inicio'], queryFn: lerContratualizacao });
 const dados = computed(() => inicio.data.value ?? null);
 const pode = computed(() => podeEditarSus(dados.value?.gravacao));
-const incentivosDominio = computed(() => dados.value?.dominios['CMINCENTIVO'] ?? []);
+const incentivosDominio = computed(() => dados.value?.dominios['incentivo'] ?? []);
 const visao = ref<'contratos' | 'dominios'>('contratos');
 const aberto = ref<number | null>(null);
 const novo = ref(false);

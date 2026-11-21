@@ -1,6 +1,6 @@
 // Atestados, declarações e requerimentos (ficha do M23, regra 5; cap-05b §5.6; CFM 2.381/2024): o atestado informa os
 // dias de afastamento; o CID só sai com autorização expressa do paciente (ou do responsável) registrada ANTES de
-// emitir. No banco do estabelecimento o documento guarda o modelo de impressão usado (PRFICHAREL: código e nome) e o
+// emitir. No banco do estabelecimento o documento guarda o modelo de impressão clínica usado (código e nome) e o
 // conteúdo dos campos de texto do modelo em XML (<atestado codigo_ficha nome><componentes>…), cada campo com o RTF
 // preenchido; a correção é um documento novo ligado ao original (ID_PRATESTREQIMP_ORIG_CORREC; 6 em 2026).
 import { problemasCp1252, type TipoAtestado } from '@sgh/contratos';

@@ -1,15 +1,15 @@
 // Permissões do M10 (ficha, seção 7): Administração › Acesso, Organização e parâmetros, Auditoria e
 // privacidade e Cadastros › Estrutura. Códigos em camelCase de três partes (o catálogo do M06 recusa `_`): a
 // ficha escreve `acesso.quebra_vidro.ler`, aqui `acesso.quebraVidro.ler` (decisão D3 do M12). Quem tem a opção
-// no legado tem a permissão no novo (opções da árvore de TBOPCOES do módulo de abertura e do módulo Tabelas:
+// no legado tem a permissão no novo (opções da árvore do menu de origem do módulo de abertura e do módulo Tabelas:
 // retrato tools/verificadores/dados/acesso-legado.pc.json); permissão sem opção correspondente é recurso novo,
-// concedido por perfil (SGH_ACESSO_MAPA_OPCAO). As de estrutura que são CRUD genérico (unidade, centro de
+// concedido por perfil (mapa de opções do acesso). As de estrutura que são CRUD genérico (unidade, centro de
 // custo, clínica, bloco, local, feriado, prioridade, local de conta e unidade de consumo) saem das declarações
 // (permissoes/dominios.ts).
 import type { DeclaracaoPermissao } from './tipos.js';
 
 /**
- * Opções do legado (TBOPCOES) usadas aqui, com o caminho no menu:
+ * Opções do menu de origem (ver conector/mapa/permissoes.tsv) usadas aqui, com o caminho no menu:
  * - 5429 Cadastro de usuários; 5433 › Gerenciamento de usuários; 5434 › Incluir; 5435 › Alterar; 5437 Permissões
  *   (módulo de abertura).
  * - 6397 Tabelas › Geral M–Z › Termo Concordância; 6400 › Consultar.

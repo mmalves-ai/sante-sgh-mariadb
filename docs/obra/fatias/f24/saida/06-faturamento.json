@@ -1,0 +1,32 @@
+{
+  "lote": "06-faturamento",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "lote_dono": "22-misto-sadt",
+      "arquivo": "apps/api/src/modulos/tiss/acompanhamento.ts",
+      "pedido": "Linha 180: conferirCodigoOnda4('MFLANCTO.TIPO_TRF', ...) vira conferirCodigoOnda4('movimentoBancario.tipoTransferencia', ...).",
+      "motivo": "A lista CODIGOS_BAIXA_CONFIANCA_ONDA_4 (onda4.ts, deste lote) passou a usar o campo do produto; a correspondência com a coluna de origem é do conector."
+    },
+    {
+      "tipo": "codigo",
+      "lote_dono": "sem dono (lançamento automático / integração)",
+      "arquivo": "quem lança item vindo de outro módulo (prescrição, dispensação, laudo) em conta já fechada",
+      "pedido": "Gravar a entrada em decisao_lancamento_tardio (estabelecimento, conta, item quando houver, atendimento, evento de origem, chegou_em) em vez de lançar na conta fechada.",
+      "motivo": "A fila e a decisão agora leem e gravam no modelo; falta quem alimente a fila."
+    },
+    {
+      "tipo": "codigo",
+      "lote_dono": "centro cirúrgico",
+      "arquivo": "apps/api/src/modulos/faturamento/porta-propria.ts (notaSala, cirurgias)",
+      "pedido": "Expor a leitura do ato cirúrgico com a conta e o consumo da sala (ato_cirurgico, consumo_cirurgia) para a nota de sala do faturamento.",
+      "motivo": "Hoje notaSala devolve nula e cirurgias, lista vazia (não é recusa de modelo: é leitura de outro módulo)."
+    },
+    {
+      "tipo": "carga",
+      "lote_dono": "criar cliente / carga de configuração",
+      "pedido": "Semear em todo cliente novo o tipo_movimento_caixa 'recebimento_particular' (entrada) e uma forma_recebimento ativa de uso recebimento para cada meio (dinheiro, pix, cartao_credito, cartao_debito, transferencia).",
+      "motivo": "O recebimento particular recusa com 'tipo-movimento-inexistente' ou 'forma-recebimento-inexistente' quando o cadastro falta."
+    }
+  ]
+}

@@ -54,7 +54,7 @@ export function utcDoLocal(local: string, fuso: string = FUSO_PADRAO): Date {
   return new Date(t);
 }
 
-/** Deslocamento "±HHMM" ou "±HH:MM" → minutos. */
+/** Deslocamento do fuso em relação ao UTC ("-03:00", também aceito sem os dois-pontos) → minutos. */
 export function minutosDoDeslocamento(fuso: string): number {
   const m = /^([+-])(\d{2}):?(\d{2})$/.exec(fuso.trim());
   if (!m) throw recusa('fuso-invalido', 'O deslocamento do horário da marcação é inválido.');

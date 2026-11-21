@@ -57,7 +57,7 @@ export interface TituloRepasseMemoria {
   ): number;
 }
 
-/** Médicos sintéticos: o código do prestador → o registro (TBCBOPRO.ID). */
+/** Médicos sintéticos: o código do prestador → o id do profissional. */
 const REGISTROS: Readonly<Record<number, number>> = { 7001: 17001, 7002: 17002 };
 /** Os nomes SINTÉTICOS da busca de médicos (nenhuma pessoa real). */
 const NOMES: Readonly<Record<number, string>> = { 7001: 'MEDICO SINTETICO A', 7002: 'MEDICO SINTETICO B' };
@@ -104,8 +104,8 @@ function regra(
     cooperativa: null,
     tipoLancamento: null,
     tipoConta: 'A',
-    horaInicial: '0000',
-    horaFinal: '2359',
+    horaInicial: '00:00',
+    horaFinal: '23:59',
     percentualFeriado: 0,
     percentualFimDeSemana: 0,
     base: null,
@@ -573,7 +573,7 @@ export class PortaRepasseMemoria implements PortaRepasse {
     const item = (n: number, p: Partial<ItemProducao>): ItemProducao => ({
       id: base + n,
       data: dia,
-      hora: '1000',
+      hora: '10:00',
       convenio: 301,
       procedimento: 10101012,
       especialidade: null,

@@ -122,10 +122,10 @@ export function diaSemanaDoDominio(v: unknown): number | null {
 }
 
 /** Hora do banco (TIME, "HH:MM[:SS]") no formato numérico que a regra do domínio usa. */
-export function horaDoDominio(v: unknown): number {
+export function horaDoDominio(v: unknown): string {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(v ?? ''));
-  if (!m) throw new Error('Hora do envio inválida.');
-  return Number(m[1]) * 100 + Number(m[2]);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) throw new Error('Hora do envio inválida.');
+  return `${m[1]!.padStart(2, '0')}:${m[2]}`;
 }
 
 /**

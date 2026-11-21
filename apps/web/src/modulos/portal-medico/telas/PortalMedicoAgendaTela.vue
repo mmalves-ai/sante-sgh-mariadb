@@ -5,7 +5,7 @@
 // solicitado, sem ocupar a sala, até a secretaria do bloco confirmar; o médico retira o próprio pedido ainda não
 // confirmado. W0-10: ele também o altera (o mesmo formulário, com o motivo e o painel de confirmação; a versão anterior
 // fica visível na linha do pedido; o confirmado devolve 409).
-import type { PedidoCirurgiaPortal, PedidoPortalMedico } from '@sgh/contratos';
+import { lerHoraDigitada, type PedidoCirurgiaPortal, type PedidoPortalMedico } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -78,15 +78,19 @@ const anestesias = computed(() =>
     t('portalMedico.pedido.naoInformada'),
   ),
 );
-const hhmm = (v: string) => {
-  const d = v.replace(/\D/g, '');
-  return /^([01]\d|2[0-3])[0-5]\d$/.test(d) ? d : null;
+/** A hora digitada ("8:30", "0830" ou "08:30") como hora do dia "HH:MM"; inválida → null. */
+const horaDoDia = (v: string): string | null => {
+  try {
+    return lerHoraDigitada(v);
+  } catch {
+    return null;
+  }
 };
 const podeEnviar = computed(
   () =>
     !!fSala.value &&
     !!fData.value &&
-    hhmm(fHora.value) !== null &&
+    horaDoDia(fHora.value) !== null &&
     Number(fDuracao.value) > 0 &&
     procedimento.value !== null &&
     !!fConvenio.value &&
@@ -101,7 +105,7 @@ function entrada(codigo: number): PedidoCirurgiaPortal {
   return {
     sala: Number(fSala.value),
     data: fData.value,
-    hora: hhmm(fHora.value) ?? '',
+    hora: horaDoDia(fHora.value) ?? '',
     duracaoMin: Number(fDuracao.value),
     procedimento: codigo,
     convenio: Number(fConvenio.value),

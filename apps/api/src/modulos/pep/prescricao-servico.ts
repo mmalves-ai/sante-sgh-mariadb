@@ -58,7 +58,18 @@ import {
   TETO_SUGESTOES,
 } from '@sgh/dominio-pep';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import type { AtendimentoDaPrescricao, GravacaoPrescricao, InclusaoItem, ItemDoIndice, ItemPrescricaoLido, PrescritorLido, ProdutoLido, RetratosAtuais, SuspensaoItem, SuspensaoPrescricao } from './tipos-pep.js';
+import type {
+  AtendimentoDaPrescricao,
+  GravacaoPrescricao,
+  InclusaoItem,
+  ItemDoIndice,
+  ItemPrescricaoLido,
+  PrescritorLido,
+  ProdutoLido,
+  RetratosAtuais,
+  SuspensaoItem,
+  SuspensaoPrescricao,
+} from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 
@@ -100,7 +111,7 @@ const PERFIS_PRODUTO = (
   viasPermitidas: p.vias,
 });
 
-/** A faixa de dose do cadastro (GEUNIPRESC) no formato do motor: por unidade e, com uma só unidade, a única. */
+/** A faixa de dose do cadastro do insumo (por unidade de prescrição) no formato do motor: por unidade e, com uma só unidade, a única. */
 export function faixaDoCadastro(
   p: Pick<ProdutoLido, 'faixasDose'>,
 ): Pick<ProdutoAlerta, 'doseMinima' | 'doseMaxima' | 'faixasDose'> {

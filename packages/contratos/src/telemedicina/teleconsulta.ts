@@ -134,9 +134,9 @@ export type EncerrarTeleconsulta = z.infer<typeof esquemaEncerrarTeleconsulta>;
 /** `atendimento.solicitarTeleinterconsulta`: no atendimento aberto, o convidado do corpo clínico e o motivo. */
 export const esquemaSolicitarTeleinterconsulta = z
   .object({
-    /** O atendimento (RECADATE.REG) em que o médico assistente pede a opinião. */
+    /** O atendimento (id) em que o médico assistente pede a opinião. */
     atendimento: id,
-    /** O vínculo profissional (TBCBOPRO.ID) do médico convidado. */
+    /** O vínculo profissional (id) do médico convidado. */
     convidado: id,
     motivo: livre(1000, 10),
     /** O paciente (ou o responsável) consentiu com a teleinterconsulta. */
@@ -178,7 +178,7 @@ export interface TeleconsultaResumo {
   readonly id: number;
   readonly modalidade: ModalidadeTelemedicina;
   readonly situacao: SituacaoTeleconsulta;
-  /** Data e hora marcadas (HHMM); na teleinterconsulta, quando foi pedida. */
+  /** Data (AAAA-MM-DD) e hora do dia (HH:MM) marcadas, no fuso do estabelecimento; na teleinterconsulta, quando foi pedida. */
   readonly data: string;
   readonly hora: string;
   readonly agenda: string;

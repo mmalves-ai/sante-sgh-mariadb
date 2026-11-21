@@ -7,7 +7,7 @@
 import { type EstadoOperacao, textoCurtoDoMotivo } from '@sgh/contratos';
 import { estadoDoHorarioExame } from '@sgh/dominio-agenda';
 import { type ContextoOperacao, ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
-import { relogioNoFuso } from './relogio.js';
+import { horaDeMinutos, minutosDaHora, normalizarHora, relogioDoEstabelecimento } from './relogio.js';
 import type { ContextoPortaM18, LiberacaoGravacao } from './apoio-gravacao.js';
 import { ESQUEMAS_OPERACAO_EXAME, OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
 import type { GravadorCoberturaExame, PortaExame } from './porta.js';
@@ -46,11 +46,9 @@ const somar = (d: string, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 const semana = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() + 1;
-const min = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(2, 4));
-const hhmm = (m: number) =>
-  `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}`;
+const min = minutosDaHora;
 const passou = (h: { data: string; hora: string }, r: RelogioEstabelecimento) =>
-  h.data < r.hoje || (h.data === r.hoje && h.hora <= r.hhmm);
+  h.data < r.hoje || (h.data === r.hoje && min(h.hora) <= min(r.hora));
 
 interface AgendaM {
   id: number;
@@ -128,7 +126,7 @@ function semear(r: RelogioEstabelecimento): Estado {
       crm: 0,
       exame: 'U',
       categoria: 24,
-      duracao: '0020',
+      duracao: '00:20',
       ativa: true,
       unidade: 2,
       convenios: [],
@@ -139,7 +137,7 @@ function semear(r: RelogioEstabelecimento): Estado {
       crm: 0,
       exame: 'E',
       categoria: 21,
-      duracao: '0030',
+      duracao: '00:30',
       ativa: true,
       unidade: 2,
       convenios: [10, 306],
@@ -150,7 +148,7 @@ function semear(r: RelogioEstabelecimento): Estado {
       crm: 0,
       exame: 'O',
       categoria: 42,
-      duracao: '0015',
+      duracao: '00:15',
       ativa: true,
       unidade: 2,
       convenios: [],
@@ -161,7 +159,7 @@ function semear(r: RelogioEstabelecimento): Estado {
       crm: 0,
       exame: 'U',
       categoria: 24,
-      duracao: '0020',
+      duracao: '00:20',
       ativa: false,
       unidade: 2,
       convenios: [],
@@ -199,9 +197,9 @@ function semear(r: RelogioEstabelecimento): Estado {
     idem: new Map(),
   };
   const faixas: Record<number, { ini: string; fim: string }> = {
-    951: { ini: '0700', fim: '1100' },
-    952: { ini: '0700', fim: '1000' },
-    953: { ini: '1300', fim: '1500' },
+    951: { ini: '07:00', fim: '11:00' },
+    952: { ini: '07:00', fim: '10:00' },
+    953: { ini: '13:00', fim: '15:00' },
   };
   for (const a of agendas.slice(0, 3)) {
     const f = faixas[a.id] as { ini: string; fim: string };
@@ -223,7 +221,7 @@ function semear(r: RelogioEstabelecimento): Estado {
         inicio: somar(r.hoje, -3),
         fim: somar(r.hoje, 21),
         em: somar(r.hoje, -3),
-        hora: '0900',
+        hora: '09:00',
         duracao: a.duracao,
         dias: [2, 3, 4, 5, 6],
         usuario: `COORDENACAO.${M}`,
@@ -236,7 +234,7 @@ function semear(r: RelogioEstabelecimento): Estado {
         e.horarios.push({
           agenda: a.id,
           data: d,
-          hora: hhmm(m),
+          hora: horaDeMinutos(m),
           exame: a.exame,
           paciente: '',
           livre: 'S',
@@ -272,7 +270,7 @@ export class PortaExameMemoria implements PortaExame {
         ativo: boolean;
       }[]
     > = async () => [],
-    private readonly relogioFn: () => RelogioEstabelecimento = () => relogioNoFuso(),
+    private readonly relogioFn: () => RelogioEstabelecimento = () => relogioDoEstabelecimento(),
   ) {}
 
   private e(c: ContextoPortaM18): Estado {
@@ -415,7 +413,7 @@ export class PortaExameMemoria implements PortaExame {
       atendido: false,
       usuario: login,
       dtAge: r.hoje,
-      hrAge: r.hhmm,
+      hrAge: r.hora,
       fone: p.telefone ?? '',
       celular: p.celular ?? '',
       obs,
@@ -454,7 +452,7 @@ export class PortaExameMemoria implements PortaExame {
       paciente: m.paciente,
       motivo,
       canceladoEm: r.hoje,
-      horaCancelamento: r.hhmm,
+      horaCancelamento: r.hora,
       canceladoPor: login,
       marcadoPor: m.usuario,
       convenio: m.conv,
@@ -475,7 +473,7 @@ export class PortaExameMemoria implements PortaExame {
     switch (op) {
       case 'agenda.agendarExame': {
         const a = this.agendaM(s, e['agenda']);
-        const h = this.vaga(s, a, e['data'], e['hora'], r);
+        const h = this.vaga(s, a, e['data'], normalizarHora(e['hora']), r);
         const p = await this.paciente(c, e['paciente']);
         this.exigirConvenio(a, e['convenio']);
         const m = this.marcar(s, a, h, p, e['convenio'], e['observacao'] ?? null, r, login);
@@ -498,9 +496,10 @@ export class PortaExameMemoria implements PortaExame {
       case 'agenda.remarcarExame': {
         const m = this.marcacaoM(s, e['marcacao']);
         const novo = this.agendaM(s, e['destino']['agenda']);
-        if (novo.id === m.agenda && e['destino']['data'] === m.data && e['destino']['hora'] === m.hora)
+        const horaDestino = normalizarHora(e['destino']['hora']);
+        if (novo.id === m.agenda && e['destino']['data'] === m.data && horaDestino === m.hora)
           throw recusa('mesmo-horario', 'O horário novo é o mesmo da marcação.');
-        const h = this.vaga(s, novo, e['destino']['data'], e['destino']['hora'], r);
+        const h = this.vaga(s, novo, e['destino']['data'], horaDestino, r);
         if (m.pront <= 0 || m.idPaciente === null)
           throw recusa(
             'sem-prontuario',
@@ -531,7 +530,10 @@ export class PortaExameMemoria implements PortaExame {
         const a = this.agendaM(s, e['agenda']);
         if (!a.ativa)
           throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita marcação nem geração.');
-        const horarios = e['horarios'] as { data: string; hora: string }[];
+        const horarios = (e['horarios'] as { data: string; hora: string }[]).map((h) => ({
+          data: h.data,
+          hora: normalizarHora(h.hora),
+        }));
         if (
           horarios.some(
             (h) =>
@@ -565,9 +567,9 @@ export class PortaExameMemoria implements PortaExame {
           a.id,
           escala.map((l) => ({
             semana: l.semana,
-            duracao: l.duracao,
-            horaInicio: l.horaInicio,
-            horaFim: l.horaFim,
+            duracao: normalizarHora(l.duracao),
+            horaInicio: normalizarHora(l.horaInicio),
+            horaFim: normalizarHora(l.horaFim),
             exame: a.exame,
             ...FAIXA_SEM_EXTRAS,
           })),
@@ -578,8 +580,8 @@ export class PortaExameMemoria implements PortaExame {
             inicio: e['de'],
             fim: e['ate'],
             em: r.hoje,
-            hora: r.hhmm,
-            duracao: e['duracao'],
+            hora: r.hora,
+            duracao: normalizarHora(e['duracao']),
             dias: (e['semanas'] as string[]).flatMap((x, i) => (x === 'T' ? [i + 1] : [])),
             usuario: login,
           },

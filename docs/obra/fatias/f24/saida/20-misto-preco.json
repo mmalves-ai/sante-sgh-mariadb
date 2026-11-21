@@ -1,0 +1,59 @@
+{
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "alvo": "arquivo (db/migracoes/00_NUCLEO)",
+      "tabela": "arquivo",
+      "colunas": [
+        "versao_objeto VARCHAR(100) NULL COMMENT 'Versão do objeto no armazenamento (a leitura é sempre por ela)'"
+      ],
+      "motivo": "A prévia e o PDF assinado da assinatura ICP guardam chave e versão do objeto. Sem a coluna, a porta aceita só a versão que a emissão do documento registrou para a mesma chave (emissao_documento.versao_objeto) e recusa as outras com 503 modelo-pendente, sem gravar. Com a coluna, a porta a usa sozinha (conferência no information_schema), e o modelo-pendente restante de assinatura/porta-propria.ts deixa de ser alcançável."
+    },
+    {
+      "tipo": "coordenado",
+      "alvo": "apps/api/src/modulos/exames/relogio.ts e cerca de 20 consumidores (adt, adt/nir, adt/operacoes, farmacia, portaria, tiss, internacao, precos, repasse, qualidade, nutricao, digitalizacao, sadt, sadt/pacs, pessoas/sesmt, pessoas/cargos, pessoas/rubricas, manutencao, especialidades, faturamento, suprimentos)",
+      "pedido": "O relógio é compartilhado. A agenda de exames já usa a forma neutra (relogioDoEstabelecimento devolve {hoje, hora 'HH:MM'}; horaCivil, minutosDaHora, horaDeMinutos, normalizarHora). relogioNoFuso devolve agora um tipo próprio (RelogioQuatroDigitos {hoje, hhmm}), separado do relógio neutro. Falta trocar nos cerca de 36 arquivos (183 chamadas) relogioNoFuso(...).hhmm e civil(...).hhmm pelas formas neutras, e apagar relogioNoFuso e o campo hhmm de civil. Depois disso o relogio.ts sai da dívida (linhas 14 e 69). Melhor ainda: mover o relógio para um módulo comum (ex.: apps/api/src/comum/relogio.ts)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/agenda/exame.ts (lote 12-agenda)",
+      "pedido": "O módulo de exames da API já trabalha em HH:MM e aceita as duas formas na entrada: horaExame, horarioExame e linhaEscalaExame podem voltar a esquemaHora, esquemaHorario e esquemaLinhaEscala. Também pode sair o comentário de transição."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "apps/api/src/modulos/farmacia/porta-propria.ts (lote 21-misto-farmacia)",
+      "pedido": "minutoCivil lê civil(...).hora; funciona (civil devolve hora e hhmm na transição), mas o nome final é horaCivil(...).hora."
+    },
+    {
+      "tipo": "coordenado",
+      "alvo": "packages/dominio-agenda/src/tempo.ts (Relogio), dia.ts, grade.ts e agenda/cirurgia (lote 12-agenda)",
+      "pedido": "Renomear o campo Relogio.hhmm (que já guarda 'HH:MM') para hora, como RelogioEstabelecimento de exames já faz. Até lá, exames/servico.ts adapta na chamada do planejarGrade ({ hoje, hhmm: r.hora })."
+    },
+    {
+      "tipo": "coordenado",
+      "alvo": "apps/api/src/modulos/exames/apoio-gravacao.ts (destinoDoContrato) e os cerca de 10 esquemas de @sgh/contratos com destino z.enum(['legado','memoria']) (preco/respostas.ts e outros)",
+      "pedido": "Vocabulário antigo que o verificador não acusa: o destino 'legado' das respostas deve virar 'proprio' (ou sair), de ponta a ponta (contrato, destinoDoContrato, telas que leem destino). É compartilhado por vários módulos; não coube no lote."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "packages/contratos/src/preco/credenciais.ts e respostas.ts (codigoLegado)",
+      "pedido": "COLUNAS_CREDENCIAL lista os nomes das colunas de credencial da origem (ex.: senhas do webservice TISS) como dado, conferidos por tools/verificadores/colunas-proibidas.ts; e o campo codigoLegado (contrato, precos/servico.ts e ContratoTela.vue) leva o código da coluna da origem à tela. As duas coisas são nome de origem fora do conector. O verificador divida_f24 não as acusa. Decidir: lista com os nomes do modelo próprio (e a da origem no conector), e codigoLegado -> codigoOrigem, ou retirar."
+    }
+  ],
+  "fora_da_lista": [
+    "apps/api/src/modulos/exames/operacoes.ts",
+    "apps/api/src/modulos/exames/servico.ts",
+    "apps/api/src/modulos/exames/porta-memoria.ts",
+    "apps/api/src/modulos/relatorio/aplicacao/gestao.spec.ts",
+    "apps/api/src/modulos/relatorio/aplicacao/gestao-ciclo.spec.ts",
+    "apps/worker/src/relatorios/envio-agendado-proprio.ts",
+    "apps/worker/src/relatorios/envio-agendado-proprio.spec.ts",
+    "apps/web/src/modulos/relatorios/telas/AgendamentosRelatorioTela.vue",
+    "apps/web/src/modulos/relatorios/telas/gestao-w0-09.spec.ts",
+    "packages/dominio-relatorio/src/agendamento.spec.ts",
+    "packages/dominio-preco/src/proposta-reajuste.spec.ts",
+    "apps/api/src/modulos/exames/exames.spec.ts",
+    "apps/api/src/modulos/exames/porta-propria.int.spec.ts (vizinho)",
+    "apps/api/src/modulos/exames/porta-memoria.spec.ts (vizinho)"
+  ]
+}

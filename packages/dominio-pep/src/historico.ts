@@ -1,13 +1,13 @@
-// Pré-preenchimento pelo histórico (regra 7 da ficha do M22; cap-11 §11.1; DP-28): PRPERGUNTA.MANTERHIST = 1
-// (1.081 perguntas) traz a última resposta do paciente na pergunta, MARCADA (autopreenchido) e exigindo
-// confirmação; ao gravar vai com AUTOPREENCHIDO = T. A semântica de 2 (61) e 3 (342) não está decidida (DP-28):
+// Pré-preenchimento pelo histórico (regra 7 da ficha do M22; cap-11 §11.1; DP-28): a pergunta com "manter
+// histórico" = 1 (1.081 perguntas) traz a última resposta do paciente na pergunta, MARCADA (autopreenchido) e
+// exigindo confirmação; ao gravar vai com AUTOPREENCHIDO = T. A semântica de 2 (61) e 3 (342) não está decidida (DP-28):
 // o contorno é só mostrar o histórico ("copiar do último", a pedido), sem trazer o valor.
 import type { CampoRegistro, RespostaRegistro } from '@sgh/contratos';
 
 export const NIVEL_PREENCHE = 1;
 
 /**
- * Valores trazidos do último registro do paciente para os campos com MANTERHIST 1 (só os campos ativos da visão;
+ * Valores trazidos do último registro do paciente para os campos com nível de histórico 1 (preenche) (só os campos ativos da visão;
  * resposta de vínculo que não está na visão é descartada). As que vêm do rascunho têm precedência (quem chama
  * só pede o histórico das perguntas sem resposta no rascunho).
  */

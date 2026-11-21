@@ -4,7 +4,42 @@
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
-import { type CompletudePainelLida, type EpisodioLido, type RecortePainel, type SupervisaoLida, type AlergiaDoProntuarioLida, type AnexoLido, type AtendimentoPepLido, type CabecalhoDocumentoLido, type CienciaLida, type ContextoGravacaoPep, type DocumentoHistoricoLido, type DocumentoResumoLido, type DocumentoProprioLido, ErroProntuario, MOTIVO_COASSINATURA_DESLIGADA, esquemaAnexo, esquemaEmissaoDocumento, esquemaExameExterno, esquemaFinalizacaoSumario, esquemaGravacaoAlergia, esquemaInativacaoAlergia, esquemaPedidoExames, esquemaSuspensaoDocumento, type EventoLido, type ExameCatalogoLido, type FichaImpressao, type FluxoLido, type PedidoLido, type ProblemaLido, type ProblemaNovo, type ResultadoLido, type SumarioLido, type TcleLido, loginDaOperacao } from './tipos-pep.js';
+import {
+  type CompletudePainelLida,
+  type EpisodioLido,
+  type RecortePainel,
+  type SupervisaoLida,
+  type AlergiaDoProntuarioLida,
+  type AnexoLido,
+  type AtendimentoPepLido,
+  type CabecalhoDocumentoLido,
+  type CienciaLida,
+  type ContextoGravacaoPep,
+  type DocumentoHistoricoLido,
+  type DocumentoResumoLido,
+  type DocumentoProprioLido,
+  ErroProntuario,
+  MOTIVO_COASSINATURA_DESLIGADA,
+  esquemaAnexo,
+  esquemaEmissaoDocumento,
+  esquemaExameExterno,
+  esquemaFinalizacaoSumario,
+  esquemaGravacaoAlergia,
+  esquemaInativacaoAlergia,
+  esquemaPedidoExames,
+  esquemaSuspensaoDocumento,
+  type EventoLido,
+  type ExameCatalogoLido,
+  type FichaImpressao,
+  type FluxoLido,
+  type PedidoLido,
+  type ProblemaLido,
+  type ProblemaNovo,
+  type ResultadoLido,
+  type SumarioLido,
+  type TcleLido,
+  loginDaOperacao,
+} from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import { cboDe, type PortaRegistroMemoria, type RegistroOuvido } from './registro-porta-memoria.js';
@@ -141,7 +176,10 @@ const PRINCIPIOS = [
 interface Estado {
   alergias: (AlergiaDoProntuarioLida & { paciente: number })[];
   documentos: (DocumentoProprioLido & { eventos: { tipo: string; em: string }[] })[];
-  legados: (DocumentoHistoricoLido & { familia: 'receita' | 'atestado' | 'externo'; tpPadrao: number | null })[];
+  legados: (DocumentoHistoricoLido & {
+    familia: 'receita' | 'atestado' | 'externo';
+    tpPadrao: number | null;
+  })[];
   pedidos: (PedidoLido & { paciente: number })[];
   resultados: (ResultadoLido & { paciente: number })[];
   ciencias: (CienciaLida & { paciente: number })[];
@@ -432,7 +470,9 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
 
   private novoDocumento(
     h: string,
-    d: Omit<DocumentoProprioLido, 'id' | 'criadoEm' | 'assinadoEm' | 'suspenso' | 'nivel'> & { nivel?: string },
+    d: Omit<DocumentoProprioLido, 'id' | 'criadoEm' | 'assinadoEm' | 'suspenso' | 'nivel'> & {
+      nivel?: string;
+    },
   ): number {
     const e = this.est(h);
     const id = e.proximo++;
@@ -621,7 +661,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       negas: porPaciente((p) => {
         const em = ultimo(
           e.documentos
-            .filter((d) => d.paciente === p && d.tipo === 'alergia' && d.origemTabela !== 'PRALERGIAPAC')
+            .filter((d) => d.paciente === p && d.tipo === 'alergia' && d.origemTabela !== 'alergia_paciente')
             .map((d) => d.criadoEm),
         );
         return em ? { paciente: p, em } : null;
@@ -1103,7 +1143,8 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         if (x.nega) {
           const ultimaNega = e.documentos
             .filter(
-              (d) => d.paciente === x.paciente && d.tipo === 'alergia' && d.origemTabela !== 'PRALERGIAPAC',
+              (d) =>
+                d.paciente === x.paciente && d.tipo === 'alergia' && d.origemTabela !== 'alergia_paciente',
             )
             .map((d) => d.criadoEm ?? '')
             .sort()
@@ -1131,7 +1172,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             comoSuporte: x.comoSuporte === true,
           });
           await this.auditar(c, login, 'pep.alergia.registrada', {
-            tabela: 'PRCABEVOL',
+            tabela: 'registro_assistencial',
             id: x.registro,
             paciente: x.paciente,
           });
@@ -1162,7 +1203,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'alergia',
-          origemTabela: 'PRALERGIAPAC',
+          origemTabela: 'alergia_paciente',
           origemId: id,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1171,7 +1212,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           comoSuporte: x.comoSuporte === true,
         });
         await this.auditar(c, login, 'pep.alergia.registrada', {
-          tabela: 'PRALERGIAPAC',
+          tabela: 'alergia_paciente',
           id,
           paciente: x.paciente,
         });
@@ -1197,7 +1238,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         const i = e.alergias.indexOf(a);
         e.alergias[i] = { ...a, ativa: false };
         await this.auditar(c, login, 'pep.alergia.inativada', {
-          tabela: 'PRALERGIAPAC',
+          tabela: 'alergia_paciente',
           id: a.id,
           paciente: x.paciente,
         });
@@ -1244,7 +1285,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: x.tipo,
-          origemTabela: x.familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP',
+          origemTabela: x.familia === 'receita' ? 'receita_medica' : 'documento_emitido',
           origemId: origem,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1257,7 +1298,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           login,
           x.familia === 'receita' ? 'pep.receita.emitida' : 'pep.atestado.emitido',
           {
-            tabela: x.familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP',
+            tabela: x.familia === 'receita' ? 'receita_medica' : 'documento_emitido',
             id: origem,
             paciente: x.paciente,
           },
@@ -1282,7 +1323,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         Object.assign(d, { suspensoEm: agora, justificativaSuspensao: x.justificativa });
         const doc = e.documentos.find(
           (y) =>
-            y.origemTabela === (x.familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP') &&
+            y.origemTabela === (x.familia === 'receita' ? 'receita_medica' : 'documento_emitido') &&
             y.origemId === x.origem,
         );
         if (doc)
@@ -1291,7 +1332,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             eventos: [...doc.eventos, { tipo: 'suspenso', em: new Date().toISOString() }],
           });
         await this.auditar(c, login, 'pep.documento.suspenso', {
-          tabela: x.familia === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP',
+          tabela: x.familia === 'receita' ? 'receita_medica' : 'documento_emitido',
           id: x.origem,
           paciente: x.paciente,
         });
@@ -1338,7 +1379,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'sumario-alta',
-          origemTabela: 'PRATESTREQIMP',
+          origemTabela: 'documento_emitido',
           origemId: origem,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1356,7 +1397,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           em: new Date().toISOString(),
         });
         await this.auditar(c, login, 'pep.sumarioAlta.finalizado', {
-          tabela: 'PRATESTREQIMP',
+          tabela: 'documento_emitido',
           id: origem,
           paciente: x.paciente,
         });
@@ -1385,7 +1426,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'anexo',
-          origemTabela: 'PRGEDIMP',
+          origemTabela: 'anexo_prontuario',
           origemId: id,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1393,7 +1434,11 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           hash: x.hashConteudo,
           comoSuporte: x.comoSuporte === true,
         });
-        await this.auditar(c, login, 'pep.anexo.incluido', { tabela: 'PRGEDIMP', id, paciente: x.paciente });
+        await this.auditar(c, login, 'pep.anexo.incluido', {
+          tabela: 'anexo_prontuario',
+          id,
+          paciente: x.paciente,
+        });
         return { anexo: id, origem: id, documento, trilha: null };
       }
       case 'pep.lancarExameExterno': {
@@ -1428,7 +1473,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'exame-externo',
-          origemTabela: 'PRLANCAMENTOEXAME',
+          origemTabela: 'exame_lancado_prontuario',
           origemId: origem,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1437,7 +1482,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           comoSuporte: x.comoSuporte === true,
         });
         await this.auditar(c, login, 'pep.exame.externoLancado', {
-          tabela: 'PRLANCAMENTOEXAME',
+          tabela: 'exame_lancado_prontuario',
           id: origem,
           paciente: x.paciente,
         });
@@ -1473,7 +1518,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         }
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'pedido-exame',
-          origemTabela: 'PREXAMEASSINATURA',
+          origemTabela: 'requisicao_exame',
           origemId: agrupamento,
           paciente: x.paciente,
           atendimento: x.atendimento,
@@ -1482,7 +1527,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           comoSuporte: x.comoSuporte === true,
         });
         await this.auditar(c, login, 'pep.exame.solicitado', {
-          tabela: 'SILANEXA',
+          tabela: 'exame_item',
           id: primeiro,
           paciente: x.paciente,
         });
@@ -1815,11 +1860,11 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     c: ContextoGravacaoPep,
     r: { registro: number; paciente: number; atendimento: number | null; hash: string },
   ) {
-    const existente = await this.documentoSghDaOrigem(c, 'PRCABEVOL', r.registro);
+    const existente = await this.documentoSghDaOrigem(c, 'registro_assistencial', r.registro);
     if (existente) return existente.id;
     return this.novoDocumento(c.hospital, {
       tipo: 'registro-clinico',
-      origemTabela: 'PRCABEVOL',
+      origemTabela: 'registro_assistencial',
       origemId: r.registro,
       paciente: r.paciente,
       atendimento: r.atendimento,

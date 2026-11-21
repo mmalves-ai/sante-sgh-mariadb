@@ -9,6 +9,7 @@ import {
   type SituacaoNotificacao,
   type SituacaoPrazo,
   type TipoIncidente,
+  lerHoraDigitada,
 } from '@sgh/contratos';
 import { mensagensQualidade } from './i18n.js';
 
@@ -22,9 +23,21 @@ export function telaDeOrigem(caminho: string): string {
 /** "AAAA-MM-DD" + "HH:mm" → instante local "AAAA-MM-DDTHH:mm" (null se faltar um dos dois). */
 export function instanteDosCampos(data: string | null, hora: string | null): string | null {
   if (!data || !hora || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
-  // O campo de hora devolve "HHMM" depois que o usuário edita (o formato do cadastro); "HH:MM" vem do relógio.
-  if (/^\d{4}$/.test(hora)) return `${data}T${hora.slice(0, 2)}:${hora.slice(2)}`;
-  return /^\d{2}:\d{2}/.test(hora) ? `${data}T${hora.slice(0, 5)}` : null;
+  const h = horaDoCampo(hora);
+  return h === null ? null : `${data}T${h}`;
+}
+
+/**
+ * A hora do campo da tela em "HH:MM" pelo auxiliar neutro do contrato (aceita "8:30", "0830" e "08:30:15", que vem do
+ * relógio); inválida ou fora do intervalo → null (o formulário aponta o campo).
+ */
+export function horaDoCampo(hora: string): string | null {
+  const t = hora.trim();
+  try {
+    return lerHoraDigitada(/^\d{2}:\d{2}:\d{2}$/.test(t) ? t.slice(0, 5) : t);
+  } catch {
+    return null;
+  }
 }
 
 export interface FormularioIncidente {

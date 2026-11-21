@@ -7,11 +7,11 @@ import { MotorInternacao } from './motor.js';
 describe('UTI pelo tipo do trecho', () => {
   const mov = movimento([
     {
-      entrada: ['2026-04-01', '0800'],
+      entrada: ['2026-04-01', '08:00'],
       trechos: [
         // Um trecho de tipo 7 (CTI) numa acomodação cadastrada como apartamento.
-        { unidade: 'APTO', tipo: 7, de: ['2026-04-01', '0800'], ate: ['2026-04-04', '0800'] },
-        { unidade: 'APTO', tipo: 2, de: ['2026-04-04', '0800'] },
+        { unidade: 'APTO', tipo: 7, de: ['2026-04-01', '08:00'], ate: ['2026-04-04', '08:00'] },
+        { unidade: 'APTO', tipo: 2, de: ['2026-04-04', '08:00'] },
       ],
     },
   ]);

@@ -144,7 +144,11 @@ type Registrado = Parameters<typeof recursoLigadoNoEstabelecimento>[2][number];
 type ChaveDoRecurso = Parameters<typeof recursoLigadoNoEstabelecimento>[0][number];
 
 /** As chaves de liberação do recurso no estabelecimento (código), que decidem (ligada não nula). */
-async function lerChavesDoRecurso(l: Leitor, estabelecimento: string, chave: string): Promise<ChaveDoRecurso[]> {
+async function lerChavesDoRecurso(
+  l: Leitor,
+  estabelecimento: string,
+  chave: string,
+): Promise<ChaveDoRecurso[]> {
   const r = await l.consultar<LinhaChave>(
     `SELECT c.escopo, c.valor, c.ligada FROM liberacao_chave c JOIN estabelecimento e ON e.id = c.estabelecimento_id
       WHERE e.codigo = ? AND c.tipo = 'recurso' AND c.chave = ? AND c.ligada IS NOT NULL`,
@@ -158,7 +162,11 @@ async function lerChavesDoRecurso(l: Leitor, estabelecimento: string, chave: str
 }
 
 /** Os pré-requisitos registrados do recurso no estabelecimento (código). */
-async function lerPrerequisitosDoRecurso(l: Leitor, estabelecimento: string, chave: string): Promise<Registrado[]> {
+async function lerPrerequisitosDoRecurso(
+  l: Leitor,
+  estabelecimento: string,
+  chave: string,
+): Promise<Registrado[]> {
   const r = await l.consultar<LinhaPrerequisito>(
     `SELECT p.tipo, p.situacao, DATE_FORMAT(p.validade, '%Y-%m-%d') AS validade
        FROM recurso_prerequisito p JOIN estabelecimento e ON e.id = p.estabelecimento_id
@@ -275,7 +283,9 @@ export async function carregarEstabelecimento(
   const dispensacoes = await nucleo.lerSomente(ctx, (l, est) => leituras.dispensacoes(l, est));
   // A pessoa da Rede de cada prontuário só é lida no modo comum (DP-42); fica em memória (o arquivo recebe o HMAC).
   const pessoas: ReadonlyMap<number, string> =
-    modo === 'comum' ? await nucleo.lerSomente(ctx, (l, est) => leituras.pessoas(l, est)) : new Map<number, string>();
+    modo === 'comum'
+      ? await nucleo.lerSomente(ctx, (l, est) => leituras.pessoas(l, est))
+      : new Map<number, string>();
   const agora = relogioDeParede(opcoes.agora ?? Date.now());
   const t = normalizarTrajetorias(mov, agora);
   const unidades = new Map(mov.unidades.map((u) => [`${u.bloco}\u0000${u.acomodacao}`, u.nome]));

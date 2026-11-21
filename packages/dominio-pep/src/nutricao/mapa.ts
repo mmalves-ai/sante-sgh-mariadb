@@ -10,6 +10,8 @@
 //   - o retrato fechado tem o hash do conteúdo canônico (JCS + SHA-256): fecha exatamente o que a pessoa viu.
 // Puro: sem banco (o adaptador lê; a API aplica).
 import {
+  ErroHoraInvalida,
+  lerHoraDigitada,
   type AlertaMapa,
   type BaseLegalAcompanhante,
   jcs,
@@ -154,12 +156,14 @@ export function examesComJejum(texto: string | null | undefined): ReadonlySet<st
 
 // ── Refeições e cortes ────────────────────────────────────────────────────────────────────────────
 
-const HHMM = /^([01]\d|2[0-3]):?([0-5]\d)$/;
-
-/** HH:MM a partir de "HHMM" ou "HH:MM"; null fora do formato. */
+/** Hora da refeição em HH:MM pelo leitor neutro (aceita também quatro dígitos sem separador); null fora do formato. */
 export function horaRefeicao(s: string | null | undefined): string | null {
-  const m = HHMM.exec((s ?? '').trim());
-  return m ? `${m[1]}:${m[2]}` : null;
+  try {
+    return lerHoraDigitada(s ?? '');
+  } catch (e) {
+    if (e instanceof ErroHoraInvalida) return null;
+    throw e;
+  }
 }
 
 /** Os cortes próprios do parâmetro ("2=09:30;5=15:30"): refeição → HH:MM. */

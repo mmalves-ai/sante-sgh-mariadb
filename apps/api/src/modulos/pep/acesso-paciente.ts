@@ -96,7 +96,7 @@ export class AcessoPacientePep {
         recurso,
         resultado: 'falha',
         paciente,
-        tabelaAlvo: 'RICADPAC',
+        tabelaAlvo: 'paciente',
         idAlvo: String(paciente),
         chaveNaturalAlvo: `sem-vinculo:${decisao.desfecho}`,
       })
@@ -152,7 +152,7 @@ export class AcessoPacientePep {
           recurso,
           resultado: 'sucesso',
           paciente,
-          tabelaAlvo: 'RICADPAC',
+          tabelaAlvo: 'paciente',
           idAlvo: String(paciente),
           chaveNaturalAlvo: chaveLeitura(parte, motivo, 'abertura'),
         });
@@ -214,7 +214,7 @@ export class AcessoPacientePep {
           recurso,
           resultado: 'sucesso',
           paciente,
-          tabelaAlvo: 'RICADPAC',
+          tabelaAlvo: 'paciente',
           chaveNaturalAlvo: `alerta:${a.tipo};crit:${a.criticidade}`,
         })
         .catch(() => undefined);

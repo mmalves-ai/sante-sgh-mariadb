@@ -1,6 +1,6 @@
 // TPS, a taxa de saúde suplementar por plano (M56, etapa 7, F6; Lei 9.961/2000, art. 20, I): a média de beneficiários
 // de cada plano no trimestre (os ativos no último dia de cada um dos três meses) vezes o valor trimestral por
-// beneficiário vigente no fim do trimestre (PSTPSVIGENCIA do banco: hoje R$ 5,39 ao ano, R$ 1,3475 por trimestre, desde
+// beneficiário vigente no fim do trimestre (hoje R$ 5,39 ao ano, R$ 1,3475 por trimestre, desde
 // 01/09/2015), menos o desconto do plano informado pelo responsável (as tabelas de desconto da lei são conferidas por
 // ele: D-TPS-567). Cada plano é uma parcela impressa com a conta; o total é a soma das parcelas arredondadas.
 import type { DescontoTps, ParcelaAns, ProblemaAns, QuadroAns } from '@sgh/contratos';

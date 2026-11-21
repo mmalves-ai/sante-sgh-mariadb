@@ -1,6 +1,7 @@
 // Hora local do estabelecimento (AAAA-MM-DDTHH:MM, sem fuso): o banco do legado é local e o relógio vem dele. As
 // contas são em minutos desde a época, sobre o calendário civil (sem horário de verão: o legado grava fuso -3 e
 // horário de verão F em 100% da janela).
+import { ErroHoraInvalida, horaParaMinutos, lerHoraDigitada } from '@sgh/contratos';
 
 const RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
@@ -21,11 +22,11 @@ export function localDe(min: number): string {
   return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}T${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
 }
 
-/** "HHMM" (hora do cadastro em texto de 4 dígitos) → minutos do dia. */
-export function minutoDoDia(hhmm: string): number {
-  const m = /^([01]\d|2[0-3]):?([0-5]\d)$/.exec(hhmm.trim());
-  if (!m) throw new Error(`Hora inválida: ${hhmm}`);
-  return Number(m[1]) * 60 + Number(m[2]);
+/** Hora do dia (HH:MM; o leitor neutro aceita também quatro dígitos sem separador) → minutos do dia. Lança se inválida. */
+export function minutoDoDia(hora: string): number {
+  const h = lerHoraDigitada(hora);
+  if (h === null) throw new ErroHoraInvalida('hora.formato', { entrada: hora }, 'Hora inválida: vazia.');
+  return horaParaMinutos(h);
 }
 
 export const DIA = 1_440;

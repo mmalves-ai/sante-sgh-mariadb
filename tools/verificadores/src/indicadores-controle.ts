@@ -5,7 +5,12 @@
 // Melhoria: as chaves sem leitura no modelo próprio saem em `naoMedidos` (nunca comparadas como zero).
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { abrirBancoDev, ambienteDoRepositorio, clienteDaLeitura, codigosDosEstabelecimentos } from './copia-leitura.ts';
+import {
+  abrirBancoDev,
+  ambienteDoRepositorio,
+  clienteDaLeitura,
+  codigosDosEstabelecimentos,
+} from './copia-leitura.ts';
 import { CONTROLE_REFERENCIA, valoresDeControle } from './indicadores-controle-leitura.ts';
 
 export { CONTROLE_REFERENCIA };
@@ -29,7 +34,9 @@ try {
       const referencia = r.dadosAte !== null && r.dadosAte >= '2026-07-05' && r.dadosAte <= '2026-07-06';
       const diferencas = referencia
         ? Object.entries(r.valores)
-            .filter(([k, obtido]) => CONTROLE_REFERENCIA[k] !== undefined && CONTROLE_REFERENCIA[k] !== obtido)
+            .filter(
+              ([k, obtido]) => CONTROLE_REFERENCIA[k] !== undefined && CONTROLE_REFERENCIA[k] !== obtido,
+            )
             .map(([k, obtido]) => `${k}: esperado ${CONTROLE_REFERENCIA[k]}, obtido ${obtido}`)
         : [];
       if (diferencas.length > 0) ok = false;
@@ -45,7 +52,9 @@ try {
       for (const d of diferencas) console.log(`  ${d}`);
     } catch (e) {
       ok = false;
-      console.log(`[${cod}] falhou: ${e instanceof Error ? `${e.name}: ${e.message.slice(0, 200)}` : 'erro'}`);
+      console.log(
+        `[${cod}] falhou: ${e instanceof Error ? `${e.name}: ${e.message.slice(0, 200)}` : 'erro'}`,
+      );
     }
   }
 } finally {

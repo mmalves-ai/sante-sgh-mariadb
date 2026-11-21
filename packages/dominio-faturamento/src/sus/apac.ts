@@ -181,7 +181,7 @@ export function exigeLaudoNefrologia(codigoSigtap: string): boolean {
   return codigoSigtap.startsWith('0305');
 }
 
-/** A APAC gravada no Sante como a montagem a lê (o solicitante com o CNS e o nome do cadastro FAMEDSOL). */
+/** A APAC gravada no Sante como a montagem a lê (o solicitante com o CNS e o nome do cadastro de solicitantes SUS). */
 export interface ApacParaMontar extends EstadoApac {
   readonly id: number;
   readonly numero: string | null;

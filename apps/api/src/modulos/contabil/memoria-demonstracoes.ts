@@ -12,6 +12,7 @@ import type {
   PedidoSituacaoArquivoSped,
   SomaConta,
 } from './tipos.js';
+import { planejarEnvioSped } from '@sgh/dominio-contabil';
 import { ErroProblema } from '../../problema.filter.js';
 import type { LancamentosMemoria } from './memoria-lancamentos.js';
 
@@ -184,13 +185,25 @@ export class DemonstracoesMemoria {
     const mesmo = this.arquivos.filter(
       (a) => a.empresa === x.empresa && a.tipo === x.tipo && a.exercicio === x.exercicio,
     );
-    const numero = mesmo.reduce((m, a) => Math.max(m, a.numero), 0) + 1;
+    // O número do envio e a substituição saem da regra do domínio (a mesma da porta do banco).
+    const plano = planejarEnvioSped(
+      mesmo.map((a) => ({
+        id: a.id,
+        numero: a.numero,
+        situacao: a.situacao === 'substituido' ? 'gerado' : a.situacao,
+        substituido: a.situacao === 'substituido',
+      })),
+      x.substituta,
+    );
+    if (!plano.ok)
+      throw recusa(plano.motivo, 'A escrituração substituta exige um envio anterior do mesmo exercício.');
+    const numero = plano.numero;
     let substituidos = 0;
-    for (const a of mesmo)
-      if (a.situacao === 'gerado') {
-        Object.assign(a, { situacao: 'substituido' });
-        substituidos += 1;
-      }
+    if (plano.substituiPendente) {
+      const alvo = mesmo.find((a) => a.id === plano.substituidoId);
+      if (alvo) Object.assign(alvo, { situacao: 'substituido' });
+      substituidos = 1;
+    }
     this.seq += 1;
     this.arquivos.push({
       id: this.seq,

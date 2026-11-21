@@ -114,7 +114,7 @@ export function conferirDecisaoAvaliacao(c: {
 }
 
 /**
- * Regra 8: gravar a decisão no outro sistema (2, 3 ou 4 em `PREXTRATOITEM_TBSITFARM`) só com a decisão registrada
+ * Regra 8: gravar a decisão no outro sistema (situações 2, 3 ou 4 do item da prescrição) só com a decisão registrada
  * (DP-25) e a conferência de que o outro sistema mostra e trata essas situações. Sem ela, recusa.
  */
 export function conferirGravacaoNoLegado(c: {

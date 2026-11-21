@@ -49,7 +49,13 @@ describe.skipIf(SEM_BANCO)('regra 1 da farmácia no ligar-tudo, sobre o banco pr
       await e.executar('DELETE FROM setor_funcional WHERE estabelecimento_id = ?', [est]);
     });
   const setor = (e: Escritor, codigo: string) =>
-    inserir(e, 'setor_funcional', { estabelecimento_id: est, codigo, nome: `SETOR SINTETICO ${codigo}`, tipo: 'assistencial', criado_em: new Date() });
+    inserir(e, 'setor_funcional', {
+      estabelecimento_id: est,
+      codigo,
+      nome: `SETOR SINTETICO ${codigo}`,
+      tipo: 'assistencial',
+      criado_em: new Date(),
+    });
   const dispensar = (e: Escritor, setorId: number, quando: Date) =>
     inserir(e, 'dispensacao', {
       estabelecimento_id: est,
@@ -85,19 +91,22 @@ describe.skipIf(SEM_BANCO)('regra 1 da farmácia no ligar-tudo, sobre o banco pr
   const motivo = () => porta().regraFarmacia(H, 'recurso', 'suprimentos.dispensacao');
 
   beforeAll(async () => {
-    const lista = execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', '--listar'], { cwd: raiz, encoding: 'utf8' });
+    const lista = execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', '--listar'], {
+      cwd: raiz,
+      encoding: 'utf8',
+    });
     if (!new RegExp(`\\b${CLIENTE}\\b`).test(lista))
-      execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste F2.2 onda 5'], { cwd: raiz });
+      execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste F2.2 onda 5'], {
+        cwd: raiz,
+      });
     nucleo = new NucleoProprio();
     est = await escrever(async (e) => {
       const r = await e.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ?', [H]);
       if (r) return Number(r.id);
-      return e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-        H,
-        'Teste F2.2 lote 05-13',
-        'Teste F2.2 lote 05-13',
-        new Date(),
-      ]);
+      return e.inserir(
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [H, 'Teste F2.2 lote 05-13', 'Teste F2.2 lote 05-13', new Date()],
+      );
     });
     await limpar();
     await comChavesDesligadas(async (e) => {
@@ -151,7 +160,11 @@ describe.skipIf(SEM_BANCO)('regra 1 da farmácia no ligar-tudo, sobre o banco pr
     expect(await motivo()).toBeNull();
     // O setor B passa a ser atendido pelo local (roteamento): sem a prescrição em uso lá, não liga.
     await comChavesDesligadas(async (e) => {
-      await inserir(e, 'local_estoque_setor', { local_estoque_id: id.local, setor_funcional_id: id.setorB, criado_em: agora });
+      await inserir(e, 'local_estoque_setor', {
+        local_estoque_id: id.local,
+        setor_funcional_id: id.setorB,
+        criado_em: agora,
+      });
     });
     expect(await motivo()).toContain('F513B');
     await comChavesDesligadas(async (e) => {

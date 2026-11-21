@@ -47,7 +47,7 @@ export const PACIENTE_SEMENTE_TELE = 1003;
 export const MARCACAO_SEMENTE_TELE = 880_101;
 export const VINCULO_SEMENTE_TELE = 7101;
 
-function relogio(agora: Date): { hoje: string; hhmm: string; carimbo: string } {
+function relogio(agora: Date): { hoje: string; hora: string; carimbo: string } {
   const p = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo',
     year: 'numeric',
@@ -62,7 +62,7 @@ function relogio(agora: Date): { hoje: string; hhmm: string; carimbo: string } {
   const hoje = `${v('year')}-${v('month')}-${v('day')}`;
   return {
     hoje,
-    hhmm: `${v('hour')}${v('minute')}`,
+    hora: `${v('hour')}:${v('minute')}`,
     carimbo: `${hoje}T${v('hour')}:${v('minute')}:${v('second')}`,
   };
 }
@@ -102,7 +102,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
   private semear(hospital: string, s: Estado): void {
     const r = relogio(this.agora());
     // A meia hora corrente: a sala de espera já está aberta (abre 30 minutos antes, fecha 2 horas depois).
-    const hora = `${r.hhmm.slice(0, 2)}${Number(r.hhmm.slice(2, 4)) >= 30 ? '30' : '00'}`;
+    const hora = `${r.hora.slice(0, 2)}:${Number(r.hora.slice(3, 5)) >= 30 ? '30' : '00'}`;
     const m: MarcacaoSinteticaTele = {
       id: MARCACAO_SEMENTE_TELE,
       data: r.hoje,

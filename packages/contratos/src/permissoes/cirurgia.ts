@@ -1,5 +1,5 @@
 // Permissões do M18 (ficha, seção 7; convencoes.md §12): agenda de exames (módulo SADT) e centro cirúrgico (módulo
-// Bloco Cirúrgico). Quem tem a opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES
+// Bloco Cirúrgico). Quem tem a opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem
 // (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - SADT › Agenda: Agenda 2759, Manutenção 2760 (cadastro, escala e criação das agendas), Agendamento 2761 e os
 //     agendamentos por área 2762 a 2769, Consulta 2770 (por paciente 2771, por data 2772, primeira hora livre 2773),
@@ -56,7 +56,7 @@ export const OPCOES_BLOCO = {
 
 const E = OPCOES_AGENDA_EXAME;
 const B = OPCOES_BLOCO;
-// Os escopos do módulo agenda (unidade e tipo de agenda); a agenda de exames não tem tipo (SIAGENDA sem TIPO): o
+// Os escopos do módulo agenda (unidade e tipo de agenda); a agenda de exames não tem tipo (sem tipo na origem): o
 // servidor filtra só pela unidade.
 const ESCOPO_EXAME: readonly EscopoPermissao[] = ['unidade', 'tipoAgenda'];
 

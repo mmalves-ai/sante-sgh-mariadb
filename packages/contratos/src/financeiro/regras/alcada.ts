@@ -1,6 +1,6 @@
 // Regra 5 do M32 (cap-06b §6.8): no Sante SGH nenhuma baixa de título a pagar sem a aprovação na alçada. A aprovação
-// fica em SGH_FIN_APROVACAO (só inclusão) e AUTORIZADO_PGTO_PARA continua com a sentinela (1899-12-30 em 100% dos
-// 71.267 títulos); MFPARAM.AUT_ELET continua 'F' (o novo não mexe em parâmetro do outro sistema). A faixa vale por
+// fica no pedido de aprovação do título (só inclusão), com quem decidiu e quando; a autorização eletrônica do sistema
+// de origem não é usada. A faixa vale por
 // valor, centro de custo e tipo de credor, com dupla aprovação acima do limite e vigência.
 import type { TipoCredor } from './credor.js';
 import { mesmaPessoa, recusaFin, type RecusaFinanceiro, reais } from './recusa.js';
@@ -8,9 +8,9 @@ import { mesmaPessoa, recusaFin, type RecusaFinanceiro, reais } from './recusa.j
 export interface FaixaAlcada {
   readonly id: number;
   readonly empresa: number;
-  /** Centro de custo (TBCENCUS.COD) ou nulo (todos). */
+  /** Código do centro de custo ou nulo (todos). */
   readonly centroCusto: number | null;
-  /** Tipo de credor (MFCONPAG.TIPO) ou nulo (todos). */
+  /** Tipo de credor do título ou nulo (todos). */
   readonly tipoCredor: TipoCredor | null;
   readonly valorDe: number;
   /** Teto da faixa (inclusivo) ou nulo (sem teto). */

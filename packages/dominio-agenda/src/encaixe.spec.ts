@@ -9,13 +9,13 @@ const linha = (hora: string, x: Partial<{ paciente: string; tipo: string; duraca
   livre: 'S',
   situacao: '',
   tipo: 'N',
-  duracao: '0015',
+  duracao: '00:15',
   ...x,
 });
 const ctx = (x: Partial<ContextoEncaixe> = {}): ContextoEncaixe => ({
-  relogio: { hoje: '2026-10-21', hhmm: '1000' },
+  relogio: { hoje: '2026-10-21', hhmm: '10:00' },
   agendaAtiva: true,
-  gradeDoDia: [linha('0800'), linha('0815'), linha('0830')],
+  gradeDoDia: [linha('08:00'), linha('08:15'), linha('08:30')],
   marcadasNoDia: [],
   duracaoAgendaMin: 15,
   pacienteTemProntuario: true,
@@ -26,59 +26,61 @@ const codigos = (r: { vetos: readonly { codigo: string }[] }) => r.vetos.map((v)
 
 describe('encaixe', () => {
   it('minuto livre fora da grade: sem veto', () => {
-    const r = avaliarEncaixe({ data: '2026-10-22', hora: '0850' }, ctx());
+    const r = avaliarEncaixe({ data: '2026-10-22', hora: '08:50' }, ctx());
     expect(r.vetos).toEqual([]);
     expect(r.sugestao).toBeNull();
   });
   it('minuto ocupado na grade: veto e sugestão do próximo livre', () => {
-    const r = avaliarEncaixe({ data: '2026-10-22', hora: '0815' }, ctx());
+    const r = avaliarEncaixe({ data: '2026-10-22', hora: '08:15' }, ctx());
     expect(codigos(r)).toEqual(['minuto-ocupado']);
-    expect(r.sugestao).toBe('0816');
+    expect(r.sugestao).toBe('08:16');
   });
   it('minuto ocupado por marcação órfã (sem horário na grade) também é veto', () => {
-    const r = avaliarEncaixe({ data: '2026-10-22', hora: '0900' }, ctx({ marcadasNoDia: ['0900'] }));
+    const r = avaliarEncaixe({ data: '2026-10-22', hora: '09:00' }, ctx({ marcadasNoDia: ['09:00'] }));
     expect(codigos(r)).toEqual(['minuto-ocupado']);
   });
   it('vetos: inativa, além de 1 ano, passado, sem prontuário, trio ambíguo', () => {
     const r = avaliarEncaixe(
-      { data: '2027-10-22', hora: '0850' },
+      { data: '2027-10-22', hora: '08:50' },
       ctx({ agendaAtiva: false, pacienteTemProntuario: false, prontuarioAmbiguo: true }),
     );
     expect(codigos(r)).toEqual(['agenda-inativa', 'alem-de-um-ano', 'sem-prontuario', 'prontuario-ambiguo']);
-    expect(codigos(avaliarEncaixe({ data: '2026-10-21', hora: '0950' }, ctx()))).toEqual(['horario-passado']);
+    expect(codigos(avaliarEncaixe({ data: '2026-10-21', hora: '09:50' }, ctx()))).toEqual([
+      'horario-passado',
+    ]);
   });
   it('limite de encaixes por turno (parâmetro do novo)', () => {
-    const c = ctx({ gradeDoDia: [linha('0800'), linha('0805', { tipo: 'E' })], limitePorTurno: 1 });
-    expect(codigos(avaliarEncaixe({ data: '2026-10-22', hora: '0850' }, c))).toEqual(['limite-do-turno']);
-    expect(codigos(avaliarEncaixe({ data: '2026-10-22', hora: '1450' }, c))).toEqual([]);
+    const c = ctx({ gradeDoDia: [linha('08:00'), linha('08:05', { tipo: 'E' })], limitePorTurno: 1 });
+    expect(codigos(avaliarEncaixe({ data: '2026-10-22', hora: '08:50' }, c))).toEqual(['limite-do-turno']);
+    expect(codigos(avaliarEncaixe({ data: '2026-10-22', hora: '14:50' }, c))).toEqual([]);
     expect(
-      codigos(avaliarEncaixe({ data: '2026-10-22', hora: '0850' }, { ...c, limitePorTurno: null })),
+      codigos(avaliarEncaixe({ data: '2026-10-22', hora: '08:50' }, { ...c, limitePorTurno: null })),
     ).toEqual([]);
   });
   it('alertas: sobreposição com o vizinho, dia sem grade e agenda não lotada', () => {
-    const sobre = avaliarEncaixe({ data: '2026-10-22', hora: '0840' }, ctx());
+    const sobre = avaliarEncaixe({ data: '2026-10-22', hora: '08:40' }, ctx());
     expect(sobre.alertas.map((a) => a.codigo)).toEqual(['sobreposicao']);
-    const vazio = avaliarEncaixe({ data: '2026-10-22', hora: '0900' }, ctx({ gradeDoDia: [] }));
+    const vazio = avaliarEncaixe({ data: '2026-10-22', hora: '09:00' }, ctx({ gradeDoDia: [] }));
     expect(vazio.alertas.map((a) => a.codigo)).toEqual(['dia-sem-grade']);
     const naoLotada = avaliarEncaixe(
-      { data: '2026-10-22', hora: '0850' },
-      ctx({ gradeDoDia: [linha('0800'), linha('0815', { paciente: '' })] }),
+      { data: '2026-10-22', hora: '08:50' },
+      ctx({ gradeDoDia: [linha('08:00'), linha('08:15', { paciente: '' })] }),
     );
-    expect(naoLotada.vagasNormais).toEqual(['0815']);
+    expect(naoLotada.vagasNormais).toEqual(['08:15']);
     expect(naoLotada.alertas.map((a) => a.codigo)).toContain('agenda-nao-lotada');
   });
   it('vizinho sem duração própria usa a da agenda; sem nenhuma, não alerta', () => {
-    const c = ctx({ gradeDoDia: [linha('0800', { duracao: '0000' })] });
-    expect(avaliarEncaixe({ data: '2026-10-22', hora: '0810' }, c).alertas.map((a) => a.codigo)).toEqual([
+    const c = ctx({ gradeDoDia: [linha('08:00', { duracao: '00:00' })] });
+    expect(avaliarEncaixe({ data: '2026-10-22', hora: '08:10' }, c).alertas.map((a) => a.codigo)).toEqual([
       'sobreposicao',
     ]);
     expect(
-      avaliarEncaixe({ data: '2026-10-22', hora: '0810' }, { ...c, duracaoAgendaMin: null }).alertas,
+      avaliarEncaixe({ data: '2026-10-22', hora: '08:10' }, { ...c, duracaoAgendaMin: null }).alertas,
     ).toEqual([]);
   });
   it('próximo minuto livre e o fim do dia', () => {
-    expect(proximoMinutoLivre('2359', new Set(['2359']))).toBeNull();
-    expect(proximoMinutoLivre('0800', new Set())).toBe('0800');
+    expect(proximoMinutoLivre('23:59', new Set(['23:59']))).toBeNull();
+    expect(proximoMinutoLivre('08:00', new Set())).toBe('08:00');
   });
   it('desfazer só até o check-in', () => {
     expect(podeDesfazerEncaixe({ temSenha: false, atendido: 'N' })).toBe(true);
@@ -88,43 +90,47 @@ describe('encaixe', () => {
 
   // Porta de vigencia-grade.test.js (sante-api), os casos de regra pura do encaixe.
   it('data além de um ano à frente é recusada; no limite (um ano exato), passa pelo veto', () => {
-    const limite = avaliarEncaixe({ data: '2027-10-21', hora: '0850' }, ctx());
+    const limite = avaliarEncaixe({ data: '2027-10-21', hora: '08:50' }, ctx());
     expect(codigos(limite)).not.toContain('alem-de-um-ano');
-    const alem = avaliarEncaixe({ data: '2027-10-22', hora: '0850' }, ctx());
+    const alem = avaliarEncaixe({ data: '2027-10-22', hora: '08:50' }, ctx());
     expect(codigos(alem)).toContain('alem-de-um-ano');
   });
 
   it('o alerta de "agenda não lotada" só oferece vaga normal que ainda não passou', () => {
     const r = avaliarEncaixe(
-      { data: '2026-10-21', hora: '1107' },
+      { data: '2026-10-21', hora: '11:07' },
       ctx({
         gradeDoDia: [
-          { ...linha('0900', { paciente: '' }), data: '2026-10-21' },
-          { ...linha('1100', { paciente: '' }), data: '2026-10-21' },
+          { ...linha('09:00', { paciente: '' }), data: '2026-10-21' },
+          { ...linha('11:00', { paciente: '' }), data: '2026-10-21' },
         ],
       }),
     );
-    expect(r.vagasNormais).toEqual(['1100']);
+    expect(r.vagasNormais).toEqual(['11:00']);
   });
 
   it('se toda vaga normal do dia já passou, não há alerta de agenda não lotada', () => {
     const r = avaliarEncaixe(
-      { data: '2026-10-21', hora: '1107' },
-      ctx({ gradeDoDia: [{ ...linha('0900', { paciente: '' }), data: '2026-10-21' }] }),
+      { data: '2026-10-21', hora: '11:07' },
+      ctx({ gradeDoDia: [{ ...linha('09:00', { paciente: '' }), data: '2026-10-21' }] }),
     );
     expect(r.alertas.map((a) => a.codigo)).not.toContain('agenda-nao-lotada');
     expect(r.vagasNormais).toEqual([]);
   });
 
   it('hora de hoje que já passou é veto (data passada também)', () => {
-    expect(codigos(avaliarEncaixe({ data: '2026-10-21', hora: '0930' }, ctx()))).toContain('horario-passado');
-    expect(codigos(avaliarEncaixe({ data: '2026-10-20', hora: '1500' }, ctx()))).toContain('horario-passado');
+    expect(codigos(avaliarEncaixe({ data: '2026-10-21', hora: '09:30' }, ctx()))).toContain(
+      'horario-passado',
+    );
+    expect(codigos(avaliarEncaixe({ data: '2026-10-20', hora: '15:00' }, ctx()))).toContain(
+      'horario-passado',
+    );
   });
 
   it('dia que só tem encaixes é dia SEM grade, e o alerta diz isso', () => {
     const r = avaliarEncaixe(
-      { data: '2026-10-22', hora: '0850' },
-      ctx({ gradeDoDia: [linha('0807', { tipo: 'E' })] }),
+      { data: '2026-10-22', hora: '08:50' },
+      ctx({ gradeDoDia: [linha('08:07', { tipo: 'E' })] }),
     );
     expect(r.alertas.map((a) => a.codigo)).toContain('dia-sem-grade');
   });

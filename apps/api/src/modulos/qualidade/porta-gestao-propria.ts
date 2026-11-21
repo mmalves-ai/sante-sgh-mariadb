@@ -3,7 +3,7 @@
 // (notificacao_incidente). Os documentos (documento_qualidade e _versao, _aprovacao, _ciencia), a análise crítica de
 // indicadores, as auditorias, as comissões e reuniões, os riscos, as não conformidades, a ouvidoria, os envios
 // regulatórios e a revisão de prontuários (sorteio_revisao_prontuario, revisao_prontuario, pendencia_prontuario)
-// aguardam o mapeamento (pedido em docs/obra/fatias/f22/saida/04-03.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as
+// aguardam o mapeamento (pedido em docs/obra/fatias/f22/arquivo-ondas-1a4/saida/04-03.json e docs/obra/fatias/f24/saida/15-qualidade.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as
 // gravações recusam com `modelo-pendente` (nada é gravado pela metade; a tela fica em consulta).
 import { type NucleoQualidade, feriadosDoEstabelecimento, lerNoEstabelecimento, leituraPendente, liberacaoPendente, modeloPendente, relogioDoEstabelecimento } from './apoio-propria.js';
 import type { ContextoGestao, PortaGestao } from './porta-gestao.js';

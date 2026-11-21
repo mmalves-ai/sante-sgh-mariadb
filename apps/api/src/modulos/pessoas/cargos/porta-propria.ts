@@ -15,10 +15,13 @@
 //   trava a correção do nome, da descrição ou dos requisitos, e o que veio da migração não é recalculado à toa.
 // Melhoria: a faixa só conta como vigente quando a tabela salarial está "vigente" e já começou no fuso do
 //   estabelecimento (rascunho e tabela futura não contam).
-// Pendência de modelo (pedido do lote 03-03): a faixa salarial por linha com vigência e o quadro de vagas aprovado
-// por centro de custo não têm coluna/tabela no modelo. As faixas do modelo (faixa_salarial na tabela_salarial com
-// vigência) são lidas; a inclusão, a versão, a situação e a exclusão de faixa e de vaga do quadro recusam com
-// 409 modelo-pendente, sem gravar nada.
+// Melhoria: a faixa salarial tem versão própria (início, fim, versão anterior e motivo) dentro da tabela salarial do
+//   estabelecimento que vale na data (a vigente antes do rascunho; encerrada não recebe faixa). O "nível" do contrato é
+//   o degrau numérico da faixa; texto que não é número recusa com `faixa-nivel-invalido`.
+// Melhoria: o quadro de vagas aprovado é por cargo e centro de custo do estabelecimento (quadro_vaga), versionado do
+//   mesmo jeito; a versão nova encerra a anterior na véspera e guarda o motivo (CHECK do banco).
+// Melhoria: faixa e vaga do quadro têm situação (ativo e motivo) e exclusão lógica só sem versão ligada (a faixa também
+//   sem histórico salarial que a use), recontada dentro da transação.
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoNucleo,
@@ -54,7 +57,7 @@ import type {
 export type NucleoCargos = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 /** Tabelas que a operação de cargos grava. */
-const TABELAS_GRAVACAO = ['cargo', 'sequencia_negocio'] as const;
+const TABELAS_GRAVACAO = ['cargo', 'sequencia_negocio', 'faixa_salarial', 'quadro_vaga'] as const;
 const TETO_LISTA = 2000;
 const TETO_BUSCA_CBO = 30;
 
@@ -81,15 +84,12 @@ const json = (v: unknown): Record<string, unknown> => {
 /** Escapa o termo para o LIKE (nunca concatenado ao SQL: vai como parâmetro). */
 const semCuringa = (t: string) => t.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-export const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a coluna ou tabela no modelo do banco (pedido registrado): nada foi gravado.`,
-  );
-const FAIXA_PENDENTE = 'A faixa salarial por linha, com vigência e versão,';
-const QUADRO_PENDENTE = 'O quadro de vagas aprovado por cargo e centro de custo';
+const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+/** A véspera de uma data AAAA-MM-DD (fim da versão anterior). */
+const vespera = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+/** Centavos → DECIMAL(15,2) do banco, sem passar por ponto flutuante na escrita. */
+const reais = (centavos: number) =>
+  `${Math.trunc(centavos / 100)}.${String(centavos % 100).padStart(2, '0')}`;
 
 /** Mesmo código da tela e da memória para a versão antiga. */
 const desatualizado = () =>
@@ -137,9 +137,12 @@ function cargoDe(r: Linha): CargoRegistrado {
   };
 }
 
-// As faixas do modelo: faixa (nível) e degrau na tabela salarial do estabelecimento, com a vigência da tabela.
+// As faixas do modelo: faixa (nível) e degrau na tabela salarial do estabelecimento. A vigência é a da própria faixa
+// (versão) e, sem ela, a da tabela.
 const SQL_FAIXA = `
   SELECT f.id, f.cargo_id, f.nivel, f.degrau, f.valor, t.vigencia_inicio, t.vigencia_fim, t.ativo, t.situacao,
+         f.vigencia_inicio AS faixa_inicio, f.vigencia_fim AS faixa_fim, f.faixa_salarial_anterior_id,
+         f.motivo_alteracao, f.ativo AS faixa_ativa, f.motivo_situacao, f.tabela_salarial_id,
          f.versao, f.criado_por, u.login AS criado_login, f.criado_em
     FROM faixa_salarial f
     JOIN tabela_salarial t ON t.id = f.tabela_salarial_id
@@ -152,11 +155,14 @@ async function hojeNoEstabelecimento(l: Pick<Leitor, 'uma'>, est: number): Promi
   return relogioNoFuso(textoN(f?.['fuso_horario']) ?? FUSO_PADRAO).hoje;
 }
 
-/** A faixa vale hoje só se a tabela salarial está vigente e já começou (rascunho e tabela futura não contam). */
+/**
+ * A faixa ativa conta só se a tabela salarial está vigente e já começou (rascunho e tabela futura não contam).
+ * O início e o fim são os da versão da faixa e, sem eles, os da tabela.
+ */
 function faixaDe(r: Linha, hoje: string): FaixaSalarialRegistrada {
   const inicio = dataIso(r['vigencia_inicio']);
   const fim = dataIso(r['vigencia_fim']);
-  const vigente =
+  const tabelaConta =
     verdadeiro(r['ativo']) &&
     String(r['situacao']) === 'vigente' &&
     inicio !== null &&
@@ -168,16 +174,85 @@ function faixaDe(r: Linha, hoje: string): FaixaSalarialRegistrada {
     faixa: String(r['nivel']),
     nivel: String(r['degrau']),
     valor: Math.round(Number(r['valor']) * 100),
-    desde: dataIso(r['vigencia_inicio']) ?? '',
-    ate: dataIso(r['vigencia_fim']),
-    anterior: null,
-    motivo: null,
-    ativo: vigente,
-    motivoSituacao: null,
+    desde: dataIso(r['faixa_inicio']) ?? inicio ?? '',
+    ate: dataIso(r['faixa_fim']) ?? fim,
+    anterior: nn(r['faixa_salarial_anterior_id']),
+    motivo: textoN(r['motivo_alteracao']),
+    ativo: tabelaConta && verdadeiro(r['faixa_ativa'] ?? true),
+    motivoSituacao: textoN(r['motivo_situacao']),
     versao: n(r['versao']),
     criadoPor: quem(r['criado_login'], r['criado_por']),
     criadoEm: instante(r['criado_em']),
   };
+}
+
+// O quadro de vagas aprovado do estabelecimento, por cargo e centro de custo, com a vigência da versão.
+const SQL_VAGA = `
+  SELECT q.id, q.cargo_id, q.centro_custo_id, q.quantidade, q.vigencia_inicio, q.vigencia_fim, q.quadro_vaga_anterior_id,
+         q.motivo_alteracao, q.ativo, q.motivo_situacao, q.versao, q.criado_por, u.login AS criado_login, q.criado_em
+    FROM quadro_vaga q
+    LEFT JOIN usuario u ON u.id = q.criado_por
+   WHERE q.estabelecimento_id = ? AND q.excluido_em IS NULL`;
+
+function vagaDe(r: Linha): VagaQuadroRegistrada {
+  return {
+    id: n(r['id']),
+    cargo: n(r['cargo_id']),
+    centroCusto: n(r['centro_custo_id']),
+    quantidade: n(r['quantidade']),
+    desde: dataIso(r['vigencia_inicio']) ?? '',
+    ate: dataIso(r['vigencia_fim']),
+    anterior: nn(r['quadro_vaga_anterior_id']),
+    motivo: textoN(r['motivo_alteracao']),
+    ativo: verdadeiro(r['ativo']),
+    motivoSituacao: textoN(r['motivo_situacao']),
+    versao: n(r['versao']),
+    criadoPor: quem(r['criado_login'], r['criado_por']),
+    criadoEm: instante(r['criado_em']),
+  };
+}
+
+type TabelaVersionada = 'faixa_salarial' | 'quadro_vaga';
+const VERSIONADA: Record<TabelaVersionada, { nome: string; anterior: string; alvo: AlvoDependenciaCargos }> =
+  {
+    faixa_salarial: { nome: 'faixa', anterior: 'faixa_salarial_anterior_id', alvo: 'salario-faixa' },
+    quadro_vaga: { nome: 'vaga', anterior: 'quadro_vaga_anterior_id', alvo: 'vaga' },
+  };
+const tabelaDoAlvo = (alvo: AlvoDependenciaCargos): TabelaVersionada =>
+  alvo === 'salario-faixa' ? 'faixa_salarial' : 'quadro_vaga';
+
+/** O que barra a exclusão de faixa ou vaga: versão posterior ou anterior ligada e, na faixa, o histórico salarial. */
+async function contarDependenciasVersao(
+  l: Pick<Leitor, 'uma'>,
+  tabela: TabelaVersionada,
+  id: number,
+): Promise<DependenciaContada[]> {
+  const v = VERSIONADA[tabela];
+  const r: DependenciaContada[] = [];
+  // Nome de tabela e coluna desta lista fixa (nunca entrada do usuário).
+  const posterior = n(
+    (
+      await l.uma(`SELECT COUNT(*) AS n FROM ${tabela} WHERE ${v.anterior} = ? AND excluido_em IS NULL`, [id])
+    )?.['n'],
+  );
+  if (posterior > 0)
+    r.push({ grupo: `Versão posterior da ${v.nome}`, tabela, coluna: v.anterior, quantidade: posterior });
+  const proprio = await l.uma(`SELECT ${v.anterior} AS anterior FROM ${tabela} WHERE id = ?`, [id]);
+  if (proprio && proprio['anterior'] !== null && proprio['anterior'] !== undefined)
+    r.push({ grupo: `Versão anterior da ${v.nome}`, tabela, coluna: 'id', quantidade: 1 });
+  if (tabela === 'faixa_salarial') {
+    const h = n(
+      (await l.uma('SELECT COUNT(*) AS n FROM historico_salarial WHERE faixa_salarial_id = ?', [id]))?.['n'],
+    );
+    if (h > 0)
+      r.push({
+        grupo: 'Histórico salarial dos colaboradores',
+        tabela: 'historico_salarial',
+        coluna: 'faixa_salarial_id',
+        quantidade: h,
+      });
+  }
+  return r;
 }
 
 /**
@@ -189,6 +264,8 @@ export const DEPENDENCIAS_CARGO: readonly { grupo: string; tabela: string; sql: 
   ['Colaboradores no cargo', 'vinculo_trabalho', true],
   ['Faixas da tabela salarial', 'faixa_salarial', true],
   ['Vagas abertas para recrutamento', 'vaga', true],
+  ['Vagas do quadro', 'quadro_vaga', true],
+  ['Perfis de acesso do cargo', 'perfil_cargo_rh', true],
   ['Histórico de cargo dos vínculos', 'historico_cargo', false],
   ['Funções do cargo', 'funcao', true],
   ['Trabalhadores sem vínculo no cargo', 'trabalhador_sem_vinculo', true],
@@ -341,13 +418,24 @@ export class PortaCargosPropria implements PortaCargos {
     });
   }
 
-  /** Quadro de vagas aprovado: sem tabela no modelo (pedido do lote 03-03); a lista sai vazia até o DDL. */
-  async vagas(): Promise<VagaQuadroRegistrada[]> {
-    return [];
+  /** Quadro de vagas aprovado do estabelecimento da sessão (todas as versões, da mais antiga para a atual). */
+  vagas(c: ContextoCargos, cargo: number | null): Promise<VagaQuadroRegistrada[]> {
+    return this.lerNoEstabelecimento(c, async (l, est) =>
+      (
+        await l.consultar(
+          `${SQL_VAGA}${cargo === null ? '' : ' AND q.cargo_id = ?'} ORDER BY q.cargo_id, q.centro_custo_id, q.vigencia_inicio, q.id`,
+          cargo === null ? [est] : [est, cargo],
+          { teto: TETO_LISTA },
+        )
+      ).map(vagaDe),
+    );
   }
 
-  async vaga(): Promise<VagaQuadroRegistrada | null> {
-    return null;
+  vaga(c: ContextoCargos, id: number): Promise<VagaQuadroRegistrada | null> {
+    return this.lerNoEstabelecimento(c, async (l, est) => {
+      const r = await l.uma(`${SQL_VAGA} AND q.id = ?`, [est, id]);
+      return r ? vagaDe(r) : null;
+    });
   }
 
   ocupacao(c: ContextoCargos): Promise<OcupacaoCargo[]> {
@@ -369,8 +457,7 @@ export class PortaCargosPropria implements PortaCargos {
   }
 
   dependencias(c: ContextoCargos, alvo: AlvoDependenciaCargos, id: number): Promise<DependenciaContada[]> {
-    // Faixa e vaga do quadro não têm versão encadeada no modelo (pendência): nada as barra além do próprio modelo.
-    if (alvo !== 'cargo') return Promise.resolve([]);
+    if (alvo !== 'cargo') return this.ler(c, (l) => contarDependenciasVersao(l, tabelaDoAlvo(alvo), id));
     return this.ler(c, (l) => contarDependenciasCargo(l, id));
   }
 
@@ -493,11 +580,148 @@ function gravadorSobre(tx: TxOperacao, extras: Extras): GravadorCargos {
     ...(await conselhoNovo(d.conselho)),
   });
   /** Versão otimista com o mesmo código da tela ("desatualizado"), igual à memória. */
-  const alterarLinha = (id: number, versao: number, valores: Record<string, unknown>) =>
-    tx.alterar('cargo', id, versao, valores).catch((e: unknown) => {
+  const alterarEm = (tabela: TabelaCargos, id: number, versao: number, valores: Record<string, unknown>) =>
+    tx.alterar(tabela, id, versao, valores).catch((e: unknown) => {
       if (e instanceof ErroOperacao && e.problema.codigo === 'conflito-versao') throw desatualizado();
       throw e;
     });
+  const alterarLinha = (id: number, versao: number, valores: Record<string, unknown>) =>
+    alterarEm('cargo', id, versao, valores);
+  const estabelecimento = () => {
+    const est = tx.contexto.estabelecimento;
+    if (est === null) throw semEstabelecimento();
+    return est;
+  };
+  const lerFaixa = async (id: number, travar = false) => {
+    const est = estabelecimento();
+    const sql = `${SQL_FAIXA} AND f.id = ?`;
+    const r = travar
+      ? (await tx.consultarParaAtualizar(sql, [est, id], { teto: 1 }))[0]
+      : await tx.uma(sql, [est, id]);
+    return r ? { linha: r, faixa: faixaDe(r, await hojeNoEstabelecimento(tx, est)) } : null;
+  };
+  const lerVaga = async (id: number, travar = false) => {
+    const sql = `${SQL_VAGA} AND q.id = ?`;
+    const p = [estabelecimento(), id];
+    const r = travar ? (await tx.consultarParaAtualizar(sql, p, { teto: 1 }))[0] : await tx.uma(sql, p);
+    return r ? vagaDe(r) : null;
+  };
+  /** Só o registro do estabelecimento da sessão (faixa pela tabela salarial, vaga pelo próprio estabelecimento). */
+  const doEstabelecimento = async (tabela: TabelaVersionada, id: number) => {
+    const achou = tabela === 'faixa_salarial' ? await lerFaixa(id, true) : await lerVaga(id, true);
+    if (!achou) throw recusa('nao-encontrado', `A ${VERSIONADA[tabela].nome} não existe ou foi excluída.`);
+  };
+  const cargoAtivo = async (cargo: number) => {
+    const r = await tx.uma('SELECT id FROM cargo WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL', [
+      cargo,
+    ]);
+    if (!r)
+      throw recusa('cargo-inexistente', 'O cargo não existe, está inativo ou foi excluído.', {
+        campos: ['cargo'],
+      });
+  };
+  /** O nível do contrato é o degrau numérico da faixa na tabela salarial. */
+  const degrauDe = (nivel: string) => {
+    const t = nivel.trim();
+    const d = /^\d{1,5}$/.test(t) ? Number(t) : 0;
+    if (d < 1 || d > 65_535)
+      throw recusa('faixa-nivel-invalido', 'O nível da faixa é o número do degrau (1, 2, 3...).', {
+        campos: ['nivel'],
+      });
+    return d;
+  };
+  /**
+   * A tabela salarial do estabelecimento em vigor hoje e na data da faixa, travada para a sequência. Rascunho e tabela
+   * futura não recebem faixa por aqui: a faixa só conta (ativo) na tabela vigente já começada (`faixaDe`), e a faixa
+   * gravada tem de voltar ativa, senão a versão, a situação e a conferência de duplicidade do serviço não a enxergam.
+   */
+  const tabelaSalarialEm = async (desde: string) => {
+    const hoje = await hojeNoEstabelecimento(tx, estabelecimento());
+    const [t] = await tx.consultarParaAtualizar(
+      `SELECT id FROM tabela_salarial
+        WHERE estabelecimento_id = ? AND ativo = TRUE AND situacao = 'vigente'
+          AND vigencia_inicio <= ? AND vigencia_inicio <= ?
+          AND (vigencia_fim IS NULL OR (vigencia_fim >= ? AND vigencia_fim >= ?))
+        ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+      [estabelecimento(), desde, hoje, desde, hoje],
+    );
+    if (!t)
+      throw recusa(
+        'tabela-salarial-ausente',
+        'Não há tabela salarial vigente do estabelecimento que valha hoje e na data da faixa.',
+        { campos: ['desde'] },
+      );
+    return n(t['id']);
+  };
+  const novaFaixa = async (x: {
+    cargo: number;
+    faixa: string;
+    degrau: number;
+    valor: number;
+    desde: string;
+    anterior: number | null;
+    motivo: string | null;
+  }) => {
+    const tabela = await tabelaSalarialEm(x.desde);
+    // A chave única do banco conta também a faixa excluída: a mesma faixa, nível e início não se repete.
+    const igual = await tx.uma(
+      `SELECT f.id FROM faixa_salarial f JOIN tabela_salarial t ON t.id = f.tabela_salarial_id
+        WHERE t.estabelecimento_id = ? AND f.cargo_id = ? AND f.nivel = ? AND f.degrau = ?
+          AND COALESCE(f.vigencia_inicio, t.vigencia_inicio) = ? LIMIT 1`,
+      [estabelecimento(), x.cargo, x.faixa, x.degrau, x.desde],
+    );
+    if (igual)
+      throw recusa('faixa-ja-existe', 'Já existe esta faixa e nível do cargo valendo a partir desta data.', {
+        campos: ['faixa'],
+      });
+    const seq = await tx.uma(
+      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM faixa_salarial WHERE tabela_salarial_id = ?',
+      [tabela],
+    );
+    return tx.incluir('faixa_salarial', {
+      tabela_salarial_id: tabela,
+      sequencia: n(seq?.['s']),
+      cargo_id: x.cargo,
+      nivel: x.faixa,
+      degrau: x.degrau,
+      valor: reais(x.valor),
+      vigencia_inicio: x.desde,
+      faixa_salarial_anterior_id: x.anterior,
+      motivo_alteracao: x.motivo,
+      ativo: true,
+    });
+  };
+  const novaVaga = async (x: {
+    cargo: number;
+    centroCusto: number;
+    quantidade: number;
+    desde: string;
+    anterior: number | null;
+    motivo: string | null;
+  }) => {
+    const est = estabelecimento();
+    const igual = await tx.uma(
+      `SELECT id FROM quadro_vaga
+        WHERE estabelecimento_id = ? AND cargo_id = ? AND centro_custo_id = ? AND vigencia_inicio = ? LIMIT 1`,
+      [est, x.cargo, x.centroCusto, x.desde],
+    );
+    if (igual)
+      throw recusa(
+        'vaga-ja-existe',
+        'Já existe vaga deste cargo neste centro de custo valendo a partir desta data.',
+        { campos: ['centroCusto'] },
+      );
+    return tx.incluir('quadro_vaga', {
+      estabelecimento_id: est,
+      cargo_id: x.cargo,
+      centro_custo_id: x.centroCusto,
+      quantidade: x.quantidade,
+      vigencia_inicio: x.desde,
+      quadro_vaga_anterior_id: x.anterior,
+      motivo_alteracao: x.motivo,
+      ativo: true,
+    });
+  };
   const nomeUnico = async (nome: string, outro: number | null) => {
     const r = await tx.uma(
       'SELECT id FROM cargo WHERE UPPER(nome) = UPPER(?) AND excluido_em IS NULL AND id <> ? LIMIT 1',
@@ -505,19 +729,10 @@ function gravadorSobre(tx: TxOperacao, extras: Extras): GravadorCargos {
     );
     if (r) throw recusa('cargo-nome-em-uso', 'Já existe um cargo com este nome.', { campos: ['nome'] });
   };
-  const soCargo = (t: TabelaCargos) => {
-    if (t === 'faixa_salarial') throw modeloPendente(FAIXA_PENDENTE);
-    if (t === 'quadro_vaga') throw modeloPendente(QUADRO_PENDENTE);
-  };
   return {
     cargo: lerCargo,
-    faixa: async (id) => {
-      const est = tx.contexto.estabelecimento;
-      if (est === null) throw semEstabelecimento();
-      const r = await tx.uma(`${SQL_FAIXA} AND f.id = ?`, [est, id]);
-      return r ? faixaDe(r, await hojeNoEstabelecimento(tx, est)) : null;
-    },
-    vaga: async () => null,
+    faixa: async (id) => (await lerFaixa(id))?.faixa ?? null,
+    vaga: (id) => lerVaga(id),
     incluirCargo: async (x) => {
       await nomeUnico(x.nome, null);
       const ref = await referencias(x);
@@ -560,11 +775,33 @@ function gravadorSobre(tx: TxOperacao, extras: Extras): GravadorCargos {
       });
     },
     situacao: async (x) => {
-      soCargo(x.tabela);
-      await alterarLinha(x.id, x.versao, { ativo: x.ativo });
+      if (x.tabela === 'cargo') {
+        await alterarLinha(x.id, x.versao, { ativo: x.ativo });
+        return;
+      }
+      await doEstabelecimento(x.tabela, x.id);
+      await alterarEm(x.tabela, x.id, x.versao, { ativo: x.ativo, motivo_situacao: x.motivo });
+      extras.motivo = x.motivo;
     },
     excluir: async (x) => {
-      soCargo(x.tabela);
+      if (x.tabela !== 'cargo') {
+        const tabela = x.tabela;
+        await doEstabelecimento(tabela, x.id);
+        const dep = await contarDependenciasVersao(tx, tabela, x.id);
+        if (dep.length > 0)
+          throw recusa(
+            `${VERSIONADA[tabela].alvo}-com-vinculos`,
+            `Há registros ligados: ${dep.map((y) => `${y.grupo}: ${y.quantidade}`).join('; ')}.`,
+          );
+        const foto = await tx.uma(`SELECT * FROM ${tabela} WHERE id = ? AND excluido_em IS NULL`, [x.id]);
+        await alterarEm(tabela, x.id, x.versao, {
+          excluido_em: new Date(),
+          excluido_por: tx.contexto.usuario,
+        });
+        extras.motivo = x.motivo;
+        extras.dados = { ...extras.dados, retrato: foto };
+        return;
+      }
       const v = await contarDependenciasCargo(tx, x.id);
       if (v.length > 0)
         throw recusa(
@@ -577,17 +814,86 @@ function gravadorSobre(tx: TxOperacao, extras: Extras): GravadorCargos {
       extras.motivo = x.motivo;
       extras.dados = { ...extras.dados, retrato };
     },
-    incluirFaixa: async () => {
-      throw modeloPendente(FAIXA_PENDENTE);
+    incluirFaixa: async (x) => {
+      await cargoAtivo(x.cargo);
+      return novaFaixa({
+        cargo: x.cargo,
+        faixa: x.faixa.trim(),
+        degrau: degrauDe(x.nivel),
+        valor: x.valor,
+        desde: x.desde,
+        anterior: null,
+        motivo: null,
+      });
     },
-    versionarFaixa: async () => {
-      throw modeloPendente(FAIXA_PENDENTE);
+    versionarFaixa: async (x) => {
+      const a = await lerFaixa(x.anterior.id, true);
+      const posterior = await tx.uma(
+        'SELECT id FROM faixa_salarial WHERE faixa_salarial_anterior_id = ? LIMIT 1',
+        [x.anterior.id],
+      );
+      // Só a versão atual (sem fim próprio, ativa e sem sucessora), na versão lida e começada antes da nova.
+      if (
+        !a ||
+        posterior ||
+        a.faixa.versao !== x.anterior.versao ||
+        a.linha['faixa_fim'] !== null ||
+        !verdadeiro(a.linha['faixa_ativa']) ||
+        !(a.faixa.desde < x.desde)
+      )
+        throw desatualizado();
+      await alterarEm('faixa_salarial', a.faixa.id, a.faixa.versao, { vigencia_fim: vespera(x.desde) });
+      extras.motivo = x.motivo;
+      return novaFaixa({
+        cargo: a.faixa.cargo,
+        faixa: a.faixa.faixa,
+        degrau: n(a.linha['degrau']),
+        valor: x.valor,
+        desde: x.desde,
+        anterior: a.faixa.id,
+        motivo: x.motivo,
+      });
     },
-    incluirVaga: async () => {
-      throw modeloPendente(QUADRO_PENDENTE);
+    incluirVaga: async (x) => {
+      await cargoAtivo(x.cargo);
+      const cc = await tx.uma(
+        'SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL',
+        [x.centroCusto, estabelecimento()],
+      );
+      if (!cc)
+        throw recusa(
+          'centro-custo-inexistente',
+          'O centro de custo não existe neste estabelecimento ou está inativo.',
+          {
+            campos: ['centroCusto'],
+          },
+        );
+      return novaVaga({ ...x, anterior: null, motivo: null });
     },
-    versionarVaga: async () => {
-      throw modeloPendente(QUADRO_PENDENTE);
+    versionarVaga: async (x) => {
+      const a = await lerVaga(x.anterior.id, true);
+      const posterior = await tx.uma('SELECT id FROM quadro_vaga WHERE quadro_vaga_anterior_id = ? LIMIT 1', [
+        x.anterior.id,
+      ]);
+      if (
+        !a ||
+        posterior ||
+        a.versao !== x.anterior.versao ||
+        a.ate !== null ||
+        !a.ativo ||
+        !(a.desde < x.desde)
+      )
+        throw desatualizado();
+      await alterarEm('quadro_vaga', a.id, a.versao, { vigencia_fim: vespera(x.desde) });
+      extras.motivo = x.motivo;
+      return novaVaga({
+        cargo: a.cargo,
+        centroCusto: a.centroCusto,
+        quantidade: x.quantidade,
+        desde: x.desde,
+        anterior: a.id,
+        motivo: x.motivo,
+      });
     },
     registrarCorrecao: async (x) => {
       extras.motivo = x.motivo;

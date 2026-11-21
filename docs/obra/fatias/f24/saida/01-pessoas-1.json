@@ -1,0 +1,46 @@
+{
+ "lote": "01-pessoas-1",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "integracao_folha_financeiro (+ _destino), lançamento dos títulos da folha e fatos contábeis da folha",
+   "colunas": "as do pedido f22 03-07 (vigência do de-para por estabelecimento; destino; lançamento com títulos e fatos; custo de pessoal por centro)",
+   "motivo": "O pedido f22 03-07 não aparece em ddl-aplicado.md nem em ddl-recusado.md. Sem ele, porta-integracao-propria.ts e servico-integracao.ts seguem com 503 modelo-pendente (de-para, prévia, lançamento, custo de pessoal, retorno). Decidir antes se depara_folha_financeiro (15_RH/02) e titulo_folha (15_RH/04), que já existem, cobrem o pedido: se cobrem, é só trabalho de porta e o pedido de DDL cai."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/pessoas/cargos.ts",
+   "motivo": "esquemaIncluirFaixaSalarial.nivel é texto de até 10 caracteres, mas o modelo guarda o degrau numérico (faixa_salarial.degrau SMALLINT). A porta própria recusa nível não numérico com faixa-nivel-invalido. Pedido: nível como inteiro positivo no contrato, na web e na memória, ou decisão de produto para um degrau em texto."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/pessoas/aplicacao/escala.int.spec.ts:289",
+   "motivo": "A porta própria da escala agora grava a cobertura mínima nas colunas da escala: coberturaRegistrada passou a true. A asserção toBe(false) tem de virar toBe(true), e cabe um caso de publicação com furo."
+  },
+  {
+   "tipo": "compartilhado",
+   "arquivo": "apps/api/src/modulos/pessoas/banco-apoio.ts (modeloPendente)",
+   "motivo": "O auxiliar continua porque pessoas/porta-propria.ts e sesmt/porta-sesmt-propria.ts, de outros lotes, o usam. Ele sai quando o último uso for ligado ao modelo."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/pessoas/aplicacao/escala.int.spec.ts:658-677",
+   "motivo": "A porta própria do realizado agora inclui tarifa por tipo de plantão (valor_hora_plantao.tipo_plantao): a asserção de incluirTarifa → 'modelo-pendente' tem de virar a inclusão com leitura da tarifa só no tipo 'sobreaviso'. O lançamento e o estorno no repasse continuam 'modelo-pendente'."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/pessoas/aplicacao/escala.int.spec.ts:635-639",
+   "motivo": "O realizado recusado agora devolve o motivo (plantao.motivo_recusa_realizado) e a origem (plantao.fonte_realizado): cabe conferir motivo 'Horário sem conferência' na leitura."
+  },
+  {
+   "tipo": "comentario",
+   "arquivo": "apps/api/src/modulos/pessoas/escala/porta-realizado.ts:5",
+   "motivo": "O comentário ainda diz que a inclusão de tarifa por tipo aguarda o modelo; agora só o lançamento e o estorno no repasse aguardam."
+  },
+  {
+   "tipo": "composicao",
+   "arquivo": "apps/api/src/modulos/pessoas/modulo.ts:241",
+   "motivo": "PortaAutoatendimentoPropria(n) é criada sem `efeitos`: o efeito da aprovação no ponto, nas férias e no cadastro segue 'modelo-pendente'. Para ligar, as portas próprias do ponto, da folha (hoje sobre Escritor, não TxOperacao) e do cadastro de pessoas precisam expor o gravador sobre a transação recebida; é mudança compartilhada de outros lotes."
+  }
+ ]
+}

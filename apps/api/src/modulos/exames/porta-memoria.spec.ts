@@ -4,7 +4,7 @@ import type { ContextoNucleo, ContextoOperacao } from '@sgh/nucleo';
 import { ErroOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import { PortaExameMemoria } from './porta-memoria.js';
-import { civil, hhmmDeMinutos, instanteCivil, minutosDeHhmm, relogioNoFuso } from './relogio.js';
+import { civil, horaCivil, horaDeMinutos, instanteCivil, minutosDaHora, relogioDoEstabelecimento, relogioNoFuso } from './relogio.js';
 
 const ctx: ContextoNucleo = { cliente: 'sintetico', estabelecimento: 1, usuario: 7, correlacao: 'unidade-01-05' };
 let k = 0;
@@ -12,19 +12,26 @@ const op = (): ContextoOperacao => ({ ...ctx, chaveIdempotencia: `unidade-${++k}
 const codigo = (e: unknown) => (e instanceof ErroOperacao ? e.problema['codigo'] : null);
 
 describe('relógio civil do estabelecimento', () => {
-  it('data e hora no fuso; instante de volta; minutos e HHMM', () => {
-    const r = relogioNoFuso('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z'));
-    expect(r).toEqual({ hoje: '2026-11-20', hhmm: '0905' });
+  it('data e hora no fuso; instante de volta; minutos e HH:MM', () => {
+    const r = relogioDoEstabelecimento('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z'));
+    expect(r).toEqual({ hoje: '2026-11-20', hora: '09:05' });
+    expect(relogioNoFuso('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z')).hhmm).toBe('0905');
+    expect(instanteCivil('2026-11-20', '09:05', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
+    expect(horaCivil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30' });
+    // A forma antiga (quatro dígitos) segue para os módulos de fora da agenda de exames.
+    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30', hhmm: '2330' });
     expect(instanteCivil('2026-11-20', '0905', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
-    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hhmm: '2330' });
-    expect(minutosDeHhmm('0120')).toBe(80);
-    expect(hhmmDeMinutos(20)).toBe('0020');
-    expect(relogioNoFuso('Fuso/Inexistente', new Date('2026-11-20T12:05:00Z')).hhmm).toBe('0905');
+    expect(minutosDaHora('01:20')).toBe(80);
+    expect(minutosDaHora('0120')).toBe(80);
+    expect(() => minutosDaHora('')).toThrow();
+    expect(() => minutosDaHora('25:00')).toThrow();
+    expect(horaDeMinutos(20)).toBe('00:20');
+    expect(relogioDoEstabelecimento('Fuso/Inexistente', new Date('2026-11-20T12:05:00Z')).hora).toBe('09:05');
   });
 });
 
 describe('porta da agenda de exames em memória', () => {
-  const relogio = () => ({ hoje: '2026-11-20', hhmm: '0600' });
+  const relogio = () => ({ hoje: '2026-11-20', hora: '06:00' });
   const pacientes = async () => [
     { id: 501, nome: 'PACIENTE SINTETICO', prontuario: 9001, telefone: null, celular: null, ativo: true },
   ];

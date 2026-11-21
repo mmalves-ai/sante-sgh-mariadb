@@ -284,7 +284,7 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     reg: number,
   ): Promise<{ modelo: number; grafica: boolean; nome: string; copias: number }[]>;
   profissional(c: ContextoAdt, login: string): Promise<ProfissionalDaSessao | null>;
-  /** O profissional da higienização ligado ao login (CHPROFISLIMP.USUARIO_SISTEMA); null sem ligação. */
+  /** O profissional da higienização ligado ao login (pelo usuário do sistema); null sem ligação. */
   profissionalLimpeza(c: ContextoAdt, login: string): Promise<number | null>;
 }
 

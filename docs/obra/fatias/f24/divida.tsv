@@ -140,7 +140,7 @@ apps/api/src/modulos/recepcao/classificacao-porta-propria.ts	api/recepcao	modelo
 apps/api/src/modulos/recepcao/operacoes.ts	api/recepcao	modelo-pendente	1	466
 apps/api/src/modulos/recepcao/porta-propria.ts	api/recepcao	modelo-pendente	2	13,73
 apps/api/src/modulos/recepcao/worklist.controller.ts	api/recepcao	nome-origem	1	87
-apps/api/src/modulos/relatorio/porta-propria.ts	api/relatorio	vocab-antigo	1	130
+apps/api/src/modulos/relatorio/porta-propria.ts	api/relatorio	vocab-antigo	1	131
 apps/api/src/modulos/relatorio/tipos.ts	api/relatorio	vocab-antigo	1	109
 apps/api/src/modulos/repasse/porta-memoria.ts	api/repasse	nome-origem	1	60
 apps/api/src/modulos/repasse/porta-propria.ts	api/repasse	modelo-pendente	1	606

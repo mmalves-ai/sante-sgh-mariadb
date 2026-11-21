@@ -2,6 +2,7 @@
 // 2 e 5). Vocabulário, entradas e respostas da API e da tela (o mesmo Zod nos dois lados). Nenhum nome de tabela do
 // banco; o texto da consulta de origem nunca sai do banco (é especificação, não é executado).
 import { z } from 'zod';
+import { esquemaHora } from '../formatacao/hora.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { DATAS_RELATIVAS, MESES_RELATIVOS } from './catalogo.js';
 
@@ -180,13 +181,8 @@ export const esquemaNovoAgendamento = z
     grupos: z.array(z.string().min(1).max(50)).max(10),
     enderecos: z.array(z.string().regex(ENDERECO, 'Endereço de e-mail inválido.')).max(20),
     periodicidade: z.enum(PERIODICIDADES),
-    /** Hora no formato HHMM (0 a 2359). */
-    hora: z
-      .number()
-      .int()
-      .min(0)
-      .max(2359)
-      .refine((h) => h % 100 < 60, 'Minutos de 00 a 59.'),
+    /** Hora do dia do envio, "HH:MM" (00:00 a 23:59), no fuso do estabelecimento. */
+    hora: esquemaHora,
     diaSemana: z.number().int().min(1).max(7).nullable(),
     diaMes: z.number().int().min(1).max(28).nullable(),
   })
@@ -236,7 +232,7 @@ export const esquemaAgendamentoLido = z.object({
   /** W0-09: os endereços só mascarados (`di***@ex***.invalid`); o endereço inteiro nunca volta à tela. */
   enderecosMascarados: z.array(z.string()),
   periodicidade: z.enum(PERIODICIDADES),
-  hora: z.number().int(),
+  hora: esquemaHora,
   diaSemana: z.number().int().nullable(),
   diaMes: z.number().int().nullable(),
   ativo: z.boolean(),

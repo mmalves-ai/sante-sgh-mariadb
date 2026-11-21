@@ -44,7 +44,7 @@ export interface BaseContrato {
   readonly tabela: number | null;
   readonly nomeTabela: string | null;
   readonly vigencia: string | null;
-  /** Valor por componente (TBVLRTHM: VALOR_CH, VALOR_CO, VALOR_FILME), modelo VALOR. */
+  /** Valor por componente (honorário, custo operacional e filme), modelo VALOR. */
   readonly valores?: { readonly ch: number; readonly co: number; readonly filme: number } | null;
   /** Modelo PORTE CBHPM: o valor do porte e a fração. */
   readonly porte?: { readonly codigo: string; readonly valor: number; readonly fracao: number } | null;
@@ -54,13 +54,13 @@ export interface BaseContrato {
   readonly filme?: { readonly m2: number; readonly indice: number } | null;
   /** UCO (custo operacional) e o índice. */
   readonly cop?: { readonly uco: number; readonly indice: number } | null;
-  /** Referência de mat/med (TBVLRMEM: VALOR) e, quando houver, PMC e PF do Brasíndice. */
+  /** Referência de mat/med (valor da tabela de preço) e, quando houver, PMC e PF do Brasíndice. */
   readonly referencia?: {
     readonly valor: number;
     readonly pmc: number | null;
     readonly pf: number | null;
   } | null;
-  /** Diária ou taxa (TBVLRDTH: VALOR). */
+  /** Diária ou taxa (valor da tabela de preço). */
   readonly diaria?: { readonly valor: number } | null;
 }
 

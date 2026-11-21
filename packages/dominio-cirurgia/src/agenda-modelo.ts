@@ -13,6 +13,7 @@ export const SITUACOES_AGENDAMENTO_MODELO = [
   'reprovado',
   'agendado',
   'confirmado',
+  'no_bloco',
   'em_andamento',
   'realizado',
   'suspenso',
@@ -26,6 +27,7 @@ const ESTADO_DA_SITUACAO: Readonly<Record<SituacaoAgendamentoModelo, EstadoAgend
   reprovado: 'cancelado',
   agendado: 'confirmado',
   confirmado: 'confirmado',
+  no_bloco: 'no-bloco',
   em_andamento: 'em-sala',
   realizado: 'realizado',
   suspenso: 'suspenso',
@@ -39,11 +41,8 @@ export function estadoDaSituacao(s: string): EstadoAgendamento | null {
     : null;
 }
 
-/**
- * Estado pedido pela tela → situação a gravar. "no-bloco" não tem situação no modelo (pedido de DDL do lote 03-01):
- * devolve null, e a gravação recusa com o motivo.
- */
-export function situacaoDoEstado(e: EstadoAgendamento): SituacaoAgendamentoModelo | null {
+/** Estado pedido pela tela → situação a gravar. */
+export function situacaoDoEstado(e: EstadoAgendamento): SituacaoAgendamentoModelo {
   switch (e) {
     case 'solicitado':
       return 'solicitado';
@@ -58,13 +57,15 @@ export function situacaoDoEstado(e: EstadoAgendamento): SituacaoAgendamentoModel
     case 'cancelado':
       return 'cancelado';
     case 'no-bloco':
-      return null;
+      return 'no_bloco';
   }
 }
 
 /** A situação gravada ocupa a sala? */
 export function situacaoOcupaSala(s: string): boolean {
-  return s === 'agendado' || s === 'confirmado' || s === 'em_andamento' || s === 'realizado';
+  return (
+    s === 'agendado' || s === 'confirmado' || s === 'no_bloco' || s === 'em_andamento' || s === 'realizado'
+  );
 }
 
 export type RecusaTransicao = 'situacao-desconhecida' | 'estado-mudou' | 'transicao-invalida' | null;

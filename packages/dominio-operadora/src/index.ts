@@ -7,7 +7,6 @@
 // decisão, junta e senha).
 export * from './liberacao.js';
 export * from './produto.js';
-export * from './inventario.js';
 export * from './documentos.js';
 export * from './plano.js';
 export * from './contrato.js';

@@ -1,4 +1,4 @@
-// Árvore de opções de menu do legado para a TELA de permissões (ficha do M10, regra 5; cap-08 §8.6): TBOPCOES não
+// Árvore de opções de menu do legado para a TELA de permissões (ficha do M10, regra 5; cap-08 §8.6): o cadastro de opções do menu de origem não
 // tem a chave do pai. O pai de uma opção é a última opção ANTERIOR do mesmo MODULO, na ordem de INDICE, com
 // NIVEL uma unidade menor. Salto de nível (a opção anterior está dois ou mais níveis acima) vira AVISO e a opção
 // fica sem pai na árvore (pendurada na raiz do módulo, marcada): o pai nunca é adivinhado. Opção inativa entra

@@ -3599,3 +3599,45 @@ ato_conta_portal_profissional_externo	INTG	historico	F3	Ato sobre a conta do mé
 troca_email_conta_portal	INTG	principal	F3	Pedido de troca do e-mail de uma conta do portal, confirmado por código enviado ao endereço novo	F2.2 onda 4 (pedidos dos lotes 03-12 e 04-02; db/migracoes)	08	0
 item_catalogo_licenciado	INTG	principal	F3	Apresentação ou produto de catálogo licenciado, com os preços por edição, só no estabelecimento licenciado	F2.2 onda 5b (pedido do lote 05-13; db/migracoes)	02	0
 retrato_validade_conselho	RH	historico	F3	Retrato diário da validade do registro no conselho dos colaboradores (só contagens, sem dado de pessoa)	F2.2 onda 5c (pedido do lote 05-16; db/migracoes)	07	0
+politica_segundo_fator	ADM	configuracao	F3	Exigência do segundo fator por estabelecimento, em ondas, com início, prazo de adesão e histórico de alteração	F2.4: pedido do lote f22 02-03	01	0
+usuario_perfil_alteracao	ADM	historico	F3	Alteração de vigência ou motivo de uma concessão de perfil, com o antes e o depois	F2.4: pedido do lote f22 02-02	01	0
+politica_senha_versao	ADM	configuracao	F3	Versão publicada da política de senha do estabelecimento, com vigência (inclusive futura) e cancelamento	F2.4: pedido do lote f22 02-02	01	0
+limite_sessao_perfil	ADM	configuracao	F3	Limite de sessões simultâneas por perfil (ou para todos os perfis) no estabelecimento, com vigência e motivo	F2.4: pedido do lote f22 02-02	01	0
+excecao_conta_dormente	ADM	configuracao	F3	Exceção de uma conta à rotina de contas dormentes, com validade e motivo	F2.4: pedido do lote f22 02-02	01	0
+conferencia_registro_conselho	ADM	historico	F3	Conferência da inscrição no conselho de classe de quem tem conta, com fonte, situação e validade	F2.4: pedido do lote f22 02-02	01	0
+perfil_cargo_rh	ADM	configuracao	F3	Perfil de acesso sugerido para cada cargo do RH no estabelecimento, com vigência e motivo	F2.4: pedido do lote f22 02-02	01	0
+resolucao_tarefa_rh	ADM	historico	F3	Resolução de uma tarefa de acesso vinda do RH (criar, revisar ou suspender acesso), com decisão e motivo	F2.4: pedido do lote f22 02-02	01	0
+comunicado_versao	ADM	historico	F3	Versão anterior de um comunicado corrigido, com título, texto e motivo da correção	F2.4: pedido do lote f22 02-01	01	0
+marca_processamento	ADM	controle	F3	Marca da leitura incremental dos processos automáticos (instante e id da última mudança lida)	F2.4: pedido do lote f22 05-15	01	0
+trilha_auditoria_fecho	ADM	controle	F3	Fecho diário da trilha de auditoria por estabelecimento: faixa de eventos, quantidade e cadeia de resumos	F2.4: pedido do lote f22 05-05	01	0
+pre_checkin_documento	AGE	item	F3	Documento enviado no pré-checkin, com tipo, arquivo e resumo do conteúdo	F2.4: pedido do lote f22 03-12	02	0
+agenda_online_configuracao	AGE	configuracao	F3	Configuração do agendamento pelo portal por agenda: antecedência, horizonte, cancelamento, pré-checkin e valor particular	F2.4: pedido do lote f22 03-12	02	0
+agenda_online_convenio	AGE	vinculo	F3	Fonte pagadora aceita no agendamento pelo portal de uma agenda	F2.4: pedido do lote f22 03-12	02	0
+agenda_online_servico	AGE	vinculo	F3	Especialidade ou exame oferecido no agendamento pelo portal de uma agenda	F2.4: pedido do lote f22 03-12	02	0
+ciclo_quimioterapia_prescricao	PEP	vinculo	F8	Prescrição ligada a um ciclo de quimioterapia, com desligamento e motivo	F2.4: pedido do lote f22 02-06	03	0
+evento_tratamento_oncologico	PEP	historico	F8	Evento do protocolo ou do ciclo de quimioterapia (revogação, suspensão, ajuste, desligamento), com motivo e versão anterior	F2.4: pedido do lote f22 02-06	03	0
+acuidade_visual	PEP	dominio	F8	Valores de acuidade visual oferecidos no exame oftalmológico (Snellen, decimal, logMAR ou qualitativo)	F2.4: pedido do lote f22 02-06	03	0
+graduacao_oftalmologica	PEP	dominio	F8	Graduações usadas nos achados do exame oftalmológico (sigla e descrição)	F2.4: pedido do lote f22 02-06	03	0
+profilaxia_tev_decisao	PEP	historico	F8	Decisão do prescritor sobre a profilaxia de tromboembolismo sugerida pela avaliação, com retificação	F2.4: pedido do lote f22 02-04	03	0
+contencao_paciente_avaliacao_adendo	PEP	historico	F8	Adendo do autor à checagem da contenção do paciente (a checagem não muda)	F2.4: pedido do lote f22 02-04	03	0
+protocolo_receita_enfermagem	PEP	configuracao	F8	Protocolo institucional que autoriza o enfermeiro a receitar, com vigência	F2.4: pedido do lote f22 05-03	03	0
+protocolo_receita_enfermagem_item	PEP	item	F8	Item que o protocolo de receita do enfermeiro permite, com dose máxima	F2.4: pedido do lote f22 05-03	03	0
+agendamento_cirurgico_recurso	CC	item	F3	Recurso da sala pedido no agendamento cirúrgico (microscópio, intensificador, vídeo, arco, congelação...)	F2.4: pedido do lote f22 03-01	04	0
+ato_copia_prontuario	HOT	historico	F3	Ato da cópia de prontuário: solicitação, conferência da legitimidade, geração e entrega	F2.4: pedido do lote f22 03-12	04	0
+preparo_lactario_evento	HOT	historico	F8	Histórico do preparo do lactário: alteração, cancelamento e emissão da etiqueta, com antes e depois	F2.4: pedido do lote f22 02-06	04	0
+conferencia_controlado	SUP	historico	F3	Dupla conferência do medicamento controlado num documento de estoque (saída, devolução ou perda), por lote	F2.4: pedido do lote f22 02-06	05	0
+evento_processo_licitatorio	SUP	historico	F3	Histórico do processo licitatório: avanço de etapa, recurso e decisão, homologação, encerramento e documento emitido	F2.4: pedido do lote f22 03-13	05	0
+versao_regra_contabil	FIN	configuracao	F7	Versão publicada e imutável de uma regra de contabilização de fatos, com conteúdo canônico e impressão	F2.4: pedido do lote f22 04-01	07	0
+vinculo_contrato_fornecedor	FIN	vinculo	F7	Ligação do contrato com fornecedor a um pedido de compra ou a um título a pagar, com a exceção aprovada usada	F2.4: pedido do lote f22 03-13	07	0
+quadro_vaga	RH	configuracao	F7	Quadro de vagas aprovado por cargo e centro de custo, com vigência e versão	F2.4: pedido do lote f22 03-03	07	0
+processamento_folha	RH	principal	F7	Processamento do cálculo da folha por estabelecimento, competência e tipo, com totais, parâmetros e tabela legal usados	F2.4: pedido do lote f22 03-06	07	0
+processamento_folha_linha	RH	item	F7	Linha do processamento da folha por vínculo e papel do cálculo: quantidade, valor, centro de custo e dias pagos	F2.4: pedido do lote f22 03-06	07	0
+parametro_folha	RH	configuracao	F7	Parâmetros da folha por estabelecimento e vigência (JSON validado pelo domínio)	F2.4: pedido do lote f22 03-06	07	0
+fechamento_periodo_folha	RH	principal	F7	Fechamento do período da folha (mensal ou anual) por estabelecimento, com totais e reabertura	F2.4: pedido do lote f22 03-06	07	0
+obrigacao_fechamento	RH	vinculo	F7	Fechamento do período da folha usado numa obrigação trabalhista	F2.4: pedido do lote f22 03-06	07	0
+evento_periodo_ponto	RH	historico	F7	Evento do período do ponto por vínculo e competência: fechamento, reabertura e ciência do espelho	F2.4: pedido do lote f22 03-09	07	0
+inscricao_conselho_unidade	RH	vinculo	F7	Unidade assistencial em que vale a inscrição no conselho de classe, com vigência	F2.4: pedido do lote f22 03-09	07	0
+curso_publico_alvo	RH	vinculo	F7	Público do curso no estabelecimento: todo o estabelecimento, um setor ou uma função, e se é obrigatório	F2.4: pedido do lote f22 03-11	07	0
+vinculo_responsavel_portal	INTG	principal	F3	Pedido e decisão do vínculo de um responsável (pais, tutor, curador, procurador) a um paciente no portal, com prova e escopos	F2.4: pedido do lote f22 03-12	08	0
+intencao_pagamento_portal	INTG	principal	F3	Pagamento iniciado pelo paciente no portal (pix ou cartão), com transação, situação e baixa no recebimento particular	F2.4: pedido do lote f22 03-12	08	0
+conciliacao_pagamento_portal	INTG	historico	F3	Conciliação do pagamento do portal pela tesouraria: conciliado, divergente ou estorno	F2.4: pedido do lote f22 03-12	08	0

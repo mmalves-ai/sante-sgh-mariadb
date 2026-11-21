@@ -1,0 +1,3 @@
+codigo_antigo	codigo_novo	descricao_nova	motivo
+faturamento.apacUtilitarios.importaTabelaFamedsol	faturamento.apacUtilitarios.importaTabelaMedicamentoSolicitado	Faturamento A.P.A.C. › Utilitários › Importa tabela de medicamentos solicitados	nome de tabela de origem no código
+sadt.utilitariosInterfaceamento.spdata	sadt.utilitariosInterfaceamento.sistemaAnterior	S.A.D.T. › Utilitários › Interfaceamento › Sistema anterior	nome do sistema de origem no código

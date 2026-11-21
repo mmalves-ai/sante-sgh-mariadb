@@ -520,7 +520,7 @@ export class PlataformaController {
   }
 
   @Get('auditoria/sessoes/:id/trilha-legado')
-  @Publica('auditoria (R3): TBCABTRILHA × "como"; conferido no serviço')
+  @Publica('auditoria (R3): trilha de auditoria × "como"; conferido no serviço')
   async cruzamento(@Param('id') id: string, @Req() req: Req): Promise<CruzamentoTrilhaTela[]> {
     const conta = await this.conta(req);
     if (!NUMERO.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Sessão não encontrada');

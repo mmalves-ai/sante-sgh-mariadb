@@ -68,7 +68,7 @@ export const esquemaPainelPermissoes = z.object({
   grupos: z.array(z.object({ nome: z.string(), ativo: z.boolean(), usuariosAtivos: z.number().int() })),
   papeis: z.array(esquemaPapelSbisTela),
   politica: esquemaPoliticaSenhaTela,
-  /** Tipos de permissão de acesso ao prontuário (TBTPPERM_RICADPAC), só consulta. */
+  /** Tipos de permissão de acesso ao prontuário, só consulta. */
   acessoProntuario: z.array(z.object({ id: z.number().int(), descricao: z.string() })),
   operacoes: z.array(
     z.object({
@@ -142,7 +142,7 @@ export type AceitarTermoEntrada = z.infer<typeof esquemaAceitarTermo>;
 
 /**
  * W1-01 (parte 6): publicar nova versão do termo de uso. A versão publicada não se edita (o próprio legado recusa
- * mudar o texto, a data e o autor de PRTERMOCAD): a nova entra ativa e a anterior sai de vigência, com os aceites
+ * mudar o texto, a data e o autor do termo de cadastro): a nova entra ativa e a anterior sai de vigência, com os aceites
  * dela intactos e consultáveis. `termoAnterior` é a versão que a tela mostrou (null: não havia termo vigente).
  */
 export const esquemaPublicarTermo = z
@@ -201,7 +201,7 @@ export const esquemaQuebraVidro = z.object({
   id: z.string(),
   login: z.string(),
   idPaciente: z.number().int().nullable(),
-  /** Prontuário do paciente (RICADPAC.PRONT): o número que a tela mostra. */
+  /** Prontuário do paciente (número do prontuário): o número que a tela mostra. */
   prontuario: z.number().int().nullable(),
   motivo: z.string().nullable(),
   justificativa: z.string().nullable(),

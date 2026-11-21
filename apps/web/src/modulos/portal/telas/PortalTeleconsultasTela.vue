@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { lerHoraDigitada } from '@sgh/contratos';
 // Portal do paciente: as teleconsultas do titular escolhido (M50, etapa 4; ficha, seção 7). Cada uma leva à sala de
 // espera virtual (`/paciente/teleconsulta/:id`); a teleconsulta nasce da marcação pelo portal numa agenda que a oferece.
 import type { SessaoContaPortal } from '@sgh/contratos';
@@ -29,7 +30,14 @@ const lista = useQuery({
   enabled: pode,
 });
 const dia = (d: string) => d.split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+// A hora chega como HH:MM (contrato neutro); lerHoraDigitada também aceita a forma de quatro dígitos e nunca quebra a tela.
+const hora = (h: string) => {
+  try {
+    return lerHoraDigitada(h) ?? '';
+  } catch {
+    return h;
+  }
+};
 
 function trocou(s: SessaoContaPortal): void {
   sessao.value = s;

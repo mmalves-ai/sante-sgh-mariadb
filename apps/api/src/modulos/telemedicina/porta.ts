@@ -40,7 +40,7 @@ export interface ContextoTelemedicina {
   readonly chaveIdempotencia?: string;
 }
 
-/** A teleconsulta (ou teleinterconsulta) lida. `hora` vai em HHMM, o formato do contrato da tela e do domínio. */
+/** A teleconsulta (ou teleinterconsulta) lida. `hora` é a hora do dia "HH:MM" no fuso do estabelecimento, como no contrato da tela e no domínio. */
 export interface Teleconsulta {
   readonly id: number;
   readonly modalidade: ModalidadeTele;

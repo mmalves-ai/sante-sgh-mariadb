@@ -101,7 +101,8 @@ export async function coletarTransacoes(
     linhas = [...(await consulta)];
   } catch (e) {
     const codigo = (e as { code?: string }).code ?? (e as Error).name;
-    if (ERRO_DE_PRIVILEGIO.test(`${codigo} ${(e as Error).message}`)) throw new ErroPrivilegioDeColeta(codigo);
+    if (ERRO_DE_PRIVILEGIO.test(`${codigo} ${(e as Error).message}`))
+      throw new ErroPrivilegioDeColeta(codigo);
     throw e;
   }
   const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
@@ -113,7 +114,13 @@ export async function coletarTransacoes(
   const grupos = new Map<string, PorProcesso>();
   for (const x of linhas) {
     const processo = x.processo?.trim() || SEM_MARCA;
-    const g = grupos.get(processo) ?? { processo, conexoes: 0, travas: 0, esperasPorTrava: 0, comandosLongos: 0 };
+    const g = grupos.get(processo) ?? {
+      processo,
+      conexoes: 0,
+      travas: 0,
+      esperasPorTrava: 0,
+      comandosLongos: 0,
+    };
     grupos.set(processo, {
       processo,
       conexoes: g.conexoes + 1,

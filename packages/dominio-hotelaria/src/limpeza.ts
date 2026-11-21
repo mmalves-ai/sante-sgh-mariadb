@@ -2,7 +2,7 @@
 // Concluído → Inspecionado → Liberado, com a reprovação na inspeção que volta à execução e o cancelamento —, quem,
 // quando e de qual aparelho (cada mudança é uma linha), o cronômetro sem as pausas, o prazo por tipo de limpeza ×
 // criticidade da área (SGH_CFG_PARAMETRO) e a precaução de contato que exige a limpeza terminal com o protocolo da
-// CCIH antes da liberação. A situação do legado (CHSITUACAO: 1 Alta hospitalar, 2 Aguardando higienização, 3 Em
+// CCIH antes da liberação. A situação de origem (1 Alta hospitalar, 2 Aguardando higienização, 3 Em
 // higienização, 4 Liberado) acompanha só nos valores gravados (1 e 2): 3 e 4 ficam no novo até a decisão registrada.
 import type { EtapaLimpeza, Precaucao } from '@sgh/contratos';
 

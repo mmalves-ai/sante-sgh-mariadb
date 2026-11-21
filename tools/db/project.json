@@ -1,0 +1,18 @@
+{
+  "name": "db-ferramentas",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/db",
+  "tags": ["tipo:ferramenta", "modulo:plataforma"],
+  "targets": {
+    "lint": {
+      "command": "eslint tools/db"
+    },
+    "typecheck": {
+      "command": "tsc -p tools/db/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config tools/db/vitest.config.ts"
+    }
+  }
+}

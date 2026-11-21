@@ -61,9 +61,9 @@ export function somarMinutos(instante: string, minutos: number): string {
 export function datasDaSerie(p: PedidoSerie): DataSessao[] {
   if (!Number.isInteger(p.sessoes) || p.sessoes < 1)
     throw new ErroSessao('serie-vazia', 'A série precisa de ao menos uma sessão.');
-  if (!/^([01]\d|2[0-3])[0-5]\d$/.test(p.hora))
-    throw new ErroSessao('hora-invalida', 'Hora no formato HHMM.');
-  const hora = `${p.hora.slice(0, 2)}:${p.hora.slice(2, 4)}`;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.hora))
+    throw new ErroSessao('hora-invalida', 'Hora no formato HH:MM.');
+  const hora = p.hora;
   const r: DataSessao[] = [];
   let dia = diaUtc(p.inicio);
   for (let ordem = 1; ordem <= p.sessoes; ordem++) {
@@ -144,7 +144,7 @@ export function conferirRecurso(
 }
 
 /**
- * A faixa etária gravada no recurso (AGCADEIRA.FAIXA_INICIAL/FINAL): a faixa padrão 0–99 e a vazia (0–0, a linha "não
+ * A faixa etária gravada no recurso (idade inicial e final da cadeira ou sala): a faixa padrão 0–99 e a vazia (0–0, a linha "não
  * informado") valem como "sem limite".
  */
 export function faixaDoRecurso(de: number | null, ate: number | null): { de: number; ate: number } | null {

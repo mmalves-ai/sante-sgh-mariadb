@@ -1,4 +1,4 @@
-// Tempos do centro cirúrgico (regra 7): HHMM, duração, instantes sem fuso e datas impossíveis.
+// Tempos do centro cirúrgico (regra 7): hora do dia "HH:MM", duração, instantes sem fuso e datas impossíveis.
 import { describe, expect, it } from 'vitest';
 import {
   dataImpossivel,
@@ -8,34 +8,32 @@ import {
   duracaoTexto,
   duracaoValida,
   ErroTempoCirurgia,
-  formatarHhmm,
-  hhmmDeMinutos,
+  horaDeMinutos,
   instanteValido,
   lerInstante,
   minutosAbsolutos,
-  minutosDeHhmm,
+  minutosDaHora,
   somarMinutos,
 } from './tempo.js';
 
-describe('HHMM e duração', () => {
-  it('converte minutos e HHMM nos dois sentidos', () => {
-    expect(hhmmDeMinutos(90)).toBe('0130');
-    expect(minutosDeHhmm('0130')).toBe(90);
-    expect(minutosDeHhmm('2460')).toBeNull();
-    expect(minutosDeHhmm(null)).toBeNull();
-    expect(formatarHhmm('0905')).toBe('09:05');
-    expect(formatarHhmm('xx')).toBe('');
-    expect(() => hhmmDeMinutos(1440)).toThrow(ErroTempoCirurgia);
+describe('hora do dia e duração', () => {
+  it('converte minutos e "HH:MM" nos dois sentidos', () => {
+    expect(horaDeMinutos(90)).toBe('01:30');
+    expect(minutosDaHora('01:30')).toBe(90);
+    expect(minutosDaHora('24:60')).toBeNull();
+    expect(minutosDaHora('0130')).toBeNull();
+    expect(minutosDaHora(null)).toBeNull();
+    expect(() => horaDeMinutos(1440)).toThrow(ErroTempoCirurgia);
   });
-  it('duração em HHMM de CCCADCIR e entre duas horas (passa da meia-noite)', () => {
-    expect(duracaoTexto(150)).toBe('0230');
+  it('duração em "HH:MM" e entre duas horas (passa da meia-noite)', () => {
+    expect(duracaoTexto(150)).toBe('02:30');
     expect(() => duracaoTexto(0)).toThrow(/Duração/);
     expect(duracaoValida(1439)).toBe(true);
     expect(duracaoValida(1440)).toBe(false);
-    expect(duracaoEntre('0800', '0930')).toBe(90);
-    expect(duracaoEntre('2330', '0030')).toBe(60);
-    expect(duracaoEntre('0800', '0800')).toBeNull();
-    expect(duracaoEntre('08', '0900')).toBeNull();
+    expect(duracaoEntre('08:00', '09:30')).toBe(90);
+    expect(duracaoEntre('23:30', '00:30')).toBe(60);
+    expect(duracaoEntre('08:00', '08:00')).toBeNull();
+    expect(duracaoEntre('08', '09:00')).toBeNull();
   });
 });
 
@@ -48,7 +46,7 @@ describe('instantes', () => {
     expect(deMinutosAbsolutos(minutosAbsolutos('2026-11-03 07:30'))).toBe('2026-11-03 07:30');
     expect(diaDoInstante('2026-11-03 07:30')).toBe('2026-11-03');
   });
-  it('data impossível do legado (ano 3203, 1899) fica fora da conta', () => {
+  it('data impossível (ano 3203, 1899) fica fora da conta', () => {
     expect(dataImpossivel('3203-10-02 08:00')).toBe(true);
     expect(dataImpossivel('1899-12-30 00:00')).toBe(true);
     expect(dataImpossivel('2026-11-03 07:30')).toBe(false);

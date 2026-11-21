@@ -140,7 +140,7 @@ export const esquemaRegistroConsulta = z.object({
 export type RegistroConsulta = z.infer<typeof esquemaRegistroConsulta>;
 
 export const esquemaPedidoExportacaoConsulta = z.object({
-  /** Código de PRTIPO_JUSTIF_EXPORTACAO (dado de pessoa ou clínico). */
+  /** Código do tipo de justificativa da exportação (dado de pessoa ou clínico). */
   justificativa: z.number().int().positive().optional(),
   filtros: z.record(z.string(), z.string().max(100)).default({}),
 });

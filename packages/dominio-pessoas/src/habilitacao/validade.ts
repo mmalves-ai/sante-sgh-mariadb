@@ -1,5 +1,5 @@
 // Validade do registro no conselho (regra 3; ATO-03, RDC63-06; ficha, seção 4 "Validade do conselho"). O cadastro de
-// profissionais do outro sistema não tem data de validade (TBCBOPRO: COD, UF, CONS_PROF, ATIVO): a validade é
+// profissionais do outro sistema não tem data de validade (código, UF, conselho e situação): a validade é
 // acompanhada pelo RH em SGH_PES_HABILITACAO. Vencida: a validade já passou; a vencer: vence na janela (padrão 60
 // dias, parâmetro `pessoas.alertaConselhoDias`); sem validade: o RH ainda não conferiu.
 import { JANELA_ALERTA_CONSELHO_DIAS, type SituacaoHabilitacao } from '@sgh/contratos';
@@ -36,7 +36,7 @@ export function piorSituacao(situacoes: readonly SituacaoHabilitacao[]): Situaca
 export interface RegistroComValidade {
   readonly registro: number;
   readonly profissional: number;
-  /** TBCBOPRO.ATIVO: o registro inativo não gera alerta. */
+  /** Inscrição ativa: o registro inativo não gera alerta. */
   readonly ativo: boolean | null;
   readonly validade: string | null;
 }

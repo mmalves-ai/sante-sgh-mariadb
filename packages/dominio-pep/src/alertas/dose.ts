@@ -10,7 +10,7 @@ export function alertasDose(item: ItemAvaliado): AlertaGerado[] {
   for (const { produto, dose, unidade } of item.produtos) {
     if (dose === null) continue;
     const u = unidade ? ` ${unidade}` : '';
-    // A faixa da unidade de prescrição do item (GEUNIPRESC); sem ela, a faixa única do produto.
+    // A faixa da unidade de prescrição do item; sem ela, a faixa única do produto.
     const faixa = unidade ? produto.faixasDose?.get(unidade.trim().toUpperCase()) : undefined;
     const doseMaxima = faixa ? faixa.maxima : produto.doseMaxima;
     const doseMinima = faixa ? faixa.minima : produto.doseMinima;

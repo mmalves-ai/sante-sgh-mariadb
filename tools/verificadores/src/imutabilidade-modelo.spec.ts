@@ -10,7 +10,9 @@ import {
   tabelasClinicasDoModelo,
 } from './imutabilidade.ts';
 
-const op = (nome: string, tabela: string) => ({ [nome]: { receita: { nome, passos: [{ tabela, acao: 'DELETE' }] } } });
+const op = (nome: string, tabela: string) => ({
+  [nome]: { receita: { nome, passos: [{ tabela, acao: 'DELETE' }] } },
+});
 
 describe('imutabilidade clínica sobre o modelo próprio', () => {
   const clinicas = tabelasClinicasDoModelo();
@@ -24,7 +26,12 @@ describe('imutabilidade clínica sobre o modelo próprio', () => {
   });
 
   it('aponta DELETE sintético em prescricao, internacao e trilha_auditoria; deixa passar cadastro', () => {
-    const ops = { ...op('sintetica/a.ts', 'prescricao'), ...op('sintetica/b.ts', 'internacao'), ...op('sintetica/c.ts', 'trilha_auditoria'), ...op('sintetica/d.ts', 'carater_admissao') };
+    const ops = {
+      ...op('sintetica/a.ts', 'prescricao'),
+      ...op('sintetica/b.ts', 'internacao'),
+      ...op('sintetica/c.ts', 'trilha_auditoria'),
+      ...op('sintetica/d.ts', 'carater_admissao'),
+    };
     expect(operacoesComDeleteClinico(ops, decisorDeleteClinico(clinicas)).map((a) => a.tabela)).toEqual([
       'prescricao',
       'internacao',
@@ -33,7 +40,8 @@ describe('imutabilidade clínica sobre o modelo próprio', () => {
   });
 
   it('aponta GRANT de DELETE em tabela clínica do modelo nas migrações', () => {
-    const sql = 'GRANT SELECT, INSERT, DELETE ON prescricao TO sgh_app;\nGRANT DELETE ON carater_admissao TO sgh_app;';
+    const sql =
+      'GRANT SELECT, INSERT, DELETE ON prescricao TO sgh_app;\nGRANT DELETE ON carater_admissao TO sgh_app;';
     expect(grantsDeleteClinicoSgh([{ arquivo: 'x.sql', sql }], decisorDeleteClinico(clinicas))).toEqual([
       { origem: 'script-sgh', onde: 'x.sql', tabela: 'prescricao' },
     ]);
@@ -49,7 +57,8 @@ describe('imutabilidade clínica sobre o modelo próprio', () => {
   });
 
   it('o critério do DDL: coluna do paciente, da passagem ou da internação', () => {
-    const ddl = 'CREATE TABLE evolucao_x (\n  id BIGINT,\n  paciente_id BIGINT UNSIGNED NOT NULL\n);\nCREATE TABLE tipo_x (\n  id BIGINT,\n  codigo VARCHAR(30)\n);';
+    const ddl =
+      'CREATE TABLE evolucao_x (\n  id BIGINT,\n  paciente_id BIGINT UNSIGNED NOT NULL\n);\nCREATE TABLE tipo_x (\n  id BIGINT,\n  codigo VARCHAR(30)\n);';
     expect(tabelasClinicasDoDdl(ddl)).toEqual(['evolucao_x']);
   });
 });

@@ -1,15 +1,14 @@
 // Vocabulário da agenda que o novo decide sozinho (POL-1: padrão de mercado como parâmetro; ajuste quando a
-// resposta do call center chegar): motivos codificados do cancelamento (o legado guarda texto livre em
-// RECANAGE.MOTIVO, 1.160 "." e 858 "ca" desde 10/2025; TBMOTCANCCAD está vazia), canais da marcação (o valor
-// que o legado grava em REPACAGD.TP_AGE pelo domínio RETIPAGE: 0 não informado, 10 presencial, 20 telefone,
-// 30 WhatsApp; código de baixa confiança, DP-46.2: legenda "a confirmar"), quem pediu o cancelamento
-// (TBMOTCANCTP: 1 Agendamento, 2 Atendimento; o novo guarda o solicitante próprio), prioridades e situações da
-// lista de espera e resultados da confirmação ativa (TBESTADOCONFIRMACAO: 1 não confirmado, 2 confirmado,
-// 3 refutado, 4 cancelado).
+// resposta do call center chegar): motivos codificados do cancelamento (a base de origem guarda texto livre no
+// motivo, 1.160 "." e 858 "ca" desde 10/2025, e o cadastro de motivos está vazio), canais da marcação (o código
+// numérico do tipo de agendamento da origem: 0 não informado, 10 presencial, 20 telefone, 30 WhatsApp; código de
+// baixa confiança, DP-46.2: legenda "a confirmar"), quem pediu o cancelamento (na origem, 1 Agendamento e
+// 2 Atendimento; o produto guarda o solicitante próprio), prioridades e situações da lista de espera e resultados
+// da confirmação ativa (1 não confirmado, 2 confirmado, 3 refutado, 4 cancelado).
 
 export interface MotivoCancelamento {
   readonly codigo: string;
-  /** Texto gravado em RECANAGE.MOTIVO (até 300 caracteres, CP1252). */
+  /** Texto gravado no motivo do cancelamento (até 300 caracteres, CP1252). */
   readonly texto: string;
   /** Quem costuma pedir. */
   readonly solicitante: 'paciente' | 'hospital' | 'profissional';
@@ -33,7 +32,7 @@ export function motivoCancelamento(codigo: string): MotivoCancelamento | null {
   return MOTIVOS_CANCELAMENTO.find((m) => m.codigo === codigo) ?? null;
 }
 
-/** Texto do motivo para RECANAGE.MOTIVO: o do código, com o complemento (até 300 caracteres). */
+/** Texto do motivo do cancelamento: o do código, com o complemento (até 300 caracteres). */
 export function textoDoMotivo(codigo: string, complemento?: string | null): string {
   const m = motivoCancelamento(codigo);
   if (!m) throw new Error('Motivo de cancelamento desconhecido.');
@@ -44,28 +43,28 @@ export function textoDoMotivo(codigo: string, complemento?: string | null): stri
 export interface CanalMarcacao {
   readonly codigo: 'nao-informado' | 'presencial' | 'telefone' | 'whatsapp' | 'portal';
   readonly rotulo: string;
-  /** REPACAGD.TP_AGE (RETIPAGE.COD); null = o canal não existe no legado (fica só em SGH_AGE_MARCACAO_EXT). */
-  readonly tpAge: number;
+  /** Código numérico do tipo de agendamento (canal) gravado na marcação; 0 = não informado. */
+  readonly codigoTipoAgendamento: number;
   readonly aConfirmar: boolean;
 }
 
 export const CANAIS_MARCACAO: readonly CanalMarcacao[] = [
-  { codigo: 'presencial', rotulo: 'Presencial (balcão)', tpAge: 10, aConfirmar: true },
-  { codigo: 'telefone', rotulo: 'Telefone (central)', tpAge: 20, aConfirmar: true },
-  { codigo: 'whatsapp', rotulo: 'WhatsApp', tpAge: 30, aConfirmar: true },
-  // Portal do paciente: fora de RETIPAGE. Sem a resposta da DP-46.2, grava o mesmo valor que o call center grava hoje
-  // (20; ficha do M50, seção 5; D-TPAGE-50) e o canal "portal" vai à extensão do novo (SGH_AGE_MARCACAO_EXT).
-  { codigo: 'portal', rotulo: 'Portal do paciente', tpAge: 20, aConfirmar: true },
-  { codigo: 'nao-informado', rotulo: 'Não informado', tpAge: 0, aConfirmar: true },
+  { codigo: 'presencial', rotulo: 'Presencial (balcão)', codigoTipoAgendamento: 10, aConfirmar: true },
+  { codigo: 'telefone', rotulo: 'Telefone (central)', codigoTipoAgendamento: 20, aConfirmar: true },
+  { codigo: 'whatsapp', rotulo: 'WhatsApp', codigoTipoAgendamento: 30, aConfirmar: true },
+  // Portal do paciente: fora dos tipos da origem. Sem a resposta da DP-46.2, usa o mesmo código do call center (20;
+  // ficha do M50, seção 5); o canal "portal" é gravado no modelo próprio.
+  { codigo: 'portal', rotulo: 'Portal do paciente', codigoTipoAgendamento: 20, aConfirmar: true },
+  { codigo: 'nao-informado', rotulo: 'Não informado', codigoTipoAgendamento: 0, aConfirmar: true },
 ];
 
 export function canalMarcacao(codigo: string): CanalMarcacao | null {
   return CANAIS_MARCACAO.find((c) => c.codigo === codigo) ?? null;
 }
 
-export function canalDoTpAge(tpAge: number | null | undefined): CanalMarcacao {
+export function canalDoCodigoTipoAgendamento(codigo: number | null | undefined): CanalMarcacao {
   return (
-    CANAIS_MARCACAO.find((c) => c.tpAge === tpAge && c.codigo !== 'portal') ??
+    CANAIS_MARCACAO.find((c) => c.codigoTipoAgendamento === codigo && c.codigo !== 'portal') ??
     (CANAIS_MARCACAO.find((c) => c.codigo === 'nao-informado') as CanalMarcacao)
   );
 }
@@ -92,7 +91,7 @@ export function ordemDaFila<T extends ItemFilaEspera>(itens: readonly T[]): T[] 
     .sort((a, b) => PESO[a.prioridade] - PESO[b.prioridade] || a.desde.localeCompare(b.desde) || a.id - b.id);
 }
 
-/** TBESTADOCONFIRMACAO: o resultado da tentativa de confirmação. */
+/** O resultado da tentativa de confirmação. */
 export const RESULTADOS_CONFIRMACAO = [
   { id: 1, codigo: 'nao-confirmado', rotulo: 'Não confirmado (sem contato)' },
   { id: 2, codigo: 'confirmado', rotulo: 'Confirmado' },

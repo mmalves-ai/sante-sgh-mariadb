@@ -1,5 +1,5 @@
-// Regra 8 do M33: tipo de credor do título que nasce do repasse (MFCONPAG.TIPO com ONDE='R'; ref 01 §2.5). M: médico
-// pessoa física, exige o vínculo com o profissional (TBCBOPRO) e recebe RPA. E: empresa médica e cooperativa, recebem
+// Regra 8 do M33: tipo de credor do título que nasce do repasse (ref 01 §2.5). M: médico
+// pessoa física, exige o vínculo com o profissional e recebe RPA. E: empresa médica e cooperativa, recebem
 // demonstrativo para emitir nota (título tipo E, sem RPA). Os demais tipos de prestador (fornecedor, prestador PF,
 // vendedor, tomador) não têm título de repasse no pc (5.458 títulos: 5.027 M e 431 E) e são recusados até o setor dizer
 // como entram.
@@ -23,7 +23,7 @@ export function destinoDoRepasse(
   return { ok: false, motivo: 'Tipo de prestador sem título de repasse.' };
 }
 
-/** Lançamento já em RPA (RPLANRPA) não entra em outro RPA (cenário recusa-ja-em-rpa). */
+/** Lançamento já em RPA não entra em outro RPA (cenário recusa-ja-em-rpa). */
 export function lancamentosLivres(
   pedidos: readonly number[],
   jaEmRpa: ReadonlySet<number>,

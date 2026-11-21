@@ -2,8 +2,8 @@
 // natureza eSocial do evento, os tipos de prestador, os parâmetros do RPA, a integração contábil dos eventos, o período
 // por usuário e as empresas que somam impostos, as cooperativas, os cooperados e os credenciamentos de médico e de
 // prestador por convênio. Os rendimentos isentos e os tipos de dedução são carga de referência (só consulta). As regras
-// de repasse (TBREPGER) não entram aqui: a regra nova nasce como rascunho no novo e só é incluída depois da aprovação do
-// supervisor (tela de regras). Opções do outro sistema (TBOPCOES, "Gestão de repasses e terceiros" 6609): Tabelas 3025,
+// de repasse não entram aqui: a regra nova nasce como rascunho no novo e só é incluída depois da aprovação do
+// supervisor (tela de regras). Opções do outro sistema (menu de origem, "Gestão de repasses e terceiros" 6609): Tabelas 3025,
 // Parâmetros 3026, Cadastro de eventos 3027, Integração 3031, Parâmetros usuário/empresa 5608, Empresas 4811;
 // Cooperativas 3675 (Tabelas › Geral A–L); Percentual de repasse 3728 (credenciamento). Conferir na validação.
 import type { DominioPublico } from './tipos.js';

@@ -1,4 +1,4 @@
-// Documento da trilha da prescrição (PRASSINATURA_DOC.DOCUMENTO_ORIGINAL do tipo 37: XML Windows-1252, comprimido e
+// Documento da trilha da prescrição (documento original da assinatura, tipo 37: XML Windows-1252, comprimido e
 // em base64 pelo adaptador), na estrutura que o executável grava (medida na cópia `pc`, documentos de 2026-06, só os
 // nomes dos elementos): o cabeçalho congelado (hospital, paciente, atendimento) e `<prescricao>` com um
 // `<lancamento>` por item (a prescrição, o tipo de assinatura, o profissional do evento, a gravação, o item, o tipo,

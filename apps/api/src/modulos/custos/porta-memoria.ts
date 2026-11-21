@@ -104,8 +104,8 @@ const FONTES: FontesEstatistica = {
     { cdc: 888888, quantidade: 4 },
   ],
   cirurgias: [
-    { cdc: 300310, duracao: '0130', n: 20 },
-    { cdc: 300310, duracao: '0045', n: 12 },
+    { cdc: 300310, minutos: 90, n: 20 },
+    { cdc: 300310, minutos: 45, n: 12 },
   ],
   exames: [{ cdc: 300500, quantidade: 1923 }],
   requisicoes: [

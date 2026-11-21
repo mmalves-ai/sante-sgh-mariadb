@@ -1,6 +1,6 @@
 // Permissões do M12 (ficha, seção 7; convencoes.md §12): convênios, contratos, tabelas de preço, importação
 // versionada e o motor de preços (consulta). Quem tem a opção no legado tem a permissão no novo: as opções vêm
-// da árvore TBOPCOES do módulo Tabelas › Convênios (Consultar 6307, Alterar 3567, Excluir 3569, Gerenciamento
+// da árvore do menu de origem do módulo Tabelas › Convênios (Consultar 6307, Alterar 3567, Excluir 3569, Gerenciamento
 // 3570/6309/3974, Honorários médicos › Gerenciamento 6313/3710/3712, Diárias/Taxas 6311, Índices 6315, Porte
 // anestésico 3591, Porte médico 3592, Índice/Procedimento 3588, Controles › Honorários médicos 3564) e de
 // Utilitários › Importações › Tabelas (3768). A correspondência ação → opção é inferida (POL-1b) quando a

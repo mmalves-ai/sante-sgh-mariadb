@@ -5,7 +5,7 @@
 import { recusa, reais, type RecusaSuprimentos } from './recusa.js';
 
 export interface PropostaCotacao {
-  /** `GELANPED.ID` da linha da proposta. */
+  /** O id do item da proposta. */
   readonly id: number;
   readonly item: number;
   readonly seq: number;

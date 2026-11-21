@@ -459,13 +459,6 @@ const registrarEventoSenha = definirOperacao({
         throw recusa('destino-nao-permitido', 'Este local não encaminha para o destino escolhido.');
     }
     const ef = d.efeito;
-    // A senha suspensa (aguardando documento, não localizada) espera a situação "suspensa" no modelo (pedido de DDL
-    // registrado): até a migração, a recusa é explícita, sem cair na restrição do banco.
-    if (ef.situacao === 'S')
-      throw recusa(
-        'modelo-pendente',
-        'A suspensão da senha ainda não tem situação no banco do produto: a gravação fica indisponível até a migração do modelo.',
-      );
     const valores: Record<string, unknown> = {};
     if (ef.situacao) {
       valores['situacao'] = situacaoDaLetra(ef.situacao);

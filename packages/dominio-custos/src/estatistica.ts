@@ -1,6 +1,6 @@
 // Estatísticas de custeio (M54-F4; ficha, seções 4 e 6): a coleta do mês a partir das fontes do banco, agregadas no
 // banco por centro de custo do movimento (nenhuma linha de paciente chega aqui), e a matriz centro × estatística da
-// competência, em que o lançamento manual prevalece sobre o coletado e a estatística de referência (CTTIPODADO 2: por
+// competência, em que o lançamento manual prevalece sobre o coletado e a estatística de referência (tipo 2: por
 // exemplo a área) vale nas competências seguintes até ser trocada. As quantidades andam em centésimos (inteiros).
 import {
   type CodigoEstatistica,
@@ -50,18 +50,9 @@ export function competenciaFutura(competencia: string, hoje: string): boolean {
 export const centesimos = (v: number): number => Math.round(v * 100);
 export const deCentesimos = (c: number): number => c / 100;
 
-/** Duração HHMM (como a cirurgia grava) em minutos; null quando o texto não é uma duração. */
-export function duracaoEmMinutos(hhmm: string | null): number | null {
-  const m = /^(\d{2})(\d{2})$/.exec((hhmm ?? '').trim());
-  if (!m) return null;
-  const mm = Number(m[2]);
-  if (mm > 59) return null;
-  return Number(m[1]) * 60 + mm;
-}
-
 // ── Coleta ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Um grupo agregado no banco: o código do centro de custo do movimento (TBCENCUS.COD) e a quantidade. */
+/** Um grupo agregado no banco: o código do centro de custo do movimento e a quantidade. */
 export interface GrupoPorCodigo {
   readonly cdc: number | null;
   readonly quantidade: number;
@@ -72,15 +63,15 @@ export interface FontesLidas {
   readonly censo: { readonly grupos: readonly GrupoPorCodigo[]; readonly diasFechados: number };
   /** Paciente-dia estimado pelas internações que tocam o mês (dia da entrada conta, o da alta não). */
   readonly internacoes: readonly GrupoPorCodigo[];
-  /** Cirurgias do mês pelo centro da sala, agrupadas pela duração gravada (HHMM). */
+  /** Cirurgias do mês pelo centro da sala, agrupadas pela duração gravada em minutos (null: sem duração válida). */
   readonly cirurgias: readonly {
     readonly cdc: number | null;
-    readonly duracao: string | null;
+    readonly minutos: number | null;
     readonly n: number;
   }[];
   readonly exames: readonly GrupoPorCodigo[];
   readonly requisicoes: readonly GrupoPorCodigo[];
-  /** Colaboradores com vínculo no mês, já pelo TBCENCUS.ID da lotação (o cadastro de pessoas guarda o ID). */
+  /** Colaboradores com vínculo no mês, já pelo id do centro de custo da lotação (o cadastro de pessoas guarda o ID). */
   readonly colaboradores: readonly { readonly centro: number; readonly n: number; readonly horas: number }[];
   readonly leitos: readonly GrupoPorCodigo[];
 }
@@ -190,8 +181,8 @@ export function planejarColeta(
   const qtd: { cdc: number | null; cent: number }[] = [];
   for (const g of fontes.cirurgias) {
     qtd.push({ cdc: g.cdc, cent: centesimos(g.n) });
-    const m = duracaoEmMinutos(g.duracao);
-    if (m === null) {
+    const m = g.minutos;
+    if (m === null || !Number.isInteger(m) || m < 0) {
       invalidas += g.n;
       continue;
     }

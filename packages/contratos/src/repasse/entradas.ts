@@ -20,7 +20,7 @@ export const esquemaProporRegraRepasse = z
     substitui: id.nullable().default(null),
     vigencia: data,
     beneficiario: z.enum(['M', 'P']),
-    /** Profissional (TBCBOPRO) ou prestador; null: qualquer um. */
+    /** Profissional ou prestador (id do profissional); null: qualquer um. */
     profissional: id.nullable().default(null),
     convenio: smallint.nullable().default(null),
     procedimentoInicial: z.number().int().min(0).nullable().default(null),
@@ -93,7 +93,7 @@ export const esquemaDecidirApuracao = z
 export type DecidirApuracaoEntrada = z.infer<typeof esquemaDecidirApuracao>;
 
 /**
- * repasse.lancarEvento: o lançamento do repasse em RPLANEVE (+ o vínculo do médico em RPLANEVE_TBCBOPRO). Origem:
+ * repasse.lancarEvento: o lançamento do repasse (com o vínculo do médico). Origem:
  * `apuracao` (o total do beneficiário na apuração aprovada do novo), `ajuste` (avulso, com justificativa) ou `estorno`
  * (glosa mantida depois do pagamento: lançamento negativo no período seguinte ligado ao original em SGH_REP_ESTORNO;
  * nunca altera o repasse pago).
@@ -110,9 +110,9 @@ export const esquemaLancarEventoRepasse = z
     previsao: data.nullable().default(null),
     evento: smallint,
     tipo: z.enum(['M', 'E']),
-    /** Código do prestador (TBCBOPRO.COD do médico; o da empresa médica no tipo E). */
+    /** Código do prestador (o do médico; o da empresa médica no tipo E). */
     prestador: id,
-    /** Registro do médico (TBCBOPRO.ID; obrigatório no tipo M: o vínculo RPLANEVE_TBCBOPRO). */
+    /** Id do profissional (médico); obrigatório no tipo M, o vínculo do lançamento com o médico. */
     profissional: id.nullable().default(null),
     valor: z
       .number()
@@ -123,7 +123,7 @@ export const esquemaLancarEventoRepasse = z
     justificativa,
     /** Apuração do novo (SGH_REP_APURACAO.ID) na origem `apuracao`. */
     apuracao: id.nullable().default(null),
-    /** Lançamento original (RPLANEVE.ID_RPLANEVE) na origem `estorno`. */
+    /** Lançamento original (id do lançamento de repasse) na origem `estorno`. */
     estornaDe: id.nullable().default(null),
     /** Realizados aprovados (SGH_PES_PLANTAO_REALIZADO.ID) na origem `plantao` (M52.6). */
     plantoes: z.array(id).max(200).default([]),
@@ -151,7 +151,7 @@ export const esquemaLancarEventoRepasse = z
   });
 export type LancarEventoRepasseEntrada = z.infer<typeof esquemaLancarEventoRepasse>;
 
-/** repasse.incluirRegra: a versão aprovada incluída em TBREPGER (+ TBREPGER_TBCBOPRO), só pelo servidor. */
+/** repasse.incluirRegra: a versão aprovada incluída na regra de repasse (com o profissional, quando há), só pelo servidor. */
 export const esquemaIncluirRegraRepasse = z
   .object({
     versao: id,
@@ -176,7 +176,7 @@ export const esquemaIncluirRegraRepasse = z
   .strict();
 export type IncluirRegraRepasseEntrada = z.infer<typeof esquemaIncluirRegraRepasse>;
 
-/** repasse.integrarItens: os itens do período com o valor do motor (FCINTEGRPA), ligados ao lançamento da apuração. */
+/** repasse.integrarItens: os itens do período com o valor do motor (a integração da apuração), ligados ao lançamento da apuração. */
 export const esquemaIntegrarItensRepasse = z
   .object({
     apuracao: id,

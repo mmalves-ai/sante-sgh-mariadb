@@ -62,8 +62,8 @@
     2: // inválidas em regras datadas (TBPERMEM: 448 linhas, com anos como 0218 e 2201; TBINDICE: 2; TBPERTHM: 2)
 
 ## apps/api/src/modulos/relatorio/porta-propria.ts
-- vocab-antigo: linhas 130
-    130: 
+- vocab-antigo: linhas 131
+    131: /** HHMM da tela → TIME do banco (recusa hora inválida). */
 
 ## apps/api/src/modulos/relatorio/tipos.ts
 - vocab-antigo: linhas 109

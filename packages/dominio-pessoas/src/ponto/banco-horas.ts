@@ -1,5 +1,5 @@
-// Banco de horas, regra 14 do M52 (cap-07 §7.1.3): por regra do regime (destino das horas pelo domínio POBANCOHRTP e o
-// início de cada ciclo pelo POTPINIBANCO); o saldo é a SOMA dos movimentos, nunca um campo editável (os movimentos são
+// Banco de horas, regra 14 do M52 (cap-07 §7.1.3): por regra do regime (destino das horas pelo domínio de destinos e o
+// início de cada ciclo pelo domínio de inícios); o saldo é a SOMA dos movimentos, nunca um campo editável (os movimentos são
 // só de inclusão: o fechamento credita as extras e debita os atrasos; a reabertura estorna com outro movimento). CLT,
 // art. 59, §§ 2º e 5º: o ciclo é de até 12 meses por acordo coletivo ou 6 por acordo individual (parâmetro do regime).
 import type { DestinoBanco, InicioBanco, OrigemBanco } from '@sgh/contratos';
@@ -47,7 +47,7 @@ export interface MovimentoProposto {
   readonly minutos: number;
 }
 
-/** A virada do ciclo pelo início escolhido (POTPINIBANCO): o que vai à folha e o que expira. */
+/** A virada do ciclo pelo início escolhido: o que vai à folha e o que expira. */
 export function viradaDoCiclo(saldo: number, inicio: InicioBanco): MovimentoProposto[] {
   const pagar = saldo > 0 && (inicio === 1 || inicio === 3);
   const expirar = saldo < 0 && (inicio === 1 || inicio === 2);

@@ -29,7 +29,9 @@ for arq in "$RAIZ"/.env "$RAIZ"/.env.*; do
   nome="$(basename "$arq")"
   [[ -f "$arq" && "$nome" != ".env.example" ]] && MONTAGEM+=(-v "/dev/null:/src/$nome:ro")
 done
-for d in node_modules .pnpm-store .pnpm-cache .pnpm-state .npm-cache .cache-local .tmp .nx .seguranca .claude \
+# dump/ (dump do MV com dados reais de pessoas, regra 5: nem o scanner lê) e certs/ (certificado local de dev) são
+# ignorados pelo git e nunca versionados: entram vazios (docs/obra/ci-verde.md).
+for d in dump certs node_modules .pnpm-store .pnpm-cache .pnpm-state .npm-cache .cache-local .tmp .nx .seguranca .claude \
   apps/api/dist apps/web/dist apps/worker/dist apps/web/test-results apps/web/playwright-report; do
   [[ -d "$RAIZ/$d" ]] && MONTAGEM+=(--mount "type=tmpfs,destination=/src/$d")
 done

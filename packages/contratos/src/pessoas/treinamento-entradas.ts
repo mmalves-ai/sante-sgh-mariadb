@@ -46,7 +46,7 @@ const chaves = <T extends string>(o: Record<T, string>) => Object.keys(o) as [T,
 export const esquemaAlvoCurso = z
   .object({
     tipo: z.enum(['unidade', 'funcao']),
-    /** Código da unidade (TBUNIDAD.COD) ou o nome da função (a chave é calculada no servidor). */
+    /** Código da unidade assistencial ou o nome da função (a chave é calculada no servidor). */
     valor: textoCp1252(60).pipe(z.string().min(1, 'Informe a unidade ou a função.')),
   })
   .strict();
@@ -197,7 +197,7 @@ export const esquemaVersaoPop = z
   .object({
     codigo,
     titulo: textoCp1252(120).pipe(z.string().min(3, 'Informe o título.')),
-    /** Unidade do POP (TBUNIDAD.COD); sem unidade, o estabelecimento inteiro. */
+    /** Unidade assistencial do POP (código); sem unidade, o estabelecimento inteiro. */
     unidade: smallint.nullable().default(null),
     vigencia: data,
     resumo: textoCp1252(2000).pipe(z.string().min(10, 'Resuma o procedimento (10 caracteres ou mais).')),
@@ -294,7 +294,7 @@ export const esquemaLancarPlantoesRepasse = z
   .object({
     competencia,
     prestador: id,
-    /** O registro do profissional (TBCBOPRO.ID): o mesmo prestador com dois registros tem dois grupos. */
+    /** O registro do profissional (id da inscrição no conselho): o mesmo prestador com dois registros tem dois grupos. */
     registro: id,
     realizados: z.array(id).min(1).max(200),
   })

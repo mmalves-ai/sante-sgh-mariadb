@@ -23,7 +23,7 @@ describe('derivadores das fontes', () => {
   });
 
   it('título a pagar: lançamento e pagamento', () => {
-    const l = linha('MFCONPAG', 7, {
+    const l = linha('titulo_pagar', 7, {
       EMISSAO: '2027-01-05',
       VALOR: 300,
       DT_PGTO: '1899-12-30',
@@ -37,15 +37,15 @@ describe('derivadores das fontes', () => {
     expect(derivarTituloPagar(l, ctx).map((f) => [f.tipo, f.valorCentavos])).toEqual([
       ['tituloPagar', 30_000],
     ]);
-    const pago = linha('MFCONPAG', 7, { ...l.valores, DT_PGTO: '2027-02-01', PAGO: 300 });
+    const pago = linha('titulo_pagar', 7, { ...l.valores, DT_PGTO: '2027-02-01', PAGO: 300 });
     const r = derivarTituloPagar(pago, ctx);
     expect(r.map((f) => f.tipo)).toEqual(['tituloPagar', 'baixaTituloPagar']);
     expect(r[1]!.campos).toMatchObject({ contaBancaria: 4, tipoLancamento: 2 });
-    expect(derivarTituloPagar(linha('MFCONPAG', 8, { EMISSAO: null }), ctx)).toEqual([]);
+    expect(derivarTituloPagar(linha('titulo_pagar', 8, { EMISSAO: null }), ctx)).toEqual([]);
   });
 
   it('título a receber: lançamento e recebimento, com o centro de custo', () => {
-    const l = linha('MFCTAREC', 9, {
+    const l = linha('titulo_receber', 9, {
       APRES: '2027-01-10',
       VALOR: 1000,
       PGTO: '2027-03-01',
@@ -59,13 +59,13 @@ describe('derivadores das fontes', () => {
       ['baixaTituloReceber', 95_000, 2],
     ]);
     expect(
-      derivarTituloReceber(linha('MFCTAREC', 1, { APRES: '1899-12-30', PGTO: '1899-12-30' }), ctx),
+      derivarTituloReceber(linha('titulo_receber', 1, { APRES: '1899-12-30', PGTO: '1899-12-30' }), ctx),
     ).toEqual([]);
   });
 
   it('movimento bancário', () => {
     const r = derivarMovimentoBancario(
-      linha('MFLANCTO', 3, {
+      linha('movimento_bancario', 3, {
         DATA: '2027-01-02',
         VALOR: 12.34,
         TIPO_TRF: 'D',
@@ -77,12 +77,12 @@ describe('derivadores das fontes', () => {
     );
     expect(r[0]).toMatchObject({ tipo: 'movimentoBancario', valorCentavos: 1234, centroCusto: 6 });
     expect(r[0]!.campos).toMatchObject({ tipoTransferencia: 'D', contaDebito: 1, contaCredito: null });
-    expect(derivarMovimentoBancario(linha('MFLANCTO', 4, { DATA: null }), ctx)).toEqual([]);
+    expect(derivarMovimentoBancario(linha('movimento_bancario', 4, { DATA: null }), ctx)).toEqual([]);
   });
 
   it('saída de estoque: quantidade × preço médio, competência por ano e mês', () => {
     const r = derivarSaidaEstoque(
-      linha('GELANSAI', 11, {
+      linha('movimento_estoque', 11, {
         ANO: 2027,
         MES: 2,
         QTDE: 2.5,
@@ -101,31 +101,31 @@ describe('derivadores das fontes', () => {
       centroCusto: 8,
     });
     const comData = derivarSaidaEstoque(
-      linha('GELANSAI', 12, { DATA_SAIDA: '2027-02-14', QTDE: -1, VLRMED: 10 }),
+      linha('movimento_estoque', 12, { DATA_SAIDA: '2027-02-14', QTDE: -1, VLRMED: 10 }),
       ctx,
     );
     expect(comData[0]).toMatchObject({ data: '2027-02-14', valorCentavos: -1000 });
-    expect(derivarSaidaEstoque(linha('GELANSAI', 13, { ANO: 2027, MES: 13 }), ctx)).toEqual([]);
+    expect(derivarSaidaEstoque(linha('movimento_estoque', 13, { ANO: 2027, MES: 13 }), ctx)).toEqual([]);
   });
 
   it('nota de entrada e recibo', () => {
     expect(
-      derivarNotaEntrada(linha('GECADNFS', 1, { DATA: '2027-01-03', TOTAL: 99.9, NAT_OP: 1102 }), ctx)[0],
+      derivarNotaEntrada(linha('nota_entrada', 1, { DATA: '2027-01-03', TOTAL: 99.9, NAT_OP: 1102 }), ctx)[0],
     ).toMatchObject({
       tipo: 'notaEntrada',
       valorCentavos: 9990,
     });
-    expect(derivarNotaEntrada(linha('GECADNFS', 2, {}), ctx)).toEqual([]);
+    expect(derivarNotaEntrada(linha('nota_entrada', 2, {}), ctx)).toEqual([]);
     expect(
       derivarRecibo(
-        linha('RPRPA', 5, { EMISSAO: '2027-01-31', VALOR_TITULOS: 500, STATUS: 'E', TIPO: 'M' }),
+        linha('recibo_autonomo', 5, { EMISSAO: '2027-01-31', VALOR_TITULOS: 500, STATUS: 'E', TIPO: 'M' }),
         ctx,
       )[0],
     ).toMatchObject({
       tipo: 'recibo',
       valorCentavos: 50_000,
     });
-    expect(derivarRecibo(linha('RPRPA', 6, { EMISSAO: '2027-01-31', STATUS: 'C' }), ctx)).toEqual([]);
+    expect(derivarRecibo(linha('recibo_autonomo', 6, { EMISSAO: '2027-01-31', STATUS: 'C' }), ctx)).toEqual([]);
   });
 
   it('folha: custo de pessoal no último dia da competência; rubrica fora da contabilização não gera fato', () => {

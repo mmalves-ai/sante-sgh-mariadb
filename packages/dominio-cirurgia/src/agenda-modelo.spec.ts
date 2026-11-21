@@ -43,14 +43,12 @@ describe('situação do modelo ↔ estado da tela', () => {
     for (const s of SITUACOES_AGENDAMENTO_MODELO) expect(estadoDaSituacao(s)).not.toBeNull();
     expect(estadoDaSituacao('agendado')).toBe('confirmado');
     expect(estadoDaSituacao('em_andamento')).toBe('em-sala');
-    expect(estadoDaSituacao('no_bloco')).toBeNull();
+    expect(estadoDaSituacao('no_bloco')).toBe('no-bloco');
+    expect(estadoDaSituacao('inexistente')).toBeNull();
   });
-  it('cada estado da tela vai a uma situação que volta ao mesmo estado; "no bloco" não tem situação', () => {
-    for (const e of ESTADOS_AGENDAMENTO) {
-      const s = situacaoDoEstado(e);
-      if (e === 'no-bloco') expect(s).toBeNull();
-      else expect(estadoDaSituacao(s!)).toBe(e);
-    }
+  it('cada estado da tela vai a uma situação que volta ao mesmo estado (inclusive "no bloco")', () => {
+    for (const e of ESTADOS_AGENDAMENTO) expect(estadoDaSituacao(situacaoDoEstado(e))).toBe(e);
+    expect(situacaoDoEstado('no-bloco')).toBe('no_bloco');
   });
   it('a transição confere a situação vista e a regra dos estados', () => {
     expect(conferirTransicao('agendado', 'em-sala', 'confirmado')).toBeNull();

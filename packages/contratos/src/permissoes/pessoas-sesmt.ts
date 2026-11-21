@@ -1,6 +1,6 @@
 // Permissões do M52, fatia F5 (ficha, seção 7, telas do SESMT; convencoes.md §12): prontuário ocupacional e ASO,
 // acidentes e CAT, riscos e EPI, vacinação do colaborador. Quem tem a opção no outro sistema tem a permissão no novo
-// (regra 1 do M06). Opções da árvore TBOPCOES (catalogo-legado.json, pc), módulo "Segurança do trabalho" (554, 582):
+// (regra 1 do M06). Opções da árvore do menu de origem (catalogo-legado.json, pc), módulo "Segurança do trabalho" (554, 582):
 //   - Lançamentos 567 › CAT 569, Risco - Seção 570, Funcionário 571 (Exame 572, EPI 573);
 //   - Tabelas 555 › PPRA 557 (Grupos de risco 558, Riscos 559, Tipo de exposição 560), Exames 566, Tipo de exames 565;
 //   - Relatórios 574 › CAT 576, ASO 577, PPP 578.

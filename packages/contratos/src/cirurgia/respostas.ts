@@ -30,7 +30,7 @@ export const ESTADOS_CIRURGIA = [
 ] as const;
 
 export const esquemaAgendamentoCirurgico = z.object({
-  /** CCAGENDA.ID; null para a solicitação que ainda não ocupa a sala. */
+  /** Id do agendamento na sala; null para a solicitação que ainda não ocupa a sala. */
   id: nul(n),
   /** O registro do novo (estado, motivo, pendências); null para o agendamento feito fora destas telas. */
   estadoId: nul(n),
@@ -98,7 +98,7 @@ export const esquemaMapaCirurgico = z.object({
   sobreposicoes: n,
   datasImpossiveis: n,
   preparoMinimoMin: n,
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type MapaCirurgico = z.infer<typeof esquemaMapaCirurgico>;
 
@@ -178,7 +178,7 @@ export const esquemaCirurgiaRealizada = z.object({
   duracao: txt,
   paciente: txt,
   procedimentos: z.array(esquemaProcedimentoDoRegistro),
-  /** Casamento com o agendamento: registrado pelo novo, ou a sugestão por REG, sala e data. */
+  /** Casamento com o agendamento: registrado pelo novo, ou a sugestão por atendimento, sala e data. */
   ligacao: z.object({
     tipo: z.enum(['registro', 'revisao', 'exato', 'reg-e-dia', 'so-reg', 'ambiguo', 'nenhum']),
     agendamento: nul(n),

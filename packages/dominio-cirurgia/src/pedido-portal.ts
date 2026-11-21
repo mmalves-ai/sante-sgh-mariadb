@@ -3,9 +3,9 @@
 // conferência do pedido de cirurgia antes de gravar e o limite de pedidos por conta. Sem banco e sem relógio próprio.
 
 export interface RegistroDoProfissional {
-  /** O registro (TBCBOPRO.ID): o cirurgião na agenda do bloco. */
+  /** O registro profissional (id): o cirurgião na agenda do bloco. */
   readonly id: number;
-  /** O código do registro (TBCBOPRO.COD): o prestador no repasse e o número do conselho. */
+  /** O número do registro profissional: o prestador no repasse e o número do conselho. */
   readonly codigo: number;
   readonly uf: string;
 }

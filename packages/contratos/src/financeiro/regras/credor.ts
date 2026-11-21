@@ -1,8 +1,8 @@
 // Regras 1 e 2 do M32 (ficha, seção 8; cap-06b §6.8; Anexo A §A.6): o tipo de credor define o lançamento e as
 // retenções, e só se grava título com credor válido.
-//   - MFCONPAG.TIPO: F 55.792 · M 8.607 (exige o vínculo com o profissional, MFCONPAG_TBCBOPRO) · E 5.421 · X 1.356 ·
-//     C 80 · T 10 (confiança alta);
-//   - MFCONPAG.ONDE (módulo de origem): F 46.895 · E 18.914 · R 5.458 (confiança média);
+//   - tipo de credor: F 55.792 · M 8.607 (exige o vínculo com o profissional) · E 5.421 · X 1.356 · C 80 · T 10
+//     (confiança alta);
+//   - módulo de origem do título: F 46.895 · E 18.914 · R 5.458 (confiança média);
 //   - os títulos órfãos do outro sistema (12,9% apontam para fornecedor inexistente) aparecem no relatório de
 //     saneamento como "não encontrado no cadastro"; a correção pela tela vale nos dois sistemas.
 import { recusaFin, type RecusaFinanceiro } from './recusa.js';
@@ -38,9 +38,9 @@ export const ROTULO_ORIGEM_TITULO: Readonly<Record<OrigemTitulo, string>> = {
 };
 
 export interface RegrasCredor {
-  /** M: o título exige o vínculo com o profissional (MFCONPAG_TBCBOPRO). */
+  /** M: o título exige o vínculo com o profissional. */
   readonly exigeProfissional: boolean;
-  /** Retenções na fonte (MFDESACR) permitidas no lançamento manual. */
+  /** Retenções na fonte permitidas no lançamento manual. */
   readonly admiteRetencao: boolean;
   /** O título nasce pela tela de títulos a pagar (X folha e o repasse nascem em outros módulos). */
   readonly lancamentoManual: boolean;
@@ -67,9 +67,9 @@ export function regrasDoCredor(tipo: TipoCredor): RegrasCredor {
 
 export interface CredorInformado {
   readonly tipo: string;
-  /** O fornecedor (TBFORNEC.COD) existe e está ativo? */
+  /** O fornecedor (pelo código) existe e está ativo? */
   readonly credorExiste: boolean;
-  /** Profissional (TBCBOPRO.ID) informado e válido, quando o tipo é M. */
+  /** Profissional (id) informado e válido, quando o tipo é M. */
   readonly profissional: number | null;
   readonly profissionalExiste?: boolean;
   /** Há retenções informadas? */

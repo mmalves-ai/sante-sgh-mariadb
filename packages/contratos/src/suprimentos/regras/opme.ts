@@ -10,7 +10,7 @@ import { qtd3, recusa, type RecusaSuprimentos } from './recusa.js';
 // ── Solicitação (regra 6) ───────────────────────────────────────────────────────────────────────────────────────
 
 export interface SolicitacaoParaConferir {
-  /** A classe do item no cadastro (TBCLASSI): só a classe de OPME. */
+  /** A classe do item no cadastro (classe do insumo): só a classe de OPME. */
   readonly classeItem: number | null;
   readonly tuss: string;
   readonly quantidade: number;

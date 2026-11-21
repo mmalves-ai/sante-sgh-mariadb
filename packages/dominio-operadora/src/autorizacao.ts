@@ -12,7 +12,7 @@
 //   - a decisão do auditor designado: o enfermeiro auditor autoriza por inteiro; negar, cortar quantidade ou diárias e
 //     abrir a junta da divergência técnica são do médico auditor, com a crítica do domínio, o fundamento (cláusula do
 //     contrato ou dispositivo legal) e o parecer; a crítica que bloqueia impede autorizar;
-//   - a situação da guia que vale para as contas médicas (CDGUIASTATUS) e o comunicado da negativa ao beneficiário.
+//   - a situação da guia que vale para as contas médicas e o comunicado da negativa ao beneficiário.
 import {
   CATEGORIAS_AUDITOR,
   type CategoriaAuditor,
@@ -220,7 +220,7 @@ export function problemasDoPedido(e: RegistrarAutorizacaoEntrada, x: ContextoPed
 
 // ── Críticas automáticas ─────────────────────────────────────────────────────────────────────────
 
-/** Códigos das críticas da autorização no domínio da operadora (PSCRITICA), lidos do banco do estabelecimento. */
+/** Códigos das críticas da autorização no domínio da operadora, lidos do banco do estabelecimento. */
 export const CRITICA_DOMINIO = {
   carencia: 1,
   inadimplencia: 2,
@@ -301,7 +301,7 @@ export function carenciaDoAtendimento(p: {
   return 'demais';
 }
 
-/** O regime do contrato do prestador (TBREGIMEATEND: 1 ambulatorial, 2 hospitalar, 3 os dois) serve? */
+/** O regime do contrato do prestador (1 ambulatorial, 2 hospitalar, 3 os dois) serve? */
 export function regimeServe(
   regime: number,
   p: { readonly tipoGuia: number; readonly comGuiaPrincipal: boolean },
@@ -517,7 +517,7 @@ export function designacaoVigente(
 
 // ── Situação da guia e comunicado ────────────────────────────────────────────────────────────────
 
-/** A situação da guia (CDGUIASTATUS) para as contas médicas: 1 autorizada (também a parcial), 5 cancelada. */
+/** A situação da guia para as contas médicas: 1 autorizada (também a parcial), 5 cancelada. */
 export function situacaoGuiaTiss(situacao: SituacaoAutorizacao): number | null {
   if (situacao === 'autorizada' || situacao === 'parcial') return 1;
   if (situacao === 'cancelada') return 5;

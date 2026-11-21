@@ -78,6 +78,11 @@ describe.skipIf(SEM_BANCO)('porta própria dos treinamentos contra o MariaDB (cl
         `DELETE o FROM treinamento_obrigatorio_funcao o JOIN funcao f ON f.id = o.funcao_id WHERE f.estabelecimento_id IN (${m})`,
         estabs,
       );
+      await e.executar(`DELETE FROM curso_publico_alvo WHERE estabelecimento_id IN (${m})`, estabs);
+      await e.executar(
+        "DELETE p FROM curso_publico_alvo p JOIN curso c ON c.id = p.curso_id WHERE c.codigo LIKE 'F2211-%'",
+        [],
+      );
       await e.executar("DELETE FROM curso WHERE codigo LIKE 'F2211-%'", []);
     });
 
@@ -297,25 +302,49 @@ describe.skipIf(SEM_BANCO)('porta própria dos treinamentos contra o MariaDB (cl
         [curso],
       ),
     ).toBe(1);
+    // A categoria POP é o tipo procedimento_operacional; o público por unidade e o "todo o estabelecimento" vão a
+    // curso_publico_alvo, e o público do curso não obrigatório também, com a marca da linha.
+    const cursoPop = await g(
+      (x) => x.incluirCurso({ ...camposCurso, codigo: `${CURSO}x`, categoria: 'pop' }),
+      A,
+      'curso',
+    );
+    expect(await porta.curso(A, cursoPop)).toMatchObject({ categoria: 'pop', obrigatorio: true });
+    const cursoUnidade = await g(
+      (x) =>
+        x.incluirCurso({
+          ...camposCurso,
+          codigo: `${CURSO}y`,
+          alvos: [{ tipo: 'unidade', valor: String(setor) }],
+        }),
+      A,
+      'curso',
+    );
+    expect(await porta.curso(A, cursoUnidade)).toMatchObject({
+      obrigatorio: true,
+      alvos: [{ tipo: 'unidade', valor: String(setor) }],
+    });
+    const cursoTodos = await g(
+      (x) => x.incluirCurso({ ...camposCurso, codigo: `${CURSO}z`, alvos: [] }),
+      A,
+      'curso',
+    );
+    expect(await porta.curso(A, cursoTodos)).toMatchObject({ obrigatorio: true, alvos: [] });
+    const cursoLivre = await g(
+      (x) => x.incluirCurso({ ...camposCurso, codigo: `${CURSO}w`, obrigatorio: false, categoria: 'gestao' }),
+      A,
+      'curso',
+    );
+    expect(await porta.curso(A, cursoLivre)).toMatchObject({
+      categoria: 'gestao',
+      obrigatorio: false,
+      alvos: [{ tipo: 'funcao', valor: chaveFuncao(FUNCAO) }],
+    });
     expect(
-      await codigoDe(
-        g((x) => x.incluirCurso({ ...camposCurso, codigo: `${CURSO}x`, categoria: 'pop' }), A, 'curso'),
-      ),
-    ).toBe('modelo-pendente');
-    expect(
-      await codigoDe(
-        g(
-          (x) =>
-            x.incluirCurso({
-              ...camposCurso,
-              codigo: `${CURSO}y`,
-              alvos: [{ tipo: 'unidade', valor: String(setor) }],
-            }),
-          A,
-          'curso',
-        ),
-      ),
-    ).toBe('modelo-pendente');
+      await contar('SELECT COUNT(*) n FROM curso_publico_alvo WHERE curso_id = ? AND excluido_em IS NULL', [
+        cursoTodos,
+      ]),
+    ).toBe(1);
     expect(await codigoDe(g((x) => x.incluirCurso(camposCurso), A, 'curso'))).toBe('codigo-repetido');
 
     // Turma com o POP, número de negócio e inscrições.
@@ -635,9 +664,16 @@ describe.skipIf(SEM_BANCO)('porta própria dos treinamentos contra o MariaDB (cl
       cargaMinimaMin: 60,
       validadeMeses: 12,
     };
-    expect(await codigoDe(servico.incluirCurso(sess(), { ...curso, obrigatorio: true, alvos: [] }))).toBe(
-      'modelo-pendente',
-    );
+    expect(
+      (
+        await servico.incluirCurso(sess(), {
+          ...curso,
+          codigo: `${curso.codigo}t`,
+          obrigatorio: true,
+          alvos: [],
+        })
+      ).id,
+    ).toBeGreaterThan(0);
     const idCurso = (
       await servico.incluirCurso(sess(), {
         ...curso,
@@ -737,7 +773,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos treinamentos contra o MariaDB (cl
     expect(await porta.turma(A, turma)).toMatchObject({ situacao: 'encerrada', pop: popA });
   }, 300_000);
 
-  it('a mesma recusa do cadastro de cursos na memória e no banco (modelo-pendente)', async () => {
+  it('o mesmo cadastro de cursos na memória e no banco (unidade, todos, gestão e não obrigatório)', async () => {
     const memoria = new PortaTreinamentoMemoria(new PortaPessoasMemoria());
     const casos: Array<[string, PortaTreinamento, ContextoTreinamento]> = [
       ['memória', memoria, { cliente: 'teste', estabelecimento: 1, usuario: null, correlacao: 'x' }],
@@ -757,13 +793,13 @@ describe.skipIf(SEM_BANCO)('porta própria dos treinamentos contra o MariaDB (cl
       };
       const incluir = (x: Record<string, unknown>) =>
         codigoDe(p.gravarSgh(c, trilha(c, 'curso'), (gr) => gr.incluirCurso({ ...base, ...x } as never)));
-      expect([nome, await incluir({ alvos: [] })]).toEqual([nome, 'modelo-pendente']);
-      expect([nome, await incluir({ alvos: [{ tipo: 'unidade', valor: String(setor) }] })]).toEqual([
+      expect([nome, await incluir({ codigo: `${base.codigo}a`, alvos: [] })]).toEqual([nome, 'ok']);
+      expect([
         nome,
-        'modelo-pendente',
-      ]);
-      expect([nome, await incluir({ categoria: 'gestao' })]).toEqual([nome, 'modelo-pendente']);
-      expect([nome, await incluir({ obrigatorio: false })]).toEqual([nome, 'modelo-pendente']);
+        await incluir({ codigo: `${base.codigo}b`, alvos: [{ tipo: 'unidade', valor: String(setor) }] }),
+      ]).toEqual([nome, 'ok']);
+      expect([nome, await incluir({ codigo: `${base.codigo}c`, categoria: 'gestao' })]).toEqual([nome, 'ok']);
+      expect([nome, await incluir({ codigo: `${base.codigo}d`, obrigatorio: false })]).toEqual([nome, 'ok']);
     }
   });
 });

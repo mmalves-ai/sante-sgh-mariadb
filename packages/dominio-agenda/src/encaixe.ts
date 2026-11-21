@@ -1,14 +1,22 @@
 // Encaixe (ficha do M17, `agenda.encaixar`/`agenda.desfazerEncaixe` e regra 6; ref 01 §3.3; sante-api:
-// src/services/acoes-encaixe.js). No legado, encaixe não é um segundo paciente no mesmo minuto (a chave
-// (NOME, CRM, DATA, HORA) de REPACAGI e o índice único de REPACAGD impedem): é uma linha nova da grade num
-// minuto que a grade não ocupa, marcada TIPOHR 'E', que nunca vira vaga pública.
+// src/services/acoes-encaixe.js). Encaixe não é um segundo paciente no mesmo minuto (a unicidade do horário na
+// agenda e a da marcação impedem): é um horário novo da grade num minuto que a grade não ocupa, do tipo 'E', que
+// nunca vira vaga pública.
 //   Vetos: agenda inativa; data além de 1 ano; horário que já passou; paciente sem prontuário; trio do
 //   prontuário ambíguo; minuto ocupado na grade OU nas marcações (há marcações órfãs, sem horário).
 //   Alertas: dia sem grade normal; sobreposição com a duração do vizinho anterior; agenda não lotada (há vaga
 //   normal futura no dia, que é o caminho certo); limite de encaixes por turno do parâmetro do novo.
-//   Desfazer: só até o check-in (senha de atendimento ligada ou ATENDIDO='S' recusam).
+//   Desfazer: só até o check-in (senha de atendimento ligada ou paciente atendido recusam).
 import { ehVaga, type LinhaGrade } from './estado-horario.js';
-import { deMinutos, formatarHora, horarioJaPassou, paraMinutos, type Relogio, umAnoDepois } from './tempo.js';
+import {
+  deMinutos,
+  duracaoMinutos,
+  formatarHora,
+  horarioJaPassou,
+  paraMinutos,
+  type Relogio,
+  umAnoDepois,
+} from './tempo.js';
 
 export type VetoEncaixe =
   | 'agenda-inativa'
@@ -31,7 +39,7 @@ export interface ContextoEncaixe {
   readonly agendaAtiva: boolean;
   /** Horários do dia na grade (normais e encaixes). */
   readonly gradeDoDia: readonly (LinhaGrade & { readonly duracao: string })[];
-  /** Horas 'HHMM' com marcação no dia (inclui as órfãs, sem horário na grade). */
+  /** Horas "HH:MM" com marcação no dia (inclui as órfãs, sem horário na grade). */
   readonly marcadasNoDia: readonly string[];
   readonly duracaoAgendaMin: number | null;
   readonly pacienteTemProntuario: boolean;
@@ -50,7 +58,7 @@ export interface AvaliacaoEncaixe {
   readonly vagasNormais: readonly string[];
 }
 
-const turno = (hhmm: string) => (paraMinutos(hhmm) < 12 * 60 ? 'manha' : 'tarde');
+const turno = (hora: string) => (paraMinutos(hora) < 12 * 60 ? 'manha' : 'tarde');
 
 /** Primeiro minuto livre a partir de `hora` (inclusive), no mesmo dia; null se não houver. */
 export function proximoMinutoLivre(hora: string, ocupados: ReadonlySet<string>): string | null {
@@ -106,8 +114,7 @@ export function avaliarEncaixe(p: PedidoEncaixe, c: ContextoEncaixe): AvaliacaoE
     .sort((a, b) => a.hora.localeCompare(b.hora))
     .at(-1);
   if (antes) {
-    const dur =
-      (antes.duracao && antes.duracao !== '0000' ? paraMinutos(antes.duracao) : null) ?? c.duracaoAgendaMin;
+    const dur = duracaoMinutos(antes.duracao) ?? c.duracaoAgendaMin;
     if (dur && paraMinutos(antes.hora) + dur > paraMinutos(p.hora))
       alertas.push({
         codigo: 'sobreposicao',

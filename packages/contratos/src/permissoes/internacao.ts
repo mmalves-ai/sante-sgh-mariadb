@@ -1,6 +1,6 @@
 // Permissões do M16 (ficha, seção 7; convencoes.md §12): painel de leitos ao vivo, divergência de cadastro de
 // leitos, censo diário, painéis gerenciais, indicadores hospitalares e o BI. Quem tem a opção no legado tem a
-// permissão no novo (regra 1 do M06). Opções da árvore do legado (TBOPCOES, retrato
+// permissão no novo (regra 1 do M06). Opções da árvore do legado (menu de origem, retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Recepção interna (módulo 7): Leitos 2322, Painel de leitos 3990, Controle Central de Leitos 2483,
 //     Pacientes por localização 2428; Recepção externa (8): Painel de leitos 4555 e Consultar 6009; módulo 37:

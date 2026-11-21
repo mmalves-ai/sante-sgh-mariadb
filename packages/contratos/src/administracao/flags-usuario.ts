@@ -1,4 +1,4 @@
-// W1-01 (parte 3b): permissões complementares do usuário (TBUSUCPL, uma linha por empresa) que o Sante altera pela
+// W1-01 (parte 3b): permissões complementares do usuário (uma linha por empresa) que o Sante altera pela
 // receita acesso.alterarFlagsUsuario. Cada coluna grava a letra que o legado já grava nela: as letras vistas no perfil
 // passivo do pc (packages/legado/src/acesso/assinaturas/dominios-vistos.json, todo o período). "FT": liga e desliga;
 // "F": só desliga (ninguém ligou neste estabelecimento: ligar gravaria uma letra nunca vista); "T": só liga.

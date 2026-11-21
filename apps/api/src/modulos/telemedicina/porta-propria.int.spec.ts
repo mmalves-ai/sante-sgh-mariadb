@@ -21,9 +21,9 @@ const CORR = `teste-l0315-${randomUUID().slice(0, 8)}`;
 
 describe('fuso do estabelecimento', () => {
   it('converte a hora local em instante e volta', () => {
-    const i = instanteNoFuso('America/Sao_Paulo', DIA, '1015');
+    const i = instanteNoFuso('America/Sao_Paulo', DIA, '10:15');
     expect(i.toISOString()).toBe('2030-04-02T13:15:00.000Z');
-    expect(civilNoFuso('America/Sao_Paulo', i)).toMatchObject({ data: DIA, hhmm: '1015' });
+    expect(civilNoFuso('America/Sao_Paulo', i)).toMatchObject({ data: DIA, hora: '10:15' });
   });
 });
 
@@ -61,7 +61,7 @@ function bateria(nome: string, fixture: () => Fixture) {
             nomeAgenda: '',
             profissional: f.p1,
             data: DIA,
-            hora: '1000',
+            hora: '10:00',
             paciente: f.paciente,
             por: LOGIN,
           }),
@@ -70,7 +70,7 @@ function bateria(nome: string, fixture: () => Fixture) {
         modalidade: 'teleconsulta',
         situacao: 'agendada',
         data: DIA,
-        hora: '1000',
+        hora: '10:00',
         paciente: f.paciente,
         profissionalAgenda: f.p1,
         versao: 1,
@@ -133,7 +133,7 @@ function bateria(nome: string, fixture: () => Fixture) {
             atendimento: atendimentoDe(f),
             paciente: f.paciente,
             data: DIA,
-            hora: '1100',
+            hora: '11:00',
             convidado: f.p2,
             nomeConvidado: 'CONVIDADO',
             motivo: 'Pergunta sintética',
@@ -394,8 +394,8 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
         'INSERT INTO canal_marcacao (codigo, descricao, criado_em) VALUES (?, ?, ?)',
         ['L0315P', `Portal ${MARCA}`, agora],
       );
-      const marcacao = async (n: number, hhmm: string, situacao: number) => {
-        const inicio = instanteNoFuso('America/Sao_Paulo', DIA, hhmm);
+      const marcacao = async (n: number, hora: string, situacao: number) => {
+        const inicio = instanteNoFuso('America/Sao_Paulo', DIA, hora);
         const horario = await garantir(
           e,
           'SELECT id FROM horario_agenda WHERE agenda_servico_id = ? AND inicio_em = ?',
@@ -427,10 +427,10 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
         await e.executar('UPDATE marcacao_horario SET situacao_marcacao_id = ? WHERE id = ?', [situacao, m]);
         return m;
       };
-      ids.m1 = await marcacao(1, '0800', ids.smAguardando);
-      ids.m2 = await marcacao(2, '0830', ids.smAguardando);
-      ids.m3 = await marcacao(3, '0900', ids.smCancelada);
-      ids.m4 = await marcacao(4, '0930', ids.smAguardando);
+      ids.m1 = await marcacao(1, '08:00', ids.smAguardando);
+      ids.m2 = await marcacao(2, '08:30', ids.smAguardando);
+      ids.m3 = await marcacao(3, '09:00', ids.smCancelada);
+      ids.m4 = await marcacao(4, '09:30', ids.smAguardando);
     });
     atendimentos.set(porta, ids.atendimento);
     await limpar();
@@ -460,7 +460,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
           nomeAgenda: '',
           profissional: ids.p1,
           data: DIA,
-          hora: '1400',
+          hora: '14:00',
           paciente: ids.paciente,
           por: LOGIN,
         }),
@@ -516,7 +516,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
           nomeAgenda: '',
           profissional: null,
           data: '2030-01-01',
-          hora: '0000',
+          hora: '00:00',
           paciente: ids.paciente,
           por: LOGIN,
         }),
@@ -526,7 +526,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
       marcacaoVigente: true,
       profissionalAgenda: ids.p1,
       data: DIA,
-      hora: '0800',
+      hora: '08:00',
       situacao: 'agendada',
     });
     expect((await porta.daMarcacao(c(), ids.m1))?.id).toBe(id);
@@ -538,7 +538,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
           nomeAgenda: '',
           profissional: null,
           data: DIA,
-          hora: '0800',
+          hora: '08:00',
           paciente,
           por: LOGIN,
         }),
@@ -563,7 +563,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
         nomeAgenda: '',
         profissional: null,
         data: DIA,
-        hora: '0930',
+        hora: '09:30',
         paciente: ids.paciente,
         por: LOGIN,
       }),
@@ -595,14 +595,14 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
         agenda: null,
         nomeAgenda: '',
         data: DIA,
-        hora: '0000',
+        hora: '00:00',
         por: LOGIN,
       }),
     );
     expect(movidas).toBe(1);
     expect(await porta.porId(c(), id)).toMatchObject({
       marcacao: ids.m2,
-      hora: '0830',
+      hora: '08:30',
       situacao: 'agendada',
       termo: null,
       local: null,
@@ -636,7 +636,7 @@ describe.skipIf(SEM_BANCO)('porta própria no MariaDB (f22_o3)', () => {
         nomeAgenda: '',
         profissional: ids.p1,
         data: DIA,
-        hora: '1500',
+        hora: '15:00',
         paciente: ids.paciente,
         por: LOGIN,
       }),

@@ -19,7 +19,7 @@ function chaves(v: unknown, prefixo = ''): string[] {
 describe('painel sem dado pessoal', () => {
   const p = montarPainel(leituras(), {
     intensivas: [3],
-    agora: em('2026-10-21', '1000'),
+    agora: em('2026-10-21', '10:00'),
     lidoEm: 'x',
     dadosAte: 'x',
     destino: 'memoria',

@@ -147,7 +147,7 @@ const cab = (p: Partial<Cabecalho> = {}): Cabecalho => ({
 const sadt = (numero: string, carteira: string): GuiaSpSadt => ({
   tipo: 'sp-sadt',
   numeroGuiaPrestador: numero,
-  beneficiario: { numeroCarteira: carteira, atendimentoRN: 'N' },
+  beneficiario: { numeroCarteira: carteira, atendimentoRN: false },
   nomeContratadoSolicitante: 'LABORATORIO SINTETICO ALFA',
   profissionalSolicitante: { conselho: '06', numeroConselho: '900001', uf: '42', cbos: '225125' },
   cnes: PRESTADOR.cnes ?? '9999999',

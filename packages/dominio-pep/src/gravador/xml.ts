@@ -1,7 +1,7 @@
-// Formulário gravado com o registro (PRCONTEVOL.EVOLUCAO_XML, UTF-8) e documento emitido da trilha documental
-// (PRASSINATURA_DOC.DOCUMENTO_ORIGINAL: XML Windows-1252, comprimido pelo adaptador), no formato que o formulário
-// de origem grava (medido na cópia `pc`, 800 registros recentes, só estrutura): `<evolucao id_evolucao id_prcabevol
-// id_prtpcomp nomeComposicao="<tipo> - <modelo>" tipo="2">` (tipo 2 em 100%), sem prólogo, um `<componente>` por
+// Formulário gravado com o registro (XML UTF-8) e documento emitido da trilha documental
+// (documento original da assinatura: XML Windows-1252, comprimido pelo adaptador), no formato que o formulário
+// de origem grava (medido na cópia `pc`, 800 registros recentes, só estrutura): o elemento raiz com o modelo, o
+// registro, o tipo de composição, o nome da composição ("<tipo> - <modelo>") e o tipo 2 (100%), sem prólogo, um `<componente>` por
 // seção com resposta embaixo e por pergunta respondida (className, name, top, left, height, width,
 // autopreenchido, alergico_ao_item, title, value); quebras CRLF dentro do valor. O documento repete o formulário
 // com o cabeçalho congelado (hospital, paciente, atendimento, lançamento, identificação) e as listas em
@@ -69,7 +69,7 @@ export function componentesDoRegistro(
 export interface CabecalhoFormulario {
   readonly modelo: number;
   readonly registro: number;
-  /** PREVOLUCAO.ID_PRTPCOMP e o nome do tipo (PRTPCOMP.NOME). */
+  /** Tipo de documento clínico do modelo (id) e o nome do tipo. */
   readonly tipoComposicao: number;
   readonly nomeTipoComposicao: string;
   readonly descricaoModelo: string;
@@ -79,7 +79,7 @@ function nomeComposicao(c: CabecalhoFormulario): string {
   return `${c.nomeTipoComposicao} - ${c.descricaoModelo}`;
 }
 
-/** XML do formulário gravado com o registro (EVOLUCAO_XML). */
+/** XML do formulário gravado com o registro. */
 export function xmlDoFormulario(c: CabecalhoFormulario, comps: readonly ComponenteGravado[]): string {
   const corpo = comps
     .map(

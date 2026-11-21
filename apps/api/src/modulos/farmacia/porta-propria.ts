@@ -8,12 +8,13 @@
 // Melhoria: a triagem, a decisão por item, a intervenção e a resposta do prescritor gravam no modelo próprio pelo
 // Executor (gravador-avaliacao.ts: avaliacao_farmaceutica, avaliacao_farmaceutica_item e intervencao_farmaceutica),
 // com a trilha no alvo gravado de fato e um evento no outbox por gravação.
-// Pendências, cada uma com o seu pedido no lote 02-06: a fila de dispensação por horário, a dispensação, a entrega,
-// a devolução e o cancelamento da dose e a avaliação pelo horário (contrato com números de situação e documento por
-// ano/mês: ver tipos.ts); a perda e a conferência do controlado; o fechamento do livro com o conteúdo e o hash; a
-// dispensação ambulatorial; a escrituração do envio nacional; a pendência de revisão médica (parecer sem valor no
-// CHECK). Até lá, essas leituras voltam vazias e essas gravações recusam com 'modelo-pendente' (409); nada é gravado
-// pela metade.
+// Melhoria: a pendência de revisão médica é o parecer `revisao_medica` (gravador-avaliacao.ts).
+// Pendências (a estrutura do banco já existe; falta a escrita ou o contrato; pedidos em
+// docs/obra/fatias/f24/saida/21-misto-farmacia.json): a fila de dispensação por horário, a dispensação, a entrega, a
+// devolução e o cancelamento da dose e a avaliação pelo horário (o contrato ainda usa números de situação e documento
+// por ano/mês: ver tipos.ts); a perda e a conferência do controlado; o fechamento do livro com o conteúdo e o hash
+// (depende do armazém de arquivos, ADR 0004); a dispensação ambulatorial; a escrituração do envio nacional. Até lá,
+// essas leituras e essas gravações recusam com 'modelo-pendente' (409); nada é gravado pela metade.
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -64,7 +65,7 @@ const TETO = 500;
 function minutoCivil(v: unknown, fuso: string): string {
   const d = v instanceof Date ? v : new Date(String(v));
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora.slice(0, 5)}`;
 }
 
 export { pendenteFarmacia };
@@ -75,6 +76,7 @@ const DECISAO_DO_PARECER: Readonly<Record<string, string>> = {
   aprovado_com_ressalva: 'valido',
   recusado: 'nao-aprovado',
   substituido: 'pendencia-revisao-medica',
+  revisao_medica: 'pendencia-revisao-medica',
 };
 
 const SQL_INTERVENCAO = `
@@ -144,7 +146,7 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return {
       pode: false,
       codigo: 'modelo-pendente',
-      motivo: 'A gravação aguarda a estrutura própria no modelo do banco.',
+      motivo: 'A operação ainda não grava no banco próprio.',
     };
   }
 
@@ -165,7 +167,7 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   /**
    * As gravações diretas das telas numa operação do Executor (trilha, outbox e idempotência na mesma transação): a
    * triagem, a decisão, a intervenção e a resposta gravam no modelo próprio (gravador-avaliacao.ts); as demais
-   * recusam com 'modelo-pendente', cada uma com o seu pedido no lote 02-06.
+   * recusam com 'modelo-pendente', cada uma com o seu pedido no lote 21-misto-farmacia da F2.4.
    */
   async gravarSgh<T>(
     c: ContextoFarmacia,
@@ -409,24 +411,26 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return { centros: [], horarios: [], validacaoFarmaceutica: false, tipos: [] };
   }
 
-  // Leituras que esperam o modelo/contrato (pedidos do lote 02-06): vazias, sem inventar dado.
-  async filaDaUnidade() {
-    return { doses: [], cortada: false };
+  // Leituras que esperam a escrita ou o contrato neutro (pedidos do lote 21-misto-farmacia da F2.4): as listas
+  // principais recusam com 409 'modelo-pendente' (a tela mostra a pendência, nunca uma fila ou um livro vazio como se
+  // fosse real); os mapas de apoio só completam linhas dessas listas, então voltam vazios.
+  async filaDaUnidade(): Promise<never> {
+    throw leituraPendente('A fila de dispensação por horário');
   }
   async itensPrescritos() {
     return new Map<number, { alergiaJustificada: boolean; produto: number | null }>();
   }
-  async dosesDoAtendimento() {
-    return [];
+  async dosesDoAtendimento(): Promise<never> {
+    throw leituraPendente('As doses dispensadas do atendimento');
   }
   async situacoes() {
     return new Map<number, { situacao: string; em: string | null }>();
   }
-  async entregas() {
-    return [];
+  async entregas(): Promise<never> {
+    throw leituraPendente('A fila de entregas');
   }
-  async dosesDaSaida() {
-    return [];
+  async dosesDaSaida(): Promise<never> {
+    throw leituraPendente('As doses da saída');
   }
   async leitos() {
     return new Map<number, { leito: string; iniciais: string }>();
@@ -434,24 +438,34 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   async aceites() {
     return new Map<number, { autor: string; em: string; modo: string }>();
   }
-  async substituicoes() {
-    return [];
+  async substituicoes(): Promise<never> {
+    throw leituraPendente('As substituições da dose');
   }
-  async movimentos() {
-    return [];
+  async movimentos(): Promise<never> {
+    throw leituraPendente('Os movimentos do controlado');
   }
-  async conferencias() {
-    return [];
+  async conferencias(): Promise<never> {
+    throw leituraPendente('As conferências do controlado');
   }
-  async livroFechado() {
-    return null;
+  async livroFechado(): Promise<never> {
+    throw leituraPendente('O fechamento do livro do controlado');
   }
-  async janelaEntregas() {
-    return { desde: null };
+  async janelaEntregas(): Promise<never> {
+    throw leituraPendente('A janela da fila de entregas');
   }
-  async ambulatoriais() {
-    return [];
+  async ambulatoriais(): Promise<never> {
+    throw leituraPendente('A dispensação ambulatorial');
   }
+}
+
+/** A recusa das leituras que esperam a escrita da farmácia hospitalar (dívida contada pelo verificador da F2.4). */
+function leituraPendente(oQue: string): ErroOperacao {
+  return new ErroOperacao(
+    409,
+    'modelo-pendente',
+    'Leitura indisponível',
+    `${oQue} ainda não tem a escrita no banco próprio: não há o que mostrar.`,
+  );
 }
 
 function contextoDe(c: ContextoPortaM18) {

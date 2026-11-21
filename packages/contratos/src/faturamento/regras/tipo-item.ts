@@ -1,4 +1,4 @@
-// Grupo do item da conta (ficha do M30, regra 6; ref 01 §2.3; Anexo A): FCLANEXT.TIPO é o único separador confiável da
+// Grupo do item da conta (ficha do M30, regra 6; ref 01 §2.3; Anexo A): o tipo do item é o único separador confiável da
 // natureza do item: 1 diárias e taxas, 2 honorários, 3 SADT, 4 mat/med. A meta do teste de reprodução que libera o
 // lançamento manual de cada grupo (cap-06b §6.5, Decisão; cap-11 §11.3): 99% em SADT e em diárias e taxas, 98% em
 // mat/med, 97% em honorários.
@@ -45,7 +45,7 @@ export function grupoAtingeMeta(grupo: GrupoItem, conferem: number, total: numbe
   return conferem / total >= META_REPRODUCAO[grupo];
 }
 
-/** Origem do item (FCLANEXT.VEIO; Anexo A): só valores já vistos; B, P e D com a legenda "a confirmar" (DP-46.5). */
+/** Origem do item (Anexo A): só valores já vistos; B, P e D com a legenda "a confirmar" (DP-46.5). */
 export const ORIGEM_ITEM: Readonly<Record<string, { rotulo: string; aConfirmar: boolean }>> = {
   E: { rotulo: 'Saída do estoque', aConfirmar: false },
   S: { rotulo: 'Exames e terapias', aConfirmar: false },

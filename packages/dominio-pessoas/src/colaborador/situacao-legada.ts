@@ -1,6 +1,7 @@
-// Regra 4 do M52 (Anexo A; ref 02; DP-46.1): `TBPROFIS.SITUACAO` NÃO define vínculo trabalhista. Os valores O, F e E
+// Regra 4 do M52 (Anexo A; ref 02; DP-46.1): a situação do profissional no cadastro de origem NÃO define vínculo
+// trabalhista. Os valores O, F e E
 // (758, 109 e 4 profissionais no pc) têm baixa confiança e saem na tela com "a confirmar". A atividade do registro vem
-// de `TBCBOPRO.ATIVO` (T 1.949, F 144, nulo <5 no pc); o vínculo de trabalho vem só de SGH_PES_VINCULO.
+// da inscrição no conselho estar ativa; o vínculo de trabalho vem só do vínculo de trabalho (vinculo_trabalho).
 import {
   SITUACOES_PROFISSIONAL_LEGADO,
   TIPOS_VINCULO,
@@ -22,7 +23,7 @@ export function legendaSituacaoProfissional(valor: string | null): LegendaSituac
   return { codigo, rotulo: SITUACOES_PROFISSIONAL_LEGADO[codigo], aConfirmar: true };
 }
 
-/** `TBCBOPRO.ATIVO`: T ativo, F inativo, nulo ou outro valor "não informado". */
+/** Inscrição no conselho ativa: T ativo, F inativo, nulo ou outro valor "não informado". */
 export function registroAtivo(valor: string | null): boolean | null {
   const v = valor?.trim().toUpperCase();
   return v === 'T' ? true : v === 'F' ? false : null;

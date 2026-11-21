@@ -52,7 +52,7 @@ export interface VersaoRegraResposta {
   readonly decididaPor: string | null;
   readonly decididaEm: string | null;
   readonly justificativaDecisao: string | null;
-  /** TBREPGER.ID depois da inclusão aprovada. */
+  /** Id da regra depois da inclusão aprovada. */
   readonly regraIncluida: number | null;
   readonly simulada: boolean;
 }
@@ -178,7 +178,7 @@ export interface RpaResposta {
   readonly situacao: string;
   readonly lancamentos: number;
   readonly valor: number;
-  /** Título a pagar que nasceu com o RPA (MFCONPAG.ID). */
+  /** Título a pagar que nasceu com o RPA (id do título). */
   readonly titulo: number | null;
 }
 
@@ -204,7 +204,7 @@ export interface ExtratoRepasseResposta {
   readonly lancamentos: readonly LancamentoRepasseResposta[];
   readonly rpas: readonly RpaResposta[];
   readonly total: number;
-  /** Adiantamentos ao médico (MFADIFOR M; só consulta: regra 11). */
+  /** Adiantamentos ao médico (só consulta: regra 11). */
   readonly adiantamentos: number;
 }
 

@@ -1,7 +1,7 @@
 // Permissões do M25 (ficha, seção 7; convencoes.md §12): enfermagem beira-leito — a linha do tempo do turno, o
 // aprazamento, a checagem em tela e por código de barras (pulseira, dose, dupla checagem, infusão), os conflitos de
 // sincronização, os sinais vitais, a passagem de plantão e os dispositivos do modo beira do leito. Quem tem a opção no
-// legado tem a permissão no novo (regra 1 do M06). Opções do módulo do PEP (TBOPCOES, retrato
+// legado tem a permissão no novo (regra 1 do M06). Opções do módulo do PEP (menu de origem, retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Checagem da enfermagem 3954 (Consultar 5535, Imprimir 5537, Não checado 3962) › Checagem geral 5301 (Checar
 //     5302, Checar com código de barras 6857/6975, Gravar 5304, Checar todos 5305, Assinar 5705, Validar assinatura

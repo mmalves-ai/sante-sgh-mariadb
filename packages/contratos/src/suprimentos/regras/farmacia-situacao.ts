@@ -1,7 +1,7 @@
-// Situações da farmácia (ficha do M29, regra 7; ref 02 §1): os 12 códigos de `TBSITUACAOFARMACIA` com a legenda da
+// Situações da farmácia (ficha do M29, regra 7; ref 02 §1): os 12 códigos da situação da farmácia com a legenda da
 // cópia e o agrupamento em 5 situações de leitura fácil (cap-11 §11.2). O agrupamento é só da tela: o que se grava
-// continua o código do outro sistema. Os códigos 2, 3 e 4 nunca foram gravados (perfil: 0 linhas em
-// `PREXTRATOITEM_TBSITFARM`); só entram com a decisão registrada (regra 8, DP-25).
+// continua o código do outro sistema. Os códigos 2, 3 e 4 nunca foram gravados (perfil: 0 linhas na
+// situação do item da prescrição); só entram com a decisão registrada (regra 8, DP-25).
 
 export const SITUACOES_FARMACIA = [
   { id: 1, nome: 'Pendente avaliação farmacêutica', grupo: 'a-avaliar' },
@@ -59,5 +59,5 @@ export function resumoPorGrupo(
   return r;
 }
 
-/** A situação de entrega do documento (GECTRLENTREGADOCSAIDA): só 7, 8 e 9 vistos (272.413, 2.607 e 3). */
+/** A situação de entrega do documento de saída: só 7, 8 e 9 vistos (272.413, 2.607 e 3). */
 export const SITUACOES_ENTREGA = [7, 8, 9] as const;

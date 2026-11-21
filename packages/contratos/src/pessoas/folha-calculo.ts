@@ -20,7 +20,7 @@ const percentual = z.number().int().min(0).max(100_000);
 // ── Papéis das rubricas no cálculo ────────────────────────────────────────────────────────────────────────────
 
 /**
- * O papel de cada linha do cálculo. Cada papel que gera valor aponta para uma rubrica da empresa (`FPEVENTO`) nos
+ * O papel de cada linha do cálculo. Cada papel que gera valor aponta para uma rubrica da empresa nos
  * parâmetros da folha: a rubrica dá o código do holerite, o código do eSocial e as incidências (INSS, IRRF, FGTS).
  */
 export const PAPEIS_CALCULO_FOLHA = [

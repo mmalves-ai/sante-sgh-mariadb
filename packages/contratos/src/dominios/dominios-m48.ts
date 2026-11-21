@@ -1,12 +1,12 @@
-// Cadastros da qualidade no CRUD genérico (M48, etapa 5; ficha, seção 5, "Receita genérica do CRUD para TBTPAUTORIDADE,
-// RPMATRIZ_GUT_DESCRICAO e RPMATRIZ_GUT_TIPO": domínios sem uso de movimento no outro sistema, edição a pedido da
+// Cadastros da qualidade no CRUD genérico (M48, etapa 5; ficha, seção 5, "Receita genérica do CRUD para tipo de autoridade,
+// descrição da matriz GUT e tipo da matriz GUT": domínios sem uso de movimento no outro sistema, edição a pedido da
 // qualidade, uma assinatura por declaração). Pelo catálogo RDB$ e pelo levantamento da cópia `pc` (2026-10-27): as três
 // tabelas sem trigger nem generator (a chave é digitada) e sem coluna de situação (sem inativação); as autoridades
 // sanitárias (3: SMS, SES, MS) servem à notificação compulsória; os tipos (3: gravidade, urgência, tendência) e os graus
 // (15, com os pontos de 1 a 5) formam a escala GUT do outro sistema, hoje a da priorização de pagamentos do repasse (a
 // tabela da matriz por prestador está vazia), e o risco da qualidade tem a escala própria (D-GUT-48.5). A escala é fixa
 // (três eixos com cinco graus cada, todos cadastrados): eixos e graus só se alteram, sem inclusão (D-GUT-FIXA-48.5). Substituem as
-// consultas provisórias do M14. Opções do outro sistema (TBOPCOES): nenhuma tela edita estas tabelas; inferidas da
+// consultas provisórias do M14. Opções do outro sistema (menu de origem): nenhuma tela edita estas tabelas; inferidas da
 // notificação compulsória do prontuário (5273 e 5487 para ler; 5275 para gravar) e das Tabelas do G.R.T. (3025 para
 // ler; 3026 Parâmetros para gravar), mais os perfis do novo (vigilância epidemiológica; escritório da qualidade).
 import type { DominioPublico } from './tipos.js';

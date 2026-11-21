@@ -82,7 +82,7 @@ function editar(a: AgendamentoLido): void {
     grupos: a.grupos.join(', '),
     enderecos: '',
     periodicidade: a.periodicidade,
-    hora: hora(a.hora),
+    hora: a.hora,
     diaSemana: String(a.diaSemana ?? 1),
     diaMes: String(a.diaMes ?? 1),
   });
@@ -125,7 +125,6 @@ async function agendar(): Promise<void> {
     const v = (parametros[d.campo] ?? '').trim();
     if (v !== '') p[d.campo] = d.tipo === 'inteiro' ? Number(v) : v;
   }
-  const [hh, mm] = novo.hora.split(':').map(Number);
   const corpo = {
     relatorio: r.codigo,
     titulo: novo.titulo,
@@ -133,7 +132,7 @@ async function agendar(): Promise<void> {
     grupos: lista2(novo.grupos),
     enderecos: lista2(novo.enderecos),
     periodicidade: novo.periodicidade,
-    hora: (hh ?? 0) * 100 + (mm ?? 0),
+    hora: novo.hora.slice(0, 5),
     diaSemana: novo.periodicidade === 'semanal' ? Number(novo.diaSemana) : null,
     diaMes: novo.periodicidade === 'mensal' ? Number(novo.diaMes) : null,
   };
@@ -253,8 +252,6 @@ const relativosDe = (tipo: string) =>
     valor: v as string,
     rotulo: t(`relatorios.agendamentos.relativos.${v}`),
   }));
-const hora = (h: number) =>
-  `${String(Math.floor(h / 100)).padStart(2, '0')}:${String(h % 100).padStart(2, '0')}`;
 </script>
 
 <template>
@@ -438,7 +435,7 @@ const hora = (h: number) =>
               }}</span>
             </td>
             <td>{{ a.relatorio }}</td>
-            <td>{{ t(`relatorios.agendamentos.periodicidades.${a.periodicidade}`) }} · {{ hora(a.hora) }}</td>
+            <td>{{ t(`relatorios.agendamentos.periodicidades.${a.periodicidade}`) }} · {{ a.hora }}</td>
             <td>{{ a.proximoEnvio?.slice(0, 16).replace('T', ' ') ?? '—' }}</td>
             <td>
               {{ a.ultimoEnvio?.slice(0, 16).replace('T', ' ') ?? '—' }}

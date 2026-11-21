@@ -1,5 +1,5 @@
 // Massa SINTÉTICA do motor da internação (testes): internações, trechos e unidades montados à mão, sem dado de
-// pessoa (paciente é um número inventado). Datas ISO e horas "HHMM", como o legado grava.
+// pessoa (paciente é um número inventado). Datas ISO e horas "HH:MM".
 import type {
   InternacaoMovimento,
   MovimentoInternacao,
@@ -10,10 +10,10 @@ import type {
 
 export const d = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
 
-/** Relógio de parede (ms) de "AAAA-MM-DD HHMM". */
-export const em = (iso: string, hora = '0000'): number =>
+/** Relógio de parede (ms) da data "AAAA-MM-DD" e da hora "HH:MM". */
+export const em = (iso: string, hora = '00:00'): number =>
   Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) +
-  (Number(hora.slice(0, 2)) * 60 + Number(hora.slice(2, 4))) * 60_000;
+  (Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5))) * 60_000;
 
 export const UNIDADES: UnidadeMovimento[] = [
   { bloco: '1', acomodacao: 'ENF', nome: 'Enfermaria', tipo: 1, leitos: 4, leitosAtivos: 4 },

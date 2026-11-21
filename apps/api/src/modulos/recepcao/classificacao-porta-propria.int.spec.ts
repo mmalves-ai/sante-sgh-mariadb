@@ -282,6 +282,16 @@ describe.skipIf(SEM_BANCO)('porta própria da classificação contra o MariaDB (
     expect(sinais.get(String(m.atendimento))?.temperatura).toBe(36.8);
     // Outro estabelecimento não lê a classificação.
     expect(await porta.classificacoes(outro, [String(m.atendimento)])).toEqual([]);
+    // O aviso de estouro do tempo-alvo grava uma vez por chave; o segundo consumidor recebe false.
+    const chave = `estouro:${r.id}:${Date.now().toString(36)}`;
+    const avisar = () =>
+      porta.gravar(cg(), trilha('aviso_estouro_classificacao'), (g) =>
+        g.avisarEstouro({ chave, classificacao: r.id, reg: m.atendimento, prazoEm: '2026-11-20T08:10:00' }),
+      );
+    expect(await avisar()).toBe(true);
+    expect(await avisar()).toBe(false);
+    expect([...(await porta.avisosGravados(c, [chave, 'outra-chave']))]).toEqual([chave]);
+    expect((await porta.avisosGravados(outro, [chave])).size).toBe(0);
   });
 
   it('reclassifica com o motivo: a anterior fica "reclassificada"; reclassificar de novo a mesma é recusado', async () => {
@@ -405,7 +415,7 @@ describe.skipIf(SEM_BANCO)('porta própria da classificação contra o MariaDB (
     expect(Number(depois[0]!.n)).toBe(Number(antes[0]!.n));
   });
 
-  it('protocolo gerenciado: publica a versão e inclui o paciente; as metas aguardam o modelo', async () => {
+  it('protocolo gerenciado: publica a versão, inclui o paciente e registra a meta uma vez só', async () => {
     const pub = await porta.gravar(cg(), trilha('protocolo_gerenciado_versao'), (g) =>
       g.publicarGerenciado({
         tipo: 'sepse',
@@ -475,9 +485,23 @@ describe.skipIf(SEM_BANCO)('porta própria da classificação contra o MariaDB (
       criterios: ['febre', 'taquicardia'],
       origem: 'enfermeiro',
     });
+    const registrarMeta = () =>
+      porta.gravar(cg(), trilha('inclusao_protocolo_registro'), (g) =>
+        g.registrarEventoProtocolo({
+          protocoloPaciente: inc,
+          tipoEvento: 'meta',
+          codigo: 'lactato',
+          situacao: 'cumprida',
+          ocorridoEm: '2026-11-20T08:30',
+          prazoEm: null,
+          motivo: null,
+          por: LOGIN_ENF,
+        }),
+      );
+    const meta = await registrarMeta();
     expect(
       await codigoDaRecusa(
-        porta.gravar(cg(), trilha('inclusao_protocolo_evento'), (g) =>
+        porta.gravar(cg(), trilha('inclusao_protocolo_registro'), (g) =>
           g.registrarEventoProtocolo({
             protocoloPaciente: inc,
             tipoEvento: 'meta',
@@ -490,6 +514,45 @@ describe.skipIf(SEM_BANCO)('porta própria da classificação contra o MariaDB (
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('ja-registrado');
+    const p2 = await porta.protocoloDoPaciente(c, inc);
+    expect(p2?.eventos).toEqual([
+      expect.objectContaining({
+        id: meta,
+        tipo: 'meta',
+        codigo: 'lactato',
+        situacao: 'cumprida',
+        quando: '2026-11-20T08:30:00',
+        por: LOGIN_ENF,
+      }),
+    ]);
+    await porta.gravar(cg(), trilha('inclusao_protocolo_registro'), (g) =>
+      g.registrarEventoProtocolo({
+        protocoloPaciente: inc,
+        tipoEvento: 'encerramento',
+        codigo: 'alta',
+        situacao: 'encerrado',
+        ocorridoEm: null,
+        prazoEm: null,
+        motivo: null,
+        por: LOGIN_ENF,
+      }),
+    );
+    expect(
+      await codigoDaRecusa(
+        porta.gravar(cg(), trilha('inclusao_protocolo_registro'), (g) =>
+          g.registrarEventoProtocolo({
+            protocoloPaciente: inc,
+            tipoEvento: 'checklist',
+            codigo: 'antibiotico',
+            situacao: 'feito',
+            ocorridoEm: null,
+            prazoEm: null,
+            motivo: null,
+            por: LOGIN_ENF,
+          }),
+        ),
+      ),
+    ).toBe('protocolo-encerrado');
   });
 });

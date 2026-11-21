@@ -50,9 +50,9 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/, 'Resumo SHA-256 em hexadecimal m
 
 export const esquemaDigitalizarDocumento = z
   .object({
-    /** O prontuário (RICADPAC.PRONT) do paciente; o servidor confere e tira o paciente dele. */
+    /** O prontuário (número do prontuário) do paciente; o servidor confere e tira o paciente dele. */
     prontuario: id,
-    /** A internação (RICADINT.REG) quando o papel é de uma internação; null = documento do prontuário. */
+    /** A internação (número da internação) quando o papel é de uma internação; null = documento do prontuário. */
     internacao: id.nullable(),
     tipoDocumento: z.enum(TIPOS_DOCUMENTO_DIGITALIZADO),
     descricao: textoCp1252(120).pipe(z.string().trim().min(3)),

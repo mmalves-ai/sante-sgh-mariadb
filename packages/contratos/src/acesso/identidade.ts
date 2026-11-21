@@ -3,7 +3,7 @@
 // ("forte", "legado com cifra", ...) e as contagens saem em faixa (0, "<5" ou o número a partir de 5).
 //
 // - Credencial forte (SGH_ACESSO_CREDENCIAL): Argon2id com sal individual, regravada no primeiro login pelo
-//   Sante SGH; o legado (TBUSERS.SENHA) fica como está até a retirada (acesso.retirarSenhaLegado), que só roda
+//   Sante SGH; a senha anterior fica como está até a retirada (acesso.retirarSenhaLegado), que só roda
 //   depois do fim do período de contingência (parâmetro legado.contingencia, por estabelecimento).
 // - Política do segundo fator (SGH_ACESSO_POLITICA_2FA): obrigatoriedade por perfil, por grupo ou para todos,
 //   por estabelecimento, em ondas (1: perfis críticos; 2: todos), com prazo de adesão em dias.

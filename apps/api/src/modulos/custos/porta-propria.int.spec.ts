@@ -3,7 +3,8 @@
 // fica; versão, trilha e idempotência da operação), gravar o mesmo não grava, a versão velha é recusada; lançar a
 // estatística (o manual substitui só o manual anterior; a coletada fica; a apurada é recusada; a observação vai à
 // trilha; a mesma sequência dá o mesmo na porta de memória), a referência vale nas competências
-// seguintes; outro estabelecimento não vê nada; a coleta, as fontes e a apuração respondem "modelo-pendente".
+// seguintes; outro estabelecimento não vê nada; as fontes agregadas; a coleta (substitui só a coletada anterior) e a
+// apuração (linhas por centro, substituição pela versão lida e aprovação) gravadas e relidas.
 // Massa SINTÉTICA (centros e domínios fictícios), limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { ESTATISTICAS_CUSTO, TIPOS_DADO_ESTATISTICA } from '@sgh/contratos';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -16,8 +17,10 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'f2203a';
 const EST_B = 'f2203b';
-const REFERENCIA = ESTATISTICAS_CUSTO.find((e) => e.tipoDado === TIPOS_DADO_ESTATISTICA.referencia)?.codigo ?? 'areaM2';
-const LANCAMENTO = ESTATISTICAS_CUSTO.find((e) => e.tipoDado === TIPOS_DADO_ESTATISTICA.lancamento)?.codigo ?? 'pacienteDia';
+const REFERENCIA =
+  ESTATISTICAS_CUSTO.find((e) => e.tipoDado === TIPOS_DADO_ESTATISTICA.referencia)?.codigo ?? 'areaM2';
+const LANCAMENTO =
+  ESTATISTICAS_CUSTO.find((e) => e.tipoDado === TIPOS_DADO_ESTATISTICA.lancamento)?.codigo ?? 'pacienteDia';
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -63,8 +66,26 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
             WHERE c.estabelecimento_id = ? AND c.codigo LIKE 'F2203%'`,
           [est],
         );
-        await e.executar("DELETE FROM apuracao_custo WHERE estabelecimento_id = ? AND competencia = '2026-05-01'", [est]);
-        await e.executar("DELETE FROM centro_custo WHERE estabelecimento_id = ? AND codigo LIKE 'F2203%'", [est]);
+        await e.executar(
+          `DELETE x FROM apuracao_custo_centro x JOIN apuracao_custo a ON a.id = x.apuracao_custo_id
+            WHERE a.estabelecimento_id = ? AND a.competencia IN ('2026-04-01', '2026-05-01')`,
+          [est],
+        );
+        await e.executar(
+          "UPDATE apuracao_custo SET substituida_por_apuracao_custo_id = NULL WHERE estabelecimento_id = ? AND competencia IN ('2026-04-01', '2026-05-01')",
+          [est],
+        );
+        await e.executar(
+          "DELETE FROM apuracao_custo WHERE estabelecimento_id = ? AND competencia IN ('2026-04-01', '2026-05-01')",
+          [est],
+        );
+        await e.executar(
+          "DELETE FROM coleta_estatistica_custo WHERE estabelecimento_id = ? AND competencia = '2026-04-01'",
+          [est],
+        );
+        await e.executar("DELETE FROM centro_custo WHERE estabelecimento_id = ? AND codigo LIKE 'F2203%'", [
+          est,
+        ]);
       }
     });
   }
@@ -145,7 +166,12 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
   it('lê os centros do estabelecimento (sem classificação) e os domínios de custos', async () => {
     const cs = await porta.centros(ctxA);
     const uti = cs.find((c) => c.id === centroUti);
-    expect(uti).toMatchObject({ nome: 'UTI FICTICIA', ativo: true, classificacao: null, produtivoCadastro: null });
+    expect(uti).toMatchObject({
+      nome: 'UTI FICTICIA',
+      ativo: true,
+      classificacao: null,
+      produtivoCadastro: null,
+    });
     expect(uti?.codigo).toBe(centroUti);
     const d = await porta.dominios(ctxA);
     expect(d.tiposDado.map((t) => t.id)).toEqual([1, 2]);
@@ -178,7 +204,9 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
       versao: 2,
     });
     // A observação da classificação vai à trilha; a do cadastro do centro não muda.
-    expect((await ler('SELECT observacao FROM centro_custo WHERE id = ?', [centroLav]))?.['observacao']).toBe('Nota do cadastro');
+    expect((await ler('SELECT observacao FROM centro_custo WHERE id = ?', [centroLav]))?.['observacao']).toBe(
+      'Nota do cadastro',
+    );
     const mot = await ler(
       "SELECT motivo FROM trilha_auditoria WHERE entidade = 'centro_custo' AND entidade_id = ? AND correlacao = ? ORDER BY id DESC LIMIT 1",
       [centroLav, correlacao],
@@ -190,7 +218,11 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
          JOIN tipo_dado_estatistico td ON td.id = c.criterio_tipo_dado_estatistico_id WHERE c.id = ?`,
       [centroLav],
     );
-    expect(linha).toMatchObject({ versao: 2, classe: 'auxiliar', criterio: codigoEstatisticaNoBanco(LANCAMENTO) });
+    expect(linha).toMatchObject({
+      versao: 2,
+      classe: 'auxiliar',
+      criterio: codigoEstatisticaNoBanco(LANCAMENTO),
+    });
     const t = await ler(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'centro_custo' AND entidade_id = ? AND correlacao = ?",
       [centroLav, correlacao],
@@ -201,11 +233,21 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
       [estA],
     );
     expect(Number(i?.['n'])).toBeGreaterThanOrEqual(1);
-    const igual = await porta.classificar(ctxA, { ...x, observacao: null, versao: 2 }, 'teste', trilha('centro_custo', centroLav));
+    const igual = await porta.classificar(
+      ctxA,
+      { ...x, observacao: null, versao: 2 },
+      'teste',
+      trilha('centro_custo', centroLav),
+    );
     expect(igual?.mudou).toBe(false);
     expect((await ler('SELECT versao FROM centro_custo WHERE id = ?', [centroLav]))?.['versao']).toBe(2);
     await expect(
-      porta.classificar(ctxA, { ...x, classe: 'produtivo', versao: 1 }, 'teste', trilha('centro_custo', centroLav)),
+      porta.classificar(
+        ctxA,
+        { ...x, classe: 'produtivo', versao: 1 },
+        'teste',
+        trilha('centro_custo', centroLav),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'desatualizado' } });
     await expect(
       porta.classificar(ctxA, { ...x, versao: null }, 'teste', trilha('centro_custo', centroLav)),
@@ -214,10 +256,26 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
 
   it('lança a estatística: uma linha por competência; o novo lançamento substitui; a referência vale depois', async () => {
     const base = { competencia: '2026-03', centro: centroUti, codigo: LANCAMENTO, tipoDado: 1 as const };
-    const a = await porta.lancar(ctxA, { ...base, cent: 12_345, observacao: 'Censo conferido' }, 'teste', trilha('estatistica_centro_mes', null));
+    const a = await porta.lancar(
+      ctxA,
+      { ...base, cent: 12_345, observacao: 'Censo conferido' },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
     expect(a.substituidas).toBe(0);
-    expect(a.registro).toMatchObject({ competencia: '2026-03', centro: centroUti, codigo: LANCAMENTO, cent: 12_345, origem: 'manual' });
-    const b = await porta.lancar(ctxA, { ...base, cent: 13_000, observacao: null }, 'teste', trilha('estatistica_centro_mes', null));
+    expect(a.registro).toMatchObject({
+      competencia: '2026-03',
+      centro: centroUti,
+      codigo: LANCAMENTO,
+      cent: 12_345,
+      origem: 'manual',
+    });
+    const b = await porta.lancar(
+      ctxA,
+      { ...base, cent: 13_000, observacao: null },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
     expect(b.substituidas).toBe(1);
     expect(b.registro.id).toBe(a.registro.id);
     const n = await ler(
@@ -235,7 +293,14 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     expect(motivo?.['motivo']).toBe('Censo conferido');
     await porta.lancar(
       ctxA,
-      { competencia: '2026-01', centro: centroLav, codigo: REFERENCIA, tipoDado: 2, cent: 25_000, observacao: null },
+      {
+        competencia: '2026-01',
+        centro: centroLav,
+        codigo: REFERENCIA,
+        tipoDado: 2,
+        cent: 25_000,
+        observacao: null,
+      },
       'teste',
       trilha('estatistica_centro_mes', null),
     );
@@ -253,13 +318,20 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
 
   it('o manual substitui só o manual: a coletada fica; a linha apurada é recusada', async () => {
     const base = { competencia: '2026-05', centro: centroUti, codigo: LANCAMENTO, tipoDado: 1 as const };
-    const tipo = await ler('SELECT id FROM tipo_dado_estatistico WHERE codigo = ?', [codigoEstatisticaNoBanco(LANCAMENTO)]);
+    const tipo = await ler('SELECT id FROM tipo_dado_estatistico WHERE codigo = ?', [
+      codigoEstatisticaNoBanco(LANCAMENTO),
+    ]);
     await escrever(
       `INSERT INTO estatistica_centro_mes (centro_custo_id, tipo_dado_estatistico_id, competencia, quantidade, forma_coleta, criado_em)
        VALUES (?, ?, '2026-05-01', 77, 'automatica', NOW(3))`,
       [centroUti, tipo?.['id']],
     );
-    const a = await porta.lancar(ctxA, { ...base, cent: 5_000, observacao: null }, 'teste', trilha('estatistica_centro_mes', null));
+    const a = await porta.lancar(
+      ctxA,
+      { ...base, cent: 5_000, observacao: null },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
     expect(a.substituidas).toBe(0);
     const formas = await ler(
       `SELECT GROUP_CONCAT(CONCAT(forma_coleta, ':', CAST(quantidade AS UNSIGNED)) ORDER BY forma_coleta) AS f FROM estatistica_centro_mes
@@ -271,12 +343,28 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
       "INSERT INTO apuracao_custo (estabelecimento_id, competencia, criado_em) VALUES (?, '2026-05-01', NOW(3))",
       [estA],
     );
-    await escrever('UPDATE estatistica_centro_mes SET apuracao_custo_id = ? WHERE id = ?', [apuracao, a.registro.id]);
+    await escrever('UPDATE estatistica_centro_mes SET apuracao_custo_id = ? WHERE id = ?', [
+      apuracao,
+      a.registro.id,
+    ]);
     await expect(
-      porta.lancar(ctxA, { ...base, cent: 6_000, observacao: null }, 'teste', trilha('estatistica_centro_mes', null)),
+      porta.lancar(
+        ctxA,
+        { ...base, cent: 6_000, observacao: null },
+        'teste',
+        trilha('estatistica_centro_mes', null),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'estatistica-apurada' } });
-    expect(Number((await ler('SELECT quantidade FROM estatistica_centro_mes WHERE id = ?', [a.registro.id]))?.['quantidade'])).toBe(50);
-    await escrever('UPDATE estatistica_centro_mes SET apuracao_custo_id = NULL WHERE id = ?', [a.registro.id]);
+    expect(
+      Number(
+        (await ler('SELECT quantidade FROM estatistica_centro_mes WHERE id = ?', [a.registro.id]))?.[
+          'quantidade'
+        ],
+      ),
+    ).toBe(50);
+    await escrever('UPDATE estatistica_centro_mes SET apuracao_custo_id = NULL WHERE id = ?', [
+      a.registro.id,
+    ]);
     await escrever('DELETE FROM apuracao_custo WHERE id = ?', [apuracao]);
   });
 
@@ -284,14 +372,38 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     const memoria = new PortaCustosMemoria();
     const centroMem = (await memoria.centros(ctxA))[0]!.id;
     const seq = async (p: PortaCustosPropria | PortaCustosMemoria, centro: number) => {
-      const base = { competencia: '2026-06', centro, codigo: LANCAMENTO, tipoDado: 1 as const, observacao: null };
-      const um = await p.lancar(ctxA, { ...base, cent: 1_000 }, 'teste', trilha('estatistica_centro_mes', null));
-      const dois = await p.lancar(ctxA, { ...base, cent: 2_000 }, 'teste', trilha('estatistica_centro_mes', null));
-      const m = (await p.estatisticas(ctxA, '2026-06')).registros.filter((r) => r.centro === centro && r.codigo === LANCAMENTO);
-      return { substituidas: [um.substituidas, dois.substituidas], vigentes: m.map((r) => [r.origem, r.cent]) };
+      const base = {
+        competencia: '2026-06',
+        centro,
+        codigo: LANCAMENTO,
+        tipoDado: 1 as const,
+        observacao: null,
+      };
+      const um = await p.lancar(
+        ctxA,
+        { ...base, cent: 1_000 },
+        'teste',
+        trilha('estatistica_centro_mes', null),
+      );
+      const dois = await p.lancar(
+        ctxA,
+        { ...base, cent: 2_000 },
+        'teste',
+        trilha('estatistica_centro_mes', null),
+      );
+      const m = (await p.estatisticas(ctxA, '2026-06')).registros.filter(
+        (r) => r.centro === centro && r.codigo === LANCAMENTO,
+      );
+      return {
+        substituidas: [um.substituidas, dois.substituidas],
+        vigentes: m.map((r) => [r.origem, r.cent]),
+      };
     };
     expect(await seq(porta, centroUti)).toEqual(await seq(memoria, centroMem));
-    expect(await seq(memoria, centroMem)).toMatchObject({ substituidas: [1, 1], vigentes: [['manual', 2_000]] });
+    expect(await seq(memoria, centroMem)).toMatchObject({
+      substituidas: [1, 1],
+      vigentes: [['manual', 2_000]],
+    });
   });
 
   it('outro estabelecimento não vê o centro nem as estatísticas; lançar no centro de outro é recusado', async () => {
@@ -301,22 +413,226 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     await expect(
       porta.lancar(
         ctxB,
-        { competencia: '2026-03', centro: centroUti, codigo: LANCAMENTO, tipoDado: 1, cent: 1, observacao: null },
+        {
+          competencia: '2026-03',
+          centro: centroUti,
+          codigo: LANCAMENTO,
+          tipoDado: 1,
+          cent: 1,
+          observacao: null,
+        },
         'teste',
         trilha('estatistica_centro_mes', null),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'centro-inexistente' } });
   });
 
-  it('coleta, fontes e apuração aguardam o modelo: "modelo-pendente", nada gravado; as leituras da apuração vêm vazias', async () => {
-    await expect(porta.fontes()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(porta.gravarColeta()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(porta.fontesCusteio()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(porta.gravarApuracao()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    expect(await porta.apuracoes()).toEqual([]);
-    expect(await porta.ultimaColeta()).toBeNull();
-    const n = await ler('SELECT COUNT(*) AS n FROM apuracao_custo WHERE estabelecimento_id = ?', [estA]);
-    expect(Number(n?.['n'])).toBe(0);
+  it('fontes agregadas no banco: a forma completa, sem movimento no estabelecimento fictício', async () => {
+    const f = await porta.fontes(ctxA, { inicio: '2026-04-01', fim: '2026-04-30', seguinte: '2026-05-01' });
+    expect(f).toEqual({
+      censo: { grupos: [], diasFechados: 0 },
+      internacoes: [],
+      cirurgias: [],
+      exames: [],
+      requisicoes: [],
+      colaboradores: [],
+      leitos: [],
+    });
+    const k = await porta.fontesCusteio(ctxA, {
+      ano: 2026,
+      mes: 4,
+      inicio: '2026-04-01',
+      fim: '2026-04-30',
+      competencia: '2026-04',
+      limiteLinhaCentavos: 1_000_000,
+    });
+    expect(k).toEqual({
+      materiais: [],
+      atipicas: [],
+      devolucoes: [],
+      devolucoesAtipicas: [],
+      despesas: [],
+      pessoal: [],
+      itensConta: [],
+      contasFechadas: 0,
+      truncado: false,
+    });
+  });
+
+  it('coleta: o registro e as linhas coletadas; a nova coleta substitui só a coletada; a manual fica', async () => {
+    const manual = await porta.lancar(
+      ctxA,
+      {
+        competencia: '2026-04',
+        centro: centroLav,
+        codigo: LANCAMENTO,
+        cent: 700,
+        tipoDado: 1,
+        observacao: null,
+      },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
+    const linhas = [
+      {
+        centro: centroUti,
+        codigo: LANCAMENTO,
+        cent: 3_050,
+        fonte: 'censo',
+        estimada: true,
+        tipoDado: 1 as const,
+      },
+      {
+        centro: centroLav,
+        codigo: LANCAMENTO,
+        cent: 1_200,
+        fonte: 'censo',
+        estimada: false,
+        tipoDado: 1 as const,
+      },
+    ];
+    const g1 = await porta.gravarColeta(
+      ctxA,
+      { competencia: '2026-04', linhas, resumo: '{"fontes":[]}', duracaoMs: 12 },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
+    expect(g1).toMatchObject({ gravadas: 2, substituidas: 0 });
+    const g2 = await porta.gravarColeta(
+      ctxA,
+      { competencia: '2026-04', linhas, resumo: '{"fontes":[]}', duracaoMs: 9 },
+      'teste',
+      trilha('estatistica_centro_mes', null),
+    );
+    expect(g2).toMatchObject({ gravadas: 2, substituidas: 2 });
+    const u = await porta.ultimaColeta(ctxA, '2026-04');
+    expect(u).toMatchObject({ id: g2.id, competencia: '2026-04', linhas: 2, duracaoMs: 9 });
+    expect(JSON.parse(u!.resumo)).toEqual({ fontes: [] });
+    const { registros } = await porta.estatisticas(ctxA, '2026-04');
+    const daUti = registros.filter((r) => r.centro === centroUti && r.codigo === LANCAMENTO);
+    expect(daUti).toEqual([
+      expect.objectContaining({ cent: 3_050, origem: 'coletada', estimada: true, idColeta: g2.id }),
+    ]);
+    const daLav = registros
+      .filter((r) => r.centro === centroLav && r.codigo === LANCAMENTO)
+      .map((r) => [r.origem, r.cent]);
+    expect(daLav.sort()).toEqual([
+      ['coletada', 1_200],
+      ['manual', 700],
+    ]);
+    expect(manual.registro.origem).toBe('manual');
+    expect(await porta.ultimaColeta(ctxB, '2026-04')).toBeNull();
+    await expect(
+      porta.gravarColeta(
+        ctxB,
+        { competencia: '2026-04', linhas, resumo: '{}', duracaoMs: 1 },
+        'teste',
+        trilha('estatistica_centro_mes', null),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'centro-inexistente' } });
+  });
+
+  it('apuração: grava e relê as linhas; a vigente só é substituída pela versão lida; aprovar fecha', async () => {
+    const linha = (centro: number, classe: string, custoFinal: number) => ({
+      centro,
+      codigo: 0,
+      nome: '',
+      classe,
+      ordemRateio: classe === 'produtivo' ? null : 1,
+      criterio: classe === 'produtivo' ? null : LANCAMENTO,
+      pessoal: 10_000,
+      materiais: 2_500,
+      despesas: 1_000,
+      despesasGerais: 0,
+      diretoTotal: 13_500,
+      recebidoTotal: classe === 'produtivo' ? 13_500 : 0,
+      recebidos: classe === 'produtivo' ? ([[centroLav, 13_500]] as const) : [],
+      repassado: classe === 'produtivo' ? 0 : 13_500,
+      naoRateado: 0,
+      custoFinal,
+      baseCriterioCent: 3_050,
+      producaoCodigo: LANCAMENTO,
+      producaoCent: 3_050,
+      custoUnitario: 88_525,
+      receita: 0,
+    });
+    const entrada = (substitui: { id: number; versao: number } | null) => ({
+      competencia: '2026-04',
+      substitui,
+      rotuloParcial: null,
+      limiteLinha: 1_000_000,
+      custoProdutivos: 27_000,
+      totais: '{"direto":27000}',
+      completude: '{"ok":true}',
+      pendencias: '[]',
+      impressao: 'a'.repeat(64),
+      justificativa: substitui ? 'refeita no teste' : null,
+      duracaoMs: 30,
+      linhas: [linha(centroUti, 'produtivo', 27_000), linha(centroLav, 'auxiliar', 0)],
+      contas: [],
+    });
+    const a1 = await porta.gravarApuracao(ctxA, entrada(null), 'teste', trilha('apuracao_custo', null));
+    expect(a1.substituida).toBeNull();
+    expect(a1.apuracao).toMatchObject({
+      competencia: '2026-04',
+      situacao: 'apurada',
+      custoProdutivos: 27_000,
+      duracaoMs: 30,
+    });
+    const ls = await porta.linhasApuracao(ctxA, a1.apuracao.id);
+    expect(ls.find((x) => x.centro === centroUti)).toMatchObject({
+      classe: 'produtivo',
+      pessoal: 10_000,
+      custoFinal: 27_000,
+      recebidoTotal: 13_500,
+      baseCriterioCent: 3_050,
+      custoUnitario: 88_525,
+      nome: 'UTI FICTICIA',
+    });
+    expect(JSON.parse(ls.find((x) => x.centro === centroUti)!.recebidos)).toEqual([[centroLav, 13_500]]);
+    expect(ls.find((x) => x.centro === centroLav)?.criterio).toBe(LANCAMENTO);
+    await expect(
+      porta.gravarApuracao(ctxA, entrada(null), 'teste', trilha('apuracao_custo', null)),
+    ).rejects.toMatchObject({
+      problema: { codigo: 'desatualizado' },
+    });
+    const a2 = await porta.gravarApuracao(
+      ctxA,
+      entrada({ id: a1.apuracao.id, versao: a1.apuracao.versao }),
+      'teste',
+      trilha('apuracao_custo', null),
+    );
+    expect(a2.substituida).toBe(a1.apuracao.id);
+    const lista = await porta.apuracoes(ctxA, '2026-04');
+    expect(lista.map((x) => [x.id, x.situacao])).toEqual([
+      [a2.apuracao.id, 'apurada'],
+      [a1.apuracao.id, 'substituida'],
+    ]);
+    const ap = await porta.aprovarApuracao(
+      ctxA,
+      a2.apuracao.id,
+      a2.apuracao.versao,
+      'teste',
+      trilha('apuracao_custo', a2.apuracao.id),
+    );
+    expect(ap?.depois).toMatchObject({ situacao: 'aprovada', justificativa: 'refeita no teste' });
+    expect(ap?.depois.aprovadaEm).not.toBeNull();
+    await expect(
+      porta.aprovarApuracao(
+        ctxA,
+        a2.apuracao.id,
+        a2.apuracao.versao,
+        'teste',
+        trilha('apuracao_custo', a2.apuracao.id),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'desatualizado' } });
+    expect(await porta.contasApuracao(ctxA, a2.apuracao.id, { negativas: false, pagina: 1 })).toEqual({
+      total: 0,
+      contas: [],
+    });
+    expect(await porta.resultadoAgrupado(ctxA, a2.apuracao.id, 'convenio')).toEqual([]);
+    expect(await porta.apuracao(ctxB, a2.apuracao.id)).toBeNull();
+    expect(await porta.apuracoes(ctxB, '2026-04')).toEqual([]);
     const nomes = await porta.nomesConvenios(ctxA, [999_999_999]);
     expect(nomes.size).toBe(0);
   });

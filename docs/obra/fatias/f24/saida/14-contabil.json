@@ -1,0 +1,30 @@
+{
+  "lote": "14-contabil",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/contabil/modulo.ts",
+      "motivo": "Passar o armazém de arquivos do ambiente (disco da máquina de hospedagem, ADR 0004) como 2º argumento de new PortaContabilPropria(ctx.nucleo, armazem), na interface ArmazemArquivoSped (guardar sem sobrescrever, ler). Sem ele, gravarArquivoSped e conteudoSped recusam com 503 'armazem-indisponivel' no banco (nunca um SPED gerado sem guarda)."
+    },
+    {
+      "tipo": "carga",
+      "tabela": "evento_contabil",
+      "motivo": "Semente nativa dos tipos de fato (TIPOS_FATO: código, rótulo, módulo) no criar-cliente. Hoje a porta cria o evento nativo na primeira regra publicada do tipo."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/worker/src/contabil/porta-propria.ts",
+      "motivo": "O worker ainda recusa as regras publicadas; a tabela versao_regra_contabil já existe e a porta da API lê com o mesmo SQL (SQL_REGRAS)."
+    },
+    {
+      "tipo": "decisao",
+      "arquivo": "packages/dominio-contabil/src/fontes.ts, receita.ts",
+      "motivo": "Os derivadores ainda leem a linha no leiaute do sistema de origem (colunas em maiúsculas, ID_FCCTAEXT, ID_RPRPA). No modelo próprio o fato nasce no módulo dono; os derivadores devem ir para o conector ou ser reescritos sobre as entidades próprias (etapa coordenada)."
+    },
+    {
+      "tipo": "decisao",
+      "arquivo": "packages/contratos/src/contabil/vocabulario.ts, rotas.ts; packages/dominio-contabil/src/fontes.ts",
+      "motivo": "As fontes de folha e patrimônio ainda usam nomes SGH_PES_FOLHA_FATO, SGH_PAT_DEPRECIACAO e SGH_PAT_AJUSTE (do sistema anterior do produto, não do sistema de origem). Trocar pelos nomes das tabelas próprias quando os módulos publicarem fatos."
+    }
+  ]
+}

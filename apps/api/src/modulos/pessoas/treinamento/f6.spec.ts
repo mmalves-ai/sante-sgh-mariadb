@@ -178,7 +178,7 @@ async function admitir(
     tipo,
     admissao: '2026-08-01',
     cargo: 'Técnico de enfermagem',
-    // A função dá o público do curso obrigatório: o público por unidade ainda não tem lugar no banco (modelo-pendente).
+    // A função dá o público do curso obrigatório.
     funcao: FUNCAO_SINTETICA,
     cargaSemanalHoras: 36,
     lotacao: { centroCusto: 9521, unidade: 1, setor: 'Posto 1' },
@@ -212,18 +212,18 @@ describe('gestão de pessoas, fatia F6, pela HTTP', { timeout: 180_000 }, () => 
       acoes: { registrar: true },
       alertaDias: 30,
     });
+    // O público por unidade é aceito (curso não obrigatório, para não mudar o painel do curso obrigatório abaixo).
     const curso = await rh.post(`${T}/cursos`, {
-      codigo: 'NR32-BIO',
-      titulo: 'Riscos biológicos (NR-32)',
+      codigo: 'NR32-UNI',
+      titulo: 'Riscos biológicos da unidade',
       conteudo: 'Precauções padrão, perfurocortantes e conduta no acidente.',
       categoria: 'nr32',
       cargaMinimaMin: 240,
       validadeMeses: 12,
-      obrigatorio: true,
+      obrigatorio: false,
       alvos: [{ tipo: 'unidade', valor: '1' }],
     });
-    // O público por unidade ainda não tem lugar no cadastro do banco: a memória recusa igual (modelo-pendente).
-    expect(curso.json().codigo).toBe('modelo-pendente');
+    expect(curso.statusCode, curso.body).toBe(200);
     const cursoFuncao = await rh.post(`${T}/cursos`, {
       codigo: 'NR32-BIO',
       titulo: 'Riscos biológicos (NR-32)',

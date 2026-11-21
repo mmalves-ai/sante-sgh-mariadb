@@ -1,5 +1,5 @@
 // Aritmética do repasse em centavos inteiros (sem ponto flutuante na conta). O arredondamento é o do banco ao gravar
-// em NUMERIC(15,2): metade para longe do zero. Percentuais com 4 casas (TBREPGER.PERC é NUMERIC(6,4)).
+// em NUMERIC(15,2): metade para longe do zero. Percentuais com 4 casas (o percentual da regra tem 4 decimais).
 
 /** Reais (número com até 2 casas) → centavos inteiros. */
 export function centavos(reais: number): number {

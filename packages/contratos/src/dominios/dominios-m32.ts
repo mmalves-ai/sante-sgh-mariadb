@@ -2,10 +2,10 @@
 // parâmetros financeiros"): bancos, agências e contas (sem as colunas de credencial), classificação gerencial (grupo e
 // item), contas de desconto e acréscimo (retenções), formas de pagamento, tipos de cobrança, clientes, naturezas de
 // operação e órgãos arrecadadores, o de-para contábil e de impostos, os parâmetros financeiros da empresa, o período por
-// usuário, o escopo de conta bancária (MFCTAUSU, que vale nos dois sistemas), os tipos de lançamento por opção e por
+// usuário, o escopo de conta bancária (que vale nos dois sistemas), os tipos de lançamento por opção e por
 // empresa, o período da escrituração e as retenções da NFS-e por usuário. Os de dado de sistema (o gatilho *_BIUD do
 // outro sistema recusa gravar: tipos de lançamento, de contribuição e de apuração, ocorrências bancárias) ficam em
-// consulta. Opções do outro sistema (TBOPCOES do Controle Financeiro, módulo 14): Tabelas 102, Parâmetros 103,
+// consulta. Opções do outro sistema (menu de origem do Controle Financeiro, módulo 14): Tabelas 102, Parâmetros 103,
 // Usuários compl 104, Conta Desconto/Acréscimo 105, Exportação Contábil 256, Vincular RPS/NFS-e 4354, Impostos 219 e
 // Exportações › Bancos 5440 (as inferidas: a árvore não tem item da tabela). Conferir na validação.
 import type { DominioPublico } from './tipos.js';

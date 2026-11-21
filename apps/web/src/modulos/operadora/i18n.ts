@@ -315,9 +315,4 @@ export const mensagensOperadora = {
     'sem-base-legal': 'Falta a aprovação da base legal das mensagens pelo encarregado de dados.',
     'fora-de-producao': 'Fora de produção nenhuma mensagem é enviada ao beneficiário.',
   },
-  inventario: {
-    'tabela-sem-contagem': 'Tabela sem contagem na conferência.',
-    'linhas-mudaram': 'A quantidade de itens mudou desde o inventário.',
-    'beneficiario-real': 'Há beneficiários cadastrados fora deste sistema: a carteira precisa de migração.',
-  },
 } as const;

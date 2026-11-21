@@ -291,7 +291,7 @@ export class AtendimentoController implements OnModuleDestroy {
     const m = await this.servico.marcacao(ctx(sessaoDe(req)), idDaRota(id));
     req.sghAlvo = {
       ...(m.paciente ? { paciente: m.paciente.id } : {}),
-      tabelaAlvo: 'REPACAGD',
+      tabelaAlvo: 'marcacao_horario',
       idAlvo: String(m.id),
     };
     return m;
@@ -434,7 +434,7 @@ export class AtendimentoController implements OnModuleDestroy {
   @Auditar(EVENTOS_AUDITAVEIS.atendimentoFilaLida.codigo)
   historico(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<HerancaPaciente> {
     const pac = idDaRota(id);
-    req.sghAlvo = { paciente: pac, tabelaAlvo: 'RICADPAC', idAlvo: String(pac) };
+    req.sghAlvo = { paciente: pac, tabelaAlvo: 'paciente', idAlvo: String(pac) };
     return this.servico.historico(ctx(sessaoDe(req)), pac);
   }
 
@@ -512,7 +512,7 @@ export class AtendimentoController implements OnModuleDestroy {
     const d = await this.servico.detalhe(ctx(sessaoDe(req)), idDaRota(reg));
     req.sghAlvo = {
       ...(d.paciente.id ? { paciente: d.paciente.id } : {}),
-      tabelaAlvo: 'RECADATE',
+      tabelaAlvo: 'atendimento',
       idAlvo: String(d.reg),
     };
     return d;

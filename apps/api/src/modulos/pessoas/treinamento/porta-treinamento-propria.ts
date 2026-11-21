@@ -25,8 +25,10 @@
 //     da alteração da turma (dados_depois.pop_versao) e é lida de lá; nenhuma gravação posterior (outra alteração,
 //     encerramento, cancelamento, nova versão do POP) muda a versão da turma, e a ciência pela conclusão é a da versão
 //     trabalhada (só para turma sem trilha: a versão publicada até a criação, nunca a revogada depois);
-//   - curso não tem a categoria do contrato nem o público por unidade ou "todos": recusa com `modelo-pendente`, a mesma
-//     regra da porta em memória (modelo-curso.ts).
+// O público do curso: o obrigatório por função fica em treinamento_obrigatorio_funcao (com vigência); o público por
+// unidade (setor funcional), o obrigatório para todo o estabelecimento (linha sem setor nem função) e o público do curso
+// não obrigatório ficam em curso_publico_alvo, por estabelecimento. A categoria do contrato é o tipo do curso
+// (modelo-curso.ts, a mesma tradução da porta em memória).
 // Melhoria: o POP publicado pela tela de treinamento respeita o tipo de documento da qualidade: o tipo que exige o fluxo
 // completo (elaboração, verificação e aprovação) recusa com `fluxo-da-qualidade`, o documento em fluxo na qualidade
 // recusa com `pop-em-fluxo`, a aprovação não é forjada (aprovador e aprovado_em ficam nulos) e a próxima revisão sai do
@@ -95,12 +97,11 @@ import { conferirModeloDoCurso } from './modelo-curso.js';
 /** O que a porta usa do núcleo. */
 export type NucleoTreinamento = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
-export { MODELO_PENDENTE } from './modelo-curso.js';
-
 /** As tabelas que as gravações do treinamento tocam (a operação do Executor recusa as outras). */
 export const TABELAS_TREINAMENTO = [
   'curso',
   'treinamento_obrigatorio_funcao',
+  'curso_publico_alvo',
   'turma_treinamento',
   'presenca_treinamento',
   'documento_qualidade',
@@ -119,6 +120,8 @@ const CATEGORIA_DO_TIPO: Readonly<Record<string, CategoriaCurso>> = {
   integracao: 'integracao',
   capacitacao: 'assistencial',
   educacao_continuada: 'assistencial',
+  procedimento_operacional: 'pop',
+  gestao: 'gestao',
   reciclagem: 'outro',
   outro: 'outro',
 };
@@ -273,10 +276,31 @@ class Leituras {
       [this.est, ...ids],
       { teto: TETO },
     );
+    const outros = await this.l.consultar(
+      `SELECT p.curso_id, p.setor_funcional_id, f.nome AS funcao, p.obrigatorio FROM curso_publico_alvo p
+         LEFT JOIN funcao f ON f.id = p.funcao_id
+        WHERE p.estabelecimento_id = ? AND p.curso_id IN (${marcadores(ids.length)}) AND p.excluido_em IS NULL
+        ORDER BY p.id`,
+      [this.est, ...ids],
+      { teto: TETO },
+    );
     const porCurso = new Map<number, AlvoCursoTreinamento[]>();
+    const obrigatorios = new Set<number>();
     for (const a of alvos) {
       const k = num(a['curso_id']);
+      obrigatorios.add(k);
       porCurso.set(k, [...(porCurso.get(k) ?? []), { tipo: 'funcao', valor: chaveFuncao(texto(a['nome'])) }]);
+    }
+    for (const a of outros) {
+      const k = num(a['curso_id']);
+      if (booleano(a['obrigatorio'])) obrigatorios.add(k);
+      const alvo: AlvoCursoTreinamento | null =
+        a['setor_funcional_id'] !== null
+          ? { tipo: 'unidade', valor: String(num(a['setor_funcional_id'])) }
+          : a['funcao'] !== null
+            ? { tipo: 'funcao', valor: chaveFuncao(texto(a['funcao'])) }
+            : null;
+      porCurso.set(k, [...(porCurso.get(k) ?? []), ...(alvo ? [alvo] : [])]);
     }
     return ls.map((x) => {
       const publico = porCurso.get(num(x['id'])) ?? [];
@@ -288,7 +312,7 @@ class Leituras {
         categoria: CATEGORIA_DO_TIPO[texto(x['tipo'])] ?? 'outro',
         cargaMinimaMin: num(x['carga_minutos']),
         validadeMeses: num(x['validade_meses']),
-        obrigatorio: publico.length > 0,
+        obrigatorio: obrigatorios.has(num(x['id'])),
         ativo: booleano(x['ativo']),
         alvos: publico,
         versao: num(x['versao']),
@@ -645,8 +669,104 @@ class Gravacoes implements GravadorTreinamento {
     if (r && Number(r.id) !== outro) throw recusa('codigo-repetido', 'Já existe um curso com este código.');
   }
 
-  /** O público obrigatório do curso neste estabelecimento: as funções pedidas ficam; as outras saem (exclusão lógica). */
-  private async sincronizarPublico(curso: number, alvos: readonly AlvoCursoTreinamento[]): Promise<void> {
+  /**
+   * O público do curso neste estabelecimento. O obrigatório por função vai a treinamento_obrigatorio_funcao; o resto
+   * (unidade, "todo o estabelecimento" do obrigatório sem alvo e o público do não obrigatório) a curso_publico_alvo.
+   */
+  private async sincronizarPublico(
+    curso: number,
+    obrigatorio: boolean,
+    alvos: readonly AlvoCursoTreinamento[],
+  ): Promise<void> {
+    const porFuncao = obrigatorio ? alvos.filter((a) => a.tipo === 'funcao') : [];
+    await this.sincronizarObrigatorioFuncao(curso, porFuncao);
+    const setores = await this.tx.consultar(
+      'SELECT id FROM setor_funcional WHERE estabelecimento_id = ?',
+      [this.est],
+      {
+        teto: TETO,
+      },
+    );
+    const setorExiste = new Set(setores.map((s) => num(s['id'])));
+    const quer = new Map<string, { setor: number | null; funcao: number | null }>();
+    for (const a of alvos) {
+      if (a.tipo === 'unidade') {
+        const id = /^\d+$/.test(a.valor) ? Number(a.valor) : NaN;
+        if (!setorExiste.has(id))
+          throw recusa('unidade-inexistente', `A unidade ${a.valor} não existe neste estabelecimento.`, {
+            campos: ['alvos'],
+          });
+        quer.set(`s${id}`, { setor: id, funcao: null });
+      } else if (!obrigatorio) {
+        quer.set(`f${a.valor}`, { setor: null, funcao: await this.funcaoPorChave(a.valor) });
+      }
+    }
+    if (obrigatorio && alvos.length === 0) quer.set('todos', { setor: null, funcao: null });
+    const agora = new Date();
+    const atuais = await this.tx.consultar(
+      `SELECT id, setor_funcional_id, funcao_id, obrigatorio, excluido_em, versao FROM curso_publico_alvo
+        WHERE curso_id = ? AND estabelecimento_id = ?`,
+      [curso, this.est],
+      { teto: TETO },
+    );
+    const vistos = new Set<string>();
+    for (const o of atuais) {
+      const setor = o['setor_funcional_id'] === null ? null : num(o['setor_funcional_id']);
+      const funcao = o['funcao_id'] === null ? null : num(o['funcao_id']);
+      const chave =
+        setor !== null
+          ? `s${setor}`
+          : funcao !== null
+            ? [...quer].find(([, v]) => v.funcao === funcao)?.[0]
+            : 'todos';
+      const ativo = o['excluido_em'] === null;
+      if (chave !== undefined && quer.has(chave)) {
+        vistos.add(chave);
+        if (!ativo || booleano(o['obrigatorio']) !== obrigatorio)
+          await this.tx.executar(
+            `UPDATE curso_publico_alvo SET excluido_em = NULL, excluido_por = NULL, obrigatorio = ?, alterado_em = ?,
+               alterado_por = ?, versao = versao + 1 WHERE id = ?`,
+            [obrigatorio, agora, this.usuario, num(o['id'])],
+          );
+      } else if (ativo)
+        await this.tx.executar(
+          `UPDATE curso_publico_alvo SET excluido_em = ?, excluido_por = ?, alterado_em = ?, alterado_por = ?,
+             versao = versao + 1 WHERE id = ?`,
+          [agora, this.usuario, agora, this.usuario, num(o['id'])],
+        );
+    }
+    for (const [chave, v] of quer) {
+      if (vistos.has(chave)) continue;
+      await this.tx.incluir('curso_publico_alvo', {
+        curso_id: curso,
+        estabelecimento_id: this.est,
+        setor_funcional_id: v.setor,
+        funcao_id: v.funcao,
+        obrigatorio,
+      });
+    }
+  }
+
+  /** A função do estabelecimento pela chave (sem acento, maiúsculas); recusa se não existir. */
+  private async funcaoPorChave(chave: string): Promise<number> {
+    const funcoes = await this.tx.consultar(
+      'SELECT id, nome FROM funcao WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+      [this.est],
+      { teto: TETO },
+    );
+    const f = funcoes.find((x) => chaveFuncao(texto(x['nome'])) === chave);
+    if (!f)
+      throw recusa('funcao-inexistente', `A função ${chave} não existe neste estabelecimento.`, {
+        campos: ['alvos'],
+      });
+    return num(f['id']);
+  }
+
+  /** O curso obrigatório por função: as funções pedidas ficam; as outras saem (exclusão lógica). */
+  private async sincronizarObrigatorioFuncao(
+    curso: number,
+    alvos: readonly AlvoCursoTreinamento[],
+  ): Promise<void> {
     const funcoes = await this.tx.consultar(
       'SELECT id, nome FROM funcao WHERE estabelecimento_id = ? AND excluido_em IS NULL',
       [this.est],
@@ -706,7 +826,7 @@ class Gravacoes implements GravadorTreinamento {
     const tipo = conferirModeloDoCurso(x);
     await this.codigoLivre(x.codigo, null);
     const id = await this.tx.incluir('curso', { ...this.valoresCurso(x, tipo), ativo: true });
-    await this.sincronizarPublico(id, x.alvos);
+    await this.sincronizarPublico(id, x.obrigatorio, x.alvos);
     return id;
   }
 
@@ -716,7 +836,7 @@ class Gravacoes implements GravadorTreinamento {
     const tipo = conferirModeloDoCurso(x);
     await this.codigoLivre(x.codigo, x.id);
     await this.tx.alterar('curso', x.id, x.versao, { ...this.valoresCurso(x, tipo), ativo: x.ativo });
-    await this.sincronizarPublico(x.id, x.alvos);
+    await this.sincronizarPublico(x.id, x.obrigatorio, x.alvos);
   }
 
   /** O documento do POP pela versão (só do estabelecimento). */

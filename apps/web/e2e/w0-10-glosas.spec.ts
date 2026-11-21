@@ -238,7 +238,7 @@ test.describe('portal do prestador: recurso de glosa por item @W0-10', () => {
       const guia: GuiaSpSadt = {
         tipo: 'sp-sadt',
         numeroGuiaPrestador: `GL-${sufixo}`,
-        beneficiario: { numeroCarteira: carteirinhaSintetica(registro, 999_998), atendimentoRN: 'N' },
+        beneficiario: { numeroCarteira: carteirinhaSintetica(registro, 999_998), atendimentoRN: false },
         nomeContratadoSolicitante: 'LABORATORIO SINTETICO ALFA',
         profissionalSolicitante: { conselho: '06', numeroConselho: '900072', uf: '42', cbos: '225125' },
         cnes: '9000001',

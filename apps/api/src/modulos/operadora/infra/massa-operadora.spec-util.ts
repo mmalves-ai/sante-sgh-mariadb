@@ -216,6 +216,14 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
       "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'assistencial', ?)",
       [pfAud, agora],
     );
+    // Conselho da terminologia TISS (o cliente de teste novo não tem a carga da terminologia).
+    await garantir(
+      e,
+      'SELECT id FROM conselho_classe ORDER BY id LIMIT 1',
+      [],
+      "INSERT INTO conselho_classe (codigo_tiss, sigla, descricao, criado_em) VALUES ('06', 'CRM', 'CONSELHO REGIONAL DE MEDICINA', ?)",
+      [agora],
+    );
     const crm = await e.uma<{ id: number }>('SELECT id FROM conselho_classe ORDER BY id LIMIT 1');
     const uf = await e.uma<{ id: number }>('SELECT id FROM unidade_federativa ORDER BY id LIMIT 1');
     if (crm && uf)
@@ -241,6 +249,14 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
       "INSERT INTO termo_terminologia (terminologia_id, codigo_termo, descricao, criado_em) VALUES (?, '90209001', 'PROCEDIMENTO SINTETICO', ?)",
       [term, agora],
     );
+    // Caráter "eletivo" da terminologia TISS (o cliente de teste novo não tem a carga da terminologia).
+    await garantir(
+      e,
+      "SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = '1'",
+      [],
+      "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('1', 'ELETIVO', 'sintetico', ?)",
+      [agora],
+    );
     m.motivoGlosa = await garantir(
       e,
       'SELECT id FROM motivo_glosa WHERE codigo_tuss = ?',
@@ -257,6 +273,7 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
       'guia_autorizacao',
       'junta',
       'protocolo_conta',
+      'recurso_glosa',
       'protocolo_atendimento',
     ])
       await garantirSequencia(e, { tipo, estabelecimento: m.est, prefixo: `${P}-` }, carimbo);
@@ -271,6 +288,7 @@ export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): P
     await e.executar('DELETE i FROM fatura_plano_item i JOIN fatura_plano f ON f.id = i.fatura_plano_id WHERE f.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM fatura_plano WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM reajuste_contrato_plano WHERE estabelecimento_id IN (?, ?)', est);
+    await e.executar('DELETE k FROM complemento_sib_beneficiario k JOIN beneficiario_plano b ON b.id = k.beneficiario_plano_id JOIN contrato_plano c ON c.id = b.contrato_plano_id WHERE c.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE r FROM envio_ans_retorno r JOIN envio_ans x ON x.id = r.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE i FROM envio_ans_item i JOIN envio_ans x ON x.id = i.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM envio_ans WHERE estabelecimento_id IN (?, ?) ORDER BY id DESC', est);
@@ -279,6 +297,8 @@ export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): P
     await e.executar('DELETE i FROM pedido_autorizacao_plano_item i JOIN pedido_autorizacao_plano p ON p.id = i.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM pedido_autorizacao_plano WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM auditor_plano WHERE operadora_saude_id = ?', [m.operadora]);
+    await e.executar('DELETE i FROM recurso_glosa_recebido_item i JOIN recurso_glosa_recebido r ON r.id = i.recurso_glosa_recebido_id WHERE r.estabelecimento_id IN (?, ?)', est);
+    await e.executar('DELETE FROM recurso_glosa_recebido WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE g FROM glosa_conta_recebida g JOIN guia_conta_recebida x ON x.id = g.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE i FROM guia_conta_recebida_item i JOIN guia_conta_recebida x ON x.id = i.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM guia_conta_recebida WHERE estabelecimento_id IN (?, ?)', est);

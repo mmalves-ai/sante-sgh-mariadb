@@ -116,7 +116,7 @@ export interface MovimentoParaDecisao {
   readonly versao: number;
   readonly solicitadoPor: string;
   readonly origem: number;
-  /** O setor (TBCENCUS.ID) que recebe; só a transferência tem. */
+  /** O setor (centro de custo) que recebe; só a transferência tem. */
   readonly destino?: number | null;
 }
 

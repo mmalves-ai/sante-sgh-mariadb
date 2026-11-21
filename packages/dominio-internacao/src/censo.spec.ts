@@ -12,20 +12,20 @@ const total = (
 describe('censo pela hora de fechamento', () => {
   const mov = movimento([
     // Entra às 18:00 do dia 10 (fechamento às 18 h): conta no dia 10.
-    { entrada: ['2026-03-10', '1800'], trechos: [{ unidade: 'ENF', de: ['2026-03-10', '1800'] }] },
+    { entrada: ['2026-03-10', '18:00'], trechos: [{ unidade: 'ENF', de: ['2026-03-10', '18:00'] }] },
     // Entra às 18:01: conta no dia 11.
-    { entrada: ['2026-03-10', '1801'], trechos: [{ unidade: 'ENF', de: ['2026-03-10', '1801'] }] },
+    { entrada: ['2026-03-10', '18:01'], trechos: [{ unidade: 'ENF', de: ['2026-03-10', '18:01'] }] },
     // Entra e sai no mesmo dia do censo: admissão e saída, não internado.
     {
-      entrada: ['2026-03-10', '0900'],
-      alta: ['2026-03-10', '1500'],
-      trechos: [{ unidade: 'APTO', de: ['2026-03-10', '0900'], ate: ['2026-03-10', '1500'] }],
+      entrada: ['2026-03-10', '09:00'],
+      alta: ['2026-03-10', '15:00'],
+      trechos: [{ unidade: 'APTO', de: ['2026-03-10', '09:00'], ate: ['2026-03-10', '15:00'] }],
     },
   ]);
   const motor = new MotorInternacao(mov, {
     horaFechamento: 18,
     intensivas: [3],
-    agora: em('2026-03-12', '1000'),
+    agora: em('2026-03-12', '10:00'),
   });
 
   it('quem entra um minuto depois da hora de fechamento conta no dia seguinte', () => {
@@ -53,7 +53,7 @@ describe('censo pela hora de fechamento', () => {
     const m = new MotorInternacao(mov, {
       horaFechamento: 24,
       intensivas: [],
-      agora: em('2026-03-12', '1000'),
+      agora: em('2026-03-12', '10:00'),
     });
     expect(total(m.censoDoDia('2026-03-10'), 'internados')).toBe(2);
     expect(total(m.censoDoDia('2026-03-10'), 'admissoes')).toBe(3);
@@ -73,26 +73,26 @@ describe('a conta do dia fecha por unidade', () => {
   it('internados(D) = internados(D−1) + admissões + entradas − saídas − transferências de saída', () => {
     const mov = movimento([
       {
-        entrada: ['2026-01-01', '1000'],
-        alta: ['2026-01-09', '1100'],
+        entrada: ['2026-01-01', '10:00'],
+        alta: ['2026-01-09', '11:00'],
         trechos: [
-          { unidade: 'ENF', de: ['2026-01-01', '1000'], ate: ['2026-01-03', '0800'] },
-          { unidade: 'UTI', de: ['2026-01-03', '0800'], ate: ['2026-01-06', '1200'] },
-          { unidade: 'ENF', de: ['2026-01-06', '1200'], ate: ['2026-01-09', '1100'] },
+          { unidade: 'ENF', de: ['2026-01-01', '10:00'], ate: ['2026-01-03', '08:00'] },
+          { unidade: 'UTI', de: ['2026-01-03', '08:00'], ate: ['2026-01-06', '12:00'] },
+          { unidade: 'ENF', de: ['2026-01-06', '12:00'], ate: ['2026-01-09', '11:00'] },
         ],
       },
       {
-        entrada: ['2026-01-02', '2300'],
-        alta: ['2026-01-04', '0100'],
+        entrada: ['2026-01-02', '23:00'],
+        alta: ['2026-01-04', '01:00'],
         motivo: 41,
-        trechos: [{ unidade: 'APTO', de: ['2026-01-02', '2300'], ate: ['2026-01-04', '0100'] }],
+        trechos: [{ unidade: 'APTO', de: ['2026-01-02', '23:00'], ate: ['2026-01-04', '01:00'] }],
       },
-      { entrada: ['2026-01-05', '0000'], trechos: [{ unidade: 'UTI', de: ['2026-01-05', '0000'] }] },
+      { entrada: ['2026-01-05', '00:00'], trechos: [{ unidade: 'UTI', de: ['2026-01-05', '00:00'] }] },
     ]);
     const motor = new MotorInternacao(mov, {
       horaFechamento: 24,
       intensivas: [3],
-      agora: em('2026-01-12', '1200'),
+      agora: em('2026-01-12', '12:00'),
     });
     let anterior = new Map<string, number>();
     for (let dia = 1; dia <= 11; dia++) {
@@ -116,12 +116,12 @@ describe('a conta do dia fecha por unidade', () => {
 
 describe('série do censo', () => {
   const mov = movimento([
-    { entrada: ['2026-02-27', '1000'], trechos: [{ unidade: 'ENF', de: ['2026-02-27', '1000'] }] },
+    { entrada: ['2026-02-27', '10:00'], trechos: [{ unidade: 'ENF', de: ['2026-02-27', '10:00'] }] },
   ]);
   const motor = new MotorInternacao(mov, {
     horaFechamento: 24,
     intensivas: [],
-    agora: em('2026-03-02', '0800'),
+    agora: em('2026-03-02', '08:00'),
   });
 
   it('por dia: paciente-dia, leito-dia e o dia em aberto parcial', () => {

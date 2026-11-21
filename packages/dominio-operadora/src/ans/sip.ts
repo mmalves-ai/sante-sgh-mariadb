@@ -3,7 +3,7 @@
 // ativos no último dia do trimestre, por segmentação). A fonte são os itens das contas médicas recebidas (F5) e não
 // devolvidas, pela data da execução no trimestre (D-SIP-567: o "conhecido ou avisado" do SIP é aproximado pela
 // execução; a ANS confere na validação). O procedimento da terminologia TUSS (tabela 22) vai ao grupo pela tabela de
-// procedimentos do SIP vigente na data (TBSIPANSPROC do banco); o que não tem grupo vigente e as outras despesas
+// procedimentos do SIP vigente na data; o que não tem grupo vigente e as outras despesas
 // (materiais, medicamentos, diárias, taxas) ficam em "demais despesas" (grupo 0), listadas à parte. A despesa é o valor
 // liberado do item (apresentado menos a glosa), em emCentavos.
 import {

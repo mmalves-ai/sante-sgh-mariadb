@@ -52,7 +52,7 @@ export function signatarioDaSessao(vinculoEscolhido: string | null): SignatarioP
 }
 
 /**
- * ID do signatário no domínio do cadastro (TBTIPOREPRE), pela descrição lida ao vivo ("Paciente", "Representante Legal"):
+ * ID do signatário no domínio do cadastro (tipo de representante), pela descrição lida ao vivo ("Paciente", "Representante Legal"):
  * nunca um número fixo no código.
  */
 export function idSignatario(
@@ -65,7 +65,7 @@ export function idSignatario(
 }
 
 /**
- * Situação do termo (TBMOVTERMSTATUS) para "consentiu" e "não consentiu", pela descrição (na cópia do pc: 3
+ * Situação do termo (situação da movimentação do termo) para "consentiu" e "não consentiu", pela descrição (na cópia do pc: 3
  * "Consentimento Autorizado" e 4 "Não autorizado").
  */
 export function idSituacaoTermo(

@@ -20,10 +20,23 @@ import { definirSessaoDaTela } from '../../casca/sessao/pode.js';
 import { mensagensWeb } from '../../i18n/pt-BR.js';
 import FichaInternado from './ccih/componentes/FichaInternado.vue';
 import SessoesMaos from './ccih/componentes/SessoesMaos.vue';
-import DialogoCorrecao, { type PedidoCorrecao } from './componentes/DialogoCorrecao.vue';
+import DialogoCorrecao from './componentes/DialogoCorrecao.vue';
 import HistoricoVersoes from './componentes/HistoricoVersoes.vue';
 import IndicadoresOuvidoria from './gestao/componentes/IndicadoresOuvidoria.vue';
 import ManifestacaoDetalhe from './gestao/componentes/ManifestacaoDetalhe.vue';
+
+// O tipo do pedido espelha a interface exportada por DialogoCorrecao.vue: o tsc puro (sem vue-tsc) só enxerga o
+// componente padrão do .vue, e a conferência roda o tsc puro.
+type PedidoCorrecao = {
+  titulo: string;
+  texto?: string | undefined;
+  alerta?: string | undefined;
+  semJustificativa?: boolean;
+  critica: boolean;
+  confirmar: string;
+  impedido?: boolean;
+  gravar: (x: { justificativa: string; senha: string }) => Promise<unknown>;
+};
 
 if (!window.matchMedia) {
   window.matchMedia = (consulta: string) =>

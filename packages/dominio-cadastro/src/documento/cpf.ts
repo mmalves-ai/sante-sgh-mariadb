@@ -1,5 +1,5 @@
 // CPF (ficha do M11, regra 2; sante-api, src/utils/sgh.js): dígito verificador; sequências repetidas e
-// "00000000000" recusadas nas telas do novo. O legado guarda CPF como NÚMERO (RICADPAC.CPF DOUBLE PRECISION):
+// "00000000000" recusadas nas telas do novo. O legado guarda CPF como NÚMERO (no cadastro do paciente, ponto flutuante):
 // a tela mostra 11 dígitos com zeros à esquerda e grava no tipo numérico; o legado continua aceitando o que
 // aceita (zero, CPF antigo inválido): a LEITURA nunca recusa, só mostra "CPF não informado" ou "inválido".
 import { cpfValido, somenteDigitos } from '@sgh/contratos';
@@ -32,7 +32,7 @@ export function mascararCpf(cpf: string | null): string | null {
   return `***.***.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
-/** Para gravar: o número do CPF (RICADPAC.CPF é numérico). Recusa o inválido. */
+/** Para gravar: o número do CPF (numérico no cadastro do paciente). Recusa o inválido. */
 export function cpfParaGravar(cpf: string): number {
   if (!cpfValido(cpf)) throw new Error('CPF inválido.');
   return Number(somenteDigitos(cpf));

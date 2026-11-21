@@ -53,7 +53,7 @@ export const ROTULOS_SITUACAO_BEM: Readonly<Record<SituacaoBem, string>> = {
 export const DOCUMENTOS_ORIGEM_BEM = ['nota', 'termo'] as const;
 export type DocumentoOrigemBem = (typeof DOCUMENTOS_ORIGEM_BEM)[number];
 
-/** Origem "Doação" no domínio de origens do patrimônio do banco (GPORIGEM; 5 linhas no pc em 24/10/2026). */
+/** Origem "Doação" no cadastro de origens do bem. */
 export const ORIGEM_BEM_DOACAO = 2;
 
 export const TIPOS_MOVIMENTO_BEM = ['transferencia', 'emprestimo', 'comodato', 'devolucao', 'baixa'] as const;
@@ -125,12 +125,12 @@ const id = z.number().int().positive();
 const camposCadastro = {
   descricao: textoObrigatorio(120, 'Descreva o bem.'),
   grupo: esquemaCodigoGrupoBem,
-  /** GPORIGEM.ID. */
+  /** Origem do bem (cadastro de origens). */
   origem: id,
-  /** TBCENCUS.ID (onde o bem fica). */
+  /** Centro de custo onde o bem fica. */
   centro: id,
   localDetalhe: opcional(80),
-  /** GPTP_RESPONSAVEL.ID. */
+  /** Tipo de responsável pelo bem. */
   tipoResponsavel: id.nullable().default(null),
   responsavel: opcional(80),
   marca: opcional(40),
@@ -148,11 +148,11 @@ const camposCadastro = {
   /** Sem ela, a vida útil padrão do grupo. */
   vidaUtilMeses: z.number().int().min(1).max(1200).nullable().default(null),
   residualCent: centavos.default(0),
-  /** GPCOEFICIENTE_DEPREC.ID (turnos de uso); null: um turno. */
+  /** Coeficiente de depreciação por turnos de uso; null: um turno. */
   coeficiente: id.nullable().default(null),
   /** Sem ela, o mês seguinte ao da aquisição. */
   inicioDepreciacao: esquemaCompetenciaPatrimonio.nullable().default(null),
-  /** Sem ela, a marca da origem (GPORIGEM.DEPRECIAR). */
+  /** Sem ela, a marca "deprecia" da origem do bem. */
   depreciavel: z.boolean().nullable().default(null),
   /** Unidades a cadastrar (uma plaqueta por unidade). */
   quantidade: z.number().int().min(1).max(TETO_BENS_POR_CADASTRO).default(1),
@@ -163,7 +163,7 @@ export const esquemaCadastrarBem = z
     z
       .object({
         documento: z.literal('nota'),
-        /** GECADNFS.ID e GELANNFS.ID_GELANNFS. */
+        /** Nota de entrada e item da nota. */
         nota: id,
         itemNota: id,
         ...camposCadastro,
@@ -175,7 +175,7 @@ export const esquemaCadastrarBem = z
         termoNumero: textoObrigatorio(40, 'Informe o número do termo de doação.'),
         termoData: data,
         doador: textoObrigatorio(120, 'Informe quem doou.'),
-        /** Empresa (TBEMPHOS) que recebe a doação. */
+        /** Empresa do grupo que recebe a doação. */
         empresa: id,
         dataAquisicao: data,
         /** Valor de cada unidade (o do termo ou do laudo de avaliação). */
@@ -347,7 +347,7 @@ export type ConsultaMovimentos = z.infer<typeof esquemaConsultaMovimentos>;
 export const esquemaAbrirInventarioBens = z
   .object({
     descricao: textoObrigatorio(120, 'Dê um nome ao inventário.'),
-    /** TBCENCUS.ID; null: o estabelecimento inteiro. */
+    /** Centro de custo; null: o estabelecimento inteiro. */
     centro: id.nullable().default(null),
   })
   .strict();
@@ -357,7 +357,7 @@ export const esquemaLeituraInventario = z
   .object({
     /** O texto do QR ou a plaqueta digitada. */
     codigo: z.string().trim().min(1, 'Leia o QR ou digite a plaqueta.').max(80),
-    /** TBCENCUS.ID do setor onde a leitura é feita. */
+    /** Centro de custo do setor onde a leitura é feita. */
     centro: id,
     observacao: opcional(400),
   })
@@ -564,11 +564,11 @@ export interface DepreciacaoCompetencia {
 
 export interface ParametrosDepreciacao {
   readonly empresa: number;
-  /** GPPARAMG.DEPRECIAR: a empresa deprecia os bens. */
+  /** Parâmetro da empresa: deprecia os bens. */
   readonly depreciar: boolean;
-  /** GPPARAMG.APLICAR_COEFICIENTE: aplica o coeficiente por turno. */
+  /** Parâmetro da empresa: aplica o coeficiente por turno. */
   readonly aplicarCoeficiente: boolean;
-  /** GPPARAMG.CONSIDERA_VALOR_RESIDUAL: desconta o valor residual da base. */
+  /** Parâmetro da empresa: desconta o valor residual da base. */
   readonly considerarResidual: boolean;
 }
 

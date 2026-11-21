@@ -292,7 +292,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       marcaSuporte: req.sghComo ? marcaSuporteTecnico(req.sghComo.alvoNome) : null,
     });
     req.sghAlvo = {
-      tabelaAlvo: 'PRCHKGERAL',
+      tabelaAlvo: 'horario_administracao',
       idAlvo: g.resumo.documento,
       chaveNaturalAlvo: `contingencia:${g.resumo.unidade}:${g.resumo.pacientes}:${g.resumo.horarios}`,
     };
@@ -337,7 +337,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
         'Ainda não há relatório de contingência gerado para esta unidade: gere um agora.',
       );
     req.sghAlvo = {
-      tabelaAlvo: 'PRCHKGERAL',
+      tabelaAlvo: 'horario_administracao',
       idAlvo: u.resumo.documento,
       chaveNaturalAlvo: `contingencia:${u.resumo.unidade}:${u.resumo.pacientes}:${u.resumo.horarios}`,
     };
@@ -373,7 +373,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const u = unidadeDe(unidade);
     const p = await this.apoios.parametros(s, u);
     const r = await this.servico.linhaDoTempo(s.porta, u, p, turnoDe(data, turno));
-    req.sghAlvo = { tabelaAlvo: 'PRCHKGERAL', chaveNaturalAlvo: `unidade:${u}:${r.horarios.length}` };
+    req.sghAlvo = { tabelaAlvo: 'horario_administracao', chaveNaturalAlvo: `unidade:${u}:${r.horarios.length}` };
     return { ...r, contencoes: await this.contencoesDoTurno(s, u, r) };
   }
 
@@ -419,7 +419,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     req.sghAlvo = {
       paciente: r.paciente.paciente,
       atendimento: r.paciente.atendimento,
-      tabelaAlvo: 'PRCHKGERAL',
+      tabelaAlvo: 'horario_administracao',
     };
     return { ...r, cacheHoras: p.cacheHoras };
   }
@@ -498,7 +498,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     req.sghAlvo = {
       paciente: h.tela.paciente,
       atendimento: h.tela.atendimento,
-      tabelaAlvo: 'PRCHKGERAL',
+      tabelaAlvo: 'horario_administracao',
       idAlvo: String(h.lido.id),
     };
     return {
@@ -855,7 +855,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const u = unidadeDe(unidade);
     const itens = await this.servico.propostas(s.porta, u);
     const liberado = await this.porta.podeGravar(s.porta, 'enfermagem.aprazarHorario');
-    req.sghAlvo = { tabelaAlvo: 'PRCHKGERAL', chaveNaturalAlvo: `aprazamento:${u}:${itens.length}` };
+    req.sghAlvo = { tabelaAlvo: 'horario_administracao', chaveNaturalAlvo: `aprazamento:${u}:${itens.length}` };
     return {
       unidade: u,
       itens,

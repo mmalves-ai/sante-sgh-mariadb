@@ -1,5 +1,5 @@
 // Bloqueio da porta do novo por tentativas (ficha do M05, regra 5): limite de
-// TBCFGLOGIN.QTDE_TENTATIVA_INVALIDA_BLOQ, no máximo 10; o novo bloqueia só a própria porta (contador no
+// tentativas inválidas da configuração de login, no máximo 10; o novo bloqueia só a própria porta (contador no
 // Valkey) e não grava no legado enquanto acesso.bloquearPorTentativas não estiver verde.
 export const LIMITE_MAXIMO_TENTATIVAS = 10;
 /** Padrão da coluna no legado (DEFAULT 3) quando vazia. */

@@ -74,7 +74,7 @@ export const linha = (
 });
 
 export const fato = (extra: Partial<FatoContabil> = {}): FatoContabil => ({
-  tabela: 'FCCTAEXT',
+  tabela: 'conta_hospitalar',
   id: 10,
   tipo: 'receitaConta',
   origem: 3,

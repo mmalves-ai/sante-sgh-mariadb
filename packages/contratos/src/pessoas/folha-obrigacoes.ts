@@ -121,7 +121,7 @@ export const esquemaParametrosObrigacoes = z
     naturezaJuridica: digitos(4, 'Natureza jurídica'),
     /** Código de recolhimento da SEFIP (115: recolhimento ao FGTS e informações à Previdência). */
     codigoRecolhimentoSefip: digitos(3, 'Código de recolhimento'),
-    /** Código de pagamento da GPS na SEFIP (2100: empresas em geral, CNPJ; catálogo FPCOD_GPS). */
+    /** Código de pagamento da GPS na SEFIP (2100: empresas em geral, CNPJ; catálogo dos códigos de pagamento da GPS). */
     codigoPagamentoGps: digitos(4, 'Código de pagamento da GPS'),
     regimes: z
       .object({

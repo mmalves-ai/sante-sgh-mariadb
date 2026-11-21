@@ -48,7 +48,7 @@ const diaUtil = (hoje: string, depois: number) => {
   }
   return d;
 };
-const instante = (data: string, hhmm: string) => `${data} ${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
+const instante = (data: string, hora: string) => `${data} ${hora}`;
 
 export const SALAS_SINTETICAS = [
   { codigo: 1, nome: `SALA CIRURGICA ${M} 1`, cdc: 101 },
@@ -164,21 +164,21 @@ function semear(r: RelogioDoEstabelecimento): Estado {
     especialidade: 33,
     anestesia: 1,
     pares: { ...paresVazios(), CRM: 9001, ID_CRM: 5001, ANEST: 9002, ID_ANEST: 5002 },
-    recursos: ['VID'],
+    recursos: ['video'],
     observacao: '',
     usuario: `COORDENACAO.${M}`,
     idPaciente: null,
   });
   // Duas cirurgias que se cruzam na sala 2 (gravadas pelo outro sistema: o mapa mostra o alerta) e uma de ontem que
-  // tem o ato registrado (casamento exato pelo REG, sala e dia).
+  // tem o ato registrado (casamento exato pelo atendimento, sala e dia).
   const agendamentos = [
-    ag(701, 2, amanha, '0800', 120, `PACIENTE ${M} SALA DOIS A`, 0),
-    ag(702, 2, amanha, '0900', 60, `PACIENTE ${M} SALA DOIS B`, 0),
-    ag(703, 1, ontem, '0700', 90, `PACIENTE ${M} REGISTRADO`, 77001),
-    // M46 (etapa 3): a cirurgia do paciente já internado (REG 77004) dois dias úteis adiante, na sala 3, para o OPME
+    ag(701, 2, amanha, '08:00', 120, `PACIENTE ${M} SALA DOIS A`, 0),
+    ag(702, 2, amanha, '09:00', 60, `PACIENTE ${M} SALA DOIS B`, 0),
+    ag(703, 1, ontem, '07:00', 90, `PACIENTE ${M} REGISTRADO`, 77001),
+    // M46 (etapa 3): a cirurgia do paciente já internado (atendimento 77004) dois dias úteis adiante, na sala 3, para o OPME
     // (a solicitação antes, o consumo em sala a internado); o cirurgião é outro registro (fora das listas do portal).
     {
-      ...ag(704, 3, diaUtil(r.hoje, 2), '1000', 120, `PACIENTE ${M} OPME`, 77004),
+      ...ag(704, 3, diaUtil(r.hoje, 2), '10:00', 120, `PACIENTE ${M} OPME`, 77004),
       pares: { ...paresVazios(), CRM: 9007, ID_CRM: 5007, ANEST: 9002, ID_ANEST: 5002 },
     },
   ];
@@ -437,7 +437,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
           anestesia: e['anestesia'],
           pares,
           recursos: RECURSOS_SALA.filter((x) => (e['recursos'] as string[]).includes(x.campo)).map(
-            (x) => x.coluna,
+            (x) => x.campo,
           ),
           observacao: e['observacao'] ?? '',
           usuario: login,
@@ -609,7 +609,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
           inicioAnestesia: e['inicioAnestesia'],
           fimAnestesia: e['fimAnestesia'],
         });
-        const mi = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(2, 4));
+        const mi = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
         // Como a receita: término antes do início só vale virando a meia-noite (6 h ou mais de diferença).
         if (
           e['fim'] === e['inicio'] ||

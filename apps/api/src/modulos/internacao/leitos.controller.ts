@@ -289,7 +289,7 @@ export class LeitosController implements OnModuleDestroy {
     const p = await this.servico.pacienteDaInternacao(ctxM16(s, 'painel-paciente'), reg);
     if (!p) throw new ErroProblema('nao-encontrado', 404, 'Internação em aberto não encontrada');
     await this.registrar(s, EVENTOS_AUDITAVEIS.pacienteDoLeitoAberto.codigo, {
-      tabelaAlvo: 'RICADINT',
+      tabelaAlvo: 'internacao',
       idAlvo: String(reg),
     });
     return p;

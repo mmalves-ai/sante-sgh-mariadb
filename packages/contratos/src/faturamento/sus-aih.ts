@@ -27,7 +27,7 @@ export const SITUACOES_AIH = [
 ] as const;
 export type SituacaoAih = (typeof SITUACOES_AIH)[number];
 
-/** Caráter da internação na tabela do SIH (RICADINT.CARINT guarda 1 e 2: eletivo e urgência). */
+/** Caráter da internação na tabela do SIH (a internação guarda 1 e 2: eletivo e urgência). */
 export const CARATERES_INTERNACAO_SIH = {
   '01': 'Eletivo',
   '02': 'Urgência',
@@ -105,13 +105,13 @@ export type RegistrarFaixaAihEntrada = z.infer<typeof esquemaRegistrarFaixaAih>;
 /** O laudo de solicitação de AIH (transcrito do laudo do médico; a internação diz o paciente). */
 export const esquemaLaudoAih = z
   .object({
-    /** O registro da internação (RICADINT.REG). */
+    /** O registro da internação. */
     registro: id,
     procedimentoSolicitado: sigtap,
     cidPrincipal: cid,
     cidSecundario: cid.nullable().default(null),
     carater: z.enum(CARATERES),
-    /** O médico solicitante SUS (FAMEDSOL: a chave é o CPF dele, como no cadastro). */
+    /** O médico solicitante SUS (cadastro de solicitantes SUS: a chave é o CPF dele, como no cadastro). */
     solicitante: z.string().regex(/^\d{1,11}$/),
     dataLaudo: data,
     /** Sinais e sintomas, condições que justificam a internação e os exames que a confirmam. */
@@ -123,7 +123,7 @@ export type LaudoAihEntrada = z.infer<typeof esquemaLaudoAih>;
 /** O OPM conferido no fechamento: o item da conta e os dados que o SISAIH01 pede (nota, CNPJ, Anvisa, série, lote). */
 export const esquemaOpmAih = z
   .object({
-    /** O item da conta (FCLANEXT.ID) com o vínculo SIGTAP do grupo 07. */
+    /** O item da conta com o vínculo SIGTAP do grupo 07. */
     item: id,
     cnpjFornecedor: z.string().regex(/^\d{14}$/),
     notaFiscal: z.string().trim().min(1).max(15),
@@ -258,9 +258,9 @@ export const esquemaLinhaEspelhoAih = z.object({
   nome: z.string().nullable(),
   quantidade: z.number().int(),
   cbo: z.string().nullable(),
-  /** O item da conta (FCLANEXT.ID); null na diária de UTI. */
+  /** O item da conta; null na diária de UTI. */
   item: z.number().int().nullable(),
-  /** O tipo de UTI do SIH (FHLEITOUTITP) na diária. */
+  /** O tipo de UTI do SIH na diária. */
   tipoUti: z.number().int().nullable(),
   valorServicoHospitalar: z.number(),
   valorServicoProfissional: z.number(),

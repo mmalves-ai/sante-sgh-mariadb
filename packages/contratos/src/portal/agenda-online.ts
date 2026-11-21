@@ -5,7 +5,7 @@
 // vira cadastro depois da conferência da recepção (receita do M11); o pagamento só pelo gateway (simulado fora de
 // produção) e nunca duas vezes para a mesma transação.
 import { z } from 'zod';
-import { FORMATO_HHMM } from '../formatacao/hora-legada.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import { MODALIDADES_MARCACAO, type SituacaoTeleconsulta } from '../telemedicina/teleconsulta.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 
@@ -15,7 +15,7 @@ export const CHAVE_PORTAL_PAGAMENTO = 'portal.pagamento';
 export const TIPOS_AGENDA_ONLINE = ['consulta', 'exame'] as const;
 export type TipoAgendaOnline = (typeof TIPOS_AGENDA_ONLINE)[number];
 
-/** Convênio particular (TBCONVEN 10): o único cobrado pelo portal. */
+/** Convênio particular (código 10 do cadastro de convênios): o único cobrado pelo portal. */
 export const CONVENIO_PARTICULAR_PORTAL = 10;
 /** Teto de horários devolvidos numa busca do portal (ficha, seção 4). */
 export const TETO_HORARIOS_PORTAL = 200;
@@ -28,7 +28,8 @@ export const MINUTOS_COBRANCA_PORTAL = 30;
 
 const id = z.number().int().positive().max(2_147_483_647);
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
-const hhmm = z.string().regex(FORMATO_HHMM, 'Hora no formato HHMM.');
+/** Hora do dia do horário ("HH:MM"). */
+const horaDoDia = esquemaHora;
 const codigo = z.number().int().min(0).max(32767);
 
 // ── Configuração da agenda online (tela interna, `agenda.configurarAgendaOnline`) ──────────────────────────────────
@@ -149,7 +150,7 @@ export interface HorarioPortal {
   readonly procedimento: string;
   readonly profissional: string | null;
   readonly data: string;
-  /** HHMM. */
+  /** HH:MM. */
   readonly hora: string;
 }
 
@@ -165,7 +166,7 @@ export const esquemaAgendarPortal = z
     tipo: z.enum(TIPOS_AGENDA_ONLINE),
     agenda: id,
     data,
-    hora: hhmm,
+    hora: horaDoDia,
     convenio: codigo,
     /** Exame escolhido (só no tipo exame; null = a recepção define na chegada). */
     servico: id.nullable().default(null),
@@ -195,7 +196,7 @@ export type CancelarPortal = z.infer<typeof esquemaCancelarPortal>;
 
 export const esquemaRemarcarPortal = z
   .object({
-    destino: z.object({ agenda: id, data, hora: hhmm }).strict(),
+    destino: z.object({ agenda: id, data, hora: horaDoDia }).strict(),
     // W0-10: o motivo escolhido na tela (a mesma lista do cancelamento); sem ele vale "outra data".
     motivo: z.enum(motivos).optional(),
   })
@@ -213,7 +214,7 @@ export type SituacaoAgendamentoPortal = (typeof SITUACOES_AGENDAMENTO_PORTAL)[nu
 
 export interface AgendamentoPortal {
   readonly tipo: TipoAgendaOnline;
-  /** ID da marcação (REPACAGD ou SIPACAGD) como texto. */
+  /** ID da marcação (de consulta ou de exame) como texto. */
   readonly id: string;
   readonly procedimento: string;
   readonly profissional: string | null;

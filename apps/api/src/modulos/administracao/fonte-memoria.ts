@@ -536,7 +536,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
 /**
  * Árvore sintética de opções (dev/ci): do catálogo de permissões, cada código `modulo.recurso.acao` com opção do
  * legado vira módulo (nível 0) → recurso (nível 1) → opção (nível 2, o ID real da opção). Com o banco, a árvore é
- * a de TBOPCOES (fonte do legado).
+ * a do menu de origem.
  */
 function arvoreSintetica(): { opcoes: AcaoMenu[]; modulos: ModuloSistema[] } {
   const porModulo = new Map<string, Map<string, { id: number; titulo: string }[]>>();
@@ -805,11 +805,20 @@ export function fonteAdministracaoMemoria(
       ),
     async executar(nome, entrada, ctx: ContextoGestao) {
       const escopo =
-        /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(nome);
+        /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(
+          nome,
+        );
       const op =
         OPERACOES_GESTAO[nome] ??
-        (escopo ? { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: z.record(z.string(), z.unknown()) } : null);
-      if (!op) throw new ErroOperacao(404, 'operacao-inexistente', 'Operação inexistente', 'Operação desconhecida.');
+        (escopo
+          ? {
+              evento: 'acesso.usuario.alterado',
+              recurso: 'acesso.usuario',
+              entrada: z.record(z.string(), z.unknown()),
+            }
+          : null);
+      if (!op)
+        throw new ErroOperacao(404, 'operacao-inexistente', 'Operação inexistente', 'Operação desconhecida.');
       const p = op.entrada.safeParse(entrada);
       if (!p.success)
         throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos.');

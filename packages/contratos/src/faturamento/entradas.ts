@@ -2,6 +2,7 @@
 // Zod). A tela nunca manda número de item, total da conta, situação gravada nem data do fechamento: o banco e os gatilhos
 // fazem. A versão é o carimbo DATA_HORA_ULTIMA_ATUALIZACAO como a tela leu (controle otimista; cap-10 §10.5).
 import { z } from 'zod';
+import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaRegraFaturabilidade } from './regras/faturabilidade.js';
 import { FORMAS_PAGAMENTO } from './regras/particular.js';
 
@@ -36,8 +37,8 @@ export const esquemaLancarItem = z
     quantidade: z.number().positive().max(99_999),
     /** AAAA-MM-DD; a data-base do preço (regra 9). */
     data: z.string().regex(DATA),
-    /** HHMM. */
-    hora: z.string().regex(/^([01]\d|2[0-3])[0-5]\d$/),
+    /** Hora do lançamento, "HH:MM" no fuso do estabelecimento. */
+    hora: esquemaHora,
     local: z.number().int().min(0).max(9999),
     ato: z.number().int().min(0).max(999),
     executante: z.number().int().positive().nullable().default(null),
@@ -69,7 +70,7 @@ export type LancarItemEntrada = z.infer<typeof esquemaLancarItem>;
 export const esquemaRegistrarPendencia = z
   .object({
     conta: id,
-    /** Tipo de TBIRREGULARID (0 = tipo do novo: regra de faturabilidade, item sem preço). */
+    /** Tipo da pendência (0 = tipo próprio do produto: regra de faturabilidade, item sem preço). */
     tipo: z.number().int().min(0),
     descricao: texto(250).pipe(z.string().min(3)),
     bloqueante: z.boolean().default(true),
@@ -94,7 +95,7 @@ export type EtapaContaEntrada = z.infer<typeof esquemaEtapaConta>;
 export const DECISOES_LANCAMENTO_TARDIO = ['reabrir', 'complementar', 'descartar'] as const;
 export const esquemaDecidirLancamentoTardio = z
   .object({
-    /** RECADATE.REG da ficha com ATU_FAT='F'. */
+    /** A entrada da fila do lançamento após o fechamento. */
     registro: id,
     decisao: z.enum(DECISOES_LANCAMENTO_TARDIO),
     motivo: texto(250).pipe(z.string().min(5)),
@@ -138,7 +139,7 @@ export type RegistrarVersaoAuditoriaEntrada = z.infer<typeof esquemaRegistrarVer
 
 export const esquemaRegistrarOrcamento = z
   .object({
-    /** Prontuário (RICADPAC.PRONT) ou 0 quando ainda sem cadastro. */
+    /** Prontuário do paciente, ou 0 quando ainda sem cadastro. */
     prontuario: z.number().int().min(0),
     nome: texto(80).pipe(z.string().min(3)),
     itens: z

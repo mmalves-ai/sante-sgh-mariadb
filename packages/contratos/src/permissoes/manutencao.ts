@@ -1,7 +1,7 @@
 // Permissões do M55, fatia F1 (ficha, seção 7: telas "Abrir e acompanhar OS" e "Equipamentos e preventiva";
 // convencoes.md §12). Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06).
-// Levantamento na cópia do pc (24/10/2026, só contagens): o módulo "Manutenção" (TBMODULO 21) existe, mas não tem
-// nenhuma opção em TBOPCOES, e as 22 tabelas GM* estão vazias. A opção mais próxima é a do patrimônio, módulo 19,
+// Levantamento na cópia do pc (24/10/2026, só contagens): o módulo "Manutenção" (módulo 21 do menu de origem) existe, mas não tem
+// nenhuma opção no menu de origem, e as 22 tabelas de manutenção estão vazias. A opção mais próxima é a do patrimônio, módulo 19,
 // "Gestão patrimonial" (4266) › Movimentação (268) › Manutenção de Bens (272, Saída 273, Retorno 274) e Relatórios
 // (276) › Relatório de Manutenção (285), cada uma concedida a 1 grupo e a nenhum papel.
 // Decisão do preparo (D-PERM-55, POL-5): a equipe de manutenção é quem tem "Manutenção de Bens" no patrimônio; abrir a OS

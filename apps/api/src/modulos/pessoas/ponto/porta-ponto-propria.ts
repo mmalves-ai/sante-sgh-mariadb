@@ -9,12 +9,16 @@
 // "cancelado", sem apagar nada; a marcação de CPF sem vínculo fica só no arquivo (conferência), nunca solta.
 // Melhoria: o ajuste de inclusão vale para o vínculo vigente na data local da marcação (admissão a desligamento),
 // conferido na gravação e reconstruído assim na leitura, nunca o primeiro vínculo do colaborador (readmissão); o
-// mesmo pedido pendente reenviado devolve o ajuste já registrado, sem duplicar. Pendência: ajuste_ponto ganha
-// vinculo_trabalho_id (pedido de DDL do lote) e a porta passa a gravar e ler por ele.
-// Pendências de modelo (pedidos do lote 03-09; operações indisponíveis no banco até o DDL): a trilha do período
-// (fechamento, reabertura e ciência do espelho), o banco de horas (movimentos e regra por regime de jornada) e o
-// ajuste do tipo "justificativa" (abono por tipo de movimento com minutos). As leituras dessas partes voltam vazias
-// e as gravações recusam com `modelo-pendente`.
+// mesmo pedido pendente reenviado devolve o ajuste já registrado, sem duplicar. O ajuste novo grava o vínculo
+// (ajuste_ponto.vinculo_trabalho_id); o anterior à coluna é lido pelo vínculo vigente na data, como antes.
+// O ajuste do tipo "justificativa" (abono) guarda o tipo de movimento e os minutos; o dia abonado fica em marcacao_em,
+// à meia-noite local do estabelecimento.
+// A trilha do período (fechamento, reabertura e ciência do espelho) é evento_periodo_ponto, só inclusão; a referência
+// da reabertura e da ciência é o último fechamento da mesma competência, pela ordem dos eventos.
+// O banco de horas: a regra por regime de jornada em regra_banco_horas (destino, início do ciclo e se a falta debita)
+// e os movimentos em movimento_banco_horas (crédito ou débito, saldo depois do movimento, por vínculo e competência).
+// O movimento do fechamento e o estorno da reabertura apontam o evento do período que os gerou: o último fechamento
+// ou reabertura da competência registrado até o movimento (mesma transação). O destino do movimento vem da origem.
 import { CLASSES_HORA, DESTINOS_BANCO, EVENTOS_FOLHA, INICIOS_BANCO } from '@sgh/contratos';
 import {
   alterarAuditado,
@@ -45,7 +49,6 @@ import {
   localNoFuso,
   marcadores,
   minutosDoDeslocamento,
-  modeloPendente,
   n,
   nn,
   registrarCorrecaoNaTrilha,
@@ -85,6 +88,49 @@ const opcoes = (o: Readonly<Record<number, string>>): OpcaoPonto[] =>
 const TETO_CONFERENCIA = 1000;
 const SITUACAO_AJUSTE: Readonly<Record<string, string>> = { cancelado: 'desistido' };
 const TIPO_AJUSTE: Readonly<Record<string, string>> = { desconsideracao: 'desconsiderar' };
+/** Destino e início do ciclo do banco: o código do contrato e o do banco. */
+const DESTINO_BANCO: Readonly<Record<number, string>> = {
+  1: 'sem_banco',
+  2: 'banco',
+  3: 'folha',
+  4: 'expiracao_negativa',
+};
+const INICIO_BANCO: Readonly<Record<number, string>> = {
+  1: 'zerado',
+  2: 'residual_positivo',
+  3: 'residual_negativo',
+  4: 'residual_ambos',
+};
+const codigoDe = (m: Readonly<Record<number, string>>, v: unknown): number =>
+  Number(Object.entries(m).find(([, x]) => x === v)?.[0] ?? 0);
+/** O destino do movimento pela origem (o fechamento credita o banco; o pagamento vai à folha; a expiração expira). */
+const DESTINO_DA_ORIGEM: Readonly<Record<string, number>> = {
+  apuracao: 2,
+  acerto: 2,
+  'inicio-ciclo': 2,
+  'pago-folha': 3,
+  expiracao: 4,
+};
+/** "AAAA-MM" → primeiro dia do mês (a competência no banco). */
+const competenciaData = (c: string) => `${c.slice(0, 7)}-01`;
+
+const SQL_EVENTO = `
+  SELECT ev.id, ev.vinculo_trabalho_id, ev.competencia, ev.acao, ev.hash_espelho, ev.totais, ev.concorda, ev.texto,
+         ev.ocorrido_em, u.login
+    FROM evento_periodo_ponto ev JOIN usuario u ON u.id = ev.usuario_id
+   WHERE ev.estabelecimento_id = ?`;
+
+const SQL_MOVIMENTO = `
+  SELECT m.id, m.vinculo_trabalho_id, m.competencia, m.motivo, m.natureza, m.minutos, m.observacao, m.criado_em,
+         u.login
+    FROM movimento_banco_horas m LEFT JOIN usuario u ON u.id = m.criado_por
+   WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND m.vinculo_trabalho_id IS NOT NULL`;
+
+const SQL_REGRA = `
+  SELECT r.id, r.regime_jornada_id, r.destino, r.inicio_ciclo, r.vigencia_inicio, r.periodo_compensacao_meses,
+         r.falta_debita, r.ativo, r.versao, u.login
+    FROM regra_banco_horas r LEFT JOIN usuario u ON u.id = COALESCE(r.alterado_por, r.criado_por)
+   WHERE r.estabelecimento_id = ? AND r.regime_jornada_id IS NOT NULL AND r.destino IS NOT NULL`;
 
 const SQL_ARQUIVO = `
   SELECT ap.id, ap.hash_sha256, ap.periodo_inicio, ap.periodo_fim, ap.nsr_inicial, ap.nsr_final,
@@ -101,7 +147,8 @@ const SQL_AJUSTE = `
     SELECT aj.id, aj.tipo, aj.marcacao_ponto_id, aj.marcacao_em, aj.classificacao_marcacao_id, aj.justificativa_ponto_id,
            aj.justificativa_texto, aj.situacao, aj.solicitado_em, aj.decidido_em, aj.motivo_recusa, aj.versao,
            aj.solicitante_usuario_id, us.login AS solicitante, ua.login AS aprovador, mp.marcado_em,
-           aj.colaborador_id, mp.vinculo_trabalho_id AS vinculo_marcacao
+           aj.colaborador_id, COALESCE(aj.vinculo_trabalho_id, mp.vinculo_trabalho_id) AS vinculo_marcacao,
+           aj.tipo_movimento_ponto_id, aj.minutos
       FROM ajuste_ponto aj
       JOIN usuario us ON us.id = aj.solicitante_usuario_id
       LEFT JOIN usuario ua ON ua.id = aj.aprovador_usuario_id
@@ -357,10 +404,10 @@ export class PortaPontoPropria implements PortaPonto {
         tipo: TIPO_AJUSTE[texto(r['tipo'])] ?? texto(r['tipo']),
         marcacao: nn(r['marcacao_ponto_id']),
         instante: texto(r['tipo']) === 'inclusao' ? local : null,
-        movimento: null,
+        movimento: nn(r['tipo_movimento_ponto_id']),
         justificativa: nn(r['justificativa_ponto_id']),
         periodo: nn(r['classificacao_marcacao_id']),
-        minutos: null,
+        minutos: nn(r['minutos']),
         motivo: texto(r['justificativa_texto']),
         situacao: SITUACAO_AJUSTE[sit] ?? sit,
         pedidoPor: texto(r['solicitante']),
@@ -417,12 +464,19 @@ export class PortaPontoPropria implements PortaPonto {
       );
       return { a, solicitante: Number(s?.solicitante_usuario_id) };
     };
-    const pendente = (o: string) =>
-      Promise.reject(
-        modeloPendente(
-          o,
-          'Esta parte do ponto aguarda a tabela no modelo do banco (pedido registrado): por enquanto fica em consulta.',
-        ),
+    const vinculoDoEstab = async (vinculo: number) => {
+      const v = await e.uma<{ colaborador_id: number }>(
+        'SELECT colaborador_id FROM vinculo_trabalho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [vinculo, est],
+      );
+      if (!v) throw recusa('vinculo-inexistente', 'Colaborador inexistente neste estabelecimento.');
+      return Number(v.colaborador_id);
+    };
+    const regraDoRegime = (regime: number) =>
+      e.uma<{ id: number; versao: number; ativo: unknown }>(
+        `SELECT id, versao, ativo FROM regra_banco_horas WHERE estabelecimento_id = ? AND regime_jornada_id = ?
+          ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+        [est, regime],
       );
     return {
       arquivoPorHash: async (hash) =>
@@ -543,8 +597,8 @@ export class PortaPontoPropria implements PortaPonto {
       ajustes: async (v, de, ate) =>
         (await this.ajustes_(e, est, fuso, { vinculo: v })).filter((a) => a.dia >= de && a.dia <= ate),
       incluirAjuste: async (a) => {
-        if (a.tipo !== 'inclusao' && a.tipo !== 'desconsiderar')
-          return pendente('O ajuste de justificativa ou abono');
+        if (a.tipo !== 'inclusao' && a.tipo !== 'desconsiderar' && a.tipo !== 'justificativa')
+          throw recusa('tipo-ajuste', 'Tipo de ajuste desconhecido.');
         if (a.justificativa === null)
           throw recusa('justificativa-obrigatoria', 'Escolha a justificativa do ajuste no catálogo.');
         const v = await e.uma<{ colaborador_id: number }>(
@@ -558,38 +612,60 @@ export class PortaPontoPropria implements PortaPonto {
             a.vinculo,
           ]);
           if (!mp) throw recusa('marcacao-inexistente', 'A marcação não é deste colaborador.');
+        } else if (a.tipo === 'justificativa') {
+          if (a.movimento === null || a.minutos === null || a.minutos <= 0)
+            throw recusa('abono-incompleto', 'Informe o tipo de movimento e os minutos abonados.');
+          const tm = await e.uma('SELECT id FROM tipo_movimento_ponto WHERE id = ? AND ativo', [a.movimento]);
+          if (!tm) throw recusa('movimento-inexistente', 'Tipo de movimento inexistente ou inativo.');
+          const vig = vigentesNoDia(
+            await this.periodosDosVinculos(e, est, [Number(v.colaborador_id)]),
+            Number(v.colaborador_id),
+            a.dia,
+          );
+          if (!vig.some((x) => x.id === a.vinculo))
+            throw recusa(
+              'fora-do-vinculo',
+              'O dia pedido está fora do período deste vínculo (da admissão ao desligamento).',
+            );
         } else {
           if (!a.instante) throw recusa('instante-obrigatorio', 'Informe o horário da marcação que faltou.');
-          // O ajuste ainda não guarda o vínculo (pendência de DDL): vale para o vínculo vigente na data da marcação.
+          // O ajuste grava o vínculo; ele tem de estar vigente na data local da marcação.
           const vigentes = vigentesNoDia(
             await this.periodosDosVinculos(e, est, [Number(v.colaborador_id)]),
             Number(v.colaborador_id),
             a.instante.slice(0, 10),
           );
-          if (vigentes.length > 1)
-            throw modeloPendente(
-              'A inclusão de marcação com dois vínculos no mesmo dia',
-              'O colaborador tem mais de um vínculo vigente nesta data; o ajuste só indicará o vínculo quando o modelo o guardar.',
-            );
-          if (vigentes[0]?.id !== a.vinculo)
+          if (!vigentes.some((x) => x.id === a.vinculo))
             throw recusa(
               'fora-do-vinculo',
               'O horário pedido está fora do período deste vínculo (da admissão ao desligamento).',
             );
         }
+        const tipo = a.tipo === 'desconsiderar' ? 'desconsideracao' : a.tipo;
+        const marcacaoEm =
+          a.tipo === 'inclusao' && a.instante
+            ? utcDoLocal(a.instante, fuso)
+            : a.tipo === 'justificativa'
+              ? utcDoLocal(`${a.dia}T00:00`, fuso)
+              : null;
+        const abono = a.tipo === 'justificativa';
         // O mesmo pedido pendente reenviado (clique duplo, repetição da requisição) devolve o ajuste já registrado.
         const repetido = await e.uma<{ id: number }>(
           `SELECT id FROM ajuste_ponto WHERE estabelecimento_id = ? AND colaborador_id = ? AND situacao = 'pendente'
               AND excluido_em IS NULL AND tipo = ? AND marcacao_ponto_id <=> ? AND marcacao_em <=> ?
-              AND justificativa_ponto_id = ? AND solicitante_usuario_id = ? LIMIT 1`,
+              AND justificativa_ponto_id = ? AND solicitante_usuario_id = ? AND vinculo_trabalho_id <=> ?
+              AND tipo_movimento_ponto_id <=> ? AND minutos <=> ? LIMIT 1`,
           [
             est,
             Number(v.colaborador_id),
-            a.tipo === 'inclusao' ? 'inclusao' : 'desconsideracao',
+            tipo,
             a.tipo === 'desconsiderar' ? a.marcacao : null,
-            a.tipo === 'inclusao' && a.instante ? utcDoLocal(a.instante, fuso) : null,
+            marcacaoEm,
             a.justificativa,
             usuario(),
+            a.vinculo,
+            abono ? a.movimento : null,
+            abono ? a.minutos : null,
           ],
         );
         if (repetido) return Number(repetido.id);
@@ -597,19 +673,23 @@ export class PortaPontoPropria implements PortaPonto {
         return e.inserir(
           `INSERT INTO ajuste_ponto (estabelecimento_id, colaborador_id, tipo, marcacao_ponto_id, marcacao_em,
              classificacao_marcacao_id, justificativa_ponto_id, justificativa_texto, solicitante_usuario_id,
-             solicitado_em, situacao, criado_em, criado_por, versao)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?, 1)`,
+             solicitado_em, situacao, vinculo_trabalho_id, tipo_movimento_ponto_id, minutos, criado_em, criado_por,
+             versao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?, ?, ?, ?, 1)`,
           [
             est,
             Number(v.colaborador_id),
-            a.tipo === 'inclusao' ? 'inclusao' : 'desconsideracao',
+            tipo,
             a.tipo === 'desconsiderar' ? a.marcacao : null,
-            a.tipo === 'inclusao' && a.instante ? utcDoLocal(a.instante, fuso) : null,
+            marcacaoEm,
             a.periodo,
             a.justificativa,
             a.motivo.slice(0, 500),
             usuario(),
             agora,
+            a.vinculo,
+            abono ? a.movimento : null,
+            abono ? a.minutos : null,
             agora,
             c.usuario,
           ],
@@ -646,13 +726,135 @@ export class PortaPontoPropria implements PortaPonto {
           carimboDe(c),
         );
       },
-      eventosPeriodo: async () => [],
-      incluirEventoPeriodo: () => pendente('O fechamento, a reabertura e a ciência do período'),
-      movimentosBanco: async () => [],
-      incluirMovimentoBanco: () => pendente('O banco de horas'),
-      regrasBanco: async () => [],
-      gravarRegraBanco: () => pendente('A regra do banco de horas do regime'),
-      situacaoRegraBanco: () => pendente('A regra do banco de horas do regime'),
+      eventosPeriodo: (v) => this.eventos_(e, est, fuso, ' AND ev.vinculo_trabalho_id = ?', [v]),
+      incluirEventoPeriodo: async (p) => {
+        await vinculoDoEstab(p.vinculo);
+        const agora = new Date();
+        return e.inserir(
+          `INSERT INTO evento_periodo_ponto (estabelecimento_id, vinculo_trabalho_id, competencia, acao, hash_espelho,
+             totais, concorda, texto, ocorrido_em, usuario_id, criado_em, criado_por, versao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            est,
+            p.vinculo,
+            competenciaData(p.competencia),
+            p.acao,
+            p.hash,
+            p.totais,
+            p.concorda,
+            p.texto?.slice(0, 1000) ?? null,
+            agora,
+            usuario(),
+            agora,
+            c.usuario,
+          ],
+        );
+      },
+      movimentosBanco: (v) => this.movimentos_(e, est, fuso, ' AND m.vinculo_trabalho_id = ?', [v]),
+      incluirMovimentoBanco: async (m) => {
+        if (m.minutos === 0 || !Number.isInteger(m.minutos))
+          throw recusa('minutos', 'Movimento sem minutos.');
+        const motivo = m.origem.replace(/-/g, '_');
+        const colaborador = await vinculoDoEstab(m.vinculo);
+        const comp = competenciaData(m.competencia);
+        // A regra do regime vigente do colaborador na competência; sem regime, a regra de todos os regimes.
+        const regra = await e.uma<{ id: number }>(
+          `SELECT r.id FROM regra_banco_horas r
+            WHERE r.estabelecimento_id = ? AND r.ativo AND r.vigencia_inicio <= LAST_DAY(?)
+              AND (r.regime_jornada_id IS NULL OR r.regime_jornada_id = (
+                SELECT vr.regime_jornada_id FROM vigencia_regime_colaborador vr
+                 WHERE vr.colaborador_id = ? AND vr.vigencia_inicio <= LAST_DAY(?)
+                   AND (vr.vigencia_fim IS NULL OR vr.vigencia_fim >= ?)
+                 ORDER BY vr.vigencia_inicio DESC LIMIT 1))
+            ORDER BY r.regime_jornada_id IS NULL, r.vigencia_inicio DESC, r.id DESC LIMIT 1`,
+          [est, comp, colaborador, comp, comp],
+        );
+        if (!regra)
+          throw recusa('sem-regra-banco', 'O regime do colaborador não tem regra de banco de horas ativa.');
+        const [ult] = await e.consultarParaAtualizar(
+          `SELECT COALESCE(MAX(sequencia), 0) AS s,
+                  COALESCE(SUM(CASE natureza WHEN 'credito' THEN minutos ELSE -minutos END), 0) AS saldo
+             FROM movimento_banco_horas WHERE colaborador_id = ? AND excluido_em IS NULL`,
+          [colaborador],
+        );
+        const agora = new Date();
+        return e.inserir(
+          `INSERT INTO movimento_banco_horas (estabelecimento_id, colaborador_id, sequencia, regra_banco_horas_id,
+             data_referencia, natureza, motivo, minutos, saldo_apos_minutos, observacao, vinculo_trabalho_id,
+             competencia, criado_em, criado_por, versao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            est,
+            colaborador,
+            n(ult?.['s']) + 1,
+            Number(regra.id),
+            comp,
+            m.minutos > 0 ? 'credito' : 'debito',
+            motivo,
+            Math.abs(m.minutos),
+            n(ult?.['saldo']) + m.minutos,
+            m.motivo?.slice(0, 500) ?? null,
+            m.vinculo,
+            comp,
+            agora,
+            c.usuario,
+          ],
+        );
+      },
+      regrasBanco: () => this.regras_(e, est, fuso),
+      gravarRegraBanco: async (x) => {
+        const atual = await regraDoRegime(x.regime);
+        const valores = {
+          destino: DESTINO_BANCO[x.destino] ?? null,
+          inicio_ciclo: INICIO_BANCO[x.inicio] ?? null,
+          vigencia_inicio: x.desde,
+          periodo_compensacao_meses: x.cicloMeses,
+          falta_debita: x.faltaDebita,
+          // Até 6 meses o banco cabe em acordo individual; acima, só por acordo ou convenção coletiva (CLT, art. 59).
+          tipo_banco: x.cicloMeses <= 6 ? 'acordo_individual' : 'acordo_coletivo',
+        };
+        if (x.versao === null) {
+          if (atual) throw recusa('regra-existente', 'O regime já tem a regra do banco: altere-a.');
+          const agora = new Date();
+          return e.inserir(
+            `INSERT INTO regra_banco_horas (estabelecimento_id, codigo, descricao, tipo_banco, criterio_inicio,
+               periodo_compensacao_meses, vigencia_inicio, ativo, regime_jornada_id, destino, inicio_ciclo, falta_debita,
+               criado_em, criado_por, versao)
+             VALUES (?, ?, ?, ?, 'competencia', ?, ?, TRUE, ?, ?, ?, ?, ?, ?, 1)`,
+            [
+              est,
+              `REGIME-${x.regime}`,
+              `Banco de horas do regime ${x.regime}`,
+              valores.tipo_banco,
+              x.cicloMeses,
+              x.desde,
+              x.regime,
+              valores.destino,
+              valores.inicio_ciclo,
+              x.faltaDebita,
+              agora,
+              c.usuario,
+            ],
+          );
+        }
+        if (!atual || Number(atual.versao) !== x.versao) throw desatualizado();
+        await alterarAuditado(e, 'regra_banco_horas', Number(atual.id), x.versao, valores, carimboDe(c));
+        return Number(atual.id);
+      },
+      situacaoRegraBanco: async (x) => {
+        const atual = await regraDoRegime(x.regime);
+        if (!atual || Number(atual.versao) !== x.versao || Boolean(n(atual.ativo)) === x.ativo)
+          throw desatualizado();
+        await alterarAuditado(
+          e,
+          'regra_banco_horas',
+          Number(atual.id),
+          x.versao,
+          { ativo: x.ativo },
+          carimboDe(c),
+        );
+        return Number(atual.id);
+      },
       registrarCorrecao: (x) => registrarCorrecaoNaTrilha(e, c, x),
       travarPessoa: async (pessoa) => {
         await e.consultarParaAtualizar('SELECT id FROM colaborador WHERE id = ?', [pessoa]);
@@ -831,19 +1033,136 @@ export class PortaPontoPropria implements PortaPonto {
     });
   }
 
-  /** Pendência de modelo (trilha do período): lê vazio até a tabela existir. */
-  async eventosPeriodo(): Promise<EventoDoPeriodo[]> {
-    return [];
+  /** A trilha do período; a reabertura e a ciência apontam o último fechamento da competência antes delas. */
+  private async eventos_(
+    l: Leitor,
+    est: number,
+    fuso: string,
+    filtro: string,
+    p: unknown[],
+  ): Promise<EventoDoPeriodo[]> {
+    const linhas = await l.consultar(`${SQL_EVENTO}${filtro} ORDER BY ev.id`, [est, ...p]);
+    const ultimoFechado = new Map<string, number>();
+    return linhas.map((r) => {
+      const competencia = (dataIso(r['competencia']) ?? '').slice(0, 7);
+      const chave = `${n(r['vinculo_trabalho_id'])}|${competencia}`;
+      const acao = texto(r['acao']) as EventoDoPeriodo['acao'];
+      const ref = acao === 'fechado' ? null : (ultimoFechado.get(chave) ?? null);
+      if (acao === 'fechado') ultimoFechado.set(chave, n(r['id']));
+      return {
+        id: n(r['id']),
+        vinculo: n(r['vinculo_trabalho_id']),
+        competencia,
+        acao,
+        ref,
+        hash: textoOuNulo(r['hash_espelho']),
+        totais: textoOuNulo(r['totais']),
+        concorda: r['concorda'] === null || r['concorda'] === undefined ? null : Boolean(n(r['concorda'])),
+        texto: textoOuNulo(r['texto']),
+        registradoPor: texto(r['login']),
+        registradoEm: localNoFuso(instante(r['ocorrido_em']) ?? new Date(0), fuso),
+      };
+    });
   }
 
-  /** Pendência de modelo (trilha do período): lê vazio até a tabela existir. */
-  async eventosDaCompetencia(): Promise<EventoDoPeriodo[]> {
-    return [];
+  /** Os movimentos do banco; o do fechamento aponta o evento do período que o gerou (o acerto não tem). */
+  private async movimentos_(
+    l: Leitor,
+    est: number,
+    fuso: string,
+    filtro: string,
+    p: unknown[],
+  ): Promise<MovimentoBancoHoras[]> {
+    const linhas = await l.consultar(`${SQL_MOVIMENTO}${filtro} ORDER BY m.id`, [est, ...p]);
+    if (linhas.length === 0) return [];
+    const vinculos = [...new Set(linhas.map((r) => n(r['vinculo_trabalho_id'])))];
+    const eventos = await l.consultar(
+      `SELECT id, vinculo_trabalho_id, competencia, ocorrido_em FROM evento_periodo_ponto
+        WHERE estabelecimento_id = ? AND acao IN ('fechado', 'reaberto')
+          AND vinculo_trabalho_id IN (${marcadores(vinculos.length)}) ORDER BY id`,
+      [est, ...vinculos],
+    );
+    return linhas.map((r) => {
+      const origem = texto(r['motivo']).replace(/_/g, '-');
+      const competencia = (dataIso(r['competencia']) ?? '').slice(0, 7);
+      const criado = instante(r['criado_em'])?.getTime() ?? 0;
+      let fechamento: number | null = null;
+      if (origem !== 'acerto')
+        for (const ev of eventos)
+          if (
+            n(ev['vinculo_trabalho_id']) === n(r['vinculo_trabalho_id']) &&
+            (dataIso(ev['competencia']) ?? '').slice(0, 7) === competencia &&
+            (instante(ev['ocorrido_em'])?.getTime() ?? 0) <= criado
+          )
+            fechamento = n(ev['id']);
+      const minutos = n(r['minutos']);
+      return {
+        id: n(r['id']),
+        vinculo: n(r['vinculo_trabalho_id']),
+        competencia,
+        origem,
+        destino: DESTINO_DA_ORIGEM[origem] ?? 2,
+        minutos: texto(r['natureza']) === 'debito' ? -minutos : minutos,
+        fechamento,
+        motivo: textoOuNulo(r['observacao']),
+        registradoPor: texto(r['login']),
+        registradoEm: localNoFuso(instante(r['criado_em']) ?? new Date(0), fuso),
+      };
+    });
   }
 
-  /** Pendência de modelo (regra do banco por regime): lê vazio até a coluna existir. */
-  async regrasBanco(): Promise<RegraBancoDoRegime[]> {
-    return [];
+  /** A regra do banco de cada regime (a de vigência mais recente); o motivo da situação vem da trilha. */
+  private async regras_(l: Leitor, est: number, fuso: string): Promise<RegraBancoDoRegime[]> {
+    const linhas = await l.consultar(
+      `${SQL_REGRA} ORDER BY r.regime_jornada_id, r.vigencia_inicio DESC, r.id DESC`,
+      [est],
+    );
+    const vistos = new Set<number>();
+    const atuais = linhas.filter((r) => {
+      const k = n(r['regime_jornada_id']);
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+    const correcoes = await correcoesDaTrilha(
+      l,
+      est,
+      'regra_banco_horas',
+      atuais.map((r) => n(r['id'])),
+      fuso,
+    );
+    return atuais.map((r) => {
+      const ult = correcoes.find((x) => x.registro === n(r['id']) && x.operacao.startsWith('banco.regra.'));
+      return {
+        id: n(r['id']),
+        regime: n(r['regime_jornada_id']),
+        destino: codigoDe(DESTINO_BANCO, r['destino']),
+        inicio: codigoDe(INICIO_BANCO, r['inicio_ciclo']),
+        desde: dataIso(r['vigencia_inicio']) ?? '',
+        cicloMeses: n(r['periodo_compensacao_meses']),
+        faltaDebita: Boolean(n(r['falta_debita'])),
+        versao: n(r['versao']),
+        ativo: Boolean(n(r['ativo'])),
+        motivoSituacao: ult ? (textoOuNulo(ult.depois['motivoSituacao']) ?? ult.motivo) : null,
+        alteradoPor: textoOuNulo(r['login']),
+      };
+    });
+  }
+
+  eventosPeriodo(c: ContextoPonto, vinculo: number): Promise<EventoDoPeriodo[]> {
+    return this.ler(c, (l, est, fuso) =>
+      this.eventos_(l, est, fuso, ' AND ev.vinculo_trabalho_id = ?', [vinculo]),
+    );
+  }
+
+  eventosDaCompetencia(c: ContextoPonto, competencia: string): Promise<EventoDoPeriodo[]> {
+    return this.ler(c, (l, est, fuso) =>
+      this.eventos_(l, est, fuso, ' AND ev.competencia = ?', [competenciaData(competencia)]),
+    );
+  }
+
+  regrasBanco(c: ContextoPonto): Promise<RegraBancoDoRegime[]> {
+    return this.ler(c, (l, est, fuso) => this.regras_(l, est, fuso));
   }
 
   correcoes(c: ContextoPonto, tabela: string, registros: readonly number[]): Promise<CorrecaoRegistrada[]> {
@@ -851,14 +1170,25 @@ export class PortaPontoPropria implements PortaPonto {
     return this.ler(c, (l, est, fuso) => correcoesDaTrilha(l, est, tabela, registros, fuso));
   }
 
-  /** Pendência de modelo (banco de horas por vínculo): lê vazio até o DDL. */
-  async movimentosBanco(): Promise<MovimentoBancoHoras[]> {
-    return [];
+  movimentosBanco(c: ContextoPonto, vinculo: number): Promise<MovimentoBancoHoras[]> {
+    return this.ler(c, (l, est, fuso) =>
+      this.movimentos_(l, est, fuso, ' AND m.vinculo_trabalho_id = ?', [vinculo]),
+    );
   }
 
-  /** Pendência de modelo (banco de horas por vínculo): sem saldo até o DDL. */
-  async saldosBanco(): Promise<Map<number, number>> {
-    return new Map();
+  /** O saldo é a soma dos movimentos do vínculo (crédito menos débito), nunca um campo editável. */
+  saldosBanco(c: ContextoPonto, vinculos: readonly number[]): Promise<Map<number, number>> {
+    if (vinculos.length === 0) return Promise.resolve(new Map());
+    return this.ler(c, async (l, est) => {
+      const linhas = await l.consultar(
+        `SELECT vinculo_trabalho_id AS v, SUM(CASE natureza WHEN 'credito' THEN minutos ELSE -minutos END) AS s
+           FROM movimento_banco_horas
+          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND vinculo_trabalho_id IN (${marcadores(vinculos.length)})
+          GROUP BY vinculo_trabalho_id`,
+        [est, ...vinculos],
+      );
+      return new Map(linhas.map((r) => [n(r['v']), n(r['s'])]));
+    });
   }
 
   vinculosDoLogin(c: ContextoPonto, login: string): Promise<number[]> {

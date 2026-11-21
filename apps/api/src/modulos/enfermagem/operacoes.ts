@@ -28,6 +28,7 @@ import {
   recusaEstoqueBaixado,
 } from './checagem.js';
 import { exigirProfissional, fusoDe, instanteDe, profissionalDoLogin } from './banco-apoio.js';
+import { iniciarAtoTransfusional, TABELAS_INICIO_ATO } from './transfusao-porta-propria.js';
 
 /** Categoria do cadastro de situações → código do contrato das telas. */
 export const LETRA_DA_CATEGORIA: Readonly<Record<string, string>> = {
@@ -157,11 +158,14 @@ async function evento(
 }
 
 const TABELAS_CHECAR = [
-  'horario_administracao',
-  'horario_administracao_evento',
-  'administracao_dupla_checagem',
-  'afericao',
-  'afericao_valor',
+  ...new Set([
+    'horario_administracao',
+    'horario_administracao_evento',
+    'administracao_dupla_checagem',
+    'afericao',
+    'afericao_valor',
+    ...TABELAS_INICIO_ATO,
+  ]),
 ];
 
 interface SaidaChecagem extends ResultadoOperacao {
@@ -178,12 +182,24 @@ export const checarAdministracao = definirOperacao<ChecagemAdministracao, SaidaC
   async gravar(tx, e) {
     const est = estabelecimento(tx);
     const profissional = await profissionalEnfermagem(tx, est, e.cbo);
-    if (e.hemocomponente)
-      throw recusa(
-        'modelo-pendente',
-        'O início da transfusão pela checagem ainda não grava no banco próprio: registre o ato pela tela da transfusão.',
-      );
     const principal = e.marcacoes.find((m) => m.papel === 'principal')!;
+    if (e.hemocomponente) {
+      // A checagem do horário do hemocomponente é o início do ato transfusional, na mesma transação.
+      const h = await travarHorario(tx, est, principal.horario);
+      if (!h || h.item !== principal.item || h.prescricao !== e.prescricao || h.atendimento !== e.atendimento)
+        throw recusa('horario-inexistente', 'O horário não é deste item da prescrição.');
+      if (h.paciente !== e.paciente) throw recusa('horario-inexistente', 'O horário não é deste paciente.');
+      const { chave: _chave, ...hemo } = e.hemocomponente;
+      void _chave;
+      const ato = await iniciarAtoTransfusional(
+        tx,
+        est,
+        await fusoDe(tx, est),
+        { ...hemo, horario: h.id },
+        e.sgh.dispositivo ?? null,
+      );
+      return { horario: principal.horario, situacao: principal.situacao, evento: ato.evento ?? 0 };
+    }
     if (principal.situacao === 'N' && !(e.sgh.motivo ?? '').trim())
       throw recusa('motivo-obrigatorio', 'O não administrado exige o motivo da lista.');
     const fuso = await fusoDe(tx, est);
@@ -238,7 +254,7 @@ export const checarAdministracao = definirOperacao<ChecagemAdministracao, SaidaC
           lote: m.papel === 'principal' ? e.sgh.lote : null,
           validade: m.papel === 'principal' ? e.sgh.validade : null,
           conferente: e.sgh.conferente,
-          dispositivo: e.sgh.dispositivo,
+          dispositivo: e.sgh.dispositivo?.trim() || null,
           origemOffline: e.sgh.origemOffline,
           avisos: e.sgh.avisos,
           observacao: m.papel === 'principal' ? e.sgh.observacao : null,

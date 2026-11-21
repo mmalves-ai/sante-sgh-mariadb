@@ -1,6 +1,6 @@
 // Regra 10 do M10 (cap-08 §8.11, §8.15): segredos e dado pessoal do cadastro de usuários, do hospital e do servidor
-// de e-mail nunca saem pela API: SENHA, SALT e CODIGO_VERIFICACAO de TBUSERS, as senhas secundárias de TBUSUCPL, as
-// credenciais de TBHOSPIT e de PREMAILCFG, o CPF, o e-mail e a biometria. Esta é a conferência sobre as RESPOSTAS
+// de e-mail nunca saem pela API: a senha, o sal e o código de verificação do usuário, as senhas secundárias das permissões complementares do usuário, as
+// credenciais de estabelecimento e de configuração de e-mail, o CPF, o e-mail e a biometria. Esta é a conferência sobre as RESPOSTAS
 // (os controladores do M10 passam por ela, e o E2E @M10 confere os corpos JSON); a guarda estática do SQL é o
 // SELECT nomeado dos repositórios (o valor nunca é lido: CASE … THEN 0/1).
 

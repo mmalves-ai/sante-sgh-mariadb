@@ -26,7 +26,7 @@
 // (`plano-varios-alvos`); o plano só de ambiente climatizado ou de bem patrimonial não é desta tela e não aparece.
 // Pendente (pedidos ao orquestrador, DDL em docs/obra/fatias/f22/saida/03-03.json): alertas de tecnovigilância ligados ao
 // parque, queixa técnica de equipamento, curso exigido por modelo, eventos do ciclo de vida, laudo da OS, modelo pronto
-// do plano, data da desativação e contrato de suprimentos do contrato de manutenção. Até lá, as gravações recusam com o
+// do plano e data da desativação. Até lá, as gravações recusam com o
 // código `modelo-pendente` (nada é gravado pela metade) e as leituras devolvem vazio.
 import {
   type AlertaEquipamento,
@@ -415,7 +415,7 @@ async function lerPlano(l: L, est: number, id: number): Promise<PlanoManutencao 
 
 const SQL_COBERTURA = `
   SELECT c.id, c.versao, c.empresa_fornecedora_id, c.numero, c.cobertura, c.inicio_vigencia, c.fim_vigencia,
-         c.prazo_atendimento_horas, c.valor_parcela, c.situacao,
+         c.prazo_atendimento_horas, c.valor_parcela, c.situacao, c.contrato_fornecedor_id,
          (SELECT t.motivo FROM trilha_auditoria t
            WHERE t.entidade = 'contrato_servico_terceirizado' AND t.entidade_id = c.id
              AND JSON_VALUE(t.dados_depois, '$.dados.operacao') = 'encerramento'
@@ -451,8 +451,7 @@ function coberturaDe(x: Linha, equipamentos: readonly number[]): CoberturaManute
     fim: dataIso(x['fim_vigencia']) ?? '',
     slaHoras: nn(x['prazo_atendimento_horas']),
     valorMensalCent: centavosN(x['valor_parcela']),
-    // Pendente (pedido contrato de suprimentos): até lá, sem ligação ao contrato de compra.
-    contrato: null,
+    contrato: nn(x['contrato_fornecedor_id']),
     ativa: texto(x['situacao']) === 'vigente',
     equipamentos,
     encerradaEm: encerrada ? dataIso(x['fim_vigencia']) : null,
@@ -1018,9 +1017,19 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     },
 
     incluirCobertura: async (x) => {
-      if (x.contrato !== null) throw modeloPendente('A ligação ao contrato de suprimentos');
       if (!(await tx.uma('SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL', [x.fornecedor])))
         throw recusa('fornecedor-invalido', 'O fornecedor não está no cadastro.', { campos: ['fornecedor'] });
+      // O contrato de suprimentos ligado é do mesmo fornecedor e deste estabelecimento.
+      if (
+        x.contrato !== null &&
+        !(await tx.uma(
+          'SELECT id FROM contrato_fornecedor WHERE id = ? AND estabelecimento_id = ? AND empresa_fornecedora_id = ? AND excluido_em IS NULL',
+          [x.contrato, est, x.fornecedor],
+        ))
+      )
+        throw recusa('contrato-fornecedor-invalido', 'O contrato de suprimentos não é deste fornecedor neste estabelecimento.', {
+          campos: ['contrato'],
+        });
       const numero = x.numero.trim().slice(0, 30);
       // Número único por fornecedor. Sem filtro de excluido_em, de propósito: a unicidade do banco conta o excluído.
       if (await tx.uma('SELECT id FROM contrato_servico_terceirizado WHERE estabelecimento_id = ? AND empresa_fornecedora_id = ? AND numero = ?', [est, x.fornecedor, numero]))
@@ -1039,6 +1048,7 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
           periodicidade_pagamento: x.valorMensalCent === null ? 'sob_demanda' : 'mensal',
           prazo_atendimento_horas: x.slaHoras,
           situacao: 'vigente',
+          contrato_fornecedor_id: x.contrato,
         });
       } catch (erro) {
         // Corrida com outra inclusão do mesmo fornecedor e número: a UNIQUE do banco decide.

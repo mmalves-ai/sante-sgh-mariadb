@@ -1,0 +1,33 @@
+{
+ "tipo_documento_financeiro": [
+  {
+   "codigo": "fatura",
+   "descricao": "Fatura",
+   "sentido": "receber",
+   "nativo_sistema": true
+  },
+  {
+   "codigo": "nota_fiscal",
+   "descricao": "Nota fiscal",
+   "sentido": "ambos",
+   "documento_fiscal": true,
+   "exige_serie": true
+  },
+  {
+   "codigo": "boleto",
+   "descricao": "Boleto",
+   "sentido": "pagar"
+  },
+  {
+   "codigo": "recibo",
+   "descricao": "Recibo",
+   "sentido": "ambos"
+  },
+  {
+   "codigo": "rpa",
+   "descricao": "Recibo de pagamento a autônomo",
+   "sentido": "pagar",
+   "retem_tributo": true
+  }
+ ]
+}

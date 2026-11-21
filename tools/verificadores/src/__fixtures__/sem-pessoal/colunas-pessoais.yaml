@@ -1,0 +1,68 @@
+# FIXTURE dos testes do sem-pessoal (sem-pessoal.spec.ts): cópia da lista de colunas pessoais do modelo base (new-sgh,
+# tools/assinatura/colunas-pessoais.yaml), só padrões de nome de coluna, nenhum dado. A lista que o verificador usa de
+# verdade fica em tools/assinatura/colunas-pessoais.yaml e só é exigida quando houver captura versionada.
+# Colunas que identificam ou descrevem pessoa ou ato clínico (roteiro 6.1, passo 3; convencoes.md §11):
+# delas o perfil só mede preenchimento, nulos, vazios e sentinelas. Nunca distintos, nunca valores, nunca
+# MIN/MAX. Na dúvida, a coluna é proibida: a regra vale por nome (padrões abaixo, por coluna inteira) e,
+# sempre, para BLOB e para texto longo (texto livre).
+#
+# `identificadores`: IDs, prontuário, atendimento e chaves de outras linhas. Não descrevem a pessoa, mas
+# "IDs e datas entram pela classe" (cap-10 §10.4): sem distintos nem valores no arquivo.
+formato: 1
+
+# Texto com mais caracteres que isto é tratado como texto livre (sempre só contagem).
+texto_livre_acima_de: 30
+
+# Padrões (expressão regular, sem diferença de maiúsculas, sobre o nome inteiro da coluna).
+pessoais:
+  # nome de pessoa, inclusive mãe, pai, responsável, acompanhante, contato, solicitante, profissional
+  - '^NOME.*'
+  - '.*_NOME$'
+  - '^NOMEC$'
+  - '^(MED|MEDICO|PROF|PROFISSIONAL)_.*'
+  - '^(MAE|PAI|NOME_MAE|NOME_PAI|RESPONSAVEL|RESP.*|ACOMP.*|CONTATO.*|CONJUGE.*|SOLICIT.*|MEDICO.*|PROFIS.*|PACIENTE.*|TITULAR.*)$'
+  # documentos e registros
+  - '.*CPF.*'
+  - '^(RG|RG_.*|.*_RG|IDENT.*|ORGAO.*)$'
+  # correção do M14: número da identidade em qualquer posição (NUM_IDENTIDADE, NUM_IDENT_CONJUGE); a data de emissão não é o número
+  - '.*NUM_IDENT.*'
+  - '.*CNS.*'
+  - '.*(CARTEIRA|CARTEIRINHA|MATRIC|MATRICULA).*'
+  # correção do M21: o número do conselho em qualquer posição (CRMALTA, CRMEXECUTANTE, CRMSOL, MEDCRM): identifica o
+  # médico; nunca valores, mesmo com a contagem mascarada
+  - '^(CRM.*|.*CRM|.*_CRM_.*|COREN.*|CONSELHO.*|NUMCONSELHO.*)$'
+  - '.*(PIS|PASEP|CTPS|TITULO_ELE.*|CERT.*NASC.*|PASSAPORTE).*'
+  # contato
+  - '.*(FONE|TEL|CELULAR|FAX|RAMAL|WHATS).*'
+  - '.*(EMAIL|E_MAIL).*'
+  - '.*(HOMEPAGE|SITE|URL).*'
+  # endereço (inclusive partes de baixa granularidade, na dúvida)
+  - '.*(ENDER|LOGRAD|BAIRRO|CEP|CIDADE|MUNIC|COMPL|NUMERO|NUM_END|UF|ESTADO_END|PAIS|NATURAL|IBGE).*'
+  # nascimento, idade e filiação
+  - '.*(NASC|OBITO|FILIA).*'
+  - '^(IDADE.*|.*_IDADE.*|IDANO|IDMESES|IDDIAS|IDAGES)$'
+  # profissionais da equipe (códigos de pessoa), inclusive o prestador (PS), os códigos *_PLS (solicitante,
+  # prestador, credenciado), o agente e o credenciado
+  - '^(AUX\d*|INSTR|ANEST|CIRCUL|CIRURG.*|PEDIATRA|ASSIST.*)$'
+  - '^(PS|.*_PLS|AGENTE.*|CRED.*|PREST.*)$'
+  # dados bancários
+  - '.*(AGENCIA|CONTA_CORR|CONTA_BANC|CHEQUE).*'
+  # login, usuário, senha, assinatura
+  - '.*(USU|USER|LOGIN|SENHA|ASSINAT|DIGITAL|FOTO|BIOMETR).*'
+  # texto livre e clínico
+  - '.*(OBS|OBSERV|HIST|EVOL|LAUDO|TEXTO|DESCR|MOTIVO|QUEIXA|DIAG|CID|ANAMN|PRESCR|RECEITA|ALERG|COMENT|MENSAG|JUSTIF|ANOT).*'
+  - '.*(RTF|XML|HTML|BLOB|IMAGEM|ARQUIVO).*'
+
+# Dado sensível (LGPD, art. 5º, II: origem racial, religião, saúde) e óbito: só contagem e FORA da
+# coocorrência (nem o padrão de preenchimento sai, porque um padrão raro aponta a pessoa).
+sensiveis:
+  - '^(COR|RACA.*|ETNIA.*|RELIG.*|SANGUE|TIPO_SANGUINEO|FATORRH|DOADOR|DEFICI.*|GESTANTE)$'
+  - '.*OBITO.*'
+  - '^(BAIXO_PESO|NATIM.*|PREMAT.*|TPDOENCA|.*DOENCA.*|.*GESTA.*|.*GRAVID.*|PESO.*|ALTURA.*|IMC|HIV.*|.*DEFICIEN.*)$'
+
+identificadores:
+  - '^ID$'
+  - '^ID_.*'
+  - '.*_ID$'
+  - '^(PRONT.*|PRTANT|PRONTUARIO|REG|REGISTRO|ATENDIMENTO|ID_ATEND.*|NR_ATEND.*|GUIA.*|SENHA_ATEND|NUM_.*|NUMERO_.*|PROTOCOLO.*|NOSSONUM.*|DOC.*|NF.*|NOTA_FISCAL.*|LOTE.*|REMESSA.*|SEQ.*)$'
+  - '.*(CODBARRA|CHAVE|TOKEN|HASH|GUID|UUID).*'

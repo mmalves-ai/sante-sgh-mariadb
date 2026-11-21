@@ -1,7 +1,6 @@
-// Regra 7 do M32 (cap-06b §6.8; ref 01 §2.5): a classificação gerencial (grupo, subgrupo, item de TBITEDES) é gravada
-// como o outro sistema grava (MFLANGSI só na parcela 1, CDC = 0) e mostrada como valendo para o documento inteiro; o
-// rateio por centro de custo fica em SGH_FIN_RATEIO até o cenário controlado provar que o outro sistema aceita
-// MFLANGSI.CDC preenchido.
+// Regra 7 do M32 (cap-06b §6.8; ref 01 §2.5): a classificação gerencial (grupo, subgrupo e item gerencial) é gravada
+// só na parcela 1, com o centro 0, e mostrada como valendo para o documento inteiro; o rateio por centro de custo fica
+// à parte, no rateio do documento.
 import { centavos, iguaisEmCentavos, recusaFin, type RecusaFinanceiro, reais } from './recusa.js';
 
 export interface ClassificacaoGerencial {
@@ -12,9 +11,9 @@ export interface ClassificacaoGerencial {
 
 export const classificacaoTexto = (c: ClassificacaoGerencial): string => `${c.grupo}.${c.subgrupo}.${c.item}`;
 
-/** O CDC gravado em MFLANGSI pelo novo (0 em 100% do perfil). */
+/** O centro de custo gravado na classificação gerencial (0 em 100% do perfil). */
 export const CDC_GRAVADO = 0;
-/** TP_LAN de MFLANGSI: 0 = despesa do título a pagar, 1 = receita do título a receber, 4 = movimento (visto). */
+/** Tipo do lançamento gerencial: 0 = despesa do título a pagar, 1 = receita do título a receber, 4 = movimento (visto). */
 export const TP_LAN_PAGAR = 0;
 export const TP_LAN_RECEBER = 1;
 

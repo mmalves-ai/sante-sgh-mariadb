@@ -15,8 +15,8 @@
 // vista pela tela quando ela a envia.
 // Melhoria: horas no fuso do estabelecimento; a alta médica é a alta médica do prontuário (alta_medica), com o
 // destino codificado e o cancelamento com motivo; os atributos do leito são as colunas do próprio leito.
-// Pendências (pedidos do lote 03-01): atributos por tipo de acomodação, faixa etária por leito, foto da etapa da
-// limpeza e os registros do SAME sem movimento (ocorrência, aceite e cobrança) aguardam DDL; as fichas da internação
+// Pendências (pedidos do lote 03-01 e da F2.4, lote 16): atributos por tipo de acomodação, foto da etapa da limpeza e
+// os registros do SAME sem movimento (ocorrência, aceite e cobrança) aguardam DDL; as fichas da internação
 // leem a configuração de documentos quando houver (por ora nenhuma ficha extra).
 import { randomUUID } from 'node:crypto';
 import {

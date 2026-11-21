@@ -128,7 +128,7 @@ describe('fichas a imprimir', () => {
     copias: 1,
     ordem: 1,
     clinicas: 'CMNOPQ',
-    retorno: 'N',
+    soNoRetorno: false,
     noAtendimento: true,
     idadeInicial: 0,
     idadeFinal: 0,
@@ -147,7 +147,7 @@ describe('fichas a imprimir', () => {
     const modelos = [
       m({}),
       m({ modelo: 2, ordem: 3, nome: 'Guia', copias: 2 }),
-      m({ modelo: 3, ordem: 2, nome: 'Só retorno', retorno: 'S' }),
+      m({ modelo: 3, ordem: 2, nome: 'Só retorno', soNoRetorno: true }),
       m({ modelo: 4, nome: 'Matricial', grafica: false }),
       m({ modelo: 5, nome: 'Pediatria', idadeFinal: 12 }),
       m({ modelo: 6, nome: 'Outra clínica', clinicas: 'C' }),

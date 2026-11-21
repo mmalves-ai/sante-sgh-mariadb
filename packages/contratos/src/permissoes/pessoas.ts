@@ -1,6 +1,6 @@
 // Permissões do M52, fatia F1 (ficha, seção 7, tela "Colaboradores e admissão"; convencoes.md §12): consultar,
 // admitir e desligar o colaborador. Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06).
-// Opções da árvore TBOPCOES (catalogo-legado.json, pc), módulo "Folha de pagamento" (351, 553, 4259):
+// Opções da árvore do menu de origem (catalogo-legado.json, pc), módulo "Folha de pagamento" (351, 553, 4259):
 //   - Tabelas 352 › Funcionário 358 (com o subitem 4224);
 //   - Lançamentos 372 › Rescisão 388 e Afastamento 389.
 // Decisão do preparo (D-PERM-52, POL-5): dependentes, mudança funcional e a validade do conselho são "agir" sobre o
@@ -123,7 +123,7 @@ export const PERMISSOES_PESSOAS_M52_F1: readonly DeclaracaoPermissao[] = [
 ];
 
 // Permissões do M52, fatia F2 (ficha, seção 7, telas "Escala do setor" e "Regimes e banco de horas"; convencoes.md
-// §12). Opções do Ponto eletrônico (novo) na árvore TBOPCOES (catalogo-legado.json, pc): Gerenciamento › Programação
+// §12). Opções do Ponto eletrônico (novo) na árvore do menu de origem (catalogo-legado.json, pc): Gerenciamento › Programação
 // de Trabalho/Folga Quadro de escalas (5073) e Programação pendente (5072); Tabelas › Horário (5056), Horário por dia
 // (5058) e Horários contratuais (5059). Decisão D-PERM-52.2 (POL-5): quem tem o quadro de escalas no outro sistema lê e
 // monta a escala; a PUBLICAÇÃO é recurso só do novo (a ficha: "só SGH_ACESSO_MAPA_OPCAO"), concedida ao perfil

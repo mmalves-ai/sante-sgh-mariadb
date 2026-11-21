@@ -1,7 +1,7 @@
 // Formas do movimento de internação lido do banco (M16): o que o adaptador (@sgh/legado) entrega e o motor da
 // internação (@sgh/dominio-internacao) consome, sem nome de tabela. Datas de calendário vêm como `Date` à
-// meia-noite UTC (o processo roda em TZ=UTC e o banco guarda a data sem fuso) e as horas como texto "HHMM",
-// como o legado grava; a data sentinela (30/12/1899) já chega como null. O paciente (prontuário) só serve à
+// meia-noite UTC (o processo roda em TZ=UTC e o banco guarda a data sem fuso) e as horas como texto "HH:MM"
+// no fuso do estabelecimento; a data sentinela da origem já chega como null. O paciente (prontuário) só serve à
 // reinternação calculada (regra 9) e nunca sai do motor.
 
 import type { GrupoMotivoAlta } from '../legendas/legendas.js';

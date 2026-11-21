@@ -1,4 +1,4 @@
-// Código anônimo do painel para familiares (ficha do M46, regra 5; seção 6, SGH_CC_PAINEL_CODIGO): sorteado (nunca
+// Código anônimo do painel para familiares (ficha do M46, regra 5; seção 6, codigo_painel_familia): sorteado (nunca
 // derivado do paciente, do prontuário, do atendimento nem do agendamento), fácil de ler em voz alta e na TV: três letras
 // e três algarismos ("KMR-482"), sem os caracteres que se confundem (0/O, 1/I/L, 5/S, 2/Z, 8/B). Único no dia do
 // estabelecimento (a chave do banco confere; colidiu, sorteia de novo). Válido até o fim do dia da entrada no bloco.

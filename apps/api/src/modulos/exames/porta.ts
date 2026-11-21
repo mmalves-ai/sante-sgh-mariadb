@@ -44,7 +44,7 @@ export interface PortaExame extends PortaGravacaoM18<GravadorCoberturaExame> {
   geracoes(c: ContextoPortaM18, agenda: number): Promise<GeracaoGrade[]>;
   /** Feriados do período; null = o calendário de feriados não está disponível (a prévia avisa). */
   feriados(c: ContextoPortaM18, de: string, ate: string): Promise<{ data: string; nome: string }[] | null>;
-  /** Todos os horários de início já ocupados na agenda ("AAAA-MM-DD HHMM"), sem teto: a prévia não os repete. */
+  /** Todos os horários de início já ocupados na agenda ("AAAA-MM-DD HH:MM"), sem teto: a prévia não os repete. */
   horariosExistentes(c: ContextoPortaM18, agenda: number, de: string, ate: string): Promise<string[]>;
   horarios(
     c: ContextoPortaM18,

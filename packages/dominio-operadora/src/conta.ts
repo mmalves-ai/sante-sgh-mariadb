@@ -413,6 +413,45 @@ export function situacaoDoRecurso(valor: number, acatado: number): SituacaoRecur
   return centavos(acatado) >= centavos(valor) ? 'acatado' : 'parcial';
 }
 
+/** O parecer do auditor é obrigatório quando o recurso não é acatado por inteiro (mantido ou acatado em parte). */
+export const exigeParecerNoRecurso = (s: SituacaoRecursoConta): boolean => s !== 'acatado' && s !== 'pendente';
+
+export function problemasDoParecerDoRecurso(s: SituacaoRecursoConta, parecer: string): Problema[] {
+  return exigeParecerNoRecurso(s) && parecer.trim() === '' ? [{ codigo: 'parecer-obrigatorio', campo: 'parecer' }] : [];
+}
+
+/**
+ * A decisão pela guia repartida pelas linhas do recurso: acatado devolve o recorrido de cada linha, mantido devolve
+ * zero, e o acatado em parte é repartido pelo peso do recorrido de cada linha. O rateio é em centavos pelo maior resto
+ * (cada linha recebe a parte inteira e os centavos que sobram vão às linhas de maior fração), então a soma é exatamente
+ * o acatado e nenhuma linha passa do próprio recorrido.
+ */
+export function rateioDoAcatado(
+  recorridos: readonly number[],
+  situacao: Exclude<SituacaoRecursoConta, 'pendente'>,
+  acatado: number,
+): number[] {
+  if (situacao === 'acatado') return recorridos.map((r) => reais(centavos(r)));
+  if (situacao === 'mantido' || recorridos.length === 0) return recorridos.map(() => 0);
+  const rec = recorridos.map(centavos);
+  const total = rec.reduce((t, r) => t + r, 0);
+  const alvo = Math.min(centavos(acatado), total);
+  if (total <= 0) return recorridos.map(() => 0);
+  const partes = rec.map((r, i) => {
+    const exato = (alvo * r) / total;
+    return { i, base: Math.floor(exato), fracao: exato - Math.floor(exato), r };
+  });
+  let sobra = alvo - partes.reduce((t, p) => t + p.base, 0);
+  for (const p of [...partes].sort((a, b) => b.fracao - a.fracao || a.i - b.i)) {
+    if (sobra <= 0) break;
+    if (p.base < p.r) {
+      p.base += 1;
+      sobra -= 1;
+    }
+  }
+  return partes.map((p) => reais(p.base));
+}
+
 /**
  * A glosa final de cada item depois do recurso: o valor acatado na guia desfaz a glosa dos itens na ordem (o primeiro
  * item glosado primeiro), sem passar da glosa de cada um. É o que o demonstrativo leva item a item.

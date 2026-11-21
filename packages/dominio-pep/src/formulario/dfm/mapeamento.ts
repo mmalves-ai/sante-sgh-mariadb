@@ -1,5 +1,5 @@
-// Conversão de um modelo de formulário do legado (PREVOLUCAO + vínculos PRPADEVOL + perguntas + respostas +
-// componentes DFM de PRFORMULCOMP) para a representação do novo (inspirada no FHIR Questionnaire; regras 2 a 6
+// Conversão de um modelo de formulário do legado (modelo de documento clínico + vínculos das perguntas + perguntas +
+// opções de resposta + componentes DFM do layout do modelo) para a representação do novo (inspirada no FHIR Questionnaire; regras 2 a 6
 // da ficha do M09; cap-11 §11.1). O legado continua dono da definição: a representação é derivada, guarda a
 // impressão digital do layout de origem e em `x-legacy` tudo o que o gravador do M22 precisa para gravar
 // como o Delphi grava (pergunta, vínculo, ordem, tipo). Vínculo inativo é preservado como inativo.
@@ -95,7 +95,7 @@ export interface XLegacy {
   readonly pergunta: number;
   readonly codPergunta: number | null;
   readonly ordem: string;
-  /** PRPERGUNTA.TIPOPERG original. */
+  /** Tipo original da pergunta no formulário de origem. */
   readonly tipo: string | null;
   readonly classe: string | null;
   readonly componente: string | null;
@@ -103,7 +103,7 @@ export interface XLegacy {
   readonly idResposta: number | null;
   readonly obrigatorio: string | null;
   readonly ativo: string | null;
-  /** PRPERGUNTA.MANTERHIST original (DP-28: nada é decidido aqui). */
+  /** Marca original "manter histórico" da pergunta (DP-28: nada é decidido aqui). */
   readonly manterHist: number | null;
 }
 
@@ -321,7 +321,7 @@ export async function converterModelo(entrada: EntradaModelo): Promise<Represent
       pendencias.push({
         linkId,
         tipo: 'tipo-inesperado',
-        detalhe: `${comp.classe} com TIPOPERG ${tipoPergunta} (esperado ${classe.tiposPergunta.join(' ou ')})`,
+        detalhe: `${comp.classe} com tipo de pergunta ${tipoPergunta} (esperado ${classe.tiposPergunta.join(' ou ')})`,
       });
     }
     const descricao = textoDe(raiz.propriedades['Description']) ?? textoDe(raiz.propriedades['Caption']);

@@ -1,8 +1,8 @@
 // Título a pagar (M32; ficha, seções 5 e 8): chave natural, parcelas, exclusão e a classificação gerencial.
 //   - regra 3: chave natural única (EMPRESA, FORN, DOC, PARC, TIPO, SERIE); repetição devolve 409;
-//   - regra 6: título pago não se apaga (TRG_MFCONPAG_AD recusa: e_exc_mfconpag_pago); desfazer é estorno com motivo;
-//   - regra 7: a classificação gerencial (MFLANGSI) é gravada só na parcela 1, com CDC = 0, e vale para o documento
-//     inteiro; o rateio por centro de custo fica em SGH_FIN_RATEIO até o cenário controlado.
+//   - regra 6: título pago não se apaga; desfazer é estorno com motivo;
+//   - regra 7: a classificação gerencial é gravada só na parcela 1, com o centro 0, e vale para o documento inteiro; o
+//     rateio por centro de custo fica no rateio do documento.
 import { dataVazia, iguaisEmCentavos, recusaFin, type RecusaFinanceiro, reais } from './recusa.js';
 
 export interface ChaveTituloPagar {
@@ -18,7 +18,7 @@ export interface ChaveTituloPagar {
 export const chaveTituloTexto = (c: ChaveTituloPagar): string =>
   `${c.empresa}/${c.credor}/${c.documento}/${c.parcela}/${c.tipo}/${c.serie.trim() || '-'}`;
 
-/** A série gravada: sem série, a letra F do DEFAULT da coluna (MFCONPAG.SERIE e MFCTAREC.SERIE; D-SERIE-32). */
+/** A série gravada: sem série, a letra F (padrão dos títulos a pagar e a receber; D-SERIE-32). */
 export const serieGravada = (s: string | null | undefined): string => (s ?? '').trim().toUpperCase() || 'F';
 
 export interface ParcelaInformada {
@@ -84,7 +84,7 @@ export function parcelarDocumento(
   return r;
 }
 
-/** Regra 7: o MFLANGSI só nasce com a parcela 1 (o outro sistema grava assim; o rateio vale para o documento). */
+/** Regra 7: a classificação gerencial só nasce com a parcela 1 (o rateio vale para o documento). */
 export const gravaClassificacao = (parcela: number): boolean => parcela === 1;
 
 export interface TituloRelido {

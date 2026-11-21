@@ -264,7 +264,7 @@ export interface SenhaDaWorklist {
   readonly id: number;
   readonly senha: string;
   readonly prioridade: PrioridadeSenha;
-  /** Grupo legal (TBGRUPOPRIORIDADE), quando o novo o registrou; null nas que o outro sistema emitiu. */
+  /** Grupo legal de prioridade, quando o novo o registrou; null nas que o outro sistema emitiu. */
   readonly grupo: number | null;
   readonly grupoDescricao: string;
   readonly emitidaEm: string;

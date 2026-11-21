@@ -2,7 +2,7 @@
 // pagamentos eletrônicos, adiantamentos, contas a receber, conta corrente de convênios, baixa por demonstrativo,
 // tesouraria (movimento, conciliação, fluxo de caixa), apropriação gerencial, cadastros e parâmetros financeiros, fiscal
 // (escrituração, NFS-e, DMED, EFD-REINF) e exportação contábil. Quem tem a opção no outro sistema tem a permissão no
-// novo (regra 1 do M06). Opções da árvore TBOPCOES do Controle Financeiro (módulo 14, 248 opções; retrato
+// novo (regra 1 do M06). Opções da árvore do menu de origem do Controle Financeiro (módulo 14, 248 opções; retrato
 // tools/verificadores/dados/acesso-legado.pc.json), levantadas na primeira hora do marco. A ficha escreve os códigos com
 // sublinhado (`financeiro.titulo_pagar.ler`); o catálogo exige camelCase (FORMATO_CODIGO_PERMISSAO): D-PERM-32.
 import type { DeclaracaoPermissao } from './tipos.js';
@@ -108,7 +108,7 @@ const p = (
   concessaoPorPerfil: null,
   categoria: 'financeira',
   criticidade: 'normal',
-  // O escopo do módulo financeiro (a conta bancária, MFCTAUSU): vale para todas, como o catálogo gerado.
+  // O escopo do módulo financeiro (a conta bancária do usuário): vale para todas, como o catálogo gerado.
   escopos: ['contaBancaria'],
   ...extra,
 });
@@ -286,7 +286,7 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
   ]),
   p(
     'financeiro.parametro.editar',
-    'Editar os parâmetros financeiros, as faixas de alçada e o escopo por conta (MFCTAUSU)',
+    'Editar os parâmetros financeiros, as faixas de alçada e o escopo por conta bancária do usuário',
     [O.parametros, O.usuariosCompl],
     { criticidade: 'sensivel' },
   ),

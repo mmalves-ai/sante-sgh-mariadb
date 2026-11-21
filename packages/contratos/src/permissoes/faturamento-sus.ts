@@ -1,7 +1,7 @@
 // Permissões do M51 (ficha, seção 7; convencoes.md §12): faturamento SUS próprio. Quem tem a opção no outro sistema tem
 // a permissão no novo (regra 1 do M06). Os nomes da ficha (`faturamento.sus.ciha.gerar`, `.fechar_competencia`) foram
 // trazidos ao formato de três partes em camelCase do catálogo (FORMATO_CODIGO_PERMISSAO): `faturamento.susCiha.gerar`,
-// `faturamento.sus.fecharCompetencia`. Opções da árvore TBOPCOES levantadas no preparo do M51 (retrato
+// `faturamento.sus.fecharCompetencia`. Opções da árvore do menu de origem levantadas no preparo do M51 (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Recepção externa (módulo 8) › Exportação 3263 › C.I.H.A. 3264 (a CIHA de hoje é gerada ali);
 //   - Recepção interna (módulo 9) › Controle atendimento S.U.S. 2487 (grupos de supervisão do faturamento);
@@ -11,7 +11,7 @@
 //   - Faturamento ambulatório (módulo 3): raiz 4253; Tabelas 701; Geração de BPA 724 (Criação 725, Manutenção 726,
 //     Arquivo Magnético 728, Importação 733); Fechamento de Fatura 906;
 //   - Faturamento A.P.A.C. (módulo 20): raiz 4262; Tabelas 920; Cadastro Apac 929; Arquivo Magnético 951;
-//     Encerramento 961; Importa tabela FAMEDSOL 1100; Fechamento de fatura 1103.
+//     Encerramento 961; Importa tabela de médicos solicitantes do SUS 1100; Fechamento de fatura 1103.
 // Escopo: o do módulo faturamento (convênio), como pede o permissoes:verificar. A CIHA cobre todos os financiadores não
 // SUS do estabelecimento: quem tem escopo parcial lê só os registros dos seus convênios e NÃO gera o arquivo nem fecha a
 // competência (o serviço recusa com `escopo-parcial`; desenho em docs/marcos/M51/preparo-e1.md).
@@ -150,7 +150,7 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     O.ambTabelas,
     O.apacTabelas,
   ]),
-  // Os médicos solicitantes SUS (FAMEDSOL) vão pelo CRUD genérico (M51, etapa 2): as permissões
+  // Os médicos solicitantes SUS vão pelo CRUD genérico (M51, etapa 2): as permissões
   // `faturamento.susSolicitante.{ler,criar,editar,exportar}` são geradas do domínio (dominios-m51.ts), com as opções
   // 920 e 1100 do módulo A.P.A.C.
   p(

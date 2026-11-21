@@ -1,6 +1,6 @@
 // Permissões do M31 (ficha, seção 7; convencoes.md §12): guias TISS, lotes e protocolo, prazos de envio, webservices por
 // operadora, fechamento de competência, demonstrativos, retorno e glosa e o painel de glosas. Quem tem a opção no outro
-// sistema tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES do Faturamento convênios (módulo 4)
+// sistema tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem do Faturamento convênios (módulo 4)
 // levantadas na primeira hora do marco (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - Emissão de Contas 1132 (Conta TISS 1165, Gerar XML 1196);
 //   - Controle de Remessa 6637 (Manutenção da Remessa 6638, Manutenção das Contas da Remessa 6643,
@@ -11,7 +11,7 @@
 //   - Glosas 1458 (Manutenção 1459, Manutenção por Intervalo 1460, Motivo/Reapres. 1461, Listagem 1462, Recurso de
 //     Glosa 1472 e Guia de Recurso de Glosas TISS 4446, Relatórios 1476);
 //   - Utilitários › Fechamento de Fatura 1590 (Fechamento 1591, Apresentação 1592), Fechamento Mensal 1593.
-// O escopo por convênio (TBUSERS_TBCONVEN, TBUSERCON) vale em toda leitura e gravação (como no M30). Supervisor do
+// O escopo por convênio (convênios liberados ao usuário) vale em toda leitura e gravação (como no M30). Supervisor do
 // faturamento (protocolo, reabrir competência): Fechamento de Fatura (1591), Apresentação (1592) ou Fechamento Mensal
 // (1593) (D-SUP-31).
 import type { DeclaracaoPermissao } from './tipos.js';

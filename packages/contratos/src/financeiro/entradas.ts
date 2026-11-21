@@ -35,7 +35,7 @@ export const esquemaParcela = z
 
 export const esquemaRetencao = z
   .object({
-    /** MFREFDES.COD (a conta de desconto ou acréscimo, com o tipo do imposto em MFREFDES.TIPO). */
+    /** Código da conta de desconto ou acréscimo (com o tipo do imposto, quando é retenção). */
     codigo: z.number().int().positive().max(2_147_483_647),
     valor: dinheiro,
   })
@@ -51,7 +51,7 @@ const centavos = z.number().int().min(0).max(9_999_999_999);
  * M53.9 (F8): os títulos da folha de um período (cenários `origem-folha` e `origem-encargo`), todos na MESMA transação
  * do registro em SGH_PES_FOLHA_LANCAMENTO, SGH_PES_FOLHA_TITULO e SGH_PES_FOLHA_FATO (regra 10 do M53: ou tudo, ou
  * nada). Cada título é de parcela única, fornecedor (TIPO F), série DP ou IMP, sem nota, como o contas a pagar lança a folha
- * hoje (perfil de MFCONPAG: 111 títulos de folha e encargos em 2025 e 2026, todos de parcela 1, TIPO F ou X, NF 0). O
+ * hoje (perfil dos títulos de folha e encargos de 2025 e 2026: todos de parcela 1, de fornecedor ou outros, sem nota). O
  * valor vem em centavos (a folha) e grava em reais. Esta ação não tem rota HTTP no financeiro: só a integração da folha
  * a monta, a partir da prévia conferida.
  */
@@ -108,9 +108,9 @@ export const esquemaCriarTituloPagar = z.discriminatedUnion('acao', [
     .object({
       acao: z.literal('incluir'),
       tipo: z.enum(TIPOS_CREDOR),
-      /** TBFORNEC.COD (no médico, o código do conselho em TBCBOPRO.COD). */
+      /** Código do fornecedor (no médico, o código do profissional). */
       credor: z.number().int().positive().max(2_147_483_647),
-      /** TBCBOPRO.ID do médico (TIPO M). */
+      /** Id do profissional, quando o credor é médico (tipo M). */
       profissional: id.nullable().default(null),
       documento: z.number().int().positive().max(2_147_483_647),
       serie: textoCp1252(3).default(''),
@@ -123,7 +123,7 @@ export const esquemaCriarTituloPagar = z.discriminatedUnion('acao', [
       parcelas: z.array(esquemaParcela).min(1).max(120),
       classificacao: esquemaClassificacao,
       retencoes: z.array(esquemaRetencao).max(12).default([]),
-      /** Centro de custo do documento (alçada e rateio no novo; o MFLANGSI grava CDC 0). */
+      /** Centro de custo do documento (alçada e rateio; a classificação gerencial grava o centro 0). */
       centroCusto: z.number().int().positive().nullable().default(null),
       rateio: z.array(esquemaRateio).max(30).default([]),
       /** M55 (etapa 3): o contrato com o fornecedor que o título consome (o vínculo na mesma transação, só no novo). */
@@ -146,12 +146,12 @@ export const esquemaBaixarTitulo = z.discriminatedUnion('cenario', [
         .array(z.object({ titulo: id, versao: versao.nullable().default(null) }).strict())
         .min(1)
         .max(200),
-      /** TBCTABAN.ID da conta que paga (no escopo MFCTAUSU). */
+      /** Id da conta bancária que paga (no escopo de contas do usuário). */
       conta: id,
       dataPagamento: data,
-      /** Forma de pagamento (MFCONPAG.TP_PGTO; só valores já vistos, DP-46.3). */
+      /** Forma de pagamento do título (só valores já vistos, DP-46.3). */
       formaPagamento: z.number().int().min(0).max(99),
-      /** Pagar por borderô (um MFBORDER para os títulos) ou sem borderô. */
+      /** Pagar por borderô (um borderô para os títulos) ou sem borderô. */
       porBordero: z.boolean(),
     })
     .strict(),
@@ -173,7 +173,7 @@ export type BaixarTituloEntrada = z.infer<typeof esquemaBaixarTitulo>;
 /** financeiro.criarTituloReceber: da conta (convênio pela competência ou particular externo). */
 export const esquemaCriarTituloReceber = z
   .object({
-    /** FCCTAEXT.ID da conta (ou das contas do mesmo convênio e competência, num título só). */
+    /** Id da conta hospitalar (ou das contas do mesmo convênio e competência, num título só). */
     contas: z
       .array(z.object({ conta: id, versao: versao.nullable().default(null) }).strict())
       .min(1)
@@ -191,7 +191,7 @@ export const esquemaLancarMovimento = z
   .object({
     tipo: z.enum(TIPOS_MOVIMENTO_GRAVADOS),
     data,
-    /** TBCTABAN.ID da conta que recebe (crédito) e da debitada (débito), no escopo MFCTAUSU. */
+    /** Id da conta bancária que recebe (crédito) e da debitada (débito), no escopo de contas do usuário. */
     contaCredito: id.nullable().default(null),
     contaDebito: id.nullable().default(null),
     valor: dinheiro,
@@ -227,7 +227,7 @@ export type AprovarTituloEntrada = z.infer<typeof esquemaAprovarTitulo>;
 export const esquemaRegistrarGlosaTitulo = z
   .object({
     tituloReceber: id,
-    /** FCLANEXT.ID do item glosado (nulo: a glosa do título inteiro, com o valor somado dos itens). */
+    /** Id do item da conta hospitalar glosado (nulo: a glosa do título inteiro, com o valor somado dos itens). */
     item: id.nullable().default(null),
     situacao: z.enum(['aceita', 'recurso-deferido', 'recurso-indeferido']),
     valor: dinheiro,
@@ -284,7 +284,7 @@ export const esquemaEmitirNfse = z
     tituloReceber: id.nullable().default(null),
     conta: id.nullable().default(null),
     momento: z.enum(['apresentacao', 'recebimento']),
-    /** Classificação tributária (NFSECLASSIFICACAO_TRIBUTARIA) e o item da lista de serviços (TBSERVICO_NFSE_ITENS). */
+    /** Classificação tributária e o item da lista de serviços da NFS-e. */
     classificacao: z.string().max(20),
     itemServico: z.string().max(20),
     valorServicos: dinheiro,

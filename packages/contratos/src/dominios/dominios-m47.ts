@@ -7,7 +7,7 @@
 // os códigos 0 a 99 que o estoque usa), os tipos de transfusão (os 4 da RDC 34 que a requisição grava pelo ID), os
 // parâmetros do outro sistema (impressão e lançamento; a senha mestra nunca é lida), os técnicos (dado de pessoa: CPF e
 // endereço) e os cadastros da triagem de doador (exames, perguntas e respostas: a coleta é do hemocentro).
-// Opções do outro sistema (TBOPCOES, módulo Hemoterapia, nenhuma concedida no pc): Tabelas 3048 › Cadastro 3050 e o item
+// Opções do outro sistema (menu de origem, módulo Hemoterapia, nenhuma concedida no pc): Tabelas 3048 › Cadastro 3050 e o item
 // de cada cadastro; a consulta dos resultados do laboratório e o registro do laboratório (D-PERM-47.2).
 import type { DominioPublico } from './tipos.js';
 

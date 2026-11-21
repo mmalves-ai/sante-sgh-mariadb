@@ -1,8 +1,8 @@
 // Entradas das operações do atendimento externo (M20; ficha, seções 5 e 7), validadas na tela, na API e no executor (o
 // mesmo Zod). Vocabulário do novo: o atendimento é o REG da ficha (número do atendimento que a recepção vê), o
 // paciente é o ID do cadastro, o profissional é o ID do vínculo profissional × CBO (o CRM vem dele), o convênio é o
-// código. Data e hora vêm sempre do relógio do banco (nunca da tela): a ficha guarda data + HHMM e o cabeçalho o
-// mesmo instante como data e hora (regra 6).
+// código. Data e hora vêm sempre do relógio do banco (nunca da tela): a ficha e o cabeçalho guardam o
+// mesmo instante (regra 6).
 import { z } from 'zod';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
@@ -19,7 +19,7 @@ import {
 
 const id = z.number().int().positive().max(2_147_483_647);
 const smallint = z.number().int().min(0).max(32_767);
-/** Número do atendimento (RECADATE.REG). */
+/** Número do atendimento. */
 export const esquemaRegAtendimento = id;
 const maiusculas = (max: number) =>
   textoCp1252(max)
@@ -219,7 +219,7 @@ export type AlterarAtendimentoEntrada = z.infer<typeof esquemaAlterarAtendimento
 // ── atendimento.alterarHeranca ───────────────────────────────────────────────────────────────────
 
 /**
- * O que a ficha nova copia do atendimento anterior do paciente (configuração única da rede, REPARATE): marca por
+ * O que a ficha nova copia do atendimento anterior do paciente (configuração única da rede): marca por
  * campo. Controle otimista pelas marcas lidas pela tela (`versao`: as letras na ordem de HERANCAS).
  */
 export const esquemaAlterarHeranca = z
@@ -262,7 +262,7 @@ const justificativaExtra = livre(200).refine(
 export const esquemaEstornarProcedimentoExtra = z
   .object({
     atendimento: esquemaRegAtendimento,
-    /** O ordinal do procedimento na ficha (REPROEXT.SEQ). */
+    /** O ordinal do procedimento na ficha. */
     sequencia: z.number().int().positive().max(32_767),
     justificativa: justificativaExtra,
   })

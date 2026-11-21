@@ -45,7 +45,7 @@ export interface ContextoAjuste {
   readonly originais: readonly MarcacaoOriginal[];
   /** Os ajustes do vínculo (pendentes e decididos) do período. */
   readonly ajustes: readonly AjusteLido[];
-  /** Códigos do tipo de movimento do ramo (PETP_MOVIM) aceitos. */
+  /** Códigos do tipo de movimento de ponto do ramo aceitos. */
   readonly movimentos: readonly number[];
 }
 

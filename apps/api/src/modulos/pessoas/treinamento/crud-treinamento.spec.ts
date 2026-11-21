@@ -122,7 +122,7 @@ async function montar() {
 }
 
 describe('correções do treinamento (W0-06, parte 2)', () => {
-  it('o que o cadastro de cursos do banco ainda não guarda recusa igual na memória (modelo-pendente)', async () => {
+  it('o cadastro de cursos aceita unidade, todo o estabelecimento, POP e público não obrigatório', async () => {
     const porta = new PortaTreinamentoMemoria(new PortaPessoasMemoria());
     const base = {
       codigo: 'NR32X',
@@ -142,10 +142,12 @@ describe('correções do treinamento (W0-06, parte 2)', () => {
         () => 'ok',
         (e: { problema?: { codigo?: string } }) => e.problema?.codigo ?? 'outro',
       );
-    expect(await cod(incluir({ alvos: [] }))).toBe('modelo-pendente');
-    expect(await cod(incluir({ alvos: [{ tipo: 'unidade', valor: '1' }] as never }))).toBe('modelo-pendente');
-    expect(await cod(incluir({ categoria: 'pop' as never }))).toBe('modelo-pendente');
-    expect(await cod(incluir({ obrigatorio: false }))).toBe('modelo-pendente');
+    expect(await cod(incluir({ codigo: 'NR32A', alvos: [] }))).toBe('ok');
+    expect(await cod(incluir({ codigo: 'NR32B', alvos: [{ tipo: 'unidade', valor: '1' }] as never }))).toBe(
+      'ok',
+    );
+    expect(await cod(incluir({ codigo: 'NR32C', categoria: 'pop' as never }))).toBe('ok');
+    expect(await cod(incluir({ codigo: 'NR32D', obrigatorio: false }))).toBe('ok');
     expect(await cod(incluir({}))).toBe('ok');
   });
 

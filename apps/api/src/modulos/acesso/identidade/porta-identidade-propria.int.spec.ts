@@ -81,6 +81,11 @@ async function limpar(e: Escritor) {
   const em = contas.map(() => '?').join(',');
   await e.executar(`DELETE FROM segundo_fator_usuario WHERE usuario_id IN (${em})`, contas);
   await e.executar(`DELETE FROM credencial_usuario WHERE usuario_id IN (${em})`, contas);
+  const ests = [ids.est, ids.outro].filter((x) => x > 0);
+  if (!ests.length) return;
+  const eem = ests.map(() => '?').join(',');
+  await e.executar(`UPDATE politica_segundo_fator SET substituida_por_id = NULL WHERE estabelecimento_id IN (${eem})`, ests);
+  await e.executar(`DELETE FROM politica_segundo_fator WHERE estabelecimento_id IN (${eem})`, ests);
 }
 
 beforeAll(async () => {
@@ -265,26 +270,44 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
     ).toBe('adesao');
   });
 
-  it('exigência pelo perfil; política por onda sem modelo: recusa sem gravar', async () => {
+  it('exigência pelo perfil; política por onda: inclui, altera (encerra e liga a nova) e encerra', async () => {
     const p = await porta.politicas(EST);
     expect(p).toContainEqual(expect.objectContaining({ alvo: 'perfil', valor: PERFIL, inicio: '2026-01-01', onda: 1 }));
     expect(await porta.politicas(OUTRO)).not.toContainEqual(expect.objectContaining({ valor: PERFIL }));
+    const nova = {
+      hospital: EST,
+      alvo: 'todos' as const,
+      valor: null,
+      onda: 2 as const,
+      inicio: '2026-12-01',
+      prazoAdesaoDias: 30,
+      motivo: 'Política sintética da onda 2',
+      criadaPor: 'teste.l0203',
+    };
+    const t = trilha(ids.b, 'acesso.politicaSegundoFator.incluida');
+    const { id } = await porta.incluirPolitica(EST, nova, t);
+    expect(await linha('SELECT alvo, perfil_acesso_id, onda, prazo_adesao_dias, criado_por FROM politica_segundo_fator WHERE id = ?', [Number(id)]))
+      .toMatchObject({ alvo: 'todos', perfil_acesso_id: null, onda: 2, prazo_adesao_dias: 30, criado_por: ids.b });
+    expect(await porta.politicas(EST)).toContainEqual(
+      expect.objectContaining({ id, alvo: 'todos', valor: null, onda: 2, inicio: '2026-12-01', prazoAdesaoDias: 30, encerradaEm: null }),
+    );
     await expect(
-      porta.incluirPolitica(
-        EST,
-        {
-          hospital: EST,
-          alvo: 'todos',
-          valor: null,
-          onda: 2,
-          inicio: '2026-12-01',
-          prazoAdesaoDias: 30,
-          motivo: 'teste',
-          criadaPor: 'teste.l0203',
-        },
-        trilha(ids.b, 'acesso.politicaSegundoFator.incluida'),
-      ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente', status: 409 } });
+      porta.incluirPolitica(EST, { ...nova, alvo: 'grupo', valor: 'X' }, trilha(ids.b, 'acesso.politicaSegundoFator.incluida')),
+    ).rejects.toMatchObject({ problema: { codigo: 'sem-grupos' } });
+    const alt = await porta.alterarPolitica(
+      EST,
+      { id, hospital: EST, por: B, alvo: 'perfil', valor: PERFIL, prazoAdesaoDias: 15, motivo: 'Prazo menor' },
+      trilha(ids.b, 'acesso.politicaSegundoFator.alterada'),
+    );
+    expect(alt).toMatchObject({ anterior: id });
+    expect(await linha('SELECT motivo_encerramento, substituida_por_id FROM politica_segundo_fator WHERE id = ?', [Number(id)]))
+      .toMatchObject({ motivo_encerramento: 'Alterada: Prazo menor', substituida_por_id: Number(alt?.id) });
+    expect(await porta.alterarPolitica(EST, { id, hospital: EST, por: B, alvo: 'todos', valor: null, prazoAdesaoDias: 1, motivo: 'x' }, trilha(ids.b, 'x')))
+      .toBeNull();
+    expect(await porta.encerrarPolitica(OUTRO, { id: String(alt?.id), hospital: OUTRO, por: B, motivo: 'Outro hospital' }, trilha(ids.b, 'x'))).toBe(false);
+    expect(await porta.encerrarPolitica(EST, { id: String(alt?.id), hospital: EST, por: B, motivo: 'Fim da onda' }, trilha(ids.b, 'x'))).toBe(true);
+    expect(await porta.encerrarPolitica(EST, { id: String(alt?.id), hospital: EST, por: B, motivo: 'De novo' }, trilha(ids.b, 'x'))).toBe(false);
+    expect((await porta.politicas(EST)).find((l) => l.id === String(alt?.id))).toMatchObject({ alvo: 'perfil', valor: PERFIL, onda: 2, inicio: '2026-12-01', prazoAdesaoDias: 15 });
   });
 
   it('lista e contagens do estabelecimento, com o filtro da senha antes da paginação', async () => {

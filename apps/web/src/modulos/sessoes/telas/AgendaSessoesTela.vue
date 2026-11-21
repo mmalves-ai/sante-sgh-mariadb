@@ -116,7 +116,7 @@ const minutos = ref(60);
 const planoTipo = ref<TipoPlanoSessao>('quimioterapia');
 const plano = ref('');
 const inicio = ref<string | null>(null);
-const horaInicio = ref('0800');
+const horaInicio = ref('08:00');
 const quantas = ref(1);
 const intervalo = ref(7);
 const pular = ref(true);
@@ -469,7 +469,7 @@ const exigeMotivo = computed(() => motivo.value.trim().length < 3);
               <SanteCampoTexto
                 v-model="horaInicio"
                 :rotulo="t('sessoes.nova.hora')"
-                :max-bytes="4"
+                :max-bytes="5"
                 data-testid="serie-hora"
               />
               <div class="campo">

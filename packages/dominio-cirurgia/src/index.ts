@@ -1,6 +1,6 @@
 // @sgh/dominio-cirurgia (M18): regras puras do centro cirúrgico, sem banco. Usadas pela API (mapa, recusa de
 // sobreposição antes de gravar, ligação com a cirurgia realizada), pela tela e pela porta em memória da sessão
-// sintética; as receitas de gravação (@sgh/legado) reconferem no banco, sob a trava da sala, o que vale.
+// sintética; as gravações da API reconferem no banco, sob a trava da sala, o que vale.
 export * from './tempo.js';
 export * from './sobreposicao.js';
 export * from './equipe.js';

@@ -306,8 +306,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     expect([r2.id, r2.sequencial]).toEqual([r1.id, r1.sequencial]);
     expect(await contar('SELECT COUNT(*) AS n FROM remessa_bancaria WHERE estabelecimento_id = ? AND hash_arquivo = ?', [m.est, 'f'.repeat(64)])).toBe(1);
     expect((await porta.registrosFiscais(c, 'remessa')).map((x) => x['CONTA'])).toContain(m.contaA);
-    expect(
-      await codigoDaGravacao(
+    const nfse = () =>
         porta.gravarSgh(comChave(c), trilha, (g) =>
           g.registrarNfse({
             usuario: 'x',
@@ -330,9 +329,26 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
             hashXml: 'd'.repeat(64),
             chaveObjeto: null,
           }),
-        ),
-      ),
-    ).toBe('modelo-pendente');
+        );
+    // A NFS-e simulada fica registrada (com o hash); o mesmo arquivo de novo devolve o mesmo registro.
+    const n1 = await nfse();
+    expect((await nfse()).id).toBe(n1.id);
+    const nota = (await porta.registrosFiscais(c, 'nfse')).find((x) => x['ID'] === n1.id);
+    expect([nota?.['SITUACAO'], nota?.['DESTINO'], nota?.['VALOR_LIQUIDO']]).toEqual(['simulada', 'simulador', 0.98]);
+    const dec = await porta.gravarSgh(comChave(c), trilha, (g) =>
+      g.registrarDeclaracao({
+        usuario: 'x',
+        tipo: 'reinf-r4000',
+        periodo: '2026-10',
+        leiaute: 'v2.1.2',
+        registros: 3,
+        valorTotal: 12.5,
+        hashArquivo: 'e'.repeat(64),
+        chaveObjeto: null,
+      }),
+    );
+    const declaracao = (await porta.registrosFiscais(c, 'declaracao')).find((x) => x['ID'] === dec.id && x['TIPO'] === 'reinf-r4000');
+    expect([declaracao?.['PERIODO'], declaracao?.['REGISTROS'], declaracao?.['VALOR_TOTAL']]).toEqual(['2026-10', 3, 12.5]);
   });
 
   it('glosa no título: item de outra conta, sem retorno ou acima do item é recusado; só a aceita reduz o saldo; o recurso deferido vira recebível', async () => {
@@ -397,12 +413,17 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     expect(await codigoDaGravacao(glosa(itemC, 10, 'aceita'))).toBe('item-fora-do-titulo');
     expect(await codigoDaGravacao(glosa(itemB, 10, 'aceita'))).toBe('item-sem-retorno');
     expect(await codigoDaGravacao(glosa(itemA, 150, 'aceita'))).toBe('glosa-acima-do-item');
-    expect(await codigoDaGravacao(glosa(itemA, 60, 'aceita', { chaveEvento: 'evt-l0207-1' }))).toBe('modelo-pendente');
     expect(await valores()).toEqual([0, 0, 0]);
+    // A glosa por evento: o mesmo evento entregue de novo (outra chave do pedido) devolve a glosa gravada, sem somar.
+    const evento = { chaveEvento: `evt-l0207-${randomUUID()}`, origem: 'evento' as const };
+    const g1 = await glosa(itemA, 60, 'aceita', evento);
+    expect(g1.repetida).toBe(false);
+    expect(await glosa(itemA, 60, 'aceita', evento)).toEqual({ id: g1.id, repetida: true });
+    expect(await valores()).toEqual([60, 60, 0]);
     // O reenvio do mesmo pedido (mesma Idempotency-Key) não soma a glosa de novo.
     const chave = `t0207-${randomUUID()}`;
-    expect((await glosa(itemA, 60, 'aceita', {}, chave)).repetida).toBe(false);
-    expect((await glosa(itemA, 60, 'aceita', {}, chave)).repetida).toBe(true);
+    expect((await glosa(itemA, 30, 'recurso-indeferido', {}, chave)).repetida).toBe(false);
+    expect((await glosa(itemA, 30, 'recurso-indeferido', {}, chave)).repetida).toBe(true);
     // Sem a Idempotency-Key, a gravação direta é recusada.
     expect(
       await codigoDaGravacao(
@@ -412,7 +433,6 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       ),
     ).toBe('entrada-invalida');
     // Somas impressas: glosa 60 (aceita) + 30 (indeferida) + 40 (deferida) = 130; aceita só 60; recurso 40.
-    expect(await codigoDaGravacao(glosa(itemA, 30, 'recurso-indeferido'))).toBe('gravou');
     expect(await codigoDaGravacao(glosa(null, 40, 'recurso-deferido'))).toBe('gravou');
     expect(await valores()).toEqual([130, 60, 40]);
     const det = await porta.tituloReceber(c, titulo, '2026-11-01');

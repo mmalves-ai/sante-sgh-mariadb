@@ -25,7 +25,7 @@ import {
 const pedido = {
   sala: 2,
   data: '2026-11-03',
-  hora: '1400',
+  hora: '14:00',
   duracaoMin: 90,
   procedimento: 30101271,
   convenio: 10,
@@ -42,7 +42,7 @@ describe('pedido de cirurgia pelo portal', () => {
   it.each([
     [{ ...pedido, paciente: { nome: 'ANA', nascimento: '1970-05-02' } }],
     [{ ...pedido, paciente: { nome: 'MARIA DA SILVA', nascimento: '02/05/1970' } }],
-    [{ ...pedido, hora: '14:00' }],
+    [{ ...pedido, hora: '1400' }],
     [{ ...pedido, sala: 0 }],
     [{ ...pedido, cirurgiao: 5001 }],
     [{ ...pedido, paciente: { nome: 'MARIA 😀 SILVA', nascimento: '1970-05-02' } }],

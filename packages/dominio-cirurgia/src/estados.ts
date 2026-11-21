@@ -1,8 +1,6 @@
-// Estados do agendamento cirúrgico (ficha do M18, seção 6: SGH_CC_AGENDA_ESTADO). O outro sistema só conhece a linha
-// de CCAGENDA (ID_TBSITAGE nulo em 100% em 2025): "solicitado" vive só no novo e não ocupa a sala; confirmar grava a
-// CCAGENDA (o outro sistema passa a ver a cirurgia); cancelar e suspender tiram a linha pelo caminho auditável
-// (cópia em CCAGENDA_EXC_CANC e exclusão); "no bloco" e "em sala" são marcações do novo; "realizado" nasce do
-// registro do ato (CCCADCIR).
+// Estados do agendamento cirúrgico (ficha do M18, seção 6). "Solicitado" não ocupa a sala; confirmar põe a cirurgia
+// na agenda da sala; cancelar e suspender tiram da sala pelo caminho auditável (a situação muda, com o motivo); "no
+// bloco" e "em sala" são marcações do andamento; "realizado" nasce do registro do ato cirúrgico.
 
 export const ESTADOS_AGENDAMENTO = [
   'solicitado',
@@ -47,7 +45,7 @@ export function proximosEstados(de: EstadoAgendamento): readonly EstadoAgendamen
   return TRANSICOES[de];
 }
 
-/** O agendamento ocupa a sala no legado (tem linha em CCAGENDA)? */
+/** O agendamento ocupa a sala (está na agenda da sala)? */
 export function ocupaSala(e: EstadoAgendamento): boolean {
   return e === 'confirmado' || e === 'no-bloco' || e === 'em-sala';
 }

@@ -1,6 +1,6 @@
 // Fonte de acesso SINTÉTICA (ficha do M05): só com AMBIENTE=dev ou ci declarado. Usuários sintéticos, sem
-// tocar no TBUSERS da cópia, para exercitar o BFF (sessão no servidor, cookie, inatividade,
-// reautenticação, tentativas) sem credencial de pessoa real (regra 1.7). O login sobre o TBUSERS da cópia
+// tocar no cadastro de usuários do banco, para exercitar o BFF (sessão no servidor, cookie, inatividade,
+// reautenticação, tentativas) sem credencial de pessoa real (regra 1.7). O login sobre o cadastro de usuários
 // é provado em packages/legado/src/acesso/credencial.int.spec.ts (usuários sintéticos inseridos e
 // desfeitos com ROLLBACK); o login com a senha de sempre é a validação humana (seção 13), nunca da IA.
 //
@@ -71,7 +71,7 @@ interface ContaSintetica {
   readonly termoAceito?: boolean;
   /** M06: concessões sintéticas do legado (grupo, opções, papéis SBIS, conselho). */
   readonly concessoes?: Partial<ConcessoesLegado>;
-  /** M17: escopos sintéticos (TBUNIUSE, TBAGEUSE…); ausente = sem restrição. */
+  /** M17: escopos sintéticos (unidades e tipos de agenda do usuário…); ausente = sem restrição. */
   readonly escopos?: Partial<DadosAutorizacaoLegado['escopos']>;
   /** M44: perfis complementares concedidos nominalmente (como SGH_ACESSO_PERFIL_USUARIO), vigentes desde sempre. */
   readonly perfisConcedidos?: readonly string[];
@@ -211,7 +211,7 @@ function opcoesTiss(...codigos: readonly string[]): number[] {
 }
 
 /** M51: as opções do legado das permissões do faturamento SUS dadas (pelo código da permissão). */
-/** M51 (etapa 2): as opções do CRUD dos médicos solicitantes SUS (Tabelas 920 e "Importa tabela FAMEDSOL" 1100). */
+/** M51 (etapa 2): as opções do CRUD dos médicos solicitantes SUS (cadastro e importação da tabela de médicos solicitantes). */
 const OPCOES_SOLICITANTE_SUS = [920, 1100] as const;
 
 function opcoesSus(...codigos: readonly string[]): number[] {
@@ -263,7 +263,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     bloqueado: true,
     senhaAlteradaEm: new Date(),
   },
-  /** Acesso a duas unidades: depois do login, o segundo seletor (TBUNIDAD). */
+  /** Acesso a duas unidades: depois do login, o segundo seletor (unidade). */
   'SINT.MULTIUNIDADE': {
     senha: SENHA_SINTETICA,
     criptografada: true,
@@ -353,7 +353,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       ],
     },
   },
-  /** M17: as mesmas opções da agenda, com o escopo restrito à unidade 2 (TBUNIUSE). */
+  /** M17: as mesmas opções da agenda, com o escopo restrito à unidade 2 (unidades do usuário). */
   'SINT.AGENDA.U2': {
     senha: SENHA_SINTETICA,
     criptografada: true,
@@ -368,7 +368,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     },
     escopos: { unidades: ['2'] },
   },
-  /** M17: as mesmas opções da agenda, com o escopo restrito ao tipo de agenda 5 (TBAGEUSE). */
+  /** M17: as mesmas opções da agenda, com o escopo restrito ao tipo de agenda 5 (tipos de agenda do usuário). */
   'SINT.AGENDA.T5': {
     senha: SENHA_SINTETICA,
     criptografada: true,
@@ -1204,7 +1204,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
   /**
    * M28: almoxarife: as consultas do estoque, a nota fiscal, a requisição (pedir e atender), a saída, a devolução, a
    * transferência, a contagem do inventário, os kits e o carrinho, o rastreio de lote; os locais de estoque do
-   * escopo (GELOCUSU) vêm da porta do estoque.
+   * escopo (locais de estoque do usuário) vêm da porta do estoque.
    */
   'SINT.ALMOXARIFE': {
     senha: SENHA_SINTETICA,
@@ -2347,7 +2347,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     },
   },
   /**
-   * M51 (etapa 2): o faturista do BPA e dos solicitantes SUS (as opções do BPA, das tabelas e da importação do FAMEDSOL;
+   * M51 (etapa 2): o faturista do BPA e dos solicitantes SUS (as opções do BPA, das tabelas e da importação dos médicos solicitantes;
    * a chave do BPA é ligada só para ele no E2E, escopo pessoa). No fim do mapa: o ID sintético é a posição (D-SINT-51).
    */
   'SINT.FATURISTA.BPA': {
@@ -3172,7 +3172,7 @@ export function reiniciarEstadoAcessoSintetico(): void {
 /** Grupo das contas sintéticas sem grupo do legado (no "login como"). */
 export const GRUPO_SINTETICO_SEM_GRUPO = 'SINTETICO';
 
-/** Política sintética (mesma forma de TBCFGLOGIN). */
+/** Política sintética (mesma forma da configuração de login). */
 export const CONFIG_SINTETICA: ConfigLogin = {
   senha: {
     minimoCaracteres: 8,

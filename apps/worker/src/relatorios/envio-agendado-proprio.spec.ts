@@ -27,13 +27,13 @@ describe('envio agendado: conversões do banco para o domínio', () => {
     expect(diaSemanaDoDominio(7)).toBe(6);
     expect(diaSemanaDoDominio(null)).toBeNull();
     expect(() => diaSemanaDoDominio(9)).toThrow();
-    expect(horaDoDominio('07:30:00')).toBe(730);
+    expect(horaDoDominio('07:30:00')).toBe('07:30');
     expect(() => horaDoDominio('x')).toThrow();
     expect(diaMesDoDominio(31)).toBe(28);
     expect(diaMesDoDominio(5)).toBe(5);
     expect(agendaDaLinha({ periodicidade: 'semanal', hora_envio: '18:05:00', dia_semana: 2, dia_mes: null })).toEqual({
       periodicidade: 'semanal',
-      hora: 1805,
+      hora: '18:05',
       diaSemana: 1,
       diaMes: null,
     });
@@ -42,7 +42,7 @@ describe('envio agendado: conversões do banco para o domínio', () => {
   it('relógio de parede do fuso, próximo envio, máscara e parâmetros', () => {
     expect(agoraParede(new Date('2026-11-21T15:00:00Z')).toISOString()).toBe('2026-11-21T12:00:00.000Z');
     const agora = new Date('2026-11-21T12:00:00Z');
-    const agenda = { periodicidade: 'diaria' as const, hora: 700, diaSemana: null, diaMes: null };
+    const agenda = { periodicidade: 'diaria' as const, hora: '07:00', diaSemana: null, diaMes: null };
     expect(proximoDepoisDoEnvio(agenda, null, agora).toISOString()).toBe('2026-11-22T07:00:00.000Z');
     const futuro = new Date('2026-12-01T07:00:00Z');
     expect(proximoDepoisDoEnvio(agenda, futuro, agora)).toBe(futuro);

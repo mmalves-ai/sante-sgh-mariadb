@@ -1,6 +1,6 @@
 // Contratos de Cadastros › Estrutura (M10, ficha seções 4, 5 e 7; cap-06a §6.1): empresa, hospital (CNES) e
 // unidades; blocos, acomodações e leitos num cadastro só, com a conferência contra o registro de conferência que
-// o banco mantém (o novo nunca o grava). Credenciais de TBHOSPIT nunca entram no SELECT.
+// o banco mantém (o novo nunca o grava). Credenciais de estabelecimento nunca entram no SELECT.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 
@@ -109,7 +109,7 @@ export const esquemaConferenciaLeitos = z.object({
     iguais: z.number().int(),
   }),
   porTipo: z.record(z.string(), z.number().int()),
-  /** Retratos do registro de conferência (HTLEITO): quantidade, só leitura. */
+  /** Retratos do registro de conferência: quantidade, só leitura. */
   retratos: z.number().int(),
   tempoMs: z.number().int(),
 });

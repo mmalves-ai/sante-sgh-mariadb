@@ -52,7 +52,7 @@ export const mensagensSessoes = {
     planoTipo: 'Tipo de plano terapêutico',
     plano: 'Plano terapêutico (protocolo, ciclo, prescrição de referência)',
     inicio: 'Primeira sessão',
-    hora: 'Hora (HHMM)',
+    hora: 'Hora (HH:MM)',
     sessoes: 'Número de sessões',
     intervalo: 'Dias entre as sessões',
     pular: 'Pular sábado e domingo (a sessão vai para a segunda)',

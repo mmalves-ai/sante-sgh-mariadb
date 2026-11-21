@@ -58,7 +58,11 @@ export function monVazio(): MonDoK6 {
 }
 
 /** Soma uma amostra do coletor, separando o processo medido dos outros processos. */
-export function somarAmostra(m: MonDoK6, c: Pick<Coleta, 'conexoesDoNovo' | 'alertas'>, limiteMs: number): void {
+export function somarAmostra(
+  m: MonDoK6,
+  c: Pick<Coleta, 'conexoesDoNovo' | 'alertas'>,
+  limiteMs: number,
+): void {
   m.amostras++;
   const proprias = c.conexoesDoNovo.filter((x) => conexaoDoK6(x.marca));
   const outras = c.conexoesDoNovo.filter((x) => !conexaoDoK6(x.marca));

@@ -1,6 +1,6 @@
 // Permissões do M44, etapa 3 (ficha, seção 7; convencoes.md §12): o relógio dos protocolos gerenciados no PA (sepse,
 // dor torácica, AVC, trauma). Recurso só do novo: o sistema anterior não tem protocolo gerenciado nem opção dele na
-// árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json). Por isso, como a classificação (etapa 1):
+// árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json). Por isso, como a classificação (etapa 1):
 //   - ler o relógio segue quem vê o registro clínico (opções da evolução do PEP, M22) e quem localiza o paciente no PA
 //     (3900), mais a diretoria clínica pelo perfil;
 //   - incluir o paciente e registrar as metas é do enfermeiro ou do médico com conselho ativo (regra 8: "inclusão pelo

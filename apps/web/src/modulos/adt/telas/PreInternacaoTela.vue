@@ -19,7 +19,7 @@ import {
 } from '../api-adt.js';
 import AvisoAdt from '../componentes/AvisoAdt.vue';
 import ErroAdt from '../componentes/ErroAdt.vue';
-import { hhmm, paraHhmm } from '../regras-tela.js';
+import { hhmm } from '../regras-tela.js';
 import { usarAdt } from '../usar-adt.js';
 
 const { t } = useI18n();
@@ -142,7 +142,7 @@ async function agendar(): Promise<void> {
         clinica: clinica.value,
         carater: carater.value,
         ...(dataPrevista.value ? { dataPrevista: dataPrevista.value } : {}),
-        ...(horaPrevista.value ? { horaPrevista: paraHhmm(horaPrevista.value) } : {}),
+        ...(horaPrevista.value ? { horaPrevista: horaPrevista.value } : {}),
         ...(bloco && acomod ? { acomodacao: { bloco, acomodacao: acomod } } : {}),
       },
       novaChave('pre'),

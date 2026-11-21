@@ -4,7 +4,7 @@
 // pelos cenários `origem-folha` e `origem-encargo` de `financeiro.criarTituloPagar` e os fatos contábeis por centro de
 // custo (o custo de pessoal que o M54 consome pela fila). Valores em CENTAVOS inteiros (o título grava reais).
 //
-// Destinos e rotinas: cada destino é uma rotina de integração do cadastro de rotinas da folha (`FPINTROTINA`: 4 folha
+// Destinos e rotinas: cada destino é uma rotina de integração do cadastro de rotinas da folha (4 folha
 // mensal, 6 contribuição sindical, 11 férias, 12 rescisão, 14 13º salário, 15 FGTS, 16 INSS, 17 INSS patronal, 18
 // IRRF). As rotinas que o cadastro marca "integra ao financeiro" viram título; as que marca "integra à contabilidade",
 // fato contábil com `contabiliza` (D-ROTINA-539).
@@ -31,7 +31,7 @@ export const DESTINOS_TITULO_FOLHA = [
 ] as const;
 export type DestinoTituloFolha = (typeof DESTINOS_TITULO_FOLHA)[number];
 
-/** A rotina de integração (`FPINTROTINA.ID`) de cada destino. */
+/** A rotina de integração (id) de cada destino. */
 export const ROTINA_DO_DESTINO: Readonly<Record<DestinoTituloFolha, number>> = {
   'liquido-mensal': 4,
   'liquido-ferias': 11,
@@ -53,7 +53,7 @@ export const ROTINAS_TITULO_FOLHA: readonly number[] = [...new Set(Object.values
   (a, b) => a - b,
 );
 
-/** `FPINTROTINA.PERMITE_INTEGRAR_*`: 2 = sim, 1 = não (as provisões integram só à contabilidade). */
+/** Se a rotina integra a cada destino: 2 = sim, 1 = não (as provisões integram só à contabilidade). */
 export const INTEGRA_SIM = 2;
 
 /** Origem do lançamento: o período fechado da folha calculada (F6) ou o retorno conferido da folha externa (F0). */
@@ -69,14 +69,14 @@ export const TETO_TITULOS_LANCAMENTO_FOLHA = 60;
 /** Teto de fatos por lançamento (centros de custo × rotinas × naturezas). */
 export const TETO_FATOS_LANCAMENTO_FOLHA = 1_500;
 
-/** Classificação gerencial do título (`TBITEDES`), como o contas a pagar usa. */
+/** Classificação gerencial do título (item de despesa), como o contas a pagar usa. */
 export const esquemaClassificacaoFolha = z
   .object({ grupo: smallint, subgrupo: smallint, item: smallint })
   .strict()
   .refine((c) => c.grupo > 0, { message: 'Escolha a classificação gerencial.' });
 
 /**
- * O de-para de um destino: credor (`TBFORNEC.COD`), classificação gerencial e o vencimento (dia do mês, no mês do
+ * O de-para de um destino: credor (código do fornecedor), classificação gerencial e o vencimento (dia do mês, no mês do
  * período ou no seguinte). O líquido vence na data de pagamento da folha (o vencimento do de-para não vale para ele).
  */
 export const esquemaDestinoIntegracaoFolha = z
@@ -280,7 +280,7 @@ export interface IntegracaoFolhaLida {
   readonly criadoEm: string;
 }
 
-/** Uma rotina do cadastro de rotinas da folha (`FPINTROTINA`) com o agrupamento (`FPINTAGRUP`). */
+/** Uma rotina do cadastro de rotinas da folha com o agrupamento. */
 export interface RotinaIntegracaoFolha {
   readonly id: number;
   readonly nome: string;

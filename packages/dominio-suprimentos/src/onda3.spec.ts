@@ -96,16 +96,25 @@ describe('setores da onda e ordem do campo 12', () => {
   });
 });
 
-describe('regra 2: motor de estoque é o do banco', () => {
-  it('acusa operação da onda que gravaria tabela de efeito; ignora as de fora da onda', () => {
+describe('regra 2: os efeitos do estoque são da operação de movimento do domínio', () => {
+  it('acusa operação da onda que grava tabela de efeito sem ser de movimento; ignora as de movimento e as de fora', () => {
     expect(
       gravacoesEmTabelaDeEfeito([
-        { nome: 'suprimentos.registrarSaida', tabelasGravadas: ['GECADSAI', 'gesaldos', 'GESALDOS'] },
-        { nome: 'suprimentos.transferir', tabelasGravadas: ['GECADTRA'] },
-        { nome: 'faturamento.lancarItem', tabelasGravadas: ['FCLANEXT'] },
+        {
+          nome: 'suprimentos.registrarSaida',
+          tabelasGravadas: ['documento_estoque', 'saldo_estoque_mensal'],
+        },
+        {
+          nome: 'suprimentos.criarPedido',
+          tabelasGravadas: ['pedido_compra', 'saldo_estoque', 'SALDO_ESTOQUE'],
+        },
+        { nome: 'suprimentos.definirVencedorCotacao', tabelasGravadas: ['cotacao', 'sequencia_negocio'] },
+        { nome: 'faturamento.lancarItem', tabelasGravadas: ['consumo_centro_custo'] },
       ]),
-    ).toEqual([{ operacao: 'suprimentos.registrarSaida', tabela: 'GESALDOS' }]);
-    expect(TABELAS_EFEITO_ESTOQUE).toContain('GEARMLOC');
+    ).toEqual([{ operacao: 'suprimentos.criarPedido', tabela: 'saldo_estoque' }]);
+    expect(TABELAS_EFEITO_ESTOQUE).toContain('saldo_estoque');
+    expect(TABELAS_EFEITO_ESTOQUE).not.toContain('sequencia_negocio');
+    expect(TABELAS_EFEITO_ESTOQUE).not.toContain('lancamento_contabil');
   });
 });
 

@@ -1,4 +1,4 @@
-// Linha do tempo do cadastro (ficha do M11, seção 4; HTPACIENTE e HTPROFIS): cada versão do retrato do legado
+// Linha do tempo do cadastro (ficha do M11, seção 4; versão do paciente e versão do profissional): cada versão do retrato do legado
 // é comparada com a anterior e vira a lista de campos que mudaram (rótulo em português). As colunas sensíveis
 // e os documentos seguem as mesmas permissões da ficha (sem a permissão, "restrito").
 export interface CampoHistorico {

@@ -1,6 +1,6 @@
 // Entradas das gravações do pós-fechamento (M31; ficha, seção 5): o que as telas mandam e o executor valida (o mesmo
 // Zod). A tela nunca manda número de lote, sequencial, data do lote nem situação da conta: o contador do outro sistema
-// (TBSEGUIA, sob trava) e o banco fazem. A versão de cada item é o carimbo DATA_HORA_ULTIMA_ATUALIZACAO como a tela leu
+// (sob trava) e o banco fazem. A versão de cada item é o carimbo da última atualização como a tela leu
 // (controle otimista por item; cap-10 §10.5).
 import { z } from 'zod';
 
@@ -28,7 +28,7 @@ export const esquemaRegistrarProtocolo = z
     lote: id,
     acao: z.enum(['registrar', 'limpar']),
     protocolo: z.string().max(64),
-    /** Data do protocolo informada (a do comprovante), a recibo e a situação TISS (TBTISSSITPROT, 1..10). */
+    /** Data do protocolo informada (a do comprovante), a recibo e a situação TISS (1..10). */
     data: data.nullable().default(null),
     recibo: texto(60).default(''),
     situacao: z.number().int().min(1).max(10).nullable().default(null),
@@ -47,7 +47,7 @@ export const esquemaRegistrarGlosa = z
             versao,
             valorPago: dinheiro,
             quantidadePaga: quantidade,
-            /** TBMOTGLO.CODIGO (tabela 38 da TISS); 0 = não informado (só sem glosa). */
+            /** Código do motivo de glosa (tabela 38 da TISS); 0 = não informado (só sem glosa). */
             motivo: z.number().int().min(0).max(99_999_999),
           })
           .strict(),
@@ -106,7 +106,7 @@ export const esquemaRegistrarRetornoRecurso = z
   .strict();
 export type RegistrarRetornoRecursoEntrada = z.infer<typeof esquemaRegistrarRetornoRecurso>;
 
-/** faturamento.fecharCompetencia: CONVENIO + ANO + MES em FCFECMES. */
+/** faturamento.fecharCompetencia: convênio + ano + mês da competência fechada. */
 export const esquemaFecharCompetencia = z
   .object({
     convenio: z.number().int().min(0).max(32_767),

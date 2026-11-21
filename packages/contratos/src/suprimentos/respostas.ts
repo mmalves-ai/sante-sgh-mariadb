@@ -48,7 +48,7 @@ export const esquemaListaSaldos = z.object({
 });
 export type ListaSaldos = z.infer<typeof esquemaListaSaldos>;
 
-/** A ficha do item (GEITENS com a classe e o grupo): as unidades por uso e os fatores de conversão. */
+/** A ficha do item (o insumo com a classe e o grupo): as unidades por uso e os fatores de conversão. */
 export const esquemaFichaItem = z.object({
   item: n,
   classe: z.object({ codigo: n, nome: texto }).nullable(),
@@ -481,11 +481,11 @@ export const esquemaFornecedorLido = z.object({
 });
 export type FornecedorLido = z.infer<typeof esquemaFornecedorLido>;
 
-/** Terceiro destinatário de saída (GECADTER): só o código e o nome (a data de nascimento não sai). */
+/** Terceiro destinatário de saída (terceiro): só o código e o nome (a data de nascimento não sai). */
 export const esquemaTerceiroLido = z.object({ codigo: n, nome: texto });
 export type TerceiroLido = z.infer<typeof esquemaTerceiroLido>;
 
-/** Colaborador ou prestador (GETABFUN): o CPF e a conta mascarados; retenções só como marca. */
+/** Colaborador ou prestador (cadastro de colaboradores e prestadores): o CPF e a conta mascarados; retenções só como marca. */
 export const esquemaPrestadorLido = z.object({
   codigo: n,
   empresa: n,

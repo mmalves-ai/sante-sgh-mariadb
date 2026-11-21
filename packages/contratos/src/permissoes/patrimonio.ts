@@ -1,6 +1,6 @@
 // Permissões do patrimônio, etapa 6 (M54-F6; ficha, seção 7: "Bens patrimoniais", "Depreciação" e "Transferência,
 // baixa e inventário"; convencoes.md §12). Quem tem a opção no outro sistema tem a permissão no novo (regra 1 do M06).
-// Opções da árvore TBOPCOES "Gestão patrimonial" (4266; catalogo-legado.json, pc): Tabelas › Bens 266; Movimentação 268
+// Opções da árvore do menu de origem "Gestão patrimonial" (4266; catalogo-legado.json, pc): Tabelas › Bens 266; Movimentação 268
 // (Cálculo de Depreciação 269, Transferência 270, Baixa 271, Manutenção de Bens 272 com Saída 273 e Retorno 274);
 // Relatórios 276 (Razão Analítico dos Bens 277, Mapa de depreciações 278, Demonstrativo de Saldos 279, Demonstrativo de
 // Depreciação Acumulada 280, Inventário de Bens 281 a 284, Ficha de Bens 287, Listagem de Locais 288, Termo de

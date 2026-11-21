@@ -18,8 +18,8 @@
 // Melhoria: os estabelecimentos vêm do banco do cliente (estabelecimento ativo), não de uma lista no arquivo de ambiente.
 // Melhoria: o catálogo das operações é o do produto (o mesmo da tela de liberação), não um diretório de arquivos.
 import { resolve } from 'node:path';
+import { catalogoOperacoesProprio } from '@sgh/dominio-config';
 import { ambienteEfetivo, caminhoArquivoAmbiente, ehLoopback, NucleoProprio } from '@sgh/nucleo';
-import { catalogoOperacoesProprio } from '../../../apps/api/src/modulos/config/catalogo-operacoes.ts';
 import { codigoDeSaida, executarLiberacaoFull, relatorioEmTexto } from './liberacao-full.ts';
 import { PortaLiberacaoPropria } from './liberacao-propria.ts';
 
@@ -44,7 +44,8 @@ export function argumentosLiberacao(argv: readonly string[]): {
   for (const b of bandeiras)
     if (!['so-listar', 'reverter'].includes(b)) throw new Error(`Opção desconhecida: --${b}`);
   for (const k of Object.keys(opcoes))
-    if (!['cliente', 'hospital', 'referencia', 'incluir'].includes(k)) throw new Error(`Opção desconhecida: --${k}`);
+    if (!['cliente', 'hospital', 'referencia', 'incluir'].includes(k))
+      throw new Error(`Opção desconhecida: --${k}`);
   const cliente = opcoes['cliente']?.trim();
   return {
     ...(cliente ? { cliente } : {}),

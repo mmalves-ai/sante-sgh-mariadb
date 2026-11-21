@@ -1,9 +1,9 @@
 // Permissões do M27 (ficha, seção 7): as filas de trabalho da página inicial, a central de avisos, as mensagens
 // internas e comunicados, as mensagens do sistema anterior (consulta) e o dicionário ortográfico pessoal. Quem tem a
 // opção no legado tem a permissão no novo (regra 1 do M06); os recursos só do novo vão por perfil
-// (SGH_ACESSO_MAPA_OPCAO). Opções da árvore TBOPCOES (retrato tools/verificadores/dados/acesso-legado.pc.json):
+// (mapa de opções do acesso). Opções da árvore do menu de origem (retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - "Mensagem a usuários" do módulo de abertura (2 no sghspd, 6932 no sgospd; ativas, 6 de 39 grupos com a 2): a
-//     publicação de comunicado e a consulta das mensagens do sistema anterior (TBMENSAG) seguem quem as tinha;
+//     publicação de comunicado e a consulta das mensagens do sistema anterior seguem quem as tinha;
 //   - a fila do médico segue quem prescreve no prontuário (Prescrição geral 2601 e Prescrever 5223 do módulo do PEP,
 //     as opções que no outro sistema só o médico tem; a localização de paciente, 3900, a recepção também tem): a fila
 //     é dos pacientes com vínculo assistencial pelo CBO do profissional (regra 2);

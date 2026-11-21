@@ -384,37 +384,6 @@ export interface CodigoBaixaConfianca {
   readonly confirma: string;
 }
 
-export const CODIGOS_BAIXA_CONFIANCA_ONDA_2: readonly CodigoBaixaConfianca[] = [
-  {
-    tabela: 'RECADATE',
-    coluna: 'TIPO_SADT',
-    vistos: ['H', 'E', 'S'],
-    decisao: 'DP-46.6',
-    confirma: 'recepção',
-  },
-  {
-    tabela: 'SILANEXA',
-    coluna: 'TIPO_RESULTADO',
-    vistos: ['P', 'V', 'T'],
-    decisao: 'DP-46.7',
-    confirma: 'laboratório',
-  },
-  {
-    tabela: 'SILIBERACAOEXAME',
-    coluna: 'SITUACAO',
-    vistos: ['2'],
-    decisao: 'DP-46.7',
-    confirma: 'laboratório',
-  },
-  {
-    tabela: 'ATCABECATEND',
-    coluna: 'TCLE',
-    vistos: ['1'],
-    decisao: 'DP-46.6',
-    confirma: 'diretoria clínica',
-  },
-];
-
 /** Legenda dos códigos de baixa confiança até a confirmação (regra 14). */
 export const LEGENDA_A_CONFIRMAR = 'a confirmar';
 

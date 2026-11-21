@@ -1,6 +1,6 @@
 // Entradas das operações do SADT (M26; ficha, seções 5 e 7), validadas na tela, na API e no executor (o mesmo Zod).
-// Vocabulário do novo: o exame é o ID do exame lançado (SILANEXA.ID) com a chave natural de 7 colunas lida pela tela
-// (data, registro, conta, atendimento, ato, exame e sequência; o índice único do legado) e o carimbo da última
+// Vocabulário: o exame é o id do exame lançado, com a chave natural de 7 campos lida pela tela
+// (data, registro, conta, atendimento, ato, exame e sequência) e o carimbo da última
 // alteração (controle otimista); o atendimento é o ID do cabeçalho; o profissional é o vínculo × CBO (o conselho vem
 // dele); o exame do catálogo é o ID do cadastro de exames. Data e hora gravadas vêm do relógio do banco.
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { textoCp1252 } from '../texto-cp1252.js';
 import { CODIGOS_ESTADO_AMOSTRA, CODIGOS_MOTIVO_REJEICAO, CODIGOS_SETOR_SADT } from './vocabulario.js';
 
 const id = z.number().int().positive().max(2_147_483_647);
-/** ID do legado em DOUBLE PRECISION (SILANEXA.ID, SIRES01.ID): inteiro seguro. */
+/** Id longo (exame lançado, resultado): inteiro seguro. */
 const idDouble = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const smallint = z.number().int().min(0).max(32_767);
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());

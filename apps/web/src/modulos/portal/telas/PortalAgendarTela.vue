@@ -109,7 +109,7 @@ const opcoesMotivo = computed(() =>
 );
 
 const dia = (d: string) => d.split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+const hora = (h: string) => h.slice(0, 5);
 const quando = (x: { data: string; hora: string }) => `${dia(x.data)} ${hora(x.hora)}`;
 const porDia = computed(() => {
   const m = new Map<string, HorarioPortal[]>();

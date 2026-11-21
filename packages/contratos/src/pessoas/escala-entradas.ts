@@ -46,11 +46,11 @@ const camposRegime = {
       .regex(/^[A-Za-z0-9][A-Za-z0-9 x/.-]*$/, 'Use letras, números, espaço, x, barra, ponto ou hífen.'),
   ),
   nome: textoCp1252(60).pipe(z.string().min(3, 'Informe o nome do regime.')),
-  /** Tipo de jornada do domínio do ramo (POTPJORNADA.ID: 1 normal, 2 escalonada, 3 a 6 horista). */
+  /** Tipo de jornada do domínio do ramo (id: 1 normal, 2 escalonada, 3 a 6 horista). */
   jornada: z.number().int().min(1).max(9),
-  /** Contrato em tempo parcial (POTPCONTTEMP.ID: 0 não é; 1 a 3 com o limite semanal; regra 6). */
+  /** Contrato em tempo parcial (0 não é; 1 a 3 com o limite semanal; regra 6). */
   contratoParcial: z.number().int().min(0).max(9).default(0),
-  /** Folga padrão do domínio de trabalho/folga do ramo (POTPTRABFOLGA.ID), se houver. */
+  /** Folga padrão do domínio de trabalho/folga do ramo (id), se houver. */
   folgaPadrao: z.number().int().min(1).max(99).nullable().default(null),
   /** Duração padrão do plantão no regime (a grade sugere o fim), em minutos. */
   minutosPlantao: z.number().int().min(DURACAO_MINIMA_PLANTAO_MIN).max(DURACAO_MAXIMA_PLANTAO_MIN),
@@ -110,7 +110,7 @@ export type CoberturaEntrada = z.infer<typeof esquemaCobertura>;
 /** Nova escala do setor e da competência (uma por unidade, setor, competência e tipo). */
 export const esquemaCriarEscala = z
   .object({
-    /** Unidade do estabelecimento (TBUNIDAD.COD). */
+    /** Unidade do estabelecimento (código da unidade assistencial). */
     unidade: z.number().int().positive().max(32_767),
     setor: textoCp1252(60).default(''),
     competencia: esquemaCompetenciaEscala,

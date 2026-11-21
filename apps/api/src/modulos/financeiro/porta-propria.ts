@@ -137,6 +137,8 @@ const TABELAS_GRAVACAO_DIRETA = [
   'conta_bancaria',
   'remessa_bancaria',
   'lote_exportacao_contabil',
+  'arquivo_fiscal_gerado',
+  'glosa_titulo_receber',
   'sequencia_negocio',
 ];
 
@@ -1280,7 +1282,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
             };
           });
         case 'nfse':
-          return (
+          return juntarPorData('EMITIDO_EM', await nfseGeradas(l, est), (
             await l.consultar(
               `SELECT id, numero_nota, titulo_receber_id, valor_servicos, valor_iss, valor_liquido, ambiente, situacao,
                       data_emissao
@@ -1300,9 +1302,9 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
             DESTINO: texto(r['ambiente']) === 'producao' ? 'prefeitura' : 'simulador',
             SITUACAO: texto(r['situacao']),
             EMITIDO_EM: instanteIso(r['data_emissao']),
-          }));
+          })));
         case 'declaracao':
-          return (
+          return juntarPorData('GERADO_EM', await declaracoesGeradas(l, est), (
             await l.consultar(
               `SELECT id, ano_calendario, codigo_leiaute, situacao, gerada_em FROM declaracao_dmed
                 WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY ano_calendario DESC LIMIT 500`,
@@ -1317,21 +1319,72 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
             VALOR_TOTAL: null,
             SITUACAO: texto(r['situacao']),
             GERADO_EM: instanteIso(r['gerada_em']),
-          }));
+          })));
       }
     });
   }
 }
 
-// ── Gravações diretas (dentro da operação do executor) ──────────────────────────────────────────────────────────
+// ── Arquivos fiscais gerados (NFS-e simulada, DMED, EFD-REINF): o registro com o hash, ao lado das notas e declarações ──
 
-const modeloPendente = (oQue: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Registro indisponível',
-    `${oQue} aguarda a tabela no modelo do banco: o arquivo foi gerado e guardado, mas o registro não é gravado.`,
-  );
+const SITUACAO_NFSE_GERADA: Readonly<Record<string, string>> = { simulado: 'simulada', autorizado: 'autorizada', rejeitado: 'rejeitada' };
+const SITUACAO_ARQUIVO_DA_NFSE: Readonly<Record<string, string>> = { simulada: 'simulado', autorizada: 'autorizado', rejeitada: 'rejeitado' };
+const TIPO_DECLARACAO_GERADA: Readonly<Record<string, string>> = { dmed: 'dmed', reinf_r2000: 'reinf-r2000', reinf_r4000: 'reinf-r4000' };
+const TIPO_ARQUIVO_DA_DECLARACAO: Readonly<Record<string, string>> = { dmed: 'dmed', 'reinf-r2000': 'reinf_r2000', 'reinf-r4000': 'reinf_r4000' };
+
+/** As duas origens na mesma lista, da mais recente para a mais antiga (o teto da tela continua 500). */
+function juntarPorData(campo: string, a: readonly RegistroFiscalResposta[], b: readonly RegistroFiscalResposta[]): RegistroFiscalResposta[] {
+  const chave = (x: RegistroFiscalResposta) => String((x as Record<string, unknown>)[campo] ?? '');
+  return [...a, ...b].sort((x, y) => chave(y).localeCompare(chave(x))).slice(0, 500);
+}
+
+async function nfseGeradas(l: Leitor, est: number): Promise<RegistroFiscalResposta[]> {
+  return (
+    await l.consultar(
+      `SELECT id, numero, titulo_receber_id, momento, valor_total, valor_iss, valor_ibs, valor_cbs, valor_liquido, destino,
+              situacao, gerado_em
+         FROM arquivo_fiscal_gerado WHERE estabelecimento_id = ? AND tipo = 'nfse' AND excluido_em IS NULL
+        ORDER BY gerado_em DESC LIMIT 500`,
+      [est],
+    )
+  ).map((r) => ({
+    ID: numero(r['id']),
+    NUMERO: r['numero'] === null ? '' : texto(r['numero']),
+    TITULO_RECEBER: numeroOuNulo(r['titulo_receber_id']),
+    MOMENTO: r['momento'] === null ? '' : texto(r['momento']),
+    VALOR_SERVICOS: numero(r['valor_total']),
+    VALOR_ISS: numero(r['valor_iss']),
+    VALOR_IBS: numero(r['valor_ibs']),
+    VALOR_CBS: numero(r['valor_cbs']),
+    VALOR_LIQUIDO: numero(r['valor_liquido']),
+    DESTINO: texto(r['destino']),
+    SITUACAO: SITUACAO_NFSE_GERADA[texto(r['situacao'])] ?? texto(r['situacao']),
+    EMITIDO_EM: instanteIso(r['gerado_em']),
+  }));
+}
+
+async function declaracoesGeradas(l: Leitor, est: number): Promise<RegistroFiscalResposta[]> {
+  return (
+    await l.consultar(
+      `SELECT id, tipo, periodo, leiaute, quantidade_registros, valor_total, situacao, gerado_em
+         FROM arquivo_fiscal_gerado
+        WHERE estabelecimento_id = ? AND tipo IN ('dmed','reinf_r2000','reinf_r4000') AND excluido_em IS NULL
+        ORDER BY gerado_em DESC LIMIT 500`,
+      [est],
+    )
+  ).map((r) => ({
+    ID: numero(r['id']),
+    TIPO: TIPO_DECLARACAO_GERADA[texto(r['tipo'])] ?? texto(r['tipo']),
+    PERIODO: texto(r['periodo']),
+    LEIAUTE: texto(r['leiaute']),
+    REGISTROS: numero(r['quantidade_registros']),
+    VALOR_TOTAL: numero(r['valor_total']),
+    SITUACAO: texto(r['situacao']),
+    GERADO_EM: instanteIso(r['gerado_em']),
+  }));
+}
+
+// ── Gravações diretas (dentro da operação do executor) ──────────────────────────────────────────────────────────
 
 function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
   const usuario = tx.contexto.usuario;
@@ -1501,9 +1554,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     },
 
     async registrarGlosaTitulo(d) {
-      // Sem a glosa por evento no modelo (pedido glosa_titulo_receber), a chave do evento não tem onde ser guardada:
-      // recusar em vez de somar o mesmo evento duas vezes.
-      if (d.chaveEvento) throw modeloPendente('O registro da glosa por evento (com a chave do evento)');
+      // Cada glosa fica registrada (glosa_titulo_receber). A que chega por evento leva a chave do evento: o mesmo
+      // evento entregue de novo devolve a glosa já gravada, sem somar o valor duas vezes.
+      if (d.chaveEvento) {
+        const ja = await tx.uma(
+          `SELECT g.id FROM glosa_titulo_receber g JOIN titulo_receber t ON t.id = g.titulo_receber_id
+            WHERE g.chave_evento = ? AND t.estabelecimento_id = ? AND g.excluido_em IS NULL LIMIT 1`,
+          [d.chaveEvento, est],
+        );
+        if (ja) return { id: numero(ja['id']), repetida: true };
+      }
       const [t] = await tx.consultarParaAtualizar(
         `SELECT id, versao, valor_liquido, valor_recebido, valor_glosa, valor_glosa_aceita, situacao FROM titulo_receber
           WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
@@ -1542,7 +1602,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         valor_glosa: soma(t['valor_glosa']),
         ...(regra.aceita ? { valor_glosa_aceita: soma(t['valor_glosa_aceita']) } : {}),
       });
-      return { id: d.tituloReceber, repetida: false };
+      const glosa = await tx.incluir('glosa_titulo_receber', {
+        titulo_receber_id: d.tituloReceber,
+        conta_hospitalar_item_id: d.item,
+        situacao: d.situacao.replace(/-/g, '_'),
+        valor: centavos(d.valor),
+        motivo: d.motivo,
+        meio: d.origem,
+        chave_evento: d.chaveEvento ?? null,
+      });
+      return { id: glosa, repetida: false };
     },
 
     async importarExtrato(d) {
@@ -1768,12 +1837,60 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       return { id, sequencial };
     },
 
-    async registrarNfse() {
-      throw modeloPendente('O registro da NFS-e simulada');
+    async registrarNfse(d) {
+      // O registro da NFS-e gerada (simulada fora de produção): o mesmo arquivo (hash) não gera outro registro.
+      const ja = await tx.uma(
+        "SELECT id FROM arquivo_fiscal_gerado WHERE estabelecimento_id = ? AND tipo = 'nfse' AND hash_arquivo = ? AND excluido_em IS NULL",
+        [est, d.hashXml],
+      );
+      if (ja) return { id: numero(ja['id']) };
+      const momento = agora();
+      const id = await tx.incluir('arquivo_fiscal_gerado', {
+        estabelecimento_id: est,
+        tipo: 'nfse',
+        periodo: momento.toISOString().slice(0, 7),
+        leiaute: `${d.classificacao} · item ${d.itemServico}`.slice(0, 60),
+        titulo_receber_id: d.tituloReceber,
+        conta_hospitalar_id: d.conta,
+        momento: d.momento,
+        numero: d.numero,
+        quantidade_registros: 1,
+        valor_total: centavos(d.valorServicos),
+        valor_iss: centavos(d.valorIss),
+        valor_ibs: centavos(d.valorIbs),
+        valor_cbs: centavos(d.valorCbs),
+        valor_liquido: centavos(d.valorLiquido),
+        hash_arquivo: d.hashXml,
+        chave_objeto: d.chaveObjeto,
+        destino: d.destino,
+        situacao: SITUACAO_ARQUIVO_DA_NFSE[d.situacao] ?? 'gerado',
+        gerado_em: momento,
+      });
+      return { id };
     },
 
-    async registrarDeclaracao() {
-      throw modeloPendente('O registro da declaração (DMED ou EFD-REINF) gerada');
+    async registrarDeclaracao(d) {
+      // O registro da DMED ou da EFD-REINF gerada: o mesmo arquivo (hash) não gera outro registro.
+      const tipo = TIPO_ARQUIVO_DA_DECLARACAO[d.tipo] ?? d.tipo;
+      const ja = await tx.uma(
+        'SELECT id FROM arquivo_fiscal_gerado WHERE estabelecimento_id = ? AND tipo = ? AND hash_arquivo = ? AND excluido_em IS NULL',
+        [est, tipo, d.hashArquivo],
+      );
+      if (ja) return { id: numero(ja['id']) };
+      const id = await tx.incluir('arquivo_fiscal_gerado', {
+        estabelecimento_id: est,
+        tipo,
+        periodo: d.periodo,
+        leiaute: d.leiaute.slice(0, 60),
+        quantidade_registros: d.registros,
+        valor_total: centavos(d.valorTotal),
+        hash_arquivo: d.hashArquivo,
+        chave_objeto: d.chaveObjeto,
+        destino: 'receita',
+        situacao: 'gerado',
+        gerado_em: agora(),
+      });
+      return { id };
     },
 
     async registrarLoteContabil(d) {

@@ -10,8 +10,10 @@
 // Melhoria: a cobrança cancelada guarda quem e quando (cancelada_em, cancelada_por_usuario_id; CHECK no banco); a baixa
 // exige a data do pagamento junto do valor (CHECK no banco); o número da fatura é único no estabelecimento (UNIQUE).
 // Melhoria: o reajuste aplicado guarda quem aplicou e quando; um reajuste por contrato, data-base e tipo (UNIQUE).
-// Pendente (pedido ao orquestrador): base das mensalidades (tabela de preço por faixa), acordos e renegociação
-// (acordo_inadimplencia), notificação de inadimplência (ocorrencia_inadimplencia) respondem 501 `modelo-pendente`;
+// Base das mensalidades: contratos vigentes na competência, preço por faixa (tabela exclusiva do contrato, senão a do
+// produto), beneficiários ativos no mês, reajustes aplicados e a mensalidade já gerada.
+// Pendente (pedido ao orquestrador): acordos e renegociação (acordo_inadimplencia) e notificação de inadimplência
+// (ocorrencia_inadimplencia) respondem 501 `modelo-pendente`;
 // multa e juros da baixa ficam somados em valor_acrescimo até o modelo separar as duas colunas.
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
@@ -48,6 +50,7 @@ import {
   type FiltroCobrancasPorta,
   LIMITE_PAGINA_COBRANCA,
   type TotaisCobranca,
+  LIMITE_CONTRATOS_GERACAO,
 } from './dados-portas.js';
 
 export const TABELAS_COBRANCA = ['fatura_plano', 'fatura_plano_item', 'reajuste_contrato_plano'] as const;
@@ -186,6 +189,60 @@ const SELECT_REAJUSTE = `
     LEFT JOIN produto_plano p ON p.id = k.produto_plano_id
     LEFT JOIN usuario u ON u.id = COALESCE(r.aplicado_por_usuario_id, r.criado_por)`;
 
+const SELECT_CONTRATO = `
+  SELECT k.id, k.operadora_saude_id, k.numero, k.situacao, k.inicio_vigencia, k.fim_vigencia,
+         k.dia_vencimento, k.mes_reajuste, p.id AS produto_id, p.nome AS produto_nome, p.tipo_contratacao,
+         COALESCE(pfc.nome, pjc.razao_social) AS contratante_nome,
+         COALESCE(pfc.cpf, pjc.cnpj) AS contratante_documento, ct.natureza
+    FROM contrato_plano k
+    JOIN contratante_plano ct ON ct.id = k.contratante_plano_id
+    LEFT JOIN pessoa_fisica pfc ON pfc.id = ct.pessoa_fisica_id
+    LEFT JOIN pessoa_juridica pjc ON pjc.id = ct.pessoa_juridica_id
+    LEFT JOIN produto_plano p ON p.id = k.produto_plano_id`;
+
+function contratoDe(k: Linha): DadosContratoCobranca {
+  const contratacao = CONTRATACAO[txt(k['tipo_contratacao'])] ?? 1;
+  return {
+    id: num(k['id']),
+    operadora: num(k['operadora_saude_id']),
+    numero: txt(k['numero']),
+    tipo: contratacao === 1 ? 1 : 2,
+    tipoContratacao: contratacao,
+    situacao: txt(k['situacao']),
+    inicio: data(k['inicio_vigencia']) ?? '',
+    fim: data(k['fim_vigencia']),
+    diaVencimento: numOuNulo(k['dia_vencimento']),
+    mesReajuste: num(k['mes_reajuste']),
+    contratanteNome: txt(k['contratante_nome']),
+    contratanteDocumento: txt(k['contratante_documento']),
+    produto: num(k['produto_id']),
+    produtoNome: txt(k['produto_nome']),
+    natureza: 'plano',
+    coparticipacao: { tipo: 0, valor: null },
+    precos: null,
+  };
+}
+
+/**
+ * O preço por faixa etária do contrato (na ordem das faixas): a tabela exclusiva vigente do contrato, senão a tabela
+ * vigente do produto (a mesma que a porta do produto grava). Sem tabela: null (a geração recusa o contrato sem preço).
+ */
+async function precosDoContrato(l: Leitor, contrato: number, produto: number | null): Promise<number[] | null> {
+  if (produto === null) return null;
+  const linhas = await l.consultar(
+    `SELECT t.exclusiva_contrato_plano_id AS exclusiva, f.sequencia, f.valor_mensalidade
+       FROM tabela_preco_plano_faixa f
+       JOIN tabela_preco_plano t ON t.id = f.tabela_preco_plano_id
+      WHERE f.produto_plano_id = ? AND t.situacao = 'vigente' AND t.excluido_em IS NULL AND f.excluido_em IS NULL
+        AND (t.exclusiva_contrato_plano_id IS NULL OR t.exclusiva_contrato_plano_id = ?)
+      ORDER BY f.sequencia`,
+    [produto, contrato],
+  );
+  const exclusiva = linhas.filter((x) => numOuNulo(x['exclusiva']) === contrato);
+  const usadas = exclusiva.length > 0 ? exclusiva : linhas.filter((x) => numOuNulo(x['exclusiva']) === null);
+  return usadas.length > 0 ? usadas.map((x) => num(x['valor_mensalidade'])) : null;
+}
+
 export class PortaCobrancaOperadoraPropria
   extends BasePortaOperadoraPropria<GravadorCobranca>
   implements PortaCobrancaOperadora
@@ -196,47 +253,83 @@ export class PortaCobrancaOperadoraPropria
 
   // ---- leituras ----
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async baseMensalidades(_c: ContextoCobranca, _f: FiltroBaseMensalidades): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }> {
-    return pendente('Base de cálculo das mensalidades (tabela de preço por faixa etária)');
+  /**
+   * A base das mensalidades da competência: os contratos da operadora vigentes no mês (página por id), cada um com o
+   * preço por faixa (a tabela exclusiva do contrato, senão a vigente do produto), os beneficiários ativos no mês, os
+   * reajustes aplicados até a competência e se a mensalidade da competência já foi gerada.
+   */
+  baseMensalidades(c: ContextoCobranca, f: FiltroBaseMensalidades): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }> {
+    return this.ler(c, async (l) => {
+      const cond = [
+        'k.estabelecimento_id = ?',
+        'k.operadora_saude_id = ?',
+        'k.excluido_em IS NULL',
+        "k.situacao <> 'encerrado'",
+        'k.inicio_vigencia <= ?',
+        '(k.fim_vigencia IS NULL OR k.fim_vigencia >= ?)',
+        'k.id > ?',
+      ];
+      const p: unknown[] = [c.estabelecimento ?? 0, f.operadora, f.ultimoDia, f.primeiroDia, f.apos ?? 0];
+      if (f.contrato) {
+        cond.push('k.id = ?');
+        p.push(f.contrato);
+      }
+      const linhas = await l.consultar(
+        `${SELECT_CONTRATO} WHERE ${cond.join(' AND ')} ORDER BY k.id LIMIT ${LIMITE_CONTRATOS_GERACAO + 1}`,
+        p,
+      );
+      const pagina = linhas.slice(0, LIMITE_CONTRATOS_GERACAO);
+      const itens: DadosBaseMensalidade[] = [];
+      for (const k of pagina) {
+        const id = num(k['id']);
+        const bens = await l.consultar(
+          `SELECT b.id, b.titular_beneficiario_plano_id, b.data_adesao, b.situacao, b.data_exclusao,
+                  pf.nome, pf.data_nascimento
+             FROM beneficiario_plano b JOIN pessoa_fisica pf ON pf.id = b.pessoa_fisica_id
+            WHERE b.contrato_plano_id = ? AND b.excluido_em IS NULL
+              AND b.data_adesao <= ? AND (b.data_exclusao IS NULL OR b.data_exclusao > ?)
+            ORDER BY b.titular_beneficiario_plano_id IS NOT NULL, b.id`,
+          [id, f.ultimoDia, f.primeiroDia],
+        );
+        const reajustes = await l.consultar(
+          `SELECT data_base, percentual FROM reajuste_contrato_plano
+            WHERE contrato_plano_id = ? AND situacao = 'aplicado' AND excluido_em IS NULL AND data_base <= ?
+            ORDER BY data_base, id`,
+          [id, f.ultimoDia],
+        );
+        const gerada = await l.uma(
+          `SELECT 1 AS ok FROM fatura_plano
+            WHERE contrato_plano_id = ? AND tipo_fatura = 'mensalidade' AND competencia = ?
+              AND situacao <> 'cancelada' AND excluido_em IS NULL LIMIT 1`,
+          [id, primeiroDia(f.competencia)],
+        );
+        itens.push({
+          ...contratoDe(k),
+          precos: await precosDoContrato(l, id, numOuNulo(k['produto_id'])),
+          beneficiarios: bens.map((b) => ({
+            id: num(b['id']),
+            titular: numOuNulo(b['titular_beneficiario_plano_id']),
+            nome: txt(b['nome']),
+            nascimento: data(b['data_nascimento']) ?? '',
+            inclusao: data(b['data_adesao']) ?? '',
+            situacao: txt(b['situacao']),
+            exclusao: data(b['data_exclusao']),
+          })),
+          reajustes: reajustes.map((r) => ({ competencia: competenciaDe(r['data_base']), percentual: num(r['percentual']) })),
+          jaGerada: Boolean(gerada),
+        });
+      }
+      return { itens, proxima: linhas.length > LIMITE_CONTRATOS_GERACAO ? num(pagina[pagina.length - 1]?.['id']) : null };
+    });
   }
 
   contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null> {
     return this.ler(c, async (l) => {
-      const k = await l.uma(
-        `SELECT k.id, k.operadora_saude_id, k.numero, k.situacao, k.inicio_vigencia, k.fim_vigencia,
-                k.dia_vencimento, k.mes_reajuste, p.id AS produto_id, p.nome AS produto_nome, p.tipo_contratacao,
-                COALESCE(pfc.nome, pjc.razao_social) AS contratante_nome,
-                COALESCE(pfc.cpf, pjc.cnpj) AS contratante_documento, ct.natureza
-           FROM contrato_plano k
-           JOIN contratante_plano ct ON ct.id = k.contratante_plano_id
-           LEFT JOIN pessoa_fisica pfc ON pfc.id = ct.pessoa_fisica_id
-           LEFT JOIN pessoa_juridica pjc ON pjc.id = ct.pessoa_juridica_id
-           LEFT JOIN produto_plano p ON p.id = k.produto_plano_id
-          WHERE k.id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL`,
-        [id, c.estabelecimento ?? 0],
-      );
-      if (!k) return null;
-      const contratacao = CONTRATACAO[txt(k['tipo_contratacao'])] ?? 1;
-      return {
-        id: num(k['id']),
-        operadora: num(k['operadora_saude_id']),
-        numero: txt(k['numero']),
-        tipo: contratacao === 1 ? 1 : 2,
-        tipoContratacao: contratacao,
-        situacao: txt(k['situacao']),
-        inicio: data(k['inicio_vigencia']) ?? '',
-        fim: data(k['fim_vigencia']),
-        diaVencimento: numOuNulo(k['dia_vencimento']),
-        mesReajuste: num(k['mes_reajuste']),
-        contratanteNome: txt(k['contratante_nome']),
-        contratanteDocumento: txt(k['contratante_documento']),
-        produto: num(k['produto_id']),
-        produtoNome: txt(k['produto_nome']),
-        natureza: 'plano',
-        coparticipacao: { tipo: 0, valor: null },
-        precos: null,
-      };
+      const k = await l.uma(`${SELECT_CONTRATO} WHERE k.id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL`, [
+        id,
+        c.estabelecimento ?? 0,
+      ]);
+      return k ? { ...contratoDe(k), precos: await precosDoContrato(l, num(k['id']), numOuNulo(k['produto_id'])) } : null;
     });
   }
 

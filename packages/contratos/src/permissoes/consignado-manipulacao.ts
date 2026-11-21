@@ -1,5 +1,5 @@
 // Permissões do M46, etapa 4 (ficha, seção 7; convencoes.md §12): consignados e manipulação. Quem tem a opção no
-// sistema anterior tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// sistema anterior tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json), do módulo Gestão de estoque:
 //   - Consignados 4467 (cadastro) e 1946 (relatório), "para Fornecedor consignado" 4482 (a devolução ao fornecedor) e a
 //     Entrada de nota fiscal 5722 (o faturamento liga a nota da entrada ao consumo);

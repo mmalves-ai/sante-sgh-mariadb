@@ -10,6 +10,7 @@
 //     confirma pela agenda do M18 (cirurgia.agendarCirurgia, sem mudança), localizando o cadastro do paciente.
 // Toda leitura e gravação vai à trilha de auditoria sem dado pessoal. O lado interno lista as contas e liga ou desliga o
 // profissional (portal.medicoExterno.vincular).
+import { Logger } from '@nestjs/common';
 import {
   type AtoContaMedicoExternoEntrada,
   type AtoContaMedicoExternoItem,
@@ -66,7 +67,7 @@ import {
   reservarPedido,
   ROTULOS_ESTADO,
 } from '@sgh/dominio-cirurgia';
-import type { ContextoNucleo } from '@sgh/nucleo';
+import { type ContextoNucleo, ErroOperacao } from '@sgh/nucleo';
 import { createHash, randomBytes } from 'node:crypto';
 import { ErroProblema } from '../../../problema.filter.js';
 import { problemaDoCadastro } from '../../cadastro/comum.js';
@@ -104,12 +105,6 @@ const E = EVENTOS_AUDITAVEIS;
 /** W0-10: validade do link de confirmação do e-mail novo. */
 export const TROCA_EMAIL_MEDICO_HORAS = 24;
 const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
-
-/** A recusa 409 da porta própria para o recurso que o modelo ainda não tem (pedido de DDL registrado). */
-const modeloPendente = (x: unknown): boolean =>
-  typeof x === 'object' &&
-  x !== null &&
-  (x as { problema?: { codigo?: unknown } }).problema?.codigo === 'modelo-pendente';
 
 export type SessaoPortalM26 = ReturnType<ServicoPortal['sessao']>;
 
@@ -196,6 +191,13 @@ const somarDias = (dia: string, k: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** O resultado de um ciclo da notificação de críticos (as recusas levam só ids e o código, nada do paciente). */
+export interface ResultadoCicloCritico {
+  contas: number;
+  notificados: number;
+  recusas: { aviso: number; acesso: number; codigo: string }[];
+}
+
 export class ServicoPortalMedico {
   private readonly pedidosPorConta = new Map<string, number[]>();
   /** W0-10: o canal do link da confirmação do e-mail novo (simulador no dev/ci; fora, desligado até o dono). */
@@ -209,6 +211,7 @@ export class ServicoPortalMedico {
   /** W0-10 (M5): os estabelecimentos da vigia que notifica o médico do crítico (vazio: a vigia não roda). */
   hospitaisAvisoCritico: readonly string[] = [];
   private vigiaCritico: ReturnType<typeof setInterval> | null = null;
+  private readonly logCritico = new Logger('PortalMedicoCriticos');
   private emCicloCritico = false;
 
   constructor(
@@ -460,7 +463,7 @@ export class ServicoPortalMedico {
         ? {
             sala: e.sala,
             data: e.inicio.slice(0, 10),
-            hora: e.inicio.slice(11, 16).replace(':', ''),
+            hora: e.inicio.slice(11, 16),
             duracaoMin: e.duracaoMin,
             procedimento: e.procedimento,
             convenio: e.convenio,
@@ -1487,21 +1490,13 @@ export class ServicoPortalMedico {
   async criticos(
     s: SessaoPortalM26,
     sessaoId: string | null,
-  ): Promise<CriticosPortalMedico & { readonly notificacaoIndisponivel?: string }> {
+  ): Promise<CriticosPortalMedico> {
     const p = await this.noPedido(s, sessaoId);
     const fila = await this.filaDaConta(p);
     if (!fila) return { vinculado: false, avisos: [], pendentes: 0 };
-    // A notificação é só um adorno de cada aviso: se o banco ainda não a tem (409 modelo-pendente), os avisos de crítico
-    // saem assim mesmo (segurança do paciente), com notificacao null e o motivo explícito na resposta.
-    const indisponivel: { motivo: string | null } = { motivo: null };
     const [avisos, notificacoes] = await Promise.all([
       this.avisosDaFila(p.c, fila),
-      this.porta.notificacoesCritico(p.c, s.acesso).catch((x: unknown) => {
-        if (!modeloPendente(x)) throw x;
-        indisponivel.motivo =
-          'A notificação dos avisos ao médico ainda não está disponível neste banco: os avisos aparecem sem ela.';
-        return [] as NotificacaoCriticoMedico[];
-      }),
+      this.porta.notificacoesCritico(p.c, s.acesso),
     ]);
     const porAviso = new Map(notificacoes.map((n) => [n.aviso, n]));
     const lista = avisos
@@ -1521,9 +1516,7 @@ export class ServicoPortalMedico {
         s.acesso,
       ),
     );
-    return indisponivel.motivo
-      ? { vinculado: true, avisos: lista, pendentes, notificacaoIndisponivel: indisponivel.motivo }
-      : { vinculado: true, avisos: lista, pendentes };
+    return { vinculado: true, avisos: lista, pendentes };
   }
 
   /**
@@ -1790,10 +1783,12 @@ export class ServicoPortalMedico {
    * Um ciclo da notificação no estabelecimento: para cada conta ativa ligada a um profissional, os avisos sem ciência
    * dos pacientes com vínculo assistencial dele ainda não notificados; cada um vira uma notificação registrada (uma por
    * aviso e conta) e, se o canal puder enviar, uma mensagem sem dado do paciente (o link do portal). Sem canal, a
-   * notificação fica 'desligado' com o motivo: nada sai.
+   * notificação fica 'desligado' com o motivo: nada sai. A recusa de um aviso (ex.: 'canal-inexistente' quando o
+   * cliente não tem o canal do portal cadastrado) não para o ciclo: vai em `recusas` (só ids e código), e a vigia a
+   * registra no log; o aviso segue sem tentativa gravada e volta no próximo ciclo.
    */
-  async notificarCriticos(hospital: string): Promise<{ contas: number; notificados: number }> {
-    const zero = { contas: 0, notificados: 0 };
+  async notificarCriticos(hospital: string): Promise<ResultadoCicloCritico> {
+    const zero: ResultadoCicloCritico = { contas: 0, notificados: 0, recusas: [] };
     const fonte = this.pacientes;
     if (!fonte) return zero;
     const [portal, medico] = await Promise.all([
@@ -1820,6 +1815,7 @@ export class ServicoPortalMedico {
     );
     let contas = 0;
     let notificados = 0;
+    const recusas: ResultadoCicloCritico['recusas'] = [];
     for (let k = 0; k < ativas.length; k += 400) {
       const vinculos = await this.porta.vinculos(
         c,
@@ -1841,26 +1837,33 @@ export class ServicoPortalMedico {
         const canal = await this.canal.disponivel(hospital);
         for (const a of novos) {
           const envio = canal.envio ?? 'desligado';
-          const gravou = await this.porta.gravar(
-            c,
-            (g) =>
-              g.notificarCritico({
-                aviso: a.id,
-                acesso,
-                envio,
-                motivo: canal.envio ? null : (canal.motivo ?? MOTIVO_HALAI_MEDICO_DESLIGADA),
-              }),
-            {
-              ...this.trilha(
-                hospital,
-                E.portalMedicoCriticoNotificado.codigo,
-                `notificação do crítico ao médico externo (${envio})`,
-                { tabela: 'aviso_valor_critico', id: String(a.id) },
-                acesso,
-              ),
-              idPaciente: a.paciente.id,
-            },
-          );
+          let gravou: boolean;
+          try {
+            gravou = await this.porta.gravar(
+              c,
+              (g) =>
+                g.notificarCritico({
+                  aviso: a.id,
+                  acesso,
+                  envio,
+                  motivo: canal.envio ? null : (canal.motivo ?? MOTIVO_HALAI_MEDICO_DESLIGADA),
+                }),
+              {
+                ...this.trilha(
+                  hospital,
+                  E.portalMedicoCriticoNotificado.codigo,
+                  `notificação do crítico ao médico externo (${envio})`,
+                  { tabela: 'aviso_valor_critico', id: String(a.id) },
+                  acesso,
+                ),
+                idPaciente: a.paciente.id,
+              },
+            );
+          } catch (e) {
+            if (!(e instanceof ErroOperacao)) throw e;
+            recusas.push({ aviso: a.id, acesso, codigo: String(e.problema['codigo'] ?? e.problema.status) });
+            continue;
+          }
           if (!gravou) continue;
           notificados++;
           if (canal.envio)
@@ -1875,7 +1878,7 @@ export class ServicoPortalMedico {
         }
       }
     }
-    return { contas, notificados };
+    return { contas, notificados, recusas };
   }
 
   /** Liga a vigia da notificação (um ciclo por estabelecimento a cada `intervaloMs`; um ciclo de cada vez). */
@@ -1885,7 +1888,18 @@ export class ServicoPortalMedico {
       if (this.emCicloCritico) return;
       this.emCicloCritico = true;
       void Promise.all(
-        this.hospitaisAvisoCritico.map((h) => this.notificarCriticos(h).catch(() => null)),
+        this.hospitaisAvisoCritico.map((h) =>
+          this.notificarCriticos(h)
+            .then((r) => {
+              // Só ids e códigos no log (nada do paciente): a recusa fica visível em vez de engolida.
+              for (const x of r.recusas)
+                this.logCritico.warn(`aviso ${x.aviso} conta M${x.acesso} em ${h}: notificação recusada (${x.codigo})`);
+            })
+            .catch((e: unknown) => {
+              const codigo = e instanceof ErroOperacao ? String(e.problema['codigo'] ?? e.problema.status) : 'erro';
+              this.logCritico.error(`ciclo da notificação de críticos em ${h} falhou (${codigo})`);
+            }),
+        ),
       ).finally(() => {
         this.emCicloCritico = false;
       });

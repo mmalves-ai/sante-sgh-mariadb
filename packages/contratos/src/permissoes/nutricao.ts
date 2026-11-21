@@ -1,7 +1,7 @@
 // Permissões do M45, etapa 5 (ficha, seção 7; convencoes.md §12): a nutrição clínica (fila de pacientes a triar e a
 // triagem NRS-2002 ou NUTRIC; a terapia nutricional da EMTN), o serviço de nutrição e dietética (mapa de dietas por
 // unidade e refeição, etiqueta de bandeja, refeição do acompanhante) e o serviço social. Quem tem a opção no sistema
-// anterior tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES (retrato
+// anterior tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - o grupo NUTRICÃO (5 usuários ativos) registra no prontuário pelas opções da evolução (3915 e o Salvar 4581) e lê
 //     os internados pelo relatório Recepção interna › Relatórios › Pacientes internados (2382), que a HOTELARIA (a copa)

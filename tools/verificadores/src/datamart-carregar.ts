@@ -36,7 +36,9 @@ const args = process.argv.slice(2);
 const hospital = args.find((a) => a.startsWith('--hospital='))?.slice(11);
 const cliente = clienteDaLeitura(args, { ...process.env, ...env });
 if (!hospital || !cliente) {
-  console.error('Uso: pnpm datamart:carregar -- --cliente=<código> --hospital=<estabelecimento>|todos [--sem-rede]');
+  console.error(
+    'Uso: pnpm datamart:carregar -- --cliente=<código> --hospital=<estabelecimento>|todos [--sem-rede]',
+  );
   process.exit(2);
 }
 const problemas = colunasIdentificadoras(ESQUEMA_DATAMART);
@@ -70,8 +72,7 @@ try {
   const nucleo = nucleoDaCarga(proprio, cliente);
   const alvo = hospital === 'todos' ? codigos : [hospital];
   for (const h of alvo)
-    if (!codigos.includes(h))
-      throw new Error(`${h}: não é um estabelecimento deste cliente.`);
+    if (!codigos.includes(h)) throw new Error(`${h}: não é um estabelecimento deste cliente.`);
   // O modo do pseudônimo vale para a rede inteira: comum só com a liberação em TODOS os estabelecimentos.
   const modo = modoDoPseudonimo(await pseudonimoComumLiberado(nucleo, codigos));
   for (const h of alvo) {

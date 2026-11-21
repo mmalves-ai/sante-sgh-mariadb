@@ -89,9 +89,9 @@ export const TIPOS_DOCUMENTO_POLITICA = [
 export type TipoDocumentoPolitica = (typeof TIPOS_DOCUMENTO_POLITICA)[number];
 
 /**
- * Ponte de cada tipo da política com o tipo de ato da trilha documental do legado (PRTPASSINATURA.ID, lido na cópia do
- * pc em 24/10/2026): é por ela que a etapa 2 resolve a exigência de um documento emitido (SGH_PEP_DOC →
- * PRASSINATURA_DOC → PRASSINATURA_CAB.ID_PRTPASSINATURA → tipo da política). O primeiro ID de cada lista é o que o
+ * Ponte de cada tipo da política com o tipo de ato da trilha documental do legado (id do tipo de ato, lido na cópia do
+ * pc em 24/10/2026): é por ela que a etapa 2 resolve a exigência de um documento emitido (documento →
+ * assinatura do documento → cabeçalho da assinatura → tipo do ato → tipo da política). O primeiro ID de cada lista é o que o
  * novo grava (M22 a M26: 36 registro clínico, 37 prescrição, 40 atestado, 41 receita, 54 resultado lançado, 79 pedido
  * de exame); os demais são os do mesmo tipo vindos de outra origem (Mevo, laudos por setor). Um ID pode servir a mais
  * de um tipo (41: receita comum, de controle especial e de antimicrobiano): a etapa 2 desempata pelo documento do

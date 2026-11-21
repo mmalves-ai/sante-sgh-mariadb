@@ -28,8 +28,9 @@ export function valoresDominio(classe: string): string[] {
   return arg.split('|').map((v) => (v === "''" ? '' : v));
 }
 
+/** Formato do valor capturado; `hora-4-digitos` é a hora do dia gravada sem separador na base de origem. */
 export const FORMATOS = [
-  'HHMM',
+  'hora-4-digitos',
   'HH:MM',
   'letra:T/F',
   'letra:S/N',

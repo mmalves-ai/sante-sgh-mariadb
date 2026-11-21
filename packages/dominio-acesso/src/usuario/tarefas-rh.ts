@@ -32,7 +32,7 @@ export interface VinculoRh {
   readonly setor: string | null;
   readonly admissao: string;
   readonly desligamento: string | null;
-  /** TBUSERS.ID_TBUSERS do vínculo (null: ainda sem usuário). */
+  /** Id do usuário do vínculo (null: ainda sem usuário). */
   readonly usuario: number | null;
 }
 
@@ -188,7 +188,7 @@ export interface ResolucaoRhPedida {
   readonly ref: string;
   readonly situacao: SituacaoResolucaoRh;
   readonly motivo: string;
-  /** criar-acesso feita: o login criado (TBUSERS.NOME). */
+  /** criar-acesso feita: o login criado. */
   readonly login: string | null;
 }
 

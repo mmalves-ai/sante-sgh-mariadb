@@ -18,7 +18,11 @@ describe('anexo das migrações', () => {
     const itens = listaDeMigracoes([...migracoes].reverse());
     expect(itens).toHaveLength(migracoes.length);
     expect(itens.length).toBeGreaterThan(10);
-    expect(itens[0]).toMatchObject({ ordem: 1, arquivo: '00_NUCLEO/00_nucleo_tabelas.sql', etapa: 'tabelas' });
+    expect(itens[0]).toMatchObject({
+      ordem: 1,
+      arquivo: '00_NUCLEO/00_nucleo_tabelas.sql',
+      etapa: 'tabelas',
+    });
     const primeiraChave = itens.findIndex((i) => i.etapa === 'chaves');
     expect(primeiraChave).toBeGreaterThan(0);
     expect(itens.slice(primeiraChave).every((i) => i.etapa === 'chaves')).toBe(true);
@@ -34,13 +38,29 @@ describe('anexo das migrações', () => {
   });
 
   it('conferência aponta migração faltando e hash velho', () => {
-    const m = (arquivo: string, hash: string): MigracaoBanco => ({ arquivo, etapa: 'tabelas', hash, comandos: 1 });
-    const itens = listaDeMigracoes([m('01_A/01_tabelas.sql', 'a'.repeat(64)), m('02_B/01_tabelas.sql', 'b'.repeat(64)), m('03_C/01_tabelas.sql', 'c'.repeat(64))]);
+    const m = (arquivo: string, hash: string): MigracaoBanco => ({
+      arquivo,
+      etapa: 'tabelas',
+      hash,
+      comandos: 1,
+    });
+    const itens = listaDeMigracoes([
+      m('01_A/01_tabelas.sql', 'a'.repeat(64)),
+      m('02_B/01_tabelas.sql', 'b'.repeat(64)),
+      m('03_C/01_tabelas.sql', 'c'.repeat(64)),
+    ]);
     const md = anexoDeMigracoes(itens.slice(0, 2)).replace('b'.repeat(64), 'velho');
-    expect(conferirAnexo(md, itens)).toEqual({ faltam: ['03_C/01_tabelas.sql'], hashDivergente: ['02_B/01_tabelas.sql'] });
+    expect(conferirAnexo(md, itens)).toEqual({
+      faltam: ['03_C/01_tabelas.sql'],
+      hashDivergente: ['02_B/01_tabelas.sql'],
+    });
   });
 
   it('conta os comandos sem os comentários', () => {
-    expect(contarComandos('-- cabeçalho; com ponto e vírgula\nCREATE TABLE a (x INT);\nALTER TABLE a\n  ADD y INT;\n')).toBe(2);
+    expect(
+      contarComandos(
+        '-- cabeçalho; com ponto e vírgula\nCREATE TABLE a (x INT);\nALTER TABLE a\n  ADD y INT;\n',
+      ),
+    ).toBe(2);
   });
 });

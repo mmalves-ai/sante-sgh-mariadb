@@ -150,4 +150,67 @@ describe.skipIf(SEM_BANCO)('porta própria das contas médicas recebidas (MariaD
     });
     expect(ficha).toMatchObject({ id: r.id });
   });
+
+  it('recurso de glosa pela guia e por item: registra, lê, recusa o próprio auditor e decide com outro usuário', async () => {
+    const outro = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't0209-u2' }, async (e) => {
+      await e.executar(
+        "INSERT IGNORE INTO usuario (login, nome, tipo_conta, criado_em) VALUES ('L0209AUD2', 'AUDITOR SINTETICO', 'servico', NOW(3))",
+      );
+      const [u] = await e.consultar("SELECT id FROM usuario WHERE login = 'L0209AUD2'");
+      return Number(u!['id']);
+    });
+    const c2 = () => ({ ...contexto(m), usuario: outro });
+    const analisada = async (lote: string) => {
+      const r = await receber(lote);
+      const [item] = await porta.itens(contexto(m), r.id);
+      await porta.gravar(contexto(m), T('x'), (g) =>
+        g.glosar({ id: r.id, versao: 1, usuario: 'x', itens: [{ item: item!.id, valorGlosado: 80, motivo: m.motivoGlosa, justificativa: 'x' }], texto: 'x', desfeita: false }),
+      );
+      await porta.gravar(contexto(m), T('x'), (g) => g.concluir({ id: r.id, versao: 2, usuario: 'x', auditor: 1, situacao: 'analisada', observacao: null, texto: 'x' }));
+      const [guia] = await porta.guias(contexto(m), r.id);
+      return { id: r.id, guia: guia!.id, item: item!.id };
+    };
+    // Pela guia.
+    const a = await analisada('900010');
+    const antes = await porta.gravar(contexto(m), T('x'), (g) => g.registrarRecurso({ id: a.id, versao: 3, usuario: 'x', guia: a.guia, valor: 999, justificativa: 'x', situacao: 'analisada' })).catch((e: unknown) => codigoDe(e));
+    expect(antes).toBe('recurso-incoerente');
+    const reg = await porta.gravar(contexto(m), T('operadora.contas.recurso'), (g) =>
+      g.registrarRecurso({ id: a.id, versao: 3, usuario: 'x', guia: a.guia, valor: 80, justificativa: 'Indicação anexada', situacao: 'analisada' }),
+    );
+    expect(reg.versao).toBe(4);
+    const [rec] = await ler("SELECT objeto, situacao, valor_recursado, numero_protocolo FROM recurso_glosa_recebido WHERE lote_conta_recebida_id = ?", [a.id]);
+    expect(rec).toMatchObject({ objeto: 'guia', situacao: 'recebido' });
+    expect(Number(rec!['valor_recursado'])).toBe(80);
+    expect((await porta.guias(contexto(m), a.id))[0]!.recurso).toMatchObject({ situacao: 'pendente', valor: 80, justificativa: 'Indicação anexada' });
+    expect((await porta.conta(contexto(m), a.id))?.recursosPendentes).toBe(1);
+    expect((await porta.contas(contexto(m), { recursos: true })).itens.map((x) => x.id)).toContain(a.id);
+    const dobro = await porta.gravar(contexto(m), T('x'), (g) => g.registrarRecurso({ id: a.id, versao: 4, usuario: 'x', guia: a.guia, valor: 10, justificativa: 'x', situacao: 'analisada' })).catch((e: unknown) => codigoDe(e));
+    expect(dobro).toBe('recurso-ja-registrado');
+    const proprio = await porta.gravar(contexto(m), T('x'), (g) => g.decidirRecurso({ id: a.id, versao: 4, usuario: 'x', guia: a.guia, valorAcatado: 80, situacaoRecurso: 'acatado', parecer: 'ok', situacao: 'analisada' })).catch((e: unknown) => codigoDe(e));
+    expect(proprio).toBe('recurso-do-proprio-auditor');
+    const semParecer = await porta.gravar(c2(), T('x'), (g) => g.decidirRecurso({ id: a.id, versao: 4, usuario: 'y', guia: a.guia, valorAcatado: 30, situacaoRecurso: 'parcial', parecer: ' ', situacao: 'analisada' })).catch((e: unknown) => codigoDe(e));
+    expect(semParecer).toBe('parecer-obrigatorio');
+    await porta.gravar(c2(), T('operadora.contas.recurso-decidido'), (g) =>
+      g.decidirRecurso({ id: a.id, versao: 4, usuario: 'y', guia: a.guia, valorAcatado: 30, situacaoRecurso: 'parcial', parecer: 'Acatado em parte', situacao: 'analisada' }),
+    );
+    expect((await porta.guias(contexto(m), a.id))[0]).toMatchObject({ acatado: 30, recurso: { situacao: 'parcial', parecer: 'Acatado em parte', decididoPor: 'L0209AUD2' } });
+    expect(await porta.conta(contexto(m), a.id)).toMatchObject({ acatado: 30, recursosPendentes: 0 });
+    const [it1] = await ler('SELECT i.decisao, i.valor_acatado FROM recurso_glosa_recebido_item i JOIN recurso_glosa_recebido r ON r.id = i.recurso_glosa_recebido_id WHERE r.lote_conta_recebida_id = ?', [a.id]);
+    expect(it1).toMatchObject({ decisao: 'acatado_parcial' });
+    expect(Number(it1!['valor_acatado'])).toBe(30);
+    // Por item.
+    const b = await analisada('900011');
+    const r2 = await porta.gravar(contexto(m), T('x'), (g) =>
+      g.registrarRecursoItens({ id: b.id, versao: 3, usuario: 'x', guia: b.guia, itens: [{ item: b.item, valor: 80, justificativa: 'Item indicado' }], justificativa: 'Recurso por item', situacao: 'analisada', acesso: 0 }),
+    );
+    expect(r2.recursos).toHaveLength(1);
+    expect(await porta.recursosItens(contexto(m), b.id)).toEqual([expect.objectContaining({ item: b.item, valor: 80, decisao: null })]);
+    const pelaGuia = await porta.gravar(c2(), T('x'), (g) => g.decidirRecursoItens({ id: b.id, versao: 4, usuario: 'y', guia: b.guia, decisoes: [], parecer: 'x', situacao: 'analisada' })).catch((e: unknown) => codigoDe(e));
+    expect(pelaGuia).toBe('recurso-item-incoerente');
+    const d = await porta.gravar(c2(), T('x'), (g) =>
+      g.decidirRecursoItens({ id: b.id, versao: 4, usuario: 'y', guia: b.guia, decisoes: [{ item: b.item, valorAcatado: 80, parecer: '' }], parecer: 'Acatado', situacao: 'analisada' }),
+    );
+    expect(d).toMatchObject({ decisao: 'acatado', valorAcatado: 80, versao: 5 });
+    expect((await porta.recursosItens(contexto(m), b.id))[0]!.decisao).toMatchObject({ decisao: 'acatado', valorAcatado: 80, por: 'L0209AUD2' });
+  });
 });

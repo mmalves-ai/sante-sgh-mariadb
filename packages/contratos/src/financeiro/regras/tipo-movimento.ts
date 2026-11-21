@@ -1,8 +1,8 @@
 // Regra 14 do M32 (cap-06b §6.8; Anexo A §A.6): o movimento bancário com domínio fechado e as mesmas letras.
-// MFLANCTO.TIPO_TRF: O 18.902 (outros: tarifas, aplicações) · I 9.753 (importado do extrato) · F 5.048 (fechamento de
+// Tipo do movimento: O 18.902 (outros: tarifas, aplicações) · I 9.753 (importado do extrato) · F 5.048 (fechamento de
 // caixa) · vazio 2.512 (crédito não identificado) · T 95 (transferência) · C 65 · D 9 (crédito e débito avulsos) · S 1.
-// I, T, C e D com a legenda "a confirmar" até a DP-46.4. O novo grava O, F, T, C e D; o crédito não identificado vai
-// para a fila SGH_FIN_CREDITO_PENDENTE até a atribuição.
+// I, T, C e D com a legenda "a confirmar" até a DP-46.4. O sistema grava O, F, T, C e D; o crédito não identificado vai
+// para a fila de créditos não identificados até a atribuição.
 import { recusaFin, type RecusaFinanceiro } from './recusa.js';
 
 export const TIPOS_MOVIMENTO_GRAVADOS = ['O', 'F', 'T', 'C', 'D'] as const;
@@ -32,9 +32,9 @@ export const ehTipoMovimento = (t: string): t is TipoMovimento =>
 
 export interface MovimentoInformado {
   readonly tipo: string;
-  /** Conta que recebe (crédito: o dinheiro entra), TBCTABAN.ID. */
+  /** Conta bancária que recebe (crédito: o dinheiro entra), pelo id. */
   readonly contaCredito: number | null;
-  /** Conta que paga (débito: o dinheiro sai), TBCTABAN.ID. */
+  /** Conta bancária que paga (débito: o dinheiro sai), pelo id. */
   readonly contaDebito: number | null;
   readonly valor: number;
   readonly historico: string;
@@ -72,7 +72,7 @@ export function conferirMovimento(m: MovimentoInformado): RecusaFinanceiro | nul
   return null;
 }
 
-/** As contas do movimento estão no escopo do usuário (MFCTAUSU; regra 15)? */
+/** As contas do movimento estão no escopo de contas do usuário (regra 15)? */
 export function contasNoEscopo(
   m: Pick<MovimentoInformado, 'contaCredito' | 'contaDebito'>,
   escopo: readonly number[] | null,

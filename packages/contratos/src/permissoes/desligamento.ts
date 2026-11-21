@@ -1,4 +1,4 @@
-// Permissões do M58 (ficha, seção 7): recursos novos, sem opção em TBOPCOES, concedidos por perfil ao Administrador do
+// Permissões do M58 (ficha, seção 7): recursos novos, sem opção no menu de origem, concedidos por perfil ao Administrador do
 // sistema (papel SBIS 1) pelo mapa SGH_ACESSO_MAPA_OPCAO. O painel "Prontidão do desligamento por hospital" é lido com
 // `config.coexistencia.ler` (M35/M37) e o cartão "Plataforma do banco" com `config.schema.ler` (M02), como a ficha
 // pede; o registro da checklist da M58-F1 é ação nova e crítica (reautenticação, SBIS-07), porque libera o passo de

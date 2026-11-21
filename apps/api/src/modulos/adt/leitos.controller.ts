@@ -453,7 +453,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       correlacao: correlacaoDaRequisicao(s.req, 'etiqueta-leito').slice(0, 64),
       recurso: 'leitos.etiqueta',
       resultado: 'sucesso',
-      tabelaAlvo: 'RILEITOS',
+      tabelaAlvo: 'leito_hospitalar',
       idAlvo: l.chave,
       chaveNaturalAlvo: `etiqueta-leito:${e.copias}:${createHash('sha256').update(conteudo).digest('hex').slice(0, 16)}`,
     });

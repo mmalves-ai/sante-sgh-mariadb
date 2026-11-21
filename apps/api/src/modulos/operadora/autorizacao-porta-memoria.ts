@@ -751,13 +751,13 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
             'auditor-desatualizado',
             'A designação mudou depois que você abriu (outra pessoa gravou). Abra de novo e confira.',
           );
-        x.nome = a.nome;
+        // O nome é o do cadastro do profissional: a alteração não o troca.
         x.categoria = a.categoria;
         x.conselho = a.conselho;
         x.numero = a.numero;
         x.uf = a.uf;
         x.versao++;
-        return { id: x.id, versao: x.versao };
+        return { id: x.id, versao: x.versao, nome: x.nome };
       },
     };
   }

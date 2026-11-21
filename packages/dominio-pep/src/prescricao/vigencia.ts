@@ -7,7 +7,7 @@
 import { DIA, inicioDoDia, localDe, minutoDoDia, minLocal } from './tempo.js';
 
 export interface RegraVigencia {
-  /** Horário inicial do período (HHMM do cadastro). */
+  /** Horário inicial do período (HH:MM do cadastro). */
   readonly horarioInicial: string;
   /** 0: virada diária no horário inicial; 3: o período começa no minuto da prescrição (externo). */
   readonly considerar: number;

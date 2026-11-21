@@ -1,9 +1,7 @@
-// Permissões da rouparia e lavanderia (ficha do M55, fatia F2, seção 7; convencoes.md §12). O sistema anterior não tem
-// rouparia; a equipe que cuida do enxoval é a da hotelaria, que no outro sistema tem as opções do módulo Higienização
-// (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json): Painel de leitos 5012, Gerenciar limpeza 5014 e
-// Iniciar/Finalizar limpeza 5015 (regra 1 do M06: quem tem a opção tem a permissão). Além delas, o perfil complementar
-// `rouparia` concede as duas a quem a gestão de acessos nomear (a costureira, o encarregado da lavanderia), sem dar a
-// higienização (D-PERM-552).
+// Permissões da rouparia e lavanderia (ficha do M55, fatia F2, seção 7; convencoes.md §12). A equipe que cuida do
+// enxoval é a da hotelaria: as permissões do painel de leitos e da limpeza valem também aqui (a correspondência com o
+// menu de origem está em conector/mapa/permissoes.tsv). Além delas, o perfil complementar `rouparia` concede as duas a
+// quem a gestão de acessos nomear (a costureira, o encarregado da lavanderia), sem dar a higienização (D-PERM-552).
 import { OPCOES_INTERNACAO } from './internacao-adt.js';
 import type { DeclaracaoPermissao } from './tipos.js';
 

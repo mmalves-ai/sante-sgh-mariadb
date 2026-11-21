@@ -272,7 +272,7 @@ export class TransfusaoController {
       this.gravacao(s),
     ]);
     // A lista mostra nome e registro: leitura de dado pessoal auditada (só a contagem no alvo).
-    req.sghAlvo = { tabelaAlvo: 'PRPRESCHEMO', chaveNaturalAlvo: `itens:${String(r.itens.length)}` };
+    req.sghAlvo = { tabelaAlvo: 'prescricao_item', chaveNaturalAlvo: `itens:${String(r.itens.length)}` };
     return { ...r, agora, gravacao };
   }
 
@@ -284,7 +284,7 @@ export class TransfusaoController {
     const agora = await this.agora(s);
     const i = await this.porta.item(s.porta, idDaRota(item), agora);
     if (!i) throw new ErroProblema('nao-encontrado', 404, 'Item de hemoterapia não encontrado');
-    req.sghAlvo = { paciente: i.paciente.id, tabelaAlvo: 'PRPRESCHEMO', idAlvo: String(i.item) };
+    req.sghAlvo = { paciente: i.paciente.id, tabelaAlvo: 'prescricao_item', idAlvo: String(i.item) };
     const [termos, tipagem, horarios] = await Promise.all([
       this.termosAssinados(s, i.paciente.id, i.atendimento),
       this.porta.tipagem(s.porta, i.paciente.id),

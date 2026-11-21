@@ -1,5 +1,5 @@
 // Aritmética da contabilidade em centavos inteiros (sem ponto flutuante na soma). O banco grava NUMERIC(10,2) e
-// NUMERIC(15,2); FCLANEXT.VALOR_D é NUMERIC(10,5) e TOTAL_CONTA é DOUBLE PRECISION: tudo passa por `paraCentavos`, que
+// NUMERIC(15,2); o valor do item da conta tem 5 casas e o total da conta é ponto flutuante: tudo passa por `paraCentavos`, que
 // arredonda metade para longe do zero pela representação decimal (nunca por multiplicação em ponto flutuante).
 
 /** Valor lido do banco (número, texto decimal ou nulo) → centavos inteiros; nulo e vazio viram 0. */

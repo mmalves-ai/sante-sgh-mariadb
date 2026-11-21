@@ -1,5 +1,6 @@
 // Formatação das telas da recepção (M19). Os instantes vêm do relógio do banco como "AAAA-MM-DDTHH:MM:SS" (hora local
 // do estabelecimento, sem fuso): a tela mostra o texto como veio, sem converter pelo fuso do navegador.
+import { lerHoraDigitada } from '@sgh/contratos';
 
 /** "AAAA-MM-DDTHH:MM:SS" → "HH:MM" ("—" sem hora). */
 export function horaDe(instante: string | null | undefined): string {
@@ -34,11 +35,13 @@ export function diaRelativo(hoje: string, dias: number): string {
 }
 
 /**
- * M44 (etapa 3): a hora digitada (HHMM do campo de hora) no dia do relógio do banco (AAAA-MM-DDTHH:MM). Hora depois da
- * do relógio é do dia anterior (o registro feito logo depois da meia-noite de algo feito antes dela).
+ * M44 (etapa 3): a hora digitada no campo de hora ("08:30", "8:30" ou "0830", lida pelo auxiliar neutro) no dia do
+ * relógio do banco (AAAA-MM-DDTHH:MM). Hora depois da do relógio é do dia anterior (o registro feito logo depois da
+ * meia-noite de algo feito antes dela). Hora inválida é recusada pelo auxiliar (nunca vira outra hora).
  */
-export function horaHhmmParaLocal(agora: string, hhmm: string): string {
-  const h = `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
+export function horaDigitadaParaLocal(agora: string, digitada: string): string {
+  const h = lerHoraDigitada(digitada);
+  if (h === null) throw new RangeError('Hora vazia.');
   const dia = agora.slice(0, 10);
   if (h <= agora.slice(11, 16)) return `${dia}T${h}`;
   const ontem = new Date(Date.parse(`${dia}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);

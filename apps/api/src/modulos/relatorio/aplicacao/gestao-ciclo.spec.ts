@@ -109,7 +109,7 @@ const ENVIO = {
   grupos: [],
   enderecos: ['diretoria@exemplo.invalid', 'qualidade@hospital.invalid'],
   periodicidade: 'diaria',
-  hora: 700,
+  hora: '07:00',
   diaSemana: null,
   diaMes: null,
 };
@@ -254,7 +254,7 @@ describe('envio agendado: Alterar sem redigitar (mascarados), desativar com moti
       ...semEnderecos,
       enderecos: [],
       manterEnderecos: true,
-      hora: 830,
+      hora: '08:30',
       motivo: 'A diretoria pediu o envio mais tarde',
     });
     expect(alt.statusCode).toBe(200);
@@ -262,7 +262,7 @@ describe('envio agendado: Alterar sem redigitar (mascarados), desativar com moti
       .json()
       .agendamentos.find((x: { id: string }) => x.id === id);
     expect(depois).toMatchObject({
-      hora: 830,
+      hora: '08:30',
       enderecos: 2,
       proximoEnvio: expect.stringMatching(/T08:30:00$/),
     });
@@ -447,7 +447,7 @@ describe('revisão W0-09: o valor anterior é o vigente na transação, não o l
         ...semOsEnderecos(),
         enderecos: [],
         manterEnderecos: true,
-        hora: 930,
+        hora: '09:30',
         motivo: 'A pediu 9:30',
       });
       expect(alt.statusCode).toBe(200);
@@ -459,7 +459,7 @@ describe('revisão W0-09: o valor anterior é o vigente na transação, não o l
     } finally {
       v.soltar();
     }
-    expect((await antesDe('agendamento', id)).map((x) => x['hora'])).toEqual([700, 930]);
-    expect(await porta.agendamento(ctx, id)).toMatchObject({ hora: 930, ativo: false });
+    expect((await antesDe('agendamento', id)).map((x) => x['hora'])).toEqual(['07:00', '09:30']);
+    expect(await porta.agendamento(ctx, id)).toMatchObject({ hora: '09:30', ativo: false });
   });
 });

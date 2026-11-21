@@ -7,7 +7,36 @@
 // Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import type { AlergiaDoProntuarioLida, AnexoLido, AtendimentoPepLido, CabecalhoDocumentoLido, CienciaLida, ContextoGravacaoPep, DocumentoHistoricoLido, DocumentoResumoLido, DocumentoProprioLido, EventoLido, ExameCatalogoLido, FichaImpressao, FluxoLido, LiberacaoConsultada, CompletudePainelLida, EpisodioLido, LinhaPainelLida, RecortePainel, SupervisaoLida, PacientePepLido, PedidoLido, ProblemaLido, ProblemaNovo, ProfissionalDoRegistro, ResultadoLido, RetratosAtuais, SumarioLido, TcleLido } from './tipos-pep.js';
+import type {
+  AlergiaDoProntuarioLida,
+  AnexoLido,
+  AtendimentoPepLido,
+  CabecalhoDocumentoLido,
+  CienciaLida,
+  ContextoGravacaoPep,
+  DocumentoHistoricoLido,
+  DocumentoResumoLido,
+  DocumentoProprioLido,
+  EventoLido,
+  ExameCatalogoLido,
+  FichaImpressao,
+  FluxoLido,
+  LiberacaoConsultada,
+  CompletudePainelLida,
+  EpisodioLido,
+  LinhaPainelLida,
+  RecortePainel,
+  SupervisaoLida,
+  PacientePepLido,
+  PedidoLido,
+  ProblemaLido,
+  ProblemaNovo,
+  ProfissionalDoRegistro,
+  ResultadoLido,
+  RetratosAtuais,
+  SumarioLido,
+  TcleLido,
+} from './tipos-pep.js';
 
 export const PORTA_DOCUMENTOS = Symbol('PORTA_DOCUMENTOS');
 
@@ -16,7 +45,7 @@ export type ContextoDocs = ContextoPorta;
 
 /** Profissional da sessão com a ocupação (código CBO 2002 de cada CBO) para a matriz ação × categoria. */
 export interface ProfissionalPep extends ProfissionalDoRegistro {
-  /** CBO (TBCBOPRO.ID) → código CBO 2002 (TBCBOSUS.COD) e conselho ativo. */
+  /** Inscrição no conselho do profissional → código CBO 2002 da ocupação e conselho ativo. */
   readonly ocupacoes: readonly { cbo: number; codigo: string; conselhoAtivo: boolean }[];
 }
 
@@ -25,7 +54,7 @@ export interface PortaDocumentos {
   // ── Leituras ───────────────────────────────────────────────────────────────────────────────────────
   agora(c: ContextoDocs): Promise<string>;
   profissional(c: ContextoDocs, login: string): Promise<ProfissionalPep | null>;
-  /** Código CBO 2002 de um CBO (TBCBOPRO.ID) do autor de um registro (sigilo da categoria). */
+  /** Código CBO 2002 da inscrição no conselho do autor de um registro (sigilo da categoria). */
   ocupacaoDoCbo(c: ContextoDocs, cbo: number): Promise<string | null>;
   painel(
     c: ContextoDocs,

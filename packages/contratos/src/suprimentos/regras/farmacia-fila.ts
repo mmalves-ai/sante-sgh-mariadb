@@ -14,7 +14,7 @@ export const TETO_FILA_DOSES = 500;
 export type ClasseMedicamento = 'alto-risco' | 'antimicrobiano' | 'controlado' | 'comum' | 'material';
 
 export interface DoseNaFila {
-  /** O horário prescrito (PRCHKGERAL.ID). */
+  /** O id do horário prescrito (aprazamento). */
   readonly horario: number;
   readonly atendimento: number;
   readonly paciente: number;
@@ -27,7 +27,7 @@ export interface DoseNaFila {
   readonly classe: ClasseMedicamento;
   readonly urgente: boolean;
   readonly agora: boolean;
-  /** Já dispensada por qualquer dos dois sistemas (GEDISPHOR ou PRINTEGRACAOESTOQUE ligados ao horário). */
+  /** Já dispensada por qualquer dos dois sistemas (dose dispensada ou integração com o estoque ligada ao horário). */
   readonly dispensada: boolean;
   /** Suspensa (situação 6 ou item suspenso na prescrição) ou excluída no estoque (10). */
   readonly suspensa: boolean;
@@ -113,7 +113,7 @@ export function proximaLivre<T>(candidatas: readonly T[], ocupada: (c: T) => boo
   return null;
 }
 
-/** Política "dispensar só depois de validar", por classe (parâmetro SGH_; nada em PRPARAM). */
+/** Política "dispensar só depois de validar", por classe (parâmetro próprio do produto). */
 export type PoliticaDispensacao = Readonly<Partial<Record<ClasseMedicamento, 'validar-antes' | 'livre'>>>;
 
 /** A política padrão: alto risco e antimicrobiano só depois da validação (escopo inicial da DP-25, POL-1). */

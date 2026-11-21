@@ -17,6 +17,8 @@ export const mensagensUi = {
         formato: 'Hora inválida: "{entrada}". Use HH:MM, por exemplo 08:30.',
         'fora-do-intervalo': 'Hora fora do intervalo: "{entrada}" (00:00 a 23:59).',
       },
+      instante: { formato: 'Data e hora inválidas: "{entrada}".' },
+      booleano: { valor: 'Valor de sim/não inválido: "{entrada}".' },
       cp1252: {
         emoji: 'Emoji não pode ser gravado neste campo',
         controle: 'Há um caractere de controle invisível no texto',

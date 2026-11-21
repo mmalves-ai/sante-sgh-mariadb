@@ -12,9 +12,10 @@
 // Melhoria: a reclassificação marca a anterior como "reclassificada" e exige o motivo (CHECK do banco); a sucessão é
 // única (a anterior travada com FOR UPDATE).
 // Melhoria: o vínculo profissional da sessão sai do cadastro (profissional e inscrição no conselho), pela pessoa.
-// Pendências do modelo (pedidos ao integrador): a licença do protocolo licenciado, o aviso de estouro do tempo-alvo e
-// as metas e o checklist do protocolo gerenciado não têm coluna ou tabela: as gravações respondem "modelo-pendente" e
-// as leituras devolvem vazio. A impressão digital do conteúdo é recalculada na leitura (sem coluna própria).
+// Melhoria: a licença do protocolo licenciado fica na versão publicada (registro, titular e validade); o aviso de
+// estouro do tempo-alvo é gravado uma vez por chave (aviso_estouro_classificacao, UNIQUE); as metas, o checklist e o
+// encerramento do protocolo gerenciado são registros únicos por item (inclusao_protocolo_registro), na transação do
+// pedido e com a trilha. A impressão digital do conteúdo é recalculada na leitura.
 import { CORES_RISCO } from '@sgh/contratos';
 import {
   type ContextoOperacao,
@@ -25,11 +26,13 @@ import {
   type Linha,
   type Operacao,
   recusa,
+  restricaoViolada,
   type ResultadoOperacao,
 } from '@sgh/nucleo';
 import {
   bool,
   civilOuNull,
+  dataIso,
   type EstabelecimentoDaSessao,
   estabelecimentoPorCodigo,
   horaCivil,
@@ -62,7 +65,7 @@ import type {
   VinculoDaSessao,
 } from './classificacao-porta.js';
 import { impressaoDoConteudo } from './classificacao-servico.js';
-import { modeloPendente, type NucleoRecepcao } from './porta-propria.js';
+import type { NucleoRecepcao } from './porta-propria.js';
 import { impressaoGerenciado } from './protocolo-gerenciado-servico.js';
 import type {
   ClassificacaoRegistrada,
@@ -75,6 +78,7 @@ import type {
   PublicacaoGerenciado,
   PublicacaoProtocolo,
   NovaInclusaoProtocolo,
+  NovoEventoProtocolo,
   SinaisVitais,
   TrilhaGravacao,
   VersaoGerenciado,
@@ -179,7 +183,7 @@ export class PortaClassificacaoPropria implements PortaClassificacao {
             { escritor: e },
           )
         ).resultado;
-      return fn(new GravadorProprio(e, ctx, executar, new Date(this.agora())));
+      return fn(new GravadorProprio(e, ctx, executar, new Date(this.agora()), est));
     });
   }
 
@@ -319,9 +323,18 @@ export class PortaClassificacaoPropria implements PortaClassificacao {
     });
   }
 
-  async avisosGravados(): Promise<Set<string>> {
-    // O aviso de estouro ainda não tem marco no modelo (pedido registrado): nenhum gravado.
-    return new Set<string>();
+  async avisosGravados(c: ContextoClassificacao, chaves: readonly string[]): Promise<Set<string>> {
+    if (chaves.length === 0) return new Set<string>();
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT a.chave FROM aviso_estouro_classificacao a
+           JOIN classificacao_risco cr ON cr.id = a.classificacao_risco_id
+          WHERE cr.estabelecimento_id = ? AND a.chave IN (${chaves.map(() => '?').join(', ')})`,
+        [est.id, ...chaves],
+        { teto: TETO },
+      );
+      return new Set(ls.map((x) => txt(x['chave'])));
+    });
   }
 
   versoesGerenciadas(c: ContextoClassificacao): Promise<VersaoGerenciado[]> {
@@ -394,7 +407,7 @@ async function versoesDoEstabelecimento(
 ): Promise<(VersaoProtocolo & { conteudo: unknown })[]> {
   const ls = await l.consultar(
     `SELECT v.id, v.protocolo_classificacao_risco_id, v.numero_versao, p.tipo, p.nome, v.motivo_publicacao, v.dados,
-            v.vigencia_inicio, ua.login AS autor, up.login AS aprovador
+            v.vigencia_inicio, v.licenca_valida_ate, ua.login AS autor, up.login AS aprovador
        FROM protocolo_classificacao_risco_versao v
        JOIN protocolo_classificacao_risco p ON p.id = v.protocolo_classificacao_risco_id AND p.excluido_em IS NULL
        LEFT JOIN usuario ua ON ua.id = v.usuario_id LEFT JOIN usuario up ON up.id = v.publicado_por_usuario_id
@@ -417,7 +430,7 @@ async function versoesDoEstabelecimento(
       autor: txt(x['autor']),
       aprovador: txt(x['aprovador']),
       publicadoEm: horaCivil(x['vigencia_inicio'] as Date, est.fuso),
-      licencaValidaAte: null,
+      licencaValidaAte: x['licenca_valida_ate'] ? dataIso(x['licenca_valida_ate']) : null,
       impressao: impressaoDoConteudo(conteudo as never),
       conteudo,
     };
@@ -539,6 +552,15 @@ async function inclusoesOnde(
     ids,
     { teto: TETO * 10 },
   );
+  const registros = await l.consultar(
+    `SELECT r.id, r.inclusao_protocolo_paciente_id, r.tipo, r.codigo, r.situacao, r.ocorrido_em, r.prazo_em, r.motivo,
+            r.criado_em, u.login
+       FROM inclusao_protocolo_registro r LEFT JOIN usuario u ON u.id = r.usuario_id
+      WHERE r.inclusao_protocolo_paciente_id IN (${ids.map(() => '?').join(', ')}) AND r.excluido_em IS NULL
+      ORDER BY r.inclusao_protocolo_paciente_id, r.id`,
+    ids,
+    { teto: TETO * 10 },
+  );
   return ls.map((x) => {
     const id = num(x['id']);
     const forma = txt(x['forma_inclusao']);
@@ -557,8 +579,19 @@ async function inclusoesOnde(
       chegadaEm: horaCivil(x['horario_zero_em'] as Date, est.fuso),
       incluidoEm: horaCivil(x['criado_em'] as Date, est.fuso),
       incluidoPor: txt(x['incluido_por']),
-      // As metas e o checklist ainda não têm tabela no modelo (pedido registrado).
-      eventos: [],
+      eventos: registros
+        .filter((r) => num(r['inclusao_protocolo_paciente_id']) === id)
+        .map((r) => ({
+          id: num(r['id']),
+          tipo: txt(r['tipo']) as 'meta' | 'checklist' | 'encerramento',
+          codigo: txt(r['codigo']),
+          situacao: txt(r['situacao']),
+          quando: civilOuNull(r['ocorrido_em'], est.fuso),
+          prazoEm: civilOuNull(r['prazo_em'], est.fuso),
+          motivo: txtOuNull(r['motivo']),
+          por: txt(r['login']),
+          em: horaCivil(r['criado_em'] as Date, est.fuso),
+        })),
     };
   });
 }
@@ -575,7 +608,30 @@ class GravadorProprio implements GravadorClassificacao {
     private readonly ctx: ContextoOperacao,
     private readonly executar: Executa,
     private readonly instante: Date,
+    private readonly est: EstabelecimentoDaSessao,
   ) {}
+
+  /** A hora civil do estabelecimento ("AAAA-MM-DDTHH:MM" ou com segundos) como instante; nulo fica nulo. */
+  private instanteDe(civil: string | null): Date | null {
+    return civil === null
+      ? null
+      : instanteDaHoraCivil(civil.length === 16 ? `${civil}:00` : civil, this.est.fuso);
+  }
+
+  private async trilhaDireta(entidade: string, id: number, dados: Record<string, unknown>): Promise<void> {
+    await gravarTrilha(this.e, {
+      estabelecimento: this.ctx.estabelecimento,
+      usuario: this.ctx.usuario,
+      acao: 'operacao',
+      entidade,
+      entidadeId: id,
+      dadosDepois: dados,
+      motivo: null,
+      enderecoIp: this.ctx.enderecoIp ?? null,
+      correlacao: this.ctx.correlacao.slice(0, 64),
+      ocorridoEm: this.instante,
+    });
+  }
 
   /** Evento próprio a mais na trilha (sem escrita de negócio: a cor sobreposta), na mesma transação. */
   async registrarEvento(t: TrilhaGravacao): Promise<void> {
@@ -619,8 +675,42 @@ class GravadorProprio implements GravadorClassificacao {
     return (await this.executar(opRegistrarSinais, r)).sinais;
   }
 
-  async avisarEstouro(): Promise<boolean> {
-    return modeloPendente('O aviso de estouro do tempo-alvo');
+  /** O aviso de estouro, uma vez por chave (a UNIQUE decide entre consumidores concorrentes). */
+  async avisarEstouro(a: {
+    chave: string;
+    classificacao: number;
+    reg: number;
+    prazoEm: string;
+  }): Promise<boolean> {
+    const cr = await this.e.uma(
+      'SELECT id FROM classificacao_risco WHERE id = ? AND estabelecimento_id = ?',
+      [a.classificacao, this.ctx.estabelecimento],
+    );
+    if (!cr) throw recusa('registro-inexistente', 'A classificação não é deste estabelecimento.');
+    try {
+      await this.e.inserir(
+        `INSERT INTO aviso_estouro_classificacao (classificacao_risco_id, chave, prazo_em, avisado_em, criado_em,
+           criado_por, versao) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        [
+          a.classificacao,
+          a.chave,
+          this.instanteDe(a.prazoEm),
+          this.instante,
+          this.instante,
+          this.ctx.usuario,
+        ],
+      );
+    } catch (erro) {
+      // Outro consumidor avisou antes (a UNIQUE da chave decide); a transação segue.
+      if (restricaoViolada(erro)?.nome === 'uq_aviso_estouro_classificacao_chave') return false;
+      throw erro;
+    }
+    await this.trilhaDireta('classificacao_risco', a.classificacao, {
+      aviso: 'estouro',
+      chave: a.chave,
+      reg: a.reg,
+    });
+    return true;
   }
 
   async publicarGerenciado(p: PublicacaoGerenciado): Promise<{ id: number; versao: number }> {
@@ -633,8 +723,53 @@ class GravadorProprio implements GravadorClassificacao {
     return (await this.executar(opIncluirProtocolo, p)).id;
   }
 
-  async registrarEventoProtocolo(): Promise<number> {
-    return modeloPendente('As metas e o checklist do protocolo gerenciado');
+  /** A meta, o item do checklist ou o encerramento: uma vez cada, e nada depois do encerramento. */
+  async registrarEventoProtocolo(p: NovoEventoProtocolo): Promise<number> {
+    const inc = await this.e.consultarParaAtualizar(
+      'SELECT id FROM inclusao_protocolo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [p.protocoloPaciente, this.ctx.estabelecimento],
+    );
+    if (inc.length === 0)
+      throw recusa('protocolo-inexistente', 'O protocolo do paciente não existe neste estabelecimento.');
+    const feitos = await this.e.consultar(
+      'SELECT tipo, codigo FROM inclusao_protocolo_registro WHERE inclusao_protocolo_paciente_id = ? AND excluido_em IS NULL',
+      [p.protocoloPaciente],
+    );
+    if (feitos.some((k) => txt(k['tipo']) === 'encerramento'))
+      throw recusa(
+        p.tipoEvento === 'encerramento' ? 'ja-encerrado' : 'protocolo-encerrado',
+        'O protocolo deste paciente já foi encerrado.',
+      );
+    if (feitos.some((k) => txt(k['tipo']) === p.tipoEvento && txt(k['codigo']) === p.codigo))
+      throw recusa(
+        'ja-registrado',
+        'Este item do protocolo já foi registrado. Abra de novo para ver o registro.',
+      );
+    const u = await this.e.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [p.por]);
+    if (!u) throw recusa('usuario-inexistente', 'O usuário não está no cadastro deste cliente.');
+    const id = await this.e.inserir(
+      `INSERT INTO inclusao_protocolo_registro (inclusao_protocolo_paciente_id, tipo, codigo, situacao, ocorrido_em,
+         prazo_em, motivo, usuario_id, criado_em, criado_por, versao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        p.protocoloPaciente,
+        p.tipoEvento,
+        p.codigo,
+        p.situacao,
+        this.instanteDe(p.ocorridoEm),
+        this.instanteDe(p.prazoEm),
+        p.motivo,
+        num(u['id']),
+        this.instante,
+        this.ctx.usuario,
+      ],
+    );
+    await this.trilhaDireta('inclusao_protocolo_registro', id, {
+      protocoloPaciente: p.protocoloPaciente,
+      tipo: p.tipoEvento,
+      codigo: p.codigo,
+      situacao: p.situacao,
+    });
+    return id;
   }
 }
 

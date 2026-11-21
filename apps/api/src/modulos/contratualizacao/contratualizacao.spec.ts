@@ -14,7 +14,7 @@ import {
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/configuracao-fonte.js';
-import { dominiosComRotulo } from './contratualizacao.controller.js';
+import { CHAVE_RESPOSTA_DOMINIO, dominiosComRotulo } from './contratualizacao.controller.js';
 import { moduloContratualizacao } from './modulo.js';
 import { PortaContratualizacaoMemoria } from './porta-memoria.js';
 
@@ -157,7 +157,7 @@ describe('contratualização SUS pela HTTP', () => {
     expect(b.fonte).toBe('contas-sus');
     expect(b.parametros).toMatchObject({ faixasValidas: true, conveniosSus: [1] });
     expect(b.parametros.faixas).toHaveLength(4);
-    expect(b.dominios.CMTPAFERICAO[0]).toEqual({
+    expect(b.dominios.tipoAfericao[0]).toEqual({
       codigo: 1,
       rotulo: 'Sistema de gestão do hospital',
       sigla: null,
@@ -174,8 +174,27 @@ describe('contratualização SUS pela HTTP', () => {
       tipo_afericao: [{ codigo: 1, nome: 'Nome gravado qualquer', sigla: null }],
       incentivo: [{ codigo: 7, nome: 'Incentivo de teste', sigla: null }],
     } as never);
-    expect(d['CMTPAFERICAO']?.[0]?.rotulo).toBe('Sistema de gestão do hospital');
-    expect(d['CMINCENTIVO']?.[0]).toEqual({ codigo: 7, rotulo: 'Incentivo de teste', sigla: null });
+    expect(d['tipoAfericao']?.[0]?.rotulo).toBe('Sistema de gestão do hospital');
+    expect(d['incentivo']?.[0]).toEqual({ codigo: 7, rotulo: 'Incentivo de teste', sigla: null });
+  });
+
+  it('as onze listas saem nas chaves camelCase que a tela traduz (contratualizacaoSus.dominios.nomes)', () => {
+    const vazio = Object.fromEntries(Object.keys(CHAVE_RESPOSTA_DOMINIO).map((k) => [k, []]));
+    expect(Object.keys(dominiosComRotulo(vazio as never)).sort()).toEqual(
+      [
+        'periodicidade',
+        'tipoIndicador',
+        'complexidade',
+        'tipoItemIndicador',
+        'redeAssistencial',
+        'escore',
+        'tipoAfericao',
+        'esfera',
+        'tipoDado',
+        'componenteOrcamento',
+        'incentivo',
+      ].sort(),
+    );
   });
 
   it('contrato → metas → painel com a produção das contas SUS → apuração → painel com o repasse, com as parcelas', async () => {

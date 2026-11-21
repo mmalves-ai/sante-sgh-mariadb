@@ -1,0 +1,24 @@
+{
+ "lote": "05-pep-2",
+ "pedidos": [
+  {
+   "tipo": "porta",
+   "lote_dono": "04-pep-1",
+   "arquivo": "apps/api/src/modulos/pep/prescricao-porta-memoria.ts (e a porta própria da prescrição e apps/api/src/modulos/nutricao/porta-propria.ts quando lerem hora)",
+   "pedido": "Entregar a hora do dia em HH:MM (horarioInicial, grade, relativos, horariosDieta), como o contrato já documenta; hoje a porta em memória passa '0000', '1601', ['0700','1145',...]. Os testes da API devem exercitar o formato novo.",
+   "motivo": "O contrato e o domínio já são HH:MM; o dado que circula na API ainda é de quatro dígitos. Feito isso, o domínio troca o leitor tolerante (lerHoraDigitada) pela leitura estrita (horaParaMinutos/esquemaHora) em prescricao/tempo.ts (minutoDoDia) e nutricao/mapa.ts, numa volta curta deste lote."
+  },
+  {
+   "tipo": "formato-documento",
+   "arquivos": "packages/dominio-pep/src/gravador/xml.ts, packages/dominio-pep/src/prescricao/documento.ts, packages/dominio-pep/src/documento-legado.ts (leitor, fora de lote), apps/api/src/modulos/pep/registro-servico.ts e porta-memoria.ts, packages/dominio-pep/src/prontuario/corpus.spec-util.ts, prescricao/montagem.spec.ts, conector",
+   "pedido": "Dar nome próprio aos elementos do XML do formulário gravado e do documento emitido (id_prcabevol, id_prtpcomp, id_evolucao, id_prlangeral, id_prtplan, id_prfrequencia, id_prchkgeral, id_prhrrelativa, id_prprescmed, id_prprescproced, id_prprescdieta, id_prprescsol, id_prtpinfusao, id_prmodovent, id_prpreschemo, id_prpresc e os demais id_pr*), por exemplo registro, tipo_composicao, modelo, item_prescricao, plano, frequencia, checagem, horario_relativo... A conversão do documento importado da origem para o formato próprio fica no conector, e o leitor do domínio lê só o formato próprio.",
+   "motivo": "Decisão pela melhor prática (regra de ouro 1): o formato do documento não é exigência externa (o documento assinado é nosso), então os elementos têm nome de negócio. A troca é de ponta a ponta e cruza lotes (leitor documento-legado.ts, serviço e porta de memória da API, specs e conector): feita só neste lote, o leitor deixaria de ler o que o domínio emite. Fica para uma rodada compartilhada, com um agente só."
+  },
+  {
+   "tipo": "verificador",
+   "arquivo": "tools/obra/divida_f24.py",
+   "pedido": "Ensinar os padrões de nome de origem RESP* (RESPSNAO, RESPALFA, RESPDATA, RESPHORA, RESPVALOR, UNIDRESP), CONTEVOL, EVOLUCAO_XML, DOCUMENTO_ORIGINAL, MANTERHIST, TIPOPERG, ID_TB*, ID_PR*, ID_RESPOSTA e id_pr* (minúsculo, elementos de XML).",
+   "motivo": "Hoje o verificador dá 0 para esses arquivos sem a dívida estar zerada. Fora deste lote ainda há ocorrências: formulario/dfm/classes.ts:27, formulario/dfm/escolhas.ts:5 e mensagens 'ID_RESPOSTA ...' (com escolhas.spec.ts e mapeamento.spec.ts), formulario-novo/plano.ts (TIPOPERG_DO_TIPO, coluna TIPOPERG), documento-legado.ts."
+  }
+ ]
+}

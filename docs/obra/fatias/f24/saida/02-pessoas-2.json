@@ -1,0 +1,31 @@
+[
+  {
+    "tipo": "contrato",
+    "arquivos": [
+      "packages/contratos/src/pessoas/sesmt-entradas.ts (esquemaCancelarEpi, esquemaAssinaturaEpi)",
+      "apps/api/src/modulos/pessoas/sesmt/porta-sesmt.ts (RegistroProtecao, registroEpi, cancelarEntregaEpi)",
+      "apps/api/src/modulos/pessoas/sesmt/servico-sesmt.ts (incluirEpi, cancelarEpi, assinarEpi)",
+      "apps/web/src/modulos/pessoas/sesmt (cancelamento do registro de proteção)"
+    ],
+    "pedido": "O registro de proteção (entrega de EPI, leitura do dosímetro, exposição a quimioterápico) passa a ser endereçado por tipo + id, nas respostas e nas entradas de cancelamento e assinatura. Com isso a porta própria grava e lê leitura_dosimetria e exposicao_quimioterapico (as tabelas já existem em 15_RH/05).",
+    "motivo": "Hoje o contrato endereça o registro só pelo id. Os ids das três tabelas se repetem, e o cancelamento de uma leitura do dosímetro pegaria a entrega de EPI de mesmo id. Por isso a porta própria ainda recusa as duas gravações (modelo-pendente, 409, com o motivo), a única dívida que sobra no lote."
+  },
+  {
+    "tipo": "contrato",
+    "prioridade": "alta",
+    "arquivos": [
+      "apps/web/src/modulos/pessoas/sesmt/RetificarAcidente.vue (campo ret-horas-antes, linha ~210)"
+    ],
+    "pedido": "Trocar o campo das horas trabalhadas antes do acidente para aceitar HH:MM até 99:59: SanteCampoTexto com :max-bytes=\"5\" (ou componente de duração), e a entrada passando pelo auxiliar neutro de duração de packages/contratos/src/formatacao/. O teste da tela acompanha (valor '02:30' vindo da API aparece e é regravado; '0230' é recusado pelo esquema).",
+    "motivo": "O lote trocou horasAntes da CAT (comunicação de acidente de trabalho) de HHMM para HH:MM em sesmt-entradas.ts (/^\\d{2}:[0-5]\\d$/) e a porta devolve '02:30'. Com max-bytes 4 a tela de retificação não aceita '02:30' e o '0230' que cabe é recusado pelo Zod: retificar uma CAT com horas antes fica quebrado. O arquivo não está em nenhuma .lista da F2.4."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "ajuste_ponto",
+    "colunas": [
+      "data_referencia DATE NULL (o dia do abono)"
+    ],
+    "motivo": "Opcional, para clareza do modelo: o ajuste do tipo justificativa (abono) guarda hoje o dia em marcacao_em, à meia-noite local do estabelecimento. Uma coluna própria para o dia evitaria usar o instante da marcação para isso.",
+    "prioridade": "baixa"
+  }
+]

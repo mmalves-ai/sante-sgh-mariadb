@@ -1,6 +1,6 @@
 // Permissões do M49 (ficha, seção 7; convencoes.md §12): assinar documento e em lote, vincular o próprio certificado,
 // política por tipo de documento, OIDs e formas de assinatura, provedores em nuvem e o painel do verificador público. Quem tem a opção no outro sistema
-// tem a permissão no novo (regra 1 do M06). Opções da árvore TBOPCOES levantadas no preparo (catalogo-legado.json, pc):
+// tem a permissão no novo (regra 1 do M06). Opções da árvore do menu de origem levantadas no preparo (catalogo-legado.json, pc):
 //   - P.E.P. › Movimentações › Pendências de assinatura digital 5298 (Consultar 5534);
 //   - P.E.P. › Movimentações › Receita/Atestado Digital 6463 (Nova 6468, Consultar 6464, Impressão 6467, Suspender 6469);
 //   - Tabelas › Geral A - L › Assinatura avançada 6922 (Gerenciamento 6923): cadastro de apoio da assinatura.

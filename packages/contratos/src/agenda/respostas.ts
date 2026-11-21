@@ -83,7 +83,7 @@ export type LinhaEscalaResposta = z.infer<typeof esquemaLinhaEscalaResposta>;
 
 export const esquemaDetalheAgenda = z.object({
   agenda: esquemaAgendaResumo,
-  versao: z.object({ duracao: txt, ativa: txt, teleatendimento: txt }),
+  versao: z.object({ duracaoMinutos: nul(n), ativa: z.boolean(), teleatendimento: z.boolean() }),
   convenios: z.array(
     esquemaOpcaoCodigo.extend({ ativo: z.boolean(), marcadosFuturos: n, particular: z.boolean() }),
   ),

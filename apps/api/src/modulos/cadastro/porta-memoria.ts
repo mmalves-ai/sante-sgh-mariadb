@@ -17,12 +17,7 @@ import {
   type EstadoOperacao,
   type UnificarPacienteEntrada,
 } from '@sgh/contratos';
-import {
-  erroConflitoVersao,
-  erroEntradaInvalida,
-  type Linha,
-  recusa,
-} from '@sgh/nucleo';
+import { erroConflitoVersao, erroEntradaInvalida, type Linha, recusa } from '@sgh/nucleo';
 import { lerVersaoColunas, versaoDasColunas } from './memoria-versao.js';
 import type {
   ConsentimentoPaciente,
@@ -35,7 +30,6 @@ import type {
 } from './tipos.js';
 import type { ContextoPorta, EstadoCatalogo, PortaCadastro } from './porta.js';
 import { type OperacaoProfissionalTela, ProfissionaisMemoria } from './profissionais-memoria.js';
-
 
 // ---- Linha sintética da memória (dev/ci) ----
 // A memória guarda cada paciente como uma linha de colunas curtas (a mesma forma desde o M11) e a decodifica aqui para
@@ -390,7 +384,7 @@ interface Estado {
   }[];
 }
 
-/** Revisão do M39: o cadastro de conselhos sintético (sigla → ID), como TBCONSPROF. */
+/** Revisão do M39: o cadastro de conselhos sintético (sigla → ID), como conselho profissional. */
 const CONSELHOS: Readonly<Record<string, number>> = { CRM: 1, COREN: 2, CRO: 3, CRF: 4, CREFITO: 6 };
 
 /** Campos do retrato da linha do tempo (pelo nome do campo da ficha) → coluna da linha sintética. */
@@ -448,7 +442,9 @@ export class PortaCadastroMemoria implements PortaCadastro {
     if (verDocumento) return versao;
     const v = lerVersaoPaciente(versao);
     if (!v) return versao;
-    return JSON.stringify(Object.fromEntries(Object.entries(v).filter(([c]) => !COLUNAS_DOCUMENTO_VERSAO.includes(c))));
+    return JSON.stringify(
+      Object.fromEntries(Object.entries(v).filter(([c]) => !COLUNAS_DOCUMENTO_VERSAO.includes(c))),
+    );
   }
 
   /** Sessão sintética (dev/ci): a regra do executor nesses ambientes (só o estado do catálogo decide). */
@@ -784,12 +780,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
       if (v === undefined) continue;
       const col = COLUNA_DO_CAMPO_PACIENTE[campo];
       if (!col) continue;
-      novo[col] =
-        campo === 'nascimento'
-          ? data(String(v))
-          : campo === 'cpf'
-            ? Number(v)
-            : (v ?? null);
+      novo[col] = campo === 'nascimento' ? data(String(v)) : campo === 'cpf' ? Number(v) : (v ?? null);
     }
     if (a.cep !== undefined) {
       const cep = CEPS[a.cep];
@@ -810,9 +801,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     });
     if (iguais) throw recusa('sem-alteracao', 'Nenhum campo mudou em relação ao cadastro.');
     novo['USUARIO'] = ctx.login;
-    novo['CARIMBO'] = new Date(
-      Math.max(Date.now(), (atual['CARIMBO'] as Date).getTime() + 1),
-    );
+    novo['CARIMBO'] = new Date(Math.max(Date.now(), (atual['CARIMBO'] as Date).getTime() + 1));
     s.pacientes.set(e.idPaciente, novo);
     s.historico.set(e.idPaciente, [
       ...(s.historico.get(e.idPaciente) ?? []),
@@ -836,8 +825,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     const f = s.pacientes.get(e.idSobrevivente);
     if (!a) throw recusa('registro-inexistente', 'O prontuário absorvido não existe mais.');
     if (!f) throw recusa('registro-inexistente', 'O prontuário que fica não existe mais.');
-    const livre = (l: Linha) =>
-      l['ATIVO'] !== false && Number(l['UNIFICADO_EM']) === Number(l['ID']);
+    const livre = (l: Linha) => l['ATIVO'] !== false && Number(l['UNIFICADO_EM']) === Number(l['ID']);
     if (!livre(f))
       throw recusa(
         'cadastro-inativo',

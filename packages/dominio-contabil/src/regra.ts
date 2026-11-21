@@ -1,4 +1,4 @@
-// Regra 2 (cap-07 §7.2): regra de contabilização VERSIONADA por origem (COTP_ORIGEM_LANCAMENTO) e tipo de fato.
+// Regra 2 (cap-07 §7.2): regra de contabilização VERSIONADA por origem do lançamento e tipo de fato.
 // A versão publicada não muda; uma nova versão tem vigência que começa depois da anterior. Aplicar a regra ao fato é
 // determinístico (mesmo fato + mesma versão + mesmo plano + mesmo de-para → o mesmo lançamento, com a mesma chave):
 // por isso reprocessar um período aberto dá o mesmo resultado.

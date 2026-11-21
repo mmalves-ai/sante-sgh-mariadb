@@ -1,0 +1,98 @@
+{
+ "situacao_pedido_leito": [
+  {
+   "codigo": "solicitado",
+   "descricao": "Solicitado",
+   "estado": "solicitado",
+   "final": false,
+   "ordem_exibicao": 1
+  },
+  {
+   "codigo": "em_analise",
+   "descricao": "Em análise",
+   "estado": "em_analise",
+   "final": false,
+   "ordem_exibicao": 2
+  },
+  {
+   "codigo": "reservado",
+   "descricao": "Leito reservado",
+   "estado": "reservado",
+   "final": false,
+   "ordem_exibicao": 3
+  },
+  {
+   "codigo": "em_transito",
+   "descricao": "Em trânsito",
+   "estado": "em_transito",
+   "final": false,
+   "ordem_exibicao": 4
+  },
+  {
+   "codigo": "internado",
+   "descricao": "Internado",
+   "estado": "internado",
+   "final": true,
+   "ordem_exibicao": 5
+  },
+  {
+   "codigo": "cancelado",
+   "descricao": "Cancelado",
+   "estado": "cancelado",
+   "final": true,
+   "ordem_exibicao": 6
+  },
+  {
+   "codigo": "rejeitado",
+   "descricao": "Rejeitado",
+   "estado": "rejeitado",
+   "final": true,
+   "ordem_exibicao": 7
+  }
+ ],
+ "motivo_saida_hospitalar": [
+  {
+   "codigo": "alta_melhorado",
+   "descricao": "Alta melhorado",
+   "tipo_saida": "alta"
+  },
+  {
+   "codigo": "alta_curado",
+   "descricao": "Alta curado",
+   "tipo_saida": "alta"
+  },
+  {
+   "codigo": "alta_a_pedido",
+   "descricao": "Alta a pedido",
+   "tipo_saida": "a_pedido"
+  },
+  {
+   "codigo": "alta_administrativa",
+   "descricao": "Alta administrativa",
+   "tipo_saida": "administrativa"
+  },
+  {
+   "codigo": "transferencia",
+   "descricao": "Transferência para outro estabelecimento",
+   "tipo_saida": "transferencia"
+  },
+  {
+   "codigo": "evasao",
+   "descricao": "Evasão",
+   "tipo_saida": "evasao",
+   "alta_a_revelia": true
+  },
+  {
+   "codigo": "obito",
+   "descricao": "Óbito",
+   "tipo_saida": "obito",
+   "exige_declaracao_obito": true
+  },
+  {
+   "codigo": "permanencia",
+   "descricao": "Permanência (mudança de procedimento ou reinternação)",
+   "tipo_saida": "permanencia",
+   "encerra_internacao": false
+  }
+ ]
+}

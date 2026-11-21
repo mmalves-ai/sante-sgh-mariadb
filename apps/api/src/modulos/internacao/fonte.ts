@@ -110,8 +110,8 @@ export interface FonteInternacao {
   canal(alvo: ContextoNucleo, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal>;
 }
 
-/** Valor de `destino` no contrato das telas (o enum do contrato ainda chama o banco de 'legado'; pedido da onda). */
-export const destinoNoContrato = (d: DestinoFonte): 'legado' | 'memoria' => (d === 'memoria' ? 'memoria' : 'legado');
+/** Valor de `destino` no contrato das telas: o banco do cliente ou a memória do processo. */
+export const destinoNoContrato = (d: DestinoFonte): DestinoFonte => d;
 
 /** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido). */
 export function fonteInternacaoIndisponivel(): FonteInternacao {

@@ -3,13 +3,9 @@
 // DP-3): classes ASA, Mallampati, jejum (ASA 2017), risco cardíaco de Lee, sinais monitorados na ficha, gases, vias,
 // fluidos, perdas, eventos, marcos de tempo e o índice de Aldrete-Kroulik da recuperação.
 //
-// O que vem do banco (domínios lidos, nunca gravados pelo novo nesta etapa; IDs do outro estabelecimento podem
-// diferir, por isso a tela lê a tabela e não fixa o ID): tipo de anestesia (TBANESTESIA, 17 na cópia pc), posição
-// cirúrgica (PRFA_CAD_POSICAO_CIR, 9), modo respiratório (PRFA_CAD_MODO_RESPIR, 3), função na equipe
-// (PRTIPO_PROFISSIONAL, 9) e utilização (PRFA_UTILIZACAO, 3). Os cadastros de gás (PRFA_CAD_GAS), de incidente
-// (PRFA_CAD_INCIDENTE) e de sinal vital (PRSINALVITAL) estão VAZIOS na cópia pc (0 linhas): por isso gases, eventos e
-// sinais da ficha são vocabulário do novo, com a sigla do cadastro antigo quando ele existe (PRFA_TIPO_SINAL: FC,
-// PAS, PAD).
+// O que vem do banco (cadastros do cliente; os ids podem diferir entre clientes, por isso a tela lê a tabela e não
+// fixa o id): tipo de anestesia, posição cirúrgica, modo ventilatório, função na equipe e utilização. Gases, eventos
+// e sinais da ficha são vocabulário do produto, com a sigla do cadastro de sinais quando ela existe (FC, PAS, PAD).
 
 // ── APA ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -71,7 +67,7 @@ export const INTERVALO_SINAIS_FICHA_MIN = 5;
 
 /**
  * Sinais monitorados na ficha: unidade, faixa plausível (fora dela é erro de digitação) e se a grade de 5 minutos
- * cobra o sinal (obrigatório). A sigla do cadastro antigo (PRFA_TIPO_SINAL) vai junto quando existe.
+ * cobra o sinal (obrigatório). A sigla do cadastro de sinais vai junto quando existe.
  */
 export const SINAIS_FICHA = {
   pas: {
@@ -219,28 +215,23 @@ export const MARCOS_FICHA = [
 export type MarcoFicha = (typeof MARCOS_FICHA)[number]['codigo'];
 
 /**
- * Partes da ficha. Cada uma vira uma tabela SGH_CC_FA_<parte> com a estrutura que o cadastro antigo previu nas
- * PRFA_LANC_ANEST_<parte> (vazias e NÃO usadas: FK restritiva para o agendamento, regra 12). A tabela antiga fica só
- * como referência de estrutura.
+ * Partes da ficha. Todos os lançamentos ficam numa tabela só, `lancamento_ficha_anestesica`, e a coluna `parte`
+ * guarda este código; os campos usados por cada parte estão no comentário das colunas.
  */
 export const PARTES_FICHA = [
-  { parte: 'sinal', tabelaSgh: 'SGH_CC_FA_MONITORIZ', referencia: 'PRFA_LANC_ANEST_MONITORIZ' },
-  { parte: 'medicamento', tabelaSgh: 'SGH_CC_FA_MEDICAMENTO', referencia: 'PRFA_LANC_ANEST_MEDICAMENTO' },
-  { parte: 'gas', tabelaSgh: 'SGH_CC_FA_CAD_GAS', referencia: 'PRFA_LANC_ANEST_CAD_GAS' },
-  { parte: 'fluido', tabelaSgh: 'SGH_CC_FA_GANHO', referencia: 'PRFA_LANC_ANEST_GANHO' },
-  { parte: 'perda', tabelaSgh: 'SGH_CC_FA_PERDA', referencia: 'PRFA_LANC_ANEST_PERDA' },
-  { parte: 'evento', tabelaSgh: 'SGH_CC_FA_INCIDENTE', referencia: 'PRFA_LANC_ANEST_INCIDENTE' },
-  {
-    parte: 'modoRespiratorio',
-    tabelaSgh: 'SGH_CC_FA_MODO_RESPIR',
-    referencia: 'PRFA_LANC_ANEST_MODO_RESPIR',
-  },
-  { parte: 'posicao', tabelaSgh: 'SGH_CC_FA_POSICAO_CIR', referencia: 'PRFA_LANC_ANEST_POSICAO_CIR' },
-  { parte: 'procedimento', tabelaSgh: 'SGH_CC_FA_PROCED', referencia: 'PRFA_LANC_ANEST_PROCED' },
-  { parte: 'exame', tabelaSgh: 'SGH_CC_FA_EXAME', referencia: 'PRFA_LANC_ANEST_EXAME' },
-  { parte: 'equipe', tabelaSgh: 'SGH_CC_FA_EQUIPE_CIR', referencia: 'PRFA_LANC_ANEST_EQUIPE_CIR' },
-  { parte: 'avulso', tabelaSgh: 'SGH_CC_FA_ITEM_AVULSO', referencia: 'PRFA_LANC_ANEST_ITEM_AVULSO' },
-  { parte: 'bi', tabelaSgh: 'SGH_CC_FA_BI', referencia: 'PRFA_LANC_ANEST_BI' },
+  { parte: 'sinal' },
+  { parte: 'medicamento' },
+  { parte: 'gas' },
+  { parte: 'fluido' },
+  { parte: 'perda' },
+  { parte: 'evento' },
+  { parte: 'modoRespiratorio' },
+  { parte: 'posicao' },
+  { parte: 'procedimento' },
+  { parte: 'exame' },
+  { parte: 'equipe' },
+  { parte: 'avulso' },
+  { parte: 'bi' },
 ] as const;
 export type ParteFicha = (typeof PARTES_FICHA)[number]['parte'];
 

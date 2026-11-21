@@ -1,4 +1,4 @@
-// Regras da agenda de exames (ficha do M18, regras 1 a 4): categoria, TP_AGE, estado do horário, resíduo da
+// Regras da agenda de exames (ficha do M18, regras 1 a 4): categoria da marcação, estado do horário, resíduo da
 // sante-api, vínculo pelo prontuário e cobertura por exame. Dados sintéticos.
 import { describe, expect, it } from 'vitest';
 import {
@@ -13,7 +13,7 @@ import {
   rotuloCategoria,
   rotuloTipoHorario,
   tipoHorarioValido,
-  tpAgeDaMarcacao,
+  categoriaDaMarcacao,
   vinculoDaMarcacao,
 } from './exame.js';
 
@@ -29,7 +29,7 @@ const h = (x: Partial<HorarioExameLido> = {}): HorarioExameLido => ({
   ...x,
 });
 
-describe('categoria e TP_AGE (regra 4)', () => {
+describe('categoria da agenda e da marcação (regra 4)', () => {
   it('rotula as categorias do catálogo e o ato 90, que não tem linha no catálogo', () => {
     expect(categoriaExame(24)?.rotulo).toBe('Ultrassonografia');
     expect(categoriaExame(90)).toEqual({ codigo: 90, rotulo: 'Métodos gráficos', noCatalogo: false });
@@ -38,11 +38,11 @@ describe('categoria e TP_AGE (regra 4)', () => {
     expect(rotuloCategoria(null)).toBe('Categoria não informada');
   });
 
-  it('TP_AGE: 90 no horário de exame O; a categoria da agenda nos demais', () => {
-    expect(tpAgeDaMarcacao(42, 'O')).toBe(90);
-    expect(tpAgeDaMarcacao(24, 'O')).toBe(90);
-    expect(tpAgeDaMarcacao(24, 'U')).toBe(24);
-    expect(tpAgeDaMarcacao(21, 'E ')).toBe(21);
+  it('categoria da marcação: 90 no horário de exame O; a categoria da agenda nos demais', () => {
+    expect(categoriaDaMarcacao(42, 'O')).toBe(90);
+    expect(categoriaDaMarcacao(24, 'O')).toBe(90);
+    expect(categoriaDaMarcacao(24, 'U')).toBe(24);
+    expect(categoriaDaMarcacao(21, 'E ')).toBe(21);
   });
 
   it('tipos de horário vistos (E, U, O); o resto é recusado', () => {

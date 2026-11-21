@@ -1,6 +1,6 @@
 // Permissões do M45, etapa 2 (ficha, seção 7; convencoes.md §12): escores e reavaliações, classificação de pacientes e
 // índices de gravidade da UTI. Quem tem a opção no legado tem a permissão no novo (regra 1 do M06). Opções do módulo do
-// PEP (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json):
+// PEP (menu de origem, retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - escores: as escalas de enfermagem são registros clínicos em formulário hoje (evolução do PEP, M22) feitos junto
 //     dos sinais vitais (Monitorização 2642, M25): ler = as de leitura da evolução e da monitorização; registrar = as de
 //     gravação da evolução e de inclusão do sinal vital;

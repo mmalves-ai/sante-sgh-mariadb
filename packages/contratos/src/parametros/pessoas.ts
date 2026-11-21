@@ -122,7 +122,7 @@ export const PARAMETROS_PESSOAS: readonly DefinicaoParametro[] = [
     minimo: 1,
     maximo: 720,
     dono: 'gestão de pessoas, com a folha',
-    origem: 'ficha do M52, regra 13 (PETP_INTEGR_EVENTO; acordo coletivo)',
+    origem: 'ficha do M52, regra 13 (tipo de evento de integração; acordo coletivo)',
   },
   {
     chave: 'pessoas.ponto.intervaloPreAssinalado',

@@ -8,7 +8,7 @@ import type { DestinoTriagem } from '@sgh/contratos';
 export interface RelatorioOrigem {
   readonly id: number;
   readonly nome: string;
-  /** Módulo do editor de origem (TBEDITREL.MODULO: -1 abertura, 4 faturamento de convênios, 22 folha…). */
+  /** Módulo do editor de origem (código do módulo na origem: -1 abertura, 4 faturamento de convênios, 22 folha…). */
   readonly modulo: number;
   /** Tipo do relatório no editor (2 relatório, 3 etiqueta). */
   readonly tipo: number;

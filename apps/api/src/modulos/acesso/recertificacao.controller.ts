@@ -241,7 +241,7 @@ export class RecertificacaoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @AuditadoNoHandler(
-    'SGH_ACESSO_RECERT_ITEM e SGH_TRILHA na transação SGH_; retirar: executor acesso.bloquearUsuario (TBCABTRILHA) ou revogarPerfil (SGH_TRILHA)',
+    'item da recertificação e trilha na mesma transação; retirar: executor acesso.bloquearUsuario ou revogarPerfil, com a trilha',
   )
   async decidir(
     @Param('id') bruto: string,

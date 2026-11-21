@@ -5,6 +5,9 @@ import type { GuiaTissRecebida, ItemTissRecebido, LoteTissRecebido } from '@sgh/
 import { describe, expect, it } from 'vitest';
 import { numeroCarteirinha } from './carteirinha.js';
 import {
+  exigeParecerNoRecurso,
+  problemasDoParecerDoRecurso,
+  rateioDoAcatado,
   acoesDaConta,
   type AutorizacaoDaSenha,
   competenciaDoRecebimento,
@@ -514,5 +517,31 @@ describe('pagamento ao prestador', () => {
     expect(problemasDoPagamento({ ...c, analisadaEm: null }, { valor: 1, data: '2026-10-19' }, HOJE)).toEqual(
       [],
     );
+  });
+});
+
+describe('recurso de glosa: rateio e parecer', () => {
+  it('acatado devolve o recorrido de cada linha; mantido devolve zero', () => {
+    expect(rateioDoAcatado([10, 20.5], 'acatado', 30.5)).toEqual([10, 20.5]);
+    expect(rateioDoAcatado([10, 20.5], 'mantido', 0)).toEqual([0, 0]);
+  });
+  it('acatado em parte reparte pelo peso, soma exata e nenhuma linha acima do recorrido', () => {
+    const r = rateioDoAcatado([10, 10, 10], 'parcial', 10);
+    expect(r.reduce((t, v) => Math.round((t + v) * 100) / 100, 0)).toBe(10);
+    expect(r).toEqual([3.34, 3.33, 3.33]);
+    expect(rateioDoAcatado([100, 50], 'parcial', 75)).toEqual([50, 25]);
+    const quase = rateioDoAcatado([0.01, 0.01, 99.98], 'parcial', 99.99);
+    expect(quase.every((v, i) => v <= [0.01, 0.01, 99.98][i]!)).toBe(true);
+    expect(Math.round(quase.reduce((t, v) => t + v, 0) * 100)).toBe(9999);
+  });
+  it('uma linha só recebe todo o acatado', () => {
+    expect(rateioDoAcatado([42.1], 'parcial', 12.34)).toEqual([12.34]);
+  });
+  it('o parecer é obrigatório no mantido e no acatado em parte', () => {
+    expect(exigeParecerNoRecurso('acatado')).toBe(false);
+    expect(exigeParecerNoRecurso('mantido')).toBe(true);
+    expect(problemasDoParecerDoRecurso('parcial', '  ')).toEqual([{ codigo: 'parecer-obrigatorio', campo: 'parecer' }]);
+    expect(problemasDoParecerDoRecurso('parcial', 'Laudo confirma')).toEqual([]);
+    expect(problemasDoParecerDoRecurso('acatado', '')).toEqual([]);
   });
 });

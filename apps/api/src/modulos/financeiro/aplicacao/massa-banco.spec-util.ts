@@ -62,6 +62,8 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
     await x(`DELETE l FROM linha_extrato l JOIN extrato_bancario x ON x.id = l.extrato_bancario_id WHERE x.estabelecimento_id IN (${q})`);
     await x(`DELETE FROM extrato_bancario WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM recebimento WHERE estabelecimento_id IN (${q})`);
+    await x(`DELETE g FROM glosa_titulo_receber g JOIN titulo_receber t ON t.id = g.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`);
+    await x(`DELETE FROM arquivo_fiscal_gerado WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE p FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`);
     await x(`DELETE FROM titulo_receber WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM baixa_titulo WHERE estabelecimento_id IN (${q})`);

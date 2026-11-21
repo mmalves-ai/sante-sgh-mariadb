@@ -140,7 +140,7 @@ const AGENDA = {
       edicao: {
         sala: 2,
         data: '2026-11-03',
-        hora: '1400',
+        hora: '14:00',
         duracaoMin: 90,
         procedimento: 30101271,
         convenio: 10,
@@ -226,7 +226,7 @@ describe('portal do médico externo', () => {
     expect(pedido?.corpo).toMatchObject({
       sala: 2,
       data: '2026-11-10',
-      hora: '1430',
+      hora: '14:30',
       convenio: 10,
       procedimento: 30101271,
       paciente: { nome: 'Paciente Informado Sintetico', nascimento: '1970-05-02' },
@@ -262,7 +262,7 @@ describe('W0-10: alteração do pedido não confirmado', () => {
     await w.get('[data-testid="pm-alterar-33"]').trigger('click');
     await flushPromises();
     expect(w.get('#pm-pedido-titulo').text()).toContain('PACIENTE INFORMADO (versão 1)');
-    expect((w.get('[data-testid="pm-hora"]').element as HTMLInputElement).value).toBe('1400');
+    expect((w.get('[data-testid="pm-hora"]').element as HTMLInputElement).value).toBe('14:00');
     expect(w.get('[data-testid="pm-proc-escolhido"]').text()).toContain('COLECISTECTOMIA');
     // Sem o motivo, a revisão fica desabilitada.
     expect(w.get('[data-testid="pm-pedir"]').attributes('disabled')).toBeDefined();
@@ -280,7 +280,7 @@ describe('W0-10: alteração do pedido não confirmado', () => {
     expect(alt?.corpo).toMatchObject({
       sala: 2,
       data: '2026-11-03',
-      hora: '1500',
+      hora: '15:00',
       duracaoMin: 90,
       procedimento: 30101271,
       convenio: 10,

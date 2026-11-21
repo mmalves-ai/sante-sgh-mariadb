@@ -1,4 +1,4 @@
-// Herança do atendimento anterior (REPARATE; ficha do M20, seção 4 "Histórico do paciente"): as marcas da
+// Herança do atendimento anterior (ficha do M20, seção 4 "Histórico do paciente"): as marcas da
 // configuração dizem o que a nova ficha copia do atendimento anterior do paciente (convênio, profissional,
 // carteirinha, plano, clínica, empresa, validade da carteirinha…). Retrato da cópia pc: convênio, profissional,
 // carteirinha, plano, clínica, empresa, procedência e validade marcados; o resto não. A pessoa confere antes de gravar.

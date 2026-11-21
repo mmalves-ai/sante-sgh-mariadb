@@ -1,5 +1,5 @@
 // Afastamento do colaborador (M53-F0; ficha do M53, seção 1: a exportação leva os afastamentos; D-AFAST-531): o motivo
-// vem do domínio de motivos de afastamento do ramo (FPMOTAFAST, lido na hora), o período fica dentro do vínculo e não se
+// vem do domínio de motivos de afastamento do ramo (lido na hora), o período fica dentro do vínculo e não se
 // sobrepõe a outro afastamento em vigor do mesmo vínculo. Encerrar é informar o fim (uma vez); cancelar exige motivo e
 // nunca apaga (fica para a trilha).
 import type { RecusaSesmt } from '../sesmt/recusa.js';

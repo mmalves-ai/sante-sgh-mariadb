@@ -1,0 +1,34 @@
+{
+ "lote": "22-misto-sadt",
+ "pedidos": [
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/sadt/porta-propria.ts",
+   "motivo": "Restam 19 leituras (LEITURAS_PENDENTES: digitacao, conferencia, filaLiberacao, laudoParaEmitir, requisicoes, atendimento, atendimentosPorNumero, orcamentos, orcamento, apoio, parametros, indicadores, laudosPortalDoPaciente, laudosPortalDoMedico, laudoPortal, acessoPorProtocolo, acessoDoMedico, acessoPorId, autocadastros), 6 gravações (registrarOrcamento, marcarOrcamentoConvertido, criarProtocoloPortal, registrarAutocadastro, decidirAutocadastro, registrarTentativaPortal), a leitura do resultado feita no portal e OPERACOES_SADT_PENDENTES. Não é falta de DDL conferida por item: é a ligação da porta ao modelo (portal de resultados, orçamento do diagnóstico, filas da bancada). Pede lote próprio (estimativa: 2 agentes, leitura e gravação)."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/manutencao/porta-propria.ts",
+   "motivo": "As estruturas pedidas no f22 03-03 já existem no modelo (alerta_sanitario + alerta_sanitario_equipamento em 18_QUA/04; queixa_tecnica_produto.equipamento_saude_id com CHECK de alvo; modelo_equipamento_curso, evento_ciclo_equipamento e plano_preventivo.modelo_plano_codigo em 09_HOT/06; laudo da OS). Falta ligar a porta: alertas de tecnovigilância (4 gravações + ação de campo), queixa técnica da OS, curso exigido por modelo (2), evento do ciclo de vida, laudo da OS (mudarOs com laudo), plano instalado de modelo pronto; e as leituras correspondentes, que hoje devolvem vazio. Os specs tecnovigilancia.int.spec.ts e porta-propria.int.spec.ts (linhas 162, 373, 433) provam a recusa e mudam junto."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/patrimonio/porta-propria.ts",
+   "motivo": "calculo_depreciacao, cota_depreciacao e ajuste_valor_bem já existem (14_FIN/11 e 03). Falta ligar calcular/estornar (cabeçalho por competência e rodada, cotas, estorno com motivo e origem) e registrarAjuste/estornarAjuste, com as leituras calculos/cotas/estornos/ajustes (hoje vazias), seguindo a regra pura de @sgh/dominio-patrimonio. O doador do termo e o responsável pelo bem dependem da troca de contrato pedida no f22 02-11 (responsável por responsavel_usuario_id, não texto)."
+  },
+  {
+   "tipo": "etapa-coordenada",
+   "arquivo": "packages/contratos/src/permissoes/tipos.ts (linha 38) e suprimentos.ts (linha 107)",
+   "motivo": "FlagLegado.tabela e a constante flag(...) com o nome da tabela de origem como dado: não mexidos no lote, conforme padroes.md §4; saem na etapa da seção 5 (procedência só em conector/mapa/permissoes.tsv)."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "cota_depreciacao",
+   "colunas": [
+    "calculo_depreciacao_id BIGINT UNSIGNED NULL (FK calculo_depreciacao)",
+    "vigente_chave gerada (bem|competencia|base enquanto o cálculo é vigente) com UNIQUE, no lugar de uq_cota_depreciacao_bem_competencia_base"
+   ],
+   "motivo": "Sem a ligação da cota ao cálculo, cotas(calculo) não distingue a rodada, e a UNIQUE atual (que conta a cota excluída) impede o recálculo depois do estorno sem DELETE físico."
+  }
+ ]
+}

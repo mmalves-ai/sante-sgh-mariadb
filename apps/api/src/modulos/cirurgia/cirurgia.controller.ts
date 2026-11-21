@@ -13,7 +13,7 @@
 //   POST /api/cirurgia/estados/:id/pendencias               pendência pré-operatória (banco)
 //   GET  /api/cirurgia/cancelamentos?de&ate                 agendamentos cancelados (31 dias)
 //   GET  /api/cirurgia/historico?de&ate                     inclusões e remarcações da agenda (31 dias)
-//   GET  /api/cirurgia/realizadas?de&ate&reg&sala           cirurgias realizadas com o casamento (31 dias; só REG: sem janela)
+//   GET  /api/cirurgia/realizadas?de&ate&reg&sala           cirurgias realizadas com o casamento (31 dias; só atendimento: sem janela)
 //   POST /api/cirurgia/realizadas                           cirurgia.registrarCirurgia
 //   POST /api/cirurgia/realizadas/:id/ligacao               revisão da ligação com o agendamento (banco)
 //   GET  /api/cirurgia/salas                                salas e usuários permitidos (contagem)
@@ -205,7 +205,7 @@ export class CirurgiaController {
   async detalhe(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<DetalheAgendamento> {
     const s = sessaoDe(req);
     const d = await this.servico.detalhe(s.porta, idDaRota(id), await this.preparo(s));
-    req.sghAlvo = { tabelaAlvo: 'CCAGENDA', idAlvo: String(d.agendamento.id) };
+    req.sghAlvo = { tabelaAlvo: 'agendamento_cirurgico', idAlvo: String(d.agendamento.id) };
     return d;
   }
 
@@ -525,7 +525,7 @@ export class CirurgiaController {
     const sala = inteiroOuNulo(q['sala']) || null;
     const de = dataDaConsulta(q['de']);
     const ateQ = dataDaConsulta(q['ate']);
-    // Pelo atendimento (REG) sem período: todas as cirurgias dele (teto de 500), sem janela.
+    // Pelo atendimento sem período: todas as cirurgias dele (teto de 500), sem janela.
     if (reg !== null && de === null && ateQ === null)
       return this.servico.realizadas(s.porta, { de: null, ate: null, reg, sala });
     const r = await this.porta.relogio(s.porta);
@@ -579,7 +579,7 @@ export class CirurgiaController {
           'recusa-de-negocio',
           409,
           'Outro atendimento',
-          'O agendamento é de outro atendimento (REG diferente).',
+          'O agendamento é de outro atendimento.',
           {
             codigo: 'atendimento-de-outro-paciente',
           },

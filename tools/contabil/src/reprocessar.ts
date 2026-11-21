@@ -121,8 +121,10 @@ export function pedidoDe(o: Readonly<Record<string, string>>): PedidoReprocessam
   const cliente = o['cliente'] ?? '';
   if (!FORMATO_NOME_BANCO.test(cliente)) return 'cliente inválido (o código do banco do cliente)';
   const estabelecimento = Number(o['estabelecimento']);
-  if (!Number.isSafeInteger(estabelecimento) || estabelecimento <= 0) return 'estabelecimento inválido (o id)';
-  if (o['empresa'] !== undefined) return 'empresa não se informa: no banco próprio a empresa contábil é o estabelecimento';
+  if (!Number.isSafeInteger(estabelecimento) || estabelecimento <= 0)
+    return 'estabelecimento inválido (o id)';
+  if (o['empresa'] !== undefined)
+    return 'empresa não se informa: no banco próprio a empresa contábil é o estabelecimento';
   return { cliente, estabelecimento, periodo };
 }
 
@@ -140,7 +142,12 @@ const ROTULO_SAIDA: Readonly<Record<number, string>> = {
 };
 
 /** Linha do relatório (só contagens e totais em centavos com as parcelas). */
-export function relatorio(rotulo: string, estabelecimento: number, periodo: string, r: ResultadoConferencia): string {
+export function relatorio(
+  rotulo: string,
+  estabelecimento: number,
+  periodo: string,
+  r: ResultadoConferencia,
+): string {
   const t = (x: { debitos: number; creditos: number }) => `D ${x.debitos} = C ${x.creditos}`;
   return [
     `[${rotulo}] estabelecimento ${estabelecimento}, competência ${periodo}: ${r.fatos} fatos${r.parcial ? ' (parcial: acima do teto)' : ''}`,
@@ -156,7 +163,9 @@ export function relatorio(rotulo: string, estabelecimento: number, periodo: stri
 }
 
 /** Contexto de leitura de um pedido (sem usuário: processo de conferência, só leitura). */
-export function contextoDe(p: Pick<PedidoReprocessamento, 'cliente' | 'estabelecimento'>): ContextoReprocessamento {
+export function contextoDe(
+  p: Pick<PedidoReprocessamento, 'cliente' | 'estabelecimento'>,
+): ContextoReprocessamento {
   return {
     cliente: p.cliente,
     estabelecimento: p.estabelecimento,
@@ -171,12 +180,21 @@ export function contextoDe(p: Pick<PedidoReprocessamento, 'cliente' | 'estabelec
  * O fonte da porta da tela. A API usa decoradores e propriedades de parâmetro: a ferramenta roda num executor de
  * TypeScript completo (o mesmo transformador dos testes), não no modo só de remoção de tipos do node.
  */
-export const PORTA_DA_TELA = new URL('../../../apps/api/src/modulos/contabil/porta-propria.ts', import.meta.url).href;
+export const PORTA_DA_TELA = new URL(
+  '../../../apps/api/src/modulos/contabil/porta-propria.ts',
+  import.meta.url,
+).href;
 
 /** A porta da tela, carregada na hora (o caminho não entra no grafo do compilador da ferramenta). */
-export async function fonteDoBanco(nucleo: NucleoProprio, caminho: string = PORTA_DA_TELA): Promise<FonteDoPeriodo> {
+export async function fonteDoBanco(
+  nucleo: NucleoProprio,
+  caminho: string = PORTA_DA_TELA,
+): Promise<FonteDoPeriodo> {
   const m = (await import(caminho).catch((e: unknown) => {
-    throw new Error(`Porta da contabilidade não carregada (${caminho}); rode a ferramenta num executor de TypeScript completo.`, { cause: e });
+    throw new Error(
+      `Porta da contabilidade não carregada (${caminho}); rode a ferramenta num executor de TypeScript completo.`,
+      { cause: e },
+    );
   })) as {
     PortaContabilPropria: new (n: NucleoProprio) => FonteDoPeriodo;
   };
@@ -187,7 +205,10 @@ export async function fonteDoBanco(nucleo: NucleoProprio, caminho: string = PORT
 export type NucleoDaConferencia = Pick<NucleoProprio, 'lerSomente'>;
 
 /** O estabelecimento existe e não foi excluído no banco do cliente? */
-export async function estabelecimentoExiste(nucleo: NucleoDaConferencia, p: PedidoReprocessamento): Promise<boolean> {
+export async function estabelecimentoExiste(
+  nucleo: NucleoDaConferencia,
+  p: PedidoReprocessamento,
+): Promise<boolean> {
   const linha = await nucleo.lerSomente({ cliente: p.cliente, correlacao: 'contabil-reprocessar' }, (l) =>
     l.uma('SELECT id FROM estabelecimento WHERE id = ? AND excluido_em IS NULL', [p.estabelecimento]),
   );
@@ -216,13 +237,19 @@ export async function reprocessar(
   p: PedidoReprocessamento,
 ): Promise<ExecucaoReprocessamento> {
   if (!(await estabelecimentoExiste(nucleo, p)))
-    return { saida: SAIDA.uso, texto: `estabelecimento ${p.estabelecimento} não existe (ou está excluído) no cliente ${p.cliente}` };
+    return {
+      saida: SAIDA.uso,
+      texto: `estabelecimento ${p.estabelecimento} não existe (ou está excluído) no cliente ${p.cliente}`,
+    };
   const c = contextoDe(p);
   try {
     const primeira = await lerPeriodo(fonte, c, p.estabelecimento, p.periodo);
     const segunda = await lerPeriodo(fonte, c, p.estabelecimento, p.periodo);
     const r = conferirExecucoes(primeira, segunda);
-    return { saida: saidaDe(r), texto: relatorio(`${p.cliente}/${p.estabelecimento}`, p.estabelecimento, p.periodo, r) };
+    return {
+      saida: saidaDe(r),
+      texto: relatorio(`${p.cliente}/${p.estabelecimento}`, p.estabelecimento, p.periodo, r),
+    };
   } catch (e) {
     if (codigoDoProblema(e) !== 'modelo-pendente') throw e;
     const detalhe = (e as { problema?: { detail?: unknown } }).problema?.detail;
@@ -236,7 +263,9 @@ export async function reprocessar(
 async function principal(argv: readonly string[]): Promise<number> {
   const p = pedidoDe(opcoesDe(argv));
   if (typeof p === 'string') {
-    console.error(`${p}. Uso: pnpm contabil:reprocessar -- --cliente=<banco> --estabelecimento=<id> --periodo=AAAA-MM`);
+    console.error(
+      `${p}. Uso: pnpm contabil:reprocessar -- --cliente=<banco> --estabelecimento=<id> --periodo=AAAA-MM`,
+    );
     return SAIDA.uso;
   }
   const nucleo = new NucleoProprio();

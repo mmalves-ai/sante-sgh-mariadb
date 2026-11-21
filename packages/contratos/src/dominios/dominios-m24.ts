@@ -1,8 +1,8 @@
 // Cadastros de prescrição do M24 (ficha, seção 7: "Cadastros > Cadastros clínicos e de prescrição") no CRUD
 // genérico (M08): locais de assistência, perguntas enviadas à operadora e hemocomponentes prescritíveis. Os demais
 // cadastros de prescrição (kits, receitas padrão, itens não padronizados, parâmetros do item) têm tela própria de
-// consulta na prescrição (o item de estoque é buscado, não listado). Opções do legado (TBOPCOES, retrato
-// tools/verificadores/dados/acesso-legado.pc.json): "Cadastro de template operadora" 5975 (Consultar 5976,
+// consulta na prescrição (o item de estoque é buscado, não listado). Opções do legado (menu de origem, ver
+// conector/mapa/permissoes.tsv): "Cadastro de template operadora" 5975 (Consultar 5976,
 // Confirmar 5977) para as perguntas; o local de assistência não tem item próprio na árvore: área genérica
 // "Tabelas" 3501 (inferida, POL-1b; conferir na validação com a TI, DP-3).
 import type { DominioPublico } from './tipos.js';
@@ -49,8 +49,8 @@ export const DOMINIOS_M24: readonly DominioPublico[] = [
 ];
 
 // ── M24 (P-CAD-1): os demais cadastros de prescrição no CRUD genérico ─────────────────────────────────
-// Lidos na cópia em 22/10/2026 (estrutura RDB$ e agregados; nada de pessoa). Opções do legado (TBOPCOES, retrato
-// tools/verificadores/dados/acesso-legado.pc.json), só as ativas: Kits de medicamentos 4671 (Consultar 5947, Novo
+// Lidos na cópia em 22/10/2026 (estrutura RDB$ e agregados; nada de pessoa). Opções do legado (menu de origem, ver
+// conector/mapa/permissoes.tsv), só as ativas: Kits de medicamentos 4671 (Consultar 5947, Novo
 // kit 5366, Confirmar 5367, Excluir 4674); Kits de soluções EV contínua 4667 (Consultar 5946, Confirmar 4670,
 // Excluir 4669); Itens não padronizados 3347 (Consultar 5948, Incluir 3349, Confirmar 4675, Excluir 3350);
 // Protocolos prescrição geral 3368 (Confirmar 5369, Excluir 3371); Fórmulas 2646 (Consultar 5954, Confirmar 5373,

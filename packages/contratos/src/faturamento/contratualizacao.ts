@@ -3,10 +3,10 @@
 // contrato com o gestor do SUS (esfera, orçamento pré-fixado e pós-fixado, incentivos, habilitação), as metas
 // quantitativas por grupo SIGTAP e qualitativas por indicador, com periodicidade, pontos e escore, e o painel produção ×
 // meta alimentado pelo faturamento SUS (M51) ou, sem ele, pelas contas SUS do motor de convênios.
-// Compatível com o que já existe: os códigos dos domínios são os das 11 tabelas `CM*` do sistema anterior (esfera =
-// CMTPCONTRATO, orçamento = CMTPORCAMENTO, periodicidade = CMPERIODO, indicador = CMTPINDICADOR, formato =
-// CMTPITEMINDIC, aferição = CMTPAFERICAO, escore = CMESCORE, rede = CMREDEASSIST, complexidade = CMTIPOCOMPLEXIDADESP,
-// incentivo = CMINCENTIVO), lidos onde estão. As tabelas de domínio têm gatilho que recusa toda gravação (D-DOM-555): o
+// Compatível com o que já existe: os códigos dos 11 domínios (esfera do gestor, componente do orçamento,
+// periodicidade, grupo do indicador, formato da resposta, fonte da aferição, escore, rede de atenção, bloco de
+// financiamento, tipo de dado e incentivo) são os mesmos do sistema anterior, lidos onde estão. As tabelas de domínio
+// recusam toda gravação (D-DOM-555): o
 // novo só lê; contrato, metas e apurações ficam em `SGH_SUS_*` (script 0555). Os rótulos aqui são os do produto.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
@@ -20,7 +20,7 @@ export const COMPETENCIAS_MAXIMAS_PAINEL = 24;
 
 // ── Vocabulário (códigos dos domínios CM*; rótulos do produto) ─────────────────────────────────────
 
-/** CMTPCONTRATO: a esfera do gestor contratante. */
+/** A esfera do gestor contratante. */
 export const ESFERAS_CONTRATO_SUS = [
   { codigo: 1, rotulo: 'Federal' },
   { codigo: 2, rotulo: 'Estadual' },
@@ -28,14 +28,14 @@ export const ESFERAS_CONTRATO_SUS = [
 ] as const;
 export type EsferaContratoSus = (typeof ESFERAS_CONTRATO_SUS)[number]['codigo'];
 
-/** CMTPORCAMENTO: as duas partes do orçamento do contrato. */
+/** As duas partes do orçamento do contrato. */
 export const TIPOS_ORCAMENTO_SUS = [
   { codigo: 1, rotulo: 'Pré-fixado' },
   { codigo: 2, rotulo: 'Pós-fixado' },
 ] as const;
 
 /**
- * CMPERIODO: a periodicidade da meta. `meses` é o tamanho do período em competências; as submensais (diária, semanal,
+ * A periodicidade da meta. `meses` é o tamanho do período em competências; as submensais (diária, semanal,
  * quinzenal) não servem para meta, porque a produção SUS é apurada por competência mensal (D-PER-555).
  */
 export const PERIODICIDADES_META_SUS = [
@@ -53,7 +53,7 @@ export const PERIODICIDADES_META_SUS = [
   { codigo: 1, rotulo: 'Anual', meses: 12 },
   { codigo: 2, rotulo: 'Bianual', meses: 24 },
 ] as const;
-/** Os códigos de CMPERIODO que não servem para meta (diária 4, quinzenal 7, semanal 8). */
+/** Os códigos de periodicidade que não servem para meta (diária 4, quinzenal 7, semanal 8). */
 export const PERIODICIDADES_SUBMENSAIS = [4, 7, 8] as const;
 export type PeriodicidadeMetaSus = (typeof PERIODICIDADES_META_SUS)[number]['codigo'];
 
@@ -61,7 +61,7 @@ export function mesesDaPeriodicidade(codigo: number): number | null {
   return PERIODICIDADES_META_SUS.find((p) => p.codigo === codigo)?.meses ?? null;
 }
 
-/** CMTPINDICADOR: o grupo do indicador qualitativo (o 0 "não informado" do domínio não é aceito numa meta). */
+/** O grupo do indicador qualitativo (o 0 "não informado" do domínio não é aceito numa meta). */
 export const TIPOS_INDICADOR_SUS = [
   { codigo: 1, rotulo: 'Condicionantes da remuneração' },
   { codigo: 2, rotulo: 'Qualidade da assistência' },
@@ -74,7 +74,7 @@ export const TIPOS_INDICADOR_SUS = [
 const CODIGOS_INDICADOR = TIPOS_INDICADOR_SUS.map((t) => t.codigo);
 
 /**
- * CMTPITEMINDIC: o formato da resposta do indicador. Só os mensuráveis entram numa meta: sim ou não (2), valor decimal
+ * O formato da resposta do indicador. Só os mensuráveis entram numa meta: sim ou não (2), valor decimal
  * (6) e valor inteiro (7). Título, texto, texto fixo e respostas (1, 3, 4, 5) são da montagem de questionário.
  */
 export const FORMATOS_INDICADOR_SUS = [
@@ -85,7 +85,7 @@ export const FORMATOS_INDICADOR_SUS = [
 export type FormatoIndicadorSus = (typeof FORMATOS_INDICADOR_SUS)[number]['codigo'];
 const CODIGOS_FORMATO = FORMATOS_INDICADOR_SUS.map((f) => f.codigo);
 
-/** CMTPAFERICAO: de onde vem o dado que comprova o indicador (rótulo do produto no código 1, D-AFER-555). */
+/** De onde vem o dado que comprova o indicador (rótulo do produto no código 1, D-AFER-555). */
 export const AFERICOES_SUS = [
   { codigo: 1, rotulo: 'Sistema de gestão do hospital' },
   { codigo: 2, rotulo: 'Sistemas do DATASUS' },
@@ -94,7 +94,7 @@ export const AFERICOES_SUS = [
 ] as const;
 const CODIGOS_AFERICAO = AFERICOES_SUS.map((a) => a.codigo);
 
-/** CMESCORE: o escore do período, da faixa de cumprimento (4 é o melhor). */
+/** O escore do período, da faixa de cumprimento (4 é o melhor). */
 export const ESCORES_SUS = [
   { codigo: 4, rotulo: 'Ótimo' },
   { codigo: 3, rotulo: 'Bom' },
@@ -103,7 +103,7 @@ export const ESCORES_SUS = [
 ] as const;
 export type EscoreSus = (typeof ESCORES_SUS)[number]['codigo'];
 
-/** CMREDEASSIST: a rede de atenção do contrato (0 = não informada). */
+/** A rede de atenção do contrato (0 = não informada). */
 export const REDES_ASSISTENCIA_SUS = [
   { codigo: 0, rotulo: 'Não informada' },
   { codigo: 1, rotulo: 'Rede Cegonha' },
@@ -114,7 +114,7 @@ export const REDES_ASSISTENCIA_SUS = [
 ] as const;
 const CODIGOS_REDE = REDES_ASSISTENCIA_SUS.map((r) => r.codigo);
 
-/** CMTIPOCOMPLEXIDADESP: o bloco de financiamento da meta quantitativa (informativo; a produção vem da SIGTAP). */
+/** O bloco de financiamento da meta quantitativa (informativo; a produção vem da SIGTAP). */
 export const COMPLEXIDADES_SUS = [
   { codigo: 1, rotulo: 'Teto MAC' },
   { codigo: 2, rotulo: 'Alta complexidade ambulatorial' },
@@ -259,7 +259,7 @@ const umDe = (codigos: readonly number[], mensagem: string) =>
 
 export const esquemaIncentivoSus = z
   .object({
-    /** CMINCENTIVO.ID quando o incentivo está no domínio; null para o incentivo só com o nome. */
+    /** Código do incentivo quando o incentivo está no domínio; null para o incentivo só com o nome. */
     incentivo: z.number().int().min(0).max(2_147_483_647).nullable().default(null),
     nome: livre(120).pipe(z.string().min(3, 'Informe o nome do incentivo.')),
     valorMensalCentavos: centavos.refine((n) => n > 0, { message: 'Informe o valor mensal do incentivo.' }),

@@ -7,7 +7,7 @@
 //     facial só com a DP-45): TRAVADO, só consulta (D-CRUD-50-5);
 //   - situações de acesso (3), tipos de terminal (6) e fabricantes (3): um trigger recusa incluir, alterar e excluir
 //     (e_geral_sistema): de SISTEMA, só consulta.
-// Opções do outro sistema (TBOPCOES, módulo Controle de acesso): Tabelas 4528 (com Crachás 4530 na portaria e Terminais
+// Opções do outro sistema (menu de origem, módulo Controle de acesso): Tabelas 4528 (com Crachás 4530 na portaria e Terminais
 // 4540 nos terminais) para ler; Tabelas para gravar. Não há opção própria por tabela na árvore (inferida: conferir na
 // validação).
 import type { DominioPublico } from './tipos.js';

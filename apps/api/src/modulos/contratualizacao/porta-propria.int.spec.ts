@@ -36,7 +36,15 @@ const CONTRATO: Omit<ContratoSusEntrada, 'versaoVista' | 'chave'> = {
   valorPreMensalCentavos: 12_345_678,
   valorPosMensalCentavos: 500_000,
   parteQualitativaPct: 40,
-  incentivos: [{ incentivo: null, nome: 'Incentivo de teste', valorMensalCentavos: 100_000, inicio: '2026-01-01', fim: null }],
+  incentivos: [
+    {
+      incentivo: null,
+      nome: 'Incentivo de teste',
+      valorMensalCentavos: 100_000,
+      inicio: '2026-01-01',
+      fim: null,
+    },
+  ],
   observacao: null,
 };
 
@@ -91,19 +99,33 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
 
   const ler = <T extends Record<string, unknown>>(sql: string, p: readonly unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0203-conta' }, (l) => l.uma<T>(sql, p));
-  const trilha = (entidade: string): ((r: { id: number }) => TrilhaDaGravacao) => (r) => ({
-    estabelecimento: estA,
-    usuario: null,
-    acao: 'operacao',
-    entidade,
-    entidadeId: r.id,
-    dadosDepois: { evento: 'teste' },
-    correlacao,
-  });
+  const trilha =
+    (entidade: string): ((r: { id: number }) => TrilhaDaGravacao) =>
+    (r) => ({
+      estabelecimento: estA,
+      usuario: null,
+      acao: 'operacao',
+      entidade,
+      entidadeId: r.id,
+      dadosDepois: { evento: 'teste' },
+      correlacao,
+    });
 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-limpa' }, async (e) => {
       for (const est of [estA, estB].filter(Boolean)) {
+        await e.executar(
+          `DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+            WHERE ch.estabelecimento_id = ? AND ch.numero LIKE 'F2423-%'`,
+          [est],
+        );
+        await e.executar(
+          "DELETE FROM conta_hospitalar WHERE estabelecimento_id = ? AND numero LIKE 'F2423-%'",
+          [est],
+        );
+        await e.executar("DELETE FROM atendimento WHERE estabelecimento_id = ? AND numero LIKE 'F2423-%'", [
+          est,
+        ]);
         await e.executar('DELETE FROM afericao_meta_sus WHERE estabelecimento_id = ?', [est]);
         await e.executar(
           `DELETE m FROM meta_contratual_sus m JOIN contrato_gestor_sus g ON g.id = m.contrato_gestor_sus_id
@@ -228,9 +250,17 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
         WHERE g.id = ?`,
       [contrato],
     );
-    expect(linha).toMatchObject({ situacao: 'vigente', versao: 1, esfera: 'municipal', rede: 'urgencia_emergencia' });
+    expect(linha).toMatchObject({
+      situacao: 'vigente',
+      versao: 1,
+      esfera: 'municipal',
+      rede: 'urgencia_emergencia',
+    });
     expect(Number(linha?.['valor_pre_fixado_mensal'])).toBeCloseTo(123_456.78, 2);
-    const inc = await ler('SELECT COUNT(*) AS n FROM incentivo_contratual_sus WHERE contrato_gestor_sus_id = ?', [contrato]);
+    const inc = await ler(
+      'SELECT COUNT(*) AS n FROM incentivo_contratual_sus WHERE contrato_gestor_sus_id = ?',
+      [contrato],
+    );
     expect(Number(inc?.['n'])).toBe(1);
     const t = await ler(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'contrato_gestor_sus' AND entidade_id = ? AND correlacao = ?",
@@ -245,18 +275,24 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
     // O reenvio com a mesma chave acha o contrato original (o fluxo do controlador): nenhuma linha nova.
     const de = await porta.gravarSgh(ctxA, trilha('contrato_gestor_sus'), async (g) => {
       const ja = await g.contratoPelaChave('f22-0203-contrato-1');
-      return ja ? { id: ja.id, versao: ja.versao } : g.incluirContrato({ entrada: CONTRATO, usuario: 'teste', chave: 'f22-0203-contrato-1' });
+      return ja
+        ? { id: ja.id, versao: ja.versao }
+        : g.incluirContrato({ entrada: CONTRATO, usuario: 'teste', chave: 'f22-0203-contrato-1' });
     });
     expect(de).toEqual({ id: contrato, versao: 1 });
-    const n = await ler('SELECT COUNT(*) AS n FROM contrato_gestor_sus WHERE estabelecimento_id = ? AND numero_contrato = ?', [
-      estA,
-      CONTRATO.numero,
-    ]);
+    const n = await ler(
+      'SELECT COUNT(*) AS n FROM contrato_gestor_sus WHERE estabelecimento_id = ? AND numero_contrato = ?',
+      [estA, CONTRATO.numero],
+    );
     expect(Number(n?.['n'])).toBe(1);
     // Chave já guardada não inclui de novo, nem chamada direta (a chave única do banco recusa).
     await expect(
       porta.gravarSgh(ctxA, trilha('contrato_gestor_sus'), (g) =>
-        g.incluirContrato({ entrada: { ...CONTRATO, numero: `${CONTRATO.numero}9` }, usuario: 'teste', chave: 'f22-0203-contrato-1' }),
+        g.incluirContrato({
+          entrada: { ...CONTRATO, numero: `${CONTRATO.numero}9` },
+          usuario: 'teste',
+          chave: 'f22-0203-contrato-1',
+        }),
       ),
     ).rejects.toThrow();
     const lido = await porta.contrato(ctxA, contrato);
@@ -271,7 +307,13 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       versao: 1,
     });
     expect(lido?.incentivos).toEqual([
-      { incentivo: null, nome: 'Incentivo de teste', valorMensalCentavos: 100_000, inicio: '2026-01-01', fim: null },
+      {
+        incentivo: null,
+        nome: 'Incentivo de teste',
+        valorMensalCentavos: 100_000,
+        inicio: '2026-01-01',
+        fim: null,
+      },
     ]);
     expect((await porta.contratos(ctxA)).itens.map((c) => c.id)).toContain(contrato);
   });
@@ -295,21 +337,25 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'conflito-versao' } });
     const lido = await porta.contrato(ctxA, contrato);
-    expect(lido).toMatchObject({ esfera: 2, gestor: 'Secretaria Estadual Fictícia', versao: 2, incentivos: [] });
+    expect(lido).toMatchObject({
+      esfera: 2,
+      gestor: 'Secretaria Estadual Fictícia',
+      versao: 2,
+      incentivos: [],
+    });
   });
 
-  it('o campo sem lugar no modelo é recusado (modelo-pendente) e nada é gravado', async () => {
-    await expect(
-      porta.gravarSgh(ctxA, trilha('contrato_gestor_sus'), (g) =>
-        g.incluirContrato({
-          entrada: { ...CONTRATO, numero: 'CT-F2203-2', observacao: 'Observação' },
-          usuario: 'teste',
-          chave: 'f22-0203-contrato-2',
-        }),
-      ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    const n = await ler('SELECT COUNT(*) AS n FROM contrato_gestor_sus WHERE estabelecimento_id = ?', [estA]);
-    expect(Number(n?.['n'])).toBe(1);
+  it('a observação do contrato é gravada e relida', async () => {
+    const r = await porta.gravarSgh(ctxA, trilha('contrato_gestor_sus'), (g) =>
+      g.incluirContrato({
+        entrada: { ...CONTRATO, numero: 'CT-F2203-2', observacao: 'Observação de teste' },
+        usuario: 'teste',
+        chave: 'f22-0203-contrato-2',
+      }),
+    );
+    expect((await porta.contrato(ctxA, r.id))?.observacao).toBe('Observação de teste');
+    const n = await ler('SELECT observacao FROM contrato_gestor_sus WHERE id = ?', [r.id]);
+    expect(n?.['observacao']).toBe('Observação de teste');
   });
 
   it('metas: a quantitativa aponta o procedimento SIGTAP; a qualitativa ganha o indicador', async () => {
@@ -334,7 +380,9 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
         : g.incluirMeta({ entrada: META_QUANTI, usuario: 'teste', contrato, chave: 'f22-0203-meta-1' });
     });
     expect(reenvio.id).toBe(metaQuanti);
-    const nm = await ler('SELECT COUNT(*) AS n FROM meta_contratual_sus WHERE contrato_gestor_sus_id = ?', [contrato]);
+    const nm = await ler('SELECT COUNT(*) AS n FROM meta_contratual_sus WHERE contrato_gestor_sus_id = ?', [
+      contrato,
+    ]);
     expect(Number(nm?.['n'])).toBe(2);
     // Outro estabelecimento não acha a meta pela chave.
     const deB = await porta.gravarSgh(ctxB, trilha('meta_contratual_sus'), async (g) => ({
@@ -379,15 +427,30 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       afericao: 2,
     });
     const alterada = await porta.gravarSgh(ctxA, trilha('meta_contratual_sus'), (g) =>
-      g.alterarMeta({ entrada: { ...META_QUALI, indicador: 4 }, usuario: 'teste', id: metaQuali, versaoVista: 1 }),
+      g.alterarMeta({
+        entrada: { ...META_QUALI, indicador: 4 },
+        usuario: 'teste',
+        id: metaQuali,
+        versaoVista: 1,
+      }),
     );
     expect(alterada.versao).toBe(2);
     expect((await porta.meta(ctxA, metaQuali))?.indicador).toBe(4);
-    await expect(
-      porta.gravarSgh(ctxA, trilha('meta_contratual_sus'), (g) =>
-        g.incluirMeta({ entrada: { ...META_QUALI, formato: 7 }, usuario: 'teste', contrato, chave: 'f22-0203-meta-3' }),
-      ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    const inteira = await porta.gravarSgh(ctxA, trilha('meta_contratual_sus'), (g) =>
+      g.incluirMeta({
+        entrada: { ...META_QUALI, formato: 7, complexidade: 3 },
+        usuario: 'teste',
+        contrato,
+        chave: 'f22-0203-meta-3',
+      }),
+    );
+    expect(await porta.meta(ctxA, inteira.id)).toMatchObject({ formato: 7, complexidade: 3 });
+    const gravada = await ler(
+      `SELECT m.formato_resposta, cx.codigo AS complexidade FROM meta_contratual_sus m
+         JOIN dominio_contratualizacao_sus cx ON cx.id = m.complexidade_dominio_contratualizacao_sus_id WHERE m.id = ?`,
+      [inteira.id],
+    );
+    expect(gravada).toMatchObject({ formato_resposta: 'inteiro', complexidade: 'media_ambulatorial' });
   });
 
   it('a apuração do período é registrada e corrigida pela versão; a leitura devolve as duas competências', async () => {
@@ -409,7 +472,14 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
     const c = await porta.gravarSgh(ctxA, trilha('afericao_meta_sus'), async (g) => {
       const atual = await g.apuracao(metaQuali, '202603');
       expect(atual?.id).toBe(r.id);
-      return g.corrigirApuracao({ ...base, realizado: 70, cumprimentoPct: 82.35, escore: 2, id: r.id, versaoVista: 1 });
+      return g.corrigirApuracao({
+        ...base,
+        realizado: 70,
+        cumprimentoPct: 82.35,
+        escore: 2,
+        id: r.id,
+        versaoVista: 1,
+      });
     });
     expect(c.versao).toBe(2);
     const a = await porta.apuracoes(ctxA, [metaQuali, metaQuanti]);
@@ -424,11 +494,11 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       versao: 2,
     });
     const linha = await ler(
-      `SELECT a.situacao, es.codigo AS escore FROM afericao_meta_sus a
+      `SELECT a.situacao, a.origem_realizado, es.codigo AS escore FROM afericao_meta_sus a
          JOIN dominio_contratualizacao_sus es ON es.id = a.escore_dominio_contratualizacao_sus_id WHERE a.id = ?`,
       [r.id],
     );
-    expect(linha).toMatchObject({ situacao: 'apurada', escore: 'regular' });
+    expect(linha).toMatchObject({ situacao: 'apurada', origem_realizado: 'informado', escore: 'regular' });
   });
 
   it('outro estabelecimento não vê o contrato nem as metas', async () => {
@@ -440,7 +510,12 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
 
   it('encerra o contrato com o motivo na trilha; a produção do faturamento SUS lê sem linhas', async () => {
     const r = await porta.gravarSgh(ctxA, trilha('contrato_gestor_sus'), (g) =>
-      g.encerrarContrato({ id: contrato, versaoVista: versaoContrato, motivo: 'Fim do convênio de teste', usuario: 'teste' }),
+      g.encerrarContrato({
+        id: contrato,
+        versaoVista: versaoContrato,
+        motivo: 'Fim do convênio de teste',
+        usuario: 'teste',
+      }),
     );
     expect(r.versao).toBe(versaoContrato + 1);
     expect((await porta.contrato(ctxA, contrato))?.situacao).toBe('encerrado');
@@ -449,7 +524,122 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       [contrato, correlacao],
     );
     expect(t?.['motivo']).toBe('Fim do convênio de teste');
+    expect(await porta.contrato(ctxA, contrato)).toMatchObject({
+      motivoEncerramento: 'Fim do convênio de teste',
+      encerradoEm: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
     expect(await porta.producaoFaturamentoSus(ctxA, '202601', '202612')).toEqual([]);
-    await expect(porta.producaoContasSus()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    expect(await porta.producaoContasSus(ctxA, '202603', [])).toEqual([]);
+    expect(await porta.producaoContasSus(ctxA, '202603', [999_999])).toEqual([]);
+    await expect(porta.producaoContasSus(ctxA, '2026-03', [1])).rejects.toMatchObject({
+      problema: { codigo: 'entrada-invalida' },
+    });
+  });
+
+  it('a produção das contas SUS filtra a fonte pagadora pelo CÓDIGO de negócio do parâmetro, nunca pelo id', async () => {
+    const m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f24-23-producao' }, async (e) => {
+      const agora = new Date();
+      const porCodigo = (tabela: string, codigo: string, colunas: string, valores: unknown[]) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE codigo = ?`,
+          [codigo],
+          `INSERT INTO ${tabela} (codigo, ${colunas}, criado_em) VALUES (?, ${valores.map(() => '?').join(', ')}, ?)`,
+          [codigo, ...valores, agora],
+        );
+      // Código com zero à esquerda: o parâmetro chega como número (917) e precisa casar com '0917'.
+      const fonte = await porCodigo('fonte_pagadora', '0917', 'nome, tipo, situacao', [
+        'GESTOR SUS FICTICIO F2423',
+        'publico',
+        'ativa',
+      ]);
+      const pessoa = (nome: string) =>
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
+      const pf = await pessoa('PACIENTE SINTETICO F2423');
+      const paciente = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pf],
+        "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+        [pf, 912_423_001, agora],
+      );
+      const pm = await pessoa('MEDICO SINTETICO F2423');
+      const profissional = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pm],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pm, agora],
+      );
+      const carater = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+        ['E9'],
+        "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('E9', 'CARATER F2423', 'teste', ?)",
+        [agora],
+      );
+      const categoria = await porCodigo('categoria_atendimento', 'F2423-INT', 'descricao, tipo_base', [
+        'INTERNACAO F2423',
+        'externo',
+      ]);
+      const atendimento = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+           fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [estA, `F2423-AT${Date.now().toString(36)}`, paciente, categoria, carater, fonte, profissional, agora, agora],
+      );
+      const tipo = await porCodigo('tipo_conta', 'F2423-INT', 'descricao, natureza', [
+        'INTERNACAO F2423',
+        'internacao',
+      ]);
+      const conta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-03-01', ?, ?)`,
+        [estA, `F2423-CH${Date.now().toString(36)}`, atendimento, paciente, fonte, tipo, '2026-03-02 08:00:00', agora],
+      );
+      const grupo = await porCodigo('grupo_faturamento', 'F2423-GF', 'descricao, tipo_grupo', [
+        'GRUPO F2423',
+        'servico_hospitalar',
+      ]);
+      const item = await porCodigo(
+        'item_faturavel',
+        'F2423-IF',
+        'descricao, tipo_item, grupo_faturamento_id',
+        ['CONSULTA F2423', 'procedimento', grupo],
+      );
+      const sigtap = await e.uma<{ id: number }>(
+        'SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ?',
+        ['0301010072'],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM equivalencia_sigtap_item WHERE item_faturavel_id = ? AND procedimento_sigtap_id = ?',
+        [item, sigtap?.id],
+        "INSERT INTO equivalencia_sigtap_item (item_faturavel_id, procedimento_sigtap_id, vigencia_inicio, criado_em) VALUES (?, ?, '2020-01-01', ?)",
+        [item, sigtap?.id, agora],
+      );
+      const lancar = (seq: number, qtd: number, situacao: string) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+             valor_unitario, valor_total, situacao, criado_em) VALUES (?, ?, ?, '2026-03-03 10:00:00', ?, 10, ?, ?, ?)`,
+          [conta, seq, item, qtd, qtd * 10, situacao, agora],
+        );
+      await lancar(1, 2, 'lancado');
+      await lancar(2, 1, 'conferido');
+      await lancar(3, 5, 'estornado');
+      return { fonte };
+    });
+    const r = await porta.producaoContasSus(ctxA, '202603', [917]);
+    expect(r).toEqual([
+      { competencia: '202603', modalidade: 'hospitalar', codigo: '0301010072', quantidade: 3 },
+    ]);
+    // O id da fonte pagadora não é código: passado no parâmetro, não traz a produção dela.
+    if (m.fonte !== 917) expect(await porta.producaoContasSus(ctxA, '202603', [m.fonte])).toEqual([]);
+    expect(await porta.producaoContasSus(ctxB, '202603', [917])).toEqual([]);
   });
 });

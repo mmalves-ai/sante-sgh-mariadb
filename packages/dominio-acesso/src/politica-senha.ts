@@ -1,8 +1,8 @@
-// Política de senha (cap-08 §8.8): as regras de TBCFGLOGIN somadas às mínimas do Sante SGH quando a troca é
+// Política de senha (cap-08 §8.8): as regras da configuração de login somadas às mínimas do Sante SGH quando a troca é
 // feita pelo novo (8 caracteres, letra e número, sem derivar do login). Regra pura: sem banco, sem HTTP.
 import type { FalhaSenha } from '@sgh/contratos';
 
-/** Regras lidas de TBCFGLOGIN (null: coluna vazia no legado). */
+/** Regras lidas da configuração de login (null: não configurada). */
 export interface PoliticaSenhaLegado {
   readonly minimoCaracteres: number | null;
   readonly exigeLetra: boolean;
@@ -18,7 +18,7 @@ export interface PoliticaSenhaLegado {
 
 /**
  * W1-01 (parte 5): a política do Sante por estabelecimento (SGH_ACESSO_POLITICA_SENHA, versão vigente). Complementa
- * TBCFGLOGIN: a efetiva é a mais exigente entre as duas (só aperta, nunca afrouxa).
+ * configuração de login: a efetiva é a mais exigente entre as duas (só aperta, nunca afrouxa).
  */
 export interface PoliticaSenhaSante {
   readonly versao: number;
@@ -69,7 +69,7 @@ function menorPrazo(a: number, b: number): number {
 }
 
 /**
- * Política efetiva: a mais exigente entre o legado (TBCFGLOGIN), o mínimo do novo e, se houver, a política do Sante
+ * Política efetiva: a mais exigente entre a configuração de login, o mínimo do novo e, se houver, a política do Sante
  * do estabelecimento (W1-01, parte 5: tamanho e reuso pelo maior, classes por "ou", expiração pelo menor prazo).
  */
 export function politicaEfetiva(l: PoliticaSenhaLegado, sante?: PoliticaSenhaSante | null): PoliticaSenha {
@@ -256,7 +256,7 @@ export function senhaExpirada(alteradaEm: Date | null, agora: Date, periodoTroca
   return agora.getTime() - alteradaEm.getTime() > periodoTrocaDias * DIA_MS;
 }
 
-/** Início da janela de reutilização (TBHISTSENHA dentro dela não pode ser repetida). */
+/** Início da janela de reutilização (senha do histórico dentro dela não pode ser repetida). */
 export function inicioJanelaReutilizacao(agora: Date, periodoReutilizacaoDias: number): Date {
   return new Date(agora.getTime() - Math.max(0, periodoReutilizacaoDias) * DIA_MS);
 }

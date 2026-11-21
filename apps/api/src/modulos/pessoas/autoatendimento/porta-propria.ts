@@ -9,11 +9,12 @@
 // memória e no serviço).
 // Melhoria: o tipo do pedido é cadastro (FK pelo código); o tipo que faltar recusa com `cadastro-pendente`.
 // Melhoria: os ajustes do ponto ligados ao pedido ficam no detalhe do pedido (dados.ajustes), como o modelo prevê.
-// Pendente (pedido em docs/obra/fatias/f22/saida/03-02.json): o atestado (com o CID restrito) e a trilha de acesso a ele
-// não têm tabela: incluir e ler o atestado recusam com `modelo-pendente`; como nada pode ter sido gravado, a lista de
-// acessos é de fato vazia. O efeito da aprovação no ponto, nas férias e no cadastro usa os gravadores das portas
-// próprias desses módulos sobre a mesma transação (`efeitos`); enquanto não forem ligados, a aprovação que tem efeito
-// recusa com `modelo-pendente` e nada é gravado pela metade.
+// O atestado fica em atestado_colaborador (um por solicitação), com o CID pelo catálogo CID-10 (termo_terminologia) e o
+// anexo em arquivo; toda leitura do atestado grava o acesso em atestado_colaborador_acesso (quem, quando, a finalidade e
+// se viu o CID), e o CID só sai a quem pediu para vê-lo.
+// Pendente: o efeito da aprovação no ponto, nas férias e no cadastro usa os gravadores das portas próprias desses
+// módulos sobre a mesma transação (`efeitos`, ligados na composição do módulo); enquanto não forem ligados, a aprovação
+// que tem efeito recusa com `modelo-pendente` e nada é gravado pela metade.
 import { ErroOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type AnotacaoGravacao, gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, TrilhaDaGravacao } from '../../exames/public-api.js';
@@ -44,13 +45,19 @@ import type {
 import type {
   AcessoAtestado,
   AjusteDaSolicitacao,
+  AtestadoRegistrado,
   SituacaoSolicitacao,
   SolicitacaoRegistrada,
   TipoSolicitacao,
 } from './tipos.js';
 
 /** As tabelas que a gravação da solicitação escreve (mais as dos efeitos ligados). */
-export const TABELAS_SOLICITACAO = ['solicitacao_colaborador'] as const;
+export const TABELAS_SOLICITACAO = [
+  'solicitacao_colaborador',
+  'atestado_colaborador',
+  'atestado_colaborador_acesso',
+  'arquivo',
+] as const;
 
 /** Os gravadores dos efeitos da aprovação (ponto, férias e cadastro) sobre a MESMA transação. */
 export interface EfeitosAutoatendimento {
@@ -58,7 +65,6 @@ export interface EfeitosAutoatendimento {
   gravadores(tx: TxOperacao, est: number): Pick<GravadorAutoatendimento, 'ponto' | 'folha' | 'pessoas'>;
 }
 
-const PENDENTE_ATESTADO = 'O atestado do autoatendimento (dados do atestado com o CID e a trilha de acesso)';
 const PENDENTE_EFEITO = 'O efeito da aprovação no ponto, nas férias ou no cadastro do colaborador';
 
 /** Um gravador de efeito ainda não ligado: toda chamada recusa (a transação inteira é desfeita). */
@@ -94,7 +100,9 @@ const mesmo = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUp
 
 const SQL_SOLICITACAO = `
   SELECT s.id, s.situacao, s.solicitado_em, s.data_inicio, s.data_fim, s.dados, s.justificativa, s.arquivo_id,
-         s.decidido_em, s.motivo_decisao, s.versao, t.codigo AS tipo, up.login AS pedido_por, ud.login AS decidido_por
+         s.decidido_em, s.motivo_decisao, s.versao, t.codigo AS tipo, up.login AS pedido_por, ud.login AS decidido_por,
+         EXISTS (SELECT 1 FROM atestado_colaborador ac
+                  WHERE ac.solicitacao_colaborador_id = s.id AND ac.excluido_em IS NULL) AS tem_atestado
     FROM solicitacao_colaborador s
     JOIN tipo_solicitacao_colaborador t ON t.id = s.tipo_solicitacao_colaborador_id
     LEFT JOIN usuario up ON up.id = s.criado_por
@@ -125,7 +133,7 @@ function solicitacaoDe(r: Linha): SolicitacaoRegistrada {
     decididoEm: instanteN(r['decidido_em']),
     motivoDecisao: textoN(r['motivo_decisao']),
     ferias: d.ferias ?? null,
-    temAtestado: false,
+    temAtestado: Number(r['tem_atestado'] ?? 0) > 0,
     versao: n(r['versao']),
   } as SolicitacaoRegistrada;
 }
@@ -137,6 +145,70 @@ const SITUACAO_AJUSTE: Readonly<Record<string, string>> = {
   recusado: 'recusado',
   cancelado: 'desistido',
 };
+
+/** O CID-10 do catálogo guarda o código sem ponto (J111); o contrato mostra com ponto depois do 3º caractere (J11.1). */
+const cidSemPonto = (cid: string) => cid.trim().toUpperCase().replace('.', '');
+const cidComPonto = (codigo: string) =>
+  codigo.length > 3 ? `${codigo.slice(0, 3)}.${codigo.slice(3)}` : codigo;
+
+const SQL_ATESTADO = `
+  SELECT a.id, a.solicitacao_colaborador_id, a.emitido_em, a.dias, tt.codigo_termo AS cid, a.emitente,
+         a.registro_conselho, ar.chave_armazenamento, ar.hash_sha256, ar.tipo_mime, ar.tamanho_bytes,
+         u.login AS criado_login, a.criado_em
+    FROM atestado_colaborador a
+    JOIN solicitacao_colaborador s ON s.id = a.solicitacao_colaborador_id
+    LEFT JOIN termo_terminologia tt ON tt.id = a.cid_termo_terminologia_id
+    LEFT JOIN arquivo ar ON ar.id = a.arquivo_id
+    LEFT JOIN usuario u ON u.id = a.criado_por
+   WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL AND a.excluido_em IS NULL
+     AND a.solicitacao_colaborador_id = ?`;
+
+function atestadoDe(r: Linha, verCid: boolean): AtestadoRegistrado {
+  const cid = textoN(r['cid']);
+  const chave = textoN(r['chave_armazenamento']);
+  return {
+    id: n(r['id']),
+    solicitacao: n(r['solicitacao_colaborador_id']),
+    emitidoEm: dataIso(r['emitido_em']) ?? '',
+    dias: n(r['dias']),
+    cid: verCid && cid ? cidComPonto(cid) : null,
+    temCid: cid !== null,
+    emitente: texto(r['emitente']),
+    registroConselho: textoN(r['registro_conselho']),
+    arquivo:
+      chave === null
+        ? null
+        : {
+            chave,
+            hash: texto(r['hash_sha256']),
+            tipo: texto(r['tipo_mime']) as NonNullable<AtestadoRegistrado['arquivo']>['tipo'],
+            tamanho: n(r['tamanho_bytes']),
+          },
+    criadoPor: texto(r['criado_login']),
+    criadoEm: instante(r['criado_em']),
+  } as AtestadoRegistrado;
+}
+
+async function acessosDe(l: L, est: number, solicitacao: number): Promise<AcessoAtestado[]> {
+  const rs = await l.consultar<Linha>(
+    `SELECT x.id, u.login, x.acessado_em, x.viu_cid, x.finalidade
+       FROM atestado_colaborador_acesso x
+       JOIN atestado_colaborador a ON a.id = x.atestado_colaborador_id AND a.excluido_em IS NULL
+       JOIN solicitacao_colaborador s ON s.id = a.solicitacao_colaborador_id
+       JOIN usuario u ON u.id = x.usuario_id
+      WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL AND a.solicitacao_colaborador_id = ?
+      ORDER BY x.acessado_em DESC, x.id DESC LIMIT 500`,
+    [est, solicitacao],
+    { teto: 500 },
+  );
+  return rs.map((r) => ({
+    id: n(r['id']),
+    acessadoPor: texto(r['login']),
+    acessadoEm: instante(r['acessado_em']),
+    viuCid: Number(r['viu_cid']) === 1 || r['viu_cid'] === true,
+    finalidade: texto(r['finalidade']),
+  }));
+}
 
 async function lerSolicitacao(l: L, est: number, id: number): Promise<Linha | null> {
   return l.uma<Linha>(`${SQL_SOLICITACAO} AND s.id = ?`, [est, id]);
@@ -234,7 +306,53 @@ function gravador(
         justificativa: x.observacao,
       });
     },
-    incluirAtestado: () => Promise.reject(modeloPendente(PENDENTE_ATESTADO)),
+    async incluirAtestado(x) {
+      const sol = await travarSolicitacao(tx, est, x.solicitacao);
+      if (!sol) throw desatualizado();
+      if (sol['tipo'] !== 'atestado')
+        throw recusa('atestado-fora-do-tipo', 'Só a solicitação do tipo atestado recebe o atestado.');
+      const ja = await tx.uma<{ id: number }>(
+        'SELECT id FROM atestado_colaborador WHERE solicitacao_colaborador_id = ? LIMIT 1',
+        [x.solicitacao],
+      );
+      if (ja) throw recusa('atestado-repetido', 'A solicitação já tem um atestado.');
+      let cid: number | null = null;
+      if (x.cid !== null) {
+        const t = await tx.uma<{ id: number }>(
+          `SELECT tt.id FROM termo_terminologia tt JOIN terminologia t ON t.id = tt.terminologia_id
+            WHERE t.codigo = 'cid10' AND tt.codigo_termo = ? AND tt.ativo = TRUE
+            ORDER BY tt.id LIMIT 1`,
+          [cidSemPonto(x.cid)],
+        );
+        if (!t)
+          throw recusa('cid-inexistente', 'O CID informado não está no catálogo CID-10 carregado.', {
+            campos: ['cid'],
+          });
+        cid = n(t.id);
+      }
+      const arquivo =
+        x.arquivo === null
+          ? null
+          : await tx.incluir('arquivo', {
+              estabelecimento_id: est,
+              entidade: 'atestado_colaborador',
+              finalidade: 'atestado',
+              nome_original: (x.arquivo.chave.split('/').at(-1) ?? 'atestado').slice(0, 255),
+              tipo_mime: x.arquivo.tipo,
+              tamanho_bytes: x.arquivo.tamanho,
+              hash_sha256: x.arquivo.hash,
+              chave_armazenamento: x.arquivo.chave,
+            });
+      return tx.incluir('atestado_colaborador', {
+        solicitacao_colaborador_id: x.solicitacao,
+        emitido_em: x.emitidoEm,
+        dias: x.dias,
+        cid_termo_terminologia_id: cid,
+        emitente: x.emitente,
+        registro_conselho: x.registroConselho,
+        arquivo_id: arquivo,
+      });
+    },
     async decidirSolicitacao(x) {
       const r = await travada(x.id, x.versao);
       if (mesmo(texto(r['pedido_por']), x.por))
@@ -282,7 +400,19 @@ function gravador(
       });
     },
     ajustesDaSolicitacao: (id) => ajustesDe(tx, est, id),
-    atestado: () => Promise.reject(modeloPendente(PENDENTE_ATESTADO)),
+    async atestado(x) {
+      const r = await tx.uma<Linha>(SQL_ATESTADO, [est, x.solicitacao]);
+      if (!r) return null;
+      const em = await agora();
+      await tx.incluir('atestado_colaborador_acesso', {
+        atestado_colaborador_id: n(r['id']),
+        usuario_id: await exigirUsuario(tx, x.por),
+        acessado_em: em,
+        viu_cid: x.verCid,
+        finalidade: x.finalidade.slice(0, 200),
+      });
+      return atestadoDe(r, x.verCid);
+    },
     ponto: e.ponto,
     folha: e.folha,
     pessoas: e.pessoas,
@@ -357,9 +487,8 @@ export class PortaAutoatendimentoPropria implements PortaAutoatendimento {
   ajustesDaSolicitacao(c: ContextoAutoatendimento, solicitacao: number): Promise<AjusteDaSolicitacao[]> {
     return this.ler(c, (l, est) => ajustesDe(l, est, solicitacao));
   }
-  /** O atestado ainda não tem tabela: nenhum acesso pode ter sido gravado neste banco. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo
-  async acessosAtestado(_c: ContextoAutoatendimento, _solicitacao: number): Promise<AcessoAtestado[]> {
-    return [];
+  /** A trilha de leitura do atestado da solicitação, do acesso mais recente ao mais antigo. */
+  acessosAtestado(c: ContextoAutoatendimento, solicitacao: number): Promise<AcessoAtestado[]> {
+    return this.ler(c, (l, est) => acessosDe(l, est, solicitacao));
   }
 }

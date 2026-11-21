@@ -130,7 +130,7 @@ const horaLocal = z
 
 export const esquemaIniciarProtocoloGerenciado = z
   .object({
-    /** Número do atendimento do PA (RECADATE.REG). */
+    /** Número do atendimento do pronto atendimento (id do atendimento). */
     atendimento: id,
     tipo: z.enum(CODIGOS_TIPO_GERENCIADO),
     /** A versão vigente vista na tela (a inclusão a guarda; colisão se outra foi publicada no meio). */

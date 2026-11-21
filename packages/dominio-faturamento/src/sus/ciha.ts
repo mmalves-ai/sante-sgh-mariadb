@@ -1,7 +1,7 @@
 // CIHA (ficha do M51, regra 3; cap-06b §6.6, "Atenção sobre a CIHA"; Portaria GM/MS 1.171/2011; Orientações Técnicas
 // CIHA v4 e leiaute de importação do CIHA01 1.0.4.0): toda internação e todo procedimento ambulatorial pago por
 // convênio ou particular, com o procedimento SIGTAP equivalente (o vínculo que o gatilho do outro sistema grava em
-// FCCTRLANCIHA para cada item lançado, ou a equivalência registrada no Sante), o CID principal e os dados que o leiaute
+// cada item lançado, ou a equivalência registrada no Sante), o CID principal e os dados que o leiaute
 // exige. O que não tem equivalente vai para a crítica. Aqui a montagem é pura: as leituras do banco e o arquivo ficam
 // no adaptador e em `ciha-leiaute.ts`.
 //   - Internação: só o procedimento que caracteriza a internação (o de registro "AIH principal"; sem o registro
@@ -36,13 +36,13 @@ import {
   type ProcedimentoSigtap,
 } from './sigtap-competencia.js';
 
-/** Um item da conta com o vínculo SIGTAP (FCLANEXT × FCCTRLANCIHA). */
+/** Um item da conta com o vínculo SIGTAP. */
 export interface ItemCiha {
   readonly item: number;
-  /** TBPROSUS.ID do vínculo; null quando o gatilho não achou equivalente. */
+  /** Id do procedimento SIGTAP do vínculo; null quando o gatilho não achou equivalente. */
   readonly sigtap: number | null;
   readonly quantidade: number;
-  /** O procedimento do item na tabela do hospital (FCLANEXT.PROCTO): a chave da equivalência registrada no Sante. */
+  /** O procedimento do item na tabela do hospital: a chave da equivalência registrada no Sante. */
   readonly procedimento?: number | null;
 }
 
@@ -59,7 +59,7 @@ export interface PacienteCiha extends DocumentosPessoa {
   readonly complemento?: string | null;
   readonly uf?: string | null;
   readonly cep?: string | null;
-  /** Número do prontuário (RICADPAC.PRONT). */
+  /** Número do prontuário. */
   readonly prontuario?: number | null;
   /** Declaração de óbito (só vai ao arquivo quando o motivo da alta é óbito). */
   readonly declaracaoObito?: string | null;
@@ -79,13 +79,13 @@ export interface AtendimentoCiha {
   readonly cidPrincipal: string | null;
   readonly cidSecundario: string | null;
   readonly itens: readonly ItemCiha[];
-  /** Motivo da alta na tabela do SIH (RICADINT.MOTIVO; a internação exige). */
+  /** Motivo da alta na tabela do SIH (a internação exige). */
   readonly motivoAlta?: number | null;
-  /** Código do beneficiário na operadora (FCCTAEXT.MATRICULA; a fonte "plano privado" exige). */
+  /** Código do beneficiário na operadora (a fonte "plano privado" exige). */
   readonly beneficiario?: string | null;
-  /** Número da guia TISS (FCCTAEXT.GUIA; só vai na fonte "plano privado"). */
+  /** Número da guia TISS (só vai na fonte "plano privado"). */
   readonly guiaTiss?: string | null;
-  /** Registro ANS e CNPJ da operadora do convênio (TBCONVEN.REG_ANS e CGC). */
+  /** Registro ANS e CNPJ da operadora do convênio. */
   readonly operadora?: { readonly regAns: number | null; readonly cnpj: string | null } | null;
 }
 
@@ -140,7 +140,7 @@ export interface CriticaCiha {
 export interface ProcedimentoNaCiha {
   readonly procedimento: ProcedimentoSigtap;
   readonly naCompetencia: AtributosNaCompetencia | null;
-  /** Instrumentos de registro do procedimento na competência (TBPROREG); vazio = não conhecido. */
+  /** Instrumentos de registro do procedimento na competência; vazio = não conhecido. */
   readonly registros?: readonly RegistroSigtap[];
 }
 
@@ -150,13 +150,13 @@ export interface ContextoCiha {
   readonly convenios?: ConveniosEspeciais;
   /** Fonte de remuneração por convênio (parâmetros `faturamento.sus.ciha.*`). */
   readonly fontePorConvenio: (convenio: number) => FonteRemuneracaoCiha | null;
-  /** O procedimento SIGTAP pelo ID (TBPROSUS) e os atributos na competência (regra 2); null se não existe. */
+  /** O procedimento SIGTAP pelo ID e os atributos na competência (regra 2); null se não existe. */
   readonly procedimento: (id: number) => ProcedimentoNaCiha | null;
   readonly cnsValido: ValidadorCns;
-  /** CID-10 existente (TBCID10); a forma é conferida aqui. */
+  /** CID-10 existente (catálogo CID-10); a forma é conferida aqui. */
   readonly cidExiste?: (cid: string) => boolean;
   /**
-   * A equivalência SIGTAP registrada no Sante para o procedimento do item (FCLANEXT.PROCTO → TBPROSUS.ID). Vale
+   * A equivalência SIGTAP registrada no Sante para o procedimento do item. Vale
    * quando o item não tem vínculo ou o vínculo não está vigente na competência; o vínculo vigente do gatilho prevalece.
    */
   readonly equivalencia?: (procedimento: number) => number | null;
@@ -171,7 +171,7 @@ export interface ResultadoCiha {
 
 const FORMA_CID = /^[A-Z]\d{2}[0-9X]?$/;
 
-/** Motivos de alta e permanência da tabela do SIH (o outro sistema já grava RICADINT.MOTIVO nessa tabela). */
+/** Motivos de alta e permanência da tabela do SIH (o outro sistema já grava o motivo da alta nessa tabela). */
 export const MOTIVOS_ALTA_SIH: ReadonlySet<number> = new Set([
   11, 12, 14, 15, 16, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 41, 42, 43, 51, 61, 62, 63, 64, 65,
   66, 67,

@@ -5,6 +5,7 @@
 // Data e hora vêm sempre do relógio do banco (nunca da tela), salvo a data prevista da pré-internação e a hora da
 // alta informada pela enfermagem (dentro do dia, conferida no servidor). Nenhum nome de tabela nem de coluna aqui.
 import { z } from 'zod';
+import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 
@@ -15,7 +16,6 @@ const maiusculas = (max: number) =>
     .overwrite((t) => t.replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR'))
     .pipe(textoCp1252(max));
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
-const hhmm = z.string().regex(/^([01]\d|2[0-3])[0-5]\d$/, 'Hora no formato HHMM (quatro dígitos).');
 
 /** Número da internação (o registro que a recepção, a enfermagem e o faturamento veem). */
 export const esquemaRegInternacao = id;
@@ -188,7 +188,7 @@ export const ORIGENS_LIMPEZA = ['alta', 'manual', 'qrcode'] as const;
 export type OrigemLimpeza = (typeof ORIGENS_LIMPEZA)[number];
 
 /**
- * Situação da execução no legado (CHSITUACAO: 1 Alta hospitalar, 2, 3 Em higienização, 4 Liberado). Só 1 e 2 foram
+ * Situação da execução da limpeza (1 Alta hospitalar, 2, 3 Em higienização, 4 Liberado). Só 1 e 2 foram
  * gravados (6.857 e 11): 3 e 4 ficam recusados até a decisão registrada (DP nova, ESTADO.md) e a conferência na tela.
  */
 export const SITUACOES_LIMPEZA_LEGADO = [1, 2, 3, 4] as const;
@@ -318,8 +318,8 @@ export const esquemaDarAlta = z
     motivo: smallint.refine((m) => m > 0, 'Informe o motivo da alta.'),
     /** Médico que deu a alta (vínculo; vem da alta médica registrada). */
     medicoAlta: id,
-    /** Hora da saída (HHMM) dentro do dia de hoje; sem ela, a hora do banco. */
-    horaSaida: hhmm.optional(),
+    /** Hora da saída ("HH:MM", no fuso do estabelecimento) dentro do dia de hoje; sem ela, a hora do banco. */
+    horaSaida: esquemaHora.optional(),
     versao: z.string().min(10).max(30),
   })
   .strict();
@@ -333,7 +333,7 @@ export const esquemaRegistrarAltaMedica = z
     destino: z.enum(CODIGOS_DESTINO_ALTA),
     /** O sumário de alta do prontuário eletrônico ligado (M23), quando já finalizado. */
     sumarioAlta: id.optional(),
-    previsaoSaida: hhmm.optional(),
+    previsaoSaida: esquemaHora.optional(),
     observacao: livre(200).optional(),
   })
   .strict();
@@ -353,7 +353,7 @@ export const esquemaPreInternar = z
     paciente: id,
     /** Data prevista; sem ela, "sem data" (2099, como o legado). */
     dataPrevista: esquemaDataIso.optional(),
-    horaPrevista: hhmm.optional(),
+    horaPrevista: esquemaHora.optional(),
     convenio: smallint.refine((c) => c > 0, 'Informe o convênio.'),
     /** O plano da carteirinha, como a pré-internação guarda (texto). */
     plano: maiusculas(40).pipe(z.string().min(1, 'Informe o plano.')),
@@ -652,8 +652,8 @@ export type AtributoLeitoEntrada = z.infer<typeof esquemaAtributoLeito>;
 
 // ── Regras puras do legado que a gravação reproduz (o domínio da internação as reexporta) ─────────
 
-/** Hora em que a diária vence no legado (a saída às 12h ou depois conta mais uma diária; regra 5). */
-export const HORA_CORTE_DIARIA = '1200';
+/** Hora em que a diária vence (a saída às 12h ou depois conta mais uma diária; regra 5). */
+export const HORA_CORTE_DIARIA = '12:00';
 
 /**
  * Diárias faturáveis (PERMANEN, regra 5), como o legado grava na saída: a diferença de dias entre a entrada e a
@@ -665,7 +665,10 @@ export function diariasFaturaveis(entradaIso: string, saidaIso: string, horaSaid
     (Date.parse(`${saidaIso}T00:00:00Z`) - Date.parse(`${entradaIso}T00:00:00Z`)) / 86_400_000,
   );
   if (!Number.isFinite(dias) || dias <= 0) return 1;
-  return dias + (horaSaida.padStart(4, '0') >= HORA_CORTE_DIARIA ? 1 : 0);
+  // A hora da saída é "HH:MM"; a comparação é pelos dígitos, para valer também enquanto algum chamador manda sem os
+  // dois-pontos.
+  const digitos = (h: string) => h.replace(':', '').padStart(4, '0');
+  return dias + (digitos(horaSaida) >= digitos(HORA_CORTE_DIARIA) ? 1 : 0);
 }
 
 // ── Entradas só da API (impressos, desbloqueio, foto) ─────────────────────────────────────────────

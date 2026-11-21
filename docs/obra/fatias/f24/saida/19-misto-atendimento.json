@@ -1,0 +1,10 @@
+{
+ "lote": "19-misto-atendimento",
+ "pedidos": [
+  {
+   "tipo": "compartilhado",
+   "arquivo": "packages/contratos/src/integracao/segredos-legado.ts (+ packages/dominio-acesso/src/segredos/segredos.ts e spec, apps/web/src/modulos/acesso/segredos-tela.ts, api-segredos.ts, segredos.spec.ts, i18n-segredos.ts e apps/web/e2e/m59-3.spec.ts)",
+   "motivo": "As linhas 36 a 99 (SEGREDOS_LEGADO.tabela e EXCECOES_SEGREDO_LEGADO.objeto) ainda são nomes de tabela de origem usados como chave de ponta a ponta: o enum do contrato, a referência do cofre (regex em maiúsculas), o domínio de acesso, a tela, o i18n e o e2e. Mesmo pedido do lote 07: inventário de segredos com identificador de negócio próprio (ex.: convenio.senhaPortal, servidorEmail.senha), contrato, domínio, web e testes juntos; a correspondência com a tabela e as colunas de origem vai para o mapa do conector (o recurso, que esvazia senhas em texto puro na base de origem, é do conector). Não mexi no dado para não quebrar web e domínio de outros lotes."
+  }
+ ]
+}

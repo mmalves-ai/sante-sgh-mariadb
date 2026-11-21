@@ -220,7 +220,7 @@ export class VacinaController {
     const u = unidade.trim();
     if (!UNIDADE.test(u))
       throw new ErroProblema('entrada-invalida', 400, 'Unidade inválida', 'Escolha a unidade.');
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return (await this.enfermagem.internados(sessaoDe(req).porta, u)).map((i) => ({
       paciente: i.paciente,
       atendimento: i.atendimento,
@@ -239,7 +239,7 @@ export class VacinaController {
     const dia = (await this.enfermagem.relogio(s.porta)).slice(0, 10);
     const r = await this.porta.externosDoDia(s.porta, dia);
     // A lista mostra nome e registro dos pacientes do dia: leitura de dado pessoal auditada (só a contagem no alvo).
-    req.sghAlvo = { tabelaAlvo: 'ATCABECATEND', chaveNaturalAlvo: `dia:${dia};n:${String(r.itens.length)}` };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', chaveNaturalAlvo: `dia:${dia};n:${String(r.itens.length)}` };
     return r;
   }
 

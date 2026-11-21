@@ -29,10 +29,7 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 }
 
 /** O primeiro registro de um catálogo oficial do cliente (nome literal; o catálogo vazio para a integração). */
-async function primeiro(
-  e: Escritor,
-  tabela: 'sexo' | 'tipo_vinculo_trabalho' | 'categoria_trabalhador' | 'ocupacao_cbo',
-) {
+async function primeiro(e: Escritor, tabela: 'sexo' | 'tipo_vinculo_trabalho' | 'categoria_trabalhador') {
   const r = await e.uma<{ id: number }>(`SELECT id FROM ${tabela} ORDER BY id LIMIT 1`, []);
   if (!r) throw new Error(`O catálogo ${tabela} está vazio no cliente de teste ${CLIENTE_O3}.`);
   return Number(r.id);
@@ -56,6 +53,21 @@ export async function limparO3(e: Escritor, ests: readonly number[]): Promise<vo
   );
   await e.executar(`DELETE FROM avaliacao_desempenho WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM ciclo_avaliacao WHERE estabelecimento_id IN (${em})`, ests);
+  const doAtestado = `SELECT a.id FROM atestado_colaborador a JOIN solicitacao_colaborador s ON s.id = a.solicitacao_colaborador_id WHERE s.estabelecimento_id IN (${em})`;
+  await e.executar(
+    `DELETE FROM atestado_colaborador_acesso WHERE atestado_colaborador_id IN (SELECT id FROM (${doAtestado}) x)`,
+    ests,
+  );
+  const anexos = await e.consultar<{ arquivo_id: number }>(
+    `SELECT a.arquivo_id FROM atestado_colaborador a JOIN solicitacao_colaborador s ON s.id = a.solicitacao_colaborador_id WHERE s.estabelecimento_id IN (${em}) AND a.arquivo_id IS NOT NULL`,
+    ests,
+  );
+  await e.executar(`DELETE FROM atestado_colaborador WHERE id IN (SELECT id FROM (${doAtestado}) x)`, ests);
+  if (anexos.length > 0)
+    await e.executar(
+      `DELETE FROM arquivo WHERE id IN (${anexos.map(() => '?').join(', ')})`,
+      anexos.map((x) => Number(x.arquivo_id)),
+    );
   await e.executar(`DELETE FROM solicitacao_colaborador WHERE estabelecimento_id IN (${em})`, ests);
 }
 
@@ -101,7 +113,18 @@ export async function prepararMassaO3(marca: string): Promise<MassaPessoasO3> {
         'SELECT id FROM cargo WHERE codigo = ?',
         [`${P}C`],
         "INSERT INTO cargo (codigo, nome, ocupacao_cbo_id, data_inicio, criado_em) VALUES (?, 'CARGO SINTETICO', ?, '2020-01-01', ?)",
-        [`${P}C`, await primeiro(e, 'ocupacao_cbo'), agora],
+        [
+          `${P}C`,
+          // O CBO oficial não tem carregador de catálogo: a massa usa uma ocupação sintética própria.
+          await garantir(
+            e,
+            'SELECT id FROM ocupacao_cbo WHERE codigo_cbo = ?',
+            ['990302'],
+            "INSERT INTO ocupacao_cbo (codigo_cbo, descricao, area_saude, criado_em) VALUES ('990302', 'OCUPACAO SINTETICA L0302', FALSE, ?)",
+            [agora],
+          ),
+          agora,
+        ],
       );
       const cpf = `0003020${String(marca.charCodeAt(0) % 10)}${'000'}`.slice(0, 11);
       const colaborador = await garantir(

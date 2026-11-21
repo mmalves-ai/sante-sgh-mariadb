@@ -14,9 +14,11 @@
 // Provisório até o pedido de DDL do lote 02-04: a ligação da retificação com a anterior e a justificativa em colunas
 // (afericao_valor.retifica_afericao_valor_id e motivo_retificacao), a data de referência do plantão
 // (passagem_turno.data_referencia) e o SBAR em colunas (hoje o SBAR vai como JSON em observacao_enfermagem).
-// Pendências de modelo (pedido do lote 02-04): eventos da infusão contínua, conflitos de sincronização do tablet,
-// aparelhos autorizados da beira do leito e as respostas de extensão do formulário: lidos vazios e gravações recusadas
-// com 'modelo-pendente' até as tabelas existirem.
+// Os eventos da infusão contínua vão ao evento do horário (velocidade e volume em colunas; o código do contrato nos
+// dados); o aparelho da beira do leito guarda só o resumo do identificador; o conflito de sincronização é um por chave.
+// Pendências de modelo (pedido do lote 11-enfermagem-1): a retomada e a troca de bolsa da infusão (o CHECK do evento
+// não as tem) e a resposta de extensão do formulário (sem tabela) recusam com 'modelo-pendente'.
+import { createHash } from 'node:crypto';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -47,7 +49,7 @@ import {
 } from './banco-apoio.js';
 import { internadosEmCache } from './cache-internados.js';
 import { type AnotacaoGravacao, conferirAtendimento, gravacaoDireta } from './gravacao-direta.js';
-import { letraDaSituacao, OPERACOES_ENFERMAGEM } from './operacoes.js';
+import { LETRA_DA_CATEGORIA, letraDaSituacao, OPERACOES_ENFERMAGEM } from './operacoes.js';
 import {
   type ContextoEnfermagem,
   type GravadorSghEnfermagem,
@@ -57,6 +59,8 @@ import {
 import type {
   AparelhoBeiraLeito,
   AprazamentoRegistrado,
+  ConflitoSincronizacao,
+  EventoInfusao,
   AtoChecagem,
   EventoHistoricoHorario,
   ExtrasContingencia,
@@ -69,6 +73,43 @@ import type {
   UnidadeComInternados,
   VinculoEnfermagem,
 } from './tipos.js';
+
+/** O identificador do aparelho nunca é guardado: só o resumo dele com o estabelecimento. */
+const hashDoAparelho = (est: number, identificador: string) =>
+  createHash('sha256').update(`${est}:${identificador.trim()}`).digest('hex');
+
+const TIPO_CONFLITO_BANCO = { suspenso: 'suspenso', jaChecado: 'ja_checado', mudou: 'mudou' } as const;
+const TIPO_CONFLITO_CONTRATO: Readonly<Record<string, ConflitoSincronizacao['tipo']>> = {
+  suspenso: 'suspenso',
+  ja_checado: 'jaChecado',
+  mudou: 'mudou',
+};
+
+/** O evento da infusão contínua (contrato) → evento do horário no banco; sem par, aguarda o CHECK ampliado. */
+const EVENTO_INFUSAO_BANCO: Readonly<Record<string, string>> = {
+  inicio: 'infusao_inicio',
+  pausa: 'infusao_pausa',
+  velocidade: 'infusao_velocidade',
+  fim: 'infusao_termino',
+};
+
+const SQL_APARELHOS = `
+  SELECT a.id, a.nome, u.codigo AS unidade, a.tipo, a.ativo, a.ultimo_sincronismo_em,
+         (SELECT u2.login FROM usuario u2 WHERE u2.id = a.criado_por) AS login
+    FROM aparelho_beira_leito a JOIN unidade_internacao u ON u.id = a.unidade_internacao_id
+   WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL`;
+
+function aparelhoDe(r: Record<string, unknown>, fuso: string): AparelhoBeiraLeito {
+  return {
+    id: num(r['id']),
+    nome: texto(r['nome']),
+    unidade: texto(r['unidade']),
+    tipo: texto(r['tipo']) as AparelhoBeiraLeito['tipo'],
+    ativo: booleano(r['ativo']),
+    ultimoSincronismo: civilDe(r['ultimo_sincronismo_em'], fuso)?.slice(0, 16) ?? null,
+    cadastradoPor: texto(r['login']),
+  };
+}
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoEnfermagem = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -219,6 +260,8 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
         'passagem_turno',
         'passagem_turno_paciente',
         'horario_administracao_evento',
+        'aparelho_beira_leito',
+        'conflito_sincronizacao_checagem',
       ],
       trilha,
       gravador: (tx, est, an) => gravadorEnfermagem(tx, est, an),
@@ -500,8 +543,28 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
     });
   }
 
-  eventosInfusao(): Promise<[]> {
-    return Promise.resolve([]);
+  eventosInfusao(c: ContextoNucleo, horarios: readonly number[]): Promise<EventoInfusao[]> {
+    if (horarios.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT e.id, e.horario_administracao_id, JSON_UNQUOTE(JSON_EXTRACT(e.dados, '$.infusao')) AS evento,
+                e.velocidade_ml_h, e.volume_infundido_ml, e.ocorrido_em, ${LOGIN_DE('e.usuario_id')} AS login
+           FROM horario_administracao_evento e JOIN horario_administracao h ON h.id = e.horario_administracao_id
+          WHERE h.estabelecimento_id = ? AND e.horario_administracao_id IN (${marcadores(horarios.length)})
+            AND e.evento LIKE 'infusao\\_%'
+          ORDER BY e.ocorrido_em, e.id`,
+        [est, ...horarios],
+      );
+      return rs.map((r) => ({
+        id: num(r['id']),
+        horario: num(r['horario_administracao_id']),
+        evento: texto(r['evento']),
+        velocidadeMlH: numOuNulo(r['velocidade_ml_h']),
+        volumeInfundidoMl: numOuNulo(r['volume_infundido_ml']),
+        horaReal: (civilDe(r['ocorrido_em'], fuso) ?? '').slice(0, 16),
+        usuario: texto(r['login']),
+      }));
+    });
   }
 
   sinais(
@@ -587,8 +650,37 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
     });
   }
 
-  conflitos(): Promise<[]> {
-    return Promise.resolve([]);
+  conflitos(c: ContextoNucleo, o: { abertos: boolean }): Promise<ConflitoSincronizacao[]> {
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT k.id, k.horario_administracao_id, k.paciente_id, k.chave_ato, k.tipo, sc.categoria,
+                k.desfecho_tentado, k.ocorrido_em, a.nome AS aparelho, k.criado_em, k.resolucao, k.resolvido_em,
+                k.observacao, ${LOGIN_DE('k.criado_por')} AS login, ${LOGIN_DE('k.resolvido_por_usuario_id')} AS resolvido_login
+           FROM conflito_sincronizacao_checagem k
+           LEFT JOIN situacao_checagem sc ON sc.id = k.situacao_encontrada_id
+           LEFT JOIN aparelho_beira_leito a ON a.id = k.aparelho_beira_leito_id
+          WHERE k.estabelecimento_id = ? AND k.excluido_em IS NULL ${o.abertos ? 'AND k.resolvido_em IS NULL' : ''}
+          ORDER BY k.ocorrido_em DESC, k.id DESC LIMIT 500`,
+        [est],
+      );
+      return rs.map((r) => ({
+        id: num(r['id']),
+        horario: num(r['horario_administracao_id']),
+        paciente: num(r['paciente_id']),
+        chave: texto(r['chave_ato']),
+        tipo: TIPO_CONFLITO_CONTRATO[texto(r['tipo'])] ?? 'mudou',
+        situacaoEncontrada: r['tipo'] === 'suspenso' ? 'S' : letraDaSituacao(r['categoria'], false),
+        desfechoTentado: texto(r['desfecho_tentado']),
+        horaReal: (civilDe(r['ocorrido_em'], fuso) ?? '').slice(0, 16),
+        dispositivo: textoOuNulo(r['aparelho']),
+        usuario: texto(r['login']),
+        registradoEm: (civilDe(r['criado_em'], fuso) ?? '').slice(0, 16),
+        resolucao: textoOuNulo(r['resolucao']),
+        resolvidoPor: textoOuNulo(r['resolvido_login']),
+        resolvidoEm: civilDe(r['resolvido_em'], fuso)?.slice(0, 16) ?? null,
+        observacao: textoOuNulo(r['observacao']),
+      }));
+    });
   }
 
   passagens(c: ContextoEnfermagem, o: { unidade?: string; id?: number }): Promise<PassagemPlantao[]> {
@@ -678,12 +770,20 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
     });
   }
 
-  dispositivos(): Promise<AparelhoBeiraLeito[]> {
-    return Promise.resolve([]);
+  dispositivos(c: ContextoNucleo): Promise<AparelhoBeiraLeito[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (await l.consultar(`${SQL_APARELHOS} ORDER BY a.nome, a.id`, [est])).map((r) => aparelhoDe(r, fuso)),
+    );
   }
 
-  dispositivoAutorizado(): Promise<AparelhoBeiraLeito | null> {
-    return Promise.resolve(null);
+  dispositivoAutorizado(c: ContextoNucleo, identificador: string): Promise<AparelhoBeiraLeito | null> {
+    return this.ler(c, async (l, est, fuso) => {
+      const r = await l.uma<Record<string, unknown>>(
+        `${SQL_APARELHOS} AND a.ativo AND a.identificador_hash = ?`,
+        [est, hashDoAparelho(est, identificador)],
+      );
+      return r ? aparelhoDe(r, fuso) : null;
+    });
   }
 
   extrasContingencia(
@@ -839,7 +939,8 @@ function sinalDe(r: Linha, fuso: string): SinalVitalRegistrado {
     horaReal: civilDe(r['aferido_em'], fuso) ?? '',
     versao: num(r['versao']),
     anterior: numOuNulo(r['anterior']),
-    justificativa: r['anterior'] === null || r['anterior'] === undefined ? null : textoOuNulo(r['justificativa']),
+    justificativa:
+      r['anterior'] === null || r['anterior'] === undefined ? null : textoOuNulo(r['justificativa']),
     usuario: texto(r['login']),
   };
 }
@@ -848,6 +949,23 @@ function sinalDe(r: Linha, fuso: string): SinalVitalRegistrado {
 function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): GravadorSghEnfermagem {
   const fusoP = fusoDe(tx, est);
   const profissional = () => exigirProfissional(tx, tx.contexto, est);
+  const aparelhoTravado = async (id: number) => {
+    const [d] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+      `SELECT id, versao, identificador_hash FROM aparelho_beira_leito
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [id, est],
+    );
+    if (!d) throw recusa('dispositivo-inexistente', 'O aparelho não foi encontrado.');
+    return d;
+  };
+  const conferirHorarioDoPaciente = async (horario: number, paciente: number) => {
+    const h = await tx.uma(
+      `SELECT h.id FROM horario_administracao h JOIN atendimento a ON a.id = h.atendimento_id
+        WHERE h.id = ? AND h.estabelecimento_id = ? AND a.paciente_id = ?`,
+      [horario, est, paciente],
+    );
+    if (!h) throw recusa('horario-inexistente', 'O horário não é deste paciente neste estabelecimento.');
+  };
   const unidadeInternacao = async (codigo: string) => {
     const u = await tx.uma<{ id: number; setor_funcional_id: number | null }>(
       'SELECT id, setor_funcional_id FROM unidade_internacao WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
@@ -948,8 +1066,22 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
       };
       return novo;
     },
-    gravarEventoInfusao: async () => {
-      throw pendente('O evento da infusão contínua');
+    async gravarEventoInfusao(r) {
+      const evento = EVENTO_INFUSAO_BANCO[r.evento];
+      if (!evento) throw pendente(`O evento "${r.evento}" da infusão contínua`);
+      await conferirHorarioDoPaciente(r.horario, r.paciente);
+      return tx.incluir('horario_administracao_evento', {
+        horario_administracao_id: r.horario,
+        operacao: 'inclusao',
+        dados: JSON.stringify({ infusao: r.evento, solucao: r.solucao }),
+        ocorrido_em: instanteDe(r.horaReal, await fusoP),
+        usuario_id: tx.contexto.usuario,
+        evento,
+        profissional_id: await profissional(),
+        velocidade_ml_h: r.velocidadeMlH,
+        volume_infundido_ml: r.volumeMl,
+        motivo: r.observacao?.slice(0, 500) ?? null,
+      });
     },
     async gravarAprazamento(r) {
       // A operação do aprazamento já gravou o horário e o evento: a confirmação devolve o evento dela.
@@ -962,11 +1094,61 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
       if (!e) throw recusa('horario-mudou', 'O aprazamento do horário não foi gravado: nada foi confirmado.');
       return Number(e.id);
     },
-    registrarConflito: async () => {
-      throw pendente('O registro do conflito de sincronização');
+    async registrarConflito(r) {
+      const chave = r.chave.trim().slice(0, 80);
+      const ja = await tx.uma<{ id: number }>(
+        'SELECT id FROM conflito_sincronizacao_checagem WHERE estabelecimento_id = ? AND chave_ato = ?',
+        [est, chave],
+      );
+      if (ja) return { id: Number(ja.id), novo: false };
+      await conferirHorarioDoPaciente(r.horario, r.paciente);
+      const aparelho = r.dispositivo
+        ? await tx.uma<{ id: number }>(
+            'SELECT id FROM aparelho_beira_leito WHERE estabelecimento_id = ? AND identificador_hash = ? AND excluido_em IS NULL',
+            [est, hashDoAparelho(est, r.dispositivo)],
+          )
+        : null;
+      if (r.aparelhoExigido && !aparelho)
+        throw recusa(
+          'aparelho-nao-autorizado',
+          'O aparelho não está autorizado na beira do leito deste estabelecimento.',
+        );
+      const categoria = Object.entries(LETRA_DA_CATEGORIA).find(([, l]) => l === r.situacaoEncontrada)?.[0];
+      const situacao =
+        categoria && r.situacaoEncontrada !== 'S'
+          ? await tx.uma<{ id: number }>(
+              'SELECT id FROM situacao_checagem WHERE categoria = ? AND ativo ORDER BY ordem IS NULL, ordem, id LIMIT 1',
+              [categoria],
+            )
+          : null;
+      const id = await tx.incluir('conflito_sincronizacao_checagem', {
+        estabelecimento_id: est,
+        horario_administracao_id: r.horario,
+        paciente_id: r.paciente,
+        chave_ato: chave,
+        tipo: TIPO_CONFLITO_BANCO[r.tipo],
+        situacao_encontrada_id: situacao ? Number(situacao.id) : null,
+        desfecho_tentado: r.desfechoTentado.slice(0, 20),
+        ocorrido_em: instanteDe(r.horaReal, await fusoP),
+        aparelho_beira_leito_id: aparelho ? Number(aparelho.id) : null,
+      });
+      return { id, novo: true };
     },
-    resolverConflito: async () => {
-      throw pendente('A resolução do conflito de sincronização');
+    async resolverConflito(r) {
+      const [k] = await tx.consultarParaAtualizar<{ id: number; versao: number; resolvido_em: unknown }>(
+        `SELECT id, versao, resolvido_em FROM conflito_sincronizacao_checagem
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [r.id, est],
+      );
+      if (!k || k.resolvido_em !== null)
+        throw recusa('conflito-resolvido', 'O conflito não existe ou já foi resolvido.');
+      await tx.alterar('conflito_sincronizacao_checagem', r.id, Number(k.versao), {
+        resolucao: r.resolucao.slice(0, 30),
+        resolvido_por_usuario_id: tx.contexto.usuario,
+        resolvido_em: new Date(),
+        observacao: r.observacao.slice(0, 500),
+      });
+      return r.id;
     },
     async passarPlantao(r) {
       const u = await unidadeInternacao(r.unidade);
@@ -978,7 +1160,9 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
           'Quem recebe o plantão não tem vínculo de profissional neste estabelecimento.',
         );
       if (recebe === entrega) throw recusa('recebedor-invalido', 'O plantão é passado a outro profissional.');
-      const turno = await tx.uma<{ id: number }>('SELECT id FROM turno_padrao WHERE codigo = ? AND ativo', [r.turno]);
+      const turno = await tx.uma<{ id: number }>('SELECT id FROM turno_padrao WHERE codigo = ? AND ativo', [
+        r.turno,
+      ]);
       if (!turno)
         throw recusa(
           'cadastro-incompleto',
@@ -1041,16 +1225,89 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
       });
       return r.id;
     },
-    gravarDispositivo: async () => {
-      throw pendente('O cadastro do aparelho da beira do leito');
+    async gravarDispositivo(r) {
+      const u = await unidadeInternacao(r.unidade);
+      const hash = hashDoAparelho(est, r.identificador);
+      if (
+        await tx.uma(
+          'SELECT id FROM aparelho_beira_leito WHERE estabelecimento_id = ? AND identificador_hash = ?',
+          [est, hash],
+        )
+      )
+        throw recusa('dispositivo-existente', 'Este aparelho já está autorizado.');
+      return tx.incluir('aparelho_beira_leito', {
+        estabelecimento_id: est,
+        unidade_internacao_id: u.id,
+        nome: r.nome.trim().slice(0, 80),
+        tipo: r.tipo,
+        identificador_hash: hash,
+        ativo: true,
+      });
     },
-    alterarDispositivo: async () => {
-      throw pendente('A alteração do aparelho da beira do leito');
+    async alterarDispositivo(r) {
+      const d = await aparelhoTravado(r.id);
+      if (!r.motivo || r.motivo.trim().length < 10)
+        throw recusa('motivo-obrigatorio', 'Descreva o motivo da alteração do aparelho.');
+      await tx.alterar('aparelho_beira_leito', r.id, num(d['versao']), {
+        ...(r.ativo !== undefined ? { ativo: r.ativo } : {}),
+        ...(r.nome !== undefined ? { nome: r.nome.trim().slice(0, 80) } : {}),
+        ...(r.unidade !== undefined
+          ? { unidade_internacao_id: (await unidadeInternacao(r.unidade)).id }
+          : {}),
+        motivo_alteracao: r.motivo.trim().slice(0, 300),
+      });
+      return r.id;
     },
-    excluirDispositivo: async () => {
-      throw pendente('A exclusão do aparelho da beira do leito');
+    async excluirDispositivo(r) {
+      const d = await aparelhoTravado(r.id);
+      const conflitos = num(
+        (
+          await tx.uma<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM conflito_sincronizacao_checagem WHERE aparelho_beira_leito_id = ? AND excluido_em IS NULL',
+            [r.id],
+          )
+        )?.n ?? 0,
+      );
+      // As checagens feitas no aparelho guardam o identificador no evento do horário: conferidas pelo resumo.
+      const checagens = num(
+        (
+          await tx.uma<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM horario_administracao_evento e
+               JOIN horario_administracao h ON h.id = e.horario_administracao_id
+              WHERE h.estabelecimento_id = ? AND e.canal_registro = 'beira_leito'
+                AND SHA2(CONCAT(?, ':', TRIM(JSON_UNQUOTE(JSON_EXTRACT(e.dados, '$.dispositivo')))), 256) = ?`,
+            [est, String(est), texto(d['identificador_hash'])],
+          )
+        )?.n ?? 0,
+      );
+      if (checagens + conflitos > 0) {
+        const grupos = [
+          ...(checagens ? [`${checagens} checagens feitas no aparelho`] : []),
+          ...(conflitos ? [`${conflitos} conflitos de sincronização do aparelho`] : []),
+        ];
+        throw recusa(
+          'dispositivo-com-leituras',
+          `O aparelho tem ${checagens + conflitos} leitura(s) vinculada(s) (${grupos.join('; ')}): não pode ser excluído. Retire-o do modo beira do leito (inativar).`,
+        );
+      }
+      const v = await tx.alterar('aparelho_beira_leito', r.id, num(d['versao']), {
+        motivo_alteracao: r.motivo.trim().slice(0, 300),
+      });
+      await tx.excluir('aparelho_beira_leito', r.id, v);
+      return r.id;
     },
-    marcarSincronismo: async () => false,
+    async marcarSincronismo(r) {
+      const [d] = await tx.consultarParaAtualizar<{ id: number; versao: number }>(
+        `SELECT id, versao FROM aparelho_beira_leito
+          WHERE estabelecimento_id = ? AND identificador_hash = ? AND ativo AND excluido_em IS NULL`,
+        [est, hashDoAparelho(est, r.identificador)],
+      );
+      if (!d) return false;
+      await tx.alterar('aparelho_beira_leito', Number(d.id), Number(d.versao), {
+        ultimo_sincronismo_em: new Date(),
+      });
+      return true;
+    },
     async registrarEstornoPedido(r) {
       // A operação do estorno já gravou o evento com o motivo: o pedido devolve o evento dela.
       const e = await tx.uma<{ id: number }>(

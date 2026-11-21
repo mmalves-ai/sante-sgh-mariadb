@@ -7,6 +7,13 @@ export const nn = (v: unknown) => (v === null || v === undefined ? null : Number
 export const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 export const textoOuNulo = (v: unknown) => (v === null || v === undefined ? null : String(v));
 export const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
+/** Coluna DATE → "AAAA-MM-DD"; null se vazia. */
+export const dataOuNulo = (v: unknown) =>
+  v === null || v === undefined || v === ''
+    ? null
+    : v instanceof Date
+      ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
+      : String(v).slice(0, 10);
 export const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 
 function partes(d: Date, fuso: string): string {
@@ -30,7 +37,10 @@ export function civil(v: unknown, fuso: string): string | null {
   return Number.isNaN(d.getTime()) ? null : partes(d, fuso);
 }
 
-/** "HHMM" ou "HH:MM" → "HH:MM". */
+/**
+ * Hora "HH:MM" (ou "HH:MM:SS") → "HH:MM". Os quatro dígitos sem separador ainda chegam do contrato do portal do médico
+ * externo até ele migrar (lote 21); depois disso, só "HH:MM".
+ */
 export const horaDe = (h: string) => (h.includes(':') ? h.slice(0, 5) : `${h.slice(0, 2)}:${h.slice(2, 4)}`);
 
 /** "AAAA-MM-DD HH:MM" (ou com "T") no fuso → instante; `minutos` soma ao fim (o limite superior do dia). */

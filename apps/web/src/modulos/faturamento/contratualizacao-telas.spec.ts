@@ -268,8 +268,8 @@ const inicio = (ligada = true) => ({
   contratos: [contrato],
   cortada: false,
   dominios: {
-    CMESCORE: [{ codigo: 4, rotulo: 'Ótimo', sigla: null }],
-    CMINCENTIVO: [{ codigo: 1, rotulo: 'Incentivo de qualificação', sigla: null }],
+    escore: [{ codigo: 4, rotulo: 'Ótimo', sigla: null }],
+    incentivo: [{ codigo: 1, rotulo: 'Incentivo de qualificação', sigla: null }],
   },
   parametros: { faixas: painel.faixas, faixasValidas: true, cnes: '1234567', conveniosSus: [1] },
   fonte: 'contas-sus',
@@ -528,7 +528,7 @@ describe('ContratualizacaoTela', () => {
     const t = w.get('[data-testid="ds-dominios"]').text();
     expect(t).toContain('Escores');
     expect(t).toContain('Incentivo de qualificação');
-    expect(t).not.toMatch(/CMESCORE|CMINCENTIVO/);
+    expect(t).not.toMatch(/\bescore\b|\bincentivo\b/);
   });
 });
 
@@ -612,6 +612,30 @@ describe('formulários', () => {
     await w.get('[data-testid="ms-formulario"]').trigger('submit');
     await flushPromises();
     expect(chamadas).toHaveLength(0);
+  });
+
+  it('cada lista que a API devolve aparece com o próprio nome, nunca o genérico', () => {
+    // As chaves são as de CHAVE_RESPOSTA_DOMINIO no controlador da contratualização (API).
+    const chavesDaApi = [
+      'periodicidade',
+      'tipoIndicador',
+      'complexidade',
+      'tipoItemIndicador',
+      'redeAssistencial',
+      'escore',
+      'tipoAfericao',
+      'esfera',
+      'tipoDado',
+      'componenteOrcamento',
+      'incentivo',
+    ];
+    expect(Object.keys(mensagensContratualizacao.dominios.nomes).sort()).toEqual([...chavesDaApi].sort());
+    const w = montar(DominiosSus, {
+      dominios: Object.fromEntries(chavesDaApi.map((c) => [c, [{ codigo: 1, rotulo: 'Item', sigla: null }]])),
+    });
+    expect(w.text()).not.toContain('Outra tabela de apoio');
+    expect(w.text()).toContain('Fontes da aferição');
+    expect(w.text()).toContain('Partes do orçamento');
   });
 
   it('as tabelas de apoio desconhecidas aparecem com o nome genérico', () => {

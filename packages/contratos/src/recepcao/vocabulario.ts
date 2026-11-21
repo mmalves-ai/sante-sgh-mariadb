@@ -1,14 +1,14 @@
-// Vocabulário da recepção: senhas, guichês, totens e painéis (M19; ficha, seções 5 e 8). As letras são as de
-// TBACAOFLUXOSENHA (domínio do legado, M14) e as situações de TBSENHAATEND.SITUACAO; o novo só grava as letras já
-// vistas no perfil passivo da cópia (I e F nunca apareceram: recusadas). Perfil da cópia pc (só agregados):
-//   - TBSENHAATEND (301.109; 40.120 em 2026): SITUACAO A 126.709, L 100.557, S 73.417, G 399, C 27; PRIORIDADE
-//     '2' em 97,9%; MOTIVO '' na emissão; GUICHE 0 até a chamada;
-//   - TBFLUXOATEND (555.695): A 231.735, L 154.306, C 93.549, S 73.813, X 1.773, N 458, E 61; nenhum G;
+// Vocabulário da recepção: senhas, guichês, totens e painéis (M19; ficha, seções 5 e 8). As letras são as das ações do
+// fluxo da senha (domínio do legado, M14) e as das situações da senha; o novo só grava as letras já vistas no perfil
+// passivo da cópia (I e F nunca apareceram: recusadas). Perfil da cópia pc (só agregados):
+//   - senhas emitidas (301.109; 40.120 em 2026): situação A 126.709, L 100.557, S 73.417, G 399, C 27; prioridade
+//     '2' em 97,9%; motivo vazio na emissão; guichê 0 até a chamada;
+//   - eventos do fluxo da senha (555.695): A 231.735, L 154.306, C 93.549, S 73.813, X 1.773, N 458, E 61; nenhum G;
 //   - senhas "diversos" (gerador tipo 5) terminam com L e o motivo 'Tipo de atendimento diversos' (54.242 de 54.242
 //     desde 2025).
 // Nenhum nome de tabela do legado sai daqui para a tela: os rótulos são de produto (ADR 0023).
 
-/** Situação da senha (TBSENHAATEND.SITUACAO), com o rótulo de produto. */
+/** Situação da senha, com o rótulo de produto. */
 export const SITUACOES_SENHA = [
   { letra: 'G', rotulo: 'Aguardando chamada' },
   { letra: 'C', rotulo: 'Chamada no local' },
@@ -18,7 +18,7 @@ export const SITUACOES_SENHA = [
 ] as const;
 export type SituacaoSenha = (typeof SITUACOES_SENHA)[number]['letra'];
 
-/** Letras de evento do fluxo (TBACAOFLUXOSENHA) e se o perfil da cópia as mostra (só as vistas gravam). */
+/** Letras de evento do fluxo da senha e se o perfil da cópia as mostra (só as vistas gravam). */
 export const LETRAS_FLUXO = [
   { letra: 'G', rotulo: 'Retirada de senha', vista: false },
   { letra: 'C', rotulo: 'Chamar', vista: true },
@@ -61,7 +61,7 @@ export function eventoSenha(codigo: string): (typeof EVENTOS_SENHA)[number] | un
 }
 
 /**
- * Prioridade gravada (TBSENHAATEND.PRIORIDADE, CHAR(1)): o domínio do legado 0/1/2 (TBGRUPOPRIORIDADE 0 acima de 80
+ * Prioridade gravada na senha (um caractere): o domínio do legado 0/1/2 (grupo de prioridade legal: 0 acima de 80
  * anos, 1 demais prioridades, 2 normal). Os 7 grupos detalhados (3 a 9) ficam no novo (SGH_REC_SENHA_EXT) até a
  * conferência de que o outro sistema chama na ordem certa (ficha, regra 3).
  */
@@ -72,7 +72,7 @@ export const PRIORIDADES_SENHA = [
 ] as const;
 export type PrioridadeSenha = (typeof PRIORIDADES_SENHA)[number]['codigo'];
 
-/** Grupos legais (TBGRUPOPRIORIDADE, 10 linhas) e a prioridade 0/1/2 que cada um grava hoje. */
+/** Grupos de prioridade legal (10) e a prioridade 0/1/2 que cada um grava hoje. */
 export const GRUPOS_PRIORIDADE = [
   { grupo: 0, rotulo: 'Acima de 80 anos', prioridade: '0' },
   { grupo: 1, rotulo: 'Demais prioridades', prioridade: '1' },
@@ -87,7 +87,7 @@ export const GRUPOS_PRIORIDADE = [
 ] as const satisfies readonly { grupo: number; rotulo: string; prioridade: PrioridadeSenha }[];
 export type GrupoPrioridade = (typeof GRUPOS_PRIORIDADE)[number]['grupo'];
 
-/** Tipos de gerador (TBGERASENHA.TIPO, Anexo A §A.3): só 0 e 5 têm uso; 1 a 4 existem como colunas vazias. */
+/** Tipos de gerador de senha (Anexo A §A.3): só 0 e 5 têm uso; 1 a 4 existem como colunas vazias. */
 export const TIPOS_GERADOR = [
   { codigo: '0', rotulo: 'Recepção (abre atendimento)', usado: true },
   { codigo: '1', rotulo: 'Por unidade', usado: false },
@@ -102,7 +102,7 @@ export type TipoGerador = (typeof TIPOS_GERADOR)[number]['codigo'];
 export const MOTIVO_LIBERACAO_DIVERSOS = 'Tipo de atendimento diversos';
 
 /**
- * Motivos padronizados da suspensão (o legado guarda texto livre de até 50 caracteres em TBSENHAATEND.MOTIVO: 6.137
+ * Motivos padronizados da suspensão (o legado guarda texto livre de até 50 caracteres no motivo da senha: 6.137
  * textos distintos desde 2025). O novo grava o texto do motivo e guarda o código em SGH_REC_SENHA_EXT.
  */
 export const MOTIVOS_SUSPENSAO = [
@@ -120,7 +120,7 @@ export const CODIGOS_MOTIVO_SUSPENSAO = MOTIVOS_SUSPENSAO.map((m) => m.codigo) a
   ...MotivoSuspensao[],
 ];
 
-/** Texto gravado em TBSENHAATEND.MOTIVO (VARCHAR(50)): o motivo padronizado e, no "outro", o complemento. */
+/** Texto gravado no motivo da senha (até 50 caracteres): o motivo padronizado e, no "outro", o complemento. */
 export function textoDoMotivoSuspensao(codigo: string, complemento?: string | null): string {
   const m = MOTIVOS_SUSPENSAO.find((x) => x.codigo === codigo);
   const base = m?.texto ?? 'Outro motivo';

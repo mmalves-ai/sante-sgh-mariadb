@@ -262,7 +262,7 @@ export interface FluxoCaixaResposta {
   readonly premissas: readonly { convenio: number; taxaGlosa: number; atrasoMedioDias: number }[];
 }
 
-/** A apropriação gerencial do documento a pagar (MFLANGSI, a parcela 1) com o rateio por centro de custo do novo. */
+/** A apropriação gerencial do documento a pagar (na parcela 1) com o rateio por centro de custo. */
 export interface ApropriacaoGerencialResposta {
   readonly titulo: number | null;
   readonly credor: number;

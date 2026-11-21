@@ -110,9 +110,9 @@ describe('trava da incisão', () => {
     );
     expect(conferirExcecao(C, 1)).toBe('excecao-timeout-concluido');
   });
-  it('o instante da incisão do registro do ato (HHMM no dia)', () => {
-    expect(instanteDaIncisao('2026-10-25', '0805')).toBe('2026-10-25T08:05');
+  it('o instante da incisão do registro do ato (hora "HH:MM" no dia)', () => {
+    expect(instanteDaIncisao('2026-10-25', '08:05')).toBe('2026-10-25T08:05');
     expect(instanteDaIncisao('2026-10-25', null)).toBeNull();
-    expect(instanteDaIncisao('2026-10-25', '8:05')).toBeNull();
+    expect(instanteDaIncisao('2026-10-25', '0805')).toBeNull();
   });
 });

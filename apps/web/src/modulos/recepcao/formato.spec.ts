@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dataDe, dataHoraDe, diaRelativo, horaDe, horaHhmmParaLocal, minutosOu } from './formato.js';
+import { dataDe, dataHoraDe, diaRelativo, horaDe, horaDigitadaParaLocal, minutosOu } from './formato.js';
 
 describe('formato da recepção', () => {
   it('mostra a hora e a data como vieram do banco', () => {
@@ -19,10 +19,15 @@ describe('formato da recepção', () => {
   });
 });
 
-describe('horaHhmmParaLocal (M44, etapa 3)', () => {
+describe('horaDigitadaParaLocal (M44, etapa 3)', () => {
   it('a hora no dia do relógio; depois da hora do relógio, o dia anterior', () => {
-    expect(horaHhmmParaLocal('2026-10-24T10:20:00', '1008')).toBe('2026-10-24T10:08');
-    expect(horaHhmmParaLocal('2026-10-24T10:20:00', '1020')).toBe('2026-10-24T10:20');
-    expect(horaHhmmParaLocal('2026-10-24T00:05:00', '2355')).toBe('2026-10-23T23:55');
+    expect(horaDigitadaParaLocal('2026-10-24T10:20:00', '1008')).toBe('2026-10-24T10:08');
+    expect(horaDigitadaParaLocal('2026-10-24T10:20:00', '10:20')).toBe('2026-10-24T10:20');
+    expect(horaDigitadaParaLocal('2026-10-24T00:05:00', '23:55')).toBe('2026-10-23T23:55');
+    expect(horaDigitadaParaLocal('2026-10-24T10:20:00', '8:05')).toBe('2026-10-24T08:05');
+  });
+  it('hora inválida ou vazia é recusada (nunca vira outra hora)', () => {
+    expect(() => horaDigitadaParaLocal('2026-10-24T10:20:00', '25:00')).toThrow();
+    expect(() => horaDigitadaParaLocal('2026-10-24T10:20:00', '')).toThrow();
   });
 });

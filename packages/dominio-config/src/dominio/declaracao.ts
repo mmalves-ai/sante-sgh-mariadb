@@ -98,7 +98,7 @@ export function validarDeclaracao(d: DeclaracaoDominio, ctx: ContextoDeclaracao)
     falha('arvore', `${id}: o subitem ${pub.subitem} não existe na árvore de menus.`);
 
   const destino = ctx.destino(d.tabela);
-  // M14: a enumeração interna pode vir de `migrar-leitura` (TBDIASEMANA: a matriz manda só ler).
+  // M14: a enumeração interna pode vir de `migrar-leitura` (dias da semana: a matriz manda só ler).
   const destinosAceitos =
     pub.natureza === 'carga-referencia'
       ? ['carga-referencia']
@@ -116,7 +116,7 @@ export function validarDeclaracao(d: DeclaracaoDominio, ctx: ContextoDeclaracao)
   }
   // M14: chave composta declarada inteira, na ordem do catálogo.
   const chaves = d.chaveComposta ?? [d.chave];
-  // M51.4: tabela sem PK no catálogo (FHLEITOUTI): a chave é a coluna gerada pelo trigger BI e a declaração diz o
+  // M51.4: tabela sem PK no catálogo (ex.: leitos de UTI): a chave é a coluna gerada pelo trigger BI e a declaração diz o
   // índice único (natural) que o CRUD confere antes do banco; sem os dois, a chave tem de ser a PK.
   const chaveDaColuna = d.colunas.find((c) => c.coluna === d.chave);
   const semPkComChaveGerada =

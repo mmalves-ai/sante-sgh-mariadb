@@ -9,18 +9,18 @@ export interface JanelaPublicacao {
 
 export const JANELA_PADRAO: JanelaPublicacao = { inicio: '22:00', fim: '06:00' };
 
-const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const FORMATO_HORA_JANELA = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-export function minutosDe(hhmm: string): number {
-  const m = HHMM.exec(hhmm);
-  if (!m) throw new Error(`Hora inválida: ${hhmm}`);
+export function minutosDe(hora: string): number {
+  const m = FORMATO_HORA_JANELA.exec(hora);
+  if (!m) throw new Error(`Hora inválida: ${hora}`);
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
 /** Lê a janela "HH:MM-HH:MM" (texto do parâmetro); inválida ou vazia = a padrão. */
 export function lerJanela(texto: string | null | undefined): JanelaPublicacao {
   const m = /^\s*(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})\s*$/.exec(texto ?? '');
-  if (!m || !HHMM.test(m[1] as string) || !HHMM.test(m[2] as string)) return JANELA_PADRAO;
+  if (!m || !FORMATO_HORA_JANELA.test(m[1] as string) || !FORMATO_HORA_JANELA.test(m[2] as string)) return JANELA_PADRAO;
   return { inicio: m[1] as string, fim: m[2] as string };
 }
 

@@ -1,6 +1,6 @@
 // BPA (ficha do M51, seção 5: `faturamento.gerarBpa`; regras 1, 2, 4 e 5; Portaria SAS 709/2007; Manual do SIA): a
 // produção ambulatorial do SUS da competência, a partir da mesma conta (o financiador é o SUS: a conta é uma só, regra
-// 1). Cada procedimento vai ao instrumento de registro que a SIGTAP da competência permite (TBPROREG):
+// 1). Cada procedimento vai ao instrumento de registro que a SIGTAP da competência permite:
 //   - BPA individualizado (BPA-I, registro 02 da SIGTAP): identifica o paciente pelo CNS e o executante pelo CNS e pelo
 //     CBO; é o preferido quando os dois são permitidos (regra 1) e o paciente tem CNS válido;
 //   - BPA consolidado (BPA-C, registro 01): só CBO, procedimento, idade e quantidade, somados; vai consolidado também
@@ -26,7 +26,7 @@ import {
 import { type ConveniosEspeciais, CONVENIOS_ESPECIAIS_PADRAO, financiadorDoConvenio } from './instrumento.js';
 import { idadeEmMeses } from './sigtap-competencia.js';
 
-/** O profissional executante do item (FCLANEXT.ID_TBCBOPRO_TITULAR × TBCBOPRO × TBPROFIS). */
+/** O profissional executante do item (o titular do item, com o CBO e o profissional). */
 export interface ExecutanteBpa {
   readonly cbo: string | null;
   readonly cns: string | null;
@@ -35,10 +35,10 @@ export interface ExecutanteBpa {
 
 export interface ItemBpa {
   readonly item: number;
-  /** TBPROSUS.ID do vínculo do gatilho (FCCTRLANCIHA); null sem equivalente. */
+  /** Id do procedimento SIGTAP do vínculo do item; null sem equivalente. */
   readonly sigtap: number | null;
   readonly quantidade: number;
-  /** O procedimento unificado do item (FCLANEXT.ID_TBPROCTO): a chave da equivalência do Sante. */
+  /** O procedimento unificado do item: a chave da equivalência do Sante. */
   readonly procedimento: number | null;
   readonly executante: ExecutanteBpa | null;
 }

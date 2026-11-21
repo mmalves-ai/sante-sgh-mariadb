@@ -1,6 +1,6 @@
 // Permissões do M30 (ficha, seção 7; convencoes.md §12): conta do paciente, lançamentos, auditoria de contas, pacotes,
 // particular, regras de faturabilidade, simulador e nota de sala. Quem tem a opção no legado tem a permissão no novo
-// (regra 1 do M06). Opções da árvore TBOPCOES levantadas na primeira hora do marco (retrato
+// (regra 1 do M06). Opções da árvore do menu de origem levantadas na primeira hora do marco (retrato
 // tools/verificadores/dados/acesso-legado.pc.json):
 //   - Faturamento convênios (4): Tabelas 1115 (Parâmetros 1116); Lançamentos 1121 › Cadastro de Contas 1122 (Internas
 //     1123: Manutenção 1124, Consulta 1125; Externas 1126: Manutenção 1127, Consulta 1128); Pesquisa de Contas 1166
@@ -12,7 +12,7 @@
 //   - Faturamento ambulatório (3): Lançamentos 709 › Cadastro de Boletins 710 (Manutenção 711, Consulta 712);
 //     Irregularidades 4396 (Manutenção 4397, Listagem 4398);
 //   - Bloco cirúrgico (0): Lançamentos 2258; Emissão da folha de sala 2240.
-// O escopo por convênio (TBUSERS_TBCONVEN, TBUSERCON) vale em toda leitura e gravação da conta (regra 13, `convenio`).
+// O escopo por convênio (convênios liberados ao usuário) vale em toda leitura e gravação da conta (regra 13, `convenio`).
 // "Supervisor" do faturamento (reabrir conta, decidir o lançamento tardio, preço manual): quem tem a opção de
 // Fechamento de Fatura (1591) ou de Ajustes de valores (1595) no outro sistema (D-SUP-30).
 import type { DeclaracaoPermissao } from './tipos.js';

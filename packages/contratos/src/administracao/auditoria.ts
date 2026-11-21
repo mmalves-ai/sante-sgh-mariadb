@@ -24,12 +24,12 @@ export const esquemaConsultaTrilha = z.object({
   fim: data.optional(),
   usuario: z.string().max(31).optional(),
   origem: z.enum(ORIGENS_TRILHA).optional(),
-  /** Tipo de ação do banco (TBTPACAOAUDIT.ID). */
+  /** Tipo de ação do banco (tipo de ação de auditoria). */
   tipo: z.coerce.number().int().min(0).max(999).optional(),
   /** Evento da trilha própria (código do catálogo). */
   evento: z.string().max(80).optional(),
   paciente: z.coerce.number().int().positive().optional(),
-  /** Prontuário do paciente (RICADPAC.PRONT): o filtro de quem chega pelo número, não pelo ID interno. */
+  /** Prontuário do paciente (número do prontuário): o filtro de quem chega pelo número, não pelo ID interno. */
   prontuario: z.coerce.number().int().positive().max(2_147_483_647).optional(),
   pagina: z.coerce.number().int().min(1).max(10_000).optional(),
 });
@@ -74,7 +74,7 @@ export const esquemaLeituraProntuarioTrilha = z.object({
   usuario: z.string(),
   evento: z.string(),
   paciente: z.number().int().nullable(),
-  /** Prontuário do paciente (RICADPAC.PRONT). */
+  /** Prontuário do paciente (número do prontuário). */
   prontuario: z.number().int().nullable(),
   /** Atendimento (registro) gravado na trilha, quando o evento o leva. */
   atendimento: z.number().int().nullable(),

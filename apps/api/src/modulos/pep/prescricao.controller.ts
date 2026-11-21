@@ -563,7 +563,7 @@ export class PrescricaoController {
     const pol = await this.politicas(s);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'ATCABECATEND',
+      tabelaAlvo: 'atendimento',
       chaveNaturalAlvo: chaveLeitura('registro', 'assistencia', `contexto;n:${r.atendimentos.length}`),
     };
     return {
@@ -593,7 +593,7 @@ export class PrescricaoController {
     const r = await this.servico.prescricoes(s.porta, paciente, idDaRota(a));
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       chaveNaturalAlvo: chaveLeitura('registro', 'assistencia', `n:${r.length}`),
     };
     return r;
@@ -615,7 +615,7 @@ export class PrescricaoController {
     const r = await this.servico.lerPrescricao(s.porta, paciente, id);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       idAlvo: String(id),
       chaveNaturalAlvo: chaveLeitura('registro', 'assistencia'),
     };
@@ -669,7 +669,7 @@ export class PrescricaoController {
     );
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       idAlvo: String(id),
       chaveNaturalAlvo: chaveLeitura('registro', 'assistencia', `receita-alta;n:${receitas.length}`),
     };
@@ -755,7 +755,7 @@ export class PrescricaoController {
           });
       req.sghAlvo = {
         paciente,
-        tabelaAlvo: 'PRPRESC',
+        tabelaAlvo: 'prescricao',
         idAlvo: String(id),
         chaveNaturalAlvo: `impresso:prescricao;via:${e.emissao.via}`,
       };
@@ -806,7 +806,7 @@ export class PrescricaoController {
     };
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       chaveNaturalAlvo: `parte:verificacao;alertas:${v.alertas.length}`,
     };
     return v;
@@ -1002,7 +1002,7 @@ export class PrescricaoController {
     await this.servico.coassinar(s.porta, paciente, e.data.prescricao, s.login);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       idAlvo: String(e.data.prescricao),
       chaveNaturalAlvo: 'coassinatura',
     };
@@ -1238,7 +1238,7 @@ export class PrescricaoController {
     );
     const visiveis = lista.filter((x) => permitidos.has(porId.get(x.id)?.paciente ?? 0));
     req.sghAlvo = {
-      tabelaAlvo: 'PRPRESC',
+      tabelaAlvo: 'prescricao',
       chaveNaturalAlvo: `parte:a-renovar;n:${visiveis.length};pacientes:${permitidos.size}`,
     };
     return visiveis.map((x) => {

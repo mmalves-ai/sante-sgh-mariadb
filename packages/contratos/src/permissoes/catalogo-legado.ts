@@ -1,4 +1,4 @@
-// Catálogo de permissões GERADO da árvore de opções do legado (TBOPCOES; ficha do M06, regra 2): os dados
+// Catálogo de permissões GERADO da árvore de opções do legado (menu de origem; ficha do M06, regra 2): os dados
 // ficam em catalogo-legado.json, escrito por `pnpm permissoes:verificar -- --atualizar` a partir do retrato
 // versionado (tools/verificadores/dados/acesso-legado.<cod>.json) e conferido pelo mesmo comando no CI.
 // Fora do índice de @sgh/contratos (importe de '@sgh/contratos/catalogo-legado'): não entra no pacote da tela.

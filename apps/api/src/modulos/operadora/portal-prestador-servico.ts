@@ -92,7 +92,7 @@ const MINUTOS_AUTENTICADOR_NOVO = 10;
 const ERROS_AUTENTICADOR_NOVO = 5;
 const TABELA = 'conta_portal_prestador';
 const E = EVENTOS_AUDITAVEIS;
-/** Origem do atendimento do pedido feito pelo portal (SPORIGEM_ATEND 4, "Portal autorizador"). */
+/** Origem do atendimento do pedido feito pelo portal (código 4, "Portal autorizador"). */
 export const ORIGEM_PORTAL = 4;
 
 export interface SessaoPortalPrestadorInterna {

@@ -2,7 +2,7 @@
 // "explicar valor"). A definição é código versionado; no banco (SGH_CFG_PARAMETRO, por estabelecimento)
 // ficam só os valores, com vigência, justificativa e autor. Vale o nível mais específico vigente: usuário,
 // perfil, unidade, estabelecimento, empresa, rede e, por fim, o padrão do registro. Os parâmetros do
-// LEGADO (GEPARAM, REPARAM, PRPARAM) são só lidos (declarações em @sgh/legado, config/parametros); a edição
+// sistema de origem (parâmetros gerais, da recepção e do prontuário) são só lidos (declarações em @sgh/legado, config/parametros); a edição
 // no formato do legado é operação do M10.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
@@ -768,10 +768,10 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   {
     chave: 'enfermagem.inicioTurnoDiurno',
     modulo: 'enfermagem',
-    descricao: 'Início do turno diurno de 12 horas da enfermagem (HHMM; o noturno começa 12 horas depois)',
+    descricao: 'Início do turno diurno de 12 horas da enfermagem (HH:MM; o noturno começa 12 horas depois)',
     tipo: 'texto',
-    padrao: '0700',
-    formato: { expressao: '^([01][0-9]|2[0-3])[0-5][0-9]$', mensagem: 'Hora no formato HHMM.' },
+    padrao: '07:00',
+    formato: { expressao: '^([01][0-9]|2[0-3]):[0-5][0-9]$', mensagem: 'Hora no formato HH:MM.' },
     niveis: ['unidade', 'estabelecimento', 'rede'],
     critico: false,
     dono: 'gerência de enfermagem',
@@ -986,10 +986,10 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     chave: PARAMETRO_BALANCO_HORA_CORTE,
     modulo: 'enfermagem',
     descricao:
-      'Hora de corte do balanço hídrico de 24 horas (HHMM): a janela vai da hora de corte de um dia à do dia seguinte',
+      'Hora de corte do balanço hídrico de 24 horas (HH:MM): a janela vai da hora de corte de um dia à do dia seguinte',
     tipo: 'texto',
-    padrao: '0700',
-    formato: { expressao: '^([01][0-9]|2[0-3])[0-5][0-9]$', mensagem: 'Hora no formato HHMM.' },
+    padrao: '07:00',
+    formato: { expressao: '^([01][0-9]|2[0-3]):[0-5][0-9]$', mensagem: 'Hora no formato HH:MM.' },
     niveis: ['unidade', 'estabelecimento', 'rede'],
     critico: false,
     dono: 'gerência de enfermagem',
@@ -1347,7 +1347,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     dono: 'faturamento',
     origem: 'ficha do M31, seção 4 (painel com cache de horas)',
   },
-  // M51 (etapa 1): faturamento SUS próprio, CIHA. O CNES vem do parâmetro (no dev, TBEMPHOS.CNES está zerado; ele fica
+  // M51 (etapa 1): faturamento SUS próprio, CIHA. O CNES vem do parâmetro (no dev, o CNES da empresa de origem está zerado; ele fica
   // só como reserva); os convênios SUS e particular e a fonte de remuneração por convênio são do estabelecimento.
   {
     chave: 'faturamento.sus.cnes',
@@ -1376,7 +1376,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
       mensagem: 'Use códigos de convênio separados por vírgula (ex.: 1).',
     },
     dono: 'faturamento',
-    origem: 'ficha do M51, regra 1 (TBCONVEN 1 nos dois hospitais)',
+    origem: 'ficha do M51, regra 1 (convênio SUS de código 1 nos dois hospitais)',
   },
   {
     chave: 'faturamento.sus.conveniosParticular',
@@ -1511,7 +1511,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     dono: 'faturamento',
     origem: 'leiaute do BPA-Mag (cabeçalho)',
   },
-  // M51 (etapa 4): AIH. O tipo de UTI do SIH (FHLEITOUTITP) e o procedimento da diária por tipo de acomodação da
+  // M51 (etapa 4): AIH. O tipo de UTI do SIH e o procedimento da diária por tipo de acomodação da
   // trajetória (o outro sistema não liga a acomodação ao tipo de UTI do SIH) e o diretor clínico do SISAIH01.
   // Desligado por estabelecimento (DP-35).
   {
@@ -1529,7 +1529,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     },
     dono: 'faturamento',
     origem:
-      'ficha do M51, regra 6 (diárias de UTI pela trajetória); tabela de tipos de UTI do SIH (FHLEITOUTITP)',
+      'ficha do M51, regra 6 (diárias de UTI pela trajetória); tabela de tipos de UTI do SIH',
   },
   {
     chave: 'faturamento.sus.aih.diretorClinicoCns',
@@ -1675,7 +1675,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     origem: 'ficha do M28, regra 15',
   },
   // M29: farmácia hospitalar e clínica (janela da fila por unidade, política "dispensar só depois de validar", classes
-  // da fila humana, regras automáticas, local da dispensação e a decisão da DP-25). Nada em PRPARAM (compartilhado).
+  // da fila humana, regras automáticas, local da dispensação e a decisão da DP-25). Nada nos parâmetros do prontuário de origem (compartilhados).
   {
     chave: 'suprimentos.farmaciaJanelaHoras',
     modulo: 'suprimentos',
@@ -2314,7 +2314,7 @@ export interface ValorParametro {
   readonly id: string;
   readonly chave: string;
   readonly nivel: NivelParametro;
-  /** Alvo do nível: código da rede, empresa (TBEMPHOS.COD), estabelecimento, unidade, perfil ou login. */
+  /** Alvo do nível: código da rede, empresa (código da empresa), estabelecimento, unidade, perfil ou login. */
   readonly alvo: string;
   readonly valor: string;
   readonly vigenteDesde: string;

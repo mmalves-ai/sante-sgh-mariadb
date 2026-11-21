@@ -69,7 +69,7 @@ export class AcompanhamentoTiss {
   }
 
   /**
-   * As contas bancárias do escopo da sessão para o movimento (regra 15 do M32, MFCTAUSU): só com a leitura do
+   * As contas bancárias do escopo da sessão para o movimento (regra 15 do M32, contas bancárias do usuário): só com a leitura do
    * movimento; null = todas. Vale para a leitura e para a chave do cache.
    */
   private async contasBancarias(s: SessaoCadastro): Promise<number[] | null> {
@@ -177,7 +177,7 @@ export class AcompanhamentoTiss {
           movimento: s.pode(LEITURAS_DOS_BLOCOS.movimento)
             ? t.movimento.map((m) => ({
                 ...m,
-                rotulo: conferirCodigoOnda4('MFLANCTO.TIPO_TRF', m.tipo, []).legenda,
+                rotulo: conferirCodigoOnda4('movimentoBancario.tipoTransferencia', m.tipo, []).legenda,
               }))
             : null,
         }

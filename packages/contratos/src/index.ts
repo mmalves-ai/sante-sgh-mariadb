@@ -13,6 +13,8 @@ export * from './codec/cp1252.js';
 export * from './codec/corpus-cp1252.js';
 export * from './formatacao/hora-legada.js';
 export * from './formatacao/data-legada.js';
+export * from './formatacao/hora.js';
+export * from './formatacao/booleano.js';
 export * from './texto/normalizar.js';
 export * from './menu/tipos.js';
 export { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './menu/arvore.js';

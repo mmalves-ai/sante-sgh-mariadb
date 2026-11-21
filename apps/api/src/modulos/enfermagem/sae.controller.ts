@@ -196,7 +196,7 @@ export class SaeController {
   @Auditar(E.saeLida.codigo)
   async pacientes(@Param('unidade') unidade: string, @Req() req: RequisicaoAutorizada) {
     const u = unidadeDe(unidade);
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return (await this.enfermagem.internados(sessaoDe(req).porta, u)).map((i) => ({
       paciente: i.paciente,
       atendimento: i.atendimento,

@@ -1064,7 +1064,7 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
       [familia],
     );
     if (!padrao)
-      throw recusa('modelo-pendente', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
+      throw recusa('padrao-troca-nao-cadastrado', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
     const ponto = await this.tx.incluir('ponto_integracao', {
       estabelecimento_id: this.est,
       codigo,

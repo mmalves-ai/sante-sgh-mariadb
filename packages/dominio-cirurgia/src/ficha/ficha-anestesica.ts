@@ -1,7 +1,7 @@
 // Ficha anestésica (ficha do M46, regra 3; Resolução CFM 2.174/2017, anexo da ficha; Lei 12.842/2013): sinais a cada
 // 5 minutos, fármacos e gases com dose e hora, fluidos e hemoderivados que vão ao balanço (M45) uma vez só, marcos
 // de tempo em ordem, transferência de responsabilidade entre anestesistas e a assinatura só pelo anestesista da
-// cirurgia. Regras puras: a receita (operação só SGH_, regra 12: nunca PRFA_*) reconfere no banco o que vale.
+// cirurgia. Regras puras: a gravação (regra 12) reconfere no banco o que vale.
 import {
   FLUIDOS_FICHA,
   INTERVALO_SINAIS_FICHA_MIN,
@@ -264,7 +264,7 @@ export interface EquipeLancada {
 
 /**
  * Anestesistas da cirurgia: o do agendamento (fora o sentinela), os da equipe lançada com a função de anestesista
- * (PRTIPO_PROFISSIONAL achado pelo nome; o ID é do estabelecimento) e quem teve a responsabilidade na ficha.
+ * (a função achada pelo nome; o id é do estabelecimento) e quem teve a responsabilidade na ficha.
  */
 export function anestesistasDaCirurgia(e: {
   readonly agendado: number | null;

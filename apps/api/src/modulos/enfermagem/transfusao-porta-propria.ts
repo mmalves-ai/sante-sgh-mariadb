@@ -18,9 +18,9 @@
 // gravados como a tela informou (sem informação: falso, o padrão do banco), nunca afirmados pela porta.
 // Melhoria: a linha da trilha da tela (evento auditável, recurso, paciente, estação) vai na trilha da operação, mesmo
 // quando montada pelo resultado; o bloqueio da transfusão (regra 11) grava a trilha numa operação sem escrita.
-// Pendências de modelo (pedidos do lote 02-05): as versões anteriores da requisição alterada e o adendo dos sinais do
-// ato (alterar e adendo respondem 409 modelo-pendente; as leituras devolvem vazio); os alertas da dupla checagem vão à
-// trilha da operação (sem coluna no ato).
+// A alteração da requisição antes do atendimento guarda a versão anterior (requisicao_transfusao_versao, com o motivo);
+// o adendo dos sinais do ato (ato_transfusional_adendo) corrige uma medida já registrada sem mudá-la. Os alertas da
+// dupla checagem vão à trilha da operação (sem coluna no ato).
 import { randomUUID } from 'node:crypto';
 import {
   type AdendoAtoLido,
@@ -37,6 +37,7 @@ import {
   type GrupoAbo,
   grupoAboPorId,
   HEMOCOMPONENTES_VISTOS,
+  MENSAGENS_CORRECAO_HEMO,
   type ItemHemoterapiaAAtender,
   type MomentoSinaisTransfusao,
   type ReacaoTransfusionalLida,
@@ -54,7 +55,6 @@ import {
   type ContextoNucleo,
   type ContextoOperacao,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -63,11 +63,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import {
-  type LiberacaoGravacao,
-  portaIndisponivel,
-  type TrilhaDaGravacao,
-} from '../exames/public-api.js';
+import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import {
   booleano,
   civilDe,
@@ -93,7 +89,7 @@ import {
   METODOS_PORTA_TRANSFUSAO,
   type PortaTransfusao,
 } from './transfusao-porta.js';
-import type { HorarioHemoterapia, TermoConsentimentoLido } from './transfusao-tipos.js';
+import type { HorarioHemoterapia, InicioTransfusaoNovo, TermoConsentimentoLido } from './transfusao-tipos.js';
 import { extrasDaTrilha, gravarSoTrilha, resolverTrilha, type TrilhaDaTela } from './trilha-da-tela.js';
 
 /** O mínimo do núcleo que a porta usa. */
@@ -112,6 +108,8 @@ export const OPERACOES_TRANSFUSAO = {
   concluir: 'transfusao.concluir',
   reacao: 'transfusao.registrar-reacao',
   notificada: 'transfusao.notificacao-enviada',
+  alterar: 'transfusao.alterar-requisicao',
+  adendo: 'transfusao.adendo-sinais',
   trilha: 'transfusao.registrar-trilha',
 } as const;
 
@@ -139,15 +137,16 @@ const ESTADO_ATO: Readonly<Record<string, EstadoAtoTransfusional>> = {
 /** camelCase do contrato → snake_case do código no banco. */
 export const codigoDoBanco = (c: string): string => c.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 /** snake_case do banco → camelCase do contrato. */
-export const codigoDoContrato = (c: string): string => c.replace(/_([a-z])/g, (_m, l: string) => l.toUpperCase());
+export const codigoDoContrato = (c: string): string =>
+  c.replace(/_([a-z])/g, (_m, l: string) => l.toUpperCase());
 
 const RH_DO_SINAL: Readonly<Record<string, FatorRh>> = { '+': 'positivo', '-': 'negativo' };
 
 const tipagemDe = (abo: unknown, rh: unknown): TipagemSanguinea => ({
   abo: (['A', 'B', 'AB', 'O'].includes(texto(abo)) ? texto(abo) : null) as GrupoAbo | null,
-  rh: (texto(rh) === 'positivo' || texto(rh) === 'negativo' ? texto(rh) : (RH_DO_SINAL[texto(rh)] ?? null)) as
-    | FatorRh
-    | null,
+  rh: (texto(rh) === 'positivo' || texto(rh) === 'negativo'
+    ? texto(rh)
+    : (RH_DO_SINAL[texto(rh)] ?? null)) as FatorRh | null,
 });
 
 /**
@@ -232,13 +231,8 @@ const SQL_REACOES = `
     JOIN paciente pa ON pa.id = x.paciente_id
    WHERE x.estabelecimento_id = ? AND x.excluido_em IS NULL`;
 
-const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a tabela no modelo do banco: nada foi gravado.`,
-  );
+/** A recusa da correção pelo código, com a mensagem comum às portas. */
+const recusaCorrecao = (codigo: string) => recusa(codigo, MENSAGENS_CORRECAO_HEMO[codigo] ?? codigo);
 
 /** Uma escrita da porta: o que grava, nas tabelas declaradas, com a chave do pedido. */
 interface Escrita<R extends ResultadoOperacao> {
@@ -271,7 +265,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
     this.executor = executorPronto ?? nucleo.criarExecutor();
   }
 
-  private ler<T>(c: ContextoTransfusao, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
+  private ler<T>(
+    c: ContextoTransfusao,
+    fn: (l: Leitor, est: number, fuso: string) => Promise<T>,
+  ): Promise<T> {
     let est: number;
     try {
       est = estabelecimentoDe(c);
@@ -347,13 +344,21 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
     return r;
   }
 
-  private gravador(c: ContextoTransfusao, linha: TrilhaDaTela<unknown>, marcar: () => void): GravadorTransfusao {
+  private gravador(
+    c: ContextoTransfusao,
+    linha: TrilhaDaTela<unknown>,
+    marcar: () => void,
+  ): GravadorTransfusao {
     const esc = <R extends ResultadoOperacao>(w: Escrita<R>) => {
       marcar();
       return this.escrever(c, linha, w);
     };
-    const concluirNa = (tx: TxOperacao, est: number, fuso: string, x: Parameters<GravadorTransfusao['concluir']>[0]) =>
-      concluirAto(tx, est, fuso, x);
+    const concluirNa = (
+      tx: TxOperacao,
+      est: number,
+      fuso: string,
+      x: Parameters<GravadorTransfusao['concluir']>[0],
+    ) => concluirAto(tx, est, fuso, x);
     return {
       requisitar: async (r) => {
         const s = await esc({
@@ -373,7 +378,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
               [r.item, est, r.atendimento],
             );
             if (!pih)
-              throw recusa('item-nao-encontrado', 'O item de hemoterapia não foi encontrado neste atendimento.');
+              throw recusa(
+                'item-nao-encontrado',
+                'O item de hemoterapia não foi encontrado neste atendimento.',
+              );
             const aberta = await tx.consultarParaAtualizar(
               `SELECT r.id FROM requisicao_transfusao r WHERE r.prescricao_item_hemocomponente_id = ?
                   AND r.situacao IN ('requisitada','amostra_coletada','em_atendimento') AND r.excluido_em IS NULL`,
@@ -490,7 +498,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
             });
             // O código da etiqueta: HT + ano (2 dígitos) + id (8 dígitos), único no estabelecimento.
             const codigo = `HT${a.coletadaEm.slice(2, 4)}${String(id).padStart(8, '0')}`;
-            await tx.executar('UPDATE amostra_pre_transfusional SET codigo_barras = ? WHERE id = ?', [codigo, id]);
+            await tx.executar('UPDATE amostra_pre_transfusional SET codigo_barras = ? WHERE id = ?', [
+              codigo,
+              id,
+            ]);
             if (q.situacao === 'requisitada')
               await tx.alterar('requisicao_transfusao', q.id, q.versao, { situacao: 'amostra_coletada' });
             return { id, codigo };
@@ -512,114 +523,7 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
           chave: t.chave,
           entrada: { ...t },
           alvo: (r) => ({ tabela: 'ato_transfusional', id: Number(r['id']) }),
-          gravar: async (tx, est, fuso) => {
-            const q = await requisicaoTravada(tx, est, t.requisicao);
-            if (!['requisitada', 'amostra_coletada', 'em_atendimento'].includes(q.situacao))
-              throw recusa('requisicao-fechada', 'A requisição não está aberta para transfusão.');
-            const emCurso = await tx.uma(
-              `SELECT id FROM ato_transfusional WHERE requisicao_transfusao_id = ? AND situacao = 'em_andamento'
-                  AND excluido_em IS NULL`,
-              [q.id],
-            );
-            if (emCurso)
-              throw recusa(
-                'ato-em-curso',
-                'Há uma transfusão em curso nesta requisição: conclua-a antes de iniciar outra bolsa.',
-              );
-            if (q.quantidade_atendida >= q.quantidade_bolsas)
-              throw recusa('requisicao-fechada', 'Todas as bolsas da requisição já foram transfundidas.');
-            const executor = await exigirProfissional(tx, c, est);
-            const conferente = await profissionalDoLogin(tx, t.conferente, est);
-            if (conferente === null)
-              throw recusa(
-                'segundo-profissional-sem-vinculo',
-                'O segundo profissional não tem cadastro de profissional neste estabelecimento.',
-              );
-            if (conferente === executor)
-              throw recusa('segundo-profissional-igual', 'O segundo profissional tem de ser outra pessoa.');
-            const numero = t.bolsa.numero.trim().toUpperCase();
-            const [bolsa] = await tx.consultarParaAtualizar<Linha & { id: number }>(
-              `SELECT b.id, b.situacao, b.reservada_requisicao_transfusao_id, b.validade_em, g.sigla AS abo, f.sinal AS rh
-                 FROM bolsa_hemocomponente b
-                 JOIN hemocomponente h ON h.id = b.hemocomponente_id
-                 JOIN grupo_sanguineo g ON g.id = b.grupo_sanguineo_id
-                 JOIN fator_rh f ON f.id = b.fator_rh_id
-                WHERE b.estabelecimento_id = ? AND b.numero = ? AND h.sigla = ? AND b.excluido_em IS NULL`,
-              [est, numero, t.bolsa.hemocomponente.trim().toUpperCase()],
-            );
-            if (!bolsa)
-              throw recusa(
-                'bolsa-nao-recebida',
-                'A bolsa não está no estoque da agência transfusional deste estabelecimento: confira o número.',
-              );
-            const usada = await tx.uma(
-              `SELECT id FROM ato_transfusional WHERE bolsa_hemocomponente_id = ? AND situacao <> 'cancelado'
-                  AND excluido_em IS NULL`,
-              [bolsa.id],
-            );
-            if (usada) throw recusa('bolsa-ja-usada', 'Esta bolsa já foi usada em outra transfusão.');
-            if (!['liberada', 'reservada'].includes(texto(bolsa['situacao'])))
-              throw recusa('bolsa-indisponivel', 'A bolsa não está liberada pela agência transfusional.');
-            if (
-              texto(bolsa['situacao']) === 'reservada' &&
-              numOuNulo(bolsa['reservada_requisicao_transfusao_id']) !== q.id
-            )
-              throw recusa(
-                'bolsa-reservada-outra-requisicao',
-                'A bolsa está reservada pela agência para outra requisição: confira a bolsa do paciente.',
-              );
-            const validade = bolsa['validade_em'] instanceof Date ? bolsa['validade_em'] : new Date(String(bolsa['validade_em']));
-            const inicio = instanteDe(t.inicioEm, fuso);
-            if (!(validade.getTime() > inicio.getTime()))
-              throw recusa('bolsa-vencida', 'A bolsa está vencida no estoque da agência transfusional.');
-            if (
-              texto(bolsa['abo']) !== grupoAboPorId(t.bolsa.abo) ||
-              RH_DO_SINAL[texto(bolsa['rh'])] !== fatorRhPorId(t.bolsa.rh)
-            )
-              throw recusa('tipagem-da-bolsa-diverge', 'A tipagem digitada não confere com a da bolsa no estoque.');
-            const s0 = t.sinaisAntes;
-            const id = await tx.incluir('ato_transfusional', {
-              estabelecimento_id: est,
-              requisicao_transfusao_id: q.id,
-              requisicao_transfusao_item_id: q.item_id,
-              bolsa_hemocomponente_id: bolsa.id,
-              paciente_id: q.paciente_id,
-              atendimento_id: q.atendimento_id,
-              prescricao_item_hemocomponente_id: q.prescricao_item_hemocomponente_id,
-              horario_administracao_id: t.horario,
-              executor_profissional_id: executor,
-              conferente_profissional_id: conferente,
-              pulseira_conferida: t.pulseiraLida,
-              etiqueta_receptor_conferida: t.etiquetaReceptorConferida === true,
-              inspecao_visual_aprovada: t.inspecaoVisualAprovada === true,
-              justificativa_rh: t.justificativaRh,
-              pressao_sistolica_antes: s0.pas,
-              pressao_diastolica_antes: s0.pad,
-              frequencia_cardiaca_antes: s0.fc,
-              frequencia_respiratoria_antes: s0.fr ?? null,
-              temperatura_antes: s0.temperatura,
-              saturacao_oxigenio_antes: s0.spo2 ?? null,
-              inicio_em: inicio,
-              situacao: 'em_andamento',
-            });
-            if (t.horario !== null)
-              await checarHorarioDoAto(tx, est, {
-                horario: t.horario,
-                prescricaoItemHemocomponente: q.prescricao_item_hemocomponente_id,
-                ocorrido: inicio,
-                profissional: executor,
-                ato: id,
-                pulseiraLida: t.pulseiraLida,
-                motivoSemPulseira: t.motivoSemPulseira,
-                conferente: t.conferente,
-                bolsa: numero,
-                alertas: t.alertas,
-              });
-            await incluirSinais(tx, id, 'antes', s0, instanteDe(t.sinaisAntesEm, fuso), executor);
-            if (q.situacao !== 'em_atendimento')
-              await tx.alterar('requisicao_transfusao', q.id, q.versao, { situacao: 'em_atendimento' });
-            return { id };
-          },
+          gravar: (tx, est, fuso) => iniciarAtoTransfusional(tx, est, fuso, t),
         });
         return { id: Number(s.resultado['id']), repetida: s.repetida };
       },
@@ -636,12 +540,19 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
             if (x.momento === 'durante' && a.situacao !== 'em_andamento')
               throw recusa('ato-encerrado', 'A transfusão já terminou: registre os sinais do término.');
             if (x.momento === 'depois' && a.situacao === 'em_andamento')
-              throw recusa('ato-em-curso', 'Os sinais do término são registrados depois de concluir a transfusão.');
+              throw recusa(
+                'ato-em-curso',
+                'Os sinais do término são registrados depois de concluir a transfusão.',
+              );
             const ja = await tx.uma(
               'SELECT id FROM monitoramento_transfusao WHERE ato_transfusional_id = ? AND momento = ? AND excluido_em IS NULL',
               [a.id, x.momento],
             );
-            if (ja) throw recusa('sinais-ja-registrados', 'Os sinais deste momento da transfusão já foram registrados.');
+            if (ja)
+              throw recusa(
+                'sinais-ja-registrados',
+                'Os sinais deste momento da transfusão já foram registrados.',
+              );
             const prof = await exigirProfissional(tx, c, est);
             const id = await incluirSinais(tx, a.id, x.momento, x.sinais, instanteDe(x.medidoEm, fuso), prof);
             return { id };
@@ -669,7 +580,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
         return {
           id: Number(s.resultado['id']),
           estadoRequisicao: String(s.resultado['estadoRequisicao']),
-          ganho: s.resultado['ganho'] === null || s.resultado['ganho'] === undefined ? null : Number(s.resultado['ganho']),
+          ganho:
+            s.resultado['ganho'] === null || s.resultado['ganho'] === undefined
+              ? null
+              : Number(s.resultado['ganho']),
         };
       },
 
@@ -695,7 +609,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
             let interrompeu = false;
             if (a.situacao === 'em_andamento') {
               if (!r.interromper)
-                throw recusa('em-curso-sem-interromper', 'Com a transfusão em curso, a primeira conduta é interrompê-la.');
+                throw recusa(
+                  'em-curso-sem-interromper',
+                  'Com a transfusão em curso, a primeira conduta é interrompê-la.',
+                );
               await concluirAto(
                 tx,
                 est,
@@ -754,7 +671,11 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
           entrada: { ...m },
           alvo: (r) => ({ tabela: 'reacao_transfusional', id: Number(r['id']) }),
           gravar: async (tx, est, fuso) => {
-            const [x] = await tx.consultarParaAtualizar<{ id: number; versao: number; notificacao_enviada_em: unknown }>(
+            const [x] = await tx.consultarParaAtualizar<{
+              id: number;
+              versao: number;
+              notificacao_enviada_em: unknown;
+            }>(
               `SELECT id, versao, notificacao_enviada_em FROM reacao_transfusional
                 WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
               [m.reacao, est],
@@ -771,11 +692,109 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
         return { id: Number(s.resultado['id']) };
       },
 
-      alterar: async () => {
-        throw modeloPendente('A alteração da requisição com a versão anterior guardada');
+      alterar: async (x) => {
+        const s = await esc({
+          nome: OPERACOES_TRANSFUSAO.alterar,
+          tabelas: ['requisicao_transfusao', 'requisicao_transfusao_item', 'requisicao_transfusao_versao'],
+          chave: null,
+          entrada: { ...x },
+          alvo: (r) => ({ tabela: 'requisicao_transfusao', id: Number(r['id']) }),
+          gravar: async (tx, est, fuso) => {
+            const q = await requisicaoTravada(tx, est, x.requisicao);
+            if (q.situacao !== 'requisitada' && q.situacao !== 'amostra_coletada')
+              throw recusaCorrecao('requisicao-ja-atendida');
+            if (x.urgencia === 1 && !x.programadaPara) throw recusaCorrecao('programada-sem-data');
+            const atual = await tx.uma<Linha>(
+              `SELECT r.tipo_transfusao_id, r.programada_para, ri.hemocomponente_id, ri.volume_ml
+                 FROM requisicao_transfusao r JOIN requisicao_transfusao_item ri ON ri.id = ?
+                WHERE r.id = ?`,
+              [q.item_id, q.id],
+            );
+            if (!atual) throw recusa('nao-encontrada', 'A requisição transfusional não foi encontrada.');
+            const hemo = await idPorSigla(tx, x.hemocomponente);
+            const tipo = await tipoTransfusao(tx, x.urgencia);
+            const programada =
+              x.urgencia === 1 && x.programadaPara ? instanteDe(x.programadaPara, fuso) : null;
+            const programadaAtual = atual['programada_para']
+              ? new Date(atual['programada_para'] as Date)
+              : null;
+            if (
+              num(atual['hemocomponente_id']) === hemo &&
+              numOuNulo(atual['volume_ml']) === x.volumeMl &&
+              num(atual['tipo_transfusao_id']) === tipo &&
+              (programadaAtual?.getTime() ?? null) === (programada?.getTime() ?? null)
+            )
+              throw recusaCorrecao('requisicao-sem-mudanca');
+            if (num(atual['hemocomponente_id']) !== hemo) {
+              const reserva = await tx.uma(
+                `SELECT id FROM bolsa_hemocomponente
+                  WHERE reservada_requisicao_transfusao_id = ? AND situacao = 'reservada' AND excluido_em IS NULL
+                  LIMIT 1`,
+                [q.id],
+              );
+              if (reserva) throw recusaCorrecao('requisicao-com-reserva');
+            }
+            const n = await tx.uma<{ n: number }>(
+              'SELECT COALESCE(MAX(numero_versao), 0) + 1 AS n FROM requisicao_transfusao_versao WHERE requisicao_transfusao_id = ?',
+              [q.id],
+            );
+            const numero = num(n?.n ?? 1);
+            await tx.incluir('requisicao_transfusao_versao', {
+              requisicao_transfusao_id: q.id,
+              numero_versao: numero,
+              hemocomponente_id: num(atual['hemocomponente_id']),
+              volume_ml: numOuNulo(atual['volume_ml']),
+              tipo_transfusao_id: num(atual['tipo_transfusao_id']),
+              programada_para: programadaAtual,
+              motivo: x.motivo.trim().slice(0, 300),
+              alterada_em: new Date(),
+              alterada_por_usuario_id: c.usuario,
+            });
+            await tx.alterar('requisicao_transfusao', q.id, q.versao, {
+              tipo_transfusao_id: tipo,
+              programada_para: programada,
+            });
+            await tx.alterar('requisicao_transfusao_item', q.item_id, q.item_versao, {
+              hemocomponente_id: hemo,
+              volume_ml: x.volumeMl,
+            });
+            return { id: q.id, versao: numero + 1 };
+          },
+        });
+        return { id: Number(s.resultado['id']), versao: Number(s.resultado['versao']) };
       },
-      adendo: async () => {
-        throw modeloPendente('O adendo dos sinais do ato transfusional');
+      adendo: async (x) => {
+        const s = await esc({
+          nome: OPERACOES_TRANSFUSAO.adendo,
+          tabelas: ['ato_transfusional_adendo'],
+          chave: null,
+          entrada: { ...x },
+          alvo: (r) => ({ tabela: 'ato_transfusional_adendo', id: Number(r['id']) }),
+          gravar: async (tx, est) => {
+            const a = await atoTravado(tx, est, x.ato);
+            const medida = await tx.uma<{ id: number }>(
+              `SELECT id FROM monitoramento_transfusao
+                WHERE ato_transfusional_id = ? AND momento = ? AND excluido_em IS NULL ORDER BY sequencia LIMIT 1`,
+              [a.id, x.momento],
+            );
+            if (!medida) throw recusaCorrecao('momento-sem-medida');
+            const prof = await exigirProfissional(tx, c, est);
+            const id = await tx.incluir('ato_transfusional_adendo', {
+              ato_transfusional_id: a.id,
+              monitoramento_transfusao_id: Number(medida.id),
+              pressao_sistolica: x.sinais.pas,
+              pressao_diastolica: x.sinais.pad,
+              frequencia_cardiaca: x.sinais.fc,
+              temperatura: x.sinais.temperatura,
+              frequencia_respiratoria: x.sinais.fr ?? null,
+              saturacao_oxigenio: x.sinais.spo2 ?? null,
+              motivo: x.motivo.trim().slice(0, 300),
+              profissional_id: prof,
+            });
+            return { id };
+          },
+        });
+        return { id: Number(s.resultado['id']) };
       },
     };
   }
@@ -794,7 +813,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
         sql += ' AND p.atendimento_id = ?';
         p.push(o.atendimento);
       }
-      const rs = await l.consultar(`${sql} ORDER BY p.prescrito_em, pi.id LIMIT ${TETO_ITENS_HEMOTERAPIA + 1}`, p);
+      const rs = await l.consultar(
+        `${sql} ORDER BY p.prescrito_em, pi.id LIMIT ${TETO_ITENS_HEMOTERAPIA + 1}`,
+        p,
+      );
       return {
         itens: rs.slice(0, TETO_ITENS_HEMOTERAPIA).map((x) => itemDe(x, fuso)),
         cortada: rs.length > TETO_ITENS_HEMOTERAPIA,
@@ -834,9 +856,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
   tipagem(c: ContextoTransfusao, paciente: number): Promise<TipagemSanguinea> {
     // A tipagem do cadastro do paciente é da rede inteira (o paciente não tem estabelecimento).
     return this.ler(c, async (l) => {
-      const p = await l.uma('SELECT tipo_sanguineo, fator_rh FROM paciente WHERE id = ? AND excluido_em IS NULL', [
-        paciente,
-      ]);
+      const p = await l.uma(
+        'SELECT tipo_sanguineo, fator_rh FROM paciente WHERE id = ? AND excluido_em IS NULL',
+        [paciente],
+      );
       return p ? tipagemDe(p['tipo_sanguineo'], p['fator_rh']) : { abo: null, rh: null };
     });
   }
@@ -903,7 +926,10 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
         sql += ` AND (pa.numero_prontuario = ? OR ${nomeDoPaciente('r.paciente_id')} LIKE ?)`;
         p.push(/^\d+$/.test(termo) ? Number(termo) : -1, `%${termo.replace(/[%_\\]/g, '\\$&')}%`);
       }
-      const rs = await l.consultar(`${sql} ORDER BY r.solicitado_em DESC, r.id DESC LIMIT ${TETO_REQUISICOES + 1}`, p);
+      const rs = await l.consultar(
+        `${sql} ORDER BY r.solicitado_em DESC, r.id DESC LIMIT ${TETO_REQUISICOES + 1}`,
+        p,
+      );
       return {
         itens: rs.slice(0, TETO_REQUISICOES).map((x) => requisicaoDe(x, fuso, f.agora)),
         cortada: rs.length > TETO_REQUISICOES,
@@ -1054,16 +1080,73 @@ export class PortaTransfusaoPropria implements PortaTransfusao {
     );
   }
 
-  /** Pendência de modelo: a versão anterior da requisição alterada ainda não tem tabela. */
-  async versoesRequisicao(c: ContextoTransfusao, requisicao: number): Promise<VersaoRequisicaoLida[]> {
-    void [c, requisicao];
-    return [];
+  /** As versões anteriores da requisição (a 1 é a original), da mais antiga para a mais recente. */
+  versoesRequisicao(c: ContextoTransfusao, requisicao: number): Promise<VersaoRequisicaoLida[]> {
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT v.numero_versao, h.sigla, v.volume_ml, tt.codigo AS urgencia, tt.prazo_atendimento_horas,
+                v.programada_para, r.solicitado_em, v.motivo, v.alterada_em, ${LOGIN_DE('v.alterada_por_usuario_id')} AS login
+           FROM requisicao_transfusao_versao v
+           JOIN requisicao_transfusao r ON r.id = v.requisicao_transfusao_id
+           JOIN hemocomponente h ON h.id = v.hemocomponente_id
+           JOIN tipo_transfusao tt ON tt.id = v.tipo_transfusao_id
+          WHERE v.requisicao_transfusao_id = ? AND r.estabelecimento_id = ?
+          ORDER BY v.numero_versao`,
+        [requisicao, est],
+      );
+      return rs.map((x) => {
+        const prazo = prazoDe(x);
+        return {
+          versao: num(x['numero_versao']),
+          hemocomponente: texto(x['sigla']),
+          volumeMl: numOuNulo(x['volume_ml']),
+          urgencia: (codigoDoContrato(texto(x['urgencia'])) as UrgenciaTransfusao) ?? 'rotina',
+          programadaPara: civilDe(x['programada_para'], fuso)?.slice(0, 16) ?? null,
+          prazo: prazo ? (localNoFusoSeguro(prazo, fuso)?.slice(0, 16) ?? null) : null,
+          motivo: texto(x['motivo']),
+          alteradaPor: texto(x['login']),
+          alteradaEm: (civilDe(x['alterada_em'], fuso) ?? '').slice(0, 16),
+        };
+      });
+    });
   }
 
-  /** Pendência de modelo: o adendo dos sinais do ato ainda não tem tabela. */
-  async adendos(c: ContextoTransfusao, atos: readonly number[]): Promise<AdendoAtoLido[]> {
-    void [c, atos];
-    return [];
+  /** Os adendos dos sinais dos atos (os mais antigos primeiro); a medida original fica como foi registrada. */
+  adendos(c: ContextoTransfusao, atos: readonly number[]): Promise<AdendoAtoLido[]> {
+    if (atos.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT d.id, d.ato_transfusional_id, m.momento, d.pressao_sistolica, d.pressao_diastolica,
+                d.frequencia_cardiaca, d.temperatura, d.frequencia_respiratoria, d.saturacao_oxigenio, d.motivo,
+                d.criado_em, ${LOGIN_DE('d.criado_por')} AS login
+           FROM ato_transfusional_adendo d
+           JOIN ato_transfusional a ON a.id = d.ato_transfusional_id
+           JOIN monitoramento_transfusao m ON m.id = d.monitoramento_transfusao_id
+          WHERE d.ato_transfusional_id IN (${marcadores(atos.length)}) AND a.estabelecimento_id = ?
+          ORDER BY d.criado_em, d.id`,
+        [...atos, est],
+      );
+      return rs.map((x) => {
+        const fr = numOuNulo(x['frequencia_respiratoria']);
+        const spo2 = numOuNulo(x['saturacao_oxigenio']);
+        return {
+          id: num(x['id']),
+          ato: num(x['ato_transfusional_id']),
+          momento: texto(x['momento']) as MomentoSinaisTransfusao,
+          sinais: {
+            pas: num(x['pressao_sistolica']),
+            pad: num(x['pressao_diastolica']),
+            fc: num(x['frequencia_cardiaca']),
+            temperatura: Number(x['temperatura']),
+            ...(fr !== null ? { fr } : {}),
+            ...(spo2 !== null ? { spo2 } : {}),
+          },
+          motivo: texto(x['motivo']),
+          usuario: texto(x['login']),
+          em: (civilDe(x['criado_em'], fuso) ?? '').slice(0, 16),
+        };
+      });
+    });
   }
 
   gravadoPorChave(
@@ -1169,7 +1252,8 @@ async function requisicaoTravada(tx: TxOperacao, est: number, id: number): Promi
       WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
     [id, est],
   );
-  if (!q) throw recusa('nao-encontrada', 'A requisição transfusional não foi encontrada neste estabelecimento.');
+  if (!q)
+    throw recusa('nao-encontrada', 'A requisição transfusional não foi encontrada neste estabelecimento.');
   return {
     id: num(q['id']),
     versao: num(q['versao']),
@@ -1247,7 +1331,8 @@ async function concluirAto(
   destinoBolsa: 'transfundida' | 'devolvida' | 'descartada' = 'transfundida',
 ): Promise<{ id: number; estadoRequisicao: string; ganho: number | null }> {
   const a = await atoTravado(tx, est, x.ato);
-  if (a.situacao !== 'em_andamento') throw recusa('ato-encerrado', 'A transfusão já foi concluída ou interrompida.');
+  if (a.situacao !== 'em_andamento')
+    throw recusa('ato-encerrado', 'A transfusão já foi concluída ou interrompida.');
   const termino = instanteDe(x.terminoEm, fuso);
   await tx.alterar('ato_transfusional', a.id, a.versao, {
     termino_em: termino,
@@ -1379,8 +1464,11 @@ async function checarHorarioDoAto(
     readonly conferente: string;
     readonly bolsa: string;
     readonly alertas: readonly string[];
+    /** O aparelho da beira do leito que leu a checagem (nulo: estação de trabalho). */
+    readonly aparelho: string | null;
   },
-): Promise<void> {
+): Promise<number> {
+  const canal = h.aparelho ? 'beira_leito' : 'estacao';
   const [x] = await tx.consultarParaAtualizar<Linha>(
     `SELECT ha.id, ha.versao, ha.suspenso, sc.categoria
        FROM horario_administracao ha
@@ -1390,7 +1478,8 @@ async function checarHorarioDoAto(
     [h.horario, est, h.prescricaoItemHemocomponente ?? 0],
   );
   if (!x) throw recusa('horario-inexistente', 'O horário não é do hemocomponente desta requisição.');
-  if (booleano(x['suspenso'])) throw recusa('horario-suspenso', 'A prescrição está suspensa: nada foi gravado.');
+  if (booleano(x['suspenso']))
+    throw recusa('horario-suspenso', 'A prescrição está suspensa: nada foi gravado.');
   if (!['pendente', 'atrasado', 'adiado'].includes(texto(x['categoria'])))
     throw recusa('horario-ja-checado', 'O horário já foi checado em outro terminal: nada foi gravado.');
   const adm = await tx.uma<{ id: number }>(
@@ -1408,9 +1497,9 @@ async function checarHorarioDoAto(
     quantidade_administrada: 1,
     administrado_por_profissional_id: h.profissional,
     administrado_em: h.ocorrido,
-    canal_registro: 'estacao',
+    canal_registro: canal,
   });
-  await tx.incluir('horario_administracao_evento', {
+  return tx.incluir('horario_administracao_evento', {
     horario_administracao_id: num(x['id']),
     operacao: 'alteracao',
     dados: JSON.stringify({
@@ -1421,6 +1510,7 @@ async function checarHorarioDoAto(
       motivoSemPulseira: h.motivoSemPulseira,
       conferente: h.conferente,
       avisos: h.alertas.slice(0, 5),
+      ...(h.aparelho ? { dispositivo: h.aparelho } : {}),
     }),
     ocorrido_em: h.ocorrido,
     usuario_id: tx.contexto.usuario,
@@ -1428,8 +1518,142 @@ async function checarHorarioDoAto(
     situacao_checagem_id: adm.id,
     quantidade_administrada: 1,
     profissional_id: h.profissional,
-    canal_registro: 'estacao',
+    canal_registro: canal,
   });
+}
+
+/** As tabelas que o início do ato grava (a operação da tela da transfusão e a checagem do horário do item). */
+export const TABELAS_INICIO_ATO = [
+  'ato_transfusional',
+  'monitoramento_transfusao',
+  'requisicao_transfusao',
+  'horario_administracao',
+  'horario_administracao_evento',
+] as const;
+
+/**
+ * O início do ato transfusional na transação: a requisição aberta, a bolsa do estoque conferida (número, tipagem,
+ * validade, reserva), a dupla checagem por outro profissional, os sinais de antes e, com o horário, a checagem do
+ * horário do item de hemoterapia. Devolve o ato e o evento da checagem do horário (nulo sem horário).
+ */
+export async function iniciarAtoTransfusional(
+  tx: TxOperacao,
+  est: number,
+  fuso: string,
+  t: Omit<InicioTransfusaoNovo, 'chave' | 'usuario'>,
+  /** O aparelho da beira do leito, quando a checagem do horário veio dele (o identificador aparado). */
+  aparelho: string | null = null,
+): Promise<{ id: number; evento: number | null }> {
+  const q = await requisicaoTravada(tx, est, t.requisicao);
+  if (!['requisitada', 'amostra_coletada', 'em_atendimento'].includes(q.situacao))
+    throw recusa('requisicao-fechada', 'A requisição não está aberta para transfusão.');
+  const emCurso = await tx.uma(
+    `SELECT id FROM ato_transfusional WHERE requisicao_transfusao_id = ? AND situacao = 'em_andamento'
+          AND excluido_em IS NULL`,
+    [q.id],
+  );
+  if (emCurso)
+    throw recusa(
+      'ato-em-curso',
+      'Há uma transfusão em curso nesta requisição: conclua-a antes de iniciar outra bolsa.',
+    );
+  if (q.quantidade_atendida >= q.quantidade_bolsas)
+    throw recusa('requisicao-fechada', 'Todas as bolsas da requisição já foram transfundidas.');
+  const executor = await exigirProfissional(tx, tx.contexto, est);
+  const conferente = await profissionalDoLogin(tx, t.conferente, est);
+  if (conferente === null)
+    throw recusa(
+      'segundo-profissional-sem-vinculo',
+      'O segundo profissional não tem cadastro de profissional neste estabelecimento.',
+    );
+  if (conferente === executor)
+    throw recusa('segundo-profissional-igual', 'O segundo profissional tem de ser outra pessoa.');
+  const numero = t.bolsa.numero.trim().toUpperCase();
+  const [bolsa] = await tx.consultarParaAtualizar<Linha & { id: number }>(
+    `SELECT b.id, b.situacao, b.reservada_requisicao_transfusao_id, b.validade_em, g.sigla AS abo, f.sinal AS rh
+         FROM bolsa_hemocomponente b
+         JOIN hemocomponente h ON h.id = b.hemocomponente_id
+         JOIN grupo_sanguineo g ON g.id = b.grupo_sanguineo_id
+         JOIN fator_rh f ON f.id = b.fator_rh_id
+        WHERE b.estabelecimento_id = ? AND b.numero = ? AND h.sigla = ? AND b.excluido_em IS NULL`,
+    [est, numero, t.bolsa.hemocomponente.trim().toUpperCase()],
+  );
+  if (!bolsa)
+    throw recusa(
+      'bolsa-nao-recebida',
+      'A bolsa não está no estoque da agência transfusional deste estabelecimento: confira o número.',
+    );
+  const usada = await tx.uma(
+    `SELECT id FROM ato_transfusional WHERE bolsa_hemocomponente_id = ? AND situacao <> 'cancelado'
+          AND excluido_em IS NULL`,
+    [bolsa.id],
+  );
+  if (usada) throw recusa('bolsa-ja-usada', 'Esta bolsa já foi usada em outra transfusão.');
+  if (!['liberada', 'reservada'].includes(texto(bolsa['situacao'])))
+    throw recusa('bolsa-indisponivel', 'A bolsa não está liberada pela agência transfusional.');
+  if (
+    texto(bolsa['situacao']) === 'reservada' &&
+    numOuNulo(bolsa['reservada_requisicao_transfusao_id']) !== q.id
+  )
+    throw recusa(
+      'bolsa-reservada-outra-requisicao',
+      'A bolsa está reservada pela agência para outra requisição: confira a bolsa do paciente.',
+    );
+  const validade =
+    bolsa['validade_em'] instanceof Date ? bolsa['validade_em'] : new Date(String(bolsa['validade_em']));
+  const inicio = instanteDe(t.inicioEm, fuso);
+  if (!(validade.getTime() > inicio.getTime()))
+    throw recusa('bolsa-vencida', 'A bolsa está vencida no estoque da agência transfusional.');
+  if (
+    texto(bolsa['abo']) !== grupoAboPorId(t.bolsa.abo) ||
+    RH_DO_SINAL[texto(bolsa['rh'])] !== fatorRhPorId(t.bolsa.rh)
+  )
+    throw recusa('tipagem-da-bolsa-diverge', 'A tipagem digitada não confere com a da bolsa no estoque.');
+  const s0 = t.sinaisAntes;
+  const id = await tx.incluir('ato_transfusional', {
+    estabelecimento_id: est,
+    requisicao_transfusao_id: q.id,
+    requisicao_transfusao_item_id: q.item_id,
+    bolsa_hemocomponente_id: bolsa.id,
+    paciente_id: q.paciente_id,
+    atendimento_id: q.atendimento_id,
+    prescricao_item_hemocomponente_id: q.prescricao_item_hemocomponente_id,
+    horario_administracao_id: t.horario,
+    executor_profissional_id: executor,
+    conferente_profissional_id: conferente,
+    pulseira_conferida: t.pulseiraLida,
+    etiqueta_receptor_conferida: t.etiquetaReceptorConferida === true,
+    inspecao_visual_aprovada: t.inspecaoVisualAprovada === true,
+    justificativa_rh: t.justificativaRh,
+    pressao_sistolica_antes: s0.pas,
+    pressao_diastolica_antes: s0.pad,
+    frequencia_cardiaca_antes: s0.fc,
+    frequencia_respiratoria_antes: s0.fr ?? null,
+    temperatura_antes: s0.temperatura,
+    saturacao_oxigenio_antes: s0.spo2 ?? null,
+    inicio_em: inicio,
+    situacao: 'em_andamento',
+  });
+  const evento =
+    t.horario === null
+      ? null
+      : await checarHorarioDoAto(tx, est, {
+          horario: t.horario,
+          prescricaoItemHemocomponente: q.prescricao_item_hemocomponente_id,
+          ocorrido: inicio,
+          profissional: executor,
+          ato: id,
+          pulseiraLida: t.pulseiraLida,
+          motivoSemPulseira: t.motivoSemPulseira,
+          conferente: t.conferente,
+          bolsa: numero,
+          alertas: t.alertas,
+          aparelho: aparelho?.trim() || null,
+        });
+  await incluirSinais(tx, id, 'antes', s0, instanteDe(t.sinaisAntesEm, fuso), executor);
+  if (q.situacao !== 'em_atendimento')
+    await tx.alterar('requisicao_transfusao', q.id, q.versao, { situacao: 'em_atendimento' });
+  return { id, evento };
 }
 
 // ── Montagem das leituras ───────────────────────────────────────────────────────────────────────────────────────
@@ -1440,7 +1664,11 @@ function itemDe(x: Linha, fuso: string): ItemHemoterapiaAAtender {
     item: num(x['item']),
     prescricao: num(x['prescricao']),
     atendimento: num(x['atendimento_id']),
-    paciente: { id: num(x['paciente_id']), nome: texto(x['nome']), prontuario: numOuNulo(x['numero_prontuario']) },
+    paciente: {
+      id: num(x['paciente_id']),
+      nome: texto(x['nome']),
+      prontuario: numOuNulo(x['numero_prontuario']),
+    },
     hemocomponente: {
       codigo: sigla,
       rotulo: HEMOCOMPONENTES_VISTOS[sigla]?.rotulo ?? texto(x['hemocomponente_nome']),
@@ -1475,8 +1703,15 @@ function requisicaoDe(x: Linha, fuso: string, agora: string): RequisicaoTransfus
     id: num(x['id']),
     item: num(x['item']),
     atendimento: num(x['atendimento_id']),
-    paciente: { id: num(x['paciente_id']), nome: texto(x['nome']), prontuario: numOuNulo(x['numero_prontuario']) },
-    hemocomponente: { codigo: sigla, rotulo: HEMOCOMPONENTES_VISTOS[sigla]?.rotulo ?? texto(x['hemocomponente_nome']) },
+    paciente: {
+      id: num(x['paciente_id']),
+      nome: texto(x['nome']),
+      prontuario: numOuNulo(x['numero_prontuario']),
+    },
+    hemocomponente: {
+      codigo: sigla,
+      rotulo: HEMOCOMPONENTES_VISTOS[sigla]?.rotulo ?? texto(x['hemocomponente_nome']),
+    },
     quantidadeBolsas: num(x['quantidade_bolsas']),
     bolsasTransfundidas: num(x['quantidade_atendida']),
     volumeMl: numOuNulo(x['volume_ml']),

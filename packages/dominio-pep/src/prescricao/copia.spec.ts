@@ -23,7 +23,9 @@ describe('cópia', () => {
     expect(revisarCopia([], tela, tela, {})).toEqual({ copiar: [], mudaramNaOrigem: [], reavaliar: [] });
   });
   it('classe da coluna do item copiado', () => {
-    expect(classeDoItemCopiado(false, 'ID_PRFREQUENCIA')).toBe('copia:PRLANGERAL.ID_PRFREQUENCIA');
-    expect(classeDoItemCopiado(true, 'ID_PRFREQUENCIA')).toBe('entrada');
+    expect(classeDoItemCopiado(false, 'frequencia_administracao_id')).toBe(
+      'copia:prescricao_item.frequencia_administracao_id',
+    );
+    expect(classeDoItemCopiado(true, 'frequencia_administracao_id')).toBe('entrada');
   });
 });

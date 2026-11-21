@@ -13,6 +13,7 @@
 // com preço manual (o manual só vale contra a faixa de uma tabela); o item da tabela sem vigência na data aceita o
 // preço manual, com aprovação, como na memória.
 import {
+  dataHoraParaInstante,
   type ConferirItemEntrada,
   esquemaConferirItem,
   esquemaFecharConta,
@@ -35,7 +36,6 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { instanteCivil } from '../exames/relogio.js';
 import { versaoNumero } from './esquemas.js';
 import {
   conferirCompetenciaDaConta,
@@ -57,10 +57,12 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 export const FAIXA_PRECO_MANUAL = { abaixo: 0.1, acima: 0.2 } as const;
 
 function estabelecimentoDe(ctx: ContextoOperacao): number {
-  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
-const naoEncontrada = () => new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
+const naoEncontrada = () =>
+  new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
 const recusaDe = (r: { codigo: string; mensagem: string; campos?: readonly string[] }) =>
   recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 
@@ -294,7 +296,11 @@ export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperac
       'SELECT COUNT(*) AS n FROM lote_tiss_conta WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
       [conta.id],
     );
-    const r = conferirReaberturaConta({ situacao: conta.situacao, emLote: n(lote?.['n']) > 0, motivo: e.motivo });
+    const r = conferirReaberturaConta({
+      situacao: conta.situacao,
+      emLote: n(lote?.['n']) > 0,
+      motivo: e.motivo,
+    });
     if (r) throw recusaDe(r);
     await tx.alterar('conta_hospitalar', conta.id, conta.versao, {
       situacao: 'aberta',
@@ -342,7 +348,9 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
     }
     if (mudaram.length) throw erroConflitoVersao(mudaram);
     for (const i of e.itens)
-      await tx.alterar('conta_hospitalar_item', i.id, n(porId.get(i.id)?.['versao']), { situacao: 'conferido' });
+      await tx.alterar('conta_hospitalar_item', i.id, n(porId.get(i.id)?.['versao']), {
+        situacao: 'conferido',
+      });
     await registrarEtapa(
       tx,
       conta,
@@ -374,7 +382,10 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
           AND excluido_em IS NULL AND situacao = 'ativo'`,
       [String(e.codigo), ...tipos],
     );
-    if (!item) throw recusa('item-fora-do-catalogo', 'O item não está no catálogo de itens faturáveis.', { campos: ['codigo'] });
+    if (!item)
+      throw recusa('item-fora-do-catalogo', 'O item não está no catálogo de itens faturáveis.', {
+        campos: ['codigo'],
+      });
     const tabelas = await tabelasDePreco(tx, est, conta.fonte, conta.plano, conta.tabela);
     const naTabela = tabelas.length
       ? await tx.uma<Linha>(
@@ -396,7 +407,8 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
         `SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND ativo = 1 AND excluido_em IS NULL`,
         [e.local, est],
       );
-      if (!x) throw recusa('setor-inexistente', 'O setor não existe neste estabelecimento.', { campos: ['local'] });
+      if (!x)
+        throw recusa('setor-inexistente', 'O setor não existe neste estabelecimento.', { campos: ['local'] });
       setor = n(x['id']);
     }
     let unitario: number;
@@ -416,11 +428,17 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       valorizacao = 'manual';
     } else if (preco) unitario = preco.unitario;
     else
-      throw recusa('item-sem-preco', 'O item não tem preço vigente na tabela da conta: informe o preço manual.', {
-        campos: ['precoManual'],
-      });
+      throw recusa(
+        'item-sem-preco',
+        'O item não tem preço vigente na tabela da conta: informe o preço manual.',
+        {
+          campos: ['precoManual'],
+        },
+      );
     const fuso = await tx.uma<Linha>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
-    const realizado = instanteCivil(e.data, e.hora, texto(fuso?.['fuso_horario']) || undefined);
+    const realizado = new Date(
+      dataHoraParaInstante(e.data, e.hora, texto(fuso?.['fuso_horario']) || undefined),
+    );
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [conta.id],
@@ -436,7 +454,8 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       quantidade: e.quantidade,
       valor_unitario: unitario,
       valor_honorario: valorizacao === 'tabela' && preco ? r2(preco.honorario * e.quantidade) : 0,
-      valor_custo_operacional: valorizacao === 'tabela' && preco ? r2(preco.custoOperacional * e.quantidade) : 0,
+      valor_custo_operacional:
+        valorizacao === 'tabela' && preco ? r2(preco.custoOperacional * e.quantidade) : 0,
       valor_filme: valorizacao === 'tabela' && preco ? r2(preco.filme * e.quantidade) : 0,
       valor_total: valor,
       tipo_valorizacao: valorizacao,
@@ -497,7 +516,8 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
   alvo: (_e, r) => ({ tabela: 'conta_hospitalar_item', id: Number(r['id']) }),
 });
 
-const comoOperacao = <E>(o: Operacao<E, ResultadoOperacao>) => o as unknown as Operacao<never, ResultadoOperacao>;
+const comoOperacao = <E>(o: Operacao<E, ResultadoOperacao>) =>
+  o as unknown as Operacao<never, ResultadoOperacao>;
 
 /** As operações da conta pelo nome da tela (o executor as registra pelo nome em minúsculas). */
 export const OPERACOES_CONTA: Readonly<Record<string, Operacao<never, ResultadoOperacao>>> = {

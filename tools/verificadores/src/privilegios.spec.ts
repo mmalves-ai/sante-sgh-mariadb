@@ -77,14 +77,21 @@ describe('privilégio mínimo por módulo: regras (puro)', () => {
     ]);
     const comum = { trilha_auditoria: ['SELECT', 'INSERT'] as ('SELECT' | 'INSERT')[] };
     expect(() =>
-      calcularAlcances({ modelo, comum, modulos: { generico: { uso: {}, dinamicos: r.dinamicos, catalogo: [] } } }),
+      calcularAlcances({
+        modelo,
+        comum,
+        modulos: { generico: { uso: {}, dinamicos: r.dinamicos, catalogo: [] } },
+      }),
     ).toThrow(/dinâmico sem catálogo/);
     const { alcances } = calcularAlcances({
       modelo,
       comum,
       modulos: { generico: { uso: {}, dinamicos: r.dinamicos, catalogo: ['leito', 'trilha_auditoria'] } },
     });
-    expect(alcances[0]?.objetos).toEqual({ leito: ['SELECT', 'INSERT'], trilha_auditoria: ['SELECT', 'INSERT'] });
+    expect(alcances[0]?.objetos).toEqual({
+      leito: ['SELECT', 'INSERT'],
+      trilha_auditoria: ['SELECT', 'INSERT'],
+    });
   });
 
   it('trilha só com SELECT e INSERT; DELETE em exclusão lógica vira descarte; módulo sem uso vira aviso', () => {
@@ -94,7 +101,11 @@ describe('privilégio mínimo por módulo: regras (puro)', () => {
       modulos: { cadastro: { paciente: ['DELETE', 'SELECT'] }, vazio: {} },
     });
     expect(alcances).toEqual([
-      { modulo: 'cadastro', papel: 'sgh_mod_cadastro', objetos: { paciente: ['SELECT'], trilha_auditoria: ['SELECT', 'INSERT'] } },
+      {
+        modulo: 'cadastro',
+        papel: 'sgh_mod_cadastro',
+        objetos: { paciente: ['SELECT'], trilha_auditoria: ['SELECT', 'INSERT'] },
+      },
     ]);
     expect(descartes).toEqual(['cadastro: DELETE em paciente (exclusão lógica)']);
     expect(avisos).toEqual([expect.stringMatching(/^vazio: nenhum uso/)]);
@@ -135,7 +146,12 @@ function declaracoesDoArquivo(texto: string): string[] {
   const listas = new Map<string, string[]>();
   for (const m of t.matchAll(/const ([A-Z][A-Z0-9_]*)\s*=\s*'([a-z][a-z0-9_]*)'/g)) textos.set(m[1]!, m[2]!);
   for (const m of t.matchAll(/const ([A-Z][A-Z0-9_]*)\s*=\s*\[([^\]]*)\]/g))
-    listas.set(m[1]!, [...m[2]!.matchAll(/'([a-z][a-z0-9_]*)'|\b([A-Z][A-Z0-9_]*)\b/g)].map((x) => x[1] ?? textos.get(x[2]!) ?? '').filter(Boolean));
+    listas.set(
+      m[1]!,
+      [...m[2]!.matchAll(/'([a-z][a-z0-9_]*)'|\b([A-Z][A-Z0-9_]*)\b/g)]
+        .map((x) => x[1] ?? textos.get(x[2]!) ?? '')
+        .filter(Boolean),
+    );
   const saida: string[] = [];
   for (const m of t.matchAll(/\btabelas:\s*(\[[^\]]*\]|[A-Z][A-Z0-9_]*)\s*[,}\n]/g)) {
     const c = m[1]!;
@@ -162,7 +178,9 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
   });
 
   it('gravação por constante chega ao papel (os casos que o casamento só por literal perdia)', () => {
-    expect(porModulo.get('documento')?.['emissao_documento']).toEqual(expect.arrayContaining(['INSERT', 'UPDATE']));
+    expect(porModulo.get('documento')?.['emissao_documento']).toEqual(
+      expect.arrayContaining(['INSERT', 'UPDATE']),
+    );
     expect(porModulo.get('telemedicina')?.['teleconsulta']).toEqual(expect.arrayContaining(['INSERT']));
     expect(porModulo.get('portal-medico')?.['conta_portal_profissional_externo']).toEqual(
       expect.arrayContaining(['UPDATE']),
@@ -173,7 +191,11 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
     const pasta = resolve(RAIZ, PASTA_MODULOS);
     const ts = (p: string): string[] =>
       readdirSync(p).flatMap((n) =>
-        statSync(join(p, n)).isDirectory() ? ts(join(p, n)) : /\.ts$/.test(n) && !/\.spec\.ts$/.test(n) ? [join(p, n)] : [],
+        statSync(join(p, n)).isDirectory()
+          ? ts(join(p, n))
+          : /\.ts$/.test(n) && !/\.spec\.ts$/.test(n)
+            ? [join(p, n)]
+            : [],
       );
     const faltas: string[] = [];
     let conferidas = 0;
@@ -194,7 +216,9 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
   it('os scripts só criam papéis e concedem ou revogam privilégio de tabela; nada de administrador', () => {
     for (const texto of [a.aplicar, a.recolher]) {
       for (const c of texto.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('--'))) {
-        expect(c).toMatch(/^(CREATE ROLE IF NOT EXISTS sgh_mod_[a-z0-9_]+;|GRANT [A-Z, ]+ ON [a-z0-9_]+ TO sgh_mod_[a-z0-9_]+;|REVOKE [A-Z, ]+ ON [a-z0-9_]+ FROM sgh_mod_[a-z0-9_]+;)$/);
+        expect(c).toMatch(
+          /^(CREATE ROLE IF NOT EXISTS sgh_mod_[a-z0-9_]+;|GRANT [A-Z, ]+ ON [a-z0-9_]+ TO sgh_mod_[a-z0-9_]+;|REVOKE [A-Z, ]+ ON [a-z0-9_]+ FROM sgh_mod_[a-z0-9_]+;)$/,
+        );
         expect(c).not.toMatch(/ALL PRIVILEGES|GRANT OPTION|SUPER|PASSWORD|\*\./);
       }
     }

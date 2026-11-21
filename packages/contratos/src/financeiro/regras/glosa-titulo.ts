@@ -1,12 +1,13 @@
-// Regra 12 do M32 (ref 01 §0 achado 10; cap-06b §6.8): a glosa chega ao título. Valor glosado = VALOR_C − VLR_PG dos
-// itens com FCLANEXT.GLOSADO = 'T' (baixados); nunca ler 'F' como glosa (daria 33,8% em vez de 15,2%). A glosa aceita
-// reduz o saldo mostrado do título (SGH_FIN_GLOSA_TITULO); o recurso deferido vira recebível.
+// Regra 12 do M32 (ref 01 §0 achado 10; cap-06b §6.8): a glosa chega ao título. Valor glosado = cobrado − pago dos
+// itens da conta já com retorno da operadora (baixados); o item ainda sem retorno não é glosa (daria 33,8% em vez de
+// 15,2%). A glosa aceita reduz o saldo mostrado do título (registro da glosa no título); o recurso deferido vira
+// recebível.
 import { centavos } from './recusa.js';
 
 export interface ItemContaGlosa {
   readonly valorCobrado: number;
   readonly valorPago: number;
-  /** FCLANEXT.GLOSADO: 'T' = baixado (conciliado); 'F' ou vazio = ainda sem retorno. */
+  /** Retorno do item da conta: 'T' = baixado (conciliado); 'F' ou vazio = ainda sem retorno. */
   readonly glosado: string;
 }
 

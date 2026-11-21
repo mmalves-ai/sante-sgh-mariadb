@@ -56,7 +56,7 @@ const d = computed(() => atual.value);
 const apoio = useQuery({ queryKey: ['telemedicina', 'apoio'], queryFn: () => apoioTelemedicina() });
 
 const dia = (x: string) => x.split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+const hora = (h: string) => h.slice(0, 5);
 const instante = (s: string | null) => (s ? `${dia(s.slice(0, 10))} ${s.slice(11, 16)}` : '');
 const salaSimulada = computed(() => {
   const s = d.value?.sala;

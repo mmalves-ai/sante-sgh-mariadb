@@ -26,7 +26,7 @@ export interface CatalogoOperacoes {
 export interface ContextoAnestesia {
   readonly agendamento: number;
   readonly reg: number;
-  /** O atendimento pelo REG (id do atendimento); null sem atendimento (o balanço hídrico não recebe os fluidos). */
+  /** O id do atendimento; null sem atendimento (o balanço hídrico não recebe os fluidos). */
   readonly atendimento: number | null;
   readonly paciente: number | null;
   readonly sala: number;
@@ -177,7 +177,7 @@ export interface FichaAnestesica {
   readonly truncado: boolean;
 }
 
-/** Filtro das cirurgias realizadas: período pela data do ato, atendimento (REG) e sala; tudo opcional. */
+/** Filtro das cirurgias realizadas: período pela data do ato, atendimento e sala; tudo opcional. */
 export interface FiltroRealizadas {
   readonly de: string | null;
   readonly ate: string | null;

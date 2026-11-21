@@ -5,7 +5,9 @@ export class ErroIndisponivel extends Error {
   readonly falta: string;
 
   constructor(operacao: string, falta: string) {
-    super(`${operacao}: indisponível no modelo próprio. Falta: ${falta} (pedido registrado na F2.2, lote 05-10).`);
+    super(
+      `${operacao}: indisponível no modelo próprio. Falta: ${falta} (pedido registrado na F2.2, lote 05-10).`,
+    );
     this.name = 'ErroIndisponivel';
     this.operacao = operacao;
     this.falta = falta;

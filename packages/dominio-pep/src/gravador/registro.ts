@@ -1,6 +1,6 @@
-// Montagem do registro no formato do formulário de origem (ficha do M22, seção 5, `pep.registrarEvolucao`):
-// respostas → linhas (PREVOLPAC), texto formatado do registro inteiro (PRCONTEVOL.EVOLUCAO), formulário gravado
-// (EVOLUCAO_XML) e documento emitido (DOCUMENTO_ORIGINAL). A PROVA DO PRÓPRIO GRAVADOR: as linhas, relidas pelo
+// Montagem do registro clínico (ficha do M22, seção 5, `pep.registrarEvolucao`): respostas → linhas de resposta,
+// texto formatado do registro inteiro (texto do registro), formulário gravado (XML do formulário) e documento
+// emitido (documento original da assinatura). A PROVA DO PRÓPRIO GRAVADOR: as linhas, relidas pelo
 // leitor do M15, têm de bater com o formulário que o próprio novo produziu (a mesma conferência cruzada do leitor);
 // faltou parte, o adaptador desfaz e avisa.
 import type { RespostaRegistro } from '@sgh/contratos';

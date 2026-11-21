@@ -1,9 +1,9 @@
-// O login é a chave (ficha do M10, regra 2; cap-08 §8.9; ref 01 §4.3): TBUSERS.NOME é a PK, texto exato de até
+// O login é a chave (ficha do M10, regra 2; cap-08 §8.9; ref 01 §4.3): o login é único, texto exato de até
 // 31 caracteres, sensível a maiúsculas ("hal-ai" é outro usuário que "HALAI"), referenciado por FK RESTRICT em
 // centenas de tabelas. As colunas USUARIO* do legado recebem o login de quem OPERA (a sessão), nunca o da
 // conexão com o banco. O novo nunca normaliza o login digitado: confere e recusa.
 
-/** Tamanho de TBUSERS.NOME (VARCHAR(31)). */
+/** Tamanho máximo do login (31 caracteres). */
 export const TAMANHO_LOGIN = 31;
 
 export type FalhaLogin = 'vazio' | 'longo' | 'espacos-nas-pontas' | 'espaco-interno' | 'caractere-invalido';

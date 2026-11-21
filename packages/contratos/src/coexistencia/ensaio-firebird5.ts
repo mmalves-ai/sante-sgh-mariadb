@@ -115,7 +115,7 @@ export type FuncaoEnsaio = z.infer<typeof esquemaFuncaoEnsaio>;
 
 export const esquemaParceiroEnsaio = z
   .object({
-    /** O prefixo das visões (V_EPIMED_, V_FIRST_…) ou `banco-externo` (gatilhos com ON EXTERNAL e TBINFBANCO). */
+    /** O prefixo das visões de integração de um parceiro ou `banco-externo` (gatilhos que acessam outro banco). */
     alvo: z.string().regex(/^(?:[A-Z][A-Z0-9_]{0,30}|banco-externo)$/),
     objetos: n,
     /** Objetos lidos (SELECT FIRST 1) ou gatilhos provados sem erro na cópia de ensaio. */

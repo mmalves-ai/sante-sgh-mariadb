@@ -29,7 +29,7 @@ describe('datas da série', () => {
   it('semanal: 4 sessões a cada 7 dias, com o fim pela duração', () => {
     const d = datasDaSerie({
       inicio: '2027-03-01',
-      hora: '0800',
+      hora: '08:00',
       sessoes: 4,
       intervaloDias: 7,
       pularFimDeSemana: false,
@@ -47,7 +47,7 @@ describe('datas da série', () => {
   it('diária pulando o fim de semana: sexta, segunda, terça (o sábado e o domingo vão para a segunda)', () => {
     const d = datasDaSerie({
       inicio: '2027-03-05',
-      hora: '1400',
+      hora: '14:00',
       sessoes: 3,
       intervaloDias: 1,
       pularFimDeSemana: true,
@@ -56,7 +56,7 @@ describe('datas da série', () => {
     expect(d.map((x) => x.inicio.slice(0, 10))).toEqual(['2027-03-05', '2027-03-08', '2027-03-09']);
     const domingo = datasDaSerie({
       inicio: '2027-03-07',
-      hora: '1400',
+      hora: '14:00',
       sessoes: 1,
       intervaloDias: 1,
       pularFimDeSemana: true,
@@ -68,7 +68,7 @@ describe('datas da série', () => {
   it('sem pular, o sábado fica; a sessão que passa da meia-noite termina no outro dia', () => {
     const d = datasDaSerie({
       inicio: '2027-03-06',
-      hora: '2300',
+      hora: '23:00',
       sessoes: 1,
       intervaloDias: 1,
       pularFimDeSemana: false,
@@ -80,14 +80,14 @@ describe('datas da série', () => {
   it('recusa a série vazia, a hora e a data inexistentes', () => {
     const base = {
       inicio: '2027-03-01',
-      hora: '0800',
+      hora: '08:00',
       sessoes: 1,
       intervaloDias: 1,
       pularFimDeSemana: false,
       duracaoMin: 30,
     };
     recusa(() => datasDaSerie({ ...base, sessoes: 0 }), 'serie-vazia');
-    recusa(() => datasDaSerie({ ...base, hora: '2460' }), 'hora-invalida');
+    recusa(() => datasDaSerie({ ...base, hora: '24:60' }), 'hora-invalida');
     recusa(() => datasDaSerie({ ...base, inicio: '2027-02-30' }), 'data-invalida');
   });
 
@@ -108,7 +108,7 @@ describe('sobreposição', () => {
   it('a cadeira ocupada vem antes do paciente ocupado; o resto fica livre', () => {
     const datas = datasDaSerie({
       inicio: '2027-03-01',
-      hora: '0800',
+      hora: '08:00',
       sessoes: 3,
       intervaloDias: 7,
       pularFimDeSemana: false,

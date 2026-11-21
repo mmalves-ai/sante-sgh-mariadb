@@ -1,7 +1,8 @@
 // Layout fluido em grade de 12 colunas a partir da largura do DFM (regra 4 da ficha do M09; cap-11 §11.1):
 // largura ≥ 700 → 12; ~350 → 6; ~160 → 3. A ordem é a da árvore de perguntas (ORDEM do vínculo), não a
-// posição em pixels. Na apresentação: a sentinela 1899-12-30 vira vazio e a hora HHMM vira HH:MM (o valor
-// gravado continua o do legado; quem grava é o codec do adaptador).
+// posição em pixels. Na apresentação: a sentinela 1899-12-30 vira vazio e a hora sai em HH:MM pelo leitor neutro de
+// @sgh/contratos (que também aceita a hora de quatro dígitos das linhas já gravadas; quem grava é o adaptador).
+import { ErroHoraInvalida, lerHoraDigitada } from '@sgh/contratos';
 
 /** Largura de referência do formulário no Delphi (grupo principal ≈ 744 a 750 px). */
 export const LARGURA_REFERENCIA = 750;
@@ -59,10 +60,14 @@ export function apresentarData(valor: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : v;
 }
 
-/** Hora `HHMM` do legado para `HH:MM` (só na apresentação). Valor fora do formato volta como está. */
+/** Hora gravada para `HH:MM` (só na apresentação, pelo leitor neutro). Valor fora do formato volta como está. */
 export function apresentarHora(valor: string | null | undefined): string {
   if (!valor) return '';
   const v = valor.trim();
-  const m = /^([01]\d|2[0-3])([0-5]\d)$/.exec(v);
-  return m ? `${m[1]}:${m[2]}` : v;
+  try {
+    return lerHoraDigitada(v) ?? '';
+  } catch (e) {
+    if (e instanceof ErroHoraInvalida) return v;
+    throw e;
+  }
 }

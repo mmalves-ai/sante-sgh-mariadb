@@ -95,7 +95,7 @@ export const CATEGORIAS_PRESCRITOR = [
 ] as const;
 export type CategoriaPrescritor = (typeof CATEGORIAS_PRESCRITOR)[number];
 
-/** Código do tipo de lançamento do cadastro do legado para cada tipo oferecido (PRTPLAN; os 11 usados em 2026). */
+/** Código do tipo de lançamento do cadastro do legado para cada tipo oferecido (tipo de item da prescrição; os 11 usados em 2026). */
 export const PLANO_DO_TIPO: Readonly<Record<TipoItemPrescricao, number>> = {
   jejum: 1,
   'dieta-livre': 2,

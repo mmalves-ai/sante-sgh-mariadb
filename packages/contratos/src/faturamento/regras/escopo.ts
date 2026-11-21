@@ -1,5 +1,5 @@
 // Escopo por convênio (ficha do M30, regra 13; cap-06b §6.5, Perfis; cap-08 §8.4): o faturista só vê e opera contas
-// dos convênios do seu escopo (TBUSERS_TBCONVEN e TBUSERCON do outro sistema, lidos pelo M06). Lista vazia = sem
+// dos convênios do seu escopo (os vínculos usuário × convênio, lidos pelo M06). Lista vazia = sem
 // restrição, como o outro sistema trata a ausência de vínculo (POL-1).
 import { recusaFat, type RecusaFaturamento } from './recusa.js';
 

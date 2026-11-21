@@ -147,7 +147,7 @@ export interface PortaCirurgia extends PortaGravacaoM18<GravadorSghCirurgia> {
   estadosDoPortal(c: ContextoPortaM18, acesso: number, desde: string): Promise<PedidoCirurgia[]>;
   /** W0-10: as versões anteriores dos pedidos do portal (a mais nova primeiro em cada pedido). */
   versoesDosPedidos(c: ContextoPortaM18, ids: readonly number[]): Promise<VersaoDoPedido[]>;
-  /** M50 (etapa 3): a agenda do cirurgião (os registros dele em CCAGENDA.ID_CRM), no período. */
+  /** M50 (etapa 3): a agenda do cirurgião (os agendamentos em que ele é o cirurgião), no período. */
   agendamentosDoCirurgiao(
     c: ContextoPortaM18,
     cirurgioes: readonly number[],

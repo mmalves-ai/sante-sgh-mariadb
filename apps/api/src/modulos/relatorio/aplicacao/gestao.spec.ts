@@ -142,7 +142,7 @@ describe('envio agendado (regra 5)', () => {
       grupos: [],
       enderecos: ['diretoria@exemplo.invalid'],
       periodicidade: 'diaria',
-      hora: 700,
+      hora: '07:00',
       diaSemana: null,
       diaMes: null,
     });
@@ -165,7 +165,7 @@ describe('envio agendado (regra 5)', () => {
           grupos: ['G'],
           enderecos: [],
           periodicidade: 'semanal',
-          hora: 700,
+          hora: '07:00',
           diaSemana: null,
           diaMes: null,
         })
@@ -180,7 +180,7 @@ describe('envio agendado (regra 5)', () => {
           grupos: ['G'],
           enderecos: [],
           periodicidade: 'diaria',
-          hora: 700,
+          hora: '07:00',
           diaSemana: null,
           diaMes: null,
         })
@@ -196,7 +196,7 @@ describe('envio agendado (regra 5)', () => {
           grupos: [],
           enderecos: ['diretoria@exemplo.invalid'],
           periodicidade: 'diaria',
-          hora: 700,
+          hora: '07:00',
           diaSemana: null,
           diaMes: null,
           ativo: false,
@@ -228,7 +228,7 @@ describe('enviar agora: a base do link', () => {
         grupos: [],
         enderecos: ['diretoria@exemplo.invalid'],
         periodicidade: 'diaria',
-        hora: 700,
+        hora: '07:00',
         diaSemana: null,
         diaMes: null,
       });

@@ -1,7 +1,7 @@
-// Proposta de reajuste de honorários (ficha do M12, seção 5 `preco.reajustar` e regras 2, 3, 5, 10; sante-api:
-// src/services/acoes-precos.js): o reajuste é uma LINHA NOVA datada em TBVLRTHM, nunca a alteração da que
+// Proposta de reajuste de honorários (ficha do M12, seção 5 `preco.reajustar` e regras 2, 3, 5,
+// 10): o reajuste é uma LINHA NOVA datada na vigência de valor do procedimento, nunca a alteração da que
 // existe. A proposta mostra item a item o valor de antes e o de depois, os vetos (nada é gravado) e os
-// alertas (os que exigem confirmação explícita: tabela compartilhada e tabela com percentual em TBPERTHM).
+// alertas (os que exigem confirmação explícita: tabela compartilhada e tabela com percentual por procedimento).
 //
 // Modos: `percentual` (sobre o VALOR_CH vigente; os outros componentes são COPIADOS da vigência atual, nunca
 // zerados), `valor` (o VALOR_CH novo de cada item) e `arquivo` (os componentes informados por item, da
@@ -23,14 +23,14 @@ import { dataDeVigencia } from './vigencia.js';
 export interface ItemParaReajuste {
   readonly codigo: number;
   readonly nome: string;
-  /** TBTABTHM.SITUACAO (A = ativo). */
+  /** Situação do item da tabela (A = ativo). */
   readonly situacao: string | null;
-  /** TBTABTHM.CH (≠ 0: modelo AMB, veto). */
+  /** Coeficiente CH do item (≠ 0: modelo AMB, veto). */
   readonly ch: number;
   /** Data da vigência que vale hoje (null: sem vigência anterior). */
   readonly vigencia: string | null;
   readonly valores: Componentes | null;
-  /** Maior DATA do item em TBVLRTHM (inclui vigência futura). */
+  /** Maior data de vigência de valor do item (inclui vigência futura). */
   readonly ultimaData: string | null;
   /** Já existe linha na data pedida (TAB, COD, DATA). */
   readonly temNaData: boolean;
@@ -284,13 +284,13 @@ export function proporReajuste(
   if (TABELAS_COM_PERCENTUAL.includes(ctx.tabela))
     alerta(
       'percentual-na-tabela',
-      `A tabela ${ctx.tabela} tem percentual por procedimento em TBPERTHM: o preço final passa por ele e o reajuste só do valor pode não dar o aumento pretendido.`,
+      `A tabela ${ctx.tabela} tem percentual por procedimento: o preço final passa por ele e o reajuste só do valor pode não dar o aumento pretendido.`,
       'percentualTabela',
     );
   if (ctx.tabela === TABELA_PERCENTUAL_A_CONFIRMAR)
     alerta(
       'percentual-a-confirmar',
-      `O significado do percentual da tabela ${ctx.tabela} em TBPERTHM está "a confirmar" com o faturamento (DP-33).`,
+      `O significado do percentual por procedimento da tabela ${ctx.tabela} está "a confirmar" com o faturamento (DP-33).`,
     );
   if (pedido.modo === 'percentual') {
     const comComp = linhas.filter((l) => l.atuais && totalComponentes(l.atuais) !== l.atuais.ch);

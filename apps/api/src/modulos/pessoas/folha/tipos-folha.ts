@@ -1,6 +1,6 @@
 // Tipos de negócio da folha (lote com a folha externa, afastamento, cálculo, férias, rescisão, fechamento e
 // obrigações): o que as portas da folha leem e gravam, em vocabulário neutro (booleano, data ISO, id numérico, número de
-// negócio). Substituem os tipos de leitura e gravação do sistema de origem; nada de S/N, HHMM ou sentinela.
+// negócio). Substituem os tipos de leitura e gravação do sistema de origem; nada de sim/não em letra, hora em quatro dígitos ou sentinela.
 // Melhoria: centro de custo e carga semanal do vínculo são opcionais (o modelo não os exige), em vez de um zero fictício.
 // Melhoria: o andamento do afastamento (previsto, em andamento, encerrado) sai da regra pura `situacaoDoAfastamento`, calculado
 // na leitura; o banco guarda só o fato (ativo ou cancelado), nunca um estado que vence com o relógio.

@@ -51,5 +51,5 @@ export function revisarCopia(
 
 /** Classe da coluna do item copiado: mantido igual copia a origem; alterado é entrada (regra da assinatura). */
 export function classeDoItemCopiado(alterado: boolean, coluna: string): string {
-  return alterado ? 'entrada' : `copia:PRLANGERAL.${coluna}`;
+  return alterado ? 'entrada' : `copia:prescricao_item.${coluna}`;
 }

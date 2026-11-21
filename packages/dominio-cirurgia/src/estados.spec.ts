@@ -1,4 +1,4 @@
-// Estados do agendamento (SGH_CC_AGENDA_ESTADO): transições e ações da tela.
+// Estados do agendamento (situação do agendamento cirúrgico): transições e ações da tela.
 import { describe, expect, it } from 'vitest';
 import {
   acoesDoEstado,

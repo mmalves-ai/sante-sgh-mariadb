@@ -13,10 +13,10 @@
 // guardada em idempotencia_operacao na inclusão (mesma transação; a chave única do banco impede a segunda linha).
 // Melhoria: a meta qualitativa ganha o seu indicador (indicador_contratual_sus) com o tipo, o sentido e a unidade.
 // Melhoria: valores em DECIMAL de reais no banco (a tela segue em centavos); listas por código neutro (vocabulario.ts).
-// Pendências do modelo (pedidos ao integrador, docs/obra/fatias/f22/saida/02-03.json): observação do contrato, motivo
-// do encerramento no contrato, bloco de financiamento (complexidade) da meta, formato "valor inteiro" do indicador,
-// origem do realizado da aferição e o vínculo item faturável × SIGTAP das contas SUS de convênio: a gravação desses
-// campos responde "modelo-pendente" (nada é gravado) e a produção das contas SUS também, sem contorno.
+// O contrato guarda a observação e o encerramento (motivo, quando e quem); a meta, o bloco de financiamento
+// (complexidade) e o formato "valor inteiro"; a apuração, a origem do realizado. A produção das contas SUS de convênio
+// soma os itens das contas hospitalares das fontes pagadoras do parâmetro, pela equivalência vigente do item faturável
+// com a SIGTAP (equivalencia_sigtap_item) na data em que o item foi realizado.
 import { randomUUID } from 'node:crypto';
 import {
   type ApuracaoSus,
@@ -71,6 +71,8 @@ import {
   MODALIDADE_SIGTAP,
   NIVEL_DA_TELA,
   NIVEL_DO_BANCO,
+  ORIGEM_REALIZADO_DO_BANCO,
+  ORIGEM_REALIZADO_DO_CONTRATO,
   periodicidadeDosMeses,
 } from './vocabulario.js';
 
@@ -123,9 +125,12 @@ export function relogioContratualizacao(
   agora: Date = new Date(),
 ): { hoje: string; competencia: string } {
   const formatar = (f: string) =>
-    new Intl.DateTimeFormat('en-CA', { timeZone: f, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-      agora,
-    );
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: f,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(agora);
   let hoje: string;
   try {
     hoje = formatar(fuso || FUSO_PADRAO);
@@ -135,31 +140,24 @@ export function relogioContratualizacao(
   return { hoje, competencia: `${hoje.slice(0, 4)}${hoje.slice(5, 7)}` };
 }
 
-/** Recusa das gravações que esperam coluna ou vínculo no modelo (pedido registrado ao integrador). */
-export function modeloPendenteContratualizacao(recurso: string, campos: readonly string[] = []): never {
-  throw recusa(
-    'modelo-pendente',
-    `${recurso} ainda não tem lugar no banco do produto: nada foi gravado. Deixe o campo em branco ou aguarde a migração do modelo.`,
-    campos.length ? { campos: [...campos] } : {},
-  );
-}
-
 // ── SQL de leitura ───────────────────────────────────────────────────────────────────────────────────────────────
 
 const SQL_CONTRATO = `SELECT g.id, g.numero_contrato, g.gestor_nome, g.objeto, g.vigencia_inicio, g.vigencia_fim,
     g.valor_pre_fixado_mensal, g.valor_pos_fixado_mensal, g.percentual_parte_qualitativa, g.situacao, g.versao,
-    g.criado_em, g.alterado_em, e.codigo AS esfera, r.codigo AS rede, uc.login AS criado_login, ua.login AS alterado_login
+    g.criado_em, g.alterado_em, g.observacao, g.motivo_encerramento, g.encerrado_em, e.codigo AS esfera,
+    r.codigo AS rede, uc.login AS criado_login, ua.login AS alterado_login, ue.login AS encerrado_login
   FROM contrato_gestor_sus g
   JOIN dominio_contratualizacao_sus e ON e.id = g.esfera_dominio_contratualizacao_sus_id
   LEFT JOIN dominio_contratualizacao_sus r ON r.id = g.rede_assistencial_dominio_contratualizacao_sus_id
   LEFT JOIN usuario uc ON uc.id = g.criado_por
   LEFT JOIN usuario ua ON ua.id = g.alterado_por
+  LEFT JOIN usuario ue ON ue.id = g.encerrado_por_usuario_id
  WHERE g.estabelecimento_id = ? AND g.excluido_em IS NULL`;
 
 const SQL_META = `SELECT m.id, m.contrato_gestor_sus_id, m.tipo, m.descricao, m.periodicidade_meses, m.vigencia_inicio,
     m.vigencia_fim, m.pontos, m.nivel_sigtap, m.formato_resposta, m.sentido, m.unidade_medida, m.valor_meta, m.ativa,
     m.versao, m.criado_em, m.alterado_em, COALESCE(p.codigo_sigtap, gs.codigo_sigtap) AS codigo_sigtap,
-    ds.codigo_sigtap AS modalidade, ti.codigo AS tipo_indicador, i.fonte AS afericao,
+    ds.codigo_sigtap AS modalidade, ti.codigo AS tipo_indicador, i.fonte AS afericao, cx.codigo AS complexidade,
     COALESCE(ua.login, uc.login) AS por_login
   FROM meta_contratual_sus m
   JOIN contrato_gestor_sus g ON g.id = m.contrato_gestor_sus_id
@@ -168,12 +166,14 @@ const SQL_META = `SELECT m.id, m.contrato_gestor_sus_id, m.tipo, m.descricao, m.
   LEFT JOIN dominio_sigtap ds ON ds.id = m.modalidade_dominio_sigtap_id
   LEFT JOIN indicador_contratual_sus i ON i.id = m.indicador_contratual_sus_id
   LEFT JOIN dominio_contratualizacao_sus ti ON ti.id = i.tipo_indicador_dominio_contratualizacao_sus_id
+  LEFT JOIN dominio_contratualizacao_sus cx ON cx.id = m.complexidade_dominio_contratualizacao_sus_id
   LEFT JOIN usuario uc ON uc.id = m.criado_por
   LEFT JOIN usuario ua ON ua.id = m.alterado_por
  WHERE g.estabelecimento_id = ? AND g.excluido_em IS NULL AND m.excluido_em IS NULL`;
 
 const SQL_APURACAO = `SELECT a.id, a.meta_contratual_sus_id, a.competencia_inicial, a.competencia_final, a.valor_meta,
-    a.valor_alcancado, a.percentual_alcancado, a.observacao, a.versao, a.apurada_em, a.alterado_em, m.tipo,
+    a.valor_alcancado, a.percentual_alcancado, a.observacao, a.origem_realizado, a.versao, a.apurada_em,
+    a.alterado_em, m.tipo,
     es.codigo AS escore, COALESCE(ua.login, uc.login) AS por_login
   FROM afericao_meta_sus a
   JOIN meta_contratual_sus m ON m.id = a.meta_contratual_sus_id
@@ -247,11 +247,11 @@ function contratoDe(x: Linha, incentivos: IncentivoSus[], cad: CadastroEstabelec
     valorPosMensalCentavos: centavos(x['valor_pos_fixado_mensal']),
     parteQualitativaPct: Math.round(num(x['percentual_parte_qualitativa'])),
     incentivos,
-    observacao: null,
+    observacao: txtOuNull(x['observacao']),
     situacao: encerrado ? 'encerrado' : 'ativo',
-    motivoEncerramento: null,
-    encerradoPor: encerrado ? txtOuNull(x['alterado_login']) : null,
-    encerradoEm: encerrado ? instanteIso(x['alterado_em']) : null,
+    motivoEncerramento: encerrado ? txtOuNull(x['motivo_encerramento']) : null,
+    encerradoPor: encerrado ? txtOuNull(x['encerrado_login']) : null,
+    encerradoEm: encerrado ? instanteIso(x['encerrado_em']) : null,
     criadoPor: txt(x['criado_login']),
     criadoEm: instanteIso(x['criado_em']) ?? '',
     alteradoPor: txtOuNull(x['alterado_login']),
@@ -281,7 +281,7 @@ function metaDe(x: Linha): MetaSus {
           ? 'hospitalar'
           : 'todas'
       : null,
-    complexidade: null,
+    complexidade: x['complexidade'] ? codigoDaTela('complexidade', txt(x['complexidade'])) : null,
     indicador: x['tipo_indicador'] ? codigoDaTela('tipo_indicador', txt(x['tipo_indicador'])) : null,
     formato: x['formato_resposta'] ? (FORMATO_DO_BANCO[txt(x['formato_resposta'])] ?? null) : null,
     sentido: x['sentido'] === 'maior' || x['sentido'] === 'menor' ? x['sentido'] : null,
@@ -305,8 +305,10 @@ function apuracaoDe(x: Linha): ApuracaoSus {
     realizado: num(x['valor_alcancado']),
     cumprimentoPct: num(x['percentual_alcancado']),
     escore: (codigoDaTela('escore', txt(x['escore'])) ?? 1) as EscoreSus,
-    // Pendência do modelo: a origem do realizado não é gravada; a qualitativa é sempre informada pelo analista.
-    origem: txt(x['tipo']) === 'qualitativa' ? 'informado' : 'faturamento-sus',
+    // A apuração gravada antes da coluna não tem a origem: a qualitativa é informada; a quantitativa, do faturamento SUS.
+    origem:
+      ORIGEM_REALIZADO_DO_BANCO[txt(x['origem_realizado'])] ??
+      (txt(x['tipo']) === 'qualitativa' ? 'informado' : 'faturamento-sus'),
     observacao: txtOuNull(x['observacao']),
     por: txt(x['por_login']),
     em: instanteIso(x['alterado_em'] ?? x['apurada_em']) ?? '',
@@ -314,12 +316,19 @@ function apuracaoDe(x: Linha): ApuracaoSus {
   };
 }
 
-const ordemContratos = 'ORDER BY (g.situacao = \'encerrado\'), g.vigencia_fim DESC, g.id DESC';
+const ordemContratos = "ORDER BY (g.situacao = 'encerrado'), g.vigencia_fim DESC, g.id DESC";
 const ordemMetas = 'ORDER BY m.ativa DESC, m.tipo, m.id';
 
 // ── Leituras comuns (porta e gravador) ───────────────────────────────────────────────────────────────────────────
 
-async function lerContratos(l: Leitor, est: number, extra: string, p: unknown[], teto: number, travar = false) {
+async function lerContratos(
+  l: Leitor,
+  est: number,
+  extra: string,
+  p: unknown[],
+  teto: number,
+  travar = false,
+) {
   const sql = `${SQL_CONTRATO}${extra}`;
   const ls = travar
     ? await (l as Escritor).consultarParaAtualizar(sql, [est, ...p], { teto })
@@ -340,7 +349,14 @@ async function lerMetas(l: Leitor, est: number, extra: string, p: unknown[], tet
   return ls.map(metaDe);
 }
 
-async function lerApuracoes(l: Leitor, est: number, extra: string, p: unknown[], teto: number, travar = false) {
+async function lerApuracoes(
+  l: Leitor,
+  est: number,
+  extra: string,
+  p: unknown[],
+  teto: number,
+  travar = false,
+) {
   const sql = `${SQL_APURACAO}${extra}`;
   const ls = travar
     ? await (l as Escritor).consultarParaAtualizar(sql, [est, ...p], { teto })
@@ -349,10 +365,10 @@ async function lerApuracoes(l: Leitor, est: number, extra: string, p: unknown[],
 }
 
 async function idDaLista(l: Leitor, lista: ListaDominioContratualizacao, codigo: string): Promise<number> {
-  const r = await l.uma('SELECT id FROM dominio_contratualizacao_sus WHERE lista = ? AND codigo = ? AND ativo', [
-    lista,
-    codigo,
-  ]);
+  const r = await l.uma(
+    'SELECT id FROM dominio_contratualizacao_sus WHERE lista = ? AND codigo = ? AND ativo',
+    [lista, codigo],
+  );
   if (!r)
     throw new ErroOperacao(
       503,
@@ -363,7 +379,11 @@ async function idDaLista(l: Leitor, lista: ListaDominioContratualizacao, codigo:
   return num(r['id']);
 }
 
-async function idDaListaTela(l: Leitor, lista: ListaDominioContratualizacao, codigoTela: number): Promise<number> {
+async function idDaListaTela(
+  l: Leitor,
+  lista: ListaDominioContratualizacao,
+  codigoTela: number,
+): Promise<number> {
   const codigo = codigoNeutro(lista, codigoTela);
   if (!codigo) throw recusa('entrada-invalida', `Código ${codigoTela} fora da lista "${lista}".`);
   return idDaLista(l, lista, codigo);
@@ -412,17 +432,6 @@ interface EstadoGravacao {
   motivo: string | null;
 }
 
-function conferirContratoGravavel(e: ContratoParaGravar['entrada']): void {
-  if (e.observacao) modeloPendenteContratualizacao('A observação do contrato', ['observacao']);
-}
-
-function conferirMetaGravavel(e: MetaParaGravar['entrada']): void {
-  if (e.complexidade !== null)
-    modeloPendenteContratualizacao('O bloco de financiamento da meta', ['complexidade']);
-  if (e.tipo === 'qualitativa' && e.formato !== null && !FORMATO_DA_TELA[e.formato])
-    modeloPendenteContratualizacao('O formato "valor inteiro" do indicador', ['formato']);
-}
-
 function valoresContrato(e: ContratoParaGravar['entrada']) {
   return {
     numero_contrato: e.numero,
@@ -433,6 +442,7 @@ function valoresContrato(e: ContratoParaGravar['entrada']) {
     valor_pre_fixado_mensal: reais(e.valorPreMensalCentavos),
     valor_pos_fixado_mensal: reais(e.valorPosMensalCentavos),
     percentual_parte_qualitativa: e.parteQualitativaPct,
+    observacao: e.observacao ? e.observacao.slice(0, 500) : null,
   };
 }
 
@@ -458,7 +468,9 @@ async function gravarIncentivos(
 async function valoresMeta(tx: TxOperacao, e: MetaParaGravar['entrada']) {
   const meses = mesesDaPeriodicidade(e.periodicidade);
   if (meses === null)
-    throw recusa('periodicidade-invalida', 'Escolha uma periodicidade mensal ou maior.', { campos: ['periodicidade'] });
+    throw recusa('periodicidade-invalida', 'Escolha uma periodicidade mensal ou maior.', {
+      campos: ['periodicidade'],
+    });
   const quantitativa = e.tipo === 'quantitativa';
   const sigtap =
     quantitativa && e.nivelSigtap && e.codigoSigtap
@@ -474,10 +486,16 @@ async function valoresMeta(tx: TxOperacao, e: MetaParaGravar['entrada']) {
     nivel_sigtap: quantitativa && e.nivelSigtap ? (NIVEL_DA_TELA[e.nivelSigtap] ?? null) : null,
     ...sigtap,
     modalidade_dominio_sigtap_id: quantitativa ? await modalidadeSigtap(tx, e.modalidade) : null,
+    complexidade_dominio_contratualizacao_sus_id:
+      e.complexidade !== null ? await idDaListaTela(tx, 'complexidade', e.complexidade) : null,
     formato_resposta: !quantitativa && e.formato !== null ? (FORMATO_DA_TELA[e.formato] ?? null) : null,
     sentido: quantitativa ? null : e.sentido,
     unidade_medida: e.unidade ? e.unidade.slice(0, 20) : null,
-    fonte_afericao: quantitativa ? 'producao' : e.afericao !== null ? (FONTE_AFERICAO_DA_TELA[e.afericao] ?? null) : null,
+    fonte_afericao: quantitativa
+      ? 'producao'
+      : e.afericao !== null
+        ? (FONTE_AFERICAO_DA_TELA[e.afericao] ?? null)
+        : null,
     valor_meta: e.valorMeta,
     ativa: e.ativa,
   };
@@ -487,7 +505,11 @@ async function valoresMeta(tx: TxOperacao, e: MetaParaGravar['entrada']) {
 async function valoresIndicador(tx: TxOperacao, e: MetaParaGravar['entrada']) {
   return {
     nome: e.descricao.slice(0, 150),
-    tipo_indicador_dominio_contratualizacao_sus_id: await idDaListaTela(tx, 'tipo_indicador', e.indicador ?? 0),
+    tipo_indicador_dominio_contratualizacao_sus_id: await idDaListaTela(
+      tx,
+      'tipo_indicador',
+      e.indicador ?? 0,
+    ),
     unidade_medida: e.unidade ? e.unidade.slice(0, 30) : null,
     sentido: e.sentido,
     fonte: e.afericao !== null ? codigoNeutro('tipo_afericao', e.afericao) : null,
@@ -547,12 +569,15 @@ function gravadorSobre(
   estado: EstadoGravacao,
   usuario: number | null,
 ): GravadorContratualizacao {
-  const contrato = async (id: number) => (await lerContratos(tx, est, ' AND g.id = ?', [id], 1, true))[0] ?? null;
+  const contrato = async (id: number) =>
+    (await lerContratos(tx, est, ' AND g.id = ?', [id], 1, true))[0] ?? null;
   const meta = async (id: number) => (await lerMetas(tx, est, ' AND m.id = ?', [id], 1, true))[0] ?? null;
   return {
     relogio: async () =>
       relogioContratualizacao(
-        txtOuNull((await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]))?.['fuso_horario']),
+        txtOuNull(
+          (await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]))?.['fuso_horario'],
+        ),
       ),
     contrato,
     contratoPelaChave: async (chave) => {
@@ -571,14 +596,21 @@ function gravadorSobre(
       return id === null ? null : meta(id);
     },
     apuracao: async (m, competencia) =>
-      (await lerApuracoes(tx, est, ' AND a.meta_contratual_sus_id = ? AND a.competencia_final = ?', [m, competencia], 1, true))[0] ??
-      null,
+      (
+        await lerApuracoes(
+          tx,
+          est,
+          ' AND a.meta_contratual_sus_id = ? AND a.competencia_final = ?',
+          [m, competencia],
+          1,
+          true,
+        )
+      )[0] ?? null,
     apuracaoPelaChave: async (chave) => {
       const id = await idPelaChave(tx, 'apuracao', chave, usuario);
       return id === null ? null : ((await lerApuracoes(tx, est, ' AND a.id = ?', [id], 1, true))[0] ?? null);
     },
     async incluirContrato(c) {
-      conferirContratoGravavel(c.entrada);
       const id = await tx.incluir('contrato_gestor_sus', {
         estabelecimento_id: est,
         ...valoresContrato(c.entrada),
@@ -593,7 +625,6 @@ function gravadorSobre(
       return { id, versao: 1 };
     },
     async alterarContrato(c) {
-      conferirContratoGravavel(c.entrada);
       const versao = await tx.alterar('contrato_gestor_sus', c.id, c.versaoVista, {
         ...valoresContrato(c.entrada),
         esfera_dominio_contratualizacao_sus_id: await idDaListaTela(tx, 'esfera', c.entrada.esfera),
@@ -616,7 +647,6 @@ function gravadorSobre(
       return { id: c.id, versao };
     },
     async incluirMeta(m) {
-      conferirMetaGravavel(m.entrada);
       const seq = await tx.uma<{ n: unknown }>(
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS n FROM meta_contratual_sus WHERE contrato_gestor_sus_id = ?',
         [m.contrato],
@@ -641,14 +671,24 @@ function gravadorSobre(
       return { id, versao: 1 };
     },
     async alterarMeta(m) {
-      conferirMetaGravavel(m.entrada);
       const atual = await tx.uma(
         `SELECT i.id, i.versao FROM meta_contratual_sus x
            JOIN indicador_contratual_sus i ON i.id = x.indicador_contratual_sus_id WHERE x.id = ?`,
         [m.id],
       );
-      if (atual) await tx.alterar('indicador_contratual_sus', num(atual['id']), num(atual['versao']), await valoresIndicador(tx, m.entrada));
-      const versao = await tx.alterar('meta_contratual_sus', m.id, m.versaoVista, await valoresMeta(tx, m.entrada));
+      if (atual)
+        await tx.alterar(
+          'indicador_contratual_sus',
+          num(atual['id']),
+          num(atual['versao']),
+          await valoresIndicador(tx, m.entrada),
+        );
+      const versao = await tx.alterar(
+        'meta_contratual_sus',
+        m.id,
+        m.versaoVista,
+        await valoresMeta(tx, m.entrada),
+      );
       return { id: m.id, versao };
     },
     async registrarApuracao(a) {
@@ -680,6 +720,7 @@ async function valoresApuracao(tx: TxOperacao, a: ApuracaoParaGravar) {
     valor_alcancado: a.realizado,
     percentual_alcancado: a.cumprimentoPct,
     escore_dominio_contratualizacao_sus_id: await idDaListaTela(tx, 'escore', a.escore),
+    origem_realizado: ORIGEM_REALIZADO_DO_CONTRATO[a.origem],
     observacao: a.observacao,
   };
 }
@@ -698,7 +739,12 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
   }
 
   private contexto(c: ContextoPortaM18, est: number | null): ContextoNucleo {
-    return { cliente: c.cliente, estabelecimento: est, usuario: c.usuario, correlacao: c.correlacao || 'contratualizacao' };
+    return {
+      cliente: c.cliente,
+      estabelecimento: est,
+      usuario: c.usuario,
+      correlacao: c.correlacao || 'contratualizacao',
+    };
   }
 
   /** O estabelecimento da sessão (pelo id; sem o mapa, pelo código da sessão). Sem ele, nada é lido. */
@@ -720,7 +766,9 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
   }
 
   private async fuso(l: Leitor, est: number): Promise<string | null> {
-    return txtOuNull((await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]))?.['fuso_horario']);
+    return txtOuNull(
+      (await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]))?.['fuso_horario'],
+    );
   }
 
   // ── Gravação ──
@@ -755,7 +803,10 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
         const l = linha();
         return { tabela: l?.entidade ?? 'contrato_gestor_sus', id: l?.entidadeId ?? null };
       },
-      trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: estado.motivo ?? linha()?.motivo ?? null }),
+      trilha: () => ({
+        dados: linha()?.dadosDepois ?? null,
+        motivo: estado.motivo ?? linha()?.motivo ?? null,
+      }),
     });
     // Cada chamada é uma execução nova do Executor (a trilha e o outbox são desta execução); a idempotência do pedido
     // é a da chave recebida, guardada pela inclusão (guardarChave) e conferida pelos *PelaChave na mesma transação.
@@ -775,7 +826,9 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
   dominios(c: ContextoPortaM18): Promise<DominiosContratualizacao> {
     // As listas são do produto inteiro (a mesma tabela para toda a rede do cliente), sem estabelecimento.
     return this.ler(c, async (l, est) => {
-      const out = Object.fromEntries(LISTAS_DOMINIO_CONTRATUALIZACAO.map((k) => [k, []])) as unknown as DominiosContratualizacao;
+      const out = Object.fromEntries(
+        LISTAS_DOMINIO_CONTRATUALIZACAO.map((k) => [k, []]),
+      ) as unknown as DominiosContratualizacao;
       const ls = await l.consultar(
         'SELECT id, lista, codigo, descricao, sigla FROM dominio_contratualizacao_sus WHERE ativo ORDER BY lista, ordem, id',
         [],
@@ -787,7 +840,11 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
         const tela = codigoDaTela(lista, txt(x['codigo']));
         const semVocabulario = lista === 'tipo_dado';
         if (tela === null && !semVocabulario) continue;
-        out[lista].push({ codigo: tela ?? num(x['id']), nome: txt(x['descricao']), sigla: txtOuNull(x['sigla']) });
+        out[lista].push({
+          codigo: tela ?? num(x['id']),
+          nome: txt(x['descricao']),
+          sigla: txtOuNull(x['sigla']),
+        });
       }
       const inc = await l.consultar(
         `SELECT id, nome FROM incentivo_contratual_sus
@@ -802,7 +859,13 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
 
   contratos(c: ContextoPortaM18) {
     return this.ler(c, async (l, est) => {
-      const itens = await lerContratos(l, est, ` ${ordemContratos} LIMIT ${TETO_CONTRATOS + 1}`, [], TETO_CONTRATOS + 1);
+      const itens = await lerContratos(
+        l,
+        est,
+        ` ${ordemContratos} LIMIT ${TETO_CONTRATOS + 1}`,
+        [],
+        TETO_CONTRATOS + 1,
+      );
       return { itens: itens.slice(0, TETO_CONTRATOS), cortada: itens.length > TETO_CONTRATOS };
     });
   }
@@ -812,7 +875,9 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
   }
 
   metas(c: ContextoPortaM18, contrato: number) {
-    return this.ler(c, (l, est) => lerMetas(l, est, ` AND m.contrato_gestor_sus_id = ? ${ordemMetas}`, [contrato], TETO_METAS));
+    return this.ler(c, (l, est) =>
+      lerMetas(l, est, ` AND m.contrato_gestor_sus_id = ? ${ordemMetas}`, [contrato], TETO_METAS),
+    );
   }
 
   meta(c: ContextoPortaM18, id: number) {
@@ -842,8 +907,9 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
       );
       if (p) return true;
       return (
-        (await l.uma('SELECT id FROM grupo_sigtap WHERE codigo_sigtap = ? AND vigencia_fim IS NULL LIMIT 1', [prefixo])) !==
-        null
+        (await l.uma('SELECT id FROM grupo_sigtap WHERE codigo_sigtap = ? AND vigencia_fim IS NULL LIMIT 1', [
+          prefixo,
+        ])) !== null
       );
     });
   }
@@ -903,16 +969,48 @@ export class PortaContratualizacaoPropria implements PortaContratualizacao {
     });
   }
 
-  producaoContasSus(): Promise<ProducaoSigtapSus[]> {
-    return Promise.reject(
-      recusa(
-        'modelo-pendente',
-        'A produção das contas SUS de convênio aguarda o vínculo do item faturável com a SIGTAP no modelo: use o faturamento SUS (BPA e AIH) como fonte da produção.',
-      ),
-    );
+  /**
+   * A produção das contas SUS de convênio de UMA competência: os itens das contas hospitalares (não canceladas) das
+   * fontes pagadoras do parâmetro, pela equivalência vigente do item faturável com a SIGTAP na data do item. A conta de
+   * internação conta como hospitalar; as demais naturezas, como ambulatorial. Item estornado ou transferido não conta.
+   * Os convênios do parâmetro são CÓDIGOS de negócio da fonte pagadora (nunca o id): o filtro casa `fonte_pagadora.codigo`
+   * como texto, sem os zeros à esquerda (o parâmetro chega como número).
+   */
+  producaoContasSus(
+    c: ContextoPortaM18,
+    competencia: string,
+    convenios: readonly number[],
+  ): Promise<ProducaoSigtapSus[]> {
+    if (!/^\d{4}(0[1-9]|1[0-2])$/.test(competencia))
+      return Promise.reject(recusa('entrada-invalida', 'Competência AAAAMM.'));
+    if (convenios.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT IF(ch.natureza = 'internacao', 'hospitalar', 'ambulatorial') AS modalidade, p.codigo_sigtap,
+                SUM(i.quantidade) AS quantidade
+           FROM conta_hospitalar ch
+           JOIN fonte_pagadora fp ON fp.id = ch.fonte_pagadora_id
+           JOIN conta_hospitalar_item i ON i.conta_hospitalar_id = ch.id AND i.excluido_em IS NULL
+                AND i.situacao NOT IN ('estornado','transferido')
+           JOIN equivalencia_sigtap_item q ON q.item_faturavel_id = i.item_faturavel_id AND q.excluido_em IS NULL
+                AND q.vigencia_inicio <= DATE(i.realizado_em)
+                AND (q.vigencia_fim IS NULL OR q.vigencia_fim >= DATE(i.realizado_em))
+           JOIN procedimento_sigtap p ON p.id = q.procedimento_sigtap_id
+          WHERE ch.estabelecimento_id = ? AND ch.excluido_em IS NULL AND ch.situacao <> 'cancelada'
+            AND ch.competencia = ? AND TRIM(LEADING '0' FROM fp.codigo) IN (${marcas(convenios.length)})
+          GROUP BY modalidade, p.codigo_sigtap`,
+        [est, primeiroDia(competencia), ...convenios.map((x) => String(x))],
+        { teto: TETO_PRODUCAO },
+      );
+      return ls.map((x) => ({
+        competencia,
+        modalidade: txt(x['modalidade']) === 'hospitalar' ? 'hospitalar' : 'ambulatorial',
+        codigo: txt(x['codigo_sigtap']),
+        quantidade: Math.round(num(x['quantidade'])),
+      }));
+    });
   }
 }
-
 
 /** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
 export function portaContratualizacaoIndisponivel(): PortaContratualizacao {

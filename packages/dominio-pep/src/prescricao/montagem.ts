@@ -12,7 +12,7 @@ import {
   SEM_FREQUENCIA,
 } from './catalogo.js';
 import { horariosPrevistos } from './horarios-previstos.js';
-import { DIA, localDe, minLocal } from './tempo.js';
+import { DIA, localDe, minLocal, minutoDoDia } from './tempo.js';
 import type { Periodo } from './vigencia.js';
 
 export interface KitMontado {
@@ -24,11 +24,11 @@ export interface KitMontado {
 export interface ContextoMontagem {
   readonly vigencia: Periodo;
   readonly agora: string;
-  /** Grade da unidade por número de doses (HHMM). */
+  /** Grade da unidade por número de doses (HH:MM). */
   readonly grade: ReadonlyMap<number, readonly string[]>;
-  /** Âncoras relativas (id → HHMM). */
+  /** Âncoras relativas (id → HH:MM). */
   readonly relativos: ReadonlyMap<number, string>;
-  /** Horários da dieta do cadastro (HHMM ativos), quando a dieta tem horário próprio. */
+  /** Horários da dieta do cadastro (HH:MM ativos), quando a dieta tem horário próprio. */
   readonly horariosDieta: (dieta: number) => readonly string[];
   /** Kit de materiais do medicamento que casa com o produto, a via, a unidade e a dose (vazio sem kit). */
   readonly kit: (produto: number, via: string, unidade: string, dose: number) => readonly KitMontado[];
@@ -149,8 +149,6 @@ export interface PadroesMontagem {
 export class ErroMontagem extends Error {
   override readonly name = 'ErroMontagem';
 }
-
-const h4 = (hhmm: string) => hhmm.replace(':', '');
 
 export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMontagem): ItemMontado {
   const d = i.detalhe;
@@ -389,15 +387,14 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
   }
 }
 
-/** Os horários próprios (da dieta) no período: cada HHMM uma vez, a partir do momento da prescrição. */
-export function horariosDaGrade(hhmm: readonly string[], v: Periodo, agora: string): HorarioMontado[] {
+/** Os horários próprios (da dieta) no período: cada hora (HH:MM) uma vez, a partir do momento da prescrição. */
+export function horariosDaGrade(horas: readonly string[], v: Periodo, agora: string): HorarioMontado[] {
   const ini = minLocal(v.inicio);
   const fim = minLocal(v.fim);
   const desde = Math.max(ini, minLocal(agora));
   const r = new Set<number>();
-  for (const h of hhmm) {
-    const x = h4(h);
-    const mdd = Number(x.slice(0, 2)) * 60 + Number(x.slice(2, 4));
+  for (const h of horas) {
+    const mdd = minutoDoDia(h);
     let t = Math.floor(ini / DIA) * DIA + mdd;
     if (t < ini) t += DIA;
     if (t >= desde && t <= fim) r.add(t);

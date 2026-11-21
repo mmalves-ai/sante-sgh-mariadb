@@ -4,6 +4,7 @@
 // notificação da conta sai uma vez por aviso, sem dado do paciente, pelo simulador (dev) ou fica registrada como
 // 'desligado' com o motivo (trava de saídas: a Hal-AI do médico desligada fora do dev).
 import type { AvisoCritico, WorklistMedico } from '@sgh/contratos';
+import { recusa } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import type { PortaCirurgia } from '../../cirurgia/public-api.js';
 import type { ServicoRepasse } from '../../repasse/public-api.js';
@@ -175,14 +176,28 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
     expect((await s.criticos(sessao(), null)).pendentes).toBe(0);
   });
 
+  it('a recusa da notificação (canal não cadastrado) não é engolida: volta em recusas, sem notificar nem enviar', async () => {
+    const simulador = new CanalMedicoSimulador();
+    const { s, porta } = montar({ canal: simulador });
+    await ligar(porta, ACESSO, 6801);
+    porta.gravar = () =>
+      Promise.reject(recusa('canal-inexistente', 'O canal da notificação do portal do médico externo não está cadastrado.'));
+    expect(await s.notificarCriticos(H)).toEqual({
+      contas: 1,
+      notificados: 0,
+      recusas: [{ aviso: 1, acesso: ACESSO, codigo: 'canal-inexistente' }],
+    });
+    expect(simulador.mensagens(H)).toHaveLength(0);
+  });
+
   it('a notificação sai uma vez por aviso e conta, só ao médico com vínculo, pelo simulador e sem dado do paciente', async () => {
     const simulador = new CanalMedicoSimulador();
     const { s, porta } = montar({ canal: simulador });
     await ligar(porta, ACESSO, 6801);
     await ligar(porta, OUTRA, 6802);
-    expect(await s.notificarCriticos(H)).toEqual({ contas: 1, notificados: 1 });
+    expect(await s.notificarCriticos(H)).toEqual({ contas: 1, notificados: 1, recusas: [] });
     // O segundo ciclo não repete.
-    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0 });
+    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0, recusas: [] });
     const caixa = simulador.mensagens(H);
     expect(caixa).toHaveLength(1);
     expect(caixa[0]).toMatchObject({
@@ -218,7 +233,7 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
     };
     const { s, porta } = montar({ canal: espiao });
     await ligar(porta, ACESSO, 6801);
-    expect(await s.notificarCriticos(H)).toEqual({ contas: 1, notificados: 1 });
+    expect(await s.notificarCriticos(H)).toEqual({ contas: 1, notificados: 1, recusas: [] });
     expect(enviou).toBe(0);
     expect(await porta.notificacoesCritico(ctxT('rede', H), ACESSO)).toEqual([
       { aviso: 1, envio: 'desligado', motivo: MOTIVO_HALAI_MEDICO_DESLIGADA, em: expect.any(String) },
@@ -228,8 +243,8 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
   it('sem avisos pendentes ou sem a fila (503 nas telas), o ciclo não faz nada', async () => {
     const { s, avisos } = montar();
     avisos.splice(0, avisos.length);
-    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0 });
+    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0, recusas: [] });
     s.pacientes = null;
-    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0 });
+    expect(await s.notificarCriticos(H)).toEqual({ contas: 0, notificados: 0, recusas: [] });
   });
 });

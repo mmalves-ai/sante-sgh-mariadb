@@ -1,7 +1,7 @@
 // Porta PRÓPRIA da notificação compulsória (M48, etapa 4) sobre o MariaDB do cliente, pelo @sgh/nucleo.
 // Lê o relógio do estabelecimento; o caso de agravo (notificacao_agravo, notificacao_agravo_resposta), o cadastro de
 // agravos notificáveis (agravo_notificavel, agravo_notificavel_cid, agravo_pergunta) e os gatilhos por CID, exame e
-// óbito aguardam o mapeamento (pedido em docs/obra/fatias/f22/saida/04-03.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as
+// óbito aguardam o mapeamento (pedido em docs/obra/fatias/f22/arquivo-ondas-1a4/saida/04-03.json e docs/obra/fatias/f24/saida/15-qualidade.json): até lá as leituras falham fechadas (503 `modelo-pendente`, a tela mostra indisponível) e as
 // gravações recusam com `modelo-pendente` (nada é gravado pela metade; a tela fica em consulta).
 import { type NucleoQualidade, lerNoEstabelecimento, leituraPendente, liberacaoPendente, modeloPendente, relogioDoEstabelecimento } from './apoio-propria.js';
 import type { ContextoAgravo, PortaAgravo } from './porta-agravo.js';

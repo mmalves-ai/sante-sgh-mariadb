@@ -34,7 +34,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
-import { instanteCivil, minutosDeHhmm } from './relogio.js';
+import { instanteCivil, minutosDaHora, normalizarHora } from './relogio.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -382,14 +382,15 @@ async function vagasDaEscala(
   ate: string,
 ): Promise<(data: string, hora: string) => number> {
   const linhas = await tx.consultar(
-    `SELECT dia_semana, TIME_FORMAT(hora_inicio, '%H%i') AS inicio, TIME_FORMAT(hora_fim, '%H%i') AS fim,
+    `SELECT dia_semana, TIME_FORMAT(hora_inicio, '%H:%i') AS inicio, TIME_FORMAT(hora_fim, '%H:%i') AS fim,
             vagas_por_horario, vigencia_inicio, vigencia_fim
        FROM agenda_escala
       WHERE agenda_servico_id = ? AND ativo = TRUE AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
     [agenda, ate, de],
   );
   const iso = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : v === null ? null : String(v).slice(0, 10));
-  return (data, hora) => {
+  return (data, horaInformada) => {
+    const hora = normalizarHora(horaInformada);
     const semana = new Date(`${data}T00:00:00Z`).getUTCDay() + 1;
     const l = linhas.find(
       (x) =>
@@ -413,7 +414,7 @@ export const gerarGradeExame = definirOperacao<GerarGradeExameEntrada, Resultado
     const a = await agendaDeExame(tx, est, e.agenda);
     if (!a.ativo) throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita geração.');
     const fuso = await fusoDe(tx, est);
-    const duracao = minutosDeHhmm(e.duracao);
+    const duracao = minutosDaHora(e.duracao);
     const agora = Date.now();
     const horarios = e.horarios.map((h) => {
       const inicio = instanteCivil(h.data, h.hora, fuso);

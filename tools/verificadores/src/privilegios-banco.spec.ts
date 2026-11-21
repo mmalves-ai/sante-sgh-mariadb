@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { desviosDaConta, nomeDaConta, type PrivilegioBanco } from './privilegios-banco.ts';
 import { lerListagemContainers } from './containers.ts';
 
-const p = (nivel: PrivilegioBanco['nivel'], alvo: string, privilegio: string, repassa = false): PrivilegioBanco => ({
+const p = (
+  nivel: PrivilegioBanco['nivel'],
+  alvo: string,
+  privilegio: string,
+  repassa = false,
+): PrivilegioBanco => ({
   conta: "'app'@'127.0.0.1'",
   nivel,
   alvo,

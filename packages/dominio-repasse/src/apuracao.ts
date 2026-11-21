@@ -1,6 +1,6 @@
 // Regras 9 e 10 do M33. A apuração do período passa por aberta → conferida → aprovada → titulada (SGH_REP_APURACAO);
 // quem apura não aprova; aprovada não muda (correção entra no período seguinte); devolver leva a conferida de volta a
-// aberta. Uma apuração por período e empresa num só sistema: se o outro sistema já apurou (FCINTEGRPA ou RPLANEVE no
+// aberta. Uma apuração por período e empresa num só sistema: se o outro sistema já apurou (integração ou lançamento no
 // período), o novo mostra a apuração dele e não grava.
 import type { EstadoApuracao } from '@sgh/contratos';
 import type { MemoriaCalculo } from './calculo.js';

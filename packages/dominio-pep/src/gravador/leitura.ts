@@ -2,7 +2,7 @@
 // outro sistema), trazer a última resposta do paciente (MANTERHIST, "copiar do último") e mostrar o registro
 // gravado no renderizador. A linha é ligada à pergunta pela ORDEM e pelo ID da resposta (a mesma ORDEM pode ter
 // vínculos de perguntas diferentes; leitura do M15). O que não se reconhece fica de fora e é contado.
-import type { RespostaRegistro, ValorResposta } from '@sgh/contratos';
+import { ErroHoraInvalida, lerHoraDigitada, type RespostaRegistro, type ValorResposta } from '@sgh/contratos';
 import type { ItemFormulario, RepresentacaoFormulario } from '../formulario/dfm/mapeamento.js';
 import { pareceRtf, rtfParaTexto } from '../prontuario/rtf.js';
 import type { LinhaResposta } from '../prontuario/respostas.js';
@@ -17,9 +17,14 @@ function textoPlano(t: string | null): string {
     .trim();
 }
 
+/** Hora da linha em HH:MM pelo leitor neutro (aceita também os quatro dígitos das linhas já gravadas); null fora do formato. */
 function horaTela(h: string | null): string | null {
-  const m = /^([01]\d|2[0-3])([0-5]\d)$/.exec((h ?? '').trim());
-  return m ? `${m[1]}:${m[2]}` : null;
+  try {
+    return lerHoraDigitada(h ?? '');
+  } catch (e) {
+    if (e instanceof ErroHoraInvalida) return null;
+    throw e;
+  }
 }
 
 function idsDoItem(i: ItemFormulario): Set<number> {

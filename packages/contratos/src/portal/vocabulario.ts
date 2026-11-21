@@ -1,5 +1,5 @@
 // Vocabulário do portal do paciente, etapa 1 do M50 (ficha, seções 5 a 8; cap-07 §7.6; cap-13 §13.3.6; LGPD art. 14 e
-// 18; SBIS-24): conta própria com segundo fator (identidade separada dos usuários internos, nunca TBUSERS), responsável
+// 18; SBIS-24): conta própria com segundo fator (identidade separada dos usuários internos, nunca a tabela de usuários), responsável
 // legal com prova de vínculo, consentimentos por finalidade, pedidos do titular e o relatório de quem acessou o próprio
 // prontuário. A conta liga ao paciente pelo ID do cadastro e pelo prontuário (sobrevive à unificação). Nenhum texto daqui
 // cita outro sistema (ADR 0023).
@@ -138,7 +138,7 @@ export const FINALIDADES_CONSENTIMENTO_PORTAL = FINALIDADES_CONSENTIMENTO.filter
 export type FinalidadeConsentimentoPortal = (typeof FINALIDADES_CONSENTIMENTO_PORTAL)[number];
 
 /**
- * Signatário do consentimento no domínio do cadastro (TBTIPOREPRE, lido ao vivo pela descrição: na cópia do pc, 1
+ * Signatário do consentimento no domínio do cadastro (tipo de representante, lido ao vivo pela descrição: na cópia do pc, 1
  * "Paciente" e 2 "Representante Legal").
  */
 export const SIGNATARIOS_PORTAL = ['paciente', 'representante-legal'] as const;

@@ -14,6 +14,7 @@ import {
   tipoSugeridoDaPrecaucao,
 } from '@sgh/contratos';
 import { bloqueioDoVizinho, conferirCriterios, REGRAS_IRAS } from '@sgh/dominio-qualidade';
+import { horaDoCampo } from '../regras-qualidade.js';
 
 /** "AAAA-MM" do instante local. */
 export function competenciaDe(agora: string): string {
@@ -283,13 +284,13 @@ export function classeDaSituacao(situacao: string): string {
 }
 
 /**
- * Instante local "AAAA-MM-DDTHH:mm" a partir dos campos de data e hora (null se faltar um). O campo de hora devolve
- * "HHMM" (o formato do cadastro); "HH:MM" também vale.
+ * Instante local "AAAA-MM-DDTHH:mm" a partir dos campos de data e hora (null se faltar um ou se a hora for inválida).
+ * A hora vira "HH:MM" pelo auxiliar neutro do contrato.
  */
 export function instanteLocal(data: string | null, hora: string | null): string | null {
-  const h = /^(\d{2}):?(\d{2})$/.exec(hora?.trim() ?? '');
-  if (!data || !h || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
-  return `${data}T${h[1]}:${h[2]}`;
+  const h = hora === null ? null : horaDoCampo(hora);
+  if (!data || h === null || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
+  return `${data}T${h}`;
 }
 
 /** Número decimal digitado ("1,5" ou "1.5"): vazio → null; positivo → o número; inválido ou zero → undefined. */

@@ -41,10 +41,10 @@ export const esquemaContaPlano = z.object({
   grupo: esquemaGrupoConta,
   tipo: z.enum(['sintetica', 'analitica']),
   natureza: z.enum(['devedora', 'credora']),
-  /** ID do tipo de plano referencial (COTIPOPLANOCONTAREFERENCIAL.ID) e o código da conta referencial. */
+  /** ID do tipo de plano referencial (plano_referencial) e o código da conta referencial. */
   referencialTipo: z.number().int().positive().nullable().default(null),
   referencialConta: z.string().trim().max(30).nullable().default(null),
-  /** Conta contábil do de-para da exportação (TBINTCRC.CTA_CONTABIL), quando a conta corresponde a uma de lá. */
+  /** Conta contábil do de-para da exportação ao contador, quando a conta corresponde a uma de lá. */
   contaExportacao: z.number().int().positive().nullable().default(null),
   /** Exige centro de custo no lançamento (contas de resultado, em geral). */
   exigeCentroCusto: z.boolean().default(false),

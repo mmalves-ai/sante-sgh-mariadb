@@ -35,7 +35,15 @@ import type { z } from 'zod';
 const M = 'SINTETICO';
 
 /** Colunas da versão opaca da linha sintética do profissional e do registro (só a memória de dev/ci). */
-const COLUNAS_VERSAO_PROFISSIONAL = ['NOME', 'APELIDO', 'SEXO', 'NASC', 'NOME_MAE', 'EMAIL', 'CELULAR'] as const;
+const COLUNAS_VERSAO_PROFISSIONAL = [
+  'NOME',
+  'APELIDO',
+  'SEXO',
+  'NASC',
+  'NOME_MAE',
+  'EMAIL',
+  'CELULAR',
+] as const;
 const COLUNAS_VERSAO_REGISTRO = ['ATIVO', 'CONSELHO', 'SIGLA'] as const;
 /** Coluna da linha sintética → campo da tela (o aviso de colisão cita o campo). */
 const CAMPO_DA_COLUNA_PROFISSIONAL: Readonly<Record<string, string>> = {
@@ -619,9 +627,9 @@ export class ProfissionaisMemoria {
             fraseVinculos(v, 'Este profissional', 'Não pode ser excluído: inative o cadastro.'),
           );
         const p = this.profissionais[i]!;
-        this.retratos.push({ tabela: 'TBPROFIS', chave: String(p.id), motivo: e.motivo });
+        this.retratos.push({ tabela: 'profissional', chave: String(p.id), motivo: e.motivo });
         for (const r of p.registros)
-          this.retratos.push({ tabela: 'TBCBOPRO', chave: String(r.id), motivo: e.motivo });
+          this.retratos.push({ tabela: 'profissional_ocupacao', chave: String(r.id), motivo: e.motivo });
         this.profissionais.splice(i, 1);
         return { resultado: { profissional: p.id }, profissional: null };
       }
@@ -634,7 +642,7 @@ export class ProfissionaisMemoria {
             'registro-com-atos',
             fraseVinculos(v, 'Este registro', 'Não pode ser excluído: encerre o registro (inativar).'),
           );
-        this.retratos.push({ tabela: 'TBCBOPRO', chave: String(r.id), motivo: e.motivo });
+        this.retratos.push({ tabela: 'profissional_ocupacao', chave: String(r.id), motivo: e.motivo });
         p.registros = p.registros.filter((x) => x.id !== r.id);
         p.especialidades = p.especialidades.filter((x) => x.registro !== r.id);
         p.lotacao = p.lotacao.filter((x) => x.registro !== r.id);
@@ -691,7 +699,8 @@ export class ProfissionaisMemoria {
         const lida = lerVersaoColunas(e.versao, COLUNAS_VERSAO_PROFISSIONAL);
         if (!lida) throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.');
         const mudou = Object.keys(lida).filter((c) => comparavel(p.linha[c]) !== lida[c]);
-        if (mudou.length > 0) throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
+        if (mudou.length > 0)
+          throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
         const a = e.alteracoes;
         const novos: Record<string, unknown> = {};
         if (a.nome !== undefined) novos['NOME'] = a.nome;
@@ -721,7 +730,8 @@ export class ProfissionaisMemoria {
         if (!lida) throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.');
         const atual = this.linhaRegistro(r);
         const mudou = Object.keys(lida).filter((c) => comparavel(atual[c]) !== lida[c]);
-        if (mudou.length > 0) throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
+        if (mudou.length > 0)
+          throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
         const a = e.alteracoes;
         const conselho = a.conselho ?? r.conselho;
         if (!CONSELHOS.includes(conselho))

@@ -264,7 +264,7 @@ export const esquemaRegistrarMetaTerapia = z
   .object({
     internacao: id,
     via: z.enum(CODIGOS_VIA_TERAPIA),
-    /** O item de dieta prescrito (PRPRESCDIETA da prescrição vigente) a que a meta se refere; null na parenteral. */
+    /** O item de dieta prescrito (item de dieta da prescrição vigente) a que a meta se refere; null na parenteral. */
     itemDieta: id.nullable(),
     pesoKg: z.number().positive().max(400),
     kcalPorKg: z.number().positive().max(60),

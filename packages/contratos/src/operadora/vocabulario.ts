@@ -4,7 +4,7 @@
 // mostra o rótulo, nunca o código cru nem o nome da tabela. Os rótulos vêm normalizados para a tela (a tabela tem
 // alguns em maiúsculas e com erro de grafia, como "CONJUGÊ").
 
-/** Tipo de cobrança ao beneficiário (TBTIPOCOBRANCASGO; ref 02; regra 6). */
+/** Tipo de cobrança ao beneficiário (ref 02; regra 6). */
 export const TIPOS_COBRANCA_OPERADORA = {
   1: 'Mensalidade',
   2: 'Coparticipação avulsa',
@@ -13,7 +13,7 @@ export const TIPOS_COBRANCA_OPERADORA = {
 } as const;
 export type TipoCobrancaOperadora = keyof typeof TIPOS_COBRANCA_OPERADORA;
 
-/** Vínculo com o titular (SPVINCULOTITULAR; 1 é o próprio titular). */
+/** Vínculo com o titular (1 é o próprio titular). */
 export const VINCULOS_TITULAR = {
   1: 'Titular',
   2: 'Responsável legal',
@@ -28,7 +28,7 @@ export type VinculoTitular = keyof typeof VINCULOS_TITULAR;
 /** Código do vínculo do próprio titular (o beneficiário sem titular acima dele). */
 export const VINCULO_TITULAR = 1 as const satisfies VinculoTitular;
 
-/** Tipo de contratação do plano (CDPLANOCLASSIF; os três da regulação da ANS). */
+/** Tipo de contratação do plano (os três da regulação da ANS). */
 export const TIPOS_CONTRATACAO = {
   1: 'Individual ou familiar',
   2: 'Coletivo empresarial',
@@ -36,11 +36,11 @@ export const TIPOS_CONTRATACAO = {
 } as const;
 export type TipoContratacao = keyof typeof TIPOS_CONTRATACAO;
 
-/** Tipo de contrato (CDTPCONTRATO): pessoa física (individual ou familiar) ou pessoa jurídica (coletivo). */
+/** Tipo de contrato: pessoa física (individual ou familiar) ou pessoa jurídica (coletivo). */
 export const TIPOS_CONTRATO_OPERADORA = { 1: 'Individual ou familiar', 2: 'Coletivo' } as const;
 export type TipoContratoOperadora = keyof typeof TIPOS_CONTRATO_OPERADORA;
 
-/** Forma de reajuste do contrato (TBTPFORMAREAJ; carga de referência). */
+/** Forma de reajuste do contrato (carga de referência). */
 export const FORMAS_REAJUSTE = {
   1: 'IPCA',
   2: 'IGP-M',
@@ -53,19 +53,19 @@ export const FORMAS_REAJUSTE = {
 } as const;
 export type FormaReajuste = keyof typeof FORMAS_REAJUSTE;
 
-/** Tipo de vigência do contrato (TBTPVIGCONTRATO). */
+/** Tipo de vigência do contrato. */
 export const TIPOS_VIGENCIA_CONTRATO = { 1: 'Prazo determinado', 2: 'Prazo indeterminado' } as const;
 export type TipoVigenciaContrato = keyof typeof TIPOS_VIGENCIA_CONTRATO;
 
-/** Acomodação do plano (CDACOMODTIPO). */
+/** Acomodação do plano. */
 export const ACOMODACOES_PLANO_OPERADORA = { 1: 'Apartamento', 2: 'Enfermaria', 3: 'Ambulatório' } as const;
 export type AcomodacaoPlanoOperadora = keyof typeof ACOMODACOES_PLANO_OPERADORA;
 
-/** Tipo de coparticipação do plano (CDTPCOPART). */
+/** Tipo de coparticipação do plano. */
 export const TIPOS_COPARTICIPACAO = { 1: 'Nenhum', 2: 'Percentual', 3: 'Valor fixo' } as const;
 export type TipoCoparticipacao = keyof typeof TIPOS_COPARTICIPACAO;
 
-/** Movimento cadastral do beneficiário (CDSTATUSCAD; é o que vai ao SIB). */
+/** Movimento cadastral do beneficiário (é o que vai ao SIB). */
 export const MOVIMENTOS_CADASTRAIS = {
   1: 'Inclusão',
   2: 'Alteração',
@@ -74,7 +74,7 @@ export const MOVIMENTOS_CADASTRAIS = {
 } as const;
 export type MovimentoCadastral = keyof typeof MOVIMENTOS_CADASTRAIS;
 
-/** Situação da guia na operadora (CDGUIASTATUS). */
+/** Situação da guia na operadora. */
 export const SITUACOES_GUIA_OPERADORA = {
   1: 'Autorizada',
   2: 'Liberada',
@@ -88,7 +88,7 @@ export const SITUACOES_GUIA_OPERADORA = {
 } as const;
 export type SituacaoGuiaOperadora = keyof typeof SITUACOES_GUIA_OPERADORA;
 
-/** Tipo de guia na operadora (CDTPGUIA). */
+/** Tipo de guia na operadora. */
 export const TIPOS_GUIA_OPERADORA = {
   1: 'Ambulatório',
   2: 'Consulta',
@@ -97,7 +97,7 @@ export const TIPOS_GUIA_OPERADORA = {
 } as const;
 export type TipoGuiaOperadora = keyof typeof TIPOS_GUIA_OPERADORA;
 
-/** Tipo de prestador da rede (TBTPPRESTADOR). */
+/** Tipo de prestador da rede. */
 export const TIPOS_PRESTADOR_REDE = {
   1: 'Consultório médico',
   2: 'Centro clínico',
@@ -110,15 +110,15 @@ export const TIPOS_PRESTADOR_REDE = {
 } as const;
 export type TipoPrestadorRede = keyof typeof TIPOS_PRESTADOR_REDE;
 
-/** Movimento da rede credenciada (TBSTATUSCREPLS; é o que vai ao RPS da ANS). */
+/** Movimento da rede credenciada (é o que vai ao RPS da ANS). */
 export const MOVIMENTOS_REDE = { 1: 'Inclusão', 2: 'Alteração', 3: 'Exclusão', 4: 'Reinclusão' } as const;
 export type MovimentoRede = keyof typeof MOVIMENTOS_REDE;
 
-/** Tipo de contratação do prestador (TBTPCONTRATOCREPLS). */
+/** Tipo de contratação do prestador. */
 export const CONTRATACOES_PRESTADOR = { 1: 'Direta', 2: 'Indireta' } as const;
 export type ContratacaoPrestador = keyof typeof CONTRATACOES_PRESTADOR;
 
-/** Modelo de remuneração do prestador (TBTISSREMUNERAOPERPS; vigência desde 01/08/2021). */
+/** Modelo de remuneração do prestador (vigência desde 01/08/2021). */
 export const MODELOS_REMUNERACAO = {
   1: 'Por procedimento',
   2: 'Pacote',
@@ -130,7 +130,7 @@ export const MODELOS_REMUNERACAO = {
 } as const;
 export type ModeloRemuneracao = keyof typeof MODELOS_REMUNERACAO;
 
-/** Regime de atendimento do contrato com o prestador (TBREGIMEATEND). */
+/** Regime de atendimento do contrato com o prestador. */
 export const REGIMES_ATENDIMENTO_OPERADORA = {
   1: 'Ambulatorial',
   2: 'Hospitalar',
@@ -138,7 +138,7 @@ export const REGIMES_ATENDIMENTO_OPERADORA = {
 } as const;
 export type RegimeAtendimentoOperadora = keyof typeof REGIMES_ATENDIMENTO_OPERADORA;
 
-/** Origem do atendimento ao beneficiário (SPORIGEM_ATEND; só leitura). */
+/** Origem do atendimento ao beneficiário (só leitura). */
 export const ORIGENS_ATENDIMENTO_OPERADORA = {
   1: 'Liberação de guias',
   2: 'Recepção externa',
@@ -149,7 +149,7 @@ export const ORIGENS_ATENDIMENTO_OPERADORA = {
 } as const;
 export type OrigemAtendimentoOperadora = keyof typeof ORIGENS_ATENDIMENTO_OPERADORA;
 
-/** Funções do portal do prestador (PFPORTALOPCAO; o perfil Prestador recebe as que o contrato der). */
+/** Funções do portal do prestador (o perfil Prestador recebe as que o contrato der). */
 export const FUNCOES_PORTAL_PRESTADOR = {
   1: 'Solicitar autorização',
   2: 'Cancelar autorização',
@@ -162,7 +162,7 @@ export const FUNCOES_PORTAL_PRESTADOR = {
 } as const;
 export type FuncaoPortalPrestador = keyof typeof FUNCOES_PORTAL_PRESTADOR;
 
-/** Tipo de atendimento no portal do prestador (PFTPATEND). */
+/** Tipo de atendimento no portal do prestador. */
 export const TIPOS_ATENDIMENTO_PORTAL = {
   1: 'Todos',
   2: 'Ambulatório',

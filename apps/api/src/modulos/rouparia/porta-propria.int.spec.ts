@@ -1,7 +1,8 @@
 // Integração da porta própria da rouparia contra o MariaDB real (cliente f22_o2, já criado pela obra da onda 2). Massa
 // SINTÉTICA com códigos "L0214" (nenhuma pessoa real). Contrato de efeito de cada gravação: o documento no modelo, a
 // versão, a trilha da operação e as recusas (versão antiga, chave de outro movimento, envio já retornado, outro
-// estabelecimento, inventário e kit aguardando o modelo). A mesma bateria do movimento roda na memória e no banco.
+// estabelecimento, peso no inventário, kit dentro de kit); o kit com a composição, a perda de várias peças e o
+// inventário com a contagem. A mesma bateria do movimento roda na memória e no banco.
 // No fim, a massa de negócio é apagada; ficam o estabelecimento e o usuário de teste, que a trilha (só inclusão)
 // referencia. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
@@ -100,7 +101,16 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
         est,
       );
       await e.executar('DELETE FROM baixa_enxoval WHERE estabelecimento_id IN (?, ?)', est);
+      await e.executar(
+        'DELETE vi FROM inventario_enxoval_item vi JOIN inventario_enxoval v ON v.id = vi.inventario_enxoval_id WHERE v.estabelecimento_id IN (?, ?)',
+        est,
+      );
+      await e.executar('DELETE FROM inventario_enxoval WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar('DELETE FROM cota_enxoval_setor WHERE estabelecimento_id IN (?, ?)', est);
+      await e.executar(
+        "DELETE c FROM peca_enxoval_composicao c JOIN peca_enxoval k ON k.id = c.kit_peca_enxoval_id WHERE k.codigo LIKE 'PE-%' AND k.descricao LIKE ?",
+        [`% ${P}%`],
+      );
       await e.executar("DELETE FROM peca_enxoval WHERE codigo LIKE 'PE-%' AND descricao LIKE ?", [`% ${P}%`]);
     })();
 
@@ -198,7 +208,7 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
     expect(await porta.fornecedorExiste(outro, ids.lavanderia)).toBe(false);
   });
 
-  it('a peça do enxoval: inclusão com código de negócio, alteração pela versão; a versão antiga e o kit recusam', async () => {
+  it('a peça do enxoval: inclusão com código de negócio, alteração pela versão; a versão antiga recusa; o kit grava a composição', async () => {
     const antes = await contarTrilha();
     const peca = {
       nome: `LENCOL ${P}`,
@@ -235,18 +245,27 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
         ),
       ),
     ).toBe('conflito-versao');
+    const kit = { ...peca, nome: `KIT ${P}`, categoria: 'kit' as const, composicao: [{ peca: r.id, quantidade: 2 }] };
+    const k = await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) => g.incluirPeca(kit));
+    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([{ peca: r.id, quantidade: 2 }]);
+    // A mudança altera a linha da composição (sem duplicar); a peça que sai é excluída e volta reativada.
+    const k2 = await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
+      g.alterarPeca({ ...kit, composicao: [], id: k.id, versaoVista: 1 }),
+    );
+    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([]);
+    await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
+      g.alterarPeca({ ...kit, composicao: [{ peca: r.id, quantidade: 3 }], id: k.id, versaoVista: k2.versao }),
+    );
+    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([{ peca: r.id, quantidade: 3 }]);
+    const linhasKit = await linha('SELECT COUNT(*) AS n FROM peca_enxoval_composicao WHERE kit_peca_enxoval_id = ?', [k.id]);
+    expect(Number(linhasKit?.['n'])).toBe(1);
     expect(
       await erroDe(
         porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
-          g.incluirPeca({
-            ...peca,
-            nome: `KIT ${P}`,
-            categoria: 'kit',
-            composicao: [{ peca: r.id, quantidade: 2 }],
-          }),
+          g.incluirPeca({ ...kit, nome: `KIT2 ${P}`, composicao: [{ peca: k.id, quantidade: 1 }] }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('kit-dentro-de-kit');
     const p2 = await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
       g.incluirPeca({ ...peca, nome: `FRONHA ${P}`, categoria: 'fronha', pesoGramas: 150 }),
     );
@@ -437,7 +456,7 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
     expect(await porta.enviosAbertos(ctx)).toEqual([]);
   });
 
-  it('a entrega com a cota vigente, a perda por peça com o motivo; o inventário aguarda o modelo', async () => {
+  it('a entrega com a cota vigente, a perda de uma e de várias peças com o motivo; o inventário com a contagem', async () => {
     const ent = await porta.gravarSgh(ctx, trilha('distribuicao_enxoval'), (g) =>
       g.registrarMovimento(
         movimento({
@@ -465,25 +484,25 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
         }),
       ),
     );
-    // A perda é um documento só: a de várias peças aguarda os itens da baixa no modelo (nada gravado).
-    expect(
-      await erroDe(
-        porta.gravarSgh(ctx, trilha('baixa_enxoval'), (g) =>
-          g.registrarMovimento(
-            movimento({
-              tipo: 'perda',
-              data: hoje,
-              centroCusto: ids.setor,
-              motivoPerda: 'extravio',
-              itens: [
-                { peca: ids.peca, quantidade: 2 },
-                { peca: ids.peca2, quantidade: 1 },
-              ],
-            }),
-          ),
-        ),
+    // A perda de várias peças é um documento só, com uma linha de item por peça.
+    const per2 = await porta.gravarSgh(ctx, trilha('baixa_enxoval'), (g) =>
+      g.registrarMovimento(
+        movimento({
+          tipo: 'perda',
+          data: hoje,
+          centroCusto: ids.setor,
+          motivoPerda: 'extravio',
+          itens: [
+            { peca: ids.peca, quantidade: 2 },
+            { peca: ids.peca2, quantidade: 1 },
+          ],
+        }),
       ),
-    ).toBe('modelo-pendente');
+    );
+    expect((await porta.movimento(ctx, per2.id))?.itens).toEqual([
+      { peca: ids.peca, quantidade: 2 },
+      { peca: ids.peca2, quantidade: 1 },
+    ]);
     const baixas = await nucleo.lerSomente(ctx, (l) =>
       l.consultar(
         `SELECT b.numero, bi.quantidade, bi.custo_estimado FROM baixa_enxoval b
@@ -491,35 +510,61 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
         [ids.est],
       ),
     );
-    expect(baixas).toHaveLength(1);
+    expect(baixas.map((b) => Number(b['quantidade']))).toEqual([2, 2, 1]);
     expect(Number(baixas[0]?.['custo_estimado'])).toBe(71);
     expect(await porta.movimento(ctx, per.id)).toMatchObject({
       tipo: 'perda',
       motivoPerda: 'extravio',
       pecas: 2,
     });
-    expect((await porta.totais(ctx, hoje, hoje)).pecasPerdidas).toBe(2);
+    expect((await porta.totais(ctx, hoje, hoje)).pecasPerdidas).toBe(5);
     // O cancelamento da perda desfaz o documento inteiro.
     const cp = await porta.gravarSgh(ctx, trilha('baixa_enxoval'), (g) =>
       g.cancelarMovimento({ id: per.id, versaoVista: 1, motivo: 'PERDA ERRADA', remessa: null }),
     );
     expect(cp.versao).toBe(2);
-    expect((await porta.totais(ctx, hoje, hoje)).pecasPerdidas).toBe(0);
+    expect((await porta.totais(ctx, hoje, hoje)).pecasPerdidas).toBe(3);
+    // O inventário conta as peças (zero é contagem válida); o peso não se aplica.
     expect(
       await erroDe(
-        porta.gravarSgh(ctx, trilha('x'), (g) =>
+        porta.gravarSgh(ctx, trilha('inventario_enxoval'), (g) =>
           g.registrarMovimento(
-            movimento({ tipo: 'inventario', data: hoje, itens: [{ peca: ids.peca, quantidade: 0 }] }),
+            movimento({ tipo: 'inventario', data: hoje, pesoKg: 3, itens: [{ peca: ids.peca, quantidade: 1 }] }),
           ),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('inventario-sem-peso');
+    const inv = await porta.gravarSgh(ctx, trilha('inventario_enxoval'), (g) =>
+      g.registrarMovimento(
+        movimento({
+          tipo: 'inventario',
+          data: hoje,
+          itens: [
+            { peca: ids.peca, quantidade: 0 },
+            { peca: ids.peca2, quantidade: 7 },
+          ],
+        }),
+      ),
+    );
+    expect(documentoDoMovimento(inv.id)?.tipo).toBe('inventario');
+    const invs = await porta.inventarios(ctx, hoje);
+    expect(invs.map((x) => [x.id, x.pecas, x.itens])).toEqual([
+      [
+        inv.id,
+        7,
+        [
+          { peca: ids.peca, quantidade: 0 },
+          { peca: ids.peca2, quantidade: 7 },
+        ],
+      ],
+    ]);
+    expect(await porta.inventarios(outro, hoje)).toEqual([]);
     const lista = await porta.movimentos(ctx, { de: hoje, ate: hoje, teto: 2 });
     expect(lista.itens).toHaveLength(2);
     expect(lista.cortada).toBe(true);
     expect(
       (await porta.movimentos(ctx, { de: hoje, ate: hoje, tipo: 'perda' })).itens.map((x) => x.tipo),
-    ).toEqual(['perda']);
+    ).toEqual(['perda', 'perda']);
     expect((await porta.movimentos(outro, { de: hoje, ate: hoje })).itens).toEqual([]);
   });
 

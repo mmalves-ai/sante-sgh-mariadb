@@ -29,14 +29,14 @@ export const CHAVE_CONTABIL = 'contabil' as const;
 
 /** Rótulo de produto de cada fonte de fato (a tela nunca mostra o nome da tabela). */
 export const ROTULOS_FONTE_FATO: Readonly<Record<string, string>> = {
-  FCCTAEXT: 'Contas dos pacientes (receita)',
-  FCLANEXT: 'Itens das contas (glosa e recurso)',
-  MFCONPAG: 'Contas a pagar',
-  MFCTAREC: 'Contas a receber',
-  MFLANCTO: 'Movimento bancário',
-  GELANSAI: 'Saídas de estoque',
-  GECADNFS: 'Notas fiscais de entrada',
-  RPRPA: 'Recibos de autônomo',
+  conta_hospitalar: 'Contas dos pacientes (receita)',
+  conta_hospitalar_item: 'Itens das contas (glosa e recurso)',
+  titulo_pagar: 'Contas a pagar',
+  titulo_receber: 'Contas a receber',
+  movimento_bancario: 'Movimento bancário',
+  movimento_estoque: 'Saídas de estoque',
+  nota_entrada: 'Notas fiscais de entrada',
+  recibo_autonomo: 'Recibos de autônomo',
   SGH_PES_FOLHA_FATO: 'Folha de pagamento (custo de pessoal)',
   SGH_PAT_DEPRECIACAO: 'Depreciação dos bens patrimoniais',
   SGH_PAT_AJUSTE: 'Perda por impairment dos bens patrimoniais',

@@ -1,6 +1,6 @@
 // Permissões do M11 (ficha, seção 7; convencoes.md §12; cap-08 §8.13): pacientes, pessoas, profissionais e
 // solicitantes. Quem tem a opção no legado tem a permissão no novo (regra 1 do M06): as opções são as das telas
-// do SPDATA que fazem o mesmo (TBOPCOES, retrato tools/verificadores/dados/acesso-legado.pc.json):
+// do sistema anterior que fazem o mesmo (menu de origem, retrato tools/verificadores/dados/acesso-legado.pc.json):
 //   - Cadastro de pacientes das duas recepções: externa (3253 acessar, 6027 consultar, 3255 incluir,
 //     3254 alterar) e interna (2347, 6061, 2349, 2348); Pesquisa de pacientes (3290);
 //   - Termo de consentimento do cadastro (externa 6533–6537, pesquisa 6538–6542, interna 6589–6593);

@@ -6,11 +6,11 @@ import {
   datasEntre,
   deMinutos,
   diasEntre,
-  duracaoHHMM,
+  duracaoEmHoras,
   duracaoMinutos,
   ErroTempo,
   formatarHora,
-  hhmmValido,
+  horaValida,
   horarioJaPassou,
   normalizarHora,
   paraMinutos,
@@ -22,7 +22,7 @@ import {
   dataValida,
 } from './tempo.js';
 
-const relogio = { hoje: '2026-09-28', hhmm: '1000' };
+const relogio = { hoje: '2026-09-28', hhmm: '10:00' };
 
 describe('vigência e horário que já passou', () => {
   it('vigente = ativa e ao menos um horário que ainda não começou (nunca PERINI/PERFIN)', () => {
@@ -54,40 +54,42 @@ describe('vigência e horário que já passou', () => {
   });
 });
 
-describe('horas HHMM e durações', () => {
+describe('horas HH:MM e durações', () => {
   it('normaliza HH:MM, H:MM, HHMM e HMM', () => {
-    expect(normalizarHora('08:00')).toBe('0800');
-    expect(normalizarHora('8:05')).toBe('0805');
-    expect(normalizarHora('0815')).toBe('0815');
-    expect(normalizarHora('930')).toBe('0930');
+    expect(normalizarHora('08:00')).toBe('08:00');
+    expect(normalizarHora('8:05')).toBe('08:05');
+    expect(normalizarHora('0815')).toBe('08:15');
+    expect(normalizarHora('930')).toBe('09:30');
     expect(() => normalizarHora('24:00')).toThrow(ErroTempo);
     expect(() => normalizarHora('08:60')).toThrow(ErroTempo);
     expect(() => normalizarHora('oito')).toThrow(ErroTempo);
   });
-  it('"08:01" nunca chega ao banco: o formato é de 4 dígitos', () => {
-    expect(hhmmValido('08:01')).toBe(false);
-    expect(hhmmValido('0801')).toBe(true);
+  it('o formato estrito é "HH:MM"', () => {
+    expect(horaValida('08:01')).toBe(true);
+    expect(horaValida('0801')).toBe(false);
+    expect(horaValida('24:00')).toBe(false);
   });
   it('formata para a tela', () => {
     expect(formatarHora('0800')).toBe('08:00');
     expect(formatarHora('930')).toBe('09:30');
+    expect(formatarHora('08:00')).toBe('08:00');
     expect(formatarHora('')).toBe('');
     expect(formatarHora(null)).toBe('');
   });
-  it('duração é HHMM: "0100" são 60 minutos, não 100', () => {
-    expect(duracaoMinutos('0100')).toBe(60);
+  it('duração em horas e minutos: "01:00" são 60 minutos', () => {
+    expect(duracaoMinutos('01:00')).toBe(60);
     expect(duracaoMinutos('0045')).toBe(45);
-    expect(duracaoMinutos('0000')).toBeNull();
+    expect(duracaoMinutos('00:00')).toBeNull();
     expect(duracaoMinutos('')).toBeNull();
     expect(duracaoMinutos(null)).toBeNull();
     expect(duracaoMinutos('9999')).toBeNull();
-    expect(duracaoHHMM(60)).toBe('0100');
-    expect(duracaoHHMM(15)).toBe('0015');
-    expect(() => duracaoHHMM(0)).toThrow(ErroTempo);
+    expect(duracaoEmHoras(60)).toBe('01:00');
+    expect(duracaoEmHoras(15)).toBe('00:15');
+    expect(() => duracaoEmHoras(0)).toThrow(ErroTempo);
   });
-  it('minutos ↔ HHMM dentro do dia', () => {
-    expect(paraMinutos('0815')).toBe(495);
-    expect(deMinutos(495)).toBe('0815');
+  it('minutos ↔ HH:MM dentro do dia', () => {
+    expect(paraMinutos('08:15')).toBe(495);
+    expect(deMinutos(495)).toBe('08:15');
     expect(() => deMinutos(1440)).toThrow(ErroTempo);
     expect(() => paraMinutos('2500')).toThrow(ErroTempo);
   });

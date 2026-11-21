@@ -13,14 +13,14 @@ export const DOMINIOS_RECEPCAO: readonly DominioPublico[] = [
       rotulo: { singular: 'Motivo de exclusão de atendimento', plural: 'Motivos de exclusão de atendimento' },
       subitem: 'agenda',
       natureza: 'editavel',
-      // W1-04: inativar só no novo (TBMOTEXC não tem coluna de situação) e excluir o motivo nunca usado, com o mapa de
+      // W1-04: inativar só no novo (o motivo de exclusão da origem não tem coluna de situação) e excluir o motivo nunca usado, com o mapa de
       // dependências (recibos e notas cancelados, cópias de recibo, atendimentos excluídos pelo nome do motivo).
       acoes: ['ler', 'criar', 'editar', 'inativar', 'excluir', 'exportar'],
       categoria: 'dominio',
     },
     todas([3590], ['ler', 'criar', 'editar', 'inativar', 'excluir', 'exportar']),
   ),
-  // W1-04: a procedência (TBPROCED) sai do lote gerado do M14 e ganha a alteração (todas as colunas; o gatilho do
+  // W1-04: a procedência sai do lote gerado do M14 e ganha a alteração (todas as colunas; o gatilho do
   // banco só recusa trocar o nome da procedência já usada no atendimento, com a mensagem dele) e a exclusão física do
   // item nunca usado, com o mapa de dependências (8 FKs e 5 referências por código). Opções inferidas (POL-1b): a
   // opção "Tabelas" do módulo da recepção.

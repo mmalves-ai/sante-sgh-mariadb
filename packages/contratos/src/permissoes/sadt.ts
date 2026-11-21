@@ -1,26 +1,9 @@
 // Permissões do M26 (ficha, seção 7; convencoes.md §12): SADT (laboratório, imagem, métodos gráficos, endoscopia),
-// laudos e portal de resultados. Quem tem a opção no legado tem a permissão no novo (regra 1 do M06). Opções da árvore
-// TBOPCOES do módulo S.A.D.T. (9) (retrato tools/verificadores/dados/acesso-legado.pc.json):
-//   - Lançamentos › Atendimentos 2728 › Externo 2729 (Alterar 6103, Incluir 6104, Consultar 6106) e Interno 2730
-//     (Alterar 6149, Incluir 6150, Consultar 6152); os exames por setor: externo Laboratório 6114 (6115 a 6118),
-//     Radiologia 6129 (6130 a 6133), Tomografia 6134 (6135 a 6138), Ultrassonografia 6139 (6140 a 6143), Endoscopia
-//     6124 (6125 a 6128), Outros 6144 (6145 a 6148); interno Laboratório 6159 (6160 a 6163), Radiologia 6174 (6175 a
-//     6178), Tomografia 6179 (6180 a 6183), Ultrassonografia 6184 (6185 a 6188), Endoscopia 6169 (6170 a 6173), Outros
-//     6189 (6190 a 6193); Ficha/Talão/Relat./Etiq. 2731; Etiqueta de triagem de laboratório 4754;
-//   - Resultados 2738: Laboratório › Registro 2743 (6206 a 6209) e Especialidade 2744 (6210 a 6213); Radiologia 2745
-//     (6214 a 6217), Tomografia 2746 (6218 a 6221), Ultrassonografia 2747 (6222 a 6225), Endoscopia 2740 (6198 a
-//     6201), Outros 2748 (6226 a 6229);
-//   - Solicitações do PEP 2758 (Alterar 6230, Incluir 6231, Consultar 6233, Cancelar 6234); Entrega resultado 4756
-//     (Laboratório 4760: 6255 a 6258; Radiologia 4761; Tomografia 4762; Ultrassonografia 4763; Endoscopia 4758;
-//     Outros 4764); Orçamento 2803; Rastreabilidade 6985 (Recoleta 6809, Registro de amostras 6810, Rastreabilidade
-//     6811, Painel 6812) e Tabelas › Rastreabilidade 6984 (motivo de recoleta 6805, status 6806);
-//   - Tabelas › Parâmetros 2678; Integração com PACs 4740 (Equipamento 4742); Integração Resultados web 4743 (Cadastro
-//     de perfil 4744, Perfil por usuário 4745, Configurações gerais 4747, Acesso médico solicitante 4748); Utilitários
-//     › Liberar resultados p/ Web 2972; Relatórios 2804 (Laudos emitidos 2845; Mapa de produção 2849).
-// Perfil da trilha do legado (cópia pc, 2026-06-01 a 2026-07-05, só contagens): inclusão de resultado de laboratório
-// na 6211 (tipo 2), recebimento do pedido do prontuário na 6230 (tipo 3), lançamento direto do laboratório na 6116
-// (externo) e 6161 (internado), tipo 2. Liberar resultado de laboratório é do responsável técnico habilitado e laudar
-// imagem, endoscopia e métodos gráficos é privativo de médico (regra 8): o servidor confere o vínculo da sessão.
+// laudos e portal de resultados. Quem tem a opção no menu de origem tem a permissão (regra 1 do M06); a
+// correspondência está em conector/mapa/permissoes.tsv. Os números em OPCOES_* ficam até a etapa coordenada que tira a
+// procedência da declaração (padroes.md da F2.4, seção 5).
+// Liberar resultado de laboratório é do responsável técnico habilitado e laudar imagem, endoscopia e métodos gráficos
+// é privativo de médico (regra 8): o servidor confere o vínculo da sessão.
 import type { DeclaracaoPermissao } from './tipos.js';
 
 export const OPCOES_SADT = {

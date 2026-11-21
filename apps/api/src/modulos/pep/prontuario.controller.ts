@@ -238,7 +238,10 @@ export class ProntuarioController {
     const s = sessaoDe(req);
     await this.exigirLiberacao(s);
     const r = await this.servico.excecoes(s.porta);
-    req.sghAlvo = { tabelaAlvo: 'PRCABEVOL', chaveNaturalAlvo: `excecoes;estratos:${r.linhas.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'registro_assistencial',
+      chaveNaturalAlvo: `excecoes;estratos:${r.linhas.length}`,
+    };
     return r;
   }
 
@@ -272,7 +275,7 @@ export class ProntuarioController {
       throw problemaDoCadastro(e);
     });
     // Na trilha, só o tipo e a quantidade (nunca o termo).
-    req.sghAlvo = { tabelaAlvo: 'RICADPAC', chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length};pep` };
+    req.sghAlvo = { tabelaAlvo: 'paciente', chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length};pep` };
     return r;
   }
 
@@ -313,7 +316,7 @@ export class ProntuarioController {
     this.estado.registrarMotivo(chaveSessao(s), paciente, m.data.motivo);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: chaveLeitura('lista', m.data.motivo, 'motivo-informado'),
     };
@@ -341,7 +344,7 @@ export class ProntuarioController {
     const r = await this.servico.lista(s.porta, paciente, f.data);
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'RICADPAC',
+      tabelaAlvo: 'paciente',
       idAlvo: String(paciente),
       chaveNaturalAlvo: chaveLeitura('lista', motivo, `p:${f.data.pagina};n:${r.itens.length}`),
     };
@@ -370,7 +373,7 @@ export class ProntuarioController {
     const r = await this.servico.buscar(s.porta, paciente, c.data, await this.categoriaDoLeitor(s));
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRCONTEVOL',
+      tabelaAlvo: 'registro_assistencial',
       chaveNaturalAlvo: chaveLeitura('busca', motivo, `lidos:${r.lidos};n:${r.itens.length}`),
     };
     return r;
@@ -391,7 +394,7 @@ export class ProntuarioController {
     const r = await this.servico.abrir(s.porta, paciente, id, await this.categoriaDoLeitor(s));
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRCABEVOL',
+      tabelaAlvo: 'registro_assistencial',
       idAlvo: String(id),
       chaveNaturalAlvo: chaveLeitura('registro', motivo),
     };
@@ -420,7 +423,7 @@ export class ProntuarioController {
     });
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'PRCABEVOL',
+      tabelaAlvo: 'registro_assistencial',
       idAlvo: String(id),
       chaveNaturalAlvo: chaveLeitura(aba, motivo),
     };

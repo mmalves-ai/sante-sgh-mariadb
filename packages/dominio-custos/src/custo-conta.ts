@@ -14,13 +14,13 @@ import { dividirArredondado, repartir } from './repartir.js';
 
 /** O que uma conta faturou num centro (agregado no banco por conta e centro de custo do item; centavos). */
 export interface ItemContaLido {
-  /** FCCTAEXT.ID. */
+  /** Id da conta do paciente. */
   readonly conta: number;
   readonly numero: number;
   readonly tipoConta: string | null;
   readonly convenio: number | null;
   readonly procedimento: string | null;
-  /** TBCENCUS.ID do item (null: o código do item não está no cadastro). */
+  /** Id do centro de custo do item (null: o código do item não está no cadastro). */
   readonly centro: number | null;
   readonly bruta: number;
   readonly glosa: number;

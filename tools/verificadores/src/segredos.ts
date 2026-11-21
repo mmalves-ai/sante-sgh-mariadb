@@ -38,13 +38,22 @@ function valorVazio(bruto: string, estruturaJsonPermitida: boolean): boolean {
   );
 }
 
+// Em código TypeScript/JavaScript, um valor que é só um identificador (`X_SENHA: SENHA_DE_TESTE,`) é referência a uma
+// constante, não valor de segredo: um segredo literal teria de estar entre aspas (e continua achado) e a constante
+// referida é conferida onde é definida. Em .env, YAML, JSON e shell o identificador nu continua achado.
+const CODIGO = /\.(?:[cm]?[jt]s|tsx|jsx|vue)$/;
+const IDENTIFICADOR = /^[A-Za-z_$][\w$]*,?$/;
+
 export function procurarSegredos(conteudo: string, arquivo: string): Achado[] {
   const achados: Achado[] = [];
   const estrutura = cobertoPelaRegra(arquivo);
+  const codigo = CODIGO.test(arquivo);
   conteudo.split(/\r?\n/).forEach((texto, i) => {
     const m = ATRIBUICAO.exec(texto);
     if (!m) return;
     const chave = m[1] ?? '';
+    const valor = (m[2] ?? '').trim();
+    if (codigo && IDENTIFICADOR.test(valor)) return;
     if (CHAVE_SEGREDO.test(chave) && !valorVazio(m[2] ?? '', estrutura))
       achados.push({ arquivo, linha: i + 1, chave });
   });

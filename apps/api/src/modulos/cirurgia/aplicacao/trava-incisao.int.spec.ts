@@ -2,7 +2,7 @@
 // em memória (dados SINTÉTICOS): com a chave `bloco.checklistTrava` ligada, a hora da incisão no registro do ato (M18)
 // e o marco "início da cirurgia" da ficha anestésica (M46.1) são recusados sem a pausa cirúrgica concluída (a negação vai
 // à trilha) e antes dela; passam depois dela, com a exceção em urgência e, no ato sem agendamento, só com o supervisor;
-// com a chave desligada, nada é conferido (a gravação do legado não muda).
+// com a chave desligada, nada é conferido (a gravação não muda).
 import { LISTA_CHECKLIST_V1, type MomentoChecklist } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AG, type AppBloco, HOJE, montarAppBloco, respostasQueConcluem } from '../bloco-seguro.spec-util.js';

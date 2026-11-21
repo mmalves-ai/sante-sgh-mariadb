@@ -1,4 +1,5 @@
-// Formatos da agenda na tela: datas dd/mm/aaaa, horas HH:MM e a hora digitada (HH:MM ou HHMM) para o contrato.
+// Formatos da agenda na tela: datas dd/mm/aaaa, horas HH:MM e a hora digitada (com ou sem os dois-pontos) para o
+// contrato, que recebe sempre "HH:MM".
 
 /** AAAA-MM-DD → dd/mm/aaaa (texto vazio fica vazio). */
 export function dataBr(iso: string | null | undefined): string {
@@ -7,21 +8,19 @@ export function dataBr(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
-/** HHMM ou HH:MM → HH:MM. */
+/** Hora para exibir: "HH:MM" (a hora sem os dois-pontos também é aceita); o resto volta como veio. */
 export function horaBr(h: string | null | undefined): string {
   if (!h) return '';
-  const s = h.replace(':', '');
-  return /^\d{4}$/.test(s) ? `${s.slice(0, 2)}:${s.slice(2)}` : h;
+  return horaDoContrato(h) ?? h;
 }
 
-/** Hora digitada (HH:MM, HHMM ou H:MM) → HHMM do contrato; null quando inválida. */
+/** Hora digitada ("08:15", "0815", "8:15" ou "815") → "HH:MM" do contrato; null quando inválida. */
 export function horaDoContrato(h: string | null | undefined): string | null {
-  const s = (h ?? '').trim().replace(':', '');
-  const t = s.length === 3 ? `0${s}` : s;
-  if (!/^\d{4}$/.test(t)) return null;
-  const hh = Number(t.slice(0, 2));
-  const mm = Number(t.slice(2));
-  return hh <= 23 && mm <= 59 ? t : null;
+  const m = /^(\d{1,2}):?(\d{2})$/.exec((h ?? '').trim());
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  return hh <= 23 && mm <= 59 ? `${String(hh).padStart(2, '0')}:${m[2]}` : null;
 }
 
 /** Soma dias a uma data AAAA-MM-DD. */

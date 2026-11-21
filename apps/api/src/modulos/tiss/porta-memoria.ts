@@ -504,7 +504,7 @@ export class PortaTissMemoria implements PortaTiss {
       tipoGuia,
       numeroGuia: String(c.codigo),
       carteira: c.carteira,
-      atendimentoRN: 'N',
+      atendimentoRN: false,
       inicio: { data: c.dataEmissao, hora: '08:00:00' },
       fim: { data: c.dataEmissao, hora: '12:00:00' },
       caraterAtendimento: '1',

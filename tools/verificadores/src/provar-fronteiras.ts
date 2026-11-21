@@ -10,12 +10,12 @@ const raiz = resolve(import.meta.dirname, '../../..');
 const casos = [
   {
     projeto: 'web',
-    fixture: 'web-importa-legado.ts.txt',
+    fixture: 'web-importa-nucleo.ts.txt',
     destino: 'apps/web/src/fixture-importacao-proibida.ts',
   },
   {
     projeto: 'api',
-    fixture: 'api-importa-driver.ts.txt',
+    fixture: 'api-importa-driver-banco.ts.txt',
     destino: 'apps/api/src/fixture-importacao-proibida.ts',
   },
 ];

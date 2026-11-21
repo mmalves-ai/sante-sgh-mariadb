@@ -10,6 +10,7 @@ import {
   type TipoDocumentoPreCheckin,
   TIPOS_DOCUMENTO_PRECHECKIN,
   VERSAO_TERMO_PRECHECKIN,
+  lerHoraDigitada,
 } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteCampoTexto } from '@sgh/ui';
 import { computed, ref } from 'vue';
@@ -105,7 +106,14 @@ async function enviar(): Promise<void> {
   }
 }
 const dia = (d: string) => d.split('-').reverse().join('/');
-const hora = (h: string) => `${h.slice(0, 2)}:${h.slice(2, 4)}`;
+// A hora chega como HH:MM (contrato neutro); lerHoraDigitada também aceita a forma de quatro dígitos e nunca quebra a tela.
+const hora = (h: string) => {
+  try {
+    return lerHoraDigitada(h) ?? '';
+  } catch {
+    return h;
+  }
+};
 </script>
 
 <template>

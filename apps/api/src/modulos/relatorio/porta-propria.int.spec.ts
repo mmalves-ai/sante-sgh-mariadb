@@ -58,8 +58,9 @@ describe('consultas do catálogo (sem banco)', () => {
     expect(() => conferirSqlDoCatalogo('DELETE FROM x', 0)).toThrow(ErroRelatorio);
     expect(() => conferirSqlDoCatalogo('SELECT 1; DROP TABLE x', 0)).toThrow(/ponto e vírgula/);
     expect(() => conferirSqlDoCatalogo('SELECT 1 FROM x WHERE a = ?', 2)).toThrow(/parâmetro/);
-    expect(() => horaNoBanco(2460)).toThrow();
-    expect(horaNoBanco(730)).toBe('07:30:00');
+    expect(() => horaNoBanco('24:60')).toThrow();
+    expect(() => horaNoBanco('0730')).toThrow();
+    expect(horaNoBanco('07:30')).toBe('07:30:00');
     expect(relogioNoFuso('America/Sao_Paulo', new Date('2026-10-28T12:00:00Z')).agora).toBe(
       '2026-10-28T09:00:00',
     );
@@ -158,7 +159,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
     grupos: [],
     enderecos: ['diretoria@exemplo.invalid'],
     periodicidade: 'semanal',
-    hora: 730,
+    hora: '07:30',
     diaSemana: 2,
     diaMes: null,
     ...x,
@@ -348,7 +349,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
       relatorio: 'atendimentosPorDia',
       grupos: [`${P}-DIR`],
       enderecos: ['diretoria@exemplo.invalid'],
-      hora: 730,
+      hora: '07:30',
       diaSemana: 2,
       ativo: true,
       dono: 'r0404.teste',
@@ -400,7 +401,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
       const anterior = await g.lerAgendamentoTravado(id);
       const k = await g.alterarAgendamento(
         id,
-        { ...envio({ hora: 1815 }), ativo: false },
+        { ...envio({ hora: '18:15' }), ativo: false },
         'r0404.teste',
         null,
       );
@@ -413,7 +414,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
     const a = await porta.agendamento(ctx, id);
     expect(a).toMatchObject({
       ativo: false,
-      hora: 1815,
+      hora: '18:15',
       proximoEnvio: null,
       enderecos: ['diretoria@exemplo.invalid'],
     });
@@ -731,7 +732,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
           titulo: dados.titulo,
           enderecos: [...dados.enderecos],
           periodicidade: 'semanal',
-          hora: 730,
+          hora: '07:30',
           ativo: true,
         });
         const x = await p.gravarSgh(
@@ -773,12 +774,12 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
         );
         const alterar = (versao: number) =>
           p.gravarSgh(c, trilha('agendamento_relatorio', id), (g) =>
-            g.alterarAgendamento(id, { ...envio({ hora: 900 }), ativo: true }, 'r0404.teste', null, versao),
+            g.alterarAgendamento(id, { ...envio({ hora: '09:00' }), ativo: true }, 'r0404.teste', null, versao),
           );
         expect(await erroDe(alterar(99))).toBe('conflito-versao');
         expect(await alterar(1)).toBe(1);
         expect(await erroDe(alterar(1))).toBe('conflito-versao');
-        expect(await p.agendamento(c, id)).toMatchObject({ hora: 900 });
+        expect(await p.agendamento(c, id)).toMatchObject({ hora: '09:00' });
       },
     );
     it('no banco, a execução registrada em UTC (o instante real, não a hora local)', async () => {

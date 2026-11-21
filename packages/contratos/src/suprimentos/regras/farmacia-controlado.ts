@@ -1,10 +1,10 @@
 // Medicamentos controlados (Portaria SVS/MS 344/1998; ficha do M29, regra 4; cap-13 CTRL-01 a CTRL-03): prescritor
-// obrigatório na saída, com registro coerente com o conselho (`GELANSAI.ID_TBCBOPRO_MAT_MED_CONTROLADO`); para o
+// obrigatório na saída, com registro coerente com o conselho (o vínculo profissional do prescritor no item da saída); para o
 // internado basta a prescrição do prontuário (o prescritor dela). Dupla conferência (quem confere não é quem dispensou;
 // reautenticação recente), perda e descarte com testemunha, saldo por substância a partir dos movimentos.
 import { qtd3, recusa, type RecusaSuprimentos } from './recusa.js';
 
-/** As listas vistas no cadastro de itens da cópia (`GEITENS.PORTARIA`): A1 8, A2 3, B1 14, C1 32, C5 1. */
+/** As listas vistas no cadastro de itens da cópia (a lista da portaria no cadastro do insumo): A1 8, A2 3, B1 14, C1 32, C5 1. */
 export const LISTAS_PORTARIA_344 = ['A1', 'A2', 'A3', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4', 'C5'] as const;
 export type ListaPortaria = (typeof LISTAS_PORTARIA_344)[number];
 
@@ -17,7 +17,7 @@ export function listaDoItem(portaria: string | null | undefined): ListaPortaria 
 const CONSELHOS_PRESCRITORES = ['CRM', 'CRO', 'CRMV'] as const;
 
 export interface PrescritorControlado {
-  /** O vínculo profissional (TBCBOPRO.ID). */
+  /** O id do vínculo profissional (ocupação e conselho). */
   readonly vinculo: number | null;
   /** Sigla do conselho do vínculo (CRM, CRO, CRMV, COREN…). */
   readonly conselho: string | null;

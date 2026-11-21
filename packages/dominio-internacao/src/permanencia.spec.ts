@@ -9,17 +9,17 @@ describe('duas réguas de permanência', () => {
   const mov = movimento([
     // 3 noites; o faturamento conta 4 diárias.
     {
-      entrada: ['2026-06-01', '1000'],
-      alta: ['2026-06-04', '1500'],
+      entrada: ['2026-06-01', '10:00'],
+      alta: ['2026-06-04', '15:00'],
       permanencia: 4,
-      trechos: [{ unidade: 'ENF', de: ['2026-06-01', '1000'], ate: ['2026-06-04', '1500'] }],
+      trechos: [{ unidade: 'ENF', de: ['2026-06-01', '10:00'], ate: ['2026-06-04', '15:00'] }],
     },
     // 5 noites; o faturamento conta 5 (a diferença de datas).
     {
-      entrada: ['2026-06-10', '0800'],
-      alta: ['2026-06-15', '0700'],
+      entrada: ['2026-06-10', '08:00'],
+      alta: ['2026-06-15', '07:00'],
       permanencia: 5,
-      trechos: [{ unidade: 'APTO', de: ['2026-06-10', '0800'], ate: ['2026-06-15', '0700'] }],
+      trechos: [{ unidade: 'APTO', de: ['2026-06-10', '08:00'], ate: ['2026-06-15', '07:00'] }],
     },
   ]);
   const motor = new MotorInternacao(mov, { horaFechamento: 24, intensivas: [], agora: em('2026-07-02') });
@@ -41,15 +41,15 @@ describe('duas réguas de permanência', () => {
     const m = new MotorInternacao(
       movimento([
         {
-          entrada: ['2026-06-01', '1000'],
-          alta: ['2026-06-02', '1000'],
-          trechos: [{ unidade: 'ENF', de: ['2026-06-01', '1000'], ate: ['2026-06-02', '1000'] }],
+          entrada: ['2026-06-01', '10:00'],
+          alta: ['2026-06-02', '10:00'],
+          trechos: [{ unidade: 'ENF', de: ['2026-06-01', '10:00'], ate: ['2026-06-02', '10:00'] }],
         },
         {
-          entrada: ['2026-06-01', '1000'],
-          alta: ['2026-06-02', '1000'],
+          entrada: ['2026-06-01', '10:00'],
+          alta: ['2026-06-02', '10:00'],
           permanencia: 0,
-          trechos: [{ unidade: 'ENF', de: ['2026-06-01', '1000'], ate: ['2026-06-02', '1000'] }],
+          trechos: [{ unidade: 'ENF', de: ['2026-06-01', '10:00'], ate: ['2026-06-02', '10:00'] }],
         },
       ]),
       { horaFechamento: 24, intensivas: [], agora: em('2026-07-02') },
@@ -64,12 +64,12 @@ describe('duas réguas de permanência', () => {
 describe('M21: diárias faturáveis, Portaria 312 e reinternação', () => {
   it('a diária vence às 12h; o mesmo dia é 1', async () => {
     const { diariasFaturaveis, permanenciaPortaria312 } = await import('./adt.js');
-    expect(diariasFaturaveis('2026-06-01', '2026-06-01', '0900')).toBe(1);
-    expect(diariasFaturaveis('2026-06-01', '2026-06-01', '1800')).toBe(1);
-    expect(diariasFaturaveis('2026-06-01', '2026-06-04', '1159')).toBe(3);
-    expect(diariasFaturaveis('2026-06-01', '2026-06-04', '1200')).toBe(4);
+    expect(diariasFaturaveis('2026-06-01', '2026-06-01', '09:00')).toBe(1);
+    expect(diariasFaturaveis('2026-06-01', '2026-06-01', '18:00')).toBe(1);
+    expect(diariasFaturaveis('2026-06-01', '2026-06-04', '11:59')).toBe(3);
+    expect(diariasFaturaveis('2026-06-01', '2026-06-04', '12:00')).toBe(4);
     expect(diariasFaturaveis('2026-06-01', '2026-06-04', '930')).toBe(3);
-    expect(diariasFaturaveis('2026-06-04', '2026-06-01', '1500')).toBe(1);
+    expect(diariasFaturaveis('2026-06-04', '2026-06-01', '15:00')).toBe(1);
     expect(permanenciaPortaria312('2026-06-01', '2026-06-04')).toBe(3);
     expect(permanenciaPortaria312('2026-06-01', '2026-06-01')).toBe(1);
     expect(permanenciaPortaria312('2026-06-04', '2026-06-01')).toBe(0);

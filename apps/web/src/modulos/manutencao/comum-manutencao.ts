@@ -29,6 +29,7 @@ import {
   type SituacaoEquipamento,
   type TipoEquipamento,
   type TipoRecursoAgenda,
+  lerHoraDigitada,
 } from '@sgh/contratos';
 import type { z } from 'zod';
 
@@ -101,15 +102,21 @@ export const instanteBr = (i: string | null | undefined) =>
 
 /** Data (AAAA-MM-DD) e hora (HH:MM) dos campos num instante; incompleto é nulo. */
 export function juntarInstante(data: string | null, hora: string | null): string | null {
-  // O SanteHora entrega HHMM (4 dígitos, o modelo da hora legada); HH:MM também vale.
-  const h = hora && /^\d{4}$/.test(hora) ? `${hora.slice(0, 2)}:${hora.slice(2)}` : hora;
-  if (!data || !h || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^\d{2}:\d{2}$/.test(h)) return null;
+  // A hora digitada passa pelo auxiliar neutro (`lerHoraDigitada`: "8:30" e "0830" viram "08:30"); hora inválida não
+  // forma instante (o campo fica incompleto e a tela pede a correção).
+  let h: string | null;
+  try {
+    h = hora === null ? null : lerHoraDigitada(hora);
+  } catch {
+    return null;
+  }
+  if (!data || !h || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
   return `${data}T${h}`;
 }
 /** O instante separado nos dois campos. */
 export const separarInstante = (i: string | null) => ({
   data: i ? i.slice(0, 10) : null,
-  hora: i && i.length >= 16 ? `${i.slice(11, 13)}${i.slice(14, 16)}` : null,
+  hora: i && i.length >= 16 ? i.slice(11, 16) : null,
 });
 
 /** Minutos em texto curto: "45 min", "3 h 05 min", "2 dias 4 h". */

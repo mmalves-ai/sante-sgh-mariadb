@@ -145,30 +145,30 @@ describe('regra 4: sem versão nos dias de fechamento nem em feriado prolongado'
 describe('regra 9: códigos de baixa confiança da onda', () => {
   it('a lista cobre os códigos da ficha, com a DP de cada um', () => {
     expect(CODIGOS_BAIXA_CONFIANCA_ONDA_4.map((c) => c.coluna)).toEqual([
-      'MFCONPAG.STATUS',
-      'MFCONPAG.TP_PGTO',
-      'MFCTAREC.ORIGEM',
-      'MFLANCTO.TIPO_TRF',
-      'FCCTAEXT.TIPO_NOTA',
-      'FCCTAEXT.PACOTE',
-      'FCLANEXT.FPA',
-      'FCLANEXT.VEIO',
+      'contaPagar.situacao',
+      'contaPagar.formaPagamento',
+      'contaReceber.origem',
+      'movimentoBancario.tipoTransferencia',
+      'contaHospitalar.tipoNota',
+      'contaHospitalar.pacote',
+      'itemConta.fpa',
+      'itemConta.origemLancamento',
     ]);
   });
 
   it('recusa valor nunca visto e mostra "a confirmar" no visto', () => {
-    const ok = conferirCodigoOnda4('MFLANCTO.TIPO_TRF', 'I', ['', 'F', 'I', 'O']);
+    const ok = conferirCodigoOnda4('movimentoBancario.tipoTransferencia', 'I', ['', 'F', 'I', 'O']);
     expect(ok).toEqual({ aceito: true, legenda: 'I (a confirmar)', recusa: null });
-    const nao = conferirCodigoOnda4('MFLANCTO.TIPO_TRF', 'Z', ['', 'F', 'I', 'O']);
+    const nao = conferirCodigoOnda4('movimentoBancario.tipoTransferencia', 'Z', ['', 'F', 'I', 'O']);
     expect(nao.aceito).toBe(false);
     expect(nao.recusa?.codigo).toBe('codigo-nunca-visto');
     expect(nao.recusa?.mensagem).toContain('DP-46.4');
-    expect(conferirCodigoOnda4('MFCTAREC.ORIGEM', '', ['']).legenda).toBe('(a confirmar)');
+    expect(conferirCodigoOnda4('contaReceber.origem', '', ['']).legenda).toBe('(a confirmar)');
   });
 
   it('legenda confirmada substitui a de baixa confiança; coluna fora da lista segue a regra geral', () => {
-    expect(conferirCodigoOnda4('FCCTAEXT.PACOTE', 'P', ['P'], { P: 'Pacote' }).legenda).toBe('Pacote');
-    expect(conferirCodigoOnda4('FCCTAEXT.FECHADA', 'X', [])).toMatchObject({ aceito: true, recusa: null });
+    expect(conferirCodigoOnda4('contaHospitalar.pacote', 'P', ['P'], { P: 'Pacote' }).legenda).toBe('Pacote');
+    expect(conferirCodigoOnda4('contaHospitalar.situacao', 'X', [])).toMatchObject({ aceito: true, recusa: null });
   });
 });
 

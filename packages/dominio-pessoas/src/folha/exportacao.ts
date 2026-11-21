@@ -69,7 +69,7 @@ export interface EntradaLoteFolha {
   readonly afastamentos: readonly AfastamentoParaFolha[];
   /** O fechamento vigente por vínculo (ausente: período não fechado). */
   readonly fechamentos: ReadonlyMap<number, Readonly<Record<string, number>>>;
-  /** Os minutos por tipo de hora (POTPHORA) do mesmo fechamento, por vínculo (regra 5; informativo). */
+  /** Os minutos por tipo de hora da apuração do mesmo fechamento, por vínculo (regra 5; informativo). */
   readonly horas?: ReadonlyMap<number, Readonly<Record<string, number>>>;
   readonly plantoes: readonly PlantaoParaFolha[];
   readonly eventosDisponiveis: ReadonlySet<number>;

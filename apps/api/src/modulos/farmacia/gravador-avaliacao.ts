@@ -10,8 +10,10 @@
 // farmacêutico e o prescritor pelo vínculo profissional (não por login em texto) e a recusa exige a justificativa
 // também no banco (CHECK); a linha do cabeçalho e a da intervenção são relidas com trava (FOR UPDATE) e alteradas pela
 // versão relida (trava otimista).
-// Pendência (pedido do lote 02-06): a "pendência de revisão médica" não tem parecer no modelo (o CHECK do parecer só
-// tem aprovado, aprovado_com_ressalva, recusado e substituido); essa decisão recusa com 'modelo-pendente'.
+// Melhoria: a "pendência de revisão médica" é o parecer `revisao_medica` (com justificativa, CHECK do banco). Ela não
+// conta como decisão: o item volta a ser decidido depois da revisão do médico (a decisão altera a linha da pendência,
+// porque o par avaliação + item é único), e a avaliação só conclui quando todo item vigente tem um parecer final
+// (aprovado, com ressalva, recusado ou substituído).
 import {
   conferirDecisaoAvaliacao,
   conferirRespostaIntervencao,
@@ -38,13 +40,17 @@ export interface ExtrasGravacaoFarmacia {
   readonly eventos: EventoOperacao[];
 }
 
-/** A recusa das gravações que esperam o modelo ou o contrato (pedidos do lote 02-06). */
+/**
+ * A recusa das gravações da farmácia que ainda não têm a sua escrita no banco próprio (pedidos do lote 02-06 e da
+ * F2.4, em docs/obra/fatias/f24/saida/21-misto-farmacia.json): 409, nada gravado, com o código `modelo-pendente`
+ * (dívida contada pelo verificador da F2.4: a estrutura do banco existe, falta a escrita ou o contrato neutro).
+ */
 export function pendenteFarmacia(oQue: string): ErroOperacao {
   return new ErroOperacao(
     409,
     'modelo-pendente',
     'Gravação indisponível',
-    `${oQue} aguarda a estrutura própria no modelo do banco: nada foi gravado.`,
+    `${oQue} ainda não grava no banco próprio: nada foi gravado.`,
   );
 }
 
@@ -52,11 +58,11 @@ function recusar(r: RecusaSuprimentos | null | undefined): void {
   if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 }
 
-/** Decisão da tela → parecer do item no modelo (a pendência de revisão médica espera o modelo). */
-const PARECER_DA_DECISAO: Readonly<Record<DecisaoAvaliacao, string | null>> = {
+/** Decisão da tela → parecer do item no modelo. */
+const PARECER_DA_DECISAO: Readonly<Record<DecisaoAvaliacao, string>> = {
   valido: 'aprovado',
   'nao-aprovado': 'recusado',
-  'pendencia-revisao-medica': null,
+  'pendencia-revisao-medica': 'revisao_medica',
 };
 
 /** Tipo da intervenção da tela → categoria do cadastro (tipo_intervencao_farmaceutica), quando o código não bate. */
@@ -140,6 +146,7 @@ export function gravadorAvaliacao(
       `SELECT ai.id FROM avaliacao_farmaceutica_item ai
          JOIN avaliacao_farmaceutica a ON a.id = ai.avaliacao_farmaceutica_id
         WHERE ai.prescricao_item_id = ? AND a.estabelecimento_id = ? AND ai.excluido_em IS NULL AND a.excluido_em IS NULL
+          AND ai.parecer <> 'revisao_medica'
         LIMIT 1`,
       [item, est],
     ));
@@ -189,15 +196,33 @@ export function gravadorAvaliacao(
     justificativa: string | null,
     farmaceutico: number | null,
   ): Promise<number> => {
-    const id = await tx.incluir('avaliacao_farmaceutica_item', {
-      avaliacao_farmaceutica_id: c.id,
-      sequencia: await proximaSequencia('avaliacao_farmaceutica_item', c.id),
-      prescricao_item_id: i.id,
-      parecer,
-      justificativa,
-      liberador_profissional_id: farmaceutico,
-      avaliado_em: agora(),
-    });
+    // A pendência de revisão médica do item no mesmo cabeçalho (UNIQUE avaliação + item): a nova decisão altera essa
+    // linha (relida com trava, pela versão relida) em vez de incluir outra; a revisão fica na trilha da operação.
+    const [revisao] = await tx.consultarParaAtualizar<Linha>(
+      `SELECT id, versao FROM avaliacao_farmaceutica_item
+        WHERE avaliacao_farmaceutica_id = ? AND prescricao_item_id = ? AND parecer = 'revisao_medica'
+          AND excluido_em IS NULL`,
+      [c.id, i.id],
+    );
+    let id: number;
+    if (revisao) {
+      id = n(revisao['id']);
+      await tx.alterar('avaliacao_farmaceutica_item', id, n(revisao['versao']), {
+        parecer,
+        justificativa,
+        liberador_profissional_id: farmaceutico,
+        avaliado_em: agora(),
+      });
+    } else
+      id = await tx.incluir('avaliacao_farmaceutica_item', {
+        avaliacao_farmaceutica_id: c.id,
+        sequencia: await proximaSequencia('avaliacao_farmaceutica_item', c.id),
+        prescricao_item_id: i.id,
+        parecer,
+        justificativa,
+        liberador_profissional_id: farmaceutico,
+        avaliado_em: agora(),
+      });
     if (c.situacao === 'pendente') {
       c.versao = await tx.alterar('avaliacao_farmaceutica', c.id, c.versao, {
         situacao: 'em_avaliacao',
@@ -212,10 +237,18 @@ export function gravadorAvaliacao(
           AND NOT EXISTS (SELECT 1 FROM avaliacao_farmaceutica_item ai
                             JOIN avaliacao_farmaceutica a ON a.id = ai.avaliacao_farmaceutica_id
                            WHERE ai.prescricao_item_id = pi.id AND a.estabelecimento_id = ?
+                             AND ai.parecer <> 'revisao_medica'
                              AND ai.excluido_em IS NULL AND a.excluido_em IS NULL)`,
       [i.prescricao, est],
     );
-    if (n(falta?.['n']) === 0 && farmaceutico !== null) {
+    // Uma pendência de revisão médica no cabeçalho o mantém em avaliação (mesmo de item que deixou de ser vigente): a
+    // decisão final altera a linha da pendência neste mesmo cabeçalho.
+    const revisoes = await tx.uma<Linha>(
+      `SELECT COUNT(*) AS n FROM avaliacao_farmaceutica_item
+        WHERE avaliacao_farmaceutica_id = ? AND parecer = 'revisao_medica' AND excluido_em IS NULL`,
+      [c.id],
+    );
+    if (n(falta?.['n']) === 0 && n(revisoes?.['n']) === 0 && farmaceutico !== null) {
       const r = await tx.uma<Linha>(
         `SELECT SUM(ai.parecer = 'recusado') AS recusados,
                 SUM(ai.parecer IN ('aprovado_com_ressalva','substituido')) AS ressalvas,
@@ -269,7 +302,6 @@ export function gravadorAvaliacao(
         }),
       );
       const parecer = PARECER_DA_DECISAO[d.decisao];
-      if (parecer === null) throw pendenteFarmacia('A pendência de revisão médica');
       const farmaceutico = await profissionalDe(usuario);
       const { c } = await garantirCabecalho(i);
       const id = await registrarParecer(i, c, parecer, d.justificativa.trim() || null, farmaceutico);

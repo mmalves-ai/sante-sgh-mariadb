@@ -6,25 +6,36 @@
 // Melhoria: horas no fuso do estabelecimento (estabelecimento.fuso_horario), não no relógio do servidor; estado do
 // horário pela situação do horário e da marcação, sem letras de situação; "ocupado sem marcação" vira conferência
 // de consistência do próprio banco (o resíduo "confirmado sem paciente" não existe no modelo: CHECK da marcação).
-// Pendências de modelo (pedidos do lote 01-05): cobertura por exame (agenda_servico_exame), feriados (feriado) e o
-// solicitante externo da marcação; até lá a cobertura lê vazia (a agenda faz todos os exames) e grava com recusa.
+// Cobertura por exame (agenda_servico_exame) lida e gravada pelo Executor, com a trilha na mesma transação; feriados
+// do calendário do cliente (feriado: nacionais, da UF e do município do estabelecimento e os do próprio
+// estabelecimento). Pendência: o solicitante externo da marcação (pedido do lote 01-05).
+import { randomUUID } from 'node:crypto';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
-  ErroOperacao,
+  definirOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
   recusa,
+  type ResultadoOperacao,
+  type TxOperacao,
 } from '@sgh/nucleo';
-import { type ContextoPortaM18, type LiberacaoGravacao, portaIndisponivel } from './apoio-gravacao.js';
+import { z } from 'zod';
+import {
+  type ContextoPortaM18,
+  type LiberacaoGravacao,
+  portaIndisponivel,
+  type TrilhaDaGravacao,
+} from './apoio-gravacao.js';
 import { OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
 import { OPERACOES_EXAME } from './operacoes.js';
 import { type GravadorCoberturaExame, METODOS_PORTA_EXAME, type PortaExame } from './porta.js';
-import { civil, FUSO_PADRAO, hhmmDeMinutos, instanteCivil, relogioNoFuso } from './relogio.js';
+import { FUSO_PADRAO, horaCivil, horaDeMinutos, instanteCivil, relogioDoEstabelecimento } from './relogio.js';
 import {
   type AgendaExame,
   type CancelamentoExame,
+  type CoberturaExame,
   type ContatoMarcacaoExame,
   type ExtensaoExame,
   type GeracaoGrade,
@@ -49,8 +60,8 @@ const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 /** DATE do banco (meia-noite UTC) → "AAAA-MM-DD". */
 const dataIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
-/** TIME do banco ("HH:MM:SS") → "HHMM". */
-const hhmmDoTempo = (v: unknown) => texto(v).replace(':', '').slice(0, 4).padStart(4, '0');
+/** TIME do banco ("HH:MM:SS") → hora do dia "HH:MM". */
+const horaDoTempo = (v: unknown) => texto(v).padStart(8, '0').slice(0, 5);
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 
 /** Modalidade da agenda no vocabulário da tela; o modelo ainda não a registra (pendência: "O" = outros). */
@@ -160,23 +171,42 @@ export class PortaExamePropria implements PortaExame {
     return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
 
-  /** Cobertura por exame: o modelo ainda não tem a tabela (pedido de DDL agenda_servico_exame). */
-  async gravarSgh<T>(c: ContextoPortaM18, t: unknown, fn: (g: GravadorCoberturaExame) => Promise<T>): Promise<T> {
-    void c;
-    void t;
-    void fn;
-    throw new ErroOperacao(
-      409,
-      'modelo-pendente',
-      'Cobertura por exame indisponível',
-      'A cobertura por exame da agenda aguarda a tabela no modelo do banco: por enquanto a agenda faz todos os exames do catálogo.',
-    );
+  /**
+   * Cobertura por exame (agenda_servico_exame) pelo Executor, com a linha da trilha na mesma transação. A agenda tem
+   * de ser de exame e do estabelecimento da sessão; retirar é exclusão lógica e incluir de novo reativa a linha (a
+   * chave única agenda + exame + fonte pagadora vale também para as excluídas).
+   */
+  async gravarSgh<T>(
+    c: ContextoPortaM18,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorCoberturaExame) => Promise<T>,
+  ): Promise<T> {
+    const est = c.estabelecimento;
+    if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    let saida: { valor: T } | null = null;
+    const escrita: { id: number | null } = { id: null };
+    const linha = () => (typeof trilha === 'function' ? (saida ? trilha(saida.valor) : null) : trilha);
+    const op = definirOperacao({
+      nome: 'agenda.cobertura_exame',
+      tabelas: ['agenda_servico_exame'],
+      entrada: z.object({ chave: z.string() }),
+      async gravar(tx) {
+        saida = { valor: await fn(gravadorCobertura(tx, est, escrita)) };
+        return { valor: saida.valor === undefined ? null : saida.valor } as unknown as ResultadoOperacao;
+      },
+      alvo: () => ({ tabela: 'agenda_servico_exame', id: escrita.id ?? linha()?.entidadeId ?? null }),
+      trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
+    });
+    const chave = `exame.cobertura:${randomUUID()}`;
+    await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    if (!saida) throw new Error('Gravação da cobertura sem resultado.');
+    return (saida as { valor: T }).valor;
   }
 
   // ── Leituras ──────────────────────────────────────────────────────────────────────────────────────────────
 
   relogio(c: ContextoPortaM18) {
-    return this.ler(c, async (l, est) => relogioNoFuso(await this.fuso(l, est)));
+    return this.ler(c, async (l, est) => relogioDoEstabelecimento(await this.fuso(l, est)));
   }
 
   agendas(c: ContextoPortaM18): Promise<AgendaExame[]> {
@@ -211,7 +241,7 @@ export class PortaExamePropria implements PortaExame {
   escala(c: ContextoPortaM18, agenda: number, periodo?: { de: string; ate: string }) {
     return this.ler(c, async (l, est) => {
       // Sem período: as faixas vigentes hoje (no fuso do estabelecimento); com período: as que valem em algum dia.
-      const hoje = civil(new Date(), await this.fuso(l, est)).data;
+      const hoje = horaCivil(new Date(), await this.fuso(l, est)).data;
       const de = periodo?.de ?? hoje;
       const ate = periodo?.ate ?? hoje;
       const linhas = await l.consultar(
@@ -226,12 +256,12 @@ export class PortaExamePropria implements PortaExame {
       );
       return linhas.map((r) => ({
         semana: n(r['dia_semana']),
-        duracao: hhmmDeMinutos(n(r['duracao'])),
-        horaInicio: hhmmDoTempo(r['hora_inicio']),
-        horaFim: hhmmDoTempo(r['hora_fim']),
+        duracao: horaDeMinutos(n(r['duracao'])),
+        horaInicio: horaDoTempo(r['hora_inicio']),
+        horaFim: horaDoTempo(r['hora_fim']),
         exame: MODALIDADE_PADRAO,
-        intervaloInicio: r['intervalo_inicio'] === null ? null : hhmmDoTempo(r['intervalo_inicio']),
-        intervaloFim: r['intervalo_fim'] === null ? null : hhmmDoTempo(r['intervalo_fim']),
+        intervaloInicio: r['intervalo_inicio'] === null ? null : horaDoTempo(r['intervalo_inicio']),
+        intervaloFim: r['intervalo_fim'] === null ? null : horaDoTempo(r['intervalo_fim']),
         vagas: Math.max(1, n(r['vagas_por_horario'])),
         atendeFeriado: verdadeiro(r['atende_feriado']),
         vigenciaInicio: dataIso(r['vigencia_inicio']) ?? de,
@@ -254,14 +284,14 @@ export class PortaExamePropria implements PortaExame {
         [agenda, est],
       );
       return linhas.map((r) => {
-        const em = civil(r['solicitada_em'] as Date, fuso);
+        const em = horaCivil(r['solicitada_em'] as Date, fuso);
         return {
           situacao: SITUACAO_GERACAO[texto(r['situacao'])] ?? 'pendente',
           inicio: dataIso(r['periodo_inicio']) ?? '',
           fim: dataIso(r['periodo_fim']) ?? '',
           em: em.data,
-          hora: em.hhmm,
-          duracao: r['duracao_horario_minutos'] === null ? '' : hhmmDeMinutos(n(r['duracao_horario_minutos'])),
+          hora: em.hora,
+          duracao: r['duracao_horario_minutos'] === null ? '' : horaDeMinutos(n(r['duracao_horario_minutos'])),
           dias: texto(r['dias'])
             .split(',')
             .filter(Boolean)
@@ -273,14 +303,29 @@ export class PortaExamePropria implements PortaExame {
   }
 
   /**
-   * Feriados: o modelo ainda não tem o calendário de feriados (pedido de DDL `feriado`). null = não conferidos: a
-   * prévia avisa em vez de gerar em silêncio como se não houvesse feriado.
+   * Feriados do período que valem no estabelecimento (calendário do cliente): os nacionais, os estaduais da UF do
+   * município do endereço, os municipais desse município e os do próprio estabelecimento, ativos e não excluídos. O
+   * ponto facultativo fica de fora (não é feriado legal; a agenda o trata como dia útil, como o restante do produto).
    */
-  async feriados(c?: ContextoPortaM18, de?: string, ate?: string): Promise<{ data: string; nome: string }[] | null> {
-    void c;
-    void de;
-    void ate;
-    return null;
+  feriados(c: ContextoPortaM18, de: string, ate: string): Promise<{ data: string; nome: string }[] | null> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT f.data, f.nome FROM feriado f
+             JOIN estabelecimento e ON e.id = ?
+             LEFT JOIN municipio_ibge m ON m.id = e.municipio_ibge_id
+             LEFT JOIN unidade_federativa uf ON uf.id = m.unidade_federativa_id
+            WHERE f.data BETWEEN ? AND ? AND f.ativo = TRUE AND f.excluido_em IS NULL AND f.ponto_facultativo = FALSE
+              AND (f.abrangencia = 'nacional'
+                   OR (f.abrangencia = 'estadual' AND f.uf = uf.sigla)
+                   OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = e.municipio_ibge_id)
+                   OR (f.abrangencia = 'estabelecimento' AND f.estabelecimento_id = e.id))
+            ORDER BY f.data, f.id`,
+          [est, de, ate],
+          { teto: 1000 },
+        )
+      ).map((r) => ({ data: dataIso(r['data']) ?? '', nome: texto(r['nome']) })),
+    );
   }
 
   /** Inícios já usados (regular ou extra, posição 0 da chave única), sem teto; excluídos ficam de fora (reativáveis). */
@@ -296,7 +341,7 @@ export class PortaExamePropria implements PortaExame {
         [agenda, est, de, ate],
         { teto: 200_000 },
       );
-      return linhas.map((r) => `${dataIso(r['data_referencia']) ?? ''} ${civil(r['inicio_em'] as Date, fuso).hhmm}`);
+      return linhas.map((r) => `${dataIso(r['data_referencia']) ?? ''} ${horaCivil(r['inicio_em'] as Date, fuso).hora}`);
     });
   }
 
@@ -323,7 +368,7 @@ export class PortaExamePropria implements PortaExame {
       );
       const itens: HorarioExame[] = linhas.slice(0, TETO_HORARIOS_EXAME).map((r) => ({
         data: dataIso(r['data_referencia']) ?? '',
-        hora: civil(r['inicio_em'] as Date, fuso).hhmm,
+        hora: horaCivil(r['inicio_em'] as Date, fuso).hora,
         exame: MODALIDADE_PADRAO,
         estado: estadoDoHorario(r),
         paciente: r['paciente'] === null ? null : texto(r['paciente']),
@@ -359,7 +404,7 @@ export class PortaExamePropria implements PortaExame {
           nomeAgenda: texto(r['nome']),
           categoria: n(r['categoria_agenda_id']),
           data: dataIso(r['data_referencia']) ?? '',
-          hora: civil(r['inicio_em'] as Date, fuso).hhmm,
+          hora: horaCivil(r['inicio_em'] as Date, fuso).hora,
           exame: MODALIDADE_PADRAO,
         })),
       };
@@ -411,8 +456,8 @@ export class PortaExamePropria implements PortaExame {
     return this.ler(c, async (l, est) => {
       if (f.agendas && f.agendas.length === 0) return { itens: [] as CancelamentoExame[], total: 0 };
       const fuso = await this.fuso(l, est);
-      const ini = instanteCivil(f.de, '0000', fuso);
-      const fim = new Date(instanteCivil(f.ate, '0000', fuso).getTime() + 86_400_000);
+      const ini = instanteCivil(f.de, '00:00', fuso);
+      const fim = new Date(instanteCivil(f.ate, '00:00', fuso).getTime() + 86_400_000);
       const filtro = f.agendas ? `AND a.id IN (${lista(f.agendas.length)})` : '';
       const base = `
           FROM cancelamento_marcacao cm
@@ -441,16 +486,16 @@ export class PortaExamePropria implements PortaExame {
         p,
       );
       const itens = linhas.map((r) => {
-        const quando = civil(r['cancelado_em'] as Date, fuso);
+        const quando = horaCivil(r['cancelado_em'] as Date, fuso);
         const complemento = texto(r['complemento']);
         return {
           nomeAgenda: texto(r['nome_agenda']),
           data: dataIso(r['data_referencia']) ?? '',
-          hora: civil(r['inicio_em'] as Date, fuso).hhmm,
+          hora: horaCivil(r['inicio_em'] as Date, fuso).hora,
           paciente: texto(r['paciente']),
           motivo: complemento ? `${texto(r['motivo'])}: ${complemento}` : texto(r['motivo']),
           canceladoEm: quando.data,
-          horaCancelamento: quando.hhmm,
+          horaCancelamento: quando.hora,
           canceladoPor: texto(r['cancelado_por']),
           marcadoPor: texto(r['marcado_por']),
           convenio: n(r['fonte_pagadora_id']),
@@ -495,7 +540,7 @@ export class PortaExamePropria implements PortaExame {
         horarios: linhas.slice(0, teto).map((r) => ({
           nomeAgenda: texto(r['nome']),
           data: dataIso(r['data_referencia']) ?? '',
-          hora: civil(r['inicio_em'] as Date, fuso).hhmm,
+          hora: horaCivil(r['inicio_em'] as Date, fuso).hora,
           tipo: 'sem-marcacao' as const,
         })),
         truncado: linhas.length > teto,
@@ -550,10 +595,84 @@ export class PortaExamePropria implements PortaExame {
     });
   }
 
-  /** Cobertura por exame: sem a tabela no modelo, nenhuma linha (a agenda faz todos os exames). */
-  async cobertura() {
-    return [];
+  /** Cobertura por exame das agendas do estabelecimento (sem linha: a agenda faz todos os exames do catálogo). */
+  cobertura(c: ContextoPortaM18, agenda: number | null): Promise<CoberturaExame[]> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT x.id, x.agenda_servico_id, x.exame_id, e.nome AS exame_nome, x.fonte_pagadora_id,
+                  f.nome AS fonte_nome
+             FROM agenda_servico_exame x
+             JOIN agenda_servico a ON a.id = x.agenda_servico_id
+             JOIN exame e ON e.id = x.exame_id
+             LEFT JOIN fonte_pagadora f ON f.id = x.fonte_pagadora_id
+            WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND x.excluido_em IS NULL
+              ${agenda === null ? '' : 'AND x.agenda_servico_id = ?'}
+            ORDER BY x.agenda_servico_id, e.nome, x.id`,
+          agenda === null ? [est] : [est, agenda],
+          { teto: 20_000 },
+        )
+      ).map((r) => ({
+        id: n(r['id']),
+        agenda: n(r['agenda_servico_id']),
+        exame: n(r['exame_id']),
+        exameNome: texto(r['exame_nome']),
+        convenio: nn(r['fonte_pagadora_id']),
+        convenioNome: r['fonte_nome'] === null || r['fonte_nome'] === undefined ? null : texto(r['fonte_nome']),
+      })),
+    );
   }
+}
+
+/** O gravador da cobertura por exame dentro da transação do Executor (só agenda de exame do estabelecimento). */
+function gravadorCobertura(tx: TxOperacao, est: number, escrita: { id: number | null }): GravadorCoberturaExame {
+  const exigirAgenda = async (agenda: number) => {
+    const a = await tx.uma(
+      `SELECT a.id FROM agenda_servico a JOIN categoria_agenda ca ON ca.id = a.categoria_agenda_id
+        WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL AND ca.natureza = 'exame'`,
+      [agenda, est],
+    );
+    if (!a) throw recusa('agenda-desconhecida', 'A agenda de exames não existe neste estabelecimento.');
+  };
+  const linhaDa = (r: { agenda: number; exame: number; convenio: number | null }) =>
+    tx.consultarParaAtualizar(
+      `SELECT id, versao, excluido_em FROM agenda_servico_exame
+        WHERE agenda_servico_id = ? AND exame_id = ? AND fonte_pagadora_chave = ?`,
+      [r.agenda, r.exame, r.convenio ?? 0],
+    );
+  return {
+    async incluirCobertura(r) {
+      await exigirAgenda(r.agenda);
+      const [atual] = await linhaDa(r);
+      if (atual && atual['excluido_em'] === null) throw recusa('ja-coberto', 'Esta cobertura já está na agenda.');
+      if (atual) {
+        await tx.alterar('agenda_servico_exame', n(atual['id']), n(atual['versao']), {
+          excluido_em: null,
+          excluido_por: null,
+        });
+        escrita.id = n(atual['id']);
+        return escrita.id;
+      }
+      escrita.id = await tx.incluir('agenda_servico_exame', {
+        agenda_servico_id: r.agenda,
+        exame_id: r.exame,
+        fonte_pagadora_id: r.convenio,
+      });
+      return escrita.id;
+    },
+    async encerrarCobertura(r) {
+      await exigirAgenda(r.agenda);
+      const [atual] = await linhaDa(r);
+      if (!atual || atual['excluido_em'] !== null) return 0;
+      // Exclusão lógica (a linha fica para a trilha e é reativada se o exame voltar à cobertura).
+      await tx.alterar('agenda_servico_exame', n(atual['id']), n(atual['versao']), {
+        excluido_em: new Date(),
+        excluido_por: tx.contexto.usuario,
+      });
+      escrita.id = n(atual['id']);
+      return 1;
+    },
+  };
 }
 
 function contextoDe(c: ContextoPortaM18): ContextoNucleo {
@@ -573,7 +692,7 @@ function agendaDe(r: Linha): AgendaExame {
     crm: 0,
     exame: MODALIDADE_PADRAO,
     categoria: n(r['categoria_agenda_id']),
-    duracao: hhmmDeMinutos(n(r['duracao_horario_minutos'])),
+    duracao: horaDeMinutos(n(r['duracao_horario_minutos'])),
     ativa: verdadeiro(r['ativo']),
     unidade: n(r['unidade_assistencial_id']),
     inicio: dataIso(r['inicio']),
@@ -590,7 +709,7 @@ function marcacaoDe(r: Linha, fuso: string): MarcacaoExame {
     nomeAgenda: texto(r['nome_agenda']),
     categoriaAgenda: n(r['categoria_agenda_id']),
     data: dataIso(r['data_referencia']) ?? '',
-    hora: civil(r['inicio_em'] as Date, fuso).hhmm,
+    hora: horaCivil(r['inicio_em'] as Date, fuso).hora,
     paciente: texto(r['paciente']),
     idPaciente: nn(r['paciente_id']),
     prontuario: n(r['numero_prontuario']),
@@ -599,7 +718,7 @@ function marcacaoDe(r: Linha, fuso: string): MarcacaoExame {
     situacao: significado,
     atendido: r['atendido_em'] !== null || significado === 'realizada',
     usuario: texto(r['usuario']),
-    marcadaEm: r['marcado_em'] instanceof Date ? civil(r['marcado_em'], fuso).data : '',
+    marcadaEm: r['marcado_em'] instanceof Date ? horaCivil(r['marcado_em'], fuso).data : '',
     temSenha: r['chegada_em'] !== null,
   };
 }

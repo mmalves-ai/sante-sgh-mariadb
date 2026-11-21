@@ -29,7 +29,8 @@ export const PASTA_DDL = 'db/migracoes';
 export const PASTA_ARTEFATOS = 'infra/mariadb/privilegios';
 export const NOME_PASSO_PAPEIS = '0001_papeis_por_modulo';
 export const caminhoAlcance = () => `${PASTA_ARTEFATOS}/alcance.json`;
-export const caminhoScript = (lado: 'aplicar' | 'recolher') => `${PASTA_ARTEFATOS}/${NOME_PASSO_PAPEIS}.${lado}.sql`;
+export const caminhoScript = (lado: 'aplicar' | 'recolher') =>
+  `${PASTA_ARTEFATOS}/${NOME_PASSO_PAPEIS}.${lado}.sql`;
 /** Pasta dos scripts de privilégio (a mesma para todo cliente; o código de hospital antigo é ignorado). */
 export const caminhoScripts = () => PASTA_ARTEFATOS;
 
@@ -94,7 +95,9 @@ export function lerModelo(raiz = RAIZ): ModeloBanco {
   const ddl = resolve(raiz, PASTA_DDL);
   for (const f of arquivos(ddl, /\.sql$/)) {
     const pasta = relative(ddl, f).split(/[\\/]/)[0] ?? '';
-    const partes = readFileSync(f, 'utf8').split(/\bCREATE TABLE\s+(?:IF NOT EXISTS\s+)?/i).slice(1);
+    const partes = readFileSync(f, 'utf8')
+      .split(/\bCREATE TABLE\s+(?:IF NOT EXISTS\s+)?/i)
+      .slice(1);
     for (const p of partes) {
       const m = /^`?([a-z][a-z0-9_]*)`?\s*\(/.exec(p);
       if (!m?.[1]) continue;
@@ -109,7 +112,9 @@ export function lerModelo(raiz = RAIZ): ModeloBanco {
 
 /** Remove comentários preservando o comprimento das linhas (o número da linha do uso dinâmico continua certo). */
 const semComentarios = (t: string) =>
-  t.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' ')).replace(/^\s*\/\/.*$/gm, (c) => ' '.repeat(c.length));
+  t
+    .replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' '))
+    .replace(/^\s*\/\/.*$/gm, (c) => ' '.repeat(c.length));
 
 /** Constante resolvida: um texto (nome de tabela ou trecho de SQL) ou uma lista de nomes. */
 export type ValorConstante = string | readonly string[];
@@ -118,7 +123,10 @@ export type Constantes = ReadonlyMap<string, ValorConstante>;
 const ELEMENTO = /\.\.\.\s*([A-Za-z_$][\w$]*)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
 
 /** As constantes de nível de arquivo (string, template sem expressão não resolvida e lista de nomes). */
-export function lerConstantes(textos: readonly string[], base: Constantes = new Map()): Map<string, ValorConstante> {
+export function lerConstantes(
+  textos: readonly string[],
+  base: Constantes = new Map(),
+): Map<string, ValorConstante> {
   const brutos = new Map<string, { tipo: 'texto' | 'lista'; corpo: string }>();
   for (const bruto of textos) {
     const t = semComentarios(bruto);
@@ -270,13 +278,20 @@ export function analisarTexto(
   for (const m of t.matchAll(/(\b[A-Za-z_$][\w$]*)?\.?\b(incluir|alterar|excluir)\(\s*([^,()]+?)\s*,/g)) {
     const [, recebedor, metodo, expr] = m;
     const acaoDe = (n: string): Acao =>
-      metodo === 'incluir' ? 'INSERT' : metodo === 'alterar' ? 'UPDATE' : modelo.exclusaoLogica.has(n) ? 'UPDATE' : 'DELETE';
+      metodo === 'incluir'
+        ? 'INSERT'
+        : metodo === 'alterar'
+          ? 'UPDATE'
+          : modelo.exclusaoLogica.has(n)
+            ? 'UPDATE'
+            : 'DELETE';
     const v = valor(expr!);
     if (typeof v === 'string') {
       if (/^['"`]/.test(expr!.trim())) anotar(u, v, acaoDe(v), modelo);
       else declarar(v, acaoDe(v));
     } else if ([...expr!.matchAll(/'([a-z][a-z0-9_]*)'/g)].some((x) => modelo.tabelas.has(x[1]!))) {
-      for (const x of expr!.matchAll(/'([a-z][a-z0-9_]*)'/g)) if (modelo.tabelas.has(x[1]!)) anotar(u, x[1]!, acaoDe(x[1]!), modelo);
+      for (const x of expr!.matchAll(/'([a-z][a-z0-9_]*)'/g))
+        if (modelo.tabelas.has(x[1]!)) anotar(u, x[1]!, acaoDe(x[1]!), modelo);
     } else if (recebedor === 'tx')
       dinamicos.push({
         onde: linhaDe(naOrigem(m.index!)),
@@ -294,7 +309,11 @@ export function analisarTexto(
     const nomes: string[] = [];
     const naoResolvidos: string[] = [];
     if (corpo.startsWith('[')) {
-      for (const e of corpo.slice(1, -1).matchAll(/\.\.\.\s*(?:new Set\(\[\s*\.\.\.\s*)?([^,\]\s]+)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$.]*)/g)) {
+      for (const e of corpo
+        .slice(1, -1)
+        .matchAll(
+          /\.\.\.\s*(?:new Set\(\[\s*\.\.\.\s*)?([^,\]\s]+)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$.]*)/g,
+        )) {
         if (e[1]) {
           const r = constantes.get(e[1].trim());
           if (Array.isArray(r)) nomes.push(...(r as string[]));
@@ -314,7 +333,9 @@ export function analisarTexto(
     }
     // Literais dentro de expressão não resolvida (ex.: `x ? 'a' : 'b'`) contam como as tabelas possíveis.
     for (let i = naoResolvidos.length - 1; i >= 0; i--) {
-      const lits = [...naoResolvidos[i]!.matchAll(/'([a-z][a-z0-9_]*)'/g)].map((x) => x[1]!).filter((x) => modelo.tabelas.has(x));
+      const lits = [...naoResolvidos[i]!.matchAll(/'([a-z][a-z0-9_]*)'/g)]
+        .map((x) => x[1]!)
+        .filter((x) => modelo.tabelas.has(x));
       if (lits.length > 0) {
         nomes.push(...lits);
         naoResolvidos.splice(i, 1);
@@ -411,24 +432,32 @@ export function calcularAlcances(e: EntradaAlcance): {
     if (m.dinamicos.length > 0) {
       if (m.catalogo.length === 0)
         for (const d of m.dinamicos)
-          motivos.push(`${modulo}: nome de tabela dinâmico sem catálogo (${d.acao} em \${${d.expressao}} em ${d.onde})`);
+          motivos.push(
+            `${modulo}: nome de tabela dinâmico sem catálogo (${d.acao} em \${${d.expressao}} em ${d.onde})`,
+          );
       else
         for (const d of m.dinamicos)
           for (const t of m.catalogo) {
             if (SO_INCLUSAO.includes(t) && d.acao !== 'SELECT' && d.acao !== 'INSERT') {
-              descartes.push(`${modulo}: ${d.acao} dinâmico em ${t} (tabela só de inclusão; o catálogo do módulo só a lê)`);
+              descartes.push(
+                `${modulo}: ${d.acao} dinâmico em ${t} (tabela só de inclusão; o catálogo do módulo só a lê)`,
+              );
               continue;
             }
             // tx.excluir em tabela de exclusão lógica é UPDATE (o Executor marca excluido_em).
-            const acao: Acao = d.acao === 'DELETE' && d.porExecutor && e.modelo.exclusaoLogica.has(t) ? 'UPDATE' : d.acao;
+            const acao: Acao =
+              d.acao === 'DELETE' && d.porExecutor && e.modelo.exclusaoLogica.has(t) ? 'UPDATE' : d.acao;
             const a = (uso[t] ??= []);
             if (!a.includes(acao)) a.push(acao);
             if (!a.includes('SELECT')) a.push('SELECT');
           }
     }
-    for (const t of m.foraDoModelo ?? []) avisos.push(`${modulo}: ${t} declarada ao Executor e ausente do DDL`);
+    for (const t of m.foraDoModelo ?? [])
+      avisos.push(`${modulo}: ${t} declarada ao Executor e ausente do DDL`);
     if (Object.keys(uso).length === 0) {
-      avisos.push(`${modulo}: nenhum uso de tabela encontrado (sem papel; confira se o módulo grava pelo núcleo)`);
+      avisos.push(
+        `${modulo}: nenhum uso de tabela encontrado (sem papel; confira se o módulo grava pelo núcleo)`,
+      );
       continue;
     }
     const objetos: Record<string, Acao[]> = {};
@@ -497,14 +526,20 @@ export function entradaDoRepositorio(raiz = RAIZ): EntradaAlcance {
     fs.forEach((f, i) => {
       // A constante do próprio arquivo vale sobre a de outro arquivo do módulo com o mesmo nome.
       const r = analisarTexto(textos[i]!, modelo, lerConstantes([textos[i]!], constantes), relative(raiz, f));
-      for (const [t, a] of Object.entries(r.uso)) for (const x of a) if (!(uso[t] ??= []).includes(x)) uso[t]!.push(x);
+      for (const [t, a] of Object.entries(r.uso))
+        for (const x of a) if (!(uso[t] ??= []).includes(x)) uso[t]!.push(x);
       dinamicos.push(...r.dinamicos);
       for (const x of r.foraDoModelo) fora.add(x);
     });
     const catalogo = new Set(catalogoDoTexto(textos.join('\n'), modelo));
     for (const ext of CATALOGOS_EXTERNOS[m] ?? [])
       for (const t of catalogoDoTexto(readFileSync(resolve(raiz, ext), 'utf8'), modelo)) catalogo.add(t);
-    modulos[m] = { uso: ordenarAcoes(uso), dinamicos, catalogo: [...catalogo].sort(), foraDoModelo: [...fora].sort() };
+    modulos[m] = {
+      uso: ordenarAcoes(uso),
+      dinamicos,
+      catalogo: [...catalogo].sort(),
+      foraDoModelo: [...fora].sort(),
+    };
   }
   return { modulos, comum, modelo };
 }
@@ -522,7 +557,10 @@ export interface Artefatos {
 }
 
 /** Os scripts dos papéis (texto exato: o teste compara byte a byte). Puro. */
-export function gerarScriptsPapeis(alcances: readonly AlcanceModulo[], versao: string): { aplicar: string; recolher: string } {
+export function gerarScriptsPapeis(
+  alcances: readonly AlcanceModulo[],
+  versao: string,
+): { aplicar: string; recolher: string } {
   const cabeca = (lado: string) => [
     `-- ${NOME_PASSO_PAPEIS}.${lado} (alcance ${versao}). Gerado por pnpm privilegios:gerar; não edite à mão.`,
     '-- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.',
