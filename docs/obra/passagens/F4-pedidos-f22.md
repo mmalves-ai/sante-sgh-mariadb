@@ -90,3 +90,42 @@ Lista por pedido em `docs/obra/fatias/f4/saida/aplicados-r4.md`. O que a API pre
 - L8-08 (12): domínio do tipo de prestador SUS: decisão de catálogo
 - L8-08 (15): autorizador e órgão gestor SUS: desenho (F2.2)
 - L8-15 (10): foto da pessoa: armazenamento de arquivos do produto
+
+## Rodada 5 (2026-11-21): modelo da continuidade (ADR 0006) para a trilha F2.2 e a API
+
+Lotes `40_` (faixa do F4, para não colidir com a numeração da pasta principal), sem gatilho, FKs RESTRICT.
+
+### Rascunho clínico: regra de domínio "rascunho só o autor finaliza ou apaga, com trilha"
+- Evolução em rascunho: `registro_assistencial_rascunho` (já existia, `situacao = 'aberto'`). Novas colunas:
+  `iniciado_em` (data ORIGINAL em que o autor abriu; na migração, a da origem, nunca a da carga), `imagem_anotada`
+  (JSON), `encerrado_por_profissional_id` e `encerrado_por_usuario_id`. `autor_usuario_id` aceita nulo só com
+  `origem = 'migracao'` (o autor é o profissional; a API resolve o usuário dele no primeiro acesso).
+- Alergia em rascunho: `alergia_paciente.situacao_registro` (`rascunho`, `confirmado` padrão, `descartado`), com
+  `registro_assistencial_rascunho_id` (o rascunho de evolução em que está sendo informada), `rascunho_autor_usuario_id`,
+  `encerrado_em`, `encerrado_por_profissional_id`. O autor é `registrado_profissional_id`; a data original é
+  `registrado_em`.
+- CHECK no banco (integridade): quem encerra é o autor (`encerrado_por_profissional_id` igual ao autor quando
+  preenchido); rascunho de alergia exige autor; descartado exige `encerrado_em`.
+- A API DEVE: (1) listar o rascunho só para o autor (e para o administrador da plataforma, ADR 0002); (2) finalizar
+  ou descartar só pelo autor, preenchendo `encerrado_por_*` e `encerrado_em`, gravando a `trilha_auditoria`
+  (`alteracao` na finalização com `motivo = 'finalizacao_rascunho'`, `exclusao` no descarte com `dados_antes`);
+  apagar = descartar (lógico, nunca DELETE); (3) nunca mostrar rascunho como registro finalizado: alerta de alergia,
+  lista de alergias, prescrição e interação leem só `situacao_registro = 'confirmado'`; (4) a finalização de um
+  rascunho de evolução confirma junto as alergias ligadas a ele (`registro_assistencial_rascunho_id`).
+
+### Item do hospital ao lado do catálogo oficial
+- `termo_terminologia` (CID-10, TUSS e termos TISS), `procedimento_sigtap`, `ocupacao_cbo`, `municipio_ibge`, `banco`,
+  `cfop`, `codigo_fiscal_oficial`, `codigo_esocial`: colunas `item_hospital`, `motivo_item_hospital` (`versao_antiga`,
+  `codigo_local`), `descricao_hospital` (personalização: o nome que o hospital usa; a oficial não muda) e
+  `mantido_ativo_hospital` (código oficial revogado que o hospital segue usando). Os CHECKs de formato do código
+  (SIGTAP, IBGE, COMPE/ISPB, CFOP) valem só para o item oficial.
+- Telas de busca: item ativo para o hospital = `ativo OR mantido_ativo_hospital OR item_hospital`; mostrar
+  `COALESCE(descricao_hospital, descricao)` e um selo "próprio do hospital" no item do hospital.
+- O princípio ativo já tinha o desenho próprio (`principio_ativo_cliente`, rodada 4) e ficou como está.
+
+### Espelho padrão da base
+- `tools/db/espelho.py` (criar, situacao, atualizar), `db/espelho/0001_espelho.sql` (controle), carga oficial por
+  `catalogos/carregar.py --espelho BANCO`, licenciados por `catalogos/licenciados/carregar.py` (formato em
+  `catalogos/licenciados/FORMATO.md`). O `criar_cliente` leva o espelho (quando existir) a todo cliente novo e grava
+  o resumo no evento `criado`; `espelho.py atualizar` grava o evento `espelho_atualizado`. O painel pode mostrar as
+  edições do evento e oferecer "atualizar catálogos" chamando o comando.

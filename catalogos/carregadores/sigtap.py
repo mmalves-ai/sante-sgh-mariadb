@@ -512,7 +512,7 @@ def carregar(banco: str) -> dict:
     _sql(banco, "\n".join(f"UPDATE {t} SET vigencia_fim = {vespera}, alterado_em = UTC_TIMESTAMP(3) "
                           f"WHERE vigencia_fim IS NULL AND vigencia_inicio < '{vig}';" for t in com_vig)
          + f"\nUPDATE procedimento_sigtap SET ativo = FALSE, vigencia_fim = {vespera}, alterado_em = UTC_TIMESTAMP(3) "
-           f"WHERE ativo AND versao_fonte <> '{ver}';"
+           f"WHERE ativo AND NOT item_hospital AND versao_fonte <> '{ver}';"
          + f"\nUPDATE competencia_sigtap SET situacao_carga = 'substituida', vigencia_fim = {vespera}, "
            f"alterado_em = UTC_TIMESTAMP(3) WHERE codigo_competencia < '{comp}' AND situacao_carga = 'carregada';")
     inativos = _consulta(banco, f"SELECT COUNT(*) FROM procedimento_sigtap WHERE NOT ativo AND versao_fonte <> '{ver}'")

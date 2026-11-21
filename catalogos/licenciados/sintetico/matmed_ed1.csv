@@ -1,0 +1,7 @@
+codigo;descricao;tipo_produto;apresentacao;codigo_laboratorio;nome_laboratorio;quantidade_embalagem;fator_divisao;codigo_tuss;preco_fabrica;preco_maximo_consumidor;aliquota_icms;tipo_alteracao
+SINT0001;PRODUTO FICTICIO ALFA 10 MG;medicamento;CX 20 COMP;L01;LABORATORIO FICTICIO UM;20;20;90000001;12,50;16,90;18;inclusao
+SINT0002;PRODUTO FICTICIO BETA SOL INJ;medicamento;AMP 2 ML;L01;LABORATORIO FICTICIO UM;1;1;;3.40;4.70;18;inclusao
+SINT0003;MATERIAL FICTICIO GAMA (ESTERIL);material;UN;L02;FABRICANTE FICTICIO DOIS;1;1;;1,05;;;inclusao
+SINT0004;SOLUCAO FICTICIA DELTA 500 ML;solucao;FR 500 ML;L02;FABRICANTE FICTICIO DOIS;1;1;;7,80;9,90;12;inclusao
+SINT0005;ITEM FICTICIO SEM PRECO;material;UN;L02;FABRICANTE FICTICIO DOIS;1;1;;;;;inclusao
+SINT0006;ITEM FICTICIO TIPO ERRADO;brinquedo;UN;L02;FABRICANTE FICTICIO DOIS;1;1;;1,00;;;inclusao

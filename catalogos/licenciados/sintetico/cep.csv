@@ -1,0 +1,6 @@
+cep;codigo_ibge_municipio;uf;tipo_cep;logradouro;complemento;numero_inicial;numero_final;lado;codigo_bairro;bairro
+99990001;3550308;SP;logradouro;RUA FICTICIA UM;;1;199;impar;SINT01;BAIRRO FICTICIO A
+99990002;3550308;SP;logradouro;AVENIDA FICTICIA DOIS;;2;400;par;SINT01;BAIRRO FICTICIO A
+99990003;3304557;RJ;logradouro;TRAVESSA FICTICIA TRES;;;;;SINT02;BAIRRO FICTICIO B
+99990004;9999999;SP;logradouro;RUA DE MUNICIPIO INEXISTENTE;;;;;;
+9999000X;3550308;SP;logradouro;CEP INVALIDO;;;;;;
