@@ -42,5 +42,6 @@ docker run --rm --network none "${PRIV[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" \
   -e CONECTOR_UID="$(id -u)" -e CONECTOR_GID="$(id -g)" \
+  -e CONECTOR_PLANO_B_AUTORIZADO="${CONECTOR_PLANO_B_AUTORIZADO:-}" \
   -e CONECTOR_COW_MB="${CONECTOR_COW_MB:-2048}" -e CONECTOR_RESERVA_GB="${CONECTOR_RESERVA_GB:-100}" \
   "$IMG" "$@"

@@ -69,6 +69,21 @@ class Caminho(unittest.TestCase):
             shutil.rmtree(fora)
 
 
+class ConfrontoGstat(unittest.TestCase):
+    def test_conjunto_de_tabelas_conta_como_divergencia(self):
+        reg = {"contagens": {"A": 1, "B": 2}}
+        imagem.confrontar_gstat(reg, None, gs={"A": 1, "B": 2})
+        self.assertEqual((reg["gstat"]["divergentes"], reg["gstat"]["registros_total"]), (0, 3))
+        reg = {"contagens": {"A": 1, "B": 2, "C": 0}}
+        imagem.confrontar_gstat(reg, None, gs={"A": 1, "B": 3, "OCULTA": 5})
+        g = reg["gstat"]
+        self.assertEqual(g["divergentes"], 3)
+        self.assertEqual(g["so_no_gstat"], ["OCULTA"])
+        self.assertEqual(g["so_no_leitor"], ["C"])
+        self.assertEqual(g["registros_total"], 9)
+        self.assertEqual(g["divergencias"]["B"]["motivo"], "contagem")
+
+
 class Texto(unittest.TestCase):
     def test_tabela_c1_deterministica(self):
         b = bytes(range(0x80, 0xA0))
@@ -148,9 +163,23 @@ class AbridorELeitura(unittest.TestCase):
                 apos = vistos[-1]
             self.assertEqual(len(vistos), MANIF["contagens"]["EX_ITEM_COMP"])
             self.assertEqual(vistos, sorted(set(vistos)))
-            # sem PK: chave vazia; leitura por ordem declarada
+            # keyset só sobre chave provada única e NOT NULL
+            self.assertEqual(lt.chaves_unicas_de("EX_ITEM_COMP"), [["PEDIDO", "SEQ"]])
+            _, lote = lt.ler_por_chave("EX_ITEM_COMP", ["SEQ", "PEDIDO"], None, limite=5)
+            self.assertEqual(len(lote), 5)
+            for ruim in (["SEQ"], ["PEDIDO"], [], ["PEDIDO", "SEQ", "DESCR"]):
+                with self.assertRaises(ValueError, msg=ruim):
+                    lt.ler_por_chave("EX_ITEM_COMP", ruim, None, limite=10)
+            # sem PK: keyset recusado (empates e NULL seriam pulados); passada única cobre o COUNT(*)
             self.assertEqual(lt.chave_primaria("EX_TRILHA"), [])
-            self.assertEqual(lt.contar("EX_TRILHA"), MANIF["contagens"]["EX_TRILHA"])
+            self.assertEqual(lt.chaves_unicas_de("EX_TRILHA"), [])
+            for ruim in (["TEXTO"], ["QUANDO"], ["QUANDO", "TEXTO"]):
+                with self.assertRaises(ValueError, msg=ruim):
+                    lt.ler_por_chave("EX_TRILHA", ruim, None, limite=10)
+            n = lt.contar("EX_TRILHA")
+            self.assertEqual(n, MANIF["contagens"]["EX_TRILHA"])
+            _, it = lt.ler_tudo("EX_TRILHA")
+            self.assertEqual(sum(1 for _ in it), n)
             # hash determinístico e sensível a uma só coluna
             self.assertEqual(hash_linha((1, b"S", None)), hash_linha((1, b"S", None)))
             self.assertNotEqual(hash_linha((1, b"S", None)), hash_linha((1, b"N", None)))
@@ -158,17 +187,45 @@ class AbridorELeitura(unittest.TestCase):
 
     def test_plano_b_copia_com_guarda(self):
         o = caminho.validar_origem(ARQ)
+        # sem autorização explícita do dono, a cópia é recusada; modo automático não existe
+        for modo, kw in (("copia", {}), ("copia", {"plano_b_autorizado": False}), ("auto", {})):
+            with self.assertRaises(abridor.AbridorErro, msg=modo):
+                with abridor.abrir(o["absoluto"], modo=modo, reserva_gb=0, **kw):
+                    pass
+        self.assertEqual([f for f in os.listdir(TRAB) if f.startswith("copia-")], [])
         with self.assertRaises(abridor.AbridorErro) as cm:
-            with abridor.abrir(o["absoluto"], modo="copia", reserva_gb=10 ** 6):
+            with abridor.abrir(o["absoluto"], modo="copia", reserva_gb=10 ** 6, plano_b_autorizado=True):
                 pass
         self.assertIn("guarda de disco", str(cm.exception))
-        with abridor.abrir(o["absoluto"], modo="copia", reserva_gb=0) as ab:
+        with abridor.abrir(o["absoluto"], modo="copia", reserva_gb=0, plano_b_autorizado=True) as ab:
             destino = ab.dispositivo
             with Leitor(ab.dispositivo) as lt:
                 self.assertEqual(lt.contar("EX_PESSOA"), MANIF["contagens"]["EX_PESSOA"])
                 self.assertTrue(lt.somente_leitura())
         self.assertEqual(ab.modo, "copia")
         self.assertFalse(os.path.exists(destino))
+
+    def test_falha_do_snapshot_nunca_cai_na_copia(self):
+        o = caminho.validar_origem(ARQ)
+        orig_loop, orig_sh = abridor._loop, abridor._sh
+        for falha in ("loop", "somente_leitura"):
+            if falha == "loop":
+                def _loop(*a, **k):
+                    raise abridor.AbridorErro("losetup falhou (simulado)")
+                abridor._loop = _loop
+            else:
+                def _sh(*args):
+                    if args[:2] == ("blockdev", "--getro"):
+                        return "0"
+                    return orig_sh(*args)
+                abridor._sh = _sh
+            try:
+                with self.assertRaises(abridor.AbridorErro, msg=falha):
+                    with abridor.abrir(o["absoluto"], cow_mb=64, plano_b_autorizado=True):
+                        self.fail("não deveria abrir")
+            finally:
+                abridor._loop, abridor._sh = orig_loop, orig_sh
+        self.assertEqual([f for f in os.listdir(TRAB) if f.startswith(("copia-", "cow-"))], [])
 
     def test_snapshot_sempre_limpa_em_erro(self):
         o = caminho.validar_origem(ARQ)

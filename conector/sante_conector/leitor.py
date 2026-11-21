@@ -3,7 +3,10 @@
 - Texto (CHAR/VARCHAR, qualquer charset) sai como `bytes` por CAST para CHARACTER SET OCTETS: são os bytes
   gravados, com o preenchimento de CHAR; nada é transliterado.
 - BLOB de texto sai como BLOB binário (bytes).
-- Leitura por faixa de PK inteira (`ler_faixa`) ou por chave composta/ordem declarada (`ler_por_chave`, keyset).
+- Leitura por faixa de PK inteira (`ler_faixa`), por keyset (`ler_por_chave`) só sobre chave provada única e
+  NOT NULL (PK, ou índice único com todas as colunas NOT NULL), ou em passada única (`ler_tudo`, um cursor sem
+  paginação na mesma transação SNAPSHOT) para tabela sem chave única: keyset sobre ordem não única pula empates
+  na fronteira das páginas e nunca alcança NULL.
 - Nomes de tabela e coluna vêm só do catálogo (RDB$) e são conferidos; nada de SQL montado com entrada livre.
 - Nunca grava; nenhum valor de linha vai para log.
 """
@@ -71,7 +74,8 @@ class Leitor:
         if tabela not in self._colunas:
             rows = self.consultar(
                 "SELECT rf.RDB$FIELD_NAME, f.RDB$FIELD_TYPE, COALESCE(f.RDB$FIELD_LENGTH,0), "
-                "COALESCE(f.RDB$FIELD_SUB_TYPE,0), COALESCE(f.RDB$FIELD_SCALE,0), COALESCE(rf.RDB$NULL_FLAG,0) "
+                "COALESCE(f.RDB$FIELD_SUB_TYPE,0), COALESCE(f.RDB$FIELD_SCALE,0), "
+                "COALESCE(rf.RDB$NULL_FLAG,0) + COALESCE(f.RDB$NULL_FLAG,0) "
                 "FROM RDB$RELATION_FIELDS rf JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME=rf.RDB$FIELD_SOURCE "
                 "WHERE rf.RDB$RELATION_NAME=? AND f.RDB$COMPUTED_BLR IS NULL ORDER BY rf.RDB$FIELD_POSITION",
                 (tabela,))
@@ -85,6 +89,23 @@ class Leitor:
             "SELECT s.RDB$FIELD_NAME FROM RDB$RELATION_CONSTRAINTS c JOIN RDB$INDEX_SEGMENTS s "
             "ON s.RDB$INDEX_NAME=c.RDB$INDEX_NAME WHERE c.RDB$RELATION_NAME=? AND c.RDB$CONSTRAINT_TYPE="
             "'PRIMARY KEY' ORDER BY s.RDB$FIELD_POSITION", (tabela,))]
+
+    def chaves_unicas_de(self, tabela):
+        """Chaves que provam unicidade: a PK e os índices únicos ativos cujas colunas são todas NOT NULL."""
+        pk = self.chave_primaria(tabela)
+        res = [pk] if pk else []
+        idx = {}
+        for nome, campo in self.consultar(
+                "SELECT i.RDB$INDEX_NAME, s.RDB$FIELD_NAME FROM RDB$INDICES i JOIN RDB$INDEX_SEGMENTS s "
+                "ON s.RDB$INDEX_NAME=i.RDB$INDEX_NAME WHERE i.RDB$RELATION_NAME=? AND i.RDB$UNIQUE_FLAG=1 "
+                "AND COALESCE(i.RDB$INDEX_INACTIVE,0)=0 AND i.RDB$EXPRESSION_BLR IS NULL "
+                "ORDER BY i.RDB$INDEX_NAME, s.RDB$FIELD_POSITION", (tabela,)):
+            idx.setdefault(nome.strip(), []).append(campo.strip())
+        obrig = {c["nome"] for c in self.colunas(tabela) if c["obrigatoria"]}
+        for cols in idx.values():
+            if cols != pk and set(cols) <= obrig and cols not in res:
+                res.append(cols)
+        return res
 
     def generators(self):
         nomes = [r[0].strip() for r in self.consultar(
@@ -134,8 +155,25 @@ class Leitor:
             yield ini, ini + bloco
             ini += bloco
 
+    def ler_tudo(self, tabela, colunas=None):
+        """Passada única (um cursor, sem paginação) na transação SNAPSHOT: para tabela sem chave única.
+        Devolve (nomes, gerador de tuplas); cobre exatamente o COUNT(*) da mesma transação."""
+        nomes, sel = self._select(tabela, colunas)
+        sql = "SELECT %s FROM %s" % (sel, _q(tabela))
+
+        def linhas():
+            with self._cur() as c:
+                c.execute(sql)
+                yield from c
+        return nomes, linhas()
+
     def ler_por_chave(self, tabela, chaves, apos=None, limite=10000, colunas=None):
-        """Keyset por chave composta (ou ordem declarada): linhas com chave > `apos`, até `limite`."""
+        """Keyset: linhas com chave > `apos`, até `limite`. `chaves` tem de ser chave provada única e NOT NULL
+        (PK ou índice único com colunas NOT NULL, em qualquer ordem); senão recusa (use `ler_tudo`)."""
+        if not chaves or not any(set(chaves) == set(u) and len(chaves) == len(u)
+                                 for u in self.chaves_unicas_de(tabela)):
+            raise ValueError("keyset exige chave única e NOT NULL (PK ou índice único); "
+                             "para tabela sem chave única use ler_tudo")
         nomes, sel = self._select(tabela, colunas)
         ordem = ", ".join(_q(k) for k in chaves)
         where, params = "", []

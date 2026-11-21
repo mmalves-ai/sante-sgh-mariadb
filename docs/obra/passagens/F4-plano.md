@@ -57,8 +57,11 @@ sobre a cópia `redesante-fb-pc`, transação READ ONLY). Resultado por tabela: 
     loop read-only.
   - O motor conecta com transação READ ONLY. No fim, remove o snapshot e o COW.
   - Prova do lote L1: sha256 do arquivo antes e depois é igual; COW usado abaixo de 1 GB.
-- **Plano B:** se dm/loop não estiver disponível no host do cliente, cópia integral para um volume temporário
-  (exige +48 GB livres, conferidos antes), apagada no fim.
+- **Plano B:** cópia integral para um volume temporário (exige +48 GB livres e reserva de 100 GB, conferidos
+  antes), apagada no fim. **Contraria o ADR 0003 item 7**, por isso nunca é recuo automático: a falha do
+  snapshot é erro (inclusive a da conferência de somente leitura). Só roda com pedido explícito (`modo copia`)
+  e `CONECTOR_PLANO_B_AUTORIZADO=sim`, que só se liga com decisão do dono registrada para aquele ambiente ou
+  cliente. **Pendente de decisão do dono** se o plano B deve existir.
 - **Plano C, só no dev:** ler a cópia já restaurada `redesante-fb-pc` (127.0.0.1:3351), só com transação READ
   ONLY e sem parar nem alterar nada, como fez a medição.
 - **Validação do caminho:**
@@ -294,7 +297,9 @@ do cliente de exemplo, container privilegiado sem rede). Prova real: `conector/p
   volume da execução) dentro do container `sante-sgh-conector` (`--privileged --network none`). O kernel
   carregou o alvo `snapshot` sozinho. Firebird 3.0.14 embarcado abre o `/dev/mapper/sscon-<execução>` como
   dispositivo bruto; `gfix -mode read_only` cai no COW. O plano B (cópia com guarda de disco) está
-  implementado e testado na imagem sintética; `--modo auto` cai nele se o snapshot falhar.
+  implementado e testado na imagem sintética, mas **sem recuo automático** (correção pós-avaliação, 21/11):
+  o padrão é `snapshot`, não há `auto`, e a cópia só roda com `--modo copia` e `CONECTOR_PLANO_B_AUTORIZADO=sim`
+  (decisão do dono pendente).
 - **Prova sobre `pc-20261019.fdb` (48 GB), só agregados:**
   - sha256, mtime e tamanho iguais antes e depois; sha256 confere com o `.sha256` lateral;
   - COW usado: 16 KiB (limite 2 GiB); banco read-only na abertura;
@@ -312,5 +317,10 @@ do cliente de exemplo, container privilegiado sem rede). Prova real: `conector/p
   - a imagem sintética usa tabelas neutras `EX_*` com as formas da origem (PK inteira com lacunas, composta,
     sem PK, FK, CP1252 0x80–0x9F, CHAR preenchido, BLOB binário e de texto, sentinelas, generator); o L3
     acrescenta as tabelas do mapa na mesma especificação (`sintetica.py`).
+- **Correções da avaliação do L1 (21/11):**
+  - keyset (`ler_por_chave`) só sobre chave provada única e NOT NULL; recusava nada e pulava empates
+    (EX_TRILHA: 70 de 150 linhas pelo keyset em `TEXTO`). Tabela sem chave única: `ler_tudo`, passada única
+    no mesmo SNAPSHOT, com teste que exige total = `COUNT(*)`;
+  - confronto com o gstat conta como divergência a tabela que só um dos lados vê; total do gstat soma todas.
 - **Para o L2:** separar o abridor privilegiado do worker (hoje o comando inteiro roda privilegiado);
   limpeza de órfãos `sscon-*` após queda do container.

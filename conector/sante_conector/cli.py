@@ -4,7 +4,7 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   listar                                  .fdb da pasta autorizada, com aceite/motivo
   validar <relativo>                      caminho + cabeçalho
   sintetica <arquivo.fdb> [--versao N]    gera a imagem sintética do cliente de exemplo (no trabalho)
-  registrar <relativo> [--modo auto|snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
+  registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   testes                                  suíte unittest (precisa de --privileged)
 """
@@ -34,10 +34,10 @@ def main(argv=None):
     p = sub.add_parser("validar"); p.add_argument("relativo")
     p = sub.add_parser("sintetica"); p.add_argument("arquivo"); p.add_argument("--versao", type=int, default=1)
     p = sub.add_parser("registrar"); p.add_argument("relativo")
-    p.add_argument("--modo", default="auto"); p.add_argument("--sem-gstat", action="store_true")
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--sem-gstat", action="store_true")
     p.add_argument("--sha256", action="store_true"); p.add_argument("--saida")
     p = sub.add_parser("ler-faixa"); p.add_argument("relativo"); p.add_argument("--tabela", required=True)
-    p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="auto")
+    p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     sub.add_parser("testes")
     a = ap.parse_args(argv)
 

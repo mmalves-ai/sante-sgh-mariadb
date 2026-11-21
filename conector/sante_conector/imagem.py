@@ -60,11 +60,19 @@ def registrar(leitor, origem, abertura=None, progresso=False):
     return reg
 
 
-def confrontar_gstat(reg, dispositivo):
+def confrontar_gstat(reg, dispositivo, gs=None):
+    """Confronto com o gstat: conta como divergência a contagem diferente E a tabela presente num só lado."""
     t1 = time.time()
-    gs = gstat_registros(dispositivo)
+    if gs is None:
+        gs = gstat_registros(dispositivo)
     cont = reg["contagens"]
-    diverg = {t: {"contagem": n, "gstat": gs.get(t)} for t, n in cont.items() if gs.get(t) != n}
-    reg["gstat"] = {"tabelas": len(gs), "registros_total": sum(gs.get(t, 0) for t in cont),
+    diverg = {}
+    for t in sorted(set(cont) | set(gs)):  # o conjunto de tabelas também é conferido, nos dois sentidos
+        if gs.get(t) != cont.get(t):
+            diverg[t] = {"contagem": cont.get(t), "gstat": gs.get(t),
+                         "motivo": ("só no gstat (fora do leitor)" if t not in cont else
+                                    "só no leitor (o gstat não viu)" if t not in gs else "contagem")}
+    reg["gstat"] = {"tabelas": len(gs), "registros_total": sum(gs.values()),
+                    "so_no_gstat": sorted(set(gs) - set(cont)), "so_no_leitor": sorted(set(cont) - set(gs)),
                     "divergentes": len(diverg), "divergencias": diverg, "segundos": round(time.time() - t1, 1)}
     return reg

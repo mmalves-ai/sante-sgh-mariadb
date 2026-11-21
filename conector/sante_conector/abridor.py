@@ -7,8 +7,11 @@ Plano A (padrão): snapshot de bloco copy-on-write do device-mapper.
   - `gfix -mode read_only` no snapshot: a escrita do cabeçalho cai no COW; o banco aberto não faz GC nem sweep;
   - no fim: remove o snapshot, os loops e o COW; mede o COW usado.
   Exige container privilegiado (só o do conector, sem rede).
-Plano B: cópia integral para o diretório de trabalho, só se o disco livre após a cópia ficar >= reserva
-  (CONECTOR_RESERVA_GB, padrão 100); a cópia é apagada no fim. O original é só lido.
+Plano B: cópia integral para o diretório de trabalho. Contraria o ADR 0003 item 7 ("nunca copiado inteiro"),
+  por isso NUNCA é automático: não há recuo do snapshot para a cópia, em nenhuma falha (nem de loop, nem da
+  conferência de somente leitura). Só roda com `modo="copia"` E autorização explícita registrada como decisão
+  do dono para o ambiente (`CONECTOR_PLANO_B_AUTORIZADO=sim`, ou `plano_b_autorizado=True`), e só se o disco
+  livre após a cópia ficar >= reserva (CONECTOR_RESERVA_GB, padrão 100); a cópia é apagada no fim.
 """
 import contextlib
 import os
@@ -157,38 +160,37 @@ def snapshot_disponivel():
         return False
 
 
+MODOS = ("snapshot", "copia")
+
+
+def plano_b_autorizado_no_ambiente():
+    return os.environ.get("CONECTOR_PLANO_B_AUTORIZADO", "").strip().lower() == "sim"
+
+
 @contextlib.contextmanager
-def abrir(original, modo="auto", trabalho=None, cow_mb=None, reserva_gb=None, nome=None):
-    """Abre `original` (caminho já validado) para leitura pelo Firebird embarcado. Devolve uma `Abertura`."""
+def abrir(original, modo="snapshot", trabalho=None, cow_mb=None, reserva_gb=None, nome=None,
+          plano_b_autorizado=None):
+    """Abre `original` (caminho já validado) para leitura pelo Firebird embarcado. Devolve uma `Abertura`.
+
+    Padrão: snapshot (plano A), sem recuo. A cópia (plano B) só com `modo="copia"` e autorização explícita."""
     trabalho = trabalho or os.environ.get("CONECTOR_TRABALHO_DIR", "/trabalho")
     cow_mb = int(cow_mb or os.environ.get("CONECTOR_COW_MB", 2048))
     reserva_gb = int(reserva_gb if reserva_gb is not None else os.environ.get("CONECTOR_RESERVA_GB", 100))
     nome = nome or uuid.uuid4().hex[:12]
     if not NOME_OK.match(nome):
         raise AbridorErro("nome de execução inválido")
+    if modo not in MODOS:
+        raise AbridorErro("modo inválido: %s (sem modo automático: a cópia nunca é recuo)" % modo)
     os.makedirs(trabalho, exist_ok=True)
-    if modo not in ("auto", "snapshot", "copia"):
-        raise AbridorErro("modo inválido: %s" % modo)
-    if modo in ("auto", "snapshot"):
-        try:
-            cm = _snapshot(original, trabalho, cow_mb, nome)
-            ab = cm.__enter__()
-        except AbridorErro as e:
-            if modo == "snapshot":
-                raise
-            ab = None
-            motivo_b = str(e)
-        else:
-            try:
-                yield ab
-            except BaseException:
-                if not cm.__exit__(*__import__("sys").exc_info()):
-                    raise
-            else:
-                cm.__exit__(None, None, None)
-            return
-    else:
-        motivo_b = "modo copia pedido"
+    if modo == "snapshot":
+        with _snapshot(original, trabalho, cow_mb, nome) as ab:
+            yield ab
+        return
+    if plano_b_autorizado is None:
+        plano_b_autorizado = plano_b_autorizado_no_ambiente()
+    if not plano_b_autorizado:
+        raise AbridorErro("plano B (cópia integral) recusado: o arquivo apontado nunca é copiado inteiro (ADR 0003 "
+                          "item 7); só com decisão do dono registrada (CONECTOR_PLANO_B_AUTORIZADO=sim)")
     with _copia(original, trabalho, reserva_gb, nome) as ab:
-        ab.motivo_plano_b = motivo_b
+        ab.motivo_plano_b = "cópia pedida explicitamente, com autorização do dono"
         yield ab

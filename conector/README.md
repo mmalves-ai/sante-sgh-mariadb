@@ -12,8 +12,14 @@ daqui é só ferramenta interna de teste.
   `--read-only` (o kernel recusa escrita; conferido por `blockdev --getro`) e põe por cima um snapshot
   copy-on-write do device-mapper. O que o Firebird escreve (cabeçalho, `gfix -mode read_only`) cai num COW
   esparso no volume de trabalho da execução, apagado no fim.
-- **Plano B** (host sem dm/loop): cópia integral para o volume de trabalho, só se o disco livre depois da
-  cópia continuar >= `CONECTOR_RESERVA_GB` (padrão 100); apagada no fim. `--modo auto` tenta A e cai em B.
+- **Plano B** (host sem dm/loop): cópia integral para o volume de trabalho. Contraria o ADR 0003 item 7, por
+  isso **nunca é recuo automático** (não existe `--modo auto`; a falha do snapshot, inclusive da conferência
+  de somente leitura, é erro). Só roda com `--modo copia` **e** `CONECTOR_PLANO_B_AUTORIZADO=sim`, decisão do
+  dono registrada para o ambiente, e só se o disco livre depois da cópia continuar >= `CONECTOR_RESERVA_GB`
+  (padrão 100); apagada no fim.
+- **Leitura:** faixa de PK inteira; keyset só sobre chave provada única e NOT NULL (PK ou índice único com
+  colunas NOT NULL), senão recusa; tabela sem chave única é lida em passada única (`ler_tudo`), no mesmo
+  SNAPSHOT. O confronto com o gstat conta como divergência também a tabela presente num só lado.
 - **Pasta autorizada** `CONECTOR_ORIGENS_DIR` (padrão: `banco-dev/backups` da área de trabalho), montada
   somente leitura em `/origens`. Só caminho relativo, sem `..`, sem symlink, arquivo regular `.fdb`,
   cabeçalho Firebird ODS 12 e tamanho múltiplo da página.
