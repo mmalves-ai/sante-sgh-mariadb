@@ -10,7 +10,7 @@
 //   GET  /api/custos/resultado/contas?competencia&...    custo e margem por conta (paginado; a conta pelo número)
 // Ler a apuração: `custos.apuracao.ler`; apurar: `custos.apuracao.apurar`; aprovar: `custos.apuracao.aprovar`;
 // exportar: `custos.apuracao.exportar`; resultado e contas: `custos.resultado.ler`. As gravações e a exportação exigem
-// a chave `custos` no estabelecimento (POL-3); as gravações vão com a SGH_TRILHA na mesma transação (com a porta em
+// a chave `custos` no estabelecimento (POL-3); as gravações vão com a trilha na mesma transação (com a porta em
 // memória, o registrador da API registra).
 import {
   Body,
@@ -106,6 +106,9 @@ export class ApuracaoCustosController {
     return {
       rede: s.rede,
       hospital: s.hospital,
+      estabelecimento: s.porta.estabelecimento,
+      usuario: s.porta.usuario,
+      correlacao: s.porta.correlacao,
       login: s.login,
       pode: (c) => s.pode(c),
       trilha: (evento, operacao, tabela, id) =>
@@ -137,7 +140,7 @@ export class ApuracaoCustosController {
     const s = sessaoDe(req);
     const [l, d] = await Promise.all([
       this.liberacao.consultar(s, CHAVE_LIBERACAO_CUSTOS),
-      this.porta.dominios({ rede: s.rede, hospital: s.hospital }),
+      this.porta.dominios({ rede: s.rede, hospital: s.hospital, estabelecimento: s.porta.estabelecimento }),
     ]);
     return this.servico.apoio(
       this.sessao(s),
@@ -161,7 +164,7 @@ export class ApuracaoCustosController {
   @Post('apuracao')
   @HttpCode(201)
   @Permissao(P.apuracaoApurar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da apuração (só valores e contagens; a conta pelo ID)')
+  @AuditadoNoHandler('trilha na transação da apuração (só valores e contagens; a conta pelo ID)')
   async apurar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ApuracaoCustos> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_CUSTOS);
@@ -175,7 +178,7 @@ export class ApuracaoCustosController {
   @Post('apuracao/:id/aprovacao')
   @HttpCode(200)
   @Permissao(P.apuracaoAprovar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da aprovação da apuração')
+  @AuditadoNoHandler('trilha na transação da aprovação da apuração')
   async aprovar(
     @Param('id') id: string,
     @Body() corpo: unknown,

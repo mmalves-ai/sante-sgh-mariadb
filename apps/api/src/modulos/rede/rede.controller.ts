@@ -9,10 +9,10 @@
 //   POST /api/rede/mpi/divergencias/reparo                     "completar o que faltou" (idempotente)
 //   GET  /api/rede/mpi/pacientes/:id/aviso                     etapa 2: "tem atendimentos em outro estabelecimento"
 //                                                              (só contagens e datas; o cabeçalho do paciente)
-// A chave `rede.mpi` (SGH_CFG_LIBERACAO) por estabelecimento: desligada no da sessão, 403 `recurso-desligado` com o
+// A chave `rede.mpi` (liberação por estabelecimento): desligada no da sessão, 403 `recurso-desligado` com o
 // motivo; nos outros, conferida estabelecimento a estabelecimento (escopo do estabelecimento inteiro e os
 // pré-requisitos dele): o desligado fica fora da fila, do par e do ciclo. Numa sessão "como", o MPI só consulta. Toda
-// gravação vai, banco a banco, numa transação SGH_ com a SGH_TRILHA junto (no banco em que a linha mora); com a porta
+// gravação vai, estabelecimento a estabelecimento, numa operação do executor com a trilha junto; com a porta
 // em memória (sessão sintética), o registrador da API registra.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -105,7 +105,7 @@ export class RedeMpiController {
       como: s.req.sghComo !== undefined,
       trilha: (evento, operacao, alvo) =>
         linhaTrilha(s, evento, 'rede.mpi', operacao, {
-          tabela: 'SGH_REDE_VINCULO',
+          tabela: 'suspeita_duplicidade',
           id: alvo.id ?? null,
           chave: alvo.chave,
         }),
@@ -169,7 +169,7 @@ export class RedeMpiController {
     const k = chaveDaRota(chave);
     const x = await this.servico.candidato(r, k);
     if (!x) throw new ErroProblema('nao-encontrado', 404, 'Par não encontrado');
-    req.sghAlvo = { paciente: x.local.id, tabelaAlvo: 'SGH_REDE_CANDIDATO', idAlvo: k };
+    req.sghAlvo = { paciente: x.local.id, tabelaAlvo: 'suspeita_duplicidade', idAlvo: k };
     return x;
   }
 
@@ -177,7 +177,7 @@ export class RedeMpiController {
   @HttpCode(200)
   @Permissao('rede.mpi.vincular')
   @AuditadoNoHandler(
-    'SGH_TRILHA em cada transação SGH_ do índice, banco a banco (memória: registrador da API)',
+    'trilha em cada operação do índice, pelo executor do núcleo (memória: registrador da API)',
   )
   async decidir(
     @Param('chave') chave: string,
@@ -204,7 +204,7 @@ export class RedeMpiController {
   @HttpCode(200)
   @Permissao('rede.mpi.desfazer')
   @AuditadoNoHandler(
-    'SGH_TRILHA em cada transação SGH_ do índice, banco a banco (memória: registrador da API)',
+    'trilha em cada operação do índice, pelo executor do núcleo (memória: registrador da API)',
   )
   async desfazer(
     @Param('chave') chave: string,
@@ -234,14 +234,14 @@ export class RedeMpiController {
       throw new ErroProblema('nao-encontrado', 404, 'Cadastro não encontrado');
     const n = idDaRota(id);
     if (estabelecimento === r.hospital)
-      req.sghAlvo = { paciente: n, tabelaAlvo: 'SGH_REDE_VINCULO', idAlvo: String(n) };
+      req.sghAlvo = { paciente: n, tabelaAlvo: 'unificacao_cadastro', idAlvo: String(n) };
     return this.servico.vinculosDoCadastro(r, estabelecimento, n);
   }
 
   @Post('pareamento')
   @HttpCode(200)
   @Permissao('rede.mpi.vincular')
-  @AuditadoNoHandler('SGH_TRILHA em cada transação SGH_ do ciclo, banco a banco (só contagens)')
+  @AuditadoNoHandler('trilha em cada operação do ciclo, pelo executor do núcleo (só contagens)')
   async parear(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CicloPareamentoRede> {
     const { s, r } = await this.entrar(req);
     const bruto = (corpo as { lote?: unknown } | null)?.lote;
@@ -267,7 +267,7 @@ export class RedeMpiController {
     const n = idDaRota(id);
     req.sghAlvo = {
       paciente: n,
-      tabelaAlvo: 'SGH_REDE_VINCULO',
+      tabelaAlvo: 'unificacao_cadastro',
       idAlvo: String(n),
       chaveNaturalAlvo: 'aviso',
     };
@@ -294,7 +294,7 @@ export class RedeMpiController {
     });
     req.sghAlvo = {
       paciente: n,
-      tabelaAlvo: 'SGH_REDE_VINCULO',
+      tabelaAlvo: 'unificacao_cadastro',
       idAlvo: String(n),
       chaveNaturalAlvo: `aviso:${x.situacao};n:${x.estabelecimentos.length}`,
     };
@@ -312,7 +312,7 @@ export class RedeMpiController {
   @Post('divergencias/reparo')
   @HttpCode(200)
   @Permissao('rede.mpi.vincular')
-  @AuditadoNoHandler('SGH_TRILHA em cada transação SGH_ do reparo, no banco completado')
+  @AuditadoNoHandler('trilha em cada operação do reparo, pelo executor do núcleo')
   async reparar(
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ reparados: number; pendentes: number; manuais: string[] }> {

@@ -6,7 +6,7 @@
 //   POST /api/enfermagem/balanco/:atendimento/lancamentos          enfermagem.lancarBalanco (Idempotency-Key)
 //   POST /api/enfermagem/balanco/:atendimento/lancamentos/:id/estorno   o estorno com o motivo
 //   POST /api/enfermagem/balanco/:atendimento/fechamentos          enfermagem.fecharBalanco (parcial ou 24 horas)
-// Operações só do novo (SGH_), com a SGH_TRILHA na mesma transação e o ator real; o estabelecimento vem da sessão (o
+// Operações com a trilha_auditoria na mesma transação e o ator real; o estabelecimento vem da sessão (o
 // atendimento de outro não é achado). A hora de corte e a fórmula das perdas insensíveis são os parâmetros da unidade
 // do paciente. A funcionalidade nasce desligada (chave `enfermagem.balanco`, POL-3): desligada, a tela fica em consulta.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
@@ -33,7 +33,7 @@ import {
   janelaDoInstante,
   textoDoFechamento,
 } from '@sgh/dominio-enfermagem';
-import type { InternadoLido } from '@sgh/legado';
+import type { Internado } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -48,11 +48,12 @@ import {
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { type GravadorBalanco, PORTA_BALANCO, type PortaBalanco } from './balanco-porta.js';
+import { sessaoComAto } from './gravacao-direta.js';
 import { type ParametrosBalanco, ServicoBalanco } from './balanco-servico.js';
 import { PORTA_ENFERMAGEM, type PortaEnfermagem } from './porta.js';
 
 const E = EVENTOS_AUDITAVEIS;
-const TABELA = 'SGH_PEP_BALANCO';
+const TABELA = 'balanco_lancamento';
 const UNIDADE = /^[A-Za-z0-9 ._-]{1,5}$/;
 const HORA = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/;
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
@@ -173,7 +174,7 @@ export class BalancoController {
   async pacientes(
     @Param('unidade') unidade: string,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<Pick<InternadoLido, 'paciente' | 'atendimento' | 'numero' | 'nome' | 'leito' | 'unidade'>[]> {
+  ): Promise<Pick<Internado, 'paciente' | 'atendimento' | 'numero' | 'nome' | 'leito' | 'unidade'>[]> {
     const u = unidade.trim();
     if (!UNIDADE.test(u))
       throw new ErroProblema('entrada-invalida', 400, 'Unidade inválida', 'Escolha a unidade.');
@@ -216,7 +217,7 @@ export class BalancoController {
   @Post(':atendimento/lancamentos')
   @HttpCode(201)
   @Permissao(P.lancar)
-  @AuditadoNoHandler('enfermagem.lancarBalanco: SGH_PEP_BALANCO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('enfermagem.lancarBalanco: balanco_lancamento com a trilha_auditoria na mesma transação')
   async lancar(
     @Param('atendimento') atendimento: string,
     @Body() b: unknown,
@@ -245,8 +246,10 @@ export class BalancoController {
         });
       return r;
     });
+    // O reenvio do pedido (a mesma Idempotency-Key, o mesmo conteúdo) devolve os lançamentos da primeira vez; a mesma
+    // chave com outro conteúdo é recusada.
     const r = await this.apoio.sgh(
-      s,
+      sessaoComAto(s, { atendimento: c.internado.atendimento, lancamentos: e.lancamentos }, chave),
       E.balancoLancado.codigo,
       P.lancar,
       (x: { ids: number[] }) => ({
@@ -295,7 +298,7 @@ export class BalancoController {
   @HttpCode(201)
   @Permissao(P.lancar)
   @AuditadoNoHandler(
-    'enfermagem.lancarBalanco (estorno): SGH_PEP_BALANCO com a SGH_TRILHA na mesma transação',
+    'enfermagem.lancarBalanco (estorno): balanco_lancamento com a trilha_auditoria na mesma transação',
   )
   async estornar(
     @Param('atendimento') atendimento: string,
@@ -345,7 +348,7 @@ export class BalancoController {
   @HttpCode(201)
   @Permissao(P.fechar)
   @AuditadoNoHandler(
-    'enfermagem.fecharBalanco: SGH_PEP_BALANCO (ganhos da checagem e diurese dos sinais) e SGH_PEP_BALANCO_FECH com a SGH_TRILHA na mesma transação',
+    'enfermagem.fecharBalanco: balanco_lancamento (ganhos da checagem e diurese dos sinais) e balanco_fechamento com a trilha_auditoria na mesma transação',
   )
   async fechar(
     @Param('atendimento') atendimento: string,
@@ -403,7 +406,7 @@ export class BalancoController {
       E.balancoFechado.codigo,
       P.fechar,
       (x: { id: number }) => ({
-        tabela: 'SGH_PEP_BALANCO_FECH',
+        tabela: 'balanco_fechamento',
         id: String(x.id),
         paciente: c.internado.paciente,
         chave: `${e.tipo}:${janela.inicio}:${k.ate}`,

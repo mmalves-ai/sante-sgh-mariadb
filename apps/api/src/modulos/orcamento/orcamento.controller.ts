@@ -9,8 +9,10 @@
 //   POST /api/financeiro/orcamento/versoes/:id/descarte       descartar o rascunho, com o motivo
 //   GET  /api/financeiro/orcamento/versoes/:id/comparativo    orçado × realizado (mesAte, visao linha|centro|item)
 // Ler: `financeiro.orcamento.ler`; criar, gravar e descartar: `financeiro.orcamento.editar`; aprovar:
-// `financeiro.orcamento.aprovar`. As gravações exigem a chave `orcamento` no estabelecimento (POL-3) e vão com a
-// SGH_TRILHA na mesma transação (com a porta em memória, o registrador da API registra).
+// `financeiro.orcamento.aprovar`. As gravações exigem a chave `orcamento` no estabelecimento (POL-3) e vão pelo Executor
+// com a trilha de auditoria na mesma transação (com a porta em memória, o registrador da API registra).
+// Melhoria: a gravação usa a Idempotency-Key da requisição (sem ela, uma chave nova por pedido).
+import { randomUUID } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type ApoioOrcamento,
@@ -47,6 +49,7 @@ import { type EventosOrcamento, ServicoOrcamento, type SessaoOrcamento } from '.
 export const CHAVE_LIBERACAO_ORCAMENTO = 'orcamento';
 
 const CODIGOS = { editar: P.editar, aprovar: P.aprovar } as const;
+const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 const EVENTOS: EventosOrcamento = {
   criado: EVENTOS_AUDITAVEIS.orcamentoCriado.codigo,
   linhas: EVENTOS_AUDITAVEIS.orcamentoLinhasGravadas.codigo,
@@ -84,10 +87,15 @@ export class OrcamentoController {
   }
 
   private sessao(s: SessaoCadastro): SessaoOrcamento {
+    const bruto = s.req.headers['idempotency-key'];
+    const chave = Array.isArray(bruto) ? bruto[0] : bruto;
     return {
       rede: s.rede,
       hospital: s.hospital,
       login: s.login,
+      porta: s.porta,
+      chaveIdempotencia:
+        typeof chave === 'string' && IDEMPOTENCIA.test(chave) ? chave : `orcamento-${randomUUID()}`,
       pode: (c) => s.pode(c),
       trilha: (evento, operacao, tabela, id, chave = null) =>
         linhaTrilha(s, evento, 'financeiro.orcamento', operacao, {
@@ -142,11 +150,11 @@ export class OrcamentoController {
   @Post('versoes')
   @HttpCode(201)
   @Permissao(P.editar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da criação da versão (ano, base e contagem de linhas)')
+  @AuditadoNoHandler('Trilha na transação da criação da versão (ano, base e contagem de linhas)')
   async criar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: number; numero: number; linhas: number; descartadas: number }> {
+  ): Promise<{ id: number; numero: number; linhas: number; descartadas: number; consumoDeFora: number }> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_ORCAMENTO);
     const d = esquemaCriarVersaoOrcamento.safeParse(corpo);
@@ -167,7 +175,7 @@ export class OrcamentoController {
   @Post('versoes/:id/linhas')
   @HttpCode(200)
   @Permissao(P.editar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ dos valores gravados (contagens e total antes e depois)')
+  @AuditadoNoHandler('Trilha na transação dos valores gravados (contagens e total antes e depois)')
   async gravarLinhas(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_ORCAMENTO);
@@ -182,7 +190,7 @@ export class OrcamentoController {
   @Post('versoes/:id/aprovacao')
   @HttpCode(200)
   @Permissao(P.aprovar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da aprovação (a substituída na mesma transação)')
+  @AuditadoNoHandler('Trilha na transação da aprovação (a substituída na mesma transação)')
   async aprovar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -201,7 +209,7 @@ export class OrcamentoController {
   @Post('versoes/:id/descarte')
   @HttpCode(200)
   @Permissao(P.editar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do descarte, com o motivo')
+  @AuditadoNoHandler('Trilha na transação do descarte, com o motivo')
   async descartar(
     @Param('id') id: string,
     @Body() corpo: unknown,

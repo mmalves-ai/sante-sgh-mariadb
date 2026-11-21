@@ -25,7 +25,9 @@ import {
   terminologiaDasLinhas,
   turnoDoInstante,
 } from '@sgh/dominio-enfermagem';
-import { type AtividadeVigenteLida, type InternadoLido, montarProcessoSae } from '@sgh/legado';
+import { montarProcessoSae } from '@sgh/dominio-enfermagem';
+import type { AtividadeVigente } from './sae-tipos.js';
+import type { InternadoEnfermagem } from './tipos-vinculados.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoEnfermagem, PortaEnfermagem } from './porta.js';
 import type { ContextoSae, PortaSae } from './sae-porta.js';
@@ -63,7 +65,7 @@ export class ServicoSae {
   }
 
   /** O internado do atendimento (404 sem ele: a SAE é do paciente internado). */
-  async internado(c: ContextoSae, atendimento: number): Promise<InternadoLido> {
+  async internado(c: ContextoSae, atendimento: number): Promise<InternadoEnfermagem> {
     const i = await this.enfermagem.internado(c, atendimento);
     if (!i)
       throw new ErroProblema(
@@ -115,7 +117,7 @@ export class ServicoSae {
    */
   async horarios(
     c: ContextoSae,
-    internados: readonly InternadoLido[],
+    internados: readonly InternadoEnfermagem[],
     o: { readonly de: string; readonly ate: string; readonly agora: string },
   ): Promise<{ horarios: HorarioCuidado[]; cortada: boolean }> {
     if (internados.length === 0) return { horarios: [], cortada: false };
@@ -134,7 +136,7 @@ export class ServicoSae {
     });
     const saida: HorarioCuidado[] = [];
     const linha = (
-      a: AtividadeVigenteLida,
+      a: AtividadeVigente,
       previsto: string,
       estado: EstadoCuidado,
       ch: ChecagemCuidadoLida | null,

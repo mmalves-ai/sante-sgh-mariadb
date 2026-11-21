@@ -5,8 +5,6 @@
 // invalidação depois do commit. Controladores chamados direto, sobre a fonte EM MEMÓRIA (dados sintéticos).
 import { ESCOPOS_SEM_RESTRICAO } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso } from '@sgh/dominio-acesso';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -20,7 +18,6 @@ import { MotorController } from './motor.controller.js';
 import { PrecosController } from './precos.controller.js';
 import { ServicoPrecos } from './servico.js';
 
-const catalogo = fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo'));
 
 const PERMISSOES = [
   'convenio.operadora.ler',
@@ -51,7 +48,7 @@ function req(convenios: string[]): RequisicaoAutorizada {
   } as unknown as RequisicaoAutorizada;
 }
 
-function montar(fonte: FontePrecos = new FontePrecosMemoria(catalogo, 'dev')) {
+function montar(fonte: FontePrecos = new FontePrecosMemoria('dev')) {
   const servico = new ServicoPrecos(fonte);
   const trilha = new RegistradorTrilhaMemoria();
   const resolvedor = {} as ResolvedorSessao;
@@ -119,11 +116,11 @@ describe('escopo de convênio da sessão (TBUSERS_TBCONVEN) nas leituras do M12'
 
 describe('lista de convênios no armazém compartilhado (Valkey)', () => {
   it('a busca lê uma vez e serve do cache; a invalidação depois do commit relê', async () => {
-    const memoria = new FontePrecosMemoria(catalogo, 'dev');
+    const memoria = new FontePrecosMemoria('dev');
     let leituras = 0;
     const fonte = new Proxy(memoria, {
       get(alvo, p, r) {
-        if (p === 'destino') return 'legado';
+        if (p === 'destino') return 'banco';
         if (p === 'convenios')
           return () => {
             leituras++;
@@ -134,7 +131,7 @@ describe('lista de convênios no armazém compartilhado (Valkey)', () => {
     }) as unknown as FontePrecos;
     const cache = new CacheConfig(new ArmazemMemoria());
     const servico = new ServicoPrecos(fonte, cache);
-    const c = { rede: 'rede-teste', hospital: 'aa', traceId: 't' };
+    const c = { cliente: '', estabelecimento: null, usuario: null, correlacao: 't', rede: 'rede-teste', hospital: 'aa', traceId: 't' };
     await servico.listarConvenios(c, { busca: 'alfa', situacao: 'todos' }, null);
     await servico.listarConvenios(c, { busca: 'beta', situacao: 'ativos' }, null);
     expect(leituras).toBe(1);

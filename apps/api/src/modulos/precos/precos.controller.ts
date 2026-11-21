@@ -38,6 +38,7 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
+import { destinoDoContrato } from '../exames/public-api.js';
 import {
   contextoOperacao,
   ctxDe,
@@ -230,7 +231,7 @@ export class PrecosController {
   @Post('honorarios/:tab/reajuste')
   @HttpCode(200)
   @Permissao('preco.reajuste.aplicar')
-  @AuditadoNoHandler('executor: SGH_TRILHA e SGH_PRECO_AUTORIA em cada parte (memória: registrador da API)')
+  @AuditadoNoHandler('executor: trilha e autoria em cada parte (memória: registrador da API)')
   async aplicar(
     @Param('tab') tab: string,
     @Body() corpo: unknown,
@@ -261,7 +262,7 @@ export class PrecosController {
       await this.trilhaMemoria(req, EVENTOS_AUDITAVEIS.precoReajustado.codigo, r.lote);
       return {
         operacao: 'preco.reajustar',
-        destino: this.fonte.destino,
+        destino: destinoDoContrato(this.fonte.destino),
         lote: r.lote,
         linhas: r.linhas,
         partes: r.partes,
@@ -282,7 +283,7 @@ export class PrecosController {
   @Post('reajustes/:lote/desfazer')
   @HttpCode(200)
   @Permissao('preco.reajuste.desfazer')
-  @AuditadoNoHandler('executor: SGH_TRILHA e SGH_PRECO_AUTORIA em cada parte (memória: registrador da API)')
+  @AuditadoNoHandler('executor: trilha e autoria em cada parte (memória: registrador da API)')
   async desfazer(
     @Param('lote') lote: string,
     @Body() corpo: unknown,
@@ -301,7 +302,7 @@ export class PrecosController {
       await this.trilhaMemoria(req, EVENTOS_AUDITAVEIS.precoReajusteDesfeito.codigo, lote);
       return {
         operacao: 'preco.desfazerReajuste',
-        destino: this.fonte.destino,
+        destino: destinoDoContrato(this.fonte.destino),
         lote,
         linhas: r.linhas,
         partes: r.partes,
@@ -363,7 +364,7 @@ export class PrecosController {
   ): Promise<ValorVigente> {
     const tipo = q['tipo'] === 'diaria' || q['tipo'] === 'matmed' ? q['tipo'] : 'honorario';
     const convenio = inteiro(q['convenio'], 'convênio', [0, 32767]);
-    // Fora do escopo da sessão (TBUSERS_TBCONVEN): o mesmo 404 do inexistente.
+    // Fora do escopo da sessão: o mesmo 404 do inexistente.
     exigirNoEscopo(req, convenio);
     const r = await this.servico.valorVigente(ctxDe(req, 'consulta'), {
       convenio,

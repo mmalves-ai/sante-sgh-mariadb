@@ -69,6 +69,12 @@ export const esquemaAgendarSessao = z
     /** Pular sábado e domingo ao calcular as datas (a sessão vai para a segunda). */
     pularFimDeSemana: z.boolean(),
     observacao: textoCp1252(200).pipe(z.string().trim()).optional(),
+    /** O item agendado em cada sessão (o procedimento do tratamento), que o plano de sessões exige para faturar. */
+    itemAgendavel: idLongo.optional(),
+    /** O profissional que indicou o tratamento. */
+    solicitante: idLongo.optional(),
+    /** A fonte pagadora do tratamento. */
+    fontePagadora: idLongo.optional(),
   })
   .strict();
 export type AgendarSessaoEntrada = z.infer<typeof esquemaAgendarSessao>;

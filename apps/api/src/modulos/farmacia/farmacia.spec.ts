@@ -1,5 +1,5 @@
 // M29 (farmácia hospitalar, dispensação e farmácia clínica) pela HTTP, com a sessão real sobre a fonte sintética e a
-// porta EM MEMÓRIA (nada conecta a banco): permissões pelas opções do legado, fila por paciente e horário, política
+// porta EM MEMÓRIA (nada conecta a banco), com os módulos registrados: permissões pelas opções do perfil, fila por paciente e horário, política
 // "dispensar só depois de validar", dispensação com etiqueta, Idempotency-Key, fila disputada (dose ocupada passa
 // adiante), aceite da enfermagem (leitura e tablet), devolução do não administrado, avaliação com intervenção
 // respondida pelo médico, controlado com dupla conferência, livro em modo conferência, SNGPC desligado, textos de
@@ -10,16 +10,24 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloFarmacia } from './modulo.js';
 import { PortaFarmaciaMemoria, UNIDADE_SINTETICA } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,farmacia' };
 const trilha = new RegistradorTrilhaMemoria();
 const farmacia = new PortaFarmaciaMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, farmacia, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      config: () => import('../config/modulo.js'),
+      documento: () => import('../documento/modulo.js'),
+      farmacia: async () => ({ modulo: (ctx) => moduloFarmacia(ctx, { porta: farmacia }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -71,7 +79,7 @@ interface PacienteFila {
   leito: string;
   horarios: { previsto: string; doses: DoseFila[] }[];
 }
-const ctxSint = { rede: 'rede-sintetica', hospital: 'aa' };
+const ctxSint = { cliente: '', estabelecimento: null, usuario: null, correlacao: 'teste-m29' };
 
 describe('permissões e textos de produto', () => {
   it('sem as opções da farmácia, 403; o farmacêutico vê a fila e nenhum nome de sistema antigo', async () => {
@@ -270,7 +278,7 @@ describe('avaliação farmacêutica (regras 7 e 8) e intervenção', () => {
       unidade: UNIDADE_SINTETICA,
     });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json().mensagem).toMatch(/registrada no novo/);
+    expect(ok.json().mensagem).toMatch(/Avaliação registrada/);
     const outra = await entrar('SINT.FARMACEUTICO2');
     expect(
       (await post(outra, `/farmacia/avaliacao/${atb.item}/decisao`, { decisao: 'valido' })).json().codigo,

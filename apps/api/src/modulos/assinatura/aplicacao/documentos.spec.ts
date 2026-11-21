@@ -16,7 +16,7 @@ import {
   lerCms,
   TIPOS_ASSINAVEIS_ICP,
 } from '@sgh/dominio-documento';
-import { type DocumentoSghLido, TIPOS_DOCUMENTO_ICP_SQL } from '@sgh/legado';
+import { type DocumentoEmitidoIcp, TIPOS_DOCUMENTO_ICP } from '../tipos.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RequisicaoAutorizada } from '../../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -54,7 +54,7 @@ function sessao(o: { login?: string; como?: boolean; pode?: (c: string) => boole
     hospital: 'pc',
     rede: 'rede-sintetica',
     login: o.login ?? LOGIN,
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: { rede: 'rede-sintetica', hospital: 'pc', cliente: 'teste', estabelecimento: 1, usuario: 1, correlacao: 'teste' },
     pode: o.pode ?? (() => false),
   };
 }
@@ -123,7 +123,7 @@ class ArmazemMemoria implements ArmazemPdfIcp {
   }
 }
 
-let docs: (DocumentoSghLido & { eventos: string[] })[];
+let docs: (DocumentoEmitidoIcp & { eventos: string[] })[];
 let porta: PortaAssinaturaMemoria;
 let trilha: RegistradorTrilhaMemoria;
 let cfg: ConfigServicoAssinatura;
@@ -135,7 +135,7 @@ let ligadas: Set<string>;
 let sncr: SimuladorSncr;
 const s = sessao();
 
-function documento(id: number, o: Partial<DocumentoSghLido> = {}): DocumentoSghLido & { eventos: string[] } {
+function documento(id: number, o: Partial<DocumentoEmitidoIcp> = {}): DocumentoEmitidoIcp & { eventos: string[] } {
   return {
     id,
     tipo: 'atestado',
@@ -278,7 +278,7 @@ describe('fila do autor pela política (regras 6 e 7)', () => {
   });
 
   it('a lista dos tipos que recebem a ICP é a mesma no motor e no SQL do adaptador', () => {
-    expect([...TIPOS_DOCUMENTO_ICP_SQL]).toEqual([...TIPOS_ASSINAVEIS_ICP]);
+    expect([...TIPOS_DOCUMENTO_ICP]).toEqual([...TIPOS_ASSINAVEIS_ICP]);
   });
 });
 
@@ -376,7 +376,7 @@ describe('assinar um documento e o lote (regras 1, 2, 3 e 8)', () => {
       conferirAssinaturaHash(sim.titular(CPF_SINTETICO_SESSAO).certificado, hashAtributos, cms.assinatura),
     ).toBe(true);
     // A exportação valida de novo (momento "exportar"): válida (o CPF já foi conferido na assinatura) e vai à trilha.
-    expect(porta.trilhas.find((t) => t.evento === 'documento.assinatura.exportado')?.chaveNaturalAlvo).toBe(
+    expect(porta.trilhas.find((t) => t.evento === 'documento.assinatura.exportado')?.chave).toBe(
       'exportar:valida',
     );
     expect(porta.trilhas.map((t) => t.evento)).toEqual(
@@ -400,7 +400,7 @@ describe('assinar um documento e o lote (regras 1, 2, 3 e 8)', () => {
     expect(volta.lote).toEqual({ assinados: 20, pendentes: 0, recusados: 0 });
     expect(
       porta.trilhas.filter(
-        (t) => t.evento === 'documento.assinatura.pedida' && t.chaveNaturalAlvo === 'documento:nuvem:20',
+        (t) => t.evento === 'documento.assinatura.pedida' && t.chave === 'documento:nuvem:20',
       ),
     ).toHaveLength(1);
     expect(docs.filter((d) => d.id >= 100 && d.nivel === 'icp-brasil')).toHaveLength(20);

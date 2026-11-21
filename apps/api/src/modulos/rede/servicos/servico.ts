@@ -1,5 +1,5 @@
 // Registro dos serviços compartilhados da Rede (M57, etapa 3; ficha, seção 7 "Serviços compartilhados (registro)";
-// regra 11; DP-14 decidida: catálogos e cadastros por estabelecimento, cada um no seu banco): oportunidades registradas
+// regra 11; DP-14 decidida: catálogos e cadastros por estabelecimento): oportunidades registradas
 // sem compromisso de escopo (catálogo, fornecedores, compras, laudos). Cada registro mora no banco do estabelecimento
 // em que foi feito; a lista da Rede lê cada banco em separado (nenhuma consulta cruza os bancos) e junta em memória.
 //   - Regra 12: só os estabelecimentos da rede da sessão (lista configurada); os envolvidos têm de ser da rede.
@@ -15,9 +15,11 @@ import {
   type ServicoCompartilhado,
 } from '@sgh/contratos';
 import { ErroIsolamentoRede, estabelecimentosDaRede } from '@sgh/dominio-rede';
-import { type LinhaTrilha, type MudancaServicoParaGravar, TETO_SERVICOS_POR_BANCO } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../../problema.filter.js';
+import type { TrilhaRede } from '../tipos-indice.js';
 import type { PortaServicosRede } from './porta.js';
+import { type MudancaServicoParaGravar, TETO_SERVICOS_POR_BANCO } from './tipos.js';
 
 export interface SessaoServicosRede {
   readonly rede: string;
@@ -27,7 +29,7 @@ export interface SessaoServicosRede {
   /** A chave `rede.bi` em cada estabelecimento (o da sessão já foi conferido pelo controlador). */
   readonly liberados: ReadonlySet<string>;
   /** A linha da trilha de uma gravação (o banco é o do registro). */
-  trilha(evento: string, operacao: string, id: number | null): LinhaTrilha;
+  trilha(evento: string, operacao: string, id: number | null): TrilhaRede;
 }
 
 export interface ListaDaRedeServicos {
@@ -127,7 +129,9 @@ export class ServicoServicosRede {
         );
         itens.push(...r.itens.map((x) => ({ ...x, estabelecimentos: [...x.estabelecimentos] })));
         total += r.total;
-      } catch {
+      } catch (erro) {
+        // Recurso sem modelo no banco próprio: a recusa vale para a lista inteira (não é um estabelecimento fora do ar).
+        if (erro instanceof ErroOperacao && erro.problema.status === 501) throw erro;
         foraDoAr.push(e.codigo);
       }
     }

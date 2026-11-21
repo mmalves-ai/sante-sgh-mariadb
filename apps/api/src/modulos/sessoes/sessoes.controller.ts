@@ -3,11 +3,13 @@
 //   GET  /api/sessoes/grade?de&dias&agenda     as cadeiras e salas com as sessões do período (auditado)
 //   GET  /api/sessoes/pacientes/:id            as sessões do paciente a partir de hoje (auditado)
 //   POST /api/sessoes/previa                   as datas da série e o que impede cada uma (não grava)
-//   POST /api/sessoes                          agenda.agendarSessao (a série inteira; SGH_AGE_SESSAO)
+//   POST /api/sessoes                          agenda.agendarSessao (a série inteira: plano_sessao e sessao_terapeutica)
 //   POST /api/sessoes/:id/situacao             agenda.atualizarSessao (realizada, falta, cancelada, restantes)
 // As datas, a sobreposição e a conferência do recurso são SEMPRE do domínio (@sgh/dominio-agenda); a gravação reconfere a
-// ocupação sob a trava do recurso e do paciente, na mesma transação, com a SGH_TRILHA junto. Desligada até o serviço
+// ocupação sob a trava do recurso e do paciente, na mesma transação, com a trilha junto. Desligada até o serviço
 // existir (chave `sessoes`, DP-32; POL-3): as telas ficam em consulta.
+// Melhoria: a série leva o item agendado, o profissional solicitante e a fonte pagadora ao plano de sessões; quem grava
+// é o usuário da sessão pelo id (o contexto).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AgendarSessaoEntrada,
@@ -34,7 +36,6 @@ import {
   idadeEmAnos,
   transicaoSessao,
 } from '@sgh/dominio-agenda';
-import type { RecursoSessaoLido, SessaoSghLida } from '@sgh/legado';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -48,7 +49,13 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
-import { type GravadorSessoes, PORTA_SESSOES, type PortaSessoes } from './porta.js';
+import {
+  type GravadorSessoes,
+  PORTA_SESSOES,
+  type PortaSessoes,
+  type RecursoDeSessao,
+  type SessaoAgendada,
+} from './porta.js';
 
 const DATA = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const DIA_MS = 86_400_000;
@@ -63,7 +70,7 @@ function somarDias(data: string, dias: number): string {
   return new Date(Date.parse(`${data}T00:00:00Z`) + dias * DIA_MS).toISOString().slice(0, 10);
 }
 
-export function recursoPublico(r: RecursoSessaoLido): RecursoSessao {
+export function recursoPublico(r: RecursoDeSessao): RecursoSessao {
   return {
     recurso: r.recurso,
     identificacao: r.identificacao,
@@ -79,7 +86,7 @@ export function recursoPublico(r: RecursoSessaoLido): RecursoSessao {
   };
 }
 
-const sessaoPublica = (x: SessaoSghLida, nomes: Map<number, string>): SessaoLida => ({
+const sessaoPublica = (x: SessaoAgendada, nomes: Map<number, string>): SessaoLida => ({
   id: x.id,
   serie: x.serie,
   ordem: x.ordem,
@@ -287,7 +294,9 @@ export class SessoesController {
   @Post('sessoes')
   @HttpCode(201)
   @Permissao(P.agendar)
-  @AuditadoNoHandler('agenda.agendarSessao (SGH_AGE_SESSAO e a trava) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'agenda.agendarSessao (plano_sessao e sessao_terapeutica, com as travas) com a trilha na mesma transação',
+  )
   async agendar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSessao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAgendarSessao, b);
@@ -309,8 +318,8 @@ export class SessoesController {
       E.sessaoAgendada.codigo,
       P.agendar,
       (x: { serie: number; ids: number[] }) => ({
-        tabela: 'SGH_AGE_SESSAO',
-        id: String(x.ids[0] ?? ''),
+        tabela: 'plano_sessao',
+        id: String(x.serie),
         paciente: p.paciente.id,
         chave: `serie=${x.serie}:recurso=${p.recurso.recurso}:${p.datas.length}x${e.intervaloDias}d:${e.planoTipo}`,
       }),
@@ -322,11 +331,16 @@ export class SessoesController {
           duracao: e.duracao,
           paciente: p.paciente.id,
           prontuario: p.paciente.prontuario,
+          duracaoMin: e.duracaoMin,
+          intervaloDias: e.intervaloDias,
+          pularFimDeSemana: e.pularFimDeSemana,
           planoTipo: e.planoTipo,
           plano: e.plano,
           observacao: e.observacao?.length ? e.observacao : null,
+          itemAgendavel: e.itemAgendavel ?? null,
+          solicitante: e.solicitante ?? null,
+          fontePagadora: e.fontePagadora ?? null,
           sessoes: p.datas.map((d) => ({ ordem: d.ordem, inicio: d.inicio, fim: d.fim })),
-          usuario: s.login,
         }),
     );
     return {
@@ -341,7 +355,7 @@ export class SessoesController {
   @HttpCode(200)
   @Permissao(P.agendar)
   @AuditadoNoHandler(
-    'agenda.atualizarSessao (SGH_AGE_SESSAO, pela versão) com a SGH_TRILHA na mesma transação',
+    'agenda.atualizarSessao (sessao_terapeutica, pela versão) com a trilha na mesma transação',
   )
   async situacao(
     @Param('id') id: string,
@@ -375,7 +389,7 @@ export class SessoesController {
       E.sessaoAtualizada.codigo,
       P.agendar,
       (k: number) => ({
-        tabela: 'SGH_AGE_SESSAO',
+        tabela: 'sessao_terapeutica',
         id: String(x.id),
         paciente: x.paciente,
         chave: `serie=${x.serie}:${e.acao}${e.acao === 'cancelar-restantes' ? `:${k}` : ''}`,
@@ -388,14 +402,12 @@ export class SessoesController {
             ordem: x.ordem,
             motivo: motivo ?? '',
             versao: e.versao,
-            usuario: s.login,
           });
         await g.atualizar({
           id: x.id,
           situacao: nova as Exclude<typeof nova, 'agendada'>,
           motivo,
           versao: e.versao,
-          usuario: s.login,
         });
         return 1;
       },

@@ -10,23 +10,26 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { ArmazemValkey } from '../../sessao/valkey.js';
-import { fonteConfiguracaoMemoria } from './configuracao-fonte.js';
+import { type FonteConfiguracao, fonteConfiguracaoMemoria } from './configuracao-fonte.js';
+import { registroComConfig } from './modulo-teste.spec-util.js';
 
 const URL_VALKEY = process.env['VALKEY_URL']?.trim() || 'redis://127.0.0.1:63718';
 const REDE = `rede-int-${randomUUID().slice(0, 8)}`;
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', REDE_PADRAO: REDE };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', REDE_PADRAO: REDE, API_MODULOS: 'config' };
 
 describe('cache de configuração no Valkey (regra 10)', () => {
   let armazem: ArmazemValkey;
   let a: NestFastifyApplication;
   let b: NestFastifyApplication;
+  let configuracao: FonteConfiguracao;
   beforeAll(async () => {
     armazem = new ArmazemValkey(URL_VALKEY);
     const trilha = new RegistradorTrilhaMemoria();
     // A MESMA fonte (o "banco") e o MESMO armazém (Valkey) nas duas instâncias; caches separados por processo não existem.
-    const configuracao = fonteConfiguracaoMemoria(trilha);
-    a = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, configuracao });
-    b = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, configuracao });
+    configuracao = fonteConfiguracaoMemoria(trilha);
+    const registro = registroComConfig({ fonte: configuracao });
+    a = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, registro });
+    b = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, registro });
     for (const x of [a, b]) {
       await x.init();
       await x.getHttpAdapter().getInstance().ready();
@@ -99,6 +102,31 @@ describe('cache de configuração no Valkey (regra 10)', () => {
         .json()
         .funcionalidades.find((f: { chave: string }) => f.chave === 'licitacao');
     expect((await painel()).ligadaNoEstabelecimento).toBe(false);
+    // POL-3: a licitação só liga com a aprovação conjunta registrada (cumprida, com a evidência).
+    await configuracao.gravarPrerequisito(
+      REDE,
+      {
+        hospital: 'aa',
+        recurso: 'licitacao',
+        tipo: 'aprovacao',
+        situacao: 'cumprido',
+        validade: null,
+        evidencia: 'ata sintética do teste de integração',
+        autor: 'SINT.ADMIN',
+      },
+      {
+        rede: REDE,
+        hospital: 'aa',
+        usuario: 'SINT.ADMIN',
+        evento: 'config.prerequisito.registrado',
+        recurso: 'config.prerequisito',
+        operacao: 'config.gravarPrerequisito',
+        chaveNaturalAlvo: null,
+        resultado: 'sucesso',
+        estacao: 'TESTE:127.0.0.1',
+        correlacao: 'teste-cache-config',
+      },
+    );
     const r = await a.inject({
       method: 'POST',
       url: '/api/administracao/liberacao',

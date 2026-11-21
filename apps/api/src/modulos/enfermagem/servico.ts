@@ -31,7 +31,7 @@ import {
   turnoDoInstante,
 } from '@sgh/dominio-enfermagem';
 import { regraDaUnidade } from '@sgh/dominio-pep';
-import type { ChecagemGravacao, HorarioLidoEnf, InternadoLido } from '@sgh/legado';
+import type { ChecagemGravacao, HorarioEnfermagemLido, InternadoEnfermagem } from './tipos-vinculados.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoEnfermagem, PortaEnfermagem } from './porta.js';
 
@@ -50,8 +50,8 @@ export interface ParametrosEnfermagem {
 
 /** O horário lido como a tela mostra (com o estado no turno e o paciente). */
 export function horarioDaTela(
-  h: HorarioLidoEnf,
-  i: InternadoLido | undefined,
+  h: HorarioEnfermagemLido,
+  i: InternadoEnfermagem | undefined,
   estado: HorarioEnfermagem['estado'],
   atrasoMinutos: number | null,
 ): HorarioEnfermagem {
@@ -86,7 +86,7 @@ export function horarioDaTela(
   };
 }
 
-const paciente = (i: InternadoLido): PacienteDaUnidade => ({
+const paciente = (i: InternadoEnfermagem): PacienteDaUnidade => ({
   paciente: i.paciente,
   atendimento: i.atendimento,
   numero: i.numero,
@@ -229,8 +229,8 @@ export class ServicoEnfermagem {
    * checagem, glicemia com a faixa. Recusa (422/409) com o código; devolve os avisos conferidos.
    */
   montarChecagem(a: {
-    readonly h: HorarioLidoEnf;
-    readonly internado: InternadoLido;
+    readonly h: HorarioEnfermagemLido;
+    readonly internado: InternadoEnfermagem;
     readonly faixas: readonly { id: number; situacao: string; faixa: number }[];
     readonly entrada: ChecarHorario;
     readonly cbo: number;
@@ -430,7 +430,7 @@ export class ServicoEnfermagem {
         aPrazar.map((h) => h.id),
       )
       .catch(() => new Map());
-    const porItem = new Map<number, HorarioLidoEnf[]>();
+    const porItem = new Map<number, HorarioEnfermagemLido[]>();
     for (const h of aPrazar) porItem.set(h.item, [...(porItem.get(h.item) ?? []), h]);
     const r: PropostaAprazamento[] = [];
     for (const hs of porItem.values()) {

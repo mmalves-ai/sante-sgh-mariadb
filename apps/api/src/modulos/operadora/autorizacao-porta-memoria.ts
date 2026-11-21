@@ -2,35 +2,17 @@
 // carteirinha e as operadoras vêm da porta em memória da F1, e os prestadores da porta em memória da F3 (os mesmos que a
 // tela da rede mostra); os domínios têm os códigos que o banco do estabelecimento tem (rótulos do vocabulário), a
 // terminologia TUSS e o CID são SINTÉTICOS (nenhum nome oficial). Os pedidos, os itens, o histórico e os auditores ficam
-// em memória com as mesmas recusas das SGH_ (versão vista e situação de partida, protocolo e senha únicos, um auditor
-// ativo por operadora) e a transação desfeita por inteiro quando a função falha. Nada vai à cópia. A trilha da memória é
+// em memória com as mesmas recusas das (versão vista e situação de partida, protocolo e senha únicos, um auditor
+// ativo por operadora) e a transação desfeita por inteiro quando a função falha. Nada vai ao banco. A trilha da memória é
 // registrada pela API (como na rede).
 import {
   ORIGENS_ATENDIMENTO_OPERADORA,
   SITUACOES_GUIA_OPERADORA,
   TIPOS_GUIA_OPERADORA,
 } from '@sgh/contratos';
-import {
-  ANEXOS_COMPLEMENTO_MAX,
-  type AnexoComplementoLido,
-  type AuditorLido,
-  type AutorizacaoDaSenhaLida,
-  type AutorizacaoLida,
-  type AutorizacaoResumoLida,
-  conferirAnexoResposta,
-  recusaAuditorComPedidos,
-  type DominioAutorizacao,
-  ErroOperacao,
-  type EventoAutorizacaoSghLido,
-  type FiltroAutorizacoesLido,
-  type ItemAutorizacaoLido,
-  type ItemDominioAutorizacaoLido,
-  LIMITE_BUSCA_TUSS,
-  LIMITE_PAGINA_AUTORIZACOES,
-  type PrestadorParaAutorizacaoLido,
-  type ProcedimentoTussLido,
-  type SituacaoAutorizacaoLida,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import { conferirAnexoResposta, recusaAuditorComPedidos } from './aplicacao/regras-portas.js';
+import { ANEXOS_COMPLEMENTO_MAX, type DadosAnexoComplemento, type DadosAuditor, type DadosAutorizacao, type DadosAutorizacaoDaSenha, type DadosAutorizacaoResumo, type DadosEventoAutorizacao, type DadosItemAutorizacao, type DadosItemDominioAutorizacao, type DadosPrestadorParaAutorizacao, type DadosProcedimentoTuss, type DominioAutorizacao, type FiltroAutorizacoesPorta, LIMITE_BUSCA_TUSS, LIMITE_PAGINA_AUTORIZACOES, type SituacaoAutorizacaoPorta } from './dados-portas.js';
 import type {
   ContextoAutorizacao,
   GravadorAutorizacao,
@@ -39,11 +21,11 @@ import type {
 import type { PortaOperadora } from './porta.js';
 import type { PortaRedeOperadora } from './rede-porta.js';
 
-const opcoes = (o: Readonly<Record<number, string>>): ItemDominioAutorizacaoLido[] =>
+const opcoes = (o: Readonly<Record<number, string>>): DadosItemDominioAutorizacao[] =>
   Object.entries(o).map(([k, v]) => ({ codigo: Number(k), rotulo: v }));
 
 /** Os domínios como o banco do estabelecimento tem (as críticas são o domínio editável da operadora, sintético). */
-export const DOMINIOS_AUTORIZACAO_SINTETICOS: Record<DominioAutorizacao, ItemDominioAutorizacaoLido[]> = {
+export const DOMINIOS_AUTORIZACAO_SINTETICOS: Record<DominioAutorizacao, DadosItemDominioAutorizacao[]> = {
   tipoGuia: opcoes(TIPOS_GUIA_OPERADORA),
   origem: opcoes(ORIGENS_ATENDIMENTO_OPERADORA),
   critica: [
@@ -59,7 +41,7 @@ export const DOMINIOS_AUTORIZACAO_SINTETICOS: Record<DominioAutorizacao, ItemDom
 };
 
 /** Terminologia TUSS SINTÉTICA (códigos de 8 dígitos; um fora de vigência). */
-export const TUSS_SINTETICA: readonly ProcedimentoTussLido[] = [
+export const TUSS_SINTETICA: readonly DadosProcedimentoTuss[] = [
   { codigo: '10101012', nome: 'Consulta em consultório (sintético)', vigente: true },
   { codigo: '40301630', nome: 'Dosagem sintética de laboratório', vigente: true },
   { codigo: '40304361', nome: 'Hemograma sintético', vigente: true },
@@ -116,7 +98,7 @@ interface PedidoMem {
     diariasAutorizadas: number | null;
     admissaoPrevista: string;
   } | null;
-  situacao: SituacaoAutorizacaoLida;
+  situacao: SituacaoAutorizacaoPorta;
   complementoPedido: string | null;
   complementoResposta: string | null;
   junta: {
@@ -128,7 +110,7 @@ interface PedidoMem {
     parecer: string | null;
   } | null;
   auditor: number | null;
-  /** W0-10: o auditor responsável pela análise (SGH_OPE_AUT_RESPONSAVEL: a última linha). */
+  /** W0-10: o auditor responsável pela análise (auditor_plano: a última linha). */
   responsavel?: number | null;
   decididaEm: string | null;
   decididaPor: string | null;
@@ -144,11 +126,11 @@ interface PedidoMem {
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
 interface Estado {
   pedidos: PedidoMem[];
-  itens: (Mut<ItemAutorizacaoLido> & { hospital: string; autorizacao: number })[];
-  eventos: (EventoAutorizacaoSghLido & { hospital: string; autorizacao: number })[];
-  auditores: (Mut<AuditorLido> & { hospital: string })[];
-  /** W0-10: os anexos das respostas ao complemento pelo portal (SGH_OPE_AUT_ANEXO). */
-  anexos: (AnexoComplementoLido & { hospital: string; autorizacao: number; bytes: Uint8Array })[];
+  itens: (Mut<DadosItemAutorizacao> & { hospital: string; autorizacao: number })[];
+  eventos: (DadosEventoAutorizacao & { hospital: string; autorizacao: number })[];
+  auditores: (Mut<DadosAuditor> & { hospital: string })[];
+  /** W0-10: os anexos das respostas ao complemento pelo portal (pedido_autorizacao_plano_anexo). */
+  anexos: (DadosAnexoComplemento & { hospital: string; autorizacao: number; bytes: Uint8Array })[];
   seq: Record<string, number>;
 }
 
@@ -157,7 +139,7 @@ function sem<T extends object, K extends keyof T>(o: T, ...chaves: K[]): Omit<T,
   return Object.fromEntries(Object.entries(o).filter(([k]) => !chaves.includes(k as K))) as Omit<T, K>;
 }
 
-const EM_ABERTO = new Set<SituacaoAutorizacaoLida>(['em-analise', 'pendente', 'em-junta']);
+const EM_ABERTO = new Set<SituacaoAutorizacaoPorta>(['em-analise', 'pendente', 'em-junta']);
 
 export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperadora {
   readonly destino = 'memoria' as const;
@@ -184,8 +166,8 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     return this.operadora.operadoras(c);
   }
 
-  async prestadores(c: ContextoAutorizacao): Promise<PrestadorParaAutorizacaoLido[]> {
-    const r: PrestadorParaAutorizacaoLido[] = [];
+  async prestadores(c: ContextoAutorizacao): Promise<DadosPrestadorParaAutorizacao[]> {
+    const r: DadosPrestadorParaAutorizacao[] = [];
     let apos: { nome: string; id: number } | undefined;
     for (let i = 0; i < 20; i++) {
       const p = await this.rede.prestadores(c, { situacao: 'credenciado', ...(apos ? { apos } : {}) });
@@ -233,7 +215,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     return EM_ABERTO.has(p.situacao) && p.prazoEm < this.agora();
   }
 
-  private resumo(p: PedidoMem): AutorizacaoResumoLida {
+  private resumo(p: PedidoMem): DadosAutorizacaoResumo {
     return {
       id: p.id,
       operadora: p.operadora,
@@ -269,7 +251,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     }
   >();
 
-  async autorizacoes(c: ContextoAutorizacao, f: FiltroAutorizacoesLido) {
+  async autorizacoes(c: ContextoAutorizacao, f: FiltroAutorizacoesPorta) {
     const busca = f.busca?.trim() ?? '';
     const d = busca.replace(/[\s.\-/]/g, '');
     const lista = this.estado.pedidos
@@ -310,7 +292,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     };
   }
 
-  async autorizacao(c: ContextoAutorizacao, id: number): Promise<AutorizacaoLida | null> {
+  async autorizacao(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao | null> {
     const p = this.estado.pedidos.find((x) => x.hospital === c.hospital && x.id === id);
     if (!p) return null;
     const f = this.fichas.get(p.id);
@@ -365,7 +347,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
       .map((e) => sem(e, 'hospital', 'autorizacao'));
   }
 
-  async anexosDoComplemento(c: ContextoAutorizacao, id: number): Promise<AnexoComplementoLido[]> {
+  async anexosDoComplemento(c: ContextoAutorizacao, id: number): Promise<DadosAnexoComplemento[]> {
     return this.estado.anexos
       .filter((x) => x.hospital === c.hospital && x.autorizacao === id)
       .sort((a, b) => a.id - b.id)
@@ -419,7 +401,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
   async autorizacoesPorSenha(
     c: ContextoAutorizacao,
     senhas: readonly string[],
-  ): Promise<AutorizacaoDaSenhaLida[]> {
+  ): Promise<DadosAutorizacaoDaSenha[]> {
     return this.estado.pedidos
       .filter((p) => p.hospital === c.hospital && p.senha !== null && senhas.includes(p.senha))
       .map((p) => ({
@@ -471,8 +453,8 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     const prox = (s: string) => (e.seq[s] = (e.seq[s] ?? 0) + 1);
     const evento = (
       autorizacao: number,
-      ev: EventoAutorizacaoSghLido['evento'],
-      situacao: SituacaoAutorizacaoLida,
+      ev: DadosEventoAutorizacao['evento'],
+      situacao: SituacaoAutorizacaoPorta,
       texto: string | null,
       por: string,
     ) =>
@@ -488,7 +470,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
       });
     const mudar = (
       a: { id: number; versao: number; usuario: string },
-      de: readonly SituacaoAutorizacaoLida[],
+      de: readonly SituacaoAutorizacaoPorta[],
       fn: (p: PedidoMem) => void,
     ) => {
       const p = e.pedidos.find((x) => x.hospital === h && x.id === a.id);
@@ -680,7 +662,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
           const it = e.itens.find((x) => x.hospital === h && x.autorizacao === d.id && x.id === i.id);
           if (!it) throw desatualizada();
           it.quantidadeAutorizada = i.quantidade;
-          it.situacao = i.situacao as ItemAutorizacaoLido['situacao'];
+          it.situacao = i.situacao as DadosItemAutorizacao['situacao'];
         }
         evento(
           d.id,
@@ -780,7 +762,7 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     };
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     c: ContextoAutorizacao,
     _trilha: unknown,
     fn: (g: GravadorAutorizacao) => Promise<T>,

@@ -14,11 +14,10 @@ import {
   numeroCarteirinha,
   senhaValida,
 } from '@sgh/dominio-operadora';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../config/public-api.js';
+import { criarAppOperadora } from './infra/app-operadora.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { fonteConfiguracaoMemoria } from '../config/public-api.js';
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
@@ -26,7 +25,7 @@ import { PortaOperadoraMemoria } from './porta-memoria.js';
 import { PortaRedeOperadoraMemoria } from './rede-porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -39,7 +38,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-const pre = (recurso: string, tipo: PrerequisitoGravado['tipo']): PrerequisitoGravado => ({
+const pre = (recurso: string, tipo: PrerequisitoRecurso['tipo']): PrerequisitoRecurso => ({
   recurso,
   tipo,
   situacao: 'cumprido',
@@ -60,11 +59,11 @@ let ligado: NestFastifyApplication;
 let desligado: NestFastifyApplication;
 
 beforeAll(async () => {
-  ligado = await criarApp(lerConfiguracao(env), null, env, {
+  ligado = await criarAppOperadora(env, {
     trilha,
     operadora,
-    redeOperadora: rede,
-    autorizacaoOperadora: autorizacao,
+    rede: rede,
+    autorizacao: autorizacao,
     configuracao: fonteConfiguracaoMemoria(trilha, {
       chavesIniciais: () => [
         chave('operadora'),
@@ -77,7 +76,7 @@ beforeAll(async () => {
       ],
     }),
   });
-  desligado = await criarApp(lerConfiguracao(env), null, env, {});
+  desligado = await criarAppOperadora(env, {});
   for (const a of [ligado, desligado]) {
     await a.init();
     await a.getHttpAdapter().getInstance().ready();

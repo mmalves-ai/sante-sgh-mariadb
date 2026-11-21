@@ -1,11 +1,20 @@
 // Porta da rouparia EM MEMÓRIA (M55, fatia F2): a sessão sintética de dev/ci (E2E) tem setores, uma lavanderia
 // terceirizada e um enxoval SINTÉTICOS (peças e um kit) e grava as peças, as cotas e os movimentos SINTÉTICOS com as
 // mesmas regras e recusas da gravação (a versão vista, o retorno que só acha o envio ainda registrado, a chave única do
-// pedido, o cancelamento que devolve o envio). Nada vai à cópia; nenhum nome é de pessoa real.
+// pedido, o cancelamento que devolve o envio). Nada vai a banco; nenhum nome é de pessoa real.
+// Melhoria: recusas do @sgh/nucleo (as mesmas da porta própria); o estado é por estabelecimento da sessão; a repetição
+// pela chave guarda o resultado e a impressão do pedido, como o Executor.
 import type { CotaRoupa, KgSetorDia, MovimentoRoupa, PecaRoupa } from '@sgh/contratos';
-import { recusa } from '@sgh/legado';
+import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
-import type { FiltroMovimentosPorta, GravadorRouparia, PortaRouparia, SetorRouparia } from './porta.js';
+import {
+  chaveDoEstabelecimento,
+  type ContextoRouparia,
+  type FiltroMovimentosPorta,
+  type GravadorRouparia,
+  type PortaRouparia,
+  type SetorRouparia,
+} from './porta.js';
 
 export const SETORES_SINTETICOS_ROUPARIA: readonly SetorRouparia[] = [
   { codigo: 9101, nome: 'Clínica médica (sintético)', ativo: true },
@@ -89,6 +98,8 @@ interface Estado {
   pecas: PecaRoupa[];
   cotas: Mutavel<CotaRoupa & { id: number }>[];
   movimentos: Mutavel<MovimentoRoupa & { chave: string }>[];
+  /** Pedidos já gravados pela chave: a impressão e o resultado devolvido. */
+  pedidos: Record<string, { impressao: string; resultado: unknown }>;
   seq: number;
 }
 
@@ -98,6 +109,14 @@ function agoraLocal(): { hoje: string; agora: string } {
   const agora = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
   return { hoje: agora.slice(0, 10), agora };
 }
+/** Quem grava na memória sintética (sem usuário numérico). */
+const USUARIO_MEMORIA = 'SINT.ROUPARIA';
+
+/** O resultado guardado de um pedido repetido, marcado como repetição. */
+export function repetido(r: unknown): unknown {
+  return r !== null && typeof r === 'object' ? { ...(r as Record<string, unknown>), repetida: true } : r;
+}
+
 function semChave(m: MovimentoRoupa & { chave: string }): MovimentoRoupa {
   const r: Partial<MovimentoRoupa & { chave: string }> = { ...m };
   delete r.chave;
@@ -106,15 +125,16 @@ function semChave(m: MovimentoRoupa & { chave: string }): MovimentoRoupa {
 
 export class PortaRoupariaMemoria implements PortaRouparia {
   readonly destino = 'memoria' as const;
-  private readonly porHospital = new Map<string, Estado>();
+  private readonly porEstabelecimento = new Map<string, Estado>();
 
   constructor(private readonly relogioFn: () => { hoje: string; agora: string } = agoraLocal) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    const k = chaveDoEstabelecimento(c);
+    let s = this.porEstabelecimento.get(k);
     if (!s) {
-      s = { pecas: ENXOVAL.map((p) => ({ ...p })), cotas: [], movimentos: [], seq: 55_200 };
-      this.porHospital.set(c.hospital, s);
+      s = { pecas: ENXOVAL.map((p) => ({ ...p })), cotas: [], movimentos: [], pedidos: {}, seq: 55_200 };
+      this.porEstabelecimento.set(k, s);
     }
     return s;
   }
@@ -128,14 +148,25 @@ export class PortaRoupariaMemoria implements PortaRouparia {
   }
 
   async gravarSgh<T>(
-    c: ContextoPortaM18,
+    c: ContextoRouparia,
     _trilha: unknown,
     fn: (g: GravadorRouparia) => Promise<T>,
   ): Promise<T> {
     const s = this.e(c);
+    const pedido = c.pedido;
+    if (pedido) {
+      const ja = s.pedidos[pedido.chave];
+      if (ja) {
+        if (ja.impressao !== pedido.impressao)
+          throw recusa('chave-de-outro-movimento', 'A chave do pedido já foi usada em outro movimento.');
+        return repetido(ja.resultado) as T;
+      }
+    }
     const antes = structuredClone(s);
     try {
-      return await fn(this.gravador(s));
+      const r = await fn(this.gravador(s));
+      if (pedido) s.pedidos[pedido.chave] = { impressao: pedido.impressao, resultado: structuredClone(r) };
+      return r;
     } catch (x) {
       Object.assign(s, antes);
       throw x;
@@ -148,10 +179,6 @@ export class PortaRoupariaMemoria implements PortaRouparia {
       pecas: async () => s.pecas.map((p) => ({ ...p })),
       movimento: async (id) => {
         const m = s.movimentos.find((x) => x.id === id);
-        return m ? semChave(m) : null;
-      },
-      movimentoPelaChave: async (chave) => {
-        const m = s.movimentos.find((x) => x.chave === chave);
         return m ? semChave(m) : null;
       },
       incluirPeca: async (p) => {
@@ -186,6 +213,7 @@ export class PortaRoupariaMemoria implements PortaRouparia {
         return { id: p.id, versao: atual.versao + 1 };
       },
       gravarCotas: async (c) => {
+        // Memória: as cotas valem pelo setor e pela peça (a porta própria guarda a vigência).
         let alteradas = 0;
         for (const q of c.cotas) {
           const atual = s.cotas.find((x) => x.centroCusto === c.centroCusto && x.peca === q.peca);
@@ -208,8 +236,6 @@ export class PortaRoupariaMemoria implements PortaRouparia {
         return { alteradas };
       },
       registrarMovimento: async (m) => {
-        if (s.movimentos.some((x) => x.chave === m.chave))
-          throw recusa('chave-de-outro-movimento', 'A chave do pedido já foi usada em outro movimento.');
         if (m.tipo === 'retorno') {
           const envio = s.movimentos.find(
             (x) => x.id === m.remessa && x.tipo === 'envio' && x.situacao === 'registrado',
@@ -239,7 +265,7 @@ export class PortaRoupariaMemoria implements PortaRouparia {
           ocorrencia: m.ocorrencia,
           observacao: m.observacao,
           situacao: 'registrado',
-          por: m.usuario,
+          por: USUARIO_MEMORIA,
           canceladoPor: null,
           canceladoEm: null,
           motivoCancelamento: null,
@@ -255,7 +281,7 @@ export class PortaRoupariaMemoria implements PortaRouparia {
             'O movimento mudou desde que foi aberto ou já tem o retorno: atualize a tela.',
           );
         m.situacao = 'cancelado';
-        m.canceladoPor = c.usuario;
+        m.canceladoPor = USUARIO_MEMORIA;
         m.canceladoEm = this.relogioFn().agora;
         m.motivoCancelamento = c.motivo;
         m.versao += 1;

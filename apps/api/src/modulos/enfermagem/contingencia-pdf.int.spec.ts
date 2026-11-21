@@ -3,10 +3,8 @@
 // releitura e o veraPDF sem falha (PDF/A-2b). Serviços do Compose sgh (127.0.0.1); massa SINTÉTICA; nada sai da
 // máquina. Fora do `pnpm verificar`: roda pelo `testes:integracao` da API, com `./pnpm infra:subir` no ar.
 import { rmSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { sha256Hex } from '@sgh/dominio-documento';
 import { TITULO_RELATORIO_CONTINGENCIA } from '@sgh/contratos';
-import { fonteCatalogoArquivo } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import type { FonteDocumento } from '../documento/public-api.js';
@@ -34,10 +32,7 @@ const emissao = new EmissaoService({
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
   raiz,
 });
-const porta = new PortaEnfermagemMemoria(
-  fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
-  { agora: () => new Date(RELOGIO_TESTE) },
-);
+const porta = new PortaEnfermagemMemoria({ agora: () => new Date(RELOGIO_TESTE) });
 
 let pasta: string;
 beforeAll(async () => {
@@ -51,7 +46,14 @@ describe('relatório de contingência do posto em PDF/A (M40, regra 6)', () => {
   it('PDF/A-2b sem falha no veraPDF, com o título e o hash conferido na releitura', async () => {
     const servico = new ServicoContingencia(porta, { emissao } as unknown as FonteDocumento);
     const g = await servico.gerar(
-      { rede: 'rede-teste', hospital: 'zz' },
+      {
+        cliente: '',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste-pdf',
+        rede: 'rede-teste',
+        hospital: 'zz',
+      },
       { unidade: 'UTI', horas: 6, autor: 'USUARIO_TESTE' },
     );
     expect(g.resumo).toMatchObject({ unidade: 'UTI', pacientes: 3 });

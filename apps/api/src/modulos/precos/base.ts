@@ -1,15 +1,17 @@
 // Partes comuns dos controladores do M12: sessão e estabelecimento, contexto de leitura, permissão conferida no
-// handler (com a negação na trilha), escopo de convênio (TBUSERS_TBCONVEN pelo M06), contexto da operação
+// handler (com a negação na trilha), escopo de convênio (pela sessão, M06), contexto da operação
 // (Idempotency-Key obrigatória; reautenticação nas críticas) e a tradução dos erros do executor para Problem
 // Details em português (sem nome de tabela nem valor de coluna).
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { pode } from '@sgh/dominio-acesso';
-import { type ContextoOperacao, ErroCargaSgh, ErroOperacao, ErroPlanoSgh } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import type { CtxPrecos } from './fonte.js';
+import { contextoDoEstabelecimento, idUsuarioDaSessao } from '../cadastro/contexto-nucleo.js';
+import type { ContextoGravacaoPreco, CtxPrecos } from './fonte.js';
+import { ErroCarga, ErroPlano } from './tipos.js';
 
 const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,72}$/;
 
@@ -23,7 +25,15 @@ export function sessaoDe(req: RequisicaoAutorizada) {
 
 export function ctxDe(req: RequisicaoAutorizada, origem: string): CtxPrecos {
   const s = sessaoDe(req);
-  return { rede: s.rede, hospital: s.hospital, traceId: correlacaoDaRequisicao(req, origem).slice(0, 64) };
+  const correlacao = correlacaoDaRequisicao(req, origem).slice(0, 64);
+  return {
+    ...contextoDoEstabelecimento(s.hospital),
+    usuario: idUsuarioDaSessao(s.a.sessao.usuario.id),
+    correlacao,
+    rede: s.rede,
+    hospital: s.hospital,
+    traceId: correlacao,
+  };
 }
 
 export function podeNa(req: RequisicaoAutorizada, codigo: string): boolean {
@@ -55,8 +65,7 @@ export async function exigir(
 }
 
 /**
- * Convênios do escopo da sessão (TBUSERS_TBCONVEN, lidos pelo M06): null = sem restrição (lista vazia no
- * legado = todos, POL-1). Lido direto da sessão: o módulo `convenio` não tem escopo por módulo no CASL (as
+ * Convênios do escopo da sessão (lidos pelo M06): null = sem restrição (lista vazia = todos, POL-1). Lido direto da sessão: o módulo `convenio` não tem escopo por módulo no CASL (as
  * classificações oncológicas, que não são por convênio, falhariam fechado).
  */
 export function escopoConvenio(req: RequisicaoAutorizada): readonly string[] | null {
@@ -85,12 +94,19 @@ export function exigirNoEscopo(req: RequisicaoAutorizada, convenio: number): voi
     throw new ErroProblema('nao-encontrado', 404, 'Convênio não encontrado');
 }
 
+/** A Idempotency-Key do pedido, quando válida; null quando o cliente não a mandou (gravação sem reenvio seguro). */
+export function chaveDoPedido(req: RequisicaoAutorizada): string | null {
+  const bruto = req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  return typeof chave === 'string' && IDEMPOTENCIA.test(chave) ? chave : null;
+}
+
 export function contextoOperacao(
   req: RequisicaoAutorizada,
   origem: string,
   reautenticadoEm?: number,
-): ContextoOperacao {
-  const { rede, hospital, login } = sessaoDe(req);
+): ContextoGravacaoPreco {
+  const { login } = sessaoDe(req);
   const bruto = req.headers['idempotency-key'];
   const chave = Array.isArray(bruto) ? bruto[0] : bruto;
   if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave))
@@ -101,22 +117,20 @@ export function contextoOperacao(
       'Falta a Idempotency-Key do pedido de gravação.',
     );
   return {
-    rede,
-    hospital,
-    traceId: correlacaoDaRequisicao(req, origem).slice(0, 64),
-    usuarioLegado: login,
-    idempotencyKey: chave,
+    ...ctxDe(req, origem),
+    login,
+    chaveIdempotencia: chave,
     estacao: estacaoDaRequisicao(req).slice(0, 80),
     ...(reautenticadoEm !== undefined ? { reautenticadoEm } : {}),
   };
 }
 
-/** Erro do executor (ou da transação SGH_) → Problem Details em português. */
+/** Erro do executor (ou da gravação direta) → Problem Details em português. */
 export function problemaDoPreco(e: unknown): ErroProblema {
   if (e instanceof ErroProblema) return e;
-  if (e instanceof ErroCargaSgh)
+  if (e instanceof ErroCarga)
     return new ErroProblema('recusa-de-negocio', 409, 'Importação', e.message, { codigo: e.codigo });
-  if (e instanceof ErroPlanoSgh)
+  if (e instanceof ErroPlano)
     return e.codigo === 'nao-encontrado'
       ? new ErroProblema('nao-encontrado', 404, 'Plano', e.message, { codigo: e.codigo })
       : e.codigo === 'conflito-concorrente'

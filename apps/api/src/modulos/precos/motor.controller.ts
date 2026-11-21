@@ -7,7 +7,7 @@
 //   GET /api/faturamento/terceiros/tabelas · /terceiros?tabela&busca&pagina · /unimed?busca&pagina
 import { Controller, Get, Inject, Query, Req } from '@nestjs/common';
 import type { PaginaGenerica } from '@sgh/contratos';
-import type { Pagina } from '@sgh/legado';
+import type { Pagina } from './tipos.js';
 import { Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ctxDe, filtroConvenioDaSessao, inteiro, inteiroOuNulo, paginaDe, podeNa } from './base.js';
@@ -27,7 +27,7 @@ export class MotorController {
 
   /**
    * Convênio pedido dentro do escopo da sessão (fora dele: nenhum item, sem vazar). Sem convênio pedido, a
-   * lista do escopo (TBUSERS_TBCONVEN): com escopo restrito, omitir o convênio nunca vira "todos".
+   * lista do escopo da sessão: com escopo restrito, omitir o convênio nunca vira "todos".
    */
   private convenio(req: RequisicaoAutorizada, q: Record<string, string>) {
     return filtroConvenioDaSessao(req, inteiroOuNulo(q['convenio'], 'convenio'));
@@ -108,7 +108,7 @@ export class MotorController {
   ): Promise<PaginaGenerica> {
     const p = paginaDe(q);
     const ctx = ctxDe(req, 'portes');
-    // Por convênio: a tabela de porte do contrato (TBCONVEN.PORTE), dentro do escopo; senão, a tabela pedida.
+    // Por convênio: a tabela de porte do contrato (a do contrato), dentro do escopo; senão, a tabela pedida.
     let tabela = inteiroOuNulo(q['tabela'], 'tabela');
     const pedido = inteiroOuNulo(q['convenio'], 'convenio');
     if (pedido !== null) {

@@ -22,6 +22,15 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { FonteDocumento } from '../documento/public-api.js';
 import type { ContextoEnfermagem, PortaEnfermagem } from './porta.js';
 
+/**
+ * O contexto da contingência: o do núcleo (cliente, estabelecimento por id) mais os códigos da rede e do estabelecimento
+ * que o serviço de emissão de documentos usa (o contexto da sessão já traz os dois).
+ */
+export type ContextoContingencia = ContextoEnfermagem & { readonly rede: string; readonly hospital: string };
+
+/** Os estabelecimentos com a geração de cada hora (o módulo entrega; vazio, nenhuma geração automática). */
+export const ALVOS_CONTINGENCIA = Symbol('ALVOS_CONTINGENCIA');
+
 /** Teto de horários lidos para o posto (as 24 h da prescrição vigente mais o horizonte). */
 const TETO_HORARIOS = 3_000;
 
@@ -54,12 +63,12 @@ export class ServicoContingencia {
     private readonly documento: FonteDocumento | null,
   ) {}
 
-  private static chave(c: ContextoEnfermagem, unidade: string): string {
-    return `${c.rede}|${c.hospital}|${unidade}`;
+  private static chave(c: ContextoContingencia, unidade: string): string {
+    return `${c.cliente}|${c.rede}|${c.hospital}|${unidade}`;
   }
 
   /** O último relatório do posto (null quando nenhum foi gerado desde que a API subiu). */
-  async ultima(c: ContextoEnfermagem, unidade: string): Promise<UltimaGeracao | null> {
+  async ultima(c: ContextoContingencia, unidade: string): Promise<UltimaGeracao | null> {
     const u = this.ultimas.get(ServicoContingencia.chave(c, unidade));
     if (!u) return null;
     const fonte = this.documento;
@@ -83,7 +92,7 @@ export class ServicoContingencia {
   }
 
   /** Lê o posto, monta o relatório e emite o PDF/A (via 1 de um documento novo a cada geração). */
-  async gerar(c: ContextoEnfermagem, p: PedidoGeracao): Promise<GeracaoFeita> {
+  async gerar(c: ContextoContingencia, p: PedidoGeracao): Promise<GeracaoFeita> {
     const fonte = this.documento;
     if (!fonte)
       throw new ErroProblema(
@@ -191,8 +200,8 @@ export class GeracaoPorHora {
     private readonly servico: ServicoContingencia,
     private readonly trilha: RegistradorTrilha,
     private readonly parametro: (rede: string, hospital: string, chave: string) => Promise<string | null>,
-    private readonly hospitais: readonly string[],
-    private readonly rede: string,
+    /** Cada estabelecimento com a geração de cada hora (o contexto do núcleo com os códigos da rede e dele). */
+    private readonly alvos: readonly ContextoContingencia[],
   ) {}
 
   iniciar(intervaloMs = 3_600_000): void {
@@ -209,16 +218,21 @@ export class GeracaoPorHora {
     this.rodando = true;
     const feitos: { hospital: string; unidade: string; ok: boolean }[] = [];
     try {
-      for (const hospital of this.hospitais) {
+      for (const alvo of this.alvos) {
+        const { rede, hospital } = alvo;
         const postos = postosDoParametro(
-          await this.parametro(this.rede, hospital, PARAMETRO_CONTINGENCIA_POSTOS).catch(() => null),
+          await this.parametro(rede, hospital, PARAMETRO_CONTINGENCIA_POSTOS).catch(() => null),
         );
         if (postos.length === 0) continue;
         const horas = Number(
-          await this.parametro(this.rede, hospital, PARAMETRO_CONTINGENCIA_HORAS).catch(() => null),
+          await this.parametro(rede, hospital, PARAMETRO_CONTINGENCIA_HORAS).catch(() => null),
         );
         for (const unidade of postos) {
-          const c = { rede: this.rede, hospital };
+          const c: ContextoContingencia = {
+            ...alvo,
+            usuario: null,
+            correlacao: `contingencia-${Date.now()}`,
+          };
           try {
             const g = await this.servico.gerar(c, {
               unidade,
@@ -227,14 +241,14 @@ export class GeracaoPorHora {
             });
             await this.trilha.registrar({
               evento: EVENTOS_AUDITAVEIS.enfermagemContingenciaGerada.codigo,
-              rede: this.rede,
+              rede,
               hospital,
               usuario: 'sgh.api',
               estacao: 'api:contingencia',
               correlacao: `contingencia-${hospital}-${unidade}-${Date.now()}`.slice(0, 64),
               recurso: 'enfermagem.contingencia',
               resultado: 'sucesso',
-              tabelaAlvo: 'PRCHKGERAL',
+              tabelaAlvo: 'horario_administracao',
               idAlvo: g.resumo.documento,
               chaveNaturalAlvo: `contingencia:${unidade}:${g.resumo.pacientes}:${g.resumo.horarios}`,
             });

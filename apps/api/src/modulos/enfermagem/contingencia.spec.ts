@@ -3,8 +3,6 @@
 // A HTTP: pedido inválido 400, sem a permissão 403, com o serviço de emissão fora 503 (a mensagem manda imprimir a
 // linha do tempo); a leitura vai à trilha com a unidade e as contagens. A geração de cada hora: só os postos do
 // parâmetro, e cada geração na trilha como leitura do sistema.
-import { resolve } from 'node:path';
-import { fonteCatalogoArquivo } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import type { FonteDocumento } from '../documento/public-api.js';
@@ -12,12 +10,17 @@ import { GeracaoPorHora, postosDoParametro, ServicoContingencia } from './contin
 import { type AppEnfermagem, criarAppEnfermagem, RELOGIO_TESTE } from './enfermagem.spec-util.js';
 import { PortaEnfermagemMemoria } from './porta-memoria.js';
 
-const porta = () =>
-  new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
-    { agora: () => new Date(RELOGIO_TESTE) },
-  );
-const c = { rede: 'r', hospital: 'aa' };
+const porta = () => new PortaEnfermagemMemoria({ agora: () => new Date(RELOGIO_TESTE) });
+/** O contexto do estabelecimento sintético (sem banco), com os códigos da rede e do estabelecimento. */
+const alvo = (hospital: string) => ({
+  cliente: '',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste-contingencia',
+  rede: 'r',
+  hospital,
+});
+const c = alvo('aa');
 
 function emissaoFalsa() {
   const pedidos: { modelo: string; campos: readonly { rotulo: string; valor: string }[]; autor: string }[] =
@@ -80,8 +83,7 @@ describe('relatório de contingência do posto (serviço)', () => {
       servico,
       trilha,
       (_r, _h, chave) => Promise.resolve(chave === 'enfermagem.contingenciaPostos' ? 'UTI' : '4'),
-      ['aa'],
-      'r',
+      [alvo('aa')],
     );
     await por.ciclo();
     const u = await servico.ultima(c, 'UTI');
@@ -90,7 +92,7 @@ describe('relatório de contingência do posto (serviço)', () => {
     // A geração seguinte (tela ou hora) passa a ser a última; outro hospital não enxerga.
     await servico.gerar(c, { unidade: 'UTI', horas: 6, autor: 'SINT.ENF' });
     expect((await servico.ultima(c, 'UTI'))?.resumo.documento).toBe('doc-2');
-    expect(await servico.ultima({ ...c, hospital: 'bb' }, 'UTI')).toBeNull();
+    expect(await servico.ultima(alvo('bb'), 'UTI')).toBeNull();
   });
 
   it('sem o serviço de emissão: 503 com a saída pela linha do tempo', async () => {
@@ -116,8 +118,7 @@ describe('relatório de contingência do posto (serviço)', () => {
         Promise.resolve(
           chave === 'enfermagem.contingenciaPostos' ? (hospital === 'aa' ? 'UTI,ENF1' : '') : '4',
         ),
-      ['aa', 'bb'],
-      'r',
+      [alvo('aa'), alvo('bb')],
     );
     const feitos = await por.ciclo();
     expect(feitos).toEqual([

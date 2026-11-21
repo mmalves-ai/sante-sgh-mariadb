@@ -1,11 +1,11 @@
 // Serviços compartilhados da Rede (M57, etapa 3; ficha, seção 7; regra 11) — dentro de `Relatórios e BI > BI
 // consolidado da Rede` (`/relatorios/bi/rede/servicos`):
-//   GET  /api/rede/servicos?area&situacao&pagina&porPagina     a lista da Rede (cada banco lido em separado)
-//   POST /api/rede/servicos                                     registrar (no banco do estabelecimento da sessão)
-//   POST /api/rede/servicos/:estabelecimento/:id                alterar (no banco em que o registro mora)
+//   GET  /api/rede/servicos?area&situacao&pagina&porPagina     a lista da Rede (cada estabelecimento lido em separado)
+//   POST /api/rede/servicos                                     registrar (no estabelecimento da sessão)
+//   POST /api/rede/servicos/:estabelecimento/:id                alterar (no estabelecimento do registro)
 // Ler: `relatorio.biRede.acessar`; gravar: `rede.servico.registrar` (perfil da diretoria da Rede). A chave `rede.bi`
 // no estabelecimento da sessão; nos outros, conferida estabelecimento a estabelecimento. Toda gravação vai com a
-// SGH_TRILHA na mesma transação, no banco do registro (com a porta em memória, o registrador da API registra).
+// trilha na mesma transação, pelo executor do núcleo (com a porta em memória, o registrador da API registra).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   CHAVE_LIBERACAO_BI_REDE,
@@ -87,7 +87,7 @@ export class ServicosRedeController {
         liberados,
         trilha: (evento, operacao, id) =>
           linhaTrilha(s, evento, 'rede.servico', operacao, {
-            tabela: 'SGH_REDE_SERVICO_COMPART',
+            tabela: 'servico_compartilhado_rede',
             id: id === null ? null : String(id),
           }),
       },
@@ -127,7 +127,7 @@ export class ServicosRedeController {
   @Post()
   @HttpCode(201)
   @Permissao(P.servicoRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do registro, no banco do estabelecimento da sessão')
+  @AuditadoNoHandler('trilha na transação do registro, pelo executor do núcleo')
   async registrar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ServicoCompartilhado> {
     const { s, r } = await this.entrar(req);
     const d = esquemaNovoServicoCompartilhado.safeParse(corpo);
@@ -140,7 +140,7 @@ export class ServicosRedeController {
   @Post(':estabelecimento/:id')
   @HttpCode(200)
   @Permissao(P.servicoRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da alteração, no banco em que o registro mora')
+  @AuditadoNoHandler('trilha na transação da alteração, pelo executor do núcleo')
   async alterar(
     @Param('estabelecimento') estabelecimento: string,
     @Param('id') id: string,

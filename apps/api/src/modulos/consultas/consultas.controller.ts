@@ -9,12 +9,15 @@
 //   POST /api/consultas/:modulo/:recurso/exportar            CSV (permissão exportar; justificativa com dado de
 //                                                            pessoa ou conteúdo clínico; trilha antes da resposta)
 // A rota exige `config.consulta.ler` (todos os perfis de pessoa); cada handler confere a permissão da CONSULTA
-// (`<modulo>.consulta.ler|exportar`; clínica: `pep.consultaClinica.*`), com a negação na trilha. Nada grava no
-// legado: transação READ ONLY e o executor não tem receita para consultas (regra 5). Nenhum nome de tabela nem
-// de coluna do legado sai na resposta.
+// (`<modulo>.consulta.ler|exportar`; clínica: `pep.consultaClinica.*`), com a negação na trilha. Nada é gravado:
+// transação somente leitura e o executor não tem operação de consulta (regra 5). Nenhum nome de tabela nem de coluna
+// do banco sai na resposta. A consulta só existe quando a tabela do modelo próprio a atende (tabelas.gerado.ts).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req, Res } from '@nestjs/common';
 import {
+  CONSULTAS_DECLARADAS,
   type ConsultaDescrita,
+  type ConsultaPublica,
+  consultaPublica,
   esquemaPedidoExportacaoConsulta,
   esquemaPedidoPaginaConsulta,
   EVENTOS_AUDITAVEIS,
@@ -38,22 +41,16 @@ import {
   valoresDoCodigo,
 } from '@sgh/dominio-config';
 import { filtroDeEscopo, pode } from '@sgh/dominio-acesso';
-import {
-  colunasDescritas,
-  CONSULTAS_LEGADO,
-  consultaLegado,
-  type DeclaracaoConsulta,
-  ErroConsulta,
-  ErroEscopo,
-  ErroTempoEsgotado,
-} from '@sgh/legado';
+import { ErroTempoEsgotado } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { FONTE_CONSULTAS, type FonteConsultas } from './fonte.js';
+import { sessaoDe } from '../cadastro/comum.js';
+import { colunasDescritas, type DeclaracaoConsulta, ErroConsulta, ErroEscopo } from './declaracao.js';
+import { type CtxConsulta, FONTE_CONSULTAS, type FonteConsultas, tabelaDaConsulta } from './fonte.js';
 
 interface RespostaCsv {
   header(nome: string, valor: string): RespostaCsv;
@@ -111,35 +108,61 @@ export class ConsultasController {
     return { a, hospital, rede: a.sessao.rede ?? '', login: a.sessao.usuario.login ?? a.sessao.usuario.id };
   }
 
-  /** Contexto da leitura com o escopo do M06 da sessão para a permissão desta consulta. */
-  private ctx(req: RequisicaoAutorizada, d: DeclaracaoConsulta) {
-    const { rede, hospital } = this.sessao(req);
+  /** Contexto da leitura (sem o escopo): o estabelecimento e o usuário da sessão por id, quando conhecidos. */
+  private base(req: RequisicaoAutorizada): CtxConsulta {
+    const s = sessaoDe(req);
     return {
-      rede,
-      hospital,
+      rede: s.rede,
+      hospital: s.hospital,
+      estabelecimento: s.porta.estabelecimento,
+      usuario: s.porta.usuario,
+      correlacao: s.porta.correlacao,
+    };
+  }
+
+  /** Contexto da leitura com o escopo do M06 da sessão para a permissão desta consulta. */
+  private ctx(req: RequisicaoAutorizada, d: DeclaracaoConsulta): CtxConsulta {
+    return {
+      ...this.base(req),
       escopo: filtroDeEscopo(permissaoDaConsulta(d.publico, 'ler'), req.sgh?.sessao.escopos),
     };
   }
 
-  private consulta(modulo: string, recurso: string): DeclaracaoConsulta {
-    const d =
+  /** A parte pública da consulta (404 quando não existe ou quando nenhuma tabela do modelo a atende). */
+  private publica(modulo: string, recurso: string): ConsultaPublica {
+    const p =
       /^[a-z]+$/.test(modulo) && /^[a-z][A-Za-z0-9]{1,60}$/.test(recurso)
-        ? consultaLegado(modulo, recurso)
+        ? consultaPublica(modulo, recurso)
         : undefined;
+    if (!p || !tabelaDaConsulta(p)) throw new ErroProblema('nao-encontrado', 404, 'Consulta não encontrada');
+    return p;
+  }
+
+  /** A permissão primeiro (a negação vai à trilha); depois, a declaração física lida do banco. */
+  private async consulta(
+    req: RequisicaoAutorizada,
+    modulo: string,
+    recurso: string,
+    acao: 'ler' | 'exportar',
+  ): Promise<DeclaracaoConsulta> {
+    const p = this.publica(modulo, recurso);
+    await this.exigir(req, p, acao);
+    let d: DeclaracaoConsulta | null;
+    try {
+      d = await this.fonte.declaracao(this.base(req), p);
+    } catch (e) {
+      throw problemaDaConsulta(e);
+    }
     if (!d) throw new ErroProblema('nao-encontrado', 404, 'Consulta não encontrada');
     return d;
   }
 
-  private podeConsultar(req: RequisicaoAutorizada, d: DeclaracaoConsulta, acao: 'ler' | 'exportar'): boolean {
-    return pode(this.sessao(req).a.ability, permissaoDaConsulta(d.publico, acao));
+  private podeConsultar(req: RequisicaoAutorizada, p: ConsultaPublica, acao: 'ler' | 'exportar'): boolean {
+    return pode(this.sessao(req).a.ability, permissaoDaConsulta(p, acao));
   }
 
-  private async exigir(
-    req: RequisicaoAutorizada,
-    d: DeclaracaoConsulta,
-    acao: 'ler' | 'exportar',
-  ): Promise<void> {
-    if (this.podeConsultar(req, d, acao)) return;
+  private async exigir(req: RequisicaoAutorizada, p: ConsultaPublica, acao: 'ler' | 'exportar'): Promise<void> {
+    if (this.podeConsultar(req, p, acao)) return;
     const { hospital, rede, login } = this.sessao(req);
     await this.trilha
       .registrar({
@@ -149,7 +172,7 @@ export class ConsultasController {
         usuario: login,
         estacao: estacaoDaRequisicao(req),
         correlacao: correlacaoDaRequisicao(req, 'negada'),
-        recurso: permissaoDaConsulta(d.publico, acao).slice(0, 80),
+        recurso: permissaoDaConsulta(p, acao).slice(0, 80),
         resultado: 'falha',
       })
       .catch(() => undefined);
@@ -168,7 +191,7 @@ export class ConsultasController {
       rota: rotaDaConsulta(d.publico),
       colunas: colunasDescritas(d),
       exigeFiltro: d.publico.grande,
-      permitidas: (['ler', 'exportar'] as const).filter((a) => this.podeConsultar(req, d, a)),
+      permitidas: (['ler', 'exportar'] as const).filter((a) => this.podeConsultar(req, d.publico, a)),
       exportarExigeJustificativa: d.publico.classe !== 'comum',
     };
   }
@@ -218,17 +241,17 @@ export class ConsultasController {
   @Permissao('config.consulta.ler')
   indice(@Query('item') item: string | undefined, @Req() req: RequisicaoAutorizada): IndiceConsultas {
     return {
-      consultas: CONSULTAS_LEGADO.filter(
-        (d) => (!item || d.publico.item === item) && this.podeConsultar(req, d, 'ler'),
-      ).map((d) => ({
-        modulo: d.publico.modulo,
-        recurso: d.publico.recurso,
-        rotulo: d.publico.rotulo,
-        item: d.publico.item,
-        fase: d.publico.fase,
-        classe: d.publico.classe,
-        grande: d.publico.grande,
-        rota: rotaDaConsulta(d.publico),
+      consultas: CONSULTAS_DECLARADAS.filter(
+        (p) => tabelaDaConsulta(p) !== null && (!item || p.item === item) && this.podeConsultar(req, p, 'ler'),
+      ).map((p) => ({
+        modulo: p.modulo,
+        recurso: p.recurso,
+        rotulo: p.rotulo,
+        item: p.item,
+        fase: p.fase,
+        classe: p.classe,
+        grande: p.grande,
+        rota: rotaDaConsulta(p),
       })),
     };
   }
@@ -239,9 +262,8 @@ export class ConsultasController {
   async justificativasExportacao(
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ justificativas: { codigo: number; descricao: string }[] }> {
-    const { rede, hospital } = this.sessao(req);
     try {
-      return { justificativas: [...(await this.fonte.justificativas({ rede, hospital }))] };
+      return { justificativas: [...(await this.fonte.justificativas(this.base(req)))] };
     } catch (e) {
       throw problemaDaConsulta(e);
     }
@@ -254,8 +276,7 @@ export class ConsultasController {
     @Param('recurso') r: string,
     @Req() req: RequisicaoAutorizada,
   ): Promise<ConsultaDescrita> {
-    const d = this.consulta(m, r);
-    await this.exigir(req, d, 'ler');
+    const d = await this.consulta(req, m, r, 'ler');
     return this.descrever(req, d);
   }
 
@@ -270,8 +291,7 @@ export class ConsultasController {
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaConsulta> {
-    const d = this.consulta(m, r);
-    await this.exigir(req, d, 'ler');
+    const d = await this.consulta(req, m, r, 'ler');
     const p = esquemaPedidoPaginaConsulta.safeParse(q);
     if (!p.success) throw new ErroProblema('entrada-invalida', 400, 'Consulta inválida');
     this.sessao(req);
@@ -317,8 +337,7 @@ export class ConsultasController {
     @Param('codigo') codigo: string,
     @Req() req: RequisicaoAutorizada,
   ): Promise<RegistroConsulta> {
-    const d = this.consulta(m, r);
-    await this.exigir(req, d, 'ler');
+    const d = await this.consulta(req, m, r, 'ler');
     if (codigo.length > 200) throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
     this.sessao(req);
     try {
@@ -358,16 +377,14 @@ export class ConsultasController {
     @Req() req: RequisicaoAutorizada,
     @Res({ passthrough: true }) res: RespostaCsv,
   ): Promise<string> {
-    const d = this.consulta(m, r);
     // Permissão de exportar ANTES de qualquer leitura (a negação vai à trilha).
-    await this.exigir(req, d, 'exportar');
+    const d = await this.consulta(req, m, r, 'exportar');
     const p = esquemaPedidoExportacaoConsulta.safeParse(corpo ?? {});
     if (!p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
-    const { rede, hospital } = this.sessao(req);
     try {
       const exige = d.publico.classe !== 'comum';
       if (exige) {
-        const validas = new Set((await this.fonte.justificativas({ rede, hospital })).map((j) => j.codigo));
+        const validas = new Set((await this.fonte.justificativas(this.base(req))).map((j) => j.codigo));
         if (p.data.justificativa === undefined || !validas.has(p.data.justificativa))
           throw new ErroProblema(
             'entrada-invalida',

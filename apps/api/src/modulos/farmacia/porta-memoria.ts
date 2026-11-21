@@ -1,6 +1,6 @@
 // Porta da farmácia em MEMÓRIA (M29): a sessão sintética de dev/ci (E2E). Unidade, internados, horários prescritos,
 // itens, lotes, dispensações, doses, controle de entrega, avaliações, intervenções e controlados SINTÉTICOS (nomes
-// claramente fictícios). As gravações aplicam o mesmo Zod das receitas (operacao(op).entrada) e as mesmas regras do
+// claramente fictícios). As gravações aplicam o mesmo Zod das receitas (o Zod de operacoes.ts) e as mesmas regras do
 // domínio (fila disputada, política, saldo e lote, controlado com prescritor, aceite, devolução até a dose, decisão,
 // intervenção, dupla conferência, livro, SNGPC) e simulam o que os gatilhos fazem no banco (número do documento, saldo).
 // A dispensação e a devolução da dose ficam DESLIGADAS no banco real (D-MOTOR-28): aqui a tela percorre o fluxo inteiro.
@@ -20,7 +20,6 @@ import {
   conferirDispensacaoAmbulatorial,
   conferirDuplaConferencia,
   conferirFechamentoLivro,
-  conferirGravacaoNoLegado,
   conferirPerdaControlado,
   conferirPrescritorControlado,
   conferirRespostaIntervencao,
@@ -30,20 +29,23 @@ import {
   montarEnvioSngpc,
   type RecusaSuprimentos,
 } from '@sgh/contratos/regras-suprimentos';
-import {
-  type AvaliacaoSghLida,
-  type ContextoOperacao,
-  type DoseDispensadaRepo,
-  type DoseFilaLida,
-  ErroOperacao,
-  type FonteCatalogo,
-  type HorarioLidoEnf,
-  type IntervencaoRepo,
-  type LiberacaoConsultada,
-  operacao,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { ENTRADAS_FARMACIA } from './operacoes.js';
 import type { ContextoFarmacia, GravadorSghFarmacia, PortaFarmacia } from './porta.js';
+import type {
+  AvaliacaoRegistrada,
+  DoseDaFila,
+  DoseDispensada,
+  HorarioDaFila,
+  IntervencaoRegistrada,
+} from './tipos.js';
 
+/** Chave do estado em memória: o cliente e o estabelecimento da sessão. */
+const chaveDe = (c: ContextoFarmacia) => `${c.cliente}:${c.estabelecimento ?? 0}`;
+/** O autor exibido da gravação em memória: o login da sessão (o contexto da gravação o leva), senão o id. */
+const autorDe = (ctx: ContextoOperacao & { readonly login?: string }) =>
+  ctx.login ?? (ctx.usuario === null ? 'SINT.FARMA' : `USUARIO.${ctx.usuario}`);
 const recusaOp = (codigo: string, mensagem: string, campos?: readonly string[]) =>
   new ErroOperacao(409, codigo, 'Operação recusada', mensagem, campos ? { campos } : {});
 function recusar(r: RecusaSuprimentos | null | undefined): void {
@@ -87,7 +89,7 @@ interface HorarioM {
   id: number;
   lancamento: number;
   prescricao: number;
-  reg: number;
+  atendimento: number;
   cabecalho: number;
   item: number;
   previsto: Date;
@@ -98,7 +100,7 @@ interface HorarioM {
 }
 
 interface InternadoM {
-  reg: number;
+  atendimento: number;
   paciente: number;
   cabecalho: number;
   leito: string;
@@ -107,8 +109,8 @@ interface InternadoM {
 }
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
-interface DoseM extends Mutavel<DoseDispensadaRepo> {
-  reg: number;
+interface DoseM extends Mutavel<DoseDispensada> {
+  atendimento: number;
   usuario: string;
 }
 
@@ -118,7 +120,7 @@ interface ControleM {
   situacao: number;
   em: Date;
   usuario: string;
-  reg: number;
+  atendimento: number;
   motivo: string | null;
 }
 
@@ -131,8 +133,8 @@ interface Estado {
   controles: ControleM[];
   aceites: Map<number, { autor: string; em: string; modo: string }>;
   devolucoes: { dose: number; quantidade: number; doc: number; em: string }[];
-  avaliacoes: Map<number, AvaliacaoSghLida & { decisaoTexto: string | null }>;
-  intervencoes: IntervencaoRepo[];
+  avaliacoes: Map<number, AvaliacaoRegistrada & { decisaoTexto: string | null }>;
+  intervencoes: IntervencaoRegistrada[];
   conferencias: { item: number; docTipo: string; docId: number; tipo: string; em: Date }[];
   movimentos: {
     item: number;
@@ -260,9 +262,9 @@ function estadoInicial(): Estado {
     },
   ];
   const internados: InternadoM[] = [
-    { reg: 9001, paciente: 8001, cabecalho: 6001, leito: '201-A', iniciais: 'P.S.U.', alergia: false },
-    { reg: 9002, paciente: 8002, cabecalho: 6002, leito: '202-A', iniciais: 'P.S.D.', alergia: true },
-    { reg: 9003, paciente: 8003, cabecalho: 6003, leito: '203-B', iniciais: 'P.S.T.', alergia: false },
+    { atendimento: 9001, paciente: 8001, cabecalho: 6001, leito: '201-A', iniciais: 'P.S.U.', alergia: false },
+    { atendimento: 9002, paciente: 8002, cabecalho: 6002, leito: '202-A', iniciais: 'P.S.D.', alergia: true },
+    { atendimento: 9003, paciente: 8003, cabecalho: 6003, leito: '203-B', iniciais: 'P.S.T.', alergia: false },
   ];
   let id = 50_000;
   const horarios: HorarioM[] = [];
@@ -275,15 +277,15 @@ function estadoInicial(): Estado {
     [9003, 7001, [4]],
   ];
   let lanc = 40_000;
-  for (const [reg, item, horas] of plano) {
-    const i = internados.find((x) => x.reg === reg)!;
+  for (const [atendimento, item, horas] of plano) {
+    const i = internados.find((x) => x.atendimento === atendimento)!;
     lanc += 1;
     for (const h of horas)
       horarios.push({
         id: (id += 1),
         lancamento: lanc,
-        prescricao: 30_000 + reg,
-        reg,
+        prescricao: 30_000 + atendimento,
+        atendimento,
         cabecalho: i.cabecalho,
         item,
         previsto: hora(h),
@@ -315,15 +317,15 @@ function estadoInicial(): Estado {
 export class PortaFarmaciaMemoria implements PortaFarmacia {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
-  /** A decisão da DP-25 (o parâmetro); os testes ligam para provar a gravação no outro sistema. */
-  decisaoDp25 = false;
-  constructor(private readonly catalogo: Pick<FonteCatalogo, 'estado'> | null) {}
+  constructor(
+    private readonly catalogo: { estado(operacao: string, estabelecimento: string): EstadoOperacao | null } | null = null,
+  ) {}
 
   e(c: ContextoFarmacia): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDe(c));
     if (!s) {
       s = estadoInicial();
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDe(c), s);
     }
     return s;
   }
@@ -337,17 +339,17 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   }
 
   /** Testes: uma prescrição nova (o tempo real a mostra na fila). */
-  novaPrescricao(c: ContextoFarmacia, reg: number, item: number, horas: number): number {
+  novaPrescricao(c: ContextoFarmacia, atendimento: number, item: number, horas: number): number {
     const s = this.e(c);
-    const i = s.internados.find((x) => x.reg === reg)!;
+    const i = s.internados.find((x) => x.atendimento === atendimento)!;
     const d = new Date(Date.now() + horas * 3_600_000);
     d.setSeconds(0, 0);
     const id = (s.seq += 1) + 60_000;
     s.horarios.push({
       id,
       lancamento: id,
-      prescricao: 30_000 + reg,
-      reg,
+      prescricao: 30_000 + atendimento,
+      atendimento,
       cabecalho: i.cabecalho,
       item,
       previsto: d,
@@ -363,8 +365,8 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoFarmacia, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoFarmacia, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, chaveDe(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
@@ -375,14 +377,16 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   }
 
   async executar(c: ContextoFarmacia, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const a = o.entrada.safeParse(entradaBruta);
+    const entrada = ENTRADAS_FARMACIA[op];
+    if (!entrada)
+      throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+    const a = entrada.safeParse(entradaBruta);
     if (!a.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(a.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(a.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -404,9 +408,9 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   private aplicar(s: Estado, op: string, e: any, ctx: ContextoOperacao): Record<string, number | string> {
     switch (op) {
       case 'suprimentos.dispensarHorario':
-        return this.dispensar(s, e as DispensarHorarioEntrada, ctx.usuarioLegado);
+        return this.dispensar(s, e as DispensarHorarioEntrada, autorDe(ctx));
       case 'suprimentos.confirmarEntrega':
-        return this.confirmar(s, e as ConfirmarEntregaEntrada, ctx.usuarioLegado);
+        return this.confirmar(s, e as ConfirmarEntregaEntrada, autorDe(ctx));
       case 'suprimentos.devolverDose':
         return this.devolver(s, e as DevolverDoseEntrada);
       case 'suprimentos.cancelarDispensacao': {
@@ -429,7 +433,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
           id: (s.seq += 1),
           situacao: 9,
           em: new Date(),
-          usuario: ctx.usuarioLegado,
+          usuario: autorDe(ctx),
           motivo: e.motivo,
         });
         return { ...r, saida: d.saida?.id ?? 0 };
@@ -442,7 +446,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         const l = i.lotes.find((x) => x.lote === p.lote);
         recusar(
           conferirPerdaControlado({
-            responsavel: ctx.usuarioLegado,
+            responsavel: autorDe(ctx),
             testemunha: p.testemunha,
             motivo: p.motivo,
             quantidade: p.quantidade,
@@ -467,13 +471,6 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         return { id, doc: id, ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, itens: 1 };
       }
       case 'suprimentos.avaliarPrescricao': {
-        recusar(
-          conferirGravacaoNoLegado({
-            decisao: e.decisao,
-            decisaoRegistrada: this.decisaoDp25,
-            conferidoNoOutroSistema: this.decisaoDp25,
-          }),
-        );
         const h = s.horarios.find((x) => x.id === e.horario);
         if (!h) throw recusaOp('horario-inexistente', 'O horário prescrito não existe.', ['horario']);
         h.situacaoFarmacia =
@@ -505,7 +502,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     let susp = 0;
     for (const d of e.doses) {
       const h = s.horarios.find((x) => x.id === d.horario);
-      if (!h || h.reg !== e.atendimento)
+      if (!h || h.atendimento !== e.atendimento)
         throw recusaOp('horario-de-outro-paciente', 'Um dos horários não é deste atendimento.', ['doses']);
       if (h.ocupado) {
         ocupadas += 1;
@@ -529,7 +526,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
       if (ja > 0 && ocupadas === 0)
         throw recusaOp(
           'dose-ja-dispensada',
-          'As doses já foram dispensadas (por este ou pelo outro sistema).',
+          'As doses já foram dispensadas (por outro terminal).',
           ['doses'],
         );
       throw recusaOp(
@@ -588,7 +585,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         situacaoEntrega: 7,
         barras: i.barras,
         devolvido: 0,
-        reg: e.atendimento,
+        atendimento: e.atendimento,
         usuario,
       });
       if (i.portaria)
@@ -609,7 +606,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
       situacao: 7,
       em: agora,
       usuario,
-      reg: e.atendimento,
+      atendimento: e.atendimento,
       motivo: null,
     });
     return {
@@ -755,7 +752,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
           justificativa: null,
           respondente: null,
           respondidaEm: null,
-          reg: h.reg,
+          atendimento: h.atendimento,
         });
         return { id, prescritor: PRESCRITOR_SINTETICO.login };
       },
@@ -904,50 +901,36 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   async filaDaUnidade(c: ContextoFarmacia, o: { unidade: string; inicio: Date; fim: Date }) {
     const s = this.e(c);
     if (o.unidade !== UNIDADE_SINTETICA) return { doses: [], cortada: false };
-    const doses: DoseFilaLida[] = s.horarios
+    const doses: DoseDaFila[] = s.horarios
       .filter((h) => h.previsto >= o.inicio && h.previsto < o.fim)
       .map((h) => {
         const i = s.itens.get(h.item)!;
-        const n = s.internados.find((x) => x.reg === h.reg)!;
-        const horario: HorarioLidoEnf = {
+        const n = s.internados.find((x) => x.atendimento === h.atendimento)!;
+        const horario: HorarioDaFila = {
           id: h.id,
           item: h.lancamento,
           prescricao: h.prescricao,
-          atendimento: h.cabecalho,
+          atendimento: h.atendimento,
           previsto: minuto(h.previsto),
-          situacao: h.situacao,
-          checadoEm: null,
-          cboChecagem: null,
-          quantidade: null,
+          suspenso: ['S', 'C', 'X', 'O'].includes(h.situacao),
           tipo: i.tipo,
           descricao: i.nome,
           dose: i.dose,
           unidadeDose: i.unidade,
           via: i.via || null,
           produto: i.codigo,
-          barras: i.barras,
-          seNecessario: false,
           altaVigilancia: i.altaVigilancia,
           antimicrobiano: i.antimicrobiano,
-          duplaMarcada: false,
-          hemocomponente: false,
-          infusao: null,
-          faixasGlicemia: [],
-          faixa: null,
-          procedimento: null,
-          aprazamento: null,
-          numDoses: null,
-          observacaoMedica: null,
         };
         return {
           horario,
-          reg: h.reg,
+          atendimento: h.atendimento,
           paciente: n.paciente,
           leito: n.leito,
           iniciais: n.iniciais,
           alergia: n.alergia,
           dispensada: s.doses.some((d) => d.horario === h.id),
-          validadaNoOutro: h.situacaoFarmacia === 5 || h.situacaoFarmacia === 2,
+          validadaAntes: h.situacaoFarmacia === 5 || h.situacaoFarmacia === 2,
           urgente: h.urgente,
         };
       });
@@ -984,9 +967,9 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   async itensPrescritos(_c: ContextoFarmacia, lancamentos: readonly number[]) {
     return new Map(lancamentos.map((l) => [l, { alergiaJustificada: false, produto: null }]));
   }
-  async dosesDoAtendimento(c: ContextoFarmacia, reg: number) {
+  async dosesDoAtendimento(c: ContextoFarmacia, atendimento: number) {
     return this.e(c)
-      .doses.filter((d) => d.reg === reg)
+      .doses.filter((d) => d.atendimento === atendimento)
       .map((d) => ({ ...d }));
   }
   async situacoes(c: ContextoFarmacia, horarios: readonly number[]) {
@@ -1009,7 +992,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         situacao: x.situacao,
         desde: minuto(x.em),
         saida: { id: x.saida, ano: x.em.getFullYear(), mes: x.em.getMonth() + 1, doc: x.saida },
-        reg: x.reg,
+        atendimento: x.atendimento,
         centroCusto: CENTRO_SINTETICO,
         usuario: x.usuario,
         itens: s.doses.filter((d) => d.saida?.id === x.saida).length,
@@ -1032,7 +1015,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     const s = this.e(c);
     return new Map(
       regs.flatMap((r) => {
-        const i = s.internados.find((x) => x.reg === r);
+        const i = s.internados.find((x) => x.atendimento === r);
         return i ? [[r, { leito: i.leito, iniciais: i.iniciais }] as const] : [];
       }),
     );

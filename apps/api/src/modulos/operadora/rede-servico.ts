@@ -2,7 +2,7 @@
 // da porta e decide no servidor o que a tela só mostra: os rótulos dos domínios (o do vocabulário quando o código é
 // fixo; o do banco nos editáveis), o documento mascarado na lista (CPF do prestador pessoa física), as regras do
 // credenciamento, da alteração, do descredenciamento e da reinclusão (@sgh/dominio-operadora) e o movimento do RPS.
-// As gravações passam pelas recusas das regras antes de chegar às SGH_; a versão vista e as chaves únicas são do banco.
+// As gravações passam pelas recusas das regras antes de chegar ao banco; a versão vista e as chaves únicas são do banco.
 import {
   type AlterarPrestadorEntrada,
   type ApoioRede,
@@ -35,9 +35,15 @@ import {
   problemasDoPrestador,
   valoresRps,
 } from '@sgh/dominio-operadora';
-import type { DominioRede, ItemDominioRedeLido, MovimentoRpsLido, PrestadorLido } from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoRede, PortaRedeOperadora } from './rede-porta.js';
+import type {
+  ContextoRede,
+  DominioRede,
+  ItemDominioRede,
+  MovimentoRede,
+  PortaRedeOperadora,
+  Prestador,
+} from './rede-porta.js';
 
 /** Rótulos do vocabulário dos domínios fixos (o banco tem alguns em maiúsculas e sem acento). */
 const VOCABULARIO: Partial<Record<DominioRede, Readonly<Record<number, string>>>> = {
@@ -59,7 +65,7 @@ function frase(t: string): string {
 }
 
 export function rotulosDosDominios(
-  d: Record<DominioRede, ItemDominioRedeLido[]>,
+  d: Record<DominioRede, ItemDominioRede[]>,
 ): Record<DominioRede, { codigo: number; rotulo: string }[]> {
   const r = {} as Record<DominioRede, { codigo: number; rotulo: string }[]>;
   for (const k of Object.keys(d) as DominioRede[])
@@ -67,7 +73,7 @@ export function rotulosDosDominios(
   return r;
 }
 
-const conjuntos = (d: Record<DominioRede, ItemDominioRedeLido[]>): DominiosRede => {
+const conjuntos = (d: Record<DominioRede, ItemDominioRede[]>): DominiosRede => {
   const s = (k: DominioRede) => new Set(d[k].map((x) => x.codigo));
   return {
     tipo: s('tipo'),
@@ -106,7 +112,7 @@ const naoEncontrado = () =>
     'O prestador não está na rede da operadora.',
   );
 
-export function resumoDe(p: PrestadorLido): PrestadorResumo {
+export function resumoDe(p: Prestador): PrestadorResumo {
   return {
     id: p.id,
     pessoa: p.pessoa,
@@ -128,7 +134,7 @@ export function resumoDe(p: PrestadorLido): PrestadorResumo {
   };
 }
 
-const movimentoDe = (m: MovimentoRpsLido): MovimentoRps => ({ ...m });
+const movimentoDe = (m: MovimentoRede): MovimentoRps => ({ ...m });
 
 export interface EstabelecimentoDaRede {
   readonly codigo: string;
@@ -209,7 +215,7 @@ export class ServicoRedeOperadora {
     id: number,
     e: AlterarPrestadorEntrada,
     estabelecimentos: readonly EstabelecimentoDaRede[],
-  ): Promise<{ atual: PrestadorLido; camposRps: string[] }> {
+  ): Promise<{ atual: Prestador; camposRps: string[] }> {
     const atual = await this.porta.prestador(c, id);
     if (!atual) throw naoEncontrado();
     // O descredenciado e o de saída agendada já têm a exclusão no RPS: alterar depois dela é movimento incoerente.
@@ -222,7 +228,7 @@ export class ServicoRedeOperadora {
     c: ContextoRede,
     id: number,
     e: DescredenciarPrestadorEntrada,
-  ): Promise<{ atual: PrestadorLido; avisos: string[] }> {
+  ): Promise<{ atual: Prestador; avisos: string[] }> {
     const atual = await this.porta.prestador(c, id);
     if (!atual) throw naoEncontrado();
     const substituto =
@@ -249,7 +255,7 @@ export class ServicoRedeOperadora {
     c: ContextoRede,
     id: number,
     e: ReincluirPrestadorEntrada,
-  ): Promise<PrestadorLido> {
+  ): Promise<Prestador> {
     const atual = await this.porta.prestador(c, id);
     if (!atual) throw naoEncontrado();
     const problemas: { codigo: string; campo: string }[] = [];

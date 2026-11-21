@@ -1,42 +1,40 @@
 // Porta da operadora em memória (M56): a sessão sintética de dev/ci (E2E). F0: catálogos da ANS SINTÉTICOS (códigos
 // de procedimento na faixa 90.000.000, que nenhuma tabela oficial usa), com a mesma paginação por chave e o mesmo teto
-// de página das leituras do legado. F1 (M56.2): operadora, produto, contrato, beneficiário e vias da carteirinha em
+// de página das leituras do banco. F1 (M56.2): operadora, produto, contrato, beneficiário e vias da carteirinha em
 // memória, com as mesmas recusas do banco (chaves únicas e a versão) e a transação desfeita por inteiro quando a função
 // falha; os domínios (motivos de baixa e de segunda via) são sintéticos; a trilha vai ao registrador da API. Nada vai
-// à cópia.
+// a banco.
+import { ErroOperacao } from '@sgh/nucleo';
+import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
-  type BeneficiarioOpeLido,
-  type BeneficiarioSgh,
-  type ClassificacaoAnsLida,
-  type ContratoOpeLido,
-  type ContratoSgh,
-  type DominiosBeneficiarioLidos,
-  type ElegibilidadeOpeLida,
-  ErroOperacao,
-  type FiltroBeneficiariosSgh,
-  type FiltroContratosSgh,
-  type GrupoSipLido,
+  type Beneficiario,
+  type ChaveSip,
+  type ClassificacaoAns,
+  type ContextoOperadora,
+  type Contrato,
+  type DadosBeneficiario,
+  type DadosContrato,
+  type DadosOperadora,
+  type DadosProduto,
+  type DominiosBeneficiario,
+  type Elegibilidade,
+  type FiltroBeneficiarios,
+  type FiltroClassificacao,
+  type FiltroContratos,
+  type FiltroSip,
+  type GravadorOperadora,
+  type GrupoSip,
   LIMITE_PAGINA_OPERADORA,
   LIMITE_PAGINA_SIP,
-  type LinhaTrilha,
-  type OperadoraOpeLida,
-  type OperadoraSgh,
-  type ProcedimentoSipLido,
-  type ProdutoOpeLido,
-  type ProdutoSgh,
-  type ViaCarteirinhaLida,
-} from '@sgh/legado';
-import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
-import type {
-  ChaveSip,
-  ContextoOperadora,
-  FiltroClassificacao,
-  FiltroSip,
-  GravadorOperadora,
-  PortaOperadora,
+  type Operadora,
+  type PortaOperadora,
+  type ProcedimentoSip,
+  type Produto,
+  type ViaCarteirinha,
 } from './porta.js';
 
-const GRUPOS: readonly GrupoSipLido[] = [
+const GRUPOS: readonly GrupoSip[] = [
   { id: 1, nome: 'Consultas médicas (sintético)' },
   { id: 2, nome: 'Outros atendimentos ambulatoriais (sintético)' },
   { id: 3, nome: 'Exames (sintético)' },
@@ -46,7 +44,7 @@ const GRUPOS: readonly GrupoSipLido[] = [
 
 /** 250 procedimentos sintéticos (passa de uma página), um terço com vigência encerrada. */
 /** O nome vem da terminologia TUSS sintética; um em cada dez códigos não está nela (nome null). */
-const PROCEDIMENTOS: readonly ProcedimentoSipLido[] = Array.from({ length: 250 }, (_, i) => ({
+const PROCEDIMENTOS: readonly ProcedimentoSip[] = Array.from({ length: 250 }, (_, i) => ({
   procedimento: 90_000_001 + i,
   nome: i % 10 === 9 ? null : `Procedimento sintético ${90_000_001 + i}`,
   grupo: (i % GRUPOS.length) + 1,
@@ -54,13 +52,13 @@ const PROCEDIMENTOS: readonly ProcedimentoSipLido[] = Array.from({ length: 250 }
   vigenciaFinal: i % 3 === 0 ? '2020-12-31' : null,
 }));
 
-const CLASSIFICACOES: readonly ClassificacaoAnsLida[] = Array.from({ length: 12 }, (_, i) => ({
+const CLASSIFICACOES: readonly ClassificacaoAns[] = Array.from({ length: 12 }, (_, i) => ({
   codigo: i + 1,
   nome: `${i % 2 === 0 ? 'Exames' : 'Terapias'}: classificação sintética ${String(i + 1).padStart(2, '0')}`,
 }));
 
 /** Domínios sintéticos da sessão de dev/ci (motivos de baixa com o 99 protegido; motivos de segunda via). */
-const DOMINIOS: DominiosBeneficiarioLidos = {
+const DOMINIOS: DominiosBeneficiario = {
   motivosBaixa: [
     { codigo: 1, nome: 'A pedido do beneficiário (sintético)' },
     { codigo: 2, nome: 'Inadimplência (sintético)' },
@@ -78,25 +76,25 @@ const DOMINIOS: DominiosBeneficiarioLidos = {
 /** Na sessão sintética, os cadastros de paciente de ID 1 a 99.999 "existem" (regra 8: só o ID é guardado). */
 const MAIOR_PACIENTE_SINTETICO = 99_999;
 
-const depois = (p: ProcedimentoSipLido, a: ChaveSip): boolean =>
+const depois = (p: ProcedimentoSip, a: ChaveSip): boolean =>
   p.procedimento > a.procedimento ||
   (p.procedimento === a.procedimento &&
     (p.grupo > a.grupo || (p.grupo === a.grupo && (p.vigenciaInicial ?? '') > a.vigenciaInicial)));
 
-interface BeneficiarioMem extends Omit<BeneficiarioOpeLido, 'contratoNumero' | 'produtoNome'> {
+interface BeneficiarioMem extends Omit<Beneficiario, 'contratoNumero' | 'produtoNome'> {
   readonly nomeBusca: string;
   readonly hospital: string;
 }
-interface ContratoMem extends Omit<ContratoOpeLido, 'produtoNome' | 'beneficiariosAtivos'> {
+interface ContratoMem extends Omit<Contrato, 'produtoNome' | 'beneficiariosAtivos'> {
   readonly contratanteBusca: string;
   readonly hospital: string;
 }
 interface Estado {
-  operadoras: (OperadoraOpeLida & { hospital: string })[];
-  produtos: (ProdutoOpeLido & { hospital: string })[];
+  operadoras: (Operadora & { hospital: string })[];
+  produtos: (Produto & { hospital: string })[];
   contratos: ContratoMem[];
   beneficiarios: BeneficiarioMem[];
-  vias: (ViaCarteirinhaLida & { beneficiario: number; hospital: string })[];
+  vias: (ViaCarteirinha & { beneficiario: number; hospital: string })[];
   seq: Record<string, number>;
 }
 
@@ -127,7 +125,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
 
   constructor(private readonly trilha: RegistradorTrilha | null = null) {}
 
-  async gruposSip(): Promise<GrupoSipLido[]> {
+  async gruposSip(): Promise<GrupoSip[]> {
     return [...GRUPOS];
   }
 
@@ -171,31 +169,31 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     return sem(x, 'hospital');
   }
 
-  async operadoras(c: ContextoOperadora): Promise<OperadoraOpeLida[]> {
+  async operadoras(c: ContextoOperadora): Promise<Operadora[]> {
     return this.estado.operadoras
       .filter((o) => o.hospital === c.hospital)
       .sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial) || a.id - b.id)
       .map((o) => this.sem(o));
   }
 
-  async operadora(c: ContextoOperadora, id: number): Promise<OperadoraOpeLida | null> {
+  async operadora(c: ContextoOperadora, id: number): Promise<Operadora | null> {
     const o = this.estado.operadoras.find((x) => x.hospital === c.hospital && x.id === id);
     return o ? this.sem(o) : null;
   }
 
-  async produtos(c: ContextoOperadora, operadora?: number): Promise<ProdutoOpeLido[]> {
+  async produtos(c: ContextoOperadora, operadora?: number): Promise<Produto[]> {
     return this.estado.produtos
       .filter((p) => p.hospital === c.hospital && (operadora === undefined || p.operadora === operadora))
       .sort((a, b) => a.nome.localeCompare(b.nome) || a.id - b.id)
       .map((p) => this.sem(p));
   }
 
-  async produto(c: ContextoOperadora, id: number): Promise<ProdutoOpeLido | null> {
+  async produto(c: ContextoOperadora, id: number): Promise<Produto | null> {
     const p = this.estado.produtos.find((x) => x.hospital === c.hospital && x.id === id);
     return p ? this.sem(p) : null;
   }
 
-  private contratoLido(x: ContratoMem): ContratoOpeLido {
+  private contratoLido(x: ContratoMem): Contrato {
     return {
       ...sem(x, 'contratanteBusca', 'hospital'),
       produtoNome: this.estado.produtos.find((p) => p.id === x.produto)?.nome ?? '',
@@ -205,7 +203,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async contratos(c: ContextoOperadora, f: FiltroContratosSgh) {
+  async contratos(c: ContextoOperadora, f: FiltroContratos) {
     const lista = this.estado.contratos
       .filter(
         (x) =>
@@ -224,12 +222,12 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async contrato(c: ContextoOperadora, id: number): Promise<ContratoOpeLido | null> {
+  async contrato(c: ContextoOperadora, id: number): Promise<Contrato | null> {
     const x = this.estado.contratos.find((k) => k.hospital === c.hospital && k.id === id);
     return x ? this.contratoLido(x) : null;
   }
 
-  private beneficiarioLido(b: BeneficiarioMem): BeneficiarioOpeLido {
+  private beneficiarioLido(b: BeneficiarioMem): Beneficiario {
     const ctr = this.estado.contratos.find((x) => x.id === b.contrato);
     return {
       ...sem(b, 'nomeBusca', 'hospital'),
@@ -238,7 +236,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async beneficiarios(c: ContextoOperadora, f: FiltroBeneficiariosSgh) {
+  async beneficiarios(c: ContextoOperadora, f: FiltroBeneficiarios) {
     const lista = this.estado.beneficiarios
       .filter(
         (b) =>
@@ -260,26 +258,26 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async beneficiario(c: ContextoOperadora, id: number): Promise<BeneficiarioOpeLido | null> {
+  async beneficiario(c: ContextoOperadora, id: number): Promise<Beneficiario | null> {
     const b = this.estado.beneficiarios.find((x) => x.hospital === c.hospital && x.id === id);
     return b ? this.beneficiarioLido(b) : null;
   }
 
-  async dependentes(c: ContextoOperadora, titular: number): Promise<BeneficiarioOpeLido[]> {
+  async dependentes(c: ContextoOperadora, titular: number): Promise<Beneficiario[]> {
     return this.estado.beneficiarios
       .filter((b) => b.hospital === c.hospital && b.titular === titular)
       .sort((a, b) => a.id - b.id)
       .map((b) => this.beneficiarioLido(b));
   }
 
-  async vias(c: ContextoOperadora, beneficiario: number): Promise<ViaCarteirinhaLida[]> {
+  async vias(c: ContextoOperadora, beneficiario: number): Promise<ViaCarteirinha[]> {
     return this.estado.vias
       .filter((v) => v.hospital === c.hospital && v.beneficiario === beneficiario)
       .sort((a, b) => b.via - a.via)
       .map((v) => sem(v, 'beneficiario', 'hospital'));
   }
 
-  async elegibilidade(c: ContextoOperadora, carteirinha: string): Promise<ElegibilidadeOpeLida | null> {
+  async elegibilidade(c: ContextoOperadora, carteirinha: string): Promise<Elegibilidade | null> {
     const b = this.estado.beneficiarios.find(
       (x) => x.hospital === c.hospital && x.carteirinha === carteirinha,
     );
@@ -327,7 +325,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async dominiosBeneficiario(): Promise<DominiosBeneficiarioLidos> {
+  async dominiosBeneficiario(): Promise<DominiosBeneficiario> {
     return DOMINIOS;
   }
 
@@ -348,7 +346,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     const unico = (ok: boolean, codigo: string, detail: string, campo: string) => {
       if (!ok) throw recusa(codigo, detail, campo);
     };
-    const conferirOperadora = (d: OperadoraSgh, id: number | null) => {
+    const conferirOperadora = (d: DadosOperadora, id: number | null) => {
       unico(
         !s.operadoras.some((o) => o.hospital === h && o.id !== id && o.registroAns === d.registroAns),
         'registro-ans-em-uso',
@@ -362,14 +360,14 @@ export class PortaOperadoraMemoria implements PortaOperadora {
         'cnpj',
       );
     };
-    const conferirProduto = (d: ProdutoSgh, id: number | null) =>
+    const conferirProduto = (d: DadosProduto, id: number | null) =>
       unico(
         !s.produtos.some((p) => p.operadora === d.operadora && p.id !== id && p.codigo === d.codigo),
         'codigo-em-uso',
         'Já existe produto com este código na operadora.',
         'codigo',
       );
-    const conferirContrato = (d: ContratoSgh, operadora: number, id: number | null) =>
+    const conferirContrato = (d: DadosContrato, operadora: number, id: number | null) =>
       unico(
         !s.contratos.some((c) => c.operadora === operadora && c.id !== id && c.numero === d.numero),
         'numero-em-uso',
@@ -381,7 +379,7 @@ export class PortaOperadoraMemoria implements PortaOperadora {
       if (i < 0) throw desatualizado();
       return i;
     };
-    const paraBen = (d: BeneficiarioSgh) => ({ ...d });
+    const paraBen = (d: DadosBeneficiario) => ({ ...d });
     return {
       gravarOperadora: async ({ id, versao, dados }) => {
         conferirOperadora(dados, id);
@@ -531,27 +529,27 @@ export class PortaOperadoraMemoria implements PortaOperadora {
     };
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     c: ContextoOperadora,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: GravadorOperadora) => Promise<T>,
   ): Promise<T> {
     const antes = structuredClone(this.estado);
     try {
       const r = await fn(this.gravador(c.hospital));
       const l = typeof trilha === 'function' ? trilha(r) : trilha;
+      const d = (l.dadosDepois ?? {}) as { evento?: string; recurso?: string; estacao?: string };
       await this.trilha?.registrar({
-        evento: l.evento,
-        rede: l.rede,
-        hospital: l.hospital,
-        usuario: l.usuario,
-        estacao: l.estacao ?? 'memoria',
-        correlacao: l.correlacao ?? l.evento,
-        recurso: l.recurso,
+        evento: d.evento ?? 'operadora',
+        rede: c.rede,
+        hospital: c.hospital,
+        usuario: String(c.usuario ?? 'memoria'),
+        estacao: d.estacao ?? 'memoria',
+        correlacao: l.correlacao ?? d.evento ?? 'operadora',
+        recurso: d.recurso ?? 'operadora',
         resultado: 'sucesso',
-        tabelaAlvo: l.tabelaAlvo ?? 'MEMORIA',
-        ...(l.idAlvo ? { idAlvo: l.idAlvo } : {}),
-        ...(l.chaveNaturalAlvo ? { chaveNaturalAlvo: l.chaveNaturalAlvo } : {}),
+        tabelaAlvo: 'MEMORIA',
+        ...(l.entidadeId !== null ? { idAlvo: String(l.entidadeId) } : {}),
       });
       return r;
     } catch (e) {

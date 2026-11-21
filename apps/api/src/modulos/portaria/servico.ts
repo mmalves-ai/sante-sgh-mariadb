@@ -5,7 +5,6 @@ import {
   type ContatoVisita,
   type DominiosPortaria,
   type FundamentoAcompanhante,
-  IDENTIFICACAO_BIOMETRICA,
   mascararDocumento,
   type PacientePortaria,
   type RegraVisitaLida,
@@ -24,18 +23,18 @@ import {
   temSigilo,
 } from '@sgh/dominio-internacao';
 import type {
-  BloqueioLidoSgh,
-  DominiosPortariaLidos,
+  BloqueioVisitaRegistrado,
+  DominiosDaPortaria,
   InternadoPortaria,
-  RegraVisitaLidaSgh,
-  VisitaLidaSgh,
-  VisitanteLidoSgh,
-} from '@sgh/legado';
+  RegraVisitaRegistrada,
+  VisitaRegistrada,
+  VisitanteRegistrado,
+} from './tipos.js';
 import type { ContextoPortaria, PortaPortaria } from './porta.js';
 
 export const TETO_BUSCA_PACIENTE = 20;
 
-const paraAvaliar = (b: BloqueioLidoSgh) => ({
+const paraAvaliar = (b: BloqueioVisitaRegistrado) => ({
   motivo: b.motivo,
   abrangencia: b.abrangencia,
   visitante: b.visitante,
@@ -47,20 +46,22 @@ const paraAvaliar = (b: BloqueioLidoSgh) => ({
 });
 
 /** Os domínios como a tela os recebe (a biometria marcada e disponível só com a DP-45). */
-export function dominiosParaTela(d: DominiosPortariaLidos, biometriaLigada: boolean): DominiosPortaria {
+export function dominiosParaTela(d: DominiosDaPortaria, biometriaLigada: boolean): DominiosPortaria {
   return {
     tiposVisitante: d.tiposVisitante,
-    tiposVisitado: d.tiposVisitado,
-    identificacoes: d.identificacoes.map((i) => {
-      const biometrica = IDENTIFICACAO_BIOMETRICA.includes(i.codigo);
-      return { ...i, biometrica, disponivel: !biometrica || biometriaLigada };
-    }),
+    tiposVisitado: d.tiposVisitado.map((t) => ({ codigo: t.codigo, nome: t.nome })),
+    identificacoes: d.identificacoes.map((i) => ({
+      codigo: i.codigo,
+      nome: i.nome,
+      biometrica: i.biometrica,
+      disponivel: !i.biometrica || biometriaLigada,
+    })),
     tiposTerminal: d.tiposTerminal,
     situacoesAcesso: d.situacoesAcesso,
   };
 }
 
-export function visitanteParaTela(v: VisitanteLidoSgh): VisitanteLido {
+export function visitanteParaTela(v: VisitanteRegistrado): VisitanteLido {
   return {
     id: v.id,
     nome: v.nome,
@@ -93,14 +94,14 @@ export interface ContextoDoPaciente {
 }
 
 /** A visita aberta que ocupa a vaga agora: sem a saída e com o crachá válido (a vencida não conta). */
-export const visitaEmCurso = (v: Pick<VisitaLidaSgh, 'saida' | 'validoAte'>, agora: string): boolean =>
+export const visitaEmCurso = (v: Pick<VisitaRegistrada, 'saida' | 'validoAte'>, agora: string): boolean =>
   v.saida === null && !crachaVencido(v.validoAte, agora);
 
 export class ServicoPortaria {
   constructor(private readonly porta: PortaPortaria) {}
 
   /** A regra de cada unidade (a da unidade, a do estabelecimento ou a de mercado), como a tela mostra. */
-  regrasParaTela(regras: readonly RegraVisitaLidaSgh[]): RegraVisitaLida[] {
+  regrasParaTela(regras: readonly RegraVisitaRegistrada[]): RegraVisitaLida[] {
     const r: RegraVisitaLida[] = regras.map((x) => ({ ...x, padrao: false }));
     if (!regras.some((x) => x.unidade === '*')) {
       const p = regraDaUnidade([], '*').regra;
@@ -228,7 +229,7 @@ export class ServicoPortaria {
 
   /** A visita como a portaria a vê (o leito só se a visita é ao paciente; o paciente pelo nome lido). */
   visitaParaTela(
-    v: VisitaLidaSgh,
+    v: VisitaRegistrada,
     internados: ReadonlyMap<number, InternadoPortaria>,
     agora: string,
   ): VisitaLida {
@@ -258,7 +259,7 @@ export class ServicoPortaria {
     };
   }
 
-  contatoParaTela(v: VisitaLidaSgh, internados: ReadonlyMap<number, InternadoPortaria>): ContatoVisita {
+  contatoParaTela(v: VisitaRegistrada, internados: ReadonlyMap<number, InternadoPortaria>): ContatoVisita {
     const i = v.internacao !== null ? internados.get(v.internacao) : undefined;
     return {
       visita: v.id,

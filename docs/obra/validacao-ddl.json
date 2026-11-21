@@ -1,15 +1,15 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3523,
-  "catalogo": 3517,
+  "tabelas_criadas": 3564,
+  "catalogo": 3558,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
-  "colunas_id_sem_fk": 23,
-  "fks": 13541,
+  "colunas_id_sem_fk": 68,
+  "fks": 13646,
   "gatilhos": 0,
   "plataforma_erros": 0,
   "total_erros": 0
@@ -19,14 +19,33 @@
  "erros_arquivo": {},
  "erros_tabela": {},
  "avisos_tabela": {
+  "aparelho_beira_leito": [
+   "estabelecimento_id sem FK",
+   "unidade_internacao_id sem FK"
+  ],
   "sinal_vigilancia_iras": [
    "fato_id sem FK"
+  ],
+  "reavaliacao_escala": [
+   "estabelecimento_id sem FK",
+   "paciente_id sem FK",
+   "internacao_id sem FK",
+   "escala_clinica_id sem FK",
+   "aplicacao_escala_id sem FK"
   ],
   "profissional_especialidade": [
    "principal_profissional_id sem FK"
   ],
   "fato_contabil": [
    "entidade_origem_id sem FK"
+  ],
+  "apuracao_custo": [
+   "aprovador_usuario_id sem FK",
+   "substituida_por_apuracao_custo_id sem FK"
+  ],
+  "calculo_depreciacao": [
+   "estabelecimento_id sem FK",
+   "estorno_usuario_id sem FK"
   ],
   "documento_origem_titulo": [
    "titulo_referencia_id sem FK",
@@ -38,6 +57,13 @@
   "lancamento_contabil": [
    "entidade_origem_id sem FK"
   ],
+  "servico_compartilhado_rede": [
+   "estabelecimento_id sem FK",
+   "registrado_por_usuario_id sem FK"
+  ],
+  "emissao_documento": [
+   "origem_registro_id sem FK"
+  ],
   "devolucao_pix": [
    "end_to_end_id sem FK"
   ],
@@ -47,12 +73,30 @@
   "usuario_profissional": [
    "usuario_vigente_id sem FK"
   ],
+  "classificacao_paciente": [
+   "estabelecimento_id sem FK",
+   "paciente_id sem FK",
+   "internacao_id sem FK",
+   "unidade_internacao_id sem FK"
+  ],
+  "parada_cardiorrespiratoria_ficha": [
+   "estabelecimento_id sem FK",
+   "paciente_id sem FK",
+   "atendimento_id sem FK",
+   "acionamento_resposta_rapida_id sem FK",
+   "anterior_ficha_id sem FK",
+   "unidade_internacao_id sem FK"
+  ],
   "lancamento_origem_evento": [
    "entidade_origem_id sem FK"
   ],
   "ocupacao_leito": [
    "leito_vigente_id sem FK",
    "internacao_vigente_id sem FK"
+  ],
+  "servico_compartilhado_rede_estabelecimento": [
+   "servico_compartilhado_rede_id sem FK",
+   "estabelecimento_id sem FK"
   ],
   "unificacao_cadastro_item": [
    "registro_id sem FK"
@@ -63,8 +107,32 @@
   "valor_codigo_regulacao": [
    "registro_interno_id sem FK"
   ],
+  "apuracao_custo_centro": [
+   "apuracao_custo_id sem FK",
+   "centro_custo_id sem FK",
+   "criterio_tipo_dado_estatistico_id sem FK"
+  ],
+  "ajuste_valor_bem": [
+   "bem_patrimonial_id sem FK",
+   "laudo_bem_id sem FK",
+   "estorno_usuario_id sem FK"
+  ],
+  "indice_gravidade_uti": [
+   "estabelecimento_id sem FK",
+   "paciente_id sem FK",
+   "internacao_id sem FK",
+   "validado_por_profissional_id sem FK"
+  ],
   "profissional_ocupacao": [
    "principal_profissional_id sem FK"
+  ],
+  "conflito_sincronizacao_checagem": [
+   "estabelecimento_id sem FK",
+   "horario_administracao_id sem FK",
+   "paciente_id sem FK",
+   "situacao_encontrada_id sem FK",
+   "aparelho_beira_leito_id sem FK",
+   "resolvido_por_usuario_id sem FK"
   ],
   "ocupacao_leito_observacao": [
    "leito_vigente_id sem FK",
@@ -73,8 +141,17 @@
   "sugestao_notificacao_incidente": [
    "fato_id sem FK"
   ],
+  "retorno_lavanderia": [
+   "remessa_vigente_id sem FK"
+  ],
+  "laudo_bem": [
+   "bem_patrimonial_id sem FK"
+  ],
   "periodo_situacao_leito": [
    "leito_vigente_id sem FK"
+  ],
+  "pedido_numeracao_receita": [
+   "entidade_origem_id sem FK"
   ],
   "documento_prontuario": [
    "entidade_origem_id sem FK"

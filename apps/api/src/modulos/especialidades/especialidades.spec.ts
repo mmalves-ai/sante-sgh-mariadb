@@ -12,9 +12,10 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloEspecialidades } from './modulo.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,especialidades' };
 const trilha = new RegistradorTrilhaMemoria();
 // 25/10/2026 às 15:00 (local).
 // O relógio anda só no caso da ordem vencida do lactário (e volta no fim dele).
@@ -25,7 +26,14 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, especialidades, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      config: () => import('../config/modulo.js'),
+      documento: () => import('../documento/modulo.js'),
+      especialidades: async () => ({ modulo: (ctx) => moduloEspecialidades(ctx, { porta: especialidades }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

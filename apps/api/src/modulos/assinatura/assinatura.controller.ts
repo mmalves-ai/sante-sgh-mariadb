@@ -10,7 +10,7 @@
 //   GET|PUT /api/documento/assinatura/provedores ; PUT .../:codigo/segredo (senha) ; POST .../:codigo/teste
 //   GET  /api/documento/simulador-psc/v0/oauth/authorize[/confirmar]  (SÓ dev/ci: a página do provedor simulado)
 //   GET  /api/documento/simulador-agente/certificado ; POST .../assinar (SÓ dev/ci: o agente local A1/A3 simulado, etapa 3)
-// Toda escrita só em SGH_, com a SGH_TRILHA na mesma transação; o segredo vai ao cofre e nunca volta.
+// Toda escrita com a trilha na mesma transação; o segredo vai ao cofre e nunca volta.
 import {
   Body,
   Controller,
@@ -122,7 +122,7 @@ export class AssinaturaIcpController {
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
   @AuditadoNoHandler(
-    'certificado em SGH_ACESSO_CERTIFICADO com a SGH_TRILHA na mesma transação; a recusa vai à trilha',
+    'certificado em certificado_usuario com a trilha na mesma transação; a recusa vai à trilha',
   )
   vincular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<CertificadoVinculadoResumo> {
     return this.servico.vincularArquivo(sessaoDe(req), corpo(esquemaVincularCertificado, b));
@@ -131,7 +131,7 @@ export class AssinaturaIcpController {
   @Post('certificados/nuvem')
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
-  @AuditadoNoHandler('o pedido em SGH_DOC_PEDIDO_ASSINATURA; o vínculo é auditado na volta do provedor')
+  @AuditadoNoHandler('o pedido em pedido_assinatura; o vínculo é auditado na volta do provedor')
   nuvem(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<AutorizacaoPsc> {
     return this.servico.iniciarVinculoNuvem(sessaoDe(req), corpo(esquemaVincularNuvem, b).provedor);
   }
@@ -139,7 +139,7 @@ export class AssinaturaIcpController {
   @Post('certificados/:id/desvincular')
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
-  @AuditadoNoHandler('inativação em SGH_ACESSO_CERTIFICADO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('inativação em certificado_usuario com a trilha na mesma transação')
   desvincular(
     @Param('id') id: string,
     @Req() req: RequisicaoAutorizada,
@@ -151,7 +151,7 @@ export class AssinaturaIcpController {
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
   @AuditadoNoHandler(
-    'o pedido em SGH_DOC_PEDIDO_ASSINATURA; a assinatura e a validação na volta, com a trilha',
+    'o pedido em pedido_assinatura; a assinatura e a validação na volta, com a trilha',
   )
   teste(
     @Param('id') id: string,
@@ -162,7 +162,7 @@ export class AssinaturaIcpController {
 
   @Get('assinatura/retorno')
   @Permissao('documento.certificado.vincular')
-  @AuditadoNoHandler('vínculo ou assinatura com a validação em SGH_, com a SGH_TRILHA; a recusa vai à trilha')
+  @AuditadoNoHandler('vínculo ou assinatura com a validação, com a trilha; a recusa vai à trilha')
   async retorno(
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,
@@ -197,7 +197,7 @@ export class AssinaturaIcpController {
   @Post('assinatura/agente')
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
-  @AuditadoNoHandler('assinatura e validação em SGH_DOC_ASSINATURA e SGH_DOC_VALIDACAO com a SGH_TRILHA')
+  @AuditadoNoHandler('assinatura e validação em assinatura_documento e validacao_assinatura com a trilha')
   agente(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFluxoAssinatura> {
     return this.servico.respostaAgente(sessaoDe(req), corpo(esquemaRespostaAgenteLocal, b));
   }
@@ -212,7 +212,7 @@ export class AssinaturaIcpController {
 
   @Put('assinatura/politica')
   @Permissao('documento.politica.editar')
-  @AuditadoNoHandler('regra em SGH_DOC_POLITICA_ASSIN com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('regra em politica_assinatura com a trilha na mesma transação')
   definirPolitica(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -223,7 +223,7 @@ export class AssinaturaIcpController {
   @Post('assinatura/politica/remocao')
   @HttpCode(200)
   @Permissao('documento.politica.editar')
-  @AuditadoNoHandler('linha inativa em SGH_DOC_POLITICA_ASSIN com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('linha inativa em politica_assinatura com a trilha na mesma transação')
   removerPolitica(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -242,7 +242,7 @@ export class AssinaturaIcpController {
 
   @Put('assinatura/provedores')
   @Permissao('documento.provedor.editar')
-  @AuditadoNoHandler('provedor em SGH_DOC_PROVEDOR_PSC (só a referência do segredo) com a SGH_TRILHA')
+  @AuditadoNoHandler('provedor em provedor_assinatura_nuvem (só a referência do segredo) com a trilha')
   salvarProvedor(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ProvedoresPscResposta> {
     const { senha, ...resto } = corpo(esquemaSenha, b);
     // Trocar o endereço ou o client_id com o segredo definido pede a senha de novo (o serviço decide quando).

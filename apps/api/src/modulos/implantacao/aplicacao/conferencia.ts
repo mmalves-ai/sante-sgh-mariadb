@@ -1,36 +1,31 @@
 // M60, etapa 2: a conferência da instalação do estabelecimento ativo (ficha do M60, M60-F2 "Conexão ao banco"; regras
-// 5 e 6). Junta a versão instalada, a leitura da conexão corrente e os scripts registrados com os scripts do pacote
-// instalado (os arquivos SGH_ do próprio pacote, com o hash) e devolve os itens com a situação (regras puras em
-// @sgh/dominio-config). Só leitura; nenhum segredo, endereço ou dado de pessoa sai daqui.
-import {
-  type CharsetLegado,
-  type ConferenciaInstalacao,
-  definicaoParametro,
-  esquemaConferenciaInstalacao,
-  NOMES_CHARSET_FIREBIRD,
-  PARAMETRO_CHARSET_LEGADO,
-  type Versao,
-} from '@sgh/contratos';
+// 5 e 6). Junta a versão instalada, a leitura da conexão corrente e as migrações registradas com as migrações do
+// pacote instalado (os arquivos de db/migracoes, com o hash) e devolve os itens com a situação: as regras gerais em
+// @sgh/dominio-config e as do motor do banco em ./regras-banco.ts. Só leitura; nenhum segredo, endereço ou dado de
+// pessoa sai daqui.
+// Melhoria: sem o parâmetro de codificação da convivência: o banco próprio grava texto só em utf8mb4, e a conferência
+// exige utf8mb4 no banco e na conexão; o registro das migrações ausente vira alerta com o motivo, não "sem papel".
+import { type ConferenciaInstalacao, esquemaConferenciaInstalacao, type Versao } from '@sgh/contratos';
 import {
   conferirScripts,
   itensDaConferencia,
-  resolverParametro,
   type ScriptDoPacote,
   situacaoDaConferencia,
-  valorTipado,
 } from '@sgh/dominio-config';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { FonteConfiguracao } from '../../config/public-api.js';
-import type { ContextoImplantacao, PortaImplantacao } from '../porta.js';
+import type { ContextoImplantacao, MigracaoRegistrada, PortaImplantacao } from '../porta.js';
+import { itensDoMotor } from './regras-banco.js';
 
 export interface DependenciasConferencia {
   readonly porta: PortaImplantacao;
   readonly ambiente: string;
-  /** Os scripts SGH_ do pacote instalado (lidos uma vez, sob demanda). */
+  /** As migrações do pacote instalado (lidas uma vez, sob demanda). */
   readonly scriptsDoPacote: () => readonly ScriptDoPacote[];
   readonly versao: () => Versao;
   /** A identificação que o pacote promete (SONDA_VERSAO_ESPERADA); nula: só mostra a instalada. */
   readonly identificacaoEsperada: string | null;
+  /** Mantida na assinatura para a montagem do módulo; a conferência não lê parâmetro. */
   readonly configuracao?: FonteConfiguracao | null;
   readonly agora?: () => number;
 }
@@ -42,55 +37,29 @@ export class ServicoConferenciaInstalacao {
     return this.d.agora ? this.d.agora() : Date.now();
   }
 
-  /** O parâmetro legado.charset do estabelecimento (padrão CP1252 sem a fonte de configuração). */
-  private async charsetParametro(c: ContextoImplantacao): Promise<CharsetLegado> {
-    const def = definicaoParametro(PARAMETRO_CHARSET_LEGADO);
-    if (!def || !this.d.configuracao) return 'CP1252';
-    let valores: Awaited<ReturnType<FonteConfiguracao['valoresParametro']>>;
-    try {
-      valores = await this.d.configuracao.valoresParametro(c.rede, c.hospital);
-    } catch {
-      valores = [];
-    }
-    const v = valorTipado(
-      def,
-      resolverParametro(
-        def,
-        valores,
-        { rede: c.rede, empresa: null, estabelecimento: c.hospital, unidade: null, perfis: [], usuario: '' },
-        new Date(this.agora()),
-      ).valor,
-    );
-    return v === 'UTF8' ? 'UTF8' : 'CP1252';
-  }
-
   conferir(s: SessaoCadastro): Promise<ConferenciaInstalacao> {
     return this.conferirContexto({ rede: s.rede, hospital: s.hospital });
   }
 
   /** A mesma conferência sem sessão (a sonda da implantação, com o segredo do pipeline). */
   async conferirContexto(c: ContextoImplantacao): Promise<ConferenciaInstalacao> {
-    // allSettled: a falha ao ler o registro dos scripts (a conta sem o papel) não derruba a conferência; a leitura
-    // da conexão (conta, papel, canal) sempre chega à tela, e o item dos scripts sai em falha.
-    const [rLida, rRegistrados, rCharset] = await Promise.allSettled([
+    // allSettled: a falha ao ler o registro das migrações (a conta sem o direito) não derruba a conferência; a leitura
+    // da conexão (conta, papel, canal) sempre chega à tela, e o item das migrações sai em falha.
+    const [rLida, rRegistradas] = await Promise.allSettled([
       this.d.porta.conexao(c),
-      this.d.porta.scriptsRegistrados(c),
-      this.charsetParametro(c),
+      this.d.porta.migracoesRegistradas(c),
     ]);
     // Sem a leitura da conexão não há o que conferir (o banco não respondeu): o erro segue.
     if (rLida.status === 'rejected') throw rLida.reason;
     const lida = rLida.value;
-    const registrados = rRegistrados.status === 'fulfilled' ? rRegistrados.value : null;
-    const charsetParametro: CharsetLegado = rCharset.status === 'fulfilled' ? rCharset.value : 'CP1252';
+    const registradas: MigracaoRegistrada[] | null | 'sem-registro' =
+      rRegistradas.status === 'fulfilled' ? (rRegistradas.value ?? 'sem-registro') : null;
     const versao = this.d.versao();
     const conexao = {
       versaoMotor: lida.versaoMotor,
       charsetBanco: lida.charsetBanco,
-      charsetConexao:
-        lida.charsetConexaoId === null
-          ? null
-          : (NOMES_CHARSET_FIREBIRD[lida.charsetConexaoId] ?? `id ${lida.charsetConexaoId}`),
-      charsetParametro,
+      charsetConexao: lida.charsetConexao,
+      charsetParametro: 'UTF8' as const,
       autenticacao: lida.autenticacao,
       canalCifrado: lida.canalCifrado,
       canalComprimido: lida.canalComprimido,
@@ -98,15 +67,17 @@ export class ServicoConferenciaInstalacao {
       conta: lida.conta,
       papel: lida.papel,
     };
-    const scripts = conferirScripts(this.d.scriptsDoPacote(), registrados);
-    const itens = itensDaConferencia({
+    const pacote = this.d.scriptsDoPacote();
+    const scripts = conferirScripts(pacote, registradas === 'sem-registro' ? null : registradas);
+    const gerais = itensDaConferencia({
       ambiente: this.d.ambiente,
       conexao,
       scripts,
-      charsetParametro,
+      charsetParametro: 'UTF8',
       identificacao: versao.identificacao,
       identificacaoEsperada: this.d.identificacaoEsperada,
     });
+    const itens = itensDoMotor(gerais, lida, this.d.ambiente, registradas, scripts.noPacote);
     return esquemaConferenciaInstalacao.parse({
       hospital: c.hospital,
       em: new Date(this.agora()).toISOString(),

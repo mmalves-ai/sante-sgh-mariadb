@@ -81,18 +81,19 @@ import {
   type BemParaDepreciar,
 } from '@sgh/dominio-patrimonio';
 import type {
-  AjusteLido,
-  LaudoLido,
-  BemLido,
-  BemParaDepreciarLido,
-  BemParaGravar,
-  CotaLida,
-  DominiosPatrimonioLidos,
-  InventarioLido,
-  LinhaTrilha,
-  MovimentoBemLido,
-} from '@sgh/legado';
+  AjusteDoBem,
+  LaudoDoBem,
+  BemRegistrado,
+  BemDaCompetencia,
+  BemNovo,
+  CotaRegistrada,
+  DominiosPatrimonio,
+  InventarioRegistrado,
+  MovimentoRegistrado,
+} from './tipos.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ArmazemLaudoPatrimonio } from './armazem-laudo.js';
 import type { ContextoPatrimonio, PortaPatrimonio } from './porta.js';
 
@@ -100,8 +101,12 @@ export interface SessaoPatrimonio {
   readonly rede: string;
   readonly hospital: string;
   readonly login: string;
+  /** O contexto do núcleo da sessão (cliente, estabelecimento e usuário por id). */
+  readonly porta: ContextoPorta;
+  /** A chave de idempotência da gravação (Idempotency-Key da requisição). */
+  readonly chaveIdempotencia: string;
   /**
-   * Regra 13 (D-ACEITE-546): os centros de custo (TBCENCUS.ID) por que a pessoa recebe a transferência, do escopo
+   * Regra 13 (D-ACEITE-546): os centros de custo (pelo id) por que a pessoa recebe a transferência, do escopo
    * `centroCusto` da permissão de aceite; `null`: sem centro cadastrado, sem restrição (M06, regra 6).
    */
   readonly centrosQueRecebe: ReadonlySet<number> | null;
@@ -111,10 +116,10 @@ export interface SessaoPatrimonio {
     operacao: 'INSERT' | 'UPDATE' | 'DELETE',
     tabela: string,
     id: number | null,
-  ): LinhaTrilha;
+  ): RegistroTrilhaTela;
 }
 
-const ctx = (s: SessaoPatrimonio): ContextoPatrimonio => ({ rede: s.rede, hospital: s.hospital });
+const ctx = (s: SessaoPatrimonio): ContextoPatrimonio => ({ ...s.porta, chaveIdempotencia: s.chaveIdempotencia });
 
 /** O inventário que não está aberto: encerrado ou cancelado (W0-08), cada um com o seu código. */
 const inventarioNaoAberto = (situacao: string) =>
@@ -137,7 +142,7 @@ const recusada = (
   });
 
 /** O laudo no contrato (sem a chave do armazenamento). */
-const paraLaudoBem = (l: LaudoLido): LaudoBem => ({
+const paraLaudoBem = (l: LaudoDoBem): LaudoBem => ({
   id: l.id,
   bem: l.bem,
   nome: l.nome,
@@ -160,7 +165,7 @@ const laudoInexistente = (laudo: number) =>
 const sha256Hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
 /** O ajuste lido no contrato (sem o centro, o grupo e a plaqueta, que só a contabilidade usa). */
-const paraAjusteBem = (a: AjusteLido): AjusteBem => ({
+const paraAjusteBem = (a: AjusteDoBem): AjusteBem => ({
   id: a.id,
   bem: a.bem,
   tipo: a.tipo,
@@ -187,7 +192,7 @@ const paraAjusteBem = (a: AjusteLido): AjusteBem => ({
       }
     : null,
 });
-/** W0-08: o grupo do bem é cadastro (SGH_PAT_GRUPO): o código gravado vale como está. */
+/** W0-08: o grupo do bem é cadastro (grupo_bem): o código gravado vale como está. */
 const grupoValido = (g: string): string => g.trim();
 const tipoMov = (t: string): TipoMovimentoBem =>
   (TIPOS_MOVIMENTO_BEM as readonly string[]).includes(t) ? (t as TipoMovimentoBem) : 'transferencia';
@@ -214,7 +219,7 @@ export class ServicoPatrimonio {
     private readonly hoje: () => string = () => hojeNoEstabelecimento(),
   ) {}
 
-  private bem(s: SessaoPatrimonio, b: BemLido): BemPatrimonial {
+  private bem(s: SessaoPatrimonio, b: BemRegistrado): BemPatrimonial {
     return {
       ...b,
       grupo: grupoValido(b.grupo),
@@ -226,11 +231,11 @@ export class ServicoPatrimonio {
     };
   }
 
-  private movimento(m: MovimentoBemLido): MovimentoBem {
+  private movimento(m: MovimentoRegistrado): MovimentoBem {
     return { ...m, tipo: tipoMov(m.tipo), situacao: situacaoMov(m.situacao) };
   }
 
-  private async bemOu404(s: SessaoPatrimonio, id: number): Promise<BemLido> {
+  private async bemOu404(s: SessaoPatrimonio, id: number): Promise<BemRegistrado> {
     const b = await this.porta.bem(ctx(s), id);
     if (!b) throw naoEncontrado('Bem');
     return b;
@@ -398,7 +403,7 @@ export class ServicoPatrimonio {
       throw recusada('Cadastro do bem recusado', [
         { codigo: 'empresa', mensagem: 'A nota não tem empresa.' },
       ]);
-    const bens: BemParaGravar[] = v.valores.map((valorCent) => ({
+    const bens: BemNovo[] = v.valores.map((valorCent) => ({
       empresa,
       plaqueta: x.plaqueta,
       descricao: x.descricao,
@@ -434,7 +439,7 @@ export class ServicoPatrimonio {
       },
       s.login,
       (n) => formatarPlaqueta(s.hospital, n),
-      s.trilha(evento, 'INSERT', 'SGH_PAT_BEM', null),
+      s.trilha(evento, 'INSERT', 'bem_patrimonial', null),
     );
     return { bens: r.map((b) => this.bem(s, b)) };
   }
@@ -465,7 +470,7 @@ export class ServicoPatrimonio {
         mensagem: 'Informe o tipo do responsável.',
         campo: 'tipoResponsavel',
       });
-    // Revisão W0-08: o grupo vem do cadastro (SGH_PAT_GRUPO); o grupo novo tem de existir e estar ativo (manter o
+    // Revisão W0-08: o grupo vem do cadastro (grupo_bem); o grupo novo tem de existir e estar ativo (manter o
     // grupo inativo que o bem já tem é aceito). A gravação confere de novo na transação, com a linha do grupo travada.
     const grupo = (await this.porta.grupos(ctx(s))).find((g) => g.codigo === x.grupo);
     const antesDoBem = await this.porta.bem(ctx(s), id);
@@ -514,13 +519,13 @@ export class ServicoPatrimonio {
           ? 'O bem já tem depreciação gravada: vida útil, residual, turnos, início e a marca de depreciar não mudam mais.'
           : null;
       },
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_BEM', id),
+      s.trilha(evento, 'UPDATE', 'bem_patrimonial', id),
     );
     if (!r) throw naoEncontrado('Bem');
     return { bem: this.bem(s, r.depois), mudou: r.mudou };
   }
 
-  // ── Grupo do bem (W0-08, parte 4: cadastro SGH_PAT_GRUPO) ──────────────────────────────────────────────────────────
+  // ── Grupo do bem (W0-08, parte 4: cadastro grupo_bem) ──────────────────────────────────────────────────────────
 
   /** O nome do grupo pelo cadastro (o código, quando não está mais lá). */
   private async nomeDoGrupo(c: ContextoPatrimonio): Promise<(codigo: string) => string> {
@@ -585,7 +590,7 @@ export class ServicoPatrimonio {
       ctx(s),
       { codigo: x.codigo, nome: x.nome, vidaUtilMeses: x.vidaUtilMeses, conta: x.conta },
       s.login,
-      s.trilha(evento, 'INSERT', 'SGH_PAT_GRUPO', null),
+      s.trilha(evento, 'INSERT', 'grupo_bem', null),
     );
     return this.grupoDe(g);
   }
@@ -609,7 +614,7 @@ export class ServicoPatrimonio {
         motivo: x.motivo,
       },
       s.login,
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_GRUPO', null),
+      s.trilha(evento, 'UPDATE', 'grupo_bem', null),
     );
     return this.grupoDe(r.depois);
   }
@@ -625,7 +630,7 @@ export class ServicoPatrimonio {
       ctx(s),
       { codigo, versaoVista: x.versao, motivo: x.motivo, ativo },
       s.login,
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_GRUPO', null),
+      s.trilha(evento, 'UPDATE', 'grupo_bem', null),
     );
     return this.grupoDe(r.depois);
   }
@@ -640,18 +645,18 @@ export class ServicoPatrimonio {
       ctx(s),
       { codigo, versaoVista: x.versao, motivo: x.motivo },
       s.login,
-      s.trilha(evento, 'DELETE', 'SGH_PAT_GRUPO', null),
+      s.trilha(evento, 'DELETE', 'grupo_bem', null),
     );
     return { codigo, excluido: true };
   }
 
   // ── Depreciação ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private paraDepreciar(b: BemParaDepreciarLido): BemParaDepreciar {
+  private paraDepreciar(b: BemDaCompetencia): BemParaDepreciar {
     return { ...b, grupo: grupoValido(b.grupo) };
   }
 
-  private cotaDaLida(k: CotaLida, competencia: string): CotaDepreciacao {
+  private cotaDaLida(k: CotaRegistrada, competencia: string): CotaDepreciacao {
     const depreciavel = k.baseCent - k.residualCent;
     return {
       bem: k.bem,
@@ -674,7 +679,7 @@ export class ServicoPatrimonio {
     };
   }
 
-  private parametros(d: DominiosPatrimonioLidos, empresa: number): ParametrosDepreciacao | null {
+  private parametros(d: DominiosPatrimonio, empresa: number): ParametrosDepreciacao | null {
     return d.parametros.find((p) => p.empresa === empresa) ?? null;
   }
 
@@ -751,7 +756,7 @@ export class ServicoPatrimonio {
       { ...x, origem: ORIGEM_ESTORNO_DEPRECIACAO },
       s.login,
       (sit) => impedimentoDoEstorno(x.competencia, sit),
-      s.trilha(evento, 'INSERT', 'SGH_PAT_CALCULO_ESTORNO', null),
+      s.trilha(evento, 'INSERT', 'estorno_calculo_depreciacao', null),
     );
     return this.depreciacao(s, { empresa: x.empresa, competencia: x.competencia });
   }
@@ -797,7 +802,7 @@ export class ServicoPatrimonio {
           contasConfiguradas: sit.contasConfiguradas,
           lotesExportados: sit.lotesExportados,
         }),
-      s.trilha(evento, 'INSERT', 'SGH_PAT_AJUSTE', x.bem),
+      s.trilha(evento, 'INSERT', 'ajuste_valor_bem', x.bem),
     );
     return paraAjusteBem(r);
   }
@@ -850,7 +855,7 @@ export class ServicoPatrimonio {
       c,
       { bem, nome: x.nome, descricao: x.descricao, chave, sha256, tamanho: bytes.length },
       s.login,
-      s.trilha(evento, 'INSERT', 'SGH_PAT_LAUDO', bem),
+      s.trilha(evento, 'INSERT', 'laudo_bem', bem),
     );
     return paraLaudoBem(l);
   }
@@ -897,7 +902,7 @@ export class ServicoPatrimonio {
           ...sit,
           ajuste: { ...sit.ajuste, estornado: sit.ajuste.estorno !== null },
         }),
-      s.trilha(evento, 'INSERT', 'SGH_PAT_AJUSTE_ESTORNO', ajuste),
+      s.trilha(evento, 'INSERT', 'ajuste_valor_bem', ajuste),
     );
     return paraAjusteBem(r);
   }
@@ -938,7 +943,7 @@ export class ServicoPatrimonio {
           resumo: resumoDoCalculo(plano),
         };
       },
-      s.trilha(evento, 'INSERT', 'SGH_PAT_CALCULO', null),
+      s.trilha(evento, 'INSERT', 'calculo_depreciacao', null),
     );
     return this.depreciacao(s, x);
   }
@@ -964,10 +969,22 @@ export class ServicoPatrimonio {
     s: SessaoPatrimonio,
     x: RegistrarMovimento,
     evento: string,
+    /** Só na baixa: o motivo de baixa do cadastro (dominios.motivosBaixa), nunca texto livre. */
+    motivoBaixa: number | null = null,
   ): Promise<{ movimento: MovimentoBem; bem: BemPatrimonial }> {
     const c = ctx(s);
     const b = await this.bemOu404(s, x.bem);
     const d = await this.porta.dominios(c);
+    if (x.tipo === 'baixa' && (motivoBaixa === null || !d.motivosBaixa.some((m) => m.id === motivoBaixa)))
+      throw recusada('Movimento recusado', [
+        {
+          codigo: 'motivo-baixa',
+          mensagem:
+            motivoBaixa === null
+              ? 'Escolha o motivo da baixa no cadastro de motivos.'
+              : 'O motivo de baixa não existe ou está inativo.',
+        },
+      ]);
     const vista = {
       id: b.id,
       situacao: b.situacao,
@@ -1000,12 +1017,13 @@ export class ServicoPatrimonio {
         termoNumero:
           x.tipo === 'emprestimo' || x.tipo === 'comodato' || x.tipo === 'baixa' ? x.termoNumero : null,
         motivo: x.motivo,
+        motivoBaixa: x.tipo === 'baixa' ? motivoBaixa : null,
         valorVendaCent: x.tipo === 'baixa' ? x.valorVendaCent : null,
         referencia,
         efeito: ef.bem ? { situacao: ef.bem.situacao, baixadoEm: ef.bem.baixadoEm } : null,
       },
       s.login,
-      s.trilha(evento, 'INSERT', 'SGH_PAT_MOVIMENTO', null),
+      s.trilha(evento, 'INSERT', 'movimento_bem', null),
     );
     return { movimento: this.movimento(r.movimento), bem: this.bem(s, r.bem) };
   }
@@ -1037,7 +1055,7 @@ export class ServicoPatrimonio {
         ).filter((p) => x.aceitar || p.codigo !== 'bem-mudou');
         return ps.length > 0 ? ps.map((p) => p.mensagem).join(' ') : null;
       },
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_MOVIMENTO', id),
+      s.trilha(evento, 'UPDATE', 'movimento_bem', id),
     );
     if (!r) throw naoEncontrado('Movimento');
     return { movimento: this.movimento(r.movimento), bem: this.bem(s, r.bem) };
@@ -1067,7 +1085,7 @@ export class ServicoPatrimonio {
         );
         return ps.length > 0 ? ps.map((p) => p.mensagem).join(' ') : null;
       },
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_MOVIMENTO', id),
+      s.trilha(evento, 'UPDATE', 'movimento_bem', id),
     );
     if (!r) throw naoEncontrado('Movimento');
     return { movimento: this.movimento(r.movimento) };
@@ -1075,7 +1093,7 @@ export class ServicoPatrimonio {
 
   // ── Inventário ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private inventarioBase(i: InventarioLido): Omit<Inventario, 'resumo'> {
+  private inventarioBase(i: InventarioRegistrado): Omit<Inventario, 'resumo'> {
     return {
       id: i.id,
       descricao: i.descricao,
@@ -1102,7 +1120,7 @@ export class ServicoPatrimonio {
       ctx(s),
       { id, motivo: x.motivo },
       s.login,
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_INVENTARIO', id),
+      s.trilha(evento, 'UPDATE', 'inventario_bem', id),
     );
     if (!ok) throw naoEncontrado('Inventário');
     return this.inventario(s, id);
@@ -1117,7 +1135,7 @@ export class ServicoPatrimonio {
 
   private async resumoAoVivo(
     s: SessaoPatrimonio,
-    i: InventarioLido,
+    i: InventarioRegistrado,
     leituras: readonly LeituraInventarioRegistrada[],
   ): Promise<ResumoInventario> {
     const esp = await this.porta.esperados(ctx(s), i.centro?.id ?? null);
@@ -1139,7 +1157,7 @@ export class ServicoPatrimonio {
     if (i.situacao === 'encerrado') {
       const gravado = lerResumoGravado(i.resumo);
       if (gravado) {
-        const porId = new Map<number, BemLido | null>();
+        const porId = new Map<number, BemRegistrado | null>();
         for (const n of gravado.naoEncontrados) porId.set(n.bem, await this.porta.bem(ctx(s), n.bem));
         resumo = {
           ...gravado,
@@ -1170,7 +1188,7 @@ export class ServicoPatrimonio {
       ctx(s),
       x,
       s.login,
-      s.trilha(evento, 'INSERT', 'SGH_PAT_INVENTARIO', null),
+      s.trilha(evento, 'INSERT', 'inventario_bem', null),
     );
     return this.inventario(s, id);
   }
@@ -1222,7 +1240,7 @@ export class ServicoPatrimonio {
         observacao: x.observacao,
       },
       s.login,
-      s.trilha(evento, 'INSERT', 'SGH_PAT_INV_LEITURA', null),
+      s.trilha(evento, 'INSERT', 'inventario_bem_item', null),
     );
     const det = await this.inventario(s, id);
     const leitura = det.leituras.find((l) => l.id === lid);
@@ -1238,7 +1256,7 @@ export class ServicoPatrimonio {
       ctx(s),
       { id, esperados: det.resumo.esperados, resumo: resumoParaGravar(det.resumo) },
       s.login,
-      s.trilha(evento, 'UPDATE', 'SGH_PAT_INVENTARIO', id),
+      s.trilha(evento, 'UPDATE', 'inventario_bem', id),
     );
     if (!ok) throw naoEncontrado('Inventário');
     return this.inventario(s, id);

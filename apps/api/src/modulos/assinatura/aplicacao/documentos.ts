@@ -7,12 +7,12 @@
 //     documento, a revisão incremental PAdES da prévia e o hash dos atributos assinados (D-RAW-49: o provedor assina
 //     esse hash); o documento do outro sistema não tem prova e é recusado (regra 7);
 //   - a CONCLUSÃO: cada assinatura validada no servidor; válida → "assinada", com o evento "assinado" (nível ICP-Brasil)
-//     na cadeia do documento do novo e o PDF assinado (CMS destacado com o carimbo) no S3; LCR, OCSP ou ACT fora do ar →
+//     na cadeia do documento do prontuário e o PDF assinado (CMS destacado com o carimbo) no S3; LCR, OCSP ou ACT fora do ar →
 //     PENDENTE, com o aviso ao autor e à direção técnica e a próxima tentativa (regra 5); o reprocessamento (sozinho,
 //     pelo agendador, ou à mão) completa a mesma assinatura (nada é assinado de novo);
 //   - o PDF assinado para validar fora do sistema (validação "ao exportar") e a numeração SNCR (desligada, POL-3).
 // A trilha documental do outro sistema não muda (o novo continua gravando o tipo 1, "Somente lançamento", na emissão).
-// Tudo só SGH_, com a SGH_TRILHA na mesma transação; nada de CPF, conteúdo nem segredo na trilha.
+// Tudo com a trilha na mesma transação; nada de CPF, conteúdo nem segredo na trilha.
 import { createHash } from 'node:crypto';
 import {
   type ExigenciaAssinatura,
@@ -73,13 +73,13 @@ import {
   urlVerificador,
 } from '@sgh/dominio-documento';
 import type {
-  AssinaturaDocumentoLida,
-  CertificadoGravado,
-  DocumentoSghLido,
-  PedidoAssinaturaGravado,
-  PreviaGravada,
-  ProvedorGravado,
-} from '@sgh/legado';
+  AssinaturaDoDocumento,
+  CertificadoVinculado,
+  DocumentoEmitidoIcp,
+  PedidoAssinaturaAberto,
+  PreviaDoDocumento,
+  ProvedorNuvem,
+} from '../tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { linhaTrilha, type SessaoCadastro } from '../../cadastro/comum.js';
 import { ErroIndisponivel } from '../infra/clientes.js';
@@ -91,7 +91,7 @@ const E = EVENTOS_AUDITAVEIS;
 const sha256Hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const b64 = (s: string) => Uint8Array.from(Buffer.from(s, 'base64'));
 
-/** O conteúdo do documento do novo, como a impressão do M23 o monta (identificação, corpo e extras). */
+/** O conteúdo do documento do prontuário, como a impressão do M23 o monta (identificação, corpo e extras). */
 export interface ConteudoIcp {
   readonly modelo: ModeloPep;
   readonly titulo: string;
@@ -101,7 +101,7 @@ export interface ConteudoIcp {
 
 /** O que o prontuário de uso diário (M23) entrega: o conteúdo do documento e os nomes da fila do autor. */
 export interface FonteConteudoIcp {
-  conteudo(c: ContextoAssinatura, d: DocumentoSghLido): Promise<ConteudoIcp>;
+  conteudo(c: ContextoAssinatura, d: DocumentoEmitidoIcp): Promise<ConteudoIcp>;
   nomes(c: ContextoAssinatura, pacientes: readonly number[]): Promise<Map<number, string>>;
 }
 
@@ -221,7 +221,7 @@ export class ServicoAssinaturaDocumentos {
   }
 
   /** D-CONSELHO-49: a sigla do conselho pelo OID de registro do certificado (null: vale "qualquer conselho"). */
-  private async conselho(c: ContextoAssinatura, cert: CertificadoGravado | null): Promise<string | null> {
+  private async conselho(c: ContextoAssinatura, cert: CertificadoVinculado | null): Promise<string | null> {
     if (!cert?.certificadoDer) return null;
     try {
       const lido = lerCertificado(b64(cert.certificadoDer));
@@ -243,15 +243,15 @@ export class ServicoAssinaturaDocumentos {
     });
   }
 
-  private async certificadoDoUsuario(s: SessaoCadastro, id: number): Promise<CertificadoGravado> {
+  private async certificadoDoUsuario(s: SessaoCadastro, id: number): Promise<CertificadoVinculado> {
     const c = await this.porta.certificado(s.porta, id);
     if (!c || c.usuario !== s.login || !c.ativo || !c.certificadoDer)
       throw recusa('certificado-divergente', 404);
     return c;
   }
 
-  /** O documento do novo do autor, que recebe a ICP e não está suspenso (as recusas das regras 7 e 4). */
-  private async documentoDoAutor(s: SessaoCadastro, id: number): Promise<DocumentoSghLido> {
+  /** O documento do prontuário do autor, que recebe a ICP e não está suspenso (as recusas das regras 7 e 4). */
+  private async documentoDoAutor(s: SessaoCadastro, id: number): Promise<DocumentoEmitidoIcp> {
     const d = await this.porta.documentoEmitido(s.porta, id);
     if (!d) throw recusa('documento-sem-prova', 404);
     if (d.usuario !== s.login) throw recusa('nao-e-o-autor', 403);
@@ -262,7 +262,7 @@ export class ServicoAssinaturaDocumentos {
 
   /** A revisão incremental da prévia e o hash dos atributos assinados (determinístico: a volta remonta e confere). */
   private async prepararDaPrevia(
-    pv: PreviaGravada,
+    pv: PreviaDoDocumento,
     certificadoDer: Uint8Array,
   ): Promise<{
     pdf: Uint8Array;
@@ -454,13 +454,13 @@ export class ServicoAssinaturaDocumentos {
           versaoS3: feito.versao,
           codigo,
           assinarEm: assinarEm.toISOString(),
-          // Etapa 3: o que o selo mostra, para o verificador público (só SGH_).
+          // Etapa 3: o que o selo mostra, para o verificador público.
           profissional: conteudo.profissional,
           registro,
         }),
       (x) =>
         linhaTrilha(s, E.previaAssinaturaGerada.codigo, 'documento.assinatura', 'documento.assinar', {
-          tabela: 'SGH_DOC_PREVIA_ASSIN',
+          tabela: 'previa_assinatura',
           id: String(x.id),
           paciente: d.paciente,
           chave: `previa:${d.tipo}:${politica}`,
@@ -537,7 +537,7 @@ export class ServicoAssinaturaDocumentos {
     ]);
     const recusados: { documento: number; motivo: MotivoRecusaAssinatura }[] = [];
     const documentos = new Map<number, DocumentoEmitido>();
-    const previas = new Map<number, PreviaGravada>();
+    const previas = new Map<number, PreviaDoDocumento>();
     const pedido: { documentos: number[]; hashes: string[] } = { documentos: [], hashes: [] };
     for (const [i, id] of e.documentos.entries()) {
       const d = await this.porta.documentoEmitido(s.porta, id);
@@ -690,13 +690,13 @@ export class ServicoAssinaturaDocumentos {
   /** Cada documento do pedido: a prévia mais recente remonta o mesmo hash (senão, a prévia mudou: recusa). */
   private async itensDoPedido(
     s: SessaoCadastro,
-    pedido: PedidoAssinaturaGravado,
+    pedido: PedidoAssinaturaAberto,
     der: Uint8Array,
   ): Promise<{
-    ok: { documento: number; hash: string; previa: PreviaGravada }[];
+    ok: { documento: number; hash: string; previa: PreviaDoDocumento }[];
     recusados: ItemConcluido[];
   }> {
-    const ok: { documento: number; hash: string; previa: PreviaGravada }[] = [];
+    const ok: { documento: number; hash: string; previa: PreviaDoDocumento }[] = [];
     const recusados: ItemConcluido[] = [];
     for (const [i, documento] of pedido.documentos.entries()) {
       const pv = await this.porta.previaMaisRecente(s.porta, documento, s.login);
@@ -731,10 +731,10 @@ export class ServicoAssinaturaDocumentos {
 
   async concluirNuvem(
     s: SessaoCadastro,
-    pedido: PedidoAssinaturaGravado,
+    pedido: PedidoAssinaturaAberto,
     cfg: ConfiguracaoPsc,
     token: string,
-    provedor: ProvedorGravado,
+    provedor: ProvedorNuvem,
   ): Promise<ResultadoFluxoAssinatura> {
     const cert = pedido.certificado ? await this.porta.certificado(s.porta, pedido.certificado) : null;
     if (!cert?.certificadoDer || cert.usuario !== s.login)
@@ -804,7 +804,7 @@ export class ServicoAssinaturaDocumentos {
 
   async concluirAgente(
     s: SessaoCadastro,
-    pedido: PedidoAssinaturaGravado,
+    pedido: PedidoAssinaturaAberto,
     porHash: ReadonlyMap<string, string>,
     certificadoB64: string,
   ): Promise<ResultadoFluxoAssinatura> {
@@ -838,8 +838,8 @@ export class ServicoAssinaturaDocumentos {
     x: {
       documento: number;
       hash: string;
-      previa: PreviaGravada;
-      certificado: CertificadoGravado;
+      previa: PreviaDoDocumento;
+      certificado: CertificadoVinculado;
       assinatura: Uint8Array;
       provedor: string | null;
     },
@@ -908,7 +908,7 @@ export class ServicoAssinaturaDocumentos {
         await g.gravarAssinaturaPdf({ assinatura: a.id, previa: x.previa.id });
         if (estado === 'assinada')
           await g.gravarEventoAssinadoIcp(
-            { hospital: s.hospital, usuarioLegado: s.login },
+            { hospital: s.hospital, usuario: s.login },
             x.documento,
             comoSuporte,
           );
@@ -932,7 +932,7 @@ export class ServicoAssinaturaDocumentos {
                 'documento.assinatura',
                 'documento.assinar',
                 {
-                  tabela: 'SGH_DOC_ASSINATURA',
+                  tabela: 'assinatura_documento',
                   id: String(a.id),
                   paciente: d?.paciente ?? null,
                   chave: `documento:${politica}:${v.resultado}`,
@@ -965,7 +965,7 @@ export class ServicoAssinaturaDocumentos {
   // ── PDF assinado (regra 8) ────────────────────────────────────────────────────────────────────────────────
 
   /** Remonta o PDF assinado (prévia + revisão incremental + CMS com o carimbo) e o guarda no S3. */
-  async montarPdfAssinado(c: ContextoAssinatura, a: AssinaturaDocumentoLida): Promise<Uint8Array> {
+  async montarPdfAssinado(c: ContextoAssinatura, a: AssinaturaDoDocumento): Promise<Uint8Array> {
     if (a.estado !== 'assinada' || !a.assinatura || a.previa === null) throw recusa('nao-reprocessavel', 409);
     const [pv, cert] = await Promise.all([
       this.porta.previa(c, a.previa),
@@ -1004,7 +1004,7 @@ export class ServicoAssinaturaDocumentos {
     return pdf;
   }
 
-  /** O PDF assinado para validar fora do sistema; a validação "ao exportar" vai a SGH_DOC_VALIDACAO. */
+  /** O PDF assinado para validar fora do sistema; a validação "ao exportar" vai a validacao_assinatura. */
   async pdfAssinado(s: SessaoCadastro, assinatura: number): Promise<{ pdf: Uint8Array; documento: number }> {
     const a = await this.porta.assinaturaDocumento(s.porta, assinatura);
     if (!a || a.usuario !== s.login) throw recusa('documento-sem-prova', 404);
@@ -1056,7 +1056,7 @@ export class ServicoAssinaturaDocumentos {
           em: agora,
         }),
       linhaTrilha(s, E.documentoAssinadoExportado.codigo, 'documento.assinatura', 'documento.validar', {
-        tabela: 'SGH_DOC_ASSINATURA',
+        tabela: 'assinatura_documento',
         id: String(a.id),
         chave: `exportar:${resultado}`,
       }),
@@ -1161,7 +1161,7 @@ export class ServicoAssinaturaDocumentos {
         });
         if (t.situacao.estado === 'assinada')
           await g.gravarEventoAssinadoIcp(
-            { hospital: a.hospital, usuarioLegado: a.usuario },
+            { hospital: a.hospital, usuario: a.usuario },
             a.documento,
             false,
           );
@@ -1187,7 +1187,7 @@ export class ServicoAssinaturaDocumentos {
                 'documento.assinatura',
                 'documento.reprocessarPendente',
                 {
-                  tabela: 'SGH_DOC_ASSINATURA',
+                  tabela: 'assinatura_documento',
                   id: String(a.id),
                   paciente: d?.paciente ?? null,
                   chave: `${manual ? 'manual' : 'automatico'}:${t.situacao.estado}:${t.situacao.tentativas}`,
@@ -1248,7 +1248,7 @@ export class ServicoAssinaturaDocumentos {
               'documento.assinatura',
               'documento.reprocessarPendente',
               {
-                tabela: 'SGH_DOC_ASSINATURA_AVISO',
+                tabela: 'aviso_assinatura',
                 chave: `lidos:${n}`,
               },
             )
@@ -1302,7 +1302,7 @@ export class ServicoAssinaturaDocumentos {
         }),
       (x) =>
         linhaTrilha(s, E.sncrSolicitada.codigo, 'documento.assinatura', 'documento.obterNumeracaoSncr', {
-          tabela: 'SGH_DOC_SNCR_SOLICITACAO',
+          tabela: 'pedido_numeracao_receita',
           id: String(x.id),
           paciente: d.paciente,
           chave: `pendente:${tipo}:${medicamentos}`,
@@ -1338,7 +1338,7 @@ export class ServicoAssinaturaDocumentos {
           if (estado.numero) await x.gravarNumeroSncr(s.hospital, documento, estado.numero);
         },
         linhaTrilha(s, E.sncrSolicitada.codigo, 'documento.assinatura', 'documento.obterNumeracaoSncr', {
-          tabela: 'SGH_DOC_SNCR_SOLICITACAO',
+          tabela: 'pedido_numeracao_receita',
           id: String(g.id),
           paciente: d.paciente,
           chave: `${estado.situacao}:${tipo}`,

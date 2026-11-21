@@ -2,7 +2,7 @@
 // portal, com a MESMA conferência do recebimento interno (M56, etapa 6: a versão, o XSD, o hash do epílogo, a operadora
 // de destino, o prestador da rede, o lote repetido, as críticas e as glosas automáticas) e mais uma: o lote tem de ser
 // do prestador da conta do portal e da operadora dela (`lote-de-outro-prestador`, antes de qualquer escrita). O XML vai
-// guardado sem edição (SGH_OPE_CONTA, com o SHA-256 único e o hash do epílogo) e recebe o protocolo; a trilha
+// guardado sem edição (lote_conta_recebida, com o SHA-256 único e o hash do epílogo) e recebe o protocolo; a trilha
 // `operadora.portal.lote-enviado` vai na mesma transação. O prestador vê os lotes dele (só os dele, na operadora da conta)
 // e baixa o demonstrativo de análise e, do lote pago, o de pagamento (o mesmo XML do lado interno, validado no XSD), com
 // a trilha da leitura. O prestador vê as glosas do lote e recorre item a item (a guia inteira de uma vez, uma por guia):
@@ -29,7 +29,7 @@ import {
 } from './portal-prestador-servico.js';
 
 const E = EVENTOS_AUDITAVEIS;
-const TABELA = 'SGH_OPE_CONTA';
+const TABELA = 'lote_conta_recebida';
 const brl = (v: number) =>
   `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const naoEncontrado = () =>
@@ -79,9 +79,9 @@ export class ServicoContasPortalPrestador {
     const { hoje } = await this.porta.relogio(c);
     let protocolo = '';
     const r = await this.porta
-      .gravarSgh(
+      .gravar(
         c,
-        (y: { id: number }) =>
+        (y: { id: number; versao: number }) =>
           this.portal.linhaDoPortal(
             s,
             E.operadoraPortalLoteEnviado.codigo,
@@ -208,7 +208,7 @@ export class ServicoContasPortalPrestador {
     await this.contaDoPrestador(s, id);
     const x = await this.contas.conferirRecursoItens(c, id, e);
     const r = await this.porta
-      .gravarSgh(
+      .gravar(
         c,
         this.portal.linhaDoPortal(
           s,
@@ -262,8 +262,8 @@ export class ServicoContasPortalPrestador {
       tipo === 'pagamento'
         ? await this.contas.demonstrativoPagamento(c, id)
         : await this.contas.demonstrativo(c, id);
-    if (this.porta.destino === 'legado')
-      await this.porta.gravarSgh(
+    if (this.porta.destino === 'banco')
+      await this.porta.gravar(
         c,
         this.portal.linhaDoPortal(
           s,

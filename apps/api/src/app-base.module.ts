@@ -45,6 +45,7 @@ import type { FonteAcesso } from './sessao/fonte-acesso.js';
 import { FontePlataformaPropria, nucleoPlataforma } from './sessao/fonte-plataforma.js';
 import { criarFonteAcessoPropria } from './sessao/fonte-propria.js';
 import type { FontePlataforma } from './sessao/tipos-acesso.js';
+import { GanchosComoTardios } from './sessao/ganchos-como.js';
 import { fonteAcessoEfetiva, fontesSinteticas, montarServicoSessao } from './sessao/montar.js';
 import { ResolvedorRedeConfigurado } from './sessao/rede.js';
 import type { ServicoSessao } from './sessao/servico-sessao.js';
@@ -133,12 +134,15 @@ export class AppBaseModule {
       if (np) plataforma = new FontePlataformaPropria(np, () => new Date(), aviso);
       else aviso('núcleo sem acesso ao banco plataforma: entrada da plataforma indisponível', {});
     }
+    // O "login como" é do módulo suporte, montado depois da sessão: a sessão recebe ganchos tardios que ele liga.
+    const ganchosComo = new GanchosComoTardios();
     const servico =
       opcoes.servico !== undefined
         ? opcoes.servico
         : montarServicoSessao(env, real, armazem, trilha, aviso, {
             ...(senha ? { senha } : {}),
             ...(plataforma ? { plataforma } : {}),
+            ...ganchosComo.paraSessao(),
           });
     // A trava da sintética olha o NÚCLEO (o banco do cliente), não a fonte de acesso: com o núcleo em AMBIENTE=dev e
     // ACESSO_FONTE_DEV=sintetica, a sessão sintética (papéis de administrador) só vale com SESSAO_SINTETICA=sim.
@@ -151,7 +155,7 @@ export class AppBaseModule {
       !['dev', 'ci'].includes(configuracao.ambiente),
     );
     const modulos = await carregarModulos(
-      { configuracao, nucleo, env, armazem, servico, trilha },
+      { configuracao, nucleo, env, armazem, servico, trilha, ganchosComo },
       opcoes.registro,
     );
     return {

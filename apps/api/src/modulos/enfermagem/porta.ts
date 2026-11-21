@@ -1,41 +1,42 @@
 // Porta da enfermagem beira-leito (M25): o que as telas de trabalho leem e gravam, independente de onde (a API não
-// escreve SQL; fronteira Nx):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; a checagem pelo EXECUTOR do M04,
-//     com a trilha na mesma transação; as gravações só do novo — sinais vitais, infusão, aprazamento, conflitos,
-//     plantão, aparelhos — por transação SGH_ com a SGH_TRILHA junto);
+// escreve SQL fora das portas):
+//   - `banco`: a porta própria sobre o banco do cliente (porta-propria.ts, pelo @sgh/nucleo; a checagem, o aprazamento
+//     e o estorno pelo Executor, com a trilha na mesma transação; as demais gravações por gravação direta do Executor);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): unidade, pacientes, prescrições e horários SINTÉTICOS em memória,
-//     com as mesmas validações (Zod das receitas) e as mesmas recusas; nada vai à cópia;
+//     com as mesmas validações (o Zod das operações) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type {
-  ExtrasContingenciaLidos,
-  AprazamentoSghLido,
-  AtoChecagemSgh,
-  ConflitoSghLido,
-  DispositivoSghLido,
-  EventoHistoricoLido,
-  EventoInfusaoSgh,
-  HorarioLidoEnf,
-  InternadoLido,
-  NotaSghPlantao,
-  PassagemSghLida,
-  ProfissionalEnfermagemLido,
-  RegraHorarioLida,
+  ExtrasContingencia,
+  AprazamentoRegistrado,
+  AtoChecagem,
+  ConflitoSincronizacao,
+  AparelhoBeiraLeito,
+  EventoHistoricoHorario,
+  EventoInfusao,
+  HorarioEnfermagem,
+  Internado,
+  NotaPlantao,
+  PassagemPlantao,
+  VinculoEnfermagem,
+  RegraHorario,
   SinalParaRetificar,
-  SinalVitalSgh,
-  SinalVitalSghLido,
-  UnidadeInternacaoLida,
-} from '@sgh/legado';
+  SinalVitalNovo,
+  SinalVitalRegistrado,
+  UnidadeComInternados,
+} from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_ENFERMAGEM = Symbol('PORTA_ENFERMAGEM');
 
 export type ContextoEnfermagem = ContextoPortaM18;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** Gravações diretas da porta (fora das operações de tela), numa transação com a linha da trilha junto. */
 export interface GravadorSghEnfermagem {
-  gravarSinal(r: Omit<SinalVitalSgh, 'hospital'>): Promise<number>;
+  gravarSinal(r: Omit<SinalVitalNovo, 'hospital'>): Promise<number>;
   retificarSinal(r: {
     id: number;
+    /** A versão lida na tela (trava otimista: outra retificação no meio recusa). */
+    versao?: number;
     valor: number;
     foraDaFaixa: boolean;
     justificativa: string;
@@ -88,7 +89,7 @@ export interface GravadorSghEnfermagem {
     data: string;
     passadoPor: string;
     recebedor: string;
-    notas: readonly NotaSghPlantao[];
+    notas: readonly NotaPlantao[];
   }): Promise<number>;
   responderPlantao(r: {
     id: number;
@@ -140,25 +141,28 @@ export interface GravadorSghEnfermagem {
 export interface PortaEnfermagem extends PortaGravacaoM18<GravadorSghEnfermagem> {
   /** O relógio do banco do estabelecimento (AAAA-MM-DDTHH:mm:ss, hora local). */
   relogio(c: ContextoEnfermagem): Promise<string>;
-  unidades(c: ContextoEnfermagem): Promise<UnidadeInternacaoLida[]>;
-  internados(c: ContextoEnfermagem, unidade: string): Promise<InternadoLido[]>;
-  internado(c: ContextoEnfermagem, atendimento: number): Promise<InternadoLido | null>;
+  unidades(c: ContextoEnfermagem): Promise<UnidadeComInternados[]>;
+  internados(c: ContextoEnfermagem, unidade: string): Promise<Internado[]>;
+  internado(c: ContextoEnfermagem, atendimento: number): Promise<Internado | null>;
   horarios(
     c: ContextoEnfermagem,
     o: { atendimentos: readonly number[]; inicio: string; fim: string; teto: number },
-  ): Promise<{ itens: HorarioLidoEnf[]; cortada: boolean }>;
-  horario(c: ContextoEnfermagem, id: number): Promise<HorarioLidoEnf | null>;
+  ): Promise<{ itens: HorarioEnfermagem[]; cortada: boolean }>;
+  horario(c: ContextoEnfermagem, id: number): Promise<HorarioEnfermagem | null>;
   faixasDoHorario(
     c: ContextoEnfermagem,
-    h: Pick<HorarioLidoEnf, 'id' | 'item' | 'previsto'>,
+    h: Pick<HorarioEnfermagem, 'id' | 'item' | 'previsto'>,
   ): Promise<{ id: number; situacao: string; faixa: number }[]>;
-  historico(c: ContextoEnfermagem, id: number): Promise<{ eventos: EventoHistoricoLido[]; cortado: boolean }>;
+  historico(
+    c: ContextoEnfermagem,
+    id: number,
+  ): Promise<{ eventos: EventoHistoricoHorario[]; cortado: boolean }>;
   situacoes(c: ContextoEnfermagem, ids: readonly number[]): Promise<Map<number, string>>;
   mudancas(
     c: ContextoEnfermagem,
     o: { inicio: string; fim: string; desde: string },
   ): Promise<{ id: number; situacao: string; quando: string }[]>;
-  vinculos(c: ContextoEnfermagem, login: string): Promise<ProfissionalEnfermagemLido[]>;
+  vinculos(c: ContextoEnfermagem, login: string): Promise<VinculoEnfermagem[]>;
   nomesVinculos(c: ContextoEnfermagem, cbos: readonly number[]): Promise<Map<number, string>>;
   laboratorio(
     c: ContextoEnfermagem,
@@ -166,22 +170,25 @@ export interface PortaEnfermagem extends PortaGravacaoM18<GravadorSghEnfermagem>
   ): Promise<{ exame: string; nome: string; valor: number; quando: string }[]>;
   regrasHorario(
     c: ContextoEnfermagem,
-  ): Promise<{ regras: RegraHorarioLida[]; porBloco: ReadonlyMap<string, number> }>;
-  atos(c: ContextoEnfermagem, horarios: readonly number[]): Promise<AtoChecagemSgh[]>;
-  eventosInfusao(c: ContextoEnfermagem, horarios: readonly number[]): Promise<EventoInfusaoSgh[]>;
+  ): Promise<{ regras: RegraHorario[]; porBloco: ReadonlyMap<string, number> }>;
+  atos(c: ContextoEnfermagem, horarios: readonly number[]): Promise<AtoChecagem[]>;
+  eventosInfusao(c: ContextoEnfermagem, horarios: readonly number[]): Promise<EventoInfusao[]>;
   sinais(
     c: ContextoEnfermagem,
     o: { paciente: number; de: string; ate: string },
-  ): Promise<{ itens: SinalVitalSghLido[]; cortada: boolean }>;
+  ): Promise<{ itens: SinalVitalRegistrado[]; cortada: boolean }>;
   /** O sinal vital pelo id (o paciente, o tipo e a versão vêm do banco, nunca do pedido). */
   sinalPorId(c: ContextoEnfermagem, id: number): Promise<SinalParaRetificar | null>;
   ultimosSinais(c: ContextoEnfermagem, pacientes: readonly number[]): Promise<Map<number, string>>;
-  aprazamentos(c: ContextoEnfermagem, horarios: readonly number[]): Promise<Map<number, AprazamentoSghLido>>;
-  conflitos(c: ContextoEnfermagem, o: { abertos: boolean }): Promise<ConflitoSghLido[]>;
-  passagens(c: ContextoEnfermagem, o: { unidade?: string; id?: number }): Promise<PassagemSghLida[]>;
-  dispositivos(c: ContextoEnfermagem): Promise<DispositivoSghLido[]>;
+  aprazamentos(
+    c: ContextoEnfermagem,
+    horarios: readonly number[],
+  ): Promise<Map<number, AprazamentoRegistrado>>;
+  conflitos(c: ContextoEnfermagem, o: { abertos: boolean }): Promise<ConflitoSincronizacao[]>;
+  passagens(c: ContextoEnfermagem, o: { unidade?: string; id?: number }): Promise<PassagemPlantao[]>;
+  dispositivos(c: ContextoEnfermagem): Promise<AparelhoBeiraLeito[]>;
   /** O aparelho autorizado (ativo) pelo identificador que o tablet manda (a porta guarda só o hash). */
-  dispositivoAutorizado(c: ContextoEnfermagem, identificador: string): Promise<DispositivoSghLido | null>;
+  dispositivoAutorizado(c: ContextoEnfermagem, identificador: string): Promise<AparelhoBeiraLeito | null>;
   /**
    * M40 (regra 6): o que o relatório de contingência do posto precisa além da linha do tempo — os nomes das alergias,
    * a lista de problemas, as justificativas de alerta, as amostras em rastreio e a higienização em andamento.
@@ -194,7 +201,7 @@ export interface PortaEnfermagem extends PortaGravacaoM18<GravadorSghEnfermagem>
       atendimentos: readonly number[];
       prescricoes: readonly number[];
     },
-  ): Promise<ExtrasContingenciaLidos>;
+  ): Promise<ExtrasContingencia>;
 }
 
 export const METODOS_PORTA_ENFERMAGEM: ReadonlySet<string> = new Set([

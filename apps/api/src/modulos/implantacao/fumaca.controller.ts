@@ -1,7 +1,7 @@
 // M60, etapa 3: a fumaça do servidor (testes pós-implantação).
 //   GET /api/administracao/implantacao/fumaca     fuso e relógio contra o banco, Valkey, worker e filas, estrutura do
-//                                                 banco contra a homologada e chaves de liberação, do estabelecimento
-//                                                 ativo (sistema.saude.ler, D-PERM-60.2)
+//                                                 banco contra a homologada (ESTRUTURA_HOMOLOGADA) e chaves de
+//                                                 liberação, do estabelecimento ativo (sistema.saude.ler, D-PERM-60.2)
 //   GET /api/sistema/sonda/fumaca?hospital=       a mesma fumaça sem sessão, só com x-sonda-token = SONDA_TOKEN (sem
 //                                                 ele, 404), para `pnpm implantacao:verificar`
 // Só leitura (nada muda, sem trilha de escrita); só códigos e contagens, sem dado de pessoa.
@@ -22,18 +22,17 @@ import {
   PERMISSAO_CONFERENCIA_INSTALACAO,
 } from '@sgh/contratos';
 import { lerChavesEsperadas } from '@sgh/dominio-config';
-import type { MarcaSchema } from '@sgh/legado';
 import { Permissao, Publica } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { sessaoDe } from '../cadastro/comum.js';
-import { FONTE_COEXISTENCIA, type FonteCoexistencia } from '../config/fonte.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
 import { ServicoFumacaServidor } from './aplicacao/fumaca.js';
 import { FILAS_IMPLANTACAO, type PortaFilasImplantacao } from './filas.js';
 import { consultarNtp } from './ntp.js';
 import { PORTA_IMPLANTACAO, type PortaImplantacao } from './porta.js';
+import { RESUMO_ESTRUTURA_SINTETICA } from './porta-memoria.js';
 
 /** Comparação de segredo em tempo constante. */
 function mesmoSegredo(a: string, b: string): boolean {
@@ -42,21 +41,10 @@ function mesmoSegredo(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** A marca sintética (dev/ci sem o núcleo): a estrutura igual à homologada. */
-function marcaSintetica(hospital: string): MarcaSchema {
-  return {
-    estabelecimento: hospital,
-    estado: 'homologado',
-    verificadaEm: new Date().toISOString(),
-    resumo: 'sintetico0000000',
-    resumoHomologado: 'sintetico0000000',
-    contagens: null,
-    diferencas: {},
-    tabelasBloqueadas: [],
-    bloqueiaTudo: false,
-    motivo: null,
-    duracaoMs: 0,
-  };
+/** O resumo homologado da estrutura do banco, levado pelo pacote (ESTRUTURA_HOMOLOGADA); nulo sem ele. */
+export function estruturaHomologadaDoAmbiente(env: NodeJS.ProcessEnv = process.env): string | null {
+  const v = env['ESTRUTURA_HOMOLOGADA']?.trim().toLowerCase() ?? '';
+  return /^[0-9a-f]{64}$/.test(v) ? v : null;
 }
 
 /** O fuso do processo: a variável TZ, senão o que o Node resolveu. */
@@ -92,7 +80,6 @@ export class FumacaServidorController implements OnApplicationShutdown {
     @Inject(PORTA_IMPLANTACAO) porta: PortaImplantacao,
     @Inject(FILAS_IMPLANTACAO) private readonly filas: PortaFilasImplantacao,
     @Inject(CONFIGURACAO) configuracao: Configuracao,
-    @Optional() @Inject(FONTE_COEXISTENCIA) coexistencia: FonteCoexistencia | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) fonte: FonteConfiguracao | null = null,
   ) {
     this.rede = configuracao.rede ?? '';
@@ -101,12 +88,8 @@ export class FumacaServidorController implements OnApplicationShutdown {
       porta,
       filas,
       ambiente: configuracao.ambiente,
-      marcaSchema: (h) =>
-        coexistencia
-          ? (coexistencia.saude().find((s) => s.codigo === h)?.schema ?? null)
-          : sintetica
-            ? marcaSintetica(h)
-            : undefined,
+      // A sessão sintética leva a própria estrutura como homologada; a real, a do pacote.
+      estruturaHomologada: () => (sintetica ? RESUMO_ESTRUTURA_SINTETICA : estruturaHomologadaDoAmbiente()),
       configuracao: fonte,
       chavesEsperadas: chavesEsperadasDoAmbiente(process.env, configuracao.ambiente),
       fuso: () => fusoDoProcesso(),

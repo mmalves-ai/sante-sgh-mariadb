@@ -1,5 +1,5 @@
 // Arquivo original da carga de catálogo (ficha do M13, seção 5): vai ao S3 com Object Lock (retenção pela
-// política do ambiente, a mesma dos documentos do M09) e fica ligado à carga (SGH_CAT_CARGA.ARQUIVO_S3). A edição
+// política do ambiente, a mesma dos documentos do M09) e fica ligado à carga (carga_catalogo.arquivo_guardado). A edição
 // anterior, quando o banco não a guarda, continua recuperável pelo arquivo e pelas linhas da preparação. Sem S3
 // configurado, a carga segue sem o arquivo guardado (a tela mostra "arquivo não guardado").
 import type { Configuracao } from '../../configuracao.js';

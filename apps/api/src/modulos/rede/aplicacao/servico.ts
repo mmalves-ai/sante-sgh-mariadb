@@ -2,9 +2,15 @@
 // estabelecimentos da rede, a decisão humana (mesma pessoa / outra pessoa), o desfazer, os vínculos de um cadastro,
 // o ciclo de pareamento (automático e pontuado) e o relatório de divergência entre os índices com o reparo.
 // O cruzamento entre os estabelecimentos é feito em memória, com as regras e a orquestração de @sgh/dominio-rede: cada
-// leitura é de um banco só, e cada gravação é uma transação SGH_ por banco, na ordem do plano (regra 4; nenhuma
-// transação cruza os bancos). Se um banco falhar no meio, os outros ficam gravados, o resultado diz `pendente` e o
-// reparo do relatório de divergência completa (idempotente). O cadastro de paciente nunca é alterado (regra 1).
+// leitura é de um estabelecimento só, e cada gravação é uma transação por estabelecimento, na ordem do plano (regra 4).
+// No banco do cliente (porta própria), os estabelecimentos moram no mesmo banco: "a mesma pessoa" é a unificação dos
+// cadastros, feita no cadastro (409 `unificar-no-cadastro` aqui), e o automático só põe o par na fila (o ciclo o conta
+// em `naFila`, nunca em `automaticos`). Nesse banco único, a decisão é UMA operação (uma transação, uma trilha), não há
+// índice por banco a divergir (o relatório responde vazio e o reparo, zero) e o aviso conta os atendimentos do paciente
+// em cada outro estabelecimento sem depender de vínculo. Com uma cópia por estabelecimento (a memória de dev/ci), se um
+// banco falhar no meio, os outros ficam gravados, o resultado diz `pendente` e o reparo do relatório de divergência
+// completa (idempotente). O cadastro de paciente nunca é alterado (regra 1).
+// Melhoria: no banco único, uma decisão grava uma linha com uma trilha e uma idempotência (não uma por estabelecimento).
 // Isolamento (regra 12): só os estabelecimentos da rede da sessão, da lista configurada; o par com um lado fora
 // dela é recusado antes de qualquer leitura. Liberação (POL-3; ficha, seção 12): a chave `rede.mpi` é POR
 // estabelecimento; o que tem a chave desligada (ou um pré-requisito pendente) não entra: a fila não mostra os pares com
@@ -42,6 +48,8 @@ import {
   ErroIsolamentoRede,
   estabelecimentosDaRede,
   executarPlanoRede,
+  type EscritaIndice,
+  garantirSomenteIndice,
   type GravadorIndiceRede,
   ladoLocalERemoto,
   ladosDaChave,
@@ -53,9 +61,9 @@ import {
   repararIndiceRede,
   type VinculoIndice,
 } from '@sgh/dominio-rede';
-import type { CadastroRedeLido, CandidatoRedeLido, LinhaTrilha } from '@sgh/legado';
 import { ErroProblema } from '../../../problema.filter.js';
-import type { ContextoRede, EstabelecimentoRede, PortaRede } from '../porta.js';
+import type { AtendimentosNaRede, ContextoRede, EstabelecimentoRede, GravadorRede, PortaRede } from '../porta.js';
+import type { CadastroRedeLido, CandidatoRedeLido, EscritaIndiceRede, TrilhaRede } from '../tipos-indice.js';
 
 /** Usuário técnico do pareamento automático (a trilha mostra que não foi uma pessoa). */
 export const USUARIO_PAREAMENTO_REDE = 'SGH.REDE';
@@ -75,7 +83,7 @@ export interface SessaoRede {
   /** Sessão "como" do suporte (ADR 0021): o MPI não grava entre bancos. */
   readonly como?: boolean;
   /** Linha da trilha de uma gravação (o serviço completa o evento, o alvo e o banco). */
-  trilha(evento: string, operacao: string, alvo: { chave: string | null; id?: string | null }): LinhaTrilha;
+  trilha(evento: string, operacao: string, alvo: { chave: string | null; id?: string | null }): TrilhaRede;
 }
 
 export interface OpcoesServicoRede {
@@ -109,6 +117,54 @@ function recursoDesligadoEm(nome: string): ErroProblema {
     'Funcionalidade desligada',
     `O MPI da Rede ainda não foi liberado em ${nome}: os cadastros desse estabelecimento ficam fora da fila e dos vínculos até a liberação (fim da migração e amostra revisada pelo gestor de cadastro). A liberação é feita pelo administrador em Funcionalidades por estabelecimento.`,
     { codigo: 'recurso-desligado' },
+  );
+}
+
+/** A escrita do plano do domínio (por tabela do índice) como escrita da porta (por alvo de negócio). */
+function escritaDaPorta(w: EscritaIndice): EscritaIndiceRede {
+  switch (w.tabela) {
+    case 'SGH_REDE_PESSOA':
+      return { alvo: 'pessoa', acao: 'inserir_se_ausente', pessoa: w.pessoa, em: w.em };
+    case 'SGH_REDE_VINCULO':
+      return { alvo: 'vinculo', acao: 'gravar', linha: w.linha };
+    case 'SGH_REDE_CANDIDATO':
+      return {
+        alvo: 'suspeita',
+        acao: 'mudar_situacao',
+        chave: w.chave,
+        situacao: w.situacao,
+        ...(w.origem ? { origem: w.origem } : {}),
+        por: w.por,
+        em: w.em,
+        justificativa: w.justificativa,
+      };
+  }
+}
+
+/**
+ * O gravador do domínio sobre o da porta. Com a unificação no lugar do vínculo (banco único do cliente), as escritas de
+ * pessoa e de vínculo do automático não vão à porta: o par fica na fila (a porta grava o candidato como aberto), e só uma
+ * pessoa decide, unificando no cadastro.
+ */
+function gravadorDoDominio(g: GravadorRede, porUnificacao: boolean): GravadorIndiceRede {
+  return {
+    escritas: (ws) =>
+      g.escritas(
+        ws.map(escritaDaPorta).filter((w) => !porUnificacao || (w.alvo !== 'pessoa' && w.alvo !== 'vinculo')),
+      ),
+    candidatos: (cs) => g.candidatos(cs),
+    marca: (m, por) => g.marca(m, por),
+    duplicidadesLocais: (pares) => g.duplicidadesLocais(pares),
+  };
+}
+
+function unificarNoCadastro(): ErroProblema {
+  return new ErroProblema(
+    'recusa-de-negocio',
+    409,
+    'Unifique no cadastro',
+    'Os estabelecimentos da rede usam o mesmo banco: "a mesma pessoa" é a unificação dos dois cadastros, feita em Cadastros > Pacientes > Unificar (transfere os registros e pode ser revertida lá).',
+    { codigo: 'unificar-no-cadastro' },
   );
 }
 
@@ -328,9 +384,9 @@ export class ServicoMpiRede {
       pessoasDosCadastros: (est, ids) => p.pessoasDosCadastros(c(est), ids),
       loteVinculos: (est, depois, n) => p.loteVinculos(c(est), depois, n),
       gravar: (est, fn, rot) =>
-        p.gravar(c(est), (g) => fn(g as unknown as GravadorIndiceRede), {
+        p.gravar(c(est), (g) => fn(gravadorDoDominio(g, p.mesmaPessoaPorUnificacao === true)), {
           ...s.trilha(rot.evento, rot.operacao, { chave: rot.chave, id: rot.pessoa }),
-          hospital: est,
+          ocorridoEm: this.agora(),
         }),
     };
   }
@@ -341,6 +397,7 @@ export class ServicoMpiRede {
     evento: string,
     operacao: string,
   ): Promise<ResultadoGravacaoRede> {
+    if (this.porta.mesmaPessoaPorUnificacao) return this.executarNoBancoUnico(s, plano, evento, operacao);
     try {
       const r = await executarPlanoRede(this.indice(s), plano, { evento, operacao }, this.aviso);
       return { chave: r.chave, pessoa: r.pessoa, bancos: [...r.bancos] };
@@ -354,6 +411,39 @@ export class ServicoMpiRede {
         );
       throw e;
     }
+  }
+
+  /**
+   * Banco único do cliente: as escritas do plano (as mesmas linhas vistas de cada estabelecimento) numa só operação do
+   * Executor, no estabelecimento da sessão: uma transação, uma trilha, uma idempotência. Falha: nada gravado (o erro sobe).
+   */
+  private async executarNoBancoUnico(
+    s: SessaoRede,
+    plano: PlanoIndice,
+    evento: string,
+    operacao: string,
+  ): Promise<ResultadoGravacaoRede> {
+    garantirSomenteIndice(plano);
+    const vistas = new Set<string>();
+    const escritas = plano.bancos
+      .flatMap((b) => b.escritas)
+      .filter((w) => {
+        const k = JSON.stringify(w);
+        if (vistas.has(k)) return false;
+        vistas.add(k);
+        return true;
+      });
+    const r = await this.porta.gravar(
+      this.ctx(s, s.hospital),
+      (g) => gravadorDoDominio(g, true).escritas(escritas),
+      { ...s.trilha(evento, operacao, { chave: plano.chave, id: plano.pessoa }), ocorridoEm: this.agora() },
+    );
+    const situacao = r.gravadas > 0 ? ('gravado' as const) : ('ja_estava' as const);
+    return {
+      chave: plano.chave,
+      pessoa: plano.pessoa,
+      bancos: plano.bancos.map((b) => ({ estabelecimento: b.estabelecimento, situacao })),
+    };
   }
 
   // ── Decisão humana ─────────────────────────────────────────────────────────────────────────────────
@@ -380,6 +470,7 @@ export class ServicoMpiRede {
         EVENTOS_AUDITAVEIS.redeParOutraPessoa.codigo,
         'rede.decidirOutraPessoa',
       );
+    if (this.porta.mesmaPessoaPorUnificacao) throw unificarNoCadastro();
     // "Mesma pessoa": o estado relido nos dois bancos (o cadastro pode ter ficado inativo ou sido unificado).
     const [x, y] = ladosDaChave(chave);
     const lidos = await Promise.all(
@@ -442,6 +533,8 @@ export class ServicoMpiRede {
   async desfazer(s: SessaoRede, chave: string, d: DesfazerVinculoRede): Promise<ResultadoGravacaoRede> {
     this.conferirChave(s, chave);
     this.exigirForaDoComo(s);
+    // Banco único do cliente: o vínculo é a unificação, e desfazê-la é a reversão no cadastro.
+    if (this.porta.mesmaPessoaPorUnificacao) throw unificarNoCadastro();
     const linhas: VinculoIndice[] = [];
     for (const l of ladosDaChave(chave)) {
       const v = await this.porta.vinculo(this.ctx(s, l.estabelecimento), chave).catch((e: unknown) => {
@@ -513,7 +606,7 @@ export class ServicoMpiRede {
         inelegiveis: 0,
         marcas: [],
       };
-    return cicloPareamentoRede(this.indice(s), ests, {
+    const r = await cicloPareamentoRede(this.indice(s), ests, {
       lote,
       por: s.login,
       em: this.agora().toISOString(),
@@ -522,6 +615,10 @@ export class ServicoMpiRede {
       eventoCiclo: EVENTOS_AUDITAVEIS.redeFilaAtualizada.codigo,
       aviso: this.aviso,
     });
+    // Banco único: o par de destino automático não foi unido (a porta o grava aberto, na fila): conta em `naFila`.
+    return this.porta.mesmaPessoaPorUnificacao
+      ? { ...r, automaticos: 0, naFila: r.naFila + r.automaticos }
+      : r;
   }
 
   // ── Divergência entre os índices ──────────────────────────────────────────────────────────────────
@@ -538,6 +635,9 @@ export class ServicoMpiRede {
 
   async divergencias(s: SessaoRede): Promise<DivergenciasRede> {
     const ests = this.liberados(s).map((e) => e.codigo);
+    // Banco único: o par, a decisão e a unificação são as mesmas linhas para todos os estabelecimentos (nada a divergir).
+    if (this.porta.mesmaPessoaPorUnificacao)
+      return { geradoEm: this.agora().toISOString(), estabelecimentos: ests, total: 0, itens: [] };
     const itens = await divergenciasRede(this.indice(s), ests).catch(() => {
       throw this.semBanco();
     });
@@ -556,6 +656,8 @@ export class ServicoMpiRede {
   /** "Completar o que faltou": o reparo idempotente; pessoa diferente nos dois bancos fica para revisão humana. */
   async reparar(s: SessaoRede): Promise<{ reparados: number; pendentes: number; manuais: string[] }> {
     this.exigirForaDoComo(s);
+    // Banco único: não há cópia por estabelecimento a completar.
+    if (this.porta.mesmaPessoaPorUnificacao) return { reparados: 0, pendentes: 0, manuais: [] };
     const ests = this.liberados(s).map((e) => e.codigo);
     return repararIndiceRede(
       this.indice(s),
@@ -583,6 +685,7 @@ export class ServicoMpiRede {
     acessoCruzado: (estabelecimento: string) => Promise<{ pode: boolean; motivo: string | null }>,
   ): Promise<AvisoRedePaciente> {
     const ests = new Map(this.liberados(s).map((e) => [e.codigo, e.nome]));
+    if (this.porta.atendimentosNaRede) return this.avisoNoBancoUnico(s, id, ests, acessoCruzado);
     const vs = await this.porta.vinculosDoCadastro(this.ctx(s, s.hospital), id).catch((e: unknown) => {
       if (e instanceof ErroProblema) throw e;
       throw this.semBanco();
@@ -630,6 +733,74 @@ export class ServicoMpiRede {
     const pode = estabelecimentos.some((e) => e.podeAbrir);
     return {
       situacao: algum ? 'com-atendimentos' : 'sem-atendimentos',
+      estabelecimentos,
+      acessoCruzado: { pode, motivo: pode ? null : (lidos.find((x) => x.motivo)?.motivo ?? null) },
+    };
+  }
+  /**
+   * Banco único do cliente: o paciente é do cliente inteiro, e o aviso conta os atendimentos e as internações dele (e dos
+   * cadastros unificados com ele) em cada OUTRO estabelecimento liberado, sem depender de vínculo. A unificação efetivada
+   * entra só como complemento (o estabelecimento ligado sem registro aparece com zero). Uma leitura só, no mesmo banco:
+   * falha é 503 (não há banco parcial).
+   */
+  private async avisoNoBancoUnico(
+    s: SessaoRede,
+    id: number,
+    ests: ReadonlyMap<string, string>,
+    acessoCruzado: (estabelecimento: string) => Promise<{ pode: boolean; motivo: string | null }>,
+  ): Promise<AvisoRedePaciente> {
+    const porta = this.porta as PortaRede & Required<Pick<PortaRede, 'atendimentosNaRede'>>;
+    const ctx = this.ctx(s, s.hospital);
+    const [contagens, vs] = await Promise.all([
+      porta.atendimentosNaRede(ctx, id),
+      porta.vinculosDoCadastro(ctx, id),
+    ]).catch((e: unknown) => {
+      if (e instanceof ErroProblema) throw e;
+      throw this.semBanco();
+    });
+    const porEst = new Map<string, AtendimentosNaRede>();
+    for (const x of contagens)
+      if (x.estabelecimento !== s.hospital && ests.has(x.estabelecimento)) porEst.set(x.estabelecimento, x);
+    for (const v of vs)
+      if (
+        v.situacao === 'ativo' &&
+        v.estabelecimentoRemoto !== s.hospital &&
+        ests.has(v.estabelecimentoRemoto) &&
+        !porEst.has(v.estabelecimentoRemoto)
+      )
+        porEst.set(v.estabelecimentoRemoto, {
+          estabelecimento: v.estabelecimentoRemoto,
+          idRemoto: v.idRemoto,
+          atendimentos: 0,
+          ultimoAtendimento: null,
+          internacoes: 0,
+          ultimaInternacao: null,
+        });
+    if (porEst.size === 0)
+      return { situacao: 'sem-vinculo', estabelecimentos: [], acessoCruzado: { pode: false, motivo: null } };
+    const lidos = await Promise.all(
+      [...porEst.values()].map(async (x) => {
+        const acesso = await acessoCruzado(x.estabelecimento);
+        return {
+          item: {
+            estabelecimento: x.estabelecimento,
+            estabelecimentoNome: ests.get(x.estabelecimento) ?? x.estabelecimento,
+            idRemoto: x.idRemoto,
+            disponivel: true,
+            atendimentos: x.atendimentos,
+            ultimoAtendimento: x.ultimoAtendimento,
+            internacoes: x.internacoes,
+            ultimaInternacao: x.ultimaInternacao,
+            podeAbrir: acesso.pode,
+          },
+          motivo: acesso.motivo,
+        };
+      }),
+    );
+    const estabelecimentos = lidos.map((x) => x.item);
+    const pode = estabelecimentos.some((e) => e.podeAbrir);
+    return {
+      situacao: estabelecimentos.some((e) => e.atendimentos + e.internacoes > 0) ? 'com-atendimentos' : 'sem-atendimentos',
       estabelecimentos,
       acessoCruzado: { pode, motivo: pode ? null : (lidos.find((x) => x.motivo)?.motivo ?? null) },
     };

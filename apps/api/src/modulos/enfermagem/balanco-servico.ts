@@ -24,7 +24,7 @@ import {
   lancamentosVigentes,
   parcelasDoBalanco,
 } from '@sgh/dominio-enfermagem';
-import type { InternadoLido } from '@sgh/legado';
+import type { Internado } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoBalanco, PortaBalanco } from './balanco-porta.js';
 
@@ -34,7 +34,7 @@ export interface ParametrosBalanco {
 }
 
 export interface BalancoMontado {
-  readonly internado: InternadoLido;
+  readonly internado: Internado;
   /** A entrada da internação (nula sem a data). */
   readonly desde: string | null;
   readonly agora: string;
@@ -55,7 +55,7 @@ export interface BalancoMontado {
 export class ServicoBalanco {
   constructor(private readonly porta: PortaBalanco) {}
 
-  async internado(c: ContextoBalanco, atendimento: number): Promise<InternadoLido> {
+  async internado(c: ContextoBalanco, atendimento: number): Promise<Internado> {
     const i = await this.porta.internado(c, atendimento);
     if (!i)
       throw new ErroProblema(
@@ -90,7 +90,7 @@ export class ServicoBalanco {
   async montar(
     c: ContextoBalanco,
     o: {
-      readonly internado: InternadoLido;
+      readonly internado: Internado;
       readonly desde?: string | null;
       readonly agora: string;
       readonly parametros: ParametrosBalanco;

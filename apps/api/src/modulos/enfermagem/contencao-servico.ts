@@ -25,7 +25,8 @@ import {
   situacaoDaOrdem,
   somarMinutos,
 } from '@sgh/dominio-enfermagem';
-import type { ContencaoLidaSgh, InternadoLido, OrdemContencaoSgh } from '@sgh/legado';
+import type { ContextoNucleo } from '@sgh/nucleo';
+import type { ContencaoRegistrada, Internado, OrdemContencao } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { PortaEscores } from './escores-porta.js';
 import type { PortaEnfermagem } from './porta.js';
@@ -53,7 +54,7 @@ export function parametrosContencao(
   };
 }
 
-const ordemLida = (o: ContencaoLidaSgh) => ({
+const ordemLida = (o: ContencaoRegistrada) => ({
   id: o.id,
   inicio: o.inicio,
   prazoHoras: o.prazoHoras,
@@ -68,7 +69,7 @@ const ordemLida = (o: ContencaoLidaSgh) => ({
  * Revisão W0-03: o corte da ordem — a hora da retirada ou, na renovação (mesmo antes do fim do prazo), o início da
  * ordem nova. Os horários depois dele não checados ficam cancelados (são da nova) e não contam como previstos.
  */
-const corteDa = (o: ContencaoLidaSgh): string | null => {
+const corteDa = (o: ContencaoRegistrada): string | null => {
   const cortes = [
     o.encerramento?.em.slice(0, 16) ?? null,
     o.renovadaPor !== null && o.renovadaEm ? o.renovadaEm.slice(0, 16) : null,
@@ -78,7 +79,7 @@ const corteDa = (o: ContencaoLidaSgh): string | null => {
 
 /** A ordem lida no formato da tela, com a situação e o estado de cada horário. */
 export function contencaoParaTela(
-  o: ContencaoLidaSgh,
+  o: ContencaoRegistrada,
   agora: string,
   toleranciaMinutos: number,
   inicioDiurno = '0700',
@@ -89,7 +90,7 @@ export function contencaoParaTela(
 }
 
 function contencaoParaTelaSemTurnos(
-  o: ContencaoLidaSgh,
+  o: ContencaoRegistrada,
   agora: string,
   toleranciaMinutos: number,
 ): ContencaoLida {
@@ -157,12 +158,12 @@ const invalida = (codigo: string, detalhe: string, campos?: readonly string[]) =
 /** A ordem (ou a renovação) pronta para gravar: conferida contra os parâmetros e com os horários aprazados. */
 export function prepararOrdem(
   e: OrdemContencaoEntrada,
-  internado: InternadoLido,
+  internado: Internado,
   agora: string,
   p: ParametrosContencao,
   prescritor: string,
   anterior: number | null,
-): Omit<OrdemContencaoSgh, 'hospital'> {
+): Omit<OrdemContencao, 'hospital'> {
   const c = conferirOrdem(e, p);
   if (!c.ok) throw invalida(c.codigo, c.mensagem, ['prazoHoras', 'intervaloMinutos']);
   const inicio = agora.slice(0, 16);
@@ -195,7 +196,7 @@ export function conferirChecagem(previsto: string, agora: string, toleranciaMinu
 
 /** Os avisos da central das ordens vencidas: ao prescritor da ordem e aos logins configurados da unidade. */
 export function avisosDeVencidas(
-  ordens: readonly ContencaoLidaSgh[],
+  ordens: readonly ContencaoRegistrada[],
   agora: string,
   loginsExtras: readonly string[] = [],
 ) {
@@ -222,7 +223,7 @@ export function avisosDeVencidas(
         evento: EVENTO_AVISO_CONTENCAO_VENCIDA,
         titulo: titulo.slice(0, 120),
         link: `/enfermagem/contencao?atendimento=${o.atendimento}`,
-        objetoTabela: 'SGH_PEP_CONTENCAO',
+        objetoTabela: 'contencao_paciente',
         objetoChave: String(o.id),
       });
   }
@@ -234,7 +235,7 @@ export function indicadorDoPeriodo(
   unidade: string,
   de: string,
   ate: string,
-  ordens: readonly ContencaoLidaSgh[],
+  ordens: readonly ContencaoRegistrada[],
   censo: { pacientesDia: number; diasFechados: number },
   agora: string,
   toleranciaMinutos: number,
@@ -293,51 +294,42 @@ class NadaNovo extends Error {
 export class VigiaContencao {
   private timer: ReturnType<typeof setInterval> | null = null;
 
+  /** `alvos`: o cliente e cada estabelecimento vigiado (o contexto do núcleo, sem usuário: processo automático). */
   constructor(
     private readonly porta: PortaEscores,
     private readonly enfermagem: PortaEnfermagem,
-    private readonly rede: string,
-    private readonly hospitais: readonly string[],
+    private readonly alvos: readonly ContextoNucleo[],
     private readonly intervaloMs = 60_000,
   ) {}
 
-  async ciclo(hospital: string): Promise<number> {
-    const c = { rede: this.rede, hospital };
+  async ciclo(alvo: ContextoNucleo): Promise<number> {
+    const c: ContextoNucleo = { ...alvo, usuario: null, correlacao: `vigia-contencao-${Date.now()}` };
     const agora = (await this.enfermagem.relogio(c)).slice(0, 16);
-    // Revisão W0-03: também as abertas mais antigas (a vencida e não retirada segue alertando).
+    // Também as abertas mais antigas (a vencida e não retirada segue alertando).
     const ordens = await this.porta.contencoes(c, { desde: somarMinutos(agora, -48 * 60), abertas: true });
     const avisos = avisosDeVencidas(ordens, agora);
     if (avisos.length === 0) return 0;
-    // Revisão W0-03: o aviso já gravado não se grava de novo, e sem aviso novo a transação é desfeita sem trilha (a
-    // SGH_TRILHA é só inclusão: uma linha por minuto da mesma vencida seria lixo permanente).
+    // O aviso já gravado não se grava de novo, e sem aviso novo a transação é desfeita sem trilha (a trilha é só
+    // inclusão: uma linha por minuto da mesma vencida seria lixo permanente).
     try {
-      return await this.gravar(c, hospital, avisos);
+      return await this.gravar(c, avisos);
     } catch (x) {
       if (x instanceof NadaNovo) return 0;
       throw x;
     }
   }
 
-  private gravar(
-    c: { rede: string; hospital: string },
-    hospital: string,
-    avisos: ReturnType<typeof avisosDeVencidas>,
-  ): Promise<number> {
+  private gravar(c: ContextoNucleo, avisos: ReturnType<typeof avisosDeVencidas>): Promise<number> {
     return this.porta.gravarSgh(
       c,
       (n: number) => ({
-        rede: this.rede,
-        hospital,
-        usuario: 'SGH.VIGIA',
-        evento: 'enfermagem.contencao.vencidaAvisada',
-        recurso: 'enfermagem.contencao',
-        operacao: 'enfermagem.contencao.vencidaAvisada',
-        tabelaAlvo: 'SGH_ADM_AVISO',
-        idAlvo: null,
-        chaveNaturalAlvo: `vencidas:${n}`,
-        resultado: 'sucesso',
-        estacao: null,
-        correlacao: `vigia-contencao-${Date.now()}`,
+        estabelecimento: c.estabelecimento,
+        usuario: null,
+        acao: 'inclusao',
+        entidade: 'aviso_central',
+        entidadeId: null,
+        dadosDepois: { evento: 'enfermagem.contencao.vencidaAvisada', avisos: n },
+        correlacao: c.correlacao,
       }),
       async (g) => {
         const k = await g.avisar(avisos);
@@ -348,9 +340,9 @@ export class VigiaContencao {
   }
 
   iniciar(): void {
-    if (this.timer || this.hospitais.length === 0) return;
+    if (this.timer || this.alvos.length === 0) return;
     this.timer = setInterval(() => {
-      for (const h of this.hospitais) void this.ciclo(h).catch(() => 0);
+      for (const a of this.alvos) void this.ciclo(a).catch(() => 0);
     }, this.intervaloMs);
     this.timer.unref?.();
   }
@@ -367,7 +359,7 @@ export class VigiaContencao {
  * cancelado pela retirada ou pela renovação também não (é da ordem nova).
  */
 export function contencoesNoTurno(
-  ordens: readonly ContencaoLidaSgh[],
+  ordens: readonly ContencaoRegistrada[],
   internados: readonly { readonly atendimento: number; readonly leito: string | null }[],
   janela: { readonly inicio: string; readonly fim: string },
   agora: string,

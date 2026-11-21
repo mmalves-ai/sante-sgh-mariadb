@@ -1,5 +1,5 @@
 // Rotas da conta da plataforma e do "login como" (ADR 0021). São @Publica para a guarda das sessões do
-// SPDATA: cada handler confere a SESSÃO DA PLATAFORMA (cookie próprio, HttpOnly) e, nas que mudam estado, o
+// hospital: cada handler confere a SESSÃO DA PLATAFORMA (cookie próprio, HttpOnly) e, nas que mudam estado, o
 // CSRF por token duplo próprio (cookie sgh_pcsrf + cabeçalho x-csrf-plataforma, conferidos contra o token
 // guardado na sessão). A designação e a auditoria completa são telas da conta da PLATAFORMA, não do alvo
 // (única exceção estrutural; dentro do "como" vale o que o alvo pode).
@@ -42,7 +42,6 @@ import {
   type TipoProblema,
   type UsuarioComo,
 } from '@sgh/contratos';
-import { ErroConflitoCorrecao, ErroPreviaCorrecao } from '@sgh/legado';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
@@ -64,6 +63,7 @@ import {
 import type { ResolvedorRede } from '../../sessao/rede.js';
 import { ErroSessao, type ServicoSessao } from '../../sessao/servico-sessao.js';
 import { RESOLVEDOR_REDE, SERVICO_SESSAO } from '../acesso/acesso.controller.js';
+import { ErroConflitoCorrecao, ErroPreviaCorrecao } from './correcao.js';
 import type { ServicoComo } from './servico-como.js';
 import { type ContaComAtribuicoes, ErroPlataforma, type ServicoPlataforma } from './servico-plataforma.js';
 
@@ -181,7 +181,7 @@ export class PlataformaController {
   @Post('sessao')
   @HttpCode(200)
   @Publica('login próprio da conta da plataforma (senha Argon2id e TOTP conferidos no serviço)')
-  @AuditadoNoHandler('SGH_PLAT_AUDITORIA (login e falha) gravada pelo serviço')
+  @AuditadoNoHandler('a auditoria das contas (login e falha) gravada pelo serviço')
   async entrar(
     @Body() corpo: unknown,
     @Req() req: Req,
@@ -228,7 +228,7 @@ export class PlataformaController {
   @Delete('sessao')
   @HttpCode(204)
   @Publica('sair da própria conta da plataforma (CSRF próprio conferido no handler)')
-  @AuditadoNoHandler('o encerramento do "como" vai à SGH_SUP_SESSAO pelo serviço de sessão')
+  @AuditadoNoHandler('o encerramento do "como" vai à sessao_suporte pelo serviço de sessão')
   async sair(@Req() req: Req, @Res({ passthrough: true }) res: Res): Promise<void> {
     const { p } = this.servicos();
     const id = this.idPlataforma(req);
@@ -253,7 +253,7 @@ export class PlataformaController {
   @HttpCode(204)
   @Publica('definição da senha pelo convite (token de uso único conferido pelo hash)')
   @AuditadoNoHandler(
-    'SGH_PLAT_AUDITORIA (senha definida) gravada pelo serviço; as sessões "como" da conta encerram',
+    'a auditoria das contas (senha definida) gravada pelo serviço; as sessões "como" da conta encerram',
   )
   async aceitarConvite(@Body() corpo: unknown, @Req() req: Req): Promise<void> {
     const { p } = this.servicos();
@@ -290,7 +290,7 @@ export class PlataformaController {
   @Post('suportes')
   @HttpCode(201)
   @Publica('designação: só a conta da plataforma (CSRF próprio; conferida no serviço)')
-  @AuditadoNoHandler('SGH_PLAT_AUDITORIA (suporte.conta.criada) na mesma transação')
+  @AuditadoNoHandler('a auditoria das contas (suporte.conta.criada) na mesma transação')
   async criarSuporte(@Body() corpo: unknown, @Req() req: Req): Promise<{ id: string; convite: ConviteTela }> {
     const conta = await this.conta(req, true);
     const d = this.analisar(esquemaNovoSuporte, corpo);
@@ -304,7 +304,7 @@ export class PlataformaController {
   @Put('suportes/:id')
   @HttpCode(204)
   @Publica('designação: só a conta da plataforma (CSRF próprio; conferida no serviço)')
-  @AuditadoNoHandler('SGH_PLAT_AUDITORIA (suporte.funcao.alterada) na mesma transação')
+  @AuditadoNoHandler('a auditoria das contas (suporte.funcao.alterada) na mesma transação')
   async funcao(@Param('id') id: string, @Body() corpo: unknown, @Req() req: Req): Promise<void> {
     const conta = await this.conta(req, true);
     if (!NUMERO.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Suporte não encontrado');
@@ -321,7 +321,7 @@ export class PlataformaController {
   @Put('suportes/:id/atribuicoes')
   @HttpCode(200)
   @Publica('designação: só a conta da plataforma (CSRF próprio; conferida no serviço)')
-  @AuditadoNoHandler('SGH_PLAT_AUDITORIA (suporte.atribuicoes.alteradas) na mesma transação')
+  @AuditadoNoHandler('a auditoria das contas (suporte.atribuicoes.alteradas) na mesma transação')
   async atribuicoes(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -352,7 +352,7 @@ export class PlataformaController {
   @HttpCode(201)
   @Publica('designação: só a conta da plataforma (CSRF próprio; conferida no serviço)')
   @AuditadoNoHandler(
-    'SGH_PLAT_AUDITORIA (suporte.convite.gerado) na mesma transação; as sessões da conta encerram',
+    'a auditoria das contas (suporte.convite.gerado) na mesma transação; as sessões da conta encerram',
   )
   async convite(@Param('id') id: string, @Req() req: Req): Promise<ConviteTela> {
     const conta = await this.conta(req, true);
@@ -426,7 +426,7 @@ export class PlataformaController {
   @HttpCode(201)
   @Publica('abre a sessão "como" (conta, função e atribuição conferidas; CSRF próprio)')
   @AuditadoNoHandler(
-    'SGH_SUP_SESSAO antes da sessão do alvo; o aviso ao Auditor (SGH_OUTBOX) depois dela, sem ele a sessão é desfeita',
+    'sessao_suporte antes da sessão do alvo; o aviso ao Auditor (outbox) depois dela, sem ele a sessão é desfeita',
   )
   async entrarComo(
     @Body() corpo: unknown,
@@ -463,7 +463,7 @@ export class PlataformaController {
   @Delete('como')
   @HttpCode(204)
   @Publica('encerra a sessão "como" deste navegador (CSRF próprio ou o da sessão do SPDATA)')
-  @AuditadoNoHandler('o encerramento vai à SGH_SUP_SESSAO pelo serviço de sessão')
+  @AuditadoNoHandler('o encerramento vai à sessao_suporte pelo serviço de sessão')
   async voltar(@Req() req: Req, @Res({ passthrough: true }) res: Res): Promise<void> {
     let autorizado = false;
     try {
@@ -534,7 +534,7 @@ export class PlataformaController {
   @Post('auditoria/sessoes/:id/encerrar')
   @HttpCode(204)
   @Publica('revogar sessão "como" aberta (CSRF próprio; conferido no serviço)')
-  @AuditadoNoHandler('SGH_SUP_SESSAO (revogada) e a marca de revogação no armazém')
+  @AuditadoNoHandler('sessao_suporte (revogada) e a marca de revogação no armazém')
   async encerrar(@Param('id') id: string, @Req() req: Req): Promise<void> {
     const conta = await this.conta(req, true);
     if (!NUMERO.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Sessão não encontrada');
@@ -548,7 +548,7 @@ export class PlataformaController {
   @Post('auditoria/correcoes')
   @HttpCode(200)
   @Publica('Corrigir/Desfazer: plataforma ou suporte atribuído ao estabelecimento (CSRF próprio)')
-  @AuditadoNoHandler('SGH_SUP_CORRECAO e SGH_TRILHA na mesma transação da compensação')
+  @AuditadoNoHandler('a correção e a trilha na mesma transação da compensação')
   async corrigir(
     @Body() corpo: unknown,
     @Req() req: Req,

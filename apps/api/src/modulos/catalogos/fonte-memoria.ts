@@ -10,13 +10,15 @@ import {
   entidadeConsultaCatalogo,
 } from '@sgh/contratos';
 import { camposDaChave, LEIAUTE_CEP_PADRAO, type LeituraDoBanco } from '@sgh/dominio-catalogo';
-import type { CargaCatalogoLida, NovaCargaCatalogo } from '@sgh/legado';
 import type {
-  ConsultaLida,
+  CargaDeCatalogo,
+  ConsultaCatalogo,
   CtxCatalogos,
   FonteCatalogos,
-  HistoricoLido,
-  LinhaLida,
+  HistoricoSigtap,
+  LinhaDaCarga,
+  MudancaSituacaoCarga,
+  PreparoCargaCatalogo,
   Trilha,
 } from './fonte.js';
 
@@ -180,9 +182,9 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
   readonly destino = 'memoria' as const;
   readonly gravacao = { permitida: true, motivo: null };
   private readonly itens = semente();
-  private readonly cargasPorHospital = new Map<string, CargaCatalogoLida[]>();
-  private readonly linhasPorCarga = new Map<number, LinhaLida[]>();
-  private readonly historicoProc = new Map<string, HistoricoLido['competencias']>();
+  private readonly cargasPorHospital = new Map<string, CargaDeCatalogo[]>();
+  private readonly linhasPorCarga = new Map<number, LinhaDaCarga[]>();
+  private readonly historicoProc = new Map<string, HistoricoSigtap['competencias']>();
   private proximo = 1;
   private competencia = '202609';
   /** Teste: muda o responsável de um catálogo. */
@@ -262,7 +264,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
         ?.id ?? null
     );
   }
-  async gravarCarga(c: CtxCatalogos, n: NovaCargaCatalogo, trilha: Trilha) {
+  async gravarCarga(c: CtxCatalogos, n: PreparoCargaCatalogo, trilha: Trilha) {
     const id = this.proximo++;
     this.lista(c.hospital).push({
       id,
@@ -279,7 +281,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
       totais: n.totais,
       lotes: { total: n.lotes.total, publicados: 0, tamanho: n.lotes.tamanho },
       motivo: n.motivo,
-      arquivoGuardado: n.arquivoS3 !== null,
+      arquivoGuardado: n.arquivoGuardado !== null,
       versao: 1,
     });
     this.linhasPorCarga.set(
@@ -295,15 +297,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
   }
   async mudarSituacao(
     c: CtxCatalogos,
-    m: {
-      hospital: string;
-      id: number;
-      versao: number;
-      de: readonly string[];
-      para: string;
-      aprovador: string | null;
-      motivo: string | null;
-    },
+    m: MudancaSituacaoCarga,
     trilha: Trilha,
   ) {
     const lista = this.lista(c.hospital);
@@ -319,7 +313,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
       });
     lista[i] = {
       ...atual,
-      situacao: m.para as CargaCatalogoLida['situacao'],
+      situacao: m.para,
       aprovador: m.aprovador ?? atual.aprovador,
       motivo: m.motivo ?? atual.motivo,
       versao: atual.versao + 1,
@@ -376,7 +370,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
     _c: CtxCatalogos,
     entidade: string,
     f: { busca: string | null; pagina: number; porPagina: number; competencia?: string | null },
-  ): Promise<ConsultaLida | null> {
+  ): Promise<ConsultaCatalogo | null> {
     if (!SO_CONSULTA.has(entidade)) return null;
     const ent = definicaoDaEntidade(entidade);
     const m = this.itens.get(entidade);
@@ -410,7 +404,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
       total: todos.length,
     };
   }
-  async historico(_c: CtxCatalogos, procedimento: string): Promise<HistoricoLido | null> {
+  async historico(_c: CtxCatalogos, procedimento: string): Promise<HistoricoSigtap | null> {
     const p = this.itens.get('procedimento')?.get(`codigo=${procedimento}`);
     if (!p) return null;
     return {

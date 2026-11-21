@@ -34,12 +34,8 @@ import {
   problemaDoEncerramento,
   relogioDoProtocolo,
 } from '@sgh/dominio-recepcao';
-import type {
-  EscoreLidoSgh,
-  InternadoLido,
-  ProtocoloInternadoLido,
-  ProtocoloPacienteLido,
-} from '@sgh/legado';
+import type { ProtocoloPaciente } from '../recepcao/tipos.js';
+import type { EscoreRegistrado, InternadoEnfermagem, ProtocoloDoInternado } from './tipos-vinculados.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { VinculoAssistencial } from './escores-porta.js';
 
@@ -89,7 +85,7 @@ export function motivoSemAtor(v: VinculoAssistencial | null): string | null {
 }
 
 /** O escore lido como entrada das regras do internado (a hora em minutos; o estornado marcado). */
-export function escoreParaProtocolo(x: EscoreLidoSgh): EscoreParaProtocolo {
+export function escoreParaProtocolo(x: EscoreRegistrado): EscoreParaProtocolo {
   return {
     id: x.id,
     atendimento: x.atendimento ?? 0,
@@ -100,15 +96,15 @@ export function escoreParaProtocolo(x: EscoreLidoSgh): EscoreParaProtocolo {
   };
 }
 
-export const fechado = (p: ProtocoloInternadoLido) =>
+export const fechado = (p: ProtocoloDoInternado) =>
   p.eventos.some((e) => e.tipo === 'encerramento' || e.tipo === 'inativacao');
 
 /** A inclusão para a tela: o relógio das metas (parado no encerramento ou na inativação), o escore e os fatos. */
 export function protocoloParaTela(
-  p: ProtocoloInternadoLido,
+  p: ProtocoloDoInternado,
   def: VersaoComConteudo | undefined,
   nome: string,
-  escore: EscoreLidoSgh | undefined,
+  escore: EscoreRegistrado | undefined,
   agora: string,
 ): ProtocoloInternado {
   const inativacao = p.eventos.find((e) => e.tipo === 'inativacao') ?? null;
@@ -193,9 +189,9 @@ export function protocoloParaTela(
  * é posterior ao tempo zero da última sepse do atendimento (o alerta antigo não volta depois do encerramento).
  */
 export function sugestoesDaUnidade(
-  internados: readonly InternadoLido[],
-  escores: readonly EscoreLidoSgh[],
-  protocolos: readonly ProtocoloInternadoLido[],
+  internados: readonly InternadoEnfermagem[],
+  escores: readonly EscoreRegistrado[],
+  protocolos: readonly ProtocoloDoInternado[],
   p: ParametrosProtocoloInternado,
 ): SugestaoNews2[] {
   const porAt = new Map(internados.map((i) => [i.atendimento, i]));
@@ -228,8 +224,8 @@ export function sugestoesDaUnidade(
 
 /** Os indicadores por origem: o internado do período mais o PA do período, com as metas da versão usada. */
 export function indicadoresDoPeriodo(
-  internado: readonly ProtocoloInternadoLido[],
-  pa: readonly ProtocoloPacienteLido[],
+  internado: readonly ProtocoloDoInternado[],
+  pa: readonly ProtocoloPaciente[],
   versoes: readonly VersaoComConteudo[],
 ): IndicadorOrigemProtocolo[] {
   const metas = new Map(versoes.map((x) => [x.v.id, x.conteudo.metas.map((m) => m.codigo)]));
@@ -258,7 +254,7 @@ export function indicadoresDoPeriodo(
 export function conferirInclusao(p: {
   e: IncluirProtocoloInternadoEntrada;
   vigente: VersaoComConteudo | undefined;
-  escore: EscoreLidoSgh | undefined;
+  escore: EscoreRegistrado | undefined;
   jaAberto: boolean;
   limiar: number;
   agora: string;
@@ -303,7 +299,7 @@ export function conferirInclusao(p: {
 
 /** A meta ou o item do checklist conferido pela definição da versão usada (cumprida no prazo; senão, perdida). */
 export function conferirMeta(
-  p: ProtocoloInternadoLido,
+  p: ProtocoloDoInternado,
   def: VersaoComConteudo | undefined,
   e: RegistrarMetaInternadoEntrada,
   agora: string,
@@ -337,7 +333,7 @@ export function conferirMeta(
 
 /** O encerramento conferido: o descarte e as metas sem registro pedem o motivo. */
 export function conferirEncerramento(
-  p: ProtocoloInternadoLido,
+  p: ProtocoloDoInternado,
   def: VersaoComConteudo | undefined,
   e: EncerrarProtocoloInternadoEntrada,
 ): void {

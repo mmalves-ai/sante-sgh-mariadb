@@ -1,6 +1,6 @@
 // Porta da conta do paciente em MEMÓRIA (M30): a sessão sintética de dev/ci (E2E). Contas, itens, fichas e preços
-// SINTÉTICOS (nenhum dado real; nada vai à cópia), com as mesmas validações (Zod dos contratos) e as mesmas regras do
-// domínio que o adaptador do legado confere (vetos do fechamento e da reabertura, situação derivada, explicador,
+// SINTÉTICOS (nenhum dado real; nada vai a banco), com as mesmas validações (Zod dos contratos) e as mesmas regras do
+// domínio que a porta própria confere (vetos do fechamento e da reabertura, situação derivada, explicador,
 // faturabilidade, particular). A conta de internação 9001 nasce aberta e emitida, com itens "dos gatilhos" (estoque,
 // SADT, internação); a ficha 7001 dela entra na fila do lançamento após o fechamento quando a conta é fechada (o
 // procedimento lançado depois, pelo outro sistema, que o gatilho marca e não lança).
@@ -29,7 +29,6 @@ import {
   aceitaLancamento,
   avaliarFaturabilidade,
   type BaseContrato,
-  conferirContaParticular,
   conferirFechamento,
   conferirPrecoManual,
   conferirReabertura,
@@ -48,20 +47,18 @@ import {
   situacaoDerivada,
   totalOrcamento,
 } from '@sgh/dominio-faturamento';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type FonteCatalogo,
-  type FiltroPagamentos,
-  type LiberacaoConsultada,
-  operacao,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import type { EstadoCatalogo } from '../cadastro/porta.js';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { ehOperacaoFaturamento, ENTRADAS_FATURAMENTO } from './esquemas.js';
 import type {
   ContextoFaturamento,
   FiltroContasPorta,
+  FiltroPagamentos,
   GravadorSghFaturamento,
   PortaFaturamento,
 } from './porta.js';
+import { conferirRecebimentoDaConta } from './regras-conta.js';
 
 const recusa = (codigo: string, mensagem: string, campos?: readonly string[]) =>
   new ErroOperacao(409, codigo, 'Operação recusada', mensagem, campos ? { campos } : {});
@@ -134,6 +131,8 @@ const TIPOS_PENDENCIA: readonly { id: number; nome: string; modulos: readonly nu
   { id: 2, nome: 'FALTA LAUDO (SINTETICA)', modulos: [3, 4] },
 ];
 const CONVENIOS: Readonly<Record<number, string>> = { 91: 'CONVENIO SINTETICO', 10: 'PARTICULAR' };
+/** As fontes pagadoras da massa sintética de tipo particular (o tipo da fonte, não um código fixo, decide). */
+const FONTES_PARTICULARES: ReadonlySet<number> = new Set([10]);
 
 interface Estado {
   seq: number;
@@ -192,7 +191,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
 
-  constructor(private readonly catalogo: FonteCatalogo | null) {}
+  constructor(private readonly catalogo: EstadoCatalogo | null) {}
 
   private e(c: ContextoFaturamento): Estado {
     let s = this.estados.get(c.hospital);
@@ -356,7 +355,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoFaturamento, op: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoFaturamento, op: string): Promise<LiberacaoGravacao> {
     const e = this.estadoOp(op, c.hospital);
     if (e === null || e === 'bloqueada')
       return {
@@ -383,14 +382,14 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     `2026-01-01T00:00:${String(n % 60).padStart(2, '0')}.${String(n).padStart(3, '0')}Z`;
 
   async executar(c: ContextoFaturamento, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+    if (!ehOperacaoFaturamento(op)) throw new Error(`Operação ${op} sem a porta em memória.`);
+    const analise = ENTRADAS_FATURAMENTO[op].safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -403,7 +402,9 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as never, ctx.usuarioLegado, c.hospital);
+        // O login de quem grava, para mostrar na conta sintética (o contexto da gravação da API o leva).
+    const login = (ctx as ContextoOperacao & { readonly login?: string }).login ?? '';
+    const resultado = this.aplicar(s, op, analise.data as never, login, c.hospital);
     s.idem.set(chave, { hash, resultado });
     this.gravadasAqui(c.hospital).set(op, (this.gravadasAqui(c.hospital).get(op) ?? 0) + 1);
     if (op === 'faturamento.fecharConta') this.fechadasAqui(c.hospital).add(Number(resultado['conta']));
@@ -430,7 +431,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     ano: number,
     mes: number,
   ): { convenio: number; situacao: string; contas: number; fechadasPeloNovo: number; valor: number }[] {
-    const s = this.e({ hospital, rede: '' } as ContextoFaturamento);
+    const s = this.e({ hospital } as ContextoFaturamento);
     const aqui = this.fechadasAqui(hospital);
     const grupos = new Map<
       string,
@@ -476,7 +477,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
           'Registro alterado',
           'A conta foi alterada por outra pessoa desde que você a abriu. Releia a conta.',
           {
-            campos: ['DATA_HORA_ULTIMA_ATUALIZACAO'],
+            campos: ['versao'],
           },
         );
     };
@@ -817,7 +818,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
         if (orc && orc.situacao !== 'aberto')
           throw recusa('orcamento-fechado', 'O orçamento já foi pago ou cancelado.');
         if (!orc && r.conta) {
-          const np = conferirContaParticular(this.contaM(s, r.conta).convenio);
+          const np = conferirRecebimentoDaConta(FONTES_PARTICULARES.has(this.contaM(s, r.conta).convenio));
           if (np) throw recusa(np.codigo, np.mensagem, ['conta']);
         }
         const saldo = orc ? r2(orc.total - orc.pago) : r.conta ? this.contaM(s, r.conta).total : 0;
@@ -1146,6 +1147,11 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
 
   async contaDaPendencia(c: ContextoFaturamento, id: number): Promise<number | null> {
     return this.e(c).pendencias.find((p) => p.id === id)?.conta ?? null;
+  }
+
+  async contaParticular(c: ContextoFaturamento, conta: number): Promise<boolean | null> {
+    const x = this.e(c).contas.get(conta);
+    return x ? FONTES_PARTICULARES.has(x.convenio) : null;
   }
 
   async convenioDaConta(c: ContextoFaturamento, conta: number): Promise<number | null> {

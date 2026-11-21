@@ -8,6 +8,7 @@ import type { DynamicModule } from '@nestjs/common';
 import type { Ambiente, NucleoProprio } from '@sgh/nucleo';
 import type { RegistradorTrilha } from '../autorizacao/trilha.js';
 import type { Configuracao } from '../configuracao.js';
+import type { GanchosComoTardios } from '../sessao/ganchos-como.js';
 import type { ArmazemSessao } from '../sessao/armazem.js';
 import type { ServicoSessao } from '../sessao/servico-sessao.js';
 
@@ -23,6 +24,8 @@ export interface ContextoModulo {
   readonly armazem: ArmazemSessao;
   readonly servico: ServicoSessao | null;
   readonly trilha: RegistradorTrilha;
+  /** Ganchos do "login como" na sessão da base, que o módulo suporte liga (ausente: nenhuma sessão "como" vale). */
+  readonly ganchosComo?: GanchosComoTardios;
 }
 
 /** O que o arquivo de um módulo migrado exporta (`modulo.ts`). */
@@ -38,10 +41,33 @@ export type CarregadorModulo = () => Promise<ModuloApi>;
  */
 export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({
   agenda: () => import('./agenda/modulo.js'),
+  assinatura: () => import('./assinatura/modulo.js'),
   atendimento: () => import('./atendimento/modulo.js'),
   cadastro: () => import('./cadastro/modulo.js'),
+  catalogos: () => import('./catalogos/modulo.js'),
   config: () => import('./config/modulo.js'),
+  consultas: () => import('./consultas/modulo.js'),
+  contratualizacao: () => import('./contratualizacao/modulo.js'),
+  custos: () => import('./custos/modulo.js'),
+  documento: () => import('./documento/modulo.js'),
+  enfermagem: () => import('./enfermagem/modulo.js'),
+  especialidades: () => import('./especialidades/modulo.js'),
+  exames: () => import('./exames/modulo.js'),
+  farmacia: () => import('./farmacia/modulo.js'),
+  faturamento: () => import('./faturamento/modulo.js'),
+  financeiro: () => import('./financeiro/modulo.js'),
+  implantacao: () => import('./implantacao/modulo.js'),
+  internacao: () => import('./internacao/modulo.js'),
+  operadora: () => import('./operadora/modulo.js'),
+  orcamento: () => import('./orcamento/modulo.js'),
+  patrimonio: () => import('./patrimonio/modulo.js'),
+  portaria: () => import('./portaria/modulo.js'),
+  precos: () => import('./precos/modulo.js'),
   recepcao: () => import('./recepcao/modulo.js'),
+  rede: () => import('./rede/modulo.js'),
+  rouparia: () => import('./rouparia/modulo.js'),
+  sessoes: () => import('./sessoes/modulo.js'),
+  suporte: () => import('./suporte/modulo.js'),
 });
 
 export class ErroModulos extends Error {

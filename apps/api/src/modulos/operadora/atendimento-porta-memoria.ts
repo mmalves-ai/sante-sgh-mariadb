@@ -1,10 +1,10 @@
 // Porta do atendimento com protocolo e das contas do portal do prestador em MEMÓRIA (M56, etapa 8, F7): a sessão
 // sintética de dev/ci (E2E). O beneficiário pela carteirinha e as operadoras vêm da porta em memória da F1, e os
 // prestadores da porta em memória da F3; os domínios têm os códigos que o banco do estabelecimento tem (rótulos do
-// vocabulário). Os protocolos, o histórico e as contas ficam em memória com as mesmas recusas das SGH_ (versão vista e
+// vocabulário). Os protocolos, o histórico e as contas ficam em memória com as mesmas recusas das (versão vista e
 // situação de partida, número único, e-mail único, ativação pendente e dentro da validade) e a transação desfeita por
 // inteiro quando a função falha. A sequência do número começa em 500.001 na memória (a da autorização em memória é outra
-// e começa em 1: os números não se cruzam na sessão sintética). Nada vai à cópia. A trilha da memória é registrada pela
+// e começa em 1: os números não se cruzam na sessão sintética). Nada vai ao banco. A trilha da memória é registrada pela
 // API (como na rede).
 import {
   FUNCOES_PORTAL_PRESTADOR,
@@ -12,24 +12,9 @@ import {
   TIPOS_ATENDIMENTO_PORTAL,
 } from '@sgh/contratos';
 import { acessoBloqueado } from '@sgh/dominio-operadora';
-import {
-  type AcessoPortalParaEntradaLido,
-  type AcessoPortalPrestadorLido,
-  conferirAnexoResposta,
-  type ConsultaElegibilidadeLida,
-  type ConsultaProtocoloLida,
-  ErroOperacao,
-  type EventoProtocoloSghLido,
-  type FiltroProtocolosLido,
-  type ItemDominioLido,
-  LIMITE_PAGINA_PROTOCOLOS,
-  type ProtocoloOpeLido,
-  type ProtocoloOpeResumoLido,
-  type RegistroProtocoloSgh,
-  type RespostaPrestadorLida,
-  SITUACOES_RESPOSTA_PRESTADOR,
-  type SituacaoProtocoloLida,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import { conferirAnexoResposta } from './aplicacao/regras-portas.js';
+import { type DadosAcessoPortalParaEntrada, type DadosAcessoPortalPrestador, type DadosConsultaElegibilidade, type DadosConsultaProtocolo, type DadosEventoProtocolo, type DadosItemDominio, type DadosProtocolo, type DadosProtocoloResumo, type DadosRespostaPrestador, type EntradaRegistroProtocolo, type FiltroProtocolosPorta, LIMITE_PAGINA_PROTOCOLOS, SITUACOES_RESPOSTA_PRESTADOR, type SituacaoProtocoloPorta } from './dados-portas.js';
 import type {
   ContextoAtendimento,
   DominiosAtendimento,
@@ -40,7 +25,7 @@ import type { PortaAutorizacaoOperadora } from './autorizacao-porta.js';
 import type { PortaOperadora } from './porta.js';
 import type { PortaRedeOperadora } from './rede-porta.js';
 
-const opcoes = (o: Readonly<Record<number, string>>): ItemDominioLido[] =>
+const opcoes = (o: Readonly<Record<number, string>>): DadosItemDominio[] =>
   Object.entries(o).map(([k, v]) => ({ id: Number(k), rotulo: v }));
 
 export const DOMINIOS_ATENDIMENTO_SINTETICOS: DominiosAtendimento = {
@@ -71,15 +56,15 @@ const acessoDesatualizado = () =>
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
 type Protocolo = { hospital: string } & Mutavel<
   Omit<
-    ProtocoloOpeLido,
+    DadosProtocolo,
     'vencido' | 'escritaVencida' | 'beneficiarioNome' | 'autorizacao' | 'origemProtocolo'
   >
 > & { autorizacaoId: number | null; origemId: number | null; beneficiarioNome: string | null };
-type Evento = EventoProtocoloSghLido & { hospital: string; protocolo: number };
-type Acesso = Mutavel<AcessoPortalParaEntradaLido> & { hospital: string; ativacaoResumo: string | null };
+type Evento = DadosEventoProtocolo & { hospital: string; protocolo: number };
+type Acesso = Mutavel<DadosAcessoPortalParaEntrada> & { hospital: string; ativacaoResumo: string | null };
 
-/** W0-10: a resposta do prestador (SGH_OPE_PROT_RESPOSTA), com o conteúdo do anexo. */
-type Resposta = RespostaPrestadorLida & { hospital: string; protocolo: number; bytes: Uint8Array | null };
+/** W0-10: a resposta do prestador (protocolo_beneficiario_resposta), com o conteúdo do anexo. */
+type Resposta = DadosRespostaPrestador & { hospital: string; protocolo: number; bytes: Uint8Array | null };
 
 interface Estado {
   protocolos: Protocolo[];
@@ -87,7 +72,7 @@ interface Estado {
   acessos: Acesso[];
   respostas: Resposta[];
   /** W0-10 (M7): as consultas de elegibilidade do portal (só inclusão). */
-  elegibilidades: (ConsultaElegibilidadeLida & { hospital: string; prestador: number })[];
+  elegibilidades: (DadosConsultaElegibilidade & { hospital: string; prestador: number })[];
   seq: {
     protocolo: number;
     numero: number;
@@ -151,7 +136,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
   async consultasElegibilidade(
     c: ContextoAtendimento,
     prestador: number,
-  ): Promise<ConsultaElegibilidadeLida[]> {
+  ): Promise<DadosConsultaElegibilidade[]> {
     return this.estado.elegibilidades
       .filter((x) => x.hospital === c.hospital && x.prestador === prestador)
       .sort((a, b) => b.id - a.id)
@@ -174,7 +159,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     return p.escritaPedida && !p.escritaEnviadaEm && !!p.escritaPrazoEm && this.agora() > p.escritaPrazoEm;
   }
 
-  private resumo(p: Protocolo): ProtocoloOpeResumoLido {
+  private resumo(p: Protocolo): DadosProtocoloResumo {
     return {
       id: p.id,
       operadora: p.operadora,
@@ -201,7 +186,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     };
   }
 
-  async protocolos(c: ContextoAtendimento, f: FiltroProtocolosLido) {
+  async protocolos(c: ContextoAtendimento, f: FiltroProtocolosPorta) {
     const limite = Math.min(Math.max(1, f.limite ?? LIMITE_PAGINA_PROTOCOLOS), LIMITE_PAGINA_PROTOCOLOS);
     const d = (f.busca ?? '').replace(/[\s.\-/]/g, '');
     const nome = (f.busca ?? '').trim().toUpperCase();
@@ -242,7 +227,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     };
   }
 
-  async protocolo(c: ContextoAtendimento, id: number): Promise<ProtocoloOpeLido | null> {
+  async protocolo(c: ContextoAtendimento, id: number): Promise<DadosProtocolo | null> {
     const p = this.estado.protocolos.find((x) => x.id === id && x.hospital === c.hospital);
     if (!p) return null;
     const a = p.autorizacaoId === null ? null : await this.autorizacao.autorizacao(c, p.autorizacaoId);
@@ -268,7 +253,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
       .map((e) => sem(e, 'hospital', 'protocolo'));
   }
 
-  async respostasPrestador(c: ContextoAtendimento, id: number): Promise<RespostaPrestadorLida[]> {
+  async respostasPrestador(c: ContextoAtendimento, id: number): Promise<DadosRespostaPrestador[]> {
     return this.estado.respostas
       .filter((r) => r.hospital === c.hospital && r.protocolo === id)
       .map((r) => sem(r, 'hospital', 'protocolo', 'bytes'));
@@ -297,7 +282,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     c: ContextoAtendimento,
     numero: string,
     prestador?: number,
-  ): Promise<ConsultaProtocoloLida | null> {
+  ): Promise<DadosConsultaProtocolo | null> {
     const p = this.estado.protocolos.find(
       (x) =>
         x.hospital === c.hospital &&
@@ -333,7 +318,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     };
   }
 
-  private semSegredo(a: Acesso): AcessoPortalPrestadorLido {
+  private semSegredo(a: Acesso): DadosAcessoPortalPrestador {
     return sem(a, 'hospital', 'ativacaoResumo', 'senhaResumo', 'segundoFator');
   }
 
@@ -364,7 +349,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     return sem(a, 'hospital', 'ativacaoResumo');
   }
 
-  async gravarSgh<T>(c: ContextoAtendimento, _trilha: unknown, fn: (g: GravadorAtendimento) => Promise<T>) {
+  async gravar<T>(c: ContextoAtendimento, _trilha: unknown, fn: (g: GravadorAtendimento) => Promise<T>) {
     const antes = clone(this.estado);
     try {
       return await fn(this.gravador(c));
@@ -380,7 +365,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
     const evento = (
       protocolo: number,
       ev: string,
-      situacao: SituacaoProtocoloLida,
+      situacao: SituacaoProtocoloPorta,
       texto: string | null,
       por: string,
     ) =>
@@ -405,7 +390,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
       p.versao += 1;
       return p.versao;
     };
-    const registrar = async (r: Omit<RegistroProtocoloSgh, 'hospital'>) => {
+    const registrar = async (r: Omit<EntradaRegistroProtocolo, 'hospital'>) => {
       if (s.protocolos.some((x) => x.protocolo === r.protocolo))
         throw recusa('numero-em-uso', 'O número gerado já existe: tente de novo.');
       const el = r.carteirinha ? await this.operadora.elegibilidade(c, r.carteirinha) : null;
@@ -477,7 +462,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
       },
       interagir: async (a) => {
         const versao = mudar(a, [a.situacao], () => undefined);
-        evento(a.id, 'interacao', a.situacao as SituacaoProtocoloLida, a.texto, a.usuario);
+        evento(a.id, 'interacao', a.situacao as SituacaoProtocoloPorta, a.texto, a.usuario);
         return { id: a.id, versao };
       },
       prorrogar: async (a) => {
@@ -488,7 +473,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
         evento(
           a.id,
           'prorrogacao',
-          a.situacao as SituacaoProtocoloLida,
+          a.situacao as SituacaoProtocoloPorta,
           `Prazo até ${a.ate.slice(0, 10)}: ${a.motivo}`,
           a.usuario,
         );
@@ -514,7 +499,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
           p.escritaPedidaEm = a.pedidaEm;
           p.escritaPrazoEm = a.escritaPrazoEm;
         });
-        evento(a.id, 'escrita-pedida', a.situacao as SituacaoProtocoloLida, null, a.usuario);
+        evento(a.id, 'escrita-pedida', a.situacao as SituacaoProtocoloPorta, null, a.usuario);
         return { id: a.id, versao };
       },
       enviarEscrita: async (a) => {
@@ -549,7 +534,7 @@ export class PortaAtendimentoOperadoraMemoria implements PortaAtendimentoOperado
         evento(
           a.id,
           'reanalise',
-          a.situacao as SituacaoProtocoloLida,
+          a.situacao as SituacaoProtocoloPorta,
           `Reanálise na ouvidoria: protocolo ${a.novo.protocolo}`,
           a.usuario,
         );

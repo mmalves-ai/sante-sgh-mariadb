@@ -1,32 +1,30 @@
 // Porta da estrutura de custos em memória (M54, etapa 4): a sessão sintética de dev/ci (E2E) e os testes da API.
 // Centros de custo, domínios e fontes agregadas SINTÉTICOS, por estabelecimento; as gravações seguem as mesmas regras
-// do legado (versão lida, coleta que substitui só as coletadas, manual que substitui só o manual). Nenhum dado real.
+// da porta própria (versão lida, coleta que substitui só as coletadas, manual que substitui só o manual). Nenhum dado real.
 import {
-  type ApuracaoCustosLida,
+  type ApuracaoCustosRegistrada,
   type ApuracaoParaGravar,
-  type CodigosExportacaoLidos,
+  type CentroCustoCadastrado,
+  type ClassificacaoParaGravar,
+  type CodigosExportacao,
+  type ColetaParaGravar,
+  type ColetaRegistrada,
   type ContaParaGravar,
-  type CustoContaLido,
+  type CustoContaApuracao,
+  type DominiosCustos,
+  type EstatisticaRegistrada,
   type FiltroContasCusto,
-  type FontesCusteioLidas,
-  type GrupoResultadoLido,
-  type LinhaCentroLida,
+  type FontesCusteio,
+  type FontesEstatistica,
+  type GrupoResultadoApurado,
+  type LancamentoEstatisticaParaGravar,
+  type LinhaCentroApuracao,
   TAMANHO_PAGINA_CONTAS,
-} from '@sgh/legado';
-import type {
-  CentroCustoEstruturaLido,
-  ClassificacaoParaGravar,
-  ColetaLida,
-  ColetaParaGravar,
-  DominiosCustosLidos,
-  EstatisticaLida,
-  FontesEstatisticaLidas,
-  LancamentoEstatisticaParaGravar,
-} from '@sgh/legado';
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoCustos, PortaCustos } from './porta.js';
 
-const CENTROS_SINTETICOS: readonly Omit<CentroCustoEstruturaLido, 'classificacao'>[] = [
+const CENTROS_SINTETICOS: readonly Omit<CentroCustoCadastrado, 'classificacao'>[] = [
   {
     id: 101,
     codigo: 300100,
@@ -85,7 +83,7 @@ const CENTROS_SINTETICOS: readonly Omit<CentroCustoEstruturaLido, 'classificacao
   },
 ];
 
-const DOMINIOS: DominiosCustosLidos = {
+const DOMINIOS: DominiosCustos = {
   tiposDado: [
     { id: 1, nome: 'Lançamento' },
     { id: 2, nome: 'Referência' },
@@ -99,7 +97,7 @@ const DOMINIOS: DominiosCustosLidos = {
 };
 
 /** Fontes sintéticas de qualquer competência (o censo fechado em 10 dias: o paciente-dia sai estimado). */
-const FONTES: FontesEstatisticaLidas = {
+const FONTES: FontesEstatistica = {
   censo: { grupos: [{ cdc: 300100, quantidade: 95 }], diasFechados: 10 },
   internacoes: [
     { cdc: 300100, quantidade: 301 },
@@ -120,7 +118,7 @@ const FONTES: FontesEstatisticaLidas = {
 };
 
 /** Fontes sintéticas do custeio de qualquer competência (sem folha: a apuração sai "parcial (sem pessoal)"). */
-const FONTES_CUSTEIO: FontesCusteioLidas = {
+const FONTES_CUSTEIO: FontesCusteio = {
   materiais: [
     { cdc: 300100, centavos: 4_500_000, linhas: 820 },
     { cdc: 300310, centavos: 2_800_000, linhas: 310 },
@@ -219,7 +217,7 @@ const FONTES_CUSTEIO: FontesCusteioLidas = {
   truncado: false,
 };
 
-const CODIGOS_EXPORTACAO: CodigosExportacaoLidos = {
+const CODIGOS_EXPORTACAO: CodigosExportacao = {
   centros: [
     { id: 101, codigoApurasus: '02.01', unidade: 0 },
     { id: 102, codigoApurasus: '02.05', unidade: 0 },
@@ -235,12 +233,12 @@ const CONVENIOS = new Map([
 ]);
 
 interface Estado {
-  classificacoes: Map<number, NonNullable<CentroCustoEstruturaLido['classificacao']>>;
-  registros: (EstatisticaLida & { vigente: boolean })[];
-  coletas: ColetaLida[];
+  classificacoes: Map<number, NonNullable<CentroCustoCadastrado['classificacao']>>;
+  registros: (EstatisticaRegistrada & { vigente: boolean })[];
+  coletas: ColetaRegistrada[];
   seq: number;
-  apuracoes: ApuracaoCustosLida[];
-  linhas: Map<number, LinhaCentroLida[]>;
+  apuracoes: ApuracaoCustosRegistrada[];
+  linhas: Map<number, LinhaCentroApuracao[]>;
   contas: Map<number, ContaParaGravar[]>;
 }
 
@@ -256,7 +254,7 @@ const desatualizadoApuracao = () =>
 /** Prontuário sintético da conta (as contas 9001 e 9002 são do mesmo paciente; as demais, uma por paciente). */
 const prontuarioSintetico = (conta: number): number | null =>
   conta === 9001 || conta === 9002 ? 800001 : conta > 0 ? 800000 + conta : null;
-const contaLida = (c: ContaParaGravar): CustoContaLido => ({
+const contaLida = (c: ContaParaGravar): CustoContaApuracao => ({
   ...c,
   parcelas: JSON.stringify(c.parcelas),
   prontuario: prontuarioSintetico(c.conta),
@@ -285,38 +283,38 @@ export class PortaCustosMemoria implements PortaCustos {
     return e;
   }
 
-  private montar(e: Estado, id: number): CentroCustoEstruturaLido | null {
+  private montar(e: Estado, id: number): CentroCustoCadastrado | null {
     const base = CENTROS_SINTETICOS.find((c) => c.id === id);
     return base ? { ...base, classificacao: e.classificacoes.get(id) ?? null } : null;
   }
 
-  async centros(c: ContextoCustos): Promise<CentroCustoEstruturaLido[]> {
+  async centros(c: ContextoCustos): Promise<CentroCustoCadastrado[]> {
     const e = this.estado(c);
     return CENTROS_SINTETICOS.map((x) => this.montar(e, x.id)!);
   }
 
-  async centro(c: ContextoCustos, id: number): Promise<CentroCustoEstruturaLido | null> {
+  async centro(c: ContextoCustos, id: number): Promise<CentroCustoCadastrado | null> {
     return this.montar(this.estado(c), id);
   }
 
-  async dominios(): Promise<DominiosCustosLidos> {
+  async dominios(): Promise<DominiosCustos> {
     return DOMINIOS;
   }
 
-  async fontes(): Promise<FontesEstatisticaLidas> {
+  async fontes(): Promise<FontesEstatistica> {
     return FONTES;
   }
 
   async estatisticas(
     c: ContextoCustos,
     competencia: string,
-  ): Promise<{ registros: EstatisticaLida[]; truncado: boolean }> {
+  ): Promise<{ registros: EstatisticaRegistrada[]; truncado: boolean }> {
     const registros = this.estado(c)
       .registros.filter(
         (r) =>
           r.vigente && (r.competencia === competencia || (r.competencia < competencia && r.tipoDado === 2)),
       )
-      .map((r): EstatisticaLida => {
+      .map((r): EstatisticaRegistrada => {
         const { vigente, ...resto } = r;
         void vigente;
         return resto;
@@ -324,7 +322,7 @@ export class PortaCustosMemoria implements PortaCustos {
     return { registros, truncado: false };
   }
 
-  async ultimaColeta(c: ContextoCustos, competencia: string): Promise<ColetaLida | null> {
+  async ultimaColeta(c: ContextoCustos, competencia: string): Promise<ColetaRegistrada | null> {
     return (
       this.estado(c)
         .coletas.filter((x) => x.competencia === competencia)
@@ -336,7 +334,7 @@ export class PortaCustosMemoria implements PortaCustos {
     c: ContextoCustos,
     x: ClassificacaoParaGravar,
     por: string,
-  ): Promise<{ antes: CentroCustoEstruturaLido; depois: CentroCustoEstruturaLido; mudou: boolean } | null> {
+  ): Promise<{ antes: CentroCustoCadastrado; depois: CentroCustoCadastrado; mudou: boolean } | null> {
     const e = this.estado(c);
     const antes = this.montar(e, x.centro);
     if (!antes) return null;
@@ -418,7 +416,7 @@ export class PortaCustosMemoria implements PortaCustos {
     c: ContextoCustos,
     x: LancamentoEstatisticaParaGravar,
     por: string,
-  ): Promise<{ registro: EstatisticaLida; substituidas: number }> {
+  ): Promise<{ registro: EstatisticaRegistrada; substituidas: number }> {
     const e = this.estado(c);
     let substituidas = 0;
     for (const r of e.registros)
@@ -432,7 +430,7 @@ export class PortaCustosMemoria implements PortaCustos {
         r.vigente = false;
         substituidas += 1;
       }
-    const registro: EstatisticaLida = {
+    const registro: EstatisticaRegistrada = {
       id: ++e.seq,
       competencia: x.competencia,
       centro: x.centro,
@@ -453,11 +451,11 @@ export class PortaCustosMemoria implements PortaCustos {
 
   // ── Etapa 5 ──
 
-  async fontesCusteio(): Promise<FontesCusteioLidas> {
+  async fontesCusteio(): Promise<FontesCusteio> {
     return FONTES_CUSTEIO;
   }
 
-  async codigosExportacao(): Promise<CodigosExportacaoLidos> {
+  async codigosExportacao(): Promise<CodigosExportacao> {
     return CODIGOS_EXPORTACAO;
   }
 
@@ -465,17 +463,17 @@ export class PortaCustosMemoria implements PortaCustos {
     return new Map(codigos.filter((k) => CONVENIOS.has(k)).map((k) => [k, CONVENIOS.get(k)!]));
   }
 
-  async apuracoes(c: ContextoCustos, competencia: string): Promise<ApuracaoCustosLida[]> {
+  async apuracoes(c: ContextoCustos, competencia: string): Promise<ApuracaoCustosRegistrada[]> {
     return this.estado(c)
       .apuracoes.filter((a) => a.competencia === competencia)
       .sort((a, b) => b.id - a.id);
   }
 
-  async apuracao(c: ContextoCustos, id: number): Promise<ApuracaoCustosLida | null> {
+  async apuracao(c: ContextoCustos, id: number): Promise<ApuracaoCustosRegistrada | null> {
     return this.estado(c).apuracoes.find((a) => a.id === id) ?? null;
   }
 
-  async linhasApuracao(c: ContextoCustos, id: number): Promise<LinhaCentroLida[]> {
+  async linhasApuracao(c: ContextoCustos, id: number): Promise<LinhaCentroApuracao[]> {
     return this.estado(c).linhas.get(id) ?? [];
   }
 
@@ -483,7 +481,7 @@ export class PortaCustosMemoria implements PortaCustos {
     c: ContextoCustos,
     id: number,
     f: FiltroContasCusto,
-  ): Promise<{ total: number; contas: CustoContaLido[] }> {
+  ): Promise<{ total: number; contas: CustoContaApuracao[] }> {
     const ls = (this.estado(c).contas.get(id) ?? [])
       .filter(
         (x) =>
@@ -502,8 +500,8 @@ export class PortaCustosMemoria implements PortaCustos {
     c: ContextoCustos,
     id: number,
     agrupamento: 'convenio' | 'procedimento' | 'tipoConta' | 'paciente',
-  ): Promise<GrupoResultadoLido[]> {
-    const g = new Map<string | null, GrupoResultadoLido>();
+  ): Promise<GrupoResultadoApurado[]> {
+    const g = new Map<string | null, GrupoResultadoApurado>();
     for (const x of this.estado(c).contas.get(id) ?? []) {
       const v =
         agrupamento === 'convenio'
@@ -542,7 +540,7 @@ export class PortaCustosMemoria implements PortaCustos {
     c: ContextoCustos,
     x: ApuracaoParaGravar,
     por: string,
-  ): Promise<{ apuracao: ApuracaoCustosLida; substituida: number | null }> {
+  ): Promise<{ apuracao: ApuracaoCustosRegistrada; substituida: number | null }> {
     const e = this.estado(c);
     const vigentes = e.apuracoes.filter(
       (a) => a.competencia === x.competencia && a.situacao !== 'substituida',
@@ -555,7 +553,7 @@ export class PortaCustosMemoria implements PortaCustos {
       e.apuracoes[i] = { ...e.apuracoes[i]!, situacao: 'substituida', versao: e.apuracoes[i]!.versao + 1 };
     } else if (vigentes.length > 0) throw desatualizadoApuracao();
     const id = ++e.seq;
-    const apuracao: ApuracaoCustosLida = {
+    const apuracao: ApuracaoCustosRegistrada = {
       id,
       competencia: x.competencia,
       situacao: 'apurada',
@@ -589,13 +587,13 @@ export class PortaCustosMemoria implements PortaCustos {
     id: number,
     versao: number,
     por: string,
-  ): Promise<{ antes: ApuracaoCustosLida; depois: ApuracaoCustosLida } | null> {
+  ): Promise<{ antes: ApuracaoCustosRegistrada; depois: ApuracaoCustosRegistrada } | null> {
     const e = this.estado(c);
     const i = e.apuracoes.findIndex((a) => a.id === id);
     if (i < 0) return null;
     const antes = e.apuracoes[i]!;
     if (antes.versao !== versao || antes.situacao !== 'apurada') throw desatualizadoApuracao();
-    const depois: ApuracaoCustosLida = {
+    const depois: ApuracaoCustosRegistrada = {
       ...antes,
       situacao: 'aprovada',
       versao: antes.versao + 1,

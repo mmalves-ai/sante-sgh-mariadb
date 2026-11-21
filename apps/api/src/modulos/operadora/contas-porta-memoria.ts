@@ -2,25 +2,12 @@
 // beneficiário pela carteirinha vêm da porta em memória da F1, os prestadores da porta em memória da F3 e as
 // autorizações pela senha e os auditores designados da porta em memória da F4 (os mesmos que as outras telas mostram);
 // os motivos de glosa são SINTÉTICOS (os códigos da tabela 38 da TISS que a operadora usa, com descrições próprias). Os
-// lotes, as guias, os itens e o histórico ficam em memória com as mesmas recusas das SGH_ (lote e arquivo repetidos,
+// lotes, as guias, os itens e o histórico ficam em memória com as mesmas recusas das (lote e arquivo repetidos,
 // versão vista e situação de partida, item de outro lote, um recurso por guia) e a transação desfeita por inteiro quando
-// a função falha. Nada vai à cópia. A trilha da memória é registrada pela API (como na rede).
+// a função falha. Nada vai ao banco. A trilha da memória é registrada pela API (como na rede).
 import { CRITICAS_CONTA, type MotivoGlosaLido } from '@sgh/contratos';
-import {
-  type AuditorLido,
-  type AutorizacaoDaSenhaLida,
-  type ContaOpeLida,
-  type ContaOpeResumoLida,
-  ErroOperacao,
-  type EventoContaOpeLido,
-  type FiltroContasLido,
-  type FiltroPagamentosLido,
-  type GuiaContaOpeLida,
-  type ItemContaOpeLido,
-  LIMITE_PAGINA_CONTAS,
-  type RecursoItemLido,
-  type SituacaoContaLida,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import { type DadosAuditor, type DadosAutorizacaoDaSenha, type DadosConta, type DadosContaResumo, type DadosEventoConta, type DadosGuiaConta, type DadosItemConta, type DadosRecursoItem, type FiltroContasPorta, type FiltroPagamentosPorta, LIMITE_PAGINA_CONTAS, type SituacaoContaPorta } from './dados-portas.js';
 import type { ContextoContas, GravadorContas, PortaContasOperadora } from './contas-porta.js';
 import type { PortaOperadora } from './porta.js';
 import type { PortaRedeOperadora } from './rede-porta.js';
@@ -62,17 +49,17 @@ interface ContaMem {
   prestador: number;
   protocolo: string;
   numeroLote: string;
-  tipoGuia: ContaOpeResumoLida['tipoGuia'];
+  tipoGuia: DadosContaResumo['tipoGuia'];
   competencia: string;
   guias: number;
   recebidaEm: string;
   prazoPagamento: string;
-  situacao: SituacaoContaLida;
+  situacao: SituacaoContaPorta;
   apresentado: number;
   glosado: number;
   acatado: number;
   pago: number;
-  arquivo: ContaOpeLida['arquivo'] & { base64: string };
+  arquivo: DadosConta['arquivo'] & { base64: string };
   auditor: number | null;
   analisadaEm: string | null;
   analisadaPor: string | null;
@@ -83,11 +70,11 @@ interface ContaMem {
 
 interface Estado {
   contas: ContaMem[];
-  guias: (Mut<GuiaContaOpeLida> & { hospital: string; conta: number; prestador: number })[];
-  itens: (Mut<ItemContaOpeLido> & { hospital: string; conta: number })[];
-  eventos: (EventoContaOpeLido & { hospital: string; conta: number })[];
-  /** W0-10 (M8): o recurso por item (a decisão entra na mesma linha, como a junção da SGH_ devolve). */
-  recursosItens: (RecursoItemLido & { hospital: string; conta: number })[];
+  guias: (Mut<DadosGuiaConta> & { hospital: string; conta: number; prestador: number })[];
+  itens: (Mut<DadosItemConta> & { hospital: string; conta: number })[];
+  eventos: (DadosEventoConta & { hospital: string; conta: number })[];
+  /** W0-10 (M8): o recurso por item (a decisão entra na mesma linha, como a junção da devolve). */
+  recursosItens: (DadosRecursoItem & { hospital: string; conta: number })[];
   seq: Record<string, number>;
 }
 
@@ -102,8 +89,8 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     private readonly operadora: Pick<PortaOperadora, 'elegibilidade' | 'operadoras'>,
     private readonly rede: Pick<PortaRedeOperadora, 'prestador' | 'prestadores'>,
     private readonly autorizacao: {
-      autorizacoesPorSenha(c: ContextoContas, senhas: readonly string[]): Promise<AutorizacaoDaSenhaLida[]>;
-      designacoes(c: ContextoContas, login: string): Promise<AuditorLido[]>;
+      autorizacoesPorSenha(c: ContextoContas, senhas: readonly string[]): Promise<DadosAutorizacaoDaSenha[]>;
+      designacoes(c: ContextoContas, login: string): Promise<DadosAuditor[]>;
     },
   ) {}
 
@@ -188,7 +175,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     );
   }
 
-  private resumo(k: ContaMem): ContaOpeResumoLida {
+  private resumo(k: ContaMem): DadosContaResumo {
     return {
       id: k.id,
       operadora: k.operadora,
@@ -220,7 +207,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     return { itens: r, proxima: ordenadas.length > limite ? (r[r.length - 1]?.id ?? null) : null };
   }
 
-  async contas(c: ContextoContas, f: FiltroContasLido) {
+  async contas(c: ContextoContas, f: FiltroContasPorta) {
     const busca = f.busca?.trim() ?? '';
     return this.pagina(
       this.estado.contas.filter(
@@ -238,8 +225,8 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     );
   }
 
-  async pagamentos(c: ContextoContas, f: FiltroPagamentosLido) {
-    const situacoes: readonly SituacaoContaLida[] =
+  async pagamentos(c: ContextoContas, f: FiltroPagamentosPorta) {
+    const situacoes: readonly SituacaoContaPorta[] =
       f.estado === 'a-pagar' ? ['analisada'] : f.estado === 'pagas' ? ['paga'] : ['analisada', 'paga'];
     return this.pagina(
       this.estado.contas.filter(
@@ -274,7 +261,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     };
   }
 
-  async conta(c: ContextoContas, id: number): Promise<ContaOpeLida | null> {
+  async conta(c: ContextoContas, id: number): Promise<DadosConta | null> {
     const k = this.estado.contas.find((x) => x.hospital === c.hospital && x.id === id);
     if (!k) return null;
     const o = this.operadorasMem.get(k.operadora);
@@ -297,28 +284,28 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     };
   }
 
-  async guias(c: ContextoContas, id: number): Promise<GuiaContaOpeLida[]> {
+  async guias(c: ContextoContas, id: number): Promise<DadosGuiaConta[]> {
     return this.estado.guias
       .filter((g) => g.hospital === c.hospital && g.conta === id)
       .sort((a, b) => a.ordem - b.ordem)
       .map((g) => structuredClone(sem(g, 'hospital', 'conta', 'prestador')));
   }
 
-  async itens(c: ContextoContas, id: number): Promise<ItemContaOpeLido[]> {
+  async itens(c: ContextoContas, id: number): Promise<DadosItemConta[]> {
     return this.estado.itens
       .filter((i) => i.hospital === c.hospital && i.conta === id)
       .sort((a, b) => a.id - b.id)
       .map((i) => sem(i, 'hospital', 'conta'));
   }
 
-  async eventos(c: ContextoContas, id: number): Promise<EventoContaOpeLido[]> {
+  async eventos(c: ContextoContas, id: number): Promise<DadosEventoConta[]> {
     return this.estado.eventos
       .filter((e) => e.hospital === c.hospital && e.conta === id)
       .sort((a, b) => a.id - b.id)
       .map((e) => sem(e, 'hospital', 'conta'));
   }
 
-  async recursosItens(c: ContextoContas, id: number): Promise<RecursoItemLido[]> {
+  async recursosItens(c: ContextoContas, id: number): Promise<DadosRecursoItem[]> {
     return this.estado.recursosItens
       .filter((r) => r.hospital === c.hospital && r.conta === id)
       .sort((a, b) => a.id - b.id)
@@ -351,8 +338,8 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     const agora = () => this.agora();
     const evento = (
       conta: number,
-      x: Omit<EventoContaOpeLido, 'id' | 'em' | 'guia' | 'valor' | 'pagoEm' | 'documento'> &
-        Partial<Pick<EventoContaOpeLido, 'guia' | 'valor' | 'pagoEm' | 'documento'>>,
+      x: Omit<DadosEventoConta, 'id' | 'em' | 'guia' | 'valor' | 'pagoEm' | 'documento'> &
+        Partial<Pick<DadosEventoConta, 'guia' | 'valor' | 'pagoEm' | 'documento'>>,
     ) =>
       e.eventos.push({
         hospital: h,
@@ -368,7 +355,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
         texto: x.texto,
         por: x.por,
       });
-    const mudar = (id: number, versao: number, de: readonly SituacaoContaLida[]): ContaMem => {
+    const mudar = (id: number, versao: number, de: readonly SituacaoContaPorta[]): ContaMem => {
       const k = e.contas.find((x) => x.hospital === h && x.id === id);
       if (!k || k.versao !== versao || !de.includes(k.situacao))
         throw recusa(
@@ -608,7 +595,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
         });
         return { id: x.id, versao: k.versao };
       },
-      // W0-10 (M8): as mesmas conferências da receita SGH_ (tudo antes de escrever; a guia pela soma).
+      // W0-10 (M8): as mesmas conferências da receita (tudo antes de escrever; a guia pela soma).
       registrarRecursoItens: async (x) => {
         if (x.itens.length === 0 || new Set(x.itens.map((i) => i.item)).size !== x.itens.length)
           throw recusa('recurso-item-incoerente', 'Escolha cada item glosado uma vez.');
@@ -701,7 +688,7 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     return gv;
   }
 
-  async gravarSgh<T>(c: ContextoContas, _trilha: unknown, fn: (g: GravadorContas) => Promise<T>): Promise<T> {
+  async gravar<T>(c: ContextoContas, _trilha: unknown, fn: (g: GravadorContas) => Promise<T>): Promise<T> {
     const antes = structuredClone(this.estado);
     const depois: (() => Promise<void>)[] = [];
     try {

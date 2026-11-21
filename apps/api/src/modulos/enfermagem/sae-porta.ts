@@ -7,28 +7,27 @@
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // Os internados, o relógio, os vínculos de enfermagem e a grade de horários vêm da porta da enfermagem (M25).
 import type {
-  AtendimentoDaConsultaLido,
-  AtividadeSaeSgh,
-  AtividadeVigenteLida,
-  CabecalhoReceitaLido,
-  ChecagemCuidadoSgh,
-  DiagnosticoSaeSgh,
-  ReceitaEnfermeiroSgh,
-  ReceitaLidaSgh,
+  ConsultaDeEnfermagem,
+  AtividadeSaeNova,
+  AtividadeVigente,
+  CabecalhoReceita,
+  ChecagemCuidadoNova,
+  DiagnosticoSaeNovo,
+  ReceitaEnfermeiroNova,
+  ReceitaDoEnfermeiro,
   RetificacaoVacina,
-  SaeDoAtendimentoLida,
-  TermoSaeLidoSgh,
-  VacinaLidaSgh,
-  RecusaRiaLida,
-  VacinaSgh,
-} from '@sgh/legado';
+  SaeDoAtendimento,
+  TermoTerminologiaSae,
+  VacinaAplicada,
+  RecusaEnvioVacina,
+  VacinaNova,
+} from './sae-tipos.js';
 import type { ChecagemCuidadoLida, SituacaoEvolucaoSae } from '@sgh/contratos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_SAE = Symbol('PORTA_SAE');
 
 export type ContextoSae = ContextoPortaM18;
-type SemHospital<T> = Omit<T, 'hospital'>;
 
 /** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
 export interface GravadorSae {
@@ -39,7 +38,7 @@ export interface GravadorSae {
     readonly sistema: 'SINT' | 'NNN' | 'CIPE';
     readonly versaoTerminologia: string;
     readonly avaliacao: string;
-    readonly diagnosticos: readonly DiagnosticoSaeSgh[];
+    readonly diagnosticos: readonly DiagnosticoSaeNovo[];
     readonly vinculo: number;
     readonly usuario: string;
     readonly chave: string | null;
@@ -63,7 +62,7 @@ export interface GravadorSae {
     readonly sae: number;
     readonly paciente: number;
     readonly atendimento: number;
-    readonly atividades: readonly AtividadeSaeSgh[];
+    readonly atividades: readonly AtividadeSaeNova[];
     readonly vinculo: number;
     readonly usuario: string;
     readonly chave: string;
@@ -75,7 +74,7 @@ export interface GravadorSae {
     readonly vinculo: number;
     readonly usuario: string;
   }): Promise<number>;
-  checar(c: SemHospital<ChecagemCuidadoSgh>): Promise<{ id: number; repetida: boolean }>;
+  checar(c: ChecagemCuidadoNova): Promise<{ id: number; repetida: boolean }>;
   estornar(x: {
     readonly checagem: number;
     readonly atendimento: number;
@@ -97,9 +96,9 @@ export interface GravadorSae {
     }[];
     readonly usuario: string;
   }): Promise<{ termos: number }>;
-  prescreverMedicamento(r: SemHospital<ReceitaEnfermeiroSgh>): Promise<{ id: number; repetida: boolean }>;
+  prescreverMedicamento(r: ReceitaEnfermeiroNova): Promise<{ id: number; repetida: boolean }>;
   registrarVacina(
-    v: Omit<VacinaSgh, 'hospital' | 'rede'>,
+    v: VacinaNova,
   ): Promise<{ id: number; evento: string; repetida: boolean }>;
   /** W0-03: suspender ou cancelar a receita (fato novo; a original fica legível e inativa). */
   inativarReceita(r: {
@@ -117,6 +116,8 @@ export interface GravadorSae {
     readonly motivo: string;
     readonly dados: RetificacaoVacina | null;
     readonly usuario: string;
+    /** A chave do pedido: o reenvio da mesma correção é reconhecido (sem segunda retificação nem segundo evento). */
+    readonly chave?: string | null | undefined;
   }): Promise<{ id: number; versao: number; evento: string; outbox: string }>;
 }
 
@@ -124,21 +125,21 @@ export interface PortaSae extends PortaGravacaoM18<GravadorSae> {
   dominios(
     c: ContextoSae,
   ): Promise<{ escala: { codigo: number; rotulo: string }[]; metas: { codigo: number; rotulo: string }[] }>;
-  terminologia(c: ContextoSae): Promise<TermoSaeLidoSgh[]>;
-  sae(c: ContextoSae, atendimento: number): Promise<SaeDoAtendimentoLida>;
-  atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigenteLida[]>;
+  terminologia(c: ContextoSae): Promise<TermoTerminologiaSae[]>;
+  sae(c: ContextoSae, atendimento: number): Promise<SaeDoAtendimento>;
+  atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigente[]>;
   atividade(
     c: ContextoSae,
     id: number,
   ): Promise<
-    (AtividadeVigenteLida & { readonly paciente: number; readonly revisadoEm: string | null }) | null
+    (AtividadeVigente & { readonly paciente: number; readonly revisadoEm: string | null }) | null
   >;
   checagens(
     c: ContextoSae,
     o: { readonly atividades: readonly number[]; readonly de: string; readonly ate: string },
   ): Promise<{ itens: (ChecagemCuidadoLida & { atendimento: number })[]; cortada: boolean }>;
   checagem(c: ContextoSae, id: number): Promise<(ChecagemCuidadoLida & { atendimento: number }) | null>;
-  consulta(c: ContextoSae, atendimento: number): Promise<AtendimentoDaConsultaLido | null>;
+  consulta(c: ContextoSae, atendimento: number): Promise<ConsultaDeEnfermagem | null>;
   consultasDoProfissional(
     c: ContextoSae,
     o: { readonly vinculos: readonly number[]; readonly dia: string },
@@ -156,11 +157,11 @@ export interface PortaSae extends PortaGravacaoM18<GravadorSae> {
   cabecalhoReceita(
     c: ContextoSae,
     o: { readonly paciente: number; readonly vinculo: number },
-  ): Promise<CabecalhoReceitaLido>;
-  receitas(c: ContextoSae, atendimento: number): Promise<ReceitaLidaSgh[]>;
-  vacinas(c: ContextoSae, paciente: number): Promise<VacinaLidaSgh[]>;
+  ): Promise<CabecalhoReceita>;
+  receitas(c: ContextoSae, atendimento: number): Promise<ReceitaDoEnfermeiro[]>;
+  vacinas(c: ContextoSae, paciente: number): Promise<VacinaAplicada[]>;
   /** W0-03 (M6): o monitor de recusas do RIA (os envios que a RNDS recusou ou que não chegaram). */
-  recusasRia(c: ContextoSae): Promise<RecusaRiaLida[]>;
+  recusasRia(c: ContextoSae): Promise<RecusaEnvioVacina[]>;
 }
 
 export const METODOS_PORTA_SAE: ReadonlySet<string> = new Set([

@@ -1,7 +1,7 @@
 // M49, etapa 3 (regra 9): o verificador público sobre a porta em memória. Mostra tipo, datas, profissional (como o
 // selo) e o resultado; nunca o paciente nem o conteúdo; cada consulta vira uma linha com a origem mascarada e a trilha;
 // o limite por origem e minuto responde 429 e só a primeira barrada é gravada; sem o registro, 503 (falha fechada).
-import type { DocumentoSghLido } from '@sgh/legado';
+import type { DocumentoEmitidoIcp } from '../tipos.js';
 import { describe, expect, it } from 'vitest';
 import { ArmazemMemoria } from '../../../sessao/armazem.js';
 import { PortaAssinaturaMemoria } from '../porta-memoria.js';
@@ -10,7 +10,7 @@ import { estabelecimentosDoVerificador, ServicoVerificador, USUARIO_VERIFICADOR 
 const CODIGO = 'CodigoSintetico_0123456789';
 const AGORA = new Date('2026-10-24T15:00:00Z');
 
-function doc(id: number, extra: Partial<DocumentoSghLido> = {}): DocumentoSghLido {
+function doc(id: number, extra: Partial<DocumentoEmitidoIcp> = {}): DocumentoEmitidoIcp {
   return {
     id,
     tipo: 'atestado',
@@ -31,7 +31,7 @@ function doc(id: number, extra: Partial<DocumentoSghLido> = {}): DocumentoSghLid
 
 async function montar(
   o: {
-    docs?: DocumentoSghLido[];
+    docs?: DocumentoEmitidoIcp[];
     limite?: number;
     estado?: 'assinada' | 'pendente';
     teto?: number;
@@ -149,10 +149,10 @@ describe('verificador público', () => {
       { hospital: 'pc', documento: 40, resultado: 'valida', origemMascarada: '203.0.113.0' },
     ]);
     expect(porta.trilhas.at(-1)).toMatchObject({
-      usuario: USUARIO_VERIFICADOR,
+      ator: USUARIO_VERIFICADOR,
       evento: 'documento.verificacao.consultada',
       operacao: 'documento.registrarConsultaPublica',
-      tabelaAlvo: 'SGH_DOC_VERIFICACAO',
+      entidade: 'consulta_verificacao_documento',
       estacao: 'PUBLICO:203.0.113.0',
     });
     expect(JSON.stringify(porta.trilhas)).not.toContain('203.0.113.77');
@@ -209,7 +209,7 @@ describe('verificador público', () => {
   it('HS-1: com o núcleo real, só o estabelecimento liberado; o hs (sem os scripts) nunca é consultado', async () => {
     expect(estabelecimentosDoVerificador(['pc', 'hs'], new Set(['pc']))).toEqual(['pc']);
     expect(estabelecimentosDoVerificador(['pc', 'hs'], null)).toEqual(['pc', 'hs']);
-    expect(estabelecimentosDoVerificador([], null)).toEqual(['pc']);
+    expect(estabelecimentosDoVerificador([], null)).toEqual([]);
     expect(estabelecimentosDoVerificador(['hs'], new Set(['pc']))).toEqual([]);
     // Com a lista filtrada, o código que não está no pc responde "não encontrado" e é gravado no pc, mesmo que a
     // leitura do hs falharia (ela não acontece).

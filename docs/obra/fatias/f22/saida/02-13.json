@@ -1,0 +1,77 @@
+{
+  "lote": "02-13",
+  "registrar": [
+    "rede: () => import('./rede/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/rede/aplicacao/servico.spec.ts",
+    "src/modulos/rede/aplicacao/servico.ts",
+    "src/modulos/rede/aviso-http.spec.ts",
+    "src/modulos/rede/indisponivel.ts",
+    "src/modulos/rede/modulo.ts",
+    "src/modulos/rede/porta-memoria.ts",
+    "src/modulos/rede/porta-propria.int.spec.ts",
+    "src/modulos/rede/porta-propria.spec.ts",
+    "src/modulos/rede/porta-propria.ts",
+    "src/modulos/rede/public-api.ts",
+    "src/modulos/rede/rede.controller.ts",
+    "src/modulos/rede/servicos/porta-memoria.ts",
+    "src/modulos/rede/servicos/porta-propria.int.spec.ts",
+    "src/modulos/rede/servicos/porta-propria.ts",
+    "src/modulos/rede/servicos/porta.ts",
+    "src/modulos/rede/servicos/servicos.controller.ts",
+    "src/modulos/rede/servicos/servico.spec.ts",
+    "src/modulos/rede/servicos/servico.ts",
+    "src/modulos/rede/servicos/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "servico_compartilhado_rede",
+      "motivo": "Registro de serviços compartilhados da Rede (M57 etapa 3) não tem tabela no modelo (regra_servico_compartilhado é o rateio do financeiro, outra coisa). Hoje a porta própria responde 501 pendente-modelo-proprio em listar/ler/registrar/alterar.",
+      "ddl": "CREATE TABLE servico_compartilhado_rede (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL COMMENT 'Estabelecimento de quem registrou',\n  area              VARCHAR(20) NOT NULL,\n  titulo            VARCHAR(120) NOT NULL,\n  descricao         VARCHAR(1000) NULL,\n  situacao          VARCHAR(20) NOT NULL DEFAULT 'registrada',\n  registrado_por_usuario_id BIGINT UNSIGNED NOT NULL,\n  registrado_em     DATETIME(3) NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_servico_compartilhado_rede_area CHECK (area IN ('catalogo','fornecedores','compras','laudos','outro')),\n  CONSTRAINT ck_servico_compartilhado_rede_situacao CHECK (situacao IN ('registrada','em_estudo','adotada','descartada')),\n  CONSTRAINT ck_servico_compartilhado_rede_titulo CHECK (CHAR_LENGTH(TRIM(titulo)) >= 3),\n  KEY ix_servico_compartilhado_rede_estabelecimento (estabelecimento_id, registrado_em),\n  KEY ix_servico_compartilhado_rede_registrado_por (registrado_por_usuario_id)\n) COMMENT='Oportunidade de serviço compartilhado entre os estabelecimentos da rede (registro sem compromisso de escopo)';\nCREATE TABLE servico_compartilhado_rede_estabelecimento (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  servico_compartilhado_rede_id BIGINT UNSIGNED NOT NULL,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_servico_compartilhado_rede_estabelecimento_par (servico_compartilhado_rede_id, estabelecimento_id),\n  KEY ix_servico_compartilhado_rede_estabelecimento_estabelecimento (estabelecimento_id)\n) COMMENT='Estabelecimentos envolvidos na oportunidade de serviço compartilhado';\n-- FKs (ON DELETE RESTRICT): estabelecimento (x2), usuario (registrado_por_usuario_id), servico_compartilhado_rede."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "suspeita_duplicidade",
+      "motivo": "O critério CNS do pareamento da rede não tem coluna (hoje se perde ao gravar o par).",
+      "ddl": "ALTER TABLE suspeita_duplicidade ADD COLUMN criterio_cns BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Mesmo cartão nacional de saúde' AFTER criterio_cpf;"
+    },
+    {
+      "tipo": "decisao",
+      "alvo": "MPI da Rede no banco único do cliente",
+      "motivo": "Adotada a opção (a) do pedido do lote 01-06, a confirmar pelo dono: o par entre estabelecimentos é suspeita_duplicidade (a mesma fila do cadastro, com os pacientes de cadastro_estabelecimento_id diferentes); 'outra pessoa' decide a linha; 'mesma pessoa' é a unificação do cadastro (unificacao_cadastro), e o MPI responde 409 unificar-no-cadastro em 'mesma pessoa' e no desfazer; o vínculo exibido é a unificação efetivada (desfeito = revertida), pessoa = id do cadastro mantido; o automático não une, só põe o par na fila. Alternativa: o MPI chamar a unificação do cadastro direto (precisa decidir qual cadastro fica e exigir a justificativa)."
+    },
+    {
+      "tipo": "decisao",
+      "alvo": "cursor do pareamento",
+      "motivo": "O cursor incremental do pareamento de cada estabelecimento foi gravado em marca_sincronismo (sistema_origem 'pareamento_rede', tabela_origem 'paciente', tipo 'sequencial', valor JSON só com ids e carimbo). Confirmar o uso da tabela ou pedir uma tabela própria."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "divergências do par na fila",
+      "motivo": "As divergências não são guardadas em suspeita_duplicidade: a fila própria devolve divergencias [] (a tela do par mostra os dois lados lidos ao vivo). Recalcular no serviço com decidirPar(comparavel(a), comparavel(b)) ao montar a fila, ou guardar (DDL)."
+    },
+    {
+      "tipo": "aviso_outros_lotes",
+      "alvo": "pep (onda 4), api-desmontagem, relatorio",
+      "motivo": "Removidos: rede/porta-legado.ts, rede/servicos/porta-legado.ts e rede/infra/{duas-copias.spec-util,vinculo-dois-bancos.int.spec,isolamento-rede.int.spec}.ts. pep/infra/acesso-entre-hospitais.int.spec.ts importa duas-copias.spec-util e porta-legado (apagados); app.module.ts importa portaRedeLegado/portaServicosRedeLegado de rede/public-api (export removido; public-api exporta PortaRedePropria, PortaServicosRedePropria, portaRedeIndisponivel, portaServicosRedeIndisponivel e moduloRede). SessaoRede.trilha agora devolve TrilhaRede (LinhaTrilha do núcleo sem ocorridoEm): pep/acesso-rede.spec monta SessaoRede. O teste HTTP do acesso cruzado (POST /api/pep/rede/...) saiu de rede/aviso-http.spec.ts e volta com o lote do PEP."
+    },
+    {
+      "tipo": "aviso_arquivos_fora_da_lista",
+      "alvo": "rede/tipos-indice.ts e rede/porta.ts (onda 1, lote 01-06)",
+      "motivo": "Editados porque o lote 01-06 deixou o redesenho dos tipos para este lote: EscritaIndiceRede por alvo com os campos do plano do domínio (pessoa em texto, por = login), TrilhaRede, e PortaRede.mesmaPessoaPorUnificacao e gravar(trilha: TrilhaRede). Correção dos achados: porta.ts ganhou AtendimentosNaRede e o método opcional PortaRede.atendimentosNaRede (o aviso no banco único, sem depender de vínculo)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "estabelecimento",
+      "motivo": "A chave do par do MPI (dominio-rede, chave.ts) exige código de estabelecimento /^[a-z][a-z0-9]{1,9}$/; o DDL aceita qualquer VARCHAR(30). Hoje o estabelecimento fora do formato fica fora do MPI com aviso no log e 403 codigo-fora-do-formato. Proposta: CHECK no código (ou, alternativa, a chave do par passar a usar o id do estabelecimento no domínio).",
+      "ddl": "ALTER TABLE estabelecimento ADD CONSTRAINT ck_estabelecimento_codigo_formato CHECK (codigo REGEXP '^[a-z][a-z0-9]{1,9}$');"
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "@sgh/contratos rede (prontuarioLocal/prontuarioRemoto/prontuario)",
+      "motivo": "O prontuário da unidade (prontuario_estabelecimento.numero_prontuario) é VARCHAR(20); o contrato do MPI usa número. A porta própria usa o da unidade quando é numérico (até 15 dígitos) e cai no número do cliente caso contrário. Se a unidade puder ter prontuário alfanumérico, o contrato tem de passar a texto."
+    }
+  ]
+}

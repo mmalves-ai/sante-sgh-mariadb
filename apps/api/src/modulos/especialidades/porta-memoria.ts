@@ -5,20 +5,20 @@
 // profissionais pelo nome do login (ESPECIALISTA médico, FARMA farmacêutico, LACTARIO nutricionista, ENFERM enfermeiro).
 // As gravações ficam em memória, com as mesmas recusas do banco (a versão do protocolo pelo hash, o ciclo repetido, a
 // validação e a conferência uma vez e por outra pessoa). Nenhum dado real.
-import {
-  type AlteracaoHotSghLida,
-  type EventoOncoSghLido,
-  type CadastrosOftalmologiaLidos,
-  type CicloOncologicoSghLido,
-  ErroOperacao,
-  type ExameOftalmologicoSghLido,
-  type InternacaoEspecialidadeLida,
-  type LiberacaoConsultada,
-  type OrdemLactarioSghLida,
-  type PontoPartogramaSghLido,
-  type ProtocoloOncologicoSghLido,
-  type RecemNascidoSghLido,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import type {
+  AlteracaoLactarioRegistrada,
+  CadastrosOftalmologia,
+  CicloOncologicoRegistrado,
+  EventoOncologicoRegistrado,
+  ExameOftalmologicoRegistrado,
+  InternacaoEspecialidadeLida,
+  OrdemLactarioRegistrada,
+  PontoPartograma,
+  ProtocoloOncologicoRegistrado,
+  RecemNascidoRegistrado,
+} from './tipos.js';
 import type {
   ContextoEspecialidades,
   GravadorEspecialidades,
@@ -38,6 +38,8 @@ function omitir<T extends object, K extends keyof T>(o: T, ...chaves: K[]): Omit
   for (const k of chaves) delete r[k];
   return r;
 }
+/** Chave do estado em memória: o cliente e o estabelecimento da sessão. */
+const chaveDe = (c: ContextoEspecialidades) => `${c.cliente}:${c.estabelecimento ?? 0}`;
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
 
@@ -48,8 +50,8 @@ interface Sintetico extends Omit<InternacaoEspecialidadeLida, 'admissao' | 'aber
 
 const SINTETICOS: readonly Sintetico[] = [
   {
-    reg: 950_101,
-    pront: 70_101,
+    internacao: 950_101,
+    prontuario: 70_101,
     paciente: 99_601,
     nome: 'JULIA SINTETICA PARTURIENTE',
     nascimento: '1996-04-12',
@@ -60,8 +62,8 @@ const SINTETICOS: readonly Sintetico[] = [
     horasAtras: 6,
   },
   {
-    reg: 950_102,
-    pront: 70_102,
+    internacao: 950_102,
+    prontuario: 70_102,
     paciente: 99_602,
     nome: 'CARLOS SINTETICO ONCOLOGIA',
     nascimento: '1962-07-20',
@@ -72,8 +74,8 @@ const SINTETICOS: readonly Sintetico[] = [
     horasAtras: 30,
   },
   {
-    reg: 950_103,
-    pront: 70_103,
+    internacao: 950_103,
+    prontuario: 70_103,
     paciente: 99_603,
     nome: 'ROSA SINTETICA OFTALMO',
     nascimento: '1950-02-03',
@@ -84,8 +86,8 @@ const SINTETICOS: readonly Sintetico[] = [
     horasAtras: 20,
   },
   {
-    reg: 950_104,
-    pront: 70_104,
+    internacao: 950_104,
+    prontuario: 70_104,
     paciente: 99_604,
     nome: 'BEBE SINTETICO LACTARIO',
     nascimento: null,
@@ -98,7 +100,7 @@ const SINTETICOS: readonly Sintetico[] = [
   },
 ];
 
-const CADASTROS: CadastrosOftalmologiaLidos = {
+const CADASTROS: CadastrosOftalmologia = {
   grupos: [
     { codigo: 1, nome: 'Pre-exame' },
     { codigo: 2, nome: 'Refração/lentes de contato' },
@@ -166,15 +168,15 @@ function vinculosSinteticos(login: string): VinculoDoLogin[] {
 export class PortaEspecialidadesMemoria implements PortaEspecialidades {
   readonly destino = 'memoria' as const;
   private seq = 1;
-  readonly examesGravados: (ExameOftalmologicoSghLido & { hospital: string })[] = [];
-  readonly protocolosGravados: (ProtocoloOncologicoSghLido & { hospital: string })[] = [];
-  readonly ciclosGravados: (CicloOncologicoSghLido & { hospital: string })[] = [];
-  readonly pontosGravados: (PontoPartogramaSghLido & { hospital: string; reg: number })[] = [];
-  readonly rnsGravados: (RecemNascidoSghLido & { hospital: string; reg: number })[] = [];
-  readonly ordensGravadas: (OrdemLactarioSghLida & { hospital: string })[] = [];
+  readonly examesGravados: (ExameOftalmologicoRegistrado & { estab: string })[] = [];
+  readonly protocolosGravados: (ProtocoloOncologicoRegistrado & { estab: string })[] = [];
+  readonly ciclosGravados: (CicloOncologicoRegistrado & { estab: string })[] = [];
+  readonly pontosGravados: (PontoPartograma & { estab: string; internacao: number })[] = [];
+  readonly rnsGravados: (RecemNascidoRegistrado & { estab: string; internacao: number })[] = [];
+  readonly ordensGravadas: (OrdemLactarioRegistrada & { estab: string })[] = [];
   // W0-05: os eventos do protocolo e do ciclo e o log das alterações do lactário.
-  readonly eventosOnco: (EventoOncoSghLido & { hospital: string })[] = [];
-  readonly alteracoesGravadas: (AlteracaoHotSghLida & { hospital: string })[] = [];
+  readonly eventosOnco: (EventoOncologicoRegistrado & { estab: string })[] = [];
+  readonly alteracoesGravadas: (AlteracaoLactarioRegistrada & { estab: string })[] = [];
   /** O teto da lista dos ciclos de uma versão (o do banco é 500; os testes baixam para provar a lista cortada). */
   tetoCiclosDaVersao = 500;
 
@@ -198,12 +200,12 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
     return { ...omitir(s, 'horasAtras', 'diasDeVida'), nascimento, admissao: local(admissao), aberta: true };
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
-    return { pode: true, codigo: null, motivo: null } as unknown as LiberacaoConsultada;
+  async podeGravar(): Promise<LiberacaoGravacao> {
+    return { pode: true, codigo: null, motivo: null } ;
   }
 
   async executar(): Promise<never> {
-    throw new Error('As especialidades não gravam pelo executor (só SGH_).');
+    throw new Error('As especialidades gravam pela gravação direta da porta (com a trilha na mesma transação).');
   }
 
   async gravarSgh<T>(
@@ -211,16 +213,16 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
     _trilha: unknown,
     fn: (g: GravadorEspecialidades) => Promise<T>,
   ) {
-    const h = c.hospital;
+    const h = chaveDe(c);
     const em = this.agora();
     const g: GravadorEspecialidades = {
       registrarExame: async (x) => {
         if ((x.od.pio !== null || x.oe.pio !== null) && x.metodoPio === null)
-          throw new Error('Operation violates CHECK constraint SGH_CK_PEP_OFT_PIO');
+          throw new Error('Operation violates CHECK constraint ck_exame_oftalmologico_valor_metodo');
         const id = this.seq++;
         this.examesGravados.push({
           id,
-          reg: x.reg,
+          internacao: x.internacao,
           od: x.od,
           oe: x.oe,
           metodoPio: x.metodoPio,
@@ -230,14 +232,14 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           itens: [...x.itens],
           por: x.usuario,
           em,
-          hospital: h,
+          estab: h,
         });
         return id;
       },
       publicarProtocolo: async (x) => {
-        const mesmos = this.protocolosGravados.filter((p) => p.hospital === h && p.codigo === x.codigo);
+        const mesmos = this.protocolosGravados.filter((p) => p.estab === h && p.codigo === x.codigo);
         if (mesmos.some((p) => p.hash === x.hash))
-          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "SGH_UQ_PEP_ONCO_PROT_HASH"');
+          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "uq_protocolo_quimioterapia_hash"');
         const versao = Math.max(0, ...mesmos.map((p) => p.versao)) + 1;
         const id = this.seq++;
         this.protocolosGravados.push({
@@ -254,13 +256,13 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           hash: x.hash,
           por: x.usuario,
           em,
-          hospital: h,
+          estab: h,
         });
         return { id, versao };
       },
       registrarCiclo: async (x) => {
-        // W0-05: a oferta conferida na gravação (como o gravador SGH_ faz na transação).
-        const doHospital = this.eventosOnco.filter((e) => e.hospital === h);
+        // A oferta conferida na gravação (como a porta do banco faz na transação).
+        const doHospital = this.eventosOnco.filter((e) => e.estab === h);
         if (doHospital.some((e) => e.evento === 'versao-revogada' && e.protocolo === x.protocolo))
           throw recusa(
             'versao-revogada',
@@ -279,18 +281,18 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
         if (
           this.ciclosGravados.some(
             (c0) =>
-              c0.hospital === h &&
+              c0.estab === h &&
               c0.paciente === x.paciente &&
               c0.codigoProtocolo === x.codigoProtocolo &&
               c0.curso === (x.curso ?? 1) &&
               c0.numero === x.numero,
           )
         )
-          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "SGH_UQ_PEP_ONCO_CICLO_CURSO"');
+          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "uq_ciclo_quimioterapia_numero"');
         const id = this.seq++;
         this.ciclosGravados.push({
           id,
-          reg: x.reg,
+          internacao: x.internacao,
           paciente: x.paciente,
           protocolo: x.protocolo,
           codigoProtocolo: x.codigoProtocolo,
@@ -314,14 +316,14 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           motivoCurso: x.motivoCurso ?? null,
           prescricoes: [],
           andamento: 'ativo',
-          hospital: h,
+          estab: h,
         });
         return id;
       },
       vincularPrescricao: async (x) => {
         const i = this.ciclosGravados.findIndex(
           (c0) =>
-            c0.hospital === h && c0.id === x.ciclo && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
+            c0.estab === h && c0.id === x.ciclo && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
         );
         if (i < 0)
           throw recusa(
@@ -335,7 +337,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
             'A data prevista do ciclo mudou (outra pessoa o ajustou): abra de novo e escolha a prescrição da data nova.',
           );
         if (c0.prescricoes.includes(x.prescricao))
-          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "SGH_PK_PEP_ONCO_CICLO_PRESC"');
+          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "uq_ciclo_quimioterapia_prescricao_par"');
         this.ciclosGravados[i] = {
           ...c0,
           prescricoes: [...c0.prescricoes, x.prescricao].sort((a, b) => a - b),
@@ -345,7 +347,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       validarCiclo: async (x) => {
         const i = this.ciclosGravados.findIndex(
           (c0) =>
-            c0.hospital === h &&
+            c0.estab === h &&
             c0.id === x.id &&
             c0.situacao === 'prescrito' &&
             c0.andamento === 'ativo' &&
@@ -367,29 +369,29 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       registrarPartograma: async (x) => {
         if (x.bcf !== null && (x.bcf < 50 || x.bcf > 220))
-          throw new Error('Operation violates CHECK constraint SGH_CK_PEP_OBST_PART_FAIXA');
+          throw new Error('Operation violates CHECK constraint ck_partograma_registro_faixa');
         const id = this.seq++;
         this.pontosGravados.push({
-          ...omitir(x, 'pront', 'paciente', 'vinculo', 'usuario'),
+          ...omitir(x, 'prontuario', 'paciente', 'vinculo', 'usuario'),
           id,
           alertas: [...x.alertas],
           por: x.usuario,
           registradoEm: em,
-          hospital: h,
-          reg: x.reg,
+          estab: h,
+          internacao: x.internacao,
         });
         return id;
       },
       registrarRecemNascido: async (x) => {
         if (x.apgar5 < 7 && x.apgar10 === null)
-          throw new Error('Operation violates CHECK constraint SGH_CK_PEP_OBST_RN_APGAR');
+          throw new Error('Operation violates CHECK constraint ck_registro_nascimento_apgar');
         const id = this.seq++;
         this.rnsGravados.push({
-          ...omitir(x, 'pront', 'paciente', 'vinculo', 'usuario'),
+          ...omitir(x, 'prontuario', 'paciente', 'vinculo', 'usuario'),
           id,
           por: x.usuario,
           em,
-          hospital: h,
+          estab: h,
         });
         return id;
       },
@@ -397,8 +399,8 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
         const id = this.seq++;
         this.ordensGravadas.push({
           id,
-          reg: x.reg,
-          pront: x.pront,
+          internacao: x.internacao,
+          prontuario: x.prontuario,
           paciente: x.paciente,
           formula: x.formula,
           volumeMl: x.volumeMl,
@@ -416,14 +418,14 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           canceladaEm: null,
           motivoCancelamento: null,
           etiquetaEm: null,
-          hospital: h,
+          estab: h,
         });
         return id;
       },
       conferirOrdem: async (x) => {
         const i = this.ordensGravadas.findIndex(
           (o) =>
-            o.hospital === h &&
+            o.estab === h &&
             o.id === x.id &&
             o.situacao === 'preparada' &&
             o.canceladaEm === null &&
@@ -446,7 +448,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
         const id = this.seq++;
         this.eventosOnco.unshift({
           id,
-          hospital: h,
+          estab: h,
           evento: x.evento,
           codigoProtocolo: x.codigoProtocolo,
           protocolo: x.protocolo,
@@ -464,12 +466,12 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       revogarVersao: async (x) => {
         if (
           this.eventosOnco.some(
-            (e) => e.hospital === h && e.evento === 'versao-revogada' && e.protocolo === x.protocolo,
+            (e) => e.estab === h && e.evento === 'versao-revogada' && e.protocolo === x.protocolo,
           )
         )
           throw recusa('versao-ja-revogada', 'A versão do protocolo já foi revogada.');
         const daVersao = this.ciclosGravados.filter(
-          (c0) => c0.hospital === h && c0.protocolo === x.protocolo,
+          (c0) => c0.estab === h && c0.protocolo === x.protocolo,
         );
         const emAndamento = daVersao.filter((c0) => c0.andamento !== 'cancelado').length;
         if (emAndamento > x.emAndamentoCiente)
@@ -493,7 +495,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       mudarAndamentoCiclo: async (x) => {
         const i = this.ciclosGravados.findIndex(
-          (c0) => c0.hospital === h && c0.id === x.id && x.de.includes(c0.andamento),
+          (c0) => c0.estab === h && c0.id === x.id && x.de.includes(c0.andamento),
         );
         if (i < 0)
           throw recusa(
@@ -506,7 +508,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       ajustarCiclo: async (x) => {
         const i = this.ciclosGravados.findIndex(
           (c0) =>
-            c0.hospital === h && c0.id === x.id && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
+            c0.estab === h && c0.id === x.id && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
         );
         if (i < 0)
           throw recusa(
@@ -542,7 +544,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       desligarPrescricao: async (x) => {
         const i = this.ciclosGravados.findIndex(
           (c0) =>
-            c0.hospital === h &&
+            c0.estab === h &&
             c0.id === x.ciclo &&
             c0.situacao === 'prescrito' &&
             c0.prescricoes.includes(x.prescricao),
@@ -558,7 +560,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       alterarOrdem: async (x) => {
         const i = this.ordensGravadas.findIndex(
-          (o) => o.hospital === h && o.id === x.id && o.situacao === 'preparada' && o.canceladaEm === null,
+          (o) => o.estab === h && o.id === x.id && o.situacao === 'preparada' && o.canceladaEm === null,
         );
         if (i < 0)
           throw recusa(
@@ -589,7 +591,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       cancelarOrdem: async (x) => {
         const i = this.ordensGravadas.findIndex(
-          (o) => o.hospital === h && o.id === x.id && o.canceladaEm === null,
+          (o) => o.estab === h && o.id === x.id && o.canceladaEm === null,
         );
         if (i < 0) throw recusa('ordem-cancelada', 'A ordem já foi cancelada (ou não existe).');
         this.ordensGravadas[i] = {
@@ -602,7 +604,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       marcarEtiqueta: async (x) => {
         const i = this.ordensGravadas.findIndex(
-          (o) => o.hospital === h && o.id === x.id && o.etiquetaEm === null,
+          (o) => o.estab === h && o.id === x.id && o.etiquetaEm === null,
         );
         if (i < 0) return 0;
         this.ordensGravadas[i] = { ...this.ordensGravadas[i]!, etiquetaEm: em };
@@ -612,7 +614,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
         const id = this.seq++;
         this.alteracoesGravadas.unshift({
           id,
-          hospital: h,
+          estab: h,
           idRegistro: x.id,
           evento: x.evento,
           antes: x.antes,
@@ -631,24 +633,24 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
 
   async eventosProtocolos(c: ContextoEspecialidades) {
     return this.eventosOnco
-      .filter((e) => e.hospital === c.hospital && e.ciclo === null && e.evento !== 'prescricao-desligada')
-      .map((e) => omitir(e, 'hospital'));
+      .filter((e) => e.estab === chaveDe(c) && e.ciclo === null && e.evento !== 'prescricao-desligada')
+      .map((e) => omitir(e, 'estab'));
   }
 
   async eventosCiclos(c: ContextoEspecialidades, ciclos: readonly number[]) {
     return this.eventosOnco
-      .filter((e) => e.hospital === c.hospital && e.ciclo !== null && ciclos.includes(e.ciclo))
-      .map((e) => omitir(e, 'hospital'));
+      .filter((e) => e.estab === chaveDe(c) && e.ciclo !== null && ciclos.includes(e.ciclo))
+      .map((e) => omitir(e, 'estab'));
   }
 
   async ciclosDaVersao(c: ContextoEspecialidades, protocolo: number) {
     const todos = this.ciclosGravados
-      .filter((x) => x.hospital === c.hospital && x.protocolo === protocolo)
+      .filter((x) => x.estab === chaveDe(c) && x.protocolo === protocolo)
       .sort((a, b) => b.dataPrevista.localeCompare(a.dataPrevista) || b.id - a.id);
     const itens = todos.slice(0, this.tetoCiclosDaVersao).map((x) => ({
       id: x.id,
       paciente: x.paciente,
-      internacao: x.reg,
+      internacao: x.internacao,
       numero: x.numero,
       curso: x.curso,
       dataPrevista: x.dataPrevista,
@@ -665,8 +667,8 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
 
   async alteracoesOrdens(c: ContextoEspecialidades, ids: readonly number[]) {
     return this.alteracoesGravadas
-      .filter((x) => x.hospital === c.hospital && ids.includes(x.idRegistro))
-      .map((x) => omitir(x, 'hospital'));
+      .filter((x) => x.estab === chaveDe(c) && ids.includes(x.idRegistro))
+      .map((x) => omitir(x, 'estab'));
   }
 
   async relogio() {
@@ -681,10 +683,10 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
   async internacoes(_c: ContextoEspecialidades, termo: string) {
     const t = termo.trim().toUpperCase();
     const itens: InternacaoDaBusca[] = SINTETICOS.map((s) => this.internado(s))
-      .filter((i) => !t || i.nome.includes(t) || String(i.reg) === t || String(i.pront) === t)
+      .filter((i) => !t || i.nome.includes(t) || String(i.internacao) === t || String(i.prontuario) === t)
       .map((i) => ({
-        reg: i.reg,
-        prontuario: i.pront,
+        internacao: i.internacao,
+        prontuario: i.prontuario,
         nome: i.nome,
         leito: { bloco: i.bloco, acomodacao: i.acomodacao, leito: i.leito },
         entrada: i.admissao,
@@ -692,8 +694,8 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
     return { itens, cortada: false };
   }
 
-  async internacao(_c: ContextoEspecialidades, reg: number) {
-    const s = SINTETICOS.find((x) => x.reg === reg);
+  async internacao(_c: ContextoEspecialidades, internacao: number) {
+    const s = SINTETICOS.find((x) => x.internacao === internacao);
     return s ? this.internado(s) : null;
   }
 
@@ -709,59 +711,59 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
     return TIPOS_PARTO;
   }
 
-  async exames(c: ContextoEspecialidades, reg: number) {
+  async exames(c: ContextoEspecialidades, internacao: number) {
     return this.examesGravados
-      .filter((x) => x.hospital === c.hospital && x.reg === reg)
+      .filter((x) => x.estab === chaveDe(c) && x.internacao === internacao)
       .sort((a, b) => b.id - a.id)
-      .map((x) => omitir(x, 'hospital'));
+      .map((x) => omitir(x, 'estab'));
   }
 
   async protocolos(c: ContextoEspecialidades) {
     return this.protocolosGravados
-      .filter((p) => p.hospital === c.hospital)
+      .filter((p) => p.estab === chaveDe(c))
       .sort((a, b) => a.codigo.localeCompare(b.codigo) || b.versao - a.versao)
-      .map((p) => omitir(p, 'hospital'));
+      .map((p) => omitir(p, 'estab'));
   }
 
   async protocolo(c: ContextoEspecialidades, id: number) {
-    const p = this.protocolosGravados.find((x) => x.hospital === c.hospital && x.id === id);
+    const p = this.protocolosGravados.find((x) => x.estab === chaveDe(c) && x.id === id);
     if (!p) return null;
     const max = Math.max(
       ...this.protocolosGravados
-        .filter((x) => x.hospital === c.hospital && x.codigo === p.codigo)
+        .filter((x) => x.estab === chaveDe(c) && x.codigo === p.codigo)
         .map((x) => x.versao),
     );
-    const resto = omitir(p, 'hospital');
+    const resto = omitir(p, 'estab');
     return { ...resto, vigente: p.versao === max };
   }
 
   async ciclosDoPaciente(c: ContextoEspecialidades, paciente: number) {
     return this.ciclosGravados
-      .filter((x) => x.hospital === c.hospital && x.paciente === paciente)
+      .filter((x) => x.estab === chaveDe(c) && x.paciente === paciente)
       .sort((a, b) => b.dataPrevista.localeCompare(a.dataPrevista) || b.numero - a.numero)
-      .map((x) => omitir(x, 'hospital'));
+      .map((x) => omitir(x, 'estab'));
   }
 
   async ciclo(c: ContextoEspecialidades, id: number) {
-    const x = this.ciclosGravados.find((y) => y.hospital === c.hospital && y.id === id);
+    const x = this.ciclosGravados.find((y) => y.estab === chaveDe(c) && y.id === id);
     if (!x) return null;
-    const resto = omitir(x, 'hospital');
+    const resto = omitir(x, 'estab');
     return resto;
   }
 
   async ciclosAValidar(c: ContextoEspecialidades) {
     return this.ciclosGravados
-      .filter((x) => x.hospital === c.hospital && x.situacao === 'prescrito' && x.andamento === 'ativo')
-      .map((x) => omitir(x, 'hospital'));
+      .filter((x) => x.estab === chaveDe(c) && x.situacao === 'prescrito' && x.andamento === 'ativo')
+      .map((x) => omitir(x, 'estab'));
   }
 
   /**
    * As prescrições sintéticas do paciente da oncologia: uma vigente desde a admissão (sem fim) e uma suspensa; a
    * vigência cobre o dia a partir da admissão.
    */
-  async prescricoesDoDia(_c: ContextoEspecialidades, reg: number, paciente: number, dia: string) {
-    const s = SINTETICOS.find((x) => x.reg === reg && x.paciente === paciente);
-    if (!s || reg !== 950_102) return [];
+  async prescricoesDoDia(_c: ContextoEspecialidades, internacao: number, paciente: number, dia: string) {
+    const s = SINTETICOS.find((x) => x.internacao === internacao && x.paciente === paciente);
+    if (!s || internacao !== 950_102) return [];
     const inicio = this.internado(s).admissao;
     if (inicio.slice(0, 10) > dia) return [];
     return [
@@ -770,29 +772,30 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
     ];
   }
 
-  async partograma(c: ContextoEspecialidades, reg: number) {
+  /** Os alertas são os gravados no momento do registro (o controller os calcula com o parâmetro da fase ativa). */
+  async partograma(c: ContextoEspecialidades, internacao: number) {
     return this.pontosGravados
-      .filter((x) => x.hospital === c.hospital && x.reg === reg)
+      .filter((x) => x.estab === chaveDe(c) && x.internacao === internacao)
       .sort((a, b) => a.em.localeCompare(b.em) || a.id - b.id)
-      .map((x) => omitir(x, 'hospital', 'reg'));
+      .map((x) => omitir(x, 'estab', 'internacao'));
   }
 
-  async recemNascidos(c: ContextoEspecialidades, reg: number) {
+  async recemNascidos(c: ContextoEspecialidades, internacao: number) {
     return this.rnsGravados
-      .filter((x) => x.hospital === c.hospital && x.reg === reg)
-      .map((x) => omitir(x, 'hospital', 'reg'));
+      .filter((x) => x.estab === chaveDe(c) && x.internacao === internacao)
+      .map((x) => omitir(x, 'estab', 'internacao'));
   }
 
   async ordensDoDia(c: ContextoEspecialidades, dia: string) {
     return this.ordensGravadas
-      .filter((x) => x.hospital === c.hospital && x.preparoEm.startsWith(dia))
-      .map((x) => omitir(x, 'hospital'));
+      .filter((x) => x.estab === chaveDe(c) && x.preparoEm.startsWith(dia))
+      .map((x) => omitir(x, 'estab'));
   }
 
   async ordem(c: ContextoEspecialidades, id: number) {
-    const x = this.ordensGravadas.find((y) => y.hospital === c.hospital && y.id === id);
+    const x = this.ordensGravadas.find((y) => y.estab === chaveDe(c) && y.id === id);
     if (!x) return null;
-    const resto = omitir(x, 'hospital');
+    const resto = omitir(x, 'estab');
     return resto;
   }
 }

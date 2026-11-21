@@ -17,7 +17,10 @@
 //   GET  /api/hotelaria/rouparia/indicadores?de=&ate=     kg por paciente-dia, índice de perda e custo por paciente-dia,
 //                                                         com as contas impressas
 //   GET  /api/hotelaria/rouparia/fornecedores?termo=      a lavanderia terceirizada (busca no cadastro de fornecedores)
-// Tudo só do novo (SGH_HOT_ROUPA_*), com a SGH_TRILHA na mesma transação. Nasce desligado (chave `rouparia`, POL-3).
+// Cada movimento vai ao documento próprio do modelo (coleta, remessa, retorno, distribuição e baixa do enxoval), com a
+// trilha na mesma transação, pela porta própria (MariaDB pelo @sgh/nucleo). Nasce desligado (chave `rouparia`, POL-3).
+// Melhoria: a repetição do pedido pela Idempotency-Key é a do Executor (a mesma chave com outro movimento é recusada);
+// quem grava é o usuário da sessão pelo id (o contexto), não o login em texto.
 import {
   Body,
   Controller,
@@ -81,8 +84,20 @@ import {
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { type GravadorRouparia, PORTA_ROUPARIA, type PortaRouparia, type SetorRouparia } from './porta.js';
+import { documentoDoMovimento } from './porta-propria.js';
 
 const E = EVENTOS_AUDITAVEIS;
+/** A tabela de cada movimento no modelo (a trilha registra o documento). */
+const TABELA_DO_MOVIMENTO: Readonly<Record<string, string>> = {
+  coleta: 'coleta_roupa_suja',
+  envio: 'remessa_lavanderia',
+  retorno: 'retorno_lavanderia',
+  entrega: 'distribuicao_enxoval',
+  perda: 'baixa_enxoval',
+  inventario: 'inventario_enxoval',
+};
+/** Alvo de leitura das telas da rouparia (a auditoria da leitura). */
+const ALVO_LEITURA = 'rouparia';
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
 /** A situação da cota olha os movimentos do setor destes últimos dias (o último inventário e o que veio depois). */
 export const DIAS_SITUACAO_COTA = 90;
@@ -144,6 +159,11 @@ export class RoupariaController {
     );
   }
 
+  /** O id do documento no modelo (o número da tela compõe o documento e o tipo; a memória usa o próprio número). */
+  private idDoDocumento(numero: number): number {
+    return this.porta.destino === 'banco' ? (documentoDoMovimento(numero)?.id ?? numero) : numero;
+  }
+
   private chave(s: SessaoCadastro, doCorpo: string): string {
     const bruto = s.req.headers['idempotency-key'];
     const k = Array.isArray(bruto) ? bruto[0] : bruto;
@@ -187,7 +207,7 @@ export class RoupariaController {
     gravacao: GravacaoAgenda;
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_MOVIMENTO' };
+    req.sghAlvo = { tabelaAlvo: ALVO_LEITURA };
     const { hoje, agora } = await this.porta.relogio(s.porta);
     const [pecas, setores, cotas, abertos, deHoje, parametros, gravacao] = await Promise.all([
       this.porta.pecas(s.porta),
@@ -220,7 +240,7 @@ export class RoupariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ itens: MovimentoRoupa[]; cortada: boolean; proximo: number | null }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_MOVIMENTO' };
+    req.sghAlvo = { tabelaAlvo: ALVO_LEITURA };
     const vazio = (v: unknown) => (v === undefined || v === '' ? null : v);
     const f = esquemaFiltroMovimentosRoupa.safeParse({
       de: q['de'],
@@ -248,7 +268,7 @@ export class RoupariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ movimento: MovimentoRoupa; remessa: MovimentoRoupa | null }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_MOVIMENTO', idAlvo: id };
+    req.sghAlvo = { tabelaAlvo: ALVO_LEITURA, idAlvo: id };
     const m = await this.porta.movimento(s.porta, idDaRota(id));
     if (!m)
       throw new ErroProblema(
@@ -265,7 +285,7 @@ export class RoupariaController {
   @HttpCode(201)
   @Permissao(P.registrar)
   @AuditadoNoHandler(
-    'internacao.registrarMovimentoRoupa: SGH_HOT_ROUPA_MOVIMENTO e SGH_HOT_ROUPA_MOV_ITEM com a SGH_TRILHA na mesma transação',
+    'internacao.registrarMovimentoRoupa: o documento do movimento e as peças com a trilha na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoRouparia> {
     const s = sessaoDe(req);
@@ -276,26 +296,27 @@ export class RoupariaController {
       this.parametros(s),
       e.fornecedor !== null ? this.porta.fornecedorExiste(s.porta, e.fornecedor) : Promise.resolve(true),
     ]);
+    // A repetição pela chave: o mesmo movimento (tipo, data e setor) devolve o resultado gravado; outro é recusado.
+    const pedido = {
+      ...s.porta,
+      pedido: { chave, impressao: `${e.tipo}:${e.data}:${e.centroCusto ?? 'central'}` },
+    };
     const x = await this.apoio.sgh(
-      s,
+      { ...s, porta: pedido },
       E.movimentoRoupaRegistrado.codigo,
       P.registrar,
-      (y: { id: number }) => ({
-        tabela: 'SGH_HOT_ROUPA_MOVIMENTO',
-        id: String(y.id),
+      (y: {
+        id: number;
+        versao: number;
+        repetida: boolean;
+        conferencia: ConferenciaRetornoRoupa | null;
+      }) => ({
+        tabela: TABELA_DO_MOVIMENTO[e.tipo] ?? 'rouparia',
+        id: String(this.idDoDocumento(y.id)),
         paciente: null,
         chave: `${e.tipo}:${e.centroCusto ?? 'central'}:${e.data}`,
       }),
       async (g) => {
-        const ja = await g.movimentoPelaChave(chave);
-        if (ja) {
-          if (ja.tipo !== e.tipo || ja.data !== e.data || ja.centroCusto !== e.centroCusto)
-            throw recusaRouparia({
-              codigo: 'chave-de-outro-movimento',
-              mensagem: MENSAGENS_ROUPARIA['chave-de-outro-movimento'],
-            });
-          return { id: ja.id, versao: ja.versao, repetida: true, conferencia: null };
-        }
         const [relogio, pecas, remessa] = await Promise.all([
           g.relogio(),
           g.pecas(),
@@ -319,7 +340,6 @@ export class RoupariaController {
             : null;
         const y = await g.registrarMovimento({
           ...e,
-          usuario: s.login,
           diferencaKg: conferencia?.diferencaKg ?? null,
           diferencaPct: conferencia?.diferencaPct ?? null,
           ocorrencia: conferencia?.ocorrencia ?? false,
@@ -345,7 +365,7 @@ export class RoupariaController {
   @HttpCode(201)
   @Permissao(P.registrar)
   @AuditadoNoHandler(
-    'internacao.cancelarMovimentoRoupa: SGH_HOT_ROUPA_MOVIMENTO com a SGH_TRILHA na mesma transação',
+    'internacao.cancelarMovimentoRoupa: o documento do movimento com a trilha na mesma transação',
   )
   async cancelar(
     @Param('id') id: string,
@@ -360,7 +380,12 @@ export class RoupariaController {
       s,
       E.movimentoRoupaCancelado.codigo,
       P.registrar,
-      { tabela: 'SGH_HOT_ROUPA_MOVIMENTO', id: String(alvo), paciente: null, chave: 'cancelamento' },
+      {
+        tabela: TABELA_DO_MOVIMENTO[documentoDoMovimento(alvo)?.tipo ?? ''] ?? 'rouparia',
+        id: String(this.idDoDocumento(alvo)),
+        paciente: null,
+        chave: 'cancelamento',
+      },
       async (g) => {
         const [m, relogio] = await Promise.all([g.movimento(alvo), g.relogio()]);
         const r = conferirCancelamentoRoupa(m, {
@@ -373,7 +398,6 @@ export class RoupariaController {
           id: alvo,
           versaoVista: e.versaoVista,
           motivo: e.motivo,
-          usuario: s.login,
           remessa: m!.tipo === 'retorno' ? m!.remessa : null,
         });
       },
@@ -390,7 +414,7 @@ export class RoupariaController {
       E.pecaRoupaGravada.codigo,
       P.registrar,
       (y: { id: number }) => ({
-        tabela: 'SGH_HOT_ROUPA_PECA',
+        tabela: 'peca_enxoval',
         id: String(y.id),
         paciente: null,
         chave: e.categoria,
@@ -407,9 +431,7 @@ export class RoupariaController {
         const r = conferirPecaRoupa(e, { id, pecas })[0];
         if (r) throw recusaRouparia(r);
         const { versaoVista, ...p } = e;
-        return id === null
-          ? g.incluirPeca({ ...p, usuario: s.login })
-          : g.alterarPeca({ ...p, usuario: s.login, id, versaoVista: versaoVista! });
+        return id === null ? g.incluirPeca(p) : g.alterarPeca({ ...p, id, versaoVista: versaoVista! });
       },
     );
   }
@@ -417,7 +439,7 @@ export class RoupariaController {
   @Post('pecas')
   @HttpCode(201)
   @Permissao(P.registrar)
-  @AuditadoNoHandler('internacao.gravarPecaRoupa: SGH_HOT_ROUPA_PECA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.gravarPecaRoupa: peca_enxoval com a trilha na mesma transação')
   async incluirPeca(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const x = await this.gravarPeca(sessaoDe(req), b, null);
     return { ok: true as const, ...x, mensagem: 'Peça cadastrada no enxoval.' };
@@ -425,7 +447,7 @@ export class RoupariaController {
 
   @Put('pecas/:id')
   @Permissao(P.registrar)
-  @AuditadoNoHandler('internacao.gravarPecaRoupa: SGH_HOT_ROUPA_PECA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.gravarPecaRoupa: peca_enxoval com a trilha na mesma transação')
   async alterarPeca(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const x = await this.gravarPeca(sessaoDe(req), b, idDaRota(id));
     return { ok: true as const, ...x, mensagem: 'Peça alterada.' };
@@ -439,7 +461,7 @@ export class RoupariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<SituacaoCotaSetor> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_COTA', idAlvo: centro };
+    req.sghAlvo = { tabelaAlvo: 'cota_enxoval_setor', idAlvo: centro };
     const cc = idDaRota(centro);
     const { hoje } = await this.porta.relogio(s.porta);
     const [cotas, movs] = await Promise.all([
@@ -456,7 +478,7 @@ export class RoupariaController {
 
   @Put('cotas')
   @Permissao(P.registrar)
-  @AuditadoNoHandler('internacao.gravarCotasRoupa: SGH_HOT_ROUPA_COTA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.gravarCotasRoupa: cota_enxoval_setor com a trilha na mesma transação')
   async gravarCotas(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCotasSetor, b);
@@ -478,7 +500,7 @@ export class RoupariaController {
       E.cotaRoupaGravada.codigo,
       P.registrar,
       {
-        tabela: 'SGH_HOT_ROUPA_COTA',
+        tabela: 'cota_enxoval_setor',
         id: String(e.centroCusto),
         paciente: null,
         chave: String(e.centroCusto),
@@ -491,7 +513,7 @@ export class RoupariaController {
             mensagem: MENSAGENS_ROUPARIA['peca-inexistente'],
             campos: ['cotas'],
           });
-        return g.gravarCotas({ centroCusto: e.centroCusto, cotas: e.cotas, usuario: s.login });
+        return g.gravarCotas({ centroCusto: e.centroCusto, cotas: e.cotas });
       },
     );
     return {
@@ -516,7 +538,7 @@ export class RoupariaController {
     conta: string;
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_MOVIMENTO' };
+    req.sghAlvo = { tabelaAlvo: ALVO_LEITURA };
     const { de, ate } = periodo(q);
     const linhas = await this.porta.kgPorSetorDia(s.porta, de, ate);
     const porSetor = kgPorSetorNoPeriodo(linhas);
@@ -543,7 +565,7 @@ export class RoupariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<IndicadoresRouparia> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ROUPA_MOVIMENTO' };
+    req.sghAlvo = { tabelaAlvo: ALVO_LEITURA };
     const { de, ate } = periodo(q);
     const [totais, pacientesDia, inventarios, parametros] = await Promise.all([
       this.porta.totais(s.porta, de, ate),

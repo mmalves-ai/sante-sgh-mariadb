@@ -1,6 +1,7 @@
 // M60 (etapa 3) pela HTTP, com a sessão real sobre a fonte sintética, a porta EM MEMÓRIA e as filas de um dublê (nada
 // conecta a banco nem ao Valkey): a fumaça do servidor do estabelecimento ativo, as recusas (sem permissão,
 // sonda sem o segredo) e, no serviço, o servidor errado em produção (fuso, relógio, Valkey, worker, estrutura e chaves).
+// A app é a migrada (F2.2), com o módulo da implantação registrado pelas opções do teste.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   esquemaFumacaServidor,
@@ -10,16 +11,17 @@ import {
   ROTA_SONDA_FUMACA,
 } from '@sgh/contratos';
 import { formatarHoraDeParede } from '@sgh/dominio-config';
-import type { MarcaSchema } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import type { FonteConfiguracao } from '../config/public-api.js';
-import { impressaoDaMarca, ServicoFumacaServidor } from './aplicacao/fumaca.js';
+import { impressaoDaEstrutura, ServicoFumacaServidor } from './aplicacao/fumaca.js';
 import { FilasBullmq, filasDoAmbiente, FilasSemValkey, type PortaFilasImplantacao } from './filas.js';
-import { chavesEsperadasDoAmbiente, fusoDoProcesso } from './fumaca.controller.js';
+import { chavesEsperadasDoAmbiente, estruturaHomologadaDoAmbiente, fusoDoProcesso } from './fumaca.controller.js';
+import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo } from './modulo.js';
 import { PortaImplantacaoMemoria } from './porta-memoria.js';
 
 const filasBoas = (): PortaFilasImplantacao => ({
@@ -37,14 +39,19 @@ const filasBoas = (): PortaFilasImplantacao => ({
     ),
 });
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', TZ: 'UTC' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', TZ: 'UTC', API_MODULOS: 'configuracao_teste,implantacao' };
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha: new RegistradorTrilhaMemoria(),
-    scriptsDoPacote: () => [{ numero: 1, hash: 'a'.repeat(64) }],
-    filasImplantacao: filasBoas(),
+    registro: {
+      configuracao_teste: async () => ({ modulo: (ctx) => moduloConfiguracaoDeTeste(ctx) }),
+      implantacao: async () => ({
+        modulo: (ctx) =>
+          modulo(ctx, { scriptsDoPacote: () => [{ numero: 1, hash: 'a'.repeat(64) }], filas: filasBoas() }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -150,32 +157,22 @@ describe('M60.3: fumaça do servidor pela HTTP', { timeout: 60_000 }, () => {
 
 describe('M60.3: fumaça do servidor (serviço)', () => {
   const T = Date.UTC(2026, 9, 27, 15, 0, 0);
-  const marca = (estado: MarcaSchema['estado']): MarcaSchema => ({
-    estabelecimento: 'pc',
-    estado,
-    verificadaEm: new Date(T).toISOString(),
-    resumo: 'f'.repeat(64),
-    resumoHomologado: 'e'.repeat(64),
-    contagens: null,
-    diferencas: {},
-    tabelasBloqueadas: ['TAB_A', 'TAB_B'],
-    bloqueiaTudo: false,
-    motivo: null,
-    duracaoMs: 10,
-  });
+  const ATUAL = { resumo: 'f'.repeat(64), tabelas: 2 };
+  const HOMOLOGADA = 'e'.repeat(64);
   const fonteChaves = (linhas: unknown[]): FonteConfiguracao =>
     ({ chaves: () => Promise.resolve(linhas) }) as unknown as FonteConfiguracao;
 
   it('servidor errado em produção: fuso local, relógio 8 s atrasado, sem Valkey, estrutura divergente e chave ligada', async () => {
-    const porta = new PortaImplantacaoMemoria(
+    const memoria = new PortaImplantacaoMemoria(
       () => [],
       () => T - 8_000,
     );
+    const porta = Object.assign(memoria, { estrutura: () => Promise.resolve(ATUAL) });
     const s = new ServicoFumacaServidor({
       porta,
       filas: new FilasSemValkey(),
       ambiente: 'producao',
-      marcaSchema: () => marca('divergente'),
+      estruturaHomologada: () => HOMOLOGADA,
       configuracao: fonteChaves([
         {
           tipo: 'recurso',
@@ -202,7 +199,7 @@ describe('M60.3: fumaça do servidor (serviço)', () => {
       chaves: 'falha',
     });
     expect(f.situacao).toBe('falha');
-    expect(f.impressao).toMatchObject({ resumo: 'f'.repeat(16), tabelasBloqueadas: 2 });
+    expect(f.impressao).toMatchObject({ estado: 'divergente', resumo: 'f'.repeat(16), tabelasBloqueadas: 0 });
     expect(f.chaves.ligadas).toEqual([
       { tipo: 'recurso', chave: 'pep.prontuario.consulta', hospital: 0, setor: 0, grupo: 0, pessoa: 1 },
     ]);
@@ -210,19 +207,19 @@ describe('M60.3: fumaça do servidor (serviço)', () => {
     expect(JSON.stringify(f)).not.toContain('ALGUEM');
   });
 
-  it('o banco não respondeu e as chaves não foram lidas: relógio e chaves em falha, o resto segue', async () => {
+  it('o banco não respondeu e as chaves não foram lidas: relógio, estrutura e chaves em falha, o resto segue', async () => {
     const porta = {
-      ...new PortaImplantacaoMemoria(() => []),
-      destino: 'legado' as const,
+      destino: 'banco' as const,
       conexao: () => Promise.reject(new Error('x')),
-      scriptsRegistrados: () => Promise.reject(new Error('x')),
+      migracoesRegistradas: () => Promise.reject(new Error('x')),
       relogioBanco: () => Promise.reject(new Error('Unable to complete network request')),
+      estrutura: () => Promise.reject(new Error('x')),
     };
     const s = new ServicoFumacaServidor({
       porta,
       filas: filasBoas(),
       ambiente: 'producao',
-      marcaSchema: () => null,
+      estruturaHomologada: () => HOMOLOGADA,
       configuracao: {
         chaves: () => Promise.reject(new Error('x')),
       } as unknown as FonteConfiguracao,
@@ -232,13 +229,22 @@ describe('M60.3: fumaça do servidor (serviço)', () => {
     const f = await s.conferir({ rede: 'r', hospital: 'pc' });
     const sit = Object.fromEntries(f.itens.map((i) => [i.codigo, i.situacao]));
     expect(sit).toMatchObject({ fuso: 'ok', relogio: 'falha', valkey: 'ok', worker: 'ok', chaves: 'falha' });
-    expect(sit['impressao-digital']).toBe('alerta');
+    expect(sit['impressao-digital']).toBe('falha');
+    expect(f.impressao.estado).toBe('indisponivel');
   });
 
-  it('sem núcleo (indefinida) a estrutura é indisponível; sem verificação ainda, nula', () => {
-    expect(impressaoDaMarca(undefined).estado).toBe('indisponivel');
-    expect(impressaoDaMarca(null).estado).toBeNull();
-    expect(impressaoDaMarca(marca('homologado')).resumoHomologado).toBe('e'.repeat(16));
+  it('a impressão da estrutura: indisponível sem resposta, sem homologação sem a do pacote, igual ou divergente', () => {
+    const em = new Date(T).toISOString();
+    expect(impressaoDaEstrutura(undefined, HOMOLOGADA, em).estado).toBe('indisponivel');
+    expect(impressaoDaEstrutura(ATUAL, null, em).estado).toBe('sem-homologacao');
+    expect(impressaoDaEstrutura(ATUAL, 'F'.repeat(64), em)).toMatchObject({
+      estado: 'homologado',
+      resumoHomologado: 'f'.repeat(16),
+      verificadaEm: em,
+    });
+    expect(impressaoDaEstrutura(ATUAL, HOMOLOGADA, em).estado).toBe('divergente');
+    expect(estruturaHomologadaDoAmbiente({ ESTRUTURA_HOMOLOGADA: 'x' })).toBeNull();
+    expect(estruturaHomologadaDoAmbiente({ ESTRUTURA_HOMOLOGADA: HOMOLOGADA })).toBe(HOMOLOGADA);
   });
 
   it('variáveis: chaves esperadas inválidas contam como vazias; fuso pela TZ', () => {
@@ -322,7 +328,7 @@ describe('M60.3: Valkey e filas (porta)', () => {
       ),
       filas: filasBoas(),
       ambiente: 'producao',
-      marcaSchema: () => null,
+      estruturaHomologada: () => null,
       configuracao: {
         chaves: () => Promise.resolve([]),
         valoresParametro: () => Promise.resolve(valores),
@@ -371,7 +377,7 @@ describe('M60.3: Valkey e filas (porta)', () => {
       ),
       filas: filasBoas(),
       ambiente: 'dev',
-      marcaSchema: () => null,
+      estruturaHomologada: () => null,
       configuracao: null,
       chavesEsperadas: [],
       fuso: () => 'UTC',

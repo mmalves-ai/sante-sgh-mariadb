@@ -1,0 +1,91 @@
+{
+  "lote": "02-12",
+  "registrar": [
+    "portaria",
+    "precos"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/portaria/aplicacao/porteiro.autorizacao.int.spec.ts",
+    "src/modulos/portaria/fotos.ts",
+    "src/modulos/portaria/modulo.ts",
+    "src/modulos/portaria/porta-memoria.ts",
+    "src/modulos/portaria/porta-propria.int.spec.ts",
+    "src/modulos/portaria/porta-propria.ts",
+    "src/modulos/portaria/porta.ts",
+    "src/modulos/portaria/portaria-revisao.spec.ts",
+    "src/modulos/portaria/portaria.controller.ts",
+    "src/modulos/portaria/portaria.spec-util.ts",
+    "src/modulos/portaria/portaria.spec.ts",
+    "src/modulos/portaria/public-api.ts",
+    "src/modulos/portaria/servico.ts",
+    "src/modulos/portaria/tipos.ts",
+    "src/modulos/precos/base.ts",
+    "src/modulos/precos/campos-contrato.ts",
+    "src/modulos/precos/convenios.controller.ts",
+    "src/modulos/precos/escopo.spec.ts",
+    "src/modulos/precos/fonte-memoria.ts",
+    "src/modulos/precos/fonte-propria.int.spec.ts",
+    "src/modulos/precos/fonte-propria.ts",
+    "src/modulos/precos/fonte.ts",
+    "src/modulos/precos/importacoes.controller.ts",
+    "src/modulos/precos/modulo.ts",
+    "src/modulos/precos/motor.controller.ts",
+    "src/modulos/precos/operacoes.ts",
+    "src/modulos/precos/precos-correcao.spec.ts",
+    "src/modulos/precos/precos.controller.ts",
+    "src/modulos/precos/precos.spec.ts",
+    "src/modulos/precos/public-api.ts",
+    "src/modulos/precos/servico.ts",
+    "src/modulos/precos/simbolos.ts",
+    "src/modulos/precos/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "visita, regra_visita_unidade, bloqueio_visitante, pessoa_portaria, acompanhante_internacao, evento_acesso_portaria",
+      "motivo": "Portaria: validade do crachá e chave do pedido na visita (hoje a validade é derivada da regra vigente e o reenvio do mesmo pedido é recusado 'ja-em-visita'); exceção e local em colunas próprias (hoje na observação); idade mínima, duração, conduta no isolamento e observação da regra (hoje 'modelo-pendente' se diferentes do padrão); limite, inclusão do acompanhante, documento judicial e motivo da revogação do bloqueio (hoje 'modelo-pendente'; o motivo da revogação vai à trilha); prazo de guarda e anonimização do visitante (o expurgo responde 'modelo-pendente'); o visitante no acompanhante (hoje pelo documento); o evento da catraca ligado ao terminal da portaria (hoje 'modelo-pendente'). Arquivo sugerido: 09_HOT/05_tabelas.sql. A visita a outro destino hoje exige setor cadastrado do estabelecimento (setor_funcional, pelo código, sigla ou nome); o local livre responde 'modelo-pendente' até local_destino e o CHECK ck_visita_visitado ajustado.",
+      "ddl": "-- HOT (lote 02-12): o que a portaria ainda não guarda no modelo.\nALTER TABLE visita\n  ADD COLUMN cracha_valido_ate DATETIME(3) NULL COMMENT 'Validade do crachá emitido na entrada' AFTER cracha_visitante_id,\n  ADD COLUMN chave_pedido VARCHAR(80) NULL COMMENT 'Chave do pedido (Idempotency-Key): o reenvio devolve a mesma visita' AFTER observacao,\n  ADD COLUMN excecao VARCHAR(200) NULL COMMENT 'Exceção autorizada pela supervisão (fora do horário, limite)' AFTER chave_pedido,\n  ADD COLUMN local_destino VARCHAR(150) NULL COMMENT 'Local visitado quando o destino não é paciente nem setor cadastrado' AFTER excecao,\n  ADD COLUMN origem_saida VARCHAR(20) NULL COMMENT 'portaria, catraca ou expirada' AFTER saida_usuario_id,\n  ADD CONSTRAINT ck_visita_origem_saida CHECK (origem_saida IS NULL OR origem_saida IN ('portaria','catraca','expirada')),\n  ADD UNIQUE KEY uq_visita_chave_pedido (estabelecimento_id, chave_pedido),\n  DROP CONSTRAINT ck_visita_visitado,\n  ADD CONSTRAINT ck_visita_visitado CHECK (paciente_id IS NOT NULL OR setor_funcional_id IS NOT NULL OR visitado_colaborador_id IS NOT NULL OR local_destino IS NOT NULL);\nALTER TABLE regra_visita_unidade\n  ADD COLUMN idade_minima_anos SMALLINT UNSIGNED NULL COMMENT 'Idade mínima do visitante',\n  ADD COLUMN duracao_maxima_minutos SMALLINT UNSIGNED NULL COMMENT 'Duração máxima da visita',\n  ADD COLUMN conduta_isolamento VARCHAR(20) NOT NULL DEFAULT 'orientar' COMMENT 'Paciente em isolamento: bloquear ou orientar',\n  ADD COLUMN observacao VARCHAR(500) NULL,\n  ADD COLUMN excluido_em DATETIME(3) NULL,\n  ADD COLUMN excluido_por BIGINT UNSIGNED NULL,\n  ADD CONSTRAINT ck_regra_visita_unidade_isolamento CHECK (conduta_isolamento IN ('bloquear','orientar'));\nALTER TABLE bloqueio_visitante\n  ADD COLUMN limite_visitantes TINYINT UNSIGNED NULL COMMENT 'Limite de visitantes simultâneos (abrangência limite)',\n  ADD COLUMN inclui_acompanhante BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Barra também o acompanhante (ordem judicial ou decisão clínica)',\n  ADD COLUMN documento_referencia VARCHAR(60) NULL COMMENT 'Processo ou documento da ordem judicial',\n  ADD COLUMN motivo_inativacao VARCHAR(500) NULL COMMENT 'Motivo da revogação',\n  ADD CONSTRAINT ck_bloqueio_visitante_limite CHECK (limite_visitantes IS NULL OR limite_visitantes BETWEEN 1 AND 10);\n-- e o CHECK de abrangência passa a aceitar 'limite' (paciente_id obrigatório).\nALTER TABLE pessoa_portaria\n  ADD COLUMN guarda_ate DATE NULL COMMENT 'Fim do prazo de guarda do cadastro (LGPD)',\n  ADD COLUMN anonimizada_em DATETIME(3) NULL COMMENT 'Cadastro anonimizado ao vencer a guarda',\n  DROP CONSTRAINT ck_pessoa_portaria_identificacao,\n  ADD CONSTRAINT ck_pessoa_portaria_identificacao CHECK (anonimizada_em IS NOT NULL OR cpf IS NOT NULL OR numero_documento IS NOT NULL),\n  ADD KEY ix_pessoa_portaria_guarda (guarda_ate);\nALTER TABLE acompanhante_internacao\n  ADD COLUMN pessoa_portaria_id BIGINT UNSIGNED NULL COMMENT 'Cadastro da pessoa na portaria' AFTER pessoa_fisica_id,\n  ADD COLUMN motivo_fim VARCHAR(500) NULL,\n  ADD KEY ix_acompanhante_internacao_pessoa_portaria (pessoa_portaria_id),\n  ADD CONSTRAINT fk_acompanhante_internacao_pessoa_portaria_id FOREIGN KEY (pessoa_portaria_id) REFERENCES pessoa_portaria (id) ON DELETE RESTRICT;\nALTER TABLE evento_acesso_portaria\n  MODIFY dispositivo_acesso_id BIGINT UNSIGNED NULL,\n  ADD COLUMN terminal_acesso_id BIGINT UNSIGNED NULL AFTER dispositivo_acesso_id,\n  ADD COLUMN chave_evento VARCHAR(60) NULL COMMENT 'Identificador do evento no terminal (o reenvio não grava duas vezes)',\n  ADD CONSTRAINT ck_evento_acesso_portaria_equipamento CHECK (dispositivo_acesso_id IS NOT NULL OR terminal_acesso_id IS NOT NULL),\n  ADD UNIQUE KEY uq_evento_acesso_portaria_chave (terminal_acesso_id, chave_evento),\n  ADD CONSTRAINT fk_evento_acesso_portaria_terminal_acesso_id FOREIGN KEY (terminal_acesso_id) REFERENCES terminal_acesso (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "importacao_tabela_linha",
+      "motivo": "Preços: a importação de tabela (preparar, comparar, aprovar, rejeitar) precisa das linhas da carga; hoje gravarCarga/mudarSituacaoCarga respondem 'modelo-pendente' na fonte própria.",
+      "ddl": "CREATE TABLE importacao_tabela_linha (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  importacao_tabela_id BIGINT UNSIGNED NOT NULL,\n  numero_linha INT UNSIGNED NOT NULL,\n  item_faturavel_id BIGINT UNSIGNED NULL,\n  codigo_item VARCHAR(30) NULL,\n  descricao VARCHAR(255) NULL,\n  valores JSON NULL COMMENT 'Componentes lidos do arquivo',\n  valores_vigentes JSON NULL COMMENT 'Componentes vigentes antes da importação',\n  resultado VARCHAR(20) NOT NULL,\n  comparacao VARCHAR(20) NULL,\n  motivo VARCHAR(255) NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_importacao_tabela_linha_resultado CHECK (resultado IN ('valida','erro')),\n  CONSTRAINT ck_importacao_tabela_linha_comparacao CHECK (comparacao IS NULL OR comparacao IN ('novo','removido','alterado','igual')),\n  CONSTRAINT ck_importacao_tabela_linha_json CHECK ((valores IS NULL OR JSON_VALID(valores)) AND (valores_vigentes IS NULL OR JSON_VALID(valores_vigentes))),\n  UNIQUE KEY uq_importacao_tabela_linha (importacao_tabela_id, numero_linha),\n  KEY ix_importacao_tabela_linha_item (item_faturavel_id),\n  CONSTRAINT fk_importacao_tabela_linha_importacao FOREIGN KEY (importacao_tabela_id) REFERENCES importacao_tabela (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_importacao_tabela_linha_item FOREIGN KEY (item_faturavel_id) REFERENCES item_faturavel (id) ON DELETE RESTRICT\n) COMMENT='Linha do arquivo de uma carga de tabela de preço, com a validação e a comparação com o vigente';"
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py",
+      "motivo": "Domínios da portaria que a porta própria usa por significado/código e que o cliente novo não traz: tipo_visitante, tipo_visitado (um com alvo 'paciente'), forma_identificacao_visitante (biometrica marcada), situacao_acesso_visitante, motivo_bloqueio_visita com os códigos 'pedido','judicial','clinico','sigilo', tipo_documento_identificacao 'rg','cnh','passaporte','outro', fabricante/modelo de terminal; e um ponto_acesso 'portaria' por estabelecimento (a visita exige o ponto de entrada; sem ele, 'sem-ponto-acesso')."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/internacao/portaria.ts",
+      "motivo": "IDENTIFICACAO_BIOMETRICA, IDENTIFICACAO_CRACHA, TIPO_VISITADO_PACIENTE e SITUACAO_ACESSO_REGISTRAR são ids fixos do sistema de origem: a API já usa o significado vindo do banco (dominios.identificacoes[].biometrica, tiposVisitado[].paciente); retirar as constantes e levar 'paciente' ao DominiosPortaria da tela."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/preco/respostas.ts e entradas.ts",
+      "motivo": "Vocabulário do sistema de origem no M12: situacao 'A'/'I' do convênio e da tabela (trocar por 'ativa'/'suspensa'/'inativa'), validaCarteira 'T'/'F' (booleano), senhaObrigatoria '1'/'4 (a confirmar)', codigoLegado e planoLegado, constantesOcultas, destino 'legado' (trocar por 'banco'), vigência da tabela com fim obrigatório (nulo enquanto vigente; hoje a API manda '' no aberto), convênio por smallint (id). E os campos editáveis do contrato que o modelo não tem (endereço, nota fiscal, contatos por área): decidir se vão a pessoa_juridica/contato ou saem do contrato da tela."
+    },
+    {
+      "tipo": "regra",
+      "alvo": "precos",
+      "motivo": "Fonte própria ainda sem: reajuste e desfazer pelo lote (lote_reajuste/lote_reajuste_item → preco_procedimento_valor; estado null = não liberada na tela), modificadores, índices e porte na data (valor_indice*), credenciamento, de-para de exames, portes, referências de terceiros, mat/med negociado (preco_negociado_matmed) e o impacto em contas abertas e profissionais. Lidas hoje: convênios, contrato, vigências de tabela, TISS do prestador, histórico, planos, tabelas e itens de honorários com o valor na data, diárias, lotes, edições, códigos do prestador. Gravadas: situação, contrato (campos com coluna), planos."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "registro.ts / app",
+      "motivo": "portaria/modulo.ts e precos/modulo.ts chamam ligarMapaEstabelecimentos (como exames); o cache da lista de convênios (CACHE_CONFIG/Valkey) não entra no módulo de preços até o armazém compartilhado chegar ao boot mínimo."
+    },
+    {
+      "tipo": "permissao",
+      "alvo": "packages/contratos (autorização) e precos/convenios.controller.ts",
+      "motivo": "Os campos de rede do convênio (nome, classificação, registro ANS, contato, e-mail, prazo de pagamento, validade da carteira) ficam em fonte_pagadora e valem para todos os estabelecimentos; hoje a permissão 'convenio.contrato.editar' (por estabelecimento) os altera. Propor 'convenio.rede.editar' para esses campos; a situação e o retorno já gravam em fonte_pagadora_estabelecimento."
+    },
+    {
+      "tipo": "carga",
+      "alvo": "conector / criar cliente",
+      "motivo": "A lista de convênios e as gravações de situação e retorno exigem a linha em fonte_pagadora_estabelecimento (o convênio credenciado no estabelecimento); o conector e o cadastro do convênio devem criá-la."
+    }
+  ]
+}

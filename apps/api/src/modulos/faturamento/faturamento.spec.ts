@@ -1,24 +1,33 @@
 // M30 (conta do paciente, lançamentos e auditoria de contas) pela HTTP, com a sessão real sobre a fonte sintética e a
-// porta EM MEMÓRIA (nada conecta a banco): permissões pelas opções do legado (403 sem elas), liberação (POL-3),
+// porta EM MEMÓRIA (nada conecta a banco): permissões pelo perfil (403 sem elas), liberação (POL-3),
 // situação derivada, explicação do preço, conferência em bloco, pendência bloqueante que impede o fechamento, fechamento
 // com o pré-voo, reabertura recusada na apresentada, a fila tardia, o lançamento manual recusado pelo grupo fora da meta,
 // o particular (orçamento, caixa, Pix simulado, recibo) e a urgência sem caução; textos de produto. Dados sintéticos.
+// A app é a migrada (F2.2), com a configuração sintética e o módulo do faturamento registrados pelas opções do teste.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo } from './modulo.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,faturamento' };
 const trilha = new RegistradorTrilhaMemoria();
 const faturamento = new PortaFaturamentoMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, faturamento, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      configuracao_teste: async () => ({ modulo: (ctx) => moduloConfiguracaoDeTeste(ctx) }),
+      faturamento: async () => ({ modulo: (ctx) => modulo(ctx, { porta: faturamento }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

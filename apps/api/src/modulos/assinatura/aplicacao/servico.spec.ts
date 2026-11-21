@@ -45,7 +45,7 @@ function sessao(
     hospital,
     rede: 'rede-sintetica',
     login: o.login ?? LOGIN,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: { rede: 'rede-sintetica', hospital, cliente: 'teste', estabelecimento: 1, usuario: 1, correlacao: 'teste' },
     pode,
   };
 }
@@ -517,14 +517,14 @@ describe('revisão do M49.1: trilha do pedido, dono do pedido e CPF cruzado a ca
     // (o provedor simulado criado no primeiro uso tem a própria linha, fora desta conta)
     const eventos = porta.trilhas
       .filter((t) => t.evento !== 'documento.provedor.alterado')
-      .map((t) => `${t.evento}|${t.operacao}|${t.tabelaAlvo}`);
+      .map((t) => `${t.evento}|${t.operacao}|${t.entidade}`);
     expect(eventos).toEqual([
-      'documento.assinatura.pedida|documento.vincularCertificado|SGH_DOC_PEDIDO_ASSINATURA',
-      'documento.assinatura.autorizacao-consumida|documento.vincularCertificado|SGH_DOC_PEDIDO_ASSINATURA',
-      'documento.certificado.vinculado|documento.vincularCertificado|SGH_ACESSO_CERTIFICADO',
-      'documento.assinatura.pedida|documento.assinar|SGH_DOC_PEDIDO_ASSINATURA',
-      'documento.assinatura.autorizacao-consumida|documento.assinar|SGH_DOC_PEDIDO_ASSINATURA',
-      'documento.assinatura.assinado|documento.assinar|SGH_DOC_ASSINATURA',
+      'documento.assinatura.pedida|documento.vincularCertificado|pedido_assinatura',
+      'documento.assinatura.autorizacao-consumida|documento.vincularCertificado|pedido_assinatura',
+      'documento.certificado.vinculado|documento.vincularCertificado|certificado_usuario',
+      'documento.assinatura.pedida|documento.assinar|pedido_assinatura',
+      'documento.assinatura.autorizacao-consumida|documento.assinar|pedido_assinatura',
+      'documento.assinatura.assinado|documento.assinar|assinatura_documento',
     ]);
     expect(JSON.stringify(porta.trilhas)).not.toContain(volta.state);
     // A volta repetida não acha pedido: nada consumido, nenhuma linha a mais na trilha da transação.
@@ -550,7 +550,7 @@ describe('revisão do M49.1: trilha do pedido, dono do pedido e CPF cruzado a ca
     expect(await servico.retornoPsc(s, volta)).toMatchObject({ ok: true, finalidade: 'vincular' });
   });
 
-  it('cadastro que ficou inconsistente depois do vínculo (TBUSERS.CPF ≠ TBPROFIS.CNPJ_CPF): nada assina', async () => {
+  it('cadastro que ficou inconsistente depois do vínculo (CPF da conta ≠ CPF do profissional): nada assina', async () => {
     const { certificado } = await vincularNuvem();
     const a = await servico.iniciarTeste(s, certificado!);
     if (a.tipo !== 'nuvem') throw new Error('nuvem');
@@ -576,7 +576,7 @@ describe('revisão do M49.1: trilha do pedido, dono do pedido e CPF cruzado a ca
     expect(cpfCruzadoDiverge({ cpf: '1', cpfProfissional: null, registros: [] })).toBe(false);
   });
 
-  it('tipo de certificado do cadastro (TBTIPOCERTIFICADO): pelo provedor; A1/A3 e sem correspondência, null', async () => {
+  it('tipo de certificado do cadastro (tipo_certificado): pelo provedor; A1/A3 e sem correspondência, null', async () => {
     const tipos = await porta.tiposCertificado();
     expect(tipoCertificadoDoProvedor(tipos, { codigo: 'safeweb', nome: 'Safeweb RFB' })).toBe(2);
     expect(tipoCertificadoDoProvedor(tipos, { codigo: 'psc-vidaas', nome: 'VIDaaS' })).toBe(3);
@@ -732,8 +732,8 @@ describe('revisão do M49.1: o segredo do provedor é do estabelecimento', () =>
     expect(ordem).toEqual([`cofre:${porta.trilhas.length}`]);
     expect(porta.trilhas.at(-1)).toMatchObject({
       evento: 'documento.provedor.alterado',
-      tabelaAlvo: 'SGH_DOC_PROVEDOR_PSC',
-      chaveNaturalAlvo: 'psc-comum:troca-do-segredo',
+      entidade: 'provedor_assinatura_nuvem',
+      chave: 'psc-comum:troca-do-segredo',
     });
     cfg.cofre.gravar = async () => {
       throw new Error('disco cheio');

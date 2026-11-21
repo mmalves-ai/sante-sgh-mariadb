@@ -8,9 +8,12 @@ export {
   FONTE_PRECOS,
   type FontePrecos,
   type CtxPrecos,
+  type ContextoGravacaoPreco,
   fontePrecosIndisponivel,
-  fontePrecosLegado,
 } from './fonte.js';
+export { FontePrecosPropria, type NucleoPrecos } from './fonte-propria.js';
+export { modulo, moduloPrecos, type OpcoesModuloPrecos } from './modulo.js';
+export type * from './tipos.js';
 export { FontePrecosMemoria } from './fonte-memoria.js';
 export { ServicoPrecos } from './servico.js';
 export { SERVICO_PRECOS } from './simbolos.js';

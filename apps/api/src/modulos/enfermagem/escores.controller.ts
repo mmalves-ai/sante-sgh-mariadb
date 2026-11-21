@@ -11,7 +11,7 @@
 //   POST /api/enfermagem/escores/reavaliacoes/:id/dispensar  a dispensa com o motivo
 //   GET|POST /api/enfermagem/escores/regras                as faixas vigentes; enfermagem.publicarRegraEscore (crítica)
 //   GET|POST /api/enfermagem/classificacao                 a carga da unidade no turno; enfermagem.classificarPaciente
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação; a liberação é a `enfermagem.escores` (POL-3).
+// Só do novo (SGH_), com a trilha_auditoria na mesma transação; a liberação é a `enfermagem.escores` (POL-3).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type CargaDaUnidade,
@@ -35,7 +35,7 @@ import {
   esquemaRetificarProfilaxia,
 } from '@sgh/contratos';
 import { BRADEN_HISTORICA_FORMULARIO, categoriaPorCbo, parametrosTev } from '@sgh/dominio-enfermagem';
-import type { InternadoLido } from '@sgh/legado';
+import type { Internado } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -144,9 +144,9 @@ export class ApoioEscores {
     const e = corpo(esquemaEstornarRegistro, b);
     const p = await this.servico.prepararEstorno({ c: s.porta, login: s.login }, origem, id, e);
     const tabela = {
-      escore: 'SGH_PEP_ESCORE',
-      classificacao: 'SGH_PEP_CLASSIF_PAC',
-      indiceUti: 'SGH_PEP_INDICE_UTI',
+      escore: 'aplicacao_escala',
+      classificacao: 'classificacao_paciente',
+      indiceUti: 'indice_gravidade_uti',
     }[origem];
     await this.apoio.sgh(
       s,
@@ -197,7 +197,7 @@ export class ApoioEscores {
   }
 
   /** O internado do atendimento (o paciente do pedido tem de ser o do atendimento). */
-  async internado(s: SessaoCadastro, atendimento: number | null, paciente: number): Promise<InternadoLido> {
+  async internado(s: SessaoCadastro, atendimento: number | null, paciente: number): Promise<Internado> {
     const i = atendimento ? await this.enfermagem.internado(s.porta, atendimento) : null;
     if (!i || i.paciente !== paciente)
       throw new ErroProblema(
@@ -251,7 +251,7 @@ export class EscoresController {
     const [p, g] = await Promise.all([this.a.parametros(s), this.gravacao(s)]);
     const r = await this.a.servico.unidade({ c: s.porta, login: s.login }, unidade, p, g);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_PEP_ESCORE',
+      tabelaAlvo: 'aplicacao_escala',
       chaveNaturalAlvo: `unidade:${unidade};n:${r.pacientes.length}`,
     };
     return r;
@@ -274,14 +274,14 @@ export class EscoresController {
       this.a.enfermagem.unidades(s.porta),
     ]);
     if (!(u ?? '').trim()) {
-      req.sghAlvo = { tabelaAlvo: 'SGH_PEP_ESCORE', chaveNaturalAlvo: 'profilaxia:unidades' };
+      req.sghAlvo = { tabelaAlvo: 'aplicacao_escala', chaveNaturalAlvo: 'profilaxia:unidades' };
       return { unidade: null, agora: null, pendentes: [], decidir: g.decidirProfilaxia ?? false, unidades };
     }
     const unidade = unidadeDe(u);
     const r = await this.a.servico.unidade({ c: s.porta, login: s.login }, unidade, p, g);
     const pendentes = r.profilaxiasPendentes ?? [];
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_PEP_ESCORE',
+      tabelaAlvo: 'aplicacao_escala',
       chaveNaturalAlvo: `profilaxia:${unidade};n:${pendentes.length}`,
     };
     return { unidade, agora: r.agora, pendentes, decidir: g.decidirProfilaxia ?? false, unidades };
@@ -301,7 +301,7 @@ export class EscoresController {
     if (!i) throw new ErroProblema('nao-encontrado', 404, 'Paciente não internado');
     const [p, g] = await Promise.all([this.a.parametros(s), this.gravacao(s)]);
     const r = await this.a.servico.paciente({ c: s.porta, login: s.login }, i, p);
-    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'SGH_PEP_ESCORE' };
+    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'aplicacao_escala' };
     return { ...r, gravacao: g, nome: i.nome, leito: i.leito, reg: i.numero };
   }
 
@@ -309,7 +309,7 @@ export class EscoresController {
   @HttpCode(201)
   @Permissao(P.escoreRegistrar)
   @AuditadoNoHandler(
-    'enfermagem.registrarEscore (NEWS2): SGH_PEP_SINAL_VITAL, SGH_PEP_ESCORE e SGH_TRILHA na mesma transação',
+    'enfermagem.registrarEscore (NEWS2): afericao_valor, aplicacao_escala e trilha_auditoria na mesma transação',
   )
   async afericao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscore> {
     const s = sessaoDe(req);
@@ -328,7 +328,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.escoreRegistrado.codigo,
       P.escoreRegistrar,
       (x: { id: number }) => ({
-        tabela: 'SGH_PEP_ESCORE',
+        tabela: 'aplicacao_escala',
         id: String(x.id),
         paciente: i.paciente,
         chave: `news2:v${registro.escore.versaoRegra}:${resultado.total}:${resultado.faixa}:${resultado.gatilho}`,
@@ -346,7 +346,7 @@ export class EscoresController {
   @HttpCode(201)
   @Permissao(P.escoreRegistrar)
   @AuditadoNoHandler(
-    'enfermagem.registrarEscore: SGH_PEP_ESCORE, SGH_PEP_ESCORE_CUIDADO e SGH_TRILHA na mesma transação',
+    'enfermagem.registrarEscore: aplicacao_escala, aplicacao_escala e trilha_auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscore> {
     const s = sessaoDe(req);
@@ -364,7 +364,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.escoreRegistrado.codigo,
       P.escoreRegistrar,
       (x: { id: number }) => ({
-        tabela: 'SGH_PEP_ESCORE',
+        tabela: 'aplicacao_escala',
         id: String(x.id),
         paciente: i.paciente,
         chave: `${e.escala}:v${registro.escore.versaoRegra}:${resultado.total}:${resultado.faixa}`,
@@ -385,7 +385,7 @@ export class EscoresController {
   @Post(':id/profilaxia')
   @HttpCode(201)
   @Permissao(PERMISSAO_PRESCREVER)
-  @AuditadoNoHandler('a decisão em SGH_PEP_ESCORE_CUIDADO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a decisão em aplicacao_escala com a trilha_auditoria na mesma transação')
   async decidirProfilaxia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaDecidirProfilaxia, b);
@@ -397,7 +397,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.enfermagemProfilaxiaTevDecidida.codigo,
       PERMISSAO_PRESCREVER,
       {
-        tabela: 'SGH_PEP_ESCORE_CUIDADO',
+        tabela: 'aplicacao_escala',
         id: String(escore),
         paciente: r.paciente,
         chave: `profilaxiaTev:${e.decisao}`,
@@ -429,7 +429,7 @@ export class EscoresController {
   @Post(':id/profilaxia/retificar')
   @HttpCode(201)
   @Permissao(PERMISSAO_PRESCREVER)
-  @AuditadoNoHandler('a correção em SGH_PEP_PROFILAXIA_RETIF com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a correção em profilaxia_tev_avaliacao com a trilha_auditoria na mesma transação')
   async retificarProfilaxia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRetificarProfilaxia, b);
@@ -441,7 +441,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.enfermagemProfilaxiaTevDecidida.codigo,
       PERMISSAO_PRESCREVER,
       {
-        tabela: 'SGH_PEP_PROFILAXIA_RETIF',
+        tabela: 'profilaxia_tev_avaliacao',
         id: String(escore),
         paciente: r.paciente,
         chave: `profilaxiaTev:retifica:${e.decisao}`,
@@ -471,7 +471,7 @@ export class EscoresController {
   @Post(':id/estornar')
   @HttpCode(200)
   @Permissao(P.escoreRegistrar)
-  @AuditadoNoHandler('o estorno em SGH_PEP_ESTORNO_REGISTRO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o estorno em aplicacao_escala com a trilha_auditoria na mesma transação')
   estornar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.a.estornar(sessaoDe(req), 'escore', idDaRota(id), b, P.escoreRegistrar);
   }
@@ -488,7 +488,7 @@ export class EscoresController {
     const i = await this.a.enfermagem.internado(s.porta, idDaRota(atendimento));
     if (!i) throw new ErroProblema('nao-encontrado', 404, 'Paciente não internado');
     const r = await this.a.servico.paciente({ c: s.porta, login: s.login }, i, await this.a.parametros(s));
-    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'SGH_PEP_ESCORE' };
+    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'aplicacao_escala' };
     const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const linhas = [
       [
@@ -531,7 +531,9 @@ export class EscoresController {
   @Post('reavaliacoes')
   @HttpCode(201)
   @Permissao(P.escoreRegistrar)
-  @AuditadoNoHandler('enfermagem.programarReavaliacao: SGH_PEP_REAVALIACAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'enfermagem.programarReavaliacao: reavaliacao_escala e trilha_auditoria na mesma transação',
+  )
   async programar(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -546,7 +548,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.reavaliacaoProgramada.codigo,
       P.escoreRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_REAVALIACAO',
+        tabela: 'reavaliacao_escala',
         id: String(x),
         paciente: i.paciente,
         chave: `${e.escala}:${r.chave}`,
@@ -560,7 +562,7 @@ export class EscoresController {
   @HttpCode(200)
   @Permissao(P.escoreRegistrar)
   @AuditadoNoHandler(
-    'enfermagem.programarReavaliacao (dispensa): SGH_PEP_REAVALIACAO e SGH_TRILHA na mesma transação',
+    'enfermagem.programarReavaliacao (dispensa): reavaliacao_escala e trilha_auditoria na mesma transação',
   )
   async dispensar(
     @Param('id') id: string,
@@ -576,7 +578,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.reavaliacaoProgramada.codigo,
       P.escoreRegistrar,
       (x: { paciente: number }) => ({
-        tabela: 'SGH_PEP_REAVALIACAO',
+        tabela: 'reavaliacao_escala',
         id: String(rid),
         paciente: x.paciente,
         chave: 'dispensada',
@@ -604,7 +606,9 @@ export class EscoresController {
   @Post('regras')
   @HttpCode(201)
   @Permissao(P.regraEscorePublicar)
-  @AuditadoNoHandler('enfermagem.publicarRegraEscore: SGH_PEP_ESCORE_REGRA e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'enfermagem.publicarRegraEscore: escala_clinica_versao e trilha_auditoria na mesma transação',
+  )
   async publicarRegra(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -625,7 +629,7 @@ export class EscoresController {
       EVENTOS_AUDITAVEIS.regraEscorePublicada.codigo,
       P.regraEscorePublicar,
       (x: { id: number; versao: number }) => ({
-        tabela: 'SGH_PEP_ESCORE_REGRA',
+        tabela: 'escala_clinica_versao',
         id: String(x.id),
         chave: `${e.escala}:v${x.versao}`,
       }),
@@ -653,7 +657,7 @@ export class ClassificacaoPacientesController {
   @Post(':id/estornar')
   @HttpCode(200)
   @Permissao(P.classificacaoRegistrar)
-  @AuditadoNoHandler('o estorno em SGH_PEP_ESTORNO_REGISTRO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o estorno em aplicacao_escala com a trilha_auditoria na mesma transação')
   estornar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.a.estornar(sessaoDe(req), 'classificacao', idDaRota(id), b, P.classificacaoRegistrar);
   }
@@ -690,7 +694,7 @@ export class ClassificacaoPacientesController {
       { ligada: l.ligada, motivo: l.motivo, registrar: l.ligada && enf && s.pode(P.classificacaoRegistrar) },
     );
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_PEP_CLASSIF_PAC',
+      tabelaAlvo: 'classificacao_paciente',
       chaveNaturalAlvo: `unidade:${unidade};${r.data}:${r.turno}`,
     };
     return r;
@@ -699,7 +703,9 @@ export class ClassificacaoPacientesController {
   @Post()
   @HttpCode(201)
   @Permissao(P.classificacaoRegistrar)
-  @AuditadoNoHandler('enfermagem.classificarPaciente: SGH_PEP_CLASSIF_PAC e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'enfermagem.classificarPaciente: classificacao_paciente e trilha_auditoria na mesma transação',
+  )
   async classificar(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -738,7 +744,7 @@ export class ClassificacaoPacientesController {
       EVENTOS_AUDITAVEIS.pacienteClassificado.codigo,
       P.classificacaoRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_CLASSIF_PAC',
+        tabela: 'classificacao_paciente',
         id: String(x),
         paciente: i.paciente,
         chave: `${e.instrumento}:${e.data}:${e.turno}:${resultado.total}`,

@@ -1,4 +1,4 @@
-// W0-10 (M8) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA (dados SINTÉTICOS): o prestador
+// W0-10 (M8) pela HTTP, com a sessão real sobre a fonte sintética, o módulo registrado e as portas EM MEMÓRIA (dados SINTÉTICOS): o prestador
 // envia o lote XML TISS pelo portal (o inválido no XSD é recusado com os erros; o válido recebe o protocolo; o mesmo
 // arquivo não entra de novo; o lote de outro prestador é recusado antes de qualquer escrita), vê os lotes dele (e só os
 // dele) e baixa o demonstrativo de análise depois da conclusão do auditor e o de pagamento do lote quitado (XML válido
@@ -14,21 +14,21 @@ import {
   validarNoXsd,
 } from '@sgh/dominio-faturamento';
 import { cnpjSintetico, numeroCarteirinha } from '@sgh/dominio-operadora';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import { fonteConfiguracaoMemoria } from '../config/public-api.js';
+import { type ChaveLiberacao, fonteConfiguracaoMemoria, type PrerequisitoRecurso } from '../config/public-api.js';
 import { PortaAtendimentoOperadoraMemoria } from './atendimento-porta-memoria.js';
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
 import { PortaContasOperadoraMemoria } from './contas-porta-memoria.js';
+import { moduloOperadora } from './modulo.js';
 import { PortaOperadoraMemoria } from './porta-memoria.js';
 import { PortaRedeOperadoraMemoria, prestadoresSinteticos } from './rede-porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'operadora' };
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -41,7 +41,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-const pre = (recurso: string, tipo: PrerequisitoGravado['tipo']): PrerequisitoGravado => ({
+const pre = (recurso: string, tipo: PrerequisitoRecurso['tipo']): PrerequisitoRecurso => ({
   recurso,
   tipo,
   situacao: 'cumprido',
@@ -62,28 +62,28 @@ const novaApp = async (contasLigadas: boolean) => {
   autorizacao.agora = () => agora;
   atendimento.agora = () => agora;
   contas.agora = () => agora;
+  const configuracao = fonteConfiguracaoMemoria(trilha, {
+    chavesIniciais: () => [
+      chave('operadora'),
+      chave('operadora.beneficiarios'),
+      chave('operadora.autorizacao'),
+      chave('operadora.atendimento'),
+      chave('operadora.portalPrestador'),
+      ...(contasLigadas ? [chave('operadora.contas')] : []),
+    ],
+    prerequisitosIniciais: () => [
+      pre('operadora', 'credenciamento'),
+      pre('operadora.autorizacao', 'aprovacao'),
+      pre('operadora.contas', 'aprovacao'),
+    ],
+  });
   const app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    operadora,
-    redeOperadora: rede,
-    autorizacaoOperadora: autorizacao,
-    atendimentoOperadora: atendimento,
-    contasOperadora: contas,
-    configuracao: fonteConfiguracaoMemoria(trilha, {
-      chavesIniciais: () => [
-        chave('operadora'),
-        chave('operadora.beneficiarios'),
-        chave('operadora.autorizacao'),
-        chave('operadora.atendimento'),
-        chave('operadora.portalPrestador'),
-        ...(contasLigadas ? [chave('operadora.contas')] : []),
-      ],
-      prerequisitosIniciais: () => [
-        pre('operadora', 'credenciamento'),
-        pre('operadora.autorizacao', 'aprovacao'),
-        pre('operadora.contas', 'aprovacao'),
-      ],
-    }),
+    registro: {
+      operadora: async () => ({
+        modulo: (ctx) => moduloOperadora(ctx, { operadora, rede, autorizacao, atendimento, contas, configuracao }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

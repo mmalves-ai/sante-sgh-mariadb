@@ -1,8 +1,8 @@
 // Porta do financeiro e fiscal (M32): o que as telas de contas a pagar e a receber, tesouraria, gerencial e fiscal leem
 // e gravam, independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas
-//     financeiro.*, com a trilha na mesma transação); as só do novo (alçada, aprovação, glosa no título, extrato,
-//     conciliação, crédito pendente, remessa, NFS-e, declarações, lote contábil) em transação SGH_ com a SGH_TRILHA junto;
+//   - `banco` (porta-propria.ts): o banco do cliente pelo @sgh/nucleo; gravações pelo Executor (operações
+//     financeiro.*, com a trilha, o outbox e a idempotência na mesma transação) e as gravações diretas (alçada,
+//     aprovação, glosa no título, extrato, conciliação, crédito pendente, remessa, lote contábil) também pelo Executor;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): títulos, contas bancárias, contas do faturamento e extrato
 //     SINTÉTICOS em memória, com as mesmas validações (Zod dos contratos e regras do domínio) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
@@ -91,7 +91,7 @@ export interface RetencaoReinfPorta {
   readonly cofins: number;
 }
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
+/** Gravações diretas da porta, numa transação com a trilha junto (o estabelecimento e o usuário vêm do contexto). */
 export interface GravadorSghFinanceiro {
   salvarFaixa(d: FaixaAlcadaEntrada & { usuario: string }): Promise<{ id: number }>;
   aprovarTitulo(d: {
@@ -203,7 +203,13 @@ export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro>
     c: ContextoFinanceiro,
     id: number,
     hoje: string,
-  ): Promise<Omit<DetalheTituloReceberResposta, 'saldo' | 'recebivelRecurso'> | null>;
+  ): Promise<
+    | (Omit<DetalheTituloReceberResposta, 'saldo' | 'recebivelRecurso'> & {
+        /** Recurso deferido somado no título (banco); ausente quando vem da lista das glosas. */
+        readonly recursoDeferido?: number;
+      })
+    | null
+  >;
   tituloDoItem(c: ContextoFinanceiro, item: number): Promise<number | null>;
   contasSemTitulo(
     c: ContextoFinanceiro,

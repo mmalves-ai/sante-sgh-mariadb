@@ -1,44 +1,43 @@
 // Porta da portaria e dos visitantes (M50, etapa 5; ficha, seções 4, 5 e 7), independente de onde (a API não escreve
 // SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY (domínios, internados com o isolamento, regras, bloqueios, visitantes, visitas,
-//     acompanhantes, terminais, eventos) e as gravações só do novo numa transação SGH_ com a SGH_TRILHA junto;
+//   - `banco` (porta-propria.ts): o banco do cliente pelo @sgh/nucleo; as gravações numa operação do Executor, com a
+//     trilha, o outbox e a idempotência na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): internados, domínios e cadastros SINTÉTICOS em memória, com as
 //     mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type {
-  AcompanhanteSgh,
-  AcompanhanteLidoSgh,
-  AvaliacaoRelida,
-  BloqueioLidoSgh,
-  BloqueioSgh,
-  DominiosPortariaLidos,
-  EventoCatracaLidoSgh,
+  AcompanhanteRegistrado,
+  AvaliacaoDaVisita,
+  BloqueioVisitaRegistrado,
+  DominiosDaPortaria,
+  EventoCatracaRegistrado,
   InternadoPortaria,
-  PacienteRelido,
-  RegraVisitaLidaSgh,
-  RegraVisitaSgh,
-  TerminalLidoSgh,
-  TerminalRelido,
-  TerminalSgh,
+  NovaRegraVisita,
+  NovaVisita,
+  NovoAcompanhante,
+  NovoBloqueioVisita,
+  NovoTerminal,
+  NovoVisitante,
+  RegraVisitaRegistrada,
+  SituacaoDoPaciente,
+  TerminalDaCatraca,
+  TerminalRegistrado,
   VisitaDoCracha,
-  VisitaLidaSgh,
-  VisitanteLidoSgh,
-  VisitanteSgh,
-  VisitaSgh,
-} from '@sgh/legado';
+  VisitanteRegistrado,
+  VisitaRegistrada,
+} from './tipos.js';
 import type { MotivoBloqueioVisita, PapelVisita, ResultadoCatraca, SentidoCatraca } from '@sgh/contratos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_PORTARIA = Symbol('PORTA_PORTARIA');
 
-export type ContextoPortaria = ContextoPortaM18;
+/** Contexto da porta; `chavePedido` é a Idempotency-Key do pedido (o reenvio devolve o mesmo resultado). */
+export type ContextoPortaria = ContextoPortaM18 & { readonly chavePedido?: string | null };
 
-type SemHospital<T> = Omit<T, 'hospital'>;
-
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** Gravações diretas da porta, numa transação com a trilha junto. */
 export interface GravadorPortaria {
   registrarVisitante(
-    v: SemHospital<VisitanteSgh>,
+    v: NovoVisitante,
   ): Promise<{ id: number; novo: boolean; fotoAnterior: string | null }>;
   expurgarVisitantes(x: {
     readonly hoje: string;
@@ -46,8 +45,8 @@ export interface GravadorPortaria {
     readonly teto: number;
   }): Promise<{ ids: number[]; fotos: string[] }>;
   registrarVisita(
-    v: SemHospital<VisitaSgh>,
-    avaliar: (r: PacienteRelido) => AvaliacaoRelida,
+    v: NovaVisita,
+    avaliar: (r: SituacaoDoPaciente) => AvaliacaoDaVisita,
   ): Promise<{ id: number; papel: PapelVisita; repetida: boolean }>;
   encerrarVisita(x: {
     readonly id: number;
@@ -55,8 +54,8 @@ export interface GravadorPortaria {
     readonly origem: 'portaria' | 'catraca' | 'expirada';
     readonly usuario: string;
   }): Promise<number>;
-  definirRegra(r: SemHospital<RegraVisitaSgh>): Promise<{ id: number; versao: number }>;
-  bloquear(b: SemHospital<BloqueioSgh>): Promise<number>;
+  definirRegra(r: NovaRegraVisita): Promise<{ id: number; versao: number }>;
+  bloquear(b: NovoBloqueioVisita): Promise<number>;
   revogarBloqueio(x: {
     readonly id: number;
     readonly motivo: string;
@@ -65,14 +64,14 @@ export interface GravadorPortaria {
     /** A rota clínica revoga só o bloqueio clínico (conferido no gravador, depois da trava). */
     readonly exigeMotivo?: 'clinico' | null;
   }): Promise<{ id: number; internacao: number; motivo: MotivoBloqueioVisita }>;
-  registrarAcompanhante(a: SemHospital<AcompanhanteSgh>): Promise<{ id: number; substituido: number | null }>;
+  registrarAcompanhante(a: NovoAcompanhante): Promise<{ id: number; substituido: number | null }>;
   encerrarAcompanhante(x: {
     readonly id: number;
     readonly motivo: string;
     readonly fim: string;
     readonly usuario: string;
   }): Promise<{ id: number; internacao: number }>;
-  configurarTerminal(t: SemHospital<TerminalSgh>): Promise<{ id: number; versao: number }>;
+  configurarTerminal(t: NovoTerminal): Promise<{ id: number; versao: number }>;
   registrarEventoCatraca(
     ev: {
       readonly terminal: number;
@@ -82,7 +81,7 @@ export interface GravadorPortaria {
       readonly chave: string;
       readonly usuario: string;
     },
-    avaliar: (x: { terminal: TerminalRelido; visita: VisitaDoCracha | null }) => {
+    avaliar: (x: { terminal: TerminalDaCatraca; visita: VisitaDoCracha | null }) => {
       readonly resultado: ResultadoCatraca;
       readonly motivo: string | null;
       readonly encerra: boolean;
@@ -99,20 +98,21 @@ export interface GravadorPortaria {
 export interface PortaPortaria extends PortaGravacaoM18<GravadorPortaria> {
   /** O relógio do banco do estabelecimento (AAAA-MM-DDTHH:mm:ss, hora local). */
   relogio(c: ContextoPortaria): Promise<string>;
-  dominios(c: ContextoPortaria): Promise<DominiosPortariaLidos>;
+  dominios(c: ContextoPortaria): Promise<DominiosDaPortaria>;
   unidades(c: ContextoPortaria): Promise<{ unidade: string; nome: string }[]>;
   internados(c: ContextoPortaria): Promise<InternadoPortaria[]>;
   internado(c: ContextoPortaria, internacao: number): Promise<InternadoPortaria | null>;
-  regras(c: ContextoPortaria): Promise<RegraVisitaLidaSgh[]>;
-  bloqueios(c: ContextoPortaria, internacao?: number | null): Promise<BloqueioLidoSgh[]>;
-  visitante(c: ContextoPortaria, id: number): Promise<VisitanteLidoSgh | null>;
+  regras(c: ContextoPortaria): Promise<RegraVisitaRegistrada[]>;
+  bloqueios(c: ContextoPortaria, internacao?: number | null): Promise<BloqueioVisitaRegistrado[]>;
+  visitante(c: ContextoPortaria, id: number): Promise<VisitanteRegistrado | null>;
   buscarVisitantes(
     c: ContextoPortaria,
     b: { readonly documento: { tipo: string; numero: string } | null; readonly nomeBusca: string | null },
-  ): Promise<VisitanteLidoSgh[]>;
-  vencidos(c: ContextoPortaria, hoje: string): Promise<number>;
-  abertas(c: ContextoPortaria): Promise<VisitaLidaSgh[]>;
-  visita(c: ContextoPortaria, id: number): Promise<VisitaLidaSgh | null>;
+  ): Promise<VisitanteRegistrado[]>;
+  /** Cadastros com a guarda vencida (sem visita aberta); `retencaoDias` é o prazo do estabelecimento. */
+  vencidos(c: ContextoPortaria, hoje: string, retencaoDias?: number): Promise<number>;
+  abertas(c: ContextoPortaria): Promise<VisitaRegistrada[]>;
+  visita(c: ContextoPortaria, id: number): Promise<VisitaRegistrada | null>;
   visitasDoPeriodo(
     c: ContextoPortaria,
     f: {
@@ -121,10 +121,10 @@ export interface PortaPortaria extends PortaGravacaoM18<GravadorPortaria> {
       readonly de: string;
       readonly ate: string;
     },
-  ): Promise<VisitaLidaSgh[]>;
-  acompanhantes(c: ContextoPortaria, unidade?: string | null): Promise<AcompanhanteLidoSgh[]>;
-  terminais(c: ContextoPortaria): Promise<TerminalLidoSgh[]>;
-  eventos(c: ContextoPortaria, teto?: number): Promise<EventoCatracaLidoSgh[]>;
+  ): Promise<VisitaRegistrada[]>;
+  acompanhantes(c: ContextoPortaria, unidade?: string | null): Promise<AcompanhanteRegistrado[]>;
+  terminais(c: ContextoPortaria): Promise<TerminalRegistrado[]>;
+  eventos(c: ContextoPortaria, teto?: number): Promise<EventoCatracaRegistrado[]>;
   foto(c: ContextoPortaria, visitante: number): Promise<string | null>;
 }
 

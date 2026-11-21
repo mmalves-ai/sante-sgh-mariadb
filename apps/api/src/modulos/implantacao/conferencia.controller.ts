@@ -1,15 +1,15 @@
 // M60, etapa 2: a conferência da instalação e da conexão ao banco (Administração > Saúde do sistema).
-//   GET /api/administracao/implantacao/conferencia   versão, conexão corrente, scripts do pacote × banco e os itens
+//   GET /api/administracao/implantacao/conferencia   versão, conexão corrente, migrações do pacote × banco e os itens
 //   GET /api/sistema/sonda/instalacao?hospital=      a mesma conferência para a fumaça pós-implantação, sem sessão,
 //                                                    só com x-sonda-token = SONDA_TOKEN (sem ele, 404)
 // Só leitura, com a permissão dos painéis de saúde (sistema.saude.ler, D-PERM-60.2). Sem gravação, sem trilha de
 // escrita (nada muda); a leitura não envolve dado de pessoa.
-import { timingSafeEqual } from 'node:crypto';
-import { resolve } from 'node:path';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { Controller, Get, Headers, Inject, Optional, Query, Req } from '@nestjs/common';
 import { type ConferenciaInstalacao, PERMISSAO_CONFERENCIA_INSTALACAO } from '@sgh/contratos';
 import type { ScriptDoPacote } from '@sgh/dominio-config';
-import { lerScriptsSgh } from '@sgh/legado';
 import { Permissao, Publica } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
@@ -20,15 +20,37 @@ import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api
 import { ServicoConferenciaInstalacao } from './aplicacao/conferencia.js';
 import { PORTA_IMPLANTACAO, type PortaImplantacao } from './porta.js';
 
-/** Os scripts SGH_ do pacote: os arquivos de packages/legado/src (o pacote leva a árvore), lidos uma vez. */
+/**
+ * As migrações do pacote: os arquivos .sql de db/migracoes (pasta do módulo e arquivo, em ordem), numerados pela
+ * posição nessa ordem e com o SHA-256 do conteúdo. O mesmo número e o mesmo hash vão ao registro do banco do cliente.
+ */
+export function migracoesDoPacote(pasta: string): ScriptDoPacote[] {
+  let modulos: string[];
+  try {
+    modulos = readdirSync(pasta, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const arquivos = modulos.flatMap((m) =>
+    readdirSync(join(pasta, m))
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .map((f) => join(pasta, m, f)),
+  );
+  return arquivos.map((f, i) => ({
+    numero: i + 1,
+    hash: createHash('sha256').update(readFileSync(f)).digest('hex'),
+  }));
+}
+
+/** As migrações do pacote instalado (db/migracoes), lidas uma vez. */
 export const SCRIPTS_DO_PACOTE = Symbol('SCRIPTS_DO_PACOTE');
 export function scriptsDoPacoteDoDisco(raiz: string = process.cwd()): () => readonly ScriptDoPacote[] {
   let cache: ScriptDoPacote[] | null = null;
-  return () =>
-    (cache ??= lerScriptsSgh(resolve(raiz, 'packages/legado/src')).map((s) => ({
-      numero: s.numero,
-      hash: s.hash,
-    })));
+  return () => (cache ??= migracoesDoPacote(resolve(raiz, 'db/migracoes')));
 }
 
 /** Comparação de segredo em tempo constante. */

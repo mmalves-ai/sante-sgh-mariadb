@@ -1,18 +1,17 @@
 // Revisão de segurança do suporte técnico (ADR 0021), sem HTTP e sem banco: o código TOTP vale uma vez, as
 // tentativas contam por e-mail e origem, a plataforma revoga outra conta da plataforma (nunca a si mesma), o
-// aviso ao Auditor gravado pela outbox chega ao worker no formato que ele confere, e o Corrigir não grava em
-// dev sobre a cópia. Contas, segredos e senhas são sintéticos, gerados no próprio teste.
+// aviso ao Auditor chega ao worker no formato que ele confere, e o Corrigir recusado pela fonte não recalcula nada.
+// Contas, segredos e senhas são sintéticos, gerados no próprio teste.
 import { randomBytes } from 'node:crypto';
 import { conferirAlertaSuporte } from '@sgh/contratos';
 import { cifrarSenha, codigoTotp } from '@sgh/dominio-acesso';
-import { conferirCarga, dadosDoJobOutbox, type PendenteOutbox } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
+import type { AlertaAuditor } from '../acesso/alerta.js';
 import {
-  FonteComoLegado,
-  type NucleoSuporte,
-  RepositorioPlataformaLegado,
+  ErroCorrigirIndisponivel,
+  type FonteComoEstabelecimento,
   RepositorioPlataformaMemoria,
 } from './repositorio.js';
 import { ServicoComo } from './servico-como.js';
@@ -146,53 +145,7 @@ describe('credencial redefinida e contas da plataforma', () => {
   });
 });
 
-describe('aviso ao Auditor pela outbox chega ao worker no formato conferido', () => {
-  /** Núcleo falso: a SGH_SUP_SESSAO "grava" e a outbox passa pela MESMA conferência da carga do núcleo. */
-  function nucleoFalso(outbox: PendenteOutbox[], corrigidos: string[]) {
-    const escritor = {
-      hospital: 'plat',
-      consultar: () =>
-        Promise.resolve([
-          { ID: '4242', I: new Date('2026-10-20T10:00:00Z'), F: new Date('2026-10-20T11:00:00Z') },
-        ]),
-      executar: () => Promise.resolve(1),
-      executarRetornando: () => Promise.resolve({}),
-      lerBlob: () => Promise.resolve(Buffer.alloc(0)),
-    };
-    const n = {
-      rede: 'rede-teste',
-      gravarSgh: (_c: unknown, fn: (e: unknown) => Promise<unknown>) => fn(escritor),
-      gravarSghComOutbox: (
-        ctx: { rede: string; hospital: string },
-        fn: (
-          e: unknown,
-          o: (ev: { tipo: string; chave: string; carga: Record<string, string> }) => Promise<string>,
-        ) => Promise<unknown>,
-      ) =>
-        fn(escritor, (ev) => {
-          const carga = JSON.parse(conferirCarga(ev.carga)) as Record<string, string>;
-          outbox.push({
-            id: '1',
-            rede: ctx.rede,
-            hospital: ctx.hospital,
-            tipo: ev.tipo,
-            chave: ev.chave,
-            carga,
-            tentativas: 0,
-          });
-          return Promise.resolve('1');
-        }),
-      lerSomente: () => Promise.resolve([]),
-      corrigirComo: () => {
-        corrigidos.push('chamou');
-        return Promise.resolve(
-          corrigidos.includes('com-feitas') ? [{ imagem: '1', correcao: '2', compensacao: 'UPDATE' }] : [],
-        );
-      },
-    };
-    return n as unknown as NucleoSuporte;
-  }
-
+describe('aviso ao Auditor chega ao worker no formato conferido; o Corrigir pela fonte do estabelecimento', () => {
   const conta: ContaComAtribuicoes = {
     id: '7',
     email: 'dono@sintetico.invalid',
@@ -208,18 +161,43 @@ describe('aviso ao Auditor pela outbox chega ao worker no formato conferido', ()
     atribuicoes: [],
   };
 
-  function como(nucleo: NucleoSuporte, corrigirLiberado = true, invalidados: string[] = []) {
-    const s = new ServicoComo(
-      new RepositorioPlataformaLegado(nucleo, 'plat'),
-      new FonteComoLegado(nucleo, corrigirLiberado),
-      new ArmazemMemoria(),
-      {
-        rede: 'rede-teste',
-        estabelecimentos: () => [{ codigo: 'aa', nome: 'Sintético', disponivel: true }],
-        minutos: 60,
-        avisoAuditor: true,
+  /** Fonte do "como" falsa: o Corrigir devolve passos feitos, recusa (fora do ambiente) ou nada. */
+  function fonteFalsa(modo: 'feitas' | 'nada' | 'recusa', chamadas: string[]): FonteComoEstabelecimento {
+    return {
+      grupos: () => Promise.resolve([]),
+      usuarios: () => Promise.resolve([]),
+      imagensPorAcao: () => Promise.resolve(new Map()),
+      previa: () => Promise.resolve({ passos: [], tabelas: [] }),
+      corrigir: () => {
+        chamadas.push('corrigir');
+        if (modo === 'recusa')
+          return Promise.reject(new ErroCorrigirIndisponivel('Correção desligada aqui.'));
+        return Promise.resolve(
+          modo === 'feitas' ? [{ imagem: '1', correcao: '2', compensacao: 'restaurar' as const }] : [],
+        );
       },
-    );
+      cruzamento: () => Promise.resolve([]),
+    };
+  }
+
+  function como(
+    repo: RepositorioPlataformaMemoria,
+    fonte: FonteComoEstabelecimento,
+    alertas: Record<string, string>[] = [],
+    invalidados: string[] = [],
+  ) {
+    const s = new ServicoComo(repo, fonte, new ArmazemMemoria(), {
+      rede: 'rede-teste',
+      estabelecimentos: () => [{ codigo: 'aa', nome: 'Sintético', disponivel: true }],
+      minutos: 60,
+      avisoAuditor: true,
+      alerta: {
+        suporteSessaoAberta: (carga: Record<string, string>) => {
+          alertas.push(carga);
+          return Promise.resolve('enfileirado');
+        },
+      } as unknown as AlertaAuditor,
+    });
     const sessao = {
       conferirAlvoComo: () => Promise.resolve({ id: 900123 }),
       abrirComo: () =>
@@ -236,90 +214,82 @@ describe('aviso ao Auditor pela outbox chega ao worker no formato conferido', ()
     return s;
   }
 
-  it('carga gravada pelo repositório do banco → relay → conferência do worker: estabelecimento do alvo', async () => {
-    const outbox: PendenteOutbox[] = [];
-    await como(nucleoFalso(outbox, [])).entrar(
+  const sessaoLida = (modo: 'como' | 'acesso-total') => ({
+    id: '4242',
+    idConta: '7',
+    atorTipo: 'plataforma' as const,
+    rede: 'rede-teste',
+    hospital: 'aa',
+    alvoLogin: 'SINT.ALVO',
+    motivo: null,
+    modo,
+    inicio: new Date(0),
+    expiraEm: new Date(1),
+    fim: new Date(1),
+    encerramento: 'voltou',
+    escritas: 1,
+    atosClinicos: 0,
+  });
+
+  it('a carga do aviso passa pela conferência do worker: estabelecimento, sessão, ator e janela', async () => {
+    const repo = new RepositorioPlataformaMemoria(() => Date.parse('2026-10-20T13:00:00Z'));
+    const alertas: Record<string, string>[] = [];
+    await como(repo, fonteFalsa('nada', []), alertas).entrar(
       conta,
       { estabelecimento: 'aa', login: 'SINT.ALVO', motivo: 'CHAMADO-1' },
       'rede-teste',
       null,
       'T',
     );
-    expect(outbox).toHaveLength(1);
-    const job = conferirAlertaSuporte(dadosDoJobOutbox(outbox[0]!));
-    expect(job).toEqual({
-      rede: 'rede-teste',
-      hospital: 'plat',
+    // Em memória não há outbox: o aviso registrado vai pela fila, com a mesma carga.
+    expect(repo.avisos).toHaveLength(1);
+    expect(alertas).toHaveLength(1);
+    const job = conferirAlertaSuporte({ ...repo.avisos[0]!.carga, rede: 'rede-teste', hospital: 'aa' });
+    expect(job).toMatchObject({
       estabelecimento: 'aa',
-      idSessao: '4242',
       atorTipo: 'plataforma',
       idUsuario: '900123',
-      // O banco devolve a hora civil de São Paulo (10:00 e 11:00): o instante real é 3 h depois (instanteDoBanco).
       inicio: '2026-10-20T13:00:00.000Z',
       fim: '2026-10-20T14:00:00.000Z',
       motivo: 'CHAMADO-1',
     });
+    expect(job.idSessao).toBe(repo.avisos[0]!.carga['idSessao']);
     // Sem os campos (a carga antiga), o worker recusa.
     expect(() =>
       conferirAlertaSuporte({ rede: 'r', hospital: 'h', idSessao: '1', atorTipo: 'x', motivo: 'm' }),
     ).toThrow();
   });
 
-  it('dev sobre a cópia: o Corrigir é recusado (409) e o núcleo não é chamado', async () => {
+  it('o Corrigir recusado pela fonte (fora do ambiente que permite) vira conflito, sem recalcular nada', async () => {
     const chamadas: string[] = [];
-    const s = como(nucleoFalso([], chamadas), false);
+    const invalidados: string[] = [];
+    const repo = new RepositorioPlataformaMemoria();
+    const s = como(repo, fonteFalsa('recusa', chamadas), [], invalidados);
+    repo.sessaoComo = () => Promise.resolve(sessaoLida('como'));
     const pedido = { estabelecimento: 'aa', sessao: '4242', previa: false, resumo: 'a'.repeat(64) };
-    // A sessão existe no banco da plataforma (lida pelo repositório).
-    (s.repo as RepositorioPlataformaLegado).sessaoComo = () =>
-      Promise.resolve({
-        id: '4242',
-        idConta: '7',
-        atorTipo: 'plataforma',
-        rede: 'rede-teste',
-        hospital: 'aa',
-        alvoLogin: 'SINT.ALVO',
-        motivo: null,
-        modo: 'como',
-        inicio: new Date(0),
-        expiraEm: new Date(1),
-        fim: new Date(1),
-        encerramento: 'voltou',
-        escritas: 1,
-        atosClinicos: 0,
-      });
     expect(await erroDe(s.corrigir(conta, pedido, 'T', 'c'))).toBe('conflito');
-    expect(chamadas).toEqual([]);
+    expect(chamadas).toEqual(['corrigir']);
+    expect(invalidados).toEqual([]);
   });
 
   it('Corrigir com passo desfeito troca a geração das permissões do estabelecimento (decisão 12 do ADR 0022)', async () => {
-    const chamadas = ['com-feitas'];
     const invalidados: string[] = [];
-    const s = como(nucleoFalso([], chamadas), true, invalidados);
-    (s.repo as RepositorioPlataformaLegado).sessaoComo = () =>
-      Promise.resolve({
-        id: '4242',
-        idConta: '7',
-        atorTipo: 'plataforma',
-        rede: 'rede-teste',
-        hospital: 'aa',
-        alvoLogin: 'SINT.ALVO',
-        motivo: null,
-        modo: 'acesso-total',
-        inicio: new Date(0),
-        expiraEm: new Date(1),
-        fim: new Date(1),
-        encerramento: 'voltou',
-        escritas: 1,
-        atosClinicos: 0,
-      });
-    (s.repo as RepositorioPlataformaLegado).acoes = () => Promise.resolve([]);
-    (s.repo as RepositorioPlataformaLegado).registrarEventoConta = () => Promise.resolve();
+    const repo = new RepositorioPlataformaMemoria();
+    let modo: 'feitas' | 'nada' = 'feitas';
+    const chamadas: string[] = [];
+    const fonte: FonteComoEstabelecimento = {
+      ...fonteFalsa('feitas', chamadas),
+      corrigir: (...a) => fonteFalsa(modo, chamadas).corrigir(...a),
+    };
+    const s = como(repo, fonte, [], invalidados);
+    repo.sessaoComo = () => Promise.resolve(sessaoLida('acesso-total'));
+    repo.acoes = () => Promise.resolve([]);
     const pedido = { estabelecimento: 'aa', sessao: '4242', previa: false, resumo: 'a'.repeat(64) };
     const r = await s.corrigir(conta, pedido, 'T', 'c');
     expect(r).toMatchObject({ corrigidos: 1, permissoes: 'recalculadas' });
     expect(invalidados).toEqual(['rede-teste:aa']);
     // Nada desfeito: nada a recalcular.
-    chamadas.length = 0;
+    modo = 'nada';
     const nada = await s.corrigir(conta, pedido, 'T', 'c');
     expect(nada.permissoes).toBeUndefined();
     expect(invalidados).toHaveLength(1);

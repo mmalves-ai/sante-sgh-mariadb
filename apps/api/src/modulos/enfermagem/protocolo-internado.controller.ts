@@ -49,6 +49,7 @@ import {
 import { corpo } from '../exames/public-api.js';
 import {
   PORTA_CLASSIFICACAO,
+  portaClassificacaoIndisponivel,
   type PortaClassificacao,
   ServicoProtocoloGerenciado,
 } from '../recepcao/public-api.js';
@@ -107,17 +108,21 @@ const SEM_PA = {
 export class ProtocoloInternadoController {
   private readonly a: ApoioEscores;
   private readonly gerenciados: ServicoProtocoloGerenciado;
+  private readonly classificacao: PortaClassificacao;
 
   constructor(
     @Inject(PORTA_ESCORES) porta: PortaEscores,
     @Inject(PORTA_ENFERMAGEM) enfermagem: PortaEnfermagem,
-    @Inject(PORTA_CLASSIFICACAO) private readonly classificacao: PortaClassificacao,
+    // A classificação de risco é da recepção (módulo global): sem ela montada, os protocolos do PA respondem 503.
+    @Optional() @Inject(PORTA_CLASSIFICACAO) classificacaoMontada: PortaClassificacao | null,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
   ) {
+    const classificacao = classificacaoMontada ?? portaClassificacaoIndisponivel();
+    this.classificacao = classificacao;
     this.a = new ApoioEscores(porta, enfermagem, trilha, configuracao, cache);
     this.gerenciados = new ServicoProtocoloGerenciado(classificacao, SEM_PA);
   }

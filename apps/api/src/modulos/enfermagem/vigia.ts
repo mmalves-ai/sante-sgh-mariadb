@@ -1,9 +1,15 @@
-// Vigia dos horários da enfermagem (ficha do M25, regra 10 e seção 4 "Vigia de suspensões feitas no legado"): enquanto
+// Vigia dos horários da enfermagem (ficha do M25, regra 10 e seção 4, vigia das suspensões): enquanto
 // houver uma tela da beira do leito aberta no estabelecimento, lê a cada 1 a 2 segundos as mudanças de situação dos
 // horários da janela (12 horas para trás e para frente do relógio do banco), pelo índice do horário previsto, e avisa as
 // telas (canal de eventos) quando um horário mudou: a suspensão feita na prescrição (neste ou no outro sistema) e a
 // checagem feita em outro terminal aparecem em até 2 segundos. Sem ouvinte, nada é lido.
+// Melhoria: o alvo é o estabelecimento no banco do cliente (cliente e id), o mesmo dos avisos do atendimento; o vigia lê
+// só o banco próprio (sem reconciliação com outro sistema).
 import { mudancasDeSituacao, somarMinutos } from '@sgh/dominio-enfermagem';
+import type { ContextoNucleo } from '@sgh/nucleo';
+
+/** O estabelecimento vigiado (cliente e id). */
+export type AlvoVigiaEnfermagem = Pick<ContextoNucleo, 'cliente' | 'estabelecimento'>;
 import type { PortaEnfermagem } from './porta.js';
 
 type Ouvinte = (e?: unknown) => void;
@@ -13,6 +19,7 @@ interface EstadoVigia {
   temporizador: ReturnType<typeof setTimeout> | null;
   vistos: Map<number, string>;
   desde: string | null;
+  alvo: AlvoVigiaEnfermagem;
 }
 
 export const INTERVALO_VIGIA_ENFERMAGEM_MS = 1_500;
@@ -22,16 +29,16 @@ export class VigiaHorarios {
 
   constructor(
     private readonly porta: PortaEnfermagem,
-    private readonly rede: string,
     private readonly intervaloMs = INTERVALO_VIGIA_ENFERMAGEM_MS,
     private readonly aviso: (m: string) => void = () => undefined,
   ) {}
 
   /** A assinatura no formato do vigia do M16 (o canal é ignorado: a enfermagem tem o dela). */
-  assinar(hospital: string, _canal: unknown, ouvinte: (e: never) => void): () => void {
+  assinar(alvo: AlvoVigiaEnfermagem, _canal: unknown, ouvinte: (e: never) => void): () => void {
+    const hospital = `${alvo.cliente}:${String(alvo.estabelecimento ?? '')}`;
     let e = this.estados.get(hospital);
     if (!e) {
-      e = { ouvintes: new Set(), temporizador: null, vistos: new Map(), desde: null };
+      e = { ouvintes: new Set(), temporizador: null, vistos: new Map(), desde: null, alvo };
       this.estados.set(hospital, e);
     }
     e.ouvintes.add(ouvinte as Ouvinte);
@@ -59,7 +66,7 @@ export class VigiaHorarios {
     const e = this.estados.get(hospital);
     if (!e) return 0;
     try {
-      const c = { rede: this.rede, hospital };
+      const c: ContextoNucleo = { ...e.alvo, usuario: null, correlacao: 'vigia-enfermagem' };
       const agora = (await this.porta.relogio(c)).slice(0, 16);
       const desde = e.desde ?? somarMinutos(agora, -1);
       const ms = await this.porta.mudancas(c, {

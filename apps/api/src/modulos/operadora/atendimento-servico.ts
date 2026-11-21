@@ -31,13 +31,7 @@ import {
   recusaDaAcao,
   textoDaRespostaEscrita,
 } from '@sgh/dominio-operadora';
-import type {
-  AcessoPortalPrestadorLido,
-  OperadoraOpeLida,
-  ProtocoloOpeLido,
-  ProtocoloOpeResumoLido,
-  RegistroProtocoloSgh,
-} from '@sgh/legado';
+import { type DadosAcessoPortalPrestador, type DadosOperadora, type DadosProtocolo, type DadosProtocoloResumo, type EntradaRegistroProtocolo } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAtendimento, PortaAtendimentoOperadora } from './atendimento-porta.js';
 import type { PortaAutorizacaoOperadora } from './autorizacao-porta.js';
@@ -103,7 +97,7 @@ const dataBr = (d: string) => d.slice(0, 10).split('-').reverse().join('/');
 const quando = (d: string) => `${dataBr(d)} ${d.slice(11, 16)}`;
 
 /** O resumo da lista (as escolhas fechadas do banco vêm como texto: a tela recebe só os valores do contrato). */
-export function resumoDoProtocolo(p: ProtocoloOpeResumoLido): ProtocoloOpeResumo {
+export function resumoDoProtocolo(p: DadosProtocoloResumo): ProtocoloOpeResumo {
   return {
     id: p.id,
     protocolo: p.protocolo,
@@ -124,7 +118,7 @@ export function resumoDoProtocolo(p: ProtocoloOpeResumoLido): ProtocoloOpeResumo
   };
 }
 
-export const acessoDe = (a: AcessoPortalPrestadorLido): AcessoPortalPrestador => ({
+export const acessoDe = (a: DadosAcessoPortalPrestador): AcessoPortalPrestador => ({
   id: a.id,
   operadora: a.operadora,
   prestador: a.prestador,
@@ -144,7 +138,7 @@ export const acessoDe = (a: AcessoPortalPrestadorLido): AcessoPortalPrestador =>
 export interface RegistroConferido {
   readonly registroAns: string;
   /** O registro sem o número (montado na transação com a sequência) nem o usuário. */
-  readonly registro: Omit<RegistroProtocoloSgh, 'hospital' | 'protocolo' | 'usuario'>;
+  readonly registro: Omit<EntradaRegistroProtocolo, 'hospital' | 'protocolo' | 'usuario'>;
 }
 
 export class ServicoAtendimentoOperadora {
@@ -182,7 +176,7 @@ export class ServicoAtendimentoOperadora {
     };
   }
 
-  private async operadora(c: ContextoAtendimento, id: number): Promise<OperadoraOpeLida> {
+  private async operadora(c: ContextoAtendimento, id: number): Promise<DadosOperadora> {
     const o = (await this.porta.operadoras(c)).find((x) => x.id === id);
     if (!o) throw recusaDoAtendimento([{ codigo: 'operadora-inexistente', campo: 'operadora' }]);
     if (o.situacao !== 'ativa')
@@ -290,13 +284,13 @@ export class ServicoAtendimentoOperadora {
       : `Protocolo ${protocolo}: resposta até ${quando(prazoEm)}.`;
   }
 
-  async protocoloOu404(c: ContextoAtendimento, id: number): Promise<ProtocoloOpeLido> {
+  async protocoloOu404(c: ContextoAtendimento, id: number): Promise<DadosProtocolo> {
     const p = await this.porta.protocolo(c, id);
     if (!p) throw naoEncontrado();
     return p;
   }
 
-  private async paraAcoes(c: ContextoAtendimento, p: ProtocoloOpeLido): Promise<ProtocoloParaAcoes> {
+  private async paraAcoes(c: ContextoAtendimento, p: DadosProtocolo): Promise<ProtocoloParaAcoes> {
     const reanalises = await this.porta.reanalises(c, p.id);
     return {
       instancia: p.instancia as ProtocoloParaAcoes['instancia'],
@@ -313,7 +307,7 @@ export class ServicoAtendimentoOperadora {
   }
 
   /** O protocolo, se a ação vale nele agora (senão a recusa com o motivo). */
-  async conferirAcao(c: ContextoAtendimento, id: number, acao: AcaoProtocolo): Promise<ProtocoloOpeLido> {
+  async conferirAcao(c: ContextoAtendimento, id: number, acao: AcaoProtocolo): Promise<DadosProtocolo> {
     const p = await this.protocoloOu404(c, id);
     const motivo = recusaDaAcao(await this.paraAcoes(c, p), acao);
     if (motivo) throw recusaDoAtendimento([{ codigo: motivo }]);
@@ -477,7 +471,7 @@ export class ServicoAtendimentoOperadora {
     await this.conferirFuncoes(c, e.funcoes, e.tipoAtendimento);
   }
 
-  async acessoOu404(c: ContextoAtendimento, id: number): Promise<AcessoPortalPrestadorLido> {
+  async acessoOu404(c: ContextoAtendimento, id: number): Promise<DadosAcessoPortalPrestador> {
     const a = await this.porta.acesso(c, id);
     if (!a) throw acessoNaoEncontrado();
     if (a.situacao === 'encerrado') throw recusaDoAtendimento([{ codigo: 'acesso-encerrado' }]);

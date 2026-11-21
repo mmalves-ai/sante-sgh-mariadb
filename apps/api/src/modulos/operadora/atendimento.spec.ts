@@ -9,11 +9,11 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { codigoTotp } from '@sgh/dominio-acesso';
 import { cnpjSintetico, cpfSintetico } from '@sgh/dominio-operadora';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { criarApp } from '../../app.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../config/public-api.js';
+import { contextoDeTeste } from '../cadastro/teste.spec-util.js';
+import { criarAppOperadora } from './infra/app-operadora.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, REDE, SENHA } from '../../sessao/teste.spec-util.js';
 import { fonteConfiguracaoMemoria } from '../config/public-api.js';
 import { PortaAtendimentoOperadoraMemoria } from './atendimento-porta-memoria.js';
@@ -22,7 +22,7 @@ import { PortaOperadoraMemoria } from './porta-memoria.js';
 import { PortaRedeOperadoraMemoria } from './rede-porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -35,7 +35,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-const pre = (recurso: string, tipo: PrerequisitoGravado['tipo']): PrerequisitoGravado => ({
+const pre = (recurso: string, tipo: PrerequisitoRecurso['tipo']): PrerequisitoRecurso => ({
   recurso,
   tipo,
   situacao: 'cumprido',
@@ -58,12 +58,12 @@ let ligado: NestFastifyApplication;
 let desligado: NestFastifyApplication;
 
 beforeAll(async () => {
-  ligado = await criarApp(lerConfiguracao(env), null, env, {
+  ligado = await criarAppOperadora(env, {
     trilha,
     operadora,
-    redeOperadora: rede,
-    autorizacaoOperadora: autorizacao,
-    atendimentoOperadora: atendimento,
+    rede: rede,
+    autorizacao: autorizacao,
+    atendimento: atendimento,
     configuracao: fonteConfiguracaoMemoria(trilha, {
       chavesIniciais: () => [
         chave('operadora'),
@@ -78,7 +78,7 @@ beforeAll(async () => {
       ],
     }),
   });
-  desligado = await criarApp(lerConfiguracao(env), null, env, {});
+  desligado = await criarAppOperadora(env, {});
   for (const a of [ligado, desligado]) {
     await a.init();
     await a.getHttpAdapter().getInstance().ready();
@@ -735,7 +735,7 @@ describe(
       const r2 = await entrada('senha-sintetica-56');
       expect(r2.statusCode, r2.body).toBe(200);
       const a2 = sessaoDe(r2);
-      const versaoAntes = (await atendimento.acesso({ rede: REDE, hospital: 'aa' }, cria.json().id))?.versao;
+      const versaoAntes = (await atendimento.acesso(contextoDeTeste('aa', REDE), cria.json().id))?.versao;
 
       // A troca da senha: sem CSRF, 403; senha nova igual à atual ou fraca, 400; senha atual errada, 422 (conta no contador).
       const ROTA_SENHA = `${PP}/conta/senha`;
@@ -765,7 +765,7 @@ describe(
       const r3 = await entrada('senha-nova-sint-78');
       expect(r3.statusCode, r3.body).toBe(200);
       const a3 = sessaoDe(r3);
-      const versaoDepois = (await atendimento.acesso({ rede: REDE, hospital: 'aa' }, cria.json().id))?.versao;
+      const versaoDepois = (await atendimento.acesso(contextoDeTeste('aa', REDE), cria.json().id))?.versao;
       expect(versaoDepois).toBe((versaoAntes as number) + 1);
 
       // A troca do autenticador: confirmar sem iniciar, 409; iniciar confere a senha e o código atual.
@@ -800,7 +800,7 @@ describe(
       segredo = novo;
       expect((await entrada('senha-nova-sint-78')).statusCode).toBe(200);
       // Encerrada a conta pelo credenciamento, a troca não acontece (a sessão cai).
-      const v = (await atendimento.acesso({ rede: REDE, hospital: 'aa' }, cria.json().id))?.versao as number;
+      const v = (await atendimento.acesso(contextoDeTeste('aa', REDE), cria.json().id))?.versao as number;
       expect(
         (
           await gestor.post(`${O}/portal/acessos/${cria.json().id}/encerrar`, {
@@ -919,7 +919,7 @@ describe(
       ).toBe('complemento-nao-pedido');
 
       // O auditor pede o complemento (pela porta, como a tela interna grava).
-      await autorizacao.gravarSgh({ rede: REDE, hospital: 'aa' }, null as never, (g) =>
+      await autorizacao.gravar(contextoDeTeste('aa', REDE), null as never, (g) =>
         g.pedirComplemento({
           id: guia,
           versao: 1,
@@ -1070,7 +1070,7 @@ describe(
         });
 
       // Um protocolo de atendimento aberto pelo prestador (como o canal do portal grava) e outro de outro prestador.
-      const C = { rede: REDE, hospital: 'aa' };
+      const C = contextoDeTeste('aa', REDE);
       const base = {
         operadora: ope,
         instancia: 'atendimento',
@@ -1096,9 +1096,9 @@ describe(
         usuario: 'SGH.PORTAL.PRESTADOR',
       };
       const registrar = (numero: string, pre: number) =>
-        atendimento.gravarSgh(C, null as never, (g) =>
+        atendimento.gravar(C, null as never, (g) =>
           g.registrar({ ...base, protocolo: numero, prestador: pre }),
-        );
+        ) as Promise<{ id: number; versao: number }>;
       // O protocolo do prestador nasce pelo portal (POST protocolos): CSRF, natureza do portal e regras do registro.
       const abrir = (corpo: object, comCsrf = true) =>
         ligado.inject({
@@ -1229,7 +1229,7 @@ describe(
       });
       expect(it2.statusCode, it2.body).toBe(200);
       const ev2 = (await pget(`${PP}/protocolos/${numMeu}`)).json().interacoes[1].evento as number;
-      await atendimento.gravarSgh(C, null as never, (g) =>
+      await atendimento.gravar(C, null as never, (g) =>
         g.cancelar({ id: meu.id, versao: 4, usuario: 'SINT', motivo: 'Cancelamento sintético' }),
       );
       const fechado = (await pget(`${PP}/protocolos/${numMeu}`)).json();

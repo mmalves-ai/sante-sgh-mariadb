@@ -4,7 +4,7 @@
 // (terminologia TUSS, CID, internação, guia principal), o prazo da resposta pelo relógio do banco, as críticas
 // automáticas (elegibilidade, segmentação, carências, rede), quem pode decidir (o auditor designado e vigente da operadora
 // do beneficiário; negar e cortar só o médico), a senha e a validade e o comunicado da negativa (@sgh/dominio-operadora).
-// As gravações passam pelas recusas das regras antes de chegar às SGH_; a versão vista e a situação de partida são do
+// As gravações passam pelas recusas das regras antes de chegar ao banco; a versão vista e a situação de partida são do
 // banco.
 import {
   type AbrirJuntaEntrada,
@@ -43,17 +43,7 @@ import {
   type ResultadoDecisao,
   situacaoGuiaTiss,
 } from '@sgh/dominio-operadora';
-import type {
-  AuditorLido,
-  AutorizacaoLida,
-  AutorizacaoResumoLida,
-  DominioAutorizacao,
-  ElegibilidadeOpeLida,
-  FiltroAutorizacoesLido,
-  ItemDominioAutorizacaoLido,
-  ItemRegistroSgh,
-  RegistroAutorizacaoSgh,
-} from '@sgh/legado';
+import { type DadosAuditor, type DadosAutorizacao, type DadosAutorizacaoResumo, type DadosElegibilidadeBeneficiario, type DadosItemDominioAutorizacao, type DominioAutorizacao, type EntradaItemRegistro, type EntradaRegistroAutorizacao, type FiltroAutorizacoesPorta } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAutorizacao, PortaAutorizacaoOperadora } from './autorizacao-porta.js';
 
@@ -71,7 +61,7 @@ function frase(t: string): string {
 }
 
 export function rotulosDaAutorizacao(
-  d: Record<DominioAutorizacao, ItemDominioAutorizacaoLido[]>,
+  d: Record<DominioAutorizacao, DadosItemDominioAutorizacao[]>,
 ): ApoioAutorizacoes['dominios'] {
   const r = (k: DominioAutorizacao) =>
     d[k].map((x) => ({
@@ -117,7 +107,7 @@ const naoEncontrada = () =>
 const dataBr = (d: string) => d.slice(0, 10).split('-').reverse().join('/');
 const quando = (d: string) => `${dataBr(d)} ${d.slice(11, 16)}`;
 
-export function resumoDe(a: AutorizacaoResumoLida): AutorizacaoResumo {
+export function resumoDe(a: DadosAutorizacaoResumo): AutorizacaoResumo {
   return {
     id: a.id,
     protocolo: a.protocolo,
@@ -136,10 +126,10 @@ export function resumoDe(a: AutorizacaoResumoLida): AutorizacaoResumo {
   };
 }
 
-export const auditorDe = (a: AuditorLido): AuditorOperadora => ({ ...a });
+export const auditorDe = (a: DadosAuditor): AuditorOperadora => ({ ...a });
 
 export interface PedidoConferido {
-  readonly registro: Omit<RegistroAutorizacaoSgh, 'hospital' | 'protocolo' | 'usuario'>;
+  readonly registro: Omit<EntradaRegistroAutorizacao, 'hospital' | 'protocolo' | 'usuario'>;
   readonly registroAns: string;
   readonly avisos: string[];
 }
@@ -152,7 +142,7 @@ export class ServicoAutorizacaoOperadora {
     c: ContextoAutorizacao,
     login: string,
     operadora: number | null,
-  ): Promise<AuditorLido | null> {
+  ): Promise<DadosAuditor | null> {
     const [ds, { hoje }] = await Promise.all([this.porta.designacoes(c, login), this.porta.relogio(c)]);
     return (
       ds.find((d) => (operadora === null || d.operadora === operadora) && designacaoVigente(d, hoje)) ?? null
@@ -186,7 +176,8 @@ export class ServicoAutorizacaoOperadora {
         nome: o.nomeFantasia ?? o.razaoSocial,
         registroAns: o.registroAns,
       })),
-      prestadores: prestadores.map((p) => ({ ...p })),
+      // O prestador sem regime (cadastro incompleto) não entra na escolha até o cadastro completar.
+      prestadores: prestadores.flatMap((p) => (p.regime === null ? [] : [{ ...p, regime: p.regime }])),
       auditor: auditor ? auditorDe(auditor) : null,
       ligada: x.ligada,
       motivo: x.motivo,
@@ -201,11 +192,11 @@ export class ServicoAutorizacaoOperadora {
   /** A busca: protocolo, senha ou carteirinha pelos dígitos; o resto pelo início do nome do beneficiário. */
   filtro(f: {
     busca?: string | undefined;
-    situacao?: FiltroAutorizacoesLido['situacao'] | undefined;
+    situacao?: FiltroAutorizacoesPorta['situacao'] | undefined;
     vencidas?: boolean | undefined;
     prestador?: number | undefined;
     apos?: number | undefined;
-  }): FiltroAutorizacoesLido {
+  }): FiltroAutorizacoesPorta {
     const b = f.busca?.trim() ?? '';
     const d = b.replace(/[\s.\-/]/g, '');
     const busca = b ? (/^\d{16}$|^\d{20}$/.test(d) ? d : nomeDeBusca(b)) : '';
@@ -282,7 +273,7 @@ export class ServicoAutorizacaoOperadora {
   async conferirRegistro(
     c: ContextoAutorizacao,
     e: RegistrarAutorizacaoEntrada,
-  ): Promise<PedidoConferido & { el: ElegibilidadeOpeLida }> {
+  ): Promise<PedidoConferido & { el: DadosElegibilidadeBeneficiario }> {
     if (!carteirinhaValida(e.carteirinha))
       throw recusaDasRegras([{ codigo: 'carteirinha-invalida', campo: 'carteirinha' }]);
     const codigosTuss = e.itens.filter((i) => i.tabela === TABELA_PROCEDIMENTOS).map((i) => i.codigo);
@@ -318,7 +309,7 @@ export class ServicoAutorizacaoOperadora {
     const operadora = (await this.porta.operadoras(c)).find((o) => o.id === el.beneficiario.operadora);
     if (!operadora) throw recusaDasRegras([{ codigo: 'operadora-inexistente', campo: 'carteirinha' }]);
     const prazo = prazoDaResposta(e, relogio.agora);
-    const itens: ItemRegistroSgh[] = e.itens.map((i) => ({
+    const itens: EntradaItemRegistro[] = e.itens.map((i) => ({
       tabela: i.tabela,
       codigo: i.codigo,
       descricao:
@@ -365,7 +356,7 @@ export class ServicoAutorizacaoOperadora {
     };
   }
 
-  private async pedido(c: ContextoAutorizacao, id: number, acao: AcaoAutorizacao): Promise<AutorizacaoLida> {
+  private async pedido(c: ContextoAutorizacao, id: number, acao: AcaoAutorizacao): Promise<DadosAutorizacao> {
     const a = await this.porta.autorizacao(c, id);
     if (!a) throw naoEncontrada();
     if (!acaoPermitida(a.situacao, acao))
@@ -505,19 +496,19 @@ export class ServicoAutorizacaoOperadora {
   private async auditorDoPedido(
     c: ContextoAutorizacao,
     login: string,
-    a: AutorizacaoLida,
-  ): Promise<AuditorLido | null> {
+    a: DadosAutorizacao,
+  ): Promise<DadosAuditor | null> {
     return this.designacao(c, login, a.operadora);
   }
 
-  async conferirComplemento(c: ContextoAutorizacao, id: number, login: string): Promise<AutorizacaoLida> {
+  async conferirComplemento(c: ContextoAutorizacao, id: number, login: string): Promise<DadosAutorizacao> {
     const a = await this.pedido(c, id, 'pedirComplemento');
     if (!(await this.auditorDoPedido(c, login, a)))
       throw recusaDasRegras([{ codigo: 'auditor-nao-designado', campo: 'auditor' }]);
     return a;
   }
 
-  conferirResposta(c: ContextoAutorizacao, id: number): Promise<AutorizacaoLida> {
+  conferirResposta(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao> {
     return this.pedido(c, id, 'responderComplemento');
   }
 
@@ -537,8 +528,8 @@ export class ServicoAutorizacaoOperadora {
     login: string,
     junta: boolean,
   ): Promise<{
-    a: AutorizacaoLida;
-    auditor: AuditorLido;
+    a: DadosAutorizacao;
+    auditor: DadosAuditor;
     resultado: ResultadoDecisao;
     registroAns: string;
     hoje: string;
@@ -581,7 +572,7 @@ export class ServicoAutorizacaoOperadora {
     return { a, auditor, resultado, registroAns, hoje: relogio.hoje };
   }
 
-  conferirCancelamento(c: ContextoAutorizacao, id: number): Promise<AutorizacaoLida> {
+  conferirCancelamento(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao> {
     return this.pedido(c, id, 'cancelar');
   }
 
@@ -600,7 +591,7 @@ export class ServicoAutorizacaoOperadora {
     return { a, conselho: conselhoDoAuditor(categoria) };
   }
 
-  async conferirEncerramento(c: ContextoAutorizacao, id: number): Promise<AuditorLido> {
+  async conferirEncerramento(c: ContextoAutorizacao, id: number): Promise<DadosAuditor> {
     const a = await this.porta.auditor(c, id);
     if (!a) throw recusaDasRegras([{ codigo: 'auditor-inexistente', campo: 'id' }]);
     if (a.situacao !== 'ativo')

@@ -28,7 +28,7 @@ export class VerificadorController {
     'verificador público do documento assinado pelo código do QR (sem conteúdo clínico nem dado do paciente)',
   )
   @AuditadoNoHandler(
-    'documento.registrarConsultaPublica: SGH_DOC_VERIFICACAO (origem mascarada) com a SGH_TRILHA na mesma transação',
+    'documento.registrarConsultaPublica: consulta_verificacao_documento (origem mascarada) com a trilha na mesma transação',
   )
   verificar(@Param('codigo') codigo: string, @Req() req: ReqPublica): Promise<VerificacaoPublica> {
     return this.servico.verificar(

@@ -16,7 +16,7 @@
 //   POST /api/operadora/ans/ressarcimento                operadora.registrarAvisoRessarcimento (análise de cada atendimento)
 //   POST /api/operadora/ans/envios/:id/itens/:item/decisao  operadora.decidirAtendimentoRessarcimento
 // Tudo exige a chave da fatia `operadora.ans`, que só vale com a do módulo (regra 1), menos o apoio. Cada gravação muda
-// as SGH_OPE_ENVIO_ANS* (e o complemento do SIB) com a SGH_TRILHA na mesma transação; nenhuma tabela legada é escrita;
+// as envio_ans* (e o complemento do SIB) com a trilha_auditoria na mesma transação; nenhuma tabela de outro sistema é escrita;
 // fora de `producao` o destino é o simulador (regra 7).
 import {
   Body,
@@ -55,7 +55,7 @@ import {
   type ResultadoEnvioAns,
   ROTAS_OPERADORA_F6 as R,
 } from '@sgh/contratos';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -80,10 +80,11 @@ import { corpo } from '../exames/public-api.js';
 import { type GravadorAns, PORTA_ANS_OPERADORA, type PortaAnsOperadora } from './ans-porta.js';
 import { ServicoAnsOperadora } from './ans-servico.js';
 import { ServicoSituacaoOperadora, type SujeitoOperadora } from './aplicacao/situacao.js';
+import { contextoGravacao } from './contexto-gravacao.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.ans';
-const TABELA = 'SGH_OPE_ENVIO_ANS';
+const TABELA = 'envio_ans';
 
 function filtro<T extends { safeParse(v: unknown): { success: boolean; data?: unknown; error?: unknown } }>(
   esquema: T,
@@ -126,7 +127,7 @@ export class AnsOperadoraController {
     return s;
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T extends { id: number }>(
     s: SessaoCadastro,
     evento: string,
@@ -134,9 +135,9 @@ export class AnsOperadoraController {
     fn: (g: GravadorAns) => Promise<T>,
     tabela = TABELA,
   ): Promise<T> {
-    const linha = (r: T): LinhaTrilha =>
+    const linha = (r: T): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria')
@@ -213,7 +214,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.gerar.permissao)
   @AuditadoNoHandler(
-    'operadora.gerarEnvioAns (SGH_OPE_ENVIO_ANS, os itens, o substituído e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.gerarEnvioAns (envio_ans, os itens, o substituído e o evento) com a trilha_auditoria na mesma transação',
   )
   async gerar(
     @Body() b: unknown,
@@ -237,7 +238,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.registrarAviso.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarAvisoRessarcimento (SGH_OPE_ENVIO_ANS, os atendimentos e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarAvisoRessarcimento (envio_ans, os atendimentos e o evento) com a trilha_auditoria na mesma transação',
   )
   async registrarAviso(
     @Body() b: unknown,
@@ -265,7 +266,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.decidirItem.permissao)
   @AuditadoNoHandler(
-    'operadora.decidirAtendimentoRessarcimento (SGH_OPE_ENVIO_ANS_ITEM e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.decidirAtendimentoRessarcimento (envio_ans_item e o evento) com a trilha_auditoria na mesma transação',
   )
   async decidirItem(
     @Param('id') id: string,
@@ -301,7 +302,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.transmitir.permissao)
   @AuditadoNoHandler(
-    'operadora.transmitirEnvioAns (SGH_OPE_ENVIO_ANS e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.transmitirEnvioAns (envio_ans e o evento) com a trilha_auditoria na mesma transação',
   )
   async transmitir(
     @Param('id') id: string,
@@ -329,7 +330,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.retorno.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarRetornoAns (SGH_OPE_ENVIO_ANS, os itens, o complemento do SIB e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarRetornoAns (envio_ans, os itens, o complemento do SIB e o evento) com a trilha_auditoria na mesma transação',
   )
   async retorno(
     @Param('id') id: string,
@@ -359,7 +360,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.pagar.permissao)
   @AuditadoNoHandler(
-    'operadora.pagarGruAns (SGH_OPE_ENVIO_ANS e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.pagarGruAns (envio_ans e o evento) com a trilha_auditoria na mesma transação',
   )
   async pagar(
     @Param('id') id: string,
@@ -390,7 +391,7 @@ export class AnsOperadoraController {
   ): Promise<PendenciasSib> {
     const f = filtro(esquemaFiltroPendenciasSib, q);
     const s = await this.exigirFatia(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_OPE_BENEF_SIB', idAlvo: String(f.operadora) };
+    req.sghAlvo = { tabelaAlvo: 'beneficiario_plano', idAlvo: String(f.operadora) };
     return this.servico.pendenciasSib(s.porta, f.operadora, f.apos ?? 0);
   }
 
@@ -400,7 +401,7 @@ export class AnsOperadoraController {
   async complementoSib(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ComplementoSib> {
     const n = idDaRota(id);
     const s = await this.exigirFatia(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_OPE_BENEF_SIB', idAlvo: String(n) };
+    req.sghAlvo = { tabelaAlvo: 'beneficiario_plano', idAlvo: String(n) };
     return this.servico.complemento(s.porta, n);
   }
 
@@ -408,7 +409,7 @@ export class AnsOperadoraController {
   @HttpCode(200)
   @Permissao(R.gravarComplementoSib.permissao)
   @AuditadoNoHandler(
-    'operadora.alterarComplementoSib (SGH_OPE_BENEF_SIB) com a SGH_TRILHA na mesma transação',
+    'operadora.alterarComplementoSib (beneficiario_plano) com a trilha_auditoria na mesma transação',
   )
   async gravarComplementoSib(
     @Param('id') id: string,
@@ -424,7 +425,7 @@ export class AnsOperadoraController {
       E.operadoraAnsComplementoSib.codigo,
       'operadora.alterarComplementoSib',
       (g) => g.complemento({ ...e, beneficiario: n, usuario: s.login }),
-      'SGH_OPE_BENEF_SIB',
+      'beneficiario_plano',
     );
     return this.servico.complemento(s.porta, n);
   }

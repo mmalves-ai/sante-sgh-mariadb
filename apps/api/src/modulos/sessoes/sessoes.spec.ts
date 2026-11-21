@@ -10,9 +10,10 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloSessoes } from './modulo.js';
 import { PortaSessoesMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'sessoes' };
 const trilha = new RegistradorTrilhaMemoria();
 const NASC: Record<number, string> = { 1001: '1980-03-15', 1003: '1992-07-01', 1007: '2001-09-09' };
 // 01/03/2027 às 07:00 (local, UTC-3).
@@ -33,7 +34,10 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, sessoes, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { sessoes: async () => ({ modulo: (ctx) => moduloSessoes(ctx, { porta: sessoes }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

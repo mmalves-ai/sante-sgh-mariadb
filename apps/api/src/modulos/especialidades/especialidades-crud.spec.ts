@@ -12,16 +12,24 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloEspecialidades } from './modulo.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,especialidades' };
 const trilha = new RegistradorTrilhaMemoria();
 const especialidades = new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0));
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, especialidades, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      config: () => import('../config/modulo.js'),
+      documento: () => import('../documento/modulo.js'),
+      especialidades: async () => ({ modulo: (ctx) => moduloEspecialidades(ctx, { porta: especialidades }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -130,13 +138,13 @@ describe('W0-05: oncologia e lactário', () => {
       justificativaIntervalo: null,
       doses: [{ farmaco: 'Paclitaxel', final: 145.6 }],
     });
-    // A ligação com a prescrição errada: desfeita só no vínculo do novo; a prescrição do legado fica idêntica.
+    // A ligação com a prescrição errada: desfeita só no vínculo do ciclo; a prescrição fica idêntica.
     expect(
       (await post(medico, `/especialidades/oncologia/ciclos/${id}/prescricoes`, { prescricao: 990_201 }))
         .statusCode,
     ).toBe(200);
     const antes = await especialidades.prescricoesDoDia(
-      { rede: 'r', hospital: 'aa' },
+      { cliente: '', estabelecimento: null, usuario: null, correlacao: 'teste-m45' },
       950_102,
       99_602,
       '2026-10-27',
@@ -147,7 +155,7 @@ describe('W0-05: oncologia e lactário', () => {
     expect(des.statusCode, des.body).toBe(200);
     expect(eventos(E.cicloOncologicoPrescricaoDesligada.codigo)).toBe(1);
     const depois = await especialidades.prescricoesDoDia(
-      { rede: 'r', hospital: 'aa' },
+      { cliente: '', estabelecimento: null, usuario: null, correlacao: 'teste-m45' },
       950_102,
       99_602,
       '2026-10-27',

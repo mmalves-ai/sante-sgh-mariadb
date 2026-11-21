@@ -6,11 +6,11 @@
 //   GET  /api/cadastros/convenios/:cod/situacao/impacto?operacao          impacto e alertas de suspender/reativar
 //   POST /api/cadastros/convenios/:cod/situacao                          convenio.alterarSituacao (crítica)
 //   PUT  /api/cadastros/convenios/:cod/contrato                          convenio.alterarContrato (crítica)
-//   POST /api/cadastros/convenios/:cod/planos                            plano e vigência do contrato (SGH_)
+//   POST /api/cadastros/convenios/:cod/planos                            plano e vigência do contrato
 //   PATCH /api/cadastros/convenios/:cod/planos/:id                       corrigir, encerrar ou desativar o plano
 //   GET  /api/cadastros/convenios/:cod/aceita-atendimento                public-api para a agenda (M17)
-// As gravações no legado passam pelo EXECUTOR (Idempotency-Key; reautenticação; SGH_TRILHA e a autoria em
-// SGH_PRECO_AUTORIA na mesma transação). Com a fonte em memória, a trilha vai ao registrador da API.
+// As gravações passam pelo EXECUTOR (Idempotency-Key; reautenticação; trilha e autoria na mesma
+// transação). Com a fonte em memória, a trilha vai ao registrador da API.
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   type ContratoConvenio,
@@ -25,7 +25,7 @@ import {
   textoCp1252,
 } from '@sgh/contratos';
 import { convenioAceitaAtendimento } from '@sgh/dominio-preco';
-import { MODIFICADORES, operacao, type TipoModificador } from '@sgh/legado';
+
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -37,7 +37,10 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
+import { destinoDoContrato } from '../exames/public-api.js';
+import { MODIFICADORES, type TipoModificador } from './tipos.js';
 import {
+  chaveDoPedido,
   contextoOperacao,
   ctxDe,
   escopoConvenio,
@@ -123,7 +126,7 @@ export class ConveniosController {
       { busca: (q['busca'] ?? '').slice(0, 60), situacao },
       escopoConvenio(req),
     );
-    return { itens, total: itens.length, destino: this.fonte.destino };
+    return { itens, total: itens.length, destino: destinoDoContrato(this.fonte.destino) };
   }
 
   @Get('codigos-prestador')
@@ -133,7 +136,7 @@ export class ConveniosController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaGenerica> {
     const p = paginaDe(q);
-    // Escopo da sessão (TBUSERS_TBCONVEN): fora dele, lista vazia; sem convênio pedido, só os do escopo.
+    // Escopo da sessão: fora dele, lista vazia; sem convênio pedido, só os do escopo.
     const conv = filtroConvenioDaSessao(req, inteiroOuNulo(q['convenio'], 'convenio'));
     const r =
       conv === 'fora'
@@ -175,11 +178,11 @@ export class ConveniosController {
     if (!def) throw new ErroProblema('nao-encontrado', 404, 'Modificador desconhecido');
     const p = paginaDe(q);
     const r = await this.fonte.modificadores(ctxDe(req, 'modificadores'), tipo, c, p.pagina, p.porPagina);
-    // Regra 7 (DP-33): o percentual da tabela 625 em TBPERTHM tem significado a confirmar.
+    // Regra 7 (DP-33): o percentual da tabela 625 tem significado a confirmar.
     const aConfirmar = tipo === 'honorarios' && r.itens.some((i) => i['tabela'] === 625);
     return {
       tipo,
-      colunas: def.colunas.map(([campo, , rotulo]) => ({
+      colunas: def.colunas.map(([campo, rotulo]) => ({
         campo,
         rotulo,
         ...(aConfirmar && campo.startsWith('perc') ? { aConfirmar: true } : {}),
@@ -254,7 +257,7 @@ export class ConveniosController {
   @HttpCode(200)
   @Permissao('convenio.situacao.alterar')
   @AuditadoNoHandler(
-    'executor: SGH_TRILHA e SGH_PRECO_AUTORIA na mesma transação (memória: registrador da API)',
+    'executor: trilha e autoria na mesma transação (memória: registrador da API)',
   )
   async situacao(
     @Param('cod') cod: string,
@@ -275,9 +278,9 @@ export class ConveniosController {
     const em = await reautenticar(this.sessoes, this.resolvedor, req, p.data.senha);
     const ctx = contextoOperacao(req, 'convenio-situacao', em);
     try {
-      await this.fonte.executor.executar(
-        operacao('convenio.alterarSituacao'),
-        ctx.hospital,
+      await this.fonte.executar(
+        'convenio.alterarSituacao',
+        ctx,
         { convenio: c, operacao: p.data.operacao, justificativa: p.data.justificativa },
         ctx,
       );
@@ -293,7 +296,7 @@ export class ConveniosController {
     await this.servico.invalidarConvenios(ctxDe(req, 'convenios'), Date.now());
     return {
       operacao: 'convenio.alterarSituacao',
-      destino: this.fonte.destino,
+      destino: destinoDoContrato(this.fonte.destino),
       lote: null,
       linhas: 1,
       partes: 1,
@@ -305,7 +308,7 @@ export class ConveniosController {
   @HttpCode(200)
   @Permissao('convenio.contrato.editar')
   @AuditadoNoHandler(
-    'executor: SGH_TRILHA e SGH_PRECO_AUTORIA na mesma transação (memória: registrador da API)',
+    'executor: trilha e autoria na mesma transação (memória: registrador da API)',
   )
   async alterarContrato(
     @Param('cod') cod: string,
@@ -338,7 +341,7 @@ export class ConveniosController {
     const em = await reautenticar(this.sessoes, this.resolvedor, req, p.data.senha);
     const ctx = contextoOperacao(req, 'convenio-contrato', em);
     try {
-      await this.fonte.executor.executar(operacao('convenio.alterarContrato'), ctx.hospital, entrada, ctx);
+      await this.fonte.executar('convenio.alterarContrato', ctx, entrada, ctx);
     } catch (e) {
       throw problemaDoPreco(e);
     }
@@ -351,7 +354,7 @@ export class ConveniosController {
     await this.servico.invalidarConvenios(ctxDe(req, 'convenios'), Date.now());
     return {
       operacao: 'convenio.alterarContrato',
-      destino: this.fonte.destino,
+      destino: destinoDoContrato(this.fonte.destino),
       lote: null,
       linhas: 1,
       partes: 1,
@@ -363,7 +366,7 @@ export class ConveniosController {
   @HttpCode(201)
   @Permissao('convenio.contrato.editar')
   @AuditadoNoHandler(
-    'transação SGH_: SGH_CAD_CONVENIO_PLANO e SGH_TRILHA juntas (memória: registrador da API)',
+    'gravação do plano com a trilha junto (memória: registrador da API)',
   )
   async plano(@Param('cod') cod: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const c = inteiro(cod, 'convênio', [0, 32767]);
@@ -407,6 +410,7 @@ export class ConveniosController {
           resultado: 'sucesso',
           estacao: estacaoDaRequisicao(req).slice(0, 80),
           correlacao: ctx.traceId,
+          chaveIdempotencia: chaveDoPedido(req),
         },
       );
       await this.trilhaMemoria(
@@ -415,7 +419,7 @@ export class ConveniosController {
         'convenio.plano',
         String(r.id),
       );
-      return { id: r.id, destino: this.fonte.destino };
+      return { id: r.id, destino: destinoDoContrato(this.fonte.destino) };
     } catch (e) {
       throw problemaDoPreco(e);
     }
@@ -424,7 +428,7 @@ export class ConveniosController {
   @HttpCode(200)
   @Permissao('convenio.contrato.editar')
   @AuditadoNoHandler(
-    'transação SGH_: SGH_CAD_CONVENIO_PLANO e SGH_TRILHA juntas (memória: registrador da API)',
+    'gravação do plano com a trilha junto (memória: registrador da API)',
   )
   async alterarPlano(
     @Param('cod') cod: string,
@@ -473,6 +477,7 @@ export class ConveniosController {
           resultado: 'sucesso',
           estacao: estacaoDaRequisicao(req).slice(0, 80),
           correlacao: ctx.traceId,
+          chaveIdempotencia: chaveDoPedido(req),
         },
       );
       await this.trilhaMemoria(
@@ -481,7 +486,7 @@ export class ConveniosController {
         'convenio.plano',
         String(r.id),
       );
-      return { id: r.id, versao: r.versao, destino: this.fonte.destino };
+      return { id: r.id, versao: r.versao, destino: destinoDoContrato(this.fonte.destino) };
     } catch (e) {
       throw problemaDoPreco(e);
     }

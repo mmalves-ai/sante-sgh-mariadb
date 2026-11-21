@@ -1,38 +1,23 @@
 // Porta da cobrança e das mensalidades da operadora própria (M56, etapa 3, F2): o que a tela da cobrança lê e grava,
-// independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: as leituras de @sgh/legado em transação READ ONLY (o contrato, o produto e os beneficiários da F1 e as
-//     cobranças da F2, todos SGH_OPE_*) e as gravações SGH_OPE_COBRANCA, SGH_OPE_COBRANCA_ITEM e SGH_OPE_REAJUSTE numa
-//     transação SGH_ com a SGH_TRILHA junto; em dev sobre a cópia compartilhada, as gravações são recusadas
-//     (`sghSoLeitura`), como nos outros módulos;
-//   - `memoria`: a sessão sintética de dev/ci (E2E), sobre a porta da F1 em memória (os mesmos contratos e
-//     beneficiários); nada vai à cópia;
+// independente de onde:
+//   - `banco`: a porta própria sobre o banco do cliente (fatura_plano, fatura_plano_item, reajuste_contrato_plano,
+//     contrato_plano, beneficiario_plano), pelo @sgh/nucleo e o Executor;
+//   - `memoria`: a sessão sintética de dev/ci (E2E), sobre a porta da F1 em memória;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
-// Nenhuma tabela do sistema anterior é lida nem escrita.
-import type {
-  BaseMensalidadeLida,
-  BeneficiarioBaseLido,
-  CobrancaLida,
-  CobrancaSgh,
-  ContratoCobrancaLido,
-  FiltroCobrancasSgh,
-  ItemCobrancaLido,
-  LinhaTrilha,
-  OperadoraOpeLida,
-  ReajusteOpeLido,
-  ReajusteSgh,
-  TotaisCobrancaLidos,
-} from '@sgh/legado';
+// Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
+// gravação vem da sessão, nunca da entrada.
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import { type DadosBaseMensalidade, type DadosBeneficiarioBase, type DadosCobranca, type DadosContratoCobranca, type DadosItemCobranca, type DadosOperadora, type DadosReajuste, type EntradaCobranca, type EntradaReajuste, type FiltroCobrancasPorta, type TotaisCobranca } from './dados-portas.js';
 
 export const PORTA_COBRANCA_OPERADORA = Symbol('PORTA_COBRANCA_OPERADORA');
 
-export interface ContextoCobranca {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** O contexto da sessão: o do núcleo (ids) mais a rede e o código do estabelecimento (exibição). */
+export type ContextoCobranca = ContextoPorta;
 
-/** O que a gravação SGH_ da cobrança faz dentro da transação (com a trilha junto). */
+/** O que a gravação da cobrança faz dentro da transação (com a trilha junto). */
 export interface GravadorCobranca {
-  incluir(c: CobrancaSgh & { readonly por: string }): Promise<{ id: number; versao: number }>;
+  incluir(c: EntradaCobranca & { readonly por: string }): Promise<{ id: number; versao: number }>;
   baixar(b: {
     id: number;
     versao: number;
@@ -65,8 +50,8 @@ export interface GravadorCobranca {
     referencia: string;
     por: string;
   }): Promise<{ cobrancas: number }>;
-  registrarReajuste(r: ReajusteSgh & { readonly por: string }): Promise<{ id: number }>;
-  cancelarReajuste(x: { id: number; motivo: string; por: string }): Promise<{ id: number }>;
+  registrarReajuste(r: EntradaReajuste & { readonly por: string }): Promise<{ id: number }>;
+  cancelarReajuste(x: { id: number; versao?: number; motivo: string; por: string }): Promise<{ id: number }>;
 }
 
 export interface FiltroBaseMensalidades {
@@ -79,33 +64,33 @@ export interface FiltroBaseMensalidades {
 }
 
 export interface PortaCobrancaOperadora {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   /** A data de hoje no relógio do banco (AAAA-MM-DD). */
   hoje(c: ContextoCobranca): Promise<string>;
-  operadoras(c: ContextoCobranca): Promise<OperadoraOpeLida[]>;
+  operadoras(c: ContextoCobranca): Promise<DadosOperadora[]>;
   baseMensalidades(
     c: ContextoCobranca,
     f: FiltroBaseMensalidades,
-  ): Promise<{ itens: BaseMensalidadeLida[]; proxima: number | null }>;
-  contrato(c: ContextoCobranca, id: number): Promise<ContratoCobrancaLido | null>;
+  ): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }>;
+  contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null>;
   beneficiario(
     c: ContextoCobranca,
     id: number,
-  ): Promise<(BeneficiarioBaseLido & { contrato: number }) | null>;
+  ): Promise<(DadosBeneficiarioBase & { contrato: number }) | null>;
   titular(
     c: ContextoCobranca,
     contrato: number,
   ): Promise<{ id: number; nome: string; cpf: string | null } | null>;
   cobrancas(
     c: ContextoCobranca,
-    f: FiltroCobrancasSgh,
-  ): Promise<{ itens: CobrancaLida[]; proxima: number | null }>;
-  cobranca(c: ContextoCobranca, id: number): Promise<CobrancaLida | null>;
-  itens(c: ContextoCobranca, cobranca: number): Promise<ItemCobrancaLido[]>;
-  renegociadas(c: ContextoCobranca, acordo: number): Promise<CobrancaLida[]>;
+    f: FiltroCobrancasPorta,
+  ): Promise<{ itens: DadosCobranca[]; proxima: number | null }>;
+  cobranca(c: ContextoCobranca, id: number): Promise<DadosCobranca | null>;
+  itens(c: ContextoCobranca, cobranca: number): Promise<DadosItemCobranca[]>;
+  renegociadas(c: ContextoCobranca, acordo: number): Promise<DadosCobranca[]>;
   /** As cobranças dos contratos com vencimento desde a data ou em aberto. */
-  doContrato(c: ContextoCobranca, contratos: readonly number[], desde: string): Promise<CobrancaLida[]>;
-  totais(c: ContextoCobranca, operadora: number, hoje: string): Promise<TotaisCobrancaLidos>;
+  doContrato(c: ContextoCobranca, contratos: readonly number[], desde: string): Promise<DadosCobranca[]>;
+  totais(c: ContextoCobranca, operadora: number, hoje: string): Promise<TotaisCobranca>;
   inadimplentes(
     c: ContextoCobranca,
     f: { operadora: number; hoje: string; apos?: number },
@@ -116,15 +101,15 @@ export interface PortaCobrancaOperadora {
   reajustes(
     c: ContextoCobranca,
     f: { operadora: number; contrato?: number; apos?: number },
-  ): Promise<{ itens: ReajusteOpeLido[]; proxima: number | null }>;
-  reajuste(c: ContextoCobranca, id: number): Promise<ReajusteOpeLido | null>;
+  ): Promise<{ itens: DadosReajuste[]; proxima: number | null }>;
+  reajuste(c: ContextoCobranca, id: number): Promise<DadosReajuste | null>;
   situacaoReajuste(
     c: ContextoCobranca,
     contrato: number,
   ): Promise<{ vigentes: string[]; ultimaMensalidade: string | null; vidas: number }>;
-  gravarSgh<T>(
+  gravar<T>(
     c: ContextoCobranca,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: GravadorCobranca) => Promise<T>,
   ): Promise<T>;
 }
@@ -146,5 +131,5 @@ export const METODOS_PORTA_COBRANCA: ReadonlySet<string> = new Set([
   'reajustes',
   'reajuste',
   'situacaoReajuste',
-  'gravarSgh',
+  'gravar',
 ]);

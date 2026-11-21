@@ -1,23 +1,26 @@
 // Porta da portaria EM MEMÓRIA (M50, etapa 5): a sessão sintética de dev/ci (E2E) e os testes da API. Os internados, as
 // unidades e os domínios são SINTÉTICOS (marca "SINTETICO"; os domínios repetem os rótulos do controle de acesso da
-// cópia `pc`, que não são dado de pessoa); as gravações seguem as recusas das gravações SGH_ do legado (a visita aberta
+// configuração de origem, que não são dado de pessoa); as gravações seguem as mesmas recusas da porta do banco (a visita aberta
 // uma vez por visitante, a chave do ato, a saída uma vez só, a regra pela versão, o bloqueio revogado uma vez, o
 // acompanhante vigente com a troca, o terminal pela versão, o evento da catraca uma vez só). Nada conecta a banco.
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
 import type {
-  AcompanhanteLidoSgh,
-  BloqueioLidoSgh,
-  DominiosPortariaLidos,
-  EventoCatracaLidoSgh,
+  AcompanhanteRegistrado,
+  BloqueioVisitaRegistrado,
+  DominiosDaPortaria,
+  EventoCatracaRegistrado,
   InternadoPortaria,
-  PacienteRelido,
-  RegraVisitaLidaSgh,
-  TerminalLidoSgh,
-  VisitaLidaSgh,
-  VisitanteLidoSgh,
-} from '@sgh/legado';
-import { ErroOperacao, recusa } from '@sgh/legado';
-import type { ContextoOperacao } from '@sgh/legado';
-import type { GravadorPortaria, PortaPortaria } from './porta.js';
+  RegraVisitaRegistrada,
+  SituacaoDoPaciente,
+  TerminalRegistrado,
+  VisitaRegistrada,
+  VisitanteRegistrado,
+} from './tipos.js';
+import type { ContextoPortaria, GravadorPortaria, PortaPortaria } from './porta.js';
+
+/** Chave do estabelecimento da sessão na memória. */
+const est = (c: Pick<ContextoPortaria, 'estabelecimento'> & { readonly hospital?: string }) =>
+  c.estabelecimento != null ? String(c.estabelecimento) : String(c.hospital ?? '0');
 
 const minuto = (d: Date) => {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -88,7 +91,7 @@ export const INTERNADOS_PORTARIA_SINTETICOS: readonly InternadoPortaria[] = [
   },
 ];
 
-const DOMINIOS: DominiosPortariaLidos = {
+const DOMINIOS: DominiosDaPortaria = {
   tiposVisitante: [
     { codigo: 1, nome: 'Acompanhante', ativo: true },
     { codigo: 2, nome: 'Fornecedor', ativo: true },
@@ -100,18 +103,18 @@ const DOMINIOS: DominiosPortariaLidos = {
     { codigo: 8, nome: 'Colaborador', ativo: true },
   ],
   tiposVisitado: [
-    { codigo: 1, nome: 'Funcionário' },
-    { codigo: 2, nome: 'Local' },
-    { codigo: 3, nome: 'Médico' },
-    { codigo: 4, nome: 'Paciente' },
-    { codigo: 5, nome: 'Geral' },
-    { codigo: 6, nome: 'Colaborador' },
+    { codigo: 1, nome: 'Funcionário', paciente: false },
+    { codigo: 2, nome: 'Local', paciente: false },
+    { codigo: 3, nome: 'Médico', paciente: false },
+    { codigo: 4, nome: 'Paciente', paciente: true },
+    { codigo: 5, nome: 'Geral', paciente: false },
+    { codigo: 6, nome: 'Colaborador', paciente: false },
   ],
   identificacoes: [
-    { codigo: 1, nome: 'Biometria' },
-    { codigo: 2, nome: 'Crachá' },
-    { codigo: 3, nome: 'Etiqueta' },
-    { codigo: 4, nome: 'Facial' },
+    { codigo: 1, nome: 'Biometria', biometrica: true },
+    { codigo: 2, nome: 'Crachá', biometrica: false },
+    { codigo: 3, nome: 'Etiqueta', biometrica: false },
+    { codigo: 4, nome: 'Facial', biometrica: true },
   ],
   situacoesAcesso: [
     { codigo: 1, nome: 'Todas' },
@@ -126,18 +129,18 @@ const DOMINIOS: DominiosPortariaLidos = {
   ],
 };
 
-interface VisitanteMem extends VisitanteLidoSgh {
+interface VisitanteMem extends VisitanteRegistrado {
   readonly hospital: string;
   readonly chave: string | null;
   readonly anonimizado: boolean;
 }
-type VisitaMem = VisitaLidaSgh & { hospital: string; chave: string | null; origem?: string };
+type VisitaMem = VisitaRegistrada & { hospital: string; chave: string | null; origem?: string };
 
 export interface OpcoesPortariaMemoria {
   /** O relógio (padrão: o do processo). */
   readonly agora?: () => Date;
   /** Regras de visita sintéticas iniciais (padrão: o dia inteiro, para a sessão sintética rodar a qualquer hora). */
-  readonly regras?: readonly Omit<RegraVisitaLidaSgh, 'id' | 'versao' | 'atualizadoPor' | 'atualizadoEm'>[];
+  readonly regras?: readonly Omit<RegraVisitaRegistrada, 'id' | 'versao' | 'atualizadoPor' | 'atualizadoEm'>[];
   /** Os internados sintéticos (padrão: INTERNADOS_PORTARIA_SINTETICOS; os testes que cruzam módulos trazem os seus). */
   readonly internados?: readonly InternadoPortaria[];
 }
@@ -174,11 +177,11 @@ export class PortaPortariaMemoria implements PortaPortaria {
   private readonly agora: () => Date;
   readonly visitantes: VisitanteMem[] = [];
   readonly visitas: VisitaMem[] = [];
-  readonly regrasMem: (RegraVisitaLidaSgh & { hospital: string })[] = [];
-  readonly bloqueiosMem: (BloqueioLidoSgh & { hospital: string; revogadoEm: string | null })[] = [];
-  readonly acompanhantesMem: (AcompanhanteLidoSgh & { hospital: string })[] = [];
-  readonly terminaisMem: (TerminalLidoSgh & { hospital: string })[] = [];
-  readonly eventosMem: (EventoCatracaLidoSgh & { hospital: string; chave: string })[] = [];
+  readonly regrasMem: (RegraVisitaRegistrada & { hospital: string })[] = [];
+  readonly bloqueiosMem: (BloqueioVisitaRegistrado & { hospital: string; revogadoEm: string | null })[] = [];
+  readonly acompanhantesMem: (AcompanhanteRegistrado & { hospital: string })[] = [];
+  readonly terminaisMem: (TerminalRegistrado & { hospital: string })[] = [];
+  readonly eventosMem: (EventoCatracaRegistrado & { hospital: string; chave: string })[] = [];
   readonly travas: string[] = [];
 
   private readonly regrasIniciais: NonNullable<OpcoesPortariaMemoria['regras']>;
@@ -255,7 +258,7 @@ export class PortaPortariaMemoria implements PortaPortaria {
     );
   }
 
-  private relido(hospital: string, reg: number, visitante: number | null, agora: string): PacienteRelido {
+  private relido(hospital: string, reg: number, visitante: number | null, agora: string): SituacaoDoPaciente {
     const acomp = this.acompanhantesMem.find(
       (a) => a.hospital === hospital && a.internacao === reg && a.fim === null,
     );
@@ -311,14 +314,14 @@ export class PortaPortariaMemoria implements PortaPortaria {
         const chave = `${hospital}:${v.tipoDocumento}:${v.documento}`;
         const ja = this.visitantes.find((x) => x.chave === chave);
         if (ja) {
-          const fotoAnterior =
-            v.fotoChave && ja.fotoChave && ja.fotoChave !== v.fotoChave ? ja.fotoChave : null;
+          const nova = v.foto?.chave ?? null;
+          const fotoAnterior = nova && ja.fotoChave && ja.fotoChave !== nova ? ja.fotoChave : null;
           Object.assign(ja, {
             nome: v.nome,
             nascimento: v.nascimento ?? ja.nascimento,
             telefone: v.telefone ?? ja.telefone,
             tipoVisitante: v.tipoVisitante,
-            fotoChave: v.fotoChave ?? ja.fotoChave,
+            fotoChave: nova ?? ja.fotoChave,
             reterAte: ja.reterAte > v.reterAte ? ja.reterAte : v.reterAte,
           });
           return { id: ja.id, novo: false, fotoAnterior };
@@ -335,7 +338,7 @@ export class PortaPortariaMemoria implements PortaPortaria {
           nascimento: v.nascimento,
           telefone: v.telefone,
           tipoVisitante: v.tipoVisitante,
-          fotoChave: v.fotoChave,
+          fotoChave: v.foto?.chave ?? null,
           reterAte: v.reterAte,
           ultimaVisita: null,
         });
@@ -383,7 +386,7 @@ export class PortaPortariaMemoria implements PortaPortaria {
             x.validoAte <= v.entrada.slice(0, 16),
         );
         if (vencida) Object.assign(vencida, { saida: vencida.validoAte, origem: 'expirada' });
-        let papel: VisitaLidaSgh['papel'] = 'visitante';
+        let papel: VisitaRegistrada['papel'] = 'visitante';
         if (v.destino.tipo === 'paciente') {
           this.travas.push(`${hospital}:${v.destino.internacao}`);
           const r = this.relido(hospital, v.destino.internacao, v.visitante, v.entrada);
@@ -596,12 +599,8 @@ export class PortaPortariaMemoria implements PortaPortaria {
     };
   }
 
-  async gravarSgh<T>(
-    c: { hospital: string },
-    _t: unknown,
-    fn: (g: GravadorPortaria) => Promise<T>,
-  ): Promise<T> {
-    return fn(this.gravador(c.hospital));
+  async gravarSgh<T>(c: ContextoPortaria, _t: unknown, fn: (g: GravadorPortaria) => Promise<T>): Promise<T> {
+    return fn(this.gravador(est(c)));
   }
 
   async relogio(): Promise<string> {
@@ -622,87 +621,87 @@ export class PortaPortariaMemoria implements PortaPortaria {
   async internado(_c: unknown, internacao: number) {
     return this.internadosLista.find((i) => i.internacao === internacao) ?? null;
   }
-  async regras(c: { hospital: string }) {
-    this.semear(c.hospital);
-    return this.regrasMem.filter((r) => r.hospital === c.hospital);
+  async regras(c: ContextoPortaria) {
+    this.semear(est(c));
+    return this.regrasMem.filter((r) => r.hospital === est(c));
   }
-  async bloqueios(c: { hospital: string }, internacao?: number | null) {
-    this.semear(c.hospital);
+  async bloqueios(c: ContextoPortaria, internacao?: number | null) {
+    this.semear(est(c));
     return this.bloqueiosMem.filter(
       (b) =>
-        b.hospital === c.hospital && !b.revogadoEm && (internacao == null || b.internacao === internacao),
+        b.hospital === est(c) && !b.revogadoEm && (internacao == null || b.internacao === internacao),
     );
   }
-  async visitante(c: { hospital: string }, id: number) {
-    this.semear(c.hospital);
-    return this.visitantes.find((v) => v.hospital === c.hospital && v.id === id && !v.anonimizado) ?? null;
+  async visitante(c: ContextoPortaria, id: number) {
+    this.semear(est(c));
+    return this.visitantes.find((v) => v.hospital === est(c) && v.id === id && !v.anonimizado) ?? null;
   }
   async buscarVisitantes(
-    c: { hospital: string },
+    c: ContextoPortaria,
     b: { documento: { tipo: string; numero: string } | null; nomeBusca: string | null },
   ) {
     if (b.documento) {
-      const chave = `${c.hospital}:${b.documento.tipo}:${b.documento.numero}`;
+      const chave = `${est(c)}:${b.documento.tipo}:${b.documento.numero}`;
       return this.visitantes.filter((v) => v.chave === chave);
     }
     if (!b.nomeBusca || b.nomeBusca.length < 3) return [];
     const alvo = b.nomeBusca;
     const norma = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     return this.visitantes
-      .filter((v) => v.hospital === c.hospital && !v.anonimizado && norma(v.nome).startsWith(alvo))
+      .filter((v) => v.hospital === est(c) && !v.anonimizado && norma(v.nome).startsWith(alvo))
       .slice(0, 30);
   }
-  async vencidos(c: { hospital: string }, hoje: string) {
-    this.semear(c.hospital);
+  async vencidos(c: ContextoPortaria, hoje: string) {
+    this.semear(est(c));
     return this.visitantes.filter(
       (v) =>
-        v.hospital === c.hospital &&
+        v.hospital === est(c) &&
         !v.anonimizado &&
         v.reterAte < hoje &&
         !this.visitas.some((a) => a.visitante === v.id && a.saida === null),
     ).length;
   }
-  async abertas(c: { hospital: string }) {
-    this.semear(c.hospital);
+  async abertas(c: ContextoPortaria) {
+    this.semear(est(c));
     // Como no banco: o crachá válido ou vencido há até 24 horas.
     const limite = new Date(this.agora().getTime() - 24 * 3_600_000);
     const corte = minuto(limite).slice(0, 16);
     return this.visitas
-      .filter((v) => v.hospital === c.hospital && v.saida === null && v.validoAte > corte)
+      .filter((v) => v.hospital === est(c) && v.saida === null && v.validoAte > corte)
       .reverse();
   }
-  async visita(c: { hospital: string }, id: number) {
-    this.semear(c.hospital);
-    return this.visitas.find((v) => v.hospital === c.hospital && v.id === id) ?? null;
+  async visita(c: ContextoPortaria, id: number) {
+    this.semear(est(c));
+    return this.visitas.find((v) => v.hospital === est(c) && v.id === id) ?? null;
   }
   async visitasDoPeriodo(
-    c: { hospital: string },
+    c: ContextoPortaria,
     f: { internacao: number | null; unidade: string | null; de: string; ate: string },
   ) {
     return this.visitas.filter(
       (v) =>
-        v.hospital === c.hospital &&
+        v.hospital === est(c) &&
         (f.internacao !== null ? v.internacao === f.internacao : v.bloco === f.unidade) &&
         v.entrada.slice(0, 10) <= f.ate &&
         (v.saida ?? v.validoAte).slice(0, 10) >= f.de,
     );
   }
-  async acompanhantes(c: { hospital: string }, unidade?: string | null) {
-    this.semear(c.hospital);
+  async acompanhantes(c: ContextoPortaria, unidade?: string | null) {
+    this.semear(est(c));
     return this.acompanhantesMem.filter(
-      (a) => a.hospital === c.hospital && a.fim === null && (unidade == null || a.bloco === unidade),
+      (a) => a.hospital === est(c) && a.fim === null && (unidade == null || a.bloco === unidade),
     );
   }
-  async terminais(c: { hospital: string }) {
-    this.semear(c.hospital);
-    return this.terminaisMem.filter((t) => t.hospital === c.hospital);
+  async terminais(c: ContextoPortaria) {
+    this.semear(est(c));
+    return this.terminaisMem.filter((t) => t.hospital === est(c));
   }
-  async eventos(c: { hospital: string }, teto = 50) {
-    this.semear(c.hospital);
-    return this.eventosMem.filter((e) => e.hospital === c.hospital).slice(0, teto);
+  async eventos(c: ContextoPortaria, teto = 50) {
+    this.semear(est(c));
+    return this.eventosMem.filter((e) => e.hospital === est(c)).slice(0, teto);
   }
-  async foto(c: { hospital: string }, id: number) {
-    this.semear(c.hospital);
-    return this.visitantes.find((v) => v.hospital === c.hospital && v.id === id)?.fotoChave ?? null;
+  async foto(c: ContextoPortaria, id: number) {
+    this.semear(est(c));
+    return this.visitantes.find((v) => v.hospital === est(c) && v.id === id)?.fotoChave ?? null;
   }
 }

@@ -41,7 +41,8 @@ import {
   perfilBrCoreRecortado,
   validarRecurso,
 } from '@sgh/dominio-integracao';
-import { doseVigenteDaVacina, type VacinaLidaSgh } from '@sgh/legado';
+import { doseVigenteDaVacina } from '@sgh/dominio-enfermagem';
+import type { VacinaAplicada } from './sae-tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -57,6 +58,15 @@ import {
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { PORTA_ENFERMAGEM, type PortaEnfermagem } from './porta.js';
 import { chaveDoPedido, recusaHttp } from './sae.controller.js';
+
+/** A chave do pedido quando a tela a mandou (o reenvio é reconhecido); sem ela, a gravação segue sem chave. */
+function chaveSeHouver(s: Parameters<typeof chaveDoPedido>[0]): string | null {
+  try {
+    return chaveDoPedido(s);
+  } catch {
+    return null;
+  }
+}
 import { type GravadorSae, PORTA_SAE, type PortaSae } from './sae-porta.js';
 import { ServicoSae } from './sae-servico.js';
 
@@ -67,16 +77,16 @@ const UNIDADE = /^[A-Za-z0-9 ._-]{1,5}$/;
  * W0-03: a vacina como vale hoje (a última retificação por cima do registro local, que nunca muda), a situação e o
  * original quando retificada.
  */
-export function vacinaVigente(v: VacinaLidaSgh): VacinaLidaSgh & {
+export function vacinaVigente(v: VacinaAplicada): VacinaAplicada & {
   situacao: 'ativa' | 'retificada' | 'estornada';
   original: Pick<
-    VacinaLidaSgh,
+    VacinaAplicada,
     'lote' | 'fabricante' | 'validadeLote' | 'dose' | 'via' | 'local' | 'aplicadaEm'
   > | null;
 } {
   const cs = v.correcoes ?? [];
   if (cs.some((c) => c.tipo === 'estorno')) {
-    let base: VacinaLidaSgh = v;
+    let base: VacinaAplicada = v;
     for (const c of cs) if (c.tipo === 'retificacao' && c.dados) base = { ...base, ...(c.dados as object) };
     return {
       ...base,
@@ -86,11 +96,11 @@ export function vacinaVigente(v: VacinaLidaSgh): VacinaLidaSgh & {
   }
   const rets = cs.filter((c) => c.tipo === 'retificacao' && c.dados);
   if (rets.length === 0) return { ...v, situacao: 'ativa', original: null };
-  let x: VacinaLidaSgh = v;
+  let x: VacinaAplicada = v;
   for (const c of rets) x = { ...x, ...(c.dados as object) };
   return { ...x, situacao: 'retificada', original: origem(v) };
 }
-const origem = (v: VacinaLidaSgh) => ({
+const origem = (v: VacinaAplicada) => ({
   lote: v.lote,
   fabricante: v.fabricante,
   validadeLote: v.validadeLote,
@@ -103,7 +113,7 @@ const origem = (v: VacinaLidaSgh) => ({
 /** O registro RIA (Immunization do BR Core fixado) da vacina aplicada, com os identificadores do conector. */
 export function imunizacaoDaVacina(
   v: Pick<
-    VacinaLidaSgh,
+    VacinaAplicada,
     'id' | 'imunobiologico' | 'nome' | 'lote' | 'fabricante' | 'dose' | 'via' | 'local' | 'aplicadaEm'
   >,
   o: { readonly hospital: string; readonly paciente: number; readonly vacinador: string },
@@ -446,6 +456,7 @@ export class VacinaController {
           motivo: e.motivo,
           dados: e.dados,
           usuario: s.login,
+          chave: chaveSeHouver(s),
         }),
     );
     return {

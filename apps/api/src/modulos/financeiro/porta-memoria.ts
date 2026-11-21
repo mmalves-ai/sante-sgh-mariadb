@@ -1,6 +1,6 @@
 // Porta do financeiro em MEMÓRIA (M32): a sessão sintética de dev/ci (E2E). Credores, títulos, contas bancárias,
 // contas do faturamento, itens glosados e movimentos SINTÉTICOS (nenhum dado real; nada vai à cópia), com as mesmas
-// validações (Zod dos contratos) e as mesmas regras do domínio que o adaptador do legado confere (credor, parcelas,
+// validações (Zod dos contratos) e as mesmas regras do domínio que o porta do banco confere (credor, parcelas,
 // chave natural, exclusão em aberto, alçada e segregação, baixa manual, conta que gera título, movimento por tipo e
 // escopo por conta). Semeadura: os fornecedores 5001 e 5002, o médico 7001 (profissional 70), as contas bancárias 1 e
 // 2, a faixa de alçada geral (até R$ 10.000,00, uma aprovação) e a da diretoria (acima, duas aprovações), o título de
@@ -42,14 +42,10 @@ import {
   type TipoCredor,
   tpPgtoVisto,
 } from '@sgh/dominio-financeiro';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type FonteCatalogo,
-  type LiberacaoConsultada,
-  operacao,
-  recusa,
-} from '@sgh/legado';
+import type { EstadoOperacao } from '@sgh/contratos';
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import type {
   BasesDrePorta,
   BasesIndicadoresPorta,
@@ -212,7 +208,7 @@ const CONTAS: readonly Omit<ContaBancariaResposta, 'saldo'>[] = [
 ];
 const SALDO_FECHADO: Readonly<Record<number, number>> = { 1: 50_000, 2: 120_000 };
 /**
- * O escopo por conta (MFCTAUSU) dos usuários sintéticos restritos (regra 15): só a conta 1. Quem não está aqui vê as
+ * O escopo por conta (permissão por conta bancária) dos usuários sintéticos restritos (regra 15): só a conta 1. Quem não está aqui vê as
  * duas contas (como o parâmetro REST_CTA_USU desligado).
  */
 const ESCOPO_SINTETICO: Readonly<Record<string, readonly number[]>> = {
@@ -263,17 +259,28 @@ const versao = (n: number) => `m-${String(n).padStart(10, '0')}`;
 const conflito = () =>
   new ErroOperacao(409, 'conflito-versao', 'Registro alterado', 'O título mudou desde a leitura; releia.');
 
+/** Estado de cada operação no catálogo de operações do estabelecimento (null = operação desconhecida). */
+export interface CatalogoOperacoesFinanceiro {
+  estado(operacao: string, estabelecimento: string): EstadoOperacao | null;
+}
+
+/** Estabelecimento da sessão como chave do estado em memória. */
+const chaveDe = (c: ContextoFinanceiro) => String(c.estabelecimento ?? 0);
+/** Login de quem grava (o contexto da gravação da API leva o login; sem ele, um rótulo pelo id). */
+const loginDoContexto = (ctx: ContextoOperacao): string =>
+  (ctx as ContextoOperacao & { login?: string }).login ?? `USUARIO.${ctx.usuario ?? 0}`;
+
 export class PortaFinanceiroMemoria implements PortaFinanceiro {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
 
-  constructor(private readonly catalogo: FonteCatalogo | null) {}
+  constructor(private readonly catalogo: CatalogoOperacoesFinanceiro | null) {}
 
   private e(c: ContextoFinanceiro): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDe(c));
     if (!s) {
       s = this.semear();
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDe(c), s);
     }
     return s;
   }
@@ -512,8 +519,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     return id;
   }
 
-  async podeGravar(c: ContextoFinanceiro, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoFinanceiro, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, chaveDe(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
@@ -524,14 +531,15 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
   }
 
   async executar(c: ContextoFinanceiro, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+    const esquema = ESQUEMAS_OPERACAO_FINANCEIRO[op];
+    if (!esquema) throw recusa('operacao-desconhecida', 'Operação desconhecida no financeiro.');
+    const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -544,7 +552,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as never, ctx.usuarioLegado);
+    const resultado = this.aplicar(s, op, analise.data as never, loginDoContexto(ctx));
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -1073,11 +1081,11 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         return { id: cr.id };
       },
       registrarRemessa: async (d) => {
-        const sequencial = s.fiscais.remessa.filter((r) => r['ID_TBCTABAN'] === d.conta).length + 1;
+        const sequencial = s.fiscais.remessa.filter((r) => r['CONTA'] === d.conta).length + 1;
         const id = ++s.seq;
         s.fiscais.remessa.unshift({
           ID: id,
-          ID_TBCTABAN: d.conta,
+          CONTA: d.conta,
           LEIAUTE: d.leiaute,
           SEQUENCIAL: sequencial,
           TITULOS: d.titulos,
@@ -1093,7 +1101,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         const id = ++s.seq;
         s.fiscais.nfse.unshift({
           ID: id,
-          ID_MFCTAREC: d.tituloReceber,
+          TITULO_RECEBER: d.tituloReceber,
           MOMENTO: d.momento,
           VALOR_SERVICOS: d.valorServicos,
           VALOR_ISS: d.valorIss,

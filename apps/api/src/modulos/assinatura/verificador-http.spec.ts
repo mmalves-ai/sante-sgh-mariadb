@@ -7,16 +7,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { confiarNoProxy, criarApp } from '../../app.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste } from '../../sessao/teste.spec-util.js';
+import { modulo } from './modulo.js';
 import { PortaAssinaturaMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'assinatura' };
 const CODIGO = 'NaoExisteNenhum_0123456789';
 let app: NestFastifyApplication;
 let porta: PortaAssinaturaMemoria;
 
 beforeAll(async () => {
   porta = new PortaAssinaturaMemoria();
-  app = await criarApp(lerConfiguracao(env), null, env, { assinaturaIcp: porta });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    registro: { assinatura: async () => ({ modulo: (ctx) => modulo(ctx, { porta, estabelecimentos: ['pc'] }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

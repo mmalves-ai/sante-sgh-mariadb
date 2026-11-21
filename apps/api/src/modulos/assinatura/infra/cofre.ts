@@ -5,7 +5,7 @@
 //     valor cifrado em AES-256-GCM com a chave mestra do deploy (PLATAFORMA_CHAVE_MESTRA; DP-15). Sem a chave ou sem o
 //     diretório, o cofre fica indisponível (falha fechada) e a assinatura em nuvem não liga.
 //   - `CofreMemoria`: a sessão sintética de dev/ci e os testes (nada vai a disco).
-// A mesma chave cifra o verificador do PKCE guardado no pedido (SGH_DOC_PEDIDO_ASSINATURA.PKCE_CIFRADO).
+// A mesma chave cifra o verificador do PKCE guardado no pedido (pedido de assinatura).
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';

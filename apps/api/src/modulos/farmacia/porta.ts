@@ -1,9 +1,8 @@
 // Porta da farmácia hospitalar e da farmácia clínica (M29): o que as telas leem e gravam, independente de onde (a API
 // não escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas
-//     suprimentos.dispensarHorario, confirmarEntrega, devolverDose e as P2, com a trilha na mesma transação); as só do
-//     novo (avaliação, intervenção, conferência do controlado, livro, farmácia ambulatorial) em transação SGH_ com a
-//     SGH_TRILHA junto;
+//   - `banco`: o banco do cliente pelo @sgh/nucleo (porta-propria.ts): leituras somente leitura; gravações pelo
+//     Executor (operações suprimentos.* e a gravação direta das telas, com a trilha, o outbox e a idempotência na mesma
+//     transação);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): unidades, internados, horários, doses e controlados SINTÉTICOS,
 //     com as mesmas validações (Zod dos contratos e regras do domínio) e as mesmas recusas; nada vai à cópia;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
@@ -15,31 +14,31 @@ import type {
   TipoIntervencao,
 } from '@sgh/contratos/regras-suprimentos';
 import type {
-  AvaliacaoSghLida,
-  ControladoLido,
-  DoseDispensadaRepo,
-  DoseFilaLida,
-  EntregaRepo,
-  IntervencaoRepo,
-  ItemEstoqueFarmacia,
-  MovimentoControladoRepo,
-  TriagemSgh,
-} from '@sgh/legado';
+  AvaliacaoRegistrada,
+  DoseDaFila,
+  DoseDispensada,
+  EntregaRegistrada,
+  IntervencaoRegistrada,
+  ItemControlado,
+  ItemFarmacia,
+  MovimentoControlado,
+  Triagem,
+} from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_FARMACIA = Symbol('PORTA_FARMACIA');
 
 export type ContextoFarmacia = ContextoPortaM18;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
+/** Gravações diretas das telas, numa transação com a linha da trilha junto (o estabelecimento vem do contexto). */
 export interface GravadorSghFarmacia {
-  triar(t: { itens: readonly TriagemSgh[] }): Promise<{ novos: number }>;
+  triar(t: { itens: readonly Triagem[] }): Promise<{ novos: number }>;
   decidir(d: {
     item: number;
     decisao: DecisaoAvaliacao;
     justificativa: string;
     farmaceutico: string;
-    triagem: TriagemSgh;
+    triagem: Triagem;
   }): Promise<{ id: number }>;
   intervir(i: { item: number; tipo: TipoIntervencao; texto: string; autor: string }): Promise<{
     id: number;
@@ -123,19 +122,19 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
   filaDaUnidade(
     c: ContextoFarmacia,
     o: { unidade: string; inicio: Date; fim: Date },
-  ): Promise<{ doses: DoseFilaLida[]; cortada: boolean }>;
-  itens(c: ContextoFarmacia, codigos: readonly number[]): Promise<Map<number, ItemEstoqueFarmacia>>;
-  avaliacoes(c: ContextoFarmacia, itens: readonly number[]): Promise<Map<number, AvaliacaoSghLida>>;
+  ): Promise<{ doses: DoseDaFila[]; cortada: boolean }>;
+  itens(c: ContextoFarmacia, codigos: readonly number[]): Promise<Map<number, ItemFarmacia>>;
+  avaliacoes(c: ContextoFarmacia, itens: readonly number[]): Promise<Map<number, AvaliacaoRegistrada>>;
   itensPrescritos(
     c: ContextoFarmacia,
     lancamentos: readonly number[],
   ): Promise<Map<number, { alergiaJustificada: boolean; produto: number | null }>>;
-  dosesDoAtendimento(c: ContextoFarmacia, reg: number, desde: Date): Promise<DoseDispensadaRepo[]>;
+  dosesDoAtendimento(c: ContextoFarmacia, atendimento: number, desde: Date): Promise<DoseDispensada[]>;
   situacoes(
     c: ContextoFarmacia,
     horarios: readonly number[],
   ): Promise<Map<number, { situacao: string; em: string | null }>>;
-  entregas(c: ContextoFarmacia, o: { situacao: number; centroCusto?: number }): Promise<EntregaRepo[]>;
+  entregas(c: ContextoFarmacia, o: { situacao: number; centroCusto?: number }): Promise<EntregaRegistrada[]>;
   dosesDaSaida(c: ContextoFarmacia, saida: number): Promise<DoseDaSaida[]>;
   leitos(
     c: ContextoFarmacia,
@@ -145,9 +144,9 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
     c: ContextoFarmacia,
     controles: readonly number[],
   ): Promise<Map<number, { autor: string; em: string; modo: string }>>;
-  intervencoesDosItens(c: ContextoFarmacia, itens: readonly number[]): Promise<IntervencaoRepo[]>;
-  intervencoesDoPrescritor(c: ContextoFarmacia, login: string): Promise<IntervencaoRepo[]>;
-  intervencao(c: ContextoFarmacia, id: number): Promise<IntervencaoRepo | null>;
+  intervencoesDosItens(c: ContextoFarmacia, itens: readonly number[]): Promise<IntervencaoRegistrada[]>;
+  intervencoesDoPrescritor(c: ContextoFarmacia, login: string): Promise<IntervencaoRegistrada[]>;
+  intervencao(c: ContextoFarmacia, id: number): Promise<IntervencaoRegistrada | null>;
   totaisIntervencoes(
     c: ContextoFarmacia,
     desde: Date,
@@ -167,11 +166,11 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
       em: string;
     }[]
   >;
-  controlados(c: ContextoFarmacia): Promise<ControladoLido[]>;
+  controlados(c: ContextoFarmacia): Promise<ItemControlado[]>;
   movimentos(
     c: ContextoFarmacia,
     o: { itens: readonly number[]; inicio: Date; fim: Date },
-  ): Promise<MovimentoControladoRepo[]>;
+  ): Promise<MovimentoControlado[]>;
   conferencias(
     c: ContextoFarmacia,
     desde: Date,
@@ -247,3 +246,4 @@ export const METODOS_PORTA_FARMACIA: ReadonlySet<string> = new Set([
 ]);
 
 export type { AchadoAvaliacao, ClasseMedicamento };
+export type * from './tipos.js';

@@ -16,7 +16,10 @@ import {
   fonteConfiguracaoMemoria,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
+import type { ContextoModulo } from '../registro.js';
+import { moduloRede } from './modulo.js';
 import { PortaRedeMemoria } from './porta-memoria.js';
+import { PortaServicosRedeMemoria } from './servicos/porta-memoria.js';
 import { RedeMpiController } from './rede.controller.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
@@ -33,7 +36,16 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(config, null, env, { trilha, rede: porta });
+  const envModulos = { ...env, API_MODULOS: 'rede' };
+  app = await criarApp(lerConfiguracao(envModulos), null, envModulos, {
+    trilha,
+    registro: {
+      rede: async () => ({
+        modulo: (ctx: ContextoModulo) =>
+          moduloRede(ctx, { porta, servicos: new PortaServicosRedeMemoria() }),
+      }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -115,35 +127,7 @@ describe('aviso de atendimentos em outro estabelecimento (M57.2)', () => {
   });
 });
 
-describe('acesso cruzado ao prontuário (M57.2, regra 6)', () => {
-  it('sem a regra da DP-42: 403 recurso-desligado com o motivo, nada lido; corpo inválido: 400', async () => {
-    const m = await entrar('SINT.MEDICO');
-    const url = '/api/pep/rede/paciente/1/estabelecimentos/sx/linha-do-tempo';
-    const ruim = await app.inject({ method: 'POST', url, headers: h(m), payload: { motivo: 'curiosidade' } });
-    expect(ruim.statusCode).toBe(400);
-    const antes = trilha.eventos.filter((e) => e.evento === 'pep.prontuarioRede.lido').length;
-    const r = await app.inject({
-      method: 'POST',
-      url,
-      headers: h(m),
-      payload: { motivo: 'assistencia', justificativa: 'Paciente em atendimento aqui' },
-    });
-    expect(r.statusCode).toBe(403);
-    expect(r.json().codigo).toBe('recurso-desligado');
-    expect(trilha.eventos.filter((e) => e.evento === 'pep.prontuarioRede.lido').length).toBe(antes);
-    const s = await entrar('SINT.RH');
-    expect(
-      (
-        await app.inject({
-          method: 'POST',
-          url,
-          headers: h(s),
-          payload: { motivo: 'assistencia', justificativa: 'Paciente em atendimento aqui' },
-        })
-      ).statusCode,
-    ).toBe(403);
-  });
-});
+// O acesso cruzado ao prontuário (POST /api/pep/rede/...) é rota do PEP: o teste HTTP volta com o lote do PEP (onda 4).
 
 describe('aviso e o vínculo assistencial do M15 (correção do M57.2)', () => {
   // Pelo controlador, com a sessão montada à mão: a restrição por vínculo do estabelecimento ligada e o vínculo

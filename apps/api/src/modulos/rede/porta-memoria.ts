@@ -1,19 +1,9 @@
 // Porta do MPI da Rede em MEMÓRIA (M57, etapa 1): a sessão sintética de dev/ci (E2E e testes do serviço). Cada
 // estabelecimento configurado é um "banco" separado em memória, com cadastros SINTÉTICOS (nenhuma pessoa real) e as
-// tabelas do índice (pessoa, vínculo, candidato, marca), com as mesmas regras das gravações do legado: só o índice,
+// tabelas do índice (pessoa, vínculo, candidato, marca), com as mesmas regras das gravações do índice: só o índice,
 // idempotente, candidato decidido nunca muda. `falharEm` simula a queda de um banco no meio (regra 4: o outro grava,
 // o relatório de divergência acha e o reparo completa). Nada vai à cópia nem ao banco.
-import { normalizarChave, TABELAS_INDICE_REDE } from '@sgh/contratos';
-import type {
-  CadastroRedeLido,
-  CandidatoParaGravarRede,
-  CandidatoRedeLido,
-  ChavesProcuraRede,
-  EscritaIndiceRede,
-  LinhaTrilha,
-  ParNovo,
-  VinculoRedeLido,
-} from '@sgh/legado';
+import { normalizarChave } from '@sgh/contratos';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
   AtendimentosRede,
@@ -24,6 +14,16 @@ import type {
   PortaRede,
   RecorteFilaRede,
 } from './porta.js';
+import type {
+  CadastroRedeLido,
+  CandidatoParaGravarRede,
+  CandidatoRedeLido,
+  ChavesProcuraRede,
+  EscritaIndiceRede,
+  ParNovo,
+  TrilhaRede,
+  VinculoRedeLido,
+} from './tipos-indice.js';
 
 interface Banco {
   readonly cadastros: Map<number, CadastroRedeLido>;
@@ -32,7 +32,7 @@ interface Banco {
   readonly candidatos: Map<string, CandidatoRedeLido & { id: number }>;
   marca: MarcaRede | null;
   duplicidades: Set<string>;
-  trilha: LinhaTrilha[];
+  trilha: (TrilhaRede & { readonly estabelecimentoDoBanco: string })[];
   seq: number;
 }
 
@@ -126,8 +126,6 @@ function novoBanco(est: string, sementes: readonly Semente[]): Banco {
     seq: 0,
   };
 }
-
-const PERMITIDAS = new Set<string>(TABELAS_INDICE_REDE);
 
 export interface OpcoesPortaRedeMemoria {
   readonly rede: string;
@@ -352,7 +350,7 @@ export class PortaRedeMemoria implements PortaRede {
   async gravar<T>(
     c: ContextoRede,
     fn: (g: GravadorRede) => Promise<T>,
-    trilha: LinhaTrilha | null,
+    trilha: TrilhaRede | null,
   ): Promise<T> {
     const b = this.banco(c);
     if (this.falharEm.has(c.hospital))
@@ -369,7 +367,7 @@ export class PortaRedeMemoria implements PortaRede {
       seq: b.seq,
     };
     const r = await fn(this.gravador(c.hospital, copia));
-    if (trilha) copia.trilha.push({ ...trilha, hospital: c.hospital });
+    if (trilha) copia.trilha.push({ ...trilha, estabelecimentoDoBanco: c.hospital });
     this.bancos.set(c.hospital, copia);
     return r;
   }
@@ -377,22 +375,19 @@ export class PortaRedeMemoria implements PortaRede {
   private gravador(est: string, b: Banco): GravadorRede {
     return {
       escritas: async (ws: readonly EscritaIndiceRede[]) => {
-        for (const w of ws) {
-          if (!PERMITIDAS.has((w as { tabela: string }).tabela))
-            throw new Error('O índice da Rede só grava nas tabelas do índice.');
-          if (w.tabela === 'SGH_REDE_VINCULO' && w.linha.estabelecimento !== est)
+        for (const w of ws)
+          if (w.alvo === 'vinculo' && w.linha.estabelecimento !== est)
             throw new Error('Linha de vínculo de outro estabelecimento no plano deste banco.');
-        }
         let gravadas = 0;
         let jaEstavam = 0;
         for (const w of ws) {
-          if (w.tabela === 'SGH_REDE_PESSOA') {
+          if (w.alvo === 'pessoa') {
             if (b.pessoas.has(w.pessoa)) jaEstavam++;
             else {
               b.pessoas.add(w.pessoa);
               gravadas++;
             }
-          } else if (w.tabela === 'SGH_REDE_VINCULO') {
+          } else if (w.alvo === 'vinculo') {
             if (!b.pessoas.has(w.linha.pessoa))
               throw new Error('Pessoa da Rede ausente (chave estrangeira).');
             const atual = b.vinculos.get(w.linha.chave);

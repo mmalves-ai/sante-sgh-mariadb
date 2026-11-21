@@ -95,7 +95,7 @@ import {
   tarefasDoAto,
   tipagemDoReceptor,
 } from '@sgh/dominio-sadt';
-import type { ChecagemGravacao } from '@sgh/legado';
+import type { ChecagemGravacao } from './tipos-vinculados.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -115,6 +115,15 @@ import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { ApoiosEnfermagem } from './apoios.js';
 import { PORTA_ENFERMAGEM, type PortaEnfermagem } from './porta.js';
 import { chaveDoPedido } from './sae.controller.js';
+
+/** A chave do pedido quando a tela a mandou (a repetição é reconhecida); sem ela, a gravação segue sem chave. */
+function chaveSeHouver(s: Parameters<typeof chaveDoPedido>[0]): string | null {
+  try {
+    return chaveDoPedido(s);
+  } catch {
+    return null;
+  }
+}
 import { PORTA_AGENCIA, type PortaAgencia } from './agencia-porta.js';
 import { type GravadorTransfusao, PORTA_TRANSFUSAO, type PortaTransfusao } from './transfusao-porta.js';
 
@@ -567,7 +576,7 @@ export class TransfusaoController {
       E.sadtTransfusaoCancelada.codigo,
       P.transfusaoCancelar,
       { tabela: 'SGH_SADT_HEMO_REQ', id: String(r.id), paciente: r.paciente.id, chave: 'cancelada' },
-      (g) => g.cancelar({ requisicao: r.id, motivo: e.motivo, usuario: s.login }),
+      (g) => g.cancelar({ requisicao: r.id, motivo: e.motivo, usuario: s.login, chave: chaveSeHouver(s) }),
     );
     return { ok: true, id: r.id, mensagem: 'Requisição cancelada.' };
   }
@@ -898,7 +907,24 @@ export class TransfusaoController {
       ...(daAgencia ? { estoque: true } : {}),
     };
     let ato: number;
-    if (gravacaoNoHorario(pendente?.situacao ?? null) === 'checar-administrado' && pendente) {
+    const comHorario = gravacaoNoHorario(pendente?.situacao ?? null) === 'checar-administrado' && pendente;
+    if (comHorario && pendente && this.porta.destino !== 'memoria') {
+      // Banco próprio: o início do ato e a checagem do horário pendente (administrado, com o evento do horário) numa
+      // única operação da porta da transfusão, com a linha da trilha da tela.
+      const x = await this.apoio.sgh(
+        s,
+        E.sadtTransfusaoIniciada.codigo,
+        P.transfusaoAdministrar,
+        (a: { id: number }) => ({
+          tabela: 'SGH_SADT_HEMO_ATO',
+          id: String(a.id),
+          paciente: r.paciente.id,
+          chave: e.bolsa.numero,
+        }),
+        (g) => g.iniciar({ ...bloco, horario: pendente.id }),
+      );
+      ato = x.id;
+    } else if (comHorario && pendente) {
       // Com o horário pendente: a checagem do M25 (Administrado) com o ato no registro próprio da mesma transação.
       const h = await this.enfermagem.horario(s.porta, pendente.id);
       if (!h) throw new ErroProblema('nao-encontrado', 404, 'Horário não encontrado');
@@ -944,12 +970,11 @@ export class TransfusaoController {
         gravacao,
         'Transfusão iniciada.',
         {
-          idempotencyKey: chave,
+          chaveIdempotencia: chave,
         },
       );
-      if (this.porta.destino === 'memoria')
-        // Na sessão sintética, a enfermagem em memória não tem o registro próprio da receita: o ato vai à porta daqui.
-        await this.porta.gravarSgh(s.porta, null as never, (g) => g.iniciar({ ...bloco, horario: h.id }));
+      // Na sessão sintética (memória), a checagem fica com a enfermagem em memória e o ato vai à porta daqui.
+      await this.porta.gravarSgh(s.porta, null as never, (g) => g.iniciar({ ...bloco, horario: h.id }));
       const [x] = (await this.porta.atos(s.porta, { requisicao: r.id })).filter(
         (a) => a.estado === 'emCurso',
       );
@@ -1134,6 +1159,7 @@ export class TransfusaoController {
           motivoInterrupcao: e.motivoInterrupcao,
           usuario: s.login,
           janelaBalanco: janela,
+          chave: chaveSeHouver(s),
         }),
     );
     return {
@@ -1376,7 +1402,7 @@ export class TransfusaoController {
       E.sadtReacaoNotificada.codigo,
       P.reacaoRegistrar,
       { tabela: 'SGH_SADT_HEMO_REACAO', id: String(r.id), paciente: r.paciente.id, chave: 'notificada' },
-      (g) => g.notificada({ reacao: r.id, enviadaEm: e.enviadaEm.slice(0, 16) }),
+      (g) => g.notificada({ reacao: r.id, enviadaEm: e.enviadaEm.slice(0, 16), chave: chaveSeHouver(s) }),
     );
     return { ok: true, id: r.id, mensagem: 'Envio da notificação registrado.' };
   }

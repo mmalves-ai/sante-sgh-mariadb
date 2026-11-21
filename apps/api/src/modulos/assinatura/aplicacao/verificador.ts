@@ -1,8 +1,8 @@
 // Verificador público de documentos (M49, etapa 3; ficha, seções 4, 5 e 7; regra 9; cap-07 §7.6; cap-12 §12.4). Sem
 // login: o código opaco do QR do documento assinado leva ao tipo, às datas, ao profissional (como o selo mostra) e ao
-// resultado da validação mais recente no servidor; NUNCA o conteúdo clínico nem o paciente. Lê só SGH_ (nunca a tabela
-// do outro sistema) em cada estabelecimento da rede, e cada consulta é registrada (`documento.registrarConsultaPublica`,
-// SGH_DOC_VERIFICACAO, com a SGH_TRILHA na mesma transação) com a origem só mascarada. Limite de taxa por origem e por
+// resultado da validação mais recente no servidor; NUNCA o conteúdo clínico nem o paciente. Procura em cada
+// estabelecimento do cliente, e cada consulta é registrada (`documento.registrarConsultaPublica`,
+// consulta_verificacao_documento, com a trilha na mesma transação) com a origem só mascarada. Limite de taxa por origem e por
 // minuto (parâmetro `documento.verificadorConsultasPorMinuto`), no armazém compartilhado (Valkey): a consulta acima do
 // limite responde 429 e só a primeira barrada do minuto vira linha.
 import {
@@ -23,7 +23,7 @@ import {
   resultadoParaGravar,
   situacaoDaVerificacao,
 } from '@sgh/dominio-documento';
-import type { DocumentoVerificadoLido, LinhaTrilha } from '@sgh/legado';
+import type { DocumentoVerificado, TrilhaAssinatura } from '../tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { FonteConfiguracao } from '../../config/public-api.js';
@@ -37,8 +37,12 @@ export interface ContadorTaxa {
 
 export interface ConfigVerificador {
   readonly rede: string;
-  /** Os estabelecimentos da rede onde o código é procurado (ESTABELECIMENTOS; o primeiro recebe as consultas sem achado). */
-  readonly estabelecimentos: readonly string[];
+  /**
+   * Os estabelecimentos da rede onde o código é procurado (o primeiro recebe as consultas sem achado): a lista fixa
+   * (configuração e testes) ou a leitura a cada consulta (do banco, com cache curto: o estabelecimento criado depois
+   * entra sem reiniciar a API, e a falha do banco responde 503 só no verificador).
+   */
+  readonly estabelecimentos: readonly string[] | (() => Promise<readonly string[]>);
   /** A base pública do verificador (a mesma do QR). */
   readonly endereco: string;
   /** Teto de consultas por minuto de TODAS as origens juntas (padrão TETO_GLOBAL_VERIFICADOR_POR_MINUTO). */
@@ -54,16 +58,15 @@ export interface ConfigVerificador {
 export const TETO_GLOBAL_VERIFICADOR_POR_MINUTO = 600;
 
 /**
- * Os estabelecimentos onde o verificador procura (HS-1): com o núcleo real, só os liberados (o estabelecimento cuja
- * árvore gerou o catálogo, a mesma regra da sessão), porque os scripts SGH_ do verificador só estão aplicados nele;
- * sem núcleo real (dev/ci sintético), os configurados. Nenhum liberado configurado: lista vazia (o verificador
- * responde 503, falha fechada).
+ * Os estabelecimentos onde o verificador procura: os do cliente (lidos do banco pelo módulo) ou os configurados, e,
+ * quando há uma lista de liberados, só os que estão nela. Nenhum: lista vazia (o verificador não acha documento).
+ * Melhoria: sem estabelecimento padrão fixo no código.
  */
 export function estabelecimentosDoVerificador(
   configurados: readonly string[],
   liberados: ReadonlySet<string> | null,
 ): string[] {
-  const base = configurados.length ? [...configurados] : ['pc'];
+  const base = [...configurados];
   return liberados ? base.filter((h) => liberados.has(h)) : base;
 }
 
@@ -100,12 +103,17 @@ export class ServicoVerificador {
     this.agora = cfg.agora ?? (() => new Date());
   }
 
-  private get principal(): string | null {
-    return this.cfg.estabelecimentos[0] ?? null;
+  private async estabelecimentos(): Promise<readonly string[]> {
+    const e = this.cfg.estabelecimentos;
+    return typeof e === 'function' ? e() : e;
+  }
+
+  private async principal(): Promise<string | null> {
+    return (await this.estabelecimentos())[0] ?? null;
   }
 
   async limitePorMinuto(): Promise<number> {
-    const h = this.principal;
+    const h = await this.principal().catch(() => null);
     if (!h) return LIMITE_PADRAO;
     const v = await parametroDoEstabelecimento(
       this.configuracao,
@@ -118,32 +126,36 @@ export class ServicoVerificador {
   }
 
   private trilha(
-    hospital: string,
     resultado: string,
     previa: number | null,
     origem: string,
     correlacao: string,
-  ): LinhaTrilha {
+  ): TrilhaAssinatura {
     return {
-      rede: this.cfg.rede,
-      hospital,
-      usuario: USUARIO_VERIFICADOR,
-      evento: EVENTOS_AUDITAVEIS.verificacaoPublicaConsultada.codigo,
-      recurso: 'documento.verificador',
-      operacao: 'documento.registrarConsultaPublica',
-      tabelaAlvo: 'SGH_DOC_VERIFICACAO',
-      idAlvo: previa === null ? null : String(previa),
-      chaveNaturalAlvo: `verificacao:${resultado}`,
-      resultado: resultado === 'barrada' ? 'falha' : 'sucesso',
-      estacao: `PUBLICO:${origem}`.slice(0, 80),
+      // Consulta pública: sem usuário (processo do portal); o estabelecimento é resolvido pela porta.
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao',
+      entidade: 'consulta_verificacao_documento',
+      entidadeId: previa,
+      dadosDepois: {
+        evento: EVENTOS_AUDITAVEIS.verificacaoPublicaConsultada.codigo,
+        recurso: 'documento.verificador',
+        operacao: 'documento.registrarConsultaPublica',
+        chave: `verificacao:${resultado}`,
+        estacao: `PUBLICO:${origem}`.slice(0, 80),
+        ator: USUARIO_VERIFICADOR,
+        canal: 'portal',
+      },
       correlacao: correlacao.slice(0, 64),
-      origem: 'portal',
+      resultado: resultado === 'barrada' ? 'falha' : 'sucesso',
     };
   }
 
   private async registrar(
     hospital: string,
-    d: DocumentoVerificadoLido | null,
+    codigo: string,
+    d: DocumentoVerificado | null,
     resultado: 'valida' | 'invalida' | 'indeterminada' | 'pendente' | 'nao-encontrado' | 'barrada',
     origem: string,
     correlacao: string,
@@ -155,12 +167,13 @@ export class ServicoVerificador {
         (g) =>
           g.registrarConsultaPublica({
             hospital,
+            codigo: codigo.slice(0, 64),
             documento: achado ? d.documento : null,
             previa: achado ? d.previa : null,
             resultado,
             origemMascarada: origem,
           }),
-        this.trilha(hospital, resultado, achado ? d.previa : null, origem, correlacao),
+        this.trilha(resultado, achado ? d.previa : null, origem, correlacao),
       );
     } catch {
       // Sem o registro da consulta (e a trilha), nada é mostrado: falha fechada.
@@ -179,7 +192,10 @@ export class ServicoVerificador {
     ip: string | null,
     correlacao = 'verificador',
   ): Promise<VerificacaoPublica> {
-    const hospitalRegistro = this.principal;
+    const lista = await this.estabelecimentos().catch(() => {
+      throw new ErroProblema('indisponivel', 503, 'Verificador indisponível', 'Tente de novo em instantes.');
+    });
+    const hospitalRegistro = lista[0] ?? null;
     if (!hospitalRegistro)
       throw new ErroProblema(
         'indisponivel',
@@ -217,18 +233,18 @@ export class ServicoVerificador {
     // Teto global: acima dele, nada é gravado (só a primeira barrada do minuto, de todas as origens).
     if (!dentroDoLimite(global, teto)) {
       if (primeiraBarrada(global, teto))
-        await this.registrar(hospitalRegistro, null, 'barrada', origem, correlacao);
+        await this.registrar(hospitalRegistro, codigo, null, 'barrada', origem, correlacao);
       throw muitas();
     }
     if (!dentroDoLimite(n, limite)) {
       if (primeiraBarrada(n, limite))
-        await this.registrar(hospitalRegistro, null, 'barrada', origem, correlacao);
+        await this.registrar(hospitalRegistro, codigo, null, 'barrada', origem, correlacao);
       throw muitas();
     }
     // Formato inválido: nada é procurado nem gravado (não é um código do sistema).
     if (!formatoCodigoVerificador(codigo)) return naoEncontrado;
-    let achado: { hospital: string; d: DocumentoVerificadoLido } | null = null;
-    for (const hospital of this.cfg.estabelecimentos) {
+    let achado: { hospital: string; d: DocumentoVerificado } | null = null;
+    for (const hospital of lista) {
       const d = await this.porta.documentoDoCodigo({ rede: this.cfg.rede, hospital }, codigo).catch(() => {
         throw new ErroProblema(
           'indisponivel',
@@ -246,6 +262,7 @@ export class ServicoVerificador {
     const d = situacao === 'nao-encontrado' ? null : (achado?.d ?? null);
     await this.registrar(
       achado && d ? achado.hospital : hospitalRegistro,
+      codigo,
       d,
       resultadoParaGravar(situacao, d),
       origem,

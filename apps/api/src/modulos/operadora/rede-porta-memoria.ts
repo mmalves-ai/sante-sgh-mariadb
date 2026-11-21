@@ -1,8 +1,8 @@
 // Porta da rede credenciada em MEMÓRIA (M56, etapa 4, F3): a sessão sintética de dev/ci (E2E). Os domínios com os
 // códigos que o banco do estabelecimento tem (rótulos do vocabulário), dois convênios e três prestadores SINTÉTICOS
-// (documentos com os dígitos calculados, nenhum de pessoa ou empresa real), as mesmas recusas das SGH_ (documento e
+// (documentos com os dígitos calculados, nenhum de pessoa ou empresa real), as mesmas recusas do banco (documento e
 // hospital da Rede únicos, versão vista, substituto credenciado), a mesma paginação por chave e o relógio do processo.
-// Nada vai à cópia. A trilha da memória é registrada pela API (como nas outras portas em memória).
+// A trilha da memória é registrada pela API (como nas outras portas em memória).
 import {
   CLASSIFICACOES_REDE,
   CONTRATACOES_PRESTADOR,
@@ -15,23 +15,30 @@ import {
   TIPOS_PRESTADOR_REDE,
 } from '@sgh/contratos';
 import { situacaoVigente } from '@sgh/dominio-operadora';
-import type {
-  ConvenioLido,
-  DominioRede,
-  FiltroPrestadoresLido,
-  ItemDominioRedeLido,
-  MovimentoRpsLido,
-  PrestadorLido,
-} from '@sgh/legado';
-import { LIMITE_PAGINA_MOVIMENTOS, LIMITE_PAGINA_PRESTADORES, nomeBuscaPrestador } from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoRede, FiltroMovimentosPorta, GravadorRede, PortaRedeOperadora } from './rede-porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import {
+  type ContextoRede,
+  type ConvenioRede,
+  type DominioRede,
+  type FiltroMovimentosPorta,
+  type FiltroPrestadores,
+  type GravacaoRede,
+  type GravadorRede,
+  type ItemDominioRede,
+  LIMITE_PAGINA_MOVIMENTOS,
+  LIMITE_PAGINA_PRESTADORES,
+  type MovimentoRede,
+  nomeBuscaPrestador,
+  type PortaRedeOperadora,
+  type Prestador,
+} from './rede-porta.js';
 
-const opcoes = (o: Readonly<Record<number, string>>): ItemDominioRedeLido[] =>
+const opcoes = (o: Readonly<Record<number, string>>): ItemDominioRede[] =>
   Object.entries(o).map(([k, v]) => ({ codigo: Number(k), rotulo: v }));
 
 /** Os domínios como o banco do estabelecimento tem (os códigos; a natureza é a do domínio editável, sintética). */
-export const DOMINIOS_REDE_SINTETICOS: Record<DominioRede, ItemDominioRedeLido[]> = {
+export const DOMINIOS_REDE_SINTETICOS: Record<DominioRede, ItemDominioRede[]> = {
   tipo: opcoes(TIPOS_PRESTADOR_REDE),
   natureza: opcoes({
     1: 'Rede contratada, referenciada ou credenciada',
@@ -50,21 +57,13 @@ export const DOMINIOS_REDE_SINTETICOS: Record<DominioRede, ItemDominioRedeLido[]
   movimento: opcoes(MOVIMENTOS_REDE),
 };
 
-const convenio = (codigo: number, nome: string, registroAns: number | null): ConvenioLido => ({
+const convenio = (codigo: number, nome: string, registroAns: number | null): ConvenioRede => ({
   codigo,
   nome,
-  situacao: 'A',
-  classificacao: null,
-  classificacaoNome: null,
   registroAns,
-  honorariosInternacao: null,
-  honorariosExterna: null,
-  diarias: null,
-  matmed: null,
-  porte: null,
 });
 
-export const CONVENIOS_SINTETICOS: readonly ConvenioLido[] = [
+export const CONVENIOS_SINTETICOS: readonly ConvenioRede[] = [
   convenio(990, 'Operadora própria (sintético)', 900001),
   convenio(991, 'Outra operadora (sintético)', 900002),
 ];
@@ -87,7 +86,7 @@ export function cnpjSintetico(base12: string): string {
 
 const AGORA = '2026-10-24T08:00:00';
 
-function semente(id: number, p: Partial<PrestadorLido>): PrestadorLido {
+function semente(id: number, p: Partial<Prestador>): Prestador {
   return {
     id,
     pessoa: 'J',
@@ -128,7 +127,7 @@ function semente(id: number, p: Partial<PrestadorLido>): PrestadorLido {
 }
 
 /** Os três prestadores sintéticos de partida: um laboratório e dois hospitais (um serve de substituto). */
-export function prestadoresSinteticos(): PrestadorLido[] {
+export function prestadoresSinteticos(): Prestador[] {
   return [
     semente(1, { nome: 'Laboratório sintético Alfa', tipo: 4 }),
     semente(2, {
@@ -166,14 +165,14 @@ const agoraLocal = () => {
  * A leitura pela situação vigente (como a do banco): o descredenciado com a data efetiva no futuro segue credenciado,
  * com a saída agendada. O estado guarda o que a gravação grava (`saidaEm` sempre null).
  */
-const vigente = (p: PrestadorLido): PrestadorLido => ({
+const vigente = (p: Prestador): Prestador => ({
   ...p,
   ...situacaoVigente(p.situacao, p.situacaoEm, hojeLocal()),
 });
 
 interface Estado {
-  prestadores: PrestadorLido[];
-  movimentos: (MovimentoRpsLido & { readonly hospital: string })[];
+  prestadores: Prestador[];
+  movimentos: (MovimentoRede & { readonly hospital: string })[];
   seq: number;
   seqMov: number;
 }
@@ -220,7 +219,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
     return [...CONVENIOS_SINTETICOS];
   }
 
-  async prestadores(c: ContextoRede, f: FiltroPrestadoresLido) {
+  async prestadores(c: ContextoRede, f: FiltroPrestadores) {
     const busca = f.busca?.trim() ?? '';
     const doc = busca.replace(/[.\-/\s]/g, '').toUpperCase();
     const porDoc = /^\d{7}$/.test(doc) || (/^[0-9A-Z]{11,14}$/.test(doc) && /\d/.test(doc));
@@ -270,7 +269,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
           (f.apos === undefined || m.id < f.apos),
       )
       .sort((a, b) => b.id - a.id);
-    const itens = lista.slice(0, LIMITE_PAGINA_MOVIMENTOS).map((m): MovimentoRpsLido => ({
+    const itens = lista.slice(0, LIMITE_PAGINA_MOVIMENTOS).map((m): MovimentoRede => ({
       id: m.id,
       prestador: m.prestador,
       prestadorNome: m.prestadorNome,
@@ -287,7 +286,11 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
     };
   }
 
-  async gravarSgh<T>(c: ContextoRede, _trilha: unknown, fn: (g: GravadorRede) => Promise<T>): Promise<T> {
+  async gravar<T extends GravacaoRede>(
+    c: ContextoRede,
+    _trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
+    fn: (g: GravadorRede) => Promise<T>,
+  ): Promise<T> {
     const e = this.estado(c.hospital);
     // A transação da memória: as mudanças valem só se a função terminar (cópia de trabalho).
     const prestadores = e.prestadores.map((p) => ({ ...p }));
@@ -295,7 +298,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
     let seq = e.seq;
     let seqMov = e.seqMov;
     const mover = (
-      prestador: PrestadorLido,
+      prestador: Prestador,
       movimento: 1 | 2 | 3 | 4,
       campos: readonly string[],
       motivo: string | null,
@@ -328,7 +331,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
           ['estabelecimento'],
         );
     };
-    const versaoVista = (id: number, versao: number, situacao?: PrestadorLido['situacao']) => {
+    const versaoVista = (id: number, versao: number, situacao?: Prestador['situacao']) => {
       const i = prestadores.findIndex((p) => p.id === id);
       const p = prestadores[i];
       if (!p || p.versao !== versao || (situacao && p.situacao !== situacao))
@@ -344,7 +347,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
         unico(x.documento, estab, null);
         const id = ++seq;
         const agora = agoraLocal();
-        const novo: PrestadorLido = {
+        const novo: Prestador = {
           id,
           pessoa: x.pessoa,
           documento: x.documento,
@@ -388,7 +391,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
         const estab = x.ehOHospital ? x.estabelecimento : null;
         unico(null, estab, x.id);
         const { camposRps, usuario } = x;
-        const novo: PrestadorLido = {
+        const novo: Prestador = {
           ...p,
           nome: x.nome,
           nomeFantasia: x.nomeFantasia,
@@ -428,7 +431,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
             );
         }
         const { i, p } = versaoVista(x.id, x.versao, 'credenciado');
-        const novo: PrestadorLido = {
+        const novo: Prestador = {
           ...p,
           situacao: 'descredenciado',
           situacaoEm: x.efetivoEm,
@@ -445,7 +448,7 @@ export class PortaRedeOperadoraMemoria implements PortaRedeOperadora {
       },
       reincluir: async (x) => {
         const { i, p } = versaoVista(x.id, x.versao, 'descredenciado');
-        const novo: PrestadorLido = {
+        const novo: Prestador = {
           ...p,
           situacao: 'credenciado',
           situacaoEm: hojeLocal(),

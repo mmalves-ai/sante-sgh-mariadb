@@ -6,7 +6,7 @@
 //   POST /api/pep/uti/indices                        pep.registrarIndiceUti (a pontuação recalculada no servidor)
 //   POST /api/pep/uti/indices/:id/validar            pep.validarIndiceUti (só o médico com conselho ativo; senha)
 //   GET  /api/pep/uti/smr?de&ate                     a razão de mortalidade padronizada com as parcelas (auditada)
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação; a liberação é a `enfermagem.escores` (POL-3).
+// Só do novo (SGH_), com a trilha_auditoria na mesma transação; a liberação é a `enfermagem.escores` (POL-3).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type CalculoIndiceUti,
@@ -23,7 +23,7 @@ import {
   type TipoAdmissaoUti,
 } from '@sgh/contratos';
 import { calcularApache2, calcularSmr, calcularSofa, comImpressao } from '@sgh/dominio-pep';
-import type { IndiceUtiLidoSgh } from '@sgh/legado';
+import type { IndiceUtiRegistrado } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -85,7 +85,7 @@ export class IndicesUtiController {
       : carregar();
   }
 
-  private lido(x: IndiceUtiLidoSgh, impressao: string): IndiceUtiLido {
+  private lido(x: IndiceUtiRegistrado, impressao: string): IndiceUtiLido {
     const v = (x.variaveis ?? {}) as { parcelas?: PontoVariavel[] };
     return {
       id: x.id,
@@ -164,7 +164,10 @@ export class IndicesUtiController {
         sofa: ultimo('sofa'),
       });
     }
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_INDICE_UTI', chaveNaturalAlvo: `unidade:${unidade};n:${r.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'indice_gravidade_uti',
+      chaveNaturalAlvo: `unidade:${unidade};n:${r.length}`,
+    };
     return { unidade, pacientes: r };
   }
 
@@ -186,7 +189,7 @@ export class IndicesUtiController {
       this.a.apoio.liberacao(s),
       this.podeValidar(s),
     ]);
-    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'SGH_PEP_INDICE_UTI' };
+    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'indice_gravidade_uti' };
     return {
       paciente: i.paciente,
       nome: i.nome,
@@ -210,7 +213,7 @@ export class IndicesUtiController {
   @Post('indices')
   @HttpCode(201)
   @Permissao(P.indiceUtiRegistrar)
-  @AuditadoNoHandler('pep.registrarIndiceUti: SGH_PEP_INDICE_UTI e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.registrarIndiceUti: indice_gravidade_uti e trilha_auditoria na mesma transação')
   async registrar(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -235,7 +238,7 @@ export class IndicesUtiController {
       EVENTOS_AUDITAVEIS.indiceUtiRegistrado.codigo,
       P.indiceUtiRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_INDICE_UTI',
+        tabela: 'indice_gravidade_uti',
         id: String(x),
         paciente: i.paciente,
         chave: `${e.indice}:${calc.pontuacao}`,
@@ -281,7 +284,7 @@ export class IndicesUtiController {
   @Post('indices/:id/estornar')
   @HttpCode(200)
   @Permissao(P.indiceUtiRegistrar)
-  @AuditadoNoHandler('o estorno em SGH_PEP_ESTORNO_REGISTRO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o estorno em aplicacao_escala com a trilha_auditoria na mesma transação')
   estornar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.a.estornar(sessaoDe(req), 'indiceUti', idDaRota(id), b, P.indiceUtiRegistrar);
   }
@@ -289,7 +292,7 @@ export class IndicesUtiController {
   @Post('indices/:id/validar')
   @HttpCode(200)
   @Permissao(P.indiceUtiValidar)
-  @AuditadoNoHandler('pep.validarIndiceUti: SGH_PEP_INDICE_UTI e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.validarIndiceUti: indice_gravidade_uti e trilha_auditoria na mesma transação')
   async validar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -317,7 +320,7 @@ export class IndicesUtiController {
       EVENTOS_AUDITAVEIS.indiceUtiValidado.codigo,
       P.indiceUtiValidar,
       (x: { paciente: number }) => ({
-        tabela: 'SGH_PEP_INDICE_UTI',
+        tabela: 'indice_gravidade_uti',
         id: String(iid),
         paciente: x.paciente,
         chave: 'validado',
@@ -373,7 +376,7 @@ export class IndicesUtiController {
           coletadoEm: x.coletadoEm,
         })),
     );
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_INDICE_UTI', chaveNaturalAlvo: `smr:${de}:${ate};n:${r.indices}` };
+    req.sghAlvo = { tabelaAlvo: 'indice_gravidade_uti', chaveNaturalAlvo: `smr:${de}:${ate};n:${r.indices}` };
     return { de: de!, ate: ate!, ...r };
   }
 }

@@ -1,8 +1,8 @@
 // Serviço do M12 (as duas fontes): monta o contrato em abas, as grades de preço com a vigência na data, a
 // proposta de reajuste (@sgh/dominio-preco) e a gravação em partes de até 200 itens pelo executor, o desfazer
 // do lote, a consulta de valor vigente com a explicação do modelo, a importação versionada (preparar, validar,
-// comparar, aprovar como reajuste por arquivo, rejeitar) e o saneamento. Nenhum nome de tabela do legado sai
-// na resposta (as abas de consulta levam o código da coluna, para conferir no SPDATA).
+// comparar, aprovar como reajuste por arquivo, rejeitar) e o saneamento. Nenhum nome de tabela ou coluna sai na
+// resposta (as abas levam a chave de negócio do campo).
 import { createHash } from 'node:crypto';
 import {
   type AbaContratoDescrita,
@@ -41,21 +41,17 @@ import {
   vigenteEm,
 } from '@sgh/dominio-preco';
 import {
+  campoDeConsulta,
+  COLUNA_DO_CAMPO,
   COLUNAS_CONSTANTES,
   COLUNAS_VISIVEIS,
-  COLUNA_DO_CAMPO,
-  campoDeConsulta,
-  type ContextoOperacao,
-  type ConvenioLido,
-  type ItemParaReajusteLido,
-  type LinhaPreparada,
-  operacao,
   ROTULOS_CONSULTA,
-} from '@sgh/legado';
+} from './campos-contrato.js';
+import type { ConvenioPreco, ItemParaReajuste, LinhaPreparada } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoPreco } from './base.js';
 import { type CacheConfig, TTL_CONVENIOS_S } from '../config/public-api.js';
-import type { CtxPrecos, FontePrecos } from './fonte.js';
+import type { ContextoGravacaoPreco, CtxPrecos, FontePrecos } from './fonte.js';
 
 const TITULOS: Readonly<Record<(typeof ABAS_CONTRATO)[number], string>> = {
   cadastro: 'Cadastro',
@@ -74,7 +70,7 @@ const ROTULO_INDICE: Readonly<Record<string, string>> = {
   '5': 'UCO',
 };
 
-export function resumoDoConvenio(c: ConvenioLido): ConvenioResumo {
+export function resumoDoConvenio(c: ConvenioPreco): ConvenioResumo {
   return {
     codigo: c.codigo,
     nome: c.nome,
@@ -110,16 +106,16 @@ export class ServicoPrecos {
   private readonly cacheTabelas = new Map<string, { quando: number; valor: TabelaPreco[] }>();
   /**
    * `cache`: o armazém compartilhado (Valkey) da lista de convênios da busca por palavra (ficha, seção 4),
-   * só com a fonte do legado; invalidado depois do commit da situação e do contrato. O cache nunca decide
-   * gravação: a proposta de reajuste e as receitas releem o legado.
+   * só com a fonte do banco; invalidado depois do commit da situação e do contrato. O cache nunca decide
+   * gravação: a proposta de reajuste e as operações releem o banco.
    */
   constructor(
     private readonly fonte: FontePrecos,
     private readonly cache: CacheConfig | null = null,
   ) {}
 
-  private conveniosDaBusca(c: CtxPrecos): Promise<ConvenioLido[]> {
-    if (!this.cache || this.fonte.destino !== 'legado') return this.fonte.convenios(c);
+  private conveniosDaBusca(c: CtxPrecos): Promise<ConvenioPreco[]> {
+    if (!this.cache || this.fonte.destino !== 'banco') return this.fonte.convenios(c);
     return this.cache.lerOuCarregar(this.cache.chave(c.rede, c.hospital, 'convenios'), TTL_CONVENIOS_S, () =>
       this.fonte.convenios(c),
     );
@@ -226,7 +222,12 @@ export class ServicoPrecos {
       abas,
       constantesOcultas: COLUNAS_CONSTANTES.length,
       planos: planos ?? [],
-      vigencias: vigencias.map((v) => ({ ...v, vigente: v.inicio <= hoje && hoje <= v.fim })),
+      // O contrato da tela ainda pede o fim em texto (pedido de contrato: fim nulo enquanto vigente).
+      vigencias: vigencias.map((v) => ({
+        ...v,
+        fim: v.fim ?? '',
+        vigente: v.inicio <= hoje && (v.fim === null || hoje <= v.fim),
+      })),
       indices: indices.map((i) => ({
         tipo: i.tipo,
         chave: i.chave,
@@ -275,7 +276,7 @@ export class ServicoPrecos {
     };
   }
 
-  /** Impacto e alertas de suspender ou reativar (sante-api: acoes-convenio-situacao.js). */
+  /** Impacto e alertas de suspender ou reativar . */
   async impactoSituacao(c: CtxPrecos, cod: number, operacaoPedida: 'suspender' | 'reativar') {
     const conv = await this.fonte.convenio(c, cod);
     if (!conv) return null;
@@ -284,7 +285,7 @@ export class ServicoPrecos {
     const alertas: string[] = [];
     if (operacaoPedida === 'suspender')
       alertas.push(
-        `No SPDATA, suspender não bloqueia nada: o convênio segue em ${i.agendasConsulta} agenda(s) de consulta e ${i.agendasExame} de exame. No sistema novo, convênio suspenso não aceita novo atendimento nem agendamento.`,
+        `Convênio suspenso não aceita novo atendimento nem agendamento; ele segue em ${i.agendasConsulta} agenda(s) de consulta e ${i.agendasExame} de exame.`,
       );
     if (i.agendamentosFuturos > 0)
       alertas.push(`${i.agendamentosFuturos} agendamento(s) futuro(s) com este convênio continuam marcados.`);
@@ -292,9 +293,9 @@ export class ServicoPrecos {
       alertas.push(`${i.contasAbertas} conta(s) aberta(s) com este convênio: a mudança não as fecha.`);
     if (operacaoPedida === 'reativar')
       alertas.push(
-        `Reativar não refaz os vínculos de profissionais (hoje: ${i.profissionais}): o SPDATA só vincula na inclusão do convênio.`,
+        `Reativar não refaz os vínculos de profissionais (hoje: ${i.profissionais}).`,
       );
-    alertas.push('O SPDATA não guarda quem mudou a situação: a autoria fica registrada no sistema novo.');
+    alertas.push('Quem mudou a situação fica registrado na trilha e no histórico do convênio.');
     const dthOk =
       i.diariaAcompanhante === null ||
       !(
@@ -324,7 +325,7 @@ export class ServicoPrecos {
   }
 
   /**
-   * Tabelas com os convênios que as usam. `escopo` (TBUSERS_TBCONVEN): a lista `convenios` de cada tabela
+   * Tabelas com os convênios que as usam. `escopo` (da sessão): a lista `convenios` de cada tabela
    * sai filtrada pelo escopo da sessão depois do cache (o cache é do estabelecimento, não da sessão).
    */
   async tabelas(
@@ -454,7 +455,7 @@ export class ServicoPrecos {
     };
   }
 
-  /** Vigências da diária/taxa (TBVLRDTH) ou do mat/med (TBVLRMEM): a linha do tempo do item. */
+  /** Vigências da diária/taxa  ou do mat/med: a linha do tempo do item. */
   async vigenciasValor(
     c: CtxPrecos,
     tipo: 'diaria' | 'matmed',
@@ -498,7 +499,7 @@ export class ServicoPrecos {
       : p.arquivo
         ? [...p.arquivo.keys()]
         : p.codigos;
-    const itens: ItemParaReajusteLido[] = await this.fonte.itensParaReajuste(c, tab, codigos, data, 6000);
+    const itens: ItemParaReajuste[] = await this.fonte.itensParaReajuste(c, tab, codigos, data, 6000);
     const pedido: PedidoReajuste = p.arquivo
       ? { modo: 'arquivo', valores: p.arquivo }
       : p.valores
@@ -555,7 +556,7 @@ export class ServicoPrecos {
   /** Grava a proposta (recalculada no servidor) em partes de até 200 itens pelo executor. */
   async aplicarReajuste(
     c: CtxPrecos,
-    ctxOp: ContextoOperacao,
+    ctxOp: ContextoGravacaoPreco,
     tab: number,
     p: PedidoProposta,
     confirmacoes: Readonly<Partial<Record<Confirmacao, boolean | undefined>>>,
@@ -586,14 +587,14 @@ export class ServicoPrecos {
           .join(' '),
         { codigo: 'confirmacao-pendente' },
       );
-    const lote = loteDaChave(ctxOp.idempotencyKey);
+    const lote = loteDaChave(ctxOp.chaveIdempotencia);
     const mudam = prop.linhas.filter((l) => l.muda);
     const partes = fatiar(mudam, ITENS_POR_TRANSACAO);
     let linhas = 0;
     for (const [n, parte] of partes.entries()) {
-      const r = await this.fonte.executor.executar(
-        operacao('preco.reajustar'),
-        c.hospital,
+      const r = await this.fonte.executar(
+        'preco.reajustar',
+        c,
         {
           tabela: tab,
           data: prop.data,
@@ -615,7 +616,7 @@ export class ServicoPrecos {
             novos: l.novos,
           })),
         },
-        { ...ctxOp, idempotencyKey: `${ctxOp.idempotencyKey}:p${n + 1}`.slice(0, 80) },
+        { ...ctxOp, chaveIdempotencia: `${ctxOp.chaveIdempotencia}:p${n + 1}`.slice(0, 80) },
       );
       linhas += Number(r.resultado['linhas'] ?? 0);
     }
@@ -625,7 +626,7 @@ export class ServicoPrecos {
   /** Desfaz o lote inteiro (todas as partes), pelo executor. */
   async desfazerLote(
     c: CtxPrecos,
-    ctxOp: ContextoOperacao,
+    ctxOp: ContextoGravacaoPreco,
     lote: string,
     justificativa: string,
   ): Promise<{ linhas: number; partes: number }> {
@@ -667,16 +668,16 @@ export class ServicoPrecos {
     }
     let total = 0;
     for (const p of partes) {
-      const r = await this.fonte.executor.executar(operacao('preco.desfazerReajuste'), c.hospital, p, {
+      const r = await this.fonte.executar('preco.desfazerReajuste', c, p, {
         ...ctxOp,
-        idempotencyKey: `${ctxOp.idempotencyKey}:p${p.parte}`.slice(0, 80),
+        chaveIdempotencia: `${ctxOp.chaveIdempotencia}:p${p.parte}`.slice(0, 80),
       });
       total += Number(r.resultado['linhas'] ?? 0);
     }
     return { linhas: total, partes: partes.length };
   }
 
-  /** "Quanto vale este item neste contrato nesta data" (cap-11 §11.3; sante-api: valores.js). */
+  /** "Quanto vale este item neste contrato nesta data" (cap-11 §11.3). */
   async valorVigente(
     c: CtxPrecos,
     q: {
@@ -733,7 +734,7 @@ export class ServicoPrecos {
         i.valores,
         { ch: ind.get(ato) ?? ind.get(1) ?? null, filme: ind.get(4) ?? null, uco: ind.get(5) ?? null, porte },
       );
-      // O total é a regra da sante-api (valores.js): soma dos 5 componentes de TBVLRTHM na vigência, o mesmo
+      // O total é a soma dos 5 componentes do valor na vigência, o mesmo
       // da grade e das vigências. A regra do modelo (CH ou PORTE, pelos índices) fica só como explicação.
       const total = i.valores ? totalComponentes(i.valores) : null;
       const explicacao = ex.modelo === 'VALOR' ? [] : ex.passos;
@@ -749,14 +750,14 @@ export class ServicoPrecos {
         passos: [
           `Tabela ${tab} (${q.conta === 'externa' ? 'conta externa' : 'conta de internação'}); vigência ${i.vigencia ?? 'nenhuma'} (maior data ≤ ${data}).`,
           i.valores
-            ? `Total (regra da sante-api) = CH + custo operacional + filme + anestesia + outros = ${[
+            ? `Total = CH + custo operacional + filme + anestesia + outros = ${[
                 i.valores.ch,
                 i.valores.co,
                 i.valores.filme,
                 i.valores.anes,
                 i.valores.outros,
               ].join(' + ')} = ${total}.`
-            : 'Sem vigência de TBVLRTHM na data.',
+            : 'Sem vigência do valor na data.',
           ...(explicacao.length > 0
             ? [`Explicação pelo modelo ${ex.modelo} (estimativa, não é o total): ${explicacao.join(' ')}`]
             : []),
@@ -795,14 +796,14 @@ export class ServicoPrecos {
       estimativaPeloModelo: null,
       passos: m
         ? [
-            `Tabela de mat/med ${tab}; vigência ${m.vigencia ?? 'nenhuma'}. O valor final passa pela referência (PF/PMC) e pelos percentuais do convênio, calculados pelo SPDATA.`,
+            `Tabela de mat/med ${tab}; vigência ${m.vigencia ?? 'nenhuma'}. O valor final passa pela referência (PF/PMC) e pelos percentuais do convênio, calculados no faturamento.`,
           ]
         : ['Item de mat/med não encontrado na tabela do convênio.'],
       falta: m?.valor == null ? ['vigência na data'] : [],
     };
   }
 
-  /** Prepara, valida e compara a importação (nada é gravado no legado). */
+  /** Prepara, valida e compara a importação (nada muda nos preços). */
   async prepararImportacao(
     c: CtxPrecos,
     tab: number,

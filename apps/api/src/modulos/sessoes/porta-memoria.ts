@@ -2,16 +2,19 @@
 // agendas e quatro recursos SINTÉTICOS (uma cadeira que aceita tudo, uma pediátrica de 0 a 17 anos, uma de alta
 // complexidade e uma sala de fisioterapia de curta duração) e os pacientes do cadastro sintético. As mesmas recusas do
 // adaptador (recurso e paciente ocupados, versão, situação), sem banco; a trilha é a do registrador da API.
-import type {
-  LinhaTrilha,
-  OcupacaoLida,
-  RecursoSessaoLido,
-  SessaoSghLida,
-  SituacaoSessaoSgh,
-} from '@sgh/legado';
-import { recusa } from '@sgh/legado';
+// Melhoria: recusas do @sgh/nucleo (as mesmas da porta própria); o estado é por estabelecimento da sessão.
+import type { SituacaoSessao } from '@sgh/contratos';
+import { recusa } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoSessoes, GravadorSessoes, PacienteSessao, PortaSessoes } from './porta.js';
+import type {
+  ContextoSessoes,
+  GravadorSessoes,
+  OcupacaoSessaoLida,
+  PacienteSessao,
+  PortaSessoes,
+  RecursoDeSessao,
+  SessaoAgendada,
+} from './porta.js';
 
 /** Os pacientes do cadastro sintético (pela porta do cadastro em memória), para o nome e a idade. */
 export type LerPacientesSinteticos = (
@@ -27,7 +30,7 @@ export type LerPacientesSinteticos = (
   }[]
 >;
 
-const RECURSOS: readonly RecursoSessaoLido[] = [
+const RECURSOS: readonly RecursoDeSessao[] = [
   {
     recurso: 7001,
     identificacao: 'CADEIRA 01',
@@ -99,12 +102,15 @@ const DURACOES = [
   { codigo: 3, nome: 'Longa duração' },
 ];
 
+/** Quem grava na memória sintética (sem usuário numérico). */
+const USUARIO_MEMORIA = 'SINT.SESSOES';
+
 const sobrepoe = (a: { inicio: string; fim: string }, b: { inicio: string; fim: string }) =>
   a.inicio < b.fim && b.inicio < a.fim;
 const doisDigitos = (n: number) => String(n).padStart(2, '0');
 
 function agoraLocal(relogio: () => Date = () => new Date()): { agora: string; hoje: string } {
-  // O relógio civil do estabelecimento (UTC-3, sem horário de verão), como o banco do legado.
+  // O relógio civil do estabelecimento (UTC-3, sem horário de verão).
   const d = new Date(relogio().getTime() - 3 * 3_600_000);
   const hoje = `${d.getUTCFullYear()}-${doisDigitos(d.getUTCMonth() + 1)}-${doisDigitos(d.getUTCDate())}`;
   return { agora: `${hoje}T${doisDigitos(d.getUTCHours())}:${doisDigitos(d.getUTCMinutes())}`, hoje };
@@ -112,7 +118,7 @@ function agoraLocal(relogio: () => Date = () => new Date()): { agora: string; ho
 
 export class PortaSessoesMemoria implements PortaSessoes {
   readonly destino = 'memoria' as const;
-  private readonly sessoes = new Map<string, SessaoSghLida[]>();
+  private readonly sessoes = new Map<string, SessaoAgendada[]>();
   private seq = 9000;
   private seqSerie = 900;
 
@@ -122,11 +128,13 @@ export class PortaSessoesMemoria implements PortaSessoes {
     private readonly agoraDe: () => Date = () => new Date(),
   ) {}
 
-  private doHospital(c: ContextoSessoes): SessaoSghLida[] {
-    let s = this.sessoes.get(c.hospital);
+  private doHospital(c: ContextoSessoes): SessaoAgendada[] {
+    // Na sintética sem id numérico do estabelecimento, o código dele (a sessão da tela leva os dois).
+    const k = `${c.cliente}:${c.estabelecimento ?? (c as Partial<{ hospital: string }>).hospital ?? '-'}`;
+    let s = this.sessoes.get(k);
     if (!s) {
       s = [];
-      this.sessoes.set(c.hospital, s);
+      this.sessoes.set(k, s);
     }
     return s;
   }
@@ -148,7 +156,7 @@ export class PortaSessoesMemoria implements PortaSessoes {
 
   async gravarSgh<T>(
     c: ContextoSessoes,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: unknown,
     fn: (g: GravadorSessoes) => Promise<T>,
   ): Promise<T> {
     const lista = this.doHospital(c);
@@ -194,7 +202,7 @@ export class PortaSessoesMemoria implements PortaSessoes {
             situacao: 'agendada',
             observacao: s.observacao,
             motivo: null,
-            por: s.usuario,
+            por: USUARIO_MEMORIA,
             em: agora,
             alteradoPor: null,
             alteradoEm: null,
@@ -212,7 +220,7 @@ export class PortaSessoesMemoria implements PortaSessoes {
           ...x,
           situacao: a.situacao,
           motivo: a.motivo,
-          alteradoPor: a.usuario,
+          alteradoPor: USUARIO_MEMORIA,
           alteradoEm: agora,
           versao: x.versao + 1,
         };
@@ -223,16 +231,15 @@ export class PortaSessoesMemoria implements PortaSessoes {
           situacao: 'cancelada',
           motivo: a.motivo,
           versao: a.versao,
-          usuario: a.usuario,
         });
         let n = 1;
         for (const [i, x] of copia.entries())
           if (x.serie === a.serie && x.ordem > a.ordem && x.situacao === 'agendada') {
             copia[i] = {
               ...x,
-              situacao: 'cancelada' as SituacaoSessaoSgh,
+              situacao: 'cancelada' as SituacaoSessao,
               motivo: a.motivo,
-              alteradoPor: a.usuario,
+              alteradoPor: USUARIO_MEMORIA,
               alteradoEm: agora,
               versao: x.versao + 1,
             };
@@ -240,7 +247,6 @@ export class PortaSessoesMemoria implements PortaSessoes {
           }
         return n;
       },
-      registrarEvento: async () => undefined,
     };
     const r = await fn(g);
     lista.splice(0, lista.length, ...copia);
@@ -287,13 +293,13 @@ export class PortaSessoesMemoria implements PortaSessoes {
     c: ContextoSessoes,
     alvo: { readonly recurso: number } | { readonly paciente: number },
     horarios: readonly { readonly inicio: string; readonly fim: string }[],
-  ): Promise<OcupacaoLida[]> {
+  ): Promise<OcupacaoSessaoLida[]> {
     const ativas = this.doHospital(c).filter(
       (x) =>
         ('recurso' in alvo ? x.recurso === alvo.recurso : x.paciente === alvo.paciente) &&
         (x.situacao === 'agendada' || x.situacao === 'realizada'),
     );
-    const vistas = new Map<number, OcupacaoLida>();
+    const vistas = new Map<number, OcupacaoSessaoLida>();
     for (const h of horarios) {
       const x = ativas.find((o) => o.inicio < h.fim && o.fim > h.inicio);
       if (x) vistas.set(x.id, { id: x.id, serie: x.serie, inicio: x.inicio, fim: x.fim });

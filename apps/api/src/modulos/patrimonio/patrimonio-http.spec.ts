@@ -12,14 +12,29 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { textoDoQr } from '@sgh/dominio-patrimonio';
 import { PORTA_PATRIMONIO } from './porta.js';
-import type { PortaPatrimonioMemoria } from './porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloPatrimonio } from './modulo.js';
+import { PortaPatrimonioMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,patrimonio',
+};
 let app: NestFastifyApplication;
 const trilha = new RegistradorTrilhaMemoria();
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: registroDeTeste(
+      {},
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        patrimonio: (ctx) => moduloPatrimonio(ctx, { porta: new PortaPatrimonioMemoria() }),
+      },
+    ),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 120_000);
@@ -326,14 +341,25 @@ describe('patrimônio: cada rota pela sua permissão, o ciclo do bem', { timeout
       versao: v3,
       data: '2026-05-10',
       motivo: 'Obsolescência',
+      motivoBaixa: 1,
       termoNumero: 'TB-1',
       senha: SENHA,
     });
     expect(baixaVelha.statusCode).toBe(409);
+    // Sem o motivo de baixa do cadastro: 400 (o motivo em texto é só a justificativa).
+    const semMotivo = await post(pat, `${P}/bens/${b2?.id}/baixa`, {
+      versao: v3,
+      data: '2026-10-22',
+      motivo: 'Obsolescência',
+      termoNumero: 'TB-1',
+      senha: SENHA,
+    });
+    expect(semMotivo.statusCode).toBe(400);
     const baixa = await post(pat, `${P}/bens/${b2?.id}/baixa`, {
       versao: v3,
       data: '2026-10-22',
       motivo: 'Obsolescência',
+      motivoBaixa: 1,
       termoNumero: 'TB-1',
       valorVendaCent: 50_00,
       senha: SENHA,

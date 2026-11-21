@@ -6,23 +6,23 @@
 // estorno uma vez só, o horário uma vez por geração, a versão da terminologia, a dose uma vez só, a chave reutilizada).
 // Nada é de pessoa real (marca "SINTETICO M45").
 import type { ChecagemCuidadoLida } from '@sgh/contratos';
+import { type ContextoOperacao, recusa } from '@sgh/nucleo';
+import { doseVigenteDaVacina } from '@sgh/dominio-enfermagem';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
 import {
-  type AtendimentoDaConsultaLido,
-  type AtividadeVigenteLida,
-  type ContextoOperacao,
-  type CorrecaoVacinaLida,
-  doseVigenteDaVacina,
+  type ConsultaDeEnfermagem,
+  type AtividadeVigente,
+  type CorrecaoVacina,
   EVENTO_VACINA_CANCELADA,
   EVENTO_VACINA_SUBSTITUIDA,
-  type ItemSaeLidoSgh,
-  type LiberacaoConsultada,
-  type ReceitaLidaSgh,
-  recusa,
-  type TermoSaeLidoSgh,
-  type VacinaLidaSgh,
-  type RecusaRiaLida,
-} from '@sgh/legado';
+  type ItemSae,
+  type ReceitaDoEnfermeiro,
+  type TermoTerminologiaSae,
+  type VacinaAplicada,
+  type RecusaEnvioVacina,
+} from './sae-tipos.js';
 import type { ContextoSae, GravadorSae, PortaSae } from './sae-porta.js';
+import { chaveDoEstabelecimento } from './tipos-vinculados.js';
 import type { PortaEnfermagem } from './porta.js';
 
 const M = 'SINTETICO M45';
@@ -45,7 +45,7 @@ interface Sae {
   em: string;
   chave: string | null;
 }
-type Item = ItemSaeLidoSgh & { sae: number; atendimento: number; paciente: number };
+type Item = ItemSae & { sae: number; atendimento: number; paciente: number };
 interface Checagem {
   id: number;
   item: number;
@@ -70,10 +70,10 @@ interface Estado {
   saes: Sae[];
   itens: Item[];
   checagens: Checagem[];
-  termos: (TermoSaeLidoSgh & { id: number })[];
-  receitas: (Mutavel<ReceitaLidaSgh> & { atendimento: number; paciente: number; chave: string | null })[];
-  vacinas: (Omit<VacinaLidaSgh, 'correcoes'> & {
-    correcoes: CorrecaoVacinaLida[];
+  termos: (TermoTerminologiaSae & { id: number })[];
+  receitas: (Mutavel<ReceitaDoEnfermeiro> & { atendimento: number; paciente: number; chave: string | null })[];
+  vacinas: (Omit<VacinaAplicada, 'correcoes'> & {
+    correcoes: CorrecaoVacina[];
     paciente: number;
     chaveDose: string | null;
     chave: string | null;
@@ -81,7 +81,7 @@ interface Estado {
   /** W0-03: a fila de saída (SGH_OUTBOX) da memória: o tipo, a chave e a carga (só IDs). */
   fila: { id: string; tipo: string; chave: string; carga: Record<string, number> }[];
   /** W0-03 (M6, testes): as recusas do RIA simuladas (na memória não há conector). */
-  recusas: RecusaRiaLida[];
+  recusas: RecusaEnvioVacina[];
 }
 
 /** Revisão W0-03: a dose vigente na memória é a mesma regra da leitura do banco. */
@@ -94,7 +94,7 @@ export class PortaSaeMemoria implements PortaSae {
   constructor(private readonly enfermagem: PortaEnfermagem) {}
 
   private e(c: ContextoSae): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDoEstabelecimento(c));
     if (!s) {
       s = {
         seq: 45_700,
@@ -107,7 +107,7 @@ export class PortaSaeMemoria implements PortaSae {
         fila: [],
         recusas: [],
       };
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDoEstabelecimento(c), s);
     }
     return s;
   }
@@ -116,7 +116,7 @@ export class PortaSaeMemoria implements PortaSae {
     return (await this.enfermagem.relogio(c)).slice(0, 19);
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -128,7 +128,7 @@ export class PortaSaeMemoria implements PortaSae {
   async gravarSgh<T>(c: ContextoSae, _trilha: unknown, fn: (g: GravadorSae) => Promise<T>): Promise<T> {
     const s = this.e(c);
     const agora = await this.agora(c);
-    const k = (chave: string | null, sufixo = '') => (chave ? `${c.hospital}:${chave}${sufixo}` : null);
+    const k = (chave: string | null, sufixo = '') => (chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null);
     const vigente = (atendimento: number) =>
       s.saes.filter((x) => x.atendimento === atendimento).sort((a, b) => b.versao - a.versao)[0] ?? null;
     const SAE_MUDOU = () =>
@@ -166,7 +166,7 @@ export class PortaSaeMemoria implements PortaSae {
       return it;
     };
     const jaPelaChave = (chave: string, atendimento: number) => {
-      const ja = s.itens.filter((x) => x.chave?.startsWith(`${c.hospital}:${chave}#`));
+      const ja = s.itens.filter((x) => x.chave?.startsWith(`${chaveDoEstabelecimento(c)}:${chave}#`));
       if (ja.length === 0) return null;
       if (ja.some((x) => x.atendimento !== atendimento))
         throw recusa(
@@ -317,7 +317,7 @@ export class PortaSaeMemoria implements PortaSae {
         const geracao = s.checagens.filter(
           (y) => y.item === a.id && y.tipo === 'estorno' && y.previsto === previsto,
         ).length;
-        const chaveHorario = `${c.hospital}:${a.id}:${previsto.replace(/\D/g, '')}:${geracao}`;
+        const chaveHorario = `${chaveDoEstabelecimento(c)}:${a.id}:${previsto.replace(/\D/g, '')}:${geracao}`;
         if (s.checagens.some((y) => y.chaveHorario === chaveHorario))
           throw recusa(
             'ja-checado',
@@ -538,7 +538,7 @@ export class PortaSaeMemoria implements PortaSae {
     };
   }
 
-  async terminologia(c: ContextoSae): Promise<TermoSaeLidoSgh[]> {
+  async terminologia(c: ContextoSae): Promise<TermoTerminologiaSae[]> {
     const t = this.e(c).termos;
     const ult = t.at(-1);
     return ult ? t.filter((x) => x.sistema === ult.sistema && x.versao === ult.versao) : [];
@@ -566,7 +566,7 @@ export class PortaSaeMemoria implements PortaSae {
     };
   }
 
-  private atividadeLida(s: Estado, a: Item): AtividadeVigenteLida {
+  private atividadeLida(s: Estado, a: Item): AtividadeVigente {
     const susp = s.itens.find((i) => i.tipo === 'suspensao' && i.pai === a.id);
     return {
       id: a.id,
@@ -584,7 +584,7 @@ export class PortaSaeMemoria implements PortaSae {
     };
   }
 
-  async atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigenteLida[]> {
+  async atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigente[]> {
     const s = this.e(c);
     const ultimas = new Set(
       [...new Set(atendimentos)]
@@ -652,7 +652,7 @@ export class PortaSaeMemoria implements PortaSae {
     return x ? this.checagemLida(s, x) : null;
   }
 
-  async consulta(c: ContextoSae, atendimento: number): Promise<AtendimentoDaConsultaLido | null> {
+  async consulta(c: ContextoSae, atendimento: number): Promise<ConsultaDeEnfermagem | null> {
     if (atendimento === CONSULTA_ENFERMAGEM_SINTETICA || atendimento === CONSULTA_MEDICA_SINTETICA) {
       const enf = atendimento === CONSULTA_ENFERMAGEM_SINTETICA;
       const agora = await this.agora(c);
@@ -734,12 +734,12 @@ export class PortaSaeMemoria implements PortaSae {
     return this.e(c).vacinas.filter((v) => v.paciente === paciente);
   }
 
-  async recusasRia(c: ContextoSae): Promise<RecusaRiaLida[]> {
+  async recusasRia(c: ContextoSae): Promise<RecusaEnvioVacina[]> {
     return [...this.e(c).recusas];
   }
 
   /** W0-03 (M6, testes): uma recusa do RIA como o conector gravaria na SGH_INTG_ENVIO. */
-  simularRecusaRia(c: ContextoSae, r: RecusaRiaLida): void {
+  simularRecusaRia(c: ContextoSae, r: RecusaEnvioVacina): void {
     this.e(c).recusas.unshift(r);
   }
 

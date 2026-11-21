@@ -4,12 +4,9 @@
 // ordem nova vinculada, a inativação é do autor com a senha, e o indicador imprime o numerador e o denominador. Porta
 // em memória; relógio controlado; dados sintéticos.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import { CONTEXTO_SINTETICO, criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { VigiaContencao } from './contencao-servico.js';
 import { PortaEscoresMemoria } from './escores-porta-memoria.js';
@@ -31,16 +28,14 @@ interface Sessao {
 async function montar() {
   const trilha = new RegistradorTrilhaMemoria();
   const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
     { agora },
   );
   const escores = new PortaEscoresMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     escores,
     vigiaEnfermagem: null,
-    vigia: null,
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -49,7 +44,7 @@ async function montar() {
     app,
     trilha,
     escores,
-    vigia: new VigiaContencao(escores, enfermagem, 'rede-sintetica', ['aa']),
+    vigia: new VigiaContencao(escores, enfermagem, [CONTEXTO_SINTETICO]),
     async entrar(login: string): Promise<Sessao> {
       const r = await app.inject({
         method: 'POST',
@@ -228,15 +223,15 @@ describe('W0-03, M5: contenção mecânica pela API', () => {
     let o = tela.pacientes.find((x: { atendimento: number }) => x.atendimento === TRES.atendimento).ordem;
     expect(o.horarios[0].estado).toBe('atrasada');
     expect(tela.atrasadas).toBeGreaterThanOrEqual(1);
-    expect(await a.vigia.ciclo('aa')).toBe(0);
+    expect(await a.vigia.ciclo(CONTEXTO_SINTETICO)).toBe(0);
     // Passado o prazo, sem retirada nem renovação: vencida, com o alerta da tela e o aviso da central (uma vez).
     avancar(20);
     tela = (await a.get(enf, '/enfermagem/contencao/unidade?unidade=UTI')).json();
     o = tela.pacientes.find((x: { atendimento: number }) => x.atendimento === TRES.atendimento).ordem;
     expect(o.situacao).toBe('vencida');
     expect(tela.vencidas).toBe(1);
-    expect(await a.vigia.ciclo('aa')).toBe(1);
-    expect(await a.vigia.ciclo('aa')).toBe(0);
+    expect(await a.vigia.ciclo(CONTEXTO_SINTETICO)).toBe(1);
+    expect(await a.vigia.ciclo(CONTEXTO_SINTETICO)).toBe(0);
     const aviso = a.escores.estado('aa').avisos.find((x) => x.objeto === String(id))!;
     expect(aviso).toMatchObject({
       login: 'SINT.ENF.PLANTAO',

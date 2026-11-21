@@ -20,7 +20,7 @@
 //   POST /api/operadora/reajustes                          operadora.reajustarContrato
 //   POST /api/operadora/reajustes/:id/cancelamento         operadora.cancelarReajuste
 // Tudo exige a chave `operadora.cobranca`, que só vale com a do módulo (regra 1), menos a tela. Cada gravação vai numa
-// transação só SGH_ com a SGH_TRILHA junto; nenhuma tabela do sistema anterior é escrita.
+// transação só com a trilha_auditoria junto; nenhuma tabela do sistema anterior é escrita.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type CobrancaDetalhe,
@@ -139,7 +139,7 @@ export class CobrancaOperadoraController {
   @Post(R.gerarMensalidades.caminho)
   @HttpCode(201)
   @Permissao(R.gerarMensalidades.permissao)
-  @AuditadoNoHandler('operadora.cobranca.gerada (SGH_OPE_COBRANCA e itens) com a SGH_TRILHA em cada página')
+  @AuditadoNoHandler('operadora.cobranca.gerada (fatura_plano e itens) com a trilha_auditoria em cada página')
   gerarMensalidades(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoGeracao> {
     return this.servico.mensalidades(
       sessaoDe(req),
@@ -151,7 +151,7 @@ export class CobrancaOperadoraController {
   @Post(R.coparticipacao.caminho)
   @HttpCode(201)
   @Permissao(R.coparticipacao.permissao)
-  @AuditadoNoHandler('operadora.cobranca.gerada (coparticipação) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.gerada (coparticipação) com a trilha_auditoria na mesma transação')
   coparticipacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
     return this.servico.coparticipacao(sessaoDe(req), corpo(esquemaLancarCoparticipacao, b));
   }
@@ -159,7 +159,7 @@ export class CobrancaOperadoraController {
   @Post(R.avulsa.caminho)
   @HttpCode(201)
   @Permissao(R.avulsa.permissao)
-  @AuditadoNoHandler('operadora.cobranca.gerada (cobrança avulsa) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.gerada (cobrança avulsa) com a trilha_auditoria na mesma transação')
   avulsa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
     return this.servico.avulsa(sessaoDe(req), corpo(esquemaLancarAvulsa, b));
   }
@@ -176,7 +176,7 @@ export class CobrancaOperadoraController {
   @HttpCode(201)
   @Permissao(R.acordo.permissao)
   @AuditadoNoHandler(
-    'operadora.cobranca.acordo (renegociadas e parcelas) com a SGH_TRILHA na mesma transação',
+    'operadora.cobranca.acordo (renegociadas e parcelas) com a trilha_auditoria na mesma transação',
   )
   acordo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAcordo> {
     return this.servico.acordo(sessaoDe(req), corpo(esquemaAcordo, b));
@@ -184,7 +184,7 @@ export class CobrancaOperadoraController {
 
   @Post(R.baixar.caminho)
   @Permissao(R.baixar.permissao)
-  @AuditadoNoHandler('operadora.cobranca.baixada com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.baixada com a trilha_auditoria na mesma transação')
   @HttpCode(200)
   baixar(
     @Param('id') id: string,
@@ -197,7 +197,7 @@ export class CobrancaOperadoraController {
 
   @Post(R.cancelar.caminho)
   @Permissao(R.cancelar.permissao)
-  @AuditadoNoHandler('operadora.cobranca.cancelada com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.cancelada com a trilha_auditoria na mesma transação')
   @HttpCode(200)
   cancelar(
     @Param('id') id: string,
@@ -210,7 +210,7 @@ export class CobrancaOperadoraController {
 
   @Post(R.estornar.caminho)
   @Permissao(R.estornar.permissao)
-  @AuditadoNoHandler('operadora.cobranca.estornada com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.estornada com a trilha_auditoria na mesma transação')
   @HttpCode(200)
   estornar(
     @Param('id') id: string,
@@ -234,7 +234,7 @@ export class CobrancaOperadoraController {
   @Post(R.notificar.caminho)
   @HttpCode(201)
   @Permissao(R.notificar.permissao)
-  @AuditadoNoHandler('operadora.cobranca.notificada com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.cobranca.notificada com a trilha_auditoria na mesma transação')
   notificar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
     return this.servico.notificar(sessaoDe(req), corpo(esquemaNotificacao, b));
   }
@@ -251,14 +251,14 @@ export class CobrancaOperadoraController {
   @Post(R.reajustar.caminho)
   @HttpCode(201)
   @Permissao(R.reajustar.permissao)
-  @AuditadoNoHandler('operadora.reajuste.registrado com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.reajuste.registrado com a trilha_auditoria na mesma transação')
   reajustar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
     return this.servico.reajustar(sessaoDe(req), corpo(esquemaReajuste, b));
   }
 
   @Post(R.cancelarReajuste.caminho)
   @Permissao(R.cancelarReajuste.permissao)
-  @AuditadoNoHandler('operadora.reajuste.cancelado com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.reajuste.cancelado com a trilha_auditoria na mesma transação')
   @HttpCode(200)
   cancelarReajuste(
     @Param('id') id: string,

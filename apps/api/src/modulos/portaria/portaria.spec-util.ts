@@ -7,6 +7,7 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloPortaria } from './modulo.js';
 import { type OpcoesPortariaMemoria, PortaPortariaMemoria, REGRAS_SINTETICAS } from './porta-memoria.js';
 
 export interface Sessao {
@@ -40,12 +41,15 @@ export const REGRAS_TESTE: NonNullable<OpcoesPortariaMemoria['regras']> = [
 ];
 
 export async function criarAppPortaria(o: { agora?: Date } = {}): Promise<AppPortaria> {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'portaria' };
   const trilha = new RegistradorTrilhaMemoria();
   // 15:00 do relógio do estabelecimento (o processo dos testes roda em UTC).
   const relogio = { agora: o.agora ?? new Date(2026, 9, 25, 15, 0, 0) };
   const porta = new PortaPortariaMemoria({ agora: () => relogio.agora, regras: REGRAS_TESTE });
-  const app = await criarApp(lerConfiguracao(env), null, env, { trilha, portaria: porta, vigia: null });
+  const app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { portaria: async () => ({ modulo: (ctx) => moduloPortaria(ctx, { porta }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   const entrar = async (login: string): Promise<Sessao> => {

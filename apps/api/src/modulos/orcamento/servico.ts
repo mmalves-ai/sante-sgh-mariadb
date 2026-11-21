@@ -1,8 +1,10 @@
 // Orçamento empresarial (M54, etapa 7; ficha, seções 4, 6, 7 e 8, regra 14; manual m23): a tela `Financeiro >
-// Orçamento empresarial` (`/financeiro/orcamento`). Os centros de custo e os itens gerenciais são os do banco (lidos
-// onde estão); as versões e as linhas ficam em SGH_ORC_*; o realizado é lido do banco (MFLANGSI, GEKONCDC e o rateio do
-// novo). As regras são de @sgh/dominio-financeiro; aqui só a orquestração (leituras, validação contra os cadastros do
-// banco, gravação com a trilha na mesma transação).
+// Orçamento empresarial` (`/financeiro/orcamento`). Os centros de custo e os itens gerenciais são os do cadastro do
+// cliente; as versões e as linhas ficam em versao_orcamento e linha_orcamento; o realizado vem dos títulos com o rateio
+// por centro e do consumo valorizado. As regras são de @sgh/dominio-financeiro; aqui só a orquestração (leituras,
+// validação contra os cadastros, gravação com a trilha na mesma transação).
+// Melhoria: o centro do realizado chega pelo id (sem conversão de código), e a gravação leva a chave de idempotência
+// da requisição ao Executor.
 import {
   type ApoioOrcamento,
   type AprovarOrcamento,
@@ -38,15 +40,26 @@ import {
   planejarGravacao,
   validarLinhas,
 } from '@sgh/dominio-financeiro';
-import type { LinhaTrilha, RealizadoAnoLido } from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro } from '../cadastro/comum.js';
-import type { ApoioOrcamentoLido, ContextoOrcamento, PortaOrcamento } from './porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import type {
+  ApoioOrcamentoDados,
+  BaseVersaoOrcamento,
+  ContextoOrcamento,
+  GravacaoOrcamento,
+  PortaOrcamento,
+  RealizadoAno,
+} from './porta.js';
 
 export interface SessaoOrcamento {
   readonly rede: string;
   readonly hospital: string;
   readonly login: string;
+  /** O contexto do núcleo da sessão (cliente, estabelecimento e usuário por id). */
+  readonly porta: ContextoOrcamento;
+  /** A chave de idempotência da gravação (Idempotency-Key da requisição). */
+  readonly chaveIdempotencia: string;
   pode(codigo: string): boolean;
   /** A linha da trilha de uma gravação. */
   trilha(
@@ -55,7 +68,7 @@ export interface SessaoOrcamento {
     tabela: string,
     id: number | null,
     chave?: string | null,
-  ): LinhaTrilha;
+  ): RegistroTrilhaTela;
 }
 
 export interface CodigosOrcamento {
@@ -70,7 +83,13 @@ export interface EventosOrcamento {
   readonly descartado: string;
 }
 
-const ctx = (s: SessaoOrcamento): ContextoOrcamento => ({ rede: s.rede, hospital: s.hospital });
+const ctx = (s: SessaoOrcamento): ContextoOrcamento => s.porta;
+
+const gravacao = (s: SessaoOrcamento, trilha: RegistroTrilhaTela): GravacaoOrcamento => ({
+  login: s.login,
+  chaveIdempotencia: s.chaveIdempotencia,
+  trilha,
+});
 
 const naoEncontrado = () =>
   new ErroProblema(
@@ -83,7 +102,7 @@ const naoEncontrado = () =>
 const recusa = (codigo: string, titulo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, titulo, detalhe, { codigo });
 
-/** Converte a recusa do legado (ErroOperacao) no problema HTTP. */
+/** Converte a recusa do Executor (ErroOperacao) no problema HTTP. */
 async function gravando<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -112,7 +131,7 @@ export function rotuloItem(
 }
 
 interface Cadastros {
-  readonly apoio: ApoioOrcamentoLido;
+  readonly apoio: ApoioOrcamentoDados;
   readonly centros: Map<number, CentroOrcamento>;
   readonly itens: Map<string, ItemGerencialOrcamento>;
 }
@@ -182,10 +201,9 @@ export class ServicoOrcamento {
     };
   }
 
-  /** O realizado do ano na chave do orçamento (centro pelo ID; documento com rateio repartido). */
-  private realizadoNaChave(r: RealizadoAnoLido, centros: ReadonlyMap<number, CentroOrcamento>) {
-    const porCodigo = new Map([...centros.values()].map((c) => [c.codigo, c.id]));
-    return converterRealizado(r.agregado, r.rateados, (cod) => porCodigo.get(cod) ?? null);
+  /** O realizado do ano na chave do orçamento (centro pelo id; fora do cadastro, sem centro; rateio repartido). */
+  private realizadoNaChave(r: RealizadoAno, centros: ReadonlyMap<number, CentroOrcamento>) {
+    return converterRealizado(r.agregado, r.rateados, (id) => (centros.has(id) ? id : null));
   }
 
   private validar(linhas: readonly ChaveLinhaOrcamento[], c: Cadastros): void {
@@ -204,7 +222,7 @@ export class ServicoOrcamento {
     s: SessaoOrcamento,
     x: CriarVersaoOrcamento,
     eventos: EventosOrcamento,
-  ): Promise<{ id: number; numero: number; linhas: number; descartadas: number }> {
+  ): Promise<{ id: number; numero: number; linhas: number; descartadas: number; consumoDeFora: number }> {
     const c = await this.cadastros(s);
     if (!c.apoio.empresas.includes(x.empresa))
       throw recusa(
@@ -213,7 +231,8 @@ export class ServicoOrcamento {
         `A empresa ${x.empresa} não está cadastrada neste estabelecimento.`,
       );
     let linhas: LinhaOrcamentoEntrada[] = [];
-    let base = 'vazio';
+    let base: BaseVersaoOrcamento = { tipo: 'vazio' };
+    let rotulo = 'vazio';
     if (x.base.tipo === 'versao') {
       const origem = await this.versaoOu404(s, x.base.id);
       if (origem.empresa !== x.empresa)
@@ -227,12 +246,14 @@ export class ServicoOrcamento {
         meses: [...l.meses],
         observacao: l.observacao,
       }));
-      base = `cópia de ${origem.ano} v${origem.numero}`;
+      base = { tipo: 'versao', id: origem.id };
+      rotulo = `cópia de ${origem.ano} v${origem.numero}`;
     } else if (x.base.tipo === 'realizado') {
       const r = this.realizadoNaChave(await this.porta.realizado(ctx(s), x.empresa, x.ano - 1), c.centros);
       linhas = gerarDoRealizado(r.realizado, x.base.ajusteCentesimos);
       const sinal = x.base.ajusteCentesimos >= 0 ? '+' : '-';
-      base = `realizado de ${x.ano - 1} ${sinal}${(Math.abs(x.base.ajusteCentesimos) / 100).toFixed(2).replace('.', ',')}%`;
+      base = { tipo: 'realizado', ajusteCentesimos: x.base.ajusteCentesimos };
+      rotulo = `realizado de ${x.ano - 1} ${sinal}${(Math.abs(x.base.ajusteCentesimos) / 100).toFixed(2).replace('.', ',')}%`;
     }
     // A cópia e o realizado trazem só o que ainda está no cadastro (item ou centro que saiu fica de fora, contado).
     const validas = linhas.filter(
@@ -242,24 +263,24 @@ export class ServicoOrcamento {
           itens: new Map([...c.itens].map(([k, i]) => [k, i.natureza])),
         }).length === 0,
     );
-    const descartadas = linhas.length - validas.length;
-    if (validas.length > TETO_LINHAS_ORCAMENTO)
+    // O consumo por centro só entra quando o banco o guarda (porta.gravaConsumoPorCentro): senão fica de fora, contado
+    // nas descartadas, e a versão do realizado sai com a despesa e a receita (nunca recusada por inteiro).
+    const gravaveis = this.porta.gravaConsumoPorCentro ? validas : validas.filter((l) => l.natureza !== 'consumo');
+    const consumoDeFora = validas.length - gravaveis.length;
+    const descartadas = linhas.length - gravaveis.length;
+    if (gravaveis.length > TETO_LINHAS_ORCAMENTO)
       throw recusa('limite', 'Versão grande demais', `A base tem mais de ${TETO_LINHAS_ORCAMENTO} linhas.`);
     const r = await gravando(() =>
       this.porta.criar(
         ctx(s),
-        { empresa: x.empresa, ano: x.ano, descricao: x.descricao, base, linhas: validas },
-        s.login,
-        s.trilha(
-          eventos.criado,
-          'incluir',
-          'SGH_ORC_ORCAMENTO',
-          null,
-          `${x.ano}:${base}:${validas.length} linhas`,
+        { empresa: x.empresa, ano: x.ano, descricao: x.descricao, base, linhas: gravaveis },
+        gravacao(
+          s,
+          s.trilha(eventos.criado, 'incluir', 'versao_orcamento', null, `${x.ano}:${rotulo}:${gravaveis.length} linhas`),
         ),
       ),
     );
-    return { ...r, descartadas };
+    return { ...r, descartadas, consumoDeFora };
   }
 
   async gravarLinhas(
@@ -313,13 +334,15 @@ export class ServicoOrcamento {
         id,
         x.versao,
         { incluir: plano.incluir, alterar: plano.alterar, remover: plano.remover },
-        s.login,
-        s.trilha(
-          eventos.linhas,
-          'alterar',
-          'SGH_ORC_LINHA',
-          id,
-          `+${resumo.incluidas} ~${resumo.alteradas} -${resumo.removidas}; total ${formatoReais(plano.totalAntes)} -> ${formatoReais(plano.totalDepois)}`,
+        gravacao(
+          s,
+          s.trilha(
+            eventos.linhas,
+            'alterar',
+            'linha_orcamento',
+            id,
+            `+${resumo.incluidas} ~${resumo.alteradas} -${resumo.removidas}; total ${formatoReais(plano.totalAntes)} -> ${formatoReais(plano.totalDepois)}`,
+          ),
         ),
       ),
     );
@@ -351,8 +374,7 @@ export class ServicoOrcamento {
         ctx(s),
         { id, versao: x.versao, empresa: v.empresa, ano: v.ano },
         x.observacao,
-        s.login,
-        s.trilha(eventos.aprovado, 'alterar', 'SGH_ORC_ORCAMENTO', id, `${v.ano} v${v.numero}`),
+        gravacao(s, s.trilha(eventos.aprovado, 'alterar', 'versao_orcamento', id, `${v.ano} v${v.numero}`)),
       ),
     );
   }
@@ -372,8 +394,7 @@ export class ServicoOrcamento {
         id,
         x.versao,
         x.motivo,
-        s.login,
-        s.trilha(eventos.descartado, 'alterar', 'SGH_ORC_ORCAMENTO', id, `${v.ano} v${v.numero}`),
+        gravacao(s, s.trilha(eventos.descartado, 'alterar', 'versao_orcamento', id, `${v.ano} v${v.numero}`)),
       ),
     );
   }
@@ -422,7 +443,7 @@ export class ServicoOrcamento {
           .filter(Boolean)
           .join(', ')}): os totais e as parcelas são só os do recorte.`,
       );
-    // O consumo de estoque é do estabelecimento (GEKONCDC não tem empresa; D-CONSUMO-EMPRESA-547).
+    // O consumo de estoque é do estabelecimento (não se separa por empresa).
     if (c.apoio.empresas.length > 1 && r.linhas.some((l) => l.natureza === 'consumo'))
       avisos.push(
         'O consumo de estoque não se separa por empresa: o realizado do consumo é o do estabelecimento inteiro.',

@@ -20,8 +20,13 @@ import {
   ordemDePublicacao,
   prepararCarga,
 } from '@sgh/dominio-catalogo';
-import type { CargaCatalogoLida, LinhaCatalogoPreparada } from '@sgh/legado';
-import type { CtxCatalogos, FonteCatalogos, Trilha } from './fonte.js';
+import type {
+  CargaDeCatalogo,
+  CtxCatalogos,
+  FonteCatalogos,
+  LinhaPreparadaCatalogo,
+  Trilha,
+} from './fonte.js';
 
 export const SERVICO_CATALOGOS = Symbol('SERVICO_CATALOGOS');
 
@@ -68,6 +73,75 @@ function mesesEntre(a: string, b: string): number {
   return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(4, 6)) - Number(a.slice(4, 6));
 }
 
+/** Limites da área de preparação (carga_catalogo_linha): chave natural, cada valor e o motivo. */
+export const LIMITES_PREPARACAO = { chave: 200, valor: 4000, motivo: 500 } as const;
+const ENTIDADE_VALIDA = /^[a-z][A-Za-z0-9]{1,39}$/;
+
+type ValorLinha = string | number | null;
+
+function cortarValores(
+  v: Readonly<Record<string, ValorLinha>> | null,
+  cortados: Set<string>,
+): Record<string, ValorLinha> | null {
+  if (!v) return null;
+  return Object.fromEntries(
+    Object.entries(v).map(([k, x]) => {
+      if (typeof x !== 'string' || x.length <= LIMITES_PREPARACAO.valor) return [k, x];
+      cortados.add(k);
+      return [k, x.slice(0, LIMITES_PREPARACAO.valor)];
+    }),
+  );
+}
+
+/**
+ * A linha preparada nos limites da área de preparação. A linha com erro guarda o texto lido inteiro (ex.: aspas não
+ * fechadas que fundem linhas num campo enorme, chave natural maior que o código): aqui a chave e os valores são
+ * cortados, e o corte vai no motivo, para que a carga seja gravada com as linhas de erro em vez de recusada inteira.
+ */
+export function linhaParaPreparacao(l: {
+  readonly linha: number;
+  readonly entidade: string;
+  readonly chave: string;
+  readonly resultado: 'valida' | 'erro';
+  readonly comparacao: LinhaPreparadaCatalogo['comparacao'];
+  readonly antes: Readonly<Record<string, ValorLinha>> | null;
+  readonly depois: Readonly<Record<string, ValorLinha>> | null;
+  readonly motivos: readonly string[];
+  readonly lote: number | null;
+}): LinhaPreparadaCatalogo {
+  const cortes: string[] = [];
+  let chave = l.chave;
+  if (chave.length > LIMITES_PREPARACAO.chave) {
+    chave = chave.slice(0, LIMITES_PREPARACAO.chave);
+    cortes.push(`chave cortada em ${LIMITES_PREPARACAO.chave} caracteres na área de preparação`);
+  }
+  if (chave === '') chave = '(sem chave)';
+  const cortados = new Set<string>();
+  const antes = cortarValores(l.antes, cortados);
+  const depois = cortarValores(l.depois, cortados);
+  if (cortados.size > 0)
+    cortes.push(
+      `${[...cortados].join(', ')}: cortado em ${LIMITES_PREPARACAO.valor} caracteres na área de preparação`,
+    );
+  const entidadeValida = ENTIDADE_VALIDA.test(l.entidade);
+  if (!entidadeValida) cortes.push('entidade fora da definição do catálogo');
+  // Só a linha com erro chega a passar dos limites (a linha válida respeita o tamanho de cada campo da definição); o
+  // resultado, a comparação e o lote ficam como a preparação os deu, para os totais fecharem com as linhas.
+  // O corte vem primeiro: o motivo da validação pode repetir o texto lido e passar do limite.
+  const motivos = [...cortes, ...l.motivos];
+  return {
+    linha: l.linha,
+    entidade: entidadeValida ? l.entidade : 'desconhecida',
+    chave,
+    resultado: l.resultado,
+    comparacao: l.comparacao,
+    antes,
+    depois,
+    motivo: motivos.length > 0 ? motivos.join('; ').slice(0, LIMITES_PREPARACAO.motivo) : null,
+    lote: l.lote,
+  };
+}
+
 export class ServicoCatalogos {
   readonly janela: JanelaPublicacao;
   private readonly edicoes = new Map<string, EdicaoEmCache>();
@@ -95,7 +169,7 @@ export class ServicoCatalogos {
   ): Promise<{
     id: number;
     situacao: string;
-    totais: CargaCatalogoLida['totais'];
+    totais: CargaDeCatalogo['totais'];
     motivo: string | null;
     lotes: number;
   }> {
@@ -132,17 +206,9 @@ export class ServicoCatalogos {
         def,
         prep.linhas.filter((l) => l.publicar),
       ).forEach((l, k) => loteDe.set(l, Math.floor(k / tamanho) + 1));
-    const linhas: LinhaCatalogoPreparada[] = prep.linhas.map((l) => ({
-      linha: l.linha,
-      entidade: l.entidade,
-      chave: l.chave,
-      resultado: l.resultado,
-      comparacao: l.comparacao,
-      antes: l.antes,
-      depois: l.depois,
-      motivo: l.motivos.length > 0 ? l.motivos.join('; ').slice(0, 200) : null,
-      lote: loteDe.get(l) ?? null,
-    }));
+    const linhas: LinhaPreparadaCatalogo[] = prep.linhas.map((l) =>
+      linhaParaPreparacao({ ...l, lote: loteDe.get(l) ?? null }),
+    );
     const situacao = errosArquivo.length > 0 ? 'rejeitada' : 'comparada';
     const motivo =
       errosArquivo.length > 0
@@ -158,7 +224,7 @@ export class ServicoCatalogos {
       .map((a) => (a.charset && a.charset !== 'utf-8' ? `${a.nome} (${a.charset})` : a.nome))
       .join(', ')
       .slice(0, 120);
-    const arquivoS3 =
+    const arquivoGuardado =
       situacao === 'comparada' && this.opcoes.guardarArquivo
         ? await this.opcoes
             .guardarArquivo(ctx.hospital, sha256, nomeArquivo, ordenados.map((a) => a.conteudo).join('\n'))
@@ -173,7 +239,7 @@ export class ServicoCatalogos {
         arquivo: nomeArquivo,
         sha256,
         bytes,
-        arquivoS3,
+        arquivoGuardado,
         situacao,
         edicao: prep.edicao,
         responsavel: autor,
@@ -188,7 +254,7 @@ export class ServicoCatalogos {
   }
 
   /** Pode aprovar e publicar? (a operação refaz a conferência na transação de cada lote). */
-  async decisao(ctx: CtxCatalogos, c: CargaCatalogoLida): Promise<DecisaoPublicacao> {
+  async decisao(ctx: CtxCatalogos, c: CargaDeCatalogo): Promise<DecisaoPublicacao> {
     const cat = c.catalogo as CodigoCatalogo;
     const def = definicaoCatalogo(cat);
     if (!def) return { pode: false, codigo: 'catalogo-inexistente', motivo: 'Catálogo inexistente.' };
@@ -217,7 +283,7 @@ export class ServicoCatalogos {
   private async edicaoEmCache(
     ctx: CtxCatalogos,
     codigo: CodigoCatalogo,
-    cargas: readonly CargaCatalogoLida[],
+    cargas: readonly CargaDeCatalogo[],
   ): Promise<{ ultima: string | null; descricao: string; linhas: number }> {
     const k = `${ctx.hospital}:${codigo}`;
     const marcador = cargas

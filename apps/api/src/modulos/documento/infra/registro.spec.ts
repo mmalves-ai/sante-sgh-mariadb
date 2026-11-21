@@ -1,10 +1,26 @@
-// Registro das emissões: reserva, confirmação única e unicidade (ID_ORIGINAL, VIA) como no SQL; tamanhos das
-// colunas do script 0101 iguais aos segmentos da chave do S3 (LIMITES_CHAVE).
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+// Registro das emissões: reserva, confirmação única e unicidade (original, via) como no banco; tamanhos das colunas
+// de emissao_documento (db/migracoes, ou o DDL proposto do lote 02-06 enquanto não entra) iguais aos segmentos da chave
+// do objeto (LIMITES_CHAVE).
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type EmissaoDocumento, ErroViaOcupada, LIMITES_CHAVE } from '@sgh/dominio-documento';
 import { RegistroEmissoesMemoria } from './registro.js';
+import { DDL_EMISSAO_DOCUMENTO } from './registro-propria.js';
+
+/** O CREATE TABLE de emissao_documento nas migrações; enquanto o pedido não entra, o DDL proposto. */
+function ddlEmissao(): string {
+  const raiz = resolve(import.meta.dirname, '../../../../../../db/migracoes');
+  const arquivos = (pasta: string): string[] =>
+    readdirSync(pasta, { withFileTypes: true }).flatMap((d) =>
+      d.isDirectory() ? arquivos(join(pasta, d.name)) : d.name.endsWith('.sql') ? [join(pasta, d.name)] : [],
+    );
+  for (const f of arquivos(raiz)) {
+    const m = /CREATE TABLE emissao_documento \([\s\S]*?\n\)[^;]*;/.exec(readFileSync(f, 'utf8'));
+    if (m) return m[0];
+  }
+  return DDL_EMISSAO_DOCUMENTO;
+}
 
 const base: EmissaoDocumento = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -47,20 +63,14 @@ describe('registro das emissões', () => {
     await r.reservar({ ...via2, via: 3, id: 'c', chaveObjeto: 'kc', identificadorQr: 'qc' });
   });
 
-  it('colunas do script 0101 do tamanho dos segmentos da chave; sem DEFAULT de hora local', () => {
-    const sql = readFileSync(
-      resolve(
-        import.meta.dirname,
-        '../../../../../../packages/legado/src/documento/sgh/0101_documento_emissao.sql',
-      ),
-      'utf8',
-    );
+  it('colunas de emissao_documento do tamanho dos segmentos da chave; sem DEFAULT de hora local', () => {
+    const sql = ddlEmissao();
     const tamanho = (coluna: string) =>
       Number(new RegExp(`\\n\\s*${coluna}\\s+VARCHAR\\((\\d+)\\)`).exec(sql)?.[1]);
-    expect(tamanho('REDE')).toBe(LIMITES_CHAVE.rede);
-    expect(tamanho('ESTABELECIMENTO')).toBe(LIMITES_CHAVE.estabelecimento);
-    expect(tamanho('MODELO')).toBe(LIMITES_CHAVE.modelo);
-    expect(tamanho('VERSAO_S3')).toBe(100);
+    expect(tamanho('rede')).toBe(LIMITES_CHAVE.rede);
+    expect(tamanho('estabelecimento_codigo')).toBe(LIMITES_CHAVE.estabelecimento);
+    expect(tamanho('modelo')).toBe(LIMITES_CHAVE.modelo);
+    expect(tamanho('versao_objeto')).toBe(100);
     expect(sql).not.toMatch(/DEFAULT\s+CURRENT_TIMESTAMP/i);
   });
 });

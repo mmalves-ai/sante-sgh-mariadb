@@ -134,9 +134,9 @@ describe('regra 15: conciliação, crédito e remessas só nas contas do escopo 
   });
 
   it('as remessas da conta de fora do escopo não aparecem', async () => {
-    const [hospital] = [...(a.porta as unknown as { estados: Map<string, unknown> }).estados.keys()];
+    const [chave] = [...(a.porta as unknown as { estados: Map<string, unknown> }).estados.keys()];
     for (const conta of [1, 2])
-      await a.porta.gravarSgh({ hospital } as never, null, (g) =>
+      await a.porta.gravarSgh({ estabelecimento: Number(chave) } as never, null as never, (g) =>
         g.registrarRemessa({
           usuario: 'SINT.FIN.PAGA',
           conta,
@@ -151,11 +151,11 @@ describe('regra 15: conciliação, crédito e remessas só nas contas do escopo 
           ocorrencias: null,
         }),
       );
-    const lista = (await a.get(tesfis, '/financeiro/pagar/remessas')).json() as { ID_TBCTABAN: number }[];
-    expect(lista.map((r) => r.ID_TBCTABAN)).toEqual([1]);
+    const lista = (await a.get(tesfis, '/financeiro/pagar/remessas')).json() as { CONTA: number }[];
+    expect(lista.map((r) => r.CONTA)).toEqual([1]);
     const paga = await a.entrar('SINT.FIN.PAGA');
-    const todas = (await a.get(paga, '/financeiro/pagar/remessas')).json() as { ID_TBCTABAN: number }[];
-    expect(todas.map((r) => r.ID_TBCTABAN).sort()).toEqual([1, 2]);
+    const todas = (await a.get(paga, '/financeiro/pagar/remessas')).json() as { CONTA: number }[];
+    expect(todas.map((r) => r.CONTA).sort()).toEqual([1, 2]);
   });
 });
 

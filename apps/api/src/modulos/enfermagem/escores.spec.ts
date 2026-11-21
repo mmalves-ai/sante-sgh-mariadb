@@ -1,5 +1,5 @@
 // M45, etapa 2 (escores, classificação de pacientes e índices de UTI) pela HTTP, com a sessão real sobre a fonte
-// sintética e as portas EM MEMÓRIA (nada conecta a banco): permissões pelas opções do legado; a unidade com as
+// sintética e as portas EM MEMÓRIA (nada conecta a banco): permissões pelas opções do perfil; a unidade com as
 // reavaliações vencidas; a aferição com o NEWS2 7 (TRR) e a mudança de quadro programada; Braden com os cuidados
 // preventivos decididos e a baixa da programada; CAM-ICU com RASS -4 recusado; a reavaliação programada, repetida e
 // dispensada; as faixas publicadas com a senha; Fugulin só do enfermeiro, uma por turno, e a carga; APACHE II e SOFA
@@ -7,12 +7,9 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { REGRAS_PADRAO } from '@sgh/dominio-enfermagem';
 import { CONFIGURACAO_INDICES_SINTETICA, categoriasDoTipo, comImpressao } from '@sgh/dominio-pep';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -35,10 +32,7 @@ interface Sessao {
 
 async function montar(o: { semChave?: boolean; trr?: string } = {}) {
   const trilha = new RegistradorTrilhaMemoria();
-  const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
-    { agora },
-  );
+  const enfermagem = new PortaEnfermagemMemoria({ agora });
   const escores = new PortaEscoresMemoria({ agora });
   const configuracao = o.semChave
     ? fonteConfiguracaoMemoria(trilha, {
@@ -65,12 +59,11 @@ async function montar(o: { semChave?: boolean; trr?: string } = {}) {
           ],
         })
       : undefined;
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     escores,
     vigiaEnfermagem: null,
-    vigia: null,
     ...(configuracao ? { configuracao } : {}),
   });
   await app.init();
