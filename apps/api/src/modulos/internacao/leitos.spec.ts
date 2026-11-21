@@ -13,17 +13,23 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { desligarMapaEstabelecimentos, ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
 import { FonteInternacaoMemoria } from './fonte-memoria.js';
+import { modulo as moduloInternacao } from './modulo.js';
 import { MotorVigia } from './vigia.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,internacao',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const pasta = mkdtempSync(join(tmpdir(), 'sgh-m16-'));
 const arquivo = join(pasta, 'por-fora.json');
 const fonte = new FonteInternacaoMemoria({ arquivoPorFora: arquivo });
 const vigia = new MotorVigia({
-  rede: 'rede-teste',
-  lerCanal: (h, c, m) => fonte.canal({ rede: 'rede-teste', hospital: h, traceId: 't' }, c, m),
+  lerCanal: (alvo, c, m) => fonte.canal(alvo, c, m),
   armazem: new ArmazemMemoria(),
   tipoArmazem: 'memoria',
   intervaloMs: 1_000,
@@ -32,16 +38,25 @@ let app: NestFastifyApplication;
 let base = '';
 
 beforeAll(async () => {
+  // O canal de eventos é do estabelecimento por id: o mapa código → id do cliente de teste (sem banco).
+  await ligarMapaEstabelecimentos('teste', {
+    lerSomente: async <T>() => [{ id: 11, codigo: 'aa' }, { id: 12, codigo: 'bb' }] as T,
+  });
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    internacao: fonte,
-    vigia,
-    batidaEventosMs: 300,
+    registro: registroDeTeste(
+      {},
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        internacao: (ctx) => moduloInternacao(ctx, { fonte, vigia, batidaEventosMs: 300 }),
+      },
+    ),
   });
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
 });
 afterAll(async () => {
+  desligarMapaEstabelecimentos();
   vigia.parar();
   await app.close();
   rmSync(pasta, { recursive: true, force: true });
@@ -162,7 +177,7 @@ describe('painel de leitos ao vivo', () => {
       '/api/internacao/censo/exportar?de=2025-01-01&ate=2025-02-28&agrupamento=dia',
     );
     expect(serieCsv.body.split('\r\n')).toHaveLength(61);
-    // A diretoria vê o censo mas não exporta (opção do legado própria).
+    // A diretoria vê o censo mas não exporta (permissão própria de exportar).
     expect((await get(diretoria, '/api/internacao/censo')).statusCode).toBe(200);
     expect((await get(diretoria, '/api/internacao/censo/exportar')).statusCode).toBe(403);
   });

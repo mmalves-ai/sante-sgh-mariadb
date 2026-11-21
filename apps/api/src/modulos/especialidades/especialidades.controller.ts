@@ -11,7 +11,7 @@
 //   POST /api/especialidades/oncologia/ciclos                pep.registrarCicloOncologico (médico; dose calculada aqui)
 //   GET  /api/especialidades/oncologia/validacao             a fila da validação farmacêutica (auditada)
 //   GET  /api/especialidades/oncologia/ciclos/:id/prescricoes as prescrições da internação no dia previsto (auditado)
-//   POST /api/especialidades/oncologia/ciclos/:id/prescricoes pep.registrarCicloOncologico (a ligação com o PRPRESC.ID)
+//   POST /api/especialidades/oncologia/ciclos/:id/prescricoes pep.registrarCicloOncologico (a ligação com a prescrição)
 //   POST /api/especialidades/oncologia/ciclos/:id/validar    pep.validarCicloOncologico (farmacêutico; dupla checagem;
 //                                                            só com a prescrição ligada)
 //   GET  /api/especialidades/obstetricia/internacoes/:reg    o partograma com as linhas e os recém-nascidos (auditado)
@@ -23,7 +23,7 @@
 //   POST /api/nutricao/lactario/ordens/:id/conferir          internacao.registrarProducaoLactario (outra pessoa)
 //   POST /api/nutricao/lactario/ordens/:id/etiquetas         as etiquetas em ZPL (só da ordem conferida)
 // Os cálculos (classificação da visão, doses, linhas do partograma, validade) são SEMPRE do domínio, aqui; as categorias
-// são conferidas na hora pelo vínculo do login (CBO com o conselho ativo). Gravações só SGH_ com a SGH_TRILHA junto.
+// são conferidas na hora pelo vínculo do login (CBO com o conselho ativo). Gravações pela porta, com a trilha de auditoria na mesma transação.
 import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -109,14 +109,15 @@ import {
   transicaoDoCiclo,
 } from '@sgh/dominio-pep';
 import type {
-  CicloOncologicoSghLido,
-  ExameOftalmologicoSghLido,
+  AlteracaoLactarioRegistrada,
+  CicloOncologicoRegistrado,
+  EventoOncologicoRegistrado,
+  ExameOftalmologicoRegistrado,
   InternacaoEspecialidadeLida,
-  OrdemLactarioSghLida,
-  ProtocoloOncologicoSghLido,
-  AlteracaoHotSghLida,
-  EventoOncoSghLido,
-} from '@sgh/legado';
+  OrdemLactarioRegistrada,
+  ProtocoloOncologicoRegistrado,
+  RecemNascidoRegistrado,
+} from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -145,7 +146,21 @@ import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { AcessoPacientePep } from '../pep/acesso-paciente.js';
 import { ESTADO_PRONTUARIO } from '../pep/prontuario.controller.js';
 import type { EstadoProntuario } from '../pep/sessao-prontuario.js';
-import { type GravadorEspecialidades, PORTA_ESPECIALIDADES, type PortaEspecialidades } from './porta.js';
+import {
+  FASE_ATIVA_CM_PADRAO,
+  type GravadorEspecialidades,
+  PORTA_ESPECIALIDADES,
+  type PortaEspecialidades,
+} from './porta.js';
+
+/**
+ * A tela da obstetrícia com o recém-nascido lido: peso, Apgar, idade gestacional e as classificações podem ser null
+ * (o banco aceita o nascimento sem esses campos; nunca uma classificação sobre um zero inventado). O contrato
+ * (esquemaRecemNascidoLido) ainda os tem como obrigatórios: pedido do lote 02-06 para torná-los anuláveis.
+ */
+type ObstetriciaLida = Omit<ObstetriciaPaciente, 'recemNascidos'> & {
+  readonly recemNascidos: (Omit<RecemNascidoRegistrado, 'tipoParto'> & { readonly tipoParto: string })[];
+};
 
 type Nome = 'oftalmologia' | 'oncologia' | 'obstetricia' | 'lactario';
 
@@ -207,7 +222,7 @@ const versaoAnterior = (antes: string | null): VersaoCicloAnterior | null => {
  * W0-05: o evento do protocolo ou do ciclo como a tela lê. O 'ciclo-ajustado' leva a versão anterior do ciclo (data,
  * redução e doses), que a tela mostra como inativa e imprime: o ajuste é nova versão, e a anterior continua visível.
  */
-const eventoLido = (e: EventoOncoSghLido): EventoOncoLido => ({
+const eventoLido = (e: EventoOncologicoRegistrado): EventoOncoLido => ({
   id: e.id,
   evento: e.evento,
   categoria: e.categoria,
@@ -299,7 +314,7 @@ export class EspecialidadesController {
     const r = await this.porta.internacoes(s.porta, termoDe(termo));
     return {
       itens: r.itens.map((i) => ({
-        internacao: i.reg,
+        internacao: i.internacao,
         prontuario: i.prontuario,
         nome: i.nome,
         leito: i.leito,
@@ -315,9 +330,9 @@ export class EspecialidadesController {
   ): Promise<InternacaoEspecialidade> {
     const { hoje } = await this.porta.relogio(s.porta);
     return {
-      internacao: i.reg,
+      internacao: i.internacao,
       paciente: i.paciente,
-      prontuario: i.pront,
+      prontuario: i.prontuario,
       nome: i.nome,
       nascimento: i.nascimento,
       idade: idadeEmAnos(i.nascimento, hoje),
@@ -442,10 +457,10 @@ export class EspecialidadesController {
   }
 
   private exameLido(
-    x: ExameOftalmologicoSghLido,
+    x: ExameOftalmologicoRegistrado,
     c: Awaited<ReturnType<EspecialidadesController['cadastroOftalmo']>>['dominio'],
   ): ExameOftalmologicoLido {
-    const olho = (o: ExameOftalmologicoSghLido['od']) => ({
+    const olho = (o: ExameOftalmologicoRegistrado['od']) => ({
       acuidadeSemCorrecao: o.avSc === null ? null : (c.acuidades.get(o.avSc) ?? `Acuidade ${o.avSc}`),
       acuidadeComCorrecao: o.avCc === null ? null : (c.acuidades.get(o.avCc) ?? `Acuidade ${o.avCc}`),
       pio: o.pio,
@@ -482,7 +497,7 @@ export class EspecialidadesController {
     const i = await this.internacaoLida(s, reg, P.oftalmologiaLer);
     const [cab, exames, c] = await Promise.all([
       this.cabecalho(s, i),
-      this.porta.exames(s.porta, i.reg),
+      this.porta.exames(s.porta, i.internacao),
       this.cadastroOftalmo(s),
     ]);
     return { internacao: cab, exames: exames.map((x) => this.exameLido(x, c.dominio)) };
@@ -492,7 +507,7 @@ export class EspecialidadesController {
   @HttpCode(201)
   @Permissao(P.oftalmologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarExameOftalmologico (SGH_PEP_OFT_EXAME e os itens) com a SGH_TRILHA na mesma transação',
+    'pep.registrarExameOftalmologico (exame_oftalmologico e os itens) com a trilha de auditoria na mesma transação',
   )
   async registrarExame(
     @Body() b: unknown,
@@ -511,15 +526,15 @@ export class EspecialidadesController {
       E.exameOftalmologicoRegistrado.codigo,
       P.oftalmologiaRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_OFT_EXAME',
+        tabela: 'exame_oftalmologico',
         id: String(x),
         paciente: i.paciente,
-        chave: `${i.reg}:${r.classificacao}:${r.alertas.length}`,
+        chave: `${i.internacao}:${r.classificacao}:${r.alertas.length}`,
       }),
       (g) =>
         g.registrarExame({
-          reg: i.reg,
-          pront: i.pront,
+          internacao: i.internacao,
+          prontuario: i.prontuario,
           paciente: i.paciente,
           od: {
             avSc: e.od.acuidadeSemCorrecao,
@@ -568,10 +583,10 @@ export class EspecialidadesController {
   }
 
   private async protocoloLido(
-    p: ProtocoloOncologicoSghLido,
+    p: ProtocoloOncologicoRegistrado,
     tipos: ReadonlyMap<number, string>,
     vigente: boolean,
-    eventos: readonly EventoOncoSghLido[] = [],
+    eventos: readonly EventoOncologicoRegistrado[] = [],
   ): Promise<ProtocoloOncologicoLido> {
     // W0-05: a revogação da versão e a inativação do protocolo (pelo código) tiram a versão da oferta.
     const oferta = ofertaDoProtocolo({ id: p.id, codigo: p.codigo, vigente }, eventos);
@@ -619,7 +634,7 @@ export class EspecialidadesController {
   @HttpCode(201)
   @Permissao(P.oncologiaPublicarProtocolo)
   @AuditadoNoHandler(
-    'pep.publicarProtocoloOncologico (SGH_PEP_ONCO_PROTOCOLO, imutável) com a SGH_TRILHA na mesma transação',
+    'pep.publicarProtocoloOncologico (protocolo_quimioterapia, imutável) com a trilha de auditoria na mesma transação',
   )
   async publicarProtocolo(
     @Body() b: unknown,
@@ -646,7 +661,7 @@ export class EspecialidadesController {
       E.protocoloOncologicoPublicado.codigo,
       P.oncologiaPublicarProtocolo,
       (x: { id: number; versao: number }) => ({
-        tabela: 'SGH_PEP_ONCO_PROTOCOLO',
+        tabela: 'protocolo_quimioterapia',
         id: String(x.id),
         chave: `${e.codigo}:v${x.versao}:${hash.slice(0, 16)}`,
       }),
@@ -674,9 +689,9 @@ export class EspecialidadesController {
   }
 
   private cicloLido(
-    c: CicloOncologicoSghLido,
+    c: CicloOncologicoRegistrado,
     p: { codigo: string; versao: number; nome: string } | null,
-    eventos: readonly EventoOncoSghLido[] = [],
+    eventos: readonly EventoOncologicoRegistrado[] = [],
   ): CicloOncologicoLido {
     return {
       id: c.id,
@@ -737,7 +752,7 @@ export class EspecialidadesController {
   @Post('especialidades/oncologia/ciclos')
   @HttpCode(201)
   @Permissao(P.oncologiaRegistrar)
-  @AuditadoNoHandler('pep.registrarCicloOncologico (SGH_PEP_ONCO_CICLO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.registrarCicloOncologico (ciclo_quimioterapia) com a trilha de auditoria na mesma transação')
   async registrarCiclo(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -802,15 +817,15 @@ export class EspecialidadesController {
       E.cicloOncologicoRegistrado.codigo,
       P.oncologiaRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_ONCO_CICLO',
+        tabela: 'ciclo_quimioterapia',
         id: String(x),
         paciente: i.paciente,
         chave: `${p.codigo}:v${p.versao}:curso${curso}:ciclo${e.numero}${e.reducaoPct ? `:reducao${e.reducaoPct}` : ''}`,
       }),
       (g) =>
         g.registrarCiclo({
-          reg: i.reg,
-          pront: i.pront,
+          internacao: i.internacao,
+          prontuario: i.prontuario,
           paciente: i.paciente,
           protocolo: p.id,
           codigoProtocolo: p.codigo,
@@ -857,12 +872,12 @@ export class EspecialidadesController {
     const porId = new Map(ps.protocolos.map((p) => [p.id, p]));
     const itens: FilaValidacaoOnco['itens'] = [];
     for (const c of ciclos) {
-      const i = await this.porta.internacao(s.porta, c.reg);
+      const i = await this.porta.internacao(s.porta, c.internacao);
       itens.push({
         ciclo: this.cicloLido(c, porId.get(c.protocolo) ?? null),
-        internacao: c.reg,
+        internacao: c.internacao,
         nome: i?.nome ?? '',
-        prontuario: i?.pront ?? 0,
+        prontuario: i?.prontuario ?? 0,
       });
     }
     return { itens };
@@ -872,7 +887,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaValidar)
   @AuditadoNoHandler(
-    'pep.validarCicloOncologico (SGH_PEP_ONCO_CICLO, uma vez, por outra pessoa) com a SGH_TRILHA na mesma transação',
+    'pep.validarCicloOncologico (ciclo_quimioterapia, uma vez, por outra pessoa) com a trilha de auditoria na mesma transação',
   )
   async validarCiclo(
     @Param('id') idRota: string,
@@ -897,7 +912,7 @@ export class EspecialidadesController {
     tentar(() => conferirPrescricaoParaValidar(c));
     await this.acesso.exigirVinculo(s, c.paciente, P.oncologiaValidar, 'pep.evolucao');
     // W0-05: a prescrição ligada tem de valer no dia previsto do ciclo (a validação é sobre as doses daquele dia).
-    const doDia = await this.porta.prescricoesDoDia(s.porta, c.reg, c.paciente, c.dataPrevista);
+    const doDia = await this.porta.prescricoesDoDia(s.porta, c.internacao, c.paciente, c.dataPrevista);
     if (!c.prescricoes.some((x) => doDia.some((d) => d.id === x && !d.suspensa)))
       return recusaDominio(
         new ErroEspecialidade(
@@ -924,7 +939,7 @@ export class EspecialidadesController {
       E.cicloOncologicoValidado.codigo,
       P.oncologiaValidar,
       {
-        tabela: 'SGH_PEP_ONCO_CICLO',
+        tabela: 'ciclo_quimioterapia',
         id: String(c.id),
         paciente: c.paciente,
         chave: `${c.codigoProtocolo}:ciclo${c.numero}:validado`,
@@ -958,7 +973,7 @@ export class EspecialidadesController {
     const s = sessaoDe(req);
     const c = await this.cicloDaRota(s, idRota);
     await this.acesso.exigirVinculo(s, c.paciente, P.oncologiaLer, 'pep.evolucao');
-    const ps = await this.porta.prescricoesDoDia(s.porta, c.reg, c.paciente, c.dataPrevista);
+    const ps = await this.porta.prescricoesDoDia(s.porta, c.internacao, c.paciente, c.dataPrevista);
     const ligadas = new Set(c.prescricoes);
     const itens = ps.map((x) => ({ ...x, vinculada: ligadas.has(x.id) }));
     // As ligadas que já não valem no dia continuam na lista (a ligação é só de inclusão).
@@ -972,7 +987,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (a ligação com o PRPRESC.ID em SGH_PEP_ONCO_CICLO_PRESC) com a SGH_TRILHA na mesma transação',
+    'pep.registrarCicloOncologico (a ligação com a prescrição em ciclo_quimioterapia_prescricao) com a trilha de auditoria na mesma transação',
   )
   async vincularPrescricao(
     @Param('id') idRota: string,
@@ -984,15 +999,15 @@ export class EspecialidadesController {
     await this.apoio.oncologia.exigirLiberacao(s);
     const v = await this.vinculoDa(s, 'oncologia.registrar');
     const c = await this.cicloDaRota(s, idRota);
-    const i = await this.internacaoAberta(s, c.reg, P.oncologiaRegistrar);
-    const candidatas = await this.porta.prescricoesDoDia(s.porta, i.reg, i.paciente, c.dataPrevista);
+    const i = await this.internacaoAberta(s, c.internacao, P.oncologiaRegistrar);
+    const candidatas = await this.porta.prescricoesDoDia(s.porta, i.internacao, i.paciente, c.dataPrevista);
     tentar(() => conferirVinculoPrescricao(c, e.prescricao, candidatas));
     await this.apoio.oncologia.sgh(
       s,
       E.cicloOncologicoPrescricaoVinculada.codigo,
       P.oncologiaRegistrar,
       {
-        tabela: 'SGH_PEP_ONCO_CICLO_PRESC',
+        tabela: 'ciclo_quimioterapia_prescricao',
         id: String(c.id),
         paciente: c.paciente,
         chave: `${c.codigoProtocolo}:curso${c.curso}:ciclo${c.numero}:prescricao${e.prescricao}`,
@@ -1022,15 +1037,16 @@ export class EspecialidadesController {
   async obstetricia(
     @Param('reg') reg: string,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<ObstetriciaPaciente> {
+  ): Promise<ObstetriciaLida> {
     const s = sessaoDe(req);
     const i = await this.internacaoLida(s, reg, P.obstetriciaLer);
-    const [cab, pontos, rns, tipos, faseAtivaCm, relogio] = await Promise.all([
+    // A fase ativa do estabelecimento antes dos pontos: os alertas relidos usam o mesmo parâmetro da gravação.
+    const faseAtivaCm = await this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, FASE_ATIVA_CM_PADRAO);
+    const [cab, pontos, rns, tipos, relogio] = await Promise.all([
       this.cabecalho(s, i),
-      this.porta.partograma(s.porta, i.reg),
-      this.porta.recemNascidos(s.porta, i.reg),
+      this.porta.partograma(s.porta, i.internacao, faseAtivaCm),
+      this.porta.recemNascidos(s.porta, i.internacao),
       this.porta.tiposParto(s.porta),
-      this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, 4),
       this.porta.relogio(s.porta),
     ]);
     const nomes = new Map(tipos.map((t) => [t.codigo, t.nome]));
@@ -1048,7 +1064,7 @@ export class EspecialidadesController {
   @Post('especialidades/obstetricia/partograma')
   @HttpCode(201)
   @Permissao(P.obstetriciaRegistrar)
-  @AuditadoNoHandler('pep.registrarPartograma (SGH_PEP_OBST_PARTOGRAMA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.registrarPartograma (partograma_registro) com a trilha de auditoria na mesma transação')
   async registrarPartograma(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1058,10 +1074,10 @@ export class EspecialidadesController {
     await this.apoio.obstetricia.exigirLiberacao(s);
     const v = await this.vinculoDa(s, 'obstetricia.registrar');
     const i = await this.internacaoAberta(s, e.internacao, P.obstetriciaRegistrar);
-    const [{ agora }, anteriores, faseAtivaCm] = await Promise.all([
+    const faseAtivaCm = await this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, FASE_ATIVA_CM_PADRAO);
+    const [{ agora }, anteriores] = await Promise.all([
       this.porta.relogio(s.porta),
-      this.porta.partograma(s.porta, i.reg),
-      this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, 4),
+      this.porta.partograma(s.porta, i.internacao, faseAtivaCm),
     ]);
     const r = tentar(() => conferirPartograma(e, { admissao: i.admissao, agora, anteriores, faseAtivaCm }));
     const id = await this.apoio.obstetricia.sgh(
@@ -1069,15 +1085,15 @@ export class EspecialidadesController {
       E.partogramaRegistrado.codigo,
       P.obstetriciaRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_OBST_PARTOGRAMA',
+        tabela: 'partograma_registro',
         id: String(x),
         paciente: i.paciente,
-        chave: `${i.reg}:alertas:${r.alertas.length}`,
+        chave: `${i.internacao}:alertas:${r.alertas.length}`,
       }),
       (g) =>
         g.registrarPartograma({
-          reg: i.reg,
-          pront: i.pront,
+          internacao: i.internacao,
+          prontuario: i.prontuario,
           paciente: i.paciente,
           em: e.em,
           dilatacaoCm: e.dilatacaoCm,
@@ -1108,7 +1124,7 @@ export class EspecialidadesController {
   @Post('especialidades/obstetricia/recem-nascidos')
   @HttpCode(201)
   @Permissao(P.obstetriciaRegistrar)
-  @AuditadoNoHandler('pep.registrarRecemNascido (SGH_PEP_OBST_RN) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.registrarRecemNascido (registro_nascimento) com a trilha de auditoria na mesma transação')
   async registrarRecemNascido(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1135,15 +1151,15 @@ export class EspecialidadesController {
       E.recemNascidoRegistrado.codigo,
       P.obstetriciaRegistrar,
       (x: number) => ({
-        tabela: 'SGH_PEP_OBST_RN',
+        tabela: 'registro_nascimento',
         id: String(x),
         paciente: i.paciente,
-        chave: `${i.reg}:rn`,
+        chave: `${i.internacao}:rn`,
       }),
       (g) =>
         g.registrarRecemNascido({
-          reg: i.reg,
-          pront: i.pront,
+          internacao: i.internacao,
+          prontuario: i.prontuario,
           paciente: i.paciente,
           nascimentoEm: e.nascimentoEm,
           sexo: e.sexo,
@@ -1177,16 +1193,16 @@ export class EspecialidadesController {
 
   private async ordemLida(
     s: SessaoCadastro,
-    o: OrdemLactarioSghLida,
+    o: OrdemLactarioRegistrada,
     agora: string,
-    log: readonly AlteracaoHotSghLida[] = [],
+    log: readonly AlteracaoLactarioRegistrada[] = [],
   ) {
-    const i = await this.porta.internacao(s.porta, o.reg);
+    const i = await this.porta.internacao(s.porta, o.internacao);
     return {
       id: o.id,
-      internacao: o.reg,
+      internacao: o.internacao,
       nome: i?.nome ?? '',
-      prontuario: o.pront,
+      prontuario: o.prontuario,
       nascimento: i?.nascimento ?? null,
       leito: i
         ? { bloco: i.bloco, acomodacao: i.acomodacao, leito: i.leito }
@@ -1251,7 +1267,7 @@ export class EspecialidadesController {
   @HttpCode(201)
   @Permissao(P.lactarioProduzir)
   @AuditadoNoHandler(
-    'internacao.registrarProducaoLactario (SGH_HOT_LACTARIO_ORDEM) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarProducaoLactario (preparo_lactario_item) com a trilha de auditoria na mesma transação',
   )
   async registrarOrdem(
     @Body() b: unknown,
@@ -1269,15 +1285,15 @@ export class EspecialidadesController {
       E.ordemLactarioRegistrada.codigo,
       P.lactarioProduzir,
       (x: number) => ({
-        tabela: 'SGH_HOT_LACTARIO_ORDEM',
+        tabela: 'preparo_lactario_item',
         id: String(x),
         paciente: i.paciente,
-        chave: `${i.reg}:${r.porcoes.length}:${e.volumeMl}`,
+        chave: `${i.internacao}:${r.porcoes.length}:${e.volumeMl}`,
       }),
       (g) =>
         g.registrarOrdem({
-          reg: i.reg,
-          pront: i.pront,
+          internacao: i.internacao,
+          prontuario: i.prontuario,
           paciente: i.paciente,
           formula: e.formula,
           volumeMl: e.volumeMl,
@@ -1301,7 +1317,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.lactarioProduzir)
   @AuditadoNoHandler(
-    'internacao.registrarProducaoLactario (a conferência por outra pessoa) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarProducaoLactario (a conferência por outra pessoa) com a trilha de auditoria na mesma transação',
   )
   async conferirOrdem(
     @Param('id') idRota: string,
@@ -1320,10 +1336,10 @@ export class EspecialidadesController {
       E.ordemLactarioConferida.codigo,
       P.lactarioProduzir,
       {
-        tabela: 'SGH_HOT_LACTARIO_ORDEM',
+        tabela: 'preparo_lactario_item',
         id: String(o.id),
         paciente: o.paciente,
-        chave: `${o.reg}:conferida`,
+        chave: `${o.internacao}:conferida`,
       },
       (g) => g.conferirOrdem({ id: o.id, usuario: s.login }),
     );
@@ -1349,7 +1365,7 @@ export class EspecialidadesController {
     const { agora } = await this.porta.relogio(s.porta);
     tentar(() => exigirOrdemNaoCancelada(o));
     tentar(() => conferirEtiquetaLactario(o, agora));
-    const i = await this.porta.internacao(s.porta, o.reg);
+    const i = await this.porta.internacao(s.porta, o.internacao);
     if (!i)
       throw new ErroProblema('nao-encontrado', 404, 'Internação não encontrada', 'A internação não existe.');
     await this.acesso.exigirVinculo(s, i.paciente, P.lactarioProduzir, 'pep.evolucao');
@@ -1359,8 +1375,8 @@ export class EspecialidadesController {
         zplEtiquetaLactario({
           nomeCompleto: i.nome,
           nascimento: i.nascimento ?? '',
-          prontuario: i.pront,
-          internacao: i.reg,
+          prontuario: i.prontuario,
+          internacao: i.internacao,
           ordem: o.id,
           leito: `${i.bloco} ${i.acomodacao} ${i.leito}`,
           formula: o.formula,
@@ -1423,7 +1439,7 @@ export class EspecialidadesController {
       E.etiquetaLactarioImpressa.codigo,
       P.lactarioProduzir,
       {
-        tabela: 'SGH_HOT_LACTARIO_ORDEM',
+        tabela: 'preparo_lactario_item',
         id: String(o.id),
         paciente: o.paciente,
         chave: `etiqueta-lactario:${zpls.length}:${createHash('sha256').update(conteudo).digest('hex').slice(0, 16)}`,
@@ -1431,7 +1447,6 @@ export class EspecialidadesController {
       async (g) => {
         await g.marcarEtiqueta({ id: o.id });
         return g.registrarAlteracao({
-          tabela: 'SGH_HOT_LACTARIO_ORDEM',
           id: o.id,
           evento: 'etiqueta-emitida',
           antes: null,
@@ -1513,7 +1528,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaPublicarProtocolo)
   @AuditadoNoHandler(
-    'pep.publicarProtocoloOncologico (a revogação da versão em SGH_PEP_ONCO_EVENTO, sem exclusão) com a SGH_TRILHA',
+    'pep.publicarProtocoloOncologico (a revogação da versão em evento_tratamento_oncologico, sem exclusão) com a trilha de auditoria',
   )
   async revogarVersao(
     @Param('id') idRota: string,
@@ -1555,7 +1570,7 @@ export class EspecialidadesController {
       E.protocoloOncologicoAlterado.codigo,
       P.oncologiaPublicarProtocolo,
       (x: number) => ({
-        tabela: 'SGH_PEP_ONCO_EVENTO',
+        tabela: 'evento_tratamento_oncologico',
         id: String(x),
         chave: `${p.codigo}:v${p.versao}:revogada:${d.total}`,
       }),
@@ -1602,7 +1617,7 @@ export class EspecialidadesController {
       s,
       E.protocoloOncologicoAlterado.codigo,
       P.oncologiaPublicarProtocolo,
-      (x: number) => ({ tabela: 'SGH_PEP_ONCO_EVENTO', id: String(x), chave: `${p.codigo}:${evento}` }),
+      (x: number) => ({ tabela: 'evento_tratamento_oncologico', id: String(x), chave: `${p.codigo}:${evento}` }),
       (g) =>
         g.registrarEventoOnco({
           evento,
@@ -1633,7 +1648,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaPublicarProtocolo)
   @AuditadoNoHandler(
-    'pep.publicarProtocoloOncologico (a inativação em SGH_PEP_ONCO_EVENTO, sem exclusão) com a SGH_TRILHA',
+    'pep.publicarProtocoloOncologico (a inativação em evento_tratamento_oncologico, sem exclusão) com a trilha de auditoria',
   )
   inativarProtocolo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.mudarProtocolo(req, id, b, 'protocolo-inativado');
@@ -1642,7 +1657,7 @@ export class EspecialidadesController {
   @Post('especialidades/oncologia/protocolos/:id/reativar')
   @HttpCode(200)
   @Permissao(P.oncologiaPublicarProtocolo)
-  @AuditadoNoHandler('pep.publicarProtocoloOncologico (a reativação em SGH_PEP_ONCO_EVENTO) com a SGH_TRILHA')
+  @AuditadoNoHandler('pep.publicarProtocoloOncologico (a reativação em evento_tratamento_oncologico) com a trilha de auditoria')
   reativarProtocolo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.mudarProtocolo(req, id, b, 'protocolo-reativado');
   }
@@ -1651,7 +1666,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (o ajuste antes da validação; a versão anterior em SGH_PEP_ONCO_EVENTO) com a SGH_TRILHA',
+    'pep.registrarCicloOncologico (o ajuste antes da validação; a versão anterior em evento_tratamento_oncologico) com a trilha de auditoria',
   )
   async ajustarCiclo(
     @Param('id') idRota: string,
@@ -1666,7 +1681,7 @@ export class EspecialidadesController {
     tentar(() => exigirCicloEditavel(c));
     if (e.reducaoPct > 0 && !e.motivoReducao)
       return recusaDominio(new ErroEspecialidade('motivo-reducao', 'A redução de dose pede o motivo.'));
-    const i = await this.internacaoAberta(s, c.reg, P.oncologiaRegistrar);
+    const i = await this.internacaoAberta(s, c.internacao, P.oncologiaRegistrar);
     const p = await this.porta.protocolo(s.porta, c.protocolo);
     if (!p)
       throw new ErroProblema('nao-encontrado', 404, 'Protocolo não encontrado', 'O protocolo não existe.');
@@ -1698,7 +1713,7 @@ export class EspecialidadesController {
       E.cicloOncologicoAlterado.codigo,
       P.oncologiaRegistrar,
       {
-        tabela: 'SGH_PEP_ONCO_CICLO',
+        tabela: 'ciclo_quimioterapia',
         id: String(c.id),
         paciente: c.paciente,
         chave: `${c.codigoProtocolo}:ciclo${c.numero}:ajustado`,
@@ -1764,7 +1779,7 @@ export class EspecialidadesController {
       E.cicloOncologicoAlterado.codigo,
       P.oncologiaRegistrar,
       {
-        tabela: 'SGH_PEP_ONCO_CICLO',
+        tabela: 'ciclo_quimioterapia',
         id: String(c.id),
         paciente: c.paciente,
         chave: `${c.codigoProtocolo}:ciclo${c.numero}:${evento}${e.categoria ? `:${e.categoria}` : ''}`,
@@ -1803,7 +1818,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (a suspensão do ciclo, fato novo em SGH_PEP_ONCO_EVENTO) com a SGH_TRILHA',
+    'pep.registrarCicloOncologico (a suspensão do ciclo, fato novo em evento_tratamento_oncologico) com a trilha de auditoria',
   )
   suspenderCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.interromperCiclo(req, id, b, 'suspender');
@@ -1813,7 +1828,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (a retomada do ciclo em SGH_PEP_ONCO_EVENTO) com a SGH_TRILHA',
+    'pep.registrarCicloOncologico (a retomada do ciclo em evento_tratamento_oncologico) com a trilha de auditoria',
   )
   retomarCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.interromperCiclo(req, id, b, 'retomar');
@@ -1823,7 +1838,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (o cancelamento do ciclo, fato novo em SGH_PEP_ONCO_EVENTO) com a SGH_TRILHA',
+    'pep.registrarCicloOncologico (o cancelamento do ciclo, fato novo em evento_tratamento_oncologico) com a trilha de auditoria',
   )
   cancelarCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.interromperCiclo(req, id, b, 'cancelar');
@@ -1833,7 +1848,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.oncologiaRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarCicloOncologico (desfaz só a ligação SGH_PEP_ONCO_CICLO_PRESC; a prescrição não é tocada) com a SGH_TRILHA',
+    'pep.registrarCicloOncologico (desfaz só a ligação ciclo_quimioterapia_prescricao; a prescrição não é tocada) com a trilha de auditoria',
   )
   async desligarPrescricao(
     @Param('id') idRota: string,
@@ -1854,7 +1869,7 @@ export class EspecialidadesController {
       E.cicloOncologicoPrescricaoDesligada.codigo,
       P.oncologiaRegistrar,
       {
-        tabela: 'SGH_PEP_ONCO_CICLO_PRESC',
+        tabela: 'ciclo_quimioterapia_prescricao',
         id: String(c.id),
         paciente: c.paciente,
         chave: `${c.codigoProtocolo}:curso${c.curso}:ciclo${c.numero}:prescricao${prescricao}:desligada`,
@@ -1895,7 +1910,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.lactarioProduzir)
   @AuditadoNoHandler(
-    'internacao.registrarProducaoLactario (a alteração antes da conferência e o log em SGH_HOT_ALTERACAO) com a SGH_TRILHA',
+    'internacao.registrarProducaoLactario (a alteração antes da conferência e o log em preparo_lactario_item_evento) com a trilha de auditoria',
   )
   async alterarOrdem(
     @Param('id') idRota: string,
@@ -1916,13 +1931,13 @@ export class EspecialidadesController {
         { codigo: 'ordem-ja-conferida', avisos: ['acao:cancelar'] },
       );
     tentar(() => exigirOrdemAlteravel(o));
-    const i = await this.internacaoAberta(s, o.reg, P.lactarioProduzir);
+    const i = await this.internacaoAberta(s, o.internacao, P.lactarioProduzir);
     const { agora } = await this.porta.relogio(s.porta);
     const validadeHoras = await this.parametro(s, 'lactario', PARAMETRO_LACTARIO_VALIDADE, 24);
     const r = tentar(() =>
       conferirOrdemLactario(
         {
-          internacao: i.reg,
+          internacao: i.internacao,
           formula: e.formula,
           volumeMl: e.volumeMl,
           horarios: e.horarios,
@@ -1964,16 +1979,15 @@ export class EspecialidadesController {
       E.ordemLactarioAlterada.codigo,
       P.lactarioProduzir,
       {
-        tabela: 'SGH_HOT_LACTARIO_ORDEM',
+        tabela: 'preparo_lactario_item',
         id: String(o.id),
         paciente: o.paciente,
-        chave: `${o.reg}:alterada`,
+        chave: `${o.internacao}:alterada`,
       },
       async (g) => {
         // O anterior é o relido na transação (linha travada): duas alterações simultâneas não perdem a versão do meio.
         const antes = await g.alterarOrdem({ id: o.id, ...novo });
         return g.registrarAlteracao({
-          tabela: 'SGH_HOT_LACTARIO_ORDEM',
           id: o.id,
           evento: 'alterada',
           antes: valor(antes),
@@ -1995,7 +2009,7 @@ export class EspecialidadesController {
   @HttpCode(200)
   @Permissao(P.lactarioProduzir)
   @AuditadoNoHandler(
-    'internacao.registrarProducaoLactario (o cancelamento lógico com o motivo e o log em SGH_HOT_ALTERACAO) com a SGH_TRILHA',
+    'internacao.registrarProducaoLactario (o cancelamento lógico com o motivo e o log em preparo_lactario_item_evento) com a trilha de auditoria',
   )
   async cancelarOrdem(
     @Param('id') idRota: string,
@@ -2013,15 +2027,14 @@ export class EspecialidadesController {
       E.ordemLactarioCancelada.codigo,
       P.lactarioProduzir,
       {
-        tabela: 'SGH_HOT_LACTARIO_ORDEM',
+        tabela: 'preparo_lactario_item',
         id: String(o.id),
         paciente: o.paciente,
-        chave: `${o.reg}:cancelada${o.etiquetaEm ? ':etiquetada' : ''}`,
+        chave: `${o.internacao}:cancelada${o.etiquetaEm ? ':etiquetada' : ''}`,
       },
       async (g) => {
         await g.cancelarOrdem({ id: o.id, motivo: e.motivo.slice(0, 200), usuario: s.login });
         return g.registrarAlteracao({
-          tabela: 'SGH_HOT_LACTARIO_ORDEM',
           id: o.id,
           evento: 'cancelada',
           antes: o.situacao,

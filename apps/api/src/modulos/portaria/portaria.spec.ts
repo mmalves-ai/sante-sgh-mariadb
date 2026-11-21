@@ -294,7 +294,7 @@ describe('portaria (M50, etapa 5)', () => {
     expect(e.statusCode, e.body).toBe(201);
     expect(e.json()).toMatchObject({ mensagem: expect.stringMatching(/acompanhante/) });
     expect((e.json() as { cracha: CrachaVisita }).cracha.validoAte).toBe('2026-10-26T15:00');
-    expect(await acompanhantesComRefeicao(a.porta, { rede: 'r', hospital: 'aa' }, 'INT-2')).toEqual([
+    expect(await acompanhantesComRefeicao(a.porta, { hospital: 'aa' } as never, 'INT-2')).toEqual([
       {
         id: expect.any(Number),
         internacao: UM,

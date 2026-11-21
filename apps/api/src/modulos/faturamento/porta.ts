@@ -1,11 +1,14 @@
-// Porta da conta do paciente (M30): o que as telas leem e gravam, independente de onde (a API não escreve SQL;
-// fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas
-//     faturamento.*, com a trilha na mesma transação); as só do novo (pendências, etapas, fila tardia, regras, pacotes,
-//     auditoria e particular) em transação SGH_ com a SGH_TRILHA junto;
+// Porta da conta do paciente (M30): o que as telas leem e gravam, independente de onde (a API não escreve SQL fora da
+// porta; fronteira Nx):
+//   - `banco`: a porta própria sobre o banco do cliente, pelo @sgh/nucleo: leituras somente leitura nas tabelas da
+//     conta (conta_hospitalar, conta_hospitalar_item, pendencia_conta, conta_hospitalar_etapa, auditoria_conta...) e
+//     gravações pelo Executor (operações faturamento.*: trilha, outbox e idempotência na mesma transação); as
+//     gravações diretas (pendências, etapas, auditoria, orçamento e caixa) numa transação com a trilha junto;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): contas, itens e fichas SINTÉTICAS em memória, com as mesmas
-//     validações (Zod dos contratos e regras do domínio) e as mesmas recusas; nada vai à cópia;
+//     validações (Zod dos contratos e regras do domínio) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+// Melhoria: o contexto é o do núcleo (cliente, estabelecimento e usuário por id) mais a rede e o código do
+// estabelecimento da sessão; os filtros são tipos do próprio módulo.
 import type {
   AuditoriaConta,
   CaixaLido,
@@ -32,14 +35,44 @@ import type {
   RegraLida,
   WorklistFaturamento,
 } from '@sgh/contratos';
-import type { FiltroContas, FiltroPagamentos } from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import type { SituacaoDerivada } from '@sgh/dominio-faturamento';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_FATURAMENTO = Symbol('PORTA_FATURAMENTO');
 
-export type ContextoFaturamento = ContextoPortaM18;
+/** Contexto da porta: o do núcleo (cliente, estabelecimento, usuário, correlação), a rede e o código do estabelecimento. */
+export type ContextoFaturamento = ContextoPorta;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
+/** Filtro da lista de contas. */
+export interface FiltroContas {
+  readonly situacao: SituacaoDerivada | null;
+  /** Convênios do escopo do usuário; null: todos. */
+  readonly convenios: readonly number[] | null;
+  readonly ano: number | null;
+  readonly mes: number | null;
+  /** E: externa (ambulatório, pronto atendimento); I: internação. */
+  readonly tipoConta: 'E' | 'I' | null;
+  readonly termo: string;
+  readonly sus: boolean;
+  /** Só as contas com alta até esta data (AAAA-MM-DD). */
+  readonly altaAte: string | null;
+  readonly pagina: number;
+  readonly porPagina: number;
+}
+
+/** Filtro dos pagamentos do particular. */
+export interface FiltroPagamentos {
+  readonly caixa: number | null;
+  readonly forma: string | null;
+  readonly situacao: string | null;
+  readonly desde: string | null;
+  readonly ate: string | null;
+  readonly pagina?: number;
+  readonly porPagina?: number;
+}
+
+/** Gravações diretas da porta, numa transação com a linha da trilha junto (o estabelecimento vem do contexto). */
 export interface GravadorSghFaturamento {
   registrarPendencia(p: RegistrarPendenciaEntrada & { usuario: string }): Promise<number>;
   resolverPendencia(r: { id: number; resolucao: string; usuario: string }): Promise<{ conta: number }>;
@@ -91,6 +124,8 @@ export interface PortaFaturamento extends PortaGravacaoM18<GravadorSghFaturament
   contaDaPendencia(c: ContextoFaturamento, id: number): Promise<number | null>;
   /** O convênio da conta (null: a conta não existe), sem ler o resto da conta. */
   convenioDaConta(c: ContextoFaturamento, conta: number): Promise<number | null>;
+  /** A conta é particular (fonte pagadora de tipo particular)? Nulo: conta inexistente no estabelecimento. */
+  contaParticular(c: ContextoFaturamento, conta: number): Promise<boolean | null>;
   /** O convênio da conta do item (para o escopo). */
   convenioDoItem(c: ContextoFaturamento, item: number): Promise<number | null>;
   sigtap(c: ContextoFaturamento, conta: number): Promise<ItemSigtap[]>;
@@ -161,6 +196,7 @@ export const METODOS_PORTA_FATURAMENTO: ReadonlySet<string> = new Set([
   'explicar',
   'contaDaPendencia',
   'convenioDaConta',
+  'contaParticular',
   'convenioDoItem',
   'sigtap',
   'painelLancamentos',
@@ -179,3 +215,7 @@ export const METODOS_PORTA_FATURAMENTO: ReadonlySet<string> = new Set([
   'worklist',
   'simular',
 ]);
+
+export function portaFaturamentoIndisponivel(): PortaFaturamento {
+  return portaIndisponivel<PortaFaturamento>(METODOS_PORTA_FATURAMENTO);
+}

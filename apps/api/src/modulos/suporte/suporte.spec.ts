@@ -13,13 +13,23 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, REDE, SENHA } from '../../sessao/teste.spec-util.js';
+import { montarServicoSessao } from '../../sessao/montar.js';
+import { moduloRouparia } from '../rouparia/modulo.js';
+import { moduloSuporte, servicosSuporte } from './modulo.js';
+import type { ServicoComo } from './servico-como.js';
+import type { ServicoPlataforma } from './servico-plataforma.js';
 import {
   CONTAS_PLATAFORMA_SINTETICAS as C,
   RepositorioPlataformaMemoria,
   SENHA_PLATAFORMA_SINTETICA,
 } from './repositorio.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', SUPORTE_SESSAO_MINUTOS: '60' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  SUPORTE_SESSAO_MINUTOS: '60',
+  API_MODULOS: 'suporte,rouparia',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const armazem = new ArmazemMemoria();
 /** Avança o relógio de todos os serviços (Date falso; os temporizadores continuam reais). */
@@ -30,14 +40,54 @@ function avancar(ms: number): void {
 let repo: RepositorioPlataformaMemoria;
 let app: NestFastifyApplication;
 let chave = 0;
-const BASE = '/api/cadastros/dominios/cadastro/religiao';
+// A escrita e a leitura do alvo no "como": as telas da rouparia (memória sintética).
+const BASE = '/api/hotelaria/rouparia';
+const ESCRITA = `${BASE}/pecas`;
+const LEITURA = `${BASE}/movimentos`;
+const PERIODO = 'de=2026-10-01&ate=2026-10-02';
+const peca = (nome: string) => ({
+  nome,
+  categoria: 'lencol',
+  pesoGramas: 500,
+  composicao: [],
+  ativa: true,
+  versaoVista: null,
+});
 
 beforeAll(async () => {
   // Cifra barata nos testes (os parâmetros vão na própria cifra; a conferência usa os dela).
   repo = RepositorioPlataformaMemoria.sintetico(REDE, ['aa', 'bb'], (s) =>
     cifrarSenha(s, { memoria: 8_192, passes: 1, paralelismo: 1 }),
   );
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, plataforma: repo });
+  // A base ainda não liga os ganchos do "como" na sessão (pedido de fiação do lote 02-14): o teste monta a sessão
+  // com eles, sobre os serviços do módulo do suporte.
+  const ganchos: { como: ServicoComo | null; plataforma: ServicoPlataforma | null } = {
+    como: null,
+    plataforma: null,
+  };
+  const servico = montarServicoSessao(env, null, armazem, trilha, undefined, {
+    guardaComo: (c, rede, hospital) =>
+      ganchos.como ? ganchos.como.guarda(c, rede, hospital) : Promise.resolve(false),
+    reautenticarAtor: (c, senha) =>
+      ganchos.plataforma ? ganchos.plataforma.conferirSenhaDaConta(c.idConta, senha) : Promise.resolve(false),
+    aoEncerrarComo: (c, motivo) => (ganchos.como ? ganchos.como.aoEncerrar(c, motivo) : Promise.resolve()),
+  });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem,
+    servico,
+    registro: {
+      suporte: async () => ({
+        modulo: (ctx) => {
+          const s = servicosSuporte(ctx, { repositorio: repo });
+          ganchos.como = s.como;
+          ganchos.plataforma = s.plataforma;
+          return moduloSuporte(ctx, { servicos: s });
+        },
+      }),
+      rouparia: async () => ({ modulo: (ctx) => moduloRouparia(ctx) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -68,7 +118,7 @@ function guardar(n: Navegador, set: string | string[] | undefined): void {
 }
 const cookie = (n: Navegador) => [...n.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
 const plat = (n: Navegador) => ({ cookie: cookie(n), 'x-csrf-plataforma': n.cookies.get('sgh_pcsrf') ?? '' });
-const spdata = (n: Navegador) => ({
+const hospital = (n: Navegador) => ({
   cookie: cookie(n),
   'x-csrf': n.cookies.get('sgh_csrf') ?? '',
   'idempotency-key': `teste-suporte-${++chave}-${Date.now()}`,
@@ -135,7 +185,7 @@ describe('conta da plataforma: login próprio', () => {
     });
   });
 
-  it('a sessão do SPDATA não abre as rotas da plataforma (e vice-versa)', async () => {
+  it('a sessão do hospital não abre as rotas da plataforma (e vice-versa)', async () => {
     const r = await app.inject({
       method: 'POST',
       url: '/api/sessao',
@@ -247,14 +297,14 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     const direto = await app.inject({
       method: 'POST',
       url: '/api/sessao',
-      payload: { estabelecimento: 'aa', login: 'SINT.ADMIN', senha: SENHA },
+      payload: { estabelecimento: 'aa', login: 'SINT.ROUPARIA', senha: SENHA },
     });
     const permissoesDoAlvo = esquemaSessao.parse(direto.json()).permissoes;
     const n = await entrarPlataforma(C.plataforma);
-    const r = await entrarComo(n, 'aa', 'SINT.ADMIN', 'CHAMADO-123');
+    const r = await entrarComo(n, 'aa', 'SINT.ROUPARIA', 'CHAMADO-123');
     expect(r.statusCode).toBe(201);
     const s = esquemaSessao.parse(r.json());
-    expect(s.usuario.login).toBe('SINT.ADMIN');
+    expect(s.usuario.login).toBe('SINT.ROUPARIA');
     expect(s.permissoes).toEqual(permissoesDoAlvo);
     expect(s.como).toMatchObject({
       ator: { tipo: 'plataforma', email: C.plataforma },
@@ -262,24 +312,32 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     });
     // GET /api/sessao com os dois cookies: a do alvo, com a marca.
     const atual = await app.inject({ method: 'GET', url: '/api/sessao', headers: { cookie: cookie(n) } });
-    expect(esquemaSessao.parse(atual.json()).como?.alvo.login).toBe('SINT.ADMIN');
-    // Escrita do alvo (CRUD genérico do M08) feita no "como": aceita.
+    expect(esquemaSessao.parse(atual.json()).como?.alvo.login).toBe('SINT.ROUPARIA');
+    // Escrita do alvo (a peça do enxoval da rouparia) feita no "como": aceita.
     const antes = trilha.eventos.length;
     const inc = await app.inject({
       method: 'POST',
-      url: `${BASE}/itens`,
-      headers: spdata(n),
-      payload: { valores: { codigo: 77, nome: 'Religião sintética do suporte' } },
+      url: ESCRITA,
+      headers: hospital(n),
+      payload: peca('Peça sintética do suporte'),
     });
     expect(inc.statusCode).toBe(201);
     // Trilha: USUARIO = alvo, com o ator real marcado (a ORIGEM no banco).
     const ev = trilha.eventos.slice(antes).find((e) => e.tabelaAlvo === 'MEMORIA');
-    expect(ev?.usuario).toBe('SINT.ADMIN');
-    expect(ev?.como).toMatchObject({ atorTipo: 'plataforma', alvo: 'SINT.ADMIN' });
+    expect(ev?.usuario).toBe('SINT.ROUPARIA');
+    expect(ev?.como).toMatchObject({ atorTipo: 'plataforma', alvo: 'SINT.ROUPARIA' });
     expect(ev?.estacao).toMatch(/:SUPORTE$/);
     // Auditoria da sessão: a escrita (método, caminho, status) e a leitura agregada, sem query string.
-    await app.inject({ method: 'GET', url: `${BASE}/itens?busca=segredo`, headers: { cookie: cookie(n) } });
-    await app.inject({ method: 'GET', url: `${BASE}/itens?busca=outra`, headers: { cookie: cookie(n) } });
+    await app.inject({
+      method: 'GET',
+      url: `${LEITURA}?${PERIODO}&busca=segredo`,
+      headers: { cookie: cookie(n) },
+    });
+    await app.inject({
+      method: 'GET',
+      url: `${LEITURA}?${PERIODO}&busca=outra`,
+      headers: { cookie: cookie(n) },
+    });
     const sessoes = await app.inject({
       method: 'GET',
       url: '/api/plataforma/auditoria/sessoes',
@@ -293,16 +351,16 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     });
     const d = det.json();
     expect(d.acoes).toEqual([
-      expect.objectContaining({ metodo: 'POST', caminho: `${BASE}/itens`, status: 'ok', http: 201 }),
+      expect.objectContaining({ metodo: 'POST', caminho: ESCRITA, status: 'ok', http: 201 }),
     ]);
-    const leitura = d.leituras.find((l: { caminho: string }) => l.caminho === `${BASE}/itens`);
+    const leitura = d.leituras.find((l: { caminho: string }) => l.caminho === LEITURA);
     expect(leitura.quantidade).toBe(2);
     expect(JSON.stringify(d)).not.toMatch(/segredo|outra/);
   });
 
   it('escrita sem a linha da auditoria não acontece (503) e nada é gravado', async () => {
     const n = await entrarPlataforma(C.plataforma);
-    expect((await entrarComo(n, 'aa', 'SINT.ADMIN')).statusCode).toBe(201);
+    expect((await entrarComo(n, 'aa', 'SINT.ROUPARIA')).statusCode).toBe(201);
     // A guarda já confere com cache; a falha vale para o registro da escrita.
     const antes = trilha.eventos.length;
     const registrar = repo.registrarAcao.bind(repo);
@@ -310,9 +368,9 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     try {
       const r = await app.inject({
         method: 'POST',
-        url: `${BASE}/itens`,
-        headers: spdata(n),
-        payload: { valores: { codigo: 78, nome: 'Não pode gravar' } },
+        url: ESCRITA,
+        headers: hospital(n),
+        payload: peca('Não pode gravar'),
       });
       expect(r.statusCode).toBe(503);
       expect(trilha.eventos.slice(antes).some((e) => e.tabelaAlvo === 'MEMORIA')).toBe(false);
@@ -326,7 +384,11 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     expect((await entrarComo(n, 'aa', 'SINT.ADMIN')).statusCode).toBe(201);
     avancar(20_000); // passa do cache de 15 s
     repo.falhar = true;
-    const r = await app.inject({ method: 'GET', url: `${BASE}/itens`, headers: { cookie: cookie(n) } });
+    const r = await app.inject({
+      method: 'GET',
+      url: `${LEITURA}?${PERIODO}`,
+      headers: { cookie: cookie(n) },
+    });
     expect(r.statusCode).toBe(503);
     const s = await app.inject({ method: 'GET', url: '/api/sessao', headers: { cookie: cookie(n) } });
     expect(s.statusCode).toBe(503);
@@ -430,7 +492,7 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
   it('sair (DELETE /api/sessao) e "voltar" encerram o "como"; a conta da plataforma continua', async () => {
     const n = await entrarPlataforma(C.plataforma);
     expect((await entrarComo(n, 'aa', 'SINT.USUARIO')).statusCode).toBe(201);
-    const sair = await app.inject({ method: 'DELETE', url: '/api/sessao', headers: spdata(n) });
+    const sair = await app.inject({ method: 'DELETE', url: '/api/sessao', headers: hospital(n) });
     expect(sair.statusCode).toBe(204);
     guardar(n, sair.headers['set-cookie']);
     expect(
@@ -458,14 +520,14 @@ describe('a sessão "como" é a do alvo, com o ator real na auditoria', () => {
     const doAlvo = await app.inject({
       method: 'POST',
       url: '/api/sessao/reautenticar',
-      headers: spdata(n),
+      headers: hospital(n),
       payload: { senha: SENHA },
     });
     expect(doAlvo.statusCode).toBe(401);
     const doAtor = await app.inject({
       method: 'POST',
       url: '/api/sessao/reautenticar',
-      headers: spdata(n),
+      headers: hospital(n),
       payload: { senha: SENHA_PLATAFORMA_SINTETICA },
     });
     expect(doAtor.statusCode).toBe(200);
@@ -595,7 +657,7 @@ describe('revisão de segurança do "como" (credencial, alvo, volta, substituiç
     });
   });
 
-  it('"Voltar" com a sessão da plataforma vencida encerra o "como" pelo CSRF do SPDATA', async () => {
+  it('"Voltar" com a sessão da plataforma vencida encerra o "como" pelo CSRF do hospital', async () => {
     const n = await entrarPlataforma(C.plataforma);
     expect((await entrarComo(n, 'aa', 'SINT.GESTOR')).statusCode).toBe(201);
     for (let i = 0; i < 3; i++) {
@@ -640,7 +702,7 @@ describe('revisão de segurança do "como" (credencial, alvo, volta, substituiç
     const n = await entrarPlataforma(C.plataforma);
     expect((await entrarComo(n, 'aa', 'SINT.RECEPCAO')).statusCode).toBe(201);
     const antes = trilha.eventos.length;
-    const r = await app.inject({ method: 'GET', url: '/api/acesso/grupos', headers: { cookie: cookie(n) } });
+    const r = await app.inject({ method: 'GET', url: BASE, headers: { cookie: cookie(n) } });
     expect(r.statusCode).toBe(403);
     const ev = trilha.eventos
       .slice(antes)

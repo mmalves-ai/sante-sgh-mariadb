@@ -3,12 +3,9 @@
 // classificação estornada sai da carga e se relança no mesmo turno; o índice de UTI estornado fica inativo. Nada se
 // apaga (o original continua na porta). Porta em memória; dados sintéticos.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -32,7 +29,6 @@ interface Sessao {
 async function montar(o: { semChave?: boolean; trr?: string } = {}) {
   const trilha = new RegistradorTrilhaMemoria();
   const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
     { agora },
   );
   const escores = new PortaEscoresMemoria({ agora });
@@ -61,12 +57,11 @@ async function montar(o: { semChave?: boolean; trr?: string } = {}) {
           ],
         })
       : undefined;
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     escores,
     vigiaEnfermagem: null,
-    vigia: null,
     ...(configuracao ? { configuracao } : {}),
   });
   await app.init();

@@ -10,7 +10,8 @@
 //   POST /api/operadora/prestadores/:id/reincluir        operadora.reincluirPrestador
 //   GET  /api/operadora/rede/movimentos                  os movimentos do RPS (situação, apos)
 // Tudo exige a chave da fatia `operadora.rede`, que só vale com a do módulo (regra 1), menos o apoio. Cada gravação muda
-// SGH_OPE_PRESTADOR e registra o movimento do RPS com a SGH_TRILHA na mesma transação; nenhuma tabela legada é escrita.
+// o prestador da rede (prestador_rede, contrato e histórico) e registra o movimento do registro da ANS com a trilha na
+// mesma transação, pelo Executor do núcleo (porta própria).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type ApoioRede,
@@ -28,7 +29,6 @@ import {
   ROTAS_OPERADORA_F3 as R,
   type ResultadoRede,
 } from '@sgh/contratos';
-import type { LinhaTrilha } from '@sgh/legado';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -50,12 +50,13 @@ import {
 } from '../config/public-api.js';
 import { corpo } from '../exames/public-api.js';
 import { ServicoSituacaoOperadora, type SujeitoOperadora } from './aplicacao/situacao.js';
-import { PORTA_REDE_OPERADORA, type GravadorRede, type PortaRedeOperadora } from './rede-porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import { type GravacaoRede, type GravadorRede, PORTA_REDE_OPERADORA, type PortaRedeOperadora } from './rede-porta.js';
 import { type EstabelecimentoDaRede, resumoDe, ServicoRedeOperadora } from './rede-servico.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.prestador';
-const TABELA = 'SGH_OPE_PRESTADOR';
+const TABELA = 'prestador_rede';
 
 /** Cursor da lista: o nome de busca e o ID da última linha (base64url, opaco para a tela). */
 export function cursorPrestador(c: { nome: string; id: number }): string {
@@ -113,16 +114,16 @@ export class RedeOperadoraController {
     return s;
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
-  private async gravar<T extends { id: number }>(
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  private async gravar<T extends GravacaoRede>(
     s: SessaoCadastro,
     evento: string,
     operacao: string,
     fn: (g: GravadorRede) => Promise<T>,
   ): Promise<T> {
-    const linha = (r: T): LinhaTrilha =>
+    const linha = (r: T): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela: TABELA, id: String(r.id) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(s.porta, linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria')
@@ -206,7 +207,7 @@ export class RedeOperadoraController {
   @HttpCode(200)
   @Permissao(R.credenciar.permissao)
   @AuditadoNoHandler(
-    'operadora.credenciarPrestador (SGH_OPE_PRESTADOR e o movimento do RPS) com a SGH_TRILHA na mesma transação',
+    'operadora.credenciarPrestador (prestador, contrato e o movimento do registro da ANS) com a trilha na mesma transação',
   )
   async credenciar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoRede> {
     const e = corpo(esquemaCredenciarPrestador, b);
@@ -233,7 +234,7 @@ export class RedeOperadoraController {
   @HttpCode(200)
   @Permissao(R.alterar.permissao)
   @AuditadoNoHandler(
-    'operadora.alterarPrestador (SGH_OPE_PRESTADOR e, se muda campo do RPS, o movimento) com a SGH_TRILHA na mesma transação',
+    'operadora.alterarPrestador (prestador, contrato e, se muda campo do registro da ANS, o movimento) com a trilha na mesma transação',
   )
   async alterar(
     @Param('id') id: string,
@@ -265,7 +266,7 @@ export class RedeOperadoraController {
   @HttpCode(200)
   @Permissao(R.descredenciar.permissao)
   @AuditadoNoHandler(
-    'operadora.descredenciarPrestador (SGH_OPE_PRESTADOR e o movimento de exclusão do RPS) com a SGH_TRILHA na mesma transação',
+    'operadora.descredenciarPrestador (prestador, histórico e o movimento de exclusão) com a trilha na mesma transação',
   )
   async descredenciar(
     @Param('id') id: string,
@@ -296,7 +297,7 @@ export class RedeOperadoraController {
   @HttpCode(200)
   @Permissao(R.reincluir.permissao)
   @AuditadoNoHandler(
-    'operadora.reincluirPrestador (SGH_OPE_PRESTADOR e o movimento de reinclusão do RPS) com a SGH_TRILHA na mesma transação',
+    'operadora.reincluirPrestador (prestador, contrato novo e o movimento de reinclusão) com a trilha na mesma transação',
   )
   async reincluir(
     @Param('id') id: string,

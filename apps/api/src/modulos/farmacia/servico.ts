@@ -41,7 +41,7 @@ import {
   type SugestaoDevolucao,
 } from '@sgh/contratos/regras-suprimentos';
 import { enfileirarZpl, ErroZpl, zplEtiquetaDose } from '@sgh/dominio-documento';
-import type { DoseFilaLida, TriagemSgh } from '@sgh/legado';
+import type { DoseDaFila, Triagem } from './tipos.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
@@ -135,7 +135,7 @@ export class ServicoFarmacia {
       ),
     ]);
     const politica = lerPolitica(await this.parametroTexto(s, 'suprimentos.farmaciaPoliticaDispensacao'));
-    const extras = new Map<number, { d: DoseFilaLida; dose: DoseFila }>();
+    const extras = new Map<number, { d: DoseDaFila; dose: DoseFila }>();
     const naFila: DoseNaFila[] = doses.map((d) => {
       const i = itens.get(d.horario.produto ?? 0);
       const controlado = !!(i?.portaria || i?.psico);
@@ -147,12 +147,12 @@ export class ServicoFarmacia {
       });
       const a = avals.get(d.horario.item);
       const validada =
-        d.validadaNoOutro ||
+        d.validadaAntes ||
         a?.estado === 'automatico' ||
         (a?.estado === 'decidido' && a.decisao === 'valido');
       const n: DoseNaFila = {
         horario: d.horario.id,
-        atendimento: d.reg,
+        atendimento: d.atendimento,
         paciente: d.paciente,
         leito: d.leito,
         item: d.horario.produto ?? 0,
@@ -163,7 +163,7 @@ export class ServicoFarmacia {
         urgente: d.urgente,
         agora: false,
         dispensada: d.dispensada,
-        suspensa: ['S', 'C', 'X', 'O'].includes(d.horario.situacao),
+        suspensa: d.horario.suspenso,
         validada,
       };
       const bloqueio = conferirPoliticaDispensacao(n, politica);
@@ -336,7 +336,7 @@ export class ServicoFarmacia {
     const [leitos, aceites] = await Promise.all([
       this.porta.leitos(
         ctx(s),
-        ls.map((x) => x.reg),
+        ls.map((x) => x.atendimento),
       ),
       this.porta.aceites(
         ctx(s),
@@ -352,8 +352,8 @@ export class ServicoFarmacia {
       situacaoNome: nomeDaSituacao(x.situacao),
       desde: x.desde,
       documento: x.saida,
-      atendimento: x.reg,
-      leito: leitos.get(x.reg)?.leito ?? '',
+      atendimento: x.atendimento,
+      leito: leitos.get(x.atendimento)?.leito ?? '',
       centroCusto: x.centroCusto,
       itens: x.itens,
       usuario: x.usuario,
@@ -388,12 +388,12 @@ export class ServicoFarmacia {
   async filaAvaliacao(
     s: SessaoCadastro,
     unidade: string,
-  ): Promise<FilaAvaliacao & { triagens: TriagemSgh[] }> {
+  ): Promise<FilaAvaliacao & { triagens: Triagem[] }> {
     const r = await this.porta.relogio(ctx(s));
     const inicio = new Date(r.agora.getTime() - 2 * 3_600_000);
     const fim = new Date(r.agora.getTime() + 24 * 3_600_000);
     const { doses, cortada } = await this.porta.filaDaUnidade(ctx(s), { unidade, inicio, fim });
-    const porItem = new Map<number, DoseFilaLida>();
+    const porItem = new Map<number, DoseDaFila>();
     for (const d of doses) if (!porItem.has(d.horario.item)) porItem.set(d.horario.item, d);
     const lista = [...porItem.values()];
     const [itens, avals, prescritos, intervs] = await Promise.all([
@@ -408,10 +408,10 @@ export class ServicoFarmacia {
     const humanas = await this.classesHumanas(s);
     const contagemProduto = new Map<string, number>();
     for (const d of lista) {
-      const k = `${d.reg}:${d.horario.produto}`;
+      const k = `${d.atendimento}:${d.horario.produto}`;
       contagemProduto.set(k, (contagemProduto.get(k) ?? 0) + 1);
     }
-    const triagens: TriagemSgh[] = [];
+    const triagens: Triagem[] = [];
     const itensFila: ItemAvaliacao[] = lista.map((d) => {
       const i = itens.get(d.horario.produto ?? 0);
       const classe = classeDoItem({
@@ -424,7 +424,7 @@ export class ServicoFarmacia {
         {
           classe,
           alergiaConflitante: d.alergia && !!prescritos.get(d.horario.item)?.alergiaJustificada,
-          duplicado: (contagemProduto.get(`${d.reg}:${d.horario.produto}`) ?? 0) > 1,
+          duplicado: (contagemProduto.get(`${d.atendimento}:${d.horario.produto}`) ?? 0) > 1,
           via: d.horario.via,
           viasDoCadastro: [],
           dose: d.horario.dose,
@@ -446,12 +446,12 @@ export class ServicoFarmacia {
           achados: t.achados,
           regra: t.regra,
         });
-      const situacao = d.validadaNoOutro ? 5 : null;
+      const situacao = d.validadaAntes ? 5 : null;
       return {
         item: d.horario.item,
         horario: d.horario.id,
         prescricao: d.horario.prescricao,
-        atendimento: d.reg,
+        atendimento: d.atendimento,
         paciente: d.paciente,
         leito: d.leito,
         iniciais: d.iniciais,

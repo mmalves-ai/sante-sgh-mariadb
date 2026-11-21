@@ -1,5 +1,5 @@
-// Conta do paciente, lançamentos e auditoria de contas (M30; ficha, seções 4, 5 e 7). Telas de trabalho sobre a mesma
-// conta do outro sistema, que os gatilhos criam e alimentam; o total, a situação gravada e o preço são do banco:
+// Conta do paciente, lançamentos e auditoria de contas (M30; ficha, seções 4, 5 e 7). Telas de trabalho sobre a conta do
+// banco do cliente (conta_hospitalar e itens); a situação, o total e o preço vêm da porta, calculados na aplicação:
 //   GET  /api/faturamento/gravacao | apoio | worklist
 //   GET  /api/faturamento/contas?situacao&convenio&competencia&tipo&termo&pagina&sus   (leitura auditada)
 //   GET  /api/faturamento/contas/:id (auditada); GET contas/:id/itens; GET contas/:id/sigtap; GET contas/:id/auditoria
@@ -210,7 +210,7 @@ export class FaturamentoController {
     const tipo = q['tipo'] === 'E' || q['tipo'] === 'I' ? q['tipo'] : null;
     const p = pagina(q['pagina']);
     req.sghAlvo = {
-      tabelaAlvo: 'FCCTAEXT',
+      tabelaAlvo: 'conta_hospitalar',
       idAlvo: `lista ${sit ?? 'todas'} ${q['competencia'] ?? ''} p${p}`,
     };
     return this.porta.contas(
@@ -238,7 +238,7 @@ export class FaturamentoController {
     const s = sessaoDe(req);
     const conta = idDaRota(id);
     await this.servico.exigirEscopoConta(s, conta);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAEXT', idAlvo: String(conta) };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar', idAlvo: String(conta) };
     const c = await this.porta.conta(ctx(s), conta, await this.porta.hoje(ctx(s)));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Conta não encontrada');
     return c;
@@ -281,7 +281,7 @@ export class FaturamentoController {
     const s = sessaoDe(req);
     const conta = idDaRota(id);
     await this.servico.exigirEscopoConta(s, conta);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAAUD', idAlvo: String(conta) };
+    req.sghAlvo = { tabelaAlvo: 'auditoria_conta', idAlvo: String(conta) };
     return this.porta.auditoria(ctx(s), conta);
   }
 
@@ -348,7 +348,7 @@ export class FaturamentoController {
   @Post('contas/:id/pendencias')
   @HttpCode(200)
   @Permissao('faturamento.pendencia.editar')
-  @AuditadoNoHandler('pendência em SGH_FAT_PENDENCIA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pendência em pendencia_conta com a trilha_auditoria na mesma transação')
   async pendencia(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -361,7 +361,7 @@ export class FaturamentoController {
       s,
       'contas',
       E.faturamentoPendenciaRegistrada.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_PENDENCIA', id: String(r), chave: `conta ${e.conta}` }),
+      (r: number) => ({ tabela: 'pendencia_conta', id: String(r), chave: `conta ${e.conta}` }),
       (g) => g.registrarPendencia({ ...e, usuario: s.login }),
     );
     return resultadoFat('Pendência registrada.', false, { id: x });
@@ -370,7 +370,7 @@ export class FaturamentoController {
   @Post('pendencias/:id/resolver')
   @HttpCode(200)
   @Permissao('faturamento.pendencia.editar')
-  @AuditadoNoHandler('pendência resolvida em SGH_FAT_PENDENCIA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pendência resolvida em pendencia_conta com a trilha_auditoria na mesma transação')
   async resolver(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -386,7 +386,7 @@ export class FaturamentoController {
       s,
       'contas',
       E.faturamentoPendenciaRegistrada.codigo,
-      () => ({ tabela: 'SGH_FAT_PENDENCIA', id: String(e.id) }),
+      () => ({ tabela: 'pendencia_conta', id: String(e.id) }),
       (g) => g.resolverPendencia({ ...e, usuario: s.login }),
     );
     return resultadoFat('Pendência resolvida.', false, { conta: x.conta });
@@ -395,7 +395,7 @@ export class FaturamentoController {
   @Post('contas/:id/etapas')
   @HttpCode(200)
   @Permissao('faturamento.conta.ler')
-  @AuditadoNoHandler('etapa em SGH_FAT_CONTA_ETAPA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('etapa em conta_hospitalar_etapa com a trilha_auditoria na mesma transação')
   async etapa(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -413,7 +413,7 @@ export class FaturamentoController {
       s,
       e.etapa === 'auditoria' ? 'auditoria' : 'contas',
       E.faturamentoEtapaRegistrada.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_CONTA_ETAPA', id: String(r), chave: `conta ${e.conta}` }),
+      (r: number) => ({ tabela: 'conta_hospitalar_etapa', id: String(r), chave: `conta ${e.conta}` }),
       (g) => g.registrarEtapa({ ...e, usuario: s.login }),
     );
     const nome = e.etapa === 'auditoria' ? 'Auditoria' : 'Conferência';
@@ -423,7 +423,7 @@ export class FaturamentoController {
   @Post('contas/:id/auditoria/versoes')
   @HttpCode(200)
   @Permissao('faturamento.auditoria.ajustar')
-  @AuditadoNoHandler('versão da auditoria em SGH_FAT_AUDITORIA_VERSAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('versão da auditoria em auditoria_conta_versao com a trilha_auditoria na mesma transação')
   async versao(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -436,7 +436,7 @@ export class FaturamentoController {
       s,
       'auditoria',
       E.faturamentoAuditoriaRegistrada.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_AUDITORIA_VERSAO', id: String(r), chave: `conta ${e.conta}` }),
+      (r: number) => ({ tabela: 'auditoria_conta_versao', id: String(r), chave: `conta ${e.conta}` }),
       (g) => g.registrarVersaoAuditoria({ ...e, usuario: s.login }),
     );
     return resultadoFat('Parecer e versão da conta registrados.', false, { id: x });
@@ -462,7 +462,7 @@ export class FaturamentoController {
     const s = sessaoDe(req);
     const item = idDaRota(id);
     await this.servico.exigirEscopoItem(s, item);
-    req.sghAlvo = { tabelaAlvo: 'FCLANEXT', idAlvo: String(item) };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar_item', idAlvo: String(item) };
     const x = await this.porta.explicar(ctx(s), item);
     if (!x) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
     return x;
@@ -498,7 +498,7 @@ export class FaturamentoController {
       ano: Number(hoje.slice(0, 4)),
       mes: Number(hoje.slice(5, 7)),
     };
-    req.sghAlvo = { tabelaAlvo: 'RECADATE', idAlvo: `fila tardia ${comp.ano}-${comp.mes}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar_item', idAlvo: `fila tardia ${comp.ano}-${comp.mes}` };
     return this.porta.painelLancamentos(ctx(s), {
       ...comp,
       desde: menosDias(hoje, await this.parametro(s, 'faturamento.tardioJanelaDias', 180)),
@@ -509,7 +509,7 @@ export class FaturamentoController {
   @Post('lancamentos/tardios/:registro/decisao')
   @HttpCode(200)
   @Permissao('faturamento.lancamentoTardio.decidir')
-  @AuditadoNoHandler('decisão em SGH_FAT_LANC_TARDIO (e a reabertura pelo executor) com a trilha')
+  @AuditadoNoHandler('decisão em decisao_lancamento_tardio (e a reabertura pelo executor) com a trilha')
   async decidir(
     @Param('registro') reg: string,
     @Body() b: unknown,
@@ -544,7 +544,7 @@ export class FaturamentoController {
   @Post('regras')
   @HttpCode(200)
   @Permissao('faturamento.regra.editar')
-  @AuditadoNoHandler('regra em SGH_FAT_REGRA_FATURAB com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('regra em regra_faturabilidade com a trilha_auditoria na mesma transação')
   async editarRegra(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEditarRegraFaturabilidade, b);
@@ -552,7 +552,7 @@ export class FaturamentoController {
       s,
       'regras',
       E.faturamentoRegraEditada.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_REGRA_FATURAB', id: String(r), chave: e.regra.nome }),
+      (r: number) => ({ tabela: 'regra_faturabilidade', id: String(r), chave: e.regra.nome }),
       (g) => g.editarRegra({ ...e, usuario: s.login }),
     );
     return resultadoFat(e.id ? 'Regra alterada.' : 'Regra incluída.', false, { id });
@@ -584,7 +584,7 @@ export class FaturamentoController {
   @Post('pacotes')
   @HttpCode(200)
   @Permissao('faturamento.pacote.editar')
-  @AuditadoNoHandler('pacote em SGH_FAT_PACOTE com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pacote em pacote_contrato com a trilha_auditoria na mesma transação')
   async editarPacote(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEditarPacote, b);
@@ -592,7 +592,7 @@ export class FaturamentoController {
       s,
       'regras',
       E.faturamentoPacoteEditado.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_PACOTE', id: String(r), chave: `${e.convenio}/${e.codigo}` }),
+      (r: number) => ({ tabela: 'pacote_contrato', id: String(r), chave: `${e.convenio}/${e.codigo}` }),
       (g) => g.editarPacote({ ...e, usuario: s.login }),
     );
     return resultadoFat(e.id ? 'Pacote alterado.' : 'Pacote incluído.', false, { id });
@@ -613,7 +613,7 @@ export class FaturamentoController {
   @Auditar(E.faturamentoContasLidas.codigo)
   async nota(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<NotaSala> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'CCCADCIR', idAlvo: id };
+    req.sghAlvo = { tabelaAlvo: 'ato_cirurgico', idAlvo: id };
     const n = await this.porta.notaSala(ctx(s), idDaRota(id));
     if (!n) throw new ErroProblema('nao-encontrado', 404, 'Cirurgia não encontrada');
     return n;
@@ -626,14 +626,14 @@ export class FaturamentoController {
   @Auditar(E.faturamentoContasLidas.codigo)
   async orcamentos(@Req() req: RequisicaoAutorizada): Promise<OrcamentoParticular[]> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_ORCAMENTO', idAlvo: 'lista' };
+    req.sghAlvo = { tabelaAlvo: 'orcamento_particular', idAlvo: 'lista' };
     return this.porta.orcamentos(ctx(s), await this.porta.hoje(ctx(s)));
   }
 
   @Post('particular/orcamentos')
   @HttpCode(200)
   @Permissao('faturamento.orcamento.criar')
-  @AuditadoNoHandler('orçamento em SGH_FAT_ORCAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('orçamento em orcamento_particular com a trilha_auditoria na mesma transação')
   async orcamento(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarOrcamento, b);
@@ -641,7 +641,7 @@ export class FaturamentoController {
       s,
       'particular',
       E.faturamentoOrcamentoRegistrado.codigo,
-      (x: { id: number }) => ({ tabela: 'SGH_FAT_ORCAMENTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'orcamento_particular', id: String(x.id) }),
       (g) => g.registrarOrcamento({ ...e, usuario: s.login }),
     );
     return resultadoFat(`Orçamento ${r.id} registrado: R$ ${r.total.toFixed(2).replace('.', ',')}.`, false, {
@@ -660,7 +660,7 @@ export class FaturamentoController {
   @Post('particular/caixas')
   @HttpCode(200)
   @Permissao('faturamento.recibo.emitir')
-  @AuditadoNoHandler('caixa em SGH_FAT_CAIXA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('caixa em sessao_caixa com a trilha_auditoria na mesma transação')
   async abrirCaixa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirCaixa, b);
@@ -668,7 +668,7 @@ export class FaturamentoController {
       s,
       'particular',
       E.faturamentoCaixaMovimentado.codigo,
-      (r: number) => ({ tabela: 'SGH_FAT_CAIXA', id: String(r) }),
+      (r: number) => ({ tabela: 'sessao_caixa', id: String(r) }),
       (g) => g.abrirCaixa({ ...e, usuario: s.login }),
     );
     return resultadoFat('Caixa aberto.', false, { id });
@@ -677,7 +677,7 @@ export class FaturamentoController {
   @Post('particular/caixas/:id/fechar')
   @HttpCode(200)
   @Permissao('faturamento.recibo.emitir')
-  @AuditadoNoHandler('fechamento do caixa em SGH_FAT_CAIXA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('fechamento do caixa em sessao_caixa com a trilha_auditoria na mesma transação')
   async fecharCaixa(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -689,7 +689,7 @@ export class FaturamentoController {
       s,
       'particular',
       E.faturamentoCaixaMovimentado.codigo,
-      () => ({ tabela: 'SGH_FAT_CAIXA', id: String(e.id) }),
+      () => ({ tabela: 'sessao_caixa', id: String(e.id) }),
       (g) => g.fecharCaixa({ ...e, usuario: s.login }),
     );
     const dif = Math.round((e.contado - r.esperado) * 100) / 100;
@@ -705,7 +705,7 @@ export class FaturamentoController {
   @Post('particular/recebimentos')
   @HttpCode(200)
   @Permissao('faturamento.recibo.emitir')
-  @AuditadoNoHandler('pagamento em SGH_FAT_PAGAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pagamento em movimento_caixa com a trilha_auditoria na mesma transação')
   receber(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     return this.servico.receber(sessaoDe(req), corpo(esquemaReceberParticular, b));
   }
@@ -741,7 +741,7 @@ export class FaturamentoController {
   @Post('particular/recibos')
   @HttpCode(200)
   @Permissao('faturamento.recibo.emitir')
-  @AuditadoNoHandler('recibo em SGH_FAT_RECIBO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('recibo em recibo com a trilha_auditoria na mesma transação')
   async emitirRecibo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFaturamento> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEmitirRecibo, b);
@@ -749,7 +749,7 @@ export class FaturamentoController {
       s,
       'particular',
       E.faturamentoReciboEmitido.codigo,
-      (x: { id: number }) => ({ tabela: 'SGH_FAT_RECIBO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'recibo', id: String(x.id) }),
       (g) => g.emitirRecibo({ ...e, usuario: s.login }),
     );
     return resultadoFat(`Recibo nº ${r.numero} emitido.`, false, { id: r.id, numero: r.numero });

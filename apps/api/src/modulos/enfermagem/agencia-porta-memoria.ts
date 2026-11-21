@@ -29,9 +29,11 @@ import {
   vencida,
   venceEm,
 } from '@sgh/dominio-sadt';
-import { type ContextoOperacao, type LiberacaoConsultada, recusa } from '@sgh/legado';
+import { type ContextoOperacao, recusa } from '@sgh/nucleo';
+import { type LiberacaoGravacao } from '../exames/public-api.js';
 import type { ContextoAgencia, FiltroImunoPorta, GravadorAgencia, PortaAgencia } from './agencia-porta.js';
 import type { PortaTransfusao } from './transfusao-porta.js';
+import { chaveDoEstado } from './porta-memoria.js';
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
 type Bolsa = Mutavel<Omit<BolsaEstoqueLida, 'vencida' | 'situacao' | 'ato' | 'reservadaPara'>> & {
@@ -82,15 +84,15 @@ export class PortaAgenciaMemoria implements PortaAgencia {
   ) {}
 
   private e(c: ContextoAgencia): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDoEstado(c));
     if (!s) {
       s = { seq: 47_500, imunos: [], bolsas: [], movimentos: [], versoes: [] };
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDoEstado(c), s);
     }
     return s;
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -111,7 +113,8 @@ export class PortaAgenciaMemoria implements PortaAgencia {
   ): Promise<T> {
     const s = this.e(c);
     const agora = (await this.relogio(c)).slice(0, 16);
-    const k = (chave: string | null, sufixo: string) => (chave ? `${c.hospital}:${chave}${sufixo}` : null);
+    const k = (chave: string | null, sufixo: string) =>
+      chave ? `${chaveDoEstado(c)}:${chave}${sufixo}` : null;
     const mover = (
       b: Bolsa,
       tipo: TipoMovimentoBolsa,

@@ -2,9 +2,9 @@
 // (automático, fila por faixa, duplicado local à fila do cadastro, idempotência e marca d'água), a fila mascarada, a
 // decisão (mesma pessoa e outra pessoa, nos dois bancos), o desfazer (só a ligação; volta à fila), a queda de um
 // banco entre as duas gravações (pendente → divergência → reparo → 0; regra 4) e o isolamento da rede (regra 12).
-import type { LinhaTrilha } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { PortaRedeMemoria } from '../porta-memoria.js';
+import type { TrilhaRede } from '../tipos-indice.js';
 import { ServicoMpiRede, type SessaoRede } from './servico.js';
 
 const REDE = 'rede-teste';
@@ -36,18 +36,13 @@ function sessao(
     hospital,
     login,
     ...extra,
-    trilha: (evento, operacao, alvo): LinhaTrilha => ({
-      rede,
-      hospital,
-      usuario: login,
-      evento,
-      recurso: 'rede.mpi',
-      operacao,
-      tabelaAlvo: 'SGH_REDE_VINCULO',
-      idAlvo: alvo.id ?? null,
-      chaveNaturalAlvo: alvo.chave,
-      resultado: 'sucesso',
-      estacao: 'TESTE',
+    trilha: (evento, operacao, alvo): TrilhaRede => ({
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao',
+      entidade: 'suspeita_duplicidade',
+      entidadeId: null,
+      dadosDepois: { evento, recurso: 'rede.mpi', operacao, chave: alvo.chave, login, estabelecimento: hospital },
       correlacao: 'teste',
     }),
   };
@@ -81,8 +76,8 @@ describe('MPI da Rede: ciclo de pareamento', () => {
     // O inativo não pareia (regra 2: só cadastros ativos e não absorvidos).
     expect([...pc.candidatos.keys()].some((k) => k.includes('pc:7'))).toBe(false);
     // Trilha em cada banco, só contagens.
-    expect(pc.trilha.at(-1)).toMatchObject({ evento: 'rede.fila.atualizada', hospital: 'pc' });
-    expect(sx.trilha.at(-1)).toMatchObject({ evento: 'rede.fila.atualizada', hospital: 'sx' });
+    expect(pc.trilha.at(-1)).toMatchObject({ dadosDepois: { evento: 'rede.fila.atualizada' }, estabelecimentoDoBanco: 'pc' });
+    expect(sx.trilha.at(-1)).toMatchObject({ dadosDepois: { evento: 'rede.fila.atualizada' }, estabelecimentoDoBanco: 'sx' });
     // Repetir: nada é duplicado (a mesma chave nos dois lados) e o par já vinculado não é refeito.
     const de = await servico.ciclo(sessao());
     expect(de.automaticos).toBe(0);

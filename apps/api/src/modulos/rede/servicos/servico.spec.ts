@@ -2,10 +2,11 @@
 // SINTÉTICOS): cada registro no banco da sessão; a lista junta os bancos e pagina; o desligado fica fora; a alteração
 // grava no banco do registro; a sessão "como" não altera outro banco; a regra 12 recusa antes de ler.
 import { esquemaConsultaServicosRede, TETO_LISTA_SERVICOS_REDE } from '@sgh/contratos';
-import { type LinhaTrilha, TETO_SERVICOS_POR_BANCO } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
+import type { TrilhaRede } from '../tipos-indice.js';
 import { PortaServicosRedeMemoria } from './porta-memoria.js';
 import { ServicoServicosRede, type SessaoServicosRede } from './servico.js';
+import { TETO_SERVICOS_POR_BANCO } from './tipos.js';
 
 const REDE = 'rede-teste';
 const lista = {
@@ -23,18 +24,13 @@ function sessao(hospital = 'pc', extra: Partial<SessaoServicosRede> = {}): Sessa
     login: 'SINT.DIRETORIA.REDE',
     como: false,
     liberados: new Set(['pc', 'sx']),
-    trilha: (evento, operacao, id): LinhaTrilha => ({
-      rede: REDE,
-      hospital,
-      usuario: 'SINT.DIRETORIA.REDE',
-      evento,
-      recurso: 'rede.servico',
-      operacao,
-      tabelaAlvo: 'SGH_REDE_SERVICO_COMPART',
-      idAlvo: id === null ? null : String(id),
-      chaveNaturalAlvo: null,
-      resultado: 'sucesso',
-      estacao: 'TESTE',
+    trilha: (evento, operacao, id): TrilhaRede => ({
+      estabelecimento: 1,
+      usuario: 1,
+      acao: 'operacao',
+      entidade: 'servico_compartilhado_rede',
+      entidadeId: id,
+      dadosDepois: { evento, recurso: 'rede.servico', operacao, estabelecimento: hospital },
       correlacao: 'teste',
     }),
     ...extra,

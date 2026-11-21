@@ -1,48 +1,25 @@
-// Porta das contas médicas recebidas pela operadora própria (M56, etapa 6, F5): o que a tela das contas lê e grava,
-// independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: as leituras de @sgh/legado em transação READ ONLY (os lotes, as guias, os itens e o histórico em
-//     SGH_OPE_CONTA_*, as operadoras, o prestador pelo documento, o beneficiário pela carteirinha, as autorizações pela
-//     senha, os auditores designados e os motivos de glosa da tabela 38 do banco do estabelecimento) e as gravações
-//     SGH_OPE_CONTA, _GUIA, _ITEM e _EVT numa transação SGH_ com a SGH_TRILHA junto; em dev sobre a cópia compartilhada,
-//     as gravações são recusadas (`sghSoLeitura`), como nos outros módulos;
-//   - `memoria`: a sessão sintética de dev/ci (E2E), sobre as portas em memória da F1 (beneficiários), da F3 (rede) e da
-//     F4 (autorizações e auditores), com os motivos de glosa SINTÉTICOS; nada vai à cópia;
+// Porta das contas médicas recebidas dos prestadores (M56, etapa 5, F5): o que a tela das contas lê e grava,
+// independente de onde:
+//   - `banco`: a porta própria sobre o banco do cliente (lote_conta_recebida, guia_conta_recebida e itens,
+//     glosa_conta_recebida, recurso_glosa_recebido), pelo @sgh/nucleo e o Executor;
+//   - `memoria`: a sessão sintética de dev/ci (E2E);
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
-// Nenhuma tabela legada é escrita (seção 5 da ficha); os motivos de glosa são só lidos.
+// Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
+// gravação vem da sessão, nunca da entrada.
 import type { MotivoGlosaLido } from '@sgh/contratos';
-import type {
-  AuditorLido,
-  AutorizacaoDaSenhaLida,
-  ContaOpeLida,
-  ContaOpeResumoLida,
-  DecisaoItemSgh,
-  DecisaoRecursoItem,
-  ElegibilidadeOpeLida,
-  EventoContaOpeLido,
-  FiltroContasLido,
-  FiltroPagamentosLido,
-  GlosaItemSgh,
-  GuiaContaOpeLida,
-  ItemContaOpeLido,
-  ItemRecorridoSgh,
-  LinhaTrilha,
-  OperadoraOpeLida,
-  PrestadorLido,
-  RecebimentoContaSgh,
-  RecursoItemLido,
-  TotaisContasLidos,
-} from '@sgh/legado';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import type { Prestador } from './rede-porta.js';
+import { type DadosAuditor, type DadosAutorizacaoDaSenha, type DadosConta, type DadosContaResumo, type DadosElegibilidadeBeneficiario, type DadosEventoConta, type DadosGuiaConta, type DadosItemConta, type DadosOperadora, type DadosRecursoItem, type DecisaoRecursoItem, type EntradaDecisaoItem, type EntradaGlosaItem, type EntradaItemRecorrido, type EntradaRecebimentoConta, type FiltroContasPorta, type FiltroPagamentosPorta, type TotaisContas } from './dados-portas.js';
 
 export const PORTA_CONTAS_OPERADORA = Symbol('PORTA_CONTAS_OPERADORA');
 
-export interface ContextoContas {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** O contexto da sessão: o do núcleo (ids) mais a rede e o código do estabelecimento (exibição). */
+export type ContextoContas = ContextoPorta;
 
 type SemHospital<T> = Omit<T, 'hospital'>;
 
-interface AcaoSgh {
+interface AcaoPorta {
   readonly id: number;
   readonly versao: number;
   readonly usuario: string;
@@ -50,25 +27,25 @@ interface AcaoSgh {
 
 type Feito = Promise<{ id: number; versao: number }>;
 
-/** O que a gravação SGH_ das contas faz dentro da transação (com a trilha junto). */
+/** O que a gravação das contas faz dentro da transação (com a trilha junto). */
 export interface GravadorContas {
   proximoProtocolo(): Promise<number>;
-  receber(r: SemHospital<RecebimentoContaSgh>): Feito;
-  glosar(a: AcaoSgh & { itens: readonly GlosaItemSgh[]; texto: string; desfeita: boolean }): Feito;
+  receber(r: SemHospital<EntradaRecebimentoConta>): Feito;
+  glosar(a: AcaoPorta & { itens: readonly EntradaGlosaItem[]; texto: string; desfeita: boolean }): Feito;
   concluir(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       auditor: number;
       situacao: 'analisada' | 'paga';
       observacao: string | null;
       texto: string;
     },
   ): Feito;
-  devolver(a: AcaoSgh & { motivo: string }): Feito;
+  devolver(a: AcaoPorta & { motivo: string }): Feito;
   registrarRecurso(
-    a: AcaoSgh & { guia: number; valor: number; justificativa: string; situacao: 'analisada' | 'paga' },
+    a: AcaoPorta & { guia: number; valor: number; justificativa: string; situacao: 'analisada' | 'paga' },
   ): Feito;
   decidirRecurso(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       guia: number;
       valorAcatado: number;
       situacaoRecurso: 'acatado' | 'parcial' | 'mantido';
@@ -77,13 +54,13 @@ export interface GravadorContas {
     },
   ): Feito;
   pagar(
-    a: AcaoSgh & { valor: number; data: string; documento: string; situacao: 'analisada' | 'paga' },
+    a: AcaoPorta & { valor: number; data: string; documento: string; situacao: 'analisada' | 'paga' },
   ): Feito;
   /** W0-10 (M8): o recurso por item do prestador pelo portal (a guia recebe a soma; uma linha por item). */
   registrarRecursoItens(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       guia: number;
-      itens: readonly ItemRecorridoSgh[];
+      itens: readonly EntradaItemRecorrido[];
       justificativa: string;
       situacao: 'analisada' | 'paga';
       acesso: number;
@@ -91,9 +68,9 @@ export interface GravadorContas {
   ): Promise<{ id: number; versao: number; recursos: number[] }>;
   /** W0-10 (M8): a decisão do recurso por item (todos os itens de uma vez; a guia pela soma; outra pessoa). */
   decidirRecursoItens(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       guia: number;
-      decisoes: readonly DecisaoItemSgh[];
+      decisoes: readonly EntradaDecisaoItem[];
       parecer: string;
       situacao: 'analisada' | 'paga';
     },
@@ -101,40 +78,40 @@ export interface GravadorContas {
 }
 
 export interface PortaContasOperadora {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   /** O relógio do banco: hoje (AAAA-MM-DD) e agora (AAAA-MM-DDTHH:MM:SS). */
   relogio(c: ContextoContas): Promise<{ hoje: string; agora: string }>;
-  operadoras(c: ContextoContas): Promise<OperadoraOpeLida[]>;
+  operadoras(c: ContextoContas): Promise<DadosOperadora[]>;
   /** Os prestadores da rede (o filtro da lista e o seletor). */
   prestadores(c: ContextoContas): Promise<{ id: number; nome: string }[]>;
-  prestadorPorDocumento(c: ContextoContas, documento: string): Promise<PrestadorLido | null>;
-  elegibilidade(c: ContextoContas, carteirinha: string): Promise<ElegibilidadeOpeLida | null>;
-  autorizacoesPorSenha(c: ContextoContas, senhas: readonly string[]): Promise<AutorizacaoDaSenhaLida[]>;
+  prestadorPorDocumento(c: ContextoContas, documento: string): Promise<Prestador | null>;
+  elegibilidade(c: ContextoContas, carteirinha: string): Promise<DadosElegibilidadeBeneficiario | null>;
+  autorizacoesPorSenha(c: ContextoContas, senhas: readonly string[]): Promise<DadosAutorizacaoDaSenha[]>;
   guiasJaApresentadas(c: ContextoContas, prestador: number, numeros: readonly string[]): Promise<Set<string>>;
   loteJaRecebido(
     c: ContextoContas,
     x: { operadora: number; prestador: number; numeroLote: string; sha256: string },
   ): Promise<boolean>;
   motivos(c: ContextoContas): Promise<MotivoGlosaLido[]>;
-  designacoes(c: ContextoContas, login: string): Promise<AuditorLido[]>;
+  designacoes(c: ContextoContas, login: string): Promise<DadosAuditor[]>;
   contas(
     c: ContextoContas,
-    f: FiltroContasLido,
-  ): Promise<{ itens: ContaOpeResumoLida[]; proxima: number | null }>;
-  totais(c: ContextoContas): Promise<TotaisContasLidos>;
-  conta(c: ContextoContas, id: number): Promise<ContaOpeLida | null>;
-  guias(c: ContextoContas, id: number): Promise<GuiaContaOpeLida[]>;
-  itens(c: ContextoContas, id: number): Promise<ItemContaOpeLido[]>;
-  eventos(c: ContextoContas, id: number): Promise<EventoContaOpeLido[]>;
+    f: FiltroContasPorta,
+  ): Promise<{ itens: DadosContaResumo[]; proxima: number | null }>;
+  totais(c: ContextoContas): Promise<TotaisContas>;
+  conta(c: ContextoContas, id: number): Promise<DadosConta | null>;
+  guias(c: ContextoContas, id: number): Promise<DadosGuiaConta[]>;
+  itens(c: ContextoContas, id: number): Promise<DadosItemConta[]>;
+  eventos(c: ContextoContas, id: number): Promise<DadosEventoConta[]>;
   /** W0-10 (M8): os recursos por item do lote, com a decisão de cada um. */
-  recursosItens(c: ContextoContas, id: number): Promise<RecursoItemLido[]>;
+  recursosItens(c: ContextoContas, id: number): Promise<DadosRecursoItem[]>;
   pagamentos(
     c: ContextoContas,
-    f: FiltroPagamentosLido,
-  ): Promise<{ itens: ContaOpeResumoLida[]; proxima: number | null }>;
-  gravarSgh<T>(
+    f: FiltroPagamentosPorta,
+  ): Promise<{ itens: DadosContaResumo[]; proxima: number | null }>;
+  gravar<T>(
     c: ContextoContas,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: GravadorContas) => Promise<T>,
   ): Promise<T>;
 }
@@ -158,5 +135,5 @@ export const METODOS_PORTA_CONTAS: ReadonlySet<string> = new Set([
   'eventos',
   'recursosItens',
   'pagamentos',
-  'gravarSgh',
+  'gravar',
 ]);

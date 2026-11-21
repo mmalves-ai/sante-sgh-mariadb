@@ -1,6 +1,7 @@
 // Tipos do índice da rede (MPI): leitura e escrita do índice de pacientes da rede.
 // Melhoria: a escrita se discrimina pelo alvo de negócio (pessoa, vínculo, suspeita), com ids numéricos e data ISO, sem
-// nome de tabela inexistente no modelo. O resto dos tipos (forma entre bancos) é redesenhado no lote da rede (onda 2).
+// nome de tabela inexistente no modelo. Lote 02-13: no banco do cliente, cada "banco" do contexto é um estabelecimento do mesmo banco.
+import type { LinhaTrilha } from '@sgh/nucleo';
 
 export interface ParNovo {
   readonly a: { readonly id: number; readonly pront: number };
@@ -10,23 +11,22 @@ export interface ParNovo {
 }
 
 /**
- * Escrita no índice de pacientes da rede, por ALVO de negócio (não por nome de tabela: o modelo próprio, com um banco
- * por cliente, ainda não decidiu as tabelas do índice — ver o pedido de redesenho do lote 01-06; a suspeita de
- * duplicata tende a ser `suspeita_duplicidade`, 03_CAD). Ids numéricos e instantes em data ISO (UTC).
+ * Escrita no índice de pacientes da rede, por ALVO de negócio (não por nome de tabela). No banco do cliente (um banco por
+ * cliente, todos os estabelecimentos juntos), a "pessoa da rede" é o próprio paciente, o par suspeito é uma linha de
+ * `suspeita_duplicidade` e "a mesma pessoa" é a unificação dos dois cadastros (feita no cadastro). Instantes em ISO 8601.
  */
 export type EscritaIndiceRede =
   | {
       readonly alvo: 'pessoa';
       readonly acao: 'inserir_se_ausente';
-      /** Id do paciente que representa a pessoa no cliente. */
-      readonly pacienteId: number;
-      /** Instante ISO 8601 (UTC). */
+      /** Identificador da pessoa da rede. */
+      readonly pessoa: string;
       readonly em: string;
     }
   | {
       readonly alvo: 'vinculo';
       readonly acao: 'gravar';
-      readonly linha: Omit<VinculoRedeLido, 'estabelecimento'> & { readonly estabelecimento: string };
+      readonly linha: VinculoRedeLido;
     }
   | {
       readonly alvo: 'suspeita';
@@ -34,12 +34,14 @@ export type EscritaIndiceRede =
       readonly chave: string;
       readonly situacao: 'aberto' | 'vinculado' | 'outra_pessoa';
       readonly origem?: 'automatico' | 'humano';
-      /** Id do usuário que decidiu. */
-      readonly porUsuarioId: number;
-      /** Instante ISO 8601 (UTC). */
+      /** Login de quem decidiu (exibição); no banco, quem decide é o usuário do contexto da gravação. */
+      readonly por: string;
       readonly em: string;
       readonly justificativa: string | null;
     };
+
+/** A linha da trilha de uma gravação do índice (o instante é o da gravação, quando ausente). */
+export type TrilhaRede = Omit<LinhaTrilha, 'ocorridoEm'> & { readonly ocorridoEm?: Date };
 
 export interface ResultadoEscritasIndice {
   readonly gravadas: number;

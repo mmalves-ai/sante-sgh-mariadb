@@ -6,8 +6,10 @@ import type { ContextoPortaria, PortaPortaria } from './porta.js';
 
 export { OPCOES_PORTARIA, type OpcoesPortaria, PortariaController } from './portaria.controller.js';
 export { PORTA_PORTARIA, type PortaPortaria } from './porta.js';
-export { portaPortariaIndisponivel, portaPortariaLegado } from './porta-legado.js';
+export { type NucleoPortaria, portaPortariaIndisponivel, PortaPortariaPropria } from './porta-propria.js';
+export { modulo, moduloPortaria, type OpcoesModuloPortaria, portaDaPortaria } from './modulo.js';
 export { PortaPortariaMemoria } from './porta-memoria.js';
+export type * from './tipos.js';
 export { ARMAZEM_FOTOS_PORTARIA, criarArmazemFotosPortaria } from './fotos.js';
 
 /** O acompanhante vigente registrado na portaria com direito à refeição, como a nutrição o lê. */
@@ -24,7 +26,7 @@ export interface AcompanhanteComRefeicao {
 
 /**
  * Os acompanhantes vigentes com direito à refeição (por unidade): o mapa de dietas da nutrição (M45) lê esta, para
- * que o acompanhante registrado na portaria chegue à copa sem um segundo cadastro (fonte única: SGH_HOT_ACOMPANHANTE).
+ * que o acompanhante registrado na portaria chegue à copa sem um segundo cadastro (fonte única: acompanhante_internacao).
  */
 export async function acompanhantesComRefeicao(
   porta: PortaPortaria,

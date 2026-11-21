@@ -37,9 +37,10 @@
 //   POST /api/patrimonio/inventarios/:id/leituras     ler o QR ou a plaqueta
 //   POST /api/patrimonio/inventarios/:id/encerramento encerrar (as divergências ficam registradas)
 //   POST /api/patrimonio/inventarios/:id/cancelamento cancelar o aberto com motivo (W0-08; as leituras ficam)
-// As gravações exigem a chave `patrimonio` no estabelecimento (POL-3) e vão com a SGH_TRILHA na mesma transação (com a
+// As gravações exigem a chave `patrimonio` no estabelecimento (POL-3) e vão com a trilha de auditoria na mesma transação (com a
 // porta em memória, o registrador da API registra). D-PERM-INV-546: o inventário (ler e contar) é da permissão de
 // contar, para quem conta no celular ver o que já leu.
+import { randomUUID } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -139,6 +140,7 @@ function centrosQueRecebe(s: SessaoCadastro): ReadonlySet<number> | null {
 export const CHAVE_LIBERACAO_PATRIMONIO = 'patrimonio';
 
 const E = EVENTOS_AUDITAVEIS;
+const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 
 function invalido(erro: {
   issues: readonly { path: readonly PropertyKey[]; message: string }[];
@@ -169,6 +171,16 @@ const esquemaCodigo = z
   .object({ codigo: z.string().trim().min(1, 'Leia o QR ou digite a plaqueta.').max(80) })
   .strict();
 
+/** A baixa leva o motivo de baixa do cadastro (motivo_baixa_bem), pelo id. */
+const esquemaMotivoBaixa = z
+  .object({
+    motivoBaixa: z
+      .number({ error: 'Escolha o motivo da baixa.' })
+      .int()
+      .positive('Escolha o motivo da baixa.'),
+  })
+  .strict();
+
 @Controller('patrimonio')
 export class PatrimonioController {
   readonly servico: ServicoPatrimonio;
@@ -191,9 +203,14 @@ export class PatrimonioController {
   }
 
   private sessao(s: SessaoCadastro): SessaoPatrimonio {
+    const bruto = s.req.headers['idempotency-key'];
+    const chave = Array.isArray(bruto) ? bruto[0] : bruto;
     return {
       rede: s.rede,
       hospital: s.hospital,
+      porta: s.porta,
+      chaveIdempotencia:
+        typeof chave === 'string' && IDEMPOTENCIA.test(chave) ? chave : `patrimonio-${randomUUID()}`,
       login: s.login,
       centrosQueRecebe: centrosQueRecebe(s),
       pode: (c) => s.pode(c),
@@ -342,7 +359,7 @@ export class PatrimonioController {
   @Post('bens')
   @HttpCode(201)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do cadastro (uma linha por bem)')
+  @AuditadoNoHandler('Trilha na transação do cadastro (uma linha por bem)')
   async cadastrar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -357,7 +374,7 @@ export class PatrimonioController {
   @Post('bens/:id')
   @HttpCode(200)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da alteração do bem')
+  @AuditadoNoHandler('Trilha na transação da alteração do bem')
   async alterar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -374,7 +391,7 @@ export class PatrimonioController {
   @Post('bens/:id/baixa')
   @HttpCode(201)
   @Permissao(P.bemBaixar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da baixa (com a senha de novo)')
+  @AuditadoNoHandler('Trilha na transação da baixa (com a senha de novo)')
   async baixar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -383,12 +400,14 @@ export class PatrimonioController {
     const s = await this.gravando(req);
     const o = typeof corpo === 'object' && corpo !== null ? (corpo as Record<string, unknown>) : {};
     const { senha } = validar(esquemaSenhaReautenticacao, { senha: o['senha'] });
-    const resto = Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'senha'));
+    // O motivo de baixa do cadastro vem à parte do contrato do movimento (pedido: entrar em esquemaRegistrarMovimento).
+    const { motivoBaixa } = validar(esquemaMotivoBaixa, { motivoBaixa: o['motivoBaixa'] });
+    const resto = Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'senha' && k !== 'motivoBaixa'));
     const x = validar(esquemaRegistrarMovimento, { ...resto, tipo: 'baixa', bem: idDaRota(id) });
     if (!(this.porta.destino === 'memoria' && !req.sgh?.real))
       await reautenticar(this.sessoes, this.resolvedor, req, senha);
     const ev = E.patrimonioMovimentoRegistrado.codigo;
-    const r = await this.servico.registrar(this.sessao(s), x, ev);
+    const r = await this.servico.registrar(this.sessao(s), x, ev, motivoBaixa);
     await this.trilhaMemoria(s, ev, r.movimento.id);
     return r;
   }
@@ -427,7 +446,7 @@ export class PatrimonioController {
   @Post('grupos')
   @HttpCode(201)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da inclusão do grupo do bem')
+  @AuditadoNoHandler('Trilha na transação da inclusão do grupo do bem')
   async incluirGrupo(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<GrupoBemCadastro> {
     const s = await this.gravando(req);
     const ev = E.patrimonioGrupoIncluido.codigo;
@@ -439,7 +458,7 @@ export class PatrimonioController {
   @Put('grupos/:codigo')
   @HttpCode(200)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da alteração do grupo do bem')
+  @AuditadoNoHandler('Trilha na transação da alteração do grupo do bem')
   async alterarGrupo(
     @Param('codigo') codigo: string,
     @Body() corpo: unknown,
@@ -460,7 +479,7 @@ export class PatrimonioController {
   @Post('grupos/:codigo/inativacao')
   @HttpCode(200)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da inativação do grupo do bem')
+  @AuditadoNoHandler('Trilha na transação da inativação do grupo do bem')
   async inativarGrupo(
     @Param('codigo') codigo: string,
     @Body() corpo: unknown,
@@ -472,7 +491,7 @@ export class PatrimonioController {
   @Post('grupos/:codigo/reativacao')
   @HttpCode(200)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da reativação do grupo do bem')
+  @AuditadoNoHandler('Trilha na transação da reativação do grupo do bem')
   async reativarGrupo(
     @Param('codigo') codigo: string,
     @Body() corpo: unknown,
@@ -503,7 +522,7 @@ export class PatrimonioController {
   @Post('grupos/:codigo/exclusao')
   @HttpCode(200)
   @Permissao(P.bemCadastrar)
-  @AuditadoNoHandler('SGH_TRILHA e SGH_HIST_EXCLUSAO na transação SGH_ da exclusão do grupo do bem')
+  @AuditadoNoHandler('Trilha (com o retrato da exclusão) na transação da exclusão do grupo do bem')
   async excluirGrupo(
     @Param('codigo') codigo: string,
     @Body() corpo: unknown,
@@ -556,7 +575,7 @@ export class PatrimonioController {
   @Post('depreciacao/calculo')
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do cálculo (só totais)')
+  @AuditadoNoHandler('Trilha na transação do cálculo (só totais)')
   async calcular(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<DepreciacaoCompetencia> {
     const s = await this.gravando(req);
     const ev = E.patrimonioDepreciacaoCalculada.codigo;
@@ -569,7 +588,7 @@ export class PatrimonioController {
   @Post('depreciacao/estorno')
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do estorno (com o motivo no estorno e a senha de novo)')
+  @AuditadoNoHandler('Trilha na transação do estorno (com o motivo no estorno e a senha de novo)')
   async estornarDepreciacao(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -600,7 +619,7 @@ export class PatrimonioController {
   @Post('bens/:id/ajustes')
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do ajuste (com o motivo e o laudo no ajuste)')
+  @AuditadoNoHandler('Trilha na transação do ajuste (com o motivo e o laudo no ajuste)')
   async registrarAjuste(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -629,7 +648,7 @@ export class PatrimonioController {
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
   @AuditadoNoHandler(
-    'SGH_TRILHA na transação SGH_ do laudo (o PDF no armazenamento com retenção, pelo SHA-256)',
+    'Trilha na transação do laudo (o PDF no armazenamento com retenção, pelo SHA-256)',
   )
   async anexarLaudo(
     @Param('id') id: string,
@@ -668,7 +687,7 @@ export class PatrimonioController {
   @Post('ajustes/:id/estorno')
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do estorno do ajuste (com o motivo e a senha de novo)')
+  @AuditadoNoHandler('Trilha na transação do estorno do ajuste (com o motivo e a senha de novo)')
   async estornarAjuste(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -704,7 +723,7 @@ export class PatrimonioController {
   @Post('movimentos')
   @HttpCode(201)
   @Permissao(P.movimentoRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do movimento')
+  @AuditadoNoHandler('Trilha na transação do movimento')
   async registrar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -730,7 +749,7 @@ export class PatrimonioController {
   @Post('movimentos/:id/decisao')
   @HttpCode(200)
   @Permissao(P.movimentoAceitar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da decisão da transferência')
+  @AuditadoNoHandler('Trilha na transação da decisão da transferência')
   async decidir(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -747,7 +766,7 @@ export class PatrimonioController {
   @Post('movimentos/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.movimentoRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do cancelamento do pedido')
+  @AuditadoNoHandler('Trilha na transação do cancelamento do pedido')
   async cancelar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -780,7 +799,7 @@ export class PatrimonioController {
   @Post('inventarios')
   @HttpCode(201)
   @Permissao(P.inventarioContar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da abertura do inventário')
+  @AuditadoNoHandler('Trilha na transação da abertura do inventário')
   async abrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<DetalheInventario> {
     const s = await this.gravando(req);
     const ev = E.patrimonioInventarioAberto.codigo;
@@ -796,7 +815,7 @@ export class PatrimonioController {
   @Post('inventarios/:id/leituras')
   @HttpCode(201)
   @Permissao(P.inventarioContar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da leitura')
+  @AuditadoNoHandler('Trilha na transação da leitura')
   async ler(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -817,7 +836,7 @@ export class PatrimonioController {
   @Post('inventarios/:id/encerramento')
   @HttpCode(200)
   @Permissao(P.inventarioContar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do encerramento (as divergências no resumo)')
+  @AuditadoNoHandler('Trilha na transação do encerramento (as divergências no resumo)')
   async encerrar(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<DetalheInventario> {
     const s = await this.gravando(req);
     const n = idDaRota(id);
@@ -830,7 +849,7 @@ export class PatrimonioController {
   @Post('inventarios/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.inventarioContar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do cancelamento (com o motivo; as leituras ficam)')
+  @AuditadoNoHandler('Trilha na transação do cancelamento (com o motivo; as leituras ficam)')
   async cancelarInventario(
     @Param('id') id: string,
     @Body() corpo: unknown,

@@ -1,0 +1,109 @@
+{
+  "lote": "02-11",
+  "registrar": [
+    "internacao",
+    "orcamento",
+    "patrimonio"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/internacao/leitos.spec.ts",
+    "src/modulos/internacao/modulo.ts",
+    "src/modulos/internacao/vigia.int.spec.ts",
+    "src/modulos/orcamento/modulo.ts",
+    "src/modulos/orcamento/orcamento.controller.ts",
+    "src/modulos/orcamento/orcamento-http.spec.ts",
+    "src/modulos/orcamento/orcamento.int.spec.ts",
+    "src/modulos/orcamento/porta-memoria.ts",
+    "src/modulos/orcamento/porta-propria.ts",
+    "src/modulos/orcamento/porta.ts",
+    "src/modulos/orcamento/public-api.ts",
+    "src/modulos/orcamento/servico.ts",
+    "src/modulos/patrimonio/ajustes.int.spec.ts",
+    "src/modulos/patrimonio/armazem-laudo.ts",
+    "src/modulos/patrimonio/documentos-pdf.int.spec.ts",
+    "src/modulos/patrimonio/documentos.spec.ts",
+    "src/modulos/patrimonio/documentos.spec-util.ts",
+    "src/modulos/patrimonio/documentos.ts",
+    "src/modulos/patrimonio/massa.spec-util.ts",
+    "src/modulos/patrimonio/modulo.ts",
+    "src/modulos/patrimonio/patrimonio.controller.ts",
+    "src/modulos/patrimonio/patrimonio-http.spec.ts",
+    "src/modulos/patrimonio/patrimonio.int.spec.ts",
+    "src/modulos/patrimonio/porta-memoria.ts",
+    "src/modulos/patrimonio/porta-propria.ts",
+    "src/modulos/patrimonio/porta.ts",
+    "src/modulos/patrimonio/public-api.ts",
+    "src/modulos/patrimonio/servico.ts",
+    "src/modulos/patrimonio/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "calculo_depreciacao",
+      "motivo": "Cabeçalho do cálculo mensal da depreciação por estabelecimento e competência (rodada, bens, ignorados, total) e o seu estorno com motivo e origem: sem ele a porta própria recusa calcular/estornar com modelo-pendente e lê calculos/cotas/estornos vazios. A cota_depreciacao passa a apontar o cálculo.",
+      "ddl": "CREATE TABLE calculo_depreciacao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  competencia DATE NOT NULL COMMENT 'Primeiro dia do mês calculado',\n  base VARCHAR(30) NOT NULL DEFAULT 'societaria',\n  rodada SMALLINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 no primeiro cálculo; N+1 depois de N estornos',\n  bens_calculados INT UNSIGNED NOT NULL DEFAULT 0,\n  bens_ignorados INT UNSIGNED NOT NULL DEFAULT 0,\n  valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,\n  situacao VARCHAR(30) NOT NULL DEFAULT 'vigente',\n  estornado_em DATETIME(3) NULL,\n  estorno_usuario_id BIGINT UNSIGNED NULL,\n  motivo_estorno VARCHAR(500) NULL,\n  origem_estorno VARCHAR(30) NULL,\n  vigente_chave VARCHAR(40) AS (IF(situacao = 'vigente', CONCAT(estabelecimento_id, '|', competencia, '|', base), NULL)) STORED,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_calculo_depreciacao_competencia CHECK (DAYOFMONTH(competencia) = 1),\n  CONSTRAINT ck_calculo_depreciacao_situacao CHECK (situacao IN ('vigente','estornado')),\n  CONSTRAINT ck_calculo_depreciacao_estorno CHECK (situacao <> 'estornado' OR (estornado_em IS NOT NULL AND motivo_estorno IS NOT NULL)),\n  CONSTRAINT ck_calculo_depreciacao_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_calculo_depreciacao_rodada (estabelecimento_id, competencia, base, rodada),\n  UNIQUE KEY uq_calculo_depreciacao_vigente (vigente_chave)\n) COMMENT='Cálculo mensal da depreciação do estabelecimento, com o estorno';\nALTER TABLE cota_depreciacao ADD COLUMN calculo_depreciacao_id BIGINT UNSIGNED NULL AFTER bem_patrimonial_id,\n  ADD CONSTRAINT fk_cota_depreciacao_calculo_depreciacao_id FOREIGN KEY (calculo_depreciacao_id) REFERENCES calculo_depreciacao (id) ON DELETE RESTRICT,\n  DROP INDEX uq_cota_depreciacao_bem_competencia_base,\n  ADD UNIQUE KEY uq_cota_depreciacao_calculo_bem (calculo_depreciacao_id, bem_patrimonial_id);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ajuste_valor_bem",
+      "motivo": "Ajuste de valor do bem (revisão de estimativa de vida útil/residual, perda por recuperabilidade e reavaliação), com o marco da competência, os valores antes/depois, a vida restante, o laudo e o estorno como fato novo. reavaliacao_bem não cobre a revisão de estimativa nem o marco nem o estorno. Sem ele: registrarAjuste/estornarAjuste recusam modelo-pendente.",
+      "ddl": "CREATE TABLE ajuste_valor_bem (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  bem_patrimonial_id BIGINT UNSIGNED NOT NULL,\n  tipo VARCHAR(30) NOT NULL,\n  competencia_marco DATE NOT NULL,\n  data_ajuste DATE NOT NULL,\n  valor_contabil_antes DECIMAL(15,2) NOT NULL,\n  valor_contabil_depois DECIMAL(15,2) NOT NULL,\n  depreciacao_acumulada_marco DECIMAL(15,2) NOT NULL,\n  valor_perda DECIMAL(15,2) NOT NULL DEFAULT 0,\n  valor_residual DECIMAL(15,2) NOT NULL DEFAULT 0,\n  vida_restante_meses SMALLINT UNSIGNED NOT NULL,\n  valor_justo DECIMAL(15,2) NULL,\n  laudo_bem_id BIGINT UNSIGNED NULL,\n  motivo VARCHAR(500) NOT NULL,\n  origem_ajuste VARCHAR(30) NOT NULL,\n  estornado_em DATETIME(3) NULL,\n  data_estorno DATE NULL,\n  estorno_usuario_id BIGINT UNSIGNED NULL,\n  motivo_estorno VARCHAR(500) NULL,\n  origem_estorno VARCHAR(30) NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_ajuste_valor_bem_tipo CHECK (tipo IN ('revisao_estimativa','impairment','reavaliacao')),\n  CONSTRAINT ck_ajuste_valor_bem_marco CHECK (DAYOFMONTH(competencia_marco) = 1),\n  CONSTRAINT ck_ajuste_valor_bem_valores CHECK (valor_contabil_antes >= 0 AND valor_contabil_depois >= 0 AND valor_perda >= 0 AND valor_residual >= 0),\n  CONSTRAINT ck_ajuste_valor_bem_estorno CHECK (estornado_em IS NULL OR (motivo_estorno IS NOT NULL AND data_estorno IS NOT NULL)),\n  CONSTRAINT ck_ajuste_valor_bem_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  KEY ix_ajuste_valor_bem_bem (bem_patrimonial_id, competencia_marco)\n) COMMENT='Ajuste de valor do bem (revisão de estimativa, recuperabilidade, reavaliação) com o estorno';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "laudo_bem",
+      "motivo": "Laudo PDF anexado ao bem (guardado no armazenamento com retenção, pela chave e pelo SHA-256): sem ele anexarLaudo recusa modelo-pendente; FK de ajuste_valor_bem.laudo_bem_id.",
+      "ddl": "CREATE TABLE laudo_bem (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  bem_patrimonial_id BIGINT UNSIGNED NOT NULL,\n  nome_arquivo VARCHAR(150) NOT NULL,\n  descricao VARCHAR(300) NOT NULL,\n  chave_armazenamento VARCHAR(300) NOT NULL,\n  sha256 CHAR(64) NOT NULL,\n  tamanho_bytes INT UNSIGNED NOT NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_laudo_bem_sha256 CHECK (sha256 REGEXP '^[0-9a-f]{64}$'),\n  CONSTRAINT ck_laudo_bem_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_laudo_bem_bem_sha256 (bem_patrimonial_id, sha256)\n) COMMENT='Laudo em PDF anexado ao bem patrimonial';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "bem_patrimonial",
+      "motivo": "Data e doador do termo de doação: sem as colunas, o cadastro com doador recusa modelo-pendente. (O responsável pela guarda NÃO ganha coluna em texto: ver o pedido de contrato do responsável, que usa responsavel_usuario_id.)",
+      "ddl": "ALTER TABLE bem_patrimonial\n  ADD COLUMN termo_doacao_data DATE NULL AFTER termo_doacao_numero,\n  ADD COLUMN termo_doacao_doador VARCHAR(120) NULL AFTER termo_doacao_data;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "movimento_bem",
+      "motivo": "Referência da devolução ao empréstimo/comodato de origem; a transferência entre centros de custo do mesmo estabelecimento (hoje exige setor de destino: a porta grava o setor do centro e recusa centro sem setor). A baixa já grava motivo_baixa_bem_id (FK do cadastro): o DDL da baixa em texto foi retirado.",
+      "ddl": "ALTER TABLE movimento_bem\n  ADD COLUMN referencia_movimento_bem_id BIGINT UNSIGNED NULL COMMENT 'Saída que a devolução encerra' AFTER motivo_decisao,\n  ADD CONSTRAINT fk_movimento_bem_referencia_movimento_bem_id FOREIGN KEY (referencia_movimento_bem_id) REFERENCES movimento_bem (id) ON DELETE RESTRICT,\n  DROP CONSTRAINT ck_movimento_bem_transferencia,\n  ADD CONSTRAINT ck_movimento_bem_transferencia CHECK (tipo_movimento <> 'transferencia' OR destino_setor_funcional_id IS NOT NULL OR destino_estabelecimento_id IS NOT NULL OR destino_centro_custo_id IS NOT NULL);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "inventario_bem / inventario_bem_item",
+      "motivo": "Resumo e número de bens esperados no encerramento do inventário (retrato do fechamento; hoje o serviço recalcula ao vivo) e o centro de custo onde cada leitura foi feita (hoje vale o centro do bem lido).",
+      "ddl": "ALTER TABLE inventario_bem\n  ADD COLUMN bens_esperados INT UNSIGNED NULL AFTER encerrado_em,\n  ADD COLUMN resumo_encerramento JSON NULL AFTER bens_esperados,\n  ADD CONSTRAINT ck_inventario_bem_resumo CHECK (resumo_encerramento IS NULL OR JSON_VALID(resumo_encerramento));\nALTER TABLE inventario_bem_item\n  ADD COLUMN encontrado_centro_custo_id BIGINT UNSIGNED NULL AFTER encontrado_setor_funcional_id,\n  ADD CONSTRAINT fk_inventario_bem_item_encontrado_centro_custo_id FOREIGN KEY (encontrado_centro_custo_id) REFERENCES centro_custo (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "linha_orcamento",
+      "motivo": "O orçamento de consumo por centro (total valorizado, sem item de estoque) que a tela tem: a restrição ck_linha_orcamento_consumo exige insumo_id. Proposta: permitir o consumo sem insumo (o total do centro). Sem isso a porta recusa a linha de consumo (consumo-sem-insumo).",
+      "ddl": "ALTER TABLE linha_orcamento DROP CONSTRAINT ck_linha_orcamento_consumo;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "versao_orcamento",
+      "motivo": "Uma só versão aprovada por estabelecimento e ano (hoje a porta trava e substitui na transação; falta a garantia do banco) e o ajuste percentual da base até +1000% (o contrato aceita 100000 centésimos; DECIMAL(7,4) vai até 999,9999).",
+      "ddl": "ALTER TABLE versao_orcamento\n  MODIFY percentual_ajuste_base DECIMAL(8,4) NULL COMMENT 'Ajuste aplicado sobre o realizado do ano anterior',\n  ADD COLUMN aprovada_chave VARCHAR(30) AS (IF(situacao = 'aprovado', CONCAT(estabelecimento_id, '|', ano), NULL)) STORED,\n  ADD UNIQUE KEY uq_versao_orcamento_aprovada (aprovada_chave);"
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/orcamento/orcamento.ts e patrimonio/patrimonio.ts",
+      "motivo": "O campo `empresa` (código da empresa do sistema de origem) não tem lugar no modelo próprio: o orçamento e o patrimônio são do estabelecimento. As portas próprias devolvem empresa 1 (única). Proposta: tirar `empresa` dos contratos e das telas. Os parâmetros do orçamento (ano e mês iniciais, digita centro, regime) e da depreciação (depreciar, coeficiente, residual) também não têm tabela: definir se viram parâmetros da configuração (ValorParametro) ou saem da tela."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/patrimonio/patrimonio.ts (+ apps/web, tela de baixa)",
+      "motivo": "A baixa grava o motivo de baixa do cadastro (motivo_baixa_bem) pelo id. Hoje a rota POST patrimonio/bens/:id/baixa lê `motivoBaixa` à parte do contrato (esquemaMotivoBaixa no controller). Pedido: (1) incluir `motivoBaixa: id` (obrigatório) na variante 'baixa' de esquemaRegistrarMovimento, e tirar a leitura à parte do controller; (2) incluir `motivosBaixa: { id, descricao, tipo, exigeLaudo }[]` em ApoioPatrimonio (o serviço já tem em dominios.motivosBaixa); (3) a tela de baixa escolhe o motivo num combo, e o texto `motivo` fica como justificativa. Até a tela mandar o campo, a baixa pela tela sai 400 'Escolha o motivo da baixa'."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/patrimonio/patrimonio.ts (+ apps/web, cadastro do bem)",
+      "motivo": "Responsável pela guarda do bem: o contrato manda o nome em texto (`responsavel`), mas o modelo já tem bem_patrimonial.responsavel_usuario_id. Pedido: trocar `responsavel: texto` por `responsavelUsuario: id | null` no cadastro e na alteração do bem (a tela escolhe o usuário). O pedido anterior de coluna responsavel_nome foi retirado. Até lá, o cadastro com responsável por nome recusa modelo-pendente."
+    },
+    {
+      "tipo": "registro",
+      "alvo": "apps/api/src/modulos/registro.ts",
+      "motivo": "incluir em REGISTRO_MODULOS, em ordem alfabética: internacao: () => import('./internacao/modulo.js'), orcamento: () => import('./orcamento/modulo.js'), patrimonio: () => import('./patrimonio/modulo.js')"
+    }
+  ]
+}

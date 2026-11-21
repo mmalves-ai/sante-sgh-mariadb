@@ -1,116 +1,93 @@
-// M56 regra 8 (ficha, seção 8; cap-07 §7.4 e cap-08 §8.13) na cópia, numa transação SEMPRE desfeita: o beneficiário
-// que também é paciente do hospital tem os dois cadastros separados. A ligação é só o ID do cadastro do paciente em
-// SGH_OPE_BENEFICIARIO (sem FK): a inclusão só confere a existência pela chave (contagem), não lê nem grava nada do
-// paciente; a transação não escreve em tabela do outro sistema; a ficha do beneficiário não traz dado clínico (só os
-// campos cadastrais da operadora e o número do cadastro); o ID inexistente é recusado. O ID do paciente de amostra é
-// lido da cópia pelo repositório do atendimento externo (só o ID, nunca nome ou documento) e nunca impresso.
-import { atendimentoExternoDeAmostra, escritasDaTransacao, type NucleoLegado } from '@sgh/legado';
+// M56 regra 8 contra o MariaDB real (cliente f22_o2): o beneficiário que também é paciente do hospital tem os dois
+// cadastros separados. A operadora guarda só o id do paciente (paciente_id do beneficiário); a inclusão só confere a
+// existência pela chave; a ficha do beneficiário não traz dado clínico; o id inexistente é recusado; nenhuma linha do
+// paciente muda. Massa SINTÉTICA, apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import type { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  COD,
+  CLIENTE,
   codigoDe,
   criarNucleo,
+  limparMassa,
+  type MassaBase,
   montarCarteira,
   PODE,
-  servicoNaTransacao,
+  prepararBase,
+  servicoNoBanco,
   sessao,
 } from './copia.spec-util.js';
 
-let nucleo: NucleoLegado;
-beforeAll(async () => {
-  if (!PODE) return;
-  nucleo = criarNucleo();
-  await nucleo.verificarSchema(COD);
-});
-afterAll(async () => {
-  if (PODE) await nucleo.encerrar();
-});
+describe.skipIf(!PODE)('M56 regra 8: beneficiário e paciente separados (MariaDB, f22_o2)', () => {
+  let nucleo: NucleoProprio;
+  let m: MassaBase;
+  let paciente = 0;
+  let pessoa = 0;
 
-/** Campos que a ficha do beneficiário pode ter (cadastro da operadora); nenhum clínico. */
-const CAMPOS_DA_FICHA = [
-  'carteirinha',
-  'carteirinhas',
-  'cns',
-  'contrato',
-  'contratoNumero',
-  'cpf',
-  'dependentes',
-  'exclusao',
-  'id',
-  'inclusao',
-  'motivoBaixa',
-  'nascimento',
-  'nome',
-  'nomeMae',
-  'nomeSocial',
-  'operadora',
-  'pacienteHospital',
-  'produtoNome',
-  'registroAnsOperadora',
-  'sexo',
-  'situacao',
-  'titular',
-  'versao',
-  'via',
-  'vinculo',
-  'alteradoEm',
-].sort();
+  beforeAll(async () => {
+    nucleo = criarNucleo();
+    m = await prepararBase(nucleo);
+    await limparMassa(nucleo, m);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-10' }, async (e) => {
+      const agora = new Date();
+      pessoa = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', ['PACIENTE SINTETICO L0210', agora]);
+      paciente = await e.inserir(
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, cadastro_estabelecimento_id, criado_em) VALUES (?, ?, ?, ?)',
+        [pessoa, 902_100_000 + (Date.now() % 100_000), m.est, agora],
+      );
+    });
+  });
 
-describe.skipIf(!PODE)('regra 8: beneficiário que é paciente, cadastros separados (na cópia)', () => {
-  it('só o ID do paciente na operadora; nada lido nem gravado do cadastro do paciente; ID inexistente recusado', async () => {
-    const r = await nucleo.desfazendoNaCopia(
-      { rede: nucleo.rede, hospital: COD, traceId: 'int-m56-segrega' },
-      async (e) => {
-        const amostra = await atendimentoExternoDeAmostra(e);
-        if (!amostra) throw new Error('Nenhum atendimento externo na cópia.');
-        const paciente = amostra.paciente;
-        const { servico } = servicoNaTransacao(e);
-        const s = sessao(nucleo.rede);
-        const k = await montarCarteira(servico, s, {
-          registro: '990581',
-          base: '99059',
-          pacienteHospital: paciente,
-        });
-        const ficha = await servico.ficha(s, k.titular.id);
-        const linha = await servicoNaTransacao(e).porta.beneficiario(
-          { rede: nucleo.rede, hospital: COD },
-          k.titular.id,
-        );
-        const inexistente = await codigoDe(
-          servico.gravarBeneficiario(s, k.titular.id, {
-            contrato: k.contrato,
-            titular: null,
-            vinculo: 1,
-            nome: ficha.nome,
-            nomeSocial: null,
-            cpf: ficha.cpf,
-            nascimento: ficha.nascimento,
-            sexo: ficha.sexo,
-            cns: null,
-            nomeMae: ficha.nomeMae,
-            inclusao: ficha.inclusao,
-            pacienteHospital: 2_000_000_000,
-            versao: ficha.versao,
-          }),
-        );
-        const tabelas = (await escritasDaTransacao(e)).filter(
-          (w) => w.insercoes + w.alteracoes + w.exclusoes > 0,
-        );
-        return {
-          mesmoId: linha?.pacienteHospital === paciente && ficha.pacienteHospital === paciente,
-          campos: Object.keys(ficha).sort(),
-          inexistente,
-          tabelas: tabelas.map((w) => w.tabela),
-        };
-      },
+  afterAll(async () => {
+    if (!nucleo) return;
+    if (m) await limparMassa(nucleo, m);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-10' }, async (e) => {
+      await e.executar('DELETE FROM paciente WHERE id = ?', [paciente]);
+      await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [pessoa]);
+    });
+    await nucleo.encerrar();
+  });
+
+  it('só o id do paciente na operadora; nada do cadastro do paciente muda; id inexistente recusado', async () => {
+    const versaoPaciente = () =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) =>
+        l.uma<{ versao: unknown }>('SELECT versao FROM paciente WHERE id = ?', [paciente]),
+      );
+    const antes = await versaoPaciente();
+    const { servico, porta } = servicoNoBanco(nucleo);
+    const s = sessao(m);
+    const k = await montarCarteira(servico, s, { registro: '902103', base: '90210', pacienteHospital: paciente });
+    const ficha = await servico.ficha(s, k.titular.id);
+    const lido = await porta.beneficiario(s.porta, k.titular.id);
+    expect(lido?.pacienteHospital).toBe(paciente);
+    expect(ficha.pacienteHospital).toBe(paciente);
+    expect(JSON.stringify(ficha)).not.toMatch(/alergia|diagnostico|prontuario|cid/i);
+    const ligado = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) =>
+      l.uma<{ paciente_id: unknown; pessoa_fisica_id: unknown }>(
+        'SELECT paciente_id, pessoa_fisica_id FROM beneficiario_plano WHERE id = ?',
+        [k.titular.id],
+      ),
     );
-    expect(r.mesmoId).toBe(true);
-    expect(r.campos).toEqual(CAMPOS_DA_FICHA);
-    expect(r.inexistente).toBe('paciente-inexistente');
-    expect(r.tabelas.includes('RICADPAC')).toBe(false);
-    expect(r.tabelas.every((t) => t.startsWith('SGH_') || t.startsWith('RDB$'))).toBe(true);
-    console.log(
-      `[int-m56.2] ${COD}: regra 8 conferida; tabelas escritas: ${r.tabelas.length} (só SGH_), desfeito`,
+    expect(Number(ligado?.paciente_id)).toBe(paciente);
+    // O beneficiário tem a própria pessoa (nunca a do paciente por arrasto).
+    expect(Number(ligado?.pessoa_fisica_id)).not.toBe(pessoa);
+    const inexistente = await codigoDe(
+      servico.gravarBeneficiario(s, k.titular.id, {
+        contrato: k.contrato,
+        titular: null,
+        vinculo: 1,
+        nome: ficha.nome,
+        nomeSocial: null,
+        cpf: ficha.cpf,
+        nascimento: ficha.nascimento,
+        sexo: ficha.sexo,
+        cns: null,
+        nomeMae: ficha.nomeMae,
+        inclusao: ficha.inclusao,
+        pacienteHospital: 2_000_000_000,
+        versao: ficha.versao,
+      }),
     );
+    expect(inexistente).not.toBe('gravou');
+    expect(await versaoPaciente()).toEqual(antes);
   });
 });

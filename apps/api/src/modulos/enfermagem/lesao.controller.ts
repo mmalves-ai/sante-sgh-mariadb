@@ -13,7 +13,7 @@
 //   POST /api/enfermagem/lesoes/:id/inativar             a lesão lançada errada (só do autor; motivo e senha)
 //   POST /api/enfermagem/lesoes/curativos/:id/inativar   o curativo lançado errado (só do autor; motivo e senha)
 //   POST /api/enfermagem/lesoes/fotos/:id/inativar       a foto vinculada errada (só de quem vinculou; motivo e senha)
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação; nenhuma rota de exclusão física (registro clínico). A
+// Só do novo (SGH_), com a trilha_auditoria na mesma transação; nenhuma rota de exclusão física (registro clínico). A
 // liberação é a dos escores de risco (`enfermagem.escores`). Permissões reusadas (nenhuma nova): ler, a dos escores;
 // registrar, a de registrar escore (a enfermagem) ou a do prescritor.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
@@ -59,11 +59,11 @@ const PERMISSAO_PRESCREVER = 'pep.prescricao.criar';
 const UNIDADE = /^[A-Za-z0-9 ._-]{1,5}$/;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const T = {
-  lesao: 'SGH_PEP_LESAO',
-  versao: 'SGH_PEP_LESAO_VERSAO',
-  curativo: 'SGH_PEP_LESAO_CURATIVO',
-  foto: 'SGH_PEP_LESAO_FOTO',
-  evento: 'SGH_PEP_LESAO_EVENTO',
+  lesao: 'lesao_pele_paciente',
+  versao: 'lesao_pele_avaliacao',
+  curativo: 'lesao_pele_avaliacao',
+  foto: 'lesao_pele_avaliacao',
+  evento: 'lesao_pele_paciente',
 } as const;
 
 function unidadeDe(v: string | undefined): string {
@@ -219,7 +219,7 @@ export class LesaoController {
   @HttpCode(201)
   @Permissao(PE.escoreLer)
   @AuditadoNoHandler(
-    'a lesão em SGH_PEP_LESAO e a versão 1 em SGH_PEP_LESAO_VERSAO com a SGH_TRILHA na mesma transação',
+    'a lesão em lesao_pele_paciente e a versão 1 em lesao_pele_avaliacao com a trilha_auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -269,7 +269,7 @@ export class LesaoController {
   @Post(':id/versoes')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a versão seguinte em SGH_PEP_LESAO_VERSAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a versão seguinte em lesao_pele_avaliacao com a trilha_auditoria na mesma transação')
   async versao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     this.exigirAgir(s);
@@ -336,7 +336,7 @@ export class LesaoController {
   @Post(':id/curativos')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('o curativo em SGH_PEP_LESAO_CURATIVO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o curativo em lesao_pele_avaliacao com a trilha_auditoria na mesma transação')
   async curativo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     this.exigirAgir(s);
@@ -369,7 +369,9 @@ export class LesaoController {
   @Post('curativos/:id/corrigir')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a correção do curativo em SGH_PEP_LESAO_CURATIVO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'a correção do curativo em lesao_pele_avaliacao com a trilha_auditoria na mesma transação',
+  )
   async corrigirCurativo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     this.exigirAgir(s);
@@ -420,7 +422,9 @@ export class LesaoController {
   @Post(':id/fotos')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a foto (referência ao anexo) em SGH_PEP_LESAO_FOTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'a foto (referência ao anexo) em lesao_pele_avaliacao com a trilha_auditoria na mesma transação',
+  )
   async foto(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     this.exigirAgir(s);
@@ -457,7 +461,7 @@ export class LesaoController {
   @Post(':id/encerrar')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('o encerramento em SGH_PEP_LESAO_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o encerramento em lesao_pele_paciente com a trilha_auditoria na mesma transação')
   async encerrar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     this.exigirAgir(s);
@@ -529,7 +533,9 @@ export class LesaoController {
   @Post(':id/inativar')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a inativação em SGH_PEP_LESAO_EVENTO (com a senha) e a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'a inativação em lesao_pele_paciente (com a senha) e a trilha_auditoria na mesma transação',
+  )
   inativarLesao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.inativar(req, 'lesao', id, b);
   }
@@ -537,7 +543,9 @@ export class LesaoController {
   @Post('curativos/:id/inativar')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a inativação em SGH_PEP_LESAO_EVENTO (com a senha) e a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'a inativação em lesao_pele_paciente (com a senha) e a trilha_auditoria na mesma transação',
+  )
   inativarCurativo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.inativar(req, 'curativo', id, b);
   }
@@ -545,7 +553,9 @@ export class LesaoController {
   @Post('fotos/:id/inativar')
   @HttpCode(201)
   @Permissao(PE.escoreLer)
-  @AuditadoNoHandler('a inativação em SGH_PEP_LESAO_EVENTO (com a senha) e a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'a inativação em lesao_pele_paciente (com a senha) e a trilha_auditoria na mesma transação',
+  )
   inativarFoto(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.inativar(req, 'foto', id, b);
   }

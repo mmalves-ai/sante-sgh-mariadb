@@ -1,89 +1,93 @@
-// Porta do patrimônio (M54, etapa 6): lê os domínios do patrimônio, os centros de custo, as empresas e a nota fiscal de
-// entrada onde estão, e os bens, movimentos, cálculos e inventários de SGH_PAT_*; grava só SGH_PAT_* numa transação
-// SGH_, com a SGH_TRILHA junto.
-//   - `legado`: @sgh/legado (leituras READ ONLY; SGH_PAT_* pelo escritor só SGH_);
+// Porta do patrimônio (M54, etapa 6): lê os domínios do patrimônio, os centros de custo e a nota fiscal de entrada, e
+// os bens, movimentos, cálculos e inventários; grava com a trilha de auditoria na mesma transação.
+//   - própria (`banco`): o MariaDB do cliente pelo @sgh/nucleo (porta-propria.ts);
 //   - `memoria`: a sessão sintética de dev/ci (E2E) e os testes da API, com domínios e notas sintéticos;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 (falha fechada).
+// Melhoria: o contexto é o do núcleo (cliente, estabelecimento e usuário por id) com a chave de idempotência da
+// requisição, e a linha da trilha é a da tela (evento e recurso), gravada pelo Executor na transação.
 import type {
-  AjusteLido,
-  AjusteParaGravar,
-  AlteracaoBemParaGravar,
-  BemEsperadoLido,
-  BemLido,
-  BemParaDepreciarLido,
-  CadastroParaGravar,
-  CalculoLido,
-  CotaLida,
-  DominiosPatrimonioLidos,
-  EstornoCalculoLido,
+  AjusteDoBem,
+  AjusteNovo,
+  AlteracaoDoBem,
+  BemEsperado,
+  BemRegistrado,
+  BemDaCompetencia,
+  CadastroDeBens,
+  CalculoRegistrado,
+  CotaRegistrada,
+  DominiosPatrimonio,
+  EstornoDeCalculo,
   FiltroBens,
-  GrupoBemLido,
-  GrupoBemParaGravar,
-  InventarioLido,
-  LaudoLido,
-  ItemNotaLidoPatrimonio,
-  LeituraInventarioLida,
-  LeituraParaGravar,
-  LinhaTrilha,
-  MovimentoBemLido,
-  MovimentoParaGravar,
-  NotaEntradaLida,
-  PlanoParaGravar,
-  SituacaoAjusteLida,
-  SituacaoEstornoAjusteLida,
-  SituacaoEstornoLida,
-} from '@sgh/legado';
+  GrupoDoBem,
+  GrupoBemNovo,
+  InventarioRegistrado,
+  LaudoDoBem,
+  ItemDaNota,
+  LeituraRegistrada,
+  LeituraNova,
+  MovimentoRegistrado,
+  MovimentoNovo,
+  NotaDeEntrada,
+  PlanoDepreciacao,
+  SituacaoParaAjuste,
+  SituacaoParaEstornoAjuste,
+  SituacaoParaEstorno,
+} from './tipos.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { VersaoGrupoBem } from '@sgh/contratos';
+import { ErroProblema } from '../../problema.filter.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { DestinoPorta } from '../cadastro/tipos.js';
 
 export const PORTA_PATRIMONIO = Symbol('PORTA_PATRIMONIO');
 
-export interface ContextoPatrimonio {
-  readonly rede: string;
-  readonly hospital: string;
+/** O contexto do núcleo da sessão, com a rede, o código do estabelecimento e a chave de idempotência da gravação. */
+export interface ContextoPatrimonio extends ContextoPorta {
+  readonly chaveIdempotencia?: string;
 }
 
 type C = ContextoPatrimonio;
 
 export interface PortaPatrimonio {
-  readonly destino: 'legado' | 'memoria' | 'indisponivel';
-  dominios(c: C): Promise<DominiosPatrimonioLidos>;
-  bens(c: C, f: FiltroBens): Promise<{ bens: BemLido[]; total: number }>;
-  bem(c: C, id: number): Promise<BemLido | null>;
-  bemPorPlaqueta(c: C, plaqueta: string): Promise<BemLido | null>;
+  readonly destino: DestinoPorta | 'indisponivel';
+  dominios(c: C): Promise<DominiosPatrimonio>;
+  bens(c: C, f: FiltroBens): Promise<{ bens: BemRegistrado[]; total: number }>;
+  bem(c: C, id: number): Promise<BemRegistrado | null>;
+  bemPorPlaqueta(c: C, plaqueta: string): Promise<BemRegistrado | null>;
   notas(
     c: C,
     ano: number,
     mes: number,
     busca?: string,
-  ): Promise<{ notas: NotaEntradaLida[]; truncado: boolean }>;
-  nota(c: C, id: number): Promise<NotaEntradaLida | null>;
-  itensDaNota(c: C, nota: NotaEntradaLida): Promise<ItemNotaLidoPatrimonio[]>;
-  itemNota(c: C, id: number): Promise<ItemNotaLidoPatrimonio | null>;
+  ): Promise<{ notas: NotaDeEntrada[]; truncado: boolean }>;
+  nota(c: C, id: number): Promise<NotaDeEntrada | null>;
+  itensDaNota(c: C, nota: NotaDeEntrada): Promise<ItemDaNota[]>;
+  itemNota(c: C, id: number): Promise<ItemDaNota | null>;
   bensParaDepreciar(
     c: C,
     empresa: number,
     competencia: string,
-  ): Promise<{ bens: BemParaDepreciarLido[]; truncado: boolean }>;
+  ): Promise<{ bens: BemDaCompetencia[]; truncado: boolean }>;
   calculos(
     c: C,
     empresa: number,
     competencia: string,
-  ): Promise<{ daCompetencia: CalculoLido | null; ultimo: CalculoLido | null }>;
-  cotas(c: C, calculo: number): Promise<CotaLida[]>;
+  ): Promise<{ daCompetencia: CalculoRegistrado | null; ultimo: CalculoRegistrado | null }>;
+  cotas(c: C, calculo: number): Promise<CotaRegistrada[]>;
   /** W0-08: os estornos de cálculo da competência (o histórico com motivo, data, quem e origem). */
-  estornos(c: C, empresa: number, competencia: string): Promise<EstornoCalculoLido[]>;
+  estornos(c: C, empresa: number, competencia: string): Promise<EstornoDeCalculo[]>;
   movimentos(
     c: C,
     f: { situacao?: string | undefined; bem?: number | undefined },
-  ): Promise<MovimentoBemLido[]>;
-  movimento(c: C, id: number): Promise<MovimentoBemLido | null>;
+  ): Promise<MovimentoRegistrado[]>;
+  movimento(c: C, id: number): Promise<MovimentoRegistrado | null>;
   ultimaSaida(c: C, bem: number): Promise<number | null>;
-  inventarios(c: C): Promise<InventarioLido[]>;
-  inventario(c: C, id: number): Promise<InventarioLido | null>;
-  leituras(c: C, inventario: number): Promise<{ leituras: LeituraInventarioLida[]; truncado: boolean }>;
-  esperados(c: C, centro: number | null): Promise<{ bens: BemEsperadoLido[]; truncado: boolean }>;
+  inventarios(c: C): Promise<InventarioRegistrado[]>;
+  inventario(c: C, id: number): Promise<InventarioRegistrado | null>;
+  leituras(c: C, inventario: number): Promise<{ leituras: LeituraRegistrada[]; truncado: boolean }>;
+  esperados(c: C, centro: number | null): Promise<{ bens: BemEsperado[]; truncado: boolean }>;
   /** W0-08: os grupos do bem do estabelecimento (sem nenhum gravado, a semente na versão 0), com os bens de cada um. */
-  grupos(c: C): Promise<GrupoBemLido[]>;
+  grupos(c: C): Promise<GrupoDoBem[]>;
   versoesGrupo(c: C, id: number | null): Promise<VersaoGrupoBem[]>;
   /** Revisão W0-08: as contas analíticas e ativas do plano (a conta que o grupo do bem pode indicar). */
   contasDoGrupo(c: C): Promise<{ codigo: string; nome: string }[]>;
@@ -91,123 +95,183 @@ export interface PortaPatrimonio {
   /** Gravações: cada uma com a trilha na mesma transação (uma linha por registro afetado). */
   cadastrar(
     c: C,
-    x: CadastroParaGravar,
+    x: CadastroDeBens,
     por: string,
     gerarPlaqueta: (n: number) => string,
-    trilha: LinhaTrilha,
-  ): Promise<BemLido[]>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<BemRegistrado[]>;
   alterar(
     c: C,
-    x: AlteracaoBemParaGravar,
+    x: AlteracaoDoBem,
     por: string,
-    conferir: (antes: BemLido) => string | null,
-    trilha: LinhaTrilha,
-  ): Promise<{ antes: BemLido; depois: BemLido; mudou: boolean } | null>;
+    conferir: (antes: BemRegistrado) => string | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ antes: BemRegistrado; depois: BemRegistrado; mudou: boolean } | null>;
   registrarMovimento(
     c: C,
-    x: MovimentoParaGravar,
+    x: MovimentoNovo,
     por: string,
-    trilha: LinhaTrilha,
-  ): Promise<{ movimento: MovimentoBemLido; bem: BemLido }>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ movimento: MovimentoRegistrado; bem: BemRegistrado }>;
   decidir(
     c: C,
     x: { id: number; versao: number; aceitar: boolean; motivo: string | null },
     por: string,
-    conferir: (m: MovimentoBemLido, bem: BemLido) => string | null,
-    trilha: LinhaTrilha,
-  ): Promise<{ antes: MovimentoBemLido; movimento: MovimentoBemLido; bem: BemLido } | null>;
+    conferir: (m: MovimentoRegistrado, bem: BemRegistrado) => string | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ antes: MovimentoRegistrado; movimento: MovimentoRegistrado; bem: BemRegistrado } | null>;
   cancelar(
     c: C,
     x: { id: number; versao: number; motivo: string },
     por: string,
-    conferir: (m: MovimentoBemLido) => string | null,
-    trilha: LinhaTrilha,
-  ): Promise<{ antes: MovimentoBemLido; movimento: MovimentoBemLido } | null>;
+    conferir: (m: MovimentoRegistrado) => string | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ antes: MovimentoRegistrado; movimento: MovimentoRegistrado } | null>;
   calcular(
     c: C,
     x: { empresa: number; competencia: string },
     por: string,
-    montar: (d: { bens: BemParaDepreciarLido[]; ultimo: CalculoLido | null }) => PlanoParaGravar,
-    trilha: LinhaTrilha,
-  ): Promise<{ calculo: CalculoLido; plano: PlanoParaGravar }>;
+    montar: (d: { bens: BemDaCompetencia[]; ultimo: CalculoRegistrado | null }) => PlanoDepreciacao,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ calculo: CalculoRegistrado; plano: PlanoDepreciacao }>;
   /** W0-08: estorna o último cálculo vigente da competência (a regra pura decide; null pode). */
   estornar(
     c: C,
     x: { empresa: number; competencia: string; motivo: string; origem: string },
     por: string,
-    conferir: (s: SituacaoEstornoLida) => { readonly codigo: string; readonly detalhe: string } | null,
-    trilha: LinhaTrilha,
-  ): Promise<{ estorno: EstornoCalculoLido; calculo: CalculoLido }>;
+    conferir: (s: SituacaoParaEstorno) => { readonly codigo: string; readonly detalhe: string } | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ estorno: EstornoDeCalculo; calculo: CalculoRegistrado }>;
   abrirInventario(
     c: C,
     x: { descricao: string; centro: number | null },
     por: string,
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<number>;
-  registrarLeitura(c: C, x: LeituraParaGravar, por: string, trilha: LinhaTrilha): Promise<number>;
+  registrarLeitura(c: C, x: LeituraNova, por: string, trilha: RegistroTrilhaTela): Promise<number>;
   /** W0-08 (M1): os ajustes de valor do bem, do mais novo ao mais antigo (os estornados com o estorno). */
-  ajustes(c: C, bem: number): Promise<AjusteLido[]>;
+  ajustes(c: C, bem: number): Promise<AjusteDoBem[]>;
   /** W0-08 (M1): registra o ajuste relendo na transação; a regra pura planeja ou recusa (409 com o código). */
   registrarAjuste(
     c: C,
     x: { bem: number; versao: number; motivo: string; hoje: string },
     por: string,
     planejar: (
-      s: SituacaoAjusteLida,
+      s: SituacaoParaAjuste,
     ) =>
-      { ajuste: AjusteParaGravar } | { impedimento: { readonly codigo: string; readonly detalhe: string } },
-    trilha: LinhaTrilha,
-  ): Promise<AjusteLido>;
+      { ajuste: AjusteNovo } | { impedimento: { readonly codigo: string; readonly detalhe: string } },
+    trilha: RegistroTrilhaTela,
+  ): Promise<AjusteDoBem>;
   /** Achado 6 da revisão: os laudos anexados ao bem, do mais novo ao mais antigo. */
-  laudos(c: C, bem: number): Promise<LaudoLido[]>;
+  laudos(c: C, bem: number): Promise<LaudoDoBem[]>;
   /** Achado 6 da revisão: o laudo pelo identificador (null: não existe neste estabelecimento). */
-  laudo(c: C, id: number): Promise<LaudoLido | null>;
+  laudo(c: C, id: number): Promise<LaudoDoBem | null>;
   /** Achado 6 da revisão: registra o laudo anexado (o PDF já está no armazenamento com Object Lock, pela chave). */
   anexarLaudo(
     c: C,
     x: { bem: number; nome: string; descricao: string; chave: string; sha256: string; tamanho: number },
     por: string,
-    trilha: LinhaTrilha,
-  ): Promise<LaudoLido>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<LaudoDoBem>;
   /** W0-08 (M1): estorna o ajuste (fato novo com motivo, data e origem); a regra pura decide. */
   estornarAjuste(
     c: C,
     x: { ajuste: number; motivo: string; origem: string; hoje: string },
     por: string,
-    conferir: (s: SituacaoEstornoAjusteLida) => { readonly codigo: string; readonly detalhe: string } | null,
-    trilha: LinhaTrilha,
-  ): Promise<AjusteLido>;
+    conferir: (s: SituacaoParaEstornoAjuste) => { readonly codigo: string; readonly detalhe: string } | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<AjusteDoBem>;
   /** W0-08: cancela o inventário aberto com motivo (false: não existe; as leituras ficam). */
   cancelarInventario(
     c: C,
     x: { id: number; motivo: string },
     por: string,
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<boolean>;
   /** W0-08: grupo do bem (cada gravação com a trilha; recusas 409 como o núcleo). */
-  incluirGrupo(c: C, x: GrupoBemParaGravar, por: string, trilha: LinhaTrilha): Promise<GrupoBemLido>;
+  incluirGrupo(c: C, x: GrupoBemNovo, por: string, trilha: RegistroTrilhaTela): Promise<GrupoDoBem>;
   alterarGrupo(
     c: C,
-    x: GrupoBemParaGravar & { versaoVista: number; motivo: string },
+    x: GrupoBemNovo & { versaoVista: number; motivo: string },
     por: string,
-    trilha: LinhaTrilha,
-  ): Promise<{ antes: GrupoBemLido; depois: GrupoBemLido }>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ antes: GrupoDoBem; depois: GrupoDoBem }>;
   situacaoGrupo(
     c: C,
     x: { codigo: string; versaoVista: number; motivo: string; ativo: boolean },
     por: string,
-    trilha: LinhaTrilha,
-  ): Promise<{ antes: GrupoBemLido; depois: GrupoBemLido }>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ antes: GrupoDoBem; depois: GrupoDoBem }>;
   excluirGrupo(
     c: C,
     x: { codigo: string; versaoVista: number; motivo: string },
     por: string,
-    trilha: LinhaTrilha,
-  ): Promise<GrupoBemLido>;
+    trilha: RegistroTrilhaTela,
+  ): Promise<GrupoDoBem>;
   encerrarInventario(
     c: C,
     x: { id: number; esperados: number; resumo: string },
     por: string,
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<boolean>;
+}
+export function portaPatrimonioIndisponivel(): PortaPatrimonio {
+  const recusa = (): Promise<never> =>
+    Promise.reject(
+      new ErroProblema(
+        'indisponivel',
+        503,
+        'Banco do estabelecimento indisponível',
+        'O banco do estabelecimento não está configurado: nada foi lido nem gravado.',
+      ),
+    );
+  const metodos = [
+    'dominios',
+    'bens',
+    'bem',
+    'bemPorPlaqueta',
+    'notas',
+    'nota',
+    'itensDaNota',
+    'itemNota',
+    'bensParaDepreciar',
+    'calculos',
+    'cotas',
+    'estornos',
+    'ajustes',
+    'laudos',
+    'laudo',
+    'movimentos',
+    'movimento',
+    'ultimaSaida',
+    'inventarios',
+    'inventario',
+    'leituras',
+    'esperados',
+    'grupos',
+    'contasDoGrupo',
+    'versoesGrupo',
+    'cadastrar',
+    'alterar',
+    'registrarMovimento',
+    'decidir',
+    'cancelar',
+    'calcular',
+    'estornar',
+    'registrarAjuste',
+    'estornarAjuste',
+    'anexarLaudo',
+    'abrirInventario',
+    'registrarLeitura',
+    'encerrarInventario',
+    'cancelarInventario',
+    'incluirGrupo',
+    'alterarGrupo',
+    'situacaoGrupo',
+    'excluirGrupo',
+  ] as const satisfies readonly (keyof Omit<PortaPatrimonio, 'destino'>)[];
+  return {
+    destino: 'indisponivel',
+    ...(Object.fromEntries(metodos.map((m) => [m, recusa])) as unknown as Omit<PortaPatrimonio, 'destino'>),
+  };
 }

@@ -17,7 +17,7 @@
 //   GET  /api/operadora/pagamentos-prestadores         o que pagar aos prestadores (só valores)
 //   POST /api/operadora/contas/:id/pagamento           operadora.pagarConta (o valor, a data e o documento)
 // Tudo exige a chave da fatia `operadora.contas`, que só vale com a do módulo (regra 1), menos o apoio. Cada gravação
-// muda as SGH_OPE_CONTA_* com a SGH_TRILHA na mesma transação; nenhuma tabela legada é escrita.
+// muda as lote_conta_recebida e guia_conta_recebida* com a trilha_auditoria na mesma transação; nenhuma tabela de outro sistema é escrita.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type ApoioContas,
@@ -42,7 +42,7 @@ import {
   SITUACOES_RECURSO_CONTA,
 } from '@sgh/contratos';
 import { protocoloConta } from '@sgh/dominio-operadora';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -66,10 +66,11 @@ import { corpo } from '../exames/public-api.js';
 import { ServicoSituacaoOperadora, type SujeitoOperadora } from './aplicacao/situacao.js';
 import { type GravadorContas, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { pagamentoDe, resumoDaConta, ServicoContasOperadora } from './contas-servico.js';
+import { contextoGravacao } from './contexto-gravacao.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.contas';
-const TABELA = 'SGH_OPE_CONTA';
+const TABELA = 'lote_conta_recebida';
 
 function filtro<T extends { safeParse(v: unknown): { success: boolean; data?: unknown; error?: unknown } }>(
   esquema: T,
@@ -114,16 +115,16 @@ export class ContasOperadoraController {
     return s;
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T extends { id: number }>(
     s: SessaoCadastro,
     evento: string,
     operacao: string,
     fn: (g: GravadorContas) => Promise<T>,
   ): Promise<T> {
-    const linha = (r: T): LinhaTrilha =>
+    const linha = (r: T): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela: TABELA, id: String(r.id) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria')
@@ -266,7 +267,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.receber.permissao)
   @AuditadoNoHandler(
-    'operadora.receberConta (SGH_OPE_CONTA, as guias, os itens e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.receberConta (lote_conta_recebida, as guias, os itens e o evento) com a trilha_auditoria na mesma transação',
   )
   async receber(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoConta> {
     const e = corpo(esquemaReceberConta, b);
@@ -302,7 +303,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.glosar.permissao)
   @AuditadoNoHandler(
-    'operadora.glosarConta (SGH_OPE_CONTA_ITEM, os valores e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.glosarConta (guia_conta_recebida_item, os valores e o evento) com a trilha_auditoria na mesma transação',
   )
   async glosar(
     @Param('id') id: string,
@@ -334,7 +335,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.concluir.permissao)
   @AuditadoNoHandler(
-    'operadora.concluirAnaliseConta (SGH_OPE_CONTA e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.concluirAnaliseConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação',
   )
   async concluir(
     @Param('id') id: string,
@@ -370,7 +371,7 @@ export class ContasOperadoraController {
   @Post(R.devolver.caminho)
   @HttpCode(200)
   @Permissao(R.devolver.permissao)
-  @AuditadoNoHandler('operadora.devolverConta (SGH_OPE_CONTA e o evento) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.devolverConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação')
   async devolver(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -396,7 +397,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.recurso.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarRecursoConta (SGH_OPE_CONTA_GUIA e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarRecursoConta (guia_conta_recebida e o evento) com a trilha_auditoria na mesma transação',
   )
   async recurso(
     @Param('id') id: string,
@@ -435,7 +436,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.decidirRecurso.permissao)
   @AuditadoNoHandler(
-    'operadora.decidirRecursoConta (SGH_OPE_CONTA_GUIA, os valores e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.decidirRecursoConta (guia_conta_recebida, os valores e o evento) com a trilha_auditoria na mesma transação',
   )
   async decidirRecurso(
     @Param('id') id: string,
@@ -476,7 +477,7 @@ export class ContasOperadoraController {
   @HttpCode(200)
   @Permissao(R.decidirRecursoItens.permissao)
   @AuditadoNoHandler(
-    'operadora.decidirRecursoItens (SGH_OPE_CONTA_RECURSO_ITEM, a guia pela soma e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.decidirRecursoItens (recurso_glosa_recebido_item, a guia pela soma e o evento) com a trilha_auditoria na mesma transação',
   )
   async decidirRecursoItens(
     @Param('id') id: string,
@@ -517,7 +518,7 @@ export class ContasOperadoraController {
   @Post(R.pagar.caminho)
   @HttpCode(200)
   @Permissao(R.pagar.permissao)
-  @AuditadoNoHandler('operadora.pagarConta (SGH_OPE_CONTA e o evento) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.pagarConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação')
   async pagar(
     @Param('id') id: string,
     @Body() b: unknown,

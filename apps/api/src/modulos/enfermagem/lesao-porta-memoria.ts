@@ -1,7 +1,7 @@
 // W0-03, mercado M4: as feridas e LPP na porta em memória (a sessão sintética de dev/ci, E2E), com as mesmas recusas da
-// gravação SGH_ (packages/legado/src/enfermagem/gravacao/lesao.ts). Nada vai à cópia. O anexo da foto não é conferido
-// contra o prontuário aqui (a memória não tem os anexos do legado): só a unicidade do vínculo.
-import type { LesaoLidaSgh } from '@sgh/legado';
+// gravação da porta própria. Nada vai a banco. O anexo da foto não é conferido contra o prontuário aqui (a memória não
+// tem os anexos): só a unicidade do vínculo.
+import type { LesaoRegistrada } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { GravadorEscores } from './escores-porta.js';
 
@@ -9,11 +9,11 @@ const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não gravado', detalhe, { codigo });
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer U)[] ? U[] : T[K] };
-type LesaoMemoria = Mutavel<LesaoLidaSgh>;
+type LesaoMemoria = Mutavel<LesaoRegistrada>;
 
 export interface EstadoLesoes {
   seq: number;
-  lesoes?: LesaoLidaSgh[];
+  lesoes?: LesaoRegistrada[];
 }
 
 type GravadorLesao = Pick<
@@ -287,11 +287,11 @@ export function gravadorLesaoMemoria(copia: EstadoLesoes, agora: () => string): 
 
 /** A leitura da memória com os mesmos filtros da gravação SGH_. */
 export function lesoesMemoria(
-  lesoes: readonly LesaoLidaSgh[] | undefined,
+  lesoes: readonly LesaoRegistrada[] | undefined,
   f: { id?: number; atendimentos?: readonly number[]; desde?: string; ate?: string },
-): LesaoLidaSgh[] {
+): LesaoRegistrada[] {
   const ats = f.atendimentos ? new Set(f.atendimentos) : null;
-  const ident = (l: LesaoLidaSgh) =>
+  const ident = (l: LesaoRegistrada) =>
     l.versoes.map((v) => {
       try {
         return String((JSON.parse(v.dados) as { identificadaEm?: string }).identificadaEm ?? '');

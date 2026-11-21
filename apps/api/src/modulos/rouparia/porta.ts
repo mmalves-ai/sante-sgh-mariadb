@@ -1,41 +1,77 @@
-// Porta da rouparia e lavanderia (M55, fatia F2; ficha, seções 4 a 7), independente de onde (a API não escreve SQL;
-// fronteira Nx):
-//   - `legado`: as leituras READ ONLY (o enxoval, as cotas, os movimentos, os envios abertos, os kg por setor e dia, os
-//     totais, os inventários, os setores, o fornecedor e os pacientes-dia do censo) e as gravações só do novo numa
-//     transação SGH_ com a SGH_TRILHA junto (o movimento e o envio relidos e travados na MESMA transação);
-//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas regras e recusas; nada vai à cópia;
+// Porta da rouparia e lavanderia (M55; ficha, seções 4 a 7), independente de onde (a API não escreve SQL):
+//   - `banco`: a porta própria sobre o banco do cliente (porta-propria.ts), pelo @sgh/nucleo: leituras somente leitura e
+//     as gravações numa operação do Executor (trilha, outbox e idempotência na mesma transação);
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas regras e recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-// Recurso só do novo: nenhuma operação do executor (o legado não tem rouparia).
-import type { CotaRoupa, KgSetorDia, MovimentoRoupa, PecaRoupa, TipoMovimentoRoupa } from '@sgh/contratos';
-import type { MovimentoRoupaSgh, PecaRoupaSgh, TotaisRoupariaLidos } from '@sgh/legado';
+// O "centro de custo" do contrato da tela é o setor do estabelecimento (setor_funcional); o "fornecedor" é a lavanderia
+// terceirizada do cadastro (lavanderia_externa).
+// Melhoria: tipos de negócio do módulo (sem os tipos do sistema de origem); o usuário vem do contexto (id), não do login;
+// a repetição do pedido (Idempotency-Key) é a do Executor, presa à impressão do movimento (tipo, data e setor).
+import type {
+  CotaRoupa,
+  ItemMovimentoRoupa,
+  KgSetorDia,
+  MovimentoRoupa,
+  PecaRoupa,
+  PecaRoupaEntrada,
+  RegistrarMovimentoRoupaEntrada,
+  TipoMovimentoRoupa,
+} from '@sgh/contratos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_ROUPARIA = Symbol('PORTA_ROUPARIA');
 
-type SemHospital<T> = Omit<T, 'hospital'>;
+/** O pedido de gravação que se repete pela Idempotency-Key: a chave e a impressão do que foi pedido. */
+export interface PedidoRouparia {
+  readonly chave: string;
+  /** Tipo, data e setor: a mesma chave com outra impressão é recusada (chave-de-outro-movimento). */
+  readonly impressao: string;
+}
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto; as leituras aqui são da mesma transação. */
+/** O contexto da porta, com o pedido quando a gravação se repete pela chave (registrar movimento). */
+export type ContextoRouparia = ContextoPortaM18 & { readonly pedido?: PedidoRouparia };
+
+/** A peça ou o kit como a tela grava (sem a versão vista, que vai à parte). */
+export type PecaRoupaGravada = Omit<PecaRoupaEntrada, 'versaoVista'>;
+
+/** O movimento conferido pelo domínio, com a conferência do retorno com o envio. */
+export interface MovimentoRoupaNovo extends Omit<RegistrarMovimentoRoupaEntrada, 'itens'> {
+  readonly itens: readonly ItemMovimentoRoupa[];
+  readonly diferencaKg: number | null;
+  readonly diferencaPct: number | null;
+  readonly ocorrencia: boolean;
+}
+
+/** Totais do período para os indicadores (kg por etapa, peças perdidas, retornos e ocorrências). */
+export interface TotaisRouparia {
+  readonly kgColetados: number;
+  readonly kgEnviados: number;
+  readonly kgRetornados: number;
+  readonly pecasPerdidas: number;
+  readonly retornos: number;
+  readonly ocorrencias: number;
+}
+
+/** Gravações da rouparia numa transação (as leituras aqui são da mesma transação, com a trava quando dito). */
 export interface GravadorRouparia {
   relogio(): Promise<{ hoje: string; agora: string }>;
   pecas(): Promise<PecaRoupa[]>;
   /** O movimento relido na transação (travado até o fim), ou null. */
   movimento(id: number): Promise<MovimentoRoupa | null>;
-  movimentoPelaChave(chave: string): Promise<MovimentoRoupa | null>;
-  incluirPeca(p: SemHospital<PecaRoupaSgh>): Promise<{ id: number; versao: number }>;
+  incluirPeca(p: PecaRoupaGravada): Promise<{ id: number; versao: number }>;
   alterarPeca(
-    p: SemHospital<PecaRoupaSgh> & { id: number; versaoVista: number },
+    p: PecaRoupaGravada & { id: number; versaoVista: number },
   ): Promise<{ id: number; versao: number }>;
   gravarCotas(c: {
     centroCusto: number;
     cotas: readonly { peca: number; quantidade: number }[];
-    usuario: string;
   }): Promise<{ alteradas: number }>;
-  registrarMovimento(m: SemHospital<MovimentoRoupaSgh>): Promise<{ id: number; versao: number }>;
+  registrarMovimento(m: MovimentoRoupaNovo): Promise<{ id: number; versao: number }>;
   cancelarMovimento(c: {
     id: number;
     versaoVista: number;
     motivo: string;
-    usuario: string;
+    /** Retorno: o envio que volta a "registrado". */
     remessa: number | null;
   }): Promise<{ id: number; versao: number }>;
 }
@@ -56,6 +92,11 @@ export interface SetorRouparia {
 }
 
 export interface PortaRouparia extends PortaGravacaoM18<GravadorRouparia> {
+  gravarSgh<T>(
+    c: ContextoRouparia,
+    trilha: Parameters<PortaGravacaoM18<GravadorRouparia>['gravarSgh']>[1],
+    fn: (g: GravadorRouparia) => Promise<T>,
+  ): Promise<T>;
   relogio(c: ContextoPortaM18): Promise<{ hoje: string; agora: string }>;
   pecas(c: ContextoPortaM18): Promise<PecaRoupa[]>;
   cotas(c: ContextoPortaM18, centroCusto?: number | null): Promise<CotaRoupa[]>;
@@ -66,11 +107,11 @@ export interface PortaRouparia extends PortaGravacaoM18<GravadorRouparia> {
   movimento(c: ContextoPortaM18, id: number): Promise<MovimentoRoupa | null>;
   enviosAbertos(c: ContextoPortaM18): Promise<MovimentoRoupa[]>;
   kgPorSetorDia(c: ContextoPortaM18, de: string, ate: string): Promise<KgSetorDia[]>;
-  totais(c: ContextoPortaM18, de: string, ate: string): Promise<TotaisRoupariaLidos>;
+  totais(c: ContextoPortaM18, de: string, ate: string): Promise<TotaisRouparia>;
   inventarios(c: ContextoPortaM18, ate: string): Promise<MovimentoRoupa[]>;
-  /** Os setores (centros de custo) do estabelecimento, com os inativos marcados. */
+  /** Os setores do estabelecimento, com os inativos marcados. */
   setores(c: ContextoPortaM18): Promise<SetorRouparia[]>;
-  /** Os fornecedores pelo nome ou código (a lavanderia terceirizada), sem documento nem dado bancário. */
+  /** As lavanderias terceirizadas pelo nome ou código, sem documento nem dado bancário. */
   fornecedores(c: ContextoPortaM18, termo: string): Promise<{ codigo: number; nome: string }[]>;
   fornecedorExiste(c: ContextoPortaM18, codigo: number): Promise<boolean>;
   /** Pacientes-dia do período (o censo diário fechado). */
@@ -95,3 +136,9 @@ export const METODOS_PORTA_ROUPARIA: ReadonlySet<string> = new Set([
   'fornecedorExiste',
   'pacientesDia',
 ]);
+
+/** Chave do estado da memória: o estabelecimento da sessão (na sintética sem id numérico, o código dele). */
+export function chaveDoEstabelecimento(c: ContextoPortaM18): string {
+  const codigo = (c as Partial<{ hospital: string }>).hospital;
+  return `${c.cliente}:${c.estabelecimento ?? codigo ?? '-'}`;
+}

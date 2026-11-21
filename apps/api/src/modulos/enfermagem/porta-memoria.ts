@@ -10,35 +10,43 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import type { FaixaGlicemiaLida } from '@sgh/contratos';
 import {
-  type AprazamentoSghLido,
-  type AprazarGravacao,
-  type AtoChecagemSgh,
-  type ChecagemGravacao,
-  type ConflitoSghLido,
-  type ContextoOperacao,
-  type DispositivoSghLido,
-  ErroOperacao,
-  type EstornarGravacao,
+  type AprazamentoRegistrado,
+  type AtoChecagem,
+  type ConflitoSincronizacao,
+  type AparelhoBeiraLeito,
+  type EventoHistoricoHorario,
+  type EventoInfusao,
+  type HorarioEnfermagem,
+  type Internado,
+  type PassagemPlantao,
+  type RegraHorario,
+  type SinalVitalRegistrado,
+  type UnidadeComInternados,
+} from './tipos.js';
+import {
+  type AprazamentoHorario,
+  type ChecagemAdministracao,
+  ESQUEMAS_CHECAGEM,
+  type EstornoChecagem,
   justificativaDoEstorno,
-  type EventoHistoricoLido,
-  type EventoInfusaoSgh,
-  type FonteCatalogo,
-  type HorarioLidoEnf,
-  type InternadoLido,
-  type LiberacaoConsultada,
-  operacao,
-  type PassagemSghLida,
-  recusa,
+  OPERACOES_CHECAGEM,
   recusaEstoqueBaixado,
-  type RegraHorarioLida,
-  type ResultadoOperacao,
-  type SinalVitalSghLido,
-  type UnidadeInternacaoLida,
-} from '@sgh/legado';
+} from './checagem.js';
+import { type ContextoOperacao, ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import { type LiberacaoGravacao } from '../exames/public-api.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { ContextoEnfermagem, GravadorSghEnfermagem, PortaEnfermagem } from './porta.js';
 
 const M = 'SINTETICO M25';
+/**
+ * O estado sintético é por estabelecimento da sessão: o código do estabelecimento que a sessão sintética põe no contexto
+ * (sem o mapa de estabelecimentos do banco, o id é nulo) ou, sem ele, o cliente e o id do estabelecimento.
+ */
+export const chaveDoEstado = (c: Pick<ContextoEnfermagem, 'cliente' | 'estabelecimento'>): string =>
+  (c as { readonly hospital?: string }).hospital ?? `${c.cliente}|${c.estabelecimento ?? '-'}`;
+/** O login da sessão que a API põe no contexto da gravação (a memória identifica o vínculo sintético por ele). */
+const loginDe = (ctx: ContextoOperacao): string =>
+  (ctx as ContextoOperacao & { readonly login?: string }).login ?? String(ctx.usuario ?? '');
 const p2 = (n: number) => String(n).padStart(2, '0');
 const local = (d: Date) =>
   `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}T${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
@@ -63,7 +71,7 @@ interface HorarioM {
   cbo: number | null;
   quantidade: number | null;
   justificativa: string | null;
-  tipo: HorarioLidoEnf['tipo'];
+  tipo: HorarioEnfermagem['tipo'];
   descricao: string;
   dose: number | null;
   unidadeDose: string | null;
@@ -74,26 +82,26 @@ interface HorarioM {
   altaVigilancia: boolean;
   antimicrobiano: boolean;
   hemocomponente: boolean;
-  infusao: HorarioLidoEnf['infusao'];
+  infusao: HorarioEnfermagem['infusao'];
   faixasGlicemia: FaixaGlicemiaLida[];
   faixa: number | null;
   procedimento: number | null;
   numDoses: number;
   observacaoMedica: string | null;
-  historico: EventoHistoricoLido[];
+  historico: EventoHistoricoHorario[];
 }
 
 interface EstadoM {
   seq: number;
-  internados: (InternadoLido & { prescricao: number; suspensa: boolean })[];
+  internados: (Internado & { prescricao: number; suspensa: boolean })[];
   horarios: HorarioM[];
-  atos: AtoChecagemSgh[];
-  infusao: EventoInfusaoSgh[];
-  sinais: SinalVitalSghLido[];
-  aprazamentos: (AprazamentoSghLido & { id: number })[];
-  conflitos: ConflitoSghLido[];
-  passagens: PassagemSghLida[];
-  dispositivos: ({ -readonly [K in keyof DispositivoSghLido]: DispositivoSghLido[K] } & { hash: string })[];
+  atos: AtoChecagem[];
+  infusao: EventoInfusao[];
+  sinais: SinalVitalRegistrado[];
+  aprazamentos: (AprazamentoRegistrado & { id: number })[];
+  conflitos: ConflitoSincronizacao[];
+  passagens: PassagemPlantao[];
+  dispositivos: ({ -readonly [K in keyof AparelhoBeiraLeito]: AparelhoBeiraLeito[K] } & { hash: string })[];
   /** W0-03: checagens antigas feitas por aparelho (só os identificadores; a contagem da recusa de exclusão). */
   checagensDeAparelho: string[];
   respostas: {
@@ -121,7 +129,6 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
   private readonly estados = new Map<string, EstadoM>();
 
   constructor(
-    private readonly catalogo: FonteCatalogo,
     private readonly opcoes: { readonly arquivoPorFora?: string | null; readonly agora?: () => Date } = {},
   ) {}
 
@@ -172,11 +179,12 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     s.mudancas.push({ id: h.id, situacao, quando });
   }
 
-  private e(c: ContextoEnfermagem): EstadoM {
-    let s = this.estados.get(c.hospital);
+  private e(c: Pick<ContextoEnfermagem, 'cliente' | 'estabelecimento'>): EstadoM {
+    const k = chaveDoEstado(c);
+    let s = this.estados.get(k);
     if (!s) {
-      s = this.semear(c.hospital);
-      this.estados.set(c.hospital, s);
+      s = this.semear(k);
+      this.estados.set(k, s);
     }
     this.aplicarPorFora(s);
     return s;
@@ -411,7 +419,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     return s;
   }
 
-  private lido(s: EstadoM, h: HorarioM): HorarioLidoEnf {
+  private lido(s: EstadoM, h: HorarioM): HorarioEnfermagem {
     return {
       id: h.id,
       item: h.item,
@@ -445,22 +453,18 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     void s;
   }
 
-  async podeGravar(c: ContextoEnfermagem, op: string): Promise<LiberacaoConsultada> {
-    const estado = this.catalogo.estado(op, c.hospital);
-    if (estado === null || estado === 'bloqueada')
-      return { pode: false, codigo: 'operacao-bloqueada', motivo: 'A operação está bloqueada.' };
-    const r = operacao(op).receita;
-    if (r.pendente)
-      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Falta provar: ${r.pendente}` };
+  async podeGravar(c: ContextoEnfermagem, op: string): Promise<LiberacaoGravacao> {
+    void c;
+    if (!(OPERACOES_CHECAGEM as readonly string[]).includes(op))
+      return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return { pode: true, codigo: null, motivo: null };
   }
 
   async executar(c: ContextoEnfermagem, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
     const s = this.e(c);
-    const receita = operacao(op);
-    if (receita.receita.pendente)
-      throw new ErroOperacao(423, 'operacao-nao-liberada', 'Operação não liberada', receita.receita.pendente);
-    const analise = receita.entrada.safeParse(entradaBruta);
+    const esquema = ESQUEMAS_CHECAGEM[op as keyof typeof ESQUEMAS_CHECAGEM];
+    if (!esquema) throw recusa('operacao-desconhecida', 'Operação desconhecida na enfermagem.');
+    const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
@@ -468,9 +472,9 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     const hash = createHash('sha256')
       .update(`${op}:${JSON.stringify(analise.data)}`)
       .digest('hex');
-    const ja = s.idempotencia.get(ctx.idempotencyKey);
+    const ja = s.idempotencia.get(ctx.chaveIdempotencia);
     if (ja) {
-      if (ja.hash !== hash || ja.usuario !== ctx.usuarioLegado)
+      if (ja.hash !== hash || ja.usuario !== loginDe(ctx))
         throw new ErroOperacao(
           422,
           'idempotencia-divergente',
@@ -480,12 +484,12 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
       return { resultado: ja.resultado, repetida: true, trilha: null };
     }
     if (op === 'enfermagem.estornarChecagem')
-      return this.estornar(s, analise.data as EstornarGravacao, ctx, hash);
+      return this.estornar(s, analise.data as EstornoChecagem, ctx, hash);
     if (op === 'enfermagem.aprazarHorario')
-      return this.aprazar(s, analise.data as AprazarGravacao, ctx, hash);
+      return this.aprazar(s, analise.data as AprazamentoHorario, ctx, hash);
     if (op !== 'enfermagem.checarAdministracao') throw new Error(`Operação ${op} sem simulação em memória.`);
-    const e = analise.data as ChecagemGravacao;
-    const v = VINCULOS_SINTETICOS[ctx.usuarioLegado];
+    const e = analise.data as ChecagemAdministracao;
+    const v = VINCULOS_SINTETICOS[loginDe(ctx)];
     if (!v || v.cbo !== e.cbo)
       throw recusa('cbo-invalido', 'O CBO informado não é do profissional da sessão ou não está ativo.');
     const pres = s.internados.find((x) => x.prescricao === e.prescricao);
@@ -525,7 +529,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         situacao: m.situacao,
         horaReal: e.sgh.horaReal.slice(0, 16),
         gravadoEm: agora,
-        usuario: ctx.usuarioLegado,
+        usuario: loginDe(ctx),
         quantidade: m.quantidade,
         motivo: m.papel === 'principal' ? e.sgh.motivo : null,
         observacao: m.papel === 'principal' ? e.sgh.observacao : 'Fora da faixa da glicemia medida',
@@ -555,14 +559,14 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         versao: 1,
         anterior: null,
         justificativa: null,
-        usuario: ctx.usuarioLegado,
+        usuario: loginDe(ctx),
       });
     const resultado: ResultadoOperacao = {
       horario: principal.horario,
       horarios: e.marcacoes.length,
       documentos: new Set(e.marcacoes.map((m) => m.situacao)).size,
     };
-    s.idempotencia.set(ctx.idempotencyKey, { hash, usuario: ctx.usuarioLegado, resultado });
+    s.idempotencia.set(ctx.chaveIdempotencia, { hash, usuario: loginDe(ctx), resultado });
     return { resultado, repetida: false, trilha: null };
   }
 
@@ -571,8 +575,8 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
    * dose sintética que baixa estoque é a da morfina (produto 603, alta vigilância): administrada, tem a baixa e o
    * estorno é recusado sem a devolução pendente.
    */
-  private estornar(s: EstadoM, e: EstornarGravacao, ctx: ContextoOperacao, hash: string) {
-    const v = VINCULOS_SINTETICOS[ctx.usuarioLegado];
+  private estornar(s: EstadoM, e: EstornoChecagem, ctx: ContextoOperacao, hash: string) {
+    const v = VINCULOS_SINTETICOS[loginDe(ctx)];
     if (!v || v.cbo !== e.cbo)
       throw recusa('cbo-invalido', 'O CBO informado não é do profissional da sessão ou não está ativo.');
     const h = s.horarios.find((x) => x.id === e.horario);
@@ -597,7 +601,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
       situacao: anterior,
       horaReal: agora,
       gravadoEm: agora,
-      usuario: ctx.usuarioLegado,
+      usuario: loginDe(ctx),
       quantidade: null,
       motivo: e.motivo,
       observacao: e.justificativa,
@@ -622,13 +626,13 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
       dispensacoes: baixa.dispensacoes,
       devolucaoPendente: temBaixa,
     };
-    s.idempotencia.set(ctx.idempotencyKey, { hash, usuario: ctx.usuarioLegado, resultado });
+    s.idempotencia.set(ctx.chaveIdempotencia, { hash, usuario: loginDe(ctx), resultado });
     return Promise.resolve({ resultado, repetida: false, trilha: null });
   }
 
   /** W1-08: o aprazamento como o executor grava (reaprazar substitui a hora de checar; suprimir só com o motivo). */
-  private aprazar(s: EstadoM, e: AprazarGravacao, ctx: ContextoOperacao, hash: string) {
-    const v = VINCULOS_SINTETICOS[ctx.usuarioLegado];
+  private aprazar(s: EstadoM, e: AprazamentoHorario, ctx: ContextoOperacao, hash: string) {
+    const v = VINCULOS_SINTETICOS[loginDe(ctx)];
     if (!v || v.cbo !== e.cbo)
       throw recusa('cbo-invalido', 'O CBO informado não é do profissional da sessão ou não está ativo.');
     if (e.acao !== 'aprazar' && !(e.motivo ?? '').trim())
@@ -658,7 +662,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
       reaprazamento: e.acao === 'reaprazar',
       extrato: h.tipo === 'medicamento' || h.tipo === 'solucao',
     };
-    s.idempotencia.set(ctx.idempotencyKey, { hash, usuario: ctx.usuarioLegado, resultado });
+    s.idempotencia.set(ctx.chaveIdempotencia, { hash, usuario: loginDe(ctx), resultado });
     return Promise.resolve({ resultado, repetida: false, trilha: null });
   }
 
@@ -695,6 +699,8 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         if (!a) throw recusa('sinal-inexistente', 'O sinal vital não foi encontrado.');
         if (s.sinais.some((y) => y.anterior === a.id))
           throw recusa('sinal-ja-retificado', 'Este registro já foi retificado: retifique a versão vigente.');
+        if (x.versao !== undefined && x.versao !== a.versao)
+          throw recusa('conflito-versao', 'O sinal vital mudou desde a leitura: recarregue e retifique de novo.');
         const id = ++s.seq;
         s.sinais.push({
           ...a,
@@ -811,7 +817,9 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         return x.id;
       },
       gravarDispositivo: async (x) => {
-        const hash = createHash('sha256').update(`${c.hospital}:${x.identificador}`).digest('hex');
+        const hash = createHash('sha256')
+          .update(`${chaveDoEstado(c)}:${x.identificador}`)
+          .digest('hex');
         if (s.dispositivos.some((d) => d.hash === hash))
           throw recusa('dispositivo-existente', 'Este aparelho já está autorizado.');
         const id = ++s.seq;
@@ -855,7 +863,10 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         const d = s.dispositivos[k];
         if (!d) throw recusa('dispositivo-inexistente', 'O aparelho não foi encontrado.');
         const doAparelho = (id: string | null) =>
-          !!id && createHash('sha256').update(`${c.hospital}:${id}`).digest('hex') === d.hash;
+          !!id &&
+          createHash('sha256')
+            .update(`${chaveDoEstado(c)}:${id}`)
+            .digest('hex') === d.hash;
         const checagens =
           s.atos.filter((a) => doAparelho(a.dispositivo)).length +
           s.checagensDeAparelho.filter((x) => doAparelho(x)).length;
@@ -891,7 +902,9 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         return x.id;
       },
       marcarSincronismo: async (x) => {
-        const hash = createHash('sha256').update(`${c.hospital}:${x.identificador}`).digest('hex');
+        const hash = createHash('sha256')
+          .update(`${chaveDoEstado(c)}:${x.identificador}`)
+          .digest('hex');
         const d = s.dispositivos.find((y) => y.hash === hash && y.ativo);
         if (!d) return false;
         d.ultimoSincronismo = agora();
@@ -934,7 +947,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     return this.relogioAtual();
   }
 
-  async unidades(c: ContextoEnfermagem): Promise<UnidadeInternacaoLida[]> {
+  async unidades(c: ContextoEnfermagem): Promise<UnidadeComInternados[]> {
     const s = this.e(c);
     return [
       {
@@ -983,7 +996,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     return h ? this.lido(s, h) : null;
   }
 
-  async faixasDoHorario(c: ContextoEnfermagem, h: Pick<HorarioLidoEnf, 'id' | 'item' | 'previsto'>) {
+  async faixasDoHorario(c: ContextoEnfermagem, h: Pick<HorarioEnfermagem, 'id' | 'item' | 'previsto'>) {
     return this.e(c)
       .horarios.filter((x) => x.item === h.item && x.faixa !== null && x.previsto === h.previsto)
       .map((x) => ({ id: x.id, situacao: x.situacao, faixa: x.faixa as number }));
@@ -1035,7 +1048,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
       [4, ['0000', '0600', '1200', '1800']],
       [6, ['0200', '0600', '1000', '1400', '1800', '2200']],
     ]);
-    const regras: RegraHorarioLida[] = [
+    const regras: RegraHorario[] = [
       { id: 1, tipoAtendimento: 'I', horarioInicial: '1601', considerar: 0, padrao: true, grade },
     ];
     return { regras, porBloco: new Map<string, number>() };
@@ -1082,7 +1095,7 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
   }
 
   async aprazamentos(c: ContextoEnfermagem, hs: readonly number[]) {
-    const r = new Map<number, AprazamentoSghLido>();
+    const r = new Map<number, AprazamentoRegistrado>();
     for (const a of this.e(c).aprazamentos) if (hs.includes(a.horario)) r.set(a.horario, a);
     return r;
   }
@@ -1102,7 +1115,9 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
   }
 
   async dispositivoAutorizado(c: ContextoEnfermagem, identificador: string) {
-    const hash = createHash('sha256').update(`${c.hospital}:${identificador}`).digest('hex');
+    const hash = createHash('sha256')
+      .update(`${chaveDoEstado(c)}:${identificador}`)
+      .digest('hex');
     const d = this.e(c).dispositivos.find((x) => x.hash === hash && x.ativo);
     if (!d) return null;
     return semHash(d);
@@ -1135,8 +1150,11 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
     };
   }
 
-  suspenderPrescricaoPorFora(hospital: string, atendimento: number): void {
-    const s = this.e({ rede: '', hospital });
+  suspenderPrescricaoPorFora(
+    c: Pick<ContextoEnfermagem, 'cliente' | 'estabelecimento'>,
+    atendimento: number,
+  ): void {
+    const s = this.e(c);
     const i = s.internados.find((x) => x.atendimento === atendimento);
     if (!i) return;
     i.suspensa = true;

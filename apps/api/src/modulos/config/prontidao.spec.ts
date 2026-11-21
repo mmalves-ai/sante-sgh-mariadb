@@ -1,6 +1,6 @@
 // M35: a aba "Prontidão por setor" e a carga somada da tela de conexões leem o relatório gerado pelo
 // `pnpm prontidao:relatorio` (só leitura; nenhum acesso ao banco). Arquivo ausente ou fora do esquema: null.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -8,12 +8,13 @@ import { esquemaRelatorioProntidao } from '@sgh/contratos';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { lerConfiguracao } from '../../configuracao.js';
+import { registroComConfig } from './modulo-teste.spec-util.js';
 import { caminhoProntidao, fonteArquivoProntidao } from './prontidao.js';
 
 const raiz = resolve(import.meta.dirname, '../../../../..');
 const tmp = mkdtempSync(join(tmpdir(), 'sgh-api-prontidao-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
-const ENV_DEV = { AMBIENTE: 'dev', REDE_PADRAO: 'rede-teste' };
+const ENV_DEV = { AMBIENTE: 'dev', REDE_PADRAO: 'rede-teste', API_MODULOS: 'config' };
 
 let app: NestFastifyApplication | null = null;
 afterEach(async () => {
@@ -51,11 +52,16 @@ describe('fonte do relatório de prontidão', () => {
     expect(fonteArquivoProntidao(ruim).relatorio()).toBeNull();
   });
 
-  it('o relatório versionado do repositório passa no esquema', () => {
-    const r = fonteArquivoProntidao(caminhoProntidao(raiz, {})).relatorio();
-    expect(r).not.toBeNull();
-    expect(esquemaRelatorioProntidao.parse(r).liberadas).toBe(0);
-    expect(r?.hospitais.map((h) => h.codigo)).toEqual(['pc', 'hs']);
+  // O relatório versionado era gerado na cópia do sistema de origem (convivência, ADR 0003): não existe neste repositório.
+  // Quando gerado aqui, passa no esquema; sem ele, a fonte devolve null.
+  it('o relatório do repositório: ausente, null; gerado, passa no esquema', () => {
+    const caminho = caminhoProntidao(raiz, {});
+    const r = fonteArquivoProntidao(caminho).relatorio();
+    if (!existsSync(caminho)) {
+      expect(r).toBeNull();
+      return;
+    }
+    expect(esquemaRelatorioProntidao.parse(r).formato).toBe(1);
   });
 });
 
@@ -64,7 +70,7 @@ describe('GET /api/config/prontidao e /api/config/carga', () => {
     const arquivo = join(tmp, 'prontidao.json');
     writeFileSync(arquivo, JSON.stringify(relatorio));
     app = await criarApp(lerConfiguracao({ AMBIENTE: 'dev' }), null, ENV_DEV, {
-      prontidao: fonteArquivoProntidao(arquivo),
+      registro: registroComConfig({ prontidao: fonteArquivoProntidao(arquivo) }),
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -78,7 +84,7 @@ describe('GET /api/config/prontidao e /api/config/carga', () => {
 
   it('sem relatório gerado: relatorio e carga nulos', async () => {
     app = await criarApp(lerConfiguracao({ AMBIENTE: 'dev' }), null, ENV_DEV, {
-      prontidao: fonteArquivoProntidao(join(tmp, 'ausente.json')),
+      registro: registroComConfig({ prontidao: fonteArquivoProntidao(join(tmp, 'ausente.json')) }),
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

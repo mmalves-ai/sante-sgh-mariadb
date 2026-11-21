@@ -1,5 +1,5 @@
-// Farmácia hospitalar, dispensação e farmácia clínica (M29; ficha, seções 4, 5 e 7). Telas de trabalho sobre a mesma
-// fila e os mesmos documentos do outro sistema; o número, o valor, o saldo e a conta são do banco (gatilhos):
+// Farmácia hospitalar, dispensação e farmácia clínica (M29; ficha, seções 4, 5 e 7). Telas de trabalho sobre a porta
+// da farmácia (banco do cliente pelo @sgh/nucleo, ou a memória de dev/ci); as regras ficam no domínio:
 //   GET  /api/farmacia/gravacao | unidades | eventos (tempo real: SSE, a fila e a worklist releem)
 //   GET  /api/farmacia/fila?unidade                          fila por paciente e horário (leitura auditada)
 //   POST /api/farmacia/dispensar                             doses da fila (executor) + etiquetas ZPL
@@ -325,7 +325,7 @@ export class FarmaciaController {
   @Post('avaliacao/triagem')
   @HttpCode(200)
   @Permissao('suprimentos.avaliacao.decidir')
-  @AuditadoNoHandler('triagem em SGH_SUP_AVALIACAO_FARM (trilha na mesma transação)')
+  @AuditadoNoHandler('triagem em avaliacao_farmaceutica (trilha na mesma transação)')
   async triagem(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFarmacia> {
     const s = sessaoDe(req);
     const unidade = unidadeDe(
@@ -345,7 +345,7 @@ export class FarmaciaController {
       s,
       EVENTOS_AUDITAVEIS.suprimentosPrescricaoAvaliada.codigo,
       'suprimentos.avaliacao',
-      { tabela: 'SGH_SUP_AVALIACAO_FARM', id: `triagem ${unidade}` },
+      { tabela: 'avaliacao_farmaceutica', id: `triagem ${unidade}` },
       (g) => g.triar({ itens }),
     );
     this.avisar(s);
@@ -355,7 +355,7 @@ export class FarmaciaController {
   @Post('avaliacao/:item/decisao')
   @HttpCode(200)
   @Permissao('suprimentos.avaliacao.decidir')
-  @AuditadoNoHandler('decisão em SGH_SUP_AVALIACAO_FARM (trilha na mesma transação)')
+  @AuditadoNoHandler('decisão em avaliacao_farmaceutica (trilha na mesma transação)')
   async decidir(
     @Param('item') i: string,
     @Body() b: unknown,
@@ -372,7 +372,7 @@ export class FarmaciaController {
       s,
       EVENTOS_AUDITAVEIS.suprimentosPrescricaoAvaliada.codigo,
       'suprimentos.avaliacao',
-      (x: { id: number }) => ({ tabela: 'SGH_SUP_AVALIACAO_FARM', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'avaliacao_farmaceutica', id: String(x.id) }),
       (g) =>
         g.decidir({
           item: e.item,
@@ -392,7 +392,7 @@ export class FarmaciaController {
     );
     this.avisar(s);
     return {
-      mensagem: 'Avaliação registrada no novo (a situação no outro sistema continua a dele até a DP-25).',
+      mensagem: 'Avaliação registrada.',
       repetida: false,
       ids: { avaliacao: r.id },
       avisos: [],
@@ -402,7 +402,7 @@ export class FarmaciaController {
   @Post('avaliacao/:item/intervencoes')
   @HttpCode(200)
   @Permissao('suprimentos.avaliacao.intervir')
-  @AuditadoNoHandler('intervenção em SGH_SUP_INTERVENCAO_FARM (trilha na mesma transação)')
+  @AuditadoNoHandler('intervenção em intervencao_farmaceutica (trilha na mesma transação)')
   async intervir(
     @Param('item') i: string,
     @Body() b: unknown,
@@ -414,7 +414,7 @@ export class FarmaciaController {
       s,
       EVENTOS_AUDITAVEIS.suprimentosIntervencaoRegistrada.codigo,
       'suprimentos.avaliacao',
-      (x: { id: number }) => ({ tabela: 'SGH_SUP_INTERVENCAO_FARM', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'intervencao_farmaceutica', id: String(x.id) }),
       (g) => g.intervir({ item: e.item, tipo: e.tipo, texto: e.texto, autor: s.login }),
     );
     this.avisar(s);
@@ -457,7 +457,7 @@ export class FarmaciaController {
   @Post('intervencoes/:id/resposta')
   @HttpCode(200)
   @Permissao('suprimentos.intervencao.responder')
-  @AuditadoNoHandler('resposta em SGH_SUP_INTERVENCAO_FARM (trilha na mesma transação)')
+  @AuditadoNoHandler('resposta em intervencao_farmaceutica (trilha na mesma transação)')
   async responder(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -491,7 +491,7 @@ export class FarmaciaController {
       s,
       EVENTOS_AUDITAVEIS.suprimentosIntervencaoRespondida.codigo,
       'suprimentos.avaliacao',
-      { tabela: 'SGH_SUP_INTERVENCAO_FARM', id: String(i.id) },
+      { tabela: 'intervencao_farmaceutica', id: String(i.id) },
       (g) =>
         g.responder({ id: i.id, resposta: e.resposta, justificativa: e.justificativa, respondente: s.login }),
     );
@@ -509,7 +509,7 @@ export class FarmaciaController {
   @Auditar(EVENTOS_AUDITAVEIS.suprimentosAvaliacaoLida.codigo)
   async worklist(@Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUP_AVALIACAO_FARM', idAlvo: 'worklist' };
+    req.sghAlvo = { tabelaAlvo: 'avaliacao_farmaceutica', idAlvo: 'worklist' };
     const us = await this.porta.unidades(s.porta);
     return this.servico.worklist(
       s,

@@ -3516,3 +3516,44 @@ sessao_suporte_acao	ADM	historico	F3	Ação feita numa sessão de suporte como o
 sessao_suporte_leitura	ADM	historico	F3	Leituras agregadas por caminho numa sessão de suporte	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
 termo_consentimento_recepcao	REC	principal	F3	Termo de consentimento assinado no balcão	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
 usuario_profissional	ADM	vinculo	F3	Profissional que a conta de acesso representa, com vigência	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+pedido_assinatura	ADM	principal	F3	Pedido de assinatura de uso único, com prazo: autorização do titular no provedor ou desafio do agente local	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+previa_assinatura	ADM	principal	F3	Prévia exata do documento a assinar (o que a tela mostra é o que se assina), com o código do verificador	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+assinatura_icp	ADM	principal	F3	Assinatura ICP em andamento, com tentativas e reprocessamento; ao concluir, vira assinatura do documento	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+validacao_assinatura	ADM	historico	F3	Validação da assinatura no servidor, por momento, com o resultado de cada conferência	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+aviso_assinatura	ADM	historico	F3	Aviso de assinatura pendente ou em falha ao autor e à direção técnica, com a leitura	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+pedido_numeracao_receita	PEP	principal	F3	Pedido de numeração da receita controlada no serviço nacional, com tentativas e retorno	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+regra_politica_assinatura	ADM	configuracao	F3	Regra da política de assinatura por conselho e destino (nível exigido), com vigência; uma vigente por chave	F2.2 onda 2 (pedido do lote 02-01; db/migracoes)	02	0
+carga_catalogo	INTG	principal	F3	Carga de catálogo oficial: arquivo por hash, situação, totais da comparação, lotes de publicação e decisão	F2.2 onda 2 (pedido do lote 02-02; db/migracoes)	02	0
+carga_catalogo_linha	INTG	item	F3	Linha preparada da carga de catálogo: entidade, chave natural, valores antes e depois, resultado e lote	F2.2 onda 2 (pedido do lote 02-02; db/migracoes)	02	0
+licenca_catalogo	INTG	configuracao	F3	Licença de catálogo licenciado por estabelecimento, com vigência e o comprovante	F2.2 onda 2 (pedido do lote 02-02; db/migracoes)	02	0
+coleta_estatistica_custo	FIN	historico	F3	Coleta automática das estatísticas de custeio da competência	F2.2 onda 2 (pedido do lote 02-03; db/migracoes)	02	0
+apuracao_custo_centro	FIN	historico	F3	Linha por centro da apuração do custo do mês	F2.2 onda 2 (pedido do lote 02-03; db/migracoes)	02	0
+conflito_sincronizacao_checagem	PEP	historico	F3	Conflito do ato de checagem feito sem conexão com o horário que mudou, e a resolução	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+aparelho_beira_leito	PEP	configuracao	F3	Aparelho autorizado da checagem à beira do leito	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+reavaliacao_escala	PEP	historico	F3	Reavaliação programada de escala de risco	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+classificacao_paciente	PEP	principal	F3	Classificação de pacientes por grau de dependência da enfermagem	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+indice_gravidade_uti	PEP	principal	F3	Índice de gravidade da UTI	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+parada_cardiorrespiratoria_ficha	PEP	principal	F3	Ficha da parada cardiorrespiratória (Utstein), por versão	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+passagem_turno_pendencia	PEP	item	F3	Pendência de cada paciente na passagem de plantão	F2.2 onda 2 (pedido do lote 02-04; db/migracoes)	02	0
+requisicao_transfusao_versao	SADT	item	F3	Versão anterior da requisição transfusional alterada antes do atendimento (legível, com o motivo)	F2.2 onda 2 (pedido do lote 02-05; db/migracoes)	02	0
+ato_transfusional_adendo	SADT	item	F3	Adendo dos sinais vitais do ato transfusional digitados errado (a medida original fica)	F2.2 onda 2 (pedido do lote 02-05; db/migracoes)	02	0
+terminologia_licenca_estabelecimento	INTG	item	F3	Licença de terminologia de enfermagem (NNN, CIPE) comprovada pelo estabelecimento: só com ela o catálogo licenciado é carregado	F2.2 onda 2 (pedido do lote 02-05; db/migracoes)	02	0
+emissao_documento	PEP	historico	F3	Emissão de documento em PDF imutável: via, chave do objeto, QR de validação e hash	F2.2 onda 2 (pedido do lote 02-06; db/migracoes)	02	0
+arquivo_fiscal_gerado	FIN	principal	F3	Arquivo fiscal gerado (NFS-e simulada, DMED, EFD-REINF) com hash e destino	F2.2 onda 2 (pedido do lote 02-07; db/migracoes)	02	0
+glosa_titulo_receber	FIN	principal	F3	Glosa registrada no título a receber, por evento	F2.2 onda 2 (pedido do lote 02-07; db/migracoes)	02	0
+decisao_lancamento_tardio	FAT	historico	F3	Fila do lançamento que chega depois do fechamento da conta e a decisão do faturista	F2.2 onda 2 (pedido do lote 02-08; db/migracoes)	02	0
+regra_faturabilidade	FAT	configuracao	F3	Regra de faturabilidade por fonte pagadora: o que o item precisa para ser cobrado	F2.2 onda 2 (pedido do lote 02-08; db/migracoes)	02	0
+migracao_aplicada	SIS	historico	F3	Registro das migrações aplicadas no banco do cliente (conferência da instalação)	F2.2 onda 2 (pedido do lote 02-08; db/migracoes)	02	0
+complemento_sib_beneficiario	SGO	principal	F3	Complemento cadastral do beneficiário para o SIB	F2.2 onda 2 (pedido do lote 02-09; db/migracoes)	02	0
+conta_portal_prestador_funcao	SGO	item	F3	Funções liberadas para a conta do portal do prestador	F2.2 onda 2 (pedido do lote 02-09; db/migracoes)	02	0
+calculo_depreciacao	FIN	historico	F3	Cálculo mensal da depreciação do estabelecimento, com o estorno	F2.2 onda 2 (pedido do lote 02-11; db/migracoes)	02	0
+ajuste_valor_bem	FIN	principal	F3	Ajuste de valor do bem (revisão de estimativa, recuperabilidade, reavaliação) com o estorno	F2.2 onda 2 (pedido do lote 02-11; db/migracoes)	02	0
+laudo_bem	FIN	principal	F3	Laudo em PDF anexado ao bem patrimonial	F2.2 onda 2 (pedido do lote 02-11; db/migracoes)	02	0
+importacao_tabela_linha	FAT	item	F3	Linha do arquivo de uma carga de tabela de preço, com a validação e a comparação com o vigente	F2.2 onda 2 (pedido do lote 02-12; db/migracoes)	02	0
+servico_compartilhado_rede	ADM	configuracao	F3	Oportunidade de serviço compartilhado entre os estabelecimentos da rede (registro sem compromisso de escopo)	F2.2 onda 2 (pedido do lote 02-13; db/migracoes)	02	0
+servico_compartilhado_rede_estabelecimento	ADM	item	F3	Estabelecimentos envolvidos na oportunidade de serviço compartilhado	F2.2 onda 2 (pedido do lote 02-13; db/migracoes)	02	0
+inventario_enxoval	HOT	principal	F3	Contagem das peças do enxoval na rouparia ou no setor	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
+inventario_enxoval_item	HOT	item	F3	Quantidade contada de cada peça no inventário do enxoval	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
+peca_enxoval_composicao	HOT	item	F3	Peças que compõem um kit do enxoval, com a quantidade	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
+remessa_lavanderia_item	HOT	item	F3	Quantidade de cada peça enviada à lavanderia na remessa	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
+baixa_enxoval_item	HOT	item	F3	Peças e quantidades de cada baixa do enxoval	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0

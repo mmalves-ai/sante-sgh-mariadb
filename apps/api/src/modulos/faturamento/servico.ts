@@ -1,5 +1,5 @@
 // Aplicação da conta do paciente (M30): as gravações das telas (pelo executor, com a trilha na mesma transação, ou só do
-// novo em SGH_ com a SGH_TRILHA junto), o escopo por convênio conferido no servidor em toda leitura e gravação da conta
+// as gravações diretas da porta, com a trilha_auditoria junto), o escopo por convênio conferido no servidor em toda leitura e gravação da conta
 // (regra 13), a liberação do lançamento manual por grupo de item (meta da reprodução), a decisão do lançamento tardio
 // (a reabertura pela mesma receita) e o particular (o conector de Pix e cartão simulado fora de produção).
 import {
@@ -13,7 +13,6 @@ import {
   type ResultadoFaturamento,
 } from '@sgh/contratos';
 import {
-  conferirContaParticular,
   conferirEscopoConvenio,
   filtroConvenios,
   grupoDoItem,
@@ -25,6 +24,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { ApoiosFaturamento } from './apoios.js';
 import type { ContextoFaturamento, GravadorSghFaturamento, PortaFaturamento } from './porta.js';
+import { conferirRecebimentoDaConta } from './regras-conta.js';
 
 const ctx = (s: SessaoCadastro): ContextoFaturamento => s.porta;
 
@@ -246,7 +246,7 @@ export class ServicoFaturamento {
       s,
       'lancamentoTardio',
       EVENTOS_AUDITAVEIS.faturamentoLancamentoTardioDecidido.codigo,
-      (x: number) => ({ tabela: 'SGH_FAT_LANC_TARDIO', id: String(x), chave: `RECADATE ${e.registro}` }),
+      (x: number) => ({ tabela: 'decisao_lancamento_tardio', id: String(x), chave: `atendimento ${e.registro}` }),
       (g) => g.decidirLancamentoTardio({ ...e, usuario: s.login, conta: contaVersao?.conta ?? null }),
     );
     if (e.decisao === 'reabrir' && contaVersao) {
@@ -298,7 +298,7 @@ export class ServicoFaturamento {
         throw new ErroProblema('sem-permissao', 403, 'Fora do escopo', fora.mensagem, {
           codigo: fora.codigo,
         });
-      const np = conferirContaParticular(conv);
+      const np = conferirRecebimentoDaConta((await this.porta.contaParticular(ctx(s), e.conta)) === true);
       if (np)
         throw new ErroProblema('recusa-de-negocio', 409, 'Conta de convênio', np.mensagem, {
           codigo: np.codigo,
@@ -312,7 +312,7 @@ export class ServicoFaturamento {
       'particular',
       EVENTOS_AUDITAVEIS.faturamentoPagamentoRecebido.codigo,
       (x: { pagamentos: number[] }) => ({
-        tabela: 'SGH_FAT_PAGAMENTO',
+        tabela: 'movimento_caixa',
         id: String(x.pagamentos[0] ?? ''),
         chave: `caixa ${e.caixa}`,
       }),

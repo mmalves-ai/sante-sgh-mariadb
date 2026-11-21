@@ -17,7 +17,7 @@ import {
 } from '../suporte/repositorio.js';
 import { REGISTRO_MODULOS } from '../registro.js';
 import { PortaCadastroMemoria } from './porta-memoria.js';
-import { registroDeTeste } from './teste.spec-util.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from './teste.spec-util.js';
 
 /** A sessão "como" é do módulo suporte: o teste roda quando ele estiver migrado e registrado (F2.2). */
 const SUPORTE = REGISTRO_MODULOS['suporte'];
@@ -26,7 +26,7 @@ const env: Record<string, string> = {
   ...envTeste,
   AMBIENTE: 'dev',
   SUPORTE_SESSAO_MINUTOS: '60',
-  API_MODULOS: 'cadastro,suporte',
+  API_MODULOS: 'configuracao_teste,cadastro,suporte',
 };
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaCadastroMemoria();
@@ -43,7 +43,13 @@ beforeAll(async () => {
     armazem: new ArmazemMemoria(),
     // O repositório sintético da plataforma é do módulo suporte (o tipo da fonte é dele).
     plataforma: repo as never,
-    registro: { ...registroDeTeste({ cadastro: porta }), suporte: SUPORTE },
+    registro: {
+      ...registroDeTeste(
+        { cadastro: porta },
+        { configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx) },
+      ),
+      suporte: SUPORTE,
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

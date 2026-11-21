@@ -9,6 +9,8 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import type { ContextoModulo } from '../registro.js';
+import { moduloCustos, type OpcoesModuloCustos } from './modulo.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
@@ -18,12 +20,16 @@ import {
 import { CHAVE_LIBERACAO_CUSTOS } from './custos.controller.js';
 import { PortaCustosMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'custos' };
+/** O módulo dos custos registrado com as opções do teste (o registro real é o do integrador da onda). */
+const registro = (o: OpcoesModuloCustos = {}) => ({
+  custos: async () => ({ modulo: (ctx: ContextoModulo) => moduloCustos(ctx, { pdf: null, ...o }) }),
+});
 let app: NestFastifyApplication;
 const trilha = new RegistradorTrilhaMemoria();
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro: registro() });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 120_000);
@@ -343,8 +349,7 @@ describe('apuração do custo do mês: cada rota pela sua permissão', { timeout
     });
     const b = await criarApp(lerConfiguracao(env), null, env, {
       trilha: trilhaB,
-      configuracao,
-      custos: new PortaContada(),
+      registro: registro({ configuracao, porta: new PortaContada() }),
     });
     await b.init();
     await b.getHttpAdapter().getInstance().ready();

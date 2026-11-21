@@ -1,8 +1,8 @@
 // "Login como" (ADR 0021): depois do próprio login, a plataforma (em todos os estabelecimentos configurados) e
-// o suporte técnico (só nos atribuídos, com a função ativa) abrem a sessão do ALVO do SPDATA, sem a senha
+// o suporte técnico (só nos atribuídos, com a função ativa) abrem a sessão do ALVO (usuário do hospital), sem a senha
 // dele: as permissões são as reais do M06 e NÃO há bloqueio de uso (decisão do dono, 20/10/2026: "a palavra-
 // chave é auditoria, não limites"). O controle é quem entra e onde, e a auditoria: a sessão de suporte
-// (SGH_SUP_SESSAO, com o motivo opcional e o aviso ao Auditor pela outbox), cada escrita (método, caminho,
+// (sessao_suporte, com o motivo opcional e o aviso ao Auditor pela outbox), cada escrita (método, caminho,
 // status) ANTES de acontecer, cada leitura agregada por caminho, a imagem antes/depois de cada registro (no
 // núcleo, na transação da escrita) e a correção. A guarda por requisição confere a sessão de suporte, a
 // função e a atribuição, com cache curto (15 s) e marca de revogação no armazém compartilhado; erro: 503
@@ -35,15 +35,6 @@ import {
   podeEntrarNoEstabelecimento,
   tipoDoAtor,
 } from '@sgh/dominio-acesso';
-import {
-  AVISOS_CORRECAO,
-  ErroConflitoCorrecao,
-  ErroPreviaCorrecao,
-  ErroRegraCorrecao,
-  resumoDoPlano,
-  type PassoCorrecao,
-  type SessaoComoLida,
-} from '@sgh/legado';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
 import type { RegistroComo, ResultadoLogin, ServicoSessao } from '../../sessao/servico-sessao.js';
 import type { AlertaAuditor } from '../acesso/alerta.js';
@@ -58,6 +49,14 @@ import {
   marcaCredencial,
   regraDaConta,
 } from './servico-plataforma.js';
+import {
+  AVISOS_CORRECAO,
+  ErroConflitoCorrecao,
+  ErroPreviaCorrecao,
+  ErroRegraCorrecao,
+  resumoDoPlano,
+} from './correcao.js';
+import type { PassoCorrecao, SessaoComoLida } from './tipos.js';
 
 export interface ConfigComo {
   readonly rede: string;
@@ -195,8 +194,8 @@ export class ServicoComo {
   /**
    * Abre a sessão "como". Ordem: (1) conta, função, atribuição e rede; (2) a conta-alvo pela MESMA regra do
    * modal (existe, ativa, não bloqueada, de grupo ativo do TBGRUUSU), e o login fora dela é recusado sem
-   * sessão de suporte nem aviso (a tentativa vai só à SGH_PLAT_AUDITORIA); (3) a sessão de suporte
-   * (SGH_SUP_SESSAO); (4) a sessão do alvo; (5) o aviso ao Auditor, com a carga completa (SGH_OUTBOX ou fila).
+   * sessão de suporte nem aviso (a tentativa vai só à auditoria das contas); (3) a sessão de suporte
+   * (sessao_suporte); (4) a sessão do alvo; (5) o aviso ao Auditor, com a carga completa (outbox ou fila).
    * Sem o aviso registrado, a sessão do alvo é desfeita (falha fechada).
    */
   async entrar(
@@ -596,7 +595,8 @@ export class ServicoComo {
       imagem: p.imagem.id,
       tabela: p.imagem.tabela,
       chave,
-      operacaoOriginal: p.imagem.operacao,
+      // O contrato da tela ainda nomeia a operação pelo comando SQL (pedido de contrato da onda 2).
+      operacaoOriginal: OPERACAO_NA_TELA[p.imagem.operacao],
       compensacao: p.compensacao,
       mudancas: p.mudancas,
       conflito: p.conflito,
@@ -648,16 +648,22 @@ export class ServicoComo {
         },
         { atorTipo, idConta: c.id },
         {
-          rede: s.rede,
-          hospital: s.hospital,
-          usuario: USUARIO_CORRECAO,
-          evento: EVENTOS_AUDITAVEIS.suporteEscritaCorrigida.codigo,
-          recurso: 'suporte.correcao',
-          operacao: 'suporte.corrigirEscrita',
-          resultado: 'sucesso',
-          estacao,
+          // A linha da trilha do núcleo: sem usuário do hospital (quem corrige é a conta da plataforma, no JSON).
+          estabelecimento: null,
+          usuario: null,
+          acao: 'operacao',
+          entidade: 'sessao_suporte',
+          entidadeId: /^\d{1,15}$/.test(s.id) ? Number(s.id) : null,
+          dadosDepois: {
+            evento: EVENTOS_AUDITAVEIS.suporteEscritaCorrigida.codigo,
+            recurso: 'suporte.correcao',
+            operacao: 'suporte.corrigirEscrita',
+            autor: USUARIO_CORRECAO,
+            estacao,
+            origem: `SUPORTE:${atorTipo}:${c.id}:S${s.id}`,
+          },
           correlacao: correlacao.slice(0, 64),
-          origem: `SUPORTE:${atorTipo}:${c.id}:S${s.id}`,
+          ocorridoEm: new Date(),
         },
       ),
     );
@@ -704,15 +710,17 @@ export class ServicoComo {
     const linhas = await this.tentar(() =>
       this.fonte.cruzamento(s.hospital, { alvo: s.alvoLogin, inicio: s.inicio, fim: s.fim ?? s.expiraEm }),
     );
+    // O contrato da tela ainda usa os nomes antigos dos campos (pedido de contrato da onda 2): aqui é a trilha
+    // própria do estabelecimento.
     return linhas.map((l) => ({
-      idTrilhaLegado: l.idTrilhaLegado,
+      idTrilhaLegado: l.idTrilha,
       dataHora: l.dataHora?.toISOString() ?? '',
-      usuarioLegado: l.usuarioLegado,
+      usuarioLegado: l.usuarioLogin,
       tipo: l.tipo,
       estacao: l.estacao,
       autorReal: l.doSuporte
         ? `${ROTULO_SUPORTE_PARA_HOSPITAL} (sessão ${s.id})`
-        : `${l.usuarioLegado} (próprio usuário)`,
+        : `${l.usuarioLogin} (próprio usuário)`,
       ligada: l.doSuporte,
     }));
   }
@@ -733,5 +741,8 @@ export class ServicoComo {
   }
 }
 
-/** USUARIO da SGH_TRILHA na correção (quem corrige não é usuário do legado; o ator vai na ORIGEM). */
+/** Autor na trilha da correção (quem corrige não é usuário do hospital; o ator vai na origem). */
 export const USUARIO_CORRECAO = '(suporte)';
+
+/** Operação da imagem (modelo próprio) → forma da tela. */
+const OPERACAO_NA_TELA = { inclusao: 'INSERT', alteracao: 'UPDATE', exclusao: 'DELETE' } as const;

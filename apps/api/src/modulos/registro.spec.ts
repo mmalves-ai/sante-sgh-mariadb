@@ -39,20 +39,43 @@ describe('API_MODULOS', () => {
   });
 
   it('nome desconhecido ou ainda não migrado: recusa a partida, com a mensagem', () => {
-    const r = recusaDosModulos({ API_MODULOS: 'sessao,faturamento' });
-    expect(r).toMatch(/faturamento/);
+    const r = recusaDosModulos({ API_MODULOS: 'sessao,pep' });
+    expect(r).toMatch(/pep/);
     expect(r).toMatch(/ainda não migrado/);
     expect(recusaDosModulos({ API_MODULOS: 'todos,sessao' })).toMatch(/todos/);
   });
 
-  it('"todos": a base e todos os registrados (onda 1 da F2.2: agenda, atendimento, cadastro, configuração, recepção)', () => {
+  it('"todos": a base e todos os registrados (ondas 1 e 2 da F2.2)', () => {
     expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual([
       'agenda',
+      'assinatura',
       'atendimento',
       'cadastro',
+      'catalogos',
       'config',
+      'consultas',
+      'contratualizacao',
+      'custos',
+      'documento',
+      'enfermagem',
+      'especialidades',
+      'exames',
+      'farmacia',
+      'faturamento',
+      'financeiro',
+      'implantacao',
+      'internacao',
+      'operadora',
+      'orcamento',
+      'patrimonio',
       'plataforma-onboarding',
+      'portaria',
+      'precos',
       'recepcao',
+      'rede',
+      'rouparia',
+      'sessoes',
+      'suporte',
     ]);
     expect(recusaDosModulos({ API_MODULOS: 'sessao,cadastro,atendimento' })).toBeNull();
     expect(modulosPedidos({ API_MODULOS: 'todos' }, registro)).toEqual(['exemplo']);

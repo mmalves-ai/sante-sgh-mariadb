@@ -9,14 +9,17 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { REGISTRO_MODULOS } from '../registro.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'catalogos' };
+// O módulo pelo próprio carregador (o integrador inclui `catalogos` no REGISTRO_MODULOS).
+const registro = { ...REGISTRO_MODULOS, catalogos: () => import('./modulo.js') };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

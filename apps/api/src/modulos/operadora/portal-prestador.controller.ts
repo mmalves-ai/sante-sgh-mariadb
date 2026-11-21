@@ -1,5 +1,5 @@
 // BFF do portal do prestador credenciado da operadora própria (M56, etapa 8, F7; ficha, seção 7; cap-08 §8.3.5). As rotas
-// são @Publica para a guarda das sessões internas: é outro domínio de identidade (a conta em SGH_OPE_PORTAL_ACESSO), e
+// são @Publica para a guarda das sessões internas: é outro domínio de identidade (a conta em o cadastro da operadora), e
 // cada handler confere a SESSÃO DO PORTAL DO PRESTADOR (cookie HttpOnly próprio) e, nas que mudam estado, o CSRF por
 // token duplo (cookie sgh_portal_prestador_csrf + cabeçalho x-csrf-portal-prestador). Nada vem da tela sobre quem é o
 // prestador: sai da conta, no servidor. A sessão dá `operadora.portal.acessar` só às funções liberadas.
@@ -210,7 +210,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Publica(
     'ativação do acesso do prestador ao portal (código de uso único conferido no serviço; limite de taxa)',
   )
-  @AuditadoNoHandler('a ativação (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a ativação (o cadastro da operadora) com a trilha na mesma transação')
   ativar(@Param('hospital') hospital: string, @Body() b: unknown, @Req() req: Req) {
     return this.portal.ativar(hospitalDaRota(hospital), corpo(esquemaAtivarPortalPrestador, b), this.ip(req));
   }
@@ -220,7 +220,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Publica(
     'entrada do prestador no portal (senha Argon2id e segundo fator conferidos no serviço; limite de taxa)',
   )
-  @AuditadoNoHandler('a tentativa de entrada (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a tentativa de entrada (o cadastro da operadora) com a trilha na mesma transação')
   async entrar(
     @Param('hospital') hospital: string,
     @Body() b: unknown,
@@ -277,7 +277,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Get(R.autorizacoes)
   @Header('cache-control', 'no-store')
   @Publica('os pedidos de autorização do prestador da sessão do portal (conferida no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.autorizacao-lida) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.autorizacao-lida) sem dado pessoal')
   autorizacoes(
     @Query() q: Record<string, string | undefined>,
     @Req() req: Req,
@@ -295,7 +295,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Get(R.autorizacao)
   @Header('cache-control', 'no-store')
   @Publica('um pedido de autorização do prestador da sessão do portal (conferida no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.autorizacao-lida) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.autorizacao-lida) sem dado pessoal')
   autorizacao(@Param('id') id: string, @Req() req: Req) {
     return this.portal.autorizacaoDoPrestador(this.sessao(req), idRota(id), this.ip(req));
   }
@@ -306,7 +306,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'pedido de autorização do prestador (sessão e CSRF do portal conferidos no handler; prestador da conta)',
   )
   @AuditadoNoHandler(
-    'operadora.registrarAutorizacao (SGH_OPE_AUTORIZACAO) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarAutorizacao (o cadastro da operadora) com a trilha na mesma transação',
   )
   solicitar(@Body() b: unknown, @Req() req: Req): Promise<ResultadoAutorizacao> {
     const s = this.sessao(req, true);
@@ -327,7 +327,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o prestador cancela o próprio pedido não decidido (sessão e CSRF do portal conferidos no handler)',
   )
   @AuditadoNoHandler(
-    'operadora.cancelarAutorizacao (SGH_OPE_AUTORIZACAO) com a SGH_TRILHA na mesma transação',
+    'operadora.cancelarAutorizacao (o cadastro da operadora) com a trilha na mesma transação',
   )
   cancelar(@Param('id') id: string, @Body() b: unknown, @Req() req: Req): Promise<ResultadoAutorizacao> {
     const s = this.sessao(req, true);
@@ -340,7 +340,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o prestador responde ao complemento pedido pelo auditor numa autorização dele (sessão e CSRF do portal conferidos no handler)',
   )
   @AuditadoNoHandler(
-    'operadora.responderComplementoPortal (SGH_OPE_AUTORIZACAO, _EVT e SGH_OPE_AUT_ANEXO) com a SGH_TRILHA na mesma transação',
+    'operadora.responderComplementoPortal (o cadastro da operadora) com a trilha na mesma transação',
   )
   responderComplemento(
     @Param('id') id: string,
@@ -359,7 +359,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Get(R.anexo)
   @Header('cache-control', 'no-store')
   @Publica('um anexo da resposta ao complemento do prestador da sessão do portal (conferida no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.autorizacao-lida) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.autorizacao-lida) sem dado pessoal')
   async anexo(
     @Param('id') id: string,
     @Param('anexo') anexo: string,
@@ -390,7 +390,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @HttpCode(200)
   @Publica('o prestador abre um protocolo de atendimento (sessão e CSRF do portal conferidos no handler)')
   @AuditadoNoHandler(
-    'operadora.registrarProtocolo pelo portal (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarProtocolo pelo portal (o cadastro da operadora e o evento) com a trilha na mesma transação',
   )
   abrirProtocolo(@Body() b: unknown, @Req() req: Req): Promise<ResultadoProtocoloPortalAberto> {
     const s = this.sessao(req, true);
@@ -403,7 +403,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o prestador responde a uma interação da operadora num protocolo dele (sessão e CSRF do portal conferidos no handler)',
   )
   @AuditadoNoHandler(
-    'operadora.responderInteracaoPrestador (SGH_OPE_PROTOCOLO, _EVT e SGH_OPE_PROT_RESPOSTA) com a SGH_TRILHA na mesma transação',
+    'operadora.responderInteracaoPrestador (o cadastro da operadora) com a trilha na mesma transação',
   )
   responderInteracao(
     @Param('id') id: string,
@@ -426,7 +426,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Publica(
     'o anexo de uma resposta do prestador da sessão do portal num protocolo dele (conferida no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.autorizacao-lida) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.autorizacao-lida) sem dado pessoal')
   async anexoProtocolo(
     @Param('id') id: string,
     @Param('resposta') resposta: string,
@@ -460,7 +460,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'a elegibilidade do beneficiário pela carteirinha (sessão e CSRF do portal conferidos no handler; operadora da conta)',
   )
   @AuditadoNoHandler(
-    'a consulta registrada em SGH_OPE_ELEG_CONSULTA com a SGH_TRILHA na mesma transação (operadora.portal.elegibilidade-consultada)',
+    'a consulta registrada em o cadastro da operadora com a trilha na mesma transação (operadora.portal.elegibilidade-consultada)',
   )
   elegibilidade(@Body() b: unknown, @Req() req: Req): Promise<ElegibilidadePortal> {
     const s = this.sessao(req, true);
@@ -472,7 +472,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Publica(
     'o prestador troca a própria senha (sessão e CSRF do portal; senha atual e código conferidos no serviço)',
   )
-  @AuditadoNoHandler('a troca (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação; o erro também')
+  @AuditadoNoHandler('a troca (o cadastro da operadora) com a trilha na mesma transação; o erro também')
   trocarSenha(@Body() b: unknown, @Req() req: Req): Promise<{ mensagem: string }> {
     const s = this.sessao(req, true);
     return this.portal.trocarSenha(s, corpo(esquemaTrocarSenhaPortalPrestador, b), this.ip(req));
@@ -485,7 +485,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o início da troca do autenticador (sessão e CSRF do portal; senha e código atual conferidos no serviço)',
   )
   @AuditadoNoHandler(
-    'o erro de senha ou código vai à SGH_TRILHA com o contador; o segredo novo fica só na sessão',
+    'o erro de senha ou código vai à trilha com o contador; o segredo novo fica só na sessão',
   )
   iniciarAutenticador(@Body() b: unknown, @Req() req: Req): Promise<AutenticadorNovoPortalPrestador> {
     const s = this.sessao(req, true);
@@ -499,7 +499,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Post(R.autenticadorConfirmar)
   @HttpCode(200)
   @Publica('a confirmação do autenticador novo (sessão e CSRF do portal; o código do aplicativo novo)')
-  @AuditadoNoHandler('a troca (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a troca (o cadastro da operadora) com a trilha na mesma transação')
   confirmarAutenticador(@Body() b: unknown, @Req() req: Req): Promise<{ mensagem: string }> {
     const s = this.sessao(req, true);
     return this.portal.confirmarAutenticador(
@@ -526,7 +526,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o envio do lote XML TISS pelo prestador (sessão e CSRF do portal conferidos no handler; o lote tem de ser dele)',
   )
   @AuditadoNoHandler(
-    'o lote (SGH_OPE_CONTA, as guias, os itens e o evento) com a SGH_TRILHA na mesma transação (operadora.portal.lote-enviado)',
+    'o lote (o cadastro da operadora, as guias, os itens e o evento) com a trilha na mesma transação (operadora.portal.lote-enviado)',
   )
   enviarLote(@Body() b: unknown, @Req() req: Req): Promise<ResultadoConta> {
     const s = this.sessao(req, true);
@@ -536,7 +536,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Get(R.contaDemonstrativo)
   @Header('cache-control', 'no-store')
   @Publica('o demonstrativo de análise de um lote do prestador da sessão do portal (conferida no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.demonstrativo-baixado)')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.demonstrativo-baixado)')
   demonstrativoConta(
     @Param('id') id: string,
     @Req() req: Req,
@@ -560,7 +560,7 @@ export class PortalPrestadorController implements OnModuleInit {
     'o recurso de glosa por item do prestador (sessão e CSRF do portal conferidos no handler; o lote tem de ser dele)',
   )
   @AuditadoNoHandler(
-    'o recurso (SGH_OPE_CONTA_RECURSO_ITEM e a guia) com a SGH_TRILHA na mesma transação (operadora.portal.recurso-item-enviado)',
+    'o recurso (o cadastro da operadora e a guia) com a trilha na mesma transação (operadora.portal.recurso-item-enviado)',
   )
   recorrerConta(@Param('id') id: string, @Body() b: unknown, @Req() req: Req): Promise<ResultadoConta> {
     const s = this.sessao(req, true);
@@ -572,7 +572,7 @@ export class PortalPrestadorController implements OnModuleInit {
   @Publica(
     'o demonstrativo de pagamento de um lote quitado do prestador da sessão do portal (conferida no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (operadora.portal.demonstrativo-pagamento-baixado)')
+  @AuditadoNoHandler('a leitura vai à trilha (operadora.portal.demonstrativo-pagamento-baixado)')
   demonstrativoPagamentoConta(
     @Param('id') id: string,
     @Req() req: Req,

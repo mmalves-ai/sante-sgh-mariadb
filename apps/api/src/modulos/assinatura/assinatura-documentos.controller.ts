@@ -13,7 +13,7 @@
 //   POST /api/documento/sncr                                        (numeração SNCR: chave `receita.sncr`, desligada)
 //   PUT  /api/documento/simulador-psc/fontes                        (SÓ dev/ci: fontes do simulador fora do ar)
 // E o agendador do reprocessamento automático (regra 5): ligado fora de dev/ci; em dev/ci só com
-// ASSINATURA_REPROCESSAR=ligado (a cópia é compartilhada). Toda escrita só em SGH_, com a SGH_TRILHA na mesma transação.
+// ASSINATURA_REPROCESSAR=ligado (o banco do dev é compartilhado). Toda escrita com a trilha na mesma transação.
 import {
   Body,
   Controller,
@@ -43,7 +43,7 @@ import {
   type SituacaoAssinaturaDocumento,
   type SolicitacaoSncrResumo,
 } from '@sgh/contratos';
-import { lerRedePadrao } from '@sgh/legado';
+import { lerRedePadrao } from '../../sessao/rede.js';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -171,14 +171,14 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Auditar('documento.pendencias.lidas')
   async fila(@Req() req: RequisicaoAutorizada): Promise<PendenciasIcpResposta> {
     const r = await this.servico.fila(sessaoDe(req));
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_DOCUMENTO', chaveNaturalAlvo: `pendencias-icp;n:${r.itens.length}` };
+    req.sghAlvo = { tabelaAlvo: 'documento_prontuario', chaveNaturalAlvo: `pendencias-icp;n:${r.itens.length}` };
     return r;
   }
 
   @Post('assinatura/documentos/:id/previa')
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
-  @AuditadoNoHandler('prévia em SGH_DOC_PREVIA_ASSIN (PDF/A no S3) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('prévia em previa_assinatura (PDF/A no S3) com a trilha na mesma transação')
   previa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PreviaIcp> {
     return this.servico.previa(sessaoDe(req), idDaRota(id), corpo(esquemaPrevia, b).certificado);
   }
@@ -196,7 +196,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
     const r = await this.servico.pdfDaPrevia(sessaoDe(req), doc);
     req.sghAlvo = {
       paciente: r.paciente,
-      tabelaAlvo: 'SGH_DOC_PREVIA_ASSIN',
+      tabelaAlvo: 'previa_assinatura',
       idAlvo: String(doc),
       chaveNaturalAlvo: 'previa-icp',
     };
@@ -208,7 +208,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Post('assinatura/lote/preparar')
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
-  @AuditadoNoHandler('uma prévia por documento em SGH_DOC_PREVIA_ASSIN, cada uma com a sua SGH_TRILHA')
+  @AuditadoNoHandler('uma prévia por documento em previa_assinatura, cada uma com a sua trilha')
   lote(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<LoteIcpPreparado> {
     return this.servico.prepararLote(sessaoDe(req), corpo(esquemaPrepararLoteIcp, b));
   }
@@ -217,7 +217,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
   @AuditadoNoHandler(
-    'o pedido em SGH_DOC_PEDIDO_ASSINATURA com a SGH_TRILHA; a assinatura, a validação e o evento na volta',
+    'o pedido em pedido_assinatura com a trilha; a assinatura, a validação e o evento na volta',
   )
   pedir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PedidoAssinaturaIcpResposta> {
     return this.servico.pedir(sessaoDe(req), corpo(esquemaPedirAssinaturaIcp, b));
@@ -227,7 +227,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
   @AuditadoNoHandler(
-    'SGH_DOC_ASSINATURA, SGH_DOC_VALIDACAO, o evento e os avisos com a SGH_TRILHA na mesma transação',
+    'assinatura_documento, validacao_assinatura, o evento e os avisos com a trilha na mesma transação',
   )
   reprocessar(
     @Param('id') id: string,
@@ -238,7 +238,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
 
   @Get('assinatura/assinaturas/:id/pdf')
   @Permissao('documento.assinatura.assinar')
-  @AuditadoNoHandler('validação "ao exportar" em SGH_DOC_VALIDACAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('validação "ao exportar" em validacao_assinatura com a trilha na mesma transação')
   @Header('content-type', 'application/pdf')
   async pdfAssinado(
     @Param('id') id: string,
@@ -254,7 +254,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Post('assinatura/avisos/lidos')
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
-  @AuditadoNoHandler('LIDO_EM em SGH_DOC_ASSINATURA_AVISO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a leitura em aviso_assinatura com a trilha na mesma transação')
   avisosLidos(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<{ lidos: number }> {
     return this.servico.marcarAvisos(sessaoDe(req), corpo(esquemaMarcarAvisosAssinatura, b).avisos);
   }
@@ -275,7 +275,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @HttpCode(200)
   @Permissao('documento.assinatura.reprocessar')
   @AuditadoNoHandler(
-    'SGH_DOC_ASSINATURA, SGH_DOC_VALIDACAO, o evento e os avisos com a SGH_TRILHA na mesma transação',
+    'assinatura_documento, validacao_assinatura, o evento e os avisos com a trilha na mesma transação',
   )
   reprocessarDoEstabelecimento(
     @Param('id') id: string,
@@ -287,7 +287,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Post('assinatura/estabelecimento/avisos/lidos')
   @HttpCode(200)
   @Permissao('documento.assinatura.reprocessar')
-  @AuditadoNoHandler('LIDO_EM em SGH_DOC_ASSINATURA_AVISO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a leitura em aviso_assinatura com a trilha na mesma transação')
   avisosDoEstabelecimentoLidos(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -301,7 +301,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
   @AuditadoNoHandler(
-    'SGH_DOC_SNCR_SOLICITACAO (e o campo SNCR da receita) com a SGH_TRILHA na mesma transação',
+    'pedido_numeracao_receita (e o campo SNCR da receita) com a trilha na mesma transação',
   )
   sncr(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<SolicitacaoSncrResumo> {
     return this.servico.solicitarSncr(sessaoDe(req), corpo(esquemaSolicitarSncr, b).documento);

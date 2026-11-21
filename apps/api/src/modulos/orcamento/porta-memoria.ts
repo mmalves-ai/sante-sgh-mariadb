@@ -1,7 +1,8 @@
 // Porta do orçamento empresarial em memória (M54, etapa 7): a sessão sintética de dev/ci (E2E) e os testes da API.
 // Centros de custo, itens gerenciais e realizado SINTÉTICOS (determinísticos: o ano anterior a 2026 inteiro, 2026 até
-// setembro, nada depois); as gravações seguem as mesmas regras do legado (versão lida, só o rascunho muda, a aprovação
-// substitui a vigente do ano, nada se apaga além da linha do rascunho). Nenhum dado real.
+// setembro, nada depois); as gravações seguem as mesmas regras da porta própria (versão lida, só o rascunho muda, a aprovação
+// substitui a vigente do ano, nada se apaga além da linha do rascunho). Nenhum dado real. O realizado traz o centro
+// pelo id (como a porta própria).
 import type {
   CentroOrcamento,
   ItemGerencialOrcamento,
@@ -10,15 +11,19 @@ import type {
   OrcamentoVersao,
   ParametrosOrcamentoLidos,
 } from '@sgh/contratos';
-import type {
-  GravacaoLinhasOrcamento,
-  LinhaOrcamentoParaGravar,
-  RealizadoAgregadoLido,
-  RealizadoAnoLido,
-  VersaoOrcamentoParaCriar,
-} from '@sgh/legado';
+import type { RealizadoBruto } from '@sgh/dominio-financeiro';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ApoioOrcamentoLido, ContextoOrcamento, PortaOrcamento } from './porta.js';
+import {
+  type ApoioOrcamentoDados,
+  type ContextoOrcamento,
+  type GravacaoOrcamento,
+  type LinhaOrcamentoParaGravar,
+  type PlanoLinhasOrcamento,
+  type PortaOrcamento,
+  type RealizadoAno,
+  rotuloBaseOrcamento,
+  type VersaoOrcamentoNova,
+} from './porta.js';
 
 const CENTROS: readonly CentroOrcamento[] = [
   { id: 101, codigo: 300100, nome: 'UTI ADULTO SINTETICA', ativo: true },
@@ -97,10 +102,10 @@ const PARAMETROS: ParametrosOrcamentoLidos = {
 const mesesComRealizado = (ano: number): number => (ano < 2026 ? 12 : ano === 2026 ? 9 : 0);
 
 /** O realizado sintético de um ano (determinístico; centavos). */
-export function realizadoSintetico(ano: number): RealizadoAnoLido {
+export function realizadoSintetico(ano: number): RealizadoAno {
   const ate = mesesComRealizado(ano);
-  const agregado: RealizadoAgregadoLido[] = [];
-  const rateados: RealizadoAnoLido['rateados'][number][] = [];
+  const agregado: RealizadoBruto[] = [];
+  const rateados: RealizadoAno['rateados'][number][] = [];
   const fator = ano - 2020;
   for (let mes = 1; mes <= ate; mes++) {
     const base = { mes, codigoCentro: null };
@@ -125,25 +130,24 @@ export function realizadoSintetico(ano: number): RealizadoAnoLido {
       },
       {
         mes,
-        codigoCentro: 300100,
+        codigoCentro: 101,
         natureza: 'consumo',
         grupo: 0,
         subgrupo: 0,
         item: 0,
         centavos: 800_000 + mes * 1_000,
       },
-      { mes, codigoCentro: 200130, natureza: 'consumo', grupo: 0, subgrupo: 0, item: 0, centavos: 120_000 },
+      { mes, codigoCentro: 104, natureza: 'consumo', grupo: 0, subgrupo: 0, item: 0, centavos: 120_000 },
     );
     rateados.push({
-      documento: `sintetico-${ano}-${mes}`,
       grupo: 230,
       subgrupo: 1,
       item: 1,
       mes,
       centavos: 300_001,
       centros: [
-        { codigoCentro: 300100, percentual: 60 },
-        { codigoCentro: 300310, percentual: 40 },
+        { codigoCentro: 101, percentual: 60 },
+        { codigoCentro: 102, percentual: 40 },
       ],
     });
   }
@@ -186,6 +190,7 @@ const paraLinha = (l: LinhaOrcamentoParaGravar): LinhaOrcamento => ({
 
 export class PortaOrcamentoMemoria implements PortaOrcamento {
   readonly destino = 'memoria' as const;
+  readonly gravaConsumoPorCentro = true;
   private readonly versoesGravadas = new Map<number, VersaoMemoria>();
   private proximoId = 1;
 
@@ -209,7 +214,7 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
     return v && v.hospital === c.hospital ? v : null;
   }
 
-  async apoio(): Promise<ApoioOrcamentoLido> {
+  async apoio(): Promise<ApoioOrcamentoDados> {
     return { centros: [...CENTROS], itens: [...ITENS], empresas: [1], parametros: PARAMETROS };
   }
 
@@ -230,15 +235,27 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
     return v ? [...v.linhas.values()].map((l) => ({ ...l, meses: [...l.meses] })) : [];
   }
 
-  async realizado(_c: ContextoOrcamento, _empresa: number, ano: number): Promise<RealizadoAnoLido> {
+  async realizado(_c: ContextoOrcamento, _empresa: number, ano: number): Promise<RealizadoAno> {
     return realizadoSintetico(ano);
   }
 
   async criar(
     c: ContextoOrcamento,
-    x: VersaoOrcamentoParaCriar,
-    por: string,
+    x: VersaoOrcamentoNova,
+    g: GravacaoOrcamento,
   ): Promise<{ id: number; numero: number; linhas: number }> {
+    const por = g.login;
+    let copia: { ano: number; numero: number } | null = null;
+    if (x.base.tipo === 'versao') {
+      const o = this.daSessao(c, x.base.id);
+      copia = o ? { ano: o.cab.ano, numero: o.cab.numero } : null;
+    }
+    const base = rotuloBaseOrcamento(
+      x.base.tipo === 'versao' ? 'copia_versao' : x.base.tipo,
+      x.ano,
+      copia,
+      x.base.tipo === 'realizado' ? x.base.ajusteCentesimos : 0,
+    );
     const numero =
       Math.max(
         0,
@@ -257,7 +274,7 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
         numero,
         descricao: x.descricao,
         situacao: 'rascunho',
-        base: x.base,
+        base,
         versao: 0,
         criadoPor: por,
         criadoEm: agora,
@@ -278,9 +295,10 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
     c: ContextoOrcamento,
     id: number,
     versao: number,
-    g: GravacaoLinhasOrcamento,
-    por: string,
+    g: PlanoLinhasOrcamento,
+    gravacao: GravacaoOrcamento,
   ): Promise<{ versao: number }> {
+    const por = gravacao.login;
     const v = this.daSessao(c, id);
     if (!v || v.cab.situacao !== 'rascunho' || v.cab.versao !== versao) throw desatualizado();
     const linhas = new Map(v.linhas);
@@ -302,8 +320,9 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
     c: ContextoOrcamento,
     x: { readonly id: number; readonly versao: number; readonly empresa: number; readonly ano: number },
     observacao: string | null,
-    por: string,
+    g: GravacaoOrcamento,
   ): Promise<{ substituida: number | null }> {
+    const por = g.login;
     const v = this.daSessao(c, x.id);
     if (!v || v.cab.situacao !== 'rascunho' || v.cab.versao !== x.versao) throw desatualizado();
     const anterior = [...this.versoesGravadas.values()].find(
@@ -331,8 +350,9 @@ export class PortaOrcamentoMemoria implements PortaOrcamento {
     id: number,
     versao: number,
     motivo: string,
-    por: string,
+    g: GravacaoOrcamento,
   ): Promise<void> {
+    const por = g.login;
     const v = this.daSessao(c, id);
     if (!v || v.cab.situacao !== 'rascunho' || v.cab.versao !== versao) throw desatualizado();
     v.cab = {

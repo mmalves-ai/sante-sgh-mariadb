@@ -2,7 +2,7 @@
 // `Controladoria > Custos hospitalares > Custo por procedimento e por paciente` (`/custos/apuracao`) e `Resultado por
 // unidade e por convênio` (`/custos/resultado`). As regras são de @sgh/dominio-custos; aqui só a orquestração: lê a
 // estrutura (etapa 4), as estatísticas vigentes e as fontes agregadas, apura, confere a conservação, assina o resultado
-// (SHA-256 da forma canônica) e grava em SGH_CUS_* com a trilha na mesma transação.
+// (SHA-256 da forma canônica) e grava no banco do cliente com a trilha na mesma transação.
 import { createHash } from 'node:crypto';
 import {
   AGRUPAMENTOS_RESULTADO,
@@ -52,12 +52,18 @@ import {
   montarMatriz,
   pendenciasDaEstrutura,
 } from '@sgh/dominio-custos';
-import type { ApuracaoCustosLida, CustoContaLido, LinhaCentroLida } from '@sgh/legado';
+import type { ApuracaoCustosRegistrada, CustoContaApuracao, LinhaCentroApuracao } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoCustos, PortaCustos } from './porta.js';
 import { fonteValida, paraDominio, paraEstrutura, type SessaoCustos } from './servico.js';
 
-const ctx = (s: SessaoCustos): ContextoCustos => ({ rede: s.rede, hospital: s.hospital });
+const ctx = (s: SessaoCustos): ContextoCustos => ({
+  rede: s.rede,
+  hospital: s.hospital,
+  estabelecimento: s.estabelecimento ?? null,
+  usuario: s.usuario ?? null,
+  ...(s.correlacao ? { correlacao: s.correlacao } : {}),
+});
 const sha256 = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
 
 function json<T>(t: string, padrao: T): T {
@@ -80,7 +86,7 @@ const naoEncontrada = () =>
   );
 
 /** A linha por centro lida do banco no formato do contrato. */
-export function linhaDaLida(x: LinhaCentroLida): LinhaApuracaoCentro {
+export function linhaDaLida(x: LinhaCentroApuracao): LinhaApuracaoCentro {
   const recebidos = json<[number, number][]>(x.recebidos, []).map(([de, centavos]) => ({ de, centavos }));
   return {
     centro: x.centro,
@@ -107,7 +113,7 @@ export function linhaDaLida(x: LinhaCentroLida): LinhaApuracaoCentro {
   };
 }
 
-export function contaDaLida(x: CustoContaLido): CustoConta {
+export function contaDaLida(x: CustoContaApuracao): CustoConta {
   return {
     conta: x.conta,
     numero: x.numero,
@@ -130,7 +136,7 @@ export function contaDaLida(x: CustoContaLido): CustoConta {
   };
 }
 
-function resumoDe(a: ApuracaoCustosLida): ResumoApuracao {
+function resumoDe(a: ApuracaoCustosRegistrada): ResumoApuracao {
   return {
     id: a.id,
     competencia: a.competencia,
@@ -148,7 +154,7 @@ function resumoDe(a: ApuracaoCustosLida): ResumoApuracao {
 
 const COMPLETUDE_VAZIA: SituacaoCompletude = { fontes: [], parcial: false, rotulo: null };
 
-export function apuracaoDe(a: ApuracaoCustosLida, linhas: readonly LinhaCentroLida[]): ApuracaoCustos {
+export function apuracaoDe(a: ApuracaoCustosRegistrada, linhas: readonly LinhaCentroApuracao[]): ApuracaoCustos {
   return {
     id: a.id,
     competencia: a.competencia,
@@ -169,7 +175,7 @@ export function apuracaoDe(a: ApuracaoCustosLida, linhas: readonly LinhaCentroLi
   };
 }
 
-const vigenteDe = (as: readonly ApuracaoCustosLida[]) => as.find((a) => a.situacao !== 'substituida') ?? null;
+const vigenteDe = (as: readonly ApuracaoCustosRegistrada[]) => as.find((a) => a.situacao !== 'substituida') ?? null;
 
 const ROTULO_TIPO_CONTA: Readonly<Record<string, string>> = {
   I: 'Internação',
@@ -384,7 +390,7 @@ export class ServicoApuracaoCustos {
         })),
       },
       s.login,
-      s.trilha(EVENTOS_AUDITAVEIS.custosApurado.codigo, 'apurar', 'SGH_CUS_APURACAO', null),
+      s.trilha(EVENTOS_AUDITAVEIS.custosApurado.codigo, 'apurar', 'apuracao_custo', null),
     );
     return apuracaoDe(g.apuracao, await this.porta.linhasApuracao(ctx(s), g.apuracao.id));
   }
@@ -395,7 +401,7 @@ export class ServicoApuracaoCustos {
       id,
       versao,
       s.login,
-      s.trilha(EVENTOS_AUDITAVEIS.custosApuracaoAprovada.codigo, 'aprovar', 'SGH_CUS_APURACAO', id),
+      s.trilha(EVENTOS_AUDITAVEIS.custosApuracaoAprovada.codigo, 'aprovar', 'apuracao_custo', id),
     );
     if (!r) throw naoEncontrada();
     return apuracaoDe(r.depois, await this.porta.linhasApuracao(ctx(s), id));

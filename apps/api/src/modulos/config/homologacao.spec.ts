@@ -1,7 +1,7 @@
 // M36: as telas de coexistência leem o painel da homologação gerado por `pnpm homologacao:roteiro` (só leitura;
 // nenhum acesso ao banco). Arquivo ausente ou fora do esquema: null. Só com config.coexistencia.ler: a recepção
 // recebe 403 (matriz perfil × permissão).
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -10,6 +10,7 @@ import { criarApp } from '../../app.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { caminhoHomologacao, fonteArquivoHomologacao } from './homologacao.js';
+import { registroComConfig } from './modulo-teste.spec-util.js';
 
 const raiz = resolve(import.meta.dirname, '../../../../..');
 const tmp = mkdtempSync(join(tmpdir(), 'sgh-api-homologacao-'));
@@ -53,10 +54,12 @@ const painel = {
 const arquivo = join(tmp, 'homologacao.json');
 writeFileSync(arquivo, JSON.stringify(painel));
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config' };
 let app: NestFastifyApplication;
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { homologacao: fonteArquivoHomologacao(arquivo) });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    registro: registroComConfig({ homologacao: fonteArquivoHomologacao(arquivo) }),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -85,13 +88,16 @@ describe('fonte do painel de homologação', () => {
     expect(fonteArquivoHomologacao(ruim).painel()).toBeNull();
   });
 
-  it('o painel versionado do repositório passa no esquema, sem liberada e com o pentest bloqueando', () => {
-    const p = fonteArquivoHomologacao(caminhoHomologacao(raiz, {})).painel();
+  // O painel versionado era o roteiro da homologação sobre a cópia do sistema de origem (convivência, ADR 0003): não é
+  // gerado neste repositório. Quando gerado aqui, passa no esquema; sem ele, a fonte devolve null (painel vazio).
+  it('o painel do repositório: ausente, null; gerado, passa no esquema sem valor de linha', () => {
+    const caminho = caminhoHomologacao(raiz, {});
+    const p = fonteArquivoHomologacao(caminho).painel();
+    if (!existsSync(caminho)) {
+      expect(p).toBeNull();
+      return;
+    }
     expect(p).not.toBeNull();
-    expect(p?.hospitais.map((h) => h.codigo)).toEqual(['pc', 'hs']);
-    expect(p?.operacoes.some((o) => Object.values(o.estados).includes('liberada'))).toBe(false);
-    expect(p?.pentest.bloqueiaLiberacao).toBe(true);
-    // nenhum valor de linha: só nomes de estrutura, estados e contagens
     expect(JSON.stringify(p)).not.toMatch(/\d{3}\.\d{3}\.\d{3}-\d{2}|@[a-z]+\./);
   });
 });

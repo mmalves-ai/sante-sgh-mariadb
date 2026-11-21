@@ -15,7 +15,7 @@
 //   POST /api/operadora/beneficiarios/:id/reativacao reativação do excluído
 //   POST /api/operadora/beneficiarios/:id/carteirinha segunda via (e seguintes) com o motivo
 //   GET  /api/operadora/elegibilidade?carteirinha=&data=  elegibilidade pela carteirinha (auditada)
-// Toda gravação vai numa transação só SGH_ com a SGH_TRILHA junto; nenhuma tabela do outro sistema é gravada.
+// Toda gravação vai numa transação só com a trilha_auditoria junto; nenhuma tabela do outro sistema é gravada.
 import {
   Body,
   Controller,
@@ -123,7 +123,7 @@ export class BeneficiariosOperadoraController {
   @Post(R.gravarOperadora.caminho)
   @HttpCode(201)
   @Permissao(R.gravarOperadora.permissao)
-  @AuditadoNoHandler('operadora.empresa.gravada (SGH_OPE_OPERADORA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.empresa.gravada (operadora_saude) com a trilha_auditoria na mesma transação')
   async incluirOperadora(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoOperadora> {
     const r = await this.servico.gravarOperadora(sessaoDe(req), null, corpo(esquemaOperadoraEntrada, b));
     return { ok: true, id: r.id, mensagem: MENSAGEM.operadora };
@@ -131,7 +131,7 @@ export class BeneficiariosOperadoraController {
 
   @Put(`${R.gravarOperadora.caminho}/:id`)
   @Permissao(R.gravarOperadora.permissao)
-  @AuditadoNoHandler('operadora.empresa.gravada (SGH_OPE_OPERADORA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.empresa.gravada (operadora_saude) com a trilha_auditoria na mesma transação')
   async alterarOperadora(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -155,7 +155,7 @@ export class BeneficiariosOperadoraController {
   @Post(R.gravarProduto.caminho)
   @HttpCode(201)
   @Permissao(R.gravarProduto.permissao)
-  @AuditadoNoHandler('operadora.produto.gravado (SGH_OPE_PRODUTO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.produto.gravado (produto_plano) com a trilha_auditoria na mesma transação')
   async incluirProduto(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoOperadora> {
     const r = await this.servico.gravarProduto(sessaoDe(req), null, corpo(esquemaProdutoEntrada, b));
     return { ok: true, id: r.id, mensagem: MENSAGEM.produto };
@@ -163,7 +163,7 @@ export class BeneficiariosOperadoraController {
 
   @Put(`${R.gravarProduto.caminho}/:id`)
   @Permissao(R.gravarProduto.permissao)
-  @AuditadoNoHandler('operadora.produto.gravado (SGH_OPE_PRODUTO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.produto.gravado (produto_plano) com a trilha_auditoria na mesma transação')
   async alterarProduto(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -186,7 +186,7 @@ export class BeneficiariosOperadoraController {
     const f = filtro(esquemaFiltroContratos, q);
     const r = await this.servico.contratos(sessaoDe(req), f);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_OPE_CONTRATO',
+      tabelaAlvo: 'contrato_plano',
       chaveNaturalAlvo: `parte:lista;n:${r.itens.length}`,
     };
     return r;
@@ -198,7 +198,7 @@ export class BeneficiariosOperadoraController {
   async contrato(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ContratoOperadora> {
     const c = await this.servico.contrato(sessaoDe(req), idDe(id));
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_OPE_CONTRATO',
+      tabelaAlvo: 'contrato_plano',
       idAlvo: String(c.id),
       chaveNaturalAlvo: `contrato:${c.numero}`,
     };
@@ -208,7 +208,7 @@ export class BeneficiariosOperadoraController {
   @Post(R.gravarContrato.caminho)
   @HttpCode(201)
   @Permissao(R.gravarContrato.permissao)
-  @AuditadoNoHandler('operadora.contrato.gravado (SGH_OPE_CONTRATO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.contrato.gravado (contrato_plano) com a trilha_auditoria na mesma transação')
   async incluirContrato(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoOperadora> {
     const r = await this.servico.gravarContrato(sessaoDe(req), null, corpo(esquemaContratoEntrada, b));
     return { ok: true, id: r.id, mensagem: MENSAGEM.contrato };
@@ -216,7 +216,7 @@ export class BeneficiariosOperadoraController {
 
   @Put(`${R.gravarContrato.caminho}/:id`)
   @Permissao(R.gravarContrato.permissao)
-  @AuditadoNoHandler('operadora.contrato.gravado (SGH_OPE_CONTRATO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.contrato.gravado (contrato_plano) com a trilha_auditoria na mesma transação')
   async alterarContrato(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -238,7 +238,7 @@ export class BeneficiariosOperadoraController {
     const f = filtro(esquemaFiltroBeneficiarios, q);
     const r = await this.servico.beneficiarios(sessaoDe(req), f);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_OPE_BENEFICIARIO',
+      tabelaAlvo: 'beneficiario_plano',
       chaveNaturalAlvo: `parte:lista;n:${r.itens.length}`,
     };
     return r;
@@ -250,7 +250,7 @@ export class BeneficiariosOperadoraController {
   async ficha(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<BeneficiarioFicha> {
     const f = await this.servico.ficha(sessaoDe(req), idDe(id));
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_OPE_BENEFICIARIO',
+      tabelaAlvo: 'beneficiario_plano',
       idAlvo: String(f.id),
       chaveNaturalAlvo: 'parte:ficha',
     };
@@ -261,7 +261,7 @@ export class BeneficiariosOperadoraController {
   @HttpCode(201)
   @Permissao(R.gravarBeneficiario.permissao)
   @AuditadoNoHandler(
-    'operadora.beneficiario.gravado (SGH_OPE_BENEFICIARIO e a 1ª via em SGH_OPE_CARTEIRINHA) com a SGH_TRILHA na mesma transação',
+    'operadora.beneficiario.gravado (beneficiario_plano e a 1ª via em cartao_beneficiario) com a trilha_auditoria na mesma transação',
   )
   async incluirBeneficiario(
     @Body() b: unknown,
@@ -283,7 +283,7 @@ export class BeneficiariosOperadoraController {
   @Put(`${R.gravarBeneficiario.caminho}/:id`)
   @Permissao(R.gravarBeneficiario.permissao)
   @AuditadoNoHandler(
-    'operadora.beneficiario.gravado (SGH_OPE_BENEFICIARIO) com a SGH_TRILHA na mesma transação',
+    'operadora.beneficiario.gravado (beneficiario_plano) com a trilha_auditoria na mesma transação',
   )
   async alterarBeneficiario(
     @Param('id') id: string,
@@ -301,7 +301,7 @@ export class BeneficiariosOperadoraController {
   @Post(`${R.gravarBeneficiario.caminho}/:id/baixa`)
   @Permissao(R.gravarBeneficiario.permissao)
   @AuditadoNoHandler(
-    'operadora.beneficiario.gravado (a exclusão em SGH_OPE_BENEFICIARIO, com os dependentes) com a SGH_TRILHA na mesma transação',
+    'operadora.beneficiario.gravado (a exclusão em beneficiario_plano, com os dependentes) com a trilha_auditoria na mesma transação',
   )
   async baixar(
     @Param('id') id: string,
@@ -322,7 +322,7 @@ export class BeneficiariosOperadoraController {
   @Post(`${R.gravarBeneficiario.caminho}/:id/reativacao`)
   @Permissao(R.gravarBeneficiario.permissao)
   @AuditadoNoHandler(
-    'operadora.beneficiario.gravado (a reativação em SGH_OPE_BENEFICIARIO) com a SGH_TRILHA na mesma transação',
+    'operadora.beneficiario.gravado (a reativação em beneficiario_plano) com a trilha_auditoria na mesma transação',
   )
   async reativar(
     @Param('id') id: string,
@@ -337,7 +337,7 @@ export class BeneficiariosOperadoraController {
   @Post(`${R.gravarBeneficiario.caminho}/:id/carteirinha`)
   @Permissao(R.gravarBeneficiario.permissao)
   @AuditadoNoHandler(
-    'operadora.carteirinha.emitida (SGH_OPE_CARTEIRINHA e a via em SGH_OPE_BENEFICIARIO) com a SGH_TRILHA na mesma transação',
+    'operadora.carteirinha.emitida (cartao_beneficiario e a via em beneficiario_plano) com a trilha_auditoria na mesma transação',
   )
   async emitirVia(
     @Param('id') id: string,
@@ -360,7 +360,7 @@ export class BeneficiariosOperadoraController {
     const f = filtro(esquemaFiltroElegibilidade, q);
     const r = await this.servico.elegibilidade(sessaoDe(req), f.carteirinha, f.data);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_OPE_BENEFICIARIO',
+      tabelaAlvo: 'beneficiario_plano',
       ...(r.beneficiario ? { idAlvo: String(r.beneficiario.id) } : {}),
       chaveNaturalAlvo: `parte:elegibilidade;elegivel:${r.elegivel ? 'sim' : 'nao'}`,
     };

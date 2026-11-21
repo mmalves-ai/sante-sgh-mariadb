@@ -1,5 +1,6 @@
-// Apoio dos testes do financeiro pela HTTP (M32): a app com a sessão real sobre a fonte sintética e a porta EM MEMÓRIA
-// (nada conecta a banco), o login dos usuários sintéticos da segregação e as chamadas com a Idempotency-Key.
+// Apoio dos testes do financeiro pela HTTP (M32): a app com a sessão real sobre a fonte sintética, o módulo registrado
+// (API_MODULOS=financeiro) e a porta EM MEMÓRIA (nada conecta a banco), o login dos usuários sintéticos da segregação
+// e as chamadas com a Idempotency-Key.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { expect } from 'vitest';
 import { criarApp } from '../../../app.js';
@@ -7,6 +8,7 @@ import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
 import { armazemFinanceiroMemoria } from '../armazem.js';
+import { moduloFinanceiro } from '../modulo.js';
 import { PortaFinanceiroMemoria } from '../porta-memoria.js';
 
 export interface Sessao {
@@ -32,15 +34,15 @@ export interface AppFinanceiro {
 let seq = 0;
 
 export async function appFinanceiro(): Promise<AppFinanceiro> {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'financeiro' };
   const trilha = new RegistradorTrilhaMemoria();
   const porta = new PortaFinanceiroMemoria({ estado: () => 'verde' });
   const armazem = armazemFinanceiroMemoria();
   const app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    financeiro: porta,
-    armazemFinanceiro: armazem,
-    vigia: null,
+    registro: {
+      financeiro: async () => ({ modulo: (ctx) => moduloFinanceiro(ctx, { porta, armazem }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

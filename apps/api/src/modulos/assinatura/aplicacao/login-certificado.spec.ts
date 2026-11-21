@@ -37,7 +37,7 @@ function sessao(): SessaoCadastro {
     hospital: 'pc',
     rede: REDE,
     login: LOGIN,
-    porta: { rede: REDE, hospital: 'pc' },
+    porta: { rede: REDE, hospital: 'pc', cliente: 'teste', estabelecimento: 1, usuario: 1, correlacao: 'teste' },
     pode: () => true,
   };
 }

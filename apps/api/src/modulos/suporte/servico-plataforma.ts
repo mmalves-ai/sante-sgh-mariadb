@@ -1,8 +1,8 @@
-// Contas da plataforma (ADR 0021): login PRÓPRIO (separado da porta de entrada dos usuários do SPDATA),
+// Contas da plataforma (ADR 0021): login PRÓPRIO (separado da porta de entrada dos usuários do hospital),
 // senha em Argon2id, segundo fator TOTP obrigatório fora de dev/ci, sessão no servidor (armazém Valkey)
 // presa ao endereço da rede, cookie HttpOnly próprio e CSRF por token duplo, tentativas contadas antes de
 // conferir. Designação (só a PLATAFORMA): cadastrar suporte por e-mail (com convite para a pessoa definir a
-// senha), ativar e desativar a função e marcar os estabelecimentos; toda mudança vai à SGH_PLAT_AUDITORIA.
+// senha), ativar e desativar a função e marcar os estabelecimentos; toda mudança vai à auditoria das contas.
 // Nenhuma senha, cifra, segredo TOTP ou token vai a log, resposta ou trilha.
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
@@ -27,9 +27,9 @@ import {
   uriOtpauth,
   type ContaRegra,
 } from '@sgh/dominio-acesso';
-import type { AtribuicaoLida, ContaLida } from '@sgh/legado';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
 import type { RepositorioPlataforma } from './repositorio.js';
+import type { AtribuicaoLida, ContaLida } from './tipos.js';
 
 export class ErroPlataforma extends Error {
   constructor(

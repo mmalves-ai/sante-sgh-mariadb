@@ -24,8 +24,8 @@
 //   POST /api/operadora/portal/acessos/:id/reemissao     operadora.reemitirAcessoPortal (novo código; zera a senha)
 //   POST /api/operadora/portal/acessos/:id/encerrar      operadora.encerrarAcessoPortal
 // Os protocolos exigem a chave `operadora.atendimento`, e as contas a `operadora.portalPrestador`, que só valem com a do
-// módulo (regra 1), menos o apoio e a lista das contas. Cada gravação muda as SGH_OPE_* da fatia com a SGH_TRILHA na
-// mesma transação; nenhuma tabela legada é escrita. A resposta ao beneficiário não sai por mensagem nesta etapa (o meio
+// módulo (regra 1), menos o apoio e a lista das contas. Cada gravação muda as tabelas da operadora da fatia com a trilha_auditoria na
+// mesma transação; nenhuma tabela de outro sistema é escrita. A resposta ao beneficiário não sai por mensagem nesta etapa (o meio
 // é registrado; DP-44 (a)).
 import {
   Body,
@@ -82,7 +82,7 @@ import {
   protocoloAtendimento,
   validadeDaAtivacao,
 } from '@sgh/dominio-operadora';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -118,11 +118,12 @@ import {
   sha256,
 } from './atendimento-servico.js';
 import { PORTA_AUTORIZACAO_OPERADORA, type PortaAutorizacaoOperadora } from './autorizacao-porta.js';
+import { contextoGravacao } from './contexto-gravacao.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.atendimento';
-const TABELA = 'SGH_OPE_PROTOCOLO';
-const TABELA_ACESSO = 'SGH_OPE_PORTAL_ACESSO';
+const TABELA = 'protocolo_beneficiario';
+const TABELA_ACESSO = 'conta_portal_prestador';
 function filtro<T extends { safeParse(v: unknown): { success: boolean; data?: unknown } }>(
   esquema: T,
   q: unknown,
@@ -171,7 +172,7 @@ export class AtendimentoOperadoraController {
     return { ligada, motivo: ligada ? null : (f?.motivo ?? situacao.modulo.motivo) };
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T extends { id: number }>(
     s: SessaoCadastro,
     evento: string,
@@ -179,9 +180,9 @@ export class AtendimentoOperadoraController {
     tabela: string,
     fn: (g: GravadorAtendimento) => Promise<T>,
   ): Promise<T> {
-    const linha = (r: T): LinhaTrilha =>
+    const linha = (r: T): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria')
@@ -302,7 +303,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.registrar.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoProtocoloOpe> {
     const e = corpo(esquemaRegistrarProtocoloOpe, b);
@@ -332,7 +333,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.analisar.permissao)
   @AuditadoNoHandler(
-    'operadora.analisarProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.analisarProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async analisar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -353,7 +354,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.interagir.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarInteracaoProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarInteracaoProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async interagir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -374,7 +375,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.prorrogar.permissao)
   @AuditadoNoHandler(
-    'operadora.prorrogarProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.prorrogarProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async prorrogar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -420,7 +421,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.responder.permissao)
   @AuditadoNoHandler(
-    'operadora.responderProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.responderProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -469,7 +470,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.pedirEscrita.permissao)
   @AuditadoNoHandler(
-    'operadora.pedirEscritaProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.pedirEscritaProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async pedirEscrita(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -508,7 +509,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.enviarEscrita.permissao)
   @AuditadoNoHandler(
-    'operadora.enviarEscritaProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.enviarEscritaProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async enviarEscrita(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -535,7 +536,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.encerrar.permissao)
   @AuditadoNoHandler(
-    'operadora.encerrarProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.encerrarProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async encerrar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -556,7 +557,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.cancelar.permissao)
   @AuditadoNoHandler(
-    'operadora.cancelarProtocolo (SGH_OPE_PROTOCOLO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.cancelarProtocolo (protocolo_beneficiario e o evento) com a trilha_auditoria na mesma transação',
   )
   async cancelar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -577,7 +578,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.reanalise.permissao)
   @AuditadoNoHandler(
-    'operadora.pedirReanaliseProtocolo (o novo SGH_OPE_PROTOCOLO da ouvidoria e os eventos) com a SGH_TRILHA na mesma transação',
+    'operadora.pedirReanaliseProtocolo (o novo protocolo_beneficiario da ouvidoria e os eventos) com a trilha_auditoria na mesma transação',
   )
   async reanalise(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -672,7 +673,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.criarAcesso.permissao)
   @AuditadoNoHandler(
-    'operadora.criarAcessoPortal (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação',
+    'operadora.criarAcessoPortal (conta_portal_prestador) com a trilha_auditoria na mesma transação',
   )
   async criarAcesso(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAcessoPortal> {
     const e = corpo(esquemaCriarAcessoPortal, b);
@@ -712,7 +713,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.alterarAcesso.permissao)
   @AuditadoNoHandler(
-    'operadora.alterarAcessoPortal (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação',
+    'operadora.alterarAcessoPortal (conta_portal_prestador) com a trilha_auditoria na mesma transação',
   )
   async alterarAcesso(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -741,7 +742,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.reemitirAcesso.permissao)
   @AuditadoNoHandler(
-    'operadora.reemitirAcessoPortal (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação',
+    'operadora.reemitirAcessoPortal (conta_portal_prestador) com a trilha_auditoria na mesma transação',
   )
   async reemitirAcesso(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -778,7 +779,7 @@ export class AtendimentoOperadoraController {
   @HttpCode(200)
   @Permissao(R.encerrarAcesso.permissao)
   @AuditadoNoHandler(
-    'operadora.encerrarAcessoPortal (SGH_OPE_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação',
+    'operadora.encerrarAcessoPortal (conta_portal_prestador) com a trilha_auditoria na mesma transação',
   )
   async encerrarAcesso(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);

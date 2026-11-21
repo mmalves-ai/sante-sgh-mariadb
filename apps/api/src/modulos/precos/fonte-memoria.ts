@@ -1,8 +1,8 @@
 // Fonte do M12 em MEMÓRIA (sessão sintética de dev/ci; E2E e testes HTTP): convênios, tabelas e preços
 // SINTÉTICOS (nomes "SINTÉTICO", nenhum dado real) e as gravações com as MESMAS entradas Zod, vetos e códigos
-// de recusa das receitas do legado (situação, contrato, reajuste e desfazer), a idempotência e a
-// reautenticação da operação crítica. A prova contra o banco é a assinatura e a integração na cópia; aqui é a
-// tela e a HTTP. Nada conecta a banco.
+// de recusa das operações (situação, contrato, reajuste e desfazer), a idempotência e a reautenticação da
+// operação crítica. A prova contra o banco é a integração da fonte própria; aqui é a tela e a HTTP. Nada conecta
+// a banco.
 import {
   CAMPOS_CONTRATO,
   type DesfazerReajusteEntrada,
@@ -11,49 +11,61 @@ import {
   TABELAS_COM_PERCENTUAL,
 } from '@sgh/contratos';
 import {
-  COLUNA_DO_CAMPO,
-  COLUNAS_LIDAS_CONTRATO,
-  type CabecalhoTabela,
-  type CargaLida,
-  componenteAceito,
-  type Componentes,
-  type ContextoOperacao,
-  type ConvenioLido,
-  diariaAcompanhanteValida,
   ErroOperacao,
   erroConflitoVersao,
   erroEntradaInvalida,
   erroIdempotenciaDivergente,
-  erroOperacaoBloqueada,
+  erroNaoLiberada,
   erroReautenticacao,
-  ErroPlanoSgh,
-  type Executor,
-  type FiltroConvenio,
-  type FonteCatalogo,
   hashEntrada,
-  type ItemDiariaLido,
-  type ItemHonorarioLido,
-  type ItemMatmedLido,
-  type LinhaCargaLida,
-  type LinhaDoLote,
-  type LoteLido,
-  mesmosComponentes,
-  mesmoValor,
-  type Operacao,
-  type Pagina,
-  type PlanoLido,
   REAUTENTICACAO_MS_PADRAO,
   type ResultadoOperacao,
-  type VigenciaLida,
-  valorParaGravar,
-} from '@sgh/legado';
-import type { CtxPrecos, FiltroPagina, FontePrecos } from './fonte.js';
+} from '@sgh/nucleo';
+import { CHAVES_CONTRATO, COLUNA_DO_CAMPO, mesmoValor, valorParaGravar } from './campos-contrato.js';
+import type { ContextoGravacaoPreco, CtxPrecos, FiltroPagina, FontePrecos } from './fonte.js';
+import { type NomeOperacaoPreco, OPERACOES_PRECO } from './operacoes.js';
+import {
+  type CabecalhoTabela,
+  type CargaImportacao,
+  type Componentes,
+  type ConvenioPreco,
+  ErroPlano,
+  type FiltroConvenio,
+  type ItemDiariaPreco,
+  type ItemHonorarioPreco,
+  type ItemMatmedPreco,
+  type LinhaCargaImportacao,
+  type LinhaDoLote,
+  type LoteReajuste,
+  type Pagina,
+  type PlanoConvenio,
+  type VigenciaItem,
+} from './tipos.js';
+
+const VALOR_MAXIMO_COMPONENTE = 99_999_999.99;
+const casas = (v: number) => (String(v).split('.')[1] ?? '').length;
+/** O componente cabe no valor gravado (até 4 casas no CH, custo e outros; 2 na anestesia e no filme). */
+function componenteAceito(c: Componentes): boolean {
+  const ok = (v: number, max: number) =>
+    Number.isFinite(v) && v >= 0 && v <= VALOR_MAXIMO_COMPONENTE && casas(v) <= max;
+  return ok(c.ch, 4) && ok(c.co, 4) && ok(c.outros, 4) && ok(c.anes, 2) && ok(c.filme, 2);
+}
+/** Igualdade exata dos cinco componentes (anestesia e filme comparados em centavos). */
+function mesmosComponentes(a: Componentes, b: Componentes): boolean {
+  const c2 = (x: number) => Math.round(x * 100);
+  return a.ch === b.ch && a.co === b.co && a.outros === b.outros && c2(a.anes) === c2(b.anes) && c2(a.filme) === c2(b.filme);
+}
+/** A diária de acompanhante apontada é do tipo diária e do subtipo acompanhante (1/5), ou nenhuma. */
+function diariaAcompanhanteValida(d: { tipo: number | null; subtipo: number | null } | null): boolean {
+  if (d === null) return true;
+  return !((d.tipo !== null && d.tipo !== 1) || (d.subtipo !== null && d.subtipo !== 5));
+}
 
 const ZERO: Componentes = { ch: 0, co: 0, filme: 0, anes: 0, outros: 0 };
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
 
-interface ConvenioMemoria extends ConvenioLido {
+interface ConvenioMemoria extends ConvenioPreco {
   dth: { tipo: number; subtipo: number } | null;
   valores: Record<string, string | number | null>;
 }
@@ -83,7 +95,7 @@ interface AutoriaMemoria {
 const hojeIso = () => new Date().toISOString().slice(0, 10);
 
 /** Só as colunas públicas do convênio lido (sem os dados internos da memória). */
-function lidoDoConvenio(c: ConvenioMemoria): ConvenioLido {
+function lidoDoConvenio(c: ConvenioMemoria): ConvenioPreco {
   return {
     codigo: c.codigo,
     nome: c.nome,
@@ -115,38 +127,29 @@ function convenioSintetico(
   extra: Partial<ConvenioMemoria> = {},
 ): ConvenioMemoria {
   const valores: Record<string, string | number | null> = Object.fromEntries(
-    COLUNAS_LIDAS_CONTRATO.map((c) => [c, null]),
+    CHAVES_CONTRATO.map((c) => [c, null]),
   );
   Object.assign(valores, {
-    COD: codigo,
-    NOME: nome,
-    SITUACAO: situacao,
-    THM: thm,
-    THM_E: thmE,
-    DTH: 5,
-    MEM: 700,
-    CLASSIF_C: 6,
-    REG_ANS: 100000 + codigo,
-    CGC: 11222333000181,
-    LOCAL: 'RUA SINTÉTICA',
-    NUMERO: codigo,
-    CIDADE: 'CIDADE SINTÉTICA',
-    UF: 'MG',
-    CEP: 36000000,
-    FONE: '3200000000',
-    CONV_EMAIL: 'faturamento@operadora.invalid',
-    VAL_CART: 'T',
-    SENHA_OBRIGATORIA_CONV: 4,
-    RETORNO: 30,
-    PRAZO_PGTO: 30,
-    PORTE: 1,
-    PCLI: 100,
-    PCIR: 100,
-    IPCPE_RC: 'S',
-    TAB_HR_ATE: 1,
-    MAX_MAT: 50,
-    GUIA_GERAL: 1000 + codigo,
+    nome,
+    classificacao: '6',
+    registroAns: 100000 + codigo,
+    cnpj: 11222333000181,
+    endereco: 'RUA SINTÉTICA',
+    numero: codigo,
+    cidade: 'CIDADE SINTÉTICA',
+    uf: 'MG',
+    cep: 36000000,
+    telefone: '3200000000',
+    convenioEmail: 'faturamento@operadora.invalid',
+    validaCarteira: 'T',
+    senhaObrigatoria: '4',
+    retornoDias: '30',
+    prazoPagamentoDias: '30',
+    situacaoAcordo: situacao === 'A' ? 'vigente' : 'suspenso',
+    prazoApresentacaoDias: 60,
+    exigeGuia: 'sim',
   });
+
   return {
     codigo,
     nome,
@@ -214,17 +217,15 @@ const busca = (texto: string, b: string | undefined) =>
 export class FontePrecosMemoria implements FontePrecos {
   readonly destino = 'memoria' as const;
   readonly gravacao = { permitida: true, motivo: null };
-  readonly executor: Executor;
   private readonly convenios_: ConvenioMemoria[];
   private readonly itens: ItemMemoria[];
   private readonly autoria: AutoriaMemoria[] = [];
-  private readonly cargas_: (CargaLida & { linhas: LinhaCargaLida[] })[] = [];
-  private readonly planos_: (PlanoLido & { convenio: number })[] = [];
+  private readonly cargas_: (CargaImportacao & { linhas: LinhaCargaImportacao[] })[] = [];
+  private readonly planos_: (PlanoConvenio & { convenio: number })[] = [];
   private readonly idem = new Map<string, { hash: string; resultado: ResultadoOperacao; usuario: string }>();
   private seq = 0;
 
   constructor(
-    private readonly catalogo: FonteCatalogo,
     private readonly ambiente: string,
     private readonly agora: () => number = Date.now,
   ) {
@@ -237,7 +238,7 @@ export class FontePrecosMemoria implements FontePrecos {
       convenioSintetico(50, 'OPERADORA SINTÉTICA COM DIÁRIA INVÁLIDA', 'A', 307, 307, {
         dth: { tipo: 2, subtipo: 1 },
       }),
-      // Modelos CH (AMB, tabela 53) e PORTE (CBHPM, tabela 71): componentes de TBVLRTHM diferentes de zero,
+      // Modelos CH (AMB, tabela 53) e PORTE (CBHPM, tabela 71): componentes do valor diferentes de zero,
       // para a consulta provar que o total é a soma dos componentes (regra da sante-api), não o modelo.
       convenioSintetico(53, 'OPERADORA SINTÉTICA MODELO CH', 'A', 53, 53),
       convenioSintetico(71, 'OPERADORA SINTÉTICA MODELO PORTE', 'A', 71, 71),
@@ -255,14 +256,11 @@ export class FontePrecosMemoria implements FontePrecos {
       ...itensSinteticos(71, 4, 0, '3A', { co: 15, anes: 30, outros: 2 }),
       ...itensSinteticos(61, 2),
     ];
-    this.executor = {
-      executar: (op: Operacao<unknown, ResultadoOperacao>, h: string, e: unknown, ctx: ContextoOperacao) =>
-        this.executar(op, h, e, ctx),
-    } as unknown as Executor;
   }
 
-  estado(op: string, hospital: string): EstadoOperacao | null {
-    return this.catalogo.estado(op, hospital);
+  /** Na memória, as quatro operações do M12 estão liberadas (só em dev/ci). */
+  estado(op: string): EstadoOperacao | null {
+    return Object.hasOwn(OPERACOES_PRECO, op) ? 'liberada' : null;
   }
 
   private agoraIso(): string {
@@ -277,10 +275,10 @@ export class FontePrecosMemoria implements FontePrecos {
     return this.convenios_.find((c) => c.codigo === cod);
   }
 
-  convenios(): Promise<ConvenioLido[]> {
+  convenios(): Promise<ConvenioPreco[]> {
     return Promise.resolve(this.convenios_.map(lidoDoConvenio));
   }
-  convenio(_c: CtxPrecos, cod: number): Promise<ConvenioLido | null> {
+  convenio(_c: CtxPrecos, cod: number): Promise<ConvenioPreco | null> {
     const c = this.conv(cod);
     return Promise.resolve(c ? lidoDoConvenio(c) : null);
   }
@@ -391,7 +389,7 @@ export class FontePrecosMemoria implements FontePrecos {
     return Promise.resolve(m);
   }
 
-  private lido(i: ItemMemoria, data: string): ItemHonorarioLido {
+  private lido(i: ItemMemoria, data: string): ItemHonorarioPreco {
     const validas = i.vigencias.filter((v) => v.data <= data).sort((a, b) => (a.data < b.data ? 1 : -1));
     const v = validas[0] ?? null;
     const ult = [...i.vigencias].sort((a, b) => (a.data < b.data ? 1 : -1))[0]?.data ?? null;
@@ -434,7 +432,7 @@ export class FontePrecosMemoria implements FontePrecos {
         .map((i) => ({ ...this.lido(i, hoje), temNaData: i.vigencias.some((v) => v.data === data) })),
     );
   }
-  vigenciasDoItem(_c: CtxPrecos, tab: number, cod: number): Promise<VigenciaLida[]> {
+  vigenciasDoItem(_c: CtxPrecos, tab: number, cod: number): Promise<VigenciaItem[]> {
     const i = this.itens.find((x) => x.tab === tab && x.cod === cod);
     return Promise.resolve(
       (i?.vigencias ?? [])
@@ -465,7 +463,7 @@ export class FontePrecosMemoria implements FontePrecos {
         .reverse(),
     );
   }
-  lotes(_c: CtxPrecos, tab: number | null): Promise<LoteLido[]> {
+  lotes(_c: CtxPrecos, tab: number | null): Promise<LoteReajuste[]> {
     const grupos = new Map<string, AutoriaMemoria[]>();
     for (const a of this.autoria) {
       if (a.origem !== 'reajuste' && a.origem !== 'importacao') continue;
@@ -511,8 +509,8 @@ export class FontePrecosMemoria implements FontePrecos {
     _c: CtxPrecos,
     _tab: number,
     f: FiltroPagina,
-  ): Promise<{ itens: ItemDiariaLido[]; total: number }> {
-    const todos: ItemDiariaLido[] = [
+  ): Promise<{ itens: ItemDiariaPreco[]; total: number }> {
+    const todos: ItemDiariaPreco[] = [
       ['DIÁRIA DE APARTAMENTO SINTÉTICA', 1, 1, 450.5],
       ['DIÁRIA DE ENFERMARIA SINTÉTICA', 1, 2, 280],
       ['DIÁRIA DE ACOMPANHANTE SINTÉTICA', 1, 5, 90],
@@ -543,8 +541,8 @@ export class FontePrecosMemoria implements FontePrecos {
     _c: CtxPrecos,
     _tab: number,
     f: FiltroPagina,
-  ): Promise<{ itens: ItemMatmedLido[]; total: number }> {
-    const todos: ItemMatmedLido[] = Array.from({ length: 8 }, (_, i) => ({
+  ): Promise<{ itens: ItemMatmedPreco[]; total: number }> {
+    const todos: ItemMatmedPreco[] = Array.from({ length: 8 }, (_, i) => ({
       id: 70000 + i,
       codigo: 700100 + i,
       nome: `${i % 2 ? 'MATERIAL' : 'MEDICAMENTO'} SINTÉTICO ${i + 1}`,
@@ -851,14 +849,14 @@ export class FontePrecosMemoria implements FontePrecos {
   alterarPlano(_c: CtxPrecos, a: Parameters<FontePrecos['alterarPlano']>[1]) {
     const i = this.planos_.findIndex((x) => x.id === a.id && x.convenio === a.convenio);
     const x = this.planos_[i];
-    if (!x) return Promise.reject(new ErroPlanoSgh('nao-encontrado', 'Plano não encontrado neste convênio.'));
+    if (!x) return Promise.reject(new ErroPlano('nao-encontrado', 'Plano não encontrado neste convênio.'));
     if (x.versao !== a.versao)
       return Promise.reject(
-        new ErroPlanoSgh('conflito-concorrente', 'O plano mudou desde a leitura. Releia.'),
+        new ErroPlano('conflito-concorrente', 'O plano mudou desde a leitura. Releia.'),
       );
     if (a.fim && a.fim < x.inicio)
       return Promise.reject(
-        new ErroPlanoSgh('vigencia-invalida', `O fim (${a.fim}) não pode ser antes do início (${x.inicio}).`),
+        new ErroPlano('vigencia-invalida', `O fim (${a.fim}) não pode ser antes do início (${x.inicio}).`),
       );
     this.planos_[i] = {
       ...x,
@@ -872,41 +870,41 @@ export class FontePrecosMemoria implements FontePrecos {
 
   // ── Gravação compatível em memória (as mesmas entradas, vetos e códigos das receitas) ─────────────────
 
-  private async executar(
-    op: Operacao<unknown, ResultadoOperacao>,
-    hospital: string,
+  async executar(
+    nome: NomeOperacaoPreco,
+    c: CtxPrecos,
     bruta: unknown,
-    ctx: ContextoOperacao,
-  ): Promise<{ resultado: ResultadoOperacao; repetida: boolean; eventos: string[]; trilha: string | null }> {
-    const nome = op.receita.nome;
-    const estado = this.estado(nome, hospital);
-    if (estado === null || estado === 'bloqueada') throw erroOperacaoBloqueada();
-    if (!['dev', 'ci'].includes(this.ambiente)) throw erroOperacaoBloqueada();
+    ctx: ContextoGravacaoPreco,
+  ): Promise<{ resultado: ResultadoOperacao; repetida: boolean }> {
+    const op = OPERACOES_PRECO[nome];
+    const hospital = c.hospital;
+    if (!op || this.estado(nome) === null || !['dev', 'ci'].includes(this.ambiente))
+      throw erroNaoLiberada('a memória só grava em dev/ci');
     const a = op.entrada.safeParse(bruta);
     if (!a.success)
       throw erroEntradaInvalida([...new Set(a.error.issues.map((i) => i.path.join('.') || '(entrada)'))]);
-    if (op.receita.critica) {
+    if (op.critica) {
       const em = ctx.reautenticadoEm;
       if (em === undefined || this.agora() - em > REAUTENTICACAO_MS_PADRAO) throw erroReautenticacao();
     }
     const hash = hashEntrada(nome, a.data);
-    const chave = `${hospital}|${nome}|${ctx.idempotencyKey}`;
+    const chave = `${hospital}|${nome}|${ctx.chaveIdempotencia}`;
     const anterior = this.idem.get(chave);
     if (anterior) {
-      if (anterior.hash !== hash || anterior.usuario !== ctx.usuarioLegado)
+      if (anterior.hash !== hash || anterior.usuario !== ctx.login)
         throw erroIdempotenciaDivergente();
-      return { resultado: anterior.resultado, repetida: true, eventos: [], trilha: null };
+      return { resultado: anterior.resultado, repetida: true };
     }
     const resultado = this.aplicar(nome, a.data as Record<string, unknown>, ctx);
-    this.idem.set(chave, { hash, resultado, usuario: ctx.usuarioLegado });
-    return { resultado, repetida: false, eventos: [], trilha: null };
+    this.idem.set(chave, { hash, resultado, usuario: ctx.login });
+    return { resultado, repetida: false };
   }
 
   private registrar(a: Omit<AutoriaMemoria, 'quando'>): void {
     this.autoria.push({ ...a, quando: this.agoraIso() });
   }
 
-  private aplicar(nome: string, e: Record<string, unknown>, ctx: ContextoOperacao): ResultadoOperacao {
+  private aplicar(nome: string, e: Record<string, unknown>, ctx: ContextoGravacaoPreco): ResultadoOperacao {
     if (nome === 'convenio.alterarSituacao') {
       const c = this.conv(Number(e['convenio']));
       if (!c)
@@ -925,7 +923,7 @@ export class FontePrecosMemoria implements FontePrecos {
           'A diária de acompanhante do convênio não é diária/acompanhante.',
         );
       Object.assign(c, { situacao: alvo });
-      c.valores['SITUACAO'] = alvo;
+      c.valores['situacaoAcordo'] = alvo === 'A' ? 'vigente' : 'suspenso';
       this.registrar({
         origem: 'situacao',
         lote: null,
@@ -933,7 +931,7 @@ export class FontePrecosMemoria implements FontePrecos {
         cod: c.codigo,
         data: null,
         valores: null,
-        autor: ctx.usuarioLegado,
+        autor: ctx.login,
         justificativa: String(e['justificativa']),
       });
       return { convenio: c.codigo, situacaoAntes: origem, situacaoDepois: alvo };
@@ -963,7 +961,7 @@ export class FontePrecosMemoria implements FontePrecos {
         if (!CAMPOS_CONTRATO.some((x) => x.campo === k)) throw recusa('campo-nao-editavel', `Campo ${k}.`);
         c.valores[COLUNA_DO_CAMPO[k] as string] = valorParaGravar(k, valores[k] ?? null);
       }
-      if (valores['nome'] !== undefined) Object.assign(c, { nome: String(c.valores['NOME']) });
+      if (valores['nome'] !== undefined) Object.assign(c, { nome: String(c.valores['nome']) });
       this.registrar({
         origem: 'contrato',
         lote: null,
@@ -971,17 +969,17 @@ export class FontePrecosMemoria implements FontePrecos {
         cod: c.codigo,
         data: null,
         valores: null,
-        autor: ctx.usuarioLegado,
+        autor: ctx.login,
         justificativa: String(e['justificativa']),
       });
       return { convenio: c.codigo, campos: campos.length, historicoAntes: 0 };
     }
     if (nome === 'preco.reajustar') return this.reajustar(e, ctx);
     if (nome === 'preco.desfazerReajuste') return this.desfazer(e, ctx);
-    throw erroOperacaoBloqueada();
+    throw erroNaoLiberada();
   }
 
-  private reajustar(e: Record<string, unknown>, ctx: ContextoOperacao): ResultadoOperacao {
+  private reajustar(e: Record<string, unknown>, ctx: ContextoGravacaoPreco): ResultadoOperacao {
     const tab = Number(e['tabela']);
     const data = String(e['data']);
     const itens = e['itens'] as {
@@ -1016,7 +1014,7 @@ export class FontePrecosMemoria implements FontePrecos {
     if ((tab === TABELA_COMPARTILHADA || ativos > 1) && !confirm.tabelaCompartilhada)
       throw recusa('confirmacao-pendente', `A tabela ${tab} é usada por mais de um convênio: confirme.`);
     if (TABELAS_COM_PERCENTUAL.includes(tab) && !confirm.percentualTabela)
-      throw recusa('confirmacao-pendente', `A tabela ${tab} tem percentual em TBPERTHM: confirme.`);
+      throw recusa('confirmacao-pendente', `A tabela ${tab} tem percentual de honorário no convênio: confirme.`);
     for (const x of alvos) {
       m(x).vigencias.push({ data, valores: { ...x.i.novos } });
       this.registrar({
@@ -1026,7 +1024,7 @@ export class FontePrecosMemoria implements FontePrecos {
         cod: x.i.codigo,
         data,
         valores: { ...x.i.novos },
-        autor: ctx.usuarioLegado,
+        autor: ctx.login,
         justificativa: String(e['justificativa']),
       });
     }
@@ -1074,7 +1072,7 @@ export class FontePrecosMemoria implements FontePrecos {
   /** Para os testes: um lançamento de conta do item (FCLANEXT) na vigência. */
   readonly usadosEmConta = new Set<string>();
 
-  private desfazer(e: Record<string, unknown>, ctx: ContextoOperacao): ResultadoOperacao {
+  private desfazer(e: Record<string, unknown>, ctx: ContextoGravacaoPreco): ResultadoOperacao {
     const tab = Number(e['tabela']);
     const data = String(e['data']);
     const lote = String(e['lote']);
@@ -1090,7 +1088,7 @@ export class FontePrecosMemoria implements FontePrecos {
         cod: i.codigo,
         data,
         valores: { ...i.valores },
-        autor: ctx.usuarioLegado,
+        autor: ctx.login,
         justificativa: String(e['justificativa']),
       });
     }

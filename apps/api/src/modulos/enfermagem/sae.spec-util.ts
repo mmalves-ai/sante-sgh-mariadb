@@ -2,12 +2,9 @@
 // banco; dados sintéticos), com o relógio fixo em 2026-10-22 13:00 de São Paulo e, se pedido, uma chave desligada pelo
 // administrador. Usada pelo sae.spec.ts, pelo prescricao-enfermeiro.http.spec.ts e pelo vacina-rnds.spec.ts.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { expect } from 'vitest';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -31,7 +28,6 @@ export interface Sessao {
 export async function montarAppSae(o: { semChave?: string } = {}) {
   const trilha = new RegistradorTrilhaMemoria();
   const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
     { agora },
   );
   const configuracao = o.semChave
@@ -41,11 +37,10 @@ export async function montarAppSae(o: { semChave?: string } = {}) {
         parametrosIniciais: parametrosIniciaisSinteticos,
       })
     : undefined;
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     vigiaEnfermagem: null,
-    vigia: null,
     ...(configuracao ? { configuracao } : {}),
   });
   await app.init();

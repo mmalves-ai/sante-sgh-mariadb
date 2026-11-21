@@ -3,12 +3,14 @@
 //     nova fica cancelado na tela e não conta como previsto; as horas da anterior vão até o início da nova);
 //   - a vigia não grava trilha quando não há aviso novo (dois ciclos sobre a mesma vencida: 1 aviso e 1 linha);
 //   - o técnico de enfermagem com a permissão de aprazar não prescreve a contenção (a categoria vem do vínculo).
-import type { ContencaoLidaSgh } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { ContencaoController } from './contencao.controller.js';
 import { contencaoParaTela, indicadorDoPeriodo, VigiaContencao } from './contencao-servico.js';
 import type { PortaEscores } from './escores-porta.js';
 import type { PortaEnfermagem } from './porta.js';
+import type { ContencaoRegistrada } from './tipos.js';
+
+const ALVO = { cliente: 'teste', estabelecimento: 1, usuario: null, correlacao: 'teste' };
 
 const horarios = (lista: readonly string[], feitas: readonly string[] = []) =>
   lista.map((previsto, i) => ({
@@ -42,7 +44,7 @@ const base = {
 
 // A: 08:00, 4 h, a cada 60 min (09, 10, 11, 12); 09, 10 e 11 checadas. Renovada às 11:30 por B (4 h: 12:30 a 15:30,
 // todas checadas no horário).
-const A: ContencaoLidaSgh = {
+const A: ContencaoRegistrada = {
   ...base,
   id: 1,
   inicio: '2026-10-25T08:00:00',
@@ -54,7 +56,7 @@ const A: ContencaoLidaSgh = {
     ['2026-10-25T09:00', '2026-10-25T10:00', '2026-10-25T11:00'],
   ),
 };
-const B: ContencaoLidaSgh = {
+const B: ContencaoRegistrada = {
   ...base,
   id: 2,
   inicio: '2026-10-25T11:30:00',
@@ -98,7 +100,7 @@ describe('revisão W0-03: a renovação antes do fim do prazo', () => {
 
 describe('revisão W0-03: a vigia grava a trilha só com aviso novo', () => {
   it('dois ciclos sobre a mesma ordem vencida: 1 aviso e 1 linha de trilha', async () => {
-    const vencida: ContencaoLidaSgh = {
+    const vencida: ContencaoRegistrada = {
       ...base,
       id: 9,
       inicio: '2026-10-25T08:00:00',
@@ -136,12 +138,12 @@ describe('revisão W0-03: a vigia grava a trilha só com aviso novo', () => {
       },
     } as unknown as PortaEscores;
     const enfermagem = { relogio: async () => '2026-10-25T12:00:00' } as unknown as PortaEnfermagem;
-    const vigia = new VigiaContencao(porta, enfermagem, 'rede', ['aa']);
-    expect(await vigia.ciclo('aa')).toBe(1);
-    expect(await vigia.ciclo('aa')).toBe(0);
-    expect(await vigia.ciclo('aa')).toBe(0);
+    const vigia = new VigiaContencao(porta, enfermagem, [ALVO]);
+    expect(await vigia.ciclo(ALVO)).toBe(1);
+    expect(await vigia.ciclo(ALVO)).toBe(0);
+    expect(await vigia.ciclo(ALVO)).toBe(0);
     expect(trilhas).toHaveLength(1);
-    expect(trilhas[0]).toMatchObject({ chaveNaturalAlvo: 'vencidas:1' });
+    expect(trilhas[0]).toMatchObject({ entidade: 'aviso_central', dadosDepois: { avisos: 1 } });
   });
 });
 

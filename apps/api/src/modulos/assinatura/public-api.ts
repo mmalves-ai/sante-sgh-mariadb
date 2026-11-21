@@ -6,12 +6,16 @@ export { type ConfigServicoAssinatura, ServicoAssinaturaIcp } from './aplicacao/
 export { configAssinaturaDoAmbiente, modoAssinaturaIcp } from './infra/ambiente.js';
 // M59-F3: o mesmo cofre guarda as credenciais de parceiro que substituem os segredos das tabelas do banco.
 export { type Cofre, CofreMemoria, cofreDoAmbiente, cofreIndisponivel } from './infra/cofre.js';
-export { PORTA_ASSINATURA_ICP, type PortaAssinaturaIcp } from './porta.js';
 export {
+  type ContextoAssinatura,
+  PORTA_ASSINATURA_ICP,
+  type PortaAssinaturaIcp,
   portaAssinaturaIndisponivel,
-  portaAssinaturaLegado,
-  portaAssinaturaNaTransacao,
-} from './porta-legado.js';
+} from './porta.js';
+export { type NucleoAssinatura, PortaAssinaturaPropria } from './porta-propria.js';
+export { modulo, type OpcoesModuloAssinatura } from './modulo.js';
+export type * from './tipos.js';
+export { ErroAssinatura, TIPOS_DOCUMENTO_ICP } from './tipos.js';
 export { PortaAssinaturaMemoria } from './porta-memoria.js';
 export { SimuladorIcp } from './infra/simulador.js';
 // M49, etapa 2: documentos emitidos (prévia exata, lote, pendências e reprocessamento, selo e PDF assinado, SNCR).

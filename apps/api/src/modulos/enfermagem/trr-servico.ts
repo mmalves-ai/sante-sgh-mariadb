@@ -11,7 +11,7 @@ import {
   type IndicadoresTrrPcr,
 } from '@sgh/contratos';
 import { diferencaMinutos, indicadoresTrrPcr } from '@sgh/dominio-enfermagem';
-import type { AcionamentoTrrLidoSgh, VersaoPcrLidaSgh } from '@sgh/legado';
+import type { AcionamentoTrrRegistrado, VersaoPcrRegistrada } from './tipos-vinculados.js';
 
 /** As unidades de UTI do parâmetro (códigos separados por vírgula). */
 export function unidadesUti(v: unknown): Set<string> {
@@ -23,7 +23,7 @@ export function unidadesUti(v: unknown): Set<string> {
 }
 
 export function acionamentoParaTela(
-  a: AcionamentoTrrLidoSgh,
+  a: AcionamentoTrrRegistrado,
   fichas: readonly FichaPcrLida[] = [],
 ): AcionamentoTrrLido {
   return {
@@ -58,7 +58,7 @@ function dadosLidos(json: string): DadosPcr | null {
 }
 
 /** As fichas vigentes (a última versão de cada cadeia), com as versões anteriores. */
-export function fichasVigentes(versoes: readonly VersaoPcrLidaSgh[]): FichaPcrLida[] {
+export function fichasVigentes(versoes: readonly VersaoPcrRegistrada[]): FichaPcrLida[] {
   const porId = new Map(versoes.map((v) => [v.id, v]));
   const substituidas = new Set(versoes.flatMap((v) => (v.anterior === null ? [] : [v.anterior])));
   const r: FichaPcrLida[] = [];
@@ -105,8 +105,8 @@ export function fichasVigentes(versoes: readonly VersaoPcrLidaSgh[]): FichaPcrLi
 export function indicadoresDoPeriodo(
   de: string,
   ate: string,
-  acionamentos: readonly AcionamentoTrrLidoSgh[],
-  versoes: readonly VersaoPcrLidaSgh[],
+  acionamentos: readonly AcionamentoTrrRegistrado[],
+  versoes: readonly VersaoPcrRegistrada[],
   censo: { porSetor: { setor: string; pacientesDia: number }[] },
   uti: Set<string>,
   metaMinutos: number,

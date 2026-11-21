@@ -1,11 +1,11 @@
 // Importação versionada de tabela de preço (ficha do M12, seção 5 e 7; cap-06a §6.2, carga em três passos):
-//   GET  /api/precos/importacoes                          cargas do estabelecimento (SGH_CAT_CARGA)
-//   POST /api/precos/importacoes                          prepara, valida e compara um arquivo (nada no legado)
+//   GET  /api/precos/importacoes                          cargas do estabelecimento (importacao_tabela)
+//   POST /api/precos/importacoes                          prepara, valida e compara um arquivo (nada muda nos preços)
 //   GET  /api/precos/importacoes/:id?pagina&comparacao     detalhe com as linhas da área de preparação
 //   POST /api/precos/importacoes/:id/aprovar              publica os itens alterados como preco.reajustar em
 //                                                         modo "por arquivo" (crítica; supervisor do faturamento)
-//   POST /api/precos/importacoes/:id/rejeitar             rejeita (nada no legado)
-// Itens novos e removidos aparecem na comparação e não são publicados (o novo nunca grava TBTABTHM;
+//   POST /api/precos/importacoes/:id/rejeitar             rejeita (nada muda nos preços)
+// Itens novos e removidos aparecem na comparação e não são publicados (a importação nunca cria item na tabela;
 // a inclusão de item ainda não está disponível).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -26,6 +26,7 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
+import { destinoDoContrato } from '../exames/public-api.js';
 import { contextoOperacao, ctxDe, inteiro, paginaDe, problemaDoPreco, sessaoDe } from './base.js';
 import { FONTE_PRECOS, type FontePrecos } from './fonte.js';
 import type { ServicoPrecos } from './servico.js';
@@ -53,7 +54,7 @@ const esquemaAprovar = z
   .strict();
 const esquemaRejeitar = z.object({ motivo: esquemaJustificativa, versao: z.number().int().min(1) }).strict();
 
-/** Os 5 componentes de TBVLRTHM a partir do JSON da linha (ausente = 0). */
+/** Os 5 componentes do valor a partir do JSON da linha (ausente = 0). */
 function componentesDe(v: Readonly<Record<string, number>> | null) {
   if (!v) return null;
   const n = (k: string) => (typeof v[k] === 'number' ? v[k] : 0);
@@ -130,7 +131,7 @@ export class ImportacoesController {
   @HttpCode(201)
   @Permissao('preco.importacao.criar')
   @AuditadoNoHandler(
-    'transação SGH_: SGH_CAT_CARGA, SGH_CAT_CARGA_LINHA e SGH_TRILHA juntas (memória: registrador da API)',
+    'gravação direta da carga e das linhas, com a trilha junto (memória: registrador da API)',
   )
   async criar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = esquemaNova.safeParse(corpo);
@@ -164,7 +165,7 @@ export class ImportacoesController {
         situacao: prep.situacao,
         totais: prep.totais,
         motivo: prep.motivo,
-        destino: this.fonte.destino,
+        destino: destinoDoContrato(this.fonte.destino),
       };
     } catch (e) {
       throw problemaDoPreco(e);
@@ -209,7 +210,7 @@ export class ImportacoesController {
   @Post(':id/aprovar')
   @HttpCode(200)
   @Permissao('preco.importacao.aprovar')
-  @AuditadoNoHandler('executor (preco.reajustar por arquivo) e transação SGH_ da carga, com as trilhas')
+  @AuditadoNoHandler('executor (preco.reajustar por arquivo) e a gravação da carga, com as trilhas')
   async aprovar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -284,7 +285,7 @@ export class ImportacoesController {
       await this.trilhaMemoria(req, String(c.id));
       return {
         operacao: 'preco.reajustar',
-        destino: this.fonte.destino,
+        destino: destinoDoContrato(this.fonte.destino),
         lote: r.lote,
         linhas: r.linhas,
         partes: r.partes,
@@ -298,7 +299,7 @@ export class ImportacoesController {
   @Post(':id/rejeitar')
   @HttpCode(200)
   @Permissao('preco.importacao.aprovar')
-  @AuditadoNoHandler('transação SGH_ da carga, com a SGH_TRILHA (memória: registrador da API)')
+  @AuditadoNoHandler('gravação da carga com a trilha junto (memória: registrador da API)')
   async rejeitar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = esquemaRejeitar.safeParse(corpo);
     if (!p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Diga o motivo.');

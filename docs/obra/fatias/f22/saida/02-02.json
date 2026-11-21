@@ -1,0 +1,73 @@
+{
+ "lote": "02-02",
+ "registrar": [
+  "catalogos: () => import('./catalogos/modulo.js'),"
+ ],
+ "fecho_tsconfig": [
+  "src/modulos/catalogos/catalogos.controller.ts",
+  "src/modulos/catalogos/catalogos.spec.ts",
+  "src/modulos/catalogos/fonte-memoria.ts",
+  "src/modulos/catalogos/fonte.ts",
+  "src/modulos/catalogos/guardar-arquivo.ts",
+  "src/modulos/catalogos/public-api.ts",
+  "src/modulos/catalogos/servico-cache.spec.ts",
+  "src/modulos/catalogos/servico.ts",
+  "src/modulos/config/cache-config.int.spec.ts",
+  "src/modulos/config/dominio.controller.spec.ts",
+  "src/modulos/config/gravacao.spec.ts",
+  "src/modulos/config/guarda-chave-de-tela.ts",
+  "src/modulos/config/homologacao.spec.ts",
+  "src/modulos/config/onda0.spec.ts",
+  "src/modulos/config/prontidao.spec.ts",
+  "src/modulos/catalogos/consultas-proprias.ts",
+  "src/modulos/catalogos/modulo.ts",
+  "src/modulos/catalogos/porta-propria.int.spec.ts",
+  "src/modulos/catalogos/porta-propria.ts",
+  "src/modulos/config/modulo-teste.spec-util.ts",
+  "src/modulos/catalogos/leitura-propria.ts"
+ ],
+ "apagados": [
+  "apps/api/src/modulos/config/assinaturas.spec.ts",
+  "apps/api/src/modulos/config/coexistencia.spec.ts",
+  "apps/api/src/modulos/config/vigia-reconciliacao.spec.ts",
+  "apps/api/src/modulos/config/dominios-liberacao.spec.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "onde": "db/migracoes/17_INTG (tabelas e chaves)",
+   "motivo": "Área de preparação das cargas de catálogo (carga_catalogo, carga_catalogo_linha) e licença dos catálogos licenciados por estabelecimento (licenca_catalogo, regra 7). Sem elas o painel mostra 'sem cargas', o envio falha e a licença fica fechada. O int.spec cria as tabelas com este DDL no f22_o2 (marcadas '[teste 02-02]') e apaga no fim; depois da migração usa as do banco. DDL completo também em docs/obra/fatias/f22/saida/02-02.sql.",
+   "ddl": "-- Pedido do lote 02-02 (F2.2 onda 2): área de preparação das cargas dos catálogos oficiais (M13) e licença dos\n-- catálogos licenciados (regra 7). Destino proposto: db/migracoes/17_INTG (junto de terminologia e\n-- terminologia_edicao), tabelas e chaves. Convenções do ADR 0002 (parte 2): snake_case, auditoria, versao, CHECK.\n-- O teste de integração do lote (apps/api/src/modulos/catalogos/porta-propria.int.spec.ts) cria estas tabelas no\n-- cliente f22_o2 quando faltam (marcadas no COMMENT com \"[teste 02-02]\") e as apaga no fim; depois da migração, usa as\n-- do banco.\n\nCREATE TABLE carga_catalogo (\n  id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id       BIGINT UNSIGNED NOT NULL,\n  catalogo                 VARCHAR(30) NOT NULL COMMENT 'Código do catálogo oficial na definição do produto (cid, sigtap, cep...)',\n  arquivo_nome             VARCHAR(200) NOT NULL COMMENT 'Nomes dos arquivos enviados, com a codificação lida',\n  arquivo_sha256           CHAR(64) NOT NULL,\n  arquivo_bytes            BIGINT UNSIGNED NOT NULL,\n  arquivo_guardado         VARCHAR(200) NULL COMMENT 'Endereço do original no armazenamento com retenção; nulo: não guardado',\n  situacao                 VARCHAR(20) NOT NULL DEFAULT 'comparada',\n  edicao                   VARCHAR(12) NULL COMMENT 'Competência AAAAMM, versão TISS ou edição do arquivo',\n  total_linhas             INT UNSIGNED NOT NULL DEFAULT 0,\n  linhas_validas           INT UNSIGNED NOT NULL DEFAULT 0,\n  linhas_erro              INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_novos              INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_removidos          INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_alterados          INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_iguais             INT UNSIGNED NOT NULL DEFAULT 0,\n  lotes_total              INT UNSIGNED NOT NULL DEFAULT 0,\n  lotes_publicados         INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Confirmado pelo worker na mesma transação de cada lote',\n  tamanho_lote             INT UNSIGNED NOT NULL DEFAULT 0,\n  motivo                   VARCHAR(500) NULL,\n  aprovada_em              DATETIME(3) NULL,\n  aprovada_por_usuario_id  BIGINT UNSIGNED NULL,\n  encerrada_em             DATETIME(3) NULL COMMENT 'Rejeitada, cancelada ou com falha',\n  encerrada_por_usuario_id BIGINT UNSIGNED NULL,\n  publicada_em             DATETIME(3) NULL,\n  criado_em                DATETIME(3) NOT NULL,\n  criado_por               BIGINT UNSIGNED NULL COMMENT 'Quem enviou a carga',\n  alterado_em              DATETIME(3) NULL,\n  alterado_por             BIGINT UNSIGNED NULL,\n  versao                   INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_carga_catalogo_situacao CHECK (situacao IN ('preparada','validada','comparada','aprovada','publicando','publicada','rejeitada','cancelada','falhou')),\n  CONSTRAINT ck_carga_catalogo_linhas CHECK (linhas_validas + linhas_erro = total_linhas),\n  CONSTRAINT ck_carga_catalogo_lotes CHECK (lotes_publicados <= lotes_total),\n  CONSTRAINT ck_carga_catalogo_sha CHECK (arquivo_sha256 REGEXP '^[0-9a-f]{64}$'),\n  CONSTRAINT ck_carga_catalogo_aprovada CHECK (situacao NOT IN ('aprovada','publicando','publicada') OR aprovada_em IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_aprovador CHECK (situacao NOT IN ('aprovada','publicando','publicada') OR aprovada_por_usuario_id IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_encerrada CHECK (situacao NOT IN ('rejeitada','cancelada','falhou') OR encerrada_em IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_publicada CHECK (situacao <> 'publicada' OR publicada_em IS NOT NULL),\n  KEY ix_carga_catalogo_estabelecimento (estabelecimento_id, catalogo, situacao),\n  KEY ix_carga_catalogo_sha (estabelecimento_id, catalogo, arquivo_sha256),\n  KEY ix_carga_catalogo_aprovada_por (aprovada_por_usuario_id),\n  KEY ix_carga_catalogo_encerrada_por (encerrada_por_usuario_id)\n) COMMENT='Carga de catálogo oficial: arquivo por hash, situação, totais da comparação, lotes de publicação e decisão';\n\nCREATE TABLE carga_catalogo_linha (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  carga_catalogo_id BIGINT UNSIGNED NOT NULL,\n  linha             INT UNSIGNED NOT NULL COMMENT 'Linha no arquivo (itens removidos: numeração a partir de 9.000.000)',\n  entidade          VARCHAR(40) NOT NULL COMMENT 'Entidade do catálogo na definição do produto',\n  chave             VARCHAR(200) NOT NULL COMMENT 'Chave natural do item (campo=valor;...)',\n  resultado         VARCHAR(10) NOT NULL,\n  comparacao        VARCHAR(10) NULL,\n  valores           JSON NULL COMMENT 'Valores do arquivo (na alteração, só os que mudam)',\n  valores_antes     JSON NULL COMMENT 'Valores que o banco tinha',\n  motivo            VARCHAR(500) NULL,\n  lote              INT UNSIGNED NULL COMMENT 'Lote de publicação do item; nulo: não vai à publicação',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_carga_catalogo_linha_resultado CHECK (resultado IN ('valida','erro')),\n  CONSTRAINT ck_carga_catalogo_linha_comparacao CHECK (comparacao IS NULL OR comparacao IN ('novo','removido','alterado','igual')),\n  CONSTRAINT ck_carga_catalogo_linha_lote CHECK (lote IS NULL OR (lote >= 1 AND resultado = 'valida')),\n  UNIQUE KEY uq_carga_catalogo_linha_linha (carga_catalogo_id, linha),\n  KEY ix_carga_catalogo_linha_lote (carga_catalogo_id, lote),\n  KEY ix_carga_catalogo_linha_comparacao (carga_catalogo_id, comparacao, resultado)\n) COMMENT='Linha preparada da carga de catálogo: entidade, chave natural, valores antes e depois, resultado e lote';\n\nCREATE TABLE licenca_catalogo (\n  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id     BIGINT UNSIGNED NOT NULL,\n  catalogo               VARCHAR(30) NOT NULL COMMENT 'Código do catálogo licenciado (brasindice, simpro...)',\n  numero_contrato        VARCHAR(60) NULL,\n  vigencia_inicio        DATE NOT NULL,\n  vigencia_fim           DATE NULL COMMENT 'Nulo enquanto vigente',\n  comprovante_arquivo_id BIGINT UNSIGNED NOT NULL COMMENT 'Contrato ou nota da licença (regra 7: só entra com a prova)',\n  observacao             VARCHAR(500) NULL,\n  criado_em              DATETIME(3) NOT NULL,\n  criado_por             BIGINT UNSIGNED NULL,\n  alterado_em            DATETIME(3) NULL,\n  alterado_por           BIGINT UNSIGNED NULL,\n  versao                 INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em            DATETIME(3) NULL,\n  excluido_por           BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_licenca_catalogo_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  KEY ix_licenca_catalogo_estabelecimento (estabelecimento_id, catalogo, vigencia_inicio),\n  KEY ix_licenca_catalogo_comprovante (comprovante_arquivo_id)\n) COMMENT='Licença de catálogo licenciado por estabelecimento, com vigência e o comprovante';\n\n-- chaves\nALTER TABLE carga_catalogo\n  ADD CONSTRAINT fk_carga_catalogo_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_carga_catalogo_aprovada_por_usuario_id FOREIGN KEY (aprovada_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_carga_catalogo_encerrada_por_usuario_id FOREIGN KEY (encerrada_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;\nALTER TABLE carga_catalogo_linha\n  ADD CONSTRAINT fk_carga_catalogo_linha_carga_catalogo_id FOREIGN KEY (carga_catalogo_id) REFERENCES carga_catalogo (id) ON DELETE RESTRICT;\nALTER TABLE licenca_catalogo\n  ADD CONSTRAINT fk_licenca_catalogo_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_licenca_catalogo_comprovante_arquivo_id FOREIGN KEY (comprovante_arquivo_id) REFERENCES arquivo (id) ON DELETE RESTRICT;\n"
+  },
+  {
+   "tipo": "registro",
+   "onde": "apps/api/src/modulos/registro.ts",
+   "motivo": "Incluir catalogos: () => import('./catalogos/modulo.js') em REGISTRO_MODULOS (ordem alfabética, antes de cadastro). config já está registrado; o config/modulo.ts deste lote agora monta também domínios, onda 0, saúde das conexões, homologação, prontidão e a GuardaChaveDeTela (APP_GUARD)."
+  },
+  {
+   "tipo": "mapa",
+   "onde": "apps/api/src/modulos/catalogos/porta-propria.ts e consultas-proprias.ts",
+   "motivo": "Mapa entidade -> tabela própria da comparação de carga (leitura-propria.ts) feito para cid10, procedimento, cep, municipio e cbo, com os campos que o modelo guarda no vocabulário do contrato (sexo, classificação, complexidade, financiamento, valores, bairro e tipo de logradouro ficam fora da comparação até o modelo os guardar no mesmo vocabulário). Ainda sem mapa (o envio que traz itens delas recusa 409 catalogo-sem-mapa com o motivo): ciap, cidMorfologia, procedimentoCid, procedimentoCbo, ocupacao e os catálogos tuss, listas, fiscal, brasindice, simpro, dominiosSus, ans, agravos e spedContabil. Falta tabela própria para procedimento x CID (rl_procedimento_cid) e para a lista de ocupações do cadastro; procedimento_sigtap_cbo existe e pode ganhar o mapa de par."
+  },
+  {
+   "tipo": "worker",
+   "onde": "apps/worker (publicador de catálogos)",
+   "motivo": "A publicação dos lotes aprovados (carga_catalogo situacao aprovada/publicando, lotes_publicados e publicada_em na mesma transação do lote) é do worker e ainda não foi migrada."
+  },
+  {
+   "tipo": "carga",
+   "onde": "tools/db/carregar_acoes.py / fonte sintética de acesso",
+   "motivo": "A sessão sintética não tem as ações dos domínios <modulo>.<recurso>.<acao> (ex.: administracao.dimensaoPriorizacaoGut.ler): o índice HTTP volta vazio. O CRUD é provado no controlador com uma habilidade que concede as ações (dominio.controller.spec)."
+  },
+  {
+   "tipo": "web",
+   "onde": "apps/web",
+   "motivo": "Rota GET /api/config/gravacao (conferência de gravação do sistema de origem) e a seção 'legado' do painel de parâmetros saíram; o roteiro de homologação e o relatório de prontidão versionados não existem neste repositório (a fonte devolve null)."
+  },
+  {
+   "tipo": "sonda",
+   "onde": "apps/api/src/modulos/config/onda0.controller.ts",
+   "motivo": "A sonda painel-leitos depende do módulo da internação (SERVICO_INTERNACAO, CONFIGURACAO_M16): sem ele montado a implantação não fica pronta (onda0.spec prova as outras quatro)."
+  }
+ ]
+}

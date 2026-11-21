@@ -32,10 +32,10 @@
 //   POST /api/portaria/terminais (e /:id)                  internacao.configurarTerminal
 //   POST /api/portaria/catraca/eventos                     internacao.registrarEventoCatraca (integrador local)
 //   POST /api/portaria/catraca/simular                     o simulador da catraca (fora de produção)
-// Operações só do novo (SGH_), com a SGH_TRILHA na mesma transação e o ator real; o estabelecimento vem da sessão. A
+// Gravações numa operação do Executor, com a trilha na mesma transação e o ator real; o estabelecimento vem da sessão. A
 // portaria nasce desligada (chave `portaria`, POL-3); a catraca (`portaria.catraca`) e a biometria (`portaria.biometria`,
 // DP-45) têm chaves próprias.
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AcompanhanteLido,
@@ -55,7 +55,6 @@ import {
   esquemaTerminal,
   esquemaVisitante,
   EVENTOS_AUDITAVEIS,
-  IDENTIFICACAO_BIOMETRICA,
   type PacientePortaria,
   type PainelAcompanhantes,
   type PainelPortaria,
@@ -66,8 +65,6 @@ import {
   type RespostaCatraca,
   type ResultadoPortaria,
   RETENCAO_PADRAO_DIAS,
-  SITUACAO_ACESSO_REGISTRAR,
-  TIPO_VISITADO_PACIENTE,
   UNIDADE_TODAS,
   type VisitanteLido,
 } from '@sgh/contratos';
@@ -86,13 +83,12 @@ import {
   validadeDoCracha,
   zplDoCracha,
 } from '@sgh/dominio-internacao';
-import type { InternadoPortaria } from '@sgh/legado';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { idDaRota, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { idDaRota, type SessaoCadastro, sessaoDe as sessaoCadastro } from '../cadastro/comum.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -102,6 +98,7 @@ import {
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { ARMAZEM_FOTOS_PORTARIA, type ArmazemFotosPortaria, imagemConfere } from './fotos.js';
 import { type GravadorPortaria, PORTA_PORTARIA, type PortaPortaria } from './porta.js';
+import type { FotoGuardada, InternadoPortaria } from './tipos.js';
 import {
   type ContextoDoPaciente,
   dominiosParaTela,
@@ -137,6 +134,12 @@ function chaveDoPedido(s: SessaoCadastro): string | null {
   const bruto = s.req.headers['idempotency-key'];
   const k = Array.isArray(bruto) ? bruto[0] : bruto;
   return typeof k === 'string' && CHAVE.test(k) ? k : null;
+}
+
+/** A sessão com a Idempotency-Key do pedido no contexto da porta (as gravações a usam como chave). */
+function sessaoDe(req: RequisicaoAutorizada): SessaoCadastro {
+  const s = sessaoCadastro(req);
+  return { ...s, porta: Object.assign({}, s.porta, { chavePedido: chaveDoPedido(s) }) };
 }
 
 const invalida = (mensagem: string, campos: string[] = []) =>
@@ -224,7 +227,7 @@ export class PortariaController {
   @Auditar(E.portariaLida.codigo)
   async painel(@Req() req: RequisicaoAutorizada): Promise<PainelPortaria> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_VISITA' };
+    req.sghAlvo = { tabelaAlvo: 'visita' };
     const [agora, dominios, abertas, internados, biometria, gravacao, retencaoDias] = await Promise.all([
       this.agora(s),
       this.porta.dominios(s.porta),
@@ -255,7 +258,7 @@ export class PortariaController {
     const b = (busca ?? '').trim();
     if (nomeDeBusca(b).replace(/ /g, '').length < 3)
       throw invalida('Digite 3 letras ou mais do nome do paciente.', ['busca']);
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return this.servico.buscarPacientes(s.porta, b.slice(0, 70), await this.agora(s));
   }
 
@@ -270,7 +273,7 @@ export class PortariaController {
   ): Promise<PacientePortaria & { excepcionavel: boolean; papel: string | null }> {
     const s = sessaoDe(req);
     const i = await this.internadoDe(s, idDaRota(internacao));
-    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'SGH_HOT_VISITA' };
+    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'visita' };
     const agora = await this.agora(s);
     const ctx = await this.servico.contexto(s.porta, i, agora);
     const idVisitante = visitante ? idDaRota(visitante) : null;
@@ -286,7 +289,9 @@ export class PortariaController {
         id: pessoa.id,
         nascimento: pessoa.nascimento,
         emVisita: abertas.some((x) => x.visitante === pessoa.id && visitaEmCurso(x, agora)),
-        biometrica: IDENTIFICACAO_BIOMETRICA.includes(Number(identificacao)),
+        biometrica: (await this.porta.dominios(s.porta)).identificacoes.some(
+          (d) => d.codigo === Number(identificacao) && d.biometrica,
+        ),
         biometriaLigada: await this.biometriaLigada(s),
         excecao: false,
       };
@@ -318,7 +323,7 @@ export class PortariaController {
     documento: string | undefined,
   ): Promise<VisitanteLido[]> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_VISITANTE' };
+    req.sghAlvo = { tabelaAlvo: 'pessoa_portaria' };
     if (documento) {
       const d = documento.replace(/[\s.\-/]/g, '').toUpperCase();
       if (!/^[A-Z0-9]{3,20}$/.test(d) || !/^(cpf|rg|cnh|passaporte|outro)$/.test(tipo ?? ''))
@@ -342,7 +347,7 @@ export class PortariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ tipo: string; conteudo: string }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_VISITANTE' };
+    req.sghAlvo = { tabelaAlvo: 'pessoa_portaria' };
     const chave = await this.porta.foto(s.porta, idDaRota(id));
     const f = chave && this.fotos ? await this.fotos.ler(s.hospital, chave) : null;
     if (!f) throw naoEncontrado('Foto');
@@ -357,7 +362,7 @@ export class PortariaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ paciente: PacientePortaria | null }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ACOMPANHANTE' };
+    req.sghAlvo = { tabelaAlvo: 'acompanhante_internacao' };
     const pessoa = await this.porta.visitante(s.porta, idDaRota(id));
     if (!pessoa) throw naoEncontrado('Visitante');
     const a = (await this.porta.acompanhantes(s.porta, null)).find((x) => x.visitante === pessoa.id);
@@ -365,7 +370,7 @@ export class PortariaController {
     if (!a || a.fundamento === 'autorizado') return { paciente: null };
     const i = await this.porta.internado(s.porta, a.internacao);
     if (!i) return { paciente: null };
-    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'SGH_HOT_ACOMPANHANTE' };
+    req.sghAlvo = { paciente: i.paciente, tabelaAlvo: 'acompanhante_internacao' };
     const agora = await this.agora(s);
     const ctx = await this.servico.contexto(s.porta, i, agora);
     return { paciente: this.servico.pacienteParaTela(i, ctx, this.servico.avaliar(ctx, i, agora, null)) };
@@ -374,7 +379,7 @@ export class PortariaController {
   @Post('visitantes')
   @HttpCode(201)
   @Permissao(P.registrar)
-  @AuditadoNoHandler('internacao.registrarVisitante: SGH_HOT_VISITANTE com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.registrarVisitante: pessoa_portaria com a trilha na mesma transação')
   registrarVisitante(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     return this.cadastrarVisitante(sessaoDe(req), b, P.registrar);
   }
@@ -395,7 +400,7 @@ export class PortariaController {
     if (!dominios.tiposVisitante.some((t) => t.codigo === e.tipoVisitante && t.ativo))
       throw invalida('Escolha um tipo de visitante ativo.', ['tipoVisitante']);
     await this.apoio.exigirLiberacao(s);
-    let fotoChave: string | null = null;
+    let foto: FotoGuardada | null = null;
     if (e.foto) {
       const bytes = Buffer.from(e.foto.base64, 'base64');
       if (bytes.length === 0 || bytes.length > MAX_FOTO || !imagemConfere(e.foto.tipo, bytes))
@@ -407,14 +412,19 @@ export class PortariaController {
           'Fotos indisponíveis',
           'O armazenamento de fotos não está configurado.',
         );
-      fotoChave = await this.fotos.guardar(s.hospital, e.foto.tipo, bytes);
+      foto = {
+        chave: await this.fotos.guardar(s.hospital, e.foto.tipo, bytes),
+        tipoMime: e.foto.tipo,
+        tamanho: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+      };
     }
     const r = await this.apoio
       .sgh(
         s,
         E.visitanteRegistrado.codigo,
         recurso,
-        (x: { id: number }) => ({ tabela: 'SGH_HOT_VISITANTE', id: String(x.id), chave: e.tipoDocumento }),
+        (x: { id: number }) => ({ tabela: 'pessoa_portaria', id: String(x.id), chave: e.tipoDocumento }),
         (g) =>
           g.registrarVisitante({
             nome: e.nome,
@@ -424,13 +434,13 @@ export class PortariaController {
             nascimento: e.nascimento,
             telefone: e.telefone,
             tipoVisitante: e.tipoVisitante,
-            fotoChave,
+            foto,
             reterAte: reterAte(agora, dias),
             usuario: s.login,
           }),
       )
       .catch(async (x: unknown) => {
-        if (fotoChave && this.fotos) await this.fotos.remover(s.hospital, fotoChave).catch(() => undefined);
+        if (foto && this.fotos) await this.fotos.remover(s.hospital, foto.chave).catch(() => undefined);
         throw x;
       });
     if (r.fotoAnterior && this.fotos)
@@ -446,7 +456,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.registrar)
   @AuditadoNoHandler(
-    'internacao.registrarVisita: SGH_HOT_VISITA e a trava do paciente com a SGH_TRILHA na mesma transação',
+    'internacao.registrarVisita: visita e a trava do paciente com a trilha na mesma transação',
   )
   async registrarVisita(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
@@ -468,7 +478,8 @@ export class PortariaController {
     if (!pessoa) throw naoEncontrado('Visitante');
     if (!dominios.identificacoes.some((i) => i.codigo === e.identificacao))
       throw invalida('Escolha a forma de identificação no acesso.', ['identificacao']);
-    const biometrica = IDENTIFICACAO_BIOMETRICA.includes(e.identificacao);
+    const biometrica = dominios.identificacoes.some((d) => d.codigo === e.identificacao && d.biometrica);
+    const tipoPaciente = dominios.tiposVisitado.find((t) => t.paciente)?.codigo ?? null;
     const biometriaLigada = biometrica ? await this.biometriaLigada(s) : false;
     if (biometrica && !biometriaLigada)
       throw new ErroProblema(
@@ -513,7 +524,7 @@ export class PortariaController {
         a.papel === 'acompanhante' && ctx.acompanhante?.fundamento === 'autorizado' ? 'visitante' : a.papel;
       destinoTexto = `${internado.unidadeNome} · ${internado.leito}`;
     } else {
-      if (e.destino.tipoVisitado === TIPO_VISITADO_PACIENTE)
+      if (e.destino.tipoVisitado === tipoPaciente)
         throw invalida('A visita a paciente é registrada pelo paciente internado.', ['destino']);
       if (
         !dominios.tiposVisitado.some((t) => t.codigo === (e.destino as { tipoVisitado: number }).tipoVisitado)
@@ -534,7 +545,7 @@ export class PortariaController {
       E.visitaRegistrada.codigo,
       P.registrar,
       (x: { id: number }) => ({
-        tabela: 'SGH_HOT_VISITA',
+        tabela: 'visita',
         id: String(x.id),
         paciente: i?.paciente ?? null,
         chave: i ? String(i.internacao) : 'outro',
@@ -553,9 +564,8 @@ export class PortariaController {
                   leito: i.leitoCodigo,
                 }
               : { tipo: 'outro', local: (e.destino as { local: string }).local },
-            tipoVisitado: e.destino.tipo === 'paciente' ? TIPO_VISITADO_PACIENTE : e.destino.tipoVisitado,
+            tipoVisitado: e.destino.tipo === 'paciente' ? (tipoPaciente ?? 0) : e.destino.tipoVisitado,
             identificacao: e.identificacao,
-            situacaoAcesso: SITUACAO_ACESSO_REGISTRAR,
             cracha,
             entrada: agora,
             validoAte,
@@ -637,8 +647,8 @@ export class PortariaController {
     if (!v) throw naoEncontrado('Visita');
     req.sghAlvo =
       v.paciente !== null
-        ? { paciente: v.paciente, tabelaAlvo: 'SGH_HOT_VISITA' }
-        : { tabelaAlvo: 'SGH_HOT_VISITA' };
+        ? { paciente: v.paciente, tabelaAlvo: 'visita' }
+        : { tabelaAlvo: 'visita' };
     const internados = await this.mapaInternados(s);
     const i = v.internacao !== null ? internados.get(v.internacao) : undefined;
     const destino = i ? `${i.unidadeNome} · ${i.leito}` : (v.local ?? '');
@@ -661,7 +671,7 @@ export class PortariaController {
   @Post('visitas/:id/saida')
   @HttpCode(201)
   @Permissao(P.registrar)
-  @AuditadoNoHandler('internacao.encerrarVisita: SGH_HOT_VISITA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.encerrarVisita: visita com a trilha na mesma transação')
   async saida(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
     const v = await this.porta.visita(s.porta, idDaRota(id));
@@ -671,7 +681,7 @@ export class PortariaController {
       s,
       E.visitaEncerrada.codigo,
       P.registrar,
-      { tabela: 'SGH_HOT_VISITA', id: String(v.id), paciente: v.paciente, chave: 'portaria' },
+      { tabela: 'visita', id: String(v.id), paciente: v.paciente, chave: 'portaria' },
       (g) => g.encerrarVisita({ id: v.id, saida: agora, origem: 'portaria', usuario: s.login }),
     );
     return { ok: true, id: r, mensagem: 'Saída registrada. Recolha o crachá.' };
@@ -707,7 +717,7 @@ export class PortariaController {
   @Auditar(E.portariaLida.codigo)
   async regras(@Req() req: RequisicaoAutorizada): Promise<PainelRegrasPortaria> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_REGRA_VISITA' };
+    req.sghAlvo = { tabelaAlvo: 'regra_visita_unidade' };
     const [agora, unidades, regras, bloqueios, internados, gravacao] = await Promise.all([
       this.agora(s),
       this.porta.unidades(s.porta),
@@ -722,7 +732,7 @@ export class PortariaController {
       bloqueios: bloqueios
         .filter((b) => internados.has(b.internacao))
         .map((b) => this.bloqueioParaTela(b, internados)),
-      vencidos: await this.porta.vencidos(s.porta, agora.slice(0, 10)),
+      vencidos: await this.porta.vencidos(s.porta, agora.slice(0, 10), await this.retencaoDias(s)),
       gravacao,
     };
   }
@@ -741,7 +751,7 @@ export class PortariaController {
   @Permissao(P.regrar)
   @Auditar(E.portariaLida.codigo)
   internadosRegras(@Query('unidade') unidade: string | undefined, @Req() req: RequisicaoAutorizada) {
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return this.internadosDaUnidade(sessaoDe(req), unidade);
   }
 
@@ -749,7 +759,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.regrar)
   @AuditadoNoHandler(
-    'internacao.definirRegraVisita: SGH_HOT_REGRA_VISITA com a SGH_TRILHA na mesma transação',
+    'internacao.definirRegraVisita: regra_visita_unidade com a trilha na mesma transação',
   )
   async definirRegra(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
@@ -765,7 +775,7 @@ export class PortariaController {
       s,
       E.visitaRegraDefinida.codigo,
       P.regrar,
-      (x: { id: number }) => ({ tabela: 'SGH_HOT_REGRA_VISITA', id: String(x.id), chave: e.unidade }),
+      (x: { id: number }) => ({ tabela: 'regra_visita_unidade', id: String(x.id), chave: e.unidade }),
       (g) => g.definirRegra({ ...e, usuario: s.login }),
     );
     return { ok: true, id: r.id, mensagem: 'Regra de visita gravada.' };
@@ -799,7 +809,7 @@ export class PortariaController {
       E.visitaBloqueada.codigo,
       recurso,
       (x: number) => ({
-        tabela: 'SGH_HOT_BLOQUEIO_VISITA',
+        tabela: 'bloqueio_visitante',
         id: String(x),
         paciente: i.paciente,
         chave: e.motivo,
@@ -835,7 +845,7 @@ export class PortariaController {
       s,
       E.visitaBloqueioRevogado.codigo,
       recurso,
-      (x: { id: number }) => ({ tabela: 'SGH_HOT_BLOQUEIO_VISITA', id: String(x.id), chave: 'revogacao' }),
+      (x: { id: number }) => ({ tabela: 'bloqueio_visitante', id: String(x.id), chave: 'revogacao' }),
       async (g) => {
         // A rota clínica revoga só o bloqueio clínico (o sigilo, a ordem judicial e o pedido são da supervisão): a
         // conferência é do gravador, depois do SELECT ... WITH LOCK, na mesma transação.
@@ -862,7 +872,7 @@ export class PortariaController {
   @Post('bloqueios')
   @HttpCode(201)
   @Permissao(P.regrar)
-  @AuditadoNoHandler('internacao.bloquearVisita: SGH_HOT_BLOQUEIO_VISITA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.bloquearVisita: bloqueio_visitante com a trilha na mesma transação')
   bloquearVisita(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.bloquear(sessaoDe(req), b, false);
   }
@@ -870,7 +880,7 @@ export class PortariaController {
   @Post('bloqueios/:id/revogacao')
   @HttpCode(201)
   @Permissao(P.regrar)
-  @AuditadoNoHandler('internacao.bloquearVisita (revogação): SGH_HOT_BLOQUEIO_VISITA com a SGH_TRILHA junto')
+  @AuditadoNoHandler('internacao.bloquearVisita (revogação): bloqueio_visitante com a trilha junto')
   revogarBloqueio(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.revogar(sessaoDe(req), id, b, false);
   }
@@ -888,7 +898,7 @@ export class PortariaController {
     gravacao: PainelPortaria['gravacao'];
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_BLOQUEIO_VISITA' };
+    req.sghAlvo = { tabelaAlvo: 'bloqueio_visitante' };
     const [unidades, bloqueios, internados, gravacao] = await Promise.all([
       this.porta.unidades(s.porta),
       this.porta.bloqueios(s.porta, null),
@@ -908,7 +918,7 @@ export class PortariaController {
   @Post('bloqueios-clinicos')
   @HttpCode(201)
   @Permissao(P.bloquearClinico)
-  @AuditadoNoHandler('internacao.bloquearVisita (clínico): SGH_HOT_BLOQUEIO_VISITA com a SGH_TRILHA junto')
+  @AuditadoNoHandler('internacao.bloquearVisita (clínico): bloqueio_visitante com a trilha junto')
   bloquearClinico(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.bloquear(sessaoDe(req), b, true);
   }
@@ -917,7 +927,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.bloquearClinico)
   @AuditadoNoHandler(
-    'internacao.bloquearVisita (revogação clínica): SGH_HOT_BLOQUEIO_VISITA com a SGH_TRILHA junto',
+    'internacao.bloquearVisita (revogação clínica): bloqueio_visitante com a trilha junto',
   )
   revogarClinico(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.revogar(sessaoDe(req), id, b, true);
@@ -926,7 +936,7 @@ export class PortariaController {
   @Post('visitantes/expurgo')
   @HttpCode(201)
   @Permissao(P.regrar)
-  @AuditadoNoHandler('internacao.registrarVisitante (expurgo): SGH_HOT_VISITANTE com a SGH_TRILHA junto')
+  @AuditadoNoHandler('internacao.registrarVisitante (expurgo): pessoa_portaria com a trilha junto')
   async expurgo(@Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
     const agora = await this.agora(s);
@@ -935,7 +945,7 @@ export class PortariaController {
       E.visitantesExpurgados.codigo,
       P.regrar,
       (x: { ids: number[] }) => ({
-        tabela: 'SGH_HOT_VISITANTE',
+        tabela: 'pessoa_portaria',
         id: String(x.ids[0] ?? ''),
         chave: `${x.ids.length}`,
       }),
@@ -976,7 +986,7 @@ export class PortariaController {
     const f = r.data;
     if (!DATA.test(f.de) || minutos(`${f.ate}T00:00`) - minutos(`${f.de}T00:00`) > 90 * 24 * 60)
       throw invalida('O período vai até 90 dias.', ['ate']);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_VISITA' };
+    req.sghAlvo = { tabelaAlvo: 'visita' };
     const [vs, internados] = await Promise.all([
       this.porta.visitasDoPeriodo(s.porta, f),
       this.mapaInternados(s),
@@ -988,7 +998,7 @@ export class PortariaController {
   @Permissao(P.contatos)
   @Auditar(E.portariaLida.codigo)
   async unidadesContatos(@Req() req: RequisicaoAutorizada): Promise<{ unidade: string; nome: string }[]> {
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return this.porta.unidades(sessaoDe(req).porta);
   }
 
@@ -997,7 +1007,7 @@ export class PortariaController {
   @Auditar(E.portariaLida.codigo)
   internadosContatos(@Query('unidade') unidade: string | undefined, @Req() req: RequisicaoAutorizada) {
     // A investigação de surto (controle de infecção) vê todos os internados da unidade, com o sigilo.
-    req.sghAlvo = { tabelaAlvo: 'RICADINT' };
+    req.sghAlvo = { tabelaAlvo: 'internacao' };
     return this.internadosDaUnidade(sessaoDe(req), unidade);
   }
 
@@ -1015,7 +1025,7 @@ export class PortariaController {
     }
   > {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_ACOMPANHANTE' };
+    req.sghAlvo = { tabelaAlvo: 'acompanhante_internacao' };
     const u = unidade?.trim() || null;
     if (u !== null && !UNIDADE.test(u)) throw invalida('Unidade inválida.', ['unidade']);
     const veSigilo = this.veSigilo(s);
@@ -1055,7 +1065,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.acompanhante)
   @AuditadoNoHandler(
-    'internacao.registrarVisitante (do acompanhante): SGH_HOT_VISITANTE com a SGH_TRILHA na mesma transação',
+    'internacao.registrarVisitante (do acompanhante): pessoa_portaria com a trilha na mesma transação',
   )
   registrarVisitanteAcompanhante(
     @Body() b: unknown,
@@ -1092,7 +1102,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.acompanhante)
   @AuditadoNoHandler(
-    'internacao.registrarAcompanhante: SGH_HOT_ACOMPANHANTE com a SGH_TRILHA na mesma transação',
+    'internacao.registrarAcompanhante: acompanhante_internacao com a trilha na mesma transação',
   )
   async registrarAcompanhante(
     @Body() b: unknown,
@@ -1124,7 +1134,7 @@ export class PortariaController {
       E.acompanhanteRegistrado.codigo,
       P.acompanhante,
       (x: { id: number }) => ({
-        tabela: 'SGH_HOT_ACOMPANHANTE',
+        tabela: 'acompanhante_internacao',
         id: String(x.id),
         paciente: i.paciente,
         chave: e.fundamento,
@@ -1156,7 +1166,7 @@ export class PortariaController {
   @Post('acompanhantes/:id/fim')
   @HttpCode(201)
   @Permissao(P.acompanhante)
-  @AuditadoNoHandler('internacao.registrarAcompanhante (fim): SGH_HOT_ACOMPANHANTE com a SGH_TRILHA junto')
+  @AuditadoNoHandler('internacao.registrarAcompanhante (fim): acompanhante_internacao com a trilha junto')
   async fimAcompanhante(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1169,7 +1179,7 @@ export class PortariaController {
       s,
       E.acompanhanteEncerrado.codigo,
       P.acompanhante,
-      (x: { id: number }) => ({ tabela: 'SGH_HOT_ACOMPANHANTE', id: String(x.id), chave: 'fim' }),
+      (x: { id: number }) => ({ tabela: 'acompanhante_internacao', id: String(x.id), chave: 'fim' }),
       (g) => g.encerrarAcompanhante({ id: idDaRota(id), motivo: e.motivo, fim: agora, usuario: s.login }),
     );
     return { ok: true, id: r.id, mensagem: 'Acompanhamento encerrado.' };
@@ -1182,7 +1192,7 @@ export class PortariaController {
   @Auditar(E.portariaLida.codigo)
   async terminais(@Req() req: RequisicaoAutorizada): Promise<PainelTerminais> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_TERMINAL' };
+    req.sghAlvo = { tabelaAlvo: 'terminal_acesso' };
     const [dominios, terminais, eventos, catraca, biometria, gravacao] = await Promise.all([
       this.porta.dominios(s.porta),
       this.porta.terminais(s.porta),
@@ -1216,7 +1226,7 @@ export class PortariaController {
       s,
       E.terminalConfigurado.codigo,
       P.terminalEditar,
-      (x: { id: number }) => ({ tabela: 'SGH_HOT_TERMINAL', id: String(x.id), chave: e.local }),
+      (x: { id: number }) => ({ tabela: 'terminal_acesso', id: String(x.id), chave: e.local }),
       (g) =>
         g.configurarTerminal({
           id,
@@ -1236,7 +1246,7 @@ export class PortariaController {
   @Post('terminais')
   @HttpCode(201)
   @Permissao(P.terminalEditar)
-  @AuditadoNoHandler('internacao.configurarTerminal: SGH_HOT_TERMINAL com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.configurarTerminal: terminal_acesso com a trilha na mesma transação')
   incluirTerminal(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.configurar(sessaoDe(req), null, b);
   }
@@ -1244,7 +1254,7 @@ export class PortariaController {
   @Post('terminais/:id')
   @HttpCode(201)
   @Permissao(P.terminalEditar)
-  @AuditadoNoHandler('internacao.configurarTerminal: SGH_HOT_TERMINAL com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.configurarTerminal: terminal_acesso com a trilha na mesma transação')
   alterarTerminal(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.configurar(sessaoDe(req), idDaRota(id), b);
   }
@@ -1263,7 +1273,7 @@ export class PortariaController {
       E.catracaEvento.codigo,
       P.catraca,
       (x: { id: number; resultado: string }) => ({
-        tabela: 'SGH_HOT_CATRACA_EVT',
+        tabela: 'evento_acesso_portaria',
         id: String(x.id),
         chave: `${ev.sentido}:${x.resultado}`,
       }),
@@ -1284,7 +1294,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.catraca)
   @AuditadoNoHandler(
-    'internacao.registrarEventoCatraca: SGH_HOT_CATRACA_EVT com a SGH_TRILHA na mesma transação',
+    'internacao.registrarEventoCatraca: evento_acesso_portaria com a trilha na mesma transação',
   )
   eventoCatraca(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<RespostaCatraca> {
     return this.evento(sessaoDe(req), corpo(esquemaEventoCatraca, b));
@@ -1294,7 +1304,7 @@ export class PortariaController {
   @HttpCode(201)
   @Permissao(P.terminalEditar)
   @AuditadoNoHandler(
-    'internacao.registrarEventoCatraca (simulador): SGH_HOT_CATRACA_EVT com a SGH_TRILHA junto',
+    'internacao.registrarEventoCatraca (simulador): evento_acesso_portaria com a trilha junto',
   )
   async simular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<RespostaCatraca> {
     if (!this.simulador)

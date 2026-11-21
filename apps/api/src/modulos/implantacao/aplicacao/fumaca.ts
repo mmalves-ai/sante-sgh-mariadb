@@ -1,7 +1,10 @@
 // M60, etapa 3: a fumaça do servidor (ficha do M60, M60-F3): o que a instância confere de si para a verificação
-// pós-implantação. Lê o relógio do banco, o Valkey e as filas, a última verificação de estrutura do núcleo e as chaves
-// de liberação do estabelecimento, e devolve os itens com a situação (regras puras em @sgh/dominio-config). Só leitura;
-// só códigos e contagens.
+// pós-implantação. Lê o relógio do banco, o Valkey e as filas, a impressão da estrutura do banco do cliente contra a
+// homologada e as chaves de liberação do estabelecimento, e devolve os itens com a situação (regras puras em
+// @sgh/dominio-config). Só leitura; só códigos e contagens.
+// Melhoria: a impressão da estrutura é lida do próprio banco do cliente a cada fumaça (tabelas e colunas), e não da
+// verificação de convivência com o sistema antigo; a divergência não bloqueia escrita (o modelo próprio não tem
+// tabelas espelho), só falha a fumaça.
 import {
   definicaoParametro,
   esquemaFumacaServidor,
@@ -24,19 +27,18 @@ import {
   piorSituacao,
   resolverParametro,
 } from '@sgh/dominio-config';
-import type { MarcaSchema } from '@sgh/legado';
 import type { FonteConfiguracao } from '../../config/public-api.js';
 import type { PortaFilasImplantacao } from '../filas.js';
 import type { ConsultaNtp } from '../ntp.js';
-import type { ContextoImplantacao, PortaImplantacao } from '../porta.js';
+import type { ContextoImplantacao, EstruturaBanco, PortaImplantacao } from '../porta.js';
 
 export interface DependenciasFumaca {
   readonly porta: PortaImplantacao;
   readonly filas: PortaFilasImplantacao;
   readonly ambiente: string;
-  /** A última verificação de estrutura do estabelecimento (nula: ainda não rodou; indefinida: sem núcleo). */
-  readonly marcaSchema: (hospital: string) => MarcaSchema | null | undefined;
-  /** As linhas de SGH_CFG_LIBERACAO do estabelecimento; nula: sem fonte (a leitura sai em falha). */
+  /** O resumo homologado da estrutura do banco (ESTRUTURA_HOMOLOGADA do pacote); nulo: o pacote não levou. */
+  readonly estruturaHomologada: (hospital: string) => string | null;
+  /** As chaves de liberação do estabelecimento (liberacao_chave); nula: sem fonte (a leitura sai em falha). */
   readonly configuracao: FonteConfiguracao | null;
   /** IMPLANTACAO_CHAVES_ESPERADAS já lidas. */
   readonly chavesEsperadas: readonly string[];
@@ -83,23 +85,32 @@ export function parametrosDaHora(
 
 const curto = (s: string | null | undefined): string | null => (s ? s.slice(0, 16) : null);
 
-export function impressaoDaMarca(m: MarcaSchema | null | undefined): ImpressaoConferida {
-  if (!m)
+/**
+ * A impressão da estrutura contra a homologada: `atual` indefinida é o banco que não respondeu; homologada nula, o
+ * pacote sem a impressão homologada.
+ */
+export function impressaoDaEstrutura(
+  atual: EstruturaBanco | undefined,
+  homologada: string | null,
+  verificadaEm: string,
+): ImpressaoConferida {
+  if (!atual)
     return {
-      estado: m === undefined ? 'indisponivel' : null,
+      estado: 'indisponivel',
       resumo: null,
-      resumoHomologado: null,
+      resumoHomologado: curto(homologada),
       verificadaEm: null,
       tabelasBloqueadas: 0,
       bloqueiaTudo: false,
     };
+  const h = homologada?.trim().toLowerCase() || null;
   return {
-    estado: m.estado,
-    resumo: curto(m.resumo),
-    resumoHomologado: curto(m.resumoHomologado),
-    verificadaEm: m.verificadaEm,
-    tabelasBloqueadas: m.tabelasBloqueadas.length,
-    bloqueiaTudo: m.bloqueiaTudo,
+    estado: h === null ? 'sem-homologacao' : h === atual.resumo.toLowerCase() ? 'homologado' : 'divergente',
+    resumo: curto(atual.resumo),
+    resumoHomologado: curto(h),
+    verificadaEm,
+    tabelasBloqueadas: 0,
+    bloqueiaTudo: false,
   };
 }
 
@@ -147,7 +158,7 @@ export class ServicoFumacaServidor {
     const inicio = this.agora();
     const meio = () => Math.round((inicio + this.agora()) / 2);
     const hora = await this.parametros(c);
-    const [rBanco, valkey, filas, linhas, rNtp] = await Promise.all([
+    const [rBanco, valkey, filas, linhas, rNtp, estrutura] = await Promise.all([
       this.d.porta.relogioBanco(c).then(
         (v) => ({ v, ms: meio() }),
         () => ({ v: null, ms: meio() }),
@@ -156,6 +167,9 @@ export class ServicoFumacaServidor {
       this.d.filas.filas(c.rede),
       this.linhasDeChave(c),
       this.consultarNtp(hora.servidorNtp),
+      Promise.resolve()
+        .then(() => this.d.porta.estrutura(c))
+        .catch((): undefined => undefined),
     ]);
     const relogio = compararRelogios(rBanco.ms, rBanco.v, this.d.fuso());
     const horaConfiavel = conferirHoraConfiavel({
@@ -164,7 +178,11 @@ export class ServicoFumacaServidor {
       servidorMs: rNtp.ms,
       relogio,
     });
-    const impressao = impressaoDaMarca(this.d.marcaSchema(c.hospital));
+    const impressao = impressaoDaEstrutura(
+      estrutura,
+      this.d.estruturaHomologada(c.hospital),
+      new Date(this.agora()).toISOString(),
+    );
     const chaves = conferirChaves(linhas, this.d.chavesEsperadas);
     const itens = itensDaFumaca({
       ambiente: this.d.ambiente,

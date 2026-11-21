@@ -1,0 +1,91 @@
+{
+  "lote": "02-14",
+  "registrar": [
+    "rouparia",
+    "sessoes",
+    "suporte"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/rouparia/porta.ts",
+    "src/modulos/rouparia/porta-memoria.ts",
+    "src/modulos/rouparia/porta-propria.ts",
+    "src/modulos/rouparia/rouparia.controller.ts",
+    "src/modulos/rouparia/public-api.ts",
+    "src/modulos/rouparia/modulo.ts",
+    "src/modulos/rouparia/rouparia.spec.ts",
+    "src/modulos/rouparia/porta-propria.int.spec.ts",
+    "src/modulos/sessoes/porta.ts",
+    "src/modulos/sessoes/porta-memoria.ts",
+    "src/modulos/sessoes/porta-propria.ts",
+    "src/modulos/sessoes/sessoes.controller.ts",
+    "src/modulos/sessoes/public-api.ts",
+    "src/modulos/sessoes/modulo.ts",
+    "src/modulos/sessoes/sessoes.spec.ts",
+    "src/modulos/sessoes/porta-propria.int.spec.ts",
+    "src/modulos/suporte/correcao.ts",
+    "src/modulos/suporte/servico-como.ts",
+    "src/modulos/suporte/servico-plataforma.ts",
+    "src/modulos/suporte/plataforma.controller.ts",
+    "src/modulos/suporte/modulo.ts",
+    "src/modulos/suporte/seguranca.spec.ts",
+    "src/modulos/suporte/suporte.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "fiacao",
+      "alvo": "apps/api/src/app-base.module.ts e sessao/montar.ts",
+      "motivo": "Os ganchos do 'login como' (guardaComo, reautenticarAtor, aoEncerrarComo) entram no ServicoSessao só na construção; a base monta a sessão ANTES dos módulos. Proposta: a base cria um objeto de ganchos tardios e o passa a montarServicoSessao e ao ContextoModulo (ex.: ctx.ganchosComo.ligar({guarda, reautenticar, aoEncerrar})); suporte/modulo.ts liga os do ServicoComo e do ServicoPlataforma (servicosSuporte). Sem isso, com API_MODULOS=suporte nenhuma sessão 'como' vale (falha fechada). O suporte.spec.ts monta a sessão com os ganchos (opção servico) até lá."
+    },
+    {
+      "tipo": "decisao",
+      "alvo": "suporte (contas de suporte da plataforma)",
+      "motivo": "Mantida a pendência do lote 01-06: onde ficam credencial, TOTP e convite das contas de suporte (banco plataforma × conta_plataforma). Até a decisão, o módulo do suporte só tem o repositório em memória (dev/ci sintético); com o núcleo, as rotas /api/plataforma/* respondem 503. Também falta a FonteComoEstabelecimento própria (prévia/correção sobre a trilha própria e as imagens de sessao_suporte)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "inventario_enxoval e inventario_enxoval_item (09_HOT)",
+      "motivo": "Inventário (contagem) do enxoval: a tela registra o movimento 'inventario' e os indicadores usam as peças em circulação. Hoje a porta própria recusa com 'modelo-pendente' e inventarios() lê vazio.",
+      "ddl": "CREATE TABLE inventario_enxoval (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  numero VARCHAR(30) NOT NULL COMMENT 'Número de negócio (sequencia_negocio)',\n  contado_em DATETIME(3) NOT NULL,\n  setor_funcional_id BIGINT UNSIGNED NULL COMMENT 'Nulo: inventário da rouparia central',\n  responsavel_usuario_id BIGINT UNSIGNED NOT NULL,\n  situacao VARCHAR(20) NOT NULL DEFAULT 'registrado',\n  cancelado_em DATETIME(3) NULL,\n  motivo_cancelamento VARCHAR(500) NULL,\n  observacao VARCHAR(500) NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_inventario_enxoval_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  CONSTRAINT ck_inventario_enxoval_situacao CHECK (situacao IN ('registrado','cancelado')),\n  CONSTRAINT ck_inventario_enxoval_cancelamento CHECK (situacao <> 'cancelado' OR (cancelado_em IS NOT NULL AND motivo_cancelamento IS NOT NULL)),\n  UNIQUE KEY uq_inventario_enxoval_numero (estabelecimento_id, numero),\n  KEY ix_inventario_enxoval_data (estabelecimento_id, contado_em),\n  KEY ix_inventario_enxoval_setor_funcional (setor_funcional_id),\n  KEY ix_inventario_enxoval_responsavel_usuario (responsavel_usuario_id)\n) COMMENT='Contagem das peças do enxoval na rouparia ou no setor';\nCREATE TABLE inventario_enxoval_item (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  inventario_enxoval_id BIGINT UNSIGNED NOT NULL,\n  sequencia SMALLINT UNSIGNED NOT NULL,\n  peca_enxoval_id BIGINT UNSIGNED NOT NULL,\n  quantidade_contada INT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_inventario_enxoval_item_sequencia (inventario_enxoval_id, sequencia),\n  UNIQUE KEY uq_inventario_enxoval_item_peca (inventario_enxoval_id, peca_enxoval_id),\n  KEY ix_inventario_enxoval_item_peca_enxoval (peca_enxoval_id)\n) COMMENT='Quantidade contada de cada peça no inventário do enxoval';\nALTER TABLE inventario_enxoval\n  ADD CONSTRAINT fk_inventario_enxoval_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_inventario_enxoval_setor_funcional_id FOREIGN KEY (setor_funcional_id) REFERENCES setor_funcional (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_inventario_enxoval_responsavel_usuario_id FOREIGN KEY (responsavel_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;\nALTER TABLE inventario_enxoval_item\n  ADD CONSTRAINT fk_inventario_enxoval_item_inventario_enxoval_id FOREIGN KEY (inventario_enxoval_id) REFERENCES inventario_enxoval (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_inventario_enxoval_item_peca_enxoval_id FOREIGN KEY (peca_enxoval_id) REFERENCES peca_enxoval (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "peca_enxoval_composicao (09_HOT)",
+      "motivo": "Composição do kit do enxoval (kit leito = 2 lençóis + 1 fronha). O domínio exige composição no kit; hoje a porta recusa o kit com 'modelo-pendente' e lê composicao [].",
+      "ddl": "CREATE TABLE peca_enxoval_composicao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  kit_peca_enxoval_id BIGINT UNSIGNED NOT NULL,\n  componente_peca_enxoval_id BIGINT UNSIGNED NOT NULL,\n  quantidade SMALLINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_peca_enxoval_composicao_quantidade CHECK (quantidade BETWEEN 1 AND 99),\n  CONSTRAINT ck_peca_enxoval_composicao_distintas CHECK (kit_peca_enxoval_id <> componente_peca_enxoval_id),\n  UNIQUE KEY uq_peca_enxoval_composicao (kit_peca_enxoval_id, componente_peca_enxoval_id),\n  KEY ix_peca_enxoval_composicao_componente (componente_peca_enxoval_id)\n) COMMENT='Peças que compõem um kit do enxoval, com a quantidade';\nALTER TABLE peca_enxoval_composicao\n  ADD CONSTRAINT fk_peca_enxoval_composicao_kit_peca_enxoval_id FOREIGN KEY (kit_peca_enxoval_id) REFERENCES peca_enxoval (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_peca_enxoval_composicao_componente_peca_enxoval_id FOREIGN KEY (componente_peca_enxoval_id) REFERENCES peca_enxoval (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "remessa_lavanderia_item (09_HOT)",
+      "motivo": "Peças enviadas à lavanderia por remessa: a conferência do retorno compara as peças enviadas com as que voltaram (pecasFaltando). Hoje a remessa guarda só quantidade_pecas e a conferência por peça fica vazia.",
+      "ddl": "CREATE TABLE remessa_lavanderia_item (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  remessa_lavanderia_id BIGINT UNSIGNED NOT NULL,\n  sequencia SMALLINT UNSIGNED NOT NULL,\n  peca_enxoval_id BIGINT UNSIGNED NOT NULL,\n  quantidade INT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_remessa_lavanderia_item_quantidade CHECK (quantidade > 0),\n  UNIQUE KEY uq_remessa_lavanderia_item_sequencia (remessa_lavanderia_id, sequencia),\n  UNIQUE KEY uq_remessa_lavanderia_item_peca (remessa_lavanderia_id, peca_enxoval_id),\n  KEY ix_remessa_lavanderia_item_peca_enxoval (peca_enxoval_id)\n) COMMENT='Quantidade de cada peça enviada à lavanderia na remessa';\nALTER TABLE remessa_lavanderia_item\n  ADD CONSTRAINT fk_remessa_lavanderia_item_remessa_lavanderia_id FOREIGN KEY (remessa_lavanderia_id) REFERENCES remessa_lavanderia (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_remessa_lavanderia_item_peca_enxoval_id FOREIGN KEY (peca_enxoval_id) REFERENCES peca_enxoval (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "coleta_roupa_suja, distribuicao_enxoval, baixa_enxoval (cancelamento) e retorno_lavanderia (unicidade)",
+      "motivo": "O cancelamento desses documentos exige motivo (contrato: motivo >= 5 caracteres) e hoje só muda a situação (o motivo fica na trilha). E o uq_retorno_lavanderia_remessa impede registrar de novo o retorno de uma remessa cujo retorno foi cancelado.",
+      "ddl": "ALTER TABLE coleta_roupa_suja ADD COLUMN cancelado_em DATETIME(3) NULL, ADD COLUMN motivo_cancelamento VARCHAR(500) NULL, ADD CONSTRAINT ck_coleta_roupa_suja_cancelamento CHECK (situacao <> 'cancelada' OR motivo_cancelamento IS NOT NULL);\nALTER TABLE distribuicao_enxoval ADD COLUMN cancelado_em DATETIME(3) NULL, ADD COLUMN motivo_cancelamento VARCHAR(500) NULL, ADD CONSTRAINT ck_distribuicao_enxoval_cancelamento CHECK (situacao <> 'cancelada' OR motivo_cancelamento IS NOT NULL);\nALTER TABLE baixa_enxoval ADD COLUMN cancelado_em DATETIME(3) NULL, ADD COLUMN motivo_cancelamento VARCHAR(500) NULL, ADD CONSTRAINT ck_baixa_enxoval_cancelamento CHECK (situacao <> 'cancelada' OR motivo_cancelamento IS NOT NULL);\nALTER TABLE retorno_lavanderia DROP INDEX uq_retorno_lavanderia_remessa, ADD COLUMN remessa_vigente_id BIGINT UNSIGNED AS (IF(situacao = 'cancelado' OR excluido_em IS NOT NULL, NULL, remessa_lavanderia_id)) PERSISTENT COMMENT 'Um retorno vigente por remessa', ADD UNIQUE KEY uq_retorno_lavanderia_remessa_vigente (remessa_vigente_id), ADD KEY ix_retorno_lavanderia_remessa (remessa_lavanderia_id);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "recurso_agendavel (05_AGE): faixa etária",
+      "motivo": "A agenda de sessões confere a idade do paciente com a faixa da cadeira (cadeira pediátrica 0–17). recurso_agendavel.faixa_inicial/final são posições da grade, não idade; hoje o recurso aceita qualquer idade.",
+      "ddl": "ALTER TABLE recurso_agendavel ADD COLUMN idade_minima_anos SMALLINT UNSIGNED NULL COMMENT 'Idade mínima do paciente aceita', ADD COLUMN idade_maxima_anos SMALLINT UNSIGNED NULL COMMENT 'Idade máxima do paciente aceita', ADD CONSTRAINT ck_recurso_agendavel_idade CHECK (idade_minima_anos IS NULL OR idade_maxima_anos IS NULL OR idade_maxima_anos >= idade_minima_anos);"
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (alterações aditivas e pendentes)",
+      "motivo": "Feito (aditivo): agenda/sessoes.ts esquemaAgendarSessao ganhou itemAgendavel, solicitante e fontePagadora opcionais (o plano_sessao exige; a porta própria recusa 'plano-incompleto' sem eles): a tela da série precisa pedi-los. Pendente: rouparia identifica o movimento por número composto (id do documento × 8 + tipo) — trocar para rota /movimentos/:tipo/:id ou id textual; suporte/suporte.ts CruzamentoTrilhaTela.idTrilhaLegado/usuarioLegado, PassoCorrecaoTela.operacaoOriginal ('INSERT'|'UPDATE'|'DELETE') e a rota GET /api/plataforma/auditoria/sessoes/:id/trilha-legado ainda com vocabulário antigo; agenda/sessoes.ts com hora HHMM e complexidade/duração 0 = todas."
+    },
+    {
+      "tipo": "carga",
+      "alvo": "criar_cliente / cargas do cliente",
+      "motivo": "Domínios usados pela rouparia e pelas sessões precisam de carga inicial: motivo_baixa_enxoval (extravio, dano, mancha, desgaste, evasao, outro — a perda recusa 'motivo-nao-cadastrado' sem eles), complexidade_sessao e duracao_sessao. As sequências remessa_lavanderia, distribuicao_enxoval, baixa_enxoval, peca_enxoval (do cliente) e plano_sessao são criadas sob demanda (garantirSequencia)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "baixa_enxoval_item (09_HOT)",
+      "motivo": "A perda é um documento só com várias peças (achado da revisão do lote 02-14). Hoje a porta própria aceita só uma peça por perda e recusa a de várias com 'modelo-pendente'. Com os itens, baixa_enxoval fica cabeçalho (peca_enxoval_id, quantidade e custo_estimado passam ao item).",
+      "ddl": "CREATE TABLE baixa_enxoval_item (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  baixa_enxoval_id BIGINT UNSIGNED NOT NULL,\n  sequencia SMALLINT UNSIGNED NOT NULL,\n  peca_enxoval_id BIGINT UNSIGNED NOT NULL,\n  quantidade INT UNSIGNED NOT NULL,\n  custo_estimado DECIMAL(15,2) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_baixa_enxoval_item_quantidade CHECK (quantidade > 0),\n  CONSTRAINT ck_baixa_enxoval_item_custo CHECK (custo_estimado IS NULL OR custo_estimado >= 0),\n  UNIQUE KEY uq_baixa_enxoval_item_sequencia (baixa_enxoval_id, sequencia),\n  UNIQUE KEY uq_baixa_enxoval_item_peca (baixa_enxoval_id, peca_enxoval_id),\n  KEY ix_baixa_enxoval_item_peca_enxoval (peca_enxoval_id)\n) COMMENT='Peças e quantidades de cada baixa do enxoval';\nALTER TABLE baixa_enxoval_item\n  ADD CONSTRAINT fk_baixa_enxoval_item_baixa_enxoval_id FOREIGN KEY (baixa_enxoval_id) REFERENCES baixa_enxoval (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_baixa_enxoval_item_peca_enxoval_id FOREIGN KEY (peca_enxoval_id) REFERENCES peca_enxoval (id) ON DELETE RESTRICT;\nALTER TABLE baixa_enxoval DROP CONSTRAINT ck_baixa_enxoval_quantidade, DROP INDEX ix_baixa_enxoval_peca_enxoval, DROP COLUMN peca_enxoval_id, DROP COLUMN quantidade, DROP COLUMN custo_estimado; -- após mover as linhas existentes para o item (sequencia 1)"
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import type {
   MudancaServicoParaGravar,
   NovoServicoParaGravar,
   ServicoCompartilhadoLido,
-} from '@sgh/legado';
+} from './tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { ContextoServicosRede, PortaServicosRede } from './porta.js';
 

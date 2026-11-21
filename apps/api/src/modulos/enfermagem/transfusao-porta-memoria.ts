@@ -22,14 +22,11 @@ import {
   MENSAGENS_CORRECAO_HEMO,
   type VersaoRequisicaoLida,
 } from '@sgh/contratos';
-import {
-  type ContextoOperacao,
-  type HorarioHemoterapiaLido,
-  type HorarioLidoEnf,
-  type LiberacaoConsultada,
-  recusa,
-  type TcleLido,
-} from '@sgh/legado';
+import { type ContextoOperacao, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import type { HorarioEnfermagemLido } from './tipos-vinculados.js';
+import { chaveDoEstabelecimento } from './tipos-vinculados.js';
+import type { HorarioHemoterapia, TermoConsentimentoLido } from './transfusao-tipos.js';
 import type { PortaEnfermagem } from './porta.js';
 import type {
   ContextoTransfusao,
@@ -91,7 +88,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
   constructor(private readonly enfermagem: PortaEnfermagem) {}
 
   private e(c: ContextoTransfusao): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDoEstabelecimento(c));
     if (!s) {
       s = {
         seq: 47_100,
@@ -104,7 +101,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
         versoes: [],
         adendos: [],
       };
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDoEstabelecimento(c), s);
     }
     return s;
   }
@@ -136,9 +133,9 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
   }
 
   private itemDoHorario(
-    h: HorarioLidoEnf,
+    h: HorarioEnfermagemLido,
     i: { paciente: number; nome: string; numero: number },
-    todos: readonly HorarioLidoEnf[],
+    todos: readonly HorarioEnfermagemLido[],
   ): ItemHemoterapiaAAtender {
     const codigo = /PLAQUETA/i.test(h.descricao) ? 'CP' : /PLASMA/i.test(h.descricao) ? 'PLC' : 'CH';
     return {
@@ -189,7 +186,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
     return [...r.values()];
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -205,7 +202,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
   ): Promise<T> {
     const s = this.e(c);
     const agora = await this.agora(c);
-    const k = (chave: string | null, sufixo = '') => (chave ? `${c.hospital}:${chave}${sufixo}` : null);
+    const k = (chave: string | null, sufixo = '') => (chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null);
     const mesma = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
     const req = (id: number) => {
       const q = s.requisicoes.find((x) => x.id === id);
@@ -503,7 +500,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
     return (await this.todosOsItens(c)).find((i) => i.item === item) ?? null;
   }
 
-  async horarios(c: ContextoTransfusao, item: number): Promise<HorarioHemoterapiaLido[]> {
+  async horarios(c: ContextoTransfusao, item: number): Promise<HorarioHemoterapia[]> {
     const { hs } = await this.hemoterapia(c);
     return hs
       .filter((h) => h.item === item)
@@ -521,7 +518,7 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
     return paciente % 2 === 0 ? { abo: 'O', rh: 'positivo' } : { abo: 'A', rh: 'negativo' };
   }
 
-  async termos(c: ContextoTransfusao, paciente: number): Promise<TcleLido[]> {
+  async termos(c: ContextoTransfusao, paciente: number): Promise<TermoConsentimentoLido[]> {
     const { internados } = await this.hemoterapia(c);
     const i = internados.find((x) => x.paciente === paciente);
     if (!i) return [];
@@ -673,10 +670,10 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
     const s = this.e(c);
     const mesma = (a: string) => a.trim().toUpperCase() === o.usuario.trim().toUpperCase();
     if (o.tipo === 'ato') {
-      const a = s.atos.find((x) => x.chave === `${c.hospital}:${o.chave}:ato`);
+      const a = s.atos.find((x) => x.chave === `${chaveDoEstabelecimento(c)}:${o.chave}:ato`);
       return a && mesma(a.profissional) ? a.id : null;
     }
-    const q = s.requisicoes.find((x) => x.chave === `${c.hospital}:${o.chave}`);
+    const q = s.requisicoes.find((x) => x.chave === `${chaveDoEstabelecimento(c)}:${o.chave}`);
     return q && mesma(q.requisitadaPor) ? q.id : null;
   }
 

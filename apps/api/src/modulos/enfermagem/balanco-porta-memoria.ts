@@ -6,15 +6,12 @@
 // mudados, a mesma origem uma vez só, a chave do ato repetida). Nada é de pessoa real (marca "SINTETICO M45").
 import { type DominiosBalanco, type FechamentoBalancoLido, type LancamentoBalancoLido } from '@sgh/contratos';
 import { janelaDoInstante, somarMinutos } from '@sgh/dominio-enfermagem';
-import {
-  type ChecagemLidaParaBalanco,
-  type ContextoOperacao,
-  type LiberacaoConsultada,
-  recusa,
-  type SinaisParaBalanco,
-} from '@sgh/legado';
+import { type ChecagemParaBalanco, type SinaisParaBalanco } from './tipos.js';
+import { type ContextoOperacao, recusa } from '@sgh/nucleo';
+import { type LiberacaoGravacao } from '../exames/public-api.js';
 import type { ContextoBalanco, GravadorBalanco, PortaBalanco } from './balanco-porta.js';
 import type { PortaEnfermagem } from './porta.js';
+import { chaveDoEstado } from './porta-memoria.js';
 
 const M = 'SINTETICO M45';
 /** O atendimento sintético da UTI-02 (porta da enfermagem em memória). */
@@ -84,12 +81,12 @@ export const DOMINIOS_BALANCO_SINTETICOS: DominiosBalanco = {
   ],
 };
 
-/** Os horários administrados do atendimento no intervalo, pela porta da enfermagem (a mesma conta do legado). */
+/** Os horários administrados do atendimento no intervalo, pela porta da enfermagem (a mesma conta da porta própria). */
 export async function checagensPelaEnfermagem(
   enf: PortaEnfermagem,
   c: ContextoBalanco,
   o: { atendimento: number; de: string; ate: string },
-): Promise<{ itens: ChecagemLidaParaBalanco[]; cortada: boolean }> {
+): Promise<{ itens: ChecagemParaBalanco[]; cortada: boolean }> {
   const lido = await enf.horarios(c, {
     atendimentos: [o.atendimento],
     inicio: somarMinutos(o.de, -24 * 60),
@@ -141,7 +138,7 @@ interface Estado {
   lancamentos: Lancamento[];
   fechamentos: (FechamentoBalancoLido & { atendimento: number })[];
   /** A checagem e os sinais sintéticos da janela anterior (gerados uma vez, em torno do relógio). */
-  checagens: ChecagemLidaParaBalanco[];
+  checagens: ChecagemParaBalanco[];
   sinais: { id: number; tipo: string; valor: number; horaReal: string }[];
   /** A entrada sintética de todo atendimento: 30 horas antes do começo da janela anterior. */
   entrada: string;
@@ -154,7 +151,7 @@ export class PortaBalancoMemoria implements PortaBalanco {
   constructor(private readonly enfermagem: PortaEnfermagem) {}
 
   private async e(c: ContextoBalanco): Promise<Estado> {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDoEstado(c));
     if (!s) {
       // A janela anterior pela hora de corte padrão (7 h): a checagem às 22 h, o peso às 8 h e a diurese às 18 h.
       const agora = (await this.enfermagem.relogio(c)).slice(0, 16);
@@ -198,12 +195,12 @@ export class PortaBalancoMemoria implements PortaBalanco {
           { id: 45_353, tipo: 'temperatura', valor: 37.2, horaReal: somarMinutos(anterior, 11 * 60) },
         ],
       };
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDoEstado(c), s);
     }
     return s;
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -224,7 +221,7 @@ export class PortaBalancoMemoria implements PortaBalanco {
     const agora = (await this.enfermagem.relogio(c)).slice(0, 16);
     const g: GravadorBalanco = {
       lancar: async ({ janelaInicio, ...l }) => {
-        const chave = l.chave ? `${c.hospital}:${l.chave}` : null;
+        const chave = l.chave ? `${chaveDoEstado(c)}:${l.chave}` : null;
         const ja = chave ? s.lancamentos.find((x) => x.chave === chave) : undefined;
         if (ja && (ja.atendimento !== l.atendimento || ja.usuario.toUpperCase() !== l.usuario.toUpperCase()))
           throw recusa(

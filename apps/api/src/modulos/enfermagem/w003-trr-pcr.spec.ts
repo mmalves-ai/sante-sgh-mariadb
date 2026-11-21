@@ -4,12 +4,9 @@
 // por 1.000 pacientes-dia fora da UTI e do tempo de resposta, com o numerador e o denominador. Porta em memória;
 // relógio controlado; dados sintéticos.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaEscoresMemoria } from './escores-porta-memoria.js';
 import { PortaEnfermagemMemoria } from './porta-memoria.js';
@@ -30,16 +27,14 @@ interface Sessao {
 async function montar() {
   const trilha = new RegistradorTrilhaMemoria();
   const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
     { agora },
   );
   const escores = new PortaEscoresMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     escores,
     vigiaEnfermagem: null,
-    vigia: null,
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

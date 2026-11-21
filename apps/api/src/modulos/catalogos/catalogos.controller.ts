@@ -1,8 +1,8 @@
 // Catálogos oficiais e importadores (ficha do M13, seções 4, 5 e 7):
 //   GET  /api/catalogos/painel                          painel de cargas (responsável, última carga, edição no banco)
 //   GET  /api/catalogos/cargas?catalogo=                cargas do estabelecimento
-//   POST /api/catalogos/cargas                          envia o arquivo: prepara, valida e compara (nada no banco do
-//                                                       estabelecimento; a área de preparação SGH_ e a trilha juntas)
+//   POST /api/catalogos/cargas                          envia o arquivo: prepara, valida e compara (nada nas tabelas do
+//                                                       catálogo; a área de preparação e a trilha juntas)
 //   GET  /api/catalogos/cargas/:id?pagina&comparacao&resultado  detalhe com as linhas e a decisão de publicar
 //   POST /api/catalogos/cargas/:id/aprovar              aprova (crítica: justificativa e a senha de novo); a
 //                                                       publicação em lotes é do worker, na janela fora do pico
@@ -26,8 +26,8 @@ import {
   permissaoConsultaCatalogo,
 } from '@sgh/contratos';
 import { pode } from '@sgh/dominio-acesso';
-import { type CargaCatalogoLida, ErroCargaSgh } from '@sgh/legado';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { FORMATO_CHAVE_IDEMPOTENCIA } from '@sgh/nucleo';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -35,7 +35,7 @@ import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/reso
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
-import type { CtxCatalogos, Trilha } from './fonte.js';
+import { type CargaDeCatalogo, type CtxCatalogos, ErroCargaCatalogo, type Trilha } from './fonte.js';
 import { SERVICO_CATALOGOS, type ServicoCatalogos } from './servico.js';
 
 const INTEIRO = /^\d{1,9}$/;
@@ -62,6 +62,29 @@ function ctxDe(req: RequisicaoAutorizada, origem: string): CtxCatalogos {
   return { rede: s.rede, hospital: s.hospital, traceId: correlacaoDaRequisicao(req, origem).slice(0, 64) };
 }
 
+/**
+ * Chave de idempotência do pedido de gravação (cabeçalho Idempotency-Key, no formato do núcleo): o reenvio do mesmo
+ * pedido devolve o resultado anterior em vez de gravar de novo.
+ */
+function idempotenciaDe(req: RequisicaoAutorizada): string {
+  const bruto = req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof chave !== 'string' || !FORMATO_CHAVE_IDEMPOTENCIA.test(chave))
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Pedido incompleto',
+      'Falta a Idempotency-Key do pedido de gravação (8 a 80 letras, dígitos, ponto, dois-pontos, hífen ou sublinhado).',
+    );
+  return chave;
+}
+
+/** IP de origem para a trilha; na sessão "como" (suporte), nunca o IP do ator (ADR 0021). */
+function enderecoIpDe(req: RequisicaoAutorizada): string | null {
+  if (req.sghComo) return null;
+  return (req.ip ?? '').replace(/[^0-9a-fA-F:.]/g, '').slice(0, 45) || null;
+}
+
 function inteiro(v: unknown, nome: string, max = 2147483647): number {
   const s = typeof v === 'string' ? v.trim() : String(v ?? '');
   if (!INTEIRO.test(s) || Number(s) > max)
@@ -77,7 +100,7 @@ function pagina(q: Record<string, string | undefined>, teto = 500) {
 }
 
 /** A carga sem os campos internos (versão de controle e estabelecimento): a resposta pública. */
-function semInternos(c: CargaCatalogoLida): CargaCatalogo {
+function semInternos(c: CargaDeCatalogo): CargaCatalogo {
   return {
     id: c.id,
     catalogo: c.catalogo,
@@ -98,8 +121,14 @@ function semInternos(c: CargaCatalogoLida): CargaCatalogo {
 
 function problema(e: unknown): ErroProblema {
   if (e instanceof ErroProblema) return e;
-  if (e instanceof ErroCargaSgh)
-    return new ErroProblema('recusa-de-negocio', 409, 'Carga', e.message, { codigo: e.codigo });
+  if (e instanceof ErroCargaCatalogo)
+    return e.codigo === 'conflito-concorrente'
+      ? new ErroProblema('conflito-de-versao', 409, 'Carga alterada', e.message, {
+          codigo: e.codigo,
+          alteradoPor: 'desconhecido',
+          campos: [],
+        })
+      : new ErroProblema('recusa-de-negocio', 409, 'Carga', e.message, { codigo: e.codigo });
   const codigo = (e as { codigo?: unknown }).codigo;
   if (e instanceof Error && typeof codigo === 'string')
     return new ErroProblema(
@@ -135,7 +164,9 @@ export class CatalogosController {
       chaveNaturalAlvo: chave.slice(0, 120),
       resultado: 'sucesso',
       estacao: estacaoDaRequisicao(req).slice(0, 80),
+      enderecoIp: enderecoIpDe(req),
       correlacao: correlacaoDaRequisicao(req, 'catalogo').slice(0, 64),
+      idempotencia: idempotenciaDe(req),
     };
   }
 
@@ -169,7 +200,7 @@ export class CatalogosController {
   @HttpCode(201)
   @Permissao('catalogo.carga.criar')
   @AuditadoNoHandler(
-    'transação SGH_: SGH_CAT_CARGA, SGH_CAT_CARGA_LINHA e SGH_TRILHA juntas (memória: registrador da API)',
+    'Executor: carga_catalogo, carga_catalogo_linha e trilha_auditoria na mesma transação (memória: registrador da API)',
   )
   async criar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = esquemaNovaCargaCatalogo.safeParse(corpo);
@@ -183,18 +214,14 @@ export class CatalogosController {
     this.semGravacao();
     const ctx = ctxDe(req, 'catalogo-carga');
     const { login } = sessaoDe(req);
+    const trilha = this.trilha(
+      req,
+      EVENTOS_AUDITAVEIS.catalogoCargaPreparada.codigo,
+      'catalogo.carga.preparar',
+      `CATALOGO:${p.data.catalogo}`,
+    );
     try {
-      return await this.servico.preparar(
-        ctx,
-        login,
-        p.data,
-        this.trilha(
-          req,
-          EVENTOS_AUDITAVEIS.catalogoCargaPreparada.codigo,
-          'catalogo.carga.preparar',
-          `CATALOGO:${p.data.catalogo}`,
-        ),
-      );
+      return await this.servico.preparar(ctx, login, p.data, trilha);
     } catch (e) {
       throw problema(e);
     }
@@ -240,7 +267,7 @@ export class CatalogosController {
   @HttpCode(200)
   @Permissao('catalogo.carga.publicar')
   @AuditadoNoHandler(
-    'transação SGH_ da carga, com a SGH_TRILHA; cada lote publicado pelo executor com a trilha dele',
+    'Executor: carga_catalogo e trilha_auditoria na mesma transação; cada lote publicado pelo worker com a trilha dele',
   )
   async aprovar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = esquemaAprovarCargaCatalogo.safeParse(corpo);
@@ -255,7 +282,16 @@ export class CatalogosController {
     const ctx = ctxDe(req, 'catalogo-aprovar');
     const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga'));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
-    if (c.versao !== p.data.versao)
+    const trilha = this.trilha(
+      req,
+      EVENTOS_AUDITAVEIS.catalogoCargaAprovada.codigo,
+      'catalogo.carga.aprovar',
+      `CARGA:${c.id}`,
+    );
+    // Versão diferente da lida: no banco, só o reenvio do mesmo pedido (mesma Idempotency-Key) passa, e o Executor
+    // devolve o resultado anterior sem gravar; qualquer outro pedido é recusado pela trava otimista (409).
+    const reenvio = c.versao !== p.data.versao;
+    if (reenvio && this.servico.fonte.destino !== 'banco')
       throw new ErroProblema(
         'conflito-de-versao',
         409,
@@ -263,8 +299,8 @@ export class CatalogosController {
         'A carga mudou desde a leitura. Releia.',
         { alteradoPor: 'desconhecido', campos: [] },
       );
-    const d = await this.servico.decisao(ctx, c);
-    if (!d.pode)
+    const d = reenvio ? null : await this.servico.decisao(ctx, c);
+    if (d && !d.pode)
       throw new ErroProblema('recusa-de-negocio', 409, 'Publicação recusada', d.motivo ?? undefined, {
         codigo: d.codigo ?? 'recusada',
       });
@@ -286,19 +322,21 @@ export class CatalogosController {
         {
           hospital: ctx.hospital,
           id: c.id,
-          versao: c.versao,
+          versao: p.data.versao,
           de: ['comparada'],
           para: 'aprovada',
           aprovador: login,
           motivo: p.data.justificativa,
         },
-        this.trilha(
-          req,
-          EVENTOS_AUDITAVEIS.catalogoCargaAprovada.codigo,
-          'catalogo.carga.aprovar',
-          `CARGA:${c.id}`,
-        ),
+        trilha,
       );
+      if (reenvio)
+        return {
+          id: c.id,
+          situacao: c.situacao,
+          lotes: c.lotes.total,
+          mensagem: 'Pedido já atendido: a carga foi aprovada por este mesmo pedido.',
+        };
       const publicada = this.servico.fonte.publicarAgora
         ? await this.servico.fonte.publicarAgora(ctx, c.id, login)
         : null;
@@ -308,7 +346,7 @@ export class CatalogosController {
         lotes: c.lotes.total,
         mensagem: publicada
           ? `Carga publicada: ${publicada.incluidas} item(ns) incluído(s) e ${publicada.alteradas} alterado(s) em ${publicada.lotes} lote(s).`
-          : d.codigo === 'fora-da-janela'
+          : d?.codigo === 'fora-da-janela'
             ? `Carga aprovada: ${c.lotes.total} lote(s) aguardando a janela de publicação (${this.servico.janela.inicio} às ${this.servico.janela.fim}).`
             : `Carga aprovada: ${c.lotes.total} lote(s) em publicação (lotes curtos, retomada pelo último lote confirmado).`,
       };
@@ -330,6 +368,12 @@ export class CatalogosController {
     const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga'));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
     const { login } = sessaoDe(req);
+    const trilha = this.trilha(
+      req,
+      EVENTOS_AUDITAVEIS.catalogoCargaRejeitada.codigo,
+      `catalogo.carga.${para === 'rejeitada' ? 'rejeitar' : 'cancelar'}`,
+      `CARGA:${c.id}`,
+    );
     try {
       await this.servico.fonte.mudarSituacao(
         ctx,
@@ -345,12 +389,7 @@ export class CatalogosController {
           aprovador: login,
           motivo: p.data.motivo,
         },
-        this.trilha(
-          req,
-          EVENTOS_AUDITAVEIS.catalogoCargaRejeitada.codigo,
-          `catalogo.carga.${para === 'rejeitada' ? 'rejeitar' : 'cancelar'}`,
-          `CARGA:${c.id}`,
-        ),
+        trilha,
       );
       return { id: c.id, situacao: para };
     } catch (e) {
@@ -361,7 +400,7 @@ export class CatalogosController {
   @Post('cargas/:id/rejeitar')
   @HttpCode(200)
   @Permissao('catalogo.carga.rejeitar')
-  @AuditadoNoHandler('transação SGH_ da carga, com a SGH_TRILHA (memória: registrador da API)')
+  @AuditadoNoHandler('Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)')
   rejeitar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.encerrar(id, corpo, req, 'rejeitada');
   }
@@ -369,7 +408,7 @@ export class CatalogosController {
   @Post('cargas/:id/cancelar')
   @HttpCode(200)
   @Permissao('catalogo.carga.rejeitar')
-  @AuditadoNoHandler('transação SGH_ da carga, com a SGH_TRILHA (memória: registrador da API)')
+  @AuditadoNoHandler('Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)')
   cancelar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.encerrar(id, corpo, req, 'cancelada');
   }

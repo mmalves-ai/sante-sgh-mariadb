@@ -1,5 +1,5 @@
-// Aplicação do financeiro e fiscal (M32): as gravações das telas (pelo executor, com a trilha na mesma transação, ou só
-// do novo em SGH_ com a SGH_TRILHA junto), a alçada e a segregação conferidas no servidor (regras 4 e 5), os títulos da
+// Aplicação do financeiro e fiscal (M32): as gravações das telas (pelo executor, com a trilha na mesma transação, ou
+// pelas gravações diretas da porta, também com a trilha junto), a alçada e a segregação conferidas no servidor (regras 4 e 5), os títulos da
 // competência (regra 10), a glosa no título (regra 12), a conciliação por regra, o fluxo de caixa, a DRE em duas réguas,
 // os indicadores com as parcelas, e o fiscal (NFS-e, DMED, EFD-REINF, lote contábil e remessa) gerado como arquivo,
 // guardado no S3 com hash, e enviado só ao SIMULADOR fora de produção (nada sai para banco, prefeitura ou Receita).
@@ -67,6 +67,18 @@ import type { ArmazemFinanceiro } from './armazem.js';
 import type { ContextoFinanceiro, PortaFinanceiro } from './porta.js';
 
 const ctx = (s: SessaoCadastro): ContextoFinanceiro => s.porta;
+
+/**
+ * A sessão com a Idempotency-Key do pedido no contexto da porta: a gravação direta usa a chave do pedido, e o reenvio
+ * (duplo clique, nova tentativa) devolve o resultado gravado em vez de gravar de novo.
+ */
+function comChave(s: SessaoCadastro): SessaoCadastro {
+  const bruto = s.req?.headers?.['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof chave !== 'string' || !/^[A-Za-z0-9._:-]{8,80}$/.test(chave)) return s;
+  const porta: ContextoFinanceiro & { chaveIdempotencia: string } = { ...s.porta, chaveIdempotencia: chave };
+  return Object.assign(Object.create(Object.getPrototypeOf(s) as object) as SessaoCadastro, s, { porta });
+}
 const E = EVENTOS_AUDITAVEIS;
 const sha256 = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 const bytes = (t: string) => new TextEncoder().encode(t);
@@ -196,10 +208,10 @@ export class ServicoFinanceiro {
 
   async aprovar(s: SessaoCadastro, e: AprovarTituloEntrada): Promise<ResultadoFinanceiro> {
     const r = await this.apoios.apoios.contasPagar.sgh(
-      s,
+      comChave(s),
       E.financeiroTituloAprovado.codigo,
       'financeiro.contasPagar',
-      () => ({ tabela: 'MFCONPAG', id: String(e.titulo) }),
+      () => ({ tabela: 'parcela_pagar', id: String(e.titulo) }),
       (g) =>
         g.aprovarTitulo({
           titulo: e.titulo,
@@ -219,10 +231,10 @@ export class ServicoFinanceiro {
 
   async salvarFaixa(s: SessaoCadastro, e: FaixaAlcadaEntrada): Promise<ResultadoFinanceiro> {
     const r = await this.apoios.apoios.contasPagar.sgh(
-      s,
+      comChave(s),
       E.financeiroAlcadaEditada.codigo,
       'financeiro.contasPagar',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_ALCADA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'fluxo_aprovacao', id: String(x.id) }),
       (g) => g.salvarFaixa({ ...e, usuario: s.login }),
     );
     return resultadoFin('Faixa de alçada gravada.', false, { faixa: r.id });
@@ -291,10 +303,10 @@ export class ServicoFinanceiro {
     // Fora de produção, nada sai para o banco: o simulador devolve o retorno (ocorrência 00 = crédito efetuado).
     const retorno = this.ambiente === 'producao' ? null : simularRetorno(titulos);
     const r = await this.apoios.apoios.contasPagar.sgh(
-      s,
+      comChave(s),
       E.financeiroRemessaGerada.codigo,
       'financeiro.contasPagar',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_REMESSA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'remessa_bancaria', id: String(x.id) }),
       (g) =>
         g.registrarRemessa({
           usuario: s.login,
@@ -355,24 +367,26 @@ export class ServicoFinanceiro {
     const hoje = await this.porta.hoje(ctx(s));
     const t = await this.porta.tituloReceber(ctx(s), id, hoje);
     if (!t) throw naoEncontrado('Título');
-    const deferido = t.glosas
-      .filter((g) => g.situacao === 'recurso-deferido')
-      .reduce((x, g) => x + g.valor, 0);
+    const { recursoDeferido, ...detalhe } = t;
+    // O recurso deferido vem somado da porta (banco); sem ele, da lista das glosas (memória).
+    const deferido =
+      recursoDeferido ??
+      t.glosas.filter((g) => g.situacao === 'recurso-deferido').reduce((x, g) => x + g.valor, 0);
     const sm = saldoMostrado({
       valorTitulo: t.valor,
       recebido: t.recebido,
       glosaAceita: t.glosaAceita,
       recursoDeferido: deferido,
     });
-    return { ...t, saldo: sm.saldo, recebivelRecurso: sm.recebivelRecurso };
+    return { ...detalhe, saldo: sm.saldo, recebivelRecurso: sm.recebivelRecurso };
   }
 
   async registrarGlosa(s: SessaoCadastro, e: RegistrarGlosaTituloEntrada): Promise<ResultadoFinanceiro> {
     const r = await this.apoios.apoios.contasReceber.sgh(
-      s,
+      comChave(s),
       E.financeiroGlosaTituloRegistrada.codigo,
       'financeiro.contasReceber',
-      () => ({ tabela: 'MFCTAREC', id: String(e.tituloReceber) }),
+      () => ({ tabela: 'titulo_receber', id: String(e.tituloReceber) }),
       (g) => g.registrarGlosaTitulo({ ...e, usuario: s.login, origem: 'tela' }),
     );
     return resultadoFin(
@@ -415,10 +429,10 @@ export class ServicoFinanceiro {
       // O mesmo arquivo já guardado (imutável): a importação é idempotente pelo hash.
     }
     const r = await this.apoios.apoios.tesouraria.sgh(
-      s,
+      comChave(s),
       E.financeiroExtratoImportado.codigo,
       'financeiro.tesouraria',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_EXTRATO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'extrato_bancario', id: String(x.id) }),
       (g) =>
         g.importarExtrato({
           usuario: s.login,
@@ -509,7 +523,7 @@ export class ServicoFinanceiro {
     };
   }
 
-  /** Os ids das contas do escopo do usuário (MFCTAUSU; regra 15). */
+  /** Os ids das contas do escopo do usuário (permissao_conta_bancaria; regra 15). */
   private async idsDoEscopo(s: SessaoCadastro): Promise<number[]> {
     return (await this.porta.contas(ctx(s), s.login)).map((c) => c.id);
   }
@@ -526,10 +540,10 @@ export class ServicoFinanceiro {
   async conciliar(s: SessaoCadastro, e: ConciliarEntrada): Promise<ResultadoFinanceiro> {
     const contasEscopo = await this.idsDoEscopo(s);
     const r = await this.apoios.apoios.tesouraria.sgh(
-      s,
+      comChave(s),
       E.financeiroConciliacaoConfirmada.codigo,
       'financeiro.tesouraria',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_CONCILIACAO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'conciliacao_bancaria_item', id: String(x.id) }),
       (g) => g.conciliar({ ...e, usuario: s.login, contasEscopo }),
     );
     return resultadoFin(
@@ -544,10 +558,10 @@ export class ServicoFinanceiro {
   async atribuirCredito(s: SessaoCadastro, e: AtribuirCreditoEntrada): Promise<ResultadoFinanceiro> {
     const contasEscopo = await this.idsDoEscopo(s);
     const r = await this.apoios.apoios.tesouraria.sgh(
-      s,
+      comChave(s),
       E.financeiroCreditoAtribuido.codigo,
       'financeiro.tesouraria',
-      () => ({ tabela: 'SGH_FIN_CREDITO_PENDENTE', id: String(e.credito) }),
+      () => ({ tabela: 'credito_nao_identificado', id: String(e.credito) }),
       (g) => g.atribuirCredito({ ...e, usuario: s.login, contasEscopo }),
     );
     return resultadoFin('Crédito atribuído ao título a receber.', false, { credito: r.id });
@@ -727,10 +741,10 @@ export class ServicoFinanceiro {
     await this.armazem.guardar(chave, bytes(xml), 'application/xml');
     const sim = simularPrefeitura(xml, Date.now() % 1_000_000_000);
     const r = await this.apoios.apoios.fiscal.sgh(
-      s,
+      comChave(s),
       E.financeiroNfseEmitida.codigo,
       'financeiro.fiscal',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_NFSE', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'nota_servico', id: String(x.id) }),
       (g) =>
         g.registrarNfse({
           usuario: s.login,
@@ -795,10 +809,10 @@ export class ServicoFinanceiro {
     const chave = `declaracao/${e.tipo}/${e.periodo}-${hash.slice(0, 16)}`;
     await this.armazem.guardar(chave, bytes(arquivo.conteudo), 'text/plain').catch(() => undefined);
     const r = await this.apoios.apoios.fiscal.sgh(
-      s,
+      comChave(s),
       E.financeiroDeclaracaoGerada.codigo,
       'financeiro.fiscal',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_DECLARACAO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'declaracao_dmed', id: String(x.id) }),
       (g) =>
         g.registrarDeclaracao({
           usuario: s.login,
@@ -865,10 +879,10 @@ export class ServicoFinanceiro {
     const chave = `contabil/${e.periodo}-${e.regua}-${hash.slice(0, 16)}.txt`;
     await this.armazem.guardar(chave, bytes(lote.conteudo), 'text/plain').catch(() => undefined);
     const r = await this.apoios.apoios.fiscal.sgh(
-      s,
+      comChave(s),
       E.financeiroLoteContabilExportado.codigo,
       'financeiro.fiscal',
-      (x: { id: number }) => ({ tabela: 'SGH_FIN_LOTE_CONTABIL', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'lote_exportacao_contabil', id: String(x.id) }),
       (g) =>
         g.registrarLoteContabil({
           usuario: s.login,

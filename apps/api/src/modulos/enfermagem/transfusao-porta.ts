@@ -17,33 +17,37 @@ import type {
   VersaoRequisicaoLida,
 } from '@sgh/contratos';
 import type {
-  AdendoAtoSgh,
-  AlteracaoRequisicaoSgh,
-  AmostraTransfusionalSgh,
-  ConclusaoTransfusaoSgh,
-  HorarioHemoterapiaLido,
-  InicioTransfusaoSgh,
-  ReacaoTransfusionalSgh,
-  RequisicaoTransfusaoSgh,
-  TcleLido,
-} from '@sgh/legado';
+  AdendoAtoNovo,
+  AlteracaoRequisicaoNova,
+  AmostraTransfusionalNova,
+  ConclusaoTransfusaoNova,
+  HorarioHemoterapia,
+  InicioTransfusaoNovo,
+  ReacaoTransfusionalNova,
+  RequisicaoTransfusaoNova,
+  TermoConsentimentoLido,
+} from './transfusao-tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_TRANSFUSAO = Symbol('PORTA_TRANSFUSAO');
 
 export type ContextoTransfusao = ContextoPortaM18;
-type SemHospital<T> = Omit<T, 'hospital'>;
 
 /** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
 export interface GravadorTransfusao {
-  requisitar(r: SemHospital<RequisicaoTransfusaoSgh>): Promise<{ id: number; repetida: boolean }>;
-  cancelar(c: { readonly requisicao: number; readonly motivo: string; readonly usuario: string }): Promise<{
+  requisitar(r: RequisicaoTransfusaoNova): Promise<{ id: number; repetida: boolean }>;
+  cancelar(c: {
+    readonly requisicao: number;
+    readonly motivo: string;
+    readonly usuario: string;
+    readonly chave?: string | null | undefined;
+  }): Promise<{
     id: number;
   }>;
   amostra(
-    a: SemHospital<AmostraTransfusionalSgh>,
+    a: AmostraTransfusionalNova,
   ): Promise<{ id: number; codigo: string; repetida: boolean }>;
-  iniciar(t: SemHospital<InicioTransfusaoSgh>): Promise<{ id: number; repetida: boolean }>;
+  iniciar(t: InicioTransfusaoNovo): Promise<{ id: number; repetida: boolean }>;
   sinais(s: {
     readonly ato: number;
     readonly momento: 'durante' | 'depois';
@@ -54,16 +58,20 @@ export interface GravadorTransfusao {
     readonly chave: string | null;
   }): Promise<{ id: number; repetida: boolean }>;
   concluir(
-    c: SemHospital<ConclusaoTransfusaoSgh>,
+    c: ConclusaoTransfusaoNova,
   ): Promise<{ id: number; estadoRequisicao: string; ganho: number | null }>;
   reacao(
-    r: SemHospital<ReacaoTransfusionalSgh>,
+    r: ReacaoTransfusionalNova,
   ): Promise<{ id: number; repetida: boolean; interrompeu: boolean }>;
-  notificada(m: { readonly reacao: number; readonly enviadaEm: string }): Promise<{ id: number }>;
+  notificada(m: {
+    readonly reacao: number;
+    readonly enviadaEm: string;
+    readonly chave?: string | null | undefined;
+  }): Promise<{ id: number }>;
   /** W0-03: a requisição alterada antes do atendimento (a versão anterior guardada); 409 depois. */
-  alterar(a: SemHospital<AlteracaoRequisicaoSgh>): Promise<{ id: number; versao: number }>;
+  alterar(a: AlteracaoRequisicaoNova): Promise<{ id: number; versao: number }>;
   /** W0-03: o adendo do ato (sinais digitados errado); o ato e a medida original não mudam. */
-  adendo(a: SemHospital<AdendoAtoSgh>): Promise<{ id: number }>;
+  adendo(a: AdendoAtoNovo): Promise<{ id: number }>;
 }
 
 export interface FiltroRequisicoesPorta {
@@ -85,9 +93,9 @@ export interface PortaTransfusao extends PortaGravacaoM18<GravadorTransfusao> {
   ): Promise<{ itens: ItemHemoterapiaAAtender[]; cortada: boolean }>;
   /** O item de hemoterapia pelo ID (vigente ou não), com a indicação escrita. */
   item(c: ContextoTransfusao, item: number, agora: string): Promise<ItemHemoterapiaAAtender | null>;
-  horarios(c: ContextoTransfusao, item: number): Promise<HorarioHemoterapiaLido[]>;
+  horarios(c: ContextoTransfusao, item: number): Promise<HorarioHemoterapia[]>;
   tipagem(c: ContextoTransfusao, paciente: number): Promise<TipagemSanguinea>;
-  termos(c: ContextoTransfusao, paciente: number): Promise<TcleLido[]>;
+  termos(c: ContextoTransfusao, paciente: number): Promise<TermoConsentimentoLido[]>;
   requisicoes(
     c: ContextoTransfusao,
     f: FiltroRequisicoesPorta,

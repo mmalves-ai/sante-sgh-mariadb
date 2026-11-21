@@ -19,7 +19,7 @@
 //   POST /api/operadora/auditores/:id/encerrar             operadora.encerrarAuditor (W0-10: redistribuirPara)
 //   POST /api/operadora/auditores/:id/alteracao            operadora.alterarAuditor (W0-10, com o motivo)
 // Tudo exige a chave da fatia `operadora.autorizacao`, que só vale com a do módulo (regra 1), menos o apoio. Cada
-// gravação muda as SGH_OPE_* da fatia com a SGH_TRILHA na mesma transação; nenhuma tabela legada é escrita.
+// gravação muda as tabelas da operadora da fatia com a trilha_auditoria na mesma transação; nenhuma tabela de outro sistema é escrita.
 import {
   Body,
   Controller,
@@ -58,7 +58,8 @@ import {
   ROTAS_OPERADORA_F4 as R,
 } from '@sgh/contratos';
 import { protocoloAtendimento, senhaAutorizacao, validadeDaSenha } from '@sgh/dominio-operadora';
-import { ErroOperacao, type LinhaTrilha } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -105,10 +106,11 @@ import {
   type PortaAutorizacaoOperadora,
 } from './autorizacao-porta.js';
 import { auditorDe, resumoDe, ServicoAutorizacaoOperadora } from './autorizacao-servico.js';
+import { contextoGravacao } from './contexto-gravacao.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.autorizacao';
-const TABELA = 'SGH_OPE_AUTORIZACAO';
+const TABELA = 'pedido_autorizacao_plano';
 
 function filtro<T extends { safeParse(v: unknown): { success: boolean; data?: unknown; error?: unknown } }>(
   esquema: T,
@@ -150,7 +152,7 @@ export class AutorizacaoOperadoraController {
     return s;
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T extends { id: number }>(
     s: SessaoCadastro,
     evento: string,
@@ -158,9 +160,9 @@ export class AutorizacaoOperadoraController {
     tabela: string,
     fn: (g: GravadorAutorizacao) => Promise<T>,
   ): Promise<T> {
-    const linha = (r: T): LinhaTrilha =>
+    const linha = (r: T): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw recusaComDependentes(e) ?? problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria')
@@ -252,7 +254,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.registrar.permissao)
   @AuditadoNoHandler(
-    'operadora.registrarAutorizacao (SGH_OPE_AUTORIZACAO, os itens e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.registrarAutorizacao (pedido_autorizacao_plano, os itens e o evento) com a trilha_auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAutorizacao> {
     const e = corpo(esquemaRegistrarAutorizacao, b);
@@ -289,7 +291,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.pedirComplemento.permissao)
   @AuditadoNoHandler(
-    'operadora.pedirComplemento (SGH_OPE_AUTORIZACAO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.pedirComplemento (pedido_autorizacao_plano e o evento) com a trilha_auditoria na mesma transação',
   )
   async pedirComplemento(
     @Param('id') id: string,
@@ -323,7 +325,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.responderComplemento.permissao)
   @AuditadoNoHandler(
-    'operadora.responderComplemento (SGH_OPE_AUTORIZACAO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.responderComplemento (pedido_autorizacao_plano e o evento) com a trilha_auditoria na mesma transação',
   )
   async responderComplemento(
     @Param('id') id: string,
@@ -357,7 +359,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.abrirJunta.permissao)
   @AuditadoNoHandler(
-    'operadora.abrirJunta (SGH_OPE_AUTORIZACAO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.abrirJunta (pedido_autorizacao_plano e o evento) com a trilha_auditoria na mesma transação',
   )
   async abrirJunta(
     @Param('id') id: string,
@@ -455,7 +457,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.decidir.permissao)
   @AuditadoNoHandler(
-    'operadora.decidirAutorizacao (SGH_OPE_AUTORIZACAO, os itens e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.decidirAutorizacao (pedido_autorizacao_plano, os itens e o evento) com a trilha_auditoria na mesma transação',
   )
   async decidir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -467,7 +469,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.concluirJunta.permissao)
   @AuditadoNoHandler(
-    'operadora.concluirJunta (SGH_OPE_AUTORIZACAO, os itens e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.concluirJunta (pedido_autorizacao_plano, os itens e o evento) com a trilha_auditoria na mesma transação',
   )
   async concluirJunta(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
@@ -479,7 +481,7 @@ export class AutorizacaoOperadoraController {
   @HttpCode(200)
   @Permissao(R.cancelar.permissao)
   @AuditadoNoHandler(
-    'operadora.cancelarAutorizacao (SGH_OPE_AUTORIZACAO e o evento) com a SGH_TRILHA na mesma transação',
+    'operadora.cancelarAutorizacao (pedido_autorizacao_plano e o evento) com a trilha_auditoria na mesma transação',
   )
   async cancelar(
     @Param('id') id: string,
@@ -519,7 +521,7 @@ export class AutorizacaoOperadoraController {
   @Post(R.designar.caminho)
   @HttpCode(200)
   @Permissao(R.designar.permissao)
-  @AuditadoNoHandler('operadora.designarAuditor (SGH_OPE_AUDITOR) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.designarAuditor (auditor_plano) com a trilha_auditoria na mesma transação')
   async designar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAuditor> {
     const e = corpo(esquemaDesignarAuditor, b);
     const s = await this.exigirFatia(req);
@@ -528,7 +530,7 @@ export class AutorizacaoOperadoraController {
       s,
       E.operadoraAuditorDesignado.codigo,
       'operadora.designarAuditor',
-      'SGH_OPE_AUDITOR',
+      'auditor_plano',
       (g) => g.designar({ ...e, conselho, usuario: s.login }),
     );
     return {
@@ -541,7 +543,7 @@ export class AutorizacaoOperadoraController {
   @Post(R.encerrar.caminho)
   @HttpCode(200)
   @Permissao(R.encerrar.permissao)
-  @AuditadoNoHandler('operadora.encerrarAuditor (SGH_OPE_AUDITOR) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.encerrarAuditor (auditor_plano) com a trilha_auditoria na mesma transação')
   async encerrar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -555,7 +557,7 @@ export class AutorizacaoOperadoraController {
       s,
       E.operadoraAuditorEncerrado.codigo,
       'operadora.encerrarAuditor',
-      'SGH_OPE_AUDITOR',
+      'auditor_plano',
       (g) =>
         g.encerrar({
           id: n,
@@ -578,7 +580,7 @@ export class AutorizacaoOperadoraController {
   @Post(R.alterar.caminho)
   @HttpCode(200)
   @Permissao(R.alterar.permissao)
-  @AuditadoNoHandler('operadora.alterarAuditor (SGH_OPE_AUDITOR) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('operadora.alterarAuditor (auditor_plano) com a trilha_auditoria na mesma transação')
   async alterar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -592,7 +594,7 @@ export class AutorizacaoOperadoraController {
       s,
       E.operadoraAuditorAlterado.codigo,
       'operadora.alterarAuditor',
-      'SGH_OPE_AUDITOR',
+      'auditor_plano',
       (g) =>
         g.alterar({
           id: n,

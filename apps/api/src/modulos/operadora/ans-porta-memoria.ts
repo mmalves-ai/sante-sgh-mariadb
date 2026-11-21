@@ -2,32 +2,20 @@
 // produtos, os contratos e os beneficiários vêm da porta em memória da F1, as cobranças da porta da F2 e as contas
 // médicas da porta da F5 (as mesmas que as outras telas mostram); os grupos e os procedimentos do SIP são os SINTÉTICOS
 // da F1; os motivos e os campos do SIB e os valores da TPS são os da norma (domínio público, sem dado de pessoa). Os
-// envios, os itens, o histórico e o complemento do SIB ficam em memória com as mesmas recusas das SGH_ (enviado sem
+// envios, os itens, o histórico e o complemento do SIB ficam em memória com as mesmas recusas das (enviado sem
 // retorno, substituído que mudou, sequencial e aviso repetidos, versão vista e situação de partida, CCO em uso) e a
-// transação desfeita por inteiro quando a função falha. Nada vai à cópia. A trilha da memória é registrada pela API.
-import {
-  type AtivosLidos,
-  type BeneficiarioOpeLido,
-  type BeneficiarioSibLido,
-  type ComplementoSibLido,
-  type EnvioAnsLido,
-  type EnvioExistenteLido,
-  type EventoEnvioAnsLido,
-  ErroOperacao,
-  type FiltroEnviosLido,
-  type GuiaMonitoramentoLida,
-  type ItemEnvioAnsLido,
-  type ItemSipLido,
-  LIMITE_PAGINA_ENVIOS,
-  LIMITE_PAGINA_SIB,
-  type ObrigacaoLida,
-  type ProdutoOpeLido,
-  type SituacaoEnvioLida,
-} from '@sgh/legado';
+// transação desfeita por inteiro quando a função falha. Nada vai ao banco. A trilha da memória é registrada pela API.
+import { ErroOperacao } from '@sgh/nucleo';
+import { type DadosAtivos, type DadosBeneficiarioSib, type DadosComplementoSib, type DadosEnvioAns, type DadosEnvioExistente, type DadosEventoEnvioAns, type DadosGuiaMonitoramento, type DadosItemEnvioAns, type DadosItemSip, type DadosObrigacao, type FiltroEnviosPorta, LIMITE_PAGINA_ENVIOS, LIMITE_PAGINA_SIB, type SituacaoEnvioPorta, CAMPOS_SIB
+} from './dados-portas.js';
 import type { ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
 import type { PortaCobrancaOperadora } from './cobranca-porta.js';
 import type { PortaContasOperadora } from './contas-porta.js';
 import type { PortaOperadora } from './porta.js';
+
+// Os tipos da operadora, do produto, do contrato e do beneficiário são os da porta da F1 (derivados dela).
+type DadosBeneficiario = NonNullable<Awaited<ReturnType<PortaOperadora['beneficiario']>>>;
+type DadosProduto = NonNullable<Awaited<ReturnType<PortaOperadora['produto']>>>;
 
 /** Motivos de movimentação cadastral do SIB (o grupo: 1 inclusão, 2 alteração, 3 cancelamento, 4 reativação). */
 export const MOTIVOS_SIB_MEMORIA = [
@@ -45,27 +33,6 @@ export const MOTIVOS_SIB_MEMORIA = [
   { codigo: 12, nome: 'Reativação por renegociação do contrato', grupo: 4 },
 ] as const;
 
-const CAMPOS_SIB_MEMORIA = [
-  'Carteirinha',
-  'Nome',
-  'Data de nascimento',
-  'Sexo',
-  'CPF',
-  'Nome da mãe',
-  'Declaração de nascido vivo',
-  'Cartão Nacional de Saúde',
-  'Titular',
-  'Logradouro',
-  'Número',
-  'Complemento',
-  'Bairro',
-  'Município',
-  'CEP',
-  'Reside no exterior',
-  'Data de adesão',
-  'Relação de dependência',
-  'CAEPF',
-].map((nome, k) => ({ codigo: k + 1, nome }));
 
 /** Valores da TPS por beneficiário (Lei 9.961/2000, art. 20, I, e a atualização de 2015). */
 export const VALORES_TPS_MEMORIA = [
@@ -91,17 +58,17 @@ type Mut<T> = { -readonly [K in keyof T]: T[K] };
 function sem<T extends object, K extends keyof T>(o: T, ...chaves: K[]): Omit<T, K> {
   return Object.fromEntries(Object.entries(o).filter(([k]) => !chaves.includes(k as K))) as Omit<T, K>;
 }
-interface EnvioMem extends Mut<EnvioAnsLido> {
+interface EnvioMem extends Mut<DadosEnvioAns> {
   hospital: string;
   arquivoBase64: string | null;
 }
-interface ItemMem extends Mut<ItemEnvioAnsLido> {
+interface ItemMem extends Mut<DadosItemEnvioAns> {
   envio: number;
 }
-interface EventoMem extends EventoEnvioAnsLido {
+interface EventoMem extends DadosEventoEnvioAns {
   envio: number;
 }
-type ComplementoMem = Mut<ComplementoSibLido> & { hospital: string };
+type ComplementoMem = Mut<DadosComplementoSib> & { hospital: string };
 
 interface Estado {
   envios: EnvioMem[];
@@ -145,7 +112,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
   }
 
   async camposSib() {
-    return CAMPOS_SIB_MEMORIA.map((m) => ({ ...m }));
+    return CAMPOS_SIB.map((m) => ({ ...m }));
   }
 
   async valoresTps() {
@@ -162,11 +129,11 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
     return this.estado.envios.filter((e) => e.hospital === c.hospital);
   }
 
-  private semInterno(e: EnvioMem): EnvioAnsLido {
+  private semInterno(e: EnvioMem): DadosEnvioAns {
     return sem(e, 'hospital', 'arquivoBase64');
   }
 
-  async envios(c: ContextoAns, f: FiltroEnviosLido) {
+  async envios(c: ContextoAns, f: FiltroEnviosPorta) {
     const limite = Math.min(Math.max(1, f.limite ?? LIMITE_PAGINA_ENVIOS), LIMITE_PAGINA_ENVIOS);
     const lista = this.daqui(c)
       .filter(
@@ -210,7 +177,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
       : null;
   }
 
-  async itens(c: ContextoAns, id: number): Promise<ItemEnvioAnsLido[]> {
+  async itens(c: ContextoAns, id: number): Promise<DadosItemEnvioAns[]> {
     if (!(await this.envio(c, id))) return [];
     return this.estado.itens
       .filter((i) => i.envio === id)
@@ -218,12 +185,12 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
       .map((i) => sem(i, 'envio'));
   }
 
-  async eventos(c: ContextoAns, id: number): Promise<EventoEnvioAnsLido[]> {
+  async eventos(c: ContextoAns, id: number): Promise<DadosEventoEnvioAns[]> {
     if (!(await this.envio(c, id))) return [];
     return this.estado.eventos.filter((v) => v.envio === id).map((v) => sem(v, 'envio'));
   }
 
-  async existentes(c: ContextoAns, operadora: number, obrigacao: ObrigacaoLida, competencia: string) {
+  async existentes(c: ContextoAns, operadora: number, obrigacao: DadosObrigacao, competencia: string) {
     return this.daqui(c)
       .filter(
         (e) =>
@@ -231,7 +198,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
           e.obrigacao === obrigacao &&
           (e.competencia === competencia || e.situacao === 'gerado' || e.situacao === 'enviado'),
       )
-      .map((e): EnvioExistenteLido => ({
+      .map((e): DadosEnvioExistente => ({
         id: e.id,
         obrigacao: e.obrigacao,
         competencia: e.competencia,
@@ -242,8 +209,8 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
 
   // ── Fontes (F1, F2, F5) ───────────────────────────────────────────────────────────────────────
 
-  private async todosBeneficiarios(c: ContextoAns, operadora: number): Promise<BeneficiarioOpeLido[]> {
-    const r: BeneficiarioOpeLido[] = [];
+  private async todosBeneficiarios(c: ContextoAns, operadora: number): Promise<DadosBeneficiario[]> {
+    const r: DadosBeneficiario[] = [];
     let apos: number | undefined;
     for (;;) {
       const p = await this.operadora.beneficiarios(c, { operadora, ...(apos === undefined ? {} : { apos }) });
@@ -256,7 +223,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
   private async produtosPorContrato(c: ContextoAns, contratos: readonly number[]) {
     const m = new Map<
       number,
-      { contrato: Awaited<ReturnType<PortaOperadora['contrato']>>; produto: ProdutoOpeLido | null }
+      { contrato: Awaited<ReturnType<PortaOperadora['contrato']>>; produto: DadosProduto | null }
     >();
     for (const id of new Set(contratos)) {
       const contrato = await this.operadora.contrato(c, id);
@@ -273,7 +240,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
       c,
       pagina.map((b) => b.contrato),
     );
-    const itens = pagina.map((b): BeneficiarioSibLido => {
+    const itens = pagina.map((b): DadosBeneficiarioSib => {
       const x = pc.get(b.contrato);
       const t = b.titular === null ? null : (porId.get(b.titular) ?? null);
       return {
@@ -319,7 +286,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
     };
   }
 
-  private complementoDe(c: ContextoAns, beneficiario: number): ComplementoSibLido | null {
+  private complementoDe(c: ContextoAns, beneficiario: number): DadosComplementoSib | null {
     const x = this.estado.complementos.get(beneficiario);
     if (!x || x.hospital !== c.hospital) return null;
     return sem(x, 'hospital');
@@ -334,7 +301,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
     return b ? { id: b.id, operadora: b.operadora, carteirinha: b.carteirinha, nome: b.nome } : null;
   }
 
-  async ativosNaData(c: ContextoAns, operadora: number, data: string): Promise<AtivosLidos[]> {
+  async ativosNaData(c: ContextoAns, operadora: number, data: string): Promise<DadosAtivos[]> {
     const bs = (await this.todosBeneficiarios(c, operadora)).filter(
       (b) => b.inclusao <= data && (b.exclusao === null || b.exclusao > data),
     );
@@ -342,7 +309,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
       c,
       bs.map((b) => b.contrato),
     );
-    const m = new Map<number, Mut<AtivosLidos>>();
+    const m = new Map<number, Mut<DadosAtivos>>();
     for (const b of bs) {
       const p = pc.get(b.contrato)?.produto;
       if (!p || p.natureza !== 'plano') continue;
@@ -383,7 +350,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
   async itensSip(c: ContextoAns, operadora: number, inicio: string, fim: string, apos: number) {
     const contas = this.contas;
     if (!contas) return { itens: [], proxima: null };
-    const r: ItemSipLido[] = [];
+    const r: DadosItemSip[] = [];
     for (const k of (await this.contasDa(c, operadora)).filter((x) => x.situacao !== 'devolvida')) {
       const guias = new Map((await contas.guias(c, k.id)).map((g) => [g.id, g]));
       for (const i of await contas.itens(c, k.id)) {
@@ -479,7 +446,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
   async guiasMonitoramento(c: ContextoAns, operadora: number, inicio: string, fim: string, teto: number) {
     const contas = this.contas;
     if (!contas) return [];
-    const r: GuiaMonitoramentoLida[] = [];
+    const r: DadosGuiaMonitoramento[] = [];
     for (const k of await this.contasDa(c, operadora)) {
       if (k.situacao !== 'analisada' && k.situacao !== 'paga') continue;
       const ficha = await contas.conta(c, k.id);
@@ -568,7 +535,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
 
   // ── Gravações ─────────────────────────────────────────────────────────────────────────────────
 
-  async gravarSgh<T>(c: ContextoAns, _trilha: unknown, fn: (g: GravadorAns) => Promise<T>): Promise<T> {
+  async gravar<T>(c: ContextoAns, _trilha: unknown, fn: (g: GravadorAns) => Promise<T>): Promise<T> {
     const antes = copia(this.estado);
     try {
       return await fn(this.gravador(c));
@@ -581,14 +548,14 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
   private evento(
     envio: number,
     evento: string,
-    situacao: SituacaoEnvioLida,
+    situacao: SituacaoEnvioPorta,
     texto: string | null,
     por: string,
   ) {
     this.estado.eventos.push({ envio, evento, situacao, texto, por, em: this.agora() });
   }
 
-  private mudar(c: ContextoAns, id: number, versao: number, de: readonly SituacaoEnvioLida[]): EnvioMem {
+  private mudar(c: ContextoAns, id: number, versao: number, de: readonly SituacaoEnvioPorta[]): EnvioMem {
     const e = this.estado.envios.find((x) => x.id === id && x.hospital === c.hospital);
     if (!e || e.versao !== versao || !de.includes(e.situacao)) throw DESATUALIZADO();
     e.versao += 1;
@@ -636,7 +603,7 @@ export class PortaAnsOperadoraMemoria implements PortaAnsOperadora {
             nome: o?.nomeFantasia ?? o?.razaoSocial ?? '',
             registroAns: o?.registroAns ?? '',
           },
-          obrigacao: g.obrigacao as ObrigacaoLida,
+          obrigacao: g.obrigacao as DadosObrigacao,
           competencia: g.competencia,
           sequencial: g.sequencial,
           retificador: g.retificador,

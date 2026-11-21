@@ -1,32 +1,32 @@
 // M12, correção da verificação, pela HTTP com a sessão real sobre a fonte sintética e a fonte de preços EM
-// MEMÓRIA (nada conecta a banco; dados sintéticos): o total da consulta é a soma dos componentes (regra da
-// sante-api) também nos modelos CH e PORTE; os casos de sante-api test/valores.test.js; a comparação da
+// MEMÓRIA (nada conecta a banco; dados sintéticos): o total da consulta é a soma dos componentes (soma dos
+// componentes) também nos modelos CH e PORTE; os casos de sante-api test/valores.test.js; a comparação da
 // importação com o valor anterior; corrigir e encerrar o plano; portes pelo convênio; credenciamento pelo
 // profissional e o valor da consulta só no Particular; vigências de diárias e mat/med; o desfazer pré-confere
 // todas as partes e retoma o que falta.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { credenciaisNaResposta } from '@sgh/contratos';
-import { fonteCatalogoArquivo, operacao } from '@sgh/legado';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { FontePrecosMemoria } from './fonte-memoria.js';
+import { moduloPrecos } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'precos' };
 const trilha = new RegistradorTrilhaMemoria();
-const fonte = new FontePrecosMemoria(
-  fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
-  'dev',
-);
+const fonte = new FontePrecosMemoria('dev');
 let app: NestFastifyApplication;
+const ctxTeste = { cliente: '', estabelecimento: null, usuario: null, correlacao: 't', rede: '', hospital: 'aa', traceId: 't' };
 let chave = 0;
 const respostas: { url: string; corpo: unknown }[] = [];
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, precos: fonte });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { precos: async () => ({ modulo: (ctx) => moduloPrecos(ctx, { fonte }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -282,12 +282,12 @@ describe('desfazer do lote: pré-confere todas as partes e retoma o que falta', 
       senha: SENHA,
     });
     const lote = r.json().lote as string;
-    const linhas = await fonte.linhasDoLote({ rede: '', hospital: 'aa', traceId: 't' }, lote);
+    const linhas = await fonte.linhasDoLote(ctxTeste, lote);
     const primeiro = linhas[0]!;
     // Uma parte já desfeita (como se o pedido anterior tivesse parado depois dela).
-    await fonte.executor.executar(
-      operacao('preco.desfazerReajuste'),
-      'aa',
+    await fonte.executar(
+      'preco.desfazerReajuste',
+      ctxTeste,
       {
         tabela: 305,
         data: primeiro.data,
@@ -298,11 +298,9 @@ describe('desfazer do lote: pré-confere todas as partes e retoma o que falta', 
         itens: [{ codigo: primeiro.codigo, valores: primeiro.valores }],
       },
       {
-        rede: '',
-        hospital: 'aa',
-        traceId: 't',
-        usuarioLegado: 'SINT.FATURAMENTO',
-        idempotencyKey: `parte-1-${lote}`,
+        ...ctxTeste,
+        login: 'SINT.FATURAMENTO',
+        chaveIdempotencia: `parte-1-${lote}`,
         estacao: 'teste',
         reautenticadoEm: Date.now(),
       },

@@ -9,7 +9,7 @@
 //   - a transmissão (o recibo só na ANS, em produção; o simulador fora dela), o retorno (o resultado dos itens, o CCO do
 //     SIB), a GRU da TPS e do ressarcimento;
 //   - o complemento do beneficiário para o SIB e as pendências do cadastro.
-// As gravações passam pelas recusas das regras antes de chegar às SGH_; a versão vista e a situação de partida são do
+// As gravações passam pelas recusas das regras antes de chegar ao banco; a versão vista e a situação de partida são do
 // banco.
 import { createHash } from 'node:crypto';
 import {
@@ -92,15 +92,7 @@ import {
   ufDoMunicipio,
   valorDevido,
 } from '@sgh/dominio-operadora';
-import type {
-  BeneficiarioSibLido,
-  EnvioAnsLido,
-  EnvioAnsResumoLido,
-  GeracaoEnvioSgh,
-  ItemEnvioAnsLido,
-  ItemEnvioSgh,
-  OperadoraOpeLida,
-} from '@sgh/legado';
+import { type DadosBeneficiarioSib, type DadosEnvioAns, type DadosEnvioAnsResumo, type DadosItemEnvioAns, type DadosOperadora, type EntradaGeracaoEnvio, type EntradaItemEnvio } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ArquivoGravado, ContextoAns, PortaAnsOperadora } from './ans-porta.js';
 
@@ -141,21 +133,21 @@ export interface Montagem {
   readonly retificador: boolean;
   readonly substituir: readonly number[];
   readonly arquivo: string | null;
-  readonly itens: readonly ItemEnvioSgh[];
+  readonly itens: readonly EntradaItemEnvio[];
   readonly valorTotal: number | null;
-  readonly operadora: OperadoraOpeLida;
+  readonly operadora: DadosOperadora;
 }
 
 interface Partes {
   readonly registros: number;
   readonly quadros: readonly QuadroAns[];
   readonly problemas: readonly ProblemaAns[];
-  readonly itens: readonly ItemEnvioSgh[];
+  readonly itens: readonly EntradaItemEnvio[];
   readonly valorTotal: number | null;
   readonly arquivo: ((cab: CabecalhoAns) => string) | null;
 }
 
-export function resumoDoEnvio(e: EnvioAnsResumoLido): EnvioAnsResumo {
+export function resumoDoEnvio(e: DadosEnvioAnsResumo): EnvioAnsResumo {
   return {
     id: e.id,
     versao: e.versao,
@@ -182,7 +174,7 @@ export function resumoDoEnvio(e: EnvioAnsResumoLido): EnvioAnsResumo {
 }
 
 /** O beneficiário lido no formato da regra do SIB. */
-export function beneficiarioDaRegra(b: BeneficiarioSibLido): BeneficiarioSib {
+export function beneficiarioDaRegra(b: DadosBeneficiarioSib): BeneficiarioSib {
   const c = b.complemento;
   return {
     id: b.id,
@@ -219,7 +211,7 @@ export function beneficiarioDaRegra(b: BeneficiarioSibLido): BeneficiarioSib {
   };
 }
 
-function itemDaRessarcimento(i: ItemEnvioAnsLido): ItemRessarcimento {
+function itemDaRessarcimento(i: DadosItemEnvioAns): ItemRessarcimento {
   const d = json<{ identificacao?: string; inicio?: string; fim?: string; procedimento?: string }>(
     i.dados,
     {},
@@ -285,7 +277,7 @@ export class ServicoAnsOperadora {
     return { itens: r.itens.map(resumoDoEnvio), proxima: r.proxima, totais };
   }
 
-  private async envioOu404(c: ContextoAns, id: number): Promise<EnvioAnsLido> {
+  private async envioOu404(c: ContextoAns, id: number): Promise<DadosEnvioAns> {
     const e = await this.porta.envio(c, id);
     if (!e) throw naoEncontrado();
     return e;
@@ -337,7 +329,7 @@ export class ServicoAnsOperadora {
 
   // ── Prévia e geração ──────────────────────────────────────────────────────────────────────────
 
-  private async operadoraDe(c: ContextoAns, id: number): Promise<OperadoraOpeLida> {
+  private async operadoraDe(c: ContextoAns, id: number): Promise<DadosOperadora> {
     const o = (await this.porta.operadoras(c)).find((x) => x.id === id);
     if (!o) throw naoEncontrado('Operadora não encontrada');
     return o;
@@ -420,7 +412,7 @@ export class ServicoAnsOperadora {
   async gerar(
     c: ContextoAns,
     e: GerarEnvioAnsEntrada,
-  ): Promise<Omit<GeracaoEnvioSgh, 'hospital' | 'usuario'>> {
+  ): Promise<Omit<EntradaGeracaoEnvio, 'hospital' | 'usuario'>> {
     const m = await this.montar(c, e);
     if (!m.previa.podeGerar || !m.arquivo)
       throw recusaAns(
@@ -464,8 +456,8 @@ export class ServicoAnsOperadora {
     }
   }
 
-  private async todosBeneficiarios(c: ContextoAns, operadora: number): Promise<BeneficiarioSibLido[]> {
-    const r: BeneficiarioSibLido[] = [];
+  private async todosBeneficiarios(c: ContextoAns, operadora: number): Promise<DadosBeneficiarioSib[]> {
+    const r: DadosBeneficiarioSib[] = [];
     let apos = 0;
     for (let k = 0; k < PAGINAS_SIB; k++) {
       const p = await this.porta.beneficiariosSib(c, operadora, apos);
@@ -727,7 +719,7 @@ export class ServicoAnsOperadora {
   async registrarAviso(
     c: ContextoAns,
     e: RegistrarAvisoRessarcimentoEntrada,
-  ): Promise<Omit<GeracaoEnvioSgh, 'hospital' | 'usuario'>> {
+  ): Promise<Omit<EntradaGeracaoEnvio, 'hospital' | 'usuario'>> {
     const operadora = await this.operadoraDe(c, e.operadora);
     const { hoje } = await this.porta.relogio(c);
     const ps = problemasDoAviso(e.recebidoEm, e.atendimentos);
@@ -750,7 +742,7 @@ export class ServicoAnsOperadora {
     ]);
     const porIdent = new Map(benefs.map((b) => [b.identificacao, b]));
     const itens: ItemRessarcimento[] = [];
-    const gravar: ItemEnvioSgh[] = [];
+    const gravar: EntradaItemEnvio[] = [];
     e.atendimentos.forEach((a, k) => {
       const b = porIdent.get(a.identificacao) ?? null;
       const sugestao = analisarAtendimentoSus(
@@ -834,7 +826,7 @@ export class ServicoAnsOperadora {
     id: number,
     item: number,
     e: DecidirItemRessarcimentoEntrada,
-  ): Promise<{ envio: EnvioAnsLido; texto: string }> {
+  ): Promise<{ envio: DadosEnvioAns; texto: string }> {
     const [envio, itens, { hoje }] = await Promise.all([
       this.envioOu404(c, id),
       this.porta.itens(c, id),
@@ -860,7 +852,7 @@ export class ServicoAnsOperadora {
     c: ContextoAns,
     id: number,
     e: TransmitirEnvioAnsEntrada,
-  ): Promise<{ envio: EnvioAnsLido; recibo: string | null; arquivo: ArquivoGravado | null; texto: string }> {
+  ): Promise<{ envio: DadosEnvioAns; recibo: string | null; arquivo: ArquivoGravado | null; texto: string }> {
     const envio = await this.envioOu404(c, id);
     if (envio.situacao !== 'gerado') throw recusaAns(['situacao-nao-permite']);
     if (envio.versao !== e.versao) throw recusaAns(['envio-desatualizado']);
@@ -908,7 +900,7 @@ export class ServicoAnsOperadora {
     id: number,
     e: RegistrarRetornoAnsEntrada,
   ): Promise<{
-    envio: EnvioAnsLido;
+    envio: DadosEnvioAns;
     situacao: 'aceito' | 'aceitoParcial' | 'rejeitado';
     itens: { id: number; aceito: boolean; cco: string | null; erro: string | null }[];
     texto: string;
@@ -938,7 +930,7 @@ export class ServicoAnsOperadora {
     return { envio, situacao, itens: [...r.itens], texto };
   }
 
-  async conferirPagamento(c: ContextoAns, id: number, e: PagamentoGruEntrada): Promise<EnvioAnsLido> {
+  async conferirPagamento(c: ContextoAns, id: number, e: PagamentoGruEntrada): Promise<DadosEnvioAns> {
     const envio = await this.envioOu404(c, id);
     if (!OBRIGACOES_COM_GRU.includes(envio.obrigacao)) throw recusaAns(['sem-gru']);
     if (envio.situacao !== 'aceito' && envio.situacao !== 'aceitoParcial')

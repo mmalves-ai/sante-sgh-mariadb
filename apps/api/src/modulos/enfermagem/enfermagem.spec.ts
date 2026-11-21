@@ -1,5 +1,5 @@
 // M25 (enfermagem beira-leito) pela HTTP, com a sessão real sobre a fonte sintética e a porta EM MEMÓRIA (nada conecta
-// a banco): permissões pelas opções do legado, a linha do tempo do turno (atrasada, omitida, suspensa), a checagem com
+// a banco): permissões pelas opções do perfil, a linha do tempo do turno (atrasada, omitida, suspensa), a checagem com
 // a pulseira, os nove certos, o não administrado com o motivo, a dupla checagem com o segundo login, a glicemia com a
 // faixa da escala, a infusão, o aprazamento só do enfermeiro (no novo), o conflito da suspensão vinda da prescrição, a
 // sincronização sem rede na ordem, os sinais vitais com a faixa e a retificação, a passagem de plantão com o aceite, os
@@ -89,7 +89,8 @@ describe('checagem: pulseira, motivo, nove certos', () => {
     const d = (await a.get(s, `/enfermagem/horarios/${h.id}`)).json();
     expect(d.horario.situacao).toBe('A');
     expect(d.atos[0]).toMatchObject({ pulseiraLida: false, motivoSemPulseira: 'semPulseira' });
-    expect(a.trilha.eventos.some((e) => e.evento === 'enfermagem.administracao.checada')).toBe(true);
+    // A memória registra a operação da tela na trilha (no banco, a trilha é a do Executor, na mesma transação).
+    expect(a.trilha.eventos.some((e) => e.evento === 'enfermagem.checarAdministracao')).toBe(true);
     // Checado: a segunda checagem do mesmo horário vira conflito (nunca sobrescreve).
     const de2 = await a.post(s, `/enfermagem/horarios/${h.id}/checar`, checagemPadrao(25001, 25201));
     expect(de2.statusCode).toBe(409);
@@ -304,11 +305,11 @@ describe('aprazamento, sinais vitais, plantão, aparelhos e estorno', () => {
     expect(fora.statusCode).toBe(422);
     expect(fora.json().codigo).toBe('sinal-confirmar');
     // A linha da trilha que vai na transação leva o paciente dono do sinal, não o do pedido.
-    const linhas: { idPaciente: number | null }[] = [];
+    const linhas: { dadosDepois?: { paciente?: number } }[] = [];
     const original = a.porta.gravarSgh.bind(a.porta);
     const espiao = vi.spyOn(a.porta, 'gravarSgh').mockImplementation(async (c, trilha, fn) => {
       const r = await original(c, trilha, fn);
-      linhas.push((trilha as (x: unknown) => { idPaciente: number | null })(r));
+      linhas.push((trilha as (x: unknown) => { dadosDepois?: { paciente?: number } })(r));
       return r;
     });
     const r = await a.post(enf, `/enfermagem/sinais-vitais/${id}/retificar?paciente=25001`, {
@@ -317,7 +318,7 @@ describe('aprazamento, sinais vitais, plantão, aparelhos e estorno', () => {
     });
     espiao.mockRestore();
     expect(r.statusCode).toBe(200);
-    expect(linhas.map((l) => l.idPaciente)).toEqual([25003]);
+    expect(linhas.map((l) => l.dadosDepois?.paciente)).toEqual([25003]);
     expect(
       (
         await a.post(enf, '/enfermagem/sinais-vitais/987654321/retificar', {

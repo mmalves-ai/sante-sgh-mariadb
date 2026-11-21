@@ -7,17 +7,16 @@
 // (regra 8), quem só lê (403 ao gravar) e quem não tem perfil da operadora.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { carteirinhaValida, cnpjSintetico, cpfSintetico } from '@sgh/dominio-operadora';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../config/public-api.js';
+import { criarAppOperadora } from './infra/app-operadora.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { fonteConfiguracaoMemoria } from '../config/public-api.js';
 import { PortaOperadoraMemoria } from './porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -30,7 +29,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-const registroAns: PrerequisitoGravado = {
+const registroAns: PrerequisitoRecurso = {
   recurso: 'operadora',
   tipo: 'credenciamento',
   situacao: 'cumprido',
@@ -45,7 +44,7 @@ let desligado: NestFastifyApplication;
 const trilha = new RegistradorTrilhaMemoria();
 
 beforeAll(async () => {
-  ligado = await criarApp(lerConfiguracao(env), null, env, {
+  ligado = await criarAppOperadora(env, {
     trilha,
     operadora: new PortaOperadoraMemoria(trilha),
     configuracao: fonteConfiguracaoMemoria(trilha, {
@@ -53,7 +52,7 @@ beforeAll(async () => {
       prerequisitosIniciais: () => [registroAns],
     }),
   });
-  desligado = await criarApp(lerConfiguracao(env), null, env, {});
+  desligado = await criarAppOperadora(env, {});
   for (const a of [ligado, desligado]) {
     await a.init();
     await a.getHttpAdapter().getInstance().ready();

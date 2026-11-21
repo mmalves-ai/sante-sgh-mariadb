@@ -40,3 +40,4 @@ export * from './sae/vacina.js';
 export * from './escores/deterioracao-pa.js';
 export * from './protocolos/protocolo-internado.js';
 export * from './feridas/lesao.js';
+export * from './sae/montagem.js';

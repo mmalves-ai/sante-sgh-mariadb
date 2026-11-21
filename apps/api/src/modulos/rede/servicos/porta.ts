@@ -1,16 +1,16 @@
-// Porta do registro de serviços compartilhados da Rede (M57, etapa 3; regra 11; DP-14): cada registro mora no banco do
-// estabelecimento em que foi feito; a porta lê ou grava (transação SGH_ com a SGH_TRILHA junto) SÓ no banco do
-// estabelecimento do contexto. A lista da Rede é a junção, em memória, das listas de cada banco (no serviço).
-//   - `legado`: @sgh/legado (só SGH_REDE_SERVICO_COMPART e a trilha);
+// Porta do registro de serviços compartilhados da Rede (M57, etapa 3; regra 11; DP-14): cada registro é do
+// estabelecimento em que foi feito; a porta lê ou grava (com a trilha na mesma transação) SÓ os registros do
+// estabelecimento do contexto. A lista da Rede é a junção, em memória, das listas de cada estabelecimento (no serviço).
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo (pendente do modelo: responde 501 até a tabela existir);
 //   - `memoria`: a sessão sintética de dev/ci (E2E), um registro em memória por estabelecimento;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 (falha fechada).
+import type { TrilhaRede } from '../tipos-indice.js';
 import type {
   FiltroServicosRede,
-  LinhaTrilha,
   MudancaServicoParaGravar,
   NovoServicoParaGravar,
   ServicoCompartilhadoLido,
-} from '@sgh/legado';
+} from './tipos.js';
 
 export const PORTA_SERVICOS_REDE = Symbol('PORTA_SERVICOS_REDE');
 
@@ -20,7 +20,7 @@ export interface ContextoServicosRede {
 }
 
 export interface PortaServicosRede {
-  readonly destino: 'legado' | 'memoria' | 'indisponivel';
+  readonly destino: 'proprio' | 'memoria' | 'indisponivel';
   listar(
     c: ContextoServicosRede,
     f: FiltroServicosRede,
@@ -31,13 +31,13 @@ export interface PortaServicosRede {
     c: ContextoServicosRede,
     novo: NovoServicoParaGravar,
     por: string,
-    trilha: LinhaTrilha,
+    trilha: TrilhaRede,
   ): Promise<ServicoCompartilhadoLido>;
   alterar(
     c: ContextoServicosRede,
     id: number,
     m: MudancaServicoParaGravar,
     por: string,
-    trilha: LinhaTrilha,
+    trilha: TrilhaRede,
   ): Promise<{ antes: ServicoCompartilhadoLido; depois: ServicoCompartilhadoLido; mudou: boolean } | null>;
 }

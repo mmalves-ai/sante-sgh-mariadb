@@ -112,17 +112,22 @@ import {
 } from '../config/public-api.js';
 import { corpo } from '../exames/public-api.js';
 import { BATIDA_EVENTOS_MS, BATIDA_EVENTOS_PADRAO_MS } from '../internacao/public-api.js';
-import { lerCodigos } from '@sgh/legado';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/public-api.js';
 import { ApoiosEnfermagem } from './apoios.js';
-import { GeracaoPorHora, ServicoContingencia } from './contingencia.js';
+import {
+  ALVOS_CONTINGENCIA,
+  type ContextoContingencia,
+  GeracaoPorHora,
+  ServicoContingencia,
+} from './contingencia.js';
 import { PORTA_ENFERMAGEM, type PortaEnfermagem } from './porta.js';
 import { ServicoEnfermagem } from './servico.js';
 import { ApoioEscores } from './escores.controller.js';
 import { PORTA_ESCORES, type PortaEscores } from './escores-porta.js';
 import { contencoesNoTurno, parametrosContencao } from './contencao-servico.js';
 import { PARAMETROS_NEWS2 } from './escores-servico.js';
+import { atoDe, sessaoComAto } from './gravacao-direta.js';
 import { AVISOS_ENFERMAGEM } from './simbolos.js';
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -174,6 +179,9 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     @Optional() @Inject(FONTE_DOCUMENTO) documento: FonteDocumento | null = null,
     @Optional() @Inject(CONFIGURACAO) private readonly cfg: Configuracao | null = null,
     @Optional() @Inject(PORTA_ESCORES) escores: PortaEscores | null = null,
+    @Optional()
+    @Inject(ALVOS_CONTINGENCIA)
+    private readonly alvosContingencia: readonly ContextoContingencia[] = [],
   ) {
     this.portaEscores = escores;
     this.apoios = new ApoiosEnfermagem(porta, trilha, configuracao, cache);
@@ -188,14 +196,15 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
    */
   onApplicationBootstrap(): void {
     const ambiente = this.cfg?.ambiente ?? 'dev';
-    if (this.porta.destino !== 'legado' || ['dev', 'ci'].includes(ambiente)) return;
+    if (this.porta.destino !== 'banco' || ['dev', 'ci'].includes(ambiente)) return;
     if ((process.env['CONTINGENCIA_POR_HORA'] ?? '').trim() === 'desligado') return;
+    // Os estabelecimentos vigiados vêm do módulo (o cliente e cada estabelecimento do banco); sem eles, nada roda.
+    if (this.alvosContingencia.length === 0) return;
     this.porHora = new GeracaoPorHora(
       this.contingencia,
       this.trilha,
       (rede, hospital, chave) => this.apoios.parametroDoEstabelecimento(rede, hospital, chave),
-      lerCodigos(process.env),
-      this.cfg?.rede ?? '',
+      this.alvosContingencia,
     );
     this.porHora.iniciar();
   }
@@ -639,7 +648,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
         'enfermagem.checarAdministracao',
         aparelhoExigido ? { ...gravacao, sgh: { ...gravacao.sgh, aparelhoExigido } } : gravacao,
         e.desfecho === 'administrado' ? 'Administração checada.' : 'Não administração registrada.',
-        chave ? { idempotencyKey: chave } : {},
+        chave ? { chaveIdempotencia: chave } : {},
       );
       this.avisos?.avisar(s.hospital);
       return {
@@ -686,7 +695,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemConflitoRegistrado.codigo,
       P.administracaoChecar,
-      (r: { id: number }) => ({ tabela: 'SGH_PEP_CONFLITO_SYNC', id: String(r.id), paciente }),
+      (r: { id: number }) => ({ tabela: 'conflito_sincronizacao', id: String(r.id), paciente }),
       (g) =>
         g.registrarConflito({
           horario,
@@ -783,7 +792,9 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('horarios/:id/infusao')
   @HttpCode(201)
   @Permissao(P.administracaoChecar)
-  @AuditadoNoHandler('evento da infusão em SGH_PEP_INFUSAO_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'evento da infusão em horario_administracao_evento com a trilha_auditoria na mesma transação',
+  )
   async infusao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaEventoInfusao, b);
@@ -818,7 +829,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemInfusaoEvento.codigo,
       P.administracaoChecar,
-      (r: number) => ({ tabela: 'SGH_PEP_INFUSAO_EVENTO', id: String(r), paciente: h.tela.paciente }),
+      (r: number) => ({ tabela: 'horario_administracao_evento', id: String(r), paciente: h.tela.paciente }),
       (g) =>
         g.gravarEventoInfusao({
           horario: h.lido.id,
@@ -843,7 +854,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const s = sessaoDe(req);
     const u = unidadeDe(unidade);
     const itens = await this.servico.propostas(s.porta, u);
-    const liberado = await this.porta.podeGravar(s.porta, 'enfermagem.aprazarHorario', s.login);
+    const liberado = await this.porta.podeGravar(s.porta, 'enfermagem.aprazarHorario');
     req.sghAlvo = { tabelaAlvo: 'PRCHKGERAL', chaveNaturalAlvo: `aprazamento:${u}:${itens.length}` };
     return {
       unidade: u,
@@ -857,7 +868,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @HttpCode(200)
   @Permissao(P.horarioAprazar)
   @AuditadoNoHandler(
-    'enfermagem.aprazarHorario pelo executor, um horário por vez (reaprazar substitui a hora); depois a confirmação em SGH_PEP_APRAZAMENTO com a SGH_TRILHA',
+    'enfermagem.aprazarHorario pelo executor, um horário por vez (reaprazar substitui a hora); depois a confirmação em horario_administracao_evento com a trilha_auditoria',
   )
   async aprazar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -902,8 +913,8 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     }
     // W1-08: o aprazamento grava no horário da prescrição (um ato do executor por horário, cada um com a sua chave
     // derivada da do pedido: repetir o pedido devolve o resultado de cada um). O registro da proposta confirmada em
-    // SGH_PEP_APRAZAMENTO vem depois, com os horários que o banco aceitou.
-    const chave = contextoOperacao(s, 'enfermagem.aprazarHorario').idempotencyKey.slice(0, 72);
+    // horario_administracao_evento vem depois, com os horários que o banco aceitou.
+    const chave = contextoOperacao(s, 'enfermagem.aprazarHorario').chaveIdempotencia.slice(0, 72);
     let gravados = 0;
     for (const [k, x] of e.itens.entries()) {
       const h = lidos[k]!;
@@ -921,7 +932,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
           motivo: x.motivo,
         },
         MENSAGENS_ENFERMAGEM.aprazamentoGravado,
-        { idempotencyKey: `${chave}-a${k}` },
+        { chaveIdempotencia: `${chave}-a${k}` },
       );
       gravados++;
     }
@@ -930,7 +941,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       EVENTOS_AUDITAVEIS.enfermagemHorarioAprazado.codigo,
       P.horarioAprazar,
       (r: number[]) => ({
-        tabela: 'SGH_PEP_APRAZAMENTO',
+        tabela: 'horario_administracao_evento',
         id: String(r[0] ?? ''),
         chave: `${r.length} horario(s)`,
       }),
@@ -968,14 +979,14 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const nomes = new Map<number, string>();
     for (const u of unidades)
       for (const i of await this.porta.internados(s.porta, u.unidade)) nomes.set(i.paciente, i.nome);
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_CONFLITO_SYNC', chaveNaturalAlvo: `conflitos:${ks.length}` };
+    req.sghAlvo = { tabelaAlvo: 'conflito_sincronizacao', chaveNaturalAlvo: `conflitos:${ks.length}` };
     return ks.map((k) => ({ ...k, pacienteNome: nomes.get(k.paciente) ?? null }));
   }
 
   @Post('conflitos/:id/resolver')
   @HttpCode(200)
   @Permissao(P.conflitoResolver)
-  @AuditadoNoHandler('a resolução em SGH_PEP_CONFLITO_SYNC com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a resolução em conflito_sincronizacao com a trilha_auditoria na mesma transação')
   async resolver(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaResolverConflito, b);
@@ -983,7 +994,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemConflitoResolvido.codigo,
       P.conflitoResolver,
-      { tabela: 'SGH_PEP_CONFLITO_SYNC', id },
+      { tabela: 'conflito_sincronizacao', id },
       (g) =>
         g.resolverConflito({
           id: idDaRota(id),
@@ -1047,12 +1058,14 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
         } else if (a.tipo === 'sinal') {
           // A rota pede a permissão de checar; o sinal vital pede a dele, como na rota online.
           await exigir(s, P.sinalCriar, this.trilha);
-          const id = await this.registrarSinal(s, a.paciente, { ...a.sinal, origemOffline: true });
+          // O reenvio do mesmo ato (a mesma chave) devolve o sinal gravado da primeira vez, sem gravar de novo.
+          const sa = sessaoComAto(s, { paciente: a.paciente, sinal: a.sinal }, a.chave, ':sinal');
+          const id = await this.registrarSinal(sa, a.paciente, { ...a.sinal, origemOffline: true });
           resultados.push({
             chave: a.chave,
             tipo: a.tipo,
             ok: true,
-            codigo: null,
+            codigo: atoDe(sa.porta)?.repetida ? 'repetido' : null,
             mensagem: `Sinal vital registrado (${id}).`,
           });
         } else {
@@ -1060,7 +1073,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
             s,
             EVENTOS_AUDITAVEIS.enfermagemAnotacaoRegistrada.codigo,
             P.administracaoChecar,
-            (r: number) => ({ tabela: 'SGH_PEP_RESP_EXT', id: String(r), paciente: a.paciente }),
+            (r: number) => ({ tabela: 'afericao', id: String(r), paciente: a.paciente }),
             (g) =>
               g.gravarRespostaExt({
                 registro: 0,
@@ -1099,7 +1112,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
         s,
         EVENTOS_AUDITAVEIS.enfermagemDispositivoAlterado.codigo,
         P.administracaoChecar,
-        { tabela: 'SGH_PEP_DISPOSITIVO', chave: 'sincronismo' },
+        { tabela: 'aparelho_beira_leito', chave: 'sincronismo' },
         (g) => g.marcarSincronismo({ identificador: e.dispositivo }),
       )
       .catch(() => false);
@@ -1174,7 +1187,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemSinalRegistrado.codigo,
       P.sinalCriar,
-      (r: number) => ({ tabela: 'SGH_PEP_SINAL_VITAL', id: String(r), paciente }),
+      (r: number) => ({ tabela: 'afericao_valor', id: String(r), paciente }),
       (g) =>
         g.gravarSinal({
           paciente,
@@ -1211,7 +1224,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       this.porta.sinais(s.porta, { paciente: id, de: d, ate: a }),
       this.porta.laboratorio(s.porta, { paciente: id, de: d, ate: a }).catch(() => []),
     ]);
-    req.sghAlvo = { paciente: id, tabelaAlvo: 'SGH_PEP_SINAL_VITAL' };
+    req.sghAlvo = { paciente: id, tabelaAlvo: 'afericao_valor' };
     const substituidos = new Map(
       r.itens.filter((x) => x.anterior !== null).map((x) => [x.anterior as number, x.id]),
     );
@@ -1243,7 +1256,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('pacientes/:paciente/sinais-vitais')
   @HttpCode(201)
   @Permissao(P.sinalCriar)
-  @AuditadoNoHandler('os sinais em SGH_PEP_SINAL_VITAL com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('os sinais em afericao_valor com a trilha_auditoria na mesma transação')
   async registrarSinais(
     @Param('paciente') paciente: string,
     @Body() b: unknown,
@@ -1252,7 +1265,8 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const s = sessaoDe(req);
     const e = corpo(esquemaSinaisVitais, b);
     const ids: number[] = [];
-    for (const x of e.sinais) ids.push(await this.registrarSinal(s, idDaRota(paciente), x));
+    for (const [i, x] of e.sinais.entries())
+      ids.push(await this.registrarSinal(sessaoComAto(s, x, null, `:sinal${i}`), idDaRota(paciente), x));
     this.avisos?.avisar(s.hospital);
     // M45 (etapa 2, regra 1): a aferição com os sete parâmetros do NEWS2 registra o escore (sem a chave dos escores ou
     // sem a permissão, os sinais ficam registrados e o NEWS2 não; a resposta diz por quê).
@@ -1315,7 +1329,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
         EVENTOS_AUDITAVEIS.escoreRegistrado.codigo,
         'enfermagem.escore.registrar',
         (x: { id: number }) => ({
-          tabela: 'SGH_PEP_ESCORE',
+          tabela: 'aplicacao_escala',
           id: String(x.id),
           paciente,
           chave: `news2:v${registro.escore.versaoRegra}:${resultado.total}:${resultado.faixa}:${resultado.gatilho}`,
@@ -1342,7 +1356,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('sinais-vitais/:id/retificar')
   @HttpCode(200)
   @Permissao(P.sinalRetificar)
-  @AuditadoNoHandler('a versão nova em SGH_PEP_SINAL_VITAL com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a versão nova em afericao_valor com a trilha_auditoria na mesma transação')
   async retificar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRetificarSinal, b);
@@ -1373,10 +1387,11 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemSinalRetificado.codigo,
       P.sinalRetificar,
-      (r: number) => ({ tabela: 'SGH_PEP_SINAL_VITAL', id: String(r), paciente: lido.paciente }),
+      (r: number) => ({ tabela: 'afericao_valor', id: String(r), paciente: lido.paciente }),
       (g) =>
         g.retificarSinal({
           id: sid,
+          versao: lido.versao,
           valor: e.valor,
           foraDaFaixa: v.ok ? v.foraDaFaixa : false,
           justificativa: e.justificativa,
@@ -1401,7 +1416,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const { linha, sugestoes } = await this.servico.pendencias(s.porta, u, p, turnoDe(data, turno));
     const passagens = await this.porta.passagens(s.porta, { unidade: u });
     const nomes = new Map(linha.pacientes.map((x) => [x.paciente, x.nome]));
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_PASSAGEM_PLANTAO', chaveNaturalAlvo: `plantao:${u}` };
+    req.sghAlvo = { tabelaAlvo: 'passagem_turno', chaveNaturalAlvo: `plantao:${u}` };
     return {
       unidade: u,
       turno: linha.turno,
@@ -1427,7 +1442,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('plantao')
   @HttpCode(201)
   @Permissao(P.plantaoPassar)
-  @AuditadoNoHandler('a passagem em SGH_PEP_PASSAGEM_PLANTAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a passagem em passagem_turno com a trilha_auditoria na mesma transação')
   async passar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaPassarPlantao, b);
@@ -1441,7 +1456,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       EVENTOS_AUDITAVEIS.enfermagemPlantaoPassado.codigo,
       P.plantaoPassar,
       (r: number) => ({
-        tabela: 'SGH_PEP_PASSAGEM_PLANTAO',
+        tabela: 'passagem_turno',
         id: String(r),
         chave: `${e.unidade}:${e.data}:${e.turno}`,
       }),
@@ -1473,7 +1488,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('plantao/:id/aceite')
   @HttpCode(200)
   @Permissao(P.plantaoAceitar)
-  @AuditadoNoHandler('o aceite em SGH_PEP_PASSAGEM_PLANTAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o aceite em passagem_turno com a trilha_auditoria na mesma transação')
   async aceitar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAceitarPlantao, b);
@@ -1487,7 +1502,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemPlantaoAceito.codigo,
       P.plantaoAceitar,
-      { tabela: 'SGH_PEP_PASSAGEM_PLANTAO', id },
+      { tabela: 'passagem_turno', id },
       (g) =>
         g.responderPlantao({
           id: idDaRota(id),
@@ -1508,7 +1523,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('plantao/:id/cancelar')
   @HttpCode(200)
   @Permissao(P.plantaoPassar)
-  @AuditadoNoHandler('o cancelamento em SGH_PEP_PASSAGEM_PLANTAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o cancelamento em passagem_turno com a trilha_auditoria na mesma transação')
   async cancelarPlantao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCancelarPassagemPlantao, b);
@@ -1524,7 +1539,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemPlantaoCancelado.codigo,
       P.plantaoPassar,
-      { tabela: 'SGH_PEP_PASSAGEM_PLANTAO', id },
+      { tabela: 'passagem_turno', id },
       (g) => g.cancelarPlantao({ id: idDaRota(id), motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true, mensagem: 'Passagem cancelada: a responsabilidade continua com quem passou.' };
@@ -1539,7 +1554,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @Post('dispositivos')
   @HttpCode(201)
   @Permissao(P.dispositivoEditar)
-  @AuditadoNoHandler('o aparelho em SGH_PEP_DISPOSITIVO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o aparelho em aparelho_beira_leito com a trilha_auditoria na mesma transação')
   async novoDispositivo(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaDispositivoBeiraLeito, b);
@@ -1549,7 +1564,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemDispositivoAlterado.codigo,
       P.dispositivoEditar,
-      (r: number) => ({ tabela: 'SGH_PEP_DISPOSITIVO', id: String(r) }),
+      (r: number) => ({ tabela: 'aparelho_beira_leito', id: String(r) }),
       (g) =>
         g.gravarDispositivo({
           nome: e.nome,
@@ -1571,7 +1586,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @HttpCode(200)
   @Permissao(P.dispositivoEditar)
   @AuditadoNoHandler(
-    'o aparelho (nome, unidade, situação) em SGH_PEP_DISPOSITIVO com a SGH_TRILHA na mesma transação',
+    'o aparelho (nome, unidade, situação) em aparelho_beira_leito com a trilha_auditoria na mesma transação',
   )
   async alterarDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1580,7 +1595,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemDispositivoAlterado.codigo,
       P.dispositivoEditar,
-      { tabela: 'SGH_PEP_DISPOSITIVO', id },
+      { tabela: 'aparelho_beira_leito', id },
       (g) =>
         g.alterarDispositivo({
           id: idDaRota(id),
@@ -1607,7 +1622,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
   @HttpCode(200)
   @Permissao(P.dispositivoEditar)
   @AuditadoNoHandler(
-    'a exclusão em SGH_PEP_DISPOSITIVO com o retrato em SGH_HIST_EXCLUSAO e a SGH_TRILHA juntos',
+    'a exclusão em aparelho_beira_leito com o retrato em trilha_auditoria e a trilha_auditoria juntos',
   )
   async excluirDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1616,7 +1631,7 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
       s,
       EVENTOS_AUDITAVEIS.enfermagemDispositivoExcluido.codigo,
       P.dispositivoEditar,
-      { tabela: 'SGH_PEP_DISPOSITIVO', id },
+      { tabela: 'aparelho_beira_leito', id },
       (g) => g.excluirDispositivo({ id: idDaRota(id), motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true, mensagem: 'Aparelho excluído (o retrato da linha fica guardado).' };

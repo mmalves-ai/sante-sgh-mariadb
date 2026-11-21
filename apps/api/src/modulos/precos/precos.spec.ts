@@ -9,14 +9,18 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloPrecos } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'precos' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { precos: async () => ({ modulo: (ctx) => moduloPrecos(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -77,15 +81,16 @@ describe('convênios e contrato (M12)', () => {
       'tiss',
       'financeiro',
     ]);
-    expect(corpo.constantesOcultas).toBeGreaterThan(200);
+    // Modelo próprio: nenhuma constante oculta nem campo "a confirmar".
+    expect(corpo.constantesOcultas).toBe(0);
     expect(JSON.stringify(corpo)).not.toMatch(/"SENHA"|CPF_RESPONSAVEL|TBCONVEN/);
     const cadastro = corpo.abas.find((a: { id: string }) => a.id === 'cadastro');
     expect(cadastro.editavel).toBe(true);
     expect(cadastro.campos.find((x: { campo: string }) => x.campo === 'nome')).toMatchObject({
       editavel: true,
     });
-    const consulta = corpo.abas.find((a: { id: string }) => a.id === 'tiss');
-    expect(consulta.campos.find((x: { aConfirmar: boolean }) => x.aConfirmar)).toBeTruthy();
+    const todos = corpo.abas.flatMap((a: { campos: { aConfirmar: boolean }[] }) => a.campos);
+    expect(todos.some((x: { aConfirmar: boolean }) => x.aConfirmar)).toBe(false);
     expect(corpo.permissoes).toEqual({ alterarSituacao: true, editarContrato: true });
     const f = await entrar('SINT.FATURISTA');
     const cf = await get(f, '/api/cadastros/convenios/305');

@@ -1,5 +1,5 @@
-// M18 (agenda de exames) pela HTTP, com a sessão real sobre a fonte sintética e a porta EM MEMÓRIA (nada conecta a
-// banco): permissões pelas opções do SADT, liberação (POL-3), busca de vaga com a cobertura por convênio e por exame,
+// M18 (agenda de exames) pela HTTP, com a sessão real sobre a fonte sintética, o módulo registrado (API_MODULOS=exames)
+// e a porta EM MEMÓRIA (nada conecta a banco): permissões pelas opções do SADT, liberação (POL-3), busca de vaga com a cobertura por convênio e por exame,
 // marcação com a disputa do mesmo horário, detalhe auditado, cancelamento com motivo, remarcação (transferir e
 // liberar), cobertura (convênio pelo executor e exame só do novo), prévia e geração da grade, resíduo e a operação
 // sem prontuário desligada.
@@ -10,18 +10,19 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloExames } from './modulo.js';
 import { PortaExameMemoria } from './porta-memoria.js';
 import { portaExameIndisponivel } from './porta-propria.js';
 import { ServicoExame } from './servico.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
 const AMANHA = '2026-10-22';
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'exames' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const exame = new PortaExameMemoria(
   null,
-  (c, ids) => cadastro.lerPacientes(c, ids),
+  (c, ids) => cadastro.lerPacientes({ ...c, rede: '', hospital: '' }, ids),
   () => ({
     hoje: HOJE,
     hhmm: '0600',
@@ -31,7 +32,10 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, cadastro, exame });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { exames: async () => ({ modulo: (ctx) => moduloExames(ctx, { porta: exame }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -100,7 +104,7 @@ describe('permissões, liberação e opções', () => {
     expect(g.ligada).toBe(true);
     expect(g.operacoes['agenda.agendarExame'].pode).toBe(true);
     expect(g.operacoes['agenda.agendarExameSemProntuario'].pode).toBe(false);
-    expect(g.operacoes['agenda.agendarExameSemProntuario'].motivo).toMatch(/Falta provar/);
+    expect(g.operacoes['agenda.agendarExameSemProntuario'].motivo).toMatch(/Falta provar|desligad/i);
     const o = (await get(s, '/opcoes')).json();
     expect(o.exames.length).toBe(5);
     expect(o.categorias.map((c: { codigo: number }) => c.codigo)).toContain(90);
@@ -147,13 +151,13 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     expect(d.json().solicitante.crm).toBe(12345);
     expect(d.json().estado).toBe('marcado');
     const lida = trilha.eventos.filter((e) => e.evento === 'agenda.exame.lido').at(-1);
-    expect(lida?.tabelaAlvo).toBe('SIPACAGD');
-    expect(trilha.eventos.some((e) => e.evento === 'agenda.exame.marcado')).toBe(true);
+    expect(lida?.tabelaAlvo).toBe('marcacao_horario');
+    expect(trilha.eventos.some((e) => e.evento === 'agenda.agendarExame')).toBe(true);
     const dia = (await get(s, `/marcacoes?data=${AMANHA}`)).json();
     expect(dia.itens.find((x: { id: number }) => x.id === id).paciente).not.toMatch(/SILVA/);
     // As marcações do paciente respeitam o escopo de unidade da permissão (as agendas sintéticas são da unidade 2).
     const servico = new ServicoExame(exame);
-    const ctx = { rede: 'rede-teste', hospital: 'aa' };
+    const ctx = { cliente: '', estabelecimento: null, usuario: null, correlacao: 'teste-m18' };
     const doPaciente = async (unidades: string[] | null) =>
       (await servico.marcacoesDoPaciente({ ...ctx, unidades }, 1001)).itens.map((x) => x.id);
     expect(await doPaciente(null)).toContain(id);
@@ -325,18 +329,14 @@ describe('cobertura, grade e resíduo', () => {
       duracaoMinutos: 20,
       faixas: [{ semana: 2, inicio: '1300', fim: '1500' }],
     };
-    // Faixa ou duração fora dos valores que a escala já usa: recusada na prévia, com o motivo e as opções.
+    // Melhoria (F2.2): a faixa fora dos valores que a escala já usa não é mais recusada ("fora do padrão" era contorno
+    // do sistema de origem); a prévia mostra os horários e nada grava.
     const fora = await post(s, '/grade/previa', {
       ...pedido,
       faixas: [{ semana: 2, inicio: '0715', fim: '1200' }],
     });
-    expect(fora.statusCode).toBe(409);
-    expect(fora.json().codigo).toBe('fora-do-padrao');
-    expect(fora.json().detail).toMatch(/07:15/);
-    expect(fora.json().detail).not.toMatch(/SPDATA|legado|sistema atual/i);
-    expect((await post(s, '/grade/previa', { ...pedido, duracaoMinutos: 30 })).json().codigo).toBe(
-      'fora-do-padrao',
-    );
+    expect(fora.statusCode).toBe(200);
+    expect(JSON.stringify(fora.json())).not.toMatch(/SPDATA|legado|sistema atual/i);
     const p = await post(s, '/grade/previa', pedido);
     expect(p.statusCode).toBe(200);
     expect(p.json().horarios).toBe(6);

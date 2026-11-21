@@ -1,6 +1,6 @@
 // Portal do prestador credenciado da operadora própria (M56, etapa 8, F7; ficha, seção 7; cap-07 §7.6, "Regras";
 // cap-08 §8.3.5): um domínio de identidade separado dos usuários internos e do portal de resultados do hospital (a
-// operadora é empresa distinta, regra 3). A conta (SGH_OPE_PORTAL_ACESSO) é criada pelo credenciamento com o código de
+// operadora é empresa distinta, regra 3). A conta (conta_portal_prestador) é criada pelo credenciamento com o código de
 // ativação de uso único; o responsável no prestador ativa com o código, a senha própria (Argon2id) e o segundo fator
 // (TOTP, segredo cifrado pelo servidor) e entra com o e-mail, a senha e o código do aplicativo, com o limite de taxa por
 // origem e o bloqueio depois das tentativas erradas. A sessão do portal é própria (cookie HttpOnly e CSRF por token
@@ -62,17 +62,19 @@ import {
   PARAMETROS_PORTAL_PRESTADOR,
   protocoloAtendimento,
 } from '@sgh/dominio-operadora';
-import {
-  type AcessoPortalParaEntradaLido,
-  type AutorizacaoLida,
-  type AutorizacaoResumoLida,
-  type LinhaTrilha,
-  SITUACOES_RESPOSTA_PRESTADOR,
-} from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro } from '../cadastro/comum.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { ServicoSituacaoOperadora } from './aplicacao/situacao.js';
 import type { PortaAtendimentoOperadora } from './atendimento-porta.js';
+import {
+  type DadosAcessoPortalParaEntrada,
+  type DadosAutorizacao,
+  type DadosAutorizacaoResumo,
+  SITUACOES_RESPOSTA_PRESTADOR,
+} from './dados-portas.js';
 import {
   recusaDoAtendimento,
   rotuloDaGuia,
@@ -88,7 +90,7 @@ const TAXA_POR_MINUTO = 10;
 /** W0-10: o novo autenticador pedido vale 10 minutos, só na sessão que o pediu, com até 5 códigos errados. */
 const MINUTOS_AUTENTICADOR_NOVO = 10;
 const ERROS_AUTENTICADOR_NOVO = 5;
-const TABELA = 'SGH_OPE_PORTAL_ACESSO';
+const TABELA = 'conta_portal_prestador';
 const E = EVENTOS_AUDITAVEIS;
 /** Origem do atendimento do pedido feito pelo portal (SPORIGEM_ATEND 4, "Portal autorizador"). */
 export const ORIGEM_PORTAL = 4;
@@ -159,8 +161,15 @@ export class ServicoPortalPrestador {
     this.autorizacao = new ServicoAutorizacaoOperadora(autorizacoes);
   }
 
-  private c(hospital: string) {
-    return { rede: this.rede, hospital };
+  /** O contexto das portas: o estabelecimento por id; a conta do portal não é usuário interno (usuário nulo). */
+  private c(hospital: string): ContextoPorta {
+    return {
+      ...contextoDoEstabelecimento(hospital),
+      usuario: null,
+      correlacao: `portal-prestador-${randomBytes(6).toString('hex')}`,
+      rede: this.rede,
+      hospital,
+    };
   }
 
   private async exigirLigado(hospital: string, chave: ChaveOperadora = CHAVE_OPERADORA_PORTAL_PRESTADOR) {
@@ -191,21 +200,22 @@ export class ServicoPortalPrestador {
     resultado: 'sucesso' | 'falha',
     ip: string,
     tabela = TABELA,
-  ): LinhaTrilha {
+  ): RegistroTrilhaTela {
     return {
-      rede: this.rede,
-      hospital,
-      usuario: USUARIO_PORTAL_PRESTADOR,
-      evento,
-      recurso: CHAVE_OPERADORA_PORTAL_PRESTADOR,
-      operacao: evento,
-      tabelaAlvo: tabela,
-      idAlvo,
-      chaveNaturalAlvo: null,
-      resultado,
-      estacao: ip.slice(0, 80),
+      estabelecimento: contextoDoEstabelecimento(hospital).estabelecimento,
+      usuario: null,
+      acao: 'operacao',
+      entidade: tabela,
+      entidadeId: /^\d{1,15}$/.test(idAlvo) ? Number(idAlvo) : null,
+      dadosDepois: {
+        evento,
+        recurso: CHAVE_OPERADORA_PORTAL_PRESTADOR,
+        operacao: evento,
+        usuario: USUARIO_PORTAL_PRESTADOR,
+        resultado,
+        estacao: ip.slice(0, 80),
+      },
       correlacao: `portal-prestador-${randomBytes(6).toString('hex')}`,
-      idPaciente: null,
     };
   }
 
@@ -237,7 +247,7 @@ export class ServicoPortalPrestador {
       throw recusaDoAtendimento([{ codigo: 'ativacao-invalida', campo: 'codigo' }]);
     const segredo = gerarSegredoBase32();
     const senhaResumo = await cifrarSenha(e.senha);
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       this.c(hospital),
       this.trilha(hospital, E.operadoraPortalAtivado.codigo, String(a.id), 'sucesso', ip),
       (g) =>
@@ -284,7 +294,7 @@ export class ServicoPortalPrestador {
     // O credenciamento vale a cada entrada (a conta pode seguir ativa depois do descredenciamento).
     if (acertou && !(await this.prestadorCredenciado(hospital, a.prestador))) throw prestadorDescredenciado();
     // O banco decide o contador (soma atômica; no limite, bloqueia e zera): pedidos simultâneos não se perdem.
-    const r = await this.porta.gravarSgh(
+    const r = await this.porta.gravar(
       this.c(hospital),
       this.trilha(hospital, E.operadoraPortalEntrada.codigo, String(a.id), acertou ? 'sucesso' : 'falha', ip),
       (g) =>
@@ -408,7 +418,7 @@ export class ServicoPortalPrestador {
   }
 
   /** W0-10 (M8): o contexto da rede e do estabelecimento da sessão. */
-  contextoDe(s: SessaoPortalPrestadorInterna): { rede: string; hospital: string } {
+  contextoDe(s: SessaoPortalPrestadorInterna): ContextoPorta {
     return this.c(s.hospital);
   }
 
@@ -420,7 +430,7 @@ export class ServicoPortalPrestador {
     resultado: 'sucesso' | 'falha',
     ip: string,
     tabela: string,
-  ): LinhaTrilha {
+  ): RegistroTrilhaTela {
     return this.trilha(s.hospital, evento, idAlvo, resultado, ip, tabela);
   }
 
@@ -436,7 +446,7 @@ export class ServicoPortalPrestador {
     codigo: string,
     evento: string,
     ip: string,
-  ): Promise<AcessoPortalParaEntradaLido> {
+  ): Promise<DadosAcessoPortalParaEntrada> {
     await this.exigirConta(s);
     this.conferirTaxa(ip);
     const a = await this.porta.acessoParaEntrada(this.c(s.hospital), { login: s.login });
@@ -461,7 +471,7 @@ export class ServicoPortalPrestador {
     const senhaOk = await conferirSenha(senha, a.senhaResumo);
     const fatorOk = this.segundoFatorConfere(a.segundoFator, codigo);
     if (senhaOk && fatorOk) return a;
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       this.c(s.hospital),
       this.trilha(s.hospital, evento, String(a.id), 'falha', ip),
       (g) =>
@@ -497,7 +507,7 @@ export class ServicoPortalPrestador {
     const evento = E.operadoraPortalSenhaTrocada.codigo;
     const a = await this.reautenticar(s, e.senhaAtual, e.codigo, evento, ip);
     const senhaResumo = await cifrarSenha(e.senhaNova);
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       this.c(s.hospital),
       this.trilha(s.hospital, evento, String(a.id), 'sucesso', ip),
       (g) =>
@@ -567,7 +577,7 @@ export class ServicoPortalPrestador {
       );
     }
     const segundoFator = cifrarSegredo(novo.segredo, this.chaveMestra);
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       this.c(s.hospital),
       this.trilha(s.hospital, E.operadoraPortalAutenticadorTrocado.codigo, String(a.id), 'sucesso', ip),
       (g) =>
@@ -584,7 +594,7 @@ export class ServicoPortalPrestador {
     return { mensagem: MENSAGENS_TROCA_CREDENCIAL['autenticador-trocado'] as string };
   }
 
-  private paraPortal(a: AutorizacaoResumoLida, senhaValidade: string | null = null): AutorizacaoPortal {
+  private paraPortal(a: DadosAutorizacaoResumo, senhaValidade: string | null = null): AutorizacaoPortal {
     return {
       id: a.id,
       protocolo: a.protocolo,
@@ -618,8 +628,8 @@ export class ServicoPortalPrestador {
 
   /** A leitura das autorizações vai à trilha (sem dado pessoal; o alvo é a conta do portal). */
   private async registrarLeitura(s: SessaoPortalPrestadorInterna, ip: string): Promise<void> {
-    if (this.porta.destino !== 'legado') return;
-    await this.porta.gravarSgh(
+    if (this.porta.destino !== 'banco') return;
+    await this.porta.gravar(
       this.c(s.hospital),
       this.trilha(s.hospital, E.operadoraPortalAutorizacaoLida.codigo, String(s.acesso), 'sucesso', ip),
       async () => ({ id: s.acesso }),
@@ -663,7 +673,7 @@ export class ServicoPortalPrestador {
   }
 
   /** W0-10: o complemento no detalhe: o que o auditor pediu e as respostas (texto e anexos, sem conteúdo), em ordem. */
-  private async complementoDoPedido(c: ContextoAutorizacao, a: AutorizacaoLida): Promise<ComplementoPortal> {
+  private async complementoDoPedido(c: ContextoAutorizacao, a: DadosAutorizacao): Promise<ComplementoPortal> {
     const [eventos, anexos] = await Promise.all([
       this.autorizacoes.eventos(c, a.id),
       this.autorizacoes.anexosDoComplemento(c, a.id),
@@ -711,7 +721,7 @@ export class ServicoPortalPrestador {
       bytes: new Uint8Array(Buffer.from(x.conteudo, 'base64')),
     }));
     const r = await this.autorizacoes
-      .gravarSgh(
+      .gravar(
         c,
         this.trilha(
           s.hospital,
@@ -719,7 +729,7 @@ export class ServicoPortalPrestador {
           String(id),
           'sucesso',
           ip,
-          'SGH_OPE_AUTORIZACAO',
+          'pedido_autorizacao_plano',
         ),
         (g) =>
           g.responderComplementoPortal({
@@ -777,7 +787,7 @@ export class ServicoPortalPrestador {
   /**
    * W0-10 (M7): a elegibilidade do beneficiário pela carteirinha na data do atendimento (situação, vigência do contrato,
    * validade da carteirinha, carências e cobertura pela segmentação), com o registro da consulta
-   * (SGH_OPE_ELEG_CONSULTA) e a trilha na mesma transação. Beneficiário de outra operadora não é mostrado (fica como
+   * (consulta_elegibilidade_recebida) e a trilha na mesma transação. Beneficiário de outra operadora não é mostrado (fica como
    * "não encontrado"). O resultado é do momento: a autorização confere de novo ao pedir.
    */
   async elegibilidade(
@@ -814,7 +824,7 @@ export class ServicoPortalPrestador {
     const motivos: MotivoInelegibilidade[] = [...r.motivos];
     if (vencida) motivos.push('carteirinha-vencida');
     const elegivel = motivos.length === 0;
-    const { id } = await this.porta.gravarSgh(
+    const { id } = await this.porta.gravar(
       c,
       (y: { id: number }) =>
         this.trilha(
@@ -823,7 +833,7 @@ export class ServicoPortalPrestador {
           String(y.id),
           elegivel ? 'sucesso' : 'falha',
           ip,
-          'SGH_OPE_ELEG_CONSULTA',
+          'consulta_elegibilidade_recebida',
         ),
       (g) =>
         g.registrarElegibilidade({
@@ -919,7 +929,7 @@ export class ServicoPortalPrestador {
     if (x.registro.operadora !== s.operadora)
       throw recusaDoAtendimento([{ codigo: 'beneficiario-de-outra-operadora', campo: 'carteirinha' }]);
     let protocolo = '';
-    const r = await this.autorizacoes.gravarSgh(
+    const r = await this.autorizacoes.gravar(
       c,
       (y: { id: number }) =>
         this.trilha(
@@ -928,7 +938,7 @@ export class ServicoPortalPrestador {
           String(y.id),
           'sucesso',
           ip,
-          'SGH_OPE_AUTORIZACAO',
+          'pedido_autorizacao_plano',
         ),
       async (g) => {
         protocolo = protocoloAtendimento(x.registroAns, x.registro.solicitadaEm, await g.proximoProtocolo());
@@ -972,7 +982,7 @@ export class ServicoPortalPrestador {
     if (!['em-analise', 'pendente'].includes(atual.situacao))
       throw recusaDoAtendimento([{ codigo: 'situacao-nao-permite' }]);
     const a = await this.autorizacao.conferirCancelamento(c, id);
-    const r = await this.autorizacoes.gravarSgh(
+    const r = await this.autorizacoes.gravar(
       c,
       this.trilha(
         s.hospital,
@@ -980,7 +990,7 @@ export class ServicoPortalPrestador {
         String(id),
         'sucesso',
         ip,
-        'SGH_OPE_AUTORIZACAO',
+        'pedido_autorizacao_plano',
       ),
       (g) => g.cancelar({ id, versao: e.versao, motivo: e.motivo, usuario: USUARIO_PORTAL_PRESTADOR }),
     );
@@ -1056,7 +1066,7 @@ export class ServicoPortalPrestador {
     );
     let protocolo = '';
     const r = await this.porta
-      .gravarSgh(
+      .gravar(
         c,
         (y: { id: number }) =>
           this.trilha(
@@ -1065,7 +1075,7 @@ export class ServicoPortalPrestador {
             String(y.id),
             'sucesso',
             ip,
-            'SGH_OPE_PROTOCOLO',
+            'protocolo_beneficiario',
           ),
         async (g) => {
           protocolo = protocoloAtendimento(x.registroAns, x.registro.abertoEm, await g.proximoProtocolo());
@@ -1153,7 +1163,7 @@ export class ServicoPortalPrestador {
       ? { nome: e.anexo.nome, bytes: new Uint8Array(Buffer.from(e.anexo.conteudo, 'base64')) }
       : null;
     const r = await this.porta
-      .gravarSgh(
+      .gravar(
         c,
         this.trilha(
           s.hospital,
@@ -1161,7 +1171,7 @@ export class ServicoPortalPrestador {
           String(id),
           'sucesso',
           ip,
-          'SGH_OPE_PROTOCOLO',
+          'protocolo_beneficiario',
         ),
         (g) =>
           g.responderInteracaoPrestador({

@@ -3,11 +3,8 @@
 // ficha (aplicacao/*.int.spec.ts). Dados sintéticos.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { expect } from 'vitest';
-import { resolve } from 'node:path';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaEnfermagemMemoria } from './porta-memoria.js';
 
@@ -42,16 +39,8 @@ export async function criarAppEnfermagem(): Promise<AppEnfermagem> {
   const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
   const trilha = new RegistradorTrilhaMemoria();
   // O relógio fixo do estabelecimento (13:00 em São Paulo, no meio do turno diurno): os estados não dependem da hora.
-  const porta = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
-    { agora: () => new Date(RELOGIO_TESTE) },
-  );
-  const app = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    enfermagem: porta,
-    vigiaEnfermagem: null,
-    vigia: null,
-  });
+  const porta = new PortaEnfermagemMemoria({ agora: () => new Date(RELOGIO_TESTE) });
+  const app = await criarAppComEnfermagem(env, { trilha, enfermagem: porta, vigiaEnfermagem: null });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   const entrar = async (login: string): Promise<Sessao> => {

@@ -68,7 +68,7 @@ import {
   profilaxiaPendente,
   sugestaoProfilaxia,
 } from '@sgh/dominio-enfermagem';
-import type { EscoreLidoSgh, EstornoRegistroSgh, InternadoLido, OrigemEstorno } from '@sgh/legado';
+import type { EscoreRegistrado, NovoEstornoRegistro, Internado, OrigemEstorno } from './tipos.js';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoEscores, PortaEscores, RegistroDeEscore } from './escores-porta.js';
@@ -147,7 +147,7 @@ export class ServicoEscores {
     id: number,
     e: { tipo: 'estorno' | 'invalidacao'; motivo: string },
   ): Promise<{
-    gravar: Omit<EstornoRegistroSgh, 'hospital'>;
+    gravar: Omit<NovoEstornoRegistro, 'hospital'>;
     paciente: number;
     alerta: AlertaReavaliacao | null;
     /** Revisão W0-03 (D-CRUD-ORFAOS): o que está ligado ao escore só por código, para o aviso do estorno. */
@@ -169,12 +169,12 @@ export class ServicoEscores {
         .map((x) => ({ id: x.id, gatilho: x.gatilho, aferidoEm: x.aferidoEm, estornado: !!x.estorno }));
       alerta = reavaliarAlertaNews2({ id, gatilho: r.gatilho ?? 'nenhum' }, outros, agora);
     }
-    // Revisão W0-03: o acionamento do TRR (SGH_PEP_TRR.ID_ESCORE, só por código) e a decisão de profilaxia ligados ao
+    // Revisão W0-03: o acionamento do TRR (acionamento_resposta_rapida.ID_ESCORE, só por código) e a decisão de profilaxia ligados ao
     // escore. Nada se apaga: o acionamento é fato real (fica, marcado com o escore estornado, e o tempo "do alerta ao
     // acionamento" sai do indicador); a decisão de profilaxia sai da lista com o escore.
-    // A inclusão em protocolo do internado aberta pelo alerta (SGH_PEP_PROTOC_INTERNADO.ID_ESCORE, só por código) também
+    // A inclusão em protocolo do internado aberta pelo alerta (inclusao_protocolo_paciente.ID_ESCORE, só por código) também
     // fica: só é contada (a vigente, sem encerramento nem inativação) para o aviso dizer que segue aberta.
-    // Revisão W0-03: as reavaliações de Braden e Morse que o escore cumpriu (SGH_PEP_REAVALIACAO.ID_ESCORE) são
+    // Revisão W0-03: as reavaliações de Braden e Morse que o escore cumpriu (reavaliacao_escala.ID_ESCORE) são
     // reabertas na transação do estorno (fato novo; a baixa original fica) e contadas aqui para o aviso.
     const vinculados = { acionamentos: 0, profilaxias: 0, protocolos: 0, reavaliacoes: 0 };
     if (origem === 'escore') {
@@ -280,7 +280,7 @@ export class ServicoEscores {
 
   /** A faixa do escore gravado pela versão da regra que ele usou (a padrão ou a publicada). */
   private faixaDoGravado(
-    e: EscoreLidoSgh,
+    e: EscoreRegistrado,
     publicadas: readonly RegraEscore[],
   ): { rotulo: string; risco: boolean } {
     const escala = e.escala as EscalaEscore;
@@ -298,7 +298,7 @@ export class ServicoEscores {
     return { rotulo: f?.rotulo ?? e.faixa, risco: f?.risco ?? false };
   }
 
-  lido(e: EscoreLidoSgh, publicadas: readonly RegraEscore[]): EscoreLido {
+  lido(e: EscoreRegistrado, publicadas: readonly RegraEscore[]): EscoreLido {
     const f = this.faixaDoGravado(e, publicadas);
     return {
       id: e.id,
@@ -455,11 +455,7 @@ export class ServicoEscores {
   }
 
   /** O paciente: o histórico de 30 dias, os últimos, as reavaliações e as escalas em formulário. */
-  async paciente(
-    s: SessaoEscores,
-    internado: InternadoLido,
-    p: ParametrosEscores,
-  ): Promise<EscoresDoPaciente> {
+  async paciente(s: SessaoEscores, internado: Internado, p: ParametrosEscores): Promise<EscoresDoPaciente> {
     const c = s.c;
     const [agora, regras] = await Promise.all([this.relogio(c), this.regras(c)]);
     const desde = somarHoras(agora, -DIAS_HISTORICO * 24);
@@ -507,7 +503,7 @@ export class ServicoEscores {
     gatilho: GatilhoEscore,
     sugereSepse: boolean,
     total: number,
-    internado: InternadoLido,
+    internado: Internado,
   ): RegistroDeEscore['avisos'] {
     if (gatilho === 'nenhum') return [];
     const trr = gatilho === 'trr';
@@ -525,7 +521,7 @@ export class ServicoEscores {
       evento: 'enfermagem.escore.registrado',
       titulo: titulo.slice(0, 120),
       link: `/enfermagem/escores?atendimento=${internado.atendimento}`,
-      objetoTabela: 'SGH_PEP_ESCORE',
+      objetoTabela: 'aplicacao_escala',
       objetoChave: String(escore),
     }));
   }
@@ -536,7 +532,7 @@ export class ServicoEscores {
     escala: string,
     total: number,
     rotulo: string,
-    internado: InternadoLido,
+    internado: Internado,
   ): RegistroDeEscore['avisos'] {
     const titulo = `${escala === 'caprini' ? 'Caprini' : 'Padua'} ${total} (${rotulo}): decidir a profilaxia de TEV (leito ${internado.leito})`;
     return (p?.loginsMedico ?? []).map((login) => (escore: number) => ({
@@ -547,7 +543,7 @@ export class ServicoEscores {
       evento: 'enfermagem.escore.registrado',
       titulo: titulo.slice(0, 120),
       link: `/enfermagem/escores?atendimento=${internado.atendimento}`,
-      objetoTabela: 'SGH_PEP_ESCORE',
+      objetoTabela: 'aplicacao_escala',
       objetoChave: String(escore),
     }));
   }
@@ -555,7 +551,7 @@ export class ServicoEscores {
   /** A aferição dos sete parâmetros: os sinais vitais e o NEWS2 na mesma gravação (regra 1). */
   async prepararAfericao(
     s: SessaoEscores,
-    internado: InternadoLido,
+    internado: Internado,
     e: AfericaoNews2Entrada,
     p: ParametrosEscores,
     /** M25: os sinais já gravados pela tela dos sinais vitais (o NEWS2 nasce deles; a origem é o primeiro). */
@@ -654,7 +650,7 @@ export class ServicoEscores {
   /** Um escore da tela: total pelos itens, faixa e gatilho, cuidados conferidos, baixa das programadas. */
   async prepararEscore(
     s: SessaoEscores,
-    internado: InternadoLido,
+    internado: Internado,
     e: RegistrarEscoreEntrada,
     /** Quem registra é enfermeiro (CBO 2235, conselho ativo): só ele aceita ou recusa os cuidados (regra 4). */
     decideCuidados = true,
@@ -763,7 +759,7 @@ export class ServicoEscores {
   /** A reavaliação programada à mão (a admissão ou a mudança de quadro), devida agora. */
   async prepararReavaliacao(
     s: SessaoEscores,
-    internado: InternadoLido,
+    internado: Internado,
     e: ProgramarReavaliacaoEntrada,
     p: ParametrosEscores,
   ) {
@@ -806,7 +802,7 @@ export class ServicoEscores {
   /** A classificação do turno pelo instrumento (regra 9): o turno do dia não pode ser futuro nem de mais de 24 h. */
   async prepararClassificacao(
     s: SessaoEscores,
-    internado: InternadoLido,
+    internado: Internado,
     e: ClassificarPacienteEntrada,
     p: ParametrosEscores,
   ) {

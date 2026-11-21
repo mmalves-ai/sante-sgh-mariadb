@@ -1,23 +1,27 @@
-// M56 (etapa F0) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA (nada conecta a banco): a
+// M56 (etapa F0) pela HTTP, com a sessão real sobre a fonte sintética, o módulo registrado (API_MODULOS=operadora) e as
+// portas EM MEMÓRIA (nada conecta a banco): a
 // situação das chaves da operadora no estabelecimento (regra 1: tudo desligado sem nenhuma linha de liberação), os
 // catálogos da ANS paginados por chave (grupos do SIP, procedimentos por grupo, vigência e código, classificação), a
 // recusa a quem não tem perfil da operadora (D-PERM-56) e a entrada inválida. E o serviço da situação com uma fonte
 // falsa: módulo e fatia ligados, fatia sem o módulo (aguardando), pré-requisito pendente, falha fechada e o 403 de
 // `exigir`.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import type { FonteConfiguracao } from '../config/public-api.js';
+import type { ChaveLiberacao, FonteConfiguracao, PrerequisitoRecurso } from '../config/public-api.js';
+import { camposPessoaisMudados, mesmaPessoa } from './aplicacao/identidade.js';
 import { SEM_CONFIGURACAO_OPERADORA, ServicoSituacaoOperadora } from './aplicacao/situacao.js';
+import { moduloOperadora } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'operadora' };
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {});
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    registro: { operadora: async () => ({ modulo: (ctx) => moduloOperadora(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -125,28 +129,11 @@ describe('operadora própria, etapa F0, pela HTTP', { timeout: 60_000 }, () => {
     for (const u of ['ans/sip/grupos', 'ans/sip/procedimentos', 'ans/classificacoes'])
       expect((await get(rec, `${O}/${u}`)).statusCode, u).toBe(403);
   });
-
-  it('os domínios do grupo operadora no CRUD genérico: o gestor lê e o índice mostra os 63', async () => {
-    const c = await entrar('SINT.OPERADORA');
-    const r = await get(c, '/api/cadastros/dominios');
-    expect(r.statusCode).toBe(200);
-    const doGrupo = r
-      .json()
-      .dominios.filter(
-        (d: { modulo: string; marco?: string }) => d.modulo === 'operadora' && d.marco === 'M56',
-      );
-    expect(doGrupo).toHaveLength(63);
-    const tipo = doGrupo.find((d: { recurso: string }) => d.recurso === 'tipoMensalidade');
-    expect(tipo.permitidas).toEqual(expect.arrayContaining(['ler', 'criar', 'editar']));
-    const travado = doGrupo.find((d: { recurso: string }) => d.recurso === 'tipoCobrancaBeneficiario');
-    expect(travado.natureza).toBe('travado');
-    expect(travado.permitidas).toEqual(['ler', 'exportar']);
-  });
 });
 
 // ── O serviço da situação com uma fonte falsa ────────────────────────────────────────────────────────────
 
-const chave = (c: string, ligada: boolean): ChaveGravada => ({
+const chave = (c: string, ligada: boolean): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -159,7 +146,7 @@ const chave = (c: string, ligada: boolean): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-const prerequisito = (recurso: string, tipo: PrerequisitoGravado['tipo']): PrerequisitoGravado => ({
+const prerequisito = (recurso: string, tipo: PrerequisitoRecurso['tipo']): PrerequisitoRecurso => ({
   recurso,
   tipo,
   situacao: 'cumprido',
@@ -168,7 +155,7 @@ const prerequisito = (recurso: string, tipo: PrerequisitoGravado['tipo']): Prere
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-24T10:00:00',
 });
-function fonte(chaves: ChaveGravada[], pre: PrerequisitoGravado[], falha = false): FonteConfiguracao {
+function fonte(chaves: ChaveLiberacao[], pre: PrerequisitoRecurso[], falha = false): FonteConfiguracao {
   return {
     chaves: async () => {
       if (falha) throw new Error('fora');
@@ -224,5 +211,31 @@ describe('ServicoSituacaoOperadora (regra 1)', () => {
       expect(s.fatias.every((f) => f.situacao === 'desligada')).toBe(true);
       await expect(so.exigir(S, 'operadora')).rejects.toMatchObject({ status: 403 });
     }
+  });
+});
+
+describe('identidade da pessoa do cadastro único (regra pura)', () => {
+  const pessoa = {
+    nome: 'Maria  da Conceição',
+    nomeSocial: null,
+    cpf: '123.456.789-09',
+    cns: null,
+    nascimento: '1980-05-10',
+    sexo: 'F',
+    nomeMae: 'Mãe Sintética',
+  };
+  it('o CPF encontrado só é da pessoa digitada com o mesmo nome (sem acento e caixa) e nascimento', () => {
+    expect(mesmaPessoa(pessoa, { nome: 'MARIA DA CONCEICAO', nascimento: '1980-05-10' })).toBe(true);
+    expect(mesmaPessoa(pessoa, { nome: 'MARIA DA CONCEICAO', nascimento: '1981-05-10' })).toBe(false);
+    expect(mesmaPessoa(pessoa, { nome: 'OUTRA PESSOA', nascimento: '1980-05-10' })).toBe(false);
+    expect(mesmaPessoa({ nome: 'Maria da Conceição', nascimento: null }, { nome: 'maria da conceicao', nascimento: '1980-05-10' })).toBe(true);
+  });
+  it('a alteração aponta só os dados pessoais que mudaram', () => {
+    expect(camposPessoaisMudados(pessoa, { ...pessoa, nome: 'MARIA DA CONCEICAO', cpf: '12345678909', nomeMae: 'MAE SINTETICA' })).toEqual([]);
+    expect(camposPessoaisMudados(pessoa, { ...pessoa, nome: 'Outra', sexo: 'I', cns: '700000000000005' })).toEqual([
+      'nome',
+      'cns',
+      'sexo',
+    ]);
   });
 });

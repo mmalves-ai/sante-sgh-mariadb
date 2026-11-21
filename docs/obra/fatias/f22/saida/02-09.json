@@ -1,0 +1,155 @@
+{
+  "lote": "02-09",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/operadora/ans.controller.ts",
+    "src/modulos/operadora/ans-porta-memoria.ts",
+    "src/modulos/operadora/ans-porta-propria.int.spec.ts",
+    "src/modulos/operadora/ans-porta-propria.ts",
+    "src/modulos/operadora/ans-porta.ts",
+    "src/modulos/operadora/ans-servico.ts",
+    "src/modulos/operadora/ans.spec.ts",
+    "src/modulos/operadora/aplicacao/beneficiarios.ts",
+    "src/modulos/operadora/aplicacao/regras-portas.ts",
+    "src/modulos/operadora/apoio-porta-propria.ts",
+    "src/modulos/operadora/atendimento.controller.ts",
+    "src/modulos/operadora/atendimento-porta-memoria.ts",
+    "src/modulos/operadora/atendimento-porta-propria.int.spec.ts",
+    "src/modulos/operadora/atendimento-porta-propria.ts",
+    "src/modulos/operadora/atendimento-porta.ts",
+    "src/modulos/operadora/atendimento-servico.ts",
+    "src/modulos/operadora/atendimento.spec.ts",
+    "src/modulos/operadora/autorizacao.controller.ts",
+    "src/modulos/operadora/autorizacao-porta-memoria.ts",
+    "src/modulos/operadora/autorizacao-porta-propria.int.spec.ts",
+    "src/modulos/operadora/autorizacao-porta-propria.ts",
+    "src/modulos/operadora/autorizacao-porta.ts",
+    "src/modulos/operadora/autorizacao-servico.ts",
+    "src/modulos/operadora/autorizacao.spec.ts",
+    "src/modulos/operadora/beneficiarios.controller.ts",
+    "src/modulos/operadora/beneficiarios.spec.ts",
+    "src/modulos/operadora/cobranca.controller.ts",
+    "src/modulos/operadora/cobranca-porta-memoria.ts",
+    "src/modulos/operadora/cobranca-porta-propria.int.spec.ts",
+    "src/modulos/operadora/cobranca-porta-propria.ts",
+    "src/modulos/operadora/cobranca-porta.ts",
+    "src/modulos/operadora/cobranca-servico.ts",
+    "src/modulos/operadora/cobranca.spec.ts",
+    "src/modulos/operadora/contas.controller.ts",
+    "src/modulos/operadora/contas-porta-memoria.ts",
+    "src/modulos/operadora/contas-porta-propria.int.spec.ts",
+    "src/modulos/operadora/contas-porta-propria.ts",
+    "src/modulos/operadora/contas-porta.ts",
+    "src/modulos/operadora/contas-servico.ts",
+    "src/modulos/operadora/contas.spec.ts",
+    "src/modulos/operadora/dados-portas.ts",
+    "src/modulos/operadora/infra/app-operadora.spec-util.ts",
+    "src/modulos/operadora/infra/massa-operadora.spec-util.ts",
+    "src/modulos/operadora/contexto-gravacao.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "envio_ans",
+      "motivo": "o destino (simulador ou ANS) e os quadros do arquivo gerado não têm coluna; hoje o destino vem do ambiente do processo e os quadros voltam nulos na ficha do envio.",
+      "ddl": "ALTER TABLE envio_ans\n  ADD COLUMN destino VARCHAR(20) NOT NULL DEFAULT 'simulador' AFTER tipo_envio,\n  ADD COLUMN quadros JSON NULL COMMENT 'Resumo do arquivo gerado (quadros da obrigação)',\n  ADD COLUMN cobranca_ressarcimento_sus_id BIGINT UNSIGNED NULL COMMENT 'Aviso do ressarcimento ao SUS analisado neste envio',\n  ADD CONSTRAINT ck_envio_ans_destino CHECK (destino IN ('simulador','ans')),\n  ADD CONSTRAINT ck_envio_ans_quadros CHECK (quadros IS NULL OR JSON_VALID(quadros)),\n  ADD KEY ix_envio_ans_cobranca_ressarcimento_sus_id (cobranca_ressarcimento_sus_id),\n  ADD CONSTRAINT fk_envio_ans_cobranca_ressarcimento_sus_id FOREIGN KEY (cobranca_ressarcimento_sus_id) REFERENCES cobranca_ressarcimento_sus (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "envio_ans_item",
+      "motivo": "a decisão de cada atendimento do ressarcimento (impugnar ou aceitar) liga o registro ao atendimento cobrado; hoje decidir responde 501.",
+      "ddl": "ALTER TABLE envio_ans_item\n  ADD COLUMN ressarcimento_sus_atendimento_id BIGINT UNSIGNED NULL,\n  ADD KEY ix_envio_ans_item_ressarcimento_sus_atendimento_id (ressarcimento_sus_atendimento_id),\n  ADD CONSTRAINT fk_envio_ans_item_ressarcimento_sus_atendimento_id FOREIGN KEY (ressarcimento_sus_atendimento_id) REFERENCES ressarcimento_sus_atendimento (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "complemento_sib_beneficiario",
+      "motivo": "complemento cadastral do SIB (nascido vivo, reside no exterior, itens excluídos da cobertura, motivo de cancelamento da ANS, aceite); o endereço vem do cadastro da pessoa. Hoje complementoSib, beneficiariosSib e a gravação do complemento respondem 501.",
+      "ddl": "CREATE TABLE complemento_sib_beneficiario (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  beneficiario_plano_id BIGINT UNSIGNED NOT NULL,\n  declaracao_nascido_vivo CHAR(11) NULL,\n  reside_exterior BOOLEAN NOT NULL DEFAULT FALSE,\n  itens_excluidos_cobertura BOOLEAN NOT NULL DEFAULT FALSE,\n  motivo_movimento_cadastral_id BIGINT UNSIGNED NULL COMMENT 'Motivo de cancelamento informado à ANS',\n  aceito_envio_ans_id BIGINT UNSIGNED NULL, aceito_em DATETIME(3) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  CONSTRAINT ck_complemento_sib_beneficiario_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_complemento_sib_beneficiario (beneficiario_plano_id),\n  KEY ix_complemento_sib_beneficiario_motivo (motivo_movimento_cadastral_id), KEY ix_complemento_sib_beneficiario_envio (aceito_envio_ans_id)\n) COMMENT='Complemento cadastral do beneficiário para o SIB';\nALTER TABLE complemento_sib_beneficiario\n  ADD CONSTRAINT fk_complemento_sib_beneficiario_beneficiario_plano_id FOREIGN KEY (beneficiario_plano_id) REFERENCES beneficiario_plano (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_complemento_sib_beneficiario_motivo_id FOREIGN KEY (motivo_movimento_cadastral_id) REFERENCES motivo_movimento_cadastral (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_complemento_sib_beneficiario_envio_id FOREIGN KEY (aceito_envio_ans_id) REFERENCES envio_ans (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "fatura_plano",
+      "motivo": "a baixa separa multa e juros e guarda o motivo da dispensa; o cancelamento e o estorno guardam o motivo; a parcela de acordo aponta o acordo. Hoje multa e juros vão somados em valor_acrescimo e o motivo vai em observacao.",
+      "ddl": "ALTER TABLE fatura_plano\n  ADD COLUMN valor_multa DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER valor_acrescimo,\n  ADD COLUMN valor_juros DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER valor_multa,\n  ADD COLUMN motivo_dispensa VARCHAR(500) NULL,\n  ADD COLUMN motivo_cancelamento VARCHAR(500) NULL,\n  ADD COLUMN acordo_inadimplencia_id BIGINT UNSIGNED NULL COMMENT 'Acordo de que esta fatura é parcela',\n  ADD CONSTRAINT ck_fatura_plano_multa_juros CHECK (valor_multa >= 0 AND valor_juros >= 0),\n  ADD CONSTRAINT ck_fatura_plano_motivo_cancelamento CHECK (situacao <> 'cancelada' OR motivo_cancelamento IS NOT NULL),\n  ADD KEY ix_fatura_plano_acordo_inadimplencia_id (acordo_inadimplencia_id),\n  ADD CONSTRAINT fk_fatura_plano_acordo_inadimplencia_id FOREIGN KEY (acordo_inadimplencia_id) REFERENCES acordo_inadimplencia (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "reajuste_contrato_plano",
+      "motivo": "o teto e o ofício da ANS e o motivo e o responsável do cancelamento não têm coluna; hoje vão em observacao.",
+      "ddl": "ALTER TABLE reajuste_contrato_plano\n  ADD COLUMN percentual_teto_ans DECIMAL(7,4) NULL,\n  ADD COLUMN oficio_ans VARCHAR(60) NULL,\n  ADD COLUMN cancelado_em DATETIME(3) NULL,\n  ADD COLUMN cancelado_por_usuario_id BIGINT UNSIGNED NULL,\n  ADD COLUMN motivo_cancelamento VARCHAR(500) NULL,\n  ADD CONSTRAINT ck_reajuste_contrato_plano_cancelamento CHECK (situacao <> 'cancelado' OR (cancelado_em IS NOT NULL AND motivo_cancelamento IS NOT NULL)),\n  ADD CONSTRAINT fk_reajuste_contrato_plano_cancelado_por FOREIGN KEY (cancelado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "protocolo_beneficiario",
+      "motivo": "o registro do protocolo (instância, natureza, canal, assunto, NIP, urgência, alta complexidade, tipo de prazo, prorrogação, resposta por escrito e reanálise) não tem colunas; hoje registrar, interagir, prorrogar, pedir/enviar escrita e reanálise respondem 501. A operadora também falta (hoje vem do vínculo principal do estabelecimento).",
+      "ddl": "ALTER TABLE protocolo_beneficiario\n  ADD COLUMN operadora_saude_id BIGINT UNSIGNED NULL AFTER estabelecimento_id,\n  ADD COLUMN instancia VARCHAR(30) NULL, ADD COLUMN natureza VARCHAR(30) NULL, ADD COLUMN canal VARCHAR(30) NULL,\n  ADD COLUMN assunto VARCHAR(200) NULL, ADD COLUMN numero_nip VARCHAR(30) NULL,\n  ADD COLUMN urgente BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN alta_complexidade BOOLEAN NOT NULL DEFAULT FALSE,\n  ADD COLUMN prazo_tipo VARCHAR(20) NOT NULL DEFAULT 'padrao',\n  ADD COLUMN prorrogado_ate DATETIME(3) NULL, ADD COLUMN motivo_prorrogacao VARCHAR(500) NULL,\n  ADD COLUMN escrita_pedida_em DATETIME(3) NULL, ADD COLUMN escrita_prazo_em DATETIME(3) NULL,\n  ADD COLUMN escrita_enviada_em DATETIME(3) NULL, ADD COLUMN escrita_meio VARCHAR(20) NULL,\n  ADD COLUMN reanalise_de_protocolo_beneficiario_id BIGINT UNSIGNED NULL,\n  ADD CONSTRAINT ck_protocolo_beneficiario_prazo_tipo CHECK (prazo_tipo IN ('imediato','padrao','complexo')),\n  ADD CONSTRAINT ck_protocolo_beneficiario_prorrogacao CHECK (prorrogado_ate IS NULL OR motivo_prorrogacao IS NOT NULL),\n  ADD KEY ix_protocolo_beneficiario_operadora_saude_id (operadora_saude_id),\n  ADD KEY ix_protocolo_beneficiario_reanalise (reanalise_de_protocolo_beneficiario_id),\n  ADD CONSTRAINT fk_protocolo_beneficiario_operadora_saude_id FOREIGN KEY (operadora_saude_id) REFERENCES operadora_saude (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_protocolo_beneficiario_reanalise FOREIGN KEY (reanalise_de_protocolo_beneficiario_id) REFERENCES protocolo_beneficiario (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conta_portal_prestador_funcao",
+      "motivo": "a conta do portal tem várias funções (a tabela guarda uma) e o tipo de atendimento; hoje alterarAcesso responde 501.",
+      "ddl": "CREATE TABLE conta_portal_prestador_funcao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  conta_portal_prestador_id BIGINT UNSIGNED NOT NULL,\n  funcao_portal_prestador_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_conta_portal_prestador_funcao (conta_portal_prestador_id, funcao_portal_prestador_id),\n  KEY ix_conta_portal_prestador_funcao_funcao (funcao_portal_prestador_id)\n) COMMENT='Funções liberadas para a conta do portal do prestador';\nALTER TABLE conta_portal_prestador_funcao\n  ADD CONSTRAINT fk_conta_portal_prestador_funcao_conta FOREIGN KEY (conta_portal_prestador_id) REFERENCES conta_portal_prestador (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_conta_portal_prestador_funcao_funcao FOREIGN KEY (funcao_portal_prestador_id) REFERENCES funcao_portal_prestador (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "armazenamento de arquivos (porta de objetos sobre arquivo.chave_armazenamento)",
+      "motivo": "arquivo do envio à ANS, anexos da resposta do prestador (protocolo e complemento da autorização) e arquivo do lote de contas: respondem 501 até a porta de armazenamento existir no núcleo ou num módulo."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "identidade do portal do prestador (módulo de administração)",
+      "motivo": "criar, ativar, reemitir, trocar credencial, tentativas e entrada no portal: a senha e o segundo fator ficam fora de conta_portal_prestador; respondem 501 até a identidade única (usuario) cobrir o portal."
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py (cargas do criar cliente)",
+      "motivo": "numerações por estabelecimento: fatura_plano, protocolo_autorizacao, senha_autorizacao, guia_autorizacao, junta, protocolo_conta, protocolo_atendimento; cadastros mínimos: tipo_lancamento_fatura (mensalidade, avulsa, coparticipacao, repactuacao), motivo_cancelamento_guia_plano 'outros', tipo_guia_plano (consulta, sp_sadt, resumo_internacao, honorario). Sem eles a gravação recusa com a mensagem de configuração."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/operadora (vocabulario.ts, cobranca.ts, autorizacao.ts, rede)",
+      "motivo": "os contratos ainda usam códigos numéricos do sistema de origem (TIPOS_COBRANCA_OPERADORA 1..4, TIPOS_CONTRATACAO 1..3, TIPOS_CONTRATO_OPERADORA, tabela 22, tipo de internação 1..5), letras (caráter 'E'/'U', sexo 'F'/'M'/'I', pessoa 'F'/'J') e comentários com nomes de tabela do sistema de origem; as portas próprias traduzem para o vocabulário do banco. Neutralizar contratos, domínio e telas numa onda de contratos."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "lote 02-09 (portas próprias)",
+      "motivo": "implementado sobre o banco: cobrança (fatura, baixa, estorno, cancelamento, reajuste), ANS (gerar, transmitir, retorno com CCO, retificador), autorização (registro, complemento, junta, decisão, cancelamento, auditores, busca pela senha), contas (recebimento, glosa, conclusão, devolução, pagamento) e atendimento (análise, resposta, encerramento, cancelamento, elegibilidade do portal, encerramento da conta). Ainda 501 por implementar (tabelas existem): base de mensalidades, acordos/renegociação/notificação (acordo_inadimplencia, ocorrencia_inadimplencia), recurso de glosa (recurso_glosa_recebido*), bases do SIP/DIOPS/monitoramento/ressarcimento, pagamento da GRU."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "fatura_plano (ck_fatura_plano_vencimento)",
+      "motivo": "o banco recusa vencimento anterior à emissão (422 regra-do-banco): a cobrança avulsa retroativa que a tela aceitava deixa de valer; decidir se fica (melhor prática) ou se a emissão passa a vir da tela."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "git",
+      "motivo": "as remoções staged deste lote (porta-legado das 5 portas, 6 int specs do legado e chaves-desligadas.spec-util.ts) entraram no commit f8342e2 de outra sessão (o índice era compartilhado)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lote_conta_recebida",
+      "motivo": "o pagamento da conta não tem data nem documento; hoje vão como texto na observação e o evento 'pagamento' da ficha usa alterado_em como data. Com as colunas, pagar grava pago_em e documento_pagamento e a ficha lê a data da coluna.",
+      "ddl": "ALTER TABLE lote_conta_recebida\n  ADD COLUMN pago_em DATE NULL,\n  ADD COLUMN documento_pagamento VARCHAR(60) NULL,\n  ADD CONSTRAINT ck_lote_conta_recebida_pagamento CHECK (situacao <> 'paga' OR pago_em IS NOT NULL);"
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py (cadastro motivo_ajuste_fatura)",
+      "motivo": "o cancelamento da cobrança grava motivo_ajuste_fatura_id pelo código 'cancelamento' (natureza 'ajuste', exige_justificativa TRUE); sem a carga o id fica nulo e só o texto vai para a observação."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/operadora/cobranca.ts (esquemaCancelarReajuste) e apps/web/src/modulos/operadora/api-cobranca.ts",
+      "motivo": "o cancelamento do reajuste deve levar a versao vista pela tela; hoje a porta usa a versão relida pelo serviço antes das regras (o conflito entre a leitura do serviço e a gravação já dá 409)."
+    },
+    {
+      "tipo": "web",
+      "alvo": "apps/web/src/modulos/operadora (api de atendimento, autorização e contas)",
+      "motivo": "as gravações dessas telas ainda não mandam a Idempotency-Key; o controller gera uma chave só do pedido (não repetível). Com a chave em todas as telas, o contextoGravacao passa a exigir a chave (400 sem ela), como a porta própria já exige."
+    },
+    {
+      "tipo": "catalogo",
+      "alvo": "catálogos TUSS (tabela 22) e CID-10 (carregadores oficiais)",
+      "motivo": "a autorização lê os procedimentos TUSS (terminologia numero_tabela_tiss '22') e o CID-10 (terminologia 'cid10') de termo_terminologia; sem a carga TUSS, o pedido com procedimento é recusado como código inexistente (regra de negócio, não 501). Falta o carregador oficial da TUSS."
+    }
+  ]
+}

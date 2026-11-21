@@ -1,6 +1,7 @@
 // Estrutura de custos e estatísticas (M54, etapa 4; ficha, seções 4, 6, 7 e 8): a tela `Controladoria > Custos
 // hospitalares > Centros de custo e critérios de rateio` (`/custos/centros`). Os centros de custo são os do banco
-// (TBCENCUS, lidos onde estão); a classificação, a ordem e o critério do rateio e as estatísticas ficam em SGH_CUS_*.
+// (centro_custo do estabelecimento); a classificação, a ordem e o critério do rateio ficam no próprio centro, e as
+// estatísticas em estatistica_centro_mes.
 // As regras são de @sgh/dominio-custos; aqui só a orquestração (leituras, validação contra os domínios do banco,
 // gravação com a trilha na mesma transação).
 import {
@@ -38,22 +39,32 @@ import {
   sequenciaDoRateio,
   sugerirClasse,
 } from '@sgh/dominio-custos';
-import type { CentroCustoEstruturaLido, ColetaLida, EstatisticaLida, LinhaTrilha } from '@sgh/legado';
+import type { CentroCustoCadastrado, ColetaRegistrada, EstatisticaRegistrada, TrilhaCustos } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoCustos, PortaCustos } from './porta.js';
 
 export interface SessaoCustos {
   readonly rede: string;
   readonly hospital: string;
+  /** Id do estabelecimento e do usuário no banco do cliente (null: a porta resolve pelo código ou grava sem usuário). */
+  readonly estabelecimento?: number | null;
+  readonly usuario?: number | null;
+  readonly correlacao?: string;
   readonly login: string;
   pode(codigo: string): boolean;
   /** A linha da trilha de uma gravação. */
-  trilha(evento: string, operacao: string, tabela: string, id: number | null): LinhaTrilha;
+  trilha(evento: string, operacao: string, tabela: string, id: number | null): TrilhaCustos;
 }
 
-const ctx = (s: SessaoCustos): ContextoCustos => ({ rede: s.rede, hospital: s.hospital });
+const ctx = (s: SessaoCustos): ContextoCustos => ({
+  rede: s.rede,
+  hospital: s.hospital,
+  estabelecimento: s.estabelecimento ?? null,
+  usuario: s.usuario ?? null,
+  ...(s.correlacao ? { correlacao: s.correlacao } : {}),
+});
 
-export function paraEstrutura(x: CentroCustoEstruturaLido): CentroCustoEstrutura {
+export function paraEstrutura(x: CentroCustoCadastrado): CentroCustoEstrutura {
   const k = x.classificacao;
   return {
     id: x.id,
@@ -102,7 +113,7 @@ export function fonteValida(v: string): FonteEstatistica {
   return (FONTES_ESTATISTICA as readonly string[]).includes(v) ? (v as FonteEstatistica) : 'manual';
 }
 
-function coletaDaLida(x: ColetaLida): ColetaEstatisticas {
+function coletaDaLida(x: ColetaRegistrada): ColetaEstatisticas {
   let r: { fontes?: ResumoFonteColeta[]; gravadas?: number; substituidas?: number } = {};
   try {
     r = JSON.parse(x.resumo) as typeof r;
@@ -121,7 +132,7 @@ function coletaDaLida(x: ColetaLida): ColetaEstatisticas {
   };
 }
 
-function valorDoRegistro(r: EstatisticaLida): ValorEstatistica {
+function valorDoRegistro(r: EstatisticaRegistrada): ValorEstatistica {
   return {
     id: r.id,
     quantidade: deCentesimos(r.cent),
@@ -217,7 +228,7 @@ export class ServicoCustos {
       s.trilha(
         EVENTOS_AUDITAVEIS.custosCentroClassificado.codigo,
         'custos.classificarCentro',
-        'SGH_CUS_CENTRO',
+        'centro_custo',
         id,
       ),
     );
@@ -282,7 +293,7 @@ export class ServicoCustos {
       s.trilha(
         EVENTOS_AUDITAVEIS.custosEstatisticasColetadas.codigo,
         'custos.coletarEstatisticas',
-        'SGH_CUS_COLETA',
+        'estatistica_centro_mes',
         null,
       ),
     );
@@ -329,7 +340,7 @@ export class ServicoCustos {
       s.trilha(
         EVENTOS_AUDITAVEIS.custosEstatisticaLancada.codigo,
         'custos.lancarEstatistica',
-        'SGH_CUS_ESTATISTICA',
+        'estatistica_centro_mes',
         null,
       ),
     );

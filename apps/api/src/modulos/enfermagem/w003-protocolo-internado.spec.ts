@@ -5,12 +5,10 @@
 // (PA, internação, UTI) com o numerador e o denominador. Portas em memória; relógio controlado; dados sintéticos.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { PROTOCOLOS_GERENCIADOS_SINTETICOS } from '@sgh/dominio-recepcao';
-import { fonteCatalogoArquivo, type ProtocoloPacienteLido } from '@sgh/legado';
-import { resolve } from 'node:path';
+import type { ProtocoloPaciente } from '../recepcao/tipos.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
+import { criarAppComEnfermagem } from './app-enfermagem.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaClassificacaoMemoria } from '../recepcao/public-api.js';
 import { PortaEscoresMemoria } from './escores-porta-memoria.js';
@@ -29,18 +27,16 @@ interface Sessao {
 async function montar() {
   const trilha = new RegistradorTrilhaMemoria();
   const enfermagem = new PortaEnfermagemMemoria(
-    fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo')),
     { agora },
   );
   const escores = new PortaEscoresMemoria({ agora });
   const classificacao = new PortaClassificacaoMemoria({ agora, trilha });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,
     enfermagem,
     escores,
-    classificacao,
+    recepcao: { classificacao },
     vigiaEnfermagem: null,
-    vigia: null,
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -298,7 +294,7 @@ describe('W0-03, M3: protocolos gerenciados no internado pela API', () => {
   it('os indicadores por origem (PA, internação, UTI) imprimem o numerador e o denominador', async () => {
     const enf = await a.entrar('SINT.ENF.PLANTAO');
     // Um protocolo do PA no período (lido da mesma tabela do relógio do PA).
-    const pa: ProtocoloPacienteLido = {
+    const pa: ProtocoloPaciente = {
       id: 7001,
       cabecalho: '1',
       reg: 1,
@@ -325,7 +321,7 @@ describe('W0-03, M3: protocolos gerenciados no internado pela API', () => {
         },
       ],
     };
-    (a.classificacao as unknown as { e(c: { hospital: string }): { protocolos: ProtocoloPacienteLido[] } })
+    (a.classificacao as unknown as { e(c: { hospital: string }): { protocolos: ProtocoloPaciente[] } })
       .e({ hospital: 'aa' })
       .protocolos.push(pa);
     const r = await a.get(enf, `${URL}/indicadores?de=2026-10-01&ate=2026-10-25`);

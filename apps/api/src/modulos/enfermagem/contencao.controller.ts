@@ -5,7 +5,7 @@
 //   GET  /api/enfermagem/contencao/atendimentos/:atendimento  o histórico do paciente: ordens, renovações, retiradas e
 //                                                           as inativadas (tachadas), com as checagens
 //   POST /api/enfermagem/contencao                          a ordem: grava a ordem e o aprazamento da checagem periódica
-//                                                           (SGH_) na mesma transação, com a SGH_TRILHA
+//                                                           na mesma transação, com a trilha_auditoria
 //   POST /api/enfermagem/contencao/:id/renovar              a renovação: ordem nova que aponta a anterior
 //   POST /api/enfermagem/contencao/:id/checagens            a checagem de um horário aprazado
 //   POST /api/enfermagem/contencao/:id/checagens/adendo     o adendo da checagem (revisão W0-03: só do autor, motivo)
@@ -211,7 +211,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
     });
     const emCurso = pacientes.flatMap((x) => (x.ordem ? [x.ordem] : []));
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_PEP_CONTENCAO',
+      tabelaAlvo: 'contencao_paciente',
       chaveNaturalAlvo: `unidade:${unidade};n:${emCurso.length}`,
     };
     return {
@@ -250,7 +250,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       desde: somarMinutos(agora.slice(0, 16), -DIAS_HISTORICO * 24 * 60),
     });
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_PEP_CONTENCAO',
+      tabelaAlvo: 'contencao_paciente',
       chaveNaturalAlvo: `atendimento:${atendimento};n:${ordens.length}`,
     };
     return {
@@ -284,7 +284,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       EVENTOS_AUDITAVEIS.enfermagemContencaoPrescrita.codigo,
       this.recursoPrescrever(s),
       (x: number) => ({
-        tabela: 'SGH_PEP_CONTENCAO',
+        tabela: 'contencao_paciente',
         id: String(x),
         paciente: i.paciente,
         chave: `${anterior === null ? 'ordem' : `renova:${anterior}`};horarios:${o.horarios.length}`,
@@ -309,7 +309,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @Permissao(P.horarioLer)
   @PermissaoOu(PERMISSAO_PRESCREVER)
   @AuditadoNoHandler(
-    'a ordem em SGH_PEP_CONTENCAO e o aprazamento em SGH_PEP_CONTENCAO_APRAZ com a SGH_TRILHA',
+    'a ordem em contencao_paciente e o aprazamento em contencao_paciente_avaliacao com a trilha_auditoria',
   )
   prescrever(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravarOrdem(sessaoDe(req), b, null);
@@ -319,7 +319,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(201)
   @Permissao(P.horarioLer)
   @PermissaoOu(PERMISSAO_PRESCREVER)
-  @AuditadoNoHandler('a renovação (ordem nova com ID_ANTERIOR) e o aprazamento com a SGH_TRILHA')
+  @AuditadoNoHandler('a renovação (ordem nova com ID_ANTERIOR) e o aprazamento com a trilha_auditoria')
   renovar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravarOrdem(sessaoDe(req), b, idDaRota(id));
   }
@@ -327,7 +327,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @Post(':id/checagens')
   @HttpCode(201)
   @Permissao(P.administracaoChecar)
-  @AuditadoNoHandler('a checagem em SGH_PEP_CONTENCAO_CHECAGEM com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a checagem em contencao_paciente_avaliacao com a trilha_auditoria na mesma transação')
   async checar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const contencao = idDaRota(id);
@@ -347,7 +347,12 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.enfermagemContencaoChecada.codigo,
       P.administracaoChecar,
-      { tabela: 'SGH_PEP_CONTENCAO_CHECAGEM', id: String(contencao), paciente: o.paciente, chave: previsto },
+      {
+        tabela: 'contencao_paciente_avaliacao',
+        id: String(contencao),
+        paciente: o.paciente,
+        chave: previsto,
+      },
       (g) =>
         g.checarContencao({
           contencao,
@@ -369,7 +374,9 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @Post(':id/checagens/adendo')
   @HttpCode(201)
   @Permissao(P.administracaoChecar)
-  @AuditadoNoHandler('o adendo da checagem em SGH_PEP_CONTENCAO_ADENDO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'o adendo da checagem em contencao_paciente_avaliacao com a trilha_auditoria na mesma transação',
+  )
   async adendo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const contencao = idDaRota(id);
@@ -380,7 +387,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       EVENTOS_AUDITAVEIS.enfermagemContencaoChecada.codigo,
       P.administracaoChecar,
       {
-        tabela: 'SGH_PEP_CONTENCAO_ADENDO',
+        tabela: 'contencao_paciente_avaliacao',
         id: String(contencao),
         paciente: o.paciente,
         chave: `adendo:${e.previsto}`,
@@ -407,7 +414,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(200)
   @Permissao(P.horarioLer)
   @PermissaoOu(PERMISSAO_PRESCREVER)
-  @AuditadoNoHandler('a retirada em SGH_PEP_CONTENCAO_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a retirada em contencao_paciente com a trilha_auditoria na mesma transação')
   async retirar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     // A retirada é de quem prescreve ou de quem cuida (o enfermeiro que apraza), como a ordem.
@@ -431,7 +438,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.enfermagemContencaoEncerrada.codigo,
       this.recursoPrescrever(s),
-      { tabela: 'SGH_PEP_CONTENCAO_EVENTO', id: String(contencao), paciente: o.paciente, chave: 'retirada' },
+      { tabela: 'contencao_paciente', id: String(contencao), paciente: o.paciente, chave: 'retirada' },
       (g) =>
         g.encerrarContencao({ contencao, tipo: 'retirada', motivo: motivo.slice(0, 300), usuario: s.login }),
     );
@@ -447,7 +454,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
   @Permissao(P.horarioLer)
   @PermissaoOu(PERMISSAO_PRESCREVER)
   @AuditadoNoHandler(
-    'a inativação em SGH_PEP_CONTENCAO_EVENTO (com a senha) e a SGH_TRILHA na mesma transação',
+    'a inativação em contencao_paciente (com a senha) e a trilha_auditoria na mesma transação',
   )
   async inativar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -477,7 +484,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       EVENTOS_AUDITAVEIS.enfermagemContencaoEncerrada.codigo,
       P.horarioLer,
       {
-        tabela: 'SGH_PEP_CONTENCAO_EVENTO',
+        tabela: 'contencao_paciente',
         id: String(contencao),
         paciente: o.paciente,
         chave: 'inativacao',
@@ -517,7 +524,7 @@ export class ContencaoController implements OnModuleInit, OnModuleDestroy {
       desde: `${de}T00:00`,
       ate: somarMinutos(`${ate}T00:00`, 24 * 60),
     });
-    req.sghAlvo = { tabelaAlvo: 'SGH_PEP_CONTENCAO', chaveNaturalAlvo: `indicador:${unidade};${de};${ate}` };
+    req.sghAlvo = { tabelaAlvo: 'contencao_paciente', chaveNaturalAlvo: `indicador:${unidade};${de};${ate}` };
     return indicadorDoPeriodo(unidade, de, ate, ordens, censo, agora, p.toleranciaMinutos);
   }
 }

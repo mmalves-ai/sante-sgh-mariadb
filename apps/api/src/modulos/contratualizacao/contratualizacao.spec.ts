@@ -15,6 +15,7 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/configuracao-fonte.js';
 import { dominiosComRotulo } from './contratualizacao.controller.js';
+import { moduloContratualizacao } from './modulo.js';
 import { PortaContratualizacaoMemoria } from './porta-memoria.js';
 
 const R = '/api/faturamento/sus/contratualizacao';
@@ -24,7 +25,7 @@ interface Sessao {
 }
 
 async function montar(o: { desligada?: boolean } = {}) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'contratualizacao' };
   const trilha = new RegistradorTrilhaMemoria();
   const porta = new PortaContratualizacaoMemoria(() => ({ hoje: '2026-07-10', competencia: '202607' }));
   const configuracao = o.desligada
@@ -36,8 +37,11 @@ async function montar(o: { desligada?: boolean } = {}) {
     : undefined;
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    contratualizacao: porta,
-    ...(configuracao ? { configuracao } : {}),
+    registro: {
+      contratualizacao: async () => ({
+        modulo: (ctx) => moduloContratualizacao(ctx, { porta, ...(configuracao ? { configuracao } : {}) }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -165,13 +169,13 @@ describe('contratualização SUS pela HTTP', () => {
     expect((await a.get(sem, '')).statusCode).toBe(403);
   });
 
-  it('o rótulo do produto troca o nome gravado que cita o sistema anterior', () => {
+  it('as listas saem com o rótulo do produto na chave que a tela lê; sem vocabulário, o nome gravado', () => {
     const d = dominiosComRotulo({
-      CMTPAFERICAO: [{ codigo: 9, nome: 'Sistema(s) SPData', sigla: null }],
-      CMINCENTIVO: [{ codigo: 0, nome: 'Não informado', sigla: null }],
+      tipo_afericao: [{ codigo: 1, nome: 'Nome gravado qualquer', sigla: null }],
+      incentivo: [{ codigo: 7, nome: 'Incentivo de teste', sigla: null }],
     } as never);
     expect(d['CMTPAFERICAO']?.[0]?.rotulo).toBe('Sistema de gestão do hospital');
-    expect(d['CMINCENTIVO']?.[0]?.rotulo).toBe('Não informado');
+    expect(d['CMINCENTIVO']?.[0]).toEqual({ codigo: 7, rotulo: 'Incentivo de teste', sigla: null });
   });
 
   it('contrato → metas → painel com a produção das contas SUS → apuração → painel com o repasse, com as parcelas', async () => {

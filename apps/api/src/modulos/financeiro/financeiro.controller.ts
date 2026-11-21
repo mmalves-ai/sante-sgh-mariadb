@@ -1,5 +1,5 @@
-// Financeiro e fiscal (M32; ficha, seções 4, 5 e 7). Telas de trabalho sobre os mesmos títulos, movimentos e cadastros
-// do outro sistema; o que ele não tem (alçada, conciliação, glosa no título, fluxo, fiscal) em SGH_:
+// Financeiro e fiscal (M32; ficha, seções 4, 5 e 7). Telas de trabalho sobre os títulos, movimentos e cadastros do banco
+// do cliente (porta própria), com alçada, conciliação, glosa no título, fluxo e fiscal:
 //   GET  /api/financeiro/gravacao | apoio | worklist | indicadores
 //   GET  /api/financeiro/pagar/titulos (auditada) | pagar/titulos/:id ; POST pagar/titulos | pagar/titulos/:id/excluir
 //   GET  /api/financeiro/pagar/aprovacao ; POST pagar/titulos/:id/aprovar ; GET/POST alcadas
@@ -269,7 +269,7 @@ export class FinanceiroController {
   @Post('pagar/titulos/:id/aprovar')
   @HttpCode(200)
   @Permissao('financeiro.tituloPagar.aprovar')
-  @AuditadoNoHandler('aprovação na alçada em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('aprovação na alçada com a trilha na mesma transação')
   aprovar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -301,7 +301,7 @@ export class FinanceiroController {
   @Post('alcadas')
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
-  @AuditadoNoHandler('faixa de alçada em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('faixa de alçada com a trilha na mesma transação')
   salvarAlcada(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.salvarFaixa(sessaoDe(req), corpo(esquemaFaixaAlcada, b));
   }
@@ -332,16 +332,16 @@ export class FinanceiroController {
   @Permissao('financeiro.remessa.ler')
   async remessas(@Req() req: RequisicaoAutorizada): Promise<RegistroFiscalResposta[]> {
     const s = sessaoDe(req);
-    // Regra 15: só as remessas das contas do escopo (MFCTAUSU).
+    // Regra 15: só as remessas das contas do escopo (permissao_conta_bancaria).
     const ids = new Set((await this.porta.contas(ctx(s), s.login)).map((c) => c.id));
     const lista = await this.porta.registrosFiscais(ctx(s), 'remessa');
-    return lista.filter((r) => ids.has(Number(r['ID_TBCTABAN'])));
+    return lista.filter((r) => ids.has(Number(r['CONTA'])));
   }
 
   @Post('pagar/remessas')
   @HttpCode(200)
   @Permissao('financeiro.remessa.gerar')
-  @AuditadoNoHandler('remessa em SGH_ (simulador fora de produção) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('remessa (simulador fora de produção) com a trilha na mesma transação')
   gerarRemessa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.gerarRemessa(sessaoDe(req), corpo(esquemaGerarRemessa, b));
   }
@@ -447,7 +447,7 @@ export class FinanceiroController {
   @Post('receber/titulos/:id/glosa')
   @HttpCode(200)
   @Permissao('financeiro.tituloReceber.baixar')
-  @AuditadoNoHandler('glosa no título em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('glosa no título com a trilha na mesma transação')
   glosa(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -484,7 +484,7 @@ export class FinanceiroController {
     const hoje = await this.porta.hoje(ctx(s));
     const conta = inteiroOuNulo(q['conta']);
     const contas = await this.porta.contas(ctx(s), s.login);
-    // Regra 15: só a conta do escopo (MFCTAUSU, nos dois sistemas); fora dele, 403 (anti-IDOR).
+    // Regra 15: só a conta do escopo (permissao_conta_bancaria); fora dele, 403 (anti-IDOR).
     if (conta === null || !contas.some((c) => c.id === conta))
       throw new ErroProblema(
         'sem-permissao',
@@ -537,7 +537,7 @@ export class FinanceiroController {
   @Post('tesouraria/extratos')
   @HttpCode(200)
   @Permissao('financeiro.conciliacao.conciliar')
-  @AuditadoNoHandler('extrato em SGH_ (arquivo no S3 com hash) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('extrato (arquivo no S3 com hash) com a trilha na mesma transação')
   importarExtrato(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.importarExtrato(sessaoDe(req), corpo(esquemaImportarExtrato, b));
   }
@@ -545,7 +545,7 @@ export class FinanceiroController {
   @Post('tesouraria/conciliacao')
   @HttpCode(200)
   @Permissao('financeiro.conciliacao.conciliar')
-  @AuditadoNoHandler('conciliação em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('conciliação com a trilha na mesma transação')
   conciliar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.conciliar(sessaoDe(req), corpo(esquemaConciliar, b));
   }
@@ -559,7 +559,7 @@ export class FinanceiroController {
   @Post('tesouraria/creditos/:id/atribuir')
   @HttpCode(200)
   @Permissao('financeiro.conciliacao.conciliar')
-  @AuditadoNoHandler('atribuição do crédito em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('atribuição do crédito com a trilha na mesma transação')
   atribuir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -650,7 +650,7 @@ export class FinanceiroController {
   @Post('fiscal/nfse')
   @HttpCode(200)
   @Permissao('financeiro.nfse.emitir')
-  @AuditadoNoHandler('NFS-e em SGH_ (simulador fora de produção) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('NFS-e (simulador fora de produção) com a trilha na mesma transação')
   emitirNfse(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.emitirNfse(sessaoDe(req), corpo(esquemaEmitirNfse, b));
   }
@@ -674,7 +674,7 @@ export class FinanceiroController {
   @Post('fiscal/declaracoes/dmed')
   @HttpCode(200)
   @Permissao('financeiro.dmed.gerar')
-  @AuditadoNoHandler('DMED gerada em SGH_ (não enviada) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('DMED gerada (não enviada) com a trilha na mesma transação')
   gerarDmed(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.gerarDeclaracao(sessaoDe(req), declaracaoDaRota(b, 'dmed'));
   }
@@ -682,7 +682,7 @@ export class FinanceiroController {
   @Post('fiscal/declaracoes/reinf')
   @HttpCode(200)
   @Permissao('financeiro.reinf.gerar')
-  @AuditadoNoHandler('EFD-REINF gerada em SGH_ (não enviada) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('EFD-REINF gerada (não enviada) com a trilha na mesma transação')
   gerarReinf(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.gerarDeclaracao(sessaoDe(req), declaracaoDaRota(b, 'reinf'));
   }
@@ -702,7 +702,7 @@ export class FinanceiroController {
   @Post('contabil/lotes')
   @HttpCode(200)
   @Permissao('financeiro.exportacaoContabil.exportar')
-  @AuditadoNoHandler('lote contábil em SGH_ (contagem e soma) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('lote contábil (contagem e soma) com a trilha na mesma transação')
   exportar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.exportarLoteContabil(sessaoDe(req), corpo(esquemaExportarLoteContabil, b));
   }

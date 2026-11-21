@@ -1,34 +1,37 @@
-// Fonte das consultas somente leitura (M14): onde as leituras acontecem.
-//   - `legado`: o núcleo (READ ONLY; fora de dev/ci, e em dev com ACESSO_FONTE_DEV=copia, a cópia: consulta não
-//     grava nada, então ler a cópia em dev é seguro);
-//   - `memoria`: a sessão sintética (dev/ci, E2E): linhas sintéticas geradas da declaração (nada vai à cópia);
-//   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em toda chamada.
-import type { ValorCampo } from '@sgh/contratos';
+// Fonte das consultas somente leitura (M14; F2.2): onde as leituras acontecem.
+//   - própria (`fonte-propria.ts`): o banco do cliente pelo @sgh/nucleo, em transação somente leitura, nas tabelas do
+//     modelo próprio (tabelas.gerado.ts) com a declaração montada das colunas do banco;
+//   - `memoria`: a sessão sintética (dev/ci, E2E): linhas sintéticas geradas da declaração sintética (nada vai a banco);
+//   - indisponível: fora de dev/ci sem o núcleo: 503 em toda chamada.
 import {
-  contarConsulta,
+  type ConsultaPublica,
+  TETO_CONTAGEM_CONSULTA,
+  TETO_EXPORTACAO_CONSULTA,
+  type ValorCampo,
+} from '@sgh/contratos';
+import { ErroProblema } from '../../problema.filter.js';
+import {
   type DeclaracaoConsulta,
-  declaracao,
+  type DestinoConsulta,
+  declaracaoSintetica,
+  ErroConsulta,
   ErroEscopo,
   type FiltroConsulta,
   type FiltroEscopo,
-  linhasParaExportar,
-  listarDominio,
-  type NucleoLegado,
-  paginaDaConsulta,
-  type PaginaConsultaLida,
-  lerTabelasVazias,
-  registroDaConsulta,
-  type TabelaVaziaLida,
-} from '@sgh/legado';
-import { TETO_CONTAGEM_CONSULTA, TETO_EXPORTACAO_CONSULTA } from '@sgh/contratos';
-import { ErroProblema } from '../../problema.filter.js';
+} from './declaracao.js';
+import { DESTINOS_CONSULTA } from './tabelas.gerado.js';
 
 export const FONTE_CONSULTAS = Symbol('FONTE_CONSULTAS');
 
 export interface CtxConsulta {
   readonly rede: string;
+  /** Código do estabelecimento da sessão. */
   readonly hospital: string;
-  /** Correção do M14: filtro de escopo do M06 da sessão para a permissão da consulta (null: sem restrição). */
+  /** Id do estabelecimento no banco do cliente (null/ausente: a fonte própria resolve pelo código). */
+  readonly estabelecimento?: number | null;
+  readonly usuario?: number | null;
+  readonly correlacao?: string;
+  /** Filtro de escopo do M06 da sessão para a permissão da consulta (null: sem restrição). */
   readonly escopo?: FiltroEscopo;
 }
 
@@ -38,8 +41,26 @@ export interface JustificativaExportacao {
   readonly descricao: string;
 }
 
+/** Uma página da consulta: as linhas (sem máscara: a API mascara) e a chave da última (null: acabou). */
+export interface PaginaConsultaLida {
+  readonly linhas: Readonly<Record<string, ValorCampo>>[];
+  readonly proxima: readonly (string | number | null)[] | null;
+}
+
+/** O destino da consulta declarada: a tabela do modelo e o filtro fixo (null: sem destino, fora do índice). */
+export function destinoDaConsulta(p: Pick<ConsultaPublica, 'modulo' | 'recurso'>): DestinoConsulta | null {
+  return DESTINOS_CONSULTA[`${p.modulo}.${p.recurso}`] ?? null;
+}
+
+/** A tabela do modelo que atende a consulta declarada (null: sem destino no modelo, fora do índice). */
+export function tabelaDaConsulta(p: Pick<ConsultaPublica, 'modulo' | 'recurso'>): string | null {
+  return destinoDaConsulta(p)?.tabela ?? null;
+}
+
 export interface FonteConsultas {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
+  /** A declaração física da consulta (null: a tabela não existe neste banco). */
+  declaracao(c: CtxConsulta, publico: ConsultaPublica): Promise<DeclaracaoConsulta | null>;
   pagina(
     c: CtxConsulta,
     d: DeclaracaoConsulta,
@@ -62,10 +83,8 @@ export interface FonteConsultas {
     d: DeclaracaoConsulta,
     filtros: readonly FiltroConsulta[],
   ): Promise<Record<string, ValorCampo>[]>;
-  /** Justificativas de exportação ativas (PRTIPO_JUSTIF_EXPORTACAO, o domínio de auditoria do M08). */
+  /** Justificativas de exportação ativas (o domínio de auditoria tipo_justificativa_exportacao). */
   justificativas(c: CtxConsulta): Promise<readonly JustificativaExportacao[]>;
-  /** Vigia das tabelas vazias do estabelecimento (null: ainda não rodou). */
-  tabelasVazias(c: CtxConsulta): Promise<readonly TabelaVaziaLida[] | null>;
 }
 
 export class ErroFonteConsultas extends ErroProblema {
@@ -79,41 +98,18 @@ export class ErroFonteConsultas extends ErroProblema {
   }
 }
 
-async function justificativasDe(ler: (fn: Parameters<NucleoLegado['lerSomente']>[1]) => Promise<unknown>) {
-  const d = declaracao('auditoria.justificativaExportacao');
-  if (!d) return [];
-  const lida = (await ler((l) => listarDominio(l, d))) as Awaited<ReturnType<typeof listarDominio>>;
-  return lida.itens
-    .filter((i) => i.ativo)
-    .map((i) => ({ codigo: Number(i.codigo), descricao: String(i.valores[d.descricao] ?? i.codigo) }));
-}
-
-export function fonteConsultasLegado(nucleo: NucleoLegado): FonteConsultas {
-  const ler = <T>(c: CtxConsulta, fn: Parameters<NucleoLegado['lerSomente']>[1]) =>
-    nucleo.lerSomente({ rede: c.rede, hospital: c.hospital, traceId: 'consulta-generica' }, fn) as Promise<T>;
-  return {
-    destino: 'legado',
-    pagina: (c, d, f, apos, n) => ler(c, (l) => paginaDaConsulta(l, d, f, apos, n, c.escopo)),
-    contar: (c, d, f) => ler(c, (l) => contarConsulta(l, d, f, c.escopo)),
-    registro: (c, d, k) => ler(c, (l) => registroDaConsulta(l, d, k, c.escopo)),
-    exportar: (c, d, f) => ler(c, (l) => linhasParaExportar(l, d, f, c.escopo)),
-    justificativas: (c) => justificativasDe((fn) => ler(c, fn)),
-    tabelasVazias: (c) => ler(c, (l) => lerTabelasVazias(l)),
-  };
-}
-
 export function fonteConsultasIndisponivel(): FonteConsultas {
   const recusar = async (): Promise<never> => {
     throw new ErroFonteConsultas();
   };
   return {
-    destino: 'legado',
+    destino: 'banco',
+    declaracao: recusar,
     pagina: recusar,
     contar: recusar,
     registro: recusar,
     exportar: recusar,
     justificativas: recusar,
-    tabelasVazias: recusar,
   };
 }
 
@@ -183,6 +179,10 @@ export function fonteConsultasMemoria(): FonteConsultas {
       );
   return {
     destino: 'memoria',
+    async declaracao(_c, publico) {
+      const tabela = tabelaDaConsulta(publico);
+      return tabela ? declaracaoSintetica(publico, tabela) : null;
+    },
     async pagina(c, d, f, apos, n) {
       const chave = campoDaChave(d);
       let r = filtrar(d, f, c.escopo).sort((a, b) => {
@@ -230,14 +230,12 @@ export function fonteConsultasMemoria(): FonteConsultas {
     },
     async exportar(c, d, f) {
       const r = filtrar(d, f, c.escopo);
-      if (r.length > TETO_EXPORTACAO_CONSULTA) throw new Error('exportação grande');
+      if (r.length > TETO_EXPORTACAO_CONSULTA)
+        throw new ErroConsulta('exportacao-grande', 'A exportação passa do teto: filtre mais.');
       return r;
     },
     async justificativas() {
       return [1, 2, 3, 4].map((codigo) => ({ codigo, descricao: `Justificativa ${codigo}` }));
-    },
-    async tabelasVazias() {
-      return null;
     },
   };
 }

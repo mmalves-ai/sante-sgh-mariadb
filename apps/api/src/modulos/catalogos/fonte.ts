@@ -1,84 +1,170 @@
 // Fonte do M13 na API (catálogos oficiais e importadores): onde as leituras e as gravações acontecem.
-//   - `legado`: o núcleo do legado (READ ONLY nas leituras; a área de preparação SGH_ pela transação SGH_ do núcleo,
-//     com a trilha junto). A PUBLICAÇÃO no banco do estabelecimento é do worker (lotes curtos na janela fora do
-//     pico, pelo executor do M04); a API só aprova;
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-propria.ts, pelo @sgh/nucleo): a área de preparação
+//     (carga_catalogo e carga_catalogo_linha) gravada pelo Executor, com a trilha, o outbox e a idempotência na mesma
+//     transação; a PUBLICAÇÃO nas tabelas do catálogo é do worker (lotes curtos na janela fora do pico);
 //   - `memoria`: a sessão sintética de dev/ci (E2E e testes HTTP): catálogos SINTÉTICOS em memória, as mesmas
 //     regras puras (@sgh/dominio-catalogo) e a publicação logo depois da aprovação (o "worker" da memória);
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo.
-// Em dev com ACESSO_FONTE_DEV=copia, a leitura é da cópia e a gravação SGH_ fica recusada com o motivo na tela.
-import type { CodigoCatalogo, LinhaCargaCatalogo } from '@sgh/contratos';
+// Os tipos são do próprio módulo (vocabulário neutro: ids numéricos, datas ISO, situações por extenso).
+import type {
+  CargaCatalogo,
+  CodigoCatalogo,
+  ComparacaoLinha,
+  LinhaCargaCatalogo,
+  SituacaoCargaCatalogo,
+} from '@sgh/contratos';
 import type { LeituraDoBanco, SecaoLeiauteCep } from '@sgh/dominio-catalogo';
-import {
-  cargaPublicadaComHash,
-  type CargaCatalogoLida,
-  chavesExistentesDoCatalogo,
-  codigosReferenciadosExistentes,
-  consultarCatalogo,
-  contratoVigenteDoCatalogo,
-  edicaoNoBanco,
-  gravarCargaCatalogo,
-  historicoSigtap,
-  itensAtuaisDoCatalogo,
-  leiauteCepDoBanco,
-  lerCargaCatalogo,
-  type Leitor,
-  type LinhaTrilha,
-  linhasDaCargaCatalogo,
-  listarCargasCatalogo,
-  mudarSituacaoCargaCatalogo,
-  type NovaCargaCatalogo,
-  type NucleoLegado,
-  responsavelDoCatalogo,
-} from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 
 export const FONTE_CATALOGOS = Symbol('FONTE_CATALOGOS');
 
 export interface CtxCatalogos {
   readonly rede: string;
+  /** Código do estabelecimento ativo na sessão. */
   readonly hospital: string;
   readonly traceId: string;
 }
 
-export type Trilha = Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo'>;
-export type ConsultaLida = NonNullable<Awaited<ReturnType<typeof consultarCatalogo>>>;
-export type HistoricoLido = NonNullable<Awaited<ReturnType<typeof historicoSigtap>>>;
-export type LinhaLida = LinhaCargaCatalogo & { lote: number | null };
+/** O que a ação deixa na trilha (quem, de onde, o quê); a fonte acrescenta a tabela e o id. */
+export interface TrilhaCatalogo {
+  readonly rede: string;
+  readonly hospital: string;
+  /** Login de quem opera. */
+  readonly usuario: string;
+  readonly evento: string;
+  readonly recurso: string;
+  readonly operacao: string;
+  readonly chaveNaturalAlvo: string | null;
+  readonly resultado: string;
+  readonly estacao: string | null;
+  /** IP de origem (null na sessão "como" do suporte ou sem IP conhecido). */
+  readonly enderecoIp: string | null;
+  readonly correlacao: string;
+  /** Chave de idempotência do pedido (cabeçalho Idempotency-Key): o reenvio devolve o resultado anterior. */
+  readonly idempotencia: string;
+}
+/** Nome curto usado pelo controller e pelo serviço. */
+export type Trilha = TrilhaCatalogo;
+
+type Valor = string | number | null;
+export type CamposCatalogo = Record<string, Valor>;
+
+/** A carga como a fonte a devolve: a resposta pública mais a versão (trava otimista) e o estabelecimento. */
+export type CargaDeCatalogo = CargaCatalogo & {
+  readonly versao: number;
+  readonly hospital: string;
+};
+
+/** Uma linha preparada (validada e comparada) da carga, com o lote em que é publicada. */
+export interface LinhaPreparadaCatalogo {
+  readonly linha: number;
+  readonly entidade: string;
+  readonly chave: string;
+  readonly resultado: 'valida' | 'erro';
+  readonly comparacao: ComparacaoLinha | null;
+  readonly antes: Readonly<Record<string, Valor>> | null;
+  readonly depois: Readonly<Record<string, Valor>> | null;
+  readonly motivo: string | null;
+  /** Lote em que o item é publicado (null: não vai à publicação). */
+  readonly lote: number | null;
+}
+
+/** A carga preparada que a fonte grava na área de preparação. */
+export interface PreparoCargaCatalogo {
+  readonly hospital: string;
+  readonly catalogo: string;
+  readonly arquivo: string;
+  readonly sha256: string;
+  readonly bytes: number;
+  /** Endereço do original no armazenamento com retenção (null: não guardado). */
+  readonly arquivoGuardado: string | null;
+  readonly situacao: 'comparada' | 'rejeitada';
+  readonly edicao: string | null;
+  /** Login de quem enviou. */
+  readonly responsavel: string;
+  readonly motivo: string | null;
+  readonly totais: CargaCatalogo['totais'];
+  readonly lotes: { readonly total: number; readonly tamanho: number };
+  readonly linhas: readonly LinhaPreparadaCatalogo[];
+}
+
+/** Aprovar (comparada → aprovada), rejeitar, cancelar ou marcar a falha, conferindo a versão lida. */
+export interface MudancaSituacaoCarga {
+  readonly hospital: string;
+  readonly id: number;
+  readonly versao: number;
+  readonly de: readonly SituacaoCargaCatalogo[];
+  readonly para: 'aprovada' | 'rejeitada' | 'cancelada' | 'falhou';
+  /** Login de quem decide. */
+  readonly aprovador: string | null;
+  readonly motivo: string | null;
+}
+
+/** Recusa de negócio da área de preparação (situação que não permite a ação, carga mudada). */
+export class ErroCargaCatalogo extends Error {
+  override readonly name = 'ErroCargaCatalogo';
+  constructor(
+    readonly codigo: 'conflito-concorrente' | 'situacao-invalida' | 'catalogo-sem-mapa',
+    mensagem: string,
+  ) {
+    super(mensagem);
+  }
+}
+
+export interface ConsultaCatalogo {
+  readonly titulo: string;
+  readonly colunas: { campo: string; rotulo: string }[];
+  readonly itens: CamposCatalogo[];
+  readonly total: number;
+}
+
+export interface CompetenciaSigtap {
+  readonly competencia: string;
+  readonly valorSh: number | null;
+  readonly valorSa: number | null;
+  readonly valorSp: number | null;
+  atributos: CamposCatalogo;
+}
+
+export interface HistoricoSigtap {
+  readonly procedimento: string;
+  readonly nome: string | null;
+  readonly competencias: CompetenciaSigtap[];
+}
+
+export type LinhaDaCarga = LinhaCargaCatalogo & { lote: number | null };
 
 /** Tudo o que as telas do M13 leem e gravam (as fontes implementam). */
 export interface FonteCatalogos {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   readonly gravacao: { readonly permitida: boolean; readonly motivo: string | null };
   leituraDoBanco(c: CtxCatalogos, catalogo: CodigoCatalogo): LeituraDoBanco;
   leiauteCep(c: CtxCatalogos): Promise<SecaoLeiauteCep[]>;
   responsavel(c: CtxCatalogos, catalogo: CodigoCatalogo): Promise<'novo' | 'externo'>;
+  /** Licença vigente do catálogo licenciado no estabelecimento (regra 7). */
   contrato(c: CtxCatalogos, catalogo: CodigoCatalogo): Promise<boolean>;
   edicao(
     c: CtxCatalogos,
     catalogo: CodigoCatalogo,
   ): Promise<{ ultima: string | null; descricao: string; linhas: number }>;
-  cargas(c: CtxCatalogos, catalogo: string | null): Promise<CargaCatalogoLida[] | null>;
-  carga(c: CtxCatalogos, id: number): Promise<CargaCatalogoLida | null>;
+  cargas(c: CtxCatalogos, catalogo: string | null): Promise<CargaDeCatalogo[] | null>;
+  carga(c: CtxCatalogos, id: number): Promise<CargaDeCatalogo | null>;
   linhas(
     c: CtxCatalogos,
     id: number,
     f: { pagina: number; porPagina: number; comparacao?: string | null; resultado?: string | null },
-  ): Promise<{ itens: LinhaLida[]; total: number }>;
+  ): Promise<{ itens: LinhaDaCarga[]; total: number }>;
   publicadaComHash(c: CtxCatalogos, catalogo: string, sha256: string): Promise<number | null>;
-  gravarCarga(c: CtxCatalogos, nova: NovaCargaCatalogo, trilha: Trilha): Promise<{ id: number }>;
-  mudarSituacao(
-    c: CtxCatalogos,
-    m: Parameters<typeof mudarSituacaoCargaCatalogo>[1],
-    trilha: Trilha,
-  ): Promise<void>;
+  gravarCarga(c: CtxCatalogos, nova: PreparoCargaCatalogo, trilha: Trilha): Promise<{ id: number }>;
+  mudarSituacao(c: CtxCatalogos, m: MudancaSituacaoCarga, trilha: Trilha): Promise<void>;
   consultar(
     c: CtxCatalogos,
     entidade: string,
     f: { busca: string | null; pagina: number; porPagina: number; competencia?: string | null },
-  ): Promise<ConsultaLida | null>;
-  historico(c: CtxCatalogos, procedimento: string): Promise<HistoricoLido | null>;
+  ): Promise<ConsultaCatalogo | null>;
+  historico(c: CtxCatalogos, procedimento: string): Promise<HistoricoSigtap | null>;
   /**
-   * Fonte em memória: publica a carga aprovada na hora (os lotes que o worker publicaria). Na fonte do legado
+   * Fonte em memória: publica a carga aprovada na hora (os lotes que o worker publicaria). Na fonte do banco
    * não existe: a publicação é do worker.
    */
   publicarAgora?(
@@ -99,60 +185,10 @@ export class ErroCatalogosIndisponivel extends ErroProblema {
   }
 }
 
-export function fonteCatalogosLegado(
-  nucleo: NucleoLegado,
-  opcoes: { readonly gravacaoPermitida: boolean; readonly motivoSemGravacao?: string },
-): FonteCatalogos {
-  const ler = <T>(c: CtxCatalogos, fn: (l: Leitor) => Promise<T>): Promise<T> => nucleo.lerSomente(c, fn);
-  const recusar = () => {
-    if (!opcoes.gravacaoPermitida)
-      throw new ErroProblema(
-        'operacao-bloqueada',
-        409,
-        'Gravação desligada',
-        opcoes.motivoSemGravacao ?? undefined,
-        {
-          codigo: 'gravacao-desligada',
-        },
-      );
-  };
-  return {
-    destino: 'legado',
-    gravacao: {
-      permitida: opcoes.gravacaoPermitida,
-      motivo: opcoes.gravacaoPermitida ? null : (opcoes.motivoSemGravacao ?? null),
-    },
-    leituraDoBanco: (c, catalogo) => ({
-      atuais: (entidade, chaves) => ler(c, (l) => itensAtuaisDoCatalogo(l, entidade, chaves)),
-      existentes: (entidade, escopo) => ler(c, (l) => chavesExistentesDoCatalogo(l, entidade, escopo)),
-      edicao: () => ler(c, (l) => edicaoNoBanco(l, catalogo)),
-      referencias: (tabela, codigos) => ler(c, (l) => codigosReferenciadosExistentes(l, tabela, codigos)),
-    }),
-    leiauteCep: (c) => ler(c, (l) => leiauteCepDoBanco(l)),
-    responsavel: (c, cat) => ler(c, (l) => responsavelDoCatalogo(l, c.hospital, cat)),
-    contrato: (c, cat) => ler(c, (l) => contratoVigenteDoCatalogo(l, c.hospital, cat)),
-    edicao: (c, cat) => ler(c, (l) => edicaoNoBanco(l, cat)),
-    cargas: (c, cat) => ler(c, (l) => listarCargasCatalogo(l, c.hospital, cat)),
-    carga: (c, id) => ler(c, (l) => lerCargaCatalogo(l, c.hospital, id)),
-    linhas: (c, id, f) => ler(c, (l) => linhasDaCargaCatalogo(l, id, f)),
-    publicadaComHash: (c, cat, sha) => ler(c, (l) => cargaPublicadaComHash(l, c.hospital, cat, sha)),
-    async gravarCarga(c, nova, trilha) {
-      recusar();
-      return nucleo.gravarSgh(c, (e) => gravarCargaCatalogo(e, nova, trilha));
-    },
-    async mudarSituacao(c, m, trilha) {
-      recusar();
-      await nucleo.gravarSgh(c, (e) => mudarSituacaoCargaCatalogo(e, m, trilha));
-    },
-    consultar: (c, ent, f) => ler(c, (l) => consultarCatalogo(l, ent, f)),
-    historico: (c, p) => ler(c, (l) => historicoSigtap(l, p)),
-  };
-}
-
 export function fonteCatalogosIndisponivel(): FonteCatalogos {
   const recusar = () => Promise.reject(new ErroCatalogosIndisponivel());
   return {
-    destino: 'legado',
+    destino: 'banco',
     gravacao: { permitida: false, motivo: 'Banco do estabelecimento indisponível.' },
     leituraDoBanco: () => ({ atuais: recusar, existentes: recusar, edicao: recusar }),
     leiauteCep: recusar,

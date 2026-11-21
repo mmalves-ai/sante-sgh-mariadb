@@ -14,7 +14,7 @@
 //   POST /api/sadt/agencia/bolsas/:id/movimentos       sadt.movimentarBolsa (a reserva confere a compatibilidade)
 //   POST /api/sadt/agencia/bolsas/:id/corrigir         W0-03: etiqueta, validade e volume antes do uso (a versão
 //                                                      anterior legível; 409 depois do uso)
-// Toda escrita pela chave `agencia.completa` (POL-3), só em tabelas SGH_ com a SGH_TRILHA na mesma transação.
+// Toda escrita pela chave `agencia.completa` (POL-3), com a trilha_auditoria na mesma transação.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type BolsaEstoqueLida,
@@ -61,6 +61,7 @@ import {
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { type GravadorAgencia, PORTA_AGENCIA, type PortaAgencia } from './agencia-porta.js';
 import { PORTA_ENFERMAGEM, type PortaEnfermagem } from './porta.js';
+import { atoDe, sessaoComAto } from './gravacao-direta.js';
 import { chaveDoPedido } from './sae.controller.js';
 import { PORTA_TRANSFUSAO, type PortaTransfusao } from './transfusao-porta.js';
 
@@ -162,7 +163,10 @@ export class AgenciaController {
   async requisicoes(@Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const r = await this.abertas(s);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_HEMO_REQ', chaveNaturalAlvo: `abertas:${String(r.itens.length)}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'requisicao_transfusao',
+      chaveNaturalAlvo: `abertas:${String(r.itens.length)}`,
+    };
     return { ...r, gravacao: await this.gravacao(s) };
   }
 
@@ -172,7 +176,10 @@ export class AgenciaController {
   async requisicoesDoEstoque(@Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const r = await this.abertas(s);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_HEMO_REQ', chaveNaturalAlvo: `abertas:${String(r.itens.length)}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'requisicao_transfusao',
+      chaveNaturalAlvo: `abertas:${String(r.itens.length)}`,
+    };
     return r;
   }
 
@@ -183,7 +190,7 @@ export class AgenciaController {
     const s = sessaoDe(req);
     const agora = await this.agora(s);
     const r = await this.requisicaoOu404(s, idDaRota(id), `${agora}:00`);
-    req.sghAlvo = { paciente: r.paciente.id, tabelaAlvo: 'SGH_SADT_HEMO_REQ', idAlvo: String(r.id) };
+    req.sghAlvo = { paciente: r.paciente.id, tabelaAlvo: 'requisicao_transfusao', idAlvo: String(r.id) };
     const [receptor, resultados, provas, exames, estoque, gravacao] = await Promise.all([
       this.receptor(s, r.paciente.id),
       this.porta.imunos(s.porta, { paciente: r.paciente.id }),
@@ -254,7 +261,7 @@ export class AgenciaController {
       f.paciente ?? (f.requisicao !== undefined && pacientes.size === 1 ? [...pacientes][0] : undefined);
     req.sghAlvo = {
       ...(paciente !== undefined ? { paciente } : {}),
-      tabelaAlvo: 'SGH_SADT_HEMO_IMUNO',
+      tabelaAlvo: 'teste_imuno_hematologico',
       ...(f.requisicao !== undefined
         ? { idAlvo: String(f.requisicao) }
         : { chaveNaturalAlvo: `lista:${String(r.itens.length)}` }),
@@ -274,7 +281,7 @@ export class AgenciaController {
       this.porta.estoque(s.porta, { agora }),
       this.gravacao(s),
     ]);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_HEMO_BOLSA', chaveNaturalAlvo: `lista:${String(r.itens.length)}` };
+    req.sghAlvo = { tabelaAlvo: 'bolsa_hemocomponente', chaveNaturalAlvo: `lista:${String(r.itens.length)}` };
     return {
       itens: r.itens.map((b) => ({ ...b, acoes: acoesPossiveis(b.situacao, b.vencida) })),
       cortada: r.cortada,
@@ -311,7 +318,7 @@ export class AgenciaController {
     // A bolsa reservada mostra o paciente a que se destina: o acesso vai à trilha com ele.
     req.sghAlvo = {
       ...(b.reservadaPara ? { paciente: b.reservadaPara.paciente } : {}),
-      tabelaAlvo: 'SGH_SADT_HEMO_BOLSA',
+      tabelaAlvo: 'bolsa_hemocomponente',
       idAlvo: String(b.id),
     };
     return {
@@ -326,13 +333,13 @@ export class AgenciaController {
   /**
    * W0-03 (matriz, linha "Hemoterapia"; RDC 34/2014 art. 15 §1º): corrigir a bolsa recebida (número da etiqueta,
    * tipagem, validade, volume) só antes do uso — sem ato com o número, fora da reserva e da baixa —, com o motivo; a
-   * versão anterior fica legível em SGH_SADT_HEMO_BOLSA_VERSAO. Depois do uso, 409. O motivo não vai à trilha.
+   * versão anterior fica legível em bolsa_hemocomponente. Depois do uso, 409. O motivo não vai à trilha.
    */
   @Post('bolsas/:id/corrigir')
   @HttpCode(200)
   @Permissao(P.bolsaReceber)
   @AuditadoNoHandler(
-    'a correção da bolsa em SGH_SADT_HEMO_BOLSA e SGH_SADT_HEMO_BOLSA_VERSAO com a SGH_TRILHA',
+    'a correção da bolsa em bolsa_hemocomponente e bolsa_hemocomponente com a trilha_auditoria',
   )
   async corrigir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -345,7 +352,7 @@ export class AgenciaController {
       s,
       E.sadtBolsaCorrigida.codigo,
       P.bolsaReceber,
-      { tabela: 'SGH_SADT_HEMO_BOLSA', id: String(bolsa.id), paciente: null, chave: 'corrigida' },
+      { tabela: 'bolsa_hemocomponente', id: String(bolsa.id), paciente: null, chave: 'corrigida' },
       (g) =>
         g.corrigirBolsa({
           bolsa: bolsa.id,
@@ -373,7 +380,7 @@ export class AgenciaController {
   @HttpCode(201)
   @Permissao(P.imunoRegistrar)
   @AuditadoNoHandler(
-    'sadt.registrarImunoHematologia: SGH_SADT_HEMO_IMUNO com a SGH_TRILHA na mesma transação',
+    'sadt.registrarImunoHematologia: teste_imuno_hematologico com a trilha_auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -408,12 +415,14 @@ export class AgenciaController {
       });
       if (k.length > 0) throw recusa('Prova cruzada', k);
     }
+    // O reenvio do pedido (a mesma Idempotency-Key e o mesmo conteúdo) devolve o resultado da primeira vez.
+    const sa = sessaoComAto(s, e, chave);
     const x = await this.apoio.sgh(
-      s,
+      sa,
       E.sadtImunoRegistrado.codigo,
       P.imunoRegistrar,
       (r: { id: number }) => ({
-        tabela: 'SGH_SADT_HEMO_IMUNO',
+        tabela: 'teste_imuno_hematologico',
         id: String(r.id),
         paciente: e.paciente,
         chave: e.tipo,
@@ -423,7 +432,7 @@ export class AgenciaController {
     return {
       ok: true,
       id: x.id,
-      repetida: x.repetida,
+      repetida: x.repetida || atoDe(sa.porta)?.repetida === true,
       tipagem,
       problemas: problemas.map((p) => MENSAGENS[p] ?? p),
       mensagem:
@@ -442,7 +451,9 @@ export class AgenciaController {
   @Post('imuno/:id/liberar')
   @HttpCode(200)
   @Permissao(P.imunoLiberar)
-  @AuditadoNoHandler('liberação do resultado imuno-hematológico: SGH_SADT_HEMO_IMUNO com a SGH_TRILHA')
+  @AuditadoNoHandler(
+    'liberação do resultado imuno-hematológico: teste_imuno_hematologico com a trilha_auditoria',
+  )
   async liberar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     corpo(esquemaLiberarImunoHematologia, b);
@@ -460,7 +471,7 @@ export class AgenciaController {
       s,
       E.sadtImunoLiberado.codigo,
       P.imunoLiberar,
-      { tabela: 'SGH_SADT_HEMO_IMUNO', id: String(i.id), paciente: i.paciente, chave: i.tipo },
+      { tabela: 'teste_imuno_hematologico', id: String(i.id), paciente: i.paciente, chave: i.tipo },
       (g) => g.liberarImuno({ id: i.id, usuario: s.login }),
     );
     return { ok: true, id: i.id, mensagem: 'Resultado liberado.' };
@@ -469,7 +480,9 @@ export class AgenciaController {
   @Post('imuno/:id/invalidar')
   @HttpCode(200)
   @Permissao(P.imunoLiberar)
-  @AuditadoNoHandler('invalidação do resultado imuno-hematológico: SGH_SADT_HEMO_IMUNO com a SGH_TRILHA')
+  @AuditadoNoHandler(
+    'invalidação do resultado imuno-hematológico: teste_imuno_hematologico com a trilha_auditoria',
+  )
   async invalidar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaInvalidarImunoHematologia, b);
@@ -480,7 +493,7 @@ export class AgenciaController {
       s,
       E.sadtImunoInvalidado.codigo,
       P.imunoLiberar,
-      { tabela: 'SGH_SADT_HEMO_IMUNO', id: String(i.id), paciente: i.paciente, chave: i.tipo },
+      { tabela: 'teste_imuno_hematologico', id: String(i.id), paciente: i.paciente, chave: i.tipo },
       (g) => g.invalidarImuno({ id: i.id, usuario: s.login, motivo: e.motivo }),
     );
     return { ok: true, id: i.id, mensagem: 'Resultado invalidado: colete nova amostra se for preciso.' };
@@ -491,7 +504,9 @@ export class AgenciaController {
   @Post('bolsas')
   @HttpCode(201)
   @Permissao(P.bolsaReceber)
-  @AuditadoNoHandler('sadt.receberBolsa: SGH_SADT_HEMO_BOLSA e _MOV com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'sadt.receberBolsa: bolsa_hemocomponente e _MOV com a trilha_auditoria na mesma transação',
+  )
   async receber(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaReceberBolsa, b);
@@ -508,11 +523,13 @@ export class AgenciaController {
     });
     if (!k.situacao) throw recusa('Recebimento', k.bloqueios);
     const situacao = k.situacao === 'liberada' ? 'liberada' : 'quarentena';
+    // O reenvio do pedido (a mesma Idempotency-Key e o mesmo conteúdo) devolve o resultado da primeira vez.
+    const sa = sessaoComAto(s, e, chave);
     const x = await this.apoio.sgh(
-      s,
+      sa,
       E.sadtBolsaRecebida.codigo,
       P.bolsaReceber,
-      (r: { id: number }) => ({ tabela: 'SGH_SADT_HEMO_BOLSA', id: String(r.id), chave: e.numero }),
+      (r: { id: number }) => ({ tabela: 'bolsa_hemocomponente', id: String(r.id), chave: e.numero }),
       (g) =>
         g.receberBolsa({
           numero: e.numero,
@@ -534,7 +551,7 @@ export class AgenciaController {
     return {
       ok: true,
       id: x.id,
-      repetida: x.repetida,
+      repetida: x.repetida || atoDe(sa.porta)?.repetida === true,
       situacao,
       alertas: k.alertas.map((a) => MENSAGENS[a] ?? a),
       mensagem: situacao === 'liberada' ? 'Bolsa recebida e liberada.' : 'Bolsa recebida em quarentena.',
@@ -545,7 +562,7 @@ export class AgenciaController {
   @HttpCode(200)
   @Permissao(P.bolsaMovimentar)
   @AuditadoNoHandler(
-    'sadt.movimentarBolsa: SGH_SADT_HEMO_BOLSA e _MOV com a SGH_TRILHA; descarte e devolução como BOLSA_DESCARTADA',
+    'sadt.movimentarBolsa: bolsa_hemocomponente e _MOV com a trilha_auditoria; descarte e devolução como BOLSA_DESCARTADA',
   )
   async movimentar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -596,12 +613,14 @@ export class AgenciaController {
       alertas = [...k1.alertas, ...k2.alertas];
     }
     const descarte = e.acao === 'descartar' || e.acao === 'devolver';
+    // O reenvio do pedido (a mesma Idempotency-Key e o mesmo conteúdo) devolve o resultado da primeira vez.
+    const sa = sessaoComAto(s, e, chave);
     const x = await this.apoio.sgh(
-      s,
+      sa,
       descarte ? E.sadtBolsaDescartada.codigo : E.sadtBolsaMovimentada.codigo,
       P.bolsaMovimentar,
       {
-        tabela: 'SGH_SADT_HEMO_BOLSA',
+        tabela: 'bolsa_hemocomponente',
         id: String(bolsa.id),
         paciente,
         chave: `${e.acao}:${bolsa.numero}`.slice(0, 80),
@@ -624,7 +643,7 @@ export class AgenciaController {
       ok: true,
       id: x.id,
       situacao: x.situacao,
-      repetida: x.repetida,
+      repetida: x.repetida || atoDe(sa.porta)?.repetida === true,
       alertas: alertas.map((a) => MENSAGENS[a] ?? a),
       mensagem: 'Movimento registrado.',
     };

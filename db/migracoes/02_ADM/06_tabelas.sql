@@ -1,0 +1,237 @@
+-- ADM, lote 06 (F2.2 onda 2; pedidos dos lotes 02-01, 02-13): tabelas e colunas que as portas próprias pedem.
+-- Convenções do ADR 0002 (parte 2). Sem FOREIGN KEY aqui (06_chaves.sql).
+
+CREATE TABLE pedido_assinatura (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  usuario_id BIGINT UNSIGNED NOT NULL,
+  finalidade VARCHAR(20) NOT NULL,
+  midia VARCHAR(10) NOT NULL,
+  provedor_assinatura_nuvem_id BIGINT UNSIGNED NULL,
+  certificado_usuario_id BIGINT UNSIGNED NULL,
+  hash_estado CHAR(64) NOT NULL COMMENT 'SHA-256 do estado da autorização; o estado em claro nunca é guardado',
+  verificador_pkce_cifrado VARCHAR(500) NULL COMMENT 'Verificador PKCE cifrado com a chave do cofre',
+  hashes JSON NOT NULL COMMENT 'Resumos SHA-256 a assinar',
+  documentos JSON NOT NULL COMMENT 'Documentos do prontuário do lote',
+  expira_em DATETIME(3) NOT NULL,
+  consumido_em DATETIME(3) NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_pedido_assinatura_finalidade CHECK (finalidade IN ('vincular','teste','documento','digitalizacao')),
+  CONSTRAINT ck_pedido_assinatura_midia CHECK (midia IN ('nuvem','a1','a3')),
+  CONSTRAINT ck_pedido_assinatura_nuvem CHECK (midia <> 'nuvem' OR provedor_assinatura_nuvem_id IS NOT NULL),
+  UNIQUE KEY uq_pedido_assinatura_hash_estado (hash_estado),
+  KEY ix_pedido_assinatura_usuario (usuario_id, expira_em),
+  KEY ix_pedido_assinatura_estabelecimento_id (estabelecimento_id),
+  KEY ix_pedido_assinatura_provedor (provedor_assinatura_nuvem_id),
+  KEY ix_pedido_assinatura_certificado (certificado_usuario_id)
+) COMMENT='Pedido de assinatura de uso único, com prazo: autorização do titular no provedor ou desafio do agente local';
+
+CREATE TABLE previa_assinatura (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  documento_prontuario_id BIGINT UNSIGNED NOT NULL,
+  usuario_id BIGINT UNSIGNED NOT NULL,
+  certificado_usuario_id BIGINT UNSIGNED NOT NULL,
+  politica_icp VARCHAR(10) NOT NULL,
+  arquivo_id BIGINT UNSIGNED NOT NULL COMMENT 'PDF/A da prévia no armazenamento (versão imutável)',
+  hash_pdf CHAR(64) NOT NULL,
+  codigo_verificacao VARCHAR(64) NOT NULL,
+  assinar_em DATETIME(3) NOT NULL COMMENT 'Instante da assinatura gravado no PDF',
+  profissional_exibido VARCHAR(150) NULL COMMENT 'O profissional como o selo mostra',
+  registro_exibido VARCHAR(60) NULL COMMENT 'O registro no conselho como o selo mostra',
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_previa_assinatura_politica_icp CHECK (politica_icp IN ('AD-RB','AD-RT')),
+  UNIQUE KEY uq_previa_assinatura_codigo (codigo_verificacao),
+  KEY ix_previa_assinatura_documento (documento_prontuario_id, usuario_id, criado_em),
+  KEY ix_previa_assinatura_estabelecimento_id (estabelecimento_id),
+  KEY ix_previa_assinatura_usuario_id (usuario_id),
+  KEY ix_previa_assinatura_certificado (certificado_usuario_id),
+  KEY ix_previa_assinatura_arquivo_id (arquivo_id)
+) COMMENT='Prévia exata do documento a assinar (o que a tela mostra é o que se assina), com o código do verificador';
+
+CREATE TABLE assinatura_icp (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  origem_assinatura VARCHAR(20) NOT NULL,
+  documento_prontuario_id BIGINT UNSIGNED NULL,
+  previa_assinatura_id BIGINT UNSIGNED NULL,
+  usuario_id BIGINT UNSIGNED NOT NULL,
+  certificado_usuario_id BIGINT UNSIGNED NOT NULL,
+  provedor_assinatura_nuvem_id BIGINT UNSIGNED NULL,
+  midia VARCHAR(10) NOT NULL,
+  formato VARCHAR(10) NOT NULL DEFAULT 'pades',
+  politica_icp VARCHAR(10) NOT NULL,
+  hash_assinado CHAR(64) NOT NULL,
+  situacao VARCHAR(20) NOT NULL DEFAULT 'pendente',
+  tentativas SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  falha VARCHAR(60) NULL COMMENT 'Código da falha (nunca o texto da fonte)',
+  proxima_tentativa_em DATETIME(3) NULL,
+  assinatura_cms MEDIUMBLOB NULL,
+  carimbo_tempo MEDIUMBLOB NULL,
+  carimbo_tempo_em DATETIME(3) NULL,
+  carimbo_tempo_serie VARCHAR(64) NULL,
+  arquivo_assinado_id BIGINT UNSIGNED NULL COMMENT 'PDF com a assinatura embutida',
+  assinatura_documento_id BIGINT UNSIGNED NULL COMMENT 'A assinatura concluída no envelope do documento',
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_assinatura_icp_origem CHECK (origem_assinatura IN ('teste','documento','digitalizacao')),
+  CONSTRAINT ck_assinatura_icp_documento CHECK (origem_assinatura <> 'documento' OR documento_prontuario_id IS NOT NULL),
+  CONSTRAINT ck_assinatura_icp_midia CHECK (midia IN ('nuvem','a1','a3')),
+  CONSTRAINT ck_assinatura_icp_formato CHECK (formato IN ('pades','cades','xades')),
+  CONSTRAINT ck_assinatura_icp_politica CHECK (politica_icp IN ('AD-RB','AD-RT')),
+  CONSTRAINT ck_assinatura_icp_situacao CHECK (situacao IN ('pendente','assinada','falha')),
+  CONSTRAINT ck_assinatura_icp_assinada CHECK (situacao <> 'assinada' OR assinatura_cms IS NOT NULL),
+  KEY ix_assinatura_icp_documento (documento_prontuario_id, situacao),
+  KEY ix_assinatura_icp_fila (estabelecimento_id, situacao, proxima_tentativa_em),
+  KEY ix_assinatura_icp_usuario (usuario_id, criado_em),
+  KEY ix_assinatura_icp_certificado (certificado_usuario_id),
+  KEY ix_assinatura_icp_previa (previa_assinatura_id),
+  KEY ix_assinatura_icp_provedor (provedor_assinatura_nuvem_id),
+  KEY ix_assinatura_icp_arquivo (arquivo_assinado_id),
+  KEY ix_assinatura_icp_assinatura_documento (assinatura_documento_id)
+) COMMENT='Assinatura ICP em andamento, com tentativas e reprocessamento; ao concluir, vira assinatura do documento';
+
+CREATE TABLE validacao_assinatura (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  assinatura_icp_id BIGINT UNSIGNED NOT NULL,
+  momento VARCHAR(20) NOT NULL,
+  resultado VARCHAR(20) NOT NULL,
+  cadeia_ok BOOLEAN NULL,
+  vigencia_ok BOOLEAN NULL,
+  revogacao_ok BOOLEAN NULL,
+  cpf_ok BOOLEAN NULL,
+  assinatura_ok BOOLEAN NULL,
+  carimbo_ok BOOLEAN NULL,
+  motivos JSON NULL COMMENT 'Códigos das recusas (nunca texto da fonte)',
+  usuario_id BIGINT UNSIGNED NULL,
+  validada_em DATETIME(3) NOT NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_validacao_assinatura_momento CHECK (momento IN ('incluir','assinar','imprimir','importar','exportar')),
+  CONSTRAINT ck_validacao_assinatura_resultado CHECK (resultado IN ('valida','invalida','indeterminada')),
+  KEY ix_validacao_assinatura_assinatura (assinatura_icp_id, validada_em),
+  KEY ix_validacao_assinatura_usuario_id (usuario_id)
+) COMMENT='Validação da assinatura no servidor, por momento, com o resultado de cada conferência';
+
+CREATE TABLE aviso_assinatura (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  assinatura_icp_id BIGINT UNSIGNED NOT NULL,
+  destinatario VARCHAR(20) NOT NULL,
+  usuario_id BIGINT UNSIGNED NULL COMMENT 'O autor (destinatário autor); nulo para a direção técnica',
+  situacao_assinatura VARCHAR(20) NOT NULL,
+  falha VARCHAR(60) NULL,
+  lido_em DATETIME(3) NULL,
+  lido_por BIGINT UNSIGNED NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_aviso_assinatura_destinatario CHECK (destinatario IN ('autor','diretor-tecnico')),
+  CONSTRAINT ck_aviso_assinatura_autor CHECK (destinatario <> 'autor' OR usuario_id IS NOT NULL),
+  CONSTRAINT ck_aviso_assinatura_situacao CHECK (situacao_assinatura IN ('pendente','falha')),
+  KEY ix_aviso_assinatura_abertos (estabelecimento_id, destinatario, lido_em),
+  KEY ix_aviso_assinatura_assinatura (assinatura_icp_id),
+  KEY ix_aviso_assinatura_usuario_id (usuario_id),
+  KEY ix_aviso_assinatura_lido_por (lido_por)
+) COMMENT='Aviso de assinatura pendente ou em falha ao autor e à direção técnica, com a leitura';
+
+CREATE TABLE regra_politica_assinatura (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  politica_assinatura_id BIGINT UNSIGNED NOT NULL COMMENT 'Política do estabelecimento e do tipo de documento clínico',
+  conselho_classe_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os conselhos',
+  destino VARCHAR(10) NOT NULL,
+  nivel VARCHAR(30) NOT NULL,
+  padrao_assinatura VARCHAR(10) NULL COMMENT 'Política ICP-Brasil desta regra; nulo: a da política',
+  formato VARCHAR(10) NULL COMMENT 'Formato desta regra; nulo: pades',
+  justificativa VARCHAR(500) NOT NULL,
+  vigencia_inicio DATE NOT NULL,
+  vigencia_fim DATE NULL,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  escopo_conselho BIGINT UNSIGNED AS (IFNULL(conselho_classe_id, 0)) PERSISTENT,
+  vigente TINYINT UNSIGNED AS (IF(ativo AND vigencia_fim IS NULL, 1, NULL)) PERSISTENT COMMENT 'Marca a regra vigente (uma por chave); nulo nas encerradas e inativas',
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_regra_politica_assinatura_destino CHECK (destino IN ('interno','externo')),
+  CONSTRAINT ck_regra_politica_assinatura_nivel CHECK (nivel IN ('eletronica-simples','eletronica-avancada','icp-brasil')),
+  CONSTRAINT ck_regra_politica_assinatura_padrao CHECK (padrao_assinatura IS NULL OR padrao_assinatura IN ('ad_rb','ad_rt','ad_rv','ad_rc','ad_ra')),
+  CONSTRAINT ck_regra_politica_assinatura_formato CHECK (formato IS NULL OR formato IN ('pades','cades','xades')),
+  CONSTRAINT ck_regra_politica_assinatura_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),
+  UNIQUE KEY uq_regra_politica_assinatura_vigente (politica_assinatura_id, destino, escopo_conselho, vigente),
+  UNIQUE KEY uq_regra_politica_assinatura_inicio (politica_assinatura_id, destino, escopo_conselho, vigencia_inicio),
+  KEY ix_regra_politica_assinatura_conselho (conselho_classe_id)
+) COMMENT='Regra da política de assinatura por conselho e destino (nível exigido), com vigência; uma vigente por chave';
+
+CREATE TABLE servico_compartilhado_rede (
+  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL COMMENT 'Estabelecimento de quem registrou',
+  area              VARCHAR(20) NOT NULL,
+  titulo            VARCHAR(120) NOT NULL,
+  descricao         VARCHAR(1000) NULL,
+  situacao          VARCHAR(20) NOT NULL DEFAULT 'registrada',
+  registrado_por_usuario_id BIGINT UNSIGNED NOT NULL,
+  registrado_em     DATETIME(3) NOT NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em DATETIME(3) NULL,
+  excluido_por BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_servico_compartilhado_rede_area CHECK (area IN ('catalogo','fornecedores','compras','laudos','outro')),
+  CONSTRAINT ck_servico_compartilhado_rede_situacao CHECK (situacao IN ('registrada','em_estudo','adotada','descartada')),
+  CONSTRAINT ck_servico_compartilhado_rede_titulo CHECK (CHAR_LENGTH(TRIM(titulo)) >= 3),
+  KEY ix_servico_compartilhado_rede_estabelecimento (estabelecimento_id, registrado_em),
+  KEY ix_servico_compartilhado_rede_registrado_por (registrado_por_usuario_id)
+) COMMENT='Oportunidade de serviço compartilhado entre os estabelecimentos da rede (registro sem compromisso de escopo)';
+
+CREATE TABLE servico_compartilhado_rede_estabelecimento (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  servico_compartilhado_rede_id BIGINT UNSIGNED NOT NULL,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em DATETIME(3) NULL,
+  excluido_por BIGINT UNSIGNED NULL,
+  UNIQUE KEY uq_servico_compartilhado_rede_estabelecimento_par (servico_compartilhado_rede_id, estabelecimento_id),
+  KEY ix_servico_compartilhado_rede_estabelecimento_estabelecimento (estabelecimento_id)
+) COMMENT='Estabelecimentos envolvidos na oportunidade de serviço compartilhado';
+
+ALTER TABLE certificado_usuario
+  ADD COLUMN certificado_der BLOB NULL COMMENT 'Parte pública do certificado (DER); a chave privada nunca é guardada' AFTER impressao_digital;
+
+ALTER TABLE provedor_assinatura_nuvem
+  ADD COLUMN cliente_identificador VARCHAR(200) NULL COMMENT 'Identificador do sistema no provedor (OAuth client_id); o segredo fica no cofre' AFTER url_autorizacao,
+  ADD COLUMN autoridades JSON NULL COMMENT 'Autoridades certificadoras aceitas do provedor' AFTER cliente_identificador;
+
+ALTER TABLE provedor_assinatura_nuvem
+  ADD COLUMN escopo_estabelecimento BIGINT UNSIGNED AS (IFNULL(estabelecimento_id, 0)) PERSISTENT COMMENT 'Estabelecimento do provedor; 0 quando vale para a rede inteira (unicidade)' AFTER estabelecimento_id,
+  DROP INDEX uq_provedor_assinatura_nuvem_codigo,
+  ADD UNIQUE KEY uq_provedor_assinatura_nuvem_codigo (escopo_estabelecimento, codigo);
+
+ALTER TABLE consulta_verificacao_documento
+  ADD COLUMN estabelecimento_id BIGINT UNSIGNED NULL AFTER id,
+  ADD KEY ix_consulta_verificacao_documento_estabelecimento (estabelecimento_id, ocorrido_em),
+  DROP CONSTRAINT ck_consulta_verificacao_documento_resultado,
+  ADD CONSTRAINT ck_consulta_verificacao_documento_resultado CHECK (resultado IN ('autentico','nao_encontrado','revogado','alterado','bloqueado','indeterminado','pendente'));

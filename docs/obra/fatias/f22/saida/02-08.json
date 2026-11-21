@@ -1,0 +1,121 @@
+{
+  "lote": "02-08",
+  "registrar": [
+    "faturamento",
+    "implantacao"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/faturamento/apoios.ts",
+    "src/modulos/faturamento/esquemas.ts",
+    "src/modulos/faturamento/faturamento.controller.ts",
+    "src/modulos/faturamento/faturamento.spec.ts",
+    "src/modulos/faturamento/modulo.ts",
+    "src/modulos/faturamento/operacoes.ts",
+    "src/modulos/faturamento/porta-memoria.ts",
+    "src/modulos/faturamento/porta-propria.int.spec.ts",
+    "src/modulos/faturamento/porta-propria.ts",
+    "src/modulos/faturamento/porta.ts",
+    "src/modulos/faturamento/public-api.ts",
+    "src/modulos/faturamento/regras-conta.spec.ts",
+    "src/modulos/faturamento/regras-conta.ts",
+    "src/modulos/faturamento/servico.ts",
+    "src/modulos/implantacao/aplicacao/conferencia.ts",
+    "src/modulos/implantacao/aplicacao/fumaca.ts",
+    "src/modulos/implantacao/aplicacao/regras-banco.ts",
+    "src/modulos/implantacao/conferencia.controller.ts",
+    "src/modulos/implantacao/conferencia.spec.ts",
+    "src/modulos/implantacao/filas.ts",
+    "src/modulos/implantacao/fumaca.controller.ts",
+    "src/modulos/implantacao/fumaca.spec.ts",
+    "src/modulos/implantacao/modulo.ts",
+    "src/modulos/implantacao/ntp.spec.ts",
+    "src/modulos/implantacao/ntp.ts",
+    "src/modulos/implantacao/porta-memoria.ts",
+    "src/modulos/implantacao/porta-propria.int.spec.ts",
+    "src/modulos/implantacao/porta-propria.ts",
+    "src/modulos/implantacao/porta.ts",
+    "src/modulos/implantacao/public-api.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "decisao_lancamento_tardio",
+      "motivo": "fila do lançamento que chega depois do fechamento e a decisão (reabrir, complementar, descartar). Hoje a porta própria lê a fila vazia e recusa a decisão com 'modelo-pendente'.",
+      "ddl": "CREATE TABLE decisao_lancamento_tardio (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  conta_hospitalar_id BIGINT UNSIGNED NOT NULL COMMENT 'Conta já fechada quando o lançamento chegou',\n  conta_hospitalar_item_id BIGINT UNSIGNED NULL COMMENT 'Item lançado depois do fechamento, quando já existe',\n  atendimento_id BIGINT UNSIGNED NOT NULL,\n  lancamento_origem_evento_id BIGINT UNSIGNED NULL COMMENT 'Evento de origem do lançamento (prescrição, dispensação, laudo)',\n  chegou_em DATETIME(3) NOT NULL,\n  decisao VARCHAR(20) NULL,\n  motivo VARCHAR(250) NULL,\n  decidido_em DATETIME(3) NULL,\n  decidido_por_usuario_id BIGINT UNSIGNED NULL,\n  conta_complementar_id BIGINT UNSIGNED NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_decisao_lancamento_tardio_decisao CHECK (decisao IS NULL OR decisao IN ('reabrir','complementar','descartar')),\n  CONSTRAINT ck_decisao_lancamento_tardio_decidida CHECK (decisao IS NULL OR (decidido_em IS NOT NULL AND decidido_por_usuario_id IS NOT NULL AND motivo IS NOT NULL)),\n  KEY ix_decisao_lancamento_tardio_pendentes (estabelecimento_id, decisao),\n  KEY ix_decisao_lancamento_tardio_conta (conta_hospitalar_id), KEY ix_decisao_lancamento_tardio_item (conta_hospitalar_item_id),\n  KEY ix_decisao_lancamento_tardio_atendimento (atendimento_id), KEY ix_decisao_lancamento_tardio_evento (lancamento_origem_evento_id),\n  KEY ix_decisao_lancamento_tardio_usuario (decidido_por_usuario_id), KEY ix_decisao_lancamento_tardio_complementar (conta_complementar_id)\n) COMMENT='Fila do lançamento que chega depois do fechamento da conta e a decisão do faturista';\nALTER TABLE decisao_lancamento_tardio\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_conta_hospitalar_id FOREIGN KEY (conta_hospitalar_id) REFERENCES conta_hospitalar (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_conta_hospitalar_item_id FOREIGN KEY (conta_hospitalar_item_id) REFERENCES conta_hospitalar_item (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_atendimento_id FOREIGN KEY (atendimento_id) REFERENCES atendimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_lancamento_origem_evento_id FOREIGN KEY (lancamento_origem_evento_id) REFERENCES lancamento_origem_evento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_decidido_por_usuario_id FOREIGN KEY (decidido_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_decisao_lancamento_tardio_conta_complementar_id FOREIGN KEY (conta_complementar_id) REFERENCES conta_hospitalar (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "regra_faturabilidade",
+      "motivo": "regras de faturabilidade por fonte pagadora (o que o item exige; bloqueia o fechamento). Hoje regras() lê vazio e editarRegra recusa com 'modelo-pendente'.",
+      "ddl": "CREATE TABLE regra_faturabilidade (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  fonte_pagadora_id BIGINT UNSIGNED NOT NULL,\n  nome VARCHAR(120) NOT NULL,\n  exige VARCHAR(30) NOT NULL COMMENT 'O que a regra exige do item (guia, laudo, autorização...)',\n  natureza_conta VARCHAR(20) NULL COMMENT 'Nulo: vale para toda natureza de conta',\n  seletor JSON NOT NULL COMMENT 'Grupos de faturamento e itens faturáveis a que a regra se aplica',\n  bloqueia_fechamento BOOLEAN NOT NULL DEFAULT TRUE,\n  vigencia_inicio DATE NOT NULL, vigencia_fim DATE NULL,\n  ativo BOOLEAN NOT NULL DEFAULT TRUE,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_regra_faturabilidade_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  CONSTRAINT ck_regra_faturabilidade_natureza CHECK (natureza_conta IS NULL OR natureza_conta IN ('ambulatorial','pronto_atendimento','externo','internacao','domiciliar')),\n  CONSTRAINT seletor CHECK (JSON_VALID(seletor)),\n  UNIQUE KEY uq_regra_faturabilidade_nome (estabelecimento_id, fonte_pagadora_id, nome),\n  KEY ix_regra_faturabilidade_fonte_pagadora (fonte_pagadora_id)\n) COMMENT='Regra de faturabilidade por fonte pagadora: o que o item precisa para ser cobrado';\nALTER TABLE regra_faturabilidade\n  ADD CONSTRAINT fk_regra_faturabilidade_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_regra_faturabilidade_fonte_pagadora_id FOREIGN KEY (fonte_pagadora_id) REFERENCES fonte_pagadora (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "orcamento_particular / orcamento_particular_item",
+      "motivo": "o orçamento particular da tela tem item livre (descrição digitada), urgência e garantia antes: faltam as colunas. Hoje registrarOrcamento recusa com 'modelo-pendente' (a leitura funciona).",
+      "ddl": "ALTER TABLE orcamento_particular\n  ADD COLUMN urgencia BOOLEAN NOT NULL DEFAULT FALSE AFTER situacao,\n  ADD COLUMN exige_garantia_antes BOOLEAN NOT NULL DEFAULT FALSE AFTER urgencia;\nALTER TABLE orcamento_particular_item\n  ADD COLUMN descricao VARCHAR(150) NULL COMMENT 'Item livre digitado no orçamento' AFTER tipo_item,\n  DROP CONSTRAINT ck_orcamento_particular_item_alvo,\n  ADD CONSTRAINT ck_orcamento_particular_item_alvo CHECK (item_faturavel_id IS NOT NULL OR grupo_faturamento_id IS NOT NULL OR funcao_equipe_cobranca_id IS NOT NULL OR descricao IS NOT NULL);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "movimento_caixa",
+      "motivo": "o recebimento particular liga o pagamento ao orçamento ou à conta e guarda as parcelas; depois o recibo sai do recebimento (recibo.valor_extenso exige o valor por extenso: função pura no dominio-faturamento). Hoje receberParticular e emitirRecibo recusam com 'modelo-pendente'.",
+      "ddl": "ALTER TABLE movimento_caixa\n  ADD COLUMN orcamento_particular_id BIGINT UNSIGNED NULL AFTER adiantamento_paciente_id,\n  ADD COLUMN conta_hospitalar_id BIGINT UNSIGNED NULL AFTER orcamento_particular_id,\n  ADD COLUMN parcelas SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER valor,\n  ADD KEY ix_movimento_caixa_orcamento_particular_id (orcamento_particular_id),\n  ADD KEY ix_movimento_caixa_conta_hospitalar_id (conta_hospitalar_id),\n  ADD CONSTRAINT ck_movimento_caixa_parcelas CHECK (parcelas BETWEEN 1 AND 24),\n  ADD CONSTRAINT fk_movimento_caixa_orcamento_particular_id FOREIGN KEY (orcamento_particular_id) REFERENCES orcamento_particular (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_movimento_caixa_conta_hospitalar_id FOREIGN KEY (conta_hospitalar_id) REFERENCES conta_hospitalar (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "migracao_aplicada",
+      "motivo": "a conferência da instalação (M60.2) compara as migrações do pacote (db/migracoes, numeradas pela ordem e com SHA-256) com as aplicadas no banco do cliente. Sem a tabela, a porta devolve nulo e o item sai em alerta com o motivo.",
+      "ddl": "CREATE TABLE migracao_aplicada (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  numero INT UNSIGNED NOT NULL COMMENT 'Posição do arquivo na ordem de db/migracoes (pasta e arquivo)',\n  arquivo VARCHAR(200) NOT NULL COMMENT 'Pasta/arquivo da migração',\n  hash CHAR(64) NOT NULL COMMENT 'SHA-256 do conteúdo do arquivo',\n  aplicada_em DATETIME(3) NOT NULL,\n  CONSTRAINT ck_migracao_aplicada_hash CHECK (hash REGEXP '^[0-9a-f]{64}$'),\n  UNIQUE KEY uq_migracao_aplicada_numero (numero),\n  UNIQUE KEY uq_migracao_aplicada_arquivo (arquivo)\n) COMMENT='Registro das migrações aplicadas no banco do cliente (conferência da instalação)';\n-- e o tools/db/criar_cliente.py (e a atualização do cliente) grava uma linha por arquivo aplicado."
+    },
+    {
+      "tipo": "dominio",
+      "alvo": "packages/dominio-config (implantacao/conferencia.ts e fumaca.ts)",
+      "motivo": "as regras gerais da conferência ainda falam do motor antigo (Srp, WireCrypt, SYSDBA, charset NONE/WIN1252, papel SGH_APLICACAO, impressão com tabelas bloqueadas). O lote troca os itens motor, autenticação, canal, charset e conta em apps/api/src/modulos/implantacao/aplicacao/regras-banco.ts (MariaDB 11/12, ed25519/parsec/caching_sha2, TLS, utf8mb4, conta root): levar para o dominio-config e aposentar as antigas; o texto do item 'impressao-digital' divergente não deve falar de escrita bloqueada."
+    },
+    {
+      "tipo": "dominio",
+      "alvo": "packages/dominio-faturamento",
+      "motivo": "as regras da conta sobre o modelo próprio (situação, fechamento, reabertura, etapas, grupo do item) estão em apps/api/src/modulos/faturamento/regras-conta.ts, puras e testadas: levar ao dominio-faturamento e aposentar conferirFechamento/conferirReabertura/situacaoDerivada baseadas em marca S/N, remessa e emissão."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/faturamento/respostas.ts e implantacao/instalacao.ts",
+      "motivo": "o contrato das telas ainda pede marcas do sistema antigo: ContaResumo.fechada (N/S/A), tipoConta E/I, pacote C/N, indEmi, remessa, dataEmissao, retratoLegado, origem 'outro'/'antigo', versao em texto, hora; ConexaoConferida.charsetParametro CP1252/UTF8 e NOMES_CHARSET_FIREBIRD; PARAMETRO_CHARSET_LEGADO. A porta preenche pela situação do modelo (regras-conta.ts) e versaoTexto(versao). Trocar pela situação do modelo, versão numérica e remover os campos de convivência."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "faturamento/porta-propria.ts notaSala e cirurgias",
+      "motivo": "a nota de sala e as cirurgias com conta são do centro cirúrgico (ato_cirurgico, consumo_cirurgia): ligar quando o lote do centro cirúrgico expuser a leitura; hoje nula e vazia."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "faturamento/porta-propria.ts editarPacote e apoioPacotes.orcamentosPadrao",
+      "motivo": "o pacote por fonte pagadora é cadastro dos contratos (pacote, pacote_contrato, pacote_item_incluso); a edição pela tela da conta recusa com 'modelo-pendente' e a leitura usa pacote_contrato. Decidir se a tela passa a editar pacote_contrato ou só lê."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "implantacao/fumaca.controller.ts",
+      "motivo": "nova variável de ambiente ESTRUTURA_HOMOLOGADA (SHA-256 da estrutura do banco homologado, levado pelo pacote) para o item 'impressao-digital'; registrar no .env.exemplo e no pipeline de implantação."
+    },
+    {
+      "tipo": "operacao",
+      "alvo": "catálogo de ações (acoes-sistema)",
+      "motivo": "as operações do executor do M30 se chamam faturamento.fechar-conta, faturamento.reabrir-conta, faturamento.conferir-item, faturamento.lancar-item e faturamento.gravacao-direta (a tela segue usando faturamento.fecharConta etc. como chave): conferir se a liberação por operação do criar_cliente precisa desses nomes."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/faturamento/regras/particular.ts",
+      "motivo": "aposentar CONVENIO_PARTICULAR_FAT (código 10 da tabela de convênios de origem) e conferirContaParticular(convenio): a conta particular é a de fonte_pagadora.tipo = 'particular'. O lote passou a usar PortaFaturamento.contaParticular (booleano) e conferirRecebimentoDaConta (regras-conta.ts); nenhum uso restante no módulo."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/faturamento/entradas.ts (esquemaLancarItem, esquemaRegistrarPendencia)",
+      "motivo": "local e ato usam 0 como 'sem valor' e o tipo de pendência cita a tabela de origem (0 = tipo do novo): trocar por id nulo (setor_funcional_id, ato) e id do tipo_pendencia_conta. A porta própria já trata local > 0 como setor_funcional do estabelecimento e grava o ato na memória do cálculo."
+    },
+    {
+      "tipo": "ddl-opcional",
+      "tabela": "parecer_auditoria_conta",
+      "motivo": "hoje os pareceres da auditoria (papel enfermeiro|medico) ficam na lista do retrato 'depois' de auditoria_conta_versao (um 'antes' ao abrir e um 'depois' por auditoria, respeitando uq_auditoria_conta_versao_auditoria_momento). Se o produto quiser consulta e trilha por parecer, criar parecer_auditoria_conta (auditoria_conta_id, papel CHECK IN ('enfermeiro','medico'), parecer TEXT, usuario_id, registrado_em, colunas padrão) e migrar a lista."
+    }
+  ]
+}

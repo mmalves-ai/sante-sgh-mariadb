@@ -25,6 +25,7 @@ import {
   esquemaResultadoRouparia,
   esquemaSituacaoCotaSetor,
 } from '@sgh/contratos';
+import { moduloRouparia } from './modulo.js';
 import { PortaRoupariaMemoria } from './porta-memoria.js';
 
 const R = '/api/hotelaria/rouparia';
@@ -35,7 +36,7 @@ interface Sessao {
 }
 
 async function montar(o: { semRouparia?: boolean } = {}) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'rouparia' };
   const trilha = new RegistradorTrilhaMemoria();
   const relogio = { hoje: HOJE, agora: `${HOJE}T09:00:00` };
   const rouparia = new PortaRoupariaMemoria(() => ({ ...relogio }));
@@ -48,8 +49,11 @@ async function montar(o: { semRouparia?: boolean } = {}) {
     : undefined;
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    rouparia,
-    ...(configuracao ? { configuracao } : {}),
+    registro: {
+      rouparia: async () => ({
+        modulo: (ctx) => moduloRouparia(ctx, { porta: rouparia, ...(configuracao ? { configuracao } : {}) }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

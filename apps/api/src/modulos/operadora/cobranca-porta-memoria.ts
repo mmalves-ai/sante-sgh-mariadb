@@ -2,25 +2,9 @@
 // produto e os beneficiários vêm da porta da F1 em memória (os mesmos que a tela de beneficiários cadastra); as
 // cobranças, os itens e os reajustes ficam aqui, com as mesmas recusas do banco (a mensalidade única por contrato e
 // competência, o reajuste vigente único, a versão vista e a situação) e a transação desfeita por inteiro quando a
-// função falha. Nada vai à cópia.
-import {
-  type BaseMensalidadeLida,
-  type BeneficiarioBaseLido,
-  type CobrancaLida,
-  type CobrancaSgh,
-  type ContratoCobrancaLido,
-  type ContratoOpeLido,
-  ErroOperacao,
-  type FiltroCobrancasSgh,
-  type ItemCobrancaLido,
-  type ItemCobrancaSgh,
-  LIMITE_CONTRATOS_GERACAO,
-  LIMITE_PAGINA_COBRANCA,
-  type OperadoraOpeLida,
-  type ReajusteOpeLido,
-  type ReajusteSgh,
-  type TotaisCobrancaLidos,
-} from '@sgh/legado';
+// função falha. Nada vai ao banco.
+import { ErroOperacao } from '@sgh/nucleo';
+import { type DadosBaseMensalidade, type DadosBeneficiarioBase, type DadosCobranca, type DadosContratoCobranca, type DadosItemCobranca, type DadosOperadora, type DadosReajuste, type EntradaCobranca, type EntradaItemCobranca, type EntradaReajuste, type FiltroCobrancasPorta, LIMITE_CONTRATOS_GERACAO, LIMITE_PAGINA_COBRANCA, type TotaisCobranca } from './dados-portas.js';
 import { hojeLocal } from './aplicacao/beneficiarios.js';
 import type {
   ContextoCobranca,
@@ -30,7 +14,10 @@ import type {
 } from './cobranca-porta.js';
 import type { PortaOperadora } from './porta.js';
 
-type Situacao = CobrancaLida['situacao'];
+// Os tipos da operadora, do produto, do contrato e do beneficiário são os da porta da F1 (derivados dela).
+type DadosContrato = NonNullable<Awaited<ReturnType<PortaOperadora['contrato']>>>;
+
+type Situacao = DadosCobranca['situacao'];
 interface CobrancaMem {
   id: number;
   hospital: string;
@@ -63,9 +50,9 @@ interface CobrancaMem {
   criadoPor: string;
   alteradoEm: string;
   alteradoPor: string;
-  itens: ItemCobrancaSgh[];
+  itens: EntradaItemCobranca[];
 }
-interface ReajusteMem extends ReajusteSgh {
+interface ReajusteMem extends EntradaReajuste {
   id: number;
   hospital: string;
   situacao: 'vigente' | 'cancelado';
@@ -105,13 +92,13 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     return this.relogio();
   }
 
-  operadoras(c: ContextoCobranca): Promise<OperadoraOpeLida[]> {
+  operadoras(c: ContextoCobranca): Promise<DadosOperadora[]> {
     return this.f1.operadoras(c);
   }
 
   /** Todos os contratos da operadora (pelas páginas da F1). */
-  private async contratosDa(c: ContextoCobranca, operadora: number): Promise<ContratoOpeLido[]> {
-    const todos: ContratoOpeLido[] = [];
+  private async contratosDa(c: ContextoCobranca, operadora: number): Promise<DadosContrato[]> {
+    const todos: DadosContrato[] = [];
     let apos: number | undefined;
     for (;;) {
       const p = await this.f1.contratos(c, { operadora, ...(apos !== undefined ? { apos } : {}) });
@@ -125,8 +112,8 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     c: ContextoCobranca,
     operadora: number,
     contrato: number,
-  ): Promise<(BeneficiarioBaseLido & { contrato: number; cpf: string | null })[]> {
-    const todos: (BeneficiarioBaseLido & { contrato: number; cpf: string | null })[] = [];
+  ): Promise<(DadosBeneficiarioBase & { contrato: number; cpf: string | null })[]> {
+    const todos: (DadosBeneficiarioBase & { contrato: number; cpf: string | null })[] = [];
     let apos: number | undefined;
     for (;;) {
       const p = await this.f1.beneficiarios(c, {
@@ -152,7 +139,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     }
   }
 
-  private async contratoDe(c: ContextoCobranca, k: ContratoOpeLido): Promise<ContratoCobrancaLido> {
+  private async contratoDe(c: ContextoCobranca, k: DadosContrato): Promise<DadosContratoCobranca> {
     const p = await this.f1.produto(c, k.produto);
     return {
       id: k.id,
@@ -178,7 +165,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
   async baseMensalidades(
     c: ContextoCobranca,
     f: FiltroBaseMensalidades,
-  ): Promise<{ itens: BaseMensalidadeLida[]; proxima: number | null }> {
+  ): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }> {
     const lista = (await this.contratosDa(c, f.operadora)).filter(
       (k) =>
         k.situacao !== 'encerrado' &&
@@ -188,7 +175,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
         (!f.apos || k.id > f.apos),
     );
     const pagina = lista.slice(0, LIMITE_CONTRATOS_GERACAO);
-    const itens: BaseMensalidadeLida[] = [];
+    const itens: DadosBaseMensalidade[] = [];
     for (const k of pagina) {
       const base = await this.contratoDe(c, k);
       const bens = (await this.beneficiariosDo(c, f.operadora, k.id)).filter(
@@ -225,7 +212,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     };
   }
 
-  async contrato(c: ContextoCobranca, id: number): Promise<ContratoCobrancaLido | null> {
+  async contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null> {
     const k = await this.f1.contrato(c, id);
     return k ? this.contratoDe(c, k) : null;
   }
@@ -258,7 +245,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     return t ? { id: t.id, nome: t.nome, cpf: t.cpf } : null;
   }
 
-  private async lida(c: ContextoCobranca, x: CobrancaMem): Promise<CobrancaLida> {
+  private async lida(c: ContextoCobranca, x: CobrancaMem): Promise<DadosCobranca> {
     const k = await this.f1.contrato(c, x.contrato);
     const b = x.beneficiario !== null ? await this.f1.beneficiario(c, x.beneficiario) : null;
     return {
@@ -304,7 +291,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     return this.estado.cobrancas.filter((x) => x.hospital === c.hospital);
   }
 
-  async cobrancas(c: ContextoCobranca, f: FiltroCobrancasSgh) {
+  async cobrancas(c: ContextoCobranca, f: FiltroCobrancasPorta) {
     const numeros = new Map<number, string>();
     if (f.numero) for (const k of await this.contratosDa(c, f.operadora)) numeros.set(k.id, k.numero);
     const lista = this.daqui(c)
@@ -328,15 +315,15 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     };
   }
 
-  async cobranca(c: ContextoCobranca, id: number): Promise<CobrancaLida | null> {
+  async cobranca(c: ContextoCobranca, id: number): Promise<DadosCobranca | null> {
     const x = this.daqui(c).find((y) => y.id === id);
     return x ? this.lida(c, x) : null;
   }
 
-  async itens(c: ContextoCobranca, cobranca: number): Promise<ItemCobrancaLido[]> {
+  async itens(c: ContextoCobranca, cobranca: number): Promise<DadosItemCobranca[]> {
     const x = this.daqui(c).find((y) => y.id === cobranca);
     if (!x) return [];
-    const r: ItemCobrancaLido[] = [];
+    const r: DadosItemCobranca[] = [];
     for (const i of x.itens) {
       const b = i.beneficiario !== null ? await this.f1.beneficiario(c, i.beneficiario) : null;
       r.push({ ...i, beneficiarioNome: b?.nome ?? null });
@@ -344,7 +331,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     return r;
   }
 
-  async renegociadas(c: ContextoCobranca, acordo: number): Promise<CobrancaLida[]> {
+  async renegociadas(c: ContextoCobranca, acordo: number): Promise<DadosCobranca[]> {
     const ls = this.daqui(c)
       .filter((x) => x.acordoDestino === acordo)
       .sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.id - b.id);
@@ -355,14 +342,14 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     c: ContextoCobranca,
     contratos: readonly number[],
     desde: string,
-  ): Promise<CobrancaLida[]> {
+  ): Promise<DadosCobranca[]> {
     const ls = this.daqui(c)
       .filter((x) => contratos.includes(x.contrato) && (x.vencimento >= desde || x.situacao === 'aberta'))
       .sort((a, b) => a.contrato - b.contrato || a.vencimento.localeCompare(b.vencimento) || a.id - b.id);
     return Promise.all(ls.map((x) => this.lida(c, x)));
   }
 
-  async totais(c: ContextoCobranca, operadora: number, hoje: string): Promise<TotaisCobrancaLidos> {
+  async totais(c: ContextoCobranca, operadora: number, hoje: string): Promise<TotaisCobranca> {
     const da = this.daqui(c).filter((x) => x.operadora === operadora);
     const abertas = da.filter((x) => x.situacao === 'aberta');
     const vencidas = abertas.filter((x) => x.vencimento < hoje);
@@ -410,7 +397,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     };
   }
 
-  private async reajusteLido(c: ContextoCobranca, r: ReajusteMem): Promise<ReajusteOpeLido> {
+  private async reajusteLido(c: ContextoCobranca, r: ReajusteMem): Promise<DadosReajuste> {
     const k = await this.f1.contrato(c, r.contrato);
     return {
       id: r.id,
@@ -449,7 +436,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     };
   }
 
-  async reajuste(c: ContextoCobranca, id: number): Promise<ReajusteOpeLido | null> {
+  async reajuste(c: ContextoCobranca, id: number): Promise<DadosReajuste | null> {
     const r = this.estado.reajustes.find((x) => x.hospital === c.hospital && x.id === id);
     return r ? this.reajusteLido(c, r) : null;
   }
@@ -473,7 +460,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     };
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     c: ContextoCobranca,
     _trilha: unknown,
     fn: (g: GravadorCobranca) => Promise<T>,
@@ -491,7 +478,7 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
       x.alteradoEm = agora();
     };
     const g: GravadorCobranca = {
-      incluir: async (d: CobrancaSgh & { por: string }) => {
+      incluir: async (d: EntradaCobranca & { por: string }) => {
         if (
           d.tipo === 1 &&
           this.daqui(c).some(

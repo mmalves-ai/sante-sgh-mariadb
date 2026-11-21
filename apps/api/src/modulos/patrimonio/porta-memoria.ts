@@ -1,37 +1,37 @@
 // Porta do patrimônio em memória (M54, etapa 6): a sessão sintética de dev/ci (E2E) e os testes da API. Domínios,
 // centros de custo, empresas e notas fiscais de entrada SINTÉTICOS, por estabelecimento; as gravações seguem as mesmas
-// regras do legado (item da nota relido, plaqueta única, versão do bem e do pedido, cálculo único por competência, cota
+// regras da porta própria (item da nota relido, plaqueta única, versão do bem e do pedido, cálculo único por competência, cota
 // imutável, inventário encerrado sem leitura). Nenhum dado real.
 import type {
-  AjusteLido,
-  AlteracaoBemParaGravar,
-  BemEsperadoLido,
-  BemLido,
-  BemParaDepreciarLido,
-  BemParaGravar,
-  CadastroParaGravar,
-  CalculoLido,
-  EstornoCalculoLido,
-  CotaLida,
-  CotaParaGravar,
-  DominiosPatrimonioLidos,
+  AjusteDoBem,
+  AlteracaoDoBem,
+  BemEsperado,
+  BemRegistrado,
+  BemDaCompetencia,
+  BemNovo,
+  CadastroDeBens,
+  CalculoRegistrado,
+  EstornoDeCalculo,
+  CotaRegistrada,
+  CotaNova,
+  DominiosPatrimonio,
   FiltroBens,
-  GrupoBemLido,
-  GrupoBemParaGravar,
-  InventarioLido,
-  LaudoLido,
-  ItemNotaLidoPatrimonio,
-  LeituraInventarioLida,
-  LeituraParaGravar,
-  MovimentoBemLido,
-  MovimentoParaGravar,
-  NotaEntradaLida,
-} from '@sgh/legado';
+  GrupoDoBem,
+  GrupoBemNovo,
+  InventarioRegistrado,
+  LaudoDoBem,
+  ItemDaNota,
+  LeituraRegistrada,
+  LeituraNova,
+  MovimentoRegistrado,
+  MovimentoNovo,
+  NotaDeEntrada,
+} from './tipos.js';
 import { GRUPOS_BEM, type VersaoGrupoBem } from '@sgh/contratos';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPatrimonio, PortaPatrimonio } from './porta.js';
 
-const DOMINIOS: DominiosPatrimonioLidos = {
+const DOMINIOS: DominiosPatrimonio = {
   origens: [
     { id: 1, nome: 'Próprio', depreciar: true },
     { id: 2, nome: 'Doação', depreciar: true },
@@ -44,6 +44,12 @@ const DOMINIOS: DominiosPatrimonioLidos = {
     { id: 2, nome: 'Médico' },
     { id: 3, nome: 'Cooperativa' },
     { id: 4, nome: 'Colaborador' },
+  ],
+  motivosBaixa: [
+    { id: 1, descricao: 'Obsolescência', tipo: 'obsolescencia', exigeLaudo: true },
+    { id: 2, descricao: 'Venda', tipo: 'venda', exigeLaudo: false },
+    { id: 3, descricao: 'Doação', tipo: 'doacao', exigeLaudo: false },
+    { id: 4, descricao: 'Furto ou perda', tipo: 'perda', exigeLaudo: false },
   ],
   coeficientes: [
     { id: 1, descricao: '1 turno de 8 horas', percentual: 1 },
@@ -61,7 +67,7 @@ const DOMINIOS: DominiosPatrimonioLidos = {
   parametros: [{ empresa: 1, depreciar: true, aplicarCoeficiente: true, considerarResidual: true }],
 };
 
-const NOTAS: readonly NotaEntradaLida[] = [
+const NOTAS: readonly NotaDeEntrada[] = [
   {
     id: 9001,
     ano: 2026,
@@ -90,7 +96,7 @@ const NOTAS: readonly NotaEntradaLida[] = [
   },
 ];
 
-const ITENS: readonly Omit<ItemNotaLidoPatrimonio, 'jaCadastrados'>[] = [
+const ITENS: readonly Omit<ItemDaNota, 'jaCadastrados'>[] = [
   {
     id: 90011,
     nota: 9001,
@@ -120,14 +126,14 @@ const ITENS: readonly Omit<ItemNotaLidoPatrimonio, 'jaCadastrados'>[] = [
   },
 ];
 
-interface BemMem extends BemParaGravar {
+interface BemMem extends BemNovo {
   readonly id: number;
   readonly plaquetaFinal: string;
   situacao: 'ativo' | 'emprestado' | 'baixado';
   baixadoEm: string | null;
   centroAtual: number;
   responsavelAtual: string | null;
-  campos: Omit<AlteracaoBemParaGravar, 'id' | 'versao'>;
+  campos: Omit<AlteracaoDoBem, 'id' | 'versao'>;
   versao: number;
   criadoPor: string;
   criadoEm: string;
@@ -137,7 +143,7 @@ interface BemMem extends BemParaGravar {
 
 interface MovMem {
   readonly id: number;
-  readonly x: MovimentoParaGravar;
+  readonly x: MovimentoNovo;
   situacao: string;
   decididoPor: string | null;
   decididoEm: string | null;
@@ -147,7 +153,7 @@ interface MovMem {
   readonly solicitadoEm: string;
 }
 
-interface CotaMem extends CotaParaGravar {
+interface CotaMem extends CotaNova {
   readonly calculo: number;
   readonly empresa: number;
   readonly competencia: string;
@@ -174,7 +180,7 @@ const naoAberto = (i: { situacao: string }) =>
     ? recusa('inventario-cancelado', 'Inventário cancelado', 'O inventário foi cancelado.')
     : recusa('inventario-encerrado', 'Inventário encerrado', 'O inventário já foi encerrado.');
 
-interface LeituraMem extends LeituraParaGravar {
+interface LeituraMem extends LeituraNova {
   readonly id: number;
   readonly lidoPor: string;
   readonly lidoEm: string;
@@ -183,14 +189,14 @@ interface LeituraMem extends LeituraParaGravar {
 interface Estado {
   bens: BemMem[];
   movs: MovMem[];
-  calculos: CalculoLido[];
+  calculos: CalculoRegistrado[];
   cotas: CotaMem[];
   /** W0-08 (1103): os estornos de cálculo (o cálculo e as cotas ficam, sem valer). */
-  estornos: EstornoCalculoLido[];
+  estornos: EstornoDeCalculo[];
   /** W0-08 (M1, 1105): os ajustes de valor do bem (o estorno é um fato novo dentro dele). */
-  ajustes: AjusteLido[];
+  ajustes: AjusteDoBem[];
   /** Achado 6 (1109): os laudos anexados aos bens (o PDF fica no armazenamento em memória). */
-  laudos: LaudoLido[];
+  laudos: LaudoDoBem[];
   invs: InvMem[];
   leituras: LeituraMem[];
   plaqueta: number;
@@ -200,7 +206,7 @@ interface Estado {
   versoesGrupo: (VersaoGrupoBem & { readonly grupo: number })[];
 }
 
-type GrupoMem = Omit<GrupoBemLido, 'bens' | 'id'> & { id: number | null };
+type GrupoMem = Omit<GrupoDoBem, 'bens' | 'id'> & { id: number | null };
 
 const sementeMem = (): GrupoMem[] =>
   Object.entries(GRUPOS_BEM).map(([codigo, g]) => ({
@@ -297,7 +303,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return e.cotas.filter((k) => !estornados.has(k.calculo));
   }
 
-  private vistaBem(e: Estado, b: BemMem): BemLido {
+  private vistaBem(e: Estado, b: BemMem): BemRegistrado {
     const nota = b.nota === null ? null : NOTAS.find((n) => n.id === b.nota);
     const item = b.itemNota === null ? null : ITENS.find((i) => i.id === b.itemNota);
     const coef = DOMINIOS.coeficientes.find((k) => k.id === b.campos.coeficiente) ?? null;
@@ -358,7 +364,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     };
   }
 
-  private vistaMov(e: Estado, m: MovMem): MovimentoBemLido {
+  private vistaMov(e: Estado, m: MovMem): MovimentoRegistrado {
     const b = e.bens.find((x) => x.id === m.x.bem);
     return {
       id: m.id,
@@ -384,7 +390,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     };
   }
 
-  private vistaInv(i: InvMem): InventarioLido {
+  private vistaInv(i: InvMem): InventarioRegistrado {
     return {
       id: i.id,
       descricao: i.descricao,
@@ -402,12 +408,12 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     };
   }
 
-  private item(e: Estado, id: number): ItemNotaLidoPatrimonio | null {
+  private item(e: Estado, id: number): ItemDaNota | null {
     const i = ITENS.find((x) => x.id === id);
     return i ? { ...i, jaCadastrados: e.bens.filter((b) => b.itemNota === id).length } : null;
   }
 
-  async dominios(): Promise<DominiosPatrimonioLidos> {
+  async dominios(): Promise<DominiosPatrimonio> {
     return DOMINIOS;
   }
 
@@ -456,9 +462,9 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return NOTAS.find((n) => n.id === id) ?? null;
   }
 
-  async itensDaNota(c: ContextoPatrimonio, n: NotaEntradaLida) {
+  async itensDaNota(c: ContextoPatrimonio, n: NotaDeEntrada) {
     const e = this.est(c);
-    return ITENS.filter((i) => i.nota === n.id).map((i) => this.item(e, i.id) as ItemNotaLidoPatrimonio);
+    return ITENS.filter((i) => i.nota === n.id).map((i) => this.item(e, i.id) as ItemDaNota);
   }
 
   async itemNota(c: ContextoPatrimonio, id: number) {
@@ -467,7 +473,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
 
   async bensParaDepreciar(c: ContextoPatrimonio, empresa: number, competencia: string) {
     const e = this.est(c);
-    const bens: BemParaDepreciarLido[] = e.bens
+    const bens: BemDaCompetencia[] = e.bens
       .filter(
         (b) =>
           b.empresa === empresa && (b.situacao !== 'baixado' || (b.baixadoEm ?? '') >= `${competencia}-01`),
@@ -507,7 +513,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     };
   }
 
-  async cotas(c: ContextoPatrimonio, calculo: number): Promise<CotaLida[]> {
+  async cotas(c: ContextoPatrimonio, calculo: number): Promise<CotaRegistrada[]> {
     const e = this.est(c);
     return e.cotas
       .filter((k) => k.calculo === calculo)
@@ -567,7 +573,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
 
   async leituras(c: ContextoPatrimonio, inventario: number) {
     const e = this.est(c);
-    const leituras: LeituraInventarioLida[] = e.leituras
+    const leituras: LeituraRegistrada[] = e.leituras
       .filter((l) => l.inventario === inventario)
       .map((l) => {
         const b = l.bem === null ? null : e.bens.find((x) => x.id === l.bem);
@@ -588,7 +594,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
   }
 
   async esperados(c: ContextoPatrimonio, centro: number | null) {
-    const bens: BemEsperadoLido[] = this.est(c)
+    const bens: BemEsperado[] = this.est(c)
       .bens.filter((b) => b.situacao === 'ativo' && (centro === null || b.centroAtual === centro))
       .map((b) => ({
         id: b.id,
@@ -601,7 +607,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return { bens, truncado: false };
   }
 
-  async cadastrar(c: ContextoPatrimonio, x: CadastroParaGravar, por: string, gerar: (n: number) => string) {
+  async cadastrar(c: ContextoPatrimonio, x: CadastroDeBens, por: string, gerar: (n: number) => string) {
     const e = this.est(c);
     if (x.item) {
       const relido = this.item(e, x.item.id);
@@ -660,9 +666,9 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
 
   async alterar(
     c: ContextoPatrimonio,
-    x: AlteracaoBemParaGravar,
+    x: AlteracaoDoBem,
     por: string,
-    conferir: (antes: BemLido) => string | null,
+    conferir: (antes: BemRegistrado) => string | null,
   ) {
     const e = this.est(c);
     const b = e.bens.find((y) => y.id === x.id);
@@ -673,7 +679,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     if (problema) throw recusa('bem-alteracao', 'Alteração recusada', problema);
     const campos = Object.fromEntries(
       Object.entries(x).filter(([k]) => k !== 'id' && k !== 'versao'),
-    ) as Omit<AlteracaoBemParaGravar, 'id' | 'versao'>;
+    ) as Omit<AlteracaoDoBem, 'id' | 'versao'>;
     const atuais: Record<string, unknown> = { ...b.campos, responsavel: b.responsavelAtual };
     if (Object.entries(campos).every(([k, v]) => atuais[k] === v))
       return { antes, depois: antes, mudou: false };
@@ -685,7 +691,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return { antes, depois: this.vistaBem(e, b), mudou: true };
   }
 
-  async registrarMovimento(c: ContextoPatrimonio, x: MovimentoParaGravar, por: string) {
+  async registrarMovimento(c: ContextoPatrimonio, x: MovimentoNovo, por: string) {
     const e = this.est(c);
     const b = e.bens.find((y) => y.id === x.bem);
     if (!b || b.versao !== x.versaoBem) throw desatualizado();
@@ -715,7 +721,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     c: ContextoPatrimonio,
     x: { id: number; versao: number; aceitar: boolean; motivo: string | null },
     por: string,
-    conferir: (m: MovimentoBemLido, bem: BemLido) => string | null,
+    conferir: (m: MovimentoRegistrado, bem: BemRegistrado) => string | null,
   ) {
     const e = this.est(c);
     const m = e.movs.find((y) => y.id === x.id);
@@ -746,7 +752,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     c: ContextoPatrimonio,
     x: { id: number; versao: number; motivo: string },
     por: string,
-    conferir: (m: MovimentoBemLido) => string | null,
+    conferir: (m: MovimentoRegistrado) => string | null,
   ) {
     const e = this.est(c);
     const m = e.movs.find((y) => y.id === x.id);
@@ -781,7 +787,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
       throw recusa('ja-calculado', 'Já calculada', 'A depreciação desta competência já foi calculada.');
     if (plano.cotas.reduce((s, k) => s + k.valorCent, 0) !== plano.totalCent)
       throw new Error('O total do cálculo não é a soma das cotas.');
-    const calculo: CalculoLido = {
+    const calculo: CalculoRegistrado = {
       id: ++e.id,
       empresa: x.empresa,
       competencia: x.competencia,
@@ -802,7 +808,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return { calculo, plano };
   }
 
-  async estornos(c: ContextoPatrimonio, empresa: number, competencia: string): Promise<EstornoCalculoLido[]> {
+  async estornos(c: ContextoPatrimonio, empresa: number, competencia: string): Promise<EstornoDeCalculo[]> {
     return this.est(c)
       .estornos.filter((x) => x.empresa === empresa && x.competencia === competencia)
       .sort((a, b) => b.id - a.id);
@@ -845,7 +851,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
           .map((y) => y.plaqueta)
           .join(', ')}): estorne o ajuste antes.`,
       );
-    const estorno: EstornoCalculoLido = {
+    const estorno: EstornoDeCalculo = {
       id: ++e.id,
       calculo: daCompetencia.id,
       empresa: x.empresa,
@@ -865,19 +871,19 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return { estorno, calculo: daCompetencia };
   }
 
-  async ajustes(c: ContextoPatrimonio, bem: number): Promise<AjusteLido[]> {
+  async ajustes(c: ContextoPatrimonio, bem: number): Promise<AjusteDoBem[]> {
     return this.est(c)
       .ajustes.filter((x) => x.bem === bem)
       .sort((a, b) => b.id - a.id);
   }
 
-  async laudos(c: ContextoPatrimonio, bem: number): Promise<LaudoLido[]> {
+  async laudos(c: ContextoPatrimonio, bem: number): Promise<LaudoDoBem[]> {
     return this.est(c)
       .laudos.filter((x) => x.bem === bem)
       .sort((a, b) => b.id - a.id);
   }
 
-  async laudo(c: ContextoPatrimonio, id: number): Promise<LaudoLido | null> {
+  async laudo(c: ContextoPatrimonio, id: number): Promise<LaudoDoBem | null> {
     return this.est(c).laudos.find((x) => x.id === id) ?? null;
   }
 
@@ -885,11 +891,11 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     c: ContextoPatrimonio,
     x: { bem: number; nome: string; descricao: string; chave: string; sha256: string; tamanho: number },
     por: string,
-  ): Promise<LaudoLido> {
+  ): Promise<LaudoDoBem> {
     const e = this.est(c);
     if (!e.bens.some((y) => y.id === x.bem))
       throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'Bem não encontrado.');
-    const laudo: LaudoLido = {
+    const laudo: LaudoDoBem = {
       id: ++e.id,
       bem: x.bem,
       nome: x.nome.trim().slice(0, 120),
@@ -909,7 +915,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     x: { bem: number; versao: number; motivo: string; hoje: string },
     por: string,
     planejar: Parameters<PortaPatrimonio['registrarAjuste']>[3],
-  ): Promise<AjusteLido> {
+  ): Promise<AjusteDoBem> {
     const e = this.est(c);
     const b = e.bens.find((y) => y.id === x.bem);
     if (!b) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'Bem não encontrado.');
@@ -931,7 +937,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
         'Laudo não anexado',
         `O laudo ${a.laudo} não está anexado a este bem: anexe o PDF do laudo e escolha-o na lista.`,
       );
-    const ajuste: AjusteLido = {
+    const ajuste: AjusteDoBem = {
       id: ++e.id,
       bem: x.bem,
       empresa: bem.empresa,
@@ -965,7 +971,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     x: { ajuste: number; motivo: string; origem: string; hoje: string },
     por: string,
     conferir: Parameters<PortaPatrimonio['estornarAjuste']>[3],
-  ): Promise<AjusteLido> {
+  ): Promise<AjusteDoBem> {
     const e = this.est(c);
     const i = e.ajustes.findIndex((y) => y.id === x.ajuste);
     const ajuste = e.ajustes[i];
@@ -984,7 +990,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
       lotesExportados: this.lotesDe(ajuste.empresa, ajuste.data),
     });
     if (impedimento) throw recusa(impedimento.codigo, 'Operação recusada', impedimento.detalhe);
-    const estornado: AjusteLido = {
+    const estornado: AjusteDoBem = {
       ...ajuste,
       estorno: {
         data: x.hoje,
@@ -1018,7 +1024,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return inv.id;
   }
 
-  async registrarLeitura(c: ContextoPatrimonio, x: LeituraParaGravar, por: string) {
+  async registrarLeitura(c: ContextoPatrimonio, x: LeituraNova, por: string) {
     const e = this.est(c);
     const inv = e.invs.find((i) => i.id === x.inventario);
     if (!inv) throw recusa('inventario', 'Inventário', 'Inventário não encontrado.');
@@ -1057,7 +1063,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
 
   // ── W0-08: grupo do bem (as mesmas regras do núcleo: semente na versão 0, versão lida, sem órfão) ──────────────────
 
-  private gruposLidos(c: ContextoPatrimonio): GrupoBemLido[] {
+  private gruposLidos(c: ContextoPatrimonio): GrupoDoBem[] {
     const e = this.est(c);
     return [...(e.grupos ?? sementeMem())]
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') || a.codigo.localeCompare(b.codigo))
@@ -1079,7 +1085,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
     return g;
   }
 
-  private lido(c: ContextoPatrimonio, codigo: string): GrupoBemLido {
+  private lido(c: ContextoPatrimonio, codigo: string): GrupoDoBem {
     const g = this.gruposLidos(c).find((x) => x.codigo === codigo);
     if (!g)
       throw new ErroProblema('nao-encontrado', 404, 'Grupo não encontrado', 'Grupo do bem não encontrado.');
@@ -1117,7 +1123,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
       }));
   }
 
-  async incluirGrupo(c: ContextoPatrimonio, x: GrupoBemParaGravar, por: string) {
+  async incluirGrupo(c: ContextoPatrimonio, x: GrupoBemNovo, por: string) {
     const gs = this.gruposGravados(c);
     if (gs.some((g) => g.codigo === x.codigo))
       throw recusa('codigo-em-uso', 'Código em uso', `Já existe um grupo com o código ${x.codigo}.`);
@@ -1157,7 +1163,7 @@ export class PortaPatrimonioMemoria implements PortaPatrimonio {
 
   async alterarGrupo(
     c: ContextoPatrimonio,
-    x: GrupoBemParaGravar & { versaoVista: number; motivo: string },
+    x: GrupoBemNovo & { versaoVista: number; motivo: string },
     por: string,
   ) {
     const g = this.grupoPelaVersao(c, x.codigo, x.versaoVista);

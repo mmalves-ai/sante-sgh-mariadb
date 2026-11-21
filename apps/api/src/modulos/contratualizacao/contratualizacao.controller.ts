@@ -13,7 +13,8 @@
 //   GET  .../contratos/:id/painel?competencia=AAAAMM            produção × meta do período de cada meta, com as parcelas,
 //                                                                e o repasse estimado do mês
 //   GET  .../sigtap?termo=                                       a busca do código SIGTAP da meta
-// Tudo só do novo (SGH_SUS_*), com a SGH_TRILHA na mesma transação. Nasce desligado (chave `contratualizacao`, POL-3).
+// Tudo no banco do cliente (contrato_gestor_sus, meta_contratual_sus, afericao_meta_sus), com a trilha na mesma
+// transação. Nasce desligado (chave `contratualizacao`, POL-3).
 import {
   Body,
   Controller,
@@ -90,8 +91,9 @@ import {
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import {
-  type DominiosContratualizacaoLidos,
+  type DominiosContratualizacao,
   type GravadorContratualizacao,
+  type ListaDominioContratualizacao,
   PORTA_CONTRATUALIZACAO,
   type PortaContratualizacao,
 } from './porta.js';
@@ -118,37 +120,55 @@ const recusar = (codigo: keyof typeof MENSAGENS_CONTRATUALIZACAO & RecusaContrat
 const naoEncontrado = (titulo: string, codigo: 'contrato-inexistente' | 'meta-inexistente') =>
   new ErroProblema('nao-encontrado', 404, titulo, MENSAGENS_CONTRATUALIZACAO[codigo]);
 
-/** Os domínios com o rótulo do produto (o código é o do domínio; o nome gravado só onde não há rótulo). */
+/** Os domínios com o rótulo do produto (o código é o da tela; o nome gravado só onde não há rótulo). */
 export interface ItemDominioSus {
   readonly codigo: number;
   readonly rotulo: string;
   readonly sigla: string | null;
 }
-const VOCABULARIO: Readonly<Record<string, readonly { readonly codigo: number; readonly rotulo: string }[]>> =
-  {
-    CMPERIODO: PERIODICIDADES_META_SUS,
-    CMTPINDICADOR: TIPOS_INDICADOR_SUS,
-    CMTIPOCOMPLEXIDADESP: COMPLEXIDADES_SUS,
-    CMTPITEMINDIC: FORMATOS_INDICADOR_SUS,
-    CMREDEASSIST: REDES_ASSISTENCIA_SUS,
-    CMESCORE: ESCORES_SUS,
-    CMTPAFERICAO: AFERICOES_SUS,
-    CMTPCONTRATO: ESFERAS_CONTRATO_SUS,
-    CMTPORCAMENTO: TIPOS_ORCAMENTO_SUS,
-  };
-/** Nome gravado que cita o fornecedor do sistema anterior vira o rótulo do produto (ADR 0023). */
-const NOME_DE_SISTEMA = /sp\s*data/i;
+const VOCABULARIO: Readonly<
+  Partial<Record<ListaDominioContratualizacao, readonly { readonly codigo: number; readonly rotulo: string }[]>>
+> = {
+  periodicidade: PERIODICIDADES_META_SUS,
+  tipo_indicador: TIPOS_INDICADOR_SUS,
+  complexidade: COMPLEXIDADES_SUS,
+  tipo_item_indicador: FORMATOS_INDICADOR_SUS,
+  rede_assistencial: REDES_ASSISTENCIA_SUS,
+  escore: ESCORES_SUS,
+  tipo_afericao: AFERICOES_SUS,
+  esfera: ESFERAS_CONTRATO_SUS,
+  componente_orcamento: TIPOS_ORCAMENTO_SUS,
+};
+/**
+ * A chave de cada lista na resposta, como a tela e o contrato a leem hoje (pedido de renomear no contrato e na tela,
+ * docs/obra/fatias/f22/saida/02-03.json): só a tradução da resposta, nunca nome de tabela do banco.
+ */
+export const CHAVE_RESPOSTA_DOMINIO: Readonly<Record<ListaDominioContratualizacao, string>> = {
+  periodicidade: 'CMPERIODO',
+  tipo_indicador: 'CMTPINDICADOR',
+  complexidade: 'CMTIPOCOMPLEXIDADESP',
+  tipo_item_indicador: 'CMTPITEMINDIC',
+  rede_assistencial: 'CMREDEASSIST',
+  escore: 'CMESCORE',
+  tipo_afericao: 'CMTPAFERICAO',
+  esfera: 'CMTPCONTRATO',
+  tipo_dado: 'CMTPDADOS',
+  componente_orcamento: 'CMTPORCAMENTO',
+  incentivo: 'CMINCENTIVO',
+};
 
-export function dominiosComRotulo(d: DominiosContratualizacaoLidos): Record<string, ItemDominioSus[]> {
+export function dominiosComRotulo(d: DominiosContratualizacao): Record<string, ItemDominioSus[]> {
   return Object.fromEntries(
-    Object.entries(d).map(([tabela, itens]) => [
-      tabela,
-      itens.map((x) => {
-        const v = VOCABULARIO[tabela]?.find((y) => y.codigo === x.codigo)?.rotulo;
-        const rotulo = v ?? (NOME_DE_SISTEMA.test(x.nome) ? 'Sistema de gestão do hospital' : x.nome);
-        return { codigo: x.codigo, rotulo, sigla: x.sigla };
-      }),
-    ]),
+    (Object.entries(d) as [ListaDominioContratualizacao, DominiosContratualizacao[ListaDominioContratualizacao]][]).map(
+      ([lista, itens]) => [
+        CHAVE_RESPOSTA_DOMINIO[lista] ?? lista,
+        itens.map((x) => ({
+          codigo: x.codigo,
+          rotulo: VOCABULARIO[lista]?.find((y) => y.codigo === x.codigo)?.rotulo ?? x.nome,
+          sigla: x.sigla,
+        })),
+      ],
+    ),
   );
 }
 
@@ -272,7 +292,7 @@ export class ContratualizacaoController {
     gravacao: GravacaoAgenda;
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUS_CONTRATO' };
+    req.sghAlvo = { tabelaAlvo: 'contrato_gestor_sus' };
     const [relogio, contratos, dominios, parametros, fonte, gravacao] = await Promise.all([
       this.porta.relogio(s.porta),
       this.porta.contratos(s.porta),
@@ -305,7 +325,7 @@ export class ContratualizacaoController {
     requisitos: RecusaContratualizacao[];
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUS_CONTRATO', idAlvo: id };
+    req.sghAlvo = { tabelaAlvo: 'contrato_gestor_sus', idAlvo: id };
     const c = await this.porta.contrato(s.porta, idDaRota(id));
     if (!c) throw naoEncontrado('Contrato não encontrado', 'contrato-inexistente');
     const [metas, relogio, parametros] = await Promise.all([
@@ -328,7 +348,7 @@ export class ContratualizacaoController {
   @Post('contratos')
   @HttpCode(201)
   @Permissao(P.editar)
-  @AuditadoNoHandler('faturamento.gravarContratoSus: SGH_SUS_CONTRATO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('faturamento.gravarContratoSus: contrato_gestor_sus com a trilha na mesma transação')
   async criarContrato(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -342,7 +362,7 @@ export class ContratualizacaoController {
       E.contratoSusGravado.codigo,
       P.editar,
       (y: { id: number }) => ({
-        tabela: 'SGH_SUS_CONTRATO',
+        tabela: 'contrato_gestor_sus',
         id: String(y.id),
         paciente: null,
         chave: e.numero,
@@ -369,7 +389,7 @@ export class ContratualizacaoController {
   @Put('contratos/:id')
   @Permissao(P.editar)
   @AuditadoNoHandler(
-    'faturamento.gravarContratoSus: SGH_SUS_CONTRATO pela versão vista com a SGH_TRILHA na mesma transação',
+    'faturamento.gravarContratoSus: contrato_gestor_sus pela versão vista com a trilha na mesma transação',
   )
   async alterarContrato(
     @Param('id') id: string,
@@ -386,7 +406,7 @@ export class ContratualizacaoController {
       s,
       E.contratoSusGravado.codigo,
       P.editar,
-      { tabela: 'SGH_SUS_CONTRATO', id: String(idContrato), paciente: null, chave: e.numero },
+      { tabela: 'contrato_gestor_sus', id: String(idContrato), paciente: null, chave: e.numero },
       async (g) => {
         const atual = await g.contrato(idContrato);
         if (!atual) throw naoEncontrado('Contrato não encontrado', 'contrato-inexistente');
@@ -409,7 +429,7 @@ export class ContratualizacaoController {
   @Post('contratos/:id/encerramento')
   @Permissao(P.editar)
   @AuditadoNoHandler(
-    'faturamento.encerrarContratoSus: SGH_SUS_CONTRATO pela versão vista com a SGH_TRILHA na mesma transação',
+    'faturamento.encerrarContratoSus: contrato_gestor_sus pela versão vista com a trilha na mesma transação',
   )
   async encerrarContrato(
     @Param('id') id: string,
@@ -423,7 +443,7 @@ export class ContratualizacaoController {
       s,
       E.contratoSusGravado.codigo,
       P.editar,
-      { tabela: 'SGH_SUS_CONTRATO', id: String(idContrato), paciente: null, chave: 'encerramento' },
+      { tabela: 'contrato_gestor_sus', id: String(idContrato), paciente: null, chave: 'encerramento' },
       async (g) => {
         const atual = await g.contrato(idContrato);
         if (!atual) throw naoEncontrado('Contrato não encontrado', 'contrato-inexistente');
@@ -443,7 +463,7 @@ export class ContratualizacaoController {
   @Post('contratos/:id/metas')
   @HttpCode(201)
   @Permissao(P.editar)
-  @AuditadoNoHandler('faturamento.gravarMetaSus: SGH_SUS_META com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('faturamento.gravarMetaSus: meta_contratual_sus com a trilha na mesma transação')
   async criarMeta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -462,7 +482,7 @@ export class ContratualizacaoController {
       s,
       E.metaSusGravada.codigo,
       P.editar,
-      (y: { id: number }) => ({ tabela: 'SGH_SUS_META', id: String(y.id), paciente: null, chave: e.tipo }),
+      (y: { id: number }) => ({ tabela: 'meta_contratual_sus', id: String(y.id), paciente: null, chave: e.tipo }),
       async (g) => {
         const ja = await g.metaPelaChave(chave);
         if (ja) {
@@ -483,7 +503,7 @@ export class ContratualizacaoController {
   @Put('metas/:id')
   @Permissao(P.editar)
   @AuditadoNoHandler(
-    'faturamento.gravarMetaSus: SGH_SUS_META pela versão vista com a SGH_TRILHA na mesma transação',
+    'faturamento.gravarMetaSus: meta_contratual_sus pela versão vista com a trilha na mesma transação',
   )
   async alterarMeta(
     @Param('id') id: string,
@@ -504,7 +524,7 @@ export class ContratualizacaoController {
       s,
       E.metaSusGravada.codigo,
       P.editar,
-      { tabela: 'SGH_SUS_META', id: String(idMeta), paciente: null, chave: e.tipo },
+      { tabela: 'meta_contratual_sus', id: String(idMeta), paciente: null, chave: e.tipo },
       async (g) => {
         const atual = await g.meta(idMeta);
         if (!atual) throw naoEncontrado('Meta não encontrada', 'meta-inexistente');
@@ -529,7 +549,7 @@ export class ContratualizacaoController {
   @HttpCode(201)
   @Permissao(P.editar)
   @AuditadoNoHandler(
-    'faturamento.registrarApuracaoSus: SGH_SUS_META_APURACAO com a SGH_TRILHA na mesma transação',
+    'faturamento.registrarApuracaoSus: afericao_meta_sus com a trilha na mesma transação',
   )
   async apurar(
     @Param('id') id: string,
@@ -560,7 +580,7 @@ export class ContratualizacaoController {
       E.apuracaoSusRegistrada.codigo,
       P.editar,
       (y: { id: number }) => ({
-        tabela: 'SGH_SUS_META_APURACAO',
+        tabela: 'afericao_meta_sus',
         id: String(y.id),
         paciente: null,
         chave: `${idMeta}:${e.competencia}`,
@@ -635,7 +655,7 @@ export class ContratualizacaoController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PainelContratualizacaoSus> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUS_META', idAlvo: id };
+    req.sghAlvo = { tabelaAlvo: 'meta_contratual_sus', idAlvo: id };
     const f = esquemaFiltroPainelSus.safeParse({ competencia: q['competencia'] });
     if (!f.success)
       throw new ErroProblema(

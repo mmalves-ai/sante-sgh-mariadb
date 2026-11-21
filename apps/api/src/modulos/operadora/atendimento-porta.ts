@@ -1,47 +1,24 @@
-// Porta do atendimento ao beneficiário com protocolo e das contas do portal do prestador da operadora própria (M56,
-// etapa 8, F7): o que a tela dos protocolos, a das contas do portal e o próprio portal leem e gravam, independente de
-// onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: as leituras de @sgh/legado em transação READ ONLY (os protocolos e as contas em SGH_OPE_*, o beneficiário
-//     pela carteirinha, os prestadores da rede, os domínios SPORIGEM_ATEND, PFPORTALOPCAO e PFTPATEND do banco do
-//     estabelecimento) e as gravações SGH_OPE_PROTOCOLO, _EVT e SGH_OPE_PORTAL_ACESSO numa transação SGH_ com a
-//     SGH_TRILHA junto; em dev sobre a cópia compartilhada, as gravações são recusadas (`sghSoLeitura`);
-//   - `memoria`: a sessão sintética de dev/ci (E2E), sobre as portas em memória da F1 (beneficiários) e da F3 (rede),
-//     com os domínios do vocabulário; nada vai à cópia;
+// Porta do atendimento ao beneficiário e do portal do prestador da operadora própria (M56, etapa 6, F7): o que a
+// tela dos protocolos, a consulta de elegibilidade e o portal leem e gravam, independente de onde:
+//   - `banco`: a porta própria sobre o banco do cliente (protocolo_beneficiario e andamento/resposta,
+//     conta_portal_prestador, consulta_elegibilidade_recebida), pelo @sgh/nucleo e o Executor;
+//   - `memoria`: a sessão sintética de dev/ci (E2E);
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
-// O pedido de autorização (ligado ao protocolo, e o do portal) é lido e gravado pela porta da F4. Nenhuma tabela legada
-// é escrita (seção 5 da ficha); os domínios são só lidos.
-import type {
-  AcessoPortalParaEntradaLido,
-  AcessoPortalPrestadorLido,
-  ConsultaElegibilidadeLida,
-  ConsultaElegibilidadeSgh,
-  ConsultaProtocoloLida,
-  CriacaoAcessoPortalSgh,
-  ElegibilidadeOpeLida,
-  EventoProtocoloSghLido,
-  FiltroProtocolosLido,
-  ItemDominioLido,
-  LinhaTrilha,
-  OperadoraOpeLida,
-  PrestadorLido,
-  ProtocoloOpeLido,
-  ProtocoloOpeResumoLido,
-  ReanaliseLida,
-  RegistroProtocoloSgh,
-  RespostaPrestadorLida,
-  TotaisProtocolosLidos,
-} from '@sgh/legado';
+// Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
+// gravação vem da sessão, nunca da entrada.
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import type { Prestador } from './rede-porta.js';
+import { type DadosAcessoPortalParaEntrada, type DadosAcessoPortalPrestador, type DadosConsultaElegibilidade, type DadosConsultaProtocolo, type DadosElegibilidadeBeneficiario, type DadosEventoProtocolo, type DadosItemDominio, type DadosOperadora, type DadosProtocolo, type DadosProtocoloResumo, type DadosReanalise, type DadosRespostaPrestador, type EntradaConsultaElegibilidade, type EntradaCriacaoAcessoPortal, type EntradaRegistroProtocolo, type FiltroProtocolosPorta, type TotaisProtocolos } from './dados-portas.js';
 
 export const PORTA_ATENDIMENTO_OPERADORA = Symbol('PORTA_ATENDIMENTO_OPERADORA');
 
-export interface ContextoAtendimento {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** O contexto da sessão: o do núcleo (ids) mais a rede e o código do estabelecimento (exibição). */
+export type ContextoAtendimento = ContextoPorta;
 
 type SemHospital<T> = Omit<T, 'hospital'>;
 
-interface AcaoSgh {
+interface AcaoPorta {
   readonly id: number;
   readonly versao: number;
   readonly usuario: string;
@@ -50,20 +27,20 @@ type Feito = Promise<{ id: number; versao: number }>;
 
 /** Os domínios da fatia (lidos inteiros do banco do estabelecimento). */
 export interface DominiosAtendimento {
-  readonly origem: readonly ItemDominioLido[];
-  readonly funcoesPortal: readonly ItemDominioLido[];
-  readonly tiposAtendimento: readonly ItemDominioLido[];
+  readonly origem: readonly DadosItemDominio[];
+  readonly funcoesPortal: readonly DadosItemDominio[];
+  readonly tiposAtendimento: readonly DadosItemDominio[];
 }
 
-/** O que a gravação SGH_ da fatia faz dentro da transação (com a trilha junto). */
+/** O que a gravação da fatia faz dentro da transação (com a trilha junto). */
 export interface GravadorAtendimento {
   proximoProtocolo(): Promise<number>;
-  registrar(r: SemHospital<RegistroProtocoloSgh>): Feito;
-  analisar(a: AcaoSgh): Feito;
-  interagir(a: AcaoSgh & { situacao: string; texto: string }): Feito;
-  prorrogar(a: AcaoSgh & { situacao: string; ate: string; motivo: string }): Feito;
+  registrar(r: SemHospital<EntradaRegistroProtocolo>): Feito;
+  analisar(a: AcaoPorta): Feito;
+  interagir(a: AcaoPorta & { situacao: string; texto: string }): Feito;
+  prorrogar(a: AcaoPorta & { situacao: string; ate: string; motivo: string }): Feito;
   responder(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       conclusao: string;
       resposta: string;
       fundamento: string | null;
@@ -72,17 +49,17 @@ export interface GravadorAtendimento {
       escritaPrazoEm: string | null;
     },
   ): Feito;
-  pedirEscrita(a: AcaoSgh & { situacao: string; pedidaEm: string; escritaPrazoEm: string | null }): Feito;
-  enviarEscrita(a: AcaoSgh & { meio: string }): Feito;
-  encerrar(a: AcaoSgh): Feito;
-  cancelar(a: AcaoSgh & { motivo: string }): Feito;
+  pedirEscrita(a: AcaoPorta & { situacao: string; pedidaEm: string; escritaPrazoEm: string | null }): Feito;
+  enviarEscrita(a: AcaoPorta & { meio: string }): Feito;
+  encerrar(a: AcaoPorta): Feito;
+  cancelar(a: AcaoPorta & { motivo: string }): Feito;
   reanalise(
-    a: AcaoSgh & { situacao: string; novo: SemHospital<RegistroProtocoloSgh> },
+    a: AcaoPorta & { situacao: string; novo: SemHospital<EntradaRegistroProtocolo> },
   ): Promise<{ id: number; versao: number; origem: { id: number; versao: number } }>;
-  criarAcesso(c: SemHospital<CriacaoAcessoPortalSgh>): Feito;
-  alterarAcesso(a: AcaoSgh & { funcoes: string; tipoAtendimento: number }): Feito;
-  reemitirAcesso(a: AcaoSgh & { ativacaoResumo: string; ativacaoValidade: string }): Feito;
-  encerrarAcesso(a: AcaoSgh & { motivo: string }): Feito;
+  criarAcesso(c: SemHospital<EntradaCriacaoAcessoPortal>): Feito;
+  alterarAcesso(a: AcaoPorta & { funcoes: string; tipoAtendimento: number }): Feito;
+  reemitirAcesso(a: AcaoPorta & { ativacaoResumo: string; ativacaoValidade: string }): Feito;
+  encerrarAcesso(a: AcaoPorta & { motivo: string }): Feito;
   ativarAcesso(a: {
     id: number;
     ativacaoResumo: string;
@@ -91,10 +68,10 @@ export interface GravadorAtendimento {
     usuario: string;
   }): Promise<{ id: number }>;
   /** A troca da senha ou do segundo fator pelo prestador (W0-10): só a conta ativa, na versão lida. */
-  trocarCredencial(a: AcaoSgh & { senhaResumo: string | null; segundoFator: string | null }): Feito;
+  trocarCredencial(a: AcaoPorta & { senhaResumo: string | null; segundoFator: string | null }): Feito;
   /** W0-10: a resposta do prestador a uma interação da operadora no protocolo dele, com um anexo opcional. */
   responderInteracaoPrestador(
-    a: AcaoSgh & {
+    a: AcaoPorta & {
       prestador: number;
       acesso: number;
       interacao: number;
@@ -103,7 +80,7 @@ export interface GravadorAtendimento {
     },
   ): Promise<{ id: number; versao: number; resposta: number; evento: number }>;
   /** W0-10 (M7): o registro da consulta de elegibilidade do prestador (só inclusão). */
-  registrarElegibilidade(x: SemHospital<ConsultaElegibilidadeSgh>): Promise<{ id: number }>;
+  registrarElegibilidade(x: SemHospital<EntradaConsultaElegibilidade>): Promise<{ id: number }>;
   /** A tentativa de entrada, com o contador decidido no banco; `alteradas` 0 = a conta não está mais ativa ou foi bloqueada. */
   tentativaPortal(t: {
     id: number;
@@ -115,41 +92,41 @@ export interface GravadorAtendimento {
 }
 
 export interface PortaAtendimentoOperadora {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   /** O relógio do banco: hoje (AAAA-MM-DD) e agora (AAAA-MM-DDTHH:MM:SS). */
   relogio(c: ContextoAtendimento): Promise<{ hoje: string; agora: string }>;
   dominios(c: ContextoAtendimento): Promise<DominiosAtendimento>;
-  operadoras(c: ContextoAtendimento): Promise<OperadoraOpeLida[]>;
-  elegibilidade(c: ContextoAtendimento, carteirinha: string): Promise<ElegibilidadeOpeLida | null>;
+  operadoras(c: ContextoAtendimento): Promise<DadosOperadora[]>;
+  elegibilidade(c: ContextoAtendimento, carteirinha: string): Promise<DadosElegibilidadeBeneficiario | null>;
   /** W0-10 (M7): a validade da via mais recente da carteirinha e as últimas consultas de elegibilidade do prestador. */
   validadeCarteirinha(c: ContextoAtendimento, beneficiario: number): Promise<string | null>;
-  consultasElegibilidade(c: ContextoAtendimento, prestador: number): Promise<ConsultaElegibilidadeLida[]>;
-  prestador(c: ContextoAtendimento, id: number): Promise<PrestadorLido | null>;
+  consultasElegibilidade(c: ContextoAtendimento, prestador: number): Promise<DadosConsultaElegibilidade[]>;
+  prestador(c: ContextoAtendimento, id: number): Promise<Prestador | null>;
   protocolos(
     c: ContextoAtendimento,
-    f: FiltroProtocolosLido,
-  ): Promise<{ itens: ProtocoloOpeResumoLido[]; proxima: number | null }>;
-  totais(c: ContextoAtendimento): Promise<TotaisProtocolosLidos>;
-  protocolo(c: ContextoAtendimento, id: number): Promise<ProtocoloOpeLido | null>;
-  reanalises(c: ContextoAtendimento, id: number): Promise<ReanaliseLida[]>;
-  eventos(c: ContextoAtendimento, id: number): Promise<EventoProtocoloSghLido[]>;
-  consulta(c: ContextoAtendimento, numero: string, prestador?: number): Promise<ConsultaProtocoloLida | null>;
+    f: FiltroProtocolosPorta,
+  ): Promise<{ itens: DadosProtocoloResumo[]; proxima: number | null }>;
+  totais(c: ContextoAtendimento): Promise<TotaisProtocolos>;
+  protocolo(c: ContextoAtendimento, id: number): Promise<DadosProtocolo | null>;
+  reanalises(c: ContextoAtendimento, id: number): Promise<DadosReanalise[]>;
+  eventos(c: ContextoAtendimento, id: number): Promise<DadosEventoProtocolo[]>;
+  consulta(c: ContextoAtendimento, numero: string, prestador?: number): Promise<DadosConsultaProtocolo | null>;
   /** W0-10: as respostas do prestador no protocolo (sem conteúdo) e um anexo com o conteúdo (do prestador, se dado). */
-  respostasPrestador(c: ContextoAtendimento, id: number): Promise<RespostaPrestadorLida[]>;
+  respostasPrestador(c: ContextoAtendimento, id: number): Promise<DadosRespostaPrestador[]>;
   anexoDaResposta(
     c: ContextoAtendimento,
     resposta: number,
     prestador?: number,
   ): Promise<{ protocolo: number; nome: string; tipo: string; sha256: string; bytes: Buffer } | null>;
-  acessos(c: ContextoAtendimento): Promise<AcessoPortalPrestadorLido[]>;
-  acesso(c: ContextoAtendimento, id: number): Promise<AcessoPortalPrestadorLido | null>;
+  acessos(c: ContextoAtendimento): Promise<DadosAcessoPortalPrestador[]>;
+  acesso(c: ContextoAtendimento, id: number): Promise<DadosAcessoPortalPrestador | null>;
   acessoParaEntrada(
     c: ContextoAtendimento,
     chave: { login: string } | { ativacaoResumo: string },
-  ): Promise<AcessoPortalParaEntradaLido | null>;
-  gravarSgh<T>(
+  ): Promise<DadosAcessoPortalParaEntrada | null>;
+  gravar<T>(
     c: ContextoAtendimento,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: GravadorAtendimento) => Promise<T>,
   ): Promise<T>;
 }
@@ -173,5 +150,5 @@ export const METODOS_PORTA_ATENDIMENTO: ReadonlySet<string> = new Set([
   'acessos',
   'acesso',
   'acessoParaEntrada',
-  'gravarSgh',
+  'gravar',
 ]);

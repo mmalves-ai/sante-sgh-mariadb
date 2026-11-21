@@ -54,17 +54,19 @@ import {
   ultimoDia,
   valorCoparticipacao,
 } from '@sgh/dominio-operadora';
-import type { CobrancaLida, CobrancaSgh, LinhaTrilha, ReajusteOpeLido } from '@sgh/legado';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import { type DadosCobranca, type DadosReajuste, type EntradaCobranca } from './dados-portas.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema, type ExtrasProblema } from '../../problema.filter.js';
 import { linhaTrilha, problemaDoCadastro, type SessaoCadastro } from '../cadastro/comum.js';
 import type { ServicoSituacaoOperadora, SujeitoOperadora } from './aplicacao/situacao.js';
 import type { GravadorCobranca, PortaCobrancaOperadora } from './cobranca-porta.js';
+import { contextoGravacao } from './contexto-gravacao.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.cobranca';
-const T = { cobranca: 'SGH_OPE_COBRANCA', reajuste: 'SGH_OPE_REAJUSTE' } as const;
+const T = { cobranca: 'fatura_plano', reajuste: 'reajuste_contrato_plano' } as const;
 const ZERO = { multa: 0, juros: 0, total: 0 };
 /** A prévia mostra até 100 cobranças (a quantidade e o total são de todas). */
 const PREVIA_MAXIMA = 100;
@@ -105,7 +107,7 @@ export function textoDoDevido(
     : `O devido em ${dataBr} é ${brlTexto(devido)} (valor ${brlTexto(valor)}, multa ${brlTexto(encargos.multa)} e juros ${brlTexto(encargos.juros)}).`;
 }
 
-export function resumoDaCobranca(x: CobrancaLida, hoje: string): CobrancaResumo {
+export function resumoDaCobranca(x: DadosCobranca, hoje: string): CobrancaResumo {
   const vencida = x.situacao === 'aberta' && x.vencimento < hoje;
   return {
     id: x.id,
@@ -133,7 +135,7 @@ export function resumoDaCobranca(x: CobrancaLida, hoje: string): CobrancaResumo 
   };
 }
 
-const reajusteDto = (r: ReajusteOpeLido): ReajusteLido => ({
+const reajusteDto = (r: DadosReajuste): ReajusteLido => ({
   id: r.id,
   contrato: r.contrato,
   contratoNumero: r.contratoNumero,
@@ -175,7 +177,7 @@ export class ServicoCobrancaOperadora {
     return this.situacoes.exigir(this.sujeito(s), CHAVE_OPERADORA_COBRANCA);
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<R extends { id: number }>(
     s: SessaoCadastro,
     evento: string,
@@ -184,9 +186,9 @@ export class ServicoCobrancaOperadora {
     chave: (r: R) => string | null,
     fn: (g: GravadorCobranca) => Promise<R>,
   ): Promise<R> {
-    const linha = (r: R): LinhaTrilha =>
+    const linha = (r: R): RegistroTrilhaTela =>
       linhaTrilha(s, evento, RECURSO, operacao, { tabela, id: String(r.id), chave: chave(r) });
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const r = await this.porta.gravar(contextoGravacao(s, operacao), linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria' && this.trilha)
@@ -221,7 +223,7 @@ export class ServicoCobrancaOperadora {
     return k;
   }
 
-  private async cobrancaDe(s: SessaoCadastro, id: number): Promise<CobrancaLida> {
+  private async cobrancaDe(s: SessaoCadastro, id: number): Promise<DadosCobranca> {
     const x = await this.porta.cobranca(s.porta, id);
     if (!x) throw naoEncontrada('Cobrança');
     return x;
@@ -390,7 +392,7 @@ export class ServicoCobrancaOperadora {
       let tentativa = 0;
       let pagina: Awaited<ReturnType<PortaCobrancaOperadora['baseMensalidades']>>;
       let montadas: {
-        cobranca: CobrancaSgh;
+        cobranca: EntradaCobranca;
         pagadorNome: string;
         numero: string;
         nomes: Map<number, string>;
@@ -723,7 +725,7 @@ export class ServicoCobrancaOperadora {
     await this.exigirFatia(s);
     const k = await this.contratoDe(s, e.contrato);
     const hoje = await this.porta.hoje(s.porta);
-    const cobrancas: CobrancaLida[] = [];
+    const cobrancas: DadosCobranca[] = [];
     for (const c of e.cobrancas) cobrancas.push(await this.cobrancaDe(s, c.id));
     const { problemas, acordo } = calcularAcordo({
       contrato: k.id,
@@ -970,7 +972,8 @@ export class ServicoCobrancaOperadora {
       'operadora.cancelarReajuste',
       T.reajuste,
       () => `contrato:${r0.contrato};competencia:${r0.competencia}`,
-      (g) => g.cancelarReajuste({ id, motivo, por: s.login }),
+      (g) =>
+        g.cancelarReajuste({ id, motivo, por: s.login, ...(r0.versao !== undefined ? { versao: r0.versao } : {}) }),
     );
     return { ok: true, id: r.id, versao: 0, mensagem: 'Reajuste cancelado.', avisos: [] };
   }

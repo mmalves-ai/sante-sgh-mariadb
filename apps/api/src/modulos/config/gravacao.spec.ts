@@ -1,36 +1,28 @@
-// Telas do M04 (conferência de gravação; saúde das conexões e avisos de colisão): só em dev; receitas,
-// estados, triggers no banco e provas; pools, MON$ por sistema e colisões. Núcleo dublê; nenhum valor de linha.
-import { resolve } from 'node:path';
+// Tela "Saúde das conexões" (M04): pools do processo, conexões e transações abertas no banco do cliente e os avisos
+// de colisão contados pelo Executor. Núcleo dublê; só contagens, nenhum valor de linha. A "conferência de gravação"
+// do sistema de origem (gatilhos e receitas) saiu (ADR 0003): o produto não grava por gatilho.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { esquemaPainelConexoes, esquemaPainelGravacao } from '@sgh/contratos';
-import { MetricasExecutor } from '@sgh/legado';
+import { esquemaPainelConexoes } from '@sgh/contratos';
+import { MetricasExecutor } from '@sgh/nucleo';
 import { afterEach, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { criarFonteGravacao, type NucleoLeitura } from './gravacao.js';
-
-const catalogo = resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo');
+import { registroComConfig } from './modulo-teste.spec-util.js';
 
 const nucleo = (falhar = false): NucleoLeitura => ({
-  rede: 'rede-teste',
-  estadosDosPools: () => [
-    { estabelecimento: 'pc', abertas: 1, livres: 1, emUso: 0, esperando: 0, sysdbaDev: true },
-  ],
+  estadosDosPools: () => [{ banco: 'cliente_teste', ativas: 1, ociosas: 2, total: 3 }],
   async lerSomente(_ctx, fn) {
     if (falhar) throw new Error('banco fora');
     return fn({
-      hospital: 'pc',
+      cliente: 'teste',
       async consultar(sql: string) {
-        if (sql.includes('FROM SGH_TRILHA')) return [{ OPERACAO: 'cadastro.cadastrarPaciente', N: 3 }];
-        if (sql.includes('RDB$TRIGGERS'))
-          return [
-            { N: 'TRG_RICADPAC_BI', I: 0 },
-            { N: 'TRG_TBUSERS_BD', I: 1 },
-          ];
+        if (sql.includes('INNODB_TRX')) return [{ sistema: 'api', transacoes: 2, longas: 1, esperas: 1 }];
+        if (sql.includes('PROCESSLIST')) return [{ sistema: 'api', conexoes: 4 }];
         return [];
       },
-      async lerBlob() {
-        return Buffer.alloc(0);
+      async uma() {
+        return null;
       },
     } as never);
   },
@@ -42,74 +34,66 @@ afterEach(async () => {
   app = null;
 });
 
-describe('fonte das telas do M04', () => {
-  it('conferência: receita, estados, triggers no banco e provas pós-escrita do executor', async () => {
+describe('fonte da saúde das conexões', () => {
+  it('pools, coleta do banco do cliente e colisões do Executor (conflito de versão e trava)', async () => {
     const metricas = new MetricasExecutor();
-    metricas.registrar('cadastro.cadastrarPaciente', 'pc', 'sucesso');
-    metricas.registrar('cadastro.cadastrarPaciente', 'pc', 'desfeita');
-    metricas.registrar(
-      'cadastro.cadastrarPaciente',
-      'pc',
-      'conflito-versao',
-      new Date('2026-10-20T10:00:00Z'),
-    );
-    const f = criarFonteGravacao({ catalogo, estabelecimentos: ['pc'], metricas, nucleo: nucleo() });
-    const g = esquemaPainelGravacao.parse(await f.painelGravacao());
-    const cad = g.operacoes.find((o) => o.nome === 'cadastro.cadastrarPaciente');
-    expect(cad?.estados).toEqual({ pc: 'verde' });
-    expect(cad?.receita?.passos[0]?.tabela).toBe('RICADPAC');
-    expect(cad?.receita?.efeitos.map((e) => e.tabela)).toContain('HTPACIENTE');
-    expect(cad?.triggersNoBanco['pc']?.['TRG_RICADPAC_BI']).toBe('ativo');
-    expect(cad?.triggersNoBanco['pc']?.['TRG_HTPACIENTE_BI']).toBe('ausente');
-    // sucessos da trilha (fonte compartilhada); desfeitas do executor deste processo
-    expect(cad?.provas).toEqual({ pc: { sucesso: 3, desfeitas: 1 } });
-    expect(g.limitacao).toMatch(/trilha/);
-    expect(g.operacoes.find((o) => o.nome === 'convenio.cadastrarConvenio')?.receita).toBeNull();
+    metricas.registrar('cadastro.cadastrarPaciente', 'sucesso');
+    metricas.registrar('cadastro.cadastrarPaciente', 'conflito-versao');
+    metricas.registrar('cadastro.cadastrarPaciente', 'trava');
+    metricas.registrar('agenda.marcar', 'sucesso');
+    const f = criarFonteGravacao({ cliente: 'teste', rede: 'rede-teste', metricas, nucleo: nucleo() });
     const c = esquemaPainelConexoes.parse(await f.painelConexoes());
-    expect(c.pools[0]?.estabelecimento).toBe('pc');
-    expect(c.coletas['pc']).toMatchObject({ porSistema: expect.any(Array), transacoesAcimaDoLimite: 0 });
+    expect(c.pools).toEqual([
+      { estabelecimento: 'cliente_teste', abertas: 3, livres: 2, emUso: 1, esperando: 0, sysdbaDev: false },
+    ]);
+    expect(c.coletas['teste']).toMatchObject({
+      porSistema: [{ sistema: 'api', conexoes: 4, transacoes: 2 }],
+      transacoesAcimaDoLimite: 1,
+      esperasPorTrava: 1,
+      alertas: 2,
+    });
     expect(c.colisoes).toEqual([
-      { operacao: 'cadastro.cadastrarPaciente', estabelecimento: 'pc', porHora: { '2026-10-20T10': 1 } },
+      { operacao: 'cadastro.cadastrarPaciente', estabelecimento: 'teste', porHora: { total: 2 } },
     ]);
   });
 
-  it('sem núcleo ou com o banco fora: telas abrem sem conferência nem coleta', async () => {
+  it('sem núcleo ou com o banco fora: a tela abre sem coleta', async () => {
     const semNucleo = criarFonteGravacao({
-      catalogo,
-      estabelecimentos: ['pc'],
+      cliente: 'teste',
+      rede: 'rede-teste',
       metricas: new MetricasExecutor(),
       nucleo: null,
     });
-    expect((await semNucleo.painelGravacao()).operacoes[0]?.triggersNoBanco).toEqual({});
-    expect((await semNucleo.painelConexoes()).coletas).toEqual({ pc: null });
+    expect((await semNucleo.painelConexoes()).coletas).toEqual({ teste: null });
+    expect((await semNucleo.painelConexoes()).pools).toEqual([]);
     const fora = criarFonteGravacao({
-      catalogo: () => esquemaPainelGravacao.parse({ estabelecimentos: [], operacoes: [] }) as never,
-      estabelecimentos: ['pc'],
+      cliente: 'teste',
+      rede: 'rede-teste',
       metricas: new MetricasExecutor(),
       nucleo: nucleo(true),
     });
-    await expect(fora.painelConexoes()).resolves.toMatchObject({ coletas: { pc: null } });
+    await expect(fora.painelConexoes()).resolves.toMatchObject({ coletas: { teste: null } });
   });
 });
 
-describe('GET /api/config/gravacao e /api/config/conexoes', () => {
-  // M06 (pendência do M04 corrigida): exigem sessão e a permissão, em qualquer ambiente.
-  it('respondem com sessão e permissão; sem sessão, 401; sem a permissão, 403', async () => {
-    app = await criarApp(lerConfiguracao({ AMBIENTE: 'dev' }), null, {
-      AMBIENTE: 'dev',
-      REDE_PADRAO: 'rede-teste',
-      ESTABELECIMENTOS: '',
-    });
+describe('GET /api/config/conexoes', () => {
+  // Exige sessão e a permissão, em qualquer ambiente.
+  it('responde com sessão e permissão; fora de dev/ci sem sessão, 401', async () => {
+    const dev = { AMBIENTE: 'dev', REDE_PADRAO: 'rede-teste', ESTABELECIMENTOS: '', API_MODULOS: 'config' };
+    app = await criarApp(lerConfiguracao(dev), null, dev, { registro: registroComConfig() });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
-    expect((await app.inject({ method: 'GET', url: '/api/config/gravacao' })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'GET', url: '/api/config/conexoes' })).statusCode).toBe(200);
+    const r = await app.inject({ method: 'GET', url: '/api/config/conexoes' });
+    expect(r.statusCode).toBe(200);
+    expect(esquemaPainelConexoes.parse(r.json()).pools).toEqual([]);
+    // A conferência de gravação do sistema de origem saiu: a rota não existe.
+    expect((await app.inject({ method: 'GET', url: '/api/config/gravacao' })).statusCode).toBe(404);
     await app.close();
     // Fora de dev/ci não há sessão sintética: sem cookie, 401.
-    app = await criarApp(lerConfiguracao({ AMBIENTE: 'homolog' }), null, { AMBIENTE: 'homolog' });
+    const homolog = { AMBIENTE: 'homolog', API_MODULOS: 'config' };
+    app = await criarApp(lerConfiguracao(homolog), null, homolog, { registro: registroComConfig() });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
-    expect((await app.inject({ method: 'GET', url: '/api/config/gravacao' })).statusCode).toBe(401);
     expect((await app.inject({ method: 'GET', url: '/api/config/conexoes' })).statusCode).toBe(401);
     // Sobe a API duas vezes (dev e homolog): com o portão inteiro em paralelo passa dos 5 s padrão.
   }, 30_000);

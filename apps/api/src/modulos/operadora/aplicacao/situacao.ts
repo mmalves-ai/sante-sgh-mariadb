@@ -1,7 +1,7 @@
 // Situação das chaves da operadora própria no estabelecimento da sessão (M56, regra 1; ficha, seções 8 e 12; POL-3):
 // a chave do módulo (`operadora`, com o registro da operadora na ANS como pré-requisito) e a de cada fatia
 // (`operadora.<recurso>`), pelo resolvedor do M08 (estabelecimento, setor, grupo ou pessoa, com os pré-requisitos
-// declarados e registrados). Sem nenhuma linha em SGH_CFG_LIBERACAO, tudo está desligado; a fatia ligada só vale com o
+// declarados e registrados). Sem nenhuma linha em liberacao_chave, tudo está desligado; a fatia ligada só vale com o
 // módulo ligado (`chaveOperadoraValendo`). Falha da fonte da configuração = desligada (falha fechada). As rotas de cada
 // fatia exigem a chave dela por `exigir` (403 `recurso-desligado` com o motivo).
 import {

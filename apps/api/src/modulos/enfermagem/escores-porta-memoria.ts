@@ -3,28 +3,28 @@
 // a classificação uma por turno, a validação uma vez). Os pacientes são os da UTI e da enfermaria sintéticas da porta da
 // enfermagem (M25); a configuração dos índices é a sintética (a mesma da cópia). Nada é de pessoa real.
 import { CONFIGURACAO_INDICES_SINTETICA } from '@sgh/dominio-pep';
-import { comVigencia, HORAS_JANELA_ALERTA_TRR } from '@sgh/legado';
+import { comVigencia, HORAS_JANELA_ALERTA_TRR } from './tipos.js';
 import type {
-  AcionamentoTrrLidoSgh,
-  EventoTrrLidoSgh,
-  VersaoPcrLidaSgh,
-  ContencaoLidaSgh,
-  ClassificacaoLidaSgh,
-  EscalaEmFormularioLida,
-  EscoreLidoSgh,
-  IndiceUtiLidoSgh,
+  AcionamentoTrrRegistrado,
+  EventoTrrRegistrado,
+  VersaoPcrRegistrada,
+  ContencaoRegistrada,
+  ClassificacaoRegistrada,
+  EscalaEmFormulario,
+  EscoreRegistrado,
+  IndiceUtiRegistrado,
   InternacaoParaEscore,
   OrigemEstorno,
-  ReavaliacaoLidaSgh,
-  RegraEscoreLida,
-  ProtocoloInternadoLido,
-  LesaoLidaSgh,
-} from '@sgh/legado';
+  ReavaliacaoRegistrada,
+  RegraEscoreRegistrada,
+  ProtocoloInternadoRegistrado,
+  LesaoRegistrada,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { ContextoEscores, GravadorEscores, PortaEscores, VinculoAssistencial } from './escores-porta.js';
 import { gravadorLesaoMemoria, lesoesMemoria } from './lesao-porta-memoria.js';
-import { VINCULOS_SINTETICOS } from './porta-memoria.js';
+import { chaveDoEstado, VINCULOS_SINTETICOS } from './porta-memoria.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não gravado', detalhe, { codigo });
@@ -57,7 +57,7 @@ const minutosEntre = (de: string, ate: string) =>
 
 interface Estado {
   seq: number;
-  escores: EscoreLidoSgh[];
+  escores: EscoreRegistrado[];
   cuidados: {
     escore: number;
     codigo: string;
@@ -74,21 +74,21 @@ interface Estado {
       em: string;
     }[];
   }[];
-  reavaliacoes: (ReavaliacaoLidaSgh & { chave: string })[];
-  regras: RegraEscoreLida[];
-  classificacoes: (ClassificacaoLidaSgh & { unidade: string })[];
-  indices: IndiceUtiLidoSgh[];
+  reavaliacoes: (ReavaliacaoRegistrada & { chave: string })[];
+  regras: RegraEscoreRegistrada[];
+  classificacoes: (ClassificacaoRegistrada & { unidade: string })[];
+  indices: IndiceUtiRegistrado[];
   sinais: number;
   avisos: { login: string; evento: string; objeto: string; link: string | null; gravidade: string }[];
   /** W0-03, M5: as ordens de contenção, com os horários e as checagens. */
-  contencoes: ContencaoLidaSgh[];
+  contencoes: ContencaoRegistrada[];
   /** W0-03, M2: os acionamentos do TRR (com os registros da chegada e do desfecho) e as versões das fichas de PCR. */
-  trr: (AcionamentoTrrLidoSgh & { eventos: EventoTrrLidoSgh[] })[];
-  pcr: VersaoPcrLidaSgh[];
+  trr: (AcionamentoTrrRegistrado & { eventos: EventoTrrRegistrado[] })[];
+  pcr: VersaoPcrRegistrada[];
   /** W0-03, M3: os protocolos gerenciados do internado, com os eventos. */
-  protocolos?: ProtocoloInternadoLido[];
+  protocolos?: ProtocoloInternadoRegistrado[];
   /** W0-03, M4: as lesões (feridas e LPP), com as versões, os curativos, as fotos e os eventos. */
-  lesoes?: LesaoLidaSgh[];
+  lesoes?: LesaoRegistrada[];
 }
 
 /** W0-03, M5: o censo sintético da memória (internados por dia em cada unidade), para o denominador do indicador. */
@@ -152,7 +152,7 @@ export class PortaEscoresMemoria implements PortaEscores {
     _trilha: unknown,
     fn: (g: GravadorEscores) => Promise<T>,
   ): Promise<T> {
-    const s = this.estado(c.hospital);
+    const s = this.estado(chaveDoEstado(c));
     // A "transação" em memória: a cópia de trabalho só vale se nada recusar.
     const copia: Estado = structuredClone(s);
     const g: Omit<
@@ -835,7 +835,7 @@ export class PortaEscoresMemoria implements PortaEscores {
       const ps = (copia.protocolos ??= []);
       if (p.origem === 'news2' && (p.escore === null || p.tipo !== 'sepse'))
         throw recusa('escore-obrigatorio', 'O alerta do NEWS2 abre o protocolo de sepse, com o escore.');
-      const fechado = (x: ProtocoloInternadoLido) =>
+      const fechado = (x: ProtocoloInternadoRegistrado) =>
         x.eventos.some((e) => e.tipo === 'encerramento' || e.tipo === 'inativacao');
       if (ps.some((x) => x.atendimento === p.atendimento && x.tipo === p.tipo && !fechado(x)))
         throw recusa('protocolo-ja-aberto', 'O paciente já está neste protocolo neste atendimento.');
@@ -900,19 +900,19 @@ export class PortaEscoresMemoria implements PortaEscores {
       eventoProtocoloInternado,
       ...gravadorLesaoMemoria(copia, () => this.agora()),
     });
-    this.estados.set(c.hospital, copia);
+    this.estados.set(chaveDoEstado(c), copia);
     return r;
   }
 
   async regras(c: ContextoEscores) {
-    return [...this.estado(c.hospital).regras].sort(
+    return [...this.estado(chaveDoEstado(c)).regras].sort(
       (a, b) => a.escala.localeCompare(b.escala) || b.versao - a.versao,
     );
   }
 
   async escores(c: ContextoEscores, pacientes: readonly number[], desde: string) {
     const ps = new Set(pacientes);
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .escores.filter((e) => ps.has(e.paciente) && e.aferidoEm >= comSegundos(desde))
       .sort((a, b) => b.aferidoEm.localeCompare(a.aferidoEm) || b.id - a.id);
   }
@@ -930,7 +930,7 @@ export class PortaEscoresMemoria implements PortaEscores {
 
   async reavaliacoes(c: ContextoEscores, pacientes: readonly number[], desde: string) {
     const ps = new Set(pacientes);
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .reavaliacoes.filter(
         (r) =>
           ps.has(r.paciente) && (r.situacao === 'pendente' || (r.cumpridaEm ?? '') >= comSegundos(desde)),
@@ -942,7 +942,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   async escalasEmFormulario(
     _c: ContextoEscores,
     pacientes: readonly number[],
-  ): Promise<EscalaEmFormularioLida[]> {
+  ): Promise<EscalaEmFormulario[]> {
     return pacientes.includes(25_001)
       ? [
           {
@@ -969,7 +969,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   }
 
   async classificacoes(c: ContextoEscores, unidade: string, data: string, turno: string) {
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .classificacoes.filter((x) => x.unidade === unidade && x.data === data && x.turno === turno)
       .map((x) => semCampo(x, 'unidade'));
   }
@@ -979,13 +979,13 @@ export class PortaEscoresMemoria implements PortaEscores {
   }
 
   async indicesDoPaciente(c: ContextoEscores, paciente: number) {
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .indices.filter((i) => i.paciente === paciente)
       .sort((a, b) => b.coletadoEm.localeCompare(a.coletadoEm) || b.id - a.id);
   }
 
   async apachesDoPeriodo(c: ContextoEscores, de: string, ate: string) {
-    return this.estado(c.hospital).indices.filter(
+    return this.estado(chaveDoEstado(c)).indices.filter(
       (i) =>
         i.indice === 'apache2' &&
         i.situacao === 'validado' &&
@@ -1001,7 +1001,7 @@ export class PortaEscoresMemoria implements PortaEscores {
 
   async decisoesProfilaxia(c: ContextoEscores, escores: readonly number[]) {
     const ids = new Set(escores);
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .cuidados.filter((x) => x.codigo === 'profilaxiaTev' && ids.has(x.escore))
       .map((x) => {
         const historico = [
@@ -1029,7 +1029,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   }
 
   async registroParaEstorno(c: ContextoEscores, origem: OrigemEstorno, id: number) {
-    const e = this.estado(c.hospital);
+    const e = this.estado(chaveDoEstado(c));
     if (origem === 'escore') {
       const x = e.escores.find((y) => y.id === id);
       return x
@@ -1078,7 +1078,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   ) {
     const ats = f.atendimentos ? new Set(f.atendimentos) : null;
     return structuredClone(
-      this.estado(c.hospital)
+      this.estado(chaveDoEstado(c))
         .contencoes.filter(
           (x) =>
             (!ats || ats.has(x.atendimento)) &&
@@ -1094,11 +1094,11 @@ export class PortaEscoresMemoria implements PortaEscores {
   async protocolosInternados(
     c: ContextoEscores,
     f: { atendimentos?: readonly number[]; escores?: readonly number[]; desde?: string; ate?: string },
-  ): Promise<ProtocoloInternadoLido[]> {
+  ): Promise<ProtocoloInternadoRegistrado[]> {
     const ats = f.atendimentos ? new Set(f.atendimentos) : null;
     const escs = f.escores ? new Set(f.escores) : null;
     return structuredClone(
-      (this.estado(c.hospital).protocolos ?? [])
+      (this.estado(chaveDoEstado(c)).protocolos ?? [])
         .filter(
           (x) =>
             (!ats || ats.has(x.atendimento)) &&
@@ -1110,13 +1110,13 @@ export class PortaEscoresMemoria implements PortaEscores {
     );
   }
 
-  async protocoloInternado(c: ContextoEscores, id: number): Promise<ProtocoloInternadoLido | null> {
-    const x = (this.estado(c.hospital).protocolos ?? []).find((y) => y.id === id);
+  async protocoloInternado(c: ContextoEscores, id: number): Promise<ProtocoloInternadoRegistrado | null> {
+    const x = (this.estado(chaveDoEstado(c)).protocolos ?? []).find((y) => y.id === id);
     return x ? structuredClone(x) : null;
   }
 
   async contencao(c: ContextoEscores, id: number) {
-    const x = this.estado(c.hospital).contencoes.find((y) => y.id === id);
+    const x = this.estado(chaveDoEstado(c)).contencoes.find((y) => y.id === id);
     return x
       ? {
           id: x.id,
@@ -1141,7 +1141,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   }
 
   async acionamentosTrr(c: ContextoEscores, f: { unidade?: string; desde: string; ate?: string }) {
-    const s = this.estado(c.hospital);
+    const s = this.estado(chaveDoEstado(c));
     return structuredClone(
       s.trr
         .filter(
@@ -1168,7 +1168,7 @@ export class PortaEscoresMemoria implements PortaEscores {
 
   async acionamentosDosEscores(c: ContextoEscores, escores: readonly number[]) {
     const ids = new Set(escores);
-    return this.estado(c.hospital)
+    return this.estado(chaveDoEstado(c))
       .trr.filter((t) => t.escore !== null && ids.has(t.escore))
       .map((t) => ({ escore: t.escore!, trr: t.id, acionadoEm: t.acionadoEm, inativo: !!t.inativacao }));
   }
@@ -1176,7 +1176,7 @@ export class PortaEscoresMemoria implements PortaEscores {
   async escoresComTrr(c: ContextoEscores, escores: readonly number[]) {
     const ids = new Set(escores);
     return new Set(
-      this.estado(c.hospital)
+      this.estado(chaveDoEstado(c))
         .trr.filter((t) => t.escore !== null && ids.has(t.escore))
         .map((t) => t.escore!),
     );
@@ -1186,10 +1186,11 @@ export class PortaEscoresMemoria implements PortaEscores {
     c: ContextoEscores,
     f: { id?: number; atendimentos?: readonly number[]; unidade?: string; desde?: string; ate?: string },
   ) {
-    if (f.id !== undefined) return structuredClone(this.estado(c.hospital).pcr.filter((p) => p.id === f.id));
+    if (f.id !== undefined)
+      return structuredClone(this.estado(chaveDoEstado(c)).pcr.filter((p) => p.id === f.id));
     const ats = f.atendimentos ? new Set(f.atendimentos) : null;
     return structuredClone(
-      this.estado(c.hospital)
+      this.estado(chaveDoEstado(c))
         .pcr.filter(
           (p) =>
             (!ats || ats.has(p.atendimento)) &&
@@ -1208,14 +1209,14 @@ export class PortaEscoresMemoria implements PortaEscores {
   async lesoes(
     c: ContextoEscores,
     f: { id?: number; atendimentos?: readonly number[]; desde?: string; ate?: string },
-  ): Promise<LesaoLidaSgh[]> {
-    return lesoesMemoria(this.estado(c.hospital).lesoes, f);
+  ): Promise<LesaoRegistrada[]> {
+    return lesoesMemoria(this.estado(chaveDoEstado(c)).lesoes, f);
   }
 
   async lesaoDoCurativo(c: ContextoEscores, curativo: number): Promise<number | null> {
     return (
-      (this.estado(c.hospital).lesoes ?? []).find((l) => l.curativos.some((x) => x.id === curativo))?.id ??
-      null
+      (this.estado(chaveDoEstado(c)).lesoes ?? []).find((l) => l.curativos.some((x) => x.id === curativo))
+        ?.id ?? null
     );
   }
 

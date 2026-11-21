@@ -9,6 +9,7 @@ import {
   criarAppEnfermagem,
   horariosDaUti,
 } from '../enfermagem.spec-util.js';
+import { CONTEXTO_SINTETICO } from '../app-enfermagem.spec-util.js';
 import { VigiaHorarios } from '../vigia.js';
 
 let a: AppEnfermagem;
@@ -19,20 +20,23 @@ afterAll(async () => {
   await a.fechar();
 });
 
+/** O estabelecimento sintético da sessão de teste (sem banco: o código da sessão identifica o estado em memória). */
+const ALVO = CONTEXTO_SINTETICO;
+
 describe('regra 10: suspensão vinda da prescrição', () => {
   it('a vigia avisa em menos de 2 s; a tela mostra suspensa; checar o que a tela leu antes abre o conflito', async () => {
     const s = await a.entrar('SINT.ENF.PLANTAO');
     const antes = await horariosDaUti(a, s);
     const cef = antes.horarios.filter((x) => x.descricao.startsWith('CEFTRIAXONA'));
     expect(cef.every((x) => x.situacao === 'P')).toBe(true);
-    const vigia = new VigiaHorarios(a.porta, 'rede-teste', 100);
+    const vigia = new VigiaHorarios(a.porta, 100);
     let avisos = 0;
-    const parar = vigia.assinar('aa', 'leitos', () => {
+    const parar = vigia.assinar(ALVO, 'leitos', () => {
       avisos += 1;
     });
     await new Promise((r) => setTimeout(r, 250));
     const inicio = Date.now();
-    a.porta.suspenderPrescricaoPorFora('aa', 25103);
+    a.porta.suspenderPrescricaoPorFora(ALVO, 25103);
     while (avisos === 0 && Date.now() - inicio < 2_000) await new Promise((r) => setTimeout(r, 20));
     parar();
     expect(avisos).toBeGreaterThan(0);

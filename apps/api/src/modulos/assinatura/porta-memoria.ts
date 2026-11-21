@@ -1,46 +1,77 @@
-// Porta da assinatura ICP em memória (M49, etapa 1): a sessão sintética de dev/ci (E2E). Mesmas tabelas do novo em
+// Porta da assinatura ICP em memória (M49, etapa 1): a sessão sintética de dev/ci (E2E). Os mesmos registros da porta própria em
 // listas, com as mesmas recusas (certificado repetido, versão desatualizada, provedor repetido, pedido de uso único).
 // A identidade de todo login é a do CPF SINTÉTICO da sessão (nunca de pessoa real); as formas são AD-RB e AD-RT; os
 // tipos de certificado e os conselhos, os nomes do cadastro do pc (sem dado de pessoa).
 import { CPF_SINTETICO_SESSAO, prioridadeIcp } from '@sgh/dominio-documento';
 import {
-  type AssinadoIcpLido,
-  type AssinaturaDocumentoLida,
-  type AssinaturaLida,
-  type AvisoAssinaturaLido,
+  type DocumentoAssinadoIcp,
+  type AssinaturaDoDocumento,
+  type AssinaturaRealizada,
+  type AvisoAssinatura,
   type AvisoParaGravar,
   type ConsultaPublicaParaGravar,
-  type DocumentoParaIcpLido,
-  type DocumentoVerificadoLido,
-  type ResumoVerificacoesLido,
-  type DocumentoSghLido,
-  type PreviaGravada,
-  type SolicitacaoSncrLida,
-  type SolicitacaoSncrParaGravar,
-  TIPOS_DOCUMENTO_ICP_SQL,
+  type DocumentoNaFilaIcp,
+  type DocumentoVerificado,
+  type ResumoVerificacoes,
+  type DocumentoEmitidoIcp,
+  type PreviaDoDocumento,
+  type PedidoNumeracao,
+  type PedidoNumeracaoParaGravar,
+  TIPOS_DOCUMENTO_ICP,
   type AssinaturaParaGravar,
-  type CertificadoGravado,
-  ErroAssinaturaSgh,
-  type LinhaTrilha,
-  type PedidoAssinaturaGravado,
+  type CertificadoVinculado,
+  ErroAssinatura,
+  type TrilhaAssinatura,
+  type PedidoAssinaturaAberto,
   type PedidoAssinaturaParaGravar,
-  type PoliticaGravada,
+  type PoliticaVigente,
   type PoliticaParaGravar,
-  type ProvedorGravado,
+  type ProvedorNuvem,
   type ValidacaoParaGravar,
-} from '@sgh/legado';
+} from './tipos.js';
 import type { GravadorAssinatura, PortaAssinaturaIcp } from './porta.js';
 
-interface CertMem extends CertificadoGravado {
+/** Uma linha da trilha como a tela a vê (os campos dos dados da linha, mais a tabela, o id e o resultado). */
+export interface VistaTrilha {
+  readonly entidade: string;
+  readonly entidadeId: number | null;
+  readonly usuario: number | null;
+  readonly evento: string | null;
+  readonly recurso: string | null;
+  readonly operacao: string | null;
+  readonly chave: string | null;
+  readonly estacao: string | null;
+  readonly ator: string | null;
+  readonly resultado: 'sucesso' | 'falha';
+}
+
+export function vistaDaTrilha(l: TrilhaAssinatura): VistaTrilha {
+  const d = (l.dadosDepois ?? {}) as Record<string, unknown>;
+  const t = (k: string) => (typeof d[k] === 'string' ? (d[k] as string) : null);
+  return {
+    entidade: l.entidade,
+    entidadeId: l.entidadeId,
+    usuario: l.usuario,
+    evento: t('evento'),
+    recurso: t('recurso'),
+    operacao: t('operacao'),
+    chave: t('chave'),
+    estacao: t('estacao'),
+    ator: t('ator'),
+    resultado: l.resultado ?? 'sucesso',
+  };
+}
+
+interface CertMem extends CertificadoVinculado {
   readonly certificadoDer: string;
 }
 
 /**
- * Os documentos do novo da sessão sintética (a porta em memória do prontuário de uso diário, M23): a fila do autor lê
- * deles, e a assinatura ICP marca o evento "assinado" neles (a mesma transação, no legado).
+ * Os documentos do prontuário da sessão sintética (a porta em memória do prontuário de uso diário, M23): a fila do autor lê
+ * deles, e a assinatura ICP marca o evento "assinado" neles (na mesma gravação).
  */
 export interface DocumentosMemoriaIcp {
-  todos(hospital: string): readonly DocumentoSghLido[];
+  todos(hospital: string): readonly DocumentoEmitidoIcp[];
   marcarAssinadoIcp(hospital: string, documento: number): void;
 }
 
@@ -52,24 +83,25 @@ type AssinMem = AssinaturaParaGravar & {
 
 export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
   readonly destino = 'memoria' as const;
-  readonly trilhas: LinhaTrilha[] = [];
+  /** As linhas da trilha gravadas, na vista da tela (evento, recurso, chave e estação vêm dos dados da linha). */
+  readonly trilhas: VistaTrilha[] = [];
   private seq = 0;
   private readonly certs: CertMem[] = [];
-  private readonly pols: (PoliticaGravada & { hospital: string })[] = [];
-  private readonly provs: (ProvedorGravado & { hospital: string })[] = [];
-  private readonly pedidos: (PedidoAssinaturaGravado & { consumido: boolean })[] = [];
+  private readonly pols: (PoliticaVigente & { hospital: string })[] = [];
+  private readonly provs: (ProvedorNuvem & { hospital: string })[] = [];
+  private readonly pedidos: (PedidoAssinaturaAberto & { consumido: boolean })[] = [];
   private readonly assins: AssinMem[] = [];
   private readonly valids: (ValidacaoParaGravar & { id: number })[] = [];
-  private readonly previas: PreviaGravada[] = [];
+  private readonly previas: PreviaDoDocumento[] = [];
   private readonly pdfs = new Map<
     number,
     { previa: number; chaveS3: string | null; versaoS3: string | null; hashPdf: string | null }
   >();
   private readonly avisosMem: (AvisoParaGravar & { id: number; criadoEm: string; lidoEm: string | null })[] =
     [];
-  private readonly sncr: (SolicitacaoSncrParaGravar & SolicitacaoSncrLida)[] = [];
+  private readonly sncr: (PedidoNumeracaoParaGravar & PedidoNumeracao)[] = [];
   readonly numerosSncr = new Map<string, string>();
-  /** Etapa 3: as consultas ao verificador público (SGH_DOC_VERIFICACAO), com o instante. */
+  /** Etapa 3: as consultas ao verificador público (consulta_verificacao_documento), com o instante. */
   readonly verificacoes: (ConsultaPublicaParaGravar & { id: number; em: Date })[] = [];
 
   constructor(private readonly documentos: DocumentosMemoriaIcp | null = null) {}
@@ -90,7 +122,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
               x.emissorHash === c.emissorHash,
           )
         )
-          throw new ErroAssinaturaSgh(
+          throw new ErroAssinatura(
             'certificado-ja-vinculado',
             'Este certificado já está vinculado à sua conta.',
           );
@@ -122,14 +154,14 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
         const i = this.provs.findIndex((x) => x.hospital === p.hospital && x.codigo === p.codigo);
         if (versao === null) {
           if (i >= 0)
-            throw new ErroAssinaturaSgh('provedor-repetido', 'Já existe um provedor com este código.');
+            throw new ErroAssinatura('provedor-repetido', 'Já existe um provedor com este código.');
           const id = this.novo();
           this.provs.push({ ...p, id, versao: 1, alteradoPor: p.por, alteradoEm: p.em.toISOString() });
           return { id, versao: 1 };
         }
         const atual = this.provs[i];
         if (!atual || atual.versao !== versao)
-          throw new ErroAssinaturaSgh(
+          throw new ErroAssinatura(
             'versao-desatualizada',
             'O provedor foi alterado por outra pessoa. Abra de novo.',
           );
@@ -145,7 +177,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
       },
       gravarPedido: async (p: PedidoAssinaturaParaGravar) => {
         if (this.pedidos.some((x) => x.stateHash === p.stateHash))
-          throw new ErroAssinaturaSgh('pedido-repetido', 'Pedido de assinatura repetido.');
+          throw new ErroAssinatura('pedido-repetido', 'Pedido de assinatura repetido.');
         const id = this.novo();
         this.pedidos.push({ ...p, id, expiraEm: p.expiraEm.toISOString(), consumido: false });
         return { id };
@@ -163,7 +195,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
         const resto = { ...p } as Partial<typeof p>;
         delete resto.consumido;
         return {
-          ...(resto as PedidoAssinaturaGravado),
+          ...(resto as PedidoAssinaturaAberto),
           vencido: new Date(p.expiraEm).getTime() <= agora.getTime(),
         };
       },
@@ -285,11 +317,11 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
   async gravar<T>(
     _c: { rede: string; hospital: string },
     fn: (g: GravadorAssinatura) => Promise<T>,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha | null) | null,
+    trilha: TrilhaAssinatura | ((r: T) => TrilhaAssinatura | null) | null,
   ): Promise<T> {
     const r = await fn(this.gravador());
     const linha = typeof trilha === 'function' ? trilha(r) : trilha;
-    if (linha) this.trilhas.push(linha);
+    if (linha) this.trilhas.push(vistaDaTrilha(linha));
     return r;
   }
 
@@ -297,7 +329,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     return {
       cpf: CPF_SINTETICO_SESSAO,
       cpfProfissional: CPF_SINTETICO_SESSAO,
-      registros: [{ cbo: 1, sigla: 'CRM', uf: 'RJ', numero: '000000' }],
+      registros: [{ cbo: '225125', sigla: 'CRM', uf: 'RJ', numero: '000000' }],
     };
   }
 
@@ -320,7 +352,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     return ['CRM', 'COREN', 'CRF', 'CRO', 'CRP', 'CREFITO', 'CRN', 'CRFA', 'CRBM'];
   }
 
-  async certificados(c: { hospital: string }, login: string): Promise<CertificadoGravado[]> {
+  async certificados(c: { hospital: string }, login: string): Promise<CertificadoVinculado[]> {
     return this.certs
       .filter((x) => x.hospital === c.hospital && x.usuario === login)
       .sort((a, b) => b.id - a.id)
@@ -331,9 +363,9 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     return this.certs.find((x) => x.hospital === c.hospital && x.id === id) ?? null;
   }
 
-  async politicas(c: { hospital: string }): Promise<PoliticaGravada[]> {
+  async politicas(c: { hospital: string }): Promise<PoliticaVigente[]> {
     const vistos = new Set<string>();
-    const r: PoliticaGravada[] = [];
+    const r: PoliticaVigente[] = [];
     for (const p of [...this.pols].filter((x) => x.hospital === c.hospital).sort((a, b) => b.id - a.id)) {
       const k = `${p.tipoDocumento}|${p.conselho ?? ''}|${p.destino}`;
       if (vistos.has(k)) continue;
@@ -341,13 +373,13 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
       if (p.ativa) {
         const resto: Partial<typeof p> = { ...p };
         delete resto.hospital;
-        r.push(resto as PoliticaGravada);
+        r.push(resto as PoliticaVigente);
       }
     }
     return r.sort((a, b) => a.tipoDocumento.localeCompare(b.tipoDocumento) || a.id - b.id);
   }
 
-  async provedores(c: { hospital: string }): Promise<ProvedorGravado[]> {
+  async provedores(c: { hospital: string }): Promise<ProvedorNuvem[]> {
     return this.provs
       .filter((x) => x.hospital === c.hospital)
       .sort((a, b) => a.codigo.localeCompare(b.codigo));
@@ -361,7 +393,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     c: { hospital: string },
     login: string,
     origem: 'teste' | 'documento',
-  ): Promise<AssinaturaLida[]> {
+  ): Promise<AssinaturaRealizada[]> {
     return this.assins
       .filter((a) => a.hospital === c.hospital && a.usuario === login && a.origem === origem)
       .sort((a, b) => b.id - a.id)
@@ -401,7 +433,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
 
   // ── Etapa 2: documentos emitidos ────────────────────────────────────────────────────────────────────────
 
-  async documentoEmitido(c: { hospital: string }, id: number): Promise<DocumentoSghLido | null> {
+  async documentoEmitido(c: { hospital: string }, id: number): Promise<DocumentoEmitidoIcp | null> {
     return this.documentos?.todos(c.hospital).find((d) => d.id === id) ?? null;
   }
 
@@ -413,9 +445,9 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
   }
 
   async filaIcp(c: { hospital: string }, login: string, teto: number, tiposIcp: readonly string[]) {
-    const tipos = new Set<string>(TIPOS_DOCUMENTO_ICP_SQL);
+    const tipos = new Set<string>(TIPOS_DOCUMENTO_ICP);
     const icp = new Set(tiposIcp);
-    const itens: DocumentoParaIcpLido[] = [];
+    const itens: DocumentoNaFilaIcp[] = [];
     for (const d of this.documentos?.todos(c.hospital) ?? []) {
       if (d.usuario !== login || !tipos.has(d.tipo) || d.suspenso) continue;
       const a = this.ultimaDoDocumento(c.hospital, d.id);
@@ -458,7 +490,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     return this.previas.find((p) => p.hospital === c.hospital && p.id === id) ?? null;
   }
 
-  async assinaturaDocumento(c: { hospital: string }, id: number): Promise<AssinaturaDocumentoLida | null> {
+  async assinaturaDocumento(c: { hospital: string }, id: number): Promise<AssinaturaDoDocumento | null> {
     const a = this.assins.find((x) => x.hospital === c.hospital && x.id === id && x.origem === 'documento');
     if (!a) return null;
     const p = this.pdfs.get(a.id);
@@ -503,7 +535,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
       .map((a) => ({ id: a.id, usuario: a.usuario }));
   }
 
-  async assinadosRecentes(c: { hospital: string }, login: string): Promise<AssinadoIcpLido[]> {
+  async assinadosRecentes(c: { hospital: string }, login: string): Promise<DocumentoAssinadoIcp[]> {
     const docs = new Map((this.documentos?.todos(c.hospital) ?? []).map((d) => [d.id, d]));
     return this.assins
       .filter(
@@ -551,7 +583,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
   async avisos(
     c: { hospital: string },
     para: { autor: string } | 'diretor-tecnico',
-  ): Promise<AvisoAssinaturaLido[]> {
+  ): Promise<AvisoAssinatura[]> {
     return this.avisosMem
       .filter(
         (v) =>
@@ -583,7 +615,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
 
   // ── Etapa 3: verificador público ──
 
-  async documentoDoCodigo(c: { hospital: string }, codigo: string): Promise<DocumentoVerificadoLido | null> {
+  async documentoDoCodigo(c: { hospital: string }, codigo: string): Promise<DocumentoVerificado | null> {
     const pv = this.previas.find((p) => p.hospital === c.hospital && p.codigo === codigo);
     if (!pv) return null;
     const d = (this.documentos?.todos(c.hospital) ?? []).find((x) => x.id === pv.documento);
@@ -612,7 +644,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     };
   }
 
-  async resumoVerificacoes(c: { hospital: string }, desde: Date): Promise<ResumoVerificacoesLido[]> {
+  async resumoVerificacoes(c: { hospital: string }, desde: Date): Promise<ResumoVerificacoes[]> {
     const m = new Map<string, number>();
     for (const v of this.verificacoes)
       if (v.hospital === c.hospital && v.em >= desde) {
@@ -623,12 +655,12 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
     return [...m.entries()]
       .map(([k, n]) => {
         const [dia = '', resultado = ''] = k.split('|');
-        return { dia, resultado: resultado as ResumoVerificacoesLido['resultado'], consultas: n };
+        return { dia, resultado: resultado as ResumoVerificacoes['resultado'], consultas: n };
       })
       .sort((a, b) => b.dia.localeCompare(a.dia) || a.resultado.localeCompare(b.resultado));
   }
 
-  async solicitacoesSncr(c: { hospital: string }, documento: number): Promise<SolicitacaoSncrLida[]> {
+  async solicitacoesSncr(c: { hospital: string }, documento: number): Promise<PedidoNumeracao[]> {
     return this.sncr
       .filter((x) => x.hospital === c.hospital && x.documento === documento)
       .sort((a, b) => b.id - a.id)

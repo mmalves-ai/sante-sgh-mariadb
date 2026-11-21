@@ -7,7 +7,7 @@
 //   POST /api/custos/estatisticas/coleta           coletar a competência das fontes do banco
 //   POST /api/custos/estatisticas/lancamentos      lançar uma estatística à mão
 // Ler: `custos.centro.ler`; classificar: `custos.centro.editar`; coletar e lançar: `custos.estatistica.registrar`. As
-// gravações exigem a chave `custos` no estabelecimento (POL-3) e vão com a SGH_TRILHA na mesma transação (com a porta
+// gravações exigem a chave `custos` no estabelecimento (POL-3) e vão com a trilha na mesma transação (com a porta
 // em memória, o registrador da API registra).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -87,6 +87,9 @@ export class CustosController {
     return {
       rede: s.rede,
       hospital: s.hospital,
+      estabelecimento: s.porta.estabelecimento,
+      usuario: s.porta.usuario,
+      correlacao: s.porta.correlacao,
       login: s.login,
       pode: (c) => s.pode(c),
       trilha: (evento, operacao, tabela, id) =>
@@ -134,7 +137,7 @@ export class CustosController {
   @Post('centros/:id')
   @HttpCode(200)
   @Permissao(P.centroEditar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da classificação do centro (antes e depois)')
+  @AuditadoNoHandler('trilha na transação da classificação do centro (antes e depois)')
   async classificar(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -165,7 +168,7 @@ export class CustosController {
   @Post('estatisticas/coleta')
   @HttpCode(201)
   @Permissao(P.estatisticaRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ da coleta (só contagens por fonte)')
+  @AuditadoNoHandler('trilha na transação da coleta (só contagens por fonte)')
   async coletar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ColetaEstatisticas> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_CUSTOS);
@@ -179,7 +182,7 @@ export class CustosController {
   @Post('estatisticas/lancamentos')
   @HttpCode(201)
   @Permissao(P.estatisticaRegistrar)
-  @AuditadoNoHandler('SGH_TRILHA na transação SGH_ do lançamento manual')
+  @AuditadoNoHandler('trilha na transação do lançamento manual')
   async lancar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,

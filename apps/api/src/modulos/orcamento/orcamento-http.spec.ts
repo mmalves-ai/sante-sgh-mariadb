@@ -3,27 +3,49 @@
 // a versão; SINT.ORCAMENTO.APROVA aprova a que outra pessoa montou (segregação); SINT.ORCAMENTO.CONSULTA (só o
 // Comparativo, 594) lê e não grava; quem não tem opção de orçamento não abre nada. A chave `orcamento` está ligada na
 // sessão sintética; sem ela, a gravação é recusada (POL-3).
+import { Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
+import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { CACHE_CONFIG, CacheConfig, FONTE_CONFIGURACAO } from '../config/public-api.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/configuracao-fonte.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloOrcamento } from './modulo.js';
 import { CHAVE_LIBERACAO_ORCAMENTO } from './orcamento.controller.js';
 import { PortaOrcamentoMemoria, realizadoSintetico } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+/** A configuração com a chave `orcamento` desligada (a segunda app do teste). */
+@Module({})
+class ConfiguracaoDesligada {}
+
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,orcamento',
+};
 let app: NestFastifyApplication;
 const trilha = new RegistradorTrilhaMemoria();
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, orcamento: new PortaOrcamentoMemoria() });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: registroDeTeste(
+      {},
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        orcamento: (ctx) => moduloOrcamento(ctx, { porta: new PortaOrcamentoMemoria() }),
+      },
+    ),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 120_000);
@@ -363,8 +385,21 @@ describe('orçamento empresarial: cada rota pela sua permissão', { timeout: 180
     });
     const b = await criarApp(lerConfiguracao(env), null, env, {
       trilha: trilhaB,
-      configuracao,
-      orcamento: new PortaContada(),
+      registro: registroDeTeste(
+        {},
+        {
+          configuracao_teste: () => ({
+            module: ConfiguracaoDesligada,
+            global: true,
+            providers: [
+              { provide: FONTE_CONFIGURACAO, useValue: configuracao },
+              { provide: CACHE_CONFIG, useValue: new CacheConfig(new ArmazemMemoria()) },
+            ],
+            exports: [FONTE_CONFIGURACAO, CACHE_CONFIG],
+          }),
+          orcamento: (ctx) => moduloOrcamento(ctx, { porta: new PortaContada() }),
+        },
+      ),
     });
     await b.init();
     await b.getHttpAdapter().getInstance().ready();

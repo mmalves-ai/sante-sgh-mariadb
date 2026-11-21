@@ -1,0 +1,103 @@
+{
+  "lote": "02-10",
+  "registrar": [
+    "operadora"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/operadora/apoio-banco.ts",
+    "src/modulos/operadora/vocabulario-banco.ts",
+    "src/modulos/operadora/porta.ts",
+    "src/modulos/operadora/porta-propria.ts",
+    "src/modulos/operadora/porta-memoria.ts",
+    "src/modulos/operadora/rede-porta.ts",
+    "src/modulos/operadora/rede-porta-propria.ts",
+    "src/modulos/operadora/rede-porta-memoria.ts",
+    "src/modulos/operadora/rede-servico.ts",
+    "src/modulos/operadora/rede.controller.ts",
+    "src/modulos/operadora/operadora.controller.ts",
+    "src/modulos/operadora/aplicacao/situacao.ts",
+    "src/modulos/operadora/aplicacao/mensagens.ts",
+    "src/modulos/operadora/portal-prestador-servico.ts",
+    "src/modulos/operadora/portal-prestador-contas.ts",
+    "src/modulos/operadora/portal-prestador.controller.ts",
+    "src/modulos/operadora/public-api.ts",
+    "src/modulos/operadora/modulo.ts",
+    "src/modulos/operadora/infra/copia.spec-util.ts",
+    "src/modulos/operadora/porta-propria.int.spec.ts",
+    "src/modulos/operadora/rede-porta-propria.int.spec.ts",
+    "src/modulos/operadora/infra/escopo-operadora.int.spec.ts",
+    "src/modulos/operadora/infra/liberacao.int.spec.ts",
+    "src/modulos/operadora/infra/segregacao.int.spec.ts",
+    "src/modulos/operadora/operadora.spec.ts",
+    "src/modulos/operadora/rede.spec.ts",
+    "src/modulos/operadora/portal-prestador-contas.spec.ts",
+    "src/modulos/operadora/aplicacao/identidade.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "prestador_rede",
+      "motivo": "modelo de remuneração do contrato da tela (MODELOS_REMUNERACAO 3 orçamentação, 5 DRG, 6 e 7 bundles) sem valor no CHECK; hoje a tela não oferece esses códigos (vocabulario-banco.ts REMUNERACAO).",
+      "ddl": "ALTER TABLE prestador_rede DROP CONSTRAINT ck_prestador_rede_forma_remuneracao, ADD CONSTRAINT ck_prestador_rede_forma_remuneracao CHECK (forma_remuneracao IN ('procedimento','pacote','diaria','capitacao','assalariado','misto','orcamentacao','drg','bundle_episodio','bundle_condicao_clinica'));"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "produto_plano",
+      "motivo": "regra 3 (a operadora é empresa distinta): o produto não tem a operadora dona; hoje a porta atribui o produto à operadora principal do estabelecimento (operadora_saude_estabelecimento), o que não separa duas operadoras no mesmo estabelecimento.",
+      "ddl": "ALTER TABLE produto_plano ADD COLUMN operadora_saude_id BIGINT UNSIGNED NULL COMMENT 'Operadora dona do produto' AFTER estabelecimento_id, ADD KEY ix_produto_plano_operadora_saude_id (operadora_saude_id), ADD CONSTRAINT fk_produto_plano_operadora_saude_id FOREIGN KEY (operadora_saude_id) REFERENCES operadora_saude (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "produto_plano",
+      "motivo": "cartão de desconto (natureza do produto sem registro de plano na ANS): sem lugar no modelo; a porta recusa com 501 modelo-pendente.",
+      "ddl": "ALTER TABLE produto_plano ADD COLUMN natureza VARCHAR(20) NOT NULL DEFAULT 'plano' AFTER nome, ADD CONSTRAINT ck_produto_plano_natureza CHECK (natureza IN ('plano','cartao_desconto'));"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "prestador_rede_historico",
+      "motivo": "o descredenciamento tem substituto, aviso aos beneficiários e autorização da ANS; hoje vão no retrato JSON (dados) do histórico e são lidos por JSON_VALUE.",
+      "ddl": "ALTER TABLE prestador_rede_historico ADD COLUMN substituto_prestador_rede_id BIGINT UNSIGNED NULL, ADD COLUMN aviso_beneficiarios_em DATE NULL, ADD COLUMN autorizacao_ans VARCHAR(40) NULL, ADD KEY ix_prestador_rede_historico_substituto (substituto_prestador_rede_id), ADD CONSTRAINT fk_prestador_rede_historico_substituto FOREIGN KEY (substituto_prestador_rede_id) REFERENCES prestador_rede (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "movimento_rede_ans",
+      "motivo": "os campos do registro da ANS mudados na alteração e o motivo da exclusão/reinclusão; hoje no retrato JSON (dados).",
+      "ddl": "ALTER TABLE movimento_rede_ans ADD COLUMN campos_alterados JSON NULL COMMENT 'Campos do registro de prestadores mudados', ADD COLUMN motivo VARCHAR(500) NULL;"
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py",
+      "motivo": "domínios que as portas da operadora resolvem por código (sem a linha, recusa 'dominio-nao-cadastrado'): tipo_prestador_rede (códigos ANS 1-8), natureza_prestador_rede (1-4), regime_atendimento_rede (1-3), situacao_movimento_rede (inclusao, alteracao, exclusao, reinclusao), grupo_prazo_carencia (urgencia_emergencia, parto, outro, doenca_preexistente), faixa_etaria_modelo 'dez_faixas' com os 10 itens da RN 63, segmentacao_assistencial (catálogo da ANS), tipo_acomodacao_plano (1 apartamento, 2 enfermaria, 3 ambulatório), classificacao_plano (uma por tipo de contratação), grau_parentesco_dependente (2-8 do vínculo com o titular), sexo, motivo_movimento_cadastral de exclusão, motivo_solicitacao_cartao. As sequências prestador_rede, contratante_plano e carteirinha_beneficiario a porta garante."
+    },
+    {
+      "tipo": "conector",
+      "alvo": "conector (carga da rede credenciada)",
+      "motivo": "o prestador carregado precisa vir com o regime e o contrato escrito (contrato_rede_prestador): sem eles fica fora da tela e das contagens (SQL_COMPLETO em rede-porta-propria.ts)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "PortaOperadora e PortaRedeOperadora (lote 02-09 consome)",
+      "motivo": "gravarSgh virou gravar(c, trilha: RegistroTrilhaTela | fn, fn); destino 'legado' virou 'banco'; ContextoOperadora/ContextoRede = ContextoNucleo + rede + hospital; tipos renomeados: OperadoraOpeLida→Operadora, OperadoraSgh→DadosOperadora, ProdutoOpeLido→Produto, ProdutoSgh→DadosProduto, ContratoOpeLido→Contrato, ContratoSgh→DadosContrato, BeneficiarioOpeLido→Beneficiario, BeneficiarioSgh→DadosBeneficiario, Filtro*Sgh→Filtro*, ElegibilidadeOpeLida→Elegibilidade, ViaCarteirinhaLida→ViaCarteirinha, DominiosBeneficiarioLidos→DominiosBeneficiario, GrupoSipLido→GrupoSip, ProcedimentoSipLido→ProcedimentoSip, ClassificacaoAnsLida→ClassificacaoAns; rede: PrestadorLido→Prestador, MovimentoRpsLido→MovimentoRede, ConvenioLido→ConvenioRede, ItemDominioRedeLido→ItemDominioRede, TotaisRedeLidos→TotaisRede, *Sgh→Credenciamento/Alteracao/Descredenciamento/Reinclusao."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "apps/api/src/modulos/operadora/autorizacao-servico.ts:179 (lote 02-09)",
+      "motivo": "tsc: o tipo próprio do lote 02-09 tem regime number|null onde o contrato pede number; o Prestador da porta da rede tem regime number."
+    },
+    {
+      "tipo": "fiacao",
+      "alvo": "modulo.ts (contas ← autorização)",
+      "motivo": "a porta própria das contas pede autorizacoesPorSenha da autorização; enquanto a PortaAutorizacaoOperadoraPropria não a expõe, o módulo passa um adaptador que responde 501 modelo-pendente (buscaPorSenha)."
+    },
+    {
+      "tipo": "remocao",
+      "alvo": "infra/rede.int.spec.ts e o teste 'domínios do grupo operadora no CRUD genérico' do operadora.spec.ts",
+      "motivo": "o primeiro lia a cópia pela porta antiga (coberto agora por rede-porta-propria.int.spec.ts no banco); o segundo é do CRUD de domínios do módulo config (FONTE_DOMINIOS), que volta com o lote que o religar."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "dominiosBeneficiario.diasVencimento",
+      "motivo": "devolve [] (dia de vencimento livre 1-31, conferido pelo contrato da tela e pelo CHECK do banco); não há cadastro de dias permitidos no modelo."
+    }
+  ]
+}

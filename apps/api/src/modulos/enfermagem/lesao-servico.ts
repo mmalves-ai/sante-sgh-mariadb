@@ -13,7 +13,7 @@ import {
   type LesaoLida,
 } from '@sgh/contratos';
 import { areaLesao, incidenciaLpp, origemDaLesao, sugestaoNotificacaoLpp } from '@sgh/dominio-enfermagem';
-import type { EventoLesaoLidoSgh, LesaoLidaSgh } from '@sgh/legado';
+import type { EventoLesaoRegistrado, LesaoRegistrada } from './tipos.js';
 
 /** A ficha gravada (JSON validado pelo contrato; a gravação só aceita o que o contrato validou). */
 export function dadosDaFicha(json: string): DadosLesao | null {
@@ -35,8 +35,8 @@ function dadosDoCurativo(json: string): CurativoEntrada | null {
 }
 
 const inativacao = (
-  eventos: readonly EventoLesaoLidoSgh[],
-  origem: EventoLesaoLidoSgh['origem'],
+  eventos: readonly EventoLesaoRegistrado[],
+  origem: EventoLesaoRegistrado['origem'],
   registro: number,
 ): InativacaoLesaoLida | null => {
   const e = eventos.find((x) => x.origem === origem && x.registro === registro && x.tipo === 'inativacao');
@@ -55,7 +55,7 @@ export function colunasDaFicha(d: DadosLesao) {
 }
 
 /** A lesão para a tela; null se a ficha vigente não se lê (nunca deveria: a gravação valida pelo contrato). */
-export function lesaoParaTela(l: LesaoLidaSgh): LesaoLida | null {
+export function lesaoParaTela(l: LesaoRegistrada): LesaoLida | null {
   const vigente = l.versoes[0];
   const dados = vigente ? dadosDaFicha(vigente.dados) : null;
   if (!vigente || !dados) return null;

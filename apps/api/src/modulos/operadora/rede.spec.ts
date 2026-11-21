@@ -13,15 +13,22 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { cnpjSintetico } from './rede-porta-memoria.js';
+import { moduloOperadora } from './modulo.js';
 import { cursorPrestador, lerCursorPrestador } from './rede.controller.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,operadora' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let n = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      config: () => import('../config/modulo.js'),
+      operadora: async () => ({ modulo: (ctx) => moduloOperadora(ctx) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

@@ -5,8 +5,18 @@
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com estabelecimentos SINTÉTICOS em memória;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // Melhoria: tipos próprios (tipos-indice.ts), sem nome de tabela do sistema de origem.
-import type { LinhaTrilha } from '@sgh/nucleo';
-import type { CadastroRedeLido, CandidatoParaGravarRede, CandidatoRedeLido, ChavesProcuraRede, EscritaIndiceRede, FiltroFilaRede, ParNovo, ResultadoEscritasIndice, VinculoRedeLido } from './tipos-indice.js';
+import type {
+  CadastroRedeLido,
+  CandidatoParaGravarRede,
+  CandidatoRedeLido,
+  ChavesProcuraRede,
+  EscritaIndiceRede,
+  FiltroFilaRede,
+  ParNovo,
+  ResultadoEscritasIndice,
+  TrilhaRede,
+  VinculoRedeLido,
+} from './tipos-indice.js';
 
 export const PORTA_REDE = Symbol('PORTA_REDE');
 
@@ -26,6 +36,11 @@ export interface AtendimentosRede {
   readonly ultimoAtendimento: string | null;
   readonly internacoes: number;
   readonly ultimaInternacao: string | null;
+}
+
+export interface AtendimentosNaRede extends AtendimentosRede {
+  readonly estabelecimento: string;
+  readonly idRemoto: number;
 }
 
 export interface MarcaRede {
@@ -54,6 +69,11 @@ export interface GravadorRede {
 
 export interface PortaRede {
   readonly destino: 'proprio' | 'memoria' | 'indisponivel';
+  /**
+   * Banco único do cliente: os dois cadastros do par moram no mesmo banco, e "a mesma pessoa" é a unificação dos
+   * cadastros (feita no cadastro, que transfere os registros e pode ser revertida lá), não um vínculo entre bancos.
+   */
+  readonly mesmaPessoaPorUnificacao?: boolean;
   /** A rede desta hospedagem (a sessão tem de ser dela; regra 12). */
   redeConfigurada(): string | null;
   /** Os estabelecimentos configurados (ARQ-1), com o nome de exibição. */
@@ -99,13 +119,20 @@ export interface PortaRede {
    */
   atendimentos(c: ContextoRede, prontuario: number): Promise<AtendimentosRede>;
   /**
+   * Banco único do cliente: as contagens e as datas mais recentes de atendimentos e internações do paciente `id` (e dos
+   * cadastros unificados com ele) em cada OUTRO estabelecimento, agrupadas pelo estabelecimento do registro, sem depender
+   * de vínculo (o paciente é do cliente inteiro). `idRemoto`: o cadastro que guarda os registros (o mantido). Ausente:
+   * a porta só sabe pelo vínculo (a memória).
+   */
+  atendimentosNaRede?(c: ContextoRede, id: number): Promise<AtendimentosNaRede[]>;
+  /**
    * Correção do M57.2 (D-TRILHA-REMOTA-57): o CPF (só dígitos, 11) do login no banco do contexto, para provar que o
    * mesmo login é a mesma pessoa nos dois estabelecimentos (cada banco tem o seu cadastro de usuários); null: login
    * inexistente ou sem CPF lá. Nunca sai da API (só a comparação).
    */
   cpfDoLogin(c: ContextoRede, login: string): Promise<string | null>;
   /** Uma transação no banco do contexto, com a linha da trilha gravada junto (null: sem trilha). */
-  gravar<T>(c: ContextoRede, fn: (g: GravadorRede) => Promise<T>, trilha: LinhaTrilha | null): Promise<T>;
+  gravar<T>(c: ContextoRede, fn: (g: GravadorRede) => Promise<T>, trilha: TrilhaRede | null): Promise<T>;
 }
 
 export const METODOS_PORTA_REDE = [

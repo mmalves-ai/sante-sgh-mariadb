@@ -37,7 +37,7 @@ import {
   lerProtocolosEnfermeiro,
   textoDaReceitaEnfermeiro,
 } from '@sgh/dominio-enfermagem';
-import type { AtendimentoDaConsultaLido } from '@sgh/legado';
+import type { AtendimentoDaConsulta } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -63,7 +63,7 @@ import { dataBr, ServicoSae } from './sae-servico.js';
 const E = EVENTOS_AUDITAVEIS;
 
 /** É consulta de enfermagem: atendimento externo ativo com o profissional do atendimento enfermeiro (CBO 2235). */
-export function ehConsultaDeEnfermagem(a: AtendimentoDaConsultaLido): { ok: boolean; motivo: string | null } {
+export function ehConsultaDeEnfermagem(a: AtendimentoDaConsulta): { ok: boolean; motivo: string | null } {
   if (a.tipo !== 'E')
     return {
       ok: false,
@@ -116,7 +116,7 @@ export class PrescricaoEnfermeiroController {
     return { protocolos: lerProtocolosEnfermeiro(String(p ?? '')), lista: lerAnexoII(String(l ?? '')) };
   }
 
-  private async consulta(s: SessaoCadastro, atendimento: number): Promise<AtendimentoDaConsultaLido> {
+  private async consulta(s: SessaoCadastro, atendimento: number): Promise<AtendimentoDaConsulta> {
     const a = await this.porta.consulta(s.porta, atendimento);
     if (!a) throw new ErroProblema('nao-encontrado', 404, 'Atendimento não encontrado');
     return a;
@@ -124,7 +124,7 @@ export class PrescricaoEnfermeiroController {
 
   private async cabecalho(
     s: SessaoCadastro,
-    a: AtendimentoDaConsultaLido,
+    a: AtendimentoDaConsulta,
     vinculo: number,
     segundo: 'cpf' | 'nascimento',
     dia: string,
@@ -233,7 +233,7 @@ export class PrescricaoEnfermeiroController {
   ): Promise<PrescricaoEnfermeiroDoAtendimento> {
     const s = sessaoDe(req);
     const a = await this.consulta(s, idDaRota(atendimento));
-    req.sghAlvo = { paciente: a.paciente, tabelaAlvo: 'SGH_PEP_PRESC_ENFERMEIRO' };
+    req.sghAlvo = { paciente: a.paciente, tabelaAlvo: 'prescricao' };
     const [v, par, agora, l, receitas] = await Promise.all([
       this.servico.vinculo(s.porta, s.login),
       this.parametros(s),
@@ -298,16 +298,14 @@ export class PrescricaoEnfermeiroController {
     const s = sessaoDe(req);
     const e = corpo(esquemaPreviaReceitaEnfermeiro, b);
     const m = await this.montar(s, idDaRota(atendimento), e);
-    req.sghAlvo = { paciente: m.a.paciente, tabelaAlvo: 'SGH_PEP_PRESC_ENFERMEIRO' };
+    req.sghAlvo = { paciente: m.a.paciente, tabelaAlvo: 'prescricao' };
     return { texto: m.texto, impressao: m.impressao, cabecalho: m.cabecalho };
   }
 
   @Post(':atendimento')
   @HttpCode(201)
   @Permissao(P.medicamentoPrescrever)
-  @AuditadoNoHandler(
-    'enfermagem.prescreverMedicamento: SGH_PEP_PRESC_ENFERMEIRO com a SGH_TRILHA na mesma transação',
-  )
+  @AuditadoNoHandler('enfermagem.prescreverMedicamento: prescricao com a trilha_auditoria na mesma transação')
   async assinar(
     @Param('atendimento') atendimento: string,
     @Body() b: unknown,
@@ -339,7 +337,7 @@ export class PrescricaoEnfermeiroController {
       E.receitaEnfermeiroAssinada.codigo,
       P.medicamentoPrescrever,
       (x: { id: number }) => ({
-        tabela: 'SGH_PEP_PRESC_ENFERMEIRO',
+        tabela: 'prescricao',
         id: String(x.id),
         paciente: m.a.paciente,
         chave: `${m.k.protocolo.codigo}/${m.k.protocolo.ano}`,
@@ -387,7 +385,7 @@ export class PrescricaoEnfermeiroController {
   @HttpCode(200)
   @Permissao(P.medicamentoPrescrever)
   @AuditadoNoHandler(
-    'enfermagem.prescricaoMedicamento.inativada: SGH_PEP_PRESC_ENF_EVENTO com a SGH_TRILHA na mesma transação',
+    'enfermagem.prescricaoMedicamento.inativada: prescricao com a trilha_auditoria na mesma transação',
   )
   async inativar(
     @Param('atendimento') atendimento: string,
@@ -439,7 +437,7 @@ export class PrescricaoEnfermeiroController {
       s,
       E.enfermagemReceitaInativada.codigo,
       P.medicamentoPrescrever,
-      { tabela: 'SGH_PEP_PRESC_ENFERMEIRO', id: String(r.id), paciente: a.paciente, chave: e.tipo },
+      { tabela: 'prescricao', id: String(r.id), paciente: a.paciente, chave: e.tipo },
       (g) =>
         g.inativarReceita({
           id: r.id,

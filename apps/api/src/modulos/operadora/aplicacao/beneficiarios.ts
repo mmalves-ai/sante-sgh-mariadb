@@ -1,5 +1,5 @@
 // Serviço da fatia F1 da operadora própria (M56.2; ficha, seções 4, 6, 7 e 8): a tela de beneficiários, planos e
-// contratos e as gravações em SGH_OPE_*. Cada rota exige a chave da fatia (`operadora.beneficiarios`, que só vale com a
+// contratos e as gravações no banco do cliente (operadora_saude, produto_plano, contrato_plano, beneficiario_plano). Cada rota exige a chave da fatia (`operadora.beneficiarios`, que só vale com a
 // do módulo; regra 1) e as regras puras de @sgh/dominio-operadora antes de gravar. A operadora de cada registro vem do
 // banco, nunca do pedido: o contrato herda a do produto e o beneficiário, a do contrato (regra 3: a operadora é empresa
 // distinta, e um registro de uma operadora não aponta para outra). Dado pessoal (CPF, nascimento, mãe) só na ficha, que
@@ -38,10 +38,16 @@ import {
   problemasDoPlano,
   validadeDaVia,
 } from '@sgh/dominio-operadora';
-import type { BeneficiarioOpeLido, ContratoOpeLido, OperadoraOpeLida, ProdutoOpeLido } from '@sgh/legado';
 import { ErroProblema } from '../../../problema.filter.js';
 import { linhaTrilha, problemaDoCadastro, type SessaoCadastro } from '../../cadastro/comum.js';
 import type { GravadorOperadora, PortaOperadora } from '../porta.js';
+
+// Os tipos de negócio da operadora, do produto, do contrato e do beneficiário são os da porta da F1 (lote da fatia
+// de beneficiários): derivados da própria porta, para que este serviço acompanhe a forma que ela devolve.
+type DadosOperadora = NonNullable<Awaited<ReturnType<PortaOperadora['operadora']>>>;
+type DadosProduto = NonNullable<Awaited<ReturnType<PortaOperadora['produto']>>>;
+type DadosContrato = NonNullable<Awaited<ReturnType<PortaOperadora['contrato']>>>;
+type DadosBeneficiario = NonNullable<Awaited<ReturnType<PortaOperadora['beneficiario']>>>;
 import {
   MENSAGENS_BAIXA,
   MENSAGENS_BENEFICIARIO,
@@ -55,11 +61,11 @@ import {
 import type { ServicoSituacaoOperadora } from './situacao.js';
 
 const T = {
-  operadora: 'SGH_OPE_OPERADORA',
-  produto: 'SGH_OPE_PRODUTO',
-  contrato: 'SGH_OPE_CONTRATO',
-  beneficiario: 'SGH_OPE_BENEFICIARIO',
-  carteirinha: 'SGH_OPE_CARTEIRINHA',
+  operadora: 'operadora_saude',
+  produto: 'produto_plano',
+  contrato: 'contrato_plano',
+  beneficiario: 'beneficiario_plano',
+  carteirinha: 'cartao_beneficiario',
 } as const;
 
 const naoEncontrado = (o: string) =>
@@ -71,7 +77,7 @@ export function hojeLocal(agora = new Date()): string {
   return `${agora.getFullYear()}-${p(agora.getMonth() + 1)}-${p(agora.getDate())}`;
 }
 
-export const operadoraDto = (o: OperadoraOpeLida): OperadoraEmpresa => ({
+export const operadoraDto = (o: DadosOperadora): OperadoraEmpresa => ({
   id: o.id,
   registroAns: o.registroAns,
   cnpj: o.cnpj,
@@ -83,7 +89,7 @@ export const operadoraDto = (o: OperadoraOpeLida): OperadoraEmpresa => ({
   alteradoEm: o.alteradoEm,
 });
 
-export const produtoDto = (p: ProdutoOpeLido): ProdutoOperadora => ({
+export const produtoDto = (p: DadosProduto): ProdutoOperadora => ({
   id: p.id,
   operadora: p.operadora,
   codigo: p.codigo,
@@ -102,7 +108,7 @@ export const produtoDto = (p: ProdutoOpeLido): ProdutoOperadora => ({
   alteradoEm: p.alteradoEm,
 });
 
-export const contratoDto = (c: ContratoOpeLido, mascarar: boolean): ContratoOperadora => ({
+export const contratoDto = (c: DadosContrato, mascarar: boolean): ContratoOperadora => ({
   id: c.id,
   operadora: c.operadora,
   produto: c.produto,
@@ -127,7 +133,7 @@ export const contratoDto = (c: ContratoOpeLido, mascarar: boolean): ContratoOper
   alteradoEm: c.alteradoEm,
 });
 
-export const beneficiarioListaDto = (b: BeneficiarioOpeLido): BeneficiarioLista => ({
+export const beneficiarioListaDto = (b: DadosBeneficiario): BeneficiarioLista => ({
   id: b.id,
   contrato: b.contrato,
   contratoNumero: b.contratoNumero,
@@ -170,7 +176,7 @@ export class ServicoBeneficiariosOperadora {
     fn: (g: GravadorOperadora) => Promise<T>,
   ): Promise<T> {
     return this.porta
-      .gravarSgh(s.porta, (r: T) => linhaTrilha(s, evento, recurso, evento, alvo(r)), fn)
+      .gravar(s.porta, (r: T) => linhaTrilha(s, evento, recurso, evento, alvo(r)), fn)
       .catch((e: unknown) => {
         throw problemaDoCadastro(e);
       });

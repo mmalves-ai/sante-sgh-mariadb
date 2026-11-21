@@ -1,8 +1,8 @@
 // Porta da contratualização SUS EM MEMÓRIA (M55, fatia F5): a sessão sintética de dev/ci (E2E) tem os domínios da
-// contratualização com os códigos do sistema anterior, alguns procedimentos SIGTAP e uma produção SUS SINTÉTICA das
+// contratualização com os códigos da tela, alguns procedimentos SIGTAP e uma produção SUS SINTÉTICA das
 // contas (12 competências até a atual) e grava contratos, metas e apurações SINTÉTICOS com as mesmas regras e recusas
 // da gravação (a versão vista, a chave única do pedido, uma apuração por meta e período, o contrato encerrado que não
-// muda). Nada vai à cópia; nenhum nome é de pessoa real.
+// muda). Nada vai a banco; nenhum nome é de pessoa real.
 import type { ApuracaoSus, ContratoSus, MetaSus, ProducaoSigtapSus } from '@sgh/contratos';
 import {
   AFERICOES_SUS,
@@ -15,10 +15,10 @@ import {
   TIPOS_INDICADOR_SUS,
   TIPOS_ORCAMENTO_SUS,
 } from '@sgh/contratos';
-import { recusa } from '@sgh/legado';
+import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type {
-  DominiosContratualizacaoLidos,
+  DominiosContratualizacao,
   GravadorContratualizacao,
   PortaContratualizacao,
 } from './porta.js';
@@ -35,29 +35,29 @@ const menosMeses = (competencia: string, n: number) => {
 };
 
 const item = (codigo: number, nome: string, sigla: string | null = null) => ({ codigo, nome, sigla });
-const DOMINIOS: DominiosContratualizacaoLidos = {
-  CMPERIODO: [
+const DOMINIOS: DominiosContratualizacao = {
+  periodicidade: [
     ...PERIODICIDADES_META_SUS.map((p) => item(p.codigo, p.rotulo)),
     item(4, 'Diária'),
     item(7, 'Quinzenal'),
     item(8, 'Semanal'),
   ].sort((a, b) => a.codigo - b.codigo),
-  CMTPINDICADOR: [item(0, 'Não informado'), ...TIPOS_INDICADOR_SUS.map((t) => item(t.codigo, t.rotulo))],
-  CMTIPOCOMPLEXIDADESP: COMPLEXIDADES_SUS.map((c) => item(c.codigo, c.rotulo)),
-  CMTPITEMINDIC: [
+  tipo_indicador: [item(0, 'Não informado'), ...TIPOS_INDICADOR_SUS.map((t) => item(t.codigo, t.rotulo))],
+  complexidade: COMPLEXIDADES_SUS.map((c) => item(c.codigo, c.rotulo)),
+  tipo_item_indicador: [
     item(1, 'Título'),
     ...FORMATOS_INDICADOR_SUS.map((f) => item(f.codigo, f.rotulo)),
     item(3, 'Texto'),
     item(4, 'Texto fixo'),
     item(5, 'Respostas'),
   ].sort((a, b) => a.codigo - b.codigo),
-  CMREDEASSIST: REDES_ASSISTENCIA_SUS.map((r) => item(r.codigo, r.rotulo)),
-  CMESCORE: [...ESCORES_SUS].reverse().map((e) => item(e.codigo, e.rotulo)),
-  CMTPAFERICAO: AFERICOES_SUS.map((a) => item(a.codigo, a.rotulo)),
-  CMTPCONTRATO: ESFERAS_CONTRATO_SUS.map((e) => item(e.codigo, e.rotulo)),
-  CMTPDADOS: [item(1, 'Contratado'), item(2, 'Contratante'), item(3, 'Interventor')],
-  CMTPORCAMENTO: TIPOS_ORCAMENTO_SUS.map((t) => item(t.codigo, t.rotulo)),
-  CMINCENTIVO: [item(0, 'Não informado')],
+  rede_assistencial: REDES_ASSISTENCIA_SUS.map((r) => item(r.codigo, r.rotulo)),
+  escore: [...ESCORES_SUS].reverse().map((e) => item(e.codigo, e.rotulo)),
+  tipo_afericao: AFERICOES_SUS.map((a) => item(a.codigo, a.rotulo)),
+  esfera: ESFERAS_CONTRATO_SUS.map((e) => item(e.codigo, e.rotulo)),
+  tipo_dado: [item(1, 'Contratado'), item(2, 'Contratante'), item(3, 'Interventor')],
+  componente_orcamento: TIPOS_ORCAMENTO_SUS.map((t) => item(t.codigo, t.rotulo)),
+  incentivo: [item(0, 'Não informado')],
 };
 
 /** Procedimentos SIGTAP sintéticos (códigos reais da tabela pública; nenhum dado de pessoa). */
@@ -107,10 +107,11 @@ export class PortaContratualizacaoMemoria implements PortaContratualizacao {
   constructor(private readonly relogioFn: () => { hoje: string; competencia: string } = hojeLocal) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    const k = String(c.estabelecimento ?? (c as ContextoPortaM18 & { hospital?: string }).hospital ?? '');
+    let s = this.porHospital.get(k);
     if (!s) {
       s = { contratos: [], metas: [], apuracoes: [], seq: 55_500 };
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(k, s);
     }
     return s;
   }

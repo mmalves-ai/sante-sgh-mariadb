@@ -7,7 +7,7 @@
 //   - a revisão: quem analisa (o auditor designado e vigente da operadora do lote), a glosa com o motivo da tabela 38 do
 //     banco e a justificativa, a conclusão com os valores, a devolução, o recurso e a decisão, o pagamento;
 //   - o demonstrativo de análise da conta em XML TISS, conferido no XSD antes de sair.
-// As gravações passam pelas recusas das regras antes de chegar às SGH_; a versão vista e a situação de partida são do
+// As gravações passam pelas recusas das regras antes de chegar ao banco; a versão vista e a situação de partida são do
 // banco.
 import { createHash } from 'node:crypto';
 import {
@@ -64,15 +64,7 @@ import {
   situacaoPelosValores,
   valoresDaConta,
 } from '@sgh/dominio-operadora';
-import type {
-  AuditorLido,
-  ContaOpeLida,
-  ContaOpeResumoLida,
-  ElegibilidadeOpeLida,
-  GuiaContaOpeLida,
-  GuiaRecebidaSgh,
-  RecebimentoContaSgh,
-} from '@sgh/legado';
+import { type DadosAuditor, type DadosConta, type DadosContaResumo, type DadosElegibilidadeBeneficiario, type DadosGuiaConta, type EntradaGuiaRecebida, type EntradaRecebimentoConta } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContas, PortaContasOperadora } from './contas-porta.js';
 
@@ -117,7 +109,7 @@ function esquemas(): Promise<ArquivoEsquema[]> {
   return esquemasTiss;
 }
 
-export function resumoDaConta(c: ContaOpeResumoLida, hoje: string): ContaMedicaResumo {
+export function resumoDaConta(c: DadosContaResumo, hoje: string): ContaMedicaResumo {
   const v = valoresDaConta(c, c.situacao);
   return {
     id: c.id,
@@ -139,7 +131,7 @@ export function resumoDaConta(c: ContaOpeResumoLida, hoje: string): ContaMedicaR
   };
 }
 
-export function pagamentoDe(c: ContaOpeResumoLida, hoje: string): PagamentoPrestador {
+export function pagamentoDe(c: DadosContaResumo, hoje: string): PagamentoPrestador {
   const r = resumoDaConta(c, hoje);
   return {
     id: r.id,
@@ -158,7 +150,7 @@ export function pagamentoDe(c: ContaOpeResumoLida, hoje: string): PagamentoPrest
   };
 }
 
-function dadosDe(el: ElegibilidadeOpeLida): DadosElegibilidade {
+function dadosDe(el: DadosElegibilidadeBeneficiario): DadosElegibilidade {
   return {
     beneficiario: { situacao: el.beneficiario.situacao, inclusao: el.beneficiario.inclusao },
     contrato: { situacao: el.contrato.situacao as 'ativo', inicio: el.contrato.inicio, fim: el.contrato.fim },
@@ -171,7 +163,7 @@ function dadosDe(el: ElegibilidadeOpeLida): DadosElegibilidade {
 }
 
 export interface RecebimentoConferido {
-  readonly recebimento: Omit<RecebimentoContaSgh, 'hospital' | 'protocolo' | 'usuario' | 'texto'>;
+  readonly recebimento: Omit<EntradaRecebimentoConta, 'hospital' | 'protocolo' | 'usuario' | 'texto'>;
   readonly guias: number;
   readonly glosadoAutomatico: number;
   readonly itensGlosados: number;
@@ -182,7 +174,7 @@ export class ServicoContasOperadora {
   constructor(readonly porta: PortaContasOperadora) {}
 
   /** A designação vigente do usuário na operadora (ou em qualquer uma, sem a operadora). */
-  async designacao(c: ContextoContas, login: string, operadora: number | null): Promise<AuditorLido | null> {
+  async designacao(c: ContextoContas, login: string, operadora: number | null): Promise<DadosAuditor | null> {
     const [ds, { hoje }] = await Promise.all([this.porta.designacoes(c, login), this.porta.relogio(c)]);
     return (
       ds.find((d) => (operadora === null || d.operadora === operadora) && designacaoVigente(d, hoje)) ?? null
@@ -325,7 +317,7 @@ export class ServicoContasOperadora {
     let glosadoAutomatico = 0;
     let itensGlosados = 0;
     let guiasComCritica = 0;
-    const guias: GuiaRecebidaSgh[] = lote.guias.map((g: GuiaTissRecebida, i) => {
+    const guias: EntradaGuiaRecebida[] = lote.guias.map((g: GuiaTissRecebida, i) => {
       const carteira = g.carteirinha.replace(/\D/g, '');
       const el = porCarteira.get(carteira) ?? null;
       const daOperadora = el && el.beneficiario.operadora === operadora.id ? el : null;
@@ -432,7 +424,7 @@ export class ServicoContasOperadora {
 
   // ── Leituras ────────────────────────────────────────────────────────────────────────────────
 
-  private async contaOuNada(c: ContextoContas, id: number): Promise<ContaOpeLida> {
+  private async contaOuNada(c: ContextoContas, id: number): Promise<DadosConta> {
     const conta = await this.porta.conta(c, id);
     if (!conta) throw naoEncontrada();
     return conta;
@@ -559,13 +551,13 @@ export class ServicoContasOperadora {
 
   // ── Revisão do auditor ──────────────────────────────────────────────────────────────────────
 
-  private async exigirAuditor(c: ContextoContas, login: string, conta: ContaOpeLida): Promise<AuditorLido> {
+  private async exigirAuditor(c: ContextoContas, login: string, conta: DadosConta): Promise<DadosAuditor> {
     const auditor = await this.designacao(c, login, conta.operadora);
     if (!auditor) throw recusaDasContas([{ codigo: 'auditor-nao-designado' }]);
     return auditor;
   }
 
-  private exigirSituacao(conta: ContaOpeLida, de: readonly ContaOpeLida['situacao'][]): void {
+  private exigirSituacao(conta: DadosConta, de: readonly DadosConta['situacao'][]): void {
     if (!de.includes(conta.situacao)) throw recusaDasContas([{ codigo: 'situacao-nao-permite' }]);
   }
 
@@ -614,7 +606,7 @@ export class ServicoContasOperadora {
     return { conta };
   }
 
-  private async guiaDaConta(c: ContextoContas, id: number, guia: number): Promise<GuiaContaOpeLida> {
+  private async guiaDaConta(c: ContextoContas, id: number, guia: number): Promise<DadosGuiaConta> {
     const g = (await this.porta.guias(c, id)).find((x) => x.id === guia);
     if (!g) throw recusaDasContas([{ codigo: 'guia-inexistente', campo: 'guia' }]);
     return g;
