@@ -7,10 +7,13 @@ tipo de aferição, esfera, tipo de dado, tipo de indicador, tipo de item do ind
 dialítico, contraindicação e situação de transplante, credor, classificação do diagnóstico, justificativa de paciente
 sem documento, tipo de leito de UTI) em `dominio_sus`. Várias tabelas da origem no mesmo destino, separadas pelo
 literal da lista; o mesmo código em listas diferentes não colide.
-Fora da carga (1): o incentivo contratual (o destino exige estabelecimento, vigência e valor, que a origem não tem).
+Descartada (1, `declarado/sem_carga.tsv`, causa sem_valor): o incentivo contratual padrão (o destino é do contrato
+com gestor e exige valor ou percentual e vigência, que a origem não tem); a imagem prova que ele não entra.
 Anomalias: nome só com espaços (NOT NULL no destino: recusa só a linha), espaços internos colapsados, acentos CP1252,
-sigla vazia (NULL, aceita), lacunas nos ids e o mesmo id em várias listas. Duas listas do modelo são mais
-longas que a coluna `lista` (VARCHAR(30)): suas linhas são recusadas (restricao_destino_1406) até o modelo alargar.
+sigla vazia (NULL, aceita), lacunas nos ids, o mesmo id em várias listas e o id 0 (sentinela 'não informado') na
+rede assistencial e no tipo de indicador: entra INATIVO (ativo falso), nunca escolhível. Duas listas do modelo são
+mais longas que a coluna `lista` (VARCHAR(30)): suas linhas são recusadas (restricao_destino_1406) até a migração
+pedida em saida/L8-07.json (alargar para 40); depois basta trocar LARGURA_LISTA para 40.
 """
 
 LISTAS = {  # tabela: (tamanho de NOME, destino, lista)
@@ -51,7 +54,9 @@ NAO_CARREGADAS = ["CMINCENTIVO"]
 # tabelas com uma linha de nome só com espaços (recusa só a linha: restricao_destino_1048)
 COM_NOME_VAZIO = {"CMPERIODO", "CMTPINDICADOR", "FAHEMOCONTRAN", "FHLEITOUTITP"}
 # rede assistencial: (id, sigla, nome); sigla só com espaços vira NULL e a linha entra
-REDES = [(1, "RUE", "Rede  de   urgência"), (2, " RCP", "Rede cegonha e parto"), (4, "    ", "Rede psicossocial"),
+# id 0: sentinela 'não informado' da origem (entra inativo; ver colunas.d/L8-07.tsv)
+SENTINELA_ZERO = {"CMREDEASSIST", "CMTPINDICADOR"}
+REDES = [(0, "    ", "Rede nao informada"), (1, "RUE", "Rede  de   urgência"), (2, " RCP", "Rede cegonha e parto"), (4, "    ", "Rede psicossocial"),
          (6, "RPCD", "Rede da pessoa com deficiência")]
 
 
@@ -71,6 +76,8 @@ def linhas(r, ins):
             continue
         ids = [1, 2, 3, 5, 9]  # lacuna: os mesmos ids em todas as listas (o único é lista + código)
         nomes = _nomes(t, n)
+        if t in SENTINELA_ZERO:
+            ids, nomes = [0] + ids, ["Nao informado"] + nomes
         for i, nome in zip(ids, nomes):
             ins(t, [i, nome])
         pend = {}

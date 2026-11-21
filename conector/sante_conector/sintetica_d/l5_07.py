@@ -1,11 +1,12 @@
 """Fatia L5-07 (cadastros do RH): tabelas da origem com os mesmos nomes e tipos do dicionário e dados 100% falsos.
 
-Só a condição do colaborador é carregada (vira situacao_colaborador). As outras 21 são códigos oficiais (o catálogo
-oficial nunca é gravado: só dá de-para pelo código a quem referencia) ou domínios de valor cujo destino é uma tabela
-de movimento (vínculo, afastamento, ASO, vacina do colaborador...), que estas linhas não criam: entram na imagem para
-provar que nada delas é gravado.
+Só a condição do colaborador é carregada (vira situacao_colaborador INATIVA, código 'cond_<n>' pelo prefixo de domínio
+e categoria 'outro' presumida: nenhuma coluna da origem a referencia). As outras 21 são descarte de produto
+(`declarado/sem_carga.tsv`): 4 cópias de catálogo oficial (nunca gravado; 3 aguardam o carregador oficial), 15 listas
+de domínio fixo do leiaute (de-para pela descrição na coluna consumidora) e 2 listas públicas extintas sem consumidor:
+entram na imagem para provar que nada delas é gravado.
 Anomalias: descrição nula (NOT NULL no destino: recusa só a linha), espaços internos (texto_nome colapsa), acentos
-CP1252, lacunas na chave.
+CP1252, lacunas na chave, chave alta (o código com prefixo cabe), valor_presumido em toda linha lida.
 """
 DDL = """
 CREATE TABLE FPADMESOCIAL (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(100));
@@ -35,7 +36,7 @@ CREATE TABLE FPDOSE_VACINA (COD_DOSE_VAC SMALLINT NOT NULL PRIMARY KEY, DESCRICA
 
 CONDICOES = [(1, "Em atividade"), (2, "  Afastado   temporariamente  "), (3, None), (5, "Férias coletivas"),
              (6, "Licença não remunerada"), (8, "Cedido a outra unidade"), (9, "Aposentado por invalidez"),
-             (12, "Suspensão disciplinar")]
+             (12, "Suspensão disciplinar"), (300, "Condição de chave alta")]
 
 NAO_CARREGADAS = ["FPADMESOCIAL", "FPAFAST_COD", "FPAFAST_RAIS", "FPALIQRATCNAE", "FPASOEXAMEORD", "FPASOINDRESUL",
                   "FPASOINTEXAME", "FPASORESULTADO", "FPASOTIPO", "FPBANCOPIS", "FPBR_PDH", "FPCATTIPO",
@@ -73,4 +74,6 @@ def linhas(r, ins):
         ins("FPDOSE_VACINA", [i, n])
     for c in CONDICOES:
         ins("FPCONDFUNC", list(c))
-    return {"FPCONDFUNC": {"gravados": len(CONDICOES) - 1, "pendencias": {"restricao_destino_1048": 1}}}
+    # valor_presumido: uma por linha lida (categoria presumida), inclusive a recusada
+    return {"FPCONDFUNC": {"gravados": len(CONDICOES) - 1,
+                           "pendencias": {"restricao_destino_1048": 1, "valor_presumido": len(CONDICOES)}}}

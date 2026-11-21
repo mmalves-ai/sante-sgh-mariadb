@@ -2,7 +2,7 @@
  "pedidos": [
   {
    "arquivo": "conector/mapa/declarado/valores.tsv + colunas.d/L6-07.tsv",
-   "mudanca": "de-para de valores por código (depara=valores) para as classificações hoje presumidas: PRSITDOCUMENTO.ID -> situacao_documento_prontuario.categoria, PRSITDOCUMENTOASSINADO.ID -> situacao_assinatura_documento.categoria, PRSITEXAME.ID -> situacao_procedimento_prescrito.etapa, PRSITUACAOCHECAGEM.ID -> situacao_checagem.categoria, PRTIPOPRESENTEADMISSAO.ID -> presenca_admissao.significado, PRTPDOCUMENTO.ID -> tipo_exigencia_assinatura.nivel; e PRPARAMORIGEMCABIMP.ORIGEM_DADOS -> cabecalho_impressao_documento.fonte_dados, PRSITUACAOCHECAGEM.NOME_PROCESSO_ENFERMAGEM -> situacao_checagem.processo_enfermagem; PRMODOVENT.ID_PRTPLAN (pelo tipo de item) -> modo_ventilacao_mecanica.tipo_ventilacao (invasiva/nao_invasiva/ambas)",
+   "mudanca": "de-para de valores por código (depara=valores) para as classificações ainda presumidas: PRSITDOCUMENTO.ID -> situacao_documento_prontuario.categoria, PRSITDOCUMENTOASSINADO.ID -> situacao_assinatura_documento.categoria, PRSITEXAME.ID -> situacao_procedimento_prescrito.etapa, PRSITUACAOCHECAGEM -> situacao_checagem.categoria, PRTIPOPRESENTEADMISSAO.ID -> presenca_admissao.significado, PRTPDOCUMENTO.ID -> tipo_exigencia_assinatura.nivel. Já resolvidos nesta rodada (valores.d/L6-07.tsv): PRSITUACAOCHECAGEM.NOME_PROCESSO_ENFERMAGEM -> processo_enfermagem, PRPARAMORIGEMCABIMP.ORIGEM_DADOS -> fonte_dados (só E; confirmar pela contagem), PRMODOVENT.ID_PRTPLAN -> tipo_ventilacao (11/12)",
    "motivo": "são domínios com CHECK e a origem não traz o significado; hoje entram com literal PRESUMIDO (=~, pendência baixa valor_presumido por linha). Os pares dependem da contagem por valor na imagem de referência (o agente da fatia não lê valores) e da decisão do dono; valores.tsv é compartilhado. Hoje tipo_ventilacao (=~invasiva) e processo_enfermagem (=~administracao) também entram presumidos"
   },
   {
@@ -13,22 +13,7 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica)",
    "mudanca": "derivação de transições por ordem: tabela que lista as situações permitidas por tipo com ORDEM vira transições (situação anterior pela ordem -> situação da linha; a primeira com origem nula)",
-   "motivo": "PRTPASSINATURA_PRSITDOC -> fluxo_situacao_documento não foi carregada: com situacao_origem_id nulo em toda linha, todas virariam situação inicial (semântica errada)"
-  },
-  {
-   "arquivo": "tools/obra/gerar_mapa_conector.py / conector/mapa/tabelas.tsv",
-   "mudanca": "PRTPASSINATURA_TBOID: destino próprio de associação tipo de documento x OID (ou decisão de levar só um OID por tipo a tipo_documento_clinico.codigo_oid por referência derivada); PRTPCOMP: rever o destino (hoje tipo_documento_clinico, cujo código único colidiria com o de PRTPASSINATURA) ou prefixo de domínio no código",
-   "motivo": "as duas ficaram sem carga (colunas declaradas sem destino, com motivo); uma linha delas não é um tipo de documento"
-  },
-  {
-   "arquivo": "tools/obra/gerar_mapa_conector.py / db/migracoes/06_PEP",
-   "mudanca": "PRTIPONOTIFICACAO: destino de lista de tipos de notificação (ou regra_alerta), não configuracao_alerta_prescricao (regra_alerta_id NOT NULL)",
-   "motivo": "sem carga por ora: a tabela é uma lista (ID, NOME), não a configuração por regra"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.tsv + colunas.d/L6-07.tsv",
-   "mudanca": "PRTIPOPERGPAR: de-para de COD_TIPO_PERGUNTA_PARAMETRO para destino_campo_estruturado.entidade_destino e tipo_dado (NOT NULL sem padrão)",
-   "motivo": "sem carga por ora: não inventar a entidade de destino do campo estruturado"
+   "motivo": "PRTPASSINATURA_PRSITDOC carrega hoje em fluxo_situacao_documento com situacao_origem_id nulo e ativo presumido falso (=~0, valor_presumido), decisão em F4-decisoes-destino.md; com a regra, as transições entram ativas e a pendência some"
   },
   {
    "arquivo": "(registro, sem mudança de código)",
@@ -36,19 +21,29 @@
    "motivo": "o agente não lê valores; valor fora de A/I vira valor_fora_do_dominio e fica o padrão (ativo)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (código de negócio)",
-   "mudanca": "prefixo de domínio no código quando duas tabelas da origem gravam no mesmo destino de código único (o mesmo pedido da L6-06): PROFTTPARQUIV (ordem 309) e PRTIPODOCANEXO (331) -> tipo_anexo.codigo; PRSITCHECAGEM (325, numérico) e PRSITUACAOCHECAGEM (329, CHAR(1)) -> situacao_checagem.codigo",
-   "motivo": "a segunda fonte é recusada com restricao_destino_1062 no código repetido (provável em tipo_anexo 1..6; em situacao_checagem se algum ID de 1 caractere for dígito) e os anexos e checagens que apontam para ela caem em pai_pendente. Provado na imagem sintética pelo PREPARO_DESTINO de sintetica_d/l6_07.py (tipo_anexo e situacao_checagem com código '1' já gravados): esperado restricao_destino_1062 = 1 em cada, que muda quando o prefixo entrar"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py (REGRAS) + carga_mapa.py",
-   "mudanca": "regra genérica inteiro_nao_negativo: inteiro negativo vira NULL com pendência valor_fora_do_dominio e a linha é gravada; declarar em PRTPLAN.ORDEM -> tipo_item_prescricao.ordem_exibicao (SMALLINT UNSIGNED NULL)",
-   "motivo": "a ordem de exibição é só apresentação, e hoje uma negativa recusa o tipo de item inteiro (restricao_destino_1264), e a recusa se propaga: PRTPLAN_GETABVIA e os itens de prescrição das fatias seguintes caem em pai_pendente. O esperado da sintética (PRTPLAN gravados 3 + 1264) passa a gravados 4 + valor_fora_do_dominio 1, e PRTPLAN_GETABVIA perde o pai_pendente"
-  },
-  {
    "arquivo": "conector/sante_conector/carga_mapa.py (GRAVIDADE_REGRA) / painel da virada",
    "mudanca": "valor_presumido em coluna de categoria, etapa ou nível que dirige o comportamento do sistema (situação de documento, de assinatura, de checagem, de exame; nível de exigência de assinatura; processo de enfermagem; tipo de ventilação) sobe para gravidade alta, ou fica bloqueante antes da virada; o literal declarado pode marcar isso (ex.: '=~!' ou coluna de gravidade no mapa)",
    "motivo": "os presumidos escolhidos são o extremo 'não concluído' (rascunho, pendente, pedido) e só valem até o de-para por código. Efeito nos registros históricos das fatias seguintes enquanto não houver de-para: documentos assinados ou cancelados aparecem em rascunho, assinaturas concluídas como pendentes, checagens feitas como pendentes (conta_como_realizado falso: consumo e faturamento), exames realizados como pedidos; isso gera pendência de assinatura, alta impedida e checagem não realizada. Pendência baixa não chama a atenção que isso exige. O literal não é trocado sem a contagem por valor"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-09.tsv e L7-03.tsv (+ valores.d das duas)",
+   "mudanca": "declarar as consumidoras de PRTIPONOTIFICACAO: TBPROENF.ID_PRTIPONOTIFICACAOSEXO/IDADE e SITABPRO.ID_PRTIPONOTIFICACAO -> coluna de comportamento do destino (avisar/exigir justificativa/bloquear) por `ref:PRTIPONOTIFICACAO>NOME` (encadeada terminada em coluna) com depara=valores pelo nome (ex.: Avisar/Alertar -> aviso, Justificar -> exige_justificativa, Bloquear -> bloqueio); ou descarte de produto próprio de cada consumidora",
+   "motivo": "PRTIPONOTIFICACAO é descartada como lista fixa; sem as consumidoras, a ação configurada pelo cliente quando sexo ou idade não confere se perde em todo o mapa (achado da revisão)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv (linha PRTIPONOTIFICACAO)",
+   "mudanca": "motivo: '... é o domínio de configuracao_alerta_prescricao.comportamento (CHECK); a configuração do cliente só se mantém pelas colunas consumidoras (L6-09, L7-03) com ref:PRTIPONOTIFICACAO>NOME e de-para por nome; enquanto não declararem, ela se perde'",
+   "motivo": "o texto atual diz que a consumidora usa de-para de valores, o que nenhuma faz; arquivo compartilhado"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "contar como pendente (não CARREGA) a tabela com coluna 'não carregada por ora' ou com recusa esperada de linhas por restrição do destino na imagem sintética, além das colunas NOT NULL sem padrão",
+   "motivo": "hoje uma tabela com coluna da origem sem destino esperando de-para, ou com linha recusada por choque de código, aparece como CARREGA (achado da revisão)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
+   "mudanca": "par padrão presumido no de-para de valores (ex.: valor_origem '*' = destino presumido, com pendência baixa valor_presumido em vez de NULL + valor_fora_do_dominio)",
+   "motivo": "PRTPLAN.ID -> tipo_item_prescricao.categoria tem evidência por código (1-4 dieta, 6 medicamento, 7 solucao, 8 hemocomponente, 11/12 ventilacao, 13 procedimento, 14 cuidado), mas a coluna não tem padrão: código sem par recusaria o tipo de item e derrubaria os filhos. Com o par padrão, os conhecidos entram classificados e o resto 'outro' presumido"
   }
  ]
 }

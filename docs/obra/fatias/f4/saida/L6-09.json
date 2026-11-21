@@ -2,18 +2,18 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/sentinela.py (hora_hhmm)",
-   "mudanca": "aceitar também texto de 4 dígitos 'HHMM' (VARCHAR(4) da origem), com a mesma validação (0..2359, minuto < 60); outro texto: hora_invalida",
-   "motivo": "TBHORMED.HORARIO_INICIAL_VIGENCIA (e TBHORARIODOSE.HORARIO) guardam HHMM em texto; hoje todo valor vira hora_invalida. TBHORMED fica BLOQUEADA (declarada sem destino, fora da conciliação) até este pedido E o de-para de TIPO_ATENDIMENTO (pedido de valores): só então a fatia declara de novo @estabelecimento, TIPO_ATENDIMENTO (depara=valores, nunca literal presumido), HORARIO_INICIAL_VIGENCIA (hora_hhmm), CONSIDERAR_VIGENCIA (booleano_01), PADRAO e LIBERAR_VIGENCIA (booleano_sn)"
+   "mudanca": "no início do ramo hora_hhmm: `if isinstance(v, (bytes, bytearray)): v = _str(v)` (o VARCHAR da origem chega em bytes, conjunto NONE; hoje só str é aceito e todo HHMM em texto vira hora_invalida)",
+   "motivo": "TBHORMED.HORARIO_INICIAL_VIGENCIA e TBHORARIODOSE.HORARIO (VARCHAR(4)). Sem a correção, a conferência da L6-09 acusa TBHORMED e TBHORARIODOSE (todas as horas inválidas, horários em pai_pendente). Com ela, provado numa cópia do conector em scratch: conferência da L6-09 ok (duas cargas, erros [])"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "coluna do pai na linha do filho (ex.: especial '^<COLUNA_REF>.<COLUNA_DO_PAI>' lido pelo conector_origem/leitura do pai), para tabelas cuja linha do destino junta pai e filho",
-   "motivo": "horario_padrao_dose precisa de doses_por_dia e grade (TBNUMDOSE) com o horário (TBHORARIODOSE); grade_horario_unidade por unidade (TBHORMED_TBUNIDAD) precisa da hora e do tipo do pai TBHORMED. As três tabelas ficam sem carga até lá"
+   "arquivo": "modelo (F2.2): grade_horario_unidade",
+   "mudanca": "coluna grade_horario_unidade.unidade_assistencial_id (FK unidade_assistencial, na chave única de escopo); com ela TBHORMED_TBUNIDAD entra por `complementa` (como TBHORMED_RIBLOCOS)",
+   "motivo": "TBHORMED_TBUNIDAD está BLOQUEADA (modelo_sem_destino), não descartada: a ligação é dado do cliente; a grade só referencia unidade_internacao, que nenhuma tabela da origem carrega (L6-15). Sem ela, grades com o mesmo tipo de atendimento ficam todas no escopo do estabelecimento"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv",
-   "mudanca": "pares de valores (depois de conferir os códigos usados na origem, só contagem por código): TBGRAUGRAVINT.ID -> gravidade_interacao.nivel (1 = menor; libera a tabela, hoje BLOQUEADA); TBLISTADIAGNOSTICOESTADO.ID -> certeza_diagnostico.grau e confirmado (hoje grau presumido pela chave e confirmado =~0, valor_presumido por linha); TBHORMED.TIPO_ATENDIMENTO -> grade_horario_unidade.tipo_atendimento (libera a tabela junto com hora_hhmm em texto); PRSINAIS.TIPO_RESPOSTA -> parametro_vital.tipo_resposta (hoje =~numero); TBLANC_DIAG_STATUS.STATUS -> diagnostico_atendimento.situacao (domínio do lançamento, CHECK ativo/resolvido/inativado; a tabela não é carregada); TBPROENF.TIPO -> cuidado_enfermagem.tipo; TBLISTADIAGNOSTICOSITUACAO.ID -> situacao_problema.categoria e clinicamente_ativo; TBLISTADIAGNOSTICOTIPO.ID -> tipo_diagnostico.papel; TBSITUACAOMP.ID_TBSITUACAOMP -> situacao_prescricao.categoria; TBSTATUSPROCEDIMENTO.NOME -> situacao_procedimento_prescrito.etapa; TBPRINC_VALIDACAO.ID -> referencia_dose.base_calculo; TBREFERENCIA.ID -> tipo_validacao_dose.base_calculo; TBPROENF.ID_PRTIPONOTIFICACAOSEXO/IDADE -> acao_restricao_sexo/idade",
-   "motivo": "colunas NOT NULL de domínio fechado (CHECK) ou de ordem clínica que a origem não traz direto. O verificador recusa depara=valores sem par, então a fatia grava literal presumido (=~, valor_presumido por linha) onde o literal é seguro, e BLOQUEIA a tabela onde não é (nível único da gravidade; tipo de atendimento da grade, que geraria escopos idênticos não barrados pela chave única com NULL); valores.tsv é compartilhado"
+   "arquivo": "modelo (F2.2): gravidade_interacao.acao_gravidade_interacao_id",
+   "mudanca": "conferir se a coluna é redundante com acao_gravidade_interacao.gravidade_interacao_id (ciclo no modelo); a fatia grava só a filha (ação por gravidade, estabelecimento NULL)",
+   "motivo": "TBGRAUGRAVINT grava gravidade_interacao e, como destino secundário opcional, acao_gravidade_interacao (comportamento pelo nome da ação, ref. encadeada a TBACAOGRAUGRA)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + colunas.d/L6-09.tsv",
@@ -21,14 +21,9 @@
    "motivo": "situacao_procedimento_prescrito recebe TBSTATUSPROCEDIMENTO e PRSITEXAME (outro lote); a fatia usou o texto da situação como código para não chocar; com o prefixo, voltar ao ID. (TBLANC_DIAG_STATUS deixou de ser segunda origem de situacao_problema: ver pedido do mapa)"
   },
   {
-   "arquivo": "gerador do mapa (tabelas.tsv): TBREFERENCIA",
-   "mudanca": "tirar limite_dose_principio de tabelas_destino de TBREFERENCIA (fica só tipo_validacao_dose); conferir também se TBREFERENCIA e TBPRINC_VALIDACAO não estão trocadas (referencia_dose x tipo_validacao_dose: os nomes sugerem a troca)",
-   "motivo": "limite_dose_principio exige unidade_prescricao_id e ao menos uma dose; a tabela da origem só tem ID, NOME e ATIVO"
-  },
-  {
-   "arquivo": "gerador do mapa (tabelas.tsv): TBLANC_DIAG_MANTER, TBLANC_DIAG_STATUS, TBTABELA_CAMPO, TBDIGITAL_VIAACESSO",
-   "mudanca": "TBLANC_DIAG_MANTER: domínio de diagnostico_atendimento.escopo (descarte declarado ou de-para de valores), não linha de diagnóstico; TBLANC_DIAG_STATUS: tirar situacao_problema de tabelas_destino; é o domínio de diagnostico_atendimento.situacao (de-para de valores), não catálogo da lista de problemas; TBTABELA_CAMPO: domínio de campo_autopreenchido_prescricao.campo_destino; TBDIGITAL_VIAACESSO: códigos de via da prescrição digital, de-para para via_de_uso.codigo_interoperabilidade (ou descarte), não novas vias",
-   "motivo": "as quatro ficam sem carga na fatia: carregá-las como linha criaria diagnóstico sem atendimento, situação do problema duplicada (código da lista e texto do lançamento) com categoria e clinicamente_ativo presumidos (situação 'Resolvido' entraria nos alertas), campo sem fonte (CHECK) e vias duplicadas das vias do cadastro (GETABVIA)"
+   "arquivo": "gerador do mapa (tabelas.tsv): TBPRINC_VALIDACAO e TBREFERENCIA",
+   "mudanca": "TBPRINC_VALIDACAO -> tipo_validacao_dose e TBREFERENCIA -> referencia_dose (hoje trocadas; TBREFERENCIA ainda lista limite_dose_principio, que exige unidade e dose e não recebe linha dela)",
+   "motivo": "a L6-09 já declara os destinos certos pela via (nome do destino na via de cada coluna) e a L6-10 liga TBUNIDMEDIDA_PRINC_VALID a tipo_validacao_dose pelo conector_origem de TBPRINC_VALIDACAO; com o gerador corrigido, a via com o nome do destino pode sair"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
@@ -36,24 +31,24 @@
    "motivo": "TBPROENF.IDADEI/IDADEF são DOUBLE e vão para SMALLINT (idade_minima/maxima); idade fracionária (ex.: 0.5) arredondaria e a conciliação acusaria divergência"
   },
   {
-   "arquivo": "gerador do mapa / modelo: PRSINAIS (ID_PRUNIDRESPOSTA, COD, PROCTO, PREVIAMENTE_MARCADO_LANCAMENTO)",
-   "mudanca": "ID_PRUNIDRESPOSTA: ligar à unidade_resposta (coluna nova) ou declarar o texto da unidade pelo pai; COD: conferir por contagem se é único e é o código de negócio (então trocar ID_SINAIS por COD no código); PROCTO: coluna no modelo (parâmetro x cuidado) ou descarte, e ajustar a dependência PRSINAIS -> TBPROENF do mapa; PREVIAMENTE_MARCADO_LANCAMENTO: coluna de pré-seleção no modelo ou descarte",
-   "motivo": "as quatro colunas estão declaradas sem destino, com motivo; hoje o código vem da chave primária (ID_SINAIS), a única com unicidade garantida"
+   "arquivo": "modelo (F2.2) / gerador do mapa: PRSINAIS.PROCTO e PREVIAMENTE_MARCADO_LANCAMENTO",
+   "mudanca": "decididos como descarte de coluna (F4-decisoes-destino.md); revisar com o dono se o produto quer ligar parâmetro vital a cuidado e a pré-seleção no lançamento; se descartados de vez, tirar a dependência PRSINAIS -> TBPROENF do mapa",
+   "motivo": "a unidade já entra por ref:PRUNIDRESPOSTA>NOME; COD é descarte (segundo identificador)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py ou sentinela.py (regra genérica)",
-   "mudanca": "coluna lida da origem e gravada como PRESUMIDA (ex.: especial '~<COLUNA>' ou regra 'inteiro_presumido'): grava o valor e deixa valor_presumido por linha, com gravidade declarável (media para dado clínico)",
-   "motivo": "nível/grau 'presumidos pela chave' não têm como deixar pendência por linha: o literal =~ não serve em coluna única (gravidade_interacao.nivel). Com a regra, TBGRAUGRAVINT poderia carregar já (pendência média) em vez de ficar bloqueada, e certeza_diagnostico.grau dispensaria o =~0 em confirmado"
+   "arquivo": "gerador do mapa (dependencias): TBSITUACAOMP -> TBSITAGE",
+   "mudanca": "tirar a dependência: ID_TBSITAGE é descarte de coluna (decisão em F4-decisoes-destino.md)",
+   "motivo": "TIPO_PRESCRICAO, NEC_SENHA_ORDEM, ID_TBSITAGE e PERMITIR_ALT_SESSAO_SIT_PEXT foram decididas como descarte de coluna com motivo de produto"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (GRAVIDADE_REGRA) + colunas.d",
-   "mudanca": "permitir gravidade da pendência valor_presumido por coluna declarada (ex.: '=~!<texto>' = media)",
-   "motivo": "situacao_problema.categoria e clinicamente_ativo (=~ativo, =~1) e certeza_diagnostico.confirmado (=~0) são presunções com efeito clínico (lista de problemas ativos, alertas, indicadores); hoje saem como baixa"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "não contar como CARREGA tabela cuja conciliação da fatia falha: cruzar com /tmp/claude-1000/conferir-fatia-f4/<fatia>/conferencia.json (erros por tabela) ou marcar 'carrega_sem_prova'",
+   "motivo": "achado de revisão: TBHORMED e TBHORARIODOSE apareciam como CARREGA com a conciliação acusando 0 gravadas (hora_hhmm em bytes)"
   },
   {
-   "arquivo": "modelo / gerador do mapa: TBPROENF.TIPO_PRESCRICAO, TBSITUACAOMP (NEC_SENHA_ORDEM, ID_TBSITAGE, PERMITIR_ALT_SESSAO_SIT_PEXT)",
-   "mudanca": "decidir coluna no modelo ou descarte (contagem por valor); ID_TBSITAGE: se descartada, tirar a dependência TBSITUACAOMP -> TBSITAGE do mapa",
-   "motivo": "colunas sem destino equivalente; declaradas sem destino com motivo para não serem perdidas em silêncio"
+   "arquivo": "modelo (F2.2): cuidado_enfermagem.acao_restricao_sexo/idade",
+   "mudanca": "acrescentar 'exigir_justificativa' ao CHECK (como acao_gravidade_interacao.comportamento)",
+   "motivo": "a notificação da origem tem avisar, exigir justificativa e bloquear; hoje 'exigir justificativa' entra como 'alertar' (perde a exigência)"
   }
  ]
 }

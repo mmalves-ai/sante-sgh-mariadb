@@ -1,74 +1,89 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (referencia_declarada) + conector/verificar_mapa.py",
-   "mudanca": "referência a DESTINO SECUNDÁRIO do pai: via 'ref:<TABELA>/<tabela_destino>' resolve pelo conector_origem da entidade secundária (chave '<chave>/<tabela_destino>'), não pela principal; o verificador confere que o destino está em tabelas_destino do pai",
-   "motivo": "GEITENS (principal insumo) é referenciado como item_prescritivel_id em PRITEM_GEITENS, PRKITMED, PRITENSKITMED e PRKITSOLITENS; GEUNIPRESC (principal insumo_unidade) como unidade_prescricao_id em TBKITPRO; hoje gravaria o id do insumo numa FK de item_prescritivel"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (passos_ref) + verificar_mapa.py",
+   "mudanca": "M1 (PRIORITÁRIO): referência a DESTINO SECUNDÁRIO do pai: via 'ref:<TABELA>/<tabela_destino>' resolve pelo conector_origem da entidade secundária (chave '<chave>/<tabela_destino>'), também no fim de uma referência encadeada",
+   "motivo": "destrava PRITEM_GEITENS, PRPADEVOL, PRFORMULCOMP (e PRRESPOSTA, PRPERGUNTA da L6-10), o item prescritível de PRKITMED e a unidade de prescrição de L6-10/L6-11/L6-13 (medido: só 7 de 53 códigos casam pela sigla; 0 de 13 no kit de cuidado, 238 de 877 nos itens de kit)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador) + decisão do integrador",
-   "mudanca": "unidade_prescricao_id por código de unidade (TBUNICON.COD, texto): TBUNICON precisa de um destino unidade_prescricao (ou referência por código para a unidade_prescricao alimentada por GEUNIPRESC); declarar como resolver PRUNITPLAN.UNI_PRESC, PRITEMNAOPAD.UNI_PRESC, PRKITMED/PRITENSKITMED/PRKITSOLITENS.ID_TBUNICON_UNI_PRESC",
-   "motivo": "o principal de TBUNICON é unidade_medida; as FKs da fatia apontam unidade_prescricao (NOT NULL em kit_prescricao_item, item_nao_padronizado e tipo_item_prescricao_unidade): PRUNITPLAN, PRITEMNAOPAD, PRITENSKITMED e PRKITSOLITENS ficam fora da carga"
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-07.tsv (fatia L7-07)",
+   "mudanca": "GEITENS grava também item_prescritivel (destino já listado no mapa: insumo_id = @id, código, descrição e tipo de item) e parametro_clinico_item",
+   "motivo": "nenhuma tabela grava item_prescritivel; sem ele PRITEM_GEITENS não carrega e os kits ficam só com o insumo"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (ou gerador do mapa)",
+   "mudanca": "numeração da versão atual do modelo migrado depois das versões históricas (maior VERSAO de HTCABECFORMULCOMP do modelo + 1, ou 1 sem histórico); o destino secundário modelo_documento_versao já vai pela via em PREVOLUCAO (declaração comentada pronta)",
+   "motivo": "uq_modelo_documento_versao_numero: a versão 1 fixa colidiria com o histórico da L6-13; PRPADEVOL e PRFORMULCOMP entram nessa versão"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "M2: catálogo oficial de princípio ativo (DCB) no de-para: 'dcb' -> principio_ativo pelo código DCB (mesmo pedido da L6-12 e da L7-07)",
+   "motivo": "PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC -> principio_ativo_id por ref:TBPRINC>COD_DCB (declaração comentada pronta em colunas.d/L6-11.tsv); bloqueia as duas"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino COMPLEMENTAR: tabela que grava na linha já criada por outra tabela (UPDATE da linha de destino achada pela referência, com conector_origem próprio e conciliação da parte gravada), declarável por tabela (ex.: via 'complementa:<TABELA_PAI>')",
-   "motivo": "PRITEM_GEITENS completa parametro_clinico_item, que GEITENS já cria (UNIQUE item_prescritivel_id): INSERT dá 1062 em toda linha"
+   "mudanca": "M3: referência ao PRIMEIRO/ÚLTIMO FILHO: via 'ref:<FILHO>^<COL_FK>:primeiro|ultimo>COL[>T...]' (linha filha que aponta para esta, na ordem da chave do filho; terminada em coluna dá o valor, em tabela dá o id); sem filho: pai_inexistente",
+   "motivo": "PRASSINATURA_CAB (1.326.015): autor, datas e situação do documento do prontuário estão nos eventos de assinatura (PRASSINATURA_DOC); declaração completa comentada em colunas.d/L6-11.tsv (decisão registrada)"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv (compartilhado) ou mecanismo valores.d/<fatia>.tsv",
-   "mudanca": "permitir pares de de-para de valores por fatia (declarado/valores.d/<fatia>.tsv lido junto, como colunas.d), para não editar o arquivo comum em paralelo",
-   "motivo": "PRLOCAL_ASSISTENCIA.TIPO_ATENDIMENTO -> local_assistencia.tipo_atendimento e PRMANCHESTER.COR -> nivel_prioridade.cor_hexadecimal (nome da cor -> #RRGGBB, NOT NULL sem padrão) precisam de pares; PRMANCHESTER fica fora da carga sem isso; até os pares existirem, local_assistencia.tipo_atendimento entra '=~todos' presumido (valor_presumido por linha) e passa ao de-para quando ele existir"
+   "arquivo": "conector/sante_conector/mapa.py (erros_especiais_e_opcoes) + carga_mapa.py",
+   "mudanca": "M5: permitir 'adotar:<colunas>' no destino PRINCIPAL (linha que já existe com o mesmo código é adotada)",
+   "motivo": "TBKITPRO: agrupar os itens de um cuidado num só kit_cuidado_enfermagem (hoje um kit por linha da origem)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "despivotar tabela de parâmetros de linha única (MECANISMO sem chave): cada coluna declarada vira uma linha de parametro_valor (nível rede) com a parametro_definicao pela chave declarada (ex.: coluna especial '#parametro:<chave>' por coluna), definição criada uma vez",
-   "motivo": "PRPARAM (1 linha, cerca de 200 colunas) -> parametro_definicao;parametro_valor; sem a regra, fica fora da carga"
+   "mudanca": "coluna especial '#json_lista:COL=rotulo,...' (lista JSON dos rótulos das colunas com valor verdadeiro)",
+   "motivo": "PRFAVORITO.*_ABRIR_AUTOM_ATEND_PA (6 colunas) -> painel_filtro_usuario.documentos_abertura_automatica"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (modelo) — trilha F2.2",
+   "mudanca": "painel_filtro_usuario: unidade_assistencial_id e bloco_internacao_id opcionais (o filtro da origem é por unidade assistencial e bloco)",
+   "motivo": "PRFAVORITO.ID_TBUNIDAD e ID_RIBLOCOS sem coluna"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ armazenamento de arquivos)",
-   "mudanca": "coluna especial '#arquivo:<COLUNA>' para BLOB binário: grava o conteúdo no armazenamento de arquivos do produto e põe o id em arquivo_id",
-   "motivo": "PRPAREVOLIMG.IMAGEM -> imagem_anotacao_modelo.arquivo_id (NOT NULL); fora da carga até lá"
+   "mudanca": "M4: coluna especial '#arquivo:<COLUNA>' para BLOB binário (grava no armazenamento do produto e põe o id em arquivo_id)",
+   "motivo": "PRPAREVOLIMG (deixa de ser descarte: declaração comentada pronta) e PRASSINATURA_CAB.DOCUMENTO_CONSOLIDADO (documento assinado, guarda legal)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador) + modelo (db/migracoes) — decisão do dono",
-   "mudanca": "PREVOLUCAO também como modelo_documento_versao (versão 1 publicada por modelo migrado, @id no modelo), para PRPADEVOL -> modelo_campo e PRFORMULCOMP -> modelo_layout terem modelo_documento_versao_id; e regra para COMPONENTE (texto da origem) virar o JSON de modelo_layout.conteudo ou descarte",
-   "motivo": "PRPADEVOL, PRFORMULCOMP e o secundário discriminador_classificacao_risco de PRMANCHESTER (fluxograma NOT NULL) não têm de onde tirar a versão/fluxograma"
+   "arquivo": "tools/obra (relatório de implantação)",
+   "mudanca": "relatório da linha de parâmetros globais da origem (nome da coluna e valor, sem segredo), gerado no banco do cliente para a equipe de implantação",
+   "motivo": "PRPARAM é descarte (parâmetros do produto são do produto); o cliente precisa ver o que o antigo usava"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (mesmo pedido da L5-03 'ref:HTPACIENTE>paciente_id')",
-   "mudanca": "referência por coluna do pai já gravado: via 'ref:<TABELA>><coluna_destino>' lê a coluna do destino do pai (ex.: usuario_id de preferencia_usuario)",
-   "motivo": "PRFAVORITO -> painel_filtro_usuario.usuario_id (NOT NULL) vem do usuário de PRLOCPACDEFAULT; fora da carga até lá"
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-07.tsv (fatia L7-07) — alternativa à decisão da unidade",
+   "mudanca": "TBUNICON com o destino unidade_prescricao (código, sigla, descrição), adotando pelo código a que já existe",
+   "motivo": "a unidade de prescrição hoje casa pela sigla de integração de TBUNIDADEMEDIDA (ref:TBUNIDADEMEDIDA.SIGLA_API); medir a correspondência na imagem real antes da virada"
   },
   {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + carga_mapa.py (mesmo pedido da L5-05)",
-   "mudanca": "referência a id interno de tabela de catálogo oficial: ler o código na linha-pai (declarado/catalogos.tsv) e resolver pelo de-para oficial; acrescentar princípio ativo (principio_ativo) aos CATALOGOS",
-   "motivo": "TBCBARAREACAOADVERSA.ID_TBCID10 -> manifestacao_alergica.cid_termo_terminologia_id; PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC -> principio_ativo_id (TBPRINC tem principio_ativo como destino oficial)"
+   "arquivo": "modelo (db/migracoes/06_PEP) — trilha F2.2, mantidos da rodada anterior",
+   "mudanca": "local_assistencia: leito_hospitalar_id e unidade_assistencial_id opcionais; modelo_documento_clinico: código de exibição livre, tipo_atendimento e cabeçalho de impressão da origem",
+   "motivo": "PRLOCAL_ASSISTENCIA.ID_TBLEITO/ID_TBUNIDAD e PREVOLUCAO.COD/TP_ATENDIMENTO/CODCAB sem destino"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna especial de junção '#juntar:<COL1>,<COL2>[:<separador>]' (texto das colunas não vazias unido pelo separador)",
-   "motivo": "TBCBARAREACAOADVERSA.SINONIMO_1 e SINONIMO_2 -> manifestacao_alergica.sinonimos (uma coluna); hoje só o primeiro entra"
-  },
-  {
-   "arquivo": "db/migracoes/06_PEP (modelo) — decisão do dono",
-   "mudanca": "local_assistencia: colunas opcionais leito_hospitalar_id e unidade_assistencial_id; modelo_documento_clinico: coluna de código de exibição livre (o codigo tem CHECK ^[A-Z0-9_]+$); kit_prescricao/kit_cuidado_enfermagem: nome derivado ou presumido (a origem não tem nome do kit)",
-   "motivo": "PRLOCAL_ASSISTENCIA.ID_TBLEITO/ID_TBUNIDAD e PREVOLUCAO.COD sem destino; PRKITMED e TBKITPRO sem nome (NOT NULL), TBKITPRO é uma linha por item (o kit é por cuidado PROCTO: pede agrupamento)"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador) ou declarado/descartes.tsv",
-   "mudanca": "PRAGRUP_PRFILTROCLASSIF: rever destino (é a ligação filtro x classificação de despesa; classificacao_filtro_painel é o próprio filtro, já gravado por PRFILTROCLASSIF); PRKITMED e PRKITSOL gravam kit_prescricao.codigo (UNIQUE) a partir de IDs de duas tabelas: prefixo de código por tabela da origem",
-   "motivo": "PRAGRUP_PRFILTROCLASSIF não tem coluna de destino; códigos de kits colidiriam (1062)"
+   "mudanca": "coluna especial de junção '#juntar:<COL1>,<COL2>[:<separador>]'",
+   "motivo": "TBCBARAREACAOADVERSA.SINONIMO_2 (manifestacao_alergica.sinonimos é uma coluna só)"
   },
   {
    "arquivo": "conector/sante_conector/sintetica.py (_q)",
    "mudanca": "escrever datetime.time como literal 'HH:MM:SS'",
-   "motivo": "PRPARAM tem 3 colunas TIME; a fatia as deixa nulas na imagem sintética"
+   "motivo": "PRPARAM tem 3 colunas TIME (ficam nulas na imagem sintética)"
   },
   {
-   "arquivo": "db/migracoes/06_PEP (modelo) + conector/mapa/declarado/valores.d/L6-11.tsv (mecanismo pedido acima) — decisão do dono",
-   "mudanca": "PREVOLUCAO: (a) TP_ATENDIMENTO (restrição do modelo a um tipo de atendimento): coluna opcional tipo_atendimento em modelo_documento_clinico (mesmo domínio de local_assistencia.tipo_atendimento) com de-para de valores do código da origem; (b) CODCAB (cabeçalho de impressão da origem): ligação com cabecalho_impressao_documento (tabela-pai no mapa ou código de cabeçalho) para preencher cabecalho_impressao_documento_id; (c) LAYOUT_VISUALIZACAO_IMPRESSAO: de-para de valores para apenas_impressao/imprime_apenas_respondidos, ou descarte se o domínio não corresponder",
-   "motivo": "as três colunas ficam fora da carga, declaradas sem destino em colunas.d/L6-11.tsv; o modelo migrado vale para todos os atendimentos e usa o cabeçalho e a impressão padrão até a decisão"
+   "arquivo": "docs/obra/fatias/f4 (imagem sintética) — orquestrador",
+   "mudanca": "as imagens de L6-05 e L7-07 não entram juntas: L7-07 lista GETABVIA como pai externo e L6-05 a carrega (alteracao_aguarda_sincronizar); L6-10 sozinha falha em TBHORMED_RIBLOCOS (depende da L6-09)",
+   "motivo": "a L6-11 requer só a L7-07 e lê PRLOCPACDEFAULT, TBPROENF e TBUNIDADEMEDIDA com a forma dos módulos donos (L6-05, L6-09, L6-10)"
+  },
+  {
+   "arquivo": "tools/obra/conferir-fatia-f4.sh + tools/obra/cobertura_conector.py",
+   "mudanca": "a autoconferência roda 'cobertura_conector.py --fatia <F>' e mostra BLOQUEADA; a causa 'destino_decidido' não vale quando o texto da decisão diz 'bloquead' ou 'espera M'; causas que dependem de mecanismo inexistente (catalogo_oficial_faltante, declaracao_comentada com [bloqueia]) saem de COM_MECANISMO",
+   "motivo": "achado da revisão da L6-11: a conferência devolvia ok com 6 tabelas bloqueadas e o relatório dizia 'sem mecanismo: 0'"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-13.tsv (fatia L6-13)",
+   "mudanca": "trocar ref:TBUNIDADEMEDIDA.SIMBOLO por ref:TBUNIDADEMEDIDA.SIGLA_API em PRITENSGLICEMIA, PRPRESCSOL e PRITENSESQ (a decisão da própria L6-13 já revoga o símbolo)",
+   "motivo": "medido na referência: 0 de 53 códigos de unidade casam com SIMBOLO (7 com SIGLA_API); a declaração ainda usa o símbolo"
   }
  ]
 }

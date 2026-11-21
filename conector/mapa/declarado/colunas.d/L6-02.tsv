@@ -15,10 +15,10 @@ TBLOCAL	PERMITE_ENC	local_atendimento.permite_encaminhamento	booleano_sn			L6-02
 TBLOCAL	LOCAL_BASE_CALC_ESPERA_PEP	local_atendimento.base_tempo_espera	booleano_sn			L6-02: indicador S/N (gerado como codigo_char)
 TBLOCAL	FLUXO_REAVALIACAO_MEDICA	local_atendimento.reavaliacao_medica	booleano_sn			L6-02: indicador S/N (gerado como codigo_char)
 TBLOCAL	CANAL	local_atendimento.canal_audio	texto			L6-02
-TBLOCAL	ATIVO	local_atendimento.ativo	booleano_sn			L6-02; IP_PAINEL, PORTA_PAINEL, PAINEL_WEB, CONDICAO_LOCALIZACAO_PACIENTE e LOCAL_ENC sem coluna no destino (pedido no L6-02.json)
+TBLOCAL	ATIVO	local_atendimento.ativo	booleano_sn			L6-02; fora por decisão (F4-decisoes-destino.md): IP_PAINEL, PORTA_PAINEL e PAINEL_WEB (endereço do equipamento do painel antigo: mecanismo_do_produto), CONDICAO_LOCALIZACAO_PACIENTE e LOCAL_ENC (opção de tela sem domínio documentado: sem_valor)
 PNCONFIG	@estabelecimento	painel_chamada.estabelecimento_id				L6-02: a origem não traz o estabelecimento do painel
 PNCONFIG	ID_PNTIPO	painel_chamada.tipo_painel_id				L6-02
-PNCONFIG	=~Painel de chamada	painel_chamada.descricao				L6-02: a origem não nomeia o painel; nome presumido (pendência baixa valor_presumido) para o cliente revisar. CONFIGURACAO (texto livre) não vai para o JSON do destino sem regra de embrulho (pedido no L6-02.json)
+PNCONFIG	=~Painel de chamada	painel_chamada.descricao				L6-02: a origem não nomeia o painel; nome presumido (pendência baixa valor_presumido) para o cliente revisar. CONFIGURACAO fora por decisão (layout no formato do software antigo, que o produto não interpreta: sem_valor; F4-decisoes-destino.md)
 PNCONFIG	ID_TBLOCAL	painel_chamada.local_atendimento_id				L6-02
 TBLOCALENCATE	ID_TBLOCAL	local_atendimento_encaminhamento.local_atendimento_id				L6-02
 TBLOCALENCATE	ID_TBLOCAL_ENCAM_ATEND	local_atendimento_encaminhamento.destino_local_atendimento_id				L6-02: local igual ao de origem é recusado pelo CHECK do destino
@@ -35,20 +35,33 @@ TBGERASENHA	ID_REAGENDA	gerador_senha.agenda_servico_id				L6-02: ID_SIAGENDA ta
 TBGERASENHA	GERAR_PRIORITARIA	gerador_senha.gera_prioritaria	booleano_sn			L6-02
 TBGERASENHA	GERAR_SENHA_AUTOMATICA	gerador_senha.emissao_automatica	booleano_sn			L6-02
 TBGERASENHA	LIMITE_SENHA_DIA	gerador_senha.limite_dia	inteiro_zero_nulo			L6-02: 0 é 'sem limite' (no destino, nulo)
-TBGERASENHA	SITUACAO	gerador_senha.ativo	booleano_ai			L6-02: A ativo, I inativo; ICONE (arquivo), ORDENAR_LISTA_PACIENTE_POR (domínio a confirmar) e OLD_ID_TBMEDICO fora (pedido no L6-02.json)
+TBGERASENHA	SITUACAO	gerador_senha.ativo	booleano_ai			L6-02: A ativo, I inativo; fora por decisão (F4-decisoes-destino.md): ICONE (imagem do botão do totem antigo: sem_valor), ORDENAR_LISTA_PACIENTE_POR (domínio não documentado: ordem_lista fica 'chegada' e o cliente escolhe no painel) e OLD_ID_TBMEDICO (id antigo substituído por ID_TBPROFIS: duplicado)
 TBSENHAATEND	@estabelecimento	senha_emitida.estabelecimento_id				L6-02: a senha não traz o estabelecimento
 TBSENHAATEND	ID_TBGERASENHA	senha_emitida.gerador_senha_id				L6-02
 TBSENHAATEND	DATA_SENHA	senha_emitida.data_referencia	data			L6-02
 TBSENHAATEND	SENHA	senha_emitida.numero	inteiro			L6-02: número repetido no mesmo gerador e dia recusa (único)
-TBSENHAATEND	SENHA	senha_emitida.codigo_exibicao	texto			L6-02: só o número; o prefixo fica no gerador até haver concatenação de colunas (pedido no L6-02.json)
+TBSENHAATEND	SENHA	senha_emitida.codigo_exibicao	texto			L6-02: PERDA REGISTRADA (decisão em F4-decisoes-destino.md): só o número, sem a letra do gerador; a letra fica em gerador_senha.prefixo (senha_emitida.gerador_senha_id) e a senha exibida se recompõe dela; com #concat (pedido no L6-02.json) a coluna vira letra+número e as linhas aparecem alteradas para o Sincronizar
 TBSENHAATEND	PRIORIDADE	senha_emitida.prioritaria	codigo_char	valores		L6-02: 0 (grupo 0 de TBGRUPOPRIORIDADE) e 1 (grupo 1) viram prioritária; 2 normal. PERDA REGISTRADA: o grupo (0 = acima de 80 anos, a confirmar) não vai para grupo_prioridade_legal_id porque o motor não aplica de-para de valores antes de referência ('2' viraria pai_inexistente em toda senha normal); pedido no L6-02.json
 TBSENHAATEND	SITUACAO	senha_emitida.situacao	codigo_char	valores		L6-02: G e vazio aguardando, C chamada, A em atendimento, L atendida, S suspensa (o modelo tem 'suspensa' no CHECK desde 04_REC/03_tabelas.sql); outro valor: valor_fora_do_dominio e padrão do destino
 TBSENHAATEND	DATA_HORA	senha_emitida.emitida_em	data_hora			L6-02
 TBSENHAATEND	USUARIO	senha_emitida.emitida_usuario_id			ref:TBUSERS	L6-02: login do usuário que emitiu
-TBSENHAATEND	MOTIVO	senha_emitida.motivo_complemento	texto			L6-02: texto livre da suspensão; GUICHE (número do guichê, chave composta) fica fora (pedido no L6-02.json)
+TBSENHAATEND	MOTIVO	senha_emitida.motivo_complemento	texto			L6-02: texto livre da suspensão. GUICHE: destino decidido senha_emitida.guiche_recepcao_id (guichê da recepção do gerador), mas a chave do guichê é (número, recepção) e a recepção só vem pelo gerador: falta referência composta com passo encadeado ref:TBGUICHE(GUICHE,TBGERASENHA>ID_TBRECEPCAO) (pedido no L6-02.json); até lá o guichê da senha fica nulo
 ATCABECATEND_TBSENHAATEND	ID_ATCABECATEND	atendimento_senha.atendimento_id				L6-02
 ATCABECATEND_TBSENHAATEND	ID_TBSENHAATEND	atendimento_senha.senha_emitida_id				L6-02
 TBSENHAATEND_REPACAGD	ID_TBSENHAATEND	senha_emitida_marcacao.senha_emitida_id				L6-02
 TBSENHAATEND_REPACAGD	ID_REPACAGD	senha_emitida_marcacao.marcacao_horario_id				L6-02: marcação de consulta
 TBSENHAATEND_SIPACAGD	ID_TBSENHAATEND	senha_emitida_marcacao.senha_emitida_id				L6-02
 TBSENHAATEND_SIPACAGD	ID_SIPACAGD	senha_emitida_marcacao.marcacao_horario_id				L6-02: marcação de exame (destino principal da origem: marcacao_horario)
+TBFLUXOATEND	ID_TBSENHAATEND	evento_senha.senha_emitida_id				L6-02: senha do evento; sem senha ou senha nunca vista recusa (NOT NULL)
+TBFLUXOATEND	ACAO	evento_senha.acao_fluxo_senha_id			ref:TBACAOFLUXOSENHA.SIGLA	L6-02: a origem guarda a letra da ação; casa pela letra exata (caixa distinta: 'c' e 'C' são ações diferentes); letra repetida: pai_ambiguo; ação recusada: pai_pendente
+TBFLUXOATEND	ID_TBLOCAL	evento_senha.local_atendimento_id				L6-02: local onde o evento ocorreu
+TBFLUXOATEND	DATA_HORA	evento_senha.ocorrido_em	data_hora			L6-02: momento do evento; vazio ou sentinela recusa (NOT NULL)
+TBFLUXOATEND	USUARIO	evento_senha.usuario_id			ref:TBUSERS	L6-02: login de quem executou; nunca visto: NULL com pai_inexistente
+TBFLUXOATEND	=inclusao	evento_senha.operacao				L6-02: cada linha da origem é um evento registrado (o guichê e o local de destino do encaminhamento não existem na origem)
+HTATENDIMENTO	DATA_HORA_HISTORICO	trilha_auditoria.ocorrido_em	data_hora			L6-02: versão anterior do atendimento vira trilha de auditoria (historico_entidade); só trilha_auditoria: o segundo destino do mapa criaria atendimentos a partir do histórico (decisão em F4-decisoes-destino.md)
+HTATENDIMENTO	=alteracao	trilha_auditoria.acao				L6-02: cada linha do histórico é uma alteração do atendimento
+HTATENDIMENTO	=atendimento	trilha_auditoria.entidade				L6-02: entidade afetada
+HTATENDIMENTO	ID_ATCABECATEND	trilha_auditoria.entidade_id				L6-02: id do atendimento (L3); nunca visto: NULL com pai_inexistente
+HTATENDIMENTO	#retrato	trilha_auditoria.dados_antes				L6-02: retrato JSON da VERSÃO ANTERIOR do atendimento (o histórico guarda o estado antes da alteração), em dados_antes como HTPROCTO; dados_depois fica nulo (o estado seguinte é a versão posterior ou o atendimento atual); hoje só chave, atendimento e momento (o retrato completo pede #retrato com lista de colunas: pedido no L6-02.json). Estabelecimento fora: com vários estabelecimentos recusaria o histórico inteiro
+#TBLOCALHORA	ID_TBLOCAL					L6-02: regra genérica faltante no motor (pedido no L6-02.json): cada dia vira uma linha de horário com DUAS horas da mesma linha (início e fim) e dois rótulos (dia da semana; feriado como dia não útil), e o item múltiplo só é aceito em destino secundário (o mapa traz um destino só). Sem isso hora_fim fica sem fonte e toda linha seria recusada
+#ATCONTA	ID_ATCABECATEND					L6-02: NÃO descartada (revisão): atendimento_conta deve nascer da carga das contas (L8-06, destino secundário de FCCTAEXT e RICONTAS, pedido no L6-02.json); COD_CONTA não identifica a conta sozinho (número da conta externa ou registro da internação, que tem várias contas parciais, sem coluna que diga qual): casar pela conta externa ligaria atendimento de internação a conta externa de mesmo número. Só depois de atendimento_conta carregada pela L8-06 o descarte duplicado vale (teste da fatia vigia)

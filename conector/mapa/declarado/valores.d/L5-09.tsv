@@ -1,0 +1,225 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	10	empregador	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	11	empregador	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	12	termino_contrato	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	20	empregado	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	21	empregado	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	22	empregado	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	30	outro	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	31	outro	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	32	outro	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	33	outro	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	34	outro	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	40	outro	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	50	aposentadoria	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	60	falecimento	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	62	falecimento	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	63	falecimento	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	64	falecimento	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	70	aposentadoria	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	71	aposentadoria	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	72	aposentadoria	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	73	aposentadoria	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	74	aposentadoria	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	75	aposentadoria	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	76	aposentadoria	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	78	aposentadoria	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	79	aposentadoria	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	80	aposentadoria	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.iniciativa	90	acordo	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	12	0	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	21	1	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	22	0	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	40	0	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	50	0	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	60	0	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	62	0	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	63	0	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	64	0	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	70	0	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	71	0	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	72	0	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	73	0	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	74	0	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	75	0	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	76	0	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	78	0	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	79	0	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	80	0	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.exige_aviso_previo	90	1	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	12	0	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	21	0	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	22	0	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	40	0	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	50	0	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	60	0	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	62	0	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	63	0	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	64	0	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	70	0	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	71	0	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	72	0	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	73	0	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	74	0	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	75	0	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	76	0	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	78	0	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	79	0	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	80	0	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_multa_fgts	90	1	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	10		L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	11	40	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	12		L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	20	40	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	21		L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	22		L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	30		L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	31		L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	32		L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	33		L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	34		L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	40		L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	50		L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	60		L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	62		L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	63		L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	64		L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	70		L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	71		L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	72		L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	73		L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	74		L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	75		L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	76		L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	78		L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	79		L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	80		L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.percentual_multa_fgts	90	20	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	12	1	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	21	0	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	22	0	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	40	0	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	50	0	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	60	1	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	62	1	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	63	1	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	64	1	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	70	1	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	71	1	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	72	1	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	73	1	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	74	1	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	75	1	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	76	1	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	78	1	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	79	1	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	80	1	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.permite_saque_fgts	90	1	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	12	1	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	21	1	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	22	1	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	40	1	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	50	1	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	60	1	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	62	1	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	63	1	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	64	1	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	70	1	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	71	0	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	72	1	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	73	0	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	74	0	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	75	1	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	76	0	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	78	0	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	79	1	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	80	0	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_ferias_proporcionais	90	1	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	12	1	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	21	1	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	22	1	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	40	1	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	50	1	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	60	1	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	62	1	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	63	1	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	64	1	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	70	1	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	71	0	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	72	1	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	73	0	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	74	0	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	75	1	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	76	0	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	78	0	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	79	1	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	80	0	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.paga_decimo_proporcional	90	1	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	10	0	L5-09: código RAIS 10, justa causa por iniciativa do empregador: sem proporcionais (Súmula 171 do TST; 13º, Lei 4.090/62) nem saque
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	11	1	L5-09: código RAIS 11, sem justa causa por iniciativa do empregador: aviso, multa de 40%, saque e seguro-desemprego
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	12	0	L5-09: código RAIS 12, término do contrato a prazo: saque (art. 20, IX, Lei 8.036/90), sem multa nem aviso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	20	1	L5-09: código RAIS 20, rescisão indireta (iniciativa do empregado por falta do empregador): verbas da dispensa sem justa causa
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	21	0	L5-09: código RAIS 21, pedido de demissão: aviso do empregado, sem multa, saque nem seguro
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	22	0	L5-09: código RAIS 22, posse em cargo inacumulável (servidor): iniciativa do empregado
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	30	0	L5-09: código RAIS 30, transferência com ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	31	0	L5-09: código RAIS 31, transferência sem ônus para a cedente: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	32	0	L5-09: código RAIS 32, readaptação de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	33	0	L5-09: código RAIS 33, cessão de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	34	0	L5-09: código RAIS 34, redistribuição de servidor: o vínculo continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	40	0	L5-09: código RAIS 40, mudança de regime trabalhista: encerra o contrato CLT sem saque imediato (art. 20, VIII, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	50	0	L5-09: código RAIS 50, reforma de militar para a reserva remunerada
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	60	0	L5-09: código RAIS 60, falecimento: saque pelos dependentes (art. 20, IV, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	62	0	L5-09: código RAIS 62, falecimento por acidente do trabalho típico
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	63	0	L5-09: código RAIS 63, falecimento por acidente do trabalho de trajeto
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	64	0	L5-09: código RAIS 64, falecimento por doença profissional
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	70	0	L5-09: código RAIS 70, aposentadoria por tempo de contribuição com rescisão: saque (art. 20, III, Lei 8.036/90)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	71	0	L5-09: código RAIS 71, aposentadoria por tempo de contribuição sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	72	0	L5-09: código RAIS 72, aposentadoria por idade com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	73	0	L5-09: código RAIS 73, aposentadoria por invalidez por acidente do trabalho: contrato suspenso (art. 475 da CLT)
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	74	0	L5-09: código RAIS 74, aposentadoria por invalidez por doença profissional: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	75	0	L5-09: código RAIS 75, aposentadoria compulsória
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	76	0	L5-09: código RAIS 76, aposentadoria por invalidez, outras causas: contrato suspenso
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	78	0	L5-09: código RAIS 78, aposentadoria por idade sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	79	0	L5-09: código RAIS 79, aposentadoria especial com rescisão
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	80	0	L5-09: código RAIS 80, aposentadoria especial sem rescisão: o contrato continua
+FPTIPORESC	ID_FPRESC_RAIS	tipo_rescisao.da_direito_seguro_desemprego	90	0	L5-09: código RAIS 90, acordo entre as partes (art. 484-A da CLT): metade do aviso, multa de 20%, saque de 80%, sem seguro

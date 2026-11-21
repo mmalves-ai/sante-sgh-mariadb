@@ -1,13 +1,18 @@
 """Fatia L6-07 (prontuário, assinatura e assistência do PEP): tabelas de situação, tipos e parâmetros do prontuário.
 
 Dados 100% falsos. Anomalias: descrição só de espaços em tabela com NOME obrigatório (vira NULL: NOT NULL no
-destino recusa a linha); nome com espaços repetidos (colapsados); bytes CP1252 0x80-0x9F; código de 1 caractere com
-colisão de caixa ('a' e 'A': codigo_colisao_caixa nas duas); S/N e A/I fora do domínio (valor_fora_do_dominio, fica
-o padrão do destino); ordem negativa (SMALLINT UNSIGNED: restricao_destino_1264, até a regra inteiro_nao_negativo pedida);
-choque de código com outra fonte do mesmo destino (PREPARO_DESTINO: restricao_destino_1062, até o prefixo de domínio); referência a pai recusado
+destino recusa a linha); nome com espaços repetidos (colapsados); bytes CP1252 0x80-0x9F; código de 1 caractere que só
+difere pela caixa ('a' e 'A': códigos distintos pelo sufixo); processo de enfermagem, origem do cabeçalho e tipo de
+ventilação pelo de-para de valores (sem par: valor_fora_do_dominio e o padrão do destino); S/N e A/I fora do domínio (valor_fora_do_dominio, fica
+o padrão do destino); ordem negativa (inteiro_nao_negativo: NULL com valor_fora_do_dominio; piso:0 na ordem da situação
+permitida: valor_elevado_ao_minimo); choque de código com outra fonte do mesmo destino (PREPARO_DESTINO: o tipo de anexo
+com prefixo de domínio não choca; a situação de checagem de 1 caractere entra pelo de-para de valores com o prefixo
+'checagem_' e a caixa no sufixo: 'a' e 'A' gravam as duas e '1' não choca; caractere sem par é recusado); tipo de
+documento de duas fontes no mesmo destino (PRTPCOMP com prefixo 'evolucao_', sem choque com PRTPASSINATURA); situação
+permitida por tipo gravada inativa e presumida (valor_presumido); referência a pai recusado
 (pai_pendente), a pai nulo em coluna NOT NULL e a pai de fora da fatia inexistente (pai_inexistente). Os literais
 PRESUMIDOS (`=~`) deixam valor_presumido em cada linha, inclusive na recusada pela restrição do destino
-(não na recusada por pai_pendente nem por colisão de caixa: comportamento atual do motor). As tabelas não carregadas por ora (ver colunas.d/L6-07.tsv)
+(não na recusada por pai_pendente: comportamento atual do motor). As tabelas descartadas (declarado/sem_carga.tsv, mecanismo_do_produto)
 entram na imagem para provar que nada delas é gravado.
 """
 
@@ -53,14 +58,16 @@ CREATE TABLE PRTPLAN_GETABVIA (ID_PRTPLAN SMALLINT NOT NULL, ID_GETABVIA VARCHAR
 PAIS_EXTERNOS = {"GETABVIA": ["01", "02", "03"]}
 
 # choque de código em destino compartilhado: L6-06 (PROFTTPARQUIV, PRSITCHECAGEM) grava antes no mesmo destino com
-# código numérico; sem o prefixo de domínio (pedido em saida/L6-07.json) a linha de mesmo código é recusada (1062)
+# código numérico: o tipo de anexo leva o prefixo 'anexo_' e a situação de checagem o prefixo 'checagem_' (de-para
+# de valores): nenhum choca
 PREPARO_DESTINO = """
 INSERT INTO tipo_anexo (codigo, descricao, criado_em) VALUES ('1', 'Tipo de arquivo falso de outra fonte', NOW(3));
 INSERT INTO situacao_checagem (codigo, descricao, categoria, criado_em)
   VALUES ('1', 'Situação falsa de outra fonte', 'pendente', NOW(3));
 """
 
-NAO_CARREGADAS = ["PRTIPONOTIFICACAO", "PRTIPOPERGPAR", "PRTPASSINATURA_PRSITDOC", "PRTPASSINATURA_TBOID", "PRTPCOMP"]
+# descartadas com motivo de produto (declarado/sem_carga.tsv): nada delas é gravado
+NAO_CARREGADAS = ["PRTIPONOTIFICACAO", "PRTIPOPERGPAR", "PRTPASSINATURA_TBOID"]
 
 
 def _simples(ins, t, nomes, extra=lambda i: []):
@@ -74,11 +81,15 @@ def linhas(r, ins):
                                      "Situação exemplo cinco"])
     _simples(ins, "PRSITDOCUMENTOASSINADO", ["Assinatura falsa um", "Assinatura falsa dois", E])
     _simples(ins, "PRSITEXAME", ["Exame um", "Exame dois", "Exame três"])
-    for cod, nome, ativo in [("A", "Checagem exemplo A", "S"), ("a", "Colide com A pela caixa", "S"),
-                             ("B", "Checagem exemplo B", "N"), ("C", "Checagem exemplo C", None),
-                             ("D", "Checagem exemplo D", "X"), ("E", E, "S"),
-                             ("1", "Checagem de código numérico", "S")]:
-        ins("PRSITUACAOCHECAGEM", [cod, nome, ativo, None, "Processo falso"])
+    for cod, nome, ativo, proc in [("A", "Checagem exemplo A", "S", "Administração"),
+                                   ("a", "Só difere de A pela caixa", "S", "CUIDADOS"),
+                                   ("B", "Checagem exemplo B", "N", "Processo falso"),   # sem par: padrão
+                                   ("C", "Checagem exemplo C", None, None),
+                                   ("D", "Checagem exemplo D", "X", "Sinais vitais"),
+                                   ("E", E, "S", "Coleta"),                               # sem nome: recusa
+                                   ("1", "Checagem de código numérico", "S", "Conferência"),
+                                   ("#", "Código fora do de-para", "S", "Coleta")]:       # sem par: recusa
+        ins("PRSITUACAOCHECAGEM", [cod, nome, ativo, None, proc])
     for i, (desc, st) in enumerate([("Seção falsa um", "A"), ("Seção falsa dois", "I"), ("Seção falsa três", "Z"),
                                     (E, "A")], 1):
         ins("PRSUMARIO_ALTA_COMP", [i, desc, st])
@@ -89,6 +100,7 @@ def linhas(r, ins):
         ins("PRTIPONOTIFICACAO", [i, "Notificação falsa %d" % i])
         ins("PRTIPOPERGPAR", [i, r.randint(1, 9), "Parâmetro falso %d" % i])
         ins("PRTPCOMP", [i, "Componente falso %d" % i])
+    ins("PRTPCOMP", [4, E])  # sem nome: NOT NULL recusa
     _simples(ins, "PRTIPOPRESENTEADMISSAO", ["Sim falso", "Não falso", "Indeterminado falso"],
              lambda i: ["SNX"[i - 1]])
     _simples(ins, "PRTPALERTA", ["Alerta falso um", "Alerta falso dois"])
@@ -98,10 +110,14 @@ def linhas(r, ins):
     for i, (tp, desc) in enumerate([(1, "Escala falsa um"), (2, "Escala falsa dois"), (4, "Escala do tipo recusado"),
                                     (3, None), (99, "Escala de tipo inexistente")], 1):
         ins("PRINDICEAGRUPAMENTO", [i, tp, desc])
-    for i, (tp, ger) in enumerate([(1, "S"), (2, "N"), (None, None), (4, "S"), (5, "S")], 1):
-        ins("PRPARAMORIGEMCABIMP", [i, tp, "E", ger])
+    for i, (tp, org, ger) in enumerate([(1, "E", "S"), (2, "E", "N"), (None, None, None), (4, "E", "S"),
+                                        (5, "X", "S")], 1):  # X sem par: padrão (estabelecimento)
+        ins("PRPARAMORIGEMCABIMP", [i, tp, org, ger])
+    # situações permitidas por tipo: 3 e 4 com pai recusado (situação sem nome; tipo sem descrição); ordem negativa
+    # sobe a 0; situação inexistente (pai_inexistente, NOT NULL recusa)
+    for i, (tp, sit, ordem) in enumerate([(1, 1, 1), (1, 2, 2), (1, 3, 3), (4, 1, 1), (2, 1, -1), (2, 99, 2)], 1):
+        ins("PRTPASSINATURA_PRSITDOC", [i, tp, sit, ordem])
     for i in range(1, 4):
-        ins("PRTPASSINATURA_PRSITDOC", [i, 1, i, i])
         ins("PRTPASSINATURA_TBOID", [i, i, i])
     _simples(ins, "PRTPDOCUMENTO", ["Sem assinatura falsa", "Eletrônica falsa"])
     _simples(ins, "PRTPINFOPERGOPERADORA", ["Grupo falso um", "Grupo falso dois", None])
@@ -112,10 +128,10 @@ def linhas(r, ins):
     for i, (nome, ordem) in enumerate([("Item falso um", 1), ("Item falso dois", None), ("Item falso três", -1),
                                        ("Item falso quatro", 4)], 1):
         ins("PRTPLAN", [i, nome, ordem, "categoria-falsa-%d" % i])
-    for i in range(1, 4):
-        ins("PRMODOVENT", [i, 1, "Modo falso %d" % i, None])
+    for i, tp in enumerate([12, 11, 1], 1):  # invasiva, não invasiva, código sem par (padrão)
+        ins("PRMODOVENT", [i, tp, "Modo falso %d" % i, None])
     for item, via, vis, marc in [(1, "01", "S", "N"), (1, "02", None, "S"), (2, "01", "N", None),
-                                 (3, "01", "S", "S"),      # item recusado: pai_pendente
+                                 (3, "01", "S", "S"),      # item de ordem negativa: gravado (ordem nula)
                                  (4, "99", "S", "N"),      # via fora da imagem: pai_inexistente (NOT NULL recusa)
                                  (4, "03", "X", "N")]:     # S/N inválido: fica o padrão
         ins("PRTPLAN_GETABVIA", [item, via, vis, marc])
@@ -123,24 +139,27 @@ def linhas(r, ins):
         "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1}},
         "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "PRSITUACAOCHECAGEM": {"gravados": 3, "pendencias": {"valor_presumido": 10, "restricao_destino_1062": 1, "codigo_colisao_caixa": 2,
-                                                             "valor_fora_do_dominio": 1,
-                                                             "restricao_destino_1048": 1}},
+        "PRSITUACAOCHECAGEM": {"gravados": 6, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
+                                                             "restricao_destino_1048": 2}},
         "PRSUMARIO_ALTA_COMP": {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
                                                               "restricao_destino_1048": 1}},
-        "PRTIPODOCANEXO": {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
+        "PRTIPODOCANEXO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "PRTIPOPRESENTEADMISSAO": {"gravados": 3, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 1}},
-        "PRTPALERTA": {"gravados": 2, "pendencias": {}},
-        "PRTPASSINATURA": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
+        "PRTPALERTA": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
+        "PRTPASSINATURA": {"gravados": 5, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1}},
         "PRINDICEAGRUPAMENTO": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
                                                               "pai_inexistente": 1}},
-        "PRPARAMORIGEMCABIMP": {"gravados": 4, "pendencias": {"valor_presumido": 4, "pai_pendente": 1}},
+        "PRPARAMORIGEMCABIMP": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_pendente": 1}},
+        "PRTPASSINATURA_PRSITDOC": {"gravados": 3, "pendencias": {"valor_presumido": 4, "pai_pendente": 2,
+                                                                  "valor_elevado_ao_minimo": 1, "pai_inexistente": 1,
+                                                                  "restricao_destino_1048": 1}},
+        "PRTPCOMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
         "PRTPDOCUMENTO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "PRTPINFOPERGOPERADORA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "PRINFOPERGOPERADORA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 2, "pai_pendente": 1}},
-        "PRTPINFUSAO": {"gravados": 2, "pendencias": {}},
-        "PRTPLAN": {"gravados": 3, "pendencias": {"restricao_destino_1264": 1}},
-        "PRMODOVENT": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "PRTPLAN_GETABVIA": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+        "PRTPINFUSAO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
+        "PRTPLAN": {"gravados": 4, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1}},
+        "PRMODOVENT": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}},
+        "PRTPLAN_GETABVIA": {"gravados": 5, "pendencias": {"pai_inexistente": 1,
                                                            "restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},
     }

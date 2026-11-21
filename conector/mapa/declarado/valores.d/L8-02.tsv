@@ -5,3 +5,11 @@ TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	3	03	L8-02: código 
 TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	5	05	L8-02: código de despesa da TISS (tabela 25)
 TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	7	07	L8-02: código de despesa da TISS (tabela 25)
 TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	8	08	L8-02: código de despesa da TISS (tabela 25)
+RPEVENTO	TIPO_EVENTO	evento_repasse.natureza	V	rendimento	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
+RPEVENTO	TIPO_EVENTO	evento_repasse.natureza	F	rendimento	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto'); F como rendimento a revisar com o dono
+RPEVENTO	TIPO_EVENTO	evento_repasse.natureza	D	desconto	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
+RPEVENTO	TIPO_EVENTO	evento_repasse.tipo_lancamento	V	credito	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
+RPEVENTO	TIPO_EVENTO	evento_repasse.tipo_lancamento	F	credito	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
+RPEVENTO	TIPO_EVENTO	evento_repasse.tipo_lancamento	D	debito	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
+RPRPA	STATUS	rpa.situacao	G	emitido	L8-02: G (gerado) é a situação gravada pela emissão do RPA no sistema antigo
+RPRPA	METODO_ENVIO	rpa.metodo_envio	E	esocial	L8-02: E é o envio pelo eSocial gravado pela emissão do RPA no sistema antigo

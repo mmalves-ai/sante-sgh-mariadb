@@ -399,7 +399,3 @@ CDTPACUMULPOR	ID	nivel_acumulo_limite.codigo	96	sistema-96	L8-13: domínio fixo 
 CDTPACUMULPOR	ID	nivel_acumulo_limite.codigo	97	sistema-97	L8-13: domínio fixo do sistema de origem, prefixo 'sistema-'
 CDTPACUMULPOR	ID	nivel_acumulo_limite.codigo	98	sistema-98	L8-13: domínio fixo do sistema de origem, prefixo 'sistema-'
 CDTPACUMULPOR	ID	nivel_acumulo_limite.codigo	99	sistema-99	L8-13: domínio fixo do sistema de origem, prefixo 'sistema-'
-CDMOTMOVIMCAD	ID_CDSTATUSCAD	motivo_movimento_cadastral.tipo_movimento	1	inclusao	L8-13: movimento cadastral do domínio fixo do sistema de origem
-CDMOTMOVIMCAD	ID_CDSTATUSCAD	motivo_movimento_cadastral.tipo_movimento	2	alteracao	L8-13: movimento cadastral do domínio fixo do sistema de origem
-CDMOTMOVIMCAD	ID_CDSTATUSCAD	motivo_movimento_cadastral.tipo_movimento	3	exclusao	L8-13: movimento cadastral do domínio fixo do sistema de origem
-CDMOTMOVIMCAD	ID_CDSTATUSCAD	motivo_movimento_cadastral.tipo_movimento	4	reativacao	L8-13: movimento cadastral do domínio fixo do sistema de origem

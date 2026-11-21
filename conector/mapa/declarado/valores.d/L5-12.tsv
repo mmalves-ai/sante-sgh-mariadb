@@ -1,0 +1,20 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+FPREMESSA	FECHADA	competencia_folha.situacao	S	fechada	L5-12: competência fechada
+FPREMESSA	FECHADA	competencia_folha.situacao	N	aberta	L5-12: competência aberta
+FPPARAM	COD_EMP	cadastro_empregador.construtora	0	0	L5-12: indConstr do eSocial: 0 não é construtora
+FPPARAM	COD_EMP	cadastro_empregador.construtora	1	1	L5-12: indConstr do eSocial: 1 empresa construtora
+FPPARAM	COD_EMP	cadastro_empregador.indicador_cooperativa	0	nao_cooperativa	L5-12: indCoop do eSocial: 0 não é cooperativa
+FPPARAM	COD_EMP	cadastro_empregador.indicador_cooperativa	1	trabalho	L5-12: indCoop do eSocial: 1 cooperativa de trabalho
+FPPARAM	COD_EMP	cadastro_empregador.indicador_cooperativa	2	producao	L5-12: indCoop do eSocial: 2 cooperativa de produção
+FPPARAM	COD_EMP	cadastro_empregador.indicador_cooperativa	3	outra	L5-12: indCoop do eSocial: 3 outras cooperativas
+TBTPTRIBUTO	ID	tributo_folha.tipo	1	fundo_garantia	L5-12: FGTS (classificação por agregado na imagem de referência)
+TBTPTRIBUTO	ID	tributo_folha.tipo	2	contribuicao_previdenciaria	L5-12: INSS do segurado (classificação por agregado na imagem de referência)
+TBTPTRIBUTO	ID	tributo_folha.tipo	3	contribuicao_previdenciaria	L5-12: INSS patronal (classificação por agregado na imagem de referência)
+TBTPTRIBUTO	ID	tributo_folha.tipo	4	imposto_renda	L5-12: IRRF (classificação por agregado na imagem de referência)
+TBTPTRIBUTO	ID	tributo_folha.tipo	5	contribuicao_social	L5-12: PIS (classificação por agregado na imagem de referência)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	1	outro	L5-12: tipo 1 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	2	outro	L5-12: tipo 2 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	3	outro	L5-12: tipo 3 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	4	outro	L5-12: tipo 4 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	5	outro	L5-12: tipo 5 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	6	outro	L5-12: tipo 6 sem gatilho correspondente no CHECK atual (pedido 8 à F2.2)

@@ -1,28 +1,104 @@
 tabela	coluna	destino	regra	depara	via	motivo
-TBTABIRR	=irrf	tabela_legal_vigencia.tipo_tabela				a tabela da origem é a do IRRF (cabeçalho por vigência); as faixas (F1 a acima) e as do INSS e salário-família da mesma linha pedem grupo repetido e literal tipado no motor; salário mínimo, contribuinte individual e teto do INSS são outras vigências (tipos salario_minimo, inss_contribuinte_individual, teto_inss) da mesma linha e pedem o mesmo grupo repetido no destino principal (saida/L5-12.json)
-TBTABIRR	DTA_INSS_IRRF	tabela_legal_vigencia.vigencia_inicio	data			data de início da vigência (chave da origem)
-TBTABIRR	ISENTO	tabela_legal_vigencia.isencao_ate	flutuante			limite da faixa isenta do IRRF
-TBTABIRR	DESC_DEP	tabela_legal_vigencia.deducao_dependente	flutuante			dedução por dependente
-TBTABIRR	DESC_SIMPLIFICADO	tabela_legal_vigencia.desconto_simplificado	decimal			desconto simplificado mensal
-TBTABIRR	F1_INICIO_26	tabela_legal_vigencia.reducao_de	flutuante			início da faixa com redução do IRRF (lei de 2026); nulo nas vigências anteriores
-TBTABIRR	F1_FIM_26	tabela_legal_vigencia.reducao_ate	flutuante			fim da faixa com redução do IRRF (lei de 2026); reducao_ate < reducao_de é recusada pelo CHECK do destino
-TBTABIRR	ACIMA_26	tabela_legal_vigencia.sem_reducao_acima_de	flutuante			acima deste rendimento não há redução do IRRF (lei de 2026)
-TBTABIRR	ISENTO_26		flutuante			não carregada por ora: limite da isenção pela redução de 2026 não tem coluna no modelo (isencao_ate já recebe ISENTO, a faixa isenta da tabela); coluna pedida em saida/L5-12.json
-TBTABIRR	REDUCAO_26		flutuante			não carregada por ora: valor da redução de 2026 não tem coluna no modelo; coluna pedida em saida/L5-12.json
-TBTABIRR	SAL_MIN		decimal			não carregada por ora: é a vigência tipo salario_minimo (valor_referencia) da mesma data; pede o grupo repetido no destino principal (saida/L5-12.json)
-TBTABIRR	CONTR_IND		decimal			não carregada por ora: vigência tipo inss_contribuinte_individual (alíquota/faixa), pede o grupo repetido no destino principal (saida/L5-12.json)
-TBTABIRR	TETO_CONTR_IND		decimal			não carregada por ora: teto da vigência inss_contribuinte_individual; pede o grupo repetido no destino principal (saida/L5-12.json)
-TBTABIRR	CONTR_IND_FINS		decimal			não carregada por ora: contribuinte individual com fins (segunda vigência inss_contribuinte_individual da data); o modelo tem uma por tipo e data, pede grupo repetido e decisão do tipo (saida/L5-12.json)
-TBTABIRR	TETO_CONTR_IND_FINS		decimal			não carregada por ora: teto da vigência anterior (CONTR_IND_FINS); mesmo pedido (saida/L5-12.json)
-TBTABIRR	INSS_TETO_PF		decimal			não carregada por ora: teto do INSS da pessoa física, vigência tipo teto_inss (teto); pede o grupo repetido no destino principal (saida/L5-12.json)
-TBTABIRR	VLR_ACIMA_F4		decimal			não carregada por ora: valor acima da última faixa do INSS (teto da tabela inss); entra com as faixas do INSS pelo grupo repetido (saida/L5-12.json)
-TBTABIRR	INSS_PERC_PF		decimal			não carregada por ora: percentual do INSS do autônomo pessoa física; entra na vigência inss_contribuinte_individual pelo grupo repetido (saida/L5-12.json)
-TBTABIRR	ISENTO_PJ		decimal			descartada: retenção de imposto sobre pagamento a pessoa jurídica não é tabela legal da folha; sem destino no modelo (registrado em saida/L5-12.json)
-TBTABIRR	ALIQ_PJ		decimal			descartada: alíquota de retenção sobre pessoa jurídica; sem destino no modelo (registrado em saida/L5-12.json)
-TBTABIRR	INSS_PERC_PJ		decimal			descartada: percentual de INSS retido de pessoa jurídica; sem destino no modelo (registrado em saida/L5-12.json)
+TBTABIRR	DTA_INSS_IRRF		data			L5-12: DESCARTE (catalogo_oficial, linha pedida em sem_carga.tsv; decisão em F4-decisoes-destino.md): tabela legal pública da folha (IRRF, INSS, salário-família, salário mínimo, teto e contribuinte individual), que é lei federal e não dado do cliente; regra 7: tabela_legal_vigencia e faixa_tabela_legal só recebem do carregador oficial versionado (pedido em saida/L5-12.json); gravar da origem um cabeçalho sem as faixas daria ao cálculo da folha uma tabela vazia
 PEJUSTIF	COD_JUSTIF	justificativa_ponto.codigo	texto			código da justificativa como texto (destino VARCHAR); LIMITAÇÃO DO MODELO, não erro do dado: a origem é única por empresa + código e o destino tem UNIQUE(codigo) global; o código repetido em outra empresa vira restricao_destino_1062 até o escopo por mantenedora pedido em saida/L5-12.json
 PEJUSTIF	NOME	justificativa_ponto.descricao	texto_nome			descrição (sem nome: recusa pelo NOT NULL do destino)
-PEJUSTIF	COD_EMP		inteiro			não carregada por ora: a justificativa não tem escopo por empresa no modelo (UNIQUE(codigo) global); pedido de mantenedora_id e UNIQUE(mantenedora_id, codigo) em saida/L5-12.json
+PEJUSTIF	COD_EMP		inteiro			L5-12: AGUARDA MODELO (pedido 10 à F2.2; decisão em F4-decisoes-destino.md): justificativa_ponto.mantenedora_id com UNIQUE(mantenedora_id, codigo); hoje UNIQUE(codigo) global recusa (1062) o mesmo código em outra empresa. Na imagem de referência há uma só empresa: nenhuma linha perdida
 TBTPTRIBUTO	ID	tributo_folha.codigo	texto			código do tributo como texto (destino VARCHAR); chave da origem, sem referência
 TBTPTRIBUTO	NOME	tributo_folha.descricao	texto_nome			descrição do tributo
-TBTPTRIBUTO	=outro	tributo_folha.tipo				a origem não classifica o tributo: entra como outro e o cliente reclassifica na tela (sem trava)
+TBTPTRIBUTO	ID	tributo_folha.tipo	inteiro	valores		L5-12: tipo do tributo pela chave da lista do sistema de origem (valores.d/L5-12.tsv; classificação conferida por agregado na imagem de referência: 1 FGTS, 2 e 3 previdência, 4 imposto de renda, 5 contribuição social); chave sem par: valor_fora_do_dominio e o NOT NULL recusa (visível na pendência)
+FPEVENTO	@estabelecimento	rubrica.estabelecimento_id				L5-12: a rubrica é do estabelecimento; a origem só traz a empresa (COD_EMP, mantenedora): id do único estabelecimento do cliente (vários: estabelecimento_indefinido)
+FPEVENTO	COD_EVENTO	rubrica.codigo	texto			L5-12: código da rubrica no cliente (destino VARCHAR)
+FPEVENTO	NOME	rubrica.descricao	texto_nome			L5-12: descrição (sem nome: NOT NULL do destino recusa)
+FPEVENTO	TP_EVENTO	rubrica.tipo_rubrica_id			ref:FPTP_EVENTO	L5-12: o tipo (provento, desconto...) é a chave de FPTP_EVENTO (tipo_rubrica)
+FPEVENTO	TP_REFER	rubrica.tipo_referencia_rubrica_id			ref:FPTP_REFER	L5-12: a unidade da referência é a chave de FPTP_REFER (tipo_referencia_rubrica)
+FPEVENTO	PERC_INC	rubrica.percentual_incidencia	decimal			L5-12: percentual de incidência
+FPEVENTO	PRIORIDADE	rubrica.prioridade_calculo	inteiro_nao_negativo			L5-12: prioridade de cálculo (nula: padrão 100 do destino)
+FPEVENTO	FORMULA	rubrica.formula	texto_longo			L5-12: fórmula vigente (versão 1 da rubrica migrada; formula_rubrica guarda as versões criadas no produto)
+FPEVENTO	FORMULA_REF	rubrica.formula_referencia	texto_longo			L5-12: fórmula da referência
+FPEVENTO	FORMULA_VLR_CHEIO	rubrica.formula_valor_integral	texto_longo			L5-12: fórmula do valor cheio
+FPEVENTO	FOLHA	rubrica.usa_em_folha	booleano_sn			L5-12: usada na folha mensal (S/N; nulo: padrão do destino)
+FPEVENTO	FERIAS	rubrica.usa_em_ferias	booleano_sn			L5-12: usada em férias
+FPEVENTO	RESCISAO	rubrica.usa_em_rescisao	booleano_sn			L5-12: usada na rescisão
+FPEVENTO	DEC_TER_SALARIO	rubrica.usa_em_decimo_terceiro	booleano_sn			L5-12: usada no 13º
+FPEVENTO	INC_MED_FER	rubrica.compoe_media_ferias	booleano_sn			L5-12: compõe a média de férias
+FPEVENTO	INC_MED_13	rubrica.compoe_media_decimo_terceiro	booleano_sn			L5-12: compõe a média do 13º
+FPEVENTO	MEDIA_RESCISAO	rubrica.compoe_media_rescisao	booleano_sn			L5-12: compõe a média da rescisão
+FPEVENTO	DEDUTIVEL_IRRF	rubrica.dedutivel_irrf	booleano_sn			L5-12: dedutível do IRRF
+FPEVENTO	@vigencia_carga	rubrica.vigencia_inicio				L5-12: decisão genérica (F4-decisoes-destino.md): a origem não dá início de vigência em toda rubrica; data da carga com vigencia_sem_fonte
+FPEVENTO	ID_FPNATRUBRICA		chave_origem			L5-12: AGUARDA O DE-PARA OFICIAL natureza_rubrica no motor (pedido 3 em saida/L5-12.json): rubrica.natureza_rubrica_id (NOT NULL) é o catálogo oficial natureza_rubrica (tabela 03), declarado em catalogos.tsv para FPNATRUBRICA; com o de-para, a linha vira ref:FPNATRUBRICA>codigo com depara natureza_rubrica. Até lá a rubrica é recusada com restricao_destino_1364
+FPEVENTO	SITUACAO	rubrica.ativo	booleano_ai			L5-12: situação da rubrica (A ativa, I inativa; vazio: padrão TRUE); inativa na origem não é candidata no cálculo
+FPEVENTO	DATA_INICIAL_VALIDADE		data			L5-12: início real da validade (preenchido em parte das rubricas): entra com o especial @vigencia_carga:DATA_INICIAL_VALIDADE (pedido 6); até lá vale a data da carga com vigencia_sem_fonte
+FPEVENTO	DATA_FINAL_VALIDADE		data			L5-12: fim da validade: entra em rubrica.vigencia_fim junto com o início real (pedido 6); com início = data da carga, o fim passado seria recusado pelo CHECK fim >= início
+FPLOTTRIBCAD	@estabelecimento	lotacao_tributaria.estabelecimento_id				L5-12: único estabelecimento do cliente (a origem traz a empresa)
+FPLOTTRIBCAD	ID	lotacao_tributaria.codigo	texto			L5-12: código da lotação (chave da origem)
+FPLOTTRIBCAD	NOME	lotacao_tributaria.nome	texto_nome			L5-12: nome da lotação
+FPLOTTRIBCAD	ID_FPLOTACAOTRIB	lotacao_tributaria.tipo_codigo_esocial_id	texto	codigo_esocial:10		L5-12: tipo de lotação tributária pelo código oficial (tabela 10 do eSocial)
+FPLOTTRIBCAD	DATA_VIGENCIA_INICIAL	lotacao_tributaria.vigencia_inicio	data			L5-12: início da vigência
+FPLOTTRIBCAD	DATA_VIGENCIA_FINAL	lotacao_tributaria.vigencia_fim	data			L5-12: fim da vigência
+FPLOTTRIBCAD	DATA_HORA_INC_ULT_ALT_ESOC	lotacao_tributaria.enviado_esocial_em	data_hora			L5-12: último envio ao eSocial
+FPLOTTRIBCAD	ID_ERP_TERCEIRO	lotacao_tributaria.codigo_externo_erp	texto			L5-12: código no ERP contábil
+FPLOTTRIBCAD	ID_FPFPAS		chave_origem			L5-12: AGUARDA O DE-PARA OFICIAL fpas no motor (pedido 3): lotacao_tributaria.fpas_id (NOT NULL) pelo código FPAS de 3 dígitos (catálogo declarado em catalogos.tsv para FPFPAS); até lá a lotação é recusada com 1364
+FPLOTTRIBCAD	ID_FPTPINSCRICAO		chave_origem			L5-12: não carregada por ora: tipo e número de inscrição andam juntos (CHECK); CNPJ_CNO é BIGINT e pede regra de inscrição por tipo (pedido em saida/L5-12.json)
+FPREMESSA	@estabelecimento	competencia_folha.estabelecimento_id				L5-12: único estabelecimento do cliente (a origem traz a empresa)
+FPREMESSA	ANO_PROC	competencia_folha.ano	inteiro			L5-12: ano da competência
+FPREMESSA	MES_PROC	competencia_folha.mes	inteiro			L5-12: mês da competência (fora de 1..12: CHECK do destino recusa)
+FPREMESSA	COD_TP	competencia_folha.tipo_folha_id			ref:FPTP_FOLHA	L5-12: tipo da folha é a chave de FPTP_FOLHA (tipo_folha)
+FPREMESSA	COD_REMESSA	competencia_folha.numero_folha	inteiro_zero_nulo			L5-12: número da folha na competência (nulo: padrão 1)
+FPREMESSA	DTA_INI_APUR	competencia_folha.apuracao_inicio	data			L5-12: início da apuração
+FPREMESSA	DTA_FIN_APUR	competencia_folha.apuracao_fim	data			L5-12: fim da apuração
+FPREMESSA	DATA_PAGAMENTO	competencia_folha.data_pagamento	data			L5-12: data de pagamento
+FPREMESSA	FECHADA	competencia_folha.situacao	codigo_char	valores		L5-12: S fechada, N aberta (valores.d/L5-12.tsv); sem par: valor_fora_do_dominio e o padrão aberta
+FPREMESSA	DESCRICAO_MOTIVO		texto			L5-12: não carregada: motivo da remessa ao eSocial (retificação), não reabertura da competência; o evento do eSocial é do produto
+FPRESP	@estabelecimento	responsavel_legal_empregador.estabelecimento_id				L5-12: único estabelecimento do cliente (a origem traz a empresa)
+FPRESP	=~outro	responsavel_legal_empregador.papel				L5-12: a origem não diz o papel (é referenciada como responsável pela empresa e pela ficha); presumido outro, o cliente reclassifica no painel
+FPRESP	NOME	responsavel_legal_empregador.nome	texto_nome			L5-12: nome do responsável
+FPRESP	CPF	responsavel_legal_empregador.cpf	cpf			L5-12: CPF validado (inválido: documento_invalido, NOT NULL recusa)
+FPRESP	DTA_NASC	responsavel_legal_empregador.data_nascimento	data			L5-12: nascimento
+FPRESP	DESC_FUNCAO	responsavel_legal_empregador.cargo_funcao	texto			L5-12: cargo ou função
+FPRESP	NUM_INSCRICAO_ORGAO_CLASSE	responsavel_legal_empregador.numero_conselho_classe	texto			L5-12: número no conselho de classe
+FPRESP	ID_TBUF	responsavel_legal_empregador.conselho_unidade_federativa_id	texto	ibge_uf		L5-12: UF do conselho pela sigla oficial
+FPRESP	TEL	responsavel_legal_empregador.telefone	texto			L5-12: telefone (o DDD fica fora até haver composição de colunas: pedido em saida/L5-12.json)
+FPRESP	RAMAL	responsavel_legal_empregador.ramal	texto			L5-12: ramal
+FPRESP	NUM_CELULAR	responsavel_legal_empregador.celular	texto			L5-12: celular
+FPRESP	E_MAIL	responsavel_legal_empregador.email	texto			L5-12: e-mail
+FPRESP	VIGENCIA_INICIAL	responsavel_legal_empregador.vigencia_inicio	data			L5-12: início da responsabilidade
+FPRESP	VIGENCIA_FINAL	responsavel_legal_empregador.vigencia_fim	data			L5-12: fim da responsabilidade
+FPRESP	PIS		texto			L5-12: não carregada por ora: nis CHAR(11) pede regra de NIS com verificador (pedido em saida/L5-12.json)
+FPRESP	SITUACAO	responsavel_legal_empregador.ativo	booleano_ai			L5-12: situação do responsável (A ativo, I inativo; vazio: padrão TRUE)
+FPRESP	RESPONS		texto_nome			L5-12: nome no leiaute antigo: fonte alternativa quando NOME está vazio (especial #primeiro:NOME,RESPONS, pedido 7); na imagem de referência NOME está preenchido onde RESPONS está
+FPRUBRICAFGTS_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
+FPRUBRICAINSS_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
+FPRUBRICAIRRF_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
+FPRUBRICASIND_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
+FPRUBRICAFGTS_FPEVENTO	@vigencia_carga	incidencia_rubrica.vigencia_inicio				L5-12: a origem não dá vigência da incidência: data da carga com vigencia_sem_fonte
+FPRUBRICAINSS_FPEVENTO	@vigencia_carga	incidencia_rubrica.vigencia_inicio				L5-12: a origem não dá vigência da incidência: data da carga com vigencia_sem_fonte
+FPRUBRICAIRRF_FPEVENTO	@vigencia_carga	incidencia_rubrica.vigencia_inicio				L5-12: a origem não dá vigência da incidência: data da carga com vigencia_sem_fonte
+FPRUBRICASIND_FPEVENTO	@vigencia_carga	incidencia_rubrica.vigencia_inicio				L5-12: a origem não dá vigência da incidência: data da carga com vigencia_sem_fonte
+FPRUBRICAFGTS_FPEVENTO	ID_FPRUBRICAFGTS		chave_origem			L5-12: AGUARDA de-para oficial e modelo: codigo_incidencia_rubrica_id (NOT NULL) pelo código de FPRUBRICAFGT em ref:FPRUBRICAFGT com o de-para codigo_incidencia_rubrica:fgts (pedido 3); o tributo é implícito na tabela da origem: decisão de modelo (pedido 9 à F2.2) com coluna incidencia_rubrica.tributo (literal =fgts) e tributo_folha_id opcional. Até lá a incidência é recusada
+FPRUBRICAINSS_FPEVENTO	ID_FPRUBRICAINSS		chave_origem			L5-12: AGUARDA de-para oficial e modelo: codigo_incidencia_rubrica_id (NOT NULL) pelo código de FPRUBRICAINS em ref:FPRUBRICAINS com o de-para codigo_incidencia_rubrica:inss (pedido 3); o tributo é implícito na tabela da origem: decisão de modelo (pedido 9 à F2.2) com coluna incidencia_rubrica.tributo (literal =inss) e tributo_folha_id opcional. Até lá a incidência é recusada
+FPRUBRICAIRRF_FPEVENTO	ID_FPRUBRICAIRRF		chave_origem			L5-12: AGUARDA de-para oficial e modelo: codigo_incidencia_rubrica_id (NOT NULL) pelo código de FPRUBRICAIRR em ref:FPRUBRICAIRR com o de-para codigo_incidencia_rubrica:irrf (pedido 3); o tributo é implícito na tabela da origem: decisão de modelo (pedido 9 à F2.2) com coluna incidencia_rubrica.tributo (literal =irrf) e tributo_folha_id opcional. Até lá a incidência é recusada
+FPRUBRICASIND_FPEVENTO	ID_FPRUBRICASIND		chave_origem			L5-12: AGUARDA de-para oficial e modelo: codigo_incidencia_rubrica_id (NOT NULL) pelo código de FPRUBRICASIN em ref:FPRUBRICASIN com o de-para codigo_incidencia_rubrica:contribuicao_sindical (pedido 3); o tributo é implícito na tabela da origem: decisão de modelo (pedido 9 à F2.2) com coluna incidencia_rubrica.tributo (literal =contribuicao_sindical) e tributo_folha_id opcional. Até lá a incidência é recusada
+FPTPEVENTOAUT_TBEMPHOS	@estabelecimento	lancamento_automatico_rubrica.estabelecimento_id				L5-12: a empresa da origem vira o único estabelecimento do cliente
+FPTPEVENTOAUT_TBEMPHOS	ID_FPTPEVENTOAUT	lancamento_automatico_rubrica.evento_gatilho	inteiro	valores		L5-12: tipo do lançamento automático pela chave da lista (valores.d/L5-12.tsv). Conferido por agregado na imagem de referência: nenhum dos 6 tipos é gatilho do CHECK atual (há licença-maternidade, rescisão e afastamento), então todos entram como outro; a chave original fica em conector_origem. Valores novos do CHECK pedidos à F2.2 (pedido 8)
+FPTPEVENTOAUT_TBEMPHOS	LANCAR_TP_EVENTO_AUTOM_FOLHA	lancamento_automatico_rubrica.lancar	booleano_sn			L5-12: lançar automaticamente na folha (S/N; nulo: padrão do destino)
+FPTPEVENTOAUT_TBEMPHOS	@vigencia_carga	lancamento_automatico_rubrica.vigencia_inicio				L5-12: a origem não dá vigência: data da carga com vigencia_sem_fonte
+FPTPEVENTOAUT_TBEMPHOS	ID_TBEMPHOS		chave_origem			L5-12: a empresa vira @estabelecimento. AGUARDA MODELO (pedido 8 à F2.2): rubrica_id (NOT NULL) não existe na origem (a habilitação é por tipo, sem rubrica); decisão: rubrica_id NULL até o cliente escolher a rubrica no painel. Até lá a linha é recusada com 1364
+FPPARAM	ID_RESP_EMP	cadastro_empregador.responsavel_legal_empregador_id			ref:FPRESP	L5-12: responsável pela empresa (FPRESP)
+FPPARAM	@estabelecimento	cadastro_empregador.estabelecimento_id				L5-12: único estabelecimento do cliente (a origem traz a empresa)
+FPPARAM	@vigencia_carga	cadastro_empregador.vigencia_inicio				L5-12: o cadastro vigente não tem início na origem (as versões ficam na trilha, por FPPARAMVIG): data da carga com vigencia_sem_fonte; decisão em F4-decisoes-destino.md
+FPPARAM	COD_EMP	cadastro_empregador.tributaria_codigo_esocial_id	texto	codigo_esocial:8	ref:TBEMPHOS>ID_FPCLASSIFTRIB	L5-12: classificação tributária da empresa (TBEMPHOS.ID_FPCLASSIFTRIB) pelo código oficial (tabela 08 do eSocial)
+FPPARAM	COD_EMP	cadastro_empregador.construtora	texto	valores	ref:TBEMPHOS>ID_TBTPCONSTRUT	L5-12: indicativo de construtora da empresa (código do eSocial 0/1; TBTPCONSTRUT é a lista do domínio)
+FPPARAM	COD_EMP	cadastro_empregador.indicador_cooperativa	texto	valores	ref:TBEMPHOS>ID_TBTPCOOPERAT	L5-12: indicativo de cooperativa da empresa (código do eSocial 0 a 3; TBTPCOOPERAT é a lista do domínio)
+FPPARAM	COD_GPS	cadastro_empregador.codigo_pagamento_gps	texto			L5-12: código de pagamento da GPS
+FPPARAM	DIA_PGTO	cadastro_empregador.dia_pagamento	faixa:1,31			L5-12: dia de pagamento (fora de 1..31: valor_fora_do_dominio)
+FPPARAM	INTEGRAR_PONTO_ELETRONICO	cadastro_empregador.registro_ponto_eletronico	booleano_sn			L5-12: integra ponto eletrônico
+FPPARAM	DATA_INICIO_ESOCIAL	cadastro_empregador.inicio_esocial	data			L5-12: início no eSocial
+FPPARAM	ID_FPESOCDESONER		chave_origem			L5-12: não carregada por ora: indicador_desoneracao pela ref:FPESOCDESONER>COD_INDICATIVO_DESONERACAO quando a L5-08 trouxer FPESOCDESONER à imagem sintética; até lá o padrão nao_aplicavel
+FPPARAM	DATA_FINAL_VALIDADE		data			L5-12: não carregada: o fim da validade é anterior à data da carga (vigencia_inicio) e o CHECK recusaria; o histórico vem de FPPARAMVIG
+FPPARAMVIG	COD_EMP	trilha_auditoria.entidade_id			ref:FPPARAM	L5-12: a versão é do cadastro do empregador (FPPARAM)
+FPPARAMVIG	@estabelecimento	trilha_auditoria.estabelecimento_id				L5-12: único estabelecimento do cliente
+FPPARAMVIG	=cadastro_empregador	trilha_auditoria.entidade				L5-12: histórico do cadastro do empregador (mecanismo historico_entidade)
+FPPARAMVIG	=alteracao	trilha_auditoria.acao				L5-12: cada vigência é uma alteração do cadastro
+FPPARAMVIG	DATA_HORA_VIGENCIA	trilha_auditoria.ocorrido_em	data_hora			L5-12: instante (TIMESTAMP) em que a versão foi gravada na origem, de quando ela passa a valer; a versão como linha de cadastro_empregador (vigencia_inicio) pede a conversão de data e hora para DATE no motor (pedido 4)
+FPPARAMVIG	#retrato	trilha_auditoria.dados_depois				L5-12: retrato da versão (colunas lidas); retrato com todas as colunas da origem pedido em saida/L5-12.json
+FPREMESSA	DTA_FIN_APUR		data			L5-12: AGUARDA a conversão de DATE em DATETIME no motor (pedido 4): aberta_em (NOT NULL) e fechada_em são DATETIME e a origem só tem datas; decisão: início da apuração em aberta_em e fim em fechada_em (00:00). Hoje a soma de controle diverge (data x data e hora); até lá a competência é recusada com 1364

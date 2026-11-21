@@ -31,4 +31,3 @@ RICADPAC	ATIVO	paciente.situacao	booleano_sn			declarado no L3 (N vira inativo)
 RICADPAC	IBGE	endereco_pessoa.municipio_ibge_id	inteiro	ibge_municipio		município do endereço pelo catálogo oficial
 ATCABECATEND	ID_RICADPAC	atendimento.paciente_id	chave_origem			declarado no L3
 ATCABECATEND	DATA_HORA_ENTRADA	atendimento.entrada_em	data_hora			declarado no L3 (sentinela recusa: entrada_sentinela)
-TBBANCOS	CODBCOCENTRAL	conta_bancaria.banco_id	texto	banco	conta_bancaria	banco da conta pelo código de compensação

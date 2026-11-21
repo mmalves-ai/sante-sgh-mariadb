@@ -1,54 +1,59 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga.py (ERROS_LINHA)",
-   "mudanca": "acrescentar 1364 (coluna NOT NULL sem padrão ausente do INSERT) a ERROS_LINHA, para recusar só a linha com restricao_destino_1364",
-   "motivo": "hoje uma coluna obrigatória do destino sem declaração derruba a execução inteira (exceção fora de ERROS_LINHA); a L5-05 deixou 8 tabelas sem declarar por isso. O test_l5_05 confere a cobertura das obrigatórias nas 12 declaradas"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "catálogo oficial 'conselho_classe': tabela conselho_classe, coluna sigla, normalizar = texto aparado em maiúsculas (ex.: CRM, COREN), chave = upper; usado com a referência encadeada terminada em coluna ref:TBCONSPROF>COD_CONSELHO_PROF",
+   "motivo": "TBMEDSOL (7.660 linhas) -> solicitante_externo exige conselho_classe_id NOT NULL; a declaração está pronta e comentada em colunas.d/L5-05.tsv (#TBMEDSOL): ao existir o catálogo, descomentar e acrescentar TBMEDSOL à imagem sintética. Serve também a TBOID (L5-03), TBMEDSOLWEBCAD (L8-16) e FCCTAEXT"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna especial '@estabelecimento' (id do estabelecimento do cliente; mais de um sem coluna de empresa vira pendência), já pedida pela L5-02 e L5-03",
-   "motivo": "TBGERSEQ -> sequencia_prontuario, TBUNIDAD -> unidade_assistencial, TBCBOPRO_TBUNIDAD -> lotacao_profissional e TBMUIBGE -> regra_retencao exigem estabelecimento_id NOT NULL"
+   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv + tools/obra/gerar_mapa_conector.py (ou opção genérica de via)",
+   "mudanca": "TBEMPHOS com destinos 'pessoa_juridica;mantenedora' (principal pessoa_juridica); alternativa genérica: opção de via 'principal' que põe um destino declarado por via à frente dos de tabelas_destino",
+   "motivo": "mantenedora.pessoa_juridica_id é NOT NULL e o @id só liga secundário ao principal. Hoje a TBEMPHOS já carrega a pessoa jurídica (adotada pelo CNPJ); as colunas da mantenedora estão prontas e comentadas (#TBEMPHOS): ao existir, descomentar (as linhas da pessoa jurídica aparecem alteradas e o Sincronizar completa)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + depara.py (CATALOGOS)",
-   "mudanca": "referência chave_origem cujo pai é tabela depara_catalogo_oficial (TBCONSPROF, TBCBOSUS, TBUF): ler o código na linha-pai da origem (coluna de declarado/catalogos.tsv) e resolver pelo de-para oficial; acrescentar 'conselho_classe' a depara.CATALOGOS",
-   "motivo": "TBMEDSOL (7.660 linhas) -> solicitante_externo exige conselho_classe_id e conselho_unidade_federativa_id NOT NULL; ID_TBCONSPROF e ID_TBCBOSUS são ids da origem, não códigos (o depara 'cbo' gerado sobre ID_TBCBOSUS está errado: aplicaria a normalização de CBO ao id)"
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar tabelas.tsv)",
+   "mudanca": "APLICADO pela fatia (2026-11-21): linha TBCBOPRO_TBUNIDAD -> TBPROFIS em declarado/dependencias.tsv e mapa regenerado (gerar_mapa_conector.py); a lotação vem agora depois de TBPROFIS. Integrador: só conferir",
+   "motivo": "na ordem atual a lotação (91) vem antes do profissional (874): toda lotação seria recusada (pai_inexistente + 1048). A conferência da fatia simula o profissional já carregado (PAIS_EXTERNOS)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "TBEMPHOS: destinos 'pessoa_juridica;mantenedora' (principal pessoa_juridica; '@id' em mantenedora.pessoa_juridica_id)",
-   "motivo": "mantenedora.pessoa_juridica_id é NOT NULL e o verificador recusa coluna declarada fora dos destinos da tabela; razão social, CNPJ, endereço e contatos de TBEMPHOS vão para pessoa_juridica"
+   "arquivo": "conector/sante_conector/sentinela.py (regras cnpj, cpf, cpf_cnpj)",
+   "mudanca": "aceitar DOUBLE com valor inteiro (float.is_integer()) como documento, convertendo para inteiro antes de validar",
+   "motivo": "TBUNIDAD.CGC é DOUBLE PRECISION: hoje cnpj(11222333000181.0) dá documento_invalido. Ao existir, declarar 'TBUNIDAD CGC unidade_assistencial.cnpj cnpj' em colunas.d/L5-05.tsv (fica fora por ora para não gerar falso alarme)"
   },
   {
-   "arquivo": "decisão do integrador/dono (tabelas.tsv ou descartes.tsv)",
-   "mudanca": "TBPESSOA (só ID, CPF_CNPJ, TIPO_PESSOA): não é carregável como pessoa_fisica/pessoa_juridica (nome e razão social NOT NULL não existem nela). Propor: destino por discriminador (TIPO_PESSOA F/J) só como índice de identidade para adoção por CPF/CNPJ pelas tabelas que a referenciam, ou descarte justificado",
-   "motivo": "3.187 linhas sem nome; gravar exigiria inventar nome"
+   "arquivo": "conector/sante_conector/sintetica.py (imagem base) ou REQUER",
+   "mudanca": "TBCBOSUS (e TBCBOPRO, hoje só na imagem da L5-05 com as colunas da referência encadeada) na imagem comum, para as fatias que encadeiam por elas sem REQUER de outra fatia em obra",
+   "motivo": "na conferência isolada da L5-05 a ocupação da lotação não resolve (TBCBOSUS é da L5-06) e as 4 lotações são recusadas pelo NOT NULL; com a L5-06 junto (ponta a ponta) resolvem. Se a L5-04 criar TBCBOPRO na imagem dela, tirar a da L5-05 (DDL repetido derruba o isql dos lotes)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + sentinela.py",
-   "mudanca": "de-para de valores declarado por fatia (valor da origem -> valor do domínio do destino), já pedido pela L5-02, L5-09 e L5-10",
-   "motivo": "TBUNID_IDADE -> unidade_idade exige sigla e unidade_calculo (CHECK ano/mes/semana/dia/hora) derivados do nome; hoje só literal fixo, que seria errado para as 3 linhas"
+   "arquivo": "db/migracoes/03_CAD/03_tabelas.sql (trilha F2.2)",
+   "mudanca": "ck_pessoa_juridica_cnpj: exigir cnpj IS NOT NULL para empresa nacional ((estrangeira AND cnpj IS NULL) OR (NOT estrangeira AND cnpj IS NOT NULL AND cnpj REGEXP ...))",
+   "motivo": "medido na conferência da L5-05: com CNPJ inválido (NULL) a pessoa jurídica nacional é gravada, porque o CHECK com NULL não falha; o comentário do modelo diz que o CNPJ é obrigatório para empresa nacional"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "adoção pela chave natural: linha nova cujo código/sigla único já existe no destino criado pela carga do L3 (sexo M/F/I; tipo_telefone residencial/celular; tipo_documento_identificacao rg) passa a apontar o conector_origem para o id existente, com pendência baixa, em vez de recusar com 1062",
-   "motivo": "na carga real, TBSEXO (ordem 85) vem depois do L3, que cria sexo com as siglas M/F/I: as linhas da origem seriam recusadas por uq_sexo_sigla; tipo_telefone e tipo_documento ficariam duplicados (códigos diferentes, mesma descrição). Até a regra existir, TBSEXO, TBTIPOTELEFONE e TBTPDOCUMENTO ficam fora das declaradas (sem duplicar nem recusar); os filhos (TBALERTA, TBPROENF, SITABPRO, CHPROFLIMPTEL, TBFORNECTEL, TBPRESER) ficam em pai_pendente até lá. A sintética da L5-05 guarda em DESTINO_L3 as linhas do L3: ao aplicar a regra, redeclarar as 3 tabelas e passar DESTINO_L3 a PREPARO_DESTINO para a conferência reproduzir o conflito"
+   "arquivo": "db/migracoes (trilha F2.2, proposta de modelo)",
+   "mudanca": "lotacao_profissional.unidade_assistencial_id (anulável) e unicidade incluindo a unidade; sequencia_negocio.descricao (anulável)",
+   "motivo": "a lotação da origem é por unidade (TBCBOPRO_TBUNIDAD): hoje a segunda unidade da mesma pessoa e ocupação ADOTA a lotação (adotado_existente) e a carga horária dela não entra; o gerador de números da origem tem nome (TBGERSEQ.NOME) que a sequência do produto não guarda"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "aplicar sentinela.colisoes_caixa às colunas codigo_char com destino UNIQUE: pendência codigo_colisao_caixa nas DUAS linhas do grupo, sem escolher vencedora (em vez de restricao_destino_1062 na segunda lida); já pedido pela L5-09 e L5-10",
-   "motivo": "TBGRAU_INST.COD_GRAU é codigo_char; na imagem sintética 'A' e 'a' colidem em nivel_escolaridade.codigo e hoje saem como restricao_destino_1062; o 1062 depende da collation do destino e da ordem de leitura e se mistura com duplicidade comum. Quando aplicado, o esperado de TBGRAU_INST em sintetica_d/l5_05.py passa a gravados 2, codigo_colisao_caixa 2, restricao_destino_1048 1"
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter, referência encadeada)",
+   "mudanca": "aresta duas_fases também para a referência encadeada terminada em tabela (ref:T>X>U): pai U ainda não visto numa tabela com aresta (filho, U) em ciclos.tsv adia a coluna para a fase 2 em vez de NULL com pai_inexistente; declarar então TBUNIDAD -> TBPROFIS duas_fases em ciclos.tsv",
+   "motivo": "TBUNIDAD (ordem 90) aponta o farmacêutico pela inscrição (ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS) e TBPROFIS vem depois (ordem ~870); TBPROFIS -> TBUNIDAD já é duas_fases, então TBUNIDAD não pode ir para depois. Hoje o farmacêutico fica sempre NULL com pai_inexistente na carga real"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (planejar) ou conferencia",
-   "mudanca": "tabela do mapa presente na origem, com linhas e sem coluna declarada: pendência (ex.: tabela_sem_declaracao, alta) em vez de ficar fora do plano em silêncio",
-   "motivo": "as 8 tabelas da L5-05 que aguardam regra genérica hoje simplesmente não carregam, sem aviso na execução"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "de-para 'ibge_municipio_nome': município pelo nome normalizado (sem acento, maiúsculas, espaços colapsados) + UF (coluna da mesma linha), único; ausente ou ambíguo vira pendência catalogo_codigo_inexistente/pai_ambiguo",
+   "motivo": "TBUNIDAD.CIDADE/UF (e outras tabelas com cidade em texto) não têm código IBGE; unidade_assistencial.municipio_ibge_id fica NULL até lá (decisão em F4-decisoes-destino.md)"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py (REGRAS) + carga_mapa.py",
-   "mudanca": "regra genérica de sigla derivada: valor da origem cabe no destino -> grava; não cabe ou vazio -> grava um padrão declarado (ex.: '=?' via coluna de reserva) com pendência baixa 'sigla_para_revisao' que NÃO recusa a linha; ou decisão do dono pela sigla nula/literal",
-   "motivo": "orgao_emissor_documento.sigla é VARCHAR(10) NOT NULL e TBORGAOEMIS só tem NOME (até 80): derivar a sigla do nome inteiro recusava o órgão (1406) e deixava os documentos de identificação em pai_pendente. Até lá TBORGAOEMIS fica fora das declaradas"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (de-para de valores)",
+   "mudanca": "par curinga em valores.d (valor_origem '*'): valor da origem sem par recebe o valor do curinga com a pendência baixa valor_presumido (em vez de NULL com valor_fora_do_dominio)",
+   "motivo": "perfil_unidade.categoria e unidade_assistencial.tipo_unidade são NOT NULL sem padrão: com o de-para pelo nome do perfil (TBTIPOATEUNIDADE.NOME e ref:TBTIPOATEUNIDADE>NOME) o nome sem par recusaria a linha; com o curinga, o nome casado vira evidência e só o resto fica presumido"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "comparar os destinos do plano (carga_mapa.planejar) com tabelas_destino do mapa: destino declarado sem nenhuma coluna e não opcional vira BLOQUEADA destino_sem_colunas; e só contar CARREGA quando as referências NOT NULL vierem de tabela anterior na ordem (ou duas_fases)",
+   "motivo": "TBEMPHOS aparece CARREGA com a mantenedora (tabelas_destino) nunca gravada (só a pessoa jurídica); a lotação aparecia CARREGA antes da dependência de TBPROFIS (falso positivo de cobertura)"
   }
  ]
 }

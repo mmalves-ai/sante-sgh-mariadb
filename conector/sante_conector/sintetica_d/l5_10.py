@@ -1,11 +1,15 @@
 """Fatia L5-10 (cadastros e administração, módulo RH): tabelas de domínio da origem, dados 100% falsos.
 
-Carregada: tipos de colaborador. Bloqueadas até o de-para de valores (tipos de férias, de vale, de rubrica, de folha e
-de referência da rubrica: a classificação vem do código ou da descrição) e não carregadas (catálogos oficiais e
-domínios que viram valor de coluna enum) entram na imagem para provar que não geram carga.
+Carregadas: tipos de colaborador, de rubrica (natureza e sinal por de-para de valores da letra, com evidência), de
+referência da rubrica (unidade por de-para), de folha (indicativo de apuração e categoria derivada do mesmo código; ativo
+presumido como marca de revisão) e de férias (categoria presumida). Descartadas (sem_carga.tsv): catálogos oficiais do
+eSocial, domínios fixos do modelo e o tipo de vale (classificação do benefício); entram na imagem para provar que não
+geram carga.
 Anomalias: descrição vazia em destino NOT NULL (recusa a linha), texto com espaços repetidos, CP1252 acentuado,
-código de 1 caractere que só difere pela caixa em FPTP_EVENTO e FPTP_REFER (casos prontos para quando a carga for
-liberada: o esperado será codigo_colisao_caixa).
+código de 1 caractere que só difere pela caixa em FPTP_EVENTO e FPTP_REFER (codigo_colisao_caixa no grupo todo),
+código sem par no de-para de valores (valor_fora_do_dominio), indicativo da folha fora de 1 e 2 (3 a 5: NULL no
+indicativo e categoria presumida; outro código: a categoria NOT NULL recusa a linha) e literal presumido
+(valor_presumido por linha).
 """
 import datetime
 
@@ -33,20 +37,19 @@ CREATE TABLE FPTP_FUNC (COD_TIPO SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50)
 CREATE TABLE FPTP_REFER (TP_REFER VARCHAR(1) NOT NULL PRIMARY KEY, NOME VARCHAR(20));
 """
 
-CARREGADAS = ("FPTP_FUNC",)
-BLOQUEADAS = ("FPTPFERIAS", "FPTPVALE", "FPTP_EVENTO", "FPTP_FOLHA", "FPTP_REFER")
-NAO_CARREGADAS = ("FPTPDEPENDENT", "FPTPDEPENDENTREINF", "FPTPEVENTOAUT", "FPTPFOLHAESOC", "FPTPONUS",
-                  "FPTPONUSREMUN", "FPTPPENSAOALI", "FPTPPROCESSO", "FPTPREGIMEPRE", "FPTPREGIMETRA",
-                  "FPTPREGJORNAD", "FPTPREINTEG", "FPTPRESCDIRET", "FPTP_ARQ_EMPREGADORWEB", "FPTP_EVENTO_SIND")
+CARREGADAS = ("FPTP_FUNC", "FPTPFERIAS", "FPTP_EVENTO", "FPTP_FOLHA", "FPTP_REFER")
+DESCARTADAS = ("FPTPDEPENDENT", "FPTPDEPENDENTREINF", "FPTPEVENTOAUT", "FPTPFOLHAESOC", "FPTPONUS",
+               "FPTPONUSREMUN", "FPTPPENSAOALI", "FPTPPROCESSO", "FPTPREGIMEPRE", "FPTPREGIMETRA",
+               "FPTPREGJORNAD", "FPTPREINTEG", "FPTPRESCDIRET", "FPTP_ARQ_EMPREGADORWEB", "FPTP_EVENTO_SIND",
+               "FPTPVALE")
 
 
 def linhas(r, ins):
-    # não carregadas (só presença na imagem)
+    # descartadas (só presença na imagem)
     for i in range(1, 4):
         ins("FPTPDEPENDENT", ["Tipo exemplo %d" % i, "%02d" % i, datetime.date(2020, 1, i), None])
         ins("FPTPDEPENDENTREINF", ["%d" % i, "Tipo REINF exemplo %d" % i])
         ins("FPTPEVENTOAUT", [i, "Evento exemplo %d" % i])
-        ins("FPTPFOLHAESOC", [i, "Apuração %d" % i])
         ins("FPTPONUS", [i, "Ônus exemplo %d" % i])
         ins("FPTPONUSREMUN", [i, "Ônus remun. %d" % i])
         ins("FPTPPENSAOALI", [i, "Pensão exemplo %d" % i])
@@ -58,24 +61,39 @@ def linhas(r, ins):
         ins("FPTPRESCDIRET", [i, "Motivo exemplo %d" % i])
         ins("FPTP_ARQ_EMPREGADORWEB", [i, "Arquivo %d" % i])
         ins("FPTP_EVENTO_SIND", [i, "Evento sindical %d" % i])
-    # tipos de férias (bloqueada): 1 sem descrição (NOT NULL no destino)
+    for i in range(1, 6):  # 5 códigos, como na imagem de referência
+        ins("FPTPFOLHAESOC", [i, "Apuração %d" % i])
+    # tipos de férias: 1 sem descrição (NOT NULL no destino); a pendência de categoria presumida fica em toda linha lida
     for g in [(1, "Normal"), (2, "Coletiva"), (3, None), (4, "Abono  10")]:
         ins("FPTPFERIAS", list(g))
-    # vales (bloqueada): nome com espaços repetidos (colapsados) e acento
+    # tipos de vale: descartados (classificação do benefício), só presença na imagem
     for g in [(1, "Vale   transporte"), (2, "  Vale refeição "), (3, "Cesta básica")]:
         ins("FPTPVALE", list(g))
-    # tipos de rubrica (bloqueada): 'p' colide com 'P' no destino (não distingue caixa)
-    for g in [("P", "Provento"), ("D", "Desconto"), ("B", "Base"), ("I", "Informativo"), ("p", "Provento minúsculo")]:
+    # tipos de rubrica: as 5 letras da origem (J informativa dedutora); 'p' colide com 'P' no destino (os dois
+    # recusados); 'X' sem par no de-para (natureza e sinal: duas pendências; natureza NOT NULL recusa a linha)
+    for g in [("P", "Provento"), ("D", "Desconto"), ("B", "Base"), ("I", "Informativo"), ("J", "Inf. dedutora"),
+              ("p", "Provento minúsculo"), ("X", "Sem par")]:
         ins("FPTP_EVENTO", list(g))
-    # tipos de folha (bloqueada): 1 sem descrição; indicativo 2 (anual) no 13º
-    for g in [(1, "Mensal", 1), (2, "Adiantamento", 1), (3, "13o salário", 2), (4, None, 1), (5, "Férias", None)]:
+    # tipos de folha (toda linha: ativo presumido = marca de revisão da categoria): 1 sem descrição (recusa); 2 (anual)
+    # no 13º -> decimo_terceiro_segunda; sem indicativo -> mensal; 4 (entre 3 e 5) -> indicativo NULL com
+    # valor_fora_do_dominio e categoria mensal; 9 sem par nos dois de-paras -> categoria NULL recusa a linha
+    for g in [(1, "Mensal", 1), (2, "Adiantamento", 1), (3, "13o salário", 2), (4, None, 1), (5, "Férias", None),
+              (6, "Extra", 9), (7, "Rescisão", 4)]:
         ins("FPTP_FOLHA", list(g))
     # tipos de colaborador: nome só com espaços vira vazio (NOT NULL no destino)
     for i in range(1, 7):
         ins("FPTP_FUNC", [i, "   " if i == 4 else "Tipo  colaborador %d" % i])
-    # tipos de referência (bloqueada): 1 sem nome; 'h' colide com 'H' pela caixa
-    for g in [("H", "Horas"), ("D", "Dias"), ("P", None), ("V", "Valor"), ("h", "Horas minúsculo")]:
+    # tipos de referência: 1 sem nome; 'h' colide com 'H' pela caixa; 'R' referência (quantidade); 'Z' sem par
+    for g in [("H", "Horas"), ("D", "Dias"), ("P", None), ("V", "Valor"), ("h", "Horas minúsculo"),
+              ("R", "Referência"), ("Z", "Sem par")]:
         ins("FPTP_REFER", list(g))
     return {
         "FPTP_FUNC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
+        "FPTPFERIAS": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
+        "FPTP_EVENTO": {"gravados": 4, "pendencias": {"codigo_colisao_caixa": 2, "valor_fora_do_dominio": 2,
+                                                      "restricao_destino_1048": 1}},
+        "FPTP_FOLHA": {"gravados": 5, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 3,
+                                                     "restricao_destino_1048": 2}},
+        "FPTP_REFER": {"gravados": 3, "pendencias": {"codigo_colisao_caixa": 2, "valor_fora_do_dominio": 1,
+                                                     "restricao_destino_1048": 2}},
     }

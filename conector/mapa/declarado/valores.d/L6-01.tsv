@@ -1,0 +1,6 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBPROCED	SITUACAO	procedencia.ativo	S	1	L6-01: situação ativa/inativa nos dois domínios (S/N e A/I não se sobrepõem)
+TBPROCED	SITUACAO	procedencia.ativo	A	1	L6-01: situação ativa/inativa nos dois domínios (S/N e A/I não se sobrepõem)
+TBPROCED	SITUACAO	procedencia.ativo	N	0	L6-01: situação ativa/inativa nos dois domínios (S/N e A/I não se sobrepõem)
+TBPROCED	SITUACAO	procedencia.ativo	I	0	L6-01: situação ativa/inativa nos dois domínios (S/N e A/I não se sobrepõem)
+TBPROCED	ID_TBPROCEDPADRAO	procedencia.tipo_padrao			L6-01: só o nulo; código sem par vira pendência até o cliente classificar

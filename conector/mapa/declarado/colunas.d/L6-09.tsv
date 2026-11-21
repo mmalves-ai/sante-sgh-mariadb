@@ -1,32 +1,21 @@
 tabela	coluna	destino	regra	depara	via	motivo
-TBGRAUGRAVINT	ID					L6-09: BLOQUEADA (não carregada, fora da conciliação) até o de-para de valores do nível (pedido): o nível de severidade (1 = menor, NOT NULL e único) é dado clínico e não pode ser presumido pela ordem da chave (a origem pode numerar 1 = grave) nem por literal (único); chave e código; com o de-para, ID -> gravidade_interacao.nivel
-TBGRAUGRAVINT	NOME					L6-09: BLOQUEADA (não carregada, fora da conciliação) até o de-para de valores do nível (pedido): o nível de severidade (1 = menor, NOT NULL e único) é dado clínico e não pode ser presumido pela ordem da chave (a origem pode numerar 1 = grave) nem por literal (único); vai para gravidade_interacao.descricao (texto_nome)
-TBGRAUGRAVINT	ATIVO					L6-09: BLOQUEADA (não carregada, fora da conciliação) até o de-para de valores do nível (pedido): o nível de severidade (1 = menor, NOT NULL e único) é dado clínico e não pode ser presumido pela ordem da chave (a origem pode numerar 1 = grave) nem por literal (único); vai para gravidade_interacao.ativo (booleano_sn)
-TBGRAUGRAVINT	ID_TBACAOGRAUGRA					L6-09: BLOQUEADA (não carregada, fora da conciliação) até o de-para de valores do nível (pedido): o nível de severidade (1 = menor, NOT NULL e único) é dado clínico e não pode ser presumido pela ordem da chave (a origem pode numerar 1 = grave) nem por literal (único); vai para gravidade_interacao.acao_gravidade_interacao_id (chave_origem)
-TBHORMED	TIPO_ATENDIMENTO					L6-09: BLOQUEADA (não carregada, fora da conciliação): código de 1 caractere que distingue as grades (internação, urgência, ambulatório); só pelo de-para de valores (pedido). Presumir um tipo grava grades de escopo idêntico que a chave única não barra (NULL repetido)
-TBHORMED	HORARIO_INICIAL_VIGENCIA					L6-09: BLOQUEADA (não carregada, fora da conciliação): HHMM em texto (VARCHAR(4)): a regra hora_hhmm só aceita inteiro hoje (pedido)
-TBHORMED	CONSIDERAR_VIGENCIA					L6-09: BLOQUEADA (não carregada, fora da conciliação): inteiro 0/1 para grade_horario_unidade.considera_vigencia (booleano_01) quando a tabela for liberada
-TBHORMED	PADRAO					L6-09: BLOQUEADA (não carregada, fora da conciliação): S/N para grade_horario_unidade.padrao quando a tabela for liberada
-TBHORMED	LIBERAR_VIGENCIA					L6-09: BLOQUEADA (não carregada, fora da conciliação): S/N para grade_horario_unidade.permite_liberar_fora_vigencia quando a tabela for liberada
-TBHORMED_TBUNIDAD	ID_TBHORMED					L6-09: não carregada: a ligação grade x unidade exige no destino uma linha da grade por unidade com hora e tipo do pai (TBHORMED); o motor não copia colunas do pai (pedido ao integrador)
-TBLANC_DIAG_MANTER	MANTER_DIAGNOSTICO					L6-09: não carregada: é o domínio de diagnostico_atendimento.escopo (atendimento/prontuário), não linha de diagnóstico; pedido ao integrador tirar o destino do mapa (descarte ou de-para de valores)
 TBLISTADIAGNOSTICOSITUACAO	ID	situacao_problema.codigo	inteiro			L6-09: situação da lista de problemas: a chave vira o código
 TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.descricao	texto_nome			L6-09: NOT NULL no destino
 TBLISTADIAGNOSTICOSITUACAO	ATIVO	situacao_problema.ativo	booleano_sn			L6-09: S/N
-TBLISTADIAGNOSTICOSITUACAO	=~ativo	situacao_problema.categoria				L6-09: categoria NOT NULL sem padrão: presumida (valor_presumido) até o de-para de valores por código (pedido)
-TBLISTADIAGNOSTICOSITUACAO	=~1	situacao_problema.clinicamente_ativo				L6-09: clinicamente ativo presumido TRUE (seria o padrão em silêncio): na dúvida o problema aparece na lista ativa e nos alertas (excesso de alerta, nunca alerta perdido); valor_presumido por linha; gravidade maior e de-para pedidos
-TBLANC_DIAG_STATUS	STATUS					L6-09: não carregada: é o domínio da coluna diagnostico_atendimento.situacao (CHECK ativo/resolvido/inativado) do lançamento, não catálogo da lista de problemas (como a MANTER); carregada em situacao_problema duplicaria situações e presumiria categoria e clinicamente_ativo. Pedido: tirar o destino do mapa e de-para de valores para a situação do lançamento
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.categoria	texto_nome	valores		L6-09: categoria pelo NOME da situação (valores.d/L6-09.tsv: ativo, suspeito, controlado, remissão, recidiva, resolvido, descartado, inativo); nome sem par: valor_fora_do_dominio e a linha recusada (1048) para o cliente classificar
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.clinicamente_ativo	texto_nome	valores		L6-09: clinicamente ativo pelo NOME (resolvido, descartado e inativo: FALSE; remissão segue ativa, na dúvida aparece nos alertas); nome sem par: valor_fora_do_dominio (a linha já é recusada pela categoria)
 TBLANC_DIAG_SUJ_CUID	ID	sujeito_cuidado.codigo	inteiro			L6-09: a chave vira o código
 TBLANC_DIAG_SUJ_CUID	SUJEITO_CUIDADO	sujeito_cuidado.descricao	texto			L6-09: NOT NULL no destino
 TBLISTADIAGNOSTICOESTADO	ID	certeza_diagnostico.codigo	inteiro			L6-09: a chave vira o código
 TBLISTADIAGNOSTICOESTADO	NOME	certeza_diagnostico.descricao	texto_nome			L6-09: NOT NULL no destino
 TBLISTADIAGNOSTICOESTADO	ATIVO	certeza_diagnostico.ativo	booleano_sn			L6-09: S/N
-TBLISTADIAGNOSTICOESTADO	ID	certeza_diagnostico.grau	inteiro			L6-09: grau de certeza (NOT NULL, não único) PRESUMIDO pela ordem da chave: a linha leva valor_presumido pelo literal de confirmado (abaixo); revisar no cliente; acima de 255 é recusado (TINYINT); de-para de valores pedido
-TBLISTADIAGNOSTICOESTADO	=~0	certeza_diagnostico.confirmado				L6-09: confirmado presumido FALSE (seria o padrão do destino em silêncio): literal presumido deixa valor_presumido por linha, que cobre também o grau presumido pela chave
+TBLISTADIAGNOSTICOESTADO	NOME	certeza_diagnostico.grau	texto_nome	valores		L6-09: grau de certeza pelo NOME do estado (descartado 0, suspeito/hipótese 1, provável 2, confirmado/definitivo 3), nunca pela ordem da chave; nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBLISTADIAGNOSTICOESTADO	NOME	certeza_diagnostico.confirmado	texto_nome	valores		L6-09: conta como confirmado nos indicadores só o estado confirmado/definitivo, pelo NOME; nome sem par: valor_fora_do_dominio (a linha já é recusada pelo grau)
 TBLISTADIAGNOSTICOTIPO	ID	tipo_diagnostico.codigo	inteiro			L6-09: a chave vira o código
 TBLISTADIAGNOSTICOTIPO	NOME	tipo_diagnostico.descricao	texto_nome			L6-09: NOT NULL no destino
 TBLISTADIAGNOSTICOTIPO	ATIVO	tipo_diagnostico.ativo	booleano_sn			L6-09: S/N
-TBLISTADIAGNOSTICOTIPO	=~secundario	tipo_diagnostico.papel				L6-09: papel NOT NULL sem padrão: presumido (valor_presumido) até o de-para de valores por código (pedido)
+TBLISTADIAGNOSTICOTIPO	NOME	tipo_diagnostico.papel	texto_nome	valores		L6-09: papel pelo NOME do tipo (principal, secundário, entrada, saída, óbito, complicação, comorbidade); nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBLISTADIAGNOSTICOTIPO	NOME	tipo_diagnostico.unico_por_atendimento	texto_nome	valores		L6-09: só o tipo principal é único por atendimento, pelo NOME
 TBLISTAPROBLEMACLASSIF	ID	classificacao_problema.codigo	inteiro			L6-09: a chave vira o código
 TBLISTAPROBLEMACLASSIF	NOME	classificacao_problema.descricao	texto_nome			L6-09: NOT NULL no destino
 TBLISTAPROBLEMACLASSIF	ATIVO	classificacao_problema.ativo	booleano_sn			L6-09: S/N; vazio fica com o padrão
@@ -36,55 +25,72 @@ TBMODALIDADE_ASSIST	ATIVO	modalidade_assistencial.ativo	booleano_sn			L6-09: S/N
 TBMOTIVOMP	ID_TBMOTIVOMP	motivo_situacao_prescricao.codigo	inteiro			L6-09: a chave vira o código
 TBMOTIVOMP	DESCRICAO	motivo_situacao_prescricao.descricao	texto			L6-09: NOT NULL no destino (sem descrição a linha é recusada)
 TBMOTIVOMP	ATIVO	motivo_situacao_prescricao.ativo	booleano_sn			L6-09: S/N; nulo fica com o padrão
-TBNUMDOSE	NUM_DOSE					L6-09: não carregada: a linha do destino é um horário por dose (horário NOT NULL), que só existe na tabela filha; o motor não junta pai e filho (pedido ao integrador)
-TBHORARIODOSE	HORARIO					L6-09: não carregada: precisa do número de doses e da grade do pai (TBNUMDOSE); o motor não copia colunas do pai e o HHMM em texto ainda não é aceito (pedidos ao integrador)
-TBPRINC_VALIDACAO	ID	referencia_dose.codigo	inteiro			L6-09: a chave vira o código
-TBPRINC_VALIDACAO	NOME	referencia_dose.descricao	texto_nome			L6-09: NOT NULL no destino
-TBPRINC_VALIDACAO	ATIVO	referencia_dose.ativo	booleano_sn			L6-09: S/N
-TBPRINC_VALIDACAO	=~dose_fixa	referencia_dose.base_calculo				L6-09: base de cálculo NOT NULL sem padrão: presumida dose_fixa (a única que dispensa unidade_base) até o de-para de valores (pedido)
+TBPRINC_VALIDACAO	ID	tipo_validacao_dose.codigo	inteiro		tipo_validacao_dose	L6-09: o princípio de validação é o TIPO de validação da dose (o mapa gerado dizia referencia_dose: trocado com TBREFERENCIA; o destino vai na via até o gerador corrigir, pedido); a chave vira o código; a L6-10 liga as unidades por este conector_origem
+TBPRINC_VALIDACAO	NOME	tipo_validacao_dose.descricao	texto_nome		tipo_validacao_dose	L6-09: NOT NULL no destino
+TBPRINC_VALIDACAO	ATIVO	tipo_validacao_dose.ativo	booleano_sn		tipo_validacao_dose	L6-09: S/N
+TBPRINC_VALIDACAO	NOME	tipo_validacao_dose.base_calculo	texto_nome	valores	tipo_validacao_dose	L6-09: base em que o limite é comparado pelo NOME (por dose, por dia/período, por quilo, por m², cumulativa); nome sem par: valor_fora_do_dominio e a linha recusada (1048), nunca presumida
 TBPROBOCINTMED	ID	probabilidade_interacao.codigo	inteiro			L6-09: a chave vira o código
 TBPROBOCINTMED	NOME	probabilidade_interacao.descricao	texto_nome			L6-09: NOT NULL no destino
 TBPROBOCINTMED	ATIVO	probabilidade_interacao.ativo	booleano_sn			L6-09: S/N
 TBPROENF	COD	cuidado_enfermagem.codigo	inteiro			L6-09: a chave vira o código (texto no destino)
 TBPROENF	NOME	cuidado_enfermagem.descricao	texto_nome			L6-09: NOT NULL e 150 caracteres no destino (a origem tem 200: acima de 150 é recusado, restricao_destino_1406)
 TBPROENF	SITUACAO	cuidado_enfermagem.ativo	booleano_ai			L6-09: A/I; fora do domínio fica com o padrão do destino
+TBPROENF	TIPO	cuidado_enfermagem.tipo	codigo_char	valores		L6-09: tipo do cuidado pela letra (C cuidado, P procedimento, O orientação, M monitorização; revisar com o dono); outra letra: valor_fora_do_dominio e fica o padrão 'cuidado' (linha gravada, pendência visível)
 TBPROENF	ID_TBSEXO	cuidado_enfermagem.sexo_id	chave_origem			L6-09: restrição por sexo (pai do L5)
+TBPROENF	ID_PRTIPONOTIFICACAOSEXO	cuidado_enfermagem.acao_restricao_sexo	texto_nome	valores	ref:PRTIPONOTIFICACAO>NOME	L6-09: ação quando o sexo não confere, pelo nome da notificação da origem (lista descartada na L6-07, lida pela referência encadeada): bloquear; avisar e exigir justificativa viram alertar (o produto não tem a opção de justificativa: pedido); sem notificação: alertar, a opção conservadora, nunca NULL; nome sem par: NULL com valor_fora_do_dominio
+TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	texto_nome	valores	ref:PRTIPONOTIFICACAO>NOME	L6-09: idem para a idade fora da faixa
 TBPROENF	IDADEI	cuidado_enfermagem.idade_minima	flutuante			L6-09: idade mínima (DOUBLE da origem em SMALLINT); exige a unidade (CHECK do destino)
 TBPROENF	ID_TBUNID_IDADE_MIN	cuidado_enfermagem.idade_minima_unidade_idade_id	chave_origem			L6-09: unidade da idade mínima (pai do L5)
 TBPROENF	IDADEF	cuidado_enfermagem.idade_maxima	flutuante			L6-09: idade máxima; exige a unidade (CHECK do destino)
 TBPROENF	ID_TBUNID_IDADE_MAX	cuidado_enfermagem.idade_maxima_unidade_idade_id	chave_origem			L6-09: unidade da idade máxima (pai do L5)
 TBPROENF	EXIBIR_FICHA_ANEST	cuidado_enfermagem.exibe_ficha_anestesica	booleano_sn			L6-09: S/N (gerada como codigo_char)
 TBPROENF	ORDEM_FICHA_ANEST	cuidado_enfermagem.ordem_ficha_anestesica	inteiro			L6-09: ordem na ficha anestésica (SMALLINT UNSIGNED: negativo é recusado)
-TBPROENF	TIPO					L6-09: não carregada por ora: código de 1 caractere do tipo do cuidado; vai para cuidado_enfermagem.tipo pelo de-para de valores (pedido)
-TBPROENF	ID_PRTIPONOTIFICACAOSEXO					L6-09: não carregada por ora: a ação ao sexo não conferir é domínio (alertar/bloquear) no destino; de-para de valores pela notificação (pedido)
-TBPROENF	ID_PRTIPONOTIFICACAOIDADE					L6-09: não carregada por ora: idem para a idade (acao_restricao_idade)
-TBPROENF	TIPO_PRESCRICAO					L6-09: não carregada: classificação da origem sem coluna correspondente em cuidado_enfermagem (tipo já vem de TIPO); pedido ao integrador conferir os valores (só contagem) e decidir modelo ou descarte
+TBPROENF	TIPO_PRESCRICAO					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): código interno sem tabela de valores na origem; a classificação do cuidado no produto vem de TIPO
 PRSINAIS	ID_SINAIS	parametro_vital.codigo	inteiro			L6-09: a chave vira o código
 PRSINAIS	NOME	parametro_vital.descricao	texto_nome			L6-09: NOT NULL no destino
 PRSINAIS	SIGLA	parametro_vital.sigla	texto			L6-09: sigla do parâmetro
 PRSINAIS	ATIVO	parametro_vital.ativo	booleano_sn			L6-09: S/N
-PRSINAIS	ID_PRUNIDRESPOSTA					L6-09: não carregada por ora: o destino guarda a unidade como texto (parametro_vital.unidade), não referência; pedido ao integrador
-PRSINAIS	=~numero	parametro_vital.tipo_resposta				L6-09: tipo de resposta presumido 'numero' (seria o padrão do destino em silêncio): valor_presumido por linha até o de-para de valores de TIPO_RESPOSTA (pedido)
-PRSINAIS	TIPO_RESPOSTA					L6-09: não carregada por ora: código do tipo de resposta (número, texto, opção, escala; CHECK do destino); vai para parametro_vital.tipo_resposta pelo de-para de valores (pedido); até lá o tipo é presumido (linha acima)
-PRSINAIS	COD					L6-09: não carregada: o código do destino (único) vem de ID_SINAIS, a chave primária da origem; COD não tem unicidade declarada na origem. Pedido: conferir por contagem se COD é único e, se for o código de negócio, trocar
-PRSINAIS	PROCTO					L6-09: não carregada: liga o parâmetro ao procedimento/cuidado da origem (dependência do mapa por TBPROENF); parametro_vital não tem coluna para isso. Pedido: coluna no modelo ou descarte, e ajustar a dependência
-PRSINAIS	PREVIAMENTE_MARCADO_LANCAMENTO					L6-09: não carregada: S/N de pré-seleção no lançamento; parametro_vital não tem coluna equivalente (obrigatorio é outra coisa). Pedido: coluna no modelo ou descarte
-TBREFERENCIA	ID	tipo_validacao_dose.codigo	inteiro			L6-09: a chave vira o código; limite_dose_principio não recebe linha desta tabela (exige unidade e dose; pedido tirar do mapa)
-TBREFERENCIA	NOME	tipo_validacao_dose.descricao	texto_nome			L6-09: NOT NULL no destino
-TBREFERENCIA	ATIVO	tipo_validacao_dose.ativo	booleano_sn			L6-09: S/N
-TBREFERENCIA	=~dose	tipo_validacao_dose.base_calculo				L6-09: base de cálculo NOT NULL sem padrão: presumida (valor_presumido) até o de-para de valores (pedido)
+PRSINAIS	ID_PRUNIDRESPOSTA	parametro_vital.unidade	texto_nome		ref:PRUNIDRESPOSTA>NOME	L6-09: unidade exibida pelo nome da unidade de resposta (referência encadeada; o destino guarda texto); unidade inexistente: NULL com pai_inexistente
+PRSINAIS	=~numero	parametro_vital.tipo_resposta				L6-09: tipo de resposta presumido 'numero' com valor_presumido por linha (decisão em F4-decisoes-destino.md): TIPO_RESPOSTA é código sem tabela de valores na origem; muda só o campo de entrada, sem efeito clínico
+PRSINAIS	TIPO_RESPOSTA					L6-09: sem destino direto: código sem tabela de valores na origem (o tipo entra presumido, linha acima, para o cliente revisar)
+PRSINAIS	COD					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): segundo identificador sem unicidade declarada; o código do produto vem da chave ID_SINAIS
+PRSINAIS	PROCTO					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): o produto não liga o parâmetro a um cuidado; a aferição é pedida pelo cuidado de monitorização prescrito (pedido de modelo mantido para o dono)
+PRSINAIS	PREVIAMENTE_MARCADO_LANCAMENTO					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): preferência de tela do lançamento; no produto o conjunto de parâmetros do lançamento vem do grupo do parâmetro
+TBREFERENCIA	ID	referencia_dose.codigo	inteiro		referencia_dose	L6-09: a referência é a BASE da dose prescrita (por quilo, por m², fixa); o mapa gerado dizia tipo_validacao_dose;limite_dose_principio (trocado com TBPRINC_VALIDACAO; limite_dose_principio exige unidade e dose): o destino vai na via até o gerador corrigir (pedido)
+TBREFERENCIA	NOME	referencia_dose.descricao	texto_nome		referencia_dose	L6-09: NOT NULL no destino
+TBREFERENCIA	ATIVO	referencia_dose.ativo	booleano_sn		referencia_dose	L6-09: S/N
+TBREFERENCIA	NOME	referencia_dose.base_calculo	texto_nome	valores	referencia_dose	L6-09: base de cálculo pelo NOME (peso, superfície corporal, dose fixa, idade, área sob a curva); nome sem par: valor_fora_do_dominio e a linha recusada (1048), nunca presumida (por kg virar dose fixa mudaria a validação)
+TBREFERENCIA	NOME	referencia_dose.unidade_base	texto_nome	valores	referencia_dose	L6-09: unidade da base pelo mesmo NOME (kg, m2, ano, mg/mL.min; dose fixa sem unidade), coerente com o CHECK do destino
 TBSITUACAOMP	ID_TBSITUACAOMP	situacao_prescricao.codigo	inteiro			L6-09: a chave vira o código
 TBSITUACAOMP	NOME	situacao_prescricao.descricao	texto_nome			L6-09: NOT NULL no destino
 TBSITUACAOMP	ORDEM	situacao_prescricao.ordem	inteiro			L6-09: ordem de exibição (SMALLINT UNSIGNED: negativo é recusado)
 TBSITUACAOMP	ATIVO	situacao_prescricao.ativo	booleano_sn			L6-09: S/N
-TBSITUACAOMP	=~planejada	situacao_prescricao.categoria				L6-09: categoria NOT NULL sem padrão: presumida (valor_presumido; não vigente nem final) até o de-para de valores por código (pedido)
+TBSITUACAOMP	NOME	situacao_prescricao.categoria	texto_nome	valores		L6-09: categoria pelo NOME da situação (rascunho, planejada, liberada, validada, em preparo, suspensa, encerrada, cancelada); nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBSITUACAOMP	NOME	situacao_prescricao.vigente	texto_nome	valores		L6-09: gera horários só liberada, validada e em preparo, pelo NOME
+TBSITUACAOMP	NOME	situacao_prescricao.final	texto_nome	valores		L6-09: final só encerrada e cancelada, pelo NOME (suspensa pode voltar)
 TBSITUACAOMP	ICONE					L6-09: não carregada: imagem do ícone (BLOB); o destino guarda o nome do ícone da interface
-TBSITUACAOMP	NEC_SENHA_ORDEM					L6-09: não carregada: exige senha para a ordem nesta situação; situacao_prescricao não tem coluna equivalente. Pedido: coluna no modelo ou descarte
-TBSITUACAOMP	ID_TBSITAGE					L6-09: não carregada: liga a situação da prescrição à situação de agenda (dependência do mapa por TBSITAGE); situacao_prescricao não tem referência equivalente. Pedido: modelo ou descarte, e ajustar a dependência
-TBSITUACAOMP	PERMITIR_ALT_SESSAO_SIT_PEXT					L6-09: não carregada: permissão de alterar a sessão nesta situação; sem coluna equivalente em situacao_prescricao. Pedido: modelo ou descarte
+TBSITUACAOMP	NEC_SENHA_ORDEM					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): a confirmação por senha no produto é da assinatura e da permissão do usuário (mecanismo do produto)
+TBSITUACAOMP	ID_TBSITAGE					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): a situação da marcação é do ciclo próprio da agenda no produto; pedido: tirar a dependência TBSITUACAOMP -> TBSITAGE do mapa
+TBSITUACAOMP	PERMITIR_ALT_SESSAO_SIT_PEXT					L6-09: descarte da coluna (decisão em F4-decisoes-destino.md): permissão de alterar é do perfil de acesso no produto (mecanismo do produto)
 TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.codigo	texto			L6-09: o mesmo destino recebe outra origem (situação do exame, outro lote): o código é o texto da situação para não chocar com códigos numéricos (prefixo de domínio pedido); repetido sem caixa é recusado pela chave única
 TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.descricao	texto_nome			L6-09: NOT NULL no destino
 TBSTATUSPROCEDIMENTO	ATIVO	situacao_procedimento_prescrito.ativo	booleano_sn			L6-09: S/N; nulo fica com o padrão
-TBSTATUSPROCEDIMENTO	=~pedido	situacao_procedimento_prescrito.etapa				L6-09: etapa NOT NULL sem padrão: presumida (valor_presumido) até o de-para de valores (pedido)
-TBTABELA_CAMPO	NOME					L6-09: não carregada: só traz o nome do campo; o destino exige campo e fonte de domínio fechado (CHECK); de-para de valores pedido
-TBDIGITAL_VIAACESSO	CODIGO					L6-09: não carregada: lista de códigos de via da integração de prescrição digital (64); viraria via duplicada das vias do cadastro (outro lote); pedido ao integrador tratar como código de interoperabilidade da via (de-para) ou descarte
+TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.etapa	texto_nome	valores		L6-09: etapa pelo NOME (pedido, agendado, coletado, em execução, realizado, laudado, cancelado, suspenso); nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.final	texto_nome	valores		L6-09: encerra o ciclo só laudado e cancelado, pelo NOME
+TBGRAUGRAVINT	ID	gravidade_interacao.codigo	inteiro			L6-09: a chave vira o código
+TBGRAUGRAVINT	NOME	gravidade_interacao.descricao	texto_nome			L6-09: NOT NULL no destino
+TBGRAUGRAVINT	NOME	gravidade_interacao.nivel	texto_nome	valores		L6-09: nível de severidade (1 = menor, único) pelo NOME do grau (valores.d/L6-09.tsv: leve, moderada, grave, contraindicada), nunca pela ordem da chave; nome sem par: NULL com valor_fora_do_dominio e a linha recusada (1048) para o cliente classificar
+TBGRAUGRAVINT	ATIVO	gravidade_interacao.ativo	booleano_sn			L6-09: S/N; fora do domínio fica o padrão
+TBHORMED	@estabelecimento	grade_horario_unidade.estabelecimento_id				L6-09: a origem não traz estabelecimento; a grade vale para o estabelecimento inteiro (unidade NULL)
+TBHORMED	TIPO_ATENDIMENTO	grade_horario_unidade.tipo_atendimento	codigo_char	valores		L6-09: I/U/A pelo domínio de tipo de atendimento da origem (o mesmo do atendimento, L3); outro código: valor_fora_do_dominio e a linha recusada (1048) para o cliente classificar
+TBHORMED	HORARIO_INICIAL_VIGENCIA	grade_horario_unidade.hora_inicio_dia	hora_hhmm			L6-09: início do dia da prescrição, HHMM em texto; inválida: hora_invalida; nula: a linha é recusada (NOT NULL)
+TBHORMED	CONSIDERAR_VIGENCIA	grade_horario_unidade.considera_vigencia	booleano_01			L6-09: 0/1; nulo fica o padrão
+TBHORMED	PADRAO	grade_horario_unidade.padrao	booleano_sn			L6-09: S/N; nulo fica o padrão
+TBHORMED	LIBERAR_VIGENCIA	grade_horario_unidade.permite_liberar_fora_vigencia	booleano_sn			L6-09: S/N (gerada como codigo_char); nulo fica o padrão
+TBHORARIODOSE	@estabelecimento	horario_padrao_dose.estabelecimento_id				L6-09: a origem não traz estabelecimento
+TBHORARIODOSE	ID_TBNUMDOSE	horario_padrao_dose.grade_horario_unidade_id	chave_origem		ref:TBNUMDOSE>ID_TBHORMED>TBHORMED	L6-09: grade do número de doses (TBNUMDOSE, descartada como linha: a linha do destino é o horário)
+TBHORARIODOSE	ID_TBNUMDOSE	horario_padrao_dose.doses_por_dia	inteiro		ref:TBNUMDOSE>NUM_DOSE	L6-09: número de doses por dia, do pai TBNUMDOSE; fora de 1..48: CHECK do destino (4025)
+TBHORARIODOSE	ORDEM	horario_padrao_dose.ordem_dose	inteiro			L6-09: posição da dose no dia; acima do número de doses: CHECK do destino (4025)
+TBHORARIODOSE	HORARIO	horario_padrao_dose.horario	hora_hhmm			L6-09: HHMM em texto; inválida: hora_invalida e a linha recusada (NOT NULL)
+TBGRAUGRAVINT	@id	acao_gravidade_interacao.gravidade_interacao_id			acao_gravidade_interacao	L6-09: a ação do sistema é filha da gravidade no modelo (vale para todos os estabelecimentos: estabelecimento NULL)
+TBGRAUGRAVINT	ID_TBACAOGRAUGRA	acao_gravidade_interacao.comportamento	texto_nome	valores	ref:TBACAOGRAUGRA>NOME;acao_gravidade_interacao;opcional	L6-09: comportamento pelo nome da ação da origem (TBACAOGRAUGRA, descartada como lista: domínio do produto), pela referência encadeada e de-para de valores; ação sem par ou inexistente não grava a ação (opcional), a gravidade entra e o cliente configura

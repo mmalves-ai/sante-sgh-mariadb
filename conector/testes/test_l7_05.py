@@ -1,5 +1,7 @@
 """Fatia L7-05 (SADT e suprimentos, módulo SUP): declarações planejadas, regras das colunas e coerência da imagem
 sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L7-05`."""
+import datetime
+import decimal
 import random
 import unittest
 
@@ -78,6 +80,53 @@ class Plano(unittest.TestCase):
         self.assertEqual(c["cep"]["regra"], "inteiro_zeros_esquerda:8")
         self.assertEqual(c["cnpj"]["regra"], "cnpj")
 
+    def test_estoque_cobertura_total(self):
+        obrig = {("GEATUALIZASALDO", "recalculo_saldo_estoque"): {"estabelecimento_id", "operacao", "ocorrido_em",
+                                                                  "competencia_inicio", "competencia_fim", "motivo"},
+                 ("GECADTRA", "documento_estoque"): {"estabelecimento_id", "numero", "tipo", "movimentado_em"},
+                 ("GELANTRA", "documento_estoque_item"): {"documento_estoque_id", "sequencia", "insumo_id",
+                                                          "unidade_medida_id", "quantidade"},
+                 ("GEESTINI", "inventario_estoque"): {"estabelecimento_id", "numero", "local_estoque_id", "tipo",
+                                                      "data_corte", "abertura_usuario_id", "aberto_em"},
+                 ("GEGERSEQ", "sequencia_documento_estoque"): {"estabelecimento_id", "tipo_movimento_estoque_id"},
+                 ("GELIMLOC", "parametro_reposicao"): {"estabelecimento_id", "insumo_id", "local_estoque_id"}}
+        for (t, dt), cs in obrig.items():
+            self.assertEqual(self.plano[t]["destinos"][0], dt)
+            self.assertTrue(cs <= set(self.cols(t, dt)), (t, cs - set(self.cols(t, dt))))
+        # competência composta de ANO+MES; documento: número único pelo ID, tipo transferência (fato), situação pela
+        # consolidação (nunca concluído com consolidado falso)
+        r = self.cols("GEATUALIZASALDO", "recalculo_saldo_estoque")
+        self.assertEqual(r["competencia_inicio"]["coluna"], "#data:ANO_PROC,MES_PROC")
+        self.assertEqual(r["situacao"]["valores"], {"S": "concluido", "N": "falhou", "": "falhou"})
+        d = self.cols("GECADTRA", "documento_estoque")
+        self.assertEqual((d["numero"]["coluna"], d["tipo"]["coluna"], d["situacao"]["coluna"]),
+                         ("ID", "=transferencia", "CONSOL"))
+        self.assertEqual((d["situacao"]["depara"], d["situacao"]["valores"]),
+                         ("valores", {"S": "concluido", "N": "aberto", "": "aberto"}))
+        self.assertEqual(d["consolidado"]["coluna"], "CONSOL")
+        self.assertEqual(d["destino_local_estoque_id"]["referencia"], "GELOCARM")
+        i = self.cols("GELANTRA", "documento_estoque_item")
+        self.assertEqual([x["tabela"] for x in i["unidade_medida_id"]["passos"] if "tabela" in x],
+                         ["GEITENS", "TBUNICON"])
+        self.assertEqual(self.cols("GEGERSEQ", "sequencia_documento_estoque")["proximo_numero"]["regra"], "piso:1")
+        self.assertEqual(self.plano["GEESTINI"]["destinos"], ["inventario_estoque", "inventario_estoque_contagem"])
+        self.assertEqual(self.cols("GEESTINI", "inventario_estoque_contagem")["inventario_estoque_id"]["coluna"], "@id")
+        self.assertEqual(self.cols("GEESTINI", "inventario_estoque")["situacao"]["valores"],
+                         {"S": "aprovado", "N": "aberto", "": "aberto"})
+
+    def test_fechamento_nunca_entra_aberto(self):
+        # a linha da origem só existe para mês FECHADO: bloqueada (sem destino) até a data em DATETIME no motor;
+        # a declaração pronta, comentada, grava 'fechado' com a data do fechamento presumida
+        self.assertIn("GEFECMES", l7_05.BLOQUEADAS)
+        decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "GEFECMES"]
+        self.assertFalse([c for c in decl if c["destino"]])
+        from pathlib import Path
+        txt = (Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "colunas.d" / "L7-05.tsv").read_text(
+            encoding="utf-8")
+        self.assertNotIn("=~aberto\tfechamento_estoque", txt)
+        self.assertIn("#GEFECMES\t=fechado\tfechamento_estoque.situacao", txt)
+        self.assertIn("#GEFECMES\t=~@data_carga\tfechamento_estoque.fechado_em", txt)
+
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
         self.assertFalse(com_destino & set(l7_05.BLOQUEADAS))
@@ -96,6 +145,12 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("inteiro_zero_nulo", 12345), (12345, None))
         self.assertEqual(a("inteiro_nao_negativo", -5), (None, "valor_fora_do_dominio"))
         self.assertEqual(a("inteiro_nao_negativo", 0), (0, None))
+        self.assertEqual(a("piso:1", 0), (1, "valor_elevado_ao_minimo"))
+        self.assertEqual(a("piso:1", 15), (15, None))
+        self.assertEqual(a("decimal_nao_negativo", decimal.Decimal("-5")), (None, "valor_fora_do_dominio"))
+        self.assertEqual(carga_mapa.data_composta(2025, 3), (datetime.date(2025, 3, 1), None))
+        self.assertEqual(carga_mapa.data_composta(2025, 13), (None, "valor_fora_do_dominio"))
+        self.assertEqual(carga_mapa.data_composta(2025, None), (None, None))
 
 
 class Sintetica(unittest.TestCase):

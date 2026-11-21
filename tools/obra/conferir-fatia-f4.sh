@@ -8,6 +8,8 @@
 #   4. testes da fatia: conector/testes/test_<fatia>.py (ex.: test_l5_01.py), no container;
 #   5. conciliação da fatia na imagem SINTÉTICA: conector/sante_conector/sintetica_d/<fatia>.py, carregada pelo mapa
 #      duas vezes num banco descartável (conector.sh conferir-fatia <fatia>).
+#   6. cobertura da fatia (python3 -I tools/obra/cobertura_conector.py --fatia <fatia>): erro com cada tabela
+#      BLOQUEADA e a causa (a fatia só fecha quando toda tabela carrega ou tem descarte com motivo de produto).
 # O validador global (suíte inteira: conector/conector.sh testes) roda à parte, sobre tudo.
 set -uo pipefail
 [ $# -eq 1 ] || { sed -n 2,3p "$0"; exit 2; }
@@ -51,6 +53,13 @@ PY
   while IFS= read -r l; do [ -n "$l" ] && ERROS+=("$l"); done <<< "$RES"
 else
   ERROS+=("sem imagem sintética da fatia: conector/sante_conector/sintetica_d/$MOD.py")
+fi
+
+if [ "${MOD#exemplo}" = "$MOD" ]; then
+  python3 -I tools/obra/cobertura_conector.py --fatia "$F" --saida "$LOG/cobertura.tsv" > "$LOG/cobertura.log" 2>&1
+  while IFS=$'\t' read -r _ tab sit causa; do
+    [ "$sit" = BLOQUEADA ] && ERROS+=("cobertura: $tab BLOQUEADA ($causa)")
+  done < <(tail -n +2 "$LOG/cobertura.tsv" 2>/dev/null)
 fi
 
 if [ ${#ERROS[@]} -eq 0 ]; then

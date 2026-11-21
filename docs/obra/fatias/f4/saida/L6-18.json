@@ -1,34 +1,14 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/verificar_mapa.py",
-   "mudanca": "aplicar a regra já pedida (L5-04, L5-09, L6-04) de prefixo de domínio por tabela da origem no código único do destino (ex.: '=prefixo:<texto>' na coluna de código) também em via_dieta: TBTPDIETA.ID e PRVIAADMIN.ID; com ela, declarar TBTPDIETA (codigo, descricao, modalidade presumida) e PRVIAADMIN.ID_TBTPDIETA, TBDIETAS.TPDIETA e PRTPREFEIC.TPDIETA conforme o significado do tipo de dieta",
-   "motivo": "as duas origens alimentam via_dieta com códigos inteiros pequenos que se repetem (uq_via_dieta_codigo): hoje só PRVIAADMIN é carregada; TBTPDIETA ficou sem destino"
+   "arquivo": "conector/sante_conector/sentinela.py (aplicar, regra hora_hhmm)",
+   "mudanca": "hora_hhmm decodificar bytes/bytearray (texto cru CP1252 da origem) antes do teste de str: `if isinstance(v, (bytes, bytearray)): v = _str(v)`; é o mesmo pedido 2 do L6-04 (SICTRAGE) e afeta também a L6-09 (TBHORMED, TBHORARIODOSE)",
+   "motivo": "PRHORPAD.HORARIO é VARCHAR(4) e chega em bytes: hoje toda hora dá hora_invalida e toda linha é recusada (conferência da L6-18: PRHORPAD gravou 0 de 4 esperados); a declaração e o esperado da imagem já estão prontos para a regra corrigida"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py (hora_hhmm) + carga_mapa.py + db/migracoes/09_HOT (horario_refeicao)",
-   "mudanca": "(a) hora_hhmm aceitar texto de 4 dígitos (VARCHAR(4) 'HHMM'), hoje dá hora_invalida; (b) decisão do modelo para horario_refeicao: horario_fim e horario_corte_mapa NOT NULL sem origem (a origem tem um só HORARIO por refeição e dieta) — aceitar NULL ou derivar (fim = início da refeição seguinte; corte = início), com valor_presumido; (c) CODREF aponta PRTPREFEIC pelo código: via 'ref:PRTPREFEIC'; estabelecimento por '@estabelecimento'",
-   "motivo": "PRHORPAD não carregada: sem isso toda linha é recusada (1048 e ck_horario_refeicao_periodo)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "despivotamento de parâmetros (o mesmo pedido do AGPARAM no L6-04): cada coluna de CHPARAM e CVPARAM vira um parametro_valor de nível 'estabelecimento' (chave declarada no mapa, nome de negócio, nunca o da origem); SENHA_MASTER_LIB_VISITA nunca migrada em claro (descarte ou cofre, decisão do dono)",
-   "motivo": "CHPARAM e CVPARAM (MECANISMO, uma linha por estabelecimento) não carregadas"
-  },
-  {
-   "arquivo": "db/migracoes/09_HOT/02_tabelas.sql (leito_profissional_higienizacao) ou carga_mapa.py",
-   "mudanca": "vigencia_inicio NOT NULL sem origem: aceitar NULL (vigência desconhecida) ou especial '@data_carga' presumido (valor_presumido por linha, estável no diferencial)",
-   "motivo": "TBLEITO_CHPROFISLIMP (136 linhas) não carregada; nenhuma data inventada foi gravada"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (+ ordem do mapa)",
-   "mudanca": "solicitacao_limpeza.situacao_limpeza_id NOT NULL: a origem guarda a situação só na execução (CHEXECLIMPEZA.ID_CHSITUACAO, carregada depois). Opções: referência a linha de cadastro por código fixo ('=>situacao_limpeza.codigo=<valor>', já pedida no L6-14) presumida, ou atualização da solicitação pela última execução em segunda fase. Com isso declarar CHSOLICITLIMP (numero = ID, motivo_geracao '=~manual', solicitante por 'ref:TBUSERS' no login, solicitada_em data_hora, atendimento_id, modalidade_limpeza_id), CHEXECLIMPEZA (estabelecimento '@estabelecimento', inicio_em/fim_em data_hora, observacao texto_longo) e CHSOLICITLIMP_TBLEITO (sequencia '#seq:ID_CHSOLICITLIMP', inclui_acomodacao booleano_sn)",
-   "motivo": "CHSOLICITLIMP, CHEXECLIMPEZA e CHSOLICITLIMP_TBLEITO (cerca de 6,8 mil linhas cada) não carregadas"
-  },
-  {
-   "arquivo": "db/migracoes/09_HOT/02_tabelas.sql (movimento_prontuario) + conector/mapa",
-   "mudanca": "movimento_prontuario: volume_prontuario_id e paciente_id NOT NULL sem origem direta (a origem aponta a conta: ATCONTA -> atendimento -> paciente; o volume não existe na origem). Pedir: referência derivada pelo pai (paciente pela conta) e volume padrão por paciente (ou volume_prontuario_id NULL na migração); setores da origem são setor_tramite (RISETOR), o modelo guarda setor_funcional: acrescentar saida/destino_setor_tramite_id ou trocar a referência; RIMOTIVO fora do mapa; EXCLUIDO 'S' sem data de exclusão",
-   "motivo": "GDPRONTMOVIM (729 mil linhas, faixa_id_hash_bloco) não carregada"
+   "arquivo": "db/migracoes/09_HOT/02_tabelas.sql e 02_chaves.sql (movimento_prontuario) — trilha F2.2 (DECIDIDO na F4, F4-decisoes-destino.md L6-18)",
+   "mudanca": "Em CREATE TABLE movimento_prontuario: `volume_prontuario_id BIGINT UNSIGNED NULL COMMENT 'Nulo só na migração: a origem movimenta o prontuário do paciente, sem volume'`; depois de destino_setor_funcional_id: `saida_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite de onde o prontuário saiu'`, `destino_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite para onde o prontuário foi'`; `CONSTRAINT ck_movimento_prontuario_volume CHECK (origem = 'migracao' OR volume_prontuario_id IS NOT NULL)`; `KEY ix_movimento_prontuario_saida_setor_tramite_id (saida_setor_tramite_id)`, `KEY ix_movimento_prontuario_destino_setor_tramite_id (destino_setor_tramite_id)`. Em 02_chaves.sql: `ADD CONSTRAINT fk_movimento_prontuario_saida_setor_tramite_id FOREIGN KEY (saida_setor_tramite_id) REFERENCES setor_tramite (id) ON DELETE RESTRICT`, idem destino. Sem CHECK de setores diferentes (a origem registra trâmite no mesmo setor; recusar perderia histórico). Ao aplicar: descomentar #GDPRONTMOVIM em colunas.d/L6-18.tsv, acrescentar a valores.d/L6-18.tsv os pares GDPRONTMOVIM EXCLUIDO movimento_prontuario.excluido_em (1 -> data da carga, valor especial do de-para; 0 e vazio -> nulo), tirar GDPRONTMOVIM de NAO_CARREGADAS na sintética (3 linhas: uma com EXCLUIDO='S') e recontar o esperado.",
+   "motivo": "GDPRONTMOVIM (cerca de 729 mil linhas, todo o histórico de trâmite de prontuário) não carrega sem isso: nenhuma tabela da origem alimenta volume_prontuario e um volume 'migrado' por paciente exigiria tipo de documento fixo (id do produto por código, mecanismo inexistente no motor). Declaração completa e comentada (EXCLUIDO, setores de saída e destino; motivo descartado: RIMOTIVO obsoleta)."
   },
   {
    "arquivo": "conector/mapa/declarado/valores.tsv (por cliente, pelo painel) + modelo setor_tramite",
@@ -36,19 +16,9 @@
    "motivo": "RISETOR.tipo carregado como valor presumido"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py (REGRAS) + carga_mapa.py (tipar)",
-   "mudanca": "regra genérica inteiro_em_texto: VARCHAR com inteiro ('1', ' 2 ') vira int; decimal exato ('1.0') vira int; texto não numérico ou fracionário vira NULL com pendência valor_fora_do_dominio (média). E tipar() nunca levantar ValueError: int() inválido vira NULL com pendência, dentro do tratamento por linha. Com ela, PRCARACT_TBDIETAS.ORDEM volta a modalidade_dieta_caracteristica.ordem",
-   "motivo": "hoje tipar faz int(x) fora do SAVEPOINT por linha: um texto não numérico aborta a carga inteira; ORDEM ficou sem destino (padrão 0) até a regra existir"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.tsv (de-para de valores por cliente, pelo painel)",
-   "mudanca": "de-para do tipo de dieta do cliente (TBTPDIETA.ID, via PRVIAADMIN.ID_TBTPDIETA e TBDIETAS.TPDIETA) para via_dieta.modalidade e modalidade_dieta.classe (oral, enteral, parenteral, jejum); com ele, trocar '=~oral' pelo de-para e devolver via_dieta.ativo ('=0' hoje) e modalidade_dieta.ativo (TBDIETAS.SITUACAO booleano_ai)",
-   "motivo": "modalidade e classe presumidas 'oral' têm risco clínico (via parenteral ou dieta enteral oferecida como oral): até o de-para, via e dieta migram inativas"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (GRAVIDADE_REGRA / '=~')",
-   "mudanca": "gravidade do valor_presumido declarável por coluna (ex.: '=~!oral' ou coluna de gravidade no TSV), para presunção em coluna clínica (via_dieta.modalidade, modalidade_dieta.classe) sair com gravidade alta na triagem",
-   "motivo": "valor_presumido é sempre 'baixa' e esconde presunção clínica na triagem; mitigado hoje gravando via e dieta inativas"
+   "arquivo": "conector/sante_conector/sentinela.py (aplicar: regra nova, genérica)",
+   "mudanca": "regra `hora_hhmm_desloca:<±minutos>`: igual a hora_hhmm (com bytes decodificados) e soma o deslocamento, limitado a 00:00:00..23:59:59, deixando pendência baixa `valor_presumido`. PRHORPAD passa a: horario_corte_mapa = HORARIO com `hora_hhmm_desloca:-120`; horario_fim = HORARIO com `hora_hhmm_desloca:+60` (no lugar de `=~23:59:59`)",
+   "motivo": "Corte igual ao início é o MAIS permissivo (sem tempo de preparo) e fim 23:59:59 sobrepõe as janelas das refeições do dia; hoje só há literal fixo. Interino declarado com motivo corrigido; o cliente ajusta no painel"
   }
  ]
 }

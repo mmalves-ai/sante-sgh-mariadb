@@ -1,0 +1,17 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBFORNEC	PESSOA	empresa_fornecedora.tipo_pessoa	J	juridica	L7-06: pessoa jurídica ou física pela convenção J/F
+TBFORNEC	PESSOA	empresa_fornecedora.tipo_pessoa	F	fisica	L7-06: pessoa jurídica ou física pela convenção J/F
+TBFORNEC	PESSOA	empresa_fornecedora.tipo_pessoa	j	juridica	L7-06: pessoa jurídica ou física pela convenção J/F
+TBFORNEC	PESSOA	empresa_fornecedora.tipo_pessoa	f	fisica	L7-06: pessoa jurídica ou física pela convenção J/F
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	COMERCIAL	comercial	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns); sem par: padrão comercial com valor_fora_do_dominio
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Comercial	comercial	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns); sem par: padrão comercial com valor_fora_do_dominio
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	HORARIO COMERCIAL	comercial	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns); sem par: padrão comercial com valor_fora_do_dominio
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	HORÁRIO COMERCIAL	comercial	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns); sem par: padrão comercial com valor_fora_do_dominio
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Horário comercial	comercial	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns); sem par: padrão comercial com valor_fora_do_dominio
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	24 HORAS	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	24 horas	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	PLANTAO 24 HORAS	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	PLANTÃO 24 HORAS	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Plantão 24 horas	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	SOB DEMANDA	sob_demanda	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Sob demanda	sob_demanda	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)

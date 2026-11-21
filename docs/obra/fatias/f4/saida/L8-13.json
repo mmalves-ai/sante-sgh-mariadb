@@ -1,34 +1,29 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou db/migracoes/16_SGO/05_tabelas.sql)",
-   "mudanca": "especial '@data_carga' (data da execução da carga, presumida: valor_presumido por linha; na soma de controle entra o valor relido do destino, como o padrão do destino) OU, decisão do dono, mensagem_cobranca.vigencia_inicio nula para registro migrado",
-   "motivo": "L8-13: CDMSGCOBRANCA não tem vigência e o destino exige vigencia_inicio (DATE NOT NULL); data fictícia ('2000-01-01') é sentinela, proibida pelo modelo. As 9 mensagens ficam fora da carga até um dos dois (declaração planejada comentada em colunas.d/L8-13.tsv já usa @data_carga). O pedido anterior (tipar literal de data) foi retirado"
+   "arquivo": "conferência global (tools/obra ou conector/testes)",
+   "mudanca": "teste de colisão no código único entre as fatias L8-13, L8-14 e L8-15 carregadas juntas na sintética (origem_cobranca_plano, origem_guia_plano, motivo_movimento_cadastral, nivel_acumulo_limite)",
+   "motivo": "L8-13: os domínios fixos do sistema gravam 'sistema-<n>' pelo de-para de valores (valores.d/L8-13.tsv), linhas distintas das cadastradas pelo cliente nas outras fatias; a autoconferência roda a fatia isolada e não prova a ausência de colisão entre fatias"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "valor_presumido contado uma vez por linha (não por coluna presumida)",
-   "motivo": "L8-13: CDMSGCOBRANCA com dois literais presumidos (posicao e vigencia_inicio) dava 8 pendências para 4 linhas; o esperado de pendência por linha fica dependente do número de colunas"
+   "arquivo": "conector/mapa/declarado/valores.d (fatia futura que carregar tabela consumidora)",
+   "mudanca": "hoje nada: nenhuma coluna da origem referencia CDFAIXAETATP, CDMSGLINHA, CDPARDIGOBG, CDPGTOCOOPART, CDTPCOPART ou CDTPCTRCONTRAT; se uma tabela consumidora entrar, declarar nela o de-para de valores para o CHECK do produto",
+   "motivo": "L8-13: as 6 listas são descarte mecanismo_do_produto (sem_carga.tsv) com o motivo real (lista fixa sem consumidor carregado)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conferência global (tools/obra ou conector/testes)",
-   "mudanca": "(a) prefixo de domínio genérico por tabela da origem no código único (o mesmo pedido de L6-04/06/07/08/09/18); quando existir, troca o de-para 0..99 -> 'sistema-<n>' de valores.d/L8-13.tsv pelo prefixo 'sistema-' (mesmo valor gravado: nada aparece como alterado); (b) teste de colisão no código único entre as fatias L8-13, L8-14 e L8-15 carregadas juntas na sintética (origem_cobranca_plano, origem_guia_plano, motivo_movimento_cadastral, nivel_acumulo_limite)",
-   "motivo": "L8-13: os domínios fixos do sistema (CDORIGEMCOBR, CDORIGEMGUIA, CDMOTMOVIMCAD, CDTPACUMULPOR) são linhas distintas das cadastradas pelo cliente (PSORIGEMCOBR, PSORIGEMGUIA, PSMOTIVO em L8-14; PSTIPMEN, TBTIPOCOBRANCASGO, PSTPACUMULPOR em L8-15): já gravam 'sistema-<n>' pelo de-para de valores e não chocam mais com a chave inteira de L8-14; a autoconferência da fatia roda isolada e não prova a ausência de colisão entre fatias"
+   "arquivo": "painel do conector",
+   "mudanca": "revisão pelo cliente das classificações presumidas (=~): tipo_acomodacao_plano.categoria, incidencia_comissao.base_calculo, motivo_cancelamento_contrato.tipo_cancelamento, origem_cobranca_plano.natureza, origem_guia_plano.canal, forma_pagamento_coparticipacao.momento, classificacao_plano.tipo_contratacao, nivel_acumulo_limite.abrangencia, forma_cobranca_plano.meio, tipo_contrato_plano.tipo_contratacao, mensagem_cobranca.posicao, motivo_movimento_cadastral.tipo_movimento; marcar classificacao_plano.tipo_contratacao e tipo_contrato_plano.tipo_contratacao como RECLASSIFICAÇÃO OBRIGATÓRIA (categoria regulatória, não só revisão)",
+   "motivo": "L8-13: a origem só tem o nome; o literal presumido deixa valor_presumido por linha"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.d (fatias que referenciam)",
-   "mudanca": "de-para de valores (ID da lista -> valor do CHECK) nas tabelas que referenciam CDFAIXAETATP (faixa_etaria_modelo.tipo), CDMSGLINHA (mensagem_cobranca.posicao/numero_linha), CDPARDIGOBG (documento_emitido_operadora.exigencia_campos), CDPGTOCOOPART (forma_pagamento_coparticipacao.momento), CDTPCOPART (regra_coparticipacao.tipo_coparticipacao), CDTPCTRCONTRAT (tipo_contrato_plano.patrocinado); de-para por cliente no painel",
-   "motivo": "L8-13: o mapa diz que essas listas 'viram atributo'; carregá-las como linhas criaria registros falsos (ex.: regra de coparticipação sem operadora) e colidiria no código único com a outra origem do mesmo destino. Ficam na imagem e não são carregadas"
+   "arquivo": "docs/obra/fatias/f4/*.md e indice.tsv (orquestrador)",
+   "mudanca": "regerar as fatias (tools/obra/fatiar_conector.py): o --conferir acusa todas as fatias L5-03..L8-18 e o índice diferentes do gerado",
+   "motivo": "L8-13: mudança global do mapa (tabelas.tsv modificado fora desta fatia); não é da fatia e a fatia não edita arquivo gerado"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.d ou painel",
-   "mudanca": "de-para por cliente das classificações hoje presumidas: tipo_acomodacao_plano.categoria, incidencia_comissao.base_calculo, motivo_cancelamento_contrato.tipo_cancelamento, origem_cobranca_plano.natureza, origem_guia_plano.canal, forma_pagamento_coparticipacao.momento, classificacao_plano.tipo_contratacao, nivel_acumulo_limite.abrangencia, forma_cobranca_plano.meio, tipo_contrato_plano.tipo_contratacao",
-   "motivo": "L8-13: a origem só tem o nome; os literais presumidos ('=~') deixam valor_presumido por linha para o cliente revisar"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (destino de CDSTATUSCAD)",
-   "mudanca": "rever o destino de CDSTATUSCAD: a lista é o movimento cadastral (1 inclusão, 2 alteração, 3 exclusão, 4 reativação), que já é o CHECK de motivo_movimento_cadastral.tipo_movimento, não a situação cadastral do beneficiário (ativo, suspenso, cancelado); o mais correto seria 'vira atributo' e não carregar as 4 linhas em situacao_cadastral_beneficiario",
-   "motivo": "L8-13: o tipo do motivo agora vai pelo código desse domínio (de-para de valores em valores.d/L8-13.tsv); as 4 linhas gravadas como situação cadastral são de outro conceito e o cliente teria de corrigi-las"
+   "arquivo": "db/migracoes/16_SGO (modelo)",
+   "mudanca": "avaliar motivo_movimento_cadastral.situacao_cadastral_beneficiario_id (FK opcional)",
+   "motivo": "L8-13: a origem liga o motivo de movimento à situação cadastral (ID_CDSTATUSCAD); o destino não guarda essa ligação, que hoje se perde"
   }
  ]
 }

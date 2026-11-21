@@ -3,6 +3,7 @@ sintética. Sem banco; só valores inventados. A carga e a conciliação rodam e
 import datetime
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l7_02
@@ -10,8 +11,14 @@ from sante_conector.sintetica_d import l7_02
 TABELAS = set(l7_02.CARREGADAS)
 BLOQUEADAS = set(l7_02.NAO_CARREGADAS)
 DESTINO = {"SICTRPSR": "grupo_resposta", "SIESPEC": "especialidade_diagnostica", "SIKITEXA": "kit_exame",
+           "SIKITITE": "kit_exame_item",
            "SIMATERI": "material_biologico", "SIMETODO": "metodo_analitico", "SIMODULO": "setor_diagnostico",
-           "SIPACSMODALID": "modalidade_imagem"}
+           "SIPACSMODALID": "modalidade_imagem", "SIOBSERV": "texto_padrao_resultado",
+           "SIPARGER": "responsavel_laudo_setor"}
+# outras alimentadoras conhecidas do mesmo destino, em domínio de código disjunto (prefixo próprio)
+# (SIMODULO_SIWEBATOS, L8-16, só complementa o setor com o canal de aviso, coluna que SIMODULO não grava)
+# SIMODULO_SIWEBATOS virou descarte (mecanismo_do_produto) na rodada 2 (L8-16): só SIMODULO alimenta o setor
+OUTRAS_ALIMENTADORAS = {"grupo_resposta": {"SHRESPOSTA"}}
 
 
 class Plano(unittest.TestCase):
@@ -30,10 +37,14 @@ class Plano(unittest.TestCase):
 
     def test_obrigatorias_do_destino_cobertas(self):
         obrig = {"SICTRPSR": {"codigo", "descricao"}, "SIESPEC": {"codigo", "descricao"},
-                 "SIKITEXA": {"codigo", "nome"}, "SIMATERI": {"codigo", "descricao"},
+                 "SIKITEXA": {"codigo", "nome"},
+                 "SIKITITE": {"kit_exame_id", "sequencia", "exame_id", "quantidade"}, "SIMATERI": {"codigo", "descricao"},
                  "SIMETODO": {"codigo", "descricao"},
                  "SIMODULO": {"estabelecimento_id", "codigo", "nome", "tipo"},
-                 "SIPACSMODALID": {"codigo", "descricao", "sigla_padrao"}}
+                 "SIPACSMODALID": {"codigo", "descricao", "sigla_padrao"},
+                 "SIOBSERV": {"codigo", "descricao", "texto"},
+                 "SIPARGER": {"setor_diagnostico_id", "profissional_id", "vigencia_inicio", "assina_laudo",
+                              "responsavel_tecnico"}}
         for t, o in obrig.items():
             self.assertTrue(o <= set(self.cols(t)), t)
 
@@ -54,12 +65,77 @@ class Plano(unittest.TestCase):
         for t, dt in DESTINO.items():
             outras = {c["tabela"] for c in self.mapa["colunas_decl"]
                       if (c.get("destino") or "").startswith(dt + ".")} - {t}
-            self.assertEqual(outras, set(), dt)
+            self.assertEqual(outras, OUTRAS_ALIMENTADORAS.get(dt, set()), dt)
+        comp = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "SIMODULO_SIWEBATOS"]
+        self.assertTrue(not comp or any("complementa" in (c.get("via") or "").split(";") for c in comp))
+        proprias = set(self.cols("SIMODULO")) - {"setor_diagnostico.id"}
+        self.assertFalse(proprias & {c.get("destino") for c in comp})
+
+    def test_grupo_resposta_sem_colisao_no_codigo(self):
+        # SICTRPSR grava a chave inteira (só dígitos); SHRESPOSTA grava sempre com o prefixo 'triagem_': os dois
+        # domínios nunca se cruzam em uq_grupo_resposta_codigo
+        dec = [c for c in self.mapa["colunas_decl"] if c.get("destino") == "grupo_resposta.codigo"]
+        por = {c["tabela"]: c for c in dec}
+        self.assertEqual(set(por), {"SICTRPSR", "SHRESPOSTA"})
+        self.assertEqual((por["SICTRPSR"]["coluna"], por["SICTRPSR"]["regra"]), ("COD", "texto"))
+        self.assertTrue(por["SHRESPOSTA"]["coluna"].startswith("#codigo_derivado:"))
+        pre = por["SHRESPOSTA"]["coluna"].split(":")[3]
+        self.assertEqual(pre, "triagem_")
+        for cod in (0, 1, 17, 32767):
+            self.assertTrue(sentinela.aplicar("texto", cod)[0].isdigit())
+        self.assertFalse(carga_mapa.codigo_derivado("12", 30, pre)[0].isdigit())
+
+    def test_texto_padrao_por_codigo_derivado_do_texto(self):
+        c = self.cols("SIOBSERV")
+        self.assertEqual(c["codigo"]["coluna"], "#codigo_derivado:OBS:30")
+        self.assertEqual(c["codigo"]["regra"], "texto_longo")
+        self.assertEqual(c["texto"]["regra"], "texto_longo")
+        via = {x["destino"]: x["via"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIOBSERV"}
+        self.assertEqual(via["texto_padrao_resultado.setor_diagnostico_id"], "ref:SIMODULO")
+        curto, m1 = carga_mapa.codigo_derivado("Amostra hemolisada.", 30)
+        self.assertEqual((curto, m1), ("Amostra hemolisada.", False))
+        longo, m2 = carga_mapa.codigo_derivado("x" * 64, 30)
+        self.assertTrue(m2 and len(longo) <= 30)
+
+    def test_responsavel_do_laboratorio(self):
+        c = self.cols("SIPARGER")
+        via = {x["destino"]: x["via"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIPARGER"}
+        self.assertTrue(via["responsavel_laudo_setor.setor_diagnostico_id"].startswith("ref:SIMODULO;"))
+        self.assertIn("adotar:setor_diagnostico_id,profissional_id",
+                      via["responsavel_laudo_setor.setor_diagnostico_id"].split(";"))
+        self.assertTrue(via["responsavel_laudo_setor.profissional_id"].startswith(
+            "ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS;"))
+        self.assertEqual(c["assina_laudo"]["coluna"], "=1")
+        self.assertEqual(c["responsavel_tecnico"]["coluna"], "=1")
+        self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
+        # SIPARRX segue descarte até a referência à linha única (pedido 8): o motivo cita o responsável
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(Path(mapa.__file__).resolve().parents[1] / "mapa/declarado/sem_carga.tsv")}
+        self.assertIn("ID_TBCBOPRO_RESP_LAUDO", sc["SIPARRX"]["motivo"])
+        self.assertNotIn("SIPARGER", sc)
 
     def test_bloqueadas_sem_destino(self):
         # dependem de regra genérica, de ordem do mapa ou de decisão do dono (docs/obra/fatias/f4/saida/L7-02.json)
         self.assertFalse(BLOQUEADAS & set(self.plano))
         self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in BLOQUEADAS and c.get("destino")])
+
+    def test_item_do_kit(self):
+        c = self.cols("SIKITITE")
+        via = {x["destino"]: x["via"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIKITITE"}
+        self.assertEqual(via["kit_exame_item.kit_exame_id"], "ref:SIKITEXA")
+        self.assertEqual(via["kit_exame_item.exame_id"], "ref:SITABPRO(ATO,EXAME)")
+        self.assertEqual(c["sequencia"]["coluna"], "#seq:KIT")
+        self.assertEqual(c["quantidade"]["regra"], "piso:1")
+        # o exame (SITABPRO) vem antes do item pela dependência declarada (o gerador do mapa a põe na ordem)
+        dec = mapa.ler_tsv(Path(mapa.__file__).resolve().parents[1] / "mapa/declarado/dependencias.tsv")
+        self.assertIn(("SIKITITE", "SITABPRO"), {(d["tabela"], d["depende_de"]) for d in dec})
+
+    def test_descartes_com_motivo_de_produto(self):
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(Path(mapa.__file__).resolve().parents[1] / "mapa/declarado/sem_carga.tsv")}
+        for t in l7_02.DESCARTADAS:
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], {"sem_valor", "mecanismo_do_produto"}, t)
+            self.assertTrue(sc[t]["motivo"], t)
+        self.assertEqual(set(l7_02.NAO_CARREGADAS), set(l7_02.DESCARTADAS) | set(l7_02.AGUARDAM_REGRA))
 
     def test_secundario_de_material_fora(self):
         # de_para_material_apoio exige laboratorio_apoio_id sem origem: só o destino principal é carregado
@@ -95,7 +171,7 @@ class Sintetica(unittest.TestCase):
 
     def test_linhas_com_a_forma_do_ddl(self):
         f = l7_02.formas()
-        self.assertEqual(set(f), TABELAS | BLOQUEADAS)
+        self.assertEqual(set(f), TABELAS | BLOQUEADAS | set(l7_02.FORMA_SO))
         vistos = []
         l7_02.linhas(random.Random(2), lambda t, v: vistos.append((t, len(v))))
         for t, n in vistos:
@@ -116,6 +192,13 @@ class Sintetica(unittest.TestCase):
         esp = l7_02.linhas(random.Random(5), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         for t in ("SIESPEC", "SIMATERI", "SIMODULO"):
             self.assertEqual(esp[t]["pendencias"]["valor_presumido"], cont[t], t)
+
+    def test_quantidade_do_kit_elevada_a_um(self):
+        a = sentinela.aplicar
+        self.assertEqual(a("piso:1", 0), (1, "valor_elevado_ao_minimo"))
+        self.assertEqual(a("piso:1", -2), (1, "valor_elevado_ao_minimo"))
+        self.assertEqual(a("piso:1", 3), (3, None))
+        self.assertEqual(a("piso:1", None), (None, None))
 
     def test_senha_gerencial_nunca_na_imagem(self):
         f = [c for c, _, _ in l7_02.formas()["SIPARLAB"]]

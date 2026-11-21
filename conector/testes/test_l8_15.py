@@ -8,8 +8,8 @@ from sante_conector.sintetica_d import l8_15
 
 TABELAS = set(l8_15.CARREGADAS)
 FORA = set(l8_15.NAO_CARREGADAS)
-# tabelas cujo destino já recebe a chave inteira como código de outra tabela anterior: código = nome (pedido 1)
-POR_NOME = {"PSTIPMEN": "origem_cobranca_plano", "PSTIPOGUIA": "tipo_guia_plano",
+# tabelas cujo destino recebe códigos de várias origens: código = prefixo de domínio + chave, adoção pela descrição
+POR_PREFIXO = {"PSTIPMEN": "origem_cobranca_plano", "PSTIPOGUIA": "tipo_guia_plano",
             "PSTPACUMULPOR": "nivel_acumulo_limite", "PSTPPERIODO": "unidade_prazo",
             "TBTIPOCOBRANCASGO": "origem_cobranca_plano", "TBTPPRESTADOR": "tipo_prestador_rede",
             "TBTPUNIDTEMPO": "unidade_prazo"}
@@ -28,12 +28,19 @@ class Plano(unittest.TestCase):
         self.assertEqual(set(self.plano), TABELAS)
         for t in TABELAS:
             self.assertEqual(len(self.plano[t]["destinos"]), 1, t)
+        self.assertEqual(self.plano["PSBENEFI"]["destinos"], ["beneficiario_plano"])
+        self.assertEqual(self.plano["PSVENDAS"]["destinos"], ["proposta_adesao"])
 
-    def test_codigo_pelo_nome_onde_o_destino_e_compartilhado(self):
-        for t, d in POR_NOME.items():
+    def test_codigo_com_prefixo_e_adocao_onde_o_destino_e_compartilhado(self):
+        prefixos = set()
+        for t, d in POR_PREFIXO.items():
             cs = self.cols(t, d)
-            self.assertEqual(cs["codigo"]["coluna"], "NOME", t)
+            self.assertTrue(cs["codigo"]["coluna"].startswith("#codigo_derivado:"), t)
+            prefixos.add(cs["codigo"]["coluna"].split(":")[3])
             self.assertEqual(cs["descricao"]["coluna"], "NOME", t)
+            self.assertEqual(self.plano[t]["opcoes"][d].get("adotar"), ["descricao"], t)
+        self.assertEqual(len(prefixos), len(POR_PREFIXO))  # um prefixo de domínio por origem
+        self.assertEqual(carga_mapa.codigo_derivado("3", 30, "periodo_"), ("periodo_3", False))
         cs = self.cols("TBENVCOBEMAIL", "preferencia_envio_cobranca")
         self.assertEqual(cs["codigo"]["coluna"], "ID")
 
@@ -66,12 +73,60 @@ class Plano(unittest.TestCase):
                         ("TBREGIMEATEND", "regime_atendimento_rede", "natureza")):
             self.assertTrue(self.cols(t, d)[c]["coluna"].startswith("=~"), (t, c))
 
-    def test_fora_da_carga_aparece_na_conciliacao(self):
-        # tabela do mapa com destino e sem coluna declarada nunca some sem rastro (pedido 5, regra tabela_bloqueada)
-        f = getattr(carga_mapa, "tabelas_bloqueadas", None)
-        if f is None:
-            self.skipTest("regra genérica tabela_bloqueada ainda não aplicada no motor (pedido 5 em saida/L8-15.json)")
-        self.assertTrue(FORA <= set(f(self.mapa, TABELAS | FORA)))
+    def test_descartadas_com_causa_de_produto(self):
+        # cobertura total: toda tabela fora da carga tem descarte com causa aceita e motivo (declarado/sem_carga.tsv)
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        causas = {"TBTPFAVORECIDO": "catalogo_oficial", "TBTPFORMAREAJ": "catalogo_oficial",
+                  "TBTPVIGCONTRATO": "catalogo_oficial", "PSTPSVIGENCIA": "catalogo_oficial",
+                  "PSBENCPL": "duplicado"}
+        self.assertNotIn("PSVENDAS", sc)
+        # o descarte como catálogo oficial é coerente com declarado/catalogos.tsv
+        cat = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/catalogos.tsv")}
+        self.assertTrue({t for t, c in causas.items() if c == "catalogo_oficial"} <= cat)
+        self.assertEqual(set(causas), FORA)
+        for t, causa in causas.items():
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
+            self.assertTrue(sc[t]["motivo"], t)
+
+    def test_beneficiario_nunca_sem_contrato_plano_e_pessoa(self):
+        cs = self.cols("PSBENEFI", "beneficiario_plano")
+        decl = {c["destino"]: (c["coluna"], c.get("via")) for c in self.mapa["colunas_decl"]
+                if c["tabela"] == "PSBENEFI" and c.get("destino")}
+        self.assertEqual(decl["beneficiario_plano.contrato_plano_id"], ("EMP", "ref:PSEMPBEN"))
+        self.assertEqual(decl["beneficiario_plano.plano_comercializado_id"], ("PLANO", "ref:PSPLANOS"))
+        self.assertEqual(decl["beneficiario_plano.pessoa_fisica_id"], ("CPF", "ref:TBPESSOA.CPF_CNPJ"))
+        # obrigatórias do destino todas com fonte; situação presumida, nunca afirmada
+        for c in ("tipo", "matricula", "data_adesao", "inicio_vigencia"):
+            self.assertIn(c, cs)
+        self.assertEqual((cs["situacao"]["coluna"], cs["situacao"]["depara"]), ("STATUS", "valores"))
+        self.assertEqual((cs["tipo"]["coluna"], cs["tipo"]["depara"]), ("DEP", "valores"))
+        self.assertEqual(decl["beneficiario_plano.titular_beneficiario_plano_id"],
+                         ("ID_PSBENEFI_VINCULO", "ref:PSBENEFI.ID"))
+        self.assertEqual(cs["fim_vigencia"]["coluna"], "FIM_VIG")
+        # nenhuma coluna do destino com duas origens (PSBENCPL é descarte; a venda só em PSVENDAS)
+        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENCPL" and c.get("destino")])
+
+    def test_situacao_e_tipo_pela_evidencia_nunca_ativo_presumido(self):
+        pares = {}
+        for v in self.mapa["valores"]:
+            if v["tabela"] == "PSBENEFI":
+                pares.setdefault(v["coluna"], {})[v["valor_origem"]] = v["valor_destino"]
+        self.assertEqual(pares["DEP"]["0"], "titular")
+        self.assertEqual({pares["DEP"][str(i)] for i in range(1, 100)}, {"dependente"})
+        st = pares["STATUS"]
+        self.assertEqual([k for k, x in st.items() if x == "ativo"], ["A"])
+        self.assertEqual(st[""], "suspenso")  # nulo nunca vira o padrão 'ativo' do destino
+        self.assertNotIn("excluido", st.values())  # excluído exige motivo e data, sem fonte na origem
+        self.assertEqual(len(st), 1 + 26 * 2 + 10)  # todo código de 1 caractere tem par: nada cai no padrão
+
+    def test_venda_vira_proposta_efetivada_com_plano_e_contrato_do_beneficiario(self):
+        cs = self.cols("PSVENDAS", "proposta_adesao")
+        self.assertEqual(cs["situacao"]["coluna"], "=efetivada")
+        self.assertEqual(cs["estabelecimento_id"]["coluna"], "@estabelecimento")
+        decl = {c["destino"]: c.get("via") for c in self.mapa["colunas_decl"] if c["tabela"] == "PSVENDAS"
+                and c.get("destino")}
+        self.assertEqual(decl["proposta_adesao.plano_comercializado_id"], "ref:PSBENEFI>PLANO>PSPLANOS")
+        self.assertEqual(decl["proposta_adesao.contrato_plano_id"], "ref:PSBENEFI>EMP>PSEMPBEN")
 
     def test_modelo_de_email_entra_inativo(self):
         cs = self.cols("TBTPEMAILPLS", "modelo_comunicacao_beneficiario")
@@ -79,7 +134,7 @@ class Plano(unittest.TestCase):
         self.assertEqual(cs["canal"]["coluna"], "=email")
         self.assertTrue(cs["corpo"]["coluna"].startswith("=~"))
 
-    def test_fora_da_carga_sem_destino(self):
+    def test_descartadas_sem_destino(self):
         decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] in FORA]
         self.assertTrue(decl)
         self.assertFalse([c for c in decl if c.get("destino")])

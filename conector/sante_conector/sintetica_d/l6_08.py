@@ -7,11 +7,16 @@ Anomalias cobertas:
 - nome com espaços repetidos (texto_nome colapsa); nome ou código ausente em coluna obrigatória (1048);
 - código ou nome maior que o destino (1406); código da terminologia repetido (único no destino, 1062);
 - literal presumido (=~): pendência valor_presumido em toda linha gravada;
-- gravidade com a ordem da chave DIFERENTE da gravidade (1 = Grave): o nível pela chave é presumido e toda linha
-  leva valor_presumido (o teste falha se a pendência faltar); chave acima de 255 não cabe no nível (recusa);
+- de-para de valores pelo nome: gravidade com a ordem da chave DIFERENTE da gravidade (1 = Grave) recebe o nível pelo
+  NOME (Grave = 3); nome sem par recusa (1048); tipo de pergunta pelo nome (sem par recusa); letra do tipo de
+  protocolo sem par fica com o padrão do destino (valor_fora_do_dominio);
+- unidade de nome maior que a sigla: resumida (texto_resumido), a unidade e o kit dela entram;
+- velocidade de infusão zero (NULL com valor_fora_do_dominio) e velocidade sem unidade (CHECK recusa o kit);
 - categoria com código da terminologia maior que o destino: não recusa (o código é a chave), e o alergeno dela entra.
-PRPARRECMED, PRTPREQUISICAO, PRTPRESPOSTA, TBACAOGRAUGRA e TBCLASSIFALERGIA ficam na imagem e NÃO são carregadas
-(sem coluna declarada; motivos e pedidos em docs/obra/fatias/f4/saida/L6-08.json).
+- cobertura total: TBCLASSIFALERGIA no mesmo cadastro de TBCBARACATEGORIA com prefixo de domínio no código (mesmas
+  chaves 1 e 2 nas duas, sem colisão).
+PRTPREQUISICAO, TBACAOGRAUGRA, TBDIGITAL_VIAACESSO, PRTPRESPOSTA e PRPARRECMED ficam na imagem e NÃO são carregadas
+(descarte de produto em declarado/sem_carga.tsv: os pais de PRTPRESPOSTA e PRPARRECMED são descartados na L6-05).
 """
 
 DDL = """
@@ -52,14 +57,16 @@ CREATE TABLE TBCBARASEVERIDADE (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(5
   ID_DIGITAL VARCHAR(36));
 CREATE TABLE TBCLASSIFALERGIA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(100) NOT NULL);
 CREATE TABLE TBCLASSINTMED (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(40) NOT NULL, ATIVO CHAR(1) NOT NULL);
+CREATE TABLE TBDIGITAL_VIAACESSO (ID VARCHAR(36) NOT NULL PRIMARY KEY, CODIGO VARCHAR(30) NOT NULL,
+  NOME VARCHAR(100) NOT NULL);
 """
 PAIS_EXTERNOS = {"PRTPLAN": ["1", "2", "3"], "PRFREQUENCIA": ["1", "2", "3"], "PRTPINFUSAO": ["1", "2"],
                  "GETABVIA": ["VO", "EV"]}
 CARREGADAS = ("PRTPLAN_PRFREQUENCIA", "PRTPLAN_PRTPINFUSAO", "PRTPNOTALEMB", "PRTPPERGUNTA", "PRTPPROT", "PRTPRECMED",
               "PRTPTCLE", "PRUNIDINFUSAO", "PRKITSOL", "PRUNIDRESPOSTA", "PRVALIDARMEDDUPLICPRESC", "PRVIAAEREA",
               "TBCBARACATEGORIA", "TBCBARAAGENTE", "TBCBARACLASSIFREACAO", "TBCBARAORIGEMINFO", "TBCBARASEVERIDADE",
-              "TBCLASSINTMED")
-NAO_CARREGADAS = ("PRPARRECMED", "PRTPREQUISICAO", "PRTPRESPOSTA", "TBACAOGRAUGRA", "TBCLASSIFALERGIA")
+              "TBCLASSINTMED", "TBCLASSIFALERGIA")
+NAO_CARREGADAS = ("PRTPREQUISICAO", "TBACAOGRAUGRA", "TBDIGITAL_VIAACESSO", "PRTPRESPOSTA", "PRPARRECMED")
 GUID = "00000000-0000-0000-0000-0000000000%02d"
 
 
@@ -73,38 +80,44 @@ def linhas(r, ins):
     for v in [(1, "Aviso"), (2, " Lembrete ")]:
         ins("PRTPNOTALEMB", list(v))
     for i in range(1, 6):
-        nome = {3: None, 4: "  Pergunta   quatro "}.get(i, "Pergunta exemplo %d" % i)
+        # 1 e 2 pelo nome; 3 sem nome (1048); 4 com espaços (colapsados antes do par); 5 sem par (recusa, 1048)
+        nome = {1: "Texto", 2: "DATA", 3: None, 4: "  Número  "}.get(i, "Pergunta exemplo %d" % i)
         ins("PRTPPERGUNTA", [i, nome, "componente_exemplo_%d" % i if i % 2 else None, GUID % i])
     # protocolos: 2 com inteiro 0/1 fora do domínio; 4 sem nome (1048)
     for c in range(1, 6):
         nome = None if c == 4 else "Protocolo exemplo %d" % c
-        ins("PRTPPROT", [c, nome, "clExemplo", c, "SN"[c % 2], "Q", "S", 2 if c == 2 else c % 2, "N"])
+        tipo = {3: "Z", 5: "H"}.get(c, "Q")  # Z sem par: padrão do destino com valor_fora_do_dominio
+        ins("PRTPPROT", [c, nome, "clExemplo", c, "SN"[c % 2], tipo, "S", 2 if c == 2 else c % 2, "N"])
     for v in [(1, "Receita simples exemplo", "S"), (2, "Receita especial exemplo", "N"), (3, "Receita três", "X")]:
         ins("PRTPRECMED", list(v))
     for v in [(1, 1), (2, 3)]:
         ins("PRPARRECMED", list(v))
     for v in [(1, "Por horário"), (2, "Por dia")]:
         ins("PRTPREQUISICAO", list(v))
-    for v in [(1, 1, 1), (2, 2, 1)]:
+    # respostas: 3 pergunta sem nome (1048); 4 pergunta nunca vista e 5 dado de envio nunca visto (pai_inexistente,
+    # 1048); 6 nome da pergunta com espaços repetidos (colapsados na descrição)
+    for v in [(1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 9, 1), (5, 1, 7), (6, 4, 1)]:
         ins("PRTPRESPOSTA", list(v))
     for v in [(1, "Pendente exemplo"), (2, "Assinado exemplo"), (3, "Recusado exemplo")]:
         ins("PRTPTCLE", list(v))
-    # unidades: 3 com nome maior que a sigla (1406: recusa; o kit 3 fica pai_pendente); 4 com tipo nunca carregado
+    # unidades: 3 com nome maior que a sigla (resumida, texto_resumido; o kit 3 entra); 4 com tipo nunca carregado
     for v in [(1, 1, "ml/h"), (2, None, "gotas/min"), (3, 2, "unidade exemplo longa demais"), (4, 7, "mcg/kg/min")]:
         ins("PRUNIDINFUSAO", list(v))
     for k in range(1, 7):
-        nome, via, ini, unid, tpi = "Kit solução %d" % k, ("VO", "EV")[k % 2], "N", None, None
+        nome, via, ini, unid, tpi, vel = "Kit solução %d" % k, ("VO", "EV")[k % 2], "N", None, None, None
         if k == 1:
-            unid, tpi = 1, 1
+            unid, tpi, vel = 1, 1, "1.500"
         if k == 2:
-            via = "ZZ"           # via nunca carregada: NULL com pai_inexistente
+            via, vel = "ZZ", "0"  # via nunca carregada: NULL com pai_inexistente; velocidade 0: NULL (fora do domínio)
         if k == 3:
-            unid = 3             # unidade recusada: pai_pendente
+            unid, vel = 3, "3.500"  # unidade de nome resumido: o kit entra
         if k == 4:
             nome = "  Kit   quatro  "
         if k == 5:
-            ini = "X"            # fora do domínio: padrão FALSE
-        ins("PRKITSOL", [k, nome, 1 + k % 3, via, ini, "%d.500" % k, unid, tpi, None, "SN"[k % 2]])
+            ini, unid, vel = "X", 2, "5.250"  # fora do domínio: padrão FALSE
+        if k == 6:
+            vel = "6.500"         # velocidade sem unidade: o CHECK do destino recusa o kit
+        ins("PRKITSOL", [k, nome, 1 + k % 3, via, ini, vel, unid, tpi, None, "SN"[k % 2]])
     for v in [(1, "mg"), (2, "ml"), (3, " cm ")]:
         ins("PRUNIDRESPOSTA", list(v))
     for v in [(1, "Mesmo princípio", "S"), (2, "Mesma classe", "N")]:
@@ -132,11 +145,13 @@ def linhas(r, ins):
         ins("TBCBARACLASSIFREACAO", list(v) + [1, "S", None])
     for v in [(1, "Paciente", "S"), (2, "Familiar", "N"), (3, "Documento", "X")]:
         ins("TBCBARAORIGEMINFO", list(v) + [None])
-    # ordem da chave diferente da gravidade; 300 não cabe no nível (TINYINT UNSIGNED)
-    for v in [(1, "Grave", "S"), (2, "Leve", "S"), (3, "Moderada", "S"), (300, "Gravidade fora exemplo", "N")]:
+    # ordem da chave diferente da gravidade: o nível vem do nome (Grave = 3); nome sem par recusa (1048)
+    for v in [(1, "Grave", "S"), (2, "LEVE", "S"), (3, "Moderada", "S"), (4, "Gravidade fora exemplo", "N")]:
         ins("TBCBARASEVERIDADE", list(v) + [None])
-    for v in [(1, "Alimentos exemplo"), (2, "Medicamentos exemplo")]:
+    for v in [(1, "Alimentos exemplo"), (2, "Medicamentos exemplo"), (3, "  Ambiental   exemplo ")]:
         ins("TBCLASSIFALERGIA", list(v))
+    for i in range(1, 3):
+        ins("TBDIGITAL_VIAACESSO", [GUID % i, "V%d" % i, "Via digital exemplo %d" % i])
     for v in [(1, "Farmacocinética", "S"), (2, "Farmacodinâmica", "S"), (3, "Outra exemplo", "N")]:
         ins("TBCLASSINTMED", list(v))
     return {
@@ -144,15 +159,14 @@ def linhas(r, ins):
                                                                "restricao_destino_1048": 2}},
         "PRTPLAN_PRTPINFUSAO": {"gravados": 3, "pendencias": {}},
         "PRTPNOTALEMB": {"gravados": 2, "pendencias": {}},
-        "PRTPPERGUNTA": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1}},
-        "PRTPPROT": {"gravados": 4, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 1,
-                                                   "restricao_destino_1048": 1}},
+        "PRTPPERGUNTA": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}},
+        "PRTPPROT": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
         "PRTPRECMED": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}},
         "PRTPTCLE": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "PRUNIDINFUSAO": {"gravados": 3, "pendencias": {"restricao_destino_1406": 1, "pai_inexistente": 1,
+        "PRUNIDINFUSAO": {"gravados": 4, "pendencias": {"texto_resumido": 1, "pai_inexistente": 1,
                                                         "valor_presumido": 4}},
-        "PRKITSOL": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
-                                                   "valor_fora_do_dominio": 1}},
+        "PRKITSOL": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 2,
+                                                   "restricao_destino_4025": 1}},
         "PRUNIDRESPOSTA": {"gravados": 3, "pendencias": {}},
         "PRVALIDARMEDDUPLICPRESC": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "PRVIAAEREA": {"gravados": 3, "pendencias": {}},
@@ -161,6 +175,7 @@ def linhas(r, ins):
                                                         "restricao_destino_1062": 1}},
         "TBCBARACLASSIFREACAO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "TBCBARAORIGEMINFO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}},
-        "TBCBARASEVERIDADE": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1264": 1}},
+        "TBCBARASEVERIDADE": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "TBCLASSINTMED": {"gravados": 3, "pendencias": {}},
+        "TBCLASSIFALERGIA": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
     }

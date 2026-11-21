@@ -1,79 +1,100 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "prefixo de domínio no código (ex.: especial '=prefixo:<texto>' ou código composto '#junta:TAB,COD') para origens diferentes no mesmo destino com código único (já pedido no L5/L6): TBCTRDTH, TBCTRMEM, TBCTRTHM e TBPROCTO -> tabela_preco.codigo; TBITEATE (TAB,COD) -> tipo_atendimento_tabela.codigo",
-   "motivo": "sem prefixo, o COD repetido entre as quatro origens colide em uq_tabela_preco_codigo e o COD de TBITEATE repete entre tabelas"
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar ou _truncar)",
+   "mudanca": "data (datetime.date) gravada em coluna DATETIME/TIMESTAMP do destino vira datetime às 00:00 antes da soma de controle (os dois lados da conciliação na mesma forma); vale para coluna da origem DATE e para =@data_carga / =~@data_carga",
+   "motivo": "valor_indice.ocorrido_em (TBINDICE.DATA) e competencia_faturamento.aberta_em (=~@data_carga): gravam e relêem certo, mas a conciliação diverge (resumo '2025-01-01' x '2025-01-01 00:00:00'); é o único erro da autoconferência da L8-03",
+   "n": 1
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv",
-   "mudanca": "pares TBCTRTAT/TBITEATE.TAB -> tipo_atendimento_tabela.padrao (sus, tuss, presencial, proprio), revisados pelo cliente sobre as 3 tabelas da origem; depois declarar TBITEATE (código composto, NOME -> descricao, COD -> codigo_externo, TAB -> padrao depara=valores) e deixar TBCTRTAT só como domínio",
-   "motivo": "TBCTRTAT é o domínio do padrão, não tipo de atendimento"
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "acrescentar 2 linhas: TBCTRTAT\tdescarte\tmecanismo_do_produto\tdomínio do padrão do tipo de atendimento (CHECK de tipo_atendimento_tabela.padrao); o padrão de cada tipo vem de TBITEATE.TAB | TBCONVPERCTAPAC\tdescarte\tmecanismo_do_produto\tlista fixa das opções do percentual de taxa em pacote: a opção de cada fonte pagadora entra em regra_consistencia_lancamento (tipo percentual_taxa_pacote) pela coluna de TBCONVEN (gravar só DEPOIS do pedido 10, à L5-06). TBMATMED NÃO é descarte: passa a bloqueada por mecanismo (pedido 11)",
+   "motivo": "cobertura total da L8-03 (decisões em F4-decisoes-destino.md, seção L8-03)",
+   "n": 2
   },
   {
-   "arquivo": "decisão do dono / conector/mapa/tabelas.tsv",
-   "mudanca": "TBCTRDTH, TBCTRMEM e TBCTRTHM: o cabeçalho vai só para tabela_preco (tirar preco_diaria_taxa, preco_negociado_matmed e preco_procedimento dos destinos, que são itens: vêm de TBTABDTH, TBTABTHM e da negociação); referencia (NOT NULL) e tipo_item como literal presumido por origem (=~propria; =diaria_taxa, =misto, =honorario)",
-   "motivo": "o segundo destino exige item e sequência que o cabeçalho não tem"
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "arestas por referência declarada na L8-03 (ordens atuais do tabelas.tsv): TBCRECOO(657)->TBPROFIS(866); TBCREMED(658)->TBCONVEN(707); TBCREMED->TBPROFIS(866); TBCREPRS(659)->TBCONVEN; TBCREPRS->TBPRESER(871); TBCREPRS->TBTABATO(682); TBDTHCDC(664)->TBTABDTH(705); TBDTHCDC->TBCENCUS(808); TBINDICE(665)->TBCONVEN; e TBLOCCON(672)->TBCENCUS em DUAS FASES (declarado/ciclos.tsv: TBCENCUS já depende de TBLOCCON)",
+   "motivo": "os pais vêm depois na ordem atual: sem as arestas a referência fica pai_inexistente e a linha é recusada (NOT NULL ou CHECK); na imagem sintética TBCREPRS e TBDTHCDC gravam 0 por isso. Aplicadas as arestas, troco test_contagens_dos_vinculos e o esperado para as contagens com o pai presente",
+   "n": 3
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino encadeado: criar a pessoa_juridica (documento CGC por cpf_cnpj, nome, endereço, CNES) e gravar o id em cooperativa_medica.pessoa_juridica_id, como pedido para a fonte pagadora no L5-06",
-   "motivo": "TBCOOPER (242 na referência) não carrega sem pessoa_juridica_id NOT NULL e único; TBCRECOO depende dela"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova)",
+   "mudanca": "destino ANTES do principal: opção de via (ex.: 'antes') num destino secundário faz a linha dele ser gravada primeiro e o id ir para a coluna do principal por '@id:<destino>' (ex.: TBCOOPER: pessoa_juridica com adotar:cnpj, depois cooperativa_medica.pessoa_juridica_id = @id:pessoa_juridica). É o mesmo pedido 2 do L5-05 (TBEMPHOS -> mantenedora)",
+   "motivo": "TBCOOPER (242 na referência) bloqueada: cooperativa_medica.pessoa_juridica_id NOT NULL e único; as declarações estão prontas e comentadas (#TBCOOPER) no colunas.d/L8-03.tsv; TBCRECOO (membro_cooperativa) já está declarada e passa a carregar com ela",
+   "n": 4
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência derivada (já pedida no L5-06/L7-04): TBCRECOO/TBCREMED.ID_TBCBOPRO -> inscricao_conselho.profissional_id para membro_cooperativa, credenciamento_cobranca e profissional_fonte_pagadora .profissional_id",
-   "motivo": "o destino exige o profissional e a origem só tem a inscrição no conselho"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica nova)",
+   "mudanca": "referência fixa por código a um cadastro do destino ('ref=<tabela>.<coluna>:<valor>' ou literal de busca '=@<tabela>.codigo:<valor>'): o id da linha do destino com aquele código; ausente: pendência e NULL. Junto: referência pelo código do catálogo do produto com de-para de valores ('cod:<tabela>': valor da origem -> codigo no destino)",
+   "motivo": "TBPROCTO -> item_faturavel (grupo_faturamento_id NOT NULL sem origem: grupo 'migracao' fixo para o cliente reclassificar), TBPORMED (porte_procedimento pelo código PORTE), TBCREMED/TBCREPRS.CONTAS -> credenciamento_cobranca.tipo_conta_id pelo código do catálogo tipo_conta (hoje o credenciamento entra sem tipo de conta, ou seja, vale para todos: ampliação registrada em F4-decisoes-destino.md para o dono)",
+   "n": 5
   },
   {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "vigencia_inicio (NOT NULL) sem fonte em membro_cooperativa, credenciamento_cobranca, profissional_fonte_pagadora, diaria_taxa_centro_custo: literal presumido de data (ex.: '=~1900-01-01' não serve; data da migração com valor_presumido) ou coluna anulável para dado migrado",
-   "motivo": "TBCRECOO, TBCREMED, TBCREPRS e TBDTHCDC não têm data de início"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica nova) + decisão de mapa com a L8-04/L8-06",
+   "mudanca": "item faturável do procedimento: TBPROCTO grava item_faturavel como PRINCIPAL (via com 'item_faturavel'; código '#codigo_derivado:ID:20:proc_', descrição NOME, tipo_item '=procedimento', grupo pela referência fixa acima) e TBTABTHM (L8-04) referencia o item por ref:TBPROCTO (ID_TBPROCTO); ou referência a destino não principal ('ref:TBTABTHM>item_faturavel', pedido do L8-06)",
+   "motivo": "TBINDPRO (valor_indice_item.item_faturavel_id) e TBPACTHM (pacote.item_faturavel_id e cobranca_item_faturavel_id, NOT NULL) não têm de onde tirar o item enquanto nenhuma origem grava item_faturavel como principal; TBPACTHM depois: pacote por adotar:codigo (um por CON,CONTAS,THM), pacote_item_incluso por linha e pacote_contrato pela fonte",
+   "n": 6
   },
   {
-   "arquivo": "conector/mapa/declarado (L5-06)",
-   "mudanca": "carregar a fonte pagadora (TBCONVEN, hoje comentada no L5-06) e declarar referência CON/CONV -> fonte_pagadora por via ref:TBCONVEN",
-   "motivo": "TBCREMED, TBCREPRS, TBINDICE, TBINDPRO, TBPORMED, TBPACTHM e TBMATMED (equivalência) exigem fonte_pagadora_id NOT NULL"
+   "arquivo": "conector/sante_conector/mapa.py (passos_ref)",
+   "mudanca": "chave alternativa composta: 'ref:T.(K1,K2)(C1,C2)' (colunas K1,K2 do pai casadas com C1,C2 desta linha); e código derivado de várias colunas ('#codigo_derivado:TAB+COD:30:<prefixo>')",
+   "motivo": "TBDTHCDC.DTH (operação dentro da tabela TAB em TBTABDTH) e TBCREPRS.PS (código do prestador dentro do ato em TBPRESER) hoje vão por chave alternativa de uma coluna (repetida: pai_ambiguo); TBITEATE.codigo (COD repete entre tabelas TAB: a repetição é recusada com 1062)",
+   "n": 7
   },
   {
-   "arquivo": "conector/mapa/dependencias.tsv / ordem",
-   "mudanca": "CDC -> TBCENCUS (ordem 831) e PROCTO/THM -> TBTABTHM (ordem 706) apontam tabelas carregadas depois desta fatia: declarar a aresta (duas fases) ou reordenar",
-   "motivo": "local_cobranca.centro_custo_id, diaria_taxa_centro_custo, valor_indice_item e preco_procedimento ficariam com pai_inexistente"
+   "arquivo": "conector/mapa/declarado/colunas.d da fatia de TBMODULO (L5)",
+   "mudanca": "carregar TBMODULO em modulo_sistema com adotar:codigo (o catálogo do produto é adotado, nunca duplicado), para que ref:TBMODULO resolva (usada por TBIRREGULARID_TBMODULO na L8-03 e por TBEDITREL na L8-18)",
+   "motivo": "sem o conector_origem do módulo, tipo_pendencia_conta_modulo.modulo_sistema_id fica pai_inexistente e a linha é recusada (NOT NULL)",
+   "n": 8
   },
   {
-   "arquivo": "decisão do dono",
-   "mudanca": "TBMATMED (910414 na referência) é a referência de preço de mercado licenciada: pela regra 7 só entra por hospital com licença comprovada; definir se a carga dele vira opcional por cliente (com a licença registrada) e de onde vêm fonte_referencia e tipo_produto",
-   "motivo": "catálogo licenciado nunca entra na base do produto"
+   "arquivo": "conector/mapa/tabelas.tsv (gerador) / decisão",
+   "mudanca": "TBCTRDTH, TBCTRMEM e TBCTRTHM: tirar preco_diaria_taxa, preco_negociado_matmed e preco_procedimento dos destinos (só tabela_preco, como declarado); TBPROCTO: destino item_faturavel (hoje tabela_preco;preco_procedimento); TBIRREGULARID: tirar tipo_pendencia_prontuario; TBCREMED: tirar profissional_fonte_pagadora (o fato vem de TBCBOPRO_TBCONVEN, L5-06)",
+   "motivo": "decisões em F4-decisoes-destino.md, seção L8-03; hoje o mapa lista destinos que a fatia não declara",
+   "n": 9
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "data composta: competência (primeiro dia do mês) a partir de mês e ano em colunas separadas (FCPARAM MESPRO, ANOPRO -> competencia_faturamento.competencia), com estabelecimento por @estabelecimento e módulo literal; o resto de FCPARAM vai para o mecanismo de parâmetros, MENOS FCPARAM.ID_TBIRREGCTRCTA (modo global de controle da irregularidade), cujo destino é tipo_pendencia_conta.controle (ver pedido do modo global)",
-   "motivo": "competência NOT NULL e CHECK de dia 1 sem regra que junte mês e ano"
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia de TBCONVEN)",
+   "mudanca": "declarar TBCONVEN.ID_TBCONVPERCTAPAC num destino secundário opcional regra_consistencia_lancamento: fonte_pagadora_id=@id, tipo_regra '=percentual_taxa_pacote', opcao pela referência encadeada 'ref:TBCONVPERCTAPAC>NOME' (regra texto; via com 'regra_consistencia_lancamento;opcional'); vazio não grava",
+   "motivo": "hoje a coluna não está declarada em nenhum colunas.d: sem ela a opção de percentual de taxa em pacote de cada convênio se perde e o descarte de TBCONVPERCTAPAC não se sustenta",
+   "n": 10
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py ou decisão do dono",
-   "mudanca": "agregação: TBINDICE (um indice_cobranca por IND e um valor_indice por linha, ocorrido_em da DATA) e TBPACTHM (um pacote por CON,CONTAS,THM e um pacote_item_incluso por linha)",
-   "motivo": "carga linha a linha duplicaria o cabeçalho e violaria as chaves únicas"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova)",
+   "mudanca": "filtro de linha pela origem do pai: opção de via 'so_se:<ref>><COL>=<valores>' (ex.: 'so_se:TBCTRMEM>REF_BRA=N;TBCTRMEM>REF_SIMP=N') ou interruptor de licença do cliente ('licenca:brasindice|simpro'): a linha que não passa é PULADA com a pendência baixa licenca_nao_comprovada (contada na conciliação como pulada, nunca gravada)",
+   "motivo": "TBMATMED (910.414 na referência): os itens das tabelas próprias do hospital carregam em item_referencia_matmed (fonte_referencia 'outra'); os da referência comercial (Brasíndice, Simpro) só com a licença do cliente (regra 7). Também precisa do código de várias colunas (TAB+COD, pedido 7) porque o COD repete entre tabelas",
+   "n": 11
   },
   {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "TBIRREGULARID também alimenta tipo_pendencia_prontuario pelo mapa; hoje só entra em tipo_pendencia_conta. Separar pelo módulo (TBIRREGULARID_TBMODULO) ou manter só na conta. TBMODULO NÃO é carregado pelo conector (modulo_sistema é catálogo do produto, L5-02): o módulo entra por de-para (ver pedido de referência pelo código do catálogo do produto)",
-   "motivo": "gravar as 39 nos dois destinos duplicaria o cadastro"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica nova)",
+   "mudanca": "de-para de valores de várias colunas: depara 'valores' com coluna composta 'REF_BRA+REF_SIMP' (chave do par = valores unidos por '|', ex.: 'S|N' -> brasindice, 'N|S' -> simpro, 'N|N' -> propria)",
+   "motivo": "tabela_preco.referencia de TBCTRMEM: a origem diz a referência em duas colunas; hoje entra =~propria presumida",
+   "n": 12
   },
   {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "TBCONVPERCTAPAC (4 opções) e TBPORMED.PORTE: a lista de opções vira domínio de regra_consistencia_lancamento.opcao (pares em valores.tsv) e o porte em texto precisa de referência a porte_procedimento pelo código",
-   "motivo": "sem fonte pagadora e tipo de regra a linha não é uma regra; o porte não tem chave_origem"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica nova)",
+   "mudanca": "referência à linha única de parâmetros: 'ref:FCPARAM(*)>ID_TBIRREGCTRCTA' (a tabela de uma linha só: o valor da coluna dela, seguido do de-para de valores); mais de uma linha: pai_ambiguo",
+   "motivo": "tipo_pendencia_conta.controle: o modo de controle é global na origem (FCPARAM.ID_TBIRREGCTRCTA); hoje entra =~alerta presumido, e um hospital que bloqueava o fechamento passaria a só alertar",
+   "n": 13
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/declarado/valores.d/L8-03.tsv",
-   "mudanca": "referência genérica pelo código de um catálogo do produto (ex.: via 'cod:modulo_sistema'): o valor da origem passa pelo de-para de valores (depara=valores: id do módulo da origem -> modulo_sistema.codigo do produto) e o id é buscado no destino por codigo; código sem par: valor_fora_do_dominio; código sem linha no destino: pai_inexistente (NOT NULL recusa). Com isso declarar TBIRREGULARID_TBMODULO.ID_TBMODULO -> tipo_pendencia_conta_modulo.modulo_sistema_id (via cod:modulo_sistema, depara valores) e a imagem sintética prepara modulo_sistema no PREPARO_DESTINO por código, sem PAIS_EXTERNOS de TBMODULO. Os pares (43 vínculos, módulos da origem) são revisados pelo cliente; o mesmo mecanismo serve ao de-para do módulo pedido no L6-05",
-   "motivo": "modulo_sistema é gravado com o produto, nunca pelo conector: nenhuma linha dele tem conector_origem do módulo da origem, então chave_origem recusaria sempre os 43 vínculos (pai_inexistente + 1048). TBIRREGULARID_TBMODULO fica sem destino até lá"
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliar)",
+   "mudanca": "a conciliação de uma entidade com destino 0 e TODAS as recusas pai_inexistente de um pai que está no plano da mesma execução (carregado depois) vira erro 'ordem_de_carga', não 'conferido'",
+   "motivo": "hoje TBDTHCDC conta como CARREGA, grava 0 e concilia ok porque tudo é recusado",
+   "n": 14
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py ou decisão do dono",
-   "mudanca": "de-para do modo global de controle da irregularidade: FCPARAM.ID_TBIRREGCTRCTA (opção de TBIRREGCTRCTA, pares em valores.d -> alerta, impede_fechamento, impede_envio) aplicado a tipo_pendencia_conta.controle de TODOS os tipos migrados do cliente (valor de uma tabela de linha única replicado num destino de N linhas); TBIRREGCTRCTA fica só como domínio desse de-para",
-   "motivo": "no modelo o efeito é por tipo (tipo_pendencia_conta.controle); na origem é global. Até lá a fatia grava controle como literal presumido '=~alerta' (valor_presumido por linha): num hospital cujo modo bloqueava o fechamento, a conta fecharia com pendência aberta; a pendência valor_presumido avisa o cliente para revisar"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "tabela cuja coluna NOT NULL do destino só tem referência a uma tabela BLOQUEADA conta como BLOQUEADA (causa pai_bloqueado), não CARREGA",
+   "motivo": "TBCRECOO (membro_cooperativa.cooperativa_medica_id -> TBCOOPER) é contada como CARREGA e recusa todas as linhas",
+   "n": 15
+  },
+  {
+   "n": 16,
+   "arquivo": "conector/mapa/declarado/valores.d/L8-03.tsv + colunas.d/L8-03.tsv (TBITEATE)",
+   "mudanca": "o orquestrador (com acesso à imagem) confirma os 3 códigos de TBCTRTAT (domínio do sistema, sem dado de pessoa: padrão SUS, TUSS, presencial) e grava os pares TBITEATE TAB -> tipo_atendimento_tabela.padrao (sus/tuss/presencial); então TBITEATE.TAB passa de não migrada para 'TAB tipo_atendimento_tabela.padrao inteiro valores' no lugar de =~proprio. Com o código de várias colunas (pedido 7, '#codigo_derivado:TAB+COD:30:atendimento_') a repetição de COD entre tabelas deixa de ser recusada (1062)",
+   "motivo": "hoje todo tipo entra 'proprio' presumido e os tipos SUS e TUSS perdem o padrão; a fatia não lê a imagem real e não inventa a ordem dos códigos"
   }
  ]
 }

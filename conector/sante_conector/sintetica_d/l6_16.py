@@ -6,12 +6,18 @@ Anomalias cobertas:
 - nome ausente em coluna obrigatória do destino (restricao_destino_1048);
 - sigla repetida (única no destino: restricao_destino_1062);
 - literal presumido (=~): pendência valor_presumido em toda linha lida;
+- natureza do caráter e grupo da anestesia pelo NOME (de-para de valores, valores.d/L6-16.tsv): nome sem par vira
+  NULL com valor_fora_do_dominio e fica o padrão do destino;
 - parâmetros do usuário (tabela sem chave): S/N inválido nas 8 permissões (uma pendência por coluna); usuário nunca
   carregado (pai_inexistente, recusa pelo NOT NULL), usuário repetido com permissões opostas (único por usuário e
-  estabelecimento: 1062), usuário nulo (1048), CON_AGE nulo (padrão TRUE do destino: pedido no L6-16.json) e
+  estabelecimento: 1062), usuário nulo (1048), CON_AGE nulo (FALSE pelo de-para de valores: permissão ausente é negada) e
   pode_criar_agendamento presumido (valor_presumido por linha);
-- ícone binário presente (fica fora: vai para arquivo, pedido em L6-16.json).
-CCAGENDA_EXC_CANC, CCHISAGE, CCPROEXT, CCSALAS, CCSALAS_TBUSERS, CCCADCIR, CCAGENDA e CCLANCIR ficam na imagem e NÃO são
+- ícone binário presente (fica fora: vai para arquivo, pedido em L6-16.json);
+- agenda excluída ou cancelada (registro_excluido com retrato): operação presumida (valor_presumido por linha),
+  atendimento e prontuário nunca vistos (pai_inexistente, coluna opcional: grava NULL), sem data da última
+  atualização (1048) e usuário nunca carregado (pai_inexistente e 1048). RICADPAC entra só com as colunas da
+  referência pelo prontuário (pai do L3, registrado como já carregado).
+CCHISAGE, CCPROEXT, CCSALAS, CCSALAS_TBUSERS, CCCADCIR, CCAGENDA e CCLANCIR ficam na imagem e NÃO são
 carregadas (sem coluna declarada; motivos e pedidos em docs/obra/fatias/f4/saida/L6-16.json).
 """
 import datetime
@@ -104,14 +110,18 @@ CREATE TABLE CCLANCIR ("ID" INTEGER NOT NULL, "ID_CCCADCIR" INTEGER NOT NULL, "O
   INTEGER, "ID_CIRC" INTEGER, "TECNICA" SMALLINT, "DATA_HORA_INCLUSAO" TIMESTAMP, "DATA_HORA_ULTIMA_ATUALIZACAO"
   TIMESTAMP, "ID_TBPROCTO_TAXA" INTEGER, "QUANTIDADE" DOUBLE PRECISION, "ID_TBCBOPRO_AUX4" INTEGER, "HORAF" CHAR(4),
   CONSTRAINT PK_L616_CCLANCIR PRIMARY KEY ("ID"));
+CREATE TABLE RICADPAC ("ID" INTEGER NOT NULL, "PRONT" INTEGER NOT NULL, CONSTRAINT PK_L616_RICADPAC PRIMARY KEY ("ID"));
 """
-PAIS_EXTERNOS = {"TBUSERS": ["USR_EXEMPLO_A", "USR_EXEMPLO_B", "USR_EXEMPLO_C", "USR_EXEMPLO_E"]}
+PAIS_EXTERNOS = {"TBUSERS": ["USR_EXEMPLO_A", "USR_EXEMPLO_B", "USR_EXEMPLO_C", "USR_EXEMPLO_E"],
+                 "RICADPAC": ["1", "2"], "RECADATE": ["5000"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 CARREGADAS = ("CCPARAM", "CCTIPOLOCALBLC", "CCTIPOMOVIMENTACAOPAC", "CCTPURGENCIA", "PRFA_CAD_MODO_RESPIR",
-              "PRFA_CAD_POSICAO_CIR", "PRFA_TIPO_SINAL", "PRTIPO_PROFISSIONAL", "TBANESTESIA")
-NAO_CARREGADAS = ("CCAGENDA_EXC_CANC", "CCHISAGE", "CCPROEXT", "CCSALAS", "CCSALAS_TBUSERS", "CCCADCIR", "CCAGENDA",
+              "PRFA_CAD_POSICAO_CIR", "PRFA_TIPO_SINAL", "PRTIPO_PROFISSIONAL", "TBANESTESIA", "CCAGENDA_EXC_CANC")
+# pai do L3 só com as colunas da referência pelo prontuário (não é carregado pela fatia)
+PAIS_ORIGEM = ("RICADPAC",)
+NAO_CARREGADAS = ("CCHISAGE", "CCPROEXT", "CCSALAS", "CCSALAS_TBUSERS", "CCCADCIR", "CCAGENDA",
                   "CCLANCIR")
 _COL = re.compile(r'"(\w+)"\s+([A-Z]+)(?:\((\d+)(?:,(\d+))?\))?')
 
@@ -151,17 +161,37 @@ def _generica(tabela, i):
     return v
 
 
+def _exc_canc(**kw):
+    """Linha da agenda excluída ou cancelada: genérica e falsa, com as colunas lidas dadas por nome."""
+    nomes = [n for n, _, _ in colunas("CCAGENDA_EXC_CANC")]
+    v = _generica("CCAGENDA_EXC_CANC", 1)
+    for k, x in kw.items():
+        v[nomes.index(k)] = x
+    return v
+
+
 def linhas(r, ins):
     for t in NAO_CARREGADAS:
         for i in (1, 2):
             ins(t, _generica(t, i))
+    ins("RICADPAC", [1, 700])
+    ins("RICADPAC", [2, 701])
+    # agenda excluída ou cancelada: 1 completa; 2 atendimento nunca visto e sem prontuário; 3 prontuário nunca visto;
+    # 4 sem a data da última atualização (1048); 5 usuário nunca carregado (pai_inexistente e 1048)
+    ts = datetime.datetime(2026, 2, 3, 14, 5)
+    for i, pront, reg, usu, quando in [(1, 700, 5000, "USR_EXEMPLO_A", ts), (2, None, 9999, "USR_EXEMPLO_B", ts),
+                                       (3, 888, 5000, "USR_EXEMPLO_C", ts), (4, 701, 5000, "USR_EXEMPLO_A", None),
+                                       (5, 701, 5000, "USR_EXEMPLO_D", ts)]:
+        ins("CCAGENDA_EXC_CANC", _exc_canc(ID=i, PRONT=pront, REG=reg, USUARIO=usu,
+                                           DATA_HORA_ULTIMA_ATUALIZACAO=quando, JUSTIF="Justificativa exemplo %d" % i))
     # local do paciente no bloco: 2 com espaços repetidos; 3 com S/N inválido (padrão TRUE); 4 com S/N nulo
     for v in [(1, "Pré-operatório exemplo", "S"), (2, "  Sala   exemplo  ", "S"), (3, "Recuperação exemplo", "X"),
               (4, "Espera exemplo", None), (5, "Inativo exemplo", "N")]:
         ins("CCTIPOLOCALBLC", list(v))
     for v in [(1, "Admissão exemplo", "S"), (2, "Transferência exemplo", "S"), (3, "Alta do bloco exemplo", "N")]:
         ins("CCTIPOMOVIMENTACAOPAC", list(v))
-    for v in [(1, "Eletiva exemplo", "S"), (2, "Urgência exemplo", "S"), (3, "Emergência exemplo", "T")]:
+    # caráter: natureza pelo nome (de-para de valores); 4 sem par: NULL com valor_fora_do_dominio, fica o padrão
+    for v in [(1, "ELETIVA", "S"), (2, "Urgência", "S"), (3, "EMERGÊNCIA", "T"), (4, "Caráter exemplo", "S")]:
         ins("CCTPURGENCIA", list(v))
     for v in [(1, "Espontâneo exemplo", "VE", "S"), (2, " Controlado a volume ", "VCV", "S"),
               (3, "Controlado a pressão", "PCV", "N")]:
@@ -176,12 +206,14 @@ def linhas(r, ins):
     for v in [(1, "Cirurgião exemplo", "S"), (2, "Primeiro   auxiliar", "S"), (3, "Anestesista exemplo", "S"),
               (4, "Instrumentador exemplo", "N")]:
         ins("PRTIPO_PROFISSIONAL", list(v))
-    # anestesia 3 sem nome (1048); 4 com S/N nulo (padrão TRUE)
-    for v in [(1, "Geral exemplo", "S"), (2, "Raquidiana exemplo", "S"), (3, None, "S"), (4, "Local exemplo", None)]:
+    # anestesia: grupo pelo nome (de-para de valores); 3 sem nome (1048); 4 com S/N nulo (padrão TRUE); 6 sem par
+    # (NULL com valor_fora_do_dominio, fica o padrão geral)
+    for v in [(1, "GERAL", "S"), (2, "Raquidiana", "S"), (3, None, "S"), (4, "Local", None), (5, "Bloqueio", "S"),
+              (6, "Técnica exemplo", "S")]:
         ins("TBANESTESIA", list(v))
     # parâmetros do usuário (sem chave): C com S/N inválido; D nunca carregado (pai_inexistente, recusa pelo NOT NULL);
     # A repetido com permissões opostas (hoje 1062 numa delas; pedido: as duas recusadas); usuário nulo (1048);
-    # E com CON_AGE nulo (hoje fica com o padrão TRUE do destino; pedido: FALSE com pendência)
+    # E com CON_AGE nulo (FALSE pelo de-para de valores, nunca o padrão TRUE do destino)
     cols = colunas("CCPARAM")
     for u, flag in [("USR_EXEMPLO_A", "S"), ("USR_EXEMPLO_B", "N"), ("USR_EXEMPLO_C", "X"), ("USR_EXEMPLO_D", "S"),
                     ("USR_EXEMPLO_A", "N"), (None, "S"), ("USR_EXEMPLO_E", "S")]:
@@ -193,12 +225,14 @@ def linhas(r, ins):
     return {
         "CCTIPOLOCALBLC": {"gravados": 5, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 1}},
         "CCTIPOMOVIMENTACAOPAC": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "CCTPURGENCIA": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
+        "CCTPURGENCIA": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}},
         "PRFA_CAD_MODO_RESPIR": {"gravados": 3, "pendencias": {}},
         "PRFA_CAD_POSICAO_CIR": {"gravados": 3, "pendencias": {}},
         "PRFA_TIPO_SINAL": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1}},
         "PRTIPO_PROFISSIONAL": {"gravados": 4, "pendencias": {}},
-        "TBANESTESIA": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
+        "TBANESTESIA": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
+        "CCAGENDA_EXC_CANC": {"gravados": 3, "pendencias": {"valor_presumido": 5, "pai_inexistente": 3,
+                                                            "restricao_destino_1048": 2}},
         "CCPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 8, "pai_inexistente": 1,
                                                   "restricao_destino_1048": 2, "restricao_destino_1062": 1}},
     }

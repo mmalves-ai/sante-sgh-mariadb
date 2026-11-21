@@ -1,74 +1,70 @@
 {
+ "fatia": "L6-13",
  "pedidos": [
   {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "linha: PRLANCREGISTROTEMPO\tdescarte\tsem_valor\t2 linhas presas a um envio para plataforma externa cujo cabeçalho (PRCABNEXODATA) não é carregado (L8-17); a origem não tem o tipo de evento nem o usuário, NOT NULL no destino",
+   "motivo": "cobertura total L6-13: descarte de produto registrado em F4-decisoes-destino.md"
+  },
+  {
+   "arquivo": "tools/obra/gerar_mapa_conector.py (destino no mapa) + F2.2 (modelo)",
+   "mudanca": "PRASSINAT_DOC_PRCHKGERAL: trocar o destino documento_prontuario por trilha_auditoria (declaração pronta comentada em colunas.d/L6-13.tsv); no modelo, propor horario_administracao.documento_assinado_id (ou ligação horario_administracao x documento_assinado) e então declarar por complementa",
+   "motivo": "o verificador recusa destino fora do mapa; documento_prontuario criaria 4,6 milhões de documentos sem paciente, tipo, título nem autor"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py; colunas.d/L7-07.tsv (GEITENS)",
+   "mudanca": "referência a destino SECUNDÁRIO do pai (ex.: ref:GEITENS/item_prescritivel, entidade '<chave>/item_prescritivel' do conector_origem) e GEITENS declarar o destino item_prescritivel",
+   "motivo": "sem isso, item padronizado em PRITENSESQ é recusado pelo CHECK do item (visível como restricao_destino_4025) e PRITENSGLICEMIA/PRITEMRECEITA ficam sem o item prescritível"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_chave_alternativa)",
+   "mudanca": "opção de chave alternativa sem distinção de caixa e acento (ex.: ref:T.K com sufixo ~i)",
+   "motivo": "a unidade de prescrição casa o código da unidade de consumo com a sigla de integração de TBUNIDADEMEDIDA (mesma chave da L6-10 e L6-11, ref:TBUNIDADEMEDIDA.SIGLA_API); caixa diferente vira pai_inexistente e recusa (NOT NULL)"
+  },
+  {
    "arquivo": "conector/sante_conector/conferencia.py",
-   "mudanca": "fatia sem tabela carregável: com o plano vazio, não aplicar o DDL de destino (hoje aplicar_script('') dá 1065 'Query was empty') e aceitar esperado {} quando nenhuma tabela da fatia entra no plano (conferir só que nenhuma tabela da fatia foi planejada e que a imagem gerou as tabelas), em vez do erro 'a fatia não declarou o esperado'",
-   "motivo": "L6-13 tem as 23 tabelas bloqueadas por regra genérica que falta; a conciliação não roda e a autoconferência nunca dá ok, mesmo com declarações, testes e imagem corretos"
+   "mudanca": "tabelas de PAIS_EXTERNOS presentes na imagem (pais lidos só pela referência encadeada) ficam fora do plano da conferência",
+   "motivo": "planejadas, viram 'alteradas' e a conciliação diverge; L6-13 contorna com MAPA_TESTE (mapa real sem as declarações dos pais), que sai quando a regra existir"
   },
   {
-   "arquivo": "conector/sante_conector/mapa.py + conector/sante_conector/carga_mapa.py + conector/verificar_mapa.py",
-   "mudanca": "referência a COLUNA do destino do pai no campo via: 'ref:<TABELA>><coluna>' (resolve o pai pelo conector_origem e grava a coluna indicada da linha de destino dele), com cadeia 'ref:<TABELA>><col1>><col2>' seguindo as FKs do destino; pai pendente propaga pai_pendente como hoje; verificador confere que cada coluna existe e é FK",
-   "motivo": "bloqueia 15 das 23 tabelas: TBCBOPRO>profissional_id (inscricao_conselho; PRRECEITA, PRVELOCINFUSAO, PRLANCAMENTOEXAME, PRLANCREGISTROTEMPO, PRCHKGERAL, PREXTRATOITEM_PRCHKGERAL, HTCHKGERAL), PRPRESCPROCED>prescricao_item_id (PRSENECESSARIO_PRPRESCPROCED, PRITENSGLICEMIA), PRPRESCMED>prescricao_item_id (PRSENECESSARIO_PRPRESCMED), PRRESPOSTA>modelo_campo_id (PREVOLPAC), HTPACIENTE>paciente_id (PRRECEITA), PRLANGERAL>prescricao_id>atendimento_id (PRCHKGERAL); já pedido por L5-03 e L5-06"
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação de complementa)",
+   "mudanca": "complementa: coluna sem valor da origem (NULL ou sem par no de-para) NÃO entra no UPDATE (nem com o padrão do destino); conciliação só das colunas que a linha escreveu",
+   "motivo": "PRPRESC_AUTOPREENCHIDO tem uma linha por campo do mesmo item (138.274 linhas): hoje a marca de quantidade grava o padrão (falso) em dose_autopreenchida e apaga a marca de dose anterior, além de divergir a conciliação; a imagem sintética só prova uma marca por item até o motor mudar"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py",
-   "mudanca": "referência a destino SECUNDÁRIO do pai: 'ref:<TABELA>/<tabela destino>' resolve pela entidade '<chave>/<tabela destino>' do conector_origem (a que a carga de vários destinos já grava)",
-   "motivo": "GEITENS/item_prescritivel (o principal é insumo) em PRITEMRECEITA, PRITENSESQ, PRITENSGLICEMIA e PRPRESCMED (sem ele, todo medicamento padronizado é recusado por ck_prescricao_item_medicamento_04); HTATENDIMENTO/atendimento (o principal é trilha_auditoria) em PRRECEITA e HTATENDALTA"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "destino com 'complementa' não exige as NOT NULL do destino (a linha já existe), como o opcional",
+   "motivo": "PRPRESC_AUTOPREENCHIDO aparece como coluna_obrigatoria_sem_fonte, mas carrega por UPDATE"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) ou decisão do dono",
-   "mudanca": "dar uma origem a unidade_prescricao (nenhuma tabela do mapa a alimenta): ex. TBUNICON com segundo destino unidade_prescricao (codigo = código da unidade, @id em unidade_medida_id) e a coluna ID_TBUNICON_UNI_PRESC com via 'ref:TBUNICON/unidade_prescricao' pelo código",
-   "motivo": "unidade_prescricao_id é NOT NULL em prescricao_item_solucao_etapa, prescricao_item_material, prescricao_item_glicemia e prescricao_item_medicamento: bloqueia PRITENSESQ, PRITENSGERAL, PRITENSGLICEMIA e PRPRESCMED (cerca de 2,48 milhões de linhas na imagem de referência) e, em cadeia, PRSENECESSARIO_PRPRESCMED"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra)",
+   "mudanca": "valor condicionado a outra coluna (ex.: administrado_em <- DATA_HORA_SITUACAO_CHECAGEM e administrado_por <- ID_TBCBOPRO_SITUACAO_CHECAGEM só quando SITUACAO_CHECAGEM for de administração, por de-para de valores da situação); PRIORIDADE ALTA",
+   "motivo": "6,28 milhões de horários sem quem/quando administrou; os eventos (HTCHKGERAL, 1,39 milhão) não cobrem o estado atual de todos"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "PRITENSESQ: tirar prescricao_item_solucao_componente dos destinos (fica só prescricao_item_solucao_etapa)",
-   "motivo": "cada linha é um componente por etapa e casa coluna a coluna com prescricao_item_solucao_etapa; gravar também em componente duplicaria cada linha"
+   "arquivo": "coordenação com L6-12 (índice das fatias mudou)",
+   "mudanca": "PREVOLPAC, PREVOLPACTMP, PRITENSGERAL e PRPRESCMED saíram de colunas.d/L6-13.tsv (agora são da L6-12; as declarações antigas estão no HEAD); PRPRESCSOL, PRPRESCVI e PRPRESCVNI agora são da L6-13 e as linhas comentadas delas em colunas.d/L6-12.tsv devem sair",
+   "motivo": "tabela em dois arquivos é erro do verificador"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) ou declarado/descartes.tsv",
-   "mudanca": "PRASSINAT_DOC_PRCHKGERAL: rever o destino documento_prontuario. É ligação N:N entre o documento assinado (PRASSINATURA_DOC) e o horário checado (PRCHKGERAL); propor tabela de ligação no modelo (ex.: horario_administracao_documento) ou coluna documento_assinado_id no horário, ou descarte justificado",
-   "motivo": "gravar em documento_prontuario criaria 4,6 milhões de documentos sem paciente, tipo, título nem autor (todos NOT NULL)"
+   "arquivo": "tools/obra/conferir-fatia-f4.sh",
+   "mudanca": "rodar `python3 -I tools/obra/cobertura_conector.py --fatia $F` e falhar quando houver tabela BLOQUEADA",
+   "motivo": "a autoconferência hoje responde ok com tabelas bloqueadas (L6-13: PRASSINAT_DOC_PRCHKGERAL, PRLANCREGISTROTEMPO, PRPRESC_AUTOPREENCHIDO)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) ou declarado/descartes.tsv",
-   "mudanca": "HTPARAMORIGEMCABIMP: tirar o destino cabecalho_impressao_documento e o motivo 'não é histórico'; destino trilha (histórico da configuração) ou descarte justificado",
-   "motivo": "tem DATA e usuário de cada mudança e espelha PRPARAMORIGEMCABIMP (mesmas 79 linhas, mesmo destino, fatia L6-07); com estabelecimento nulo a chave única não trava e o cabeçalho sairia em dobro"
+   "arquivo": "db/migracoes (F2.2: documento_emitido) + tools/obra/gerar_mapa_conector.py (destinos de PRRECEITA)",
+   "mudanca": "aceitar o tipo 'receita' em documento_emitido (ou destino de documento assinado próprio) e dar à PRRECEITA o destino secundário do documento (texto = DOCUMENTO_QRP, assinatura = ASSINATURA), ligado por receita_medica.documento_emitido_id",
+   "motivo": "documento renderizado e assinatura digital da receita (inclusive controlada) não podem ser descartados; hoje não há destino no mapa nem tipo no CHECK"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou decisão do dono)",
-   "mudanca": "especial de marca no pai: a linha não cria registro; atualiza colunas booleanas do destino do pai (ex.: 'marca:PRLANGERAL' com de-para de valores do campo TBTABELA_CAMPO -> dose_autopreenchida, quantidade_autopreenchida, etapa_autopreenchida), sem pendência quando já marcada; ou descarte justificado",
-   "motivo": "PRPRESC_AUTOPREENCHIDO (138 mil linhas) marca campos autopreenchidos de um item já gravado por PRLANGERAL; como linha nova em prescricao_item seria item falso"
+   "arquivo": "conector/sante_conector/carga_mapa.py (adotar)",
+   "mudanca": "opção de adoção em que a linha posterior ATUALIZA a adotada (ex.: `adotar:atendimento_id;atualizar`, a última versão vence, coerente com o Sincronizar 'origem vence')",
+   "motivo": "HTATENDALTA (histórico por versão): com adotar, previsão e textos ficam os da primeira versão gravada; o estado vigente já vem do cabeçalho do atendimento"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv + decisão do dono (agregação em JSON)",
-   "mudanca": "agregação de filhas no JSON do pai: PREVOLPACTMP -> registro_assistencial_rascunho.respostas (do rascunho PRCABEVOLTMP), HTFORMULCOMP -> modelo_layout.conteudo e modelo_documento_versao.dados (da versão HTCABECFORMULCOMP); ou trocar os destinos dessas tabelas",
-   "motivo": "os destinos guardam um registro por pai com JSON NOT NULL (JSON_VALID); a origem tem uma linha por resposta ou componente, e o COMPONENTE é texto de componente de tela, não JSON. Bloqueia PREVOLPACTMP, HTCABECFORMULCOMP e HTFORMULCOMP"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
-   "mudanca": "regras genéricas: (a) valor derivado da coluna preenchida ('#primeiro:<COL>=<valor>,...'), para tipo_valor (RESPALFA/CONTEVOL=texto, RESPVALOR=numero, RESPDATA=data...) e para a situação: receita_medica.situacao (DATA_HORA_SUSPENSAO preenchida=suspensa, REGISTRO_VALIDO inválido=cancelada, senão emitida), exame_lancado_prontuario.situacao (suspensão preenchida=suspenso), alta_medica.situacao (DATA_HORA_ALTA_MEDICA preenchida=efetivada, TIPO_ALTERACAO de cancelamento=cancelada) e administrado_por_profissional_id/administrado_em do horário só quando a situação da checagem for de administrado; (b) hora HHMM em texto (RESPHORA VARCHAR(4)); (c) TIME para minutos (PRPRESCMED.TEMPO_INFUSAO -> tempo_infusao_minutos); (d) número a partir de texto, com pendência quando não for número (DURACAO_TRATAMENTO, resultado de exame)",
-   "motivo": "PREVOLPAC (14,2 milhões de linhas) precisa de tipo_valor NOT NULL; sem a situação derivada, receita suspensa sairia emitida, exame suspenso sairia ativo e 780 mil altas efetivadas sairiam previstas (os CHECKs de suspensão e efetivação deixariam de valer); PRCHKGERAL perderia quem administrou cada horário"
-  },
-  {
-   "arquivo": "decisão do dono / modelo (db/migracoes 06_PEP)",
-   "mudanca": "origem de tipo_receita_id (PRRECEITA.TP_RECEITA_PADRAO_PSICOTROPICO: de-para do código para o id de tipo_receita, que nenhuma tabela alimenta), tipo_evento_tempo_id e usuario_id de registro_tempo_evento (sem origem em PRLANCREGISTROTEMPO) e profissional_id de alta_medica (NOT NULL, sem origem em HTATENDALTA: buscar no atendimento ou aceitar nulo na migração)",
-   "motivo": "colunas NOT NULL sem origem bloqueiam PRRECEITA, PRLANCREGISTROTEMPO e HTATENDALTA mesmo com a referência a coluna do pai"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.tsv (compartilhado) + decisão do dono",
-   "mudanca": "pares de valores: HTCHKGERAL.ID_PRSITUACAOCHECAGEM -> horario_administracao_evento.evento (checagem, nao_administrado, estorno, suspensao...) e PRLANCREGISTROTEMPO.ID_PRSITDOCUMENTO -> registro_tempo_evento.situacao (valido, cancelado), a partir dos códigos das tabelas de situação da origem (só códigos, sem dado de pessoa)",
-   "motivo": "o literal '=checagem' foi retirado: gravaria toda linha do histórico como checagem e escaparia de ck_horario_administracao_evento_motivo; o padrão valido contradiria o cancelamento"
-  },
-  {
-   "arquivo": "medição na imagem de referência (só contagem) + modelo db/migracoes 06_PEP, se preciso",
-   "mudanca": "contar em PRCHKGERAL os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, dar ao horario_administracao o vínculo com a filha do item (material, componente, faixa) ou outra chave, em vez da única (prescricao_item_id, previsto_em)",
-   "motivo": "cada material de PRITENSGERAL, componente de PRITENSESQ ou faixa de PRITENSGLICEMIA pode ter checagem própria no mesmo horário: a segunda linha seria recusada como restricao_destino e a checagem por componente se perderia; não medido"
-  },
-  {
-   "arquivo": "confirmação na origem (metadado ou dono)",
-   "mudanca": "unidade de PRPRESCMED.INTERVALO_ENTRE_DOSES (minutos ou horas) antes de liberar a declaração pronta para intervalo_doses_minutos",
-   "motivo": "em horas, gravar direto daria intervalo 60 vezes menor"
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência presumida)",
+   "mudanca": "marca de presunção em coluna com valor de origem ou referência (ex.: `~ref:` ou `presumido` na via), com a pendência baixa valor_presumido",
+   "motivo": "hoje só o literal `=~` marca presunção; PRVELOCINFUSAO usa `=~inclusao` na operação para marcar a linha"
   }
  ]
 }

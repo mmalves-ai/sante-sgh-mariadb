@@ -1,6 +1,6 @@
 tabela	coluna	destino	valor_origem	valor_destino	motivo
-MFTIPOLANC	TP_LANCAMENTO	tipo_credor.sentido	P	pagar	L8-10: lançamento a pagar (domínio a confirmar pelo dono, pedido 6)
-MFTIPOLANC	TP_LANCAMENTO	tipo_credor.sentido	R	receber	L8-10: lançamento a receber (domínio a confirmar pelo dono, pedido 6)
+MFTIPOLANC	TP_LANCAMENTO	tipo_credor.sentido	P	pagar	L8-10: lançamento a pagar (decisão da rodada: domínio das origens de título a pagar e a receber)
+MFTIPOLANC	TP_LANCAMENTO	tipo_credor.sentido	R	receber	L8-10: lançamento a receber (decisão da rodada: domínio das origens de título a pagar e a receber)
 GPORIGEM	DEPRECIAR	origem_bem.deprecia	1	1	L8-10: sim
 GPORIGEM	DEPRECIAR	origem_bem.deprecia	0	0	L8-10: não
 GPORIGEM	DEPRECIAR	origem_bem.deprecia		0	L8-10: vazio = não: o sistema antigo testa = 'T'

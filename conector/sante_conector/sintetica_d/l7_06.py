@@ -1,19 +1,25 @@
 """Fatia L7-06 (suprimentos, módulo SUP: cadastros de estoque, compras e fornecedores): tabelas da origem com a forma
 do dicionário e dados 100% falsos.
 
-Carregadas pelo mapa (colunas.d/L7-06.tsv): GENIVELSERV (nível de serviço), GEPADRAO_DATAMATRIX_QRCODE (padrão de
-leitura, simbologia presumida), GEPORTALCOMPRAS (portal de cotação), GEREFER (categoria contábil do insumo),
-GESITUACAOPED (situação do pedido de compra, indicadores presumidos FALSE), GETPLANCTO (tipo de movimento, natureza e sentido presumidos neutros),
-TBCATEGO (categoria de fornecimento, tipo presumido), TBFABOPM e TBLABORA (fabricante, duas fontes no mesmo destino),
-TBGRUPOUNIDADEMEDIDA (grupo de unidade, grandeza presumida) e TBSITUACAOFARMACIA (situação farmacêutica, indicadores presumidos FALSE).
-Todo valor sem origem que muda o comportamento do sistema entra como literal presumido (=~), com valor_presumido.
-As outras 14 tabelas entram na imagem só com a forma (2 linhas falsas cada) e ficam fora da carga até o motor ganhar
-as regras genéricas pedidas em docs/obra/fatias/f4/saida/L7-06.json (motivo por coluna em colunas.d/L7-06.tsv).
-Anomalias: descrição nula ou só com espaços (NOT NULL do destino recusa a linha: restricao_destino_1048), nome com
-espaços repetidos, S/N fora do domínio (valor_fora_do_dominio, fica o padrão do destino), percentual 0 e fator
-negativo (CHECK do destino: restricao_destino_4025), percentual repetido (UNIQUE: restricao_destino_1062) e literal
-presumido (valor_presumido por coluna presumida em cada linha que chega à gravação, inclusive a recusada pelo
-destino).
+Cobertura total (colunas.d/L7-06.tsv): 21 tabelas carregadas e 4 descartadas com motivo de produto
+(declarado/sem_carga.tsv: GETPSALDO, GEULTDOCGER, GPPARAMG, TBDISPON), que entram na imagem só com a forma (TBDISPON
+com nomes, lida pela referência encadeada do fornecedor).
+Rodada 2 da cobertura: GESALDOS (histórico mensal do saldo consolidado) e GESALCON (saldo consignado do fornecedor)
+carregam na trilha do insumo (âncora `complementa` no insumo, um valor por linha pelo `desdobrar`); TBFORNEC grava a
+conta bancária do credor só com CONTA preenchida (desdobrar) e as retenções na trilha da empresa; GEREFER guarda a
+conta e a operação contábil antigas na trilha da categoria.
+Carregadas: GENIVELSERV, GEPADRAO_DATAMATRIX_QRCODE, GEPORTALCOMPRAS, GEREFER, GESITUACAOPED, GETPLANCTO, TBCATEGO,
+TBFABOPM e TBLABORA (fabricante), TBGRUPOUNIDADEMEDIDA, TBSITUACAOFARMACIA e, nesta rodada: GELOCUSU e GEUSERS
+(local_estoque_usuario, par local x usuário ADOTADO entre as duas), GESUBGRU (código derivado do nome),
+PRPARVARUNIRESP (unidade_resposta), TBFORNEC (fornecedor: tipo por de-para J/F, CNPJ com adoção, disponibilidade pelo
+nome de TBDISPON), TBCATFOR, TBFORNECTEL e GEBARRAS (unidade pela referência encadeada ao insumo).
+Anomalias: descrição nula ou só com espaços (NOT NULL: restricao_destino_1048), S/N fora do domínio
+(valor_fora_do_dominio), CHECK (4025), UNIQUE (1062), literal presumido (valor_presumido), pai inexistente e pai
+recusado (pai_pendente), par repetido adotado (adotado_existente), documento inválido (documento_invalido, inclusive a
+regra cruzada CPF x CNPJ da mesma coluna), nome longo (codigo_derivado, texto_resumido), município fora do catálogo
+(catalogo_codigo_inexistente). Pais de fora da fatia em PAIS_EXTERNOS; GEITENS não está na imagem, então o código de
+barras é recusado (unidade pela referência encadeada ao insumo: pai_inexistente) e a prova do sucesso fica no
+mecanismo (sintetica_d/exemplo_cob.py).
 """
 import datetime
 import decimal
@@ -101,11 +107,49 @@ CREATE TABLE TBSITUACAOFARMACIA ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(50) NOT 
   ("ID"));
 """
 CARREGADAS = ("GENIVELSERV", "GEPADRAO_DATAMATRIX_QRCODE", "GEPORTALCOMPRAS", "GEREFER", "GESITUACAOPED",
-              "GETPLANCTO", "TBCATEGO", "TBFABOPM", "TBGRUPOUNIDADEMEDIDA", "TBLABORA", "TBSITUACAOFARMACIA")
-# fora da carga (todas as colunas declaradas sem destino, com motivo): 2 linhas falsas cada. Quando o motor ganhar a
-# pendência por tabela (tabela_nao_carregada, pedida na L6-03), entram no esperado.
-NAO_CARREGADAS = ("GELOCUSU", "GESALCON", "GESALDOS", "GESUBGRU", "GETPSALDO", "GEULTDOCGER", "GEUSERS", "GPPARAMG",
-                  "PRPARVARUNIRESP", "TBDISPON", "TBFORNEC", "TBCATFOR", "TBFORNECTEL", "GEBARRAS")
+              "GETPLANCTO", "TBCATEGO", "TBFABOPM", "TBGRUPOUNIDADEMEDIDA", "TBLABORA", "TBSITUACAOFARMACIA",
+              "GELOCUSU", "GESUBGRU", "GEUSERS", "PRPARVARUNIRESP", "TBFORNEC", "TBCATFOR", "TBFORNECTEL", "GEBARRAS",
+              "GESALDOS", "GESALCON")
+# descarte de produto (declarado/sem_carga.tsv): só a forma, 2 linhas falsas cada (TBDISPON com nomes, 3 linhas)
+DESCARTADAS = ("GETPSALDO", "GEULTDOCGER", "GPPARAMG", "TBDISPON")
+PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo", "novo.exemplo"], "GELOCARM": [1, 2, 3],
+                 "GEGRUPOS": [1, 2], "GEITENS": [10, 20], "TBTIPOTELEFONE": [1]}
+PREPARO_DESTINO = ("INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES"
+                   " ('3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3));\n"
+                   "INSERT INTO banco (codigo_compensacao, codigo_ispb, descricao, vigencia_inicio, versao_fonte,"
+                   " criado_em) VALUES ('237', '00000237', 'Banco ficticio', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));\n"
+                   # o insumo de fora da fatia (PAIS_EXTERNOS GEITENS 10 e 20 recebem os ids 3 e 4, na ordem dos pais) tem
+                   # de existir no destino: GESALDOS e GESALCON o complementam (âncora da trilha)
+                   "SET FOREIGN_KEY_CHECKS=0;\n"
+                   "INSERT INTO insumo (id, codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em)"
+                   " VALUES (3, '10', 'Insumo exemplo dez', 'material', 1, 1, UTC_TIMESTAMP(3)),"
+                   " (4, '20', 'Insumo exemplo vinte', 'material', 2, 1, UTC_TIMESTAMP(3));\n"
+                   "SET FOREIGN_KEY_CHECKS=1")
+# colunas numéricas do fornecedor zeradas na linha genérica (retenções e valores; o teste escolhe as que preenche)
+NUMERICAS_FORNECEDOR = ("INSS", "ALIQISS", "COFINS", "CSLL", "ALIQINSS", "PED_MIN", "VLR_MIN_ISS", "HORA_TEC", "PIS",
+                        "ALIQUOTA_IR", "ALIQUOTA_AGREGADO", "ALIQUOTA_CBS", "ALIQUOTA_IBS")
+
+
+def cnpj_falso(base12):
+    """CNPJ inventado com dígitos verificadores válidos (inteiro, como a origem guarda)."""
+    d = [int(x) for x in "%012d" % base12]
+    for w in ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]):
+        r = sum(x * p for x, p in zip(d, w)) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return int("".join(map(str, d)))
+
+
+def cpf_falso(base9):
+    """CPF inventado com dígitos verificadores válidos (inteiro)."""
+    d = [int(x) for x in "%09d" % base9]
+    for n in (10, 11):
+        r = sum(x * p for x, p in zip(d, range(n, 1, -1))) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return int("".join(map(str, d)))
+
+
+CNPJ_A, CNPJ_B, CNPJ_C = cnpj_falso(112223330001), cnpj_falso(445556660001), cnpj_falso(778889990001)
+CPF_A = cpf_falso(123456780)
 _COL = re.compile(r'"(\w+)"\s+([A-Z]+)(?:\((\d+)(?:,(\d+))?\))?')
 
 
@@ -132,11 +176,88 @@ def _generica(tabela, i):
     return v
 
 
+def _por_nome(tabela, i, **v):
+    """Linha genérica e falsa com as colunas nomeadas trocadas."""
+    nomes = [n for n, _, _ in colunas(tabela)]
+    linha = _generica(tabela, i)
+    for k, x in v.items():
+        linha[nomes.index(k)] = x
+    return linha
+
+
 def linhas(r, ins):
-    for t in NAO_CARREGADAS:
-        for i in (1, 2):
-            ins(t, _generica(t, i))
     D = decimal.Decimal
+    # saldo mensal consolidado (sem local): insumo 10 em 12/2025 (3 valores = 3 linhas na trilha, zero conta) e 01/2026
+    # sem estoque médio (2 linhas); insumo 20 com mês 13 (competência inválida: NULL, valor_fora_do_dominio e 1048);
+    # insumo 30 nunca visto (pai_inexistente, recusa: o complemento exige o insumo)
+    for v in [(2025, 12, 10, D("5.000"), D("50.00"), D("4.500")), (2026, 1, 10, D("0.000"), D("0.00"), None),
+              (2026, 13, 20, D("1.000"), D("2.00"), D("1.000")), (2026, 1, 30, D("1.000"), D("1.00"), None)]:
+        ins("GESALDOS", list(v))
+    # saldo consignado: fornecedor 1 e insumo 20 (1 linha com o retrato); insumo 30 nunca visto (pai_inexistente)
+    for v in [(1, 20, D("3.000")), (2, 30, D("1.000"))]:
+        ins("GESALCON", list(v))
+    for t in DESCARTADAS:
+        if t != "TBDISPON":
+            for i in (1, 2):
+                ins(t, _generica(t, i))
+    for v in [(1, "COMERCIAL"), (2, "Plantão 24 horas"), (3, "Horário especial exemplo")]:
+        ins("TBDISPON", list(v))
+    # usuário x local: 1|1 criado e adotado pelo segundo tipo de movimento; usuário e local inexistentes (1048)
+    for v in [("almox.exemplo", 1, "EN"), ("almox.exemplo", 1, "SA"), ("almox.exemplo", 2, "EN"),
+              ("farm.exemplo", 1, "EN"), ("ninguem.exemplo", 1, "EN"), ("almox.exemplo", 9, "EN")]:
+        ins("GELOCUSU", list(v))
+    # local padrão: almox|1 já criado por GELOCUSU (adotado); farm|3 com S/N inválido; novo sem local (1048)
+    ins("GEUSERS", _por_nome("GEUSERS", 1, USUARIO="almox.exemplo", LOC_ARM=1))
+    ins("GEUSERS", _por_nome("GEUSERS", 2, USUARIO="farm.exemplo", LOC_ARM=3, VISUAL_PRECO="X"))
+    ins("GEUSERS", _por_nome("GEUSERS", 3, USUARIO="novo.exemplo", LOC_ARM=None))
+    # subgrupo: mesmo COD em grupos diferentes (ok); nome repetido entre grupos (1062); nome longo (codigo_derivado);
+    # grupo inexistente e nome nulo (1048)
+    for v in [(1, 1, "Comprimidos exemplo", 0), (2, 1, "Ampolas exemplo", 5), (2, 2, "Comprimidos exemplo", None),
+              (1, 2, "Subgrupo de nome comprido demais ex", None), (9, 1, "Grupo inexistente exemplo", None),
+              (1, 3, None, None)]:
+        ins("GESUBGRU", list(v))
+    for v in [(1, "kg exemplo"), (2, "Dias de tratamento exemplo longo"), (3, "   ")]:
+        ins("PRPARVARUNIRESP", list(v))
+    # fornecedor: 1 jurídica, 2 física, 3 mesmo CNPJ de 1 (adotado), 4 tipo inválido (1048), 5 CNPJ inválido
+    # (CHECK 4025), 6 disponibilidade sem par e município fora do catálogo. A regra cruzada da mesma coluna (CPF x
+    # CNPJ) deixa um documento_invalido por linha até o destino condicional pelo tipo de pessoa.
+    f = [dict(PESSOA="J", CGC=CNPJ_A, NOME="Fornecedor exemplo um", CEP=1310100, IBGE=3550308, DISPONIB=1,
+              EMAIL="compras@exemplo.invalid", NUMERO=100),
+         dict(PESSOA="F", CGC=CPF_A, NOME="Fornecedora pessoa exemplo", CEP=None, IBGE=3550308, DISPONIB=2, NUMERO=0),
+         dict(PESSOA="J", CGC=CNPJ_A, NOME="Fornecedor exemplo filial", IBGE=3550308, DISPONIB=1),
+         dict(PESSOA="X", CGC=CNPJ_B, NOME="Fornecedor tipo errado", IBGE=3550308, DISPONIB=1),
+         dict(PESSOA="J", CGC=12345678000199, NOME="Fornecedor documento errado", IBGE=3550308, DISPONIB=1),
+         dict(PESSOA="J", CGC=CNPJ_C, NOME="  Fornecedor   seis  ", CEP=None, IBGE=9999999, DISPONIB=3)]
+    D = decimal.Decimal
+    # conta do credor: 1 com banco do catálogo (gravada); 2 (pessoa física) com conta zero (sem conta); 6 com banco
+    # fora do catálogo e sem conta (catalogo_codigo_inexistente, sem conta); os demais sem conta (nenhuma linha)
+    # retenções: 1 com ISS, PIS, Cofins e CSLL (4 linhas na trilha); 2 com IR (1 linha); zeros não geram linha
+    banco = {1: dict(BANCO=237, CONTA=123456, AGENCIA="1234", DIGITO_AGE="5", DIGITO="0"),
+             2: dict(BANCO=237, CONTA=0, AGENCIA="99", DIGITO_AGE=None, DIGITO=None),
+             6: dict(BANCO=999, CONTA=None, AGENCIA=None, DIGITO_AGE=None, DIGITO=None)}
+    ret = {1: dict(ALIQISS=D("2.00000000"), PIS=D("0.65"), COFINS=D("3.00"), CSLL=D("1.00")),
+           2: dict(ALIQUOTA_IR=D("1.50"))}
+    for i, v in enumerate(f, 1):
+        z = {c: D(0) for c in NUMERICAS_FORNECEDOR}
+        z.update(dict(BANCO=None, CONTA=None, AGENCIA=None, DIGITO_AGE=None, DIGITO=None))
+        z.update(banco.get(i, {}))
+        z.update(ret.get(i, {}))
+        z.update(v)
+        ins("TBFORNEC", _por_nome("TBFORNEC", i, COD=i, **z))
+    # categoria: 3|1 repete o par de 1|1 (fornecedor adotado); categoria 2 e fornecedor 5 recusados (pai_pendente);
+    # fornecedor 9 inexistente (1048)
+    for v in [(1, 1), (3, 1), (2, 2), (5, 3), (9, 3)]:
+        ins("TBCATFOR", list(v))
+    # contato: tipo 2 inexistente (gravado sem tipo); fornecedor 5 recusado; número vazio (CHECK 4025)
+    for v in [(1, 1, 1, "3333-0001", 11, "Contato exemplo", 12), (2, 1, 1, "99999-0002", 11, None, 0),
+              (3, 2, 2, "3333-0003", None, None, None), (4, 5, 1, "3333-0004", None, None, None),
+              (5, 6, 1, "  ", None, None, None)]:
+        ins("TBFORNECTEL", list(v))
+    # código de barras: GEITENS fora da imagem, a unidade (encadeada) é pai_inexistente e a linha é recusada (1048);
+    # insumo 30 também inexistente. Na carga real o insumo vem DEPOIS (ordem do mapa): a aresta GEBARRAS -> GEITENS
+    # está pedida em saida/L7-06.json; até ela, nenhum código de barras carrega (esperado 0, visível)
+    for v in [(10, "7890000000017", 1, 1), (10, "7890000000024", None, None), (30, "7890000000031", None, None)]:
+        ins("GEBARRAS", list(v))
     # nível de serviço: 3 com percentual 0 e 5 com fator negativo (CHECK: 4025); 4 repete o percentual de 1 (1062)
     for v in [(1, D("95.00"), D("1.645")), (2, D("90.00"), D("1.282")), (3, D("0.00"), D("1.000")),
               (4, D("95.00"), D("0.500")), (5, D("99.90"), D("-0.100"))]:
@@ -146,10 +267,11 @@ def linhas(r, ins):
         ins("GEPADRAO_DATAMATRIX_QRCODE", list(v))
     for v in [(1, "Portal de cotação exemplo"), (2, "Portal ação exemplo"), (3, "")]:
         ins("GEPORTALCOMPRAS", list(v))
-    # categoria contábil: 2 com espaços repetidos; 3 com S/N inválido; 4 sem nome (1048); 5 com S/N nulo
+    # categoria contábil: 2 com espaços repetidos; 3 com S/N inválido; 4 sem nome (1048); 5 com S/N nulo e operação
+    # contábil 0 (só a conta antiga vai para a trilha: 7 linhas nas 4 gravadas)
     for v in [(1, "Medicamentos exemplo", "UN", "S", 1, 10, 1), (2, "  Material   médico  ", "CX", "N", 2, 20, 1),
               (3, "Consignados exemplo", "UN", "X", 3, 30, 2), (4, None, "UN", "S", 4, 40, 1),
-              (5, "Órteses exemplo", None, None, 5, 50, 2)]:
+              (5, "Órteses exemplo", None, None, 0, 50, 2)]:
         ins("GEREFER", list(v))
     for v in [(1, "Aberto exemplo"), (2, "Autorizado   exemplo"), (3, None)]:
         ins("GESITUACAOPED", list(v))
@@ -183,4 +305,26 @@ def linhas(r, ins):
         "TBGRUPOUNIDADEMEDIDA": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBLABORA": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "TBSITUACAOFARMACIA": {"gravados": 4, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 1}},
+        # rodada 2: com a aresta GELOCUSU -> GEUSERS (pedida pela fatia), GEUSERS grava antes e o local por usuário
+        # adota as duas linhas de usuário_local que já existem
+        "GELOCUSU": {"gravados": 4, "pendencias": {"adotado_existente": 2, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 2}},
+        "GEUSERS": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1,
+                                                  "restricao_destino_1048": 1}},
+        "GESUBGRU": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "codigo_derivado": 1,
+                                                   "pai_inexistente": 1, "restricao_destino_1048": 2}},
+        "PRPARVARUNIRESP": {"gravados": 2, "pendencias": {"texto_resumido": 1, "restricao_destino_1048": 1}},
+        # documento_invalido: a regra cruzada CPF x CNPJ da mesma coluna (6) + o CNPJ errado da linha 5 na empresa e
+        # no titular da conta (2); catálogo: município da linha 6 e banco 999 da linha 6 (sem conta: nada gravado)
+        "TBFORNEC": {"gravados": 4, "pendencias": {"documento_invalido": 8, "adotado_existente": 1,
+                                                   "valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
+                                                   "restricao_destino_4025": 1, "catalogo_codigo_inexistente": 2}},
+        "TBCATFOR": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_pendente": 2, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1}},
+        "TBFORNECTEL": {"gravados": 3, "pendencias": {"valor_presumido": 4, "pai_inexistente": 1, "pai_pendente": 1,
+                                                      "restricao_destino_4025": 1}},
+        "GEBARRAS": {"gravados": 0, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 3}},
+        "GESALDOS": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+                                                   "pai_inexistente": 1}},
+        "GESALCON": {"gravados": 1, "pendencias": {"pai_inexistente": 1}},
     }

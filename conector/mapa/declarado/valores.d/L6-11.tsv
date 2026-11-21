@@ -1,0 +1,113 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	I	internacao	L6-11: letra inicial do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01)
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	A	ambulatorial	L6-11: letra inicial do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01)
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	U	urgencia	L6-11: letra inicial do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01)
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	E	externo	L6-11: letra inicial do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01)
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	T	todos	L6-11: letra inicial do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01)
+PRKITSOLITENS	ITEM_PRINCIPAL	kit_prescricao_item.papel	1	principal	L6-11: item principal da solução (1) ou componente (0)
+PRKITSOLITENS	ITEM_PRINCIPAL	kit_prescricao_item.papel	0	componente	L6-11: item principal da solução (1) ou componente (0)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	I	internacao	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	I	Internação	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	A	ambulatorio	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	A	Ambulatório	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	U	urgencia	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	U	Urgência	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	E	externo	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	E	Externo	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	T	todos	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	T	Todos os atendimentos	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	I	internacao	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	A	ambulatorial	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	U	urgencia	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	E	externo	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	T	todos	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clRed	vermelho	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clRed	#FF0000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clRed	10	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clMaroon	bordô	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clMaroon	#800000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clMaroon	11	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$000080FF	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$000080FF	#FF8000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$000080FF	20	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$000080ff	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$000080ff	#FF8000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$000080ff	20	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$0000A5FF	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$0000A5FF	#FFA500	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$0000A5FF	21	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$0000a5ff	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$0000a5ff	#FFA500	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$0000a5ff	21	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$00008CFF	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$00008CFF	#FF8C00	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$00008CFF	22	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$00008cff	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$00008cff	#FF8C00	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$00008cff	22	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$004080FF	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$004080FF	#FF8040	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$004080FF	23	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$004080ff	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$004080ff	#FF8040	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$004080ff	23	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$000040FF	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$000040FF	#FF4000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$000040FF	24	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	$000040ff	laranja	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	$000040ff	#FF4000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	$000040ff	24	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clYellow	amarelo	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clYellow	#FFFF00	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clYellow	30	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clLime	verde	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clLime	#00FF00	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clLime	40	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clGreen	verde	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clGreen	#008000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clGreen	41	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clMoneyGreen	verde	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clMoneyGreen	#C0DCC0	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clMoneyGreen	42	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clBlue	azul	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clBlue	#0000FF	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clBlue	50	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clNavy	azul	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clNavy	#000080	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clNavy	51	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clAqua	azul	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clAqua	#00FFFF	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clAqua	52	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clSkyBlue	azul	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clSkyBlue	#A6CAF0	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clSkyBlue	53	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clTeal	azul	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clTeal	#008080	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clTeal	54	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clBlack	preto	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clBlack	#000000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clBlack	55	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clWhite	branco	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clWhite	#FFFFFF	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clWhite	60	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clCream	branco	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clCream	#FFFBF0	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clCream	61	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clSilver	cinza	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clSilver	#C0C0C0	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clSilver	62	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clMedGray	cinza	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clMedGray	#A4A0A0	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clMedGray	63	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clGray	cinza	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clGray	#808080	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clGray	64	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clFuchsia	magenta	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clFuchsia	#FF00FF	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clFuchsia	70	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clPurple	roxo	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clPurple	#800080	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clPurple	71	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	clOlive	oliva	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clOlive	#808000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
+PRMANCHESTER	COR	nivel_prioridade.ordem	clOlive	72	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem

@@ -2,38 +2,99 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (e verificar_mapa.py)",
-   "mudanca": "prefixo de domínio por tabela da origem no código único (ex.: coluna especial que grava '<prefixo>:<chave>' no código), o mesmo mecanismo já pedido por L6-04/06/07/08/09/18, L8-13 e L8-14; depois dele, PSTIPMEN, PSTIPOGUIA, PSTPACUMULPOR, PSTPPERIODO, TBTIPOCOBRANCASGO, TBTPPRESTADOR e TBTPUNIDTEMPO voltam a usar a chave como código (trocar a linha NOME->codigo em colunas.d/L8-15.tsv)",
-   "motivo": "origem_cobranca_plano, tipo_guia_plano, nivel_acumulo_limite, unidade_prazo e tipo_prestador_rede recebem de várias tabelas da origem a chave inteira como código; os números chocam na chave única (restricao_destino_1062). Até lá o código provisório é o nome, que pode chocar entre tabelas (nome igual sem distinção de caixa) ou passar de 30 caracteres (restricao_destino_1406)"
+   "mudanca": "RESOLVIDO sem motor novo (rodada de correção 2026-11-21): as 7 tabelas usam #codigo_derivado:<CHAVE>:30:<prefixo> (prefixo de domínio por origem) e adotar:descricao. prefixo de domínio por tabela da origem no código único (ex.: coluna especial que grava '<prefixo>:<chave>' no código), o mesmo mecanismo já pedido por L6-04/06/07/08/09/18, L8-13 e L8-14; depois dele, PSTIPMEN, PSTIPOGUIA, PSTPACUMULPOR, PSTPPERIODO, TBTIPOCOBRANCASGO, TBTPPRESTADOR e TBTPUNIDTEMPO voltam a usar a chave como código (trocar a linha NOME->codigo em colunas.d/L8-15.tsv)",
+   "motivo": "origem_cobranca_plano, tipo_guia_plano, nivel_acumulo_limite, unidade_prazo e tipo_prestador_rede recebem de várias tabelas da origem a chave inteira como código; os números chocam na chave única (restricao_destino_1062). Até lá o código provisório é o nome, que pode chocar entre tabelas (nome igual sem distinção de caixa) ou passar de 30 caracteres (restricao_destino_1406)",
+   "numero": 1
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/<fatia do contrato com prestador>.tsv (fatia que carregar contrato_rede_prestador e contrato_rede_prestador_clausula)",
-   "mudanca": "de-para de valores das colunas que referenciam TBTPFAVORECIDO (-> contrato_rede_prestador_clausula.favorecido: operadora/prestador/ambos/beneficiario), TBTPFORMAREAJ (-> forma_reajuste: ipca/igpm/inpc/outro_indice/livre_negociacao/formula_especifica/livre_negociacao_indice_contrato/variacao_tabela_referencia) e TBTPVIGCONTRATO (-> contrato_rede_prestador.tipo_vigencia: determinada/indeterminada), pares por cliente no painel",
-   "motivo": "as três tabelas são domínios que no modelo viram valor de coluna com CHECK; não formam linha própria (contrato NOT NULL) e termo_terminologia é catálogo oficial, nunca gravado"
+   "mudanca": "SUPERADO pelo pedido 13 (TBTPFAVORECIDO, TBTPFORMAREAJ e TBTPVIGCONTRATO são terminologia TISS, catalogos.tsv tiss_ans). de-para de valores das colunas que referenciam TBTPFAVORECIDO (-> contrato_rede_prestador_clausula.favorecido: operadora/prestador/ambos/beneficiario), TBTPFORMAREAJ (-> forma_reajuste: ipca/igpm/inpc/outro_indice/livre_negociacao/formula_especifica/livre_negociacao_indice_contrato/variacao_tabela_referencia) e TBTPVIGCONTRATO (-> contrato_rede_prestador.tipo_vigencia: determinada/indeterminada), pares por cliente no painel",
+   "motivo": "as três tabelas são domínios que no modelo viram valor de coluna com CHECK; não formam linha própria (contrato NOT NULL) e termo_terminologia é catálogo oficial, nunca gravado",
+   "numero": 2
   },
   {
    "arquivo": "catalogos/ (carregador oficial) e decisão do dono",
-   "mudanca": "taxa_saude_suplementar_vigencia vem do carregador da fonte oficial (valores por vida por vigência); PSTPSVIGENCIA fica fora da carga; apuracao_taxa_saude_suplementar só por apuração própria (operadora, vidas, valor total)",
-   "motivo": "PSTPSVIGENCIA é a tabela oficial de valores da taxa; o mapa a liga a apuracao_taxa_saude_suplementar, que exige operadora_saude_id, quantidade de vidas e valor_total sem origem nesta tabela"
+   "mudanca": "RESOLVIDO na rodada de cobertura: PSTPSVIGENCIA descartada (catalogo_oficial, declarado/sem_carga.tsv); taxa_saude_suplementar_vigencia vem do carregador da fonte oficial (valores por vida por vigência); PSTPSVIGENCIA fica fora da carga; apuracao_taxa_saude_suplementar só por apuração própria (operadora, vidas, valor total)",
+   "motivo": "PSTPSVIGENCIA é a tabela oficial de valores da taxa; o mapa a liga a apuracao_taxa_saude_suplementar, que exige operadora_saude_id, quantidade de vidas e valor_total sem origem nesta tabela",
+   "numero": 3
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d (lote do beneficiário, quando houver cliente com beneficiários)",
-   "mudanca": "declarar PSBENEFI, PSBENCPL e PSVENDAS para beneficiario_plano, proposta_adesao, comissao_venda e vendedor_plano quando existir contrato, plano comercializado e pessoa física carregados",
-   "motivo": "na imagem de referência as três têm só a linha placeholder (não migra); beneficiario_plano exige contrato, plano, pessoa física e matrícula NOT NULL sem alimentadora carregada"
+   "mudanca": "SUPERADO na rodada de cobertura: PSBENEFI declarada para beneficiario_plano (contrato ref:PSEMPBEN, plano ref:PSPLANOS, pessoa ref:TBPESSOA.CPF_CNPJ); PSBENCPL e PSVENDAS descartadas (duplicado). Texto original: declarar PSBENEFI, PSBENCPL e PSVENDAS para beneficiario_plano, proposta_adesao, comissao_venda e vendedor_plano quando existir contrato, plano comercializado e pessoa física carregados",
+   "motivo": "na imagem de referência as três têm só a linha placeholder (não migra); beneficiario_plano exige contrato, plano, pessoa física e matrícula NOT NULL sem alimentadora carregada",
+   "numero": 4
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (planejar, conciliar), motor.py e conferencia.py",
-   "mudanca": "mesma regra genérica 'tabela_bloqueada' do pedido L6-10.json (e L6-06, L6-17, L7-05): tabela do mapa com tabelas_destino, presente e com linhas, sem coluna declarada com destino, gera UMA pendência alta por tabela (chave '*', sem valor) e entidade de conciliação com registros_origem=N, registros_destino=0; expor carga_mapa.tabelas_bloqueadas(mapa_exec, presentes); a conferência da fatia passa a aceitar no esperado {tabela: {'gravados': 0, 'pendencias': {'tabela_bloqueada': 1}}}. Aplicado o motor, sintetica_d/l8_15.py acrescenta ao esperado as 7 de NAO_CARREGADAS com esse valor (a imagem já insere 2 linhas em cada) e test_l8_15.test_fora_da_carga_aparece_na_conciliacao deixa de ser pulado",
-   "motivo": "achado alto: TBTPFAVORECIDO, TBTPFORMAREAJ, TBTPVIGCONTRATO, PSTPSVIGENCIA, PSBENEFI, PSBENCPL e PSVENDAS estão no mapa com destino e sem coluna declarada; planejar() as pula em silêncio e tabela_sem_mapa só cobre tabela FORA do mapa. descartes.tsv não resolve: mapa.tabelas_sem_mapa ignora toda tabela do mapa. Num cliente com beneficiários reais, as linhas sumiriam sem rastro"
+   "mudanca": "Ainda útil como regra genérica, mas nenhuma tabela desta fatia depende mais dela (cobertura: 17 carregam, 6 descartadas). mesma regra genérica 'tabela_bloqueada' do pedido L6-10.json (e L6-06, L6-17, L7-05): tabela do mapa com tabelas_destino, presente e com linhas, sem coluna declarada com destino, gera UMA pendência alta por tabela (chave '*', sem valor) e entidade de conciliação com registros_origem=N, registros_destino=0; expor carga_mapa.tabelas_bloqueadas(mapa_exec, presentes); a conferência da fatia passa a aceitar no esperado {tabela: {'gravados': 0, 'pendencias': {'tabela_bloqueada': 1}}}. Aplicado o motor, sintetica_d/l8_15.py acrescenta ao esperado as 7 de NAO_CARREGADAS com esse valor (a imagem já insere 2 linhas em cada) e test_l8_15.test_fora_da_carga_aparece_na_conciliacao deixa de ser pulado",
+   "motivo": "achado alto: TBTPFAVORECIDO, TBTPFORMAREAJ, TBTPVIGCONTRATO, PSTPSVIGENCIA, PSBENEFI, PSBENCPL e PSVENDAS estão no mapa com destino e sem coluna declarada; planejar() as pula em silêncio e tabela_sem_mapa só cobre tabela FORA do mapa. descartes.tsv não resolve: mapa.tabelas_sem_mapa ignora toda tabela do mapa. Num cliente com beneficiários reais, as linhas sumiriam sem rastro",
+   "numero": 5
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (e painel)",
    "mudanca": "de-para de valores POR CLIENTE (pares revisados no painel, por tabela, coluna e destino, por cima do presumido =~ do mapa; valor sem par fica com o presumido e valor_presumido). Colunas desta fatia que precisam dele: origem_cobranca_plano.natureza (PSTIPMEN, TBTIPOCOBRANCASGO), unidade_prazo.unidade_base (PSTPPERIODO, TBTPUNIDTEMPO), regime_atendimento_rede.natureza, preferencia_envio_cobranca.canal, tipo_guia_plano.internacao e exige_autorizacao, situacao_movimento_rede.comunica_ans e ativa_prestador, tipo_contrato_rede.contratacao_direta",
-   "motivo": "achados médios: os domínios são heterogêneos (anual e mensal, hospitalar e ambulatorial, adesão e mensalidade, direta e indireta) e declarado/valores.tsv é global do produto, não por cliente; até lá cada linha fica com o presumido mais seguro e a pendência baixa valor_presumido para revisão antes do uso"
+   "motivo": "achados médios: os domínios são heterogêneos (anual e mensal, hospitalar e ambulatorial, adesão e mensalidade, direta e indireta) e declarado/valores.tsv é global do produto, não por cliente; até lá cada linha fica com o presumido mais seguro e a pendência baixa valor_presumido para revisão antes do uso",
+   "numero": 6
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes) e sentinela.colisoes_caixa",
-   "mudanca": "estender a colisão de código (hoje só regra codigo_char e só dentro da tabela) a qualquer regra de texto gravada em coluna de chave única sem caixa, comparando pela colação do destino (caixa, acento e espaço final; ex.: WEIGHT_STRING ou casefold + remoção de acento) e entre todas as tabelas da origem que gravam o mesmo destino: o grupo inteiro é recusado com codigo_colisao_caixa, nenhum vence pela ordem de leitura",
-   "motivo": "achado médio: em PSTIPMEN, PSTIPOGUIA, PSTPACUMULPOR, PSTPPERIODO, TBTIPOCOBRANCASGO, TBTPPRESTADOR e TBTPUNIDTEMPO o código provisório é o nome (texto_nome, até o prefixo do pedido 1); nome que só difere pela caixa ou acento faz o primeiro lido gravar e o segundo cair em restricao_destino_1062. Com o prefixo de domínio (pedido 1) o código volta a ser a chave e o problema some; este pedido cobre o intervalo"
+   "mudanca": "SUPERADO: com o código pela chave prefixada e a adoção pela descrição (colação do destino), nome igual com outra caixa ou acento é adotado, não recusado. estender a colisão de código (hoje só regra codigo_char e só dentro da tabela) a qualquer regra de texto gravada em coluna de chave única sem caixa, comparando pela colação do destino (caixa, acento e espaço final; ex.: WEIGHT_STRING ou casefold + remoção de acento) e entre todas as tabelas da origem que gravam o mesmo destino: o grupo inteiro é recusado com codigo_colisao_caixa, nenhum vence pela ordem de leitura",
+   "motivo": "achado médio: em PSTIPMEN, PSTIPOGUIA, PSTPACUMULPOR, PSTPPERIODO, TBTIPOCOBRANCASGO, TBTPPRESTADOR e TBTPUNIDTEMPO o código provisório é o nome (texto_nome, até o prefixo do pedido 1); nome que só difere pela caixa ou acento faz o primeiro lido gravar e o segundo cair em restricao_destino_1062. Com o prefixo de domínio (pedido 1) o código volta a ser a chave e o problema some; este pedido cobre o intervalo",
+   "numero": 7
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) e colunas.d/L8-15.tsv",
+   "mudanca": "motor (carga_mapa.planejar/_tabela): opção de destino 'antes' (ex.: via 'pessoa_fisica;antes;adotar:cpf'): o destino secundário é gravado ANTES do principal e a coluna especial '@id:<tabela>' no principal recebe o id dele (adotado ou novo). PSBENEFI passa a declarar pessoa_fisica (antes, adotar:cpf) com NOME, NASC, SEXO, MAE, PAI, CNS, NOME_SOCIAL, CPF (regra cpf; sem CPF cria a pessoa), e beneficiario_plano.pessoa_fisica_id = '@id:pessoa_fisica' no lugar de ref:TBPESSOA.CPF_CNPJ. Texto anterior: PSBENEFI com tabelas_destino 'pessoa_fisica;beneficiario_plano': a pessoa nasce do próprio beneficiário (principal, adotar:cpf, nome, nome social, nascimento, sexo, mãe, CNS) e beneficiario_plano.pessoa_fisica_id recebe @id; hoje a pessoa vem pela chave alternativa ref:TBPESSOA.CPF_CNPJ",
+   "motivo": "TBPESSOA é descarte (L5-05): ref:TBPESSOA.CPF_CNPJ nunca acha o pai em cliente nenhum, e o principal só entrega @id aos secundários gravados depois. Sem isso NENHUM beneficiário grava (pai_inexistente e NOT NULL, visível). os dados pessoais do beneficiário estão em PSBENEFI; o destino principal é o primeiro de tabelas_destino e só o principal entrega @id, então a declaração da fatia não consegue pôr a pessoa antes do beneficiário. Além disso a chave alternativa compara o texto cru: CPF BIGINT sem zeros à esquerda não casa com CPF_CNPJ em texto com zeros (pai_inexistente visível, nunca valor errado)",
+   "numero": 8
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "titular RESOLVIDO na fatia: ID_PSBENEFI_VINCULO -> titular_beneficiario_plano_id por ref:PSBENEFI.ID (mesma carga, sem duas fases) e DEP 1..99 = dependente (valores.d). Falta o GRAU: grau_parentesco_dependente não tem origem no mapa; pedir à L5-05 que TBPARENTE grave também grau_parentesco_dependente (código, descrição, tipo_beneficiario 'dependente' presumido) e ao motor a referência ao destino secundário do pai (ref:TBPARENTE@grau_parentesco_dependente), para PARENTE -> grau_parentesco_dependente_id. Até lá o dependente cai no CHECK do titular (recusa visível)",
+   "motivo": "hoje só DEP=0 tem de-para (titular); dependente vira valor_fora_do_dominio e é recusado com rastro (CHECK exige titular e grau para dependente)",
+   "numero": 9
+  },
+  {
+   "arquivo": "db/migracoes/16_SGO (trilha F2.2)",
+   "mudanca": "DECIDIDO (F4-decisoes-destino.md): PSBENCPL.FOTO vai para arquivo ligado à pessoa física do beneficiário (documento da pessoa); depende do pedido 8 (pessoa nascida do beneficiário) e de uma coluna/vínculo de foto da pessoa na trilha F2.2",
+   "motivo": "PSBENCPL foi descartada como duplicado de PSBENEFI; a foto é a única coluna sem equivalente",
+   "numero": 10
+  },
+  {
+   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv -> conector/mapa/tabelas.tsv (gerador do mapa) e tools/obra/cobertura_conector.py",
+   "mudanca": "pôr PSEMPBEN (-> contrato_plano e contratante_plano) e PSPLANOS (-> plano_comercializado) no mapa, numa fatia anterior a PSBENEFI (L8), mesmo vazias na referência. No cobertura_conector.py: marcar BLOQUEADA (pai_fora_do_mapa) a tabela cuja coluna NOT NULL declarada tem ref: para tabela fora do mapa, e exigir que a sintética da fatia grave ao menos uma linha (esperado.gravados > 0) para CARREGA",
+   "motivo": "achado alto: PSBENEFI aparece CARREGA mas nenhum cliente grava beneficiário sem contrato e plano; na sintética eles entram como PAIS_EXTERNOS (PSEMPBEN 7, PSPLANOS 3). PSVENDAS (proposta) também depende deles pela referência encadeada",
+   "numero": 11
+  },
+  {
+   "arquivo": "catalogos/carregadores/ (novo: taxa de saúde suplementar, fonte pública da ANS)",
+   "mudanca": "carregador versionado de taxa_saude_suplementar_vigencia (valor por vida, anual e trimestral, por vigência) a partir da fonte pública da ANS, com versao_fonte",
+   "motivo": "PSTPSVIGENCIA é descarte catalogo_oficial (regra 7: catálogo nunca vem do banco do cliente), mas o carregador não existe: hoje a tabela de destino fica vazia",
+   "numero": 12
+  },
+  {
+   "arquivo": "mapa (TBCREPLSINFCONTR) e valores.d da fatia que a carregar",
+   "mudanca": "pôr TBCREPLSINFCONTR (informações do contrato com prestador, vazia na referência) no mapa -> contrato_rede_prestador/contrato_rede_prestador_clausula, com o de-para de valores de ID_TBTPFAVORECIDO -> favorecido, ID_TBTPFORMAREAJ -> forma_reajuste e ID_TBTPVIGCONTRATO -> tipo_vigencia",
+   "motivo": "achado médio: o descarte das três terminologias depende da consumidora, hoje fora do mapa",
+   "numero": 13
+  },
+  {
+   "arquivo": "mapa (cadastros de vendedor, supervisor, gerente, indicador e concessionária da origem)",
+   "mudanca": "pôr os cadastros de venda no mapa -> vendedor_plano, corretora_venda, equipe_venda; então PSVENDAS liga proposta_adesao.vendedor_plano_id (VENDEDOR) e corretora_venda_id (CONCESSIONARIA), e os PERC_VITA_* / VIDAS_VITALICIO / VLR_REPAS entram como regra_comissao_venda do vendedor",
+   "motivo": "achado médio: a venda carrega a proposta, mas o vendedor e a comissão vitalícia apontam cadastros fora do mapa (vazios na referência)",
+   "numero": 14
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "valor DATE em coluna DATETIME do destino vira datetime à meia-noite antes da soma de controle (como inteiro em texto); depois disso PSVENDAS.DATA_VENDA volta a ser a fonte de proposta_adesao.situacao_em",
+   "motivo": "hoje DATE gravado em DATETIME diverge na conciliação ('2025-02-01' contra '2025-02-01 00:00:00.000'); a fatia usa a inclusão do beneficiário (TIMESTAMP) como data da efetivação",
+   "numero": 15
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_gravar_ou_adotar)",
+   "mudanca": "na adoção, colunas booleanas declaradas como sinalizador (ex.: via 'adotar:descricao;ligar:aplica_contrato') são ligadas por UPDATE ... SET c = c OR %s, sem sobrescrever o resto",
+   "motivo": "TBTPUNIDTEMPO que adota a unidade de prazo de PSTPPERIODO (mesma descrição) não liga aplica_contrato; idem aplica_limite no sentido inverso. Pendência baixa adotado_existente marca a linha para revisão",
+   "numero": 16
   }
  ]
 }

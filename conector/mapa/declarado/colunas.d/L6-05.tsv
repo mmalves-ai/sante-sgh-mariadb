@@ -2,6 +2,8 @@ tabela	coluna	destino	regra	depara	via	motivo
 GETABVIA	COD	via_de_uso.codigo	codigo_char			código de 2 caracteres, caixa preservada; colisão de caixa na chave única vira codigo_colisao_caixa nas duas linhas
 GETABVIA	NOME	via_de_uso.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
 GETABVIA	ATIVO	via_de_uso.ativo	booleano_sn			S/N; vazio ou fora do domínio fica com o padrão do destino (ativo)
+GETABVIA	ID_DIGITAL	via_de_uso.codigo_interoperabilidade	texto			código da via na prescrição digital (36 posições, igual ao destino); pedido da L6-08, que descartou TBDIGITAL_VIAACESSO como duplicado por ele
+GETABVIA	ID_TBTISSVIAADMIN		chave_origem			não gravada por ora: via na terminologia TISS vai para via_tiss_termo_terminologia_id pelo termo oficial, mas a terminologia TISS não tem carregador (catalogos.tsv tiss_ans) nem de-para em depara.CATALOGOS; pedido no L6-05.json
 PRAGRAVOTPARQUETIPO	ID	agravo_notificavel.codigo	texto			a origem só tem o id: vira o código de negócio
 PRAGRAVOTPARQUETIPO	NOME	agravo_notificavel.descricao	texto_nome			descrição do agravo; vazia recusa a linha
 PRAGRAVOPERGUNTA	ID_PRAGRAVOTPARQUETIPO	agravo_pergunta.agravo_notificavel_id	chave_origem			agravo pai pelo conector_origem
@@ -10,15 +12,8 @@ PRAGRAVOPERGUNTA	CODIGO	agravo_pergunta.codigo_campo	texto			código do campo na
 PRAGRAVOPERGUNTA	SUBCODIGO	agravo_pergunta.subcodigo	inteiro			subdivisão do campo
 PRAGRAVOPERGUNTA	NOME	agravo_pergunta.enunciado	texto_nome			enunciado da pergunta
 PRAGRAVOPERGUNTA	=texto	agravo_pergunta.tipo_resposta				a origem não tem tipo de resposta: 'texto' é o tipo neutro do modelo (aceita qualquer resposta, sem opções); o cliente reclassifica
-PRAGRUPBALANCO	ID		texto			não carregada (L6-05): lado do balanço (ganho, perda, perda insensível) não existe na origem; presumir inverteria o sinal do total: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
-PRAGRUPBALANCO	NOME		texto_nome			não carregada (L6-05): lado do balanço (ganho, perda, perda insensível) não existe na origem; presumir inverteria o sinal do total: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
-PRASSINANTE	ID		texto			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
-PRASSINANTE	NOME		texto_nome			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
-PRASSINANTE	ATIVO		booleano_sn			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
 PRBHINTENSIDADE	ID	intensidade_perda.codigo	texto			a origem só tem o id: vira o código de negócio
 PRBHINTENSIDADE	NOME	intensidade_perda.descricao	texto_nome			descrição da intensidade
-PRBHTIPOFECHAMENTO	ID		texto			não carregada (L6-05): duração do período e fechamento parcial não existem na origem; presumir 24 horas contradiz o fechamento parcial: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
-PRBHTIPOFECHAMENTO	NOME		texto_nome			não carregada (L6-05): duração do período e fechamento parcial não existem na origem; presumir 24 horas contradiz o fechamento parcial: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
 PRBHTPELIMINA	ID	tipo_ganho_perda.codigo	texto			a origem só tem o id: vira o código de negócio
 PRBHTPELIMINA	NOME	tipo_ganho_perda.descricao	texto_nome			descrição do tipo
 PRBHTPELIMINA	=perda	tipo_ganho_perda.natureza				a tabela da origem só cadastra eliminações: natureza perda
@@ -44,21 +39,47 @@ PRFILTROUSUARIO	ID	filtro_resultado_usuario.nome	texto			a origem não dá nome 
 PRFILTROUSUARIO	SITUACAO_NAO_EMITIDOS	filtro_resultado_usuario.incluir_nao_emitidos	booleano_sn			S/N (gerada codigo_char); vazio fica com o padrão (falso)
 PRFILTROUSUARIO	RESULTADO_LIBERADO	filtro_resultado_usuario.somente_liberados	booleano_sn			S/N; vazio fica com o padrão (verdadeiro)
 PRFILTROUSUARIO	SOMENTE_MEUS_PEDIDOS	filtro_resultado_usuario.somente_meus_pedidos	booleano_sn			S/N (gerada codigo_char)
+PRFILTROUSUARIO	TODOS_REGISTROS	filtro_resultado_usuario.escopo_atendimento	codigo_char	valores		escopo do filtro (valores.d/L6-05.tsv): S = todos os registros do paciente, N = só o atendimento atual; vazio ou fora do domínio fica o padrão do destino (atual), com valor_fora_do_dominio no segundo caso
+PRFILTROUSUARIO	ATENDIMENTO		codigo_char			não gravada: a outra opção da mesma escolha (só o atendimento atual), que é o padrão do destino; com as duas marcadas vale TODOS_REGISTROS, para não esconder resultados (decisão em F4-decisoes-destino.md)
 PRFINALIDADETRAT	ID	intencao_tratamento_oncologico.codigo	texto			a origem só tem o id: vira o código de negócio
 PRFINALIDADETRAT	NOME	intencao_tratamento_oncologico.descricao	texto_nome			descrição; vazia recusa a linha
+PRFINALIDADETRAT	ID_TBTISSFINTRAT		chave_origem			não gravada por ora: finalidade na terminologia TISS vai para codigo_tiss e termo_terminologia_id pelo termo oficial, mas a terminologia TISS não tem carregador (catalogos.tsv tiss_ans) nem de-para em depara.CATALOGOS; pedido no L6-05.json
 PRFORMULA	COD	formula_calculo_dose.codigo	texto			código numérico da origem gravado como texto
 PRFORMULA	NOME	formula_calculo_dose.nome	texto_nome			nome da fórmula; vazio recusa a linha
 PRFORMULA	FORMULA	formula_calculo_dose.expressao	texto			expressão como está na origem (só as pontas); NÃO validada contra as variáveis do modelo: a fórmula migrada entra inativa (ativo presumido) até a revisão; vazia recusa a linha (NOT NULL)
 PRFORMULA	ATIVO		booleano_sn			não gravada (L6-05): a fórmula migrada entra sempre inativa até a revisão da expressão e da base de cálculo
 PRFORMULA	=~peso	formula_calculo_dose.base_calculo				base de cálculo não existe na origem: presumida peso com pendência valor_presumido; a fórmula fica inativa até a revisão (ativo presumido falso)
 PRFORMULA	=~0	formula_calculo_dose.ativo				fórmula migrada sem validação da expressão nem da base de cálculo: entra inativa (presumido falso, pendência valor_presumido) e só é ativada depois da revisão
-PRFREQUENCIA	ID		texto			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRFREQUENCIA	NOME		texto_nome			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRFREQUENCIA	NUM_DOSE		inteiro_zero_nulo			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRFREQUENCIA	ESTOQUE		booleano_sn			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRFREQUENCIA	RECEITA_ESTRUTURADA		booleano_sn			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRFREQUENCIA	ORDEM		inteiro			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
-PRHRRELATIVA	ID_PRFREQUENCIA		chave_origem			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
-PRHRRELATIVA	ORDEM		inteiro			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
-PRHRRELATIVA	NOME		texto_nome			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
-PRHRRELATIVA	HORARIO		hora_em_timestamp			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
+PRAGRUPBALANCO	ID	grupo_balanco_hidrico.codigo	texto			a origem só tem o id: vira o código de negócio
+PRAGRUPBALANCO	NOME	grupo_balanco_hidrico.descricao	texto_nome			descrição do grupo; vazia recusa a linha
+PRAGRUPBALANCO	NOME	grupo_balanco_hidrico.tipo	texto_nome	valores		lado do balanço pelo nome do grupo (valores.d/L6-05.tsv: ganho, perda, perda insensível); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de presumir um lado e inverter o total; o cliente acrescenta o par no painel
+PRAGRUPBALANCO	ID	grupo_balanco_hidrico.ordem	inteiro			ordem de exibição pela chave da origem (estável no diferencial)
+PRASSINANTE	ID	tipo_assinante.codigo	texto			a origem só tem o id: vira o código de negócio
+PRASSINANTE	NOME	tipo_assinante.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
+PRASSINANTE	NOME	tipo_assinante.papel	texto_nome	valores		papel de quem assina pelo nome (valores.d/L6-05.tsv); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de presumir o papel; o cliente acrescenta o par no painel
+PRASSINANTE	ATIVO	tipo_assinante.ativo	booleano_sn			S/N; vazio fica com o padrão (ativo)
+PRBHTIPOFECHAMENTO	ID	tipo_fechamento_balanco.codigo	texto			a origem só tem o id: vira o código de negócio
+PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.descricao	texto_nome			descrição; vazia recusa a linha
+PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.periodo_horas	texto_nome	valores		duração do período pelo nome (24, 12 ou 6 horas; valores.d/L6-05.tsv); nome sem duração (ex.: só 'parcial') recusa a linha em vez de presumir 24 horas
+PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.parcial	texto_nome	valores		fechamento parcial pelo nome (menos de 24 horas ou 'parcial'); sem par fica o padrão (falso) com valor_fora_do_dominio
+PRFREQUENCIA	ID	frequencia_administracao.codigo	texto			a origem só tem o id: vira o código de negócio
+PRFREQUENCIA	NOME	frequencia_administracao.descricao	texto_nome			descrição; vazia recusa a linha
+PRFREQUENCIA	NUM_DOSE	frequencia_administracao.tipo	inteiro_zero_nulo	valores		tipo pelo número de doses (valores.d/L6-05.tsv): 1..48 vezes ao dia; acima de 48 recusa (valor_fora_do_dominio + NOT NULL); sem número (nulo ou 0) a critério médico, que reproduz o programa antigo (sem horário calculado) e mantém o nome na descrição; tipo pelo NOME (agora, se necessário, contínuo, dose única) com presumido só no resto aguarda o motor (pedido no L6-05.json)
+PRFREQUENCIA	NUM_DOSE	frequencia_administracao.doses_por_dia	inteiro_zero_nulo			doses por dia; 0 é 'sem valor'
+PRFREQUENCIA	ESTOQUE	frequencia_administracao.movimenta_estoque	booleano_sn			S/N (gerada codigo_char); fora do domínio fica com o padrão (verdadeiro)
+PRFREQUENCIA	RECEITA_ESTRUTURADA	frequencia_administracao.receita_estruturada	booleano_sn			S/N (gerada codigo_char)
+PRFREQUENCIA	ORDEM	frequencia_administracao.ordem	inteiro			ordem de exibição
+PRFREQUENCIA	TP_PRESCRICAO		codigo_char			não gravada por ora: sem evidência do significado de cada código; uso_prescricao fica no padrão todos (não esconde a frequência de tipo algum de item); de-para depois da contagem por valor (pedido no L6-05.json)
+PRHRRELATIVA	ID_PRFREQUENCIA	frequencia_horario_relativo.frequencia_administracao_id	chave_origem			frequência pai pelo conector_origem; recusada: pai_pendente
+PRHRRELATIVA	ORDEM	frequencia_horario_relativo.sequencia	inteiro			posição do horário na frequência; repetida recusa pela chave única (1062)
+PRHRRELATIVA	NOME	frequencia_horario_relativo.descricao	texto_nome			descrição (em jejum, ao deitar); vazia recusa
+PRHRRELATIVA	HORARIO	frequencia_horario_relativo.horario_referencia	hora_em_timestamp			hora guardada em TIMESTAMP 1899-12-30; outra data: a hora é usada com hora_com_data
+PRFAVORITO_EXIBIR	LOCPACDEFAULT	painel_coluna_usuario.usuario_id			ref:PRLOCPACDEFAULT>USUARIO>TBUSERS	usuário da preferência: a origem aponta a preferência (PRLOCPACDEFAULT), cujo login leva ao usuário (ref encadeada à origem do pai); preferência ou login inexistente: pai_inexistente e recusa (NOT NULL)
+PRFAVORITO_EXIBIR	CAMPOSLOCALIZACAOPACIENTE	painel_coluna_usuario.coluna	inteiro			identificador da coluna da tela: o id da coluna na origem em texto, o mesmo gravado em coluna_painel_paciente.chave_atributo
+PRFAVORITO_EXIBIR	ORDEM	painel_coluna_usuario.ordem	inteiro			ordem; vazia fica com o padrão (0)
+PRFAVORITO_EXIBIR	EXIBIR	painel_coluna_usuario.exibir	booleano_sn			S/N (gerada codigo_char); fora do domínio fica com o padrão (exibir)
+#PRDADOSENVIOOPERADORA	=envio_operadora	grupo_informacao_clinica_operadora.codigo			antes adotar:codigo	L6-05: aguarda destino secundário gravado antes do principal (pedido no L6-05.json): grupo padrão das informações enviadas à operadora, criado uma vez e adotado pelas outras linhas
+#PRDADOSENVIOOPERADORA	=Informações enviadas à operadora	grupo_informacao_clinica_operadora.descricao				L6-05: descrição do grupo padrão
+#PRDADOSENVIOOPERADORA	#codigo_derivado:ID:30:envio_	informacao_clinica_operadora.codigo				L6-05: código envio_<ID>: o prefixo evita colidir com as informações de PRINFOPERGOPERADORA (L6-07, ids inteiros no mesmo código único)
+#PRDADOSENVIOOPERADORA	NOME	informacao_clinica_operadora.descricao	texto_nome			L6-05: nome da informação; vazio recusa (NOT NULL)
+#PRDADOSENVIOOPERADORA	@id:grupo_informacao_clinica_operadora	informacao_clinica_operadora.grupo_informacao_clinica_operadora_id				L6-05: id do grupo padrão gravado antes (especial pedida)

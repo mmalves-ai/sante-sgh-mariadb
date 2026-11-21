@@ -3,7 +3,9 @@
 Sem banco; só a imagem SINTÉTICA e valores inventados. A carga e a conciliação rodam em
 `conector.sh conferir-fatia L8-07`.
 """
+import os
 import random
+from pathlib import Path
 import unittest
 
 from sante_conector import carga_mapa, mapa, sentinela
@@ -50,6 +52,15 @@ class PlanoL807(unittest.TestCase):
         self.assertEqual(set(self.plano), set(l8_07.CARREGADAS))
         self.assertNotIn("CMINCENTIVO", self.plano)
 
+    def test_incentivo_descartado_com_motivo_de_produto(self):
+        d = Path(os.environ.get("CONECTOR_MAPA_DIR") or mapa.DIR_PACOTE)
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(d / "declarado/sem_carga.tsv")}
+        for t in l8_07.NAO_CARREGADAS:
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "sem_valor"), t)
+            self.assertTrue(sc[t]["motivo"], t)
+            decl = (d / "declarado/colunas.d/L8-07.tsv").read_text()
+            self.assertNotIn(t + "\t", decl, t)
+
     def test_cada_tabela_grava_sua_lista_codigo_e_descricao(self):
         for t, (_, dt, lista) in l8_07.LISTAS.items():
             self.assertEqual(self.plano[t]["destinos"], [dt], t)
@@ -58,6 +69,7 @@ class PlanoL807(unittest.TestCase):
             self.assertEqual((c["codigo"]["coluna"], c["codigo"]["regra"]), ("ID", "texto"), t)
             self.assertEqual((c["descricao"]["coluna"], c["descricao"]["regra"]), ("NOME", "texto_nome"), t)
             esperado = {"lista", "codigo", "descricao"} | ({"sigla"} if t == "CMREDEASSIST" else set())
+            esperado |= {"ativo"} if t in l8_07.SENTINELA_ZERO else set()
             esperado |= {"codigo_oficial"} if t in CODIGO_OFICIAL else set()
             self.assertEqual(set(c), esperado, t)
 
@@ -78,10 +90,19 @@ class PlanoL807(unittest.TestCase):
         self.assertEqual(len(por_destino["dominio_contratualizacao_sus"]), 10)
         self.assertEqual(len(por_destino["dominio_sus"]), 8)
 
-    def test_listas_longas_sao_as_conhecidas(self):
-        # trava o defeito do modelo (lista VARCHAR(30) menor que dois valores do próprio CHECK): ao alargar a coluna,
-        # tirar LISTA_LONGA da imagem e este teste
-        self.assertEqual(l8_07.LISTA_LONGA, {"FAHEMOCARTRAT", "FHJUSTPACDESC"})
+    def test_listas_cabem_no_modelo_alargado(self):
+        # toda lista cabe em VARCHAR(40) (migração pedida em saida/L8-07.json); LISTA_LONGA só existe enquanto a
+        # largura da imagem for a do modelo atual (30): com a migração, LARGURA_LISTA = 40 e LISTA_LONGA fica vazio
+        self.assertTrue(all(len(l) <= 40 for _, _, l in l8_07.LISTAS.values()))
+        self.assertLessEqual(l8_07.LISTA_LONGA, {"FAHEMOCARTRAT", "FHJUSTPACDESC"})
+
+    def test_sentinela_zero_entra_inativo(self):
+        # o id 0 ('não informado') vira item INATIVO: o produto representa 'não informado' com o vínculo NULL
+        for t in l8_07.SENTINELA_ZERO:
+            c = self.cols(t, "dominio_contratualizacao_sus")["ativo"]
+            self.assertEqual((c["coluna"], c["regra"]), ("ID", "booleano"), t)
+        for t in set(l8_07.LISTAS) - l8_07.SENTINELA_ZERO:
+            self.assertNotIn("ativo", self.cols(t, l8_07.LISTAS[t][1]), t)
 
     def test_nenhum_destino_oficial(self):
         por = {r["tabela"]: r for r in self.m["tabelas"]}
@@ -98,6 +119,10 @@ class RegrasL807(unittest.TestCase):
                          "Opção número dois")
         self.assertEqual(sentinela.aplicar("texto_nome", b"   "), (None, None))
 
+    def test_id_zero_vira_inativo(self):
+        self.assertEqual(sentinela.aplicar("booleano", 0), (False, None))
+        self.assertEqual(sentinela.aplicar("booleano", 5), (True, None))
+
     def test_sigla_apara_e_vazia_vira_nulo(self):
         self.assertEqual(sentinela.aplicar("texto", b" RCP")[0], "RCP")
         self.assertIsNone(sentinela.aplicar("texto", b"    ")[0])
@@ -110,6 +135,10 @@ class ImagemL807(unittest.TestCase):
         self.assertEqual(set(esp), set(l8_07.CARREGADAS))
         for t in l8_07.NAO_CARREGADAS:
             self.assertGreater(cont.get(t, 0), 0, t)
+        for t in l8_07.SENTINELA_ZERO:  # a imagem exercita o id 0
+            self.assertGreater(esp[t]["gravados"], 0, t)
+        # nenhuma tabela carregada fica com 0 gravados, fora as que aguardam a migração (LISTA_LONGA)
+        self.assertEqual({t for t, e in esp.items() if e["gravados"] == 0}, l8_07.LISTA_LONGA)
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith("restricao_destino_"))
             self.assertEqual(e["gravados"] + recusas, cont[t], t)

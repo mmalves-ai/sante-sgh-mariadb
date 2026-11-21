@@ -3,4 +3,30 @@ FPVACINA	COD_VAC	vacina_ocupacional.codigo	texto			L5-11: código da vacina ocup
 FPVACINA	DESCRICAO	vacina_ocupacional.descricao	texto			L5-11: nula recusa a linha (NOT NULL no destino)
 POTPCONTTEMP	ID	tipo_contrato_temporario.codigo	texto			L5-11 (código numérico como texto: destino VARCHAR; com inteiro a soma de controle diverge)
 POTPCONTTEMP	NOME	tipo_contrato_temporario.descricao	texto_nome			L5-11
-POTPCONTTEMP	LIMITE_HORA_SEMANAL	tipo_contrato_temporario.limite_horas_semanais	inteiro			L5-11: fora de 1..44 (inclusive 0, provável sentinela de sem limite) recusa a linha pelo CHECK do destino com restricao_destino_4025, rastreada; pedida regra genérica de faixa que grave NULL com valor_fora_do_dominio (saida/L5-11.json)
+POTPCONTTEMP	LIMITE_HORA_SEMANAL	tipo_contrato_temporario.limite_horas_semanais	faixa:1,44			L5-11: fora de 1..44 (inclusive 0, sentinela provável de sem limite) grava NULL com valor_fora_do_dominio, sem recusar o tipo
+PEPERIOD_JUSTIF	COD_PERIOD_JUSTIF	abrangencia_justificativa.codigo	texto			L5-11: código do período (chave da origem; código numérico como texto)
+PEPERIOD_JUSTIF	DESCRICAO	abrangencia_justificativa.descricao	texto			L5-11: nula recusa a linha (NOT NULL no destino)
+PEPERIOD_JUSTIF	=~dia	abrangencia_justificativa.abrangencia				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); dia inteiro é a abrangência mais comum da justificativa
+PETP_MOVIM	COD_TP_MOVIM	tipo_movimento_ponto.codigo	texto			L5-11: código do tipo de movimento (chave da origem; código numérico como texto)
+PETP_MOVIM	DESCRICAO	tipo_movimento_ponto.descricao	texto			L5-11: nula recusa a linha (NOT NULL no destino)
+PETP_MOVIM	=~outro	tipo_movimento_ponto.natureza				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); sinal e banco de horas ficam no padrão do destino (neutro, não afeta) até a revisão
+POCLASSIFMARC	ID	classificacao_marcacao.codigo	texto			L5-11: código da classificação (chave da origem; código numérico como texto)
+POCLASSIFMARC	NOME	classificacao_marcacao.descricao	texto_nome			L5-11
+POCLASSIFMARC	ID	classificacao_marcacao.ordem	inteiro			L5-11: a ordem de exibição segue a chave da origem
+POCLASSIFMARC	=~entrada	classificacao_marcacao.sentido				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md)
+POTPTRABFOLGA	ID	regime_jornada.codigo	texto			L5-11: código do regime trabalho/folga (chave da origem; código numérico como texto)
+POTPTRABFOLGA	NOME	regime_jornada.descricao	texto_nome			L5-11
+POTPTRABFOLGA	=~escala_revezamento	regime_jornada.tipo_regime				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); o tipo trabalho x folga é escala de revezamento
+POTPTRABFOLGA	=~2640	regime_jornada.carga_semanal_minutos				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); 44 horas semanais (limite constitucional) até o cliente informar a carga do regime
+POTPHORA	ID	tipo_hora.codigo	texto			L5-11: código do tipo de hora (chave da origem; código numérico como texto)
+POTPHORA	NOME	tipo_hora.descricao	texto_nome			L5-11
+POTPHORA	=~normal	tipo_hora.natureza				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); natureza neutra (normal: sem adicional nem banco de horas) até o cliente classificar extra, noturna, falta etc.
+PETPINTERVALO	ID	tipo_intervalo.codigo	texto			L5-11: código do tipo de intervalo (chave da origem; código numérico como texto)
+PETPINTERVALO	NOME	tipo_intervalo.descricao	texto_nome			L5-11
+PETPINTERVALO	=~outro	tipo_intervalo.categoria				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); categoria neutra (outro) até o cliente separar refeição e descanso; computa_jornada fica no padrão do destino
+POREPHOMOLOGADO	ID	tipo_relogio_ponto.codigo	texto			L5-11: código do tipo de relógio (chave da origem; código numérico como texto)
+POREPHOMOLOGADO	NOME	tipo_relogio_ponto.descricao	texto_nome			L5-11
+POREPHOMOLOGADO	=~rep_c	tipo_relogio_ponto.categoria_portaria				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); REP-C (registrador convencional homologado, o caso do relógio físico da instalação antiga) até o cliente informar REP-A ou REP-P
+FPVALE	#codigo_derivado:ID:30:v	beneficio.codigo	texto			L5-11: código do vale = prefixo v + chave da origem (o tipo do vale, FPTPVALE, grava o código sem prefixo no mesmo UNIQUE(codigo) de beneficio: não colide)
+FPVALE	NOME	beneficio.descricao	texto_nome			L5-11: nome do vale oferecido (NOT NULL)
+FPVALE	=~outro	beneficio.tipo				L5-11: classificador NOT NULL sem fonte na origem: literal presumido (pendência baixa valor_presumido; o cliente revisa no painel; decisão em F4-decisoes-destino.md); mesmo tipo presumido do pai FPTPVALE (L5-10), que também não traz o tipo do produto

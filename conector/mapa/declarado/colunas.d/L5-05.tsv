@@ -2,7 +2,7 @@ tabela	coluna	destino	regra	depara	via	motivo
 TBGENERO_SOCIAL	CODIGO	identidade_de_genero.codigo	texto			código numérico da origem gravado como texto (código de negócio)
 TBGENERO_SOCIAL	NOME	identidade_de_genero.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
 TBGENERO_SOCIAL	ATIVO	identidade_de_genero.ativo	booleano_sn			S/N; vazio ou fora do domínio fica com o padrão do destino (ativo)
-TBGRAU_INST	COD_GRAU	nivel_escolaridade.codigo	codigo_char			código de 1 caractere, caixa preservada; colisão de caixa deve virar codigo_colisao_caixa nas duas linhas (pedido ao motor); até lá a segunda linha lida é recusada por 1062
+TBGRAU_INST	COD_GRAU	nivel_escolaridade.codigo	codigo_char			L5-05: código de 1 caractere, caixa preservada; colisão de caixa ('A' e 'a') recusa as linhas do grupo com codigo_colisao_caixa (motor), sem escolher vencedora
 TBGRAU_INST	DESCRICAO	nivel_escolaridade.descricao	texto			descrição (só as pontas aparadas)
 TBGRAU_INST	COD_ESOCIAL	nivel_escolaridade.codigo_esocial	texto			código da escolaridade no eSocial
 TBGRUCONVEN	COD	grupo_fonte_pagadora.codigo	texto			código numérico da origem gravado como texto
@@ -15,7 +15,85 @@ TBRELIG	COD	crenca_religiosa.codigo	texto			código numérico da origem gravado 
 TBRELIG	NOME	crenca_religiosa.descricao	texto_nome			descrição da crença
 TBTIPOATEUNIDADE	ID	perfil_unidade.codigo	texto			a origem só tem o id: vira o código de negócio
 TBTIPOATEUNIDADE	NOME	perfil_unidade.descricao	texto_nome			descrição do perfil
-TBTIPOATEUNIDADE	=outro	perfil_unidade.categoria				categoria assistencial não existe na origem: entra como 'outro' (valor neutro do modelo) e o cliente reclassifica
+TBTIPOATEUNIDADE	=~outro	perfil_unidade.categoria				L5-05: categoria assistencial não existe na origem: entra como 'outro' PRESUMIDO (valor_presumido, baixa) e o cliente reclassifica no painel (F4-decisoes-destino.md)
 TBVULNERABILIDADE_SOCIAL	CODIGO	condicao_vulnerabilidade.codigo	texto			código numérico da origem gravado como texto
 TBVULNERABILIDADE_SOCIAL	DESCRICAO	condicao_vulnerabilidade.descricao	texto			descrição da condição
 TBVULNERABILIDADE_SOCIAL	ATIVO	condicao_vulnerabilidade.ativo	booleano_sn			S/N
+TBGERSEQ	#codigo_derivado:TIPO:60:origem_	sequencia_negocio.tipo	texto		sequencia_negocio	L5-05: gerador de números da origem vira sequência de negócio do cliente inteiro; tipo 'origem_<TIPO>' (formato do produto), que o cliente liga ao tipo do produto (prontuario, atendimento...) no painel; o destino sequencia_prontuario do mapa é a regra montada SOBRE a sequência (F4-decisoes-destino.md)
+TBGERSEQ	SEQ	sequencia_negocio.proximo_valor	inteiro_nao_negativo		sequencia_negocio	L5-05: valor corrente da numeração; negativo vira NULL (padrão do destino) com valor_fora_do_dominio
+TBGERSEQ	=~0	sequencia_negocio.ativo			sequencia_negocio	L5-05: entra INATIVA e presumida (valor_presumido): o cliente confere se o valor é o último emitido ou o próximo antes de ligar ao tipo do produto, para nunca repetir número
+TBORGAOEMIS	ID	orgao_emissor_documento.codigo	texto			L5-05: a origem só tem o id: vira o código de negócio
+TBORGAOEMIS	NOME	orgao_emissor_documento.descricao	texto_nome			L5-05: nome do órgão; vazio recusa a linha (NOT NULL)
+TBORGAOEMIS	#codigo_derivado:NOME:10	orgao_emissor_documento.sigla	texto_nome			L5-05: a sigla (NOT NULL, 10) não existe na origem: nome que cabe vira a sigla; maior, resumo estável com pendência baixa codigo_derivado (F4-decisoes-destino.md)
+TBSEXO	CODIGO	sexo.codigo	texto			L5-05: código numérico da origem gravado como texto (só nas linhas novas)
+TBSEXO	NOME	sexo.descricao	texto_nome			L5-05: descrição
+TBSEXO	SIGLA	sexo.sigla	codigo_char		adotar:sigla	L5-05: sigla de 1 caractere: a linha que o L3 já criou com a mesma sigla (M, F, I) é ADOTADA (adotado_existente), sem duplicar nem recusar por 1062
+TBTIPOTELEFONE	#codigo_derivado:TIPO_TELEFONE:30	tipo_telefone.codigo	texto_nome		adotar:codigo	L5-05: a origem só tem id e nome: o nome vira o código; o tipo que o L3 já criou com o mesmo código (residencial, celular; colação sem caixa) é adotado
+TBTIPOTELEFONE	TIPO_TELEFONE	tipo_telefone.descricao	texto_nome			L5-05: descrição
+TBTPDOCUMENTO	#codigo_derivado:NOME:30	tipo_documento_identificacao.codigo	texto_nome		adotar:codigo	L5-05: o nome vira o código (o tipo rg do L3 é adotado pela sigla 'RG' da origem); COD_DOCUMENTO é número interno sem significado oficial comprovado e não é aproveitado (a chave ID liga as referências)
+TBTPDOCUMENTO	NOME	tipo_documento_identificacao.descricao	texto_nome			L5-05: descrição
+TBUNID_IDADE	ID	unidade_idade.codigo	texto			L5-05: a origem só tem o id: vira o código de negócio
+TBUNID_IDADE	NOME	unidade_idade.descricao	texto_nome			L5-05: descrição
+TBUNID_IDADE	NOME	unidade_idade.unidade_calculo	texto_nome	valores		L5-05: unidade de cálculo pelo nome (evidência: o próprio nome; pares em valores.d/L5-05.tsv); nome sem par: valor_fora_do_dominio e a linha é recusada (NOT NULL)
+TBUNID_IDADE	NOME	unidade_idade.sigla	texto_nome	valores		L5-05: sigla pelo nome (mesmos pares da unidade de cálculo)
+TBUNIDAD	@estabelecimento	unidade_assistencial.estabelecimento_id				L5-05: a origem não traz o estabelecimento da unidade: único do cliente (vários: estabelecimento_indefinido)
+TBUNIDAD	COD	unidade_assistencial.codigo	texto			L5-05: código numérico da unidade gravado como texto
+TBUNIDAD	NOME	unidade_assistencial.nome	texto_nome			L5-05: nome; vazio recusa (NOT NULL); repetido no estabelecimento recusa (1062)
+TBUNIDAD	NOME_COMP	unidade_assistencial.nome_completo	texto_nome			L5-05: nome dos documentos oficiais
+TBUNIDAD	=~outra	unidade_assistencial.tipo_unidade				L5-05: a origem liga a unidade ao perfil (TBTIPOATEUNIDADE, sem domínio fixo): o tipo entra como 'outra' PRESUMIDO (valor_presumido) e o cliente reclassifica
+TBUNIDAD	CNES	unidade_assistencial.codigo_cnes	inteiro_zeros_esquerda:7			L5-05: CNES com 7 dígitos
+TBUNIDAD	ORGAO_EMISSOR	unidade_assistencial.orgao_emissor	texto			L5-05: órgão emissor dos documentos SUS da unidade
+TBUNIDAD	NIVEL_HIERARQ	unidade_assistencial.nivel_hierarquia	inteiro_nao_negativo			L5-05: nível de hierarquia SUS
+TBUNIDAD	CEP	unidade_assistencial.cep	inteiro_zeros_esquerda:8			L5-05: CEP inteiro com zeros à esquerda
+TBUNIDAD	LOCAL	unidade_assistencial.logradouro	texto			L5-05: logradouro
+TBUNIDAD	NUMERO	unidade_assistencial.numero_endereco	texto			L5-05: número do endereço como texto
+TBUNIDAD	BAIRRO	unidade_assistencial.bairro	texto			L5-05: bairro
+TBUNIDAD	FONE	unidade_assistencial.telefone	texto			L5-05: telefone
+TBUNIDAD	PERC_REP	unidade_assistencial.percentual_repasse	faixa:0,100			L5-05: percentual de repasse (CHECK 0..100): fora vira NULL com valor_fora_do_dominio
+TBUNIDAD	PERC_REP_C	unidade_assistencial.percentual_repasse_complementar	faixa:0,100			L5-05: percentual complementar (CHECK 0..100)
+TBUNIDAD	TETO_AIH	unidade_assistencial.teto_internacao	decimal_nao_negativo			L5-05: teto SUS de internação (CHECK >= 0)
+TBUNIDAD	TETO_AMB	unidade_assistencial.teto_ambulatorial	decimal_nao_negativo			L5-05: teto SUS ambulatorial (DOUBLE; CHECK >= 0)
+TBUNIDAD	SITUACAO	unidade_assistencial.ativo	booleano_ai			L5-05: A ativa, I inativa; outro valor: valor_fora_do_dominio e fica o padrão (ativa)
+TBUNIDAD	ID_TBCBOPRO_FARM_RESP_MANIPUL	unidade_assistencial.farmaceutico_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L5-05: farmacêutico responsável: a origem aponta a inscrição no conselho (TBCBOPRO), cujo profissional é o destino; profissional ainda não carregado: NULL com pai_inexistente (anulável)
+TBCBOPRO_TBUNIDAD	CBOPRO	lotacao_profissional.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS;adotar:profissional_id,estabelecimento_id,ocupacao_cbo_id	L5-05: CBOPRO é o id da inscrição no conselho (não um código CBO): o profissional vem pela inscrição. Mesma pessoa e ocupação em duas unidades do mesmo estabelecimento: a segunda ADOTA a lotação (adotado_existente), pois o modelo não tem unidade na lotação (F4-decisoes-destino.md). Exige TBPROFIS antes (dependência pedida)
+TBCBOPRO_TBUNIDAD	CBOPRO	lotacao_profissional.ocupacao_cbo_id		cbo	ref:TBCBOPRO>ID_TBCBOSUS>TBCBOSUS>COD	L5-05: ocupação: inscrição -> id da CBO na origem -> código CBO, pelo de-para oficial (o depara cbo gerado sobre CBOPRO aplicaria a CBO a um id)
+TBCBOPRO_TBUNIDAD	CBOPRO	lotacao_profissional.inscricao_conselho_id			ref:TBCBOPRO.ID	L5-05: a inscrição no conselho da lotação, pelo ID do pai (forma alternativa: a forma simples herdaria o de-para cbo gerado para CBOPRO e trataria o id como código CBO)
+TBCBOPRO_TBUNIDAD	@estabelecimento	lotacao_profissional.estabelecimento_id				L5-05: a unidade da origem não diz o estabelecimento: único do cliente
+TBCBOPRO_TBUNIDAD	CH_AMB	lotacao_profissional.carga_horaria_ambulatorial	inteiro_nao_negativo			L5-05: horas semanais (soma > 168 recusa pelo CHECK)
+TBCBOPRO_TBUNIDAD	CH_HOSP	lotacao_profissional.carga_horaria_hospitalar	inteiro_nao_negativo			L5-05: horas semanais
+TBCBOPRO_TBUNIDAD	CH_OUTROS	lotacao_profissional.carga_horaria_outros	inteiro_nao_negativo			L5-05: horas semanais
+TBCBOPRO_TBUNIDAD	ATIVO	lotacao_profissional.ativo	booleano_sn			L5-05: S/N
+TBCBOPRO_TBUNIDAD	@vigencia_carga	lotacao_profissional.vigencia_inicio				L5-05: a origem não tem início da lotação: data da carga com vigencia_sem_fonte (decisão genérica)
+#TBMEDSOL	NOME	solicitante_externo.nome	texto_nome			L5-05: nome do solicitante; aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+#TBMEDSOL	ID_TBCONSPROF	solicitante_externo.conselho_classe_id	texto	conselho_classe	ref:TBCONSPROF>COD_CONSELHO_PROF	L5-05: conselho pela sigla guardada no pai (catálogo oficial); aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+#TBMEDSOL	COD_CONSELHO_PROFISSIONAL	solicitante_externo.numero_conselho	texto			L5-05: número no conselho; aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+#TBMEDSOL	ID_TBUF	solicitante_externo.conselho_unidade_federativa_id	texto	ibge_uf		L5-05: UF do conselho pela sigla (a chave de TBUF é a sigla); aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+#TBMEDSOL	ID_TBCBOSUS	solicitante_externo.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	L5-05: ocupação: id da CBO na origem -> código CBO pelo de-para oficial; aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+#TBMEDSOL	ATIVO	solicitante_externo.ativo	booleano_sn			L5-05: S/N; aguarda o catálogo oficial conselho_classe em depara.CATALOGOS (de-para oficial pela sigla; pedido 1 do L5-05.json): conselho_classe_id é NOT NULL; ao existir, descomentar
+TBEMPHOS	CNPJ	pessoa_juridica.cnpj	cnpj		pessoa_juridica;adotar:cnpj	L5-05: pessoa jurídica única pelo CNPJ (adotada se já existir); carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	NOME	pessoa_juridica.razao_social	texto_nome		pessoa_juridica	L5-05: razão social; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	INS_ESTA	pessoa_juridica.inscricao_estadual	texto		pessoa_juridica	L5-05: inscrição estadual; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	INS_MUN	pessoa_juridica.inscricao_municipal	texto		pessoa_juridica	L5-05: inscrição municipal; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	CNES	pessoa_juridica.cnes	inteiro_zeros_esquerda:7		pessoa_juridica	L5-05: CNES; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	CNAE_PRED	pessoa_juridica.cnae_principal	texto		pessoa_juridica	L5-05: CNAE preponderante; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	E_MAIL	pessoa_juridica.email	texto		pessoa_juridica	L5-05: e-mail; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	TEL	pessoa_juridica.telefone	texto		pessoa_juridica	L5-05: telefone; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	END_SITE	pessoa_juridica.site	texto		pessoa_juridica	L5-05: site; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	CEP	pessoa_juridica.cep	inteiro_zeros_esquerda:8		pessoa_juridica	L5-05: CEP; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	ENDERECO	pessoa_juridica.logradouro	texto		pessoa_juridica	L5-05: logradouro; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	NUM	pessoa_juridica.numero_endereco	texto		pessoa_juridica	L5-05: número; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	COMP	pessoa_juridica.complemento	texto		pessoa_juridica	L5-05: complemento; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	BAIRRO	pessoa_juridica.bairro	texto		pessoa_juridica	L5-05: bairro; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+TBEMPHOS	COD_IBGE	pessoa_juridica.municipio_ibge_id	inteiro	ibge_municipio	pessoa_juridica	L5-05: município IBGE; carregada já: a pessoa jurídica da mantenedora (principal enquanto a mantenedora aguarda o pedido 2)
+#TBEMPHOS	@id	mantenedora.pessoa_juridica_id				L5-05: liga a mantenedora à pessoa jurídica; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	COD	mantenedora.codigo	texto			L5-05: código da empresa; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	NIRE	mantenedora.nire	texto			L5-05: NIRE; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	DTNIRE	mantenedora.data_registro_nire	data			L5-05: data do NIRE; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	REG_CIVIL	mantenedora.registro_civil	texto			L5-05: registro civil; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	DATA_REG	mantenedora.data_registro_civil	data			L5-05: data do registro civil; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	CNAE_PRED	mantenedora.cnae_principal	texto			L5-05: CNAE; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	NUM_REGISTRO_ANS	mantenedora.registro_ans	texto			L5-05: registro ANS; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	OPTANTE_SIMPLES	mantenedora.optante_simples	booleano_sn			L5-05: optante do Simples; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	INCENTIV_CULTURAL	mantenedora.incentivo_cultural	booleano_sn			L5-05: incentivo cultural; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	OLD_CRC	mantenedora.contador_crc	texto			L5-05: CRC do contador; aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar
+#TBEMPHOS	ATIVO_EMPRESA	mantenedora.ativo	booleano_sn			L5-05: empresa ativa (ATIVO/PASSIVO/RECEITA... são grupos do plano de contas, não a situação); aguarda pessoa_juridica como destino PRINCIPAL de TBEMPHOS (mantenedora.pessoa_juridica_id NOT NULL recebe @id; pedido 2 do L5-05.json; decisão em F4-decisoes-destino.md); ao existir, descomentar

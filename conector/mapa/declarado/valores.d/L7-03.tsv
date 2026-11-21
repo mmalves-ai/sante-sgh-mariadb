@@ -1,4 +1,9 @@
 tabela	coluna	destino	valor_origem	valor_destino	motivo
 SITABELE	NUMERICO	analito.tipo_resultado	S	numerico	L7-03
 SITABELE	NUMERICO	analito.tipo_resultado	N	texto	L7-03
-SITABELE	TITULO	analito.resultado_obrigatorio	N	1	L7-03: linha comum: resultado obrigatório; S (título) sem par de propósito: pendência por linha até a regra composta
+SITABELE	TITULO	exame_analito.obrigatorio	1	0	L7-03: linha-título não é obrigatória
+SITABELE	TITULO	exame_analito.obrigatorio	0		L7-03: linha comum: padrão do destino (a origem não informa)
+SITABELE	TITULO	exame_analito.obrigatorio			L7-03: vazio: padrão do destino
+SITABPRO	SITUACAO	exame.desativado_em	1		L7-03: ativo: sem desativação
+SITABPRO	SITUACAO	exame.desativado_em	0	@data_carga	L7-03: inativo: desativado na data da carga (a origem não guarda a data)
+SITABPRO	SITUACAO	exame.desativado_em			L7-03: vazio: ativo pelo padrão

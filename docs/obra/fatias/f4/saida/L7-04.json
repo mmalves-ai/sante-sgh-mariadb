@@ -2,53 +2,81 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência por chave composta da origem: `chave_origem` com várias colunas (ex.: ATO,EXAME -> SITABPRO ATO,CODALF; CODPRC,CODELE -> SITABELE), resolvida pelo conector_origem do pai com a chave juntada na ordem da chave do pai (já pedida no L6-01)",
-   "motivo": "SILANEXA, SIKITHISTITE e HTNOTEXAMESEXO apontam o exame (SITABPRO) e SIHISTVLREF/SIHISTVLREFEXAME/SIHISTVLREFELEMENTO apontam exame ou analito só por chave composta; os destinos exigem exame_id NOT NULL"
+   "mudanca": "chave alternativa (`ref:T.K`) com valor repetido: só é pai_ambiguo quando os candidatos levam a valores ou ids DIFERENTES no fim da cadeia (ex.: `ref:SILANEXA.ID_SICADATE>ATO>SIMODULO` com todos os exames do mesmo módulo; `ref:SIRES01.ID_SILANEXA`, cujas linhas de analito apontam o mesmo resultado adotado)",
+   "motivo": "SICADATE (setor executante) e SIRESOBS (resultado) já carregam, mas a requisição com vários exames e o exame com vários analitos ficam recusados por pai_ambiguo; com a regra, carregam todos os casos sem ambiguidade real",
+   "gravidade": "alta"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência derivada: `chave_origem` que resolve o pai e grava uma coluna do destino do pai (ex.: SICADATE.ID_ATCABECATEND -> atendimento.paciente_id para requisicao_exame.paciente_id; SILANEXA.ID_SICADATE -> requisicao_exame), já pedida no L5-06",
-   "motivo": "requisicao_exame.paciente_id e resultado_exame.paciente_id (NOT NULL) só chegam pelo atendimento ou pelo pedido"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.tsv",
-   "mudanca": "pares de TBFATORRH NOME -> fator_rh.sinal ('+' e '-') revisados pelo cliente sobre os 2 nomes da origem; depois declarar TBFATORRH (ID -> codigo, NOME -> descricao texto_nome, NOME -> sinal depara=valores)",
-   "motivo": "sinal NOT NULL e único sem fonte direta; presumir trocaria o Rh do paciente"
-  },
-  {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "fonte de requisicao_exame.setor_diagnostico_id e solicitante_profissional_id (NOT NULL) na carga de SICADATE: setor pelo exame (SILANEXA -> SITABPRO -> setor) e solicitante externo (TBMEDSOL -> solicitante_externo) ou inscrição no conselho (TBCBOPRO), que não são profissional; ou tornar essas colunas anuláveis para dado migrado",
-   "motivo": "SICADATE (123702 na referência) não tem setor executante e o solicitante não é profissional; sem a requisição, SILANEXA (exame_item), SILIBERACAOEXAME, SIASSLAUDO_IMP_SILANEXA, SIRES01, SIRESOBS, SIRESVAR ficam bloqueadas em cascata; o número (NOT NULL) pode vir de REQUIS ou do ID"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py ou decisão do dono",
-   "mudanca": "agregação: SIRES01 tem uma linha por analito (ELEMENTO) e resultado_exame é um por exame pedido; regra genérica de 'agrupar por coluna' (ex.: ID_SILANEXA) que grava o principal uma vez e cada linha num destino filho (resultado_analito, com o analito pela chave composta)",
-   "motivo": "carga linha a linha gravaria um resultado por analito e violaria uq_resultado_exame_exame_item; SIRESOBS e SIRESVAR dependem do resultado"
-  },
-  {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "destino de SIWSETIQUETA (leiaute de etiqueta devolvido pelo apoio, BLOB) e de PREXAMEASSINATURA (agrupamento de assinatura): etiqueta_amostra_apoio exige laboratório e amostra; modelo_etiqueta exige largura e altura; documento_prontuario exige tipo, situação, profissional e paciente",
-   "motivo": "nenhuma das colunas NOT NULL tem fonte na origem"
-  },
-  {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "faixa_referencia_versao exige faixa_referencia_id, mas SIHISTVLREF/SIHISTVLREFEXAME guardam o valor de referência por exame e SIHISTVLREFELEMENTO por analito, em texto (VLRREF) e limites; definir se viram versão da faixa do analito (exige a faixa vigente pelo analito) ou histórico em trilha_auditoria",
-   "motivo": "o modelo versiona a faixa, a origem versiona o texto de referência do exame"
+   "mudanca": "DATE gravado em coluna DATETIME sem divergir a soma de controle (tipar date -> datetime 00:00 na conversão para o destino), e data + hora HHMM em texto (`#data_hora:DATA,HORA`), já pedido no L6-04",
+   "motivo": "a carga usa hoje DATA_HORA_INCLUSAO (requisição) e DATA_HORA_EVENTO (resultado), que podem faltar em linhas antigas; com a regra: requisicao_exame.solicitado_em <- DATA (+HORA), resultado_exame.resultado_em <- DATA, exame_item.coletado_em <- COLETA e previsto_em <- ENTREGA",
+   "gravidade": "alta"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "fonte alternativa para uma coluna do destino: primeira não nula entre duas colunas da origem (ex.: SIRES01_DELETE DATA_HORA_EVENTO, senão DATA_HORA_GRAVACAO -> trilha_auditoria.ocorrido_em)",
-   "motivo": "DATA_HORA_EVENTO é anulável na origem; a linha sem ela é recusada (NOT NULL) mesmo tendo DATA_HORA_GRAVACAO"
+   "mudanca": "`#retrato` com colunas extras sem destino (ex.: `#retrato:+ID_TBSEXO,ID_PRTIPONOTIFICACAO`), lidas e entrando no hash",
+   "motivo": "HTNOTEXAMESEXO: o retrato tem exame e data, mas não o sexo nem o tipo de alerta; SIRES01_DELETE: dados_antes do resultado excluído",
+   "gravidade": "media"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "SIRES01_DELETE: guardar o resultado excluído em trilha_auditoria.dados_antes (JSON das colunas da origem, sem valores no log), a mesma regra de JSON pedida no L7-01.json para SICADATE_EXCLUSAO",
-   "motivo": "sem o retrato a trilha guarda quem excluiu e quando, mas não o que foi excluído"
+   "mudanca": "referência a destino secundário do pai (`ref:SITABELE(C1,C2)/faixa_referencia`), já pedida (M1, L7-02)",
+   "motivo": "com ela SIHISTVLREFELEMENTO pode virar faixa_referencia_versao (hoje descarte duplicado, com a referência da época copiada para resultado_analito)",
+   "gravidade": "baixa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "HTNOTEXAMESEXO: com a regra de JSON (dados_depois) declarar =alteracao, =restricao_exame, DATA_HORA_HISTORICO -> ocorrido_em e o retrato (sexo, tipo de alerta, exame ATO+CODALF)",
-   "motivo": "sem retrato a linha na trilha só teria a data; 754 linhas na referência ficam fora até lá"
+   "mudanca": "fonte alternativa (primeira não nula entre duas colunas), ex.: SIRES01_DELETE DATA_HORA_EVENTO senão DATA_HORA_GRAVACAO",
+   "motivo": "linha sem DATA_HORA_EVENTO é recusada (NOT NULL) mesmo tendo a gravação",
+   "gravidade": "baixa"
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT/05_tabelas.sql (trilha F2.2)",
+   "mudanca": "requisicao_exame.setor_diagnostico_id anulável (o setor executante é por exame, em exame_item.setor_diagnostico_id) e solicitante externo (solicitante_externo_id) como alternativa ao profissional (DECIDIDO na rodada 2: setor anulável; solicitante_externo_id com CHECK de exatamente um dos dois solicitantes)",
+   "motivo": "requisição com exames de vários setores e pedido de médico de fora são casos normais; hoje recusam (pai_ambiguo / 1048)",
+   "gravidade": "alta"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-01.tsv (fatia L7-01)",
+   "mudanca": "declarar SIASSLAUDO_IMPRESSAO (emissao_laudo)",
+   "motivo": "SIASSLAUDO_IMP_SILANEXA carrega pela referência a ela; sem a emissão carregada, toda linha recusa com pai_inexistente + 1048",
+   "gravidade": "media"
+  },
+  {
+   "arquivo": "db/migracoes/02_ADM ou 06_PEP (trilha F2.2)",
+   "mudanca": "vínculo exame_item -> documento_prontuario (coluna exame_item.documento_prontuario_id ou tabela de vínculo documento_prontuario_exame)",
+   "motivo": "PREXAMEASSINATURA (1,5 milhão de linhas) liga cada exame ao grupo de assinatura; sem o vínculo, perde-se quais exames cada assinatura cobriu (decisão em F4-decisoes-destino.md)",
+   "gravidade": "media"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "situação derivada por várias colunas, com prioridade (ex.: `#situacao:DATA_HORA_SUSPENSAO_PEP=cancelado,DATA_HORA_LIBERA_EXAME=liberado,DTDIGRES=resultado_digitado`) e agregação de filhos para o pai (requisição concluída só com todos os exames liberados)",
+   "motivo": "exame_item.situacao hoje só distingue liberado/solicitado; requisicao_exame.situacao é presumida concluída",
+   "gravidade": "media"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "SIRES01_DELETE depende de SILANEXA",
+   "motivo": "a trilha de exclusão passa a apontar o exame por id (entidade exame_item); hoje a chave do exame vai em correlacao porque a exclusão carrega antes",
+   "gravidade": "baixa"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "BLOB para arquivo (coluna especial que grava o registro de arquivo e devolve o id), já pedido no L6-03",
+   "motivo": "SIRES01.RESULTADO_PDF -> resultado_exame.laudo_arquivo_id: laudo assinado é registro legal",
+   "gravidade": "alta"
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT/02_tabelas.sql (trilha F2.2)",
+   "mudanca": "exame_item: texto da justificativa do cancelamento (motivo_cancelamento_texto) ou motivo 'outro' no catálogo com texto; e item da conta (conta_hospitalar_item_id)",
+   "motivo": "SILANEXA.JUSTIFICATIVA_SUSPENSAO_PEP e ID_FCLANEXT sem destino; a situação 'cancelado' exige motivo do catálogo",
+   "gravidade": "baixa"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por chave alternativa composta (`ref:TBTIPPLANO.(CONVENIO,COD)` montada por CONV,PLANO desta linha)",
+   "motivo": "SICADATE.PLANO -> requisicao_exame.plano_fonte_pagadora_id",
+   "gravidade": "baixa"
   }
  ]
 }

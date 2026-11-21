@@ -1,5 +1,6 @@
 """Fatia L6-08 (prontuário, assinatura e assistência, PEP): declarações planejadas, regras das colunas e coerência da
 imagem sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L6-08`."""
+import decimal
 import random
 import unittest
 
@@ -16,7 +17,7 @@ DESTINOS = {
     "PRVALIDARMEDDUPLICPRESC": "regra_duplicidade_terapeutica", "PRVIAAEREA": "via_aerea",
     "TBCBARACATEGORIA": "categoria_alergeno", "TBCBARAAGENTE": "alergeno", "TBCBARACLASSIFREACAO": "tipo_alergia",
     "TBCBARAORIGEMINFO": "origem_informacao_alergia", "TBCBARASEVERIDADE": "gravidade_reacao_adversa",
-    "TBCLASSINTMED": "classificacao_interacao"}
+    "TBCLASSINTMED": "classificacao_interacao", "TBCLASSIFALERGIA": "categoria_alergeno"}
 # colunas NOT NULL sem padrão de cada destino (fora id e auditoria): todas têm de vir declaradas
 OBRIGATORIAS = {
     "tipo_item_prescricao_frequencia": {"tipo_item_prescricao_id", "frequencia_administracao_id"},
@@ -50,10 +51,25 @@ class Plano(unittest.TestCase):
         for t, dt in DESTINOS.items():
             self.assertTrue(OBRIGATORIAS[dt] <= set(self.cols(t)), t)
 
-    def test_nao_carregadas_sem_declaracao(self):
-        decl = {c["tabela"] for c in self.mapa["colunas_decl"]}
+    def test_nao_carregadas_descartadas_com_causa_de_produto(self):
+        decl = {c["tabela"] for c in self.mapa["colunas_decl"] if c.get("destino")}
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         for t in l6_08.NAO_CARREGADAS:
             self.assertNotIn(t, decl, t)
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], ("mecanismo_do_produto", "duplicado", "sem_valor"), t)
+
+    def test_pais_externos_carregados_pelo_mapa(self):
+        # pai dado como já carregado na imagem tem de ser carregado de verdade pelo mapa (nunca descartado)
+        sc = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        decl = {c["tabela"] for c in self.mapa["colunas_decl"] if c.get("destino")}
+        for t in l6_08.PAIS_EXTERNOS:
+            self.assertNotIn(t, sc, t)
+            self.assertIn(t, decl, t)
+
+    def test_cobertura_categoria_com_prefixo(self):
+        self.assertEqual(self.cols("TBCLASSIFALERGIA")["codigo"]["coluna"], "#codigo_derivado:ID:30:cl_")
+        self.assertEqual(carga_mapa.codigo_derivado("1", 30, "cl_"), ("cl_1", False))
 
     def test_referencias(self):
         f = self.cols("PRTPLAN_PRFREQUENCIA")
@@ -69,20 +85,35 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("PRTPLAN_PRFREQUENCIA")["visivel"]["regra"], "booleano_sn")
         self.assertEqual(self.cols("PRTPPROT")["separa_documento_gerado"]["regra"], "booleano_01")
         self.assertEqual(self.cols("PRKITSOL")["tipo_kit"]["coluna"], "=solucao")
-        presumidos = {"PRTPPERGUNTA": "tipo_dado", "PRTPPROT": "categoria", "PRTPTCLE": "etapa",
+        presumidos = {"PRTPTCLE": "etapa",
                       "PRVALIDARMEDDUPLICPRESC": "criterio", "TBCBARAAGENTE": "natureza",
-                      "TBCBARACLASSIFREACAO": "classificacao", "PRUNIDINFUSAO": "por_peso",
-                      "TBCBARASEVERIDADE": "codigo_terminologia"}
+                      "TBCBARACLASSIFREACAO": "classificacao", "PRUNIDINFUSAO": "por_peso"}
         for t, dc in presumidos.items():
             self.assertTrue(self.cols(t)[dc]["coluna"].startswith("=~"), t)
 
-    def test_nivel_da_gravidade_presumido(self):
-        # a chave da origem NÃO prova a ordem de gravidade: o nível pela chave exige pendência valor_presumido na linha
+    def valores(self, t, col, dest):
+        return {v["valor_origem"]: v["valor_destino"] for v in mapa.ler_valores(mapa.DIR_PACOTE)
+                if (v["tabela"], v["coluna"], v["destino"]) == (t, col, dest)}
+
+    def test_nivel_da_gravidade_pelo_nome(self):
+        # a chave da origem NÃO prova a ordem de gravidade: o nível vem do nome (1 = menor), nunca da chave
         g = self.cols("TBCBARASEVERIDADE")
-        self.assertEqual(g["nivel"]["coluna"], "ID")
-        self.assertTrue(any(c["coluna"].startswith("=~") for c in g.values()))
-        motivo = " ".join(c["motivo"] for c in self.mapa["colunas_decl"] if c["tabela"] == "TBCBARASEVERIDADE")
-        self.assertIn("PRESUMIDA", motivo)
+        self.assertEqual((g["nivel"]["coluna"], g["nivel"]["depara"]), ("NOME", "valores"))
+        self.assertNotIn("codigo_terminologia", g)
+        v = self.valores("TBCBARASEVERIDADE", "NOME", "gravidade_reacao_adversa.nivel")
+        self.assertEqual([v["Leve"], v["Moderada"], v["Grave"], v["Fatal"], v["GRAVE"]], ["1", "2", "3", "4", "3"])
+
+    def test_tipo_da_pergunta_e_categoria_pelo_depara(self):
+        c = self.cols("PRTPPERGUNTA")["tipo_dado"]
+        self.assertEqual((c["coluna"], c["depara"]), ("NOME", "valores"))
+        v = self.valores("PRTPPERGUNTA", "NOME", "tipo_campo_modelo.tipo_dado")
+        self.assertEqual((v["Texto"], v["DATA"], v["Número"]), ("texto", "data", "numero"))
+        ck = {'titulo', 'texto', 'texto_longo', 'numero', 'data', 'hora', 'data_hora', 'booleano', 'lista',
+              'lista_multipla', 'tabela', 'desenho', 'assinatura', 'componente', 'calculado', 'arquivo'}
+        self.assertTrue(set(v.values()) <= ck)
+        p = self.cols("PRTPPROT")["categoria"]
+        self.assertEqual((p["coluna"], p["depara"]), ("TIPO", "valores"))
+        self.assertEqual(self.valores("PRTPPROT", "TIPO", "tipo_protocolo_oncologico.categoria")["Q"], "quimioterapia")
 
     def test_codigos_pela_chave(self):
         # o código da terminologia não é o código do produto (cabe 30): a chave evita recusa em cadeia dos alergenos
@@ -90,26 +121,19 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("TBCBARAAGENTE")["codigo"]["coluna"], "ID")
         self.assertEqual(self.cols("TBCBARAAGENTE")["codigo_cbara"]["coluna"], "CODIGO")
 
-    def test_tipo_da_pergunta_presumido_ate_o_depara(self):
-        # o NOME é o tipo de pergunta: sem de-para de valores por fatia, 'texto' presumido com o pedido no motivo
-        c = self.cols("PRTPPERGUNTA")["tipo_dado"]
-        self.assertEqual(c["coluna"], "=~texto")
-        motivo = [d["motivo"] for d in self.mapa["colunas_decl"]
-                  if d["tabela"] == "PRTPPERGUNTA" and d["destino"] == "tipo_campo_modelo.tipo_dado"]
-        self.assertIn("L6-08.json", motivo[0])
-
-    def test_colunas_fora_com_motivo(self):
-        # cor sem regra para #RRGGBB, velocidade com zero como 'sem valor' e tipo sem de-para (L6-08.json)
+    def test_colunas_fora_com_motivo_e_regras_novas(self):
+        # cor sem regra para #RRGGBB (L6-08.json); sigla resumida; velocidade só positiva
         self.assertNotIn("cor", self.cols("PRTPPROT"))
-        self.assertNotIn("velocidade_infusao", self.cols("PRKITSOL"))
-        motivos = " ".join(c["motivo"] for c in self.mapa["colunas_decl"] if c["tabela"] in ("PRTPPROT", "PRKITSOL"))
-        self.assertIn("COR", motivos)
-        self.assertIn("VELOCIDADE_INFUSAO", motivos)
+        self.assertIn("COR", " ".join(c["motivo"] for c in self.mapa["colunas_decl"] if c["tabela"] == "PRTPPROT"))
+        self.assertEqual(self.cols("PRUNIDINFUSAO")["sigla"]["regra"], "texto_resumo:20")
+        self.assertEqual(self.cols("PRUNIDRESPOSTA")["sigla"]["regra"], "texto_resumo:20")
+        self.assertEqual(self.cols("PRKITSOL")["velocidade_infusao"]["regra"], "decimal_positivo")
 
-    def test_categoria_alergeno_uma_so_alimentadora(self):
-        outras = sorted({c["tabela"] for c in self.mapa["colunas_decl"]
-                         if (c.get("destino") or "").startswith("categoria_alergeno.")} - {"TBCBARACATEGORIA"})
-        self.assertEqual(outras, [], "combinar o espaço de código de categoria_alergeno (L6-08.json)")
+    def test_categoria_alergeno_duas_alimentadoras_com_prefixo(self):
+        alim = sorted({c["tabela"] for c in self.mapa["colunas_decl"]
+                       if (c.get("destino") or "").startswith("categoria_alergeno.")})
+        self.assertEqual(alim, ["TBCBARACATEGORIA", "TBCLASSIFALERGIA"])
+        self.assertEqual(self.cols("TBCBARACATEGORIA")["codigo"]["coluna"], "ID")  # sem prefixo: "1" e "cl_1"
 
 
 class Regras(unittest.TestCase):
@@ -121,6 +145,8 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("texto_nome", "  Agente   oito  ".encode("cp1252")), ("Agente oito", None))
         self.assertEqual(a("texto", " cm ".encode("cp1252")), ("cm", None))
         self.assertEqual(a("texto", 12), ("12", None))
+        self.assertEqual(a("texto_resumo:20", "unidade exemplo longa demais".encode("cp1252"))[0], "unidade exemplo")
+        self.assertEqual(a("decimal_positivo", decimal.Decimal("0"))[1], "valor_fora_do_dominio")
 
 
 class Sintetica(unittest.TestCase):
@@ -129,7 +155,8 @@ class Sintetica(unittest.TestCase):
         esp = l6_08.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
-            recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
+            pref = ("restricao_destino_", "pai_pendente")
+            recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 
     def test_ddl_so_das_tabelas_da_fatia(self):

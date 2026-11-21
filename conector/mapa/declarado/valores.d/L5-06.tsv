@@ -1,0 +1,5 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBCONVEN	SITUACAO	fonte_pagadora.situacao	A	ativa	L5-06: A/I validados pelo código de alteração de situação do convênio
+TBCONVEN	SITUACAO	fonte_pagadora.situacao	I	inativa	L5-06: idem
+TBPROFIS	SITUACAO	profissional.situacao	A	ativo	L5-06: mesma convenção A/I da origem
+TBPROFIS	SITUACAO	profissional.situacao	I	inativo	L5-06: idem; sem data de desligamento recusa pela regra do modelo

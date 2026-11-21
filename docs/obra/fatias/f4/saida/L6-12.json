@@ -1,49 +1,74 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (referencia_declarada) + verificador",
-   "mudanca": "referência pela coluna do pai na origem, com saltos encadeados: via 'ref:<T1>.<C1>>[<T2>.<C2>>...]<FIM>' = ler em T1 (pela chave = valor da coluna da linha) a coluna C1; se houver mais saltos, ler em T2 (pela chave = esse valor) a coluna C2, e assim por diante; o último valor é resolvido pelo conector_origem de FIM (algum salto recusado ou pendente: pai_pendente com a raiz; valor ausente em qualquer salto: pai_inexistente). Casos desta fatia: ref:HTPACIENTE.ID_RICADPAC>RICADPAC (paciente), ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND (atendimento), ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS (profissional) e ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS.ID_TBUSERS>TBUSERS (usuário: a inscrição no conselho NÃO tem login; o login está no profissional, VARCHAR(31), e a chave do usuário é o login; dois saltos). O verificador deve validar cada salto: a coluna existe na tabela do salto e a referência gerada dela é a tabela seguinte (ou, sem referência gerada, a forma é a da chave da tabela seguinte)",
-   "motivo": "toda tabela da L6-12 (e outras do PEP: L6-13, TBCABTRILHA da L5-06) leva paciente, atendimento e profissional por tabela intermediária; a referência direta grava o id de outra entidade (paciente_versao, trilha_auditoria, inscricao_conselho). autor_usuario_id e suspenso_por_usuario_id do registro_assistencial são NOT NULL/exigidos pelo CHECK: um salto só (inscrição -> usuário) não existe na origem e recusaria todo registro. Ao entrar: descomentar as tabelas da cadeia da prescrição em colunas.d/L6-12.tsv, ATIVA = True em sintetica_d/l6_12.py com PAIS_EXTERNOS das tabelas avós (RICADPAC, ATCABECATEND, TBPROFIS, TBUSERS) com ids diferentes dos da intermediária, e refazer a conciliação"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "destino com 'complementa' na via não exige as colunas NOT NULL do destino (juntar 'complementa' ao conjunto dos opcionais)",
+   "motivo": "PRCONTEVOL carrega por complementa (conferido e idempotente) e a ferramenta a conta como BLOQUEADA (coluna_obrigatoria_sem_fonte)"
   },
   {
-   "arquivo": "conector/sante_conector/conferencia.py",
-   "mudanca": "não chamar banco.aplicar_script com DDL vazio (plano sem tabela carregável): pular o script quando ddl_destino(plano) devolver ''",
-   "motivo": "fatia sem nada ativo (L6-12 bloqueada) faz a conciliação falhar com 1065 'Query was empty' em vez de conferir o vazio"
+   "arquivo": "conector/sante_conector/depara.py",
+   "mudanca": "catálogo oficial 'dcb' em CATALOGOS: dict(tabela='principio_ativo', coluna='codigo_dcb', normalizar=<texto aparado, maiúsculas, só [0-9A-Z], zeros à esquerda até 5 dígitos>, chave=lambda c: c, filtro=None, descricao='princípio ativo pela DCB')",
+   "motivo": "PRALERGIAPAC_TBPRINC (29.858 na referência, alergia a princípio ativo) segue BLOQUEADA por mecanismo; declaração pronta e comentada (ref:TBPRINC>COD_DCB, depara dcb). Mesmo pedido de L7-07 (GEITENS_TBPRINC) e L6-11 (PRITEMNAOPAD_TBPRINC, TBALERGIA_TBPRINC)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (regra de geração) / tools/obra/gerar_mapa_conector.py",
-   "mudanca": "corrigir a entidade de destino de catálogos referenciados pela prescrição: TBUNICON (unidade_medida) vs unidade_prescricao_id (FK unidade_prescricao); PRMODOVENT (modo_ventilacao_mecanica) vs modo_ventilatorio_id (FK modo_ventilatorio); TBPRINC (classe_terapeutica) vs principio_ativo_id (FK principio_ativo); PRUNIDRESPOSTA (unidade_resposta) vs prescricao_item_dieta_caracteristica.unidade_medida_id; SITABPRO ATO+CODALF (exame) vs hemocomponente_id",
-   "motivo": "a referência só devolve o id do destino principal do pai; com entidade diferente a FK do modelo apontaria outra tabela. Bloqueia: volume total e unidade da solução e da dieta, ventilação invasiva e não invasiva inteiras (CHECK exige o modo), princípio da alergia, unidade da característica, hemocomponente"
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação)",
+   "mudanca": "coluna regravada por um destino 'complementa' sai do resumo (soma de controle) da entidade do pai, como a coluna em duas fases",
+   "motivo": "registro_assistencial.impressao_digital = SHA-256 do texto migrado (#sha256:EVOLUCAO em PRCONTEVOL, declaração pronta e comentada); hoje a soma do pai diverge (testado) e a impressão fica como marca presumida (=~)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + verificador",
-   "mudanca": "valor condicional por coluna, avaliado na própria linha: (a) literal '=?<v1>:<COND1>|<v2>:<COND2>|...|[<padrão>]' grava o primeiro valor cuja condição vale; sem nenhuma e sem padrão, fica o padrão do destino; (b) cópia '?<COND>:<COLUNA>' grava a coluna só quando a condição vale (senão NULL). COND = '<COLUNA>' (preenchida), '<COLUNA>=<código>' ou '<COLUNA>>@carga' (data/hora posterior ao instante da carga). Sem pendência por linha (não é presunção). Também: alternativa quando a coluna é nula (ex.: ocorrido_em = ACAO_DATA_HORA, senão a data do registro pai pelo pedido 8). Usos: prescricao.situacao '=?suspensa:DATA_HORA_SUSPENSAO|futura:DATA_HORA_INICIAL_VIGENCIA>@carga|vigente:DATA_HORA_FINAL_VIGENCIA>@carga|vencida'; prescricao_item.situacao '=?suspenso_correcao:DATA_HORA_SUSP_CORRECAO'; documento_emitido.situacao '=?suspenso:DATA_HORA_SUSPENSAO|cancelado:REGISTRO_VALIDO=N'; registro_assistencial.situacao '=?suspenso:DATA_HORA_SUSPENSAO'; alergia_paciente.inativado_em/inativado_por_usuario_id/motivo_inativacao pela retirada (RETIRAR_VINCULO_PACIENTE=S). Nota de diferencial: a situação por '>@carga' muda com o tempo; o hash da linha não pode incluir o valor derivado (só as colunas lidas), senão toda prescrição apareceria alterada a cada carga",
-   "motivo": "sem isso: prescrição vigente do internado chegaria vencida (o literal presumido gerava ainda uma pendência por linha, ~141 mil); registro, documento e item suspensos chegariam como válidos; alergia retirada do paciente chegaria ativa"
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "hora_hhmm (e demais regras de texto numérico) decodificar bytes (VARCHAR com charset NONE chega em bytes)",
+   "motivo": "PREVOLPAC.RESPHORA '0830' sai hora_invalida (testado na imagem sintética); afeta toda coluna HHMM em VARCHAR de qualquer fatia"
   },
   {
-   "arquivo": "declarado/valores.tsv (compartilhado)",
-   "mudanca": "pares em declarado/valores.tsv, depois de contar os códigos distintos na imagem de referência (só contagem): PRPRESC.TP_PRESCRICAO -> prescricao.tipo (medica, enfermagem, nutricao, farmaceutica, multiprofissional, oncologica); PRALERGIAPAC.RETIRAR_VINCULO_PACIENTE -> alergia_paciente.ativa (S -> 0; N e nulo -> 1); PRALERGIAPAC.ACAO -> alergia_paciente_evento.evento (inclusao, alteracao, inativacao, reativacao; nulo -> inclusao)",
-   "motivo": "valores.tsv é compartilhado (não editável pela fatia); as declarações já usam depara=valores, comentadas"
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-07.tsv + mapa.passos_ref",
+   "mudanca": "GEITENS grava o destino secundário item_prescritivel e a ref: passa a apontar destino secundário (ex.: ref:GEITENS/item_prescritivel)",
+   "motivo": "prescricao_item_medicamento exige item prescritível OU não padronizado (CHECK): 740.123 de 740.789 medicamentos (padronizados) recusam até lá. Mesmo bloqueio de L6-11 (PRITEM_GEITENS) e L6-13 (PRITENSGLICEMIA)"
   },
   {
-   "arquivo": "conector/sante_conector (mecanismo novo, registrado no mapa)",
-   "mudanca": "mecanismo do registro clínico e do documento: (a) PRCABEVOL + PRCONTEVOL (1:1) -> registro_assistencial com texto_consolidado (EVOLUCAO) e impressao_digital = SHA-256 do texto; XML/QRP/assinatura para arquivo; (b) PRASSINATURA_CAB + PRASSINATURA_DOC (+ PRASS_DOC_PREXAMEASS) -> documento_prontuario (entidade_origem pelo tipo, situação/profissional/datas do evento) + documento_prontuario_evento + documento_assinado/assinatura_documento + arquivo; (c) PRCABEVOLTMP + PRALERGIAPACTMP(+_TBPRINC) -> registro_assistencial_rascunho com respostas e alergias em JSON; (d) PRGEDIMP e PRATESTREQIMP.CONTEUDO/CONTEUDO_PDF -> arquivo",
-   "motivo": "os destinos têm NOT NULL que a carga coluna a coluna não supre (impressao_digital, entidade_origem, arquivo_id, respostas JSON, codigo_verificacao, hash_conteudo)"
-  },
-  {
-   "arquivo": "db/migracoes/06_PEP (modelo) ou decisão do dono",
-   "mudanca": "monitorizacao_paciente.responsavel_profissional_id anulável (ou presunção declarada); prescricao_item: coluna para a justificativa do item avulso; planejamento_prescricao.prescricao_id: a origem planeja sem prescrição (PRPLANPRESC; os itens ligam por PRLANGERAL.ID_PRPLANPRESC) — anulável ou criar a prescrição futura no mecanismo; colunas para dados da suspensão hoje perdidos: momento da gravação da suspensão e justificativa da suspensão retroativa (documento_emitido e registro_assistencial); responsável pelo acompanhamento no registro_assistencial (a origem tem ID_TBPROFIS_ACOMP_RESP); modelo do documento emitido pelo nome (NOME_ATESTADO_MODELO) exige de-para nome -> modelo_documento_clinico; ID_PRATESTREQIMP: contar preenchidas e distintas da correção antes de decidir",
-   "motivo": "a origem não traz o responsável da monitorização, nem a prescrição do planejamento; sem isso PRCABEC_MONITORIZACAO e PRPLANPRESC não entram"
+   "arquivo": "mapa (orquestrador): tabelas.tsv/colunas.d de TBUNICON",
+   "mudanca": "unidade_prescricao também a partir de TBUNICON (COD), ou de-para TBUNICON -> TBUNIDADEMEDIDA",
+   "motivo": "medido na referência (só contagens): ID_TBUNICON_UNI_PRESC casa com TBUNIDADEMEDIDA.SIGLA_API em ~2% (3.969 de 200.000 medicamentos; 9 de 910 hemocomponentes) e com SIMBOLO em 0%; ~98% dos itens de medicamento, material e hemocomponente recusam por unidade (NOT NULL). Afeta também L6-11 (PRKITMED, PRITEMNAOPAD) e L6-13 (SIMBOLO)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência pela coluna do DESTINO do pai: via 'ref:<PAI>><coluna>' lê a coluna <coluna> do destino principal do pai já carregado (id ou valor: ex. ref:PRCABEVOL>paciente_id, >atendimento_id, >data_hora_clinica, >autor_profissional_id); pai recusado/pendente: pai_pendente",
-   "motivo": "alergia_paciente exige paciente_id e registrado_em que só existem no registro clínico do pai (PRCABEVOL); já declarados comentados; o mesmo pedido da L5-06 (ref:HTPACIENTE>paciente_id)"
+   "mudanca": "'primeiro preenchido' entre colunas para um destino (ex.: '?CONTEVOL|RESPALFA') e chave composta montada por valores encadeados (modelo do registro + pergunta da opção)",
+   "motivo": "PREVOLPAC: CONTEVOL fica sem destino (valor_texto é RESPALFA); campo do modelo de pergunta usada em mais de um modelo (559 de 1.466) sai pai_ambiguo"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + verificador",
+   "mudanca": "valor condicional na linha (cópia '?<COND>:<COLUNA>'), para inativado_em só na retirada e situação 'cancelado' pela invalidação do documento",
+   "motivo": "hoje inativado_em = ACAO_DATA_HORA sem condição (na referência ACAO está vazia: as 171 retiradas recusam pelo CHECK) e REGISTRO_VALIDO fica sem destino (100% 'T' na referência)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra genérica 'texto_de_xml' (texto legível do XML, sem marcação)",
+   "motivo": "documento_emitido.texto recebe CONTEUDO_XML cru (único conteúdo na referência)"
+  },
+  {
+   "arquivo": "conector (integrador)",
+   "mudanca": "mecanismo de arquivo: XML/QRP/assinatura do registro (PRCONTEVOL), documento assinado (PRASSINATURA_DOC.DOCUMENTO_ORIGINAL/DOCUMENTO_XML_IMPRESSAO -> arquivo_id) e anexos (PRGEDIMP)",
+   "motivo": "o conector não grava arquivos"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + pendencia.py",
-   "mudanca": "pendência valor_presumido agregada por (tabela, coluna, valor presumido) com a contagem de linhas, em vez de uma por linha",
-   "motivo": "literal presumido em tabela grande afoga as pendências reais (documento_emitido.tipo '=~declaracao' em ~28 mil linhas; documento_prontuario_evento.acao em ~1,4 milhão)"
+   "mudanca": "pendência valor_presumido agregada por (tabela, coluna, valor) com contagem",
+   "motivo": "documento_emitido.tipo (~28 mil) e registro_assistencial.impressao_digital (~769 mil) geram uma pendência por linha"
+  },
+  {
+   "arquivo": "implantação (cliente)",
+   "mudanca": "de-para de PRATESTREQIMP.NOME_ATESTADO_MODELO (16 nomes na referência) -> documento_emitido.tipo em valores.d",
+   "motivo": "hoje '=~declaracao' presumido"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (F2.2)",
+   "mudanca": "colunas sem destino: momento da gravação e justificativa da suspensão retroativa (documento_emitido, registro_assistencial), responsável pelo acompanhamento no registro, justificativa do item avulso, número da dose, procedimento da resposta (PREVOLPAC.ID_HTPROCTO), indicação CID do não padronizado",
+   "motivo": "dados da origem sem coluna no modelo"
+  },
+  {
+   "arquivo": "orquestrador",
+   "mudanca": "rodar python3 -I tools/obra/gerar_mapa_conector.py e conferir fatiar_conector (L8-17, L8-18, indice.tsv)",
+   "motivo": "diferenças de fora desta fatia"
   }
  ]
 }

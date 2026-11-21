@@ -32,7 +32,8 @@ OBRIGATORIAS = {
     "motivo_movimento_cadastral": {"codigo", "descricao", "tipo_movimento"},
     "origem_cobranca_plano": {"codigo", "descricao", "natureza"},
     "origem_guia_plano": {"codigo", "descricao", "canal"}}
-NOME_COMO_CODIGO = ("CDTPLANCAMEN", "PSMOTIVO", "PSORIGEMCOBR", "PSORIGEMGUIA")
+PREFIXADOS = {"CDTPLANCAMEN": "#codigo_derivado:ID:30:lancamento_", "PSMOTIVO": "#codigo_derivado:COD:30:baixa_",
+              "PSORIGEMCOBR": "#codigo_derivado:ID:30:cobranca_", "PSORIGEMGUIA": "#codigo_derivado:ID:30:guia_"}
 PRESUMIDOS = {
     "CDTPEMISSAO": {"canal": "=~impresso"}, "CDTPEVTCTAREC": {"natureza": "=~debito"},
     "CDTPLANCAMEN": {"natureza": "=~debito"}, "CDTPFRANQUIA": {"base_calculo": "=~evento"},
@@ -61,9 +62,15 @@ class Plano(unittest.TestCase):
         for t, dt in l8_14.SEM_BENEFICIARIO.items():
             cols = {c["destino"] for c in self.plano[t]["colunas"][dt]}
             self.assertNotIn("beneficiario_plano_id", cols, t)
-            self.assertNotIn("contrato_plano_id", cols, t)
-        self.assertEqual({c["destino"]: c["coluna"] for c in self.plano["PSATVASS"]["colunas"][
-            "movimento_cadastral_beneficiario"]}["canal"], "=migracao")
+            self.assertEqual(cols & {"canal", "dados", "usuario_id", "ocorrido_em", "data_efeito", "operacao",
+                                     "tipo_movimento"}, {"canal", "dados", "usuario_id", "ocorrido_em", "data_efeito",
+                                                         "operacao", "tipo_movimento"}, t)
+            por = {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
+            self.assertEqual(por["canal"]["coluna"], "=migracao", t)
+            self.assertEqual(por["dados"]["coluna"], "#retrato", t)
+        # troca de plano é movimento (mudança contratual presumida), nunca beneficiário novo
+        self.assertEqual({c["destino"]: c["coluna"] for c in self.plano["PSPLNASS"]["colunas"][
+            "movimento_cadastral_beneficiario"]}["tipo_movimento"], "=~mudanca_contratual")
 
     def test_obrigatorias_do_destino_cobertas(self):
         for t, dt in DESTINOS.items():
@@ -74,34 +81,36 @@ class Plano(unittest.TestCase):
         for c in self.decl:
             por.setdefault(c["tabela"], set()).add(c["coluna"])
             self.assertTrue(c["motivo"].strip(), (c["tabela"], c["coluna"]))
-        for t in NA_IMAGEM:
+        for t in TABELAS:
             self.assertTrue({n for n, _, _ in l8_14.colunas(t)} <= por[t], t)
 
-    def test_nao_carregadas_sem_destino(self):
-        for c in self.decl:
-            if c["tabela"] in l8_14.NAO_CARREGADAS:
-                self.assertFalse(c["destino"], (c["tabela"], c["coluna"]))
+    def test_descartes_de_produto(self):
+        # domínios de CHECK do produto: descarte com causa e motivo, nenhuma coluna declarada
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        for t in l8_14.NAO_CARREGADAS:
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "mecanismo_do_produto"), t)
+            self.assertTrue(sc[t]["motivo"].strip(), t)
+        self.assertFalse([c for c in self.decl if c["tabela"] in l8_14.NAO_CARREGADAS])
 
     def test_codigo_e_descricao(self):
         for t in DESTINOS:
             c = self.cols(t)
             self.assertEqual(c["descricao"]["regra"], "texto_nome", t)
-            if t not in NOME_COMO_CODIGO:
-                self.assertEqual(c["codigo"]["regra"], "texto", t)
-        # destino já gravado antes com a chave inteira como código: o código é o nome até o prefixo (pedido 1)
-        for t in NOME_COMO_CODIGO:
-            self.assertEqual(self.cols(t)["codigo"]["coluna"], "NOME", t)
-            self.assertEqual(self.cols(t)["codigo"]["regra"], "texto_nome", t)
+            self.assertEqual(c["codigo"]["regra"], "texto", t)
+            self.assertEqual(c["codigo"]["coluna"], PREFIXADOS.get(t, [k for k in ("ID", "COD") if k in
+                                                                        {n for n, _, _ in l8_14.colunas(t)}][0]), t)
+        # destino já gravado antes com a chave inteira sem prefixo: prefixo de domínio, sem choque nem pendência
+        self.assertEqual(carga_mapa.codigo_derivado("3", 30, "lancamento_"), ("lancamento_3", False))
 
     def test_nome_social_pela_pertenca(self):
-        self.assertEqual(self.cols("PSDOCIMPNOMESOCIAL")["imprime_nome_social"]["coluna"], "=1")
+        self.assertEqual(self.cols("PSDOCIMPNOMESOCIAL")["imprime_nome_social"]["coluna"], "=~1")
 
     def test_presumidos_e_literais(self):
         for t, cols in PRESUMIDOS.items():
             c = self.cols(t)
             for d, lit in cols.items():
                 self.assertEqual(c[d]["coluna"], lit, (t, d))
-        self.assertEqual(self.cols("PSMOTIVO")["tipo_movimento"]["coluna"], "=exclusao")
+        self.assertEqual(self.cols("PSMOTIVO")["tipo_movimento"]["coluna"], "=~exclusao")
         # classificação plana: só 'grupo' dispensa a classe superior (CHECK de hierarquia do destino)
         self.assertEqual(self.cols("CDTPDESPCTAPGCM")["nivel"]["coluna"], "=grupo")
         self.assertEqual(self.cols("PSCRITICA")["extra_contrato"]["regra"], "booleano_sn")

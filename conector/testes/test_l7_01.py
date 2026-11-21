@@ -14,8 +14,12 @@ CARREGADAS = {"SHCONDUTA": "conduta_reacao_transfusional", "SHESTFINAL": "destin
               "SHEXAME": "tipo_teste_imuno_hematologico",
               "SHREACAO": "tipo_reacao_transfusional", "SHMOTDEV": "motivo_devolucao_bolsa",
               "SHMOV": "tipo_movimento_bolsa", "SHPERGUN": "pergunta_triagem_doador", "SHTPTRANSF": "tipo_transfusao",
-              "SICADATE_EXCLUSAO": "trilha_auditoria", "SICOLETE": "dispositivo_coleta"}
-BLOQUEADAS = set(FATIA) - set(CARREGADAS)
+              "SICADATE_EXCLUSAO": "trilha_auditoria", "SICOLETE": "dispositivo_coleta",
+              "PRHEMOTLAN": "hemocomponente", "SHCLIENT": "servico_hemoterapia_fornecedor",
+              "SHINTER": "tipo_reacao_transfusional", "SHDOACAO": "doacao_sangue",
+              "SHLOCAL": "local_guarda_hemocomponente", "SHRESPOSTA": "grupo_resposta",
+              "SHBOLSA": "bolsa_hemocomponente", "SIASSLAUDO_IMPRESSAO": "trilha_auditoria"}
+DESCARTADAS = {"SHPARAM": "mecanismo_do_produto", "SHREQUISICAO": "sem_valor"}
 
 
 def _decl():
@@ -32,20 +36,47 @@ class L701(unittest.TestCase):
     def cols(self, t):
         return {c["destino"]: c for c in self.plano[t]["colunas"][CARREGADAS[t]]}
 
-    def test_so_as_carregaveis_entram_com_o_destino_certo(self):
+    def test_cobertura_total_carrega_ou_descarta(self):
         self.assertEqual(set(self.plano), set(CARREGADAS))
+        self.assertEqual(set(CARREGADAS) | set(DESCARTADAS), set(FATIA))
         for t, dt in CARREGADAS.items():
-            self.assertEqual(self.plano[t]["destinos"], [dt], t)
-
-    def test_bloqueadas_tem_motivo_registrado(self):
-        linhas = _decl()
-        for t in BLOQUEADAS:
-            self.assertTrue(any(l.startswith("#--- %s: bloqueada: " % t) for l in linhas), t)
+            self.assertEqual(self.plano[t]["destinos"][0], dt, t)
+        self.assertEqual(self.plano["SHRESPOSTA"]["destinos"], ["grupo_resposta", "resposta_padrao"])
+        with open(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv", encoding="utf-8") as f:
+            sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
+        for t, causa in DESCARTADAS.items():
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
+            self.assertTrue(sc[t]["motivo"].startswith("L7-01: "), t)
+        self.assertFalse(any(l.startswith("#--- ") for l in _decl()))
 
     def test_literais_e_presumidos(self):
-        # nada presumido que mexa no estoque: sem fonte, a linha é recusada (NOT NULL sem padrão) até o de-para
-        self.assertNotIn("situacao_bolsa", self.cols("SHESTFINAL"))
-        self.assertNotIn("natureza", self.cols("SHMOV"))
+        # nada presumido que mexa no estoque: situação e natureza pelo de-para do NOME; sem par, recusa visível
+        for t, d in (("SHESTFINAL", "situacao_bolsa"), ("SHMOV", "natureza")):
+            self.assertEqual(self.cols(t)[d]["depara"], "valores", t)
+        self.assertEqual(self.cols("SHESTFINAL")["situacao_bolsa"]["valores"]["DESCARTE"], "descartada")
+        self.assertEqual(self.cols("SHMOV")["natureza"]["valores"]["Transfusão"], "transfusao")
+        self.assertNotIn("Estranho exemplo", self.cols("SHMOV")["natureza"]["valores"])
+        self.assertEqual(self.cols("PRHEMOTLAN")["validade_dias"]["coluna"], "=~1")
+        self.assertEqual(self.cols("PRHEMOTLAN")["faturavel"]["coluna"], "=~0")
+        self.assertEqual(self.cols("SHLOCAL")["temperatura_minima"]["coluna"], "=~2")
+        self.assertEqual(self.cols("SHLOCAL")["temperatura_maxima"]["coluna"], "=~6")
+        # situação da bolsa pelo último movimento (nome do tipo, encadeado) e da doação pelo indicador de inaptidão
+        sb = self.cols("SHBOLSA")["situacao"]
+        self.assertEqual((sb["coluna"], sb["referencia"], sb["depara"]), ("CODMOV", "SHMOV>NOME", "valores"))
+        self.assertEqual(sb["valores"]["Devolução"], "devolvida")
+        self.assertEqual(sb["valores"]["ENTRADA"], "quarentena")
+        self.assertNotIn("Transfusão", sb["valores"])  # transfundida exige data do destino que a bolsa não tem
+        d = self.cols("SHDOACAO")
+        self.assertEqual((d["situacao"]["valores"]["0"], d["situacao"]["valores"]["1"]), ("coletada", "inapto"))
+        self.assertEqual((d["apto"]["valores"]["0"], d["apto"]["valores"]["1"]), ("1", "0"))
+        self.assertTrue(d["motivo_inaptidao"]["valores"]["1"])
+        bx = self.cols("SHMOV")["baixa_estoque"]["valores"]
+        for n, v in (("Transfusão", "1"), ("DESCARTE", "1"), ("Perda", "1"), ("Devolução", "1"), ("ENTRADA", "0"),
+                     ("Bloqueio", "0")):
+            self.assertEqual(bx[n], v, n)
+        for col in ("pesquisa_hemoglobina_s", "sorologia_aprovada"):
+            self.assertEqual(self.cols("SHBOLSA")[col]["valores"], {"": ""}, col)
+        self.assertEqual(self.cols("SHINTER")["natureza"]["coluna"], "=intercorrencia")
         self.assertEqual(self.cols("SHPERGUN")["tipo_resposta"]["coluna"], "=~sim_nao")
         self.assertEqual(self.cols("SHREACAO")["natureza"]["coluna"], "=~imunologica")
         self.assertEqual(self.cols("SHREACAO")["tempo_ocorrencia"]["coluna"], "=~imediata")
@@ -64,9 +95,38 @@ class L701(unittest.TestCase):
         self.assertEqual(carga_mapa.tipar(sentinela.aplicar("flutuante", 101.0)[0], "varchar"), "101.0")
         self.assertNotIn("entidade_id", c)
 
-    def test_intercorrencia_da_doacao_fora_do_catalogo_de_reacoes(self):
-        self.assertNotIn("SHINTER", self.plano)
-        self.assertTrue(any(l.startswith("#--- SHINTER: bloqueada: ") for l in _decl()))
+    def test_intercorrencia_da_doacao_com_prefixo_de_dominio(self):
+        c = self.cols("SHINTER")["codigo"]["coluna"]
+        self.assertEqual(c, "#codigo_derivado:CODINTER:30:intercorrencia_")
+        self.assertEqual(carga_mapa.codigo_derivado("2", 30, "intercorrencia_"), ("intercorrencia_2", False))
+
+    def test_referencias_declaradas(self):
+        b = self.cols("SHBOLSA")
+        self.assertEqual(b["hemocomponente_id"]["referencia"], "PRHEMOTLAN.CODALF")
+        for d, ref in (("grupo_sanguineo_id", "TBTPSANGUINEO"), ("fator_rh_id", "TBFATORRH"),
+                       ("doacao_sangue_id", "SHDOACAO"), ("servico_hemoterapia_fornecedor_id", "SHCLIENT"),
+                       ("local_guarda_hemocomponente_id", "SHLOCAL"), ("recebida_por_usuario_id", "TBUSERS")):
+            self.assertEqual(b[d]["referencia"], ref, d)
+        self.assertEqual(self.cols("SHDOACAO")["doador_pessoa_fisica_id"]["referencia"], "SHDOADOR")
+        self.assertEqual(self.cols("SHCLIENT")["empresa_fornecedora_id"]["referencia"], "TBFORNEC.NOME")
+        self.assertEqual(self.cols("SIASSLAUDO_IMPRESSAO")["usuario_id"]["referencia"], "TBUSERS")
+        self.assertEqual(self.cols("SIASSLAUDO_IMPRESSAO")["acao"]["coluna"], "=impressao")
+
+    def test_pais_das_referencias_entram_antes(self):
+        # ref: declarada sem FK na origem: a aresta em declarado/dependencias.tsv põe o pai antes na ordem
+        ordem = {r["tabela"]: int(r["ordem"]) for r in self.m["tabelas"] if (r.get("ordem") or "").isdigit()}
+        for filho, pai in (("SHCLIENT", "TBFORNEC"), ("SHDOACAO", "TBTPSANGUINEO"), ("SHDOACAO", "TBFATORRH"),
+                           ("SHBOLSA", "TBTPSANGUINEO"), ("SHBOLSA", "TBFATORRH"), ("SHBOLSA", "SHMOV"),
+                           ("SHBOLSA", "SHCLIENT"), ("SHBOLSA", "SHDOACAO")):
+            self.assertLess(ordem[pai], ordem[filho], (filho, pai))
+
+    def test_opcoes_de_resposta_em_grupo_por_pergunta(self):
+        p = self.plano["SHRESPOSTA"]
+        self.assertEqual(p["opcoes"]["grupo_resposta"]["adotar"], ["codigo"])
+        g = {c["destino"]: c for c in p["colunas"]["grupo_resposta"]}
+        self.assertEqual(g["descricao"]["referencia"], "SHPERGUN>DESCRICAO")
+        r = {c["destino"]: c["coluna"] for c in p["colunas"]["resposta_padrao"]}
+        self.assertEqual((r["grupo_resposta_id"], r["sequencia"]), ("@id", "#seq:COD_PERGUNTA"))
 
     def test_regras_das_colunas(self):
         c = self.cols("SHEXAME")
@@ -87,6 +147,7 @@ class L701(unittest.TestCase):
         rows = [r for r in csv.DictReader(_decl(), delimiter="\t") if not r["tabela"].startswith("#")]
         for r in rows:
             self.assertIn(r["tabela"], CARREGADAS)
+            self.assertNotIn(r["tabela"], DESCARTADAS)
             self.assertTrue(r["motivo"].startswith("L7-01: "))
 
     def test_imagem_sintetica_cobre_as_carregadas(self):
@@ -94,9 +155,10 @@ class L701(unittest.TestCase):
         esp = l7_01.linhas(random.Random(1), lambda t, v: lidas.append(t))
         self.assertEqual(set(esp), set(CARREGADAS))
         for t, e in esp.items():
-            recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
+            recusas = sum(n for r, n in e["pendencias"].items()
+                          if r.startswith("restricao_destino_") or r == "pai_pendente")
             self.assertEqual(e["gravados"] + recusas, lidas.count(t), t)
-        self.assertEqual(l7_01.PAIS_EXTERNOS, {})
+        self.assertNotIn("TBFORNEC", l7_01.PAIS_EXTERNOS)  # alternativa lê a origem: fornecedor ausente
 
 
 if __name__ == "__main__":

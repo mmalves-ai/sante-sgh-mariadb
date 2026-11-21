@@ -66,6 +66,24 @@ Mecanismos genéricos da cobertura total (F4, rodada de cobertura; prova em `sin
   outras colunas são gravadas nela por UPDATE, sem linha nova; pai não carregado recusa com `pai_inexistente`);
 - dependências declaradas (`declarado/dependencias.tsv`) entram na ordem do gerador do mapa.
 
+Mecanismos da rodada 2 de cobertura (prova em `sintetica_d/exemplo_r2.py`):
+- `cod:<tabela>.<coluna>` na `via`: o valor da coluna (depois da regra e do de-para de valores) ou o literal (`=x`,
+  `=~x`) é procurado em `<tabela>.<coluna>` do DESTINO (cadastro do produto ou já carregado) e grava o id; ausente:
+  NULL com `codigo_inexistente_destino`; mais de uma linha: NULL com `pai_ambiguo` (coluna NOT NULL recusa a linha);
+- `@unico:<tabela>`: id da única linha ativa (`ativo`, se houver; `excluido_em` nulo, se houver) da tabela do
+  destino (cadastro sem fonte na origem); nenhuma ou várias: recusa com `cadastro_unico_indefinido` (alta);
+- referência por chave alternativa COMPOSTA `ref:T.(K1,K2)=(C1,C2)` e ao destino SECUNDÁRIO do pai `ref:T/<destino>`
+  (`mapa.passos_ref`);
+- `#data_hora:<COLUNA_DATA>,<COLUNA_HORA>`: data e hora de duas colunas (data pela regra `data`; hora HHMM em inteiro
+  ou texto, TIME ou TIMESTAMP de só hora); sem data: NULL (data sentinela: data_sentinela); sem hora: meia-noite; hora
+  inválida: NULL com hora_invalida;
+- opção de destino `antes` (secundário gravado ANTES do principal; com `adotar:` cria uma vez e adota depois) e
+  especial `@id:<destino>` (o id da linha gravada ou adotada nesse secundário, ex.: a pessoa física do profissional
+  criada pelo nome e CPF da própria linha);
+- data da origem em coluna DATETIME do destino vira data e hora à meia-noite (e data e hora em coluna DATE, a data), e
+  o literal em coluna TIME/DATE/DATETIME vira hora/data antes de gravar e da soma de controle (`tipar`; inválido: NULL
+  com valor_fora_do_dominio); regras `minutos_hhmm` e `email`; `hora_hhmm` aceita o texto cru da origem.
+
 O hash da linha cobre as colunas lidas (chave + declaradas): declarar uma coluna nova numa tabela já carregada faz as
 linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em silêncio.
 """
@@ -90,6 +108,7 @@ GRAVIDADE_REGRA = {"valor_presumido": "baixa", "codigo_colisao_caixa": "media", 
 GRAVIDADE_REGRA.update({"valor_elevado_ao_minimo": "baixa", "texto_resumido": "baixa", "codigo_derivado": "baixa",
                         "segredo_aguarda_cofre": "media", "adotado_existente": "baixa", "vigencia_sem_fonte": "baixa",
                         "pai_ambiguo": "media", "documento_invalido": "media"})
+GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_indefinido": "alta"})
 TIPOS_INT = (7, 8, 16)
 INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
 DEC_DESTINO = {"decimal"}
@@ -106,6 +125,19 @@ def tipar(x, tipo):
     vira número; inteiro ou decimal em coluna de texto vira texto. Sem tipo conhecido, fica como está."""
     if x is None or tipo is None or isinstance(x, bool):
         return x
+    if isinstance(x, str) and tipo in ("time", "date", "datetime", "timestamp"):  # literal (`=~23:59:59`)
+        try:
+            if tipo == "time":
+                return datetime.time.fromisoformat(x.strip())
+            if tipo == "date":
+                return datetime.date.fromisoformat(x.strip())
+            return datetime.datetime.fromisoformat(x.strip())
+        except ValueError:
+            return NAO_NUMERICO
+    if tipo in ("datetime", "timestamp") and type(x) is datetime.date:
+        return datetime.datetime.combine(x, datetime.time())
+    if tipo == "date" and isinstance(x, datetime.datetime):
+        return x.date()
     if tipo in INT_DESTINO and isinstance(x, str):
         try:
             return int(x.strip())
@@ -141,6 +173,24 @@ def data_composta(ano, mes, dia=1):
         return datetime.date(int(str(ano).strip()), int(str(mes).strip()), int(str(dia or 1).strip())), None
     except (TypeError, ValueError):
         return None, "valor_fora_do_dominio"
+
+
+def data_hora_composta(data, hora):
+    """(data e hora, pendência) de uma coluna de data e outra de hora (`#data_hora:D,H`)."""
+    d, pr = sentinela.aplicar("data", data)
+    if d is None:
+        return None, pr
+    if isinstance(d, datetime.datetime):
+        d = d.date()
+    if hora is None or (isinstance(hora, (str, bytes, bytearray)) and not sentinela.aplicar("texto", hora)[0]):
+        return datetime.datetime.combine(d, datetime.time()), None
+    if isinstance(hora, datetime.datetime):
+        h, pr = hora.time(), None
+    elif isinstance(hora, datetime.time):
+        h, pr = hora, None
+    else:
+        h, pr = sentinela.aplicar("hora_hhmm", hora)
+    return (None, pr) if h is None else (datetime.datetime.combine(d, h), None)
 
 
 def codigo_derivado(texto, n, prefixo=""):
@@ -191,6 +241,9 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                    "valores": valores.get((t, c["coluna"], c["destino"]), {}) if dp == "valores" else None}
             if passos:  # só a referência composta, alternativa ou encadeada leva os passos
                 col["passos"] = passos
+            cod = [x[4:] for x in (c.get("via") or "").split(";") if x.startswith("cod:")]
+            if cod:
+                col["cod"] = tuple(cod[0].split(".", 1))
             cols[dt].append(col)
         chave = [x for x in (r.get("chave") or "").split(",") if x]
         lidas = list(chave)
@@ -201,12 +254,12 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
         for dt in dts:
             for c in cols[dt]:
                 n = c["coluna"]
-                if n.startswith("#data:"):
-                    for x in n[6:].split(","):
+                if n.startswith("#data:") or n.startswith("#data_hora:"):
+                    for x in n.split(":", 1)[1].split(","):
                         ler(x)
                 ler(fonte_especial(n) if _especial(n) else n)
-                if c.get("passos") and c["passos"][0]["modo"] == "composta":
-                    for x in c["passos"][0]["arg"]:
+                if c.get("passos") and c["passos"][0]["modo"] in ("composta", "alt_composta"):
+                    for x in c["passos"][0].get("cols") or c["passos"][0]["arg"]:
                         ler(x)
             for col, _ in opcoes.get(dt, {}).get("desdobrar", []):
                 ler(col)
@@ -271,6 +324,8 @@ class CargaMapa(carga.Carga):
                        for r in mapa_exec.get("tabelas", [])}
         self._origem_pai = {}               # (tabela, coluna) -> {chave do pai: valor} (referência encadeada)
         self._alt = {}                      # (tabela, coluna) -> {valor canônico: chave do pai ou AMBIGUO}
+        self._cod = {}                      # (tabela, coluna, valor) -> id do destino, None ou AMBIGUO (`cod:`)
+        self._unico = {}                    # tabela -> id da única linha ativa ou None (`@unico:`)
 
     # ----- destino -----
     def _info(self, dt):
@@ -291,6 +346,24 @@ class CargaMapa(carga.Carga):
                 " TABLE_NAME='estabelecimento'") else []
             self._estab = ids[0] if len(ids) == 1 else None
         return self._estab
+
+    def _id_por_codigo(self, tab, col, v):
+        """Id da linha de `tab` do destino com `col` = v (`cod:`): None se ausente, _AMBIGUO se várias."""
+        k = (tab, col, v)
+        if k not in self._cod:
+            ids = self._todas("SELECT id FROM `%s` WHERE `%s`=%%s LIMIT 2" % (tab, col), (v,))
+            self._cod[k] = ids[0][0] if len(ids) == 1 else (_AMBIGUO if ids else None)
+        return self._cod[k]
+
+    def _unica(self, tab):
+        """Id da única linha ativa de `tab` (`@unico:`); None se nenhuma ou várias. Nunca fixo por cliente."""
+        if tab not in self._unico:
+            info = self._info(tab)
+            filtro = " AND ".join((["`ativo`"] if "ativo" in info else []) +
+                                  (["`excluido_em` IS NULL"] if "excluido_em" in info else [])) or "1"
+            ids = self._todas("SELECT id FROM `%s` WHERE %s LIMIT 2" % (tab, filtro))
+            self._unico[tab] = ids[0][0] if len(ids) == 1 else None
+        return self._unico[tab]
 
     def _unicos_sem_caixa(self, dt):
         """Colunas de `dt` com índice único de uma coluna só e colação que não distingue caixa."""
@@ -396,13 +469,15 @@ class CargaMapa(carga.Carga):
         return self._origem_pai[k]
 
     def _chave_alternativa(self, tab, col):
+        """{valor canônico da coluna (ou das colunas, tupla, unidas por '|'): chave do pai ou _AMBIGUO}."""
         k = (tab, col)
+        cols = list(col) if isinstance(col, tuple) else [col]
         if k not in self._alt:
             m = {}
-            for cp, d in self._ler_pai(tab, [col]):
-                if d[col] is None:
+            for cp, d in self._ler_pai(tab, cols):
+                if all(d[c] is None for c in cols):
                     continue
-                v = self._chave(d[col]).strip()
+                v = "|".join(self._chave(d[c]).strip() for c in cols)
                 m[v] = cp if v not in m else _AMBIGUO
             self._alt[k] = m
         return self._alt[k]
@@ -417,11 +492,19 @@ class CargaMapa(carga.Carga):
                     return None, None, "pai_inexistente"
                 v, atual = self._coluna_pai(atual[0], s["coluna"])[atual[1]], None
                 continue
-            if i == 0 and s["modo"] == "composta":
-                partes = [linha[c] for c in s["arg"]]
+            if i == 0 and s["modo"] in ("composta", "alt_composta"):
+                partes = [linha[c] for c in (s.get("cols") or s["arg"])]
                 if all(x is None for x in partes):
                     return None, None, None
-                cp = "|".join(self._chave(x) for x in partes)
+                if s["modo"] == "composta":
+                    cp = "|".join(self._chave(x) for x in partes)
+                else:
+                    cp = self._chave_alternativa(s["tabela"], tuple(s["arg"])).get(
+                        "|".join(self._chave(x).strip() for x in partes))
+                    if cp is None:
+                        return None, None, "pai_inexistente"
+                    if cp is _AMBIGUO:
+                        return None, None, "pai_ambiguo"
             else:
                 if v is None or (isinstance(v, (int, float, decimal.Decimal)) and v == 0) or \
                         (isinstance(v, (str, bytes)) and not self._chave(v).strip()):
@@ -435,6 +518,8 @@ class CargaMapa(carga.Carga):
                 else:
                     cp = self._chave(v)
             atual = (s["tabela"], cp)
+        if atual is not None and passos[-1].get("destino"):  # id do destino secundário que o pai gravou
+            atual = (atual[0], "%s/%s" % (atual[1], passos[-1]["destino"]))
         return v, atual, None
 
     def _referencia_chave(self, t, chave, coluna, ref, cpai):
@@ -531,8 +616,8 @@ class CargaMapa(carga.Carga):
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
             for c in p["colunas"][dt]:
                 nome, dc = c["coluna"], c["destino"]
-                if nome == "@id":
-                    continue  # preenchido na gravação (id do principal); fora do resumo
+                if nome == "@id" or nome.startswith("@id:"):
+                    continue  # preenchido na gravação (id do principal ou do secundário `antes`); fora do resumo
                 if nome in ("#item", "#rotulo"):
                     modelo.append((dc, nome))
                     continue
@@ -548,6 +633,10 @@ class CargaMapa(carga.Carga):
                     x = self._estabelecimento()
                     if x is None:
                         return None, None, pend, ("estabelecimento_indefinido", "alta"), []
+                elif nome.startswith("@unico:"):
+                    x = self._unica(nome[7:])
+                    if x is None:
+                        return None, None, pend, ("cadastro_unico_indefinido", "alta"), []
                 elif nome.startswith("#seq:"):
                     x = self.seq[nome[5:]]
                 elif nome.startswith("#sha256:"):
@@ -566,6 +655,11 @@ class CargaMapa(carga.Carga):
                     x, pr = data_composta(*[linha[y] for y in nome[6:].split(",")])
                     if pr:
                         pend.append((pr, "media"))
+                    algum = algum or x is not None
+                elif nome.startswith("#data_hora:"):
+                    x, pr = data_hora_composta(*[linha[y] for y in nome[11:].split(",")])
+                    if pr:
+                        pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
                     algum = algum or x is not None
                 elif nome == "#retrato":
                     x = self._retrato(p, linha)
@@ -587,6 +681,11 @@ class CargaMapa(carga.Carga):
                         return None, None, pend, ("pai_inexistente", "media"), []
                 if x == "@data_carga":
                     x = self.data_carga
+                if c.get("cod") and x is not None:  # id pelo código no cadastro do destino
+                    x = self._id_por_codigo(c["cod"][0], c["cod"][1], x if not isinstance(x, bool) else int(x))
+                    if x is None or x is _AMBIGUO:
+                        pend.append(("pai_ambiguo" if x is _AMBIGUO else "codigo_inexistente_destino", "media"))
+                        x = None
                 modelo.append((dc, x))
             itens = [("", None)]
             if op.get("desdobrar"):
@@ -691,14 +790,20 @@ class CargaMapa(carga.Carga):
             hds = []
 
             def gravar():
-                ids = []
+                ids = {}
                 del hds[:]
-                for i, dt in enumerate(dts):
+                ops = p.get("opcoes") or {}
+                ordem = [i for i, dt in enumerate(dts) if (ops.get(dt) or {}).get("antes")]
+                ordem += [i for i in range(len(dts)) if i not in ordem]
+                for i in ordem:
+                    dt = dts[i]
                     primeiro = None
                     for (suf, v), (nomes, cs) in zip(vals[dt], campos[dt]):
                         for c in p["colunas"][dt]:
                             if c["coluna"] == "@id":
-                                v[c["destino"]] = ids[0]
+                                v[c["destino"]] = ids[dts[0]]
+                            elif c["coluna"].startswith("@id:"):
+                                v[c["destino"]] = ids.get(c["coluna"][4:])
                         op = (p.get("opcoes") or {}).get(dt) or {}
                         rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
                         pad = [x for x in cs if isinstance(x, _PADRAO)]
@@ -718,8 +823,8 @@ class CargaMapa(carga.Carga):
                         self._registrar(t, k, dts[i] if i else ents[0], rid, h, hd)
                         hds.append((ents[i], chave + ("/" + suf if suf else ""), hd))
                         primeiro = primeiro or rid
-                    ids.append(primeiro)
-                return ids
+                    ids[dt] = primeiro
+                return [ids.get(dt) for dt in dts]
             ids = self._linha_nova(t, chave, ents[0], h, gravar)
             if ids:
                 for ent, k, hd in hds:
@@ -790,7 +895,7 @@ class CargaMapa(carga.Carga):
     # ----- conciliação (destino relido do banco) -----
     def _destino(self, p, dt, ent, principal):
         info = self._info(dt)
-        cols = [c for c in p["colunas"][dt] if c["coluna"] != "@id" and not (
+        cols = [c for c in p["colunas"][dt] if not c["coluna"].startswith("@id") and not (
             not _especial(c["coluna"]) and (c["regra"] == "chave_origem" and c["referencia"] in p["duas_fases"]
                                             and not c.get("passos") and not depara.conhecido(c["depara"])))]
         ed = "(d.versao > 1 OR d.alterado_em IS NOT NULL)" if {"versao", "alterado_em"} <= set(info) else "0"

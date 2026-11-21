@@ -1,0 +1,16 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBSITAGE	COD	situacao_marcacao.significado	A	chegou	L6-04: evidência pelo nome da situação (legenda do código de leitura): Aguardando (chegou)
+TBSITAGE	COD	situacao_marcacao.significado	C	confirmada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Confirmado
+TBSITAGE	COD	situacao_marcacao.significado	F	falta	L6-04: evidência pelo nome da situação (legenda do código de leitura): Faltou
+TBSITAGE	COD	situacao_marcacao.significado	T	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Transferido (remarcado): a marcação original deixa de valer
+TBSITAGE	COD	situacao_marcacao.significado	S	realizada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Realizado
+TBSITAGE	COD	situacao_marcacao.significado	X	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Cancelado
+TBSITAGE	COD	situacao_marcacao.significado	HR	bloqueada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Horário reservado
+TBSITAGE	COD	situacao_marcacao.significado	Q	bloqueada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Feriado
+TBSITAGE	COD	situacao_marcacao.significado	P	bloqueada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Manutenção
+TBSITAGE	COD	situacao_marcacao.significado	U	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Suspenso
+TBSITAGE	COD	situacao_marcacao.significado	V	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Óbito
+TBSITAGE	COD	situacao_marcacao.significado	W	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Alta
+TBSITAGE	COD	situacao_marcacao.significado	Z	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Outras intercorrências: a marcação não se realiza
+TBSITAGE	COD	situacao_marcacao.significado	R	aguardando	L6-04: evidência pelo nome da situação (legenda do código de leitura): Outros: sem significado próprio, fica pendente como marcada (revisar no painel)
+TBSITAGE	COD	situacao_marcacao.significado	N	aguardando	L6-04: evidência pelo nome da situação (legenda do código de leitura): Não informado: marcada

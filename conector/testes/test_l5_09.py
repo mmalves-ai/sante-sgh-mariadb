@@ -31,10 +31,71 @@ class L509(unittest.TestCase):
         cols = {c["destino"]: c for c in self.plano["FPTIPORESC"]["colunas"]["tipo_rescisao"]}
         for dc in ("codigo_rais", "codigo_caged"):
             self.assertEqual(cols[dc]["regra"], "inteiro")
+            self.assertEqual(cols[dc]["depara"], "")
         for dc in ("codigo", "codigo_sefip", "codigo_saque_fgts", "codigo_causa_afastamento"):
             self.assertEqual(cols[dc]["regra"], "texto")
-        self.assertEqual(cols["iniciativa"]["coluna"], "=outro")
         self.assertEqual(cols["descricao"]["regra"], "texto_nome")
+
+    def test_situacao_presumida_e_marcada(self):
+        """Nenhuma coluna de regra da situação fica no padrão do destino em silêncio: categoria e booleanos vão
+        como literal presumido (valor_presumido)."""
+        sit = {c["destino"]: c for c in self.plano["FPSIT_FUNC"]["colunas"]["situacao_colaborador"]}
+        self.assertEqual(sit["categoria"]["coluna"], "=~outro")
+        self.assertEqual(sit["considera_ativo_folha"]["coluna"], "=~0")
+        self.assertEqual(sit["permite_marcacao_ponto"]["coluna"], "=~0")
+
+    def test_tipo_de_rescisao_derivado_do_codigo_rais(self):
+        """Iniciativa e consequências legais pelo código RAIS (evidência legal), nunca pelo padrão do destino."""
+        cols = {}
+        for c in self.plano["FPTIPORESC"]["colunas"]["tipo_rescisao"]:
+            cols[c["destino"]] = c
+        derivadas = ("iniciativa", "exige_aviso_previo", "paga_multa_fgts", "percentual_multa_fgts",
+                     "permite_saque_fgts", "paga_ferias_proporcionais", "paga_decimo_proporcional",
+                     "da_direito_seguro_desemprego")
+        for dc in derivadas:
+            self.assertEqual((cols[dc]["coluna"], cols[dc]["depara"]), ("ID_FPRESC_RAIS", "valores"), dc)
+        v = {dc: cols[dc]["valores"] for dc in derivadas}
+        codigos = set(v["iniciativa"])
+        self.assertEqual(len(codigos), 28)                          # tabela legal da RAIS (27) + acordo (90)
+        for dc in derivadas:
+            self.assertEqual(set(v[dc]), codigos, dc)               # todo código tem todas as consequências
+        dominio = {"empregador", "empregado", "acordo", "termino_contrato", "falecimento", "aposentadoria", "outro"}
+        self.assertTrue(set(v["iniciativa"].values()) <= dominio)
+        for k in codigos:                                            # CHECK ck_tipo_rescisao_multa
+            self.assertEqual(v["paga_multa_fgts"][k] == "1", bool(v["percentual_multa_fgts"][k]), k)
+        ini = v["iniciativa"]
+        self.assertEqual((ini["10"], ini["11"], ini["12"], ini["21"], ini["60"], ini["70"], ini["90"]),
+                         ("empregador", "empregador", "termino_contrato", "empregado", "falecimento",
+                          "aposentadoria", "acordo"))
+        self.assertEqual((v["paga_ferias_proporcionais"]["10"], v["paga_decimo_proporcional"]["10"]), ("0", "0"))
+        self.assertEqual((v["paga_multa_fgts"]["11"], v["percentual_multa_fgts"]["11"],
+                          v["da_direito_seguro_desemprego"]["11"]), ("1", "40", "1"))
+        self.assertEqual((v["percentual_multa_fgts"]["90"], v["da_direito_seguro_desemprego"]["90"]), ("20", "0"))
+        self.assertEqual((v["permite_saque_fgts"]["21"], v["exige_aviso_previo"]["21"]), ("0", "1"))
+        self.assertNotIn("=~outro", [c["coluna"] for c in cols.values()])
+
+    def test_motivo_de_desligamento_pelo_depara_oficial_da_tabela_19(self):
+        from sante_conector import depara
+        cols = {c["destino"]: c for c in self.plano["FPTIPORESC"]["colunas"]["tipo_rescisao"]}
+        c = cols["motivo_desligamento_codigo_esocial_id"]
+        self.assertEqual((c["coluna"], c["depara"]), ("ID_FPMOTDESLIG", "codigo_esocial:19"))
+        self.assertIn("'19'", depara.catalogo("codigo_esocial:19")["filtro"])
+        d = depara.Depara("codigo_esocial:19", [("02", 7), ("04", 9)])
+        self.assertEqual(d.resolver("2"), (7, None))      # zeros à esquerda não contam
+        self.assertEqual(d.resolver("04"), (9, None))
+        self.assertEqual(d.resolver("08"), (None, "catalogo_codigo_inexistente"))
+        self.assertEqual(d.resolver(None), (None, None))
+
+    def test_descartes_pedidos_cobrem_o_resto_da_fatia(self):
+        self.assertEqual(set(l5_09.SEM_CARGA) | set(l5_09.BLOQUEADAS) | set(self.plano), set(FATIA))
+        self.assertFalse(set(l5_09.SEM_CARGA) & set(self.plano))
+        self.assertFalse(set(l5_09.SEM_CARGA) & set(l5_09.BLOQUEADAS))
+        for t, (causa, motivo) in l5_09.SEM_CARGA.items():
+            # sem carregador de catálogo trabalhista, nenhum descarte pode depender dele
+            self.assertIn(causa, ("mecanismo_do_produto", "duplicado"), t)
+            self.assertNotIn("carregador oficial", motivo, t)
+            self.assertNotIn("de-para codigo_esocial", motivo, t)
+        self.assertEqual(l5_09.BLOQUEADAS["FPMOTDESLIG"][0], "catalogo_oficial_faltante")
 
     def test_codigo_da_situacao_preserva_caixa(self):
         cols = {c["destino"]: c for c in self.plano["FPSIT_FUNC"]["colunas"]["situacao_colaborador"]}
@@ -49,13 +110,24 @@ class L509(unittest.TestCase):
         self.assertEqual(sentinela.aplicar("texto", "   ")[0], None)
         self.assertEqual(sentinela.aplicar("texto_nome", "  Tipo   com  espaços  ")[0], "Tipo com espaços")
 
-    def test_pistas_da_origem_declaradas_sem_destino(self):
+    def test_causa_de_demissao_descartada_com_motivo(self):
         import csv
         with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L5-09.tsv", encoding="utf-8") as f:
-            decl = {(r["tabela"], r["coluna"]): r for r in csv.DictReader(f, delimiter="\t")}
-        for col in ("ID_FPRESC_CAUSA", "ID_FPMOTDESLIG"):
-            self.assertEqual(decl[("FPTIPORESC", col)]["destino"], "")
-            self.assertTrue(decl[("FPTIPORESC", col)]["motivo"])
+            decl = [r for r in csv.DictReader(f, delimiter="\t")]
+        causa = [r for r in decl if (r["tabela"], r["coluna"]) == ("FPTIPORESC", "ID_FPRESC_CAUSA")]
+        self.assertEqual(len(causa), 1)
+        self.assertEqual(causa[0]["destino"], "")
+        self.assertIn("DESCARTE", causa[0]["motivo"])
+
+    @unittest.expectedFailure
+    def test_depara_codigo_esocial_filtra_fonte_e_versao(self):
+        """Pedido 3 de saida/L5-09.json (motor compartilhado): '19' pode existir em outra fonte (rais, caged...) e
+        em várias versões; o filtro precisa da fonte 'esocial' e de ordem por versão/vigência. Falha até o motor
+        mudar; quando passar, retire o expectedFailure."""
+        from sante_conector import depara
+        sql = depara.consulta("codigo_esocial:19")
+        self.assertIn("fonte = 'esocial'", sql)
+        self.assertIn("ORDER BY", sql.upper())
 
     def test_imagem_sintetica_carrega_junto_a_condicao(self):
         self.assertIn("L5-07", l5_09.REQUER)
@@ -69,6 +141,8 @@ class L509(unittest.TestCase):
             self.assertEqual(e["gravados"] + sum(v for k, v in e["pendencias"].items()
                                                  if k.startswith("restricao_destino_")
                                                  or k == "codigo_colisao_caixa"), len(vistos[t]))
+        self.assertEqual(len(vistos), len(FATIA))                 # toda tabela da fatia está na imagem
+        self.assertEqual(esp["FPSIT_FUNC"]["gravados"], 5 if l5_09.condicao_sem_prefixo() else 6)
 
 
 if __name__ == "__main__":

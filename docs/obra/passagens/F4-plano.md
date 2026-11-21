@@ -677,3 +677,24 @@ exemplo, L5-01, L6-03, L6-14 e L8-10.
 - Decisões de destino tomadas pela melhor prática: `docs/obra/passagens/F4-decisoes-destino.md` (para o dono revisar).
 - Próximo passo: refazer as 56 fatias com as tabelas BLOQUEADAS (lista na saída da ferramenta).
 
+
+## 18. Integração da rodada 2 de cobertura (2026-11-21, tentativa 1): parcial, NÃO fecha
+
+Aplicado (genérico, prova em `sintetica_d/exemplo_r2.py` e `testes/test_carga_mapa_r2.py`): `cod:<tabela>.<coluna>`,
+`@unico:<tabela>`, `ref:T.(K1,K2)=(C1,C2)`, `ref:T/<destino>`, opção `antes` + `@id:<destino>`, `#data_hora:D,H`,
+`tipar` de data/hora e literal temporal, regras `minutos_hhmm` e `email`, `hora_hhmm` sobre bytes; cobertura com
+`complementa` isento e pai bloqueado propagado; passo 6 (cobertura) na autoconferência; `PREPARO_DOS_REQUERIDOS`;
+46 dependências de ordem pedidas; 10 descartes pedidos; TBPROFIS pela pessoa criada da própria linha. Decisões em
+`F4-decisoes-destino.md` (seção da integração da rodada 2).
+
+Prova: carga e conciliação verdes nas 64 fatias + 4 exemplos (o passo 6 acusa as bloqueadas, por desenho); `verificar_mapa`
+ok; `fatiar_conector --conferir` ok; `conector.sh testes` 934 ok (8 pulados). Ponta a ponta do painel VERMELHO: a imagem
+`--fatias lotes` falha porque L8-11 e L8-12 criam TBGRUDES com DDL e chaves diferentes (a L8-12 tem de usar o
+TBGRUDES da L8-11 por `REQUER`, ou o mesmo DDL com códigos sem colisão).
+
+Cobertura: lista por tabela em `docs/obra/fatias/f4/cobertura-r2.tsv`. As causas `regra_faltante`, `referencia_composta`
+e `pai_nao_carregado` agora quase todas têm mecanismo (ver o brief, "Mecanismos da rodada 2"): a próxima rodada refaz
+as fatias. Sem mecanismo ainda: `#retrato:*` e SHA-256 do retrato (históricos HT*), desdobrar em pares de colunas
+(TBLOCALHORA, FCHORATE), recorrência de feriado (TBFERIAD), destino principal desdobrado (REPARATE), coluna do destino
+do pai (`ref:T@coluna`, FCCTRLANCIHA), regras `periodo_em_dias` e `data_hora_utc_texto`, catálogos oficiais TISS/eSocial
+(carregadores), o ciclo TBCENCUS <-> TBLOCCON (duas fases) e os pedidos de modelo à trilha F2.2.

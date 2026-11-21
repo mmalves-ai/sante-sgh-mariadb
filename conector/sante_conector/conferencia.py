@@ -119,8 +119,13 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano)
                 if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
                     banco.aplicar_script(root, ddl)
-                if getattr(mod, "PREPARO_DESTINO", None):
-                    banco.aplicar_script(root, mod.PREPARO_DESTINO)
+                # com PREPARO_DOS_REQUERIDOS = True na fatia, o preparo das fatias de REQUER roda antes do dela (rodada
+                # 2, pedido da L7-01); opcional porque preparos diferentes que criam o estabelecimento colidiriam
+                fs = sintetica.resolver_fatias([nome]) if getattr(mod, "PREPARO_DOS_REQUERIDOS", False) else [nome]
+                for f in fs:
+                    preparo = getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None)
+                    if preparo:
+                        banco.aplicar_script(root, preparo)
                 with root.cursor() as cur:
                     i = 0
                     for t, ks in sorted(manif["pais_externos"].items()):

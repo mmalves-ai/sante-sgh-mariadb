@@ -7,28 +7,34 @@
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ declaração nova, ex.: conector/mapa/declarado/vigencias.tsv)",
-   "mudanca": "Regra genérica de histórico com vigência implícita: declarado por (tabela de origem, destino, coluna de início, coluna de fim, grupo; ex.: FPHSTDIAAFAST, tabela_legal_vigencia, vigencia_inicio, vigencia_fim, tipo_tabela). Depois da carga da entidade, em fase 2 (UPDATE), vigencia_fim = próxima vigencia_inicio do mesmo grupo menos 1 dia, só nas linhas da migração; coluna fora do resumo como as de fase 2; troca de vigência na origem reabre a derivação no Sincronizar. Conciliação: no máximo uma linha vigente por data e grupo.",
+   "mudanca": "Regra genérica de histórico com vigência implícita: declarado por (tabela de origem, destino, coluna de início, coluna de fim, grupo; ex.: FPHSTDIAAFAST, tabela_legal_vigencia, vigencia_inicio, vigencia_fim, tipo_tabela). Depois da carga da entidade, em fase 2 (UPDATE), vigencia_fim = próxima vigencia_inicio do mesmo grupo menos 1 dia, só nas linhas da migração; coluna fora do resumo como as de fase 2; troca de vigência na origem reabre a derivação no Sincronizar. Conciliação: no máximo uma linha vigente por data e grupo. Até lá, a perda está registrada em F4-decisoes-destino.md (FPHSTDIAAFAST): o cálculo da folha não deve usar a tabela migrada.",
    "motivo": "Achado da avaliação: a origem guarda o fim implícito (cada linha vale até a próxima); o destino tem vigencia_fim explícita. Hoje todas ficam abertas (NULL) e a consulta padrão do modelo (inicio <= d AND (fim IS NULL OR fim >= d)) volta ambígua (15 e 60 dias na imagem sintética para uma data de 2026). Não há como derivar pela declaração de coluna (depende da linha seguinte)."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou mapa.py) — decisão do dono/integrador",
-   "mudanca": "Regra genérica para tabela do mapa com destino não oficial e SEM coluna declarada (configuração do hospital que fica de fora por decisão): em toda execução, uma pendência por linha configuracao_nao_migrada (média; tabela, chave e regra, sem valor), visível no painel. Aplicar a FPINTROTINA (19 rotinas, PERMITE_INTEGRAR_FINANCEIRO e PERMITE_INTEGRAR_CONTABILIDADE), FPINTAGRUP e FPESOCPARAMS1210.",
-   "motivo": "Achado da avaliação, confirmado: nenhuma coluna de colunas.tsv nem de outro colunas.d referencia FPINTROTINA (só ela a FPINTAGRUP); o motivo antigo ('o de-para fica nas fatias que os referenciam') estava errado. As flags teriam destino em depara_folha_financeiro.integra_financeiro/integra_contabilidade, mas a linha exige estabelecimento_id, rotina do domínio fixo, vigencia_inicio e, pela CHECK, natureza financeira e contas contábeis que a origem não dá nessa tabela: carregar geraria só recusas. Decisão pedida ao dono: perda registrada por pendência (acima) ou de-para de valores rotina->domínio com as flags e pendência quando faltar natureza/conta."
-  },
-  {
-   "arquivo": "conector/mapa/declarado (decisão do dono/integrador) + conector/sante_conector/carga_mapa.py",
-   "mudanca": "FPESOCMOTAFAS.LANC_AUT_EVENTOS (CHAR(1) S/N, configuração do hospital sobre o código oficial da tabela 18): destino motivo_afastamento.gera_lancamento_automatico (regra booleano_sn) dos motivos com codigo_esocial igual ao ID, o que pede regra genérica de atualização por código no motor (UPDATE do destino pelo código, sem criar linha). Enquanto não houver, a mesma pendência configuracao_nao_migrada do pedido anterior.",
-   "motivo": "FPESOCMOTAFAS é catálogo oficial (nunca gravado); carregá-la também em motivo_afastamento colide no UNIQUE codigo com FPMOTAFAST. Além disso, motivo_afastamento.codigo_esocial fica NULL em todos os motivos migrados: a origem (FPMOTAFAST: ID, DESCRICAO) não liga o motivo do hospital ao código oficial; o cliente completa pelo painel (registrado no motivo da declaração). A fatia fica incompleta nesse ponto até a decisão."
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py",
-   "mudanca": "Acrescentar catálogos oficiais codigo_esocial e codigo_retorno_esocial a CATALOGOS (chave: tabela oficial do eSocial + código), para as colunas de outras fatias que referenciam as 17 tabelas oficiais desta fatia (FPEPC, FPESOC*, FPEXPAGNOCIVO, FPGRAUEXPAGNOC, FPINDICDECPRO, FPLOTACAOTRIB).",
-   "motivo": "catalogos.tsv já as declara oficial:codigo_esocial, mas depara.CATALOGOS só tem cid10, sigtap, cbo, ibge_municipio, ibge_uf e banco: sem isso a referência por código não resolve em nenhum lote."
   },
   {
    "arquivo": "tools/obra/fatiar_conector.py (rodar sem --conferir) ou tools/obra/conferir-fatia-f4.sh",
    "mudanca": "Depois de integrar os colunas.d do lote, regerar as fatias (python3 -I tools/obra/fatiar_conector.py); ou fazer o --conferir ignorar o bloco 'Já declaradas' que a fatia embute.",
    "motivo": "A fatia embute as colunas declaradas: toda fatia que declara colunas passa a 'diferir do gerado'."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-12.tsv e conector/sante_conector/sintetica_d/l5_12.py (fatia L5-12)",
+   "mudanca": "FPPARAM.ID_FPESOCDESONER -> cadastro_empregador.indicador_desoneracao, via ref:FPESOCDESONER>COD_INDICATIVO_DESONERACAO, depara=valores (0 nao_aplicavel, 1 empresa_enquadrada); no l5_12.py, REQUER a dona de FPESOCDESONER (_dono(\"FPESOCDESONER\") = l5_08) e acrescentar ao esperado/teste um empregador de cada valor. FPPARAMVIG.ID_FPESOCDESONER igual, se a versão do cadastro for carregada. Modelo (F2.2): o código 2 do eSocial (município enquadrado, Lei 14.784/2023) não tem valor no CHECK ck_cadastro_empregador_indicador_desoneracao; acrescentar 'municipio_enquadrado'.",
+   "motivo": "Achado 2: a dependência entre as fatias nunca foi fechada; todo empregador migra com o padrão nao_aplicavel, valor presumido sem evidência. FPESOCDESONER já está na imagem sintética da L5-08 (3 códigos: 0, 1, 2)."
+  },
+  {
+   "arquivo": "db/migracoes/15_RH (modelo, trilha F2.2) e conector/mapa/declarado/colunas.d/L5-12.tsv (+ valores.d/L5-12.tsv)",
+   "mudanca": "Coluna cadastro_empregador.geracao_evento_pagamentos VARCHAR(30) NULL com CHECK do domínio do produto (as 3 opções de geração do evento de pagamentos), e FPPARAM.GERAR_S1210_BAIXA_FINANCEIRO declarada para ela com depara=valores (codigo_char; pares pelos 3 códigos de 1 letra da lista fixa FPESOCPARAMS1210, conferidos por contagem, sem valor de pessoa).",
+   "motivo": "Achado 1: a escolha do hospital se perdia em silêncio e o motivo do descarte apontava para uma parametro_definicao inexistente. Decisão (coluna, não parâmetro) e perda provisória registradas em F4-decisoes-destino.md (FPESOCPARAMS1210)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "Especial de descrição pelo catálogo oficial: ex. '#oficial:codigo_esocial:18:ID' grava a descricao da linha do catálogo oficial (codigo_esocial) de mesmo código (vigente na data da carga), sem gravar o catálogo; código ausente: pendência catalogo_codigo_inexistente e o rótulo provisório. Depois, trocar em colunas.d/L5-08.tsv o '#codigo_derivado:ID:150:esocial_tabela_18_' de motivo_afastamento.descricao por ele.",
+   "motivo": "Achado 3 (regra 7): a descrição do motivo oficial não pode vir do NOME da origem; hoje fica o rótulo provisório esocial_tabela_18_<código>."
   }
+ ],
+ "resolvidos_na_cobertura": [
+  "pedido antigo 3 (FPINTROTINA, FPINTAGRUP, FPESOCPARAMS1210): decidido descarte mecanismo_do_produto em declarado/sem_carga.tsv e F4-decisoes-destino.md",
+  "pedido antigo 4 (FPESOCMOTAFAS.LANC_AUT_EVENTOS): carregada em motivo_afastamento com código esocial_<código> e a flag, sem regra nova no motor",
+  "pedido antigo 5 (codigo_esocial em depara): já existe em depara.CATALOGOS_PARAMETRO; as 16 tabelas oficiais são descarte catalogo_oficial",
+  "achado 3 (FPESOCMOTAFAS): NOME oficial não é mais lido (regra 7); rótulo provisório pelo código; 34 carregados por paridade; vencido fica ativo com a vigência como janela (decisão registrada)"
  ]
 }

@@ -1,3 +1,12 @@
 tabela	coluna	destino	valor_origem	valor_destino	motivo
 GECAPELAMP	FUNCIONAMENTO	capela_manipulacao.situacao	S	disponivel	L7-05
 GECAPELAMP	FUNCIONAMENTO	capela_manipulacao.situacao	N	inativa	L7-05
+GEATUALIZASALDO	TERMINADO	recalculo_saldo_estoque.situacao	S	concluido	L7-05: recálculo terminado
+GEATUALIZASALDO	TERMINADO	recalculo_saldo_estoque.situacao	N	falhou	L7-05: interrompido no sistema antigo (não está em andamento)
+GEATUALIZASALDO	TERMINADO	recalculo_saldo_estoque.situacao		falhou	L7-05: sem marca de término
+GEESTINI	CONS	inventario_estoque.situacao	S	aprovado	L7-05: estoque inicial consolidado
+GEESTINI	CONS	inventario_estoque.situacao	N	aberto	L7-05: não consolidado
+GEESTINI	CONS	inventario_estoque.situacao		aberto	L7-05: sem marca de consolidação
+GECADTRA	CONSOL	documento_estoque.situacao	S	concluido	L7-05: documento lançado no saldo
+GECADTRA	CONSOL	documento_estoque.situacao	N	aberto	L7-05: não consolidado: fica aberto e visível
+GECADTRA	CONSOL	documento_estoque.situacao		aberto	L7-05: sem marca de consolidação

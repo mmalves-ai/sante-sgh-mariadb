@@ -10,7 +10,7 @@ PRTPNOTALEMB	NOME	tipo_nota_paciente.descricao	texto_nome			L6-08
 PRTPPERGUNTA	ID	tipo_campo_modelo.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRTPPERGUNTA	NOME	tipo_campo_modelo.descricao	texto_nome			L6-08
 PRTPPERGUNTA	REFERENCIAS	tipo_campo_modelo.referencia	texto			L6-08
-PRTPPERGUNTA	=~texto	tipo_campo_modelo.tipo_dado				L6-08: o NOME de cada linha é o tipo de pergunta, mas sem de-para de valores por fatia (pedido no L6-08.json: NOME -> tipo_dado, REFERENCIAS preenchida -> componente) o tipo fica 'texto' presumido com pendência valor_presumido em toda linha, para o cliente revisar antes de converter os modelos
+PRTPPERGUNTA	NOME	tipo_campo_modelo.tipo_dado	texto_nome	valores		L6-08: tipo de dado pelo NOME do tipo de pergunta (valores.d/L6-08.tsv: texto, data, número, lista...; evidência: o próprio nome); nome sem par: NULL com valor_fora_do_dominio e a linha recusada (1048, NOT NULL sem padrão) para o cliente classificar. REFERENCIAS preenchida não muda o tipo (par condicional pedido no L6-08.json)
 PRTPPROT	COD	tipo_protocolo_oncologico.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRTPPROT	NOME	tipo_protocolo_oncologico.descricao	texto_nome			L6-08
 PRTPPROT	ORDEM	tipo_protocolo_oncologico.ordem	inteiro			L6-08
@@ -18,7 +18,7 @@ PRTPPROT	LINTRATOBR	tipo_protocolo_oncologico.conta_linha_tratamento	booleano_sn
 PRTPPROT	PERMITE_ALT_ITEM_PROT_NP_CONV	tipo_protocolo_oncologico.permite_alterar_item	booleano_sn			L6-08
 PRTPPROT	SEPARAR_DOC_GERADO_EST	tipo_protocolo_oncologico.separa_documento_gerado	booleano_01			L6-08: inteiro 0/1 para booleano
 PRTPPROT	OBRIGAR_AUT_ITENS_AGE_AUT_PEXT	tipo_protocolo_oncologico.exige_autorizacao_itens	booleano_sn			L6-08: S/N para booleano
-PRTPPROT	=~quimioterapia	tipo_protocolo_oncologico.categoria				L6-08: TIPO (1 caractere) ainda sem de-para de valores por fatia (pedido no L6-08.json); categoria presumida com pendência valor_presumido. COR (nome de cor da origem) fica fora até haver regra de cor para #RRGGBB (CHECK do destino recusaria a linha)
+PRTPPROT	TIPO	tipo_protocolo_oncologico.categoria	codigo_char	valores		L6-08: categoria pela letra TIPO (valores.d/L6-08.tsv: Q quimioterapia, H hormonioterapia, I imunoterapia, R radioterapia); letra sem par: valor_fora_do_dominio e fica o padrão do destino (quimioterapia), linha gravada. COR (nome de cor da origem) fica fora até haver regra de cor para #RRGGBB (CHECK do destino recusaria a linha; pedido no L6-08.json)
 PRTPRECMED	ID	tipo_receita.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRTPRECMED	NOME	tipo_receita.descricao	texto_nome			L6-08
 PRTPRECMED	PADRAO	tipo_receita.padrao	booleano_sn			L6-08
@@ -27,7 +27,7 @@ PRTPTCLE	NOME	situacao_termo_consentimento.descricao	texto_nome			L6-08
 PRTPTCLE	=~pendente	situacao_termo_consentimento.etapa				L6-08: a origem não guarda a etapa do termo; 'pendente' presumido com pendência valor_presumido
 PRUNIDINFUSAO	ID	unidade_infusao.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRUNIDINFUSAO	NOME	unidade_infusao.descricao	texto_nome			L6-08
-PRUNIDINFUSAO	NOME	unidade_infusao.sigla	texto			L6-08: a origem só tem o nome curto da unidade (ex.: ml/h), que serve de sigla; nome maior que 20 ainda recusa a unidade (1406) e os kits dela (pai_pendente) até a regra de texto derivado cortado com pendência (pedido no L6-08.json)
+PRUNIDINFUSAO	NOME	unidade_infusao.sigla	texto_resumo:20			L6-08: a origem só tem o nome curto da unidade (ex.: ml/h), que serve de sigla; nome maior que 20 é resumido na fronteira de palavra (pendência baixa texto_resumido), sem recusar a unidade nem os kits dela; o nome inteiro fica na descrição
 PRUNIDINFUSAO	=~0	unidade_infusao.por_peso				L6-08: a origem não diz se a velocidade é por peso (ex.: mcg/kg/min); FALSE presumido com pendência valor_presumido em toda unidade, para o cliente revisar
 PRUNIDINFUSAO	ID_PRTPINFUSAO	unidade_infusao.tipo_infusao_id				L6-08
 PRKITSOL	ID	kit_prescricao.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
@@ -38,17 +38,18 @@ PRKITSOL	ID_GETABVIA	kit_prescricao.via_de_uso_id			ref:GETABVIA	L6-08: código 
 PRKITSOL	INICIAR_ADM_AGORA	kit_prescricao.iniciar_administracao_agora	booleano_sn			L6-08: S/N para booleano
 PRKITSOL	ID_PRUNIDINFUSAO	kit_prescricao.unidade_infusao_id				L6-08
 PRKITSOL	ID_PRTPINFUSAO	kit_prescricao.tipo_infusao_id				L6-08
-PRKITSOL	ATIVO	kit_prescricao.ativo	booleano_sn			L6-08: VELOCIDADE_INFUSAO fica fora até haver regra decimal com zero como 'sem valor' (CHECK do destino recusaria o kit inteiro com velocidade 0 ou sem unidade; pedido no L6-08.json); NOME_AGRUP_VISUAL_BALANCO não tem cadastro de grupo de balanço na origem
+PRKITSOL	ATIVO	kit_prescricao.ativo	booleano_sn			L6-08: NOME_AGRUP_VISUAL_BALANCO não tem cadastro de grupo de balanço na origem
+PRKITSOL	VELOCIDADE_INFUSAO	kit_prescricao.velocidade_infusao	decimal_positivo			L6-08: velocidade de infusão do kit; zero ou negativa vira NULL com valor_fora_do_dominio (kit gravado); velocidade com unidade nula é recusada pelo CHECK do destino (pendência registrada; regra que anule a velocidade sem unidade pedida no L6-08.json)
 PRUNIDRESPOSTA	ID	unidade_resposta.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRUNIDRESPOSTA	NOME	unidade_resposta.descricao	texto_nome			L6-08
-PRUNIDRESPOSTA	NOME	unidade_resposta.sigla	texto			L6-08: a origem só tem o nome curto da unidade, que serve de sigla
+PRUNIDRESPOSTA	NOME	unidade_resposta.sigla	texto_resumo:20			L6-08: a origem só tem o nome curto da unidade, que serve de sigla (NOME tem 10 na origem e cabe em 20; resumo por garantia)
 PRVALIDARMEDDUPLICPRESC	ID	regra_duplicidade_terapeutica.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRVALIDARMEDDUPLICPRESC	NOME	regra_duplicidade_terapeutica.descricao	texto_nome			L6-08
 PRVALIDARMEDDUPLICPRESC	ATIVO	regra_duplicidade_terapeutica.ativo	booleano_sn			L6-08
 PRVALIDARMEDDUPLICPRESC	=~mesmo_principio_ativo	regra_duplicidade_terapeutica.criterio				L6-08: a origem só nomeia a validação; critério presumido com pendência valor_presumido (ação fica no padrão 'avisar')
 PRVIAAEREA	ID	via_aerea.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRVIAAEREA	NOME	via_aerea.descricao	texto_nome			L6-08
-TBCBARACATEGORIA	ID	categoria_alergeno.codigo	texto			L6-08: a chave da origem é o código (texto no destino), como nas demais tabelas da fatia: o código da terminologia (CODIGO, até 50) não cabe no código (30) e recusaria a categoria e, em cadeia, os alergenos dela. CODIGO fica fora até haver de-para para termo_terminologia_id (catálogo da terminologia ainda sem carga). TBCLASSIFALERGIA (mesmo destino) fica fora até o motor ter domínio compartilhado (pedido no L6-08.json)
+TBCBARACATEGORIA	ID	categoria_alergeno.codigo	texto			L6-08: a chave da origem é o código (texto no destino), como nas demais tabelas da fatia: o código da terminologia (CODIGO, até 50) não cabe no código (30) e recusaria a categoria e, em cadeia, os alergenos dela. CODIGO fica fora até haver de-para para termo_terminologia_id (catálogo da terminologia ainda sem carga). TBCLASSIFALERGIA (mesmo destino) entra com prefixo de domínio no código (cl_), sem colidir com estes
 TBCBARACATEGORIA	NOME	categoria_alergeno.descricao	texto_nome			L6-08
 TBCBARACATEGORIA	ATIVO	categoria_alergeno.ativo	booleano_sn			L6-08
 TBCBARAAGENTE	ID	alergeno.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
@@ -70,8 +71,10 @@ TBCBARAORIGEMINFO	ATIVO	origem_informacao_alergia.ativo	booleano_sn			L6-08
 TBCBARASEVERIDADE	ID	gravidade_reacao_adversa.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 TBCBARASEVERIDADE	NOME	gravidade_reacao_adversa.descricao	texto_nome			L6-08
 TBCBARASEVERIDADE	ATIVO	gravidade_reacao_adversa.ativo	booleano_sn			L6-08
-TBCBARASEVERIDADE	ID	gravidade_reacao_adversa.nivel	inteiro			L6-08: a origem não tem nível; a ordem da chave é só PRESUMIDA como nível (nada prova que siga a gravidade): toda linha leva pendência valor_presumido (ver codigo_terminologia) para o cliente conferir o nível no cadastro. Chave acima de 255 recusa a linha (TINYINT). Pedido no L6-08.json: coluna presumida (~COLUNA) para ligar a pendência ao nível
-TBCBARASEVERIDADE	=~unable-to-assess	gravidade_reacao_adversa.codigo_terminologia				L6-08: a origem não dá a criticidade equivalente da terminologia de interoperabilidade; 'unable-to-assess' (não avaliada) presumida com pendência valor_presumido em toda linha, que também marca o nível presumido pela chave
+TBCBARASEVERIDADE	NOME	gravidade_reacao_adversa.nivel	texto_nome	valores		L6-08: nível de severidade (1 = menor, único) pelo NOME da gravidade (valores.d/L6-08.tsv: leve 1, moderada 2, grave 3, fatal 4), nunca pela ordem da chave (a chave pode numerar 1 = grave); nome sem par: NULL com valor_fora_do_dominio e a linha recusada (1048) para o cliente classificar. codigo_terminologia fica nulo (a origem não traz a criticidade equivalente; nada é presumido)
 TBCLASSINTMED	ID	classificacao_interacao.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 TBCLASSINTMED	NOME	classificacao_interacao.descricao	texto_nome			L6-08
 TBCLASSINTMED	ATIVO	classificacao_interacao.ativo	booleano_sn			L6-08
+TBCLASSIFALERGIA	#codigo_derivado:ID:30:cl_	categoria_alergeno.codigo	texto			L6-08 (cobertura): segunda tabela da origem no mesmo cadastro de categoria_alergeno: prefixo de domínio cl_ separa do código de TBCBARACATEGORIA (código único)
+TBCLASSIFALERGIA	NOME	categoria_alergeno.descricao	texto_nome			L6-08 (cobertura)
+TBCLASSIFALERGIA	=~outros	categoria_alergeno.tipo				L6-08 (cobertura): a origem não diz se a classe é medicamento, alimento ou ambiental; 'outros' presumido com pendência valor_presumido para o cliente revisar

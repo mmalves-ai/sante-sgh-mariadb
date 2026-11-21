@@ -1,11 +1,15 @@
-"""Fatia L8-10 (faturamento e restantes, módulo FIN; 21 tabelas): tabelas da origem com a forma do dicionário e dados
-100% falsos.
+"""Fatia L8-10 (patrimônio, financeiro, nota de serviço e escrituração: restantes do módulo FIN; 21 tabelas): tabelas
+da origem com a forma do dicionário e dados 100% falsos.
 
-CARREGADAS (5 cadastros simples, sem referência): GPORIGEM (origem_bem), GPTP_RESPONSAVEL (tipo_responsavel_bem),
-MFTIPOLANC (tipo_credor), MFTPCOBRANCA (tipo_cobranca) e MFTPCONTRIBUICAO (tributo), com as anomalias: descrição vazia
-(NOT NULL: 1048), espaços internos colapsados, S/N fora do domínio e marca vazia (FALSE: vazio = 'não'), sentido sem par no
-de-para (inclusive a mesma letra em caixa baixa), código repetido (chave única: 1062) e valores presumidos (=~).
-As outras 16 ficam só com a forma (2 linhas falsas cada): bloqueadas ou fora da carga, com pedido em saida/L8-10.json.
+CARREGADAS (9): os 4 cadastros simples (origem_bem, tipo_responsavel_bem, tipo_credor, tipo_cobranca), os 4 contextos
+de trabalho do usuário por módulo (contexto_trabalho_usuario: usuário pelo login, estabelecimento único, competência de
+ano e mês, adoção do mesmo usuário e módulo) e os dados fiscais do item (dado_fiscal_item: NCM com zeros à esquerda,
+tipo presumido, vigência da carga, CST de PIS e COFINS, gênero e natureza do crédito pela referência encadeada ao
+código dos catálogos fiscais da origem). Anomalias: descrição vazia (1048), espaços colapsados, S/N fora do domínio,
+código repetido (1062), login e item inexistentes (pai_inexistente), mês inválido, competência vazia, período invertido
+(CHECK 4025), NCM grande demais, ID de catálogo fiscal sem linha (pai_inexistente), código fiscal de 3 dígitos
+(valor_fora_do_dominio) e valores presumidos (=~).
+DESCARTADAS (10, declarado/sem_carga.tsv) e SEM_MECANISMO (2, pedido em saida/L8-10.json): só a forma (2 linhas).
 """
 import datetime
 import decimal
@@ -42,10 +46,6 @@ FORMAS = {
         ('DATA_HORA_RENEGOCIACAO', 'TIMESTAMP', True),
         ('RESPONSAVEL_RENEGOCIACAO', 'VARCHAR(70)', True),
     ]),
-    'MFCTAUSU': ('ID_TBUSERS,ID_TBCTABAN', [
-        ('ID_TBUSERS', 'SMALLINT', True),
-        ('ID_TBCTABAN', 'SMALLINT', True),
-    ]),
     'MFLANGSI': ('EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM', [
         ('EMPRESA', 'INTEGER', True),
         ('FORN', 'BIGINT', True),
@@ -72,31 +72,6 @@ FORMAS = {
         ('COD_TP_LANCAMENTO', 'CHAR(1)', True),
         ('NOME', 'VARCHAR(25)', True),
         ('TP_LANCAMENTO', 'CHAR(1)', True),
-    ]),
-    'MFADIFOR': ('ID_MFADIFOR', [
-        ('ID_MFADIFOR', 'INTEGER', True),
-        ('EMPRESA', 'SMALLINT', True),
-        ('COD', 'INTEGER', True),
-        ('TIPO_CREDOR', 'CHAR(1)', True),
-        ('DOC', 'INTEGER', True),
-        ('EMISSAO', 'DATE', False),
-        ('VENC', 'DATE', False),
-        ('DT_PGTO', 'DATE', False),
-        ('VLR_DOC_TOT', 'NUMERIC(18,2)', True),
-        ('PAGO', 'NUMERIC(18,2)', True),
-        ('REFERENTE', 'VARCHAR(60)', False),
-        ('ID_TBCTABAN', 'SMALLINT', False),
-        ('CHEQUE', 'INTEGER', True),
-        ('TP_PGTO', 'SMALLINT', False),
-        ('HIST', 'SMALLINT', False),
-        ('ID_MFCABECLANC', 'INTEGER', True),
-        ('ID_MFTIPOLANC', 'SMALLINT', True),
-        ('DATA_PREVISTA_PGTO', 'DATE', False),
-        ('AUTORIZADO_PGTO_PARA', 'DATE', False),
-    ]),
-    'MFADIFOR_TBCBOPRO': ('ID_MFADIFOR', [
-        ('ID_MFADIFOR', 'INTEGER', True),
-        ('ID_TBCBOPRO', 'INTEGER', True),
     ]),
     'MFTIPOLANC_TBOPCOES': ('ID_TBOPCOES,ID_MFTIPOLANC', [
         ('ID_TBOPCOES', 'INTEGER', True),
@@ -158,21 +133,41 @@ FORMAS = {
         ('ID_SDCSTCOFINS', 'SMALLINT', False),
         ('ID_SDCSTPIS', 'SMALLINT', False),
     ]),
+    'SDGELANNFS': ('ID_GELANNFS', [
+        ('ID_GELANNFS', 'INTEGER', True),
+        ('ID_SDCFOP', 'SMALLINT', False),
+    ]),
+    'SDNATRECEITA': ('ID', [
+        ('ID', 'SMALLINT', True),
+        ('NOME', 'VARCHAR(80)', True),
+    ]),
+    'SDPARAM': ('ANO_PROCESSAMENTO,MES_PROCESSAMENTO', [
+        ('ANO_PROCESSAMENTO', 'SMALLINT', True),
+        ('MES_PROCESSAMENTO', 'SMALLINT', True),
+        ('CAMINHO_PVA', 'VARCHAR(150)', False),
+    ]),
 }
 
-CARREGADAS = ("GPORIGEM", "GPTP_RESPONSAVEL", "MFTIPOLANC", "MFTPCOBRANCA", "MFTPCONTRIBUICAO")
-# bloqueadas por pai ou coluna obrigatória (a declaração prevista fica no motivo de cada coluna) e o pedido
-BLOQUEADAS = {"GPPARAMU": 2, "MFPARUSU": 2, "NFSEPARUSU": 2, "PEPARAM_USUARIO": 2, "MFCABECLANC": 3,
-              "MFCABECRENEGO": 3, "MFCTAUSU": 4, "MFLANGSI": 5, "MFADIFOR": 7, "MFADIFOR_TBCBOPRO": 7,
-              "SDGEITENS": 12}
-# fora da carga por decisão de modelo (pedido)
-FORA = {"MFTIPOLANC_TBOPCOES": 8, "MFTPAPURACAO": 9, "MOPARAM": 9, "NFSEEMPDESENT": 11, "NFSEEMPDESENV": 11}
-COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
+CARREGADAS = ("GPORIGEM", "GPTP_RESPONSAVEL", "MFTIPOLANC", "MFTPCOBRANCA",
+              "GPPARAMU", "MFPARUSU", "NFSEPARUSU", "PEPARAM_USUARIO", "SDGEITENS")
+# descarte de produto (declarado/sem_carga.tsv): só a forma, nada carregado
+DESCARTADAS = {"MFCABECRENEGO": "sem_valor", "MFTIPOLANC_TBOPCOES": "mecanismo_do_produto",
+               "MFTPAPURACAO": "mecanismo_do_produto", "MOPARAM": "mecanismo_do_produto",
+               "NFSEEMPDESENT": "sem_valor", "NFSEEMPDESENV": "sem_valor",
+               "SDNATRECEITA": "mecanismo_do_produto", "SDPARAM": "mecanismo_do_produto",
+               "MFCABECLANC": "sem_valor", "MFTPCONTRIBUICAO": "mecanismo_do_produto"}
+# sem mecanismo no motor: pedido em saida/L8-10.json (letra do pedido)
+SEM_MECANISMO = {"MFLANGSI": "A", "SDGELANNFS": "B"}
+# catálogos fiscais da origem (fora da fatia, carga de referência, nunca gravados: regra 7): só lidos pela referência
+# encadeada `ref:<T>>CODIGO` de SDGEITENS (forma do dicionário: ID e CODIGO SMALLINT); IDs diferentes do código
+CATALOGOS_ORIGEM = {t: ('ID', [('ID', 'SMALLINT', True), ('CODIGO', 'SMALLINT', True)])
+                    for t in ('SDCSTPIS', 'SDCSTCOFINS', 'SDGENERO', 'SDNATCREDITO')}
+COLUNAS = {t: cols for t, (_, cols) in list(FORMAS.items()) + list(CATALOGOS_ORIGEM.items())}
 
 
 def _ddl():
     saida = []
-    for t, (chave, cols) in FORMAS.items():
+    for t, (chave, cols) in list(FORMAS.items()) + list(CATALOGOS_ORIGEM.items()):
         defs = ["%s %s%s" % (c, tp, " NOT NULL" if nn else "") for c, tp, nn in cols]
         if chave:
             defs.append("PRIMARY KEY (%s)" % chave)
@@ -181,8 +176,12 @@ def _ddl():
 
 
 DDL = _ddl()
-# nenhuma carregável aponta outra tabela: sem pais externos
-PAIS_EXTERNOS = {}
+# pais de fora da fatia, como já carregados: usuários (login, chave de TBUSERS) e itens (COD de GEITENS); ZECA e o
+# item 9 não existem (pai_inexistente)
+PAIS_EXTERNOS = {"TBUSERS": ["ANA.PAULA", "BRUNO", "CARLA"], "GEITENS": [1, 2, 3]}
+# um estabelecimento só no cliente de exemplo (@estabelecimento)
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   "INSERT INTO estabelecimento () VALUES ();")
 
 
 def _falso(tipo, i):
@@ -207,7 +206,7 @@ def _ins(ins, tab, **v):
 
 def linhas(r, ins):
     for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS:
+        if tab not in CARREGADAS and tab not in CATALOGOS_ORIGEM:
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
     # origens do bem: 2 nome com espaços repetidos (colapsados) e complemento com quebra de linha (preservada);
@@ -233,9 +232,42 @@ def linhas(r, ins):
     for i, cod, nome in [(1, 1, "Carteira exemplo"), (2, 2, "Boleto  registrado"), (3, 2, "Repetido exemplo"),
                          (4, 4, None)]:
         _ins(ins, "MFTPCOBRANCA", ID=i, COD_TPCOBRANCA=cod, NOME=nome)
-    # contribuições: 4 nome vazio (1048)
-    for i, nome in [(1, "Contribuição A"), (2, "Contribuição B"), (3, "Contribuição C"), (4, "")]:
-        _ins(ins, "MFTPCONTRIBUICAO", ID=i, NOME=nome)
+    D = datetime.date
+    # contexto do patrimônio: 1 grava; 2 mesmo login em outra empresa ADOTA o contexto da 1; 3 login inexistente
+    # (pai_inexistente, 1048); 4 mês 13 (valor_fora_do_dominio, 1048); 5 fim antes do início (CHECK: 4025)
+    for emp, usu, ano, mes, ini, fim in [(1, "ANA.PAULA", 2025, 3, D(2025, 1, 1), D(2025, 3, 31)),
+                                         (2, "ANA.PAULA", 2025, 4, D(2025, 1, 1), D(2025, 4, 30)),
+                                         (1, "ZECA", 2025, 5, D(2025, 1, 1), D(2025, 5, 31)),
+                                         (1, "BRUNO", 2025, 13, D(2025, 1, 1), D(2025, 5, 31)),
+                                         (1, "CARLA", 2025, 6, D(2025, 6, 30), D(2025, 6, 1))]:
+        _ins(ins, "GPPARAMU", EMPRESA=emp, USUARIO=usu, COMPANO=ano, COMPMES=mes, DEPR_INI=ini, DEPR_FIM=fim,
+             PERMISSOES="SNNS")
+    # contexto do financeiro: 1 grava; 2 sem competência (1048); 3 mesma pessoa em outra empresa (adotado)
+    for emp, usu, ano, mes in [(1, "ANA.PAULA", 2025, 2), (1, "BRUNO", None, None), (2, "ANA.PAULA", 2025, 3)]:
+        _ins(ins, "MFPARUSU", EMPRESA=emp, USUARIO=usu, ANOPRO=ano, MESPRO=mes)
+    # contexto da nota de serviço: 1 grava (retenções por usuário não migram); 2 mês zero (1048)
+    for usu, mes in [("ANA.PAULA", 7), ("CARLA", 0)]:
+        _ins(ins, "NFSEPARUSU", ID_TBEMPHOS=1, USUARIO=usu, PERMITIR_MANUTENCAO_RPS_EMITIDO="S", RETER_ISS="S",
+             RETER_PIS="N", RETER_CSLL="N", RETER_COFINS="N", RETER_INSS="S", RETER_IRRF="N",
+             MES_PROCESSAMENTO=mes, ANO_PROCESSAMENTO=2025)
+    # contexto do ponto: 1 grava; 2 login inexistente (pai_inexistente, 1048)
+    for usu, mes in [("BRUNO", 1), ("ZECA", 2)]:
+        _ins(ins, "PEPARAM_USUARIO", COD_EMP=1, USUARIO=usu, MES=mes, ANO=2025)
+    # catálogos fiscais da origem: o ID não é o código (o código 1 da natureza do crédito vira '01'; o 123 do
+    # gênero não cabe em CHAR(2): valor_fora_do_dominio)
+    for t, pares in (("SDCSTPIS", [(7, 50), (8, 98)]), ("SDCSTCOFINS", [(7, 50), (8, 70)]),
+                     ("SDGENERO", [(31, 30), (32, 123)]), ("SDNATCREDITO", [(4, 1), (5, 13)])):
+        for i, cod in pares:
+            _ins(ins, t, ID=i, CODIGO=cod)
+    # dados fiscais: 1 NCM de 8 dígitos e Ex 1 ('01'), códigos fiscais pelo catálogo; 2 NCM com zero à esquerda
+    # perdido no inteiro, CST do PIS com ID sem linha no catálogo (pai_inexistente, NULL) e gênero de 3 dígitos
+    # (valor_fora_do_dominio, NULL); 3 NCM de 9 dígitos (valor_fora_do_dominio), sem códigos fiscais (vazio, NULL sem
+    # pendência); 9 item inexistente (pai_inexistente; CHECK do item: 4025)
+    for item, ncm, ex, gen, nat, cof, pis in [(1, 30049099, 1, 31, 4, 7, 7), (2, 1012100, None, 32, 5, 8, 99),
+                                              (3, 123456789, None, None, None, None, None),
+                                              (9, 30049099, None, 31, 4, 7, 8)]:
+        _ins(ins, "SDGEITENS", ID_GEITENS=item, NCM=ncm, CODIGO_EX_TIPI=ex, ID_SDGENERO=gen, ID_SDNATCREDITO=nat,
+             ID_SDCSTCOFINS=cof, ID_SDCSTPIS=pis)
     return ESPERADO
 
 
@@ -247,6 +279,14 @@ ESPERADO = {
                                                  "valor_fora_do_dominio": 2}},
     "MFTPCOBRANCA": {"gravados": 2, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1,
                                                    "restricao_destino_1062": 1}},
-    # três colunas presumidas por linha (esfera, apuração, incidência), contadas também na linha recusada
-    "MFTPCONTRIBUICAO": {"gravados": 3, "pendencias": {"valor_presumido": 12, "restricao_destino_1048": 1}},
+    "GPPARAMU": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 1,
+                                               "valor_fora_do_dominio": 1, "restricao_destino_1048": 2,
+                                               "restricao_destino_4025": 1}},
+    "MFPARUSU": {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 1}},
+    "NFSEPARUSU": {"gravados": 1, "pendencias": {"restricao_destino_1048": 1}},
+    "PEPARAM_USUARIO": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
+    # vigência sem fonte e tipo do item presumido por linha, contados também na recusada
+    "SDGEITENS": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 4, "valor_presumido": 4,
+                                                "valor_fora_do_dominio": 2, "pai_inexistente": 2,
+                                                "restricao_destino_4025": 1}},
 }

@@ -1,79 +1,70 @@
 {
+ "fatia": "L8-04",
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + mapa",
-   "mudanca": "de-para oficial 'tuss' (termo da terminologia TUSS pelo código) e referência composta TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND -> item_referencia_matmed; vigencia_inicio sem data: decidir padrão ou recusa",
-   "motivo": "TBREFMEMTUSS -> equivalencia_matmed_tuss exige termo_terminologia_id e item_referencia_matmed_id NOT NULL; sem isso toda linha seria recusada (pedido 1)"
+   "arquivo": "conector/sante_conector/sentinela.py (_digitos e regras de documento)",
+   "mudanca": "1) _digitos aceita float de valor inteiro (DOUBLE da origem: str(int(v))); hoje 11222333000181.0 vira 15 dígitos e documento_invalido. 2) regras genéricas para documento num campo só: tipo_pessoa_documento (até 11 dígitos 'fisica', 12 a 14 'juridica', inválido NULL com documento_invalido), cpf_de_documento e cnpj_de_documento (gravam só quando o tamanho casa; no outro caso NULL sem pendência). Depois: TBPRESER CGC_CPF -> prestador_terceiro.tipo_pessoa/cpf/cnpj com essas regras, no lugar de =~juridica e cnpj",
+   "motivo": "pedido 1: TBPRESER (prestador_terceiro) é planejada, mas hoje 100% das linhas caem no CHECK do documento (na imagem sintética: 3 de 3, documento_invalido 2 e 4025 3)"
   },
   {
-   "arquivo": "conector/mapa (TBREFUNI)",
-   "mudanca": "decidir de onde vem fonte_pagadora_id (TAB é tabela de preço; a fonte pagadora que usa a tabela vem do acordo) e vigencia_inicio (sem origem); talvez uma linha por fonte pagadora que usa a tabela",
-   "motivo": "equivalencia_matmed_fonte_pagadora exige os dois NOT NULL; declarada hoje recusaria 100% (pedido 2)"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador: desdobrar no destino principal)",
+   "mudanca": "regra genérica faltante: aceitar desdobrar:<COL>=<rótulo>,... no destino PRINCIPAL (uma linha do principal por coluna com valor; chave da entidade <chave>/<rótulo>; nenhuma coluna com valor: linha lida sem gravação, contada). Declaração pronta para TBPERTHM -> regra_percentual_cobranca: CONV fonte_pagadora_id ref:TBCONVEN; TAB tabela_preco_id ref:TBCTRTHM; PROCTO item_faturavel_id ref:TBTABTHM(TAB,PROCTO)>ID_TBPROCTO>TBPROCTO; DATA vigencia_inicio data; TIPO_PAC tipo_paciente codigo_char valores (domínio a medir); #rotulo componente; #item percentual decimal_nao_negativo com via desdobrar:PERC_CH=honorario,PERC_COPE=custo_operacional,PERC_ANEST=anestesia,PERC_FILME=filme,PERC_N_CRED=nao_credenciado,PERC_APOS_HORARIO=horario_especial; CH_VALOR_CRED sem destino",
+   "motivo": "pedido 5 (regra faltante): TBPERTHM (89015 linhas) traz seis percentuais por linha; o verificador recusa desdobrar no principal e acrescimo_horario_especial não serve de principal. Única tabela da fatia sem carga nem descarte"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py ou sentinela.py",
-   "mudanca": "regra derivada de documento: CGC_CPF (DOUBLE) com até 11 dígitos grava cpf e tipo_pessoa='fisica', até 14 grava cnpj e tipo_pessoa='juridica' (cpf_cnpj já valida; falta rotear para duas colunas e derivar o tipo); documento inválido: recusa com documento_invalido",
-   "motivo": "TBPRESER -> prestador_terceiro: tipo_pessoa NOT NULL e CHECK do documento (pedido 3)"
+   "arquivo": "tools/obra/cobertura_conector.py (avaliar: colunas obrigatórias)",
+   "mudanca": "pular o destino com complementa (como o opcional): for dt in p['destinos']: if dt in opcionais.get(t, ()) or (p.get('opcoes') or {}).get(dt, {}).get('complementa'): continue",
+   "motivo": "TBTABTHM completa o item_faturavel por UPDATE (ref:TBPROCTO;complementa): NOT NULL do item não se aplica, mas a ferramenta a dá como coluna_obrigatoria_sem_fonte:item_faturavel.*; a conferência na imagem sintética passa (3 gravadas, complemento aplicado)"
   },
   {
-   "arquivo": "conector/mapa (TBSTATUSPROCESSA, TBTPFASEUNIBH)",
-   "mudanca": "decidir destino: atributo_guia_fonte_pagadora é por operadora (fonte_pagadora_id NOT NULL) e as duas tabelas são domínios globais; opções: um atributo por operadora que usa o campo (precisa da origem desse vínculo) ou domínio de valores do produto",
-   "motivo": "sem fonte pagadora toda linha seria recusada (pedido 4)"
+   "arquivo": "conector/mapa (TBTISSVIAACES) via gerador do mapa",
+   "mudanca": "TBTISSVIAACES (3 linhas, L4, hoje só de-para de termo_terminologia) passa a carregar via_acesso_cirurgico (codigo = ID, descricao = nome, codigo_tiss = código TISS) antes de TBFORMULAPAGTO; ou o produto semeia via_acesso_cirurgico e entra um de-para de catálogo 'via_acesso_tiss' (via_acesso_cirurgico.codigo_tiss)",
+   "motivo": "TBFORMULAPAGTO -> regra_via_acesso exige via_acesso_cirurgico_id (NOT NULL) e nenhuma origem alimenta via_acesso_cirurgico: até lá a fórmula cai em pai_inexistente + 1048 (decisão registrada em F4-decisoes-destino.md)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (TBSUBDES)",
-   "mudanca": "trocar o destino para subgrupo_faturamento (GRUPO -> grupo_faturamento pelo código do grupo, SUBGRUPO -> codigo, NOME -> descricao, CODCONT/CDC quando houver coluna); DESCONTO (S/N) só faz sentido na regra do acordo",
-   "motivo": "a tabela é o cadastro de subgrupos, não regra de desconto (contrato NOT NULL sem origem) (pedido 5)"
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBPROCTO, TBCTRTHM)",
+   "mudanca": "TBPROCTO -> item_faturavel (principal pela via; código derivado com prefixo, descrição NOME); TBCTRTHM -> tabela_preco com a chave COD (TBTABTHM usa ref:TBCTRTHM pela TAB). item_faturavel exige grupo_faturamento_id: nenhuma origem alimenta grupo_faturamento (ver pedido 6)",
+   "motivo": "decisão TBPROCTO/TBTABTHM em F4-decisoes-destino.md: o preço (TBTABTHM, aqui) referencia o item pela ID_TBPROCTO e o completa; sem os pais, as linhas caem em pai_inexistente + 1048 (visível)"
   },
   {
-   "arquivo": "conector/mapa (TBTABTHM) + fatia de TBCTRTHM/TBPROCTO",
-   "mudanca": "decidir: item_faturavel.grupo_faturamento_id e tipo_item (NOT NULL) a partir de TIPO_DESP/TIPOATO ou de-para; preco_procedimento.tabela_preco_id pela chave TAB do pai (referência por coluna não-id), sequencia (#seq ou COD); SEXO -> sexo_permitido por de-para de valores; EXIGE_AUTORIZACAO booleano_01; 269654 linhas na referência (data_alteracao_hash_bloco)",
-   "motivo": "sem grupo e tabela toda linha seria recusada; os pais estão em outra fatia do L8 (pedido 6)"
+   "arquivo": "produto (criar novo cliente) + conector/sante_conector/depara.py",
+   "mudanca": "grupo_faturamento sem origem no mapa: semear os grupos padrão por tipo_grupo no 'criar novo cliente' (ou implantação) e dar ao conector o de-para de catálogo do produto 'grupo_faturamento' (por codigo) para o item faturável (TBPROCTO na L8-03, TBTABDTH na L8-05) e TIPO_DESP de TBTABTHM",
+   "motivo": "item_faturavel.grupo_faturamento_id é NOT NULL e nenhum lote cria grupo_faturamento"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar colunas em linhas)",
-   "mudanca": "regra genérica de tabela pivotada (mesma do L7-05 pedido 5): cada PERC_* de TBPERTHM vira uma linha de regra_percentual_cobranca com componente fixo (PERC_CH honorario, PERC_COPE custo_operacional, PERC_ANEST anestesia, PERC_FILME filme, PERC_N_CRED nao_credenciado, PERC_APOS_HORARIO horario_especial); nulo não gera linha; CONV -> fonte pagadora e TAB -> tabela_preco por código; TIPO_PAC -> tipo_paciente por de-para",
-   "motivo": "uma linha da origem carrega seis percentuais (pedido 7)"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "de-para oficial 'tuss' (termo_versao_tiss ou termo_terminologia pelo código TUSS) para TBTABTHM TAB_REF_TUSS/PROC_REF_TUSS -> preco_procedimento.termo_versao_tiss_id; porte (PMEDICO/PPORTE) quando porte_procedimento tiver origem",
+   "motivo": "melhoria sem bloqueio: hoje a equivalência TUSS do preço fica NULL (colunas declaradas sem destino, com motivo)"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.d (quando a coparticipação entrar)",
-   "mudanca": "TBTIPCOPART é domínio de forma_calculo (valor/percentual): de-para de valores pela descrição revisada pelo cliente na tabela que a referencia",
-   "motivo": "não é linha de coparticipacao_contrato (pedido 8)"
+   "arquivo": "docs/obra/fatias/f4 (tools/obra/fatiar_conector.py)",
+   "mudanca": "regerar as fatias e o indice.tsv depois de regerar o mapa (conferir-fatia acusa 'arquivo diferente do gerado' em quase todas as fatias: dependências novas de várias fatias, aqui TBSUBDES -> TBGRUDES em declarado/dependencias.tsv, e o mapa regerado nesta rodada)",
+   "motivo": "mapa regerado de novo nesta rodada (TBPRESER depende agora de TBCENCUS e TBPROFIS: ordem 684 -> 871); fatias e indice.tsv a regerar pelo integrador"
   },
   {
-   "arquivo": "conector/mapa (TBTIPPRO)",
-   "mudanca": "trocar destino: associação procedimento x tipo de serviço (classificação do item faturável), depois de item_faturavel; o cadastro de tipo_servico_faturavel vem de outra tabela",
-   "motivo": "codigo e descricao NOT NULL sem origem (pedido 9)"
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBCOSPPROF ID)",
+   "mudanca": "TBCOSPPROF: funcao_equipe_cobranca.codigo por #codigo_derivado:ID:30:cosp_ (ID sem destino, chave_origem)",
+   "motivo": "pedido 9b: colisão em uq_funcao_equipe_cobranca_codigo entre TBCOSPPROF (L8-03, sem prefixo), TBGRAUPARTPROC (agora grau_part_) e TBTPPROFPROC (tipo_prof_); a fatia que carregar depois seria recusada com 1062"
   },
   {
-   "arquivo": "conector/mapa (TBTISSEMIEXP, TBTISSFORMAENVPAD, TBTISSGERSPSADTPS)",
-   "mudanca": "marcar como domínios enumerados (sem linha no destino): viram de-para de valores nas tabelas que as referenciam (forma_envio, geracao_sp_sadt), revisado pelo cliente",
-   "motivo": "regra_apresentacao_tiss e endpoint_tiss_fonte_pagadora exigem estabelecimento, fonte pagadora e versão TISS NOT NULL (pedido 10)"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "de-para oficial 'ibge_municipio_nome_uf': município IBGE pelo nome normalizado (sem acento, caixa) + sigla da UF; ambíguo: pai_ambiguo; ausente: catalogo_codigo_*. Uso: TBPRESER CIDADE+UF -> prestador_terceiro.municipio_ibge_id",
+   "motivo": "pedido 9: a origem só tem nome e UF do município; hoje a coluna fica sem destino"
   },
   {
-   "arquivo": "conector/mapa (TBTISSPARDEF, TBTISSTPGUIA_TBTISSPARDEF)",
-   "mudanca": "decidir: definição de parâmetro TISS do sistema de origem; regra_montagem_guia exige tipo_regra e vigencia_inicio NOT NULL; tipo_guia vem de TBTISSTPGUIA (fora do mapa) e pede de-para de valores",
-   "motivo": "sem isso toda linha seria recusada (pedido 11)"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador)",
+   "mudanca": "aceitar adotar:<colunas> no destino PRINCIPAL (a linha que já tem o mesmo documento é adotada: conector_origem da chave aponta para ela, sem sobrescrever, pendência adotado_existente)",
+   "motivo": "pedido 10: TBPRESER repete o prestador entre linhas ATO/MODULO; com o pedido 1, o mesmo CPF/CNPJ em duas linhas cai em uq_prestador_terceiro_estabelecimento_cpf/cnpj (1062)"
   },
   {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + declarado/valores.d",
-   "mudanca": "de-para do catálogo TISS 'grau de participação' para TBGRAUPARTPROC.ID_TBTISSPOSPROF -> funcao_equipe_cobranca.grau_participacao_termo_terminologia_id, e tipo_funcao (cirurgiao, auxiliar com ordem_auxiliar, anestesista...) derivado do grau; TBTISSPOSPROF nunca gravada (terminologia oficial)",
-   "motivo": "tipo_funcao entra PRESUMIDO 'outro' (valor_presumido por linha) e o grau fica NULL (pedido 12)"
+   "arquivo": "db/migracoes/12_FAT (modelo) + colunas.d/L8-04.tsv",
+   "mudanca": "tabela associativa item_faturavel_tipo_servico (item_faturavel_id, tipo_servico_faturavel_id, UNIQUE do par) e carga de TBTIPPRO por ref:TBPROCTO (PROCTO) + tipo pelo código TIPO (tipo_servico_faturavel semeado ou criado com código = TIPO e descrição presumida)",
+   "motivo": "pedido 11: TBTIPPRO (431 linhas) é a classificação de cada procedimento; o modelo não tem onde guardá-la e TIPO não tem cadastro na origem (decisão a revisar com o dono)"
   },
   {
-   "arquivo": "conector/mapa (TBTISSVIAACES) + TBFORMULAPAGTO",
-   "mudanca": "pôr TBTISSVIAACES no mapa (via_acesso_cirurgico) antes de TBFORMULAPAGTO; vigencia_inicio sem origem: decidir padrão",
-   "motivo": "via_acesso_cirurgico_id NOT NULL de tabela fora do mapa: toda linha seria pai_inexistente e recusada (pedido 13)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (literal presumido com gravidade) + declarado/valores.d (TBTPLANC)",
-   "mudanca": "1) Gravidade média para o literal presumido que decide cobrança e repasse (ex.: sintaxe '=~!<texto>' ou gravidade por destino declarada), aplicada a TBTPLANC -> tipo_lancamento.natureza ('=~servico_hospitalar') e gera_repasse ('=~0'), hoje valor_presumido baixa. 2) De-para revisado pelo cliente para TBTPLANC (só tem nome livre): natureza e gera_repasse por id, pelo painel. 3) Código com prefixo por origem (ex.: '#prefixo:<texto>,<COLUNA>') para TBTPLANC.ID em tipo_lancamento.codigo, caso o cliente use códigos numéricos também em TBTIPO_PROCEDIMENTO. Feito na fatia: TBTIPO_PROCEDIMENTO.CODIGO -> natureza e gera_repasse por de-para de valores (valores.d/L8-04.tsv: SH, SP, MM; fora do domínio vira valor_fora_do_dominio e a linha é recusada).",
-   "motivo": "natureza e gera_repasse decidem a cobrança e a base de repasse: um honorário presumido como serviço hospitalar fica fora do repasse e só aparece como pendência baixa"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py e conferencia.py (conciliação)",
-   "mudanca": "Entidade 'sem_destino' na conciliação: para cada tabela da origem presente e sem coluna declarada (bloqueada), contar as linhas lidas e não migradas, com o motivo (colunas.d) e o pedido, e levar a contagem ao painel. Na L8-04: 17 tabelas (TBTABTHM, TBPERTHM, TBREFUNI, TBREFMEMTUSS, TBPRESER e as demais da saída); a conferência sintética deve ver 2 lidas e 0 gravadas em cada uma.",
-   "motivo": "hoje a conciliação sai ok sem mostrar que centenas de milhares de linhas da imagem de referência ficaram sem destino (perda silenciosa para quem lê o painel); mesma lacuna do L7-05 pedido 7"
+   "arquivo": "tools/obra/conferir-fatia-f4.sh + conector/sante_conector/conferencia.py",
+   "mudanca": "1) rodar cobertura_conector.py --fatia F --falhar-se-bloqueada; 2) conciliação falha quando registros_origem > 0 e registros_destino = 0 sem a tabela esperar isso explicitamente; 3) verificador global de colisão entre origens que gravam a mesma coluna UNIQUE sem prefixo",
+   "motivo": "pedido 12: a autoconferência dava ok com tabela BLOQUEADA, com destino vazio (TBPRESER) e não pegava a colisão de código entre fatias"
   }
  ]
 }

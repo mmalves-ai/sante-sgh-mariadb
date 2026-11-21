@@ -12,13 +12,19 @@ Dados 100% falsos (nomes e códigos inventados). Carregadas (CARREGADAS) e anoma
 - CVTPSITACESSO: permite_entrada presumida FALSE (lado restritivo: 'Bloqueado' e 'Restrito' nunca liberados);
 - CVTPTERMINAL: fabricante recusado (pai_pendente), fabricante inexistente (pai_inexistente + 1048), tipo presumido;
 - CVTPVISITADO / CVTPVISITANTE / GDPRONTCADOPER: alvo, categoria, tipo e sentido presumidos;
-- PRCARACTDIE: descrição nula (1048), descrição com espaços nas pontas, categoria e tipo de resposta presumidos.
+- PRCARACTDIE: descrição nula (1048), descrição com espaços nas pontas, categoria e tipo de resposta presumidos;
+  unidade pela sigla da unidade de resposta (L6-08, REQUER) casada com o código de TBUNICON (pai externo 'mg'):
+  'mg' casa e grava unidade_medida_id; 'ml' sem par fica NULL com pai_inexistente (linha gravada).
 (valor_presumido conta uma por coluna presumida em cada linha lida, inclusive a recusada pela restrição do destino;
 não conta a linha recusada antes por pai_pendente.)
-Não carregadas (NAO_CARREGADAS: na imagem, sem coluna declarada; dependem dos pedidos do L6-17.json): CHPROFISLIMP
-(vínculo exige colaborador ou empresa terceirizada, de tabelas fora do mapa), CHAREA_CHPROFISLIMP (filha dela; sem
-início de vigência na origem), CHPROFLIMPTEL (filha dela; DDD fora do mapa) e CHTPLIMPEZA (tempo previsto guardado
-como hora em TIMESTAMP; o destino quer minutos).
+Cobertura total (rodada de 2026-11-21):
+- CHTPLIMPEZA: tempo previsto em TIMESTAMP 1899-12-30 HH:MM vira minutos (minutos_em_timestamp); 00:00 vira NULL e
+  recusa (1048); outra data grava os minutos com hora_com_data; nome nulo (1048); tipo presumido 'concorrente';
+- CHPROFISLIMP: vínculo presumido 'proprio' sem ponta (funcionário e terceirizada fora do mapa): o CHECK de vínculo
+  recusa toda linha (restricao_destino_4025) até a proposta de modelo do L6-17.json; CPF inválido
+  (documento_invalido), login desconhecido (pai_inexistente);
+- CHAREA_CHPROFISLIMP e CHPROFLIMPTEL: filhas do profissional recusado (pai_pendente); vigência pela data da carga e
+  sequência por profissional declaradas.
 """
 import datetime
 
@@ -55,8 +61,14 @@ CREATE TABLE PRCARACTDIE (ID_CARACTDIE INTEGER NOT NULL PRIMARY KEY, DESCRICAO V
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 CARREGADAS = ("CHCRITICIDADE", "CHAREA", "CHOCORRENCIA", "CHSITUACAO", "CVTERMINALFAB", "CVTPIDENTIFIC",
-              "CVTPSITACESSO", "CVTPTERMINAL", "CVTPVISITADO", "CVTPVISITANTE", "GDPRONTCADOPER", "PRCARACTDIE")
-NAO_CARREGADAS = ("CHPROFISLIMP", "CHAREA_CHPROFISLIMP", "CHPROFLIMPTEL", "CHTPLIMPEZA")
+              "CVTPSITACESSO", "CVTPTERMINAL", "CVTPVISITADO", "CVTPVISITANTE", "GDPRONTCADOPER", "PRCARACTDIE",
+              "CHTPLIMPEZA", "CHPROFISLIMP", "CHAREA_CHPROFISLIMP", "CHPROFLIMPTEL")
+NAO_CARREGADAS = ()
+# pais de fora da fatia, já carregados: usuário (L3, chave = login) e tipo de telefone (L5)
+# unidade de medida (L7-07, chave = código, caixa preservada): só "mg"; "ml" fica sem par de propósito
+PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo"], "TBTIPOTELEFONE": ["1", "2"], "TBUNICON": ["mg"]}
+# a unidade de resposta (PRUNIDRESPOSTA, origem lida na referência encadeada) vem da imagem da L6-08
+REQUER = ["L6-08"]
 
 
 def linhas(r, ins):
@@ -92,14 +104,22 @@ def linhas(r, ins):
               (2, "Sem lactose", 1, "ml", "r", "S", 1, "sim\r\nnão".encode("cp1252")),
               (3, None, 0, None, "C", "S", None, None), (4, "  Diabética  ", 2, None, "R", "N", 2, None)]:
         ins("PRCARACTDIE", list(x))
-    # não carregadas: profissional próprio e terceirizado, escala, telefone e modalidade com tempo em TIMESTAMP
-    ins("CHPROFISLIMP", [1, "ana", None, 1, 1001, "S", "Profissional Exemplo Um", "00000000000"])
-    ins("CHPROFISLIMP", [2, None, 1, None, None, "S", "Profissional Exemplo Dois", None])
-    for x in [(1, 1), (2, 1), (2, 2)]:
+    # profissional sem ponta de vínculo (recusado pelo CHECK), escala e telefone (filhas: pai_pendente)
+    for x in [(1, "usuario.exemplo", None, None, None, "S", "Profissional  Exemplo Um", "12345678909"),
+              (2, None, None, None, None, None, "Profissional Exemplo Dois", None),
+              (3, "login.inexistente", None, None, None, "N", "Profissional Exemplo Tres", "11111111111")]:
+        ins("CHPROFISLIMP", list(x))
+    for x in [(1, 1), (2, 1), (2, 2), (7, 3)]:
         ins("CHAREA_CHPROFISLIMP", list(x))
     ins("CHPROFLIMPTEL", [1, 1, 11, 900000000 + r.randint(0, 99999)])
-    for i, m in [(1, 30), (2, 90)]:
-        ins("CHTPLIMPEZA", [i, "Limpeza %d" % i, datetime.datetime(1899, 12, 30, m // 60, m % 60), "S"])
+    ins("CHPROFLIMPTEL", [2, 2, None, 1100000000 + r.randint(0, 99999)])
+    # modalidade: tempo como hora do dia-zero; 00:00 (sem tempo), outra data, nome nulo
+    for i, nome, d, m, at in [(1, "Limpeza concorrente", (1899, 12, 30), 30, "S"),
+                              (2, "Limpeza  terminal", (1899, 12, 30), 90, "S"),
+                              (3, "Desinfecção", (1899, 12, 30), 0, "N"),
+                              (4, "Imediata", (2020, 1, 1), 45, None),
+                              (5, None, (1899, 12, 30), 20, "S")]:
+        ins("CHTPLIMPEZA", [i, nome, datetime.datetime(*d, m // 60, m % 60), at])
     return {
         "CHCRITICIDADE": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
         "CHAREA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 3, "pai_inexistente": 1,
@@ -115,5 +135,12 @@ def linhas(r, ins):
         "CVTPVISITADO": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
         "CVTPVISITANTE": {"gravados": 4, "pendencias": {"valor_presumido": 4}},
         "GDPRONTCADOPER": {"gravados": 4, "pendencias": {"valor_presumido": 8}},
-        "PRCARACTDIE": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 8}},
+        "PRCARACTDIE": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 8,
+                                                       "pai_inexistente": 1}},
+        "CHTPLIMPEZA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "hora_com_data": 1,
+                                                      "valor_presumido": 5}},
+        "CHPROFISLIMP": {"gravados": 0, "pendencias": {"restricao_destino_4025": 3, "valor_presumido": 3,
+                                                       "documento_invalido": 1, "pai_inexistente": 1}},
+        "CHAREA_CHPROFISLIMP": {"gravados": 0, "pendencias": {"pai_pendente": 4}},
+        "CHPROFLIMPTEL": {"gravados": 0, "pendencias": {"pai_pendente": 2}},
     }

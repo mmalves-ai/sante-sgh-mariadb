@@ -1,11 +1,18 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
-Só as 12 tabelas carregáveis hoje pela carga dirigida pelo mapa (as outras 12 da fatia aguardam regra genérica do motor
-ou decisão; ver docs/obra/fatias/f4/saida/L6-05.md). Anomalias: descrição vazia em destino NOT NULL (1048), código com
+As 18 tabelas carregadas pela carga dirigida pelo mapa (das outras 6 da fatia, 5 são descarte de produto em
+declarado/sem_carga.tsv e PRDADOSENVIOOPERADORA aguarda o motor, com a declaração pronta comentada). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
+de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
 colisão de caixa (codigo_colisao_caixa nas duas linhas), S/N fora do domínio (padrão do destino), pai recusado
 (pai_pendente), pai nunca visto (pai_inexistente + 1048), chave única repetida (1062), fórmula migrada
-inativa (valor_presumido), texto com espaços repetidos, quebra de linha e acentos CP1252.
+inativa (valor_presumido), texto com espaços repetidos, quebra de linha e acentos CP1252; de-para de valores pelo nome
+sem par (valor_fora_do_dominio + 1048, nada presumido), frequência sem número de doses (a critério médico), número de
+doses acima de 48, hora relativa guardada com data (hora_com_data), sequência repetida (1062), preferência ou login
+inexistente na referência encadeada (pai_inexistente + 1048), escopo do filtro fora do domínio (padrão 'atual'),
+código da via na prescrição digital.
 """
+import datetime
+
 DDL = """
 CREATE TABLE GETABVIA (COD VARCHAR(2) NOT NULL PRIMARY KEY, NOME VARCHAR(35), ATIVO CHAR(1), ID_TBTISSVIAADMIN SMALLINT,
   ID_DIGITAL VARCHAR(36));
@@ -24,6 +31,21 @@ CREATE TABLE PRFILTROUSUARIO (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBUSERS VARCH
   SITUACAO_NAO_EMITIDOS CHAR(1), RESULTADO_LIBERADO CHAR(1), TODOS_REGISTROS CHAR(1), SOMENTE_MEUS_PEDIDOS CHAR(1));
 CREATE TABLE PRFINALIDADETRAT (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(80), ID_TBTISSFINTRAT SMALLINT);
 CREATE TABLE PRFORMULA (COD SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30), FORMULA VARCHAR(1000), ATIVO CHAR(1));
+CREATE TABLE PRAGRUPBALANCO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20) NOT NULL);
+CREATE TABLE PRASSINANTE (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(100), ATIVO CHAR(1));
+CREATE TABLE PRBHTIPOFECHAMENTO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL);
+CREATE TABLE PRFREQUENCIA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL, NUM_DOSE SMALLINT,
+  TP_PRESCRICAO CHAR(1) NOT NULL, ESTOQUE CHAR(1) NOT NULL, RECEITA_ESTRUTURADA CHAR(1) NOT NULL, ORDEM SMALLINT);
+CREATE TABLE PRHRRELATIVA (ID SMALLINT NOT NULL PRIMARY KEY, ID_PRFREQUENCIA SMALLINT NOT NULL, NOME VARCHAR(30) NOT NULL,
+  ORDEM SMALLINT NOT NULL, HORARIO TIMESTAMP NOT NULL);
+CREATE TABLE PRLOCPACDEFAULT (ID INTEGER NOT NULL PRIMARY KEY, USUARIO VARCHAR(31) NOT NULL, TP_ATENDIMENTO_DEFAULT CHAR(1),
+  ZOOM_PADRAO_VISUALIZACAO_LANC SMALLINT, INICIAR_TELA_CFG_LOCAL_PAINEL CHAR(1), INICIAR_TELA_LOC_ACESSAR_PEP CHAR(1),
+  PERMITE_ASSINATURA_DIGITAL CHAR(1), PERMITE_ASSINATURA_DIG_EM_LOTE CHAR(1), PERMITE_LANC_RETROATIVO CHAR(1),
+  PERMITE_SOMENTE_SALVAR VARCHAR(1), PERMITE_AVALIAR VARCHAR(1), ALERTAR_EXAMES_LIBERADOS VARCHAR(1),
+  ALERTAR_EXAMES_LIB_PERIODO TIME, ALERTAR_PEND_AVAL_PRESC_O_PROF VARCHAR(1), PERMITE_CRIAR_EXCL_PRESC_FUTURA CHAR(1),
+  ALE_EXA_REP_D4H_CON CHAR(1));
+CREATE TABLE PRFAVORITO_EXIBIR (ID INTEGER NOT NULL PRIMARY KEY, LOCPACDEFAULT INTEGER NOT NULL,
+  CAMPOSLOCALIZACAOPACIENTE SMALLINT NOT NULL, ORDEM SMALLINT, EXIBIR CHAR(1));
 """
 
 # logins inventados de usuários já carregados (L3)
@@ -31,6 +53,12 @@ PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"]}
 
 
 U1, U2 = PAIS_EXTERNOS["TBUSERS"]
+H = datetime.datetime
+
+
+def _pref(i, login):
+    """Preferência do usuário (tabela da L5-01), só para a ref: encadeada; colunas opcionais vazias."""
+    return [i, login, None, None, None, None, None, None, "S", None, None, "N", None, None, None, "N"]
 
 # (tabela, linhas, esperado)
 DADOS = [
@@ -65,19 +93,53 @@ DADOS = [
      {"gravados": 3, "pendencias": {}}),
     ("PRFILTROCLASSIF", [[1, "Classificação exemplo"]], {"gravados": 1, "pendencias": {}}),
     # 4: login nunca visto (pai_inexistente + NOT NULL)
-    ("PRFILTROUSUARIO", [[1, U1, "A", "N", "S", "N", "S"], [2, U1, "T", "S", "N", "S", "N"],
-                         [3, U2, None, None, None, None, None], [4, "usuario.exemplo.tres", "A", "N", "S", "N", "N"]],
-     {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}),
+    # escopo por TODOS_REGISTROS (S todos, N atual, vazio padrão atual); 5 fora do domínio fica o padrão
+    ("PRFILTROUSUARIO", [[1, U1, "S", "N", "S", "N", "S"], [2, U1, "N", "S", "N", "S", "N"],
+                         [3, U2, None, None, None, None, None], [4, "usuario.exemplo.tres", "S", "N", "S", "N", "N"],
+                         [5, U2, "S", "N", "S", "X", "N"]],
+     {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                    "valor_fora_do_dominio": 1}}),
     ("PRFINALIDADETRAT", [[1, "Curativa", 1], [2, "Paliativa", 2], [3, "Adjuvante", None]],
      {"gravados": 3, "pendencias": {}}),
     # expressão na sintaxe da origem (não validada): as duas entram inativas; valor_presumido por coluna (base e ativo)
     ("PRFORMULA", [[1, "Superfície corporal", "peso * 0,1 + altura", "S"], [2, "Dose por peso", "peso * 10", "N"]],
      {"gravados": 2, "pendencias": {"valor_presumido": 4}}),
+    # lado do balanço pelo nome (valores.d): 4 sem par recusa (nada presumido)
+    ("PRAGRUPBALANCO", [[1, "GANHOS"], [2, "Perdas"], [3, "PERDAS INSENSÍVEIS"], [4, "Grupo exemplo"]],
+     {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}}),
+    # papel pelo nome: 4 sem par recusa; 5 sem nome (papel e descrição nulos) recusa sem valor_fora_do_dominio
+    ("PRASSINANTE", [[1, "Profissional", "S"], [2, "Paciente", "S"], [3, "Testemunha", "N"],
+                     [4, "Papel exemplo", "S"], [5, None, "S"]],
+     {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}}),
+    # 'Parcial' não diz a duração: recusa em vez de presumir 24 horas (parcial tem par: sem pendência nele)
+    ("PRBHTIPOFECHAMENTO", [[1, "24 HORAS"], [2, "12 horas"], [3, "Parcial"]],
+     {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}}),
+    # 3 e 4 sem número de doses (nulo, 0): a critério médico; 5 acima de 48 recusa; 6 S/N fora do domínio (padrão)
+    ("PRFREQUENCIA", [[1, "De 6 em 6 horas", 4, "M", "S", "S", 1], [2, "Uma vez ao dia", 1, "M", "S", "N", 2],
+                      [3, "A critério médico", None, "M", "N", "S", 3], [4, "Se necessário", 0, "M", "S", "S", None],
+                      [5, "Frequência exemplo", 60, "M", "S", "S", 5], [6, "Contínuo", None, "M", "X", "S", 6]],
+     {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}}),
+    # 3 hora com data (hora usada); 4 frequência recusada; 5 frequência nunca vista; 6 descrição vazia; 7 sequência
+    # repetida na frequência 1
+    ("PRHRRELATIVA", [[1, 1, "Em jejum", 1, H(1899, 12, 30, 6, 0)], [2, 1, "Antes do almoço", 2, H(1899, 12, 30, 11, 30)],
+                      [3, 1, "Ao deitar", 3, H(2020, 5, 1, 22, 0)], [4, 5, "Horário exemplo", 1, H(1899, 12, 30, 8, 0)],
+                      [5, 9, "Horário sem frequência", 1, H(1899, 12, 30, 8, 0)],
+                      [6, 2, "   ", 1, H(1899, 12, 30, 8, 0)], [7, 1, "Repetida", 2, H(1899, 12, 30, 9, 0)]],
+     {"gravados": 3, "pendencias": {"hora_com_data": 1, "pai_pendente": 1, "pai_inexistente": 1,
+                                    "restricao_destino_1048": 2, "restricao_destino_1062": 1}}),
+    # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio
+    ("PRFAVORITO_EXIBIR", [[1, 10, 1, 1, "S"], [2, 10, 2, 2, "N"], [3, 20, 1, 1, "S"], [4, 20, 3, None, "X"],
+                           [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"]],
+     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2}}),
 ]
+# pai de fora da fatia (L5-01) presente na imagem só para a ref: encadeada; o esperado dele não é desta fatia
+PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")]
 
 
 def linhas(r, ins):
     esperado = {}
+    for v in PREFERENCIAS:
+        ins("PRLOCPACDEFAULT", list(v))
     for tab, ls, esp in DADOS:
         for v in ls:
             ins(tab, list(v))

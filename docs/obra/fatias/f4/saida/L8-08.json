@@ -1,59 +1,62 @@
 {
  "pedidos": [
   {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "acrescentar as 8 linhas de 'linhas_sem_carga' (tabela, descarte, causa, motivo), prontas para colar; as colunas dessas tabelas em colunas.d/L8-08.tsv ficam sem destino, só com motivo",
+   "motivo": "descartes de produto da fatia (a edição direta do arquivo compartilhado foi negada nesta rodada paralela); sem elas as 8 tabelas seguem BLOQUEADAS na cobertura"
+  },
+  {
    "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus, CHECK ck_dominio_sus_lista)",
-   "mudanca": "acrescentar a lista 'localizacao_tumor' (localização primária do tumor do laudo oncológico); depois declarar TBLOCPRI (=localizacao_tumor, COD->codigo e codigo_oficial em texto, NOME->descricao texto_nome) em colunas.d/L8-08.tsv",
-   "motivo": "TBLOCPRI (49 linhas na imagem de referência) não tem lista no CHECK; local_metastase tem outro sentido"
+   "mudanca": "acrescentar a lista 'localizacao_tumor' (migração nova se a 01 já estiver aplicada); depois trocar LOCALIZACAO_NO_CHECK para True em sintetica_d/l8_08.py (o teste test_localizacao_tumor_no_check_trava_o_estado acusa a troca)",
+   "motivo": "laudo_apac_oncologia.localizacao_primaria_dominio_sus_id é 'lista SUS', mas a lista não existe no CHECK: hoje toda linha de TBLOCPRI (49 na imagem de referência) é recusada com restricao_destino_4025, visível no painel (a conciliação prova a contagem, não a carga)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (TBLOCSUS, TBNIVSUS, TBPRESUS) e conector/mapa/declarado/catalogos.tsv",
-   "mudanca": "tirar as três de dominio_sus: destinos vazio, destinos_oficiais=dominio_sigtap, estratégia depara_catalogo_oficial; em catalogos.tsv declarar TBLOCSUS (lista modalidade), TBNIVSUS (lista complexidade, ou nova lista oficial 'nivel_hierarquia' em ck_dominio_sigtap_lista se os códigos não forem os da complexidade: conferir só pelo código na carga oficial) e TBPRESUS (lista tipo_prestador) com coluna_codigo COD; código ausente no catálogo vira pendência catalogo_codigo_*. As relações TBPROLOC, TBPRONIV e TBPRESTP já são depara_catalogo_oficial e passam a resolver por esse de-para",
-   "motivo": "regra 7: são catálogos oficiais da tabela unificada (já versionados em dominio_sigtap com versao_fonte); gravá-los em dominio_sus criaria uma segunda cópia sem versão e com sentido trocado (TBLOCSUS é a modalidade, não 'local de atendimento')"
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (mesmo pedido 13 da L7-08)",
+   "mudanca": "regra genérica faltante: coluna do DESTINO da linha referenciada (ex.: via 'ref:FCLANEXT@item_faturavel_id' grava conta_hospitalar_item.item_faturavel_id do pai). Com ela FCCTRLANCIHA declara equivalencia_sigtap_item: item_faturavel_id pela regra nova, procedimento_sigtap_id por ID_TBPROSUS (depara sigtap), instrumento '=ciha', início pela data da carga (especial da cobertura), par repetido adotado pelas colunas do único (sem 1062); e conector/mapa/tabelas.tsv tira registro_ciha_procedimento dos destinos (registro_ciha sem fonte na origem)",
+   "motivo": "FCCTRLANCIHA (660776 linhas na imagem de referência) é a equivalência item da conta -> SIGTAP da CIHA gravada por lançamento; sem a regra nova não carrega (o pai FCLANEXT, L8-06, também ainda não carrega)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (TBNIVEL, TBPRESSE) e catalogos.tsv ou descartes.tsv",
-   "mudanca": "versões antigas (sem id) dos mesmos catálogos oficiais: de-para pelo COD para dominio_sigtap (TBPRESSE lista tipo_prestador; TBNIVEL a mesma lista do TBNIVSUS) se alguma coluna da origem ainda as referencia, senão descarte com motivo; nunca lista própria em dominio_sus",
-   "motivo": "regra 7; substitui o pedido anterior de listas próprias 'nivel_hierarquia'/'tipo_prestador_estadual' em dominio_sus"
+   "arquivo": "conector/mapa (alimentadora de unidade_internacao) e colunas.d/L8-08.tsv",
+   "mudanca": "quando RIBLOCOS (L6-14) gravar unidade_internacao com a unidade assistencial, ligar FHLEITOUTI.ID_TBUNIDAD a leito_uti_habilitado.unidade_internacao_id por referência à unidade de internação da unidade assistencial (pede referência ao destino secundário pela coluna, ou chave alternativa)",
+   "motivo": "hoje a UTI habilitada carrega com unidade nula (habilitação do estabelecimento, sentido do modelo e do SUS); a unidade da origem fica sem destino"
   },
   {
-   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (ck_dominio_sus_lista) e conector/sante_conector/mapa.py (verificador)",
-   "mudanca": "retirar 'local_atendimento', 'nivel_atencao' e 'tipo_prestador' do CHECK de dominio_sus (são listas da tabela unificada, que moram em dominio_sigtap) ou, se ficarem, o verificador recusar alimentadora da origem para elas; dominio_sigtap já é oficial pelo versao_fonte (conferir que continue em destinos_oficiais)",
-   "motivo": "sem isso o verificador não pega uma lista oficial gravada em dominio_sus (dominio_sus não tem versao_fonte nem está em oficiais.tsv)"
+   "arquivo": "conector/sante_conector/carga_mapa.py (opção do destino)",
+   "mudanca": "opção genérica `somar:<coluna>` junto de `adotar:<c1>,...`: a linha adotada recebe a soma da coluna (ex.: FHLEITOUTI na via de quantidade_leitos com adotar:estabelecimento_id,tipo_uti_dominio_sus_id,vigencia_inicio); conciliação pelo relido",
+   "motivo": "FHLEITOUTI: a habilitação SUS é do estabelecimento por tipo; duas unidades com o mesmo tipo gravam hoje duas linhas de unidade nula (o único não barra NULL). Com a opção, uma linha por tipo com a soma dos leitos"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (mesmo pedido do L6-06)",
-   "mudanca": "regra genérica do mecanismo de parâmetro para tabela de linha única: cada COLUNA declarada vira parâmetro (parametro_definicao pela chave modulo.nome, com módulo e tipo declarados; parametro_valor no nível do estabelecimento, vigência na data da migração). Com ela FIPARAM, FAPARAM e FAPARAMA declaram as opções (hoje 'bloqueada até a regra genérica', coluna a coluna)",
-   "motivo": "as opções dos instrumentos AIH, BPA e APAC (cerca de 180 colunas) não têm tabela própria no modelo"
+   "arquivo": "tools/obra/conferir-fatia-f4.sh",
+   "mudanca": "rodar 'python3 -I tools/obra/cobertura_conector.py --fatia <F> --falhar-se-bloqueada' e acusar tabela bloqueada da fatia",
+   "motivo": "a autoconferência devolvia ok com 9 tabelas bloqueadas na cobertura"
   },
   {
-   "arquivo": "conector/mapa (FIPARAM, FAPARAM, FAPARAMA: cabeçalho) e decisão do dono",
-   "mudanca": "destino dos dados de cabeçalho: (a) dados do estabelecimento (EMPRESA, ENDERECO, ENDENT, BAIENT, CEPENT, CIDENT, UFENT, FONE) conferidos contra o cadastro do estabelecimento, divergência vira pendência sem sobrescrever; (b) órgão gestor (NOME_ORGAO, SUDS_COD, SUDS_NOME, SUDS_END, SUDS_RESP) para contrato_gestor_sus.gestor_nome ou parâmetro do estabelecimento; (c) cabeçalho da produção (NUMRAA, CNS_AUTORIZACOES, AIHVAL, DATENT, HOSP, PRESTADOR, NIVEL_H, COD_SER, CLA_SER, AUTORIZADOR) como parâmetro de faturamento SUS por estabelecimento. Descartadas com motivo: EMAIL/EMAIL_SERV/EMAIL_USER (configuração de envio da origem) e VERDAT/VERSAO/VERSAO_BANCO/ULT_COMP_PROC/MEM (controle interno da origem)",
-   "motivo": "esses dados não são opções; hoje ficam declarados como bloqueados para não se perderem sem registro"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "tratar como BLOQUEADA (restricao_destino) a tabela cujo literal '=<lista>' fica fora do CHECK de lista do destino",
+   "motivo": "TBLOCPRI conta CARREGA e grava 0 linhas enquanto 'localizacao_tumor' falta no ck_dominio_sus_lista"
   },
   {
-   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus) + sentinela (competencia_aaaamm, já pedido)",
-   "mudanca": "para listas versionadas por competência (fonte orçamentária): único (lista, codigo, vigencia_inicio) ou vigência na chave de negócio; até lá o mesmo código em duas competências vira pendência restricao_destino_1062 (duplicidade, visível no painel)",
-   "motivo": "código = código do leiaute (único na lista) evita ambiguidade no SIH/SIA; a duplicidade não é mais gravada em silêncio"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
-   "mudanca": "regra genérica 'competencia_aaaamm': inteiro ou texto AAAAMM vira DATE do 1º dia do mês (inválido: NULL com valor_fora_do_dominio); com ela TBFONTE_ORCAMENTARIA_SUS.ANO_MES_COMPETENCIA vai para dominio_sus.vigencia_inicio",
-   "motivo": "fonte orçamentária é versionada por competência; hoje a vigência fica NULL"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna derivada de duas colunas da origem (ex.: '%AAAAMM:ANOPRO,MESPRO' -> CHAR(6)) e literal de momento da carga para colunas DATETIME NOT NULL sem padrão (ex.: '@agora' para competencia_sus.aberta_em); com elas FIPARAM/FAPARAM/FAPARAMA entram em competencia_sus (instrumento =aih/=bpa/=apac, @estabelecimento, PERINI/PERFIN como data; FIPARAM sem período precisa de período derivado da competência)",
-   "motivo": "competencia_sus exige competencia, periodo_inicio, periodo_fim e aberta_em NOT NULL; as demais opções dos instrumentos vão para o mecanismo de parâmetros (fora do mapa por tabela)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna derivada da linha referenciada (mesmo pedido 13 do L7-08): FCCTRLANCIHA.ID_FCLANEXT -> conta_hospitalar_item.item_faturavel_id para equivalencia_sigtap_item.item_faturavel_id; vigencia_inicio presumida (=~) e instrumento =ciha; registro_ciha_procedimento fica fora (registro_ciha_id e sequência sem origem: retirar do destinos do mapa ou alimentadora própria)",
-   "motivo": "FCCTRLANCIHA (660776 linhas na imagem de referência) não carrega sem o item faturável; destino secundário sem origem"
-  },
-  {
-   "arquivo": "conector/mapa (alimentadora de unidade_internacao) e decisão do dono",
-   "mudanca": "FHLEITOUTI: ID_TBUNIDAD aponta unidade_assistencial (principal de TBUNIDAD), mas leito_uti_habilitado.unidade_internacao_id referencia unidade_internacao, que nenhum lote alimenta; e vigencia_inicio NOT NULL não tem origem (presumir =~ data com valor_presumido?). Decidir alimentadora/via de unidade_internacao e a vigência presumida; então declarar tipo_uti (FHLEITOUTITP, L8-07), quantidade, @estabelecimento",
-   "motivo": "gravar unidade NULL mudaria o sentido (habilitação do estabelecimento inteiro)"
+   "arquivo": "conector/sante_conector/carga_mapa.py (opcional, só se o dono quiser migrar a competência aberta)",
+   "mudanca": "especial `#competencia:<ANO>,<MES>` (texto AAAAMM) e fim do período derivado (último dia do mês)",
+   "motivo": "FIPARAM/FAPARAM/FAPARAMA -> competencia_sus: `#data` não serve (competencia é CHAR(6) e periodo_fim NOT NULL); hoje descarte mecanismo_do_produto registrado"
   }
+ ],
+ "linhas_sem_carga": [
+  "FIPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da AIH do programa antigo: as opções são parâmetros do catálogo do produto (parametro_definicao, nunca criado pela migração), confirmados por estabelecimento na implantação; a competência da AIH é aberta pelo cliente no produto e a produção migrada traz a competência de cada registro; dados do hospital pelo cadastro do estabelecimento; como RIPARAM e SIPARGER (fatia L8-08; F4-decisoes-destino.md)",
+  "FAPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento do BPA do programa antigo, mesma decisão do FIPARAM; órgão gestor e hospital pelos cadastros próprios (fatia L8-08; F4-decisoes-destino.md)",
+  "FAPARAMA\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da APAC do programa antigo, mesma decisão do FIPARAM (fatia L8-08; F4-decisoes-destino.md)",
+  "TBLOCSUS\tdescarte\tcatalogo_oficial\tmodalidade de atendimento da tabela unificada: só o carregador oficial versionado grava (dominio_sigtap, lista modalidade); a relação procedimento x modalidade da origem dá de-para pelo código (fatia L8-08; F4-decisoes-destino.md)",
+  "TBNIVSUS\tdescarte\tcatalogo_oficial\tnível ligado ao procedimento da tabela unificada: só o carregador oficial versionado grava (dominio_sigtap); a relação procedimento x nível da origem dá de-para pelo código (fatia L8-08; F4-decisoes-destino.md)",
+  "TBPRESUS\tdescarte\tcatalogo_oficial\ttipo de prestador da tabela unificada: só o carregador oficial versionado grava (dominio_sigtap, lista tipo_prestador); a relação procedimento x tipo de prestador da origem dá de-para pelo código (fatia L8-08; F4-decisoes-destino.md)",
+  "TBNIVEL\tdescarte\tcatalogo_oficial\tversão antiga, sem id, do catálogo oficial de níveis (o mesmo do TBNIVSUS): o carregador oficial grava a versão vigente (fatia L8-08; F4-decisoes-destino.md)",
+  "TBPRESSE\tdescarte\tcatalogo_oficial\tversão antiga, sem id, do catálogo oficial de tipo de prestador (o mesmo do TBPRESUS): o carregador oficial grava a versão vigente (fatia L8-08; F4-decisoes-destino.md)"
+ ],
+ "resolvidos_na_cobertura": [
+  "FHLEITOUTI: carrega em leito_uti_habilitado (@estabelecimento, @vigencia_carga, tipo pela referência gerada; unidade nula)",
+  "TBLOCPRI: declarada em dominio_sus lista localizacao_tumor (recusa 4025 até a migração pedida)",
+  "FIPARAM, FAPARAM, FAPARAMA: descarte mecanismo_do_produto (substitui os pedidos de mecanismo de parâmetro, de cabeçalho e de competência AAAAMM)",
+  "TBLOCSUS, TBNIVSUS, TBPRESUS, TBNIVEL, TBPRESSE: descarte catalogo_oficial (substitui os pedidos de mapa/catalogos e do CHECK de dominio_sus)",
+  "TBFONTE_ORCAMENTARIA_SUS: versionada (código = id da origem, codigo_oficial = código do leiaute, vigencia_inicio = competência): nenhuma versão recusada (sintética: 4 gravadas, 1 valor_fora_do_dominio)",
+  "FIPARAM, FAPARAM, FAPARAMA: motivos por coluna reescritos sem texto de bloqueio (competência, cadastro, instalação, opção de crítica do catálogo de parâmetros)"
  ]
 }

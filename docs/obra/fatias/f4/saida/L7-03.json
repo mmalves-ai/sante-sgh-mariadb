@@ -1,9 +1,39 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.referencia_declarada",
-   "mudanca": "Referência composta declarada: via `ref:<TABELA>(<COL1>,<COL2>)` monta a chave do pai com várias colunas da linha, na ordem da chave do pai (ex.: SIRESPAD `ref:SITABPRO(ATO,EXAME)`, SITBGRAN `ref:SITABPRO(ATO,EXAME)`, SIVARFORMULA `ref:SITABPRO(ATO,EXAME)`). Mesmo pedido do L7-04.",
-   "motivo": "O exame (SITABPRO) tem chave ATO,CODALF; sem isso SIRESPAD (modelo_resultado, modelo_laudo), SITBGRAN (secao_laudo_estruturado, grandeza_laudo) e SIVARFORMULA ficam bloqueadas."
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "Data em coluna DATETIME/TIMESTAMP do destino vira datetime à meia-noite antes do resumo: em tipar(), `if tipo in (\"datetime\", \"timestamp\") and type(x) is datetime.date: return datetime.datetime(x.year, x.month, x.day)`.",
+   "motivo": "`@data_carga` (literal ou par de valores) gravado em DATETIME: o resumo da origem usa a data e o relido do banco é datetime, e a conciliação diverge (L7-03: exame.desativado_em do exame inativo; também L5-06 e L8-09 usam =@data_carga). É a única falha da conferência da L7-03; contagens e pendências conferem."
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT/02_tabelas.sql (F2.2)",
+   "mudanca": "ck_interface_equipamento_alvo: CHECK (equipamento_analitico_id IS NOT NULL OR laboratorio_apoio_id IS NOT NULL OR ativo = FALSE). Depois: descomentar as linhas #SITPEQV de colunas.d/L7-03.tsv e pôr os casos na sintetica_d/l7_03.py.",
+   "motivo": "Única trava de SITPEQV (20 interfaces) e, em cadeia, de SITBEXHP, SIMATHP, SITBELHP, SITBEXEQ e da interface de SIRES01/SILANEXA. A carga não consegue criar o alvo (equipamento exige setor; apoio exige empresa fornecedora). Interface sem alvo entra inativa até o cliente ligar o alvo. Decisão em F4-decisoes-destino.md (SITPEQV)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "`@id:<destino>`: id da linha gravada num destino SECUNDÁRIO da mesma tabela (ids[dts.index(destino)]), para os destinos seguintes.",
+   "motivo": "SITABELE: faixa_referencia.exame_analito_id (REFINI, REFFIN, VLRREF -> referencia_minima/maxima/texto) e analito.unidade_resultado_id (fase 2) dependem de destinos secundários. Hoje a faixa não migra e a unidade é criada sem ligação."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mapa.passos_ref)",
+   "mudanca": "Chave alternativa composta `ref:T.(K1,K2)` montada por colunas desta linha.",
+   "motivo": "SITBEXHP -> exame próprio pela equivalência SITBEXEQ (TIPO + COD_EXAME)."
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "(reiterado) destino com `complementa` não exige as colunas NOT NULL do destino, só a coluna id com ref:.",
+   "motivo": "SIWEBPARPERFIL aparece como BLOQUEADA (coluna_obrigatoria_sem_fonte) mas carrega e concilia na conferência da fatia."
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Destino com `complementa` (UPDATE da linha do pai) não exige as colunas NOT NULL do destino: só a coluna `id` com ref:.",
+   "motivo": "SIWEBPARPERFIL e SITPEQV_SITPEQVMODELO (e PRPARRECMED, FAMEDSOL de outras fatias) aparecem como coluna_obrigatoria_sem_fonte, mas a carga é UPDATE e concilia (conferência da fatia ok)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Especial de primeira coluna com valor (`#primeiro:RESULTADO_HTML,DESCR`), para o resultado padrão sem HTML levar o texto simples.",
+   "motivo": "SIRESPAD.DESCR fica não aproveitada (o HTML é a forma atual); linhas antigas só com DESCR ficariam sem texto."
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -11,34 +41,9 @@
    "motivo": "Código único no destino com chave composta na origem. Hoje exame.codigo usa o ID inteiro da origem e exame.sigla o CODALF: o mesmo mnemônico em dois atos recusa o segundo exame (restricao_destino_1062)."
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Coluna especial `@data_carga` (data da carga, do relógio do banco) para vigencia_inicio NOT NULL sem origem.",
-   "motivo": "Bloqueia modelo_resultado (SIRESPAD), faixa_referencia (SITABELE) e exame_equivalencia_codigo (SITABPRO)."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Destino secundário opcional: marcar o destino (ex.: via `opcional`) para que a linha secundária não seja gravada, sem recusar o principal, quando a referência NOT NULL dela vier nula ou zero (ex.: SITABPRO.MATERIAL -> exame_material.material_biologico_id; RECIPIENTE -> recipiente_coleta_id; padrao `=1`).",
-   "motivo": "Exame de imagem não tem material: com exame_material declarado, a recusa do secundário levaria o exame junto."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Referência por coluna do destino (procura): via `busca:<tabela_destino>.<coluna>` resolve o id pelo valor (ex.: SITABELE.UNIDADE -> unidade_resultado.simbolo; SITABELE.CODPRC -> exame.sigla dentro do ato do laboratório); valor sem par: nulo com pai_inexistente.",
-   "motivo": "SITABELE carrega só analito; exame_analito (exame pelo CODPRC sem ATO) e a unidade em texto livre precisam disso. Com a regra, declarar exame_analito (TITULO -> titulo, RES1 -> grupo_resposta_id ref:SICTRPSR, @id -> analito_id, #seq:CODPRC -> ordem) e faixa_referencia (REFINI/REFFIN/VLRREF)."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Atualizar o registro do pai (regra genérica já pedida no L6-10): via `atualiza:<TABELA_PAI>` grava colunas no registro já carregado do pai em vez de linha nova (SITPEQV_SITPEQVMODELO -> interface_equipamento.modelo_comunicacao_id; SIWEBPARPERFIL -> perfil_portal_resultado.visualiza_imagem, digita_laudo, envia_imagem_email, envia_link_imagem_email).",
-   "motivo": "As duas tabelas são atributos de registros de outra tabela; carregadas como linha criariam interface e perfil novos."
-  },
-  {
    "arquivo": "conector/mapa/declarado/valores.d/L7-03.tsv (após leitura do PSQL da origem)",
    "mudanca": "De-para de valores de SITABPRO.ATO -> exame.tipo_servico (laboratorio, imagem, metodo_grafico...) no lugar do literal presumido `=~outro`; e TIPO/ALFANUM -> exame.tipo_resultado.",
    "motivo": "Domínio do ATO não confirmado; hoje cada exame fica com valor_presumido."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Literal condicional: exame.desativado_em = data da carga quando SITUACAO indica inativo (e ativo = falso), para cumprir ck_exame_desativacao.",
-   "motivo": "Hoje SITUACAO do exame não é aproveitada e todo exame entra ativo."
   },
   {
    "arquivo": "conector/mapa/tabelas.tsv (gerado) ou decisão de modelagem",
@@ -49,31 +54,6 @@
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "Regra `idade_em_dias` com a unidade em outra coluna (SITABPRO.IDADEI/IDADEF com ID_TBUNID_IDADE_MIN/MAX -> exame.idade_minima_dias/idade_maxima_dias).",
    "motivo": "O destino guarda a idade em dias; a origem guarda número e unidade."
-  },
-  {
-   "arquivo": "decisão do dono + conector/sante_conector/carga_mapa.py",
-   "mudanca": "SITPEQV: interface_equipamento exige modelo_comunicacao_id (vem por SITPEQV_SITPEQVMODELO, carregada depois: via encadeada como no L6-12) e equipamento ou apoio (ck_interface_equipamento_alvo; equipamento_analitico é destino secundário gravado depois e exige setor_diagnostico_id sem origem); credencial_integracao exige referencia_cofre (as senhas nunca migram: o cliente cadastra no cofre). Decidir a ordem dos destinos (secundário antes do principal) ou carga em duas fases, e o tratamento da credencial (descarte com aviso ao cliente).",
-   "motivo": "SITPEQV bloqueada, e com ela SITBEXHP (laboratório de apoio)."
-  },
-  {
-   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv (mapa de análise) -> tabelas.tsv",
-   "mudanca": "Descarte justificado (tipo NAO) de SIWEBPARDATA e SIWEBPARTPATU: listas fixas que no destino são o domínio de perfil_portal_resultado.periodo_padrao e o atributo atualizacao_automatica_minutos.",
-   "motivo": "Hoje estão com destino perfil_portal_resultado; carregadas, criariam perfis falsos."
-  },
-  {
-   "arquivo": "decisão do dono",
-   "mudanca": "SIWEBVISULIMG: visualizador_imagem exige url_base NOT NULL que a origem não tem. Opções: descarte com aviso ao cliente (cadastrar os visualizadores), ou carga com url_base presumida vazia e pendência.",
-   "motivo": "Endereço inventado abriria o visualizador errado; bloqueada."
-  },
-  {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "SITBEXHP: exame_laboratorio_apoio exige o exame próprio, que a origem não aponta (COD_EXAME é o código do apoio). Precisa de de-para do exame do apoio para o exame próprio (por tabela de ligação da origem, se houver) ou de exame_id opcional no modelo.",
-   "motivo": "SITBEXHP (3084 na imagem de referência) bloqueada."
-  },
-  {
-   "arquivo": "decisão de modelagem",
-   "mudanca": "SIVARFORMULA: variavel_formula exige formula_calculo_id; a origem tem a variável por exame (ATO,EXAME) sem fórmula própria. Criar a fórmula por exame (destino secundário formula_calculo) ou ligar pela fórmula que a carga de exame_analito criar.",
-   "motivo": "SIVARFORMULA bloqueada."
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + declarado/valores.d",

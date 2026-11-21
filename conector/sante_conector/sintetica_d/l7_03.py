@@ -1,9 +1,13 @@
 """Fatia L7-03 (SADT e suprimentos, módulo SADT): tabelas da origem com dados 100% falsos e as anomalias.
 
-Carregadas (10): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
-fases), analitos (só o destino principal), exames (só o destino principal), modelos de comunicação, perfis do portal de
-resultados com modalidades e usuários, e modelos de impressão de laudo. Bloqueadas (10, pedidos em
-`docs/obra/fatias/f4/saida/L7-03.json`) entram na imagem para provar que não geram carga.
+Carregadas (14): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
+fases), analitos (com o analito no exame pela chave alternativa CODALF e a unidade do cliente adotada pelo código),
+exames (inativo com desativação na data da carga), resultados padrão (exame pela chave composta ATO,EXAME, depois do
+exame pela aresta de ordem), grandezas do laudo, modelos de comunicação, perfis do portal de resultados com
+modalidades, usuários e parâmetros (complementa o perfil), modelos de impressão de laudo e visualizadores de imagem
+(endereço e ativo presumidos). Descartes (5, `declarado/sem_carga.tsv`) e bloqueadas (2: SITPEQV pelo modelo e SITBEXHP
+pelo apoio que vem dela; pedidos em `docs/obra/fatias/f4/saida/L7-03.json`) entram na imagem para provar que não geram
+carga.
 Anomalias: descrição vazia ou só espaços em destino NOT NULL, espaços repetidos, CP1252 acentuado, S/N e A/I fora do
 domínio, referência zero (ausência), pai inexistente (nulo com pendência; em NOT NULL recusa), pai recusado
 (pai_pendente; na autorreferência, na fase 2), código e sigla repetidos (chave única), CHECK do destino (casas
@@ -75,10 +79,11 @@ PAIS_EXTERNOS = {"SICTRPSR": ["1", "2"], "SIMETODO": ["1", "2"], "SIESPEC": ["1"
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
-CARREGADAS = ("SIPOSRES", "SIRECIPI", "SISTATUS_AMOSTRA", "SITABELE", "SITABPRO", "SITPEQVMODELO", "SIWEBCADPERFIL",
-              "SIWEBCADPERFIL_SIPACSMODALID", "SIWEBCADPERFIL_TBUSERS", "SIWEBPARLAUDO")
-BLOQUEADAS = ("SIRESPAD", "SITBGRAN", "SITPEQV", "SITBEXHP", "SITPEQV_SITPEQVMODELO", "SIVARFORMULA", "SIWEBPARDATA",
-              "SIWEBPARPERFIL", "SIWEBPARTPATU", "SIWEBVISULIMG")
+CARREGADAS = ("SIPOSRES", "SIRECIPI", "SISTATUS_AMOSTRA", "SITABELE", "SITABPRO", "SIRESPAD", "SITBGRAN",
+              "SITPEQVMODELO", "SIWEBCADPERFIL", "SIWEBCADPERFIL_SIPACSMODALID", "SIWEBCADPERFIL_TBUSERS",
+              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG")
+DESCARTADAS = ("SITPEQV_SITPEQVMODELO", "SIVARFORMULA", "SIWEBPARDATA", "SIWEBPARTPATU")
+BLOQUEADAS = ("SITPEQV", "SITBEXHP") + DESCARTADAS
 D = decimal.Decimal
 
 
@@ -101,30 +106,33 @@ def linhas(r, ins):
             (7, "Cancelada", None, 7, "S", 6, "N")]:
         linha("SISTATUS_AMOSTRA", ID=i, ATO=1, DESCRICAO=desc, COR=cor, ORDEM=ordem, ATIVO=ativo,
               STATUS_ANTERIOR=ant, REGISTRO_COLETA=reg)
-    # analitos (ordem da chave CODPRC,CODELE): 104 sem nome; 105 método inexistente; 106 NUMERICO fora do domínio;
-    # 108 casas > 6 (CHECK); 109 limites invertidos (CHECK); ZZZ/1 repete o código 101 (único)
+    # analitos (ordem da chave CODPRC,CODELE), com o analito no exame (exame pela chave alternativa CODALF) e a unidade:
+    # URI/4 sem nome (1048); HMG/1 método inexistente e URI/3 grupo de respostas inexistente (nulos com pendência);
+    # URI/5 NUMERICO fora do domínio; URI/6 casas > 6 e HMG/2 limites invertidos (CHECK); ZZZ/1 repete o código 101
+    # (único) e não tem exame; GLI/1: mnemônico em dois atos (pai_ambiguo, recusa pelo NOT NULL); URI/2 adota a
+    # unidade criada por URI/1; URI/7 linha-título (titulo, não obrigatória); limites 0 = não informado (nulos)
     for prc, ele, cod, nome, extra in [
-            ("GLI", 1, 101, "Glicose", dict(METODO=1, CASAS=0, MIN_ABE=D("10.0000"), MAX_ABE=D("900.0000"),
-                                            NUMERICO="S", SITUACAO="A", UNIDADE="mg/dL")),
-            ("GLI", 2, 102, "  Hemoglobina   glicada ", dict(CASAS=1, NUMERICO="S", SITUACAO="A",
-                                                            PULARELEMENTORESULT="S")),
-            ("URI", 1, 103, "Aspecto", dict(NUMERICO="N", RESULTADOFIXO="S", SITUACAO="I",
-                                            VLRREF="Límpido\r\n  ou levemente turvo".encode("cp1252"))),
-            ("URI", 2, 104, None, dict(NUMERICO="N")),
+            ("GLI", 1, 113, "Glicose capilar", dict(NUMERICO="S")),
             ("HMG", 1, 105, "Leucócitos", dict(METODO=7, NUMERICO="S", IMPRIMIR_ETIQUETA_TRIAGEM="S")),
-            ("URI", 3, 106, "Cor", dict(NUMERICO="X", METODO=0)),
-            ("URI", 4, 108, "Volume", dict(CASAS=9, NUMERICO="S")),
             ("HMG", 2, 109, "Faixa", dict(MIN_ABE=D("100.0000"), MAX_ABE=D("10.0000"), METODO=2)),
-            ("ZZZ", 1, 101, "Glicose jejum", dict(NUMERICO="S")),
-            # linha-título (sem par no de-para: pendência por linha); limites 0 = não informado (viram nulos: sem
-            # CHECK nem limite que recuse todo resultado)
-            ("URI", 5, 110, "Exame físico", dict(TITULO="S", NUMERICO="N")),
             ("HMG", 3, 111, "Plaquetas", dict(MIN_ABE=D("0.0000"), MAX_ABE=D("0.0000"), NUMERICO="S", TITULO="N")),
-            ("HMG", 4, 112, "Hematócrito", dict(MIN_ABE=D("5.0000"), MAX_ABE=D("0.0000"), NUMERICO="S"))]:
+            ("HMG", 4, 112, "Hematócrito", dict(MIN_ABE=D("5.0000"), MAX_ABE=D("0.0000"), NUMERICO="S")),
+            ("URI", 1, 101, "Glicose", dict(METODO=1, CASAS=0, MIN_ABE=D("10.0000"), MAX_ABE=D("900.0000"),
+                                            NUMERICO="S", SITUACAO="A", UNIDADE="mg/dL", RES1=1)),
+            ("URI", 2, 102, "  Hemoglobina   glicada ", dict(CASAS=1, NUMERICO="S", SITUACAO="A",
+                                                            PULARELEMENTORESULT="S", UNIDADE="mg/dL")),
+            ("URI", 3, 103, "Aspecto", dict(NUMERICO="N", RESULTADOFIXO="S", SITUACAO="I", RES1=9,
+                                            VLRREF="Límpido\r\n  ou levemente turvo".encode("cp1252"))),
+            ("URI", 4, 104, None, dict(NUMERICO="N")),
+            ("URI", 5, 106, "Cor", dict(NUMERICO="X", METODO=0)),
+            ("URI", 6, 108, "Volume", dict(CASAS=9, NUMERICO="S")),
+            ("URI", 7, 110, "Exame físico", dict(TITULO="S", NUMERICO="N")),
+            ("ZZZ", 1, 101, "Glicose jejum", dict(NUMERICO="S"))]:
         linha("SITABELE", CODPRC=prc, CODELE=ele, COD=cod, NOME=nome, **extra)
     # exames (ordem da chave ATO,CODALF): 2/GLI repete a sigla de 1/GLI (único); BHC sem nome; PSA sexo inexistente;
     # TSH S/N fora do domínio; US1 prazo negativo e modalidade zero; sexo não aproveitado (PSA aponta sexo inexistente
-    # sem efeito); FER inativo (CHECK de desativação: recusado); VDR e Vdr só diferem pela caixa (os dois recusados)
+    # sem efeito); FER inativo (entra inativo, desativado na data da carga); VDR e Vdr só diferem pela caixa (os dois
+    # recusados); URI é o exame dos analitos
     base = dict(ID_TBPROSUSAIH=0, ID_TBPROSUSAMB=0, SOMENTE_SOLICITACAO_PEP="N", EXIBIR_FICHA_ANEST="N",
                 ORDEM_FICHA_ANEST=0)
     for i, ato, alf, nome, extra in [
@@ -139,7 +147,8 @@ def linhas(r, ins):
             (8, 2, "US1", "Ultrassom", dict(ID_SIPACSMODALID=0, ENTHORS=-5, ID_TBSEXO=2)),
             (9, 1, "FER", "Ferritina", dict(SITUACAO="I")),
             (10, 1, "VDR", "VDRL", dict(SITUACAO="A")),
-            (11, 1, "Vdr", "VDRL quantitativo", dict())]:
+            (11, 1, "Vdr", "VDRL quantitativo", dict()),
+            (12, 1, "URI", "Urina tipo 1", dict(SITUACAO="A"))]:
         v = dict(base, **extra)
         linha("SITABPRO", ID=i, ATO=ato, CODALF=alf, NOME=nome, **v)
     for i, nome in [(1, "ASTM"), (2, "HL7"), (3, None), (4, "Arquivo")]:
@@ -157,32 +166,59 @@ def linhas(r, ins):
         linha("SIWEBPARLAUDO", ID=i, ID_SIMODULO=mod, ARQUIVO_LAUDO=bytes(r.getrandbits(8) for _ in range(64)),
               NOME=nome, EXIBIR_IMAGEM_LAUDO=exibe, QUANTIDADE_IMAGEM_POR_LINHA=qtd, ALTURA_ESPACAMENTO_LAUDO=alt,
               LARGURA_ESPACAMENTO_LAUDO=larg)
-    # bloqueadas: linhas que não podem gerar carga
-    linha("SIRESPAD", EXAME="GLI", COD=1, TIPO="N", ATO=1, NOME="Normal", DESCR="Texto  padrão".encode("cp1252"))
-    linha("SITBGRAN", COD=1, EXAME="ECO", ATO=2, NOME="Diâmetro", SIGLA="DIA")
+    # grandezas (exame pela chave composta ATO,EXAME): 2|GLI é exame recusado (pai_pendente); ZZZ não existe
+    # (pai_inexistente e NOT NULL); sem nome (NOT NULL); nome com espaços repetidos e sigla com preenchimento
+    for cod, exa, ato, nome, sigla in [(1, "GLI", 1, "Diâmetro", "DIA"), (2, "GLI", 1, "  Fração   de ejeção ", "FE  "),
+                                       (1, "RX1", 2, "Área", "AR"), (1, "GLI", 2, "Sem exame", "X"),
+                                       (1, "ZZZ", 1, "Inexistente", None), (3, "GLI", 1, None, "S")]:
+        linha("SITBGRAN", COD=cod, EXAME=exa, ATO=ato, NOME=nome, SIGLA=sigla)
+    # resultados padrão (ordem da chave EXAME,COD,TIPO,ATO; exame pela chave composta ATO,EXAME): HMG sem nome (1048);
+    # 2|GLI é exame recusado (pai_pendente); ZZZ não existe (pai_inexistente e 1048); RX1 só com o texto antigo (HTML
+    # nulo); a variante (#seq:EXAME) conta todas as linhas do mesmo EXAME
+    for exa, cod, tipo, ato, nome, html, descr in [
+            ("GLI", 1, "N", 1, "Normal", "<p>Dentro da  normalidade</p>", "Normal"),
+            ("GLI", 1, "N", 2, "Capilar", "<p>Capilar</p>", None),
+            ("GLI", 2, "A", 1, "Alterado", "<p>Alterado:\r\n ver</p>", None),
+            ("HMG", 1, "N", 1, None, "<p>Sem nome</p>", None),
+            ("RX1", 1, "N", 2, "Tórax normal", None, "Texto  antigo"),
+            ("ZZZ", 1, "N", 1, "Inexistente", "<p>x</p>", None)]:
+        linha("SIRESPAD", EXAME=exa, COD=cod, TIPO=tipo, ATO=ato, NOME=nome,
+              RESULTADO_HTML=None if html is None else html.encode("cp1252"),
+              DESCR=None if descr is None else descr.encode("cp1252"), NOMEXA="Exame %s" % exa)
+    # parâmetros do perfil (complementa): 1 e 2 completam o perfil; 3 é perfil recusado (pai_pendente); 9 não existe
+    for p, vis, dig, img, lnk in [(1, "S", "S", "N", "N"), (2, "N", "S", "S", "S"), (3, "S", "N", "N", "N"),
+                                  (9, "S", "S", "S", "S")]:
+        linha("SIWEBPARPERFIL", ID_SIWEBCADPERFIL=p, VISUALIZAR_IMG=vis, DIGITAR_LAUDO=dig, ENVIAR_IMG_EMAIL_RES_WEB=img,
+              ENVIAR_LINK_IMG_EMAIL_RES_WEB=lnk)
+    # visualizadores: endereço e ativo presumidos (2 valor_presumido por linha avaliada); sem nome (NOT NULL)
+    for i, nome in [(1, "Visualizador web"), (2, "  Estação   local "), (3, None)]:
+        linha("SIWEBVISULIMG", ID=i, NOME=nome)
+    # bloqueadas e descartadas: linhas que não podem gerar carga
     linha("SITPEQV", CODIGO=1, NOME="Analisador exemplo", INTERFACE="S", SENHA_EXPORTACAO="falsa", SENHA_FTP="falsa",
-          ID_SITPEQV_SITPEQVMODELO=1, PORTA_ABBOTT=4000)
+          ID_SITPEQV_SITPEQVMODELO=1, PORTA_ABBOTT=4000, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo",
+          USUARIO_FTP="usuario.falso", CRIPTOGRAFIA_AES="S")
+    for i, eqv, mod in [(1, 1, 1), (2, 1, 2)]:
+        linha("SITPEQV_SITPEQVMODELO", ID=i, ID_SITPEQV=eqv, ID_SITPEQVMODELO=mod)
     linha("SITBEXHP", COD=1, TIPO=1, COD_EXAME="APX1", EXAME_NOME="Exame do apoio")
-    linha("SITPEQV_SITPEQVMODELO", ID=1, ID_SITPEQV=1, ID_SITPEQVMODELO=1)
     linha("SIVARFORMULA", ATO=1, CODIGO=1, EXAME="GLI", IDENTIFICACAO="A", DESCRICAO="Variável exemplo")
     for i, nome in [(1, "Hoje"), (2, "Últimos 7 dias")]:
         linha("SIWEBPARDATA", ID=i, NOME=nome)
         linha("SIWEBPARTPATU", ID=i, NOME="Atualização %d" % i)
-        linha("SIWEBVISULIMG", ID=i, NOME="Visualizador %d" % i)
-    linha("SIWEBPARPERFIL", ID_SIWEBCADPERFIL=1, VISUALIZAR_IMG="S", DIGITAR_LAUDO="S", ENVIAR_IMG_EMAIL_RES_WEB="N",
-          ENVIAR_LINK_IMG_EMAIL_RES_WEB="N")
     return {
         "SIPOSRES": {"gravados": 3, "pendencias": {"restricao_destino_1048": 3, "pai_inexistente": 1}},
         "SIRECIPI": {"gravados": 4, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 1,
                                                    "restricao_destino_1048": 1}},
         "SISTATUS_AMOSTRA": {"gravados": 6, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
                                                            "pai_pendente": 1}},
-        "SITABELE": {"gravados": 8, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
-                                                   "restricao_destino_4025": 2, "pai_inexistente": 1,
+        "SITABELE": {"gravados": 8, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1062": 1,
+                                                   "restricao_destino_4025": 2, "pai_inexistente": 3,
+                                                   "pai_ambiguo": 1, "valor_fora_do_dominio": 1,
+                                                   "adotado_existente": 1}},
+        "SITABPRO": {"gravados": 8, "pendencias": {"valor_presumido": 20, "restricao_destino_1062": 1,
+                                                   "restricao_destino_1048": 1, "codigo_colisao_caixa": 2,
                                                    "valor_fora_do_dominio": 2}},
-        "SITABPRO": {"gravados": 6, "pendencias": {"valor_presumido": 18, "restricao_destino_1062": 1,
-                                                   "restricao_destino_1048": 1, "restricao_destino_4025": 1,
-                                                   "codigo_colisao_caixa": 2, "valor_fora_do_dominio": 2}},
+        "SIRESPAD": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, "restricao_destino_1048": 2,
+                                                   "pai_pendente": 1, "pai_inexistente": 1}},
         "SITPEQVMODELO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL_SIPACSMODALID": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
@@ -190,4 +226,8 @@ def linhas(r, ins):
         "SIWEBCADPERFIL_TBUSERS": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
         "SIWEBPARLAUDO": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                         "restricao_destino_1048": 1}},
+        "SITBGRAN": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 2}},
+        "SIWEBPARPERFIL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
+        "SIWEBVISULIMG": {"gravados": 2, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1}},
     }

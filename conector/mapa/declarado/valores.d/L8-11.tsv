@@ -1,3 +1,18 @@
 tabela	coluna	destino	valor_origem	valor_destino	motivo
 TBGRUDES	CLASSIF	grupo_natureza_financeira.tipo	D	despesa	L8-11: medido D 34; sentido a confirmar com o cliente (pedido 2)
 TBGRUDES	CLASSIF	grupo_natureza_financeira.tipo	R	receita	L8-11: medido R 6; sentido a confirmar com o cliente (pedido 2)
+TBCTABAN	TP_CONTA	conta_bancaria.tipo	C	corrente	L8-11: medido C 483 (conta movimento)
+TBCTABAN	TP_CONTA	conta_bancaria.tipo	A	aplicacao	L8-11: medido A 6 (conta de aplicação)
+TBCTABAN	SITUACAO	conta_bancaria.situacao	A	ativa	L8-11: medido A 480
+TBCTABAN	SITUACAO	conta_bancaria.situacao	I	bloqueada	L8-11: medido I 9 (inativa: bloqueada, não encerrada: a origem não guarda data de encerramento)
+TBCLIENT	PESSOA	cliente_financeiro.tipo_pessoa	F	fisica	L8-11: pessoa física
+TBCLIENT	PESSOA	cliente_financeiro.tipo_pessoa	J	juridica	L8-11: pessoa jurídica
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	0	desconto	L8-11: medido 10 linhas; 4 com 'desconto/abatimento' na descrição, nenhuma com acréscimo, juros, multa ou tributo; TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	1	acrescimo	L8-11: medido 5 linhas; descrições de acréscimo 2, juros 1, multa 1 (o cliente refina juros e multa no painel); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	2	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	4	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	6	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	8	retencao	L8-11: medido 2 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	9	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	10	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFREFDES	TIPO	tipo_ajuste_titulo.natureza	13	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio

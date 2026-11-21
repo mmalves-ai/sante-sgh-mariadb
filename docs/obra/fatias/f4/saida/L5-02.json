@@ -1,64 +1,39 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/mapa/tabelas.tsv (via tools/obra/gerar_mapa_conector.py) + conector/mapa/declarado/descartes.tsv",
-   "mudanca": "Decidir o destino de TBOPCOES, TBPAPEL_TBOPCOES, TBPERUSU e TBMODULO: (a) opção de menu nunca em acao_sistema; carregar em tela_sistema (depende da referência TBOPCOES.MODULO e de um módulo de destino) ou descartar com justificativa; (b) o vínculo papel x opção e perfil x opção vai por um de-para declarado opção -> código de ação do contrato do produto (ex.: declarado/opcao_acao.tsv), com pendência 'acao_sem_equivalente' quando faltar; (c) TBMODULO não grava em modulo_sistema (catálogo do produto): de-para declarado módulo da origem -> módulo do produto, ou descarte justificado",
-   "motivo": "acao_sistema e modulo_sistema são 'carregados com o produto' (DDL e dominios-catalogo.ts:92-93); tools/db/carregar_acoes.py:83 inativa toda ação fora do contrato (vaivém com o Sincronizar, em que a origem vence), sessao/fonte-propria.ts:321-345 resolve permissões pelo código do contrato (código numérico da origem não concede nada; papéis pareceriam migrados sem estar) e o administrador receberia ~7 mil permissões inúteis. Até a decisão, a L5-02 não carrega TBMODULO, TBOPCOES nem TBPAPEL_TBOPCOES"
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "Acrescentar as linhas (tabela, situacao, causa, motivo); TBMODULO, TBOPCOES, TBEVENTOS, TBPAPEL_TBOPCOES e TBPERUSU NÃO entram (passam a carregar):\nTBMOVTERMSTATUS\tdescarte\tmecanismo_do_produto\tsituação do termo de consentimento: lista de domínio fixa do modelo (CHECK de consentimento_titular.situacao); a origem só tem o domínio, sem movimento de consentimento: nenhuma tabela da origem carrega consentimento_titular, então não há consumidor nem dado a trazer (pedido da fatia L5-02; decisão em F4-decisoes-destino.md)\nTBTIPOREPRE\tdescarte\tmecanismo_do_produto\ttipo de signatário (titular ou representante): lista de domínio fixa do modelo (CHECK de consentimento_titular.tipo_signatario); a origem só tem o domínio, sem movimento de consentimento (pedido da fatia L5-02; decisão em F4-decisoes-destino.md)\nTBTIPOOID\tdescarte\tmecanismo_do_produto\ttipo de OID: lista de domínio fixa do modelo (CHECK de oid_icp.tipo_oid); o tipo de cada OID entra em TBOID.ID_TBTIPOOID pelo nome do tipo (ref:TBTIPOOID>NOME com de-para de valores, pedido da L5-02 à L5-03) (pedido da fatia L5-02; decisão em F4-decisoes-destino.md)",
+   "motivo": "cobertura total da L5-02: só os três domínios fixos do modelo ficam como descarte, com o motivo verdadeiro (sem movimento de consentimento na origem; tipo de OID pelo nome em TBOID)"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "Regra genérica 'texto_resumo' (corta no tamanho do destino, na fronteira de palavra, com pendência informativa 'texto_resumido' que não recusa a linha), para usar quando o texto integral já vai para outra coluna",
-   "motivo": "TBLGPDANONMOT.DESCRICAO (até 999) não cabe em base_legal_tratamento.descricao (150) e recusava a base legal inteira (1406), deixando pai_pendente nos registros de anonimização. Provisório: descricao recebe o código (cliente revisa) e explicacao o texto integral; com a regra, descricao passa a DESCRICAO/texto_resumo"
+   "arquivo": "docs/obra/passagens/F4-decisoes-destino.md (seção 2, tabela 'Destinos decididos por tabela')",
+   "mudanca": "Acrescentar as linhas:\n| TBMODULO | carrega: `modulo_sistema` como referência histórica inativa (código `legado_modulo_<n>`) | Os módulos do produto vêm do produto e não são sobrescritos (sem `adotar`: o código antigo nunca casa com o do produto). O módulo antigo fica para quem aponta para ele (relatórios L8-18, pendência por módulo L8-03, telas legadas). Nunca aparece no menu (inativo). |\n| TBOPCOES | carrega: `tela_sistema` (principal) + `acao_sistema` de acesso (`ver`), ambas referência inativa (`legado_opcao_<n>`) | Alvo da trilha de auditoria (TBCABTRILHA, exigida pela certificação), dos gatilhos de alerta (L5-03) e das telas de relatório (L8-18). A ação de acesso é o alvo das concessões antigas. Árvore do menu antigo não é reconstruída. |\n| TBEVENTOS | carrega: `acao_sistema` inativa (`legado_evento_<n>`), tipo `executar` presumido | Alvo de `alerta_gatilho.acao_sistema_id` (L5-03). `tipo_acao_auditavel` fica só com TBTPACAOAUDIT (pedido da L5-03, evita colisão no UNIQUE). |\n| TBPAPEL_TBOPCOES | carrega: `papel_seguranca_acao` para a ação de acesso da opção legada (aguarda `ref:T@destino` no motor) | As concessões são preservadas e visíveis. Valem como referência: o controle de acesso do produto usa as ações do contrato; a equivalência ação legada → ação do contrato é do produto (de-para único por origem), com pendência `acao_sem_equivalente` para a concessão sem par. |\n| TBPERUSU | carrega: `perfil_acao` (perfil TBGRUUSU × ação de acesso da opção legada), mesmo mecanismo de TBPAPEL_TBOPCOES | Matriz de permissões em uso (cerca de 17 mil concessões na referência): não é dado sem valor; descartar deixaria todo perfil migrado sem acesso (ADR 0003). **Revisar com o dono** a equivalência com o contrato. |\n| TBMOVTERMSTATUS | descarte (`mecanismo_do_produto`) | Lista de situação do termo = CHECK de consentimento_titular.situacao. A origem tem só o domínio, sem movimento de consentimento: nenhuma tabela carrega consentimento_titular. |\n| TBTIPOREPRE | descarte (`mecanismo_do_produto`) | Tipo de signatário = CHECK de consentimento_titular.tipo_signatario. Só o domínio, sem movimento. |\n| TBTIPOOID | descarte (`mecanismo_do_produto`); o tipo entra em TBOID | Tipo de OID = CHECK de oid_icp.tipo_oid. O tipo de cada OID entra pelo nome do tipo (`ref:TBTIPOOID>NOME` + de-para de valores) na declaração de TBOID (pedido à L5-03); até lá, `outro`. |\n| TBNVLCRITICID | carrega: severidade pelo NOME do nível (de-para de valores, escala de registro de eventos 0 a 7) | A chave substituta não é a severidade. São 8 níveis na referência, o tamanho da escala. Nome sem par: `valor_fora_do_dominio` e recusa só do nível, visível no painel; nome repetido na mesma severidade: 1062. |\n| TBTIPOCERTIFICADO | carrega: modalidade e repositório pelo NOME (A1 → a1/arquivo, A3 → a3/token, nuvem → nuvem/nuvem) | O nome traz a modalidade. Nome sem par: `valor_fora_do_dominio` e recusa só do tipo. `provedor_assinatura_nuvem` não é alimentado (exige endereço do serviço e credencial no cofre). |\n| TBMENSAG | carrega: mensagem + destinatário; remetente e destinatário por `ref:TBUSERS`; prioridade pelo TIPO (U urgente, N/S/nulo normal); situação `enviada` | Sem assunto na origem: o texto (até 200) vira assunto e texto. Aviso do sistema (sem remetente) e mensagem sem data de envio são recusados com pendência até o motor ter o remetente técnico do cliente (pedido). Agendamento de origem sem destino (rotina antiga). |\n| TBPERMISSAO_SUS | carrega: `usuario_permissao_sus`, uma linha por indicador S/N (desdobrar no destino principal, aguarda o motor) | Funcionalidade e operação pelo rótulo em duas partes; instrumento `aih`. |",
+   "motivo": "decisões tomadas pela melhor prática do produto (ADR 0002/0003) para o dono revisar; substitui o pedido anterior da L5-02"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL) + conector/verificar_mapa.py",
-   "mudanca": "Permitir declarar a referência de uma coluna em colunas.d (ex.: regra chave_origem com a tabela pai no campo via, ou coluna nova 'referencia'), valendo por cima da gerada; inclusive referência pelo login (TBUSERS tem chave NOME)",
-   "motivo": "TBOPCOES.MODULO (-> TBMODULO), TBSGHCONEXAO.MODULO/USUARIO, TBMENSAG.USUARIO/ORIGEM, TBPERMISSAO_SUS.ID_TBUSERS e TBPERUSU.GRUPO (-> TBGRUUSU) são referências sem referência gerada (o gerador só reconhece ID_<TABELA>); sem isso tela_sistema.modulo_sistema_id, ultimo_acesso_usuario, mensagem_interna, usuario_permissao_sus e perfil_acao (todas NOT NULL na referência) não carregam"
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (erros_especiais_e_opcoes, _ESPECIAIS)",
+   "mudanca": "(1) Permitir 'desdobrar:' no destino PRINCIPAL quando ele é o único: a linha da origem não grava linha própria; cada item tem a entidade <chave>/<rótulo> em conector_origem (conciliação por item, como no secundário). (2) Rótulo em partes: com rótulo 'a/b', '#rotulo:1' recebe 'a' e '#rotulo:2' recebe 'b' ('#rotulo' segue com o rótulo inteiro).",
+   "motivo": "TBPERMISSAO_SUS (1002 linhas, 34 indicadores S/N) tem um só destino, usuario_permissao_sus. Declaração pronta, comentada (#TBPERMISSAO_SUS, 6 linhas); ao entrar: descomentar, acrescentar o esperado em sintetica_d/l5_02.py (tirar de AGUARDA_MOTOR), inverter test_permissao_sus_aguarda_o_motor e rodar tools/obra/conferir-fatia-f4.sh L5-02"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Coluna especial para o estabelecimento da execução (ex.: '@estabelecimento': id do estabelecimento padrão do cliente ou do vínculo da origem)",
-   "motivo": "mensagem_interna, ultimo_acesso_usuario e usuario_permissao_sus exigem estabelecimento_id NOT NULL e a origem não o tem por linha"
+   "arquivo": "conector/sante_conector/mapa.py (passos_ref, _REF_TAB) + conector/sante_conector/carga_mapa.py (_referencia_chave)",
+   "mudanca": "Referência ao destino SECUNDÁRIO do pai: `ref:T@<tabela destino>` resolve o id da entidade '<chave do pai>/<tabela destino>' em conector_origem (a que o motor já grava para cada destino secundário), com as mesmas regras de pai_pendente e pai_inexistente. Verificador: <tabela destino> tem de estar em tabelas_destino de T e não ser o principal.",
+   "motivo": "TBPAPEL_TBOPCOES (520) e TBPERUSU (17.907) concedem por opção; a ação de acesso da opção é o destino secundário acao_sistema de TBOPCOES (o principal, tela_sistema, é o que a trilha, os alertas e os relatórios usam). Declarações prontas, comentadas (#TBPAPEL_TBOPCOES e #TBPERUSU, 2 linhas cada, com ref:TBOPCOES@acao_sistema); ao entrar: descomentar, acrescentar o esperado (sintética já tem as tabelas, com papel recusado, opção recusada e opção inexistente) e inverter test_concessoes_antigas_aguardam_o_motor"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Desdobrar uma linha em várias (uma por coluna-indicador: instrumento/funcionalidade/operação declarados por coluna)",
-   "motivo": "TBPERMISSAO_SUS tem 34 colunas S/N por permissão; usuario_permissao_sus guarda uma linha por (instrumento, funcionalidade, operação)"
+   "arquivo": "conector/sante_conector/carga_mapa.py (opção de destino genérica)",
+   "mudanca": "Remetente técnico do cliente como reserva de referência nula: opção na via `senao:@usuario_sistema` (referência nula ou nunca vista grava o id do usuário técnico do cliente, criado por 'criar novo cliente', com pendência baixa `remetente_sistema`).",
+   "motivo": "TBMENSAG: aviso do sistema (ORIGEM nula) hoje é recusado pela NOT NULL de remetente_usuario_id (2 das 8 mensagens sintéticas: sem remetente e destinatário/remetente ausente). Conferir na referência, por agregado, quantas têm ORIGEM nula. Se o produto não tiver usuário técnico, a recusa com pendência fica como está (decisão registrada)."
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "Regra genérica de de-para de valores por tabela declarada (código da origem -> domínio do destino, ex.: declarado/valores.tsv), com valor sem de-para virando pendência valor_fora_do_dominio",
-   "motivo": "tipo_certificado.modalidade/repositorio (TBTIPOCERTIFICADO.NOME), nivel_criticidade_auditoria.severidade (TBNVLCRITICID), regra_obrigatoriedade_campo.campo/exigencia (TBDIGITAR_FILIACAO) e oid_icp.oid/tipo_oid (TBTIPOOID) exigem valor do domínio que a origem só traz como nome livre; inventar literal seria deformar o dado"
+   "arquivo": "aviso à fatia L5-03 (colunas.d/L5-03.tsv e valores.d/L5-03.tsv)",
+   "mudanca": "(a) TBOPCOES e TBEVENTOS passam a CARREGAR (tela_sistema + acao_sistema de acesso; acao_sistema do evento), inativas: TBCABTRILHA.ID_TBOPCOES e TBALERTA_TBOPCOES_TBEVENTOS resolvem pelo destino principal, como declarado; opção recusada (sem título ou sem módulo) dá pai_pendente: incluir na conciliação da L5-03 a contagem de gatilhos recusados pelo CHECK ck_alerta_gatilho_disparo. (b) TBOID.ID_TBTIPOOID -> oid_icp.tipo_oid por `ref:TBTIPOOID>NOME` com depara=valores (nome do tipo -> politica/cpf/cnpj/nome/data_nascimento/titulo_eleitor/registro_conselho/uf_conselho/especialidade/cnes/responsavel; sem par: outro), no lugar do literal '=outro'. (c) TBCABTRILHA.ID_TBNVLCRITICID: o nível agora tem severidade pelo nome; nível sem par é recusado e o evento fica pai_pendente: conferir a contagem.",
+   "motivo": "achados da revisão da L5-02 (referência entre tabelas e motivo de descarte do tipo de OID)"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "Regra 'inteiro_zero_nulo' (0 vira NULL, sem pendência)",
-   "motivo": "TBPAPEL.QTDE_MAX_USUARIO_VINC usa 0 como 'sem limite'; papel_seguranca.limite_usuarios tem CHECK > 0 e recusaria o papel (e em cadeia os vínculos papel x opção). A coluna ficou fora da declaração até a regra existir"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/descartes.tsv",
-   "mudanca": "Descarte justificado de TBMOVTERMSTATUS, TBPROCBACKUP e TBSITBACKUP como domínio de valor (vira CHECK de consentimento_titular.situacao, verificacao_backup.processo e .situacao), e de-para desses ids no lote que carregar os termos e as verificações",
-   "motivo": "são listas de situação/tipo; os destinos do mapa são tabelas de movimento que exigem paciente, datas e operação: nenhuma linha destas tabelas cria um registro de destino"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (via tools/obra/gerar_mapa_conector.py)",
-   "mudanca": "Rever TBEVENTOS: não gravar em acao_sistema (catálogo do produto); tipo_acao_auditavel exige categoria/acao_trilha sem fonte; sugerir tipo_acao_auditavel com tela pela opção quando a referência à tela existir",
-   "motivo": "acao_sistema é carregada com o produto; evitar literal inventado; TBEVENTOS ficou sem declaração"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv",
-   "mudanca": "TBLGPDANONUSERFUNCAO: tirar encarregado_dados dos destinos (ou documentar que não é alimentado por esta tabela)",
-   "motivo": "encarregado_dados exige pessoa, e-mail público e vigência, que a tabela de funções não tem"
-  },
-  {
-   "arquivo": "tools/obra/fatiar_conector.py (ou regenerar docs/obra/fatias/f4/ na integração)",
-   "mudanca": "No --conferir, ignorar a seção 'Já declaradas' (que muda a cada colunas.d novo) ou regenerar as fatias depois de integrar as declarações",
-   "motivo": "com qualquer colunas.d/<fatia>.tsv presente todas as fatias acusam 'arquivo diferente do gerado' (o gerador passou a embutir as declarações); é o único erro da autoconferência da L5-02"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py (se TBOPCOES voltar a ser carregada)",
-   "mudanca": "Campo cosmético não recusa a linha: regra 'inteiro_nao_negativo' (negativo vira NULL/padrão com pendência informativa) para a posição no menu; título nulo cai num valor declarado (ex.: coluna alternativa NOME no campo via)",
-   "motivo": "INDICE negativo (1264) e TITULO nulo recusavam a opção e, em cascata, todos os vínculos papel x opção e perfil x opção (pai_pendente)"
+   "arquivo": "aviso às fatias L8-18 e L8-03 (sem mudança de arquivo)",
+   "mudanca": "TBMODULO passa a CARREGAR em modulo_sistema como referência inativa (código legado_modulo_<n>), sem adotar:codigo (o código antigo nunca casa com o do produto): ref:TBMODULO resolve; módulo de nome vazio é recusado (pai_pendente nos filhos).",
+   "motivo": "substitui o aviso anterior (descarte de TBMODULO)"
   }
  ]
 }

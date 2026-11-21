@@ -1,27 +1,58 @@
 tabela	coluna	destino	regra	depara	via	motivo
 PNTIPO	ID	tipo_painel.codigo	texto			L6-01: o número do tipo vira o código (único)
 PNTIPO	NOME	tipo_painel.descricao	texto_nome			L6-01: nome do tipo de painel; vazio recusa só a linha (NOT NULL)
-PNTIPO	=~outro	tipo_painel.finalidade				L6-01: a origem não classifica o que o painel exibe: 'outro' presumido (pendência valor_presumido por linha para o cliente revisar)
-REMODFIC	COD		texto			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.codigo (texto)
-REMODFIC	NOME		texto_nome			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.titulo (texto_nome)
-REMODFIC	QTDE		inteiro_zero_nulo			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.copias (inteiro_zero_nulo)
-REMODFIC	ORDEM		inteiro			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.ordem (inteiro)
-REMODFIC	RETORNO		booleano_sn			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.somente_retorno (booleano_sn)
-REMODFIC	GRAFICA		booleano_sn			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.formulario_pre_impresso (booleano_sn)
-REMODFIC	IMPANA		booleano_sn			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.imprime_anamnese (booleano_sn)
-REMODFIC	DUPLEX		booleano_sn			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.frente_verso (booleano_sn)
-REMODFIC	IDADEI		inteiro_zero_nulo			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.idade_minima (inteiro_zero_nulo)
-REMODFIC	IDADEF		inteiro_zero_nulo			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: modelo_ficha_impressa.idade_maxima (inteiro_zero_nulo)
-REMODFIC	CLINICA		texto			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto: lista de clínicas da origem desdobrada em regras por clínica (pedido no L6-01.json; nenhuma tabela de regra da origem é por clínica)
-REMODFIC	CFIMP		codigo_char			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto descartar: indicador sem equivalente no modelo (configuração de impressora da estação)
-REMODFIC	IMPATE		codigo_char			L6-01: tabela não carregada até a coluna especial '@chave' (pedido no L6-01.json): com codigo=COD a variante gráfica do mesmo número recusaria com 1062 e, como o hash só cobre as colunas lidas, nem regravaria nem corrigiria o código depois da primeira carga num cliente; previsto descartar: indicador sem equivalente no modelo; a impressão no atendimento é o próprio uso do modelo
+PNTIPO	=~outro	tipo_painel.finalidade				L6-01: a origem não classifica o que o painel exibe: 'outro' presumido (valor_presumido por linha para o cliente revisar)
+REMODFIC	COD	modelo_ficha_impressa.codigo	texto			L6-01: o número do modelo vira o código; o mesmo número nas variantes comum e de formulário pré-impresso colide na chave única (restricao_destino_1062, pendência visível): '#codigo_derivado' tem prefixo fixo e não distingue a variante; a coluna especial '#chave' (chave composta) está pedida no L6-01.json
+REMODFIC	NOME	modelo_ficha_impressa.titulo	texto_nome			L6-01: nome do modelo é o título; vazio recusa só a linha (NOT NULL)
+REMODFIC	=~outro	modelo_ficha_impressa.tipo_documento				L6-01: a origem não classifica o documento: 'outro' presumido (valor_presumido) para o cliente revisar
+REMODFIC	=Modelo migrado sem leiaute: defina o conteúdo antes de ativar	modelo_ficha_impressa.conteudo				L6-01: o leiaute da origem fica no programa antigo; o modelo exige leiaute ou conteúdo (CHECK): texto de aviso e modelo inativo
+REMODFIC	=0	modelo_ficha_impressa.ativo				L6-01: modelo migrado entra inativo até o cliente definir o leiaute
+REMODFIC	QTDE	modelo_ficha_impressa.copias	faixa:1,9			L6-01: cópias 1 a 9 (CHECK); fora da faixa (inclusive 0) vira NULL com valor_fora_do_dominio e fica o padrão 1
+REMODFIC	ORDEM	modelo_ficha_impressa.ordem	inteiro_nao_negativo			L6-01: ordem de exibição; negativa vira NULL com valor_fora_do_dominio
+REMODFIC	RETORNO	modelo_ficha_impressa.somente_retorno	booleano_sn			L6-01: S/N: imprime só no retorno
+REMODFIC	GRAFICA	modelo_ficha_impressa.formulario_pre_impresso	booleano_sn			L6-01: S/N da variante de formulário de gráfica (parte da chave)
+REMODFIC	IMPANA	modelo_ficha_impressa.imprime_anamnese	booleano_sn			L6-01: S/N: imprime a anamnese
+REMODFIC	DUPLEX	modelo_ficha_impressa.frente_verso	booleano_sn			L6-01: S/N: frente e verso
+REMODFIC	IDADEI	modelo_ficha_impressa.idade_minima	inteiro_zero_nulo			L6-01: 0 é 'sem limite'
+REMODFIC	IDADEF	modelo_ficha_impressa.idade_maxima	inteiro_zero_nulo			L6-01: 0 é 'sem limite'; máxima menor que a mínima recusa só a linha (CHECK)
+REMODFIC	CLINICA		texto			L6-01: não carregada: lista de clínicas sem coluna na regra de impressão (proposta de modelo em F4-decisoes-destino.md); o modelo entra inativo e o cliente restringe ao ativar
+REMODFIC	CFIMP		codigo_char			L6-01: não carregada: configuração de impressora da estação, sem equivalente no modelo
+REMODFIC	IMPATE		codigo_char			L6-01: não carregada: a impressão no atendimento é o próprio uso do modelo
+RECONFIC	COD	regra_impressao_ficha.modelo_ficha_impressa_id			ref:REMODFIC(COD,GRAFICA)	L6-01: modelo pela chave composta (COD,GRAFICA); modelo recusado: pai_pendente; inexistente: pai_inexistente e recusa (NOT NULL)
+RECONFIC	CONV	regra_impressao_ficha.fonte_pagadora_id			ref:TBCONVEN	L6-01: fonte pagadora da regra pela chave da origem; dependência RECONFIC->TBCONVEN declarada em dependencias.tsv (o pai carrega antes); pai nunca visto: NULL com pai_inexistente (recusa pedida ao motor no L6-01.json: critério nulo faria a regra valer para todas as fontes)
+RECONFIC	SELECAO	regra_impressao_ficha.selecionada_padrao	booleano_sn			L6-01: S/N: vem marcada para impressão; vazio fica o padrão
+REESPFIC	COD	regra_impressao_ficha.modelo_ficha_impressa_id			ref:REMODFIC(COD,GRAFICA)	L6-01: modelo pela chave composta (COD,GRAFICA); modelo recusado: pai_pendente; inexistente: pai_inexistente e recusa (NOT NULL)
+REESPFIC	ESP	regra_impressao_ficha.especialidade_medica_id			ref:TBESPEC	L6-01: especialidade da regra pela chave da origem; dependência REESPFIC->TBESPEC declarada em dependencias.tsv (o pai carrega antes); pai nunca visto: NULL com pai_inexistente (recusa pedida ao motor no L6-01.json)
+REESPFIC	SELECAO	regra_impressao_ficha.selecionada_padrao	booleano_sn			L6-01: S/N: vem marcada para impressão; vazio fica o padrão
+REUNIFIC	COD	regra_impressao_ficha.modelo_ficha_impressa_id			ref:REMODFIC(COD,GRAFICA)	L6-01: modelo pela chave composta (COD,GRAFICA); modelo recusado: pai_pendente; inexistente: pai_inexistente e recusa (NOT NULL)
+REUNIFIC	UNID	regra_impressao_ficha.unidade_assistencial_id			ref:TBUNIDAD	L6-01: unidade assistencial da regra pela chave da origem; o pai (ordem 90) carrega antes
+REUNIFIC	SELECAO	regra_impressao_ficha.selecionada_padrao	booleano_sn			L6-01: S/N: vem marcada para impressão; vazio fica o padrão
+REGRPFIC	COD	regra_impressao_ficha.modelo_ficha_impressa_id			ref:REMODFIC(COD,GRAFICA)	L6-01: modelo pela chave composta (COD,GRAFICA); modelo recusado: pai_pendente; inexistente: pai_inexistente e recusa (NOT NULL)
+REGRPFIC	SELECAO	regra_impressao_ficha.selecionada_padrao	booleano_sn			L6-01: S/N: vem marcada para impressão; vazio fica o padrão
+REGRPFIC	=~0	regra_impressao_ficha.ativo				L6-01: o grupo de procedimento da origem não tem cadastro com destino no mapa (grupo_faturamento sem origem): a regra entra INATIVA (valor_presumido por linha, com a chave original COD|GRP|GRAFICA) para o cliente ligar o grupo e ativar; ativa sem o grupo valeria para todos
+REGRPFIC	GRP		inteiro			L6-01: não carregada em coluna: o grupo fica na chave original da regra (conector_origem e pendência) até o grupo ter destino (decisão em F4-decisoes-destino.md)
+REPARATE	POR_USUARIO		codigo_char			L6-01: sem carga até o motor desdobrar no destino PRINCIPAL (pedido no L6-01.json); declaração pronta comentada abaixo; POR_USUARIO (herança por usuário) fica fora: a origem não diz de qual usuário
+#REPARATE	#rotulo	regra_heranca_campo.campo				L6-01: aguarda destino principal desdobrado (pedido no L6-01.json): o rótulo é o campo do produto
+#REPARATE	#item	regra_heranca_campo.herda	booleano_sn		desdobrar:CONV_ANT=fonte_pagadora,PLANO_ANT=plano,MATRIC_ANT=carteira,VALCAR_ANT=validade_carteira,TITCONV_ANT=titular,GUIA_ANT=guia,CRM_ANT=profissional,MEDRESP_ANT=profissional_responsavel,ESPEC_ANT=especialidade,CDC_ANT=centro_custo,UNID_ANT=unidade,CLIN_ANT=clinica,CID_ANT=cid,PROCTO_ANT=procedimento,CARSOL_ANT=carater,TPCONS_ANT=tipo_consulta,TPSAI_ANT=tipo_saida,EMPRESA_ANT=empresa,UNIORI_ANT=unidade_origem,TPDOENCA_ANT=tipo_doenca,PESO_ANT=peso,ALTURA_ANT=altura,ACOMP_ANT=acompanhante	L6-01: aguarda destino principal desdobrado que grave também o 'N' (herda=falso; hoje falso não gera linha e o padrão do produto é herdar)
+RETITFIC	COD		inteiro			L6-01: sem carga até o motor ter o complemento que não diverge a conciliação do pai (pedido no L6-01.json); declaração pronta comentada abaixo (decisão: o título impresso prevalece sobre o nome do modelo)
+#RETITFIC	COD	modelo_ficha_impressa.id			ref:REMODFIC(COD,GRAFICA) complementa	L6-01: aguarda 'complementa' que não diverge a soma de REMODFIC: completa o modelo pela chave composta
+#RETITFIC	NOME	modelo_ficha_impressa.titulo	texto_nome			L6-01: título impresso do modelo; vazio não sobrescreve o nome
+TBMOTCANCTP	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (mecanismo_do_produto): domínio fixo da operação, usado só pela matriz TBREFCANCMODTP (descartada)
+TBPROCEDPADRAO	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (mecanismo_do_produto): lista fixa da classificação; o domínio é procedencia.tipo_padrao (CHECK)
+REEXCATE	REG		inteiro			L6-01: decisão: trilha_auditoria (exclusão de atendimento que não existe no destino; entidade_id nulo, sem mudar o modelo); sem carga até o motor gravar DATE+hora HHMM em DATETIME e o retrato com todas as colunas (pedidos no L6-01.json); declaração pronta comentada abaixo
+#REEXCATE	=exclusao	trilha_auditoria.acao				L6-01: cada linha é a exclusão de um atendimento
+#REEXCATE	=atendimento	trilha_auditoria.entidade				L6-01: entidade excluída; entidade_id fica NULL (o atendimento excluído não existe no destino)
+#REEXCATE	DTCANCEL	trilha_auditoria.ocorrido_em	data_hora			L6-01: aguarda regra data+hora HHMM (HRCANCEL) em DATETIME e DATE em DATETIME na soma
+#REEXCATE	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS	L6-01: quem excluiu, pelo login (chave do usuário, L3); nunca visto: NULL com pai_inexistente
+#REEXCATE	JUSTIF	trilha_auditoria.motivo	texto			L6-01: justificativa da exclusão
+#REEXCATE	#retrato	trilha_auditoria.dados_antes				L6-01: aguarda '#retrato:*' (todas as colunas lidas: prontuário, nome, médico, convênio, unidade, anamnese, motivo)
 RETPINDATEND	ID	tipo_indicacao.codigo	texto			L6-01: o número do tipo de indicação vira o código
 RETPINDATEND	NOME	tipo_indicacao.descricao	texto_nome			L6-01: nome; vazio recusa só a linha
 RETPINDATEND	=~outro	tipo_indicacao.categoria				L6-01: a origem não classifica quem indicou: 'outro' presumido (valor_presumido)
 TBACAOFLUXOSENHA	ID	acao_fluxo_senha.codigo	texto			L6-01: o número da ação vira o código (único; a sigla pode repetir com caixa diferente)
 TBACAOFLUXOSENHA	DESCRICAO	acao_fluxo_senha.descricao	texto			L6-01: descrição; quebra de linha interna preservada; vazia recusa só a linha
-TBACAOFLUXOSENHA	SIGLA		codigo_char			L6-01: não carregada por ora: a sigla diz o que a ação faz (chamar, atender, finalizar...); de-para de valores SIGLA -> acao_fluxo_senha.encerra_senha pedido no L6-01.json; até lá encerra_senha é presumido
-TBACAOFLUXOSENHA	=~0	acao_fluxo_senha.encerra_senha				L6-01: a origem só diz pela sigla se a ação tira a senha da fila: 'não' presumido (valor_presumido por linha) para o cliente revisar cada ação, até o de-para da sigla (pedido no L6-01.json)
+TBACAOFLUXOSENHA	SIGLA		codigo_char			L6-01: não carregada: sem evidência do significado de cada sigla, encerra_senha fica presumido (decisão genérica de de-para sem evidência)
+TBACAOFLUXOSENHA	=~0	acao_fluxo_senha.encerra_senha				L6-01: a origem só diz pela sigla se a ação tira a senha da fila: 'não' presumido (valor_presumido por linha) para o cliente revisar
 TBCADGRUPOATEN	ID	grupo_atendimento.codigo	texto			L6-01: o número do grupo vira o código
 TBCADGRUPOATEN	NOME	grupo_atendimento.descricao	texto_nome			L6-01: nome do grupo
 TBCADGRUPOATEN	ATIVO	grupo_atendimento.ativo	booleano_sn			L6-01: S/N; fora do domínio fica com o padrão do destino
@@ -29,12 +60,12 @@ TBGRUPOPRIORIDADE	ID	grupo_prioridade_legal.codigo	texto			L6-01: o número do g
 TBGRUPOPRIORIDADE	DESCRICAO	grupo_prioridade_legal.descricao	texto			L6-01: descrição do grupo de prioridade
 TBMODULO_RECEPCAO	ID	modulo_recepcao.codigo	texto			L6-01: o número do módulo vira o código
 TBMODULO_RECEPCAO	DESCRICAO	modulo_recepcao.descricao	texto			L6-01: descrição do módulo de recepção
-TBMOTEXC	COD	motivo_cancelamento_operacao.codigo	texto			L6-01: o número do motivo vira o código
-TBMOTEXC	NOME	motivo_cancelamento_operacao.descricao	texto_nome			L6-01: nome do motivo; vazio recusa só a linha
+TBMOTCANCMOD	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (sem_valor): módulo usado só pela matriz TBREFCANCMODTP, também descartada; nada prova que o código é o mesmo módulo de TBMODULO_RECEPCAO
+TBMOTEXC	COD		inteiro			L6-01: descarte em declarado/sem_carga.tsv (duplicado): motivo de cancelamento do RECIBO (único consumidor FCRECIBO), cujo texto entra em recibo.motivo_cancelamento (L8-09, ref:TBMOTEXC>NOME); não é motivo da recepção
 TBPROCED	COD	procedencia.codigo	texto			L6-01: o número da procedência vira o código
 TBPROCED	NOME	procedencia.descricao	texto_nome			L6-01: nome; nulo recusa só a linha (NOT NULL)
-TBPROCED	ID_TBPROCEDPADRAO		chave_origem			L6-01: não carregada por ora: a classificação padrão vira procedencia.tipo_padrao pelo de-para de valores (pedido no L6-01.json)
-TBPROCED	SITUACAO		codigo_char			L6-01: não carregada: domínio da situação não confirmado (S/N ou A/I); pedido de confirmação para alimentar ativo
+TBPROCED	SITUACAO	procedencia.ativo	codigo_char	valores		L6-01: situação S/N ou A/I (valores.d/L6-01.tsv); outro valor: valor_fora_do_dominio e fica o padrão
+TBPROCED	ID_TBPROCEDPADRAO	procedencia.tipo_padrao	inteiro	valores		L6-01: classificação padrão (domínio do produto): de-para código->tipo_padrao ainda sem evidência (só o nulo tem par); procedência classificada fica com valor_fora_do_dominio e a chave original para o cliente classificar (decisão em F4-decisoes-destino.md)
 TBPROCED	UNIDADE					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
 TBPROCED	DRS					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
 TBPROCED	MODULO					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
@@ -43,13 +74,3 @@ TBPROCED	COD_PRES					L6-01: não carregada: sem coluna equivalente na procedên
 TBPROCED	PROCED_IAG					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
 TBPROCED	ID_DIGITAL					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
 TBPROCED	ID_DIGITAL_EXPORTATION_CONFIG					L6-01: não carregada: sem coluna equivalente na procedência (dado de integração ou de regionalização da origem)
-RECONFIC	COD		inteiro			L6-01: tabela não carregada: a regra de impressão exige o modelo pela chave composta da origem (COD,GRAFICA), que a referência ainda não resolve, e o modelo vem depois na ordem; fonte pagadora e especialidade também vêm depois (pedidos no L6-01.json)
-REESPFIC	COD		inteiro			L6-01: tabela não carregada: a regra de impressão exige o modelo pela chave composta da origem (COD,GRAFICA), que a referência ainda não resolve, e o modelo vem depois na ordem; fonte pagadora e especialidade também vêm depois (pedidos no L6-01.json)
-REGRPFIC	COD		inteiro			L6-01: tabela não carregada: a regra de impressão exige o modelo pela chave composta da origem (COD,GRAFICA), que a referência ainda não resolve, e o modelo vem depois na ordem; fonte pagadora e especialidade também vêm depois (pedidos no L6-01.json)
-REUNIFIC	COD		inteiro			L6-01: tabela não carregada: a regra de impressão exige o modelo pela chave composta da origem (COD,GRAFICA), que a referência ainda não resolve, e o modelo vem depois na ordem; fonte pagadora e especialidade também vêm depois (pedidos no L6-01.json)
-REEXCATE	REG		inteiro			L6-01: tabela não carregada: o atendimento excluído não existe no destino (entidade_id e atendimento_id NOT NULL), o motivo vem de tabela fora do mapa, a data e hora estão em duas colunas e o retrato JSON não tem regra (pedidos no L6-01.json)
-REPARATE	POR_USUARIO		codigo_char			L6-01: tabela não carregada: 23 indicadores S/N numa linha viram uma linha por campo herdado (desdobramento pedido no L5-02.json e no L6-01.json)
-RETITFIC	COD		inteiro			L6-01: tabela não carregada: título do mesmo modelo de REMODFIC; gravar à parte duplicaria o modelo (pedido de complemento pela chave no L6-01.json)
-TBMOTCANCMOD	ID		chave_origem			L6-01: tabela não carregada: os mesmos módulos de recepção de TBMODULO_RECEPCAO; gravar de novo duplicaria o módulo (pedido de de-para no L6-01.json)
-TBMOTCANCTP	ID		chave_origem			L6-01: tabela não carregada: domínio de valor (operação do escopo do motivo), sem motivo nem módulo na linha (pedido no L6-01.json)
-TBPROCEDPADRAO	ID		chave_origem			L6-01: tabela não carregada: classificação padrão da procedência, vira o valor de procedencia.tipo_padrao (pedido de de-para de valores no L6-01.json)

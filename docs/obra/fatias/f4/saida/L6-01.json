@@ -1,64 +1,39 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py",
-   "mudanca": "Referência declarada a pai de chave composta (ex.: via 'ref:REMODFIC(COD,GRAFICA)'), montando a chave do pai pelas colunas da linha",
-   "motivo": "RECONFIC, REESPFIC, REGRPFIC e REUNIFIC apontam o modelo pela chave (COD,GRAFICA) de REMODFIC; regra_impressao_ficha.modelo_ficha_impressa_id é NOT NULL. Sem isso as 4 tabelas (~970 linhas na referência) não carregam"
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter) + mapa.py (opções da via)",
+   "mudanca": "Opção de coluna 'exige_pai' (ou 'obrigatoria') na via de uma referência: quando a origem TEM valor e o pai nunca foi visto (pai_inexistente), a linha é RECUSADA em vez de gravar NULL, mesmo com a coluna do destino aceitando NULL; origem sem valor continua NULL",
+   "motivo": "PRIORITÁRIO: em regra_impressao_ficha o critério (fonte pagadora, especialidade, unidade) aceita NULL porque NULL quer dizer 'todas'. Hoje RECONFIC com convênio inexistente grava a regra com critério NULL e pai_inexistente: a regra restrita vira regra geral (na sintética, RECONFIC (1,9) gravada). As dependências RECONFIC->TBCONVEN e REESPFIC->TBESPEC já foram declaradas e o mapa regenerado (o pai carrega antes); falta só a recusa. Depois, declarar 'exige_pai' em RECONFIC.CONV, REESPFIC.ESP e REUNIFIC.UNID e esperar recusa"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv + dependencias.tsv (via tools/obra/gerar_mapa_conector.py)",
-   "mudanca": "Dependências RECONFIC/REESPFIC/REGRPFIC/REUNIFIC -> REMODFIC (e -> TBCONVEN, TBESPEC, TBUNIDAD e a fonte do grupo de faturamento) para que a ordem ponha o modelo, a fonte pagadora (729) e a especialidade (976) antes das regras de impressão (225-233)",
-   "motivo": "hoje depende_de está vazio e as regras vêm antes do modelo (229) e dos cadastros: toda referência seria pai_inexistente"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
+   "mudanca": "Coluna especial '#chave[:n[:prefixo]]': texto da chave da origem (colunas da chave unidas por '-'), com o mesmo resumo estável de '#codigo_derivado' quando não couber. Ao trocar a declaração de REMODFIC COD -> '#chave' em modelo_ficha_impressa.codigo, a tabela tem de ser reprocessada: as colunas da chave já estão no hash da linha, então a linha recusada antes (1062) continuaria 'igual' e nunca seria regravada (sugestão: a assinatura da declaração entra no hash, ou um comando de reprocessar a tabela)",
+   "motivo": "REMODFIC tem chave (COD,GRAFICA): o mesmo número nas variantes comum e de formulário pré-impresso colide em uq_modelo_ficha_impressa_codigo (restricao_destino_1062, pendência visível hoje). Com '#chave' as duas variantes entram"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Coluna especial '@chave' (texto da chave da origem, ex.: '2/S') para o código de destino quando a chave da origem é composta. Com ela, ligar REMODFIC (hoje não carregada) com as declarações previstas em colunas.d/L6-01.tsv: @chave -> modelo_ficha_impressa.codigo; NOME -> titulo (texto_nome); QTDE -> copias (inteiro_zero_nulo); ORDEM -> ordem (inteiro); RETORNO -> somente_retorno, GRAFICA -> formulario_pre_impresso, IMPANA -> imprime_anamnese, DUPLEX -> frente_verso (booleano_sn); IDADEI -> idade_minima, IDADEF -> idade_maxima (inteiro_zero_nulo); =~outro -> tipo_documento; '=~Modelo migrado sem leiaute: defina o conteúdo antes de ativar' -> conteudo; =0 -> ativo. Teste no motor: uma coluna especial que entra na declaração depois de uma carga (ou que muda de COD para '@chave') precisa entrar no hash da linha (ou forçar o reprocesso da tabela), senão _situacao trata a linha já vista como 'igual' e nunca regrava",
-   "motivo": "REMODFIC tem chave (COD,GRAFICA): o mesmo número existe nas variantes comum e gráfica e modelo_ficha_impressa.codigo é único. Carregar com codigo=COD provisório não se desfaz: a variante recusada (1062) ficaria recusada para sempre e a gravada ficaria com o código antigo; por isso REMODFIC não carrega até o '@chave'"
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar/canon)",
+   "mudanca": "Regra faltante: valor DATE da origem gravado em coluna DATETIME do destino tem de virar datetime à meia-noite antes da soma de controle; hoje a origem soma '2026-04-02' e o destino relido '2026-04-02 00:00:00.000' e a conciliação diverge. Junto, a regra genérica de data + hora HHMM texto em duas colunas -> DATETIME (já pedida por outras fatias)",
+   "motivo": "REEXCATE (520 linhas na referência) -> trilha_auditoria.ocorrido_em (DATETIME NOT NULL): a origem tem DTCANCEL (DATE) + HRCANCEL (VARCHAR HHMM). Também FCRECIBO (L8-09)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Complemento de destino de outra tabela pela chave (UPDATE de colunas declaradas da linha já gravada por outra tabela da origem, ex.: RETITFIC.NOME -> modelo_ficha_impressa.titulo pela chave COD,GRAFICA de REMODFIC)",
-   "motivo": "RETITFIC é o título do mesmo modelo de REMODFIC; gravá-lo como linha própria duplicaria o modelo. Ficou sem carga"
+   "arquivo": "conector/sante_conector/carga_mapa.py (#retrato)",
+   "mudanca": "Regra/forma '#retrato:*' (ou opção) que lê TODAS as colunas da tabela da origem para o retrato JSON, não só as colunas declaradas com destino",
+   "motivo": "REEXCATE -> trilha_auditoria.dados_antes: o retrato do atendimento excluído (prontuário, nome, médico, convênio, unidade, anamnese, motivo) tem de ir inteiro; essas colunas não têm coluna própria"
   },
   {
-   "arquivo": "docs (decisão do dono) + db/migracoes/02_ADM e 04_REC + conector/mapa (TBMOTCANCCAD)",
-   "mudanca": "Decidir a carga de REEXCATE: (a) o atendimento excluído não existe no destino (cancelamento_atendimento.atendimento_id e registro_excluido.entidade_id NOT NULL) — aceitar entidade_id nulo para origem 'migracao' com o número do atendimento no retrato, ou só registro_excluido; (b) pôr TBMOTCANCCAD no mapa (motivo_cancelamento_operacao/motivo_exclusao_registro), hoje dep_fora_do_mapa; (c) regra genérica data + hora texto HHMM em duas colunas -> DATETIME (ocorrido_em/cancelado_em); (d) coluna especial '@json' com o retrato das colunas lidas (registro_excluido.dados, NOT NULL); (e) usuário pelo login (via ref:TBUSERS)",
-   "motivo": "sem isso nenhuma linha de REEXCATE (520 na referência) cria registro de destino sem inventar dado"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.erros_especiais_e_opcoes",
+   "mudanca": "Destino PRINCIPAL desdobrado (desdobrar no único destino da tabela: chave do conector_origem '<chave>/<rótulo>' e conciliação por item); e opção de gravar também o item falso (hoje falso ou vazio não gera linha): em regra_heranca_campo o 'N' é herda=falso e a ausência de linha cai no padrão do produto (herdar)",
+   "motivo": "REPARATE (1 linha, 23 marcações S/N) -> regra_heranca_campo uma linha por campo; declaração pronta comentada em colunas.d/L6-01.tsv (#REPARATE), bloqueada em sem_carga.tsv (regra_faltante)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Desdobrar uma linha em várias, uma por coluna-indicador (mesmo pedido do L5-02.json): REPARATE vira regra_heranca_campo com campo pelo de-para coluna -> valor do domínio (CONV_ANT->fonte_pagadora, PLANO_ANT->plano, MATRIC_ANT->carteira, GUIA_ANT->guia, CRM_ANT->profissional, MEDRESP_ANT->profissional_responsavel, ESPEC_ANT->especialidade, CDC_ANT->centro_custo, UNID_ANT->unidade, CLIN_ANT->clinica, CID_ANT->cid, PROCTO_ANT->procedimento, CARSOL_ANT->carater, TPCONS_ANT->tipo_consulta, TPSAI_ANT->tipo_saida, EMPRESA_ANT->empresa, UNIORI_ANT->unidade_origem, TPDOENCA_ANT->tipo_doenca, PESO_ANT->peso, ALTURA_ANT->altura, ACOMP_ANT->acompanhante, TITCONV_ANT->titular, VALCAR_ANT->validade_carteira) e herda pelo S/N",
-   "motivo": "REPARATE é uma linha com 23 indicadores S/N; o destino guarda uma linha por campo. POR_USUARIO indica regra por usuário (usuario_id), sem usuário na linha"
+   "arquivo": "conector/sante_conector/carga_mapa.py (complementa)",
+   "mudanca": "Complemento que não diverge a conciliação do pai: colunas gravadas por 'complementa' saem da soma do destino principal (ou opção 'quando_houver' que prefere o valor do complemento a um valor já declarado no pai)",
+   "motivo": "RETITFIC (título impresso do modelo) complementa modelo_ficha_impressa.titulo, já declarado por REMODFIC.NOME; sem a regra a conciliação de REMODFIC diverge quando o título difere do nome. Declaração pronta comentada (#RETITFIC), bloqueada em sem_carga.tsv (regra_faltante)"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv + declarado/descartes.tsv",
-   "mudanca": "TBPROCEDPADRAO: descarte justificado como domínio e de-para de valores TBPROCED.ID_TBPROCEDPADRAO -> procedencia.tipo_padrao (residencia, retorno, demanda_espontanea, referenciada, via_publica, judicial, outro), conferido pelo dono com as 4 linhas da referência; TBMOTCANCTP: descarte como domínio de motivo_cancelamento_operacao_escopo.operacao (atendimento, marcacao) a aplicar quando TBMOTCANCCAD entrar no mapa",
-   "motivo": "são listas de classificação; os pares de valores não podem ser inventados pela fatia (só agregados da origem são visíveis)"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv + declarado/valores.tsv",
-   "mudanca": "TBMOTCANCMOD: não gravar em modulo_recepcao (TBMODULO_RECEPCAO já carrega os módulos); de-para TBMOTCANCMOD.ID -> módulo de TBMODULO_RECEPCAO para o escopo do motivo (motivo_cancelamento_operacao_escopo.modulo_recepcao_id) quando TBMOTCANCCAD entrar; idem conferir TBTIPO_ATENDIMENTO (ordem 254), que também aponta modulo_recepcao",
-   "motivo": "três tabelas da origem para o mesmo destino com códigos 1..n colidem em uq_modulo_recepcao_codigo (1062) ou duplicam o módulo"
-  },
-  {
-   "arquivo": "docs (confirmação de domínio)",
-   "mudanca": "Confirmar o domínio de TBPROCED.SITUACAO (S/N ou A/I) por contagem agregada na imagem para declará-la em procedencia.ativo (booleano_sn ou booleano_ai)",
-   "motivo": "declarar com a regra errada poria valor_fora_do_dominio em toda linha; ficou sem carga"
-  },
-  {
-   "arquivo": "db/migracoes/04_REC/01_tabelas.sql (decisão do modelo)",
-   "mudanca": "Avaliar se modelo_ficha_impressa deve aceitar modelo sem relatório nem conteúdo quando inativo (CHECK ck_modelo_ficha_impressa_fonte condicionada a ativo) em vez do conteúdo presumido",
-   "motivo": "o leiaute da origem fica no programa; hoje o modelo migrado entra com texto presumido (valor_presumido) e inativo"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/tabelas.tsv (regra_impressao_ficha) + db/migracoes/04_REC (decisão do modelo)",
-   "mudanca": "Desdobrar REMODFIC.CLINICA (lista de códigos de clínica separada por vírgula) em uma linha de regra_impressao_ficha por clínica, referenciando clinica_assistencial pelo código; regra_impressao_ficha não tem coluna de clínica (só estabelecimento, categoria, fonte pagadora, especialidade, grupo de faturamento e unidade assistencial): decidir se ganha clinica_assistencial_id ou se a clínica mapeia para outro destino. Código da lista sem clínica no destino vira pendência pai_inexistente",
-   "motivo": "o modelo restrito a algumas clínicas, quando ativado, passaria a valer para todas; nenhuma tabela de regra da origem (por convênio, especialidade, grupo e unidade) cobre a clínica"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.tsv (pares confirmados pelo dono)",
-   "mudanca": "De-para de valores TBACAOFLUXOSENHA.SIGLA -> acao_fluxo_senha.encerra_senha (depara=valores, regra codigo_char: a caixa distingue a sigla), com os pares confirmados pelo dono pelas siglas da referência (só agregados); trocar a declaração '=~0' por SIGLA. Ao trocar, a tabela precisa ser reprocessada (a SIGLA passa a entrar nas colunas lidas e a linha aparece como alterada: Sincronizar, a origem vence)",
-   "motivo": "sem a sigla toda ação migrada entra com encerra_senha presumido 'não' (pendência valor_presumido por linha); finalizar e cancelar precisam tirar a senha da fila"
+   "arquivo": "db/migracoes/04_REC/01_tabelas.sql (trilha F2.2: proposta de modelo)",
+   "mudanca": "regra_impressao_ficha.clinica_assistencial_id (FK clinica_assistencial), para a restrição do modelo a algumas clínicas; depois, desdobrar REMODFIC.CLINICA (lista separada por vírgula) em uma regra por clínica",
+   "motivo": "o modelo restrito a clínicas, quando ativado, passaria a valer para todas; hoje o modelo migrado entra inativo e o cliente restringe ao ativar"
   }
  ]
 }

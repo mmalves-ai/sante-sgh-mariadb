@@ -1,0 +1,11 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	Leve	leve	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	LEVE	leve	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	Moderada	moderada	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	MODERADA	moderada	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	Moderado	moderada	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	MODERADO	moderada	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	Grave	grave	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	GRAVE	grave	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	Fatal	fatal	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome
+TBCBARANOTIFICACAO	ID_TBCBARASEVERIDADE	acao_alerta_alergia.gravidade_aplicavel	FATAL	fatal	L6-10: gravidade pelo nome (mesmo de-para da L6-08, valores.d/L6-08.tsv); evidência: o próprio nome

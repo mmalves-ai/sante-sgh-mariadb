@@ -1,14 +1,20 @@
 """Fatia L8-04 (faturamento e restantes, módulo FAT): tabelas da origem com a forma do dicionário, dados 100% falsos
-e as anomalias da fatia.
+e as anomalias da fatia (rodada de cobertura total).
 
-Carregadas (6): tipo de prestador do repasse (categoria PRESUMIDA 'outro'), tipo de serviço contratado (categoria
-PRESUMIDA), grupo de ato (filme e alta complexidade S/N), tipo de lançamento vindo de duas origens (código de 2
-letras com natureza e repasse pelo de-para do código; id da outra com natureza e repasse PRESUMIDOS) e função da equipe na cobrança (tipo PRESUMIDO).
-Fora da carga (17, entram com 2 linhas cada só para provar que nada é gravado): motivos em colunas.d/L8-04.tsv e
-pedidos em saida/L8-04.json (catálogo TUSS e terminologia TISS oficiais, fonte pagadora ou contrato NOT NULL sem
-origem, documento CPF/CNPJ num só campo, desdobrar percentuais em linhas, domínios enumerados sem linha própria).
-Anomalias: nome vazio ou só espaços em destino NOT NULL (1048), S/N fora do domínio (padrão com pendência), códigos
-que só diferem pela caixa (codigo_colisao_caixa: o grupo todo recusado), código de natureza fora do domínio (recusado), nome com espaços repetidos.
+Carregadas (10): tipo de prestador do repasse, tipo de serviço contratado, grupo de ato, tipo de lançamento (duas
+origens), função da equipe na cobrança, prestador terceiro (tipo de pessoa PRESUMIDO, CNPJ pela regra), subgrupo de
+despesa (subgrupo da natureza financeira, grupo pela referência), preço do procedimento na tabela de honorários (com
+o complemento do item faturável do procedimento) e a fórmula de pagamento por via de acesso (vigência da carga).
+Fora da carga (13, 2 linhas cada só para presença): 12 descartes com motivo de produto em declarado/sem_carga.tsv e
+TBPERTHM (regra faltante no motor: desdobrar no destino principal, pedido em saida/L8-04.json).
+PAIS_EXTERNOS: tabela de honorários (TBCTRTHM), grupo de despesa (TBGRUDES), procedimento da tabela (TBPROCTO),
+centro de custo (TBCENCUS) e fornecedor (TBFORNEC), registrados como já carregados (ids 1 a 7 pela ordem alfabética da tabela: TBCENCUS 1, TBCTRTHM 2,
+TBFORNEC 3, TBGRUDES 4, TBPROCTO 5 a 7); a via de
+acesso (TBTISSVIAACES) fica de fora de propósito: nada a carrega ainda e a fórmula mostra a recusa real; PREPARO_DESTINO cria o
+estabelecimento único e os itens faturáveis dos procedimentos (ids 5 a 7) que o preço completa.
+Anomalias: nome vazio (1048), S/N, 0/1 e sexo fora do domínio, códigos que só diferem pela caixa, pai inexistente
+(nulo com pendência, NOT NULL recusa, complemento sem pai recusa), pai recusado (pai_pendente), percentual fora da
+faixa, ordem 0 elevada a 1, documento em ponto flutuante (documento_invalido até o pedido 1 e CHECK do documento).
 """
 import datetime
 import decimal
@@ -69,16 +75,32 @@ CREATE TABLE TBFORMULAPAGTO (ID SMALLINT NOT NULL, NOME VARCHAR(30) NOT NULL, ID
   PRIMARY KEY (ID));
 """
 
-CARREGADAS = ('TBGRAUPARTPROC', 'TBRPATPREPASSE', 'TBSRVCON', 'TBTABATO', 'TBTIPO_PROCEDIMENTO', 'TBTPLANC')
-FORMAS_BLOQUEADAS = {
-    'TBFORMULAPAGTO': ('SMALLINT', 'VARCHAR', 'SMALLINT', 'SMALLINT', 'NUMERIC', 'SMALLINT', 'SMALLINT', 'CHAR'),
+CARREGADAS = ('TBGRAUPARTPROC', 'TBRPATPREPASSE', 'TBSRVCON', 'TBTABATO', 'TBTIPO_PROCEDIMENTO', 'TBTPLANC',
+              'TBPRESER', 'TBSUBDES', 'TBTABTHM', 'TBFORMULAPAGTO')
+DESCARTADAS = ('TBREFMEMTUSS', 'TBREFUNI', 'TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP',
+               'TBTISSFORMAENVPAD', 'TBTISSGERSPSADTPS', 'TBTISSPARDEF', 'TBTISSTPGUIA_TBTISSPARDEF', 'TBTISSPOSPROF',
+               'TBTIPPRO')
+SEM_MECANISMO = ('TBPERTHM',)
+BLOQUEADAS = DESCARTADAS + SEM_MECANISMO  # fora do plano de carga (nome mantido para os testes)
+# linhas recusadas por pai_inexistente no complemento (não é restrição do destino)
+RECUSADAS_SEM_PAI = {"TBTABTHM": 1}
+
+# TBTISSVIAACES NÃO entra: nenhum lote carrega via_acesso_cirurgico (pedido 4), e a fórmula prova a recusa real
+PAIS_EXTERNOS = {"TBCTRTHM": ["7"], "TBGRUDES": ["3"], "TBPROCTO": ["501", "502", "503"], "TBCENCUS": ["40"],
+                 "TBFORNEC": ["900"]}
+PREPARO_DESTINO = (
+    "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+    " INSERT INTO item_faturavel (id, codigo, descricao, tipo_item, grupo_faturamento_id, origem, criado_em) VALUES"
+    " (5, 'p501', 'Procedimento exemplo um', 'procedimento', 1, 'migracao', UTC_TIMESTAMP(3)),"
+    " (6, 'p502', 'Procedimento exemplo dois', 'procedimento', 1, 'migracao', UTC_TIMESTAMP(3)),"
+    " (7, 'p503', 'Procedimento exemplo tres', 'procedimento', 1, 'migracao', UTC_TIMESTAMP(3));")
+
+FORMAS_FORA = {
     'TBPERTHM': ('SMALLINT', 'SMALLINT', 'INTEGER', 'DATE', 'VARCHAR', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC', 'NUMERIC'),
-    'TBPRESER': ('INTEGER', 'SMALLINT', 'SMALLINT', 'CHAR', 'VARCHAR', 'SMALLINT', 'VARCHAR', 'VARCHAR', 'NUMERIC', 'INTEGER', 'NUMERIC', 'VARCHAR', 'VARCHAR', 'INTEGER', 'VARCHAR', 'INTEGER', 'INTEGER', 'VARCHAR', 'INTEGER', 'VARCHAR', 'VARCHAR', 'VARCHAR', 'INTEGER', 'INTEGER', 'VARCHAR', 'VARCHAR', 'INTEGER', 'INTEGER', 'SMALLINT', 'INTEGER', 'SMALLINT'),
     'TBREFMEMTUSS': ('INTEGER', 'SMALLINT', 'BIGINT', 'SMALLINT', 'INTEGER', 'CHAR', 'DATE', 'DATE'),
     'TBREFUNI': ('SMALLINT', 'INTEGER', 'SMALLINT', 'BIGINT', 'NUMERIC', 'SMALLINT', 'INTEGER', 'INTEGER', 'VARCHAR'),
     'TBSTATUSPROCESSA': ('SMALLINT', 'VARCHAR'),
-    'TBSUBDES': ('INTEGER', 'INTEGER', 'VARCHAR', 'VARCHAR', 'INTEGER', 'VARCHAR'),
-    'TBTABTHM': ('INTEGER', 'SMALLINT', 'INTEGER', 'VARCHAR', 'NUMERIC', 'SMALLINT', 'NUMERIC', 'NUMERIC', 'SMALLINT', 'VARCHAR', 'SMALLINT', 'VARCHAR', 'SMALLINT', 'INTEGER', 'VARCHAR', 'VARCHAR', 'SMALLINT', 'VARCHAR', 'NUMERIC', 'SMALLINT', 'BIGINT', 'VARCHAR', 'SMALLINT', 'VARCHAR', 'NUMERIC', 'SMALLINT', 'SMALLINT', 'VARCHAR', 'INTEGER', 'SMALLINT', 'NUMERIC', 'VARCHAR', 'VARCHAR', 'SMALLINT', 'INTEGER', 'VARCHAR', 'SMALLINT', 'SMALLINT', 'VARCHAR', 'TIMESTAMP', 'TIMESTAMP', 'SMALLINT', 'CHAR', 'VARCHAR', 'INTEGER', 'CHAR', 'VARCHAR'),
     'TBTIPCOPART': ('SMALLINT', 'VARCHAR'),
     'TBTIPPRO': ('INTEGER', 'SMALLINT'),
     'TBTISSEMIEXP': ('SMALLINT', 'VARCHAR'),
@@ -89,9 +111,33 @@ FORMAS_BLOQUEADAS = {
     'TBTISSTPGUIA_TBTISSPARDEF': ('SMALLINT', 'SMALLINT'),
     'TBTPFASEUNIBH': ('SMALLINT', 'VARCHAR'),
 }
-BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
+
+COLS_PRESER = ("ID ATO COD MODULO NOME VINCULO REP_FILME CUSTO CGC_CPF CDC REPASSE PANEST SITUACAO FORN SEM_CESSAO CRM "
+               "CNES REP_SOBRE EQV_SGP ENDERECO BAIRRO CIDADE NUMERO CEP UF FONE CBO_ANS ID_TBCBOPRO ID_TBRPATPREPASSE "
+               "ID_CDCREDENCIADO ID_TBTPDOCUMENTO").split()
+COLS_THM = ("ID_TBPROCTO TAB COD NOME CH AUX FILME COPE INC PROCMED TIPOATO STAND REPASSE DTHPACOTE SEXO PACOTE EVENTO "
+            "PMEDICO PPORTE TAB_REF PROC_REF BILATERAL ATOSIP TITULO PERCSANT TIPO_DESP EQUIV_TISS REVISAO INAMPS "
+            "QTDE_MAX_GUIA PERC_PROC_ANT PERCSANT_SFILME SITUACAO TAB_REF_TUSS PROC_REF_TUSS ALTA_COMPLEXIDADE "
+            "EXIGE_AUTORIZACAO QTDE_MAX_GUIA_EXT LAN_HORA_FINAL DATA_HORA_INCLUSAO DATA_HORA_ULTIMA_ATUALIZACAO "
+            "EXPORTAR_TEMPRO FORMA_ENVIO APELIDO_PROCEDIMENTO ID_TBSEXO BLOQUEIO PANE").split()
 
 D = decimal.Decimal
+
+
+def _dv(base, pesos_lista):
+    d = [int(x) for x in base]
+    for pesos in pesos_lista:
+        r = sum(x * p for x, p in zip(d, pesos)) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return "".join(map(str, d))
+
+
+def cnpj_falso(base12):
+    return _dv("%012d" % base12, [[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]])
+
+
+def cpf_falso(base9):
+    return _dv("%09d" % base9, [list(range(10, 1, -1)), list(range(11, 1, -1))])
 
 
 def _valor(forma, i, k):
@@ -102,14 +148,17 @@ def _valor(forma, i, k):
         return D("%d.%02d" % (i + k, k))
     if forma == "DATE":
         return datetime.date(2025, 1 + i % 12, 1 + k % 28)
-    if forma == "TIMESTAMP":
-        return datetime.datetime(2025, 1 + i % 12, 1 + k % 28, 8, 30)
     return "S"  # CHAR/VARCHAR: cabe em qualquer tamanho da fatia
+
+
+def _linha(cols, **v):
+    assert not set(v) - set(cols), set(v) - set(cols)
+    return [v.get(c) for c in cols]
 
 
 def linhas(r, ins):
     # --- fora da carga: duas linhas por tabela (só presença)
-    for t, formas in FORMAS_BLOQUEADAS.items():
+    for t, formas in FORMAS_FORA.items():
         for i in (1, 2):
             ins(t, [_valor(f, i, k) for k, f in enumerate(formas)])
 
@@ -136,6 +185,46 @@ def linhas(r, ins):
     for x in [(1, "Cirurgião", 1), (2, "Primeiro  auxiliar", 2), (3, "", None), (4, "Anestesista", 6)]:
         ins("TBGRAUPARTPROC", list(x))
 
+    # --- prestador terceiro: tipo de pessoa presumido (3); CNPJ e CPF vêm em ponto flutuante (documento_invalido até o
+    # pedido 1) e sem documento: as três caem no CHECK do documento (4025)
+    base = dict(ATO=1, COD=1, MODULO="F", SITUACAO="A", REP_FILME="N", CUSTO="S", PANEST="N", SEM_CESSAO="N",
+                REPASSE=D("30.00"), ENDERECO="Rua Exemplo", NUMERO=10, BAIRRO="Centro", CEP=1310100, FONE="1130000000",
+                CNES=1234567, ID_TBRPATPREPASSE=1, CDC=40)
+    # base do repasse: C, R e Z (fora do domínio); fornecedor 900 externo e 901 inexistente; centro de custo 41
+    # inexistente na terceira
+    for i, doc, sobre, forn, cdc in [(1, float(cnpj_falso(112223330001)), "C", 900, 40),
+                                     (2, float(cpf_falso(529982247)), "R", None, 40), (3, None, "Z", 901, 41)]:
+        ins("TBPRESER", _linha(COLS_PRESER, **dict(base, ID=i, NOME="Prestador  exemplo %d" % i, CGC_CPF=doc,
+                                                   REP_SOBRE=sobre, FORN=forn, CDC=cdc)))
+    # --- subgrupo de despesa: grupo 3 externo; 3 sem nome (1048); grupo 77 inexistente (pai_inexistente + 1048);
+    # classificação presumida em toda linha
+    for x in [(3, 1, "Material  de escritório", "3.1.01", 40, "S"), (3, 2, "Limpeza", None, 41, "N"),
+              (3, 3, None, None, None, None), (77, 1, "Sem grupo", None, None, None)]:
+        ins("TBSUBDES", list(x))
+    # --- preço do procedimento na tabela 7 (externa) e complemento do item do procedimento (501 a 503 externos)
+    ts = datetime.datetime(2025, 3, 1, 8, 30)
+    thm = [dict(ID_TBPROCTO=501, TAB=7, COD=10101012, NOME="Consulta  em consultório", CH=100.0, AUX=0, SEXO="A", SITUACAO="A",
+                EXIGE_AUTORIZACAO=0, BILATERAL="N", ALTA_COMPLEXIDADE="N", TIPOATO=1, APELIDO_PROCEDIMENTO="Consulta",
+                QTDE_MAX_GUIA=0),
+           # grupo de ato 9 inexistente: NULL com pai_inexistente (linha gravada)
+           dict(ID_TBPROCTO=502, TAB=7, COD=30101010, NOME="Cirurgia exemplo", CH=250.5, AUX=2, FILME=0.5, INC=1, SITUACAO="I",
+                SEXO="F", EXIGE_AUTORIZACAO=1, BILATERAL="S", ALTA_COMPLEXIDADE="S", TIPOATO=9, QTDE_MAX_GUIA=2),
+           # autorização 5 e sexo X fora do domínio: o item fica com o que tinha (2 valor_fora_do_dominio)
+           dict(ID_TBPROCTO=503, TAB=7, COD=40301010, NOME="Exame exemplo", CH=None, EXIGE_AUTORIZACAO=5, SEXO="X",
+                SITUACAO="Q"),
+           # tabela 8 inexistente: pai_inexistente e NOT NULL (1048)
+           dict(ID_TBPROCTO=501, TAB=8, COD=1, NOME="Sem tabela", CH=1.0),
+           # procedimento 999 inexistente: o complemento recusa a linha (pai_inexistente)
+           dict(ID_TBPROCTO=999, TAB=7, COD=50000001, NOME="Sem procedimento", CH=1.0)]
+    for x in thm:
+        ins("TBTABTHM", _linha(COLS_THM, DATA_HORA_INCLUSAO=ts, DATA_HORA_ULTIMA_ATUALIZACAO=ts, **x))
+    # --- fórmula de pagamento: via 9 inexistente (pai_inexistente + 1048); percentual 1500 fora da faixa (NULL + 1048);
+    # ordem 0 elevada a 1 e ativo X fora do domínio (gravada); tipo de lançamento 3 recusado (pai_pendente)
+    for x in [(1, "Via única principal", 1, 1, D("100.00"), 0, 1, "S"), (2, "Mesma via demais", 1, 2, D("50.00"), 0, 2, "S"),
+              (3, "Via inexistente", 1, 9, D("70.00"), 0, 1, "S"), (4, "Percentual alto", 2, 1, D("1500.00"), 0, 1, "N"),
+              (5, "Ordem zero", 2, 2, D("70.00"), 0, 0, "X"), (6, "Tipo recusado", 3, 1, D("100.00"), 0, 3, "S")]:
+        ins("TBFORMULAPAGTO", list(x))
+
     return {
         "TBRPATPREPASSE": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBSRVCON": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
@@ -144,4 +233,16 @@ def linhas(r, ins):
                                                               "restricao_destino_1048": 1}},
         "TBTPLANC": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "TBGRAUPARTPROC": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
+        "TBPRESER": {"gravados": 0, "pendencias": {"valor_presumido": 3, "documento_invalido": 2,
+                                                   "pai_inexistente": 2, "valor_fora_do_dominio": 1,
+                                                   "restricao_destino_4025": 3}},
+        "TBSUBDES": {"gravados": 2, "pendencias": {"valor_presumido": 4, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 2}},
+        "TBTABTHM": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "valor_fora_do_dominio": 3,
+                                                   "restricao_destino_1048": 1}},
+        # sem via de acesso carregada (pedido 4) toda fórmula é recusada: 5 pai_inexistente + 1048, 1 pai_pendente
+        "TBFORMULAPAGTO": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 5, "valor_presumido": 5,
+                                                         "pai_inexistente": 5, "restricao_destino_1048": 5,
+                                                         "valor_fora_do_dominio": 2, "valor_elevado_ao_minimo": 1,
+                                                         "pai_pendente": 1}},
     }

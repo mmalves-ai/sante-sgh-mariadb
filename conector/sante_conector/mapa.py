@@ -79,7 +79,9 @@ CAMPOS_VALORES = ["tabela", "coluna", "destino", "valor_origem", "valor_destino"
 DEPARA_VALORES = "valores"
 
 
-_REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\(([A-Z0-9_$]+(?:,[A-Z0-9_$]+)+)\))?")
+_LISTA = r"[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
+_REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\((%s)\)|\.\((%s)\)=\((%s)\))?(?:/([a-z][a-z0-9_]*))?"
+                      % (_LISTA, _LISTA, _LISTA))
 _COL_ORIGEM = re.compile(r"[A-Z0-9_$]+")
 
 
@@ -90,16 +92,29 @@ def passos_ref(spec):
     - `T(C1,C2)`   chave composta: a chave de T é montada pelas colunas C1, C2 DESTA linha (na ordem da chave de T);
     - encadeada    `T>X` troca o valor pela coluna X da linha de T na origem; `T>X>U` segue para U pela chave
                    (ou `U.K`). Terminada em coluna, o valor segue para a regra/de-para declarados (ex.: código de
-                   catálogo oficial guardado no pai); terminada em tabela, grava o id do destino dela."""
+                   catálogo oficial guardado no pai); terminada em tabela, grava o id do destino dela;
+    - `T.(K1,K2)=(C1,C2)` chave alternativa COMPOSTA (só no primeiro passo): as colunas C1, C2 desta linha casam com
+                   as colunas K1, K2 de T na origem (repetido: `pai_ambiguo`);
+    - `.../<destino>` no último passo de tabela: grava o id da linha do DESTINO SECUNDÁRIO `<destino>` que o pai gravou
+                   (chave `<chave do pai>/<destino>` no conector_origem), não o do principal."""
     out = []
-    for i, p in enumerate((spec or "").split(">")):
+    partes = (spec or "").split(">")
+    for i, p in enumerate(partes):
         if i % 2 == 0:
             m = _REF_TAB.fullmatch(p)
-            if not m or (m.group(3) and i):
+            if not m or ((m.group(3) or m.group(4)) and i) or (m.group(6) and i != len(partes) - 1):
                 return None
-            modo = "alt" if m.group(2) else "composta" if m.group(3) else "chave"
-            out.append({"tabela": m.group(1), "modo": modo,
-                        "arg": m.group(2) if m.group(2) else m.group(3).split(",") if m.group(3) else None})
+            if m.group(4) and len(m.group(4).split(",")) != len(m.group(5).split(",")):
+                return None
+            modo = "alt" if m.group(2) else "composta" if m.group(3) else "alt_composta" if m.group(4) else "chave"
+            x = {"tabela": m.group(1), "modo": modo,
+                 "arg": m.group(2) if m.group(2) else m.group(3).split(",") if m.group(3) else
+                 m.group(4).split(",") if m.group(4) else None}
+            if m.group(4):
+                x["cols"] = m.group(5).split(",")
+            if m.group(6):
+                x["destino"] = m.group(6)
+            out.append(x)
         else:
             if not _COL_ORIGEM.fullmatch(p):
                 return None
@@ -110,13 +125,13 @@ def passos_ref(spec):
 def ref_simples(spec):
     """Referência só pela chave do pai (a forma original `ref:T`)."""
     p = passos_ref(spec)
-    return bool(p) and len(p) == 1 and p[0]["modo"] == "chave"
+    return bool(p) and len(p) == 1 and p[0]["modo"] == "chave" and not p[0].get("destino")
 
 
 # colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
-_ESPECIAIS = re.compile(r"@id|@estabelecimento|@vigencia_carga|#item|#rotulo|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
-                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?")
-OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa")
+_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item|#rotulo|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
+                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?")
+OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes")
 
 
 def opcoes_destino(colunas):
@@ -127,10 +142,13 @@ def opcoes_destino(colunas):
         dt = (c.get("destino") or "").partition(".")[0]
         if not dt:
             continue
-        o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False})
+        o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False,
+                                  "antes": False})
         for x in (c.get("via") or "").split(";"):
             if x == "opcional":
                 o["opcional"] = True
+            elif x == "antes":
+                o["antes"] = True
             elif x == "complementa":
                 o["complementa"] = True
             elif x.startswith("adotar:"):
@@ -161,15 +179,28 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
         n = c.get("coluna") or ""
         if n[:1] in ("@", "#") and not _ESPECIAIS.fullmatch(n):
             erros.append("coluna especial desconhecida: %s.%s" % (c["tabela"], n))
+        if n.startswith("@unico:") and ddl and n[7:] not in ddl:
+            erros.append("@unico a tabela inexistente no DDL: %s.%s" % (c["tabela"], n))
+        for x in (c.get("via") or "").split(";"):
+            if x.startswith("cod:"):
+                tc = x[4:].split(".")
+                if len(tc) != 2 or (ddl and (tc[0] not in ddl or tc[1] not in ddl[tc[0]]["colunas"])):
+                    erros.append("cod: a tabela.coluna inexistente no DDL: %s.%s -> %s" % (c["tabela"], n, x[4:]))
         if (c.get("destino") or "").count(".") == 1:
             por_t.setdefault(c["tabela"], []).append(c)
     for t, cols in sorted(por_t.items()):
         if t not in por:
             continue
         dts = principal_e_destinos(por[t]["tabelas_destino"], cols)
+        ops = opcoes_destino(cols)
+        for c in cols:
+            if c["coluna"].startswith("@id:"):
+                alvo = c["coluna"][4:]
+                if alvo not in dts or not ops.get(alvo, {}).get("antes") or alvo == c["destino"].split(".")[0]:
+                    erros.append("@id:%s sem destino secundário gravado antes (via antes) em %s" % (alvo, t))
         for dt, o in opcoes_destino(cols).items():
-            if dts and dt == dts[0] and (o["opcional"] or o["desdobrar"]):
-                erros.append("destino principal não pode ser opcional nem desdobrado: %s -> %s" % (t, dt))
+            if dts and dt == dts[0] and (o["opcional"] or o["desdobrar"] or o["antes"]):
+                erros.append("destino principal não pode ser opcional, desdobrado nem antes: %s -> %s" % (t, dt))
             for a in o["adotar"]:
                 if dt in ddl and a not in ddl[dt]["colunas"]:
                     erros.append("coluna de adoção inexistente no DDL: %s -> %s.%s" % (t, dt, a))

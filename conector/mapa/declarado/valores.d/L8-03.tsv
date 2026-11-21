@@ -1,0 +1,7 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBCTRDTH	SITUACAO	tabela_preco.situacao	A	ativa	L8-03: A/I, a convenção de situação da origem (como em TBCONVEN)
+TBCTRDTH	SITUACAO	tabela_preco.situacao	I	inativa	L8-03: A/I, a convenção de situação da origem
+TBCTRMEM	SITUACAO	tabela_preco.situacao	A	ativa	L8-03: A/I, a convenção de situação da origem
+TBCTRMEM	SITUACAO	tabela_preco.situacao	I	inativa	L8-03: A/I, a convenção de situação da origem
+TBCTRTHM	SITUACAO	tabela_preco.situacao	A	ativa	L8-03: A/I, a convenção de situação da origem
+TBCTRTHM	SITUACAO	tabela_preco.situacao	I	inativa	L8-03: A/I, a convenção de situação da origem

@@ -1,0 +1,22 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBITEDES	GRUPO	natureza_financeira.tipo	D	despesa	L8-12: grupo de despesa (TBGRUDES.CLASSIF, mesmo de-para da L8-11; medido D 34, R 6)
+TBITEDES	GRUPO	natureza_financeira.tipo	R	receita	L8-12: grupo de receita (TBGRUDES.CLASSIF)
+TBITEDES	REC_NAO_OPER	natureza_financeira.receita_operacional	S	0	L8-12: receita não operacional
+TBITEDES	REC_NAO_OPER	natureza_financeira.receita_operacional	N	1	L8-12: receita operacional
+TBITEDES	PROVISIONADO	natureza_financeira.provisiona	F	0	L8-12: provisão desligada (medido: F em 533/533)
+TBITEDES	PROVISIONADO	natureza_financeira.provisiona	N	0	L8-12: provisão desligada
+TBITEDES	TIPO_CUSTO	natureza_financeira.tipo_custo	F	fixo	L8-12: custo fixo (medido F 12)
+TBITEDES	TIPO_CUSTO	natureza_financeira.tipo_custo	V	variavel	L8-12: custo variável (medido V 7)
+TBNATOPE	ID_TBTPNATOPENF	natureza_operacao.finalidade		outra	L8-12: sem tipo: equivale ao tipo 1 (nenhum)
+TBNATOPE	ID_TBTPNATOPENF	natureza_operacao.finalidade	1	outra	L8-12: tipo 1 da origem: nenhum (classe medida por palavra-chave do nome)
+TBNATOPE	ID_TBTPNATOPENF	natureza_operacao.finalidade	2	simples_remessa	L8-12: tipo 2 da origem: simples remessa
+TBNATOPE	ID_TBTPNATOPENF	natureza_operacao.finalidade	3	venda	L8-12: tipo 3 da origem: venda de mercadoria
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	01	nf_papel	L8-12: modelo oficial 01: nota fiscal modelo 1/1A
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	1B	nf_papel	L8-12: modelo oficial 1B: nota fiscal avulsa
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	02	nf_papel	L8-12: modelo oficial 02: nota fiscal de venda a consumidor
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	04	nf_papel	L8-12: modelo oficial 04: nota fiscal de produtor
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	2D	cupom_fiscal	L8-12: modelo oficial 2D: cupom fiscal emitido por ECF
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	2E	cupom_fiscal	L8-12: modelo oficial 2E: cupom fiscal bilhete de passagem
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	59	cupom_fiscal	L8-12: modelo oficial 59: cupom fiscal eletrônico (CF-e SAT)
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	55	nfe	L8-12: modelo oficial 55: NF-e
+SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	65	nfce	L8-12: modelo oficial 65: NFC-e

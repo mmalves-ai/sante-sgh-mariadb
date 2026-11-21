@@ -56,6 +56,10 @@ REGRAS = {
                              "data_sentinela",
     "minutos_em_timestamp": "TIMESTAMP (ou TIME) que guarda uma DURAÇÃO como hora (1899-12-30 HH:MM) vira inteiro de "
                             "minutos (HH*60+MM); 00:00 vira NULL; outra data: os minutos da hora e pendência hora_com_data",
+    "minutos_hhmm": "DURAÇÃO em inteiro ou texto HHMM (ou HH:MM; texto cru CP1252 aceito) vira inteiro de minutos "
+                    "('0030' -> 30, '0100' -> 60); vazio ou 0000 vira NULL; minuto >= 60 ou forma inválida: NULL com "
+                    "valor_fora_do_dominio",
+    "email": "endereço de e-mail (local@dominio.tld, pontas aparadas); sem esse formato: NULL com valor_fora_do_dominio",
 }
 # regras cujo destino é coluna TIME / DATETIME (o verificador confere contra o tipo da coluna declarada no DDL)
 REGRAS_TIME = {"hora", "hora_hhmm", "hora_em_timestamp"}
@@ -387,7 +391,29 @@ def aplicar(regra, v):
         if v is None or v == 0:
             return None, None
         return (v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))), None
+    if regra == "minutos_hhmm":
+        if isinstance(v, (bytes, bytearray, str)):
+            t = _str(v).strip().replace(":", "")
+            if not t:
+                return None, None
+            if not re.fullmatch(r"\d{1,6}", t):
+                return None, "valor_fora_do_dominio"
+            v = int(t)
+        if isinstance(v, bool) or not isinstance(v, (int, decimal.Decimal)) or v != int(v) or v < 0:
+            return None, "valor_fora_do_dominio"
+        v = int(v)
+        if v % 100 >= 60:
+            return None, "valor_fora_do_dominio"
+        m = v // 100 * 60 + v % 100
+        return (m or None), None
+    if regra == "email":
+        t = _txt(v, "pontas")
+        if t is None:
+            return None, None
+        return (t, None) if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s.]{2,}", t) else (None, "valor_fora_do_dominio")
     if regra == "hora_hhmm":
+        if isinstance(v, (bytes, bytearray)):  # texto cru CP1252 de VARCHAR/CHAR (L6-04)
+            v = _str(v)
         if isinstance(v, str):
             s = v.strip().replace(":", "")
             if not s:

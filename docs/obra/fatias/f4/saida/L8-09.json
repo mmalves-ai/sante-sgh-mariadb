@@ -1,69 +1,39 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/sentinela.py e carga_mapa.py",
-   "mudanca": "regra 'data_em_data_hora' (DATE gravada em DATETIME à meia-noite, mesma forma na soma; já pedida em L7-08) ou, melhor para o recibo, a coluna especial '#data_hora:DATA,HORA' (DATE + VARCHAR(4) HHMM vira DATETIME; hora inválida: hora_invalida; já pedida em L6-04). Depois, aplicar a declaração prevista do recibo (campo 'declaracao_prevista' abaixo) em colunas.d/L8-09.tsv no lugar das 30 linhas bloqueadas de FCRECIBO, com valores.d/L8-09.tsv: FCRECIBO CANCELADO recibo.situacao S->cancelado, N->emitido; trocar emitido_em para '#data_hora:DATA,HORA'; mover FCRECIBO para CARREGADAS em sintetica_d/l8_09.py com o esperado PREVISTO_FCRECIBO (já conferido em contagem e pendências numa rodada: só a soma de recibo divergia, pela data)",
-   "motivo": "FCRECIBO (1748 linhas, a maior da fatia) -> recibo.emitido_em DATETIME(3) NOT NULL; com regra 'data' o resumo da origem ('AAAA-MM-DD') não casa com o relido ('AAAA-MM-DD 00:00:00.000') e a conciliação diverge",
-   "declaracao_prevista": [
-    "FCRECIBO\t@estabelecimento\trecibo.estabelecimento_id\t\t\t\tL8-09: a origem não traz o estabelecimento do recibo: id do único estabelecimento do cliente",
-    "FCRECIBO\tREC\trecibo.numero\tinteiro\t\t\tL8-09: número do recibo (gravado como texto); repetido no estabelecimento: restricao_destino_1062",
-    "FCRECIBO\t=~recebimento\trecibo.tipo\t\t\t\tL8-09: tipo PRESUMIDO (valor_presumido por linha): a origem não distingue recebimento de honorário (pedido)",
-    "FCRECIBO\tDATA\trecibo.emitido_em\tdata\t\t\tL8-09: data de emissão (a HORA HHMM em texto fica de fora até a composição data+hora, pedido); ausente ou sentinela recusa a linha",
-    "FCRECIBO\tVALOR\trecibo.valor\tdecimal\t\t\tL8-09: valor; zero ou negativo: CHECK recusa a linha",
-    "FCRECIBO\t=~valor por extenso não migrado\trecibo.valor_extenso\t\t\t\tL8-09: valor por extenso PRESUMIDO (valor_presumido por linha) até a regra genérica de extenso pedida (saida/L8-09.json)",
-    "FCRECIBO\tPAGADOR\trecibo.pagador_nome\ttexto_nome\t\t\tL8-09: nome do pagador; vazio recusa a linha (NOT NULL)",
-    "FCRECIBO\tCGC_CPF\trecibo.pagador_cpf\tcpf\t\t\tL8-09: CPF do pagador (zeros à esquerda e dígito verificador); CNPJ ou inválido: NULL com documento_invalido (roteamento CPF/CNPJ em duas colunas pedido)",
-    "FCRECIBO\tDESC_REF\trecibo.referente\ttexto_longo\t\t\tL8-09: texto do referente; vazio recusa a linha (NOT NULL)",
-    "FCRECIBO\tCANCELADO\trecibo.situacao\tcodigo_char\tvalores\t\tL8-09: S cancelado, N emitido (valores.d/L8-09.tsv); outro valor: padrão (emitido) com valor_fora_do_dominio; cancelado recusa pelo CHECK (cancelado_em e motivo sem origem, pedido)",
-    "FCRECIBO\tVALIDADO_DMED\trecibo.declarado_dmed\tbooleano_sn\t\t\tL8-09: valor já validado para a declaração de serviços médicos (S/N); vazio: padrão FALSE",
-    "FCRECIBO\tOBSERVACOES\trecibo.observacao\ttexto_longo\t\t\tL8-09: observação",
-    "FCRECIBO\tUSUARIO\trecibo.criado_por\ttexto\t\tref:TBUSERS\tL8-09: usuário pelo login (chave do pai); inexistente: NULL com pai_inexistente"
-   ]
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "DATE da origem (ou literal ISO '=AAAA-MM-DD[ HH:MM:SS]' e '=@data_carga') gravado em coluna DATETIME/TIMESTAMP do destino: converter para datetime à meia-noite em tipar() antes da soma de controle (mesma forma dos dois lados). Depois, na fatia: descomentar as declarações de FCRECIBO e COSPEDHSTSEMP em colunas.d/L8-09.tsv, descomentar as linhas '#FCRECIBO' e '#COSPEDHSTSEMP' de valores.d/L8-09.tsv (já prontas: situação e vias do recibo; códigos públicos 1 a 7 da situação especial), mover FCRECIBO e COSPEDHSTSEMP para CARREGADAS em sintetica_d/l8_09.py (FCRECIBO com PREVISTO_FCRECIBO); COSPEDHSTSEMP com PREVISTO_COSPEDHSTSEMP; ajustar test_bloqueadas_com_declaracao_pronta_comentada",
+   "motivo": "recibo.emitido_em e situacao_especial_empresa.ocorrido_em são DATETIME(3) NOT NULL e a origem só tem DATE: o resumo da origem ('AAAA-MM-DD') não casa com o relido ('AAAA-MM-DD 00:00:00.000') e a conciliação diverge (mesmo caso de GECADBAL, L7-07). Regra genérica, não código por tabela"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial)",
+   "mudanca": "'#data_hora:DATA,HORA' (DATE + texto HHMM vira DATETIME; hora inválida: hora_invalida) para recibo.emitido_em com a hora de emissão",
+   "motivo": "melhora opcional depois do pedido anterior: sem ela o recibo entra à meia-noite do dia"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
-   "mudanca": "regra 'valor_extenso' (decimal em reais por extenso, pt-BR) para recibo.valor_extenso a partir de VALOR; até lá a declaração prevista usa o literal presumido '=~valor por extenso não migrado' (valor_presumido por linha)",
-   "motivo": "recibo.valor_extenso é NOT NULL sem padrão e a origem não guarda o extenso; presumir texto fixo para 1748 recibos é pior que calcular"
+   "mudanca": "regra 'valor_extenso' (decimal em reais por extenso, pt-BR) para recibo.valor_extenso a partir de VALOR; até lá a declaração usa o literal presumido (valor_presumido por linha)",
+   "motivo": "recibo.valor_extenso é NOT NULL sem padrão e a origem não guarda o extenso"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra cpf_cnpj com dois destinos)",
-   "mudanca": "documento roteado: o mesmo CGC_CPF vai a recibo.pagador_cpf quando tem até 11 dígitos e a pagador_cnpj quando tem 12 a 14 (a outra coluna fica NULL sem pendência); inválido: documento_invalido uma vez",
-   "motivo": "a declaração prevista grava só pagador_cpf (regra cpf): pagador pessoa jurídica vira NULL com documento_invalido"
+   "arquivo": "conector/sante_conector/carga_mapa.py (documento roteado)",
+   "mudanca": "o mesmo documento vai a pagador_cpf quando tem até 11 dígitos e a pagador_cnpj quando tem 12 a 14 (a outra coluna fica NULL sem pendência)",
+   "motivo": "hoje só pagador_cpf (regra cpf): pagador pessoa jurídica vira NULL com documento_invalido"
   },
   {
-   "arquivo": "conector/mapa (recibo: vínculos e cancelamento)",
-   "mudanca": "decidir: (a) paciente_id: PACIENTE é nome (nunca casar pessoa por nome); vínculo pela conta (TIPO_CTA+CONTA -> conta_hospitalar, chave composta sem referência gerada); (b) profissional_id: ID_TBCBOPRO vira inscricao_conselho, não profissional; (c) cancelamento: ck_recibo_cancelamento exige cancelado_em e motivo_cancelamento (texto); a origem só tem CANCELADO e ID_TBMOTEXC (id do motivo): regra 'valor do pai' (descrição do motivo) e cancelado_em presumido ou relaxar o CHECK para migração",
-   "motivo": "na declaração prevista o recibo cancelado é recusado (restricao_destino_4025) e paciente, profissional e conta ficam sem vínculo"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + conector/mapa/declarado/catalogos.tsv",
-   "mudanca": "catálogo 'codigo_fiscal_oficial' no de-para (por tabela fiscal + código) e coluna_codigo das tabelas oficiais da fatia: COSPEDSITEMP CODIGO, COTPSUBSTECD ID, DMCADLEIAUTE COD_IDENT_ESTRUTURA_LEIAUTE (por ANO_REFERENCIA_LEIAUTE), ESTPCODAJUSTE ID, FPFORMATRIBRENDEXT CODIGO, FPINFOBENEFRENDEXT CODIGO",
-   "motivo": "as seis tabelas oficiais estão em catalogos.tsv sem coluna de código; nada delas é gravado (regra 7), mas os filhos (COSPEDHSTSEMP e os que usam motivo/forma/relação) precisam do de-para"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (valor do pai) + valores.d",
-   "mudanca": "COSPEDHSTSEMP -> situacao_especial_empresa: situacao pelo CODIGO oficial do pai COSPEDSITEMP (regra genérica 'valor de coluna do pai pela chave') com de-para de valores para o CHECK (cisao_total, cisao_parcial, fusao, incorporacao_incorporada, incorporacao_incorporadora, extincao, transformacao); data_evento e vigencia_inicio de DATA_VIGENCIA_INICIAL, vigencia_fim de DATA_VIGENCIA_FINAL, operacao '=inclusao', ocorrido_em DATETIME (mesma regra de DATE em DATETIME), estabelecimento pelo @estabelecimento",
-   "motivo": "o ID do pai é chave interna; mapear ID -> situação exigiria ler o conteúdo da imagem real; o catálogo pai é oficial (não vai a conector_origem)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo parametro)",
-   "mudanca": "regra genérica do mecanismo parametro (mesmo pedido de L6-06): cada coluna de COPARAM (EMPRESA, USUARIO: nível usuário no estabelecimento) e CTPARAM (USUARIO) vira parametro_valor de uma parametro_definicao por chave (contabil.* e custos.*)",
-   "motivo": "COPARAM e CTPARAM são linhas de parâmetros em colunas; a carga por linha não desdobra"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial de competência)",
-   "mudanca": "'#competencia:ANO,MES' (mesmo pedido de L7-05) para FPPARAM_USUARIO -> contexto_trabalho_usuario.competencia; estabelecimento pelo @estabelecimento (COD_EMP aponta TBEMPHOS, que vira mantenedora), usuario_id por ref:TBUSERS, modulo '=folha'",
-   "motivo": "competencia DATE NOT NULL (dia 1) e a origem guarda ANO e MES separados"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (destinos a rever)",
-   "mudanca": "CDTPCONTRCAIXA: destino tipo/natureza do movimento de caixa (cadastro), não movimento_caixa; CONIRE: prefixo do NIRE por UF é dado público (carregador versionado ou validação), não registro_empresa_junta (CHECK de 11 dígitos); COTIPOSOLICITACAOSENHA e CTWTPREGRA: domínios dos CHECK exigencia_senha e criterio_rateio.tipo (de-para de valores nos filhos, tabela sem carga própria); FPTP_SERV_NF_TO: tipo de serviço tomado (cadastro), não dado_fiscal_titulo_pagar (exige título); GPCOEFICIENTE_DEPREC: coeficiente normativo por turno (turnos e vigência sem origem; PERCENTUAL sem escala garantida para coeficiente >= 1), carregador versionado; CTWGRUPOEXPORTACAO: tirar exportacao_custo dos destinos (arquivo gerado por competência)",
-   "motivo": "com os destinos atuais toda linha seria recusada por NOT NULL ou CHECK, ou gravaria dado no lugar errado"
+   "arquivo": "conector/sante_conector/carga_mapa.py (literal condicional)",
+   "mudanca": "literal condicionado a outra coluna: recibo.cancelado_em = DATA só quando CANCELADO='S' (presumido, marcado); recibo.tipo = 'honorario' quando ID_TBCBOPRO tem valor, senão 'recebimento'; vínculo do recibo à conta hospitalar por TIPO_CTA+CONTA(+REF), que leva também paciente_id (a conta fica em tabelas diferentes da origem conforme TIPO_CTA: referência por tipo)",
+   "motivo": "ck_recibo_cancelamento exige cancelado_em e motivo: sem a data o recibo cancelado fica recusado (visível na conciliação); o tipo presumido 'recebimento' troca o significado do recibo de honorário; paciente só por chave, nunca pelo nome livre"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d (por cliente, depois da revisão no painel)",
-   "mudanca": "de-para de valores: COPERIODESCRIT -> periodo_escrituracao.forma (pela descrição); COTP_ORIGEM_LANCAMENTO -> origem_lancamento_contabil.modulo; CTCTARECEITANCI.GRUPO -> conta_receita_custeio.grupo; CTWGRUPOEXPORTACAO -> grupo_exportacao_custo.destino; CTTIPODADO -> tipo_dado_estatistico.unidade_medida",
-   "motivo": "entram PRESUMIDOS (valor_presumido por linha: '=~mensal', '=~manual', '=~outro', '=~unidade') porque o domínio da origem depende do conteúdo da imagem do cliente; nada fixo por cliente no código"
+   "mudanca": "de-para de valores por cliente, revisado no painel: COPERIODESCRIT -> periodo_escrituracao.forma (pela descrição); CTCTARECEITANCI.GRUPO -> conta_receita_custeio.grupo; CTWGRUPOEXPORTACAO -> grupo_exportacao_custo.destino; CTTIPODADO -> tipo_dado_estatistico.unidade_medida; COTP_ORIGEM_LANCAMENTO já tem de-para genérico pela descrição (valores.d/L8-09.tsv) e o cliente acrescenta os pares que faltarem",
+   "motivo": "entram PRESUMIDOS (valor_presumido por linha) porque o domínio da origem depende do conteúdo da imagem do cliente; nada fixo por cliente no código"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py (classificação das bloqueadas)",
+   "mudanca": "não classificar como 'regra_disponivel'/'vigencia_sem_fonte' uma bloqueada só porque o motivo cita '@data_carga' ou 'vigência'",
+   "motivo": "FCRECIBO e COSPEDHSTSEMP aparecem como 'só pedem refazer a fatia', mas esperam o pedido 1 (motor)"
   }
  ]
 }

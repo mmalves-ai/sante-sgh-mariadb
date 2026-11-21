@@ -22,59 +22,94 @@ class PlanoL601(unittest.TestCase):
 
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(len(FATIA), 19)
-        self.assertEqual(len(l6_01.CARREGADAS), 8)
+        self.assertEqual((len(l6_01.CARREGADAS), len(l6_01.DESCARTADAS), len(l6_01.SEM_CARGA)), (12, 4, 3))
         self.assertEqual(set(self.plano), set(l6_01.CARREGADAS))
 
-    def test_ordem_do_mapa(self):
+    def test_ordem_do_mapa_pai_antes(self):
         ordem = [p["tabela"] for p in carga_mapa.planejar(self.m, FATIA)]
-        self.assertEqual(ordem, ["PNTIPO", "RETPINDATEND", "TBACAOFLUXOSENHA", "TBCADGRUPOATEN",
-                                 "TBGRUPOPRIORIDADE", "TBMODULO_RECEPCAO", "TBMOTEXC", "TBPROCED"])
+        for filho in ("RECONFIC", "REESPFIC", "REUNIFIC", "REGRPFIC"):
+            self.assertLess(ordem.index("REMODFIC"), ordem.index(filho))
 
-    def test_um_destino_por_tabela_carregada(self):
-        esperado = {"PNTIPO": "tipo_painel", "RETPINDATEND": "tipo_indicacao",
-                    "TBACAOFLUXOSENHA": "acao_fluxo_senha", "TBCADGRUPOATEN": "grupo_atendimento",
-                    "TBGRUPOPRIORIDADE": "grupo_prioridade_legal", "TBMODULO_RECEPCAO": "modulo_recepcao",
-                    "TBMOTEXC": "motivo_cancelamento_operacao", "TBPROCED": "procedencia"}
-        for t, dt in esperado.items():
-            self.assertEqual(self.plano[t]["destinos"], [dt], t)
+    def test_criterio_da_regra_carrega_depois_do_pai(self):
+        # sem a dependência declarada, o critério ficaria NULL e a regra valeria para todos
+        ordem = {r["tabela"]: int(r["ordem"]) for r in self.m["tabelas"] if (r.get("ordem") or "").isdigit()}
+        deps = {(d["tabela"], d["depende_de"]) for d in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/dependencias.tsv")}
+        for filho, pai in [("RECONFIC", "TBCONVEN"), ("REESPFIC", "TBESPEC"), ("REUNIFIC", "TBUNIDAD")]:
+            self.assertLess(ordem[pai], ordem[filho], (filho, pai))
+        self.assertLessEqual({("RECONFIC", "TBCONVEN"), ("REESPFIC", "TBESPEC")}, deps)
+
+    def test_regra_de_impressao_pelo_modelo_de_chave_composta(self):
+        for t, col, dc, pai in [("RECONFIC", "CONV", "fonte_pagadora_id", "TBCONVEN"),
+                                ("REESPFIC", "ESP", "especialidade_medica_id", "TBESPEC"),
+                                ("REUNIFIC", "UNID", "unidade_assistencial_id", "TBUNIDAD")]:
+            cs = self.cols(t, "regra_impressao_ficha")
+            m = cs["modelo_ficha_impressa_id"]
+            self.assertEqual(m["passos"], [{"tabela": "REMODFIC", "modo": "composta", "arg": ["COD", "GRAFICA"]}])
+            self.assertIn("GRAFICA", self.plano[t]["lidas"])
+            self.assertEqual((cs[dc]["coluna"], cs[dc]["referencia"], cs[dc]["regra"]), (col, pai, "chave_origem"))
+            self.assertEqual(cs["selecionada_padrao"]["regra"], "booleano_sn")
+
+    def test_modelo_entra_inativo_com_aviso(self):
+        cs = self.cols("REMODFIC", "modelo_ficha_impressa")
+        self.assertEqual(cs["ativo"]["coluna"], "=0")
+        self.assertTrue(cs["conteudo"]["coluna"].startswith("="))
+        self.assertEqual(cs["tipo_documento"]["coluna"], "=~outro")
+        self.assertEqual(cs["copias"]["regra"], "faixa:1,9")
+        self.assertEqual(cs["ordem"]["regra"], "inteiro_nao_negativo")
+        self.assertEqual(cs["formulario_pre_impresso"]["coluna"], "GRAFICA")
+
+    def test_regra_por_grupo_entra_inativa(self):
+        cs = self.cols("REGRPFIC", "regra_impressao_ficha")
+        self.assertEqual(cs["ativo"]["coluna"], "=~0")
+        self.assertNotIn("grupo_faturamento_id", cs)
+        self.assertIn("GRP", self.plano["REGRPFIC"]["chave"])
+
+    def test_procedencia_por_depara_de_valores(self):
+        cs = self.cols("TBPROCED", "procedencia")
+        self.assertEqual(cs["ativo"]["valores"], {"S": "1", "A": "1", "N": "0", "I": "0"})
+        self.assertEqual(cs["tipo_padrao"]["valores"], {"": ""})
 
     def test_codigos_numericos_viram_texto(self):
-        for t, dt, col in [("PNTIPO", "tipo_painel", "ID"),
+        for t, dt, col in [("PNTIPO", "tipo_painel", "ID"), ("REMODFIC", "modelo_ficha_impressa", "COD"),
                            ("RETPINDATEND", "tipo_indicacao", "ID"), ("TBACAOFLUXOSENHA", "acao_fluxo_senha", "ID"),
                            ("TBCADGRUPOATEN", "grupo_atendimento", "ID"),
                            ("TBGRUPOPRIORIDADE", "grupo_prioridade_legal", "ID"),
-                           ("TBMODULO_RECEPCAO", "modulo_recepcao", "ID"),
-                           ("TBMOTEXC", "motivo_cancelamento_operacao", "COD"), ("TBPROCED", "procedencia", "COD")]:
+                           ("TBMODULO_RECEPCAO", "modulo_recepcao", "ID"), ("TBPROCED", "procedencia", "COD")]:
             c = self.cols(t, dt)["codigo"]
             self.assertEqual((c["coluna"], c["regra"]), (col, "texto"), t)
 
     def test_classificacao_sem_fonte_e_presumida(self):
-        # a origem não classifica: literal presumido (pendência valor_presumido), nunca literal firme
         for t, dt, dc in [("PNTIPO", "tipo_painel", "finalidade"), ("RETPINDATEND", "tipo_indicacao", "categoria"),
-                          ("TBACAOFLUXOSENHA", "acao_fluxo_senha", "encerra_senha")]:
+                          ("TBACAOFLUXOSENHA", "acao_fluxo_senha", "encerra_senha"),
+                          ("REMODFIC", "modelo_ficha_impressa", "tipo_documento")]:
             self.assertTrue(self.cols(t, dt)[dc]["coluna"].startswith("=~"), (t, dc))
-        self.assertEqual(self.cols("PNTIPO", "tipo_painel")["finalidade"]["coluna"], "=~outro")
 
-    def test_encerra_senha_presumido_ate_o_depara_da_sigla(self):
-        # sem a sigla, 'não tira da fila' é presumido (valor_presumido por linha), nunca literal firme
-        self.assertEqual(self.cols("TBACAOFLUXOSENHA", "acao_fluxo_senha")["encerra_senha"]["coluna"], "=~0")
+    def test_descartes_com_causa_de_produto(self):
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        causas = {"TBMOTEXC": "duplicado", "TBMOTCANCMOD": "sem_valor",
+                  "TBMOTCANCTP": "mecanismo_do_produto", "TBPROCEDPADRAO": "mecanismo_do_produto"}
+        self.assertEqual(set(causas), set(l6_01.DESCARTADAS))
+        for t, causa in causas.items():
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
+            self.assertTrue(sc[t]["motivo"], t)
+        for t in l6_01.SEM_CARGA:  # decisão tomada; só falta regra genérica no motor (pedidos no L6-01.json)
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "regra_faltante"), t)
 
-    def test_modelo_so_entra_com_a_chave_composta(self):
-        # codigo=COD provisório não se desfaz depois da primeira carga (linha recusada com hash igual nunca regrava):
-        # o modelo fica sem carga até a coluna especial '@chave'
-        self.assertNotIn("REMODFIC", self.plano)
-        decl = [c for c in self.m["colunas_decl"] if c["tabela"] == "REMODFIC"]
-        self.assertTrue(decl)
-        self.assertTrue(all("'@chave'" in c["motivo"] for c in decl))
+    def test_sem_carga_tem_declaracao_pronta_comentada(self):
+        prontas = {}
+        arq = mapa.DIR_PACOTE / "declarado/colunas.d/L6-01.tsv"
+        for linha in arq.read_text(encoding="utf-8").splitlines()[1:]:
+            t, col, destino, _, _, via, _ = linha.split("\t")
+            if t.startswith("#"):
+                prontas.setdefault(t[1:], {})[col] = {"destino": destino, "via": via}
+        self.assertEqual(prontas["REEXCATE"]["=exclusao"]["destino"], "trilha_auditoria.acao")
+        self.assertEqual(prontas["REEXCATE"]["#retrato"]["destino"], "trilha_auditoria.dados_antes")
+        itens = prontas["REPARATE"]["#item"]["via"]
+        self.assertEqual(len(itens.split(":", 1)[1].split(",")), 23)
+        self.assertIn("complementa", prontas["RETITFIC"]["COD"]["via"])
+        self.assertIn("ref:REMODFIC(COD,GRAFICA)", prontas["RETITFIC"]["COD"]["via"])
 
-    def test_nada_de_destino_oficial_nem_referencia(self):
-        por = {r["tabela"]: r for r in self.m["tabelas"]}
-        for t, p in self.plano.items():
-            self.assertEqual(por[t].get("destinos_oficiais") or "", "", t)
-            for dt in p["destinos"]:
-                self.assertFalse([c for c in p["colunas"][dt] if c["referencia"]], t)
-
-    def test_nao_carregadas_tem_motivo(self):
+    def test_nao_carregadas_sem_destino_e_com_motivo(self):
         decl = {}
         for c in self.m["colunas_decl"]:
             decl.setdefault(c["tabela"], []).append(c)
@@ -102,6 +137,12 @@ class RegrasL601(unittest.TestCase):
         self.assertEqual(sentinela.aplicar("booleano_sn", "S"), (True, None))
         self.assertEqual(sentinela.aplicar("booleano_sn", "X"), (None, "valor_fora_do_dominio"))
 
+    def test_faixa_e_nao_negativo(self):
+        self.assertEqual(sentinela.aplicar("faixa:1,9", 12)[1], "valor_fora_do_dominio")
+        self.assertEqual(sentinela.aplicar("faixa:1,9", 0)[1], "valor_fora_do_dominio")
+        self.assertEqual(sentinela.aplicar("faixa:1,9", 3), (3, None))
+        self.assertEqual(sentinela.aplicar("inteiro_nao_negativo", -1), (None, "valor_fora_do_dominio"))
+
     def test_codigo_numerico_como_texto(self):
         self.assertEqual(sentinela.aplicar("texto", 7), ("7", None))
 
@@ -112,6 +153,7 @@ class ImagemL601(unittest.TestCase):
         esp = l6_01.linhas(__import__("random").Random(1), lambda t, v: linhas.append(t))
         self.assertEqual(set(esp), set(l6_01.CARREGADAS))
         self.assertEqual(set(linhas), set(l6_01.CARREGADAS) | set(l6_01.NAO_CARREGADAS))
+        self.assertEqual(sum(1 for t in linhas if t == "REMODFIC"), len(l6_01.MODELOS))
 
     def test_ddl_tem_as_19_tabelas(self):
         criadas = {x.split()[2] for x in l6_01.DDL.split(";") if x.strip().startswith("CREATE TABLE")}

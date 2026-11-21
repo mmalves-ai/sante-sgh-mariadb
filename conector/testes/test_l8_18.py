@@ -12,10 +12,21 @@ from sante_conector.sintetica_d import l8_18
 RAIZ = Path(__file__).resolve().parents[1]  # /app no container (db/migracoes montado só leitura)
 CARREGADAS = set(l8_18.CARREGADAS)
 NA_IMAGEM = CARREGADAS | set(l8_18.NAO_CARREGADAS)
-DESTINOS = {"TBAGRUPRELAT": ["agrupamento_relatorio"], "TBEDITREL": ["relatorio", "triagem_relatorio_legado"],
+DESTINOS = {"TBAGRUPRELAT": ["agrupamento_relatorio"], "TBEDITREL": ["relatorio", "triagem_relatorio_legado", "relatorio_tela"],
             "TBAGRUPRELAT_TBEDITREL": ["agrupamento_relatorio_item"], "TBEDITPARAM": ["relatorio_parametro"],
             "TBEDITREL_GRUUSU": ["relatorio_permissao"], "TBEDITREL_TBUSERS": ["relatorio_permissao"],
-            "TBOPCAOREL": ["categoria_relatorio"]}
+            "TBOPCAOREL": ["categoria_relatorio"],
+            "TBEDITPESQ": ["relatorio_parametro_pesquisa", "relatorio_parametro"],
+            "TBEDITREL_AGENDA": ["agendamento_relatorio", "agendamento_relatorio_destinatario"],
+            "TBEDITREL_AGENDA_LOG": ["envio_relatorio"], "TBBTNOPREL": ["relatorio_tela"],
+            "TBPARAMOPREL": ["relatorio_tela_parametro"]}
+COMPLEMENTOS = {("TBEDITPESQ", "relatorio_parametro")}  # UPDATE da linha do pai: as obrigatórias já estão nela
+
+
+def _tsv(caminho):
+    linhas = caminho.read_text(encoding="utf-8").splitlines()
+    cab = linhas[0].split("\t")
+    return [dict(zip(cab, x.split("\t"))) for x in linhas[1:] if x.strip()]
 
 
 def _ddl_destino():
@@ -41,15 +52,69 @@ class Plano(unittest.TestCase):
         for t, dts in DESTINOS.items():
             self.assertEqual(self.plano[t]["destinos"], dts, t)
 
-    def test_nao_carregadas_sem_destino(self):
+    def test_descartadas_com_causa_de_produto(self):
+        sc = {d["tabela"]: d for d in _tsv(RAIZ / "mapa/declarado/sem_carga.tsv")}
         for t in l8_18.NAO_CARREGADAS:
-            decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] == t]
-            self.assertTrue(decl, t)  # declarada com motivo
-            self.assertFalse([c for c in decl if c.get("destino")], t)
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], ("sem_valor", "duplicado", "licenciado", "mecanismo_do_produto"), t)
+            self.assertTrue(sc[t]["motivo"].startswith("L8-18"), t)
+            self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == t], t)
+
+    def test_cobertura_encadeada_e_alternativa(self):
+        decl = {(c["tabela"], c["destino"]): c.get("via") or "" for c in self.mapa["colunas_decl"] if c.get("destino")}
+        via = lambda t, dt, dc: decl[(t, "%s.%s" % (dt, dc))]  # noqa: E731
+        self.assertIn("ref:TBOPCAOREL>ID_TBOPCOES>TBOPCOES", via("TBBTNOPREL", "relatorio_tela", "tela_sistema_id"))
+        self.assertIn("ref:TBEDITREL>USUARIO>TBUSERS",
+                      via("TBEDITREL_AGENDA", "agendamento_relatorio", "dono_usuario_id"))
+        self.assertIn("ref:TBEDITREL>NOME", via("TBEDITREL_AGENDA", "agendamento_relatorio", "nome"))
+        self.assertIn("ref:TBEDITREL_AGENDA.ID_TBEDITREL",
+                      via("TBEDITREL_AGENDA_LOG", "envio_relatorio", "agendamento_relatorio_id"))
+        self.assertIn("ref:TBEDITPARAM.PARAMETRO",
+                      via("TBPARAMOPREL", "relatorio_tela_parametro", "relatorio_parametro_id"))
+        lig = self.cols("TBEDITPESQ", "relatorio_parametro")
+        self.assertIn("complementa", via("TBEDITPESQ", "relatorio_parametro", "id").split(";"))
+        self.assertEqual(lig["relatorio_parametro_pesquisa_id"]["coluna"], "@id")
+
+    def test_desligados_ate_o_cliente(self):
+        # envio agendado e pesquisa presumida nunca entram ligados (regra 6; entidade a definir)
+        self.assertEqual(self.cols("TBEDITREL_AGENDA", "agendamento_relatorio")["ativo"]["coluna"], "=0")
+        self.assertEqual(self.cols("TBEDITPESQ", "relatorio_parametro_pesquisa")["ativo"]["coluna"], "=0")
+        self.assertEqual(self.cols("TBEDITREL_AGENDA", "agendamento_relatorio")["entrega"]["coluna"], "=anexo")
+
+    def test_situacao_do_envio_pelo_nome_dentro_do_check(self):
+        sit = self.cols("TBEDITREL_AGENDA_LOG", "envio_relatorio")["situacao"]
+        self.assertEqual(sit["passos"][-1], {"coluna": "NOME"})  # pelo nome da lista fixa, nunca pela ordem do código
+        self.assertEqual(sit["regra"], "texto_nome")
+        m = re.search(r"CHECK \(situacao IN \(([^)]*)\)\)", self.ddl["envio_relatorio"])
+        for v in sit["valores"].values():
+            self.assertIn("'%s'" % v, m.group(1))
+        for nome, v in (("Enviado", "enviado"), ("NÃO ENVIADO", "nao_enviado"), ("Nao enviado", "nao_enviado"),
+                        ("não conectado", "sem_conexao"), ("NAO CONECTADO", "sem_conexao")):
+            self.assertEqual(sit["valores"][nome], v, nome)
+        self.assertNotIn("Outro exemplo", sit["valores"])  # sem par: valor_fora_do_dominio
+
+    def test_relatorio_na_tela_do_menu_opcional(self):
+        tela = self.cols("TBEDITREL", "relatorio_tela")
+        self.assertEqual(tela["relatorio_id"]["coluna"], "@id")
+        self.assertEqual((tela["tela_sistema_id"]["coluna"], tela["tela_sistema_id"]["referencia"]),
+                         ("ID_TBOPCOES", "TBOPCOES"))
+        op = self.plano["TBEDITREL"]["opcoes"]["relatorio_tela"]
+        self.assertTrue(op["opcional"])
+        self.assertEqual(op["adotar"], ["tela_sistema_id", "relatorio_id"])
+        # literal fixo no rótulo: só a tela marca o destino opcional como preenchido
+        self.assertTrue(tela["rotulo_botao"]["coluna"].startswith("=") and not
+                        tela["rotulo_botao"]["coluna"].startswith("=~"))
+
+    def test_log_sem_conteudo_nem_destinatarios(self):
+        decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "TBEDITREL_AGENDA_LOG"}
+        for col in ("EMAILS_DESTINO", "CONTEUDO_EMAIL", "ANEXO_EMAIL"):
+            self.assertFalse(decl[col].get("destino"), col)
 
     def test_obrigatorias_sem_padrao_cobertas(self):
         for t, dts in DESTINOS.items():
             for dt in dts:
+                if (t, dt) in COMPLEMENTOS:
+                    continue
                 obrig = {m.group(1) for m in re.finditer(r"^\s*(\w+)\s+[^\n]*?NOT NULL(?![^\n]*DEFAULT)",
                                                           self.ddl[dt], re.M)}
                 obrig -= {"id", "criado_em", "CONSTRAINT"}  # CHECK com NOT NULL não é coluna
@@ -104,6 +169,7 @@ class Imagem(unittest.TestCase):
         self.assertEqual(set(esp), CARREGADAS)
         for t, e in esp.items():
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_") or r == "pai_pendente")
+            recusas += sum(l8_18.RECUSAS_POR_REGRA.get(t, {}).values())
             self.assertEqual(e["gravados"] + recusas, len(lidas[t]), t)
         self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l8_18.DDL)), NA_IMAGEM)
 
@@ -159,3 +225,18 @@ class RiscoEstabelecimento(unittest.TestCase):
         vals, _, _, recusa, _ = c._valores(p, {}, "1")
         self.assertIsNone(vals)
         self.assertEqual(recusa, ("estabelecimento_indefinido", "alta"))
+
+
+class RiscoParametroDeOutroRelatorio(unittest.TestCase):
+    """Risco registrado (saida/L8-18.json, F4-decisoes-destino.md): TBPARAMOPREL acha o parâmetro só pelo nome em
+    toda a TBEDITPARAM. Nome repetido vira pai_ambiguo; nome único que só existe em OUTRO relatório é ligado assim
+    mesmo. Quando o motor tiver a chave alternativa composta pelo relatório do botão, este teste deve passar a
+    esperar pai_inexistente."""
+
+    def test_nome_unico_de_outro_relatorio_e_ligado(self):
+        c = carga_mapa.CargaMapa.__new__(carga_mapa.CargaMapa)
+        c._alt = {("TBEDITPARAM", "PARAMETRO"): {"DATA_INI": carga_mapa._AMBIGUO, "CONVENIO": "7"}}
+        passos = mapa.passos_ref("TBEDITPARAM.PARAMETRO")
+        self.assertEqual(c._seguir({"PARAMETRO": "DATA_INI"}, "PARAMETRO", passos)[2], "pai_ambiguo")
+        # o botão é do relatório 1, e CONVENIO é parâmetro só do relatório 8: ligado ao parâmetro 7 (risco)
+        self.assertEqual(c._seguir({"PARAMETRO": "CONVENIO"}, "PARAMETRO", passos)[1], ("TBEDITPARAM", "7"))

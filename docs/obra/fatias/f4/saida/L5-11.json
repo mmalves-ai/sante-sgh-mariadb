@@ -1,49 +1,26 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga.py",
-   "mudanca": "incluir 1364 (campo NOT NULL sem padrão não informado) em ERROS_LINHA",
-   "motivo": "coluna obrigatória sem padrão no destino e não declarada derruba a execução inteira (OperationalError 1364) em vez de recusar só a linha como o 1048; visto na L5-11 com abrangencia_justificativa.abrangencia"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
-   "mudanca": "de-para de valores declarado por fatia (valor da origem -> valor do domínio do destino), o mesmo pedido da L5-10",
-   "motivo": "L5-11 deixa sem carga 5 tabelas cujo destino tem classificador NOT NULL sem padrão nem valor neutro: PEPERIOD_JUSTIF (abrangencia_justificativa.abrangencia), POCLASSIFMARC (classificacao_marcacao.sentido), POREPHOMOLOGADO (tipo_relogio_ponto.categoria_portaria), POTPHORA (tipo_hora.natureza), POTPTRABFOLGA (regime_jornada.carga_semanal_minutos, numérico). Com o de-para, declarar codigo<-chave (regra texto) e descricao<-NOME/DESCRICAO e o classificador; o test_l5_11 (AGUARDAM_DEPARA) lista as cinco"
-  },
-  {
-   "arquivo": "conector/mapa (gerador: tabelas.tsv) e declarado/descartes.tsv ou equivalente",
-   "mudanca": "reclassificar como domínio que vira valor de CHECK no consumidor (sem tabela de destino própria): POBANCOHRTP e POTPINIBANCO (regra_banco_horas.tipo_banco / criterio_inicio), PODIA (horario_jornada.dia), POPROGSIT (escala.situacao), POPROSITUACAO (apuracao_ponto.situacao), PETP_INTEGR_EVENTO (integracao_ponto_folha.forma), POTPJORNADA (regime_jornada.tipo_jornada_esocial); e tirar historico_salarial de FPTP_SAL, curso de FPTP_TREINAMENTO_CAPACITACAO, comunicacao_acidente de STEMITENTE e beneficio_colaborador/horario_jornada/relogio_ponto/apuracao_ponto_item de FPVALE/PETPINTERVALO/POREPHOMOLOGADO/POTPHORA",
-   "motivo": "esses destinos são tabelas de movimento com estabelecimento/colaborador/vínculo NOT NULL: uma linha de domínio não cabe ali; o valor entra pelo de-para no lote que carrega a tabela de movimento. Hoje ficam no mapa como carregáveis sem declaração (não carregam, sem aviso)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/catalogos.tsv",
-   "mudanca": "coluna_codigo: FPTP_SAL -> COD_ESOCIAL; FPTP_TREINAMENTO_CAPACITACAO -> ID; STEMITENTE -> COD_EMIT; e codigo_esocial em depara.CATALOGOS quando o carregador oficial existir",
-   "motivo": "o brief manda o lote declarar a coluna do código oficial; catalogos.tsv é compartilhado"
-  },
-  {
-   "arquivo": "conector/mapa (mecanismo parametro)",
-   "mudanca": "PEPARAM: mecanismo de desdobramento coluna -> parametro_definicao/parametro_valor (uma linha por coluna, nível estabelecimento); CAMIN_FOTO, EDIT_REL e NRO_PORTA_COM são configuração da instalação antiga e não migram",
-   "motivo": "o motor carrega uma linha da origem em uma linha por destino; o parâmetro precisa de uma linha por coluna"
+   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo futuro, não bloqueia a fatia)",
+   "mudanca": "desdobrar com referência ao destino pelo rótulo (ex.: parametro_valor.parametro_definicao_id resolvido por parametro_definicao.chave = #rotulo; nível estabelecimento por @estabelecimento)",
+   "motivo": "quando o produto definir as chaves do ponto em parametro_definicao, PEPARAM pode carregar os valores da instalação em vez do descarte"
   },
   {
    "arquivo": "tools/obra/fatiar_conector.py (docs/obra/fatias/f4/*.md, indice.tsv)",
-   "mudanca": "regenerar as fatias depois de integrar os colunas.d (mesmo pedido da L5-10)",
-   "motivo": "com colunas.d/L5-11.tsv o --conferir acusa L5-11 'arquivo diferente do gerado'; é o único erro da autoconferência"
+   "mudanca": "regenerar as fatias depois de integrar os colunas.d",
+   "motivo": "a seção 3 da fatia ainda mostra as colunas geradas, não as declaradas"
+  }
+ ],
+ "aplicado_pela_fatia": [
+  {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "gravada a linha de PEPARAM (descarte mecanismo_do_produto); tiradas FPVALE, PETPINTERVALO, POREPHOMOLOGADO e POTPHORA, que agora carregam pelo colunas.d/L5-11.tsv",
+   "motivo": "achados da revisão da fatia (cobertura total)"
   },
   {
-   "arquivo": "conector/mapa/declarado (modelo do benefício) + de-para de valor",
-   "mudanca": "decidir o modelo de FPTPVALE/FPVALE: o tipo (FPTPVALE) vira beneficio.tipo pelo de-para de valor e o FPVALE é o benefício (ou FPVALE fica sem carga até haver destino para o vínculo ao tipo); revisar também colunas.d/L5-10.tsv (FPTPVALE -> beneficio com '=outro'), que hoje grava o tipo como benefício",
-   "motivo": "carregar os dois em beneficio duplica o conceito, perde ID_FPTPVALE (obrigatória) e o pai_pendente, e colide em UNIQUE(beneficio.codigo) (ids SMALLINT sequenciais dos dois lados: restricao_destino_1062 no cliente real). L5-11 retirou a carga do FPVALE (AGUARDAM_CLASSIFICACAO no test_l5_11)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou sentinela)",
-   "mudanca": "literal de classificador ('=outro' ou padrão do destino num classificador) gera pendência por linha classificacao_a_revisar (gravidade baixa), para o painel mostrar o que o cliente precisa reclassificar; ou de-para de valor declarado por fatia (pedido anterior)",
-   "motivo": "PETP_MOVIM (tipo_movimento_ponto.natureza; sinal 'neutro' e afeta_banco_horas FALSE pelo padrão) e PETPINTERVALO (tipo_intervalo.categoria; computa_jornada FALSE) ficaram sem carga para não corromper a apuração em silêncio; o mesmo vale para os '=outro' de outras fatias (ex.: L5-10 FPTPVALE)"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
-   "mudanca": "regra genérica de inteiro com faixa (ex.: inteiro_faixa com limites declarados ou lidos do CHECK do destino, e 0 opcionalmente como sentinela de 'sem valor'): fora da faixa grava NULL com pendência valor_fora_do_dominio na linha, sem recusar a linha",
-   "motivo": "POTPCONTTEMP.LIMITE_HORA_SEMANAL -> tipo_contrato_temporario.limite_horas_semanais (NULL, CHECK 1..44): hoje 'inteiro' recusa o tipo inteiro (restricao_destino_4025, inclusive o 0) e o pai_pendente cai sobre os vínculos; trocar a regra no colunas.d/L5-11.tsv e a sintética (esperado: 5 gravados, valor_fora_do_dominio 2) quando existir"
+   "arquivo": "docs/obra/passagens/F4-decisoes-destino.md",
+   "mudanca": "decisões FPVALE, PETPINTERVALO, POREPHOMOLOGADO e POTPHORA reescritas (carregar, com classificador presumido); PEPARAM aponta a linha do sem_carga",
+   "motivo": "registro para o dono revisar"
   }
  ]
 }

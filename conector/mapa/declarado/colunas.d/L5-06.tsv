@@ -1,65 +1,113 @@
 tabela	coluna	destino	regra	depara	via	motivo
-#TBCONVEN	COD	fonte_pagadora.codigo	texto			código interno da fonte pagadora (número da origem gravado como texto)
-#TBCONVEN	NOME	fonte_pagadora.nome	texto_nome			nome; vazio recusa a linha (NOT NULL)
-#TBCONVEN	=outro	fonte_pagadora.tipo				a origem não classifica a fonte pagadora neste domínio: entra como outro e o cliente reclassifica
-#TBCONVEN	REG_ANS	fonte_pagadora.registro_ans	texto			registro na agência de saúde suplementar: precisa de código numérico de largura fixa (6 dígitos com zeros à esquerda; zero ou mais de 6 dígitos: NULL com pendência), pedido ao integrador
-#TBCONVEN	ID_TBGRUCONVEN	fonte_pagadora.grupo_fonte_pagadora_id	chave_origem			grupo da fonte pagadora (L5 ordem 77)
-#TBCONVEN	RETORNO	fonte_pagadora.dias_retorno	inteiro			prazo de retorno em dias; negativo recusa a linha (UNSIGNED)
-#TBCONVEN	PRAZO_PGTO	fonte_pagadora.dias_pagamento_remessa	inteiro			prazo de pagamento após a remessa
-#TBCONVEN	CONV_CONTATO	fonte_pagadora.contato_nome	texto			contato na fonte pagadora
-#TBCONVEN	CONV_EMAIL	fonte_pagadora.email	texto			e-mail da fonte pagadora
-#TBCONVEN	FONE	fonte_pagadora.telefone	texto			telefone da fonte pagadora
-#TBCONVEN	OBS	fonte_pagadora.observacao	texto_longo			observação (BLOB de texto, sem colapso)
-#TBMEDSOL_CODCON	ID_TBMEDSOL	solicitante_externo_fonte_pagadora.solicitante_externo_id	chave_origem			solicitante externo (L5 ordem 78)
-#TBMEDSOL_CODCON	ID_TBCONVEN	solicitante_externo_fonte_pagadora.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
-#TBMEDSOL_CODCON	CODIGO_CONVENIO	solicitante_externo_fonte_pagadora.codigo_na_fonte	texto			código do solicitante na fonte; vazio recusa (NOT NULL)
-#TBPROFIS	ID_TBPESSOA	profissional.pessoa_fisica_id	chave_origem			pessoa física do profissional (L5 ordem 83); sem pessoa recusa; pessoa repetida recusa (UNIQUE)
-#TBPROFIS	=assistencial	profissional.tipo				a origem não tem o tipo de relação neste domínio: entra como assistencial e o cliente reclassifica
-#TBPROFIS	APELIDO	profissional.nome_exibicao	texto_nome			nome curto de exibição
-#TBPROFIS	EMAIL	profissional.email_profissional	texto			e-mail profissional
-#TBPROFIS	CELULAR	profissional.celular	texto			celular
-#TBPROFIS	FONE	profissional.telefone_comercial	texto			telefone comercial
-#TBPROFIS	DATA_INICIO	profissional.data_inicio	data			início da atuação; sentinela vira NULL com pendência
-#TBPROFIS	DATA_DESLIGAMENTO	profissional.data_inativacao	data			data do desligamento
-#TBPROFIS	MOTIVO_DESLIGAMENTO	profissional.motivo_inativacao	texto			motivo do desligamento
-#TBPROFIS	PANEST	profissional.atua_anestesista	booleano_sn			S/N (gerada codigo_char): fora do domínio fica com o padrão do destino e pendência
-#TBPROFIS	PLANTAO	profissional.plantonista	booleano_sn			S/N (gerada codigo_char)
-#TBPROFIS	ID_TBCOOPER	profissional.cooperativa_medica_id	chave_origem			cooperativa médica (L8 ordem 675)
+TBCONVEN	COD	fonte_pagadora.codigo	texto			código interno da fonte pagadora (número da origem gravado como texto)
+TBCONVEN	NOME	fonte_pagadora.nome	texto_nome			nome; vazio recusa a linha (NOT NULL)
+TBCONVEN	=~outro	fonte_pagadora.tipo				a origem não classifica a fonte neste domínio: literal presumido (valor_presumido) e o cliente reclassifica no painel
+TBCONVEN	REG_ANS	fonte_pagadora.registro_ans	inteiro_zeros_esquerda:6			registro na agência de saúde suplementar: 6 dígitos com zeros à esquerda; zero ou mais de 6 dígitos: NULL com valor_fora_do_dominio
+TBCONVEN	ID_TBGRUCONVEN	fonte_pagadora.grupo_fonte_pagadora_id	chave_origem			grupo da fonte pagadora (L5 ordem 75); nunca visto: NULL com pai_inexistente
+TBCONVEN	CLASSE	fonte_pagadora.classe_fonte_pagadora_id			ref:TBCLASSC	classe da fonte pela chave de TBCLASSC (L5 ordem 65)
+TBCONVEN	SITUACAO	fonte_pagadora.situacao	codigo_char	valores		A/I (convenção da origem, validada pelo código de alteração de situação do convênio): ativa/inativa; sem par fica com o padrão do destino e valor_fora_do_dominio
+TBCONVEN	RETORNO	fonte_pagadora.dias_retorno	inteiro_nao_negativo			prazo de retorno em dias; negativo vira NULL com pendência (a fonte não é recusada)
+TBCONVEN	PRAZO_PGTO	fonte_pagadora.dias_pagamento_remessa	inteiro_nao_negativo			prazo de pagamento após a remessa
+TBCONVEN	CONV_CONTATO	fonte_pagadora.contato_nome	texto			contato na fonte pagadora
+TBCONVEN	CONV_EMAIL	fonte_pagadora.email	texto			e-mail da fonte pagadora
+TBCONVEN	FONE	fonte_pagadora.telefone	texto			telefone da fonte pagadora
+TBCONVEN	OBS	fonte_pagadora.observacao	texto_longo			observação (BLOB de texto, sem colapso)
+TBCBOPRO_TBCONVEN	ID_TBCBOPRO	profissional_fonte_pagadora.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	profissional pela inscrição no conselho (referência encadeada); exige TBPROFIS antes na ordem (dependência pedida ao integrador)
+TBCBOPRO_TBCONVEN	ID_TBCBOPRO	profissional_fonte_pagadora.inscricao_conselho_id	chave_origem			inscrição no conselho credenciada (L5 ordem 63)
+TBCBOPRO_TBCONVEN	ID_TBCONVEN	profissional_fonte_pagadora.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
+TBCBOPRO_TBCONVEN	@vigencia_carga	profissional_fonte_pagadora.vigencia_inicio				a origem não data o credenciamento: vigente desde a carga, com vigencia_sem_fonte
+TBMEDSOL_CODCON	ID_TBMEDSOL	solicitante_externo_fonte_pagadora.solicitante_externo_id	chave_origem			solicitante externo (L5 ordem 76)
+TBMEDSOL_CODCON	ID_TBCONVEN	solicitante_externo_fonte_pagadora.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
+TBMEDSOL_CODCON	CODIGO_CONVENIO	solicitante_externo_fonte_pagadora.codigo_na_fonte	texto			código do solicitante na fonte; vazio recusa (NOT NULL)
+TBPROFIS	@id:pessoa_fisica	profissional.pessoa_fisica_id				rodada 2 (integrador): a pessoa física do profissional é criada pelo nome e documento da própria linha (destino pessoa_fisica gravado antes, adotado pelo CPF se já existir); o índice de identidade da origem (TBPESSOA) é descarte (duplicado, L5-05)
+TBPROFIS	CPF	pessoa_fisica.cpf	cpf		pessoa_fisica;antes;adotar:cpf	rodada 2 (integrador): CPF da pessoa física do profissional (documento inválido: NULL com documento_invalido, a pessoa é criada só pelo nome); mesma pessoa já cadastrada pelo CPF é adotada
+TBPROFIS	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	rodada 2 (integrador): nome civil da pessoa física do profissional (NOT NULL)
+TBPROFIS	=~assistencial	profissional.tipo				a origem não tem o tipo de relação neste domínio: literal presumido (valor_presumido) e o cliente reclassifica
+TBPROFIS	APELIDO	profissional.nome_exibicao	texto_nome			nome curto de exibição
+TBPROFIS	EMAIL	profissional.email_profissional	texto			e-mail profissional
+TBPROFIS	CELULAR	profissional.celular	texto			celular
+TBPROFIS	FONE	profissional.telefone_comercial	texto			telefone comercial
+TBPROFIS	DATA_INICIO	profissional.data_inicio	data			início da atuação; sentinela vira NULL com pendência
+TBPROFIS	DATA_DESLIGAMENTO	profissional.data_inativacao	data			data do desligamento
+TBPROFIS	MOTIVO_DESLIGAMENTO	profissional.motivo_inativacao	texto			motivo do desligamento
+TBPROFIS	SITUACAO	profissional.situacao	codigo_char	valores		A/I: ativo/inativo; inativo sem data de desligamento recusa pelo CHECK até existir o valor alternativo presumido (pedido L5-06.json: data da carga com valor_presumido); sem par fica ativo com valor_fora_do_dominio
+TBPROFIS	PANEST	profissional.atua_anestesista	booleano_sn			S/N: fora do domínio fica com o padrão do destino e pendência
+TBPROFIS	PLANTAO	profissional.plantonista	booleano_sn			S/N
+TBPROFIS	ID_TBCOOPER	profissional.cooperativa_medica_id	chave_origem			cooperativa médica (L8 ordem 664)
+TBPROFIS	@id	profissional_dado_fiscal.profissional_id			opcional	dado fiscal do profissional (destino opcional: sem nenhum dado fiscal na origem, não grava)
+TBPROFIS	=1	profissional_dado_fiscal.sequencia				a origem tem um único dado fiscal por profissional
+TBPROFIS	=@data_carga	profissional_dado_fiscal.vigencia_inicio				a origem não versiona o dado fiscal: vigente desde a carga (data da carga sem pendência, para não marcar profissional sem dado fiscal)
+TBPROFIS	NUM_PIS	profissional_dado_fiscal.pis_pasep	inteiro_zeros_esquerda:11			PIS/PASEP com 11 dígitos; mais dígitos ou zero: NULL com valor_fora_do_dominio
+TBPROFIS	INSS	profissional_dado_fiscal.inscricao_inss	texto			inscrição no INSS do autônomo
+TBPROFIS	ISS	profissional_dado_fiscal.inscricao_municipal	texto			inscrição municipal (ISS)
+TBPROFIS	ALIQ_ISS	profissional_dado_fiscal.aliquota_iss	faixa:0,100			alíquota de ISS em %; fora de 0..100: NULL com pendência (a regra do modelo recusaria o profissional)
+TBPROFIS	PER_INSS	profissional_dado_fiscal.percentual_inss	faixa:0,100			percentual de INSS
+TBPROFIS	NDEP	profissional_dado_fiscal.dependentes_irrf	inteiro_nao_negativo			dependentes para o imposto de renda; negativo vira NULL (fica o padrão 0) com pendência
 TBESPEC	COD	especialidade_medica.codigo	texto			código da especialidade (número gravado como texto)
 TBESPEC	NOME	especialidade_medica.descricao	texto_nome			descrição; vazia recusa (NOT NULL)
 TBESPEC	SIGLA	especialidade_medica.sigla	texto			sigla
 TBESPEC	IDADE_INICIAL	especialidade_medica.idade_minima_anos	inteiro			faixa etária; fora da regra do destino recusa a linha (CHECK)
 TBESPEC	IDADE_FINAL	especialidade_medica.idade_maxima_anos	inteiro			faixa etária
-#TBCBOSUS_TBESPEC	ID_TBESPEC	especialidade_ocupacao.especialidade_medica_id	chave_origem			especialidade (mesma fatia)
-#TBCBOSUS_TBESPEC	ID_TBCBOSUS	especialidade_ocupacao.ocupacao_cbo_id	chave_origem			ocupação: o valor é o ID substituto de TBCBOSUS, não o código CBO; resolver ID -> TBCBOSUS.COD -> ocupacao_cbo pelo de-para oficial pela chave (pedido ao integrador)
-#HTCONVEN	ID_TBCONVEN	fonte_pagadora_versao.fonte_pagadora_id	chave_origem			fonte pagadora do retrato (mesma fatia)
-#HTCONVEN	=alteracao	fonte_pagadora_versao.operacao				histórico da origem: cada linha é uma alteração registrada
-#HTCONVEN	={}	fonte_pagadora_versao.dados				retrato JSON ainda sem montagem genérica (pedido ao integrador): nome vai na coluna própria
-#HTCONVEN	DATA_HORA_HISTORICO	fonte_pagadora_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
-#HTCONVEN	NOME	fonte_pagadora_versao.nome	texto_nome			nome vigente no retrato; vazio recusa (NOT NULL)
-#HTPACIENTE	ID_RICADPAC	paciente_versao.paciente_id	chave_origem			paciente (L3); pai nunca visto recusa (NOT NULL)
-#HTPACIENTE	=alteracao	paciente_versao.operacao				histórico da origem: cada linha é uma alteração registrada
-#HTPACIENTE	={}	paciente_versao.dados				retrato JSON ainda sem montagem genérica (pedido ao integrador): nome e nascimento vão nas colunas próprias
-#HTPACIENTE	DATA_HORA_HISTORICO	paciente_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
-#HTPACIENTE	=migracao	paciente_versao.motivo				retrato trazido do histórico da origem
-#HTPACIENTE	NOME	paciente_versao.nome	texto_nome			nome no momento do retrato; vazio recusa (NOT NULL)
-#HTPACIENTE	DATA_NASCIMENTO	paciente_versao.data_nascimento	data			nascimento no retrato; sentinela vira NULL com pendência
-#HTPACIENTE	=44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a	paciente_versao.hash_dados				SHA-256 do JSON gravado em dados ('{}'), coerente com a coluna dados
-#HTPROFIS	ID_TBPROFIS	profissional_versao.profissional_id	chave_origem			profissional (mesma fatia); pai recusado recusa (pai_pendente)
+TBCBOSUS_TBESPEC	ID_TBESPEC	especialidade_ocupacao.especialidade_medica_id	chave_origem			especialidade (mesma fatia)
+TBCBOSUS_TBESPEC	ID_TBCBOSUS	especialidade_ocupacao.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	o valor é o ID substituto de TBCBOSUS: a referência encadeada lê o COD da linha pai e o de-para oficial cbo acha a ocupação (nunca pelo ID)
+TBMEDESP	ID_TBCBOPRO	profissional_especialidade.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	profissional pela inscrição no conselho (referência encadeada)
+TBMEDESP	ID_TBCBOPRO	profissional_especialidade.inscricao_conselho_id	chave_origem			inscrição em que a especialidade foi registrada (L5 ordem 63)
+TBMEDESP	ESP	profissional_especialidade.especialidade_medica_id			ref:TBESPEC	especialidade pela chave de TBESPEC (mesma fatia)
+TBMEDESP	ATIVO	profissional_especialidade.ativo	booleano_sn			S/N; fora do domínio fica com o padrão (ativo) e pendência
+RICADPAC_TBCONVEN	ID_RICADPAC	cobertura_paciente.paciente_id	chave_origem			paciente (L3); nunca visto recusa (NOT NULL)
+RICADPAC_TBCONVEN	ID_TBCONVEN	cobertura_paciente.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
+RICADPAC_TBCONVEN	@vigencia_carga	cobertura_paciente.vigencia_inicio				a origem não data a cobertura: vigente desde a carga, com vigencia_sem_fonte
+HTCONVEN	ID_TBCONVEN	fonte_pagadora_versao.fonte_pagadora_id	chave_origem			fonte pagadora do retrato (mesma fatia)
+HTCONVEN	=alteracao	fonte_pagadora_versao.operacao				histórico da origem: cada linha é uma alteração registrada
+HTCONVEN	#retrato	fonte_pagadora_versao.dados				retrato JSON da linha do histórico (todas as colunas da tabela estão declaradas)
+HTCONVEN	DATA_HORA_HISTORICO	fonte_pagadora_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
+HTCONVEN	NOME	fonte_pagadora_versao.nome	texto_nome			nome vigente no retrato; vazio recusa (NOT NULL)
+HTCONVEN	CLASSIFICACAO	fonte_pagadora_versao.classe_fonte_pagadora_id			ref:TBCLASSC	classe no retrato pela chave de TBCLASSC
+#HTPROFIS	ID_TBPROFIS	profissional_versao.profissional_id	chave_origem			sem carga: o retrato do cadastro (dados) teria só quem e quando; espera o retrato de todas as colunas da linha, como HTPACIENTE (pedido L5-06.json)
 #HTPROFIS	=alteracao	profissional_versao.operacao				histórico da origem: cada linha é uma alteração registrada
-#HTPROFIS	={}	profissional_versao.dados				retrato JSON ainda sem montagem genérica (pedido ao integrador)
+#HTPROFIS	#retrato	profissional_versao.dados				retrato JSON de todas as colunas do histórico (falta a regra do retrato de todas as colunas)
 #HTPROFIS	DATA_HORA_HISTORICO	profissional_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
+#HTPROFIS	ID_TBUSERS	profissional_versao.usuario_id			ref:TBUSERS	usuário que alterou, pelo login (chave de TBUSERS); nunca visto: NULL com pai_inexistente
+HTPRONTUNIF	ID_RICADPAC	unificacao_cadastro.mantido_paciente_id	chave_origem			paciente que ficou (L3)
+HTPRONTUNIF	ID_RICADPAC_UNIFICADO	unificacao_cadastro.absorvido_paciente_id	chave_origem			paciente absorvido (L3); nunca visto recusa (NOT NULL)
+HTPRONTUNIF	DATA_HORA_UNIFICACAO	unificacao_cadastro.unificado_em	data_hora			momento da unificação
+HTPRONTUNIF	USUARIO_UNIFICACAO	unificacao_cadastro.unificado_por_usuario_id			ref:TBUSERS	usuário que unificou, pelo login; sem usuário recusa (NOT NULL)
+HTPRONTUNIF	=Unificação trazida do histórico do sistema anterior	unificacao_cadastro.justificativa				a origem não guarda justificativa: texto fixo que diz a procedência (o modelo exige ao menos 5 caracteres)
+HTPRONTUNIF	=0	unificacao_cadastro.reversivel				a origem não guarda os registros transferidos: a unificação migrada não pode ser revertida pelo produto
 HTTBCBOPRO	DATA_HISTORICO	trilha_auditoria.ocorrido_em	data_hora			histórico da inscrição no conselho vira trilha de auditoria (mecanismo historico_entidade)
 HTTBCBOPRO	=alteracao	trilha_auditoria.acao				cada linha do histórico é uma alteração
 HTTBCBOPRO	=inscricao_conselho	trilha_auditoria.entidade				entidade afetada
-HTTBCBOPRO	ID_TBCBOPRO	trilha_auditoria.entidade_id	chave_origem			id da inscrição no conselho (L5 ordem 65); pai nunca visto fica NULL com pendência
+HTTBCBOPRO	ID_TBCBOPRO	trilha_auditoria.entidade_id	chave_origem			id da inscrição no conselho (L5 ordem 63); pai nunca visto fica NULL com pendência
+HTTBCBOPRO	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS	quem alterou, pelo login (chave de TBUSERS); nunca visto: NULL com pai_inexistente
 HTTBCBOPRO_TBUNIDAD	DATA_ATUALIZACAO	trilha_auditoria.ocorrido_em	data_hora			histórico da lotação vira trilha de auditoria (mecanismo historico_entidade)
 HTTBCBOPRO_TBUNIDAD	=alteracao	trilha_auditoria.acao				cada linha do histórico é uma alteração
-HTTBCBOPRO_TBUNIDAD	=lotacao_profissional	trilha_auditoria.entidade				entidade afetada (a origem não traz chave da lotação: entidade_id fica NULL)
+HTTBCBOPRO_TBUNIDAD	=lotacao_profissional	trilha_auditoria.entidade				entidade afetada
+HTTBCBOPRO_TBUNIDAD	CBOPRO	trilha_auditoria.entidade_id			ref:TBCBOPRO_TBUNIDAD(CBOPRO,UNIDAD)	lotação afetada pela chave composta (CBOPRO é o ID da inscrição, nunca código CBO: a referência composta não aplica de-para); nunca vista: NULL com pai_inexistente
+HTTBCBOPRO_TBUNIDAD	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS	quem alterou, pelo login; nunca visto: NULL com pai_inexistente
 HTTBHOSPIT	DATA_HORA_GRAVACAO	trilha_auditoria.ocorrido_em	data_hora			alterações do cadastro do hospital viram trilha do estabelecimento (mecanismo historico_entidade)
 HTTBHOSPIT	=alteracao	trilha_auditoria.acao				cada linha do histórico é uma alteração
-HTTBHOSPIT	=estabelecimento	trilha_auditoria.entidade				entidade afetada (estabelecimento único da imagem: entidade_id pedido ao integrador)
-#TBCONVEN	SITUACAO	fonte_pagadora.situacao	codigo_char			situação da fonte: precisa de de-para de valores declarado (ativa/suspensa/inativa; fora do domínio: padrão com pendência), pedido ao integrador; sem ela toda fonte entraria ativa
-#TBCONVEN	CLASSE	fonte_pagadora.classe_fonte_pagadora_id	chave_origem			classe da fonte (TBCLASSC, L5 ordem 67): a referência gerada veio vazia; precisa de referência declarada, pedido ao integrador
-#TBPROFIS	SITUACAO	profissional.situacao	codigo_char			situação do profissional: precisa de de-para de valores declarado (ativo/inativo/suspenso/afastado) e inativo derivado de DATA_DESLIGAMENTO, pedido ao integrador; sem ela o desligado entraria ativo
-#HTCONVEN	CLASSIFICACAO	fonte_pagadora_versao.classe_fonte_pagadora_id	chave_origem			classificação no retrato (TBCLASSC): precisa de referência declarada, pedido ao integrador
+HTTBHOSPIT	=estabelecimento	trilha_auditoria.entidade				entidade afetada
+HTTBHOSPIT	COD	trilha_auditoria.entidade_id			ref:TBHOSPIT	estabelecimento alterado, pela chave de TBHOSPIT (L3); nunca visto: NULL com pai_inexistente
+HTTBHOSPIT	COD	trilha_auditoria.estabelecimento_id			ref:TBHOSPIT	onde a alteração ocorreu: o próprio estabelecimento
+#HTPACIENTE	ID_RICADPAC	paciente_versao.paciente_id	chave_origem			sem carga: falta regra genérica do SHA-256 do retrato (hash_dados NOT NULL) e retrato de todas as colunas da linha
+#HTPACIENTE	=alteracao	paciente_versao.operacao				histórico da origem: cada linha é uma alteração registrada
+#HTPACIENTE	#retrato	paciente_versao.dados				retrato JSON da linha (falta a regra do retrato de todas as colunas)
+#HTPACIENTE	DATA_HORA_HISTORICO	paciente_versao.ocorrido_em	data_hora			momento do retrato
+#HTPACIENTE	=migracao	paciente_versao.motivo				retrato trazido do histórico da origem
+#HTPACIENTE	NOME	paciente_versao.nome	texto_nome			nome no momento do retrato
+#HTPACIENTE	DATA_NASCIMENTO	paciente_versao.data_nascimento	data			nascimento no retrato
+#HTPACIENTE	ID_TBUSERS	paciente_versao.usuario_id			ref:TBUSERS	usuário que alterou
+#HTPACTELEFONE	ID_HTPACIENTE	paciente_versao.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	sem carga: o telefone da versão vira versão própria no mesmo instante; falta a regra do SHA-256 do retrato (hash_dados NOT NULL)
+#HTPACTELEFONE	ID_HTPACIENTE	paciente_versao.ocorrido_em	data_hora		ref:HTPACIENTE>DATA_HORA_HISTORICO	mesmo instante da versão do paciente
+#HTPACTELEFONE	ID_HTPACIENTE	paciente_versao.nome	texto_nome		ref:HTPACIENTE>NOME	nome da versão do paciente
+#HTPACTELEFONE	#retrato	paciente_versao.dados				tipo, número e contato do telefone da versão
+#HTPROFISTEL	ID_HTPROFIS	profissional_versao.profissional_id			ref:HTPROFIS>ID_TBPROFIS>TBPROFIS	sem carga: o telefone da versão vira versão própria no mesmo instante; falta a regra do retrato de todas as colunas (o número não tem coluna no destino)
+#HTPROFISTEL	ID_HTPROFIS	profissional_versao.ocorrido_em	data_hora		ref:HTPROFIS>DATA_HORA_HISTORICO	mesmo instante da versão do profissional
+#HTPROFISTEL	#retrato	profissional_versao.dados				tipo e número do telefone da versão
+#HTATENDRESP	ID_HTATENDIMENTO	trilha_auditoria.ocorrido_em	data_hora		ref:HTATENDIMENTO>DATA_HORA_HISTORICO	sem carga: o responsável do atendimento no histórico vira trilha com retrato; falta a regra do retrato de todas as colunas (nome, documento e endereço do responsável não têm coluna na trilha)
+#HTATENDRESP	=alteracao	trilha_auditoria.acao				cada linha do histórico é uma alteração
+#HTATENDRESP	=responsavel_paciente	trilha_auditoria.entidade				entidade afetada
+#HTATENDRESP	#retrato	trilha_auditoria.dados_depois				dados do responsável no histórico
+#ATPARAMGERAL	MODULO	regra_campo_cadastro.modulo_recepcao_id			ref:TBMODULO_RECEPCAO	sem carga: falta a regra genérica de desdobrar no destino principal (o único destino é regra_campo_cadastro, uma linha por campo)
+#ATPARAMGERAL	#rotulo	regra_campo_cadastro.campo				campo do cadastro do paciente
+#ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	codigo_char	valores	desdobrar:DIGITAR_APELIDO=apelido,DIGITAR_EMAIL=email,DIGITAR_CELULAR=celular,DIGITAR_IDENTIDADE=identidade,DIGITAR_CPF_CAD_PAC=cpf,DIGITAR_CNS_CAD_PAC=cns,DIGITAR_NOME_SOCIAL=nome_social	exigência do campo: S/N e o código de TBDIGITAR pelo de-para de valores

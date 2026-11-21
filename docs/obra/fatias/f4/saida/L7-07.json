@@ -2,53 +2,51 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência por chave composta do pai: via `ref:<TABELA>(<COL1>,<COL2>)` monta a chave do pai com várias colunas da linha",
-   "motivo": "GEITENS.GRU+SUB -> GESUBGRU (GRU,COD) para insumo.subgrupo_insumo_id; GELANNFS -> GECADNFS e GELANBAL -> GECADBAL pela chave ANO,MES,DOC"
+   "id": "M1",
+   "mudanca": "referência ao id de um destino SECUNDÁRIO do pai: via `ref:<TABELA>/<tabela destino>` lê o conector_origem pela chave `<chave>/<tabela destino>`",
+   "motivo": "GERASVALTRANSFLOTE -> movimento_lote.movimento_estoque_id (movimento_estoque é secundário de GELANTRA); GELANBAL -> inventario_estoque_item.inventario_estoque_contagem_id (contagem secundária de GECADBAL); GERASVALNFS (movimento de entrada da nota). Mesmo M1 do saida/L6-15.json. Declarações prontas e comentadas em colunas.d/L7-07.tsv"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência a coluna do destino do pai (`ref:<TABELA>><coluna>`, já pedida no L6-13) e a destino secundário do pai (`ref:<TABELA>/<destino>`)",
-   "motivo": "GEKITITE/GEKITKPI: kit_material_item.unidade_medida_id (NOT NULL) viria de insumo.estoque_unidade_medida_id; GERASVALTRANSFLOTE: movimento_lote.movimento_estoque_id é o destino secundário de GELANTRA"
+   "id": "M4",
+   "mudanca": "referência por identificação natural de VÁRIAS colunas do pai que não são a chave dele (ex.: `ref:GECADNFS[ANO,MES,DOC]`), com pai_ambiguo se repetida",
+   "motivo": "GELANNFS -> nota_entrada_item.nota_entrada_id: a chave de GECADNFS é ID e a linha só traz ANO,MES,DOC. Mesmo M4 do saida/L6-15.json"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino condicional por valor de coluna (ex.: `?OQUE=P` no destino) para tabela que alimenta destinos alternativos",
+   "id": "M2",
+   "mudanca": "id pelo código no destino (catálogo do produto, ex.: tipo_movimento_estoque pelo código) para coluna NOT NULL sem coluna na origem",
+   "motivo": "GELANPAC -> movimento_estoque.tipo_movimento_estoque_id (consumo do paciente = saída). Mesmo M2 do saida/L6-15.json"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "id": "data_em_datetime",
+   "mudanca": "tipar: DATE da origem em coluna DATETIME do destino vira datetime à meia-noite ANTES da soma de controle (hoje o resumo da origem tem '2026-01-31' e o relido '2026-01-31 00:00:00.000')",
+   "motivo": "GECADBAL -> inventario_estoque.data_corte/aberto_em: a conciliação diverge (provado na conferência da fatia; o mesmo do pedido 2d do L6-04 e de GEESTINI no L7-05). Declaração pronta e comentada; ao descomentar, pôr os pares CONSOL S=aprovado, N=aberto em valores.d/L7-07.tsv. Também GEFECMES/GEESTINI (L7-05)"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py",
+   "id": "dcb",
+   "mudanca": "catálogo `dcb` em CATALOGOS: tabela principio_ativo, coluna codigo_dcb (texto aparado, maiúsculas)",
+   "motivo": "GEITENS_TBPRINC -> insumo_principio_ativo.principio_ativo_id por `ref:TBPRINC>COD_DCB` com depara dcb (TBPRINC descartada como catálogo oficial). Serve também PRALERGIAPAC_TBPRINC (L6)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "id": "destino_condicional",
+   "mudanca": "destino condicional por valor de coluna (ex.: `?OQUE=P` na via do destino): a linha só grava os destinos cuja condição vale",
    "motivo": "GECADPED vira pedido_compra, cotacao ou processo_licitatorio conforme OQUE; GELANPED segue o cabeçalho"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino secundário opcional: com a coluna-fonte nula, o secundário não é gravado (em vez de recusar a linha inteira)",
-   "motivo": "GEITEMKITRAS -> kit_rastreavel_lote exige lote_insumo_id e a origem tem ID_GEVALMEM anulável"
+   "id": "texto_composto",
+   "mudanca": "especial de texto composto `#texto:C1,C2,C3[:sep]` (ex.: número AAAA/MM/DOC)",
+   "motivo": "GECADBAL -> inventario_estoque.numero: DOC sozinho pode repetir entre meses (1062, visível)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "atualização de coluna de destino já gravado por outra tabela (UPDATE pelo conector_origem do pai)",
-   "motivo": "GESALDOKITRAS.QTDE_SALDO é kit_rastreavel_item.saldo_atual do item gravado por GEITEMKITRAS"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
-   "mudanca": "ordem: GELANNFS (609) e GERASVALNFS (618) dependem da nota de entrada GECADNFS (890), carregada depois",
-   "motivo": "nota_entrada_item exige nota_entrada_id (NOT NULL)"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py",
-   "mudanca": "de-para oficial do princípio ativo (catálogo principio_ativo pelo código DCB) e do termo TISS de unidade de medida",
-   "motivo": "TBPRINC e GEITENS_TBPRINC (insumo_principio_ativo.principio_ativo_id); TBUNICON.ID_TBTISSUNIDMED -> unidade_medida.termo_tiss_id. Rever também o mapa: TBPRINC -> classe_terapeutica gravaria princípios como classes (a classe é ID_TBTERAPEUTICO)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d/L7-07.tsv (novo, por fatia)",
-   "mudanca": "de-para de valores: momento de envio da regra farmacêutica, curva ABC/XYZ e tipo do insumo pelas marcas MAT/MEDGERAL/SOLUCAO/DIET*",
-   "motivo": "hoje entram presumidos (=~nao_enviar com a regra inativa; =~outro no tipo) ou sem destino (CURVA)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "regra de valor derivado para NOT NULL sem origem: competência (1º dia do mês de uma data), local de estoque, vigência inicial",
-   "motivo": "GERASVALFINAL/GERASVALINICIAL (saldo_lote), GEUSERS_TBCLASSI (vigencia_inicio, grupo_insumo_id), GECADBAL (numero composto, aberto_em), GELANPAC (movimento_estoque), item_prescritivel/dado_fiscal_item de GEITENS"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino compartilhado por chave natural: declarar para a tabela uma identificação natural (ex.: GEVALMEM -> lote_insumo por ITEM,LOTE,DATA, com o estabelecimento); linha cuja identificação já foi gravada NÃO insere: o conector_origem dela aponta para o mesmo id (filhos resolvem por qualquer das linhas); colunas divergentes entre as linhas do grupo (fabricante, validade original) viram pendência própria, sem recusar; diferencial: apagar uma das linhas não apaga o destino enquanto outra apontar para ele. Depois disso, o esperado da sintética l7_07 (GEVALMEM linha 4, outro LOCAL) passa de restricao_destino_1062 para gravada uma vez",
-   "motivo": "GEVALMEM é o lote POR LOCAL de estoque: na referência 32297 linhas para 21800 lotes físicos; 5993 lotes em 2 ou mais locais (16490 linhas), nenhum repetido no mesmo local. Hoje 10497 linhas caem em 1062 em uq_lote_insumo_identificacao e todo filho delas (GERASVALESTINI, GEITEMKITRAS, GERASVALNFS, GERASVALTRANSFLOTE) fica pai_pendente. 15 lotes divergem em fabricante ou validade original entre locais"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "id": "cobertura_complementa",
+   "mudanca": "não exigir as colunas NOT NULL do destino quando ele é `complementa` (UPDATE da linha do pai, sem linha nova); e `tools/obra/conferir-fatia-f4.sh` passa a rodar `cobertura_conector.py --fatia <F> --falhar-se-bloqueada` (hoje devolve ok com tabelas bloqueadas)",
+   "motivo": "GESALDOKITRAS e GERASVALINICIAL CARREGAM (provado na conferência da fatia), mas a ferramenta as mostra como coluna_obrigatoria_sem_fonte"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -61,14 +59,33 @@
    "motivo": "a sequência não entra no hash: itens 1,2,3 (seq 1,2,3); apaga-se o 2 (fica no destino como apagada) e entra o 4, que recebe seq 3 = 1062 em uq_kit_rastreavel_item_sequencia / uq_inventario_estoque_lote_sequencia no Sincronizar sem erro na origem (GEITEMKITRAS e GERASVALESTINI)"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "regra decimal_positivo: nulo, zero ou negativo vira NULL com valor_fora_do_dominio (linha gravada, fica o padrão do destino)",
-   "motivo": "GEITENS.FATOR_CONV -> insumo.fator_consumo_prescricao (CHECK > 0): hoje zero recusa o insumo inteiro (4025) e nulo fica o padrão 1 sem pendência; na referência os 8406 valem 1, então nada muda nos números atuais"
-  },
-  {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "valor condicional por igualdade de colunas da mesma linha (ex.: `?UNI_ARM=UNI_CON:CONVER|=~1`): grava o valor quando a condição vale e o literal presumido quando não",
    "motivo": "CONVER é compra -> consumo e o modelo separa compra -> estoque e estoque -> consumo. Na referência UNI_ARM=UNI_CON em 7383 de 8406 (CONVER vai inteiro para fator_compra_estoque e estoque -> consumo = 1 exato); 117 têm UNI_ARM=UNI_COMP<>UNI_CON (o fator iria para estoque -> consumo); 906 não batem com nenhuma. Hoje: fator_compra_estoque = CONVER (0 = sem conversão, convenção da origem) e fator_estoque_consumo = 1 presumido em TODAS as linhas (8406 valor_presumido em vez de 1023)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "id": "competencia_carga",
+   "mudanca": "a regra declarada vale também para `=@data_carga` (ex.: `=@data_carga` com `data_primeiro_dia_mes` = 1º dia do mês da carga), estável no diferencial como o `=@data_carga`",
+   "motivo": "GEVALMEM -> saldo_lote.competencia (NOT NULL, CHECK dia 1): o saldo ATUAL do lote por local sai da GEVALMEM (QTDE, QTDE_KIT) e a competência é o mês da carga. Declaração pronta e comentada (#GEVALMEM ... saldo_lote) em colunas.d/L7-07.tsv; ao aplicar, descomentar e pôr na sintética o esperado do saldo (1 linha por lote x local; a linha 4 grava o saldo do local 2 no lote adotado)"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py",
+   "id": "lista_controle_especial",
+   "mudanca": "catálogo `lista_controle_especial` em CATALOGOS: tabela lista_controle_especial, coluna codigo_lista (texto aparado, maiúsculas; vigente)",
+   "motivo": "GEITENS.PORTARIA -> insumo.lista_controle_especial_id (perda regulatória se ficar de fora). Hoje declarada sem destino; ao aplicar: destino insumo.lista_controle_especial_id, depara lista_controle_especial"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "id": "precedencia",
+   "mudanca": "valor por precedência de condições da mesma linha: `?MEDGERAL=S:medicamento|?MAT=S:material|?SOLUCAO=S:solucao|?DIETORAL=S:dieta|?DIETENT=S:dieta|?DIETPARENT=S:dieta|=outro` (a primeira condição verdadeira vence; o literal final com `=~` deixa valor_presumido). Generaliza o pedido de valor condicional por igualdade (CONVER)",
+   "motivo": "GEITENS -> insumo.tipo, decidido em F4-decisoes-destino.md; hoje =~outro em 100% dos insumos"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "id": "cobertura_por_coluna",
+   "mudanca": "acusar coluna da origem sem declaração (com ou sem destino) nas tabelas que carregam (fora a chave e as licenciadas)",
+   "motivo": "colunas com destino no modelo sumiam em silêncio (GEITENS tinha 72 sem declaração); a L7-07 já declara todas e tem o teste test_toda_coluna_da_origem_declarada_nas_carregadas"
   }
  ]
 }

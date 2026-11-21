@@ -7,33 +7,63 @@ RISETOR	COD	setor_tramite.codigo	texto			L6-18: chave inteira da origem gravada 
 RISETOR	NOME	setor_tramite.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
 RISETOR	=~unidade	setor_tramite.tipo				L6-18: a origem não classifica o setor (SAME marca o arquivo de prontuários, mas tipo 'arquivo' exige local_arquivo_id): entra 'unidade' com pendência valor_presumido por linha (de-para pedido no L6-18.json)
 RISETOR	SAME		codigo_char			L6-18: sem destino até o de-para do tipo 'arquivo' com o local de arquivo (pedido no L6-18.json)
-PRVIAADMIN	ID	via_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); via_dieta recebe só PRVIAADMIN até o prefixo de domínio por origem (TBTPDIETA no mesmo código único, pedido no L6-18.json)
+PRVIAADMIN	ID	via_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); única alimentadora de via_dieta
 PRVIAADMIN	NOME	via_dieta.descricao	texto_nome			L6-18: nome vazio recusa a linha (NOT NULL)
-PRVIAADMIN	=~oral	via_dieta.modalidade				L6-18: a modalidade vem do tipo de dieta (ID_TBTPDIETA), domínio próprio do cliente sem de-para; entra 'oral' com pendência valor_presumido por linha para o cliente reclassificar (de-para pedido no L6-18.json)
-PRVIAADMIN	=0	via_dieta.ativo				L6-18: via migrada INATIVA até o de-para do tipo de dieta dar a modalidade real: uma via enteral ou parenteral nunca fica oferecida na prescrição como oral
-TBTPDIETA	ID		chave_origem			L6-18: não carregada: via_dieta.codigo é único e PRVIAADMIN já ocupa os mesmos códigos; espera o prefixo de domínio por origem (pedido no L6-18.json)
-TBTPDIETA	NOME		texto_nome			L6-18: não carregada (ver ID)
+PRVIAADMIN	ID_TBTPDIETA	via_dieta.modalidade	texto_nome	valores	ref:TBTPDIETA>NOME	L6-18: modalidade pelo nome do tipo de dieta da via (referência encadeada, de-para genérico por nome em valores.d/L6-18.tsv); tipo sem par: NULL com valor_fora_do_dominio e a via é recusada (NOT NULL), visível na triagem, nunca presumida em coluna clínica
 TBDIETAS	COD	modalidade_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); TBDIETAS é a única alimentadora
 TBDIETAS	NOME	modalidade_dieta.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
-TBDIETAS	SITUACAO		booleano_ai			L6-18: sem destino enquanto a classe for presumida (ativo fica FALSE); volta a modalidade_dieta.ativo com o de-para do tipo de dieta (pedido no L6-18.json)
-TBDIETAS	=0	modalidade_dieta.ativo				L6-18: dieta migrada INATIVA até o de-para do tipo de dieta dar a classe real: uma dieta enteral nunca fica oferecida como oral
-TBDIETAS	=~oral	modalidade_dieta.classe				L6-18: a origem não classifica a dieta (TPDIETA aponta o tipo de dieta, sem de-para); entra 'oral' com pendência valor_presumido por linha e a dieta inativa (ver ativo)
+TBDIETAS	SITUACAO	modalidade_dieta.ativo	booleano_ai			L6-18: A ativo, I inativo; vazio ou fora do domínio fica o padrão (ativo): a classe vem do tipo de dieta, a dieta migra prescritível
 TBDIETAS	ID_GELOCARM	modalidade_dieta.local_estoque_id	chave_origem			L6-18: estoque que abastece a dieta; nunca visto: NULL com pai_inexistente
-TBDIETAS	TPDIETA		inteiro			L6-18: sem destino: tipo de dieta (TBTPDIETA, não carregada) para via_dieta_id ou classe (pedido no L6-18.json)
+TBDIETAS	TPDIETA	modalidade_dieta.classe	texto_nome	valores	ref:TBTPDIETA>NOME	L6-18: classe pelo nome do tipo de dieta (referência encadeada, de-para genérico por nome em valores.d/L6-18.tsv); tipo sem par: valor_fora_do_dominio (média, visível na triagem) e o padrão do destino 'oral'; sem tipo: padrão 'oral'
 PRCARACT_TBDIETAS	ID_TBDIETAS	modalidade_dieta_caracteristica.modalidade_dieta_id	chave_origem			L6-18: dieta (mesma fatia); recusada: pai_pendente
 PRCARACT_TBDIETAS	ID_PRCARACTDIE	modalidade_dieta_caracteristica.caracteristica_dieta_id	chave_origem			L6-18: característica (L6, ordem 464); nunca vista: pai_inexistente e recusa (NOT NULL)
-PRCARACT_TBDIETAS	ORDEM		texto			L6-18: sem destino (ordem fica o padrão 0): a origem guarda a ordem em texto e a conversão ao inteiro do destino derruba a carga com texto não numérico; volta com a regra genérica inteiro_em_texto (pedido no L6-18.json)
+PRCARACT_TBDIETAS	ORDEM	modalidade_dieta_caracteristica.ordem	texto			L6-18 cobertura: ordem guardada em texto na origem; inteiro vira número, texto não numérico ou fracionário vira NULL com valor_fora_do_dominio e a linha fica com o padrão 0 (tipar, sem derrubar a carga)
 PRCARACT_TBDIETAS	SITUACAO	modalidade_dieta_caracteristica.ativo	booleano_ai			L6-18: A ativo, I inativo; vazio fica o padrão do destino (ativo)
 CHTPLIMPEZA_GEITENS	ID_CHTPLIMPEZA	material_modalidade_limpeza.modalidade_limpeza_id	chave_origem			L6-18: tipo de limpeza (L6, ordem 456); nunca visto: pai_inexistente e recusa (NOT NULL)
 CHTPLIMPEZA_GEITENS	ID_GEITENS	material_modalidade_limpeza.insumo_id	chave_origem			L6-18: item de estoque (L7, ordem 599; destino principal insumo); nunca visto: pai_inexistente e recusa (NOT NULL)
 CHTPLIMPEZA_GEITENS	QTDE	material_modalidade_limpeza.quantidade	decimal			L6-18: quantidade zero ou negativa recusa a linha (ck quantidade > 0)
-PRHORPAD	ID_HORPAD		chave_origem			L6-18: não carregada: horario_fim e horario_corte_mapa são NOT NULL sem origem e HORARIO é HHMM em texto (pedido no L6-18.json)
-PRHORPAD	HORARIO		texto			L6-18: não carregada (ver ID_HORPAD)
-CHPARAM	ID_TBHOSPIT		chave_origem			L6-18: não carregada: parâmetros em colunas (uma linha por estabelecimento) pedem o despivotamento para parametro_definicao/parametro_valor (pedido no L6-18.json)
-CVPARAM	COD_TBHOSPIT		inteiro			L6-18: não carregada: parâmetros em colunas pedem o despivotamento (pedido no L6-18.json); a senha mestra nunca é migrada em claro
-TBLEITO_CHPROFISLIMP	ID_TBLEITO		chave_origem			L6-18: não carregada: vigencia_inicio é NOT NULL sem origem (pedido no L6-18.json)
-TBLEITO_CHPROFISLIMP	ID_CHPROFISLIMP		chave_origem			L6-18: não carregada (ver ID_TBLEITO)
-CHSOLICITLIMP	ID		chave_origem			L6-18: não carregada: situacao_limpeza_id é NOT NULL e a origem guarda a situação só na execução (pedido no L6-18.json)
-CHEXECLIMPEZA	ID		chave_origem			L6-18: não carregada: depende da solicitação (CHSOLICITLIMP), bloqueada (pedido no L6-18.json)
-CHSOLICITLIMP_TBLEITO	ID_CHSOLICITLIMP		chave_origem			L6-18: não carregada: depende da solicitação (CHSOLICITLIMP), bloqueada; sequencia viria de #seq:ID_CHSOLICITLIMP (pedido no L6-18.json)
-GDPRONTMOVIM	ID		chave_origem			L6-18: não carregada: volume_prontuario_id e paciente_id são NOT NULL sem origem direta e os setores da origem são de trâmite, não funcionais (pedido no L6-18.json)
+PRHORPAD	@estabelecimento	horario_refeicao.estabelecimento_id				L6-18 cobertura: horário padrão do estabelecimento (a origem não tem unidade); nenhum ou vários: estabelecimento_indefinido
+PRHORPAD	CODREF	horario_refeicao.refeicao_do_dia_id			ref:PRTPREFEIC	L6-18 cobertura: código da refeição do dia (chave de PRTPREFEIC); recusada: pai_pendente; nunca vista: pai_inexistente e recusa (NOT NULL)
+PRHORPAD	ID_TBDIETAS	horario_refeicao.modalidade_dieta_id	chave_origem			L6-18 cobertura: dieta do horário; recusada: pai_pendente
+PRHORPAD	HORARIO	horario_refeicao.horario_inicio	hora_hhmm			L6-18 cobertura: HHMM em texto vira TIME; inválido: hora_invalida e recusa (NOT NULL)
+PRHORPAD	HORARIO	horario_refeicao.horario_corte_mapa	hora_hhmm			L6-18 cobertura: INTERINO: a origem tem um só horário por refeição e dieta; o corte igual ao início é o corte MAIS permissivo (prescrição até a hora da refeição ainda entra no mapa, sem tempo de preparo). Definitivo: início menos 120 min presumido (regra pedida no L6-18.json); o cliente ajusta no painel
+PRHORPAD	=~23:59:59	horario_refeicao.horario_fim				L6-18 cobertura: INTERINO: sem fonte na origem; 23:59:59 presumido (valor_presumido por linha) respeita o ck fim > início mas sobrepõe as janelas das refeições do dia. Definitivo: início mais 60 min limitado a 23:59:59 (regra pedida no L6-18.json); o cliente ajusta no painel
+PRHORPAD	SITUACAO	horario_refeicao.ativo	booleano_ai			L6-18 cobertura: A ativo, I inativo; vazio ou fora do domínio fica o padrão (ativo)
+TBLEITO_CHPROFISLIMP	ID_TBLEITO	leito_profissional_higienizacao.leito_hospitalar_id	chave_origem			L6-18 cobertura: leito (L6, ordem 826); nunca visto: pai_inexistente e recusa (NOT NULL)
+TBLEITO_CHPROFISLIMP	ID_CHPROFISLIMP	leito_profissional_higienizacao.profissional_higienizacao_id	chave_origem			L6-18 cobertura: profissional de limpeza (L6, ordem 441); nunca visto: pai_inexistente e recusa
+TBLEITO_CHPROFISLIMP	@vigencia_carga	leito_profissional_higienizacao.vigencia_inicio				L6-18 cobertura: a origem não tem data do vínculo: vigência desde a carga com vigencia_sem_fonte (decisão genérica)
+CHSOLICITLIMP	@estabelecimento	solicitacao_limpeza.estabelecimento_id				L6-18 cobertura: único estabelecimento do cliente
+CHSOLICITLIMP	ID	solicitacao_limpeza.numero	inteiro			L6-18 cobertura: número da solicitação = chave da origem (único no estabelecimento)
+CHSOLICITLIMP	ID	solicitacao_limpeza.situacao_limpeza_id			ref:CHEXECLIMPEZA.ID_CHSOLICITLIMP>ID_CHSITUACAO>CHSITUACAO	L6-18 cobertura: a origem guarda a situação só na execução (uma por solicitação): situação da execução pela chave alternativa; sem execução (pai_inexistente) ou com várias (pai_ambiguo) a solicitação é recusada (NOT NULL) e fica visível na triagem; decisão em F4-decisoes-destino.md
+CHSOLICITLIMP	=~manual	solicitacao_limpeza.motivo_geracao				L6-18 cobertura: a origem não diz o que gerou o pedido: 'manual' presumido (valor_presumido), que não exige atendimento no ck
+CHSOLICITLIMP	ID_ATCABECATEND	solicitacao_limpeza.atendimento_id	chave_origem			L6-18 cobertura: atendimento da alta ou transferência; nunca visto: pai_inexistente (coluna aceita NULL)
+CHSOLICITLIMP	ID_CHTPLIMPEZA	solicitacao_limpeza.modalidade_limpeza_id	chave_origem			L6-18 cobertura: tipo de limpeza; nulo ou nunca visto recusa (NOT NULL)
+CHSOLICITLIMP	USUARIO_SOLICITANTE	solicitacao_limpeza.solicitante_usuario_id			ref:TBUSERS	L6-18 cobertura: login do solicitante (chave de TBUSERS); nunca visto: pai_inexistente e recusa (NOT NULL)
+CHSOLICITLIMP	DATA_HORA_SOLICITACAO	solicitacao_limpeza.solicitada_em	data_hora			L6-18 cobertura: data e hora do pedido
+CHEXECLIMPEZA	@estabelecimento	execucao_limpeza.estabelecimento_id				L6-18 cobertura: único estabelecimento do cliente
+CHEXECLIMPEZA	ID_CHSOLICITLIMP	execucao_limpeza.solicitacao_limpeza_id	chave_origem			L6-18 cobertura: solicitação (mesma fatia); recusada: pai_pendente
+CHEXECLIMPEZA	ID_CHSOLICITLIMP	execucao_limpeza.modalidade_limpeza_id			ref:CHSOLICITLIMP>ID_CHTPLIMPEZA>CHTPLIMPEZA	L6-18 cobertura: tipo de limpeza da solicitação, pela referência encadeada
+CHEXECLIMPEZA	ID_CHSITUACAO	execucao_limpeza.situacao_limpeza_id	chave_origem			L6-18 cobertura: situação da execução (L6, ordem 444); nunca vista: pai_inexistente e recusa (NOT NULL)
+CHEXECLIMPEZA	USUARIO_EXECUTANTE	execucao_limpeza.criado_por			ref:TBUSERS	L6-18 cobertura: quem registrou a execução (login do executante): o modelo não tem outra coluna de usuário executante; nunca visto: pai_inexistente (NULL)
+CHEXECLIMPEZA	DATA_HORA_EXECUCAO_INICIAL	execucao_limpeza.inicio_em	data_hora			L6-18 cobertura: início da limpeza
+CHEXECLIMPEZA	DATA_HORA_EXECUCAO_FINAL	execucao_limpeza.fim_em	data_hora			L6-18 cobertura: fim da limpeza; antes do início recusa (ck periodo)
+CHEXECLIMPEZA	OBSERVACAO	execucao_limpeza.observacao	texto_longo			L6-18 cobertura: observação da execução, sem mexer em quebras de linha
+CHSOLICITLIMP_TBLEITO	ID_CHSOLICITLIMP	solicitacao_limpeza_local.solicitacao_limpeza_id	chave_origem			L6-18 cobertura: solicitação (mesma fatia); recusada: pai_pendente
+CHSOLICITLIMP_TBLEITO	#seq:ID_CHSOLICITLIMP	solicitacao_limpeza_local.sequencia				L6-18 cobertura: 1..n dentro da solicitação, na ordem da chave
+CHSOLICITLIMP_TBLEITO	ID_TBLEITO	solicitacao_limpeza_local.leito_hospitalar_id	chave_origem			L6-18 cobertura: leito; nunca visto: pai_inexistente e o ck alvo (leito ou área) recusa a linha
+CHSOLICITLIMP_TBLEITO	EXECUTAR_LIMPEZA_ACOMODACAO	solicitacao_limpeza_local.inclui_acomodacao	booleano_sn			L6-18 cobertura: S/N; vazio ou fora do domínio fica o padrão (FALSE)
+#GDPRONTMOVIM	@estabelecimento	movimento_prontuario.estabelecimento_id				BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	ID_ATCONTA	movimento_prontuario.paciente_id			ref:ATCONTA>ID_ATCABECATEND>ATCABECATEND>ID_RICADPAC>RICADPAC	BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	ID_ATCONTA	movimento_prontuario.atendimento_id			ref:ATCONTA>ID_ATCABECATEND>ATCABECATEND	BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	ID_GDPRONTCADOPER	movimento_prontuario.operacao_movimento_prontuario_id	chave_origem			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	DATA_HORA_MOVIMENTACAO	movimento_prontuario.movimentado_em	data_hora			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	USUARIO_MOVIMENTACAO	movimento_prontuario.movimentado_por_usuario_id			ref:TBUSERS	BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	NOME_RESPONSAVEL	movimento_prontuario.responsavel_nome	texto_nome			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	OBSERVACAO	movimento_prontuario.observacao	texto_longo			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	CIENTIFICO	movimento_prontuario.finalidade_cientifica	booleano_sn			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	DATA_VALIDADE_PRONTUARIO	movimento_prontuario.validade_prontuario	data			BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	USUARIO_EXCLUSAO	movimento_prontuario.excluido_por			ref:TBUSERS	BLOQUEADA por modelo (decidido na F4: volume_prontuario_id NULL só na migração + setores de trâmite; DDL entregue no pedido 2 de saida/L6-18.json); entra ao descomentar
+#GDPRONTMOVIM	EXCLUIDO	movimento_prontuario.excluido_em	booleano_sn	valores		BLOQUEADA por modelo (ver acima); S: excluído na origem, que não guarda a data: excluido_em = data da carga (pares do de-para no pedido 2); nunca entra como movimento válido
+#GDPRONTMOVIM	ID_RISETOR_ORIGEM	movimento_prontuario.saida_setor_tramite_id	chave_origem		ref:RISETOR	BLOQUEADA por modelo (ver acima); setor de trâmite de onde o prontuário saiu (mesma fatia); nunca visto: pai_inexistente (NULL)
+#GDPRONTMOVIM	ID_RISETOR_DESTINO	movimento_prontuario.destino_setor_tramite_id	chave_origem		ref:RISETOR	BLOQUEADA por modelo (ver acima); setor de trâmite para onde o prontuário foi; nunca visto: pai_inexistente (NULL)
+#GDPRONTMOVIM	ID_RIMOTIVO		inteiro			BLOQUEADA por modelo (ver acima); sem destino (descarte de coluna sem_valor): RIMOTIVO é descartada no mapa (obsoleta, 3 valores sem referência ativa)

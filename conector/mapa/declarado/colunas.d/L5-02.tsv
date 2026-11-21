@@ -2,7 +2,7 @@ tabela	coluna	destino	regra	depara	via	motivo
 TBLEITORBIOME	ID	modelo_leitor_biometrico.codigo	texto			L5-02: o número do modelo vira o código (único); texto para casar com o VARCHAR do destino na soma
 TBLEITORBIOME	NOME	modelo_leitor_biometrico.descricao	texto_nome			L5-02: nome do modelo; vazio recusa só a linha (NOT NULL no destino)
 TBLGPDANONMOT	ID	base_legal_tratamento.codigo	texto			L5-02: o número do motivo vira o código (único)
-TBLGPDANONMOT	ID	base_legal_tratamento.descricao	texto			L5-02: provisório até a regra genérica de resumo (pedido no L5-02.json): a descrição curta recebe o código e o cliente revisa; o texto integral vai para a explicação, sem recusar a linha
+TBLGPDANONMOT	DESCRICAO	base_legal_tratamento.descricao	texto_resumo:150			L5-02: descrição curta = texto do motivo resumido na fronteira de palavra (texto_resumido, baixa); o texto integral segue na explicação
 TBLGPDANONMOT	DESCRICAO	base_legal_tratamento.explicacao	texto			L5-02: texto integral do motivo (até 999 na origem; cabe nos 1000 da explicação)
 TBLGPDANONMOT	ATIVO	base_legal_tratamento.ativo	booleano_sn			L5-02: S/N; nulo fica com o padrão do destino
 TBLGPDANONUSERFUNCAO	ID	funcao_responsavel_lgpd.codigo	texto			L5-02: o número da função vira o código; encarregado_dados não é alimentado por esta tabela (exige pessoa, e-mail e vigência)
@@ -10,8 +10,73 @@ TBLGPDANONUSERFUNCAO	DESCRICAO	funcao_responsavel_lgpd.descricao	texto			L5-02: 
 TBLGPDANONUSERFUNCAO	ATIVO	funcao_responsavel_lgpd.ativo	booleano_sn			L5-02: S/N
 TBPAPEL	COD_PAPEL	papel_seguranca.codigo	texto			L5-02: código do papel (único; repetido recusa só a linha)
 TBPAPEL	NOME	papel_seguranca.nome	texto_nome			L5-02: nome do papel; nulo recusa só a linha
+TBPAPEL	QTDE_MAX_USUARIO_VINC	papel_seguranca.limite_usuarios	inteiro_zero_nulo			L5-02: 0 na origem é 'sem limite' = NULL no destino (CHECK > 0), sem pendência
 TBPAPEL	=migracao	papel_seguranca.origem				L5-02: papel trazido pelo conector (distingue dos papéis do produto)
 TBTERMCONREVTP	ID	tipo_termo_lgpd.codigo	texto			L5-02: o número do tipo de termo vira o código
 TBTERMCONREVTP	DESCRICAO	tipo_termo_lgpd.descricao	texto			L5-02: descrição do tipo de termo
 TBTERMCONREVTP	ATIVO	tipo_termo_lgpd.ativo	booleano_sn			L5-02: S/N
 TBTERMCONREVTP	=outra	tipo_termo_lgpd.finalidade				L5-02: a origem não classifica a finalidade; entra como outra e o cliente reclassifica
+TBMENSAG	@estabelecimento	mensagem_interna.estabelecimento_id				L5-02: a origem não traz o estabelecimento; id do único estabelecimento do cliente (vários: estabelecimento_indefinido)
+TBMENSAG	ORIGEM	mensagem_interna.remetente_usuario_id	chave_origem		ref:TBUSERS	L5-02: remetente pelo login (chave do usuário, L3); nulo (aviso do sistema) ou nunca visto: recusa só a linha (NOT NULL); remetente técnico do cliente pedido ao motor (pedido 5 em saida/L5-02.json)
+TBMENSAG	MENSAGEM	mensagem_interna.assunto	texto			L5-02: a origem não tem assunto: o texto (até 200, cabe) vira assunto e texto; nulo recusa a linha (NOT NULL)
+TBMENSAG	MENSAGEM	mensagem_interna.texto	texto			L5-02: texto da mensagem; quebras de linha preservadas
+TBMENSAG	=enviada	mensagem_interna.situacao				L5-02: mensagem da origem já foi enviada (não existe rascunho na origem)
+TBMENSAG	DATA_HORA_ENVIO	mensagem_interna.enviada_em	data_hora			L5-02: envio; nulo com situação enviada recusa só a linha (CHECK de envio)
+TBMENSAG	TIPO	mensagem_interna.prioridade	codigo_char	valores		L5-02: tipo da mensagem: U = urgente; N (normal) e S (aviso do sistema) = normal; nulo = normal (de-para em valores.d/L5-02.tsv); fora da lista: valor_fora_do_dominio e o padrão do destino (normal), sem recusar
+TBMENSAG	ID_TBMENSAG_AGENDADA		chave_origem			L5-02: sem destino: agendamento que gerou a mensagem (tabela fora do mapa, rotina do sistema antigo); a mensagem enviada já carrega texto, remetente e data
+TBMENSAG	@id	mensagem_interna_destinatario.mensagem_interna_id				L5-02: liga o destinatário à mensagem gravada
+TBMENSAG	=1	mensagem_interna_destinatario.sequencia				L5-02: a origem tem um destinatário por linha
+TBMENSAG	USUARIO	mensagem_interna_destinatario.destinatario_usuario_id	chave_origem		ref:TBUSERS	L5-02: destinatário (dono da caixa) pelo login; nunca visto: pai_inexistente e recusa (NOT NULL)
+TBMENSAG	DATA_HORA_LEITURA	mensagem_interna_destinatario.lida	preenchido			L5-02: lida quando há data de leitura; sem data fica o padrão (não lida)
+TBMENSAG	DATA_HORA_LEITURA	mensagem_interna_destinatario.lida_em	data_hora			L5-02: data e hora da leitura
+TBNVLCRITICID	ID	nivel_criticidade_auditoria.codigo	texto			L5-02: o número do nível vira o código (único)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.descricao	texto_nome			L5-02: nome do nível
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	texto_nome	valores		L5-02: decisão em F4-decisoes-destino.md: a severidade sai do NOME do nível (de-para de valores em valores.d/L5-02.tsv pelos 8 níveis da escala de registro de eventos, 0 = emergência a 7 = depuração), nunca da chave substituta; nome sem par: valor_fora_do_dominio e recusa só o nível (NOT NULL), visível no painel
+TBTIPOCERTIFICADO	ID	tipo_certificado.codigo	texto			L5-02: o número do tipo vira o código
+TBTIPOCERTIFICADO	NOME	tipo_certificado.descricao	texto_nome			L5-02: nome do tipo de certificado
+TBTIPOCERTIFICADO	ATIVO	tipo_certificado.ativo	booleano_sn			L5-02: S/N; fora do domínio fica o padrão
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	texto_nome	valores		L5-02: decisão em F4-decisoes-destino.md: a modalidade sai do NOME (A1, A3, nuvem) por de-para de valores; nome sem par: valor_fora_do_dominio e recusa só o tipo, visível no painel; provedor em nuvem não é alimentado (exige endereço e cofre)
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	texto_nome	valores		L5-02: onde fica a chave privada, pelo NOME: A1 = arquivo, A3 = token (cartão e token são o mesmo par para o produto; o cliente ajusta), nuvem = nuvem
+TBMODULO	#codigo_derivado:ID:30:legado_modulo_	modulo_sistema.codigo	texto			L5-02: decisão em F4-decisoes-destino.md: módulo do sistema antigo entra como REFERÊNCIA histórica (código legado_modulo_<n>, inativo), para a trilha, os relatórios e as pendências que apontam para ele; os módulos do produto vêm do produto e não são sobrescritos
+TBMODULO	NOME	modulo_sistema.descricao	texto_nome			L5-02: nome do módulo; vazio recusa só a linha (NOT NULL)
+TBMODULO	=0	modulo_sistema.ativo				L5-02: inativo: módulo legado nunca aparece no menu do produto
+TBMODULO	TITULO_JANELA	modulo_sistema.titulo_janela	texto			L5-02: título da janela
+TBMODULO	DESCRICAO_TELA_ABERTURA	modulo_sistema.texto_abertura	texto			L5-02: texto da tela de abertura (120 cabe em 280)
+TBMODULO	RESUMO_FUNCIONALIDADE	modulo_sistema.resumo_funcionalidade	texto			L5-02: resumo da funcionalidade (280 cabe em 500)
+TBMODULO	SISTEMA		texto			L5-02: sem destino: sigla do executável antigo (constante por instalação), sem valor no produto
+TBMODULO	BOTAO_TAREFA		texto			L5-02: sem destino: rótulo do botão da barra de tarefas do executável antigo
+TBMODULO	EXECUTAVEL		texto			L5-02: sem destino: nome do arquivo executável antigo
+TBOPCOES	#codigo_derivado:ID:30:legado_opcao_	tela_sistema.codigo	texto			L5-02: decisão em F4-decisoes-destino.md: opção do menu antigo entra como tela de REFERÊNCIA (código legado_opcao_<n>, inativa), alvo da trilha de auditoria, dos gatilhos de alerta e das telas de relatório
+TBOPCOES	TITULO	tela_sistema.descricao	texto			L5-02: título da opção; nulo recusa só a linha (NOT NULL)
+TBOPCOES	TITULO	tela_sistema.titulo	texto			L5-02: título exibido
+TBOPCOES	MODULO	tela_sistema.modulo_sistema_id	chave_origem		ref:TBMODULO	L5-02: módulo legado pela chave (carregado antes, nesta fatia); nulo ou módulo recusado: recusa só a linha
+TBOPCOES	INDICE	tela_sistema.ordem	inteiro_nao_negativo			L5-02: posição no menu; negativo: valor_fora_do_dominio e o padrão (0)
+TBOPCOES	DETALHE_FUNCIONALIDADE_AUDIT	tela_sistema.detalhe_auditoria	texto			L5-02: o que a tela faz, para quem lê a trilha
+TBOPCOES	OPCAO_AVULSA	tela_sistema.avulsa	booleano_sn			L5-02: opção fora do menu; fora de S/N: o padrão (não avulsa)
+TBOPCOES	=0	tela_sistema.ativo				L5-02: inativa: tela legada nunca aparece no menu
+TBOPCOES	NOME		texto_nome			L5-02: sem destino: nome interno do componente no executável antigo (o código legado_opcao_<n> já identifica a tela)
+TBOPCOES	NIVEL		inteiro			L5-02: sem destino: profundidade na árvore do menu antigo; a árvore não é reconstruída (tela legada é só referência)
+TBOPCOES	ATIVO		booleano_sn			L5-02: sem destino: a tela legada entra sempre inativa no produto
+TBOPCOES	OLD_ID_TBTPACAOAUDIT		inteiro			L5-02: sem destino: coluna antiga, substituída na própria origem pelo tipo de ação da trilha
+TBOPCOES	OLD_ID_TBNVLCRITICID		inteiro			L5-02: sem destino: coluna antiga, substituída na própria origem pela criticidade gravada em cada evento da trilha
+TBOPCOES	#codigo_derivado:ID:120:legado_opcao_	acao_sistema.codigo	texto			L5-02: ação de ACESSO à tela legada (uma por opção), alvo das concessões antigas por papel e por perfil
+TBOPCOES	TITULO	acao_sistema.descricao	texto			L5-02: título da opção
+TBOPCOES	@id	acao_sistema.tela_sistema_id				L5-02: liga a ação à tela legada gravada
+TBOPCOES	MODULO	acao_sistema.modulo_sistema_id	chave_origem		ref:TBMODULO	L5-02: módulo legado
+TBOPCOES	=ver	acao_sistema.tipo_acao				L5-02: a concessão antiga por opção é a de abrir a tela (ver)
+TBOPCOES	=0	acao_sistema.ativo				L5-02: inativa: o controle de acesso do produto só usa ações do contrato; a equivalência com elas é do produto (pendência acao_sem_equivalente)
+TBEVENTOS	#codigo_derivado:ID:120:legado_evento_	acao_sistema.codigo	texto			L5-02: decisão em F4-decisoes-destino.md: evento antigo por opção entra como ação de REFERÊNCIA (código legado_evento_<n>, inativa), alvo dos gatilhos de alerta; tipo_acao_auditavel só por TBTPACAOAUDIT (L5-03)
+TBEVENTOS	NOME	acao_sistema.descricao	texto_nome			L5-02: nome do evento
+TBEVENTOS	ID_TBOPCOES	acao_sistema.tela_sistema_id	chave_origem		ref:TBOPCOES	L5-02: tela legada do evento; opção recusada: pai_pendente
+TBEVENTOS	=~executar	acao_sistema.tipo_acao				L5-02: PRESUMIDO (valor_presumido): a origem não classifica o evento; o cliente reclassifica
+TBEVENTOS	=0	acao_sistema.ativo				L5-02: inativa: ação legada, só referência
+#TBPAPEL_TBOPCOES	ID_TBPAPEL	papel_seguranca_acao.papel_seguranca_id	chave_origem		ref:TBPAPEL	L5-02: aguarda regra do motor (pedido 4 em saida/L5-02.json): referência ao destino SECUNDÁRIO do pai (a ação de acesso da opção); declaração pronta
+#TBPAPEL_TBOPCOES	ID_TBOPCOES	papel_seguranca_acao.acao_sistema_id	chave_origem		ref:TBOPCOES@acao_sistema	L5-02: aguarda regra do motor (pedido 4 em saida/L5-02.json): ação de acesso da opção legada; declaração pronta
+#TBPERUSU	GRUPO	perfil_acao.perfil_acesso_id	chave_origem		ref:TBGRUUSU	L5-02: aguarda regra do motor (pedido 4 em saida/L5-02.json): perfil pela chave (nome do grupo, L5-01); declaração pronta
+#TBPERUSU	ID_TBOPCOES	perfil_acao.acao_sistema_id	chave_origem		ref:TBOPCOES@acao_sistema	L5-02: aguarda regra do motor (pedido 4 em saida/L5-02.json): ação de acesso da opção legada; declaração pronta
+#TBPERMISSAO_SUS	ID_TBUSERS	usuario_permissao_sus.usuario_id	chave_origem		ref:TBUSERS	L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta
+#TBPERMISSAO_SUS	@estabelecimento	usuario_permissao_sus.estabelecimento_id				L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta
+#TBPERMISSAO_SUS	=aih	usuario_permissao_sus.instrumento				L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta
+#TBPERMISSAO_SUS	#rotulo:1	usuario_permissao_sus.funcionalidade				L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta
+#TBPERMISSAO_SUS	#rotulo:2	usuario_permissao_sus.operacao				L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta
+#TBPERMISSAO_SUS	#item	usuario_permissao_sus.permitido	booleano_sn		desdobrar:AIH_CONTAS_INC=conta/incluir,AIH_CONTAS_ALT=conta/alterar,AIH_CONTAS_EXC=conta/excluir,AIH_CONTAS_EXAMES=conta_exames/executar,AIH_CONTAS_DADOS_CPL=conta_dados_complementares/alterar,AIH_BOL_INC=boletim/incluir,AIH_BOL_ALT=boletim/alterar,AIH_BOL_EXC=boletim/excluir,AIH_BOL_OPM=boletim_opm/executar,AIH_BOL_EXAMES=boletim_exames/executar,AIH_IRREG_INC=irregularidade/incluir,AIH_IRREG_ALT=irregularidade/alterar,AIH_IRREG_EXC=irregularidade/excluir,AIH_EMISSAO_EMITIR=emissao/emitir,AIH_EMISSAO_EXC_STATUS=emissao_situacao/excluir,AIH_EMISSAO_REEMITIR=emissao/reemitir,AIH_ARQ_CRIAR=arquivo/gerar_arquivo,AIH_ARQ_CONSULTAR=arquivo/consultar,AIH_ARQ_RELACAO=arquivo_relacao/consultar,AIH_FEC_FAT_INC=fechamento_faturamento/incluir,AIH_FEC_FAT_EXC=fechamento_faturamento/excluir,AIH_FEC_FAT_APRES=fechamento_faturamento/apresentar,AIH_FEC_FAT_CANC_APRES=fechamento_faturamento/cancelar,AIH_FEC_MENSAL_INC=fechamento_mensal/incluir,AIH_FEC_MENSAL_CANC=fechamento_mensal/cancelar,AIH_ACERTAR_SADT=acerto_sadt/executar,AIH_ACERTAR_CREDOR=acerto_credor/executar,AIH_INTEG_REPASSE=integracao_repasse/executar,AIH_PGTO_INTERV=pagamento_intervencao/executar,AIH_EXC_REP_GRT=repasse_garantia/excluir,AIH_REL_FAT_MENSAL=relatorio_faturamento_mensal/consultar,AIH_REL_SP_HM_SINT=relatorio_servicos_prof_hosp_sintetico/consultar,AIH_REL_PROC_ESP_ANALIT=relatorio_procedimento_especial_analitico/consultar,AIH_UTIL_FEC_FAT_FIN=utilitario_fechamento_financeiro/executar	L5-02: aguarda regra do motor: uma linha por indicador S/N no destino PRINCIPAL, com rótulo em duas partes (pedido no L5-02.json); declaração pronta

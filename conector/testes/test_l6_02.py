@@ -1,14 +1,16 @@
 """Fatia L6-02 (recepção: recepções, guichês, locais, painéis, geradores e senhas): declarações planejadas, regras e
 de-para de valores das colunas e coerência da imagem sintética. Sem banco; só valores inventados. A carga e a
 conciliação rodam em `conector.sh conferir-fatia L6-02`."""
+import csv
 import datetime
+import json
 import pathlib
 import random
 import re
 import unittest
 
 from sante_conector import carga_mapa, mapa, sentinela
-from sante_conector.sintetica_d import l6_02
+from sante_conector.sintetica_d import l6_01, l6_02
 
 TABELAS = set(l6_02.CARREGADAS)
 PARES = {  # de-para de valores pedido ao integrador (declarado/valores.tsv; L6-02.json)
@@ -25,7 +27,8 @@ class Plano(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mapa = mapa.carregar_execucao()
-        cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.mapa, TABELAS | set(l6_02.BLOQUEADAS))}
+        cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.mapa, TABELAS | set(l6_02.BLOQUEADAS)
+                                                                         | set(l6_02.DESCARTADAS))}
 
     def cols(self, t, dt):
         return {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
@@ -35,8 +38,11 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.plano["TBSENHAATEND"]["destinos"], ["senha_emitida"])
         self.assertEqual(self.plano["TBSENHAATEND_REPACAGD"]["destinos"], ["senha_emitida_marcacao"])
         self.assertEqual(self.plano["TBSENHAATEND_SIPACAGD"]["destinos"], ["senha_emitida_marcacao"])
-        # tipo de pré-atendimento não é módulo de recepção: sem declaração até o destino ser revisto (L6-02.json)
-        self.assertIn("TBTIPO_ATENDIMENTO", l6_02.BLOQUEADAS)
+        self.assertEqual(self.plano["TBFLUXOATEND"]["destinos"], ["evento_senha"])
+        # o histórico vai só para a trilha: o segundo destino do mapa (atendimento) criaria atendimentos falsos
+        self.assertEqual(self.plano["HTATENDIMENTO"]["destinos"], ["trilha_auditoria"])
+        # tipo de pré-atendimento não é módulo de recepção: descarte (sem_carga.tsv), sem declaração
+        self.assertIn("TBTIPO_ATENDIMENTO", l6_02.DESCARTADAS)
 
     def test_obrigatorias_do_destino_cobertas(self):
         obrig = {("TBRECEPCAO", "ponto_recepcao"): {"estabelecimento_id", "codigo", "descricao"},
@@ -47,7 +53,10 @@ class Plano(unittest.TestCase):
                  ("TBSENHAATEND", "senha_emitida"): {"estabelecimento_id", "gerador_senha_id", "data_referencia",
                                                      "numero", "codigo_exibicao", "emitida_em"},
                  ("ATCABECATEND_TBSENHAATEND", "atendimento_senha"): {"atendimento_id", "senha_emitida_id"},
-                 ("TBSENHAATEND_SIPACAGD", "senha_emitida_marcacao"): {"senha_emitida_id", "marcacao_horario_id"}}
+                 ("TBSENHAATEND_SIPACAGD", "senha_emitida_marcacao"): {"senha_emitida_id", "marcacao_horario_id"},
+                 ("TBFLUXOATEND", "evento_senha"): {"senha_emitida_id", "operacao", "ocorrido_em",
+                                                    "acao_fluxo_senha_id", "local_atendimento_id"},
+                 ("HTATENDIMENTO", "trilha_auditoria"): {"ocorrido_em", "acao", "entidade"}}
         for (t, dt), cs in obrig.items():
             self.assertTrue(cs <= set(self.cols(t, dt)), (t, cs - set(self.cols(t, dt))))
 
@@ -62,6 +71,56 @@ class Plano(unittest.TestCase):
                          {"TBLOCAL"})
         self.assertEqual(self.cols("TBSENHAATEND_SIPACAGD", "senha_emitida_marcacao")["marcacao_horario_id"]["referencia"],
                          "SIPACAGD")
+
+    def test_evento_e_historico(self):
+        f = self.cols("TBFLUXOATEND", "evento_senha")
+        self.assertEqual(f["acao_fluxo_senha_id"]["passos"], [{"tabela": "TBACAOFLUXOSENHA", "modo": "alt", "arg": "SIGLA"}])
+        self.assertEqual(f["acao_fluxo_senha_id"]["regra"], "chave_origem")
+        self.assertEqual((f["usuario_id"]["referencia"], f["senha_emitida_id"]["referencia"],
+                          f["local_atendimento_id"]["referencia"]), ("TBUSERS", "TBSENHAATEND", "TBLOCAL"))
+        self.assertEqual((f["operacao"]["coluna"], f["ocorrido_em"]["regra"]), ("=inclusao", "data_hora"))
+        h = self.cols("HTATENDIMENTO", "trilha_auditoria")
+        self.assertEqual((h["acao"]["coluna"], h["entidade"]["coluna"], h["dados_antes"]["coluna"]),
+                         ("=alteracao", "=atendimento", "#retrato"))
+        self.assertEqual(h["entidade_id"]["referencia"], "ATCABECATEND")
+        # o histórico é a versão ANTERIOR: retrato em dados_antes, como HTPROCTO (L8-06); dados_depois nulo
+        self.assertNotIn("dados_depois", h)
+        self.assertEqual(set(self.plano["HTATENDIMENTO"]["retrato"]), {"ID", "ID_ATCABECATEND", "DATA_HORA_HISTORICO"})
+
+    def test_descartes_com_causa_de_produto(self):
+        # no sem_carga.tsv ou, até o integrador aplicar, no pedido do L6-02.json; nunca "bloqueada esperando decisão"
+        raiz = pathlib.Path(mapa.__file__).resolve().parents[1]
+        with open(raiz / "mapa/declarado/sem_carga.tsv", encoding="utf-8") as f:
+            sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
+        js = next((r / "docs/obra/fatias/f4/saida/L6-02.json" for r in (raiz.parent, raiz)
+                   if (r / "docs/obra/fatias/f4/saida/L6-02.json").exists()), None)
+        pedido = ""
+        if js is None and not set(l6_02.DESCARTADAS) <= set(sc):
+            self.skipTest("pedido do L6-02.json fora do container (docs/ não montado); conferido no repositório")
+        if js:
+            pedido = " ".join(p["mudanca"] for p in json.loads(js.read_text(encoding="utf-8"))["pedidos"]
+                              if "sem_carga" in p["arquivo"])
+        causas = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
+        for t in l6_02.DESCARTADAS:
+            if t in sc:
+                self.assertEqual(sc[t]["situacao"], "descarte", t)
+                self.assertIn(sc[t]["causa"], causas, t)
+            else:
+                self.assertTrue(re.search(r"(^|\n)%s\tdescarte\t(%s)\t\S" % (t, "|".join(causas)), pedido), t)
+
+    def test_atconta_so_descartada_com_atendimento_conta_carregada(self):
+        # ATCONTA só vira descarte `duplicado` quando outra fonte carregar atendimento_conta (L8-06, contas): sem isso
+        # o atendimento migrado com conta apareceria sem conta (porta-propria.ts consulta atendimento_conta)
+        raiz = pathlib.Path(mapa.__file__).resolve().parents[1]
+        with open(raiz / "mapa/declarado/sem_carga.tsv", encoding="utf-8") as f:
+            sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
+        fonte = {c["tabela"] for c in self.mapa["colunas_decl"]
+                 if c.get("destino") == "atendimento_conta.conta_hospitalar_id" and c["tabela"] != "ATCONTA"}
+        if "ATCONTA" in sc and sc["ATCONTA"].get("situacao") == "descarte":
+            self.assertTrue(fonte, "ATCONTA descartada sem atendimento_conta carregada por outra fonte")
+        if not fonte:
+            self.assertIn("ATCONTA", l6_02.BLOQUEADAS)
+            self.assertNotIn("ATCONTA", l6_02.DESCARTADAS)
 
     def test_de_para_de_valores(self):
         for (t, col, dest), pares in PARES.items():
@@ -96,8 +155,8 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("TBGERASENHA", "gerador_senha")["descricao"]["coluna"], "=~Gerador de senha")
 
     def test_bloqueadas_sem_declaracao(self):
-        decl = {c["tabela"] for c in self.mapa["colunas_decl"]}
-        self.assertFalse(decl & set(l6_02.BLOQUEADAS))
+        decl = {c["tabela"] for c in self.mapa["colunas_decl"] if c.get("destino")}
+        self.assertFalse(decl & (set(l6_02.BLOQUEADAS) | set(l6_02.DESCARTADAS)))
 
 
 class Regras(unittest.TestCase):
@@ -127,6 +186,15 @@ class Sintetica(unittest.TestCase):
     def test_ddl_so_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l6_02.DDL.splitlines() if l.startswith("CREATE TABLE")}
         self.assertEqual(criadas, TABELAS)
+
+    def test_acoes_da_l6_01_que_o_evento_usa(self):
+        # o esperado do evento supõe as ações da L6-01 (REQUER): letras únicas, 'c' e 'C' distintas, X recusada, Z ausente
+        siglas = [a[1] for a in l6_01.ACOES]
+        self.assertEqual(len(siglas), len(set(siglas)))
+        self.assertTrue({"C", "c", "A", "F", "X"} <= set(siglas) and "Z" not in siglas)
+        self.assertFalse(next(a for a in l6_01.ACOES if a[1] == "X")[2].strip())
+        self.assertEqual(l6_02.REQUER, ["L6-01"])
+        self.assertNotIn("PNTIPO", l6_02.PAIS_EXTERNOS)  # vem da L6-01 (pai externo duplicaria o conector_origem)
 
     def test_situacoes_e_prioridades_cobertas(self):
         senhas = []

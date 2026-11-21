@@ -4,9 +4,12 @@ dados 100% falsos.
 Carregadas pelo mapa (colunas.d/L6-03.tsv): AGCADMOTIVO (motivo da marcação), AGCOMPLEXIDADE (complexidade da
 sessão), AGDURACAO (duração da sessão), AGGRPFASEEVOL (fase do tratamento), AGTPAGENDA (categoria de agenda, natureza
 presumida), RESITAGE (situação da marcação, significado presumido), RETIPAGE (canal de marcação) e
-RETP_INTEG_AGENDA_ONLINE (modo de marcação online, permissões presumidas). As outras 8 tabelas da fatia entram na
-imagem só com a forma (2 linhas falsas cada) e ficam fora da carga até o motor ganhar as regras genéricas pedidas em
-docs/obra/fatias/f4/saida/L6-03.json (motivo por coluna em colunas.d/L6-03.tsv).
+RETP_INTEG_AGENDA_ONLINE (modo de marcação online, permissões presumidas). CDTPRETCONS e PSTPRETORNO são descarte
+(declarado/sem_carga.tsv, mecanismo_do_produto). As outras 6 tabelas (REAGENDA, as filhas da agenda e SIAGECRI)
+entram na imagem só com a forma (2 linhas falsas cada) e ficam fora da carga até as regras de minutos HHMM e de data
+mais hora, a ordem, a referência pelo código de negócio do destino e a mudança de modelo pedidas em
+docs/obra/fatias/f4/saida/L6-03.json (lá está também a declaração pronta; motivo por coluna em colunas.d/L6-03.tsv).
+REPACAGD_EXCLUSAO é da fatia L6-04.
 Anomalias: descrição nula ou só com espaços (NOT NULL do destino recusa a linha), nome com espaços repetidos, código
 que só difere pela caixa (categoria C/c e situação AG/ag: as duas linhas recusadas com codigo_colisao_caixa), situação fora de A/I
 (valor_fora_do_dominio, fica o padrão do destino) e literal presumido (valor_presumido por coluna presumida em cada linha lida que chega à gravação, inclusive a recusada pelo destino).
@@ -35,19 +38,6 @@ CREATE TABLE RECANAGE (NOME VARCHAR(40) NOT NULL, CRM INTEGER NOT NULL, DATA DAT
 CREATE TABLE RECTRAGE (AGENDA VARCHAR(40) NOT NULL, CRM INTEGER NOT NULL, SEMANA VARCHAR(1) NOT NULL,
   DURACAO VARCHAR(4) NOT NULL, HOR_INC VARCHAR(4) NOT NULL, HOR_FIN VARCHAR(4), INTER_INC VARCHAR(4),
   INTER_FIN VARCHAR(4), AOL_PROGRAMACAO INTEGER, PRIMARY KEY (AGENDA,CRM,SEMANA,DURACAO,HOR_INC));
-CREATE TABLE REPACAGD_EXCLUSAO (ID INTEGER NOT NULL, NOME VARCHAR(40) NOT NULL, CRM INTEGER NOT NULL,
-  DATA DATE NOT NULL, HORA VARCHAR(5) NOT NULL, PACIENTE VARCHAR(70), ENDERECO VARCHAR(40), COMPL VARCHAR(15),
-  CEP INTEGER, BAIRRO VARCHAR(30), CIDADE VARCHAR(30), UF VARCHAR(2), IBGE INTEGER, FONE VARCHAR(15),
-  RETORNO VARCHAR(1), CONV INTEGER, PRONT INTEGER, REGISTRO INTEGER, GRV_ATE VARCHAR(1), ESPEC SMALLINT,
-  IDENT VARCHAR(15), ATENDIDO VARCHAR(1), CRM_ATEND INTEGER, TP_AGE SMALLINT, UNIDADE SMALLINT, PROC_SOL INTEGER,
-  CRM_SOL INTEGER, MED_SOL VARCHAR(70), SENHA_SOL INTEGER, PRONT_SOL INTEGER, USUARIO VARCHAR(31), DT_AGE DATE,
-  DAT_SOL DATE, CPF BIGINT, NUMERO INTEGER, HR_AGE VARCHAR(4), OBS BLOB SUB_TYPE 1, PROCED INTEGER,
-  EMAIL VARCHAR(50), CDC INTEGER, DIAG INTEGER, FONECONT VARCHAR(15), TIPOPAC CHAR(1), OTMU CHAR(1),
-  GUIAE VARCHAR(1), DATAE DATE, ATENDC VARCHAR(1), DATAC DATE, TIPO CHAR(1), CELULAR VARCHAR(15),
-  ID_REFISIOT INTEGER, AOL_HORARIO INTEGER, ID_RICADPAC INTEGER, ID_REPACAGD INTEGER NOT NULL,
-  DATA_HORA_AGENDAMENTO TIMESTAMP NOT NULL, DATA_NASCIMENTO DATE, ID_REAGENDA_TBESPEC INTEGER,
-  COD_AGENDA_GERCON INTEGER, ID_TBUSERS_INCLUSAO VARCHAR(31) NOT NULL, DATA_HORA_EXCLUSAO TIMESTAMP,
-  PRIMARY KEY (ID));
 CREATE TABLE REPACAGI (NOME VARCHAR(40) NOT NULL, CRM INTEGER NOT NULL, DATA DATE NOT NULL, HORA VARCHAR(5) NOT NULL,
   PACIENTE VARCHAR(70), RETORNO VARCHAR(1), CONV SMALLINT, UNID SMALLINT, LIVRE VARCHAR(1), PROCED INTEGER,
   USUARIO VARCHAR(31), TIPO VARCHAR(1), SITUACAO VARCHAR(2), DATA_CTR DATE, HORA_CTR VARCHAR(4), DATA_SIT DATE,
@@ -64,6 +54,11 @@ CREATE TABLE REAGENDA (ID INTEGER NOT NULL, NOME VARCHAR(40) NOT NULL, CRM INTEG
   USUARIO VARCHAR(31), PERINI DATE, PERFIN DATE, DT_CRIACAO DATE, FX_INC SMALLINT, FX_FIN SMALLINT,
   OBS BLOB SUB_TYPE 1, TIPO SMALLINT, UNID SMALLINT, PLANEJA VARCHAR(1), ID_RETP_INTEG_AGENDA_ONLINE SMALLINT NOT NULL,
   OBS_PORTAL_PAC_AGEND_ONLINE BLOB SUB_TYPE 1, PERMITE_TELEATENDIMENTO CHAR(1) NOT NULL, PRIMARY KEY (ID));
+CREATE TABLE SIAGECRI (NOME VARCHAR(40) NOT NULL, CRM INTEGER NOT NULL, PERINI DATE NOT NULL, PERFIN DATE NOT NULL,
+  DT_CRIACAO DATE NOT NULL, HR_CRIACAO VARCHAR(4) NOT NULL, EXAME CHAR(1) NOT NULL, DURACAO VARCHAR(4),
+  STATUS VARCHAR(1), SEM1 VARCHAR(1), SEM2 VARCHAR(1), SEM3 VARCHAR(1), SEM4 VARCHAR(1), SEM5 VARCHAR(1),
+  SEM6 VARCHAR(1), SEM7 VARCHAR(1), USUARIO VARCHAR(31),
+  PRIMARY KEY (NOME,CRM,PERINI,PERFIN,DT_CRIACAO,HR_CRIACAO,EXAME));
 """
 
 # Tabelas da fatia fora da carga (todas as colunas declaradas sem destino): 2 linhas falsas cada na imagem. Hoje o
@@ -71,7 +66,9 @@ CREATE TABLE REAGENDA (ID INTEGER NOT NULL, NOME VARCHAR(40) NOT NULL, CRM INTEG
 # devolvido por linhas(); por isso a conciliação da fatia cobre 8 de 16 tabelas. Quando o motor ganhar a pendência
 # por tabela pedida em saida/L6-03.json, entram no esperado como {"gravados": 0, "pendencias": {regra: 1}}.
 NAO_CARREGADAS = {"CDTPRETCONS": 2, "PSTPRETORNO": 2, "REAGECRI": 2, "RECANAGE": 2, "RECTRAGE": 2,
-                  "REPACAGD_EXCLUSAO": 2, "REPACAGI": 2, "REAGENDA": 2}
+                  "REPACAGI": 2, "REAGENDA": 2, "SIAGECRI": 2}
+# descarte de produto (declarado/sem_carga.tsv): domínio fixo que entra pelo de-para de valores na coluna consumidora
+DESCARTADAS = ("CDTPRETCONS", "PSTPRETORNO")
 
 CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "RESITAGE", "RETIPAGE",
               "RETP_INTEG_AGENDA_ONLINE")

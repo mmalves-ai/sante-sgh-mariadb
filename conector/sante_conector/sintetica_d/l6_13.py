@@ -1,245 +1,328 @@
-"""Fatia L6-13 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem da fatia, dados 100% falsos.
+"""Fatia L6-13 (prontuário, assinatura e assistência, módulo PEP): imagem SINTÉTICA, dados 100% falsos.
 
-Nenhuma das 23 tabelas é carregada hoje (motivos em colunas.d/L6-13.tsv e pedidos em
-docs/obra/fatias/f4/saida/L6-13.json): todas dependem de regra genérica que o motor ainda não tem (referência a coluna
-do destino do pai, destino secundário do pai, unidade de prescrição sem tabela que a alimente, agregação de filhas em
-JSON, marca no pai) ou de pai bloqueado nesta fatia. Elas entram na imagem, com a forma do dicionário, para provar que
-não geram carga e para deixar prontas as anomalias de quando forem liberadas:
-- data sentinela (1899-12-30 00:00) e data sentinela com hora (hora_sem_data) nas datas e horas anuláveis;
-- texto CP1252 acentuado com espaços repetidos e pontas com espaço; BLOB de texto com quebra de linha;
-- código de 1 caractere fora do domínio S/N ('x') e só diferente pela caixa ('s');
-- obrigatória da origem preenchida e anulável vazia na segunda linha; chave inteira com lacunas.
-Forma das colunas: NOME:TIPO, '!' = NOT NULL na origem, '~' = BLOB de texto (SUB_TYPE 1).
+Rodada de cobertura total: 20 das 23 tabelas carregam pelo mapa (PRASSINAT_DOC_PRCHKGERAL espera a troca do destino no
+mapa; PRLANCREGISTROTEMPO e HTPARAMORIGEMCABIMP são descarte). O DDL sai do dicionário (`mapa/colunas.tsv`: todas as
+colunas, mesmos nomes e tipos; só a chave é NOT NULL). Pais de fora da fatia lidos pelas referências encadeadas
+(inscrição -> profissional, histórico do atendimento -> atendimento -> paciente, item -> prescrição, detalhe do item ->
+item, modo da origem -> modo ventilatório pelo nome, unidade pela sigla de integração, alta vigente pelo cabeçalho, campo autopreenchido pelo nome) entram na
+imagem só com as colunas usadas e são PAIS_EXTERNOS (já carregados). Anomalias por tabela: pai inexistente na cadeia,
+pai recusado (pai_pendente), CHECK e UNIQUE do destino (4025, 1062), NOT NULL (1048), valor fora da faixa e zero em
+coluna positiva (valor_fora_do_dominio), valor presumido e campo sem par no de-para de valores.
 """
+import csv
 import datetime
-import decimal
+from decimal import Decimal as D
+from pathlib import Path
 
-TABELAS = (
-    ("PRPRESC_AUTOPREENCHIDO", "ID",
-     "ID:INTEGER! ID_PRLANGERAL:INTEGER! ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER "
-     "ID_TBTABELA_CAMPO:SMALLINT! SOLUCAO_ETAPA:SMALLINT"),
-    ("PRRECEITA", "ID_RECEITA",
-     "ID_RECEITA:INTEGER! ID_HTATENDIMENTO:BIGINT! ID_HTPACIENTE:BIGINT! DATA_HORA_LANCAMENTO:TIMESTAMP! "
-     "OLD_REG:INTEGER OLD_TIPOATE:VARCHAR(1) ID_TBCBOPRO_LANCAMENTO:INTEGER! RECEITA:BLOB~ OLD_CRM:INTEGER "
-     "OLD_USUARIO:VARCHAR(31) ID_TBCBOPRO_SUSPENSAO:INTEGER DATA_HORA_SUSPENSAO:TIMESTAMP "
-     "HORARIO_VERAO_SUSPENSAO:CHAR(1) JUSTIFICATIVA_SUSPENSAO:VARCHAR(70) PRE_IMPRESSO:CHAR(1) "
-     "GRUPO_RECEITA:INTEGER! TP_RECEITA_PADRAO_PSICOTROPICO:SMALLINT! DOCUMENTO_QRP:BLOB~ ASSINATURA:BLOB~ "
-     "FUSO_HORARIO_SUSPENSAO:SMALLINT FUSO_HORARIO_LANCAMENTO:SMALLINT HORARIO_VERAO_LANCAMENTO:CHAR(1) "
-     "ID_PRLOCAL_ASSISTENCIA:INTEGER DATA_HORA_LANCAMENTO_UTC:VARCHAR(30) DATA_HORA_SUSPENSAO_UTC:VARCHAR(30) "
-     "ID_TBPROFIS_ACOMP_RESP:INTEGER REGISTRO_VALIDO:CHAR(1) DATA_HORA_GRAVACAO:TIMESTAMP! "
-     "DATA_HORA_GRAVACAO_UTC:VARCHAR(30)! JUSTIFICATIVA_LANC_RETROATIVO:VARCHAR(255) "
-     "FUSO_HORARIO_GRAVACAO:SMALLINT HORARIO_VERAO_GRAVACAO:CHAR(1) DATA_HORA_GRAVACAO_SUSPENSAO:TIMESTAMP "
-     "HORARIO_VERAO_GRAVACAO_SUSPENSA:CHAR(1) JUSTIFICATIVA_SUSP_RETROATIVA:VARCHAR(255) "
-     "DATA_HORA_GRAVACAO_SUSPENSA_UTC:VARCHAR(30) FUSO_HORARIO_GRAVACAO_SUSPENSAO:SMALLINT "
-     "DATA_HORA_EXCLUSAO:TIMESTAMP DATA_HORA_ARQUIVADO:TIMESTAMP ID_PRRECEITA:INTEGER"),
-    ("PRITEMRECEITA", "ID",
-     "ID:INTEGER! ID_RECEITA:INTEGER! NOME_MEDICAMENTO_SUBSTANCIA:VARCHAR(80) DOSE_CONCENTRACAO:VARCHAR(60) "
-     "FORMA_FARMACEUTICA:VARCHAR(25) VIA_ADMINISTRACAO:VARCHAR(20) POSOLOGIA:VARCHAR(70) "
-     "QUANTIDADE:VARCHAR(20) DURACAO_TRATAMENTO:VARCHAR(25) OBSERVACAO:BLOB UNIDADE_MEDICA:VARCHAR(7) "
-     "FREQUENCIA:VARCHAR(30) INICIO_TRATAMENTO:DATE USO_CONTINUO:CHAR(1) PRAZO_UTILIZACAO:VARCHAR(25) "
-     "ID_TBUNID_IDADE_DURACAO_TRAT:SMALLINT ID_TBUNID_IDADE_PRAZO_UTILI:SMALLINT ID_GEITENS:INTEGER "
-     "ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER"),
-    ("PRSENECESSARIO_PRPRESCPROCED", "ID_PRSENECESSARIO,ID_PRPRESCPROCED",
-     "ID_PRSENECESSARIO:SMALLINT! ID_PRPRESCPROCED:INTEGER!"),
-    ("PRVELOCINFUSAO", "ID_PRPRESCSOL,ETAPA,SEQ",
-     "ID_PRPRESCSOL:INTEGER! SEQ:SMALLINT! ETAPA:SMALLINT! VELOCIDADE:NUMERIC(18,3) ID_PRUNIDINFUSAO:SMALLINT "
-     "ID_TBCBOPRO_LANCAMENTO:INTEGER! ARREDONDAR:CHAR(1) DATA_HORA_INICIAL:TIMESTAMP DATA_HORA_FINAL:TIMESTAMP "
-     "VOLUME:NUMERIC(18,3) FUSO_HORARIO_INICIAL:SMALLINT HORARIO_VERAO_FINAL:CHAR(1) "
-     "FUSO_HORARIO_FINAL:SMALLINT HORARIO_VERAO_INICIAL:CHAR(1) DATA_HORA_INICIAL_UTC:VARCHAR(30) "
-     "DATA_HORA_FINAL_UTC:VARCHAR(30)"),
-    ("PRLANCAMENTOEXAME", "ID",
-     "ID:INTEGER! ID_SILANEXA:DOUBLE ID_PRLOCALREALIZACAOEXAME:INTEGER ID_PRLOCALREALIZACAOLAUDO:INTEGER "
-     "ID_PRRESPONSAVELLAUDO:INTEGER NOME_METODO:VARCHAR(80) DATA_HORA_REALIZACAO:TIMESTAMP! "
-     "DATA_HORA_REALIZACAO_UTC:VARCHAR(30)! DATA_HORA_EVENTO:TIMESTAMP! DATA_HORA_EVENTO_UTC:VARCHAR(30)! "
-     "HORARIO_VERAO_EVENTO:CHAR(1) FUSO_HORARIO_EVENTO:SMALLINT ID_TBCBOPRO:INTEGER! "
-     "DATA_HORA_GRAVACAO:TIMESTAMP! DATA_HORA_GRAVACAO_UTC:VARCHAR(30)! RESULTADO:BLOB~ "
-     "JUSTIFICATIVA_LANC_RETROATIVO:VARCHAR(255) DATA_HORA_SUSPENSAO:TIMESTAMP "
-     "DATA_HORA_SUSPENSAO_UTC:VARCHAR(30) FUSO_HORARIO_SUSPENSAO:SMALLINT HORARIO_VERAO_SUSPENSAO:CHAR(1) "
-     "ID_TBCBOPRO_SUSPENSAO:INTEGER DATA_HORA_GRAVACAO_SUSPENSAO:TIMESTAMP "
-     "DATA_HORA_GRAVACAO_SUSPENSA_UTC:VARCHAR(30) JUST_LANC_RETROATIVO_SUSPENSAO:VARCHAR(255) "
-     "FUSO_HORARIO_GRAVACAO_SUSPENSAO:SMALLINT JUSTIFICATIVA_SUSPENSAO:VARCHAR(255) "
-     "FUSO_HORARIO_GRAVACAO:SMALLINT HORARIO_VERAO_GRAVACAO:CHAR(1) HORARIO_VERAO_GRAVACAO_SUSPENSA:CHAR(1) "
-     "DATA_HORA_COLETA:TIMESTAMP URLACESSO:VARCHAR(254) NOME_EXAME:VARCHAR(80) ID_RICADPAC:INTEGER "
-     "ACHADOCRITICO:CHAR(1)"),
-    ("PRLANCEXAMEESTRUTURADO", "ID",
-     "ID:SMALLINT! ID_PRLANCAMENTOEXAME:INTEGER ELEMENTO:VARCHAR(250) TIPO_RESULTADO:CHAR(1) "
-     "RESULTADO:VARCHAR(50) UNIDADE:VARCHAR(50) FAIXA_NORMALIDADE:VARCHAR(250)"),
-    ("PRLANCREGISTROTEMPO", "ID",
-     "ID:INTEGER! ID_TBCBOPRO:INTEGER! ID_PRSITDOCUMENTO:SMALLINT! ID_PRCABNEXODATA:INTEGER! "
-     "DATA_HORA:TIMESTAMP FUSO_HORARIO:SMALLINT HORARIO_VERAO:CHAR(1) DATA_HORA_UTC:VARCHAR(30) "
-     "DATA_HORA_GRAVACAO:TIMESTAMP FUSO_HORARIO_GRAVACAO:SMALLINT HORARIO_VERAO_GRAVACAO:CHAR(1) "
-     "DATA_HORA_GRAVACAO_UTC:VARCHAR(30) JUSTIFICATIVA_SUSPENSAO:VARCHAR(250) "
-     "JUSTIFICATIVA_SUSP_RETROATIVA:VARCHAR(255)"),
-    ("PREVOLPAC", "ID",
-     "ID:INTEGER! ID_CABEVOL:INTEGER! SEQ:SMALLINT! ID_RESPOSTA:INTEGER! UNIDRESP:VARCHAR(10) CONTEVOL:BLOB~ "
-     "RESPDATA:DATE RESPHORA:VARCHAR(4) RESPSNAO:VARCHAR(5) RESPVALOR:NUMERIC(18,3) RESPALFA:VARCHAR(255) "
-     "ORDEM:VARCHAR(15)! TAB:SMALLINT ID_HTPROCTO:INTEGER ID_HTCID:INTEGER RESPDATA_UTC:VARCHAR(30) "
-     "OBSERVACAO:VARCHAR(255) AUTOPREENCHIDO:CHAR(1) JUSTIFICATIVA_DIAGNOSTICO:VARCHAR(254)"),
-    ("PREVOLPACTMP", "ID_CABEVOL,ID_RESPOSTA,SEQ,ORDEM",
-     "ID_CABEVOL:INTEGER! ID_RESPOSTA:INTEGER! SEQ:SMALLINT! UNIDRESP:VARCHAR(10) CONTEVOL:BLOB~ RESPDATA:DATE "
-     "RESPHORA:VARCHAR(4) RESPSNAO:VARCHAR(5) RESPVALOR:NUMERIC(18,3) RESPALFA:VARCHAR(255) ORDEM:VARCHAR(15)! "
-     "TAB:SMALLINT ID_HTPROCTO:INTEGER ID_HTCID:INTEGER OBSERVACAO:VARCHAR(255) AUTOPREENCHIDO:CHAR(1) "
-     "JUSTIFICATIVA_DIAGNOSTICO:VARCHAR(254)"),
-    ("PRITENSESQ", "ID",
-     "ID:INTEGER! ID_PRPRESCSOL:INTEGER! ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER "
-     "JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER ITEM_PRINCIPAL:SMALLINT! "
-     "ETAPA:SMALLINT! QTDE:NUMERIC(18,3) ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3)! "
-     "ID_TBUNICON_UNI_PRESC:VARCHAR(7)! OLD_ID_GERAL:INTEGER OLD_SEQ:SMALLINT OLD_ETAPA:SMALLINT "
-     "OLD_QTDE:NUMERIC(18,3) OLD_OBSENF:BLOB~ OLD_JUSTIFICATIVA:VARCHAR(200) OLD_STATUS:VARCHAR(1) "
-     "OLD_ID_GELANSAI:INTEGER DOSE_EXTRA_ANTIMICROBIANO:CHAR(1)! ID_PRKITSOL:INTEGER "
-     "JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255)"),
-    ("PRITENSGERAL", "ID",
-     "ID:INTEGER! ID_PRLANGERAL:INTEGER! ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER "
-     "JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER QTDE:NUMERIC(18,3) "
-     "ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3)! ID_TBUNICON_UNI_PRESC:VARCHAR(7)! "
-     "JUSTIFICATIVA_INC_ITEM_ENF:VARCHAR(200) OBS_ENFERMAGEM:VARCHAR(250) ITEM_IMPRESSO:CHAR(1) "
-     "IMPRIMIR_FOLHA_SALA:CHAR(1) ID_PRLOCALINVASIVO:SMALLINT OLD_ITEM:INTEGER OLD_QTDE:NUMERIC(18,3) "
-     "OLD_QTDEADM:NUMERIC(18,3) OLD_JUSTIFICATIVA:VARCHAR(200) OLD_OBSENF:BLOB~ OLD_STATUS:VARCHAR(1) "
-     "OLD_ID_ITEMNAOPAD:INTEGER OLD_JUSTIFNAOPAD:VARCHAR(200) OLD_ITEMIMPRESSO:VARCHAR(1) OLD_FORMULA:SMALLINT "
-     "OLD_UNI_PRESC:VARCHAR(7) OLD_ID_GELANSAI:INTEGER OLD_ID_GENOMCOM:INTEGER OLD_ID_PRLOCALINVASIVO:SMALLINT "
-     "OLD_FOLHA_SALA:CHAR(1) OLD_ID_HTCID:INTEGER ITEM_KIT:CHAR(1) DOSE_EXTRA_ANTIMICROBIANO:CHAR(1)! "
-     "ID_PRKITSOL:INTEGER JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255) ID_DIGITAL:VARCHAR(36)"),
-    ("PRITENSGLICEMIA", "ID",
-     "ID:INTEGER! ID_PRPRESCPROCED:INTEGER! ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER "
-     "JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER INTERVALO_INICIAL_DOSE:SMALLINT! "
-     "INTERVALO_FINAL_DOSE:SMALLINT! QTDE:NUMERIC(18,3) ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3)! "
-     "ID_PRFREQUENCIA:SMALLINT ID_TBUNICON_UNI_PRESC:VARCHAR(7)! ID_GETABVIA:VARCHAR(2)! OLD_ID_GERAL:INTEGER "
-     "OLD_ACM:VARCHAR(1) OLD_QTDEADM:NUMERIC(18,3) OLD_JUSTIFICATIVA:VARCHAR(200) OLD_OBSENF:BLOB~ "
-     "OLD_STATUS:VARCHAR(1) OLD_ID_GELANSAI:INTEGER JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255) "
-     "ID_DIGITAL:VARCHAR(36)"),
-    ("PRPRESCMED", "ID",
-     "ID:INTEGER! ID_PRLANGERAL:INTEGER! ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER "
-     "JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER QTDE:NUMERIC(18,3) "
-     "ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3)! ID_TBUNICON_UNI_PRESC:VARCHAR(7)! "
-     "INICIAR_ADM_AGORA:CHAR(1) NAO_AJUSTAR_ESQUEMA_ENF:CHAR(1) TEMPO_INFUSAO:TIME "
-     "DOSE_EXTRA_ANTIMICROBIANO:CHAR(1)! INTERVALO_ENTRE_DOSES:INTEGER "
-     "JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255)"),
-    ("PRCHKGERAL", "ID",
-     "ID:INTEGER! ID_PRITENSGERAL:INTEGER ID_PRITENSESQ:INTEGER ID_PRPRESCPROCED:INTEGER "
-     "ID_PRITENSGLICEMIA:INTEGER ID_PRITENSSINAIS:INTEGER ID_PRPRESCRESPIR:INTEGER ID_PRPRESCVNI:INTEGER "
-     "ID_PRPRESCVI:INTEGER ID_PRPRESCDIETA:INTEGER ID_PRPRESCMED:INTEGER ID_PRPRESCATIV:INTEGER "
-     "ID_PRPRESCHEMO:INTEGER ID_PRPRESC_PROD_LEITE:INTEGER DATA_HORA_CHECAR:TIMESTAMP! "
-     "DATA_HORA_SITUACAO_CHECAGEM:TIMESTAMP ID_PRHRRELATIVA:SMALLINT ID_TBCBOPRO_SITUACAO_CHECAGEM:INTEGER "
-     "ID_TBCBOPRO_NOVO_HORARIO:INTEGER JUSTIFICATIVA_NOVO_HORARIO:VARCHAR(200) QTDE_ADMINISTRADA:NUMERIC(18,3) "
-     "SINAIS_ALFA:VARCHAR(10) JUSTIFICATIVA_SITUACAO_CHECAGEM:VARCHAR(200) SITUACAO_CHECAGEM:CHAR(1)! "
-     "OLD_ID_GERAL:INTEGER OLD_ID_CHK:INTEGER OLD_ID_HORPAD:INTEGER OLD_QTDE:NUMERIC(18,3) "
-     "OLD_CHECADO:VARCHAR(1) OLD_USERCHECK:VARCHAR(31) OLD_JUSTIF:VARCHAR(200) OLD_JUSTIFNHR:VARCHAR(200) "
-     "OLD_USERNHR:VARCHAR(31) OLD_QTDEADM:NUMERIC(18,3) OLD_SINAIS_ALFA:VARCHAR(10) "
-     "SUSPENSAO_PREDEFINIDA:CHAR(1) ID_PRSITAPRAZAM:SMALLINT OBS_MONITORIZACAO:VARCHAR(255) "
-     "FUSO_HORARIO_SITUACAO_CHECAGEM:SMALLINT HORARIO_VERAO_SITUACAO_CHECAGEM:CHAR(1) "
-     "FUSO_HORARIO_DATA_HORA_CHECAR:SMALLINT HORARIO_VERAO_DATA_HORA_CHECAR:CHAR(1) ID_PRLANGERAL:INTEGER! "
-     "DATA_HORA_CHECAR_UTC:VARCHAR(30) DATA_HORA_SITUACAO_CHECAGEM_UTC:VARCHAR(30) "
-     "ID_TBPROFIS_ACOMP_RESP_APZ:INTEGER DATA_HORA_ACOMP_RESP_APZ:TIMESTAMP "
-     "DATA_HORA_ACOMP_RESP_APZ_UTC:VARCHAR(30) ID_TBPROFIS_ACOMP_RESP_CHK:INTEGER "
-     "DATA_HORA_ACOMP_RESP_CHK:TIMESTAMP DATA_HORA_ACOMP_RESP_CHK_UTC:VARCHAR(30) "
-     "SITUACAO_ACOMP_RESP_CHK:CHAR(1) CHECAGEM_AVALIADA:CHAR(1) DATA_HORA_GRAVACAO:TIMESTAMP "
-     "FUSO_HORARIO_GRAVACAO:SMALLINT HORARIO_VERAO_GRAVACAO:CHAR(1) DATA_HORA_GRAVACAO_UTC:VARCHAR(30) "
-     "JUSTIFICATIVA_SUSP_RETROATIVA:VARCHAR(255) ID_TBCBOPRO_INCLUSAO:INTEGER DATA_HORA_INCLUSAO:TIMESTAMP "
-     "FUSO_HORARIO_INCLUSAO:SMALLINT HORARIO_VERAO_INCLUSAO:CHAR(1) DATA_HORA_INCLUSAO_UTC:VARCHAR(30) "
-     "FUSO_HORARIO_ACOMP_RESP_APZ:SMALLINT HORARIO_VERAO_ACOMP_RESP_APZ:CHAR(1) "
-     "FUSO_HORARIO_ACOMP_RESP_CHK:SMALLINT HORARIO_VERAO_ACOMP_RESP_CHK:CHAR(1) ID_TBCBOPRO_APZ:INTEGER "
-     "DATA_HORA_APZ:TIMESTAMP FUSO_HORARIO_APZ:SMALLINT HORARIO_VERAO_APZ:CHAR(1) "
-     "DATA_HORA_APZ_UTC:VARCHAR(30) JUSTIFICATIVA_LANC_RETROATIVO:VARCHAR(255) INTEGRACAO_ESTOQUE:VARCHAR(1) "
-     "MEDICAMENTO_URGENTE:CHAR(1) ID_PRCHKGERAL_AGRUPAMENTO:INTEGER ITEM_INCLUIDO_JSON_DIGITAL:CHAR(1) "
-     "ID_DIGITAL:VARCHAR(36) ETIQUETA_CHECAGEM_IMPRESSA:CHAR(1)! OBSERVACAO_ENFERMAGEM:VARCHAR(255)"),
-    ("PRASSINAT_DOC_PRCHKGERAL", "ID",
-     "ID:INTEGER! ID_PRASSINATURA_DOC:INTEGER! ID_PRCHKGERAL:INTEGER!"),
-    ("PREXTRATOITEM_PRCHKGERAL", "ID",
-     "ID:INTEGER! ID_PRCHKGERAL:INTEGER! ID_PRSITUACAOCHECAGEM:CHAR(1)! ID_PRSITAPRAZAM:SMALLINT "
-     "ID_TBCBOPRO:INTEGER! DATA_HORA_APRAZADO:TIMESTAMP DATA_HORA_APRAZADO_UTC:VARCHAR(30) "
-     "FUSO_HORARIO_APRAZADO:SMALLINT JUSTIFICATIVA_REAPRAZAMENTO:VARCHAR(254) DATA_HORA_HISTORICO:TIMESTAMP! "
-     "DATA_HORA_HISTORICO_UTC:VARCHAR(30)! FUSO_HORARIO_HISTORICO:SMALLINT ETIQUETA_CHECAGEM_IMPRESSA:CHAR(1)"),
-    ("PRSENECESSARIO_PRPRESCMED", "ID_PRSENECESSARIO,ID_PRPRESCMED",
-     "ID_PRSENECESSARIO:SMALLINT! ID_PRPRESCMED:INTEGER!"),
-    ("HTATENDALTA", "ID_HTATENDIMENTO",
-     "ID_HTATENDIMENTO:BIGINT! DATA_HORA_PREVISTA:TIMESTAMP ID_TBMOTALT:SMALLINT "
-     "DATA_HORA_ALTA_MEDICA:TIMESTAMP DATA_HORA_SAIDA_LEITO:TIMESTAMP OBSERVACAO:BLOB~ DIAGNOSTICO:BLOB~ "
-     "JUSTIFICATIVA:BLOB~ TRATAMENTO:BLOB~ DATA_HORA_ALTA_MEDICA_UTC:VARCHAR(30) "
-     "DATA_HORA_PREVISTA_UTC:VARCHAR(30) DATA_HORA_SAIDA_LEITO_UTC:VARCHAR(30) TIPO_ALTERACAO:VARCHAR(1)"),
-    ("HTCABECFORMULCOMP", "ID",
-     "ID:INTEGER! ID_PREVOLUCAO:INTEGER! DATA_HORA_GRAVACAO:TIMESTAMP! DATA_HORA_GRAVACAO_UTC:VARCHAR(30)! "
-     "ID_TBUSERS:VARCHAR(31)! VERSAO:INTEGER!"),
-    ("HTCHKGERAL", "ID",
-     "ID:INTEGER! ID_PRCHKGERAL:INTEGER! DATA_HORA_HISTORICO:TIMESTAMP! DATA_HORA_HISTORICO_UTC:VARCHAR(30)! "
-     "DATA_HORA_CHECAR:TIMESTAMP! DATA_HORA_CHECAR_UTC:VARCHAR(30)! ID_TBCBOPRO_SITUACAO_CHECAGEM:INTEGER! "
-     "QTDE_ADMINISTRADA:NUMERIC(18,3) JUSTIFICATIVA_SITUACAO_CHECAGEM:VARCHAR(200) "
-     "JUSTIFICATIVA_LANC_RETROATIVO:VARCHAR(255) ID_PRSITUACAOCHECAGEM:CHAR(1)! DATA_HORA_GRAVACAO:TIMESTAMP! "
-     "DATA_HORA_GRAVACAO_UTC:VARCHAR(30)! FUSO_HORARIO_GRAVACAO:SMALLINT"),
-    ("HTFORMULCOMP", "ID",
-     "ID:INTEGER! ID_HTCABECFORMULCOMP:INTEGER! ID_PRPADEVOL:INTEGER! NOME_CLASSE:VARCHAR(30)! "
-     "NOME_COMPONENTE_PAI:VARCHAR(30)! COMPONENTE:BLOB~ ORDEM_CRIACAO:SMALLINT"),
-    ("HTPARAMORIGEMCABIMP", "ID",
-     "ID:SMALLINT! DATA:TIMESTAMP ID_PRTPASSINATURA:SMALLINT ORIGEM_DADOS:CHAR(1) ID_TBUSERS:VARCHAR(31)"),
-)
-LACUNAS = (1, 2, 5, 9)  # chaves com lacunas
-DATA_ZERO = datetime.datetime(1899, 12, 30)
+_MAPA = Path(__file__).resolve().parents[2] / "mapa"
+FATIA = ["PRITENSGLICEMIA", "PRPRESCSOL", "PRITENSESQ", "PRPRESCVI", "PRPRESCVNI", "PRCHKGERAL", "PRASSINAT_DOC_PRCHKGERAL",
+         "PREXTRATOITEM_PRCHKGERAL", "PRPRESC_AUTOPREENCHIDO", "PRPRESC_PRPROTGERAL", "PRRECEITA", "PRITEMRECEITA",
+         "PRSENECESSARIO_PRPRESCMED", "PRSENECESSARIO_PRPRESCPROCED", "PRVELOCINFUSAO", "PRLANCAMENTOEXAME",
+         "PRLANCEXAMEESTRUTURADO", "PRLANCREGISTROTEMPO", "HTATENDALTA", "HTCABECFORMULCOMP", "HTCHKGERAL",
+         "HTFORMULCOMP", "HTPARAMORIGEMCABIMP"]
+PAIS_ORIGEM = ["TBCBOPRO", "HTPACIENTE", "ATCABECATEND", "HTATENDIMENTO", "PRPRESC", "PRLANGERAL", "PRPRESCPROCED",
+               "PRPRESCMED", "PRASSINATURA_DOC", "TBUNIDADEMEDIDA", "PRMODOVENT", "PRFA_CAD_MODO_RESPIR", "TBTABELA_CAMPO"]
 
 
-def _colunas(espec):
-    out = []
-    for x in espec.split():
-        nome, tipo = x.split(":", 1)
-        out.append((nome, tipo.rstrip("!~"), "!" in tipo, "~" in tipo))
-    return out
+def _ler(arq):
+    with open(_MAPA / arq, encoding="utf-8") as f:
+        return list(csv.DictReader(f, delimiter="\t"))
 
 
-COLUNAS = {t: _colunas(e) for t, _, e in TABELAS}
-CHAVE = {t: k.split(",") for t, k, _ in TABELAS}
+_COLS, _CHAVE = {}, {}
+for _r in _ler("colunas.tsv"):
+    if _r["tabela"] in FATIA or _r["tabela"] in PAIS_ORIGEM:
+        _COLS.setdefault(_r["tabela"], []).append((_r["coluna"], _r["forma"], _r["regra"]))
+for _r in _ler("tabelas.tsv"):
+    if _r["tabela"] in _COLS:
+        _CHAVE[_r["tabela"]] = [x for x in _r["chave"].split(",") if x]
+COLUNAS = {t: [c for c, _, _ in v] for t, v in _COLS.items()}
 
 
-def _ddl_tipo(tipo, texto):
-    if tipo == "BLOB":
-        return "BLOB SUB_TYPE %d" % (1 if texto else 0)
-    return "DOUBLE PRECISION" if tipo == "DOUBLE" else tipo
+def _tipo(forma, regra):
+    if forma == "BLOB":
+        return "BLOB SUB_TYPE %d" % (1 if regra == "texto_longo" else 0)
+    return "DOUBLE PRECISION" if forma == "DOUBLE" else forma
 
 
-DDL = "".join("CREATE TABLE %s (%s, PRIMARY KEY (%s));\n" % (
-    t, ", ".join("%s %s%s" % (c, _ddl_tipo(tp, tx), " NOT NULL" if ob or c in CHAVE[t] else "")
-                 for c, tp, ob, tx in COLUNAS[t]), ", ".join(CHAVE[t])) for t, _, _ in TABELAS)
+DDL = "".join('CREATE TABLE %s (%s, PRIMARY KEY (%s));\n' % (
+    t, ", ".join('"%s" %s%s' % (c, _tipo(f, rg), " NOT NULL" if c in _CHAVE[t] else "") for c, f, rg in _COLS[t]),
+    ", ".join('"%s"' % c for c in _CHAVE[t])) for t in FATIA + PAIS_ORIGEM)
+
+PAIS_EXTERNOS = {
+    "ATCABECATEND": ["1", "2", "3"], "GETABVIA": ["SC"], "HTATENDIMENTO": ["1", "2", "3", "4", "5"], "HTPACIENTE": ["1", "2"],
+    "PREVOLUCAO": ["1"], "PRFA_CAD_MODO_RESPIR": ["1"], "PRITEMNAOPAD": ["1"], "PRLANGERAL": ["1", "2", "3"],
+    "PRMODOVENT": ["1", "2"], "PRPRESC": ["1"], "PRPRESCMED": ["1", "2"], "PRPRESCPROCED": ["1", "2"],
+    "PRPROTGERAL": ["1"], "PRSENECESSARIO": ["1", "2"], "PRSITUACAOCHECAGEM": ["A", "C"], "PRTPRECMED": ["1"],
+    "PRUNIDINFUSAO": ["1"], "PRVIAAEREA": ["1"], "RICADPAC": ["1", "2"], "TBCBOPRO": ["1", "2", "3"],
+    "TBMOTALT": ["1"], "TBPROFIS": ["1", "2"], "TBTABELA_CAMPO": ["1", "2", "3"], "TBUNIDADEMEDIDA": ["1", "2", "3"],
+    "TBUSERS": ["ADMIN"]}
 
 
-def _valor(r, t, i, c, tipo, obrig, texto, anomalia):
-    """Valor falso da linha i (0..3) pela forma da coluna. `anomalia` marca a coluna que recebe a anomalia da linha."""
-    if c in CHAVE[t]:
-        k = LACUNAS[i]
-        return str(k) if tipo.startswith(("VARCHAR", "CHAR")) else k
-    if not obrig and i == 1:
-        return None
-    if tipo in ("SMALLINT", "INTEGER", "BIGINT"):
-        return r.randint(1, 9)
-    if tipo.startswith("NUMERIC"):
-        return decimal.Decimal("%d.%03d" % (r.randint(0, 999), r.randint(0, 999)))
-    if tipo == "DOUBLE":
-        return float(r.randint(1, 999))
-    if tipo == "DATE":
-        return datetime.date(1899, 12, 30) if anomalia else datetime.date(2026, 1, 1) + datetime.timedelta(days=i)
-    if tipo == "TIMESTAMP":
-        if anomalia:
-            return DATA_ZERO if i == 2 else DATA_ZERO + datetime.timedelta(hours=7, minutes=30)
-        return datetime.datetime(2026, 1, 1, 8) + datetime.timedelta(days=i, minutes=r.randint(0, 600))
-    if tipo == "TIME":
-        return None  # anulável na origem; TIME pede regra de minutos (pedido)
-    if tipo in ("CHAR(1)", "VARCHAR(1)"):
-        return ("S", "N", "x", "s")[i] if anomalia else ("S", "N")[i % 2]
-    if tipo == "BLOB":
-        return ("Texto exemplo ação %d\r\nsegunda linha  com  espaços" % i).encode("cp1252")
-    n = int(tipo[tipo.index("(") + 1:-1])
-    if c.endswith("_UTC"):
-        return ("2026-01-0%dT11:00:00Z" % (i + 1))[:n]
-    return ("  Exemplo  ação nº %d " % i if anomalia else "Exemplo %d" % i)[:n]
+def id_externo(tabela, chave):
+    """Id que a conferência dá ao pai externo: sequencial na ordem das tabelas e das chaves."""
+    i = 0
+    for t, ks in sorted(PAIS_EXTERNOS.items()):
+        for k in ks:
+            i += 1
+            if (t, k) == (tabela, chave):
+                return i
+    raise KeyError((tabela, chave))
+
+
+# o complemento (PRPRESC_AUTOPREENCHIDO) atualiza o item já gravado: os itens externos existem no destino
+PREPARO_DESTINO = (
+    "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+    + "".join(" INSERT INTO prescricao_item (id, prescricao_id, sequencia, tipo_item_prescricao_id, inicio_em,"
+              " lancamento_profissional_id, origem, criado_em) VALUES (%d, 1, %d, 1, '2026-01-02 08:00:00', 1,"
+              " 'migracao', UTC_TIMESTAMP(3));" % (id_externo("PRLANGERAL", k), n)
+              for n, k in enumerate(PAIS_EXTERNOS["PRLANGERAL"], 1)))
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE`: o mapa REAL sem as declarações dos pais de PAIS_ORIGEM. Na carga real esses pais vêm antes, em
+    outras fatias; aqui eles estão na imagem só para as referências encadeadas lerem a origem, e o pai externo
+    (PAIS_EXTERNOS) já conta como carregado: planejá-lo de novo daria conciliação falsa. Pedido no L6-13.json: a
+    conferência deixar fora do plano, por regra genérica, as tabelas de PAIS_EXTERNOS presentes na imagem."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    fora = set(PAIS_ORIGEM)
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in fora])
+
+
+def T(d, h=8, m=0):
+    return datetime.datetime(2026, 1, d, h, m)
 
 
 def linhas(r, ins):
-    for t, _, _ in TABELAS:
-        cols = COLUNAS[t]
-        # a anomalia da linha vai na primeira coluna anulável de cada forma (data, hora, código, texto)
-        vistos, marca = set(), set()
-        for c, tipo, ob, tx in cols:
-            forma = tipo.split("(")[0]
-            if not ob and c not in CHAVE[t] and forma not in vistos:
-                vistos.add(forma)
-                marca.add(c)
-        for i in range(4):
-            ins(t, [_valor(r, t, i, c, tipo, ob, tx, c in marca and i >= 2) for c, tipo, ob, tx in cols])
-    # nenhuma tabela da fatia é carregada hoje: o esperado no destino é vazio (o plano não tem tabela da fatia)
-    return {}
+    def q(t, **kw):
+        fora = set(kw) - set(COLUNAS[t])
+        assert not fora, (t, fora)
+        ins(t, [kw.get(c) for c in COLUNAS[t]])
+
+    # pais lidos pelas referências encadeadas (só as colunas usadas)
+    for i, prof in ((1, 1), (2, 2), (3, 9)):
+        q("TBCBOPRO", ID=i, ID_TBPROFIS=prof)
+    for i in (1, 2):
+        q("HTPACIENTE", ID=i, ID_RICADPAC=i)
+    # estado vigente da alta no atendimento: 1 alta efetivada; 2 sem alta (só prevista); 3 alta sem motivo
+    q("ATCABECATEND", ID=1, ID_RICADPAC=1, DATA_HORA_ALTA_MEDICA=T(5, 11), ID_TBMOTALT=1, DATA_HORA_SAIDA_LEITO=T(5, 13),
+      ID_TBCBOPRO_ALTA_MEDICA=1)
+    q("ATCABECATEND", ID=2, ID_RICADPAC=2)
+    q("ATCABECATEND", ID=3, ID_RICADPAC=1, DATA_HORA_ALTA_MEDICA=T(6, 12), ID_TBCBOPRO_ALTA_MEDICA=2)
+    for i, at, ass in ((1, 1, 1), (2, 2, 2), (3, 1, 3), (4, 2, 1), (5, 3, 1)):
+        q("HTATENDIMENTO", ID=i, ID_ATCABECATEND=at, ID_TBCBOPRO_ASSISTENTE=ass, DATA_HORA_HISTORICO=T(1, 7))
+    q("PRPRESC", ID=1, ID_HTATENDIMENTO=1, DATA_HORA_PRESCRICAO=T(2, 7, 30))
+    for i in (1, 2, 3):
+        q("PRLANGERAL", ID=i, ID_PRPRESC=1)
+    q("PRPRESCPROCED", ID=1, ID_PRLANGERAL=1)
+    q("PRPRESCPROCED", ID=2, ID_PRLANGERAL=2)
+    q("PRPRESCMED", ID=1, ID_PRLANGERAL=3)
+    q("PRPRESCMED", ID=2, ID_PRLANGERAL=8)
+    q("PRASSINATURA_DOC", ID=1, DATA_HORA_EVENTO=T(2, 9))
+    for i, nome, simb in ((1, "Unidade internacional", "UI"), (2, "Mililitro", "mL"), (3, "Miligrama", "mg")):
+        q("TBUNIDADEMEDIDA", ID=i, NOME=nome, SIMBOLO=simb.lower(), SIGLA_API=simb, SITUACAO="A")
+    q("PRMODOVENT", ID=1, NOME="Pressão controlada")
+    q("PRMODOVENT", ID=2, NOME="Modo sem par")
+    q("PRFA_CAD_MODO_RESPIR", ID=1, DESCRICAO="Pressão controlada", SIGLA="PCV", ATIVO="S")
+    for i, nome in ((1, "QTDE_DOSE"), (2, "QTDE"), (3, "OUTRO_CAMPO")):
+        q("TBTABELA_CAMPO", ID=i, NOME=nome)
+
+    e = {}
+    # glicemia: 1 e 2 na escala do controle 1; 3 faixa invertida (CHECK); 4 unidade sem par (pai_inexistente, 1048)
+    t = "PRITENSGLICEMIA"
+    q(t, ID=1, ID_PRPRESCPROCED=1, INTERVALO_INICIAL_DOSE=70, INTERVALO_FINAL_DOSE=150, QTDE_DOSE=D("0.000"),
+      ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
+    q(t, ID=2, ID_PRPRESCPROCED=1, INTERVALO_INICIAL_DOSE=151, INTERVALO_FINAL_DOSE=250, QTDE_DOSE=D("2.000"),
+      ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="Insulina sem padrão", ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
+    q(t, ID=3, ID_PRPRESCPROCED=2, INTERVALO_INICIAL_DOSE=100, INTERVALO_FINAL_DOSE=90, QTDE_DOSE=D("0.000"),
+      ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
+    q(t, ID=4, ID_PRPRESCPROCED=2, INTERVALO_INICIAL_DOSE=80, INTERVALO_FINAL_DOSE=120, QTDE_DOSE=D("0.000"),
+      ID_TBUNICON_UNI_PRESC="XX", ID_GETABVIA="SC")
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
+
+    # solução: 3 volume total sem unidade (CHECK); 4 item nunca visto (pai_inexistente, 1048)
+    t = "PRPRESCSOL"
+    q(t, ID=1, ID_PRLANGERAL=1, VOLUME_TOTAL=D("500.000"), ID_TBUNICON_UNI_PRESC="mL", INICIAR_ADM_AGORA="S",
+      NAO_AJUSTAR_ESQUEMA_ENF="N", PERMITIR_ENF_ALT_VEL_INFUSAO="S")
+    q(t, ID=2, ID_PRLANGERAL=2, VOLUME_KG=D("10.000"))
+    q(t, ID=3, ID_PRLANGERAL=3, VOLUME_TOTAL=D("250.000"))
+    q(t, ID=4, ID_PRLANGERAL=9)
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
+
+    # etapas: 2 item padronizado sem item prescritível (CHECK); 3 solução recusada; 4 quantidade zero
+    t = "PRITENSESQ"
+    q(t, ID=1, ID_PRPRESCSOL=1, ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="Sem padrão", ITEM_PRINCIPAL=1, ETAPA=1,
+      QTDE=D("10.000"), QTDE_DOSE=D("10.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="N")
+    q(t, ID=2, ID_PRPRESCSOL=1, ID_GEITENS=5, ITEM_PRINCIPAL=0, ETAPA=1, QTDE_DOSE=D("1.000"),
+      ID_TBUNICON_UNI_PRESC="mg", DOSE_EXTRA_ANTIMICROBIANO="N")
+    q(t, ID=3, ID_PRPRESCSOL=4, ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="x", ITEM_PRINCIPAL=1, ETAPA=1,
+      QTDE_DOSE=D("1.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="N")
+    q(t, ID=4, ID_PRPRESCSOL=2, ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="Sem padrão", ITEM_PRINCIPAL=1, ETAPA=1,
+      QTDE=D("0.000"), QTDE_DOSE=D("5.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="S")
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1, "valor_fora_do_dominio": 1}}
+
+    # ventilação: invasiva 2 com modo sem par (CHECK do modo) e FiO2 fora da faixa; não invasiva 2 repete o item (1062)
+    t = "PRPRESCVI"
+    q(t, ID=1, ID_PRLANGERAL=1, ID_PRVIAAEREA=1, ID_PRMODOVENT=1, FREQUENCIA_RESPIRATORIA=14, PEEP=5,
+      VOLUME_CORRENTE=D("450.00"), PRESSAO=20, FLUXO=40, TEMPO_INSPIRATORIO=D("1.0"), TEMPO_EXPIRATORIO=D("2.0"), FIO2=40)
+    q(t, ID=2, ID_PRLANGERAL=2, ID_PRVIAAEREA=1, ID_PRMODOVENT=2, FIO2=15)
+    e[t] = {"gravados": 1, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 1, "restricao_destino_4025": 1}}
+    t = "PRPRESCVNI"
+    q(t, ID=1, ID_PRLANGERAL=3, ID_PRVIAAEREA=1, ID_PRMODOVENT=1, PRESSAO_INSPIRATORIA=12, PRESSAO_EXPIRATORIA=6, FIO2=30,
+      TEMPO_TOTAL=datetime.datetime(1899, 12, 30, 2, 0))
+    q(t, ID=2, ID_PRLANGERAL=1, ID_PRVIAAEREA=1, ID_PRMODOVENT=1, FIO2=21)
+    e[t] = {"gravados": 1, "pendencias": {"restricao_destino_1062": 1}}
+
+    # horário: 2 repete item e horário (1062); 3 situação sem par (1048); 4 aprazador sem profissional (pai_inexistente)
+    t = "PRCHKGERAL"
+    q(t, ID=1, ID_PRLANGERAL=1, DATA_HORA_CHECAR=T(2, 8), SITUACAO_CHECAGEM="A", DATA_HORA_SITUACAO_CHECAGEM=T(2, 8, 10),
+      QTDE_ADMINISTRADA=D("1.000"), ID_TBCBOPRO_APZ=1, DATA_HORA_APZ=T(2, 7, 40), ETIQUETA_CHECAGEM_IMPRESSA="N",
+      SINAIS_ALFA="98", ID_TBPROFIS_ACOMP_RESP_CHK=2, DATA_HORA_ACOMP_RESP_CHK=T(2, 8, 20))
+    q(t, ID=2, ID_PRLANGERAL=1, DATA_HORA_CHECAR=T(2, 8), SITUACAO_CHECAGEM="A", ETIQUETA_CHECAGEM_IMPRESSA="N")
+    q(t, ID=3, ID_PRLANGERAL=2, DATA_HORA_CHECAR=T(2, 10), SITUACAO_CHECAGEM="Z", ETIQUETA_CHECAGEM_IMPRESSA="N")
+    q(t, ID=4, ID_PRLANGERAL=3, DATA_HORA_CHECAR=T(2, 12), SITUACAO_CHECAGEM="C", ETIQUETA_CHECAGEM_IMPRESSA="N",
+      JUSTIFICATIVA_LANC_RETROATIVO="Registro tardio", ID_TBCBOPRO_APZ=3, DATA_HORA_APZ=T(2, 11))
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 2, "restricao_destino_1048": 1}}
+
+    # ligação documento assinado x horário: na imagem, sem carga até a troca do destino no mapa
+    q("PRASSINAT_DOC_PRCHKGERAL", ID=1, ID_PRASSINATURA_DOC=1, ID_PRCHKGERAL=1)
+
+    # eventos do horário: 2 reaprazamento com motivo; 3 sem motivo (CHECK); 4 horário recusado
+    t = "PREXTRATOITEM_PRCHKGERAL"
+    q(t, ID=1, ID_PRCHKGERAL=1, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_HISTORICO=T(2, 8, 10),
+      DATA_HORA_HISTORICO_UTC="2026-01-02T11:10:00Z")
+    q(t, ID=2, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="C", ID_TBCBOPRO=2, DATA_HORA_APRAZADO=T(2, 13),
+      JUSTIFICATIVA_REAPRAZAMENTO="Paciente em exame", DATA_HORA_HISTORICO=T(2, 11, 50))
+    q(t, ID=3, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_APRAZADO=T(2, 14),
+      DATA_HORA_HISTORICO=T(2, 12, 50))
+    q(t, ID=4, ID_PRCHKGERAL=3, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_HISTORICO=T(2, 10, 5))
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}}
+
+    # campos autopreenchidos: marcam o item já gravado (uma marca por item: a conciliação do complemento relê a linha
+    # inteira, e duas marcas no mesmo item divergem; pedido no L6-13.json); 2 campo sem par (2 destinos); 4 item
+    # nunca visto
+    t = "PRPRESC_AUTOPREENCHIDO"
+    q(t, ID=1, ID_PRLANGERAL=1, ID_TBTABELA_CAMPO=1)
+    q(t, ID=2, ID_PRLANGERAL=2, ID_TBTABELA_CAMPO=3)
+    q(t, ID=3, ID_PRLANGERAL=3, ID_TBTABELA_CAMPO=2, SOLUCAO_ETAPA=1)
+    q(t, ID=4, ID_PRLANGERAL=9, ID_TBTABELA_CAMPO=1)
+    e[t] = {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "pai_inexistente": 1}}
+
+    t = "PRPRESC_PRPROTGERAL"
+    q(t, ID_PRPRESC=1, ID_PROTGERAL=1)
+    q(t, ID_PRPRESC=1, ID_PROTGERAL=5)
+    e[t] = {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
+
+    # receitas: 2 suspensa e derivada da 1; 3 suspensa sem motivo (CHECK); 4 tipo sem par (1048)
+    t = "PRRECEITA"
+    base = dict(ID_TBCBOPRO_LANCAMENTO=1, GRUPO_RECEITA=1, TP_RECEITA_PADRAO_PSICOTROPICO=1, PRE_IMPRESSO="N",
+                DATA_HORA_GRAVACAO_UTC="2026-01-03T13:01:00Z")
+    q(t, ID_RECEITA=1, ID_HTATENDIMENTO=1, ID_HTPACIENTE=1, DATA_HORA_LANCAMENTO=T(3, 10),
+      DATA_HORA_GRAVACAO=T(3, 10, 1), RECEITA=b"Uso oral\r\nTomar  com  agua", **base)
+    q(t, ID_RECEITA=2, ID_HTATENDIMENTO=2, ID_HTPACIENTE=2, DATA_HORA_LANCAMENTO=T(4, 10), DATA_HORA_GRAVACAO=T(4, 10),
+      DATA_HORA_SUSPENSAO=T(5, 8), ID_TBCBOPRO_SUSPENSAO=2, JUSTIFICATIVA_SUSPENSAO="Troca de conduta",
+      ID_PRRECEITA=1, **base)
+    q(t, ID_RECEITA=3, ID_HTATENDIMENTO=1, ID_HTPACIENTE=1, DATA_HORA_LANCAMENTO=T(4, 11), DATA_HORA_GRAVACAO=T(4, 11),
+      DATA_HORA_SUSPENSAO=T(5, 9), ID_TBCBOPRO_SUSPENSAO=1, **base)
+    q(t, ID_RECEITA=4, ID_HTATENDIMENTO=1, ID_HTPACIENTE=1, DATA_HORA_LANCAMENTO=T(4, 12), DATA_HORA_GRAVACAO=T(4, 12),
+      **dict(base, TP_RECEITA_PADRAO_PSICOTROPICO=7))
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
+
+    t = "PRITEMRECEITA"
+    q(t, ID=1, ID_RECEITA=1, NOME_MEDICAMENTO_SUBSTANCIA="Dipirona 500 mg", POSOLOGIA="1 comprimido de 6/6h",
+      QUANTIDADE="20 comprimidos", USO_CONTINUO="N")
+    q(t, ID=2, ID_RECEITA=2, NOME_MEDICAMENTO_SUBSTANCIA="Losartana", POSOLOGIA="1 ao dia", QUANTIDADE="30",
+      USO_CONTINUO="S", INICIO_TRATAMENTO=datetime.date(2026, 1, 4))
+    q(t, ID=3, ID_RECEITA=3, NOME_MEDICAMENTO_SUBSTANCIA="Item da receita recusada", POSOLOGIA="x", QUANTIDADE="1")
+    q(t, ID=4, ID_RECEITA=1, POSOLOGIA="sem nome", QUANTIDADE="1")
+    e[t] = {"gravados": 2, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}}
+
+    t = "PRSENECESSARIO_PRPRESCMED"
+    q(t, ID_PRSENECESSARIO=1, ID_PRPRESCMED=1)
+    q(t, ID_PRSENECESSARIO=2, ID_PRPRESCMED=2)
+    e[t] = {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
+    t = "PRSENECESSARIO_PRPRESCPROCED"
+    q(t, ID_PRSENECESSARIO=1, ID_PRPRESCPROCED=1)
+    q(t, ID_PRSENECESSARIO=1, ID_PRPRESCPROCED=2)
+    q(t, ID_PRSENECESSARIO=2, ID_PRPRESCPROCED=9)
+    e[t] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
+
+    # velocidade (ocorrido_em presumido = início: valor_presumido nas linhas avaliadas): 2 sem velocidade (1048);
+    # 3 solução recusada; 4 volume zero
+    t = "PRVELOCINFUSAO"
+    q(t, ID_PRPRESCSOL=1, SEQ=1, ETAPA=1, VELOCIDADE=D("100.000"), ID_PRUNIDINFUSAO=1, ID_TBCBOPRO_LANCAMENTO=1,
+      ARREDONDAR="N", DATA_HORA_INICIAL=T(2, 8), DATA_HORA_FINAL=T(2, 10), VOLUME=D("500.000"))
+    q(t, ID_PRPRESCSOL=1, SEQ=2, ETAPA=1, ID_PRUNIDINFUSAO=1, ID_TBCBOPRO_LANCAMENTO=1, DATA_HORA_INICIAL=T(2, 10))
+    q(t, ID_PRPRESCSOL=4, SEQ=1, ETAPA=1, VELOCIDADE=D("1.000"), ID_PRUNIDINFUSAO=1, ID_TBCBOPRO_LANCAMENTO=1,
+      DATA_HORA_INICIAL=T(2, 8))
+    q(t, ID_PRPRESCSOL=2, SEQ=1, ETAPA=1, VELOCIDADE=D("50.000"), ID_PRUNIDINFUSAO=1, ID_TBCBOPRO_LANCAMENTO=2,
+      DATA_HORA_INICIAL=T(2, 9), VOLUME=D("0.000"))
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "pai_pendente": 1, "valor_fora_do_dominio": 1,
+                                          "valor_presumido": 3}}
+
+    # exame lançado: 2 suspenso; 5 lançado antes da realização (CHECK)
+    t = "PRLANCAMENTOEXAME"
+    q(t, ID=1, NOME_EXAME="Hemograma  completo", NOME_METODO="Automatizado", DATA_HORA_REALIZACAO=T(2, 7),
+      DATA_HORA_EVENTO=T(2, 7), ID_TBCBOPRO=1, DATA_HORA_GRAVACAO=T(2, 9), RESULTADO=b"Sem alteracoes\r\nfim",
+      ID_RICADPAC=1)
+    q(t, ID=2, NOME_EXAME="Glicemia", DATA_HORA_REALIZACAO=T(2, 7), DATA_HORA_EVENTO=T(2, 7), ID_TBCBOPRO=2,
+      DATA_HORA_GRAVACAO=T(2, 9), ID_RICADPAC=2, DATA_HORA_SUSPENSAO=T(3, 8), ID_TBCBOPRO_SUSPENSAO=1,
+      JUSTIFICATIVA_SUSPENSAO="Lançado em duplicidade")
+    q(t, ID=5, NOME_EXAME="Ureia", DATA_HORA_REALIZACAO=T(3, 10), DATA_HORA_EVENTO=T(3, 10), ID_TBCBOPRO=1,
+      DATA_HORA_GRAVACAO=T(3, 9), ID_RICADPAC=1)
+    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1}}
+    t = "PRLANCEXAMEESTRUTURADO"
+    q(t, ID=1, ID_PRLANCAMENTOEXAME=1, ELEMENTO="Hemoglobina", RESULTADO="13,5", UNIDADE="g/dL", FAIXA_NORMALIDADE="12 a 16")
+    q(t, ID=2, ID_PRLANCAMENTOEXAME=1, ELEMENTO="Leucócitos")
+    q(t, ID=3, ID_PRLANCAMENTOEXAME=5, ELEMENTO="Ureia", RESULTADO="30")
+    e[t] = {"gravados": 1, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}}
+
+    # descartes (sem carga): ficam na imagem para provar que não entram no plano
+    q("PRLANCREGISTROTEMPO", ID=1, ID_TBCBOPRO=1, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=1, DATA_HORA=T(2, 8))
+    q("HTPARAMORIGEMCABIMP", ID=1, DATA=T(1, 8), ID_PRTPASSINATURA=1, ORIGEM_DADOS="A", ID_TBUSERS="ADMIN")
+
+    # alta: histórico por versão do atendimento; o estado vigente (data, motivo, saída do leito, quem deu a alta) vem
+    # do cabeçalho. 1 grava (efetivada); 3 é outra versão do atendimento 1 (adotada, sem alta duplicada); 2 e 4 (a 4
+    # é a exclusão) são do atendimento sem alta vigente: sem profissional da alta (1048); 5 alta sem motivo (CHECK)
+    t = "HTATENDALTA"
+    q(t, ID_HTATENDIMENTO=1, DATA_HORA_PREVISTA=T(5, 10), ID_TBMOTALT=1, DATA_HORA_ALTA_MEDICA=T(5, 11),
+      DATA_HORA_SAIDA_LEITO=T(5, 13), OBSERVACAO=b"Alta  com\r\norientacoes", DIAGNOSTICO=b"Quadro resolvido",
+      TIPO_ALTERACAO="I")
+    q(t, ID_HTATENDIMENTO=3, DATA_HORA_PREVISTA=T(5, 10), ID_TBMOTALT=1, DATA_HORA_ALTA_MEDICA=T(5, 11),
+      OBSERVACAO=b"Versao alterada", TIPO_ALTERACAO="A")
+    q(t, ID_HTATENDIMENTO=2, DATA_HORA_PREVISTA=T(6, 10), TIPO_ALTERACAO="I")
+    q(t, ID_HTATENDIMENTO=4, DATA_HORA_PREVISTA=T(6, 10), DATA_HORA_ALTA_MEDICA=T(6, 11), TIPO_ALTERACAO="E")
+    q(t, ID_HTATENDIMENTO=5, DATA_HORA_PREVISTA=T(6, 11), TIPO_ALTERACAO="I")
+    e[t] = {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1}}
+
+    # versão do formulário: 2 usuário sem par; 3 repete a versão (1062); componente da versão recusada
+    t = "HTCABECFORMULCOMP"
+    q(t, ID=1, ID_PREVOLUCAO=1, DATA_HORA_GRAVACAO=T(1, 9), ID_TBUSERS="ADMIN", VERSAO=1)
+    q(t, ID=2, ID_PREVOLUCAO=1, DATA_HORA_GRAVACAO=T(2, 9), ID_TBUSERS="NINGUEM", VERSAO=2)
+    q(t, ID=3, ID_PREVOLUCAO=1, DATA_HORA_GRAVACAO=T(3, 9), ID_TBUSERS="ADMIN", VERSAO=2)
+    e[t] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1062": 1}}
+
+    # histórico de checagem: evento presumido em toda linha; 2 quantidade negativa; 3 horário nunca visto (1048)
+    t = "HTCHKGERAL"
+    q(t, ID=1, ID_PRCHKGERAL=1, DATA_HORA_HISTORICO=T(2, 8, 10), DATA_HORA_CHECAR=T(2, 8),
+      ID_TBCBOPRO_SITUACAO_CHECAGEM=1, QTDE_ADMINISTRADA=D("1.000"), ID_PRSITUACAOCHECAGEM="A", DATA_HORA_GRAVACAO=T(2, 8, 10))
+    q(t, ID=2, ID_PRCHKGERAL=4, DATA_HORA_HISTORICO=T(2, 12, 5), DATA_HORA_CHECAR=T(2, 12),
+      ID_TBCBOPRO_SITUACAO_CHECAGEM=2, QTDE_ADMINISTRADA=D("-1.000"), JUSTIFICATIVA_LANC_RETROATIVO="Atraso",
+      ID_PRSITUACAOCHECAGEM="C", DATA_HORA_GRAVACAO=T(2, 12, 5))
+    q(t, ID=3, ID_PRCHKGERAL=7, DATA_HORA_HISTORICO=T(2, 9), DATA_HORA_CHECAR=T(2, 9), ID_TBCBOPRO_SITUACAO_CHECAGEM=1,
+      ID_PRSITUACAOCHECAGEM="A", DATA_HORA_GRAVACAO=T(2, 9))
+    e[t] = {"gravados": 2, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 1, "pai_inexistente": 1,
+                                          "restricao_destino_1048": 1}}
+
+    t = "HTFORMULCOMP"
+    q(t, ID=1, ID_HTCABECFORMULCOMP=1, ID_PRPADEVOL=1, NOME_CLASSE="CampoTexto", NOME_COMPONENTE_PAI="Painel",
+      COMPONENTE=b"object Campo1: CampoTexto\r\n  Left = 8\r\nend", ORDEM_CRIACAO=1)
+    q(t, ID=2, ID_HTCABECFORMULCOMP=3, ID_PRPADEVOL=1, NOME_CLASSE="CampoTexto", NOME_COMPONENTE_PAI="Painel")
+    q(t, ID=3, ID_HTCABECFORMULCOMP=2, ID_PRPADEVOL=1, NOME_CLASSE="CampoData", NOME_COMPONENTE_PAI="Painel",
+      ORDEM_CRIACAO=2)
+    e[t] = {"gravados": 2, "pendencias": {"pai_pendente": 1}}
+    return e

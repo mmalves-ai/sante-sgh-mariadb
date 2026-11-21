@@ -1,18 +1,22 @@
 """Fatia L8-09 (faturamento e restantes, módulo FIN): tabelas da origem com as colunas de
 `conector/mapa/declarado/colunas.d/L8-09.tsv`, dados 100% falsos e as anomalias da fatia.
 
-Carregadas (5): períodos de escrituração (forma PRESUMIDA 'mensal'), origens de lançamento contábil (módulo
-PRESUMIDO 'manual'), contas de receita do custeio (grupo PRESUMIDO 'outro'), tipos de dado estatístico (unidade
-PRESUMIDA), e grupos de exportação de custos (destino PRESUMIDO, ativo A/I).
-Recibos: bloqueados (data de emissão DATE em DATETIME, regra pedida), mas já com 13 linhas e as anomalias da
-declaração prevista (tipo e extenso presumidos, CPF, situação por de-para, usuário pelo login): PREVISTO_FCRECIBO.
-Fora da carga (17, entram na imagem só para provar que nada é gravado): catálogos oficiais (nunca gravados),
-domínios de CHECK, parâmetros em colunas, competência ANO+MES e destinos a rever (motivos em colunas.d e pedidos
-em saida/L8-09.json).
+Carregadas (8): períodos de escrituração (forma PRESUMIDA 'mensal'), origens de lançamento contábil (módulo e
+booleanos pelo de-para da descrição), contas de receita do custeio (grupo PRESUMIDO 'outro'), tipos de dado estatístico (unidade
+PRESUMIDA), grupos de exportação de custos (destino PRESUMIDO, ativo A/I) e o contexto de trabalho do usuário da
+folha, da contabilidade e do custeio (competência ANO+MES, usuário pelo login, estabelecimento único, o mesmo login
+noutra empresa adotado).
+Bloqueadas (2, declaração pronta e comentada): recibos e histórico de situação especial da empresa, até o motor
+gravar DATE em DATETIME (pedido em saida/L8-09.json); já com linhas e os esperados PREVISTO_FCRECIBO e
+PREVISTO_COSPEDHSTSEMP.
+Descartadas (12, declarado/sem_carga.tsv): catálogos oficiais, domínios de CHECK e parâmetros em colunas; entram na
+imagem só para provar que nada é gravado.
 Anomalias: descrição vazia em destino NOT NULL (1048), data sentinela (data_sentinela + 1048), vigência invertida e
 valor zero (CHECK 4025), recibo cancelado sem data e motivo (CHECK 4025), número repetido (1062), CNPJ e CPF com
 dígito errado na coluna de CPF (documento_invalido), login sem usuário (pai_inexistente), situação e ativo fora do
-domínio (padrão com valor_fora_do_dominio), ordem não numérica (padrão com valor_fora_do_dominio).
+domínio (padrão com valor_fora_do_dominio), ordem não numérica (padrão com valor_fora_do_dominio), competência com
+mês 13 (valor_fora_do_dominio + 1048), mesmo usuário em duas empresas no contexto (adotado_existente), descrição
+da origem de lançamento sem par no de-para (valor_fora_do_dominio + 1048), intervalo de lançamento invertido (4025).
 """
 import datetime
 import decimal
@@ -67,11 +71,12 @@ CREATE TABLE GPCOEFICIENTE_DEPREC (ID INTEGER NOT NULL, DESCRICAO VARCHAR(60) NO
   PRIMARY KEY (ID));
 """
 
-PAIS_EXTERNOS = {"TBUSERS": ["caixa.exemplo", "fin.exemplo"]}
+PAIS_EXTERNOS = {"TBUSERS": ["caixa.exemplo", "fin.exemplo", "custos.exemplo"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
 
-CARREGADAS = ("COPERIODESCRIT", "COTP_ORIGEM_LANCAMENTO", "CTCTARECEITANCI", "CTTIPODADO", "CTWGRUPOEXPORTACAO")
+CARREGADAS = ("COPARAM", "COPERIODESCRIT", "COTP_ORIGEM_LANCAMENTO", "CTCTARECEITANCI", "CTPARAM", "CTTIPODADO",
+              "CTWGRUPOEXPORTACAO", "FPPARAM_USUARIO")
 _TODAS = {
     'CDTPCONTRCAIXA': ('SMALLINT', 'VARCHAR(30)'),
     'CONIRE': ('VARCHAR(2)', 'SMALLINT', 'DATE', 'DATE'),
@@ -103,14 +108,18 @@ _TODAS = {
     'FPTP_SERV_NF_TO': ('INTEGER', 'VARCHAR(50)'),
     'GPCOEFICIENTE_DEPREC': ('INTEGER', 'VARCHAR(60)', 'NUMERIC(9,2)'),
 }
-# recibo: bloqueado (DATE em DATETIME diverge a soma até a regra pedida), mas já com as 13 linhas e as anomalias da
-# declaração prevista (saida/L8-09.json); o esperado delas fica em PREVISTO_FCRECIBO
-FORMAS_FORA = {t: f for t, f in _TODAS.items() if t not in CARREGADAS and t != "FCRECIBO"}
-BLOQUEADAS = tuple(FORMAS_FORA) + ("FCRECIBO",)
+# recibo e situação especial: bloqueados (DATE em DATETIME diverge a soma até a regra pedida), mas já com as linhas
+# e as anomalias da declaração prevista (saida/L8-09.json); o esperado delas fica em PREVISTO_*
+BLOQUEADAS = ("COSPEDHSTSEMP", "FCRECIBO")   # declaração pronta e comentada (DATE em DATETIME)
+DESCARTADAS = tuple(t for t in _TODAS if t not in CARREGADAS and t not in BLOQUEADAS)   # declarado/sem_carga.tsv
+# fora da carga com duas linhas genéricas (só presença); a lista de situações tem linhas próprias (pai do histórico)
+FORMAS_FORA = {t: _TODAS[t] for t in DESCARTADAS if t != "COSPEDSITEMP"}
 PREVISTO_FCRECIBO = {"gravados": 6, "pendencias": {"valor_presumido": 26, "restricao_destino_4025": 2,
                                                    "restricao_destino_1048": 4, "restricao_destino_1062": 1,
                                                    "documento_invalido": 2, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 1, "data_sentinela": 1}}
+PREVISTO_COSPEDHSTSEMP = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "valor_fora_do_dominio": 1,
+                                                        "restricao_destino_1048": 1}}
 
 D = decimal.Decimal
 
@@ -143,8 +152,11 @@ def linhas(r, ins):
               (5, "Sem início", None, None), (6, "Repetida", dt(2020, 1, 1), None),
               (7, "Sentinela", dt(1899, 12, 30), None)]:
         ins("COPERIODESCRIT", list(x))
-    # --- origens de lançamento: 3 sem descrição (1048); 2 com espaços nas pontas
-    for x in [(1, "Financeiro"), (2, "  Faturamento  "), (3, None), (4, "Folha")]:
+    # --- origens de lançamento (módulo, automático e digitação pelo de-para da descrição): 3 sem descrição (1048);
+    # 2 com espaços nas pontas; 5 manual (automático 0, digitação 1); 6 sem par no de-para (valor_fora_do_dominio
+    # + 1048 no módulo; booleanos com o padrão do DDL, também valor_fora_do_dominio)
+    for x in [(1, "Financeiro"), (2, "  Faturamento  "), (3, None), (4, "Folha"), (5, "Manual"),
+              (6, "Integração antiga exemplo")]:
         ins("COTP_ORIGEM_LANCAMENTO", list(x))
     # --- contas de receita do custeio: 3 nome só espaços (1048), 4 ordem não numérica (padrão 0 + fora do domínio)
     for x in [(1, "Diárias", "D", "1"), (2, "Taxas  e serviços", "T", "0002"), (3, "   ", "T", "3"),
@@ -156,6 +168,41 @@ def linhas(r, ins):
     # --- grupos de exportação: 2 inativo, 3 situação fora do domínio (padrão ativo), 4 nome só espaços (1048)
     for x in [(1, "Exportação própria", "A"), (2, "Federação exemplo", "I"), (3, "Outro grupo", "X"), (4, "   ", "A")]:
         ins("CTWGRUPOEXPORTACAO", list(x))
+
+    # --- contexto de trabalho da folha (USUARIO, COD_EMP, MES, ANO, ID_REMESSA, EXI_INF_INI, 7 avisos): 1 válido,
+    # 2 mês 13 (valor_fora_do_dominio + 1048), 3 login sem usuário (pai_inexistente + 1048), 4 mesmo usuário noutra
+    # empresa (adotado_existente: um contexto por usuário e módulo)
+    avisos = ["S", "N", "S", "N", "S", "N", "S"]
+    for x in [("fin.exemplo", 1, 3, 2025), ("caixa.exemplo", 1, 13, 2025), ("usuario.inexistente", 1, 4, 2025),
+              ("fin.exemplo", 2, 5, 2025)]:
+        ins("FPPARAM_USUARIO", list(x) + [10, "S"] + avisos)
+
+    # --- contexto da contabilidade (EMPRESA, USUARIO, ANO, MES, PERLANC_INI, PERLANC_FIM, 13 opções, MASC_CODREF,
+    # ID_PLANO, OPCOES, INTEGRACAO, ...): fin 1 válido; fin 2 adotado; caixa sem competência (1048); login sem usuário
+    # (pai_inexistente + 1048); custos com intervalo invertido (4025)
+    def copar(emp, usu, ano, mes, ini, fim):
+        ins("COPARAM", [emp, usu, ano, mes, ini, fim, "S", "9.9.99", "N", "1", "S", "N", "N", "S", "N", "S", "N",
+                        "N", "SNSN", "SSNN", "REF", 1, "N", "N", "S", "N", None, None, "S"])
+    copar(1, "fin.exemplo", 2025, 3, dt(2025, 3, 1), dt(2025, 3, 31))
+    copar(2, "fin.exemplo", 2025, 4, None, None)
+    copar(1, "caixa.exemplo", None, None, None, None)
+    copar(1, "usuario.inexistente", 2025, 3, None, None)
+    copar(1, "custos.exemplo", 2025, 5, dt(2025, 5, 31), dt(2025, 5, 1))
+    # --- contexto do custeio (MES, ANO, RECCOMP, USUARIO, TAB_OCUP, ANO_MES, REC_NAO_OPER): 1 válido, 2 mês 13
+    # (valor_fora_do_dominio + 1048), 3 login sem usuário (pai_inexistente + 1048)
+    for x in [(3, 2025, "fin.exemplo", 202503), (13, 2025, "caixa.exemplo", 202513),
+              (4, 2025, "usuario.inexistente", 202504)]:
+        ins("CTPARAM", [x[0], x[1], "S", x[2], "N", x[3], "N"])
+
+    # --- situações especiais (só presença: lista oficial descartada; é o pai do histórico): códigos 1 e 5 oficiais,
+    # 0 fora do domínio do produto
+    for x in [(1, 1, "Extinção exemplo"), (2, 5, "Cisão total exemplo"), (3, 0, "Situação normal exemplo")]:
+        ins("COSPEDSITEMP", list(x))
+    # --- histórico da situação especial (bloqueado; esperado em PREVISTO_COSPEDHSTSEMP): 2 válidos, vigência
+    # invertida (4025), código 0 sem par (valor_fora_do_dominio + 1048)
+    for x in [(1, dt(2020, 1, 1), None), (2, dt(2021, 6, 1), dt(2021, 12, 31)), (2, dt(2022, 6, 1), dt(2022, 1, 1)),
+              (3, dt(2023, 1, 1), None)]:
+        ins("COSPEDHSTSEMP", list(x))
 
     # --- recibos (ID, REC, TIPO_CTA, CONTA, REF, PAGADOR, PACIENTE, DESC_REF, CRM, DATA, VALOR, MESPRO, ANOPRO,
     # HORA, PROCTO, USUARIO, CONV, CGC_CPF, CANCELADO, BANCO, AGENCIA, C_CORRENTE, CHEQUE, DT_CHEQUE, OBSERVACOES,
@@ -187,10 +234,18 @@ def linhas(r, ins):
         "COPERIODESCRIT": {"gravados": 2, "pendencias": {"valor_presumido": 7, "restricao_destino_1048": 3,
                                                          "restricao_destino_4025": 1, "restricao_destino_1062": 1,
                                                          "data_sentinela": 1}},
-        "COTP_ORIGEM_LANCAMENTO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
+        # sem par no de-para: valor_fora_do_dominio nas três colunas do mesmo de-para (módulo e os dois booleanos)
+        "COTP_ORIGEM_LANCAMENTO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2,
+                                                                 "valor_fora_do_dominio": 3}},
+        "COPARAM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 1,
+                                                  "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
+        "CTPARAM": {"gravados": 1, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
+                                                  "restricao_destino_1048": 2}},
         "CTCTARECEITANCI": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1,
                                                           "valor_fora_do_dominio": 1}},
         "CTTIPODADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
+        "FPPARAM_USUARIO": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
+                                                          "restricao_destino_1048": 2, "adotado_existente": 1}},
         "CTWGRUPOEXPORTACAO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1,
                                                              "valor_fora_do_dominio": 1}},
     }

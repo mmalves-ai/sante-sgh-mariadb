@@ -24,10 +24,14 @@ class Plano(unittest.TestCase):
     def test_tabelas_e_destinos(self):
         self.assertEqual(set(self.plano), TABELAS)
         esperado = {"SIPOSRES": ["resposta_padrao"], "SIRECIPI": ["recipiente_coleta"],
-                    "SISTATUS_AMOSTRA": ["situacao_amostra"], "SITABELE": ["analito"], "SITABPRO": ["exame"],
+                    "SISTATUS_AMOSTRA": ["situacao_amostra"], "SITABELE": ["analito", "exame_analito", "unidade_resultado"], "SITABPRO": ["exame"],
+                    "SIRESPAD": ["modelo_resultado"],
                     "SITPEQVMODELO": ["modelo_comunicacao"], "SIWEBCADPERFIL": ["perfil_portal_resultado"],
                     "SIWEBCADPERFIL_SIPACSMODALID": ["perfil_portal_modalidade"],
-                    "SIWEBCADPERFIL_TBUSERS": ["perfil_portal_usuario"], "SIWEBPARLAUDO": ["modelo_impressao_laudo"]}
+                    "SIWEBCADPERFIL_TBUSERS": ["perfil_portal_usuario"], "SIWEBPARLAUDO": ["modelo_impressao_laudo"],
+                    # cobertura: grandeza sem seção (a origem não tem seção); complementos; visualizador
+                    "SITBGRAN": ["grandeza_laudo"],
+                    "SIWEBPARPERFIL": ["perfil_portal_resultado"], "SIWEBVISULIMG": ["visualizador_imagem"]}
         for t, dts in esperado.items():
             self.assertEqual(self.plano[t]["destinos"], dts, t)
 
@@ -36,13 +40,18 @@ class Plano(unittest.TestCase):
                ("SIRECIPI", "recipiente_coleta"): {"codigo", "descricao"},
                ("SISTATUS_AMOSTRA", "situacao_amostra"): {"codigo", "descricao"},
                ("SITABELE", "analito"): {"codigo", "nome"},
+               ("SITABELE", "exame_analito"): {"exame_id", "analito_id", "ordem"},
+               ("SITABELE", "unidade_resultado"): {"codigo", "descricao", "simbolo"},
+               ("SIRESPAD", "modelo_resultado"): {"exame_id", "nome", "vigencia_inicio"},
                ("SITABPRO", "exame"): {"codigo", "sigla", "nome", "tipo_servico"},
                ("SITPEQVMODELO", "modelo_comunicacao"): {"codigo", "descricao", "padrao_mensagem"},
                ("SIWEBCADPERFIL", "perfil_portal_resultado"): {"codigo", "descricao", "publico"},
                ("SIWEBCADPERFIL_SIPACSMODALID", "perfil_portal_modalidade"): {"perfil_portal_resultado_id",
                                                                                "modalidade_imagem_id"},
                ("SIWEBCADPERFIL_TBUSERS", "perfil_portal_usuario"): {"perfil_portal_resultado_id", "usuario_id"},
-               ("SIWEBPARLAUDO", "modelo_impressao_laudo"): {"estabelecimento_id", "codigo", "descricao"}}
+               ("SIWEBPARLAUDO", "modelo_impressao_laudo"): {"estabelecimento_id", "codigo", "descricao"},
+               ("SITBGRAN", "grandeza_laudo"): {"exame_id", "codigo", "descricao"},
+               ("SIWEBVISULIMG", "visualizador_imagem"): {"estabelecimento_id", "codigo", "nome", "url_base"}}
         for (t, dt), cs in req.items():
             self.assertTrue(cs <= set(self.cols(t, dt)), (t, cs - set(self.cols(t, dt))))
 
@@ -50,6 +59,14 @@ class Plano(unittest.TestCase):
         ref = lambda t, dt, c: self.cols(t, dt)[c]["referencia"]  # noqa: E731
         self.assertEqual(ref("SIPOSRES", "resposta_padrao", "grupo_resposta_id"), "SICTRPSR")
         self.assertEqual(ref("SITABELE", "analito", "metodo_analitico_id"), "SIMETODO")
+        self.assertEqual(ref("SITABELE", "exame_analito", "grupo_resposta_id"), "SICTRPSR")
+        self.assertEqual(self.cols("SITABELE", "exame_analito")["analito_id"]["coluna"], "@id")
+        self.assertEqual(self.cols("SITABELE", "exame_analito")["exame_id"]["passos"],
+                         [{"tabela": "SITABPRO", "modo": "alt", "arg": "CODALF"}])
+        # a unidade do cliente é criada uma vez e adotada pelas linhas seguintes; sem unidade não grava
+        op = self.plano["SITABELE"]["opcoes"]["unidade_resultado"]
+        self.assertTrue(op["opcional"])
+        self.assertEqual(op["adotar"], ["codigo"])
         self.assertEqual(ref("SITABPRO", "exame", "especialidade_diagnostica_id"), "SIESPEC")
         self.assertEqual(ref("SITABPRO", "exame", "modalidade_imagem_id"), "SIPACSMODALID")
         # sexo: TBSEXO não entra no conector_origem (L3 pelas siglas; adoção pedida no L5-05): não aproveitado
@@ -63,7 +80,7 @@ class Plano(unittest.TestCase):
         for t in self.plano:
             for dt in self.plano[t]["destinos"]:
                 for c in self.plano[t]["colunas"][dt]:
-                    if c["destino"].endswith("_id") and c["coluna"][:1] not in "=@":
+                    if c["destino"].endswith("_id") and c["coluna"][:1] not in "=@" and not c.get("passos"):
                         self.assertEqual(c["regra"], "chave_origem", (t, c["destino"]))
 
     def test_literais_presumidos_e_estabelecimento(self):
@@ -91,25 +108,37 @@ class Plano(unittest.TestCase):
 
     def test_segredos_e_layout_nunca_migram(self):
         decl = {(c["tabela"], c["coluna"]): c for c in self.mapa["colunas_decl"]}
+        pronta = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8")
         for col in ("SENHA_EXPORTACAO", "SENHA_FTP"):
             self.assertEqual(decl[("SITPEQV", col)]["destino"], "")
+            # cada senha tem o seu #cofre na declaração pronta (pendência segredo_aguarda_cofre própria)
+            self.assertIn("#SITPEQV\t#cofre:%s\tinterface_equipamento.chave_cofre_credencial" % col, pronta)
+        self.assertIn("#SITPEQV\tCRIPTOGRAFIA_AES\tinterface_equipamento.criptografia\tbooleano_sn", pronta)
+        for col in ("INTERFACE", "COD_LABORATORIO", "NOME_LABORATORIO", "USUARIO_FTP"):
+            self.assertTrue(decl[("SITPEQV", col)]["motivo"].strip(), col)
         self.assertEqual(decl[("SIWEBPARLAUDO", "ARQUIVO_LAUDO")]["destino"], "")
 
     def test_exame_ativo_tipo_e_sigla(self):
-        # inativo nunca entra ativo: ativo=FALSE sem desativado_em é recusado pelo CHECK (pendência por linha)
+        # inativo entra inativo, desativado na data da carga (cumpre ck_exame_desativacao)
         ex = self.cols("SITABPRO", "exame")
         self.assertEqual(ex["ativo"]["coluna"], "SITUACAO")
         self.assertEqual(ex["ativo"]["regra"], "booleano_ai")
+        self.assertEqual((ex["desativado_em"]["coluna"], ex["desativado_em"]["regra"]), ("SITUACAO", "booleano_ai"))
+        self.assertEqual(ex["desativado_em"]["valores"], {"1": "", "0": "@data_carga", "": ""})
         self.assertEqual(ex["tipo_resultado"]["coluna"], "=~misto")
         # sigla em chave única sem caixa: codigo_char passa pela detecção de colisão de caixa
         self.assertEqual(ex["sigla"]["regra"], "codigo_char")
         self.assertEqual(sentinela.colisoes_caixa({"VDR": 1, "Vdr": 1, "GLI": 1}), [["VDR", "Vdr"]])
-        self.assertEqual(self.plano["SITABELE"]["destinos"], ["analito"])
+        self.assertEqual(self.plano["SITABELE"]["destinos"][0], "analito")
 
     def test_analito_titulo_e_limites_zero(self):
         an = self.cols("SITABELE", "analito")
-        self.assertEqual(an["resultado_obrigatorio"]["coluna"], "TITULO")
-        self.assertEqual(an["resultado_obrigatorio"]["valores"], {"N": "1"})  # S sem par: pendência por linha
+        # a obrigatoriedade não vem do título: o analito fica com o padrão do destino
+        self.assertNotIn("resultado_obrigatorio", an)
+        ea = self.cols("SITABELE", "exame_analito")
+        self.assertEqual((ea["titulo"]["coluna"], ea["titulo"]["regra"]), ("TITULO", "booleano_sn"))
+        self.assertEqual(ea["obrigatorio"]["valores"], {"1": "0", "0": "", "": ""})
+        self.assertEqual(ea["ordem"]["coluna"], "CODELE")
         for c in ("limite_minimo_aceito", "limite_maximo_aceito"):
             self.assertEqual(an[c]["regra"], "decimal_zero_nulo")
         self.assertEqual(sentinela.aplicar("decimal_zero_nulo", decimal.Decimal("0.0000")), (None, None))
@@ -117,6 +146,39 @@ class Plano(unittest.TestCase):
     def test_bloqueadas_sem_destino(self):
         self.assertFalse(BLOQUEADAS & set(self.plano))
         self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in BLOQUEADAS and c.get("destino")])
+
+
+    def test_cobertura_referencia_composta_e_complementos(self):
+        decl = {(c["tabela"], c["destino"]): c for c in self.mapa["colunas_decl"] if c.get("destino")}
+        self.assertEqual(decl[("SITBGRAN", "grandeza_laudo.exame_id")]["via"], "ref:SITABPRO(ATO,EXAME)")
+        self.assertEqual(mapa.passos_ref("SITABPRO(ATO,EXAME)"),
+                         [{"tabela": "SITABPRO", "modo": "composta", "arg": ["ATO", "EXAME"]}])
+        self.assertEqual(decl[("SIWEBPARPERFIL", "perfil_portal_resultado.id")]["via"], "ref:SIWEBCADPERFIL;complementa")
+        self.assertEqual(decl[("SIRESPAD", "modelo_resultado.exame_id")]["via"], "ref:SITABPRO(ATO,EXAME)")
+        self.assertTrue(self.plano["SIWEBPARPERFIL"]["opcoes"]["perfil_portal_resultado"]["complementa"])
+        # a ligação interface x modelo não grava: o modelo vem de uma só fonte (a SITPEQV)
+        self.assertNotIn("SITPEQV_SITPEQVMODELO", self.plano)
+        # ordem: o exame vem antes do resultado padrão e do analito no exame
+        ordem = {p["tabela"]: i for i, p in enumerate(carga_mapa.planejar(self.mapa, TABELAS))}
+        self.assertLess(ordem["SITABPRO"], ordem["SIRESPAD"])
+        self.assertLess(ordem["SITABPRO"], ordem["SITABELE"])
+        # secao_laudo_estruturado não recebe linha: a origem não tem seção
+        self.assertNotIn("secao_laudo_estruturado", self.plano["SITBGRAN"]["destinos"])
+
+    def test_visualizador_inativo_ate_ter_endereco(self):
+        v = self.cols("SIWEBVISULIMG", "visualizador_imagem")
+        self.assertEqual(v["url_base"]["coluna"], "=~about:blank")
+        self.assertEqual(v["ativo"]["coluna"], "=~0")
+        self.assertEqual(v["estabelecimento_id"]["coluna"], "@estabelecimento")
+
+    def test_descartes_com_causa_de_produto(self):
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        esperado = {"SITPEQV_SITPEQVMODELO": "duplicado", "SIVARFORMULA": "sem_valor", "SIWEBPARDATA": "mecanismo_do_produto",
+                    "SIWEBPARTPATU": "mecanismo_do_produto"}
+        for t, causa in esperado.items():
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
+            self.assertTrue(sc[t]["motivo"].strip(), t)
+        self.assertEqual(set(esperado), set(l7_03.DESCARTADAS))
 
 
 class Regras(unittest.TestCase):
@@ -143,6 +205,8 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(recusam))
             if t == "SISTATUS_AMOSTRA":  # pai_pendente da autorreferência sai na fase 2: a linha fica gravada
                 recusas -= e["pendencias"]["pai_pendente"]
+            if t == "SIWEBPARPERFIL":  # complemento sem pai: recusa (pai_inexistente)
+                recusas += e["pendencias"].get("pai_inexistente", 0)
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 
     def test_colunas_da_origem(self):

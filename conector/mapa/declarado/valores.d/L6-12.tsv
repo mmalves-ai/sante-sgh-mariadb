@@ -1,0 +1,12 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+PRALERGIAPAC	RETIRAR_VINCULO_PACIENTE	alergia_paciente.ativa	1	0	L6-12: retirada do paciente (S) = inativa
+PRALERGIAPAC	RETIRAR_VINCULO_PACIENTE	alergia_paciente.ativa	0	1	L6-12: sem retirada (N) = ativa
+PRALERGIAPAC	RETIRAR_VINCULO_PACIENTE	alergia_paciente.motivo_inativacao	1	retirada do paciente no sistema anterior	L6-12: motivo fixo da retirada migrada
+PRALERGIAPAC	RETIRAR_VINCULO_PACIENTE	alergia_paciente.motivo_inativacao	0		L6-12: sem retirada: sem motivo
+PRPRESC	DATA_HORA_SUSPENSAO	prescricao.situacao	1	suspensa	L6-12: com suspensão = suspensa
+PRPRESC	DATA_HORA_SUSPENSAO	prescricao.situacao		vencida	L6-12: sem suspensão: histórico vencido
+PRPRESC	TP_PRESCRICAO	prescricao.tipo	G	medica	L6-12: geral (único código na referência) = prescrição médica
+PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao	1	suspenso	L6-12: com suspensão = suspenso
+PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao		finalizado	L6-12: sem suspensão = finalizado
+PRATESTREQIMP	DATA_HORA_SUSPENSAO	documento_emitido.situacao	1	suspenso	L6-12: com suspensão = suspenso
+PRATESTREQIMP	DATA_HORA_SUSPENSAO	documento_emitido.situacao		valido	L6-12: sem suspensão = válido

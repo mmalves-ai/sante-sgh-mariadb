@@ -26,3 +26,79 @@ RECONFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da 
 REESPFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
 REGRPFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
 REUNIFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+SIKITITE	SITABPRO	L7-02 cobertura: ref:SITABPRO(ATO,EXAME) declarada na fatia (exame do item do kit, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+PRRESPOSTA	PRPADEVOL	L6-10 cobertura: ref:PRPADEVOL.ID_PRPERGUNTA declarada na fatia (campo do modelo da opção, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBUNIDMEDIDA_PRINC_VALID	TBUNICON	L6-10 cobertura: ref:TBUNIDADEMEDIDA>SIGLA_API>TBUNICON declarada na fatia (unidade de medida, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBSUBDES	TBGRUDES	L8-04 cobertura: ref:TBGRUDES declarada na fatia (grupo do subgrupo de despesa, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+RECONFIC	TBCONVEN	relação de pai que a origem não declara como FK (pedido da fatia L6-01, cobertura: ref:TBCONVEN declarada no critério da regra de impressão): o pai vinha depois do filho na ordem de carga
+REESPFIC	TBESPEC	relação de pai que a origem não declara como FK (pedido da fatia L6-01, cobertura: ref:TBESPEC declarada no critério da regra de impressão): o pai vinha depois do filho na ordem de carga
+PRPADRECEITA	TBPROFIS	L6-06 cobertura: ref:TBPROFIS.ID_TBUSERS declarada na fatia (dono profissional da receita pessoal pelo login) sem FK na origem: o profissional vinha depois da receita na ordem de carga
+TBCBOPRO_TBCONVEN	TBPROFIS	L5-06 cobertura: ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS declarada na fatia (profissional do credenciamento pela inscrição, NOT NULL) sem FK na origem: o profissional vinha depois do credenciamento na ordem de carga
+TBCBOPRO_TBUNIDAD	TBPROFIS	L5-05 cobertura: ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS declarada na fatia (profissional da lotação, NOT NULL) atravessa a inscrição sem FK direta: o pai vinha depois do filho na ordem de carga
+RESEGUR	TBPARENTE	L5-04 cobertura: ref:TBPARENTE declarada no parentesco do titular (tipo_parentesco) sem FK na origem: o pai vinha depois do filho na ordem de carga
+FAMEDSOL	TBMEDSOL	L5-04 cobertura: complementa ref:TBMEDSOL.COD_CONSELHO_PROFISSIONAL: o solicitante do SUS completa a linha do solicitante externo, gravada antes
+SIRESPAD	SITABPRO	L7-03: resultado padrão aponta o exame pela chave composta ref:SITABPRO(ATO,EXAME), sem FK na origem: o pai vinha depois do filho na ordem de carga
+SITABELE	SITABPRO	L7-03: o analito no exame (exame_analito) acha o exame pela chave alternativa ref:SITABPRO.CODALF, sem FK na origem: o pai vinha depois do filho na ordem de carga
+SITPEQV	SITPEQVMODELO	L7-03: o modelo de comunicação da interface (NOT NULL) vem pela referência encadeada ref:SITPEQV_SITPEQVMODELO>ID_SITPEQVMODELO>SITPEQVMODELO: o pai vinha depois do filho na ordem de carga
+SHCLIENT	TBFORNEC	L7-01 cobertura: ref:TBFORNEC.NOME (empresa do serviço fornecedor, NOT NULL) declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHDOACAO	TBTPSANGUINEO	L7-01 cobertura: ref:TBTPSANGUINEO (grupo ABO) declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHDOACAO	TBFATORRH	L7-01 cobertura: ref:TBFATORRH (fator Rh) declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHBOLSA	TBTPSANGUINEO	L7-01 cobertura: ref:TBTPSANGUINEO (grupo ABO, NOT NULL) declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHBOLSA	TBFATORRH	L7-01 cobertura: ref:TBFATORRH (fator Rh, NOT NULL) declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHBOLSA	SHCLIENT	L7-01 cobertura: ref:SHCLIENT (serviço fornecedor da bolsa) declarada na fatia: o pai vinha depois do filho na ordem de carga (o serviço espera a empresa do cadastro de fornecedores)
+TBPRESER	TBCENCUS	L8-04 cobertura: ref:TBCENCUS declarada na fatia (centro de custo do prestador) sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBPRESER	TBPROFIS	L8-04 cobertura: ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS declarada na fatia (profissional do prestador): o pai vinha depois do filho na ordem de carga
+FCCODCON	TBCONVEN	L8-01 cobertura: ref:TBCONVEN declarada na fatia (convênio do código do profissional, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCCODCON	TBPROFIS	L8-01 cobertura: ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS declarada na fatia (profissional do código no convênio) atravessa a inscrição sem FK direta: o pai vinha depois do filho na ordem de carga
+FCCPSCON	TBCONVEN	L8-01 cobertura: ref:TBCONVEN declarada na fatia (convênio do código do hospital, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCFECMES	TBCONVEN	L8-01 cobertura: ref:TBCONVEN declarada na fatia (convênio do fechamento, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCORCAME	TBCONVEN	L8-01 cobertura: ref:TBCONVEN declarada na fatia (fonte particular do orçamento) sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCORCAME	RICADPAC	L8-01 cobertura: ref:RICADPAC.PRONT declarada na fatia (paciente do orçamento) sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBCENCUS	TBUNIMEN	L8-11 cobertura: ref:TBUNIMEN declarada na fatia (unidade de mensuração do centro de custo) sem FK na origem: o pai vinha depois do filho na ordem de carga
+MFREFDES	TBITEDES	L8-11 cobertura: ref:TBITEDES(GRUPO,SUBGRUPO,ITEM) declarada na fatia (natureza financeira do tipo de ajuste) sem FK na origem: o pai vinha depois do filho na ordem de carga
+REPACAGI	REAGENDA	pedido da fatia L6-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+REAGENDA	TBCBOPRO	pedido da fatia L6-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RECANAGE	REPACAGD	pedido da fatia L6-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIAGECRI	SIAGENDA	pedido da fatia L6-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICONFIC	TBCONVEN	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RIESPFIC	TBESPEC	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICTRLOC	RICADINT	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICTRLOC	RIACOMOD	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICTRLOC	RILEITOS	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICTRLOC	RIBLOCOS	pedido da fatia L6-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICADINT	RICADPAC	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RIPREINT	RICADPAC	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RIPREINT	TBCONVEN	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBACOMODLEITO	RIACOMOD	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBLEITO	RILEITOS	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+HTLEITO	RILEITOS	pedido da fatia L6-15 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+PRCARACTDIE	TBUNICON	pedido da fatia L6-17 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GECADTRA	GELOCARM	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GEESTINI	GELOCARM	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GELIMLOC	GELOCARM	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GELIMLOC	GEITENS	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GELANTRA	GEITENS	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GELANTRA	TBUNICON	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GEGERSEQ	GETPLANCTO	pedido da fatia L7-05 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GEBARRAS	GEITENS	pedido da fatia L7-06 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GELOCUSU	GEUSERS	pedido da fatia L7-06 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GESALDOS	GEITENS	pedido da fatia L7-06 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+GESALCON	GEITENS	pedido da fatia L7-06 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+FCCRECUN	TBCONVEN	pedido da fatia L8-01 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+FCDIAEXT	FCCTAEXT	pedido da fatia L8-01 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+FCDIAINT	RICONTAS	pedido da fatia L8-01 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+FCPORANE	TBCTRTHM	pedido da fatia L8-01 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RICGUIAS	RICONTAS	pedido da fatia L8-01 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RPINTEVE	RPEVENTO	pedido da fatia L8-02 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RPINTEVE	TBITEDES	pedido da fatia L8-02 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+RPRPA	TBPROFIS	pedido da fatia L8-02 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIORCAME	TBCONVEN	pedido da fatia L8-02 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIEXAORC	SIORCAME	pedido da fatia L8-02 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBCREMED	TBPROFIS	pedido da fatia L8-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBCREPRS	TBPRESER	pedido da fatia L8-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBCREPRS	TBTABATO	pedido da fatia L8-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBDTHCDC	TBCENCUS	pedido da fatia L8-03 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+PSATVASS	PSBENEFI	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+PSATVASS	PSMOTIVO	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+PSPLNASS	PSBENEFI	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBGRUDES	TBCENCUS	pedido implícito da fatia L8-11 (ref:TBCENCUS declarada no centro de custo do grupo, sem FK na origem): integrador da rodada 2, o pai passou a vir depois com as arestas novas

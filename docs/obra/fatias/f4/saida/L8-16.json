@@ -1,54 +1,30 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "especial de referência por código a cadastro do produto (ex.: '=ref:padrao_troca.codigo=esocial' e '=ref:sistema_externo.codigo=<x>'), id resolvido no destino, recusa com pendência se o código não existir",
-   "motivo": "ponto_integracao, esquema_mensagem e mapeamento_codigo_externo exigem padrao_troca_id/sistema_externo_id/tipo_mapeamento_codigo_id NOT NULL sem coluna na origem (FPESOCTPAMB, PRCABEARQINTEGRAQT, TBDIGITAL_ESPECIALIDADE, TBENDPOINT, TBENDPOINTURI, TBOPERSCHEMA, TBREGUL_ENDPOINT)"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "situacao": "aplicado nesta rodada pelo L8-16 (achado 1 da revisão), revisar",
+   "mudanca": "catálogo oficial 'conselho_classe' (tabela conselho_classe, coluna sigla, norm_conselho: só letras em maiúsculas, 2 a 10, como o CHECK; chave upper)",
+   "motivo": "TBMEDSOLWEBCAD carrega; o mesmo destrava TBMEDSOL (L5-05, descomentar) e TBCBOPRO (L5-04)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "regra genérica de desdobrar colunas em linhas (uma linha de destino por coluna preenchida, com literal por coluna)",
-   "motivo": "FPESOCTPAMB guarda 6 endereços (produção e consulta, eSocial e EFD-Reinf) numa linha; cada um é um ponto_integracao"
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "data (datetime.date, não datetime) em coluna DATETIME/TIMESTAMP vira datetime.combine(x, time()) antes da soma; o mesmo pedido 1 do L8-09.json e do L8-14.json. Patch: em tipar(), antes do return final: `if tipo in (\"datetime\", \"timestamp\") and isinstance(x, datetime.date) and not isinstance(x, datetime.datetime): return datetime.datetime.combine(x, datetime.time())`",
+   "motivo": "pedido_vinculo_profissional_externo.solicitado_em é DATETIME(3) NOT NULL com =~@data_carga (data): o resumo da origem 'AAAA-MM-DD' não casa com o relido 'AAAA-MM-DD 00:00:00.000' e a conciliação de TBMEDSOLWEBCAD diverge (origem 6, destino 3, recusados 3; pendências conforme o esperado). Único erro restante da autoconferência do L8-16"
   },
   {
-   "arquivo": "decisão do integrador (ordem de liberação)",
-   "mudanca": "liberar GEINTAPOIOCOT junto com GECADPED (L7-07) e SIMATHP, SITBELHP, SITBEXEQ junto com SITPEQV/SITBEXHP (L7-03), quando os pais forem carregáveis",
-   "motivo": "pais bloqueados: toda linha seria recusada por pai_inexistente + 1048"
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "rebaixar para BLOQUEADA (pai_nao_carregado) a tabela cuja referência para coluna NOT NULL do destino aponta para pai BLOQUEADO na cobertura global, mesmo com declaração completa; e `complementa` não exige as colunas obrigatórias do destino",
+   "motivo": "GEINTAPOIOCOT (pai GECADPED, L7-07) e SITBEXEQ (pai SITPEQV, L7-03) aparecem como CARREGA mas gravam zero na imagem real enquanto os pais estiverem bloqueados; complementa ainda vale para FAMEDSOL (L5-04) e SITPEQV_SITPEQVMODELO (L7-03)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência a coluna do destino do pai (ref:<TABELA>><coluna>, já pedida no L6-13) para setor_publicado_portal.setor_funcional_id a partir de SIMODULO",
-   "motivo": "SIMODULO_SIWEBATOS: setor_funcional_id NOT NULL sem fonte direta"
+   "arquivo": "tools/obra/conferir-fatia-f4.sh",
+   "mudanca": "passo 6: `python3 -I tools/obra/cobertura_conector.py --fatia $F --falhar-se-bloqueada` (com a regra de pai bloqueado acima)",
+   "motivo": "o ok da autoconferência não atesta a cobertura total pedida na rodada"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (decisão do dono)",
-   "mudanca": "TBCID10: tirar agravo_notificavel_cid dos destinos e deixar a tabela como depara_catalogo_oficial; o vínculo CID->agravo fica para cadastro na tela (ou carga oficial, se houver fonte pública)",
-   "motivo": "a origem não aponta o agravo. ID_TBTPNOTAGRAVO é a periodicidade (L6-10). TP_AGRAVO foi conferido por contagem na imagem de referência e descartado: 3 valores (0 em 14799 linhas, 1 em 230, 2 em 58), em correspondência 1 a 1 com ID_TBTPNOTAGRAVO (3 pares distintos; TBTPNOTAGRAVO tem 3 linhas); os valores 1 e 2 só batem com PRAGRAVOTPARQUETIPO.ID porque os ids vão de 1 a 53 seguidos, e ligar 288 CID a só 2 dos 53 agravos não faz sentido clínico"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d + conector/mapa/tabelas.tsv",
-   "mudanca": "TBDIGITAL_INTEG_TYPE: de-para de valores TABLE_NAME/TABLE_NAME_SECONDARY -> entidade do modelo (revisado pelo integrador sobre os nomes de tabela, metadado) e tirar envio_rnds dos destinos; depois TBDIGITAL_INTEG_FIELD com parceiro e ponto",
-   "motivo": "regra 1: nome de tabela da origem nunca entra no produto; envio_rnds exige paciente"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d (decisão do cliente) + conector/mapa/tabelas.tsv",
-   "mudanca": "TBFORMA_ASSINATURA_ICP: pares DESCRICAO -> familia e politica (cades/pades/xades; ad_rb...) e tirar politica_assinatura dos destinos",
-   "motivo": "familia/politica NOT NULL e únicas em par; presumir choca as 2 linhas"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py",
-   "mudanca": "de-para declarado 'nenhum' que anula o de-para gerado por nome (hoje declarado vazio cai no gerado e o verificador recusa nome fora de CATALOGOS/valores)",
-   "motivo": "TBINFBANCO.BANCO é número de conexão de banco de dados, não banco financeiro; o de-para gerado 'banco' o trocaria"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv + decisão do dono",
-   "mudanca": "TBMEDSOLWEBCAD: incluir TBCONSPROF no mapa (conselho_classe) e decidir solicitado_em sem fonte (literal presumido de data ou coluna anulável)",
-   "motivo": "conselho_classe_id e solicitado_em NOT NULL sem fonte"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/declarado/valores.d (decisão do cliente na tela)",
-   "mudanca": "TBREGUL_TABELAS: de-para declarado de tabela para sistema de regulação (chave original da tabela -> chave original do sistema, TBREGUL_SISTEMA), resolvido pelo conector_origem do sistema; sem par declarado, a linha é recusada com pendência contada (ex.: 'sistema_regulacao_nao_definido') e as de TBREGUL_VLR_TABELAS ficam pai_pendente. Alternativa: carregar só quando o cliente tiver um único sistema de regulação carregado, com recusa explícita e contada quando houver nenhum ou vários. TBREGUL_ENDPOINT gravaria o endereço em ponto_integracao ligado à central, sem nova central",
-   "motivo": "tabela_codigo_regulacao.sistema_externo_id é NOT NULL e a origem não aponta o sistema; a imagem de referência tem 2 sistemas de regulação, ambos ativos e ambos com serviços, então um especial '@unico' recusaria as 20 tabelas e deixaria as 253 linhas de valor com pai_pendente sem destravar nada: a dona de cada tabela é decisão do cliente"
+   "arquivo": "conector/sante_conector/carga_mapa.py (opcional, rodada seguinte)",
+   "mudanca": "especial de referência por código a cadastro do produto já gravado (ex.: '=ref:padrao_troca.codigo=<x>'), recusa com pendência se o código não existir",
+   "motivo": "permitiria rever os descartes de FPESOCTPAMB e TBREGUL_ENDPOINT como ponto_integracao, se o dono preferir carregar os endereços"
   }
  ]
 }

@@ -32,10 +32,12 @@ CVTPTERMINAL	=~terminal	modelo_terminal_acesso.tipo				L6-17: a origem não diz 
 CVTPVISITADO	ID	tipo_visitado.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
 CVTPVISITADO	NOME	tipo_visitado.descricao	texto_nome			L6-17: nome do tipo de visitado
 CVTPVISITADO	=~outro	tipo_visitado.alvo				L6-17: COD_TP_VISITADO é código interno sem tabela de valores; até o de-para de valores (pedido no L6-17.json) o alvo entra 'outro' com valor_presumido
+CVTPVISITADO	COD_TP_VISITADO					L6-17: não gravada: código interno sem tabela de valores; o alvo/categoria fica presumido até o de-para de valores (pedido no L6-17.json)
 CVTPVISITANTE	ID	tipo_visitante.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
 CVTPVISITANTE	NOME	tipo_visitante.descricao	texto_nome			L6-17: nome do tipo de visitante
 CVTPVISITANTE	ATIVO	tipo_visitante.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
 CVTPVISITANTE	=~outro	tipo_visitante.categoria				L6-17: COD_TP_VISITANTE é código interno sem tabela de valores; até o de-para de valores (pedido no L6-17.json) a categoria entra 'outro' com valor_presumido
+CVTPVISITANTE	COD_TP_VISITANTE					L6-17: não gravada: código interno sem tabela de valores; o alvo/categoria fica presumido até o de-para de valores (pedido no L6-17.json)
 GDPRONTCADOPER	ID	operacao_movimento_prontuario.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
 GDPRONTCADOPER	NOME	operacao_movimento_prontuario.descricao	texto_nome			L6-17: nome da operação
 GDPRONTCADOPER	=~registro	operacao_movimento_prontuario.tipo				L6-17: a origem não classifica a operação; entra 'registro' com valor_presumido (de-para pedido no L6-17.json)
@@ -44,4 +46,31 @@ PRCARACTDIE	ID_CARACTDIE	caracteristica_dieta.codigo	texto			L6-17: chave inteir
 PRCARACTDIE	DESCRICAO	caracteristica_dieta.descricao	texto			L6-17: descrição nula recusa a linha (NOT NULL)
 PRCARACTDIE	ATIVO	caracteristica_dieta.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
 PRCARACTDIE	=~outra	caracteristica_dieta.categoria				L6-17: TIPO (código de 1 caractere) sem tabela de valores; categoria entra 'outra' com valor_presumido até o de-para (pedido no L6-17.json)
-PRCARACTDIE	=~nenhuma	caracteristica_dieta.tipo_resposta				L6-17: TPRESP é código interno sem tabela de valores; entra 'nenhuma' com valor_presumido até o de-para; unidade (ID_PRUNIDRESPOSTA aponta unidade_resposta, não unidade_medida) e respostas possíveis (texto, não JSON) ficam para os pedidos do L6-17.json
+PRCARACTDIE	=~nenhuma	caracteristica_dieta.tipo_resposta				L6-17: TPRESP é código interno sem tabela de valores (o de-para de valores depende de valores.tsv, compartilhado: pedido no L6-17.json); até lá entra 'nenhuma' (o padrão do destino) com valor_presumido por linha, para o cliente reclassificar no painel; decisão em F4-decisoes-destino.md (L6-17)
+PRCARACTDIE	ID_PRUNIDRESPOSTA	caracteristica_dieta.unidade_medida_id			ref:PRUNIDRESPOSTA>NOME>TBUNICON	L6-17: unidade da resposta pela sigla da unidade de resposta da origem casada com o código de TBUNICON (unidade_medida), como TBUNIDMEDIDA_PRINC_VALID na L6-10; sem par: NULL com pai_inexistente (coluna opcional, linha gravada); dependência PRCARACTDIE -> TBUNICON pedida no L6-17.json
+PRCARACTDIE	POSSIVEIS_RESPOSTAS					L6-17: não gravada: respostas_possiveis é JSON (CHECK JSON_VALID) e a origem é texto com uma resposta por linha; espera a regra genérica lista_texto_json (pedido no L6-17.json)
+PRCARACTDIE	TIPO					L6-17: não gravada: código de 1 caractere sem tabela de valores; categoria presumida 'outra' até o de-para de valores (valores.tsv, pedido no L6-17.json)
+PRCARACTDIE	TPRESP					L6-17: não gravada: código interno sem tabela de valores; tipo_resposta presumido até o de-para de valores (pedido no L6-17.json)
+PRCARACTDIE	OLD_UNIDRESP					L6-17: descarte sem_valor: unidade antiga em texto, substituída na origem por ID_PRUNIDRESPOSTA (carregada em unidade_medida_id)
+CHTPLIMPEZA	ID	modalidade_limpeza.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CHTPLIMPEZA	NOME	modalidade_limpeza.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
+CHTPLIMPEZA	TEMPO_PREVISTO	modalidade_limpeza.tempo_previsto_minutos	minutos_em_timestamp			L6-17 cobertura: duração guardada como hora (1899-12-30 HH:MM) vira minutos; 00:00 vira NULL e recusa a linha (NOT NULL, CHECK > 0); outra data: hora_com_data
+CHTPLIMPEZA	ATIVO	modalidade_limpeza.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+CHTPLIMPEZA	=~concorrente	modalidade_limpeza.tipo				L6-17 cobertura: a origem não classifica a modalidade; entra 'concorrente' (a rotineira; libera_leito e exige_inspecao no padrão) com valor_presumido, para o cliente reclassificar terminal, imediata ou desinfecção
+CHPROFISLIMP	@estabelecimento	profissional_higienizacao.estabelecimento_id				L6-17 cobertura: a origem não tem coluna de unidade; o único estabelecimento do cliente
+CHPROFISLIMP	=~proprio	profissional_higienizacao.vinculo				L6-17 cobertura: o vínculo não sai da origem neste cliente (funcionário FPFUNC e terceirizada CHTERCEIRO fora do mapa e vazios na imagem de referência); entra 'proprio' com valor_presumido. Vínculo derivado da origem (terceirizado se ID_CHTERCEIRO, próprio se FPFUNC) e o CHECK que aceita o migrado sem ponta são pedidos (L6-17.json, alta); até lá o CHECK recusa a linha (restricao_destino_4025), visível ao cliente
+CHPROFISLIMP	NOME_PROFISSIONAL	profissional_higienizacao.nome	texto_nome			L6-17 cobertura: nome nulo recusa a linha (NOT NULL)
+CHPROFISLIMP	CPF_PROFISSIONAL	profissional_higienizacao.cpf	cpf			L6-17 cobertura: só dígitos, 11 com zeros à esquerda; inválido vira NULL com documento_invalido
+CHPROFISLIMP	USUARIO_SISTEMA	profissional_higienizacao.usuario_id	chave_origem		ref:TBUSERS	L6-17 cobertura: login do usuário do painel de limpeza pelo conector_origem (TBUSERS, L3); login desconhecido: NULL com pai_inexistente
+CHPROFISLIMP	ATIVO	profissional_higienizacao.ativo	booleano_sn			L6-17 cobertura: nulo fica com o padrão do destino (TRUE)
+CHPROFISLIMP	ID_CHTERCEIRO					L6-17: não gravada: a ponta do vínculo (empresa terceirizada CHTERCEIRO) está fora do mapa (vazia na imagem de referência); a referência e o vínculo derivado dela são pedidos no L6-17.json (alta), para não migrar terceirizado como próprio em outro cliente
+CHPROFISLIMP	ID_FPFUNC_COD_EMP					L6-17: não gravada: a ponta do vínculo (funcionário FPFUNC) está fora do mapa (vazia na imagem de referência); a referência e o vínculo derivado dela são pedidos no L6-17.json (alta), para não migrar terceirizado como próprio em outro cliente
+CHPROFISLIMP	ID_FPFUNC_COD_FUNC					L6-17: não gravada: a ponta do vínculo (funcionário FPFUNC) está fora do mapa (vazia na imagem de referência); a referência e o vínculo derivado dela são pedidos no L6-17.json (alta), para não migrar terceirizado como próprio em outro cliente
+CHAREA_CHPROFISLIMP	ID_CHAREA	escala_higienizacao.area_higienizavel_id	chave_origem			L6-17 cobertura: área pelo conector_origem; área recusada: pai_pendente
+CHAREA_CHPROFISLIMP	ID_CHPROFISLIMP	escala_higienizacao.profissional_higienizacao_id	chave_origem			L6-17 cobertura: profissional pelo conector_origem; recusado: pai_pendente
+CHAREA_CHPROFISLIMP	@vigencia_carga	escala_higienizacao.vigencia_inicio				L6-17 cobertura: a origem não data a escala: vigente desde a carga, com vigencia_sem_fonte (decisão genérica); turno fica no padrão 'integral'
+CHPROFLIMPTEL	ID_CHPROFISLIMP	profissional_higienizacao_telefone.profissional_higienizacao_id	chave_origem			L6-17 cobertura: profissional pelo conector_origem; recusado: pai_pendente
+CHPROFLIMPTEL	#seq:ID_CHPROFISLIMP	profissional_higienizacao_telefone.sequencia				L6-17 cobertura: 1..n por profissional, na ordem da chave
+CHPROFLIMPTEL	ID_TBTIPOTELEFONE	profissional_higienizacao_telefone.tipo_telefone_id	chave_origem			L6-17 cobertura: tipo de telefone pelo conector_origem (TBTIPOTELEFONE, L5)
+CHPROFLIMPTEL	NUM_TELEFONE	profissional_higienizacao_telefone.numero	texto			L6-17 cobertura: o número como está; o DDD fica em tabela de catálogo oficial e a composição DDD + número é pedido de motor (L6-17.json). Número sem DDD (menos de 10 dígitos) é recusado pelo CHECK do destino (restricao_destino_4025), visível ao cliente
+CHPROFLIMPTEL	ID_TBDDD					L6-17: não gravada à parte: o DDD (catálogo oficial area_ddd) compõe o número com NUM_TELEFONE; espera o especial de texto composto (pedido no L6-17.json, alta, o mesmo da L7-06)

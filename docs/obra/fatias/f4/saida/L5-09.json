@@ -1,69 +1,60 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (canon) / carga.py (fmt)",
-   "mudanca": "na soma de controle, normalizar o valor da origem pelo tipo da coluna de destino: inteiro gravado em coluna CHAR/VARCHAR deve entrar como texto (str), igual ao que é relido do banco",
-   "motivo": "inteiro da origem em coluna de texto do destino dá conciliação divergente (canon(1)='1' contra fmt('1')='b31'); a fatia contornou com regra texto em FPTIPORESC.ID, mas a regra genérica falta"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
-   "mudanca": "acrescentar o catálogo oficial codigo_esocial (tabela codigo_esocial, por tabela do eSocial + código) ao de-para oficial",
-   "motivo": "FPTIPORESC.ID_FPMOTDESLIG -> tipo_rescisao.motivo_desligamento_codigo_esocial_id só pode ser resolvido pelo de-para oficial do eSocial (tabela 19); hoje fica não declarada"
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "acrescentar (ou substituir, se a versão anterior da L5-09 já foi aplicada) as linhas abaixo: 19 tabelas da L5-09; colunas tabela, situacao, causa, motivo separadas por TAB",
+   "motivo": "cobertura total sem depender do carregador inexistente: 17 listas são mecanismo do produto (11 domínios fixos por CHECK e 6 códigos simples no consumidor), FPRESC_CAUSA é duplicado do código RAIS e FPMOTDESLIG fica BLOQUEADA por catalogo_oficial_faltante até o carregador oficial existir",
+   "linhas": [
+    "FPMOTESTABILI\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de estabilidade_colaborador.motivo): a linha não é registro do cliente; o consumidor na origem (FPESTABIFUNC) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPMTCANCELAVI\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de aviso_previo.motivo_cancelamento): a linha não é registro do cliente; o consumidor na origem (FPRESCISAO_FPMTCANCELAVI) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPNIVELESTAG\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de estagio_colaborador.nivel): a linha não é registro do cliente; o consumidor na origem (FPFUNC e FPFUNCVIG) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPPROCESSOTEOR\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de processo_trabalhista.teor_decisao): a linha não é registro do cliente; o consumidor na origem (FPFUNC_FPROCESSO) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTEMPO_RESID_TRAB_IMIGRANTE\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de estrangeiro_colaborador.prazo_residencia): a linha não é registro do cliente; o consumidor na origem (FPTRABALHADOR_IMIGRANTE) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTIPOAVISO\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de aviso_previo.iniciativa e reducao_jornada): a linha não é registro do cliente; o consumidor na origem (nenhum) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTIPO_CONTRATO\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de vinculo_trabalho.tipo_contrato): a linha não é registro do cliente; o consumidor na origem (FPFUNC e FPFUNCPREREG) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTPACIDTRANS\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de comunicacao_acidente.tipo_acidente_transito): a linha não é registro do cliente; o consumidor na origem (FPAFAST) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTPAVISORESC\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de aviso_previo.cumprimento): a linha não é registro do cliente; o consumidor na origem (nenhum) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTPDEFICIEN\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de deficiencia_colaborador.tipo): a linha não é registro do cliente; o consumidor na origem (FPTPDEFICIEN_FPFUNC) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPTPACESSORIA\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de assessoria_externa.tipo): a linha não é registro do cliente; o consumidor na origem (FPRESPCADREG_FPTPACESSORIA e FPPROCESSO; FPESOCEVENTO e FPEMPSOFTWARE são de outras fatias) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
+    "FPRESC_RAIS\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (tipo_rescisao.codigo_rais, declarado nesta fatia; a iniciativa e as consequências legais saem dele por de-para de valores), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPRESC_CAGED\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (tipo_rescisao.codigo_caged, declarado nesta fatia), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPRESC_SEFIP\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (tipo_rescisao.codigo_sefip, declarado nesta fatia), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPSAQUE\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (tipo_rescisao.codigo_saque_fgts e rescisao.codigo_saque_fgts), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPOCOR_SEFIP\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (risco_funcao.codigo_ocorrencia_sefip, VARCHAR(2); o consumidor com linhas é TBPROFIS.ID_FPOCOR_SEFIP, do lote do profissional), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPPROCTRAB_ESOCIAL_CR\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (processo_trabalhista.codigo_receita, VARCHAR(6); alíquota e aplicabilidade são as da tabela pública da Receita, não do cliente; consumidores FPPROCTRAB_ESOCIAL_PCR e _DCR vazios e fora do mapa), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
+    "FPRESC_CAUSA\tdescarte\tduplicado\tlista local de causas de demissão que repete o que o código RAIS do tipo de rescisão já diz de forma legal (iniciativa e justa causa, RAIS 10); o modelo não tem coluna para ela (F4-decisoes-destino.md, L5-09)",
+    "FPMOTDESLIG\tbloqueada\tcatalogo_oficial_faltante\ttabela 19 do eSocial (motivo de desligamento, com vigências): pela regra 7 só o carregador oficial versionado grava codigo_esocial, e ele não existe em catalogos/carregadores (pedido em saida/L5-09.json); até lá o de-para codigo_esocial:19 de tipo_rescisao deixa o motivo NULL com pendência. Nunca carregar da origem"
+   ]
   },
   {
    "arquivo": "conector/mapa/declarado/catalogos.tsv",
-   "mudanca": "preencher coluna_codigo: FPMOTDESLIG ID; FPMOTESTABILI ID; FPMTCANCELAVI ID; FPNIVELESTAG ID; FPOCOR_SEFIP COD_OCOR_SEF; FPPROCESSOTEOR ID; FPPROCTRAB_ESOCIAL_CR COD_RECEITA; FPRESC_CAGED COD_RES_CAG; FPRESC_CAUSA COD_CAUS_DEM; FPRESC_RAIS COD_RAIS; FPRESC_SEFIP COD_SEFIP; FPSAQUE COD_SAQ; FPTEMPO_RESID_TRAB_IMIGRANTE ID; FPTIPOAVISO ID; FPTIPO_CONTRATO COD_TP_CONT; FPTPACIDTRANS COD_FPTPACIDTRANS; FPTPAVISORESC ID; FPTPDEFICIEN ID",
-   "motivo": "o motivo diz 'o lote declara a coluna' e a coluna de código está vazia; catalogos.tsv é compartilhado"
+   "mudanca": "remover as linhas 'oficial:codigo_esocial' de: FPMOTESTABILI, FPMTCANCELAVI, FPNIVELESTAG, FPOCOR_SEFIP, FPPROCESSOTEOR, FPPROCTRAB_ESOCIAL_CR, FPRESC_CAGED, FPRESC_CAUSA, FPRESC_RAIS, FPRESC_SEFIP, FPSAQUE, FPTEMPO_RESID_TRAB_IMIGRANTE, FPTIPOAVISO, FPTIPO_CONTRATO, FPTPACIDTRANS, FPTPAVISORESC, FPTPDEFICIEN; manter só a de FPMOTDESLIG",
+   "motivo": "essas listas não são catálogo oficial do modelo: o produto as guarda como domínio fixo por CHECK ou como código simples no consumidor; declará-las como codigo_esocial promete um de-para que nenhum consumidor usa"
   },
   {
-   "arquivo": "gerador do mapa (conector/mapa/tabelas.tsv via mapa.py / analise)",
-   "mudanca": "nas tabelas mistas FPMOTDESLIG, FPMOTESTABILI, FPMTCANCELAVI, FPNIVELESTAG, FPOCOR_SEFIP, FPPROCESSOTEOR, FPPROCTRAB_ESOCIAL_CR, FPRESC_CAGED, FPRESC_CAUSA, FPRESC_RAIS, FPRESC_SEFIP, FPSAQUE, FPTEMPO_RESID_TRAB_IMIGRANTE, FPTIPOAVISO, FPTIPO_CONTRATO, FPTPACIDTRANS, FPTPAVISORESC, FPTPDEFICIEN, tirar de tabelas_destino o destino não oficial (desligamento, estabilidade_colaborador, aviso_previo, estagio_colaborador, risco_funcao, processo_trabalhista, tipo_rescisao, rescisao, estrangeiro_colaborador, vinculo_trabalho, comunicacao_acidente, deficiencia_colaborador): estratégia depara_catalogo_oficial",
-   "motivo": "são listas de códigos oficiais do eSocial/RAIS/CAGED/SEFIP; nenhuma linha delas vira registro do destino transacional (o destino só usa o código por de-para). A fatia não declara coluna delas, então não são carregadas"
+   "arquivo": "catalogos/carregadores (novo carregador oficial trabalhista)",
+   "mudanca": "carregador versionado de tabela_esocial/codigo_esocial a partir da fonte oficial (eSocial: tabelas 18, 19 e as demais usadas pelo modelo), com vigência por código",
+   "motivo": "pré-requisito de FPMOTDESLIG (BLOQUEADA) e do de-para codigo_esocial:19 de tipo_rescisao: hoje catalogos/carregadores só tem bcb, cid10, ibge e sigtap; na carga real todo motivo preenchido fica NULL com pendência. Ao existir o carregador, FPMOTDESLIG passa a descarte catalogo_oficial e as linhas de tipo_rescisao com motivo precisam ser reprocessadas (a linha igual é pulada pelo hash: pedir ao motor o reprocessamento das linhas com pendência de catálogo)"
   },
   {
-   "arquivo": "gerador do mapa (FPTPACESSORIA)",
-   "mudanca": "FPTPACESSORIA: tratar como domínio de valores de assessoria_externa.tipo (descarte declarado com motivo ou de-para de valores), não como linha de assessoria_externa",
-   "motivo": "a tabela é a lista de tipos de assessoria (5 linhas, só ID e NOME); assessoria_externa exige estabelecimento, razão social, CNPJ/CPF e data de início, que a origem não tem nessa tabela"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS_PARAMETRO codigo_esocial)",
+   "mudanca": "filtro com fonte = 'esocial' (ou fonte no parâmetro, ex.: codigo_esocial:esocial_19) e escolha da versão vigente (ORDER BY versao_fonte/vigencia_inicio DESC na tabela; no código, a linha com vigência que cobre a data, nunca setdefault sem ordem)",
+   "motivo": "a chave única de tabela_esocial é (fonte, codigo_oficial, versao_fonte) e a de codigo_esocial inclui vigencia_inicio: o LIMIT 1 sem ordem e o setdefault podem ligar o motivo a outra fonte ou a uma versão vencida. O teste test_depara_codigo_esocial_filtra_fonte_e_versao (expectedFailure) prova a falta; ao corrigir, retirar o expectedFailure e acrescentar ao PREPARO_DESTINO da L5-09 uma '19' de outra fonte e duas vigências do mesmo código, com o id esperado"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "de-para de valores declarado por lote (código da origem -> valor do domínio do destino, num .tsv por fatia), para situacao_colaborador.categoria (por FPSIT_FUNC.COD_SIT) e tipo_rescisao.iniciativa (por FPTIPORESC.ID_FPRESC_CAUSA); código sem par vira pendência valor_fora_do_dominio",
-   "motivo": "as duas colunas são NOT NULL sem padrão e a origem não as traz direto; a fatia grava o literal 'outro' até haver o de-para de valores (o sentinela.REGRAS cita 'o de-para próprio do lote', que o motor ainda não tem)"
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (lote do profissional)",
+   "mudanca": "declarar TBPROFIS.ID_FPOCOR_SEFIP (871 linhas na origem) como código simples de ocorrência SEFIP no destino do profissional ou da função, ou registrar o descarte da coluna com motivo",
+   "motivo": "é o único consumidor com linhas da lista FPOCOR_SEFIP; hoje a coluna não está declarada em nenhuma fatia"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "aplicar sentinela.colisoes_caixa aos códigos codigo_char com destino de chave única: pendência codigo_colisao_caixa em vez de restricao_destino_1062",
-   "motivo": "o brief promete codigo_colisao_caixa; hoje a colisão 'a'/'A' em FPSIT_FUNC.COD_SIT sai como restricao_destino_1062 (a imagem sintética espera 1062; trocar o esperado quando o motor mudar)"
+   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
+   "mudanca": "par curinga opcional em valores.tsv (valor_origem '*', valor_destino '~<valor>'): valor sem par grava o literal presumido com valor_presumido, em vez de NULL com valor_fora_do_dominio",
+   "motivo": "hoje o código RAIS fora da tabela legal deixa a iniciativa NULL e recusa o tipo de rescisão (NOT NULL sem padrão); com o curinga a linha entraria com 'outro' presumido para o cliente revisar"
   },
   {
-   "arquivo": "tools/obra/fatiar_conector.py (--conferir)",
-   "mudanca": "a seção 'Já declaradas' da fatia não deve tornar o .md 'diferente do gerado' quando a própria fatia declara colunas em colunas.d (ou o integrador regenera as fatias após integrar)",
-   "motivo": "o passo 2 da autoconferência acusa fatias de outros agentes (L5-10, L5-11) diferentes do gerado assim que declaram colunas"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + colunas.d/L5-07.tsv e L5-09.tsv",
-   "mudanca": "prefixo de domínio declarado no mapa para códigos de origens diferentes no mesmo destino com código único (ex.: especial '=prefixo:<texto>' aplicado à coluna de código): FPCONDFUNC.ID e FPSIT_FUNC.COD_SIT gravam situacao_colaborador.codigo; ou separar a condição em outro destino",
-   "motivo": "achado alto da avaliação da L5-09: código numérico da situação ('1') choca com a condição 1 (L5-07) e a linha é recusada (restricao_destino_1062); quem busca a situação pelo código cai na condição. A imagem sintética da L5-09 agora REQUER a L5-07 e mostra o choque (esperado 1062: 2); trocar o esperado quando o prefixo existir"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "antes de inserir uma tabela, aplicar sentinela.colisoes_caixa ao conjunto dos códigos codigo_char cujo destino tem chave única sem caixa (VARCHAR sem _bin): as duas linhas do par viram pendência codigo_colisao_caixa (nenhuma gravada) e os filhos ganham pai_pendente",
-   "motivo": "reforço do pedido anterior (achado alto): hoje a primeira linha do par ('A') é gravada e só a segunda é recusada com 1062; um filho com 'a' acharia 'A'. Ao aplicar, trocar o esperado de l5_09.py: FPSIT_FUNC gravados 5, codigo_colisao_caixa 2, restricao_destino_1062 1"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py + carga_mapa.py",
-   "mudanca": "de-para oficial de conferência (guarda o código, não o id) contra codigo_esocial por tabela oficial: tipo_rescisao.codigo_rais, codigo_caged, codigo_sefip, codigo_saque_fgts e codigo_causa_afastamento; código ausente vira pendência catalogo_codigo_inexistente sem recusar a linha",
-   "motivo": "achado médio: os códigos oficiais entram como inteiro/texto livre, sem conferência. Na imagem sintética, FPTIPORESC usa RAIS 11 a 18 e o catálogo falso tem 11 a 13: ao aplicar, esperar catalogo_codigo_inexistente para os tipos 4, 6 e 8 (14, 16, 18; 15 é recusado por NOT NULL e 17 por faixa) no esperado de l5_09.py"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "pendência de revisão por linha (ex.: classificacao_pendente, gravidade baixa) quando a coluna é preenchida por literal provisório declarado (ex.: categoria/iniciativa '=outro'), para o painel listar o que o cliente precisa classificar",
-   "motivo": "achado médio: situação e tipo de rescisão entram com indicadores no padrão do destino (ativos, sem multa, fora da folha) e nada sinaliza a revisão"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (_valores, literal '=<texto>')",
-   "mudanca": "converter o literal declarado pelo tipo da coluna de destino (BOOLEAN/inteiro: int; decimal: Decimal) antes de gravar e de entrar na soma de controle",
-   "motivo": "a fatia tentou '=0' em situacao_colaborador.ativo e tipo_rescisao.ativo (entrar inativo até a revisão do cliente) e a conciliação divergiu: canon('0')='b30' contra o 0 relido. Ao aplicar, declarar em colunas.d/L5-09.tsv: FPSIT_FUNC =0 situacao_colaborador.ativo e FPTIPORESC =0 tipo_rescisao.ativo"
+   "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes)",
+   "mudanca": "aplicar a recusa codigo_colisao_caixa também a #codigo_derivado com regra codigo_char (comparando o código já prefixado)",
+   "motivo": "hoje a coluna especial fica fora da checagem de caixa; a L5-09 manteve o código da situação sem prefixo por isso (o prefixo ficou do lado da condição, L5-07)"
   }
  ]
 }

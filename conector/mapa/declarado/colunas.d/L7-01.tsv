@@ -1,8 +1,9 @@
 tabela	coluna	destino	regra	depara	via	motivo
 SHCONDUTA	COD_CONDUTA	conduta_reacao_transfusional.codigo	inteiro			L7-01: conduta diante da reação transfusional: a chave do hospital vira o código de negócio (número como texto)
 SHCONDUTA	DESCRICAO	conduta_reacao_transfusional.descricao	texto			L7-01: descrição da conduta; anulável na origem, NOT NULL no destino (sem descrição a linha é recusada)
-SHESTFINAL	COD_ESTFINAL	destino_final_bolsa.codigo	inteiro			L7-01: destino final da bolsa: código de negócio (número como texto); situacao_bolsa (NOT NULL, sem padrão) não tem fonte na origem: sem valor presumido, TODA linha é recusada com restricao_destino_1364 (NOT NULL sem padrão e sem valor) até o de-para de valores por código revisado pelo cliente (pedido no L7-01.json)
+SHESTFINAL	COD_ESTFINAL	destino_final_bolsa.codigo	inteiro			L7-01: destino final da bolsa: código de negócio (número como texto)
 SHESTFINAL	DESCRICAO	destino_final_bolsa.descricao	texto			L7-01: descrição do destino final; sem descrição a linha é recusada
+SHESTFINAL	DESCRICAO	destino_final_bolsa.situacao_bolsa	texto	valores		L7-01: situação da bolsa pelo NOME do destino (de-para de valores por grafias comuns em valores.d/L7-01.tsv, como L6-05); nome sem par: valor_fora_do_dominio e a linha é recusada (NOT NULL), visível ao cliente, que acrescenta o par no painel; nada presumido que mexa no estoque
 SHEXAME	COD_EXAME	tipo_teste_imuno_hematologico.codigo	inteiro			L7-01: teste imuno-hematológico: código de negócio (número como texto)
 SHEXAME	DESCRICAO	tipo_teste_imuno_hematologico.descricao	texto			L7-01: descrição do teste; sem descrição a linha é recusada
 SHEXAME	UNIDADE	tipo_teste_imuno_hematologico.unidade	texto			L7-01: unidade do resultado
@@ -25,7 +26,9 @@ SHMOTDEV	TIPO		inteiro			L7-01: tipo codificado sem domínio conhecido; sem dest
 SHMOV	CODMOV	tipo_movimento_bolsa.codigo	inteiro			L7-01: tipo de movimento da bolsa: código de negócio (número como texto)
 SHMOV	NOME	tipo_movimento_bolsa.descricao	texto_nome			L7-01: nome do movimento; sem nome a linha é recusada
 SHMOV	BLOQUEADO	tipo_movimento_bolsa.bloqueia_bolsa	booleano_sn			L7-01: indicador S/N de movimento que bloqueia a bolsa; vazio: padrão do destino (FALSE); outro valor: valor_fora_do_dominio
-SHMOV	DEVOLUCAO_PERDA		codigo_char			L7-01: marca de movimento de devolução ou perda: candidata ao de-para de valores da natureza (pedido no L7-01.json; sem evidência dos códigos, nenhum par presumido). Até o de-para, natureza (NOT NULL, sem padrão) fica sem valor e TODA linha é recusada com restricao_destino_1364 (NOT NULL sem padrão e sem valor): presumir 'entrada' poria bloqueio e devolução de volta no estoque
+SHMOV	DEVOLUCAO_PERDA		codigo_char			L7-01: marca de devolução ou perda sem evidência dos códigos; natureza e baixa do estoque vêm do NOME pelo de-para (linhas abaixo), que cobre devolução e perda
+SHMOV	NOME	tipo_movimento_bolsa.natureza	texto_nome	valores		L7-01: natureza do movimento pelo NOME (de-para de valores por grafias comuns em valores.d/L7-01.tsv, como L6-05); nome sem par: valor_fora_do_dominio e recusa (NOT NULL), visível ao cliente; presumir 'entrada' poria bloqueio e devolução de volta no estoque
+SHMOV	NOME	tipo_movimento_bolsa.baixa_estoque	texto_nome	valores		L7-01: baixa do estoque pela natureza do NOME (de-para de valores, mesmas grafias): transfusão, devolução, descarte, perda e transferência retiram a bolsa do estoque; nome sem par já recusa a linha pela natureza
 SHPERGUN	COD_PERGUNTA	pergunta_triagem_doador.codigo	inteiro			L7-01: pergunta da triagem do doador: código de negócio (número como texto)
 SHPERGUN	DESCRICAO	pergunta_triagem_doador.pergunta	texto			L7-01: texto da pergunta; sem texto a linha é recusada
 SHPERGUN	UNID_PERG	pergunta_triagem_doador.unidade_resposta	texto			L7-01: unidade da resposta numérica
@@ -41,16 +44,96 @@ SICADATE_EXCLUSAO	=requisicao_exame	trilha_auditoria.entidade				L7-01: entidade
 SICADATE_EXCLUSAO	USUARIO		texto			L7-01: SEM destino: a tabela é cópia da requisição excluída (mesmo USUARIO da requisição, sem gatilho que o grave na exclusão), então é quem registrou a requisição, não necessariamente quem excluiu; usuario_id fica NULL para não atribuir a exclusão à pessoa errada (pedido no L7-01.json)
 SICADATE_EXCLUSAO	ID_SICADATE	trilha_auditoria.correlacao	flutuante			L7-01: chave original da requisição excluída (número, sem dado de pessoa) como texto na correlação: identifica o que foi excluído; entidade_id fica NULL (a requisição não existe mais e entra depois, ordem 1035); dados_antes depende de regra de JSON (pedido no L7-01.json)
 SICADATE_EXCLUSAO	UNIDADE		inteiro			L7-01: unidade da requisição: estabelecimento_id fica NULL (anulável) até a referência por código de unidade (pedido no L7-01.json); @estabelecimento não serve com coluna de unidade na origem
+SICADATE_EXCLUSAO	#retrato	trilha_auditoria.dados_antes				L7-01: retrato JSON das colunas lidas da requisição excluída (sem segredo), como o histórico do produto
 SICOLETE	COD	dispositivo_coleta.codigo	inteiro			L7-01: dispositivo de coleta: código de negócio (número como texto)
 SICOLETE	NOME	dispositivo_coleta.descricao	texto_nome			L7-01: nome do dispositivo; sem nome a linha é recusada
 SICOLETE	SITUACAO	dispositivo_coleta.ativo	booleano_ai			L7-01: situação A (ativo)/I (inativo); vazio: padrão do destino (TRUE); outro valor: valor_fora_do_dominio
-#--- PRHEMOTLAN: bloqueada: hemocomponente exige descricao e validade_dias (NOT NULL, sem fonte na origem: só ato e sigla); validade presumida seria perigosa; pedido no L7-01.json
-#--- SHCLIENT: bloqueada: servico_hemoterapia_fornecedor exige empresa_fornecedora_id (NOT NULL) sem fonte; falta referência ao cadastro de empresa pelo nome ou decisão do dono; pedido no L7-01.json
-#--- SHDOACAO: bloqueada: doacao_sangue exige doador_pessoa_fisica_id (CODDOADOR aponta o cadastro de doadores, fora do mapa) e numero; dados da imagem de referência são placeholder; pedido no L7-01.json
-#--- SHINTER: bloqueada: é a lista de intercorrências da DOAÇÃO (SHDOACAO.CODINTER), não do receptor; tipo_reacao_transfusional é FK de reacao_transfusional e dividiria a chave única de codigo com SHREACAO (1062); falta destino próprio ou ligação a doacao_sangue; pedido no L7-01.json
-#--- SHLOCAL: bloqueada: local_guarda_hemocomponente exige tipo_equipamento e faixa de temperatura (NOT NULL, sem fonte); temperatura presumida seria perigosa; pedido no L7-01.json
-#--- SHPARAM: bloqueada: configuracao_setor_diagnostico exige setor_diagnostico_id (NOT NULL) sem fonte; parâmetros por coluna pedem o mecanismo de parâmetros; pedido no L7-01.json
-#--- SHREQUISICAO: bloqueada: requisicao_transfusao exige paciente_id, atendimento_id, numero, tipo_transfusao_id e indicacao (NOT NULL) sem fonte; pedido no L7-01.json
-#--- SHBOLSA: bloqueada: bolsa_hemocomponente exige hemocomponente_id pela sigla, grupo sanguíneo e fator Rh por de-para de código, validade_em e recebida_em (NOT NULL); falta referência por código e combinação data+hora; pedido no L7-01.json
-#--- SHRESPOSTA: bloqueada: são opções de resposta da pergunta (não respostas de doação): resposta_triagem_doador exige doacao_sangue_id; falta destino de opções (grupo de resposta) ou decisão; pedido no L7-01.json
-#--- SIASSLAUDO_IMPRESSAO: bloqueada: emissao_laudo exige paciente_id (NOT NULL), que só existe no laudo (SIASSLAUDO, fora do mapa); falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, já pedida no L6-13) e o laudo no mapa; pedido no L7-01.json
+PRHEMOTLAN	ID_HEMOTLAN	hemocomponente.codigo	inteiro			L7-01: tipo de hemocomponente: a chave do hospital vira o código de negócio
+PRHEMOTLAN	CODALF	hemocomponente.sigla	texto			L7-01: sigla da etiqueta e da entrada da bolsa (CH, PFC...); nula recusa a linha; repetida recusa pela chave única (1062)
+PRHEMOTLAN	CODALF	hemocomponente.descricao	texto			L7-01: a origem só tem a sigla: a descrição é a sigla (o cliente detalha no painel)
+PRHEMOTLAN	=~1	hemocomponente.validade_dias				L7-01: validade sem fonte: PRESUMIDA em 1 dia (a mais restritiva: nunca estende o uso de uma bolsa) com valor_presumido por linha até o cliente revisar; decisão em F4-decisoes-destino.md
+PRHEMOTLAN	=~0	hemocomponente.faturavel				L7-01: sem item faturável na origem (ATO é código de procedimento sem par): PRESUMIDO não faturável (CHECK faturavel exige o item) até o vínculo no painel
+PRHEMOTLAN	ATO		inteiro			L7-01: código do ato de cobrança sem de-para para item faturável; sem destino
+SHCLIENT	@estabelecimento	servico_hemoterapia_fornecedor.estabelecimento_id				L7-01: estabelecimento único do cliente
+SHCLIENT	NOME	servico_hemoterapia_fornecedor.empresa_fornecedora_id			ref:TBFORNEC.NOME	L7-01: empresa do cadastro único de fornecedores pelo nome (chave alternativa); sem par: pai_inexistente e recusa (NOT NULL); nome repetido no cadastro: pai_ambiguo; dependência SHCLIENT -> TBFORNEC pedida no L7-01.json
+SHCLIENT	CODCLIENTE	servico_hemoterapia_fornecedor.codigo	inteiro			L7-01: código de negócio (número como texto)
+SHCLIENT	NOME	servico_hemoterapia_fornecedor.nome	texto_nome			L7-01: nome do serviço; nulo recusa a linha
+SHINTER	#codigo_derivado:CODINTER:30:intercorrencia_	tipo_reacao_transfusional.codigo	texto			L7-01: intercorrência da DOAÇÃO no catálogo de reações com a natureza própria 'intercorrencia' (CHECK do modelo); o prefixo de domínio separa o código das reações (SHREACAO), sem colisão na chave única
+SHINTER	DESCRICAO	tipo_reacao_transfusional.descricao	texto			L7-01: descrição da intercorrência; nula recusa a linha
+SHINTER	=intercorrencia	tipo_reacao_transfusional.natureza				L7-01: natureza fixa: a tabela é a lista de intercorrências (não é presunção)
+SHDOACAO	@estabelecimento	doacao_sangue.estabelecimento_id				L7-01: estabelecimento único do cliente
+SHDOACAO	REGISTRO	doacao_sangue.numero	inteiro			L7-01: número da doação (chave do hospital, número como texto)
+SHDOACAO	CODDOADOR	doacao_sangue.doador_pessoa_fisica_id			ref:SHDOADOR	L7-01: doador pela chave do cadastro de doadores (vazio nesta origem e fora do mapa): sem pai, pai_inexistente e recusa (NOT NULL); a doação nunca entra sem doador
+SHDOACAO	DATA	doacao_sangue.doada_em	data			L7-01: data da doação (a HORA em texto fica fora até a regra data+hora pedida no L6-04)
+SHDOACAO	CRM_TECNICO	doacao_sangue.coletor_profissional_id			ref:SHTECNIC	L7-01: técnico da coleta pela chave do cadastro de técnicos (L5)
+SHDOACAO	RETORNO	doacao_sangue.retorno_previsto	data			L7-01: retorno previsto do doador
+SHDOACAO	OBS	doacao_sangue.observacao	texto_resumo:1000			L7-01: observação; acima de 1000 caracteres resumida com texto_resumido
+SHDOACAO	VOLUME	doacao_sangue.volume_coletado_ml	faixa:1,1000			L7-01: volume coletado em mL; fora de 1..1000 (CHECK do modelo) vira NULL com valor_fora_do_dominio
+SHDOACAO	SANGUE	doacao_sangue.grupo_sanguineo_id			ref:TBTPSANGUINEO	L7-01: grupo ABO pela chave do cadastro (L7-04); dependência pedida no L7-01.json
+SHDOACAO	FATORRH	doacao_sangue.fator_rh_id			ref:TBFATORRH	L7-01: fator Rh pela chave do cadastro (L7-04); dependência pedida no L7-01.json
+SHDOACAO	PESO	doacao_sangue.peso_kg	decimal_nao_negativo			L7-01: peso do doador em kg
+SHDOACAO	AUTORIZADA_DOACAO_MENOR	doacao_sangue.autorizacao_responsavel	booleano_sn			L7-01: doador menor autorizado pelo responsável (S/N); vazio: padrão (FALSE)
+SHDOACAO	CODINTER		inteiro			L7-01: intercorrência da doação: o catálogo entra (SHINTER), mas a doação do modelo não tem coluna de intercorrência; sem destino (pedido de modelo no L7-01.json)
+SHDOACAO	ALTURA		flutuante			L7-01: unidade da altura (metro ou centímetro) sem evidência; sem destino para não gravar altura errada
+SHDOACAO	INAPTO	doacao_sangue.apto	inteiro	valores		L7-01: apto pelo indicador de inaptidão (de-para de valores: 0 apto, 1 inapto); outro código: valor_fora_do_dominio, fica o padrão (não apto)
+SHDOACAO	INAPTO	doacao_sangue.situacao	inteiro	valores		L7-01: situação pelo indicador: 0 coletada (a linha tem data e técnico da coleta; sem volume o CHECK de coleta recusa, visível), 1 inapto; nulo fica com o padrão (triagem)
+SHDOACAO	INAPTO	doacao_sangue.motivo_inaptidao	inteiro	valores		L7-01: motivo da inaptidão: a origem não guarda o motivo; o inapto recebe o texto fixo do de-para (o CHECK do modelo exige motivo)
+SHDOACAO	HORA		texto			L7-01: hora da doação em texto: fica fora até a regra data+hora pedida no L6-04 (doada_em fica com a data)
+SHDOACAO	PRESSAO		flutuante			L7-01: pressão em um só número: o destino separa sistólica e diastólica; sem destino para não gravar valor errado
+SHDOACAO	IMC		flutuante			L7-01: IMC é calculado de peso e altura no produto; sem destino
+SHDOACAO	PREDOACAO		codigo_char			L7-01: marca de pré-doação sem evidência dos códigos; a situação vem de INAPTO
+SHDOACAO	ATEND		codigo_char			L7-01: tipo de atendimento do registro do paciente (par REG/ANO_REG): a doação do produto não liga atendimento; sem destino
+SHDOACAO	REG		inteiro			L7-01: registro de atendimento ligado à doação: sem destino na doação do produto
+SHDOACAO	ANO_REG		inteiro			L7-01: ano do registro de atendimento: sem destino
+SHLOCAL	@estabelecimento	local_guarda_hemocomponente.estabelecimento_id				L7-01: estabelecimento único do cliente
+SHLOCAL	CODLOCAL	local_guarda_hemocomponente.codigo	inteiro			L7-01: código de negócio do local de guarda
+SHLOCAL	DESCRICAO	local_guarda_hemocomponente.descricao	texto			L7-01: descrição; nula recusa a linha
+SHLOCAL	=~refrigerador	local_guarda_hemocomponente.tipo_equipamento				L7-01: tipo sem fonte: PRESUMIDO refrigerador com valor_presumido por linha
+SHLOCAL	=~2	local_guarda_hemocomponente.temperatura_minima				L7-01: faixa sem fonte: PRESUMIDA 2 a 6 graus (faixa regulatória do concentrado de hemácias, a mais estreita usual) com valor_presumido; o cliente ajusta no painel
+SHLOCAL	=~6	local_guarda_hemocomponente.temperatura_maxima				L7-01: ver temperatura_minima
+SHRESPOSTA	#codigo_derivado:COD_PERGUNTA:30:triagem_	grupo_resposta.codigo	texto		grupo_resposta;adotar:codigo	L7-01: as opções de resposta de cada pergunta da triagem formam um grupo de respostas do produto (um por pergunta: a primeira opção cria, as outras ADOTAM o grupo, adotado_existente)
+SHRESPOSTA	COD_PERGUNTA	grupo_resposta.descricao	texto		ref:SHPERGUN>DESCRICAO;grupo_resposta	L7-01: descrição do grupo = texto da pergunta (referência encadeada à origem); pergunta inexistente: pai_inexistente e recusa
+SHRESPOSTA	@id	resposta_padrao.grupo_resposta_id			resposta_padrao	L7-01: opção no grupo da pergunta
+SHRESPOSTA	#seq:COD_PERGUNTA	resposta_padrao.sequencia			resposta_padrao	L7-01: ordem da opção dentro da pergunta, pela chave
+SHRESPOSTA	COD_RESPOSTA	resposta_padrao.codigo	inteiro		resposta_padrao	L7-01: código da opção (chave do hospital)
+SHRESPOSTA	CONTEVOL	resposta_padrao.descricao	texto		resposta_padrao	L7-01: texto da opção
+SHBOLSA	@estabelecimento	bolsa_hemocomponente.estabelecimento_id				L7-01: estabelecimento único do cliente
+SHBOLSA	CODMOV	bolsa_hemocomponente.situacao	texto_nome	valores	ref:SHMOV>NOME	L7-01: situação pelo ÚLTIMO movimento da bolsa (nome do tipo de movimento, de-para de valores): entrada e bloqueio quarentena, liberação e desbloqueio liberada, devolução devolvida, descarte e perda descartada; transfusão, reserva e transferência sem par (exigem data do destino ou requisição que a bolsa não tem): valor_fora_do_dominio e fica o padrão (quarentena), visível; sem movimento: padrão
+SHBOLSA	PESQHEMOGLOBINA	bolsa_hemocomponente.pesquisa_hemoglobina_s	inteiro	valores		L7-01: pesquisa de hemoglobina S: códigos sem evidência na origem; de-para de valores sem par presumido (todo código vira valor_fora_do_dominio, NULL, visível); o cliente acrescenta os pares no painel
+SHBOLSA	SOROLOGIA	bolsa_hemocomponente.sorologia_aprovada	inteiro	valores		L7-01: sorologia: códigos sem evidência; de-para de valores sem par presumido (valor_fora_do_dominio, fica o padrão FALSE: nunca aprova sorologia sem par revisado)
+SHBOLSA	BOLSA	bolsa_hemocomponente.numero	texto			L7-01: número da bolsa; nulo recusa a linha
+SHBOLSA	COD_PRODUTO	bolsa_hemocomponente.codigo_produto	texto			L7-01: código do produto no rótulo
+SHBOLSA	SEGMENTO	bolsa_hemocomponente.segmento	texto			L7-01: segmento
+SHBOLSA	HEMOCOMPONENTE	bolsa_hemocomponente.hemocomponente_id			ref:PRHEMOTLAN.CODALF	L7-01: hemocomponente pela sigla (chave alternativa no cadastro de hemocomponentes); sem par: pai_inexistente e recusa
+SHBOLSA	SANGUE	bolsa_hemocomponente.grupo_sanguineo_id			ref:TBTPSANGUINEO	L7-01: grupo ABO pela chave do cadastro; dependência pedida no L7-01.json
+SHBOLSA	FATOR	bolsa_hemocomponente.fator_rh_id			ref:TBFATORRH	L7-01: fator Rh pela chave do cadastro; dependência pedida no L7-01.json
+SHBOLSA	VOLUME	bolsa_hemocomponente.volume_ml	faixa:1,1000			L7-01: volume em mL; fora de 1..1000: valor_fora_do_dominio e recusa (NOT NULL)
+SHBOLSA	DATA	bolsa_hemocomponente.coletada_em	data			L7-01: data da coleta
+SHBOLSA	VENCIMENTO	bolsa_hemocomponente.validade_em	data			L7-01: validade da bolsa; nula recusa a linha
+SHBOLSA	RECEBIMENTO	bolsa_hemocomponente.recebida_em	data_hora			L7-01: recebimento; nulo recusa a linha
+SHBOLSA	USUARIO	bolsa_hemocomponente.recebida_por_usuario_id			ref:TBUSERS	L7-01: quem recebeu, pelo login
+SHBOLSA	CODFORNEC	bolsa_hemocomponente.servico_hemoterapia_fornecedor_id			ref:SHCLIENT	L7-01: serviço fornecedor (SHCLIENT)
+SHBOLSA	REGISTRO	bolsa_hemocomponente.doacao_sangue_id			ref:SHDOACAO	L7-01: doação de origem; sem fornecedor nem doação o CHECK de procedência recusa
+SHBOLSA	CODLOCAL	bolsa_hemocomponente.local_guarda_hemocomponente_id			ref:SHLOCAL	L7-01: local de guarda
+SHBOLSA	CODMOTDEV	bolsa_hemocomponente.motivo_devolucao_bolsa_id			ref:SHMOTDEV	L7-01: motivo de devolução
+SHBOLSA	DTDEVOLUCAO_PERDA	bolsa_hemocomponente.destino_em	data			L7-01: data da devolução ou perda
+SHBOLSA	TEMPERATURA	bolsa_hemocomponente.temperatura_recebimento_c	faixa:-80,40			L7-01: temperatura no recebimento; fora de -80..40 vira NULL com valor_fora_do_dominio
+SHBOLSA	OBS	bolsa_hemocomponente.observacao	texto_resumo:1000			L7-01: observação
+SHBOLSA	ID_SHREQUISICAO		chave_origem			L7-01: pedido ao serviço fornecedor (SHREQUISICAO, descarte sem_valor): o que importa dele (fornecedor e recebimento) já está na bolsa; não é a reserva para um paciente; sem destino
+SHBOLSA	CRM_TECNICO		inteiro			L7-01: técnico do recebimento: a bolsa do produto guarda quem recebeu (usuário); sem destino
+SHBOLSA	UNIDADE		inteiro			L7-01: unidade: estabelecimento único do cliente (@estabelecimento)
+SHBOLSA	ESTOQUE		flutuante			L7-01: saldo de estoque calculado no sistema antigo: o produto calcula pela situação; sem destino
+SHBOLSA	HORA		texto			L7-01: hora em texto da coleta: coletada_em é DATE no modelo; sem destino
+SHBOLSA	PROCEDENCIA		inteiro			L7-01: procedência sem evidência dos códigos: a procedência do produto é fornecedor ou doação (CHECK), já declarados
+SHBOLSA	INICIAISDOADOR		texto			L7-01: iniciais do doador: dado pessoal parcial sem valor de produto (a doação liga o doador); sem destino
+SHBOLSA	MESREF		inteiro			L7-01: mês de referência do faturamento antigo: sem destino na bolsa
+SHBOLSA	ANOREF		inteiro			L7-01: ano de referência do faturamento antigo: sem destino na bolsa
+SHBOLSA	COD_DOACAO_FORNECEDOR		inteiro			L7-01: número da doação no serviço fornecedor: o número da bolsa no rótulo já identifica; sem destino
+SHBOLSA	CDE		inteiro			L7-01: marca sem evidência dos códigos: sem destino
+SHBOLSA	SEQUENCIA		inteiro			L7-01: sequência da bolsa dentro do pedido ao fornecedor (descartado): sem destino
+SIASSLAUDO_IMPRESSAO	DATA_HORA_IMPRESSAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L7-01: impressão de laudo vira evento 'impressao' da trilha de auditoria: o laudo assinado (outra tabela, vazia nesta origem e fora do mapa) não dá o paciente que emissao_laudo exige; sem data a linha é recusada
+SIASSLAUDO_IMPRESSAO	=impressao	trilha_auditoria.acao			trilha_auditoria	L7-01: ação da trilha
+SIASSLAUDO_IMPRESSAO	=emissao_laudo	trilha_auditoria.entidade			trilha_auditoria	L7-01: entidade do produto que registra a emissão do laudo
+SIASSLAUDO_IMPRESSAO	ID_TBUSERS	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L7-01: quem imprimiu, pelo login; login inexistente: NULL com pai_inexistente
+SIASSLAUDO_IMPRESSAO	UUID	trilha_auditoria.correlacao	texto		trilha_auditoria	L7-01: código de autenticação do laudo impresso (junta as impressões do mesmo documento)
+SIASSLAUDO_IMPRESSAO	#retrato	trilha_auditoria.dados_depois			trilha_auditoria	L7-01: retrato JSON das colunas lidas

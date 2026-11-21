@@ -1,0 +1,5 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	S	parcelado	L8-01: indicador sim: orçamento parcelado
+FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	s	parcelado	L8-01: indicador sim (minúsculo): orçamento parcelado
+FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	N	a_vista	L8-01: indicador não: pagamento de uma vez
+FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	n	a_vista	L8-01: indicador não (minúsculo): pagamento de uma vez

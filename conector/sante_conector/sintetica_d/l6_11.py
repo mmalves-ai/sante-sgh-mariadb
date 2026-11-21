@@ -1,21 +1,43 @@
 """Fatia L6-11 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem com a forma do dicionário e dados
 100% falsos.
 
-Carregadas pelo mapa (colunas.d/L6-11.tsv): PRLOCAL_ASSISTENCIA (local de assistência), TBCBARAREACAOADVERSA
-(manifestação alérgica), PRPROTGERALESP (especialidade do protocolo de prescrição), PREVOLUCAO (modelo de documento
-clínico), PREVOLESPEC (especialidade do modelo) e PREVOLTIPOACO (categoria de acomodação do modelo). As outras 17
-tabelas da fatia entram na imagem só com a forma (2 linhas falsas cada) e ficam fora da carga até o motor ganhar as
-regras genéricas pedidas em docs/obra/fatias/f4/saida/L6-11.json (motivo por tabela em saida/L6-11.md).
+Carregadas pelo mapa (colunas.d/L6-11.tsv, pares em valores.d/L6-11.tsv): PRLOCAL_ASSISTENCIA, TBCBARAREACAOADVERSA,
+PRPROTGERALESP, PREVOLUCAO, PREVOLESPEC, PREVOLTIPOACO, PRITEMNAOPAD (item não padronizado), PRITEMNAOPAD_GETABVIA,
+PRKITMED (kit do medicamento), PRITENSKITMED e PRKITSOLITENS (itens de kit), TBKITPRO (kit de cuidado de enfermagem e
+item), PRFAVORITO (filtro do painel do usuário) e PRMANCHESTER (nível de prioridade). Descarte de produto
+(declarado/sem_carga.tsv): PRAGRUP_PRFILTROCLASSIF, PRPARAM, PRPAREVOLIMG. Bloqueadas por mecanismo compartilhado
+(pedidos em docs/obra/fatias/f4/saida/L6-11.json): PRITEM_GEITENS, PRITEMNAOPAD_TBPRINC, TBALERGIA_TBPRINC, PRPADEVOL,
+PRFORMULCOMP, PRASSINATURA_CAB. As não carregadas entram só com a forma (2 linhas falsas).
+
+Pais lidos na ORIGEM pelas referências por chave alternativa e encadeadas: REQUER a L7-07 (GEITENS e GEUNIPRESC:
+insumo, nome do item, unidade do insumo); PRLOCPACDEFAULT (forma e linhas da L6-05) e TBUNIDADEMEDIDA (forma da L6-10)
+entram pelo módulo da dona, porque L6-05 e L6-10 não cabem juntas com a L7-07 nesta imagem. TBPROENF (forma da
+L6-09) idem. O PREPARO_DESTINO cria o
+estabelecimento único (o da requerida não roda na conferência desta fatia).
 Anomalias: texto acima do tamanho do destino (1406), NOT NULL do destino sem valor (1048), pai inexistente, pai
-recusado (pai_pendente em cadeia: modelo recusado leva a especialidade e a acomodação), colisão de caixa no código
-único, situação e indicador fora do domínio (o destino fica com o padrão) e literal presumido do tipo de registro.
+recusado (pai_pendente em cadeia), colisão de caixa no código único, valor fora do domínio (padrão do destino ou
+recusa), literal presumido, CHECK do destino (4025: intervalo invertido, quantidade zero, produto ausente), unidade sem
+correspondência na chave alternativa, nome do pai vazio na referência encadeada.
 """
 import datetime
 import decimal
+import re
+
+REQUER = ["L7-07"]
+# pais lidos na origem cujas donas não podem entrar juntas na imagem desta fatia (L6-05 e L7-07 divergem em GETABVIA;
+# L6-10 depende da L6-09): a forma e as linhas vêm do módulo da dona, sem cópia (L6-05: PRLOCPACDEFAULT, como ela já
+# faz para a L5-01; L6-09: TBPROENF; L6-10: TBUNIDADEMEDIDA). São carregados também (as colunas são as do mapa); o esperado deles não é
+# desta fatia.
+from . import l6_05 as _l6_05, l6_09 as _l6_09, l6_10 as _l6_10
+_PAI_DDL = {t: re.search(r"CREATE TABLE %s \(.*?\);" % t, m.DDL, re.S).group(0)
+            for t, m in (("PRLOCPACDEFAULT", _l6_05), ("TBPROENF", _l6_09), ("TBUNIDADEMEDIDA", _l6_10))}
+UNIDADES = [(1, 10, "Miligrama", "MG", "mg", "A"), (2, 10, "Mililitro", "ML", "mL", "A"),
+            (4, 11, "Unidade internacional", "UI", "UI", "A")]
+CUIDADOS = [[1, "Cuidado exemplo um", "A", "C", 1, 1, None, None, None, None, None, None, "N", 0],
+            [4, None, "A", "C", 1, 1, None, None, None, None, None, None, "N", 0],          # recusado (1048)
+            [5, "Cuidado exemplo cinco", "A", "C", 1, 2, None, None, None, None, None, None, "N", 0]]
 
 FORMAS = {
-    'PRUNITPLAN': ('TPLAN,UNI_PRESC', [
-        ('TPLAN', 'VARCHAR(2)', True), ('UNI_PRESC', 'VARCHAR(7)', True),]),
     'PRITEMNAOPAD': ('ID_ITEMNAOPAD', [
         ('ID_ITEMNAOPAD', 'INTEGER', True), ('NOME', 'VARCHAR(60)', False), ('UNI_PRESC', 'VARCHAR(7)', True),
         ('SITUACAO', 'VARCHAR(1)', False), ('ITEM', 'INTEGER', False), ('USUARIO_CAD', 'VARCHAR(31)', False),
@@ -189,6 +211,10 @@ FORMAS = {
         ('OBRIGAR_DIG_LAUDO_AIH_APOS_48H', 'SMALLINT', False), ('VER_ELE_EXA_REP', 'SMALLINT', True),
         ('ID_PREVOLUCAO_RAC', 'INTEGER', False), ('REST_ACESS_PACI_NAO_ESTE_ATEND', 'VARCHAR(1)', True),
         ('CHECAGEM_ANTECIPADA', 'TIME', False), ('CONSISTIR_FREQ_UNICA_MEDIC', 'CHAR(1)', False),]),
+    'PRASSINATURA_CAB': ('ID', [
+        ('ID', 'INTEGER', True), ('ID_PRTPASSINATURA', 'SMALLINT', True), ('ID_TABELA', 'BIGINT', True),
+        ('ID_HTPACIENTE', 'BIGINT', True), ('ID_HTATENDIMENTO', 'BIGINT', False),
+        ('DOCUMENTO_CONSOLIDADO', 'BLOB SUB_TYPE 1', False),]),
     'PRPAREVOLIMG': ('ID', [
         ('ID', 'INTEGER', True), ('NOME', 'VARCHAR(50)', True), ('ATIVO', 'CHAR(1)', False),
         ('IMAGEM', 'BLOB SUB_TYPE 0', True), ('ANOTACOES', 'BLOB SUB_TYPE 1', False),
@@ -196,13 +222,27 @@ FORMAS = {
 }
 
 CARREGADAS = ("PRLOCAL_ASSISTENCIA", "TBCBARAREACAOADVERSA", "PRPROTGERALESP", "PREVOLUCAO", "PREVOLESPEC",
-              "PREVOLTIPOACO")
+              "PREVOLTIPOACO", "PRITEMNAOPAD", "PRITEMNAOPAD_GETABVIA", "PRKITMED", "PRITENSKITMED", "PRKITSOLITENS",
+              "TBKITPRO", "PRFAVORITO", "PRMANCHESTER")
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
+
+
+def _definida_fora(tabela):
+    """Tabela já definida por outra fatia da imagem (ex.: PRPADEVOL, pai lido pela L6-10): a forma não é repetida."""
+    import pathlib
+    aqui = pathlib.Path(__file__).resolve()
+    return any(p.resolve() != aqui and ("CREATE TABLE %s (" % tabela) in p.read_text(encoding="utf-8")
+               for p in aqui.parent.glob("*.py"))
+
+
+SO_FORMA = [t for t in FORMAS if t not in CARREGADAS and not _definida_fora(t)]
 
 
 def _ddl():
     saida = []
     for t, (chave, cols) in FORMAS.items():
+        if t not in CARREGADAS and t not in SO_FORMA:
+            continue
         defs = ["%s %s%s" % (c, tp, " NOT NULL" if nn else "") for c, tp, nn in cols]
         if chave:
             defs.append("PRIMARY KEY (%s)" % chave)
@@ -210,11 +250,20 @@ def _ddl():
     return "\n".join(saida) + "\n"
 
 
-DDL = _ddl()
+DDL = _ddl() + "\n".join(_PAI_DDL.values()) + "\n"
 # pais de fora da fatia, dados como já carregados (chave da origem): tipo de documento clínico, especialidade médica,
 # categoria de acomodação e protocolo de prescrição
 PAIS_EXTERNOS = {"PRTPCOMP": ["1", "2"], "TBESPEC": ["1", "2", "3"], "TBTIPOACOMOD": ["1", "2"],
-                 "PRPROTGERAL": ["10", "11"]}
+                 "PRPROTGERAL": ["10", "11"], "TBACOMODLEITO": ["1", "2"],
+                 "PRKITSOL": ["1", "2", "4"], "PRTPLAN": ["1", "2", "3"], "TBSEXO": ["1", "2"],
+                 "TBUSERS": list(_l6_05.PAIS_EXTERNOS["TBUSERS"])}
+# donas dos pais lidos na origem (referência por chave alternativa e encadeada); dados delas usados abaixo:
+# TBUNIDADEMEDIDA sigla MG (1), ML (2), UI (4) carregadas, X (3) recusada; GEITENS 101-106, 111, 112 carregados, 107
+# sem nome, 108 pai_pendente; GEUNIPRESC 1 (101, ML) e 2 (101, CX); TBPROENF 1 e 5 carregados, 4 sem nome (recusado);
+# PRKITSOL 1, 2, 4, 5, 6 carregados, 3 recusado; PRLOCPACDEFAULT 10 e 20 com login conhecido, 30 com login nunca visto;
+# PRTPLAN 1-3 e GETABVIA VO, EV, IV como pais externos das requeridas
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " nome VARCHAR(40) NOT NULL);\nINSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');")
 
 
 def _falso(tipo, i):
@@ -230,7 +279,7 @@ def _falso(tipo, i):
         return datetime.date(2025, 1, i)
     if tipo == "TIMESTAMP":
         return datetime.datetime(2025, 1, i, 8, 30)
-    if tipo == "TIME":  # o gerador (sintetica._q) ainda não escreve TIME: fica nulo (colunas opcionais)
+    if tipo == "TIME":  # o gerador (sintetica._q) não escreve TIME: fica nulo (colunas opcionais)
         return None
     return ("texto exemplo " + str(i)).encode("cp1252")
 
@@ -240,16 +289,24 @@ def _ins(ins, tab, **v):
 
 
 def linhas(r, ins):
-    for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS:
+    for v in _l6_05.PREFERENCIAS:
+        ins("PRLOCPACDEFAULT", list(v))
+    for v in UNIDADES:
+        ins("TBUNIDADEMEDIDA", list(v))
+    for v in CUIDADOS:
+        ins("TBPROENF", list(v))
+    for tab in SO_FORMA:
+        cols = COLUNAS[tab]
+        if True:
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
     # local de assistência: 3 sem descrição (1048); 4 com descrição acima de 150 (1406); 5 com situação fora do
-    # domínio (fica com o padrão do destino: ativo); 6 com espaços internos preservados
-    for i, desc, sit in [(1, "Leito 101 clínica exemplo", "A"), (2, "Sala de observação exemplo", "I"),
-                         (3, None, "A"), (4, "Local exemplo " * 12, "A"), (5, "Posto exemplo", "X"),
-                         (6, "  Box   3 exemplo ", "A")]:
-        _ins(ins, "PRLOCAL_ASSISTENCIA", ID=i, TIPO_ATENDIMENTO="I", LOCAL_ASSISTENCIA=desc, SITUACAO=sit)
+    # domínio (fica com o padrão do destino: ativo); 6 com espaços internos preservados e tipo vazio (padrão: todos);
+    # 7 com letra de tipo sem par (padrão todos, valor_fora_do_dominio); tipo pela letra nos demais
+    for i, desc, sit, tp in [(1, "Leito 101 clínica exemplo", "A", "I"), (2, "Sala de observação exemplo", "I", "E"),
+                             (3, None, "A", "I"), (4, "Local exemplo " * 12, "A", "A"), (5, "Posto exemplo", "X", "U"),
+                             (6, "  Box   3 exemplo ", "A", " "), (7, "Consultório exemplo", "A", "Z")]:
+        _ins(ins, "PRLOCAL_ASSISTENCIA", ID=i, TIPO_ATENDIMENTO=tp, LOCAL_ASSISTENCIA=desc, SITUACAO=sit)
     # manifestação alérgica: 3 e 4 só diferem pela caixa do código (as duas recusadas, nenhuma vence); 6 com código
     # acima de 30 (1406); 7 com indicador de ativo fora do domínio (fica com o padrão do destino)
     for i, cod, nome, atv in [(1, "RX001", "Urticária exemplo", "S"), (2, "RX002", "Prurido exemplo", "N"),
@@ -273,9 +330,68 @@ def linhas(r, ins):
     # acomodação do modelo: modelo 4 recusado (pai_pendente); categoria 0 (vazia: NULL em NOT NULL)
     for mod, cat in [(1, 1), (1, 2), (4, 1), (5, 2), (6, 0)]:
         _ins(ins, "PREVOLTIPOACO", ID_EVOLUCAO=mod, COD=cat, NOME="Categoria exemplo %d" % cat)
+    D = decimal.Decimal
+    # item não padronizado: 1 e 2 completos (espaços internos colapsados no 2); 3 sem nome (1048); 4 unidade sem sigla
+    # correspondente (pai_inexistente + 1048); 5 tipo de item nunca visto (pai_inexistente + 1048); 6 produto nunca
+    # visto (NULL, grava); 7 produto recusado na L7-07 (pai_pendente)
+    for i, nome, uni, tp, item in [(1, "Item não padronizado um", "MG", 1, 101), (2, "  Item   dois ", "ML", 2, None),
+                                   (3, None, "MG", 1, None), (4, "Item quatro", "CX", 1, None),
+                                   (5, "Item cinco", "MG", 9, None), (6, "Item seis", "UI", 3, 999),
+                                   (7, "Item sete", "MG", 1, 108)]:
+        _ins(ins, "PRITEMNAOPAD", ID_ITEMNAOPAD=i, NOME=nome, UNI_PRESC=uni, SITUACAO="A", ITEM=item,
+             USUARIO_CAD="usuario.exemplo", ID_PRTPLAN=tp)
+    # vias do item: 3 recusado (pai_pendente); via nunca vista e item nunca visto (pai_inexistente + 1048)
+    for it, via in [(1, "VO"), (1, "IV"), (2, "IV"), (3, "VO"), (6, "ZZ"), (99, "VO")]:
+        _ins(ins, "PRITEMNAOPAD_GETABVIA", ID_PRITEMNAOPAD=it, ID_GETABVIA=via)
+    # kit do medicamento: nome = nome do item na origem; 3 item sem nome (1048); 4 item nunca visto (pai_inexistente +
+    # 1048); 5 intervalo invertido (4025); 6 unidade sem correspondência (NULL) e tipo de atendimento fora do domínio
+    for k, item, ini, fim, uni, via, tp, atv in [(1, 101, "1", "2", "MG", "VO", "I", "S"),
+                                                 (2, 102, "0.5", "1", "ML", "IV", "A", "N"),
+                                                 (3, 107, "1", "2", "MG", "VO", "T", "S"),
+                                                 (4, 999, "1", "2", "MG", "VO", "T", "S"),
+                                                 (5, 103, "3", "1", "MG", "VO", "U", "S"),
+                                                 (6, 104, "1", "2", "ZZ", "VO", "X", "S")]:
+        _ins(ins, "PRKITMED", ID=k, ID_GEITENS=item, INTERVALO_INICIAL_DOSE=D(ini), INTERVALO_FINAL_DOSE=D(fim),
+             ID_TBUNICON_UNI_PRESC=uni, ID_GETABVIA=via, TP_ATENDIMENTO=tp, ATIVO=atv)
+    # itens do kit do medicamento: quantidade zero (4025); unidade sem correspondência (pai_inexistente + 1048); kit 3
+    # recusado (pai_pendente); produto nunca visto (NULL: CHECK do produto, 4025)
+    for k, item, q, uni in [(1, 101, "2", "MG"), (1, 102, "1", "ML"), (2, 103, "0", "MG"), (2, 104, "1", "CX"),
+                            (3, 101, "1", "MG"), (6, 101, "1.5", "MG"), (6, 999, "1", "ML")]:
+        _ins(ins, "PRITENSKITMED", ID_PRKITMED=k, ID_GEITENS=item, QTDE=D(q), ID_TBUNICON_UNI_PRESC=uni)
+    # itens do kit de solução: 2 com indicador fora do domínio (padrão componente); kit 3 recusado (pai_pendente); kit
+    # 3 e 9 nunca vistos (pai_inexistente + 1048)
+    for k, item, pr, q, uni in [(1, 101, 1, "1", "ML"), (1, 102, 0, "2", "MG"), (2, 103, 2, "1", "MG"),
+                                (3, 101, 1, "1", "ML"), (4, 101, 0, "1", "UI"), (9, 101, 0, "1", "ML")]:
+        _ins(ins, "PRKITSOLITENS", ID_PRKITSOL=k, ID_GEITENS=item, ITEM_PRINCIPAL=pr, QTDE=D(q),
+             ID_TBUNICON_UNI_PRESC=uni)
+    # kit de cuidado (um por linha; kit e item gravam juntos ou nenhum): 3 cuidado recusado (pai_pendente); 4 unidade
+    # do insumo sem correspondência (pai_inexistente + 1048); 5 sem quantidade (1048); 6 intervalo invertido (4025)
+    for i, proc, q, ini, fim, acm, gu, via in [(1, 1, "2", 0, 6, "N", 1, "VO"), (2, 5, "1", 2, None, "S", 1, None),
+                                               (3, 4, "1", 0, None, "N", 1, "VO"), (4, 1, "1", 0, None, "N", 2, "VO"),
+                                               (5, 1, None, 0, None, "N", 1, "VO"), (6, 1, "1", 8, 4, "N", 1, "VO")]:
+        _ins(ins, "TBKITPRO", ID=i, PROCTO=proc, QTDE=D(q) if q else None, INTERVALO_INICIAL=ini,
+             INTERVALO_FINAL=fim, ACM=acm, ID_GEUNIPRESC=gu, ID_GETABVIA=via)
+    # favorito do painel: nome e tipo pela letra; 30 login nunca visto (1048); 99 preferência nunca vista
+    # (pai_inexistente + 1048); Z fora do domínio (tipo fica todos; nome NULL: 1048); X no indicador (padrão)
+    for pref, tp, apenas, acom in [(10, "I", "S", 1), (10, "A", "N", None), (20, "U", "X", 2), (30, "I", "S", None),
+                                   (99, "I", "S", None), (20, "Z", "N", None)]:
+        _ins(ins, "PRFAVORITO", ID_PRLOCPACDEFAULT=pref, TIPO_ATENDIMENTO=tp, BUSCA_PACIENTES=1, ID_TBUNIDAD=1,
+             ID_TBTIPOACOMOD=1, ID_TBACOMODLEITO=acom, ATEND_APENAS_PAC_PROF_LOG_CRM=apenas,
+             EXIBIR_SOMENTE_AGENDA_MEDICA="N", PACIENTE_LEITO_OBSERVACAO="S", ORDENAR_PAC_COM_CHAMADA_PAINEL=1,
+             LOCALIZA_PACIENTE_CODIGO_BARRAS="N", EXIBIR_RESUMO_AUT_LOC_PAC="S", ID_TBESPEC=1)
+    # nível de prioridade: cor pela constante de cor da origem (nome ou $00BBGGRR); ordem clínica pela cor, nunca pelo
+    # ID (IDs fora da ordem das cores); número do nível vira a sigla; 4 sem classificação (1048); 5 cor sem par (NULL
+    # no nome, no hexadecimal e na ordem: valor_fora_do_dominio em cada um; hexadecimal NOT NULL: 1048); 9 número do nível com 6 posições
+    # (1406); 10 segunda cor vermelha no mesmo contexto (ordem repetida: 1062)
+    for i, prot, cl, cor in [(1, 3, "Urgente", "clYellow"), (2, 1, "Emergência", "clRed"),
+                             (3, 2, "Muito urgente", "$000080FF"), (4, 4, None, "clGreen"),
+                             (5, 9, "Não urgente", "Roxo"), (6, 5, "Não urgente", "clBlue"),
+                             (7, 6, "Sem classificação", "clBlack"), (8, 7, "Eletivo exemplo", "clWhite"),
+                             (9, -32000, "Pouco urgente", "clLime"), (10, 1, "Emergência dois", "clRed")]:
+        _ins(ins, "PRMANCHESTER", ID=i, COD_PROTOCOLO=prot, CLASSIFICACAO=cl, COR=cor)
     return {
-        "PRLOCAL_ASSISTENCIA": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
-                                                             "restricao_destino_1406": 1, "valor_fora_do_dominio": 1}},
+        "PRLOCAL_ASSISTENCIA": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1406": 1,
+                                                             "valor_fora_do_dominio": 2}},
         "TBCBARAREACAOADVERSA": {"gravados": 4, "pendencias": {"codigo_colisao_caixa": 2, "restricao_destino_1406": 1,
                                                               "valor_fora_do_dominio": 1}},
         "PRPROTGERALESP": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2}},
@@ -284,4 +400,13 @@ def linhas(r, ins):
         "PREVOLESPEC": {"gravados": 5, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 1}},
         "PREVOLTIPOACO": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}},
+        "PRITEMNAOPAD": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "pai_pendente": 1, "restricao_destino_1048": 3, "valor_presumido": 6}},
+        "PRITEMNAOPAD_GETABVIA": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "pai_pendente": 1, "restricao_destino_1048": 2}},
+        "PRKITMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2, "restricao_destino_4025": 1, "valor_fora_do_dominio": 1}},
+        "PRITENSKITMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "pai_pendente": 1, "restricao_destino_1048": 1, "restricao_destino_4025": 2}},
+        "PRKITSOLITENS": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
+        "TBKITPRO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
+        "PRFAVORITO": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3, "valor_fora_do_dominio": 3}},
+        "PRMANCHESTER": {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1406": 1,
+                                                      "restricao_destino_1062": 1, "valor_fora_do_dominio": 3}},
     }

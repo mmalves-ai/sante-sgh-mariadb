@@ -4,4 +4,96 @@ TBTISSWEBSERV	ID_TBCONVEN	endpoint_tiss_fonte_pagadora.fonte_pagadora_id	chave_o
 TBTISSWEBSERV	ID_TBTISSSCHEMA	endpoint_tiss_fonte_pagadora.transacao_tiss_webservice_id	chave_origem		obrigatoria	L8-06: transação TISS do serviço web (TBTISSSCHEMA, L8 ordem 1058, principal transacao_tiss_webservice); referência exigida na origem (a linha é o endereço daquela transação): pai nunca visto recusa a linha com pai_inexistente (via obrigatoria, pedido 12), nunca endpoint servico_web com transação NULL (o UNIQUE do canal não pega NULL)
 TBTISSWEBSERV	=servico_web	endpoint_tiss_fonte_pagadora.forma_envio				L8-06: a tabela da origem só guarda endereço de serviço web; a forma de envio é certa, não presumida
 TBTISSWEBSERV	URL	endpoint_tiss_fonte_pagadora.url	texto			L8-06: endereço do serviço; vazio vira NULL e o CHECK de serviço web sem endereço recusa a linha
-TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	booleano_sn	valores		L8-06: sinalizador S/N em qualquer caixa (booleano_sn): verdadeiro autenticação básica, falso ou nulo nenhuma (pares 1/0/nulo em valores.d/L8-06.tsv); fora do domínio: padrão 'nenhuma' com pendência. Login e senha NUNCA vão ao banco: a credencial vai ao cofre (pedido 9), referencia_cofre fica NULL
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	booleano_sn	valores		L8-06: sinalizador S/N em qualquer caixa (booleano_sn): verdadeiro autenticação básica, falso ou nulo nenhuma (pares 1/0/nulo em valores.d/L8-06.tsv); fora do domínio: padrão 'nenhuma' com pendência. a senha NUNCA vai ao banco (credencial_fonte_pagadora, #cofre); referencia_cofre fica NULL até o cliente cadastrar a credencial no cofre
+TBTISSWEBSERV	@estabelecimento	credencial_fonte_pagadora.estabelecimento_id				L8-06: credencial do hospital na fonte pagadora (secundário do endpoint): o único estabelecimento do cliente
+TBTISSWEBSERV	ID_TBCONVEN	credencial_fonte_pagadora.fonte_pagadora_id	chave_origem		adotar:estabelecimento_id,fonte_pagadora_id,tipo_acesso	L8-06: a credencial é por fonte pagadora e tipo de acesso, não por transação: a segunda transação da mesma fonte ADOTA a credencial já gravada (adotado_existente), sem colidir no UNIQUE
+TBTISSWEBSERV	=webservice_tiss	credencial_fonte_pagadora.tipo_acesso				L8-06: a tabela da origem só guarda acesso por serviço web TISS
+TBTISSWEBSERV	LOGIN_PRESTADOR	credencial_fonte_pagadora.login	texto			L8-06: usuário do prestador na operadora (não é segredo)
+TBTISSWEBSERV	#cofre:SENHA_PRESTADOR	credencial_fonte_pagadora.credencial_integracao_id				L8-06: senha NUNCA gravada: NULL com segredo_aguarda_cofre; o cliente cadastra a senha no cofre (SENHA_PRESTADOR_PADRAO_HASH_MD5 diz só como o sistema anterior guardava a senha: descartada, F4-decisoes-destino.md)
+TBTISSWEBSERV	URL	credencial_fonte_pagadora.url	texto			L8-06: endereço do serviço da credencial
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao	booleano_sn	valores		L8-06: S autenticação básica, N ou nulo nenhuma (pares em valores.d/L8-06.tsv)
+TBTISSWEBSERV	@vigencia_carga	credencial_fonte_pagadora.vigencia_inicio				L8-06: a origem não guarda desde quando a credencial vale: data da carga com vigencia_sem_fonte (baixa)
+FCFAIPAC	ID_FCCTAEXT	conta_hospitalar_periodo.conta_hospitalar_id				L8-06: conta externa (FCCTAEXT, mesma fatia); pai nunca visto: NULL com pai_inexistente e NOT NULL recusa
+FCFAIPAC	TIPO_LAN	conta_hospitalar_periodo.tipo_lancamento_id			ref:TBTPLANC	L8-06: tipo de lançamento do período (parte da chave da origem; TBTPLANC, L8-04, chave ID): o período parcial vale só para esse tipo (nulo no destino = todos os tipos, que a origem nunca quis dizer); nunca visto: NULL com pai_inexistente
+FCFAIPAC	#seq:ID_FCCTAEXT	conta_hospitalar_periodo.sequencia				L8-06: 1..n por conta na ordem da chave (tipo de lançamento, SEQ): SEQ sozinho repete entre tipos e colidiria no UNIQUE (conta, sequencia)
+FCFAIPAC	DATAI	conta_hospitalar_periodo.inicio_em	data_hora			L8-06: início do período (HORAI em HHMM fica fora até o especial data + hora; pedido no L8-06.json)
+FCFAIPAC	DATAF	conta_hospitalar_periodo.fim_em	data_hora			L8-06: fim do período; sem fim a linha é recusada (NOT NULL) e fim antes do início pelo CHECK, visíveis
+FCFAIPAC	DATAI	conta_hospitalar_periodo.competencia	data_primeiro_dia_mes			L8-06: competência do período = mês do início: a origem não guarda a competência do período (OLD_ANOPRO/OLD_MESPRO/OLD_CONTAS/OLD_CONTA são a chave antiga da conta, substituída por ID_FCCTAEXT; decisão em F4-decisoes-destino.md)
+FCIRREGULARID	@estabelecimento	pendencia_conta.estabelecimento_id				L8-06: o único estabelecimento do cliente (vários: estabelecimento_indefinido)
+FCIRREGULARID	ID_FCCTAEXT	pendencia_conta.conta_hospitalar_id				L8-06: conta externa
+FCIRREGULARID	ID_TBIRREGULARID	pendencia_conta.tipo_pendencia_conta_id				L8-06: tipo da pendência (TBIRREGULARID, L8, principal tipo_pendencia_conta)
+FCIRREGULARID	IRREGULARIDADE	pendencia_conta.descricao	texto_longo			L8-06: texto da irregularidade, sem mexer
+FCIRREGULARID	DATA_HORA_INICIO	pendencia_conta.inicio_em	data_hora			L8-06: abertura da pendência
+FCIRREGULARID	DATA_HORA_FIM	pendencia_conta.fim_em	data_hora			L8-06: fim da pendência
+FCIRREGULARID	DATA_HORA_FIM	pendencia_conta.resolvido_em	data_hora			L8-06: resolução = fim (o histórico migra como pendência resolvida, motivo do mapa)
+FCIRREGULARID	=~resolvida	pendencia_conta.situacao				L8-06: histórico 2020-2022 (motivo do mapa): resolvida PRESUMIDA (valor_presumido); sem fim o CHECK recusa a linha, visível (pedido: literal condicional pela presença do fim)
+TBREPGER	@estabelecimento	regra_repasse.estabelecimento_id				L8-06: o único estabelecimento do cliente
+TBREPGER	ID	regra_repasse.codigo	inteiro			L8-06: código da regra = chave da origem, gravado como texto (único por estabelecimento)
+TBREPGER	=Regra migrada do sistema anterior	regra_repasse.descricao				L8-06: a origem não tem descrição; rótulo fixo verdadeiro (não presume sentido), o cliente renomeia no painel
+TBREPGER	MED_PRS	regra_repasse.beneficiario	codigo_char	valores		L8-06: M médico = profissional, P prestador (nome da coluna MED_PRS); fora do domínio fica o padrão com pendência
+TBREPGER	ID_RPEVENTOS	regra_repasse.evento_repasse_id			ref:RPEVENTO	L8-06: evento de repasse (RPEVENTO, chave ID_RPEVENTO; o nome da coluna difere do pai, por isso ref: declarada); nunca visto: NOT NULL recusa
+TBREPGER	DATA	regra_repasse.vigencia_inicio	data			L8-06: início da vigência da regra
+TBREPGER	@id	regra_repasse_item.regra_repasse_id				L8-06: uma regra por linha da origem, com o seu critério (agrupar linhas exigiria inventar a chave de agrupamento; decisão em F4-decisoes-destino.md)
+TBREPGER	=1	regra_repasse_item.sequencia				L8-06: item único da regra
+TBREPGER	CONV	regra_repasse_item.fonte_pagadora_id			ref:TBCONVEN	L8-06: fonte pagadora; 0 = todas (o motor trata zero como sem referência, sem pendência)
+TBREPGER	ESP	regra_repasse_item.especialidade_medica_id			ref:TBESPEC	L8-06: especialidade; 0 = todas
+TBREPGER	UNID	regra_repasse_item.unidade_assistencial_id			ref:TBUNIDAD	L8-06: unidade; 0 = todas
+TBREPGER	CDC	regra_repasse_item.centro_custo_id			ref:TBCENCUS	L8-06: centro de custo; 0 = todos
+TBREPGER	ID_RPEVENTOS	regra_repasse_item.evento_repasse_id			ref:RPEVENTO	L8-06: evento também no critério
+TBREPGER	COD	regra_repasse_item.profissional_id			ref:TBCBOPRO.COD>ID_TBPROFIS>TBPROFIS	L8-06: COD é o código do prestador = TBCBOPRO.COD do titular do item (o sistema anterior casa a regra por ele, não pela ligação TBREPGER_TBCBOPRO); vale para M e P (beneficiario distingue); 0 = todos; código repetido: pai_ambiguo; nunca visto: NULL com pai_inexistente
+TBREPGER	TIPO_LAN	regra_repasse_item.tipo_lancamento_id			ref:TBTPLANC	L8-06: tipo de lançamento (TBTPLANC, chave ID, como o TIPO do lançamento da conta); 0 = todos
+TBREPGER	ATO	regra_repasse_item.funcao_equipe_cobranca_id			ref:TBGRAUPARTPROC	L8-06: ato = grau de participação do profissional no procedimento (TBGRAUPARTPROC, L8-04); 0 = todos (decisão em F4-decisoes-destino.md: confirmar o domínio por agregado na carga real)
+TBREPGER	LOCAL	regra_repasse_item.local_atendimento_id			ref:TBLOCAL	L8-06: local de atendimento (TBLOCAL, chave ID); 0 = todos; sem uso na imagem de referência (decisão em F4-decisoes-destino.md: confirmar ID ou COD por agregado na carga real)
+TBREPGER	COOP	regra_repasse_item.cooperativa_medica_id			ref:TBCOOPER	L8-06: cooperativa (TBCOOPER, chave COD); 0 ou nulo = todas; cooperativa não carregada: NULL com pai_inexistente (visível)
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	codigo_char	valores		L8-06: I internação, A/E/U externa (mesmas letras da categoria do atendimento no L3), T ou vazio todas
+TBREPGER	HORA_INI	regra_repasse_item.hora_inicio	hora_hhmm			L8-06: faixa de horário (HHMM); só uma das pontas: CHECK recusa, visível
+TBREPGER	HORA_FIN	regra_repasse_item.hora_fim	hora_hhmm			L8-06: fim da faixa de horário
+TBREPGER	QTDE	regra_repasse_item.quantidade_inicial	decimal_zero_nulo			L8-06: 0 = sem limite
+TBREPGER	QTDE_FIN	regra_repasse_item.quantidade_final	decimal_zero_nulo			L8-06: 0 = sem limite
+TBREPGER	PERC	regra_repasse_item.percentual	decimal_nao_negativo			L8-06: percentual; o CHECK exige percentual OU valor fixo (os dois ou nenhum recusa, visível)
+TBREPGER	VALOR	regra_repasse_item.valor_fixo	decimal_nao_negativo			L8-06: valor fixo
+TBREPGER	PERC_FERIADO	regra_repasse_item.percentual_feriado	decimal_nao_negativo			L8-06: acréscimo em feriado
+TBREPGER	PERC_FIM_SEMANA	regra_repasse_item.percentual_fim_semana	decimal_nao_negativo			L8-06: acréscimo no fim de semana
+TBREPGER	INCIDE_FILME	regra_repasse_item.incide_filme	booleano_sn			L8-06: S/N
+TBREPGER	GER_VLR_INTERVALO	regra_repasse_item.gera_valor_intervalo	booleano_sn			L8-06: S/N
+TBREPGER	PROCTO_INI	regra_repasse_item.codigo_procedimento_inicial	inteiro_zero_nulo			L8-06: faixa de procedimentos; 0 = sem limite
+TBREPGER	PROCTO_FIM	regra_repasse_item.codigo_procedimento_final	inteiro_zero_nulo			L8-06: fim da faixa; 0 = sem limite
+TBREPGER_TBCBOPRO	ID_TBREPGER	regra_repasse_profissional.regra_repasse_id				L8-06: regra (TBREPGER, mesma fatia); regra recusada: pai_pendente
+TBREPGER_TBCBOPRO	ID_TBCBOPRO	regra_repasse_profissional.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-06: profissional da inscrição no conselho (o principal de TBCBOPRO é a inscrição)
+TBREPGER_TBCBOPRO	ID_TBREPGER	regra_repasse_profissional.vigencia_inicio	data		ref:TBREPGER>DATA	L8-06: vigência da regra (a ligação não tem data própria)
+HTPROCTO	DATA_HORA_HISTORICO	trilha_auditoria.ocorrido_em	data_hora			L8-06: histórico do nome do procedimento vira trilha (historico_entidade, como HTATENDIMENTO); só a trilha: o segundo destino do mapa (item_faturavel) criaria item novo por versão
+HTPROCTO	=alteracao	trilha_auditoria.acao				L8-06: cada linha é uma alteração
+HTPROCTO	=item_faturavel	trilha_auditoria.entidade				L8-06: entidade afetada: item_faturavel, o destino decidido para TBPROCTO (F4-decisoes-destino.md, L8-03)
+HTPROCTO	ID_TBPROCTO	trilha_auditoria.entidade_id				L8-06: item faturável do procedimento (principal de TBPROCTO); enquanto TBPROCTO não carrega: NULL com pai_inexistente em toda linha (pedido de referência obrigatória e de pai_nao_carregado na cobertura)
+HTPROCTO	#retrato	trilha_auditoria.dados_antes				L8-06: retrato JSON da versão anterior (nome antigo)
+FCCTAEXT_FCTISSLOTEPROT	ID_FCTISSLOTEPROT	lote_tiss_conta.lote_tiss_id				L8-06: lote TISS (FCTISSLOTEPROT, mesma fatia)
+FCCTAEXT_FCTISSLOTEPROT	ID_FCCTAEXT	lote_tiss_conta.conta_hospitalar_id				L8-06: conta externa
+#--- bloqueadas por falta de regra do motor (pedidos em saida/L8-06.json); declaração pronta, comentada
+#FCCTAEXT	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_conta sem alimentadora, NOT NULL); o resto pronto abaixo
+#FCCTAEXT	@estabelecimento	conta_hospitalar.estabelecimento_id				L8-06
+#FCCTAEXT	#codigo_derivado:ID:20:e	conta_hospitalar.numero				L8-06: número = chave da origem com prefixo (não colide com a internação)
+#FCCTAEXT	COD	conta_hospitalar.atendimento_id			ref:RECADATE	L8-06: COD é o registro do atendimento externo
+#FCCTAEXT	COD	conta_hospitalar.paciente_id			ref:RECADATE>PRONT>RICADPAC	L8-06
+#FCCTAEXT	CON	conta_hospitalar.fonte_pagadora_id			ref:TBCONVEN	L8-06
+#FCCTAEXT	TIPO_CTA	conta_hospitalar.natureza	codigo_char	valores		L8-06
+#FCCTAEXT	#data:ANOPRO,MESPRO	conta_hospitalar.competencia				L8-06
+#FCCTAEXT	BAIXA	conta_hospitalar.inicio_em	data			L8-06
+#FCCTAEXT	ALTA	conta_hospitalar.fim_em	data_hora			L8-06
+#FCCTAEXT	SENHA	conta_hospitalar.senha_autorizacao	texto			L8-06
+#FCCTAEXT	DATA_FEC	conta_hospitalar.fechada_em	data_hora			L8-06
+#FCCTAEXT	OBS	conta_hospitalar.observacao	texto_longo			L8-06
+#RICONTAS	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_conta, NOT NULL). Pronto: atendimento pela internação (RICADINT, coluna ID_ATCABECATEND, até ATCABECATEND), paciente pela internação (PRONT até RICADPAC), natureza internação, competência pelo ano e mês, número derivado de COD com prefixo
+#FCCTAAUD	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_auditoria, NOT NULL) e conta pelos campos de negócio (ANOPRO, MESPRO, TIPO_CTA, COD: colunas que não são a chave do pai); a conta (FCCTAEXT) também espera
+#FCLANAUD	-					L8-06: falta regra do motor: item da conta pelos campos de negócio (tipo, data, hora, procedimento, local, ato: colunas que não são a chave do pai); auditoria (FCCTAAUD) também espera
+#FCLANEXT	-					L8-06: falta regra do motor: item_faturavel sem alimentadora principal (TBTABTHM/TBTABDTH o têm como secundário: referência ao destino secundário) e glosa_item exige o cabeçalho da glosa; a conta (FCCTAEXT) também espera
+#FCINTEGRPA	-					L8-06: falta regra do motor: função da equipe (NOT NULL) sem coluna; item (FCLANEXT) também espera
+#FCTISSLOTEPROT	-					L8-06: falta regra do motor: versão do padrão TISS (NOT NULL) sem coluna nem cadeia na origem; tipo de guia só pelo id do catálogo
+#TBHISTTABDTH	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =diaria_taxa, períodos prontos
+#TBHISTTABMM	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =matmed, períodos prontos
+#TBHISTTABTHME	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =honorario_ambulatorial, períodos prontos
+#TBHISTTABTHMI	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =honorario_internacao, períodos prontos
+#REPROEXT	-					L8-06: carrega como complemento do item da conta (FCLANEXT), que espera regra do motor (pedido 3); a declaração pronta segue; linha sem ID_FCLANEXT recusa com pai_inexistente (visível)
+#REPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento da recepção repete; o resto do item já vem de FCLANEXT
+#REPROEXT	LOTE	conta_hospitalar_item.numero_lote	texto			L8-06: lote do imunobiológico aplicado (rastreabilidade); validade (VALVACINA), CID10, GUIACOMPL e TECNICA sem coluna no item: pedido de modelo no L8-06.json
+#RIPROEXT	-					L8-06: carrega como complemento do item da conta (FCLANEXT, pedido 3); APAC e DTAPAC sem coluna no item: pedido de modelo no L8-06.json
+#RIPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento repete

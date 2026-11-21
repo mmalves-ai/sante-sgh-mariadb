@@ -1,7 +1,9 @@
 """Fatia L8-04 (faturamento e restantes, módulo FAT): declarações planejadas, regras das colunas e coerência da imagem
 sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L8-04`."""
+import decimal
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_04
@@ -26,6 +28,11 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.plano["TBTIPO_PROCEDIMENTO"]["destinos"], ["tipo_lancamento"])
         self.assertEqual(self.plano["TBTPLANC"]["destinos"], ["tipo_lancamento"])
         self.assertEqual(self.plano["TBGRAUPARTPROC"]["destinos"], ["funcao_equipe_cobranca"])
+        # cobertura: destinos decididos (F4-decisoes-destino.md)
+        self.assertEqual(self.plano["TBPRESER"]["destinos"], ["prestador_terceiro"])
+        self.assertEqual(self.plano["TBSUBDES"]["destinos"], ["subgrupo_natureza_financeira"])
+        self.assertEqual(self.plano["TBTABTHM"]["destinos"], ["preco_procedimento", "item_faturavel"])
+        self.assertEqual(self.plano["TBFORMULAPAGTO"]["destinos"], ["regra_via_acesso"])
 
     def test_obrigatorias_do_destino_cobertas(self):
         obrig = {("TBRPATPREPASSE", "tipo_prestador_repasse"): {"codigo", "descricao", "categoria"},
@@ -33,7 +40,13 @@ class Plano(unittest.TestCase):
                  ("TBTABATO", "grupo_ato"): {"codigo", "descricao"},
                  ("TBTIPO_PROCEDIMENTO", "tipo_lancamento"): {"codigo", "descricao", "natureza"},
                  ("TBTPLANC", "tipo_lancamento"): {"codigo", "descricao", "natureza"},
-                 ("TBGRAUPARTPROC", "funcao_equipe_cobranca"): {"codigo", "descricao", "tipo_funcao"}}
+                 ("TBGRAUPARTPROC", "funcao_equipe_cobranca"): {"codigo", "descricao", "tipo_funcao"},
+                 ("TBPRESER", "prestador_terceiro"): {"estabelecimento_id", "codigo", "nome", "tipo_pessoa"},
+                 ("TBSUBDES", "subgrupo_natureza_financeira"): {"grupo_natureza_financeira_id", "codigo", "descricao",
+                                                                "classificacao"},
+                 ("TBTABTHM", "preco_procedimento"): {"tabela_preco_id", "sequencia", "item_faturavel_id"},
+                 ("TBFORMULAPAGTO", "regra_via_acesso"): {"descricao", "via_acesso_cirurgico_id", "ordem_procedimento",
+                                                          "percentual", "vigencia_inicio"}}
         for (t, dt), cs in obrig.items():
             self.assertTrue(cs <= set(self.cols(t, dt)), (t, cs - set(self.cols(t, dt))))
 
@@ -42,7 +55,10 @@ class Plano(unittest.TestCase):
                             ("TBSRVCON", "tipo_servico_contratado", "categoria", "=~outro"),
                             ("TBTPLANC", "tipo_lancamento", "natureza", "=~servico_hospitalar"),
                             ("TBTPLANC", "tipo_lancamento", "gera_repasse", "=~0"),
-                            ("TBGRAUPARTPROC", "funcao_equipe_cobranca", "tipo_funcao", "=~outro")]:
+                            ("TBGRAUPARTPROC", "funcao_equipe_cobranca", "tipo_funcao", "=~outro"),
+                            ("TBPRESER", "prestador_terceiro", "tipo_pessoa", "=~juridica"),
+                            ("TBSUBDES", "subgrupo_natureza_financeira", "classificacao", "=~despesa"),
+                            ("TBFORMULAPAGTO", "regra_via_acesso", "vigencia_inicio", "@vigencia_carga")]:
             self.assertEqual(self.cols(t, dt)[c]["coluna"], v, (t, c))
 
     def test_regras_das_colunas(self):
@@ -65,6 +81,58 @@ class Plano(unittest.TestCase):
                                           "MM": "material_medicamento"})
         self.assertEqual(rep["valores"], {"SH": "0", "SP": "1", "MM": "0"})
         self.assertNotIn("mm", nat["valores"])
+
+    def test_referencias_e_complemento(self):
+        p = self.cols("TBTABTHM", "preco_procedimento")
+        self.assertEqual((p["tabela_preco_id"]["coluna"], p["tabela_preco_id"]["referencia"]), ("TAB", "TBCTRTHM"))
+        self.assertEqual(p["item_faturavel_id"]["referencia"], "TBPROCTO")
+        self.assertEqual(p["sequencia"]["coluna"], "COD")
+        i = self.cols("TBTABTHM", "item_faturavel")
+        self.assertTrue(self.plano["TBTABTHM"]["opcoes"]["item_faturavel"]["complementa"])
+        self.assertEqual(i["id"]["referencia"], "TBPROCTO")
+        self.assertEqual(i["grupo_ato_id"]["referencia"], "TBTABATO")
+        self.assertEqual(i["sexo_permitido"]["valores"], {"M": "masculino", "F": "feminino", "A": "ambos"})
+        s = self.cols("TBSUBDES", "subgrupo_natureza_financeira")
+        self.assertEqual(s["grupo_natureza_financeira_id"]["referencia"], "TBGRUDES")
+        f = self.cols("TBFORMULAPAGTO", "regra_via_acesso")
+        self.assertEqual((f["via_acesso_cirurgico_id"]["referencia"], f["tipo_lancamento_id"]["referencia"]),
+                         ("TBTISSVIAACES", "TBTPLANC"))
+        self.assertEqual((f["ordem_procedimento"]["regra"], f["percentual"]["regra"]), ("piso:1", "faixa:0,999"))
+        pr = self.cols("TBPRESER", "prestador_terceiro")
+        self.assertEqual((pr["cnpj"]["regra"], pr["cep"]["regra"], pr["cnes"]["regra"]),
+                         ("cnpj", "inteiro_zeros_esquerda:8", "inteiro_zeros_esquerda:7"))
+        self.assertEqual(pr["aceita_cessao_credito"]["valores"], {"S": "0", "N": "1"})
+
+    def test_achados_da_revisao(self):
+        # código da função com prefixo de domínio: três origens gravam a mesma coluna única
+        g = self.cols("TBGRAUPARTPROC", "funcao_equipe_cobranca")
+        self.assertEqual(g["codigo"]["coluna"], "#codigo_derivado:ID:30:grau_part_")
+        # referências do prestador e do subgrupo (antes descartadas com 'pede X carregado')
+        pr = self.cols("TBPRESER", "prestador_terceiro")
+        self.assertEqual((pr["centro_custo_id"]["referencia"], pr["empresa_fornecedora_id"]["referencia"]),
+                         ("TBCENCUS", "TBFORNEC"))
+        self.assertIn("profissional_id", pr)
+        self.assertEqual(pr["base_repasse"]["valores"], {"C": "cobrado", "R": "recebido"})
+        self.assertEqual(self.cols("TBSUBDES", "subgrupo_natureza_financeira")["centro_custo_id"]["referencia"],
+                         "TBCENCUS")
+        # preço: situação A/I e modelo por índice quando há CH (nunca o padrão silencioso)
+        p = self.cols("TBTABTHM", "preco_procedimento")
+        self.assertEqual(p["ativo"]["regra"], "booleano_ai")
+        self.assertEqual((p["modelo_valor"]["coluna"], p["modelo_valor"]["regra"]), ("CH", "preenchido"))
+        self.assertEqual(p["modelo_valor"]["valores"], {"1": "indice", "0": "valor"})
+        # critério da fórmula: presumido visível (valor_presumido), não o padrão calado
+        self.assertEqual(self.cols("TBFORMULAPAGTO", "regra_via_acesso")["criterio_ordem"]["coluna"], "=~maior_valor")
+        # a via de acesso não é dada como carregada na imagem: a conciliação prova a dependência real
+        self.assertNotIn("TBTISSVIAACES", l8_04.PAIS_EXTERNOS)
+
+    def test_descartes_com_motivo_de_produto(self):
+        raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "sem_carga.tsv"
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(raiz)}
+        for t in l8_04.DESCARTADAS:
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], {"licenciado", "mecanismo_do_produto", "catalogo_oficial"}, t)
+            self.assertTrue(sc[t]["motivo"].startswith("L8-04: "), t)
+        self.assertNotIn("TBPERTHM", sc)  # falta mecanismo, não é descarte
 
     def test_bloqueadas_fora_do_plano(self):
         # presentes na imagem, as bloqueadas nunca entram no plano de carga: zero linha no destino
@@ -90,6 +158,11 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("booleano_sn", "S"), (True, None))
         self.assertEqual(a("booleano_sn", "X"), (None, "valor_fora_do_dominio"))
         self.assertEqual(a("codigo_char", "sp")[0], "sp")
+        self.assertEqual(a("cnpj", int(l8_04.cnpj_falso(112223330001))), (l8_04.cnpj_falso(112223330001), None))
+        self.assertEqual(a("cnpj", 12345678000100), (None, "documento_invalido"))
+        self.assertEqual(a("inteiro_zeros_esquerda:8", 1310100), ("01310100", None))
+        self.assertEqual(a("piso:1", 0)[1], "valor_elevado_ao_minimo")
+        self.assertEqual(a("faixa:0,999", decimal.Decimal("1500")), (None, "valor_fora_do_dominio"))
 
     def test_colisao_de_caixa_no_codigo(self):
         grupos = sentinela.colisoes_caixa(["SH", "SP", "MM", "mm", "XX"])
@@ -104,7 +177,7 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(RECUSA))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            self.assertEqual(cont[t], e["gravados"] + recusas + l8_04.RECUSADAS_SEM_PAI.get(t, 0), t)
         for t in l8_04.BLOQUEADAS:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t)
 

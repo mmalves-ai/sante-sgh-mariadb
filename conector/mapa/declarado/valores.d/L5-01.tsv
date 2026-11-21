@@ -1,0 +1,12 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+PREMAILCFG	CONEXAO_SSL	servidor_email.seguranca	1	ssl_tls	L5-01: conexão segura ligada
+PREMAILCFG	CONEXAO_SSL	servidor_email.seguranca	0	nenhuma	L5-01: desligada: o sistema antigo conectava sem criptografia
+PREMAILCFG	CONEXAO_SSL	servidor_email.seguranca		nenhuma	L5-01: vazia: o sistema antigo conectava sem criptografia
+PRTERMOCAD	ATIVO	termo_uso_versao.situacao	1	publicado	L5-01: termo ativo
+PRTERMOCAD	ATIVO	termo_uso_versao.situacao	0	revogado	L5-01: termo inativo (substituído)
+PRTERMOCAD	ATIVO	termo_uso_versao.situacao		rascunho	L5-01: sem situação: nunca ativado
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	A	ambulatorial	L5-01: letra inicial do tipo de atendimento
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	U	urgencia	L5-01: letra inicial do tipo de atendimento
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	I	internacao	L5-01: letra inicial do tipo de atendimento
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	E	externo	L5-01: letra inicial do tipo de atendimento
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	T	todos	L5-01: letra inicial do tipo de atendimento

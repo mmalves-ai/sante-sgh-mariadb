@@ -7,8 +7,8 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_03
 
 FATIA = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "CDTPRETCONS", "PSTPRETORNO",
-         "REAGECRI", "RECANAGE", "RECTRAGE", "REPACAGD_EXCLUSAO", "REPACAGI", "RESITAGE", "RETIPAGE",
-         "RETP_INTEG_AGENDA_ONLINE", "REAGENDA")
+         "REAGECRI", "RECANAGE", "RECTRAGE", "REPACAGI", "RESITAGE", "RETIPAGE",
+         "RETP_INTEG_AGENDA_ONLINE", "REAGENDA", "SIAGECRI")
 BLOQUEADAS = set(FATIA) - set(l6_03.CARREGADAS)
 
 
@@ -73,6 +73,41 @@ class FatiaL603(unittest.TestCase):
                           if k.startswith("restricao_destino_") or k in ("pai_pendente", "codigo_colisao_caixa"))
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]), t)
 
+
+    def test_descarte_de_produto_dos_dominios_de_retorno(self):
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        for t in l6_03.DESCARTADAS:
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "mecanismo_do_produto"), t)
+            self.assertTrue(sc[t]["motivo"], t)
+            self.assertFalse([c for c in self.decl if c["tabela"] == t and c["destino"]], t)
+
+    def test_siagecri_declarada_sem_destino_com_motivo(self):
+        cols = [c for c in self.decl if c["tabela"] == "SIAGECRI"]
+        self.assertEqual({c["coluna"] for c in cols}, {n for n, _, _ in l6_03.COLUNAS["SIAGECRI"]})
+        self.assertTrue(all(not c["destino"] and "SIAGENDA" in c["motivo"] for c in cols))
+
+    def test_exclusao_de_marcacao_e_da_l6_04(self):
+        # REPACAGD_EXCLUSAO é da L6-04 (ordem 1016): nenhuma linha dela na declaração nem na imagem da L6-03
+        self.assertFalse([c for c in self.m["colunas_decl"] if c["tabela"] == "REPACAGD_EXCLUSAO"
+                          and c.get("_arquivo", "").endswith("L6-03.tsv")])
+        self.assertNotIn("REPACAGD_EXCLUSAO", l6_03.COLUNAS)
+
+    def test_restricao_por_tipo_de_agenda_tem_o_significado_certo(self):
+        # ID_RETPAGEN e TPAGEN apontam o tipo de agenda da recepção (duplicado de categoria_agenda), não o tipo de
+        # marcação: não podem ir para tipo_marcacao_id e o motivo diz o conceito certo
+        for t, c in [("AGCADMOTIVO", "ID_RETPAGEN"), ("RETIPAGE", "TPAGEN")]:
+            d = next(x for x in self.decl if (x["tabela"], x["coluna"]) == (t, c))
+            self.assertFalse(d["destino"], (t, c))
+            self.assertIn("tipo de agenda da recepção", d["motivo"].lower())
+            self.assertIn("categoria", d["motivo"])
+
+    def test_bloqueadas_dizem_o_mecanismo_que_falta(self):
+        for t in BLOQUEADAS - set(l6_03.DESCARTADAS):
+            ms = {c["motivo"] for c in self.decl if c["tabela"] == t}
+            self.assertEqual(len(ms), 1, t)
+            m = ms.pop()
+            self.assertIn("pedidos", m)
+            self.assertIn("declaração pronta em saida/L6-03.json", m)
 
     def test_colisao_de_caixa_na_situacao(self):
         linhas = {}

@@ -11,6 +11,77 @@ TBCAPACIDADE_CIVIL	ID	capacidade_civil.codigo	texto			L5-04: número vira o cód
 TBCAPACIDADE_CIVIL	DESCRICAO	capacidade_civil.descricao	texto			L5-04: descrição obrigatória
 TBCLASSC	COD	classe_fonte_pagadora.codigo	texto			L5-04: número da classe vira o código (único), como texto
 TBCLASSC	NOME	classe_fonte_pagadora.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha
-TBCLASSC	=outro	classe_fonte_pagadora.natureza				L5-04: natureza PRESUMIDA (a origem não classifica); o faturamento usa a natureza: o cliente reclassifica antes de faturar. Pendência valor_presumido por linha pedida ao integrador; contagem na saída da fatia
+TBCLASSC	=~outro	classe_fonte_pagadora.natureza				L5-04: natureza PRESUMIDA (a origem não classifica): literal presumido com a pendência baixa valor_presumido por linha; o cliente reclassifica antes de faturar
 TBESCOLARIDADE	ID	nivel_escolaridade.codigo	texto			L5-04: número do nível vira o código (único), como texto
 TBESCOLARIDADE	NOME	nivel_escolaridade.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha
+FAMEDSOL	CRM	solicitante_externo.id			ref:TBMEDSOL.COD_CONSELHO_PROFISSIONAL;complementa	L5-04: o solicitante do SUS é o mesmo solicitante externo (TBMEDSOL, que traz conselho, UF e CBO): COMPLETA a linha dele, achada pelo número no conselho (chave alternativa; repetido: pai_ambiguo; sem solicitante: recusa pai_inexistente)
+FAMEDSOL	CPF	solicitante_externo.cpf	cpf			L5-04: CPF guardado em DOUBLE: só dígitos, 11 com zeros à esquerda, dígito verificador conferido
+FAMEDSOL	CNS	solicitante_externo.cns	inteiro_zeros_esquerda:15			L5-04: CNS do profissional (BPA e APAC), 15 dígitos
+FPECIV	#codigo_derivado:COD_ECIV:30:folha_	estado_civil.codigo	texto			L5-04: o código da folha é outro espaço de códigos que o do cadastro (TBECIV): prefixo de domínio, sem adotar pelo número (nada prova que o código N da folha é o mesmo estado civil do N do cadastro); o cliente funde as linhas iguais no painel
+FPECIV	DESCRICAO	estado_civil.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha
+FPECIV	COD_ESOCIAL	estado_civil.codigo_esocial	inteiro_faixa:1,5			L5-04: código do estado civil no eSocial (1 a 5); fora da faixa: NULL com valor_fora_do_dominio
+GETABFUN	NOME	pessoa_fisica.nome	texto_nome			L5-04: nome do credor; nulo recusa a linha (restrição do destino)
+GETABFUN	CPF	pessoa_fisica.cpf	cpf		adotar:cpf	L5-04: pessoa única pelo CPF: a que já existe é adotada (adotado_existente), sem sobrescrever
+GETABFUN	INSS	pessoa_fisica.pis_pasep	inteiro_zeros_esquerda:11			L5-04: inscrição do autônomo na previdência (NIT, mesmo cadastro do PIS/PASEP): 11 dígitos; outro caractere: NULL com valor_fora_do_dominio
+GETABFUN	@id	conta_bancaria_credor.pessoa_fisica_id				L5-04: a conta é do credor pessoa física da linha
+GETABFUN	#item	conta_bancaria_credor.banco_id	inteiro	banco	desdobrar:BANCO=corrente	L5-04: conta só quando há banco: uma linha da conta se BANCO tem código do catálogo oficial (COMPE); sem banco ou código ausente: sem conta (catalogo_codigo_*)
+GETABFUN	#rotulo	conta_bancaria_credor.tipo_conta				L5-04: a origem não distingue o tipo: conta corrente (o padrão do produto)
+GETABFUN	AGENCIA	conta_bancaria_credor.numero_agencia	texto			L5-04: 
+GETABFUN	CONTA	conta_bancaria_credor.numero_conta	texto			L5-04: número da conta como texto
+GETABFUN	DIGITO	conta_bancaria_credor.digito_conta	texto			L5-04: 
+GETABFUN	NOME	conta_bancaria_credor.titular_nome	texto_nome			L5-04: o titular é o próprio credor
+GETABFUN	CPF	conta_bancaria_credor.titular_documento	cpf			L5-04: documento do titular; CPF inválido com banco recusa a linha (a conta sem titular não paga)
+REPACAGN	@estabelecimento	pre_cadastro.estabelecimento_id				L5-04: a origem não traz o estabelecimento com referência: o único do cliente (vários: estabelecimento_indefinido, nunca atribuído a um deles)
+REPACAGN	PACIENTE	pre_cadastro.nome	texto_nome			L5-04: nome de quem marcou sem prontuário
+REPACAGN	DATA_NASCIMENTO	pre_cadastro.data_nascimento	data			L5-04: data sentinela vira NULL e recusa a linha (o destino exige)
+REPACAGN	CPF	pre_cadastro.cpf	cpf			L5-04: 
+REPACAGN	CEP	pre_cadastro.cep	inteiro_zeros_esquerda:8			L5-04: CEP em inteiro perde o zero à esquerda: 8 dígitos
+REPACAGN	ENDERECO	pre_cadastro.logradouro	texto			L5-04: 
+REPACAGN	NUMERO	pre_cadastro.numero_endereco	inteiro_zero_nulo			L5-04: 0 é 'sem número'
+REPACAGN	COMPL	pre_cadastro.complemento	texto			L5-04: 
+REPACAGN	BAIRRO	pre_cadastro.bairro	texto			L5-04: 
+REPACAGN	IBGE	pre_cadastro.municipio_ibge_id	inteiro	ibge_municipio		L5-04: município pelo código IBGE (cidade e UF em texto são redundantes)
+REPACAGN	FONE	pre_cadastro.telefone	texto			L5-04: 
+REPACAGN	CONV	pre_cadastro.fonte_pagadora_id			ref:TBCONVEN	L5-04: convênio informado na marcação
+REPACAGN	OBS	pre_cadastro.observacao	texto_longo			L5-04: 
+REPACAGN	PRONT	pre_cadastro.paciente_id			ref:RICADPAC.PRONT	L5-04: marcação de paciente já cadastrado: o paciente pelo prontuário (chave alternativa); sem prontuário fica NULL; prontuário sem paciente: pai_inexistente
+REPACAGN	PRONT	pre_cadastro.situacao	preenchido	valores	ref:RICADPAC.PRONT>DTCAD	L5-04: convertido quando o paciente do prontuário existe e tem data de cadastro (fora da fila da recepção); senão o padrão pendente (a marcação antiga expira pelo produto)
+REPACAGN	PRONT	pre_cadastro.convertido_em	data		ref:RICADPAC.PRONT>DTCAD	L5-04: conversão = cadastro do paciente pelo prontuário (encadeada); sem paciente: NULL, coerente com a situação
+SIPACAGN	@estabelecimento	pre_cadastro.estabelecimento_id				L5-04: o único estabelecimento do cliente (vários: estabelecimento_indefinido)
+SIPACAGN	PACIENTE	pre_cadastro.nome	texto_nome			L5-04: nome de quem marcou o exame
+SIPACAGN	PRONT	pre_cadastro.data_nascimento	data		ref:RICADPAC.PRONT>NASC	L5-04: a origem não guarda a data de nascimento: vem do cadastro do paciente pelo prontuário (encadeada); sem prontuário a linha é recusada pelo destino até o modelo aceitar pré-cadastro sem data (pedido em saida/L5-04.json)
+SIPACAGN	CPF	pre_cadastro.cpf	cpf			L5-04: 
+SIPACAGN	CEP	pre_cadastro.cep	inteiro_zeros_esquerda:8			L5-04: 
+SIPACAGN	ENDERECO	pre_cadastro.logradouro	texto			L5-04: 
+SIPACAGN	NUMERO	pre_cadastro.numero_endereco	inteiro_zero_nulo			L5-04: 
+SIPACAGN	COMPL	pre_cadastro.complemento	texto			L5-04: 
+SIPACAGN	BAIRRO	pre_cadastro.bairro	texto			L5-04: 
+SIPACAGN	IBGE	pre_cadastro.municipio_ibge_id	inteiro	ibge_municipio		L5-04: 
+SIPACAGN	FONE	pre_cadastro.telefone	texto			L5-04: 
+SIPACAGN	CONV	pre_cadastro.fonte_pagadora_id			ref:TBCONVEN	L5-04: convênio informado na marcação
+SIPACAGN	OBS	pre_cadastro.observacao	texto_longo			L5-04: 
+SIPACAGN	PRONT	pre_cadastro.paciente_id			ref:RICADPAC.PRONT	L5-04: marcação de paciente já cadastrado: o paciente pelo prontuário (chave alternativa); sem prontuário fica NULL; prontuário sem paciente: pai_inexistente
+SIPACAGN	PRONT	pre_cadastro.situacao	preenchido	valores	ref:RICADPAC.PRONT>DTCAD	L5-04: convertido quando o paciente do prontuário existe e tem data de cadastro (fora da fila da recepção); senão o padrão pendente (a marcação antiga expira pelo produto)
+SIPACAGN	PRONT	pre_cadastro.convertido_em	data		ref:RICADPAC.PRONT>DTCAD	L5-04: conversão = cadastro do paciente pelo prontuário (encadeada); sem paciente: NULL, coerente com a situação
+RESEGUR	REG	titular_cobertura.cobertura_paciente_id			ref:RECADATE>PRONT>RICADPAC.PRONT>ID>RICADPAC_TBCONVEN.ID_RICADPAC;adotar:cobertura_paciente_id	L5-04: cobertura do paciente do atendimento (encadeada: atendimento > prontuário > paciente > cobertura); paciente com mais de uma cobertura: pai_ambiguo e recusa até a referência composta após passo encadeado (pedido); o titular é um por cobertura: o de outro atendimento da mesma cobertura é adotado
+RESEGUR	NOME	titular_cobertura.nome	texto_nome			L5-04: 
+RESEGUR	TIPO	titular_cobertura.tipo_titular	texto_char	valores		L5-04: F pessoa física, J pessoa jurídica (contrato coletivo); vazio: o padrão pessoa_fisica; outro: NULL com valor_fora_do_dominio (padrão). Documento incoerente com o tipo recusa a linha pelo CHECK do destino (visível)
+RESEGUR	CNPJ	titular_cobertura.cnpj	cnpj			L5-04: CNPJ do titular pessoa jurídica (DOUBLE): 14 dígitos com zeros à esquerda, dígito verificador conferido
+RESEGUR	PARENTE	titular_cobertura.tipo_parentesco_id			ref:TBPARENTE	L5-04: parentesco do paciente com o titular pelo domínio de parentesco da origem (TBPARENTE -> tipo_parentesco, L5-05); 0 é sem parentesco
+RESEGUR	CPF	titular_cobertura.cpf	cpf			L5-04: CPF em DOUBLE: 11 dígitos com zeros à esquerda
+RESEGUR	DTNASC	titular_cobertura.data_nascimento	data			L5-04: 
+RESEGUR	FONE	titular_cobertura.telefone	texto			L5-04: 
+RESEGUR	CEP	titular_cobertura.cep	inteiro_zeros_esquerda:8			L5-04: 
+RESEGUR	ENDERECO	titular_cobertura.logradouro	texto			L5-04: 
+RESEGUR	NUMERO	titular_cobertura.numero_endereco	inteiro_zero_nulo			L5-04: 
+RESEGUR	COMPL	titular_cobertura.complemento	texto			L5-04: 
+RESEGUR	BAIRRO	titular_cobertura.bairro	texto			L5-04: 
+SITECNIC	CPF	pessoa_fisica.cpf	cpf		adotar:cpf;pessoa_fisica	L5-04: técnico como pessoa única pelo CPF (adotado_existente se já existe); o papel de profissional espera o destino pessoa_fisica antes de profissional no mapa (pedido)
+SITECNIC	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	L5-04: 
+SITECNIC	APELIDO	pessoa_fisica.apelido	texto_nome		pessoa_fisica	L5-04: 
+TBCLINICA	COD	clinica_assistencial.codigo	codigo_char			L5-04: código de 1 caractere com a caixa preservada; colisão de caixa: codigo_colisao_caixa
+TBCLINICA	NOME	clinica_assistencial.descricao	texto_nome			L5-04: 
+TBCLINICA	SITUACAO	clinica_assistencial.ativo	booleano_ai			L5-04: A ativa, I inativa; vazio fica o padrão (ativa)
+TBCLINICA	=~outra	clinica_assistencial.natureza				L5-04: natureza PRESUMIDA (pendência baixa valor_presumido): o tipo de internação da TISS (ID_TBTISSTPINTER) é id de terminologia sem carregador oficial nem colunas no mapa, então não prova o código nem a natureza; o cliente classifica as clínicas
+TBECIV	COD	estado_civil.codigo	texto		adotar:codigo	L5-04: o código de negócio é COD (uma linha por sexo): as variantes do mesmo COD são ADOTADAS num id só (adotado_existente); o código da folha vem com prefixo e nunca é adotado aqui
+TBECIV	NOME	estado_civil.descricao	texto_nome			L5-04: 

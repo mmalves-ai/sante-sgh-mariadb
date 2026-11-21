@@ -5,3 +5,12 @@ TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.natureza	MM	material_medicamento	L8-0
 TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	SH	0	L8-04: não entra na base de repasse
 TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	SP	1	L8-04: honorário entra na base de repasse
 TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	MM	0	L8-04: não entra na base de repasse
+TBPRESER	SEM_CESSAO	prestador_terceiro.aceita_cessao_credito	S	0	L8-04: S = sem cessão de crédito
+TBPRESER	SEM_CESSAO	prestador_terceiro.aceita_cessao_credito	N	1	L8-04: N = aceita a cessão de crédito
+TBTABTHM	SEXO	item_faturavel.sexo_permitido	M	masculino	L8-04: mesmo domínio do sexo da origem (M/F)
+TBTABTHM	SEXO	item_faturavel.sexo_permitido	F	feminino	L8-04: mesmo domínio do sexo da origem (M/F)
+TBTABTHM	SEXO	item_faturavel.sexo_permitido	A	ambos	L8-04: A = ambos os sexos
+TBPRESER	REP_SOBRE	prestador_terceiro.base_repasse	C	cobrado	L8-04: repasse sobre o valor cobrado
+TBPRESER	REP_SOBRE	prestador_terceiro.base_repasse	R	recebido	L8-04: repasse sobre o valor recebido
+TBTABTHM	CH	preco_procedimento.modelo_valor	1	indice	L8-04: CH preenchido: preço por índice
+TBTABTHM	CH	preco_procedimento.modelo_valor	0	valor	L8-04: sem CH: valor direto

@@ -12,12 +12,12 @@ from sante_conector.sintetica_d import l8_13
 RAIZ = Path(__file__).resolve().parents[1]  # /app no container (db/migracoes montado só leitura)
 CARREGADAS = set(l8_13.CARREGADAS)
 NA_IMAGEM = CARREGADAS | set(l8_13.NAO_CARREGADAS)
-DESTINO = {"CDACOMODTIPO": "tipo_acomodacao_plano", "CDDIAVENCCOB": "dia_vencimento_permitido",
+DESTINO = {"CDSTATUSCAD": "situacao_cadastral_beneficiario", "CDACOMODTIPO": "tipo_acomodacao_plano", "CDDIAVENCCOB": "dia_vencimento_permitido",
            "CDGUIASTATUS": "situacao_guia_plano", "CDINCIDECOMIS": "incidencia_comissao",
            "CDMOTIVOBAIXA": "motivo_cancelamento_contrato", "CDMOTIVOSOLCART": "motivo_solicitacao_cartao",
            "CDORIGEMCOBR": "origem_cobranca_plano",
            "CDORIGEMGUIA": "origem_guia_plano", "CDPGTOBALCAOCP": "forma_pagamento_coparticipacao",
-           "CDPLANOCLASSIF": "classificacao_plano", "CDSTATUSCAD": "situacao_cadastral_beneficiario",
+           "CDPLANOCLASSIF": "classificacao_plano", "CDMSGCOBRANCA": "mensagem_cobranca",
            "CDMOTMOVIMCAD": "motivo_movimento_cadastral", "CDSTATUSSOLCART": "situacao_solicitacao_cartao",
            "CDTPACUMULPOR": "nivel_acumulo_limite", "CDTPCOBRANCA": "forma_cobranca_plano",
            "CDTPCONTRATO": "tipo_contrato_plano"}
@@ -47,16 +47,20 @@ class Plano(unittest.TestCase):
         for t, dt in DESTINO.items():
             self.assertEqual(self.plano[t]["destinos"], [dt], t)
 
-    def test_nao_carregadas_sem_destino(self):
-        # listas que são atributo de outra tabela: carregar criaria linhas falsas e colidiria no código único
+    def test_nao_carregadas_sao_descarte_de_produto(self):
+        # listas fixas que no modelo são domínio (CHECK) ou atributo: descarte com causa de produto, sem declaração
+        sem = {r["tabela"]: r for r in mapa.ler_tsv(RAIZ / "mapa/declarado/sem_carga.tsv")}
         for t in l8_13.NAO_CARREGADAS:
             self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == t and c.get("destino")], t)
+            self.assertEqual((sem[t]["situacao"], sem[t]["causa"]), ("descarte", "mecanismo_do_produto"), t)
+            self.assertTrue(sem[t]["motivo"].startswith("L8-13:"), t)
 
-    def test_mensagem_aguarda_data_da_carga(self):
-        decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "CDMSGCOBRANCA"]
-        self.assertFalse([c for c in decl if c.get("destino")])
-        self.assertIn("vigencia_inicio", decl[0]["motivo"])
-        # nenhuma data fictícia, nem na declaração planejada (comentada)
+    def test_mensagem_vigencia_da_carga(self):
+        c = self.cols("CDMSGCOBRANCA")
+        self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
+        self.assertEqual(c["prioridade"]["regra"], "inteiro_zero_nulo")
+        self.assertEqual(c["posicao"]["coluna"], "=~instrucao_boleto")
+        # nenhuma data fictícia
         texto = (RAIZ / "mapa/declarado/colunas.d/L8-13.tsv").read_text(encoding="utf-8")
         self.assertIsNone(re.search(r"=~?\d{4}-\d{2}-\d{2}", texto))
 
@@ -67,14 +71,25 @@ class Plano(unittest.TestCase):
             self.assertEqual(c["depara"], "valores", t)
             self.assertEqual(c["valores"], {str(n): "sistema-%d" % n for n in range(100)}, t)
 
-    def test_tipo_do_movimento_pela_situacao(self):
+    def test_situacao_cadastral_carregada_e_tipo_presumido(self):
+        # a situação cadastral do beneficiário é carregada no destino do mapa; o tipo do movimento não tem evidência
+        # na origem: literal presumido, sem de-para por código inventado
+        s = self.cols("CDSTATUSCAD")
+        self.assertEqual((s["codigo"]["coluna"], s["descricao"]["coluna"]), ("ID", "NOME"))
         c = self.cols("CDMOTMOVIMCAD")["tipo_movimento"]
-        self.assertEqual((c["coluna"], c["regra"], c["depara"]), ("ID_CDSTATUSCAD", "inteiro", "valores"))
-        self.assertEqual(c["valores"], {"1": "inclusao", "2": "alteracao", "3": "exclusao", "4": "reativacao"})
-        m = re.search(r"CHECK \(tipo_movimento IN \(([^)]*)\)\)", self.ddl["motivo_movimento_cadastral"])
-        for v in c["valores"].values():
-            self.assertIn("'%s'" % v, m.group(1))
-        self.assertIn("ID_CDSTATUSCAD", self.plano["CDMOTMOVIMCAD"]["lidas"])
+        self.assertEqual(c["coluna"], "=~alteracao")
+        self.assertFalse(c.get("valores"))
+        decl = [l for l in (RAIZ / "mapa/declarado/valores.d/L8-13.tsv").read_text(encoding="utf-8").splitlines()
+                if "tipo_movimento" in l]
+        self.assertEqual(decl, [])
+
+    def test_categoria_regulatoria_reclassificacao_obrigatoria(self):
+        for t in ("CDPLANOCLASSIF", "CDTPCONTRATO"):
+            c = self.cols(t)["tipo_contratacao"]
+            self.assertTrue(c["coluna"].startswith("=~"), t)
+            self.assertFalse(c.get("valores"), t)
+        texto = (RAIZ / "mapa/declarado/colunas.d/L8-13.tsv").read_text(encoding="utf-8")
+        self.assertEqual(texto.count("RECLASSIFICAÇÃO OBRIGATÓRIA"), 2)
 
     def test_obrigatorias_sem_padrao_cobertas(self):
         for t, dt in DESTINO.items():
@@ -96,7 +111,8 @@ class Plano(unittest.TestCase):
     def test_regras_das_colunas(self):
         self.assertEqual(self.cols("CDACOMODTIPO")["codigo"]["regra"], "texto")
         self.assertEqual(sentinela.aplicar("texto", 12), ("12", None))
-        self.assertFalse([c for c in self.cols("CDMOTMOVIMCAD").values() if c["coluna"].startswith("=")])
+        self.assertEqual([c["coluna"] for c in self.cols("CDMOTMOVIMCAD").values() if c["coluna"].startswith("=")],
+                         ["=~alteracao"])
         self.assertEqual(sentinela.aplicar("texto_nome", "  Quarto   exemplo  B "), ("Quarto exemplo B", None))
         d = self.cols("CDDIAVENCCOB")
         self.assertEqual((d["dia"]["regra"], d["ativo"]["regra"]), ("inteiro", "booleano_sn"))
@@ -105,7 +121,7 @@ class Plano(unittest.TestCase):
 
     def test_presumidos_marcados(self):
         for t in ("CDACOMODTIPO", "CDINCIDECOMIS", "CDMOTIVOBAIXA", "CDORIGEMCOBR", "CDORIGEMGUIA",
-                  "CDPGTOBALCAOCP", "CDPLANOCLASSIF", "CDTPACUMULPOR", "CDTPCOBRANCA", "CDTPCONTRATO"):
+                  "CDPGTOBALCAOCP", "CDPLANOCLASSIF", "CDMOTMOVIMCAD", "CDTPACUMULPOR", "CDTPCOBRANCA", "CDTPCONTRATO", "CDMSGCOBRANCA"):
             self.assertTrue([c for c in self.cols(t).values() if c["coluna"].startswith("=~")], t)
 
 

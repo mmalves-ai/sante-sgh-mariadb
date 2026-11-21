@@ -1,0 +1,7 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+GEITENS	CURVA	insumo.curva_abc	A	A	L7-07: curva ABC
+GEITENS	CURVA	insumo.curva_abc	B	B	L7-07: curva ABC
+GEITENS	CURVA	insumo.curva_abc	C	C	L7-07: curva ABC
+GEITENS	CURVA_XYZ	insumo.curva_xyz	X	X	L7-07: curva XYZ
+GEITENS	CURVA_XYZ	insumo.curva_xyz	Y	Y	L7-07: curva XYZ
+GEITENS	CURVA_XYZ	insumo.curva_xyz	Z	Z	L7-07: curva XYZ

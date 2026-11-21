@@ -11,7 +11,11 @@ Carregável: tabela do mapa (`conector/mapa/tabelas.tsv`) com tabela física de 
   (`sem_valor`, `duplicado`, `licenciado`, `catalogo_oficial`, `mecanismo_do_produto`), sempre com motivo.
 - BLOQUEADA: o resto, com a causa:
   - declarada em `sem_carga.tsv` (situacao=bloqueada; causa e motivo livres, para o dono revisar);
-  - `coluna_obrigatoria_sem_fonte:<destino.coluna>` (declarada, mas o destino recusaria toda linha);
+  - `coluna_obrigatoria_sem_fonte:<destino.coluna>` (declarada, mas o destino recusaria toda linha; destino
+    `opcional` ou `complementa`, UPDATE da linha que o pai já gravou, não exige);
+  - `pai_nao_carregado:<TABELA>` também para tabela DECLARADA cuja coluna obrigatória do destino vem por referência
+    (gerada ou `ref:`, a última tabela dos passos) de um pai BLOQUEADO ou DESCARTADO: toda linha seria recusada
+    (resolvido até o ponto fixo);
   - `pai_nao_carregado:<TABELA>` (sem declaração e pai obrigatório do mapa que também não carrega);
   - inferida dos pedidos das fatias (`docs/obra/fatias/f4/saida/<fatia>.json`) ou da declaração comentada (`#TABELA`
     em `colunas.d`): `referencia_composta`, `referencia_encadeada`, `vigencia_sem_fonte`, `desdobrar_coluna`,
@@ -156,7 +160,8 @@ def avaliar(raiz=RAIZ):
     plano = {p["tabela"]: p for p in carga_mapa.planejar(mexec, nomes)}
     opcionais = {}
     for c in d["colunas_decl"]:
-        if "opcional" in (c.get("via") or "").split(";") and c.get("destino"):
+        via = (c.get("via") or "").split(";")
+        if ("opcional" in via or "complementa" in via) and c.get("destino"):
             opcionais.setdefault(c["tabela"], set()).add(c["destino"].split(".")[0])
     fat = _indice()
     for c in d["colunas_decl"]:  # tabela já declarada fica com a fatia que a declarou (o índice pode ter mudado)
@@ -215,6 +220,34 @@ def avaliar(raiz=RAIZ):
         if c == "destino_a_rever" and t in decididas:
             c = "destino_decidido"
         res[t] = (f, sit, c)
+    # tabela que carrega, mas cuja coluna obrigatória do destino depende de um pai que não carrega (ponto fixo)
+    obrig_pai = {}
+    for t, p in plano.items():
+        for dt in p["destinos"]:
+            if dt in opcionais.get(t, ()):
+                continue
+            ob = _colunas_ddl(ddl, dt)
+            for c in p["colunas"][dt]:
+                if not ob.get(c["destino"]):
+                    continue
+                pai = ""
+                if c.get("passos"):
+                    tabs = [x for x in c["passos"] if "tabela" in x]
+                    pai = tabs[-1]["tabela"] if "tabela" in c["passos"][-1] else ""
+                elif c["regra"] == "chave_origem" and c.get("referencia") and c["referencia"] not in p["duas_fases"]:
+                    pai = c["referencia"]
+                if pai and pai != t:
+                    obrig_pai.setdefault(t, []).append(pai)
+    mudou = True
+    while mudou:
+        mudou = False
+        for t, ps in obrig_pai.items():
+            if res.get(t, (0, ""))[1] != "CARREGA":
+                continue
+            ruim = next((x for x in ps if x in res and res[x][1] in ("BLOQUEADA", "DESCARTE")), None)
+            if ruim:
+                res[t] = (res[t][0], "BLOQUEADA", "pai_nao_carregado:" + ruim)
+                mudou = True
     return res
 
 

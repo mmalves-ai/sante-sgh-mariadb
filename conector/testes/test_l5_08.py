@@ -15,7 +15,9 @@ FATIA = {"FPEPC", "FPESOCAUTORIA", "FPESOCCADRESEV", "FPESOCDESONER", "FPESOCIND
          "FPESOCINDSUSP", "FPESOCMOTAFAS", "FPESOCORIRETIF", "FPESOCPARAMS1210", "FPESOCPTOELET", "FPESOCTPAVISO",
          "FPESOCTPJORTRAB", "FPESOCTRABTEMP", "FPEXPAGNOCIVO", "FPGRAUEXPAGNOC", "FPHSTDIAAFAST", "FPINDICDECPRO",
          "FPINTAGRUP", "FPINTROTINA", "FPLOTACAOTRIB", "FPMOTAFAST"}
-CARREGADAS = {"FPMOTAFAST": ["motivo_afastamento"], "FPHSTDIAAFAST": ["tabela_legal_vigencia"]}
+CARREGADAS = {"FPMOTAFAST": ["motivo_afastamento"], "FPHSTDIAAFAST": ["tabela_legal_vigencia"],
+              "FPESOCMOTAFAS": ["motivo_afastamento"]}
+CAUSAS_DESCARTE = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
 
 
 class DeclaracoesL5_08(unittest.TestCase):
@@ -45,8 +47,47 @@ class DeclaracoesL5_08(unittest.TestCase):
         self.assertEqual(cols, {"=dias_afastamento_empresa": "tipo_tabela", "DATA_VIGENCIA": "vigencia_inicio",
                                 "NUM_DIA": "quantidade_dias"})
 
+    def test_colunas_do_motivo_oficial(self):
+        cols = {c["coluna"]: c for c in self.plano["FPESOCMOTAFAS"]["colunas"]["motivo_afastamento"]}
+        self.assertEqual(cols["#codigo_derivado:ID:30:esocial_"]["destino"], "codigo")
+        self.assertEqual(cols["ID"]["destino"], "codigo_esocial")
+        self.assertEqual(cols["LANC_AUT_EVENTOS"]["destino"], "gera_lancamento_automatico")
+        self.assertEqual(cols["#codigo_derivado:ID:150:esocial_tabela_18_"]["destino"], "descricao")
+
+    def test_texto_oficial_nunca_vem_da_origem(self):
+        """Regra 7: o NOME da tabela 18 (texto oficial) não é lido; a descrição é o rótulo provisório pelo código."""
+        lidas = {c["coluna"] for c in self.plano["FPESOCMOTAFAS"]["colunas"]["motivo_afastamento"]}
+        self.assertNotIn("NOME", lidas)
+        self.assertNotIn("NOME", self.plano["FPESOCMOTAFAS"]["lidas"])
+
+    def test_desoneracao_fora_da_carga_e_na_imagem(self):
+        """FPESOCDESONER é descarte (catálogo oficial) mas está na imagem para a referência encadeada da L5-12."""
+        self.assertNotIn("FPESOCDESONER", self.plano)
+        self.assertIn("CREATE TABLE FPESOCDESONER (ID SMALLINT NOT NULL PRIMARY KEY, COD_INDICATIVO_DESONERACAO", l5_08.DDL)
+
+    def test_cobertura_total_da_fatia(self):
+        """Toda tabela da fatia carrega ou é descarte com causa de produto e motivo (declarado/sem_carga.tsv)."""
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
+        for t in FATIA - set(CARREGADAS):
+            self.assertIn(t, sc, t)
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], CAUSAS_DESCARTE, t)
+            self.assertTrue(sc[t]["motivo"].strip(), t)
+        self.assertFalse(set(CARREGADAS) & set(sc))
+
 
 class RegrasL5_08(unittest.TestCase):
+    def test_codigo_do_motivo_oficial_com_prefixo(self):
+        self.assertEqual(carga_mapa.codigo_derivado("01", 30, "esocial_"), ("esocial_01", False))
+
+    def test_lancamento_automatico(self):
+        self.assertEqual(sentinela.aplicar("booleano_sn", "S"), (True, None))
+        self.assertEqual(sentinela.aplicar("booleano_sn", None), (None, None))
+        self.assertEqual(sentinela.aplicar("booleano_sn", "X"), (None, "valor_fora_do_dominio"))
+
+    def test_rotulo_provisorio_do_motivo_oficial(self):
+        self.assertEqual(carga_mapa.codigo_derivado("01", 150, "esocial_tabela_18_"), ("esocial_tabela_18_01", False))
+
     def test_codigo_inteiro_vira_texto(self):
         self.assertEqual(sentinela.aplicar("texto", 7), ("7", None))
 
@@ -64,6 +105,10 @@ class RegrasL5_08(unittest.TestCase):
         self.assertEqual(set(esp), set(CARREGADAS))
         self.assertEqual(vistos.count("FPMOTAFAST"), 12)
         self.assertEqual(vistos.count("FPHSTDIAAFAST"), 5)
+        self.assertEqual(vistos.count("FPESOCMOTAFAS"), 7)
+        self.assertEqual(vistos.count("FPESOCDESONER"), 3)
+        self.assertEqual(esp["FPESOCMOTAFAS"], {"gravados": 6, "pendencias": {"valor_fora_do_dominio": 1,
+                                                                              "restricao_destino_4025": 1}})
 
 
 def _mariadb():

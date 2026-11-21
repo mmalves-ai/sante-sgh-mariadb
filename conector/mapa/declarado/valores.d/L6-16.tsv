@@ -1,0 +1,193 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+CCPARAM	CON_AGE	configuracao_usuario_bloco.pode_ver_mapa_salas	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	CON_AGE	configuracao_usuario_bloco.pode_ver_mapa_salas	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	CON_AGE	configuracao_usuario_bloco.pode_ver_mapa_salas		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_REAGENDAR	configuracao_usuario_bloco.pode_alterar_agendamento	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_REAGENDAR	configuracao_usuario_bloco.pode_alterar_agendamento	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_REAGENDAR	configuracao_usuario_bloco.pode_alterar_agendamento		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_DESAGENDAR	configuracao_usuario_bloco.pode_cancelar_agendamento	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_DESAGENDAR	configuracao_usuario_bloco.pode_cancelar_agendamento	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	PERMITIR_DESAGENDAR	configuracao_usuario_bloco.pode_cancelar_agendamento		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	GERIR_SALA_BLOCO_CIRURGICO	configuracao_usuario_bloco.pode_reservar_sala	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	GERIR_SALA_BLOCO_CIRURGICO	configuracao_usuario_bloco.pode_reservar_sala	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	GERIR_SALA_BLOCO_CIRURGICO	configuracao_usuario_bloco.pode_reservar_sala		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_CIR	configuracao_usuario_bloco.pode_registrar_cirurgia	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_CIR	configuracao_usuario_bloco.pode_registrar_cirurgia	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_CIR	configuracao_usuario_bloco.pode_registrar_cirurgia		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_MATERIAIS	configuracao_usuario_bloco.pode_lancar_consumo	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_MATERIAIS	configuracao_usuario_bloco.pode_lancar_consumo	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DIG_MATERIAIS	configuracao_usuario_bloco.pode_lancar_consumo		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	LANCAR_OPM	configuracao_usuario_bloco.pode_lancar_opme	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	LANCAR_OPM	configuracao_usuario_bloco.pode_lancar_opme	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	LANCAR_OPM	configuracao_usuario_bloco.pode_lancar_opme		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DADOS_CIH	configuracao_usuario_bloco.pode_registrar_dados_ccih	1	1	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DADOS_CIH	configuracao_usuario_bloco.pode_registrar_dados_ccih	0	0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCPARAM	DADOS_CIH	configuracao_usuario_bloco.pode_registrar_dados_ccih		0	L6-16: permissão S/N; ausente ou nula NEGADA (nunca concedida sem a origem conceder)
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	ELETIVA	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Eletiva	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	eletiva	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	ELETIVO	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Eletivo	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	eletivo	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	ELETIVAS	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Eletivas	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	eletivas	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	ELETIVOS	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Eletivos	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	eletivos	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	CIRURGIA ELETIVA	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Cirurgia eletiva	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	cirurgia eletiva	eletiva	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	URGÊNCIA	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Urgência	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	urgência	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	URGENCIA	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Urgencia	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	urgencia	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	CIRURGIA DE URGÊNCIA	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Cirurgia de urgência	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	cirurgia de urgência	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	CIRURGIA DE URGENCIA	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Cirurgia de urgencia	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	cirurgia de urgencia	urgencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	EMERGÊNCIA	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Emergência	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	emergência	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	EMERGENCIA	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Emergencia	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	emergencia	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	CIRURGIA DE EMERGÊNCIA	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Cirurgia de emergência	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	cirurgia de emergência	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	CIRURGIA DE EMERGENCIA	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	Cirurgia de emergencia	emergencia	L6-16: natureza pelo nome do tipo de urgência
+CCTPURGENCIA	NOME	carater_cirurgia.natureza	cirurgia de emergencia	emergencia	L6-16: natureza pelo nome do tipo de urgência
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	ANESTESIA GERAL	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Anestesia geral	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	anestesia geral	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL BALANCEADA	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral balanceada	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral balanceada	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL VENOSA	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral venosa	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral venosa	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL INALATÓRIA	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral inalatória	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral inalatória	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL INALATORIA	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral inalatoria	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral inalatoria	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL ENDOVENOSA	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral endovenosa	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral endovenosa	geral	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUIDIANA	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raquidiana	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raquidiana	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUI	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raqui	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raqui	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUIANESTESIA	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raquianestesia	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raquianestesia	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	PERIDURAL	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	EPIDURAL	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Epidural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	epidural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUI + PERIDURAL	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raqui + peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raqui + peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUI+PERIDURAL	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raqui+peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raqui+peridural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUIPERIDURAL	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raquiperidural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raquiperidural	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	PERI	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Peri	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	peri	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	RAQUI/PERI	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Raqui/peri	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	raqui/peri	neuraxial	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	BLOQUEIO	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Bloqueio	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	bloqueio	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	REGIONAL	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	BLOQUEIO PERIFÉRICO	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Bloqueio periférico	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	bloqueio periférico	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	BLOQUEIO PERIFERICO	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Bloqueio periferico	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	bloqueio periferico	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	BLOQUEIO PLEXULAR	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Bloqueio plexular	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	bloqueio plexular	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	PLEXULAR	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Plexular	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	plexular	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	BLOQUEIO REGIONAL	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Bloqueio regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	bloqueio regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	VENOSA REGIONAL	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Venosa regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	venosa regional	regional	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	SEDAÇÃO	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Sedação	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	sedação	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	SEDACAO	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Sedacao	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	sedacao	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	SEDAÇÃO CONSCIENTE	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Sedação consciente	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	sedação consciente	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	SEDACAO CONSCIENTE	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Sedacao consciente	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	sedacao consciente	sedacao	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	LOCAL	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Local	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	local	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	ANESTESIA LOCAL	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Anestesia local	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	anestesia local	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	TÓPICA	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Tópica	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	tópica	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	TOPICA	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Topica	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	topica	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	INFILTRATIVA	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Infiltrativa	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	infiltrativa	local	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	COMBINADA	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Combinada	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	combinada	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL + PERIDURAL	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral + peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral + peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL+PERIDURAL	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral+peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral+peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL + RAQUI	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral + raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral + raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL+RAQUI	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral+raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral+raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL + BLOQUEIO	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral + bloqueio	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral + bloqueio	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL+BLOQUEIO	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral+bloqueio	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral+bloqueio	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL/PERIDURAL	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral/peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral/peridural	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL/RAQUI	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	Geral/raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+TBANESTESIA	NOME	tipo_anestesia.grupo	geral/raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)

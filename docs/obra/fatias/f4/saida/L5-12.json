@@ -1,69 +1,88 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga.py",
-   "mudanca": "incluir 1364 (campo NOT NULL sem padrão ausente do INSERT) em ERROS_LINHA",
-   "motivo": "hoje uma tabela cujo destino tem NOT NULL sem padrão que a origem não supre derruba a carga inteira em vez de recusar só a linha; bloqueia declarar FPEVENTO, FPLOTTRIBCAD, FPREMESSA, FPRESP, FPPARAM, FPPARAMVIG, FPTPEVENTOAUT_TBEMPHOS e FPRUBRICA*_FPEVENTO com recusa honesta por linha"
+   "n": 1,
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "acrescentar 8 linhas (situacao=descarte): STFIL_PREV, STLOCAL, STRESULT, STTPASO, STTPMEDIDAS com causa catalogo_oficial (catálogo oficial do eSocial, codigo_esocial; o destino transacional do mapa não recebe linha de tabela de códigos); TBTABIRR com causa catalogo_oficial (tabelas legais da folha: IRRF, INSS, salário-família, salário mínimo, teto; lei federal, regra 7: só o carregador oficial versionado grava tabela_legal_vigencia e faixa_tabela_legal); TBTPCONSTRUT e TBTPCOOPERAT com causa mecanismo_do_produto (lista fixa do eSocial, indConstr 0/1 e indCoop 0 a 3, chaves conferidas por agregado na imagem de referência: entra pelo de-para de valores em cadastro_empregador.construtora/indicador_cooperativa)",
+   "motivo": "cobertura total da L5-12: sem estas linhas as 8 tabelas contam como bloqueadas; decisões em F4-decisoes-destino.md, seção L5-12"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "literal '=<texto>' convertido ao tipo da coluna de destino antes de gravar e de entrar no resumo (ex.: '=1' em SMALLINT vira int 1)",
-   "motivo": "'=1' em faixa_tabela_legal.sequencia fazia a soma de controle divergir (texto na origem, inteiro relido do destino); por isso a faixa do IRRF ficou fora desta fatia"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL)",
-   "mudanca": "grupo repetido: uma linha da origem gera N linhas num destino secundário (ex.: sufixo '#<n>' no destino, faixa_tabela_legal#1..#4, cada uma com seu literal de sequência e @id), com linha omitida quando todas as colunas do grupo forem nulas",
-   "motivo": "TBTABIRR guarda numa linha as faixas do IRRF (F1, F2, F3, acima), do INSS (F1 a F4) e do salário-família; sem isso só o cabeçalho da vigência é carregado. O mesmo serve a destino secundário opcional (formula_rubrica só quando a fórmula existir)"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py (CAMPOS_DECL) + carga_mapa.planejar",
-   "mudanca": "referência declarável por coluna (ex.: campo 'referencia' em colunas.d ou 'ref:<TABELA>' em via), valendo por cima da gerada, para código não-ID que é a chave do pai",
-   "motivo": "FPEVENTO.TP_EVENTO é a chave de FPTP_EVENTO (tipo_rubrica) e TP_REFER a de FPTP_REFER (tipo_referencia_rubrica); a geração por nome só liga colunas ID_*; rubrica.tipo_rubrica_id e tipo_referencia_rubrica_id são NOT NULL"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "regra genérica de estabelecimento: resolver o estabelecimento_id do cliente a partir do código de empresa da origem (COD_EMP / ID_TBEMPHOS), pelo conector_origem da empresa, sem valor fixo por cliente",
-   "motivo": "rubrica, lotacao_tributaria, competencia_folha, responsavel_legal_empregador, lancamento_automatico_rubrica e cadastro_empregador exigem estabelecimento_id NOT NULL; a origem só traz a empresa (TBEMPHOS, que vira mantenedora, entidade diferente)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou depara próprio do lote)",
-   "mudanca": "de-para próprio de valores por coluna (código da origem para valor de domínio do destino, ex.: FECHADA S/N para competencia_folha.situacao fechada/aberta)",
-   "motivo": "codigo_char grava o código cru; sem de-para de valores não há como preencher colunas de domínio com CHECK"
-  },
-  {
+   "n": 2,
    "arquivo": "conector/mapa/declarado/catalogos.tsv",
    "mudanca": "preencher coluna_codigo: STFIL_PREV=COD_FIL, STLOCAL=ID, STRESULT=COD_RES, STTPASO=ID, STTPMEDIDAS=COD_TP",
-   "motivo": "as 5 tabelas são só o catálogo oficial (codigo_esocial); o de-para pelo código precisa da coluna; o destino não oficial do mapa (comunicacao_acidente, exame_ocupacional, aso, medida_controle_risco) é transacional e não recebe linha de tabela de códigos"
+   "motivo": "as 5 tabelas são só o catálogo oficial (codigo_esocial); o de-para pelo código precisa da coluna"
   },
   {
-   "arquivo": "tools/obra/gerar_mapa_conector.py / conector/mapa/tabelas.tsv (regra de geração)",
-   "mudanca": "TBTPCONSTRUT e TBTPCOOPERAT: tratar como domínio (de-para para cadastro_empregador.construtora e indicador_cooperativa) e não como tabela carregável em cadastro_empregador",
-   "motivo": "são listas de códigos referenciadas por TBEMPHOS; uma linha delas não é um cadastro de empregador (estabelecimento_id e vigência NOT NULL)"
+   "n": 3,
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS e CATALOGOS_PARAMETRO)",
+   "mudanca": "de-para oficial para os catálogos do eSocial com tabela própria no modelo, já declarados em catalogos.tsv (FPNATRUBRICA oficial:natureza_rubrica, FPFPAS oficial:fpas, FPRUBRICA* oficial:codigo_incidencia_rubrica): 'natureza_rubrica' (natureza_rubrica.codigo_esocial, norm_esocial, a versão vigente pelo maior vigencia_inicio), 'fpas' (fpas.codigo_fpas, 3 dígitos com zeros à esquerda) e 'codigo_incidencia_rubrica:<tributo>' (codigo_incidencia_rubrica.codigo_incidencia com filtro tributo='<tributo>': inss, irrf, fgts, contribuicao_sindical)",
+   "motivo": "colunas NOT NULL sem fonte: rubrica.natureza_rubrica_id (FPEVENTO, 108 linhas), lotacao_tributaria.fpas_id (FPLOTTRIBCAD), incidencia_rubrica.codigo_incidencia_rubrica_id (FPRUBRICA*_FPEVENTO, 79 linhas). Com o de-para a fatia declara ref:FPNATRUBRICA>codigo, ref:FPFPAS>codigo e ref:FPRUBRICA<X>>codigo com o catálogo"
   },
   {
-   "arquivo": "tools/obra/fatiar_conector.py",
-   "mudanca": "--conferir ignorar colunas.d (ou o integrador regenerar as fatias depois de integrar)",
-   "motivo": "a fatia inclui 'Já declaradas', então as declarações da própria fatia (L5-09 a L5-12 e outras) fazem o md e o indice.tsv divergirem do gerado e o passo 2 da autoconferência falha para todas"
+   "n": 4,
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "valor datetime.date gravado em coluna DATETIME/TIMESTAMP do destino vira datetime às 00:00, e datetime gravado em coluna DATE vira a data, antes de gravar e da soma de controle (hoje fmt(date) != fmt(datetime) e a conciliação falha)",
+   "motivo": "FPREMESSA: aberta_em (NOT NULL) e fechada_em são DATETIME(3) e a origem só tem datas: com a conversão a fatia declara DTA_INI_APUR->aberta_em e DTA_FIN_APUR->fechada_em (decisão registrada). FPPARAMVIG: TIMESTAMP->cadastro_empregador.vigencia_inicio (DATE), alvo registrado. É o mesmo pedido de outras fatias (L6-01, REEXCATE)"
   },
   {
-   "arquivo": "db/migracoes/15_RH/03_tabelas.sql (tabela_legal_vigencia)",
-   "mudanca": "acrescentar duas colunas DECIMAL(15,2) NULL para a redução do IRRF de 2026: o limite de rendimento em que a redução zera o imposto (ex.: isencao_reducao_ate) e o valor da redução (ex.: valor_reducao), com CHECK >= 0",
-   "motivo": "TBTABIRR.ISENTO_26 e REDUCAO_26 não têm coluna no modelo; isencao_ate já recebe ISENTO (faixa isenta da tabela). F1_INICIO_26, F1_FIM_26 e ACIMA_26 já entram em reducao_de, reducao_ate e sem_reducao_acima_de"
+   "n": 5,
+   "arquivo": "catalogos/carregadores (novo) — trilha de catálogos",
+   "mudanca": "carregador oficial versionado das tabelas legais da folha (IRRF com faixas e redução de 2026, INSS, salário-família, salário mínimo, teto do INSS, contribuinte individual) em tabela_legal_vigencia e faixa_tabela_legal, pela publicação oficial",
+   "motivo": "TBTABIRR é descartada como catálogo oficial (regra 7); o cálculo da folha precisa dessas tabelas carregadas pela fonte oficial"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL)",
-   "mudanca": "o grupo repetido (pedido acima) valer também para o destino PRINCIPAL: uma linha da origem gera várias linhas de tabela_legal_vigencia com tipo_tabela literal diferente e a mesma vigencia_inicio, omitida quando todas as colunas do grupo forem nulas",
-   "motivo": "a mesma linha da TBTABIRR traz, além do IRRF, as vigências salario_minimo (SAL_MIN em valor_referencia), inss_contribuinte_individual (CONTR_IND, TETO_CONTR_IND em teto, INSS_PERC_PF), teto_inss (INSS_TETO_PF em teto) e inss (VLR_ACIMA_F4 com as faixas F1 a F4); hoje só a vigência 'irrf' é carregada. CONTR_IND_FINS/TETO_CONTR_IND_FINS são uma segunda vigência inss_contribuinte_individual na mesma data: o UNIQUE(tipo_tabela, vigencia_inicio) pede um tipo novo no CHECK (ex.: inss_contribuinte_individual_fins) ou decisão do dono de descartar"
+   "n": 6,
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial '@vigencia_carga:<COLUNA>': a data da coluna quando houver; senão a data da carga com vigencia_sem_fonte",
+   "motivo": "FPEVENTO.DATA_INICIAL_VALIDADE (28 de 108 preenchidas) com DATA_FINAL_VALIDADE em rubrica.vigencia_fim (18 preenchidas; com início = data da carga o fim passado é recusado pelo CHECK); hoje é escolher entre perder a data real ou recusar a linha sem data"
   },
   {
-   "arquivo": "(registro, sem mudança de código)",
-   "mudanca": "descarte declarado de TBTABIRR.ISENTO_PJ, ALIQ_PJ e INSS_PERC_PJ (colunas sem destino, motivo em colunas.d/L5-12.tsv)",
-   "motivo": "retenção de IRRF e INSS sobre pagamento a pessoa jurídica não é tabela legal da folha e não tem destino no modelo; se o produto passar a reter na contratação de PJ (EFD-REINF), o destino é outra entidade"
+   "n": 7,
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial '#primeiro:<C1>,<C2>': o primeiro valor não vazio das colunas, pela regra declarada",
+   "motivo": "FPRESP: NOME (leiaute novo) e RESPONS (leiaute antigo) são o nome do responsável; a linha sem NOME é recusada com 1048 sem tentar RESPONS"
   },
   {
-   "arquivo": "db/migracoes/15_RH/02_tabelas.sql (justificativa_ponto) + colunas.d/L5-12.tsv",
-   "mudanca": "escopo da justificativa por mantenedora: coluna mantenedora_id BIGINT UNSIGNED NULL com FK para mantenedora e troca de UNIQUE(codigo) por UNIQUE(mantenedora_id, codigo); depois, declarar PEJUSTIF.COD_EMP -> justificativa_ponto.mantenedora_id com referência a TBEMPHOS (pede a referência declarável já pedida). Alternativa: decisão registrada do dono de unificar os códigos entre empresas (aí a recusa continua e vira tarefa do cliente)",
-   "motivo": "na origem o código é único por empresa (COD_EMP + COD_JUSTIF); o UNIQUE(codigo) global do destino recusa com restricao_destino_1062 a justificativa de uma segunda empresa com o mesmo código, a que fica depende da ordem de carga e os registros de ponto que apontam para ela caem em pai_pendente em cadeia. É LIMITAÇÃO DO MODELO, não erro do dado; até a mudança, a pendência 1062 da PEJUSTIF deve ser apresentada assim no painel"
+   "n": 8,
+   "arquivo": "db/migracoes/15_RH/02_tabelas.sql (lancamento_automatico_rubrica) — trilha F2.2",
+   "mudanca": "rubrica_id NULL (habilitação do lançamento automático por tipo antes da escolha da rubrica; o domínio exige a rubrica para lançar) e CHECK de evento_gatilho com 'licenca_maternidade', 'rescisao' e 'afastamento'",
+   "motivo": "FPTPEVENTOAUT_TBEMPHOS só diz 'empresa X lança o tipo Y automaticamente (S/N)', sem rubrica; os tipos da origem (conferidos por agregado) não estão no CHECK. Com a mudança a fatia troca os pares de valores.d/L5-12.tsv dos tipos 3, 5 e 6"
+  },
+  {
+   "n": 9,
+   "arquivo": "db/migracoes/15_RH/02_tabelas.sql (incidencia_rubrica) — trilha F2.2",
+   "mudanca": "coluna tributo VARCHAR(30) NOT NULL com o CHECK de codigo_incidencia_rubrica.tributo, UNIQUE(rubrica_id, tributo, vigencia_inicio) no lugar de UNIQUE(rubrica_id, tributo_folha_id, vigencia_inicio), tributo_folha_id NULL (ligação opcional à guia)",
+   "motivo": "o tributo da incidência é implícito na tabela da origem (FGTS, INSS, IRRF, sindical) e enumerado no modelo; a contribuição sindical não existe em TBTPTRIBUTO, então tributo_folha_id NOT NULL recusaria as 13 incidências sindicais. Com a mudança a fatia declara '=fgts', '=inss', '=irrf', '=contribuicao_sindical' (substitui o pedido anterior de busca no destino por literal)"
+  },
+  {
+   "n": 10,
+   "arquivo": "db/migracoes/15_RH/02_tabelas.sql (justificativa_ponto) — trilha F2.2",
+   "mudanca": "mantenedora_id BIGINT UNSIGNED NULL (FK) e UNIQUE(mantenedora_id, codigo) no lugar de UNIQUE(codigo)",
+   "motivo": "PEJUSTIF é única por empresa e código; num cliente com várias empresas o código repetido é recusado com 1062 (na imagem de referência há uma só empresa)"
+  },
+  {
+   "n": 11,
+   "arquivo": "conector/sante_conector/carga_mapa.py (_retrato)",
+   "mudanca": "'#retrato:*' retrata todas as colunas da linha da origem (convertidas pela regra gerada, sem segredo), não só as lidas",
+   "motivo": "FPPARAMVIG (histórico do cadastro do empregador na trilha): hoje o retrato só tem a chave e as colunas lidas"
+  },
+  {
+   "n": 12,
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'nis' (11 dígitos com verificador do PIS/PASEP/NIT, pontuação removida; inválido: documento_invalido)",
+   "motivo": "FPRESP.PIS -> responsavel_legal_empregador.nis CHAR(11)"
+  },
+  {
+   "n": 13,
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "composição de colunas em texto ('#concat:DDD,TEL') e inscrição por tipo (tipo_inscricao + número com zeros à esquerda pelo tipo: CNPJ 14, CPF 11, CNO 12)",
+   "motivo": "FPRESP.DDD+TEL; FPLOTTRIBCAD.ID_FPTPINSCRICAO+CNPJ_CNO (CHECK tipo e número juntos)"
   }
- ]
+ ],
+ "retirados": [
+  "mudança em tools/obra/cobertura_conector.py para aceitar 'SEM MECANISMO' (enfraquecia o verificador)",
+  "grupo repetido e colunas novas em tabela_legal_vigencia (TBTABIRR virou descarte catalogo_oficial)",
+  "busca no destino por literal '@destino:...' (trocada pela coluna incidencia_rubrica.tributo, pedido 9)"
+ ],
+ "arquivo_fora_da_lista": "conector/mapa/declarado/valores.d/L5-12.tsv (pares de valores da fatia, convenção valores.d das outras fatias)"
 }

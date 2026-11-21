@@ -1,44 +1,9 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv (ou um valores.d/<fatia>.tsv por fatia, lido por mapa.py)",
-   "mudanca": "de-para de valores por fatia, como colunas.d, para lotes em paralelo",
-   "motivo": "PRTPPROT.TIPO (1 caractere) -> tipo_protocolo_oncologico.categoria precisa de pares; hoje a categoria entra como =~quimioterapia (valor_presumido) porque valores.tsv é compartilhado; PRTPPERGUNTA.NOME (ou ID) -> tipo_campo_modelo.tipo_dado: o NOME de cada linha é o tipo de pergunta (catálogo do sistema, 24 linhas); os pares (data, numero, lista, assinatura, componente...) entram em valores.d/L6-08.tsv, e hoje o tipo vai como =~texto (valor_presumido) em toda linha"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "regra decimal_zero_nulo (NUMERIC em que 0 é 'sem valor': vira NULL sem pendência)",
-   "motivo": "PRKITSOL.VELOCIDADE_INFUSAO -> kit_prescricao.velocidade_infusao: o CHECK do destino (velocidade > 0 e unidade preenchida) recusaria o kit inteiro com velocidade 0; a coluna fica fora até a regra existir (ao declará-la, as linhas aparecem alteradas e o Sincronizar corrige)"
-  },
-  {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "regra cor_hex: cor da origem (nome de cor ou inteiro BGR) vira #RRGGBB; fora disso NULL com valor_fora_do_dominio",
    "motivo": "PRTPPROT.COR -> tipo_protocolo_oncologico.cor tem CHECK '^#[0-9A-Fa-f]{6}$'; carregar o texto cru recusaria a linha (4025). A coluna fica fora até a regra"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "regra genérica de domínio compartilhado (casar pelo código já gravado, ou prefixo de código por tabela da origem) — mesmo pedido do L5-04",
-   "motivo": "TBCLASSIFALERGIA e TBCBARACATEGORIA alimentam categoria_alergeno (código único); TBCLASSIFALERGIA (código pela chave inteira) ficou fora da carga"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "TBACAOGRAUGRA: descarte ou de-para de valores para acao_gravidade_interacao.comportamento (CHECK avisar/exigir_justificativa/bloquear), não destino de linha",
-   "motivo": "a origem é só a lista de ações (ID, NOME); o destino é a configuração por gravidade (gravidade_interacao_id e comportamento NOT NULL), sem fonte na tabela"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "PRTPREQUISICAO: descarte ou de-para de valores para regra_requisicao_farmacia.modo_geracao, não destino de linha",
-   "motivo": "a origem é a lista de tipos de requisição (ID, NOME); o destino exige estabelecimento_id e modo_geracao por escopo, sem fonte na tabela"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "PRPARRECMED: vínculo (UPDATE de modelo_impressao_clinica.tipo_receita_id pelo COD_PRFICHAREL), não linha nova",
-   "motivo": "a origem só liga ficha de impressão a tipo de receita; modelo_impressao_clinica exige codigo, nome, tipo_modelo_impressao_id e conteudo JSON, que vêm da ficha (outra tabela). Exige no motor destino de atualização pela chave do pai"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "PRTPRESPOSTA: revisar destino (é vínculo pergunta x dado de envio à operadora, sem descrição)",
-   "motivo": "resposta_informacao_operadora exige informacao_clinica_operadora_id, codigo e descricao; a origem só tem ID, ID_PRTPPERGUNTA e ID_PRDADOSENVIOOPERADORA, e o pai PRDADOSENVIOOPERADORA vai para formato_envio_operadora, não para informacao_clinica_operadora"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -46,19 +11,29 @@
    "motivo": "hoje a linha recusada por 1048/1406/1062/pai_pendente também conta valor_presumido (ex.: tipo_campo_modelo 4 gravadas e 5 presumidos); o esperado da L6-08 acompanha o motor atual"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
-   "mudanca": "de-para de valores com reserva presumida: valor sem par grava o literal declarado (ex.: campo via 'senao=~texto') com pendência valor_presumido, em vez de NULL + valor_fora_do_dominio; e par condicional por coluna preenchida (REFERENCIAS preenchida -> 'componente')",
-   "motivo": "tipo_campo_modelo.tipo_dado é NOT NULL sem padrão: tipo de pergunta sem par recusaria a linha (1048); a REFERENCIAS só faz sentido com tipo 'componente', hoje presumido 'texto'"
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-05.tsv",
+   "mudanca": "GETABVIA.ID_DIGITAL -> via_de_uso.codigo_interoperabilidade com via ref:TBDIGITAL_VIAACESSO>CODIGO (encadeada terminada em coluna, lê só a origem)",
+   "motivo": "TBDIGITAL_VIAACESSO está descartada (duplicado) contando com esta compensação, que ainda NÃO existe: a L6-05 declara de GETABVIA só COD, NOME e ATIVO. Sem ela o código padronizado de cada via se perde. Se ID_DIGITAL não for a chave de TBDIGITAL_VIAACESSO, usar o próprio valor (se for o código nacional)"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna presumida '~<COLUNA>': lê a coluna, aplica a regra e registra valor_presumido na linha (como =~, mas com o valor da origem)",
-   "motivo": "TBCBARASEVERIDADE.ID -> gravidade_reacao_adversa.nivel: a ordem da chave só é presumida como nível de gravidade; hoje a pendência vem de um =~ em codigo_terminologia na mesma linha. Com ~ID a pendência fica ligada ao nível (e ID > 255 continua recusado por TINYINT, restricao_destino_1264)"
+   "arquivo": "conector/mapa/declarado/colunas.d/<fatia de PRPARAM>.tsv",
+   "mudanca": "PRPARAM.ID_PRTPREQUISICAO -> regra_requisicao_farmacia.modo_geracao por de-para de valores",
+   "motivo": "PRTPREQUISICAO foi descartada como domínio do produto (mecanismo_do_produto)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
+   "mudanca": "de-para de valores com reserva: valor sem par grava um literal presumido declarado (ex.: 'senao=~texto') com valor_presumido, em vez de NULL; e par condicional por coluna preenchida (REFERENCIAS preenchida -> 'componente')",
+   "motivo": "tipo_campo_modelo.tipo_dado (NOT NULL sem padrão) agora vem do NOME por valores.d/L6-08.tsv; tipo de pergunta sem par é recusado (1048) até haver a reserva"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
-   "mudanca": "regra texto_derivado: texto cortado no tamanho do destino (o motor passa o tamanho da coluna) com pendência texto_truncado, em vez de recusa 1406",
-   "motivo": "PRUNIDINFUSAO.NOME -> unidade_infusao.sigla (20) é cópia secundária da descricao (150): nome maior que 20 recusa a unidade e, em cadeia, os kits dela (pai_pendente; kit 3 na sintética)"
+   "mudanca": "regra entre colunas: anular uma coluna (velocidade) com pendência quando outra (unidade) vier nula, em vez de deixar o CHECK recusar a linha",
+   "motivo": "PRKITSOL.VELOCIDADE_INFUSAO -> kit_prescricao.velocidade_infusao (decimal_positivo): velocidade com unidade nula é recusada pelo ck_kit_prescricao_velocidade (restricao_destino_4025) e o kit se perde"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-10.tsv + valores.d/L6-10.tsv",
+   "mudanca": "TBCBARANOTIFICACAO.ID_TBCBARASEVERIDADE -> acao_alerta_alergia.gravidade_aplicavel pelo NOME da gravidade (ref:TBCBARASEVERIDADE>NOME + de-para: Leve 1, Moderada 2, Grave 3, Fatal 4), não pela chave",
+   "motivo": "a L6-08 deixou de derivar gravidade_reacao_adversa.nivel da chave (nada prova que 1 = menor; a sintética usa 1 = Grave). A premissa 'nível = chave' que a L6-10 herdou faria alerta grave virar leve"
   }
  ]
 }

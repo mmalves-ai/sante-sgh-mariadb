@@ -1,0 +1,81 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBMENSAG	TIPO	mensagem_interna.prioridade	U	urgente	L5-02: urgente
+TBMENSAG	TIPO	mensagem_interna.prioridade	N	normal	L5-02: normal
+TBMENSAG	TIPO	mensagem_interna.prioridade	S	normal	L5-02: aviso do sistema, prioridade normal
+TBMENSAG	TIPO	mensagem_interna.prioridade		normal	L5-02: sem tipo, normal
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Emergência	0	L5-02: escala de registro de eventos (0)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Emergencia	0	L5-02: escala de registro de eventos (0)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	EMERGÊNCIA	0	L5-02: escala de registro de eventos (0)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	EMERGENCIA	0	L5-02: escala de registro de eventos (0)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Alerta	1	L5-02: escala de registro de eventos (1)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	ALERTA	1	L5-02: escala de registro de eventos (1)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Crítico	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Critico	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	CRÍTICO	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	CRITICO	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Crítica	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Critica	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	CRÍTICA	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	CRITICA	2	L5-02: escala de registro de eventos (2)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Erro	3	L5-02: escala de registro de eventos (3)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	ERRO	3	L5-02: escala de registro de eventos (3)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Aviso	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	AVISO	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Advertência	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Advertencia	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	ADVERTÊNCIA	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	ADVERTENCIA	4	L5-02: escala de registro de eventos (4)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Notificação	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Notificacao	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	NOTIFICAÇÃO	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	NOTIFICACAO	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Notícia	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Noticia	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	NOTÍCIA	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	NOTICIA	5	L5-02: escala de registro de eventos (5)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Informação	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Informacao	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	INFORMAÇÃO	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	INFORMACAO	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Informativo	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	INFORMATIVO	6	L5-02: escala de registro de eventos (6)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Depuração	7	L5-02: escala de registro de eventos (7)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Depuracao	7	L5-02: escala de registro de eventos (7)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	DEPURAÇÃO	7	L5-02: escala de registro de eventos (7)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	DEPURACAO	7	L5-02: escala de registro de eventos (7)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	Debug	7	L5-02: escala de registro de eventos (7)
+TBNVLCRITICID	NOME	nivel_criticidade_auditoria.severidade	DEBUG	7	L5-02: escala de registro de eventos (7)
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	A1	a1	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	A1	arquivo	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	a1	a1	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	a1	arquivo	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Certificado A1	a1	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Certificado A1	arquivo	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	CERTIFICADO A1	a1	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	CERTIFICADO A1	arquivo	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	A3	a3	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	A3	token	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	a3	a3	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	a3	token	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Certificado A3	a3	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Certificado A3	token	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	CERTIFICADO A3	a3	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	CERTIFICADO A3	token	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Nuvem	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Nuvem	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	NUVEM	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	NUVEM	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Em nuvem	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Em nuvem	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Em Nuvem	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Em Nuvem	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	EM NUVEM	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	EM NUVEM	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Certificado em nuvem	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Certificado em nuvem	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	CERTIFICADO EM NUVEM	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	CERTIFICADO EM NUVEM	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Remoto	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Remoto	nuvem	L5-02: repositório pela modalidade
+TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	REMOTO	nuvem	L5-02: modalidade pelo nome
+TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	REMOTO	nuvem	L5-02: repositório pela modalidade

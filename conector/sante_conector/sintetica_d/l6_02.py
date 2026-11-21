@@ -13,10 +13,17 @@ Dados 100% falsos (descrições e logins inventados). Anomalias cobertas:
 - data sentinela na data da senha e no momento da emissão (data_sentinela; NOT NULL recusa a linha);
 - login de usuário que nunca existiu (pai_inexistente, coluna anulável: grava);
 - nome presumido do painel e do gerador (valor_presumido em toda linha que chega à gravação).
+- evento da senha (TBFLUXOATEND): ação casada pela letra exata (chave alternativa; 'c' e 'C' são ações distintas),
+  ação recusada na L6-01 (pai_pendente), letra nunca vista, senha e local recusados, senha vazia, momento vazio ou
+  sentinela (NOT NULL recusa), login nunca visto (anulável: grava);
+- histórico do atendimento (HTATENDIMENTO) como trilha de auditoria com retrato JSON: atendimento nunca visto
+  (entidade_id anulável: grava com pai_inexistente) e momento sentinela (NOT NULL recusa).
 PREPARO_DESTINO cria o estabelecimento único do cliente de exemplo (no cliente real ele vem do L3).
-As tabelas bloqueadas da fatia (TBLOCALHORA, TBREFCANCMODTP, TBSTATUSGUICHE, TBFLUXOATEND, ATCONTA, REPARAM,
-HTATENDIMENTO e TBTIPO_ATENDIMENTO, que é tipo de pré-atendimento e não módulo de recepção) ficam fora da imagem até
-os pedidos do L6-02.json.
+REQUER a L6-01: a ação do evento casa pela letra na ORIGEM de TBACAOFLUXOSENHA (chave alternativa), que é tabela da
+L6-01 (o tipo de painel também vem de lá, não mais como pai externo).
+Fora da imagem: descartes da fatia (TBREFCANCMODTP, TBSTATUSGUICHE, REPARAM e TBTIPO_ATENDIMENTO; motivos em
+sem_carga.tsv, pedido no L6-02.json), TBLOCALHORA (regra genérica faltante: item em par de colunas, pedido no json) e
+ATCONTA (espera atendimento_conta como destino secundário das contas na L8-06, pedido no json).
 Situação 'S' (suspensa) vira 'suspensa': o esperado supõe o CHECK do modelo com 'suspensa' (pedido de ler_ddl).
 """
 import datetime
@@ -46,17 +53,23 @@ CREATE TABLE TBSENHAATEND (ID INTEGER NOT NULL PRIMARY KEY, ID_TBGERASENHA INTEG
 CREATE TABLE ATCABECATEND_TBSENHAATEND (ID_ATCABECATEND BIGINT NOT NULL PRIMARY KEY, ID_TBSENHAATEND INTEGER NOT NULL);
 CREATE TABLE TBSENHAATEND_REPACAGD (ID_TBSENHAATEND INTEGER NOT NULL PRIMARY KEY, ID_REPACAGD INTEGER NOT NULL);
 CREATE TABLE TBSENHAATEND_SIPACAGD (ID_TBSENHAATEND INTEGER NOT NULL PRIMARY KEY, ID_SIPACAGD INTEGER NOT NULL);
+CREATE TABLE TBFLUXOATEND (ID INTEGER NOT NULL PRIMARY KEY, ID_TBSENHAATEND INTEGER, ID_TBLOCAL SMALLINT NOT NULL,
+  DATA_HORA TIMESTAMP, USUARIO VARCHAR(31) NOT NULL, ACAO CHAR(1));
+CREATE TABLE HTATENDIMENTO (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL,
+  DATA_HORA_HISTORICO TIMESTAMP NOT NULL, DATA_HORA_ENTRADA TIMESTAMP NOT NULL, ID_HTCONVEN SMALLINT NOT NULL,
+  MATRICULA VARCHAR(24), JUSTIFICATIVA_ALTA_RETROATIVA VARCHAR(255));
 """
-PAIS_EXTERNOS = {"TBUSERS": ["RECEP01", "RECEP02"], "PNTIPO": ["1", "2"], "ATCABECATEND": [str(i) for i in range(1, 7)],
+REQUER = ["L6-01"]
+PAIS_EXTERNOS = {"TBUSERS": ["RECEP01", "RECEP02"], "ATCABECATEND": [str(i) for i in range(1, 7)],
                  "TBESPEC": ["1"], "TBPROFIS": ["1"], "TBUNIDAD": ["1"], "REAGENDA": ["1"],
                  "REPACAGD": ["1", "2"], "SIPACAGD": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
 CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALPESATE",
               "TBGERASENHA", "TBSENHAATEND", "ATCABECATEND_TBSENHAATEND", "TBSENHAATEND_REPACAGD",
-              "TBSENHAATEND_SIPACAGD")
-BLOQUEADAS = ("TBLOCALHORA", "TBREFCANCMODTP", "TBSTATUSGUICHE", "TBFLUXOATEND", "ATCONTA", "REPARAM", "HTATENDIMENTO",
-              "TBTIPO_ATENDIMENTO")
+              "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO")
+DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "REPARAM", "TBTIPO_ATENDIMENTO")
+BLOQUEADAS = ("TBLOCALHORA", "ATCONTA")  # regra genérica faltante; ATCONTA espera atendimento_conta da L8-06 (pedidos no L6-02.json)
 
 
 def linhas(r, ins):
@@ -129,6 +142,21 @@ def linhas(r, ins):
         ins("TBSENHAATEND_REPACAGD", list(m))
     for m in [(4, 1), (12, 2), (11, 1)]:
         ins("TBSENHAATEND_SIPACAGD", list(m))
+    # eventos da senha. Ações da L6-01: C 1, A 2, c 3, F 4 gravadas; X recusada (descrição vazia); Z nunca vista.
+    # Senha 5 pendente, 99 nunca vista; local 4 pendente
+    sent, ev = datetime.datetime(1899, 12, 30), datetime.datetime(2026, 3, 2, 8, 0)
+    flx = [(1, 1, 1, "RECEP01", "C"), (2, 1, 1, "RECEP01", "A"), (3, 2, 2, "RECEP02", "F"), (4, 3, 3, "RECEP01", "c"),
+           (5, 2, 1, "RECEP01", "X"), (6, 5, 1, "RECEP01", "C"), (7, 1, 4, "RECEP01", "C"), (8, None, 1, "RECEP01", "C"),
+           (9, 1, 1, "RECEP02", "A"), (10, 2, 2, "NINGUEM", "F"), (11, 3, 2, "RECEP01", "Z"), (12, 1, 2, "RECEP01", "A"),
+           (13, 4, 7, "RECEP02", "C"), (14, 99, 1, "RECEP01", "C"), (15, 7, 3, "RECEP01", None)]
+    for i, sen, loc, usu, acao in flx:
+        dh = None if i == 9 else sent if i == 12 else ev + datetime.timedelta(minutes=3 * i)
+        ins("TBFLUXOATEND", [i, sen, loc, dh, usu, acao])
+    # histórico do atendimento: 4 atendimento nunca visto; 5 momento sentinela
+    for i, cab in enumerate([1, 1, 2, 88, 3, 4], 1):
+        hist = sent if i == 5 else datetime.datetime(2026, 3, 1 + i, 9, 30)
+        ins("HTATENDIMENTO", [i, cab, hist, datetime.datetime(2026, 3, 1, 7, 0), 1, "MAT-%04d" % i,
+                              "Alta registrada depois" if i == 2 else None])
     return {
         "TBRECEPCAO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "TBGUICHE": {"gravados": 4, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}},
@@ -149,4 +177,8 @@ def linhas(r, ins):
         "TBSENHAATEND_REPACAGD": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                  "restricao_destino_1048": 1}},
         "TBSENHAATEND_SIPACAGD": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
+        "TBFLUXOATEND": {"gravados": 6, "pendencias": {"pai_pendente": 3, "restricao_destino_1048": 6,
+                                                       "pai_inexistente": 3, "data_sentinela": 1}},
+        "HTATENDIMENTO": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "data_sentinela": 1,
+                                                        "restricao_destino_1048": 1}},
     }

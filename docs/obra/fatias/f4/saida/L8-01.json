@@ -1,59 +1,126 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "coluna especial de competência que junta ano e mês da origem numa data do 1º dia do mês (ex.: '#competencia:ANOPRO,MESPRO'); mês fora de 1..12 ou ano nulo vira NULL com valor_fora_do_dominio",
-   "motivo": "FAPARUSU, FCPARUSU, FIPARUSU, FCFECMES e RECONTAS guardam a competência em duas colunas inteiras e o destino exige DATE NOT NULL"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, tipar)",
+   "mudanca": "converter valor DATE para coluna DATETIME do destino (data com 00:00) e DATETIME para DATE (trunca a hora) no tipo do destino, antes da soma de controle; hoje a data entra no banco mas a conciliação diverge (data contra data e hora)",
+   "motivo": "FCPORANE.ocorrido_em e RICGUIAS.data_solicitacao são DATETIME NOT NULL e a origem só tem DATE; é a mesma regra faltante pedida pela L8-09 (recibos). As declarações estão prontas em declaracao_pronta: ao existir a regra, basta acrescentá-las a colunas.d/L8-01.tsv e pôr o esperado (a imagem sintética já tem as linhas e anomalias). A mesma regra libera a situação realizada/aceita de FCORCAME (aceito_em DATETIME a partir de DATA_REALIZ DATE): de-para pronto em depara_situacao_pronto",
+   "declaracao_pronta": [
+    "FCPORANE\tTAB\tvalor_porte_anestesico.tabela_preco_id\t\t\tref:TBCTRTHM\tL8-01: tabela de honorários pela chave (TBCTRTHM.COD, destino principal tabela_preco); dependência FCPORANE -> TBCTRTHM pedida no L8-01.json",
+    "FCPORANE\tPORTE\tvalor_porte_anestesico.porte_anestesico\ttexto\t\t\tL8-01: porte anestésico da tabela (0 a 8)",
+    "FCPORANE\tDATA_PORTE\tvalor_porte_anestesico.vigencia_inicio\tdata\t\t\tL8-01: início de vigência do valor",
+    "FCPORANE\tDATA_PORTE\tvalor_porte_anestesico.ocorrido_em\tdata\t\t\tL8-01: a origem guarda só a vigência: a inclusão é registrada nela (operacao fica 'inclusao')",
+    "FCPORANE\tVALOR\tvalor_porte_anestesico.valor\tdecimal_nao_negativo\t\t\tL8-01: valor do porte (4 casas); negativo ou vazio recusa (NOT NULL)",
+    "RICGUIAS\t@estabelecimento\tguia_fonte_pagadora.estabelecimento_id\t\t\t\tL8-01: guia do único estabelecimento do cliente",
+    "RICGUIAS\tGUIA\tguia_fonte_pagadora.numero\ttexto\t\t\tL8-01: número da guia; vazio recusa (NOT NULL), repetido recusa (1062)",
+    "RICGUIAS\t=~internacao\tguia_fonte_pagadora.tipo_guia\t\t\t\tL8-01: guia da internação (módulo RI): PRESUMIDO internacao (valor_presumido); prorrogação exige a guia principal, que a origem não liga",
+    "RICGUIAS\tREG\tguia_fonte_pagadora.atendimento_id\t\t\tref:RECADATE\tL8-01: atendimento pelo registro (REG)",
+    "RICGUIAS\tREG\tguia_fonte_pagadora.paciente_id\t\t\tref:RECADATE>PRONT>RICADPAC.PRONT\tL8-01: paciente do atendimento pelo prontuário (referência encadeada); sem paciente recusa (NOT NULL)",
+    "RICGUIAS\tREG\tguia_fonte_pagadora.conta_hospitalar_id\t\t\tref:RICONTAS(REG,CONTA)\tL8-01: conta da internação pela chave composta (REG, CONTA); dependência pedida no L8-01.json",
+    "RICGUIAS\tCONV\tguia_fonte_pagadora.fonte_pagadora_id\t\t\tref:TBCONVEN\tL8-01: convênio pela chave; sem convênio recusa (NOT NULL)",
+    "RICGUIAS\tDATASOLICIT\tguia_fonte_pagadora.data_solicitacao\tdata\t\t\tL8-01: data da solicitação; vazia recusa (NOT NULL)",
+    "RICGUIAS\tDATAENTREGA\tguia_fonte_pagadora.data_envio_fonte_pagadora\tdata\t\t\tL8-01: entrega da guia à operadora",
+    "RICGUIAS\tSENHA\tguia_fonte_pagadora.senha\ttexto\t\t\tL8-01: senha de autorização da operadora (não é credencial do sistema)",
+    "RICGUIAS\tDIARIAS_SOLICIT\tguia_fonte_pagadora.dias_solicitados\tinteiro_nao_negativo\t\t\tL8-01: diárias solicitadas",
+    "RICGUIAS\tDIARIAS_AUTOR\tguia_fonte_pagadora.dias_autorizados\tinteiro_nao_negativo\t\t\tL8-01: diárias autorizadas",
+    "RICGUIAS\tID_TBCBOPRO_SOLICITANTE\tguia_fonte_pagadora.solicitante_profissional_id\t\t\tref:TBCBOPRO>ID_TBPROFIS>TBPROFIS\tL8-01: médico solicitante pela inscrição no conselho; sem ele NULL com pai_inexistente",
+    "RICGUIAS\tUSUARIO\tguia_fonte_pagadora.responsavel_usuario_id\t\t\tref:TBUSERS\tL8-01: usuário responsável pelo login",
+    "RICGUIAS\tINDICACAO_CLINICA\tguia_fonte_pagadora.indicacao_clinica\ttexto_longo\t\t\tL8-01: indicação clínica (texto longo)",
+    "RICGUIAS\tOBS\tguia_fonte_pagadora.observacao\ttexto_longo\t\t\tL8-01: observação"
+   ],
+   "depara_situacao_pronto": [
+    "FCORCAME\tREALIZ\torcamento_particular.situacao\tcodigo_char\tvalores\t\tL8-01: S = realizado, N = emitido (pares em valores.d/L8-01.tsv), no lugar do literal presumido =~emitido",
+    "FCORCAME\tDATA_REALIZ\torcamento_particular.aceito_em\tdata\t\t\tL8-01: aceite PRESUMIDO no dia da realização (o CHECK exige aceito_em para realizado); depende da conversão DATE -> DATETIME"
+   ]
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "referência em cadeia na via (ex.: 'ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS'): id do destino do pai do pai pelo conector_origem",
-   "motivo": "FCCODCON e FCCRECUN apontam a inscrição no conselho e o destino exige profissional_id; RICGUIAS/FCGUIAS precisam do paciente pelo atendimento (já pedido por L6)"
+   "mudanca": "referência que grava o id de um destino SECUNDÁRIO do pai (M1, já pedida pela L6-15): item_faturavel_id pelo item da tabela de honorários (TBTABTHM, destino secundário item_faturavel) e da tabela de diárias e taxas (TBTABDTH)",
+   "motivo": "FCORCPAD (orçamento padrão) e FCORLAME (item do orçamento, honorários por função na equipe) exigem item_faturavel_id; sem a regra não há como achar o item; uma linha cada na imagem de referência"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "coluna especial de data somada a dias de outra coluna (ex.: '#data_mais_dias:DATA,VALIDADE') e de data+hora HHMM em texto (DT_INICIO+HR_INICIO)",
-   "motivo": "FCORCAME.validade_ate e RECONTAS.inicio_em são NOT NULL e vêm de duas colunas"
+   "mudanca": "falta a regra genérica de referência pela chave alternativa COMPOSTA: casamento de VÁRIAS colunas do pai que não são a chave dele (ex.: a conta de FCCTAEXT por ANOPRO, MESPRO, TIPO_CTA e COD, sendo a chave ID; a conta interna de RICONTAS por ANOPRO, MESPRO e COD, sendo a chave REG,CONTA), com literal para a coluna que a linha não traz (TIPO_CTA); repetido = pai_ambiguo",
+   "motivo": "FCGUIAS aponta a conta por ANOPRO, MESPRO, TIPO_CTA e CONTA; casar só pelo número ligaria guia de conta interna a conta externa de mesmo número (ligação errada em silêncio). A guia também precisa do paciente pela conta (REG_ATE -> RECADATE -> RICADPAC.PRONT) e de numero, tipo e data de solicitação. FCDIAEXT e FCDIAINT (segurado na conta) também: a chave delas é ANOPRO,MESPRO,COD, sinal de que COD se repete entre competências; casar só por COD recusaria em massa (pai_ambiguo) ou ligaria a conta errada. Por isso as duas saíram da carga nesta rodada (antes estavam com ref:FCCTAEXT.COD e ref:RICONTAS.COD) e os pais FCCTAEXT/RICONTAS ainda não carregam (L8-06)",
+   "declaracao_pronta": [
+    "FCDIAEXT\tCOD\tconta_hospitalar_segurado.conta_hospitalar_id\t\t\tref:FCCTAEXT.COD\tL8-01: conta pelo número (chave alternativa COD de FCCTAEXT); número repetido: pai_ambiguo (nunca a conta errada); dependência pedida no L8-01.json",
+    "FCDIAEXT\tCOD\tconta_hospitalar_segurado.numero_carteira\ttexto\t\tref:FCCTAEXT.COD>MATRICULA\tL8-01: carteira usada na conta, lida da conta (FCCTAEXT.MATRICULA); sem carteira recusa (NOT NULL)",
+    "FCDIAEXT\tVAL_CAR\tconta_hospitalar_segurado.validade_carteira\tdata\t\t\tL8-01: validade da carteira",
+    "FCDIAEXT\tCARGO\tconta_hospitalar_segurado.cargo\ttexto\t\t\tL8-01: cargo do servidor",
+    "FCDIAEXT\tPADRAO\tconta_hospitalar_segurado.padrao_funcional\tinteiro\t\t\tL8-01: padrão funcional (número como texto)",
+    "FCDIAEXT\tCLASSE\tconta_hospitalar_segurado.classe_funcional\ttexto\t\t\tL8-01: classe funcional",
+    "FCDIAEXT\tUND_ADM\tconta_hospitalar_segurado.unidade_administrativa\ttexto\t\t\tL8-01: unidade administrativa do órgão",
+    "FCDIAEXT\tAFINIDADE\tconta_hospitalar_segurado.parentesco_titular\ttexto\t\t\tL8-01: parentesco com o titular",
+    "FCDIAEXT\tN_ORDEM\tconta_hospitalar_segurado.numero_ordem\ttexto\t\t\tL8-01: ordem do dependente no cadastro do órgão",
+    "FCDIAINT\tCOD\tconta_hospitalar_segurado.conta_hospitalar_id\t\t\tref:RICONTAS.COD\tL8-01: conta pelo número (chave alternativa COD de RICONTAS); número repetido: pai_ambiguo (nunca a conta errada); dependência pedida no L8-01.json",
+    "FCDIAINT\tCOD\tconta_hospitalar_segurado.numero_carteira\ttexto\t\tref:RICONTAS.COD>MATRIC\tL8-01: carteira usada na conta, lida da conta (RICONTAS.MATRIC); sem carteira recusa (NOT NULL)",
+    "FCDIAINT\tVAL_CAR\tconta_hospitalar_segurado.validade_carteira\tdata\t\t\tL8-01: validade da carteira",
+    "FCDIAINT\tCARGO\tconta_hospitalar_segurado.cargo\ttexto\t\t\tL8-01: cargo do servidor",
+    "FCDIAINT\tPADRAO\tconta_hospitalar_segurado.padrao_funcional\tinteiro\t\t\tL8-01: padrão funcional (número como texto)",
+    "FCDIAINT\tCLASSE\tconta_hospitalar_segurado.classe_funcional\ttexto\t\t\tL8-01: classe funcional",
+    "FCDIAINT\tUND_ADM\tconta_hospitalar_segurado.unidade_administrativa\ttexto\t\t\tL8-01: unidade administrativa do órgão",
+    "FCDIAINT\tAFINIDADE\tconta_hospitalar_segurado.parentesco_titular\ttexto\t\t\tL8-01: parentesco com o titular",
+    "FCDIAINT\tN_ORDEM\tconta_hospitalar_segurado.numero_ordem\ttexto\t\t\tL8-01: ordem do dependente no cadastro do órgão"
+   ]
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "desdobrar colunas repetidas numa linha em várias linhas do destino (ex.: dia da semana 0..6 a partir de DOM_I/DOM_F..SAB_I/SAB_F, hora HHMM em texto)",
-   "motivo": "FCHORATE -> horario_normal_tabela tem uma linha por dia da semana"
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, a mesma pedida pela L8-06)",
+   "mudanca": "id por código num catálogo do produto sem tabela alimentadora (tipo_conta): CONTAS (VARCHAR(1)) -> tipo_conta.id por de-para de valores para o código do catálogo",
+   "motivo": "FCCRECUN saiu da carga: sem o id, regra_credito_producao.tipo_conta_id fica NULO, que no modelo quer dizer 'vale para todos os tipos de conta' (escopo ampliado em silêncio, muda o crédito do profissional). CONTAS nula na origem continua NULO = todos. A declaração está pronta (acrescentar a linha de CONTAS quando a regra existir); a imagem sintética já tem as linhas",
+   "declaracao_pronta": [
+    "FCCRECUN\t@estabelecimento\tregra_credito_producao.estabelecimento_id\t\t\t\tL8-01: regra do único estabelecimento do cliente",
+    "FCCRECUN\tID_TBCBOPRO\tregra_credito_producao.profissional_id\t\t\tref:TBCBOPRO>ID_TBPROFIS>TBPROFIS\tL8-01: profissional pela inscrição no conselho (referência encadeada); sem ele recusa (NOT NULL)",
+    "FCCRECUN\tCON\tregra_credito_producao.fonte_pagadora_id\t\t\tref:TBCONVEN\tL8-01: convênio pela chave; dependência pedida no L8-01.json"
+   ]
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
-   "mudanca": "referência por chave composta ao item faturável (PROCTO,TIPO,SUBTIPO ou TAB,COD) e à tabela de preço pela TAB",
-   "motivo": "FCORCPAD, FCORLAME, FCREFUND, FCPROCUNIBHMED, FCPORANE e FCHORATE exigem item_faturavel_id/tabela_preco_id NOT NULL"
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (regra genérica)",
+   "mudanca": "gerar várias linhas do destino PRINCIPAL a partir de pares de colunas da mesma linha (DOM_I/DOM_F=0, SEG_I/SEG_F=1, ..., SAB_I/SAB_F=6), com início e fim por item e a hora HHMM em texto pela regra hora_hhmm; hoje a opção vale só em destino secundário e com uma coluna por item",
+   "motivo": "FCHORATE -> horario_normal_tabela tem uma linha por dia com início e fim; a tabela de preço vem da TAB (TBCTRTHM.COD)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
+   "mudanca": "DECLARADAS nesta rodada em declarado/dependencias.tsv (o integrador regenera a ordem): FCCODCON -> TBCONVEN e TBPROFIS; FCCPSCON, FCFECMES, FCORCAME -> TBCONVEN; FCORCAME -> RICADPAC (TBCBOPRO não precisa: a referência encadeada só LÊ a inscrição da origem; o id gravado é o de TBPROFIS). FALTAM, para quando carregarem: FCCRECUN -> TBCONVEN, TBPROFIS; FCDIAEXT -> FCCTAEXT; FCDIAINT -> RICONTAS; FCPORANE -> TBCTRTHM; RICGUIAS -> RICONTAS, TBCONVEN, TBPROFIS",
+   "motivo": "os pais vinham depois na ordem do mapa (TBCONVEN 712, TBPROFIS 869, RICADPAC 1007 contra 611-623 da fatia): sem a aresta a referência fica pai_inexistente e a linha é recusada pelo NOT NULL. A imagem sintética dá os pais como PAIS_EXTERNOS e não prova a ordem: pedido abaixo de checagem no verificador"
+  },
+  {
+   "arquivo": "L8-06 (contas) e integrador: conferência por agregado, sem ler valores",
+   "mudanca": "confirmar por contagem (COUNT(*) contra COUNT(DISTINCT COD)) que COD é único em FCCTAEXT e em RICONTAS; se não for, FCDIAEXT/FCDIAINT ficam com pai_ambiguo (nunca a conta errada) e pedem a regra de casamento por várias colunas acima. O descarte de RECONTAS (duplicado) supõe que a L8-06 carrega a conta externa de FCCTAEXT",
+   "motivo": "segurado na conta pela conta da competência"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (destinos de FCCODCON e FCCPSCON, integrador)",
+   "mudanca": "acrescentar conta_bancaria_credor como destino secundário opcional (BANCO, N_BANCO pelo de-para banco, AGENCIA, CONTA) e ligar codigo_prestador_fonte_pagadora.conta_bancaria_credor_id",
+   "motivo": "os dados bancários do código no convênio ficam fora da carga até lá (o destino fora dos destinos da tabela é recusado pelo verificador). A tabela carrega sem eles (decisão em F4-decisoes-destino.md): no FCCODCON a conta do profissional já vem do cadastro dele (TBPROFIS -> conta_bancaria_profissional); no FCCPSCON (33 linhas) a conta de crédito é do hospital"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-01.tsv (revisão do cliente no painel)",
-   "mudanca": "de-para de valores: tipo_deducao_irrf.natureza (RPDEDUTIVEL por código; hoje literal presumido =~outra com valor_presumido por linha), competencia_trabalho_usuario.modulo (FAPARUSU.MODULO), guia_fonte_pagadora.tipo_guia (FCGUIAS.TP_GUIA), regra_credito_producao.tipo_conta_id/credita (FCCRECUN.CONTAS) e grupo_motivo_glosa.codigo_tiss (FCTPMOTGLOSA.COD_TP_MOTIVO_GLOSA, só com evidência)",
-   "motivo": "domínios codificados sem significado fixo; não se leem valores reais para fixar pares no código"
+   "mudanca": "pares de valores com evidência para: tipo_deducao_irrf.natureza (RPDEDUTIVEL; hoje literal presumido 'outra'), grupo_motivo_glosa.codigo_tiss (FCTPMOTGLOSA.COD_TP_MOTIVO_GLOSA), codigo_prestador_fonte_pagadora.tipo_prestador e setor (FCCPSCON.ATO/COD; hoje presumido estabelecimento, e o 2º código do mesmo convênio ADOTA o 1º com adotado_existente), orcamento_particular.situacao (FCORCAME.FECHADO; REALIZ pronto no 1º pedido, depende de DATE->DATETIME). PARCELADO -> forma_pagamento já declarado (S parcelado, N a_vista)",
+   "motivo": "domínios codificados sem significado documentado; nada é tirado de valor real"
   },
   {
-   "arquivo": "decisão do dono / integrador (destinos sem fonte)",
-   "mudanca": "empresa_auditoria_externa.pessoa_juridica_id (FCEMPAUDPLANSERV só traz nome), vigencia_inicio de codigo_prestador_fonte_pagadora/profissional_fonte_pagadora (FCCODCON, FCCPSCON), numero_carteira de conta_hospitalar_segurado (FCDIAEXT, FCDIAINT), data_abertura de fechamento_competencia_fonte_pagadora e ocorrido_em de valor_porte_anestesico: NOT NULL sem fonte. Propor referência por nome/criação secundária, data de vigência mínima declarada pelo cliente, ou afrouxar o modelo",
-   "motivo": "nada presumido em silêncio; tabelas fora da carga"
+   "arquivo": "decisão do dono / integrador (TBMOTGLO -> FCTPMOTGLOSA)",
+   "mudanca": "motivo_glosa.grupo_motivo_glosa_id mora numa tabela oficial que o conector nunca grava: ligação própria do cliente (motivo oficial x grupo) carregada de TBMOTGLO, com a aresta TBMOTGLO -> FCTPMOTGLOSA",
+   "motivo": "sem isso os grupos de glosa entram sem motivo ligado (pedido mantido da rodada anterior)"
   },
   {
-   "arquivo": "decisão do dono / integrador (FCTPPGTONFSE -> nota_fatura)",
-   "mudanca": "o destino do mapa é a ligação nota de serviço com fatura (nota_servico_id e valor NOT NULL), não um catálogo de condição de pagamento; trocar o destino para condicao_pagamento (ou enumerado) por de-para de valores",
-   "motivo": "mapa aponta destino incompatível com a forma da tabela"
+   "arquivo": "evidência por metadado/contagem (integrador)",
+   "mudanca": "verificar se RPDEDUTIVEL.ID segue o tipo de dedução oficial da EFD-Reinf (contagem e faixa, sem ler valores); se sim, codigo_esocial pelo ID e natureza por tabela pública versionada",
+   "motivo": "hoje codigo_esocial fica nulo e a natureza 'outra' presumida (pedido mantido)"
   },
   {
-   "arquivo": "decisão do dono / integrador (FCPARUSU)",
-   "mudanca": "preferências soltas do faturista (CTAE, CTAI, DIG_PERVAL, IMPRES, HOSP, CNPJ_ALT, NOME_ALT, CNES_ALTERNATIVO...) pelo mecanismo de parâmetro por usuário (parametro_definicao/parametro_valor); só ANOPRO/MESPRO vão para competencia_trabalho_usuario",
-   "motivo": "motivo do mapa: preferências vão para parâmetro por usuário"
+   "arquivo": "tools/obra/cobertura_conector.py (integrador)",
+   "mudanca": "resolver as ref: declaradas (o passo que grava o id: a tabela final da via) como arestas de pai e classificar pai_nao_carregado:<PAI> a tabela cujo destino NOT NULL depende de um pai BLOQUEADO; a tabela intermediária de uma ref encadeada (ex.: TBCBOPRO em ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS) só é LIDA da origem e não conta",
+   "motivo": "hoje a cobertura dava CARREGA a FCDIAEXT/FCDIAINT com ref: NOT NULL para FCCTAEXT/RICONTAS bloqueadas (100% das linhas recusadas na carga real). Corrigido nesta fatia (as duas bloqueadas); o achado vale para as outras fatias"
   },
   {
-   "arquivo": "decisão do dono / integrador (classificação do cliente dos motivos de glosa: TBMOTGLO.ID_FCTPMOTGLOSA -> FCTPMOTGLOSA)",
-   "mudanca": "motivo_glosa.grupo_motivo_glosa_id está numa tabela oficial que o conector nunca grava: (a) tirar a coluna da tabela oficial e criar ligação própria do cliente (motivo oficial por codigo_tuss x grupo_motivo_glosa), carregada de TBMOTGLO.CODIGO (de-para pelo código oficial) + TBMOTGLO.ID_FCTPMOTGLOSA (referência ao grupo pelo conector_origem); ou (b) decisão do dono de liberar a escrita dessa coluna não oficial. Registrar em dependencias a aresta TBMOTGLO -> FCTPMOTGLOSA (hoje ausente) e declarar a coluna no lote que tiver TBMOTGLO",
-   "motivo": "sem isso os grupos de glosa entram órfãos e a classificação do hospital se perde em silêncio, sem pendência; TBMOTGLO só tem a declaração de catálogo oficial e nenhuma coluna"
+   "arquivo": "conector/verificar_mapa.py (integrador)",
+   "mudanca": "checar que todo ref: declarado (tabela final que grava id) aponta para um pai de ordem MENOR que a do filho, ou com aresta em duas fases",
+   "motivo": "a conferência por fatia dá os pais como PAIS_EXTERNOS já carregados e não percebe pai depois do filho"
   },
   {
-   "arquivo": "evidência por metadado/contagem (integrador) + conector/mapa/declarado/colunas.d/L8-01.tsv",
-   "mudanca": "verificar, sem ler valores (só contagem de IDs e faixa por agregado, e comparação com a tabela pública de tipos de dedução da EFD-Reinf), se RPDEDUTIVEL.ID corresponde ao tipo de dedução oficial (tpDed). Se sim: declarar tipo_deducao_irrf.codigo_esocial a partir do ID e derivar a natureza por tabela pública versionada (carregador de catálogo), trocando o literal presumido; e ligar natureza_rendimento_deducao.tipo_deducao_irrf_id pelo codigo_deducao_reinf (ou por FPITENSNATREND_DEDUTIVEL.ID_RPDEDUTIVEL). Se não: de-para revisado pelo cliente no painel",
-   "motivo": "hoje codigo_esocial fica nulo e a natureza 'outra' em toda linha de uma tabela fiscal; o carregador oficial não acha o tipo do hospital e as deduções permitidas por natureza de rendimento ficam desligadas"
+   "arquivo": "conector/sante_conector/carga_mapa.py (planejar, integrador)",
+   "mudanca": "regra declarada numa coluna com ref:<Tabela> simples substitui chave_origem e desliga a referência (o valor cru é gravado); recusar no verificador ou ignorar a regra quando há ref simples",
+   "motivo": "descoberta na rodada anterior; na L8-01 as colunas com ref: ficaram com regra vazia (teste garante chave_origem). Vale conferir as outras fatias que declaram regra junto com ref:"
   }
  ]
 }

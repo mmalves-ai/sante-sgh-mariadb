@@ -6,29 +6,16 @@
    "motivo": "hoje esses campos NOT NULL entram presumidos com pendência valor_presumido por linha; valores.tsv é compartilhado e a fatia não pode editá-lo"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py (REGRAS) + verificar_mapa.py",
-   "mudanca": "regra genérica 'minutos_em_timestamp': TIMESTAMP que guarda só a duração como hora (1899-12-30 HH:MM) vira inteiro de minutos (HH*60+MM); outra data: pendência hora_com_data; 00:00 vira NULL",
-   "motivo": "CHTPLIMPEZA.TEMPO_PREVISTO -> modalidade_limpeza.tempo_previsto_minutos (NOT NULL, CHECK > 0). Sem a regra a tabela não carrega (CHTPLIMPEZA fica em NAO_CARREGADAS); com ela, declarar ID->codigo, NOME->descricao, ATIVO->ativo, TEMPO_PREVISTO->tempo_previsto_minutos e tipo presumido"
+   "arquivo": "db/migracoes/09_HOT/03_tabelas.sql (trilha F2.2) + decisão do dono",
+   "mudanca": "modelo (decisão registrada em F4-decisoes-destino.md, L6-17): trocar o CHECK por CONSTRAINT ck_profissional_higienizacao_vinculo CHECK ((vinculo = 'proprio' AND colaborador_id IS NOT NULL) OR (vinculo = 'terceirizado' AND empresa_fornecedora_id IS NOT NULL) OR (origem = 'migracao' AND colaborador_id IS NULL AND empresa_fornecedora_id IS NULL)): o profissional migrado sem ponta entra com o vínculo presumido e a pendência valor_presumido, e o cliente vincula o funcionário ou a empresa no painel (o domínio exige a ponta em toda gravação pela aplicação). Mesma forma de ck_agenda_servico_dono (REAGENDA). Aplicado, a fatia troca o esperado da imagem sintética (CHPROFISLIMP 3 gravados, escala 3, telefone pelo pedido do #juntar:) e tira as três de AGUARDA_PEDIDO no test_l6_17",
+   "motivo": "na imagem de referência entram 0 de 1904 linhas (CHPROFISLIMP, CHAREA_CHPROFISLIMP 1870 e CHPROFLIMPTEL 17) e, em cascata, TBLEITO_CHPROFISLIMP (136, L6-18). A fatia não pode editar o DDL (trilha F2.2, código compartilhado): sem este pedido a cobertura das três é só de fachada",
+   "gravidade": "alta"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (CHTERCEIRO, FPFUNC fora do mapa) + decisão do dono",
-   "mudanca": "trazer para o mapa CHTERCEIRO (empresa terceirizada de limpeza -> empresa_fornecedora) e FPFUNC (funcionário -> colaborador, chave COD_EMP,COD_FUNC), ou declarar a fonte desses destinos; e a referência por chave composta 'ref:FPFUNC(COD_EMP=ID_FPFUNC_COD_EMP,COD_FUNC=ID_FPFUNC_COD_FUNC)' (mesma forma do pedido (b) da L6-14)",
-   "motivo": "profissional_higienizacao exige vinculo com colaborador_id (próprio) ou empresa_fornecedora_id (terceirizado) pelo CHECK ck_profissional_higienizacao_vinculo; sem os pais toda linha de CHPROFISLIMP seria recusada. Bloqueia CHPROFISLIMP e as filhas CHAREA_CHPROFISLIMP e CHPROFLIMPTEL (NAO_CARREGADAS). Com os pais: vinculo por literal condicional ('proprio' se FPFUNC preenchido, senão 'terceirizado'), o que pede também um especial genérico de literal condicional"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "especial de data da carga: '@data_carga' grava a data (UTC) da primeira gravação da linha, fora do resumo de controle e estável no diferencial (não muda o hash nem regrava)",
-   "motivo": "escala_higienizacao.vigencia_inicio é DATE NOT NULL sem coluna na origem (CHAREA_CHPROFISLIMP é só o par área x profissional); inventar data fixa no mapa seria valor falso. Alternativa: decisão do dono de uma data de corte por cliente, configurável, nunca fixa no mapa"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (TBDDD fora do mapa) + carga_mapa.py",
-   "mudanca": "TBDDD no mapa (ou de-para do DDD como texto) e especial de texto composto '={ID_TBDDD:DDD}{NUM_TELEFONE}' para profissional_higienizacao_telefone.numero (só dígitos, 10 a 13); sequencia por '#seq:ID_CHPROFISLIMP'; tipo_telefone_id por ID_TBTIPOTELEFONE",
-   "motivo": "o destino guarda o número com DDD num só campo (CHECK ^[0-9]{10,13}$); a origem guarda DDD por referência a tabela fora do mapa e o número como inteiro"
-  },
-  {
-   "arquivo": "conector/mapa (depende_de de PRCARACTDIE) + decisão de modelo",
-   "mudanca": "ID_PRUNIDRESPOSTA aponta unidade_resposta (destino de PRUNIDRESPOSTA), mas caracteristica_dieta.unidade_medida_id é FK para unidade_medida: ou o modelo ganha caracteristica_dieta.unidade_resposta_id, ou a carga resolve pela unidade_resposta.unidade_medida_id do pai (referência indireta 'ref:PRUNIDRESPOSTA->unidade_medida_id')",
-   "motivo": "gravar o id de unidade_resposta em unidade_medida_id violaria a FK ou apontaria outra unidade; a coluna fica sem declaração até a decisão"
+   "arquivo": "conector/sante_conector/carga_mapa.py (especiais) + verificar_mapa.py",
+   "mudanca": "especial genérico de texto composto, por exemplo '#juntar:<ref:TBDDD>DDD>,NUM_TELEFONE' (partes da linha ou da referência encadeada, só dígitos), para profissional_higienizacao_telefone.numero (e TBFORNECTEL, da L7-06). TBDDD é catálogo oficial (area_ddd): a parte do DDD vem por ref encadeada à origem, sem gravar o catálogo. Depois de aplicado, trocar a coluna NUM_TELEFONE pelo especial em colunas.d/L6-17.tsv",
+   "motivo": "o destino guarda o número com DDD (CHECK ^[0-9]{10,13}$); hoje a fatia grava NUM_TELEFONE como está e número sem DDD é recusado pelo CHECK (restricao_destino_4025), visível ao cliente; NUM_TELEFONE é INTEGER sem DDD (o DDD está em ID_TBDDD): gravado como está, toda linha real é recusada pelo CHECK. Até o especial existir CHPROFLIMPTEL grava 0 (fica em AGUARDA_PEDIDO no test_l6_17)",
+   "gravidade": "alta"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
@@ -38,12 +25,30 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (planejar, linha ~106) + painel (resumo)",
    "mudanca": "regra genérica: tabela do mapa com tabelas_destino, presente na origem, fora de carga.ORDEM e sem coluna declarada deixa de ser pulada em silêncio: vira pendência de tabela 'tabela_sem_declaracao' (gravidade alta em GRAVIDADE_REGRA), com a contagem de linhas lidas, contada no resumo do painel como a tabela_sem_mapa. Expor 'tabelas_sem_declaracao(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)) -> list' (o teste test_l6_17.test_bloqueadas_viram_pendencia_de_tabela usa esse nome e hoje fica em skip)",
-   "motivo": "CHPROFISLIMP, CHAREA_CHPROFISLIMP, CHPROFLIMPTEL e CHTPLIMPEZA (cerca de 1910 linhas na imagem de referência) estão no mapa com destino, mas sem declaração até os pedidos acima; hoje não deixam pendência, não entram na conciliação nem no painel, e a conciliação 'ok' da fatia não prova nada sobre elas. Vale para qualquer fatia com tabela bloqueada"
+   "motivo": "vale para qualquer fatia com tabela sem declaração (a L6-17 declarou todas na rodada de cobertura; o teste que usava o nome foi retirado da fatia)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (especiais) + verificar_mapa.py",
    "mudanca": "especial genérico de alternativa presumida: coluna '<COLUNA>|~<ALTERNATIVA>' grava o valor de COLUNA pela regra declarada; nulo (ou vazio depois da regra) grava o valor de ALTERNATIVA (coluna da origem, tipicamente a chave) convertido ao tipo do destino, com pendência baixa valor_presumido na linha. Depois de aplicado, a fatia declara CHAREA 'SIGLA|~ID' -> area_higienizavel.sigla, 'NOME|~SIGLA' -> area_higienizavel.nome e CHSITUACAO 'ORDEM|~ID' -> situacao_limpeza.ordem",
    "motivo": "CHAREA.SIGLA/NOME e CHSITUACAO.ORDEM são opcionais na origem e NOT NULL no destino (sigla e ordem únicas): o nulo recusa a área ou a situação inteira (restricao_destino_1048) e a perda se espalha como pai_pendente para CHAREA_CHPROFISLIMP (1870), CHEXECLIMPEZA e CHPARAM. A medição dos nulos na imagem de referência (só contagens) não foi feita: o acesso de leitura ao Firebird foi negado nesta sessão; medir antes de integrar. A alternativa pela chave ainda pode colidir com uma sigla ou ordem existente (fica restricao_destino_1062 só nessa linha)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "gravidade": "media",
+   "mudanca": "PRCARACTDIE\tTBUNICON\tL6-17: ref:PRUNIDRESPOSTA>NOME>TBUNICON declarada na fatia (unidade da resposta da característica de dieta) sem FK na origem: o pai vinha depois do filho na ordem de carga",
+   "motivo": "sem a dependência, TBUNICON (L7) carrega depois de PRCARACTDIE (L6) e toda unidade fica NULL com pai_inexistente"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (especiais) ou declarado/valores.tsv + regra 'preenchido'",
+   "gravidade": "media",
+   "mudanca": "vínculo derivado da origem, genérico: especial '#primeiro:<COL1>=<valor1>,<COL2>=<valor2>[,~<presumido>]' (grava o valor da primeira coluna preenchida; nenhuma: o presumido com valor_presumido). A fatia declara CHPROFISLIMP '#primeiro:ID_CHTERCEIRO=terceirizado,ID_FPFUNC_COD_FUNC=proprio,~proprio' -> profissional_higienizacao.vinculo e, com CHTERCEIRO e FPFUNC no mapa, as pontas por ref (empresa_fornecedora_id, colaborador_id por ref:FPFUNC(ID_FPFUNC_COD_EMP,ID_FPFUNC_COD_FUNC))",
+   "motivo": "produto de N clientes (ADR 0002): num cliente com terceirizada o literal '=~proprio' trocaria o significado. Hoje as colunas da ponta estão registradas sem destino, com motivo"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py (183-195) + tools/obra/conferir-fatia-f4.sh",
+   "gravidade": "alta",
+   "mudanca": "cobertura: rebaixar para BLOQUEADA (causa ck_recusa_total:<constraint> ou gravados_zero) a tabela que na conciliação da imagem sintética grava 0 com linhas lidas > 0; conferência: falhar quando uma tabela em CARREGADAS tiver gravados = 0 com origem não vazia, salvo lista explícita de pedidos pendentes",
+   "motivo": "hoje uma tabela cujo CHECK recusa 100% das linhas sai como CARREGA (L6-17: 16 de 16, com 3 gravando 0). O test_l6_17.test_carga_efetiva já faz essa conferência dentro da fatia"
   }
  ]
 }

@@ -14,13 +14,31 @@ Dados 100% falsos (nomes, códigos, logins e identificadores inventados). Carreg
 - SIPACSMODALID (modalidade de imagem): sigla nula (sigla_padrao NOT NULL: 1048), siglas que só diferem pela caixa
   ('CT', 'CT', 'ct': todas recusadas com codigo_colisao_caixa), sigla repetida exata ('MG' duas vezes: a segunda
   restricao_destino_1062 até o pedido 10 do L7-02.json), situação fora do domínio, identificador externo preenchido;
-- SIESPEC e SIMATERI: classificação sem origem, presumida 'outro' (valor_presumido em toda linha lida).
-Não carregadas (NAO_CARREGADAS: na imagem, sem coluna com destino; dependem dos pedidos do L7-02.json).
+- SIESPEC e SIMATERI: classificação sem origem, presumida 'outro' (valor_presumido em toda linha lida);
+- SIKITITE (item do kit, cobertura): kit pela chave, exame pela chave composta de SITABPRO (pai externo, já
+  carregado), sequência 1..n por kit, quantidade zero ou negativa elevada a 1 (valor_elevado_ao_minimo), quantidade
+  nula fica o padrão (1); exame inexistente e kit inexistente (pai_inexistente + NOT NULL: 1048), kit recusado
+  (pai_pendente).
+- SIOBSERV (texto padrão do resultado, cobertura): código derivado do próprio texto (curto: o texto; longo: início +
+  resumo estável, codigo_derivado), setor pela chave de SIMODULO; sem título e sem texto (1048); o MESMO texto em
+  outro setor colide no código único (1062);
+- SIPARGER (parâmetros gerais, cobertura): só o responsável pelo laudo do laboratório, em responsavel_laudo_setor do
+  setor LAB (assina e é responsável técnico, vigência da carga); inscrição -> profissional pela referência encadeada
+  (TBCBOPRO entra só com a forma do dicionário, TBPROFIS é pai externo); hospital sem setor (1048); outro hospital com
+  o mesmo setor e responsável adota a linha (adotado_existente).
+Não carregadas (NAO_CARREGADAS: na imagem, sem coluna com destino): descartadas com motivo de produto em
+`declarado/sem_carga.tsv` (SIPACSVISIMG sem_valor; SIPAR* de usuário e SIFORMUL mecanismo_do_produto; SIFORMUL tem a
+declaração pronta comentada, pedidos 2 e 3 do L7-02.json).
 """
 import datetime
 import re
 
 DDL = """
+CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL PRIMARY KEY, "ID_TBCBOSUS" INTEGER NOT NULL, "UF" VARCHAR(2) NOT NULL,
+  "COD" INTEGER NOT NULL, "ID_TBPROFIS" INTEGER NOT NULL, "VINC_EMPR" VARCHAR(1) NOT NULL, "CONS_PROF" VARCHAR(7),
+  "ATIVO" VARCHAR(1), "VINCULO" SMALLINT, "COMP_INICIAL" INTEGER, "COMP_FINAL" INTEGER, "ATENDE_SUS" CHAR(1),
+  "CRM_DIGITO" VARCHAR(1), "REGIONAL" INTEGER, "ID_TBSIGLACONSPROF" SMALLINT, "REG_QUALIF_ESPECIALISTA" VARCHAR(9),
+  "AXREG_ID_ANESTHESIOLOGISTS" BIGINT, "ID_DIGITAL" VARCHAR(36));
 CREATE TABLE SICTRPSR ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(40), PRIMARY KEY ("COD"));
 CREATE TABLE SIESPEC ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(50), "INTERFACE" VARCHAR(50), "ATIVO" CHAR(1), PRIMARY
   KEY ("COD"));
@@ -230,9 +248,16 @@ CREATE TABLE SIPARULT ("USUARIO" VARCHAR(31) NOT NULL, "DIGCLI" CHAR(1), "DIGCDC
   CHAR(1), "VALIDAR_DATA_HORA_LANCAMENTO" CHAR(1), "VALIDAR_DATA_HORA_COLETA" CHAR(1), "CONTAGEM_SOMENTE_DIAS_UTEIS"
   CHAR(1), "CONSIDERAR_SABADO_DIA_UTIL" CHAR(1), "DEFAULT_CDC_LANCTOS" SMALLINT NOT NULL, PRIMARY KEY ("USUARIO"));
 """
-CARREGADAS = ("SICTRPSR", "SIESPEC", "SIKITEXA", "SIMATERI", "SIMETODO", "SIMODULO", "SIPACSMODALID")
-NAO_CARREGADAS = ("SIFORMUL", "SIKITITE", "SIOBSERV", "SIPACSVISIMG", "SIPARANA", "SIPAREND", "SIPARGER", "SIPARHEM",
-                  "SIPARLAB", "SIPAROUT", "SIPARRX", "SIPARTM", "SIPARULT")
+CARREGADAS = ("SICTRPSR", "SIESPEC", "SIKITEXA", "SIKITITE", "SIMATERI", "SIMETODO", "SIMODULO", "SIOBSERV",
+              "SIPACSMODALID", "SIPARGER")
+AGUARDAM_REGRA = ()
+DESCARTADAS = ("SIFORMUL", "SIPACSVISIMG", "SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX",
+               "SIPARTM", "SIPARULT")
+NAO_CARREGADAS = DESCARTADAS
+# só a forma, para a referência encadeada (inscrição -> profissional); a tabela é de outra fatia (L5)
+FORMA_SO = ("TBCBOPRO",)
+# exame do item do kit: SITABPRO (L7-03) pela chave composta ATO|CODALF; profissional do responsável (TBPROFIS, L5)
+PAIS_EXTERNOS = {"SITABPRO": ["1|GLI", "1|COL"], "TBPROFIS": ["9001"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
@@ -289,31 +314,47 @@ def linhas(r, ins):
               (6, "US", "Ultrassom", "X", None), (7, "ct", "Tomografia em minúsculas", "S", None),
               (8, "MG", "Mamografia", "S", None), (9, "MG", "Mamografia repetida", "S", None)]:
         ins("SIPACSMODALID", list(x))
+    # kit 1: COL (qtde nula: padrão 1), GLI, XXX (exame inexistente: 1048); kit 2: qtde 0 elevada a 1; kit 3: qtde
+    # negativa elevada a 1; kit 9 inexistente (1048); kit 5 recusado em SIKITEXA (pai_pendente)
+    for x in [(1, "GLI", 1, 1), (1, "COL", 1, None), (1, "GLI", 2, 0), (1, "XXX", 1, 2), (1, "GLI", 9, 1),
+              (1, "COL", 5, 1), (1, "COL", 3, -2)]:
+        ins("SIKITITE", list(x))
     # não carregadas: formas da origem só para a imagem (dependem dos pedidos do L7-02.json)
     f = formas()
     for x in [(1, 10, "GLI", "(A+B)/2".encode("cp1252")), (1, 11, "CRE", None)]:
         ins("SIFORMUL", list(x))
-    for x in [(1, "GLI", 1, 1), (1, "COL", 1, None), (1, "GLI", 2, 0)]:
-        ins("SIKITITE", list(x))
+    # SIOBSERV: (1,3) texto longo (codigo_derivado); (1,2) sem título nem texto (1048); (2,2) o mesmo texto de (1,1)
+    # em outro setor: mesmo código derivado (1062)
+    longo = "Amostra coletada fora do prazo de estabilidade; repetir a coleta.".encode("cp1252")
     for x in [(1, 1, "Amostra hemolisada", b"Amostra hemolisada."), (2, 1, "Repetido", b"Repetido e confirmado."),
-              (1, 2, None, None)]:
+              (1, 2, None, None), (1, 3, "Fora do prazo", longo), (2, 2, "Hemolisada", b"Amostra hemolisada.")]:
         ins("SIOBSERV", list(x))
+    ins("TBCBOPRO", [501, 1, "SP", 111, 9001, "S"] + [None] * 12)
     for x in [(1, "Visualizador exemplo"), (2, "Visualizador local")]:
         ins("SIPACSVISIMG", list(x))
     for t in ("SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX", "SIPARTM", "SIPARULT"):
         for u in ("ana", "bia"):
             ins(t, _neutra(f[t], r, {"USUARIO": u}))
-    ins("SIPARGER", _neutra(f["SIPARGER"], r, {"HOSP": 1}))
+    # SIPARGER: hospital 1 com setor LAB 1 e responsável 501; hospital 2 sem setor (1048); hospital 3 com o mesmo
+    # setor e responsável do 1 (adota a linha, adotado_existente)
+    for hosp, lab in ((1, 1), (2, None), (3, 1)):
+        ins("SIPARGER", _neutra(f["SIPARGER"], r, {"HOSP": hosp, "LAB": lab, "ID_TBCBOPRO_RESP_LAUDO_LAB": 501}))
     return {
         "SICTRPSR": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2}},
         "SIESPEC": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1,
                                                   "valor_presumido": 5}},
         "SIKITEXA": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1,
                                                    "hora_com_data": 1}},
+        "SIKITITE": {"gravados": 4, "pendencias": {"valor_elevado_ao_minimo": 2, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 2, "pai_pendente": 1}},
         "SIMATERI": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1,
                                                    "valor_presumido": 5}},
         "SIMETODO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1}},
         "SIMODULO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
+        "SIOBSERV": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
+                                                   "codigo_derivado": 1}},
+        "SIPARGER": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 1,
+                                                   "vigencia_sem_fonte": 3}},
         # CT/CT/ct (2, 5, 7): todas recusadas por caixa; MG/MG (8, 9): repetição exata, a segunda 1062 até o
         # pedido 10 do L7-02.json (depois: as duas recusadas, valor_repetido_unico 2, gravados 3, sem 1062)
         "SIPACSMODALID": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,

@@ -1,13 +1,25 @@
 """Fatia L5-12 (cadastros e administração, módulo RH): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Carregadas pelo mapa (colunas.d/L5-12.tsv): TBTABIRR (tabela legal do IRRF: cabeçalho por vigência; as faixas
-esperam o grupo repetido no motor), PEJUSTIF (justificativa de ponto) e TBTPTRIBUTO (tributo da folha). As outras 18 tabelas da fatia entram na
-imagem só com a forma (2 linhas falsas cada) e ficam fora da carga até o motor ganhar as regras genéricas pedidas em
-docs/obra/fatias/f4/saida/L5-12.json (motivo por tabela em docs/obra/fatias/f4/saida/L5-12.md).
-Anomalias: data sentinela na chave (NOT NULL do destino recusa a linha), faixa de redução invertida (CHECK do destino), NOT NULL do destino sem valor, código repetido entre empresas (UNIQUE global do destino: limitação do modelo, pedida em saida/L5-12.json), nome com espaços repetidos e nome só com espaços.
+Carregadas pelo mapa (colunas.d/L5-12.tsv): PEJUSTIF, TBTPTRIBUTO (tipo pelo de-para de valores), FPRESP
+(responsável legal), FPREMESSA (competência da folha), FPPARAM (cadastro do empregador, classificação tributária,
+construtora e cooperativa pela empresa: referência encadeada a TBEMPHOS e de-para oficial/de valores), FPPARAMVIG
+(versões do cadastro na trilha, com retrato). Declaradas mas recusadas por coluna NOT NULL que aguarda mecanismo do motor
+ou modelo (1364, pedidos em saida/L5-12.json): FPEVENTO (natureza da rubrica), FPLOTTRIBCAD (FPAS), FPREMESSA (abertura
+DATETIME), FPTPEVENTOAUT_TBEMPHOS (rubrica) e as quatro incidências (pai_pendente: a rubrica foi recusada). Fora da carga
+(só a forma, 2 linhas): os 5 catálogos oficiais ST*, a tabela legal TBTABIRR (catálogo oficial) e as listas
+TBTPCONSTRUT/TBTPCOOPERAT (descartes pedidos em saida/L5-12.json).
+Anomalias: data sentinela, faixa invertida, NOT NULL sem valor, código repetido entre empresas, CPF inválido, UF sem
+código oficial, classificação tributária inexistente, dia de pagamento fora da faixa, mês 13, tipo de folha
+inexistente, situação fora do domínio, responsável recusado (pai_pendente), cadastro inexistente (pai_inexistente).
+TBEMPHOS (empresa, de outra fatia) entra na imagem só com as colunas lidas pela referência encadeada, a não ser que
+outra fatia já a defina na imagem sintética: aí ela é requerida (REQUER), o PREPARO_DESTINO dela roda antes do desta, e
+esta fatia acrescenta as empresas 11 a 13 (CNPJ válido e novo, classificação 99/77, construtora 0/1, cooperativa 0..3);
+o esperado de TBEMPHOS é o da dona mais estas 3 linhas.
 """
 import datetime
 import decimal
+import importlib
+import random
 import re
 
 DDL = """
@@ -129,7 +141,50 @@ CREATE TABLE FPPARAMVIG (COD_EMP SMALLINT NOT NULL, DATA_HORA_VIGENCIA TIMESTAMP
   VARCHAR(30), ID_FPESOCTPAMB SMALLINT, PRIMARY KEY (COD_EMP,DATA_HORA_VIGENCIA));
 """
 
-CARREGADAS = ("TBTABIRR", "PEJUSTIF", "TBTPTRIBUTO")
+CARREGADAS = ("FPEVENTO", "FPLOTTRIBCAD", "FPREMESSA", "FPRESP", "FPRUBRICAFGTS_FPEVENTO",
+              "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO", "FPTPEVENTOAUT_TBEMPHOS",
+              "PEJUSTIF", "TBTPTRIBUTO", "FPPARAM", "FPPARAMVIG")
+INCIDENCIAS = ("FPRUBRICAFGTS_FPEVENTO", "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO")
+PAIS_EXTERNOS = {"FPTP_EVENTO": ["P", "D"], "FPTP_REFER": ["H", "V"], "FPTP_FOLHA": ["1", "2"]}
+PREPARO_PROPRIO = (
+    "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+    "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES"
+    " ('esocial', '08', 'Classificacao tributaria', 'teste', UTC_TIMESTAMP(3)),"
+    " ('esocial', '10', 'Tipo de lotacao tributaria', 'teste', UTC_TIMESTAMP(3));"
+    "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '99',"
+    " 'Pessoa juridica exemplo', UTC_TIMESTAMP(3) FROM tabela_esocial WHERE codigo_oficial = '08';"
+    "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '01',"
+    " 'Lotacao exemplo', UTC_TIMESTAMP(3) FROM tabela_esocial WHERE codigo_oficial = '10';"
+    "INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
+    " ('35', 'SP', 'Estado exemplo', 1, UTC_TIMESTAMP(3));")
+
+
+def _dono(tabela):
+    """Módulo de outra fatia que já define `tabela` na imagem sintética (None: nenhum)."""
+    import pathlib
+    aqui = pathlib.Path(__file__).resolve()
+    for p in sorted(aqui.parent.glob("*.py")):
+        if p.resolve() != aqui and ("CREATE TABLE %s (" % tabela) in p.read_text(encoding="utf-8"):
+            return p.stem
+    return None
+
+
+DONO_EMPRESA = _dono("TBEMPHOS")
+REQUER = [DONO_EMPRESA] if DONO_EMPRESA else []
+MOD_DONO = importlib.import_module("sante_conector.sintetica_d." + DONO_EMPRESA) if DONO_EMPRESA else None
+# a conferência roda só o PREPARO_DESTINO da fatia conferida: o da dona (destino do L3, pessoa jurídica já
+# cadastrada) entra antes do desta, para a adoção da dona dar o esperado dela
+PREPARO_DESTINO = (getattr(MOD_DONO, "PREPARO_DESTINO", "") or "") + PREPARO_PROPRIO
+if not DONO_EMPRESA:
+    DDL += ("CREATE TABLE TBEMPHOS (COD SMALLINT NOT NULL, NOME VARCHAR(80), ID_FPCLASSIFTRIB VARCHAR(2), ID_TBTPCONSTRUT"
+            " SMALLINT, ID_TBTPCOOPERAT SMALLINT, PRIMARY KEY (COD));\n")
+
+
+def _colunas_dono(tabela):
+    """Colunas de `tabela` na ordem do DDL da fatia dona (forma dela)."""
+    m = re.search(r"CREATE TABLE %s \((.*?)\);" % tabela, MOD_DONO.DDL, re.S)
+    return [c for c in re.findall(r"(?:^|,)\s*([A-Z_0-9]+)\s+[A-Z]", m.group(1)) if c != "PRIMARY"]
 
 
 def _colunas():
@@ -147,6 +202,7 @@ def _colunas():
 
 
 COLUNAS = _colunas()
+FATIA = tuple(t for t in COLUNAS if t != "TBEMPHOS")
 
 
 def _falso(tipo, i):
@@ -167,44 +223,128 @@ def _falso(tipo, i):
     return ("texto exemplo " + str(i)).encode("cp1252")
 
 
+def cpf_falso(base9):
+    """CPF de 11 dígitos com dígitos verificadores válidos a partir de 9 dígitos inventados."""
+    d = [int(x) for x in "%09d" % base9]
+    for n in (10, 11):
+        r = sum(x * p for x, p in zip(d, range(n, 1, -1))) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return "".join(map(str, d))
+
+
+def cnpj_falso(base12):
+    """CNPJ de 14 dígitos com dígitos verificadores válidos a partir de 12 dígitos inventados."""
+    d = [int(x) for x in "%012d" % base12]
+    for pesos in ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]):
+        r = sum(x * p for x, p in zip(d, pesos)) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return "".join(map(str, d))
+
+
 def _ins(ins, tab, **v):
     ins(tab, [v.get(c) for c, _, _ in COLUNAS[tab]])
 
 
+def _obrig(tab, **v):
+    """Linha com as colunas NOT NULL da origem preenchidas (forma) e as dadas por cima."""
+    base = {c: _falso(tp, 1) for c, tp, ob in COLUNAS[tab] if ob}
+    base.update(v)
+    return base
+
+
+D = datetime.date
+TS = datetime.datetime
+
+
 def linhas(r, ins):
     for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS:
+        if tab not in CARREGADAS and tab != "TBEMPHOS":
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
-    # tabela legal do IRRF: 10 vigências; 9 com a redução invertida (CHECK do destino), 7 com data sentinela na chave (vira NULL: NOT NULL no destino recusa a linha,
-    # e a pendência data_sentinela fica), 8 sem isenção nem desconto simplificado
-    for i in range(1, 11):
-        v = dict(DTA_INSS_IRRF=datetime.date(2015 + i, 1, 1), ISENTO=1903.98 + i, F1_INICIO=1903.99 + i,
-                 F1_FIM=2826.65 + i, F1_DED=142.8, F1_ALIQ=7.5, DESC_DEP=189.59,
-                 DESC_SIMPLIFICADO=decimal.Decimal("564.80"), F2_INICIO=2826.66, F2_ALIQ=15.0)
-        if i == 7:
-            v["DTA_INSS_IRRF"] = datetime.date(1899, 12, 30)
-        if i == 8:
-            v["ISENTO"] = v["DESC_SIMPLIFICADO"] = None
-        if i == 10:  # vigência com a redução de 2026 (faixa com redução e limite sem redução)
-            v.update(F1_INICIO_26=5000.01, F1_FIM_26=7350.0, ACIMA_26=7350.0, ISENTO_26=5000.0, REDUCAO_26=312.89)
-        if i == 9:  # redução com início depois do fim: o CHECK do destino recusa a linha
-            v.update(F1_INICIO_26=7350.0, F1_FIM_26=5000.01, ACIMA_26=7350.0)
-        _ins(ins, "TBTABIRR", **v)
     # justificativa de ponto: 3 sem nome (NOT NULL no destino); 4 repete o código 10 de outra empresa: o UNIQUE(codigo)
-    # global do destino recusa (1062). É LIMITAÇÃO DO MODELO, não erro do dado (a origem é única por empresa + código):
-    # escopo por mantenedora pedido em docs/obra/fatias/f4/saida/L5-12.json
+    # global do destino recusa (1062). É LIMITAÇÃO DO MODELO, não erro do dado (pedido em saida/L5-12.json)
     for idj, emp, cod, nome in [(1, 1, 10, "Atestado médico"), (2, 1, 11, "  Consulta   de rotina "), (3, 1, 12, None),
                                 (4, 2, 10, "Atestado outra empresa"), (6, 1, 13, "Falta justificada ação"),
                                 (7, 2, 14, "Curso externo")]:
         _ins(ins, "PEJUSTIF", ID_JUSTIF=idj, COD_EMP=emp, COD_JUSTIF=cod, NOME=nome)
-    # tributo da folha: 6 com nome só de espaços (vira NULL: NOT NULL no destino)
+    # tributo da folha: tipo pela chave (valores.d); 6 sem par no de-para (valor_fora_do_dominio) e com nome só de
+    # espaços: o NOT NULL do destino recusa
     for i, nome in [(1, "Previdência exemplo"), (2, "Fundo exemplo"), (3, "Imposto exemplo"),
                     (4, "Contribuição   sobre   folha"), (5, "Sindical exemplo"), (6, "   ")]:
         _ins(ins, "TBTPTRIBUTO", ID=i, NOME=nome)
-    return {
-        "TBTABIRR": {"gravados": 8, "pendencias": {"data_sentinela": 1, "restricao_destino_1048": 1,
-                                                  "restricao_destino_4025": 1}},
+    # rubricas: válidas, mas a natureza (catálogo oficial sem de-para no motor) falta: todas recusadas com 1364
+    for i, (tp, rf) in enumerate([("P", "H"), ("D", "V"), ("P", "V")], 1):
+        _ins(ins, "FPEVENTO", **_obrig("FPEVENTO", ID_EVENTO=i, COD_EMP=1, COD_EVENTO=100 + i, NOME="Rubrica %d" % i,
+                                       TP_EVENTO=tp, TP_REFER=rf, PERC_INC=decimal.Decimal("50.00"), PRIORIDADE=10,
+                                       SITUACAO="I" if i == 3 else "A",
+                                       FORMULA=b"SALARIO * 0.5" if i == 1 else None, FOLHA="S", FERIAS="N"))
+    # incidências: a rubrica foi recusada: pai_pendente
+    for t in INCIDENCIAS:
+        for i in (1, 2):
+            _ins(ins, t, **_obrig(t, ID_FPEVENTO=i))
+    # lotação tributária: tipo oficial existente, mas o FPAS (catálogo sem de-para no motor) falta: 1364
+    for i in (1, 2):
+        _ins(ins, "FPLOTTRIBCAD", ID=i, NOME="Lotacao %d" % i, DATA_VIGENCIA_INICIAL=D(2020, 1, i),
+             ID_FPLOTACAOTRIB="01", ID_FPFPAS=515, ID_TBEMPHOS=1)
+    # lançamento automático: tipo pelo de-para de valores (outro); sem rubrica na origem: 1364
+    for i in (1, 2):
+        _ins(ins, "FPTPEVENTOAUT_TBEMPHOS", ID_FPTPEVENTOAUT=i, ID_TBEMPHOS=1, LANCAR_TP_EVENTO_AUTOM_FOLHA="S")
+    # competência: 1 fechada, 2 aberta, 3 mês 13 (CHECK), 4 tipo de folha inexistente (pai_inexistente, NOT NULL),
+    # 5 situação fora do domínio (padrão aberta), 6 sem fim de apuração (NOT NULL)
+    for i, mes, tp, fim, fech in [(1, 1, 1, D(2025, 1, 31), "S"), (2, 2, 1, D(2025, 2, 28), "N"),
+                                  (3, 13, 1, D(2025, 3, 31), "N"), (4, 4, 9, D(2025, 4, 30), "N"),
+                                  (5, 5, 2, D(2025, 5, 31), "X"), (6, 6, 1, None, "N")]:
+        _ins(ins, "FPREMESSA", ID_REMESSA=i, COD_EMP=1, ANO_PROC=2025, MES_PROC=mes, COD_REMESSA=1, COD_TP=tp,
+             DTA_INI_APUR=D(2025, min(mes, 12), 1), DTA_FIN_APUR=fim, DATA_PAGAMENTO=D(2025, min(mes, 12), 5),
+             FECHADA=fech)
+    # responsável: 1 válido; 2 UF sem código oficial; 3 CPF inválido (NOT NULL); 4 sem início de vigência (NOT NULL)
+    for i, cpf, uf, ini in [(1, cpf_falso(123456789), "SP", D(2020, 1, 1)), (2, cpf_falso(987654321), "RJ", D(2021, 1, 1)),
+                            (3, "123", "SP", D(2020, 1, 1)), (4, cpf_falso(111222333), "SP", None)]:
+        _ins(ins, "FPRESP", ID_RESP=i, COD_EMP=1, COD_RESP=i, NOME="Responsavel   exemplo %d" % i, CPF=cpf,
+             DTA_NASC=D(1970, 1, i), DESC_FUNCAO="Diretor", ID_TBUF=uf, TEL="5555-0000", E_MAIL="resp%d@exemplo.test" % i,
+             VIGENCIA_INICIAL=ini, SITUACAO={1: "A", 2: " "}.get(i))
+    # empresa (colunas lidas): 11 classificação 99 existente; 12 classificação 77 inexistente; 13 cooperativa 3
+    empresas = [(11, "99", 0, 0), (12, "77", 1, 2), (13, "99", 0, 3)]
+    if not DONO_EMPRESA:
+        for cod, cl, co, cp in empresas:
+            _ins(ins, "TBEMPHOS", COD=cod, NOME="Empresa exemplo %d" % cod, ID_FPCLASSIFTRIB=cl, ID_TBTPCONSTRUT=co,
+                 ID_TBTPCOOPERAT=cp)
+    else:  # a dona define TBEMPHOS: as empresas entram com a forma dela (CNPJ válido e novo; demais colunas nulas)
+        cols = _colunas_dono("TBEMPHOS")
+        for cod, cl, co, cp in empresas:
+            v = dict(COD=cod, NOME="Empresa exemplo %d" % cod, CNPJ=int(cnpj_falso(998877660000 + cod)),
+                     ID_FPCLASSIFTRIB=cl, ID_TBTPCONSTRUT=co, ID_TBTPCOOPERAT=cp)
+            ins("TBEMPHOS", [v.get(c) for c in cols])
+    # cadastro do empregador: 1 válido, dia de pagamento 40 (fora da faixa); 2 classificação inexistente (NOT NULL);
+    # 3 responsável recusado (pai_pendente)
+    for emp, resp, dia in [(11, 1, 40), (12, 2, 5), (13, 3, 5)]:
+        _ins(ins, "FPPARAM", **_obrig("FPPARAM", COD_EMP=emp, ID_RESP_EMP=resp, ID_RESP_FICH=resp, COD_GPS=2100,
+                                      COD_CATEG=1, DIA_PGTO=dia, INTEGRAR_PONTO_ELETRONICO="S",
+                                      DATA_INICIO_ESOCIAL=D(2018, 1, 1)))
+    # versões do cadastro: duas da empresa 11; uma da 12 (cadastro recusado: pai_pendente); uma da 19 (sem cadastro:
+    # pai_inexistente, a versão entra sem o id da entidade)
+    for emp, q in [(11, TS(2024, 1, 1, 8, 0)), (11, TS(2025, 6, 1, 9, 30)), (12, TS(2024, 3, 1, 10, 0)),
+                   (19, TS(2024, 3, 1, 10, 0))]:
+        _ins(ins, "FPPARAMVIG", **_obrig("FPPARAMVIG", COD_EMP=emp, DATA_HORA_VIGENCIA=q, COD_GPS=2100, COD_CATEG=1))
+    esperado = {
         "PEJUSTIF": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1}},
-        "TBTPTRIBUTO": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
+        "TBTPTRIBUTO": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
+        "FPEVENTO": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 3, "restricao_destino_1364": 3}},
+        "FPLOTTRIBCAD": {"gravados": 0, "pendencias": {"restricao_destino_1364": 2}},
+        "FPTPEVENTOAUT_TBEMPHOS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 2,
+                                                                "restricao_destino_1364": 2}},
+        "FPREMESSA": {"gravados": 0, "pendencias": {"restricao_destino_1364": 6, "pai_inexistente": 1,
+                                                   "valor_fora_do_dominio": 1}},
+        "FPRESP": {"gravados": 2, "pendencias": {"valor_presumido": 4, "catalogo_codigo_inexistente": 1,
+                                                "documento_invalido": 1, "restricao_destino_1048": 2}},
+        "FPPARAM": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 2, "valor_fora_do_dominio": 1,
+                                                 "catalogo_codigo_inexistente": 1, "restricao_destino_1048": 1,
+                                                 "pai_pendente": 1}},
+        "FPPARAMVIG": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
     }
+    for t in INCIDENCIAS:
+        esperado[t] = {"gravados": 0, "pendencias": {"pai_pendente": 2}}
+    if DONO_EMPRESA:  # o esperado de TBEMPHOS é o da dona (lido dela, sem inserir nada) mais as 3 empresas desta fatia
+        dono = MOD_DONO.linhas(random.Random(0), lambda t, v: None).get("TBEMPHOS", {"gravados": 0, "pendencias": {}})
+        esperado["TBEMPHOS"] = {"gravados": dono["gravados"] + len(empresas), "pendencias": dict(dono["pendencias"])}
+    return esperado

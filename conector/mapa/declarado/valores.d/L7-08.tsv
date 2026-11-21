@@ -1,0 +1,7 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+GECADSAI	CONSOL	documento_estoque.situacao	S	concluido	L7-08: consolidado: lançado no saldo
+GECADSAI	CONSOL	documento_estoque.situacao	N	aberto	L7-08: não consolidado: ainda não lançado no saldo
+GECADSAI	CONSOL	documento_estoque.situacao		aberto	L7-08: sem marca: não lançado no saldo
+GECADDEV	CONSOL	documento_estoque.situacao	S	concluido	L7-08: consolidado: lançado no saldo
+GECADDEV	CONSOL	documento_estoque.situacao	N	aberto	L7-08: não consolidado: ainda não lançado no saldo
+GECADDEV	CONSOL	documento_estoque.situacao		aberto	L7-08: sem marca: não lançado no saldo

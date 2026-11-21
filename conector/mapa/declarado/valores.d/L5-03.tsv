@@ -1,0 +1,5 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBUSERS_TBPAPEL	ATIVO	usuario_papel_seguranca.vigencia_fim	1		L5-03: ativo, sem fim
+TBUSERS_TBPAPEL	ATIVO	usuario_papel_seguranca.vigencia_fim	0	@data_carga	L5-03: inativo termina na data da carga
+TBALERTA	ID_TBSEXO	regra_alerta.sexo_aplicavel	F	feminino	L5-03: sigla do cadastro de sexo
+TBALERTA	ID_TBSEXO	regra_alerta.sexo_aplicavel	M	masculino	L5-03: sigla do cadastro de sexo

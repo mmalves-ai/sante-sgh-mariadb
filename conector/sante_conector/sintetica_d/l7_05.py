@@ -1,14 +1,18 @@
 """Fatia L7-05 (SADT e suprimentos, módulo SUP): tabelas da origem com as colunas de
 `conector/mapa/declarado/colunas.d/L7-05.tsv`, dados 100% falsos e as anomalias da fatia.
 
-Carregadas (9): capelas e grupos de manipulação (e a associativa), grupos de insumo (natureza PRESUMIDA 'outro'),
+Carregadas (15): capelas e grupos de manipulação (e a associativa), grupos de insumo (natureza PRESUMIDA 'outro'),
 ações da dose, kits padrão, locais de estoque (tipo PRESUMIDO 'outro', local de origem por autorreferência em duas
-fases), kits rastreáveis (local, kit padrão e usuário do cadastro) e destinos de entrega de compra (UF pelo catálogo
-oficial).
-Fora da carga (16, entram na imagem para provar que nada é gravado): saldos mensais, recálculo de saldo, terceiros,
-documentos de estoque e seus itens, compras, lotes, descrição de serviço, estoque inicial e seus itens, fechamento,
-sequências, horários padrão, consumo por centro de custo e limites por local (motivos em colunas.d e pedidos em
-saida/L7-05.json: pais em ordem posterior, competência composta de ANO+MES, desdobramento de colunas em linhas).
+fases), kits rastreáveis, destinos de entrega de compra, recálculo de saldo (competência ANO+MES), documentos de
+transferência (situação pela consolidação) e seus itens (unidade pelo insumo, encadeada), estoque inicial como
+inventário de abertura, sequências de documento e parâmetros de
+reposição por local.
+Fora da carga (10, entram na imagem para provar que nada é gravado): compras, consumo por centro de custo, lote por
+documento e terceiros (descarte pedido), saldos mensais, itens do estoque inicial, horários padrão e descrição de
+serviço (mecanismo pedido em saida/L7-05.json) e fechamento mensal
+(bloqueado até a data em DATETIME: entrar aberto inverteria o significado).
+Ordem: o local de estoque (GELOCARM) vem hoje DEPOIS de documentos, estoque inicial e reposição (aresta pedida); o
+esperado dessas tabelas sai das duas ordens (`_local_antes`), para a conferência valer antes e depois da integração.
 Anomalias: nome vazio ou só espaços em destino NOT NULL (1048), S/N e 0/1 fora do domínio (padrão com pendência),
 prazo acima de 365 (4025), pai recusado (pai_pendente), pai nunca visto (pai_inexistente, + 1048 se NOT NULL),
 autorreferência a local recusado e a local nunca visto (fase 2), login sem usuário (NULL aceito), UF fora do
@@ -16,6 +20,9 @@ catálogo (catalogo_codigo_inexistente), 0 como "sem valor" (NULL), nome com esp
 """
 import datetime
 import decimal
+from pathlib import Path
+
+from .. import mapa
 
 DDL = """
 CREATE TABLE GEARMLOC (ANO SMALLINT NOT NULL, MES SMALLINT NOT NULL, LOCAL SMALLINT NOT NULL, ITEM INTEGER NOT 
@@ -83,7 +90,7 @@ CHAR(1), DATA_HORA_INCLUSAO TIMESTAMP, ID_GEKITS_PADRAO SMALLINT, ID_USUARIO_CAD
   ID_USUARIO_ATUALIZA_KIT VARCHAR(31), UTILIZACAO_TOTAL CHAR(1), PRIMARY KEY (ID));
 """
 
-PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo"]}
+PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo"], "GEITENS": ["1", "2"], "GETPLANCTO": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
                    " INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
@@ -91,28 +98,34 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " ('33', 'RJ', 'Unidade exemplo RJ', 1, UTC_TIMESTAMP(3))")
 
 CARREGADAS = ("GECAPELAMP", "GEDESCOM", "GEGRUPOMP", "GECAPELAMP_GEGRUPOMP", "GEGRUPOS", "GEITEACAODOSE", "GEKITS",
-              "GELOCARM", "GEKITRAS")
+              "GELOCARM", "GEKITRAS", "GEATUALIZASALDO", "GECADTRA", "GEESTINI", "GEGERSEQ", "GELIMLOC",
+              "GELANTRA")
 FORMAS_BLOQUEADAS = {
     'GEARMLOC': ('SMALLINT', 'SMALLINT', 'SMALLINT', 'INTEGER', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'VARCHAR'),
-    'GEATUALIZASALDO': ('INTEGER', 'TIMESTAMP', 'VARCHAR', 'SMALLINT', 'INTEGER', 'VARCHAR', 'TIMESTAMP', 'SMALLINT', 'SMALLINT', 'VARCHAR'),
     'GECADTER': ('VARCHAR', 'DATE', 'INTEGER'),
-    'GECADTRA': ('INTEGER', 'SMALLINT', 'SMALLINT', 'INTEGER', 'DATE', 'INTEGER', 'VARCHAR', 'VARCHAR', 'SMALLINT', 'SMALLINT', 'VARCHAR', 'VARCHAR', 'DATE', 'VARCHAR', 'VARCHAR', 'VARCHAR', 'VARCHAR', 'VARCHAR', 'TIMESTAMP', 'TIMESTAMP', 'VARCHAR'),
     'GECOMPRA': ('INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC'),
     'GECONITL': ('SMALLINT', 'SMALLINT', 'SMALLINT', 'INTEGER', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'NUMERIC'),
     'GECTRVMM': ('SMALLINT', 'SMALLINT', 'INTEGER', 'INTEGER', 'DATE', 'NUMERIC', 'VARCHAR'),
     'GEDESPDS': ('SMALLINT', 'VARCHAR', 'INTEGER', 'INTEGER', 'BLOB'),
-    'GEESTINI': ('INTEGER', 'DATE', 'SMALLINT', 'VARCHAR', 'VARCHAR', 'VARCHAR'),
-    'GEFECMES': ('SMALLINT', 'SMALLINT', 'CHAR'),
-    'GEGERSEQ': ('SMALLINT', 'VARCHAR', 'INTEGER', 'SMALLINT', 'SMALLINT'),
     'GEHORMED': ('SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT'),
+    'GEFECMES': ('SMALLINT', 'SMALLINT', 'VARCHAR'),
     'GEKONCDC': ('SMALLINT', 'SMALLINT', 'INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC'),
     'GELANESI': ('INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC'),
-    'GELANTRA': ('INTEGER', 'SMALLINT', 'SMALLINT', 'INTEGER', 'SMALLINT', 'INTEGER', 'VARCHAR', 'NUMERIC', 'NUMERIC', 'INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'TIMESTAMP', 'TIMESTAMP'),
-    'GELIMLOC': ('INTEGER', 'SMALLINT', 'NUMERIC', 'NUMERIC'),
 }
 BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
 
 D = decimal.Decimal
+
+
+def _ordem():
+    p = Path(__file__).resolve().parents[2] / "mapa" / "tabelas.tsv"
+    return {r["tabela"]: int(r["ordem"]) for r in mapa.ler_tsv(p) if (r.get("ordem") or "").isdigit()}
+
+
+def _local_antes(filho):
+    """O local de estoque (GELOCARM, desta fatia) é carregado antes de `filho` na ordem do mapa?"""
+    o = _ordem()
+    return o.get("GELOCARM", 0) < o.get(filho, 0)
 
 
 def _valor(forma, i, k):
@@ -196,7 +209,85 @@ def linhas(r, ins):
               (4, "Entrega quatro", "Travessa Exemplo", 0, None, None, None, "RJ", None, 12345678000199)]:
         ins("GEDESCOM", list(x))
 
-    return {
+    # --- recálculo de saldo: 3 sem mês (competência vazia: 1048), 4 mês 13 (valor_fora_do_dominio nas duas
+    # competências + 1048), 5 marca de término fora do domínio (padrão + pendência), 6 login sem usuário
+    di, df = datetime.datetime(2025, 4, 1, 22, 0), datetime.datetime(2025, 4, 1, 23, 15)
+    for x in [(1, di, "almox.exemplo", 5, 7, "S", df, 3, 2025, "10.0.0.1"),
+              (2, di, None, 5, 8, "N", df, 4, 2025, None),
+              (3, di, "almox.exemplo", 5, 9, "S", df, None, 2025, None),
+              (4, di, "almox.exemplo", 5, 10, "S", df, 13, 2025, None),
+              (5, di, "farm.exemplo", 5, 11, "Z", df, 5, 2025, None),
+              (6, di, "usuario.inexistente", 5, 12, "S", df, 6, 2025, None)]:
+        ins("GEATUALIZASALDO", list(x))
+
+    # --- documentos de transferência (tipo transferência, fato da tabela; situação pela consolidação: 10 S concluido,
+    # 11 N aberto; 16 X: padrão aberto + valor_fora_do_dominio na situação e no consolidado):
+    # 12 sem data (1048), 13 origem = destino (4025), 14 destino recusado (pai_pendente), 15 destino nunca visto
+    # (pai_inexistente + 4025), 16 consolidado fora do domínio e login sem usuário (gravado)
+    d0, dh = datetime.date(2025, 5, 2), datetime.datetime(2025, 5, 2, 9, 0)
+    for (i, data, ori, des, cons, obs, usu) in [(10, d0, 1, 2, "S", "Reposição  semanal", "almox.exemplo"),
+                                                 (11, d0, 2, 1, "N", "  Devolução ", None),
+                                                 (12, None, 1, 2, "S", None, "almox.exemplo"),
+                                                 (13, d0, 1, 1, "S", None, "almox.exemplo"),
+                                                 (14, d0, 1, 3, "S", None, "almox.exemplo"),
+                                                 (15, d0, 1, 99, "S", None, "almox.exemplo"),
+                                                 (16, d0, 2, 4, "X", None, "usuario.inexistente")]:
+        ins("GECADTRA", [i, 2025, 5, i - 9, data, None, obs, cons, ori, des, "N", "S", d0, "0900", "0900", usu,
+                         None, None, dh, dh, "T"])
+    # --- itens do documento: a unidade vem do insumo (encadeada) e o insumo é de outra fatia (GEITENS não está
+    # nesta imagem): pai_inexistente na unidade + 1048; 101 de documento recusado (pai_pendente); 102 de documento
+    # nunca visto (pai_inexistente no documento e na unidade + 1048)
+    for (i, doc, seq) in [(100, 10, 1), (101, 14, 1), (102, 999, 1)]:
+        ins("GELANTRA", [doc, None, None, None, seq, 1, "S", D("5.000"), D("2.50"), None, i, 0, D("5.000"), dh, dh])
+
+    # --- estoque inicial: 3 sem usuário (1048), 4 local recusado (pai_pendente), 5 consolidação fora do domínio
+    # (padrão 'aberto' + pendência)
+    for x in [(1, d0, 1, "S", "almox.exemplo", None), (2, d0, 2, "N", "farm.exemplo", None),
+              (3, d0, 1, "S", None, None), (4, d0, 3, "S", "almox.exemplo", None),
+              (5, d0, 1, "X", "farm.exemplo", None)]:
+        ins("GEESTINI", list(x))
+
+    # --- fechamento mensal: BLOQUEADO até o motor gravar data em DATETIME (fechado exige fechado_em); só
+    # presença (acima). Ao ativar: mês 13 (valor_fora_do_dominio + 1048), exportado fora do domínio.
+
+    # --- sequências: 0 elevado a 1, ano 1999 (CHECK do período: 4025), tipo de movimento nunca visto (1048)
+    for x in [(1, "Transferência", 15, 1, 2025), (1, "Transferência", 0, 2, 2025), (2, "Saída", 7, 1, 1999),
+              (9, "Tipo exemplo", 3, 1, 2025)]:
+        ins("GEGERSEQ", list(x))
+
+    # --- reposição por local: (1,3) local recusado, (1,2) máximo menor que o mínimo (4025), (77,1) insumo nunca
+    # visto (1048), (2,1) mínimo negativo (padrão 0 + pendência)
+    for x in [(1, 1, D("10.000"), D("20.000")), (2, 2, D("0.000"), None), (1, 3, D("1.000"), D("2.000")),
+              (1, 2, D("30.000"), D("10.000")), (77, 1, D("1.000"), D("2.000")), (2, 1, D("-5.000"), D("5.000"))]:
+        ins("GELIMLOC", list(x))
+
+    loc_doc, loc_inv, loc_rep = _local_antes("GECADTRA"), _local_antes("GEESTINI"), _local_antes("GELIMLOC")
+    esp = {
+        "GEATUALIZASALDO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "valor_fora_do_dominio": 3,
+                                                          "pai_inexistente": 1}},
+        "GEGERSEQ": {"gravados": 2, "pendencias": {"valor_elevado_ao_minimo": 1, "restricao_destino_4025": 1,
+                                                   "pai_inexistente": 1, "restricao_destino_1048": 1}},
+    }
+    if loc_doc:
+        esp["GECADTRA"] = {"gravados": 3, "pendencias": {"restricao_destino_1048": 1,
+                                                         "restricao_destino_4025": 2, "pai_pendente": 1,
+                                                         "pai_inexistente": 2, "valor_fora_do_dominio": 2}}
+        esp["GELANTRA"] = {"gravados": 0, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
+                                                         "pai_pendente": 1}}
+    else:  # local ainda não carregado: o local de origem é NOT NULL e toda transferência recusa (1048)
+        esp["GECADTRA"] = {"gravados": 0, "pendencias": {"pai_inexistente": 15,
+                                                         "restricao_destino_1048": 7, "valor_fora_do_dominio": 2}}
+        esp["GELANTRA"] = {"gravados": 0, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
+                                                         "restricao_destino_1048": 1}}
+    esp["GEESTINI"] = {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "pai_pendente": 1,
+                                                     "valor_fora_do_dominio": 1}} if loc_inv else \
+        {"gravados": 0, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 5, "valor_fora_do_dominio": 1}}
+    esp["GELIMLOC"] = {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_4025": 1,
+                                                     "pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                     "valor_fora_do_dominio": 1}} if loc_rep else \
+        {"gravados": 0, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 6, "valor_fora_do_dominio": 1}}
+
+    return dict(esp, **{
         "GECAPELAMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},
         "GEGRUPOMP": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "GECAPELAMP_GEGRUPOMP": {"gravados": 3, "pendencias": {"pai_pendente": 2, "pai_inexistente": 1,
@@ -212,4 +303,4 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},
         "GEDESCOM": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 1, "restricao_destino_1048": 1,
                                                    "valor_fora_do_dominio": 1, "documento_invalido": 1}},
-    }
+    })

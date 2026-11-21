@@ -2,3 +2,15 @@ tabela	coluna	destino	valor_origem	valor_destino	motivo
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	1	basica	L8-06: booleano_sn verdadeiro (S ou s): autenticação básica
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	0	nenhuma	L8-06: booleano_sn falso (N ou n): sem autenticação básica
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao		nenhuma	L8-06: nulo: sem autenticação básica
+TBREPGER	MED_PRS	regra_repasse.beneficiario	M	profissional	L8-06: M = médico
+TBREPGER	MED_PRS	regra_repasse.beneficiario	P	prestador	L8-06: P = prestador
+TBREPGER	MED_PRS	regra_repasse.beneficiario		profissional	L8-06: nulo: o padrão do produto
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	I	internacao	L8-06: conta de internação
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	A	externa	L8-06: conta ambulatorial (externa)
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	E	externa	L8-06: conta externa
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	U	externa	L8-06: conta de pronto atendimento (externa)
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta	T	todas	L8-06: todas as contas
+TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta		todas	L8-06: nulo: todas
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao	1	basica	L8-06: S: autenticação básica
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao	0	nenhuma	L8-06: N: sem autenticação
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao		nenhuma	L8-06: nulo: sem autenticação

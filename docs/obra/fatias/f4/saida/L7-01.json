@@ -1,59 +1,64 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/mapa/declarado/valores.tsv (revisão do cliente no painel)",
-   "mudanca": "de-para de valores por código revisado pelo cliente: destino_final_bolsa.situacao_bolsa (SHESTFINAL.COD_ESTFINAL) e tipo_movimento_bolsa.natureza (SHMOV: DEVOLUCAO_PERDA e BLOQUEADO são o sinal, ex.: devolucao/perda/bloqueio, mas sem evidência dos códigos nenhum par foi presumido); até lá TODA linha dessas duas tabelas é recusada (NOT NULL sem padrão, restricao_destino_1364): presumir 'descartada' ou 'entrada' mudaria o estoque. Também pergunta_triagem_doador.tipo_resposta (TIPO_PERG) e sexo_aplicavel (SEXO: hoje só o nulo tem par; código vira valor_fora_do_dominio), tipo_reacao_transfusional.natureza/tempo_ocorrencia (TP_REACAO) e motivo_devolucao_bolsa.tipo (TIPO), que ficam com literal presumido (=~sim_nao, =~imunologica, =~imediata, =~devolucao) e valor_presumido por linha",
-   "motivo": "a origem traz esses domínios codificados sem significado fixo; não se leem valores reais para fixar pares no código"
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "DATE da origem gravado em coluna DATETIME do destino: tipar converte date em datetime (meia-noite) quando o tipo do destino é datetime/timestamp, para a soma de controle casar com o relido (hoje fmt(date)='AAAA-MM-DD' e o relido vem 'AAAA-MM-DD 00:00:00.000'). Regra genérica, uma linha: if tipo in ('datetime','timestamp') and type(x) is datetime.date: return datetime.datetime.combine(x, datetime.time())",
+   "motivo": "conciliação diverge em doacao_sangue (doada_em) e bolsa_hemocomponente (validade_em, destino_em) na imagem sintética L7-01, com contagens e pendências certas; validade_em é NOT NULL e a origem só tem a data; único erro restante de tools/obra/conferir-fatia-f4.sh L7-01 (contagens e pendências conferem)"
   },
   {
-   "arquivo": "decisão do dono / integrador (SHINTER)",
-   "mudanca": "SHINTER é a lista de intercorrências da DOAÇÃO (SHDOACAO.CODINTER), não tipo de reação transfusional do receptor (tipo_reacao_transfusional é FK de reacao_transfusional e dividiria a chave única de codigo com SHREACAO). Bloqueada com #---. Propor destino próprio (intercorrência de doação ligada a doacao_sangue) ou, se o dono quiser o catálogo único, o prefixo de domínio por tabela de origem já pedido (L5-04/L5-09/L6-04)",
-   "motivo": "evitar eventos do doador oferecidos como reação transfusional (notificacao_obrigatoria) e a perda de reações por 1062"
+   "arquivo": "conector/sante_conector/carga_mapa.py (#retrato)",
+   "mudanca": "#retrato incluir as colunas declaradas SEM destino da mesma tabela (lidas só para o retrato)",
+   "motivo": "SIASSLAUDO_IMPRESSAO: a chave do laudo (ID_SIASSLAUDO) e a data de geração do laudo ficam fora do retrato da trilha; SICADATE_EXCLUSAO: o retrato da requisição excluída só tem as colunas com destino"
   },
   {
-   "arquivo": "decisão do dono / integrador (PRHEMOTLAN -> hemocomponente)",
-   "mudanca": "descricao e validade_dias NOT NULL sem fonte (a origem só traz ato e sigla CODALF). Propor: descrição pela sigla e validade por de-para revisado pelo cliente, ou trocar o destino para de-para sigla->hemocomponente do produto",
-   "motivo": "validade presumida de hemocomponente seria perigosa; tabela fora da carga"
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência a destino secundário)",
+   "mudanca": "ref a um destino secundário do pai (ex.: ref:SHRESPOSTA/grupo_resposta) ou complemento de outra tabela com @id do secundário, para ligar pergunta_triagem_doador.grupo_resposta_id e tipo_resposta='opcao' ao grupo criado pelas opções (SHRESPOSTA)",
+   "motivo": "as opções entram como grupo_resposta + resposta_padrao (um grupo por pergunta, adotado), mas a pergunta ainda não aponta o grupo"
   },
   {
-   "arquivo": "decisão do dono / integrador (SHCLIENT -> servico_hemoterapia_fornecedor)",
-   "mudanca": "empresa_fornecedora_id NOT NULL sem fonte (só código e nome): referência ao cadastro de empresa pelo nome (chave natural) ou empresa criada pela carga como destino secundário",
-   "motivo": "tabela fora da carga; SHBOLSA e SHREQUISICAO dependem do fornecedor"
+   "arquivo": "docs/obra/passagens/F4-decisoes-destino.md (dono) / trilha F2.2 (modelo)",
+   "mudanca": "doacao_sangue sem coluna para a intercorrência da doação (SHDOACAO.CODINTER -> tipo_reacao_transfusional de natureza 'intercorrencia'): propor intercorrencia_tipo_reacao_transfusional_id anulável",
+   "motivo": "o catálogo de intercorrências entra (SHINTER), mas a ligação com a doação fica fora"
   },
   {
-   "arquivo": "decisão do dono / integrador (SHDOACAO, SHBOLSA, SHREQUISICAO, SHRESPOSTA)",
-   "mudanca": "doacao_sangue exige o doador (CODDOADOR aponta o cadastro de doadores, fora do mapa) e numero; bolsa_hemocomponente exige hemocomponente pela sigla (referência por código), grupo e fator Rh por de-para de código, validade_em e recebida_em (DATA+HORA texto: coluna especial data+hora já pedida no L6-04); requisicao_transfusao exige paciente, atendimento, numero, tipo de transfusão e indicação sem fonte; SHRESPOSTA são opções de resposta da pergunta (destino grupo de resposta), não respostas de doação",
-   "motivo": "dados da imagem de referência são placeholder (1899); conceito coberto, mas para outro cliente com dados reais as regras genéricas são necessárias"
-  },
-  {
-   "arquivo": "decisão do dono / integrador (SHLOCAL -> local_guarda_hemocomponente)",
-   "mudanca": "tipo_equipamento e temperatura_minima/maxima NOT NULL sem fonte: decisão de não migrar (só placeholder) ou literal presumido revisado pelo cliente",
-   "motivo": "temperatura presumida seria perigosa; tabela fora da carga"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo de parâmetro)",
-   "mudanca": "SHPARAM -> configuracao_setor_diagnostico: setor_diagnostico_id NOT NULL sem fonte; usar o mecanismo de parâmetros já pedido (L5-02/L5-03/L6-04) com setor de hemoterapia por literal de referência por código",
-   "motivo": "tabela fora da carga"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador) + carga_mapa.py",
-   "mudanca": "SIASSLAUDO_IMPRESSAO -> emissao_laudo (10681 linhas reais): paciente_id NOT NULL só existe no laudo (SIASSLAUDO, hoje dep_fora_do_mapa). Pôr SIASSLAUDO no mapa e usar a referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13); numero pelo ID (texto), codigo_autenticacao pelo UUID, laudo_gerado_em/emitida_em pelas datas, emitido_por_usuario_id por ref:TBUSERS em ID_TBUSERS",
-   "motivo": "a maior tabela da fatia fica fora da carga até a referência pelo laudo"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo historico_entidade)",
-   "mudanca": "SICADATE_EXCLUSAO: hoje grava ocorrido_em, acao, entidade e a chave original da requisição (ID_SICADATE como texto) em correlacao. Falta: (1) a linha excluída em dados_antes (JSON das colunas, sem valores no log); (2) estabelecimento_id pela coluna UNIDADE (referência por código de unidade); (3) decidir USUARIO: é cópia do USUARIO da requisição (SICADATE tem a mesma coluna; sem gatilho que grave a exclusão, confirmado no new-sgh: 'sem FK, sem gatilho'), então NÃO é quem excluiu; ficou sem destino e usuario_id NULL; se o dono quiser, vai em dados_antes",
-   "motivo": "hoje a trilha registra só quem excluiu e quando; o conteúdo excluído se perde"
-  },
-  {
-   "arquivo": "decisão do integrador (SHEXAME.EXAME_PAI)",
-   "mudanca": "EXAME_PAI é marca CHAR(1) de teste agrupador, não chave do pai: teste_pai_id precisa de regra de agrupamento ou fica NULL (declarada sem destino)",
-   "motivo": "agrupamento dos testes imuno-hematológicos não migra"
+   "arquivo": "conector/mapa/declarado/valores.d/L7-01.tsv (revisão do cliente no painel)",
+   "mudanca": "situação da bolsa (SHESTFINAL) e natureza do movimento (SHMOV) vão pelo de-para do NOME com grafias comuns; nome sem par recusa a linha (valor_fora_do_dominio + 1048). Conferir na imagem de referência, por contagem, quantos nomes ficam sem par e acrescentar os pares",
+   "motivo": "nada presumido que mexa no estoque"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (gravidade do presumido)",
-   "mudanca": "valor_presumido com gravidade por coluna (o '=~!' do plano): presumidos de efeito clínico (tempo_ocorrencia, tipo do motivo de devolução) com gravidade media",
+   "mudanca": "valor_presumido com gravidade por coluna (o '=~!' do plano): validade do hemocomponente (=~1), faixa de temperatura do local de guarda (=~2/=~6), tempo_ocorrencia e tipo do motivo de devolução com gravidade media",
    "motivo": "hoje valor_presumido é sempre baixa e o painel o trata como revisão cosmética"
+  },
+  {
+   "arquivo": "decisão do integrador (SHEXAME.EXAME_PAI)",
+   "mudanca": "EXAME_PAI é marca CHAR(1) de teste agrupador, não chave do pai: teste_pai_id fica NULL (declarada sem destino)",
+   "motivo": "agrupamento dos testes imuno-hematológicos não migra"
+  },
+  {
+   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv (+ gerar_mapa_conector.py)",
+   "mudanca": "pôr SHDOADOR no mapa (destino pessoa_fisica + doador; vazia na imagem de referência, por isso ficou fora) para a fatia declarar o cadastro de doadores",
+   "motivo": "SHDOACAO.CODDOADOR (doador NOT NULL) é ref:SHDOADOR: sem o cadastro no mapa, num cliente com doadores toda doação é recusada (pai_inexistente) e as bolsas de doação própria, pai_pendente"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py (avaliar)",
+   "mudanca": "BLOQUEADA quando: (a) ref: obrigatória para pai fora de tabelas.tsv; (b) pai de ref com ordem maior que a do filho sem quebra declarada; (c) coluna da origem (colunas.tsv) sem nenhuma linha de declaração; (d) opcional: resultado da conferência da fatia",
+   "motivo": "a cobertura marcava CARREGA tabela que nunca carregaria (SHDOACAO sem doadores no mapa; SHCLIENT e SHBOLSA antes das arestas de ordem)"
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py",
+   "mudanca": "rodar o PREPARO_DESTINO das fatias requeridas (REQUER) antes do da fatia conferida",
+   "motivo": "hoje só o da fatia conferida roda; a L7-01 repete o município da L7-06 no próprio preparo (o docstring da L5-12 já supõe esse comportamento)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coalesce de fonte)",
+   "mudanca": "destino com fonte alternativa (ex.: destino_em = DTDEVOLUCAO_PERDA, senão a data da transfusão) ou situação dependente de coluna presente",
+   "motivo": "bolsa transfundida não tem data de destino na própria linha: hoje entra em quarentena com pendência em vez de transfundida"
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py (orquestrador)",
+   "mudanca": "regerar as fatias depois do novo gerar_mapa_conector.py (arestas L7-01 mudam a ordem)",
+   "motivo": "fatiar --conferir acusa L8-12, L8-16 e indice.tsv diferentes do gerado; fora da fatia L7-01"
   }
  ]
 }

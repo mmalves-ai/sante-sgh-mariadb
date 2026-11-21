@@ -84,3 +84,18 @@ genérica faltar (registre o motivo); nunca código por tabela.
 Declarações em `colunas.d/<fatia>.tsv`, imagem sintética em `sintetica_d/<fatia>.py`, testes em
 `testes/test_<fatia>.py`; resumo curto em `docs/obra/fatias/f4/saida/<fatia>.md` (contagens, regras novas,
 pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp/claude-1000/`, nunca no chat.
+
+## Mecanismos da rodada 2 (integrador; prova em `sintetica_d/exemplo_r2.py`, `testes/test_carga_mapa_r2.py`)
+- `cod:<tabela>.<coluna>` na `via`: o valor (da coluna, depois da regra/de-para; ou literal `=x`/`=~x`) acha o id no
+  cadastro do DESTINO pela coluna (ex.: tipo do produto pelo código); ausente: `codigo_inexistente_destino`; repetido:
+  `pai_ambiguo` (NULL; coluna NOT NULL recusa a linha). Substitui os pedidos `@dominio:`, `cadastro:` e `cod:`.
+- `@unico:<tabela>`: id da única linha ativa da tabela do destino; nenhuma ou várias: recusa `cadastro_unico_indefinido`.
+- `ref:T.(K1,K2)=(C1,C2)`: chave alternativa COMPOSTA (colunas C desta linha casam com as colunas K do pai; repetido:
+  `pai_ambiguo`). `ref:T/<destino>` (também no fim da encadeada): id do destino SECUNDÁRIO que o pai gravou.
+- Opção de destino `antes` (secundário gravado antes do principal; com `adotar:`) e especial `@id:<destino>` (id da
+  linha gravada ou adotada nesse secundário). Ex.: a pessoa física do profissional criada pelo nome e CPF da linha.
+- `tipar`: data em coluna DATETIME (meia-noite), data e hora em coluna DATE, literal em TIME/DATE/DATETIME convertido.
+- Regras `minutos_hhmm` (duração HHMM -> minutos) e `email`; `hora_hhmm` aceita o texto cru (bytes) da origem.
+- `PREPARO_DOS_REQUERIDOS = True` na sintética da fatia: o `PREPARO_DESTINO` das fatias de `REQUER` roda antes do dela.
+- A autoconferência acusa cada tabela BLOQUEADA da fatia (passo 6); `complementa` não exige as NOT NULL do destino;
+  coluna obrigatória por referência a pai BLOQUEADO ou DESCARTADO deixa a tabela BLOQUEADA (`pai_nao_carregado`).

@@ -9,3 +9,84 @@ TBTPACAOAUDIT	ID	tipo_acao_auditavel.codigo	texto			L5-03: código é a chave da
 TBTPACAOAUDIT	NOME	tipo_acao_auditavel.descricao	texto_nome			L5-03
 TBTPACAOAUDIT	=administracao	tipo_acao_auditavel.categoria				L5-03: a origem não classifica; categoria genérica revista pelo cliente no cadastro
 TBTPACAOAUDIT	=operacao	tipo_acao_auditavel.acao_trilha				L5-03: ação genérica da trilha; revista pelo cliente no cadastro
+TBUNIUSE	USUARIO	usuario_unidade.usuario_id			ref:TBUSERS	L5-03: login (chave do pai); inexistente recusa (NOT NULL)
+TBUNIUSE	UNID	usuario_unidade.unidade_assistencial_id			ref:TBUNIDAD	L5-03: código da unidade (chave do pai)
+TBUSERCON	USUARIO	usuario_fonte_pagadora.usuario_id			ref:TBUSERS	L5-03: modelo antigo de convênios do usuário
+TBUSERCON	CONV	usuario_fonte_pagadora.fonte_pagadora_id			ref:TBCONVEN	L5-03: código do convênio (chave do pai)
+TBUSERS_TBCONVEN	ID_TBUSER	usuario_fonte_pagadora.usuario_id			ref:TBUSERS;adotar:usuario_id,fonte_pagadora_id	L5-03: vínculo atual; o par que o modelo antigo já gravou é adotado (adotado_existente), sem duplicar nem recusar
+TBUSERS_TBCONVEN	ID_TBCONVEN	usuario_fonte_pagadora.fonte_pagadora_id				L5-03: convênio (referência gerada)
+TBUSERSCOMPL	ID_TBUSERS	preferencia_usuario.usuario_id			ref:TBUSERS;adotar:usuario_id	L5-03: uma preferência por usuário (único): a linha já criada por outra origem é adotada. PERMITE_LOGAR_OUTRO_TERMINAL aguarda coluna no modelo (pedido no L5-03.json); CONFIG_TELA_CHAMADA_SENHA é o leiaute da tela do sistema antigo (sem valor no produto)
+TBUSERS_TBPAPEL	USUARIO	usuario_papel_seguranca.usuario_id			ref:TBUSERS;adotar:usuario_id,papel_seguranca_id	L5-03: login (chave do pai). O mesmo usuário e papel em mais de uma linha (outra ocupação, ou ativo e inativo) é CONSOLIDADO na primeira pela chave: a linha seguinte é adotada (adotado_existente, visível), nunca recusada pelo UNIQUE; incluir ocupacao_cbo_id na chave única é pedido à F2.2 (decisão em F4-decisoes-destino.md)
+TBUSERS_TBPAPEL	ID_TBPAPEL	usuario_papel_seguranca.papel_seguranca_id				L5-03: papel (referência gerada)
+TBUSERS_TBPAPEL	ID_TBCBOPRO	usuario_papel_seguranca.ocupacao_cbo_id		cbo	ref:TBCBOPRO>ID_TBCBOSUS>TBCBOSUS>COD	L5-03: ocupação pelo CBO da inscrição (de-para oficial; código ausente: catalogo_codigo_*)
+TBUSERS_TBPAPEL	@vigencia_carga	usuario_papel_seguranca.vigencia_inicio				L5-03: a origem não tem data de início
+TBUSERS_TBPAPEL	ATIVO	usuario_papel_seguranca.vigencia_fim	booleano_sn	valores		L5-03: papel inativo termina na data da carga (S: sem fim); fora do domínio: valor_fora_do_dominio e sem fim
+TBALERTA	ID	regra_alerta.codigo	texto			L5-03: chave inteira como código
+TBALERTA	NOME	regra_alerta.nome	texto_nome			L5-03
+TBALERTA	ID_TBCENARIO	regra_alerta.cenario_alerta_id				L5-03: cenário (referência gerada); ausente recusa (NOT NULL)
+TBALERTA	DESCRICAO_ALERTA	regra_alerta.mensagem	texto_resumo:1000			L5-03: maior que o destino: resumida com texto_resumido
+TBALERTA	IDADE_INICIAL	regra_alerta.idade_minima_anos	inteiro			L5-03
+TBALERTA	IDADE_FINAL	regra_alerta.idade_maxima_anos	inteiro_zero_nulo			L5-03: 0 no limite superior é faixa aberta (decisão em F4-decisoes-destino.md); faixa invertida recusa pelo CHECK
+TBALERTA	DATA_CAD_INICIO	regra_alerta.vigencia_inicio	data			L5-03: sem data recusa (NOT NULL)
+TBALERTA	ATIVO	regra_alerta.ativo	booleano_sn			L5-03
+TBALERTA	ID_TBSEXO	regra_alerta.sexo_aplicavel		valores	ref:TBSEXO>SIGLA	L5-03: sexo pela sigla do cadastro de sexo (F/M); sem par: valor_fora_do_dominio e 'todos' (padrão)
+TBALERTA	=~sempre	regra_alerta.repeticao				L5-03: a repetição a cada REPETIR_HORAS*60+REPETIR_MINUTOS pede a regra genérica de minutos de duas colunas (pedido no L5-03.json); até lá presumida (valor_presumido) e o Sincronizar corrige
+TBALERTA_TBOPCOES_TBEVENTOS	ID_TBALERTA	alerta_gatilho.regra_alerta_id				L5-03: regra (referência gerada)
+TBALERTA_TBOPCOES_TBEVENTOS	#seq:ID_TBALERTA	alerta_gatilho.sequencia				L5-03: 1..n por regra, na ordem da chave
+TBALERTA_TBOPCOES_TBEVENTOS	ID_TBOPCOES	alerta_gatilho.tela_sistema_id				L5-03: tela (destino principal do pai)
+TBALERTA_TBOPCOES_TBEVENTOS	ID_TBEVENTOS	alerta_gatilho.acao_sistema_id				L5-03: ação (destino principal do pai)
+TBUSERS_TBALERTA	USUARIO	assinatura_alerta.usuario_id			ref:TBUSERS	L5-03
+TBUSERS_TBALERTA	ID_TBALERTA	assinatura_alerta.regra_alerta_id				L5-03
+TBUSERS_TBALERTA	@estabelecimento	assinatura_alerta.estabelecimento_id				L5-03: a origem não traz estabelecimento
+TBLOCAL_TBUSERS	ID_TBLOCAL	usuario_local_atendimento.local_atendimento_id				L5-03
+TBLOCAL_TBUSERS	USUARIO	usuario_local_atendimento.usuario_id			ref:TBUSERS	L5-03
+PRJUSTIF_IMP_EXPORTACAO	@estabelecimento	exportacao_documento.estabelecimento_id				L5-03
+PRJUSTIF_IMP_EXPORTACAO	#codigo_derivado:ID_PRTPASSINATURA:64:doc_anterior_tipo_	exportacao_documento.entidade	texto			L5-03: tabela do registro exportado = tipo de documento assinado do sistema anterior (cada tipo é uma tabela da origem); com entidade_id identifica o documento. O tipo também fica no retrato
+PRJUSTIF_IMP_EXPORTACAO	ID_TABELA	exportacao_documento.entidade_id	inteiro			L5-03: id do documento exportado no sistema anterior (origem=migracao); sem de-para genérico para documento_*_id (decisão em F4-decisoes-destino.md)
+PRJUSTIF_IMP_EXPORTACAO	=~exportacao	exportacao_documento.tipo_operacao				L5-03: a origem é a justificativa de impressão OU exportação e não distingue as duas: exportação presumida (valor_presumido)
+PRJUSTIF_IMP_EXPORTACAO	=~outro	exportacao_documento.formato				L5-03: a origem não guarda o formato: presumido (valor_presumido)
+PRJUSTIF_IMP_EXPORTACAO	=~download	exportacao_documento.destino				L5-03: a origem não guarda o destino: presumido
+PRJUSTIF_IMP_EXPORTACAO	ID_PRTIPO_JUSTIF_EXPORTACAO	exportacao_documento.tipo_justificativa_exportacao_id				L5-03
+PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.ocupacao_cbo_id		cbo	ref:TBCBOPRO>ID_TBCBOSUS>TBCBOSUS>COD	L5-03
+PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.usuario_id			ref:TBUSUCPL.ID_TBCBOPRO>USUARIO>TBUSERS	L5-03: usuário pela inscrição no cadastro complementar (chave EMPRESA,USUARIO). O mesmo usuário com a mesma inscrição em duas empresas hoje dá pai_ambiguo e recusa (NOT NULL); a regra que só acusa ambiguidade com usuários DIFERENTES é pedido ao motor (L5-03.json, prioridade alta)
+PRJUSTIF_IMP_EXPORTACAO	DATA_HORA_IMP_EXPORTACAO	exportacao_documento.ocorrido_em	data_hora			L5-03
+PRJUSTIF_IMP_EXPORTACAO	#retrato	exportacao_documento.dados				L5-03
+CCCADCIR_EXCLUSAO	@estabelecimento	registro_excluido.estabelecimento_id				L5-03
+CCCADCIR_EXCLUSAO	=ato_cirurgico	registro_excluido.entidade				L5-03
+CCCADCIR_EXCLUSAO	ID_CCCADCIR	registro_excluido.entidade_id	inteiro			L5-03: id do registro no sistema anterior (o registro foi excluído antes da migração e não existe no destino; origem=migracao); decisão em F4-decisoes-destino.md
+CCCADCIR_EXCLUSAO	=exclusao	registro_excluido.operacao				L5-03
+CCCADCIR_EXCLUSAO	=~Excluído no sistema anterior; justificativa não registrada na origem; usuário presumido: o último que alterou o registro	registro_excluido.justificativa				L5-03: a origem não guarda justificativa; o texto diz na tela que o autor é presumido e a linha leva valor_presumido (decisão em F4-decisoes-destino.md)
+CCCADCIR_EXCLUSAO	#retrato	registro_excluido.dados				L5-03: retrato das colunas lidas; o retrato de TODAS as colunas (#retrato:*) é pedido ao motor (L5-03.json) e chega pelo Sincronizar (o hash muda e a linha aparece alterada). A origem não pode ser desligada para estas tabelas antes disso (F4-decisoes-destino.md)
+CCCADCIR_EXCLUSAO	DATA_HORA_EXCLUSAO	registro_excluido.ocorrido_em	data_hora			L5-03: sem data recusa (NOT NULL)
+CCCADCIR_EXCLUSAO	USUARIO	registro_excluido.usuario_id			ref:TBUSERS	L5-03: USUARIO da cópia é o último usuário do registro (sem PSQL do gatilho que prove o autor da exclusão): presumido, marcado pela justificativa (valor_presumido); sem usuário recusa (NOT NULL)
+CCCADCIR_EXCLUSAO	REG	registro_excluido.atendimento_id			ref:RECADATE	L5-03: atendimento pelo registro (chave do pai, L3); nunca visto: pai_inexistente e NULL (coluna opcional); também entra no retrato
+SIPACAGD_EXCLUSAO	@estabelecimento	registro_excluido.estabelecimento_id				L5-03
+SIPACAGD_EXCLUSAO	=marcacao_horario	registro_excluido.entidade				L5-03
+SIPACAGD_EXCLUSAO	ID_SIPACAGD	registro_excluido.entidade_id	inteiro			L5-03: id do registro no sistema anterior (o registro foi excluído antes da migração e não existe no destino; origem=migracao); decisão em F4-decisoes-destino.md
+SIPACAGD_EXCLUSAO	=exclusao	registro_excluido.operacao				L5-03
+SIPACAGD_EXCLUSAO	=~Excluído no sistema anterior; justificativa não registrada na origem; usuário presumido: o último que alterou o registro	registro_excluido.justificativa				L5-03: a origem não guarda justificativa; o texto diz na tela que o autor é presumido e a linha leva valor_presumido (decisão em F4-decisoes-destino.md)
+SIPACAGD_EXCLUSAO	#retrato	registro_excluido.dados				L5-03: retrato das colunas lidas; o retrato de TODAS as colunas (#retrato:*) é pedido ao motor (L5-03.json) e chega pelo Sincronizar (o hash muda e a linha aparece alterada). A origem não pode ser desligada para estas tabelas antes disso (F4-decisoes-destino.md)
+SIPACAGD_EXCLUSAO	DATA_HORA_EXCLUSAO	registro_excluido.ocorrido_em	data_hora			L5-03: sem data recusa (NOT NULL)
+SIPACAGD_EXCLUSAO	USUARIO	registro_excluido.usuario_id			ref:TBUSERS	L5-03: USUARIO da cópia é o último usuário do registro (sem PSQL do gatilho que prove o autor da exclusão): presumido, marcado pela justificativa (valor_presumido); sem usuário recusa (NOT NULL)
+SIPACAGD_EXCLUSAO	ID_RICADPAC	registro_excluido.paciente_id				L5-03: paciente (L3, referência gerada)
+TBUSUCPL	USUARIO	usuario_vinculo_profissional.usuario_id			ref:TBUSERS	L5-03
+TBUSUCPL	EMPRESA	usuario_vinculo_profissional.estabelecimento_id			ref:TBHOSPIT	L5-03: empresa da linha (chave do estabelecimento)
+TBUSUCPL	ID_TBCBOPRO	usuario_vinculo_profissional.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L5-03: profissional da inscrição; sem inscrição não há vínculo a migrar (CHECK do alvo recusa). Indicadores de permissão e senhas secundárias: decisão em F4-decisoes-destino.md
+TBUSUCPL	@vigencia_carga	usuario_vinculo_profissional.vigencia_inicio				L5-03
+TBCABTRILHA	DATA_HORA_ACAO	evento_auditoria.ocorrido_em	data_hora			L5-03
+TBCABTRILHA	ID_TBOPCOES	evento_auditoria.tela_sistema_id				L5-03: tela (destino principal do pai)
+TBCABTRILHA	USUARIO	evento_auditoria.usuario_id			ref:TBUSERS	L5-03: sem usuário: o CHECK do autor recusa. Autor de reserva pelo papel logado (ref:TBUSERS_TBPAPEL>USUARIO>TBUSERS quando USUARIO é nulo) é pedido ao motor (L5-03.json); decisão em F4-decisoes-destino.md
+TBCABTRILHA	MAQUINA_USUARIO	evento_auditoria.nome_maquina	texto			L5-03
+TBCABTRILHA	ID_ATCABECATEND	evento_auditoria.atendimento_id				L5-03
+TBCABTRILHA	ID_TBNVLCRITICID	evento_auditoria.nivel_criticidade_auditoria_id				L5-03
+TBCABTRILHA	FUSO_HORARIO_LOCAL	evento_auditoria.fuso_horario	texto			L5-03
+TBCABTRILHA	ID_TBTPACAOAUDIT	evento_auditoria.tipo_acao_auditavel_id				L5-03
+TBCABTRILHA	ID_HTPACIENTE	evento_auditoria.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L5-03: paciente da versão do cadastro (a versão não é o paciente)
+TBLANTRALERTA	ID_TBCABTRILHA	evento_auditoria_alerta.evento_auditoria_id				L5-03
+TBLANTRALERTA	#seq:ID_TBCABTRILHA	evento_auditoria_alerta.sequencia				L5-03
+TBLANTRALERTA	DESCRICAO_MENSAGEM	evento_auditoria_alerta.mensagem	texto_resumo:2000			L5-03: ID_TBEVENTOS não tem coluna no destino (o evento é o da trilha)
+TBLANTRILHASGH	ID_TBCABTRILHA	evento_auditoria_registro.evento_auditoria_id				L5-03
+TBLANTRILHASGH	#seq:ID_TBCABTRILHA	evento_auditoria_registro.sequencia				L5-03
+TBLANTRILHASGH	TABELA_CAMPO	evento_auditoria_registro.entidade	texto			L5-03: tabela e campo como registrados no histórico (dado do histórico)
+TBLANTRILHASGH	ID_TABELA	evento_auditoria_registro.entidade_id	inteiro			L5-03: id do registro no sistema anterior
+TBLANTRILHASGH	=~alteracao	evento_auditoria_registro.operacao				L5-03: registro por campo; o tipo de ação do cabeçalho é cadastro do cliente (sem código padrão para de-para genérico): alteração presumida (valor_presumido)

@@ -1,8 +1,49 @@
-{"pedidos":[
- {"arquivo":"tools/obra/fatiar_conector.py (e docs/obra/fatias/f4/*.md, indice.tsv)","mudanca":"regenerar as fatias depois de integrar os colunas.d do lote, ou fazer o --conferir ignorar a seção 'Já declaradas'","motivo":"o --conferir acusa 'arquivo diferente do gerado' nas fatias que já declararam (hoje L5-11, L5-12 e indice.tsv); a fatia é gerada e não pode ser editada à mão"},
- {"arquivo":"conector/sante_conector/carga_mapa.py","mudanca":"antes da carga de uma tabela, aplicar sentinela.colisoes_caixa às colunas codigo_char gravadas em coluna com UNIQUE no destino (collation _ai_ci) e recusar TODAS as linhas de cada grupo de colisão com a pendência codigo_colisao_caixa (gravidade media), sem depender da ordem de leitura","motivo":"hoje 'P'/'p' caem em restricao_destino_1062 genérica e vence a primeira linha lida. A imagem sintética de L5-10 já traz os casos (FPTP_EVENTO P/p, FPTP_REFER H/h); ao liberar essas tabelas o esperado é codigo_colisao_caixa: 2 por tabela"},
- {"arquivo":"conector/sante_conector/carga_mapa.py + mapa.py + verificar_mapa.py (novo declarado/valores.d/<fatia>.tsv)","mudanca":"de-para de valores declarado e genérico: (tabela, coluna origem, valor origem) -> (destino tabela.coluna, valor destino), com mais de um destino por valor; valor não reconhecido vira NULL com pendência valor_fora_do_dominio (media) e, em coluna NOT NULL sem padrão, recusa a linha. O de-para é por cliente (painel genérico), com o arquivo do lote só como sugestão inicial","motivo":"desbloqueia L5-10: FPTP_EVENTO.TP_EVENTO -> tipo_rubrica.natureza e tipo_rubrica.sinal; FPTP_REFER.TP_REFER -> tipo_referencia_rubrica.unidade; FPTP_FOLHA.ID_FPTPFOLHAESOC -> tipo_folha.indicador_apuracao_esocial (1=mensal, 2=anual) e, se anual, tipo_folha.categoria decimo_terceiro_*; e, nos lotes de movimento, os domínios FPTPONUS, FPTPONUSREMUN, FPTPPENSAOALI, FPTPPROCESSO, FPTPREGIMEPRE, FPTPREGIMETRA, FPTPREGJORNAD, FPTPREINTEG, FPTP_ARQ_EMPREGADORWEB, FPTPEVENTOAUT, FPTP_EVENTO_SIND"},
- {"arquivo":"conector/sante_conector/carga_mapa.py","mudanca":"literal declarado com marca de revisão (ex.: coluna '=valor?revisar' ou campo via='revisar') gera, por linha gravada, a pendência valor_padrao_revisar (baixa) com tabela e chave","motivo":"tipo_folha.categoria, tipo_ferias.categoria e beneficio.tipo são NOT NULL sem valor neutro e a origem só tem a descrição: sem pendência por linha o painel não aponta o que revisar. Por isso FPTPFERIAS, FPTPVALE e FPTP_FOLHA ficaram bloqueadas"},
- {"arquivo":"conector/sante_conector/depara.py + conector/mapa/declarado/catalogos.tsv","mudanca":"entrada codigo_esocial em depara.CATALOGOS (tabela codigo_esocial, coluna codigo_esocial, filtro pela tabela_esocial_id da tabela oficial, vigência) e coluna_codigo=ID em catalogos.tsv para FPTPDEPENDENT, FPTPDEPENDENTREINF, FPTPRESCDIRET e FPTPFOLHAESOC","motivo":"hoje nenhum código dessas tabelas oficiais é conferido contra o catálogo: código ausente precisa virar catalogo_codigo_inexistente quando os lotes de dependente e trabalhador sem vínculo declararem a coluna"},
- {"arquivo":"conector/mapa/declarado/catalogos.tsv e declarado/oficiais.tsv","mudanca":"rever a classificação 'oficial:codigo_esocial' de FPTPONUS, FPTPONUSREMUN, FPTPPENSAOALI, FPTPPROCESSO, FPTPREGIMEPRE, FPTPREGIMETRA, FPTPREINTEG e FPTP_ARQ_EMPREGADORWEB","motivo":"o destino delas é coluna enum própria (CHECK), não FK de codigo_esocial; FPTPPENSAOALI e FPTP_ARQ_EMPREGADORWEB parecem domínio próprio do cliente. O caminho certo é o de-para de valores, não o catálogo"}
-]}
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv e docs/obra/passagens/F4-decisoes-destino.md",
+   "mudanca": "JÁ APLICADO pela fatia (só as linhas da L5-10, mais uma nota na linha de FPVALE): 16 descartes reescritos com motivo verificável (FPTPVALE novo; FPTPFOLHAESOC passou a mecanismo_do_produto) e as decisões da seção 2 revistas",
+   "motivo": "revisão dos achados: motivos falsos (CHECK inexistente em regime_jornada.tipo_jornada_esocial, consumidor inexistente de dependente e trabalhador_sem_vinculo, de-para inexistente de FPTPEVENTOAUT, CHECK sem relação de FPTP_ARQ_EMPREGADORWEB)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-12.tsv + valores.d/L5-12.tsv (fatia L5-12)",
+   "mudanca": "FPTPEVENTOAUT_TBEMPHOS.ID_FPTPEVENTOAUT -> lancamento_automatico_rubrica.evento_gatilho com depara=valores (pares para os 6 códigos, dentro do CHECK), no lugar do '=~outro', quando houver evidência do significado dos códigos (leitura do legado ou contagem por código na imagem de referência, só agregados); até lá manter '=~outro' (o código segue na chave da linha consumidora)",
+   "motivo": "achado 1: hoje todo lançamento automático vira 'outro' presumido; o motivo do descarte de FPTPEVENTOAUT foi corrigido para dizer isso"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-12.tsv (fatia L5-12)",
+   "mudanca": "declarar ou descartar com motivo FPREMESSA.ID_FPTPFOLHAESOC (sugestão: não carregada, o indicativo da competência vem do tipo_folha pelo COD_TP; se a remessa puder divergir do tipo, de-para de valores 1 mensal 2 anual numa coluna da competência)",
+   "motivo": "achado 3: segundo consumidor de FPTPFOLHAESOC sem declaração"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-11.tsv + valores.d/L5-11.tsv + testes/test_l5_11.py + sintetica_d/l5_11.py (fatia L5-11)",
+   "mudanca": "FPTPVALE deixou de carregar em beneficio (descarte mecanismo_do_produto). (1) test_l5_11.test_vale_com_codigo_prefixado espera FPTPVALE.ID -> beneficio.codigo e vai FALHAR: trocar a asserção (o pai não grava mais em beneficio; o prefixo v pode ficar). (2) FPVALE.ID_FPTPVALE -> beneficio.tipo com depara=valores (vale_transporte, vale_refeicao, vale_alimentacao...) quando houver evidência dos 3 códigos, no lugar do '=~outro'. (3) Atualizar o motivo de FPVALE.=~outro e o docstring da l5_11.py, que citam o pai gravando em beneficio",
+   "motivo": "achado 4: o tipo de vale é a classificação do benefício, não um benefício"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (motor)",
+   "mudanca": "par presumido no de-para de valores (valor_destino '~<valor>' grava o valor com valor_presumido), como o pedido 15 da L6-05, e gravidade declarável do presumido (média para tipo_folha.categoria, para bloquear o uso no cálculo da folha até a revisão). Depois de aplicado, a L5-10 troca os pares 1/3/4/5/vazio de tipo_folha.categoria para '~mensal' e retira a marca '=~1' de tipo_folha.ativo",
+   "motivo": "achado 2: hoje a marca de revisão da categoria derivada vem do ativo presumido, porque o de-para de valores não marca presunção e valor_presumido é sempre baixa"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "(1) contar à parte CARREGA_PRESUMIDO (coluna NOT NULL preenchida só por '=~'); (2) para DESCARTE mecanismo_do_produto, conferir que o 'CHECK em t.c' citado no motivo existe no DDL e que um consumidor com depara=valores existe, ou que o motivo declara que não há consumidor; (3) para catalogo_oficial, conferir que o consumidor citado existe no mapa. A L5-10 já faz isso nos próprios testes (test_motivo_de_descarte_confere_com_o_ddl_e_o_mapa)",
+   "motivo": "achado 6: a conciliação aceitava a causa declarada sem verificar a alegação"
+  },
+  {
+   "arquivo": "medição na imagem de referência (orquestrador; só agregados)",
+   "mudanca": "contagem de FPTP_FOLHA por ID_FPTPFOLHAESOC (quantas linhas com 1, 2, 3, 4, 5, nulo) e de FPTPEVENTOAUT_TBEMPHOS por ID_FPTPEVENTOAUT; não há comando agregado no conector.sh para isso e a fatia não abre o arquivo real",
+   "motivo": "achado 3: a premissa 1 mensal e 2 anual segue sem confirmação dos códigos 3 a 5"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/catalogos.tsv",
+   "mudanca": "rever a classificação 'oficial:codigo_esocial' de FPTPONUS, FPTPONUSREMUN, FPTPPENSAOALI, FPTPPROCESSO, FPTPREGIMEPRE, FPTPREGIMETRA, FPTPREINTEG, FPTP_ARQ_EMPREGADORWEB e FPTPFOLHAESOC",
+   "motivo": "o destino delas é coluna com CHECK do modelo ou recurso do produto, não FK de codigo_esocial (sem efeito na carga, só coerência do mapa)"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv e dependencias.tsv (gerados)",
+   "mudanca": "rodar python3 -I tools/obra/gerar_mapa_conector.py na integração",
+   "motivo": "o verificador acusa os dois desatualizados por declarado/dependencias.tsv alterado por outras fatias (+7 linhas); a L5-10 não declara dependência"
+  }
+ ]
+}

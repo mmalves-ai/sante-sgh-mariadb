@@ -48,6 +48,12 @@ def norm_uf(v):
     return s if re.fullmatch(r"[A-Z]{2}", s) else None
 
 
+def norm_conselho(v):
+    """Conselho profissional pela sigla (CRM, COREN...): só letras, em maiúsculas, como o CHECK do catálogo."""
+    s = re.sub(r"[\s.\-]", "", _s(v))
+    return s if re.fullmatch(r"[A-Z]{2,10}", s) else None
+
+
 def norm_banco(v):
     d = _digitos(v)
     return d.zfill(3) if 0 < len(d) <= 3 else None
@@ -69,6 +75,9 @@ CATALOGOS = {
                     filtro=None, descricao="unidade federativa pela sigla"),
     "banco": dict(tabela="banco", coluna="codigo_compensacao", normalizar=norm_banco, chave=lambda c: c,
                   filtro=None, descricao="banco pelo código de compensação (COMPE), 3 dígitos"),
+    "conselho_classe": dict(tabela="conselho_classe", coluna="sigla", normalizar=norm_conselho,
+                            chave=lambda c: c.upper(), filtro=None,
+                            descricao="conselho profissional pela sigla (CRM, COREN...)"),
 }
 
 

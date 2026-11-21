@@ -1,16 +1,18 @@
 """Fatia L8-05 (faturamento e restantes, módulo FAT): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Carregáveis hoje (CARREGADAS): TBTIPPLANO (plano da fonte pagadora) e TBTABDTH (diária ou taxa na tabela de preço).
-PAIS_EXTERNOS são pais de fora da fatia que AINDA NÃO SÃO CARREGADOS por nenhum lote: TBCONVEN (fonte pagadora, L5-06
-comentada) e TBCTRDTH (tabela de preço de diárias e taxas, L8-03 sem destino: colisão de tabela_preco.codigo entre
-origens). Eles entram aqui só para exercitar a carga; na carga real as duas tabelas dependem deles e ficam recusadas
-(pai_inexistente + NOT NULL) até os pais carregarem: dependências bloqueantes registradas em saida/L8-05.json e
-conferidas em test_l8_05. Anomalias: nome vazio (NOT NULL), S/N e A/I fora do domínio (padrão do destino com
-pendência), chave única repetida, fonte ou tabela inexistente (pai_inexistente + NOT NULL), meses negativos (NULL com
-pendência), item inativo (I) e literal presumido (valor_presumido por linha lida).
-As outras 21 (BLOQUEADAS: pai ou coluna obrigatória do destino que a origem não dá, referência licenciada, chave
-composta, código que colide entre origens) entram só com a forma (2 linhas falsas cada); os pedidos estão em
-docs/obra/fatias/f4/saida/L8-05.json.
+Rodada de cobertura total. CARREGADAS (11): TBTIPPLANO (plano), TBTABDTH (diária ou taxa), TBTPPROFPROC (função na
+cobrança, código com prefixo de domínio e tipo presumido), TBCODATI (código do prestador na fonte pagadora, senha para
+o cofre, vigência da carga), TBCODATI_TBUSERS (usuários do código), TBCONVEN_TBTISSPARDEF (valor padrão de campo TISS,
+campo pela referência encadeada ao parâmetro), TBEMIREF (referência de emissão de mat/med, de-para de valores S/N),
+TBENTCON (calendário de entrega, competência pelo mês da entrega), TBSEGUIA (contador de guia, tipo pelo de-para) e
+TBVLRTHM (valor do procedimento por vigência, pai pela chave composta TAB+COD) e TBINTCRC (de-para da conta de
+receita do escritório contábil por fonte pagadora e natureza financeira).
+PAIS_EXTERNOS: TBCONVEN (L5-06), TBCTRDTH (L8-03), TBUSERS (L3), TBCLASSI (L8-02), TBTABTHM (L8-04, chave TAB|COD) e
+TBITEDES (L8-12, chave GRUPO|SUBGRUPO|ITEM).
+TBTISSPARDEF (L8-04) NÃO entra nesta imagem (o DDL dela é da L8-04; a imagem conjunta dos lotes não admite tabela em
+dois módulos): aqui o campo TISS fica pai_inexistente e a linha é recusada (1048), o caminho de recusa; a carga
+conjunta prova o caminho feliz.
+As demais 12 (DESCARTE em sem_carga.tsv ou BLOQUEADA sem mecanismo) entram só com a forma (2 linhas falsas cada).
 """
 import datetime
 import decimal
@@ -183,7 +185,11 @@ FORMAS = {
 
 
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
-CARREGADAS = ("TBTIPPLANO", "TBTABDTH")
+CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TBUSERS", "TBCONVEN_TBTISSPARDEF",
+              "TBEMIREF", "TBENTCON", "TBSEGUIA", "TBVLRTHM", "TBINTCRC")
+DESCARTES = ("TBTPOBRIGAMAT", "TBTPPERFILUNIBH", "TBTPTRATUNIBH", "TBTPCLASSIFUNIBH",
+             "TBVERSAOBRASIN", "TBVLRMEM", "TBEMIREFMATMED", "TBPERMEM")
+SEM_MECANISMO = ("TBTISS", "TBVLRDTH", "TBTIPPLCONV", "TBTISSTERMO_TBTPLANC")
 BLOQUEADAS = tuple(t for t in FORMAS if t not in CARREGADAS)
 
 
@@ -199,7 +205,12 @@ def _ddl():
 
 
 DDL = _ddl()
-PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"]}
+PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"], "TBUSERS": ["ANA.EX", "BRUNO.EX"],
+                 "TBCLASSI": ["1", "2"], "TBTABTHM": ["1|10", "1|11"],
+                 "TBITEDES": ["1|1|1"]}
+# único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 
 
 def _falso(tipo, i):
@@ -223,6 +234,7 @@ def _ins(ins, tab, **v):
 
 
 def linhas(r, ins):
+    D, dt = decimal.Decimal, datetime.date
     for tab in BLOQUEADAS:
         for i in (1, 2):
             ins(tab, [_falso(tp, i) for _, tp, _ in COLUNAS[tab]])
@@ -236,7 +248,6 @@ def linhas(r, ins):
     # diárias e taxas: 2 cobra taxa fora do domínio (padrão verdadeiro, gravado); 4 sem nome (1048); 5 tabela nunca
     # vista (pai_inexistente + 1048); 6 meses negativos (NULL com pendência, gravado); 7 repete TAB 1 + OPE 10 (1062);
     # situação: 1 fora de A/I (padrão ativo, com pendência), 3 inativa (I: gravada com ativo falso)
-    D = decimal.Decimal
     for i, tab, ope, nome, cobtx, meses in [(1, 1, 10, "Diaria apartamento ex", "S", None),
                                             (2, 1, 11, "Taxa de sala ex", "X", None),
                                             (3, 2, 10, "Gas exemplo", "N", None), (4, 1, 12, None, "S", None),
@@ -245,10 +256,73 @@ def linhas(r, ins):
         _ins(ins, "TBTABDTH", ID=i, TAB=tab, OPE=ope, NOME=nome, COD="EX%d" % i, TIPO=1, CH=D("1.5") * i,
              COBTX=cobtx, PACOTE="N", LAN_CRM="S" if i % 2 else "N", MAT_INSUMO="N", MED_INSUMO="N",
              LAN_HORA_FINAL="N", NUMERO_MESES=meses, SITUACAO={1: "Z", 3: "I"}.get(i, "A"))
+    # funções: código com prefixo de domínio (não colide com os IDs de TBCOSPPROF/TBGRAUPARTPROC); 3 nome em branco
+    # (1048); tipo presumido em todas as lidas
+    for i, nome in [(1, "Cirurgiao  ex"), (2, "Auxiliar ex"), (3, "   ")]:
+        _ins(ins, "TBTPPROFPROC", ID=i, NOME=nome)
+    # códigos do prestador: 1 com senha (nunca gravada: segredo_aguarda_cofre); 3 fonte nunca vista (pai_inexistente
+    # + 1048); 4 sem código na operadora (1048)
+    for i, conv, cod, senha in [(1, 1, "A1001", "senha falsa"), (2, 2, "B2002", None), (3, 9, "C3003", None),
+                                (4, 1, None, None)]:
+        _ins(ins, "TBCODATI", ID=i, CONV=conv, ATIVIDADE=1, COD_CONV=cod, NOME="Codigo ex %d" % i,
+             LOGIN_PRESTADOR="login.ex%d" % i, SENHA_PRESTADOR=senha, SENHA_PRESTADOR_PADRAO_HASH_MD5="N",
+             CTR_AUT_TP_BASIC="N")
+    # usuários do código: 3 usuário nunca visto (pai_inexistente + 1048); 4 código recusado (pai_pendente)
+    for cod, usu in [(1, "ANA.EX"), (2, "BRUNO.EX"), (1, "ZECA.EX"), (3, "ANA.EX")]:
+        _ins(ins, "TBCODATI_TBUSERS", ID_TBCODATI=cod, USUARIO=usu)
+    # valor padrão de campo TISS: o parâmetro (TBTISSPARDEF) não está nesta imagem: campo pai_inexistente + 1048
+    for conv, par, v in [(1, 1, "S"), (2, 1, "N")]:
+        _ins(ins, "TBCONVEN_TBTISSPARDEF", ID_TBCONVEN=conv, ID_TBTISSPARDEF=par, VALOR_DEFAULT=v)
+    # referência de emissão: 3 código fora de S/N (padrão com valor_fora_do_dominio, gravado); 4 classificação
+    # nunca vista (pai_inexistente + 1048)
+    for conv, cl, rc, rd, pfb in [(1, 1, "S", "S", "S"), (1, 2, "N", "N", "N"), (2, 1, "X", None, None),
+                                  (2, 9, "S", "S", "S")]:
+        _ins(ins, "TBEMIREF", CONV=conv, CLASSIF=cl, COD_DESC="C", REF_COD=rc, REF_DESC=rd, REF_VALOR="S",
+             REF_VALOR_PFB=pfb, REF_VALOR_PMC="N")
+    # calendário: 3 pagamento antes da entrega (CHECK: 4025); 4 fonte nunca vista (pai_inexistente + 1048)
+    for conv, ent, pag in [(1, dt(2025, 2, 10), dt(2025, 3, 15)), (1, dt(2025, 3, 10), None),
+                           (2, dt(2025, 2, 10), dt(2025, 1, 5)), (9, dt(2025, 2, 10), None)]:
+        _ins(ins, "TBENTCON", CONV=conv, ENTREGA=ent, PAGAMENTO=pag)
+    # contadores: 2 sem números (padrão 1); 3 tipo 7 fora do de-para (valor_fora_do_dominio + 1048); 4 lote zero
+    # (CHECK: 4025); 5 lote não numérico (padrão 1 com valor_fora_do_dominio, gravado); 6 tipo 0, o contador geral
+    # do lote, sem tipo no modelo (valor_fora_do_dominio + 1048, até o pedido de modelo)
+    for conv, tg, lote, seq in [(1, 1, "120", "45"), (1, 2, None, None), (2, 7, "5", "5"), (2, 1, "0", "3"),
+                                (2, 2, "L12", "9"), (2, 0, "7", "7")]:
+        _ins(ins, "TBSEGUIA", CONV=conv, TIPO_GUIA=tg, NUM_LOTE=lote, SEQ_TRANSACAO=seq)
+    # valores do procedimento: 3 sem nenhum valor (CHECK: 4025); 4 procedimento nunca visto (pai_inexistente + 1048)
+    for tab, cod, data, ch, co, anes in [(1, 10, dt(2025, 1, 1), 10.5, 2.25, D("3.00")),
+                                         (1, 10, dt(2025, 6, 1), 11.0, None, None),
+                                         (1, 11, dt(2025, 1, 1), None, None, None),
+                                         (2, 99, dt(2025, 1, 1), 1.0, None, None)]:
+        _ins(ins, "TBVLRTHM", TAB=tab, COD=cod, DATA=data, VALOR_CH=ch, VALOR_CO=co, VALOR_ANES=anes)
+    # de-para da conta de receita: 1 com natureza; 2 sem natureza (vale para a fonte); 3 conta zero (sem conta: CHECK
+    # 4025); 4 fonte nunca vista (pai_inexistente + CHECK 4025); 5 natureza nunca vista (pai_inexistente, gravado)
+    for conv, tc, tl, g, sg, it, cta in [(1, "I", 1, 1, 1, 1, 3101), (2, "E", 1, None, None, None, 3102),
+                                         (1, "E", 2, None, None, None, 0), (9, "I", 1, None, None, None, 3103),
+                                         (2, "I", 3, 9, 9, 9, 3104)]:
+        _ins(ins, "TBINTCRC", EMPRESA=1, CONV=conv, TIPO_CONTA=tc, TIPO_LANC=tl, TIPO_ATO=0, SUBTIPO_DIARIA=0,
+             GRUPO=g, SUBGRUPO=sg, ITEM=it, CTA_CONTABIL=cta)
     return {
         "TBTIPPLANO": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_1048": 3,
                                                      "valor_fora_do_dominio": 1, "pai_inexistente": 1}},
         "TBTABDTH": {"gravados": 4, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 3,
                                                    "restricao_destino_1048": 2, "restricao_destino_1062": 1,
                                                    "pai_inexistente": 1}},
+        "TBTPPROFPROC": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
+        "TBCODATI": {"gravados": 2, "pendencias": {"valor_presumido": 4, "vigencia_sem_fonte": 4,
+                                                   "segredo_aguarda_cofre": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 2}},
+        "TBCODATI_TBUSERS": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                           "pai_pendente": 1}},
+        "TBCONVEN_TBTISSPARDEF": {"gravados": 0, "pendencias": {"pai_inexistente": 2, "vigencia_sem_fonte": 2,
+                                                                "restricao_destino_1048": 2}},
+        "TBEMIREF": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1}},
+        "TBENTCON": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1}},
+        "TBSEGUIA": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_1048": 2,
+                                                   "restricao_destino_4025": 1}},
+        "TBVLRTHM": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1}},
+        "TBINTCRC": {"gravados": 3, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2}},
     }

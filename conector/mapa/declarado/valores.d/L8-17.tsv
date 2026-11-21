@@ -37,7 +37,6 @@ TBTISSSCHEMA	TP_TRANSACAO	transacao_tiss_webservice.tipo_transacao	PROTOCOLO_REC
 TBTISSSCHEMA	TP_TRANSACAO	transacao_tiss_webservice.tipo_transacao	ENVIO_DOCUMENTO	envio_documentos	L8-17: tipo de transação do padrão TISS (domínio público da ANS)
 TBTISSSCHEMA	TP_TRANSACAO	transacao_tiss_webservice.tipo_transacao	ENVIO_DOCUMENTOS	envio_documentos	L8-17: tipo de transação do padrão TISS (domínio público da ANS)
 TBTISSSCHEMA	TP_TRANSACAO	transacao_tiss_webservice.tipo_transacao	RECIBO_DOCUMENTO	envio_documentos	L8-17: tipo de transação do padrão TISS (domínio público da ANS)
-TBTISSSCHEMA	TP_TRANSACAO	transacao_tiss_webservice.tipo_transacao	*	outro	L8-17: curinga (pedido 5): tipo sem par grava 'outro' com valor_fora_do_dominio, sem recusar a transação nem derrubar os endpoints (L8-06)
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	Enviada	enviada	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	ENVIADA	enviada	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	enviada	enviada	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
@@ -98,4 +97,3 @@ TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	nao enviada	fal
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	Não enviada	falha_definitiva	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	NÃO ENVIADA	falha_definitiva	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
 TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	não enviada	falha_definitiva	L8-17: situação da mensagem pelo nome (título, maiúsculas e minúsculas)
-TBSMSTPRETMSG	NOME	codigo_retorno_mensageria.situacao_resultante	*	pendente	L8-17: curinga (pedido 5): nome sem par presume o lado seguro 'pendente' com valor_fora_do_dominio, nunca 'enviada'

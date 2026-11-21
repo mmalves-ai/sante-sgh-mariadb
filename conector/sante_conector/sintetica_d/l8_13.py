@@ -1,9 +1,9 @@
 """Fatia L8-13 (operadora de planos: domínios de faturamento, cadastro e cartão): imagem sintética.
 
-Dados 100% falsos (nomes inventados). 16 tabelas carregadas; 7 ficam na imagem e NÃO são carregadas (listas que
-são atributo de outra tabela do modelo, não linhas: CDFAIXAETATP, CDMSGLINHA, CDPARDIGOBG, CDPGTOCOOPART,
-CDTPCOPART, CDTPCTRCONTRAT; de-para de valores pedido em docs/obra/fatias/f4/saida/L8-13.json) e CDMSGCOBRANCA,
-que espera o especial de data da carga no motor ou vigencia_inicio nula no modelo (mesmo pedido).
+Dados 100% falsos (nomes inventados). 17 tabelas carregadas (CDSTATUSCAD em situacao_cadastral_beneficiario); 6
+ficam na imagem e são DESCARTE de produto (`declarado/sem_carga.tsv`, causa mecanismo_do_produto: listas fixas do
+sistema de origem que nenhuma tabela carregada consome): CDFAIXAETATP, CDMSGLINHA, CDPARDIGOBG, CDPGTOCOOPART,
+CDTPCOPART e CDTPCTRCONTRAT.
 Anomalias cobertas:
 - nome nulo em coluna obrigatória do destino (restricao_destino_1048, recusa só a linha);
 - dia de vencimento fora da faixa 1..31 (CHECK do destino: restricao_destino_4025);
@@ -12,8 +12,11 @@ Anomalias cobertas:
 - classificação obrigatória sem origem (literal presumido: valor_presumido por linha);
 - domínio fixo do sistema com código 'sistema-<n>' (de-para de valores 0..99): chave 120 fora da faixa
   (valor_fora_do_dominio, recusada pelo NOT NULL do código);
-- tipo do movimento pelo código da situação (de-para de valores): situação 4, cuja linha é recusada (nome nulo),
-  não muda o tipo do motivo (vai pelo código do domínio); situação 99 sem par: valor_fora_do_dominio e recusa.
+- tipo do movimento sem evidência na origem (literal presumido =~alteracao: valor_presumido por linha, inclusive no
+  motivo ligado a uma situação inexistente, que o destino não guarda);
+- situação cadastral com nome nulo (restricao_destino_1048) e com espaços repetidos;
+- mensagem de cobrança sem vigência (@vigencia_carga: vigencia_sem_fonte por linha), posição presumida
+  (valor_presumido), prioridade 0 e nula (inteiro_zero_nulo: padrão 1 do destino, sem pendência).
 """
 
 DDL = """
@@ -42,10 +45,10 @@ CREATE TABLE CDTPCONTRATO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(25));
 CREATE TABLE CDTPCOPART (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20) NOT NULL);
 CREATE TABLE CDTPCTRCONTRAT (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 """
-CARREGADAS = ("CDACOMODTIPO", "CDDIAVENCCOB", "CDGUIASTATUS", "CDINCIDECOMIS", "CDMOTIVOBAIXA", "CDMOTIVOSOLCART",
-              "CDORIGEMCOBR", "CDORIGEMGUIA", "CDPGTOBALCAOCP", "CDPLANOCLASSIF", "CDSTATUSCAD",
+CARREGADAS = ("CDSTATUSCAD", "CDACOMODTIPO", "CDDIAVENCCOB", "CDGUIASTATUS", "CDINCIDECOMIS", "CDMOTIVOBAIXA", "CDMOTIVOSOLCART",
+              "CDORIGEMCOBR", "CDORIGEMGUIA", "CDPGTOBALCAOCP", "CDPLANOCLASSIF", "CDMSGCOBRANCA",
               "CDMOTMOVIMCAD", "CDSTATUSSOLCART", "CDTPACUMULPOR", "CDTPCOBRANCA", "CDTPCONTRATO")
-NAO_CARREGADAS = ("CDMSGCOBRANCA", "CDFAIXAETATP", "CDMSGLINHA", "CDPARDIGOBG", "CDPGTOCOOPART", "CDTPCOPART", "CDTPCTRCONTRAT")
+NAO_CARREGADAS = ("CDFAIXAETATP", "CDMSGLINHA", "CDPARDIGOBG", "CDPGTOCOOPART", "CDTPCOPART", "CDTPCTRCONTRAT")
 
 # tabela com literal presumido: uma pendência valor_presumido por linha
 _NOMES = {
@@ -64,7 +67,7 @@ _NOMES = {
 _COM_NULO = {
     "CDGUIASTATUS": ["Situação A", "Situação B", None, "Situação  D", "Situação E"],
     "CDMOTIVOSOLCART": ["Motivo cartão A", None, "Motivo cartão C"],
-    "CDSTATUSCAD": ["Ativo ex", "  Susp  ex ", "Canc ex", None],
+    "CDSTATUSCAD": ["Situação A", "  Sit   B ", None, "Situação D"],
 }
 _FORA = {"CDFAIXAETATP": 3, "CDMSGLINHA": 7, "CDPARDIGOBG": 4, "CDPGTOCOOPART": 2, "CDTPCOPART": 3,
          "CDTPCTRCONTRAT": 2}
@@ -85,15 +88,15 @@ def linhas(r, ins):
         ins("CDDIAVENCCOB", [dia, {5: "X", 6: None}.get(dia, "SN"[dia % 7 == 0])])
     esperado["CDDIAVENCCOB"] = {"gravados": 31,
                                 "pendencias": {"restricao_destino_4025": 1, "valor_fora_do_dominio": 1}}
-    # mensagens (não carregadas por ora: literal de data, pedido ao motor); prioridade 0 e nula: padrão 1 no plano
+    # mensagens: vigência da carga e posição presumida em toda linha; prioridade 0 e nula: padrão 1 do destino
     for m in [(1, "Mensagem exemplo um", 1), (2, "Mensagem  exemplo dois", 2), (3, "Mensagem exemplo três", 0),
               (4, "Mensagem exemplo quatro", None)]:
         ins("CDMSGCOBRANCA", list(m))
-    # motivo de movimento: tipo pelo código da situação (1..4); 4 = situação recusada (nome nulo); 99 sem par
+    esperado["CDMSGCOBRANCA"] = {"gravados": 4, "pendencias": {"valor_presumido": 4, "vigencia_sem_fonte": 4}}
+    # motivo de movimento: tipo presumido em toda linha (a situação ligada não decide o tipo); 99 sem situação
     for i, st in enumerate([1, 2, 3, 3, 4, 99], 1):
         ins("CDMOTMOVIMCAD", [i, "Motivo movimento exemplo %d" % i, st])
-    esperado["CDMOTMOVIMCAD"] = {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1,
-                                                              "restricao_destino_1048": 1}}
+    esperado["CDMOTMOVIMCAD"] = {"gravados": 6, "pendencias": {"valor_presumido": 6}}
     # chave fora da faixa do prefixo 'sistema-<n>' (0..99): código nulo, recusa pelo NOT NULL
     ins("CDORIGEMGUIA", [120, "Origem guia fora da faixa"])
     esperado["CDORIGEMGUIA"] = {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
@@ -103,5 +106,5 @@ def linhas(r, ins):
     esperado["CDSTATUSSOLCART"] = {"gravados": 3, "pendencias": {}}
     for t, n in _FORA.items():
         for i in range(1, n + 1):
-            ins(t, [i, "Opção exemplo %d" % i])
+            ins(t, [i, "Opção %d" % i])
     return esperado

@@ -3,14 +3,16 @@
 Carregadas pelo mapa (colunas.d/L8-14.tsv): 19 cadastros simples de plano de saúde (chave vira o código, nome a
 descrição). Valor sem origem que muda o comportamento entra como literal presumido (=~), com valor_presumido por
 coluna presumida em cada linha que chega à gravação (inclusive a recusada pelo destino). Destino já gravado antes por
-outra tabela com a chave inteira como código (CDTPLANCAMEN, PSMOTIVO, PSORIGEMCOBR, PSORIGEMGUIA): o nome é o código
-até o prefixo de domínio. PSATVASS e PSPLNASS: declaradas sem o beneficiário (chave natural, pedido 4): toda linha,
-placeholder de 1899 ou não, é lida e recusada pelo destino com pendência (nunca some).
-Fora da carga, só com a forma (2 linhas falsas cada): CDTPDESCACR e PSEMPEMITEOBS (domínios de valor sem coluna que
-os referencie; pendência tabela_sem_carga pedida ao motor).
+outra tabela com a chave inteira como código (CDTPLANCAMEN, PSMOTIVO, PSORIGEMCOBR, PSORIGEMGUIA): código com
+prefixo de domínio (#codigo_derivado), o nome só na descrição (nome repetido com outra caixa agora grava).
+PSATVASS e PSPLNASS (ambas em movimento_cadastral_beneficiario, com #retrato e usuário por ref:TBUSERS): sem o
+beneficiário (chave alternativa composta EMP+BEN+DEP pedida ao motor, e PSBENEFI, que hoje não carrega sem o contrato):
+toda linha, placeholder de 1899 ou não, é lida
+e recusada pelo destino com pendência (nunca some).
+Descarte de produto (sem_carga.tsv, mecanismo_do_produto), só com a forma (2 linhas falsas cada): CDTPDESCACR e
+PSEMPEMITEOBS (domínios de CHECK do produto).
 Anomalias: nome nulo ou só com espaços (NOT NULL do destino: restricao_destino_1048), espaços repetidos e acentos
-CP1252, nome repetido com outra caixa no código único (restricao_destino_1062), S/N fora do domínio
-(valor_fora_do_dominio, fica o padrão do destino).
+CP1252, S/N fora do domínio (valor_fora_do_dominio, fica o padrão do destino), data sentinela.
 """
 import datetime
 import re
@@ -48,7 +50,8 @@ CREATE TABLE PSPLNASS ("EMP" INTEGER NOT NULL, "BEN" INTEGER NOT NULL, "DEP" INT
 """
 
 NAO_CARREGADAS = ("CDTPDESCACR", "PSEMPEMITEOBS")
-SEM_BENEFICIARIO = {"PSATVASS": "movimento_cadastral_beneficiario", "PSPLNASS": "beneficiario_plano"}
+SEM_BENEFICIARIO = {"PSATVASS": "movimento_cadastral_beneficiario", "PSPLNASS": "movimento_cadastral_beneficiario"}
+PAIS_EXTERNOS = {"TBUSERS": ["USR_L814_A"]}
 P1899 = datetime.date(1899, 12, 30)
 
 
@@ -76,9 +79,9 @@ DADOS = [
     ("CDTPFRANQUIA", _n("Franquia exemplo", None, "Franquia  por período", "Franquia internação"),
      {"gravados": 3, "pendencias": {R1048: 1, VP: 4}}),
     ("CDTPGUIA", _n("Guia exemplo", "Guia  SADT ex", "Guia internação"), {"gravados": 3, "pendencias": {}}),
-    # nome vira o código: o terceiro repete o primeiro com outra caixa e espaços (chave única sem caixa: 1062)
+    # código com prefixo: o terceiro repete o nome do primeiro com outra caixa e espaços (só a descrição; grava)
     ("CDTPLANCAMEN", _n("Mensalidade exemplo", "Taxa exemplo", "MENSALIDADE  exemplo", "Adicional exemplo"),
-     {"gravados": 3, "pendencias": {R1062: 1, VP: 4}}),
+     {"gravados": 4, "pendencias": {VP: 4}}),
     ("CDTPMOVVALOR", _n("Reajuste exemplo", "Faixa exemplo", None, "Adicional  exemplo"),
      {"gravados": 3, "pendencias": {R1048: 1}}),
     ("CDTPPERIODO", _n("Dia exemplo", "Mês exemplo"), {"gravados": 2, "pendencias": {VP: 2}}),
@@ -97,11 +100,11 @@ DADOS = [
                    [4, "Rede exemplo", None]],
      {"gravados": 4, "pendencias": {VFD: 1, VP: 4}}),
     ("PSDOCIMPNOMESOCIAL", _n("Cartão exemplo", "Guia exemplo", None, "Carta  exemplo"),
-     {"gravados": 3, "pendencias": {R1048: 1, VP: 4}}),
+     {"gravados": 3, "pendencias": {R1048: 1, VP: 8}}),
     ("PSEMPEMITEOBS", _n("Todos exemplo", "Titulares exemplo"), None),
     ("PSFORNEMEMSIT", _n("Solicitado exemplo", None, "Entregue exemplo", "Cancelado  exemplo"),
      {"gravados": 3, "pendencias": {R1048: 1}}),
-    ("PSMOTIVO", _n("Óbito exemplo", None, "Pedido  do titular"), {"gravados": 2, "pendencias": {R1048: 1}}),
+    ("PSMOTIVO", _n("Óbito exemplo", None, "Pedido  do titular"), {"gravados": 2, "pendencias": {R1048: 1, VP: 3}}),
     ("PSNATUREZAPS", _n("Contratada exemplo", "Própria exemplo", "Reembolso exemplo"),
      {"gravados": 3, "pendencias": {}}),
     ("PSORIGEMCOBR", _n("Mensalidade exemplo", "Coparticipação ex", "Avulsa exemplo"),
@@ -110,7 +113,7 @@ DADOS = [
      {"gravados": 3, "pendencias": {VP: 3}}),
     ("PSPLNASS", [[1, 1, 0, P1899, 1, None, None, None, None, None, None],
                   [9, 9, 9, datetime.date(2025, 1, 2), 3, 1, None, 1, 0, None, "USR_L814_A"]],
-     {"gravados": 0, "pendencias": {"restricao_destino_1364": 2, "data_sentinela": 1}}),
+     {"gravados": 0, "pendencias": {"restricao_destino_1364": 2, "data_sentinela": 2, VP: 2}}),
 ]
 
 

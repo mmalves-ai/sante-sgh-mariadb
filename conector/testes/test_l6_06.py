@@ -8,11 +8,14 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_06
 
 FATIA = "colunas.d/L6-06.tsv"
-PRESUMIDAS = {("PROPCAOPERIODO", "periodo_consulta_sumario_alta.atendimento_inteiro"),
-              ("PRPADRECEITA", "modelo_receita.abrangencia"),
-              ("PRSITAPRAZAM", "situacao_aprazamento.categoria"),
-              ("PRSITCHECAGEM", "situacao_checagem.categoria"),
-              ("PRPROTGERAL", "protocolo_prescricao.sexo")}
+# de-para de valores da fatia (valores.d/L6-06.tsv): nenhum valor presumido em massa
+COM_VALORES = {("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.atendimento_inteiro"),
+               ("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.horas_retroativas"),
+               ("PRPADRECEITA", "GERAL", "modelo_receita.abrangencia"),
+               ("PRPROTGERAL", "SEXO", "protocolo_prescricao.sexo"),
+               ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto"),
+               ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao"),
+               ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria")}
 
 
 class L6_06(unittest.TestCase):
@@ -20,14 +23,21 @@ class L6_06(unittest.TestCase):
     def setUpClass(cls):
         cls.m = mapa.carregar_execucao()
         cls.decl = [c for c in cls.m["colunas_decl"] if c["_arquivo"].endswith(FATIA)]
-        cls.todas = set(l6_06.CARREGADAS) | set(l6_06.NAO_CARREGADAS)
+        cls.todas = set(l6_06.CARREGADAS) | set(l6_06.DESCARTADAS)
+        cls.sem_carga = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         cls.esp = l6_06.linhas(__import__("random").Random(1), lambda t, v: None)
         cls.plano = {x["tabela"]: x for x in carga_mapa.planejar(cls.m, cls.todas)}
+        cls.val = {}
+        for v in mapa.ler_valores(mapa.DIR_PACOTE):
+            if v["motivo"].startswith("L6-06"):
+                cls.val.setdefault((v["tabela"], v["coluna"], v["destino"]), {})[v["valor_origem"]] = v["valor_destino"]
 
-    def test_fatia_tem_as_24_tabelas_e_a_imagem_tambem(self):
-        self.assertEqual(len(self.todas), 24)
-        self.assertEqual({c["tabela"] for c in self.decl}, self.todas)
-        self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l6_06.DDL)), self.todas)
+    def test_fatia_tem_as_23_tabelas_e_a_imagem_tambem(self):
+        # 24 na ficha; o protocolo aplicado à prescrição foi para L6-13 (depois da prescrição)
+        self.assertEqual(len(self.todas), 23)
+        self.assertEqual({c["tabela"] for c in self.decl}, set(l6_06.CARREGADAS))
+        self.assertNotIn("PRPRESC_PRPROTGERAL", {c["tabela"] for c in self.decl})
+        self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l6_06.DDL)), self.todas | set(l6_06.INTERMEDIARIAS))
 
     def test_plano_so_com_as_carregadas_e_um_destino(self):
         self.assertEqual(set(self.plano), set(l6_06.CARREGADAS))
@@ -36,38 +46,71 @@ class L6_06(unittest.TestCase):
         ordem = [x["tabela"] for x in carga_mapa.planejar(self.m, self.todas)]
         self.assertLess(ordem.index("PROFTGRUPEXAME"), ordem.index("PROFTEXAME"))
 
-    def test_nao_carregadas_sem_destino_e_com_motivo(self):
-        for c in self.decl:
-            if c["tabela"] in l6_06.NAO_CARREGADAS:
-                self.assertEqual(c["destino"], "", c["tabela"])
-                self.assertRegex(c["motivo"], r"L6-06: (bloqueada|não carregada)", c["tabela"])
-                self.assertIn("pedido L6-06.json", c["motivo"], c["tabela"])
+    def test_cobertura_total_descartadas_com_motivo_de_produto(self):
+        # nenhuma tabela da fatia fica bloqueada: carrega ou é descarte de produto, com motivo
+        for t in l6_06.DESCARTADAS:
+            r = self.sem_carga.get(t)
+            self.assertIsNotNone(r, t)
+            causa = "duplicado" if t == "PRSITCHECAGEM" else "mecanismo_do_produto"
+            self.assertEqual((r["situacao"], r["causa"]), ("descarte", causa), t)
+            self.assertTrue(r["motivo"].startswith("L6-06: "), t)
+            self.assertNotIn("revisar", r["motivo"].lower(), t)  # decisão firme, nada adiado
+        self.assertFalse(set(l6_06.CARREGADAS) & set(self.sem_carga))
+        self.assertFalse(set(l6_06.DESCARTADAS) & set(self.plano))
 
-    def test_literais_presumidos_e_fixos(self):
+    def test_sem_literal_presumido_e_fixos(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}
-        self.assertEqual({k for k, v in lit.items() if v.startswith("=~")}, PRESUMIDAS)
+        self.assertFalse({k for k, v in lit.items() if v.startswith("=~")})
         self.assertEqual(lit[("PRPADRECEITA", "modelo_receita.formato")], "=livre")
         self.assertEqual(lit[("PRSAE_LIKERT", "escala_resultado_enfermagem.tipo_escala")], "=likert_1_a_5")
-        for t, _ in PRESUMIDAS:
-            self.assertIn("valor_presumido", self.esp[t]["pendencias"], t)
+        for t in self.esp:
+            self.assertNotIn("valor_presumido", self.esp[t]["pendencias"], t)
+
+    def test_de_para_de_valores_declarado(self):
+        dv = {(c["tabela"], c["coluna"], c["destino"]) for c in self.decl if c["depara"] == "valores"}
+        self.assertEqual(dv, COM_VALORES)
+        self.assertEqual(set(self.val), COM_VALORES)
+        self.assertEqual(self.val[("PRPROTGERAL", "SEXO", "protocolo_prescricao.sexo")],
+                         {"A": "todos", "F": "feminino", "M": "masculino", "": "todos"})
+        self.assertEqual(self.val[("PRPADRECEITA", "GERAL", "modelo_receita.abrangencia")],
+                         {"S": "geral", "N": "profissional"})
+        pt = self.val[("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto")]
+        self.assertEqual(pt, {str(i): str(i) for i in range(1, 6)})
+        ds = self.val[("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao")]
+        self.assertTrue(all(not v.isdigit() for v in ds.values()))  # rótulo, não o número
+        cat = self.val[("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria")]
+        self.assertTrue(set(cat.values()) == {"pendente", "aprazado", "reaprazado", "suspenso", "cancelado"})
+        ai = self.val[("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.atendimento_inteiro")]
+        hr = self.val[("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.horas_retroativas")]
+        self.assertEqual(set(ai), set(hr))
+        for nome in ai:  # CHECK: atendimento inteiro OU horas, nunca os dois vazios
+            self.assertTrue((ai[nome] == "1") != bool(hr[nome]), nome)
+        self.assertEqual((ai["Últimas 24 horas"], hr["Últimas 24 horas"]), ("0", "24"))
+        self.assertEqual((ai["Atendimento inteiro"], hr["Atendimento inteiro"]), ("1", ""))
+
+    def test_checagem_antiga_e_duplicado_da_vigente(self):
+        self.assertFalse([c for c in self.decl if c["tabela"] == "PRSITCHECAGEM"])
+        refs = [c for c in self.m["colunas_decl"] if c["destino"].startswith("horario_administracao_evento.situacao_checagem_id")]
+        self.assertTrue(refs and all(c["via"] == "ref:PRSITUACAOCHECAGEM" for c in refs))
 
     def test_referencias_declaradas_na_via(self):
-        via = {(c["tabela"], c["coluna"]): (c["regra"], c["via"]) for c in self.decl if c["via"]}
-        self.assertEqual(via, {("PROFTEXAME", "ID_OFTGRUPO"): ("chave_origem", "ref:PROFTGRUPEXAME"),
-                               ("PRPADRECEITA", "USUARIO"): ("chave_origem", "ref:TBUSERS")})
-        self.assertEqual(set(l6_06.PAIS_EXTERNOS), {"TBUSERS"})
+        via = {(c["tabela"], c["coluna"], c["destino"], c["via"]) for c in self.decl if c["via"]}
+        self.assertEqual(via, {("PROFTEXAME", "ID_OFTGRUPO", "tipo_exame_oftalmologico.grupo_exame_oftalmologico_id",
+                                "ref:PROFTGRUPEXAME"),
+                               ("PRPADRECEITA", "USUARIO", "modelo_receita.criado_por", "ref:TBUSERS"),
+                               ("PRPADRECEITA", "USUARIO", "modelo_receita.profissional_id", "ref:TBPROFIS.ID_TBUSERS")})
+        self.assertEqual(set(l6_06.PAIS_EXTERNOS), {"TBUSERS", "TBPESSOA"})
 
     def test_vigencia_do_protocolo_suspensa_ate_o_pedido(self):
         # TIMESTAMP gravado em DATE diverge na soma de controle: fica fora até a regra genérica do motor
         ativas = {c["coluna"] for c in self.decl if c["tabela"] == "PRPROTGERAL" and c["destino"]}
         self.assertFalse({"VIGENCIAI", "VIGENCIAF"} & ativas)
 
-    def test_sexo_do_protocolo_presumido_com_pendencia(self):
-        # protocolo restrito a um sexo nunca vira "todos" em silêncio: literal presumido até o de-para A/F/M
-        cols = {c["coluna"]: c["destino"] for c in self.decl if c["tabela"] == "PRPROTGERAL"}
-        self.assertEqual(cols["SEXO"], "")
-        self.assertEqual(cols["=~todos"], "protocolo_prescricao.sexo")
-        self.assertEqual(self.esp["PRPROTGERAL"]["pendencias"]["valor_presumido"], 6)  # toda linha lida
+    def test_sexo_do_protocolo_pelo_de_para(self):
+        cols = {c["coluna"]: c for c in self.decl if c["tabela"] == "PRPROTGERAL"}
+        self.assertEqual((cols["SEXO"]["destino"], cols["SEXO"]["regra"]), ("protocolo_prescricao.sexo", "codigo_char"))
+        self.assertNotIn("=~todos", cols)
+        self.assertEqual(self.esp["PRPROTGERAL"]["pendencias"]["valor_fora_do_dominio"], 2)  # ativo X e sexo Z
 
     def test_uso_geral_do_protocolo_e_por_especialidade(self):
         # GERAL do protocolo = vale para todas as especialidades (vínculos em PRPROTGERALESP, outra fatia)
@@ -77,7 +120,7 @@ class L6_06(unittest.TestCase):
         self.assertEqual((ger["destino"], ger["regra"]), ("protocolo_prescricao.uso_geral", "booleano_sn"))
 
     def test_extensoes_de_arquivo_nao_viram_tipo_de_anexo(self):
-        self.assertIn("PROFTTPARQUIV", l6_06.NAO_CARREGADAS)
+        self.assertIn("PROFTTPARQUIV", l6_06.DESCARTADAS)
         self.assertNotIn("PROFTTPARQUIV", self.plano)
         self.assertFalse([c for c in self.m["colunas_decl"] if c["tabela"] == "PROFTTPARQUIV" and c["destino"]])
 
@@ -99,7 +142,8 @@ class L6_06(unittest.TestCase):
         self.assertEqual(set(self.esp), set(l6_06.CARREGADAS))
         self.assertEqual(self.esp["PROFTEXAME"]["pendencias"],
                          {"pai_pendente": 1, "pai_inexistente": 1, "restricao_destino_1048": 2})
-        self.assertEqual(self.esp["PRPADRECEITA"]["gravados"], 3)
+        self.assertEqual(self.esp["PRPADRECEITA"]["gravados"], 5)
+        self.assertEqual(self.esp["PRPADRECEITA"]["pendencias"]["pai_ambiguo"], 1)
 
 
 if __name__ == "__main__":

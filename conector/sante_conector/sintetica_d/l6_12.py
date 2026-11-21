@@ -1,23 +1,25 @@
-"""Fatia L6-12 (prontuário, assinatura e assistência, módulo PEP; 23 tabelas): forma das tabelas da origem e anomalias,
-com dados 100% falsos.
+"""Fatia L6-12 (prontuário, assinatura e assistência, módulo PEP): forma das tabelas da origem e anomalias, com dados
+100% falsos. Rodada de cobertura total (F4).
 
-A fatia está BLOQUEADA no motor de hoje: toda linha leva paciente, atendimento ou profissional por uma tabela
-intermediária da origem (histórico do paciente, histórico do atendimento, inscrição no conselho), e a referência direta
-daria o id de outra entidade. As declarações estão prontas e comentadas em `colunas.d/L6-12.tsv` até existir a
-referência pela coluna do pai (pedido em `docs/obra/fatias/f4/saida/L6-12.json`). Com `ATIVA = False` (o normal) a
-imagem traz a forma e as linhas, e o esperado é vazio (nada entra na carga).
-
-`ATIVA = True` só na validação da cadeia da prescrição (prescrição, item, procedimento, solução, dieta e
-característica), com a cadeia declarada com a referência direta (`gerar_tsv.py ... ativa`, ver saida/L6-12.md): os
-pais de fora da fatia entram como já carregados (`PAIS_EXTERNOS`) e o esperado abaixo foi conferido nessa rodada.
+Carregadas pelo mapa (colunas.d/L6-12.tsv): prescrição (PRPRESC), item (PRLANGERAL), medicamento (PRPRESCMED),
+material (PRITENSGERAL), procedimento, dieta e característica, hemocomponente (PRPRESCHEMO), registro clínico
+(PRCABEVOL), o texto dele (PRCONTEVOL, completa o registro) e as respostas (PREVOLPAC), alergia com evento, documento
+emitido (PRATESTREQIMP) e evento de assinatura (PRASSINATURA_DOC).
+Paciente, atendimento, profissional e usuário vêm por referência ENCADEADA pela origem: histórico do paciente
+(HTPACIENTE -> RICADPAC), histórico do atendimento (HTATENDIMENTO -> ATCABECATEND), inscrição no conselho
+(TBCBOPRO -> TBPROFIS) e inscrição -> profissional -> login (TBPROFIS -> TBUSERS). As intermediárias entram na imagem
+com TODAS as colunas do dicionário (`conector/mapa/colunas.tsv`), com ids diferentes dos avós, para provar que a
+referência direta não é usada. O profissional (TBPROFIS) é carregado pela declaração da L5-06; os demais avós são
+pais externos. A alergia lê paciente, atendimento, data e autor do registro clínico pela origem dele. Unidade e
+hemocomponente vêm por chave alternativa (sigla); o campo do modelo da resposta, pela opção -> pergunta -> ligação.
+Descartes (sem_carga.tsv) e a bloqueada (PRALERGIAPAC_TBPRINC, catálogo oficial sem de-para) entram só com a forma.
 """
+import csv
 import datetime
+import os
+from decimal import Decimal as D
 
-ATIVA = False
 FORMAS = {
-    'PRASSINATURA_CAB': ('ID',
-        'ID:INTEGER ID_PRTPASSINATURA:SMALLINT ID_TABELA:BIGINT ID_HTPACIENTE:BIGINT ID_HTATENDIMENTO:BIGINT '
-        'DOCUMENTO_CONSOLIDADO:BLOB1 '),
     'PRASSINATURA_DOC': ('ID',
         'ID:INTEGER ID_PRASSINATURA_CAB:INTEGER ID_PRTPDOCUMENTO:SMALLINT ID_PRSITDOCUMENTO:SMALLINT '
         'ID_TBCBOPRO:INTEGER DATA_HORA_EVENTO:TIMESTAMP FUSO_HORARIO_EVENTO:SMALLINT HORARIO_VERAO_EVENTO:CHAR(1) '
@@ -166,47 +168,81 @@ FORMAS = {
         'QTDE_DOSE:NUMERIC(18,3) ID_TBUNICON_UNI_PRESC:VARCHAR(7) VELOCIDADE_INFUSAO:NUMERIC(18,3) '
         'ID_PRUNIDINFUSAO:SMALLINT ID_PRTPINFUSAO:SMALLINT INDICACAO_CLINICA:BLOB1 INICIAR_ADM_AGORA:CHAR(1) '
         'NAO_AJUSTAR_ESQUEMA_ENF:CHAR(1) '),
+    'PRPRESCMED': ('ID',
+        'ID:INTEGER ID_PRLANGERAL:INTEGER ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER '
+        'JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER QTDE:NUMERIC(18,3) '
+        'ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3) ID_TBUNICON_UNI_PRESC:VARCHAR(7) INICIAR_ADM_AGORA:CHAR(1) '
+        'NAO_AJUSTAR_ESQUEMA_ENF:CHAR(1) TEMPO_INFUSAO:TIME DOSE_EXTRA_ANTIMICROBIANO:CHAR(1) '
+        'INTERVALO_ENTRE_DOSES:INTEGER JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255) '),
+    'PRITENSGERAL': ('ID',
+        'ID:INTEGER ID_PRLANGERAL:INTEGER ID_GEITENS:INTEGER ID_GENOMCOM:INTEGER ID_PRITEMNAOPAD:INTEGER '
+        'JUSTIFICATIVA_NAO_PADRONIZ:VARCHAR(200) ID_HTCID_NAO_PADRONIZ:INTEGER QTDE:NUMERIC(18,3) '
+        'ID_PRFORMULA:SMALLINT QTDE_DOSE:NUMERIC(18,3) ID_TBUNICON_UNI_PRESC:VARCHAR(7) '
+        'JUSTIFICATIVA_INC_ITEM_ENF:VARCHAR(200) OBS_ENFERMAGEM:VARCHAR(250) ITEM_IMPRESSO:CHAR(1) '
+        'IMPRIMIR_FOLHA_SALA:CHAR(1) ID_PRLOCALINVASIVO:SMALLINT OLD_ITEM:INTEGER OLD_QTDE:NUMERIC(18,3) '
+        'OLD_QTDEADM:NUMERIC(18,3) OLD_JUSTIFICATIVA:VARCHAR(200) OLD_OBSENF:BLOB1 OLD_STATUS:VARCHAR(1) '
+        'OLD_ID_ITEMNAOPAD:INTEGER OLD_JUSTIFNAOPAD:VARCHAR(200) OLD_ITEMIMPRESSO:VARCHAR(1) OLD_FORMULA:SMALLINT '
+        'OLD_UNI_PRESC:VARCHAR(7) OLD_ID_GELANSAI:INTEGER OLD_ID_GENOMCOM:INTEGER OLD_ID_PRLOCALINVASIVO:SMALLINT '
+        'OLD_FOLHA_SALA:CHAR(1) OLD_ID_HTCID:INTEGER ITEM_KIT:CHAR(1) DOSE_EXTRA_ANTIMICROBIANO:CHAR(1) '
+        'ID_PRKITSOL:INTEGER JUSTIFICATIVA_ITEM_ALERGICO:VARCHAR(255) ID_DIGITAL:VARCHAR(36) '),
+    'PREVOLPAC': ('ID',
+        'ID:INTEGER ID_CABEVOL:INTEGER SEQ:SMALLINT ID_RESPOSTA:INTEGER UNIDRESP:VARCHAR(10) CONTEVOL:BLOB1 '
+        'RESPDATA:DATE RESPHORA:VARCHAR(4) RESPSNAO:VARCHAR(5) RESPVALOR:NUMERIC(18,3) RESPALFA:VARCHAR(255) '
+        'ORDEM:VARCHAR(15) TAB:SMALLINT ID_HTPROCTO:INTEGER ID_HTCID:INTEGER RESPDATA_UTC:VARCHAR(30) '
+        'OBSERVACAO:VARCHAR(255) AUTOPREENCHIDO:CHAR(1) JUSTIFICATIVA_DIAGNOSTICO:VARCHAR(254) '),
     'PRPRESCPROCED': ('ID',
         'ID:INTEGER ID_PRLANGERAL:INTEGER ID_TBPROENF:INTEGER INICIAR_ADM_AGORA:CHAR(1) '
         'NAO_AJUSTAR_ESQUEMA_ENF:CHAR(1) '),
-    'PRPRESCSOL': ('ID',
-        'ID:INTEGER ID_PRLANGERAL:INTEGER VOLUME_KG:NUMERIC(18,3) VOLUME_TOTAL:NUMERIC(18,3) '
-        'ID_TBUNICON_UNI_PRESC:VARCHAR(7) ID_PRTPINFUSAO:SMALLINT INICIAR_ADM_AGORA:CHAR(1) '
-        'NAO_AJUSTAR_ESQUEMA_ENF:CHAR(1) ID_PRKITSOL:INTEGER PERMITIR_ENF_ALT_VEL_INFUSAO:CHAR(1) '),
-    'PRPRESCVI': ('ID',
-        'ID:INTEGER ID_PRLANGERAL:INTEGER ID_PRVIAAEREA:SMALLINT ID_PRMODOVENT:SMALLINT '
-        'FREQUENCIA_RESPIRATORIA:SMALLINT PEEP:SMALLINT VOLUME_CORRENTE:NUMERIC(18,2) '
-        'ID_TBUNICON_UNI_PRESC:VARCHAR(7) PRESSAO:SMALLINT ID_PRUNIDRESPOSTA_PRESSAO:SMALLINT FLUXO:SMALLINT '
-        'ID_PRUNIDINFUSAO_FLUXO:SMALLINT TEMPO_INSPIRATORIO:NUMERIC(4,1) TEMPO_EXPIRATORIO:NUMERIC(4,1) '
-        'FIO2:SMALLINT ID_PRUNIDRESPOSTA_FIO2:SMALLINT '),
-    'PRPRESCVNI': ('ID',
-        'ID:INTEGER ID_PRLANGERAL:INTEGER ID_PRVIAAEREA:SMALLINT ID_PRMODOVENT:SMALLINT '
-        'PRESSAO_INSPIRATORIA:SMALLINT ID_PRUNIDRESPOSTA_PRESSAO_IN:SMALLINT PRESSAO_EXPIRATORIA:SMALLINT '
-        'ID_PRUNIDRESPOSTA_PRESSAO_EX:SMALLINT FIO2:SMALLINT ID_PRUNIDRESPOSTA_FIO2:SMALLINT '
-        'TEMPO_TOTAL:TIMESTAMP '),
 }
+
+
+# intermediárias da referência encadeada (de outras fatias): todas as colunas do dicionário, chave ID
+_TIPOS_FB = {"DOUBLE": "DOUBLE PRECISION", "BLOB": "BLOB SUB_TYPE 0"}
+INTERMEDIARIAS = ("HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO", "TBPROFIS", "PRRESPOSTA", "PRPADEVOL", "PRHEMOTLAN",
+                  "TBUNIDADEMEDIDA")
+# chave das intermediárias (as demais: ID). PRHEMOTLAN e TBUNIDADEMEDIDA são carregadas pela declaração das fatias
+# L7-01 e L6-10 (pais por chave alternativa); PRRESPOSTA e PRPADEVOL ficam fora do plano (bloqueadas na L6-10/L6-11):
+# são lidas pela referência encadeada e registradas como pais externos
+CHAVE_INTER = {"PRRESPOSTA": "ID_RESPOSTA", "PRHEMOTLAN": "ID_HEMOTLAN"}
+
+
+def _dicionario():
+    arq = os.path.join(os.path.dirname(__file__), "..", "..", "mapa", "colunas.tsv")
+    cols = {t: [] for t in INTERMEDIARIAS}
+    with open(arq, encoding="utf-8") as f:
+        for r in csv.DictReader(f, delimiter="\t"):
+            if r["tabela"] in cols:
+                cols[r["tabela"]].append((r["coluna"], _TIPOS_FB.get(r["forma"], r["forma"])))
+    return cols
+
+
+COLS_INTER = _dicionario()
 
 _TIPO = {"BLOB1": "BLOB SUB_TYPE 1", "BLOB0": "BLOB SUB_TYPE 0"}
 
 
 def _colunas(t):
+    if t in COLS_INTER:
+        return COLS_INTER[t]
     return [c.split(":", 1) for c in FORMAS[t][1].split()]
 
 
 DDL = "".join("CREATE TABLE %s (%s, PRIMARY KEY (%s));\n" % (
-    t, ", ".join("%s %s" % (c, _TIPO.get(f, f)) for c, f in _colunas(t)), k) for t, (k, _) in FORMAS.items())
+    t, ", ".join('"%s" %s' % (c, _TIPO.get(f, f)) for c, f in _colunas(t)), k)
+    for t, k in [(t, FORMAS[t][0]) for t in FORMAS] + [(t, CHAVE_INTER.get(t, "ID")) for t in INTERMEDIARIAS])
 
-PAIS_EXTERNOS = {"HTPACIENTE": [1, 2], "HTATENDIMENTO": [1, 2], "TBCBOPRO": [1, 2], "PRLOCAL_ASSISTENCIA": [1],
-                 "PRTPLAN": [1, 2], "PRFREQUENCIA": [1], "GETABVIA": ["VO", "EV"], "PRPROTGERAL": [1],
-                 "TBPROENF": [1, 2], "PRTPINFUSAO": [1], "PRKITSOL": [1], "TBDIETAS": [1, 2], "PRVIAADMIN": [1],
-                 "PRUNIDINFUSAO": [1], "PRCARACTDIE": [1, 2], "PREVOLUCAO": [1], "PRTPASSINATURA": [1],
-                 "PRSITDOCUMENTO": [1], "PRTPDOCUMENTO": [1], "TBALERGIA": [1], "TBPRINC": [1], "PRVIAAEREA": [1],
-                 "PRMODOVENT": [1], "PRUNIDRESPOSTA": [1], "TBUNICON": ["ML"], "TBUSERS": ["teste"]}
+# avós da referência encadeada e pais de fora da fatia, registrados como já carregados (ids diferentes das
+# intermediárias: a referência direta não acharia nada)
+PAIS_EXTERNOS = {"RICADPAC": [1, 2], "ATCABECATEND": [1, 2], "TBUSERS": ["USR1", "USR2"], "TBPESSOA": [1, 2],
+                 "PRLOCAL_ASSISTENCIA": [1], "PREVOLUCAO": [1], "PRASSINATURA_CAB": [1, 2], "PRSITDOCUMENTO": [1],
+                 "TBALERGIA": [1], "PRTPLAN": [1, 2], "PRFREQUENCIA": [1], "GETABVIA": ["VO", "EV"],
+                 "PRPROTGERAL": [1], "TBPROENF": [1, 2], "PRTPINFUSAO": [1], "TBDIETAS": [1, 2], "PRVIAADMIN": [1],
+                 "PRUNIDINFUSAO": [1], "PRCARACTDIE": [1, 2], "GEITENS": [1, 2], "PRITEMNAOPAD": [1],
+                 "PRFORMULA": [1], "PRKITSOL": [1], "PRPADEVOL": [1, 2, 3, 4], "PRRESPOSTA": [1, 2, 3]}
 # único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 
-CADEIA = ("PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCSOL", "PRPRESCDIETA", "PRCARACTLAN")
 T0 = datetime.datetime(2026, 3, 2, 8, 30)
 SENTINELA = datetime.datetime(1899, 12, 30)
 
@@ -215,71 +251,187 @@ def _h(horas):
     return T0 + datetime.timedelta(hours=horas)
 
 
+class _Hora:
+    """TIME literal do isql (o gerador só cita texto e data)."""
+    def __init__(self, h):
+        self.h = h
+
+    def __str__(self):
+        return "'%s'" % self.h
+
+
 def linhas(r, ins):
     def linha(t, **v):
         ins(t, [v.get(c) for c, _ in _colunas(t)])
 
+    # intermediárias: histórico do paciente 101/102 -> pacientes 1/2, 103 -> paciente 9 nunca visto; histórico do
+    # atendimento 201/202 -> atendimentos 1/2; inscrição 301/302 -> profissionais 1/2, 303 -> profissional 9 (não existe)
+    for i, pac in ((101, 1), (102, 2), (103, 9)):
+        linha("HTPACIENTE", ID=i, ID_RICADPAC=pac, DATA_HORA_HISTORICO=_h(-48))
+    for i, atd in ((201, 1), (202, 2)):
+        linha("HTATENDIMENTO", ID=i, ID_ATCABECATEND=atd, DATA_HORA_HISTORICO=_h(-48))
+    for i, prof in ((301, 1), (302, 2), (303, 9)):
+        linha("TBCBOPRO", ID=i, ID_TBPROFIS=prof, ID_TBCBOSUS=1, UF="SP", COD=7000 + i, VINC_EMPR="N")
+    for i in (1, 2):
+        linha("TBPROFIS", ID=i, ID_TBPESSOA=i, NOME="Profissional falso %d" % i, APELIDO="Dr. Exemplo %d" % i,
+              ID_TBUSERS="USR%d" % i, SITUACAO="A", DATA_INICIO=datetime.date(2020, 1, i))
+
     # prescrições: 1 e 2 normais (2 suspensa); 3 fim antes do início (CHECK); 4 prescrita na data sentinela
-    # (NOT NULL); 5 retroativa sem justificativa (CHECK); 6 paciente nunca visto (NOT NULL)
-    for i, pac, ini, fim, dt, retro, just in [(1, 1, 0, 24, 0, "N", None), (2, 2, 1, 25, 1, "N", None),
-                                              (3, 1, 24, 2, 2, "N", None), (4, 2, 0, 24, None, "N", None),
-                                              (5, 1, 0, 24, 3, "S", None), (6, 99, 0, 24, 4, "N", None)]:
+    # (NOT NULL); 5 retroativa sem justificativa (CHECK); 6 histórico de paciente nunca visto (NOT NULL)
+    for i, pac, ini, fim, dt, retro in [(1, 101, 0, 24, 0, "N"), (2, 102, 1, 25, 1, "N"), (3, 101, 24, 2, 2, "N"),
+                                        (4, 102, 0, 24, None, "N"), (5, 101, 0, 24, 3, "S"), (6, 103, 0, 24, 4, "N")]:
         extra = {}
         if i == 2:
-            extra = {"DATA_HORA_SUSPENSAO": _h(5), "ID_TBCBOPRO_SUSPENSAO": 2,
+            extra = {"DATA_HORA_SUSPENSAO": _h(5), "ID_TBCBOPRO_SUSPENSAO": 302,
                      "JUSTIFICATIVA_SUSPENSAO": "Suspensão de teste nº %d" % i}
-        linha("PRPRESC", ID=i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=1 + i % 2, ID_PRLOCAL_ASSISTENCIA=1,
-              ID_TBCBOPRO_PRESCRICAO=1, DATA_HORA_PRESCRICAO=SENTINELA if dt is None else _h(dt), TP_PRESCRICAO="M",
+        linha("PRPRESC", ID=i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=200 + (1 + i % 2), ID_PRLOCAL_ASSISTENCIA=1,
+              ID_TBCBOPRO_PRESCRICAO=301, DATA_HORA_PRESCRICAO=SENTINELA if dt is None else _h(dt), TP_PRESCRICAO="X" if i == 1 else "G",
               DATA_HORA_INICIAL_VIGENCIA=_h(ini), DATA_HORA_FINAL_VIGENCIA=_h(fim), COD_AGRUPAMENTO_PRESCRICAO=1,
               OBS_GERAL_PRESCRICAO=("Observação geral\r\n  linha dois  %d" % i).encode("cp1252"),
-              OLD_PESO="%d.250" % r.randint(40, 90), DATA_HORA_GRAVACAO=_h(dt or 0), DATA_HORA_GRAVACAO_UTC="x",
-              LANCAMENTO_RETROATIVO=retro, JUSTIFICATIVA_LANC_RETROATIVO=just, **extra)
-    # itens: 1, 2 e 7 na prescrição 1 (sequência pela ordem); 3 e 6 na 2; 4 na 3 (recusada: pai_pendente);
-    # 5 sem data de inclusão (NOT NULL); 6 via de uso sem par (NULL com pendência); 7 observação acima de 2000
-    # (1406); 8 de planejamento, sem prescrição (NOT NULL)
+              OLD_PESO=D("%d.250" % r.randint(40, 90)), DATA_HORA_GRAVACAO=_h(dt or 0), DATA_HORA_GRAVACAO_UTC="x",
+              LANCAMENTO_RETROATIVO=retro, **extra)
+    # itens: 1, 2, 5 e 7 na prescrição 1 (sequência pela ordem); 3 e 6 na 2 (3 suspenso por correção); 4 na 3
+    # (recusada: pai_pendente); 5 sem data de inclusão (NOT NULL); 6 via de uso sem par (NULL com pendência);
+    # 7 observação acima de 2000 (1406); 8 de planejamento, sem prescrição (NOT NULL)
     for i, presc, via, inc, obs in [(1, 1, "VO", 0, None), (2, 1, "EV", 0, None), (3, 2, "VO", 1, None),
                                     (4, 3, "VO", 2, None), (5, 1, "VO", None, None), (6, 2, "XX", 1, None),
                                     (7, 1, None, 0, "x" * 2100), (8, None, "VO", 0, None)]:
         linha("PRLANGERAL", ID=i, ID_PRPRESC=presc, ID_PRTPLAN=1 + i % 2, ID_PRFREQUENCIA=1, ID_GETABVIA=via,
-              ID_PRPROTGERAL=1 if i == 1 else None, ID_TBCBOPRO_LANCAMENTO=1, OBS_ENFERMAGEM="Cuidado %d" % i,
-              DATA_HORA_INCLUSAO=None if inc is None else _h(inc),
+              ID_PRPROTGERAL=1 if i == 1 else None, ID_TBCBOPRO_LANCAMENTO=301 + i % 2,
+              OBS_ENFERMAGEM="Cuidado %d" % i, DATA_HORA_INCLUSAO=None if inc is None else _h(inc),
               OBS_MEDICA_PARA_CHECAGEM_ENF=obs.encode("cp1252") if obs else None,
+              DATA_HORA_SUSP_CORRECAO=_h(3) if i == 3 else None, ID_TBCBOPRO_SUSP_CORRECAO=302 if i == 3 else None,
               ID_PRPLANPRESC=1 if i == 8 else None)
     # procedimentos: 2 repete o item 1 (UNIQUE); 3 cuidado nunca visto (NULL, e o CHECK de alvo recusa); 4 item
     # recusado (pai_pendente); 5 S/N inválido (NULL com pendência: fica o padrão do destino)
     for i, item, proc, agora in [(1, 1, 1, "S"), (2, 1, 2, "N"), (3, 3, 99, "N"), (4, 4, 1, "N"), (5, 6, 2, "X")]:
         linha("PRPRESCPROCED", ID=i, ID_PRLANGERAL=item, ID_TBPROENF=proc, INICIAR_ADM_AGORA=agora,
               NAO_AJUSTAR_ESQUEMA_ENF="N")
-    for i, item, kg in [(1, 2, "1.500"), (2, 3, None)]:
-        linha("PRPRESCSOL", ID=i, ID_PRLANGERAL=item, VOLUME_KG=kg, ID_PRTPINFUSAO=1, ID_PRKITSOL=1,
-              INICIAR_ADM_AGORA="N", NAO_AJUSTAR_ESQUEMA_ENF="S", PERMITIR_ENF_ALT_VEL_INFUSAO="S",
-              VOLUME_TOTAL="500.000", ID_TBUNICON_UNI_PRESC="ML")
     # dietas: 2 velocidade sem unidade (CHECK); 3 modalidade nunca vista (NOT NULL)
-    for i, item, dieta, vel, unid in [(1, 3, 1, "50.000", 1), (2, 6, 2, "30.000", None), (3, 2, 99, None, None)]:
-        linha("PRPRESCDIETA", ID=i, ID_PRLANGERAL=item, ID_TBDIETAS=dieta, ID_PRVIAADMIN=1, QTDE_DOSE="200.000",
+    for i, item, dieta, vel, unid in [(1, 3, 1, D("50.000"), 1), (2, 6, 2, D("30.000"), None), (3, 2, 99, None, None)]:
+        linha("PRPRESCDIETA", ID=i, ID_PRLANGERAL=item, ID_TBDIETAS=dieta, ID_PRVIAADMIN=1, QTDE_DOSE=D("200.000"),
               ID_TBUNICON_UNI_PRESC="ML", ID_PRTPINFUSAO=1, VELOCIDADE_INFUSAO=vel, ID_PRUNIDINFUSAO=unid)
     # características (chave composta): a terceira aponta a dieta recusada
     for car, dieta, resp in [(1, 1, "Branda"), (2, 1, None), (1, 2, "Pastosa")]:
         linha("PRCARACTLAN", ID_PRCARACTDIE=car, ID_PRPRESCDIETA=dieta, RESPOSTA=resp, ID_PRUNIDRESPOSTA=1)
-    # demais tabelas (bloqueadas por mecanismo): só a forma, duas linhas falsas cada
+    # hemoterapia: 1 no item 1 (sigla e unidade com par); 2 item recusado (pai_pendente); 3 item nunca visto (NOT
+    # NULL); 4 sigla sem hemocomponente (pai_inexistente, NOT NULL); 5 sem indicação clínica (NOT NULL)
+    for i, item, sigla, ind in [(1, 1, "HM01", "Anemia sintomática " * 120), (2, 4, "HM01", "Plaquetopenia"),
+                                (3, 99, "HM01", "Sem item"), (4, 2, "ZZ99", "Sigla sem cadastro"), (5, 3, "HM01", None)]:
+        linha("PRPRESCHEMO", ID=i, ID_PRLANGERAL=item, ATO_SITABPRO=1, CODALF_SITABPRO=sigla, QTDE_DOSE=D("2.000"),
+              ID_TBUNICON_UNI_PRESC="ML", INDICACAO_CLINICA=ind.encode("cp1252") if ind else None,
+              INICIAR_ADM_AGORA="N", NAO_AJUSTAR_ESQUEMA_ENF="S", ID_PRUNIDINFUSAO=1, ID_PRTPINFUSAO=1,
+              VELOCIDADE_INFUSAO=D("100.000"))
+    # medicamentos: 1 padronizado (o item prescritível do insumo ainda não é gravado: CHECK); 2 não padronizado com
+    # justificativa e tempo de infusão (gravado); 3 não padronizado sem justificativa (CHECK); 4 unidade sem par
+    # (pai_inexistente, NOT NULL); 5 item recusado (pai_pendente)
+    for i, item, geitem, naopad, just, unid in [(1, 1, 1, None, None, "MG"), (2, 2, None, 1, "Sem similar", "MG"),
+                                                (3, 3, None, 1, None, "MG"), (4, 6, None, 1, "Sem similar", "ZZ"),
+                                                (5, 4, None, 1, "Sem similar", "MG")]:
+        linha("PRPRESCMED", ID=i, ID_PRLANGERAL=item, ID_GEITENS=geitem, ID_PRITEMNAOPAD=naopad,
+              JUSTIFICATIVA_NAO_PADRONIZ=just, QTDE=D("3.000"), ID_PRFORMULA=1, QTDE_DOSE=D("500.000"),
+              ID_TBUNICON_UNI_PRESC=unid, INICIAR_ADM_AGORA="S", NAO_AJUSTAR_ESQUEMA_ENF="N",
+              TEMPO_INFUSAO=_Hora("00:30:00") if i == 2 else None, DOSE_EXTRA_ANTIMICROBIANO="N")
+    # materiais: 1 e 2 no item 1 (sequência 1 e 2); 3 quantidade zero (CHECK); 4 insumo nunca visto e sem não
+    # padronizado (pai_inexistente e CHECK de alvo); 5 item recusado (pai_pendente)
+    for i, item, geitem, qtd in [(1, 1, 1, "2.000"), (2, 1, 2, "1.000"), (3, 2, 1, "0.000"), (4, 3, 99, "1.000"),
+                                 (5, 4, 1, "1.000")]:
+        linha("PRITENSGERAL", ID=i, ID_PRLANGERAL=item, ID_GEITENS=geitem, QTDE_DOSE=D(qtd),
+              ID_TBUNICON_UNI_PRESC="UN", ITEM_KIT="N", IMPRIMIR_FOLHA_SALA="S", DOSE_EXTRA_ANTIMICROBIANO="N",
+              ID_PRKITSOL=1 if i == 1 else None, OBS_ENFERMAGEM="Material %d" % i)
+    # cadastros lidos por chave alternativa e encadeada (unidade e hemocomponente carregados pela L6-10 e L7-01):
+    # unidade pela sigla (ML, MG, UN), hemocomponente pela sigla HM01, opção -> pergunta -> ligação modelo x
+    # pergunta (pergunta 12 em dois modelos: pai_ambiguo)
+    for i, sig in ((1, "ML"), (2, "MG"), (3, "UN")):
+        linha("TBUNIDADEMEDIDA", ID=i, NOME="Unidade falsa %d" % i, SIMBOLO="u%d" % i, SIGLA_API=sig, SITUACAO="A")
+    linha("PRHEMOTLAN", ID_HEMOTLAN=1, ATO=1, CODALF="HM01")
+    for i, perg in ((1, 10), (2, 11), (3, 12)):
+        linha("PRRESPOSTA", ID_RESPOSTA=i, ID_PRPERGUNTA=perg, COD=i, CONTEVOL=b"Opcao falsa", ATIVO="S", ORDEM=i)
+    for i, modelo, perg in ((1, 1, 10), (2, 1, 11), (3, 1, 12), (4, 2, 12)):
+        linha("PRPADEVOL", ID=i, ID_EVOLUCAO=modelo, ID_PRPERGUNTA=perg, ORDEM="%02d" % i, ATIVO="S")
+    # registros clínicos: 1 normal; 2 suspenso (excluído logicamente) e correção do 1 (fase 2); 3 inscrição de
+    # profissional inexistente (profissional e usuário pai_inexistente, NOT NULL); 4 modelo nunca visto (NOT NULL)
+    for i, pac, atd, modelo, autor in [(1, 101, 201, 1, 301), (2, 102, 202, 1, 302), (3, 101, 201, 1, 303),
+                                       (4, 102, 202, 99, 301)]:
+        extra = {}
+        if i == 2:
+            extra = {"DATA_HORA_SUSPENSAO": _h(6), "ID_TBCBOPRO_SUSPENSAO": 302, "ID_PRCABEVOL_ORIG_CORREC": 1,
+                     "JUSTIFICATIVA_SUSPENSAO": "Registro em paciente errado"}
+        linha("PRCABEVOL", ID_CABEVOL=i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=atd, ID_EVOLUCAO=modelo,
+              ID_TBCBOPRO_EVOLUCAO=autor, ID_PRLOCAL_ASSISTENCIA=1, DATA_HORA_EVOLUCAO=_h(i),
+              DATA_HORA_LANCAMENTO=_h(i), **extra)
+    # texto do registro (completa): 10 e 11 nos registros 1 e 2; 12 no registro recusado (pai_pendente);
+    # 13 em registro nunca visto (recusa pai_inexistente)
+    for i, cab in [(10, 1), (11, 2), (12, 3), (13, 77)]:
+        linha("PRCONTEVOL", ID=i, ID_PRCABEVOL=cab, EVOLUCAO=("Evolução %d\r\n  Paciente estável." % i).encode("cp1252"))
+    # alergias: 1 ativa; 2 retirada do paciente com data e usuário da ação (inativa); 3 em registro recusado
+    # (pai_pendente); 4 alérgeno nunca visto (NULL e o CHECK de alergia recusa); 5 retirada sem data da ação (CHECK)
+    for i, cab, alg, ret in [(1, 1, 1, "F"), (2, 2, 1, "T"), (3, 3, 1, "F"), (4, 1, 99, None), (5, 1, 1, "T")]:
+        acao = {"ACAO": "R", "ACAO_DATA_HORA": _h(7), "ID_TBUSERS_ACAO": "USR2"} if i == 2 else {}
+        linha("PRALERGIAPAC", ID=i, ID_PRCABEVOL=cab, ID_TBALERGIA=alg, RETIRAR_VINCULO_PACIENTE=ret,
+              OBSERVACAO="Reação leve %d" % i, **acao)
+    # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2), 3 no registro 2 (autopreenchida); 4 registro
+    # recusado (pai_pendente); 5 pergunta em dois modelos (pai_ambiguo, NOT NULL); 6 opção nunca vista (NOT NULL);
+    # 7 hora inválida (NULL com hora_invalida, gravada). A hora '0830' da 2 também sai hora_invalida: a origem entrega
+    # VARCHAR em bytes; desde a rodada 2 a regra hora_hhmm decodifica o texto cru: só 2575 fica hora_invalida
+    for i, cab, resp, extra in [(1, 1, 1, {"RESPALFA": "Texto livre", "RESPVALOR": D("37.500"), "UNIDRESP": "C"}),
+                                (2, 1, 2, {"RESPDATA": datetime.date(2026, 3, 1), "RESPHORA": "0830",
+                                           "RESPSNAO": "S"}),
+                                (3, 2, 1, {"RESPALFA": "Repetido", "AUTOPREENCHIDO": "S"}), (4, 3, 1, {}),
+                                (5, 1, 3, {"RESPALFA": "Ambígua"}), (6, 1, 99, {}), (7, 2, 2, {"RESPHORA": "2575"})]:
+        linha("PREVOLPAC", ID=i, ID_CABEVOL=cab, SEQ=1, ID_RESPOSTA=resp, ORDEM="%02d" % i,
+              CONTEVOL=b"Texto longo falso" if i == 1 else None, **extra)
+    # documentos emitidos: 1 válido; 2 suspenso com justificativa (suspenso); 3 inválido sem suspensão (válido: a
+    # situação vem da suspensão); 4 sem texto (NOT NULL); 5 correção do 1 (fase 2); 6 suspenso sem justificativa (CHECK)
+    for i, valido, susp, texto in [(1, "T", False, True), (2, "T", True, True), (3, "F", False, True),
+                                   (4, "T", False, False), (5, "T", False, True), (6, "T", True, True)]:
+        extra = {"DATA_HORA_SUSPENSAO": _h(8), "ID_TBCBOPRO_SUSPENSAO": 302,
+                 "JUSTIFICATIVA_SUSPENSAO": "Emitido por engano" if i == 2 else None} if susp else {}
+        linha("PRATESTREQIMP", ID=i, ID_HTPACIENTE=101, ID_HTATENDIMENTO=201, ID_TBCBOPRO=301,
+              ID_PRLOCAL_ASSISTENCIA=1, DATA_HORA_INCLUSAO=_h(i), DATA_HORA_LANCAMENTO=_h(i), PRE_IMPRESSO="N",
+              CONTEUDO_XML=("Declaro, para os devidos fins, documento falso %d." % i).encode("cp1252") if texto else None,
+              REGISTRO_VALIDO=valido, ID_PRATESTREQIMP_ORIG_CORREC=1 if i == 5 else None, ID_TBPROFIS_ACOMP_RESP=1,
+              **extra)
+    # eventos de assinatura: 1 e 2 normais; 3 documento nunca visto (NOT NULL); 4 sem momento do evento (NOT NULL)
+    for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None)]:
+        linha("PRASSINATURA_DOC", ID=i, ID_PRASSINATURA_CAB=cab, ID_PRTPDOCUMENTO=1, ID_PRSITDOCUMENTO=1,
+              ID_TBCBOPRO=301 + i % 2, DATA_HORA_EVENTO=None if ev is None else _h(ev), DATA_HORA_GRAVACAO=_h(9))
+    # descartes e bloqueada: só a forma, duas linhas falsas cada
+    feitas = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
+              "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
+             "PREVOLPAC"}
     for t in FORMAS:
-        if t in CADEIA:
-            continue
-        chave = FORMAS[t][0].split(",")
-        for i in (1, 2):
-            linha(t, **{c: i for c in chave})
-    if not ATIVA:
-        return {}
-    return {
-        "PRPRESC": {"gravados": 2, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1, "restricao_destino_1048": 2,
-                                                  "restricao_destino_4025": 2, "valor_presumido": 6}},
-        "PRLANGERAL": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
-                                                     "restricao_destino_1048": 2, "restricao_destino_1406": 1}},
-        "PRPRESCPROCED": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
-                                                        "restricao_destino_1062": 1, "restricao_destino_4025": 1,
-                                                        "valor_fora_do_dominio": 1}},
-        "PRPRESCSOL": {"gravados": 2, "pendencias": {}},
-        "PRPRESCDIETA": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
-                                                       "restricao_destino_4025": 1}},
-        "PRCARACTLAN": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
-    }
+        if t not in feitas:
+            for i in (1, 2):
+                linha(t, **{c: i for c in FORMAS[t][0].split(",")})
+    return ESPERADO
+
+
+ESPERADO = {
+    "PRPRESC": {"gravados": 2, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1, "restricao_destino_1048": 2,
+                                              "restricao_destino_4025": 2, "valor_fora_do_dominio": 1}},
+    "PRLANGERAL": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
+                                                 "restricao_destino_1048": 2, "restricao_destino_1406": 1}},
+    "PRPRESCPROCED": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
+                                                    "restricao_destino_1062": 1, "restricao_destino_4025": 1,
+                                                    "valor_fora_do_dominio": 1}},
+    "PRPRESCDIETA": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                   "restricao_destino_4025": 1}},
+    "PRCARACTLAN": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
+    "PRPRESCHEMO": {"gravados": 1, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
+                                                  "restricao_destino_1048": 3}},
+    "PRPRESCMED": {"gravados": 1, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                 "restricao_destino_1048": 1, "restricao_destino_4025": 2}},
+    "PRITENSGERAL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_4025": 2}},
+    "PRCABEVOL": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
+                                                "valor_presumido": 4}},
+    "PRCONTEVOL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
+    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_ambiguo": 1, "pai_inexistente": 2,
+                                                "restricao_destino_1048": 2, "hora_invalida": 1}},
+    "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_4025": 2}},
+    "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
+                                                    "restricao_destino_4025": 1}},
+    "PRASSINATURA_DOC": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+}

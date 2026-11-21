@@ -1,15 +1,18 @@
 """Fatia L8-08 (faturamento e restantes, módulo SUS): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Carregáveis: 8 listas fechadas do SUS para dominio_sus (separadas pela lista literal; código = código do leiaute
-em texto, ou o id quando a origem não tem código do leiaute; código do leiaute também em codigo_oficial). Anomalias:
-nome vazio ou nulo (descricao NOT NULL: recusa só a linha, restricao_destino_1048), espaços repetidos no nome
-(colapsados), o mesmo código do leiaute em dois ids e o mesmo código em duas competências da fonte orçamentária
-(duplicidade: o segundo vira pendência restricao_destino_1062, nunca dois itens com o mesmo código).
-BLOQUEADAS (forma e 2 linhas falsas, pedidos em saida/L8-08.json): TBLOCSUS, TBNIVSUS e TBPRESUS (catálogo oficial
-da tabela unificada: só de-para para dominio_sigtap, nunca lista própria), TBLOCPRI (sem lista no destino), TBNIVEL e
-TBPRESSE (versões antigas do catálogo oficial), FHLEITOUTI (unidade de internação sem
-alimentadora e vigência sem origem), FIPARAM, FAPARAM, FAPARAMA (competência AAAAMM de duas colunas e aberta_em sem
-origem) e FCCTRLANCIHA (item faturável derivado do item da conta; registro da CIHA sem origem).
+Carregáveis: 9 listas fechadas do SUS para dominio_sus (separadas pela lista literal; código = código do leiaute
+em texto, ou o id quando a origem não tem código do leiaute; código do leiaute também em codigo_oficial) e a UTI
+habilitada (FHLEITOUTI -> leito_uti_habilitado). Anomalias: nome vazio ou nulo (descricao NOT NULL: recusa só a linha,
+restricao_destino_1048), espaços repetidos no nome (colapsados), o mesmo código do leiaute em dois ids (duplicidade: o
+segundo vira pendência restricao_destino_1062), o mesmo código em duas competências da fonte orçamentária (duas
+versões, código = id da origem); a lista
+'localizacao_tumor' (TBLOCPRI) ainda fora do CHECK do destino (toda linha recusada com restricao_destino_4025 até a
+migração pedida; LOCALIZACAO_NO_CHECK trava o estado); UTI com zero leito (CHECK, 4025), com tipo inexistente
+(pai_inexistente e NOT NULL, 1048), duas unidades com o mesmo tipo (unidade nula: habilitação do estabelecimento) e
+vigência sem fonte (vigencia_sem_fonte).
+NÃO CARREGADAS (forma e 2 linhas falsas): descartes de produto pedidos em saida/L8-08.json para sem_carga.tsv
+(FIPARAM, FAPARAM, FAPARAMA: mecanismo_do_produto; TBLOCSUS, TBNIVSUS, TBPRESUS, TBNIVEL, TBPRESSE: catalogo_oficial)
+e FCCTRLANCIHA (sem mecanismo: item faturável do destino do pai).
 """
 import datetime
 import decimal
@@ -157,8 +160,15 @@ FORMAS = {
 }
 
 CARREGADAS = ("TBALTSUS", "TBASSOCI", "TBCARATERATEND", "TBDRS", "TBFONTE_ORCAMENTARIA_SUS", "TBGRUATE", "TBTIPATE",
-              "TBTPAPAC")
-BLOQUEADAS = ("TBLOCSUS", "TBNIVSUS", "TBPRESUS", "TBLOCPRI", "TBNIVEL", "TBPRESSE", "FHLEITOUTI", "FIPARAM", "FAPARAM", "FAPARAMA", "FCCTRLANCIHA")
+              "TBTPAPAC", "TBLOCPRI", "FHLEITOUTI")
+DESCARTADAS = {"FIPARAM": "mecanismo_do_produto", "FAPARAM": "mecanismo_do_produto", "FAPARAMA": "mecanismo_do_produto",
+               "TBLOCSUS": "catalogo_oficial", "TBNIVSUS": "catalogo_oficial", "TBPRESUS": "catalogo_oficial",
+               "TBNIVEL": "catalogo_oficial", "TBPRESSE": "catalogo_oficial"}
+SEM_MECANISMO = ("FCCTRLANCIHA",)
+BLOQUEADAS = tuple(DESCARTADAS) + SEM_MECANISMO  # não carregadas (nenhuma coluna com destino)
+# a lista 'localizacao_tumor' falta no CHECK ck_dominio_sus_lista (pedido em saida/L8-08.json): ao migrar, trocar para
+# True (o esperado de TBLOCPRI passa a gravar) e o teste que compara com o DDL passa a valer de novo
+LOCALIZACAO_NO_CHECK = False
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 
@@ -173,8 +183,10 @@ def _ddl():
 
 
 DDL = _ddl()
-# nenhuma carregável referencia pai de fora da fatia
-PAIS_EXTERNOS = {}
+# tipo de UTI (FHLEITOUTITP, L8-07) já carregado; um estabelecimento único no destino (@estabelecimento)
+PAIS_EXTERNOS = {"FHLEITOUTITP": ["1", "2"]}
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
 
 
 def _falso(tipo, i):
@@ -199,6 +211,7 @@ def _ins(ins, tab, **v):
 
 R1048 = "restricao_destino_1048"
 R1062 = "restricao_destino_1062"
+R4025 = "restricao_destino_4025"
 
 
 def linhas(r, ins):
@@ -216,8 +229,9 @@ def linhas(r, ins):
         _ins(ins, "TBCARATERATEND", ID=i, COD_CARATERATEND=cod, NOME=nome, ID_DIGITAL="00000000-exemplo-%d" % i)
     for cod, nome in [(1, "Regional exemplo um"), (2, "Regional exemplo dois")]:
         _ins(ins, "TBDRS", COD=cod, NOME=nome)
-    # fonte orçamentária: o mesmo código em duas competências (o id 2 vira duplicidade 1062: o único é lista+código);
-    # competência AAAAMM vira vigencia_inicio; o id 4 tem mês 13 (NULL com valor_fora_do_dominio, linha gravada)
+    # fonte orçamentária: o mesmo código do leiaute em duas competências são duas versões (código = id da origem,
+    # codigo_oficial repetido, vigências distintas: nenhuma recusada); competência AAAAMM vira vigencia_inicio; o id 4
+    # tem mês 13 (NULL com valor_fora_do_dominio, linha gravada)
     for i, comp, cod, nome in [(1, 202501, 100, "Fonte exemplo"), (2, 202601, 100, "Fonte exemplo nova"),
                                (3, None, 200, "Fonte exemplo dois"), (4, 202513, 300, "Fonte exemplo três")]:
         _ins(ins, "TBFONTE_ORCAMENTARIA_SUS", ID=i, ANO_MES_COMPETENCIA=comp, CODIGO=cod, NOME=nome)
@@ -227,9 +241,20 @@ def linhas(r, ins):
         _ins(ins, "TBTIPATE", COD=cod, NOME=nome)
     for i, nome in [(1, "Inicial exemplo"), (2, "Continuidade exemplo"), (3, "  ")]:
         _ins(ins, "TBTPAPAC", ID=i, NOME=nome)
+    # localização do tumor: 3 sem nome (1048, antes do CHECK); 1 e 2 recusadas pelo CHECK da lista até a migração
+    for cod, nome, qtde in [(1, "Localização exemplo um", 5), (2, "Localização   exemplo dois", 0), (3, None, 1)]:
+        _ins(ins, "TBLOCPRI", COD=cod, NOME=nome, QTDE=qtde)
+    loc = {"gravados": 2, "pendencias": {R1048: 1}} if LOCALIZACAO_NO_CHECK else \
+        {"gravados": 0, "pendencias": {R4025: 2, R1048: 1}}
+    # UTI habilitada: 1, 2 e 3 gravadas (1 e 3 do mesmo tipo em unidades diferentes: unidade nula, sem duplicidade);
+    # 4 com zero leito (CHECK: 4025); 5 com tipo inexistente (pai_inexistente; tipo NOT NULL: 1048); a vigência sem
+    # fonte fica em toda linha lida, também nas recusadas
+    for i, tp, qt, un in [(1, 1, 10, 1), (2, 2, 4, 1), (3, 1, 6, 2), (4, 1, 0, 1), (5, 9, 3, 1)]:
+        _ins(ins, "FHLEITOUTI", ID=i, ID_FHLEITOUTITP=tp, QTDE_LEITO=qt, ID_TBUNIDAD=un)
+    uti = {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, R4025: 1, "pai_inexistente": 1, R1048: 1}}
     ok = lambda n: {"gravados": n, "pendencias": {}}
     rec = lambda n: {"gravados": n, "pendencias": {R1048: 1}}
     return {"TBALTSUS": {"gravados": 3, "pendencias": {R1048: 1, R1062: 1}}, "TBASSOCI": ok(2),
             "TBCARATERATEND": rec(2), "TBDRS": ok(2),
-            "TBFONTE_ORCAMENTARIA_SUS": {"gravados": 3, "pendencias": {R1062: 1, "valor_fora_do_dominio": 1}}, "TBGRUATE": ok(3),
-            "TBTIPATE": ok(2), "TBTPAPAC": rec(2)}
+            "TBFONTE_ORCAMENTARIA_SUS": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}, "TBGRUATE": ok(3),
+            "TBTIPATE": ok(2), "TBTPAPAC": rec(2), "TBLOCPRI": loc, "FHLEITOUTI": uti}

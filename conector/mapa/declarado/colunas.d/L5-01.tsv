@@ -1,5 +1,5 @@
 tabela	coluna	destino	regra	depara	via	motivo
-TBGRUUSU	NOME	perfil_acesso.codigo	texto			código do perfil = chave da origem preservada (só as pontas aparadas; espaços internos distinguem chaves); acima de 30 caracteres recusa (restricao_destino_1406) até o código derivado (pedido no L5-01.json)
+TBGRUUSU	#codigo_derivado:NOME:30	perfil_acesso.codigo	texto			código do perfil = chave da origem preservada (só as pontas aparadas; espaços internos distinguem chaves); acima de 30 caracteres vira código derivado estável (pendência baixa codigo_derivado), sem recusar o perfil
 TBGRUUSU	NOME	perfil_acesso.nome	texto_nome			nome do perfil
 TBGRUUSU	ATIVO	perfil_acesso.ativo	booleano_sn			S/N; vazio fica com o padrão do destino (ativo)
 PREMAILMODULO	ID	finalidade_email.codigo	texto			código da finalidade = id da origem em texto (soma de controle em texto dos dois lados)
@@ -16,3 +16,50 @@ RPMATRIZ_GUT_DESCRICAO	PONTO	grau_priorizacao_gut.pontuacao	inteiro			pontuaçã
 TBCENARIO	ID	cenario_alerta.codigo	texto			código = id da origem em texto
 TBCENARIO	NOME	cenario_alerta.descricao	texto_nome			descrição do cenário
 TBCENARIO	=migracao	cenario_alerta.verificador				a origem não tem o verificador do domínio: marca migracao até o cliente associar
+PREMAILCFG	ID	servidor_email.codigo	texto			código do servidor = id da origem em texto
+PREMAILCFG	SERVIDOR_SMTP	servidor_email.nome	texto			a origem não tem nome próprio: o endereço do servidor identifica a configuração
+PREMAILCFG	SERVIDOR_SMTP	servidor_email.host	texto			endereço do servidor de saída
+PREMAILCFG	PORTA	servidor_email.porta	faixa:1,65535			porta fora de 1..65535 vira NULL com valor_fora_do_dominio (NOT NULL: a linha recusa)
+PREMAILCFG	CONEXAO_SSL	servidor_email.seguranca	booleano_sn	valores		ligado: ssl_tls; desligado ou vazio: nenhuma (o sistema antigo conectava sem criptografia); par em valores.d/L5-01.tsv
+PREMAILCFG	USUARIO_AUTENTICACAO	servidor_email.usuario_autenticacao	texto			usuário da autenticação (não é segredo)
+PREMAILCFG	USUARIO_AUTENTICACAO	servidor_email.remetente_email	texto			a origem não tem remetente: o usuário da autenticação é o endereço que envia (vazio recusa: restricao_destino_1048); o servidor entra inativo, e a validação do formato (regra email, pedida em saida/L5-01.json) e a confirmação ficam com o cliente ao ativar
+PREMAILCFG	#cofre:SENHA_AUTENTICACAO	servidor_email.referencia_cofre				senha NUNCA gravada (regra 8): NULL e pendência segredo_aguarda_cofre; o cliente cadastra no cofre do produto
+PREMAILCFG	=0	servidor_email.exige_autenticacao				sem a referência do cofre o CHECK do destino exige autenticação desligada; o cliente liga ao cadastrar a senha no cofre (pendência segredo_aguarda_cofre na linha)
+PREMAILCFG	=0	servidor_email.ativo				entra INATIVO: sem a senha no cofre o produto nunca envia sem autenticar (a origem exigia usuário e senha); o cliente ativa ao cadastrar a senha e ligar a autenticação (pendência segredo_aguarda_cofre na linha)
+PRLOCPACDEFAULT	USUARIO	preferencia_usuario.usuario_id			ref:TBUSERS	usuário pelo login (chave de TBUSERS); repetido recusa pela unicidade (restricao_destino_1062)
+PRLOCPACDEFAULT	TP_ATENDIMENTO_DEFAULT	preferencia_usuario.tipo_atendimento_padrao	codigo_char	valores		filtro inicial da lista de pacientes pela letra do tipo (A, U, I, E, T); letra sem par vira NULL com valor_fora_do_dominio
+PRLOCPACDEFAULT	ZOOM_PADRAO_VISUALIZACAO_LANC	preferencia_usuario.zoom_percentual	faixa:50,300			zoom em percentual; fora de 50..300 (CHECK do destino) vira NULL com valor_fora_do_dominio
+PRLOCPACDEFAULT	ALERTAR_EXAMES_LIBERADOS	preferencia_usuario.alerta_exames_liberados	booleano_sn			alerta de exames liberados
+PRLOCPACDEFAULT	ALERTAR_EXAMES_LIB_PERIODO	preferencia_usuario.alerta_exames_intervalo_minutos	minutos_em_timestamp			intervalo do alerta guardado como hora: vira minutos (00:00 = sem intervalo)
+PRTERMOCAD	ID	termo_uso_versao.numero_versao	texto			número da versão = id da origem em texto
+PRTERMOCAD	=Termo de uso do prontuário eletrônico	termo_uso_versao.titulo				a origem não tem título: o termo da origem é o do prontuário
+PRTERMOCAD	=prontuario	termo_uso_versao.publico				o termo da origem é o de uso do prontuário eletrônico
+PRTERMOCAD	TERMO_CONCORDANCIA_USO_PEP	termo_uso_versao.texto	texto_longo			texto do termo sem mexer em quebras de linha
+PRTERMOCAD	#sha256:TERMO_CONCORDANCIA_USO_PEP	termo_uso_versao.hash_texto	texto_longo			SHA-256 do texto gravado: prova do que foi aceito
+PRTERMOCAD	ATIVO	termo_uso_versao.situacao	booleano_sn	valores		ativo: publicado; inativo: revogado; vazio: rascunho (pares em valores.d/L5-01.tsv)
+PRTERMOCAD	DATA_HORA_TERMO	termo_uso_versao.vigencia_inicio	data_hora			vigente desde o cadastro do termo, em hora local até a regra data_hora_utc_texto sobre DATA_HORA_TERMO_UTC (pedida em saida/L5-01.json); data sentinela: NULL e o CHECK de publicação recusa
+PRTERMOCAD	DATA_HORA_TERMO	termo_uso_versao.publicado_em	data_hora			publicado no cadastro do termo
+PRTERMOCAD	USUARIO_INCLUSAO	termo_uso_versao.publicado_por_usuario_id			ref:TBUSERS	autor pelo login (chave de TBUSERS); login inexistente: NULL com pai_inexistente
+PRTERMOACEITE	ID_PRTERMOCAD	aceite_termo_uso.termo_uso_versao_id				versão do termo pelo conector_origem (gerada: chave_origem)
+PRTERMOACEITE	USUARIO_ACEITE	aceite_termo_uso.usuario_id			ref:TBUSERS	usuário pelo login; aceite repetido do mesmo usuário recusa pela unicidade (restricao_destino_1062)
+PRTERMOACEITE	DATA_HORA_ACEITE	aceite_termo_uso.ocorrido_em	data_hora			momento do aceite em hora LOCAL até existir a regra data_hora_utc_texto (pedida em saida/L5-01.json), que lerá DATA_HORA_ACEITE_UTC (texto ISO) e, vazia, a hora local + FUSO_HORARIO_ACEITE
+PRTPNOTIFEMAIL	#codigo_derivado:ID:30:notificacao_	finalidade_email.codigo	texto		finalidade_email	decisão F4-decisoes-destino.md: tipo de notificação por e-mail é finalidade de envio, não canal; prefixo de domínio separa dos códigos de PREMAILMODULO
+PRTPNOTIFEMAIL	NOME	finalidade_email.descricao	texto_nome		finalidade_email	descrição (vazia recusa: restricao_destino_1048)
+TBCFGLOGIN	ID_TBHOSPIT	politica_senha.estabelecimento_id				estabelecimento pelo conector_origem (gerada: chave_origem TBHOSPIT); uma política por estabelecimento
+TBCFGLOGIN	QTD_MINIMA_CARACTERES	politica_senha.tamanho_minimo	piso:8			mínimo abaixo de 8 é elevado a 8 (valor_elevado_ao_minimo), como a política efetiva do domínio; vazio: padrão do destino
+TBCFGLOGIN	LETRA_MAIUSCULA	politica_senha.exige_maiuscula	booleano_sn			exige maiúscula
+TBCFGLOGIN	LETRA_MINUSCULA	politica_senha.exige_minuscula	booleano_sn			exige minúscula
+TBCFGLOGIN	CARACTERE_NUMERICO	politica_senha.exige_numero	booleano_sn			exige número
+TBCFGLOGIN	CARACTERE_ESPECIAL	politica_senha.exige_especial	booleano_sn			exige caractere especial
+TBCFGLOGIN	PERIOD_TROCA_SENHA	politica_senha.validade_dias	inteiro_zero_nulo			validade da senha em dias; 0 = não expira (NULL)
+TBCFGLOGIN	PERIOD_AVISO_EXPIRACAO_SENHA	politica_senha.aviso_expiracao_dias	inteiro_zero_nulo			aviso antes de expirar, em dias; 0 = sem aviso
+TBCFGLOGIN	QTDE_TENTATIVA_INVALIDA_BLOQ	politica_senha.tentativas_ate_bloqueio	faixa:1,50			fora de 1..50 (CHECK) vira NULL com valor_fora_do_dominio e fica o padrão do destino (5)
+TBCFGLOGIN	TEMPO_MAX_INATIVO_ENC_SESSAO	politica_senha.inatividade_sessao_minutos	minutos_em_timestamp			inatividade guardada como hora: vira minutos (00:00: padrão do destino)
+TBCFGLOGIN	TEMPO_AVISO_ENC_SESSAO	politica_senha.aviso_fim_sessao_minutos	minutos_em_timestamp			aviso de fim de sessão guardado como hora: vira minutos
+TBCFGLOGIN	DOMINIO_EMAIL	politica_senha.dominio_email_permitido	texto			domínio de e-mail aceito
+TBCFGLOGIN	RECUPERA_SENHA_APENAS_POR_EMAIL	politica_senha.recuperacao_somente_email	booleano_sn			recuperação só por e-mail; vazio: padrão do destino
+TBCFGLOGIN	SOLIC_TERMO_ACEITE_PERIODICO	politica_senha.exige_aceite_periodico	booleano_sn			novo aceite periódico do termo exigido como na origem (S/N, T/F): o controle nunca é desligado na virada; valor inválido fica com o padrão do destino e a pendência valor_fora_do_dominio
+TBCFGLOGIN	=~30	politica_senha.periodicidade_aceite_dias				presumido (valor_presumido): a origem guarda o período em quantidade + unidade (D/M/A) e não há regra que multiplique duas colunas; 30 dias é o período mais curto de uso comum (nunca mais frouxo que mês ou ano), o cliente revisa no painel; a regra periodo_em_dias e as colunas de quantidade e unidade estão pedidas em saida/L5-01.json (decisão F4-decisoes-destino.md)
+TBDICIONARIO_TBUSERS	USUARIO	dicionario_usuario.usuario_id			ref:TBUSERS	usuário pelo login (chave de TBUSERS)
+TBDICIONARIO_TBUSERS	PALAVRA	dicionario_usuario.palavra	texto			palavra do dicionário pessoal (repetida sem distinção de caixa: restricao_destino_1062)
+TBDICIONARIO_TBUSERS	FONETICA	dicionario_usuario.fonetica	texto			chave fonética

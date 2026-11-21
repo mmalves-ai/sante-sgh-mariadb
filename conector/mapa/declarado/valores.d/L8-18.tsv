@@ -1,0 +1,34 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	enviado	enviado	L8-18: nome 'enviado' da lista fixa de situações: envio feito
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Enviado	enviado	L8-18: variante de caixa ou acento de 'enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	ENVIADO	enviado	L8-18: variante de caixa ou acento de 'enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	não enviado	nao_enviado	L8-18: nome 'não enviado' da lista fixa de situações: tentativa sem envio, sem falha registrada
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Não enviado	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	NÃO ENVIADO	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Não Enviado	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	nao enviado	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Nao enviado	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	NAO ENVIADO	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Nao Enviado	nao_enviado	L8-18: variante de caixa ou acento de 'não enviado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	não conectado	sem_conexao	L8-18: nome 'não conectado' da lista fixa de situações: falha de conexão com o servidor de e-mail (o CHECK exige mensagem_erro)
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Não conectado	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	NÃO CONECTADO	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Não Conectado	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	nao conectado	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Nao conectado	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	NAO CONECTADO	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Nao Conectado	sem_conexao	L8-18: variante de caixa ou acento de 'não conectado'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	falha	falhou	L8-18: nome 'falha' da lista fixa de situações: falha do envio (variante prevista, sem evidência na origem; o CHECK exige mensagem_erro)
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Falha	falhou	L8-18: variante de caixa ou acento de 'falha'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	FALHA	falhou	L8-18: variante de caixa ou acento de 'falha'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	erro	falhou	L8-18: nome 'erro' da lista fixa de situações: variante prevista de falha, sem evidência na origem
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Erro	falhou	L8-18: variante de caixa ou acento de 'erro'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	ERRO	falhou	L8-18: variante de caixa ou acento de 'erro'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	sem linhas	sem_linhas	L8-18: nome 'sem linhas' da lista fixa de situações: relatório sem linhas, nada a enviar (variante prevista, sem evidência na origem)
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Sem linhas	sem_linhas	L8-18: variante de caixa ou acento de 'sem linhas'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	SEM LINHAS	sem_linhas	L8-18: variante de caixa ou acento de 'sem linhas'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Sem Linhas	sem_linhas	L8-18: variante de caixa ou acento de 'sem linhas'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	sem dados	sem_linhas	L8-18: nome 'sem dados' da lista fixa de situações: variante prevista de sem linhas, sem evidência na origem
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Sem dados	sem_linhas	L8-18: variante de caixa ou acento de 'sem dados'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	SEM DADOS	sem_linhas	L8-18: variante de caixa ou acento de 'sem dados'
+TBEDITREL_AGENDA_LOG	ID_TBEDITREL_AGENDA_SITUACAO	envio_relatorio.situacao	Sem Dados	sem_linhas	L8-18: variante de caixa ou acento de 'sem dados'

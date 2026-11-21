@@ -1,15 +1,23 @@
 """Fatia L6-10 (prontuário, assinatura e assistência, módulo PEP): tabelas de domínio da origem, dados 100% falsos.
 
-Carregadas (15): tipos de encaminhamento, de alergia, de interação, de parto e de recém-nascido; autoridades,
-periodicidades e modalidades de notificação; ações do alerta de alergia; alergenos; formas de validar interação;
-unidades de medida (dois destinos: unidade de prescrição e de resultado); variáveis de escala clínica e as respostas
-pontuadas (opções e faixas). Bloqueadas (8, pedidos em L6-10.json) entram na imagem para provar que não geram carga.
+Carregadas (20): tipos de encaminhamento, de alergia, de interação, de parto e de recém-nascido (os dois últimos
+INATIVOS até a revisão do campo de segurança presumido); autoridades, periodicidades e modalidades de notificação;
+ações do alerta de alergia (presumido o mais restritivo) e a gravidade de cada uma (complemento da ação, pelo NOME da
+gravidade lido na origem); alergenos; formas de validar interação; bloco de internação da grade de horário (complemento
+da grade); variáveis do cálculo de dose; unidades de medida (dois destinos: unidade de prescrição e de resultado);
+variáveis de escala clínica e as respostas pontuadas (opções e faixas); unidades por tipo de validação de dose e por
+tipo de item da prescrição. Descarte (1): o parâmetro único do sumário de alta (sem_valor). Bloqueadas (3): o banco
+global de perguntas e as opções de resposta (dependem de PRPADEVOL, bloqueada na L6-11) e as regras de situação da
+prescrição (o modelo não tem 'qualquer origem'); entram na imagem para provar que não geram carga.
+REQUER a L6-08: a gravidade (TBCBARASEVERIDADE) é lida na origem pela referência encadeada, e a categoria do
+tipo de alergia (TBCLASSIFALERGIA) vem carregada dela; tipo de alergia e alergeno dividem cadastro com a L6-08
+(códigos com prefixo de domínio).
 O literal presumido deixa valor_presumido em toda linha avaliada (inclusive a recusada pela restrição do destino;
 não na recusada por pai_pendente). Na tabela de dois destinos, a pendência de coluna vale por destino.
 Anomalias: descrição vazia ou só espaços em destino NOT NULL, espaços repetidos, CP1252 acentuado, S/N e A/I fora do
 domínio, referência zero (ausência), pai recusado (pai_pendente), pai inexistente (nulo com pendência; em NOT NULL
 recusa), identificador repetido na mesma escala (único), faixa invertida (CHECK), símbolo maior que o destino de um
-só dos dois destinos, pontos nulos (padrão do destino) e literais presumidos (valor_presumido por linha gravada).
+só dos dois destinos, pontos nulos (padrão do destino), nome de gravidade sem par e literais presumidos.
 """
 import decimal
 
@@ -52,14 +60,48 @@ CREATE TABLE PRRESPOSTA (ID_RESPOSTA INTEGER NOT NULL PRIMARY KEY, ID_PRPERGUNTA
   CONTEVOL BLOB SUB_TYPE 1, ATIVO CHAR(1), ORDEM SMALLINT NOT NULL);
 CREATE TABLE TBUNIDMEDIDA_PRINC_VALID (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBPRINC_VALIDACAO SMALLINT NOT NULL,
   ID_TBUNIDADEMEDIDA INTEGER NOT NULL);
+CREATE TABLE PRUNITPLAN (TPLAN VARCHAR(2) NOT NULL, UNI_PRESC VARCHAR(7) NOT NULL, PRIMARY KEY (TPLAN, UNI_PRESC));
 """
-PAIS_EXTERNOS = {"TBCLASSIFALERGIA": ["1", "2"], "PRINDICEAGRUPAMENTO": ["1", "2"]}
+REQUER = ["L6-08"]
+PAIS_EXTERNOS = {"PRINDICEAGRUPAMENTO": ["1", "2"],
+                 "TBHORMED": ["1", "2", "3"], "RIBLOCOS": ["A", "B"], "PRPARVARUNIRESP": ["1", "2"],
+                 "PRTPLAN": ["1", "2"], "TBPRINC_VALIDACAO": ["1", "2"], "TBUNICON": ["MG", "ML"]}
+
+
+def _externos():
+    """Pais externos como a conferência os junta: os das fatias requeridas antes, depois os desta, sem repetição."""
+    from sante_conector import sintetica
+    tudo = {}
+    for m in [sintetica.modulo_fatia(f) for f in REQUER] + [None]:
+        for t, ks in (getattr(m, "PAIS_EXTERNOS", {}) if m else PAIS_EXTERNOS).items():
+            tudo.setdefault(t, [])
+            tudo[t] += [str(k) for k in ks if str(k) not in tudo[t]]
+    return tudo
+
+
+def _id_externo(tabela, chave):
+    """id de destino que a conferência dá ao pai externo (ordem das tabelas e das chaves de PAIS_EXTERNOS)."""
+    i, ext = 0, _externos()
+    for t in sorted(ext):
+        for k in ext[t]:
+            i += 1
+            if (t, k) == (tabela, chave):
+                return i
+    raise KeyError((tabela, chave))
+
+
+# a grade do complemento (TBHORMED_RIBLOCOS) já existe no destino com o id que a conferência dá ao pai externo
+PREPARO_DESTINO = "".join(
+    "INSERT INTO grade_horario_unidade (id, estabelecimento_id, tipo_atendimento, hora_inicio_dia, criado_em)"
+    " VALUES (%d, 1, 'internacao', '07:00:00', UTC_TIMESTAMP(3));\n" % _id_externo("TBHORMED", k)
+    for k in PAIS_EXTERNOS["TBHORMED"])
 
 CARREGADAS = ("TBTABENC", "TBTPALERGIA", "TBTPAUTORIDADE", "TBTPINTMED", "TBTPNOTAGRAVO", "TBTPNOTIFCID10",
               "TBTPNOTIFICACAOALERGIA", "TBALERGIA", "TBTPPARTO", "TBTPRN", "TBTPVALIDINTERACAO", "TBUNIDADEMEDIDA",
-              "PRINDICEVARIAVEL", "PRGLASGOW", "PRINDICEPONTUACAO")
-BLOQUEADAS = ("TBCBARANOTIFICACAO", "TBTPSITUACAOMP", "TBHORMED_RIBLOCOS", "PRPARVARCAD", "PRPERGUNTA",
-              "PRPARAMSUMARIOALTA", "PRRESPOSTA", "TBUNIDMEDIDA_PRINC_VALID")
+              "PRINDICEVARIAVEL", "PRGLASGOW", "PRINDICEPONTUACAO", "TBCBARANOTIFICACAO",
+              "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN")
+DESCARTADAS = ("PRPARAMSUMARIOALTA",)
+BLOQUEADAS = ("PRPERGUNTA", "TBTPSITUACAOMP", "PRRESPOSTA")
 
 D = decimal.Decimal
 
@@ -85,14 +127,19 @@ def linhas(r, ins):
                          (4, "Iodo   contraste", None, 1, None), (5, "Pó doméstico", "X", None, 1),
                          (6, "Penicilina", "S", 4, 1), (7, "Camarão", "S", 9, 1), (8, "  ", "S", 1, 1),
                          (9, "Sulfa", "S", 0, 0)])
-    varias("TBCBARANOTIFICACAO", [(1, 1, 1), (2, 2, 3), (3, 3, 2)])
+    # gravidade da ação (complemento) pelo NOME da gravidade da L6-08 (1 Grave, 2 LEVE, 4 nome sem par): 2 nome sem
+    # par (NULL, valor_fora_do_dominio); 3 gravidade inexistente (NULL, pai_inexistente); 4 ação inexistente (recusa)
+    varias("TBCBARANOTIFICACAO", [(1, 1, 1), (2, 4, 2), (3, 7, 3), (4, 2, 9)])
     varias("TBTPPARTO", [(1, "Normal"), (2, "Cesárea"), (3, "Fórceps"), (4, " ")])
     varias("TBTPRN", [(1, "Vivo"), (2, "Natimorto"), (3, "Vivo  com  anomalia")])
+    # regras de situação (bloqueada: modelo sem 'qualquer origem'): na imagem para provar que não geram carga
     varias("TBTPSITUACAOMP", [(1, 1, 1, 1, 0, "N", "N", "N"), (2, 2, 2, 1, 1, "S", "N", "S"),
-                              (3, 3, 3, 2, None, None, None, None)])
+                              (3, 3, 3, 2, None, None, None, None), (4, 1, 4, 1, 1, "N", "N", "X")])
     varias("TBTPVALIDINTERACAO", [(1, "Princípio ativo"), (2, "Classe terapêutica")])
-    varias("TBHORMED_RIBLOCOS", [("A", 1), ("B", 1), ("C", 2)])
-    varias("PRPARVARCAD", [(1, "Peso", 1), (2, "Altura", 2), (3, "Superfície corporal", 3)])
+    # bloco da grade (complemento, um bloco por grade): Z bloco inexistente (NULL); C grade inexistente (recusa)
+    varias("TBHORMED_RIBLOCOS", [("A", 1), ("B", 2), ("Z", 3), ("C", 9)])
+    # variáveis de dose: 3 unidade inexistente (NOT NULL: recusa); 4 sem nome (recusa)
+    varias("PRPARVARCAD", [(1, "Peso", 1), (2, "Altura", 2), (3, "Superfície  corporal", 3), (4, "  ", 1)])
     # unidades: 3 sem nome (recusa nos dois destinos); 5 símbolo cabe no resultado (30) e não na prescrição (10);
     # 6 situação fora do domínio A/I
     varias("TBUNIDADEMEDIDA", [(1, 10, "Miligrama", "MG", "mg", "A"), (2, 10, "Mililitro", "ML", "mL", "A"),
@@ -118,9 +165,17 @@ def linhas(r, ins):
         (10, 99, D("1"), D("1"), D("2"))])
     varias("PRPERGUNTA", [(i, 100 + i, 1, "Pergunta exemplo %d" % i, "TX", None,
                            ("texto da pergunta %d" % i).encode("cp1252"), "S", 0, 20, 200, None) for i in range(1, 4)])
-    varias("PRPARAMSUMARIOALTA", [(1, 1, 1, 2, 1, 2)])
-    varias("PRRESPOSTA", [(i, 1 + i % 3, i, ("opção %d" % i).encode("cp1252"), "S", i) for i in range(1, 6)])
-    varias("TBUNIDMEDIDA_PRINC_VALID", [(1, 1, 1), (2, 1, 2), (3, 2, 1)])
+    # parâmetro do sumário de alta (descarte, sem_valor): entra na imagem para provar que não gera carga
+    varias("PRPARAMSUMARIOALTA", [(1, 1, 1, 2, 1, None)])
+    # opções de resposta (bloqueada: o campo vem de PRPADEVOL, bloqueada na L6-11): provam que não geram carga
+    varias("PRRESPOSTA", [(1, 1, 1, "Sim".encode("cp1252"), "S", 1), (2, 1, 2, "Não".encode("cp1252"), "S", 2),
+                          (3, 1, None, ("Opção longa " * 30).encode("cp1252"), "N", 3),
+                          (4, 2, 1, b"Talvez", "S", 1), (5, 3, 1, b"Outro", "S", 1), (6, 1, 3, b"Repetida", "S", 1),
+                          (7, 1, 4, None, "S", 4)])
+    # unidades por validação: 3 sigla sem unidade de medida; 4 validação inexistente; 6 par repetido (único)
+    varias("TBUNIDMEDIDA_PRINC_VALID", [(1, 1, 1), (2, 1, 2), (3, 2, 4), (4, 9, 1), (5, 2, 1), (6, 1, 1)])
+    # unidades por tipo de item: X é a sigla da unidade recusada (pai_pendente); tipo 9 e sigla ZZ inexistentes
+    varias("PRUNITPLAN", [("1", "MG"), ("2", "ML"), ("1", "X"), ("9", "MG"), ("2", "ZZ")])
     return {
         "TBTABENC": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBTPALERGIA": {"gravados": 4, "pendencias": {"valor_presumido": 5, "pai_inexistente": 1,
@@ -133,8 +188,8 @@ def linhas(r, ins):
         "TBALERGIA": {"gravados": 7, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 1,
                                                     "pai_pendente": 1, "pai_inexistente": 1,
                                                     "restricao_destino_1048": 1}},
-        "TBTPPARTO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
-        "TBTPRN": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
+        "TBTPPARTO": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
+        "TBTPRN": {"gravados": 3, "pendencias": {"valor_presumido": 6}},
         "TBTPVALIDINTERACAO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "TBUNIDADEMEDIDA": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1406": 1,
                                                           "valor_fora_do_dominio": 2}},
@@ -142,6 +197,13 @@ def linhas(r, ins):
                                                            "restricao_destino_1048": 3,
                                                            "restricao_destino_1062": 1}},
         "PRGLASGOW": {"gravados": 7, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}},
+        "TBCBARANOTIFICACAO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2}},
+        "TBHORMED_RIBLOCOS": {"gravados": 3, "pendencias": {"pai_inexistente": 2}},
+        "PRPARVARCAD": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+        "TBUNIDMEDIDA_PRINC_VALID": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2,
+                                                                   "restricao_destino_1062": 1}},
+        "PRUNITPLAN": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
+                                                     "restricao_destino_1048": 2}},
         "PRINDICEPONTUACAO": {"gravados": 7, "pendencias": {"valor_presumido": 9, "restricao_destino_4025": 1, "pai_pendente": 1,
                                                             "pai_inexistente": 1, "restricao_destino_1048": 1}},
     }

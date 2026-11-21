@@ -1,64 +1,64 @@
 {
  "pedidos": [
   {
-   "arquivo": "db/migracoes/12_FAT (empresa_calculo_cumulativo_rpa, evento_repasse_incidencia, evento_repasse_contabil, equivalencia_item_fonte_pagadora) ou conector/sante_conector/carga_mapa.py",
-   "mudanca": "vigencia_inicio NOT NULL sem fonte na origem: aceitar um literal declarado de início de vigência (ex.: '=~1900-01-01' presumido com valor_presumido, ou a data da carga) ou tornar a coluna anulável com o significado 'desde sempre'",
-   "motivo": "L8-02: RPEMPCALCIMP, RPEVENTOESOC, RPINTEVE e SIREFCON não têm vigência na origem; sem isso 100% das linhas seriam recusadas (1048/1364). Mesmo caso do pedido 1 do L7-08 (GEUSERS_TBCENCUS)"
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar o mapa: tools/obra/gerar_mapa_conector.py)",
+   "mudanca": "acrescentar as arestas: RPINTEVE -> RPEVENTO (ref:RPEVENTO.COD), RPINTEVE -> TBITEDES (ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)), RPRPA -> TBPROFIS (ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS), SIORCAME -> TBCONVEN (ref:TBCONVEN), SIEXAORC -> SIORCAME (ref:SIORCAME(NOME,ATO)); motivo 'L8-02 cobertura: <ref> declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga'",
+   "motivo": "L8-02: na ordem atual o pai vem depois (RPEVENTO 638 > RPINTEVE 634; TBITEDES 854 > RPINTEVE; TBPROFIS 869 > RPRPA 643; TBCONVEN 712 > SIORCAME 648; SIORCAME 648 > SIEXAORC 647): a carga real recusa RPINTEVE, RPRPA e SIEXAORC inteiras e o orçamento perde a fonte pagadora. A imagem sintética só registra pai externo que vem antes e o esperado é o da ordem certa: até aplicar, conferir-fatia-f4.sh L8-02 FALHA nessas quatro tabelas (de propósito). Edição de arquivo compartilhado negada a esta fatia: o orquestrador aplica"
   },
   {
-   "arquivo": "conector/mapa (TBEMPHOS) + conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência da empresa da origem (EMPRESA, ID_TBEMPHOS, EMPRESA_RPPARAM) para estabelecimento_id: declarar TBEMPHOS também como estabelecimento (ou um de-para empresa -> estabelecimento do cliente) e carregá-la; @estabelecimento não serve a cliente com várias empresas",
-   "motivo": "L8-02: RPEVENTO, RPLANEVE, RPRPA, RPPARUSUEMP e RPEMPCALCIMP têm estabelecimento_id NOT NULL; TBEMPHOS vai para mantenedora e nenhum lote declara coluna dela"
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+   "mudanca": "acrescentar (situacao descarte): RPPARAM mecanismo_do_produto ('linha única de parâmetros do RPA: definição é catálogo do produto, valor confirmado na implantação, como RIPARAM e PEPARAM; a numeração continua da série e do maior número dos RPAs migrados'); RPRPA_TBCBOPRO duplicado ('o RPA lê o profissional pela origem encadeada ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS'); RPLANEVE_TBCBOPRO duplicado ('o lançamento lê o profissional pela origem encadeada ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS: o CHECK de médico exige o profissional no INSERT'); TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD mecanismo_do_produto ('lista fixa de opções (id, nome) de uma regra de consistência do convênio: domínio do produto, regra_consistencia_lancamento.tipo_regra e opcao; a escolha de cada convênio entra pela coluna do cadastro do convênio (TBCONVEN) com de-para de valores para a opção')",
+   "motivo": "L8-02: descartes de produto da rodada de cobertura; a fatia já não declara coluna dessas tabelas (o verificador recusa tabela declarada e descartada). Edição negada a esta fatia: o orquestrador aplica"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (FPNATRUBRICA, FPRUBRICAINSS, FPRUBRICAIRRF)",
-   "mudanca": "trazer para o mapa as tabelas de natureza da rubrica e incidência de INSS/IRRF (dep_fora_do_mapa de RPEVENTOESOC) ou registrar que vêm do catálogo oficial do eSocial por de-para do código",
-   "motivo": "L8-02: evento_repasse_incidencia exige natureza_rubrica_id NOT NULL"
+   "arquivo": "db/migracoes/12_FAT/04_tabelas.sql (lancamento_repasse) — trilha F2.2",
+   "mudanca": "modelo: favorecido_repasse_id NULL permitido no lançamento migrado (CHECK origem = 'migracao' OR favorecido_repasse_id IS NOT NULL); o favorecido da origem fica em tipo_favorecido (de-para de RPLANEVE.TIPO = código de RPTIPOPRESTADOR) e profissional_id (ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS); justificativa literal da migração para o tipo ajuste (CHECK ck_lancamento_repasse_ajuste)",
+   "motivo": "L8-02: nenhuma tabela da origem carrega favorecido_repasse antes do lançamento (a regra de favorecido é do produto); sem a mudança RPLANEVE (8675), RPLANEVE_COMPOSICAOBASE e RPLANRPA ficam fora (coluna_obrigatoria_sem_fonte). Decisão registrada em F4-decisoes-destino.md"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência por chave composta do pai (ex.: via 'ref:RPEVENTO(EMPRESA,COD)' com as colunas EMPRESA,EVENTO; 'ref:SIORCAME(NOME,ATO)'; item faturável por (ATO,EXAME))",
-   "motivo": "L8-02: RPINTEVE, SIEXAORC e SIREFCON apontam o pai pelo par de colunas, não pelo id (mesmo caso do SILANEXA no L7-04)"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "catálogos oficiais natureza_rubrica (tabela natureza_rubrica, coluna codigo_esocial, vigente na data da carga) e codigo_incidencia_rubrica (INSS e IRRF) para o de-para de RPEVENTOESOC: natureza ref:FPNATRUBRICA>COD, incidências ref:FPRUBRICAINSS>COD e ref:FPRUBRICAIRRF>COD, evento ref:RPEVENTO, @vigencia_carga",
+   "motivo": "L8-02: evento_repasse_incidencia.natureza_rubrica_id é NOT NULL e aponta catálogo oficial do eSocial (tabela 03) sem de-para no conector (codigo_esocial grava outra tabela): catálogo oficial faltante; RPEVENTOESOC (36) fica fora até lá"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "mecanismo de parâmetros (linha larga): cada coluna de RPPARAM vira parametro_valor de uma parametro_definicao do catálogo do produto, nível estabelecimento",
-   "motivo": "L8-02: RPPARAM é MECANISMO no mapa (mesmo pedido do GPPARAMG no L7-06 e do GEPARAM no L7-08)"
+   "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (equivalencia_item_fonte_pagadora) — trilha F2.2",
+   "mudanca": "modelo: alvo exame_id (FK exame) na equivalência por fonte pagadora, CHECK de alvo único entre item_faturavel_id, grupo_faturamento_id e exame_id; tipo_conta pelo TIPO_CTA. Até lá SIREFCON fica fora",
+   "motivo": "L8-02: SIREFCON (27081) dá o código de cobrança do exame (ATO, EXAME) por convênio (CONV) e tipo de conta; o exame não tem caminho pela origem até o item faturável (a referência só segue a origem) e exame_equivalencia_codigo não tem fonte pagadora. Decisão registrada em F4-decisoes-destino.md"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
-   "mudanca": "coluna derivada de duas colunas da origem: competência DATE (1º dia) a partir de mês e ano (ex.: destino com coluna '#competencia:MES_PROCESSAMENTO,ANO_PROCESSAMENTO'); mês ou ano inválido vira pendência valor_fora_do_dominio",
-   "motivo": "L8-02: competencia_trabalho_usuario.competencia NOT NULL (RPPARUSUEMP); também serviria a lancamento_repasse e rpa se a competência vier da data"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
+   "mudanca": "especial #codigo_chave:<n>[:prefixo]: código estável derivado da chave INTEIRA da origem (prefixo + 8 hex do SHA-256 da chave), para número de negócio sem fonte",
+   "motivo": "L8-02: orcamento_particular.numero (único por estabelecimento) não tem fonte; hoje vai #codigo_derivado:NOME:1, e o mesmo interessado em dois setores colide (restricao_destino_1062, visível). Com o mecanismo, trocar a declaração"
   },
   {
-   "arquivo": "conector/mapa/declarado/valores.d/L8-02.tsv (ao reativar)",
-   "mudanca": "de-para de valores revisado pelo cliente: RPEVENTO.TIPO_EVENTO -> evento_repasse.natureza (rendimento/desconto/informativo), RPEVENTO.TIPO_LANC -> tipo_lancamento (credito/debito), RPRPA.STATUS -> rpa.situacao, RPRPA.METODO_ENVIO -> rpa.metodo_envio",
-   "motivo": "L8-02: domínios codificados em 1 caractere sem significado no dicionário; NOT NULL com CHECK no destino"
-  },
-  {
-   "arquivo": "conector/mapa (favorecido do repasse) + carga_mapa.py",
-   "mudanca": "favorecido_repasse_id do lançamento (TIPO + COD_PRESTADOR: médico ou empresa) e competência do lançamento; lancamento_repasse.tipo_lancamento 'ajuste' exige justificativa (CHECK): na migração usar um tipo próprio ou justificativa literal; depois RPLANEVE_COMPOSICAOBASE com '#seq:ID_RPLANEVE' e RPLANRPA",
-   "motivo": "L8-02: RPLANEVE e filhas sem favorecido carregado"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "via encadeada ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS (inscrição no conselho -> profissional) e tabela secundária que completa coluna do destino de outra tabela (RPLANEVE_TBCBOPRO -> lancamento_repasse.profissional_id, RPRPA_TBCBOPRO -> rpa.profissional_id) por UPDATE pelo conector_origem do pai",
-   "motivo": "L8-02: rpa.profissional_id é NOT NULL e só existe na tabela RPRPA_TBCBOPRO (mesma via pedida no L6-12)"
-  },
-  {
-   "arquivo": "db/migracoes/12_FAT/04_tabelas.sql ou carga_mapa.py",
-   "mudanca": "orçamento particular: numero (único por estabelecimento) e validade_ate NOT NULL sem fonte na origem; aceitar número derivado (ex.: ATO + sequência por NOME) e validade = data do orçamento presumida",
-   "motivo": "L8-02: SIORCAME/SIEXAORC"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv + conector/mapa/declarado/valores.d/L8-02.tsv + db/migracoes/12_FAT/05_tabelas.sql (regra_consistencia_lancamento)",
-   "mudanca": "(1) TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD (e TBCONVPERCTAPAC, TBTPOBRIGAMAT de outras fatias): marcar como domínio de opções (descartada/DOMINIO), sem destino regra_consistencia_lancamento; a regra por fonte pagadora vem da coluna do cadastro do convênio (TBCONVEN) que aponta para a lista. (2) de-para de valores revisado pelo cliente, por lista: ID da opção -> valor de `opcao`, com o tipo_regra (TBCONSBRASINATIVO -> item_referencia_inativo, TBCONSIDCALCVLR -> data_base_calculo, TBCONVCOBTXPA -> taxa_porte_anestesico, TBCONVCONSMAT -> material_obrigatorio, TBCONVMEDREQATD -> requisitante_obrigatorio); sem ele o NOME da opção, único significado do ID gravado no convênio, se perde e a fatia do TBCONVEN não traduz os IDs. (3) mudança no modelo: TBCONVEN tem CINCO colunas para TBCONSIDCALCVLR (ID_TBCONSIDCALCVLR_CLI, _CIR, _MATMED, _FILME, _DTH: uma data base por grupo de item) e o UNIQUE (fonte_pagadora_id, tipo_regra, categoria_atendimento_id) só comporta uma; acrescentar a dimensão de grupo de item (coluna grupo_item na chave única, ex. clinica/cirurgia/matmed/filme/diaria_taxa) ou tipos por grupo no CHECK (data_base_calculo_clinica, _cirurgia, _matmed, _filme, _diaria_taxa)",
-   "motivo": "L8-02: listas fixas (ID, NOME) sem fonte pagadora nem tipo de regra; gravá-las em regra_consistencia_lancamento violaria NOT NULL. Sem o de-para (2) a escolha de cada convênio fica sem tradução; sem a mudança (3) as cinco escolhas de data_base_calculo de um convênio colidem no UNIQUE ou quatro se perdem"
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "catálogo oficial categoria_trabalhador (eSocial, tabela 01) para evento_repasse.categoria_trabalhador_id (RPEVENTO.ID_FPCATEGTRAB) e lançamento",
+   "motivo": "L8-02: coluna opcional hoje nula; não bloqueia a carga"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-02.tsv (ao rever)",
-   "mudanca": "de-para RPTIPOPRESTADOR.COD -> tipo_prestador_repasse.categoria (medico, empresa_medica, fornecedor, vendedor, outro), revisado pelo cliente, no lugar do literal presumido '=~outro'",
-   "motivo": "L8-02: categoria NOT NULL sem fonte; hoje entra 'outro' com valor_presumido por linha"
+   "mudanca": "revisão pelo cliente: RPTIPOPRESTADOR.COD -> categoria, pessoa_juridica, retem_irrf, retem_inss (hoje presumidos com valor_presumido por linha); RPEVENTO.TIPO_EVENTO F (fixo) -> rendimento/crédito",
+   "motivo": "L8-02: a origem não traz esses atributos; os pares V/D vêm do cadastro de eventos do sistema antigo (evidência), F foi presumido rendimento"
+  },
+  {
+   "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (evento_repasse) — trilha F2.2",
+   "mudanca": "modelo: evento_repasse.tipo_deducao_irrf_id (FK tipo_deducao_irrf) e tipo_rendimento_isento_id (FK tipo_rendimento_isento), opcionais",
+   "motivo": "L8-02: RPEVENTO.ID_RPDEDUTIVEL e ID_RPRENDISENTO ligam o evento ao tipo de dedução e ao rendimento isento; o modelo só liga esses tipos à natureza de rendimento, e o vínculo do evento se perde. Com a coluna, declarar ref:RPDEDUTIVEL e ref:RPRENDISENTO"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
+   "mudanca": "especial de valor alternativo `#primeiro:<C1>,<C2>` (primeira coluna com valor após a regra; a alternativa usada deixa pendência baixa `valor_alternativo`)",
+   "motivo": "L8-02: rpa.competencia deve vir de COMPETENCIA_FATO_GERADOR (AAAAMM) e, quando 0, do mês de DATA_INI; hoje vai DATA_INI (a competência 0 recusaria os RPAs antigos)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo de parâmetros)",
+   "mudanca": "especial `#parametro:<chave>` com desdobrar: grava parametro_valor (nível estabelecimento, vigência da carga) pela definição já existente no catálogo do produto (chave), sem criar definição",
+   "motivo": "L8-02 (revisão): RPPARAM traz valores do cliente (série e número do RPA, chaves de retenção, textos de mala direta). Com o mecanismo, RPPARAM sai do descarte e passa a carregar"
+  },
+  {
+   "arquivo": "tools/obra/conferir-fatia-f4.sh, tools/obra/cobertura_conector.py, conector/sante_conector/mapa.py (verificador)",
+   "mudanca": "(a) o conferir-fatia roda `cobertura_conector.py --fatia <F> --falhar-se-bloqueada`; (b) a cobertura só conta CARREGA quando todo pai de uma ref: declarada vem antes na ordem (L3 conta como antes); (c) o verificador recusa coluna da origem sem declaração (com destino ou com motivo) em tabela carregada",
+   "motivo": "L8-02 (revisão): o 'ok' da autoconferência não provava cobertura nem ordem; a fatia já testa (c) para si em test_toda_coluna_da_origem_declarada_nas_carregadas"
   }
  ]
 }

@@ -2,8 +2,7 @@ tabela	coluna	destino	regra	depara	via	motivo
 PRLOCAL_ASSISTENCIA	ID	local_assistencia.codigo	texto			código do local como texto (destino VARCHAR); chave da origem, sem referência
 PRLOCAL_ASSISTENCIA	LOCAL_ASSISTENCIA	local_assistencia.descricao	texto			descrição do local (sem descrição: NOT NULL do destino recusa; acima de 150: 1406)
 PRLOCAL_ASSISTENCIA	SITUACAO	local_assistencia.ativo	booleano_ai			situação A/I vira ativo; fora do domínio fica com o padrão do destino, com pendência
-PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO		codigo_char			não carregada por ora: código do tipo de atendimento pede de-para de valores para o domínio do destino; pares pedidos em saida/L6-11.json (até lá o destino entra presumido 'todos', abaixo)
-PRLOCAL_ASSISTENCIA	=~todos	local_assistencia.tipo_atendimento				sem de-para do código da origem: entra como todos, presumido (pendência valor_presumido por linha) e o cliente reclassifica na tela; troca pelo de-para quando os pares existirem
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	codigo_char	valores		letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO): I internação, A ambulatorial, U urgência, E externo, T todos; vazio fica com o padrão do destino (todos); letra sem par: padrão com valor_fora_do_dominio. Medido na referência (contagem): 41 I, 2 E, 1 vazio
 PRLOCAL_ASSISTENCIA	ID_TBLEITO		chave_origem			não carregada por ora: local_assistencia não tem coluna de leito; coluna leito_hospitalar_id pedida em saida/L6-11.json
 PRLOCAL_ASSISTENCIA	ID_TBUNIDAD		chave_origem			não carregada por ora: local_assistencia não tem coluna de unidade; coluna unidade_assistencial_id pedida em saida/L6-11.json
 TBCBARAREACAOADVERSA	CODIGO	manifestacao_alergica.codigo	codigo_char			código da reação (único no destino: colisão de caixa recusa as duas; acima de 30: 1406)
@@ -12,7 +11,6 @@ TBCBARAREACAOADVERSA	DESCRICAO	manifestacao_alergica.descricao_detalhada	texto		
 TBCBARAREACAOADVERSA	SINONIMO_1	manifestacao_alergica.sinonimos	texto			primeiro sinônimo; o segundo pede junção de colunas (saida/L6-11.json)
 TBCBARAREACAOADVERSA	ATIVO	manifestacao_alergica.ativo	booleano_sn			S/N vira ativo; fora do domínio fica com o padrão do destino, com pendência
 TBCBARAREACAOADVERSA	SINONIMO_2		texto			não carregada por ora: sinonimos é uma coluna só; junção de colunas com separador pedida em saida/L6-11.json
-TBCBARAREACAOADVERSA	ID_TBCID10		chave_origem			não carregada por ora: id interno do catálogo oficial; resolver pelo código da linha-pai (de-para cid10 para termo_terminologia) pedido em saida/L6-11.json
 TBCBARAREACAOADVERSA	ID_TBCIAP		chave_origem			não carregada: pai fora do mapa (catálogo não carregado)
 TBCBARAREACAOADVERSA	ID_TBVERSAOCBARA		chave_origem			não carregada: pai fora do mapa (versão da classificação não carregada)
 TBCBARAREACAOADVERSA	ID_DIGITAL		texto			descartada: identificador técnico da origem, sem destino no modelo
@@ -38,3 +36,131 @@ PREVOLUCAO	HIST_CLINICO_ABA		inteiro			descartada: preferência de tela do hist�
 PREVOLUCAO	HIST_CLINICO_PERIODO		inteiro			descartada: preferência de tela do histórico clínico da origem (período exibido), sem equivalente no modelo de documento
 PREVOLUCAO	HIST_CLINICO_TIPOATENDIMENTO		inteiro			descartada: preferência de tela do histórico clínico da origem (filtro por tipo de atendimento), sem equivalente no modelo de documento
 PREVOLUCAO	HIST_CLINICO_HISTORICO		inteiro			descartada: preferência de tela do histórico clínico da origem (histórico exibido), sem equivalente no modelo de documento
+TBCBARAREACAOADVERSA	ID_TBCID10	manifestacao_alergica.cid_termo_terminologia_id	texto	cid10	ref:TBCID10>COD	CID da reação: o código do pai (TBCID10.COD) pelo de-para oficial cid10; pai ou código ausente: NULL com pendência
+PRITEMNAOPAD	@estabelecimento	item_nao_padronizado.estabelecimento_id				estabelecimento único do cliente (a origem não tem unidade no cadastro)
+PRITEMNAOPAD	NOME	item_nao_padronizado.nome	texto_nome			nome do item (sem nome: NOT NULL recusa)
+PRITEMNAOPAD	ID_PRTPLAN	item_nao_padronizado.tipo_item_prescricao_id	chave_origem			tipo de item de prescrição (referência gerada PRTPLAN)
+PRITEMNAOPAD	UNI_PRESC	item_nao_padronizado.unidade_prescricao_id	chave_origem		ref:TBUNIDADEMEDIDA.SIGLA_API	unidade de prescrição pela sigla de integração (regra única L6-10/L6-11/L6-13, decisões); medido na referência só por contagem: casa em 14 de 29; o resto fica sem correspondência até a referência a destino secundário (TBUNICON/unidade_prescricao, pedido)
+PRITEMNAOPAD	ITEM	item_nao_padronizado.insumo_id	chave_origem		ref:GEITENS	produto de estoque quando o item foi cadastrado; 0 é vazio; nunca visto: NULL com pai_inexistente
+PRITEMNAOPAD	=~Cadastro migrado do sistema anterior	item_nao_padronizado.justificativa				a origem não guarda justificativa (NOT NULL): texto presumido, pendência valor_presumido por linha, o cliente revisa
+PRITEMNAOPAD	SITUACAO		codigo_char			não carregada: domínio de uma letra sem evidência; o item entra 'solicitado' (padrão do destino, o único que não exige análise registrada) e a farmácia reanalisa
+PRITEMNAOPAD	USUARIO_CAD		texto			não carregada: login de quem cadastrou; o destino guarda o profissional solicitante, não o usuário
+PRITEMNAOPAD_GETABVIA	ID_PRITEMNAOPAD	item_nao_padronizado_via.item_nao_padronizado_id	chave_origem			item não padronizado (mesma fatia); recusado: pai_pendente
+PRITEMNAOPAD_GETABVIA	ID_GETABVIA	item_nao_padronizado_via.via_de_uso_id	chave_origem		ref:GETABVIA	via de uso pela chave COD do pai; nunca vista: pai_inexistente e recusa (NOT NULL)
+PRKITMED	#codigo_derivado:ID:30:kitmed_	kit_prescricao.codigo				código do kit: prefixo kitmed_ separa dos kits de solução (PRKITSOL grava o ID puro no mesmo código único)
+PRKITMED	ID_GEITENS	kit_prescricao.nome	texto_nome		ref:GEITENS>NOME	a origem não tem nome do kit: o kit é do medicamento, e o nome é o do item (NOME do pai na origem); sem nome: recusa (NOT NULL). O vínculo item_prescritivel_id pede referência a destino secundário (pedido em saida/L6-11.json)
+PRKITMED	=medicamento	kit_prescricao.tipo_kit				kit por medicamento
+PRKITMED	ID_GETABVIA	kit_prescricao.via_de_uso_id	chave_origem		ref:GETABVIA	via de uso pela chave COD do pai
+PRKITMED	ID_TBUNICON_UNI_PRESC	kit_prescricao.unidade_prescricao_id	chave_origem		ref:TBUNIDADEMEDIDA.SIGLA_API	unidade de prescrição pela sigla de integração (regra única L6-10/L6-11/L6-13, decisões); medido na referência só por contagem: casa em 122 de 282; o resto fica sem correspondência até a referência a destino secundário (TBUNICON/unidade_prescricao, pedido)
+PRKITMED	INTERVALO_INICIAL_DOSE	kit_prescricao.intervalo_dose_inicial	decimal			início do intervalo de dose
+PRKITMED	INTERVALO_FINAL_DOSE	kit_prescricao.intervalo_dose_final	decimal			fim do intervalo (menor que o início: CHECK recusa, 4025)
+PRKITMED	TP_ATENDIMENTO	kit_prescricao.tipo_atendimento	codigo_char	valores		letra do tipo de atendimento (mesmo domínio de PRLOCPACDEFAULT, L5-01); sem par: padrão do destino (todos) com valor_fora_do_dominio
+PRKITMED	ATIVO	kit_prescricao.ativo	booleano_sn			S/N
+PRITENSKITMED	ID_PRKITMED	kit_prescricao_item.kit_prescricao_id	chave_origem			kit do medicamento (mesma fatia); recusado: pai_pendente
+PRITENSKITMED	#seq:ID_PRKITMED	kit_prescricao_item.sequencia				sequência do item dentro do kit, na ordem da chave
+PRITENSKITMED	ID_GEITENS	kit_prescricao_item.insumo_id	chave_origem			produto do item (referência gerada GEITENS, principal insumo; o CHECK aceita insumo ou item prescritível); nunca visto: NULL e o CHECK recusa
+PRITENSKITMED	QTDE	kit_prescricao_item.quantidade	decimal			quantidade (zero: CHECK recusa)
+PRITENSKITMED	ID_TBUNICON_UNI_PRESC	kit_prescricao_item.unidade_prescricao_id	chave_origem		ref:TBUNIDADEMEDIDA.SIGLA_API	unidade de prescrição pela sigla de integração (regra única L6-10/L6-11/L6-13, decisões); medido na referência só por contagem: casa em 238 de 877; o resto fica sem correspondência até a referência a destino secundário (TBUNICON/unidade_prescricao, pedido)
+PRKITSOLITENS	ID_PRKITSOL	kit_prescricao_item.kit_prescricao_id	chave_origem			kit de solução (L6-08); recusado: pai_pendente
+PRKITSOLITENS	#seq:ID_PRKITSOL	kit_prescricao_item.sequencia				sequência do item dentro do kit, na ordem da chave
+PRKITSOLITENS	ID_GEITENS	kit_prescricao_item.insumo_id	chave_origem			produto do item (principal insumo de GEITENS)
+PRKITSOLITENS	ITEM_PRINCIPAL	kit_prescricao_item.papel	inteiro	valores		1 principal, 0 componente; outro valor: padrão do destino (componente) com valor_fora_do_dominio
+PRKITSOLITENS	QTDE	kit_prescricao_item.quantidade	decimal			quantidade (zero: CHECK recusa)
+PRKITSOLITENS	ID_TBUNICON_UNI_PRESC	kit_prescricao_item.unidade_prescricao_id	chave_origem		ref:TBUNIDADEMEDIDA.SIGLA_API	unidade de prescrição pela sigla de integração (regra única L6-10/L6-11/L6-13, decisões); medido na referência só por contagem: casa em 71 de 169; o resto fica sem correspondência até a referência a destino secundário (TBUNICON/unidade_prescricao, pedido)
+PRKITSOLITENS	ID_PRFORMULA		chave_origem			não carregada: a fórmula da origem é de cálculo de dose (formula_calculo_dose), e o destino pede fórmula padrão de manipulação, outra entidade
+TBKITPRO	#codigo_derivado:ID:30:kit_cuidado_	kit_cuidado_enfermagem.codigo				um kit por linha da origem (cada linha é um item do cuidado); agrupar os itens de um cuidado num kit pede adoção no destino principal (pedido); prefixo de domínio
+TBKITPRO	PROCTO	kit_cuidado_enfermagem.descricao	texto_nome		ref:TBPROENF>NOME	o nome do kit é o do cuidado de enfermagem (NOME do pai na origem); sem nome: recusa (NOT NULL)
+TBKITPRO	PROCTO	kit_cuidado_enfermagem.cuidado_enfermagem_id	chave_origem		ref:TBPROENF	cuidado de enfermagem pela chave COD; recusado: pai_pendente
+TBKITPRO	@id	kit_cuidado_enfermagem_item.kit_cuidado_enfermagem_id				item do kit
+TBKITPRO	=1	kit_cuidado_enfermagem_item.sequencia				um item por kit
+TBKITPRO	ID_GEUNIPRESC	kit_cuidado_enfermagem_item.insumo_id	chave_origem		ref:GEUNIPRESC>ITEM>GEITENS	produto: o item da unidade de prescrição do insumo (ITEM do pai na origem) leva ao insumo
+TBKITPRO	QTDE	kit_cuidado_enfermagem_item.quantidade	decimal			quantidade (vazia: NOT NULL recusa o item; zero: CHECK)
+TBKITPRO	ID_GEUNIPRESC	kit_cuidado_enfermagem_item.unidade_prescricao_id	chave_origem		ref:GEUNIPRESC>UNI_PRESC>TBUNIDADEMEDIDA.SIGLA_API	unidade: o código da unidade do pai (UNI_PRESC) pela sigla de integração; medido na referência: 0 de 13 casam (o kit inteiro recusa até a referência a destino secundário TBUNICON/unidade_prescricao, pedido prioritário)
+TBKITPRO	ID_GETABVIA	kit_cuidado_enfermagem_item.via_de_uso_id	chave_origem		ref:GETABVIA	via de uso pela chave COD
+TBKITPRO	INTERVALO_INICIAL	kit_cuidado_enfermagem_item.intervalo_inicial_horas	inteiro			início do intervalo em horas
+TBKITPRO	INTERVALO_FINAL	kit_cuidado_enfermagem_item.intervalo_final_horas	inteiro			fim do intervalo (menor que o início: CHECK recusa o item)
+TBKITPRO	ACM	kit_cuidado_enfermagem_item.a_criterio_medico	booleano_sn			a critério médico S/N
+PRFAVORITO	@estabelecimento	painel_filtro_usuario.estabelecimento_id				estabelecimento único do cliente
+PRFAVORITO	ID_PRLOCPACDEFAULT	painel_filtro_usuario.usuario_id	chave_origem		ref:PRLOCPACDEFAULT>USUARIO>TBUSERS	usuário da preferência (login do pai na origem leva ao usuário, como PRFAVORITO_EXIBIR na L6-05); inexistente: recusa (NOT NULL)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	codigo_char	valores		letra do tipo de atendimento (domínio de L6-09/L5-01); sem par: padrão (todos) com valor_fora_do_dominio
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	codigo_char	valores		a origem não nomeia o favorito; ele é um por usuário e tipo de atendimento: o nome é o do tipo (chave única por usuário); sem par: recusa (NOT NULL)
+PRFAVORITO	ID_TBACOMODLEITO	painel_filtro_usuario.acomodacao_id	chave_origem			acomodação (referência gerada TBACOMODLEITO)
+PRFAVORITO	ID_TBESPEC	painel_filtro_usuario.especialidade_medica_id	chave_origem			especialidade médica (referência gerada TBESPEC)
+PRFAVORITO	ATEND_APENAS_PAC_PROF_LOG_CRM	painel_filtro_usuario.apenas_meus_pacientes	booleano_sn			só pacientes do profissional logado
+PRFAVORITO	EXIBIR_SOMENTE_AGENDA_MEDICA	painel_filtro_usuario.apenas_agenda_propria	booleano_sn			só a agenda própria
+PRFAVORITO	PACIENTE_LEITO_OBSERVACAO	painel_filtro_usuario.incluir_leito_observacao	booleano_sn			inclui leito de observação
+PRFAVORITO	ORDENAR_PAC_COM_CHAMADA_PAINEL	painel_filtro_usuario.ordenar_por_chamada	booleano_01			ordena pela chamada do painel (0/1)
+PRFAVORITO	LOCALIZA_PACIENTE_CODIGO_BARRAS	painel_filtro_usuario.localizar_codigo_barras	booleano_sn			localiza o paciente por código de barras
+PRFAVORITO	EXIBIR_RESUMO_AUT_LOC_PAC	painel_filtro_usuario.exibir_resumo_automatico	booleano_sn			exibe o resumo ao localizar o paciente
+PRFAVORITO	ID_TBUNIDAD		chave_origem			não carregada: o pai é unidade assistencial e o destino pede unidade de internação (outra entidade); pedido em saida/L6-11.json
+PRFAVORITO	ID_TBTIPOACOMOD		chave_origem			não carregada: categoria de acomodação sem coluna no filtro (a acomodação entra por ID_TBACOMODLEITO)
+PRFAVORITO	ID_RIBLOCOS		texto			não carregada: bloco de internação sem coluna no filtro; pedido em saida/L6-11.json
+PRFAVORITO	OLD_USUARIO		texto			descartada: login antigo, substituído na origem pela preferência (ID_PRLOCPACDEFAULT)
+PRFAVORITO	BUSCA_PACIENTES		inteiro			não carregada: modo de busca numérico sem domínio conhecido; o filtro do produto é por colunas
+PRFAVORITO	TODOS_PACIENTES		codigo_char			descartada: é o oposto de 'só pacientes do profissional' (carregado)
+PRFAVORITO	ATUALIZAR_CRM_ATEND_PEXT		codigo_char			não carregada: comportamento do atendimento externo, não é filtro do painel
+PRFAVORITO	DESFAZER_ACAO_OUTRO_USUARIO		codigo_char			não carregada: é permissão do usuário, não filtro; permissões por usuário pedidas pela L5-01
+PRFAVORITO	ANAMNESE_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada: documentos de abertura automática vão para um JSON (documentos_abertura_automatica); pedido de coluna especial de lista JSON em saida/L6-11.json (mesmo motivo nas 5 seguintes)
+PRFAVORITO	PRESC_MED_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada (ver ANAMNESE_ABRIR_AUTOM_ATEND_PA)
+PRFAVORITO	SOL_EXAME_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada (ver ANAMNESE_ABRIR_AUTOM_ATEND_PA)
+PRFAVORITO	EVOLUCAO_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada (ver ANAMNESE_ABRIR_AUTOM_ATEND_PA)
+PRFAVORITO	REC_MED_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada (ver ANAMNESE_ABRIR_AUTOM_ATEND_PA)
+PRFAVORITO	ATEST_MED_ABRIR_AUTOM_ATEND_PA		codigo_char			não carregada (ver ANAMNESE_ABRIR_AUTOM_ATEND_PA)
+PRMANCHESTER	#codigo_derivado:ID:30:manchester_	nivel_prioridade.codigo				código do nível: prefixo de domínio (a origem só tem o ID)
+PRMANCHESTER	CLASSIFICACAO	nivel_prioridade.descricao	texto			nome da classificação (sem nome: NOT NULL recusa)
+PRMANCHESTER	COR	nivel_prioridade.nome_cor	texto	valores		nome da cor em português pelo nome da constante de cor da origem (clRed, clYellow, hexadecimal $00BBGGRR...); sem par: NULL com valor_fora_do_dominio. Medido na referência: 7 de 7 cores no de-para
+PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	texto	valores		cor #RRGGBB pela constante de cor da origem (nome da cor ou $00BBGGRR em ordem azul-verde-vermelho); sem par: recusa (NOT NULL)
+PRMANCHESTER	COR	nivel_prioridade.ordem	texto	valores		ordem clínica pela cor (vermelho 10, laranja 20, amarelo 30, verde 40, azul 50, preto 55, branco 60; menor = mais urgente), nunca pelo ID; preto entre azul e branco reproduz a ordem da própria origem (medido: 0 inversões contra a ordem do protocolo); cor sem par: recusa (NOT NULL)
+PRMANCHESTER	COD_PROTOCOLO	nivel_prioridade.sigla	texto			número do nível no protocolo (medido na referência: 7 valores distintos, 1 a 7, um por linha e na mesma ordem das cores; não distingue protocolos, é o nível); vira a sigla exibida; acima de 5 posições: 1406
+PRMANCHESTER	ID_PRPADEVOL		chave_origem			não carregada: discriminador_classificacao_risco exige fluxograma (NOT NULL) que a origem não tem; o vínculo ao campo do formulário de triagem fica com a pergunta do modelo (pedido em saida/L6-11.json)
+PRMANCHESTER	ID_PRRESPOSTA		chave_origem			não carregada: mesmo motivo de ID_PRPADEVOL
+PRMANCHESTER	ID_PRPADEVOL_PROT_OBSTETRICIA		chave_origem			não carregada: mesmo motivo de ID_PRPADEVOL
+#--- Tabelas com destino DECIDIDO (F4-decisoes-destino.md) que dependem de mecanismo compartilhado (pedidos em saida/L6-11.json, M1 a M5). A linha [bloqueia] é a que só passa a valer com o mecanismo; as demais já estão prontas e saem do comentário junto.
+#--- PRITEM_GEITENS: decidido: parametro_clinico_item do item prescritível do insumo. M1 (referência a destino secundário ref:T/<destino>) + GEITENS gravar item_prescritivel (L7-07)
+#PRITEM_GEITENS	ID_GEITENS	parametro_clinico_item.item_prescritivel_id	chave_origem		ref:GEITENS/item_prescritivel	[bloqueia] M1: item prescritível que a GEITENS grava como destino secundário
+#PRITEM_GEITENS	ID_GEITEACAODOSE	parametro_clinico_item.acao_dose_fora_faixa	inteiro	valores		ação da dose fora da faixa pelo código da ação (pares a medir na referência ao destravar)
+#PRITEM_GEITENS	POTENCIALMENTE_PERIGOSO	parametro_clinico_item.alto_risco	booleano_sn			medicamento potencialmente perigoso S/N
+#PRITEM_GEITENS	PERMITIR_DOSE_INTERV_SUP_24H	parametro_clinico_item.permite_intervalo_acima_24h	booleano_sn			intervalo acima de 24 h S/N
+#PRITEM_GEITENS	PERIODO_MINIMO_ENTRE_DOSE	parametro_clinico_item.intervalo_minimo_horas	decimal			intervalo mínimo entre doses
+#PRITEM_GEITENS	ITEM_CONTABILIZADO_BALANCO_PEP	parametro_clinico_item.contabiliza_balanco_hidrico	booleano_sn			entra no balanço hídrico S/N
+#PRITEM_GEITENS	PADRAO_BOMBA_FICHA_ANEST	parametro_clinico_item.padrao_bomba_anestesia	booleano_sn			padrão em bomba na ficha de anestesia S/N
+#--- PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC: decidido: principio_ativo é catálogo oficial (DCB, regra 7): de-para pelo código DCB do princípio da origem, nunca gravado. M2 (catálogo 'dcb' em depara.CATALOGOS; o mesmo pedido da L6-12 e da L7-07)
+#PRITEMNAOPAD_TBPRINC	ID_PRITEMNAOPAD	item_nao_padronizado_principio.item_nao_padronizado_id	chave_origem			item não padronizado (mesma fatia); recusado: pai_pendente
+#PRITEMNAOPAD_TBPRINC	ID_TBPRINC	item_nao_padronizado_principio.principio_ativo_id		dcb	ref:TBPRINC>COD_DCB	[bloqueia] M2: catálogo oficial de princípio ativo pelo código DCB do pai; código ausente: catalogo_codigo_inexistente e recusa (NOT NULL)
+#TBALERGIA_TBPRINC	ID_TBALERGIA	alergeno_principio_ativo.alergeno_id	chave_origem			alergeno (L6)
+#TBALERGIA_TBPRINC	ID_TBPRINC	alergeno_principio_ativo.principio_ativo_id		dcb	ref:TBPRINC>COD_DCB	[bloqueia] M2: catálogo oficial de princípio ativo pelo código DCB do pai
+#TBALERGIA_TBPRINC	SITUACAO	alergeno_principio_ativo.ativo	booleano_ai			situação A/I
+#--- PRPADEVOL e PRFORMULCOMP: decidido: PREVOLUCAO grava a versão 1 do modelo migrado (modelo_documento_versao, destino secundário pela via; situação rascunho, porque publicar exige usuário responsável e o cliente publica na tela; número acima das versões históricas da L6-13) e os campos e o leiaute entram nessa versão. M1 + numeração da versão atual depois do histórico (pedido)
+#PREVOLUCAO	@id	modelo_documento_versao.modelo_documento_clinico_id			modelo_documento_versao	versão atual do modelo migrado (destino secundário declarado pela via)
+#PREVOLUCAO	=inclusao	modelo_documento_versao.operacao				a versão nasce da migração
+#PREVOLUCAO	#retrato	modelo_documento_versao.dados				definição da origem congelada como retrato
+#PREVOLUCAO	=@data_carga	modelo_documento_versao.ocorrido_em				momento da migração
+#PREVOLUCAO	ID_EVOLUCAO	modelo_documento_versao.numero_versao			modelo_documento_versao	[bloqueia] número da versão atual depois das versões históricas (HTCABECFORMULCOMP, L6-13, grava 1..n): pede numeração pelo maior histórico + 1 (pedido)
+#PRPADEVOL	ID_EVOLUCAO	modelo_campo.modelo_documento_versao_id	chave_origem		ref:PREVOLUCAO/modelo_documento_versao	[bloqueia] M1: versão atual do modelo migrado
+#PRPADEVOL	ORDEM	modelo_campo.sequencia	inteiro			ordem do campo no modelo
+#PRPADEVOL	#codigo_derivado:ID:100:campo_	modelo_campo.identificador				identificador estável do campo (chave da origem)
+#PRPADEVOL	ID_PRPERGUNTA	modelo_campo.titulo	texto		ref:PRPERGUNTA>TITULO	título da pergunta do banco global (PRPERGUNTA é descarte duplicado: entra aqui)
+#PRPADEVOL	CAMPOOBRIG	modelo_campo.obrigatorio	booleano_sn			campo obrigatório S/N
+#PRPADEVOL	ATIVO	modelo_campo.editavel	booleano_sn			ativo S/N
+#PRFORMULCOMP	ID_PRPADEVOL	modelo_layout.modelo_documento_versao_id	chave_origem		ref:PRPADEVOL>ID_EVOLUCAO>PREVOLUCAO/modelo_documento_versao	[bloqueia] M1: versão do modelo do campo
+#PRFORMULCOMP	#codigo_derivado:ID:150:componente_	modelo_layout.nome				nome único do componente (como HTFORMULCOMP na L6-13)
+#PRFORMULCOMP	#retrato	modelo_layout.conteudo				componente visual da origem como retrato
+#--- PRPAREVOLIMG: decidido: imagem_anotacao_modelo (código pela chave, descrição, ativo, anotações e modelo). M4 (#arquivo:IMAGEM grava o binário no armazenamento do produto e devolve arquivo_id); deixa de ser descarte (revisão do achado: era falta de mecanismo, não falta de valor)
+#PRPAREVOLIMG	#codigo_derivado:ID:30:imagem_modelo_	imagem_anotacao_modelo.codigo				código pela chave da origem
+#PRPAREVOLIMG	NOME	imagem_anotacao_modelo.descricao	texto_nome			nome da imagem
+#PRPAREVOLIMG	ATIVO	imagem_anotacao_modelo.ativo	booleano_sn			S/N
+#PRPAREVOLIMG	ID_PREVOLUCAO	imagem_anotacao_modelo.modelo_documento_clinico_id	chave_origem		ref:PREVOLUCAO	modelo em que a imagem é usada
+#PRPAREVOLIMG	#arquivo:IMAGEM	imagem_anotacao_modelo.arquivo_id				[bloqueia] M4: binário da imagem no armazenamento do produto
+#--- PRASSINATURA_CAB: decidido: documento_prontuario migrado, completado pelo PRIMEIRO evento de assinatura (autor, data e momento de gravação) e pelo ÚLTIMO (situação atual), com o par tipo + ID_TABELA como identificador da origem. M3 (referência ao primeiro/último filho) + M4 para o documento consolidado. Medido na referência (contagem): 1.326.015 cabeçalhos; 908.953 sem atendimento (o autor não pode vir do atendimento); 150 sem nenhum evento (recusa com pai_inexistente); 1.279.313 sem documento consolidado
+#PRASSINATURA_CAB	@estabelecimento	documento_prontuario.estabelecimento_id				estabelecimento único do cliente
+#PRASSINATURA_CAB	ID_HTPACIENTE	documento_prontuario.paciente_id	chave_origem		ref:HTPACIENTE>ID_RICADPAC>RICADPAC	paciente pela versão do cadastro (como PRCABEVOL na L6-12)
+#PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.atendimento_id	chave_origem		ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	atendimento (opcional no destino)
+#PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.tipo_documento_clinico_id	chave_origem		ref:PRTPASSINATURA	tipo de documento clínico (L6-07)
+#PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.titulo	texto		ref:PRTPASSINATURA>DESCRICAO	título = descrição do tipo de assinatura
+#PRASSINATURA_CAB	#codigo_derivado:ID_PRTPASSINATURA:64:assinatura_tipo_	documento_prontuario.entidade_origem				identificador da origem: o evento assinado muda de tabela conforme o tipo, então o tipo entra na entidade e o par (entidade, id) fica único
+#PRASSINATURA_CAB	ID_TABELA	documento_prontuario.entidade_origem_id	inteiro			id do evento assinado na origem (sem referência polimórfica)
+#PRASSINATURA_CAB	ID	documento_prontuario.profissional_id	chave_origem		ref:PRASSINATURA_DOC^ID_PRASSINATURA_CAB:primeiro>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	[bloqueia] M3: autor = profissional do primeiro evento de assinatura
+#PRASSINATURA_CAB	ID	documento_prontuario.referencia_em	data_hora		ref:PRASSINATURA_DOC^ID_PRASSINATURA_CAB:primeiro>DATA_HORA_EVENTO	[bloqueia] M3: momento clínico = evento do primeiro registro
+#PRASSINATURA_CAB	ID	documento_prontuario.lancado_em	data_hora		ref:PRASSINATURA_DOC^ID_PRASSINATURA_CAB:primeiro>DATA_HORA_GRAVACAO	[bloqueia] M3: gravação do primeiro registro
+#PRASSINATURA_CAB	ID	documento_prontuario.situacao_documento_prontuario_id	chave_origem		ref:PRASSINATURA_DOC^ID_PRASSINATURA_CAB:ultimo>ID_PRSITDOCUMENTO>PRSITDOCUMENTO	[bloqueia] M3: situação atual = a do último evento
+#PRASSINATURA_CAB	#arquivo:DOCUMENTO_CONSOLIDADO	documento_prontuario.arquivo_id				[bloqueia] M4: documento consolidado assinado no armazenamento do produto (guarda legal)

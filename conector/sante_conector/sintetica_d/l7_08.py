@@ -1,11 +1,14 @@
 """Fatia L7-08 (SADT e suprimentos, módulo SUP): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Nenhuma tabela da fatia é carregável hoje (esperado {}, como L6-12 e L6-13). GELANPEDENTREGA (entrega programada do
-item do pedido de compra), GERASVALBAL (lote contado no inventário) e GEANTIMI (liberação do antimicrobiano) têm pai
-OBRIGATÓRIO (NOT NULL) que nenhum lote carrega (BLOQUEADAS): declará-las recusaria 100% das linhas na imagem real.
-Elas ficam na imagem com as anomalias que valerão quando os pais entrarem (pedido 10 em saida/L7-08.json): pai
-inexistente, CHECK do destino, chave única, data sentinela, S/N fora do domínio, autorreferência em duas fases e
-liberação interrompida (DATA_INT). As outras 22 entram só com a forma (2 linhas falsas cada).
+Rodada de cobertura total: 14 tabelas declaradas, GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA descartadas e 9 bloqueadas por
+mecanismo ou modelo (pedidos em saida/L7-08.json; decisões em F4-decisoes-destino.md). GERASVALSAIDLOTE e GEDISPHOR
+estão declaradas, mas o pai obrigatório (GELANSAI, GELANDISPENSACAO) está bloqueado: só o caminho de recusa se prova.
+As declaradas trazem as anomalias que a carga trata: pai inexistente (NULL ou recusa 1048), CHECK do destino (4025),
+chave única (1062), data sentinela, S/N fora do domínio, presumido (valor_presumido), vigência sem fonte, complemento
+por UPDATE e referência encadeada à origem. Os pais de outras fatias que as encadeadas LEEM na origem (GEITENS,
+GEITEMKITRAS, PRCHKGERAL, TBCENCUS, ORIGEM_PAIS) entram na imagem só com as colunas usadas e são PAIS_EXTERNOS (já
+carregados; o MAPA_TESTE tira as declarações deles do plano, como no L6-13). TBCENCUS tem ID diferente de COD (e um COD
+igual ao ID de outro centro): prova que a ligação por ID_TBCENCUS usa a coluna ID, e CDC o código.
 """
 import datetime
 import decimal
@@ -316,15 +319,30 @@ FORMAS = {
     ]),
 }
 
-# nenhuma carregável: cada uma tem pai obrigatório (NOT NULL no destino) que o mapa não carrega (pedido 10)
-CARREGADAS = ()
-BLOQUEADAS = {"GELANPEDENTREGA": ("GELANPED",), "GERASVALBAL": ("GELANBAL",), "GEANTIMI": ("GECADANTIMI",)}
+# declaradas nesta rodada (carga dirigida pelo mapa); as demais ficam fora do plano (bloqueadas ou descartadas)
+CARREGADAS = ("GELANPEDENTREGA", "GERASVALBAL", "GEUSERS_TBCENCUS", "PRPARINTEGEST", "GECADDEV", "GECADSAI",
+              "GEINFVENEXT", "GELANDEV", "GEITEMKITRAS_GELANSAI", "GEITEMKITRAS_GELANDEV", "PREXTRATOITEM_TBSITFARM",
+              "GERASVALSAIDLOTE", "GEDISPHOR", "PRINTEGRACAOESTOQUE")
+# declaradas cujo pai obrigatório está bloqueado: recusam toda linha até o pai carregar (contam como bloqueadas)
+BLOQUEADAS_PELO_PAI = {"GERASVALSAIDLOTE": "GELANSAI", "GEDISPHOR": "GELANDISPENSACAO"}
+BLOQUEADAS = ("GEANTIMI", "GECADNFS", "GECADDISPENSACAO", "GECTRLENTREGADOCSAIDA", "GELANDISPENSACAO", "GELANSAI",
+              "GELANSAIREQ", "GERASVALDEVLOTE", "PREXTRATOITEM_SUBST")
+DESCARTADAS = ("GEPARAM", "GEQTDELOTEVALLOTEDOCSAIDA")
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
+
+
+# pais de outras fatias lidos na ORIGEM pelas referências encadeadas: só as colunas usadas (nomes e tipos do dicionário)
+ORIGEM_PAIS = {
+    'GEITENS': ('COD', [('COD', 'INTEGER', True), ('UNI_ARM', 'VARCHAR(7)', False)]),
+    'GEITEMKITRAS': ('ID', [('ID', 'INTEGER', True), ('ID_GEKITRAS', 'INTEGER', False)]),
+    'PRCHKGERAL': ('ID', [('ID', 'INTEGER', True), ('ID_PRLANGERAL', 'INTEGER', False)]),
+    'TBCENCUS': ('COD', [('COD', 'INTEGER', True), ('ID', 'INTEGER', True), ('LOCARM', 'SMALLINT', False)]),
+}
 
 
 def _ddl():
     saida = []
-    for t, (chave, cols) in FORMAS.items():
+    for t, (chave, cols) in list(FORMAS.items()) + list(ORIGEM_PAIS.items()):
         defs = ["%s %s%s" % (c, tp, " NOT NULL" if nn else "") for c, tp, nn in cols]
         if chave:
             defs.append("PRIMARY KEY (%s)" % chave)
@@ -333,13 +351,28 @@ def _ddl():
 
 
 DDL = _ddl()
-# pais de fora da fatia dados como já carregados: só pai que o mapa de fato carrega (o teste cruza com as
-# declarações). Sem tabela carregável, nenhum.
-PAIS_EXTERNOS = {}
+# pais de fora da fatia dados como já carregados (só pela chave: conector_origem)
+PAIS_EXTERNOS = {"GELANPED": [1, 2, 3], "GELANBAL": [1, 2], "GEVALMEM": [10, 11, 12], "TBUSERS": ["ana", "bia"],
+                 "TBCENCUS": [10, 20, 30], "TBTP_ENV_LISTA_AVAL_FARM": [1], "GELOCARM": [1, 2], "RICADPAC": [500],
+                 "GEITENS": [100, 101], "TBSITUACAOFARMACIA": [1], "PRCHKGERAL": [700, 701], "GEITEMKITRAS": [50, 51],
+                 "GEKITRAS": [5], "TBUNICON": ["UN"], "PRLANGERAL": [1]}
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE`: o mapa REAL sem as declarações dos pais de ORIGEM_PAIS. Na carga real esses pais vêm antes, em
+    outras fatias; aqui eles estão na imagem só para as encadeadas lerem a origem, e o pai externo (PAIS_EXTERNOS) já
+    conta como carregado: planejá-lo de novo daria conciliação falsa (mesmo arranjo do L6-13)."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in ORIGEM_PAIS])
 
 
 def _falso(tipo, i):
-    """Valor falso pela forma da coluna (tabelas só com a forma)."""
+    """Valor falso pela forma da coluna."""
     if tipo.startswith(("SMALLINT", "INTEGER", "BIGINT")):
         return i
     if tipo.startswith(("VARCHAR", "CHAR")):
@@ -354,38 +387,104 @@ def _falso(tipo, i):
     return ("texto exemplo " + str(i)).encode("cp1252")
 
 
-def _ins(ins, tab, **v):
-    ins(tab, [v.get(c) for c, _, _ in COLUNAS[tab]])
+def _ins(ins, tab, i=1, **v):
+    """Linha com os valores dados; coluna NOT NULL da origem não dada recebe um valor falso pela forma."""
+    cols = COLUNAS[tab] if tab in COLUNAS else ORIGEM_PAIS[tab][1]
+    ins(tab, [v[c] if c in v else (_falso(tp, i) if nn else None) for c, tp, nn in cols])
 
 
 def linhas(r, ins):
+    D, dt, ts = decimal.Decimal, datetime.date, datetime.datetime
     for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS and tab not in BLOQUEADAS:
+        if tab not in CARREGADAS and tab not in ("GEANTIMI", "GELANSAI"):
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
-    D = decimal.Decimal
-    # entregas: (2, 1899-12-30) data sentinela em coluna obrigatória (NULL: 1048); (3, ...) quantidade zero (CHECK:
-    # 4025); (9, ...) item do pedido inexistente (NULL em NOT NULL: 1048). A sequência conta por item na ordem da chave
-    for ped, dt, q in [(1, datetime.date(2025, 1, 10), D("10")), (1, datetime.date(2025, 2, 10), D("5.5")),
-                       (2, datetime.date(2025, 1, 15), D("100.125")), (2, datetime.date(1899, 12, 30), D("3")),
-                       (3, datetime.date(2025, 3, 1), D("0")), (9, datetime.date(2025, 3, 1), D("1"))]:
-        _ins(ins, "GELANPEDENTREGA", ID_GELANPED=ped, DATA=dt, QUANTIDADE=q)
-    # lotes contados: 4 sem quantidade (1048); 5 quantidade negativa (4025); 6 lote achado na contagem, sem cadastro
-    # (texto só apara as pontas); 7 lote inexistente e sem lote informado (pai_inexistente + CHECK 4025); 8 repete o
-    # lote 10 no item 1 (chave única: 1062); 9 item do inventário inexistente (pai_inexistente + 1048)
-    for i, bal, q, lote, dt, txt in [
-            (1, 1, D("10.5"), 10, datetime.date(2027, 1, 31), "L-EX-01"),
-            (2, 1, D("3"), 11, datetime.date(2027, 6, 30), "L-EX-02"),
+    # entregas: (2, 1899-12-30) data sentinela em coluna obrigatória (1048); (3) quantidade zero (CHECK 4025); (9)
+    # item do pedido inexistente (pai_inexistente + 1048). A sequência conta por item na ordem da chave
+    for ped, d, q in [(1, dt(2025, 1, 10), D("10")), (1, dt(2025, 2, 10), D("5.5")), (2, dt(2025, 1, 15), D("100.125")),
+                      (2, dt(1899, 12, 30), D("3")), (3, dt(2025, 3, 1), D("0")), (9, dt(2025, 3, 1), D("1"))]:
+        _ins(ins, "GELANPEDENTREGA", ID_GELANPED=ped, DATA=d, QUANTIDADE=q)
+    # lotes contados: 3 quantidade zero (aceita); 4 sem quantidade (1048); 5 negativa (4025); 6 lote achado sem
+    # cadastro (texto só apara as pontas); 7 lote inexistente sem lote informado (pai_inexistente + CHECK 4025); 8 repete
+    # o lote 10 no item 1 (1062); 9 item do inventário inexistente (pai_inexistente + 1048); 1 com saldo do sistema
+    # lido na origem de GERASVALFINAL (outra fatia: pai_inexistente, saldo NULL)
+    for i, bal, q, lote, d, txt in [
+            (1, 1, D("10.5"), 10, dt(2027, 1, 31), "L-EX-01"), (2, 1, D("3"), 11, dt(2027, 6, 30), "L-EX-02"),
             (3, 1, D("0"), 12, None, None), (4, 2, None, 10, None, None), (5, 2, D("-1"), 11, None, None),
-            (6, 2, D("2"), None, datetime.date(2027, 2, 28), "  LOTE  NOVO "), (7, 2, D("2"), 99, None, None),
+            (6, 2, D("2"), None, dt(2027, 2, 28), "  LOTE  NOVO "), (7, 2, D("2"), 99, None, None),
             (8, 1, D("4"), 10, None, None), (9, 7, D("1"), 10, None, None)]:
-        _ins(ins, "GERASVALBAL", ID=i, ID_GELANBAL=bal, QTDE=q, ID_GEVALMEM=lote, DATA=dt, LOTE=txt,
-             ID_GERASVALFINAL=i)
-    # liberações de antimicrobiano: 3 aponta a 5 (vem depois: fase 2); 4 com dias zero (CHECK 4025); 6 com ficha
-    # inexistente (1048); 7 com vigência invertida (4025); 8 com dose extra fora do domínio (fica FALSE, padrão);
-    # 9 aponta a 4, recusada (gravada, pai_pendente na fase 2); 10 com usuário inexistente (1048). Decisão presumida
-    # em todas (valor_presumido por linha); 5 interrompida no 2º dia (DATA_INT: pedido 11)
-    ini = datetime.datetime(2025, 3, 1, 8, 0)
+        _ins(ins, "GERASVALBAL", ID=i, ID_GELANBAL=bal, QTDE=q, ID_GEVALMEM=lote, DATA=d, LOTE=txt,
+             ID_GERASVALFINAL=1 if i == 1 else None)
+    # pais de outras fatias lidos na origem: insumo 101 sem unidade; item de kit 51 sem kit; horário 701 sem item
+    # prescrito; centro de custo com ID diferente de COD, e o COD 30 tem ID 10 (= COD de outro centro) e não tem armazém
+    for cod, uni in [(100, "UN"), (101, None)]:
+        _ins(ins, "GEITENS", COD=cod, UNI_ARM=uni)
+    for it, kit in [(50, 5), (51, None)]:
+        _ins(ins, "GEITEMKITRAS", ID=it, ID_GEKITRAS=kit)
+    for h, item in [(700, 1), (701, None)]:
+        _ins(ins, "PRCHKGERAL", ID=h, ID_PRLANGERAL=item)
+    for cod, ident, arm in [(10, 110, 1), (20, 120, 2), (30, 10, None)]:
+        _ins(ins, "TBCENCUS", COD=cod, ID=ident, LOCARM=arm)
+    # usuário x centro de custo (pela coluna ID): 10 liga ao centro de COD 30, nunca ao de COD 10; login inexistente
+    # e centro inexistente (pai_inexistente + 1048); vigência da carga
+    for usu, cc in [("ana", 110), ("bia", 120), ("ze", 110), ("ana", 99), ("bia", 10)]:
+        _ins(ins, "GEUSERS_TBCENCUS", USUARIO_GEUSERS=usu, ID_TBCENCUS=cc)
+    # regra de integração (inativa): armazém do centro de custo lido na origem de TBCENCUS pela coluna ID; o centro
+    # de ID 10 (COD 30) não tem armazém: NULL e 1048
+    for cc, tp in [(110, 1), (120, 2), (10, 1)]:
+        _ins(ins, "PRPARINTEGEST", ID_TBCENCUS=cc, TP_PRESCRICAO=tp, TP_INTEGRACAO=1, MOMENTO_INTEGRACAO=2,
+             GERAR_DADOS_AUTORIZ_MANIPUL=tp % 2, ID_TBTP_ENV_LISTA_AVAL_FARM=1)
+    # saídas: 3 armazém inexistente (pai_inexistente + 1048); 4 sem data de inclusão (1048); 5 consolidado fora do domínio (fica
+    # FALSE); 6 usuário inexistente (NULL); tipo presumido em todas
+    for i, arm, cdc, pac, d, cons, usu, ter in [
+            (1, 1, 10, 500, dt(2025, 2, 1), "S", "ana", None), (2, 2, None, None, dt(2025, 2, 2), "N", "bia", "Terceiro A"),
+            (3, 9, 10, None, dt(2025, 2, 3), "S", "ana", None), (4, 1, 10, None, None, "S", "ana", None),
+            (5, 1, 20, None, dt(2025, 2, 5), "X", "bia", None), (6, 2, 20, None, dt(2025, 2, 6), "N", "ze", None)]:
+        _ins(ins, "GECADSAI", i, ID=i, ANO=2025, MES=2, DOC=i, ARM=arm, CDC=cdc, ID_RICADPAC=pac, DATA=d, CONSOL=cons,
+             DATA_HORA_INCLUSAO=d and ts(d.year, d.month, d.day, 10, i),
+             OBS="obs saida %d" % i, USUARIO=usu, USU_CONS=usu if cons == "S" else None, TERCEIRO=ter)
+    # complemento da saída: 1 grava a folha de gasto; 3 aponta saída recusada (pai_pendente); 99 sem saída
+    for sai, folha in [(1, 7001), (3, 7003), (99, 7099)]:
+        _ins(ins, "GEINFVENEXT", ID_GECADSAI=sai, NUMERO_FOLHA_GASTO=folha, NUMERO_CHAMADA=1, NUMERO_BO=2)
+    # devoluções: 3 com centro de custo inexistente (NULL, pai_inexistente)
+    for i, arm, cdc in [(1, 1, 10), (2, 2, 20), (3, 1, 99)]:
+        _ins(ins, "GECADDEV", i, ID=i, ANO=2025, MES=3, DOC=i, ARM=arm, CDC=cdc, DATA=dt(2025, 3, i), CONSOL="S",
+             DATA_HORA_INCLUSAO=ts(2025, 3, i, 11, 0),
+             USUARIO="ana")
+    # itens da devolução: unidade lida na origem de GEITENS (101 sem unidade: 1048); 3 sem documento (pai_inexistente
+    # + 1048)
+    for i, dev, item in [(1, 1, 100), (2, 1, 101), (3, 9, 100)]:
+        _ins(ins, "GELANDEV", i, ID_GELANDEV=i, ID_GECADDEV=dev, ITEM=item, DATA=dt(2025, 3, i), LOCAL=1,
+             QTDE=D("2"), VALIDADE=dt(2027, 1, 1), VLRMED=D("12.34"), SEQ=i,
+             DATA_HORA_INCLUSAO=ts(2025, 3, i, 12, 0))
+    # saídas (bloqueadas): só a origem lida pelas cadeias do kit
+    for i in (1, 2):
+        _ins(ins, "GELANSAI", i, ID_GELANSAI=i, ANO=2025, MES=2, DOC=1, SEQ=i, ITEM=100, QTDE=D("3"),
+             DATA_HORA_INCLUSAO=ts(2025, 2, 1, 9, i))
+    # kit lido na origem de GEITEMKITRAS: 50 grava; 51 sem kit (1048). O movimento da saída fica NULL (pai_inexistente)
+    for sai in (1, 2):
+        _ins(ins, "GEITEMKITRAS_GELANSAI", ID_GELANSAI=sai, ID_GEITEMKITRAS=49 + sai)
+    for dev in (1, 2):
+        _ins(ins, "GEITEMKITRAS_GELANDEV", ID_GELANDEV=dev, ID_GEITEMKITRAS=49 + dev)
+    # situação farmacêutica: item prescrito lido na origem de PRCHKGERAL; 701 sem item (1048)
+    for i in (1, 2):
+        _ins(ins, "PREXTRATOITEM_TBSITFARM", i, ID=i, ID_PRCHKGERAL=699 + i, ID_TBSITUACAOFARMACIA=1, ID_TBUSERS="ana",
+             DATA_HORA_HISTORICO=ts(2025, 4, 1, 10, i), JUSTIFICATIVA_APROVACAO_MEDICA="aprovado %d" % i)
+    # lotes da saída: GELANSAI ainda não carrega (pai_inexistente + 1048); GEQTDELOTEVALLOTEDOCSAIDA (descartada) só
+    # com a forma
+    for i in (1, 2):
+        _ins(ins, "GERASVALSAIDLOTE", i, ID=i, ID_GELANSAI=i, QTDE=D("1"), ID_GEVALMEM=10)
+    # doses por horário: o item dispensado ainda não carrega (pai_inexistente + 1048)
+    for i in (1, 2):
+        _ins(ins, "GEDISPHOR", i, ID=i, ID_GELANDISPENSACAO=i, DATA_DISPENSA=ts(2025, 4, 2, 8, 0), QUANTIDADE=D("1"),
+             EMITIDO="S", USUARIO_EMISSAO="bia", ID_PRCHKGERAL=700)
+    # integração horário x estoque: horário fora da carga (pai_inexistente: recusa do complemento)
+    for i in (1, 2):
+        _ins(ins, "PRINTEGRACAOESTOQUE", ID=i, ID_PRCHKGERAL=900 + i, ID_GEDISPHOR=i, QTDE_DOSE=D("1"))
+    # liberações de antimicrobiano (bloqueada: ficha do produto exige dados clínicos que a origem não tem); anomalias
+    # mantidas para a reativação: 4 dias zero, 6 ficha inexistente, 7 vigência invertida, 8 S/N fora do domínio,
+    # 3 e 9 autorreferência (duas fases), 10 usuário inexistente, 5 interrompida (DATA_INT)
+    ini = ts(2025, 3, 1, 8, 0)
     for i, ficha, dias, ant, fim_d, extra, usu in [
             (1, 1, 7, None, 7, "N", "ana"), (2, 1, 3, 1, 3, "S", "bia"), (3, 2, 5, 5, 5, "N", "ana"),
             (4, 2, 0, None, 1, "N", "ana"), (5, 2, 10, None, 10, "N", "bia"), (6, 9, 5, None, 5, "N", "ana"),
@@ -397,4 +496,20 @@ def linhas(r, ins):
              DATA_VIGENCIA_FINAL=ini + datetime.timedelta(days=fim_d), QUANTIDADE_DOSE=D("500.25"),
              DOSE_EXTRA=extra, ID_PRFREQUENCIA=1 + i % 2, DIA_INICIO=1, ID_RICADPAC=None,
              DATA_INT=ini + datetime.timedelta(days=2) if i == 5 else None, USU_INT="bia" if i == 5 else None)
-    return {}  # nada carregável hoje (BLOQUEADAS)
+    pi, r48, r25, r62 = "pai_inexistente", "restricao_destino_1048", "restricao_destino_4025", "restricao_destino_1062"
+    return {
+        "GELANPEDENTREGA": {"gravados": 3, "pendencias": {"data_sentinela": 1, r48: 2, r25: 1, pi: 1}},
+        "GERASVALBAL": {"gravados": 4, "pendencias": {pi: 2, r48: 2, r25: 2, r62: 1}},
+        "GEUSERS_TBCENCUS": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, pi: 2, r48: 2}},
+        "PRPARINTEGEST": {"gravados": 2, "pendencias": {"valor_presumido": 9, r48: 1}},
+        "GECADSAI": {"gravados": 4, "pendencias": {"valor_presumido": 6, pi: 2, r48: 2, "valor_fora_do_dominio": 2}},
+        "GEINFVENEXT": {"gravados": 1, "pendencias": {"pai_pendente": 1, pi: 1}},
+        "GECADDEV": {"gravados": 3, "pendencias": {pi: 1}},
+        "GELANDEV": {"gravados": 1, "pendencias": {pi: 1, r48: 2}},
+        "GEITEMKITRAS_GELANSAI": {"gravados": 1, "pendencias": {pi: 2, r48: 1}},
+        "GEITEMKITRAS_GELANDEV": {"gravados": 1, "pendencias": {r48: 1}},
+        "PREXTRATOITEM_TBSITFARM": {"gravados": 1, "pendencias": {r48: 1}},
+        "GERASVALSAIDLOTE": {"gravados": 0, "pendencias": {pi: 2, r48: 2}},
+        "GEDISPHOR": {"gravados": 0, "pendencias": {pi: 2, r48: 2}},
+        "PRINTEGRACAOESTOQUE": {"gravados": 0, "pendencias": {pi: 2}},
+    }

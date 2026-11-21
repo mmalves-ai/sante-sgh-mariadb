@@ -4,12 +4,14 @@ Carregadas pelo mapa (colunas.d/L8-17.tsv): códigos de erro e situações de en
 codigo_retorno_mensageria), transações do padrão TISS (tipo pelo de-para de valores do domínio público,
 valores.d/L8-17.tsv) e padrões de serviço web. Valor sem origem que muda o comportamento entra como literal presumido
 (=~), com valor_presumido por coluna presumida em cada linha que chega à gravação (inclusive a recusada pelo destino).
-Fora da carga, só com a forma (linhas falsas): domínios que viram valor de coluna, complementos de registro já
-carregado, histórico e equivalências de catálogo oficial, e linhas isoladas sem os vínculos NOT NULL do destino
-(motivos em colunas.d/L8-17.tsv).
+Complemento (complementa): o endereço do serviço por transação TISS grava caminho_padrao na transação já gravada
+(UPDATE, sem linha nova); transação recusada: pai_pendente; nunca vista: pai_inexistente.
+Fora da carga, só com a forma (linhas falsas): descartes de produto em declarado/sem_carga.tsv (listas fixas que são
+CHECK do modelo, parâmetros do adaptador de provedor, catálogo oficial e seus históricos, registros sem valor).
 Anomalias: descrição nula ou só com espaços (NOT NULL do destino: restricao_destino_1048), código repetido com outra
 caixa (chave única sem distinção de caixa: restricao_destino_1062), espaços repetidos e acentos CP1252, tipo de
-transação fora do domínio (valor_fora_do_dominio e recusa pelo NOT NULL) e tipo nulo (recusa pelo NOT NULL).
+transação fora do domínio (valor_fora_do_dominio e recusa pelo NOT NULL), tipo nulo (recusa pelo NOT NULL) e
+complemento de transação recusada ou inexistente.
 """
 import datetime
 
@@ -56,8 +58,9 @@ CREATE TABLE HTCIAP ("ID" INTEGER NOT NULL, "ID_TBCIAP" INTEGER NOT NULL, "CODIG
   "ATIVO" CHAR(1) NOT NULL, "SEXO" VARCHAR(1) NOT NULL, PRIMARY KEY ("ID"));
 """
 
-CARREGADAS = ("TBSMSTPERRO", "TBSMSTPRETMSG", "TBTISSSCHEMA", "TBTPWEBSERV")
+CARREGADAS = ("TBSMSTPERRO", "TBSMSTPRETMSG", "TBTISSSCHEMA", "TBTPWEBSERV", "TBTISSURLWSSGH")
 R1048, R1062, VP, VFD = "restricao_destino_1048", "restricao_destino_1062", "valor_presumido", "valor_fora_do_dominio"
+PP, PI = "pai_pendente", "pai_inexistente"
 D = datetime.date(2025, 1, 2)
 T = datetime.datetime(2025, 1, 2, 8, 30)
 
@@ -67,10 +70,10 @@ DADOS = [
                      [4, " EX04 ", "Número inválido ação"]],
      {"gravados": 2, "pendencias": {R1062: 1, R1048: 1, VP: 4}}),
     # situação: nome vira o código e, pelo de-para, a situação resultante; 3 sem nome (1048); 4 com pontas;
-    # 5 nome sem par (VFD + 1048 até o curinga do pedido 5); 6 falha da origem vira falha_definitiva, nunca enviada
+    # 5 nome sem par (VFD + 1048; sem curinga no motor); 6 falha da origem vira falha_definitiva, nunca enviada
     ("TBSMSTPRETMSG", [[1, "Enviada"], [2, "ENTREGUE"], [3, None], [4, " Lida "], [5, "Estado ex"], [6, "Erro"]],
      {"gravados": 4, "pendencias": {R1048: 2, VFD: 1}}),
-    # transação TISS: código = nome no padrão; 3 fora do domínio (VFD + 1048 até o curinga); 4 sem nome (1048);
+    # transação TISS: código = nome no padrão; 3 fora do domínio (VFD + 1048; sem curinga no motor); 4 sem nome (1048);
     # 5 sem tipo (1048); 7 e 8 grafias do esquema da ANS; 9 repete o nome do 1 (1062)
     ("TBTISSSCHEMA", [[1, "tissLoteExemplo", "ENVIO_LOTE_GUIAS"], [2, "tissElegibExemplo", " VERIFICA_ELEGIBILIDADE "],
                       [3, "tissInventadoEx", "TRANSACAO_FALSA_EX"], [4, None, "CANCELA_GUIA"],
@@ -81,7 +84,13 @@ DADOS = [
      {"gravados": 5, "pendencias": {VFD: 1, R1048: 3, R1062: 1, VP: 9}}),
     ("TBTPWEBSERV", [[1, "Serviço exemplo um"], [2, "Serviço  exemplo dois"], [3, "   "]],
      {"gravados": 2, "pendencias": {R1048: 1, VP: 3}}),
-    # fora da carga: só a forma
+    # complemento da transação: 1, 2 e 6 completam (6 com pontas); 3 aponta transação recusada (pai_pendente);
+    # 77 aponta transação nunca vista (pai_inexistente)
+    ("TBTISSURLWSSGH", [[1, "https://servico.exemplo.invalid/tiss/lote"], [2, "https://servico.exemplo.invalid/eleg"],
+                        [3, "https://servico.exemplo.invalid/falsa"], [6, "  https://servico.exemplo.invalid/rec  "],
+                        [77, "https://servico.exemplo.invalid/orfa"]],
+     {"gravados": 3, "pendencias": {PP: 1, PI: 1}}),
+    # fora da carga (descarte de produto em declarado/sem_carga.tsv): só a forma
     ("TBSAFEWEB_FORMA_ASSIN_ICP", [[1, 10, "Formato ex A", 1], [2, 11, "Formato ex B", None]], None),
     ("TBSAFEWEB_SITAUTORIZA", [[1, "Situação ex"], [2, None]], None),
     ("TBSAFEWEB_TIPOATENDIMENTO", [[1, "Atendimento ex"]], None),
@@ -91,7 +100,6 @@ DADOS = [
     ("TBSIPANSPROC", [[99990001, 1, D, datetime.date(2099, 12, 31)]], None),
     ("TBSMSTPAGENDA", [[1, "Diária ex"]], None),
     ("TBTISSREMUNERAOPERPS", [[1, "Modelo ex", D, None]], None),
-    ("TBTISSURLWSSGH", [[1, "https://servico.exemplo.invalid/tiss"]], None),
     ("TBTPEXPIPERGS", [[1, "Prestador ex"]], None),
     ("TBVIDAAS_FORMA_ASSIN_ICP", [[1, "Formato ex C", 1]], None),
     ("PRCABNEXODATA", [[1, 1, 1, "ref-ex", b"{}", 1, 1, "S", None, T, 1, 1]], None),

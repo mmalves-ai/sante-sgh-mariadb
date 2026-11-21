@@ -2,23 +2,8 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência por caminho: via `ref:<PAI>><COLUNA_DO_PAI>` resolve o id de destino de um avô lendo a coluna do pai na origem (ex.: TBBTNOPREL.ID_TBOPCAOREL -> TBOPCAOREL.ID_TBOPCOES -> tela_sistema)",
-   "motivo": "L8-18: relatorio_tela exige tela_sistema_id, que só existe no pai (TBOPCAOREL); sem isso TBBTNOPREL e TBPARAMOPREL ficam sem carga"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "referência por chave composta de negócio: via `ref:<TABELA>(<COL_A>,<COL_B>)` (ex.: parâmetro pelo relatório do botão + nome do parâmetro) para TBPARAMOPREL.PARAMETRO -> relatorio_parametro",
-   "motivo": "L8-18: TBPARAMOPREL aponta o parâmetro pelo nome, não pela chave"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "tipar literal (=/=~) em coluna DATE/DATETIME antes da soma de controle (mesmo pedido do L8-13)",
    "motivo": "L8-18: relatorio_versao exige ocorrido_em e dados (JSON); sem literal de data a versão inicial de cada relatório não é gravada (ficou fora)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "agregar as linhas filhas de uma chave (TBEDITQRP por ID_EDITREL) num arquivo anexo (leiaute_arquivo_id da versão), regra genérica 'agregado_em_arquivo'",
-   "motivo": "L8-18: o leiaute antigo (17921 componentes na referência) é anexo da versão, não uma versão por componente (relatorio_versao é única por relatório e número)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -26,29 +11,9 @@
    "motivo": "L8-18: TBEDITREL.MODULO nunca visto gerou 2 pendências na mesma linha (relatorio e triagem_relatorio_legado); a imagem sintética espera 3 hoje (2+1)"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (fatiar/mapa gerado)",
-   "mudanca": "rever destino de TBEDITREL_PRMODELOREL: o pai PRMODELOREL vai para tipo_modelo_impressao (L6), mas relatorio_modelo_documento aponta modelo_documento_clinico; ou o pai muda de destino, ou o modelo ganha relatorio_tipo_modelo_impressao",
-   "motivo": "L8-18: referência gravaria id de outra entidade"
-  },
-  {
-   "arquivo": "decisão do dono",
-   "mudanca": "TBEDITREL_AGENDA/AGENDA_LOG: agendamento exige dono (usuário responsável), nome único e periodicidade, e o log não liga ao horário; decidir se o agendamento migra (desligado) e quem é o dono padrão; TBEDITREL_AGENDA_SITUACAO vira de-para de valores para envio_relatorio.situacao quando o log migrar",
-   "motivo": "L8-18: sem origem para campos obrigatórios; envio de e-mail só em produção"
-  },
-  {
-   "arquivo": "decisão do dono / modelo",
-   "mudanca": "PNCONFIGPORTAL (portal do painel de chamada): o pai vai para painel_chamada; painel_tv exige tipo_painel_tv_id. Proposta: configuração do portal como coluna JSON de painel_chamada (ou painel_chamada_portal)",
-   "motivo": "L8-18: carregar em painel_tv criaria tipo e painel falsos por linha"
-  },
-  {
    "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
    "mudanca": "de-para de TBEDITPARAM.TIPO -> relatorio_parametro.tipo_dado (data, inteiro, texto, escolha...) quando o domínio for confirmado com o cliente; hoje presumido 'texto'",
    "motivo": "L8-18: código numérico sem domínio documentado"
-  },
-  {
-   "arquivo": "decisão do modelo",
-   "mudanca": "TBEDITPESQ: relatorio_parametro_pesquisa exige entidade e campos nomeados pelo produto; a origem só tem o texto da busca. Proposta: carregar como pesquisa 'pendente' com o texto em especificação, ligada ao parâmetro (relatorio_parametro.relatorio_parametro_pesquisa_id, sentido inverso: UPDATE do filho)",
-   "motivo": "L8-18: ligação no sentido inverso não é suportada pelo motor"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -74,6 +39,51 @@
    "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
    "mudanca": "de-para de TBEDITPARAM.TIPO_DEFAULT + VALOR_DEFAULT para relatorio_parametro.valor_padrao relativo (hoje, mes_anterior...) quando o domínio do código for confirmado com o cliente",
    "motivo": "L8-18: sem TIPO_DEFAULT o valor padrão relativo entra como texto literal da origem (perda declarada)"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "na checagem coluna_obrigatoria_sem_fonte, pular o destino com a opção `complementa` (mapa.opcoes_destino): o complemento faz UPDATE da linha do pai, nunca INSERT, e as obrigatórias já estão nela",
+   "motivo": "L8-18 cobertura: TBEDITPESQ aparece BLOQUEADA (relatorio_parametro.relatorio_id, sequencia, campo, rotulo, tipo_dado) embora carregue e concilie na conferência; o mesmo falso bloqueio atinge PRPARRECMED, SIWEBPARPERFIL, GEINFVENEXT, TBTABTHM, SDGECADNFS e SIMODULO_SIWEBATOS"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+   "mudanca": "chave alternativa composta com valor vindo de passo encadeado, ex.: `ref:TBEDITPARAM.(ID_TBEDITREL,PARAMETRO)` montada por `TBBTNOPREL>ID_TBEDITREL` + PARAMETRO desta linha",
+   "motivo": "L8-18 cobertura: TBPARAMOPREL acha o parâmetro só pelo nome (`ref:TBEDITPARAM.PARAMETRO`): nome repetido vira pai_ambiguo e nome único de outro relatório ligaria o parâmetro errado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "desdobrar o VALOR de uma coluna por separador (`desdobrar_valor:<COL>:<sep>` com #item), uma linha do destino por parte",
+   "motivo": "L8-18 cobertura: TBEDITREL_AGENDA.EMAILS_DESTINO guarda a lista de endereços num campo; hoje vira um destinatário 'endereco' presumido com a lista inteira (valor_presumido), e o cliente desdobra no painel"
+  },
+  {
+   "arquivo": "db/migracoes/19_REL (modelo, trilha F2.2)",
+   "mudanca": "relatorio_parametro_pesquisa.especificacao TEXT NULL (texto da busca de origem, nunca executado) e relatorio_tela.agrupamento_relatorio_id (botão que imprime um agrupamento, exclusivo com relatorio_id)",
+   "motivo": "L8-18 cobertura: perdas declaradas de TBEDITPESQ.BROWSER e TBBTNOPREL.ID_TBAGRUPRELAT"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+   "mudanca": "de-para de TBEDITREL_AGENDA.DIAS_ESPECIFICOS para periodicidade semanal/mensal + dia, quando o formato for confirmado com o cliente",
+   "motivo": "L8-18 cobertura: periodicidade presumida diária (o agendamento entra desligado)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "especial de texto composto, ex.: '#juntar:<C1>,<C2>[:<separador>]' (cada parte pela regra/referência declarada, inclusive encadeada como `ref:TBEDITREL>NOME`), ou `#codigo_derivado` aceitando mais de uma coluna",
+   "motivo": "L8-18 (achado alto): agendamento_relatorio.nome é único por estabelecimento; a origem tem a chave (relatório, horário) e o nome vem só do relatório, então o segundo horário do mesmo relatório é recusado (1062). Ao aplicar, a fatia troca o nome por relatório + ' ' + hora"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "desempate determinístico na chave alternativa: `ref:T.K` com opção `menor:<COLUNA>` (entre as linhas de T com o mesmo K, a de menor COLUNA, desempate pela chave), registrando pendência baixa `pai_desempatado` em vez de recusar com pai_ambiguo",
+   "motivo": "L8-18 (achado alto): o log de envio só tem o relatório; com dois agendamentos do mesmo relatório todo o histórico dele é recusado (pai_ambiguo). Decisão registrada em F4-decisoes-destino.md: ligar ao agendamento de menor horário; ao aplicar, a via vira `ref:TBEDITREL_AGENDA.ID_TBEDITREL;menor:HORARIO`"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "pai_pendente (e estabelecimento_indefinido) numa coluna de destino SECUNDÁRIO `opcional` descarta só aquele destino, com a pendência na entidade '<chave>/<destino>', e grava o principal",
+   "motivo": "L8-18: o vínculo opcional relatório-tela (TBEDITREL.ID_TBOPCOES) recusaria o relatório inteiro se a tela foi recusada no L5"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+   "mudanca": "opção `opcional:<COLUNA>` (o destino secundário só grava quando a coluna da origem tem valor resolvido), para poder preencher o rótulo do vínculo pela coluna NOME sem marcar o destino como preenchido",
+   "motivo": "L8-18: relatorio_tela vindo de TBEDITREL usa rótulo fixo 'Relatório' porque qualquer coluna lida marcaria o destino opcional e a falta da tela recusaria o relatório pelo NOT NULL"
   }
  ]
 }

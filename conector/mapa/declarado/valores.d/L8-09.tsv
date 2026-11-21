@@ -1,0 +1,96 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Financeiro	financeiro	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Financeiro	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Financeiro	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	FINANCEIRO	financeiro	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	FINANCEIRO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	FINANCEIRO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Faturamento	faturamento	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Faturamento	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Faturamento	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	FATURAMENTO	faturamento	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	FATURAMENTO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	FATURAMENTO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Folha	folha	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Folha	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Folha	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	FOLHA	folha	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	FOLHA	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	FOLHA	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Folha de pagamento	folha	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Folha de pagamento	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Folha de pagamento	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	FOLHA DE PAGAMENTO	folha	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	FOLHA DE PAGAMENTO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	FOLHA DE PAGAMENTO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Estoque	estoque	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Estoque	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Estoque	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	ESTOQUE	estoque	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	ESTOQUE	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	ESTOQUE	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Patrimônio	patrimonio	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Patrimônio	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Patrimônio	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	PATRIMÔNIO	patrimonio	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	PATRIMÔNIO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	PATRIMÔNIO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Patrimonio	patrimonio	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Patrimonio	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Patrimonio	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	PATRIMONIO	patrimonio	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	PATRIMONIO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	PATRIMONIO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Contabilidade	contabil	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Contabilidade	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Contabilidade	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	CONTABILIDADE	contabil	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	CONTABILIDADE	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	CONTABILIDADE	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Contábil	contabil	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Contábil	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Contábil	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	CONTÁBIL	contabil	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	CONTÁBIL	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	CONTÁBIL	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Custos	custos	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Custos	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Custos	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	CUSTOS	custos	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	CUSTOS	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	CUSTOS	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Tributário	tributario	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Tributário	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Tributário	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	TRIBUTÁRIO	tributario	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	TRIBUTÁRIO	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	TRIBUTÁRIO	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Fiscal	tributario	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Fiscal	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Fiscal	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	FISCAL	tributario	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	FISCAL	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	FISCAL	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Manual	manual	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Manual	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Manual	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	MANUAL	manual	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	MANUAL	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	MANUAL	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	Lançamento manual	manual	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	Lançamento manual	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	Lançamento manual	1	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	LANÇAMENTO MANUAL	manual	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	LANÇAMENTO MANUAL	0	L8-09: derivado do módulo
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	LANÇAMENTO MANUAL	1	L8-09: derivado do módulo
+#FCRECIBO	CANCELADO	recibo.situacao	S	cancelado	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
+#FCRECIBO	CANCELADO	recibo.situacao	N	emitido	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
+#FCRECIBO	EMITIDO	recibo.vias_impressas	S	1	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
+#FCRECIBO	EMITIDO	recibo.vias_impressas	N	0	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	1	extincao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	2	fusao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	3	incorporacao_incorporada	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	4	incorporacao_incorporadora	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	5	cisao_total	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	6	cisao_parcial	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	7	transformacao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)

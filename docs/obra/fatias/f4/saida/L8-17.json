@@ -1,29 +1,24 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Regra genérica de COMPLEMENTO: tabela cujo destino é coluna de um registro já carregado por outra tabela (pai pelo conector_origem, ou registro achado por chave natural declarada) grava por UPDATE só as colunas declaradas daquele registro, sem inserir linha nova; a entidade concilia contagem lida = complementada + recusada.",
-   "motivo": "L8-17: TBTISSURLWSSGH é o endereço por transação (transacao_tiss_webservice.caminho_padrao da transação carregada por TBTISSSCHEMA) e TBSEXO_PIXPDQ é o código HL7 do sexo já carregado no L5 (sexo.codigo_hl7, pela sigla); inserir duplicaria a transação ou chocaria na sigla única. Até lá as duas ficam fora da carga."
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Em avaliar(), destino cuja coluna declarada tem `complementa` na via (UPDATE da linha do pai) não exige as colunas obrigatórias do destino: pular esse destino no cálculo de `coluna_obrigatoria_sem_fonte`, como já se faz com `opcional`.",
+   "motivo": "L8-17 (cobertura): TBTISSURLWSSGH carrega por complementa de transacao_tiss_webservice (conciliação ok na imagem sintética: 5 lidas, 3 complementadas, 1 pai_pendente, 1 pai_inexistente), mas a ferramenta a conta como BLOQUEADA por versao_tiss, codigo_transacao, nome e tipo_transacao, que são do pai. O mesmo falso bloqueio aparece em PRPRESC_AUTOPREENCHIDO (L6-13), GEINFVENEXT, GEQTDELOTEVALLOTEDOCSAIDA e PRINTEGRACAOESTOQUE (L7-08)."
+  },
+  {
+   "arquivo": "db/migracoes (trilha F2.2: carga inicial do cadastro de sexo)",
+   "mudanca": "Preencher sexo.codigo_hl7 na carga inicial do produto pelo padrão HL7 v2 (tabela 0001: M, F, U/O conforme a sigla), como dado do padrão e não do cliente.",
+   "motivo": "L8-17 (cobertura): TBSEXO_PIXPDQ foi descartada como catálogo oficial (códigos HL7 de sexo); sem o preenchimento pelo produto, codigo_hl7 fica nulo."
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Referência por literal a um cadastro do cliente (ex.: coluna especial '@ref:provedor_assinatura_nuvem.codigo=<codigo>' que resolve o id pelo código; ausente: recusa com pendência própria), ou o provedor de assinatura em nuvem cadastrado pelo comando de criar cliente.",
-   "motivo": "L8-17: TBSAFEWEB_FORMA_ASSIN_ICP e TBVIDAAS_FORMA_ASSIN_ICP são os formatos aceitos por um provedor fixo de cada tabela; provedor_assinatura_formato exige provedor_assinatura_nuvem_id (NOT NULL), que nenhuma tabela da origem carrega. Gravar como formato_assinatura_icp chocaria com o formato do pai (família e política únicas)."
+   "mudanca": "Par curinga no de-para de valores: em _valores, quando o valor (não nulo) não tem par e c['valores'] tem a chave '*', gravar c['valores']['*'] e manter a pendência valor_fora_do_dominio (media) na linha, em vez de NULL. Sem '*', o comportamento atual (NULL + valor_fora_do_dominio). Documentar no cabeçalho. Ao aplicar, atualizar o esperado de conector/sante_conector/sintetica_d/l8_17.py: TBSMSTPRETMSG gravados 5 e restricao_destino_1048 1; TBTISSSCHEMA gravados 6 e restricao_destino_1048 2 (valor_fora_do_dominio segue 1 em cada). Os pares '*' foram retirados de valores.d/L8-17.tsv (eram letra morta): ao aplicar, acrescentar 'TBTISSSCHEMA TP_TRANSACAO transacao_tiss_webservice.tipo_transacao * outro' e 'TBSMSTPRETMSG NOME codigo_retorno_mensageria.situacao_resultante * pendente', trocar em test_l8_17.py o assertNotIn('*') por assertEqual(c['valores']['*'], 'outro') e, na imagem sintética, TBTISSURLWSSGH linha 3 deixa de ser pai_pendente.",
+   "motivo": "L8-17 (revisão; mantido na cobertura): valor desconhecido de TP_TRANSACAO recusava a transação TISS pelo NOT NULL e derrubava em cadeia os endpoints do L8-06 (pai_pendente), embora o CHECK aceite 'outro'; na situação da mensagem, o lado seguro para nome sem par é 'pendente', nunca 'enviada'. Regra genérica, não por tabela. Na imagem de referência todos os valores já têm par (25/25 e 4/4), então o curinga só protege outros clientes."
   },
   {
-   "arquivo": "conector/mapa/declarado/oficiais.tsv",
-   "mudanca": "Declarar termo_equivalencia (equivalência procedimento x grupo SIP, TBSIPANSPROC) e termo_terminologia_vigencia (histórico de termos CID-10 e CIAP, HTCID e HTCIAP) como conteúdo do carregador versionado de catálogo oficial; incluir a equivalência SIP no carregador tiss_ans quando ele existir.",
-   "motivo": "L8-17: regra 7: os dois lados da equivalência e os termos do histórico são catálogo oficial (tiss_ans sem carregador; cid10 pelo id interno, não pelo código). Hoje as três tabelas ficam fora da carga, declaradas sem destino."
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d/L8-17.tsv",
-   "mudanca": "Quando os 3 valores de TBSGHINTEGRADOR_TABELA forem conferidos por contagem na imagem de referência, declarar o de-para de valores NOME -> entidade do modelo (paciente, atendimento...) e carregar tipo_evento_publicado.",
-   "motivo": "L8-17: o nome é o de uma tabela da origem: gravá-lo em tipo_evento_publicado.entidade poria nome da origem no modelo (regra 1)."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Par curinga no de-para de valores: em _valores, quando o valor (não nulo) não tem par e c['valores'] tem a chave '*', gravar c['valores']['*'] e manter a pendência valor_fora_do_dominio (media) na linha, em vez de NULL. Sem '*', o comportamento atual (NULL + valor_fora_do_dominio). Documentar no cabeçalho. Ao aplicar, atualizar o esperado de conector/sante_conector/sintetica_d/l8_17.py: TBSMSTPRETMSG gravados 5 e restricao_destino_1048 1; TBTISSSCHEMA gravados 6 e restricao_destino_1048 2 (valor_fora_do_dominio segue 1 em cada).",
-   "motivo": "L8-17 (revisão): valor desconhecido de TP_TRANSACAO recusava a transação TISS pelo NOT NULL e derrubava em cadeia os endpoints do L8-06 (pai_pendente), embora o CHECK aceite 'outro'; na situação da mensagem, o lado seguro para nome sem par é 'pendente', nunca 'enviada'. Regra genérica, não por tabela. Na imagem de referência todos os valores já têm par (25/25 e 4/4), então o curinga só protege outros clientes."
+   "arquivo": "conector/verificar_mapa.py",
+   "mudanca": "Aceitar a coluna especial '#codigo_derivado:COL:TAM[:PREFIXO]' (o carregador já a usa em L7-04 e L5-11): hoje o verificador recusa 'FPVALE.#codigo_derivado:ID:30:V' (colunas.d/L5-11.tsv) como 'coluna especial desconhecida'.",
+   "motivo": "L8-17 (revisão): o erro global do verificador faz conferir-fatia-f4.sh falhar em qualquer fatia, e a conferência determinística de L8-17 não chega aos testes nem à carga sintética."
   }
  ]
 }

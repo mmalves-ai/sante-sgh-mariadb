@@ -1,54 +1,133 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + verificar_mapa.py",
-   "mudanca": "coluna especial '@unico:<tabela_destino>' (como @estabelecimento): id da única linha ativa da tabela de destino no banco do cliente (nenhuma ou várias: recusa com pendência '<tabela>_indefinida'), para cadastros que o cliente cria no painel antes da migração",
-   "motivo": "CCSALAS -> sala_cirurgica exige unidade_cirurgica_id NOT NULL e a origem não tem unidade cirúrgica (nenhuma tabela do mapa alimenta unidade_cirurgica); sem a sala também ficam bloqueadas CCSALAS_TBUSERS (permissao_sala_usuario), CCCADCIR e CCAGENDA (sala_cirurgica_id)"
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS) + verificar_mapa.py",
+   "mudanca": "coluna especial '@unico:<tabela_destino>' (como @estabelecimento): id da única linha ativa da tabela de destino no banco do cliente; nenhuma ou várias: recusa com pendência alta '<tabela>_indefinida'. Para cadastros sem fonte na origem que o cliente cria no painel antes da migração (unidade cirúrgica)",
+   "motivo": "CCSALAS -> sala_cirurgica exige unidade_cirurgica_id NOT NULL e nenhuma tabela da origem alimenta unidade_cirurgica. Sem a sala ficam sem carga CCSALAS_TBUSERS e CCCADCIR (ato_cirurgico.sala_cirurgica_id NOT NULL), e por ele CCLANCIR",
+   "declaracao": [
+    "CCSALAS\t@estabelecimento\tsala_cirurgica.estabelecimento_id\t\t\t\tL6-16",
+    "CCSALAS\t@unico:unidade_cirurgica\tsala_cirurgica.unidade_cirurgica_id\t\t\t\tL6-16: a origem não tem unidade cirúrgica: a única do cliente (cadastrada no painel)",
+    "CCSALAS\tCOD\tsala_cirurgica.codigo\ttexto\t\t\tL6-16",
+    "CCSALAS\tNOME\tsala_cirurgica.descricao\ttexto_nome\t\t\tL6-16: sem nome recusa (NOT NULL)",
+    "CCSALAS\tCDC\tsala_cirurgica.centro_custo_id\t\t\tref:TBCENCUS\tL6-16: centro de custo (TBCENCUS, L8, carrega depois: dependência CCSALAS -> TBCENCUS)",
+    "CCSALAS\tOLD_SITUACAO\t\tcodigo_char\t\t\tL6-16: sem destino: coluna antiga (OLD_) sem uso",
+    "CCSALAS\tHORARIO_INICIAL_AGENDA_WEB\tsala_cirurgica.agenda_web_inicio\thora\t\t\tL6-16",
+    "CCSALAS\tHORARIO_FINAL_AGENDA_WEB\tsala_cirurgica.agenda_web_fim\thora\t\t\tL6-16: fim <= início recusa (CHECK 4025)",
+    "CCSALAS_TBUSERS\tID_CCSALAS\tpermissao_sala_usuario.sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16",
+    "CCSALAS_TBUSERS\tUSUARIO\tpermissao_sala_usuario.usuario_id\t\t\tref:TBUSERS\tL6-16: pode_agendar e pode_registrar ficam com o padrão TRUE (a origem só lista as salas liberadas)"
+   ]
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py (ou mapa.py)",
-   "mudanca": "referência derivada: preencher uma coluna do destino a partir de outra coluna do destino do pai já resolvido (ex.: 'via=ref:<TABELA>;campo=paciente_id' copia atendimento.paciente_id do atendimento achado pelo REG)",
-   "motivo": "CCCADCIR -> ato_cirurgico exige atendimento_id e paciente_id NOT NULL; a origem só tem REG (atendimento) e o paciente vem do atendimento; o mesmo para CCAGENDA (PRONT/REG) e para registro_excluido.paciente_id"
+   "arquivo": "conector/sante_conector/carga_mapa.py (ou db/migracoes/08_CC, proposta à F2.2)",
+   "mudanca": "referência a cadastro do destino por coluna de domínio do produto, presumida: '@destino:<tabela>.<coluna>=<valor>' grava o id da única linha com aquele valor (várias ou nenhuma: pendência e NULL) com valor_presumido. Alternativa de modelo: agendamento_cirurgico.carater_cirurgia_id NULL quando origem='migracao' (CHECK), com pendência para o cliente completar",
+   "motivo": "CCAGENDA -> agendamento_cirurgico exige carater_cirurgia_id NOT NULL e a agenda da origem não registra o caráter (só o ato, CCCADCIR.ID_CCTPURGENCIA). Inventar o caráter por id fixo seria valor por cliente; sem isso CCAGENDA e CCHISAGE ficam sem carga. A equipe (agendamento_cirurgico_equipe) depende do pedido 4",
+   "declaracao": [
+    "CCAGENDA\t@estabelecimento\tagendamento_cirurgico.estabelecimento_id\t\t\t\tL6-16",
+    "CCAGENDA\tID\tagendamento_cirurgico.numero\ttexto\t\t\tL6-16: número da agenda no sistema anterior",
+    "CCAGENDA\tPRONT\tagendamento_cirurgico.paciente_id\t\t\tref:RICADPAC.PRONT\tL6-16: paciente pelo prontuário; sem paciente recusa (NOT NULL)",
+    "CCAGENDA\tREG\tagendamento_cirurgico.atendimento_id\t\t\tref:RECADATE\tL6-16: atendimento opcional",
+    "CCAGENDA\tSALA\tagendamento_cirurgico.sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16: declarar só depois do pedido 1 (sala recusada derruba a agenda em pai_pendente)",
+    "CCAGENDA\tID_CRM\tagendamento_cirurgico.cirurgiao_profissional_id\t\t\tref:TBCBOPRO>ID_TBPROFIS>TBPROFIS\tL6-16: cirurgião pela inscrição no conselho",
+    "CCAGENDA\tESP\tagendamento_cirurgico.especialidade_medica_id\t\t\tref:TBESPEC\tL6-16",
+    "CCAGENDA\t@destino:carater_cirurgia.natureza=eletiva\tagendamento_cirurgico.carater_cirurgia_id\t\t\t\tL6-16: pedido 2",
+    "CCAGENDA\tANESTESIA\tagendamento_cirurgico.tipo_anestesia_id\t\t\tref:TBANESTESIA\tL6-16",
+    "CCAGENDA\tCONV\tagendamento_cirurgico.fonte_pagadora_id\t\t\tref:TBCONVEN\tL6-16",
+    "CCAGENDA\tDATA_HORA_INCLUSAO\tagendamento_cirurgico.solicitado_em\tdata_hora\t\t\tL6-16: sem data recusa; alternativa DATA_HORA",
+    "CCAGENDA\tDATA_HORA\tagendamento_cirurgico.inicio_previsto_em\tdata_hora\t\t\tL6-16",
+    "CCAGENDA\tDURACAO\tagendamento_cirurgico.duracao_prevista_minutos\tminutos_em_timestamp\t\t\tL6-16",
+    "CCAGENDA\tINTERVALO\tagendamento_cirurgico.tempo_limpeza_minutos\tminutos_em_timestamp\t\t\tL6-16",
+    "CCAGENDA\tCTI\tagendamento_cirurgico.reserva_uti\tbooleano_sn\t\t\tL6-16",
+    "CCAGENDA\tOBS\tagendamento_cirurgico.observacao\ttexto\t\t\tL6-16"
+   ]
   },
   {
-   "arquivo": "conector/mapa/colunas.tsv (geração) ou declarado",
-   "mudanca": "declarar a referência de REG ao atendimento (RECADATE) e de ID_CRM/ID_AUX*/ID_INSTR/ID_ANEST/ID_CIRCUL/ID_CIRUR/ID_PED/ID_CIRC ao cadastro do profissional (TBCBOPRO, inscricao_conselho -> profissional_id), com regra genérica de 'profissional pela inscrição no conselho'",
-   "motivo": "agendamento_cirurgico.cirurgiao_profissional_id, agendamento_cirurgico_equipe.profissional_id e participante_cirurgia.profissional_id são NOT NULL e apontam para profissional; a origem aponta para a inscrição no conselho (TBCBOPRO, destino inscricao_conselho). Sem a ponte inscrição -> profissional, CCAGENDA e CCLANCIR não carregam"
+   "arquivo": "conector/sante_conector/carga_mapa.py + sentinela.py",
+   "mudanca": "especial '#data_hora:<DATA>,<HORA>' (já citado em F4-decisoes-destino.md, seção 3: data mais hora HHMM): DATETIME a partir de DATE + hora em texto HHMM (VARCHAR(4)/CHAR(4)); hora inválida: NULL com hora_invalida; data sentinela: data_sentinela",
+   "motivo": "CCCADCIR guarda os horários do ato em texto (HORA_I, HORA_T, HORA_IA, HORA_TA, HORA_P_I/HORA_P_F) com a data em DATA, DATA_P_I e DATA_P_F; o destino (entrada_sala_em, inicio_anestesia_em, inicio_cirurgia_em, fim_*, saida_sala_em) é DATETIME. CCLANCIR.HORA/HORAF (CHAR(4)) com a data do ato",
+   "declaracao": [
+    "CCCADCIR\t@estabelecimento\tato_cirurgico.estabelecimento_id\t\t\t\tL6-16",
+    "CCCADCIR\tID\tato_cirurgico.numero\ttexto\t\t\tL6-16",
+    "CCCADCIR\tREG\tato_cirurgico.atendimento_id\t\t\tref:RECADATE\tL6-16: sem atendimento recusa (NOT NULL)",
+    "CCCADCIR\tREG\tato_cirurgico.paciente_id\t\t\tref:RECADATE>PRONT>RICADPAC.PRONT\tL6-16: paciente do atendimento",
+    "CCCADCIR\tSALA\tato_cirurgico.sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16: pedido 1",
+    "CCCADCIR\tID_CCTPURGENCIA\tato_cirurgico.carater_cirurgia_id\t\t\tref:CCTPURGENCIA\tL6-16: sem caráter recusa (NOT NULL)",
+    "CCCADCIR\tTIPO_ANES\tato_cirurgico.tipo_anestesia_id\t\t\tref:TBANESTESIA\tL6-16",
+    "CCCADCIR\tCONV\tato_cirurgico.fonte_pagadora_id\t\t\tref:TBCONVEN\tL6-16",
+    "CCCADCIR\tCID10\tato_cirurgico.codigo_cid10_pre_operatorio\ttexto\tcid10\t\tL6-16",
+    "CCCADCIR\tDIAG\tato_cirurgico.diagnostico_pre_operatorio\ttexto\t\t\tL6-16",
+    "CCCADCIR\tPESO\tato_cirurgico.peso_kg\tdecimal\t\t\tL6-16",
+    "CCCADCIR\tSUPUR\tato_cirurgico.supuracao\tbooleano_sn\t\t\tL6-16",
+    "CCCADCIR\t#data_hora:DATA,HORA_I\tato_cirurgico.inicio_cirurgia_em\t\t\t\tL6-16: pedido 3 (idem HORA_T, HORA_IA, HORA_TA, DATA_P_I/HORA_P_I, DATA_P_F/HORA_P_F)"
+   ]
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "destino secundário 'desdobrado' (uma linha por grupo de colunas repetidas: ID_CRM/ID_AUX1/ID_AUX2/ID_AUX3/ID_INSTR/ID_ANEST/ID_CIRCUL -> agendamento_cirurgico_equipe com funcao_equipe_cirurgica literal por coluna e sequencia por posição; idem CCLANCIR -> participante_cirurgia)",
-   "motivo": "a equipe vem em colunas repetidas na mesma linha; o modelo tem uma linha por profissional e função"
+   "mudanca": "no destino com desdobrar, '#rotulo' resolvido por coluna de domínio do destino ('#rotulo' com via 'busca:funcao_equipe_cirurgica.grau_participacao_tiss': o rótulo é o grau de participação TISS, terminologia oficial) e '#posicao' (1..n na ordem das colunas desdobradas) para a sequência",
+   "motivo": "a equipe vem em colunas repetidas (CCAGENDA: ID_CRM, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_CIRCUL; CCLANCIR: ID_CIRUR, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_PED, ID_CIRC, ID_TBCBOPRO_AUX4). agendamento_cirurgico_equipe e participante_cirurgia exigem funcao_equipe_cirurgica_id e sequencia NOT NULL; o código da função vem do cadastro do cliente (PRTIPO_PROFISSIONAL), então o rótulo fixo só pode ser o grau TISS (00 cirurgião, 01 a 04 auxiliares, 05 instrumentador, 06 anestesista...). O #item usa ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS"
   },
   {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "regras 'hora_texto_hhmm' e junção DATA + HORA texto em DATETIME (já pedidas em L6-03.json), mais 'minutos_de_timestamp' (TIMESTAMP 1899-12-30 HH:MM -> minutos, para duração)",
-   "motivo": "CCCADCIR tem HORA_I/HORA_T/HORA_IA/HORA_TA/HORA_P_I/HORA_P_F em VARCHAR(4) com a data em coluna separada (entrada_sala_em, inicio_anestesia_em... são DATETIME); CCAGENDA.DURACAO e CCHISAGE.DURACAO são TIMESTAMP de hora para duracao_prevista_minutos/duracao_minutos"
+   "arquivo": "decisão de destino (fatia L8 de TBPROCTO) + declarado/dependencias.tsv",
+   "mudanca": "alimentar procedimento_cirurgico a partir de TBPROCTO (procedimentos usados no bloco), como destino adicional da fatia dona de TBPROCTO, ou declarar a fonte do cadastro cirúrgico",
+   "motivo": "ato_cirurgico_procedimento (CCLANCIR) e agendamento_cirurgico_procedimento (CCPROEXT, CCAGENDA.PROCTO) exigem procedimento_cirurgico_id NOT NULL e nenhuma tabela da origem alimenta procedimento_cirurgico"
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
-   "mudanca": "referência por chave alternativa composta (já pedida em L6-03.json), aplicada a CCPROEXT (SALA + DATA_HORA -> agendamento_cirurgico) e CCHISAGE (SALA_ANT + DATA_HORA_ANT ou REG -> agendamento_cirurgico)",
-   "motivo": "agendamento_cirurgico_procedimento e reagendamento_cirurgico exigem agendamento_cirurgico_id NOT NULL e a origem só traz sala e data/hora; além disso CCAGENDA carrega na ordem 986, depois de CCHISAGE (435) e CCPROEXT (437): pede reordenar ou declarar a dependência"
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+   "mudanca": "referência por chave alternativa composta: 'ref:T.(K1,K2)' casa as colunas desta linha com as colunas K1,K2 de T na origem (repetido: pai_ambiguo). Já pedida em L6-03.json",
+   "motivo": "CCPROEXT só aponta a agenda por SALA + DATA_HORA (agendamento_cirurgico_id NOT NULL). CCHISAGE pode usar ref:CCAGENDA.REG (pai_ambiguo quando o registro tem mais de uma agenda) ou SALA_ANT + DATA_HORA_ANT com esta regra",
+   "declaracao": [
+    "CCHISAGE\tREG\treagendamento_cirurgico.agendamento_cirurgico_id\t\t\tref:CCAGENDA.REG\tL6-16: agenda pelo registro do atendimento (ambíguo: pai_ambiguo); com o pedido 6, SALA_ANT + DATA_HORA_ANT",
+    "CCHISAGE\tOPERACAO\treagendamento_cirurgico.operacao\tcodigo_char\tvalores\t\tL6-16: de-para de valores em valores.d/L6-16.tsv só com evidência; sem ela =~alteracao",
+    "CCHISAGE\tDATA_HORA\treagendamento_cirurgico.ocorrido_em\tdata_hora\t\t\tL6-16",
+    "CCHISAGE\tUSUARIO\treagendamento_cirurgico.usuario_id\t\t\tref:TBUSERS\tL6-16",
+    "CCHISAGE\tSALA_ANT\treagendamento_cirurgico.anterior_sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16",
+    "CCHISAGE\tDATA_HORA_ANT\treagendamento_cirurgico.inicio_anterior\tdata_hora\t\t\tL6-16",
+    "CCHISAGE\tSALA_R\treagendamento_cirurgico.nova_sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16",
+    "CCHISAGE\tDATA_HORA_R\treagendamento_cirurgico.inicio_novo\tdata_hora\t\t\tL6-16",
+    "CCHISAGE\tDURACAO\treagendamento_cirurgico.duracao_minutos\tminutos_em_timestamp\t\t\tL6-16",
+    "CCHISAGE\tID_CRM\treagendamento_cirurgico.solicitante_profissional_id\t\t\tref:TBCBOPRO>ID_TBPROFIS>TBPROFIS\tL6-16",
+    "CCHISAGE\tJUSTIF\treagendamento_cirurgico.justificativa\ttexto\t\t\tL6-16",
+    "CCHISAGE\t#retrato\treagendamento_cirurgico.dados\t\t\t\tL6-16"
+   ]
   },
   {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "retrato JSON da linha (dados) e literal presumido para justificativa/operacao em registro_excluido (já pedido em L6-01.json e L6-03.json)",
-   "motivo": "CCAGENDA_EXC_CANC: a agenda excluída/cancelada não existe no destino (suspensao_cirurgia.agendamento_cirurgico_id e motivo_suspensao_cirurgia_id NOT NULL sem origem); só cabe como registro_excluido, que exige dados JSON, justificativa e usuario_id"
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "linhas novas: CCHISAGE<TAB>CCAGENDA, CCPROEXT<TAB>CCAGENDA (agenda antes do histórico e dos procedimentos extras); CCAGENDA<TAB>CCSALAS e CCCADCIR<TAB>CCSALAS já seguem a ordem (426 < 436/976)",
+   "motivo": "CCAGENDA carrega na ordem 976, depois de CCHISAGE (423) e CCPROEXT (425): o filho viria antes do pai e seria recusado"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "regra 'arquivo' para BLOB SUB_TYPE 0: grava o binário no repositório de arquivos do produto e devolve o id para a coluna *_arquivo_id",
-   "motivo": "PRFA_CAD_POSICAO_CIR.ICONE -> posicao_cirurgica.icone_arquivo_id ficou fora"
+   "motivo": "PRFA_CAD_POSICAO_CIR.ICONE -> posicao_cirurgica.icone_arquivo_id ficou fora (a tabela carrega sem o ícone)"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py + verificar_mapa.py (novo conector/mapa/declarado/chaves.tsv)",
-   "mudanca": "chave declarada para tabela da origem sem PK (linha a declarar: CCPARAM\tUSUARIO\tL6-16: login único por usuário; o destino já é único por usuário e estabelecimento): a estratégia passa de hash_linha_sem_chave a hash_linha pela chave declarada (mudança de valor vira alteracao_aguarda_sincronizar da mesma linha, e a origem vence no Sincronizar); as linhas da origem com a MESMA chave declarada (ou que colidem na mesma chave única do destino) são TODAS recusadas antes de gravar com a pendência nova 'chave_declarada_repetida' (média), como em codigo_colisao_caixa: nenhuma vence pela ordem nem pelo hash; chave declarada nula: recusa com 'chave_declarada_nula'",
-   "motivo": "CCPARAM não tem PK: hoje, com o mesmo usuário repetido, a linha gravada é a de menor hash (carga_mapa.py, ordenação por hash) e a outra cai em 1062, então o conjunto de permissões gravado é arbitrário e pode ser o mais permissivo; e mudar uma permissão na origem vira apagada + nova com 1062, sem que a origem vença. Depois de aplicado, o esperado de CCPARAM em sintetica_d/l6_16.py passa a gravados 3 (B, C, E) com chave_declarada_repetida 2 (as duas de USR_EXEMPLO_A), pai_inexistente 1 + restricao_destino_1048 1 (D) e chave_declarada_nula 1 (usuário nulo), e o test_l6_16 deve conferir que nenhuma linha de USR_EXEMPLO_A foi gravada"
+   "mudanca": "chave declarada para tabela da origem sem PK (CCPARAM\tUSUARIO): estratégia hash_linha pela chave declarada; linhas com a mesma chave declarada (ou que colidem na chave única do destino) TODAS recusadas antes de gravar com 'chave_declarada_repetida' (média); chave nula: 'chave_declarada_nula'",
+   "motivo": "CCPARAM não tem PK: com o mesmo usuário repetido, a linha gravada é a de menor hash e a outra cai em 1062 (permissões arbitrárias); mudar uma permissão na origem vira apagada + nova, sem que a origem vença. Depois de aplicado: esperado de CCPARAM gravados 3 (B, C, E), chave_declarada_repetida 2, pai_inexistente 1 + restricao_destino_1048 1 (D), chave_declarada_nula 1"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "regra 'booleano_sn_nulo_falso' para permissões: como booleano_sn, mas vazio vira FALSE com pendência 'permissao_ausente_negada' (baixa) e fora do domínio vira FALSE com valor_fora_do_dominio (nunca NULL, que cairia no padrão do destino)",
-   "motivo": "configuracao_usuario_bloco.pode_ver_mapa_salas tem DEFAULT TRUE: CON_AGE nulo ou inválido hoje CONCEDE a permissão. Depois de aplicada, trocar a regra das 8 permissões de CCPARAM em colunas.d/L6-16.tsv para booleano_sn_nulo_falso e acrescentar ao esperado de CCPARAM 'permissao_ausente_negada': 1 (USR_EXEMPLO_E)"
+   "mudanca": "regra 'booleano_sn_nulo_falso': como booleano_sn, mas vazio vira FALSE com 'permissao_ausente_negada' (baixa) e fora do domínio vira FALSE com valor_fora_do_dominio",
+   "motivo": "configuracao_usuario_bloco.pode_ver_mapa_salas tem DEFAULT TRUE. O nulo já vira FALSE pelo de-para de valores (valores.d/L6-16.tsv); falta o valor FORA do domínio, que vira NULL e cai no padrão TRUE. Depois: as 8 permissões de CCPARAM passam a esta regra (sem depara) e o esperado ganha permissao_ausente_negada 1 (USR_EXEMPLO_E)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
+   "mudanca": "par padrão no de-para de valores: valor_origem '*' casa todo valor sem par e grava o valor_destino com a pendência baixa valor_presumido (em vez de NULL com valor_fora_do_dominio)",
+   "motivo": "CCTIPOMOVIMENTACAOPAC.NOME -> tipo_movimento_bloco.efeito (NOT NULL sem padrão): classificar admissão e alta pelo nome sem recusar o tipo cujo nome não casa. Declaração pronta: CCTIPOMOVIMENTACAOPAC\\tNOME\\ttipo_movimento_bloco.efeito\\ttexto_nome\\tvalores com pares admissão/entrada -> admissao, alta/saída -> alta_bloco e '*' -> transferencia_interna"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
+   "mudanca": "especial '#texto_ou:<COLUNA>:<literal>' (ou opção da regra): grava o texto da coluna quando preenchido, senão o literal",
+   "motivo": "CCAGENDA_EXC_CANC.JUSTIF -> registro_excluido.justificativa (NOT NULL): JUSTIF é opcional e hoje fica o texto fixo para todas as linhas, perdendo a justificativa real quando existe"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (#retrato) — já pedido em L6-02/L5-03",
+   "mudanca": "'#retrato:<C1,C2,...>' lê e serializa também colunas sem destino",
+   "motivo": "CCAGENDA_EXC_CANC: registro_excluido.dados deve ser o retrato do agendamento excluído (SALA, DATA_HORA, DURACAO, PROCTO, CRM/ID_CRM, equipe, ANESTESIA, OBS, JUSTIF, ID_TBSITAGE...); hoje só leva as 5 colunas lidas. Colunas listadas com motivo em colunas.d/L6-16.tsv"
+  },
+  {
+   "arquivo": "tools/obra/conferir-fatia-f4.sh + tools/obra/cobertura_conector.py",
+   "mudanca": "autoconferência roda 'cobertura_conector.py --fatia <F> --falhar-se-bloqueada' e acusa coluna da origem sem declaração em tabela carregada; conferir-fatia aceita asserções de valor por caso (ex.: {tabela_destino: [(filtro, coluna, valor)]}) além das contagens",
+   "motivo": "a conferência dá ok com tabelas bloqueadas e só concilia contagens; a fatia L6-16 prova os valores em testes de unidade (test_valor_gravado_nos_casos_de_anomalia), pelo mesmo caminho do motor, mas não no banco"
   }
  ]
 }
