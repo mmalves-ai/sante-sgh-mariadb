@@ -123,3 +123,14 @@
    (o vigia está a 130 GB) e apagar os clientes de teste ao fim de cada onda.
 8. **DDL incompleto para algum módulo:** a porta pede uma tabela que não existe. O lote registra o pedido, e a
    correção vai para `db/migracoes`, com o validador. A porta nunca contorna isso com uma tabela improvisada.
+
+## Decisão do dono (2026-11-21, ADR 0003, itens 5 e 6)
+
+- **Lote 05-04 (`coexistencia`):** **remover**, não migrar. O módulo sai do código e dos registros, o que ele
+  importar fica limpo, e o verificador confirma que não há mais referência a ele.
+- **Lote 05-05 (`carga` e `sadt`):** o `sadt` é migrado normalmente. O `carga` **não é migrado como módulo da
+  API.** Ele vai para o conector (F4):
+  - o que tiver valor (de-para, ordem de carga) vira insumo do `conector/`;
+  - o disparo passa a ser um comando do administrador da plataforma: apontar a base Firebird, carga inicial e
+    diferencial;
+  - nenhum código da API lê o Firebird.

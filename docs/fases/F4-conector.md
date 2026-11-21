@@ -20,7 +20,7 @@ O conector **nunca roda sozinho** e **nunca cria cliente**. A ordem é sempre es
      criada assim.
    - O banco nasce vazio, só com os catálogos públicos.
    - O campo `origem` do cliente só registra a intenção. Não carrega nada.
-2. **Importar do SPDATA (dia 0).**
+2. **Apontar a base Firebird e importar (carga inicial, dia 0).**
    - Comando do administrador da plataforma, na tela de administração e na linha de comando: escolhe o
      cliente e a imagem do SPDATA e dispara.
    - A importação traduz e limpa os dados para o modelo próprio (de-para, pendências e conciliação).

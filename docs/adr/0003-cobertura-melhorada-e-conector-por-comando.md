@@ -31,3 +31,19 @@ novos atrasados pela virada de um hospital.
   - lista mínima do SPDATA, 100% coberta;
   - melhorias;
   - recursos do MV.
+
+## Complemento do dono (2026-11-21)
+
+5. **A coexistência sai do produto.** O sistema novo nunca grava no Firebird. O módulo `coexistencia`, que
+   veio do `new-sgh`, é **removido**, não migrado. O código continua no histórico do git.
+6. **A carga é o conector, e só por comando do administrador da plataforma.** O fluxo é:
+   1. o administrador cria o cliente novo, zerado (por exemplo, a ProntoCardio);
+   2. aponta a base Firebird de origem;
+   3. dispara a **carga inicial**;
+   4. depois, quantas vezes quiser, dispara o **diferencial**, que traz o que mudou entre a última carga e o
+      momento atual. Isso vale também para a entrada em operação, depois da aprovação e da checagem da equipe
+      do hospital.
+
+   O módulo `carga` da API é **aproveitado como insumo do conector (F4)**, e não migrado como módulo comum. O
+   disparo fica na administração da plataforma, e a leitura do Firebird fica só no `conector/` (AGENTS, regra
+   3).
