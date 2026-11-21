@@ -1,62 +1,60 @@
-# RETOMADA: pausa graciosa de 2026-11-20, 19:25 (troca da conta da LLM)
+# RETOMADA (2026-11-20, 23:00)
 
-Leia este arquivo primeiro. Depois, `docs/ESTADO.md` e o `AGENTS.md`, com o protocolo de tokens obrigatório.
+Leia este arquivo primeiro. Depois o `docs/ESTADO.md` e o `AGENTS.md`: o protocolo de tokens é obrigatório e
+o relatório segue o formato de 4 seções, a cada 50 minutos, com os termos da saúde explicados.
 
-## O que está pronto (em commit local)
+**Ordem do dono:** não parar até completar o sistema.
 
-| Item | Onde | Prova |
-|---|---|---|
-| ADR 0001 (banco próprio, conector, virada) e ADR 0002 (decisões do dono e convenções do DDL) | `docs/adr/` | Aceitos |
-| Análise cruzada MV × SPDATA × `new-sgh` (rodadas 1 e 2) | `docs/analise/`, `docs/analise/rodada2/final/` | 3.500 tabelas próprias; destino para 8.867 do MV e 1.503 do SPDATA |
-| **DDL das 3.500 tabelas** (F1.3) | `db/migracoes/` (176 arquivos) | `python3 -I tools/db/validar_migracoes.py`: 0 erros, 13.503 FKs. Conferência em `docs/obra/conferencia-modelo.md` |
-| Banco de controle da plataforma e comando **criar novo cliente** | `db/plataforma/`, `tools/db/criar_cliente.py` | Cria o banco completo (3.505 tabelas) em cerca de 1 min |
-| Modelo base do `new-sgh` (commit `d3f8b5d`) sem o legado (F0.2) | `apps/`, `packages/`, `tools/` | `docs/obra/inventario-modelo-base.md` |
-| Dependências instaladas, sem o driver do Firebird | `node_modules` (420 MB) | `./pnpm install` sem erro |
-| Baixador das fontes oficiais | `catalogos/baixar.py` | Cache em `catalogos/cache/` (fora do git) |
-| **Carregadores IBGE, BCB e CID-10** | `catalogos/carregadores/{ibge,bcb,cid10}.py`, `catalogos/carregar.py` | Testados duas vezes no `cliente_teste_catalogos`, com contagens iguais: 27 UFs, 5.571 municípios, 471 bancos, 15.407 termos da CID-10 |
-| Dados do MV apagados | Oracle só com a estrutura (8.674 tabelas, zero linhas); cópia do `.dmp` removida | ADR 0002, item 16 |
+## Pronto e no GitHub
 
-## O que ficou pela metade (parado de propósito, sem perda)
+- F0, F1 (DDL das 3.500 tabelas e catálogos públicos), F2.1 (núcleo) e F2-L (login) (`9b0c83e`).
+- O login está no ar em **https://192.168.0.104:5310**:
+  - subir ou reiniciar: `tools/dev/subir-login.sh`;
+  - cliente `demo`;
+  - logins `admin` (administrador da plataforma, `POST /api/sessao/plataforma`) e `teste`, no estabelecimento
+    `principal`;
+  - senhas em `SEMEAR_*` do `.env`.
 
-Os workflows só retomam do cache na mesma sessão. Na nova sessão, **relance do zero**: os briefs estão prontos
-e são baratos.
+## Provas do F2-L (conferência independente)
 
-1. **Carregador do SIGTAP** (F1.4).
-   - O agente estava escrevendo e nenhum arquivo foi gravado.
-   - Brief: `docs/obra/fatias/catalogos/brief.md`. Fatia: `docs/obra/fatias/catalogos/sigtap.md`.
-   - Os CIDs já estão em `termo_terminologia` (terminologia `cid10`), para `procedimento_sigtap_cid`.
-   - A CBO do arquivo `tb_ocupacao` vai para `ocupacao_cbo`.
-   - Teste: `python3 -I catalogos/carregar.py teste_catalogos sigtap`, duas vezes.
-2. **F2.1, `packages/nucleo` sobre o MariaDB.**
-   - Não começou de fato: o acréscimo do driver ao `package.json` foi desfeito.
-   - Brief: `docs/obra/fatias/f2-nucleo/brief.md`. Plano: `docs/obra/passagens/F2-plano.md`.
-   - Relançar com o workflow de 3 etapas: construir, revisar adversarialmente e corrigir.
+- `tsc -p apps/api/tsconfig.login.json`: 0 erros.
+- Vitest: 191 testes da API e 73 do núcleo.
+- Validador do banco: 3.506 tabelas, 0 erros.
+- Login ao vivo pelo IP: 201 com cookie `Secure`; senha errada dá 401.
+- Revisão adversarial: 4 achados altos e 23 médios, todos corrigidos. A mensagem do commit diz "5 e 25" por
+  engano de contagem.
 
-## Pendências pequenas
+## Próximo: F2.2 e F2.3, os demais módulos da API sobre o núcleo
 
-- `topografia_tumor` ficou com 0 linhas na carga da CID-10. A CID-O no ZIP do DATASUS só traz morfologia; é
-  preciso buscar a fonte da topografia.
-- **Push ao GitHub:** o token precisa da permissão **Workflows (Read and write)**, por causa de
-  `.github/workflows/ci.yml` vindo do `new-sgh`. Depois, rode `git push origin main` (a regra exata já está
-  liberada nas permissões do Claude Code). O falso positivo do Semgrep já foi liberado no GitHub.
-- 72 tabelas principais de módulos operacionais sem `estabelecimento_id`: são filhas de quem já tem. Revisar
-  por módulo na F2.
-- 31 scripts do `package.json` ainda citam o legado ou o Firebird. Limpar na F2.2.
+1. **Planejar.** Classifique, por script, os 513 arquivos que importam `@sgh/legado`:
+   - use `tools/obra/fecho-imports.py` e `tools/obra/contar-legado.sh`;
+   - agrupe por módulo (`apps/api/src/modulos/*`).
 
-## Ambiente em pé (não pare)
+   O plano segue as fichas: F2.2 é "adaptadores próprios" e F2.3 é "troca dos imports".
+2. **Construir por módulo, um lote por agente.** Cada lote:
+   - escreve as portas com SQL sobre as tabelas novas, pelo `@sgh/nucleo`;
+   - liga o módulo no `modulos/registro.ts` (`API_MODULOS`);
+   - inclui o fecho do módulo no `tsconfig.login.json` (ou num novo `tsconfig.base-api.json`);
+   - tem os testes verdes.
 
-| Serviço | Endereço | Observação |
-|---|---|---|
-| `sante-sgh-mariadb` | `127.0.0.1:3410` | Bancos: `plataforma`, `cliente_teste_catalogos` |
-| `sante-sgh-oracle` | `127.0.0.1:1521/FREEPDB1` | Só a estrutura do MV, para referência |
+   Comece pelo fluxo vertical **paciente → atendimento**, que é o portão da F2.
+3. **Revisar adversarialmente e corrigir,** como no F2-L.
 
-- **Disco:** 148 GB livres em 19:25. O vigia (`tools/obra/vigia-disco.sh 130`) foi parado na pausa; religue
-  em segundo plano ao retomar.
-- **Commits locais ainda não enviados:** veja com `git log --oneline origin/main..main`.
+## Pendências
 
-## Primeiro passo da próxima sessão
+- **Decisão do dono:** segundo fator no login do administrador da plataforma. Recomendado: sim.
+- `usuario.administrador_plataforma` (`02_ADM/04_tabelas.sql:74`) não tem mais efeito. Remover ou documentar.
+- O `ServicoAutorizacao` serve a um cliente por instância. Para vários clientes, crie um por cliente (F2.2).
+- As tentativas de login erradas ficam em memória (sem Valkey). Defina a persistência na F2.2.
+- `topografia_tumor` (CID-O) está sem fonte.
+- Tipos 4 e 5 de compatibilidade do SIGTAP: confirmar o significado na fonte oficial.
+- 72 tabelas sem `estabelecimento_id`: revisar por módulo.
+- 31 scripts do `package.json` citam o legado.
 
-1. Avise: "Rodando sob o protocolo de otimização de tokens e reports periódicos".
-2. Religue o vigia de disco.
-3. Relance em paralelo o carregador do SIGTAP e a F2.1. Use o cabeçalho "Orquestrando com otimização do uso
-   de tokens" e reporte a cada 50 minutos.
+## Ambiente
+
+- MariaDB `127.0.0.1:3410` e Oracle de referência, os dois no ar.
+- Web `0.0.0.0:5310` e API `127.0.0.1:3310`, no ar.
+- Certificado em `certs/`, fora do git.
+- Vigia de disco: `tools/obra/vigia-disco.sh 130`. Havia 145 GB livres.
+- Push: `git push origin main` usa o token do `.env` pelo `credential.helper` local.

@@ -1,6 +1,6 @@
 # ESTADO do sante-sgh
 
-Atualizado em: 2026-11-20, 19:25. **PAUSADO** para a troca de conta da LLM: retome por `docs/obra/passagens/RETOMADA.md`.
+Atualizado em: 2026-11-20, 23:00. **Em andamento, sem parar** (dono). Retome por `docs/obra/passagens/RETOMADA.md`.
 
 ## Fase atual
 
@@ -9,24 +9,28 @@ Atualizado em: 2026-11-20, 19:25. **PAUSADO** para a troca de conta da LLM: reto
 | F1 | F1.1 Matriz funcional MV × SPDATA × `new-sgh` | rodada 2 concluída e conferida: 3.500 tabelas próprias (F3 1.658, F7 1.105, F8 737); 8.867 do MV e 1.503 do SPDATA com destino (`docs/analise/rodada2/RESUMO.md`). Rodada 1: | 511 funcionalidades (F3 247, F7 109, F8 104, não fazer 51) e cerca de 1.376 entidades propostas (`docs/analise/RESUMO.md`). Aguarda o dono validar as arbitragens D1 a D13. A segunda rodada cobre qualidade e segurança do paciente e o vocabulário único |
 | F0 | F0.1 a F0.3 | concluídos | git e remote (o push automático está bloqueado pelo classificador do Claude Code; o dono libera), modelo base `d3f8b5d` trazido sem o legado (`docs/obra/inventario-modelo-base.md`), MariaDB 12.3.3 em `127.0.0.1:3410` |
 | F1 | F1.3 DDL das 3.500 tabelas | **concluído e conferido** | 3.500 tabelas, 69.578 colunas, 13.503 FKs, 0 erros no validador; conferência de qualidade em `docs/obra/conferencia-modelo.md`; `criar_cliente.py` cria o banco completo (3.505 tabelas) em cerca de 1 min |
-| F1 | F1.4 catálogos públicos | em andamento | IBGE, BCB e CID-10 prontos e testados; SIGTAP a relançar |
-| F2 | F2.1 núcleo | a relançar | Plano em `docs/obra/passagens/F2-plano.md`; brief em `docs/obra/fatias/f2-nucleo/brief.md` |
+| F1 | F1.4 catálogos públicos | **concluído** | IBGE, BCB, CID-10, SIGTAP (202611) e CBO; revisados; pendentes: topografia CID-O, significado dos tipos 4 e 5 de compatibilidade SIGTAP |
+| F2 | F2.1 núcleo | **concluído** | `packages/nucleo`, 73 testes (commit `7067431`) |
+| F2 | F2-L login pelo navegador | **concluído** | https://192.168.0.104:5310, admin da plataforma e usuário de teste no cliente `demo`; `tools/dev/subir-login.sh`; commit `9b0c83e` |
+| F2 | F2.2/F2.3 demais módulos da API | próximo | 513 arquivos ainda importam `@sgh/legado`; meta `tools/obra/contar-legado.sh` = 0 |
 
 ## Quadro de fases
 
 | Fase | Status |
 |---|---|
-| F0 Fundação | pendente |
-| F1 Análise cruzada e modelo | em andamento (F1.1, primeira rodada concluída) |
-| F2 Núcleo e persistência | pendente |
+| F0 Fundação | concluída |
+| F1 Análise cruzada e modelo | concluída (pendências pequenas) |
+| F2 Núcleo e persistência | em andamento (F2.1 e F2-L concluídos) |
 | F3 Cobertura funcional melhorada | pendente |
 | F4 Conector | pendente |
-| F5 Homologação | pendente |
-| F6 Virada | pendente |
+| F5 Ferramentas de homologação e virada | pendente |
+| F6 Virada | operação do cliente (ADR 0003) |
 | F7 Serrano e hospital do zero | pendente |
 | F8 Recursos novos | pendente |
 
 ## Decisões registradas
+
+- **ADR 0003** (aceito em 2026-11-20): F3 é cobertura melhorada; F8 sem esperar virada; conector só por comando do admin sobre cliente zerado.
 
 - **ADR 0002** (aceito em 2026-11-20): respostas do dono às 24 decisões; princípios do modelo (convenções do DDL).
 

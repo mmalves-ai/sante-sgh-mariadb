@@ -25,3 +25,9 @@ cada uma com construir, revisão adversarial e correção.
   - **SIGTAP:** 5 achados médios, todos corrigidos.
   - **Núcleo:** 0 altos e 4 médios, corrigidos.
   - **Conferência final independente:** 72 testes e banco com 0 erros.
+
+**2026-11-20, F2-L (login), 6 lotes em sequência, cada um com construir, revisão adversarial e correção:**
+- 18 agentes, 2,51 milhões de tokens (139 mil por agente), 124 minutos.
+- **Qualidade:** 4 achados altos e 23 médios, todos corrigidos. Conferência final independente verde.
+- **Custo maior que no núcleo:** cada lote precisava medir o fecho de imports de uma API de cerca de 700
+  arquivos.
