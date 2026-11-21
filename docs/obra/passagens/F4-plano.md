@@ -169,6 +169,36 @@ sobre a cópia `redesante-fb-pc`, transação READ ONLY). Resultado por tabela: 
   - A imagem nova de cada sincronização é outro arquivo vinculado (outro corte); o hash de bloco compara com
     o estado guardado em `conector_ctl`, não com a imagem anterior.
 
+### 6.1 O que o Sincronizar garante (dono, 2026-11-21)
+
+**Caso de uso:**
+1. Carga inicial.
+2. A equipe navega por dias, sem produção, e sugere correções.
+3. O Sincronizar traz os dias que faltam **e as alterações em dados antigos**.
+
+**O que o Sincronizar captura:**
+- **Alteração só de coluna,** por exemplo a presença da consulta que passa a "S":
+  - o hash da linha muda, e a linha é reaplicada no destino;
+  - a data de alteração do Firebird nunca é a única prova, porque gatilho e carga manual podem não atualizá-la.
+- **Linhas novas e linhas apagadas na origem.** O apagamento vira exclusão lógica no destino (`excluido_em`),
+  com rastreio.
+- **Linhas antigas alteradas,** em qualquer data. A comparação é feita contra o estado guardado da última
+  execução, não por janela de datas.
+
+**Correções sugeridas pela equipe na avaliação:**
+- **Correção de regra de conversão** (de-para, limpeza, sentinela): vira regra no mapa do conector e vale em
+  toda execução seguinte. É o caminho preferido.
+- **Edição manual no banco novo durante a avaliação:** o motor detecta quando uma linha foi alterada no destino
+  depois da última execução, pela `versao` e pelo `alterado_em` do próprio sistema.
+  - Se a mesma linha também mudou na origem, ela vira **conflito** e aparece no painel para decisão.
+  - Nunca há sobrescrita silenciosa.
+
+**Prova (lote L9):**
+- duas imagens de teste do "cliente de exemplo", com alterações só de coluna, linhas novas, apagadas e
+  antigas alteradas;
+- uma edição manual no destino;
+- conciliação 100% e conflito exibido.
+
 ## 7. Riscos
 - **LGPD:**
   - dados reais passam só dentro do motor;
