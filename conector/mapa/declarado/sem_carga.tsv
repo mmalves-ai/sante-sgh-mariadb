@@ -1,0 +1,28 @@
+tabela	situacao	causa	motivo
+TBTIPO_ATENDIMENTO	descarte	sem_valor	tipo de pré-atendimento usado só por uma tabela vazia e fora do mapa; o produto tem a recepção própria
+HTPARAMORIGEMCABIMP	descarte	duplicado	histórico que espelha PRPARAMORIGEMCABIMP (mesmas linhas e destino): o estado atual vem dela e o produto audita as mudanças daqui em diante
+PRCABEVOLTMP	descarte	sem_valor	rascunho temporário de evolução não finalizada: não é registro do prontuário; o registro finalizado vem de PRCABEVOL/PRCONTEVOL (decisão a revisar pelo dono: na virada o rascunho é finalizado no sistema antigo)
+PREVOLPACTMP	descarte	sem_valor	respostas do rascunho temporário (PRCABEVOLTMP): mesmo motivo
+PRALERGIAPACTMP	descarte	sem_valor	alergia em rascunho temporário: a alergia confirmada vem de PRALERGIAPAC
+PRALERGIAPACTMP_TBPRINC	descarte	sem_valor	princípio ativo da alergia em rascunho temporário: mesmo motivo
+TBPROCBACKUP	descarte	mecanismo_do_produto	rotina de cópia de segurança do sistema antigo: infraestrutura, o produto tem a sua
+TBSITBACKUP	descarte	mecanismo_do_produto	situação das cópias de segurança do sistema antigo: infraestrutura
+TBSGHCONEXAO	descarte	mecanismo_do_produto	conexão da obra anterior dentro da base de origem: não é dado do cliente
+TBSGHINTEGRADOR_PARAM	descarte	mecanismo_do_produto	parâmetro do integrador da obra anterior: o conector é o integrador do produto
+TBSGHINTEGRADOR_TABELA	descarte	mecanismo_do_produto	tabelas do integrador da obra anterior: mesmo motivo
+TBVERSAOBRASIN	descarte	licenciado	versão da tabela licenciada de preços de medicamentos: catálogo licenciado nunca entra na base (regra 7); fica no de-para do cliente com licença
+POBANCOHRTP	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POTPINIBANCO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+PODIA	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POPROGSIT	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POPROSITUACAO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+PETP_INTEGR_EVENTO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POTPJORNADA	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+FPTP_SAL	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+FPTP_TREINAMENTO_CAPACITACAO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+STEMITENTE	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+FPVALE	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+PETPINTERVALO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POREPHOMOLOGADO	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+POTPHORA	descarte	mecanismo_do_produto	lista de domínio fixa do modelo (valor de CHECK no consumidor): o código entra pelo de-para de valores (depara=valores) na coluna que a usa, sem tabela própria (pedido da fatia L5-11; decisão em F4-decisoes-destino.md)
+TBIRREGCTRCTA	descarte	mecanismo_do_produto	domínio fixo do modo de controle da irregularidade: o valor global vai por literal presumido em tipo_pendencia_conta.controle de cada tipo migrado (F4-decisoes-destino.md)

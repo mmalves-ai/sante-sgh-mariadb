@@ -36,8 +36,14 @@ class FatiaL511(unittest.TestCase):
         cls.ddl = mapa.ler_ddl(_raiz())
 
     def test_fatia_inteira_classificada(self):
-        fatia = {r["tabela"] for r in self.m["tabelas"] if r.get("ordem", "").isdigit() and 182 <= int(r["ordem"]) <= 202}
-        self.assertEqual(fatia, DECLARADAS | set(AGUARDAM_DEPARA) | set(AGUARDAM_CLASSIFICACAO) | SEM_CARGA)
+        # a fatia é contígua na ordem do lote e do módulo (a numeração muda quando o gerador ganha dependências)
+        esperado = DECLARADAS | set(AGUARDAM_DEPARA) | set(AGUARDAM_CLASSIFICACAO) | SEM_CARGA
+        por = {r["tabela"]: r for r in self.m["tabelas"]}
+        ords = [int(por[t]["ordem"]) for t in esperado]
+        mods = {(por[t]["lote"], por[t]["modulo"]) for t in esperado}
+        fatia = {r["tabela"] for r in self.m["tabelas"] if r.get("ordem", "").isdigit()
+                 and min(ords) <= int(r["ordem"]) <= max(ords) and (r["lote"], r["modulo"]) in mods}
+        self.assertEqual(fatia, esperado)
 
     def test_plano_so_com_as_declaradas(self):
         p = carga_mapa.planejar(self.m, DECLARADAS | SEM_CARGA | set(AGUARDAM_DEPARA) | set(AGUARDAM_CLASSIFICACAO))

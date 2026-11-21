@@ -72,9 +72,46 @@ CATALOGOS = {
 }
 
 
-def consulta(catalogo):
+def norm_esocial(v):
+    """Código de tabela oficial trabalhista (eSocial): texto aparado em maiúsculas; código só de dígitos sem os zeros
+    à esquerda (a origem guarda 1 e o catálogo '01')."""
+    s = _s(v).upper()
+    if not s or len(s) > 20 or not re.fullmatch(r"[0-9A-Z.\-]+", s):
+        return None
+    return s.lstrip("0") or "0" if s.isdigit() else s
+
+
+# catálogos com parâmetro (`nome:<parâmetro>` no mapa): codigo_esocial:<código oficial da tabela> (ex.: 18, motivo de
+# afastamento). O parâmetro só aceita [0-9A-Za-z_] (entra no filtro do SQL).
+CATALOGOS_PARAMETRO = {
+    "codigo_esocial": dict(tabela="codigo_esocial", coluna="codigo_esocial", normalizar=norm_esocial,
+                           chave=norm_esocial, pai="tabela_esocial",
+                           filtro="tabela_esocial_id = (SELECT id FROM tabela_esocial WHERE codigo_oficial = '{p}'"
+                                  " OR codigo_oficial = LPAD('{p}', 2, '0') LIMIT 1)",
+                           descricao="código de uma tabela oficial trabalhista (eSocial), pela tabela e pelo código; "
+                                     "zeros à esquerda não contam"),
+}
+
+
+def catalogo(nome):
+    """Configuração do catálogo `nome` (simples ou `nome:<parâmetro>`); None se desconhecido."""
+    if nome in CATALOGOS:
+        return CATALOGOS[nome]
+    base, sep, p = (nome or "").partition(":")
+    if sep and base in CATALOGOS_PARAMETRO and re.fullmatch(r"[0-9A-Za-z_]{1,20}", p):
+        c = dict(CATALOGOS_PARAMETRO[base])
+        c["filtro"] = c["filtro"].format(p=p)
+        return c
+    return None
+
+
+def conhecido(nome):
+    return catalogo(nome) is not None
+
+
+def consulta(catalogo_):
     """SQL que lê os pares (código, id) do catálogo oficial no banco do cliente."""
-    c = CATALOGOS[catalogo]
+    c = catalogo(catalogo_)
     sql = "SELECT %s, id FROM %s WHERE %s IS NOT NULL" % (c["coluna"], c["tabela"], c["coluna"])
     return sql + (" AND " + c["filtro"] if c["filtro"] else "")
 
@@ -84,7 +121,7 @@ class Depara:
 
     def __init__(self, catalogo, pares):
         self.catalogo = catalogo
-        c = CATALOGOS[catalogo]
+        c = globals()["catalogo"](catalogo)
         self._norm = c["normalizar"]
         self._ids = {}
         for codigo, id_ in pares:

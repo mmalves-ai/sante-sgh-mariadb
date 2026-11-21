@@ -54,6 +54,8 @@ REGRAS = {
                           "< 1800 ou forma inválida: NULL com valor_fora_do_dominio; 0 ou vazio vira NULL",
     "data_primeiro_dia_mes": "DATE/TIMESTAMP vira DATE do 1º dia do mês (competência); data sentinela vira NULL com "
                              "data_sentinela",
+    "minutos_em_timestamp": "TIMESTAMP (ou TIME) que guarda uma DURAÇÃO como hora (1899-12-30 HH:MM) vira inteiro de "
+                            "minutos (HH*60+MM); 00:00 vira NULL; outra data: os minutos da hora e pendência hora_com_data",
 }
 # regras cujo destino é coluna TIME / DATETIME (o verificador confere contra o tipo da coluna declarada no DDL)
 REGRAS_TIME = {"hora", "hora_hhmm", "hora_em_timestamp"}
@@ -64,6 +66,13 @@ REGRAS_PARAMETRO = {
                      "ex.: prazo acima do CHECK do destino não recusa a linha inteira)",
     "inteiro_zeros_esquerda": "inteiro_zeros_esquerda:<n>: inteiro (ou texto de dígitos) vira texto de n dígitos com "
                               "zeros à esquerda (CEP); 0, negativo ou mais de n dígitos: NULL com valor_fora_do_dominio",
+    "piso": "piso:<n>: número abaixo de n é ELEVADO a n com a pendência informativa valor_elevado_ao_minimo (baixa), "
+            "em vez de recusar a linha pelo CHECK do destino (ex.: tamanho mínimo de senha da política)",
+    "faixa": "faixa:<min>,<max>: número (inteiro ou decimal) fora da faixa vira NULL com valor_fora_do_dominio (linha "
+             "gravada); limites decimais aceitos",
+    "texto_resumo": "texto_resumo:<n>: texto (pontas aparadas) maior que n é cortado na última fronteira de palavra até "
+                    "n (sem fronteira: corte em n) com a pendência informativa texto_resumido (baixa); use quando o "
+                    "texto integral vai para outra coluna",
 }
 
 
@@ -73,12 +82,17 @@ def _parametro(regra):
     if not sep or nome not in REGRAS_PARAMETRO:
         return None
     try:
+        if nome in ("faixa", "piso"):
+            xs = tuple(decimal.Decimal(x) for x in arg.split(","))
+            if any(not x.is_finite() for x in xs) or len(xs) != (2 if nome == "faixa" else 1):
+                return None
+            return (nome, xs) if nome == "piso" or xs[0] <= xs[1] else None
         if nome == "inteiro_faixa":
             a, b = (int(x) for x in arg.split(","))
             return (nome, (a, b)) if a <= b else None
         n = int(arg)
         return (nome, (n,)) if n > 0 else None
-    except ValueError:
+    except (ValueError, decimal.InvalidOperation):
         return None
 
 
@@ -243,6 +257,39 @@ def aplicar(regra, v):
         raise KeyError("regra de coluna desconhecida: %s" % regra)
     if v is None:
         return None, None
+    if par and par[0] in ("faixa", "piso"):
+        try:
+            x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(_str(v).strip() if isinstance(
+                v, (str, bytes, bytearray)) else str(v))
+        except decimal.InvalidOperation:
+            return None, "valor_fora_do_dominio"
+        if not x.is_finite():
+            return None, "valor_fora_do_dominio"
+        if par[0] == "piso":
+            n = par[1][0]
+            if x < n:
+                return (int(n) if n == n.to_integral_value() and isinstance(v, int) else n), "valor_elevado_ao_minimo"
+            return (v if isinstance(v, int) else x), None
+        a, b = par[1]
+        return ((v if isinstance(v, int) else x), None) if a <= x <= b else (None, "valor_fora_do_dominio")
+    if par and par[0] == "texto_resumo":
+        s = _txt(v, "pontas")
+        n = par[1][0]
+        if s is None or len(s) <= n:
+            return s, None
+        corte = s[:n]
+        if not s[n].isspace() and re.search(r"\s", corte):
+            corte = corte.rsplit(None, 1)[0]
+        return (corte.rstrip() or s[:n]), "texto_resumido"
+    if regra == "minutos_em_timestamp":
+        if isinstance(v, datetime.datetime):
+            h, pend = v.time(), (None if v.date() == DATA_ZERO else "hora_com_data")
+        elif isinstance(v, datetime.time):
+            h, pend = v, None
+        else:
+            return None, "valor_fora_do_dominio"
+        m = h.hour * 60 + h.minute
+        return (m or None), (pend if m else None)
     if par and par[0] == "inteiro_faixa":
         a, b = par[1]
         try:

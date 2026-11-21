@@ -1,0 +1,28 @@
+tabela	depende_de	motivo
+CCCADCIR_EXCLUSAO	CCCADCIR	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+CCCADCIR_EXCLUSAO	CCTPURGENCIA	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+COSPEDHSTSEMP	COSPEDSITEMP	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+HTATENDIMENTO	HTCID	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+MFADIFOR	TBCTABAN	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+MFCTAUSU	TBCTABAN	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+PRPRESC_PRPROTGERAL	PRPRESC	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+REPACAGD_EXCLUSAO	REAGENDA_TBESPEC	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+REPACAGD_EXCLUSAO	REPACAGD	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+RPEVENTOESOC	RPEVENTO	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+SIPACAGD_EXCLUSAO	SIPACAGD	referência da coluna (ID_<pai> ou ref: declarada na fatia) sem FK na origem: o pai vinha depois do filho na ordem de carga
+RIALTA_EXCLUSAO	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RIEXCINT	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RITRANSF	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RITRFCLI	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RITRFCON	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RITRFESP	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RITRFMED	RICADINT	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RILEITOS	RIACOMOD	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RILEITOS	RIBLOCOS	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RICONFIC	RIMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RIESPFIC	RIMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RIMODFIC	RITITFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+RECONFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+REESPFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+REGRPFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga
+REUNIFIC	REMODFIC	relação de pai que a origem não declara como FK (pedido da fatia na integração do lote): o pai vinha depois do filho na ordem de carga

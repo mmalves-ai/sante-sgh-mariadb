@@ -79,15 +79,125 @@ CAMPOS_VALORES = ["tabela", "coluna", "destino", "valor_origem", "valor_destino"
 DEPARA_VALORES = "valores"
 
 
+_REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\(([A-Z0-9_$]+(?:,[A-Z0-9_$]+)+)\))?")
+_COL_ORIGEM = re.compile(r"[A-Z0-9_$]+")
+
+
+def passos_ref(spec):
+    """Referência declarada (`ref:<spec>` na via) em passos; None se mal formada. Formas (todas genéricas):
+    - `T`          o valor da coluna é a chave de T (id do destino de T pelo conector_origem);
+    - `T.K`        chave alternativa: o valor casa com a coluna K de T na origem (ex.: sigla, código, login);
+    - `T(C1,C2)`   chave composta: a chave de T é montada pelas colunas C1, C2 DESTA linha (na ordem da chave de T);
+    - encadeada    `T>X` troca o valor pela coluna X da linha de T na origem; `T>X>U` segue para U pela chave
+                   (ou `U.K`). Terminada em coluna, o valor segue para a regra/de-para declarados (ex.: código de
+                   catálogo oficial guardado no pai); terminada em tabela, grava o id do destino dela."""
+    out = []
+    for i, p in enumerate((spec or "").split(">")):
+        if i % 2 == 0:
+            m = _REF_TAB.fullmatch(p)
+            if not m or (m.group(3) and i):
+                return None
+            modo = "alt" if m.group(2) else "composta" if m.group(3) else "chave"
+            out.append({"tabela": m.group(1), "modo": modo,
+                        "arg": m.group(2) if m.group(2) else m.group(3).split(",") if m.group(3) else None})
+        else:
+            if not _COL_ORIGEM.fullmatch(p):
+                return None
+            out.append({"coluna": p})
+    return out or None
+
+
+def ref_simples(spec):
+    """Referência só pela chave do pai (a forma original `ref:T`)."""
+    p = passos_ref(spec)
+    return bool(p) and len(p) == 1 and p[0]["modo"] == "chave"
+
+
+# colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
+_ESPECIAIS = re.compile(r"@id|@estabelecimento|@vigencia_carga|#item|#rotulo|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
+                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?")
+OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa")
+
+
+def opcoes_destino(colunas):
+    """{destino: {"opcional": bool, "adotar": [colunas do destino], "desdobrar": [(COLUNA, rótulo)]}} pela `via` das
+    colunas declaradas de UMA tabela da origem (a opção vale para o destino inteiro da coluna que a declara)."""
+    saida = {}
+    for c in colunas:
+        dt = (c.get("destino") or "").partition(".")[0]
+        if not dt:
+            continue
+        o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False})
+        for x in (c.get("via") or "").split(";"):
+            if x == "opcional":
+                o["opcional"] = True
+            elif x == "complementa":
+                o["complementa"] = True
+            elif x.startswith("adotar:"):
+                o["adotar"] = [y for y in x[7:].split(",") if y]
+            elif x.startswith("desdobrar:"):
+                o["desdobrar"] = [tuple(y.split("=", 1)) if "=" in y else (y, y) for y in x[10:].split(",") if y]
+    return saida
+
+
+def principal_e_destinos(tabelas_destino, colunas):
+    """Destinos declarados de uma tabela na ordem da carga: o primeiro é o principal (ordem de `tabelas_destino`)."""
+    ordem = [x for x in (tabelas_destino or "").split(";") if x]
+    dts = []
+    for c in colunas:
+        dt = (c.get("destino") or "").partition(".")[0]
+        if dt and (c.get("destino") or "").count(".") == 1 and dt not in dts:
+            dts.append(dt)
+    pos = {x: i for i, x in enumerate(dts)}
+    return sorted(dts, key=lambda x: (ordem.index(x) if x in ordem else len(ordem), pos[x]))
+
+
+def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
+    """Coluna especial conhecida; opções de destino (opcional, adotar, desdobrar) nunca no destino principal, colunas
+    de adoção existentes no DDL, `#item`/`#rotulo` só em destino desdobrado. Só nomes."""
+    erros, por_t = [], {}
+    por = {r["tabela"]: r for r in tabelas}
+    for c in colunas_decl:
+        n = c.get("coluna") or ""
+        if n[:1] in ("@", "#") and not _ESPECIAIS.fullmatch(n):
+            erros.append("coluna especial desconhecida: %s.%s" % (c["tabela"], n))
+        if (c.get("destino") or "").count(".") == 1:
+            por_t.setdefault(c["tabela"], []).append(c)
+    for t, cols in sorted(por_t.items()):
+        if t not in por:
+            continue
+        dts = principal_e_destinos(por[t]["tabelas_destino"], cols)
+        for dt, o in opcoes_destino(cols).items():
+            if dts and dt == dts[0] and (o["opcional"] or o["desdobrar"]):
+                erros.append("destino principal não pode ser opcional nem desdobrado: %s -> %s" % (t, dt))
+            for a in o["adotar"]:
+                if dt in ddl and a not in ddl[dt]["colunas"]:
+                    erros.append("coluna de adoção inexistente no DDL: %s -> %s.%s" % (t, dt, a))
+            if o["complementa"] and not any(c["destino"] == dt + ".id" and referencia_declarada(c) for c in cols):
+                erros.append("destino complementado sem coluna de referência ao pai em %s.id: %s" % (dt, t))
+            itens = [c for c in cols if c["destino"].startswith(dt + ".") and c["coluna"] in ("#item", "#rotulo")]
+            if itens and not o["desdobrar"]:
+                erros.append("#item/#rotulo em destino não desdobrado: %s -> %s" % (t, dt))
+            if o["desdobrar"] and not any(c["coluna"] == "#item" for c in itens):
+                erros.append("destino desdobrado sem #item: %s -> %s" % (t, dt))
+    return sorted(set(erros))
+
+
 def erros_referencia_e_valores(colunas_decl, valores, origem):
-    """Referência declarada (`ref:<TABELA>` na via) aponta tabela da origem; coluna com depara `valores` tem pares em
-    declarado/valores.tsv e todo par tem coluna declarada; valor de origem sem repetição. Só nomes."""
+    """Referência declarada (`ref:<spec>` na via, `passos_ref`) bem formada e só com tabelas da origem; coluna com
+    depara `valores` tem pares em declarado/valores.tsv e todo par tem coluna declarada; valor de origem sem
+    repetição. Só nomes."""
     erros = []
     dv = {(c["tabela"], c["coluna"], c.get("destino")) for c in colunas_decl if c.get("depara") == DEPARA_VALORES}
     com_par = {(v["tabela"], v["coluna"], v["destino"]) for v in valores}
     for c in colunas_decl:
         rd = referencia_declarada(c)
-        if rd and rd not in origem:
+        if not rd:
+            continue
+        passos = passos_ref(rd)
+        if passos is None:
+            erros.append("referência declarada mal formada: %s.%s" % (c["tabela"], c["coluna"]))
+        elif any(x.get("tabela") and x["tabela"] not in origem for x in passos):
             erros.append("referência declarada a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
     for k in sorted(dv - com_par):
         erros.append("de-para de valores sem par em declarado/valores.tsv: %s.%s -> %s" % k)
@@ -347,9 +457,10 @@ def componentes_ciclicas(nos, arestas):
     return sorted(comps)
 
 
-def montar(analise, volume, ciclos_declarados, oficiais_=frozenset()):
-    """Linhas de tabelas.tsv e dependencias.tsv a partir do mapa da análise, do volume, dos ciclos declarados e do
-    conjunto de tabelas oficiais (`oficiais()`)."""
+def montar(analise, volume, ciclos_declarados, oficiais_=frozenset(), deps_declaradas=()):
+    """Linhas de tabelas.tsv e dependencias.tsv a partir do mapa da análise, do volume, dos ciclos declarados, do
+    conjunto de tabelas oficiais (`oficiais()`) e das dependências declaradas (`declarado/dependencias.tsv`: pai que a
+    origem não declara como FK, mas que a carga exige antes, ex.: referência declarada na fatia)."""
     vol = {r["tabela"]: r for r in volume}
     linhas, carregaveis = {}, set()
     for r in analise:
@@ -369,6 +480,7 @@ def montar(analise, volume, ciclos_declarados, oficiais_=frozenset()):
     arestas = set()
     for t in sorted(carregaveis):
         deps = [d for d in (vol.get(t, {}).get("depende_de") or "").split(",") if d]
+        deps += [d["depende_de"] for d in deps_declaradas if d["tabela"] == t and d["depende_de"] not in deps]
         dentro = sorted(d for d in deps if d in carregaveis)
         fora = sorted(d for d in deps if d not in carregaveis)
         linhas[t]["depende_de"] = ",".join(dentro)
@@ -417,7 +529,7 @@ def propor_quebras(ciclos, arestas, linhas):
 
 # ---------------- verificador ----------------
 def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes, colunas, colunas_decl,
-                    catalogos_decl, oficiais_decl=(), valores=()):
+                    catalogos_decl, oficiais_decl=(), valores=(), deps_decl=(), sem_carga=()):
     """Lista de erros (vazia = mapa válido). Só nomes de tabela/coluna e regras; nunca valores."""
     erros = []
     ofi = oficiais(ddl, oficiais_decl)
@@ -426,7 +538,17 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             erros.append("oficiais.tsv cita tabela inexistente no DDL: %s" % d.get("tabela"))
         if d.get("oficial") not in ("S", "N") or not (d.get("motivo") or "").strip():
             erros.append("oficiais.tsv sem oficial S/N ou sem motivo: %s" % d.get("tabela"))
-    esperado_tab, esperado_deps, ciclos, arestas = montar(analise, volume, ciclos_decl, ofi)
+    esperado_tab, esperado_deps, ciclos, arestas = montar(analise, volume, ciclos_decl, ofi, deps_decl)
+    nomes_mapa = {r["tabela"] for r in tabelas if r["tabelas_destino"]}
+    for d in deps_decl:
+        if d["tabela"] not in nomes_mapa or d["depende_de"] not in nomes_mapa or not (d.get("motivo") or "").strip():
+            erros.append("dependência declarada fora das carregáveis ou sem motivo: %s -> %s" % (d["tabela"],
+                                                                                              d["depende_de"]))
+    for d in sem_carga:
+        if d["tabela"] not in nomes_mapa or d.get("situacao") not in ("descarte", "bloqueada") or \
+                not (d.get("causa") or "").strip() or not (d.get("motivo") or "").strip():
+            erros.append("declarado/sem_carga.tsv: tabela fora das carregáveis, situação, causa ou motivo: %s"
+                         % d.get("tabela"))
     if ciclos:
         for c in ciclos:
             erros.append("ciclo não declarado em declarado/ciclos.tsv: %s" % ",".join(c))
@@ -484,7 +606,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             erros.append("coluna de tabela fora do mapa carregável: %s.%s" % (c["tabela"], c["coluna"]))
         if not sentinela.regra_conhecida(c["regra"]):
             erros.append("regra de coluna desconhecida: %s.%s" % (c["tabela"], c["coluna"]))
-        if c.get("depara") and c["depara"] not in depara.CATALOGOS:
+        if c.get("depara") and not depara.conhecido(c["depara"]):
             erros.append("de-para desconhecido: %s.%s" % (c["tabela"], c["coluna"]))
         if c.get("referencia") and c["referencia"] not in vol:
             erros.append("referência a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
@@ -499,7 +621,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             continue
         if c.get("regra") and not sentinela.regra_conhecida(c["regra"]):
             erros.append("regra declarada desconhecida: %s.%s" % (t, c["coluna"]))
-        if c.get("depara") and c["depara"] not in depara.CATALOGOS and c["depara"] != DEPARA_VALORES:
+        if c.get("depara") and not depara.conhecido(c["depara"]) and c["depara"] != DEPARA_VALORES:
             erros.append("de-para declarado desconhecido: %s.%s" % (t, c["coluna"]))
         dest = c.get("destino") or ""
         if dest:
@@ -522,11 +644,14 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                     erros.append("regra %s com destino %s (esperado TIME): %s.%s -> %s" % (regra, tipo, t, c["coluna"],
                                                                                          dest))
     erros += erros_referencia_e_valores(colunas_decl, valores, vol)
+    erros += erros_especiais_e_opcoes(colunas_decl, tabelas, ddl)
+    sc = {d["tabela"] for d in sem_carga if d.get("situacao") == "descarte"}
+    for t in sorted({c["tabela"] for c in colunas_decl if c.get("destino")} & sc):
+        erros.append("tabela com colunas declaradas e também descartada em declarado/sem_carga.tsv: %s" % t)
     # catálogos oficiais: alvo existe no DDL; tabelas declaradas existem e são carregáveis
     usados = {c.get("depara") for c in colunas + colunas_decl} | {c["catalogo"] for c in catalogos_decl}
-    for nome, cat in depara.CATALOGOS.items():
-        if nome not in usados:
-            continue
+    for nome in sorted(x for x in usados if x and depara.conhecido(x)):
+        cat = depara.catalogo(nome)
         if cat["tabela"] not in ddl or cat["coluna"] not in ddl[cat["tabela"]]["colunas"]:
             erros.append("catálogo %s aponta coluna inexistente no DDL: %s.%s" % (nome, cat["tabela"], cat["coluna"]))
     for c in catalogos_decl:
@@ -534,7 +659,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
         if t not in por or por[t]["tipo"] == "NAO":
             erros.append("catálogo declarado fora do mapa: %s" % t)
             continue
-        if c["catalogo"] not in depara.CATALOGOS and not (c.get("motivo") or "").strip():
+        if not depara.conhecido(c["catalogo"]) and not (c.get("motivo") or "").strip():
             erros.append("catálogo declarado desconhecido e sem motivo: %s" % t)
         # declarada como catálogo: a parte oficial é de-para (nunca gravada); só o resto pode ser carregado
         if not por[t].get("destinos_oficiais"):
@@ -561,7 +686,8 @@ def carregar(raiz=RAIZ):
                 tabelas=ler("tabelas.tsv"), deps=ler("dependencias.tsv"), ciclos_decl=ler("declarado/ciclos.tsv"),
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
                 colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
-                oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler_valores(d))
+                oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler_valores(d),
+                deps_decl=ler("declarado/dependencias.tsv"), sem_carga=ler("declarado/sem_carga.tsv"))
 
 
 def verificar(raiz=RAIZ):

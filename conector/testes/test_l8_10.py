@@ -47,9 +47,10 @@ class FatiaL810(unittest.TestCase):
                 for c in self.decl:
                     if c["tabela"] == t:
                         self.assertIn("pedido %d" % n, c["motivo"], (t, c["coluna"]))
-        # TBCTABAN vem depois de MFCTAUSU na ordem do mapa: enquanto for assim, a permissão fica bloqueada
+        # rodada de cobertura: a dependência MFCTAUSU -> TBCTABAN foi declarada (declarado/dependencias.tsv) e o pai
+        # vem antes; a permissão pode ser declarada quando a fatia for refeita
         ordem = {r["tabela"]: int(r["ordem"]) for r in self.m["tabelas"] if (r.get("ordem") or "").isdigit()}
-        self.assertGreater(ordem["TBCTABAN"], ordem["MFCTAUSU"])
+        self.assertLess(ordem["TBCTABAN"], ordem["MFCTAUSU"])
 
     def test_valores_presumidos_e_regras(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}

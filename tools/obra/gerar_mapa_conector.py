@@ -116,12 +116,14 @@ def main():
     ofi = mapa.oficiais(mapa.ler_ddl(RAIZ), mapa.ler_tsv(arq_ofi) if arq_ofi.exists() else [])
     arq_ciclos = DIR / "declarado/ciclos.tsv"
     ciclos_decl = mapa.ler_tsv(arq_ciclos) if arq_ciclos.exists() else []
-    tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi)
+    arq_deps = DIR / "declarado/dependencias.tsv"
+    deps_decl = mapa.ler_tsv(arq_deps) if arq_deps.exists() else []
+    tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi, deps_decl)
     if ciclos and a.propor_ciclos and not ciclos_decl:
         prop = mapa.propor_quebras(ciclos, arestas, tab)
         mapa.escrever_tsv(arq_ciclos, ["tabela", "depende_de", "tratamento", "motivo"], prop)
         ciclos_decl = prop
-        tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi)
+        tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi, deps_decl)
     if ciclos:
         print("ciclos não declarados (%d): rode com --propor-ciclos ou declare em %s" % (len(ciclos), arq_ciclos))
         for c in ciclos[:20]:

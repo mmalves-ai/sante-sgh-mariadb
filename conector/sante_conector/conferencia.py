@@ -36,8 +36,11 @@ def ddl_destino(plano, raiz=RAIZ_APP):
         for dt in p["destinos"]:
             alvo.append(dt)
             for c in p["colunas"][dt]:
-                if c["depara"] in depara.CATALOGOS:
-                    alvo.append(depara.CATALOGOS[c["depara"]]["tabela"])
+                cat = depara.catalogo(c["depara"])
+                if cat:
+                    alvo.append(cat["tabela"])
+                    if cat.get("pai"):
+                        alvo.append(cat["pai"])
                     if c["depara"] == "cid10":
                         alvo.append("terminologia")
     faltam = sorted({t for t in alvo if t not in ddl})

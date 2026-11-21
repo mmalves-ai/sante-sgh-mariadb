@@ -655,3 +655,25 @@ Fica para a próxima rodada (decisão do dono ou mecanismo maior; pedidos comple
 - de-para oficial `tuss` e grau de participação TISS; tabelas fora do mapa (natureza da rubrica, incidências de
   INSS/IRRF, via de acesso TISS); ordem e dependências novas no gerador do mapa (centro de custo e tabela de
   procedimentos depois das filhas; aresta do motivo de glosa ao grupo).
+
+## 17. Rodada de cobertura total (2026-11-21): mecanismos genéricos e ferramenta de cobertura
+
+Prova: `conector/conector.sh testes` 706 testes ok (16 pulados); `verificar_mapa` ok; `fatiar_conector --conferir`
+ok (fatias regeneradas: a ordem mudou com as dependências declaradas); `conferir-fatia-f4.sh` ok em exemplo_cob,
+exemplo, L5-01, L6-03, L6-14 e L8-10.
+
+- `tools/obra/cobertura_conector.py` (`--saida`, `--fatia`, `--falhar-se-bloqueada`): por tabela carregável, CARREGA
+  (plano da carga e coluna obrigatória do destino com fonte), DESCARTE (`declarado/sem_carga.tsv`, causa de produto)
+  ou BLOQUEADA com causa. Saída por tabela em `docs/obra/fatias/f4/cobertura.tsv`. Ainda fora da esteira: falharia
+  até as fatias serem refeitas.
+- Antes: 1.185 carregáveis, CARREGA 403, DESCARTE 0, BLOQUEADA 782. Depois: CARREGA 403, DESCARTE 27, BLOQUEADA 755,
+  das quais 709 só pedem refazer a fatia (mecanismo ou decisão já disponível) e 46 ainda pedem regra nova.
+- Motor (genérico, `carga_mapa.py`, `mapa.py`, `sentinela.py`, `depara.py`): referência composta, alternativa e
+  encadeada; `=@data_carga`, `@vigencia_carga`, `#sha256`, `#codigo_derivado` (com prefixo de domínio), `#cofre`,
+  `#retrato` e `#data`; regras `piso`, `faixa`, `texto_resumo` e `minutos_em_timestamp`; opções de destino
+  `opcional`, `adotar`, `desdobrar` e `complementa`; catálogo oficial `codigo_esocial:<tabela>`; dependências
+  declaradas no gerador (`declarado/dependencias.tsv`, 27 arestas). Verificador: especial desconhecida, referência
+  mal formada, opção no destino principal, dependência e descarte declarados sem motivo.
+- Decisões de destino tomadas pela melhor prática: `docs/obra/passagens/F4-decisoes-destino.md` (para o dono revisar).
+- Próximo passo: refazer as 56 fatias com as tabelas BLOQUEADAS (lista na saída da ferramenta).
+

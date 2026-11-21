@@ -51,6 +51,22 @@ genérica faltar (registre o motivo); nunca código por tabela.
 - Referência a linha pendente ou recusada: `pendencia.Propagador` (`pai_pendente`, com a raiz da cadeia).
 - Ciclo novo: `conector/mapa/declarado/ciclos.tsv` (duas fases, com motivo). Nunca edite os `.tsv` gerados.
 
+## Mecanismos da rodada de cobertura (use; prova em `sintetica_d/exemplo_cob.py`)
+- Referência na `via`: `ref:T` (chave), `ref:T.K` (chave alternativa: coluna K do pai; repetido = `pai_ambiguo`),
+  `ref:T(C1,C2)` (chave composta montada por colunas desta linha), `ref:T>X>U` (encadeada: coluna X do pai leva a U;
+  terminada em coluna, o valor segue para a regra/de-para, ex. código de catálogo oficial guardado no pai).
+- Especiais: `=@data_carga`; `@vigencia_carga` (vigência sem fonte, pendência baixa `vigencia_sem_fonte`);
+  `#sha256:C`; `#codigo_derivado:C:n[:prefixo]` (prefixo de domínio e código que não cabe); `#cofre:C` (segredo
+  NUNCA gravado: NULL + `segredo_aguarda_cofre`); `#retrato` (JSON da linha, sem segredo); `#data:ANO,MES[,DIA]`.
+- Regras: `piso:<n>`, `faixa:<min>,<max>`, `texto_resumo:<n>`, `minutos_em_timestamp` (além das anteriores).
+- Opções do destino (na `via` de uma coluna dele): `opcional` (secundário sem valor não grava), `adotar:<c1>,<c2>`
+  (adota a linha que já existe, ex. CPF, sem sobrescrever), `desdobrar:COL=rot,...` com `#item`/`#rotulo` (uma linha
+  por coluna com valor), `complementa` (coluna com `ref:` e destino `<tabela>.id`: UPDATE da linha do pai).
+- De-para oficial `codigo_esocial:<tabela oficial>`; dependência nova de ordem em `declarado/dependencias.tsv`;
+  descarte de produto em `declarado/sem_carga.tsv` (causas `sem_valor`, `duplicado`, `licenciado`,
+  `catalogo_oficial`, `mecanismo_do_produto`). Decisões de destino: `docs/obra/passagens/F4-decisoes-destino.md`.
+- Cobertura: `python3 -I tools/obra/cobertura_conector.py --fatia <F>` diz o que da fatia ainda não carrega e por quê.
+
 ## Regras de ouro (AGENTS.md)
 - Só o `conector/` fala com o Firebird, e só lê. O `.fdb` nunca é alterado nem copiado inteiro.
 - Nada de nome da origem no modelo, no código fora do mapa, nas telas nem nas saídas do painel (regra 1).
