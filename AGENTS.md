@@ -223,6 +223,14 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
   por carregador versionado. Nunca do dump do MV nem do SPDATA.
 - **Licenciados** (Simpro, Brasíndice, CBHPM, CEP dos Correios) nunca entram na base do produto. Entram só
   por hospital que comprove licença.
+- **Importação é continuidade (ADR 0006, dono, 2026-11-21).** Tudo que o hospital usa entra vivo e utilizável. Não
+  existe arquivo morto.
+  - **Catálogo da origem:** entra ligado ao catálogo oficial pelo código. Os itens próprios do hospital entram
+    ativos.
+  - **Licenciado:** entra no cliente com a licença marcada na plataforma. A Rede Santé tem a licença.
+  - **Rascunho clínico:** volta como rascunho ao autor, que pode finalizá-lo ou apagá-lo.
+  - **Não copiar uma tabela** só vale com prova, pela conciliação, de que a informação continua disponível. Nunca
+    por julgamento do agente.
 
 ### 8. Segredos e ambiente
 

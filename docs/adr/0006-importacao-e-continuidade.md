@@ -1,0 +1,48 @@
+# ADR 0006: a importação é continuidade, não arquivo histórico
+
+- **Data:** 2026-11-21
+- **Situação:** aceita (decisão do dono, no chat da obra)
+
+## Decisão
+
+Importar de um sistema de origem é **continuar a operação do hospital no sistema novo**. Todo dado que o hospital usa
+entra **vivo e utilizável** no modelo próprio. Não existe "acervo morto" nem "arquivo histórico somente leitura".
+
+## Regras para o conector
+
+1. **Sem descarte por julgamento do agente.** As causas `sem_valor`, `duplicado` e `mecanismo_do_produto` deixam de
+   bastar sozinhas. Só não se copia uma tabela quando a **mesma informação continua disponível e utilizável** no sistema
+   novo, e isso tem de ser **provado pela conciliação**:
+   - derivado recalculado: o valor recalculado bate linha a linha com a origem;
+   - mecanismo do produto: o estado é carregado no mecanismo novo (ex.: a numeração de documentos continua do último
+     número usado, nunca reinicia).
+
+   Toda tabela que não carrega fica listada no relatório de conciliação, com a prova.
+2. **Rascunhos (evolução, alergia e outros registros clínicos não finalizados) entram como rascunho.**
+   - A cópia da origem é um retrato num instante, então o que estava em edição precisa continuar editável.
+   - O rascunho volta para o **autor** no sistema novo, com a situação "rascunho" e a data original.
+   - O autor (ou quem tiver a permissão) pode **finalizar** ou **apagar**, com trilha de auditoria.
+   - Rascunho não aparece como registro finalizado do prontuário.
+3. **Tabela licenciada** (ex.: preços de materiais e medicamentos de referência) **é carregada** para o cliente que tem
+   a licença.
+   - A licença é condição comercial, registrada no cadastro do cliente na plataforma: o administrador marca, por
+     tabela licenciada, "cliente possui licença".
+   - A Rede Santé possui a licença (dono, 2026-11-21).
+   - Sem a marca, o conector recusa a carga daquela tabela e avisa no relatório. Nunca descarta em silêncio.
+4. **Catálogo oficial do hospital é copiado e fica útil.**
+   - O carregador versionado da fonte oficial (regra 7) continua sendo a base.
+   - O conteúdo de catálogo que vem da origem do hospital também entra:
+     - códigos que existem na fonte oficial são ligados a ela pelo código;
+     - versões antigas, códigos locais e personalizações do hospital entram como itens do próprio hospital, ativos e
+       utilizáveis;
+     - nada do que o hospital usava fica de fora.
+
+## Consequências
+
+- Os 287 descartes da F4 (16,9 milhões de registros, 8,7% da origem) são **revistos todos** por esta regra numa rodada
+  própria do conector (rodada 5, "continuidade"), antes da carga completa da ProntoCardio.
+- O modelo ganha:
+  - a situação "rascunho" nos registros clínicos que ainda não a têm;
+  - a marca de licença por cliente e por tabela licenciada;
+  - os itens de catálogo do próprio hospital.
+- A regra 7 do AGENTS.md passa a ter esta exceção: o licenciado entra pelo conector no cliente com licença marcada.
