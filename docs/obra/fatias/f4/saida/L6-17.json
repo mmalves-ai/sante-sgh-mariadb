@@ -36,7 +36,8 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "gravidade": "media",
    "mudanca": "PRCARACTDIE\tTBUNICON\tL6-17: ref:PRUNIDRESPOSTA>NOME>TBUNICON declarada na fatia (unidade da resposta da característica de dieta) sem FK na origem: o pai vinha depois do filho na ordem de carga",
-   "motivo": "sem a dependência, TBUNICON (L7) carrega depois de PRCARACTDIE (L6) e toda unidade fica NULL com pai_inexistente"
+   "motivo": "sem a dependência, TBUNICON (L7) carrega depois de PRCARACTDIE (L6) e toda unidade fica NULL com pai_inexistente",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (especiais) ou declarado/valores.tsv + regra 'preenchido'",

@@ -95,7 +95,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "PRITENSGLICEMIA, PRITENSESQ e PRITEMRECEITA dependem de PRITEM_GEITENS (ref:PRITEM_GEITENS/item_prescritivel); HTPARAMORIGEMCABIMP depende de PRPARAMORIGEMCABIMP",
-   "motivo": "a ordem já satisfaz (576 e 329 antes de 1130 e 1174), mas a aresta deve ficar declarada"
+   "motivo": "a ordem já satisfaz (576 e 329 antes de 1130 e 1174), mas a aresta deve ficar declarada",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   }
  ]
 }

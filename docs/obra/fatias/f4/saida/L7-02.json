@@ -3,7 +3,8 @@
   {
    "arquivo": "conector/mapa/tabelas.tsv + conector/mapa/dependencias.tsv (gerados: python3 -I tools/obra/gerar_mapa_conector.py)",
    "mudanca": "regenerar o mapa com a aresta nova de declarado/dependencias.tsv: SIKITITE -> SITABPRO (o item do kit vem depois do exame; hoje 482 antes de 504). O verificador acusa 'tabelas.tsv desatualizado' até a regeneração; a fatia não regenerou o arquivo compartilhado [FEITO nesta rodada: o mapa foi regenerado; SIKITITE 495 depois de SITABPRO 494]",
-   "motivo": "SIKITITE carrega (exame_id pela ref:SITABPRO(ATO,EXAME)); na ordem atual todo item seria recusado por exame inexistente"
+   "motivo": "SIKITITE carrega (exame_id pela ref:SITABPRO(ATO,EXAME)); na ordem atual todo item seria recusado por exame inexistente",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",

@@ -182,7 +182,8 @@
    "id": "DEP_R3B",
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "RICADINT -> TBTIPPLANO, RICADINT -> TBTABTHM, RIPREINT -> RICADINT, RIPREINT -> TBTIPPLANO, RIPREINT -> RILEITOS",
-   "motivo": "referências novas declaradas sem FK na origem (a ordem do mapa já as atende hoje: 710, 667, 1018 e 843 antes de 1018/1022; a dependência explícita protege a ordem)"
+   "motivo": "referências novas declaradas sem FK na origem (a ordem do mapa já as atende hoje: 710, 667, 1018 e 843 antes de 1018/1022; a dependência explícita protege a ordem)",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   }
  ]
 }

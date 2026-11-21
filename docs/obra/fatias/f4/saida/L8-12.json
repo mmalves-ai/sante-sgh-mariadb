@@ -39,12 +39,14 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.passos_ref",
    "mudanca": "Pedido 20. Natureza do título pelo MAIOR rateio (referência ao FILHO): na referência por chave alternativa composta aceitar (a) literal entre as colunas desta linha ('=1' casa com a constante: TP_LAN de pagar), (b) passo 'max:<COL>' logo depois (vários filhos casam: escolhe o de maior COL, empate pela menor chave, pendência baixa 'escolha_pelo_maior'; nenhum: pai_inexistente) e (c) chave composta num passo SEGUINTE da encadeada '>(C1,C2,C3)>T' (a chave de T montada pelas colunas da linha do passo anterior). Uso: titulo_pagar.natureza_financeira_id por 'ref:MFLANGSI.(EMPRESA,FORN,DOC,TIPO,SERIE,TP_LAN)=(EMPRESA,FORN,DOC,TIPO,SERIE,=<pagar>)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES' (também MFCTAREC, L8-11). É o pedido 3a da L8-11, detalhado",
-   "motivo": "titulo_pagar.natureza_financeira_id é NOT NULL e a única fonte é o rateio (MFLANGSI, 117.182 linhas para 71.267 parcelas, chave EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM); a decisão 'natureza principal = a do maior rateio' já está em F4-decisoes-destino.md. Sem isso MFCONPAG e as 4 filhas (MFCONPAG_TBCBOPRO, MFDESACR, MFPAGADF, SDMFCONPAG) ficam BLOQUEADAS; rascunho completo comentado em colunas.d/L8-12.tsv (#MFCONPAG...)"
+   "motivo": "titulo_pagar.natureza_financeira_id é NOT NULL e a única fonte é o rateio (MFLANGSI, 117.182 linhas para 71.267 parcelas, chave EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM); a decisão 'natureza principal = a do maior rateio' já está em F4-decisoes-destino.md. Sem isso MFCONPAG e as 4 filhas (MFCONPAG_TBCBOPRO, MFDESACR, MFPAGADF, SDMFCONPAG) ficam BLOQUEADAS; rascunho completo comentado em colunas.d/L8-12.tsv (#MFCONPAG...)",
+   "atendido": "rodada 4 (integrador): literal na chave alternativa composta, max:COL e (C1,C2,C3)>T (exemplo_r4, EX4_TT)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Pedido 21. Regra condicional por linha 'se:<COLUNA>[=v1,v2]' na via de uma coluna e, na coluna que abre um destino SECUNDÁRIO, condição do destino inteiro (sem valor ou fora da lista: o secundário não grava, sem pendência); a coluna pode vir pela encadeada ('se:TPDES_ACR>MFREFDES>TIPO=0,1'). É o pedido 2 da L8-11",
-   "motivo": "MFCONPAG: baixa_titulo só da parcela paga (DT_PGTO preenchida; 'opcional' não serve porque EMPRESA sempre tem valor). MFDESACR: desconto/acréscimo (MFREFDES.TIPO 0 e 1) vão a ajuste_titulo e retenções (2 a 13) a retencao_titulo. Também MFADIFOR e MFCTAREC (L8-11)"
+   "motivo": "MFCONPAG: baixa_titulo só da parcela paga (DT_PGTO preenchida; 'opcional' não serve porque EMPRESA sempre tem valor). MFDESACR: desconto/acréscimo (MFREFDES.TIPO 0 e 1) vão a ajuste_titulo e retenções (2 a 13) a retencao_titulo. Também MFADIFOR e MFCTAREC (L8-11)",
+   "atendido": "rodada 4 (integrador): se:COL[=v] (também pela encadeada) e destino_se: no secundário"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -59,7 +61,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (e tabelas.tsv regerado)",
    "mudanca": "Pedido 24. Arestas de ordem: TBITEDES -> TBSUBDES, TBITEDES -> TBCENCUS, TBITEDES -> TBGRUDES; e as consumidoras da natureza sem aresta: MFLANCTO -> TBITEDES, TBINTCRC -> TBITEDES (MFREFDES e RPINTEVE já têm). Conferir que a nova ordem põe TBITEDES depois de TBSUBDES e antes de MFLANCTO, MFREFDES, RPINTEVE e TBINTCRC",
-   "motivo": "TBITEDES (natureza_financeira) lê o subgrupo por ref:TBSUBDES(GRUPO,SUBGRUPO) (NOT NULL) e o centro de custo por ref:TBCENCUS, que vêm DEPOIS na ordem do mapa; na primeira carga as 533 naturezas seriam recusadas (pai_inexistente) e o centro ficaria nulo, em cascata no movimento bancário e no título"
+   "motivo": "TBITEDES (natureza_financeira) lê o subgrupo por ref:TBSUBDES(GRUPO,SUBGRUPO) (NOT NULL) e o centro de custo por ref:TBCENCUS, que vêm DEPOIS na ordem do mapa; na primeira carga as 533 naturezas seriam recusadas (pai_inexistente) e o centro ficaria nulo, em cascata no movimento bancário e no título",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

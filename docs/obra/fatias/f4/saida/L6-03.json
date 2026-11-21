@@ -99,12 +99,14 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
    "mudanca": "especial '#data_hora_mais:<DATA>,<HORA>,<DURACAO>[,<DURACAO_PADRAO>]': DATETIME de data + hora HHMM somado da duração HHMM (regra minutos_hhmm) da linha; sem duração na linha, a de outra coluna (ex.: a da agenda pela encadeada terminada em coluna, ref:REAGENDA.(NOME,CRM)=(NOME,CRM)>DURACAO); sem nenhuma, NULL com unidade_ausente",
-   "motivo": "REPACAGI (177.897 horários na imagem de referência) -> horario_agenda.fim_em é DATETIME NOT NULL com CHECK fim_em > inicio_em, e a origem só guarda DATA, HORA (HHMM) e DURACAO (HHMM, por horário, anulável). Sem a regra a tabela fica BLOQUEADA (declaração pronta e comentada em colunas.d/L6-03.tsv); é ela que leva as marcações de consulta (REPACAGD, L6-04) ÚNICO bloqueio que resta na fatia (cobertura: REPACAGI regra_faltante, rodada 3): a declaração está pronta e comentada em colunas.d/L6-03.tsv; com o especial, basta descomentá-la e trocar REPACAGI de NAO_CARREGADAS para CARREGADAS em sintetica_d/l6_03.py"
+   "motivo": "REPACAGI (177.897 horários na imagem de referência) -> horario_agenda.fim_em é DATETIME NOT NULL com CHECK fim_em > inicio_em, e a origem só guarda DATA, HORA (HHMM) e DURACAO (HHMM, por horário, anulável). Sem a regra a tabela fica BLOQUEADA (declaração pronta e comentada em colunas.d/L6-03.tsv); é ela que leva as marcações de consulta (REPACAGD, L6-04) ÚNICO bloqueio que resta na fatia (cobertura: REPACAGI regra_faltante, rodada 3): a declaração está pronta e comentada em colunas.d/L6-03.tsv; com o especial, basta descomentá-la e trocar REPACAGI de NAO_CARREGADAS para CARREGADAS em sintetica_d/l6_03.py",
+   "atendido": "rodada 4 (integrador): #data_hora_mais:DATA,HORA,DUR (exemplo_r4, EX4_HOR)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
    "mudanca": "opção de coluna 'se:<COLUNA>=<valor>[|<valor>]' na via: a coluna do destino só recebe o valor quando a coluna da origem tem um dos valores (senão NULL, sem pendência)",
-   "motivo": "REAGECRI: a linha STATUS 'E' é a reversão da geração e o destino exige revertida_em e reversao_usuario_id quando situacao = revertida (CHECK ck_geracao_grade_reversao); declarar as duas colunas sem condição gravaria data de reversão nas gerações concluídas. Hoje a linha E é recusada pela restrição do destino (4025), visível como pendência. Com a opção: '#data_hora:DT_CRIACAO,HR_CRIACAO' -> revertida_em e USUARIO -> reversao_usuario_id com 'se:STATUS=E' Alternativa equivalente (decisão L6-03 r3b): complementar a geração C do mesmo NOME+CRM+PERINI+PERFIN pela linha E (complementa sobre a própria tabela, chave alternativa com STATUS=C), gravando situacao=revertida, revertida_em e reversao_usuario_id; a linha E não é uma geração própria."
+   "motivo": "REAGECRI: a linha STATUS 'E' é a reversão da geração e o destino exige revertida_em e reversao_usuario_id quando situacao = revertida (CHECK ck_geracao_grade_reversao); declarar as duas colunas sem condição gravaria data de reversão nas gerações concluídas. Hoje a linha E é recusada pela restrição do destino (4025), visível como pendência. Com a opção: '#data_hora:DT_CRIACAO,HR_CRIACAO' -> revertida_em e USUARIO -> reversao_usuario_id com 'se:STATUS=E' Alternativa equivalente (decisão L6-03 r3b): complementar a geração C do mesmo NOME+CRM+PERINI+PERFIN pela linha E (complementa sobre a própria tabela, chave alternativa com STATUS=C), gravando situacao=revertida, revertida_em e reversao_usuario_id; a linha E não é uma geração própria.",
+   "atendido": "rodada 4 (integrador): se:COL=v1,v2 na via"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
@@ -139,7 +141,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (gravação condicional de destino secundário) ou db/migracoes/05_AGE (F2.2)",
    "mudanca": "REPACAGI com LIVRE N (horário bloqueado): criar o bloqueio_agenda pela própria linha só quando bloqueado (opção 'se:LIVRE=N' num secundário antes, motivo de bloqueio pelo código migracao), ou ck_horario_agenda_bloqueio aceitar bloqueio nulo quando origem='migracao'",
-   "motivo": "a declaração pronta de REPACAGI grava situacao bloqueado para LIVRE N e para as situações HR/Q/P sem paciente; o CHECK exige bloqueio_agenda_id e a linha seria recusada (visível, 4025). Sem isso o horário bloqueado some, o que equivale a não oferecer a vaga, mas perde o registro do bloqueio"
+   "motivo": "a declaração pronta de REPACAGI grava situacao bloqueado para LIVRE N e para as situações HR/Q/P sem paciente; o CHECK exige bloqueio_agenda_id e a linha seria recusada (visível, 4025). Sem isso o horário bloqueado some, o que equivale a não oferecer a vaga, mas perde o registro do bloqueio",
+   "atendido": "rodada 4 (integrador): destino_se:LIVRE=N no secundário (bloqueio só do horário bloqueado)"
   }
  ],
  "declaracao_pronta": {

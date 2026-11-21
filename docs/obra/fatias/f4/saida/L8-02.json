@@ -3,7 +3,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar o mapa: tools/obra/gerar_mapa_conector.py)",
    "mudanca": "acrescentar as arestas: RPINTEVE -> RPEVENTO (ref:RPEVENTO.COD), RPINTEVE -> TBITEDES (ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)), RPRPA -> TBPROFIS (ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS), SIORCAME -> TBCONVEN (ref:TBCONVEN), SIEXAORC -> SIORCAME (ref:SIORCAME(NOME,ATO)); motivo 'L8-02 cobertura: <ref> declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga'",
-   "motivo": "L8-02: na ordem atual o pai vem depois (RPEVENTO 638 > RPINTEVE 634; TBITEDES 854 > RPINTEVE; TBPROFIS 869 > RPRPA 643; TBCONVEN 712 > SIORCAME 648; SIORCAME 648 > SIEXAORC 647): a carga real recusa RPINTEVE, RPRPA e SIEXAORC inteiras e o orçamento perde a fonte pagadora. A imagem sintética só registra pai externo que vem antes e o esperado é o da ordem certa: até aplicar, conferir-fatia-f4.sh L8-02 FALHA nessas quatro tabelas (de propósito). Edição de arquivo compartilhado negada a esta fatia: o orquestrador aplica"
+   "motivo": "L8-02: na ordem atual o pai vem depois (RPEVENTO 638 > RPINTEVE 634; TBITEDES 854 > RPINTEVE; TBPROFIS 869 > RPRPA 643; TBCONVEN 712 > SIORCAME 648; SIORCAME 648 > SIEXAORC 647): a carga real recusa RPINTEVE, RPRPA e SIEXAORC inteiras e o orçamento perde a fonte pagadora. A imagem sintética só registra pai externo que vem antes e o esperado é o da ordem certa: até aplicar, conferir-fatia-f4.sh L8-02 FALHA nessas quatro tabelas (de propósito). Edição de arquivo compartilhado negada a esta fatia: o orquestrador aplica",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
@@ -78,13 +79,15 @@
    "rodada": 3,
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar o mapa)",
    "mudanca": "acrescentar as arestas SIREFCON -> TBCONVEN, TBINDPRO -> TBCONVEN e TBINDPRO -> TBPROCTO; motivo 'L8-02 r3: referência declarada sem FK na origem: o pai vinha depois do filho na ordem de carga'",
-   "motivo": "L8-02 r3: na ordem atual TBCONVEN (690) e TBPROCTO (658) vêm depois de SIREFCON (629) e TBINDPRO (648): a carga real recusaria essas linhas (pai_inexistente). A imagem sintética registra os pais como já carregados; o teste da fatia exige este pedido enquanto a ordem não mudar"
+   "motivo": "L8-02 r3: na ordem atual TBCONVEN (690) e TBPROCTO (658) vêm depois de SIREFCON (629) e TBINDPRO (648): a carga real recusaria essas linhas (pai_inexistente). A imagem sintética registra os pais como já carregados; o teste da fatia exige este pedido enquanto a ordem não mudar",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "rodada": 3,
    "arquivo": "conector/sante_conector/sentinela.py (_digitos)",
    "mudanca": "documento (cnpj, cpf, cpf_cnpj, inteiro_zeros_esquerda) em coluna DOUBLE: float integral vira inteiro antes de tirar os dígitos (hoje str(float) traz '.0' e todo CNPJ em DOUBLE vira documento_invalido)",
-   "motivo": "L8-02 r3: TBCOOPER.CGC é DOUBLE na origem (como TBHOSPIT, TBEMPHOS e outras): sem a correção a pessoa jurídica da cooperativa entra sem CNPJ e a adoção pelo CNPJ não acontece. A imagem sintética já traz o CGC em DOUBLE e o esperado muda sozinho quando a regra aceitar. REVISÃO r3: o esperado da imagem sintética é só o correto (adoção pelo CNPJ, 1062 da repetida): até aplicar, a conciliação de TBCOOPER FALHA de propósito"
+   "motivo": "L8-02 r3: TBCOOPER.CGC é DOUBLE na origem (como TBHOSPIT, TBEMPHOS e outras): sem a correção a pessoa jurídica da cooperativa entra sem CNPJ e a adoção pelo CNPJ não acontece. A imagem sintética já traz o CGC em DOUBLE e o esperado muda sozinho quando a regra aceitar. REVISÃO r3: o esperado da imagem sintética é só o correto (adoção pelo CNPJ, 1062 da repetida): até aplicar, a conciliação de TBCOOPER FALHA de propósito",
+   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro"
   },
   {
    "rodada": 3,

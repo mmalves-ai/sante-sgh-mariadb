@@ -1593,3 +1593,17 @@ Vale por cima das linhas anteriores da L7-07 para as mesmas tabelas.
 | PREXAMEASSINATURA | Continua **declarada e pronta**; BLOQUEADA só por `pai_nao_carregado:PRASSINATURA_CAB` (L6-11). Nenhum destino alternativo. | `exame_item_assinatura.documento_prontuario_id` é NOT NULL e o único documento correto é o cabeçalho de assinatura; criar documento na L7-04 duplicaria o que a L6-11 grava. Descartar seria fugir de trabalho (prova clínica de quais exames cada assinatura cobriu). Pedido reforçado às fatias L6-11/L6-12. |
 | SIRESVAR | Continua **declarada e pronta**; BLOQUEADA só por `pai_nao_carregado:SIVARFORMULA` (L7-03), que por sua vez espera SIFORMUL (descarte `mecanismo_do_produto` da L7-01/L7-02). | Valor de entrada do cálculo do analito: dado clínico, carrega. Sem a variável da fórmula não há destino correto (`variavel_formula_id` NOT NULL, única por resultado). Pedido à fatia dona de SIFORMUL para carregar a fórmula. |
 | TBEMIREFMATMED (L8-04, rodada 3) | dona pelo índice: L8-04. **Não é descarte**; BLOQUEADA só por `pai_nao_carregado:TBMATMED` | `referencia_emissao_matmed_excecao.item_faturavel_id` é NOT NULL e o item faturável do mat/med só existe quando a L8-03 carregar TBMATMED (filtro por licença) com o destino secundário `item_faturavel`. Declaração pronta (hoje comentada no L8-05.tsv) passa ao L8-04.tsv e é descomentada nesse momento (pedido em `saida/L8-04.json`). TBREFMEMTUSS, TBREFUNI e TBTIPPRO saíram da imagem e dos testes da L8-04 (são da L8-03). |
+
+## Rodada 4 (integrador): decisões de motor tomadas pela melhor prática
+- **Filtro de linha (`so_se:`)**: a linha fora do filtro é recusada com pendência BAIXA (visível no painel, contada
+  como recusada na conciliação) e nunca gravada; a regra é declarada (`!licenca_nao_comprovada` para referência
+  comercial sem licença do cliente, regra 7). Filhas que apontam para ela ficam com `pai_pendente` da mesma gravidade.
+- **Vários pais e `max:`/`min:`**: vale o de maior (menor) valor; empate pela menor chave na ordem natural; a escolha
+  fica registrada na linha (`escolha_pelo_maior`, baixa). Sem `max:`, vários pais só valem quando todos apontam a
+  mesma linha do destino (parcelas de um título agrupado); senão continua `pai_ambiguo`.
+- **Destino principal agrupado**: a primeira linha gravada do grupo cria; as outras apontam para ela (resumo relido do
+  destino); grupo que ganha membro novo em execução posterior: `grupo_divergente_aguarda_sincronizar` (a origem vence).
+- **Percentual do grupo (`#grupo_razao`)**: arredondado à escala do destino (meio para cima); soma zero não divide:
+  NULL com `valor_fora_do_dominio`.
+- **`#arquivo`** (imagens e anexos binários): não entra pelo conector sem o armazenamento de arquivos do produto;
+  as tabelas que dependem dele ficam BLOQUEADAS (nunca descarte) até a decisão de modelo.

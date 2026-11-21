@@ -90,7 +90,8 @@ DESCARTADAS = ("CDTPRETCONS", "PSTPRETORNO")
 PRONTAS = ("REPACAGI",)
 
 CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "RESITAGE", "RETIPAGE",
-              "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "SICTRAGE", "REAGENDA", "REAGECRI", "RECTRAGE")
+              "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "REAGENDA", "REAGECRI", "RECTRAGE", "SICTRAGE")
+# rodada 4: SICTRAGE depois de REAGENDA porque a agenda de exame (SIAGENDA, L6-04) passou a esperar o profissional
 PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia"], "TBPROFIS": ["1", "2"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único vem daqui; a categoria 'exame' já
 # existe no destino (a agenda de exame a adota, sem sobrescrever)

@@ -67,7 +67,8 @@
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "equipe desdobrada: no destino com desdobrar, o #item aceitar a referência da via (hoje _converter recebe passos=None), inclusive encadeada (ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS), e o #rotulo aceitar cod:<tabela>.<coluna> (hoje o cod: recebe a marca, não o rótulo), para a função pelo grau de participação TISS (funcao_equipe_cirurgica.grau_participacao_tiss); e a sequência pela posição do item",
    "motivo": "CCAGENDA (ID_CRM, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_CIRCUL, ID_TBCBOPRO_PEDIATRA) -> agendamento_cirurgico_equipe e CCLANCIR (ID_CIRUR, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_PED, ID_CIRC, ID_TBCBOPRO_AUX4) -> participante_cirurgia: hoje sem destino (as tabelas carregam; a equipe fica pendente deste pedido). Também exige o grau TISS preenchido no cadastro de funções do cliente (PRTIPO_PROFISSIONAL não o traz)",
-   "prioridade": "alta"
+   "prioridade": "alta",
+   "aplicado_r4": "rodada 4 (integrador): #item com ref: e #rotulo com cod: aplicados; a sequência pela posição do item NÃO foi feita"
   },
   {
    "arquivo": "decisão de destino (fatia L8 de TBPROCTO) + declarado/dependencias.tsv",

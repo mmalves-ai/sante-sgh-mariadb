@@ -10,31 +10,36 @@
    "n": 2,
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova)",
    "mudanca": "filtro de linha pela origem do pai ou interruptor de licença do cliente: opção de via 'so_se:<ref>><COL>=<valores>' (ex.: 'so_se:TBCTRMEM>REF_BRA=N;so_se:TBCTRMEM>REF_SIMP=N') ou 'licenca:brasindice|simpro': a linha que não passa é PULADA com a pendência baixa licenca_nao_comprovada (contada como pulada na conciliação, nunca gravada)",
-   "motivo": "TBMATMED (910.414 na referência): itens das tabelas próprias carregam em item_referencia_matmed (fonte 'outra'); os da referência comercial só com a licença do cliente (regra 7). Sem o filtro, recusar por NOT NULL daria centenas de milhares de pendências críticas no painel; por isso segue bloqueada (pedido 11 da rodada 2, não atendido)"
+   "motivo": "TBMATMED (910.414 na referência): itens das tabelas próprias carregam em item_referencia_matmed (fonte 'outra'); os da referência comercial só com a licença do cliente (regra 7). Sem o filtro, recusar por NOT NULL daria centenas de milhares de pendências críticas no painel; por isso segue bloqueada (pedido 11 da rodada 2, não atendido)",
+   "atendido": "rodada 4 (integrador): so_se:TAB>TBCTRMEM>REF_BRA=N,F!licenca_nao_comprovada (linha fora: recusada com pendência baixa, nunca gravada)"
   },
   {
    "n": 3,
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova)",
    "mudanca": "código derivado de várias colunas: '#codigo_derivado:C1+C2+C3:<n>:<prefixo>' (valores unidos por '_', hash quando não cabe)",
-   "motivo": "pacote.codigo (UNIQUE) de TBPACTHM é um por CON,CONTAS,THM; TBITEATE.codigo por TAB+COD (hoje a repetição é recusada com 1062). Pedido 7 da rodada 2, parte não atendida"
+   "motivo": "pacote.codigo (UNIQUE) de TBPACTHM é um por CON,CONTAS,THM; TBITEATE.codigo por TAB+COD (hoje a repetição é recusada com 1062). Pedido 7 da rodada 2, parte não atendida",
+   "atendido": "rodada 4 (integrador): #codigo_derivado:C1+C2+C3:n:prefixo"
   },
   {
    "n": 4,
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova) + confirmação do orquestrador",
    "mudanca": "referência condicionada pelo valor de outra coluna da linha: 'so_se:TIPO=<v>' numa coluna concorrente (a referência só vale quando TIPO tem o valor; senão a coluna fica sem valor e a próxima concorrente é tentada). Com ela, TBPACTHM: pacote_item_incluso.item_faturavel_id por TIPO de honorário 'ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id', por TIPO de diária/taxa pelo item da diária (TBTABDTH), e mat/med sem item faturável vira grupo de faturamento; o orquestrador confirma na imagem o domínio de TBPACTHM.TIPO (só os valores distintos e contagens). Item do pacote (THM) pela tabela de honorários do convênio: chave composta com valor encadeado 'ref:TBTABTHM(ref:TBCONVEN>THM,THM)@item_faturavel_id' (CON da linha)",
-   "motivo": "TBPACTHM (335 na referência): sem o tipo, (TABELA, PROCTO) ligaria um item de mat/med ao procedimento de mesmo número numa tabela de honorários (TBCTRTHM e TBCTRMEM numeram desde 1): ligação errada calada é pior que bloqueio. Estrutura decidida: pacote agrupado por CON,CONTAS,THM (antes;agrupar), pacote_item_incluso por linha (principal), pacote_contrato por fonte (adotar:pacote_id,fonte_pagadora_id)"
+   "motivo": "TBPACTHM (335 na referência): sem o tipo, (TABELA, PROCTO) ligaria um item de mat/med ao procedimento de mesmo número numa tabela de honorários (TBCTRTHM e TBCTRMEM numeram desde 1): ligação errada calada é pior que bloqueio. Estrutura decidida: pacote agrupado por CON,CONTAS,THM (antes;agrupar), pacote_item_incluso por linha (principal), pacote_contrato por fonte (adotar:pacote_id,fonte_pagadora_id)",
+   "aplicado_r4": "rodada 4 (integrador): se:TIPO=v na coluna concorrente aplicado; a chave composta com valor encadeado ref:T(ref:U>X,C) NÃO foi feita"
   },
   {
    "n": 5,
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "TBPORMED->TBCONVEN (TBPORMED vem antes de TBCONVEN na ordem real): incluída no pedido 9, que junta todas as arestas que faltam",
-   "motivo": "valor_porte_medico.fonte_pagadora_id: sem a aresta a fonte fica pai_inexistente na carga real e o CHECK de escopo recusa toda linha (na imagem sintética TBCONVEN é pai externo)"
+   "motivo": "valor_porte_medico.fonte_pagadora_id: sem a aresta a fonte fica pai_inexistente na carga real e o CHECK de escopo recusa toda linha (na imagem sintética TBCONVEN é pai externo)",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "n": 6,
    "arquivo": "conector/sante_conector/sentinela.py (_digitos)",
    "mudanca": "regras cnpj, cpf e cpf_cnpj aceitam número de ponto flutuante inteiro (DOUBLE da origem, ex.: 11222333000181.0 -> '11222333000181'); fração diferente de zero: documento_invalido",
-   "motivo": "TBCOOPER.CGC (L8-02) e TBPRESER.CGC_CPF (L8-04) são DOUBLE: hoje viram NULL com documento_invalido e o CNPJ da cooperativa/prestador se perde (e o adotar:cnpj nunca casa)"
+   "motivo": "TBCOOPER.CGC (L8-02) e TBPRESER.CGC_CPF (L8-04) são DOUBLE: hoje viram NULL com documento_invalido e o CNPJ da cooperativa/prestador se perde (e o adotar:cnpj nunca casa)",
+   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro"
   },
   {
    "n": 7,
@@ -52,7 +57,8 @@
    "n": 9,
    "arquivo": "conector/mapa/declarado/dependencias.tsv + conector/mapa/declarado/ciclos.tsv (integrador)",
    "mudanca": "arestas de ordem que faltam (na carga real o pai vem DEPOIS do filho; a imagem sintética esconde porque dá o pai como externo): TBCRECOO->TBPROFIS; TBINDICE->TBCONVEN; TBPORMED->TBCONVEN; TBPERTHM->TBCONVEN (quando descomentada); TBLOCCON->TBCENCUS em duas fases em ciclos.tsv (TBCENCUS->TBLOCCON já existe: o local entra sem o centro de custo e a segunda fase completa local_cobranca.centro_custo_id)",
-   "motivo": "sem elas, na carga real todo valor_indice e todo valor_porte_medico são recusados (pai_inexistente e CHECK de escopo), todo membro_cooperativa é recusado (NOT NULL) e todo local_cobranca.centro_custo_id fica NULL. O teste OrdemDasReferencias.test_pai_antes_do_filho_ou_pedido_aberto (test_l8_03.py) falha se um pai vier depois sem pedido aberto, e deixa de aceitar quando este pedido for marcado atendido sem a aresta aplicada"
+   "motivo": "sem elas, na carga real todo valor_indice e todo valor_porte_medico são recusados (pai_inexistente e CHECK de escopo), todo membro_cooperativa é recusado (NOT NULL) e todo local_cobranca.centro_custo_id fica NULL. O teste OrdemDasReferencias.test_pai_antes_do_filho_ou_pedido_aberto (test_l8_03.py) falha se um pai vier depois sem pedido aberto, e deixa de aceitar quando este pedido for marcado atendido sem a aresta aplicada",
+   "atendido": "rodada 4 (integrador): arestas TBPERTHM->TBCONVEN e TBLOCCON->TBCENCUS (duas fases em ciclos.tsv); as outras já estavam"
   },
   {
    "n": 10,

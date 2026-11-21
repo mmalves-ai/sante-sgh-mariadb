@@ -31,7 +31,8 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "regra `inteiro_mais_um` (texto ou inteiro numérico + 1; não numérico: NULL com valor_fora_do_dominio)",
-   "motivo": "PRIORIDADE ALTA. TBSEGUIA está BLOQUEADA (declaração pronta e comentada) até esta regra: NUM_LOTE e SEQ_TRANSACAO guardam o ÚLTIMO número usado (evidência: o código antigo grava o contador relido sob trava + 1); o destino pede o próximo. Gravar como está repetiria, depois da virada, um lote já enviado à operadora. Com a regra: descomentar as linhas #TBSEGUIA de colunas.d/L8-05.tsv e de valores.d/L8-05.tsv, trocar a regra de NUM_LOTE e SEQ_TRANSACAO para inteiro_mais_um e voltar TBSEGUIA para CARREGADAS na sintética"
+   "motivo": "PRIORIDADE ALTA. TBSEGUIA está BLOQUEADA (declaração pronta e comentada) até esta regra: NUM_LOTE e SEQ_TRANSACAO guardam o ÚLTIMO número usado (evidência: o código antigo grava o contador relido sob trava + 1); o destino pede o próximo. Gravar como está repetiria, depois da virada, um lote já enviado à operadora. Com a regra: descomentar as linhas #TBSEGUIA de colunas.d/L8-05.tsv e de valores.d/L8-05.tsv, trocar a regra de NUM_LOTE e SEQ_TRANSACAO para inteiro_mais_um e voltar TBSEGUIA para CARREGADAS na sintética",
+   "atendido": "rodada 4 (integrador): regra inteiro_mais_um"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -74,13 +75,15 @@
    "arquivo": "tools/obra/cobertura_conector.py",
    "prioridade": "alta",
    "mudanca": "em _colunas_ddl, aceitar MODIFY COLUMN como ADD COLUMN: trocar `(?:ADD COLUMN (?:IF NOT EXISTS )?)?` por `(?:(?:ADD|MODIFY) COLUMN (?:IF NOT EXISTS )?)?` no re.match (a última definição da coluna vale)",
-   "motivo": "TBTIPPLCONV aparece BLOQUEADA (coluna_obrigatoria_sem_fonte: contrato_fonte_pagadora_id, categoria_acomodacao_id) porque a cobertura lê só o CREATE: o DDL 12_FAT/11 já as torna NULL por MODIFY COLUMN, e a carga real concilia (conferência da fatia: 3 gravadas de 6). Prova sem editar o arquivo: a cobertura com a troca, executada em memória, dá TBTIPPLCONV CARREGA (e 798/340/47 no global)"
+   "motivo": "TBTIPPLCONV aparece BLOQUEADA (coluna_obrigatoria_sem_fonte: contrato_fonte_pagadora_id, categoria_acomodacao_id) porque a cobertura lê só o CREATE: o DDL 12_FAT/11 já as torna NULL por MODIFY COLUMN, e a carga real concilia (conferência da fatia: 3 gravadas de 6). Prova sem editar o arquivo: a cobertura com a troca, executada em memória, dá TBTIPPLCONV CARREGA (e 798/340/47 no global)",
+   "atendido": "rodada 4 (integrador): cobertura lê MODIFY COLUMN"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar tabelas.tsv)",
    "prioridade": "alta",
    "mudanca": "linha: FCCTAAUD\tFCCTAEXT\treferência declarada sem FK na origem (chave alternativa composta ANOPRO, MESPRO, TIPO_CTA, COD): o pai vinha depois do filho na ordem de carga",
-   "motivo": "FCCTAAUD (ordem 970) carrega antes de FCCTAEXT (971): toda auditoria sai pai_inexistente + 1048. A imagem sintética já traz os dois esperados (antes e depois da dependência) e escolhe pelo mapa vigente (_esperado_auditoria)"
+   "motivo": "FCCTAAUD (ordem 970) carrega antes de FCCTAEXT (971): toda auditoria sai pai_inexistente + 1048. A imagem sintética já traz os dois esperados (antes e depois da dependência) e escolhe pelo mapa vigente (_esperado_auditoria)",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "db/migracoes/12_FAT (trilha F2.2: semente)",
@@ -111,7 +114,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "regra condicional por coluna: gravar o valor só quando outra coluna da linha tiver um valor (ex.: via `se:AUDITADA=S`); fora da condição, NULL sem pendência",
-   "motivo": "FCCTAAUD: concluida_em e resultado só para auditoria concluída (AUDITADA = S); sem a condição, uma auditoria em andamento pareceria concluída. FCCTAAUD fica BLOQUEADA até este pedido, o da dependência e o do total nulo"
+   "motivo": "FCCTAAUD: concluida_em e resultado só para auditoria concluída (AUDITADA = S); sem a condição, uma auditoria em andamento pareceria concluída. FCCTAAUD fica BLOQUEADA até este pedido, o da dependência e o do total nulo",
+   "atendido": "rodada 4 (integrador): se:AUDITADA=S na via"
   }
  ]
 }

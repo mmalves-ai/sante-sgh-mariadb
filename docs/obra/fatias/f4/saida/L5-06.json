@@ -3,7 +3,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (e regerar o mapa)",
    "mudanca": "aresta TBCBOPRO_TBCONVEN -> TBPROFIS",
-   "motivo": "o profissional do credenciamento vem por ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS e TBCBOPRO_TBCONVEN (ordem 718) vem antes de TBPROFIS (873): hoje NENHUM credenciamento grava (90455 linhas). A sintética e o teste da L5-06 exigem a carga completa (3 gravados) e falham até a aresta entrar; a cobertura também deveria deixar de contar como CARREGA tabela cuja ref encadeada aponta pai de ordem maior sem aresta (tools/obra/cobertura_conector.py)"
+   "motivo": "o profissional do credenciamento vem por ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS e TBCBOPRO_TBCONVEN (ordem 718) vem antes de TBPROFIS (873): hoje NENHUM credenciamento grava (90455 linhas). A sintética e o teste da L5-06 exigem a carga completa (3 gravados) e falham até a aresta entrar; a cobertura também deveria deixar de contar como CARREGA tabela cuja ref encadeada aponta pai de ordem maior sem aresta (tools/obra/cobertura_conector.py)",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",

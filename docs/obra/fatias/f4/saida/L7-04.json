@@ -87,7 +87,8 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv (integrador) + tools/obra/gerar_mapa_conector.py",
    "mudanca": "arestas PREXAMEASSINATURA -> SILANEXA e PREXAMEASSINATURA -> PRASSINATURA_CAB (referências declaradas na rodada 3 sem FK na origem: hoje o vínculo, ordem 848, vem antes do exame pedido, 1145, e do cabeçalho, 1106)",
    "motivo": "sem a ordem, toda linha do vínculo exame_item_assinatura recusa por pai_inexistente + 1048 (pendente, sem perda; o Sincronizar não reavalia recusa igual). A imagem sintética da L7-04 já traz o esperado das duas ordens e escolhe pelo mapa (ESPERADO_ASSINATURA / _ANTES)",
-   "gravidade": "alta"
+   "gravidade": "alta",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv (fatia L6-11)",

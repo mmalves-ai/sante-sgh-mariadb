@@ -31,7 +31,8 @@
   {
    "arquivo": "conector/sante_conector/mapa.py (erros_especiais_e_opcoes) + carga_mapa.py",
    "mudanca": "M5: permitir 'adotar:<colunas>' no destino PRINCIPAL (linha que já existe com o mesmo código é adotada)",
-   "motivo": "TBKITPRO (BLOQUEADA, rodada 3 revisão): um kit_cuidado_enfermagem por cuidado (13 linhas em 3 cuidados na referência); declaração pronta e comentada na forma M5 em colunas.d/L6-11.tsv"
+   "motivo": "TBKITPRO (BLOQUEADA, rodada 3 revisão): um kit_cuidado_enfermagem por cuidado (13 linhas em 3 cuidados na referência); declaração pronta e comentada na forma M5 em colunas.d/L6-11.tsv",
+   "atendido": "rodada 4 (integrador): adotar: no principal já é aceito pelo verificador e pela carga (sem mudança)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -108,7 +109,8 @@
   {
    "arquivo": "conector/sante_conector/mapa.py (principal_e_destinos) ou gerador do mapa",
    "mudanca": "deixar a fatia escolher o destino principal (ex.: opção 'principal' na via) quando a ordem de tabelas_destino não serve; alternativa ao M5",
-   "motivo": "TBKITPRO: com kit_cuidado_enfermagem_item como principal, o kit sai como secundário 'antes;agrupar:PROCTO' (mecanismo já existente); hoje o verificador recusa porque o kit é o 1.º destino do mapa"
+   "motivo": "TBKITPRO: com kit_cuidado_enfermagem_item como principal, o kit sai como secundário 'antes;agrupar:PROCTO' (mecanismo já existente); hoje o verificador recusa porque o kit é o 1.º destino do mapa",
+   "atendido": "rodada 4 (integrador): opção `principal` na via de uma coluna escolhe o destino principal (mapa.principal_e_destinos)"
   },
   {
    "arquivo": "colunas.d/L6-10.tsv, L6-12.tsv, L6-13.tsv e L7-07.tsv (fatias irmãs)",

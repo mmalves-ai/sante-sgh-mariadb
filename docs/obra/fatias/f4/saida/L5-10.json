@@ -43,7 +43,8 @@
   {
    "arquivo": "conector/mapa/tabelas.tsv e dependencias.tsv (gerados)",
    "mudanca": "rodar python3 -I tools/obra/gerar_mapa_conector.py na integração",
-   "motivo": "o verificador acusa os dois desatualizados por declarado/dependencias.tsv alterado por outras fatias (+7 linhas); a L5-10 não declara dependência"
+   "motivo": "o verificador acusa os dois desatualizados por declarado/dependencias.tsv alterado por outras fatias (+7 linhas); a L5-10 não declara dependência",
+   "atendido": "rodada 4 (integrador): mapa regenerado"
   }
  ]
 }

@@ -122,7 +122,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
    "mudanca": "DECLARADAS nesta rodada em declarado/dependencias.tsv (o integrador regenera a ordem): FCCODCON -> TBCONVEN e TBPROFIS; FCCPSCON, FCFECMES, FCORCAME -> TBCONVEN; FCORCAME -> RICADPAC (TBCBOPRO não precisa: a referência encadeada só LÊ a inscrição da origem; o id gravado é o de TBPROFIS). FALTAM, para quando carregarem: FCCRECUN -> TBCONVEN, TBPROFIS; FCDIAEXT -> FCCTAEXT; FCDIAINT -> RICONTAS; FCPORANE -> TBCTRTHM; RICGUIAS -> RICONTAS, TBCONVEN, TBPROFIS",
-   "motivo": "os pais vinham depois na ordem do mapa (TBCONVEN 712, TBPROFIS 869, RICADPAC 1007 contra 611-623 da fatia): sem a aresta a referência fica pai_inexistente e a linha é recusada pelo NOT NULL. A imagem sintética dá os pais como PAIS_EXTERNOS e não prova a ordem: pedido abaixo de checagem no verificador"
+   "motivo": "os pais vinham depois na ordem do mapa (TBCONVEN 712, TBPROFIS 869, RICADPAC 1007 contra 611-623 da fatia): sem a aresta a referência fica pai_inexistente e a linha é recusada pelo NOT NULL. A imagem sintética dá os pais como PAIS_EXTERNOS e não prova a ordem: pedido abaixo de checagem no verificador",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "L8-06 (contas) e integrador: conferência por agregado, sem ler valores",

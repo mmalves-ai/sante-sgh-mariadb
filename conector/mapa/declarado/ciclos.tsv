@@ -3,3 +3,5 @@ SITPEQV	SITPEQV_SITPEQVMODELO	duas_fases	ciclo entre 2 tabelas (SITPEQV,SITPEQV_
 TBCBOPRO	TBPROFIS	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga
 TBPROFIS	TBFORNEC	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga
 TBPROFIS	TBUNIDAD	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga
+TBLOCCON	TBCENCUS	duas_fases	rodada 4 (pedido 8 da L8-03): ciclo TBCENCUS <-> TBLOCCON; o local entra sem o centro de custo e a fase 2 completa local_cobranca.centro_custo_id
+TBUNIDAD	TBPROFIS	duas_fases	rodada 4: diretor, autorizador e farmacêutico da unidade pelo CPF/CNS/inscrição do profissional (passos); TBPROFIS já depende de TBUNIDAD em duas fases: a unidade entra antes e a fase 2 grava os profissionais

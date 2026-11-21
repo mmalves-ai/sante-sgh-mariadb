@@ -10,7 +10,8 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "_digitos: float de valor inteiro (DOUBLE da origem) vira os dígitos do inteiro (hoje '52998224725.0' vira 12 dígitos e cai em documento_invalido)",
-   "motivo": "CPF, CNS e CNPJ guardados em DOUBLE PRECISION: FAMEDSOL (CPF, CNS), RESEGUR (CPF, CNPJ). O esperado da L5-04 acompanha o motor (MOTOR_CPF_DOUBLE) e passa sozinho quando a correção entrar"
+   "motivo": "CPF, CNS e CNPJ guardados em DOUBLE PRECISION: FAMEDSOL (CPF, CNS), RESEGUR (CPF, CNPJ). O esperado da L5-04 acompanha o motor (MOTOR_CPF_DOUBLE) e passa sozinho quando a correção entrar",
+   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro"
   },
   {
    "arquivo": "conector/sante_conector/depara.py",
@@ -59,12 +60,14 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (e o mapa gerado)",
    "mudanca": "acrescentar TBESPPRO>TBPROCTO e TBESPPRO>TBESPEC",
-   "motivo": "TBESPPRO declara ref:TBPROCTO.COD_PROCEDIMENTO e ref:TBESPEC sem FK na origem; os pais vêm depois na ordem (TBESPPRO 67, TBESPEC 957, TBPROCTO 658): sem as arestas toda linha cai em pai_inexistente"
+   "motivo": "TBESPPRO declara ref:TBPROCTO.COD_PROCEDIMENTO e ref:TBESPEC sem FK na origem; os pais vêm depois na ordem (TBESPPRO 67, TBESPEC 957, TBPROCTO 658): sem as arestas toda linha cai em pai_inexistente",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (e o mapa gerado)",
    "mudanca": "acrescentar SITECNIC>TBPROFIS e SHTECNIC>TBPROFIS",
-   "motivo": "profissional tem UNIQUE por pessoa física: o técnico (ordem 57 e 59) vem antes do cadastro de profissionais (833) e, quando a mesma pessoa está nos dois, a linha de TBPROFIS cai em 1062. Com a aresta, o técnico ADOTA o profissional já gravado (adotar:pessoa_fisica_id, declarado). Alternativa equivalente: TBPROFIS com adotar:pessoa_fisica_id no profissional (L5-06)"
+   "motivo": "profissional tem UNIQUE por pessoa física: o técnico (ordem 57 e 59) vem antes do cadastro de profissionais (833) e, quando a mesma pessoa está nos dois, a linha de TBPROFIS cai em 1062. Com a aresta, o técnico ADOTA o profissional já gravado (adotar:pessoa_fisica_id, declarado). Alternativa equivalente: TBPROFIS com adotar:pessoa_fisica_id no profissional (L5-06)",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

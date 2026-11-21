@@ -3,7 +3,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo futuro, não bloqueia a fatia)",
    "mudanca": "desdobrar com referência ao destino pelo rótulo (ex.: parametro_valor.parametro_definicao_id resolvido por parametro_definicao.chave = #rotulo; nível estabelecimento por @estabelecimento)",
-   "motivo": "quando o produto definir as chaves do ponto em parametro_definicao, PEPARAM pode carregar os valores da instalação em vez do descarte"
+   "motivo": "quando o produto definir as chaves do ponto em parametro_definicao, PEPARAM pode carregar os valores da instalação em vez do descarte",
+   "atendido": "rodada 4 (integrador): #rotulo com cod: (o rótulo acha o id no destino; exemplo_r4, EX4_PAR)"
   },
   {
    "arquivo": "tools/obra/fatiar_conector.py (docs/obra/fatias/f4/*.md, indice.tsv)",

@@ -86,7 +86,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (orquestrador)",
    "mudanca": "arestas de ordem PREXAMEASSINATURA -> PRASSINATURA_CAB e PREXAMEASSINATURA -> SILANEXA (e PRASSINATURA_DOC, lida pela encadeada)",
-   "motivo": "exame_item_assinatura (L7-04) lê o documento pela ligação PRASS_DOC_PREXAMEASS (descarte duplicado da L6-12) e o exame por SILANEXA; ordem 848 antes de 1106 e 1145: a primeira carga recusa toda ligação"
+   "motivo": "exame_item_assinatura (L7-04) lê o documento pela ligação PRASS_DOC_PREXAMEASS (descarte duplicado da L6-12) e o exame por SILANEXA; ordem 848 antes de 1106 e 1145: a primeira carga recusa toda ligação",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv + sem_carga.tsv (fatia L6-11)",

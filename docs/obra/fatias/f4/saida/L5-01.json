@@ -6,7 +6,8 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
    "mudanca": "aresta de ordem DIPERMPS -> TBPRESER",
    "motivo": "DIPERMPS (ordem 7) acha o prestador pela chave alternativa composta de TBPRESER (ordem 864, L8-04): sem a aresta o recorte de todo usuário fica pai_inexistente e é recusado (NOT NULL). Com a aresta, o esperado da imagem sintética muda sozinho (cenário pai_antes em sintetica_d/l5_01.py, já provado em test_l5_01.test_recorte_com_a_aresta_de_ordem) BLOQUEANTE para a carga real: hoje DIPERMPS tem ordem 7 e TBPRESER 864, e as 35 restrições de acesso por prestador seriam todas recusadas (a sintética, no cenário da ordem real, espera 0 gravados). A fatia não edita declarado/dependencias.tsv (arquivo compartilhado): linha a acrescentar: \"DIPERMPS\\tTBPRESER\\tL5-01 cobertura: ref:TBPRESER.(ATO,COD,MODULO)=(ATO,PS,MODULO) declarada na fatia (prestador do recorte, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga\", e regenerar o mapa.",
-   "bloqueante": true
+   "bloqueante": true,
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "db/migracoes/02_ADM/04_tabelas.sql (trilha F2.2)",
@@ -59,7 +60,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (motor, genérico)",
    "mudanca": "referência por coluna no #item do desdobrar (ex.: desdobrar:DIGITAR_CNS=cns|paciente com via ref:TBDIGITAR_CNSCADPAC>DESCRICAO só para aquela coluna), ou declaração por coluna do desdobrado",
-   "motivo": "permitir a tradução por lista e pelo rótulo do pedido acima (hoje o #item usa só a regra da linha #item, sem passos de referência)"
+   "motivo": "permitir a tradução por lista e pelo rótulo do pedido acima (hoje o #item usa só a regra da linha #item, sem passos de referência)",
+   "atendido": "rodada 4 (integrador): #item desdobrado com ref: encadeada/composta (exemplo_r4, EX4_PAR)"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",

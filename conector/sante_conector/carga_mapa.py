@@ -125,6 +125,28 @@ Mecanismos da rodada 3 de cobertura, regras de estrutura (prova em `sintetica_d/
   linha especial, ou a gerada da coluna). Cabeçalho de execução anterior cujos agregados mudaram (parcela nova na
   origem): usado como está, com a pendência `grupo_divergente_aguarda_sincronizar` (a origem vence no Sincronizar).
 
+Mecanismos da rodada 4 de cobertura (pedidos das fatias; prova em `sintetica_d/exemplo_r4.py`):
+- `#data_hora_mais:<DATA>,<HORA>,<MINUTOS>`: data + hora HHMM somadas da duração (pela regra declarada na linha, ex.
+  `minutos_hhmm`); sem duração na linha, a de outra tabela pela `ref:` da via (encadeada terminada em coluna, ou
+  `ref:T.(..)=(..)@coluna`, a que o pai gravou no destino); sem nenhuma: NULL com `duracao_ausente`; fim no dia
+  seguinte: pendência baixa `virada_de_dia`;
+- condições (`mapa.condicao`): `se:COL[>T>X][=v1,v2]` na via de uma coluna (fora: NULL sem pendência; a próxima
+  concorrente é tentada), `destino_se:...` num destino SECUNDÁRIO (fora: o destino não grava, como `opcional`) e
+  `so_se:...[!regra]` na tabela (linha fora do filtro: recusada com a pendência BAIXA da regra, nunca gravada; ex.:
+  item de referência comercial sem licença do cliente);
+- `cod:<tabela>.(c1,c2)=(v1,v2)`: id do destino por chave composta (cada v: `valor` ou literal `=x`);
+- `#item`/`#item2` com `ref:` encadeada ou composta e `cod:`; `#rotulo` com `cod:` (o rótulo acha o id no destino);
+- `agrupar:C1,..` no destino PRINCIPAL (uma linha do destino por grupo; os membros apontam para ela) e
+  `#grupo_json:C1,C2` (lista JSON das colunas de todas as linhas lidas do grupo, sem segredo);
+- grupos de leitura sem cabeçalho: `#grupo_seq@C1,C2` (posição na leitura pela chave) e `#grupo_razao:V@C1,C2`
+  (V / soma de V do grupo x 100, na escala do destino; soma zero: NULL com valor_fora_do_dominio);
+- agregados das tabelas FILHAS da origem: `#filhos_min|max|somar|contar:T1.C1|T2.C2@FK` (linhas de T com FK = chave
+  desta linha; min/max sem valor: NULL com `sem_filho_com_valor`; somar sem filho: 0);
+- `#codigo_derivado:C1+C2:<n>[:prefixo]` (valores unidos por '_');
+- referência: literal na chave alternativa composta, `max:`/`min:` (escolha entre vários pais, pendência baixa
+  `escolha_pelo_maior`/`escolha_pelo_menor`), chave composta num passo seguinte `>(C1,C2)>U`, e vários pais da chave
+  alternativa que apontam para a MESMA linha do destino (parcelas do mesmo título agrupado) não são `pai_ambiguo`.
+
 O hash da linha cobre as colunas lidas (chave + declaradas): declarar uma coluna nova numa tabela já carregada faz as
 linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em silêncio.
 """
@@ -153,6 +175,9 @@ GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_i
 GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
                         "sem_item_a_gravar": "baixa"})
 GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
+GRAVIDADE_REGRA.update({"duracao_ausente": "media", "escolha_pelo_maior": "baixa", "escolha_pelo_menor": "baixa",
+                        "sem_filho_com_valor": "media", "fora_do_filtro_da_carga": "baixa"})
+FILTRO_PADRAO = "fora_do_filtro_da_carga"
 TIPOS_INT = (7, 8, 16)
 INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
 DEC_DESTINO = {"decimal"}
@@ -213,6 +238,39 @@ def fonte_especial(nome):
         if nome.startswith(pre):
             return nome[len(pre):].split(":")[0]
     return None
+
+
+def fontes_especial(nome):
+    """Todas as colunas da origem lidas por uma coluna especial (rodada 4: várias em `#codigo_derivado:A+B:n`,
+    `#grupo_json:A,B`, `#grupo_seq@A,B`, `#grupo_razao:V@A,B` e `#data_hora_mais:D,H,M`)."""
+    if nome.startswith("#codigo_derivado:"):
+        return nome.split(":")[1].split("+")
+    if nome.startswith("#grupo_json:"):
+        return nome[12:].split(",")
+    if nome.startswith("#grupo_seq@"):
+        return nome[11:].split(",")
+    if nome.startswith("#grupo_razao:"):
+        v, cols = nome[13:].split("@", 1)
+        return [v] + cols.split(",")
+    if nome.startswith("#data_hora_mais:"):
+        return nome[16:].split(",")
+    x = fonte_especial(nome)
+    return [x] if x else []
+
+
+def _valor_json(x):
+    if isinstance(x, (bytes, bytearray)):
+        return "sha256:" + hashlib.sha256(x).hexdigest()
+    if isinstance(x, (datetime.date, datetime.time)):
+        return x.isoformat()
+    if isinstance(x, (decimal.Decimal, float)):
+        return canon(decimal.Decimal(str(x)))
+    return x
+
+
+def _ord_chave(cp):
+    """Ordem natural de uma chave da origem ('2' antes de '10')."""
+    return tuple((0, int(x), "") if x.isdigit() else (1, 0, x) for x in cp.split("|"))
 
 
 def data_composta(ano, mes, dia=1):
@@ -313,10 +371,18 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                 col["passos"] = passos
             if c["coluna"].startswith("#dias:"):  # a regra declarada vale para o VALOR (nunca a gerada/da referência)
                 col["regra"] = c.get("regra") or ""
-            cod = [x[4:] for x in (c.get("via") or "").split(";") if x.startswith("cod:")]
+            if c["coluna"].startswith("#data_hora_mais:"):  # a regra declarada vale para os MINUTOS
+                col["regra"] = c.get("regra") or ""
+            via = (c.get("via") or "").split(";")
+            cod = [x[4:] for x in via if x.startswith("cod:")]
             if cod:
-                col["cod"] = tuple(cod[0].split(".", 1))
+                col["cod"] = mapa.cod_spec(cod[0])
+            se = [mapa.condicao(x[3:]) for x in via if x.startswith("se:")]
+            if se and se[0]:
+                col["se"] = se[0]
             cols[dt].append(col)
+        filtros = [f for c in decl[t] for x in (c.get("via") or "").split(";") if x.startswith("so_se:")
+                   for f in [mapa.condicao(x[6:])] if f]
         chave = [x for x in (r.get("chave") or "").split(",") if x]
         lidas = list(chave)
 
@@ -329,15 +395,22 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                 if n.startswith("#data:") or n.startswith("#data_hora:") or n.startswith("#dias:"):
                     for x in n.split(":", 1)[1].split(","):
                         ler(None if x.startswith("=") else x)
-                ler(fonte_especial(n) if _especial(n) else n)
-                if c.get("passos") and c["passos"][0]["modo"] in ("composta", "alt_composta"):
-                    for x in c["passos"][0].get("cols") or c["passos"][0]["arg"]:
+                for x in (fontes_especial(n) if _especial(n) else [n]):
+                    ler(x)
+                if c.get("passos"):
+                    for x in mapa.colunas_da_linha(c["passos"][0]):
                         ler(x)
+                if c.get("se"):
+                    _ler_cond(c["se"], ler)
+            if (opcoes.get(dt) or {}).get("se") and "coluna" in opcoes[dt]["se"]:
+                _ler_cond(opcoes[dt]["se"], ler)
             for spec, _ in opcoes.get(dt, {}).get("desdobrar", []):
                 for col in spec.split("+"):
                     ler(col)
             for col in opcoes.get(dt, {}).get("agrupar", []):
                 ler(col)
+        for f in filtros:
+            _ler_cond(f, ler)
         retratos = {}
         for dt in dts:
             for c in cols[dt]:
@@ -357,8 +430,25 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                       "retratos": retratos, "segredos": segredos,
                       "regras_geradas": {n: g.get("regra") or "" for n, g in geradas.get(t, {}).items()},
                       "estrategia": r.get("estrategia", ""), "opcoes": {dt: opcoes.get(dt, {}) for dt in dts},
+                      "filtros": filtros,
                       "duas_fases": {p for f, p in quebras if f == t} | {t}})
     return plano
+
+
+def _passos_em_duas_fases(c, p):
+    """Referência por passos (chave alternativa, composta ou encadeada) terminada na tabela de uma aresta declarada em
+    duas fases (`declarado/ciclos.tsv`) e sem `@coluna`: a chave do pai sai da origem agora e o id é gravado no fim
+    (fase 2), como a referência simples (rodada 4: unidade -> profissional pelo CPF, ciclo com o profissional)."""
+    ps = c.get("passos")
+    return bool(ps) and not _especial(c["coluna"]) and "tabela" in ps[-1] and not ps[-1].get("coluna_destino") \
+        and ps[-1]["tabela"] in p["duas_fases"] and ps[-1]["tabela"] != p["tabela"] and not c.get("cod")
+
+
+def _ler_cond(cond, ler):
+    ler(cond["coluna"])
+    if cond.get("passos"):
+        for x in mapa.colunas_da_linha(cond["passos"][0]):
+            ler(x)
 
 
 def canon(v, precisao=None):
@@ -417,16 +507,20 @@ class CargaMapa(carga.Carga):
         self._grupos = None                 # (destino agrupado, {chave: (grupo, pos.)}, {grupo: (agregados, membros)})
         self._grp = None                    # (grupo, posição) da linha atual
         self.tipos = {}                     # coluna da origem -> código do tipo (tabela atual)
+        self._alt_lista = {}                # (tabela, coluna) -> {valor: [chaves do pai]} (valor repetido)
+        self._leit = {}                     # grupos de leitura sem cabeçalho (`#grupo_seq@`, `#grupo_razao:`)
+        self._filhos = {}                   # (tabela filha, coluna, FK) -> {FK: [valores]} (`#filhos_*`)
 
     # ----- destino -----
     def _info(self, dt):
         if dt not in self.info:
-            rs = self._todas("SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, DATETIME_PRECISION, COLUMN_DEFAULT FROM"
-                             " information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s", (dt,))
+            rs = self._todas("SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, DATETIME_PRECISION, COLUMN_DEFAULT,"
+                             " NUMERIC_SCALE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND"
+                             " TABLE_NAME=%s", (dt,))
             if not rs:
                 raise ErroCarga("tabela de destino inexistente no banco do cliente: %s" % dt)
-            self.info[dt] = {c: (n == "YES", t, p, n != "YES" and d is not None and d != "NULL")
-                             for c, n, t, p, d in rs}
+            self.info[dt] = {c: (n == "YES", t, p, n != "YES" and d is not None and d != "NULL", e)
+                             for c, n, t, p, d, e in rs}
         return self.info[dt]
 
     def _estabelecimento(self):
@@ -445,6 +539,44 @@ class CargaMapa(carga.Carga):
             ids = self._todas("SELECT id FROM `%s` WHERE `%s`=%%s LIMIT 2" % (tab, col), (v,))
             self._cod[k] = ids[0][0] if len(ids) == 1 else (_AMBIGUO if ids else None)
         return self._cod[k]
+
+    def _id_por_codigos(self, tab, cols, vals):
+        """`cod:<tabela>.(c1,c2)=(v1,v2)`: id da linha com todas as colunas; None se ausente, _AMBIGUO se várias."""
+        k = (tab, tuple(cols), tuple(vals))
+        if k not in self._cod:
+            ids = self._todas("SELECT id FROM `%s` WHERE %s LIMIT 2" % (tab, " AND ".join("`%s`=%%s" % c for c in cols)),
+                              tuple(vals))
+            self._cod[k] = ids[0][0] if len(ids) == 1 else (_AMBIGUO if ids else None)
+        return self._cod[k]
+
+    def _resolver_cod(self, cod, x, pend):
+        """Valor -> id pelo `cod:` (simples ou composto); ausente ou repetido: NULL com a pendência."""
+        if x is None:
+            return None
+        x = x if not isinstance(x, bool) else int(x)
+        if len(cod) == 3:
+            vs = [v[1:] if v.startswith("=") else x for v in cod[2]]
+            r = self._id_por_codigos(cod[0], cod[1], vs)
+        else:
+            r = self._id_por_codigo(cod[0], cod[1], x)
+        if r is None or r is _AMBIGUO:
+            pend.append(("pai_ambiguo" if r is _AMBIGUO else "codigo_inexistente_destino", "media"))
+            return None
+        return r
+
+    def _cond(self, linha, cond):
+        """Condição de linha (`mapa.condicao`): a coluna (ou a do pai pela encadeada) tem um dos valores."""
+        v = linha.get(cond["coluna"])
+        if cond.get("passos"):
+            v, _, pr = self._seguir(linha, cond["coluna"], cond["passos"])
+            if pr:
+                v = None
+        if isinstance(v, (str, bytes, bytearray)):
+            v = sentinela.aplicar("texto", v)[0]
+        s = None if v is None else self._chave(v).strip()
+        if cond["valores"] is None:
+            return bool(s)
+        return (s or "") in cond["valores"]
 
     def _unica(self, tab):
         """Id da única linha ativa de `tab` (`@unico:`); None se nenhuma ou várias. Nunca fixo por cliente."""
@@ -565,34 +697,78 @@ class CargaMapa(carga.Carga):
         k = (tab, col)
         cols = list(col) if isinstance(col, tuple) else [col]
         if k not in self._alt:
-            m = {}
+            m, lista = {}, {}
             for cp, d in self._ler_pai(tab, cols):
                 if all(d[c] is None for c in cols):
                     continue
                 v = "|".join(self._chave(d[c]).strip() for c in cols)
                 m[v] = cp if v not in m else _AMBIGUO
+                lista.setdefault(v, []).append(cp)
             self._alt[k] = m
+            self._alt_lista[k] = {v: cps for v, cps in lista.items() if len(cps) > 1}
         return self._alt[k]
 
-    def _seguir(self, linha, nome, passos):
+    def _desambiguar(self, s, k, v, ultimo, pend):
+        """Vários pais na chave alternativa (rodada 4): `max:`/`min:` escolhe pelo valor da coluna (empate: menor
+        chave; pendência baixa); no ÚLTIMO passo, todos apontando para a MESMA linha do destino (parcelas de um título
+        agrupado) valem por ela. Senão _AMBIGUO."""
+        cands = (getattr(self, "_alt_lista", None) or {}).get(k, {}).get(v)
+        if not cands:
+            return _AMBIGUO
+        if s.get("escolha"):
+            tipo, col = s["escolha"]
+            vals = self._coluna_pai(s["tabela"], col)
+            validos = [(vals.get(cp), cp) for cp in cands if vals.get(cp) is not None]
+            if validos:
+                alvo = (max if tipo == "max" else min)(x for x, _ in validos)
+                cp = min((cp for x, cp in validos if x == alvo), key=_ord_chave)
+            else:
+                cp = min(cands, key=_ord_chave)
+            if pend is not None:
+                pend.append(("escolha_pelo_maior" if tipo == "max" else "escolha_pelo_menor", "baixa"))
+            return cp
+        if not ultimo:
+            return _AMBIGUO
+        tab = s["tabela"]
+        if tab not in self.existente:
+            self._carregar_existente(tab)
+        suf = "/" + s["destino"] if s.get("destino") else ""
+        ids = {(self.existente[tab].get(cp + suf) or (None,))[0] for cp in cands}
+        return min(cands, key=_ord_chave) if len(ids) == 1 and None not in ids else _AMBIGUO
+
+    def _seguir(self, linha, nome, passos, pend=None):
         """Segue os passos de uma referência declarada. (valor, (tabela, chave do pai) ou None, regra ou None):
         terminada em tabela devolve a chave do pai a resolver; terminada em coluna, o valor da origem do pai."""
         v, atual = linha.get(nome), None
+        ult_tab = max(i for i, x in enumerate(passos) if "tabela" in x) if any("tabela" in x for x in passos) else -1
         for i, s in enumerate(passos):
+            if "colunas" in s:  # chave composta do próximo passo pelas colunas da linha do pai (rodada 4)
+                partes = []
+                for col in s["colunas"]:
+                    m = self._coluna_pai(atual[0], col)
+                    if atual[1] not in m:
+                        return None, None, "pai_inexistente"
+                    partes.append(m[atual[1]])
+                if all(x is None for x in partes):
+                    return None, None, None
+                v, atual = "|".join(self._chave(x) for x in partes), None
+                continue
             if "coluna" in s:
                 if atual[1] not in self._coluna_pai(atual[0], s["coluna"]):
                     return None, None, "pai_inexistente"
                 v, atual = self._coluna_pai(atual[0], s["coluna"])[atual[1]], None
                 continue
             if i == 0 and s["modo"] in ("composta", "alt_composta"):
-                partes = [linha[c] for c in (s.get("cols") or s["arg"])]
+                partes = [c[1:] if c.startswith("=") else linha[c] for c in (s.get("cols") or s["arg"])]
                 if all(x is None for x in partes):
                     return None, None, None
                 if s["modo"] == "composta":
                     cp = "|".join(self._chave(x) for x in partes)
                 else:
-                    cp = self._chave_alternativa(s["tabela"], tuple(s["arg"])).get(
-                        "|".join(self._chave(x).strip() for x in partes))
+                    va = "|".join(self._chave(x).strip() for x in partes)
+                    cp = self._chave_alternativa(s["tabela"], tuple(s["arg"])).get(va)
+                    if cp is _AMBIGUO:
+                        cp = self._desambiguar(s, (s["tabela"], tuple(s["arg"])), va, i == ult_tab, pend)
                     if cp is None:
                         return None, None, "pai_inexistente"
                     if cp is _AMBIGUO:
@@ -602,7 +778,10 @@ class CargaMapa(carga.Carga):
                         (isinstance(v, (str, bytes)) and not self._chave(v).strip()):
                     return None, None, None
                 if s["modo"] == "alt":
-                    cp = self._chave_alternativa(s["tabela"], s["arg"]).get(self._chave(v).strip())
+                    va = self._chave(v).strip()
+                    cp = self._chave_alternativa(s["tabela"], s["arg"]).get(va)
+                    if cp is _AMBIGUO:
+                        cp = self._desambiguar(s, (s["tabela"], s["arg"]), va, i == ult_tab, pend)
                     if cp is None:
                         return None, None, "pai_inexistente"
                     if cp is _AMBIGUO:
@@ -650,16 +829,18 @@ class CargaMapa(carga.Carga):
             m[rid] = r[0][0] if r else None
         return m[rid]
 
-    def _converter(self, t, chave, p, linha, c, raw, pend):
+    def _converter(self, t, chave, p, linha, c, raw, pend, pode_adiar=False):
         """Uma coluna da origem pela referência (simples, composta, alternativa ou encadeada), de-para oficial ou de
         valores e regra. (valor, recusa ou None, chave do pai adiada ou None)."""
         nome = c["coluna"]
         regra = sentinela.regra_efetiva(c["regra"] or "texto", self.subtipo.get(nome, 0))
         if c.get("passos"):
-            raw, alvo, pr = self._seguir(linha, nome, c["passos"])
+            raw, alvo, pr = self._seguir(linha, nome, c["passos"], pend)
             if pr:
                 pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
                 return None, None, None
+            if alvo is not None and pode_adiar and _passos_em_duas_fases(c, p):
+                return None, None, alvo  # rodada 4: pai por chave alternativa/encadeada em duas fases (UPDATE no fim)
             if alvo is not None:
                 x, pr, g = self._referencia_chave(t, chave, nome, alvo[0], alvo[1])
                 if pr == "pai_pendente":
@@ -703,9 +884,13 @@ class CargaMapa(carga.Carga):
     def _texto_fonte(self, c, linha):
         """Valor convertido da coluna de origem de uma especial (`#sha256`, `#codigo_derivado`), pela regra declarada
         na própria linha especial (padrão: texto)."""
-        col = fonte_especial(c["coluna"])
-        regra = sentinela.regra_efetiva(c["regra"] or "texto", self.subtipo.get(col, 0))
-        return sentinela.aplicar(regra, linha[col])[0]
+        cols = fontes_especial(c["coluna"]) if c["coluna"].startswith("#codigo_derivado:") else \
+            [fonte_especial(c["coluna"])]
+        xs = [sentinela.aplicar(sentinela.regra_efetiva(c["regra"] or "texto", self.subtipo.get(col, 0)),
+                                linha[col])[0] for col in cols]
+        if len(xs) == 1:
+            return xs[0]
+        return None if all(x is None for x in xs) else "_".join("" if x is None else str(x) for x in xs)
 
     def _preparar(self, p):
         """Na carga, com o dicionário vivo: `#retrato:*` lê TODAS as colunas da tabela (também no hash da linha)."""
@@ -781,6 +966,126 @@ class CargaMapa(carga.Carga):
             pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
         return x
 
+    def _data_hora_mais(self, t, chave, linha, c, pend):
+        """`#data_hora_mais:<DATA>,<HORA>,<MINUTOS>`: data + hora somadas da duração (regra declarada na linha; sem
+        valor, a de outra tabela pela `ref:` da via). Sem duração: NULL com duracao_ausente."""
+        cd, ch, cm = c["coluna"][16:].split(",")
+        base, pr = data_hora_composta(linha[cd], linha[ch])
+        if pr or base is None:
+            if pr:
+                pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+            return None
+        regra = sentinela.regra_efetiva(c.get("regra") or "inteiro", self.subtipo.get(cm, 0))
+        mins, pr = sentinela.aplicar(regra, linha[cm])
+        if mins is None and not pr and c.get("passos"):
+            raw, alvo, pr = self._seguir(linha, cm, c["passos"], pend)
+            if not pr and alvo is not None:
+                x, pr, g = self._referencia_chave(t, chave, c["coluna"], alvo[0], alvo[1])
+                ult = c["passos"][-1]
+                if pr:
+                    pend.append((pr, g))
+                    return None
+                mins = self._coluna_destino(ult.get("destino") or self._principal(alvo[0]), ult["coluna_destino"],
+                                            x) if ult.get("coluna_destino") else None
+            elif not pr:
+                mins, pr = sentinela.aplicar(regra, raw)
+        if pr:
+            pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+            return None
+        if mins is None:
+            pend.append(("duracao_ausente", "media"))
+            return None
+        try:
+            mins = int(mins)
+        except (TypeError, ValueError):
+            mins = -1
+        if mins < 0:
+            pend.append(("valor_fora_do_dominio", "media"))
+            return None
+        fim = base + datetime.timedelta(minutes=mins)
+        if fim.date() > base.date():
+            pend.append(("virada_de_dia", "baixa"))
+        return fim
+
+    def _filhos_agregado(self, p, chave, c, pend):
+        """`#filhos_min|max|somar|contar:T1.C1|T2.C2@FK`: agregado das linhas das tabelas FILHAS da origem cuja FK é
+        a chave desta linha (só leitura da imagem; cache por execução)."""
+        tipo, resto = c["coluna"][8:].split(":", 1)
+        alvos, fk = resto.rsplit("@", 1)
+        geradas = {}
+        for g in self.mapa_exec.get("colunas", []):
+            geradas[(g["tabela"], g["coluna"])] = g.get("regra") or ""
+        xs = []
+        for alvo in alvos.split("|"):
+            tf, col = alvo.split(".")
+            k = (tf, col, fk)
+            if k not in self._filhos:
+                m = {}
+                if tf in set(self.lt.tabelas()):
+                    regra = c.get("regra") or geradas.get((tf, col)) or "texto"
+                    regra = "texto" if regra == "chave_origem" else regra
+                    nomes, it = self.lt.ler_tudo(tf, colunas=[fk, col])
+                    for x in it:
+                        d = dict(zip(nomes, x))
+                        if d[fk] is None:
+                            continue
+                        y = sentinela.aplicar(regra, d[col])[0]
+                        m.setdefault(self._chave(d[fk]), []).append(y)
+                self._filhos[k] = m
+            xs += self._filhos[k].get(chave, [])
+        if tipo == "contar":
+            return len(xs)
+        vs = [x for x in xs if x is not None]
+        if tipo == "somar":
+            return sum((decimal.Decimal(str(x)) for x in vs), decimal.Decimal(0))
+        if not vs:
+            pend.append(("sem_filho_com_valor", "media"))
+            return None
+        return min(vs) if tipo == "min" else max(vs)
+
+    def _montar_leituras(self, p):
+        """Grupos de leitura sem cabeçalho (`#grupo_seq@C1,C2`, `#grupo_razao:V@C1,C2`): posição da linha no grupo
+        (ordem da chave) e soma de V do grupo, de todas as linhas lidas."""
+        self._leit = {}
+        specs = [c for dt in p["destinos"] for c in p["colunas"][dt]
+                 if c["coluna"].startswith("#grupo_seq@") or c["coluna"].startswith("#grupo_razao:")]
+        if not specs:
+            return
+        for linha, ch_sem in self._linhas_mapa(p):
+            chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
+            for c in specs:
+                n = c["coluna"]
+                cols = n.split("@", 1)[1].split(",")
+                partes = [sentinela.aplicar("texto", linha[x])[0] if isinstance(linha[x], (str, bytes, bytearray))
+                          else linha[x] for x in cols]
+                g = "|".join("" if x is None else self._chave(x) for x in partes)
+                por, cont, soma_g = self._leit.setdefault(n, ({}, {}, {}))
+                cont[g] = cont.get(g, 0) + 1
+                v = None
+                if n.startswith("#grupo_razao:"):
+                    col = n[13:].split("@")[0]
+                    r = c.get("regra") or (p.get("regras_geradas") or {}).get(col) or "decimal"
+                    v = sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(col, 0)), linha[col])[0]
+                    if v is not None:
+                        v = decimal.Decimal(str(v))
+                        soma_g[g] = soma_g.get(g, decimal.Decimal(0)) + v
+                por[chave] = (g, cont[g], v)
+
+    def _leitura(self, nome, chave, escala, pend):
+        por, _, soma_g = self._leit[nome]
+        g, pos, v = por[chave]
+        if nome.startswith("#grupo_seq@"):
+            return pos
+        tot = soma_g.get(g)
+        if v is None:
+            return None
+        if not tot:
+            pend.append(("valor_fora_do_dominio", "media"))
+            return None
+        x = v / tot * 100
+        return x.quantize(decimal.Decimal(1).scaleb(-int(escala)), rounding=decimal.ROUND_HALF_UP) \
+            if escala is not None else x
+
     def _valores(self, p, linha, chave):
         """{dt: [(sufixo, {coluna destino: valor})]}, {dt: [(colunas, resumo)]}, pendências [(regra, grav)], recusa
         (regra, grav) ou None, adiadas [(dt, coluna, ref, chave_pai)]. Sufixo '' é a linha única do destino; o
@@ -790,8 +1095,12 @@ class CargaMapa(carga.Carga):
         for dt in p["destinos"]:
             info = self._info(dt)
             op = (p.get("opcoes") or {}).get(dt) or {}
+            if op.get("se") and not self._cond(linha, op["se"]):  # destino_se: o secundário não grava
+                vals[dt], campos[dt] = [], []
+                continue
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
             pos = {}                           # coluna destino -> posição no modelo (colunas concorrentes)
+            marcas = {}                        # marca de item -> declaração (`cod:` no #item/#rotulo)
             for c in p["colunas"][dt]:
                 nome, dc = c["coluna"], c["destino"]
                 if nome == "@id" or nome.startswith("@id:"):
@@ -799,8 +1108,11 @@ class CargaMapa(carga.Carga):
                 if mapa.eh_item(nome):
                     pos[dc] = len(modelo)
                     modelo.append((dc, _Marca(nome)))
+                    marcas[nome] = c
                     continue
-                if nome.startswith("=~"):
+                if c.get("se") and not self._cond(linha, c["se"]):
+                    x = None  # condição da coluna fora: NULL sem pendência (a próxima concorrente é tentada)
+                elif nome.startswith("=~"):
                     x = nome[2:]
                     pend.append(("valor_presumido", "baixa"))
                 elif nome.startswith("="):
@@ -821,8 +1133,17 @@ class CargaMapa(carga.Carga):
                 elif mapa.spec_retrato(nome) is not None:  # `#retrato...` e `#sha256:#retrato...`
                     j = self._retrato(p, linha, nome[8:] if nome.startswith("#sha256:") else nome)
                     x = hashlib.sha256(j.encode("utf-8")).hexdigest() if nome.startswith("#sha256:") else j
+                elif nome.startswith("#grupo_seq@") or nome.startswith("#grupo_razao:"):
+                    x = self._leitura(nome, chave, (info.get(dc) or (None,) * 5)[4], pend)
+                    algum = algum or x is not None
                 elif nome.startswith("#grupo_"):
                     x = self._agregado(nome)
+                    algum = algum or x is not None
+                elif nome.startswith("#filhos_"):
+                    x = self._filhos_agregado(p, chave, c, pend)
+                    algum = algum or x is not None
+                elif nome.startswith("#data_hora_mais:"):
+                    x = self._data_hora_mais(t, chave, linha, c, pend)
                     algum = algum or x is not None
                 elif nome.startswith("#sha256:"):
                     y = self._texto_fonte(c, linha)
@@ -856,23 +1177,25 @@ class CargaMapa(carga.Carga):
                     if sentinela.aplicar("texto", linha[fonte_especial(nome)])[0] is not None:
                         pend.append(("segredo_aguarda_cofre", "media"))
                 else:
-                    x, recusa, adiada = self._converter(t, chave, p, linha, c, linha[nome], pend)
+                    x, recusa, adiada = self._converter(t, chave, p, linha, c, linha[nome], pend,
+                                                        pode_adiar=(info.get(dc) or (True,))[0])
                     if recusa:
                         return None, None, pend, recusa, []
                     if adiada is not None:
-                        if adiada:
+                        if isinstance(adiada, tuple):  # (tabela do pai, chave do pai) pelos passos
+                            adiadas.append((dt, dc, adiada[0], adiada[1]))
+                        elif adiada:
                             adiadas.append((dt, dc, c["referencia"], adiada))
                         continue  # coluna em duas fases: NULL agora, fora do resumo
+                    if (info.get(dc) or (True,))[0] and _passos_em_duas_fases(c, p):
+                        continue  # mesma coluna em duas fases sem pai a adiar: fica fora do resumo também
                     algum = algum or x is not None
                     if dc == "id" and op.get("complementa") and x is None:
                         return None, None, pend, ("pai_inexistente", "media"), []
                 if x == "@data_carga":
                     x = self.data_carga
                 if c.get("cod") and x is not None:  # id pelo código no cadastro do destino
-                    x = self._id_por_codigo(c["cod"][0], c["cod"][1], x if not isinstance(x, bool) else int(x))
-                    if x is None or x is _AMBIGUO:
-                        pend.append(("pai_ambiguo" if x is _AMBIGUO else "codigo_inexistente_destino", "media"))
-                        x = None
+                    x = self._resolver_cod(c["cod"], x, pend)
                 if dc in pos:  # coluna concorrente: vale a primeira com valor, na ordem declarada
                     if modelo[pos[dc]][1] is None and x is not None:
                         modelo[pos[dc]] = (dc, x)
@@ -887,10 +1210,14 @@ class CargaMapa(carga.Carga):
                 for spec, rot in op["desdobrar"]:
                     xs = []
                     for j, col in enumerate(spec.split("+")):
-                        x, recusa, _ = self._converter(t, chave, p, linha, dict(cis[j], coluna=col, passos=None),
+                        # rodada 4: a referência do #item (encadeada ou composta) e o `cod:` valem para o item
+                        x, recusa, _ = self._converter(t, chave, p, linha, dict(cis[j], coluna=col,
+                                                                                passos=cis[j].get("passos")),
                                                        linha[col], pend)
                         if recusa:
                             return None, None, pend, recusa, []
+                        if cis[j].get("cod") and x is not None:
+                            x = self._resolver_cod(cis[j]["cod"], x, pend)
                         xs.append(x)
                     if any(x is not None and (x is not False or op.get("com_falso")) for x in xs):
                         itens.append((rot, xs))
@@ -906,8 +1233,11 @@ class CargaMapa(carga.Carga):
                             x = item[k] if k < len(item) else None
                         else:
                             partes = rot.split("|")
+                            cm = marcas.get(str(x)) or {}
                             x = (partes[k] if k < len(partes) else "") or None
-                    ic = info.get(dc) or (True, None, None, False)
+                            if cm.get("cod") and x is not None:  # o rótulo acha o id no destino (rodada 4)
+                                x = self._resolver_cod(cm["cod"], x, pend)
+                    ic = info.get(dc) or (True, None, None, False, None)
                     x = tipar(x, ic[1])
                     if x is NAO_NUMERICO:
                         x = None
@@ -945,6 +1275,17 @@ class CargaMapa(carga.Carga):
             por_linha[chave] = (g, len(ms) + 1)
             ms.append(chave)
             for c in especs:
+                if c["coluna"].startswith("#grupo_json:"):  # rodada 4: lista das colunas de cada linha do grupo
+                    d = {}
+                    for col in c["coluna"][12:].split(","):
+                        if col in p.get("segredos", ()) or mapa.SEGREDO_NOME.search(col):
+                            continue
+                        r = (p.get("regras_geradas") or {}).get(col) or "texto"
+                        r = "texto" if r == "chave_origem" else r
+                        d[col] = _valor_json(sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(col, 0)),
+                                                               linha[col])[0])
+                    vals.setdefault((g, c["coluna"]), []).append(d)
+                    continue
                 col = fonte_especial(c["coluna"])
                 if col:
                     r = c["regra"] or (p.get("regras_geradas") or {}).get(col) or "texto"
@@ -962,6 +1303,8 @@ class CargaMapa(carga.Carga):
                     ag[n] = min(xs) if xs else None
                 elif n.startswith("#grupo_max:"):
                     ag[n] = max(xs) if xs else None
+                elif n.startswith("#grupo_json:"):
+                    ag[n] = json.dumps(xs or [], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             grupos[g] = (ag, ms)
         self._grupos = (dtg, por_linha, grupos)
 
@@ -969,15 +1312,15 @@ class CargaMapa(carga.Carga):
         g, i = self._grp
         return i if nome == "#grupo_seq" else self._grupos[2][g][0].get(nome)
 
-    def _cabecalho(self, t, dt, chave):
+    def _cabecalho(self, t, dt, chave, principal=False):
         """(id do cabeçalho do grupo da linha ou None, de execução anterior): o gravado nesta execução ou o de um
-        membro do grupo já carregado antes."""
+        membro do grupo já carregado antes. No destino PRINCIPAL agrupado (rodada 4), a chave do membro é a dele."""
         g = self._grp[0]
         if (t, g) in self._cab:
             return self._cab[(t, g)], False
         ex = self.existente.get(t, {})
         for m in self._grupos[2][g][1]:
-            e = ex.get("%s/%s" % (m, dt)) if m != chave else None
+            e = ex.get(m if principal else "%s/%s" % (m, dt)) if m != chave else None
             if e and e[0] is not None:
                 return e[0], True
         return None, False
@@ -1017,6 +1360,7 @@ class CargaMapa(carga.Carga):
         self._preparar(p)
         colide = self._colisoes(p)
         self._montar_grupos(p)
+        self._montar_leituras(p)
         seqs = [c["coluna"][5:] for dt in dts for c in p["colunas"][dt] if c["coluna"].startswith("#seq:")]
         cont_seq = {}
         inicio, n = time.monotonic(), 0
@@ -1046,7 +1390,11 @@ class CargaMapa(carga.Carga):
             if chave in colide:
                 vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
             else:
-                vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
+                fora = next((f for f in p.get("filtros") or [] if not self._cond(linha, f)), None)
+                if fora is not None:  # so_se: fora do filtro da carga, nunca gravada (pendência baixa, visível)
+                    vals, campos, pend, recusa, adiadas = None, None, [], (fora["regra"] or FILTRO_PADRAO, "baixa"), []
+                else:
+                    vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
                 if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:
                     recusa = ("sem_item_a_gravar", "baixa")  # nada a gravar: visível, conta como recusada
             if recusa:
@@ -1084,7 +1432,7 @@ class CargaMapa(carga.Carga):
                             rid, adotado = self._gravar_ou_adotar(dt, dict(v, id=completar), None, True)
                             self.cont["provisorios_completados"] = self.cont.get("provisorios_completados", 0) + 1
                         elif op.get("agrupar"):  # cabeçalho do grupo: a primeira linha gravada cria, as outras usam
-                            rid, anterior = self._cabecalho(t, dt, chave)
+                            rid, anterior = self._cabecalho(t, dt, chave, i == 0)
                             agrupado, adotado = rid is not None, False
                             if not agrupado:
                                 rid = self._inserir(dt, v)
@@ -1160,7 +1508,7 @@ class CargaMapa(carga.Carga):
                 for _, rot in op["desdobrar"]:
                     if base + "/" + rot in ex:
                         self._ja_carregada(ent, chave + "/" + rot, sit, ex[base + "/" + rot])
-            elif op.get("opcional"):
+            elif op.get("opcional") or op.get("se"):
                 if base in ex:
                     self._ja_carregada(ent, chave, sit, ex[base])
             else:
@@ -1168,7 +1516,10 @@ class CargaMapa(carga.Carga):
 
     def _fase2(self):
         """Referências adiadas (autorreferência e ciclo declarado em duas fases): gravadas por UPDATE no fim."""
+        feitas = set()  # colunas concorrentes adiadas: vale a primeira resolvida, na ordem declarada
         for dt, dc, rid, ref, cpai, t, chave in self.adiadas:
+            if (dt, dc, rid) in feitas:
+                continue
             if ref not in self.existente:
                 self._carregar_existente(ref)
             ant = self.existente[ref].get(cpai)
@@ -1178,6 +1529,7 @@ class CargaMapa(carga.Carga):
                 continue
             with self._c() as c:
                 c.execute("UPDATE `%s` SET `%s`=%%s WHERE id=%%s" % (dt, dc), (ant[0], rid))
+            feitas.add((dt, dc, rid))
             self.cont["fase2_gravadas"] += 1
         self._commit()
 
@@ -1204,6 +1556,7 @@ class CargaMapa(carga.Carga):
         cols, vistos = [], set()
         for c in p["colunas"][dt]:
             if c["coluna"].startswith("@id") or c["destino"] in vistos or (
+                    _passos_em_duas_fases(c, p) and (info.get(c["destino"]) or (True,))[0]) or (
                     not _especial(c["coluna"]) and (c["regra"] == "chave_origem" and c["referencia"] in p["duas_fases"]
                                                     and not c.get("passos") and not depara.conhecido(c["depara"]))):
                 continue

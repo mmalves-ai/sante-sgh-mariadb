@@ -13,7 +13,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar tabelas.tsv)",
    "mudanca": "APLICADO pela fatia (2026-11-21): linha TBCBOPRO_TBUNIDAD -> TBPROFIS em declarado/dependencias.tsv e mapa regenerado (gerar_mapa_conector.py); a lotação vem agora depois de TBPROFIS. Integrador: só conferir",
-   "motivo": "na ordem atual a lotação (91) vem antes do profissional (874): toda lotação seria recusada (pai_inexistente + 1048). A conferência da fatia simula o profissional já carregado (PAIS_EXTERNOS)"
+   "motivo": "na ordem atual a lotação (91) vem antes do profissional (874): toda lotação seria recusada (pai_inexistente + 1048). A conferência da fatia simula o profissional já carregado (PAIS_EXTERNOS)",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py (regras cnpj, cpf, cpf_cnpj)",

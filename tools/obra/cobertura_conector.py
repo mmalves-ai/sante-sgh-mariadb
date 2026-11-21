@@ -99,7 +99,8 @@ def _colunas_ddl(ddl, t):
     saida = {}
     for txt in [x.get("create", "")] + x.get("alter", []):
         for linha in txt.splitlines():
-            m = re.match(r"\s*(?:ALTER TABLE \S+\s+)?(?:ADD COLUMN (?:IF NOT EXISTS )?)?`?(\w+)`?\s+(\w+)(.*)", linha)
+            m = re.match(r"\s*(?:ALTER TABLE \S+\s+)?(?:(?:ADD|MODIFY) COLUMN (?:IF NOT EXISTS )?)?`?(\w+)`?\s+(\w+)(.*)",
+                         linha)
             if not m or m.group(1).upper() in mapa._RESERV or m.group(1).upper() in ("CREATE", "ALTER", "ADD"):
                 continue
             resto = m.group(3).upper()
@@ -163,7 +164,8 @@ def avaliar(raiz=RAIZ):
     opcionais = {}
     for c in d["colunas_decl"]:
         via = (c.get("via") or "").split(";")
-        if ("opcional" in via or "complementa" in via) and c.get("destino"):
+        if ("opcional" in via or "complementa" in via or any(x.startswith("destino_se:") for x in via)) \
+                and c.get("destino"):
             opcionais.setdefault(c["tabela"], set()).add(c["destino"].split(".")[0])
     fat = _indice()
     for c in d["colunas_decl"]:  # tabela já declarada fica com a fatia que a declarou (o índice pode ter mudado)

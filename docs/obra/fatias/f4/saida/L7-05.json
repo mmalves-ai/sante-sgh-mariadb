@@ -66,7 +66,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
    "mudanca": "arestas: GEARMLOC -> GELOCARM; GEARMLOC -> GEITENS; GECONITL -> GEARMLOC (já em ordem, mantém); GELANESI -> GEITENS; GELANESI -> TBUNICON; GEDESPDS -> GELANPED",
-   "motivo": "local de estoque (527), insumo (573), unidade (568) e item de compra (853) vêm depois do saldo mensal (510), do movimento do mês (515), dos itens do estoque inicial (533) e da descrição do serviço (518): toda linha seria recusada. A imagem sintética calcula o esperado nas duas ordens (_local_antes)"
+   "motivo": "local de estoque (527), insumo (573), unidade (568) e item de compra (853) vêm depois do saldo mensal (510), do movimento do mês (515), dos itens do estoque inicial (533) e da descrição do serviço (518): toda linha seria recusada. A imagem sintética calcula o esperado nas duas ordens (_local_antes)",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra do rótulo resolvido pelo código no destino)",
@@ -81,7 +82,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (destino principal agrupado)",
    "mudanca": "opção 'agrupar_principal:C1,C2,...' na via de uma coluna do destino PRINCIPAL: as linhas da origem com os mesmos valores em C1, C2 gravam UMA linha do destino (a primeira cria, as outras apontam o mesmo id no conector_origem, sem pendência), com os agregados #grupo_somar/#grupo_min/#grupo_max/#grupo_contar já existentes; grupo com agregado mudado em execução posterior: grupo_divergente_aguarda_sincronizar",
-   "motivo": "GEKONCDC (2,97 mi linhas, consumo por documento) -> consumo_centro_custo (uma linha por ano, mês, centro de custo, insumo e local: UNIQUE). Declaração pronta comentada em colunas.d/L7-05.tsv (#GEKONCDC). O orçamento lê consumo_centro_custo.valor_liquido; sem a carga o histórico de custo por centro some"
+   "motivo": "GEKONCDC (2,97 mi linhas, consumo por documento) -> consumo_centro_custo (uma linha por ano, mês, centro de custo, insumo e local: UNIQUE). Declaração pronta comentada em colunas.d/L7-05.tsv (#GEKONCDC). O orçamento lê consumo_centro_custo.valor_liquido; sem a carga o histórico de custo por centro some",
+   "atendido": "rodada 4 (integrador): agrupar: no destino principal (exemplo_r4, EX4_KON)"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py (pai repetido com o mesmo id no destino)",
@@ -96,7 +98,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
    "mudanca": "arestas: GEKONCDC -> TBCENCUS; GEKONCDC -> GEITENS; GEKONCDC -> GECADSAI; GEKONCDC -> GELOCARM; GECTRVMM -> GELANSAI; GECTRVMM -> GEVALMEM",
-   "motivo": "os pais vêm depois (ordem 516/526 contra 573 a 1040): sem elas, toda linha seria recusada quando o mecanismo chegar"
+   "motivo": "os pais vêm depois (ordem 516/526 contra 573 a 1040): sem elas, toda linha seria recusada quando o mecanismo chegar",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "db/migracoes/11_SUP/05_tabelas.sql (trilha F2.2, modelo)",

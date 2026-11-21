@@ -86,7 +86,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + mapa regenerado",
    "mudanca": "Aresta SITBEXHP -> SITBEXEQ (e SITBEXHP -> SITPEQV, já no mapa).",
-   "motivo": "SITBEXHP.exame_id copia o exame que a equivalência (L8-16) gravou: `ref:SITBEXEQ.(TIPO,COD_EXAME)=(TIPO,COD_EXAME)@exame_id`; sem a aresta, SITBEXHP (ordem 495) carrega antes de SITBEXEQ (L8) e todo exame vira pai_inexistente."
+   "motivo": "SITBEXHP.exame_id copia o exame que a equivalência (L8-16) gravou: `ref:SITBEXEQ.(TIPO,COD_EXAME)=(TIPO,COD_EXAME)@exame_id`; sem a aresta, SITBEXHP (ordem 495) carrega antes de SITBEXEQ (L8) e todo exame vira pai_inexistente.",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py (verificar: checagem de @id:<destino>, ~linha 243)",

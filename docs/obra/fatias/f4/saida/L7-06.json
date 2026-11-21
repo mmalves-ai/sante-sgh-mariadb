@@ -10,12 +10,14 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (orquestrador: regerar mapa e fatias)",
    "mudanca": "arestas novas: GEBARRAS -> GEITENS (insumo e unidade pela referência encadeada), GELOCUSU -> GEUSERS (o par do local padrão nasce em GEUSERS com padrao e permissões; GELOCUSU adota), GESALDOS -> GEITENS e GESALCON -> GEITENS (âncora complementa no insumo)",
    "motivo": "hoje GEBARRAS (ordem 581) carrega antes do insumo (GEITENS, 587): insumo_id e unidade_medida_id ficam pai_inexistente e a linha é recusada (NOT NULL). GELOCUSU (550) vem antes de GEUSERS (563): o par do local padrão é criado por GELOCUSU e GEUSERS o ADOTA sem gravar padrao nem as permissões. Aplicada a aresta GELOCUSU -> GEUSERS, o esperado da sintetica_d/l7_06.py muda: GEUSERS 1 deixa de ter adotado_existente e GELOCUSU passa a 2. GESALDOS (553) e GESALCON (552) vêm antes de GEITENS (583): sem a aresta, toda linha é recusada com pai_inexistente (complementa). Prova com o insumo presente: conferência isolada verde (ver L7-06.md)",
-   "prioridade": "alta"
+   "prioridade": "alta",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
    "mudanca": "destino (ou coluna) condicional pelo valor da origem: ex. via 'se:PESSOA=J' para empresa_fornecedora.cnpj, pessoa_juridica e 'se:PESSOA=F' para cpf, pessoa_fisica; conta_bancaria_credor só com BANCO e CONTA preenchidos (a linha que não satisfaz não grava o destino nem deixa pendência)",
-   "motivo": "TBFORNEC.CGC guarda CNPJ ou CPF conforme PESSOA: com as duas regras na mesma coluna, cada fornecedor leva um documento_invalido falso (a regra do outro tipo). Pessoa jurídica/física e conta bancária do credor seguem sem carga (o motor grava todo destino para toda linha e o CHECK recusaria o fornecedor sem banco)"
+   "motivo": "TBFORNEC.CGC guarda CNPJ ou CPF conforme PESSOA: com as duas regras na mesma coluna, cada fornecedor leva um documento_invalido falso (a regra do outro tipo). Pessoa jurídica/física e conta bancária do credor seguem sem carga (o motor grava todo destino para toda linha e o CHECK recusaria o fornecedor sem banco)",
+   "atendido": "rodada 4 (integrador): se:PESSOA=J na via / destino_se: no secundário"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

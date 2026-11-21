@@ -41,7 +41,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "aresta de ordem FCRECIBO -> FCCTAEXT",
-   "motivo": "recibo.conta_hospitalar_id e paciente_id vêm da conta (ref alternativa composta); na ordem atual FCRECIBO (767) carrega antes de FCCTAEXT (971) e todo recibo fica com pai_inexistente nas duas colunas (anuláveis, visível)"
+   "motivo": "recibo.conta_hospitalar_id e paciente_id vêm da conta (ref alternativa composta); na ordem atual FCRECIBO (767) carrega antes de FCCTAEXT (971) e todo recibo fica com pai_inexistente nas duas colunas (anuláveis, visível)",
+   "atendido": "rodada 4 (integrador): aresta já no mapa"
   },
   {
    "arquivo": "catalogos/carregadores (trilha de catálogos) e docs/ESTADO.md",

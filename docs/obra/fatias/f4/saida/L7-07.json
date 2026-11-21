@@ -157,7 +157,8 @@
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "prioridade": "media",
    "mudanca": "agrupar no destino PRINCIPAL (o mesmo do pedido 15 da L6-05), ou agregado `#grupo_somar:C` válido num principal com `adotar:` (soma das linhas lidas com a mesma chave de adoção)",
-   "motivo": "GEITEMKITRAS: o par kit+insumo adotado fica com a quantidade_padrao da primeira linha; kit_rastreavel_item.saldo_atual (soma dos lotes) fica no padrão 0"
+   "motivo": "GEITEMKITRAS: o par kit+insumo adotado fica com a quantidade_padrao da primeira linha; kit_rastreavel_item.saldo_atual (soma dos lotes) fica no padrão 0",
+   "atendido": "rodada 4 (integrador): agrupar: no destino principal com #grupo_somar"
   },
   {
    "id": "via_alternativa",

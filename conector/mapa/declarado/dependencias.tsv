@@ -174,3 +174,18 @@ TBITEDES	TBCENCUS	L8-12 r3 (conferidor, pedido 24): centro de custo sugerido da 
 TBITEDES	TBGRUDES	L8-12 r3 (conferidor, pedido 24): tipo da natureza pela classificação do grupo (ref:TBGRUDES>CLASSIF); o grupo carrega antes do item, como no plano gerencial
 MFLANCTO	TBITEDES	L8-12 r3 (pedido 24): movimento_bancario.natureza_financeira_id por ref:TBITEDES(GRUPO,SUBGRUPO,ITEM) (L8-11) sem FK na origem: com a natureza depois do subgrupo, o movimento tem de vir depois dela
 MFCONPAG	TBITEDES	L8-12 r3 (pedido 20): titulo_pagar.natureza_financeira_id pela natureza do maior rateio (encadeada até TBITEDES); a natureza vem antes do título
+TBUNIUSE	TBUNIDAD	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBUSERCON	TBCONVEN	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBUSUCPL	TBPROFIS	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+REPACAGN	TBCONVEN	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+RESEGUR	RICADPAC_TBCONVEN	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIPACAGN	TBCONVEN	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBUNIDAD	TBPROFIS	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIAGENDA	TBPROFIS	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+SIPARGER	TBPROFIS	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+GECADDISPENSACAO	PRPRESC	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+FCCRECUN	TBPROFIS	rodada 4 (integrador): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga
+TBLOCCON	TBCENCUS	rodada 4 (pedido 8 da L8-03): centro de custo do local por ref:TBCENCUS; TBCENCUS já depende de TBLOCCON: duas fases (ciclos.tsv)
+TBUNIDADEMEDIDA	TBUNICON	rodada 4 (pedido 19 da L6-10): referência declarada na fatia sem FK na origem
+TBPERTHM	TBCONVEN	rodada 4 (pedido 8 da L8-03): fonte pagadora da regra de percentual (declaração da fatia) sem FK na origem
+MFLANCTO	TBCENCUS	rodada 4 (pedido 10 da L8-11): centro de custo do movimento por referência declarada sem FK na origem

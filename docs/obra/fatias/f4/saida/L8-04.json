@@ -4,7 +4,8 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py (_digitos e regras de documento)",
    "mudanca": "1) _digitos aceita float de valor inteiro (DOUBLE da origem: str(int(v))); hoje 11222333000181.0 vira 15 dígitos e documento_invalido. 2) regras genéricas para documento num campo só: tipo_pessoa_documento (até 11 dígitos 'fisica', 12 a 14 'juridica', inválido NULL com documento_invalido), cpf_de_documento e cnpj_de_documento (gravam só quando o tamanho casa; no outro caso NULL sem pendência). Depois: TBPRESER CGC_CPF -> prestador_terceiro.tipo_pessoa/cpf/cnpj com essas regras, no lugar de =~juridica e cnpj",
-   "motivo": "pedido 1: TBPRESER (prestador_terceiro) é planejada, mas hoje 100% das linhas caem no CHECK do documento (na imagem sintética: 3 de 3, documento_invalido 2 e 4025 3)"
+   "motivo": "pedido 1: TBPRESER (prestador_terceiro) é planejada, mas hoje 100% das linhas caem no CHECK do documento (na imagem sintética: 3 de 3, documento_invalido 2 e 4025 3)",
+   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro e regras tipo_pessoa_documento, cpf_de_documento, cnpj_de_documento"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador: desdobrar no destino principal)",

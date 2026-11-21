@@ -178,3 +178,22 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
   TBTIPPLCONV); tipos NATIVOS de migração `tipo_movimento_estoque` `migracao_entrada`/`migracao_saida` e
   `tipo_entrada_estoque` `migracao` (11_SUP/07_chaves.sql; por `cod:<tabela>.codigo` com `=migracao_entrada`).
 - Pedido atendido: campo `atendido` no pedido de `saida/<fatia>.json`; a cobertura deixa de contá-lo como bloqueio.
+
+## Mecanismos da rodada 4 (integrador; prova em `sintetica_d/exemplo_r4.py`, `testes/test_carga_mapa_r4.py`; lista em `saida/aplicados-r4.md`)
+- Regras: `inteiro_mais_um` (contador do último número -> o próximo), `tipo_pessoa_documento`, `cpf_de_documento`,
+  `cnpj_de_documento` (documento num campo só), `data_fim_aberta:<ano>`; `_digitos` aceita DOUBLE de valor inteiro.
+- `#data_hora_mais:DATA,HORA,MIN`: fim = data e hora + minutos (regra declarada na linha, ex. `minutos_hhmm`); sem
+  valor na linha, a `ref:` da via dá a duração (encadeada terminada em coluna ou `@coluna`); sem nenhuma:
+  `duracao_ausente`; passou da meia-noite: `virada_de_dia` (baixa).
+- Condições (`COL[>T>X][=v1,v2]`; valor vazio na lista casa o nulo; sem lista = tem valor): `se:` na via de uma
+  coluna (fora: NULL sem pendência; a próxima concorrente é tentada; com `=~x` a presumida só quando vale),
+  `destino_se:` num destino SECUNDÁRIO (fora: não grava) e `so_se:COND[!regra]` na tabela (fora: recusada com a
+  pendência BAIXA da regra, padrão `fora_do_filtro_da_carga`, nunca gravada).
+- `cod:<tabela>.(c1,c2)=(=literal,valor)`; `#item` com `ref:` encadeada/composta e `cod:`; `#rotulo` com `cod:`.
+- `agrupar:C1,..` também no destino PRINCIPAL (sem `antes`); `#grupo_json:C1,C2`; grupos de leitura sem cabeçalho
+  `#grupo_seq@C1,C2` e `#grupo_razao:V@C1,C2`; agregados das filhas `#filhos_min|max|somar|contar:T.C|U.D@FK`.
+- Referência: literal na chave alternativa composta `T.(K1,K2)=(C1,=1)`; `>max:COL` / `>min:COL` logo depois do passo
+  por chave alternativa (empate: menor chave; `escolha_pelo_maior`, baixa); chave composta num passo seguinte
+  `>(C1,C2)>U`; vários pais da chave alternativa que apontam a MESMA linha do destino (título agrupado) valem por ela.
+- `#codigo_derivado:C1+C2:n[:prefixo]`; opção `principal` na via escolhe o destino principal; secundário fora de
+  `tabelas_destino` vale quando nomeado na via ou com opção de destino (`antes`, `adotar:`...).
