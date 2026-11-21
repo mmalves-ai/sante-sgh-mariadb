@@ -18,7 +18,6 @@ import {
   type Estrutura,
   esquemaAlertas,
   esquemaArvorePermissoes,
-  esquemaRevisaoFimCoexistencia,
   esquemaBackup,
   esquemaConferenciaLeitos,
   esquemaDadosFiscais,
@@ -159,9 +158,6 @@ export const alterarFlags = (
   flags: readonly { coluna: string; ligado: boolean; antes: 'T' | 'F' | '' | null }[],
   senha: string,
 ) => gravar(`${A}/usuarios/${encodeURIComponent(login)}/flags`, { entrada: { flags }, senha });
-/** M43: os ativos sem grupo e os logins de painel com a situação do aparelho (a leitura vai à trilha). */
-export const lerRevisaoUsuarios = () =>
-  ler('/api/administracao/coexistencia/migracao/fim/revisao', esquemaRevisaoFimCoexistencia);
 export const trocarGrupo = (login: string, grupo: string, senha: string) =>
   gravar(`${A}/usuarios/${encodeURIComponent(login)}/grupo`, { entrada: { grupo }, senha });
 export const bloquear = (login: string, bloquear: boolean, senha: string) =>

@@ -114,7 +114,7 @@ export class PortalController {
   @Post(':hospital/paciente')
   @HttpCode(200)
   @Publica('acesso do paciente ao portal (protocolo e data de nascimento, limite de tentativas e de taxa)')
-  @AuditadoNoHandler('a tentativa de acesso (SGH_SADT_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a tentativa de acesso (acesso ao portal) com a trilha_auditoria na mesma transação')
   async entrarPaciente(
     @Param('hospital') hospital: string,
     @Body() b: unknown,
@@ -133,7 +133,7 @@ export class PortalController {
   @Post(':hospital/medico')
   @HttpCode(200)
   @Publica('acesso do médico externo ao portal (senha Argon2id e segundo fator conferidos no serviço)')
-  @AuditadoNoHandler('a tentativa de acesso (SGH_SADT_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a tentativa de acesso (acesso ao portal) com a trilha_auditoria na mesma transação')
   async entrarMedico(
     @Param('hospital') hospital: string,
     @Body() b: unknown,
@@ -152,7 +152,7 @@ export class PortalController {
   @Post(':hospital/autocadastro')
   @HttpCode(200)
   @Publica('autocadastro do médico solicitante (fica pendente até a aprovação interna; limite de taxa)')
-  @AuditadoNoHandler('o autocadastro (SGH_SADT_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o autocadastro (conta do médico externo) com a trilha_auditoria na mesma transação')
   autocadastro(@Param('hospital') hospital: string, @Body() b: unknown, @Req() req: Req) {
     return this.portal.autocadastro(
       hospitalDaRota(hospital),
@@ -176,7 +176,7 @@ export class PortalController {
   @Post('laudos/:liberacao')
   @HttpCode(200)
   @Publica('abrir o laudo no portal (sessão e CSRF do portal conferidos no handler)')
-  @AuditadoNoHandler('sadt.registrarVisualizacaoPortal pelo executor e a leitura (SGH_) com a SGH_TRILHA')
+  @AuditadoNoHandler('sadt.registrarVisualizacaoPortal pelo executor e a leitura com a trilha_auditoria')
   abrir(
     @Param('liberacao') liberacao: string,
     @Body() b: unknown,

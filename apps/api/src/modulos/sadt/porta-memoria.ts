@@ -1,6 +1,6 @@
 // Porta do SADT EM MEMÓRIA (M26): a sessão sintética de dev/ci (E2E) recebe, lança, digita, libera, retifica, coleta,
-// rastreia, avisa o valor crítico, emite o laudo e abre o portal sobre exames SINTÉTICOS, sem tocar a cópia. As
-// gravações aplicam o mesmo Zod das receitas (operacao(op).entrada) e as mesmas recusas (pedido suspenso, exame não
+// rastreia, avisa o valor crítico, emite o laudo e abre o portal sobre exames SINTÉTICOS, sem tocar o banco. As
+// gravações aplicam o mesmo Zod das receitas (a entrada do contrato, ENTRADAS_SADT) e as mesmas recusas (pedido suspenso, exame não
 // recebido, resultado liberado, sem habilitação, laudo de imagem por não médico, restrição de sexo e repetição). Os
 // pedidos do prontuário são os do prontuário em memória (M23: os mesmos IDs), e o resultado liberado aparece lá, com
 // a ciência do valor crítico registrada no prontuário. Nenhum nome aqui é de pessoa real (marca "SINTETICO").
@@ -28,24 +28,38 @@ import {
   type ValorConferencia,
   type ValorCriticoLido,
 } from '@sgh/contratos';
-import {
-  type AcessoPortalLido,
-  type AtendimentoParaLancamento,
-  type AutocadastroPortalLido,
-  type ContextoOperacao,
-  ErroOperacao,
-  type FiltroExamesSetor,
-  type FonteCatalogo,
-  type LaudoParaEmitir,
-  type LaudoPortalLido,
-  type LiberacaoConsultada,
-  type LiberacaoVista,
-  operacao,
-  recusa,
-  type ResultadoParaDigitacaoLido,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
 import type { PortaDocumentosMemoria } from '../pep/documentos-porta-memoria.js';
-import type { ContextoSadt, GravadorSghSadt, PortaSadt, VinculoDaSessao } from './porta.js';
+import { ENTRADAS_SADT } from './operacoes.js';
+import { CONTAS_SINTETICAS } from '../acesso/fonte-sintetica.js';
+import type {
+  AcessoPortalLido,
+  AtendimentoParaLancamento,
+  AutocadastroPortalLido,
+  ContextoSadt,
+  FiltroExamesSetor,
+  GravadorSghSadt,
+  LaudoParaEmitir,
+  LaudoPortalLido,
+  LiberacaoVista,
+  PortaSadt,
+  ResultadoParaDigitacaoLido,
+  VinculoDaSessao,
+} from './porta.js';
+
+/** A situação de cada operação por estabelecimento (dev/ci: tudo verde, salvo o que o teste desligar). */
+export interface FonteEstadoOperacao {
+  estado(operacao: string, hospital: string): EstadoOperacao | null;
+}
+/** O estabelecimento da sessão como chave do estado em memória. */
+const hospitalDe = (c: ContextoSadt): string => c.hospital ?? String(c.estabelecimento ?? 0);
+/** Quem grava (a memória mostra o usuário da sessão; sem ele, o processo). */
+// O contexto leva o id do usuário; na memória, o id sintético (900000 + posição na lista) volta ao login sintético, que
+// dá o vínculo profissional (vinculoSintetico).
+const LOGINS_SINTETICOS = Object.keys(CONTAS_SINTETICAS);
+const usuarioDe = (ctx: ContextoOperacao): string =>
+  ctx.usuario === null ? 'SISTEMA' : (LOGINS_SINTETICOS[ctx.usuario - 900000] ?? String(ctx.usuario));
 
 const M = 'SINTETICO';
 const p2 = (n: number) => String(n).padStart(2, '0');
@@ -331,19 +345,19 @@ export class PortaSadtMemoria implements PortaSadt {
   private readonly estados = new Map<string, Estado>();
 
   constructor(
-    private readonly catalogo: FonteCatalogo | null,
+    private readonly catalogo: FonteEstadoOperacao | null,
     private readonly prontuario: PortaDocumentosMemoria | null = null,
   ) {}
 
   // ── Estado ───────────────────────────────────────────────────────────────────────────────────────
 
   private e(c: ContextoSadt): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(hospitalDe(c));
     if (!s) {
       s = this.semear();
-      this.estados.set(c.hospital, s);
+      this.estados.set(hospitalDe(c), s);
     }
-    this.sincronizarPedidos(c.hospital, s);
+    this.sincronizarPedidos(hospitalDe(c), s);
     return s;
   }
 
@@ -682,9 +696,9 @@ export class PortaSadtMemoria implements PortaSadt {
 
   private publicarNoProntuario(c: ContextoSadt, s: Estado, e: ExameM): void {
     if (!this.prontuario) return;
-    this.prontuario.marcarPedidoSadt(c.hospital, e.id, { pendSadt: e.pendSadt, liberado: e.liberado });
+    this.prontuario.marcarPedidoSadt(hospitalDe(c), e.id, { pendSadt: e.pendSadt, liberado: e.liberado });
     if (!e.liberado) return;
-    this.prontuario.publicarResultadoSadt(c.hospital, {
+    this.prontuario.publicarResultadoSadt(hospitalDe(c), {
       paciente: e.paciente,
       exame: e.id,
       nome: e.catalogo.nome,
@@ -718,29 +732,28 @@ export class PortaSadtMemoria implements PortaSadt {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoSadt, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoSadt, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, hospitalDe(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
         codigo: 'operacao-bloqueada',
         motivo: 'A gravação está bloqueada neste estabelecimento (catálogo de operações).',
       };
-    const r = operacao(op).receita;
-    if (r.pendente)
-      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Falta provar: ${r.pendente}.` };
+    if (!ENTRADAS_SADT[op]) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return { pode: true, codigo: null, motivo: null };
   }
 
   async executar(c: ContextoSadt, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+    const entrada = ENTRADAS_SADT[op];
+    if (!entrada) throw recusa('operacao-desconhecida', 'Operação desconhecida no SADT.');
+    const analise = entrada.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -753,14 +766,13 @@ export class PortaSadtMemoria implements PortaSadt {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    if (o.receita.pendente) throw recusa('operacao-especificada', `Falta provar: ${o.receita.pendente}.`);
-    const resultado = this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.usuarioLegado); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const resultado = this.aplicar(c, s, op, analise.data as Record<string, any>, usuarioDe(ctx)); // eslint-disable-line @typescript-eslint/no-explicit-any
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
 
   private conferirVersao(e: ExameM, versao: string | null): void {
-    // Como o gravador do legado: o carimbo inteiro, e o nulo não pula a conferência.
+    // Como o gravador do banco: o carimbo inteiro, e o nulo não pula a conferência.
     if (versao !== e.versao)
       throw new ErroOperacao(
         409,
@@ -1164,7 +1176,7 @@ export class PortaSadtMemoria implements PortaSadt {
         s.valores.push({ id, ...f, atualizadoEm: agora() });
         return id;
       },
-      avisarCriticos: async (a) => this.avisar(s, this.exameM(s, a.idSilanexa), a.origem, agora()),
+      avisarCriticos: async (a) => this.avisar(s, this.exameM(s, a.exameItem), 'novo', agora()),
       comunicarAviso: async (r) => {
         const a = s.avisos.find((x) => x.id === r.aviso);
         if (!a || a.comunicado) throw recusa('aviso-comunicado', 'O aviso não existe ou já foi comunicado.');
@@ -1250,7 +1262,7 @@ export class PortaSadtMemoria implements PortaSadt {
         if (!a || a.situacao !== 'pendente')
           throw recusa('autocadastro-decidido', 'O autocadastro não está pendente.');
         if (r.aprovar) {
-          // O mesmo que o gravador do legado: o solicitante tem o número e a UF declarados.
+          // O mesmo que o gravador do banco: o solicitante tem o número e a UF declarados.
           const m = s.solicitantes.find((x) => x.id === r.solicitante);
           if (!m || m.registro !== `${Number(a.numero)}/${a.uf}`)
             throw recusa(
@@ -1513,7 +1525,7 @@ export class PortaSadtMemoria implements PortaSadt {
       if (a.emitidoEm.slice(0, 10) < o.inicio || a.emitidoEm.slice(0, 10) > o.fim) continue;
       const e = s.exames.get(a.exame);
       if (!e) continue;
-      const ciencia = this.prontuario?.cienciaParaSadt(c.hospital, a.exame) ?? null;
+      const ciencia = this.prontuario?.cienciaParaSadt(hospitalDe(c), a.exame) ?? null;
       if (o.pendentes && ciencia) continue;
       const el = e.catalogo.elementos.find((x) => x.codigo === a.elemento);
       r.push({
@@ -1763,7 +1775,7 @@ export class PortaSadtMemoria implements PortaSadt {
 
   async orcamento(c: ContextoSadt, id: number, o: { hoje: string }) {
     const x = this.e(c).orcamentos.find((y) => y.id === id);
-    return x ? { ...this.orcamentoLido(x, o.hoje), nomeLegado: x.nome } : null;
+    return x ? { ...this.orcamentoLido(x, o.hoje), nomeRegistrado: x.nome } : null;
   }
 
   async apoio(_c: ContextoSadt, setor?: SetorSadt) {
@@ -1792,8 +1804,8 @@ export class PortaSadtMemoria implements PortaSadt {
     return v ? [v] : [];
   }
 
-  /** Na memória, o médico sintético responde por todo atendimento. */
-  async responsavelDoAtendimento(): Promise<string | null> {
+  /** Na memória, o médico sintético é o solicitante de todo exame. */
+  async destinatarioDoCritico(): Promise<string | null> {
     return 'SINT.MEDICO';
   }
 

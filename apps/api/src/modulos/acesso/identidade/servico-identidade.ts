@@ -1,7 +1,13 @@
 // Identidade do M59-F2 (ficha do M59, regras 1 a 3; cap-08 §8.16; SBIS-03, SBIS-08): a credencial forte regravada no
-// primeiro login, o segundo fator (cadastro, conferência no login, política por onda) e a retirada da senha antiga.
-// As regras são as puras de @sgh/dominio-acesso; aqui só a orquestração sobre a porta (o núcleo do legado, READ ONLY
-// nas leituras e a transação SGH_ nas gravações, com a SGH_TRILHA) e a chave do envelope do segredo TOTP.
+// primeiro login (só na fonte sintética do dev/ci), o segundo fator (cadastro, conferência no login, política por onda).
+// As regras são as puras de @sgh/dominio-acesso; aqui só a orquestração sobre a porta (a própria, sobre o banco do
+// cliente pelo @sgh/nucleo: leituras só leitura e gravações pelo Executor, com a trilha; a de memória em dev/ci) e a
+// chave do envelope do segredo TOTP. A "senha anterior" é a credencial num algoritmo mais fraco (da migração): no banco
+// ela é de redefinição obrigatória (o sistema só confere Argon2id), e o login recusa sem tentar.
+// Melhoria: a exigência do cadastro do perfil (origem 'cadastro-perfil') vale como adesão sem prazo: quem não tem
+//   segundo fator entra e é levado ao cadastro; nunca tranca na hora os membros do perfil.
+// Melhoria: a regravação leva o autor separado da conta alvo (o gestor na redefinição), para a trilha.
+// Removido (ADR 0003): a retirada da senha antiga e a contingência do sistema anterior (código de convivência).
 // Nada de senha, hash ou segredo vai a log, resposta ou trilha.
 import {
   type Exigencia2fa,
@@ -34,12 +40,11 @@ import {
   desfecho2faNoLogin,
   faixaContagemCredencial,
   gerarSegredoBase32,
+  alcanca,
   linhasDaOnda1,
-  MENSAGENS_RECUSA_RETIRADA,
   type ParametrosArgon2,
   passoTotpConferido,
   podeRemoverSegundoFator,
-  recusaRetiradaSenha,
   type SenhaLegadoLida,
   situacaoCredencial,
   somarDias,
@@ -47,33 +52,33 @@ import {
   uriOtpauth,
 } from '@sgh/dominio-acesso';
 import type {
-  ContaIdentidade,
-  CredencialForteLegado,
-  GrupoContagemIdentidade,
   AlteracaoPolitica2fa,
-  LinhaPolitica2faLegado,
+  ContaIdentidade,
+  CredencialForte,
+  GrupoContagemIdentidade,
+  LinhaPolitica2faRegistrada,
   NovaCredencialForte,
-  OrigemCredencialForte,
   NovaLinhaPolitica2fa,
-  SegundoFatorLegado,
+  OrigemCredencialForte,
+  SegundoFatorRegistrado,
   TrilhaIdentidade,
-  UsuarioIdentidadeLegado,
-} from '@sgh/legado';
+  UsuarioIdentidadeRegistrado,
+} from './tipos-identidade.js';
 
 /** O que o serviço precisa do núcleo (o adaptador implementa; os testes usam a memória). */
 export interface PortaIdentidade {
   prontas(h: string): Promise<boolean>;
   conta(h: string, login: string): Promise<ContaIdentidade | null>;
-  forte(h: string, login: string, id: number): Promise<CredencialForteLegado | null>;
+  forte(h: string, login: string, id: number): Promise<CredencialForte | null>;
   autenticarForte(
     h: string,
     login: string,
     id: number,
     senha: string,
     conferir: (senha: string, hash: string | null) => Promise<boolean>,
-  ): Promise<{ confere: boolean; credencial: CredencialForteLegado } | null>;
+  ): Promise<{ confere: boolean; credencial: CredencialForte } | null>;
   gravarForte(h: string, c: NovaCredencialForte, t: TrilhaIdentidade): Promise<void>;
-  segundoFator(h: string, login: string, id: number): Promise<SegundoFatorLegado | null>;
+  segundoFator(h: string, login: string, id: number): Promise<SegundoFatorRegistrado | null>;
   iniciar2fa(
     h: string,
     c: { idUsuario: number; login: string; segredoEnvelope: string },
@@ -82,7 +87,7 @@ export interface PortaIdentidade {
   confirmar2fa(h: string, id: string, t: TrilhaIdentidade): Promise<boolean>;
   revogar2fa(h: string, id: string, t: TrilhaIdentidade): Promise<boolean>;
   marcar2fa(h: string, id: string, instanteDoPasso: Date): Promise<boolean>;
-  politicas(h: string): Promise<LinhaPolitica2faLegado[]>;
+  politicas(h: string): Promise<LinhaPolitica2faRegistrada[]>;
   incluirPolitica(h: string, p: NovaLinhaPolitica2fa, t: TrilhaIdentidade): Promise<{ id: string }>;
   encerrarPolitica(
     h: string,
@@ -99,7 +104,7 @@ export interface PortaIdentidade {
     h: string,
     /** `senha`: só os usuários da situação, filtrados ANTES da paginação (a página e o temMais já filtrados). */
     f: { busca?: string; senha?: SituacaoCredencial; pagina: number; tamanho: number },
-  ): Promise<{ itens: UsuarioIdentidadeLegado[]; temMais: boolean }>;
+  ): Promise<{ itens: UsuarioIdentidadeRegistrado[]; temMais: boolean }>;
   contagens(h: string): Promise<GrupoContagemIdentidade[]>;
 }
 
@@ -115,8 +120,6 @@ export interface AtorIdentidade {
 
 export interface DependenciasIdentidade {
   readonly porta: PortaIdentidade;
-  /** legado.contingencia do estabelecimento (padrão ligado; erro de leitura: ligado). */
-  readonly contingencia: (rede: string, hospital: string) => Promise<boolean>;
   /** Chave do envelope do segredo TOTP (32 bytes); null: o cadastro do segundo fator fica indisponível. */
   readonly chave: Buffer | null;
   /** Nome do produto no aplicativo autenticador (DP-49: da configuração da rede). */
@@ -137,8 +140,7 @@ export class ErroIdentidade extends Error {
       | 'sem-cadastro'
       | 'remocao-recusada'
       | 'politica-invalida'
-      | 'politica-inexistente'
-      | 'retirada-recusada',
+      | 'politica-inexistente',
     readonly detalhe: string,
     readonly status = 409,
   ) {
@@ -147,7 +149,7 @@ export class ErroIdentidade extends Error {
   }
 }
 
-/** Desfecho da credencial no login: a forte decidiu, ou o chamador segue pela senha do legado. */
+/** Desfecho da credencial no login: a forte decidiu, ou o chamador segue pela fonte de acesso (senha anterior). */
 export type DesfechoForte =
   | {
       readonly tipo: 'forte-ok';
@@ -177,7 +179,7 @@ const FUSO = 'America/Sao_Paulo';
 /** Validade do cadastro pendente: o código tem de chegar em 10 min. */
 const VALIDADE_CADASTRO_MS = 10 * 60_000;
 
-function senhaLegado(c: ContaIdentidade): SenhaLegadoLida {
+function senhaAnterior(c: ContaIdentidade): SenhaLegadoLida {
   return {
     presente: c.senhaPresente,
     criptografada: c.criptografada,
@@ -186,11 +188,11 @@ function senhaLegado(c: ContaIdentidade): SenhaLegadoLida {
   };
 }
 
-function situacao2fa(f: SegundoFatorLegado | null): SituacaoSegundoFator {
+function situacao2fa(f: SegundoFatorRegistrado | null): SituacaoSegundoFator {
   return f ? f.situacao : 'ausente';
 }
 
-function politicaDe(l: LinhaPolitica2faLegado): Politica2fa {
+function politicaDe(l: LinhaPolitica2faRegistrada): Politica2fa {
   return {
     id: l.id,
     estabelecimento: l.hospital,
@@ -206,7 +208,10 @@ function politicaDe(l: LinhaPolitica2faLegado): Politica2fa {
   };
 }
 
-const linhaPura = (l: LinhaPolitica2faLegado) => ({ ...l, ativa: l.encerradaEm === null });
+const linhaPura = (l: LinhaPolitica2faRegistrada) => ({ ...l, ativa: l.encerradaEm === null });
+/** Só as linhas da política por onda (a exigência do cadastro do perfil não entra nas conferências do gestor). */
+const daPolitica = (linhas: readonly LinhaPolitica2faRegistrada[]) =>
+  linhas.filter((l) => l.origem !== 'cadastro-perfil');
 
 export class ServicoIdentidade {
   private readonly argon2: ParametrosArgon2;
@@ -233,6 +238,7 @@ export class ServicoIdentidade {
       rede: a.rede,
       hospital: a.hospital,
       usuario: a.login,
+      idUsuario: a.idUsuario,
       evento,
       recurso: 'acesso.identidade',
       operacao,
@@ -254,14 +260,20 @@ export class ServicoIdentidade {
 
   /**
    * Regra 2: quem tem credencial forte vigente confere só ela. Sem tabela, sem conta, sem forte (ou forte
-   * desatualizada): o chamador segue pela senha do legado. Erro de banco sobe (o login responde indisponível).
+   * desatualizada): o chamador segue pela fonte de acesso (a senha anterior). Erro de banco sobe (o login responde indisponível).
    */
   async autenticar(h: string, login: string, senha: string): Promise<DesfechoForte> {
     if (!(await this.prontas(h))) return { tipo: 'legado' };
     const conta = await this.d.porta.conta(h, login);
     if (!conta) return { tipo: 'legado' };
+    // Credencial que o sistema não confere (não Argon2id): recusa sem tentar (tempo constante); só o gestor redefine.
+    if (conta.redefinicaoObrigatoria) {
+      await conferirSenha(senha, null);
+      this.d.aviso?.('credencial a redefinir pelo gestor', { hospital: h });
+      return { tipo: 'forte-invalida' };
+    }
     const forte = await this.d.porta.forte(h, login, conta.id);
-    if (caminhoDoLogin(forte, senhaLegado(conta)) !== 'forte') return { tipo: 'legado' };
+    if (caminhoDoLogin(forte, senhaAnterior(conta)) !== 'forte') return { tipo: 'legado' };
     if (!conta.ativo || conta.bloqueado) {
       await conferirSenha(senha, null);
       return { tipo: 'forte-invalida' };
@@ -273,13 +285,15 @@ export class ServicoIdentidade {
   }
 
   /**
-   * Depois que a senha do legado conferiu: regrava no esquema forte (primeiro login). Falha não impede o login
+   * Depois que a senha anterior conferiu: regrava no esquema forte (primeiro login). Falha não impede o login
    * (vai ao aviso, sem dado pessoal); a próxima entrada tenta de novo.
    */
   async regravar(
     a: AtorIdentidade,
     senha: string,
     origem: OrigemCredencialForte = 'primeiro-login',
+    /** Quem age, quando não é o dono da conta (o gestor na redefinição): vai à trilha como usuário. */
+    autor?: AtorIdentidade,
   ): Promise<boolean> {
     try {
       if (!(await this.prontas(a.hospital))) return false;
@@ -297,7 +311,7 @@ export class ServicoIdentidade {
           parametros: `m=${p.memoria},t=${p.passes},p=${p.paralelismo}`,
           origem,
         },
-        this.trilha(a, 'acesso.credencial.regravada', 'regravar'),
+        this.trilha(autor ?? a, 'acesso.credencial.regravada', 'regravar'),
       );
       return true;
     } catch (e) {
@@ -311,7 +325,13 @@ export class ServicoIdentidade {
 
   private async avaliacao(h: string, alcance: Alcance2fa): Promise<Avaliacao2fa> {
     const linhas = await this.d.porta.politicas(h);
-    return avaliarPolitica2fa(linhas.map(linhaPura), alcance, this.hoje());
+    const av = avaliarPolitica2fa(daPolitica(linhas).map(linhaPura), alcance, this.hoje());
+    if (av.exigencia !== 'opcional') return av;
+    // A exigência do cadastro do perfil: adesão sem prazo (entrar e cadastrar), nunca obrigatório imediato.
+    const doPerfil = linhas.find(
+      (l) => l.origem === 'cadastro-perfil' && l.encerradaEm === null && alcanca(linhaPura(l), alcance),
+    );
+    return doPerfil ? { exigencia: 'adesao', linha: doPerfil.id, prazoAdesaoAte: null } : av;
   }
 
   /**
@@ -350,7 +370,7 @@ export class ServicoIdentidade {
     return { tipo: 'entrar', info: info(true) };
   }
 
-  private async conferirCodigo(h: string, f: SegundoFatorLegado, codigo: string): Promise<boolean> {
+  private async conferirCodigo(h: string, f: SegundoFatorRegistrado, codigo: string): Promise<boolean> {
     if (!this.d.chave || f.situacao === 'revogado') return false;
     let segredo: string;
     try {
@@ -488,8 +508,9 @@ export class ServicoIdentidade {
 
   // ── gestão ───────────────────────────────────────────────────────────────────────────────────
 
-  async resumo(rede: string, h: string): Promise<ResumoIdentidade> {
-    const contingencia = await this.contingenciaSegura(rede, h);
+  async resumo(_rede: string, h: string): Promise<ResumoIdentidade> {
+    // Sem convivência com o sistema anterior (ADR 0003): não há contingência; o campo sai do contrato (pedido).
+    const contingencia = false;
     if (!(await this.prontas(h))) {
       return {
         estabelecimento: h,
@@ -525,7 +546,7 @@ export class ServicoIdentidade {
 
   async usuarios(h: string, f: FiltroUsuariosIdentidade): Promise<PaginaUsuariosIdentidade> {
     if (!(await this.prontas(h))) return { itens: [], pagina: f.pagina, temMais: false };
-    // Filtro por situação: na porta, antes da paginação (no legado, em SQL com a mesma regra de situacaoCredencial).
+    // Filtro por situação: na porta, antes da paginação (na porta própria, em SQL com a mesma regra de situacaoCredencial).
     const p = await this.d.porta.usuarios(h, {
       ...(f.busca ? { busca: f.busca } : {}),
       ...(f.senha ? { senha: f.senha } : {}),
@@ -540,7 +561,7 @@ export class ServicoIdentidade {
         grupo: u.grupo,
         ativo: u.ativo,
         bloqueado: u.bloqueado,
-        senha: situacaoCredencial(forte, senhaLegado(u)),
+        senha: situacaoCredencial(forte, senhaAnterior(u)),
         senhaLegadoPresente: u.senhaPresente,
         credencialEm: u.forteEm ? u.forteEm.toISOString() : null,
         segundoFator: u.segundoFator,
@@ -556,7 +577,7 @@ export class ServicoIdentidade {
 
   async incluirPolitica(a: AtorIdentidade, p: NovaPolitica2fa): Promise<Politica2fa> {
     if (!(await this.prontas(a.hospital))) throw new ErroIdentidade('indisponivel', 'Indisponível.', 503);
-    const existentes = (await this.d.porta.politicas(a.hospital)).map(linhaPura);
+    const existentes = daPolitica(await this.d.porta.politicas(a.hospital)).map(linhaPura);
     const problemas = conferirNovaLinha2fa(p, existentes, this.hoje());
     if (problemas.length) throw new ErroIdentidade('politica-invalida', problemas.join(' '), 422);
     const { id } = await this.d.porta.incluirPolitica(
@@ -578,7 +599,7 @@ export class ServicoIdentidade {
     p: { inicio: string; prazoAdesaoDias: number; motivo: string },
   ): Promise<{ incluidas: number; jaExistiam: number }> {
     if (!(await this.prontas(a.hospital))) throw new ErroIdentidade('indisponivel', 'Indisponível.', 503);
-    const existentes = (await this.d.porta.politicas(a.hospital)).map(linhaPura);
+    const existentes = daPolitica(await this.d.porta.politicas(a.hospital)).map(linhaPura);
     const novas = linhasDaOnda1().map((l) => ({ ...l, onda: 1 as const, ...p }));
     const faltam = novas.filter((n) => conferirNovaLinha2fa(n, existentes, this.hoje()).length === 0);
     if (!faltam.length) {
@@ -618,10 +639,12 @@ export class ServicoIdentidade {
   ): Promise<Politica2fa> {
     if (!(await this.prontas(a.hospital))) throw new ErroIdentidade('indisponivel', 'Indisponível.', 503);
     const linhas = await this.d.porta.politicas(a.hospital);
-    const atual = linhas.find((l) => l.id === id && l.encerradaEm === null);
+    const atual = daPolitica(linhas).find((l) => l.id === id && l.encerradaEm === null);
     if (!atual) throw new ErroIdentidade('politica-inexistente', 'Linha inexistente ou já encerrada.', 404);
     const hoje = this.hoje();
-    const outras = linhas.filter((l) => l.id !== id).map(linhaPura);
+    const outras = daPolitica(linhas)
+      .filter((l) => l.id !== id)
+      .map(linhaPura);
     const problemas = conferirNovaLinha2fa(
       { alvo: p.alvo, valor: p.valor, onda: atual.onda, inicio: atual.inicio < hoje ? hoje : atual.inicio },
       outras,
@@ -657,33 +680,5 @@ export class ServicoIdentidade {
   /** Fim do prazo de adesão de uma linha (para a tela). */
   static fimDaAdesao(p: Pick<Politica2fa, 'inicio' | 'prazoAdesaoDias'>): string {
     return somarDias(p.inicio, Math.max(0, p.prazoAdesaoDias - 1));
-  }
-
-  private async contingenciaSegura(rede: string, h: string): Promise<boolean> {
-    try {
-      return await this.d.contingencia(rede, h);
-    } catch {
-      return true;
-    }
-  }
-
-  /**
-   * Pré-condições da retirada da senha antiga (regra 1), antes do executor (que confere de novo na transação). Recusa
-   * com a mensagem da regra pura.
-   */
-  async conferirRetirada(a: AtorIdentidade, login: string): Promise<void> {
-    const contingencia = await this.contingenciaSegura(a.rede, a.hospital);
-    const conta = (await this.prontas(a.hospital)) ? await this.d.porta.conta(a.hospital, login) : null;
-    if (!conta && !contingencia) throw new ErroIdentidade('usuario-inexistente', 'Usuário inexistente.', 404);
-    const forte = conta ? await this.d.porta.forte(a.hospital, conta.login, conta.id) : null;
-    const recusa = recusaRetiradaSenha({
-      contingencia,
-      integracao: login === 'hal-ai',
-      forte,
-      legado: conta
-        ? senhaLegado(conta)
-        : { presente: false, criptografada: false, comSalt: false, alteradaEm: null },
-    });
-    if (recusa) throw new ErroIdentidade('retirada-recusada', MENSAGENS_RECUSA_RETIRADA[recusa]);
   }
 }

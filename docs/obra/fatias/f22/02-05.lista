@@ -1,39 +1,14 @@
 # lote 02-05 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: enfermagem
-# pastas: apps/api/src/modulos/enfermagem apps/api/src/modulos/enfermagem/aplicacao
-apps/api/src/modulos/enfermagem/protocolo-internado-servico.ts
-apps/api/src/modulos/enfermagem/protocolo-internado.controller.ts
-apps/api/src/modulos/enfermagem/public-api.ts
-apps/api/src/modulos/enfermagem/aplicacao/sae.autorizacao.int.spec.ts
-apps/api/src/modulos/enfermagem/sae-porta-legado.ts
-apps/api/src/modulos/enfermagem/sae-porta-memoria.ts
-apps/api/src/modulos/enfermagem/sae-porta.ts
-apps/api/src/modulos/enfermagem/sae-servico.ts
-apps/api/src/modulos/enfermagem/sae.controller.ts
-apps/api/src/modulos/enfermagem/sae.spec-util.ts
-apps/api/src/modulos/enfermagem/sae.spec.ts
-apps/api/src/modulos/enfermagem/servico.ts
-apps/api/src/modulos/enfermagem/simbolos.ts
-apps/api/src/modulos/enfermagem/aplicacao/suspensao.int.spec.ts
-apps/api/src/modulos/enfermagem/transfusao-porta-legado.ts
-apps/api/src/modulos/enfermagem/transfusao-porta-memoria.ts
-apps/api/src/modulos/enfermagem/transfusao-porta.ts
-apps/api/src/modulos/enfermagem/transfusao.controller.ts
-apps/api/src/modulos/enfermagem/transfusao.spec.ts
-apps/api/src/modulos/enfermagem/trr-servico.ts
-apps/api/src/modulos/enfermagem/trr.controller.ts
-apps/api/src/modulos/enfermagem/vacina-rnds.spec.ts
-apps/api/src/modulos/enfermagem/vacina.controller.ts
-apps/api/src/modulos/enfermagem/vigia.ts
-apps/api/src/modulos/enfermagem/w003-contencao.spec.ts
-apps/api/src/modulos/enfermagem/w003-escalas-mercado.spec.ts
-apps/api/src/modulos/enfermagem/w003-escores-estorno.spec.ts
-apps/api/src/modulos/enfermagem/w003-hemoterapia.spec.ts
-apps/api/src/modulos/enfermagem/w003-lesao.spec.ts
-apps/api/src/modulos/enfermagem/w003-plantao-aparelho.spec.ts
-apps/api/src/modulos/enfermagem/w003-protocolo-internado.spec.ts
-apps/api/src/modulos/enfermagem/w003-receita-vacina.spec.ts
-apps/api/src/modulos/enfermagem/w003-revisao-contencao.spec.ts
-apps/api/src/modulos/enfermagem/w003-trr-pcr.spec.ts
-apps/api/src/modulos/enfermagem/w108-contencao-turno.spec.ts
-apps/api/src/modulos/enfermagem/w108-estorno-aprazamento.spec.ts
+# registrar: -
+# pastas: apps/api/src/modulos/administracao
+apps/api/src/modulos/administracao/administracao.spec.ts
+apps/api/src/modulos/administracao/auditoria.controller.ts
+apps/api/src/modulos/administracao/comum.ts
+apps/api/src/modulos/administracao/estrutura.controller.spec.ts
+apps/api/src/modulos/administracao/estrutura.controller.ts
+apps/api/src/modulos/administracao/fonte-memoria.ts
+apps/api/src/modulos/administracao/fonte.ts
+apps/api/src/modulos/administracao/login-painel.ts
+apps/api/src/modulos/administracao/permissoes.controller.ts
+apps/api/src/modulos/administracao/rede-cpf.controller.spec.ts
+apps/api/src/modulos/administracao/rede-cpf.controller.ts

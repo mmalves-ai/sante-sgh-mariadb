@@ -37,7 +37,7 @@ import {
   validarDecisaoPedidoAcesso,
   validarNovoPedidoAcesso,
 } from '@sgh/dominio-acesso';
-import { ErroOperacao, type PedidoAcessoGravado, type TrilhaGestao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -50,6 +50,14 @@ import { FONTE_ADMINISTRACAO, type FonteAdministracao } from '../administracao/f
 import { SERVICO_SESSAO } from './acesso.controller.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
 import { PERFIS_DA_TELA } from './gestao.controller.js';
+import type { PedidoAcessoGravado } from './tipos-gestao-acesso.js';
+import type { DestinoGestao, TrilhaGestao } from './gestao-tipos.js';
+
+/**
+ * O contrato da tela ainda tipa o destino como 'legado' | 'memoria' (pedido do lote 02-03: 'banco' | 'memoria'); o
+ * valor enviado é o da fonte (a tela não decide nada por ele).
+ */
+const destinoTela = (d: DestinoGestao) => d as unknown as DecisaoPedidoAcessoTela['destino'];
 
 const FUSO = 'America/Sao_Paulo';
 /** Perfis que não se pedem (D-W101-34): o assistencial vem da categoria com conselho do profissional. */
@@ -224,7 +232,7 @@ export class PedidosAcessoController extends BasePedidos {
   async pedir(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; destino: FonteGestao['destino'] }> {
     const p = this.analisar(esquemaNovoPedidoAcesso, corpo);
     const { rede, hospital, login } = this.sessao(req);
     const hoje = this.hoje();
@@ -263,7 +271,7 @@ export class PedidosAcessoController extends BasePedidos {
     @Param('id') bruto: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; situacao: 'cancelado'; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; situacao: 'cancelado'; destino: FonteGestao['destino'] }> {
     const id = this.id(bruto);
     const p = this.analisar(esquemaCancelarPedidoAcesso, corpo);
     const { rede, hospital, login } = this.sessao(req);
@@ -401,11 +409,11 @@ export class PedidosAcessoGestaoController extends BasePedidos {
       )
       .catch((e: unknown) => this.problema(e));
     if (d.situacao !== 'concedido' || !d.concessao) {
-      return { id, situacao: d.situacao, concessao: null, destino: this.fonte.destino };
+      return { id, situacao: d.situacao, concessao: null, destino: destinoTela(this.fonte.destino) };
     }
     const concessao = d.concessao;
     await this.sessoes?.servicoAutorizacao?.invalidar(rede, hospital, x.login).catch(() => undefined);
-    return { id, situacao: 'concedido', concessao, destino: this.fonte.destino };
+    return { id, situacao: 'concedido', concessao, destino: destinoTela(this.fonte.destino) };
   }
 
   /**
@@ -468,6 +476,6 @@ export class PedidosAcessoGestaoController extends BasePedidos {
       })
       .catch((e: unknown) => this.problema(e));
     await this.sessoes?.servicoAutorizacao?.invalidar(rede, hospital, x.login).catch(() => undefined);
-    return { id, situacao: 'concedido', concessao: r.concessao, destino: this.fonte.destino };
+    return { id, situacao: 'concedido', concessao: r.concessao, destino: destinoTela(this.fonte.destino) };
   }
 }

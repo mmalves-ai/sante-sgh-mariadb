@@ -1,16 +1,20 @@
 // M59-F1 (ficha do M59, seção 4 "Inventário de contas e privilégios"; regras 1, 4 e 5): o serviço do painel "Contas
-// do banco de dados e privilégios". Só consulta: junta o que a porta leu do catálogo de segurança, a situação do
-// hospital (passo "desligamento" do M58 executado, no registro versionado dos passos; `legado.contingencia` do
-// estabelecimento, padrão ligado) e o plano versionado por módulo, e devolve o que o domínio decide. Nada aqui revoga:
-// a revogação é script da TI com autorização do dono por passo (ficha, seção 12).
+// do banco de dados e privilégios". Só consulta: junta o que a porta leu do catálogo de privilégios do banco do cliente
+// e o plano de privilégio mínimo por módulo, quando existir, e devolve o que o domínio decide. Nada aqui revoga: a
+// revogação é script da TI com autorização do dono por passo (ficha, seção 12).
+// Melhoria (ADR 0003): sem o sistema de origem não há passo de desligamento nem contingência a esperar: o banco do
+// cliente é o único, e cada conta segue direto para a medição do uso ou o privilégio mínimo.
+// Melhoria: a imutabilidade conta todas as tabelas do banco próprio, não uma lista de tabelas clínicas de outro sistema.
+// As operações que apagam linha (tx.excluir do Executor) e as exceções aceitas vêm de um catálogo injetado
+// (CATALOGO_EXCLUSOES); sem ele, a imutabilidade responde 409 "catalogo-pendente" em vez de afirmar zero.
+// Pendência (pedido ao orquestrador): o plano de privilégio mínimo por módulo sobre o MariaDB (contas por módulo e
+// alcance de cada uma). Sem ele, os desvios respondem 404 "plano ausente" e a imutabilidade vai sem o plano.
+// Pendência (pedido ao orquestrador): o catálogo das operações com exclusão física, derivado das operações registradas.
 import {
-  definicaoParametro,
-  EXCECOES_DELETE_CLINICO,
+  type AlcanceModulo,
   esquemaDesviosPrivilegiosResposta,
   esquemaImutabilidadeResposta,
   esquemaInventarioContasBancoResposta,
-  PREFIXOS_SGH_CLINICOS,
-  TABELAS_CLINICAS_LEGADO,
   sufixoModuloBanco,
   type DesviosPrivilegiosResposta,
   type ImutabilidadeResposta,
@@ -24,22 +28,41 @@ import {
   planejarPrivilegios,
   resumirDeleteClinico,
 } from '@sgh/dominio-acesso';
-import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import { alcanceVersionado, operacoesComDeleteClinicoDoCatalogo } from '@sgh/legado';
 import { ErroProblema } from '../../../problema.filter.js';
-import type { FonteConfiguracao } from '../../config/public-api.js';
-import { lerRegistroDesligamento } from '../../coexistencia/public-api.js';
 import type { ContextoContasBanco, PortaContasBanco } from './porta.js';
 
-export const PARAMETRO_CONTINGENCIA = 'legado.contingencia';
+/**
+ * O contrato ainda aceita só identificadores em maiúsculas (nomes do banco antigo): o nome da tabela do modelo próprio
+ * vai em maiúsculas na resposta, até o contrato aceitar minúsculas (pedido ao orquestrador).
+ */
+const ident = (tabela: string): string => tabela.toUpperCase();
+
 /** Janela mínima de medição do uso antes de revogar por desuso (D-JANELA-59). */
 export const JANELA_MINIMA_DIAS = 90;
 
+/** O plano de privilégio mínimo de um estabelecimento: o alcance de cada módulo. */
+export interface PlanoPrivilegios {
+  readonly alcances: readonly AlcanceModulo[];
+}
+
+/**
+ * O catálogo das operações do produto que apagam linha (exclusão física, tx.excluir) e das tabelas do modelo próprio
+ * em que isso é aceito, com o motivo. Montado a partir das operações registradas (pedido ao orquestrador).
+ */
+export interface CatalogoExclusoes {
+  readonly operacoes: readonly { readonly operacao: string; readonly tabela: string }[];
+  readonly excecoes: readonly { readonly tabela: string; readonly motivo: string }[];
+}
+
+/** Token do provedor do catálogo das exclusões (opcional no módulo). */
+export const CATALOGO_EXCLUSOES = Symbol('CATALOGO_EXCLUSOES');
+
 export interface DependenciasContasBanco {
   readonly porta: PortaContasBanco;
-  /** docs/coexistencia/desligamento (o registro versionado dos passos do M58). */
-  readonly raizDesligamento: string;
-  readonly configuracao?: FonteConfiguracao | null;
+  /** O catálogo das exclusões físicas (null ou ausente: ainda não montado; a imutabilidade responde 409). */
+  readonly exclusoes?: () => CatalogoExclusoes | null;
+  /** O plano por módulo do estabelecimento (null: ainda não gerado). */
+  readonly plano?: (hospital: string) => PlanoPrivilegios | null;
   readonly agora?: () => number;
 }
 
@@ -56,39 +79,14 @@ export class ServicoContasBanco {
     return this.d.agora ? this.d.agora() : Date.now();
   }
 
-  /** Regra 1: desligado pelo M58 e a contingência (padrão ligada; sem a fonte ou com erro, ligada: falha fechada). */
-  async situacao(c: ContextoContasBanco): Promise<SituacaoHospital> {
-    const avisos: string[] = [];
-    const { registro, invalido } = lerRegistroDesligamento(this.d.raizDesligamento, c.hospital);
-    if (invalido) avisos.push(`registro dos passos do desligamento: ${invalido}`);
-    const desligado = registro.passos.desligamento.execucao !== null;
-    let contingenciaAtiva = true;
-    const def = definicaoParametro(PARAMETRO_CONTINGENCIA);
-    if (def && this.d.configuracao) {
-      try {
-        const valores = await this.d.configuracao.valoresParametro(c.rede, c.hospital);
-        const v = valorTipado(
-          def,
-          resolverParametro(
-            def,
-            valores,
-            {
-              rede: c.rede,
-              empresa: null,
-              estabelecimento: c.hospital,
-              unidade: null,
-              perfis: [],
-              usuario: '',
-            },
-            new Date(this.agora()),
-          ).valor,
-        );
-        contingenciaAtiva = v !== false;
-      } catch {
-        avisos.push('parâmetro da contingência ilegível: considerada aberta');
-      }
-    } else avisos.push('parâmetros indisponíveis: contingência considerada aberta');
-    return { desligado, contingenciaAtiva, avisos };
+  private plano(hospital: string): PlanoPrivilegios | null {
+    return this.d.plano?.(hospital) ?? null;
+  }
+
+  /** O banco do cliente é o único (sem sistema anterior a desligar nem contingência a esperar). */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async situacao(_c: ContextoContasBanco): Promise<SituacaoHospital> {
+    return { desligado: true, contingenciaAtiva: false, avisos: [] };
   }
 
   async inventario(c: ContextoContasBanco): Promise<InventarioContasBancoResposta> {
@@ -99,7 +97,8 @@ export class ServicoContasBanco {
     ]);
     const avisos = [
       ...situacao.avisos,
-      'uso das contas ainda não medido: a medição é feita no servidor do hospital, pela TI',
+      'uso das contas ainda não medido: a medição é feita no servidor do banco, pela TI',
+      'o catálogo mostra o que a conta da aplicação enxerga no banco do cliente',
     ];
     return esquemaInventarioContasBancoResposta.parse(
       montarInventarioContas({
@@ -121,8 +120,8 @@ export class ServicoContasBanco {
   }
 
   async desvios(c: ContextoContasBanco): Promise<DesviosPrivilegiosResposta> {
-    const alcance = alcanceVersionado(c.hospital);
-    if (!alcance) {
+    const plano = this.plano(c.hospital);
+    if (!plano) {
       throw new ErroProblema(
         'nao-encontrado',
         404,
@@ -136,42 +135,49 @@ export class ServicoContasBanco {
       montarDesvios({
         hospital: c.hospital,
         em: new Date(this.agora()).toISOString(),
-        alcances: alcance.alcances,
+        alcances: plano.alcances,
         reais,
         contasConfiguradas: new Set(
-          alcance.alcances.map((a) => a.modulo).filter((m) => comConta.has(sufixoModuloBanco(m))),
+          plano.alcances.map((a) => a.modulo).filter((m) => comConta.has(sufixoModuloBanco(m))),
         ),
       }),
     );
   }
 
   /**
-   * M59-F3 (regra 6; SBIS-26): a imutabilidade clínica por privilégio. Operações do catálogo e plano por módulo sem
-   * DELETE clínico (fora das exceções), e quem ainda apaga registro clínico no banco (a conta ampla da aplicação,
-   * enquanto existir, é a concessão vigente; o script 0002 a revoga).
+   * M59-F3 (regra 6; SBIS-26): a imutabilidade por privilégio. Quem ainda pode apagar linha no banco do cliente (a
+   * conta ampla da aplicação, enquanto existir, é a concessão vigente) e o plano por módulo, quando existir.
    */
   async imutabilidade(c: ContextoContasBanco): Promise<ImutabilidadeResposta> {
+    const catalogo = this.d.exclusoes?.() ?? null;
+    if (!catalogo)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Catálogo das exclusões pendente',
+        'O catálogo das operações que apagam linha ainda não foi montado neste servidor: a imutabilidade não pode ser afirmada.',
+        { codigo: 'catalogo-pendente' },
+      );
     const sgh = this.d.porta.contasSgh(c.hospital);
-    const alcance = alcanceVersionado(c.hospital);
-    const plano = alcance ? planejarPrivilegios(alcance.alcances) : [];
-    const linhas = await this.d.porta.lerDeleteClinico(c, nomesLegiveis(sgh));
+    const plano = this.plano(c.hospital);
+    const itens = plano ? planejarPrivilegios(plano.alcances) : [];
+    const [linhas, tabelas] = await Promise.all([
+      this.d.porta.lerDeleteClinico(c, nomesLegiveis(sgh)),
+      this.d.porta.contarTabelas(c),
+    ]);
     const doSante = new Set([...sgh.aplicacao, ...(sgh.scripts ? [sgh.scripts] : [])]);
-    const r = resumirDeleteClinico(linhas, (t) => doSante.has(t) || t.startsWith('SGH_'));
+    const r = resumirDeleteClinico(linhas, (t) => doSante.has(t));
     return esquemaImutabilidadeResposta.parse({
       hospital: c.hospital,
       em: new Date(this.agora()).toISOString(),
-      tabelasClinicas: {
-        legado: TABELAS_CLINICAS_LEGADO.length,
-        // As SGH_ clínicas que algum módulo usa (alcance versionado).
-        sgh: new Set(
-          (alcance?.alcances ?? []).flatMap((a) =>
-            Object.keys(a.objetos).filter((t) => PREFIXOS_SGH_CLINICOS.some((p) => t.startsWith(p))),
-          ),
-        ).size,
-      },
-      operacoesComDelete: operacoesComDeleteClinicoDoCatalogo(),
-      planoComDelete: itensPlanoComDeleteClinico(plano).length,
-      excecoes: EXCECOES_DELETE_CLINICO.map((e) => ({ tabela: e.tabela, motivo: e.motivo })),
+      // Sem sistema anterior: 0 do lado antigo; todas as tabelas do banco próprio têm exclusão lógica.
+      tabelasClinicas: { legado: 0, sgh: tabelas },
+      // As operações que apagam linha fora das exceções aceitas (catálogo); o plano diz o que ainda concede DELETE.
+      operacoesComDelete: catalogo.operacoes
+        .filter((o) => !catalogo.excecoes.some((e) => e.tabela === o.tabela))
+        .map((o) => ({ operacao: o.operacao, tabela: ident(o.tabela) })),
+      planoComDelete: itensPlanoComDeleteClinico(itens).length,
+      excecoes: catalogo.excecoes.map((e) => ({ tabela: ident(e.tabela), motivo: e.motivo })),
       titulares: r.titulares,
       concessaoVigente: r.concessaoVigente,
     });

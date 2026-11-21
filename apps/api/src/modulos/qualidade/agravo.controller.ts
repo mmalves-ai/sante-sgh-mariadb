@@ -1,6 +1,6 @@
 // Notificação compulsória de agravos (M48, etapa 4; ficha, seções 4, 5, 7 e 8, regras 3, 8 e 11; cap-05b §5.11,
 // "Notificação compulsória"; manual m17 "Notificação compulsória de agravos"; DP-47.3). Tudo só do novo (SGH_QUA_AGRAVO_*
-// com a SGH_TRILHA na mesma transação); o outro sistema é lido (cadastro de CID, atendimentos, óbitos, resultados,
+// com a trilha_auditoria na mesma transação); o outro sistema é lido (cadastro de CID, atendimentos, óbitos, resultados,
 // paciente, unidade, modelos e perguntas da ficha). A chave `qualidade.agravos` liga as gravações (recolher = só
 // consulta). Rotas:
 //   GET  /api/qualidade/vigilancia/agravos/resumo             o cartão e o cabeçalho (abertos, imediatos, vencidos)
@@ -354,7 +354,7 @@ export class AgravoController {
   @Post('casos')
   @HttpCode(201)
   @Permissao(P.notificar)
-  @AuditadoNoHandler('qualidade.abrirCasoAgravo: SGH_QUA_AGRAVO_CASO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('qualidade.abrirCasoAgravo: notificacao_agravo com a trilha_auditoria na mesma transação')
   async abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirCasoAgravo, b);
@@ -398,7 +398,7 @@ export class AgravoController {
       s,
       E.qualidadeAgravoCasoAberto.codigo,
       P.notificar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_AGRAVO_CASO', id: String(x.id), paciente: e.paciente }),
+      (x: { id: number }) => ({ tabela: 'notificacao_agravo', id: String(x.id), paciente: e.paciente }),
       (g) =>
         g.abrirCaso({
           origem: e.origem,
@@ -423,7 +423,7 @@ export class AgravoController {
   @Post('casos/:id/notificacao')
   @Permissao(P.notificar)
   @AuditadoNoHandler(
-    'qualidade.registrarNotificacaoAgravo: SGH_QUA_AGRAVO_CASO com a versão conferida e a SGH_TRILHA',
+    'qualidade.registrarNotificacaoAgravo: notificacao_agravo com a versão conferida e a trilha_auditoria',
   )
   async notificar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -445,7 +445,7 @@ export class AgravoController {
       s,
       E.qualidadeAgravoNotificado.codigo,
       P.notificar,
-      { tabela: 'SGH_QUA_AGRAVO_CASO', id: String(x.id), paciente: x.paciente },
+      { tabela: 'notificacao_agravo', id: String(x.id), paciente: x.paciente },
       (g) =>
         g.registrarNotificacao({
           id: x.id,
@@ -466,7 +466,7 @@ export class AgravoController {
   @Post('casos/:id/descarte')
   @Permissao(P.notificar)
   @AuditadoNoHandler(
-    'qualidade.descartarCasoAgravo: SGH_QUA_AGRAVO_CASO com a versão conferida e a SGH_TRILHA',
+    'qualidade.descartarCasoAgravo: notificacao_agravo com a versão conferida e a trilha_auditoria',
   )
   async descartar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -483,7 +483,7 @@ export class AgravoController {
       s,
       E.qualidadeAgravoDescartado.codigo,
       P.notificar,
-      { tabela: 'SGH_QUA_AGRAVO_CASO', id: String(x.id), paciente: x.paciente },
+      { tabela: 'notificacao_agravo', id: String(x.id), paciente: x.paciente },
       (g) =>
         g.descartarCaso({
           id: x.id,
@@ -498,7 +498,7 @@ export class AgravoController {
 
   @Post('gatilhos-exame')
   @Permissao(P.notificar)
-  @AuditadoNoHandler('qualidade.configurarGatilhoExame: SGH_QUA_AGRAVO_EXAME com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.configurarGatilhoExame: agravo_notificavel_cid com a trilha_auditoria')
   async configurarGatilho(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaConfigurarGatilhoExame, b);
@@ -531,7 +531,7 @@ export class AgravoController {
       s,
       E.qualidadeAgravoGatilhoConfigurado.codigo,
       P.notificar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_AGRAVO_EXAME', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'agravo_notificavel_cid', id: String(x.id) }),
       (g) =>
         g.configurarGatilhoExame({
           id: e.gatilho,

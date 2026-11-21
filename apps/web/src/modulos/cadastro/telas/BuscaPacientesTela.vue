@@ -6,7 +6,6 @@
 import { TIPOS_BUSCA_PACIENTE, type PacienteResumo, type TipoBuscaPaciente } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import FaixaOnda0 from '../../onda0/componentes/FaixaOnda0.vue';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -99,7 +98,6 @@ function abrir(p: PacienteResumo): void {
 <template>
   <section class="tela" aria-labelledby="busca-paciente-titulo" data-testid="tela-busca-paciente">
     <h1 id="busca-paciente-titulo">{{ t('cadastro.busca.titulo') }}</h1>
-    <FaixaOnda0 tela="pacientes" />
     <p>{{ t('cadastro.busca.texto') }}</p>
     <form class="barra" role="search" data-testid="form-busca-paciente" @submit.prevent="buscar">
       <div class="campo">

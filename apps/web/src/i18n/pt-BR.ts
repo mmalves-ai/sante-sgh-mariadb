@@ -31,12 +31,6 @@ import { mensagensContratualizacao } from '../modulos/faturamento/i18n-contratua
 import { mensagensSus } from '../modulos/faturamento/i18n-sus.js';
 import { mensagensTiss } from '../modulos/tiss/i18n.js';
 import { mensagensFinanceiro } from '../modulos/financeiro/i18n.js';
-import { mensagensCoexistencia } from '../modulos/coexistencia/i18n.js';
-import { mensagensDesligamento } from '../modulos/coexistencia/i18n-desligamento.js';
-import { mensagensEnsaioFirebird5 } from '../modulos/coexistencia/i18n-ensaio-firebird5.js';
-import { mensagensEnsaioUtf8 } from '../modulos/coexistencia/i18n-ensaio-utf8.js';
-import { mensagensJanela } from '../modulos/coexistencia/i18n-janela.js';
-import { mensagensRetrocompatibilidade } from '../modulos/coexistencia/i18n-retrocompatibilidade.js';
 import { mensagensRepasse } from '../modulos/repasse/i18n.js';
 import { mensagensManutencao } from '../modulos/manutencao/i18n.js';
 import { mensagensContabil } from '../modulos/contabil/i18n.js';
@@ -90,27 +84,8 @@ import { mensagensLicitacao } from '../modulos/suprimentos/i18n-licitacao.js';
 
 export const mensagensWeb = {
   casca: {
-    // M37: faixa do ambiente de treino e o diálogo "Abrir chamado".
+    // M37: faixa do ambiente de treino.
     treino: 'AMBIENTE DE TREINAMENTO',
-    chamado: {
-      abrir: 'Abrir chamado',
-      titulo: 'Abrir chamado',
-      ondeAconteceu: 'Em que sistema aconteceu?',
-      sistemas: { novo: 'Neste sistema', outro: 'No outro sistema', ambos: 'Nos dois' },
-      severidade: 'Severidade',
-      severidades: {
-        S1: 'S1 — crítica (atendimento parado, risco ao paciente)',
-        S2: 'S2 — alta (função importante degradada)',
-        S3: 'S3 — média (sem impacto imediato)',
-        S4: 'S4 — baixa (dúvida, ajuste, sugestão)',
-      },
-      descricao: 'O que aconteceu',
-      dadoPessoal: 'Envolve dado pessoal (o encarregado será avisado)',
-      contexto: 'Vai junto: a tela {tela}, a versão {versao}, o horário e o identificador técnico.',
-      enviar: 'Abrir o chamado',
-      semSistema: 'Diga em que sistema aconteceu.',
-      aberto: 'Chamado {id} aberto. Primeira resposta até {prazo}.',
-    },
     pularParaConteudo: 'Ir para o conteúdo',
     menu: 'Menu principal',
     abrirMenu: 'Abrir o menu',
@@ -623,14 +598,8 @@ export const mensagensWeb = {
       aprovacao: 'Aprovação',
     },
     memoria: 'Sessão de teste: as chaves ficam só em memória.',
-    // M38 (onda 0): consultas liberadas e escrita do setor desligada; texto de produto, sem apontar para fora.
-    onda0: {
-      escritaDesligada:
-        'Nesta etapa da implantação, esta tela é só de consulta para o seu setor. As alterações ficam disponíveis quando o comitê liberar a próxima etapa.',
-      foraDoEscopo: 'Esta consulta ainda não foi liberada para o seu perfil nesta etapa da implantação.',
-      indisponivel:
-        'O Sante SGH está temporariamente indisponível. Nesta etapa ele é só de consulta: nenhum registro do hospital depende dele.',
-    },
+    // Lote 02-07: a ação de escrita que a liberação da operação recusa aparece desabilitada, com este aviso.
+    escritaRecusada: 'As alterações desta tela não estão liberadas para o seu perfil neste estabelecimento.',
   },
   inicio: {
     titulo: 'Início',
@@ -2342,16 +2311,6 @@ export const mensagensWeb = {
   contratualizacaoSus: mensagensContratualizacao,
   tiss: mensagensTiss,
   financeiro: mensagensFinanceiro,
-  coexistencia: mensagensCoexistencia,
-  desligamento: mensagensDesligamento,
-  // M58 (etapa 2): o ensaio da versão 5 do motor na cópia.
-  ensaioFirebird5: mensagensEnsaioFirebird5,
-  // M58 (etapa 3): o ensaio da conversão do texto para UTF-8 na cópia.
-  ensaioUtf8: mensagensEnsaioUtf8,
-  // M58 (etapa 5): a janela em produção, a verificação depois dela e a restrição de entrada.
-  janela: mensagensJanela,
-  // M59 (etapa 6): a retrocompatibilidade do banco e o plano de evolução do modelo (ADR 0033).
-  retrocompatibilidade: mensagensRetrocompatibilidade,
   repasse: mensagensRepasse,
   manutencao: mensagensManutencao,
   contabil: mensagensContabil,

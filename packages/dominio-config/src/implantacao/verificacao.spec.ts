@@ -106,8 +106,6 @@ const fumaca = (): FumacaServidor => ({
     resumo: null,
     resumoHomologado: null,
     verificadaEm: null,
-    tabelasBloqueadas: 0,
-    bloqueiaTudo: false,
   },
   chaves: { lidas: true, ligadas: [], esperadas: [], inesperadas: [] },
   itens: ITENS_FUMACA_SERVIDOR.map((codigo) => ({

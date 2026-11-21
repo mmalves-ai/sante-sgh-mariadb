@@ -5,7 +5,7 @@
 //   GET    /api/acesso/avisos/eventos                canal de eventos: "mudou" depois de cada COMMIT (o cliente relê)
 //   POST   /api/acesso/avisos/:id/lido | resolver    o estado do próprio aviso
 //   GET    /api/acesso/mensagens                     recebidas, enviadas, não lidas e ciências pendentes
-//   GET    /api/acesso/mensagens/:id                 abre a mensagem (a primeira abertura marca a leitura)
+//   GET    /api/acesso/mensagens/:id[?tipo=]         abre a mensagem (a primeira abertura marca a leitura)
 //   POST   /api/acesso/mensagens                     envia (usuários, grupos, setores, unidades; contexto do paciente)
 //   POST   /api/acesso/mensagens/:id/ciencia         dá ciência
 //   POST   /api/acesso/comunicados                   publica comunicado com vigência (gestor)
@@ -15,9 +15,9 @@
 //   POST   /api/acesso/comunicados/:id/encerramento  encerra com motivo; continua visível com as ciências (W0-09)
 //   GET    /api/acesso/mensagens-anteriores          as próprias mensagens do sistema anterior (só consulta)
 //   GET    /api/acesso/dicionario                    as palavras do próprio dicionário (o mesmo nos dois sistemas)
-//   POST   /api/acesso/dicionario                    inclui (acesso.incluirPalavraDicionario)
-//   DELETE /api/acesso/dicionario/:palavra           exclui (acesso.excluirPalavraDicionario)
-// Cada componente tem a sua chave de liberação (SGH_CFG_LIBERACAO): desligada, a leitura responde 403
+//   POST   /api/acesso/dicionario                    inclui (acesso.incluir-palavra-dicionario)
+//   DELETE /api/acesso/dicionario/:palavra           exclui (acesso.excluir-palavra-dicionario)
+// Cada componente tem a sua chave de liberação (configuração do estabelecimento): desligada, a leitura responde 403
 // `recurso-desligado` e a página inicial esconde o componente.
 import {
   Body,
@@ -31,6 +31,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -87,6 +88,11 @@ function idDaRota(v: string): number {
   if (!/^\d{1,15}$/.test(v) || Number(v) <= 0)
     throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
   return Number(v);
+}
+
+/** `?tipo=mensagem|comunicado`: mensagens diretas e comunicados têm ids de tabelas diferentes. */
+function tipoDaRota(v: string | undefined): 'mensagem' | 'comunicado' | undefined {
+  return v === 'mensagem' || v === 'comunicado' ? v : undefined;
 }
 
 /** O esquema dos contratos; a primeira mensagem vai ao detalhe (a do dado do paciente é a que orienta a tela). */
@@ -221,7 +227,7 @@ export class ComunicacaoController implements OnModuleDestroy {
   @Post('avisos/:id/lido')
   @HttpCode(200)
   @Permissao(PERMISSOES_INICIO.avisoResolver)
-  @AuditadoNoHandler('a mudança de estado vai à SGH_TRILHA na mesma transação SGH_')
+  @AuditadoNoHandler('a mudança de estado vai à trilha na mesma transação')
   async avisoLido(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<{ mudou: boolean }> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVES_INICIO.avisos);
@@ -234,7 +240,7 @@ export class ComunicacaoController implements OnModuleDestroy {
   @Post('avisos/:id/resolver')
   @HttpCode(200)
   @Permissao(PERMISSOES_INICIO.avisoResolver)
-  @AuditadoNoHandler('a mudança de estado vai à SGH_TRILHA na mesma transação SGH_')
+  @AuditadoNoHandler('a mudança de estado vai à trilha na mesma transação')
   async avisoResolvido(
     @Param('id') id: string,
     @Req() req: RequisicaoAutorizada,
@@ -273,19 +279,23 @@ export class ComunicacaoController implements OnModuleDestroy {
 
   @Get('mensagens/:id')
   @Permissao(PERMISSOES_INICIO.mensagemLer)
-  async abrir(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<MensagemRecebida> {
+  async abrir(
+    @Param('id') id: string,
+    @Req() req: RequisicaoAutorizada,
+    @Query('tipo') tipo?: string,
+  ): Promise<MensagemRecebida> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVES_INICIO.mensagens);
     return semPacienteSemAcesso(
       s,
-      await this.servico.abrir(s.porta, this.autor(s, 'mensagem-lida'), idDaRota(id)).catch(traduzir),
+      await this.servico.abrir(s.porta, this.autor(s, 'mensagem-lida'), idDaRota(id), tipoDaRota(tipo)).catch(traduzir),
     );
   }
 
   @Post('mensagens')
   @HttpCode(201)
   @Permissao(PERMISSOES_INICIO.mensagemEnviar)
-  @AuditadoNoHandler('o envio vai à SGH_TRILHA na mesma transação SGH_ (sem o texto)')
+  @AuditadoNoHandler('o envio vai à trilha na mesma transação (sem o texto)')
   async enviar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -303,20 +313,24 @@ export class ComunicacaoController implements OnModuleDestroy {
   @Post('mensagens/:id/ciencia')
   @HttpCode(200)
   @Permissao(PERMISSOES_INICIO.mensagemLer)
-  @AuditadoNoHandler('a ciência vai à SGH_TRILHA na mesma transação SGH_')
-  async ciencia(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<MensagemRecebida> {
+  @AuditadoNoHandler('a ciência vai à trilha na mesma transação')
+  async ciencia(
+    @Param('id') id: string,
+    @Req() req: RequisicaoAutorizada,
+    @Query('tipo') tipo?: string,
+  ): Promise<MensagemRecebida> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, CHAVES_INICIO.mensagens);
     return semPacienteSemAcesso(
       s,
-      await this.servico.ciencia(s.porta, this.autor(s, 'ciencia'), idDaRota(id)).catch(traduzir),
+      await this.servico.ciencia(s.porta, this.autor(s, 'ciencia'), idDaRota(id), tipoDaRota(tipo)).catch(traduzir),
     );
   }
 
   @Post('comunicados')
   @HttpCode(201)
   @Permissao(PERMISSOES_INICIO.comunicadoPublicar)
-  @AuditadoNoHandler('a publicação vai à SGH_TRILHA na mesma transação SGH_ (sem o texto)')
+  @AuditadoNoHandler('a publicação vai à trilha na mesma transação (sem o texto)')
   async publicar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -341,7 +355,7 @@ export class ComunicacaoController implements OnModuleDestroy {
 
   @Put('comunicados/:id')
   @Permissao(PERMISSOES_INICIO.comunicadoPublicar)
-  @AuditadoNoHandler('a correção vai à SGH_TRILHA na mesma transação SGH_ (sem o texto)')
+  @AuditadoNoHandler('a correção vai à trilha na mesma transação (sem o texto)')
   async corrigirComunicado(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -358,7 +372,7 @@ export class ComunicacaoController implements OnModuleDestroy {
   @Post('comunicados/:id/vigencia')
   @HttpCode(200)
   @Permissao(PERMISSOES_INICIO.comunicadoPublicar)
-  @AuditadoNoHandler('o encurtamento vai à SGH_TRILHA na mesma transação SGH_')
+  @AuditadoNoHandler('o encurtamento vai à trilha na mesma transação')
   async vigenciaComunicado(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -375,7 +389,7 @@ export class ComunicacaoController implements OnModuleDestroy {
   @Post('comunicados/:id/encerramento')
   @HttpCode(200)
   @Permissao(PERMISSOES_INICIO.comunicadoPublicar)
-  @AuditadoNoHandler('o encerramento vai à SGH_TRILHA na mesma transação SGH_')
+  @AuditadoNoHandler('o encerramento vai à trilha na mesma transação')
   async encerrarComunicado(
     @Param('id') id: string,
     @Body() corpo: unknown,

@@ -1,11 +1,10 @@
 // W0-04 (M5): a comissão de revisão de prontuários pela API, sobre a porta em memória (dados SINTÉTICOS): o checklist
 // versionado, o sorteio reproduzível com a semente registrada, a revisão com as pendências ao médico assistente, a
 // resposta do próprio profissional, o aval (crítico) lido pelo SAME, o percentual conforme por clínica e as recusas.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCcihMemoria } from './porta-ccih-memoria.js';
 import { PortaGestaoMemoria } from './porta-gestao-memoria.js';
@@ -71,7 +70,7 @@ beforeAll(async () => {
   porta = new PortaGestaoMemoria({ agora });
   porta.altasSint.set('2026-09', ALTAS);
   porta.loginsSint.set(501, 'SINT.MEDICO');
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha,
     gestao: porta,
     ccih: new PortaCcihMemoria({ agora }),

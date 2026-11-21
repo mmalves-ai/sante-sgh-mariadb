@@ -1,0 +1,23 @@
+# lote 03-10 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas apps/api/src/modulos/pessoas/infra apps/api/src/modulos/pessoas/rubricas apps/api/src/modulos/pessoas/sesmt
+apps/api/src/modulos/pessoas/rubricas/porta-rubricas-legado.ts
+apps/api/src/modulos/pessoas/rubricas/porta-rubricas-memoria.ts
+apps/api/src/modulos/pessoas/rubricas/porta-rubricas.ts
+apps/api/src/modulos/pessoas/rubricas/rubricas-http.spec.ts
+apps/api/src/modulos/pessoas/rubricas/rubricas.controller.ts
+apps/api/src/modulos/pessoas/rubricas/rubricas.int.spec.ts
+apps/api/src/modulos/pessoas/rubricas/rubricas.spec.ts
+apps/api/src/modulos/pessoas/rubricas/servico-rubricas.ts
+apps/api/src/modulos/pessoas/infra/segregacao-ocupacional.int.spec.ts
+apps/api/src/modulos/pessoas/servico.spec.ts
+apps/api/src/modulos/pessoas/servico.ts
+apps/api/src/modulos/pessoas/sesmt/crud-sesmt.spec.ts
+apps/api/src/modulos/pessoas/sesmt/documentos-sesmt.ts
+apps/api/src/modulos/pessoas/sesmt/porta-sesmt-legado.ts
+apps/api/src/modulos/pessoas/sesmt/porta-sesmt-memoria.ts
+apps/api/src/modulos/pessoas/sesmt/porta-sesmt.ts
+apps/api/src/modulos/pessoas/sesmt/servico-sesmt.ts
+apps/api/src/modulos/pessoas/sesmt/sesmt.controller.ts
+apps/api/src/modulos/pessoas/sesmt/sesmt.int.spec.ts
+apps/api/src/modulos/pessoas/sesmt/sesmt.spec.ts

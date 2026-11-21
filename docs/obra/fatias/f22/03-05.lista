@@ -1,26 +1,23 @@
 # lote 03-05 (onda 3); gerado por tools/obra/fatiar_f22.py
-# registrar: sus
-# pastas: apps/api/src/modulos/sus
-apps/api/src/modulos/sus/armazem.ts
-apps/api/src/modulos/sus/montagem-aih.ts
-apps/api/src/modulos/sus/montagem.ts
-apps/api/src/modulos/sus/porta-aih-legado.ts
-apps/api/src/modulos/sus/porta-aih-memoria.ts
-apps/api/src/modulos/sus/porta-aih.ts
-apps/api/src/modulos/sus/porta-legado.ts
-apps/api/src/modulos/sus/porta-memoria.ts
-apps/api/src/modulos/sus/porta.ts
-apps/api/src/modulos/sus/public-api.ts
-apps/api/src/modulos/sus/selo-solicitante.ts
-apps/api/src/modulos/sus/servico-aih.spec.ts
-apps/api/src/modulos/sus/servico-aih.ts
-apps/api/src/modulos/sus/servico-apac.spec.ts
-apps/api/src/modulos/sus/servico-bpa.spec.ts
-apps/api/src/modulos/sus/servico.spec.ts
-apps/api/src/modulos/sus/servico.ts
-apps/api/src/modulos/sus/sus-aih.controller.ts
-apps/api/src/modulos/sus/sus-aih.int.spec.ts
-apps/api/src/modulos/sus/sus-apac.int.spec.ts
-apps/api/src/modulos/sus/sus-bpa.int.spec.ts
-apps/api/src/modulos/sus/sus.controller.ts
-apps/api/src/modulos/sus/sus.int.spec.ts
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/esocial apps/api/src/modulos/pessoas/esocial/transmissor
+apps/api/src/modulos/pessoas/aplicacao/esocial.int.spec.ts
+apps/api/src/modulos/pessoas/esocial/esocial-http.spec.ts
+apps/api/src/modulos/pessoas/esocial/esocial.controller.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-legado.spec.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-legado.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-memoria.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial.ts
+apps/api/src/modulos/pessoas/esocial/servico-esocial.spec.ts
+apps/api/src/modulos/pessoas/esocial/servico-esocial.ts
+apps/api/src/modulos/pessoas/esocial/servico-periodicos.spec.ts
+apps/api/src/modulos/pessoas/esocial/servico-periodicos.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/certificado-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/simulador-esocial.spec-util.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/soap-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/transmissor-esocial.spec.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/transmissor-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/xml-leitura.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/xmldsig.ts
+apps/api/src/modulos/pessoas/aplicacao/fechamento-periodicos.int.spec.ts
+apps/api/src/modulos/pessoas/aplicacao/ferias-decimo.int.spec.ts

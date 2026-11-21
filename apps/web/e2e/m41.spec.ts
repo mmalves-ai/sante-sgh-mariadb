@@ -89,50 +89,6 @@ test.describe('Onda 3: efeito no estoque, conferência numérica, critério por 
     expect(externas).toEqual([]);
   });
 
-  test('aba Onda 3: regra 1 por local, quatro setores na ordem, item da onda registrado; axe', async ({
-    page,
-  }) => {
-    const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
-    await page.goto('/administracao/coexistencia/migracao');
-    await page.getByTestId('aba-migracao-onda3').click();
-    await expect(page.getByTestId('tela-migracao-onda3')).toBeVisible();
-    await expect(page.locator('[data-testid^="onda3-setor-"]')).toHaveCount(4);
-    await expect(page.getByTestId('regra1-local-10').getByTestId('faltam')).toHaveText('2A');
-    await expect(page.getByTestId('onda3-com-prescricao')).toContainText('CTI');
-    await expect(page.getByTestId('onda3-fora')).toContainText('suprimentos.livroControlados');
-    await semViolacaoAxe(page, '/administracao/coexistencia/migracao/onda3');
-
-    await escolher(page.getByTestId('onda3-filtro-setor'), 'farmacia-central');
-    await expect(page.locator('[data-testid^="onda3-setor-"]')).toHaveCount(1);
-    const central = page.getByTestId('onda3-setor-farmacia-central');
-    await expect(central.getByTestId('veredito')).toHaveText('Falta completar o critério');
-    await expect(central.getByTestId('antes')).toContainText('Almoxarifado central e compras');
-    await expect(central.getByTestId('exige-prescricao')).toBeVisible();
-    await expect(central.getByTestId('item-prescricao-na-unidade').getByTestId('situacao')).toHaveText(
-      'Pendente',
-    );
-    await expect(central.getByTestId('recursos-novos')).toContainText('dupla conferência de controlados');
-
-    await central.getByTestId('onda3-abrir-farmacia-central').click();
-    const form = page.getByTestId('form-onda3');
-    await escolher(form.getByTestId('onda3-item'), {
-      rotulo: 'Inventário recente dos locais de estoque que entram',
-    });
-    await escolher(form.getByTestId('onda3-situacao'), 'cumprido');
-    await form.getByLabel(/^Evidência/).fill('ata 41/2026 do comitê');
-    await form.getByLabel('Data do cumprimento').fill('01/12/2026');
-    await form.getByLabel('Data do cumprimento').blur();
-    await form.getByLabel('Justificativa').fill('Inventário dos locais da farmácia central (sintético)');
-    await form.getByTestId('onda3-gravar').click();
-    await expect(page.getByTestId('mensagem-onda3')).toContainText('1 item(ns) registrado(s)');
-    await expect(central.getByTestId('item-inventario-recente').getByTestId('situacao')).toHaveText(
-      'Cumprido',
-    );
-    await semViolacaoAxe(page, '/administracao/coexistencia/migracao/onda3 (registrado)');
-    expect(externas).toEqual([]);
-  });
-
   test('chaves: a dispensação diz antes e recusa ao ligar com a unidade sem a prescrição em uso (regra 1); axe', async ({
     page,
   }) => {

@@ -51,7 +51,7 @@ function montar(maximo: number) {
   const executar = vi.fn(async () => ({}));
   const fonte = { destino: 'memoria', executar } as unknown as FonteAdministracao;
   const resolvedor = { idSessao: () => null } as unknown as ResolvedorSessao;
-  const ctl = new UsuariosController(fonte, null, resolvedor, null, null, saneamento);
+  const ctl = new UsuariosController(fonte, null, resolvedor, null, saneamento);
   return { ctl, executar };
 }
 

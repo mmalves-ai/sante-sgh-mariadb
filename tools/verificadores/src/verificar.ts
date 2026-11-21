@@ -60,6 +60,10 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
   // F4 L4: mapa declarativo do conector (tabela sem destino nem descarte justificado, ciclo não declarado,
   // tabela ou coluna de destino inexistente no DDL, regra ou de-para desconhecidos, mapa gerado desatualizado).
   { nome: 'conector:mapa', comando: 'python3', args: ['-I', 'conector/verificar_mapa.py'] },
+  // F2.2 lote 02-07 (ADR 0003, itens 5 e 9): sem código de convivência com o sistema de origem (os módulos herdados,
+  // as telas "só consulta" por etapa e a liberação por setor). Catraca sobre a linha de base em
+  // tools/obra/sem-coexistencia.pendentes; o fechamento da F2.2 roda com --estrito.
+  { nome: 'sem-coexistencia', comando: 'bash', args: ['tools/obra/sem-coexistencia.sh'] },
   // M60.2: o pacote de instalação (units, nginx, cliente do banco, modelo do arquivo de ambiente e o anexo de
   // variáveis) igual ao gerado, e o catálogo cobrindo toda variável lida pelo código de produção.
   {

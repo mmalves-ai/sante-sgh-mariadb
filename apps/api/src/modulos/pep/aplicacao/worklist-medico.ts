@@ -24,7 +24,7 @@ import {
   semEvolucaoMedica24h,
   situacaoDasAlergiasDoResumo,
 } from '@sgh/dominio-pep';
-import type { ContextoSgh, ResultadoLido } from '@sgh/legado';
+import type { ContextoGravacaoPep, ResultadoLido } from '../tipos-pep.js';
 import type { ContextoDocs } from '../documentos-porta.js';
 import { idadeTexto, inicioJanelaCritico, type ServicoDocumentos } from '../documentos-servico.js';
 import type { PortaPrescricao } from '../prescricao-porta.js';
@@ -43,7 +43,7 @@ export class ServicoWorklistMedico {
     private readonly worklist: PortaWorklist,
   ) {}
 
-  /** Prescrição a renovar: pelos atendimentos da fila (legado) ou pela leitura do M24 filtrada (memória). */
+  /** Prescrição a renovar: pelos atendimentos da fila (banco próprio) ou pela leitura do M24 filtrada (memória). */
   private async aRenovar(
     c: ContextoDocs,
     atendimentos: readonly number[],
@@ -70,7 +70,7 @@ export class ServicoWorklistMedico {
   }
 
   /**
-   * A fila pelos registros (TBCBOPRO.ID) e pelo login de quem tem o vínculo assistencial. W0-10 (M4): o portal do
+   * A fila pelas ocupações do profissional (ids) e pelo login de quem tem o vínculo assistencial. W0-10 (M4): o portal do
    * médico externo usa a mesma fila pelos registros do profissional ligado à conta (o login do portal não existe no
    * cadastro de usuários: o parecer aceito por login não casa, só o atendimento e o registro no episódio).
    */
@@ -118,7 +118,7 @@ export class ServicoWorklistMedico {
       this.worklist.leituras(c, {
         login,
         pacientes: linhas.map((l) => l.paciente),
-        registros: linhas.filter((l) => l.tipo === 'internacao').map((l) => l.registro),
+        internacoes: linhas.filter((l) => l.tipo === 'internacao').map((l) => l.registro),
         desde: desdeData,
       }),
       this.aRenovar(
@@ -141,7 +141,7 @@ export class ServicoWorklistMedico {
     // informada, senão "não avaliadas" (achado da revisão do M27: a fila nunca mostrava o "nega").
     const ultimaAlergia = new Map(comp.alergiasInformadas.map((x) => [x.paciente, x.em]));
     const ultimaNega = new Map(comp.negas.map((x) => [x.paciente, x.em]));
-    const previsao = new Map(extra.previsoesAlta.map((x) => [x.registro, x.previsao]));
+    const previsao = new Map(extra.previsoesAlta.map((x) => [x.internacao, x.previsao]));
     const resultadosDe = (paciente: number): ResultadoDoPaciente[] =>
       extra.resultados
         .filter((r) => r.paciente === paciente)
@@ -149,7 +149,8 @@ export class ServicoWorklistMedico {
           exame: r.exame,
           liberadoEm: r.liberadoEm,
           critico: criticos.has(r.exame),
-          visualizadoNoOutroSistema: r.visualizadoNoOutroSistema,
+          // Um só sistema: o resultado é visto quando o médico o abre ou dá a ciência.
+          visualizadoNoOutroSistema: false,
           vistoPeloMedico: r.vistoPeloMedico,
           ciencia: comCiencia.has(r.exame),
         }));
@@ -284,7 +285,7 @@ export class ServicoWorklistMedico {
    * W0-10 (M5): a ciência do valor crítico dada fora da tela do prontuário (o médico externo no portal): a mesma ciência
    * do M23 (registro novo com a conduta, que a vigia do M26 lê para parar o escalonamento).
    */
-  darCiencia(c: ContextoSgh, paciente: number, exame: number, conduta: string): Promise<number> {
+  darCiencia(c: ContextoGravacaoPep, paciente: number, exame: number, conduta: string): Promise<number> {
     return this.documentos.darCiencia(c, paciente, exame, conduta, null);
   }
 }

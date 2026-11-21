@@ -1,7 +1,7 @@
 // W1-01 (parte 11c): painel da rede por CPF e "bloquear em todos". O controlador direto com uma fonte falsa de três
 // estabelecimentos (um deles fora do ar) e com a fonte em memória (um banco só).
 import { describe, expect, it } from 'vitest';
-import type { ContaRedeLegado } from '@sgh/legado';
+import type { ContaRede } from './tipos.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -48,7 +48,7 @@ function servico() {
   return { s, revogadas };
 }
 
-const conta = (login: string, extra: Partial<ContaRedeLegado> = {}): ContaRedeLegado => ({
+const conta = (login: string, extra: Partial<ContaRede> = {}): ContaRede => ({
   login,
   nome: 'Ana',
   grupo: 'MEDICOS',
@@ -58,10 +58,10 @@ const conta = (login: string, extra: Partial<ContaRedeLegado> = {}): ContaRedeLe
   ...extra,
 });
 
-function fonteRede(contas: Record<string, ContaRedeLegado[] | 'fora'>) {
-  const executadas: { op: string; hospital: string; login: string; chave: string }[] = [];
+function fonteRede(contas: Record<string, ContaRede[] | 'fora'>) {
+  const executadas: { op: string; hospital: string; login: string; chave: string; motivo?: string }[] = [];
   const fonte = {
-    destino: 'legado',
+    destino: 'banco',
     redeDoAcesso: () => ({
       rede: 'rede-sint',
       estabelecimentos: [
@@ -78,8 +78,18 @@ function fonteRede(contas: Record<string, ContaRedeLegado[] | 'fora'>) {
       if (x === 'fora') throw new ErroProblema('indisponivel', 503, 'fora');
       return x;
     },
-    executar: async (op: string, e: { login: string }, ctx: { hospital: string; idempotencyKey: string }) => {
-      executadas.push({ op, hospital: ctx.hospital, login: e.login, chave: ctx.idempotencyKey });
+    executar: async (
+      op: string,
+      e: { login: string; motivo?: string },
+      ctx: { hospital: string; chaveIdempotencia: string },
+    ) => {
+      executadas.push({
+        op,
+        hospital: ctx.hospital,
+        login: e.login,
+        chave: ctx.chaveIdempotencia,
+        ...(e.motivo !== undefined ? { motivo: e.motivo } : {}),
+      });
       return {};
     },
   } as unknown as FonteAdministracao;
@@ -142,6 +152,11 @@ describe('"bloquear em todos" (W1-01, parte 11c)', () => {
       'acesso.bloquearUsuario@pc:ANA',
       'acesso.bloquearUsuario@hb:ANA.HB',
     ]);
+    // O motivo obrigatório do pedido chega à entrada de cada operação (vai à trilha).
+    expect(executadas.map((x) => x.motivo)).toEqual([
+      'Desligamento confirmado pelo RH',
+      'Desligamento confirmado pelo RH',
+    ]);
     // Uma chave de idempotência por conta (a do pedido não se repete entre as receitas do lote).
     expect(new Set(executadas.map((x) => x.chave)).size).toBe(2);
     expect(executadas[0]!.chave).toBe(chaveDoItem('pedido-rede-0001', 'pc', 'ANA'));
@@ -154,6 +169,33 @@ describe('"bloquear em todos" (W1-01, parte 11c)', () => {
       'hb:ANA3:inativo',
       'hc:-:indisponivel',
     ]);
+  });
+
+  it('banco próprio: o mesmo login é a mesma conta, bloqueada uma vez só, com o último gestor conferido em cada estabelecimento', async () => {
+    const { fonte, executadas } = fonteRede({ pc: [conta('ANA')], hb: [conta('ANA')], hc: [conta('ANA.HC')] });
+    const { s, revogadas } = servico();
+    const conferidos: string[] = [];
+    const gestores: LeitorGestores = {
+      gestoresAcesso: async (_r: string, h: string) => {
+        conferidos.push(h);
+        return [];
+      },
+    };
+    const ctl = new RedeCpfController(fonte, s, resolvedor, gestores);
+    const r = await ctl.bloquear(
+      { login: 'ANA', motivo: 'Desligamento confirmado pelo RH', senha: 'certa' },
+      requisicao(),
+    );
+    expect(executadas.map((x) => `${x.hospital}:${x.login}`)).toEqual(['pc:ANA', 'hc:ANA.HC']);
+    expect(conferidos).toEqual(['pc', 'hb', 'hc']);
+    expect(revogadas).toEqual(['pc:ANA', 'hb:ANA', 'hc:ANA.HC']);
+    expect(r.bloqueados).toBe(2);
+    expect(r.resultados.map((x) => `${x.estabelecimento}:${x.login ?? '-'}:${x.resultado}`)).toEqual([
+      'pc:ANA:bloqueado',
+      'hb:ANA:bloqueado',
+      'hc:ANA.HC:bloqueado',
+    ]);
+    expect(r.resultados[1]!.detalhe).toContain('Mesma conta');
   });
 
   it('a si mesmo, auditor, sem senha, sem motivo e último gestor: recusados', async () => {

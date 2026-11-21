@@ -1,0 +1,22 @@
+# lote 03-14 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: suprimentos
+# pastas: apps/api/src/modulos/suprimentos
+apps/api/src/modulos/suprimentos/manipulacao-porta-legado.ts
+apps/api/src/modulos/suprimentos/manipulacao-porta-memoria.ts
+apps/api/src/modulos/suprimentos/manipulacao-porta.ts
+apps/api/src/modulos/suprimentos/manipulacao.controller.ts
+apps/api/src/modulos/suprimentos/nfe-xml.ts
+apps/api/src/modulos/suprimentos/onda3.spec.ts
+apps/api/src/modulos/suprimentos/onda3.ts
+apps/api/src/modulos/suprimentos/opme-porta-legado.ts
+apps/api/src/modulos/suprimentos/opme-porta-memoria.ts
+apps/api/src/modulos/suprimentos/opme-porta.ts
+apps/api/src/modulos/suprimentos/opme.controller.ts
+apps/api/src/modulos/suprimentos/opme.spec.ts
+apps/api/src/modulos/suprimentos/porta-legado.ts
+apps/api/src/modulos/suprimentos/porta-memoria.ts
+apps/api/src/modulos/suprimentos/porta.ts
+apps/api/src/modulos/suprimentos/public-api.ts
+apps/api/src/modulos/suprimentos/servico.ts
+apps/api/src/modulos/suprimentos/suprimentos.controller.ts
+apps/api/src/modulos/suprimentos/suprimentos.spec.ts

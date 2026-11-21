@@ -24,19 +24,10 @@ import {
   montarFilaAgravos,
   normalizarTexto,
 } from '@sgh/dominio-qualidade';
-import type {
-  AtendimentoComCidLido,
-  CasoAgravoSghLido,
-  CidNotificavelLido,
-  GatilhoExameSghLido,
-  ObitoComCidLido,
-  PacienteAgravoLido,
-  ResultadoCandidatoLido,
-  UnidadeAgravoLida,
-} from '@sgh/legado';
+import type { AtendimentoComCid, CasoAgravoRegistrado, CidNotificavelCadastro, GatilhoExameRegistrado, ObitoComCid, PacienteDoAgravo, ResultadoCandidato, UnidadeDoAgravo } from './tipos.js';
 
 /** O cadastro de CID notificável como as regras puras o usam (só os de periodicidade conhecida). */
-export function cadastroDe(cids: readonly CidNotificavelLido[]): Map<string, CidCadastro> {
+export function cadastroDe(cids: readonly CidNotificavelCadastro[]): Map<string, CidCadastro> {
   const m = new Map<string, CidCadastro>();
   for (const c of cids) {
     const p = periodicidadeDoCadastro(c.codigoCadastro);
@@ -45,7 +36,7 @@ export function cadastroDe(cids: readonly CidNotificavelLido[]): Map<string, Cid
   return m;
 }
 
-export function pacienteAgravo(id: number, p: PacienteAgravoLido | undefined): PacienteAgravo {
+export function pacienteAgravo(id: number, p: PacienteDoAgravo | undefined): PacienteAgravo {
   return {
     id,
     nome: p?.nome ?? '',
@@ -56,7 +47,7 @@ export function pacienteAgravo(id: number, p: PacienteAgravoLido | undefined): P
 }
 
 /** Os gatilhos de exame que valem (os do estabelecimento ou a lista padrão), no formato da resposta. */
-export function gatilhosExameVigentesDe(configurados: readonly GatilhoExameSghLido[]): GatilhoExameLido[] {
+export function gatilhosExameVigentesDe(configurados: readonly GatilhoExameRegistrado[]): GatilhoExameLido[] {
   if (configurados.length === 0) return GATILHOS_EXAME_PADRAO.map((g) => ({ ...g }));
   return configurados.map((g) => ({ ...g, fonte: 'configurado' as const }));
 }
@@ -68,11 +59,11 @@ export function padroesDeExame(gatilhos: readonly GatilhoExameLido[]): string[] 
 
 export interface LeiturasDaFila {
   readonly cadastro: ReadonlyMap<string, CidCadastro>;
-  readonly atendimentos: readonly AtendimentoComCidLido[];
-  readonly obitos: readonly ObitoComCidLido[];
-  readonly resultados: readonly ResultadoCandidatoLido[];
-  readonly pacientes: ReadonlyMap<number, PacienteAgravoLido>;
-  readonly unidades: ReadonlyMap<number, UnidadeAgravoLida>;
+  readonly atendimentos: readonly AtendimentoComCid[];
+  readonly obitos: readonly ObitoComCid[];
+  readonly resultados: readonly ResultadoCandidato[];
+  readonly pacientes: ReadonlyMap<number, PacienteDoAgravo>;
+  readonly unidades: ReadonlyMap<number, UnidadeDoAgravo>;
   readonly gatilhosExame: readonly GatilhoExameLido[];
   readonly casos: readonly {
     origem: string;
@@ -137,7 +128,7 @@ export function filaDeGatilhos(l: LeiturasDaFila): GatilhoAgravoLido[] {
 
 /** O caso na resposta, com o estado do prazo no instante `agora`. */
 export function casoLido(
-  x: CasoAgravoSghLido,
+  x: CasoAgravoRegistrado,
   paciente: PacienteAgravo,
   nomeCid: string,
   agora: string,

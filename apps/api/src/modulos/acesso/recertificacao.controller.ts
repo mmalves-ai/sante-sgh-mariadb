@@ -30,13 +30,7 @@ import {
   validarDecisaoRecert,
   validarNovaCampanhaRecert,
 } from '@sgh/dominio-acesso';
-import {
-  type CampanhaRecertLida,
-  type ContextoOperacao,
-  ErroOperacao,
-  type ItemRecertLido,
-  type TrilhaGestao,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -47,7 +41,16 @@ import { ErroProblema, tipoPorStatus } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from './acesso.controller.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
+import type { CampanhaRecertLida, ItemRecertLido } from './tipos-gestao-acesso.js';
+import type { ContextoGestao, DestinoGestao, TrilhaGestao } from './gestao-tipos.js';
 import { exigirGestorRestante } from './ultimo-gestor.js';
+
+/**
+ * O contrato da tela ainda tipa o destino como 'legado' | 'memoria' (pedido do lote 02-03: 'banco' | 'memoria'); o
+ * valor enviado é o da fonte (a tela não decide nada por ele).
+ */
+const destinoTela = (d: DestinoGestao) => d as unknown as DecisaoRecertTela['destino'];
+
 
 export const OPERACAO_BLOQUEIO_RECERT = 'acesso.bloquearUsuario';
 const FUSO = 'America/Sao_Paulo';
@@ -211,7 +214,7 @@ export class RecertificacaoController {
   async abrir(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; itens: number; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; itens: number; destino: FonteGestao['destino'] }> {
     const p = this.analisar(esquemaAbrirRecert, corpo);
     const { rede, hospital, login } = this.sessao(req);
     const hoje = this.hoje();
@@ -297,12 +300,12 @@ export class RecertificacaoController {
       .catch((e: unknown) => this.problema(e));
     try {
       if (p.decisao === 'retirar' && p.acao === 'bloqueio') {
-        const ctx: ContextoOperacao = {
+        const ctx: ContextoGestao = {
           rede,
           hospital,
-          traceId: correlacaoDaRequisicao(req, 'acesso-recert'),
-          usuarioLegado: operador,
-          idempotencyKey: `recert-${id}-${p.login}`,
+          correlacao: correlacaoDaRequisicao(req, 'acesso-recert'),
+          usuario: operador,
+          chaveIdempotencia: `recert-${id}-${p.login}`,
           estacao: estacaoDaRequisicao(req).slice(0, 80),
           reautenticadoEm,
         };
@@ -341,7 +344,7 @@ export class RecertificacaoController {
       decisao: p.decisao,
       acao: p.acao,
       perfil: p.perfil,
-      destino: this.fonte.destino,
+      destino: destinoTela(this.fonte.destino),
     };
   }
 
@@ -359,7 +362,7 @@ export class RecertificacaoController {
     id: string;
     situacao: 'encerrada' | 'cancelada';
     pendentes: number;
-    destino: 'legado' | 'memoria';
+    destino: FonteGestao['destino'];
   }> {
     const id = this.id(bruto);
     const p = this.analisar(esquemaFecharRecert, corpo);

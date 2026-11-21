@@ -5,7 +5,7 @@
 import { useI18n } from 'vue-i18n';
 import { pode } from '../../../casca/sessao/pode.js';
 
-defineProps<{ atual: 'operacoes' | 'prontidao' | 'vigia' }>();
+defineProps<{ atual: 'operacoes' | 'prontidao' }>();
 const { t } = useI18n();
 const verProntidao = pode('config.coexistencia.ler');
 const verOperacoes = pode('config.assinatura.ler');
@@ -26,13 +26,6 @@ const verOperacoes = pode('config.assinatura.ler');
       :aria-current="atual === 'prontidao' ? 'page' : undefined"
       data-testid="aba-prontidao"
       >{{ t('config.prontidao.abaProntidao') }}</RouterLink
-    >
-    <RouterLink
-      v-if="verOperacoes"
-      to="/administracao/coexistencia/assinaturas/vigia"
-      :aria-current="atual === 'vigia' ? 'page' : undefined"
-      data-testid="aba-vigia"
-      >{{ t('config.prontidao.abaVigia') }}</RouterLink
     >
   </nav>
 </template>

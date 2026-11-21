@@ -6,11 +6,7 @@ export {
   CatalogoRelatoriosController,
 } from './relatorio.controller.js';
 export { PORTA_RELATORIO, type PortaRelatorio } from './porta.js';
-export {
-  portaRelatorioIndisponivel,
-  portaRelatorioLegado,
-  portaRelatorioNaTransacao,
-} from './porta-legado.js';
+export { portaRelatorioIndisponivel, PortaRelatorioPropria } from './porta-propria.js';
 export { PortaRelatorioMemoria } from './porta-memoria.js';
 export { FilaEnvioPorValkey } from './infra/fila-envio.js';
 export { ConfiguracaoM34, type EstadoRecurso, type SujeitoM34 } from './aplicacao/configuracao.js';

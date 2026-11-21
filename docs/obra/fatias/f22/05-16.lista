@@ -1,0 +1,21 @@
+# lote 05-16 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/worker/src
+apps/worker/src/pacs-worklist.service.ts
+apps/worker/src/pacs-worklist.spec.ts
+apps/worker/src/pessoas-conselho.service.ts
+apps/worker/src/pessoas-conselho.spec.ts
+apps/worker/src/prefixo-filas.spec.ts
+apps/worker/src/publicador-catalogos.service.ts
+apps/worker/src/rede-mpi.service.ts
+apps/worker/src/rede-mpi.spec.ts
+apps/worker/src/relay-outbox.int.spec.ts
+apps/worker/src/relay-outbox.service.ts
+apps/worker/src/relay-outbox.spec.ts
+apps/worker/src/relay-outbox.ts
+apps/worker/src/relogio.ts
+apps/worker/src/representacao-pep.service.ts
+apps/worker/src/representacao-pep.spec.ts
+apps/worker/src/sinal-de-vida.service.ts
+apps/worker/src/smtp.ts
+apps/worker/src/telemetria.ts

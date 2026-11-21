@@ -110,9 +110,6 @@ export const esquemaImpressaoConferida = z.object({
   resumo: z.string().nullable(),
   resumoHomologado: z.string().nullable(),
   verificadaEm: z.string().nullable(),
-  /** Tabelas do sistema anterior com escrita bloqueada pela divergência. */
-  tabelasBloqueadas: z.number().int().nonnegative(),
-  bloqueiaTudo: z.boolean(),
 });
 export type ImpressaoConferida = z.infer<typeof esquemaImpressaoConferida>;
 

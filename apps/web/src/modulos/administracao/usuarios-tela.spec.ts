@@ -591,7 +591,7 @@ describe('usuários: ficha redesenhada', () => {
                   ],
                 },
               ],
-              destino: 'legado',
+              destino: 'banco',
             },
           }
         : undefined,

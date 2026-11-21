@@ -12,7 +12,7 @@ Atualizado em: 2026-11-20, 23:00. **Em andamento, sem parar** (dono). Retome por
 | F1 | F1.4 catálogos públicos | **concluído** | IBGE, BCB, CID-10, SIGTAP (202611) e CBO; revisados; pendentes: topografia CID-O, significado dos tipos 4 e 5 de compatibilidade SIGTAP |
 | F2 | F2.1 núcleo | **concluído** | `packages/nucleo`, 73 testes (commit `7067431`) |
 | F2 | F2-L login pelo navegador | **concluído** | https://192.168.0.104:5310, admin da plataforma e usuário de teste no cliente `demo`; `tools/dev/subir-login.sh`; commit `9b0c83e` |
-| F2 | F2.2/F2.3 demais módulos da API | próximo | 513 arquivos ainda importam `@sgh/legado`; meta `tools/obra/contar-legado.sh` = 0 |
+| F2 | F2.2/F2.3 demais módulos da API | próximo | 518 arquivos ainda importam `@sgh/legado` (após a onda 4); meta `tools/obra/contar-legado.sh` = 0 |
 
 ## Quadro de fases
 
@@ -36,6 +36,14 @@ Atualizado em: 2026-11-20, 23:00. **Em andamento, sem parar** (dono). Retome por
 
 - **ADR 0001** (aceito em 2026-11-20): banco próprio em MariaDB 12.3, modelo base do `new-sgh` trazido para
   cá, conector diferencial, operação dia 0, dia 1 e dia 2+n.
+
+## Pendência registrada da F2.2 (onda 4, fila do médico M27)
+
+- **"Resultado novo" degradado:** a fila do médico devolve `vistoPeloMedico` sempre falso até a porta própria dos
+  documentos gravar `visualizacao_resultado_exame` (tabela criada na onda 4) na abertura do resultado e a fila ler dela.
+- **Sem prova no banco próprio:** a regra 2 do M27 (vínculo assistencial) e o p95 < 1,5 s da fila PENDENTES. O
+  `worklist-medico.autorizacao.int.spec.ts` usa dublê do painel; a prova vem com a porta própria dos documentos.
+- Detalhe em `docs/obra/fatias/f22/saidas/onda-04-integracao.md`.
 
 ## Pendência registrada do F2-L (login pelo navegador)
 

@@ -1,244 +1,254 @@
-// Partida comum dos testes de integração do SADT na API (M26) sobre a cópia compartilhada: só com a trava da cópia
-// (o flock da copia.lock que envolve o comando), AMBIENTE=dev e loopback; toda gravação em transação DESFEITA
-// (ROLLBACK). O estado de partida (exame lançado, digitado, liberado) pelo próprio executor, com os profissionais, os
-// atendimentos e os exames da cópia (só IDs e o login, em memória; nunca impressos). Saída só com contagens.
-import { resolve } from 'node:path';
+// Massa SINTÉTICA comum dos testes de integração do SADT no MariaDB real (cliente f22_o2; nenhuma pessoa real): os
+// estabelecimentos, o paciente, o atendimento e os profissionais vêm da massa da enfermagem (mesmo cliente da onda); o
+// SADT acrescenta o setor de laboratório e de imagem, o catálogo (exame, analito, material, modalidade), a requisição
+// com dois exames pedidos, o canal de comunicação, um resultado liberado com valor crítico e o aviso dele, e a
+// numeração do laudo. `limparMassaSadt` apaga tudo o que montou (antes da massa da enfermagem). Saída só com contagens.
+import { garantirSequencia, NucleoProprio } from '@sgh/nucleo';
 import {
-  ambienteEfetivo,
-  caminhoArquivoAmbiente,
-  type ContextoOperacao,
-  type Escritor,
-  type Executor,
-  fonteCatalogoArquivo,
-  lerCodigos,
-  lerConfiguracaoNucleo,
-  lerExameSadt,
-  NucleoLegado,
-  operacao,
-  travaDaCopiaSegura,
-  condicaoLoginDoProfissional,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
-import { portaSadtNaTransacao } from '../porta-legado.js';
-import type { PortaSadt } from '../porta.js';
+  CLIENTE,
+  contextoDe,
+  garantir,
+  garantirCliente,
+  limparMassa,
+  type MassaEnfermagem,
+  montarMassa,
+  SEM_BANCO,
+} from '../../enfermagem/massa-enfermagem.spec-util.js';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
+import type { ContextoSadt } from '../porta.js';
 
-const raiz = resolve(import.meta.dirname, '../../../../../..');
-const { env } = ambienteEfetivo(caminhoArquivoAmbiente(process.env, raiz));
-export const codigos = lerCodigos(env);
-/** A trava da cópia é deste processo (ou de um ancestral): sem ela, nenhuma gravação na cópia. */
-export const PODE_ESCREVER = codigos.length > 0 && travaDaCopiaSegura(process.pid);
+export { CLIENTE, SEM_BANCO };
 
-export interface AmbienteSadt {
-  readonly nucleo: NucleoLegado;
-  readonly executor: Executor;
-  readonly cod: string;
+export interface MassaSadt {
+  readonly base: MassaEnfermagem;
+  readonly marca: string;
+  readonly setorLab: number;
+  readonly setorImagem: number;
+  readonly exameLab: number;
+  readonly exameLabCodigo: string;
+  readonly exameImagem: number;
+  readonly analito: number;
+  readonly modalidade: number;
+  readonly requisicao: number;
+  readonly requisicaoImagem: number;
+  /** exame_item do laboratório (a coletar) e de imagem (para a lista de trabalho). */
+  readonly itemLab: number;
+  readonly itemLab2: number;
+  readonly itemImagem: number;
+  /** Resultado liberado com valor crítico e o aviso pendente dele. */
+  readonly itemLiberado: number;
+  readonly resultado: number;
+  readonly aviso: number;
+  readonly canal: string;
 }
 
-export async function ambienteSadt(): Promise<AmbienteSadt> {
-  const nucleo = new NucleoLegado({
-    env: { ...env, FB_POOL_TETO: '3' },
-    driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(env).bibliotecaCliente }),
-    pastaHomologada: resolve(raiz, 'tools/schema-check/homologado'),
-  });
-  const cod = codigos[0] as string;
-  await nucleo.verificarSchema(cod);
-  return {
-    nucleo,
-    executor: nucleo.criarExecutor({
-      catalogo: fonteCatalogoArquivo(resolve(raiz, 'docs/operacoes/catalogo')),
-    }),
-    cod,
-  };
-}
+export const contexto = (m: MassaSadt, est = m.base.est): ContextoSadt => ({
+  ...contextoDe(m.base, est),
+  rede: 'rede-teste',
+  hospital: `h${m.marca.toLowerCase()}`.slice(0, 10),
+});
 
-let seq = 0;
-export function contexto(a: AmbienteSadt, usuario: string): ContextoOperacao {
-  return {
-    rede: a.nucleo.rede,
-    hospital: a.cod,
-    traceId: 'int-m26-api',
-    usuarioLegado: usuario,
-    idempotencyKey: `int-m26-${Date.now().toString(36)}-${(seq++).toString(36)}`,
-    reautenticadoEm: Date.now(),
-  };
-}
+/** A linha da trilha que a tela monta (como o apoio da gravação). */
+export const linhaTela = (m: MassaSadt, evento: string, entidade: string, id: number | null): TrilhaDaGravacao => ({
+  estabelecimento: m.base.est,
+  usuario: m.base.usuario,
+  acao: 'operacao',
+  entidade,
+  entidadeId: id,
+  dadosDepois: { evento, recurso: 'teste', estacao: m.marca },
+  correlacao: `t-${m.marca}`,
+});
 
-const num = (v: unknown) => Number(v ?? 0);
-const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v)).trim();
-
-export interface Profissional {
-  readonly login: string;
-  readonly vinculo: number;
-}
-
-/** O laboratório em transação desfeita: a porta sobre a transação e o estado de partida pelo executor. */
-export class MassaSadt {
-  readonly porta: PortaSadt;
-  readonly c: { rede: string; hospital: string };
-  constructor(
-    readonly a: AmbienteSadt,
-    readonly e: Escritor,
-  ) {
-    this.porta = portaSadtNaTransacao(e, a.executor);
-    this.c = { rede: a.nucleo.rede, hospital: a.cod };
-  }
-
-  executar(op: string, entrada: unknown, login: string) {
-    return this.a.executor.executar(operacao(op), this.a.cod, entrada, contexto(this.a, login), {
-      escritor: this.e,
-    });
-  }
-
-  /** Profissional com vínculo ativo, conselho e login único pela ocupação (prefixos do CBO). */
-  async profissional(prefixos: readonly string[], exceto: string | null = null): Promise<Profissional> {
-    const ls = await this.e.consultar(
-      `SELECT FIRST 40 r.ID V, u.NOME L FROM TBCBOPRO r JOIN TBPROFIS p ON p.ID = r.ID_TBPROFIS
-         JOIN TBUSERS u ON ${condicaoLoginDoProfissional('p').replace(/\?/g, 'u.NOME')} JOIN TBCBOSUS s ON s.ID = r.ID_TBCBOSUS
-        WHERE COALESCE(r.ATIVO, 'T') <> 'F' AND r.COD > 0 AND (${prefixos.map(() => 's.COD STARTING WITH ?').join(' OR ')})
-        ORDER BY r.ID DESC`,
-      [...prefixos],
-      { teto: 40 },
+export async function montarMassaSadt(nucleo: NucleoProprio, prefixo: string): Promise<MassaSadt> {
+  garantirCliente();
+  // Marca por execução (3 letras do arquivo + 3 do relógio): uma execução interrompida não colide com a próxima.
+  const marca = `${prefixo.slice(0, 3)}${Date.now().toString(36).slice(-3).toUpperCase()}`;
+  const base = await montarMassa(nucleo, marca, false);
+  const ctx = { cliente: CLIENTE, correlacao: `t-${marca}` };
+  return nucleo.escrever(ctx, async (e) => {
+    const agora = new Date();
+    const ins = (sql: string, p: unknown[]) => e.inserir(sql, p);
+    const fonte = Number(
+      (await e.uma<{ f: number }>('SELECT fonte_pagadora_id AS f FROM atendimento WHERE id = ?', [base.atendimento]))?.f,
     );
-    for (const x of ls) {
-      const login = txt(x['L']);
-      if (login === exceto) continue;
-      const [n] = await this.e.consultar('SELECT COUNT(*) N FROM TBUSERS WHERE NOME = ?', [login], {
-        teto: 1,
-      });
-      if (num(n?.['N']) === 1) return { login, vinculo: num(x['V']) };
-    }
-    throw new Error(`Nenhum profissional ${prefixos.join('/')} na cópia.`);
-  }
-
-  /** Atendimento do tipo com a conta do setor aberta e os retratos vigentes. */
-  async atendimento(
-    tipo: 'I' | 'E',
-  ): Promise<{ id: number; paciente: number; retratos: { htAtendimento: number; htPaciente: number } }> {
-    const ls = await this.e.consultar(
-      `SELECT FIRST 10 a.ID, a.ID_RICADPAC P FROM ATCABECATEND a
-        WHERE a.TP_ATENDIMENTO = ? AND a.DATA_HORA_ENTRADA >= DATEADD(-365 DAY TO CURRENT_DATE)
-          AND EXISTS (SELECT 1 FROM SICADATE s WHERE s.ID_ATCABECATEND = a.ID AND s.REG = a.COD_ATENDIMENTO AND s.ATEND = a.TP_ATENDIMENTO)
-          AND EXISTS (SELECT 1 FROM HTATENDIMENTO h WHERE h.ID_ATCABECATEND = a.ID)
-        ORDER BY a.ID DESC`,
-      [tipo],
-      { teto: 10, tempoMaximoMs: 120_000 },
-    );
-    for (const l of ls) {
-      const a = await this.porta.atendimento(this.c, num(l['ID']));
-      if (a?.retratos && a.conta) return { id: a.atendimento, paciente: num(l['P']), retratos: a.retratos };
-    }
-    throw new Error(`Nenhum atendimento ${tipo} com a conta do setor na cópia.`);
-  }
-
-  /** Um exame parametrizado do laboratório (um valor, com material e recipiente), com faixa de referência no cadastro. */
-  async exameLaboratorio(): Promise<{ id: number; codigo: string }> {
-    const [x] = await this.e.consultar(
-      `SELECT FIRST 1 t.ID, t.CODALF FROM SITABPRO t WHERE t.ATO = 15 AND COALESCE(t.SITUACAO, 'A') <> 'I'
-          AND COALESCE(t.SOMENTE_SOLICITACAO_PEP, 'F') <> 'T' AND t.VARIAVEL = 'P' AND t.ALFANUM = 'F'
-          AND t.MATERIAL IS NOT NULL AND t.RECIPIENTE IS NOT NULL ORDER BY t.ID`,
+    const setor = (tipo: string, cod: string) =>
+      ins(
+        `INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em, versao)
+         VALUES (?, ?, ?, ?, ?, 1)`,
+        [base.est, `${marca}${cod}`, `SETOR ${cod} SINTETICO`, tipo, agora],
+      );
+    const setorLab = await setor('laboratorio', 'L');
+    const setorImagem = await setor('imagem', 'I');
+    const modalidade = await garantir(
+      e,
+      "SELECT id FROM modalidade_imagem WHERE codigo = 'CT'",
       [],
-      { teto: 1 },
+      "INSERT INTO modalidade_imagem (codigo, descricao, ativo, sigla_padrao, criado_em, versao) VALUES ('CT', 'Tomografia', TRUE, 'CT', ?, 1)",
+      [agora],
     );
-    if (!x) throw new Error('Nenhum exame parametrizado do laboratório na cópia.');
-    return { id: num(x['ID']), codigo: txt(x['CODALF']) };
-  }
-
-  async prestadorELocal(ato: number): Promise<{ prestador: number; local: number }> {
-    const [x] = await this.e.consultar(
-      `SELECT FIRST 1 s.ID_TBPRESER P, s.LOCAL L, COUNT(*) N FROM SILANEXA s
-        WHERE s.ATO = ? AND s.DATA >= '2026-06-01' AND s.PEND_SADT = 'F' AND s.ID_TBPRESER IS NOT NULL AND s.LOCAL > 0
-        GROUP BY 1, 2 ORDER BY 3 DESC`,
-      [ato],
-      { teto: 1, tempoMaximoMs: 120_000 },
+    const material = await garantir(
+      e,
+      "SELECT id FROM material_biologico WHERE codigo = 'SANGUE-T'",
+      [],
+      "INSERT INTO material_biologico (codigo, descricao, ativo, tipo, imprime_etiqueta_local, exige_sitio_anatomico, criado_em, versao) VALUES ('SANGUE-T', 'Sangue (teste)', TRUE, 'liquido', FALSE, FALSE, ?, 1)",
+      [agora],
     );
-    if (!x) throw new Error(`Nenhum prestador do ato ${ato} na cópia.`);
-    return { prestador: num(x['P']), local: num(x['L']) };
-  }
-
-  /** Lança o exame do laboratório no setor pelo executor e devolve o ID do exame. */
-  async lancar(
-    tipo: 'I' | 'E',
-    quem: Profissional,
-  ): Promise<{ id: number; atendimento: number; paciente: number }> {
-    const at = await this.atendimento(tipo);
-    const ex = await this.exameLaboratorio();
-    const pl = await this.prestadorELocal(15);
-    const r = await this.executar(
-      'sadt.lancarExame',
-      {
-        atendimento: at.id,
-        ato: 15,
-        atend: tipo,
-        itens: [{ exame: ex.id, urgente: false }],
-        executante: quem.vinculo,
-        prestador: pl.prestador,
-        local: pl.local,
-        solicitante: quem.vinculo,
-        retratos: at.retratos,
-        confirmarAlertas: true,
-        repeticaoMinimaHoras: 0,
-      },
-      quem.login,
+    const exameLabCodigo = `${marca}K`;
+    const exameLab = await ins(
+      `INSERT INTO exame (codigo, sigla, nome, tipo_servico, tipo_resultado, ativo, criado_em, versao)
+       VALUES (?, ?, 'POTASSIO SINTETICO', 'laboratorio', 'numerico', TRUE, ?, 1)`,
+      [exameLabCodigo, `${marca}K`, agora],
     );
-    return { id: num(r.resultado['primeiro']), atendimento: at.id, paciente: at.paciente };
-  }
-
-  async lido(id: number) {
-    const x = await lerExameSadt(this.e, id);
-    if (!x) throw new Error('Exame não relido.');
-    return { id, chave: x.chave, versao: x.versao };
-  }
-
-  async digitar(id: number, quem: Profissional, valor: number): Promise<void> {
-    await this.executar(
-      'sadt.registrarResultado',
-      {
-        exame: await this.lido(id),
-        elementos: [{ elemento: 0, numerico: valor, alfa: null, absoluta: null }],
-      },
-      quem.login,
+    const exameImagem = await ins(
+      `INSERT INTO exame (codigo, sigla, nome, tipo_servico, tipo_resultado, modalidade_imagem_id, ativo, criado_em, versao)
+       VALUES (?, ?, 'TOMOGRAFIA SINTETICA', 'imagem', 'laudo', ?, TRUE, ?, 1)`,
+      [`${marca}T`, `${marca}T`, modalidade, agora],
     );
-  }
-
-  async liberar(id: number, quem: Profissional): Promise<void> {
-    await this.executar(
-      'sadt.liberarExame',
-      { exames: [await this.lido(id)], responsavel: quem.vinculo, confirmarCritico: true },
-      quem.login,
+    await ins(
+      'INSERT INTO exame_material (exame_id, material_biologico_id, padrao, criado_em, versao) VALUES (?, ?, TRUE, ?, 1)',
+      [exameLab, material, agora],
     );
-  }
-
-  /** A faixa crítica (SGH_) do exame no elemento 0, para o aviso da liberação. */
-  async faixaCritica(exame: string, acimaDe: number): Promise<void> {
-    await this.porta.gravarSgh(
-      this.c,
-      {
-        rede: this.c.rede,
-        hospital: this.c.hospital,
-        usuario: 'SGH.TESTE',
-        evento: 'sadt.valorCritico.alterado',
-        recurso: 'sadt.critico',
-        operacao: 'faixa crítica (teste)',
-        tabelaAlvo: 'SGH_SADT_VALOR_CRITICO',
-        idAlvo: exame,
-        chaveNaturalAlvo: null,
-        resultado: 'sucesso',
-        estacao: 'teste',
-        correlacao: `int-m26-${Date.now()}`,
-        idPaciente: null,
-      },
-      (g) =>
-        g.gravarValorCritico({
-          ato: 15,
-          exame,
-          elemento: 0,
-          abaixoDe: null,
-          acimaDe,
-          prazoMinutos: 30,
-          aprovacao: 'Teste de integração (sintético)',
-          ativo: true,
-          usuario: 'SGH.TESTE',
-        }),
+    const analito = await ins(
+      `INSERT INTO analito (codigo, nome, tipo_resultado, ativo, criado_em, versao)
+       VALUES (?, 'POTASSIO', 'numerico', TRUE, ?, 1)`,
+      [`${marca}A`, agora],
     );
-  }
+    await ins('INSERT INTO exame_analito (exame_id, analito_id, ordem, criado_em, versao) VALUES (?, ?, 1, ?, 1)', [
+      exameLab,
+      analito,
+      agora,
+    ]);
+    const requisicao = await ins(
+      `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, setor_diagnostico_id,
+         solicitante_profissional_id, fonte_pagadora_id, solicitado_em, criado_em, versao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [base.est, `${marca}-R1`, base.paciente, base.atendimento, setorLab, base.profissional, fonte, agora, agora],
+    );
+    const requisicaoImagem = await ins(
+      `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, setor_diagnostico_id,
+         solicitante_profissional_id, fonte_pagadora_id, solicitado_em, criado_em, versao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [base.est, `${marca}-R2`, base.paciente, base.atendimento, setorImagem, base.profissional, fonte, agora, agora],
+    );
+    const item = (req: number, seq: number, exame: number, situacao: string, extra = '') =>
+      ins(
+        `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, material_biologico_id, situacao, criado_em, versao${extra ? ', liberado_em' : ''})
+         VALUES (?, ?, ?, ?, ?, ?, 1${extra ? ', ?' : ''})`,
+        [req, seq, exame, exame === exameLab ? material : null, situacao, agora, ...(extra ? [agora] : [])],
+      );
+    const itemLab = await item(requisicao, 1, exameLab, 'solicitado');
+    const itemLab2 = await item(requisicao, 2, exameLab, 'solicitado');
+    const itemLiberado = await item(requisicao, 3, exameLab, 'liberado', 'liberado');
+    const itemImagem = await item(requisicaoImagem, 1, exameImagem, 'solicitado');
+    const resultado = await ins(
+      `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, forma_entrada, situacao, numero_versao,
+         resultado_em, liberado_em, liberado_por_profissional_id, critico, criado_em, versao)
+       VALUES (?, ?, ?, 'digitado', 'liberado', 1, ?, ?, ?, TRUE, ?, 1)`,
+      [itemLiberado, base.paciente, setorLab, agora, agora, base.profissional, agora],
+    );
+    const ra = await ins(
+      `INSERT INTO resultado_analito (resultado_exame_id, sequencia, analito_id, valor_numerico, critico, criado_em, versao)
+       VALUES (?, 1, ?, 7.2, TRUE, ?, 1)`,
+      [resultado, analito, agora],
+    );
+    const aviso = await ins(
+      `INSERT INTO aviso_valor_critico (estabelecimento_id, resultado_exame_id, resultado_analito_id, paciente_id, gerado_em,
+         prazo_em, situacao, criado_em, versao) VALUES (?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 30 MINUTE), 'pendente', ?, 1)`,
+      [base.est, resultado, ra, base.paciente, agora, agora, agora],
+    );
+    const canal = 'telefone-teste';
+    await garantir(
+      e,
+      'SELECT id FROM canal_notificacao WHERE codigo = ?',
+      [canal],
+      "INSERT INTO canal_notificacao (codigo, descricao, ativo, tipo_canal, criado_em, versao) VALUES (?, 'Telefone (teste)', TRUE, 'central', ?, 1)",
+      [canal, agora],
+    );
+    await garantir(
+      e,
+      "SELECT id FROM motivo_reimpressao WHERE codigo = 'perda-via'",
+      [],
+      "INSERT INTO motivo_reimpressao (codigo, descricao, ativo, criado_em, versao) VALUES ('perda-via', 'Paciente perdeu a primeira via', TRUE, ?, 1)",
+      [agora],
+    );
+    await garantirSequencia(e, { tipo: 'laudo_exame', estabelecimento: base.est, prefixo: 'L' }, { agora, usuario: null });
+    return {
+      base,
+      marca,
+      setorLab,
+      setorImagem,
+      exameLab,
+      exameLabCodigo,
+      exameImagem,
+      analito,
+      modalidade,
+      requisicao,
+      requisicaoImagem,
+      itemLab,
+      itemLab2,
+      itemImagem,
+      itemLiberado,
+      resultado,
+      aviso,
+      canal,
+    };
+  }).catch(async (x: unknown) => {
+    await limparMassa(nucleo, base);
+    throw x;
+  });
+}
+
+export async function limparMassaSadt(nucleo: NucleoProprio, m: MassaSadt | null): Promise<void> {
+  if (!m) return;
+  await nucleo.escrever({ cliente: CLIENTE, correlacao: `t-${m.marca}` }, async (e) => {
+    const ests = [m.base.est, m.base.outroEst];
+    const emEst = 'estabelecimento_id IN (?, ?)';
+    const itens = `(SELECT ei.id FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id WHERE r.${emEst})`;
+    await e.executar(
+      `UPDATE item_lista_trabalho_imagem SET integracao_mensagem_id = NULL, estudo_imagem_id = NULL WHERE ${emEst}`,
+      ests,
+    );
+    await e.executar(
+      `DELETE FROM integracao_mensagem WHERE entidade = 'item_lista_trabalho_imagem' AND entidade_id IN (SELECT id FROM item_lista_trabalho_imagem WHERE ${emEst})`,
+      ests,
+    );
+    await e.executar(`DELETE FROM item_lista_trabalho_imagem WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM estudo_imagem WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM visualizador_imagem WHERE ${emEst}`, ests);
+    await e.executar(
+      `DELETE ex FROM emissao_laudo_exame ex JOIN emissao_laudo el ON el.id = ex.emissao_laudo_id WHERE el.${emEst}`,
+      ests,
+    );
+    await e.executar(`DELETE FROM emissao_laudo WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM visualizacao_resultado_exame WHERE ${emEst}`, ests);
+    await e.executar(
+      `DELETE t FROM aviso_valor_critico_tentativa t JOIN aviso_valor_critico a ON a.id = t.aviso_valor_critico_id WHERE a.${emEst}`,
+      ests,
+    );
+    await e.executar(`DELETE FROM aviso_valor_critico WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM regra_valor_critico WHERE ${emEst} OR exame_id IN (?, ?)`, [...ests, m.exameLab, m.exameImagem]);
+    await e.executar(
+      `DELETE ev FROM amostra_biologica_evento ev JOIN amostra_biologica a ON a.id = ev.amostra_biologica_id WHERE a.${emEst}`,
+      ests,
+    );
+    await e.executar(
+      `DELETE x FROM amostra_biologica_exame x JOIN amostra_biologica a ON a.id = x.amostra_biologica_id WHERE a.${emEst}`,
+      ests,
+    );
+    await e.executar(`DELETE FROM amostra_biologica WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM resultado_analito WHERE resultado_exame_id IN (SELECT id FROM resultado_exame WHERE exame_item_id IN ${itens})`, ests);
+    await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN ${itens}`, ests);
+    await e.executar(
+      `DELETE ei FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id WHERE r.${emEst}`,
+      ests,
+    );
+    await e.executar(`DELETE FROM requisicao_exame WHERE ${emEst}`, ests);
+    await e.executar('DELETE FROM exame_analito WHERE exame_id IN (?, ?)', [m.exameLab, m.exameImagem]);
+    await e.executar('DELETE FROM exame_material WHERE exame_id IN (?, ?)', [m.exameLab, m.exameImagem]);
+    await e.executar('DELETE FROM exame WHERE id IN (?, ?)', [m.exameLab, m.exameImagem]);
+    await e.executar('DELETE FROM analito WHERE id = ?', [m.analito]);
+    await e.executar(`DELETE FROM setor_diagnostico WHERE ${emEst}`, ests);
+    await e.executar(`DELETE FROM sequencia_negocio WHERE tipo = 'laudo_exame' AND ${emEst}`, ests);
+  });
+  await limparMassa(nucleo, m.base);
 }

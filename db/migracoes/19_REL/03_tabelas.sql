@@ -1,0 +1,37 @@
+-- REL, lote 03 (F2.2 onda 4; pedido do lote 04-04: pedido de relatório novo (M34 W0-09)). Convenções do ADR 0002 (parte 2). Só para frente.
+-- Sem FOREIGN KEY aqui (03_chaves.sql).
+
+CREATE TABLE pedido_relatorio (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  solicitante_usuario_id BIGINT UNSIGNED NOT NULL,
+  titulo VARCHAR(120) NOT NULL,
+  descricao VARCHAR(2000) NOT NULL,
+  finalidade VARCHAR(300) NOT NULL COMMENT 'Para que o relatório serve',
+  area VARCHAR(60) NOT NULL COMMENT 'Área que vai usar o relatório',
+  prazo DATE NOT NULL,
+  situacao VARCHAR(30) NOT NULL DEFAULT 'aberto',
+  relatorio_id BIGINT UNSIGNED NULL COMMENT 'Relatório do catálogo que atende o pedido',
+  resposta VARCHAR(2000) NULL,
+  respondido_por_usuario_id BIGINT UNSIGNED NULL,
+  respondido_em DATETIME(3) NULL,
+  cancelado_em DATETIME(3) NULL,
+  cancelado_por_usuario_id BIGINT UNSIGNED NULL,
+  motivo_cancelamento VARCHAR(200) NULL,
+  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_pedido_relatorio_situacao CHECK (situacao IN ('aberto','em_analise','publicado','recusado')),
+  CONSTRAINT ck_pedido_relatorio_resposta CHECK (situacao = 'aberto' OR (resposta IS NOT NULL AND respondido_em IS NOT NULL AND respondido_por_usuario_id IS NOT NULL)),
+  CONSTRAINT ck_pedido_relatorio_publicado CHECK (situacao <> 'publicado' OR relatorio_id IS NOT NULL),
+  CONSTRAINT ck_pedido_relatorio_cancelamento CHECK ((cancelado_em IS NULL) = (motivo_cancelamento IS NULL) AND (cancelado_em IS NULL) = (cancelado_por_usuario_id IS NULL)),
+  CONSTRAINT ck_pedido_relatorio_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_pedido_relatorio_estabelecimento_situacao (estabelecimento_id, situacao),
+  KEY ix_pedido_relatorio_solicitante (solicitante_usuario_id),
+  KEY ix_pedido_relatorio_relatorio (relatorio_id),
+  KEY ix_pedido_relatorio_respondido_por (respondido_por_usuario_id),
+  KEY ix_pedido_relatorio_cancelado_por (cancelado_por_usuario_id)
+) COMMENT='Pedido de relatório novo à curadoria: o que, para quê, área, prazo, resposta e cancelamento com motivo';

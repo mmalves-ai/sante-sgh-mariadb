@@ -81,8 +81,6 @@ describe.skipIf(!PODE_ESCREVER)('M60.3: fumaça do servidor na cópia', () => {
         resumo: null,
         resumoHomologado: null,
         verificadaEm: null,
-        tabelasBloqueadas: 0,
-        bloqueiaTudo: false,
       },
       chaves: conferirChaves(
         linhas.map((x) => ({ tipo: x.tipo, chave: x.chave, escopo: x.escopo, ligada: x.ligada })),

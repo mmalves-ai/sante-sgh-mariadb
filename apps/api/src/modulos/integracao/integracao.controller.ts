@@ -1,5 +1,5 @@
 // Integrações novas e o laboratório de apoio (M34; ficha, seção 7):
-//   GET  /api/integracoes/monitor                      filas (outbox, saídas, entradas), mortos, alertas e o legado
+//   GET  /api/integracoes/monitor                      filas (outbox, saídas, entradas), mortos, alertas e a saúde das filas
 //   GET  /api/integracoes/envios?situacao&parceiro     as mensagens de saída (sem conteúdo: resumo e recibo)
 //   POST /api/integracoes/envios/:id/tratar            reprocessar, corrigir ou descartar a morta (motivo; auditado)
 //   GET  /api/integracoes/parceiros                    os novos e os que leem o banco (visões: existência e contagem)
@@ -92,7 +92,7 @@ export class IntegracaoController {
   @Post('envios/:id/tratar')
   @HttpCode(200)
   @Permissao(P.filaReprocessar)
-  @AuditadoNoHandler('tratamento em SGH_INTG_ENVIO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('tratamento da mensagem de saída e da falha, com a trilha na mesma transação')
   tratar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<EnvioLido> {
     return this.servico.tratarMorto(sessaoDe(req), id, b);
   }
@@ -109,7 +109,7 @@ export class IntegracaoController {
   @HttpCode(201)
   @Permissao(P.parceiroEditar)
   @AuditadoNoHandler(
-    'parceiro em SGH_INTG_PARCEIRO (o resumo do segredo) com a SGH_TRILHA na mesma transação',
+    'parceiro, cliente da API e chave (só o resumo) com a trilha na mesma transação',
   )
   criarParceiro(
     @Body() b: unknown,
@@ -121,7 +121,7 @@ export class IntegracaoController {
   @Post('parceiros/:codigo')
   @HttpCode(200)
   @Permissao(P.parceiroEditar)
-  @AuditadoNoHandler('parceiro em SGH_INTG_PARCEIRO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('parceiro com a trilha na mesma transação')
   alterarParceiro(
     @Param('codigo') codigo: string,
     @Body() b: unknown,
@@ -133,7 +133,7 @@ export class IntegracaoController {
   @Post('parceiros/:codigo/credencial')
   @HttpCode(200)
   @Permissao(P.parceiroEditar)
-  @AuditadoNoHandler('credencial nova (o resumo) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('chave nova (o resumo; a anterior revogada) com a trilha na mesma transação')
   credencial(@Param('codigo') codigo: string, @Req() req: RequisicaoAutorizada): Promise<CredencialEmitida> {
     return this.servico.trocarCredencial(sessaoDe(req), codigo);
   }
@@ -141,7 +141,7 @@ export class IntegracaoController {
   @Post('parceiros/:codigo/teste')
   @HttpCode(200)
   @Permissao(P.parceiroEditar)
-  @AuditadoNoHandler('evento de teste na SGH_OUTBOX com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('evento de teste na mensagem de saída com a trilha na mesma transação')
   teste(@Param('codigo') codigo: string, @Req() req: RequisicaoAutorizada): Promise<{ evento: string }> {
     return this.servico.mensagemDeTeste(sessaoDe(req), codigo);
   }
@@ -157,7 +157,7 @@ export class IntegracaoController {
   @Post('fhir/teste')
   @HttpCode(200)
   @Permissao(P.fhirEnviar)
-  @AuditadoNoHandler('envio de teste ao simulador ou à homologação, registrado na SGH_TRILHA')
+  @AuditadoNoHandler('envio de teste ao simulador ou à homologação, registrado na trilha')
   fhirTeste(@Req() req: RequisicaoAutorizada) {
     return this.servico.enviarTesteFhir(sessaoDe(req));
   }
@@ -180,7 +180,7 @@ export class IntegracaoController {
   @Permissao(P.apoioLer)
   @Auditar(EVENTOS_AUDITAVEIS.integracaoConsultaLida.codigo)
   async retornos(@Req() req: RequisicaoAutorizada): Promise<RetornoApoioLido[]> {
-    req.sghAlvo = { tabelaAlvo: 'SGH_INTG_RECEBIDA', idAlvo: 'fila de conferência' };
+    req.sghAlvo = { tabelaAlvo: 'mensagem_integracao_entrada', idAlvo: 'fila de conferência' };
     return this.retorno.fila(sessaoDe(req));
   }
 
@@ -188,7 +188,7 @@ export class IntegracaoController {
   @HttpCode(200)
   @Permissao(P.apoioConferir)
   @AuditadoNoHandler(
-    'sadt.registrarResultado pelo executor (trilha na mesma transação) e a conclusão em SGH_INTG_RECEBIDA',
+    'resultado do apoio pelo Executor (trilha na mesma transação) e a conclusão da mensagem recebida',
   )
   conferir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.retorno.conferir(sessaoDe(req), id, b);

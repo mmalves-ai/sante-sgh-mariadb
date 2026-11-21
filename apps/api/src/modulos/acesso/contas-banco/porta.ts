@@ -1,6 +1,6 @@
-// M59-F1: porta do painel "Contas do banco de dados e privilégios" (só leitura do catálogo de segurança do banco do
-// estabelecimento). A porta do adaptador lê pelo @sgh/legado; a de memória serve o dev e o CI sem banco, com contas
-// técnicas do catálogo do cap-08 §8.10 e números sintéticos.
+// M59-F1: porta do painel "Contas do banco de dados e privilégios" (só leitura do catálogo de privilégios do banco
+// do cliente). A porta própria lê o information_schema do MariaDB pelo @sgh/nucleo; a de memória serve o dev e o CI
+// sem banco, com contas técnicas sintéticas e números sintéticos.
 import type { ContaBancoLida, PrivilegioReal } from '@sgh/contratos';
 import type { ContasSgh } from '@sgh/dominio-acesso';
 
@@ -17,20 +17,22 @@ export interface InventarioLido {
 }
 
 export interface PortaContasBanco {
-  readonly destino: 'legado' | 'memoria';
-  /** As contas do próprio Sante SGH no estabelecimento (do arquivo de ambiente; nunca a senha). */
+  readonly destino: 'banco' | 'memoria';
+  /** As contas do próprio Sante SGH no banco do cliente (da configuração do núcleo; nunca a senha). */
   contasSgh(hospital: string): ContasSgh;
-  /** Sufixos dos módulos com conta própria no arquivo de ambiente (FB_<COD>_MOD_<MODULO>_USUARIO). */
+  /** Sufixos dos módulos com conta própria no banco (vazio enquanto a aplicação usa uma conta só). */
   modulosComConta(hospital: string): readonly string[];
   lerInventario(
     c: ContextoContasBanco,
     legiveis: { nomes: string[]; prefixos: string[] },
   ): Promise<InventarioLido>;
-  /** Privilégios dos titulares SGH_ (papéis e contas por módulo, o papel único e a conta da aplicação). */
+  /** Privilégios das contas da aplicação no banco do cliente. */
   lerPrivilegiosSgh(c: ContextoContasBanco): Promise<readonly PrivilegioReal[]>;
-  /** M59-F3 (regra 6): quem tem DELETE em tabela clínica (legíveis pelo nome; os demais num agregado sem nome). */
+  /** M59-F3 (regra 6): quem tem DELETE em tabela do banco (legíveis pelo nome; os demais num agregado sem nome). */
   lerDeleteClinico(
     c: ContextoContasBanco,
     legiveis: { nomes: string[]; prefixos: string[] },
   ): Promise<readonly { readonly titular: string | null; readonly tabelas: number }[]>;
+  /** Quantas tabelas o banco do cliente tem (a base da imutabilidade: a exclusão é lógica em todas). */
+  contarTabelas(c: ContextoContasBanco): Promise<number>;
 }

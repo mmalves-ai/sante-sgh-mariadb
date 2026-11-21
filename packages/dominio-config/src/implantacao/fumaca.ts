@@ -289,7 +289,7 @@ function itemImpressao(e: EntradaFumacaServidor): ItemFumaca {
         'impressao-digital',
         titulo,
         'falha',
-        `Diferente da homologada${resumo}: escritas bloqueadas em ${i.bloqueiaTudo ? 'todas as tabelas' : `${i.tabelasBloqueadas} tabela(s)`}. Acione o responsável técnico.`,
+        `Diferente da homologada${resumo}: aplique as atualizações do banco que faltam. Acione o responsável técnico.`,
       );
     case 'sem-homologacao':
       return item(

@@ -8,13 +8,12 @@
 //     (fica visível, sai do alerta, o turno se registra de novo);
 //   - a aba corrige e cancela o próprio dispositivo, com o responsável pela inserção;
 //   - a gravação pela aba confere o vínculo com o paciente (restrição do M23).
+import { criarAppQualidade, ctxTeste, TRILHA_TESTE } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { EstadoProntuario } from '../pep/sessao-prontuario.js';
@@ -66,7 +65,7 @@ const C = '/qualidade/ccih';
 
 beforeAll(async () => {
   porta = new PortaCcihMemoria({ agora });
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha: new RegistradorTrilhaMemoria(),
     ccih: porta,
     vigiaEnfermagem: null,
@@ -154,7 +153,7 @@ describe('revisão do W0-04: a associação da ficha de IRAS confirmada', () => 
     });
     expect(r.statusCode, r.body).toBe(201);
     expect((r.json() as { dispositivoAssociado: number | null }).dispositivoAssociado).toBeNull();
-    expect((await porta.iras({ rede: 'r', hospital: 'aa' }, ficha))?.dispositivo).toBeNull();
+    expect((await porta.iras(ctxTeste('aa'), ficha))?.dispositivo).toBeNull();
     const vs = (await get(ccih, `${C}/versoes/iras/${String(ficha)}`)).json() as {
       itens: { dados: { dispositivo: number | null } }[];
     };
@@ -357,7 +356,7 @@ describe('revisão do W0-04: correção pelo autor e o checklist do bundle', () 
 
 describe('revisão do W0-04: a sessão de higiene das mãos também é do autor', () => {
   it('a CCIH corrige e estorna a sessão de outro observador só com a senha', async () => {
-    const { id } = await porta.gravarSgh({ rede: 'r', hospital: 'aa' }, { tabela: 'X', id: null }, (g) =>
+    const { id } = await porta.gravarSgh(ctxTeste('aa'), TRILHA_TESTE, (g) =>
       g.registrarObservacaoMaos({
         unidade: 2,
         setor: 'UTI',
@@ -432,7 +431,7 @@ describe('revisão do W0-04: a gravação pela aba confere o vínculo com o paci
   };
   it('sem vínculo, o checklist, a retirada e a correção são recusados (403 sem-vinculo)', async () => {
     const { ctrl, req, memoria } = montar();
-    const { id } = await memoria.gravarSgh({ rede: 'r', hospital: 'aa' }, { tabela: 'X', id: null }, (g) =>
+    const { id } = await memoria.gravarSgh(ctxTeste('aa'), TRILHA_TESTE, (g) =>
       g.registrarDispositivo({
         reg: 4802,
         paciente: 48_002,

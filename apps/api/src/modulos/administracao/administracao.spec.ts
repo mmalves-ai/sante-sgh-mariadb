@@ -6,11 +6,10 @@
 // os 403 sem a permissão.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { avisoCorte, celulaCsv, exportarTrilha } from './auditoria.controller.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { criarAppAdministracao } from './app-administracao.spec-util.js';
+import { avisoCorte, celulaCsv, exportarTrilha } from './auditoria.controller.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
@@ -18,7 +17,7 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarAppAdministracao(env, trilha);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -342,8 +341,8 @@ describe('auditoria e privacidade', () => {
     for (const v of ['+1', '-1', '@SOMA', '\tx', '\rx']) expect(celulaCsv(v).startsWith(`"'`)).toBe(true);
     expect(celulaCsv('SINT.AUDITOR')).toBe('"SINT.AUDITOR"');
     const linha = {
-      origem: 'legado' as const,
-      id: 'L1',
+      origem: 'novo' as const,
+      id: 'T1',
       dataHora: '2026-10-20T10:00:00',
       usuario: '=cmd|calc',
       acao: 'Evento',
@@ -447,7 +446,7 @@ describe('auditoria e privacidade', () => {
 });
 
 describe('estrutura e leitos', () => {
-  it('estrutura e leitos com contagens; incluir leito; ocupado não inativa; conferência aponta a divergência', async () => {
+  it('estrutura e leitos com contagens; incluir leito; ocupado não inativa', async () => {
     const s = await entrar('SINT.ADMIN');
     const est = await get(s, '/api/cadastros/estrutura');
     expect(est.statusCode, est.body).toBe(200);
@@ -494,13 +493,13 @@ describe('estrutura e leitos', () => {
     expect((await post(s, '/api/cadastros/estrutura/leitos/naoExiste', { entrada: {} })).statusCode).toBe(
       404,
     );
-    const c = (await get(s, '/api/cadastros/estrutura/leitos/conferencia')).json();
-    expect(c.divergencias.some((d: { tipo: string }) => d.tipo === 'espelho-sem-leito')).toBe(true);
+    // A conferência com o espelho do sistema de origem saiu (ADR 0003).
+    expect((await get(s, '/api/cadastros/estrutura/leitos/conferencia')).statusCode).toBe(404);
   });
 
   it('consultas da organização sem credencial na resposta', async () => {
     const s = await entrar('SINT.ADMIN');
-    for (const u of ['alertas', 'notificacoes', 'empresa', 'backup', 'parametros-banco']) {
+    for (const u of ['alertas', 'notificacoes', 'empresa', 'backup']) {
       const r = await get(s, `/api/administracao/${u}`);
       expect([200, 403]).toContain(r.statusCode);
       expect(r.body).not.toMatch(/"(senha|password|smtpPass)"\s*:\s*"/i);

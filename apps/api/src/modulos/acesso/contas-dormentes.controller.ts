@@ -2,7 +2,7 @@
 //   GET  /api/acesso/gestao/contas-dormentes             prévia de hoje, poupadas, exceções vigentes e histórico
 //   POST /api/acesso/gestao/contas-dormentes/excecoes    incluir, trocar o prazo ou retirar a exceção (reautenticação)
 //   POST /api/acesso/gestao/contas-dormentes/rodar       rodar agora (bloqueio pelo executor; reautenticação)
-// A exceção grava em SGH_ACESSO_DORMENCIA_EXCECAO com a trilha (motivo e valor anterior) na mesma transação SGH_; a
+// A exceção grava a linha nova do histórico de exceções com a trilha (motivo e valor anterior) na mesma transação; a
 // rodada bloqueia pelo executor (acesso.bloquearUsuario) e registra cada bloqueio e a rodada na trilha. Nada de senha,
 // hash ou dado de pessoa na resposta: só login, tipo, dias e situação. O despertar diário liga no onModuleInit.
 import {
@@ -27,7 +27,7 @@ import {
   type RodadaContasDormentesTela,
 } from '@sgh/contratos';
 import type { ContaDormente } from '@sgh/dominio-acesso';
-import { ErroOperacao, excecoesDormenciaVigentes } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -43,6 +43,7 @@ import {
   type ServicoContasDormentes,
 } from './contas-dormentes.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
+import { excecoesDormenciaVigentes } from './historico-vigente.js';
 
 export const DESPERTAR_CONTAS_DORMENTES = Symbol('DESPERTAR_CONTAS_DORMENTES');
 
@@ -153,12 +154,12 @@ export class ContasDormentesController implements OnModuleInit, OnModuleDestroy 
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @AuditadoNoHandler(
-    'SGH_ACESSO_DORMENCIA_EXCECAO e SGH_TRILHA (motivo e valor anterior) na mesma transação SGH_ (memória: registrador da API)',
+    'exceção de dormência e trilha (motivo e valor anterior) na mesma transação (memória: registrador da API)',
   )
   async excecao(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; anterior: string | null; atual: string | null; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; anterior: string | null; atual: string | null; destino: 'banco' | 'memoria' }> {
     this.servico();
     const p = this.analisar(esquemaExcecaoDormencia, corpo);
     const { rede, hospital, login } = this.sessao(req);
@@ -188,7 +189,7 @@ export class ContasDormentesController implements OnModuleInit, OnModuleDestroy 
         },
       )
       .catch((e: unknown) => this.problema(e));
-    return { ...r, destino: this.fonte.destino };
+    return { ...r, destino: this.fonte.destino === 'memoria' ? 'memoria' : 'banco' };
   }
 
   @Post('rodar')

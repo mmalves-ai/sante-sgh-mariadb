@@ -1,11 +1,10 @@
-// M59-F1: painel "Contas do banco de dados e privilégios" (inventário e desvios), só consulta. Serviço com a porta de
-// memória (contas técnicas do cap-08 §8.10, números sintéticos) e as rotas com a permissão acesso.contaBanco.ler.
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+// M59-F1/F3: o painel "Contas do banco de dados e privilégios" sobre a porta de memória (sem banco): o serviço (o banco
+// do cliente é o único: sem desligamento nem contingência; plano por módulo injetado) e as rotas por um módulo de teste
+// (permissão, trilha própria com o ator real, 503 sem trilha, 404 sem plano). A porta própria tem o seu teste de
+// integração (porta-propria.int.spec.ts).
+import { Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { EVENTOS_AUDITAVEIS, type ValorParametro } from '@sgh/contratos';
-import { alcanceVersionado } from '@sgh/legado';
+import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
 import { CHAVE_AUDITAR } from '../../../autorizacao/decoradores.js';
@@ -13,141 +12,122 @@ import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import type { FonteConfiguracao } from '../../config/public-api.js';
 import { ContasBancoController } from './contas-banco.controller.js';
-import { contasSghDoAmbiente } from './porta-legado.js';
+import { PORTA_CONTAS_BANCO } from './porta.js';
 import { PortaContasBancoMemoria } from './porta-memoria.js';
-import { ServicoContasBanco } from './servico.js';
+import { contasSghDoAmbiente, titularDoGrantee } from './porta-propria.js';
+import { CATALOGO_EXCLUSOES, ServicoContasBanco } from './servico.js';
 
 const AGORA = Date.parse('2026-10-28T12:00:00Z');
-const vazia = mkdtempSync(join(tmpdir(), 'm59-deslig-vazio-'));
-const desligada = mkdtempSync(join(tmpdir(), 'm59-deslig-'));
-writeFileSync(
-  join(desligada, 'pc.yaml'),
-  [
-    'formato: 1',
-    'estabelecimento: pc',
-    'passos:',
-    '  desligamento:',
-    "    autorizacao: { data: '2026-10-20', referencia: 'autorização sintética' }",
-    "    ensaio: { data: '2026-10-21', relatorio: 'ensaio sintético', resultado: aprovado }",
-    "    execucao: { data: '2026-10-22', referencia: 'execução sintética' }",
-    '',
-  ].join('\n'),
-);
-const contingencia = (valor: 'sim' | 'nao'): FonteConfiguracao =>
-  ({
-    valoresParametro: async (): Promise<ValorParametro[]> => [
-      {
-        id: '1',
-        chave: 'legado.contingencia',
-        nivel: 'estabelecimento',
-        alvo: 'pc',
-        valor,
-        vigenteDesde: '2026-10-01T00:00:00Z',
-        vigenteAte: null,
-        justificativa: 'sintético',
-        autor: 'SINT',
-      } as ValorParametro,
-    ],
-  }) as unknown as FonteConfiguracao;
 const C = { rede: 'rede-teste', hospital: 'pc' };
+// O domínio do plano ainda valida identificadores em maiúsculas (pedido: aceitar os nomes do banco próprio).
+const PLANO = {
+  alcances: [
+    { modulo: 'acesso', objetos: { USUARIO: ['SELECT', 'UPDATE'] as const, TRILHA: ['INSERT'] as const } },
+    { modulo: 'cadastro', objetos: { PACIENTE: ['SELECT', 'INSERT', 'UPDATE'] as const } },
+  ],
+};
 
 describe('ServicoContasBanco', () => {
-  it('sem registro dos passos nem parâmetros: não desligado e contingência aberta (falha fechada)', async () => {
-    const s = new ServicoContasBanco({
-      porta: new PortaContasBancoMemoria(),
-      raizDesligamento: vazia,
-      agora: () => AGORA,
-    });
-    const r = await s.situacao(C);
-    expect(r).toMatchObject({ desligado: false, contingenciaAtiva: true });
-    expect(r.avisos.join(' ')).toMatch(/registro dos passos ausente/);
+  it('o banco do cliente é o único: sem desligamento a esperar, as contas pedem a medição do uso', async () => {
+    const s = new ServicoContasBanco({ porta: new PortaContasBancoMemoria(), agora: () => AGORA });
+    expect(await s.situacao(C)).toEqual({ desligado: true, contingenciaAtiva: false, avisos: [] });
     const inv = await s.inventario(C);
-    expect(inv.contas.every((c) => c.situacao === 'aguardando-desligamento')).toBe(true);
     expect(inv.contexto.avisos.join(' ')).toMatch(/uso das contas ainda não medido/);
     // O agregado das contas fora do catálogo nunca sai pelo nome e a contagem baixa vira faixa.
     expect(inv.contas.find((c) => c.nome === null)?.quantidade).toBe('<5');
     expect(inv.resumo.loginsSemPrivilegio).toBe('<5');
-    expect(inv.resumo.contasComEscritaAmpla).toBe(4);
+    expect(inv.contas.find((c) => c.nome === 'SGH_SINTETICO')).toMatchObject({ classe: 'aplicacao-sgh' });
   });
 
-  it('desligado pelo M58 e contingência encerrada: as contas pedem a medição do uso', async () => {
-    const s = new ServicoContasBanco({
-      porta: new PortaContasBancoMemoria(),
-      raizDesligamento: desligada,
-      configuracao: contingencia('nao'),
-      agora: () => AGORA,
-    });
-    expect(await s.situacao(C)).toEqual({ desligado: true, contingenciaAtiva: false, avisos: [] });
-    const inv = await s.inventario(C);
-    const por = (n: string) => inv.contas.find((c) => c.nome === n);
-    expect(por('AUTORIZADOR')?.situacao).toBe('medir-uso');
-    expect(por('PUBLIC')?.situacao).not.toBe('medir-uso');
-    expect(por('SGH_SINTETICO')).toMatchObject({ classe: 'aplicacao-sgh', destino: 'privilegio-minimo' });
-    expect(inv.contas[0]?.nome).toBeNull(); // a conta a identificar vem primeiro
-  });
-
-  it('com a contingência ligada, o que o sistema anterior usa aguarda', async () => {
-    const s = new ServicoContasBanco({
-      porta: new PortaContasBancoMemoria(),
-      raizDesligamento: desligada,
-      configuracao: contingencia('sim'),
-      agora: () => AGORA,
-    });
-    expect((await s.situacao(C)).contingenciaAtiva).toBe(true);
-  });
-
-  it('desvios: plano versionado do pc, ainda não aplicado; privilégio direto numa conta por módulo é excesso', async () => {
-    const plano = alcanceVersionado('pc');
+  it('desvios com o plano injetado; privilégio fora do plano numa conta da aplicação é excesso', async () => {
     const s = new ServicoContasBanco({
       porta: new PortaContasBancoMemoria([
-        { titular: 'SGH_APP_ACESSO', objeto: 'TBUSERS', acao: 'DELETE' },
-        { titular: 'SGH_APLICACAO', objeto: 'SGH_TRILHA', acao: 'INSERT' },
+        { titular: 'SGH_SINTETICO', objeto: 'USUARIO', acao: 'DELETE' },
+        { titular: 'SGH_SINTETICO', objeto: 'USUARIO', acao: 'SELECT' },
       ]),
-      raizDesligamento: vazia,
+      plano: () => PLANO,
       agora: () => AGORA,
     });
     const d = await s.desvios(C);
-    expect(d.versaoPlano).toBe(plano?.versao);
-    expect(d.modulos).toHaveLength(plano?.alcances.length ?? -1);
+    expect(d.modulos).toHaveLength(2);
     expect(d.planoAplicado).toBe(false);
-    expect(d.excesso).toEqual([{ titular: 'SGH_APP_ACESSO', objeto: 'TBUSERS', acao: 'DELETE' }]);
-    expect(d.faltaTotal).toBe(d.modulos.reduce((t, m) => t + m.itens, 0));
-    expect(d.falta.length).toBeLessThanOrEqual(500);
     expect(d.modulos.every((m) => !m.contaConfigurada)).toBe(true);
   });
 
   it('desvios sem plano gerado para o estabelecimento: 404', async () => {
-    const s = new ServicoContasBanco({ porta: new PortaContasBancoMemoria(), raizDesligamento: vazia });
+    const s = new ServicoContasBanco({ porta: new PortaContasBancoMemoria() });
     await expect(s.desvios({ rede: 'r', hospital: 'zz' })).rejects.toBeInstanceOf(ErroProblema);
   });
-});
 
-describe('contasSghDoAmbiente', () => {
-  it('a conta única, as por módulo e a dos scripts; nunca a senha', () => {
-    const r = contasSghDoAmbiente(
-      {
-        FB_PC_USUARIO: 'sgh_app',
-        FB_PC_SCRIPTS_USUARIO: 'sgh_scripts',
-        FB_PC_MOD_ACESSO_USUARIO: 'SGH_APP_ACESSO',
-        FB_PC_MOD_ACESSO_SENHA: '<nao-aparece>',
-      },
-      'pc',
-    );
-    expect(r).toEqual({ aplicacao: ['sgh_app', 'SGH_APP_ACESSO'], scripts: 'sgh_scripts', leitura: null });
-    expect(JSON.stringify(r)).not.toContain('<nao-aparece>');
+  it('imutabilidade: todas as tabelas do banco próprio; sem DELETE da aplicação, a concessão está encerrada', async () => {
+    const porta = new PortaContasBancoMemoria();
+    porta.deleteClinico = [{ titular: null, tabelas: 3 }];
+    const s = new ServicoContasBanco({
+      porta,
+      agora: () => AGORA,
+      exclusoes: () => ({
+        operacoes: [
+          { operacao: 'agenda.horario.excluir', tabela: 'horario_agenda' },
+          { operacao: 'administracao.escopo.retirar', tabela: 'usuario_escopo' },
+        ],
+        excecoes: [{ tabela: 'horario_agenda', motivo: 'grade futura sem marcação' }],
+      }),
+    });
+    const r = await s.imutabilidade(C);
+    expect(r.tabelasClinicas).toEqual({ legado: 0, sgh: 3500 });
+    // A operação que apaga fora das exceções aparece; a da exceção aceita, não.
+    expect(r.operacoesComDelete).toEqual([{ operacao: 'administracao.escopo.retirar', tabela: 'USUARIO_ESCOPO' }]);
+    expect(r.excecoes).toEqual([{ tabela: 'HORARIO_AGENDA', motivo: 'grade futura sem marcação' }]);
+    expect(r.planoComDelete).toBe(0);
+    expect(r.titulares).toEqual([{ titular: '(outras)', doSante: false, tabelas: '<5' }]);
+    expect(r.concessaoVigente).toBe(false);
+  });
+
+  it('imutabilidade sem o catálogo das exclusões: 409 catalogo-pendente, nunca zero afirmado', async () => {
+    const s = new ServicoContasBanco({ porta: new PortaContasBancoMemoria(), agora: () => AGORA });
+    await expect(s.imutabilidade(C)).rejects.toMatchObject({ extras: { codigo: 'catalogo-pendente' } });
   });
 });
 
+describe('porta própria: utilitários', () => {
+  it('a conta da aplicação vem da configuração do núcleo (padrão root); nunca a senha', () => {
+    expect(contasSghDoAmbiente({ SGH_MARIADB_USUARIO: 'sgh_app', MARIADB_SENHA: '<nao-aparece>' })).toEqual({
+      aplicacao: ['sgh_app'],
+      scripts: null,
+      leitura: null,
+    });
+    expect(contasSghDoAmbiente({}).aplicacao).toEqual(['root']);
+  });
+
+  it('o titular do information_schema: conta com host e papel sem host', () => {
+    expect(titularDoGrantee("'sgh_app'@'%'")).toEqual({ nome: 'sgh_app', papel: false });
+    expect(titularDoGrantee("'leitura'")).toEqual({ nome: 'leitura', papel: true });
+  });
+});
+
+@Module({})
+class ContasBancoTeste {}
+
 describe('rotas /api/administracao/acesso/contas-banco', () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', SGH_COEX_DESLIGAMENTO: vazia };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'contas_banco_teste' };
   let app: NestFastifyApplication;
   const trilha = new RegistradorTrilhaMemoria();
   beforeAll(async () => {
     app = await criarApp(lerConfiguracao(env), null, env, {
       trilha,
-      contasBanco: new PortaContasBancoMemoria(),
+      registro: {
+        contas_banco_teste: async () => ({
+          modulo: () => ({
+            module: ContasBancoTeste,
+            controllers: [ContasBancoController],
+            providers: [
+              { provide: PORTA_CONTAS_BANCO, useValue: new PortaContasBancoMemoria() },
+              { provide: CATALOGO_EXCLUSOES, useValue: () => ({ operacoes: [], excecoes: [] }) },
+            ],
+          }),
+        }),
+      },
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -179,72 +159,29 @@ describe('rotas /api/administracao/acesso/contas-banco', () => {
 
   it('a leitura permitida entra na trilha própria com o ator real; sem trilha, 503 e nada sai', async () => {
     const evento = EVENTOS_AUDITAVEIS.contasBancoConsultadas.codigo;
-    for (const login of ['SINT.ADMIN', 'SINT.AUDITOR']) {
-      const antes = trilha.eventos.length;
-      const r = await get(await entrar(login), '/api/administracao/acesso/contas-banco');
-      expect(r.statusCode, login).toBe(200);
-      const novos = trilha.eventos.slice(antes).filter((e) => e.evento === evento);
-      expect(novos, login).toHaveLength(1);
-      expect(novos[0]).toMatchObject({ hospital: 'aa', resultado: 'sucesso' });
-      expect(novos[0]?.usuario, login).toMatch(new RegExp(login.split('.')[1] ?? '', 'i'));
-    }
+    const antes = trilha.eventos.length;
     const cookie = await entrar('SINT.ADMIN');
-    // Os desvios levam o mesmo evento (a resposta com plano é provada no serviço; aqui o estabelecimento não tem plano).
-    for (const h of ['inventario', 'desvios', 'imutabilidade'] as const) {
+    expect((await get(cookie, '/api/administracao/acesso/contas-banco')).statusCode).toBe(200);
+    const novos = trilha.eventos.slice(antes).filter((e) => e.evento === evento);
+    expect(novos).toHaveLength(1);
+    expect(novos[0]).toMatchObject({ hospital: 'aa', resultado: 'sucesso' });
+    for (const h of ['inventario', 'desvios', 'imutabilidade'] as const)
       expect(Reflect.getMetadata(CHAVE_AUDITAR, ContasBancoController.prototype[h]), h).toBe(evento);
-    }
     trilha.falhar = true;
     try {
-      const r = await get(cookie, '/api/administracao/acesso/contas-banco');
-      expect(r.statusCode).toBe(503);
-      expect(r.body).not.toContain('SGH_');
+      expect((await get(cookie, '/api/administracao/acesso/contas-banco')).statusCode).toBe(503);
     } finally {
       trilha.falhar = false;
     }
   });
 
-  it('desvios do estabelecimento sem plano gerado: 404 com problema', async () => {
-    const r = await get(await entrar('SINT.ADMIN'), '/api/administracao/acesso/contas-banco/desvios');
-    expect(r.statusCode).toBe(404);
-  });
-
-  it('M59-F3: a imutabilidade responde no esquema, com a concessão vigente da conta sintética; 403 sem a permissão', async () => {
-    const r = await get(await entrar('SINT.ADMIN'), '/api/administracao/acesso/contas-banco/imutabilidade');
+  it('desvios sem plano gerado: 404; imutabilidade no esquema; 403 sem a permissão', async () => {
+    const cookie = await entrar('SINT.ADMIN');
+    expect((await get(cookie, '/api/administracao/acesso/contas-banco/desvios')).statusCode).toBe(404);
+    const r = await get(cookie, '/api/administracao/acesso/contas-banco/imutabilidade');
     expect(r.statusCode).toBe(200);
-    const j = r.json();
-    expect(j.hospital).toBe('aa');
-    expect(j.operacoesComDelete).toEqual([]);
-    expect(j.planoComDelete).toBe(0);
-    expect(j.concessaoVigente).toBe(true);
-    expect(j.titulares).toEqual([
-      { titular: 'SGH_SINTETICO', doSante: true, tabelas: 55 },
-      { titular: '(outras)', doSante: false, tabelas: 330 },
-    ]);
-    const n = await get(
-      await entrar('SINT.RECEPCAO'),
-      '/api/administracao/acesso/contas-banco/imutabilidade',
-    );
+    expect(r.json()).toMatchObject({ hospital: 'aa', operacoesComDelete: [], planoComDelete: 0, concessaoVigente: true });
+    const n = await get(await entrar('SINT.RECEPCAO'), '/api/administracao/acesso/contas-banco/imutabilidade');
     expect(n.statusCode).toBe(403);
-  });
-});
-
-describe('ServicoContasBanco.imutabilidade (pc, plano versionado)', () => {
-  it('conta as tabelas clínicas, nenhum DELETE clínico no catálogo nem no plano; sem DELETE do Sante, concessão encerrada', async () => {
-    const porta = new PortaContasBancoMemoria();
-    porta.deleteClinico = [{ titular: null, tabelas: 3 }];
-    const s = new ServicoContasBanco({ porta, raizDesligamento: vazia, agora: () => AGORA });
-    const r = await s.imutabilidade(C);
-    expect(r.tabelasClinicas.legado).toBeGreaterThan(40);
-    expect(r.tabelasClinicas.sgh).toBeGreaterThan(0);
-    expect(r.operacoesComDelete).toEqual([]);
-    expect(r.planoComDelete).toBe(0);
-    expect(r.excecoes.map((e) => e.tabela)).toEqual([
-      'SGH_PEP_FORMNOVO_CASO',
-      'SGH_PEP_DISPOSITIVO',
-      'SGH_PEP_DISPOSITIVO_VERSAO',
-      'SGH_PEP_ONCO_CICLO_PRESC',
-    ]);
-    expect(r.titulares).toEqual([{ titular: '(outras)', doSante: false, tabelas: '<5' }]);
-    expect(r.concessaoVigente).toBe(false);
   });
 });

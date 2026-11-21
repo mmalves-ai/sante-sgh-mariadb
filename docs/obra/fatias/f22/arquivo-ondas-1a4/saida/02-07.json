@@ -1,0 +1,84 @@
+{
+  "lote": "02-07",
+  "registrar": [
+    "financeiro"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/financeiro/apoios.ts",
+    "src/modulos/financeiro/armazem.ts",
+    "src/modulos/financeiro/esquemas.ts",
+    "src/modulos/financeiro/financeiro.controller.ts",
+    "src/modulos/financeiro/modulo.ts",
+    "src/modulos/financeiro/operacoes.ts",
+    "src/modulos/financeiro/porta-memoria.ts",
+    "src/modulos/financeiro/porta-propria.ts",
+    "src/modulos/financeiro/porta.ts",
+    "src/modulos/financeiro/public-api.ts",
+    "src/modulos/financeiro/servico.ts",
+    "src/modulos/financeiro/simbolos.ts",
+    "src/modulos/financeiro/vocabulario.ts",
+    "src/modulos/financeiro/porta-propria.int.spec.ts",
+    "src/modulos/financeiro/api/escopo-conta.int.spec.ts",
+    "src/modulos/financeiro/aplicacao/baixar-titulo.spec.ts",
+    "src/modulos/financeiro/aplicacao/comum.spec-util.ts",
+    "src/modulos/financeiro/aplicacao/criar-titulo-pagar.spec.ts",
+    "src/modulos/financeiro/aplicacao/massa-banco.spec-util.ts",
+    "src/modulos/financeiro/aplicacao/tesouraria-fiscal.spec.ts",
+    "src/modulos/financeiro/aplicacao/titulo-por-competencia.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "registro",
+      "arquivo": "apps/api/src/modulos/registro.ts",
+      "linha": "financeiro: () => import('./financeiro/modulo.js'),",
+      "motivo": "Registrar o módulo financeiro em REGISTRO_MODULOS (ordem alfabética)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "arquivo_fiscal_gerado",
+      "motivo": "Registro da NFS-e simulada e das declarações (DMED, EFD-REINF R-2000/R-4000) geradas e guardadas no S3 com hash. A nota_servico e a declaracao_dmed exigem tomador, município e responsável que a geração simulada não tem; hoje a porta recusa com 'modelo-pendente' (o arquivo é gerado e guardado, o registro não).",
+      "ddl": "CREATE TABLE arquivo_fiscal_gerado (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  tipo VARCHAR(30) NOT NULL,\n  periodo VARCHAR(7) NOT NULL COMMENT 'AAAA ou AAAA-MM',\n  leiaute VARCHAR(60) NOT NULL,\n  titulo_receber_id BIGINT UNSIGNED NULL,\n  conta_hospitalar_id BIGINT UNSIGNED NULL,\n  momento VARCHAR(20) NULL,\n  numero VARCHAR(30) NULL,\n  quantidade_registros INT UNSIGNED NOT NULL DEFAULT 0,\n  valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,\n  valor_iss DECIMAL(15,2) NULL, valor_ibs DECIMAL(15,2) NULL, valor_cbs DECIMAL(15,2) NULL, valor_liquido DECIMAL(15,2) NULL,\n  hash_arquivo CHAR(64) NOT NULL,\n  chave_objeto VARCHAR(300) NULL,\n  destino VARCHAR(20) NOT NULL,\n  situacao VARCHAR(20) NOT NULL DEFAULT 'gerado',\n  gerado_em DATETIME(3) NOT NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_arquivo_fiscal_gerado_tipo CHECK (tipo IN ('nfse','dmed','reinf_r2000','reinf_r4000')),\n  CONSTRAINT ck_arquivo_fiscal_gerado_destino CHECK (destino IN ('simulador','prefeitura','receita')),\n  CONSTRAINT ck_arquivo_fiscal_gerado_situacao CHECK (situacao IN ('gerado','simulado','autorizado','rejeitado','enviado','cancelado')),\n  CONSTRAINT ck_arquivo_fiscal_gerado_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_arquivo_fiscal_gerado_hash (estabelecimento_id, tipo, hash_arquivo),\n  KEY ix_arquivo_fiscal_gerado_titulo_receber (titulo_receber_id), KEY ix_arquivo_fiscal_gerado_conta_hospitalar (conta_hospitalar_id)\n) COMMENT='Arquivo fiscal gerado (NFS-e simulada, DMED, EFD-REINF) com hash e destino';\nALTER TABLE arquivo_fiscal_gerado\n  ADD CONSTRAINT fk_arquivo_fiscal_gerado_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_arquivo_fiscal_gerado_titulo_receber_id FOREIGN KEY (titulo_receber_id) REFERENCES titulo_receber (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_arquivo_fiscal_gerado_conta_hospitalar_id FOREIGN KEY (conta_hospitalar_id) REFERENCES conta_hospitalar (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "glosa_titulo_receber",
+      "motivo": "Glosa no título por evento (aceita, recurso deferido, recurso indeferido), com o item da conta, o motivo e a chave do evento (idempotência do evento da TISS). Hoje a porta confere o item (da conta do título, com retorno, até cobrado - pago), soma nas colunas valor_glosa/valor_glosa_aceita (só a aceita)/valor_recurso (só o deferido) do título e da parcela, lê o recurso deferido da parcela no detalhe, e recusa com 'modelo-pendente' a glosa com chave de evento; o motivo vai só na trilha e o detalhe não lista as glosas.",
+      "ddl": "CREATE TABLE glosa_titulo_receber (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  titulo_receber_id BIGINT UNSIGNED NOT NULL,\n  conta_hospitalar_item_id BIGINT UNSIGNED NULL,\n  situacao VARCHAR(30) NOT NULL,\n  valor DECIMAL(15,2) NOT NULL,\n  motivo VARCHAR(200) NOT NULL,\n  meio VARCHAR(10) NOT NULL DEFAULT 'tela',\n  chave_evento VARCHAR(100) NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_glosa_titulo_receber_situacao CHECK (situacao IN ('aceita','recurso_deferido','recurso_indeferido')),\n  CONSTRAINT ck_glosa_titulo_receber_valor CHECK (valor > 0),\n  CONSTRAINT ck_glosa_titulo_receber_meio CHECK (meio IN ('tela','evento')),\n  CONSTRAINT ck_glosa_titulo_receber_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_glosa_titulo_receber_chave_evento (chave_evento),\n  KEY ix_glosa_titulo_receber_titulo_receber (titulo_receber_id), KEY ix_glosa_titulo_receber_conta_hospitalar_item (conta_hospitalar_item_id)\n) COMMENT='Glosa registrada no título a receber, por evento';\nALTER TABLE glosa_titulo_receber\n  ADD CONSTRAINT fk_glosa_titulo_receber_titulo_receber_id FOREIGN KEY (titulo_receber_id) REFERENCES titulo_receber (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_glosa_titulo_receber_conta_hospitalar_item_id FOREIGN KEY (conta_hospitalar_item_id) REFERENCES conta_hospitalar_item (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "fluxo_aprovacao",
+      "motivo": "Faixa de alçada por tipo de credor e permissão do aprovador: hoje guardadas na condicao_entrada (JSON) da etapa 1.",
+      "ddl": "ALTER TABLE fluxo_aprovacao\n  ADD COLUMN tipo_credor_id BIGINT UNSIGNED NULL COMMENT 'Tipo de credor da faixa (nulo: todos)' AFTER centro_custo_id,\n  ADD COLUMN permissao_aprovacao VARCHAR(80) NULL COMMENT 'Permissão que o aprovador precisa ter' AFTER tipo_credor_id,\n  ADD KEY ix_fluxo_aprovacao_tipo_credor (tipo_credor_id),\n  ADD CONSTRAINT fk_fluxo_aprovacao_tipo_credor_id FOREIGN KEY (tipo_credor_id) REFERENCES tipo_credor (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lote_exportacao_contabil, remessa_bancaria",
+      "motivo": "Régua, soma dos créditos e lançamentos sem de-para do lote; destino, ocorrências e hash do retorno da remessa: hoje em observacao (JSON).",
+      "ddl": "ALTER TABLE lote_exportacao_contabil\n  ADD COLUMN regua VARCHAR(20) NULL AFTER leiaute,\n  ADD COLUMN valor_creditos DECIMAL(15,2) NULL AFTER valor_total,\n  ADD COLUMN quantidade_sem_de_para INT UNSIGNED NOT NULL DEFAULT 0 AFTER valor_creditos,\n  ADD CONSTRAINT ck_lote_exportacao_contabil_regua CHECK (regua IS NULL OR regua IN ('competencia','caixa'));\nALTER TABLE remessa_bancaria\n  ADD COLUMN destino VARCHAR(20) NOT NULL DEFAULT 'banco' AFTER situacao,\n  ADD COLUMN ocorrencias_retorno VARCHAR(1000) NULL AFTER destino,\n  ADD COLUMN hash_retorno CHAR(64) NULL AFTER ocorrencias_retorno,\n  ADD CONSTRAINT ck_remessa_bancaria_destino CHECK (destino IN ('simulador','banco'));"
+    },
+    {
+      "tipo": "carga",
+      "arquivo": "tools/db/criar_cliente.py (carga básica)",
+      "motivo": "Cadastros nativos que o financeiro procura por código (sem eles, a gravação recusa 'cadastro-incompleto'): tipo_credor (fornecedor, medico, empresa_medica, folha, colaborador, tributos); tipo_lancamento_bancario (pagamento_titulo debito, recebimento_titulo credito, tarifa debito, fechamento_caixa e transferencia transferencia, credito_avulso credito, debito_avulso debito); tipo_documento_financeiro (nota_fiscal e recibo a pagar, fatura a receber); forma_recebimento por meio (transferencia, pix, boleto, debito_automatico, cheque, dinheiro, cartao_credito); tipo_documento_aprovacao titulo_pagar (hoje garantido na primeira faixa ou aprovação)."
+    },
+    {
+      "tipo": "contrato-web",
+      "arquivo": "packages/contratos/src/financeiro/respostas.ts; apps/web/src/modulos/financeiro/telas/RemessasTela.vue e NfseTela.vue",
+      "motivo": "Os registros fiscais (RegistroFiscalResposta) passaram a usar as chaves CONTA (era a coluna antiga da conta bancária) e TITULO_RECEBER (era a coluna antiga do título): trocar a chave nas colunas das duas telas. Revisar também o vocabulário de origem que ainda está nos contratos do financeiro (fechada S/A, letras do devedor e do tipo de credor, código numérico da forma de pagamento, classificação em três números)."
+    },
+    {
+      "tipo": "parametro",
+      "motivo": "Natureza financeira de receita do título a receber por fonte pagadora ou tipo de conta: hoje a porta usa a primeira natureza de receita ativa (ordem) do cadastro."
+    },
+    {
+      "tipo": "leitura",
+      "motivo": "De-para contábil por evento (regra_contabilizacao/regra_contabilizacao_item): deParaContabil devolve vazio e o lote sai com os lançamentos 'sem de-para' até a leitura ser escrita (lote do contábil)."
+    },
+    {
+      "tipo": "desmontagem",
+      "arquivo": "apps/api/src/app.module.ts",
+      "motivo": "Ainda importa portaFinanceiroLegado e portaFinanceiroNaTransacao (removidos com porta-legado.ts) e monta o financeiro à parte; o módulo agora entra por modulo.ts/registro."
+    }
+  ]
+}

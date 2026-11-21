@@ -12,7 +12,7 @@
 //   GET  /api/administracao/acesso/termo/versoes/:id       texto e aceites (paginados) de uma versão, mesmo a anterior
 //   POST /api/administracao/acesso/termo/publicar          acesso.publicarTermo (versão nova; senha e motivo)
 //   GET  /api/administracao/acesso/quebras-de-vidro        aberturas e revisões
-//   POST /api/administracao/acesso/quebras-de-vidro/:id/revisar   revisão (SGH_ACESSO_EMERGENCIA)
+//   POST /api/administracao/acesso/quebras-de-vidro/:id/revisar   revisão (revisao_acesso_emergencial)
 import { pareceRtf, rtfParaTexto, textoCorrido } from '@sgh/dominio-pep';
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -63,7 +63,11 @@ import { FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
 const C = PERMISSOES_M10_CODIGOS;
 const DESCRICAO = new Map(CATALOGO_COMPLETO.map((p) => [p.codigo, p.descricao]));
 const CATEGORIA = new Map(CATALOGO_COMPLETO.map((p) => [p.codigo, p.categoria ?? null]));
-/** Opção do legado → permissões do sistema novo (a árvore mostra a primeira). */
+/**
+ * Fonte em memória (dev/ci): o id do nó é o da opção do menu sintético, ligado às permissões pelo catálogo. No banco
+ * próprio o nó é a acao_sistema, cujo código JÁ É a permissão (a sessão concede por acao_sistema.codigo): os dois
+ * conjuntos de ids não têm relação e nunca se cruzam.
+ */
 const PERMISSOES_DA_OPCAO = new Map<number, string[]>();
 for (const p of CATALOGO_COMPLETO)
   for (const o of p.opcoesLegado)
@@ -99,6 +103,18 @@ export class PermissoesController {
     hospital: string;
     valor: Awaited<ReturnType<FonteAdministracao['arvore']>>;
   } | null = null;
+
+  /** Permissões de cada nó da árvore, conforme o destino (ver PERMISSOES_DA_OPCAO). */
+  private permissoesDosNos(opcoes: readonly { id: number; nome: string }[]): (id: number) => string[] {
+    if (this.fonte.destino === 'banco') {
+      const codigo = new Map(opcoes.map((o) => [o.id, o.nome]));
+      return (id) => {
+        const c = codigo.get(id);
+        return c ? [c] : [];
+      };
+    }
+    return (id) => PERMISSOES_DA_OPCAO.get(id) ?? [];
+  }
 
   constructor(
     @Inject(FONTE_ADMINISTRACAO) private readonly fonte: FonteAdministracao,
@@ -199,11 +215,12 @@ export class PermissoesController {
       };
     } else if (papel !== undefined && papel !== '') {
       const n = Number(papel);
-      if (!Number.isInteger(n) || n < 0 || n > 4)
+      if (!Number.isSafeInteger(n) || n <= 0)
         throw new ErroProblema('entrada-invalida', 400, 'Papel inválido');
       alvo = { tipo: 'papel', chave: String(n), ativo: true, opcoes: await this.fonte.opcoesDoPapel(c, n) };
     }
     const comArvore = new Set(idModulo === null ? [] : [...a.nos.keys()]);
+    const permissoes = this.permissoesDosNos(opcoes);
     return {
       modulos: modulos
         .filter((m) => opcoes.some((o) => o.modulo === m.id))
@@ -220,7 +237,7 @@ export class PermissoesController {
               .map((n) => ({
                 ...n,
                 filhos: [...n.filhos],
-                permissao: PERMISSOES_DA_OPCAO.get(n.id)?.[0] ?? null,
+                permissao: permissoes(n.id)[0] ?? null,
               })),
       avisos: a.avisos.map((x) => ({ opcao: x.opcao, modulo: x.modulo, nivel: x.nivel })),
       alvo:
@@ -263,7 +280,7 @@ export class PermissoesController {
   @Post('permissoes/conceder')
   @HttpCode(200)
   @Permissao(C.opcaoConceder)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 25) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: a trilha na mesma transação da operação')
   conceder(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.opcoesArvore(req, corpo, true);
   }
@@ -271,7 +288,7 @@ export class PermissoesController {
   @Post('permissoes/revogar')
   @HttpCode(200)
   @Permissao(C.opcaoRevogar)
-  @AuditadoNoHandler('executor: TBCABTRILHA (tipo 25) e SGH_TRILHA na mesma transação da receita')
+  @AuditadoNoHandler('executor: a trilha na mesma transação da operação')
   revogar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.opcoesArvore(req, corpo, false);
   }
@@ -282,10 +299,12 @@ export class PermissoesController {
   async propostas(@Req() req: RequisicaoAutorizada) {
     const c = ctxDe(req, 'acesso-grupos');
     const grupos = await this.fonte.grupos(c).catch((e: unknown) => problema(e));
+    const permissoes = this.permissoesDosNos((await this.arvoreLida(req)).opcoes);
     const saida = [];
     for (const g of grupos.sort((a, b) => a.nome.localeCompare(b.nome))) {
-      const ops = await this.fonte.opcoesDoGrupo(c, g.nome).catch(() => []);
-      const perms = [...new Set(ops.flatMap((o) => PERMISSOES_DA_OPCAO.get(o) ?? []))];
+      // Falha de leitura não vira grupo sem permissões (proposta errada): sobe como problema.
+      const ops = await this.fonte.opcoesDoGrupo(c, g.nome).catch((e: unknown) => problema(e));
+      const perms = [...new Set(ops.flatMap((o) => permissoes(o)))];
       saida.push({
         ...proporPerfilDoGrupo({
           grupo: g.nome,
@@ -378,7 +397,7 @@ export class PermissoesController {
   @Post('termo/aceitar')
   @HttpCode(200)
   @Permissao(C.termoAceitar)
-  @AuditadoNoHandler('executor: SGH_TRILHA na mesma transação da receita (o Delphi não registra o aceite)')
+  @AuditadoNoHandler('executor: aceite_termo_uso e a trilha na mesma transação')
   async aceitar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = analisar(esquemaAceitarTermo, corpo);
     await this.fonte
@@ -432,7 +451,7 @@ export class PermissoesController {
   @Post('termo/publicar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor: SGH_TRILHA (versão anterior e motivo) na mesma transação da receita')
+  @AuditadoNoHandler('executor: termo_uso_versao (nova e a anterior fechada) e a trilha na mesma transação')
   async publicarTermo(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const { senha, ...p } = analisar(esquemaPedidoPublicarTermo, corpo);
     const reaut = await reautenticado(this.servico, this.resolvedor, req, senha);
@@ -479,7 +498,7 @@ export class PermissoesController {
   @Post('quebras-de-vidro/:id/revisar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.emergenciaRevisar)
-  @AuditadoNoHandler('SGH_ACESSO_EMERGENCIA (revisão) e SGH_TRILHA na mesma transação SGH_')
+  @AuditadoNoHandler('executor: revisao_acesso_emergencial e a trilha na mesma transação')
   async revisar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     if (!/^\d{1,20}$/.test(id))
       throw new ErroProblema('nao-encontrado', 404, 'Acesso de emergência não encontrado');
@@ -490,7 +509,7 @@ export class PermissoesController {
     await this.fonte
       .revisarQuebra(
         c,
-        { idEmergencia: id, idUsuario: eu?.id ?? 0, login: s.login, classificacao: p.classificacao },
+        { idEmergencia: id, idUsuario: eu?.id ?? s.usuario ?? 0, login: s.login, classificacao: p.classificacao },
         trilhaDe(
           req,
           EVENTOS_AUDITAVEIS.emergenciaRevisada.codigo,

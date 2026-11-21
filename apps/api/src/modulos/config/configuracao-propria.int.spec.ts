@@ -15,7 +15,6 @@ import {
 } from './configuracao-fonte.js';
 import { FonteConfiguracaoPropria } from './configuracao-propria.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
-import { portaOnda0Memoria } from './onda0.js';
 
 const CLIENTE = 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -499,62 +498,3 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
   });
 });
 
-describe('porta da onda 0 (memória): a liberação da operação pelas chaves', () => {
-  const OP = 'cadastro.cadastrarPaciente';
-  const lote = async (fonte: FonteConfiguracao, escopo: 'hospital' | 'setor' | 'grupo' | 'pessoa', valor: string, ligada: boolean) =>
-    fonte.aplicarLote(
-      'r',
-      {
-        hospital: H,
-        tipo: 'operacao',
-        chave: OP,
-        planejar: () => [{ escopo, valor, ligada, antes: null }],
-        justificativa: 'Chave de teste',
-        autor: 'admin',
-      },
-      trilha(),
-    );
-  const nova = () => {
-    const fonte = fonteConfiguracaoMemoria(new RegistradorTrilhaMemoria(), { chavesIniciais: () => [] });
-    return { fonte, porta: portaOnda0Memoria(fonte, [H]) };
-  };
-
-  it('sem chave que decida, a operação do catálogo está liberada; a chave desligada para a pessoa recusa', async () => {
-    const { fonte, porta } = nova();
-    expect(await porta.podeEscrever('r', H, 'pessoa.a', OP)).toBe(true);
-    expect(await porta.podeEscrever('r', 'outro', 'pessoa.a', OP)).toBe(false);
-    await lote(fonte, 'pessoa', 'pessoa.a', false);
-    expect(await porta.podeEscrever('r', H, 'pessoa.a', OP)).toBe(false);
-  });
-
-  it('operação fora do catálogo de operações é recusada', async () => {
-    const { porta } = nova();
-    expect(await porta.podeEscrever('r', H, 'pessoa.a', 'cadastro.operacaoInexistente')).toBe(false);
-  });
-
-  it.each(['setor', 'grupo'] as const)('chave ligada só para o %s: libera o membro e recusa quem não é', async (escopo) => {
-    const { fonte, porta } = nova();
-    await lote(fonte, escopo, 'X1', true);
-    expect(await porta.podeEscrever('r', H, { pessoa: 'pessoa.a', [escopo]: 'X1' }, OP)).toBe(true);
-    expect(await porta.podeEscrever('r', H, { pessoa: 'pessoa.b', [escopo]: 'Y2' }, OP)).toBe(false);
-    expect(await porta.podeEscrever('r', H, 'pessoa.c', OP)).toBe(false);
-  });
-
-  it.each(['setor', 'grupo'] as const)(
-    'chave desligada para o %s com o estabelecimento ligado: recusa o membro e libera quem não é',
-    async (escopo) => {
-      const { fonte, porta } = nova();
-      await lote(fonte, 'hospital', '*', true);
-      await lote(fonte, escopo, 'X1', false);
-      expect(await porta.podeEscrever('r', H, { pessoa: 'pessoa.a', [escopo]: 'X1' }, OP)).toBe(false);
-      expect(await porta.podeEscrever('r', H, { pessoa: 'pessoa.b', [escopo]: 'Y2' }, OP)).toBe(true);
-    },
-  );
-
-  it('a falha ao ler as chaves rejeita (não vira "não liberada")', async () => {
-    const { fonte } = nova();
-    const quebrada: FonteConfiguracao = { ...fonte, chaves: () => Promise.reject(new Error('sem tabela')) };
-    const porta = portaOnda0Memoria(quebrada, [H]);
-    await expect(porta.podeEscrever('r', H, 'pessoa.a', OP)).rejects.toThrow('sem tabela');
-  });
-});

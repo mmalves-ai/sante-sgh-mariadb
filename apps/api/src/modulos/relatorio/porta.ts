@@ -1,38 +1,43 @@
 // Porta do catálogo de relatórios e da gestão dos relatórios (M34; ficha, seções 4, 6 e 7): o que as telas do catálogo,
 // da triagem, dos pedidos e do envio agendado leem e gravam, independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: as consultas revisadas do catálogo em transação READ ONLY com teto de linhas e tempo (o driver cancela
-//     a consulta acima do tempo), o inventário dos relatórios de origem (metadado; o texto da consulta nunca é lido) e
-//     as gravações SGH_ (triagem, agendamento, execução, pedido) com a SGH_TRILHA na mesma transação;
+//   - `banco`: a porta própria sobre o banco do cliente (MariaDB, pelo @sgh/nucleo): as consultas revisadas do
+//     catálogo em transação só de leitura com teto de linhas e tempo; a triagem, o agendamento, a execução e o pedido
+//     gravados pelo Executor, com a trilha, o outbox e a idempotência na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): linhas SINTÉTICAS por relatório, a triagem de um inventário
-//     sintético e os agendamentos e pedidos em memória, com as mesmas validações; nada vai à cópia;
+//     sintético e os agendamentos e pedidos em memória, com as mesmas validações;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
+import type { ContextoNucleo } from '@sgh/nucleo';
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import type {
   AcessoDeOrigem,
-  AgendamentoGravado,
+  AgendamentoRelatorio,
   AlvoDependenciaRelatorio,
   AlvoEventoRelatorio,
+  DadosAgendamento,
+  DadosPedido,
+  DecisaoTriagem,
   EventoRelatorio,
-  EventoRelatorioLido,
-  AgendamentoLidoBanco,
-  DecisaoGravada,
-  ExecucaoGravada,
-  ExecucaoLidaBanco,
+  ExecucaoRelatorio,
   FiltroTriagem,
+  ItemTriagem,
   LinhaRelatorio,
-  LinhaTrilha,
-  PedidoGravado,
-  PedidoLidoBanco,
-  PropostaGravada,
-  RelatorioOrigemLido,
-  ResumoTriagemLido,
-  TriagemLinha,
+  NovaExecucao,
+  PedidoRelatorio,
+  PropostaTriagem,
+  RegistroEventoRelatorio,
+  RelatorioDeOrigem,
+  ResumoTriagem,
   ValoresDoRelatorio,
   VinculoRelatorio,
-} from '@sgh/legado';
+} from './tipos.js';
+
+export * from './tipos.js';
 
 export const PORTA_RELATORIO = Symbol('PORTA_RELATORIO');
 
-export interface ContextoRelatorio {
+/** O contexto do núcleo (cliente, estabelecimento e usuário por id, correlação) mais a rede e o código do
+ * estabelecimento da sessão (a memória separa os dados sintéticos pelo código). */
+export interface ContextoRelatorio extends ContextoNucleo {
   readonly rede: string;
   readonly hospital: string;
 }
@@ -42,36 +47,40 @@ export interface OpcoesExecucao {
   readonly tempoMaximoMs: number;
 }
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
-export interface GravadorSghRelatorio {
+/** As gravações da gestão, numa transação com a trilha, o outbox e a idempotência (o estabelecimento vem do contexto). */
+export interface GravadorRelatorio {
   gravarPropostas(
-    propostas: readonly PropostaGravada[],
+    propostas: readonly PropostaTriagem[],
   ): Promise<{ incluidas: number; atualizadas: number; preservadas: number }>;
-  decidirTriagem(id: number, d: DecisaoGravada, usuario: string): Promise<number>;
-  criarAgendamento(a: AgendamentoGravado, usuario: string, proximoEnvio: Date): Promise<string>;
+  /** A área confirma (aceita) o destino; a decisão só passa a ser dela se o destino mudar. */
+  decidirTriagem(id: number, d: DecisaoTriagem, usuario: string): Promise<number>;
+  criarAgendamento(a: DadosAgendamento, usuario: string, proximoEnvio: Date): Promise<string>;
   alterarAgendamento(
     id: string,
-    a: AgendamentoGravado & { readonly ativo: boolean },
+    a: DadosAgendamento & { readonly ativo: boolean },
     usuario: string,
     proximoEnvio: Date | null,
+    /** A versão que a tela leu (trava otimista); sem ela, vale a lida na transação. */
+    versao?: number,
   ): Promise<number>;
   registrarResultadoEnvio(
     id: string,
     r: { situacao: 'enviado' | 'falhou'; falha: string | null; falhasSeguidas: number; proximoEnvio: Date },
   ): Promise<number>;
-  registrarExecucao(x: ExecucaoGravada): Promise<string>;
-  criarPedido(p: PedidoGravado, usuario: string): Promise<string>;
+  registrarExecucao(x: NovaExecucao): Promise<string>;
+  criarPedido(p: DadosPedido, usuario: string): Promise<string>;
   responderPedido(
     id: string,
     r: { situacao: string; relatorio: string | null; resposta: string },
     usuario: string,
+    versao?: number,
   ): Promise<number>;
   // W0-09 revisão: a linha anterior lida na transação, com trava (o "antes" do evento é o vigente, não o da tela).
-  lerPedidoTravado(id: string): Promise<PedidoLidoBanco | null>;
-  lerAgendamentoTravado(id: string): Promise<AgendamentoLidoBanco | null>;
+  lerPedidoTravado(id: string): Promise<PedidoRelatorio | null>;
+  lerAgendamentoTravado(id: string): Promise<AgendamentoRelatorio | null>;
   // W0-09: o ciclo do pedido e do envio (0 = a condição não vale mais: recusa).
-  alterarPedido(id: string, p: PedidoGravado, usuario: string): Promise<number>;
-  cancelarPedido(id: string, motivo: string, usuario: string): Promise<number>;
+  alterarPedido(id: string, p: DadosPedido, usuario: string, versao?: number): Promise<number>;
+  cancelarPedido(id: string, motivo: string, usuario: string, versao?: number): Promise<number>;
   excluirPedido(id: string): Promise<number>;
   excluirAgendamento(id: string): Promise<number>;
   registrarEvento(
@@ -81,7 +90,7 @@ export interface GravadorSghRelatorio {
 }
 
 export interface PortaRelatorio {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   /** O relógio do banco do estabelecimento (o dia dos parâmetros relativos e do próximo envio). */
   relogio(c: ContextoRelatorio): Promise<{ agora: Date; hoje: string }>;
   executar(
@@ -91,13 +100,13 @@ export interface PortaRelatorio {
     o: OpcoesExecucao,
   ): Promise<{ linhas: LinhaRelatorio[]; variante: string }>;
   acessoDeOrigem(c: ContextoRelatorio, codigo: string, usuario: string): Promise<AcessoDeOrigem>;
-  inventario(c: ContextoRelatorio): Promise<RelatorioOrigemLido[]>;
-  triagem(c: ContextoRelatorio, f: FiltroTriagem): Promise<{ itens: TriagemLinha[]; total: number }>;
-  umaTriagem(c: ContextoRelatorio, id: number): Promise<TriagemLinha | null>;
-  resumoTriagem(c: ContextoRelatorio): Promise<ResumoTriagemLido>;
-  agendamentos(c: ContextoRelatorio): Promise<AgendamentoLidoBanco[]>;
-  agendamento(c: ContextoRelatorio, id: string): Promise<AgendamentoLidoBanco | null>;
-  vencidos(c: ContextoRelatorio, lote: number): Promise<AgendamentoLidoBanco[]>;
+  inventario(c: ContextoRelatorio): Promise<RelatorioDeOrigem[]>;
+  triagem(c: ContextoRelatorio, f: FiltroTriagem): Promise<{ itens: ItemTriagem[]; total: number }>;
+  umaTriagem(c: ContextoRelatorio, id: number): Promise<ItemTriagem | null>;
+  resumoTriagem(c: ContextoRelatorio): Promise<ResumoTriagem>;
+  agendamentos(c: ContextoRelatorio): Promise<AgendamentoRelatorio[]>;
+  agendamento(c: ContextoRelatorio, id: string): Promise<AgendamentoRelatorio | null>;
+  vencidos(c: ContextoRelatorio, lote: number): Promise<AgendamentoRelatorio[]>;
   historicoOrigem(c: ContextoRelatorio): Promise<{
     agendamentos: number;
     porAno: { ano: number; situacao: number; quantidade: number }[];
@@ -106,16 +115,16 @@ export interface PortaRelatorio {
   execucoes(
     c: ContextoRelatorio,
     f: { readonly relatorio?: string; readonly usuario?: string; readonly limite: number },
-  ): Promise<ExecucaoLidaBanco[]>;
-  pedidos(c: ContextoRelatorio, f: { readonly solicitante?: string }): Promise<PedidoLidoBanco[]>;
-  pedido(c: ContextoRelatorio, id: string): Promise<PedidoLidoBanco | null>;
-  eventos(c: ContextoRelatorio, alvo: AlvoEventoRelatorio, id: string): Promise<EventoRelatorioLido[]>;
-  /** Os vínculos (fora o log) que impedem a exclusão física (packages/legado: dependencias-relatorio.ts). */
+  ): Promise<ExecucaoRelatorio[]>;
+  pedidos(c: ContextoRelatorio, f: { readonly solicitante?: string }): Promise<PedidoRelatorio[]>;
+  pedido(c: ContextoRelatorio, id: string): Promise<PedidoRelatorio | null>;
+  eventos(c: ContextoRelatorio, alvo: AlvoEventoRelatorio, id: string): Promise<RegistroEventoRelatorio[]>;
+  /** Os vínculos (fora o log) que impedem a exclusão física. */
   dependencias(c: ContextoRelatorio, alvo: AlvoDependenciaRelatorio, id: string): Promise<VinculoRelatorio[]>;
   gravarSgh<T>(
     c: ContextoRelatorio,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorSghRelatorio) => Promise<T>,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorRelatorio) => Promise<T>,
   ): Promise<T>;
 }
 

@@ -1,146 +1,101 @@
 {
-  "lote": "02-01",
   "registrar": [],
   "fecho_tsconfig": [
-    "src/modulos/assinatura/aplicacao/documentos.spec.ts",
-    "src/modulos/assinatura/aplicacao/documentos.ts",
-    "src/modulos/assinatura/aplicacao/login-certificado.spec.ts",
-    "src/modulos/assinatura/aplicacao/login-certificado.ts",
-    "src/modulos/assinatura/aplicacao/regras-assinatura.spec.ts",
-    "src/modulos/assinatura/aplicacao/regras-assinatura.ts",
-    "src/modulos/assinatura/aplicacao/servico.spec.ts",
-    "src/modulos/assinatura/aplicacao/servico.ts",
-    "src/modulos/assinatura/aplicacao/verificador.spec.ts",
-    "src/modulos/assinatura/aplicacao/verificador.ts",
-    "src/modulos/assinatura/assinatura-documentos.controller.ts",
-    "src/modulos/assinatura/assinatura.controller.ts",
-    "src/modulos/assinatura/infra/ambiente.ts",
-    "src/modulos/assinatura/infra/clientes.spec.ts",
-    "src/modulos/assinatura/infra/clientes.ts",
-    "src/modulos/assinatura/infra/cofre.spec.ts",
-    "src/modulos/assinatura/infra/cofre.ts",
-    "src/modulos/assinatura/infra/documentos-ambiente.ts",
-    "src/modulos/assinatura/infra/simulador-sncr.ts",
-    "src/modulos/assinatura/infra/simulador.ts",
-    "src/modulos/assinatura/modulo.ts",
-    "src/modulos/assinatura/porta-memoria.ts",
-    "src/modulos/assinatura/porta-propria.int.spec.ts",
-    "src/modulos/assinatura/porta-propria.ts",
-    "src/modulos/assinatura/porta.ts",
-    "src/modulos/assinatura/previa-hash.int.spec.ts",
-    "src/modulos/assinatura/public-api.ts",
-    "src/modulos/assinatura/simbolos.ts",
-    "src/modulos/assinatura/tipos.ts",
-    "src/modulos/assinatura/verificador-http.spec.ts",
-    "src/modulos/assinatura/verificador.controller.ts",
-    "src/modulos/assinatura/volta-simulador.spec.ts"
+    "src/modulos/acesso/aplicacao/aviso-tempo-real.int.spec.ts",
+    "src/modulos/acesso/aplicacao/comunicacao.ts",
+    "src/modulos/acesso/comunicacao-porta-memoria.ts",
+    "src/modulos/acesso/comunicacao-porta.ts",
+    "src/modulos/acesso/comunicacao.controller.ts",
+    "src/modulos/acesso/comunicacao.spec.ts",
+    "src/modulos/acesso/aplicacao/comunicado-ciclo.int.spec.ts",
+    "src/modulos/acesso/comunicado-ciclo.spec.ts",
+    "src/modulos/acesso/conselho-gestao.controller.spec.ts",
+    "src/modulos/acesso/conselho-gestao.controller.ts",
+    "src/modulos/acesso/consulta.controller.ts",
+    "src/modulos/acesso/contas-dormentes-porta.spec.ts",
+    "src/modulos/acesso/contas-dormentes-porta.ts",
+    "src/modulos/acesso/contas-dormentes.controller.spec.ts",
+    "src/modulos/acesso/contas-dormentes.controller.ts",
+    "src/modulos/acesso/contas-dormentes.spec.ts",
+    "src/modulos/acesso/contas-dormentes.ts",
+    "src/modulos/acesso/comunicacao-porta-propria.ts",
+    "src/modulos/acesso/comunicacao-operacoes.ts",
+    "src/modulos/acesso/historico-vigente.ts",
+    "src/modulos/acesso/comunicacao-modulo.ts",
+    "src/modulos/acesso/registro-teste.spec-util.ts",
+    "src/modulos/acesso/comunicacao-porta-propria.int.spec.ts",
+    "src/modulos/acesso/aplicacao/massa-comunicacao.spec-util.ts"
   ],
   "pedidos": [
     {
-      "tipo": "ddl",
-      "tabela": "certificado_usuario",
-      "motivo": "a parte pública do certificado (DER) é lida na conferência de cada assinatura, no PDF assinado e na entrada com certificado; sem ela o certificado vinculado não assina (certificadoDer null). A porta própria já grava e lê a coluna quando ela existe.",
-      "ddl": "ALTER TABLE certificado_usuario ADD COLUMN certificado_der BLOB NULL COMMENT 'Parte pública do certificado (DER); a chave privada nunca é guardada' AFTER impressao_digital;"
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/acesso/modulo.ts",
+      "pedido": "Juntar a parte do lote 02-01: const p = parteComunicacaoDoAcesso(ctx, gestao) (acesso/comunicacao-modulo.ts) -> controllers [ComunicacaoController, ContasDormentesController, ConselhoGestaoController], providers (PORTA_COMUNICACAO, AVISOS_INICIO, SERVICO_CONTAS_DORMENTES, DESPERTAR_CONTAS_DORMENTES) e exports. Liga também a regra do conselho na autorização. Os specs HTTP do lote usam REGISTRO_TESTE_ACESSO (acesso/registro-teste.spec-util.ts) até lá; depois podem usar o registro real."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "modulos que emitem na central de avisos (sadt, qualidade, farmácia)",
+      "pedido": "Usar ServicoComunicacao sobre PORTA_COMUNICACAO exportada pelo módulo acesso (CENTRAL_AVISOS_SADT/QUALIDADE apontavam para o serviço montado no app.module)."
     },
     {
       "tipo": "ddl",
-      "tabela": "provedor_assinatura_nuvem",
-      "motivo": "o identificador do cliente OAuth no provedor e as autoridades certificadoras aceitas (lista) não têm coluna; a troca do código e a descoberta do certificado precisam deles. A porta própria já usa as colunas quando existem.",
-      "ddl": "ALTER TABLE provedor_assinatura_nuvem ADD COLUMN cliente_identificador VARCHAR(200) NULL COMMENT 'Identificador do sistema no provedor (OAuth client_id); o segredo fica no cofre' AFTER url_autorizacao, ADD COLUMN autoridades JSON NULL COMMENT 'Autoridades certificadoras aceitas do provedor' AFTER cliente_identificador;"
+      "tabela": "mensagem_interna_destinatario",
+      "pedido": "ADD via VARCHAR(40) NULL COMMENT 'Por onde chegou: usuario, grupo <codigo>, setor <id>, unidade <id>'. Sem ela a caixa mostra a via vazia na mensagem direta. Idem comunicado_destinatario.via VARCHAR(40) NULL para o público expandido na publicação."
     },
     {
       "tipo": "ddl",
-      "tabela": "provedor_assinatura_nuvem",
-      "motivo": "o provedor em nuvem é do estabelecimento (credencial no cofre por estabelecimento): a UNIQUE uq_provedor_assinatura_nuvem_codigo(codigo) no cliente inteiro impede dois estabelecimentos do mesmo cliente de cadastrarem o mesmo PSC (e o simulador no segundo estabelecimento). Troca pela unicidade (estabelecimento, código), com coluna gerada para o nulo (provedor da rede inteira), como a escopo_conselho. A porta própria já grava e altera só com codigo = ? AND estabelecimento_id = ? e recusa a gravação sem estabelecimento; o int.spec confere a inclusão do mesmo código nos dois estabelecimentos assim que a nova UNIQUE existir.",
-      "ddl": "ALTER TABLE provedor_assinatura_nuvem ADD COLUMN escopo_estabelecimento BIGINT UNSIGNED AS (IFNULL(estabelecimento_id, 0)) PERSISTENT COMMENT 'Estabelecimento do provedor; 0 quando vale para a rede inteira (unicidade)' AFTER estabelecimento_id, DROP INDEX uq_provedor_assinatura_nuvem_codigo, ADD UNIQUE KEY uq_provedor_assinatura_nuvem_codigo (escopo_estabelecimento, codigo);"
+      "tabela": "mensagem_interna / mensagem_interna_destinatario",
+      "pedido": "ADD mensagem_interna.exige_ciencia BOOLEAN NOT NULL DEFAULT FALSE e mensagem_interna_destinatario.ciente_em DATETIME(3) NULL, CONSTRAINT ck_mensagem_interna_destinatario_ciencia CHECK (ciente_em IS NULL OR lida). Hoje a ciência da mensagem direta usa solicita_resposta/respondida_em (semântica de resposta)."
     },
     {
       "tipo": "ddl",
-      "tabela": "consulta_verificacao_documento",
-      "motivo": "a consulta sem documento achado (não encontrado, barrada) não tem estabelecimento (o painel de cada hospital soma as do cliente inteiro) e os resultados 'indeterminado' e 'pendente' do verificador não cabem no CHECK (hoje respondem 501).",
-      "ddl": "ALTER TABLE consulta_verificacao_documento ADD COLUMN estabelecimento_id BIGINT UNSIGNED NULL AFTER id, ADD KEY ix_consulta_verificacao_documento_estabelecimento (estabelecimento_id, ocorrido_em), ADD CONSTRAINT fk_consulta_verificacao_documento_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT, DROP CONSTRAINT ck_consulta_verificacao_documento_resultado, ADD CONSTRAINT ck_consulta_verificacao_documento_resultado CHECK (resultado IN ('autentico','nao_encontrado','revogado','alterado','bloqueado','indeterminado','pendente'));"
+      "tabela": "notificacao_usuario",
+      "pedido": "ADD tipo VARCHAR(30) NULL e evento VARCHAR(80) NULL (o tipo e o evento do aviso estão em detalhes JSON até lá; a busca por tipo não usa índice)."
     },
     {
-      "tipo": "ddl",
-      "tabela": "pedido_assinatura",
-      "motivo": "pedido de assinatura de uso único (autorização do titular no provedor em nuvem com PKCE, ou desafio do agente local A1/A3): gravarPedido e consumirPedido respondem 501 sem ele.",
-      "ddl": "CREATE TABLE pedido_assinatura (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  finalidade VARCHAR(20) NOT NULL,\n  midia VARCHAR(10) NOT NULL,\n  provedor_assinatura_nuvem_id BIGINT UNSIGNED NULL,\n  certificado_usuario_id BIGINT UNSIGNED NULL,\n  hash_estado CHAR(64) NOT NULL COMMENT 'SHA-256 do estado da autorização; o estado em claro nunca é guardado',\n  verificador_pkce_cifrado VARCHAR(500) NULL COMMENT 'Verificador PKCE cifrado com a chave do cofre',\n  hashes JSON NOT NULL COMMENT 'Resumos SHA-256 a assinar',\n  documentos JSON NOT NULL COMMENT 'Documentos do prontuário do lote',\n  expira_em DATETIME(3) NOT NULL,\n  consumido_em DATETIME(3) NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_pedido_assinatura_finalidade CHECK (finalidade IN ('vincular','teste','documento','digitalizacao')),\n  CONSTRAINT ck_pedido_assinatura_midia CHECK (midia IN ('nuvem','a1','a3')),\n  CONSTRAINT ck_pedido_assinatura_nuvem CHECK (midia <> 'nuvem' OR provedor_assinatura_nuvem_id IS NOT NULL),\n  UNIQUE KEY uq_pedido_assinatura_hash_estado (hash_estado),\n  KEY ix_pedido_assinatura_usuario (usuario_id, expira_em),\n  KEY ix_pedido_assinatura_estabelecimento_id (estabelecimento_id),\n  KEY ix_pedido_assinatura_provedor (provedor_assinatura_nuvem_id),\n  KEY ix_pedido_assinatura_certificado (certificado_usuario_id),\n  CONSTRAINT fk_pedido_assinatura_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_pedido_assinatura_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_pedido_assinatura_provedor_id FOREIGN KEY (provedor_assinatura_nuvem_id) REFERENCES provedor_assinatura_nuvem (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_pedido_assinatura_certificado_id FOREIGN KEY (certificado_usuario_id) REFERENCES certificado_usuario (id) ON DELETE RESTRICT\n) COMMENT='Pedido de assinatura de uso único, com prazo: autorização do titular no provedor ou desafio do agente local';"
+      "tipo": "carga",
+      "tabela": "modulo_sistema",
+      "pedido": "Códigos dos módulos que emitem avisos (pep, sadt, acesso, farmacia, qualidade...) no 'criar cliente'; sem a linha, o aviso grava modulo_sistema_id nulo e o módulo vai em detalhes."
     },
     {
-      "tipo": "ddl",
-      "tabela": "previa_assinatura",
-      "motivo": "a prévia exata do documento (PDF/A guardado, resumo, código do verificador, instante e o selo do profissional) que o titular vê e assina; gravarPrevia, previa e previaMaisRecente dependem dela (hoje 501 e vazio). Alternativa avaliada: documento_assinado + arquivo, mas a prévia existe antes de qualquer assinatura e pode ser refeita; o envelope documento_assinado passa a apontar para a prévia assinada.",
-      "ddl": "CREATE TABLE previa_assinatura (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  documento_prontuario_id BIGINT UNSIGNED NOT NULL,\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  certificado_usuario_id BIGINT UNSIGNED NOT NULL,\n  politica_icp VARCHAR(10) NOT NULL,\n  arquivo_id BIGINT UNSIGNED NOT NULL COMMENT 'PDF/A da prévia no armazenamento (versão imutável)',\n  hash_pdf CHAR(64) NOT NULL,\n  codigo_verificacao VARCHAR(64) NOT NULL,\n  assinar_em DATETIME(3) NOT NULL COMMENT 'Instante da assinatura gravado no PDF',\n  profissional_exibido VARCHAR(150) NULL COMMENT 'O profissional como o selo mostra',\n  registro_exibido VARCHAR(60) NULL COMMENT 'O registro no conselho como o selo mostra',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_previa_assinatura_politica_icp CHECK (politica_icp IN ('AD-RB','AD-RT')),\n  UNIQUE KEY uq_previa_assinatura_codigo (codigo_verificacao),\n  KEY ix_previa_assinatura_documento (documento_prontuario_id, usuario_id, criado_em),\n  KEY ix_previa_assinatura_estabelecimento_id (estabelecimento_id),\n  KEY ix_previa_assinatura_usuario_id (usuario_id),\n  KEY ix_previa_assinatura_certificado (certificado_usuario_id),\n  KEY ix_previa_assinatura_arquivo_id (arquivo_id),\n  CONSTRAINT fk_previa_assinatura_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_previa_assinatura_documento_prontuario_id FOREIGN KEY (documento_prontuario_id) REFERENCES documento_prontuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_previa_assinatura_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_previa_assinatura_certificado_usuario_id FOREIGN KEY (certificado_usuario_id) REFERENCES certificado_usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_previa_assinatura_arquivo_id FOREIGN KEY (arquivo_id) REFERENCES arquivo (id) ON DELETE RESTRICT\n) COMMENT='Prévia exata do documento a assinar (o que a tela mostra é o que se assina), com o código do verificador';"
+      "tipo": "carga",
+      "tabela": "tipo_escopo_acesso",
+      "pedido": "Linha codigo 'setor' (entidade do setor) no 'criar cliente', para o destino 'setor' das mensagens (usuario_escopo.entidade_id = id do setor)."
     },
     {
-      "tipo": "ddl",
-      "tabela": "assinatura_icp",
-      "motivo": "a assinatura ICP em andamento (de conferência do certificado, de documento do prontuário ou de digitalização), com estado pendente/assinada/falha, tentativas e próxima tentativa (reprocessamento quando a fonte está fora do ar), a assinatura CMS e o carimbo do tempo. assinatura_documento guarda só a assinatura concluída e válida; a tentativa fica aqui e, ao concluir, gera a linha em assinatura_documento. Sem ela: gravarAssinatura, atualizarAssinatura, travarDocumentoParaAssinar, registrarPdfAssinado, assinaturas, assinaturasDosDocumentos, pendentesVencidas, assinadosRecentes e contagemPendencias respondem 501 ou vazio.",
-      "ddl": "CREATE TABLE assinatura_icp (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  origem_assinatura VARCHAR(20) NOT NULL,\n  documento_prontuario_id BIGINT UNSIGNED NULL,\n  previa_assinatura_id BIGINT UNSIGNED NULL,\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  certificado_usuario_id BIGINT UNSIGNED NOT NULL,\n  provedor_assinatura_nuvem_id BIGINT UNSIGNED NULL,\n  midia VARCHAR(10) NOT NULL,\n  formato VARCHAR(10) NOT NULL DEFAULT 'pades',\n  politica_icp VARCHAR(10) NOT NULL,\n  hash_assinado CHAR(64) NOT NULL,\n  situacao VARCHAR(20) NOT NULL DEFAULT 'pendente',\n  tentativas SMALLINT UNSIGNED NOT NULL DEFAULT 0,\n  falha VARCHAR(60) NULL COMMENT 'Código da falha (nunca o texto da fonte)',\n  proxima_tentativa_em DATETIME(3) NULL,\n  assinatura_cms MEDIUMBLOB NULL,\n  carimbo_tempo MEDIUMBLOB NULL,\n  carimbo_tempo_em DATETIME(3) NULL,\n  carimbo_tempo_serie VARCHAR(64) NULL,\n  arquivo_assinado_id BIGINT UNSIGNED NULL COMMENT 'PDF com a assinatura embutida',\n  assinatura_documento_id BIGINT UNSIGNED NULL COMMENT 'A assinatura concluída no envelope do documento',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_assinatura_icp_origem CHECK (origem_assinatura IN ('teste','documento','digitalizacao')),\n  CONSTRAINT ck_assinatura_icp_documento CHECK (origem_assinatura <> 'documento' OR documento_prontuario_id IS NOT NULL),\n  CONSTRAINT ck_assinatura_icp_midia CHECK (midia IN ('nuvem','a1','a3')),\n  CONSTRAINT ck_assinatura_icp_formato CHECK (formato IN ('pades','cades','xades')),\n  CONSTRAINT ck_assinatura_icp_politica CHECK (politica_icp IN ('AD-RB','AD-RT')),\n  CONSTRAINT ck_assinatura_icp_situacao CHECK (situacao IN ('pendente','assinada','falha')),\n  CONSTRAINT ck_assinatura_icp_assinada CHECK (situacao <> 'assinada' OR assinatura_cms IS NOT NULL),\n  KEY ix_assinatura_icp_documento (documento_prontuario_id, situacao),\n  KEY ix_assinatura_icp_fila (estabelecimento_id, situacao, proxima_tentativa_em),\n  KEY ix_assinatura_icp_usuario (usuario_id, criado_em),\n  KEY ix_assinatura_icp_certificado (certificado_usuario_id),\n  KEY ix_assinatura_icp_previa (previa_assinatura_id),\n  KEY ix_assinatura_icp_provedor (provedor_assinatura_nuvem_id),\n  KEY ix_assinatura_icp_arquivo (arquivo_assinado_id),\n  KEY ix_assinatura_icp_assinatura_documento (assinatura_documento_id),\n  CONSTRAINT fk_assinatura_icp_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_documento_prontuario_id FOREIGN KEY (documento_prontuario_id) REFERENCES documento_prontuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_previa_assinatura_id FOREIGN KEY (previa_assinatura_id) REFERENCES previa_assinatura (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_certificado_usuario_id FOREIGN KEY (certificado_usuario_id) REFERENCES certificado_usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_provedor_id FOREIGN KEY (provedor_assinatura_nuvem_id) REFERENCES provedor_assinatura_nuvem (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_arquivo_assinado_id FOREIGN KEY (arquivo_assinado_id) REFERENCES arquivo (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_assinatura_icp_assinatura_documento_id FOREIGN KEY (assinatura_documento_id) REFERENCES assinatura_documento (id) ON DELETE RESTRICT\n) COMMENT='Assinatura ICP em andamento, com tentativas e reprocessamento; ao concluir, vira assinatura do documento';"
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/acesso/gestao.ts",
+      "pedido": "destino: 'legado' | 'memoria' -> 'banco' | 'memoria' (5 tipos). Os controladores de contas dormentes e conselho já respondem 'banco'."
     },
     {
-      "tipo": "ddl",
-      "tabela": "validacao_assinatura",
-      "motivo": "cada validação da assinatura no servidor (ao incluir, assinar, imprimir, importar, exportar), com o resultado de cada conferência (cadeia, vigência, revogação, CPF, assinatura e carimbo); gravarValidacao responde 501 sem ela.",
-      "ddl": "CREATE TABLE validacao_assinatura (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  assinatura_icp_id BIGINT UNSIGNED NOT NULL,\n  momento VARCHAR(20) NOT NULL,\n  resultado VARCHAR(20) NOT NULL,\n  cadeia_ok BOOLEAN NULL,\n  vigencia_ok BOOLEAN NULL,\n  revogacao_ok BOOLEAN NULL,\n  cpf_ok BOOLEAN NULL,\n  assinatura_ok BOOLEAN NULL,\n  carimbo_ok BOOLEAN NULL,\n  motivos JSON NULL COMMENT 'Códigos das recusas (nunca texto da fonte)',\n  usuario_id BIGINT UNSIGNED NULL,\n  validada_em DATETIME(3) NOT NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_validacao_assinatura_momento CHECK (momento IN ('incluir','assinar','imprimir','importar','exportar')),\n  CONSTRAINT ck_validacao_assinatura_resultado CHECK (resultado IN ('valida','invalida','indeterminada')),\n  KEY ix_validacao_assinatura_assinatura (assinatura_icp_id, validada_em),\n  KEY ix_validacao_assinatura_usuario_id (usuario_id),\n  CONSTRAINT fk_validacao_assinatura_assinatura_icp_id FOREIGN KEY (assinatura_icp_id) REFERENCES assinatura_icp (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_validacao_assinatura_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT\n) COMMENT='Validação da assinatura no servidor, por momento, com o resultado de cada conferência';"
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "aviso_assinatura",
-      "motivo": "aviso de assinatura pendente ou em falha ao autor e à direção técnica, com a leitura; gravarAviso e marcarAvisosLidos respondem 501 e avisos volta vazio. (Alternativa a avaliar pelo integrador: aviso_clinico + aviso_clinico_destinatario, se o PEP já os usa para este fim.)",
-      "ddl": "CREATE TABLE aviso_assinatura (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  assinatura_icp_id BIGINT UNSIGNED NOT NULL,\n  destinatario VARCHAR(20) NOT NULL,\n  usuario_id BIGINT UNSIGNED NULL COMMENT 'O autor (destinatário autor); nulo para a direção técnica',\n  situacao_assinatura VARCHAR(20) NOT NULL,\n  falha VARCHAR(60) NULL,\n  lido_em DATETIME(3) NULL,\n  lido_por BIGINT UNSIGNED NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_aviso_assinatura_destinatario CHECK (destinatario IN ('autor','diretor-tecnico')),\n  CONSTRAINT ck_aviso_assinatura_autor CHECK (destinatario <> 'autor' OR usuario_id IS NOT NULL),\n  CONSTRAINT ck_aviso_assinatura_situacao CHECK (situacao_assinatura IN ('pendente','falha')),\n  KEY ix_aviso_assinatura_abertos (estabelecimento_id, destinatario, lido_em),\n  KEY ix_aviso_assinatura_assinatura (assinatura_icp_id),\n  KEY ix_aviso_assinatura_usuario_id (usuario_id),\n  KEY ix_aviso_assinatura_lido_por (lido_por),\n  CONSTRAINT fk_aviso_assinatura_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_aviso_assinatura_assinatura_icp_id FOREIGN KEY (assinatura_icp_id) REFERENCES assinatura_icp (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_aviso_assinatura_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_aviso_assinatura_lido_por FOREIGN KEY (lido_por) REFERENCES usuario (id) ON DELETE RESTRICT\n) COMMENT='Aviso de assinatura pendente ou em falha ao autor e à direção técnica, com a leitura';"
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "pedido_numeracao_receita",
-      "motivo": "pedido de numeração da receita de controle especial e de antimicrobiano no serviço nacional, com tentativas e retorno; gravarSolicitacaoSncr, atualizarSolicitacaoSncr e gravarNumeroSncr respondem 501 e solicitacoesSncr volta vazio. O número recebido vai ao documento (proposta: coluna numero_receita_controlada em prescricao ou no envelope do documento; decidir com o lote da prescrição).",
-      "ddl": "CREATE TABLE pedido_numeracao_receita (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  documento_prontuario_id BIGINT UNSIGNED NOT NULL,\n  entidade_origem_id BIGINT UNSIGNED NOT NULL COMMENT 'Receita que originou o documento',\n  tipo_receita VARCHAR(20) NOT NULL,\n  medicamentos SMALLINT UNSIGNED NOT NULL,\n  situacao VARCHAR(20) NOT NULL DEFAULT 'pendente',\n  tentativas SMALLINT UNSIGNED NOT NULL DEFAULT 0,\n  numero VARCHAR(40) NULL,\n  retorno VARCHAR(60) NULL COMMENT 'Código do retorno do serviço (nunca o texto)',\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_pedido_numeracao_receita_tipo CHECK (tipo_receita IN ('controle-especial','antimicrobiano')),\n  CONSTRAINT ck_pedido_numeracao_receita_situacao CHECK (situacao IN ('pendente','numerada','recusada','erro')),\n  CONSTRAINT ck_pedido_numeracao_receita_numero CHECK (situacao <> 'numerada' OR numero IS NOT NULL),\n  KEY ix_pedido_numeracao_receita_documento (documento_prontuario_id),\n  KEY ix_pedido_numeracao_receita_fila (estabelecimento_id, situacao),\n  KEY ix_pedido_numeracao_receita_usuario_id (usuario_id),\n  CONSTRAINT fk_pedido_numeracao_receita_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_pedido_numeracao_receita_documento_prontuario_id FOREIGN KEY (documento_prontuario_id) REFERENCES documento_prontuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_pedido_numeracao_receita_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT\n) COMMENT='Pedido de numeração da receita controlada no serviço nacional, com tentativas e retorno';"
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "regra_politica_assinatura",
-      "motivo": "filha de fato da politica_assinatura (FK politica_assinatura_id NOT NULL): a política do estabelecimento e do tipo_documento_clinico (FK, vigência, exigências gerais, padrão ICP) continua lá; a regra acrescenta só o que não cabe nela: conselho, destino e nível exigido, com a política ICP e o formato quando diferem da política. Vocabulário da política ICP igual ao da politica_assinatura (ad_rb, ad_rt...). Uma regra vigente por (política, destino, conselho) garantida no banco pela UNIQUE sobre a coluna gerada vigente (nula para as encerradas ou inativas), e histórico por vigência inicio/fim como a politica_assinatura. Sem ela: politicas volta vazio (vale a política do ambiente) e gravarPolitica responde 503 modelo-pendente.",
-      "ddl": "CREATE TABLE regra_politica_assinatura (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  politica_assinatura_id BIGINT UNSIGNED NOT NULL COMMENT 'Política do estabelecimento e do tipo de documento clínico',\n  conselho_classe_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os conselhos',\n  destino VARCHAR(10) NOT NULL,\n  nivel VARCHAR(30) NOT NULL,\n  padrao_assinatura VARCHAR(10) NULL COMMENT 'Política ICP-Brasil desta regra; nulo: a da política',\n  formato VARCHAR(10) NULL COMMENT 'Formato desta regra; nulo: pades',\n  justificativa VARCHAR(500) NOT NULL,\n  vigencia_inicio DATE NOT NULL,\n  vigencia_fim DATE NULL,\n  ativo BOOLEAN NOT NULL DEFAULT TRUE,\n  escopo_conselho BIGINT UNSIGNED AS (IFNULL(conselho_classe_id, 0)) PERSISTENT,\n  vigente TINYINT UNSIGNED AS (IF(ativo AND vigencia_fim IS NULL, 1, NULL)) PERSISTENT COMMENT 'Marca a regra vigente (uma por chave); nulo nas encerradas e inativas',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_regra_politica_assinatura_destino CHECK (destino IN ('interno','externo')),\n  CONSTRAINT ck_regra_politica_assinatura_nivel CHECK (nivel IN ('eletronica-simples','eletronica-avancada','icp-brasil')),\n  CONSTRAINT ck_regra_politica_assinatura_padrao CHECK (padrao_assinatura IS NULL OR padrao_assinatura IN ('ad_rb','ad_rt','ad_rv','ad_rc','ad_ra')),\n  CONSTRAINT ck_regra_politica_assinatura_formato CHECK (formato IS NULL OR formato IN ('pades','cades','xades')),\n  CONSTRAINT ck_regra_politica_assinatura_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  UNIQUE KEY uq_regra_politica_assinatura_vigente (politica_assinatura_id, destino, escopo_conselho, vigente),\n  UNIQUE KEY uq_regra_politica_assinatura_inicio (politica_assinatura_id, destino, escopo_conselho, vigencia_inicio),\n  KEY ix_regra_politica_assinatura_conselho (conselho_classe_id),\n  CONSTRAINT fk_regra_politica_assinatura_politica_id FOREIGN KEY (politica_assinatura_id) REFERENCES politica_assinatura (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_regra_politica_assinatura_conselho_classe_id FOREIGN KEY (conselho_classe_id) REFERENCES conselho_classe (id) ON DELETE RESTRICT\n) COMMENT='Regra da política de assinatura por conselho e destino (nível exigido), com vigência; uma vigente por chave';"
-    },
-    {
-      "tipo": "integracao",
-      "alvo": "assinatura/modulo.ts",
-      "motivo": "FONTE_CONTEUDO_ICP (conteúdo do documento a assinar) e ARMAZEM_PDF_ICP (prévia e PDF assinado no armazenamento) vêm do módulo de documentos (outro lote da onda 2): o módulo documento deve exportá-los (global ou export) ou o integrador liga armazemPdfIcp(fonteDocumento) aqui; sem eles a prévia e o PDF respondem indisponível. O evento 'assinado' na cadeia do documento (documento_prontuario_evento) fica com o lote do PEP/documento."
-    },
-    {
-      "tipo": "aviso",
-      "alvo": "app.module.ts, digitalizacao e portal-medico",
-      "motivo": "public-api não exporta mais portaAssinaturaLegado nem portaAssinaturaNaTransacao (porta de legado apagada); os tipos novos saem de assinatura/tipos.ts (DocumentoEmitidoIcp, CertificadoVinculado, PreviaDoDocumento...). PortaAssinaturaMemoria.trilhas agora é a vista da trilha (evento, recurso, operacao, chave, estacao, ator, entidade, resultado). Os specs de digitalizacao e portal-medico que montam SessaoCadastro com porta {rede, hospital} precisam do ContextoPorta inteiro (cliente, estabelecimento, usuario, correlacao)."
-    },
-    {
-      "tipo": "aviso",
-      "alvo": "idempotência",
-      "motivo": "o serviço da assinatura grava por porta.gravar(fn) sem Idempotency-Key da tela; cada chamada usa a chave 'assinatura:<uuid>' (como a gravação direta do cadastro). Levar a Idempotency-Key das rotas de gravação até a porta fica para a revisão do serviço."
-    },
-    {
-      "tipo": "registro",
-      "alvo": "apps/api/src/modulos/registro.ts",
-      "motivo": "incluir assinatura: () => import('./assinatura/modulo.js') em REGISTRO_MODULOS só depois de aplicados os DDLs pedido_assinatura, previa_assinatura, assinatura_icp, validacao_assinatura (ver registrar_condicionado). Até lá, as gravações sem tabela respondem 503 'modelo-pendente' com o motivo (antes 501)."
+      "tipo": "contrato-web",
+      "alvo": "packages/contratos/src/inicio/comunicacao.ts e apps/web (caixa de mensagens)",
+      "pedido": "Mensagens diretas e comunicados têm ids de tabelas diferentes: a web deve abrir e dar ciência com ?tipo=<item.tipo> (GET /acesso/mensagens/:id?tipo=comunicado). Sem o tipo, a API prefere a mensagem direta. Trocar o comentário 'TBMENSAG' de MensagemAnterior por 'mensagens trazidas pelo conector'."
     },
     {
       "tipo": "dominio",
-      "alvo": "packages/dominio-documento/src/assinatura",
-      "motivo": "as regras puras novas deste lote (categorias assináveis do documento do prontuário, estado do envelope com várias assinaturas no verificador e o registro exibido) ficaram em apps/api/src/modulos/assinatura/aplicacao/regras-assinatura.ts, com spec, porque o pacote não é arquivo deste lote; mover para o @sgh/dominio-documento (verificador.ts/politica.ts) e exportar pelo index."
+      "alvo": "packages/dominio-acesso",
+      "pedido": "Levar acesso/historico-vigente.ts (excecoesDormenciaVigentes, conferenciasConselhoVigentes) ao @sgh/dominio-acesso."
     },
     {
-      "tipo": "aviso",
-      "alvo": "verificador público",
-      "motivo": "o envelope parcial ou pendente agora sai como 'pendente' (antes saía 'válido'); gravar essa consulta depende do pedido do CHECK de consulta_verificacao_documento (resultado 'pendente'): até lá a consulta responde 503 (falha fechada), nunca 'autêntico'."
+      "tipo": "outro-lote",
+      "alvo": "02-03 (acesso/aplicacao/mensagem.int.spec.ts)",
+      "pedido": "portaComunicacaoNaTransacao foi removida (era a porta sobre a cópia). Reescrever sobre PortaComunicacaoPropria + aplicacao/massa-comunicacao.spec-util.ts, ou apagar: comunicacao-porta-propria.int.spec.ts já cobre regra 7, grupo, leitura, ciência, dicionário e anteriores."
+    },
+    {
+      "tipo": "desmontagem",
+      "alvo": "apps/api/src/app.module.ts",
+      "pedido": "Remover portaComunicacaoLegado/executorSoLeitura da comunicação (a fábrica não existe mais) e a montagem antiga das contas dormentes; a parte nova está em acesso/comunicacao-modulo.ts."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "comunicado_versao",
+      "pedido": "CREATE TABLE comunicado_versao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, comunicado_id BIGINT UNSIGNED NOT NULL, versao INT UNSIGNED NOT NULL, titulo VARCHAR(200) NOT NULL, texto TEXT NOT NULL, motivo VARCHAR(500) NOT NULL, colunas de auditoria e excluido_em DATETIME(3) NULL (retenção), CONSTRAINT fk_comunicado_versao_comunicado FOREIGN KEY (comunicado_id) REFERENCES comunicado(id), CONSTRAINT uq_comunicado_versao UNIQUE (comunicado_id, versao), CONSTRAINT ck_comunicado_versao_motivo CHECK (CHAR_LENGTH(TRIM(motivo)) >= 3)). Guarda a versão anterior do comunicado corrigido fora da trilha imutável (que agora leva só o tamanho e um resumo sha256). Até lá, o detalhe do comunicado mostra no evento 'correcao' só 'versão anterior: assunto com N caracteres, texto com M caracteres (resumo ...)', não o texto anterior."
+    },
+    {
+      "tipo": "catalogo-operacoes",
+      "alvo": "catálogo de operações / liberação",
+      "pedido": "As gravações da comunicação passaram de um nome único ('acesso.gravacao-comunicacao') a um nome por ação, no formato do núcleo: acesso.enviar-mensagem, acesso.publicar-comunicado, acesso.emitir-aviso, acesso.ler-mensagem, acesso.dar-ciencia, acesso.marcar-aviso-lido, acesso.marcar-aviso-resolvido e os de corrigir/encurtar/encerrar comunicado (nomeDaOperacao em comunicacao-porta-propria.ts). Se houver receita ou liberação cadastrada com o nome antigo, trocar pelos novos."
     }
-  ],
-  "registrar_condicionado": {
-    "modulo": "assinatura",
-    "apos_ddl": [
-      "pedido_assinatura",
-      "previa_assinatura",
-      "assinatura_icp",
-      "validacao_assinatura"
-    ],
-    "motivo": "sem essas tabelas, 17 das 20 gravações da porta própria respondem 503 modelo-pendente (vincular certificado, assinar documento, testar certificado, política): o módulo só entra em REGISTRO_MODULOS depois que os quatro DDLs forem aplicados no modelo e nos bancos dos clientes."
-  }
+  ]
 }

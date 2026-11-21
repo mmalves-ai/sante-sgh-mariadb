@@ -66,13 +66,13 @@ const descricao = useQuery({
 });
 const d = computed(() => descricao.data.value);
 const pode = (a: string) => d.value?.permitidas.includes(a as never) ?? false;
-// M38 (campo 7): a ação de escrita que a permissão deixa e o executor recusaria agora aparece desabilitada, com o aviso.
+// A ação de escrita que a permissão deixa e o executor recusaria agora aparece desabilitada, com o aviso.
 const recusada = (a: string) => !!d.value?.recusadas?.[a];
 const avisoEscrita = computed(() => {
   const escritas = (['criar', 'editar', 'inativar', 'excluir'] as const).filter((a) => pode(a));
   const recusadas = escritas.filter((a) => recusada(a));
   if (recusadas.length === 0) return null;
-  if (recusadas.length === escritas.length) return t('liberacao.onda0.escritaDesligada');
+  if (recusadas.length === escritas.length) return t('liberacao.escritaRecusada');
   return [...new Set(recusadas.map((a) => d.value?.recusadas?.[a] ?? ''))].filter(Boolean).join(' ');
 });
 

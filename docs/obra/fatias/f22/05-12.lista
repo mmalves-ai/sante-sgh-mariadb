@@ -1,0 +1,12 @@
+# lote 05-12 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/worker/src/contabil
+apps/worker/src/contabil/contabilizacao.spec.ts
+apps/worker/src/contabil/contabilizacao.ts
+apps/worker/src/contabil/demonstracoes.int.spec.ts
+apps/worker/src/contabil/dourado.int.spec.ts
+apps/worker/src/contabil/dourado.spec.ts
+apps/worker/src/contabil/fatos.int.spec.ts
+apps/worker/src/contabil/lancamentos.int.spec.ts
+apps/worker/src/contabil/leitura-fatos.service.ts
+apps/worker/src/contabil/leitura-fatos.spec.ts

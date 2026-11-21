@@ -9,7 +9,6 @@ import {
   BASES_LEGAIS,
   type CredencialEmitida,
   EVENTOS_AUDITAVEIS,
-  EVENTOS_DOS_GATILHOS,
   type EnvioLido,
   type EstadoFhir,
   type EstadoHl7,
@@ -31,20 +30,17 @@ import {
   chaveEventoFato,
   imunizacaoFhir,
   minutosNaFilaDeMortos,
-  ofertaDeCanal,
   organizacaoFhir,
   pacienteFhir,
-  parceiroDaVisao,
   perfilBrCoreRecortado,
   profissionalFhir,
   validarRecurso,
 } from '@sgh/dominio-integracao';
-import type { EnvioLidoBanco, ParceiroLidoBanco } from '@sgh/legado';
 import type { Configuracao } from '../../../configuracao.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { linhaTrilha, type SessaoCadastro } from '../../cadastro/comum.js';
 import type { ConfiguracaoM34 } from '../../relatorio/public-api.js';
-import type { PortaIntegracao } from '../porta.js';
+import type { EnvioIntegracao, ParceiroIntegracao, PortaIntegracao } from '../porta.js';
 import { novaCredencial, resumoDoSegredo } from './credencial.js';
 
 const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 19) : null);
@@ -67,7 +63,7 @@ function invalido(issues: readonly { message: string; path: readonly PropertyKey
   );
 }
 
-export function envioLido(e: EnvioLidoBanco, agora: Date): EnvioLido {
+export function envioLido(e: EnvioIntegracao, agora: Date): EnvioLido {
   return {
     id: e.id,
     evento: e.chaveEvento,
@@ -91,7 +87,7 @@ export function envioLido(e: EnvioLidoBanco, agora: Date): EnvioLido {
   };
 }
 
-const parceiroLido = (p: ParceiroLidoBanco): ParceiroLido => ({
+const parceiroLido = (p: ParceiroIntegracao): ParceiroLido => ({
   id: p.id,
   codigo: p.codigo,
   nome: p.nome,
@@ -176,10 +172,10 @@ export class ServicoIntegracoes {
 
   async monitor(s: SessaoCadastro): Promise<MonitorIntegracoes> {
     const agora = await this.porta.relogio(s.porta);
-    const [cont, mortos, legado, limite] = await Promise.all([
+    const [cont, mortos, filas, limite] = await Promise.all([
       this.porta.contagens(s.porta),
       this.porta.mortos(s.porta),
-      this.porta.saudeLegado(s.porta).catch(() => null),
+      this.porta.saudeFilas(s.porta).catch(() => null),
       this.config.inteiro(s, 'integracao.alertaMortoMinutos', LIMITE_MORTO_SEM_TRATAMENTO_MIN),
     ]);
     return {
@@ -202,7 +198,7 @@ export class ServicoIntegracoes {
         limite,
         agora,
       ).map((a) => ({ envio: a.id, parceiro: a.parceiro, minutos: a.minutos })),
-      legado: legado ? { ...legado, medidoEm: iso(agora)! } : null,
+      legado: filas ? { ...filas, medidoEm: iso(agora)! } : null,
       medidoEm: iso(agora)!,
     };
   }
@@ -234,10 +230,10 @@ export class ServicoIntegracoes {
         'A mensagem não está na fila de mortos',
         'Só a mensagem morta é tratada.',
       );
-    const n = await this.porta.gravarSgh(
+    const n = await this.porta.gravar(
       s.porta,
       linhaTrilha(s, EVENTOS_AUDITAVEIS.integracaoMortoTratado.codigo, 'integracao.fila', t.data.acao, {
-        tabela: 'SGH_INTG_ENVIO',
+        tabela: 'mensagem_integracao_saida',
         id,
         chave: e.parceiro,
       }),
@@ -260,22 +256,10 @@ export class ServicoIntegracoes {
     leemOBanco: (VisaoParceiro & { oferta: string[] })[];
     eventosDosGatilhos: readonly string[];
   }> {
-    const [novos, visoes] = await Promise.all([
-      this.porta.parceiros(s.porta),
-      this.porta.visoes(s.porta, true).catch(() => []),
-    ]);
-    return {
-      novos: novos.map(parceiroLido),
-      leemOBanco: visoes.map((v) => ({
-        parceiro: parceiroDaVisao(v.visao) ?? 'parceiro não identificado',
-        visao: v.visao,
-        existe: v.existe,
-        linhas: v.linhas,
-        // A oferta padrão (a confirmar com cada parceiro na DP-16): API pela outbox, arquivo, API de consulta.
-        oferta: ofertaDeCanal({ temApi: true, aceitaArquivo: true, consultaApi: true }),
-      })),
-      eventosDosGatilhos: EVENTOS_DOS_GATILHOS,
-    };
+    // Os parceiros não leem o banco por visões (o acesso é só pela API, com escopo e credencial próprios) e nenhum
+    // gatilho envia evento (regra de ouro 2): as duas listas do contrato saem vazias até o contrato tirá-las.
+    const novos = await this.porta.parceiros(s.porta);
+    return { novos: novos.map(parceiroLido), leemOBanco: [], eventosDosGatilhos: [] };
   }
 
   async criarParceiro(
@@ -290,11 +274,11 @@ export class ServicoIntegracoes {
       });
     const cred = novaCredencial(p.data.codigo);
     const resumo = resumoDoSegredo(cred.segredo);
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       s.porta,
       linhaTrilha(s, EVENTOS_AUDITAVEIS.integracaoParceiroAlterado.codigo, 'integracao.parceiro', 'criar', {
-        tabela: 'SGH_INTG_PARCEIRO',
-        id: p.data.codigo,
+        tabela: 'parceiro_dados',
+        id: null,
         chave: p.data.tipo,
       }),
       async (g) => {
@@ -310,20 +294,17 @@ export class ServicoIntegracoes {
     if (!p.success) throw invalido(p.error.issues);
     const atual = await this.porta.parceiro(s.porta, codigo);
     if (!atual) throw new ErroProblema('nao-encontrado', 404, 'Parceiro não encontrado');
-    // Regra 7: nenhum evento que um gatilho do legado já envia.
-    if (p.data.eventos.some((e) => (EVENTOS_DOS_GATILHOS as readonly string[]).includes(e)))
-      throw invalido([
-        { message: 'Evento que um gatilho em uso já envia não entra na integração nova.', path: ['eventos'] },
-      ]);
+    // Os eventos já foram validados contra o catálogo do que a outbox publica (EVENTOS_INTEGRACAO, no esquema): no
+    // banco próprio nenhum gatilho envia evento, então não há trava de convivência.
     const { motivo, ...resto } = p.data;
-    const n = await this.porta.gravarSgh(
+    const n = await this.porta.gravar(
       s.porta,
       linhaTrilha(
         s,
         EVENTOS_AUDITAVEIS.integracaoParceiroAlterado.codigo,
         'integracao.parceiro',
         `${p.data.ativo === atual.ativo ? 'alterar' : p.data.ativo ? 'ativar' : 'desativar'}:${motivo.slice(0, 60)}`,
-        { tabela: 'SGH_INTG_PARCEIRO', id: codigo, chave: atual.tipo },
+        { tabela: 'parceiro_dados', id: atual.id, chave: atual.tipo },
       ),
       (g) => g.alterarParceiro(codigo, resto, s.login),
     );
@@ -335,7 +316,7 @@ export class ServicoIntegracoes {
     const atual = await this.porta.parceiro(s.porta, codigo);
     if (!atual) throw new ErroProblema('nao-encontrado', 404, 'Parceiro não encontrado');
     const cred = novaCredencial(codigo);
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       s.porta,
       linhaTrilha(
         s,
@@ -343,8 +324,8 @@ export class ServicoIntegracoes {
         'integracao.parceiro',
         'credencial',
         {
-          tabela: 'SGH_INTG_PARCEIRO',
-          id: codigo,
+          tabela: 'parceiro_dados',
+          id: atual.id,
           chave: atual.tipo,
         },
       ),
@@ -374,7 +355,7 @@ export class ServicoIntegracoes {
       `${p.id}-${agora.getTime() % 1_000_000_000}`,
       agora,
     );
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       s.porta,
       linhaTrilha(
         s,
@@ -382,8 +363,8 @@ export class ServicoIntegracoes {
         'integracao.parceiro',
         'teste',
         {
-          tabela: 'SGH_OUTBOX',
-          id: codigo,
+          tabela: 'integracao_mensagem',
+          id: p.id,
           chave,
         },
       ),
@@ -442,7 +423,7 @@ export class ServicoIntegracoes {
       ? validarRecurso(recurso, perfil).map((p) => `${p.caminho}: ${p.mensagem}`)
       : ['sem perfil'];
     const recibo = `${ambiente}-${(await this.porta.relogio(s.porta)).getTime().toString(36)}`;
-    await this.porta.gravarSgh(
+    await this.porta.gravar(
       s.porta,
       linhaTrilha(
         s,
@@ -450,8 +431,8 @@ export class ServicoIntegracoes {
         'integracao.fhir',
         `teste:${ambiente}`,
         {
-          tabela: 'SGH_INTG_ENVIO',
-          id: recibo,
+          tabela: 'mensagem_integracao_saida',
+          id: null,
           chave: 'Patient',
         },
       ),
@@ -466,7 +447,7 @@ export class ServicoIntegracoes {
     const chaves = [...new Set(CANAIS_OIE.map((c) => c.chave))];
     const [estados, saude, parceiros] = await Promise.all([
       this.config.estados(sujeito(s), chaves),
-      this.porta.saudeLegado(s.porta).catch(() => null),
+      this.porta.saudeFilas(s.porta).catch(() => null),
       this.porta.parceiros(s.porta),
     ]);
     const endereco = this.env['OIE_URL']?.trim() || null;

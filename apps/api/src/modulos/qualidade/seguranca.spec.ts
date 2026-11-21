@@ -3,11 +3,10 @@
 // (sem ver quem notificou), o plano 5W2H com a situação e a eficácia, a conclusão que fecha o prazo; a sugestão
 // automática do que o usuário registrou, resolvida ao notificar (a anônima guarda só a fonte) ou ao dispensar; a
 // vigilância de produto com os expostos ao lote; o painel do plano de segurança com as parcelas.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { createHash } from 'node:crypto';
 import { semeDaSugestaoResolvida } from '@sgh/dominio-qualidade';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
@@ -89,7 +88,7 @@ async function idPorProtocolo(protocolo: string): Promise<number> {
 }
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha,
     qualidade: porta,
     vigiaEnfermagem: null,

@@ -4,7 +4,7 @@
 //   POST /api/administracao/integracoes/fachada/configuracao           um parâmetro da fachada (crítico: senha de novo)
 // O serviço é público para a sessão (a Hal-AI não tem sessão): o token da superfície é conferido no handler, em tempo
 // constante, e toda resposta sai no contrato de erro da API original (nunca o Problem Details da API do Sante SGH).
-// A configuração grava em SGH_CFG_PARAMETRO com a SGH_TRILHA na mesma transação (o mesmo caminho dos parâmetros).
+// A configuração grava pelos parâmetros do estabelecimento com a trilha na mesma transação.
 import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import {
@@ -92,7 +92,7 @@ export class FachadaController {
   @Publica(
     'fachada da API de integração: o token da superfície é conferido no handler (tempo constante, por escopo)',
   )
-  @AuditadoNoHandler('escritas pelo executor (SGH_TRILHA e autoria na mesma transação), assinadas por hal-ai')
+  @AuditadoNoHandler('escritas pelo Executor (trilha e autoria na mesma transação), assinadas por hal-ai')
   async atender(
     @Param('hospital') hospital: string,
     @Req() req: RequisicaoAutorizada,
@@ -150,7 +150,7 @@ export class FachadaController {
   @Post(`${BASE}/configuracao`)
   @HttpCode(200)
   @Permissao(P.fachadaConfigurar)
-  @AuditadoNoHandler('SGH_CFG_PARAMETRO e SGH_TRILHA na mesma transação SGH_ (reautenticação)')
+  @AuditadoNoHandler('parâmetro do estabelecimento e trilha na mesma transação (reautenticação)')
   async configurar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,

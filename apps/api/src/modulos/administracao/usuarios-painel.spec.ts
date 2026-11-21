@@ -40,7 +40,7 @@ function montar(o: {
         dispositivos: vi.fn(o.dispositivos ?? (async () => [])),
         relogio: vi.fn(o.relogio ?? (async () => ({ hoje: '2027-01-10', agora: '2027-01-10T12:00:00' }))),
       } as unknown as PortaRecepcao);
-  const ctl = new UsuariosController(fonte, null, {} as ResolvedorSessao, recepcao, null);
+  const ctl = new UsuariosController(fonte, null, {} as ResolvedorSessao, recepcao);
   return { ctl, executar };
 }
 

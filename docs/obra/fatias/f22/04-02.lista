@@ -1,20 +1,17 @@
 # lote 04-02 (onda 4); gerado por tools/obra/fatiar_f22.py
-# registrar: pep
-# pastas: apps/api/src/modulos/pep apps/api/src/modulos/pep/aplicacao apps/api/src/modulos/pep/infra
-apps/api/src/modulos/pep/acesso-rede.spec.ts
-apps/api/src/modulos/pep/aplicacao/worklist-medico.autorizacao.int.spec.ts
-apps/api/src/modulos/pep/aplicacao/worklist-medico.spec.ts
-apps/api/src/modulos/pep/aplicacao/worklist-medico.ts
-apps/api/src/modulos/pep/documentos-pdf.int.spec.ts
-apps/api/src/modulos/pep/documentos.spec.ts
-apps/api/src/modulos/pep/formulario-novo.spec.ts
-apps/api/src/modulos/pep/infra/acesso-entre-hospitais.int.spec.ts
-apps/api/src/modulos/pep/prescricao-pdf.int.spec.ts
-apps/api/src/modulos/pep/prescricao-vinculo.spec.ts
-apps/api/src/modulos/pep/prescricao.spec.ts
-apps/api/src/modulos/pep/prontuario-regras.spec.ts
-apps/api/src/modulos/pep/prontuario.spec.ts
-apps/api/src/modulos/pep/registro-regras.spec.ts
-apps/api/src/modulos/pep/registro.spec.ts
-apps/api/src/modulos/pep/worklist-porta.ts
-apps/api/src/modulos/pep/worklist.controller.ts
+# registrar: portal-medico
+# pastas: apps/api/src/modulos/portal-medico apps/api/src/modulos/portal-medico/aplicacao
+apps/api/src/modulos/portal-medico/aplicacao/assinatura-remota.spec.ts
+apps/api/src/modulos/portal-medico/aplicacao/assinatura-remota.ts
+apps/api/src/modulos/portal-medico/aplicacao/canal.spec.ts
+apps/api/src/modulos/portal-medico/aplicacao/canal.ts
+apps/api/src/modulos/portal-medico/aplicacao/criticos.spec.ts
+apps/api/src/modulos/portal-medico/aplicacao/medico-externo.autorizacao.int.spec.ts
+apps/api/src/modulos/portal-medico/aplicacao/servico.ts
+apps/api/src/modulos/portal-medico/porta-legado.ts
+apps/api/src/modulos/portal-medico/porta-memoria.ts
+apps/api/src/modulos/portal-medico/porta.ts
+apps/api/src/modulos/portal-medico/portal-medico-interno.controller.ts
+apps/api/src/modulos/portal-medico/portal-medico.controller.ts
+apps/api/src/modulos/portal-medico/portal-medico.spec.ts
+apps/api/src/modulos/portal-medico/public-api.ts

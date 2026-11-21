@@ -2,14 +2,13 @@
 // D-ALTA-DISP-48.3), as duas precauções no mesmo quarto com o bloqueio compartilhado e o bloqueio de outro motivo
 // (D-VIZINHO-48.3), e a restrição por vínculo nas rotas que entram no prontuário e na prescrição (M23). Porta EM
 // MEMÓRIA, dados sintéticos; nada conecta a banco.
+import { criarAppQualidade, ctxTeste, TRILHA_TESTE } from './teste.spec-util.js';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
@@ -45,7 +44,7 @@ afterEach(async () => {
 async function montar() {
   const trilha = new RegistradorTrilhaMemoria();
   const porta = new PortaCcihMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppQualidade(env, {
     trilha,
     ccih: porta,
     vigiaEnfermagem: null,
@@ -245,7 +244,7 @@ describe('restrição por vínculo nas rotas do prontuário e da prescrição (M
       null,
     );
     // Uma precaução aberta do paciente sintético (a leitura que o cabeçalho mostra).
-    await porta.gravarSgh({ rede: 'rede-teste', hospital: 'aa' }, null, (g) =>
+    await porta.gravarSgh(ctxTeste('aa'), TRILHA_TESTE, (g) =>
       g.definirPrecaucao({
         reg: INTERNACAO_SINTETICA_CCIH,
         paciente: PACIENTE_SINTETICO_CCIH,

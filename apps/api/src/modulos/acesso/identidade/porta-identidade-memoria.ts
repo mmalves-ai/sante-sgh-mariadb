@@ -2,23 +2,23 @@
 // envelope do segredo só aqui dentro, como o banco guardaria; a trilha vai a uma lista para conferência.
 import type {
   ContaIdentidade,
-  CredencialForteLegado,
-  LinhaPolitica2faLegado,
-  SegundoFatorLegado,
+  CredencialForte,
+  LinhaPolitica2faRegistrada,
+  SegundoFatorRegistrado,
   TrilhaIdentidade,
-} from '@sgh/legado';
+} from './tipos-identidade.js';
 import { legadoMudouDepoisDaForte, situacaoCredencial } from '@sgh/dominio-acesso';
 import type { PortaIdentidade } from './servico-identidade.js';
 
 interface UsuarioMemoria extends ContaIdentidade {
-  forte?: CredencialForteLegado & { hash: string };
-  segundoFator?: SegundoFatorLegado & { ultimoPassoMs?: number };
+  forte?: CredencialForte & { hash: string };
+  segundoFator?: SegundoFatorRegistrado & { ultimoPassoMs?: number };
 }
 
 export class PortaIdentidadeMemoria implements PortaIdentidade {
   readonly trilha: TrilhaIdentidade[] = [];
   readonly usuariosPorLogin = new Map<string, UsuarioMemoria>();
-  readonly linhas: LinhaPolitica2faLegado[] = [];
+  readonly linhas: LinhaPolitica2faRegistrada[] = [];
   tabelas = true;
   private seq = 100;
 
@@ -58,12 +58,12 @@ export class PortaIdentidadeMemoria implements PortaIdentidade {
     if (!f) return null;
     const c: Partial<typeof f> = { ...f };
     delete c.hash;
-    return c as CredencialForteLegado;
+    return c as CredencialForte;
   };
   autenticarForte: PortaIdentidade['autenticarForte'] = async (h, login, id, senha, conferir) => {
     const f = this.u(login, id)?.forte;
     if (!f) return null;
-    const credencial = (await this.forte(h, login, id)) as CredencialForteLegado;
+    const credencial = (await this.forte(h, login, id)) as CredencialForte;
     return { confere: await conferir(senha, f.hash), credencial };
   };
   gravarForte: PortaIdentidade['gravarForte'] = async (_h, c, t) => {
@@ -139,7 +139,7 @@ export class PortaIdentidadeMemoria implements PortaIdentidade {
   encerrarPolitica: PortaIdentidade['encerrarPolitica'] = async (_h, c, t) => {
     const i = this.linhas.findIndex((l) => l.id === c.id && l.hospital === c.hospital && !l.encerradaEm);
     if (i < 0) return false;
-    this.linhas[i] = { ...(this.linhas[i] as LinhaPolitica2faLegado), encerradaEm: new Date(this.relogio()) };
+    this.linhas[i] = { ...(this.linhas[i] as LinhaPolitica2faRegistrada), encerradaEm: new Date(this.relogio()) };
     this.trilha.push(t);
     return true;
   };
@@ -166,7 +166,7 @@ export class PortaIdentidadeMemoria implements PortaIdentidade {
   usuarios: PortaIdentidade['usuarios'] = async (_h, f) => {
     const todos = [...this.usuariosPorLogin.values()]
       .filter((u) => !f.busca || u.login.toUpperCase().startsWith(f.busca.toUpperCase()))
-      // Situação antes da paginação, como o SQL do legado faz.
+      // Situação antes da paginação, como a porta própria faz no SQL.
       .filter(
         (u) =>
           !f.senha ||

@@ -1,11 +1,10 @@
 // M59-F1 (ficha do M59, seção 4; painel novo, D-PAINEL-59): "Contas do banco de dados e privilégios", só consulta.
 //   GET /api/administracao/acesso/contas-banco          inventário das contas, destino e situação de cada uma
-//   GET /api/administracao/acesso/contas-banco/desvios  plano do privilégio mínimo por módulo × catálogo de segurança
-//   GET /api/administracao/acesso/contas-banco/imutabilidade  M59-F3 (regra 6): quem ainda apaga registro clínico
+//   GET /api/administracao/acesso/contas-banco/desvios  plano do privilégio mínimo por módulo × privilégios reais
+//   GET /api/administracao/acesso/contas-banco/imutabilidade  M59-F3 (regra 6): quem ainda pode apagar linha no banco do cliente
 // Permissão técnica e sensível acesso.contaBanco.ler (administrador do sistema e auditor): toda leitura permitida
 // entra na trilha própria (@Auditar, evento acesso.contaBanco.consultada; sem trilha, 503 e nada sai); a guarda só
 // registra a negação. Nenhuma rota revoga: os scripts são da TI, com autorização por passo.
-import { resolve } from 'node:path';
 import { Controller, Get, Inject, Optional, Req } from '@nestjs/common';
 import {
   EVENTOS_AUDITAVEIS,
@@ -17,10 +16,8 @@ import {
 import { Auditar, Permissao } from '../../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../../autorizacao/guarda.js';
 import { sessaoDe } from '../../cadastro/comum.js';
-import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../../config/public-api.js';
-import { RAIZES_DESLIGAMENTO, type RaizesDesligamento } from '../../coexistencia/public-api.js';
 import { PORTA_CONTAS_BANCO, type PortaContasBanco } from './porta.js';
-import { ServicoContasBanco } from './servico.js';
+import { CATALOGO_EXCLUSOES, type CatalogoExclusoes, ServicoContasBanco } from './servico.js';
 
 const BASE = 'administracao/acesso/contas-banco';
 
@@ -30,16 +27,9 @@ export class ContasBancoController {
 
   constructor(
     @Inject(PORTA_CONTAS_BANCO) porta: PortaContasBanco,
-    @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
-    @Optional() @Inject(RAIZES_DESLIGAMENTO) raizes: RaizesDesligamento | null = null,
+    @Optional() @Inject(CATALOGO_EXCLUSOES) exclusoes?: () => CatalogoExclusoes | null,
   ) {
-    this.servico = new ServicoContasBanco({
-      porta,
-      raizDesligamento:
-        raizes?.desligamento ??
-        resolve(process.cwd(), process.env['SGH_COEX_DESLIGAMENTO'] ?? 'docs/coexistencia/desligamento'),
-      configuracao,
-    });
+    this.servico = new ServicoContasBanco({ porta, ...(exclusoes ? { exclusoes } : {}) });
   }
 
   @Get(BASE)

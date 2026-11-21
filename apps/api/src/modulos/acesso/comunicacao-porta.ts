@@ -1,75 +1,99 @@
-// Porta da comunicação interna do M27 (mensagens, comunicados, avisos, mensagens do sistema anterior e o dicionário
-// pessoal): o que as telas leem e gravam, independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; o dicionário pelo EXECUTOR do M04 (as receitas
-//     acesso.incluirPalavraDicionario e acesso.excluirPalavraDicionario, com a trilha na mesma transação); mensagens,
-//     ciência e avisos numa transação SGH_ com a SGH_TRILHA junto (o texto nunca vai à trilha);
-//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas validações e recusas; nada vai à cópia;
+// Porta da comunicação interna do M27 (mensagens, comunicados, central de avisos, mensagens anteriores e o dicionário
+// pessoal): o que as telas leem e gravam, independente de onde (a API não escreve SQL fora das portas):
+//   - `banco`: a porta própria sobre o banco do cliente (comunicacao-porta-propria.ts), pelo @sgh/nucleo; as gravações
+//     numa operação do Executor (trilha, outbox e idempotência na mesma transação; o texto nunca vai à trilha);
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas validações e recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-// Em dev sobre a cópia compartilhada (ACESSO_FONTE_DEV=copia), o executor só de leitura recusa o dicionário e as
-// gravações SGH_ são recusadas também (`sghSoLeitura`), como no prontuário de uso diário (M23).
-import {
-  atendimentoDoContexto,
-  type AvisoLido,
-  type AvisoSgh,
-  avisosDoUsuario,
-  type ComunicadoLido,
-  comunicadoDetalhe,
-  corrigirComunicado,
-  encerrarComunicado,
-  encurtarVigenciaComunicado,
-  dicionarioDoUsuario,
-  type DestinatarioResolvido,
-  type Escritor,
-  type Executor,
-  type FonteCatalogo,
-  gravarAviso,
-  gravarMensagem,
-  gravarTrilha,
-  type LiberacaoConsultada,
-  type Leitor,
-  type LinhaTrilha,
-  marcarMensagemLida,
-  type MensagemAnteriorLida,
-  type MensagemEnviadaLida,
-  mensagemRecebida,
-  type MensagemRecebidaLida,
-  type MensagemSgh,
-  mensagensAnteriores,
-  mensagensEnviadas,
-  mensagensRecebidas,
-  type MetricasExecutor,
-  mudarEstadoAviso,
-  type NucleoLegado,
-  operacao,
-  registrarCienciaMensagem,
-  resolverDestinatarios,
-  type ContextoOperacao,
-} from '@sgh/legado';
-import { ErroProblema } from '../../problema.filter.js';
-import { portaIndisponivel } from '../exames/public-api.js';
+// Melhoria: o contexto é o do núcleo (cliente, estabelecimento, usuário e correlação por id) mais o código do
+// estabelecimento (a chave do canal de avisos); os tipos são os do contrato das telas, sem tipos do sistema de origem.
+import type {
+  Aviso,
+  ComunicadoDetalhe,
+  MensagemAnterior,
+  MensagemEnviada,
+  MensagemRecebida,
+  NovoAviso,
+  TipoDestinoMensagem,
+} from '@sgh/contratos';
+import type { ContextoNucleo, ContextoOperacao } from '@sgh/nucleo';
+import { createHash } from 'node:crypto';
+import { portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 
 export const PORTA_COMUNICACAO = Symbol('PORTA_COMUNICACAO');
 
-export interface ContextoComunicacao {
+/** Item da caixa: mensagem direta ou comunicado. */
+export type TipoItemCaixa = 'mensagem' | 'comunicado';
+
+/** Contexto da porta: o do núcleo (ids) mais a rede e o código do estabelecimento da sessão. */
+export interface ContextoComunicacao extends ContextoNucleo {
   readonly rede: string;
   readonly hospital: string;
 }
 
-/** Gravações SGH_ da comunicação, na transação com a SGH_TRILHA (o estabelecimento vem do contexto). */
+/** A gravação de dicionário leva o login (a memória guarda por login; o banco usa o id do contexto). */
+export type ContextoOperacaoComunicacao = ContextoOperacao & { readonly login: string };
+
+/** Linha da trilha de uma gravação da comunicação (o instante é o da transação). */
+export type TrilhaComunicacao = TrilhaDaGravacao;
+
+/** O comunicado como está gravado (sem a decisão "pode corrigir", que é do serviço). */
+export type ComunicadoRegistrado = Omit<ComunicadoDetalhe, 'podeCorrigir'>;
+
+/** O aviso da central com o evento que o gerou (a ciência resolve o aviso pelo objeto: tabela e id). */
+export interface AvisoRegistrado extends Aviso {
+  readonly evento: string;
+}
+
+export interface DestinatarioResolvido {
+  readonly login: string;
+  /** Por onde chegou: "usuario", "grupo MEDICOS", "setor 3", "unidade 1". */
+  readonly via: string;
+}
+
+export interface DestinoComunicacao {
+  readonly tipo: TipoDestinoMensagem;
+  readonly valor: string;
+}
+
+/** Liberação da gravação (passo 0 do executor): pode gravar agora, com o código e o motivo. */
+export interface LiberacaoComunicacao {
+  readonly pode: boolean;
+  readonly codigo: string | null;
+  readonly motivo: string | null;
+}
+
+/** Mensagem ou comunicado novo, com os destinatários já expandidos. */
+export interface NovaMensagem {
+  readonly tipo: 'mensagem' | 'comunicado';
+  readonly remetente: string;
+  readonly assunto: string;
+  readonly texto: string;
+  readonly cienciaObrigatoria: boolean;
+  readonly atendimento: number | null;
+  /** Instantes ISO (comunicado); nulos na mensagem. */
+  readonly vigenciaInicio: string | null;
+  readonly vigenciaFim: string | null;
+  /** Resumo dos destinos escolhidos ("grupo MEDICOS; usuario X"). */
+  readonly destinos: string;
+  readonly idempotencia: string;
+  readonly destinatarios: readonly DestinatarioResolvido[];
+}
+
+/** Gravações da comunicação, numa transação com a trilha (o estabelecimento vem do contexto). */
 export interface GravadorComunicacao {
-  gravarMensagem(m: Omit<MensagemSgh, 'hospital' | 'rede'>): Promise<{ id: number; repetida: boolean }>;
-  marcarLida(r: { login: string; id: number }): Promise<boolean>;
-  registrarCiencia(r: { login: string; id: number }): Promise<boolean>;
-  gravarAviso(a: Omit<AvisoSgh, 'hospital' | 'rede'>): Promise<number | null>;
+  gravarMensagem(m: NovaMensagem): Promise<{ id: number; repetida: boolean }>;
+  /** `tipo`: mensagem direta ou comunicado (ids de tabelas diferentes; sem ele, a mensagem direta tem preferência). */
+  marcarLida(r: { login: string; id: number; tipo?: TipoItemCaixa }): Promise<boolean>;
+  registrarCiencia(r: { login: string; id: number; tipo?: TipoItemCaixa }): Promise<boolean>;
+  gravarAviso(a: NovoAviso): Promise<number | null>;
   mudarEstadoAviso(r: { login: string; id: number; estado: 'lido' | 'resolvido' }): Promise<boolean>;
+  /**
+   * Resolve os avisos não resolvidos do usuário sobre um objeto (tabela e id): a ciência da mensagem resolve só o
+   * aviso daquela mensagem, nunca o de um comunicado com o mesmo número. Devolve quantos resolveu.
+   */
+  resolverAvisosDoObjeto(r: { login: string; tabela: string; id: number }): Promise<number>;
   /** W0-09: corrige o texto ainda não lido (lido: recusa 409); o anterior vai ao evento do comunicado. */
-  corrigirComunicado(r: {
-    id: number;
-    assunto: string;
-    texto: string;
-    motivo: string;
-    por: string;
-  }): Promise<void>;
+  corrigirComunicado(r: { id: number; assunto: string; texto: string; motivo: string; por: string }): Promise<void>;
   /** W0-09: encurta a vigência (nunca estende). */
   encurtarVigencia(r: { id: number; vigenciaFim: string; motivo: string; por: string }): Promise<void>;
   /** W0-09: encerra com o motivo (o comunicado e as ciências continuam visíveis). */
@@ -77,34 +101,55 @@ export interface GravadorComunicacao {
 }
 
 export interface PortaComunicacao {
-  readonly destino: 'legado' | 'memoria';
-  recebidas(c: ContextoComunicacao, login: string): Promise<MensagemRecebidaLida[]>;
-  recebida(c: ContextoComunicacao, login: string, id: number): Promise<MensagemRecebidaLida | null>;
-  enviadas(c: ContextoComunicacao, login: string): Promise<MensagemEnviadaLida[]>;
-  anteriores(c: ContextoComunicacao, login: string): Promise<MensagemAnteriorLida[]>;
+  readonly destino: 'banco' | 'memoria';
+  recebidas(c: ContextoComunicacao, login: string): Promise<MensagemRecebida[]>;
+  recebida(
+    c: ContextoComunicacao,
+    login: string,
+    id: number,
+    tipo?: TipoItemCaixa,
+  ): Promise<MensagemRecebida | null>;
+  enviadas(c: ContextoComunicacao, login: string): Promise<MensagemEnviada[]>;
+  anteriores(c: ContextoComunicacao, login: string): Promise<MensagemAnterior[]>;
   dicionario(c: ContextoComunicacao, login: string): Promise<{ palavra: string; fonetica: string }[]>;
-  avisos(c: ContextoComunicacao, login: string): Promise<AvisoLido[]>;
+  avisos(c: ContextoComunicacao, login: string): Promise<AvisoRegistrado[]>;
   /** W0-09: o comunicado por inteiro (texto, vigência, destinatários com a ciência e os eventos). */
-  comunicado(c: ContextoComunicacao, id: number): Promise<ComunicadoLido | null>;
+  comunicado(c: ContextoComunicacao, id: number): Promise<ComunicadoRegistrado | null>;
   /** O atendimento de contexto existe neste estabelecimento? (só o paciente dele, para conferir a autorização). */
   atendimentoDoContexto(c: ContextoComunicacao, atendimento: number): Promise<{ paciente: number } | null>;
   destinatarios(
     c: ContextoComunicacao,
-    destinos: readonly { tipo: 'usuario' | 'grupo' | 'setor' | 'unidade'; valor: string }[],
+    destinos: readonly DestinoComunicacao[],
     teto: number,
   ): Promise<{ destinatarios: DestinatarioResolvido[]; desconhecidos: string[]; passou: boolean }>;
-  podeGravar(c: ContextoComunicacao, operacao: string, login: string): Promise<LiberacaoConsultada>;
+  podeGravar(c: ContextoComunicacao, operacao: string, login: string): Promise<LiberacaoComunicacao>;
   executar(
     c: ContextoComunicacao,
     operacao: string,
     entrada: unknown,
-    octx: ContextoOperacao,
+    octx: ContextoOperacaoComunicacao,
   ): Promise<{ resultado: Record<string, unknown>; repetida: boolean }>;
+  /**
+   * Grava numa transação com a linha da trilha. `chave`: a Idempotency-Key do pedido (o reenvio devolve o resultado
+   * da primeira gravação, sem gravar de novo); sem ela, cada chamada é uma gravação.
+   */
   gravarSgh<T>(
     c: ContextoComunicacao,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaComunicacao | ((r: T) => TrilhaComunicacao),
     fn: (g: GravadorComunicacao) => Promise<T>,
+    pedido?: PedidoGravacao,
   ): Promise<T>;
+}
+
+/**
+ * O pedido de uma gravação da comunicação: a operação (nome próprio por ação, para a liberação e a idempotência), a
+ * Idempotency-Key e o resumo do conteúdo (hash do assunto, texto, destinos e vigência; nunca o texto). O mesmo pedido
+ * com outro conteúdo é recusado (idempotência divergente) em vez de devolver a gravação antiga.
+ */
+export interface PedidoGravacao {
+  readonly operacao: string;
+  readonly chave?: string;
+  readonly resumo?: string;
 }
 
 export const METODOS_PORTA_COMUNICACAO: ReadonlySet<string> = new Set([
@@ -117,109 +162,21 @@ export const METODOS_PORTA_COMUNICACAO: ReadonlySet<string> = new Set([
   'comunicado',
   'atendimentoDoContexto',
   'destinatarios',
+  'podeGravar',
   'executar',
   'gravarSgh',
 ]);
 
-function gravador(e: Escritor, c: ContextoComunicacao): GravadorComunicacao {
-  return {
-    gravarMensagem: (m) => gravarMensagem(e, { ...m, rede: c.rede, hospital: c.hospital }),
-    marcarLida: (r) => marcarMensagemLida(e, { hospital: c.hospital, ...r }),
-    registrarCiencia: (r) => registrarCienciaMensagem(e, { hospital: c.hospital, ...r }),
-    gravarAviso: (a) => gravarAviso(e, { ...a, rede: c.rede, hospital: c.hospital }),
-    mudarEstadoAviso: (r) => mudarEstadoAviso(e, { hospital: c.hospital, ...r }),
-    corrigirComunicado: (r) => corrigirComunicado(e, { hospital: c.hospital, ...r }),
-    encurtarVigencia: (r) => encurtarVigenciaComunicado(e, { hospital: c.hospital, ...r }),
-    encerrarComunicado: (r) => encerrarComunicado(e, { hospital: c.hospital, ...r }),
-  };
-}
-
-type Ler = <T>(c: ContextoComunicacao, fn: (l: Leitor) => Promise<T>) => Promise<T>;
-
-function leituras(
-  ler: Ler,
-): Pick<
-  PortaComunicacao,
-  | 'recebidas'
-  | 'recebida'
-  | 'enviadas'
-  | 'anteriores'
-  | 'dicionario'
-  | 'avisos'
-  | 'comunicado'
-  | 'atendimentoDoContexto'
-  | 'destinatarios'
-> {
-  return {
-    recebidas: (c, login) => ler(c, (l) => mensagensRecebidas(l, c.hospital, login)),
-    recebida: (c, login, id) => ler(c, (l) => mensagemRecebida(l, c.hospital, login, id)),
-    enviadas: (c, login) => ler(c, (l) => mensagensEnviadas(l, c.hospital, login)),
-    anteriores: (_c, login) => ler(_c, (l) => mensagensAnteriores(l, login)),
-    dicionario: (_c, login) => ler(_c, (l) => dicionarioDoUsuario(l, login)),
-    avisos: (c, login) => ler(c, (l) => avisosDoUsuario(l, c.hospital, login)),
-    comunicado: (c, id) => ler(c, (l) => comunicadoDetalhe(l, c.hospital, id)),
-    atendimentoDoContexto: (c, a) => ler(c, (l) => atendimentoDoContexto(l, a)),
-    destinatarios: (c, destinos, teto) => ler(c, (l) => resolverDestinatarios(l, c.hospital, destinos, teto)),
-  };
-}
-
-const SO_LEITURA = () =>
-  new ErroProblema(
-    'operacao-bloqueada',
-    409,
-    'Gravação desligada neste ambiente',
-    'Sobre a cópia compartilhada de desenvolvimento, as mensagens e os avisos não são gravados.',
-    { codigo: 'somente-leitura' },
-  );
-
-export function portaComunicacaoLegado(
-  nucleo: NucleoLegado,
-  catalogo: FonteCatalogo,
-  metricas?: MetricasExecutor,
-  executorPronto?: Executor,
-  opcoes: { readonly sghSoLeitura?: boolean } = {},
-): PortaComunicacao {
-  const executor = executorPronto ?? nucleo.criarExecutor({ catalogo, ...(metricas ? { metricas } : {}) });
-  const ctx = (c: ContextoComunicacao) => ({ rede: c.rede, hospital: c.hospital, traceId: 'comunicacao' });
-  return {
-    destino: 'legado',
-    podeGravar: (c, op, usuarioLegado) =>
-      executor.liberacao(operacao(op), { rede: c.rede, hospital: c.hospital, usuarioLegado }),
-    async executar(c, op, entrada, octx) {
-      const r = await executor.executar(operacao(op), c.hospital, entrada, octx);
-      return { resultado: r.resultado, repetida: r.repetida };
-    },
-    gravarSgh: (c, trilha, fn) => {
-      if (opcoes.sghSoLeitura) return Promise.reject(SO_LEITURA());
-      return nucleo.gravarSgh(ctx(c), async (e) => {
-        const r = await fn(gravador(e, c));
-        await gravarTrilha(e, typeof trilha === 'function' ? trilha(r) : trilha);
-        return r;
-      });
-    },
-    ...leituras((c, fn) => nucleo.lerSomente(ctx(c), fn)),
-  };
-}
-
-/** A porta sobre uma transação aberta (testes de integração na cópia, desfeita no fim). */
-export function portaComunicacaoNaTransacao(e: Escritor, executor: Executor): PortaComunicacao {
-  return {
-    destino: 'legado',
-    podeGravar: (c, op, usuarioLegado) =>
-      executor.liberacao(operacao(op), { rede: c.rede, hospital: c.hospital, usuarioLegado }),
-    async executar(c, op, entrada, octx) {
-      const r = await executor.executar(operacao(op), c.hospital, entrada, octx, { escritor: e });
-      return { resultado: r.resultado, repetida: r.repetida };
-    },
-    async gravarSgh(c, trilha, fn) {
-      const r = await fn(gravador(e, c));
-      await gravarTrilha(e, typeof trilha === 'function' ? trilha(r) : trilha);
-      return r;
-    },
-    ...leituras((_c, fn) => fn(e)),
-  };
-}
-
 export function portaComunicacaoIndisponivel(): PortaComunicacao {
   return portaIndisponivel<PortaComunicacao>(METODOS_PORTA_COMUNICACAO);
+}
+
+/**
+ * O que a trilha guarda da versão anterior do comunicado corrigido: o tamanho e um resumo (sha256) do assunto e do
+ * texto, nunca o conteúdo (a trilha é imutável e o texto corrigido pode ter sido justamente um dado indevido). A
+ * versão anterior por inteiro depende da tabela comunicado_versao (pedido de DDL do lote 02-01).
+ */
+export function descricaoVersaoAnterior(assunto: string, texto: string): string {
+  const resumo = createHash('sha256').update(JSON.stringify({ assunto, texto })).digest('hex').slice(0, 16);
+  return `versão anterior: assunto com ${assunto.length} caracteres, texto com ${texto.length} caracteres (resumo ${resumo})`;
 }

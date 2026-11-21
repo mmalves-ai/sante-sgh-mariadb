@@ -19,6 +19,7 @@
 //   POST /api/qualidade/revisao-prontuarios/pendencias/:id/cancelamento a comissão cancela com motivo
 //   GET  /api/qualidade/revisao-prontuarios/versoes/:registro/:id     as versões anteriores (inativas)
 //   GET  /api/qualidade/revisao-prontuarios/aval?reg=                 o aval lido pelo SAME
+import { TABELA_DO_REGISTRO } from './tipos.js';
 import { createHash, randomInt } from 'node:crypto';
 import { Body, Controller, Get, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -47,7 +48,6 @@ import {
   type PendenciaRevisaoLida,
   PERMISSOES_QUALIDADE as P,
   PRAZO_PENDENCIA_REVISAO_DIAS,
-  REGISTROS_VERSIONADOS_QUALIDADE,
   type RegistroVersionadoQualidade,
   type ProntuarioRevisaoLido,
   type RecusaRevisaoProntuario,
@@ -76,7 +76,7 @@ import {
   textoDoAval,
   universoCanonico,
 } from '@sgh/dominio-qualidade';
-import type { ChecklistRevisaoSghLido, PendenciaRevisaoSghLida, ProntuarioRevisaoSghLido } from '@sgh/legado';
+import type { ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado } from './tipos.js';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -144,10 +144,10 @@ const itensDe = (t: string | null): ItemChecklistRevisao[] => lista(t, esquemaIt
 const respostasDe = (t: string | null): RespostaItemRevisao[] => lista(t, esquemaRespostaItemRevisao);
 const sha256 = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
 
-function checklistLido(c: ChecklistRevisaoSghLido): ChecklistRevisaoLido {
+function checklistLido(c: ChecklistRevisaoRegistrado): ChecklistRevisaoLido {
   return { ...c, itens: itensDe(c.itens), situacao: c.situacao as SituacaoChecklistRevisao };
 }
-function pendenciaLida(p: PendenciaRevisaoSghLida, hoje: string): PendenciaRevisaoLida {
+function pendenciaLida(p: PendenciaRevisaoRegistrada, hoje: string): PendenciaRevisaoLida {
   const situacao = p.situacao as SituacaoPendenciaRevisao;
   return {
     id: p.id,
@@ -171,8 +171,8 @@ function pendenciaLida(p: PendenciaRevisaoSghLida, hoje: string): PendenciaRevis
   };
 }
 function prontuarioLido(
-  p: ProntuarioRevisaoSghLido,
-  pendencias: readonly PendenciaRevisaoSghLida[],
+  p: ProntuarioRevisaoRegistrado,
+  pendencias: readonly PendenciaRevisaoRegistrada[],
   hoje: string,
 ): ProntuarioRevisaoLido {
   const situacao = p.situacao as SituacaoRevisaoProntuario;
@@ -288,7 +288,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/checklists`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.publicarChecklistRevisao: SGH_QUA_REV_CHECKLIST (a vigente vira substituída) e a SGH_TRILHA',
+    'qualidade.publicarChecklistRevisao: modelo_checklist_qualidade_versao (a vigente vira substituída) e a trilha_auditoria',
   )
   async publicarChecklist(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -310,7 +310,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRevisaoChecklistPublicado.codigo,
       P.revisaoProntuarioRegistrar,
-      (r: { id: number }) => ({ tabela: 'SGH_QUA_REV_CHECKLIST', id: String(r.id) }),
+      (r: { id: number }) => ({ tabela: 'modelo_checklist_qualidade_versao', id: String(r.id) }),
       (g) =>
         g.publicarChecklistRevisao({
           comissao: e.comissao,
@@ -326,7 +326,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/checklists/:id/inativacao`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.inativarChecklistRevisao: SGH_QUA_REV_CHECKLIST (inativação com motivo) e a SGH_TRILHA',
+    'qualidade.inativarChecklistRevisao: modelo_checklist_qualidade_versao (inativação com motivo) e a trilha_auditoria',
   )
   async inativarChecklist(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -339,7 +339,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.revisaoProntuarioRegistrar,
-      { tabela: 'SGH_QUA_REV_CHECKLIST', id: String(c.id) },
+      { tabela: 'modelo_checklist_qualidade_versao', id: String(c.id) },
       (g) =>
         g.inativarChecklistRevisao({
           id: c.id,
@@ -389,7 +389,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/sorteios`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.sortearRevisao: SGH_QUA_REV_SORTEIO (semente e resumo do universo) e SGH_QUA_REV_PRONTUARIO, e a SGH_TRILHA',
+    'qualidade.sortearRevisao: sorteio_revisao_prontuario (semente e resumo do universo) e revisao_prontuario, e a trilha_auditoria',
   )
   async sortear(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -413,7 +413,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRevisaoSorteada.codigo,
       P.revisaoProntuarioRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_REV_SORTEIO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'sorteio_revisao_prontuario', id: String(x.id) }),
       (g) =>
         g.sortearRevisao({
           comissao: e.comissao,
@@ -483,7 +483,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/sorteios/:id/cancelamento`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarSorteioRevisao: SGH_QUA_REV_SORTEIO (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarSorteioRevisao: sorteio_revisao_prontuario (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarSorteio(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -493,7 +493,7 @@ export class RevisaoProntuarioController {
     if (!so) throw naoEncontrado('Sorteio');
     const problema = recusaCancelamentoSorteio(so);
     if (problema === 'sorteio-com-revisao') {
-      const ds = await this.porta.dependentes(s.porta, 'SGH_QUA_REV_SORTEIO', so.id);
+      const ds = await this.porta.dependentes(s.porta, 'sorteio_revisao_prontuario', so.id);
       throw recusaRevisaoHttp(
         problema,
         ds.map((d) => `${d.grupo} (${String(d.quantidade)}): nº ${d.ids.join(', nº ')}.`),
@@ -505,7 +505,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.revisaoProntuarioRegistrar,
-      { tabela: 'SGH_QUA_REV_SORTEIO', id: String(so.id) },
+      { tabela: 'sorteio_revisao_prontuario', id: String(so.id) },
       (g) =>
         g.cancelarSorteioRevisao({
           id: so.id,
@@ -522,7 +522,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/prontuarios/:id/revisao`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.revisarProntuario: SGH_QUA_REV_PRONTUARIO (correção com retrato na SGH_QUA_VERSAO) e SGH_QUA_REV_PENDENCIA, e a SGH_TRILHA',
+    'qualidade.revisarProntuario: revisao_prontuario (correção com retrato na trilha_auditoria) e pendencia_prontuario, e a trilha_auditoria',
   )
   async revisar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -557,7 +557,7 @@ export class RevisaoProntuarioController {
       s,
       corrigindo ? E.qualidadeRegistroCorrigido.codigo : E.qualidadeRevisaoRegistrada.codigo,
       P.revisaoProntuarioRegistrar,
-      { tabela: 'SGH_QUA_REV_PRONTUARIO', id: String(p.id) },
+      { tabela: 'revisao_prontuario', id: String(p.id) },
       (g) =>
         g.revisarProntuario({
           id: p.id,
@@ -597,7 +597,7 @@ export class RevisaoProntuarioController {
 
   @Post(`${B}/prontuarios/:id/aval`)
   @Permissao(P.revisaoProntuarioRegistrar)
-  @AuditadoNoHandler('qualidade.avalRevisao: SGH_QUA_REV_PRONTUARIO (aval da comissão) e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.avalRevisao: revisao_prontuario (aval da comissão) e a trilha_auditoria')
   async aval(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAvalRevisao, await this.reautenticado(req, b));
@@ -621,7 +621,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRevisaoAval.codigo,
       P.revisaoProntuarioRegistrar,
-      { tabela: 'SGH_QUA_REV_PRONTUARIO', id: String(p.id) },
+      { tabela: 'revisao_prontuario', id: String(p.id) },
       (g) => g.avalRevisao({ id: p.id, versao: e.versao, agora, usuario: s.login }),
     );
   }
@@ -666,7 +666,7 @@ export class RevisaoProntuarioController {
 
   @Post(`${B}/pendencias/:id/resposta`)
   @Permissao(P.revisaoPendenciaResponder)
-  @AuditadoNoHandler('qualidade.responderPendenciaRevisao: SGH_QUA_REV_PENDENCIA (resposta) e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.responderPendenciaRevisao: pendencia_prontuario (resposta) e a trilha_auditoria')
   async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaResponderPendenciaRevisao, b);
@@ -685,7 +685,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRevisaoPendenciaRespondida.codigo,
       P.revisaoPendenciaResponder,
-      { tabela: 'SGH_QUA_REV_PENDENCIA', id: String(p.id) },
+      { tabela: 'pendencia_prontuario', id: String(p.id) },
       (g) =>
         g.responderPendenciaRevisao({
           id: p.id,
@@ -700,7 +700,7 @@ export class RevisaoProntuarioController {
   @Post(`${B}/pendencias/:id/cancelamento`)
   @Permissao(P.revisaoProntuarioRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarPendenciaRevisao: SGH_QUA_REV_PENDENCIA (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarPendenciaRevisao: pendencia_prontuario (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarPendencia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -714,7 +714,7 @@ export class RevisaoProntuarioController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.revisaoProntuarioRegistrar,
-      { tabela: 'SGH_QUA_REV_PENDENCIA', id: String(p.id) },
+      { tabela: 'pendencia_prontuario', id: String(p.id) },
       (g) =>
         g.cancelarPendenciaRevisao({
           id: p.id,
@@ -735,7 +735,7 @@ export class RevisaoProntuarioController {
     @Req() req: RequisicaoAutorizada,
   ) {
     const s = sessaoDe(req);
-    const tabela = REGISTROS_VERSIONADOS_QUALIDADE[registro as RegistroVersionadoQualidade];
+    const tabela = TABELA_DO_REGISTRO[registro as RegistroVersionadoQualidade];
     if (
       !tabela ||
       !['revisao-prontuario', 'sorteio-revisao', 'pendencia-revisao', 'checklist-revisao'].includes(registro)

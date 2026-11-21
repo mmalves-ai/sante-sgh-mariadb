@@ -5,6 +5,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
+import { NAO_MIGRADOS_F2L } from '../../app-base.module.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
@@ -65,7 +66,9 @@ afterAll(async () => {
   reiniciarEstadoAcessoSintetico();
 });
 
-describe('W1-01 (parte 11b2): PIN e troca rápida pela HTTP', () => {
+// A troca rápida (PIN) ainda está fora da base da API (NAO_MIGRADOS_F2L: 501 com o motivo); o arquivo volta a rodar
+// sozinho quando a base a montar (pedido do lote 02-04 ao integrador).
+describe.skipIf(NAO_MIGRADOS_F2L.has('trocaRapida'))('W1-01 (parte 11b2): PIN e troca rápida pela HTTP', () => {
   it('PIN próprio: CSRF e senha; recusa o trivial; troca na estação; recusa genérica; gestor retira', async () => {
     const b = await entrar('SINT.RECEPCAO');
     const sit0 = await app.inject({ method: 'GET', url: '/api/sessao/pin', headers: cab(b) });

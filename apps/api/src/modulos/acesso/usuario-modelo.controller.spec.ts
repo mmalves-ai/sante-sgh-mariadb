@@ -4,16 +4,18 @@
 // privilégio de gestão do modelo fica em `ignorados`; ninguém aplica no próprio acesso; o auditor só consulta; a
 // trilha não leva a senha.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { EfetivasTela, PreviaModeloTela, ResultadoModeloTela } from '@sgh/contratos';
+import type { PreviaModeloTela, ResultadoModeloTela } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import { reiniciarEstadoAcessoSintetico } from './fonte-sintetica.js';
+import { estadoAcessoSintetico, reiniciarEstadoAcessoSintetico } from './fonte-sintetica.js';
+import { fonteGestaoMemoria } from './gestao-fonte.js';
+import { moduloAcesso } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'acesso' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
@@ -33,7 +35,6 @@ const cab = (quem: string) => {
 };
 const post = (quem: string, url: string, payload: Record<string, unknown>) =>
   app.inject({ method: 'POST', url, headers: cab(quem), payload });
-const get = (quem: string, url: string) => app.inject({ method: 'GET', url, headers: cab(quem) });
 
 async function entrar(login: string): Promise<void> {
   const r = await app.inject({
@@ -53,12 +54,30 @@ async function entrar(login: string): Promise<void> {
   potes[login] = pote;
 }
 
-const efetivas = async (login: string) =>
-  (await get('SINT.GESTOR', `/api/acesso/gestao/usuarios/${login}`)).json() as EfetivasTela;
+/** A conta ao vivo pela fonte da gestão em memória (a tela de efetivas é da gestão, montada pelo seu lote). */
+const efetivas = async (login: string) => {
+  const f = fonteGestaoMemoria(trilha);
+  const agora = Date.now();
+  const u = await f.usuario('', 'aa', login);
+  const historico = await f.historicoPerfis('', 'aa', login);
+  return {
+    usuario: { grupo: u?.grupo ?? null },
+    concessoes: historico.map((h) => ({
+      perfil: h.perfil,
+      fim: h.fim?.toISOString() ?? null,
+      motivo: h.motivo,
+      vigente: !h.revogadoEm && h.inicio.getTime() <= agora && (!h.fim || h.fim.getTime() > agora),
+    })),
+  };
+};
 
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria() });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem: new ArmazemMemoria(),
+    registro: { acesso: async () => ({ modulo: (ctx) => moduloAcesso(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   await entrar('SINT.GESTOR');
@@ -68,14 +87,16 @@ beforeAll(async () => {
     ['controle-infeccao', fim],
     ['administrador-sistema', undefined],
   ] as const) {
-    const r = await post('SINT.GESTOR', '/api/acesso/gestao/perfis', {
+    // Semeado direto no estado sintético (a rota de concessão é da tela de gestão, montada pelo seu lote).
+    const r = estadoAcessoSintetico().concederPerfil({
       login: MODELO,
       perfil,
-      ...(ate ? { fim: ate } : {}),
+      inicio: new Date(),
+      fim: ate ? new Date(ate) : null,
       motivo: 'semente do teste do modelo',
-      senha: SENHA,
+      concedidoPor: 'SINT.GESTOR',
     });
-    expect(r.statusCode, r.body).toBe(201);
+    expect(r.id).toBeTruthy();
   }
 });
 afterAll(async () => {
@@ -88,7 +109,7 @@ describe('W1-01 (parte 12a): aplicar acessos de um usuário-modelo', () => {
     const r = await post('SINT.GESTOR', `${URL}/previa`, { modelo: MODELO, modo: 'somar' });
     expect(r.statusCode, r.body).toBe(200);
     const p = r.json() as PreviaModeloTela;
-    expect(p.grupo).toEqual({ de: 'SAME', para: 'ATENDIMENTO' });
+    expect(p.grupo).toBeNull(); // o produto não tem grupo de usuários: o modelo não o copia
     expect(p.perfisConceder).toHaveLength(1);
     expect(p.perfisConceder[0]?.perfil).toBe('controle-infeccao');
     expect(p.perfisConceder[0]?.fim).not.toBeNull();
@@ -97,7 +118,7 @@ describe('W1-01 (parte 12a): aplicar acessos de um usuário-modelo', () => {
       item: 'administrador-sistema',
       motivo: 'privilegio-nominal',
     });
-    expect(p.passos).toBeGreaterThanOrEqual(2);
+    expect(p.passos).toBeGreaterThanOrEqual(1);
     expect(p.conferencia).toMatch(/^[0-9a-f]{64}$/);
     // Nada gravou.
     expect((await efetivas(ALVO)).usuario.grupo).toBe('SAME');
@@ -129,11 +150,10 @@ describe('W1-01 (parte 12a): aplicar acessos de um usuário-modelo', () => {
     expect(a.statusCode, a.body).toBe(200);
     const res = a.json() as ResultadoModeloTela;
     expect(res.falhas, JSON.stringify(res.passos)).toBe(0);
-    expect(res.passos.map((x) => x.acao)).toEqual(
-      expect.arrayContaining(['trocar-grupo', 'conceder-perfil']),
-    );
+    expect(res.passos.map((x) => x.acao)).toEqual(expect.arrayContaining(['conceder-perfil']));
+    expect(res.passos.map((x) => x.acao)).not.toContain('trocar-grupo');
     const depois = await efetivas(ALVO);
-    expect(depois.usuario.grupo).toBe('ATENDIMENTO');
+    expect(depois.usuario.grupo).toBe('SAME');
     const concedida = depois.concessoes.find((c) => c.perfil === 'controle-infeccao' && c.vigente);
     expect(concedida?.fim).toBe(p.perfisConceder[0]?.fim);
     expect(concedida?.motivo).toContain(`Acessos de ${MODELO}`);

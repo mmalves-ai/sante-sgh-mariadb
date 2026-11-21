@@ -1,18 +1,5 @@
 # lote 02-07 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: financeiro
-# pastas: apps/api/src/modulos/financeiro apps/api/src/modulos/financeiro/api apps/api/src/modulos/financeiro/aplicacao
-apps/api/src/modulos/financeiro/api/escopo-conta.int.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/baixar-titulo.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/comum.spec-util.ts
-apps/api/src/modulos/financeiro/aplicacao/criar-titulo-pagar.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/tesouraria-fiscal.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/titulo-por-competencia.int.spec.ts
-apps/api/src/modulos/financeiro/apoios.ts
-apps/api/src/modulos/financeiro/armazem.ts
-apps/api/src/modulos/financeiro/financeiro.controller.ts
-apps/api/src/modulos/financeiro/porta-legado.ts
-apps/api/src/modulos/financeiro/porta-memoria.ts
-apps/api/src/modulos/financeiro/porta.ts
-apps/api/src/modulos/financeiro/public-api.ts
-apps/api/src/modulos/financeiro/servico.ts
-apps/api/src/modulos/financeiro/simbolos.ts
+# registrar: -
+# pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
+# remocao: sim (os arquivos abaixo foram apagados; resta o verificador da catraca)
+tools/obra/sem-coexistencia.sh

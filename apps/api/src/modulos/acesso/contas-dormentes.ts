@@ -1,7 +1,7 @@
 // W1-01 (parte 9a): a ROTINA DAS CONTAS DORMENTES. Lê as contas ativas e livres com a última conexão, as exceções
 // justificadas vigentes, os gestores de acessos ativos e os parâmetros do estabelecimento; avalia pela regra pura
 // (avaliarDormencia, @sgh/dominio-acesso) e bloqueia cada conta dormente pelo executor do M04 (acesso.bloquearUsuario,
-// uma transação por conta, como o legado grava). Cada bloqueio e a rodada vão à trilha (quem: o responsável da rotina;
+// uma transação por conta). Cada bloqueio e a rodada vão à trilha (quem: o responsável da rotina;
 // o que: dias sem acesso e o limite; nunca senha nem dado de pessoa). O gestor recebe o aviso com o resumo (bloqueadas,
 // poupadas e falhas). O relógio é injetado (`agora`): os testes simulam o tempo. Uma rodada por estabelecimento de cada vez.
 import {
@@ -12,7 +12,7 @@ import {
   type ExcecaoDormenciaVigente,
   type ParametrosDormencia,
 } from '@sgh/dominio-acesso';
-import { type ContextoOperacao, ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 
 export const OPERACAO_BLOQUEIO_DORMENTE = 'acesso.bloquearUsuario';
 export const EVENTO_DORMENTE_BLOQUEADA = 'acesso.conta-dormente.bloqueada';
@@ -26,13 +26,26 @@ export interface LinhaTrilhaDormencia {
   readonly diferenca: string;
 }
 
+/**
+ * Quem e como a rotina executa o bloqueio: o responsável (login do gestor de acessos), a correlação da rodada e a chave
+ * de idempotência por conta (a rodada repetida no mesmo dia não bloqueia duas vezes).
+ */
+export interface ContextoRotinaDormencia {
+  readonly rede: string;
+  readonly hospital: string;
+  readonly responsavel: string;
+  readonly chaveIdempotencia: string;
+  readonly correlacao: string;
+  readonly estacao: string;
+}
+
 export interface PortaDormencia {
   contas(rede: string, hospital: string): Promise<ContaDormenciaLida[]>;
   excecoes(rede: string, hospital: string): Promise<ExcecaoDormenciaVigente[]>;
   gestoresAtivos(rede: string, hospital: string): Promise<string[]>;
   parametros(rede: string, hospital: string): Promise<ParametrosDormencia>;
   receita(nome: string, hospital: string): { readonly ligada: boolean; readonly motivo: string | null };
-  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoOperacao): Promise<void>;
+  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoRotinaDormencia): Promise<void>;
   trilha(rede: string, hospital: string, l: LinhaTrilhaDormencia, correlacao: string): Promise<void>;
 }
 
@@ -130,9 +143,9 @@ export class ServicoContasDormentes {
           {
             rede,
             hospital,
-            usuarioLegado: responsavel!,
-            idempotencyKey: `${correlacao}-${c.login}`,
-            traceId: correlacao,
+            responsavel: responsavel!,
+            chaveIdempotencia: `${correlacao}-${c.login}`.slice(0, 80),
+            correlacao: correlacao.slice(0, 64),
             estacao: 'rotina-contas-dormentes',
           },
         );

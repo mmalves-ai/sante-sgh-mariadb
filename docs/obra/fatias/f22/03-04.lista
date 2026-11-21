@@ -1,24 +1,23 @@
 # lote 03-04 (onda 3); gerado por tools/obra/fatiar_f22.py
-# registrar: nutricao repasse
-# pastas: apps/api/src/modulos/nutricao apps/api/src/modulos/repasse apps/api/src/modulos/repasse/api apps/api/src/modulos/repasse/aplicacao
-apps/api/src/modulos/nutricao/nutricao-crud.spec.ts
-apps/api/src/modulos/nutricao/nutricao-portaria.spec.ts
-apps/api/src/modulos/nutricao/nutricao-vinculo.spec.ts
-apps/api/src/modulos/nutricao/nutricao.controller.ts
-apps/api/src/modulos/nutricao/nutricao.spec.ts
-apps/api/src/modulos/nutricao/porta-legado.ts
-apps/api/src/modulos/nutricao/porta-memoria.ts
-apps/api/src/modulos/nutricao/porta.ts
-apps/api/src/modulos/nutricao/public-api.ts
-apps/api/src/modulos/nutricao/servico.ts
-apps/api/src/modulos/repasse/api/extrato.int.spec.ts
-apps/api/src/modulos/repasse/aplicacao/repasse.int.spec.ts
-apps/api/src/modulos/repasse/aplicacao/repasse.spec.ts
-apps/api/src/modulos/repasse/documentos-pdf.int.spec.ts
-apps/api/src/modulos/repasse/documentos.ts
-apps/api/src/modulos/repasse/porta-legado.ts
-apps/api/src/modulos/repasse/porta-memoria.ts
-apps/api/src/modulos/repasse/porta.ts
-apps/api/src/modulos/repasse/public-api.ts
-apps/api/src/modulos/repasse/repasse.controller.ts
-apps/api/src/modulos/repasse/servico.ts
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/escala
+apps/api/src/modulos/pessoas/aplicacao/escala.int.spec.ts
+apps/api/src/modulos/pessoas/escala/crud-escala.spec.ts
+apps/api/src/modulos/pessoas/escala/crud-realizado.spec.ts
+apps/api/src/modulos/pessoas/escala/escala.controller.ts
+apps/api/src/modulos/pessoas/escala/escala.spec.ts
+apps/api/src/modulos/pessoas/escala/plantao.controller.ts
+apps/api/src/modulos/pessoas/escala/plantao.spec.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-legado.spec.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-legado.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-memoria.ts
+apps/api/src/modulos/pessoas/escala/porta-escala.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado-legado.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado-memoria.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado.ts
+apps/api/src/modulos/pessoas/escala/realizado.controller.ts
+apps/api/src/modulos/pessoas/escala/servico-escala.spec.ts
+apps/api/src/modulos/pessoas/escala/servico-escala.ts
+apps/api/src/modulos/pessoas/escala/servico-plantao.spec.ts
+apps/api/src/modulos/pessoas/escala/servico-plantao.ts
+apps/api/src/modulos/pessoas/escala/servico-realizado.ts

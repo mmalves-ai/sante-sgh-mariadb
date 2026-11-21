@@ -10,7 +10,6 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
-import AvisoIndisponivel from '../../onda0/componentes/AvisoIndisponivel.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import { lerPacienteDoLeito, lerPainelLeitos } from '../api-internacao.js';
 import { formatarData, formatarDataHora, segundosDesde } from '../formato.js';
@@ -84,7 +83,6 @@ const pct = (v: number | null) => (v === null ? '—' : `${String(v).replace('.'
   <section class="tela" aria-labelledby="painel-titulo">
     <h1 id="painel-titulo">{{ t('internacao.painel.titulo') }}</h1>
     <p>{{ t('internacao.painel.texto') }}</p>
-    <AvisoIndisponivel v-if="painel.isError.value" :erro="painel.error.value" />
     <MensagemErro v-if="painel.isError.value" :erro="painel.error.value" />
     <p v-else-if="painel.isPending.value">{{ t('internacao.comum.carregando') }}</p>
     <template v-else-if="painel.data.value">

@@ -7,6 +7,7 @@ import { SEM_ENVIO_NO_DEV } from '@sgh/contratos';
 import { classificarChavesFull } from '@sgh/dominio-config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
+import { moduloRelatorio } from '../modulo.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
@@ -33,12 +34,20 @@ async function subir(semEnvioNoDev: boolean) {
         parametrosIniciais: parametrosIniciaisSinteticos,
       })
     : undefined;
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    relatorio,
-    vigia: null,
-    ...(configuracao ? { configuracao } : {}),
-  });
+  const app: NestFastifyApplication = await criarApp(
+    lerConfiguracao({ ...env, API_MODULOS: 'relatorio' }),
+    null,
+    { ...env, API_MODULOS: 'relatorio' },
+    {
+      trilha,
+      registro: {
+        relatorio: async () => ({
+          modulo: (ctx) =>
+            moduloRelatorio(ctx, { porta: relatorio, ...(configuracao ? { configuracao } : {}) }),
+        }),
+      },
+    },
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return { app, trilha, relatorio };
@@ -372,7 +381,14 @@ describe('o envio alterado continua sem sair do dev (SEM_ENVIO_NO_DEV)', () => {
 });
 
 describe('revisão W0-09: o valor anterior é o vigente na transação, não o lido antes (edições concorrentes)', () => {
-  const ctx = { rede: 'rede', hospital: 'aa' };
+  const ctx = {
+    cliente: 'memoria',
+    estabelecimento: null,
+    usuario: null,
+    correlacao: 'teste-w0-09',
+    rede: 'rede',
+    hospital: 'aa',
+  };
   /** Simula a leitura feita antes da gravação de outro operador: a porta devolve a cópia velha fora da transação. */
   function leituraVelha<K extends 'pedido' | 'agendamento'>(metodo: K, id: string) {
     const original = porta[metodo].bind(porta) as (c: typeof ctx, i: string) => Promise<unknown>;

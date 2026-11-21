@@ -1,131 +1,73 @@
 {
-  "lote": "02-03",
-  "registrar": [
-    "consultas",
-    "contratualizacao",
-    "custos"
-  ],
-  "fecho_tsconfig": [
-    "src/modulos/consultas/consultas.controller.ts",
-    "src/modulos/consultas/consultas.spec.ts",
-    "src/modulos/consultas/declaracao.ts",
-    "src/modulos/consultas/fonte-propria.int.spec.ts",
-    "src/modulos/consultas/fonte-propria.ts",
-    "src/modulos/consultas/fonte.ts",
-    "src/modulos/consultas/modulo.ts",
-    "src/modulos/consultas/tabelas.gerado.ts",
-    "src/modulos/contratualizacao/contratualizacao.controller.ts",
-    "src/modulos/contratualizacao/contratualizacao.spec.ts",
-    "src/modulos/contratualizacao/modulo.ts",
-    "src/modulos/contratualizacao/porta-memoria.ts",
-    "src/modulos/contratualizacao/porta-propria.int.spec.ts",
-    "src/modulos/contratualizacao/porta-propria.ts",
-    "src/modulos/contratualizacao/porta.ts",
-    "src/modulos/contratualizacao/public-api.ts",
-    "src/modulos/contratualizacao/vocabulario.ts",
-    "src/modulos/custos/apuracao-http.spec.ts",
-    "src/modulos/custos/apuracao.controller.ts",
-    "src/modulos/custos/custos-http.spec.ts",
-    "src/modulos/custos/custos.controller.ts",
-    "src/modulos/custos/modulo.ts",
-    "src/modulos/custos/porta-memoria.ts",
-    "src/modulos/custos/porta-propria.int.spec.ts",
-    "src/modulos/custos/porta-propria.ts",
-    "src/modulos/custos/porta.ts",
-    "src/modulos/custos/public-api.ts",
-    "src/modulos/custos/relatorio-custos.spec.ts",
-    "src/modulos/custos/relatorio-custos.ts",
-    "src/modulos/custos/servico-apuracao.ts",
-    "src/modulos/custos/servico.ts",
-    "src/modulos/custos/tipos.ts"
-  ],
-  "pedidos": [
-    {
-      "tipo": "ddl",
-      "alvo": "contrato_gestor_sus",
-      "motivo": "observação do contrato e encerramento com motivo, quem e quando (hoje: observação recusada com modelo-pendente; motivo só na trilha; encerradoPor/Em lidos de alterado_por/em)",
-      "ddl": "ALTER TABLE contrato_gestor_sus ADD observacao VARCHAR(500) NULL, ADD motivo_encerramento VARCHAR(300) NULL, ADD encerrado_em DATETIME(3) NULL, ADD encerrado_por_usuario_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_contrato_gestor_sus_encerramento CHECK (situacao <> 'encerrado' OR (encerrado_em IS NOT NULL AND motivo_encerramento IS NOT NULL)), ADD CONSTRAINT fk_contrato_gestor_sus_encerrado_por_usuario_id FOREIGN KEY (encerrado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "meta_contratual_sus",
-      "motivo": "bloco de financiamento (complexidade da tela) e fonte da aferição sem lugar; formato 'valor inteiro' fora do CHECK (hoje: recusados com modelo-pendente; a aferição exata vai em indicador_contratual_sus.fonte)",
-      "ddl": "ALTER TABLE meta_contratual_sus ADD complexidade_dominio_contratualizacao_sus_id BIGINT UNSIGNED NULL COMMENT 'Bloco de financiamento da meta (lista complexidade)', ADD tipo_afericao_dominio_contratualizacao_sus_id BIGINT UNSIGNED NULL COMMENT 'De onde vem o dado que comprova a meta', DROP CONSTRAINT ck_meta_contratual_sus_formato_resposta, ADD CONSTRAINT ck_meta_contratual_sus_formato_resposta CHECK (formato_resposta IN ('numero','inteiro','percentual','sim_nao') OR formato_resposta IS NULL), ADD CONSTRAINT fk_meta_contratual_sus_complexidade_dominio_contratualizacao_sus_id FOREIGN KEY (complexidade_dominio_contratualizacao_sus_id) REFERENCES dominio_contratualizacao_sus (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_meta_contratual_sus_tipo_afericao_dominio_contratualizacao_sus_id FOREIGN KEY (tipo_afericao_dominio_contratualizacao_sus_id) REFERENCES dominio_contratualizacao_sus (id) ON DELETE RESTRICT;"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "afericao_meta_sus",
-      "motivo": "a origem do realizado (faturamento SUS, contas SUS ou informado) não é gravada (hoje lida como 'informado' na qualitativa e 'faturamento-sus' na quantitativa)",
-      "ddl": "ALTER TABLE afericao_meta_sus ADD origem_realizado VARCHAR(30) NULL, ADD CONSTRAINT ck_afericao_meta_sus_origem_realizado CHECK (origem_realizado IN ('faturamento_sus','contas_sus','informado') OR origem_realizado IS NULL);"
-    },
-    {
-      "tipo": "modelo",
-      "alvo": "producaoContasSus",
-      "motivo": "a produção das contas SUS de convênio precisa do vínculo item faturável (conta_hospitalar_item) × procedimento_sigtap; hoje responde modelo-pendente (o faturamento SUS BPA/AIH funciona)"
-    },
-    {
-      "tipo": "carga",
-      "alvo": "criar_cliente",
-      "motivo": "listas que a tela usa: dominio_contratualizacao_sus (CARGA_DOMINIOS_CONTRATUALIZACAO em contratualizacao/vocabulario.ts, códigos neutros), classificacao_centro_custo (produtivo, auxiliar, administrativo, externo), tipo_dado_estatistico (ESTATISTICAS_CUSTO de @sgh/contratos, código em snake_case: paciente_dia, horas_sala…), tipo_justificativa_exportacao; dominio_sigtap 'modalidade' (01, 02) pelo carregador oficial da SIGTAP. Sem a carga, a gravação responde 503 cadastro-incompleto"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "custos: coleta e estatística",
-      "motivo": "registro da coleta automática e campos da estatística (hoje coleta/fontes = modelo-pendente; observação só na trilha)",
-      "ddl": "CREATE TABLE coleta_estatistica_custo (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, competencia DATE NOT NULL, resumo JSON NOT NULL COMMENT 'Contagens por fonte', linhas INT UNSIGNED NOT NULL DEFAULT 0, duracao_ms INT UNSIGNED NOT NULL DEFAULT 0, coletada_em DATETIME(3) NOT NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, CONSTRAINT ck_coleta_estatistica_custo_competencia CHECK (DAY(competencia) = 1), CONSTRAINT ck_coleta_estatistica_custo_resumo CHECK (JSON_VALID(resumo)), KEY ix_coleta_estatistica_custo_competencia (estabelecimento_id, competencia), CONSTRAINT fk_coleta_estatistica_custo_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT) COMMENT='Coleta automática das estatísticas de custeio da competência'; ALTER TABLE estatistica_centro_mes ADD coleta_estatistica_custo_id BIGINT UNSIGNED NULL, ADD estimada BOOLEAN NOT NULL DEFAULT FALSE, ADD observacao VARCHAR(400) NULL, ADD CONSTRAINT fk_estatistica_centro_mes_coleta_estatistica_custo_id FOREIGN KEY (coleta_estatistica_custo_id) REFERENCES coleta_estatistica_custo (id) ON DELETE RESTRICT;"
-    },
-    {
-      "tipo": "modelo",
-      "alvo": "custos: fontes da coleta e do custeio",
-      "motivo": "decisão de modelo: de onde sai o centro de custo de cada movimento (censo, internação, cirurgia, exame, requisição, colaborador, leito; saídas de estoque, despesas, folha e itens de conta). Proposta: setor_funcional.centro_custo_id (ou centro_custo.setor_funcional_id, que já existe) como regra única; com ela, a porta própria implementa fontes() e fontesCusteio()"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "custos: apuração",
-      "motivo": "a apuração guarda totais, completude, pendências e a impressão (hash) e as linhas por centro com a composição; hoje gravar/aprovar = modelo-pendente e as leituras vêm vazias",
-      "ddl": "ALTER TABLE apuracao_custo ADD rotulo_parcial VARCHAR(120) NULL, ADD limite_linha_centavos BIGINT NOT NULL DEFAULT 0, ADD custo_produtivos DECIMAL(15,2) NOT NULL DEFAULT 0, ADD totais JSON NULL, ADD completude JSON NULL, ADD pendencias JSON NULL, ADD impressao CHAR(64) NULL COMMENT 'SHA-256 da forma canônica', ADD justificativa VARCHAR(500) NULL, ADD duracao_ms INT UNSIGNED NULL, ADD aprovado_em DATETIME(3) NULL, ADD aprovador_usuario_id BIGINT UNSIGNED NULL, ADD substituida_por_apuracao_custo_id BIGINT UNSIGNED NULL; CREATE TABLE apuracao_custo_centro (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, apuracao_custo_id BIGINT UNSIGNED NOT NULL, centro_custo_id BIGINT UNSIGNED NOT NULL, classe VARCHAR(30) NOT NULL, ordem_rateio SMALLINT UNSIGNED NULL, criterio_tipo_dado_estatistico_id BIGINT UNSIGNED NULL, custo_pessoal DECIMAL(15,2) NOT NULL DEFAULT 0, custo_materiais DECIMAL(15,2) NOT NULL DEFAULT 0, custo_despesas DECIMAL(15,2) NOT NULL DEFAULT 0, custo_despesas_gerais DECIMAL(15,2) NOT NULL DEFAULT 0, custo_direto DECIMAL(15,2) NOT NULL DEFAULT 0, custo_recebido DECIMAL(15,2) NOT NULL DEFAULT 0, recebidos JSON NULL, custo_repassado DECIMAL(15,2) NOT NULL DEFAULT 0, custo_nao_rateado DECIMAL(15,2) NOT NULL DEFAULT 0, custo_final DECIMAL(15,2) NOT NULL DEFAULT 0, base_criterio DECIMAL(15,4) NULL, producao_codigo VARCHAR(30) NULL, producao_quantidade DECIMAL(15,4) NULL, custo_unitario DECIMAL(15,4) NULL, valor_receita DECIMAL(15,2) NOT NULL DEFAULT 0, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, UNIQUE KEY uq_apuracao_custo_centro (apuracao_custo_id, centro_custo_id), CONSTRAINT ck_apuracao_custo_centro_classe CHECK (classe IN ('produtivo','auxiliar','administrativo','externo')), CONSTRAINT ck_apuracao_custo_centro_recebidos CHECK (recebidos IS NULL OR JSON_VALID(recebidos))) COMMENT='Linha por centro da apuração do custo do mês'; ALTER TABLE custo_conta_paciente ADD valor_glosa DECIMAL(15,2) NOT NULL DEFAULT 0, ADD valor_recurso DECIMAL(15,2) NOT NULL DEFAULT 0, ADD receita_liquida DECIMAL(15,2) NOT NULL DEFAULT 0, ADD parcelas JSON NULL;"
-    },
-    {
-      "tipo": "contrato-web",
-      "alvo": "@sgh/contratos + apps/web (contratualização)",
-      "motivo": "as listas saem nas chaves antigas (CMPERIODO, CMTPCONTRATO…) só por compatibilidade da tela (CHAVE_RESPOSTA_DOMINIO no controlador): renomear para as listas neutras (periodicidade, esfera…) no contrato e no web; CNES e habilitação do contrato passam a ser só leitura (vêm do cadastro do estabelecimento)"
-    },
-    {
-      "tipo": "contrato-web",
-      "alvo": "matriz de cobertura",
-      "motivo": "matriz.controller.ts (rota administracao/coexistencia/matriz, convivência com o sistema de origem) apagado (ADR 0003): remover MatrizTela.vue e api-matriz.ts do web, PainelMatriz/ATENDIMENTOS_MATRIZ/esquemaPainelMatriz do contrato e a permissão config.matriz.ler"
-    },
-    {
-      "tipo": "teste",
-      "alvo": "config (dono do CRUD genérico)",
-      "motivo": "o describe 'domínios do lote pela HTTP' (inativação 'só no novo', legenda, domínio oficial) saiu do consultas.spec.ts: é do módulo config; avaliar no spec do config sem a semântica de convivência"
-    },
-    {
-      "tipo": "ferramenta",
-      "alvo": "tools/obra/gerar_tabelas_consulta.py",
-      "motivo": "o gerador de consultas/tabelas.gerado.ts está guardado (regenera quando o modelo muda; --conferir sai 1 se o gerado divergir). Hoje: 171 consultas no índice, 23 sem destino, 207 em tabela compartilhada sem discriminador fora do índice (404)"
-    },
-    {
-      "tipo": "modelo",
-      "alvo": "consultas: discriminadores das tabelas compartilhadas",
-      "motivo": "definir, no gerador (DISCRIMINADOR), a coluna e o valor de cada consulta que hoje fica fora do índice: codigo_esocial (128, por tabela_esocial fonte+codigo_oficial), codigo_fiscal_oficial (6), codigo_incidencia_rubrica (6), regra_consistencia_lancamento (6), categoria_trabalhador, compatibilidade_codigo_esocial, fator_risco_ocupacional (4 cada), termo_terminologia (8, por terminologia.codigo das listas ANS), dominio_sus TBASSOCI (1), regra_obrigatoriedade_campo CNS e filiação (2, por campo), retrato da CIAP (código da terminologia CIAP quando o carregador existir) e os pares de 2-3 consultas listados no cabeçalho do gerado"
-    },
-    {
-      "tipo": "carga",
-      "alvo": "criar_cliente: tipo_troca_internacao",
-      "motivo": "as consultas de troca de clínica, especialidade e médico filtram por tipo_troca_internacao.dado_trocado ('clinica','especialidade','profissional_responsavel'); a carga dos tipos precisa existir para as consultas mostrarem linhas"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "centro_custo (classificação do custeio)",
-      "motivo": "a observação da classificação hoje vai só à trilha (antes sobrescrevia centro_custo.observacao, do cadastro) e a versão da classificação é a do centro (alteração do cadastro faz a classificação responder desatualizado)",
-      "ddl": "ALTER TABLE centro_custo ADD observacao_classificacao VARCHAR(500) NULL COMMENT 'Observação da classificação do custeio', ADD versao_classificacao INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Versão da classificação do custeio (trava otimista própria)';"
-    },
-    {
-      "tipo": "ddl",
-      "alvo": "estatistica_centro_mes",
-      "motivo": "o lançamento manual e a coletada coexistem (a manual prevalece); a chave única atual não distingue a origem e, com destino e item nulos, não impede duplicata. Proposta: uma linha vigente por centro × estatística × competência × destino × item × (manual ou coletada)",
-      "ddl": "ALTER TABLE estatistica_centro_mes ADD escopo_destino BIGINT UNSIGNED AS (IFNULL(destino_setor_funcional_id, 0)) PERSISTENT, ADD escopo_item BIGINT UNSIGNED AS (IFNULL(item_faturavel_id, 0)) PERSISTENT, ADD lancamento_manual BOOLEAN AS (forma_coleta = 'manual') PERSISTENT, ADD vigente_marca TINYINT AS (IF(excluido_em IS NULL, 1, NULL)) PERSISTENT, DROP INDEX uq_estatistica_centro_mes_chave, ADD UNIQUE KEY uq_estatistica_centro_mes_chave (centro_custo_id, tipo_dado_estatistico_id, competencia, escopo_destino, escopo_item, lancamento_manual, vigente_marca);"
-    }
-  ]
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/acesso/identidade/identidade.controller.ts",
+  "src/modulos/acesso/identidade/politica-2fa-alteracao.spec.ts",
+  "src/modulos/acesso/identidade/porta-identidade-memoria.ts",
+  "src/modulos/acesso/identidade/porta-identidade-sintetica.spec.ts",
+  "src/modulos/acesso/identidade/porta-identidade-sintetica.ts",
+  "src/modulos/acesso/identidade/servico-identidade.spec.ts",
+  "src/modulos/acesso/identidade/servico-identidade.ts",
+  "src/modulos/acesso/legado-acesso.ts",
+  "src/modulos/acesso/mapa-ciclo.spec.ts",
+  "src/modulos/acesso/pedido-acesso.controller.spec.ts",
+  "src/modulos/acesso/pedido-acesso.controller.ts",
+  "src/modulos/acesso/perfil-parametro-ciclo.spec.ts",
+  "src/modulos/acesso/pin-gestao.controller.ts",
+  "src/modulos/acesso/recertificacao.controller.spec.ts",
+  "src/modulos/acesso/recertificacao.controller.ts",
+  "src/modulos/acesso/identidade/tipos-identidade.ts",
+  "src/modulos/acesso/identidade/porta-identidade-propria.ts",
+  "src/modulos/acesso/identidade/porta-identidade-propria.int.spec.ts",
+  "src/modulos/acesso/leitura-acesso.int.spec.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "politica_segundo_fator",
+   "motivo": "Política do segundo fator por onda (alvo perfil/todos, início, prazo de adesão, encerramento com motivo e anterior visível). Sem ela, incluir/alterar/encerrar a política (POST acesso/identidade/politica-2fa, /onda-1, /:id/alteracao, /:id/encerrar) respondem 409 modelo-pendente. DECISÃO registrada (lote 02-03, achado de revisão): até a tabela existir, a exigência do cadastro do perfil (perfil_acesso.exige_segundo_fator OU privilegiado) vale como ADESÃO SEM PRAZO (origem 'cadastro-perfil': o login entra e leva ao cadastro; o próprio segundo fator não pode ser removido), nunca como obrigatório imediato, porque não há registro de quando a exigência começou nem prazo dado pelo gestor (migrar um perfil marcado trancaria todos os membros sem 2FA). O obrigatório só nasce de uma linha desta tabela, com início e prazo explícitos. Coberto em porta-identidade-propria.int.spec.ts e servico-identidade.spec.ts.",
+   "ddl": "CREATE TABLE politica_segundo_fator (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  alvo VARCHAR(20) NOT NULL,\n  perfil_acesso_id BIGINT UNSIGNED NULL,\n  onda TINYINT UNSIGNED NOT NULL,\n  inicio DATE NOT NULL,\n  prazo_adesao_dias SMALLINT UNSIGNED NOT NULL DEFAULT 0,\n  motivo VARCHAR(500) NOT NULL,\n  encerrada_em DATETIME(3) NULL,\n  encerrada_por BIGINT UNSIGNED NULL,\n  motivo_encerramento VARCHAR(500) NULL,\n  substituida_por_id BIGINT UNSIGNED NULL COMMENT 'Linha nova quando a política foi alterada',\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_politica_segundo_fator_alvo CHECK (alvo IN ('perfil','todos')),\n  CONSTRAINT ck_politica_segundo_fator_alvo_perfil CHECK ((alvo = 'perfil') = (perfil_acesso_id IS NOT NULL)),\n  CONSTRAINT ck_politica_segundo_fator_onda CHECK (onda IN (1,2)),\n  CONSTRAINT ck_politica_segundo_fator_prazo CHECK (prazo_adesao_dias <= 365),\n  CONSTRAINT ck_politica_segundo_fator_encerramento CHECK (encerrada_em IS NULL OR (encerrada_por IS NOT NULL AND motivo_encerramento IS NOT NULL)),\n  CONSTRAINT ck_politica_segundo_fator_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  KEY ix_politica_segundo_fator_estabelecimento (estabelecimento_id, encerrada_em),\n  KEY ix_politica_segundo_fator_perfil (perfil_acesso_id),\n  KEY ix_politica_segundo_fator_substituida (substituida_por_id),\n  KEY ix_politica_segundo_fator_encerrada_por (encerrada_por)\n) COMMENT='Exigência do segundo fator por estabelecimento, em ondas, com início, prazo de adesão e histórico de alteração';\n-- chaves: estabelecimento_id -> estabelecimento(id); perfil_acesso_id -> perfil_acesso(id); encerrada_por -> usuario(id); substituida_por_id -> politica_segundo_fator(id); todas ON DELETE RESTRICT"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "segundo_fator_usuario",
+   "motivo": "O segredo do autenticador (TOTP) é guardado cifrado em envelope AES-256-GCM pela chave mestra do ambiente; o modelo só tem referencia_cofre ('nunca o segredo'). Hoje a porta guarda o envelope em referencia_cofre com o prefixo 'envelope:' (cifrado, nunca em claro) e descarta-o na revogação. Pedido: coluna própria, ou decisão do dono de usar o cofre de segredos.",
+   "ddl": "ALTER TABLE segundo_fator_usuario ADD COLUMN segredo_cifrado VARCHAR(255) NULL COMMENT 'Segredo do autenticador cifrado em envelope (chave mestra do ambiente); nunca em claro' AFTER referencia_cofre, DROP CONSTRAINT ck_segundo_fator_usuario_autenticador, ADD CONSTRAINT ck_segundo_fator_usuario_autenticador CHECK (tipo <> 'aplicativo_autenticador' OR situacao = 'revogado' OR referencia_cofre IS NOT NULL OR segredo_cifrado IS NOT NULL);"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "motivo": "destino 'legado' | 'memoria' (linhas ~503, 746, 846, 942, 1015) -> 'banco' | 'memoria' (e apps/web/src/modulos/acesso/api-gestao.ts). Até lá, pedido-acesso.controller.ts e recertificacao.controller.ts convertem na fronteira (destinoTela); gestao.controller.ts (02-02) tem o mesmo erro de tsc."
+  },
+  {
+   "tipo": "renomear",
+   "motivo": "Nomes herdados fora da lista do lote: dominio-acesso (SenhaLegadoLida, legadoMudouDepoisDaForte, recusaRetiradaSenha({legado}), situação 'legado-*' de SITUACOES_CREDENCIAL), contrato UsuarioIdentidade.senhaLegadoPresente, permissão PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar, sessão grupoLegado e o desfecho { tipo: 'legado' } de GanchoIdentidade (sessao/servico-sessao.ts) -> 'senha anterior'/'fonte'. O arquivo legado-acesso.ts -> leitura-acesso.ts com o import de consulta.controller.ts (02-01) e os campos opcoesLegado/permissoesNovo da GrupoTela."
+  },
+  {
+   "tipo": "testes",
+   "motivo": "Apagados por testarem a cópia do sistema de origem: aplicacao/mensagem.int.spec.ts (mensagem interna: cobrir na int spec da porta própria da comunicação, lote 02-01), mapa-2fa-ciclo.int.spec.ts (mapa de opções do sistema de origem: removido pelo ADR 0003; política 2FA coberta em identidade/porta-identidade-propria.int.spec.ts) e perfil-parametro-ciclo.int.spec.ts (concessão de perfil e parâmetro hierárquico: cobrir na int spec da fonte própria da gestão, lote 02-02). mapa-ciclo, perfil-parametro-ciclo, recertificacao.controller e pedido-acesso.controller (.spec) ficam pulados até 'acesso' entrar em REGISTRO_MODULOS (voltam sozinhos)."
+  },
+  {
+   "tipo": "fiacao",
+   "motivo": "app.module.ts (desmontagem) e aplicacao/rehash-primeiro-login.int.spec.ts (02-04) importam identidade/porta-identidade-legado.ts (apagado) e identidade/contingencia.ts (apagado neste lote): usar new PortaIdentidadePropria(nucleo, cliente) e montar ServicoIdentidade SEM 'contingencia' (a dependência saiu). O provider EXECUTOR_IDENTIDADE e a interface ExecutorIdentidade/ContextoRetiradaSenha deixaram de existir: retirar do app.module/modulo.ts."
+  },
+  {
+   "tipo": "remocao",
+   "motivo": "ADR 0003: a retirada da senha antiga foi removida (rota POST acesso/identidade/usuarios/:login/retirar-senha-antiga, conferirRetirada, contingencia.ts). Fora da lista do lote, remover também: PARAMETRO_CONTINGENCIA_LEGADO e sua definição (packages/contratos/src/coexistencia/desligamento.ts e parametros/definicoes.ts), PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar (packages/contratos/src/permissoes/endurecimento-identidade.ts), recusaRetiradaSenha/MENSAGENS_RECUSA_RETIRADA (dominio-acesso), o campo ResumoIdentidade.contingencia (hoje sempre false) e a chamada/botão em apps/web/src/modulos/acesso/api-identidade.ts e identidade.spec.ts. A credencial não Argon2id volta pela redefinição do gestor (operação já existente na sessão)."
+  },
+  {
+   "tipo": "sessao",
+   "arquivo": "apps/api/src/sessao/servico-sessao.ts",
+   "motivo": "(1) Redefinição pelo gestor (~l.1506, origem 'senha-provisoria'): passar o gestor como 4º argumento de identidade.regravar(alvo, senha, 'senha-provisoria', autorGestor) e acrescentar 'autor?: AtorIdentidadeSessao' em GanchoIdentidade.regravar; a trilha da conversão leva o gestor. (2) Troca de senha (~l.1291) e redefinição: depois de porta.gravar a credencial já é Argon2id e regravar virou no-op (só converte credencial não Argon2id; prova na int spec: versão e trilha intactas); a chamada pode sair (na redefinição, o retorno só serve para trocaObrigatoria: usar true). (3) A conversão no primeiro login (~l.696) só tem efeito na fonte sintética; no banco a credencial não Argon2id recusa no autenticar. Pedido: um desfecho próprio 'redefinicao-obrigatoria' em DesfechoIdentidade com a mensagem 'Sua senha precisa ser redefinida pelo gestor de acessos' (hoje sai 'forte-invalida' = usuário ou senha inválidos, com aviso 'credencial a redefinir pelo gestor' no log, sem dado pessoal)."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/identidade.ts",
+   "motivo": "SITUACOES_CREDENCIAL: as classes 'legado-cifrada/legado-sem-salt/legado-texto-puro' viram uma só 'redefinicao-obrigatoria' (rótulo 'Senha a redefinir pelo gestor'); no banco a porta própria classifica toda credencial não Argon2id como 'legado-cifrada' até lá. Texto da tela da gestão (apps/web i18n-identidade) que diz 'converte no primeiro login' deve dizer 'redefinir'. Politica2fa ganha 'origem' ('politica' | 'cadastro-perfil') para a tela distinguir a exigência do perfil (adesão sem prazo, não editável) das linhas da política por onda (hoje a linha do perfil aparece com prazoAdesaoDias 0)."
+  },
+  {
+   "tipo": "testes",
+   "motivo": "gestao-fonte-propria.int.spec.ts (02-02, aparece na conferência por estar nas pastas do lote) falha: 'expected perfil-ja-concedido to be registro-duplicado' — não é deste lote."
+  }
+ ]
 }

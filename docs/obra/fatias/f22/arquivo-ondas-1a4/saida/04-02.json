@@ -1,0 +1,78 @@
+{
+  "lote": "04-02",
+  "registrar": [
+    "pep"
+  ],
+  "registro_linha": "  pep: () => import('./pep/modulo.js'),",
+  "fecho_tsconfig": [
+    "src/modulos/pep/worklist-porta.ts",
+    "src/modulos/pep/worklist-porta-propria.ts",
+    "src/modulos/pep/worklist-porta-propria.spec.ts",
+    "src/modulos/pep/worklist-porta-propria.int.spec.ts",
+    "src/modulos/pep/worklist-massa.spec-util.ts",
+    "src/modulos/pep/aplicacao/worklist-medico.ts",
+    "src/modulos/pep/aplicacao/worklist-medico.spec.ts",
+    "src/modulos/pep/aplicacao/worklist-medico.autorizacao.int.spec.ts",
+    "src/modulos/pep/worklist.controller.ts",
+    "src/modulos/pep/modulo.ts",
+    "src/modulos/pep/teste.spec-util.ts",
+    "src/modulos/pep/infra/acesso-entre-hospitais.int.spec.ts",
+    "src/modulos/pep/acesso-rede.spec.ts",
+    "src/modulos/pep/documentos-pdf.int.spec.ts",
+    "src/modulos/pep/documentos.spec.ts",
+    "src/modulos/pep/formulario-novo.spec.ts",
+    "src/modulos/pep/prescricao-pdf.int.spec.ts",
+    "src/modulos/pep/prescricao-vinculo.spec.ts",
+    "src/modulos/pep/prescricao.spec.ts",
+    "src/modulos/pep/prontuario-regras.spec.ts",
+    "src/modulos/pep/prontuario.spec.ts",
+    "src/modulos/pep/registro-regras.spec.ts",
+    "src/modulos/pep/registro.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "visualizacao_resultado_exame",
+      "motivo": "A fila do médico (M27, regra 4) conta o resultado como novo até o médico abri-lo; o modelo não registra a visualização. Até a tabela, PortaWorklistPropria devolve vistoPeloMedico=false (o resultado conta como novo até a ciência ou o fim da janela). Depois dela: gravar na abertura do resultado (porta dos documentos) e ler aqui. PENDÊNCIA DO MARCO: o marco não fecha com a pendência 'resultado novo' degradada sem registro no ESTADO/ficha. Depois da tabela: (1) a porta própria dos documentos grava a visualização na abertura do resultado (Executor, trilha); (2) PortaWorklistPropria lê por usuário/profissional da sessão (FiltroWorklist.login); (3) teste de integração prova que o resultado aberto sai da contagem.",
+      "ddl": "CREATE TABLE visualizacao_resultado_exame (\n  id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id   BIGINT UNSIGNED NOT NULL,\n  resultado_exame_id   BIGINT UNSIGNED NOT NULL,\n  paciente_id          BIGINT UNSIGNED NOT NULL COMMENT 'Repetido do resultado para a fila por paciente',\n  usuario_id           BIGINT UNSIGNED NOT NULL COMMENT 'Quem abriu o resultado',\n  profissional_id      BIGINT UNSIGNED NULL COMMENT 'Profissional do usuário, quando houver',\n  visualizado_em       DATETIME(3) NOT NULL COMMENT 'Primeira abertura do resultado por este usuário (UTC)',\n  origem               VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em            DATETIME(3) NOT NULL,\n  criado_por           BIGINT UNSIGNED NULL,\n  alterado_em          DATETIME(3) NULL,\n  alterado_por         BIGINT UNSIGNED NULL,\n  versao               INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_visualizacao_resultado_exame_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_visualizacao_resultado_exame_usuario (resultado_exame_id, usuario_id),\n  KEY ix_visualizacao_resultado_exame_paciente (estabelecimento_id, paciente_id, visualizado_em),\n  KEY ix_visualizacao_resultado_exame_usuario (usuario_id),\n  KEY ix_visualizacao_resultado_exame_profissional (profissional_id)\n) COMMENT='Primeira visualização de um resultado de exame por usuário (pendência \"resultado novo\" da fila do médico)';\nALTER TABLE visualizacao_resultado_exame\n  ADD CONSTRAINT fk_visualizacao_resultado_exame_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_visualizacao_resultado_exame_resultado_exame_id FOREIGN KEY (resultado_exame_id) REFERENCES resultado_exame (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_visualizacao_resultado_exame_paciente_id FOREIGN KEY (paciente_id) REFERENCES paciente (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_visualizacao_resultado_exame_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_visualizacao_resultado_exame_profissional_id FOREIGN KEY (profissional_id) REFERENCES profissional (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "dominio",
+      "descricao": "packages/dominio-pep ResultadoDoPaciente.visualizadoNoOutroSistema é contorno de convivência (ADR 0003): remover o campo; o serviço da fila já passa sempre false."
+    },
+    {
+      "tipo": "public-api",
+      "arquivo": "apps/api/src/modulos/pep/public-api.ts",
+      "descricao": "Exportar PortaWorklistPropria, PortaWorklistMemoria, PORTA_WORKLIST e moduloPep/portasDoPep (arquivo do lote 01-06; não editado aqui)."
+    },
+    {
+      "tipo": "correcao",
+      "arquivo": "apps/api/src/modulos/pep/acesso-rede.ts",
+      "descricao": "tabelaAlvo 'RICADPAC' (nome do sistema de origem; regra 1) não passa no FORMATO_TABELA da trilha própria e vira entidade 'sessao'. Trocar por 'paciente'. Mesmo caso em cadastro/pacientes.controller.ts e prescricao-porta-memoria.ts ('PRPRESC')."
+    },
+    {
+      "tipo": "correcao",
+      "arquivo": "apps/api/src/modulos/carga/carga.controller.ts",
+      "descricao": "Compara worklist.destino !== 'legado' (lote 05-05): o destino agora é 'proprio' | 'memoria' e os tipos mudaram (FiltroWorklist.internacoes, PrevisaoAltaDaFila.internacao, sem visualizadoNoOutroSistema)."
+    },
+    {
+      "tipo": "portas-pendentes",
+      "descricao": "Sem adaptador próprio ainda (indisponíveis com o núcleo, 503): PortaProntuario, PortaDocumentos (painel, resultados, ciência), PortaPrescricao e PortaFormularioNovo. A fila do médico depende do painel da PortaDocumentos para funcionar de ponta a ponta no banco."
+    },
+    {
+      "tipo": "ambiente",
+      "descricao": "S3 local (container sgh-s3, SeaweedFS) recusa PUT de objeto com 500 ('Not enough data nodes found' / 'failed to find writable volumes'): documentos-pdf.int.spec.ts e prescricao-pdf.int.spec.ts falham por isso, fora do código do lote. Precisa de autorização do dono para mexer no container."
+    },
+    {
+      "tipo": "registro-estado",
+      "descricao": "Registrar no docs/ESTADO.md e na ficha do M27 (fechamento F2.2): (a) 'resultado novo' degradado — vistoPeloMedico sempre falso até visualizacao_resultado_exame + gravação na abertura; (b) regra 2 do M27 (vínculo assistencial) e p95 < 1,5 s da fila PENDENTES de prova no banco próprio: worklist-medico.autorizacao.int.spec.ts usa dublê do painel e não conta como evidência; a prova vem com a porta própria dos documentos/painel."
+    },
+    {
+      "tipo": "dominio-pendente",
+      "descricao": "A pendência 'prescrição a renovar' agora usa vencemNoTurno do @sgh/dominio-pep (regra única). Na memória a fila usa PortaPrescricao.vencemAte filtrada, sem conferir a seguinte; quando a PortaPrescricao própria existir, passar a resposta dela pelo mesmo vencemNoTurno."
+    }
+  ],
+  "alteracoes_fora_da_lista": [
+    "apps/api/src/modulos/pep/tipos-pep.ts: PARA_BYTE (tabela inversa CP1252) nunca era preenchida (todo texto fora do ASCII era recusado); loginDaOperacao usa o login do contexto da gravação quando existe (a sessão sintética não tem id numérico). Arquivo do PEP (lote 01-06); nenhum outro lote da onda 4 mexe no pep."
+  ]
+}

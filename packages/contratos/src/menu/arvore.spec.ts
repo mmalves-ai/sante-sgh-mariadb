@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('408 itens: M 189, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 408, M: 189, P: 57, N: 162 });
+  it('407 itens: M 189, P 57, N 161, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 407, M: 189, P: 57, N: 161 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(408);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(407);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -149,7 +149,6 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/administracao/coexistencia/estabelecimentos', // M02
         '/administracao/coexistencia/gravacao', // M04
         '/administracao/coexistencia/matriz', // M14
-        '/administracao/coexistencia/migracao', // M37
         '/administracao/coexistencia/schema', // M02
         '/administracao/empresa', // M10
         '/administracao/integracoes/fachada', // M58 (etapa 4: fachada da API de integração da Hal-AI)
@@ -583,7 +582,6 @@ describe('menu gerado da árvore (regra 12)', () => {
       '/administracao/coexistencia/estabelecimentos',
       '/administracao/coexistencia/gravacao',
       '/administracao/coexistencia/matriz',
-      '/administracao/coexistencia/migracao',
       '/administracao/coexistencia/schema',
       '/administracao/saude',
     ]);

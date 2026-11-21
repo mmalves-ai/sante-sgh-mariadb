@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
-import AvisoIndisponivel from '../../onda0/componentes/AvisoIndisponivel.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
   exportarCenso,
@@ -99,7 +98,6 @@ async function exportarMarcadas(): Promise<void> {
       />
     </div>
     <MensagemErro v-if="erroExportar" :erro="erroExportar" />
-    <AvisoIndisponivel v-if="censo.isError.value" :erro="censo.error.value" />
     <MensagemErro v-if="censo.isError.value" :erro="censo.error.value" />
     <p v-else-if="censo.isPending.value">{{ t('internacao.comum.carregando') }}</p>
     <template v-else-if="censo.data.value">

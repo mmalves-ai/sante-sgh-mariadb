@@ -8,7 +8,6 @@ import { useI18n } from 'vue-i18n';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import BarraSuperior from './BarraSuperior.vue';
 import FaixaComo from './FaixaComo.vue';
-import AbrirChamadoDialogo from './AbrirChamadoDialogo.vue';
 import NotificarIncidenteDialogo from './notificar/NotificarIncidenteDialogo.vue';
 import { usarBotaoNotificar } from './notificar/botao-notificar.js';
 import FaixaTreino from './FaixaTreino.vue';
@@ -26,20 +25,18 @@ import PaletaComandos from './busca/PaletaComandos.vue';
 import { provedores } from './busca/paleta.js';
 import { itensVisiveis } from './menu/filtro-menu.js';
 import { usarPreferencias } from './preferencias/preferencias.js';
-import { telaFechadaPelaChave, usarSessao, usarTrocaDeEstabelecimento } from './sessao/sessao.js';
+import { usarSessao, usarTrocaDeEstabelecimento } from './sessao/sessao.js';
 import NaoEncontradaTela from '../modulos/acesso/telas/NaoEncontradaTela.vue';
 
 const PERMISSAO_EDITAR_PREFERENCIAS = 'acesso.preferencia.editar';
 const props = defineProps<{ pacote: PacoteMarca; produto: string; treino?: boolean }>();
-// M37: o diálogo "Abrir chamado" (menu do usuário).
-const chamadoAberto = ref(false);
 // M48 (etapa 1): o diálogo global "Notificar incidente" (barra superior e paleta).
 const notificarAberto = ref(false);
 const podeNotificar = usarBotaoNotificar();
 const { t } = useI18n();
 const roteador = useRouter();
 const rota = useRoute();
-const { consulta, sessao, permissoes, telasDesligadas, telasCarregando } = usarSessao();
+const { consulta, sessao, permissoes } = usarSessao();
 const troca = usarTrocaDeEstabelecimento();
 const preferencias = usarPreferencias();
 const bloqueio = usarBloqueio();
@@ -64,13 +61,7 @@ const rotaPermitida = computed(() => {
   // do servidor (403 recurso-desligado); só o menu e a paleta escondem o destino.
   const tem = sessao.value?.permissoes ?? [];
   const alguma = [exigida, ...(rota.meta.permissaoOu ?? [])].some((p) => !!p && tem.includes(p));
-  return !!exigida && alguma && !fechadaPelaChaveDeTela.value;
-});
-// M38: as telas sob chave de tela da onda 0 fecham na casca (o servidor também recusa a leitura: GuardaChaveDeTela);
-// sem a resposta das telas, fechadas (falha fechada), com "carregando" enquanto ela não chega.
-const fechadaPelaChaveDeTela = computed(() => {
-  const exigida = rota.meta.permissao;
-  return !!exigida && telaFechadaPelaChave(exigida, telasDesligadas.value);
+  return !!exigida && alguma;
 });
 
 // Sem sessão (401) numa tela protegida, inclusive quando a sessão expira no meio do uso: vai para a porta
@@ -341,10 +332,8 @@ const carregando = computed(() => consulta.isPending.value);
         @abrir-paleta="paletaAberta = true"
         @alternar-menu="menuAberto = !menuAberto"
         @trocar="trocar"
-        @abrir-chamado="chamadoAberto = true"
         @notificar-incidente="notificarAberto = true"
       />
-      <AbrirChamadoDialogo v-if="sessao" v-model:visivel="chamadoAberto" />
       <NotificarIncidenteDialogo v-if="sessao && podeNotificar" v-model:visivel="notificarAberto" />
       <div class="casca__corpo">
         <MenuLateral :aberto="menuAberto" class="sgh-nao-imprimir" @navegou="menuAberto = false" />
@@ -363,8 +352,7 @@ const carregando = computed(() => consulta.isPending.value);
             </div>
             <!-- A troca de estabelecimento remonta a tela: tudo é relido do banco novo (regra 13). -->
             <RouterView v-if="rotaPermitida" :key="sessao?.estabelecimentoAtivo ?? ''" />
-            <p v-else-if="fechadaPelaChaveDeTela && telasCarregando">{{ t('casca.carregandoSessao') }}</p>
-            <NaoEncontradaTela v-else :motivo="fechadaPelaChaveDeTela ? 'onda0' : 'sem-permissao'" />
+            <NaoEncontradaTela v-else motivo="sem-permissao" />
           </template>
         </main>
       </div>

@@ -1,5 +1,5 @@
 // SADT: laboratório, imagem, métodos gráficos, endoscopia, laudos e a administração do portal (M26; ficha, seções 4,
-// 7 e 8). Telas de trabalho sobre os mesmos exames do outro sistema:
+// 7 e 8). Telas de trabalho sobre os exames do banco próprio:
 //   GET  /api/sadt/gravacao                          funcionalidades por setor, cada ação e a habilitação da sessão
 //   GET  /api/sadt/apoio?setor                       prestadores, exames, kits, recipientes, convênios, motivos
 //   GET  /api/sadt/exames?setor&data&situacao&urgentes&unidade&termo   exames do setor (auditado: lista com nomes)
@@ -13,7 +13,7 @@
 //   POST /api/sadt/requisicoes/:reg/protocolo        o protocolo do portal do paciente (o código sai uma vez)
 //   GET  /api/sadt/orcamentos?inicio&fim&termo       orçamentos; POST criar; POST :id/converter
 //   GET  /api/sadt/coleta?data&unidade&de&ate        lista de coleta por paciente e tubo (unidade e janela)
-//   POST /api/sadt/coleta                            a amostra coletada (SGH_) e a etiqueta ZPL na fila da estação
+//   POST /api/sadt/coleta                            a amostra coletada e a etiqueta ZPL na fila da estação
 //   GET  /api/sadt/mapa-trabalho?setor&data          mapa de trabalho por bancada
 //   GET  /api/sadt/amostras?data&estado; GET amostras/codigo/:codigo; POST amostras/:id/estado
 //   GET  /api/sadt/resultados/:id/digitacao          a digitação (referência do dia do exame, críticos, modelos)
@@ -112,7 +112,15 @@ import {
   type RespostaEventosAtendimento,
 } from '../atendimento/avisos.js';
 import { ApoiosSadt } from './aplicacao/apoios.js';
-import { ServicoSadt } from './aplicacao/servico.js';
+import {
+  ServicoSadt,
+  TABELA_AMOSTRA,
+  TABELA_AVISO,
+  TABELA_CONTA_MEDICO_PORTAL,
+  TABELA_EXAME,
+  TABELA_LAUDO,
+  TABELA_ORCAMENTO,
+} from './aplicacao/servico.js';
 import { VigiaCriticos } from './aplicacao/vigia-criticos.js';
 import { type ContextoSadt, PORTA_SADT, type PortaSadt } from './porta.js';
 
@@ -132,7 +140,7 @@ const setorOu = (v: string | undefined): SetorSadt | undefined => {
     throw new ErroProblema('entrada-invalida', 400, 'Setor inválido', 'Escolha um setor do diagnóstico.');
   return v as SetorSadt;
 };
-/** ID do exame (DOUBLE PRECISION no outro sistema: inteiro seguro). */
+/** Id do exame (inteiro positivo). */
 const idExame = (v: string): number => {
   if (!/^\d{1,15}$/.test(v) || Number(v) <= 0)
     throw new ErroProblema('nao-encontrado', 404, 'Exame não encontrado');
@@ -250,7 +258,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
       ...(f.unidade ? { unidade: f.unidade } : {}),
       ...(f.termo ? { termo: f.termo } : {}),
     });
-    req.sghAlvo = { tabelaAlvo: 'SILANEXA', idAlvo: `lista ${data}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_EXAME, idAlvo: `lista ${data}` };
     return { data, ...r };
   }
 
@@ -261,7 +269,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const e = await this.porta.exame(ctx(sessaoDe(req)), idExame(id));
     if (!e) throw new ErroProblema('nao-encontrado', 404, 'Exame não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'SILANEXA',
+      tabelaAlvo: TABELA_EXAME,
       idAlvo: String(e.id),
       ...(e.paciente.id ? { paciente: e.paciente.id } : {}),
     };
@@ -292,7 +300,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const a = await this.porta.atendimento(ctx(sessaoDe(req)), idDaRota(id));
     if (!a) throw new ErroProblema('nao-encontrado', 404, 'Atendimento não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'ATCABECATEND',
+      tabelaAlvo: 'atendimento',
       idAlvo: String(a.atendimento),
       ...(a.paciente.id ? { paciente: a.paciente.id } : {}),
     };
@@ -306,7 +314,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const n = inteiroOuNulo(numero);
     if (!n)
       throw new ErroProblema('entrada-invalida', 400, 'Número inválido', 'Informe o número do atendimento.');
-    req.sghAlvo = { tabelaAlvo: 'ATCABECATEND', idAlvo: `busca ${n}` };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', idAlvo: `busca ${n}` };
     return this.porta.atendimentosPorNumero(ctx(sessaoDe(req)), n);
   }
 
@@ -321,7 +329,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   ): Promise<ListaRequisicoes> {
     const s = sessaoDe(req);
     const data = dataIso(q['data'], await this.hoje(s));
-    req.sghAlvo = { tabelaAlvo: 'SICADATE', idAlvo: `lista ${data}` };
+    req.sghAlvo = { tabelaAlvo: 'requisicao_exame', idAlvo: `lista ${data}` };
     return {
       data,
       ...(await this.porta.requisicoes(ctx(s), {
@@ -342,7 +350,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Post('requisicoes/:reg/protocolo')
   @HttpCode(200)
   @Permissao('sadt.requisicao.criar')
-  @AuditadoNoHandler('o protocolo do portal (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o protocolo do portal com a trilha_auditoria na mesma transação')
   protocolo(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada) {
     return this.servico.protocolo(sessaoDe(req), idDaRota(reg));
   }
@@ -359,7 +367,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const validadeDias = (await this.apoios.orcamento.parametro(s, 'sadt.validadeOrcamentoDias')) || 30;
     const inicio = dataIso(q['inicio'], `${Number(hoje.slice(0, 4)) - 1}${hoje.slice(4)}`);
     // Lista com nomes e exames de pacientes: trilha de leitura, como as demais listas do diagnóstico.
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_ORCAMENTO', idAlvo: `lista ${inicio}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_ORCAMENTO, idAlvo: `lista ${inicio}` };
     return this.porta.orcamentos(ctx(s), {
       inicio,
       fim: dataIso(q['fim'], hoje),
@@ -372,7 +380,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Post('orcamentos')
   @HttpCode(200)
   @Permissao('sadt.orcamento.criar')
-  @AuditadoNoHandler('sadt.criarOrcamento pelo executor (trilha e SGH_SADT_ORCAMENTO na mesma transação)')
+  @AuditadoNoHandler('sadt.criarOrcamento pelo executor (trilha e orcamento_particular na mesma transação)')
   criarOrcamento(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSadt> {
     return this.servico.criarOrcamento(sessaoDe(req), corpo(esquemaCriarOrcamento, b));
   }
@@ -380,7 +388,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Post('orcamentos/:id/converter')
   @HttpCode(200)
   @Permissao('sadt.orcamento.converter')
-  @AuditadoNoHandler('sadt.lancarExame pelo executor e a conversão (SGH_) com a SGH_TRILHA')
+  @AuditadoNoHandler('sadt.lancarExame pelo executor e a conversão com a trilha_auditoria')
   converter(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -403,7 +411,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const hora = (v: string | undefined) => (v && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null);
     const deHora = hora(q['de']);
     const ateHora = hora(q['ate']);
-    req.sghAlvo = { tabelaAlvo: 'SILANEXA', idAlvo: `coleta ${data}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_EXAME, idAlvo: `coleta ${data}` };
     const r = await this.porta.coleta(ctx(s), {
       inicio: data,
       fim: data,
@@ -417,7 +425,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Post('coleta')
   @HttpCode(200)
   @Permissao('sadt.amostra.coletar')
-  @AuditadoNoHandler('a amostra coletada (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a amostra coletada com a trilha_auditoria na mesma transação')
   coletar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ColetaRegistrada> {
     return this.servico.coletar(sessaoDe(req), corpo(esquemaColetarAmostra, b));
   }
@@ -429,7 +437,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const s = sessaoDe(req);
     const data = dataIso(q['data'], await this.hoje(s));
     const setor = setorOu(q['setor']) ?? 'laboratorio';
-    req.sghAlvo = { tabelaAlvo: 'SILANEXA', idAlvo: `mapa ${data}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_EXAME, idAlvo: `mapa ${data}` };
     return { setor, ...(await this.porta.mapa(ctx(s), { setor, inicio: data, fim: data })) };
   }
 
@@ -445,7 +453,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const estado = q['estado'];
     if (estado && !(CODIGOS_ESTADO_AMOSTRA as readonly string[]).includes(estado))
       throw new ErroProblema('entrada-invalida', 400, 'Estado inválido');
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_AMOSTRA', idAlvo: `lista ${data}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_AMOSTRA, idAlvo: `lista ${data}` };
     return this.porta.amostras(ctx(s), { data, ...(estado ? { estado: estado as EstadoAmostra } : {}) });
   }
 
@@ -467,7 +475,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
         'O código lido não é de uma amostra deste estabelecimento.',
       );
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_SADT_AMOSTRA',
+      tabelaAlvo: TABELA_AMOSTRA,
       idAlvo: String(a.id),
       ...(a.paciente.id ? { paciente: a.paciente.id } : {}),
     };
@@ -478,7 +486,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(200)
   @Permissao('sadt.amostra.ler')
   @AuditadoNoHandler(
-    'a passagem de estado da amostra (SGH_) com a SGH_TRILHA; a permissão de agir é conferida no serviço',
+    'a passagem de estado da amostra com a trilha_auditoria; a permissão de agir é conferida no serviço',
   )
   mudarEstado(
     @Param('id') id: string,
@@ -497,7 +505,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const r = await this.porta.digitacao(ctx(sessaoDe(req)), idExame(id));
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Exame não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'SIRES01',
+      tabelaAlvo: 'resultado_exame',
       idAlvo: String(r.exame.id),
       ...(r.exame.paciente.id ? { paciente: r.exame.paciente.id } : {}),
     };
@@ -533,7 +541,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
       fim: dataIso(q['fim'], hoje),
       ...(q['setor'] ? { setor: q['setor'] } : {}),
     });
-    req.sghAlvo = { tabelaAlvo: 'SIRES01', idAlvo: `liberacao ${f.inicio}` };
+    req.sghAlvo = { tabelaAlvo: 'resultado_exame', idAlvo: `liberacao ${f.inicio}` };
     return this.porta.filaLiberacao(ctx(s), f);
   }
 
@@ -544,7 +552,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const r = await this.porta.conferencia(ctx(sessaoDe(req)), idExame(id));
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Exame não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'SIRES01',
+      tabelaAlvo: 'resultado_exame',
       idAlvo: String(r.exame.id),
       ...(r.exame.paciente.id ? { paciente: r.exame.paciente.id } : {}),
     };
@@ -612,14 +620,14 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
       inicio: dataIso(q['inicio'], hoje),
       fim: dataIso(q['fim'], hoje),
     });
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_AVISO_CRITICO', idAlvo: `painel ${f.inicio}` };
+    req.sghAlvo = { tabelaAlvo: TABELA_AVISO, idAlvo: `painel ${f.inicio}` };
     return this.servico.painelCriticos(s, f);
   }
 
   @Post('criticos/:id/comunicar')
   @HttpCode(200)
   @Permissao('sadt.avisoCritico.comunicar')
-  @AuditadoNoHandler('a comunicação do aviso (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a comunicação do aviso com a trilha_auditoria na mesma transação')
   comunicar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -645,7 +653,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Post('valores-criticos')
   @HttpCode(200)
   @Permissao('sadt.valorCritico.editar')
-  @AuditadoNoHandler('a faixa crítica (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a faixa crítica com a trilha_auditoria na mesma transação')
   gravarValorCritico(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSadt> {
     return this.servico.gravarValorCritico(sessaoDe(req), corpo(esquemaValorCritico, b));
   }
@@ -657,7 +665,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
   async laudos(@Query('exame') exame: string | undefined, @Req() req: RequisicaoAutorizada) {
     const id = idExame(exame ?? '');
-    req.sghAlvo = { tabelaAlvo: 'SIASSLAUDO_IMPRESSAO', idAlvo: String(id) };
+    req.sghAlvo = { tabelaAlvo: TABELA_LAUDO, idAlvo: String(id) };
     return this.porta.laudosDoExame(ctx(sessaoDe(req)), id);
   }
 
@@ -667,7 +675,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
   async laudoPorCodigo(@Param('codigo') codigo: string, @Req() req: RequisicaoAutorizada) {
     const c = String(codigo ?? '').slice(0, 40);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_LAUDO_EMITIDO', idAlvo: c };
+    req.sghAlvo = { tabelaAlvo: TABELA_LAUDO, idAlvo: c };
     return this.porta.validarLaudo(ctx(sessaoDe(req)), c);
   }
 
@@ -675,7 +683,7 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(200)
   @Permissao('sadt.laudo.imprimir')
   @AuditadoNoHandler(
-    'sadt.emitirLaudo pelo executor; a 2ª via (SGH_) com a SGH_TRILHA; o PDF/A no registro de emissões',
+    'a emissão do laudo (1ª ou 2ª via) com a trilha_auditoria; o PDF/A no registro de emissões',
   )
   emitirLaudo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<LaudoEmitido> {
     const e = corpo(
@@ -726,14 +734,14 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const s = sessaoDe(req);
     const hoje = await this.hoje(s);
     const desde = new Date(Date.parse(`${hoje}T00:00:00Z`) - 90 * 86_400_000).toISOString().slice(0, 10);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_PORTAL_ACESSO', idAlvo: 'autocadastros' };
+    req.sghAlvo = { tabelaAlvo: TABELA_CONTA_MEDICO_PORTAL, idAlvo: 'autocadastros' };
     return (await this.porta.autocadastros(ctx(s), { desde })).map((a) => ({ ...a }));
   }
 
   @Post('solicitantes/autocadastro/:id')
   @HttpCode(200)
   @Permissao('sadt.solicitanteWeb.aprovar')
-  @AuditadoNoHandler('a decisão do autocadastro (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a decisão do autocadastro com a trilha_auditoria na mesma transação')
   decidir(
     @Param('id') id: string,
     @Body() b: unknown,

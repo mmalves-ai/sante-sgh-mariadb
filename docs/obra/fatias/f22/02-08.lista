@@ -1,24 +1,17 @@
 # lote 02-08 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: faturamento implantacao
-# pastas: apps/api/src/modulos/faturamento apps/api/src/modulos/implantacao apps/api/src/modulos/implantacao/aplicacao
-apps/api/src/modulos/faturamento/apoios.ts
-apps/api/src/modulos/faturamento/faturamento.controller.ts
-apps/api/src/modulos/faturamento/faturamento.spec.ts
-apps/api/src/modulos/faturamento/porta-legado.ts
-apps/api/src/modulos/faturamento/porta-memoria.ts
-apps/api/src/modulos/faturamento/porta.ts
-apps/api/src/modulos/faturamento/public-api.ts
-apps/api/src/modulos/faturamento/servico.ts
-apps/api/src/modulos/implantacao/aplicacao/conferencia.ts
-apps/api/src/modulos/implantacao/aplicacao/fumaca.ts
-apps/api/src/modulos/implantacao/conferencia.controller.ts
-apps/api/src/modulos/implantacao/conferencia.spec.ts
-apps/api/src/modulos/implantacao/filas.ts
-apps/api/src/modulos/implantacao/fumaca.controller.ts
-apps/api/src/modulos/implantacao/fumaca.spec.ts
-apps/api/src/modulos/implantacao/ntp.spec.ts
-apps/api/src/modulos/implantacao/ntp.ts
-apps/api/src/modulos/implantacao/porta-legado.ts
-apps/api/src/modulos/implantacao/porta-memoria.ts
-apps/api/src/modulos/implantacao/porta.ts
-apps/api/src/modulos/implantacao/public-api.ts
+# registrar: -
+# pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
+apps/api/src/modulos/coexistencia/porta-legado.ts
+apps/api/src/modulos/coexistencia/porta-memoria.ts
+apps/api/src/modulos/coexistencia/porta.ts
+apps/api/src/modulos/coexistencia/public-api.ts
+apps/api/src/modulos/coexistencia/aplicacao/registro.ts
+apps/api/src/modulos/coexistencia/registro.int.spec.ts
+apps/api/src/modulos/coexistencia/registro.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/retrocompatibilidade.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.controller.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.int.spec.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/servico.ts
+# entregue no lugar dos 12 arquivos apagados (remoção, ADR 0003 item 9): o verificador da limpeza
+tools/obra/sem-coexistencia.sh

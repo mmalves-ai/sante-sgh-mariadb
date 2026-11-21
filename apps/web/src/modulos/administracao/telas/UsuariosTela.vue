@@ -143,7 +143,6 @@ function limparFiltros(): void {
 }
 const podeCriar = computed(() => pode('acesso.usuario.criar'));
 // M43 (ficha, campo 7): a revisão dos sem grupo e dos logins de painel é da área de usuários (permissões do M10).
-const podeRever = computed(() => pode('acesso.usuario.ler'));
 
 const dialogo = ref(false);
 const novo = ref({ login: '', nomeCompleto: '', grupo: '', cpf: '' });
@@ -250,13 +249,6 @@ function clicarLinha(e: MouseEvent, login: string): void {
       </div>
       <p class="cabecalho__texto">{{ t('adm.usuarios.subtitulo') }}</p>
       <div class="cabecalho__acoes">
-        <RouterLink
-          v-if="podeRever"
-          class="link-discreto"
-          to="/administracao/acesso/usuarios/revisao"
-          data-testid="ir-revisao-usuarios"
-          >{{ t('coexistencia.fim.irRevisao') }}</RouterLink
-        >
         <SanteBotao
           v-if="podeCriar"
           :rotulo="t('adm.usuarios.novo')"

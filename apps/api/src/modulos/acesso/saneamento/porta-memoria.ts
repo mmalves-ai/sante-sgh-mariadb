@@ -1,15 +1,20 @@
 // A porta do saneamento (M59-F4) em memória: unitários e a fonte sintética do dev/ci (nada vai à cópia). Guarda os
 // grupos (com as opções), os usuários sintéticos, o uso das opções e o plano; as regras de situação e do CHECK do banco
-// (ninguém aprova o que propôs nem a si; uma decisão viva por alvo) são as mesmas da gravação SGH_.
+// (ninguém aprova o que propôs nem a si; uma decisão viva por alvo) são as mesmas do banco (CHECK da tabela do plano).
 import { type ItemSaneamento, RESERVA_APLICACAO_MINUTOS } from '@sgh/contratos';
-import type { NovoItemSaneamentoSgh, TrilhaSaneamento, UsuarioGrupoLido } from '@sgh/legado';
-import type { GrupoComOpcoes, PortaSaneamento } from './porta.js';
+import type {
+  DecisaoSaneamentoNova,
+  GrupoComOpcoes,
+  PortaSaneamento,
+  TrilhaSaneamento,
+  UsuarioDoGrupo,
+} from './porta.js';
 
 const VIVAS = new Set(['proposto', 'aprovado', 'falhou']);
 
 export class PortaSaneamentoMemoria implements PortaSaneamento {
   readonly gruposMem = new Map<string, { ativo: boolean; opcoes: Set<number> }>();
-  readonly usuariosMem = new Map<string, UsuarioGrupoLido>();
+  readonly usuariosMem = new Map<string, UsuarioDoGrupo>();
   readonly usoMem = new Map<string, Map<number, number>>();
   readonly itens: ItemSaneamento[] = [];
   readonly trilhas: TrilhaSaneamento[] = [];
@@ -24,14 +29,14 @@ export class PortaSaneamentoMemoria implements PortaSaneamento {
     return this;
   }
 
-  comUsuario(u: UsuarioGrupoLido, uso: Readonly<Record<number, number>> = {}): this {
+  comUsuario(u: UsuarioDoGrupo, uso: Readonly<Record<number, number>> = {}): this {
     this.usuariosMem.set(u.login, u);
     this.usoMem.set(u.login, new Map(Object.entries(uso).map(([k, v]) => [Number(k), v])));
     return this;
   }
 
-  private doGrupo(g: string, u: UsuarioGrupoLido): boolean {
-    return u.grupo === g || (g === 'SEM GRUPO' && u.grupo === null);
+  private doGrupo(g: string, u: UsuarioDoGrupo): boolean {
+    return u.grupo === g;
   }
 
   async pronto(): Promise<boolean> {
@@ -59,7 +64,7 @@ export class PortaSaneamentoMemoria implements PortaSaneamento {
       .sort((a, b) => Number(this.inativo(a)) - Number(this.inativo(b)) || a.login.localeCompare(b.login));
   }
 
-  private inativo(u: UsuarioGrupoLido): boolean {
+  private inativo(u: UsuarioDoGrupo): boolean {
     return !u.ativo || u.bloqueado;
   }
 
@@ -113,8 +118,8 @@ export class PortaSaneamentoMemoria implements PortaSaneamento {
     return new Date(this.relogio()).toISOString();
   }
 
-  async incluir(h: string, n: NovoItemSaneamentoSgh, t: TrilhaSaneamento) {
-    if (n.login !== null && n.criadoPor === n.login) throw new Error('CHECK SGH_CK_ACESSO_SAN_A_SI');
+  async incluir(h: string, n: DecisaoSaneamentoNova, t: TrilhaSaneamento) {
+    if (n.login !== null && n.criadoPor === n.login) throw new Error('CHECK ck_saneamento_acesso_item_a_si');
     for (const i of this.itens)
       if (
         this.hospitalDe.get(i.id) === h &&
@@ -156,7 +161,7 @@ export class PortaSaneamentoMemoria implements PortaSaneamento {
     const i = await this.item(h, a.id);
     if (!i || i.situacao !== 'proposto' || !i.exigeAprovacao) return false;
     if (a.aprovadoPor === i.criadoPor || a.aprovadoPor === i.login)
-      throw new Error('CHECK SGH_CK_ACESSO_SAN_APROVA');
+      throw new Error('CHECK ck_saneamento_acesso_item_aprovador');
     this.trocar(a.id, {
       situacao: 'aprovado',
       aprovacao: { area: a.area, por: a.aprovadoPor, em: this.agoraIso(), motivo: a.motivo },

@@ -83,7 +83,7 @@ onMounted(async () => {
   try {
     eu.value = await buscarEu();
   } catch {
-    await roteador.replace('/plataforma/entrar');
+    await roteador.replace('/entrar');
     return;
   }
   estabelecimentos.value = await estabelecimentosComo().catch(() => []);

@@ -5,7 +5,7 @@
 // emitiu e quando; a coluna de pessoa já chega mascarada quando a sessão não tem a permissão.
 import { crc32 } from 'node:zlib';
 import type { FormatoExportacao, RelatorioCatalogo } from '@sgh/contratos';
-import type { LinhaRelatorio } from '@sgh/legado';
+import type { LinhaRelatorio } from '../tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 
 export type GeradorPdf = (html: string, titulo: string) => Promise<Uint8Array>;

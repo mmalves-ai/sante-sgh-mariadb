@@ -18,7 +18,7 @@ import { ServicoPrescricao } from './prescricao-servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 
 const PERMISSOES = ['pep.antimicrobiano.ler', 'pep.prescricao.ler'];
-const C = { rede: 'rede-teste', hospital: 'aa' };
+const C = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'rede-teste', hospital: 'aa' };
 
 function montar(restricao: boolean) {
   const t = new RegistradorTrilhaMemoria();

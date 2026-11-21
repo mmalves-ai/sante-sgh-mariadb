@@ -3,29 +3,30 @@
 // de origem (a triagem roda sobre ele pelas mesmas regras), agendamentos, execuções e pedidos em memória. Nada vai à
 // cópia. O relatório "lento" sintético estoura o tempo como o driver faria (mensagem em português).
 import type { DestinoTriagem } from '@sgh/contratos';
+import { erroConflitoVersao } from '@sgh/nucleo';
 import { proporTriagem, resumirTriagem } from '@sgh/dominio-relatorio';
 import {
-  type AgendamentoLidoBanco,
+  type AgendamentoRelatorio,
   type AlvoEventoRelatorio,
   ErroRelatorio,
-  type EventoRelatorioLido,
-  type ExecucaoLidaBanco,
+  type RegistroEventoRelatorio,
+  type ExecucaoRelatorio,
   type LinhaRelatorio,
-  type LinhaTrilha,
-  type PedidoLidoBanco,
-  type RelatorioOrigemLido,
-  type TriagemLinha,
+  type PedidoRelatorio,
+  type RelatorioDeOrigem,
+  type ItemTriagem,
   type ValoresDoRelatorio,
   type VinculoRelatorio,
-} from '@sgh/legado';
+} from './tipos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { registrarNaTrilha } from '../../autorizacao/trilha-memoria.js';
-import type { ContextoRelatorio, GravadorSghRelatorio, OpcoesExecucao, PortaRelatorio } from './porta.js';
+import type { ContextoRelatorio, GravadorRelatorio, OpcoesExecucao, PortaRelatorio } from './porta.js';
 
 const PACIENTES = ['Paciente Fictício Um', 'Paciente Fictício Dois', 'Paciente Fictício Três'];
 
 /** Inventário sintético (nomes e módulos como os do editor de origem; nenhum dado de pessoa). */
-const INVENTARIO: readonly RelatorioOrigemLido[] = [
+const INVENTARIO: readonly RelatorioDeOrigem[] = [
   {
     id: 1,
     nome: 'Faturamento mensal anual - valor',
@@ -377,15 +378,20 @@ export function linhasSinteticas(codigo: string, v: ValoresDoRelatorio): LinhaRe
   }
 }
 
+/** Trava otimista da memória: a mesma recusa da porta própria (a versão começa em 1). */
+function conferirVersao(lida: number | undefined, daTela: number | undefined): void {
+  if (daTela !== undefined && (lida ?? 1) !== daTela) throw erroConflitoVersao(['versao']);
+}
+
 export class PortaRelatorioMemoria implements PortaRelatorio {
   readonly destino = 'memoria' as const;
-  /** A trilha da sessão sintética (a gravação SGH_ em memória registra a linha nela). */
+  /** A trilha da sessão sintética (a gravação em memória registra a linha nela). */
   constructor(private readonly trilha: RegistradorTrilha | null = null) {}
-  private readonly triagens = new Map<string, Map<number, TriagemLinha>>();
-  private readonly agendas = new Map<string, AgendamentoLidoBanco & { hospital: string }>();
-  private readonly execs: (ExecucaoLidaBanco & { hospital: string; agendamento?: string | null })[] = [];
-  private readonly peds = new Map<string, PedidoLidoBanco & { hospital: string }>();
-  private readonly eventosRel: (EventoRelatorioLido & {
+  private readonly triagens = new Map<string, Map<number, ItemTriagem>>();
+  private readonly agendas = new Map<string, AgendamentoRelatorio & { hospital: string }>();
+  private readonly execs: (ExecucaoRelatorio & { hospital: string; agendamento?: string | null })[] = [];
+  private readonly peds = new Map<string, PedidoRelatorio & { hospital: string }>();
+  private readonly eventosRel: (RegistroEventoRelatorio & {
     hospital: string;
     alvo: AlvoEventoRelatorio;
     id: string;
@@ -394,7 +400,7 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
   /** Testes: força o estouro do tempo (o driver cancelaria a consulta). */
   lento = false;
 
-  private daTriagem(hospital: string): Map<number, TriagemLinha> {
+  private daTriagem(hospital: string): Map<number, ItemTriagem> {
     let t = this.triagens.get(hospital);
     if (!t) {
       t = new Map(
@@ -458,7 +464,7 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
     return { relatorios: 0, restrito: false, permitido: true };
   }
 
-  async inventario(): Promise<RelatorioOrigemLido[]> {
+  async inventario(): Promise<RelatorioDeOrigem[]> {
     return [...INVENTARIO];
   }
 
@@ -551,7 +557,7 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
     return this.eventosRel.filter((e) => e.hospital === c.hospital && e.alvo === alvo && e.id === id);
   }
 
-  /** As mesmas regras do mapa de packages/legado (dependencias-relatorio.ts), sobre a memória. */
+  /** As mesmas regras do mapa da porta própria, sobre a memória. */
   async dependencias(c: ContextoRelatorio, alvo: 'pedido' | 'agendamento', id: string) {
     const r: VinculoRelatorio[] = [];
     if (alvo === 'agendamento') {
@@ -570,12 +576,12 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
 
   async gravarSgh<T>(
     c: ContextoRelatorio,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorSghRelatorio) => Promise<T>,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorRelatorio) => Promise<T>,
   ) {
     const h = c.hospital;
     const agora = (await this.relogio()).agora;
-    const g: GravadorSghRelatorio = {
+    const g: GravadorRelatorio = {
       gravarPropostas: async (p) => {
         const t = this.daTriagem(h);
         let incluidas = 0;
@@ -613,12 +619,20 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
         const t = this.daTriagem(h);
         const x = t.get(id);
         if (!x) return 0;
+        // A área aceita; a decisão só passa a ser dela se mudar o destino (a mesma regra da porta própria).
+        const mudou =
+          x.decididoEm === null ||
+          x.destino !== d.destino ||
+          x.marco !== d.marco ||
+          x.artefato !== d.artefato;
         t.set(id, {
           ...x,
           ...d,
           situacao: 'confirmada',
-          decididoPor: usuario,
-          decididoEm: agora.toISOString(),
+          decididoPor: mudou ? usuario : x.decididoPor,
+          decididoEm: mudou ? agora.toISOString() : x.decididoEm,
+          aceitoPor: usuario,
+          aceitoEm: agora.toISOString(),
         });
         return 1;
       },
@@ -638,10 +652,11 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
         });
         return id;
       },
-      alterarAgendamento: async (id, a, _u, proximo) => {
+      alterarAgendamento: async (id, a, _u, proximo, versao) => {
         const x = this.agendas.get(`${h}:${id}`);
         if (!x) return 0;
-        this.agendas.set(`${h}:${id}`, { ...x, ...a, proximoEnvio: proximo });
+        conferirVersao(x.versao, versao);
+        this.agendas.set(`${h}:${id}`, { ...x, ...a, proximoEnvio: proximo, versao: (x.versao ?? 1) + 1 });
         return 1;
       },
       registrarResultadoEnvio: async (id, r) => {
@@ -696,11 +711,18 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
         });
         return id;
       },
-      responderPedido: async (id, r, usuario) => {
+      responderPedido: async (id, r, usuario, versao) => {
         const x = this.peds.get(id);
+        if (x && x.hospital === h) conferirVersao(x.versao, versao);
         if (!x || x.hospital !== h || !['aberto', 'em-analise'].includes(x.situacao) || x.canceladoEm)
           return 0;
-        this.peds.set(id, { ...x, ...r, respondidoPor: usuario, respondidoEm: agora });
+        this.peds.set(id, {
+          ...x,
+          ...r,
+          respondidoPor: usuario,
+          respondidoEm: agora,
+          versao: (x.versao ?? 1) + 1,
+        });
         return 1;
       },
       lerPedidoTravado: async (id) => {
@@ -711,17 +733,25 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
         const x = this.agendas.get(`${h}:${id}`);
         return x ? { ...x } : null;
       },
-      alterarPedido: async (id, p) => {
+      alterarPedido: async (id, p, _u, versao) => {
         const x = this.peds.get(id);
+        if (x && x.hospital === h) conferirVersao(x.versao, versao);
         if (!x || x.hospital !== h || x.situacao !== 'aberto' || x.respondidoEm || x.canceladoEm) return 0;
-        this.peds.set(id, { ...x, ...p });
+        this.peds.set(id, { ...x, ...p, versao: (x.versao ?? 1) + 1 });
         return 1;
       },
-      cancelarPedido: async (id, motivo, usuario) => {
+      cancelarPedido: async (id, motivo, usuario, versao) => {
         const x = this.peds.get(id);
+        if (x && x.hospital === h) conferirVersao(x.versao, versao);
         if (!x || x.hospital !== h || !['aberto', 'em-analise'].includes(x.situacao) || x.canceladoEm)
           return 0;
-        this.peds.set(id, { ...x, canceladoEm: agora, canceladoPor: usuario, motivoCancelamento: motivo });
+        this.peds.set(id, {
+          ...x,
+          canceladoEm: agora,
+          canceladoPor: usuario,
+          motivoCancelamento: motivo,
+          versao: (x.versao ?? 1) + 1,
+        });
         return 1;
       },
       excluirPedido: async (id) => {
@@ -751,7 +781,24 @@ export class PortaRelatorioMemoria implements PortaRelatorio {
       },
     };
     const r = await fn(g);
-    await registrarNaTrilha(this.trilha, typeof trilha === 'function' ? trilha(r) : trilha);
+    const l = typeof trilha === 'function' ? trilha(r) : trilha;
+    const d = (l.dadosDepois ?? {}) as Record<string, unknown>;
+    await registrarNaTrilha(
+      this.trilha,
+      typeof d['evento'] === 'string'
+        ? {
+            evento: d['evento'],
+            rede: c.rede,
+            hospital: c.hospital,
+            usuario: String(c.usuario ?? ''),
+            estacao: typeof d['estacao'] === 'string' ? d['estacao'] : null,
+            correlacao: String(d['operacao'] ?? l.correlacao ?? ''),
+            recurso: String(d['recurso'] ?? ''),
+            tabelaAlvo: l.entidade,
+            idAlvo: l.entidadeId === null ? '' : String(l.entidadeId),
+          }
+        : null,
+    );
     return r;
   }
 }

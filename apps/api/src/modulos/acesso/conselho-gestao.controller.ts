@@ -3,7 +3,7 @@
 //                                                                  cada, o efeito nos atos privativos e o histórico
 //   POST /api/acesso/gestao/usuarios/:login/conselho/conferencias   conferência nova (situação, dia da consulta, fonte,
 //                                                                  observação; reautenticação em diálogo)
-// Grava SGH_ACESSO_CONSELHO_CONFER (1211) com a trilha (quem, observação e o valor anterior) na mesma transação SGH_;
+// Grava a conferência do conselho com a trilha (quem, observação e o valor anterior) na mesma transação;
 // a autorização do usuário é recalculada na hora (o bloqueio dos atos privativos segue o parâmetro
 // acesso.conselho.bloqueioAtosPrivativos). Ninguém confere o próprio registro (segregação). A consulta automática ao
 // conselho fica desligada: depende de convênio ou credencial de consulta com cada conselho (dono).
@@ -21,7 +21,7 @@ import {
   PADRAO_CONSELHO,
   type ParametrosConselho,
 } from '@sgh/dominio-acesso';
-import { conferenciasConselhoVigentes, ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { hojeNoEstabelecimento } from '../../autorizacao/conselho.js';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -32,6 +32,7 @@ import { ErroProblema, tipoPorStatus } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from './acesso.controller.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
+import { conferenciasConselhoVigentes } from './historico-vigente.js';
 
 export const MOTIVO_CONSULTA_AUTOMATICA =
   'A consulta automática ao conselho depende do convênio ou da credencial de consulta com cada conselho (dono): até lá, a conferência é feita pela pessoa na fonte e registrada aqui.';
@@ -152,7 +153,7 @@ export class ConselhoGestaoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @AuditadoNoHandler(
-    'SGH_ACESSO_CONSELHO_CONFER e SGH_TRILHA (acesso.conselho.conferido: quem, observação e valor anterior) na mesma transação SGH_ (memória: registrador da API)',
+    'conferência do conselho e trilha (acesso.conselho.conferido: quem, observação e valor anterior) na mesma transação (memória: registrador da API)',
   )
   async conferir(
     @Param('login') login: string,
@@ -162,7 +163,7 @@ export class ConselhoGestaoController {
     id: string;
     anterior: string | null;
     atual: string;
-    destino: 'legado' | 'memoria';
+    destino: 'banco' | 'memoria';
     tela: ConselhoUsuarioTela;
   }> {
     const alvo = this.alvo(login);
@@ -216,7 +217,7 @@ export class ConselhoGestaoController {
     await this.sessoes?.servicoAutorizacao?.invalidar(g.rede, g.hospital, alvo).catch(() => undefined);
     return {
       ...feito,
-      destino: this.fonte.destino,
+      destino: this.fonte.destino === 'memoria' ? 'memoria' : 'banco',
       tela: await this.tela(g.rede, g.hospital, g.login, alvo),
     };
   }

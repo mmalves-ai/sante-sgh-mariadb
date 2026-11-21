@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Domínios na onda 0 (M38, campo 7): a ação de escrita que a permissão deixa e o executor recusaria (`recusadas` da
-// descrição) aparece desabilitada, com o aviso "só consulta nesta etapa"; sem recusa, habilitada e sem aviso.
+// Domínios (M38, campo 7): a ação de escrita que a permissão deixa e o executor recusaria (`recusadas` da descrição)
+// aparece desabilitada, com o aviso de alteração não liberada; sem recusa, habilitada e sem aviso.
 import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
@@ -108,8 +108,8 @@ afterEach(() => {
 const desabilitado = (w: ReturnType<typeof montar>, id: string) =>
   w.get(`[data-testid="${id}"]`).attributes('disabled') !== undefined;
 
-describe('DominioTela na onda 0 (M38)', () => {
-  it('operação não liberada: Incluir, Alterar e Inativar desabilitados, com o aviso de só consulta', async () => {
+describe('DominioTela: escrita recusada pela liberação (M38)', () => {
+  it('operação não liberada: Incluir, Alterar e Inativar desabilitados, com o aviso de alteração não liberada', async () => {
     const motivo = 'Operação ainda não liberada neste estabelecimento.';
     servidor({ criar: motivo, editar: motivo, inativar: motivo });
     const w = montar();
@@ -118,7 +118,7 @@ describe('DominioTela na onda 0 (M38)', () => {
     expect(desabilitado(w, 'botao-incluir')).toBe(true);
     expect(desabilitado(w, 'alterar-1')).toBe(true);
     expect(desabilitado(w, 'inativar-1')).toBe(true);
-    expect(w.get('[data-testid="dominio-escrita-recusada"]').text()).toContain('só de consulta');
+    expect(w.get('[data-testid="dominio-escrita-recusada"]').text()).toContain('não estão liberadas');
   });
 
   it('só a inclusão recusada: ela desabilitada com o motivo; as demais habilitadas', async () => {

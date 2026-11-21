@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 import type { PortaSadt } from '../porta.js';
 import { avisarCriticoNaCentral, avisoDoCritico, type CentralDeAvisos } from './central-critico.js';
 
-const c = { rede: 'sintetica', hospital: 'aa' };
+const c = { cliente: 'teste', estabelecimento: 1, usuario: null, correlacao: 't', rede: 'sintetica', hospital: 'aa' };
 const autor = { login: 'SINT.BIOMEDICO', estacao: 'teste', correlacao: 'c-1' };
 const porta = (login: string | null) =>
-  ({ responsavelDoAtendimento: async () => login }) as unknown as PortaSadt;
+  ({ destinatarioDoCritico: async () => login }) as unknown as PortaSadt;
 
 function central(): CentralDeAvisos & { emitidos: NovoAviso[] } {
   const emitidos: NovoAviso[] = [];
@@ -34,7 +34,7 @@ describe('aviso do valor crítico na central', () => {
       gravidade: 'atencao',
       modulo: 'sadt',
       evento: 'sadt.avisoCritico.emitido',
-      objetoTabela: 'SILANEXA',
+      objetoTabela: 'exame_item',
       objetoChave: '77:9',
       link: '/pep/paciente/1001/resultados',
     });
@@ -42,7 +42,7 @@ describe('aviso do valor crítico na central', () => {
     expect(avisoDoCritico({ login: 'X', exame: 77, liberacao: null, paciente: 1 }).objetoChave).toBe('77');
   });
 
-  it('vai ao médico do atendimento, uma vez por exame e liberação', async () => {
+  it('vai ao solicitante do exame, uma vez por exame e liberação', async () => {
     const k = central();
     const x = { exame: 77, liberacao: 9, paciente: 1001, atendimento: 5 };
     expect(await avisarCriticoNaCentral(k, porta('SINT.MEDICO'), c, autor, x)).toBe(true);
@@ -53,12 +53,12 @@ describe('aviso do valor crítico na central', () => {
     expect(k.emitidos.map((a) => a.login)).toEqual(['SINT.MEDICO', 'SINT.MEDICO']);
   });
 
-  it('sem central, sem atendimento ou sem médico com usuário, nada; a falha da central não lança', async () => {
+  it('sem central, sem paciente ou sem solicitante com usuário, nada; a falha da central não lança', async () => {
     const x = { exame: 77, liberacao: 9, paciente: 1001, atendimento: 5 };
     expect(await avisarCriticoNaCentral(null, porta('SINT.MEDICO'), c, autor, x)).toBe(false);
     const k = central();
     expect(await avisarCriticoNaCentral(k, porta(null), c, autor, x)).toBe(false);
-    expect(await avisarCriticoNaCentral(k, porta('SINT.MEDICO'), c, autor, { ...x, atendimento: null })).toBe(
+    expect(await avisarCriticoNaCentral(k, porta('SINT.MEDICO'), c, autor, { ...x, paciente: null })).toBe(
       false,
     );
     expect(k.emitidos).toHaveLength(0);

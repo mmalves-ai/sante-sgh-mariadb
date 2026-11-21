@@ -26,6 +26,9 @@ import {
 import { RegistroEmissoesMemoria } from '../../documento/infra/registro.js';
 import { ClienteS3 } from '../../documento/infra/s3.js';
 import { PortaDocumentosMemoria } from '../../pep/documentos-porta-memoria.js';
+import { moduloPep } from '../../pep/modulo.js';
+import { REGISTRO_MODULOS } from '../../registro.js';
+import { moduloSadt } from '../modulo.js';
 import { camposDoLaudo } from '../aplicacao/servico.js';
 import { PortaSadtMemoria } from '../porta-memoria.js';
 
@@ -133,6 +136,7 @@ describe('emissão pela API (porta em memória, serviço de emissão do Compose)
   const env: Record<string, string> = {
     ...envTeste,
     AMBIENTE: 'dev',
+    API_MODULOS: 'sadt,pep,documento,acesso,config',
     S3_ENDPOINT: S3,
     GOTENBERG_URL: GOTENBERG,
     S3_BUCKET_DOCUMENTOS: bucket,
@@ -140,11 +144,16 @@ describe('emissão pela API (porta em memória, serviço de emissão do Compose)
   beforeAll(async () => {
     const trilha = new RegistradorTrilhaMemoria();
     const documentos = new PortaDocumentosMemoria(trilha, null);
+    const sadt = new PortaSadtMemoria({ estado: () => 'verde' }, documentos);
     app = await criarApp(lerConfiguracao(env), null, env, {
       trilha,
-      documentos,
-      sadt: new PortaSadtMemoria({ estado: () => 'verde' }, documentos),
-      vigia: null,
+      registro: {
+        sadt: async () => ({ modulo: (ctx) => moduloSadt(ctx, { porta: sadt, estabelecimentos: ['aa'] }) }),
+        pep: async () => ({ modulo: (ctx) => moduloPep(ctx, { documentos }) }),
+        documento: REGISTRO_MODULOS['documento']!,
+        acesso: REGISTRO_MODULOS['acesso']!,
+        config: REGISTRO_MODULOS['config']!,
+      },
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

@@ -9,7 +9,6 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
-import AvisoIndisponivel from '../../onda0/componentes/AvisoIndisponivel.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import { lerPainelGerencial } from '../api-internacao.js';
 import GraficoSerie from '../componentes/GraficoSerie.vue';
@@ -72,7 +71,6 @@ const ultimo = (valores: readonly { valor: number | null; parcial: boolean }[]) 
       <input id="painel-ate" v-model="ate" type="month" min="2020-01" />
       <SanteBotao :rotulo="t('internacao.comum.aplicar')" tipo="submit" />
     </form>
-    <AvisoIndisponivel v-if="dados.isError.value" :erro="dados.error.value" />
     <MensagemErro v-if="dados.isError.value" :erro="dados.error.value" />
     <p v-else-if="dados.isPending.value">{{ t('internacao.comum.carregando') }}</p>
     <template v-else-if="dados.data.value">

@@ -36,7 +36,7 @@ async function enviar(): Promise<void> {
     <h1 id="convite-titulo">{{ t('suporte.conviteTitulo') }}</h1>
     <template v-if="pronto">
       <p role="status" data-testid="convite-pronto">{{ t('suporte.senhaDefinida') }}</p>
-      <RouterLink to="/plataforma/entrar">{{ t('suporte.irEntrar') }}</RouterLink>
+      <RouterLink to="/entrar">{{ t('suporte.irEntrar') }}</RouterLink>
     </template>
     <form v-else class="convite__form" @submit.prevent="enviar">
       <label class="convite__campo">

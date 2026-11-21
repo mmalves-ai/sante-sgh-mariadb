@@ -1,73 +1,143 @@
 {
- "lote": "02-02",
- "registrar": [
-  "catalogos: () => import('./catalogos/modulo.js'),"
- ],
+ "registrar": [],
  "fecho_tsconfig": [
-  "src/modulos/catalogos/catalogos.controller.ts",
-  "src/modulos/catalogos/catalogos.spec.ts",
-  "src/modulos/catalogos/fonte-memoria.ts",
-  "src/modulos/catalogos/fonte.ts",
-  "src/modulos/catalogos/guardar-arquivo.ts",
-  "src/modulos/catalogos/public-api.ts",
-  "src/modulos/catalogos/servico-cache.spec.ts",
-  "src/modulos/catalogos/servico.ts",
-  "src/modulos/config/cache-config.int.spec.ts",
-  "src/modulos/config/dominio.controller.spec.ts",
-  "src/modulos/config/gravacao.spec.ts",
-  "src/modulos/config/guarda-chave-de-tela.ts",
-  "src/modulos/config/homologacao.spec.ts",
-  "src/modulos/config/onda0.spec.ts",
-  "src/modulos/config/prontidao.spec.ts",
-  "src/modulos/catalogos/consultas-proprias.ts",
-  "src/modulos/catalogos/modulo.ts",
-  "src/modulos/catalogos/porta-propria.int.spec.ts",
-  "src/modulos/catalogos/porta-propria.ts",
-  "src/modulos/config/modulo-teste.spec-util.ts",
-  "src/modulos/catalogos/leitura-propria.ts"
- ],
- "apagados": [
-  "apps/api/src/modulos/config/assinaturas.spec.ts",
-  "apps/api/src/modulos/config/coexistencia.spec.ts",
-  "apps/api/src/modulos/config/vigia-reconciliacao.spec.ts",
-  "apps/api/src/modulos/config/dominios-liberacao.spec.ts"
+  "src/modulos/acesso/gestao-tipos.ts",
+  "src/modulos/acesso/gestao-fonte.ts",
+  "src/modulos/acesso/gestao-fonte-propria.ts",
+  "src/modulos/acesso/gestao-fonte-propria.int.spec.ts",
+  "src/modulos/acesso/gestao.controller.ts",
+  "src/modulos/acesso/gestao.spec.ts",
+  "src/modulos/acesso/emergencia.spec.ts",
+  "src/modulos/acesso/emergencia-propria.int.spec.ts",
+  "src/modulos/acesso/aplicacao/copia.spec-util.ts",
+  "src/modulos/acesso/contas-banco/porta.ts",
+  "src/modulos/acesso/contas-banco/porta-memoria.ts",
+  "src/modulos/acesso/contas-banco/porta-propria.ts",
+  "src/modulos/acesso/contas-banco/porta-propria.int.spec.ts",
+  "src/modulos/acesso/contas-banco/servico.ts",
+  "src/modulos/acesso/contas-banco/contas-banco.controller.ts",
+  "src/modulos/acesso/contas-banco/contas-banco.spec.ts",
+  "src/modulos/acesso/contas-banco/partida.ts",
+  "src/modulos/acesso/contas-banco/partida.spec.ts",
+  "src/modulos/acesso/tipos-gestao-acesso.ts",
+  "src/modulos/acesso/estado-sintetico.ts",
+  "src/modulos/acesso/fonte-sintetica.ts",
+  "src/modulos/acesso/rh-memoria.ts",
+  "src/modulos/acesso/pedido-acesso-memoria.ts",
+  "src/modulos/acesso/recertificacao-memoria.ts",
+  "src/modulos/acesso/ultimo-gestor.ts",
+  "src/modulos/acesso/alerta.ts",
+  "src/modulos/acesso/emergencia.controller.ts",
+  "src/modulos/acesso/acesso.controller.ts"
  ],
  "pedidos": [
   {
    "tipo": "ddl",
-   "onde": "db/migracoes/17_INTG (tabelas e chaves)",
-   "motivo": "Área de preparação das cargas de catálogo (carga_catalogo, carga_catalogo_linha) e licença dos catálogos licenciados por estabelecimento (licenca_catalogo, regra 7). Sem elas o painel mostra 'sem cargas', o envio falha e a licença fica fechada. O int.spec cria as tabelas com este DDL no f22_o2 (marcadas '[teste 02-02]') e apaga no fim; depois da migração usa as do banco. DDL completo também em docs/obra/fatias/f22/saida/02-02.sql.",
-   "ddl": "-- Pedido do lote 02-02 (F2.2 onda 2): área de preparação das cargas dos catálogos oficiais (M13) e licença dos\n-- catálogos licenciados (regra 7). Destino proposto: db/migracoes/17_INTG (junto de terminologia e\n-- terminologia_edicao), tabelas e chaves. Convenções do ADR 0002 (parte 2): snake_case, auditoria, versao, CHECK.\n-- O teste de integração do lote (apps/api/src/modulos/catalogos/porta-propria.int.spec.ts) cria estas tabelas no\n-- cliente f22_o2 quando faltam (marcadas no COMMENT com \"[teste 02-02]\") e as apaga no fim; depois da migração, usa as\n-- do banco.\n\nCREATE TABLE carga_catalogo (\n  id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id       BIGINT UNSIGNED NOT NULL,\n  catalogo                 VARCHAR(30) NOT NULL COMMENT 'Código do catálogo oficial na definição do produto (cid, sigtap, cep...)',\n  arquivo_nome             VARCHAR(200) NOT NULL COMMENT 'Nomes dos arquivos enviados, com a codificação lida',\n  arquivo_sha256           CHAR(64) NOT NULL,\n  arquivo_bytes            BIGINT UNSIGNED NOT NULL,\n  arquivo_guardado         VARCHAR(200) NULL COMMENT 'Endereço do original no armazenamento com retenção; nulo: não guardado',\n  situacao                 VARCHAR(20) NOT NULL DEFAULT 'comparada',\n  edicao                   VARCHAR(12) NULL COMMENT 'Competência AAAAMM, versão TISS ou edição do arquivo',\n  total_linhas             INT UNSIGNED NOT NULL DEFAULT 0,\n  linhas_validas           INT UNSIGNED NOT NULL DEFAULT 0,\n  linhas_erro              INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_novos              INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_removidos          INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_alterados          INT UNSIGNED NOT NULL DEFAULT 0,\n  itens_iguais             INT UNSIGNED NOT NULL DEFAULT 0,\n  lotes_total              INT UNSIGNED NOT NULL DEFAULT 0,\n  lotes_publicados         INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Confirmado pelo worker na mesma transação de cada lote',\n  tamanho_lote             INT UNSIGNED NOT NULL DEFAULT 0,\n  motivo                   VARCHAR(500) NULL,\n  aprovada_em              DATETIME(3) NULL,\n  aprovada_por_usuario_id  BIGINT UNSIGNED NULL,\n  encerrada_em             DATETIME(3) NULL COMMENT 'Rejeitada, cancelada ou com falha',\n  encerrada_por_usuario_id BIGINT UNSIGNED NULL,\n  publicada_em             DATETIME(3) NULL,\n  criado_em                DATETIME(3) NOT NULL,\n  criado_por               BIGINT UNSIGNED NULL COMMENT 'Quem enviou a carga',\n  alterado_em              DATETIME(3) NULL,\n  alterado_por             BIGINT UNSIGNED NULL,\n  versao                   INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_carga_catalogo_situacao CHECK (situacao IN ('preparada','validada','comparada','aprovada','publicando','publicada','rejeitada','cancelada','falhou')),\n  CONSTRAINT ck_carga_catalogo_linhas CHECK (linhas_validas + linhas_erro = total_linhas),\n  CONSTRAINT ck_carga_catalogo_lotes CHECK (lotes_publicados <= lotes_total),\n  CONSTRAINT ck_carga_catalogo_sha CHECK (arquivo_sha256 REGEXP '^[0-9a-f]{64}$'),\n  CONSTRAINT ck_carga_catalogo_aprovada CHECK (situacao NOT IN ('aprovada','publicando','publicada') OR aprovada_em IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_aprovador CHECK (situacao NOT IN ('aprovada','publicando','publicada') OR aprovada_por_usuario_id IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_encerrada CHECK (situacao NOT IN ('rejeitada','cancelada','falhou') OR encerrada_em IS NOT NULL),\n  CONSTRAINT ck_carga_catalogo_publicada CHECK (situacao <> 'publicada' OR publicada_em IS NOT NULL),\n  KEY ix_carga_catalogo_estabelecimento (estabelecimento_id, catalogo, situacao),\n  KEY ix_carga_catalogo_sha (estabelecimento_id, catalogo, arquivo_sha256),\n  KEY ix_carga_catalogo_aprovada_por (aprovada_por_usuario_id),\n  KEY ix_carga_catalogo_encerrada_por (encerrada_por_usuario_id)\n) COMMENT='Carga de catálogo oficial: arquivo por hash, situação, totais da comparação, lotes de publicação e decisão';\n\nCREATE TABLE carga_catalogo_linha (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  carga_catalogo_id BIGINT UNSIGNED NOT NULL,\n  linha             INT UNSIGNED NOT NULL COMMENT 'Linha no arquivo (itens removidos: numeração a partir de 9.000.000)',\n  entidade          VARCHAR(40) NOT NULL COMMENT 'Entidade do catálogo na definição do produto',\n  chave             VARCHAR(200) NOT NULL COMMENT 'Chave natural do item (campo=valor;...)',\n  resultado         VARCHAR(10) NOT NULL,\n  comparacao        VARCHAR(10) NULL,\n  valores           JSON NULL COMMENT 'Valores do arquivo (na alteração, só os que mudam)',\n  valores_antes     JSON NULL COMMENT 'Valores que o banco tinha',\n  motivo            VARCHAR(500) NULL,\n  lote              INT UNSIGNED NULL COMMENT 'Lote de publicação do item; nulo: não vai à publicação',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_carga_catalogo_linha_resultado CHECK (resultado IN ('valida','erro')),\n  CONSTRAINT ck_carga_catalogo_linha_comparacao CHECK (comparacao IS NULL OR comparacao IN ('novo','removido','alterado','igual')),\n  CONSTRAINT ck_carga_catalogo_linha_lote CHECK (lote IS NULL OR (lote >= 1 AND resultado = 'valida')),\n  UNIQUE KEY uq_carga_catalogo_linha_linha (carga_catalogo_id, linha),\n  KEY ix_carga_catalogo_linha_lote (carga_catalogo_id, lote),\n  KEY ix_carga_catalogo_linha_comparacao (carga_catalogo_id, comparacao, resultado)\n) COMMENT='Linha preparada da carga de catálogo: entidade, chave natural, valores antes e depois, resultado e lote';\n\nCREATE TABLE licenca_catalogo (\n  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id     BIGINT UNSIGNED NOT NULL,\n  catalogo               VARCHAR(30) NOT NULL COMMENT 'Código do catálogo licenciado (brasindice, simpro...)',\n  numero_contrato        VARCHAR(60) NULL,\n  vigencia_inicio        DATE NOT NULL,\n  vigencia_fim           DATE NULL COMMENT 'Nulo enquanto vigente',\n  comprovante_arquivo_id BIGINT UNSIGNED NOT NULL COMMENT 'Contrato ou nota da licença (regra 7: só entra com a prova)',\n  observacao             VARCHAR(500) NULL,\n  criado_em              DATETIME(3) NOT NULL,\n  criado_por             BIGINT UNSIGNED NULL,\n  alterado_em            DATETIME(3) NULL,\n  alterado_por           BIGINT UNSIGNED NULL,\n  versao                 INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em            DATETIME(3) NULL,\n  excluido_por           BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_licenca_catalogo_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  KEY ix_licenca_catalogo_estabelecimento (estabelecimento_id, catalogo, vigencia_inicio),\n  KEY ix_licenca_catalogo_comprovante (comprovante_arquivo_id)\n) COMMENT='Licença de catálogo licenciado por estabelecimento, com vigência e o comprovante';\n\n-- chaves\nALTER TABLE carga_catalogo\n  ADD CONSTRAINT fk_carga_catalogo_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_carga_catalogo_aprovada_por_usuario_id FOREIGN KEY (aprovada_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_carga_catalogo_encerrada_por_usuario_id FOREIGN KEY (encerrada_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;\nALTER TABLE carga_catalogo_linha\n  ADD CONSTRAINT fk_carga_catalogo_linha_carga_catalogo_id FOREIGN KEY (carga_catalogo_id) REFERENCES carga_catalogo (id) ON DELETE RESTRICT;\nALTER TABLE licenca_catalogo\n  ADD CONSTRAINT fk_licenca_catalogo_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_licenca_catalogo_comprovante_arquivo_id FOREIGN KEY (comprovante_arquivo_id) REFERENCES arquivo (id) ON DELETE RESTRICT;\n"
+   "tabela": "usuario_perfil",
+   "alteracao": "ADD revogado_motivo VARCHAR(500) NULL COMMENT 'Motivo da revogação da concessão'",
+   "motivo": "o motivo da revogação hoje só vai à trilha; historicoPerfis devolve revogadoMotivo null"
   },
   {
-   "tipo": "registro",
-   "onde": "apps/api/src/modulos/registro.ts",
-   "motivo": "Incluir catalogos: () => import('./catalogos/modulo.js') em REGISTRO_MODULOS (ordem alfabética, antes de cadastro). config já está registrado; o config/modulo.ts deste lote agora monta também domínios, onda 0, saúde das conexões, homologação, prontidão e a GuardaChaveDeTela (APP_GUARD)."
+   "tipo": "ddl",
+   "tabela": "usuario_perfil_alteracao",
+   "colunas": "id, usuario_perfil_id FK usuario_perfil, vigencia_inicio_antes DATE NOT NULL, vigencia_fim_antes DATE NULL, motivo_antes VARCHAR(500) NULL, vigencia_inicio DATE NOT NULL, vigencia_fim DATE NULL, motivo VARCHAR(500) NOT NULL, justificativa VARCHAR(500) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); CHECK vigencia_fim >= vigencia_inicio; KEY (usuario_perfil_id)",
+   "indisponivel": "GET /api/acesso/gestao/perfis/:id/alteracoes (alteracoesPerfil responde modelo-pendente); o anterior de cada alteração vai só à trilha"
   },
   {
-   "tipo": "mapa",
-   "onde": "apps/api/src/modulos/catalogos/porta-propria.ts e consultas-proprias.ts",
-   "motivo": "Mapa entidade -> tabela própria da comparação de carga (leitura-propria.ts) feito para cid10, procedimento, cep, municipio e cbo, com os campos que o modelo guarda no vocabulário do contrato (sexo, classificação, complexidade, financiamento, valores, bairro e tipo de logradouro ficam fora da comparação até o modelo os guardar no mesmo vocabulário). Ainda sem mapa (o envio que traz itens delas recusa 409 catalogo-sem-mapa com o motivo): ciap, cidMorfologia, procedimentoCid, procedimentoCbo, ocupacao e os catálogos tuss, listas, fiscal, brasindice, simpro, dominiosSus, ans, agravos e spedContabil. Falta tabela própria para procedimento x CID (rl_procedimento_cid) e para a lista de ocupações do cadastro; procedimento_sigtap_cbo existe e pode ganhar o mapa de par."
+   "tipo": "ddl",
+   "tabela": "politica_senha_versao",
+   "colunas": "id, estabelecimento_id FK, versao INT NOT NULL, tamanho_minimo, exige_maiuscula/minuscula/numero/especial BOOLEAN, validade_dias, reuso_dias SMALLINT NULL, recusa_nome BOOLEAN, recusa_nascimento BOOLEAN, recusa_comuns BOOLEAN, senhas_proibidas JSON NULL, vigente_desde DATETIME(3) NOT NULL, motivo VARCHAR(500) NOT NULL, situacao VARCHAR(20) CHECK IN ('publicada','cancelada'), cancelada_em, cancelada_por, motivo_cancelamento, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); UNIQUE (estabelecimento_id, versao)",
+   "indisponivel": "POST /api/acesso/gestao/politica-senha e /politica-senha/:versao/cancelar (modelo-pendente); a política em vigor segue a de politica_senha, lida pela sessão; a lista de versões vem vazia"
   },
   {
-   "tipo": "worker",
-   "onde": "apps/worker (publicador de catálogos)",
-   "motivo": "A publicação dos lotes aprovados (carga_catalogo situacao aprovada/publicando, lotes_publicados e publicada_em na mesma transação do lote) é do worker e ainda não foi migrada."
+   "tipo": "ddl",
+   "tabela": "limite_sessao_perfil",
+   "colunas": "id, estabelecimento_id FK, perfil_acesso_id FK NULL (nulo: todos os perfis), limite SMALLINT UNSIGNED NULL (nulo: retirado), motivo VARCHAR(500) NOT NULL, vigente_desde DATETIME(3) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); CHECK limite IS NULL OR limite BETWEEN 1 AND 50",
+   "indisponivel": "GET/POST /api/acesso/gestao/limites-sessao (modelo-pendente)"
   },
   {
-   "tipo": "carga",
-   "onde": "tools/db/carregar_acoes.py / fonte sintética de acesso",
-   "motivo": "A sessão sintética não tem as ações dos domínios <modulo>.<recurso>.<acao> (ex.: administracao.dimensaoPriorizacaoGut.ler): o índice HTTP volta vazio. O CRUD é provado no controlador com uma habilidade que concede as ações (dominio.controller.spec)."
+   "tipo": "ddl",
+   "tabela": "excecao_conta_dormente",
+   "colunas": "id, usuario_id FK, estabelecimento_id FK, valida_ate DATE NULL (nulo: retirada), motivo VARCHAR(500) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "registrar exceção das contas dormentes (modelo-pendente); a rotina segue sem exceções"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "conferencia_registro_conselho",
+   "colunas": "id, usuario_id FK, estabelecimento_id FK, registro_profissional_id FK (registro no conselho do cadastro de profissionais), situacao VARCHAR(20) CHECK IN ('ativo','inativo','suspenso','cancelado','nao-localizado'), fonte VARCHAR(20) CHECK IN ('portal-conselho','documento','declaracao','outra'), conferido_em DATETIME(3), valida_ate DATE NULL, observacao VARCHAR(500) NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "registros e conferências do conselho na gestão (modelo-pendente)"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "perfil_cargo_rh e resolucao_tarefa_rh",
+   "colunas": "perfil_cargo_rh: id, estabelecimento_id FK, cargo_id FK (cargo do RH), perfil_acesso_id FK NULL, motivo, vigência, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); resolucao_tarefa_rh: id, estabelecimento_id FK, usuario_id FK, tipo CHECK IN ('criar-acesso','revisar-acesso','suspender-acesso'), referencia (vínculo/mudança/afastamento), decisao, motivo, resolvido_em, resolvido_por, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "painel do RH na gestão de acessos: dadosRh, definirPerfilCargoRh, resolverTarefaRh (modelo-pendente)"
+  },
+  {
+   "tipo": "codigo",
+   "alvo": "pedidos de acesso (pedido_acesso, pedido_acesso_item) e campanhas de recertificação (recertificacao_acesso, recertificacao_acesso_item)",
+   "motivo": "as tabelas existem; o adaptador próprio não coube no lote (situações em dois níveis do pedido e itens da campanha). Respondem 'adaptador-pendente' sem gravar",
+   "indisponivel": "telas de pedido de acesso e de recertificação sobre o banco (na memória seguem)"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "pedido": "ResultadoGestaoTela.destino e o retorno das gravações: 'legado'|'memoria' -> 'banco'|'memoria'; renomear OPERACOES_GESTAO_LEGADO, OperacaoGestaoLegado, esquemaPedidoGestaoLegado para nomes neutros (ex.: OPERACOES_CONTA_GESTAO) e tirar as de grupo; PoliticaSenhaGestaoTela.legado -> base"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/imutabilidade.ts e contas-banco.ts",
+   "pedido": "tabelasClinicas.legado (sempre 0 no banco próprio), TABELAS_CLINICAS_LEGADO e PREFIXOS_SGH_CLINICOS (sem uso), destinos 'servico-legado'/'papel-legado' e o catálogo de contas técnicas do sistema de origem: rever para o MariaDB"
   },
   {
    "tipo": "web",
-   "onde": "apps/web",
-   "motivo": "Rota GET /api/config/gravacao (conferência de gravação do sistema de origem) e a seção 'legado' do painel de parâmetros saíram; o roteiro de homologação e o relatório de prontidão versionados não existem neste repositório (a fonte devolve null)."
+   "pedido": "a tela de gestão chama POST /api/acesso/gestao/operacoes/:operacao (antes /legado/:operacao); as de grupo voltam 409 operacao-desligada com o motivo"
   },
   {
-   "tipo": "sonda",
-   "onde": "apps/api/src/modulos/config/onda0.controller.ts",
-   "motivo": "A sonda painel-leitos depende do módulo da internação (SERVICO_INTERNACAO, CONFIGURACAO_M16): sem ele montado a implantação não fica pronta (onda0.spec prova as outras quatro)."
+   "tipo": "dominio",
+   "arquivo": "packages/dominio-acesso/src/contas/privilegio-minimo.ts e inventario.ts",
+   "pedido": "IDENT do plano aceita só maiúsculas (nomes do banco antigo): aceitar os nomes do banco próprio (minúsculas); conferirContaAplicacao confere SYSDBA: a regra do MariaDB (root) ficou em contas-banco/partida.ts até o domínio absorver"
+  },
+  {
+   "tipo": "plano",
+   "pedido": "plano de privilégio mínimo por módulo sobre o MariaDB (contas por módulo e alcance), injetado em ServicoContasBanco({ plano }); sem ele os desvios respondem 404 'plano ausente'"
+  },
+  {
+   "tipo": "fiacao",
+   "pedido": "no modulo.ts do acesso (lote que registra): FONTE_GESTAO = fonteGestaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao) com núcleo, fonteGestaoMemoria(ctx.trilha) em dev/ci sem núcleo, fonteGestaoIndisponivel() fora; PORTA_CONTAS_BANCO = new PortaContasBancoPropria(ctx.nucleo, cliente, contasSghDoAmbiente(ctx.env)), PortaContasBancoMemoria em dev/ci, portaContasBancoIndisponivel() fora; recusaDasContasDoBanco(env) na partida (main.ts)"
+  },
+  {
+   "tipo": "outros-lotes",
+   "pedido": "FonteGestao.executar recebe ContextoGestao {rede, hospital, usuario (login), correlacao, chaveIdempotencia, estacao?, reautenticadoEm?} no lugar do contexto antigo (traceId, usuarioLegado, idempotencyKey): ajustar rh.controller, recertificacao.controller, usuario-modelo.controller, contas-dormentes-porta e administracao/rede-cpf; tipos renomeados exportados por gestao-fonte.js: UsuarioGestao, PapelUsuario, PapelGestao, ContaDormencia, ContaRecert, CatalogoOperacoes; fonteGestaoLegado saiu; fonteGestaoMemoria(trilha) aceita os dois parâmetros antigos como opcionais; estadoDaReceita/DESLIGADA_DEV_COPIA/NOMES_PAPEL seguem exportados para administracao (02-05) e saem quando ninguém usar"
+  },
+  {
+   "tipo": "desmontagem",
+   "pedido": "app.module.ts importa contas-banco/porta-legado.js (apagado), fonteGestaoLegado (saiu), FONTE_CONFIGURACAO/RAIZES_DESLIGAMENTO no ContasBancoController (saíram) e emNomeDePadrao (o gestao.spec deixou de usar)"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "usuario_perfil",
+   "alteracao": "trocar uq_usuario_perfil_par (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio) por unicidade só entre as não excluídas: coluna gerada ativo_chave TINYINT AS (IF(excluido_em IS NULL, 1, NULL)) STORED e UNIQUE (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, ativo_chave)",
+   "motivo": "hoje a reconcessão no mesmo início de uma concessão revogada reabre a mesma linha (o histórico da revogação fica só na trilha, dados.antes); com a unicidade parcial, a revogada fica como linha própria no histórico"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "pedido": "esquemaAlterarPerfil ganha versao (int positivo, opcional) e a tela da concessão (historicoPerfis) devolve versao: a fonte já confere (409 conflito-versao) quando a versão vem"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/imutabilidade.ts e contas-banco.ts",
+   "pedido": "identBanco aceita só maiúsculas (/^[A-Z].../): aceitar os nomes do banco próprio (minúsculas); o serviço hoje põe a tabela em maiúsculas na resposta. EXCECOES_DELETE_CLINICO lista tabelas SGH_PEP_* do sistema de origem: substituir pelas exceções do modelo próprio (servem ao catálogo das exclusões)"
+  },
+  {
+   "tipo": "nucleo",
+   "pedido": "catálogo das operações com exclusão física: definirOperacao declarar as tabelas que apaga (ex.: exclui: ['horario_agenda']) ou o registro das operações expor quem usa tx.excluir; hoje usam: agenda/porta-propria (horario_agenda), administracao/fonte-propria (usuario_escopo), acesso/comunicacao-porta-propria (dicionario_usuario), patrimonio e relatorio",
+   "indisponivel": "GET /api/administracao/acesso/contas-banco/imutabilidade responde 409 catalogo-pendente enquanto o CATALOGO_EXCLUSOES não for provido no módulo"
+  },
+  {
+   "tipo": "fiacao",
+   "pedido": "no modulo.ts do acesso: provider { provide: CATALOGO_EXCLUSOES (contas-banco/servico.js), useValue: () => CatalogoExclusoes } montado do catálogo acima; sem ele a imutabilidade fica 409 catalogo-pendente"
   }
  ]
 }

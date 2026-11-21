@@ -1,7 +1,10 @@
 // Os fluxos do SADT (ficha do M26, seções 5 a 8) sobre a porta: recebimento, lançamento, digitação, liberação,
 // retificação, coleta e rastreio da amostra, valor crítico, laudo (PDF/A com código e QR), orçamento e requisição. As
-// regras de quem pode vêm do domínio e da sessão (o vínculo nunca vem da tela); as gravações do legado vão pelo
-// executor (apoio do setor, com a liberação da funcionalidade) e as só do novo pela transação SGH_ com a trilha.
+// regras de quem pode vêm do domínio e da sessão (o vínculo nunca vem da tela); as gravações vão pelo executor do
+// núcleo (apoio do setor, com a liberação da funcionalidade) ou pelo gravador da porta, com a trilha na mesma transação.
+// Melhoria: a trilha cita as tabelas do modelo próprio (amostra_biologica, aviso_valor_critico, emissao_laudo...); a
+// emissão do laudo tem um caminho só (a 1ª e a 2ª via gravam a emissão com código, via, hash e exames), sem a
+// gravação condicionada a uma conferência externa nem o aviso de conferência pendente.
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   type AbrirRequisicaoEntrada,
@@ -54,11 +57,15 @@ const naoEncontrado = (detalhe: string): never => {
 };
 const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
 
-export const TABELA_AMOSTRA = 'SGH_SADT_AMOSTRA';
-export const TABELA_AVISO = 'SGH_SADT_AVISO_CRITICO';
-export const TABELA_VALOR_CRITICO = 'SGH_SADT_VALOR_CRITICO';
-export const TABELA_PORTAL = 'SGH_SADT_PORTAL_ACESSO';
-export const TABELA_ORCAMENTO = 'SGH_SADT_ORCAMENTO';
+/** Tabelas do modelo próprio citadas na trilha (entidade da linha de auditoria). */
+export const TABELA_EXAME = 'exame_item';
+export const TABELA_AMOSTRA = 'amostra_biologica';
+export const TABELA_AVISO = 'aviso_valor_critico';
+export const TABELA_VALOR_CRITICO = 'regra_valor_critico';
+export const TABELA_PORTAL = 'acesso_resultado_portal';
+export const TABELA_CONTA_MEDICO_PORTAL = 'conta_portal_profissional_externo';
+export const TABELA_ORCAMENTO = 'orcamento_particular';
+export const TABELA_LAUDO = 'emissao_laudo';
 
 /** O resultado de uma gravação do executor para a tela (mensagem, repetida, ids e avisos). */
 function resultado(
@@ -506,9 +513,8 @@ export class ServicoSadt {
   // ── Laudo ────────────────────────────────────────────────────────────────────────────────────────
 
   /**
-   * A emissão do laudo (regra 11): o PDF/A com o código de autenticação no formato do outro sistema e o QR da
-   * validação pública; a impressão grava nas emissões do outro sistema pela receita (a 1ª via) e a 2ª via, só no novo,
-   * com o motivo.
+   * A emissão do laudo (regra 11): o PDF/A com o código de autenticação e o QR da validação pública; a emissão (1ª
+   * via, ou 2ª via com o motivo) grava o código, a via, o hash e os exames, com a trilha na mesma transação.
    */
   async emitirLaudo(
     s: SessaoCadastro,
@@ -521,6 +527,16 @@ export class ServicoSadt {
         503,
         'Emissão indisponível',
         'O serviço de emissão de documentos não está configurado.',
+      );
+    // A mesma trava que a tela lê em /sadt/gravacao (podeGravar): operação desligada no banco não gera PDF nem grava.
+    const liberada = await this.porta.podeGravar(ctx(s), 'sadt.emitirLaudo');
+    if (!liberada.pode)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Emissão desligada',
+        liberada.motivo ?? 'A emissão do laudo não está liberada neste estabelecimento.',
+        { codigo: liberada.codigo ?? 'operacao-nao-liberada' },
       );
     const exames = await this.porta.examesPorId(ctx(s), e.exames);
     if (exames.length !== e.exames.length) return naoEncontrado('Algum exame do laudo não existe mais.');
@@ -574,44 +590,24 @@ export class ServicoSadt {
       );
     }
     const hash = emitido.emissao.sha256;
-    let impressao = anterior?.impressao ?? 0;
-    const avisos: string[] = [];
-    // A 1ª via grava nas emissões do outro sistema pela receita quando ela está liberada (D-LAUDO-26); senão, e na 2ª
-    // via, o laudo fica só no novo (o código, a via, o hash e os exames), e a tela avisa.
-    const legado =
-      !e.segundaVia &&
-      (await this.porta.podeGravar(ctx(s), 'sadt.emitirLaudo', s.login).catch(() => null))?.pode === true;
-    if (legado) {
-      const r = await apoio.executar(
-        s,
-        'sadt.emitirLaudo',
-        { exames: e.exames, codigo, hashPdf: hash, segundaVia: false },
-        'Laudo emitido.',
-      );
-      impressao = Number(r.resultado['impressao'] ?? 0);
-    } else {
-      if (!e.segundaVia)
-        avisos.push(
-          'A emissão ainda não aparece nas emissões do outro sistema: a gravação lá aguarda a conferência.',
-        );
-      await apoio.sgh(
-        s,
-        EVENTOS_AUDITAVEIS.sadtLaudoEmitido.codigo,
-        'sadt.laudo.imprimir',
-        { tabela: 'SGH_SADT_LAUDO_EMITIDO', id: codigo, paciente: at!.paciente },
-        (g) =>
-          g.registrarLaudoEmitido({
-            impressao,
-            codigo,
-            via: emitido.emissao.via,
-            exames: e.exames.length,
-            hashPdf: hash,
-            motivo: e.segundaVia ? (e.motivoSegundaVia ?? null) : null,
-            usuario: s.login,
-            idsExames: e.exames,
-          }),
-      );
-    }
+    const impressao = anterior?.impressao ?? 0;
+    await apoio.sgh(
+      s,
+      EVENTOS_AUDITAVEIS.sadtLaudoEmitido.codigo,
+      'sadt.laudo.imprimir',
+      { tabela: TABELA_LAUDO, id: codigo, paciente: at!.paciente },
+      (g) =>
+        g.registrarLaudoEmitido({
+          impressao,
+          codigo,
+          via: emitido.emissao.via,
+          exames: e.exames.length,
+          hashPdf: hash,
+          motivo: e.segundaVia ? (e.motivoSegundaVia ?? null) : null,
+          usuario: s.login,
+          idsExames: e.exames,
+        }),
+    );
     this.notificador?.avisar(s.hospital);
     return {
       impressao,
@@ -620,10 +616,7 @@ export class ServicoSadt {
       segundaVia: e.segundaVia,
       pdf: Buffer.from(emitido.pdf).toString('base64'),
       hash,
-      mensagem: [
-        e.segundaVia ? `2ª via do laudo emitida (${codigo}).` : `Laudo emitido (${codigo}).`,
-        ...avisos,
-      ].join(' '),
+      mensagem: e.segundaVia ? `2ª via do laudo emitida (${codigo}).` : `Laudo emitido (${codigo}).`,
     };
   }
 
@@ -669,7 +662,7 @@ export class ServicoSadt {
     await this.apoios.orcamento.exigirLiberacao(s);
     const apoio = await this.porta.apoio(ctx(s), setorDoAto(o.ato) ?? undefined);
     const itens = o.itens.map((i) => {
-      const x = apoio.exames.find((y) => y.ato === o.ato && y.codigo === i.exame);
+      const x = apoio.exames.find((y: { ato: number; codigo: string }) => y.ato === o.ato && y.codigo === i.exame);
       if (!x)
         return recusa(
           'Exame inativo',

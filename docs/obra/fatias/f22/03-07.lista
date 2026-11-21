@@ -1,0 +1,20 @@
+# lote 03-07 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas/folha
+apps/api/src/modulos/pessoas/folha/porta-integracao-memoria.spec.ts
+apps/api/src/modulos/pessoas/folha/porta-integracao-memoria.ts
+apps/api/src/modulos/pessoas/folha/porta-integracao.ts
+apps/api/src/modulos/pessoas/folha/rescisao-http.spec.ts
+apps/api/src/modulos/pessoas/folha/rescisao.controller.ts
+apps/api/src/modulos/pessoas/folha/servico-calculo.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-calculo.ts
+apps/api/src/modulos/pessoas/folha/servico-fechamento.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-fechamento.ts
+apps/api/src/modulos/pessoas/folha/servico-ferias.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-ferias.ts
+apps/api/src/modulos/pessoas/folha/servico-folha.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-folha.ts
+apps/api/src/modulos/pessoas/folha/servico-integracao.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-integracao.ts
+apps/api/src/modulos/pessoas/folha/servico-rescisao.spec.ts
+apps/api/src/modulos/pessoas/folha/servico-rescisao.ts

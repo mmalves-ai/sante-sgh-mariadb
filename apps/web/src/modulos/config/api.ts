@@ -16,12 +16,6 @@ import {
   type RelatorioProntidao,
   esquemaPainelHomologacao,
   type PainelHomologacao,
-  esquemaCartaoPlataforma,
-  type CartaoPlataforma,
-  esquemaResumoEnsaioFirebird5,
-  type ResumoEnsaioFirebird5,
-  esquemaResumoEnsaioUtf8,
-  type ResumoEnsaioUtf8,
 } from '@sgh/contratos';
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
@@ -212,32 +206,3 @@ export function contagemExibida(n: number | null, menorQue5: boolean): string {
   return n === null ? '—' : String(n);
 }
 
-/** M58 (etapa 1): o cartão "Plataforma do banco" do estabelecimento ativo (config.schema.ler). */
-export async function buscarPlataformaBanco(buscar: typeof fetch = fetch): Promise<CartaoPlataforma> {
-  return ler(
-    await buscar('/api/administracao/coexistencia/desligamento/plataforma', {
-      headers: { accept: 'application/json' },
-    }),
-    esquemaCartaoPlataforma,
-  );
-}
-
-/** M58 (etapa 2): o resumo do ensaio da versão 5 do motor na cópia, para o cartão (config.schema.ler). */
-export async function buscarEnsaioFirebird5(buscar: typeof fetch = fetch): Promise<ResumoEnsaioFirebird5> {
-  return ler(
-    await buscar('/api/administracao/coexistencia/desligamento/ensaios/firebird5', {
-      headers: { accept: 'application/json' },
-    }),
-    esquemaResumoEnsaioFirebird5,
-  );
-}
-
-/** M58 (etapa 3): o resumo do ensaio da conversão do texto para UTF-8 na cópia, para o cartão (config.schema.ler). */
-export async function buscarEnsaioUtf8(buscar: typeof fetch = fetch): Promise<ResumoEnsaioUtf8> {
-  return ler(
-    await buscar('/api/administracao/coexistencia/desligamento/ensaios/utf8', {
-      headers: { accept: 'application/json' },
-    }),
-    esquemaResumoEnsaioUtf8,
-  );
-}

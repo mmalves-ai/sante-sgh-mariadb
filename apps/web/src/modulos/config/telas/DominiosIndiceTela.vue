@@ -6,7 +6,6 @@
 import { ARVORE_MENU, SUBITENS_DOMINIOS, type SubitemDominio } from '@sgh/contratos';
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import FaixaOnda0 from '../../onda0/componentes/FaixaOnda0.vue';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -58,7 +57,6 @@ const grupos = computed(() => {
   <section :class="{ tela: !embutido }" :aria-labelledby="embutido ? undefined : 'dominios-titulo'">
     <template v-if="!embutido">
       <h1 id="dominios-titulo">{{ t('dominios.titulo') }}</h1>
-      <FaixaOnda0 tela="dominios" />
       <p>{{ t('dominios.texto') }}</p>
     </template>
     <div v-if="!props.subitem" class="filtros">

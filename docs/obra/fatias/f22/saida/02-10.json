@@ -1,103 +1,97 @@
 {
   "lote": "02-10",
   "registrar": [
-    "operadora"
+    "carga: () => import('./carga/modulo.js'),",
+    "sadt: () => import('./sadt/modulo.js'),"
   ],
   "fecho_tsconfig": [
-    "src/modulos/operadora/apoio-banco.ts",
-    "src/modulos/operadora/vocabulario-banco.ts",
-    "src/modulos/operadora/porta.ts",
-    "src/modulos/operadora/porta-propria.ts",
-    "src/modulos/operadora/porta-memoria.ts",
-    "src/modulos/operadora/rede-porta.ts",
-    "src/modulos/operadora/rede-porta-propria.ts",
-    "src/modulos/operadora/rede-porta-memoria.ts",
-    "src/modulos/operadora/rede-servico.ts",
-    "src/modulos/operadora/rede.controller.ts",
-    "src/modulos/operadora/operadora.controller.ts",
-    "src/modulos/operadora/aplicacao/situacao.ts",
-    "src/modulos/operadora/aplicacao/mensagens.ts",
-    "src/modulos/operadora/portal-prestador-servico.ts",
-    "src/modulos/operadora/portal-prestador-contas.ts",
-    "src/modulos/operadora/portal-prestador.controller.ts",
-    "src/modulos/operadora/public-api.ts",
-    "src/modulos/operadora/modulo.ts",
-    "src/modulos/operadora/infra/copia.spec-util.ts",
-    "src/modulos/operadora/porta-propria.int.spec.ts",
-    "src/modulos/operadora/rede-porta-propria.int.spec.ts",
-    "src/modulos/operadora/infra/escopo-operadora.int.spec.ts",
-    "src/modulos/operadora/infra/liberacao.int.spec.ts",
-    "src/modulos/operadora/infra/segregacao.int.spec.ts",
-    "src/modulos/operadora/operadora.spec.ts",
-    "src/modulos/operadora/rede.spec.ts",
-    "src/modulos/operadora/portal-prestador-contas.spec.ts",
-    "src/modulos/operadora/aplicacao/identidade.ts"
+    "src/modulos/carga/carga.controller.ts",
+    "src/modulos/carga/leituras.ts",
+    "src/modulos/carga/fonte-propria.ts",
+    "src/modulos/carga/modulo.ts",
+    "src/modulos/carga/leituras.int.spec.ts",
+    "src/modulos/sadt/aplicacao/portal.ts",
+    "src/modulos/sadt/aplicacao/portal.autorizacao.int.spec.ts",
+    "src/modulos/sadt/aplicacao/portal.contexto.spec.ts",
+    "src/modulos/sadt/portal.controller.ts",
+    "src/modulos/sadt/public-api.ts",
+    "src/modulos/sadt/sadt.controller.ts",
+    "src/modulos/sadt/sadt.spec.ts",
+    "src/modulos/sadt/aplicacao/servico.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.spec.ts",
+    "src/modulos/sadt/modulo.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.int.spec.ts"
   ],
   "pedidos": [
     {
-      "tipo": "ddl",
-      "tabela": "prestador_rede",
-      "motivo": "modelo de remuneração do contrato da tela (MODELOS_REMUNERACAO 3 orçamentação, 5 DRG, 6 e 7 bundles) sem valor no CHECK; hoje a tela não oferece esses códigos (vocabulario-banco.ts REMUNERACAO).",
-      "ddl": "ALTER TABLE prestador_rede DROP CONSTRAINT ck_prestador_rede_forma_remuneracao, ADD CONSTRAINT ck_prestador_rede_forma_remuneracao CHECK (forma_remuneracao IN ('procedimento','pacote','diaria','capitacao','assalariado','misto','orcamentacao','drg','bundle_episodio','bundle_condicao_clinica'));"
+      "a": "02-09",
+      "o_que": "porta-memoria.ts: o executor em memória passou a usar String(ctx.usuario) como login (usuarioDe); vinculoSintetico(login) não acha o vínculo e sadt.spec.ts falha em 2 casos (liberar e laudar: 409 sem-habilitacao). Usar o login da sessão (ContextoGravacao.login) quando presente."
     },
     {
-      "tipo": "ddl",
-      "tabela": "produto_plano",
-      "motivo": "regra 3 (a operadora é empresa distinta): o produto não tem a operadora dona; hoje a porta atribui o produto à operadora principal do estabelecimento (operadora_saude_estabelecimento), o que não separa duas operadoras no mesmo estabelecimento.",
-      "ddl": "ALTER TABLE produto_plano ADD COLUMN operadora_saude_id BIGINT UNSIGNED NULL COMMENT 'Operadora dona do produto' AFTER estabelecimento_id, ADD KEY ix_produto_plano_operadora_saude_id (operadora_saude_id), ADD CONSTRAINT fk_produto_plano_operadora_saude_id FOREIGN KEY (operadora_saude_id) REFERENCES operadora_saude (id) ON DELETE RESTRICT;"
+      "a": "02-09",
+      "o_que": "porta-propria.ts: o portal inteiro está pendente (acessoPorProtocolo, acessoDoMedico, acessoPorId, autocadastros, laudosPortal*, laudoPortal, criarProtocoloPortal, registrarAutocadastro, decidirAutocadastro, registrarTentativaPortal: 409 modelo-pendente). Tabelas existentes: acesso_resultado_portal, conta_portal_profissional_externo, liberacao_exame (publicado_portal, visualizado_portal_em, visualizado_endereco_ip), exame_restricao_portal. O ServicoPortal (02-10) já opera no contexto do núcleo e grava a trilha com essas tabelas."
     },
     {
-      "tipo": "ddl",
-      "tabela": "produto_plano",
-      "motivo": "cartão de desconto (natureza do produto sem registro de plano na ANS): sem lugar no modelo; a porta recusa com 501 modelo-pendente.",
-      "ddl": "ALTER TABLE produto_plano ADD COLUMN natureza VARCHAR(20) NOT NULL DEFAULT 'plano' AFTER nome, ADD CONSTRAINT ck_produto_plano_natureza CHECK (natureza IN ('plano','cartao_desconto'));"
+      "a": "02-09",
+      "o_que": "central-critico.ts: objetoTabela 'SILANEXA' -> 'exame_item' (TABELA_EXAME de servico.ts)."
     },
     {
-      "tipo": "ddl",
-      "tabela": "prestador_rede_historico",
-      "motivo": "o descredenciamento tem substituto, aviso aos beneficiários e autorização da ANS; hoje vão no retrato JSON (dados) do histórico e são lidos por JSON_VALUE.",
-      "ddl": "ALTER TABLE prestador_rede_historico ADD COLUMN substituto_prestador_rede_id BIGINT UNSIGNED NULL, ADD COLUMN aviso_beneficiarios_em DATE NULL, ADD COLUMN autorizacao_ans VARCHAR(40) NULL, ADD KEY ix_prestador_rede_historico_substituto (substituto_prestador_rede_id), ADD CONSTRAINT fk_prestador_rede_historico_substituto FOREIGN KEY (substituto_prestador_rede_id) REFERENCES prestador_rede (id) ON DELETE RESTRICT;"
+      "a": "integrador",
+      "o_que": "documento/public-api: o campo origem.idLegado de FonteDocumento.emissao (usado em servico.ts emitirLaudo) deve virar origem.id (nome neutro)."
     },
     {
-      "tipo": "ddl",
-      "tabela": "movimento_rede_ans",
-      "motivo": "os campos do registro da ANS mudados na alteração e o motivo da exclusão/reinclusão; hoje no retrato JSON (dados).",
-      "ddl": "ALTER TABLE movimento_rede_ans ADD COLUMN campos_alterados JSON NULL COMMENT 'Campos do registro de prestadores mudados', ADD COLUMN motivo VARCHAR(500) NULL;"
+      "a": "integrador",
+      "o_que": "sadt/modulo.ts entrega CENTRAL_AVISOS_SADT = null: o aviso do crítico ao médico no sino fica indisponível até o módulo de comunicação (ServicoComunicacao) ser registrado e exportar a central; o painel do SADT segue avisando."
     },
     {
-      "tipo": "carga",
-      "alvo": "tools/db/criar_cliente.py",
-      "motivo": "domínios que as portas da operadora resolvem por código (sem a linha, recusa 'dominio-nao-cadastrado'): tipo_prestador_rede (códigos ANS 1-8), natureza_prestador_rede (1-4), regime_atendimento_rede (1-3), situacao_movimento_rede (inclusao, alteracao, exclusao, reinclusao), grupo_prazo_carencia (urgencia_emergencia, parto, outro, doenca_preexistente), faixa_etaria_modelo 'dez_faixas' com os 10 itens da RN 63, segmentacao_assistencial (catálogo da ANS), tipo_acomodacao_plano (1 apartamento, 2 enfermaria, 3 ambulatório), classificacao_plano (uma por tipo de contratação), grau_parentesco_dependente (2-8 do vínculo com o titular), sexo, motivo_movimento_cadastral de exclusão, motivo_solicitacao_cartao. As sequências prestador_rede, contratante_plano e carteirinha_beneficiario a porta garante."
+      "a": "integrador",
+      "o_que": "ESTUDOS_IMAGEM_PEP (o ServicoPacs para o PEP) não é provido pelo módulo sadt: ligar no módulo pep quando os dois estiverem registrados."
     },
     {
-      "tipo": "conector",
-      "alvo": "conector (carga da rede credenciada)",
-      "motivo": "o prestador carregado precisa vir com o regime e o contrato escrito (contrato_rede_prestador): sem eles fica fora da tela e das contagens (SQL_COMPLETO em rede-porta-propria.ts)."
+      "a": "integrador",
+      "o_que": "carga: as jornadas worklist/medico, prescricao/verificar, prescricao/busca, leitos/assinar e leitos/vigia respondem 404 com o motivo (JORNADAS_FORA em carga.controller.ts): medir pelas rotas reais do PEP e da internação com sessão sintética; ajustar infra/k6 (troca-plantao, carga-nominal, prescricao, painel-leitos) para essas rotas."
     },
     {
-      "tipo": "contrato",
-      "alvo": "PortaOperadora e PortaRedeOperadora (lote 02-09 consome)",
-      "motivo": "gravarSgh virou gravar(c, trilha: RegistroTrilhaTela | fn, fn); destino 'legado' virou 'banco'; ContextoOperadora/ContextoRede = ContextoNucleo + rede + hospital; tipos renomeados: OperadoraOpeLida→Operadora, OperadoraSgh→DadosOperadora, ProdutoOpeLido→Produto, ProdutoSgh→DadosProduto, ContratoOpeLido→Contrato, ContratoSgh→DadosContrato, BeneficiarioOpeLido→Beneficiario, BeneficiarioSgh→DadosBeneficiario, Filtro*Sgh→Filtro*, ElegibilidadeOpeLida→Elegibilidade, ViaCarteirinhaLida→ViaCarteirinha, DominiosBeneficiarioLidos→DominiosBeneficiario, GrupoSipLido→GrupoSip, ProcedimentoSipLido→ProcedimentoSip, ClassificacaoAnsLida→ClassificacaoAns; rede: PrestadorLido→Prestador, MovimentoRpsLido→MovimentoRede, ConvenioLido→ConvenioRede, ItemDominioRedeLido→ItemDominioRede, TotaisRedeLidos→TotaisRede, *Sgh→Credenciamento/Alteracao/Descredenciamento/Reinclusao."
+      "a": "integrador",
+      "o_que": "app.module.ts ainda monta CargaController/FONTE_CARGA com a fonte antiga (FonteCarga mudou: cliente, estabelecimento(), lerSomente sobre o núcleo); some na desmontagem."
     },
     {
-      "tipo": "aviso",
-      "alvo": "apps/api/src/modulos/operadora/autorizacao-servico.ts:179 (lote 02-09)",
-      "motivo": "tsc: o tipo próprio do lote 02-09 tem regime number|null onde o contrato pede number; o Prestador da porta da rede tem regime number."
+      "a": "integrador",
+      "o_que": "tsconfig.migrado.json referencia 4 arquivos apagados do config (onda0.ts, onda0.controller.ts, onda0.spec.ts, guarda-chave-de-tela.ts): TS6053 no tsc do migrado."
     },
     {
-      "tipo": "fiacao",
-      "alvo": "modulo.ts (contas ← autorização)",
-      "motivo": "a porta própria das contas pede autorizacoesPorSenha da autorização; enquanto a PortaAutorizacaoOperadoraPropria não a expõe, o módulo passa um adaptador que responde 501 modelo-pendente (buscaPorSenha)."
+      "a": "02-09",
+      "o_que": "porta-propria.ts: implementar avisarCriticos (INSERT em aviso_valor_critico pelo Executor, com resultado_exame_id, resultado_analito_id, paciente_id, gerado_em, prazo_em pela regra do setor, situacao 'pendente'; devolver o número de avisos criados). Hoje responde 409 modelo-pendente (GRAVACOES_PENDENTES): o resultado crítico liberado pela interface do equipamento ou pela autoliberação não ganha aviso no banco. A vigia (02-10) já isola a falha por exame e o vigia-criticos.int.spec.ts passa a exigir a linha do aviso sozinho quando a pendência sair do GRAVACOES_PENDENTES."
     },
     {
-      "tipo": "remocao",
-      "alvo": "infra/rede.int.spec.ts e o teste 'domínios do grupo operadora no CRUD genérico' do operadora.spec.ts",
-      "motivo": "o primeiro lia a cópia pela porta antiga (coberto agora por rede-porta-propria.int.spec.ts no banco); o segundo é do CRUD de domínios do módulo config (FONTE_DOMINIOS), que volta com o lote que o religar."
+      "a": "02-09",
+      "o_que": "porta-propria.ts relogio()/hoje(): devolve a hora local do fuso do estabelecimento, mas os instantes lidos (gerado_em, prazo_em, liberado_em: TIMESTAMP) saem em UTC por instante(). A vigia compara os dois e o escalonamento do valor crítico atrasa o deslocamento do fuso (3 horas em -03:00); a janela de liberadosComCritico também desloca. Medido no f22_o2: aviso gerado às 05:26 UTC, relogio.agora 04:26. Pôr os dois na mesma referência (agora em UTC, ou os instantes no fuso). O vigia-criticos.int.spec.ts usa folga de 8 horas até a correção; com ela, reduzir para 2 horas."
     },
     {
-      "tipo": "aviso",
-      "alvo": "dominiosBeneficiario.diasVencimento",
-      "motivo": "devolve [] (dia de vencimento livre 1-31, conferido pelo contrato da tela e pelo CHECK do banco); não há cadastro de dias permitidos no modelo."
+      "a": "02-09",
+      "o_que": "operacoes.ts: tirar 'sadt.emitirLaudo' de OPERACOES_SADT_PENDENTES. O servico.ts (02-10) passou a respeitar podeGravar('sadt.emitirLaudo') antes de gerar o PDF (a tela e a gravação coerentes); como registrarLaudoEmitido já grava a 1ª e a 2ª via (motivo pelo cadastro motivo_reimpressao), a emissão no banco fica desligada só por essa entrada."
+    },
+    {
+      "a": "02-09",
+      "o_que": "porta.ts (GravadorSghSadt) e porta-memoria.ts: renomear idSilanexa -> exame (avisarCriticos e registrarLeitura) e origem 'outroSistema' -> 'vigia'. O 02-10 troca nos mesmos commits as 2 chamadas (vigia-criticos.ts avisarCriticos, portal.ts registrarLeitura): o tipo é do 02-09 e o 02-10 não pode trocar antes."
     }
+  ],
+  "ddl": [],
+  "apagados": [
+    "src/modulos/sadt/aplicacao/retificar.int.spec.ts (provava a gravação do sistema de origem: SIRES01, gatilho de liberação, SGH_SADT_RESULT_LEITURA); o contrato de efeito da retificação no banco é da porta própria (02-09)"
+  ],
+  "indisponiveis": [
+    "aviso do valor crítico criado no banco: o resultado crítico liberado sem aviso (interface do equipamento, autoliberação) não ganha aviso em aviso_valor_critico enquanto avisarCriticos da porta própria responder 409 modelo-pendente (02-09); a vigia conta o exame e repete no ciclo seguinte, o escalonamento dos avisos existentes segue",
+    "escalonamento do valor crítico no banco atrasa o deslocamento do fuso (3 h em -03:00) até o 02-09 alinhar relogio() com os instantes em UTC",
+    "emissão do laudo (1ª e 2ª via) no banco: desligada por podeGravar até o 02-09 tirar 'sadt.emitirLaudo' de OPERACOES_SADT_PENDENTES (409 operacao-nao-liberada com o motivo)",
+    "portal de resultados no banco (entrada do paciente e do médico, laudos, autocadastro): 409 modelo-pendente da porta própria do 02-09",
+    "carga: worklist/medico, prescricao/verificar, prescricao/busca, leitos/assinar, leitos/vigia (404 com motivo)",
+    "aviso do crítico no sino do médico (central de avisos null até o módulo de comunicação ser registrado)"
+  ],
+  "melhorias": [
+    "vigia do valor crítico: falha isolada por exame (escalonamento e ciclo seguinte não travam), cursor parado quando há exame sem aviso, log só com contagens e códigos",
+    "trilha da emissão do aviso aponta para exame_item (o id do aviso só existe depois da gravação); a do escalonamento, para aviso_valor_critico",
+    "emitirLaudo respeita a mesma trava (podeGravar) que a tela lê em /sadt/gravacao"
   ]
 }

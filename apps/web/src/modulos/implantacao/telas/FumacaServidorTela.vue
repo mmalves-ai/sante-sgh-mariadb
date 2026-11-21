@@ -218,16 +218,6 @@ function conferirDeNovo(): void {
           }}
         </dd>
       </dl>
-      <SanteAlerta
-        v-if="dados.impressao.bloqueiaTudo || dados.impressao.tabelasBloqueadas > 0"
-        :texto="
-          dados.impressao.bloqueiaTudo
-            ? t('implantacao.fumaca.impressao.bloqueioTotal')
-            : t('implantacao.fumaca.impressao.bloqueio', { n: dados.impressao.tabelasBloqueadas })
-        "
-        variante="alerta"
-        data-testid="impressao-bloqueio"
-      />
 
       <h3>{{ t('implantacao.fumaca.chaves.titulo') }}</h3>
       <SanteAlerta

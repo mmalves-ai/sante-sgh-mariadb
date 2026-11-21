@@ -8,9 +8,7 @@ import {
   chavesIniciaisSinteticas,
   FONTE_CONFIGURACAO,
   fonteConfiguracaoMemoria,
-  PORTA_ONDA0,
   parametrosIniciaisSinteticos,
-  portaOnda0Memoria,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import { criarFonteDocumento, FONTE_DOCUMENTO } from '../documento/public-api.js';
@@ -44,10 +42,11 @@ export function registroDeTeste(
 class ConfiguracaoDeTeste {}
 
 /**
- * A configuração sintética de dev/ci (chaves de liberação, parâmetros, onda 0 e a fila de impressão em memória), como a
+ * A configuração sintética de dev/ci (chaves de liberação, parâmetros e a fila de impressão em memória), como a
  * sessão sintética tinha: os controladores do cadastro e do atendimento a injetam como opcional. Global, para os módulos do teste.
  */
-export function moduloConfiguracaoDeTeste(ctx: ContextoModulo, hospitais: readonly string[] = ['aa', 'bb']): DynamicModule {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function moduloConfiguracaoDeTeste(ctx: ContextoModulo, _hospitais: readonly string[] = ['aa', 'bb']): DynamicModule {
   const fonte = fonteConfiguracaoMemoria(ctx.trilha, {
     chavesIniciais: chavesIniciaisSinteticas,
     prerequisitosIniciais: prerequisitosIniciaisSinteticos,
@@ -59,10 +58,9 @@ export function moduloConfiguracaoDeTeste(ctx: ContextoModulo, hospitais: readon
     providers: [
       { provide: FONTE_CONFIGURACAO, useValue: fonte },
       { provide: CACHE_CONFIG, useValue: new CacheConfig(new ArmazemMemoria()) },
-      { provide: PORTA_ONDA0, useValue: portaOnda0Memoria(fonte, hospitais) },
       // A fila de impressão da estação (ZPL), como a sessão sintética tinha.
       { provide: FONTE_DOCUMENTO, useValue: criarFonteDocumento(ctx.configuracao, ctx.env) },
     ],
-    exports: [FONTE_CONFIGURACAO, CACHE_CONFIG, PORTA_ONDA0, FONTE_DOCUMENTO],
+    exports: [FONTE_CONFIGURACAO, CACHE_CONFIG, FONTE_DOCUMENTO],
   };
 }

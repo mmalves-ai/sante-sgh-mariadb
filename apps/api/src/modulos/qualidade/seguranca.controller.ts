@@ -56,7 +56,7 @@ import {
   resumoDoPlano,
   sugestoesDoUsuario,
 } from '@sgh/dominio-qualidade';
-import type { AcaoPlanoSghLida, NotificacaoSghLida } from '@sgh/legado';
+import type { AcaoPlanoRegistrada, NotificacaoRegistrada } from './tipos.js';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -70,6 +70,7 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
+import { ehLeituraPendente } from './apoio-propria.js';
 import { CHAVE_QUALIDADE_NOTIFICACAO } from './notificacao.controller.js';
 import { type GravadorQualidade, PORTA_QUALIDADE, type PortaQualidade } from './porta.js';
 import { anosDosPrazos, calendario, detalheDe, resumoDe } from './servico.js';
@@ -106,7 +107,7 @@ const registroNaoEncontrado = () => new ErroProblema('nao-encontrado', 404, 'Reg
 const somaDias = (d: string, n: number) =>
   new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const pagina = (v: string | undefined) => Math.max(1, Math.min(10_000, Number.parseInt(v ?? '1', 10) || 1));
-const estadoAcao = (a: AcaoPlanoSghLida) => ({
+const estadoAcao = (a: AcaoPlanoRegistrada) => ({
   situacao: a.situacao as SituacaoAcao,
   versao: a.versao,
   quando: a.quando,
@@ -143,7 +144,7 @@ export class SegurancaPacienteController {
   }
 
   /** A sessão pode ver a notificação: quem lê as notificações (NSP) ou o gestor a quem ela foi distribuída. */
-  private veNotificacao(s: SessaoCadastro, n: NotificacaoSghLida | null): n is NotificacaoSghLida {
+  private veNotificacao(s: SessaoCadastro, n: NotificacaoRegistrada | null): n is NotificacaoRegistrada {
     if (!n) return false;
     return (
       s.pode(P.notificacaoLer) ||
@@ -152,7 +153,7 @@ export class SegurancaPacienteController {
   }
 
   /** A notificação que a sessão pode analisar (senão, a mesma resposta de "não existe": não revela que existe). */
-  private async notificacaoDaAnalise(s: SessaoCadastro, id: number): Promise<NotificacaoSghLida> {
+  private async notificacaoDaAnalise(s: SessaoCadastro, id: number): Promise<NotificacaoRegistrada> {
     const n = await this.porta.notificacao(s.porta, id);
     if (!n || !podeAnalisar({ situacao: n.situacao as SituacaoNotificacao, gestor: n.gestor }, this.quem(s)))
       throw naoEncontrada();
@@ -203,7 +204,7 @@ export class SegurancaPacienteController {
       this.feriados(s, anosDosPrazos(visiveis, agora)),
       this.nomes(s),
     ]);
-    req.sghAlvo = { tabelaAlvo: 'SGH_QUA_ANALISE', chaveNaturalAlvo: `analises:${String(visiveis.length)}` };
+    req.sghAlvo = { tabelaAlvo: 'analise_incidente', chaveNaturalAlvo: `analises:${String(visiveis.length)}` };
     return {
       itens: visiveis.map((n) => ({
         ...resumoDe(n, agora, feriados, nomes),
@@ -239,7 +240,7 @@ export class SegurancaPacienteController {
       q.nsp ? { papel: 'nsp' } : { papel: 'gestor', login: s.login },
     );
     if (!d) throw naoEncontrada();
-    req.sghAlvo = { tabelaAlvo: 'SGH_QUA_ANALISE', idAlvo: String(n.id), chaveNaturalAlvo: n.protocolo };
+    req.sghAlvo = { tabelaAlvo: 'analise_incidente', idAlvo: String(n.id), chaveNaturalAlvo: n.protocolo };
     const lidas = acoes.map((a) => acaoLida(a, hoje));
     const registrar = l.ligada && s.pode(P.analiseRegistrar);
     return {
@@ -264,7 +265,7 @@ export class SegurancaPacienteController {
   @HttpCode(200)
   @Permissao(P.analiseRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarAnalise: SGH_QUA_ANALISE, a situação da notificação e a linha do tempo com a SGH_TRILHA',
+    'qualidade.registrarAnalise: analise_incidente, a situação da notificação e a linha do tempo com a trilha_auditoria',
   )
   async registrarAnalise(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -277,7 +278,7 @@ export class SegurancaPacienteController {
       s,
       E.qualidadeAnaliseRegistrada.codigo,
       P.analiseRegistrar,
-      { tabela: 'SGH_QUA_ANALISE', id: String(n.id), chave: n.protocolo },
+      { tabela: 'analise_incidente', id: String(n.id), chave: n.protocolo },
       async (g) => {
         const atualN = await g.travar(n.id);
         if (!podeAnalisar({ situacao: atualN.situacao as SituacaoNotificacao, gestor: atualN.gestor }, q))
@@ -320,7 +321,7 @@ export class SegurancaPacienteController {
   @Post('analises/:id/acoes')
   @HttpCode(200)
   @Permissao(P.analiseRegistrar)
-  @AuditadoNoHandler('qualidade.registrarPlanoAcao: SGH_QUA_PLANO_ACAO com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarPlanoAcao: acao_plano_qualidade com a trilha_auditoria')
   async registrarPlanoAcao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarPlanoAcao, { ...(b as object), notificacao: idDaRota(id) });
@@ -343,7 +344,7 @@ export class SegurancaPacienteController {
       s,
       E.qualidadePlanoAcaoRegistrado.codigo,
       P.analiseRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_PLANO_ACAO', id: String(x.id), chave: n.protocolo }),
+      (x: { id: number }) => ({ tabela: 'acao_plano_qualidade', id: String(x.id), chave: n.protocolo }),
       async (g) => {
         const atualN = await g.travar(n.id);
         if (!podeAnalisar({ situacao: atualN.situacao as SituacaoNotificacao, gestor: atualN.gestor }, q))
@@ -441,7 +442,7 @@ export class SegurancaPacienteController {
   @HttpCode(200)
   @Permissao(P.notificacaoCriar)
   @AuditadoNoHandler(
-    'qualidade: sugestão dispensada (SGH_QUA_SUGESTAO_RESOLVIDA, só o resumo) com a SGH_TRILHA',
+    'qualidade: sugestão dispensada (sugestao_notificacao_incidente, só o resumo) com a trilha_auditoria',
   )
   async dispensarSugestao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -457,7 +458,7 @@ export class SegurancaPacienteController {
       s,
       E.qualidadeSugestaoDispensada.codigo,
       P.notificacaoCriar,
-      { tabela: 'SGH_QUA_SUGESTAO_RESOLVIDA', chave: 'sugestao' },
+      { tabela: 'sugestao_notificacao_incidente', chave: 'sugestao' },
       (g) =>
         g.resolverSugestao({
           resumo: rs.resumo(s.hospital, s.login, e.origem),
@@ -559,7 +560,7 @@ export class SegurancaPacienteController {
       );
     const r = await this.porta.expostos(s.porta, q.item, q.lote);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_QUA_TECNOVIG',
+      tabelaAlvo: 'queixa_tecnica_produto',
       idAlvo: String(q.id),
       chaveNaturalAlvo: `expostos:${String(r.expostos.length)}`,
     };
@@ -569,7 +570,7 @@ export class SegurancaPacienteController {
   @Post('tecnovigilancia')
   @HttpCode(201)
   @Permissao(P.tecnovigilanciaRegistrar)
-  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: SGH_QUA_TECNOVIG e o andamento com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: queixa_tecnica_produto e o andamento com a trilha_auditoria')
   async abrirQueixa(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarQueixaTecnica, b);
@@ -597,7 +598,7 @@ export class SegurancaPacienteController {
       s,
       E.qualidadeQueixaTecnicaRegistrada.codigo,
       P.tecnovigilanciaRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_TECNOVIG', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'queixa_tecnica_produto', id: String(x.id) }),
       (g) =>
         g.abrirQueixa({
           area: e.area,
@@ -622,7 +623,7 @@ export class SegurancaPacienteController {
   @Post('tecnovigilancia/:id/andamento')
   @HttpCode(200)
   @Permissao(P.tecnovigilanciaRegistrar)
-  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: o andamento em SGH_QUA_TECNOVIG com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: o andamento em queixa_tecnica_produto com a trilha_auditoria')
   async andamentoQueixa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarQueixaTecnica, { ...(b as object), acao: 'andamento', id: idDaRota(id) });
@@ -633,7 +634,7 @@ export class SegurancaPacienteController {
       s,
       E.qualidadeQueixaTecnicaRegistrada.codigo,
       P.tecnovigilanciaRegistrar,
-      { tabela: 'SGH_QUA_TECNOVIG', id: String(e.id) },
+      { tabela: 'queixa_tecnica_produto', id: String(e.id) },
       async (g) => {
         const atual = await g.travarQueixa(e.id);
         const c = conferirAndamentoVigilancia(
@@ -680,13 +681,36 @@ export class SegurancaPacienteController {
         ['de', 'ate'],
         p.motivo,
       );
+    // O que ainda aguarda o mapeamento (503 `modelo-pendente`) não derruba o painel inteiro: a parte sai vazia e vai
+    // nomeada em `indisponiveis`, para a tela mostrar "indisponível" (nunca zero como se fosse o dado do hospital).
+    const indisponiveis: string[] = [];
+    const parte =
+      <T>(nome: string, vazio: T) =>
+      (e: unknown): T => {
+        if (!ehLeituraPendente(e)) throw e;
+        indisponiveis.push(nome);
+        return vazio;
+      };
     const [notificacoes, analises, acoes, adesao, gerenciados, historico] = await Promise.all([
       this.porta.painelNotificacoes(s.porta, p.de, p.fimExclusivo),
       this.porta.painelAnalises(s.porta, p.de, p.fimExclusivo, hoje),
       this.porta.painelAcoes(s.porta, hoje),
-      this.porta.painelAdesao(s.porta, p.de, p.fimExclusivo, agora),
-      this.porta.protocolosGerenciados(s.porta, `${p.de}T00:00:00`, `${p.fimExclusivo}T00:00:00`),
-      this.porta.historicoRiscos(s.porta).catch(() => []),
+      this.porta
+        .painelAdesao(s.porta, p.de, p.fimExclusivo, agora)
+        .catch(
+          parte('adesao', {
+            checagens: 0,
+            checagensComPulseira: 0,
+            checklists: 0,
+            checklistsConcluidos: 0,
+            checklistsComPausa: 0,
+            reavaliacoes: [],
+          }),
+        ),
+      this.porta
+        .protocolosGerenciados(s.porta, `${p.de}T00:00:00`, `${p.fimExclusivo}T00:00:00`)
+        .catch(parte('protocolos', { versoes: [], protocolos: [] })),
+      this.porta.historicoRiscos(s.porta).catch(parte('historico', [])),
     ]);
     const cortados = gerenciados.protocolos.length > TETO_PROTOCOLOS_DO_PERIODO;
     return {
@@ -704,6 +728,7 @@ export class SegurancaPacienteController {
         protocolosCortados: cortados,
         historico,
       }),
+      indisponiveis,
       agora,
     };
   }

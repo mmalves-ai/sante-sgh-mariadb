@@ -1,0 +1,197 @@
+{
+  "lote": "02-04",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/enfermagem/agencia-porta-memoria.ts",
+    "src/modulos/enfermagem/agencia-porta.ts",
+    "src/modulos/enfermagem/agencia.controller.ts",
+    "src/modulos/enfermagem/agencia.spec.ts",
+    "src/modulos/enfermagem/apoios.ts",
+    "src/modulos/enfermagem/aplicacao/aprazar.autorizacao.int.spec.ts",
+    "src/modulos/enfermagem/aplicacao/balanco-origem-checagem.int.spec.ts",
+    "src/modulos/enfermagem/balanco-porta-memoria.ts",
+    "src/modulos/enfermagem/balanco-porta.ts",
+    "src/modulos/enfermagem/balanco-servico.ts",
+    "src/modulos/enfermagem/balanco.controller.ts",
+    "src/modulos/enfermagem/balanco.spec.ts",
+    "src/modulos/enfermagem/aplicacao/checar.idempotencia.int.spec.ts",
+    "src/modulos/enfermagem/contencao-servico.ts",
+    "src/modulos/enfermagem/contencao.controller.ts",
+    "src/modulos/enfermagem/contingencia-pdf.int.spec.ts",
+    "src/modulos/enfermagem/contingencia.spec.ts",
+    "src/modulos/enfermagem/contingencia.ts",
+    "src/modulos/enfermagem/aplicacao/dupla-checagem.int.spec.ts",
+    "src/modulos/enfermagem/enfermagem.controller.ts",
+    "src/modulos/enfermagem/enfermagem.spec-util.ts",
+    "src/modulos/enfermagem/enfermagem.spec.ts",
+    "src/modulos/enfermagem/escores-porta-memoria.ts",
+    "src/modulos/enfermagem/escores-porta.ts",
+    "src/modulos/enfermagem/escores-servico.ts",
+    "src/modulos/enfermagem/escores.controller.ts",
+    "src/modulos/enfermagem/escores.spec.ts",
+    "src/modulos/enfermagem/indices-uti.controller.ts",
+    "src/modulos/enfermagem/lesao-porta-memoria.ts",
+    "src/modulos/enfermagem/lesao-servico.ts",
+    "src/modulos/enfermagem/lesao.controller.ts",
+    "src/modulos/enfermagem/porta-memoria.ts",
+    "src/modulos/enfermagem/porta.ts",
+    "src/modulos/enfermagem/prescricao-enfermeiro.controller.ts",
+    "src/modulos/enfermagem/prescricao-enfermeiro.http.spec.ts",
+    "src/modulos/enfermagem/tipos.ts",
+    "src/modulos/enfermagem/checagem.ts",
+    "src/modulos/enfermagem/cache-internados.ts",
+    "src/modulos/enfermagem/cache-internados.spec.ts",
+    "src/modulos/enfermagem/gravacao-direta.ts",
+    "src/modulos/enfermagem/operacoes.ts",
+    "src/modulos/enfermagem/porta-propria.ts",
+    "src/modulos/enfermagem/balanco-porta-propria.ts",
+    "src/modulos/enfermagem/agencia-porta-propria.ts",
+    "src/modulos/enfermagem/escores-porta-propria.ts",
+    "src/modulos/enfermagem/porta-propria.int.spec.ts",
+    "src/modulos/enfermagem/app-enfermagem.spec-util.ts",
+    "src/modulos/enfermagem/banco-apoio.ts",
+    "src/modulos/enfermagem/massa-enfermagem.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "balanco_lancamento (colunas)",
+      "motivo": "o lançamento vindo da checagem precisa do horário da prescrição (hoje o fechamento com ganhos de checagem pendentes é recusado com 'modelo-pendente') e a chave do ato para a idempotência por lançamento (o reenvio do tablet não é reconhecido).",
+      "ddl": "ALTER TABLE balanco_lancamento\n  ADD COLUMN horario_administracao_id BIGINT UNSIGNED NULL AFTER prescricao_item_id,\n  ADD COLUMN chave_ato VARCHAR(80) NULL COMMENT 'Idempotency-Key do ato + posição (reenvio do aparelho)',\n  ADD UNIQUE KEY uq_balanco_lancamento_chave_ato (balanco_hidrico_paciente_id, chave_ato),\n  ADD KEY ix_balanco_lancamento_horario (horario_administracao_id),\n  ADD CONSTRAINT fk_balanco_lancamento_horario_administracao_id FOREIGN KEY (horario_administracao_id) REFERENCES horario_administracao (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "balanco_fechamento (colunas)",
+      "motivo": "o fechamento guarda os totais que a tela imprime (diurese, débito urinário, oligúria, temperatura máxima, quantidade de lançamentos e as parcelas); hoje a leitura deriva diurese e débito dos lançamentos e devolve as parcelas vazias.",
+      "ddl": "ALTER TABLE balanco_fechamento\n  ADD COLUMN diurese_ml DECIMAL(15,4) NULL, ADD COLUMN debito_urinario DECIMAL(10,4) NULL, ADD COLUMN oliguria BOOLEAN NOT NULL DEFAULT FALSE,\n  ADD COLUMN temperatura_maxima DECIMAL(4,1) NULL, ADD COLUMN quantidade_lancamentos INT UNSIGNED NOT NULL DEFAULT 0, ADD COLUMN parcelas JSON NULL,\n  ADD CONSTRAINT ck_balanco_fechamento_diurese CHECK (diurese_ml IS NULL OR diurese_ml >= 0);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conflito_sincronizacao_checagem",
+      "motivo": "o conflito do ato do tablet com o horário que mudou (suspenso, já checado, mudou) e a resolução pelo enfermeiro; hoje lido vazio e gravação recusada ('modelo-pendente').",
+      "ddl": "CREATE TABLE conflito_sincronizacao_checagem (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, horario_administracao_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL,\n  chave_ato VARCHAR(80) NOT NULL, tipo VARCHAR(20) NOT NULL, situacao_encontrada_id BIGINT UNSIGNED NULL, desfecho_tentado VARCHAR(20) NOT NULL,\n  ocorrido_em DATETIME(3) NOT NULL, aparelho_beira_leito_id BIGINT UNSIGNED NULL, resolucao VARCHAR(30) NULL, resolvido_por_usuario_id BIGINT UNSIGNED NULL,\n  resolvido_em DATETIME(3) NULL, observacao VARCHAR(500) NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_conflito_sincronizacao_checagem_tipo CHECK (tipo IN ('suspenso','ja_checado','mudou')),\n  CONSTRAINT ck_conflito_sincronizacao_checagem_resolucao CHECK ((resolucao IS NULL) = (resolvido_em IS NULL)),\n  UNIQUE KEY uq_conflito_sincronizacao_checagem_chave (estabelecimento_id, chave_ato),\n  KEY ix_conflito_sincronizacao_checagem_horario (horario_administracao_id)\n) COMMENT='Conflito do ato de checagem feito sem conexão com o horário que mudou, e a resolução';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "aparelho_beira_leito",
+      "motivo": "o tablet ou coletor autorizado do posto (hash do identificador, unidade, situação, último sincronismo); hoje lido vazio e o cadastro recusado ('modelo-pendente').",
+      "ddl": "CREATE TABLE aparelho_beira_leito (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, unidade_internacao_id BIGINT UNSIGNED NOT NULL, nome VARCHAR(80) NOT NULL,\n  tipo VARCHAR(20) NOT NULL, identificador_hash CHAR(64) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, ultimo_sincronismo_em DATETIME(3) NULL, motivo_alteracao VARCHAR(300) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_aparelho_beira_leito_tipo CHECK (tipo IN ('tablet','coletor','celular')),\n  UNIQUE KEY uq_aparelho_beira_leito_hash (estabelecimento_id, identificador_hash)\n) COMMENT='Aparelho autorizado da checagem à beira do leito';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "horario_administracao_evento (eventos da infusão)",
+      "motivo": "a infusão contínua (início, pausa, troca de velocidade, término, volume infundido) é evento do horário: incluir os eventos no CHECK e as colunas de velocidade e volume; hoje gravarEventoInfusao recusa ('modelo-pendente').",
+      "ddl": "ALTER TABLE horario_administracao_evento\n  ADD COLUMN velocidade_ml_h DECIMAL(10,2) NULL, ADD COLUMN volume_infundido_ml DECIMAL(10,2) NULL,\n  DROP CONSTRAINT ck_horario_administracao_evento_evento,\n  ADD CONSTRAINT ck_horario_administracao_evento_evento CHECK (evento IN ('geracao','aprazamento','reaprazamento','checagem','nao_administrado','estorno','suspensao','conferencia','etiqueta_impressa','infusao_inicio','infusao_pausa','infusao_velocidade','infusao_termino'));"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "aplicacao_escala (colunas)",
+      "motivo": "o escore guarda o gatilho (médico, TRR), a faixa e a versão da regra em colunas; hoje vão em JSON dentro de interpretacao (VARCHAR 300).",
+      "ddl": "ALTER TABLE aplicacao_escala\n  ADD COLUMN gatilho VARCHAR(20) NULL, ADD COLUMN faixa VARCHAR(30) NULL, ADD COLUMN escala_clinica_versao_id BIGINT UNSIGNED NULL,\n  ADD COLUMN suspeita_infeccao BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN motivo_inativacao VARCHAR(300) NULL,\n  ADD CONSTRAINT fk_aplicacao_escala_escala_clinica_versao_id FOREIGN KEY (escala_clinica_versao_id) REFERENCES escala_clinica_versao (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "reavaliacao_escala",
+      "motivo": "as reavaliações programadas (Braden e Morse: admissão, diária, mudança de quadro) com prazo, cumprimento e dispensa; hoje lidas vazias e gravação recusada.",
+      "ddl": "CREATE TABLE reavaliacao_escala (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL, internacao_id BIGINT UNSIGNED NULL, escala_clinica_id BIGINT UNSIGNED NOT NULL,\n  motivo VARCHAR(20) NOT NULL, chave VARCHAR(80) NOT NULL, devida_em DATETIME(3) NOT NULL, prazo_em DATETIME(3) NOT NULL,\n  situacao VARCHAR(20) NOT NULL DEFAULT 'pendente', cumprida_em DATETIME(3) NULL, aplicacao_escala_id BIGINT UNSIGNED NULL, motivo_dispensa VARCHAR(300) NULL, observacao VARCHAR(300) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_reavaliacao_escala_motivo CHECK (motivo IN ('admissao','diaria','mudanca_quadro')),\n  CONSTRAINT ck_reavaliacao_escala_situacao CHECK (situacao IN ('pendente','cumprida','dispensada')),\n  CONSTRAINT ck_reavaliacao_escala_prazo CHECK (prazo_em >= devida_em),\n  UNIQUE KEY uq_reavaliacao_escala_chave (estabelecimento_id, chave)\n) COMMENT='Reavaliação programada de escala de risco';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "classificacao_paciente",
+      "motivo": "classificação de pacientes por turno (Fugulin, NAS), com itens, total, categoria e horas de enfermagem; hoje lida vazia e gravação recusada.",
+      "ddl": "CREATE TABLE classificacao_paciente (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL, internacao_id BIGINT UNSIGNED NOT NULL, unidade_internacao_id BIGINT UNSIGNED NOT NULL,\n  data_referencia DATE NOT NULL, turno VARCHAR(10) NOT NULL, instrumento VARCHAR(10) NOT NULL, itens JSON NOT NULL, total DECIMAL(7,2) NOT NULL, categoria VARCHAR(30) NOT NULL,\n  horas_24h DECIMAL(5,2) NOT NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'valida', motivo_estorno VARCHAR(300) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_classificacao_paciente_turno CHECK (turno IN ('diurno','noturno')),\n  CONSTRAINT ck_classificacao_paciente_instrumento CHECK (instrumento IN ('fugulin','nas')),\n  CONSTRAINT ck_classificacao_paciente_situacao CHECK (situacao IN ('valida','estornada'))\n) COMMENT='Classificação de pacientes por grau de dependência da enfermagem';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "indice_gravidade_uti",
+      "motivo": "APACHE II e SOFA com as variáveis, pontuação, mortalidade estimada e a validação pelo médico; hoje lido vazio e gravação recusada.",
+      "ddl": "CREATE TABLE indice_gravidade_uti (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL, internacao_id BIGINT UNSIGNED NULL, indice VARCHAR(10) NOT NULL,\n  variaveis JSON NOT NULL, pontuacao DECIMAL(7,2) NOT NULL, categoria_diagnostica SMALLINT NULL, tipo_admissao VARCHAR(20) NULL, mortalidade_estimada DECIMAL(5,2) NULL,\n  coletado_em DATETIME(3) NOT NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'registrado', validado_por_profissional_id BIGINT UNSIGNED NULL, validado_em DATETIME(3) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_indice_gravidade_uti_indice CHECK (indice IN ('apache2','sofa')),\n  CONSTRAINT ck_indice_gravidade_uti_situacao CHECK (situacao IN ('registrado','validado','estornado')),\n  CONSTRAINT ck_indice_gravidade_uti_validacao CHECK (situacao <> 'validado' OR (validado_em IS NOT NULL AND validado_por_profissional_id IS NOT NULL))\n) COMMENT='Índice de gravidade da UTI';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "parada_cardiorrespiratoria_ficha",
+      "motivo": "ficha Utstein da PCR por versão (rascunho, finalizada, correção com motivo); hoje lida vazia e gravação recusada.",
+      "ddl": "CREATE TABLE parada_cardiorrespiratoria_ficha (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL, atendimento_id BIGINT UNSIGNED NOT NULL, acionamento_resposta_rapida_id BIGINT UNSIGNED NULL,\n  anterior_ficha_id BIGINT UNSIGNED NULL, numero_versao SMALLINT UNSIGNED NOT NULL, situacao VARCHAR(20) NOT NULL, colapso_em DATETIME(3) NOT NULL, unidade_internacao_id BIGINT UNSIGNED NULL,\n  em_uti BOOLEAN NOT NULL DEFAULT FALSE, dados JSON NOT NULL, motivo_correcao VARCHAR(500) NULL, inativada BOOLEAN NOT NULL DEFAULT FALSE, motivo_inativacao VARCHAR(300) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_parada_cardiorrespiratoria_ficha_situacao CHECK (situacao IN ('rascunho','finalizada'))\n) COMMENT='Ficha da parada cardiorrespiratória (Utstein), por versão';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "profilaxia_tev_decisao e contencao_paciente_avaliacao_adendo",
+      "motivo": "a decisão do prescritor sobre a profilaxia sugerida pelo escore (com retificação) e o adendo da checagem da contenção (só do autor); hoje recusados com 'modelo-pendente'. Propor no padrão das tabelas de evento (só inclusão, operação/dados/ocorrido_em/usuario_id).",
+      "ddl": ""
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "escores-porta-propria (lesão, protocolo do internado)",
+      "motivo": "as gravações da ficha da lesão (tipo e região pelo cadastro tipo_lesao_pele/regiao_corporal a partir dos códigos da tela), curativo, foto, encerramento e inativação, e a inclusão/evento do protocolo gerenciado do internado estão recusadas com 'modelo-pendente' (as tabelas existem; falta o mapeamento dos códigos da tela para os cadastros e a carga deles). Leituras já sobre as tabelas."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/enfermagem/vocabulario.ts (SITUACOES_CHECAGEM) e respostas",
+      "motivo": "a situação do horário segue as letras do contrato (P, A, N, S...); a porta própria traduz das categorias de situacao_checagem (operacoes.ts: letraDaSituacao). Neutralizar o contrato para as categorias em palavras."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "checagem.ts (entrada da checagem) e tipos-vinculados.ts (lote 02-05)",
+      "motivo": "a entrada da checagem tem o bloco do ato à beira do leito em `sgh` (o nome que o servico.ts do 02-05 já monta); renomear para `ato` nas duas pontas quando as duas estiverem integradas. O 02-05 pode trocar o ChecagemGravacao dele pelo tipo ChecagemAdministracao (Zod) de checagem.ts."
+    },
+    {
+      "tipo": "fiacao",
+      "alvo": "modulo.ts (do lote 02-05) e ALVOS_CONTINGENCIA",
+      "motivo": "este lote ligou em portasDaEnfermagem as portas próprias PortaEnfermagemPropria, PortaEscoresPropria, PortaBalancoPropria e PortaAgenciaPropria (antes, 503). Falta prover ALVOS_CONTINGENCIA (contingencia.ts: o cliente e cada estabelecimento com os códigos da rede e dele) para a geração por hora do relatório de contingência fora de dev/ci; e a VigiaContencao agora recebe ContextoNucleo[] (alvos) em vez de rede + códigos."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "PortaEnfermagemMemoria (testes do 02-05: w003-*, w108-*, sae.spec-util)",
+      "motivo": "o construtor perdeu o catálogo de operações: new PortaEnfermagemMemoria({ agora, arquivoPorFora }). O estado das portas em memória é por chaveDoEstado(c) (o código do estabelecimento da sessão sintética, senão cliente|id); suspenderPrescricaoPorFora(c, atendimento) recebe o contexto."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "escores-porta-propria.configuracaoIndices",
+      "motivo": "os parâmetros dos índices da UTI não têm cadastro por estabelecimento: a porta própria devolve a configuração padrão do domínio (CONFIGURACAO_INDICES_SINTETICA de @sgh/dominio-pep); criar a parametrização ou renomear a constante como padrão."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "porta-propria (laboratório, extras da contingência)",
+      "motivo": "laboratorio() lê vazio (resultados são do módulo de exames de onda seguinte) e extrasContingencia lê só as alergias (problemas, justificativas, amostras e higienização ficam vazios até os módulos donos)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "afericao_valor (retificação)",
+      "motivo": "a retificação do sinal vital é linha nova na mesma aferição e a anterior fica marcada como substituída (excluido_em); hoje a ligação com a anterior é derivada (mesmo parâmetro, sequência menor) e a justificativa é lida da trilha. Ligar e guardar o motivo em colunas.",
+      "ddl": "ALTER TABLE afericao_valor\n  ADD COLUMN retifica_afericao_valor_id BIGINT UNSIGNED NULL COMMENT 'Valor que esta linha retifica',\n  ADD COLUMN motivo_retificacao VARCHAR(500) NULL,\n  ADD CONSTRAINT ck_afericao_valor_retificacao CHECK ((retifica_afericao_valor_id IS NULL) = (motivo_retificacao IS NULL)),\n  ADD UNIQUE KEY uq_afericao_valor_retifica (retifica_afericao_valor_id),\n  ADD CONSTRAINT fk_afericao_valor_retifica_afericao_valor_id FOREIGN KEY (retifica_afericao_valor_id) REFERENCES afericao_valor (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "passagem_turno e passagem_turno_paciente (data do turno, SBAR, pendências)",
+      "motivo": "o turno já vai em turno_padrao_id; a data do turno hoje é derivada da hora da passagem (dataDoTurno), o SBAR vai como JSON em observacao_enfermagem e as pendências como JSON em pendencias (TEXT). Colunas próprias e as pendências em tabela filha.",
+      "ddl": "ALTER TABLE passagem_turno ADD COLUMN data_referencia DATE NULL COMMENT 'Dia do turno passado';\nALTER TABLE passagem_turno_paciente\n  ADD COLUMN situacao_sbar VARCHAR(2000) NULL, ADD COLUMN historia_sbar VARCHAR(2000) NULL,\n  ADD COLUMN avaliacao_sbar VARCHAR(2000) NULL, ADD COLUMN recomendacao_sbar VARCHAR(2000) NULL;\nCREATE TABLE passagem_turno_pendencia (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, passagem_turno_paciente_id BIGINT UNSIGNED NOT NULL, sequencia SMALLINT UNSIGNED NOT NULL,\n  descricao VARCHAR(500) NOT NULL, prazo_em DATETIME(3) NULL, resolvida BOOLEAN NOT NULL DEFAULT FALSE,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_passagem_turno_pendencia_sequencia (passagem_turno_paciente_id, sequencia),\n  CONSTRAINT fk_passagem_turno_pendencia_passagem_turno_paciente_id FOREIGN KEY (passagem_turno_paciente_id) REFERENCES passagem_turno_paciente (id) ON DELETE RESTRICT\n) COMMENT='Pendência de cada paciente na passagem de plantão';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "teste_imuno_hematologico (estabelecimento e motivo da invalidação)",
+      "motivo": "o exame sem requisição não tem estabelecimento: a liberação e a invalidação ficam com o estabelecimento da trilha da inclusão; o motivo da invalidação é lido da trilha. Gravar os dois em colunas.",
+      "ddl": "ALTER TABLE teste_imuno_hematologico\n  ADD COLUMN estabelecimento_id BIGINT UNSIGNED NULL COMMENT 'Estabelecimento que registrou o exame',\n  ADD COLUMN motivo_invalidacao VARCHAR(500) NULL,\n  ADD CONSTRAINT ck_teste_imuno_hematologico_invalidacao CHECK (situacao <> 'invalidado' OR motivo_invalidacao IS NOT NULL),\n  ADD KEY ix_teste_imuno_hematologico_estabelecimento (estabelecimento_id),\n  ADD CONSTRAINT fk_teste_imuno_hematologico_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "modelo",
+      "alvo": "prova cruzada → prova_compatibilidade (tabela já existe)",
+      "motivo": "a prova cruzada vai hoje em teste_imuno_hematologico só com o paciente (o CHECK alvo exige paciente XOR bolsa) e o número da bolsa no JSON leituras, sem FK. A tabela prova_compatibilidade (requisição, amostra e bolsa com FK, resultado compativel/incompativel) é o lugar certo; falta o contrato da tela distinguir o id da prova do id do exame (liberar/invalidar por id) e a amostra da requisição na entrada. Decisão do integrador: migrar na onda da agência."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/sadt/agencia.ts (RESULTADOS_PROVA_CRUZADA)",
+      "motivo": "acrescentar 'inconclusivo' ao resultado da prova cruzada; hoje a porta própria omite a prova sem resultado ou inconclusiva (nunca a trata como compatível)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "tipo_movimento_bolsa (natureza 'correcao')",
+      "motivo": "a correção da bolsa grava um movimento_bolsa de alteração com a versão anterior e o motivo, com o tipo de natureza 'entrada' (o recebimento corrigido); uma natureza própria deixa o histórico claro.",
+      "ddl": "ALTER TABLE tipo_movimento_bolsa DROP CONSTRAINT ck_tipo_movimento_bolsa_natureza,\n  ADD CONSTRAINT ck_tipo_movimento_bolsa_natureza CHECK (natureza IN ('entrada','reserva','liberacao','transfusao','devolucao','descarte','perda','transferencia','bloqueio','desbloqueio','correcao'));"
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "config (lote 01-03): catálogo de domínios e os cadastros da agência",
+      "motivo": "os 3 testes do agencia.spec.ts sobre os cadastros da agência (/cadastros/dominios/sadt/agenciaReacao) dão 404 porque o CRUD genérico do config passou a expor as tabelas pelo nome (sadt/tipoReacaoTransfusional) e a memória só tem os domínios sintéticos; a regra própria (permissão sadt.agenciaCadastro.editar e liberação pela chave da agência, contrato dominios-m47) se perdeu. Os testes ficam pendentes por ctx.skip enquanto o domínio não existir no catálogo da app; pedido ao dono do config: declarar os cadastros da agência (nome, permissão extra e chave)."
+    }
+  ]
+}

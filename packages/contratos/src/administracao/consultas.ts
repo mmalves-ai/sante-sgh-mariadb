@@ -18,7 +18,7 @@ export const esquemaAlertas = z.object({
       usuarios: z.number().int(),
     }),
   ),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type Alertas = z.infer<typeof esquemaAlertas>;
 
@@ -36,7 +36,7 @@ export const esquemaServidorEmail = z.object({
   modulos: z.array(z.object({ id: z.number().int(), nome: z.string() })),
   /** Fora de produção, todo e-mail vai à caixa de teste (regra 19): nenhum endereço real fica ligado. */
   saidaDeTeste: z.boolean(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ServidorEmail = z.infer<typeof esquemaServidorEmail>;
 
@@ -59,7 +59,7 @@ export const esquemaDadosFiscais = z.object({
       ativa: z.boolean(),
     })
     .nullable(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type DadosFiscais = z.infer<typeof esquemaDadosFiscais>;
 
@@ -96,6 +96,6 @@ export type TabelaParametrosBanco = z.infer<typeof esquemaTabelaParametros>;
 
 export const esquemaIndiceParametrosBanco = z.object({
   tabelas: z.array(esquemaTabelaParametros.omit({ parametros: true, criterio: true, registros: true })),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type IndiceParametrosBanco = z.infer<typeof esquemaIndiceParametrosBanco>;

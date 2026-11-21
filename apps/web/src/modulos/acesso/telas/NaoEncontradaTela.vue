@@ -5,9 +5,8 @@ import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import { pode } from '../../../casca/sessao/pode.js';
 
-// M38: `onda0` = a tela de consulta ainda não foi liberada para o perfil nesta etapa (chave de tela da onda 0).
 // W1-01 (parte 10c): sem permissão, o botão "Pedir acesso" abre o formulário do pedido (perfil, setor, período, motivo).
-defineProps<{ motivo?: 'nao-encontrada' | 'sem-permissao' | 'onda0' }>();
+defineProps<{ motivo?: 'nao-encontrada' | 'sem-permissao' }>();
 const { t } = useI18n();
 // `pode` lê a sessão já carregada pela casca (sem consulta própria: a tela também abre fora do cliente de consultas).
 const podePedir = computed(
@@ -28,10 +27,6 @@ const podePedir = computed(
           >{{ t('acesso.pedidos.pedir') }}</RouterLink
         >
       </p>
-    </template>
-    <template v-else-if="motivo === 'onda0'">
-      <h1 id="ne-titulo">{{ t('erros.sem-permissao.titulo') }}</h1>
-      <p data-testid="onda0-fora-do-escopo">{{ t('liberacao.onda0.foraDoEscopo') }}</p>
     </template>
     <template v-else>
       <h1 id="ne-titulo">{{ t('naoEncontrada.titulo') }}</h1>

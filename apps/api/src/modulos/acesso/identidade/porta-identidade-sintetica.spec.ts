@@ -22,7 +22,6 @@ describe('porta da identidade sintética (M59.2)', () => {
     const porta = portaIdentidadeSintetica();
     const s = new ServicoIdentidade({
       porta,
-      contingencia: async () => true,
       chave: Buffer.alloc(32, 3),
       emissor: 'Produto sintético',
       argon2: { memoria: 8_192, passes: 1, paralelismo: 1 },
@@ -47,7 +46,6 @@ describe('conta sintética fora da identidade (M59.2)', () => {
   it('o cadastro do segundo fator fica indisponível (503), sem erro do servidor', async () => {
     const s = new ServicoIdentidade({
       porta: portaIdentidadeSintetica(),
-      contingencia: async () => true,
       chave: Buffer.alloc(32, 3),
       emissor: 'Produto sintético',
     });

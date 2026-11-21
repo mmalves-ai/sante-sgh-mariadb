@@ -1,0 +1,23 @@
+# lote 03-06 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/folha
+apps/api/src/modulos/pessoas/aplicacao/folha.int.spec.ts
+apps/api/src/modulos/pessoas/folha/calculo-http.spec.ts
+apps/api/src/modulos/pessoas/folha/calculo.controller.ts
+apps/api/src/modulos/pessoas/folha/documentos-calculo.spec.ts
+apps/api/src/modulos/pessoas/folha/documentos-calculo.ts
+apps/api/src/modulos/pessoas/folha/fechamento-http.spec.ts
+apps/api/src/modulos/pessoas/folha/fechamento.controller.ts
+apps/api/src/modulos/pessoas/folha/ferias-http.spec.ts
+apps/api/src/modulos/pessoas/folha/ferias.controller.ts
+apps/api/src/modulos/pessoas/folha/folha.controller.ts
+apps/api/src/modulos/pessoas/folha/folha.spec.ts
+apps/api/src/modulos/pessoas/folha/integracao-http.spec.ts
+apps/api/src/modulos/pessoas/folha/integracao.controller.ts
+apps/api/src/modulos/pessoas/folha/porta-calculo-legado.ts
+apps/api/src/modulos/pessoas/folha/porta-calculo-memoria.ts
+apps/api/src/modulos/pessoas/folha/porta-calculo.ts
+apps/api/src/modulos/pessoas/folha/porta-folha-legado.ts
+apps/api/src/modulos/pessoas/folha/porta-folha-memoria.ts
+apps/api/src/modulos/pessoas/folha/porta-folha.ts
+apps/api/src/modulos/pessoas/folha/porta-integracao-legado.ts

@@ -1,0 +1,20 @@
+# lote 03-09 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/ponto
+apps/api/src/modulos/pessoas/aplicacao/ponto.int.spec.ts
+apps/api/src/modulos/pessoas/ponto/crud-ponto.spec.ts
+apps/api/src/modulos/pessoas/ponto/documentos-ponto.ts
+apps/api/src/modulos/pessoas/ponto/ponto.controller.ts
+apps/api/src/modulos/pessoas/ponto/ponto.spec.ts
+apps/api/src/modulos/pessoas/ponto/porta-ponto-legado.ts
+apps/api/src/modulos/pessoas/ponto/porta-ponto-memoria.ts
+apps/api/src/modulos/pessoas/ponto/porta-ponto.ts
+apps/api/src/modulos/pessoas/ponto/portao-afd.spec.ts
+apps/api/src/modulos/pessoas/ponto/servico-ponto.spec.ts
+apps/api/src/modulos/pessoas/ponto/servico-ponto.ts
+apps/api/src/modulos/pessoas/porta-legado.ts
+apps/api/src/modulos/pessoas/porta-memoria.ts
+apps/api/src/modulos/pessoas/porta.ts
+apps/api/src/modulos/pessoas/public-api.ts
+apps/api/src/modulos/pessoas/aplicacao/realizado.int.spec.ts
+apps/api/src/modulos/pessoas/aplicacao/rescisao.int.spec.ts

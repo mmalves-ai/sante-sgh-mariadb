@@ -1,5 +1,5 @@
 // Composição da notificação de incidentes (M48, etapa 1) sobre as regras puras de @sgh/dominio-qualidade: a linha lida
-// do banco (SGH_QUA_NOTIFICACAO) vira o resumo da lista, o detalhe projetado para o leitor (regra 1), o estado do fluxo,
+// do banco (notificacao_incidente) vira o resumo da lista, o detalhe projetado para o leitor (regra 1), o estado do fluxo,
 // os prazos com o calendário de feriados (regra 3) e o resumo da fila de prazos. Também o código de acompanhamento
 // (D-ANON-48.1): com a chave do pedido, o código é derivado dela (o reenvio devolve o mesmo código sem o banco
 // guardar nem a chave nem o código: só os resumos SHA-256).
@@ -27,7 +27,7 @@ import {
   situacaoNotivisa,
 } from '@sgh/dominio-qualidade';
 import { marcaSuporteTecnico } from '@sgh/contratos';
-import type { EventoNotificacaoSghLido, NotificacaoSghLida } from '@sgh/legado';
+import type { EventoNotificacaoRegistrado, NotificacaoRegistrada } from './tipos.js';
 
 export const resumoSha256 = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex');
 
@@ -57,7 +57,7 @@ export function codigoConfere(codigo: string, resumoGuardado: string): boolean {
 }
 
 /** O estado do fluxo para as regras puras. */
-export function estadoDe(n: NotificacaoSghLida): EstadoNotificacao {
+export function estadoDe(n: NotificacaoRegistrada): EstadoNotificacao {
   return {
     protocolo: n.protocolo,
     situacao: n.situacao as SituacaoNotificacao,
@@ -82,7 +82,7 @@ export function calendario(
 }
 
 export function prazosDe(
-  n: NotificacaoSghLida,
+  n: NotificacaoRegistrada,
   agora: string,
   feriados: ReadonlySet<string>,
 ): PrazoRegulatorio[] {
@@ -102,7 +102,7 @@ export function prazosDe(
 }
 
 /** Os anos de que os prazos de um conjunto de notificações precisam (mês seguinte pode virar o ano). */
-export function anosDosPrazos(ns: readonly NotificacaoSghLida[], agora: string): number[] {
+export function anosDosPrazos(ns: readonly NotificacaoRegistrada[], agora: string): number[] {
   const anos = new Set<number>([Number(agora.slice(0, 4)), Number(agora.slice(0, 4)) + 1]);
   for (const n of ns) {
     const a = Number(n.ocorridoEm.slice(0, 4));
@@ -113,7 +113,7 @@ export function anosDosPrazos(ns: readonly NotificacaoSghLida[], agora: string):
 }
 
 export function resumoDe(
-  n: NotificacaoSghLida,
+  n: NotificacaoRegistrada,
   agora: string,
   feriados: ReadonlySet<string>,
   nomeUnidade: (codigo: number | null) => string | null,
@@ -143,7 +143,7 @@ export function resumoDe(
 
 /** O detalhe completo (a projeção da regra 1 decide depois o que cada leitor vê). */
 /** O evento foi gravado numa sessão "como" (a marca `suporte` em DADOS). */
-function peloSuporte(e: EventoNotificacaoSghLido): boolean {
+function peloSuporte(e: EventoNotificacaoRegistrado): boolean {
   if (e.dados === null || !e.dados.includes('suporte')) return false;
   try {
     return (JSON.parse(e.dados) as { suporte?: unknown }).suporte === true;
@@ -153,8 +153,8 @@ function peloSuporte(e: EventoNotificacaoSghLido): boolean {
 }
 
 export function detalheDe(
-  n: NotificacaoSghLida,
-  eventos: readonly EventoNotificacaoSghLido[],
+  n: NotificacaoRegistrada,
+  eventos: readonly EventoNotificacaoRegistrado[],
   contexto: ContextoNotificacaoLido | null,
   agora: string,
   feriados: ReadonlySet<string>,

@@ -1,33 +1,20 @@
 # lote 02-01 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: assinatura
-# pastas: apps/api/src/modulos/assinatura apps/api/src/modulos/assinatura/aplicacao apps/api/src/modulos/assinatura/infra
-apps/api/src/modulos/assinatura/aplicacao/documentos.spec.ts
-apps/api/src/modulos/assinatura/aplicacao/documentos.ts
-apps/api/src/modulos/assinatura/aplicacao/login-certificado.spec.ts
-apps/api/src/modulos/assinatura/aplicacao/login-certificado.ts
-apps/api/src/modulos/assinatura/aplicacao/servico.spec.ts
-apps/api/src/modulos/assinatura/aplicacao/servico.ts
-apps/api/src/modulos/assinatura/aplicacao/verificador.spec.ts
-apps/api/src/modulos/assinatura/aplicacao/verificador.ts
-apps/api/src/modulos/assinatura/assinatura-documentos.controller.ts
-apps/api/src/modulos/assinatura/assinatura.controller.ts
-apps/api/src/modulos/assinatura/assinatura.int.spec.ts
-apps/api/src/modulos/assinatura/infra/ambiente.ts
-apps/api/src/modulos/assinatura/infra/clientes.spec.ts
-apps/api/src/modulos/assinatura/infra/clientes.ts
-apps/api/src/modulos/assinatura/infra/cofre.spec.ts
-apps/api/src/modulos/assinatura/infra/cofre.ts
-apps/api/src/modulos/assinatura/infra/documentos-ambiente.ts
-apps/api/src/modulos/assinatura/infra/simulador-sncr.ts
-apps/api/src/modulos/assinatura/infra/simulador.ts
-apps/api/src/modulos/assinatura/porta-legado.ts
-apps/api/src/modulos/assinatura/porta-memoria.ts
-apps/api/src/modulos/assinatura/porta.ts
-apps/api/src/modulos/assinatura/previa-hash.int.spec.ts
-apps/api/src/modulos/assinatura/public-api.ts
-apps/api/src/modulos/assinatura/reprocessamento.int.spec.ts
-apps/api/src/modulos/assinatura/simbolos.ts
-apps/api/src/modulos/assinatura/verificador-http.spec.ts
-apps/api/src/modulos/assinatura/verificador-taxa.int.spec.ts
-apps/api/src/modulos/assinatura/verificador.controller.ts
-apps/api/src/modulos/assinatura/volta-simulador.spec.ts
+# registrar: -
+# pastas: apps/api/src/modulos/acesso apps/api/src/modulos/acesso/aplicacao
+apps/api/src/modulos/acesso/aplicacao/aviso-tempo-real.int.spec.ts
+apps/api/src/modulos/acesso/aplicacao/comunicacao.ts
+apps/api/src/modulos/acesso/comunicacao-porta-memoria.ts
+apps/api/src/modulos/acesso/comunicacao-porta.ts
+apps/api/src/modulos/acesso/comunicacao.controller.ts
+apps/api/src/modulos/acesso/comunicacao.spec.ts
+apps/api/src/modulos/acesso/aplicacao/comunicado-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/comunicado-ciclo.spec.ts
+apps/api/src/modulos/acesso/conselho-gestao.controller.spec.ts
+apps/api/src/modulos/acesso/conselho-gestao.controller.ts
+apps/api/src/modulos/acesso/consulta.controller.ts
+apps/api/src/modulos/acesso/contas-dormentes-porta.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes-porta.ts
+apps/api/src/modulos/acesso/contas-dormentes.controller.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes.controller.ts
+apps/api/src/modulos/acesso/contas-dormentes.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes.ts

@@ -1,22 +1,26 @@
 // W1-01 (parte 2b) pela HTTP: POST /api/administracao/acesso/usuarios/:login/senha-provisoria, com a sessão real
-// sobre a fonte sintética (nada conecta a banco). Com a troca pelo novo ligada (ACESSO_TROCA_SENHA_PELO_NOVO=sim, porta
-// em memória): reautenticação obrigatória, segregação (a própria não), a provisória volta só na resposta sem cache, a
-// sessão do usuário cai e a trilha não leva a senha. Desligada: a ficha mostra a operação desligada com o motivo e a
-// gravação responde 409.
+// sobre a fonte sintética (nada conecta a banco), com o módulo da administração registrado: reautenticação
+// obrigatória, segregação (a própria não), a provisória volta só na resposta sem cache, a sessão do usuário cai e a
+// trilha não leva a senha. Sem convivência com sistema anterior (ADR 0003), a senha é sempre a do produto: o caso
+// "troca pelo novo desligada" (operação desligada, 409) deixou de existir e saiu daqui.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { modulo } from './modulo.js';
 
 const A = '/api/administracao/acesso';
 let chave = 0;
 
 async function subir(extra: Record<string, string>) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', ...extra };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'administracao', ...extra };
   const trilha = new RegistradorTrilhaMemoria();
-  const app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  const app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { administracao: async () => ({ modulo: (ctx) => modulo(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return { app, trilha };
@@ -94,27 +98,5 @@ describe('redefinir a senha pela ficha (troca pelo novo ligada)', () => {
     // Varredura: a provisória e a senha do gestor não vão à trilha.
     const t = JSON.stringify(trilha);
     expect(t).not.toContain(corpo.senhaProvisoria);
-  });
-});
-
-describe('redefinir a senha pela ficha (troca pelo novo desligada)', () => {
-  let app: NestFastifyApplication;
-  beforeAll(async () => {
-    ({ app } = await subir({}));
-  });
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('a ficha mostra a operação desligada com o motivo; a gravação responde 409 com o código', async () => {
-    const c = cliente(app);
-    const g = await c.entrar('SINT.GESTOR');
-    const ficha = (await c.get(g, `${A}/usuarios/SINT.FATURISTA`)).json();
-    const op = ficha.operacoes.find((o: { operacao: string }) => o.operacao === 'acesso.redefinirSenha');
-    expect(op.ligada).toBe(false);
-    expect(op.motivo).toMatch(/formato da senha/);
-    const r = await c.post(g, `${A}/usuarios/SINT.FATURISTA/senha-provisoria`, { senha: SENHA });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().codigo).toBe('troca-indisponivel');
   });
 });

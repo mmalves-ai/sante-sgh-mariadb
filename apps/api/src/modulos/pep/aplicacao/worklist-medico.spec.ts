@@ -8,7 +8,7 @@ import type { PortaPrescricao } from '../prescricao-porta.js';
 import type { PortaWorklist } from '../worklist-porta.js';
 import { ServicoWorklistMedico } from './worklist-medico.js';
 
-const c = { rede: 'rede-teste', hospital: 'aa' };
+const c = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'rede-teste', hospital: 'aa' };
 const AGORA = '2026-10-22T12:00:00.000';
 
 const linha = (paciente: number, tipo: 'internacao' | 'externo', entrada: string, leito: string) => ({
@@ -109,34 +109,30 @@ function portas(
   const worklist: PortaWorklist = {
     destino: 'memoria',
     leituras: async () => ({
-      previsoesAlta: [{ registro: 100, previsao: '2026-10-25' }],
+      previsoesAlta: [{ internacao: 100, previsao: '2026-10-25' }],
       resultados: [
         {
           paciente: 1,
           exame: 501,
           liberadoEm: '2026-10-22',
-          visualizadoNoOutroSistema: false,
           vistoPeloMedico: false,
         },
         {
           paciente: 1,
           exame: 502,
           liberadoEm: '2026-10-22',
-          visualizadoNoOutroSistema: false,
           vistoPeloMedico: false,
         },
         {
           paciente: 1,
           exame: 504,
           liberadoEm: '2026-10-21',
-          visualizadoNoOutroSistema: true,
-          vistoPeloMedico: false,
+          vistoPeloMedico: true,
         },
         {
           paciente: 2,
           exame: 503,
           liberadoEm: '2026-10-22',
-          visualizadoNoOutroSistema: false,
           vistoPeloMedico: false,
         },
       ],
@@ -172,7 +168,7 @@ describe('fila do médico', () => {
     );
     const [primeiro, segundo, terceiro] = f.pacientes;
     // Paciente 1: crítico não visto (potássio 7,1), um resultado novo (o sódio) e sem evolução há mais de 24 h; o exame
-    // visualizado no outro sistema não conta; previsão de alta da internação.
+    // o já visto pelo médico não conta; previsão de alta da internação.
     expect(primeiro?.paciente).toBe(1);
     expect(primeiro?.pendencias.map((x) => x.tipo)).toEqual([
       'critico-nao-visto',

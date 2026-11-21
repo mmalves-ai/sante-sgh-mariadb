@@ -9,11 +9,21 @@ import {
   GRUPO_ACESSO_TOTAL,
   mensagemUltimoGestor,
 } from '@sgh/dominio-acesso';
-import type { GestorAcessoLido } from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 
+/** Um gestor de acessos ativo do estabelecimento, como a fonte da gestão o entrega (só login e códigos). */
+export interface GestorAcesso {
+  readonly login: string;
+  /** Código do perfil amplo da conta (o de acesso total conta como gestor); null: nenhum. */
+  readonly grupo: string | null;
+  /** Tem o papel de gestor de acessos. */
+  readonly papelGestor: boolean;
+  /** Códigos dos perfis concedidos que dão a gestão de acessos. */
+  readonly concessoes: readonly string[];
+}
+
 export interface LeitorGestores {
-  gestoresAcesso(rede: string, hospital: string): Promise<GestorAcessoLido[]>;
+  gestoresAcesso(rede: string, hospital: string): Promise<readonly GestorAcesso[]>;
 }
 
 export async function exigirGestorRestante(

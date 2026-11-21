@@ -9,13 +9,14 @@ import { CHAVE_AUDITAR } from '../../../autorizacao/decoradores.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { moduloAcesso } from '../modulo.js';
 import { PortaSaneamentoMemoria } from './porta-memoria.js';
 import { SaneamentoController } from './saneamento.controller.js';
 
 const BASE = '/api/administracao/acesso/grupos/saneamento';
 
 describe(`rotas ${BASE}`, () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'acesso' };
   let app: NestFastifyApplication;
   const trilha = new RegistradorTrilhaMemoria();
   const porta = new PortaSaneamentoMemoria()
@@ -31,7 +32,10 @@ describe(`rotas ${BASE}`, () => {
       ultimoAcesso: null,
     });
   beforeAll(async () => {
-    app = await criarApp(lerConfiguracao(env), null, env, { trilha, saneamento: porta });
+    app = await criarApp(lerConfiguracao(env), null, env, {
+      trilha,
+      registro: { acesso: async () => ({ modulo: (ctx) => moduloAcesso(ctx, { saneamento: porta }) }) },
+    });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });

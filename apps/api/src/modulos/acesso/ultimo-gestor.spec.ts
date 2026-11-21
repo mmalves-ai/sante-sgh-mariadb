@@ -1,7 +1,6 @@
 // W1-01 (parte 3c): a guarda do último gestor de acessos ativo nos dois controladores, com a fonte falsa dos
 // gestores. Recusa (409 ultimo-gestor-acessos) sem chamar a receita; com outro gestor, segue para a senha (401 no
 // unitário, sem sessão real); sem conseguir ler, 503 (falha fechada). Mais a fonte em memória (estado sintético).
-import type { GestorAcessoLido } from '@sgh/legado';
 import { describe, expect, it, vi } from 'vitest';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -10,7 +9,7 @@ import type { FonteAdministracao } from '../administracao/fonte.js';
 import { UsuariosController } from '../administracao/usuarios.controller.js';
 import { GestaoAcessoController } from './gestao.controller.js';
 import { type FonteGestao, fonteGestaoMemoria } from './gestao-fonte.js';
-import { exigirGestorRestante } from './ultimo-gestor.js';
+import { exigirGestorRestante, type GestorAcesso } from './ultimo-gestor.js';
 
 const req = {
   headers: { 'idempotency-key': 'chave-ultimo-gestor-1' },
@@ -25,12 +24,12 @@ const req = {
   },
 } as unknown as RequisicaoAutorizada;
 
-const UM: GestorAcessoLido[] = [
+const UM: GestorAcesso[] = [
   { login: 'ANA', grupo: 'MEDICOS', papelGestor: true, concessoes: ['7'] },
   { login: 'BETO', grupo: 'MASTER', papelGestor: false, concessoes: [] },
 ];
 
-function montar(gestores: GestorAcessoLido[] | Error) {
+function montar(gestores: GestorAcesso[] | Error) {
   const leitor = vi.fn(async () => {
     if (gestores instanceof Error) throw gestores;
     return gestores;
@@ -43,7 +42,7 @@ function montar(gestores: GestorAcessoLido[] | Error) {
     executar,
     fichaUsuario: async (_c: unknown, login: string) => ({ login, grupo: 'MASTER' }),
   } as unknown as FonteAdministracao;
-  const usuarios = new UsuariosController(admin, null, resolvedor, null, null, null, {
+  const usuarios = new UsuariosController(admin, null, resolvedor, null, null, {
     gestoresAcesso: leitor,
   });
   const fonteGestao = {
@@ -73,12 +72,6 @@ describe('último gestor de acessos ativo (W1-01, parte 3c)', () => {
     for (const p of [
       () => so.usuarios.bloqueio('BETO', { bloquear: true, senha: 'x' }, req),
       () => so.usuarios.grupo('BETO', { entrada: { grupo: 'FATURAMENTO' }, senha: 'x' }, req),
-      () =>
-        so.gestao.legado(
-          'acesso.trocarGrupoUsuario',
-          { entrada: { login: 'BETO', grupo: 'FATURAMENTO' }, senha: 'x' },
-          req,
-        ),
     ]) {
       const e = await erro(p());
       expect(e.getStatus()).toBe(409);
@@ -90,7 +83,7 @@ describe('último gestor de acessos ativo (W1-01, parte 3c)', () => {
     expect(
       (
         await erro(
-          ana.gestao.legado(
+          ana.gestao.executarOperacao(
             'acesso.revogarPapelUsuario',
             { entrada: { login: 'ANA', papel: 0 }, senha: 'x' },
             req,
@@ -119,7 +112,7 @@ describe('último gestor de acessos ativo (W1-01, parte 3c)', () => {
     expect(await status(m.gestao.revogarPerfil('7', { motivo: 'saiu do setor', senha: 'x' }, req))).toBe(401);
     expect(
       await status(
-        m.gestao.legado(
+        m.gestao.executarOperacao(
           'acesso.revogarPapelUsuario',
           { entrada: { login: 'ANA', papel: 0 }, senha: 'x' },
           req,

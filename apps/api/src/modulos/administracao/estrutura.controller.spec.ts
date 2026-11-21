@@ -25,7 +25,7 @@ describe('estrutura: cache por rede e estabelecimento', () => {
   it('duas redes com o mesmo estabelecimento leem cada uma a sua estrutura; a mesma rede usa o cache', async () => {
     const lidas: string[] = [];
     const fonte = {
-      destino: 'legado',
+      destino: 'banco',
       estrutura: async (c: Ctx) => {
         lidas.push(`${c.rede}/${c.hospital}`);
         return {

@@ -1,195 +1,53 @@
 {
-  "lote": "02-06",
-  "registrar": [
-    {
-      "modulo": "documento",
-      "linha": "documento: () => import('./documento/modulo.js'),"
-    },
-    {
-      "modulo": "especialidades",
-      "linha": "especialidades: () => import('./especialidades/modulo.js'),"
-    },
-    {
-      "modulo": "exames",
-      "linha": "exames: () => import('./exames/modulo.js'),"
-    },
-    {
-      "modulo": "farmacia",
-      "linha": "farmacia: () => import('./farmacia/modulo.js'),"
-    }
-  ],
-  "fecho_tsconfig": [
-    "src/modulos/documento/aplicacao/emissao.service.spec.ts",
-    "src/modulos/documento/documento.int.spec.ts",
-    "src/modulos/documento/infra/registro.spec.ts",
-    "src/modulos/documento/infra/valkey.spec.ts",
-    "src/modulos/documento/integracao.spec-util.ts",
-    "src/modulos/especialidades/especialidades-crud.spec.ts",
-    "src/modulos/especialidades/especialidades.controller.ts",
-    "src/modulos/especialidades/especialidades.spec.ts",
-    "src/modulos/especialidades/porta-memoria.ts",
-    "src/modulos/especialidades/porta.ts",
-    "src/modulos/especialidades/public-api.ts",
-    "src/modulos/exames/exames.spec.ts",
-    "src/modulos/farmacia/apoios.ts",
-    "src/modulos/farmacia/farmacia.controller.ts",
-    "src/modulos/farmacia/farmacia.spec.ts",
-    "src/modulos/farmacia/porta-memoria.ts",
-    "src/modulos/farmacia/porta.ts",
-    "src/modulos/farmacia/public-api.ts",
-    "src/modulos/farmacia/servico.ts",
-    "src/modulos/documento/infra/registro-propria.int.spec.ts",
-    "src/modulos/documento/infra/registro-propria.ts",
-    "src/modulos/documento/modulo.ts",
-    "src/modulos/especialidades/modulo.ts",
-    "src/modulos/especialidades/porta-propria.int.spec.ts",
-    "src/modulos/especialidades/porta-propria.ts",
-    "src/modulos/especialidades/tipos.ts",
-    "src/modulos/exames/modulo.ts",
-    "src/modulos/farmacia/modulo.ts",
-    "src/modulos/farmacia/operacoes.ts",
-    "src/modulos/farmacia/porta-propria.int.spec.ts",
-    "src/modulos/farmacia/porta-propria.ts",
-    "src/modulos/farmacia/tipos.ts",
-    "src/modulos/farmacia/gravador-avaliacao.ts"
-  ],
-  "pedidos": [
-    {
-      "tipo": "ddl",
-      "tabela": "emissao_documento",
-      "motivo": "Registro das emissões de PDF imutável (via, chave do objeto, QR, hash, versão do objeto); usado por RegistroEmissoesPropria. Enquanto a tabela não está em db/migracoes, a parte do banco de registro-propria.int.spec.ts é pulada (skipIf): o teste não cria nem derruba tabela no banco compartilhado.",
-      "ddl": "CREATE TABLE emissao_documento (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  codigo CHAR(36) NOT NULL COMMENT 'Identificador público da emissão (UUID)',\n  rede VARCHAR(63) NOT NULL COMMENT 'Segmento da rede na chave do objeto',\n  estabelecimento_codigo VARCHAR(20) NOT NULL COMMENT 'Segmento do estabelecimento na chave do objeto',\n  modelo VARCHAR(40) NOT NULL,\n  versao_modelo VARCHAR(20) NOT NULL,\n  origem_tipo VARCHAR(40) NOT NULL COMMENT 'Tipo do registro de origem do documento',\n  origem_registro_id BIGINT UNSIGNED NOT NULL,\n  via SMALLINT UNSIGNED NOT NULL,\n  original_emissao_documento_id BIGINT UNSIGNED NULL COMMENT 'Emissão original (via 1) da reemissão',\n  motivo_reemissao VARCHAR(200) NULL,\n  hash_conteudo CHAR(64) NOT NULL COMMENT 'SHA-256 do PDF gravado',\n  chave_objeto VARCHAR(300) NOT NULL COMMENT 'Chave do objeto no armazenamento imutável',\n  identificador_qr VARCHAR(64) NOT NULL,\n  autor VARCHAR(60) NOT NULL COMMENT 'Login de quem emitiu, no momento da emissão',\n  autor_usuario_id BIGINT UNSIGNED NULL,\n  emitido_em DATETIME(3) NOT NULL,\n  versao_objeto VARCHAR(100) NULL COMMENT 'Versão do objeto gravado (a leitura é sempre por ela)',\n  situacao VARCHAR(20) NOT NULL DEFAULT 'reservada',\n  confirmado_em DATETIME(3) NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_emissao_documento_situacao CHECK (situacao IN ('reservada','emitida')),\n  CONSTRAINT ck_emissao_documento_confirmacao CHECK ((situacao = 'reservada' AND versao_objeto IS NULL AND confirmado_em IS NULL) OR (situacao = 'emitida' AND versao_objeto IS NOT NULL AND confirmado_em IS NOT NULL)),\n  CONSTRAINT ck_emissao_documento_via CHECK (via >= 1 AND ((via = 1) = (original_emissao_documento_id IS NULL))),\n  CONSTRAINT ck_emissao_documento_reemissao CHECK (via = 1 OR motivo_reemissao IS NOT NULL),\n  CONSTRAINT ck_emissao_documento_hash CHECK (hash_conteudo REGEXP '^[0-9a-f]{64}$'),\n  UNIQUE KEY uq_emissao_documento_codigo (codigo),\n  UNIQUE KEY uq_emissao_documento_chave_objeto (chave_objeto),\n  UNIQUE KEY uq_emissao_documento_identificador_qr (identificador_qr),\n  UNIQUE KEY uq_emissao_documento_original_via (original_emissao_documento_id, via),\n  KEY ix_emissao_documento_origem (origem_tipo, origem_registro_id),\n  KEY ix_emissao_documento_estabelecimento (estabelecimento_id, emitido_em),\n  KEY ix_emissao_documento_autor_usuario_id (autor_usuario_id)\n) COMMENT='Emissão de documento em PDF imutável: via, chave do objeto, QR de validação e hash';\nALTER TABLE emissao_documento\n  ADD CONSTRAINT fk_emissao_documento_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_emissao_documento_original_emissao_documento_id FOREIGN KEY (original_emissao_documento_id) REFERENCES emissao_documento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_emissao_documento_autor_usuario_id FOREIGN KEY (autor_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;"
-    },
-    {
-      "tipo": "codigo",
-      "arquivo": "apps/api/src/modulos/documento/fonte.ts",
-      "motivo": "criarFonteDocumento: com núcleo, montar o registro por requisição com registroEmissoesDaRequisicao(nucleo) (registro-propria.ts) e chamar a fábrica com o ContextoNucleo da requisição (cliente, estabelecimento e usuário da sessão, correlação), nunca com um cliente fixo do processo; a validação pública pelo QR usa o contexto do cliente com estabelecimento null (porQr não filtra estabelecimento, de propósito). Só depois que emissao_documento entrar; até lá, o registro em memória do processo. fonte.ts é do lote 01-04."
-    },
-    {
-      "tipo": "codigo",
-      "arquivo": "apps/api/src/modulos/pep (modulo do prontuário)",
-      "motivo": "ESTADO_PRONTUARIO global, exportado pelo módulo do prontuário quando ele entrar no registro; até lá o módulo especialidades provê um EstadoProntuario local (o motivo de acesso por sessão não é compartilhado com o prontuário)."
-    },
-    {
-      "tipo": "codigo",
-      "arquivo": "apps/api/src/modulos/farmacia/modulo.ts",
-      "motivo": "AVISOS_FARMACIA (tempo real da enfermagem: AvisosAtendimento sobre o vigia) não é provido; entra com o lote que migrar o vigia da enfermagem. Sem ele, a fila não recebe o aviso de mudança (a tela relê)."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "exame_oftalmologico (consolidado)",
-      "motivo": "O exame oftalmológico da tela é uma avaliação com acuidade sem/com correção, PIO com método, gonioscopia, classificação visual, alertas e conduta, e itens por exame e lado. O modelo tem exame_oftalmologico (tipo obrigatório, um exame por linha) e exame_oftalmologico_valor (medidas). Proposta: exame_oftalmologico ganha classificacao_visual VARCHAR(20) CHECK (normal, reduzida, baixa-visao, cegueira, sem-dado), conduta VARCHAR(500) e internacao_id; o tipo da avaliação consolidada vira um tipo_exame_oftalmologico de código 'avaliacao' carregado pelo criar_cliente; gonioscopia entra como medida em exame_oftalmologico_valor (CHECK medida + 'gonioscopia'); e as tabelas de cadastro acuidade_visual (codigo, rotulo, decimal, tipo) e graduacao_oftalmologica (sigla, descricao). Até lá: leitura vazia, gravação 409 modelo-pendente."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "protocolo_quimioterapia / protocolo_quimioterapia_droga",
-      "motivo": "A tela publica o protocolo imutável por versão (código + versão, hash do conteúdo, revogação com motivo) e os fármacos por nome genérico, unidade e via do contrato. Proposta: protocolo_quimioterapia.versao_protocolo SMALLINT NOT NULL DEFAULT 1, hash_conteudo CHAR(64) NOT NULL, revogado_em DATETIME(3) NULL, motivo_revogacao VARCHAR(200) NULL, UNIQUE (codigo, versao_protocolo) no lugar de UNIQUE (codigo), UNIQUE (hash_conteudo); e o contrato da tela escolhendo item_prescritivel_id, unidade_prescricao_id e via_de_uso_id (hoje texto) para gravar protocolo_quimioterapia_droga. Até lá: leitura vazia, gravação 409."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "ciclo_quimioterapia / tratamento_oncologico",
-      "motivo": "O ciclo da tela leva creatinina, redução de dose com motivo, justificativa de intervalo, validação pelo farmacêutico (quem, quando, observação) e andamento (ativo, suspenso, cancelado). Proposta: ciclo_quimioterapia.creatinina_mg_dl DECIMAL(5,2), reducao_dose_percentual TINYINT NOT NULL DEFAULT 0 CHECK (0..75), motivo_reducao VARCHAR(200), justificativa_intervalo VARCHAR(200), validado_por_usuario_id BIGINT (FK usuario), validado_em DATETIME(3), observacao_validacao VARCHAR(300), CHECK (reducao_dose_percentual = 0 OR motivo_reducao IS NOT NULL). tratamento_oncologico exige diagnostico_oncologico_id e intencao_tratamento_oncologico_id NOT NULL: o contrato do registro do ciclo 1 precisa pedir o diagnóstico e a intenção (melhoria seguindo o MV)."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "ciclo_quimioterapia_prescricao",
-      "motivo": "Ligação N:N ciclo × prescrição (a tela liga e desliga prescrições do dia previsto). Proposta: CREATE TABLE ciclo_quimioterapia_prescricao (id PK, ciclo_quimioterapia_id FK, prescricao_id FK, ligado_em DATETIME(3) NOT NULL, desligado_em DATETIME(3) NULL, motivo_desligamento VARCHAR(200) NULL, auditoria padrão, UNIQUE KEY uq_ciclo_quimioterapia_prescricao_par (ciclo_quimioterapia_id, prescricao_id), CHECK (desligado_em IS NULL OR motivo_desligamento IS NOT NULL))."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "evento_tratamento_oncologico",
-      "motivo": "Eventos do protocolo e do ciclo (versão revogada, protocolo inativado, ciclo suspenso/cancelado/ajustado, prescrição desligada) com categoria do motivo, ciclos afetados e a versão anterior do ciclo. Proposta: CREATE TABLE evento_tratamento_oncologico (id PK, estabelecimento_id FK, protocolo_quimioterapia_id FK NULL, ciclo_quimioterapia_id FK NULL, prescricao_id FK NULL, evento VARCHAR(30) NOT NULL CHECK (lista EVENTOS_ONCO), categoria VARCHAR(30) NULL, ciclos_afetados SMALLINT NULL, versao_anterior JSON NULL, motivo VARCHAR(300) NOT NULL, ocorrido_em DATETIME(3) NOT NULL, usuario_id FK, auditoria padrão, CHECK (protocolo_quimioterapia_id IS NOT NULL OR ciclo_quimioterapia_id IS NOT NULL))."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "ordem_lactario (ou preparo_lactario_item por paciente)",
-      "motivo": "A ordem do lactário da tela é por internação: fórmula em texto, volume, horários, preparo, validade, lote, conferência por outra pessoa, cancelamento e primeira etiqueta. O modelo tem preparo_lactario (cabeçalho por preparo, manipulador colaborador obrigatório, lote único) e preparo_lactario_item (fórmula do cadastro formula_lactea, um frasco por horário). Proposta: o contrato da tela escolher formula_lactea_id e o manipulador; a ordem vira preparo_lactario (um por paciente e preparo) + preparo_lactario_item por horário; preparo_lactario ganha conferido_por_usuario_id/conferido_em e etiqueta_emitida_em; e o histórico preparo_lactario_item_evento (preparo_lactario_id, evento CHECK ('alterada','cancelada','etiqueta-emitida'), dados_antes JSON, dados_depois JSON, motivo, ocorrido_em, usuario_id). Até lá: leitura vazia, gravação 409."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "registro_nascimento",
-      "motivo": "A tela registra a reanimação neonatal e uma observação. Proposta: registro_nascimento.reanimacao_neonatal BOOLEAN NOT NULL DEFAULT FALSE e observacao VARCHAR(300) NULL. A gravação do recém-nascido recusa com 409 até lá (a leitura já vem do registro_nascimento, com as classificações recalculadas pelo domínio)."
-    },
-    {
-      "tipo": "contrato",
-      "arquivo": "packages/contratos/src/pep/especialidades.ts",
-      "motivo": "LIQUIDOS_AMNIOTICOS: o modelo distingue meconial fluido e espesso (partograma_registro.liquido_amniotico); a tela tem só 'meconial' (gravado como meconial_fluido). Proposta: 'meconial-fluido' e 'meconial-espesso' no contrato."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "livro_controlado (fechamento)",
-      "motivo": "O fechamento do livro da tela guarda o conteúdo montado, o hash e a guarda legal e diferencia conferência e oficial. Proposta: livro_controlado.modo_fechamento VARCHAR(20) CHECK ('conferencia','oficial'), hash_conteudo CHAR(64), conteudo_arquivo_id FK arquivo, guarda_ate DATE.",
-      "operacao": "gravarSgh.fecharLivro"
-    },
-    {
-      "tipo": "contrato",
-      "arquivo": "packages/contratos (destino da gravação)",
-      "motivo": "Igual ao pedido do lote 01-05: destinoDoContrato ainda devolve 'legado' para o banco; trocar o enum do contrato para 'banco'."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.dispensarHorario",
-      "arquivo": "packages/contratos/src/farmacia (entradas e respostas) e regras-suprimentos/farmacia-situacao.ts",
-      "motivo": "A dispensação por horário devolve o documento de saída por ano/mês/número e a situação numérica do sistema de origem (7 dispensada). O modelo tem dispensacao (numero por estabelecimento, tipo 'horario', situacao nomeada, local_estoque, setor_funcional e centro_custo NOT NULL) e dose_dispensada. Proposta: o contrato devolver o número da dispensação e a situação nomeada (dispensada, entregue, administrada, devolvida, cancelada) e pedir o local de estoque e o setor que recebe; então a operação grava dispensacao + dispensacao_item + dose_dispensada pelo Executor. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.confirmarEntrega",
-      "arquivo": "packages/contratos/src/farmacia (esquemaConfirmarEntrega)",
-      "motivo": "O aceite da entrega é por 'controle' do sistema de origem (situação 8 entregue). Proposta: aceite por dispensacao.id + versao, gravando dispensacao.situacao = 'entregue' e a hora/quem recebeu (o modelo precisa de recebido_em e recebido_usuario_id em dispensacao: DDL a propor com o contrato). Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.devolverDose",
-      "arquivo": "packages/contratos/src/farmacia (esquemaDevolverDose)",
-      "motivo": "A devolução devolve documento por ano/mês e situação 9 (estornada). O modelo tem devolucao_dispensacao(_item) com motivo_devolucao_estoque. Proposta: o contrato pedir o motivo do cadastro (motivo_devolucao_estoque_id) e devolver o número da devolução; a operação grava devolucao_dispensacao + item e dose_dispensada.situacao = 'devolvida'. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.cancelarDispensacao",
-      "arquivo": "packages/contratos/src/farmacia (esquemaCancelarDispensacao)",
-      "motivo": "O cancelamento é pelo documento ano/mês/número do sistema de origem. Proposta: por dispensacao.id + versao, com motivo (dispensacao.cancelado_em e motivo_cancelamento já existem com CHECK). Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.registrarPerdaControlado",
-      "arquivo": "packages/contratos/src/farmacia (esquemaRegistrarPerdaControlado)",
-      "motivo": "A perda do controlado precisa do livro aberto (livro_controlado) e do movimento de estoque que origina o lançamento (lancamento_controlado.tipo 'perda', saldo_apos). O contrato não traz o local de estoque nem o lote por id. Proposta: pedir local_estoque_id e lote_insumo_id; a operação grava o movimento de estoque, o lançamento no livro e baixa saldo_lote. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "operacao": "suprimentos.avaliarPrescricao",
-      "arquivo": "packages/contratos/src/farmacia (esquemaAvaliarPrescricao)",
-      "motivo": "A operação grava a situação 2/3/4 no extrato por horário do sistema de origem; no modelo próprio a avaliação é por item prescrito e já grava pela tela (gravarSgh.decidir, gravador-avaliacao.ts). Proposta: retirar a operação do contrato (a decisão por item a substitui) ou trocá-la por item prescrito. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "avaliacao_farmaceutica_item (parecer)",
-      "operacao": "gravarSgh.decidir com 'pendencia-revisao-medica'",
-      "motivo": "O CHECK ck_avaliacao_farmaceutica_item_parecer não tem a pendência de revisão médica (só aprovado, aprovado_com_ressalva, recusado, substituido). Proposta: ALTER TABLE avaliacao_farmaceutica_item DROP CONSTRAINT ck_avaliacao_farmaceutica_item_parecer, ADD CONSTRAINT ck_avaliacao_farmaceutica_item_parecer CHECK (parecer IN ('aprovado','aprovado_com_ressalva','recusado','substituido','revisao_medica')); e ck_avaliacao_farmaceutica_item_justificativa passa a exigir a justificativa também em 'revisao_medica'. Até lá essa decisão recusa com 409 modelo-pendente (as decisões valido e nao-aprovado já gravam)."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "conferencia_controlado",
-      "operacao": "gravarSgh.conferirControlado",
-      "motivo": "A dupla conferência do controlado (documento de saída/devolução/perda, lote, quantidade do documento e contada, justificativa da divergência, conferente reautenticado) não tem tabela no modelo. Proposta: CREATE TABLE conferencia_controlado (id PK, estabelecimento_id FK, lancamento_controlado_id FK NULL, documento_tipo VARCHAR(20) NOT NULL CHECK IN ('saida','devolucao','perda'), documento_id BIGINT NOT NULL, lote_insumo_id FK NULL, quantidade_documento DECIMAL(15,4) NOT NULL, quantidade_contada DECIMAL(15,4) NOT NULL, justificativa VARCHAR(500) NULL, conferente_usuario_id FK NOT NULL, conferido_em DATETIME(3) NOT NULL, reautenticado_em DATETIME(3) NULL, auditoria padrão, CHECK (quantidade_documento = quantidade_contada OR justificativa IS NOT NULL), UNIQUE (documento_tipo, documento_id, lote_insumo_id)). Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "ddl",
-      "tabela": "dispensacao (ambulatorial)",
-      "operacao": "gravarSgh.dispensarAmbulatorial",
-      "motivo": "A dispensação ambulatorial é por paciente com receita (número, data, prescritor) e sem atendimento; dispensacao exige atendimento_id, setor_funcional_id e centro_custo_id NOT NULL e o tipo só aceita horario/periodo/avulsa/cirurgica. Proposta: tipo 'ambulatorial' no CHECK, atendimento_id/setor_funcional_id NULL quando tipo = 'ambulatorial' (CHECK), e a receita por receita_controlada_id. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "codigo",
-      "operacao": "gravarSgh.escriturarSngpc",
-      "arquivo": "apps/api/src/modulos/farmacia (escrituração do envio nacional)",
-      "motivo": "envio_controlado_nacional existe, mas o envio monta os lançamentos do período de lancamento_controlado (que depende da perda, da dispensação e do livro acima) e exige o responsável técnico (profissional) e o arquivo gerado (arquivo_id). Entra depois de registrarPerdaControlado, dispensarHorario/dispensarAmbulatorial e fecharLivro. Até lá: 409 modelo-pendente."
-    },
-    {
-      "tipo": "contrato",
-      "arquivo": "packages/contratos/src/pep/especialidades.ts (esquemaRecemNascidoLido)",
-      "motivo": "O recém-nascido lido pode vir sem peso, Apgar e idade gestacional (colunas anuláveis em registro_nascimento, por exemplo o nascimento migrado). Proposta: pesoG, apgar1, apgar5, igSemanas, igDias, classificacaoIg, classificacaoPeso e classificacaoApgar nullable no esquema e a tela mostrar 'não anotado'. Até lá o controller declara o tipo local ObstetriciaLida (especialidades.controller.ts) e a porta devolve null, nunca uma classificação sobre zero."
-    }
-  ]
+ "lote": "02-06",
+ "apagados": [
+  "apps/api/src/modulos/administracao/sbis/porta-legado.ts",
+  "apps/api/src/modulos/administracao/sbis/sbis.int.spec.ts"
+ ],
+ "criados": [
+  "apps/api/src/modulos/administracao/modulo.ts",
+  "apps/api/src/modulos/administracao/sbis/porta-propria.ts",
+  "apps/api/src/modulos/administracao/sbis/porta-propria.int.spec.ts",
+  "apps/api/src/modulos/administracao/sbis/porta-propria.spec.ts"
+ ],
+ "registrar": [
+  "administracao: () => import('./administracao/modulo.js'),"
+ ],
+ "fecho_tsconfig": [
+  "src/modulos/administracao/modulo.ts",
+  "src/modulos/administracao/sbis/porta.ts",
+  "src/modulos/administracao/sbis/porta-memoria.ts",
+  "src/modulos/administracao/sbis/porta-propria.ts",
+  "src/modulos/administracao/sbis/porta-propria.int.spec.ts",
+  "src/modulos/administracao/sbis/servico.ts",
+  "src/modulos/administracao/sbis/servico.spec.ts",
+  "src/modulos/administracao/sbis/sbis.controller.ts",
+  "src/modulos/administracao/sbis/sbis.controller.spec.ts",
+  "src/modulos/administracao/sbis/medidas.ts",
+  "src/modulos/administracao/sbis/exportacao.ts",
+  "src/modulos/administracao/usuarios.controller.ts",
+  "src/modulos/administracao/usuarios-cpf.spec.ts",
+  "src/modulos/administracao/usuarios-painel.spec.ts",
+  "src/modulos/administracao/usuarios-painel-cpf.spec.ts",
+  "src/modulos/administracao/usuarios-redefinir-senha.spec.ts",
+  "src/modulos/administracao/usuarios-administradores.spec.ts",
+  "src/modulos/administracao/termo-publicar.spec.ts",
+  "src/modulos/administracao/termo-texto.spec.ts",
+  "src/modulos/administracao/sbis/porta-propria.spec.ts"
+ ],
+ "pedidos": [
+  "DDL (ADR 0002, modulo 02_ADM, novo tabelas.sql/chaves.sql): ciclo_certificacao. Sem ela, painel e ciclos SBIS respondem 503 'tabelas-ausentes' com a lista. CREATE TABLE ciclo_certificacao (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  tipo              VARCHAR(30) NOT NULL COMMENT 'Autoavaliação, pré-auditoria ou auditoria formal',\n  competencia       CHAR(7) NOT NULL COMMENT 'Mês de referência AAAA-MM',\n  versao_software   VARCHAR(40) NOT NULL COMMENT 'Versão do sistema avaliada',\n  referencia        VARCHAR(120) NOT NULL COMMENT 'Manual de certificação de referência',\n  avaliador         VARCHAR(120) NULL COMMENT 'Organização do consultor externo ou da auditoria',\n  situacao          VARCHAR(30) NOT NULL DEFAULT 'aberto',\n  parecer           VARCHAR(30) NULL,\n  parecer_texto     VARCHAR(1000) NULL,\n  certificado       VARCHAR(40) NULL COMMENT 'Número do certificado (auditoria formal apta)',\n  motivo_cancelamento VARCHAR(200) NULL,\n  aberto_por_usuario_id BIGINT UNSIGNED NOT NULL,\n  aberto_em         DATETIME(3) NOT NULL,\n  concluido_por_usuario_id BIGINT UNSIGNED NULL COMMENT 'Quem concluiu ou cancelou',\n  concluido_em      DATETIME(3) NULL,\n  origem            VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em       DATETIME(3) NULL,\n  excluido_por      BIGINT UNSIGNED NULL,\n  tipo_aberto       VARCHAR(30) AS (CASE WHEN situacao = 'aberto' AND excluido_em IS NULL THEN tipo END) PERSISTENT COMMENT 'Auxiliar da unicidade: um ciclo aberto por tipo no estabelecimento',\n  CONSTRAINT ck_ciclo_certificacao_tipo CHECK (tipo IN ('autoavaliacao','pre_auditoria','auditoria')),\n  CONSTRAINT ck_ciclo_certificacao_situacao CHECK (situacao IN ('aberto','concluido','cancelado')),\n  CONSTRAINT ck_ciclo_certificacao_parecer CHECK (parecer IS NULL OR parecer IN ('apto','com_bloqueante')),\n  CONSTRAINT ck_ciclo_certificacao_competencia CHECK (competencia REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'),\n  CONSTRAINT ck_ciclo_certificacao_fechamento CHECK ((situacao = 'aberto') = (concluido_em IS NULL)),\n  CONSTRAINT ck_ciclo_certificacao_concluido CHECK (situacao <> 'concluido' OR parecer IS NOT NULL),\n  CONSTRAINT ck_ciclo_certificacao_cancelado CHECK (situacao <> 'cancelado' OR motivo_cancelamento IS NOT NULL),\n  CONSTRAINT ck_ciclo_certificacao_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_ciclo_certificacao_tipo_aberto (estabelecimento_id, tipo_aberto),\n  KEY ix_ciclo_certificacao_estabelecimento (estabelecimento_id, tipo, situacao),\n  KEY ix_ciclo_certificacao_aberto_por (aberto_por_usuario_id),\n  KEY ix_ciclo_certificacao_concluido_por (concluido_por_usuario_id)\n) COMMENT='Ciclo de avaliação da certificação do prontuário eletrônico (autoavaliação, pré-auditoria, auditoria) com parecer';\nALTER TABLE ciclo_certificacao\n  ADD CONSTRAINT fk_ciclo_certificacao_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ciclo_certificacao_aberto_por_usuario_id FOREIGN KEY (aberto_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ciclo_certificacao_concluido_por_usuario_id FOREIGN KEY (concluido_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;",
+  "DDL (ADR 0002, 02_ADM): ciclo_certificacao_item. CREATE TABLE ciclo_certificacao_item (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  ciclo_certificacao_id BIGINT UNSIGNED NOT NULL,\n  requisito         VARCHAR(20) NOT NULL COMMENT 'Código do requisito no catálogo do produto (REQUISITOS_SBIS)',\n  resultado         VARCHAR(30) NOT NULL DEFAULT 'pendente',\n  severidade        VARCHAR(30) NULL COMMENT 'Severidade da não conformidade',\n  origem_nao_conformidade VARCHAR(30) NULL,\n  evidencia         VARCHAR(500) NULL,\n  observacao        VARCHAR(500) NULL,\n  avaliado_por_usuario_id BIGINT UNSIGNED NULL,\n  avaliado_em       DATETIME(3) NULL,\n  situacao_correcao VARCHAR(30) NULL,\n  descricao_correcao VARCHAR(500) NULL,\n  corrigido_por_usuario_id BIGINT UNSIGNED NULL,\n  corrigido_em      DATETIME(3) NULL,\n  verificado_por_usuario_id BIGINT UNSIGNED NULL,\n  verificado_em     DATETIME(3) NULL,\n  origem            VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em       DATETIME(3) NULL,\n  excluido_por      BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_ciclo_certificacao_item_resultado CHECK (resultado IN ('pendente','conforme','nao_conforme','concessao','nao_aplicavel')),\n  CONSTRAINT ck_ciclo_certificacao_item_severidade CHECK (severidade IS NULL OR severidade IN ('bloqueante','maior','menor','observacao')),\n  CONSTRAINT ck_ciclo_certificacao_item_origem_nc CHECK (origem_nao_conformidade IS NULL OR origem_nao_conformidade IN ('defeito','concessao','documentacao')),\n  CONSTRAINT ck_ciclo_certificacao_item_correcao CHECK (situacao_correcao IS NULL OR situacao_correcao IN ('aberta','corrigida','verificada')),\n  CONSTRAINT ck_ciclo_certificacao_item_nc CHECK ((resultado = 'nao_conforme') = (situacao_correcao IS NOT NULL)),\n  CONSTRAINT ck_ciclo_certificacao_item_verificador CHECK (verificado_por_usuario_id IS NULL OR verificado_por_usuario_id <> corrigido_por_usuario_id),\n  CONSTRAINT ck_ciclo_certificacao_item_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_ciclo_certificacao_item_requisito (ciclo_certificacao_id, requisito),\n  KEY ix_ciclo_certificacao_item_avaliado_por (avaliado_por_usuario_id),\n  KEY ix_ciclo_certificacao_item_corrigido_por (corrigido_por_usuario_id),\n  KEY ix_ciclo_certificacao_item_verificado_por (verificado_por_usuario_id)\n) COMMENT='Requisito avaliado num ciclo de certificação: resultado, não conformidade, correção e verificação por outra pessoa';\nALTER TABLE ciclo_certificacao_item\n  ADD CONSTRAINT fk_ciclo_certificacao_item_ciclo_certificacao_id FOREIGN KEY (ciclo_certificacao_id) REFERENCES ciclo_certificacao (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ciclo_certificacao_item_avaliado_por_usuario_id FOREIGN KEY (avaliado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ciclo_certificacao_item_corrigido_por_usuario_id FOREIGN KEY (corrigido_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ciclo_certificacao_item_verificado_por_usuario_id FOREIGN KEY (verificado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;",
+  "DDL (melhoria, 02_ADM): colunas proprias da restauracao em verificacao_backup; hoje periodicidade, integridade e observacao vao em verificacao_backup.dados (JSON), lidas e gravadas por sbis/porta-propria.ts (trocar para as colunas quando aplicadas). ALTER TABLE verificacao_backup\n  ADD COLUMN periodicidade VARCHAR(20) NULL COMMENT 'Teste de restauração diário ou mensal (backup verificado)' AFTER modalidade,\n  ADD COLUMN integridade_verificada VARCHAR(30) NULL COMMENT 'Resultado da conferência de integridade da cópia restaurada' AFTER resumo_integridade,\n  ADD COLUMN observacao VARCHAR(500) NULL AFTER mensagem_erro,\n  ADD CONSTRAINT ck_verificacao_backup_periodicidade CHECK (periodicidade IS NULL OR periodicidade IN ('diaria','mensal')),\n  ADD CONSTRAINT ck_verificacao_backup_integridade CHECK (integridade_verificada IS NULL OR integridade_verificada IN ('ok','falhou','nao_verificada')),\n  ADD CONSTRAINT ck_verificacao_backup_restauracao CHECK (processo <> 'restauracao' OR periodicidade IS NOT NULL);",
+  "DDL + nucleo (00_NUCLEO e packages/nucleo/src/trilha.ts): encadeamento por hash da trilha_auditoria (SBIS-16), calculado pelo nucleo na mesma transacao da linha, com a verificacao exposta para a porta. Sem isso, PortaSbisPropria.verificarDias recusa com 'trilha-sem-encadeamento'. ALTER TABLE trilha_auditoria\n  ADD COLUMN hash_anterior CHAR(64) NULL COMMENT 'Hash da linha anterior da cadeia do estabelecimento (SHA-256)',\n  ADD COLUMN hash_linha CHAR(64) NULL COMMENT 'SHA-256 do conteúdo canônico desta linha mais o hash anterior',\n  ADD KEY ix_trilha_auditoria_cadeia (estabelecimento_id, id);",
+  "Contratos alterados por este lote (enum de destino 'legado' -> 'banco'): packages/contratos/src/auditoria/sbis.ts (BackupVerificado) e packages/contratos/src/administracao/usuarios.ts (6 esquemas). Ajustar fixtures da web que ainda usam destino 'legado': apps/web/src/modulos/administracao/rede-cpf.spec.ts:105 e :144, apps/web/src/modulos/administracao/usuarios-tela.spec.ts:594 (trocar por 'banco').",
+  "Lote 02-05 (fonte-propria.ts:189): nome de operacao 'acesso.aceitarTermo' recusado por FORMATO_NOME_OPERACAO (so minusculas) ao carregar o modulo com nucleo; modulo.ts carrega a fonte propria por import dinamico so com nucleo, entao em dev/ci nao quebra, mas com nucleo a partida do modulo falha ate corrigir.",
+  "modulo.ts da administracao monta TODOS os controladores (Usuarios, RedeCpf, Permissoes, Estrutura, Auditoria, Sbis) com FONTE_ADMINISTRACAO (propria com nucleo; memoria em dev/ci) e exporta FONTE_ADMINISTRACAO, PORTA_SBIS e SERVICO_SBIS (documento e portal-paciente usam a porta SBIS para certificado e identificacao).",
+  "Ligar as fontes opcionais do ServicoSbis pelas opcoes do modulo quando os modulos donos estiverem migrados: medidas (acesso: identidade, saneamento, contas-banco, segredos), politicas2fa (acesso/identidade) e assinaturaConfigurada (assinatura). Sem elas o pacote mostra esses itens como pendentes/indisponiveis.",
+  "ADR 0003 (decisao do dono): o termo das concessoes provisorias da convivencia (rotas /administracao/coexistencia/concessoes, CONCESSOES_COEXISTENCIA, dominio sbis/concessoes.ts, medidas.ts, tela web) nao tem mais objeto sem convivencia. A porta propria as devolve encerradas, reabrir/prever recusam 'sem-convivencia'. Proposta: remover a funcionalidade e o regime 'concessao' do contrato/dominio/web.",
+  "Teste da rota /administracao/auditoria/trilha/exportar-sbis saiu de sbis.controller.spec.ts (a rota e do AuditoriaController, lote 02-05); com a porta propria ela responde 503 'trilha-sem-encadeamento' ate o encadeamento existir.",
+  "app.module.ts (desmontagem): retirar portaSbisLegado/portaSbisIndisponivel de './modulos/administracao/sbis/porta-legado.js' (arquivo apagado; portaSbisIndisponivel agora vem de './sbis/porta.js').",
+  "PROVA PENDENTE DO DDL (nao contar como aprovado): o caso dos ciclos em sbis/porta-propria.int.spec.ts faz skip enquanto ciclo_certificacao e ciclo_certificacao_item nao existem; o SQL de abrir/avaliar/corrigir/verificar/concluir/cancelar esta provado so no dublê (sbis/porta-propria.spec.ts). Ao aplicar o DDL, rodar o int.spec de novo: ele ja confere recusas sem trilha (outro estabelecimento, ciclo aberto do tipo, NC, verificador = corretor, ciclo fechado) e a versao do item.",
+  "Rotas POST de sbis.controller.ts passam a exigir Idempotency-Key (idempotencia(req) de administracao/comum.ts): a web (api-sbis.ts) ja envia; outros clientes HTTP dessas rotas recebem 400 sem a chave."
+ ]
 }

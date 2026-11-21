@@ -1,123 +1,98 @@
 {
- "lote": "02-05",
- "registrar": [
-  "enfermagem"
- ],
- "fecho_tsconfig": [
-  "src/modulos/enfermagem/protocolo-internado-servico.ts",
-  "src/modulos/enfermagem/protocolo-internado.controller.ts",
-  "src/modulos/enfermagem/public-api.ts",
-  "src/modulos/enfermagem/aplicacao/sae.autorizacao.int.spec.ts",
-  "src/modulos/enfermagem/sae-porta-memoria.ts",
-  "src/modulos/enfermagem/sae-porta.ts",
-  "src/modulos/enfermagem/sae-servico.ts",
-  "src/modulos/enfermagem/sae.controller.ts",
-  "src/modulos/enfermagem/sae.spec-util.ts",
-  "src/modulos/enfermagem/sae.spec.ts",
-  "src/modulos/enfermagem/servico.ts",
-  "src/modulos/enfermagem/simbolos.ts",
-  "src/modulos/enfermagem/aplicacao/suspensao.int.spec.ts",
-  "src/modulos/enfermagem/transfusao-porta-memoria.ts",
-  "src/modulos/enfermagem/transfusao-porta.ts",
-  "src/modulos/enfermagem/transfusao.controller.ts",
-  "src/modulos/enfermagem/transfusao.spec.ts",
-  "src/modulos/enfermagem/trr-servico.ts",
-  "src/modulos/enfermagem/trr.controller.ts",
-  "src/modulos/enfermagem/vacina-rnds.spec.ts",
-  "src/modulos/enfermagem/vacina.controller.ts",
-  "src/modulos/enfermagem/vigia.ts",
-  "src/modulos/enfermagem/w003-contencao.spec.ts",
-  "src/modulos/enfermagem/w003-escalas-mercado.spec.ts",
-  "src/modulos/enfermagem/w003-escores-estorno.spec.ts",
-  "src/modulos/enfermagem/w003-hemoterapia.spec.ts",
-  "src/modulos/enfermagem/w003-lesao.spec.ts",
-  "src/modulos/enfermagem/w003-plantao-aparelho.spec.ts",
-  "src/modulos/enfermagem/w003-protocolo-internado.spec.ts",
-  "src/modulos/enfermagem/w003-receita-vacina.spec.ts",
-  "src/modulos/enfermagem/w003-revisao-contencao.spec.ts",
-  "src/modulos/enfermagem/w003-trr-pcr.spec.ts",
-  "src/modulos/enfermagem/w108-contencao-turno.spec.ts",
-  "src/modulos/enfermagem/w108-estorno-aprazamento.spec.ts",
-  "src/modulos/enfermagem/banco-apoio.ts",
-  "src/modulos/enfermagem/sae-tipos.ts",
-  "src/modulos/enfermagem/transfusao-tipos.ts",
-  "src/modulos/enfermagem/tipos-vinculados.ts",
-  "src/modulos/enfermagem/transfusao-porta-propria.ts",
-  "src/modulos/enfermagem/sae-porta-propria.ts",
-  "src/modulos/enfermagem/modulo.ts",
-  "src/modulos/enfermagem/app-enfermagem.spec-util.ts",
-  "src/modulos/enfermagem/massa-enfermagem.spec-util.ts",
-  "src/modulos/enfermagem/transfusao-porta-propria.int.spec.ts",
-  "src/modulos/enfermagem/sae-porta-propria.int.spec.ts",
-  "src/modulos/enfermagem/trilha-da-tela.ts"
- ],
- "apagados": [
-  "apps/api/src/modulos/enfermagem/sae-porta-legado.ts",
-  "apps/api/src/modulos/enfermagem/transfusao-porta-legado.ts"
- ],
- "criados_dominio": [
-  "packages/dominio-enfermagem/src/sae/montagem.ts",
-  "packages/dominio-enfermagem/src/sae/montagem.spec.ts"
- ],
- "pedidos": [
-  {
-   "tipo": "registro",
-   "onde": "apps/api/src/modulos/registro.ts",
-   "motivo": "Incluir `enfermagem: () => import('./enfermagem/modulo.js'),` em REGISTRO_MODULOS (ordem alfabética). O conferidor do lote fica em 'registro: enfermagem não está em REGISTRO_MODULOS' até isso."
-  },
-  {
-   "tipo": "tsconfig",
-   "onde": "apps/api/tsconfig.migrado.json",
-   "motivo": "Acrescentar fecho_tsconfig. Com um tsconfig temporário (migrado + estes arquivos) o tsc deu 0 erros."
-  },
-  {
-   "tipo": "ddl",
-   "onde": "db/migracoes/10_SADT e 06_PEP",
-   "motivo": "Pendências de modelo da porta própria: versões da requisição alterada e adendo dos sinais do ato (alterar e adendo respondem 409 modelo-pendente; versoesRequisicao e adendos leem vazio); alertas da dupla checagem no ato (hoje só na trilha da operação); receita do enfermeiro (protocolo, lista, segundo identificador; prescreverMedicamento/inativarReceita 409); edição da terminologia do processo (hoje o sistema sai da terminologia do diagnóstico e a versão fica vazia); licença de terminologia por estabelecimento (carregarTerminologia 409; regra 7: licenciado só com licença comprovada).",
-   "tabelas": "-- 06_PEP / 10_SADT (tabelas): versões da requisição transfusional alterada e adendo dos sinais do ato (correção W0-03)\nCREATE TABLE requisicao_transfusao_versao (\n  id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  requisicao_transfusao_id BIGINT UNSIGNED NOT NULL,\n  numero_versao            SMALLINT UNSIGNED NOT NULL COMMENT 'Versão guardada (1 = a original)',\n  hemocomponente_id        BIGINT UNSIGNED NOT NULL,\n  volume_ml                INT UNSIGNED NULL,\n  tipo_transfusao_id       BIGINT UNSIGNED NOT NULL,\n  programada_para          DATETIME(3) NULL,\n  motivo                   VARCHAR(300) NOT NULL COMMENT 'Por que a requisição foi alterada',\n  alterada_em              DATETIME(3) NOT NULL,\n  alterada_por_usuario_id  BIGINT UNSIGNED NOT NULL,\n  criado_em                DATETIME(3) NOT NULL,\n  criado_por               BIGINT UNSIGNED NULL,\n  alterado_em              DATETIME(3) NULL,\n  alterado_por             BIGINT UNSIGNED NULL,\n  versao                   INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_requisicao_transfusao_versao_motivo CHECK (CHAR_LENGTH(TRIM(motivo)) >= 5),\n  CONSTRAINT ck_requisicao_transfusao_versao_volume CHECK (volume_ml IS NULL OR volume_ml BETWEEN 1 AND 5000),\n  UNIQUE KEY uq_requisicao_transfusao_versao_numero (requisicao_transfusao_id, numero_versao)\n) COMMENT='Versão anterior da requisição transfusional alterada antes do atendimento (legível, com o motivo)';\n\nCREATE TABLE ato_transfusional_adendo (\n  id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  ato_transfusional_id     BIGINT UNSIGNED NOT NULL,\n  monitoramento_transfusao_id BIGINT UNSIGNED NOT NULL COMMENT 'A medida corrigida (que não muda)',\n  pressao_sistolica        SMALLINT UNSIGNED NOT NULL,\n  pressao_diastolica       SMALLINT UNSIGNED NOT NULL,\n  frequencia_cardiaca      SMALLINT UNSIGNED NOT NULL,\n  temperatura              DECIMAL(4,1) NOT NULL,\n  frequencia_respiratoria  SMALLINT UNSIGNED NULL,\n  saturacao_oxigenio       SMALLINT UNSIGNED NULL,\n  motivo                   VARCHAR(300) NOT NULL,\n  profissional_id          BIGINT UNSIGNED NOT NULL,\n  criado_em                DATETIME(3) NOT NULL,\n  criado_por               BIGINT UNSIGNED NULL,\n  alterado_em              DATETIME(3) NULL,\n  alterado_por             BIGINT UNSIGNED NULL,\n  versao                   INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_ato_transfusional_adendo_motivo CHECK (CHAR_LENGTH(TRIM(motivo)) >= 5),\n  CONSTRAINT ck_ato_transfusional_adendo_sinais CHECK (pressao_sistolica BETWEEN 40 AND 300 AND pressao_diastolica BETWEEN 20 AND 200 AND frequencia_cardiaca BETWEEN 20 AND 250 AND temperatura BETWEEN 30 AND 43 AND (frequencia_respiratoria IS NULL OR frequencia_respiratoria BETWEEN 4 AND 70) AND (saturacao_oxigenio IS NULL OR saturacao_oxigenio BETWEEN 50 AND 100)),\n  KEY ix_ato_transfusional_adendo_ato (ato_transfusional_id),\n  KEY ix_ato_transfusional_adendo_monitoramento (monitoramento_transfusao_id),\n  KEY ix_ato_transfusional_adendo_profissional (profissional_id)\n) COMMENT='Adendo dos sinais vitais do ato transfusional digitados errado (a medida original fica)';\n\nALTER TABLE ato_transfusional\n  ADD COLUMN alertas_conferencia JSON NULL COMMENT 'Alertas da dupla checagem aceitos no início (códigos)' AFTER justificativa_rh,\n  ADD CONSTRAINT ck_ato_transfusional_alertas CHECK (alertas_conferencia IS NULL OR JSON_VALID(alertas_conferencia));\n\nALTER TABLE receita_medica\n  ADD COLUMN protocolo_enfermagem VARCHAR(60) NULL COMMENT 'Protocolo que autoriza a prescrição do enfermeiro',\n  ADD COLUMN tipo_protocolo_enfermagem VARCHAR(20) NULL,\n  ADD COLUMN versao_lista_enfermagem VARCHAR(30) NULL COMMENT 'Versão da lista de medicamentos do protocolo',\n  ADD COLUMN segundo_identificador VARCHAR(20) NULL COMMENT 'O segundo identificador impresso do paciente',\n  ADD CONSTRAINT ck_receita_medica_tipo_protocolo CHECK (tipo_protocolo_enfermagem IS NULL OR tipo_protocolo_enfermagem IN ('institucional','programa')),\n  ADD CONSTRAINT ck_receita_medica_segundo_identificador CHECK (segundo_identificador IS NULL OR segundo_identificador IN ('cpf','nascimento')),\n  ADD CONSTRAINT ck_receita_medica_protocolo_completo CHECK (protocolo_enfermagem IS NULL OR (tipo_protocolo_enfermagem IS NOT NULL AND versao_lista_enfermagem IS NOT NULL AND segundo_identificador IS NOT NULL));\n\nALTER TABLE processo_enfermagem\n  ADD COLUMN terminologia_edicao_id BIGINT UNSIGNED NULL COMMENT 'Edição da classificação usada (NNN, CIPE ou a sintética)' AFTER setor_funcional_id,\n  ADD KEY ix_processo_enfermagem_terminologia_edicao (terminologia_edicao_id);\n\nCREATE TABLE terminologia_licenca_estabelecimento (\n  id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id       BIGINT UNSIGNED NOT NULL,\n  terminologia_edicao_id   BIGINT UNSIGNED NOT NULL,\n  referencia_licenca       VARCHAR(200) NOT NULL COMMENT 'Referência do contrato de licença (sem segredo)',\n  vigencia_inicio          DATE NOT NULL,\n  vigencia_fim             DATE NULL,\n  criado_em                DATETIME(3) NOT NULL,\n  criado_por               BIGINT UNSIGNED NULL,\n  alterado_em              DATETIME(3) NULL,\n  alterado_por             BIGINT UNSIGNED NULL,\n  versao                   INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_terminologia_licenca_estabelecimento_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  UNIQUE KEY uq_terminologia_licenca_estabelecimento (estabelecimento_id, terminologia_edicao_id, vigencia_inicio)\n) COMMENT='Licença de terminologia de enfermagem (NNN, CIPE) comprovada pelo estabelecimento: só com ela o catálogo licenciado é carregado';",
-   "chaves": "ALTER TABLE requisicao_transfusao_versao\n  ADD CONSTRAINT fk_requisicao_transfusao_versao_requisicao FOREIGN KEY (requisicao_transfusao_id) REFERENCES requisicao_transfusao (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_requisicao_transfusao_versao_hemocomponente FOREIGN KEY (hemocomponente_id) REFERENCES hemocomponente (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_requisicao_transfusao_versao_tipo FOREIGN KEY (tipo_transfusao_id) REFERENCES tipo_transfusao (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_requisicao_transfusao_versao_usuario FOREIGN KEY (alterada_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;\nALTER TABLE ato_transfusional_adendo\n  ADD CONSTRAINT fk_ato_transfusional_adendo_ato FOREIGN KEY (ato_transfusional_id) REFERENCES ato_transfusional (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ato_transfusional_adendo_monitoramento FOREIGN KEY (monitoramento_transfusao_id) REFERENCES monitoramento_transfusao (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_ato_transfusional_adendo_profissional FOREIGN KEY (profissional_id) REFERENCES profissional (id) ON DELETE RESTRICT;\nALTER TABLE processo_enfermagem\n  ADD CONSTRAINT fk_processo_enfermagem_terminologia_edicao_id FOREIGN KEY (terminologia_edicao_id) REFERENCES terminologia_edicao (id) ON DELETE RESTRICT;\nALTER TABLE terminologia_licenca_estabelecimento\n  ADD CONSTRAINT fk_terminologia_licenca_estabelecimento_estabelecimento FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_terminologia_licenca_estabelecimento_edicao FOREIGN KEY (terminologia_edicao_id) REFERENCES terminologia_edicao (id) ON DELETE RESTRICT;"
-  },
-  {
-   "tipo": "carga",
-   "onde": "tools/db/criar_cliente.py (domínios do produto)",
-   "motivo": "A porta própria da transfusão lê por código: tipo_transfusao (programada, rotina 24 h, urgente 3 h, extrema_urgencia 0 h; prazo_atendimento_horas), tipo_reacao_transfusional (os códigos de TIPOS_REACAO_TRANSFUSIONAL do contrato em snake_case, ex. febril_nao_hemolitica), motivo_cancelamento_requisicao_transfusao 'outro' (aplica_a requisicao/ambos), hemocomponente por sigla (CH, CP, PLC, CR), grupo_sanguineo por sigla e fator_rh por sinal; e sequencia_negocio por estabelecimento dos tipos requisicao_transfusao e reacao_transfusional. Sem eles a gravação recusa com 422 (…-nao-cadastrado / sequencia-nao-configurada)."
-  },
-  {
-   "tipo": "codigo",
-   "onde": "lote 02-05 (próxima rodada) + lote 02-04",
-   "motivo": "PENDÊNCIA BLOQUEANTE (não está pronto): a prescrição de cuidados do enfermeiro com aprazamento, suspensão, checagem e estorno (sae: prescrever/suspender/checar/estornar respondem 409 modelo-pendente; atividadesVigentes/atividade/checagens/checagem leem vazio, e a grade de cuidados some da tela do turno). NÃO falta modelo: implementar sobre prescricao (tipo enfermagem), prescricao_item, prescricao_item_cuidado, horario_administracao(+_evento) e plano_intervencao_enfermagem (situacao prescrita, prescricao_item_id), reaproveitando a checagem/estorno do 02-04 (operacoes.ts). Até lá a SAE no banco próprio não substitui a prescrição de cuidados da memória.",
-   "bloqueante": true,
-   "pronto": false
-  },
-  {
-   "tipo": "vocabulario",
-   "onde": "enfermagem (02-04 e 02-05)",
-   "motivo": "A situação do horário segue P/A/N/S (contrato das telas, tipos.ts do 02-04); a porta da transfusão mapeia situacao_checagem.categoria para essas letras. Ao trocar o contrato para vocabulário de negócio, trocar SITUACAO_HORARIO em transfusao-porta-propria.ts junto."
-  },
-  {
-   "tipo": "dominio",
-   "onde": "packages/dominio-enfermagem",
-   "motivo": "Criado sae/montagem.ts (montarProcessoSae, doseVigenteDaVacina; antes no pacote do sistema de origem) com spec e a linha no index.ts; incluir no fecho do pacote se houver lista."
-  },
-  {
-   "tipo": "carga",
-   "onde": "tools/db/criar_cliente.py (domínios do produto) ou carga de configuração",
-   "motivo": "O ganho do volume transfundido no balanço hídrico usa o grupo_balanco_hidrico de tipo ganho com código 'hemocomponente' (ou 'hemoterapia'/'transfusao'). Sem ele, a conclusão grava e a tela responde ganhoNoBalanco=false. Incluir o grupo 'hemocomponente' (Hemocomponente, ganho) na carga do cliente."
-  },
-  {
-   "tipo": "contrato",
-   "onde": "packages/contratos (sadt/transfusao: início do ato e amostra) e a tela",
-   "motivo": "Atestados de segurança transfusional: a tela passa a colher etiquetaReceptorConferida e inspecaoVisualAprovada (início do ato) e identificadoresConferidos e rotuladaNoLeito (amostra). A porta grava o que vier (os tipos internos já aceitam os campos); sem eles, grava falso (DEFAULT do DDL), nunca afirma."
-  },
-  {
-   "tipo": "codigo",
-   "onde": "enfermagem (02-04: balanco-porta-propria.ts)",
-   "motivo": "Exportar o gravador do balanço (gravadorBalanco/balancoDaJanela) para a porta da transfusão reaproveitar a abertura do balanço da janela; hoje transfusao-porta-propria.ts tem uma cópia curta (lancarGanhoNoBalanco)."
-  },
-  {
-   "tipo": "teste",
-   "onde": "enfermagem/transfusao.controller.ts",
-   "motivo": "O caminho do controller com horário pendente no banco próprio (início do ato + checagem do horário numa operação da porta) está coberto no int.spec da porta; falta um teste HTTP sobre o banco (o app-enfermagem.spec-util monta só memória)."
-  }
- ]
+  "lote": "02-05",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/administracao/administracao.spec.ts",
+    "src/modulos/administracao/auditoria.controller.ts",
+    "src/modulos/administracao/comum.ts",
+    "src/modulos/administracao/estrutura.controller.spec.ts",
+    "src/modulos/administracao/estrutura.controller.ts",
+    "src/modulos/administracao/fonte-memoria.ts",
+    "src/modulos/administracao/fonte.ts",
+    "src/modulos/administracao/login-painel.ts",
+    "src/modulos/administracao/permissoes.controller.ts",
+    "src/modulos/administracao/rede-cpf.controller.spec.ts",
+    "src/modulos/administracao/rede-cpf.controller.ts",
+    "src/modulos/administracao/tipos.ts",
+    "src/modulos/administracao/fonte-propria.ts",
+    "src/modulos/administracao/fonte-propria.int.spec.ts",
+    "src/modulos/administracao/app-administracao.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_titular",
+      "pedido": "ALTER TABLE pedido_titular DROP CONSTRAINT ck_pedido_titular_canal, ADD CONSTRAINT ck_pedido_titular_canal CHECK (canal_recebimento IN ('presencial','email','portal','telefone','carta','outro'))",
+      "motivo": "o contrato da tela (CANAIS_PEDIDO) aceita 'outro'; hoje a fonte própria recusa com 409 canal-indisponivel"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_titular",
+      "pedido": "ADD COLUMN fundamento_decisao VARCHAR(40) NULL COMMENT 'Fundamento legal da decisão (guarda-legal-prontuario, obrigacao-legal, exercicio-de-direito, identidade-nao-confirmada, outro)' + CHECK na lista",
+      "motivo": "hoje o fundamento da negativa vai em motivo_indeferimento e o do atendimento só no histórico"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "permissao_complementar_usuario",
+      "pedido": "nenhuma tabela nova: as 'permissões complementares' por coluna-letra da origem viram exceções de ação (usuario_acao_excecao, já no modelo); falta a tela/operação",
+      "motivo": "FichaUsuario.flags volta vazio no banco; acesso.alterarFlagsUsuario sem implementação própria"
+    },
+    {
+      "tipo": "carga",
+      "pedido": "'criar cliente' deve semear tipo_escopo_acesso com entidade 'bloco_internacao' (codigo 'setor_internacao')",
+      "motivo": "setor()/setores() da ficha usam usuario_escopo por bloco; sem o tipo, conceder setor recusa 409 escopo-nao-configurado"
+    },
+    {
+      "tipo": "implementacao",
+      "pedido": "operações próprias de gestão ainda sem definirOperacao (receita() devolve ligada=false com o motivo; executar recusa 409 operacao-pendente): acesso.criarUsuario, alterarUsuario, alterarFlagsUsuario, concederPapelUsuario, revogarPapelUsuario, reativarPapelUsuario, trocarGrupoUsuario, concederOpcoesGrupo, revogarOpcoesGrupo, conceder/retirar<Escopo>Usuario; organizacao.incluirAcomodacao, alterarAcomodacao, incluirLeito, alterarLeito, inativarLeito, reativarLeito",
+      "motivo": "modelo existe (usuario, usuario_perfil, perfil_acao, usuario_papel_seguranca, usuario_unidade/local/fonte_pagadora/tipo_agenda/tipo_prontuario, acomodacao, leito_hospitalar); trabalho do lote seguinte da unidade"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/auditoria.ts: ORIGENS_TRILHA ['todas','legado','novo'] e LinhaTrilha.origem → uma trilha só (tirar o campo ou trocar por 'produto'); PaginaTrilha.tipos (tipos numerados da trilha antiga) e esquemaConsultaTrilha.tipo saem; IndiceParametrosBanco/TabelaParametrosBanco/ConferenciaLeitos sem rota (removidas)",
+      "motivo": "ADR 0003; a API já devolve origem 'novo' fixa e tipos []"
+    },
+    {
+      "tipo": "chamadores",
+      "pedido": "modulo.ts (lote 02-06): FONTE_ADMINISTRACAO = new FonteAdministracaoPropria(ctx.nucleo, CLIENTE_PADRAO, { rede }) com núcleo; fonteAdministracaoMemoria(ctx.trilha, null, 'dev', quebras, profissionalDoLogin) só em dev/ci sem núcleo; fonteAdministracaoIndisponivel() fora disso. contextoOperacao (comum.ts) agora devolve ContextoGestao {rede, hospital, correlacao, login, usuario, chaveIdempotencia, estacao, reautenticadoEm?}: ajustar coexistencia/migracao.controller e acesso/pedido-acesso.controller; FontesLoginPainel.raizFim ficou opcional e sem uso (pessoas)",
+      "motivo": "integração dos lotes"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/auditoria.ts: TIPOS_PEDIDO_TITULAR + 'oposicao','revisao-decisao-automatizada'; SITUACOES_PEDIDO_TITULAR + 'aguardando-titular','atendido-parcial'; esquemaPedidoTitular.idPaciente nullable (titular sem cadastro de paciente); ListaPedidos.foraDaLista: z.number().int() (a API já devolve)",
+      "motivo": "o modelo aceita esses tipos/situações (ck_pedido_titular_tipo/situacao) e titular sem paciente; até o contrato mudar, GET privacidade/pedidos deixa esses pedidos FORA da lista e devolve a contagem em foraDaLista (não quebra a lista); aguardando_titular e atendido_parcial aparecem como identidade-verificada e atendido"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/consultas.ts: DadosFiscais.empresa.optanteSimples → z.boolean().nullable()",
+      "motivo": "o dado é da mantenedora (mantenedora.optante_simples); estabelecimento sem mantenedora sai false só porque o contrato exige booleano"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "(a definir)",
+      "pedido": "LocaisComplementos.horarios e .pesquisados não têm tabela no modelo próprio: definir o que medem (horários de funcionamento do local de atendimento? locais pesquisados na recepção?) e, se a tela precisar, criar a tabela pelas convenções do ADR 0002",
+      "motivo": "a API devolve null nos dois (antes 0 fixo)"
+    },
+    {
+      "tipo": "implementacao",
+      "pedido": "operação própria para publicar o termo GERAL da rede (termo_uso_versao.estabelecimento_id NULL), com permissão de rede própria (ex.: acesso.termo.publicarRede) e conferência de que quem publica gere todos os estabelecimentos",
+      "motivo": "acesso.publicarTermo agora publica sempre no estabelecimento de quem publica; trocar o termo geral fica indisponível até essa operação existir"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "acomodacao",
+      "pedido": "Leitos.opcoes.locaisConta / acomodacao.localConta e opcoes.tiposTiss: sem coluna de local de conta na acomodacao; tipo TISS vem de categoria_acomodacao.codigo_tiss_acomodacao (texto) e o contrato pede número — alinhar contrato (valor: string) ou criar o domínio",
+      "motivo": "leitos() devolve localConta null e listas vazias nesses dois campos; tipo/tipos já vêm de categoria_acomodacao"
+    },
+    {
+      "tipo": "chamadores",
+      "pedido": "usuarios.controller (lote da ficha): o bloqueio do banco próprio vale para a CONTA; a operação recusa 'exige-gestao-da-rede' (sem permissão de bloquear em todos os estabelecimentos do vínculo) e 'ultimo-gestor-acessos' (conferido em todos, na transação); a tela deve mostrar essas recusas (409 com o detalhe) e o exigirGestorRestante do controller pode ficar só para a fonte em memória",
+      "motivo": "decisão de semântica do bloqueio registrada no cabeçalho de fonte-propria.ts"
+    },
+    {
+      "tipo": "carga",
+      "pedido": "permissão 'acesso.usuario.bloquear' tem de existir como acao_sistema.codigo (permissionavel) no catálogo do cliente semeado por 'criar cliente'",
+      "motivo": "a conferência do alcance do bloqueio lê perfil_acao por acao_sistema.codigo; sem a ação, só o perfil administrador bloqueia conta com vínculo em vários estabelecimentos"
+    }
+  ]
 }

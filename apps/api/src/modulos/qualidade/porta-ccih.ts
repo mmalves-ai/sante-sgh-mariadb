@@ -1,30 +1,10 @@
-// Porta da CCIH (M48, etapa 3; ADR 0031): as leituras do outro sistema e das SGH_ de outros marcos (internados, leitos,
-// antimicrobianos prescritos e dispensados, culturas, cirurgias, temperaturas, censo, tipos de surto) e as gravações e
-// leituras só do novo (SGH_QUA_* da CCIH e o estado do leito do M21) numa transação SGH_ com a SGH_TRILHA junto.
-// Duas implementações: sobre o núcleo do legado (a cópia) e em memória (dev/ci e os testes; dados sintéticos).
+// Porta da CCIH (M48, etapa 3): internados, prescrições de antimicrobiano, culturas, cirurgias, censo e os registros da
+// vigilância (dispositivos, IRAS, liberações, precauções, higiene das mãos, surtos, bundles e competências), com as
+// gravações numa transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente
+// (porta-ccih-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
 import type { ChaveLeito, UnidadeNotificacao } from '@sgh/contratos';
-import type {
-  BundleSghLido,
-  CompetenciaQuaLida,
-  DependentesQua,
-  TabelaCorrigivelQua,
-  VersaoQuaLida,
-  AntimicrobianoPrescritoLido,
-  CulturaLida,
-  DispositivoInvasivoSghLido,
-  DispositivoInvasivoSgh,
-  InternadoCcihLido,
-  IrasSgh,
-  IrasSghLida,
-  ItemAntimicrobianoSghLido,
-  LiberacaoSgh,
-  LiberacaoSghLida,
-  ObservacaoMaosSghLida,
-  PrecaucaoSgh,
-  PrecaucaoSghLida,
-  SurtoSghLido,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import type { BundleRegistrado, CompetenciaFechada, DependentesRegistro, TabelaCorrigivel, VersaoRegistro, AntimicrobianoPrescrito, CulturaDoPaciente, DispositivoInvasivoRegistrado, DispositivoInvasivoNovo, InternadoCcih, IrasNova, IrasRegistrada, ItemAntimicrobianoConfigurado, LiberacaoAntimicrobianoNova, LiberacaoAntimicrobianoRegistrada, ObservacaoMaosRegistrada, PrecaucaoNova, PrecaucaoRegistrada, SurtoRegistrado } from './tipos.js';
+import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_CCIH = Symbol('PORTA_CCIH');
 
@@ -39,7 +19,7 @@ type Versionada = {
 
 /** Gravações só do novo (as regras puras conferidas antes, na API). */
 export interface GravadorCcih {
-  registrarDispositivo(d: SemHospital<DispositivoInvasivoSgh>): Promise<{ id: number }>;
+  registrarDispositivo(d: SemHospital<DispositivoInvasivoNovo>): Promise<{ id: number }>;
   retirarDispositivo(
     r: Versionada & {
       readonly retiradoEm: string;
@@ -47,7 +27,7 @@ export interface GravadorCcih {
       readonly observacao: string | null;
     },
   ): Promise<{ versao: number }>;
-  registrarIras(i: SemHospital<IrasSgh>): Promise<{ id: number }>;
+  registrarIras(i: SemHospital<IrasNova>): Promise<{ id: number }>;
   descartarIras(d: Versionada & { readonly justificativa: string }): Promise<{ versao: number }>;
   configurarAntimicrobiano(c: {
     readonly item: number;
@@ -58,7 +38,7 @@ export interface GravadorCcih {
     readonly agora: string;
     readonly usuario: string;
   }): Promise<{ criado: boolean }>;
-  liberarAntimicrobiano(x: SemHospital<LiberacaoSgh>): Promise<{ id: number }>;
+  liberarAntimicrobiano(x: SemHospital<LiberacaoAntimicrobianoNova>): Promise<{ id: number }>;
   revisarAntimicrobiano(
     r: Versionada & {
       readonly marco: 'd3' | 'd7';
@@ -66,7 +46,7 @@ export interface GravadorCcih {
       readonly observacao: string | null;
     },
   ): Promise<{ versao: number }>;
-  definirPrecaucao(p: SemHospital<PrecaucaoSgh>): Promise<{ id: number; bloqueados: number; leito: string }>;
+  definirPrecaucao(p: SemHospital<PrecaucaoNova>): Promise<{ id: number; bloqueados: number; leito: string }>;
   encerrarPrecaucao(
     r: Versionada & {
       readonly leito: ChaveLeito;
@@ -113,7 +93,7 @@ export interface GravadorCcih {
       readonly encerradoEm: string | null;
     },
   ): Promise<{ versao: number }>;
-  // W0-04: correção por versão e cancelamento com motivo (a versão anterior vai à SGH_QUA_VERSAO).
+  // W0-04: correção por versão e cancelamento com motivo (a versão anterior vai à trilha_auditoria).
   corrigirDispositivo(
     c: Corrigida & {
       readonly tipo: string;
@@ -198,8 +178,8 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
   /** O relógio do banco do estabelecimento (instante local `AAAA-MM-DDTHH:mm:ss`). */
   relogio(c: C): Promise<string>;
   unidades(c: C): Promise<UnidadeNotificacao[]>;
-  internados(c: C): Promise<{ itens: InternadoCcihLido[]; cortada: boolean }>;
-  internacao(c: C, reg: number): Promise<InternadoCcihLido | null>;
+  internados(c: C): Promise<{ itens: InternadoCcih[]; cortada: boolean }>;
+  internacao(c: C, reg: number): Promise<InternadoCcih | null>;
   /** A alta de cada internação (null enquanto aberta): o dispositivo-dia para na alta (D-ALTA-DISP-48.3). */
   altasDas(c: C, regs: readonly number[]): Promise<{ reg: number; alta: string | null }[]>;
   vizinhos(c: C, leito: ChaveLeito): Promise<(ChaveLeito & { ocupado: boolean })[]>;
@@ -207,13 +187,13 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
     c: C,
     regs: readonly number[],
     desde: string | null,
-  ): Promise<{ itens: AntimicrobianoPrescritoLido[]; cortada: boolean }>;
-  antimicrobianoPrescrito(c: C, itemPrescricao: number): Promise<AntimicrobianoPrescritoLido | null>;
+  ): Promise<{ itens: AntimicrobianoPrescrito[]; cortada: boolean }>;
+  antimicrobianoPrescrito(c: C, itemPrescricao: number): Promise<AntimicrobianoPrescrito | null>;
   vigencias(
     c: C,
     de: string,
     ate: string,
-  ): Promise<{ itens: AntimicrobianoPrescritoLido[]; cortada: boolean }>;
+  ): Promise<{ itens: AntimicrobianoPrescrito[]; cortada: boolean }>;
   consumoDispensado(
     c: C,
     ano: number,
@@ -222,8 +202,8 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
   itensAntimicrobianos(c: C): Promise<{ item: number; nome: string }[]>;
   itemDoCadastro(c: C, item: number): Promise<{ item: number; nome: string; antimicrobiano: boolean } | null>;
   fichas(c: C, itensPrescricao: readonly number[]): Promise<Map<number, number>>;
-  culturas(c: C, regs: readonly number[], desde: string): Promise<CulturaLida[]>;
-  exame(c: C, id: number): Promise<CulturaLida | null>;
+  culturas(c: C, regs: readonly number[], desde: string): Promise<CulturaDoPaciente[]>;
+  exame(c: C, id: number): Promise<CulturaDoPaciente | null>;
   cirurgias(
     c: C,
     regs: readonly number[],
@@ -241,44 +221,44 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
     ate: string,
   ): Promise<{ porSetor: { setor: string; pacientesDia: number }[]; diasFechados: number }>;
   tiposSurto(c: C): Promise<{ codigo: number; nome: string }[]>;
-  dispositivo(c: C, id: number): Promise<DispositivoInvasivoSghLido | null>;
-  dispositivosDas(c: C, regs: readonly number[]): Promise<DispositivoInvasivoSghLido[]>;
+  dispositivo(c: C, id: number): Promise<DispositivoInvasivoRegistrado | null>;
+  dispositivosDas(c: C, regs: readonly number[]): Promise<DispositivoInvasivoRegistrado[]>;
   dispositivosNoPeriodo(
     c: C,
     de: string,
     ate: string,
-  ): Promise<{ itens: DispositivoInvasivoSghLido[]; cortada: boolean }>;
-  iras(c: C, id: number): Promise<IrasSghLida | null>;
-  irasDas(c: C, regs: readonly number[]): Promise<IrasSghLida[]>;
-  irasNoPeriodo(c: C, de: string, ate: string): Promise<{ itens: IrasSghLida[]; cortada: boolean }>;
-  itensConfigurados(c: C): Promise<ItemAntimicrobianoSghLido[]>;
-  liberacao(c: C, id: number): Promise<LiberacaoSghLida | null>;
-  liberacoesDos(c: C, itensPrescricao: readonly number[]): Promise<LiberacaoSghLida[]>;
-  precaucao(c: C, id: number): Promise<PrecaucaoSghLida | null>;
-  precaucoesAbertas(c: C): Promise<PrecaucaoSghLida[]>;
-  precaucoesDa(c: C, reg: number): Promise<PrecaucaoSghLida[]>;
+  ): Promise<{ itens: DispositivoInvasivoRegistrado[]; cortada: boolean }>;
+  iras(c: C, id: number): Promise<IrasRegistrada | null>;
+  irasDas(c: C, regs: readonly number[]): Promise<IrasRegistrada[]>;
+  irasNoPeriodo(c: C, de: string, ate: string): Promise<{ itens: IrasRegistrada[]; cortada: boolean }>;
+  itensConfigurados(c: C): Promise<ItemAntimicrobianoConfigurado[]>;
+  liberacao(c: C, id: number): Promise<LiberacaoAntimicrobianoRegistrada | null>;
+  liberacoesDos(c: C, itensPrescricao: readonly number[]): Promise<LiberacaoAntimicrobianoRegistrada[]>;
+  precaucao(c: C, id: number): Promise<PrecaucaoRegistrada | null>;
+  precaucoesAbertas(c: C): Promise<PrecaucaoRegistrada[]>;
+  precaucoesDa(c: C, reg: number): Promise<PrecaucaoRegistrada[]>;
   observacoesMaos(
     c: C,
     de: string,
     ate: string,
-  ): Promise<{ itens: ObservacaoMaosSghLida[]; cortada: boolean }>;
+  ): Promise<{ itens: ObservacaoMaosRegistrada[]; cortada: boolean }>;
   consumoAlcool(
     c: C,
     competencia: string,
   ): Promise<{ unidade: number; setor: string | null; mililitros: number }[]>;
-  surto(c: C, id: number): Promise<SurtoSghLido | null>;
-  surtos(c: C, desde: string): Promise<SurtoSghLido[]>;
+  surto(c: C, id: number): Promise<SurtoRegistrado | null>;
+  surtos(c: C, desde: string): Promise<SurtoRegistrado[]>;
   // W0-04
   /** As sessões com as estornadas (a lista da tela; a adesão usa `observacoesMaos`, sem elas). */
-  sessoesMaos(c: C, de: string, ate: string): Promise<{ itens: ObservacaoMaosSghLida[]; cortada: boolean }>;
-  observacaoMaos(c: C, id: number): Promise<ObservacaoMaosSghLida | null>;
-  versoes(c: C, tabela: TabelaCorrigivelQua, id: number): Promise<VersaoQuaLida[]>;
-  competencias(c: C, competencias?: readonly string[]): Promise<CompetenciaQuaLida[]>;
-  dependentes(c: C, tabela: string, id: number): Promise<DependentesQua[]>;
+  sessoesMaos(c: C, de: string, ate: string): Promise<{ itens: ObservacaoMaosRegistrada[]; cortada: boolean }>;
+  observacaoMaos(c: C, id: number): Promise<ObservacaoMaosRegistrada | null>;
+  versoes(c: C, tabela: TabelaCorrigivel, id: number): Promise<VersaoRegistro[]>;
+  competencias(c: C, competencias?: readonly string[]): Promise<CompetenciaFechada[]>;
+  dependentes(c: C, tabela: string, id: number): Promise<DependentesRegistro[]>;
   /** W0-04 (M1): os checklists do bundle dos dispositivos. */
-  bundles(c: C, dispositivos: readonly number[]): Promise<BundleSghLido[]>;
+  bundles(c: C, dispositivos: readonly number[]): Promise<BundleRegistrado[]>;
   /** Revisão do W0-04: um checklist pelo ID (correção e estorno). */
-  bundle(c: C, id: number): Promise<BundleSghLido | null>;
+  bundle(c: C, id: number): Promise<BundleRegistrado | null>;
   /** Revisão do W0-04: a busca do profissional responsável pela inserção e o nome pelo registro. */
   buscarProfissionais(c: C, texto: string): Promise<{ id: number; cod: number; nome: string }[]>;
   profissionaisPorRegistro(
@@ -337,3 +317,8 @@ export const METODOS_PORTA_CCIH: ReadonlySet<string> = new Set([
   'buscarProfissionais',
   'profissionaisPorRegistro',
 ]);
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaCcihIndisponivel(): PortaCcih {
+  return portaIndisponivel<PortaCcih>(METODOS_PORTA_CCIH);
+}

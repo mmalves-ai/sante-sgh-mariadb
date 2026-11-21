@@ -12,7 +12,14 @@ import { AcessoProntuarioRede } from './acesso-rede.js';
 
 const REDE = 'rede-teste';
 const PEDIDO = { motivo: 'assistencia' as const, justificativa: 'Paciente em atendimento aqui', pagina: 1 };
-const SA = { rede: REDE, hospital: 'pc', login: 'SINT.MEDICO', estacao: 'TESTE', correlacao: 'teste' };
+const SA = {
+  rede: REDE,
+  hospital: 'pc',
+  porta: { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: REDE, hospital: 'pc' },
+  login: 'SINT.MEDICO',
+  estacao: 'TESTE',
+  correlacao: 'teste',
+};
 
 async function montar(
   ligadas: Record<string, boolean> = { sx: true },
@@ -31,17 +38,12 @@ async function montar(
     hospital: 'pc',
     login: 'SINT.GESTOR',
     trilha: (evento, operacao, alvo) => ({
-      rede: REDE,
-      hospital: 'pc',
-      usuario: 'SINT.GESTOR',
-      evento,
-      recurso: 'rede.mpi',
-      operacao,
-      tabelaAlvo: 'SGH_REDE_VINCULO',
-      idAlvo: alvo.id ?? null,
-      chaveNaturalAlvo: alvo.chave,
-      resultado: 'sucesso',
-      estacao: 'TESTE',
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao',
+      entidade: 'suspeita_duplicidade',
+      entidadeId: null,
+      dadosDepois: { evento, recurso: 'rede.mpi', operacao, chave: alvo.chave, login: 'SINT.GESTOR', estabelecimento: 'pc' },
       correlacao: 'teste',
     }),
   };

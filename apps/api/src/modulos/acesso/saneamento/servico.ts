@@ -1,10 +1,13 @@
 // Saneamento dos grupos de acesso amplo (M59-F4; ficha do M59, seções 5, 7 e 8, regra 8; cap-08 §8.7, §8.15): o painel
 // dos grupos genéricos, os usuários de cada um com a sugestão de destino pelo uso, o simulador (antes e depois), o plano
-// (decidir, aprovar pela área, descartar) e a aplicação pelas operações do M10 no executor do M04, uma transação por
-// usuário (ou por lote de opções na dissolução do grupo vazio). As regras são as puras de @sgh/dominio-acesso; aqui só
-// a orquestração sobre a porta (READ ONLY nas leituras; o plano na transação SGH_ com a SGH_TRILHA) e o executor.
-// O saneamento NÃO depende do fim da contingência (DP-6, contorno da ficha): muda grupo e opções pelas operações que o
-// sistema anterior também entende; nada do que ele lê é retirado.
+// (decidir, aprovar pela área, descartar) e a aplicação pelas operações do executor do núcleo, uma transação por
+// usuário (ou por lote de ações na dissolução do perfil vazio). As regras são as puras de @sgh/dominio-acesso; aqui só
+// a orquestração sobre a porta (leituras somente leitura; o plano pelo executor, com a trilha na mesma transação).
+// "Grupo" é o perfil de acesso (perfil_acesso.codigo) e "opção" é a ação do catálogo (acao_sistema).
+// Melhoria: a conta sem perfil no estabelecimento fica fora do alcance (sem o grupo "sentinela" para o nulo); o bloqueio
+// de quem tem perfil em outro estabelecimento é recusado; a chave de cada lote da dissolução deriva das ações do lote.
+// Melhoria: o contexto da aplicação é neutro (chave de idempotência, reautenticação); quem executa resolve o cliente,
+// o estabelecimento e o usuário por id, sem o login como chave de gravação.
 import {
   DIAS_USO_SANEAMENTO,
   EVENTOS_AUDITAVEIS,
@@ -38,13 +41,9 @@ import {
   validarDissolucao,
   validarEntradaNoMaster,
 } from '@sgh/dominio-acesso';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type TrilhaSaneamento,
-  type UsuarioGrupoLido,
-} from '@sgh/legado';
-import type { GrupoComOpcoes, PortaSaneamento } from './porta.js';
+import { createHash } from 'node:crypto';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { GrupoComOpcoes, PortaSaneamento, TrilhaSaneamento, UsuarioDoGrupo } from './porta.js';
 
 export interface AtorSaneamento {
   readonly rede: string;
@@ -54,10 +53,31 @@ export interface AtorSaneamento {
   readonly correlacao: string;
 }
 
-/** A execução das receitas do M10 (o executor do M04, com o estado do catálogo por estabelecimento). */
+/** As operações da aplicação (nomes no formato do executor do núcleo). */
+export const OPERACOES_SANEAMENTO = {
+  trocarGrupo: 'acesso.saneamento.trocar-perfil',
+  bloquear: 'acesso.saneamento.bloquear-usuario',
+  retirarOpcoes: 'acesso.saneamento.retirar-acoes',
+} as const;
+
+/** O que a tela entrega para gravar: a Idempotency-Key e o instante da reautenticação. */
+export interface ContextoAplicacao {
+  readonly chaveIdempotencia: string;
+  readonly reautenticadoEm?: number;
+}
+
+/** O contexto de cada execução: o ator (estabelecimento e login), a correlação e a chave da operação. */
+export interface ContextoExecucaoSaneamento extends ContextoAplicacao {
+  readonly hospital: string;
+  readonly login: string;
+  readonly correlacao: string;
+  readonly estacao: string | null;
+}
+
+/** A execução das operações da aplicação (executor do núcleo; a liberação é conferida na execução). */
 export interface ExecutorSaneamento {
   receita(nome: string, hospital: string): { readonly ligada: boolean; readonly motivo: string | null };
-  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoOperacao): Promise<void>;
+  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoExecucaoSaneamento): Promise<void>;
 }
 
 export interface DependenciasSaneamento {
@@ -80,6 +100,7 @@ export class ErroSaneamento extends Error {
       | 'usuario-inexistente'
       | 'item-inexistente'
       | 'operacao-desligada'
+      | 'conta-em-outro-estabelecimento'
       | 'alterado',
     readonly detalhe: string,
     readonly status = 409,
@@ -122,7 +143,17 @@ function exigir(r: RecusaSaneamento | null, status = 409): void {
   if (r) throw new ErroSaneamento(r, TEXTOS_RECUSA[r], status);
 }
 
-const grupoDe = (u: UsuarioGrupoLido) => u.grupo ?? 'SEM GRUPO';
+/** O grupo amplo da conta; sem perfil no estabelecimento (null), a conta está fora do alcance do saneamento. */
+function grupoAmplo(u: UsuarioDoGrupo): string {
+  if (u.grupo === null || !ehGrupoGenerico(u.grupo)) exigir('grupo-nao-generico');
+  return u.grupo as string;
+}
+
+/** Chave de um lote da dissolução: a do pedido mais o resumo das ações do lote (repetir o pedido retira o resto). */
+export function chaveDoLote(chave: string, lote: readonly number[]): string {
+  const resumo = createHash('sha256').update(lote.join(',')).digest('hex').slice(0, 16);
+  return `${chave.slice(0, 63)}.${resumo}`;
+}
 
 /** A decisão que vale para cada login: a mais recente que não foi descartada. */
 function ultimaPorLogin(plano: readonly ItemSaneamento[]): Map<string, ItemSaneamento> {
@@ -277,17 +308,18 @@ export class ServicoSaneamento {
     };
   }
 
-  private async conta(h: string, login: string): Promise<UsuarioGrupoLido> {
+  private async conta(h: string, login: string): Promise<UsuarioDoGrupo> {
     const u = await this.d.porta.usuario(h, login);
     if (!u) throw new ErroSaneamento('usuario-inexistente', 'Usuário não encontrado.', 404);
     return u;
   }
 
   /** Simulação crua (as contagens e os IDs) da troca de grupo de um usuário. */
-  private async simularCru(h: string, u: UsuarioGrupoLido, destino: string) {
-    const [com, uso] = await Promise.all([this.d.porta.gruposComOpcoes(h), this.usoDoGrupo(h, grupoDe(u))]);
+  private async simularCru(h: string, u: UsuarioDoGrupo, destino: string) {
+    const grupo = grupoAmplo(u);
+    const [com, uso] = await Promise.all([this.d.porta.gruposComOpcoes(h), this.usoDoGrupo(h, grupo)]);
     const cands = this.candidatos(com);
-    const origem = cands.find((c) => c.grupo === grupoDe(u));
+    const origem = cands.find((c) => c.grupo === grupo);
     const dest = cands.find((c) => c.grupo === destino) ?? null;
     const usoUsuario = uso.uso.get(u.login) ?? new Map<number, number>();
     const r = simularTroca(origem?.opcoes ?? new Set(), dest?.opcoes ?? new Set(), usoUsuario);
@@ -297,7 +329,7 @@ export class ServicoSaneamento {
   async simular(a: AtorSaneamento, login: string, destino: string): Promise<SimulacaoSaneamento> {
     await this.pronto(a.hospital);
     const u = await this.conta(a.hospital, login);
-    if (!ehGrupoGenerico(grupoDe(u))) exigir('grupo-nao-generico');
+    const grupoOrigem = grupoAmplo(u);
     const { r, dest, usoUsuario, lido } = await this.simularCru(a.hospital, u, destino);
     if (!dest || ehGrupoGenerico(dest.grupo)) exigir(dest ? 'destino-generico' : 'destino-invalido');
     const ganhas = r.ganhas.slice(0, LISTA_SIMULACAO);
@@ -310,7 +342,7 @@ export class ServicoSaneamento {
     });
     return {
       login: u.login,
-      grupoOrigem: grupoDe(u),
+      grupoOrigem,
       grupoDestino: destino,
       antes: r.antes,
       depois: r.depois,
@@ -335,7 +367,7 @@ export class ServicoSaneamento {
    * Guarda do limite de administradores fora do saneamento (achado 1 da revisão do M59.4): a tela de Usuários chama
    * antes de pôr alguém no grupo de acesso total (criar ou trocar de grupo, `grupoNovo`) ou de desbloquear (`grupoNovo`
    * null). Recusa com administradores-no-limite quando os ativos do MASTER passariam do máximo do estabelecimento. Não
-   * depende do script do plano: conta TBUSERS na hora.
+   * depende da tabela do plano: conta as contas com o perfil na hora.
    */
   async conferirEntradaNoMaster(
     a: { readonly rede: string; readonly hospital: string },
@@ -363,6 +395,12 @@ export class ServicoSaneamento {
   async incluir(a: AtorSaneamento, n: NovoItemSaneamento): Promise<ItemSaneamento> {
     await this.pronto(a.hospital);
     const u = await this.conta(a.hospital, n.login);
+    const grupoOrigem = grupoAmplo(u);
+    if (n.decisao === 'bloquear' && u.emOutroEstabelecimento)
+      throw new ErroSaneamento(
+        'conta-em-outro-estabelecimento',
+        'A conta tem perfil vigente em outro estabelecimento: o bloqueio vale na rede toda; troque o perfil aqui.',
+      );
     const [plano, maximo] = await Promise.all([this.d.porta.plano(a.hospital), this.maximo(a)]);
     let perdasTotal = 0;
     let perdasUsadas = 0;
@@ -379,7 +417,7 @@ export class ServicoSaneamento {
       validarDecisao(
         {
           login: u.login,
-          grupo: grupoDe(u),
+          grupo: grupoOrigem,
           ativo: u.ativo,
           bloqueado: u.bloqueado,
           diasSemAcesso: diasSemAcesso(u.ultimoAcesso, this.hoje()),
@@ -399,7 +437,7 @@ export class ServicoSaneamento {
       a.hospital,
       {
         hospital: a.hospital,
-        grupoOrigem: grupoDe(u),
+        grupoOrigem,
         idUsuario: u.idUsuario,
         login: u.login,
         decisao: n.decisao,
@@ -447,7 +485,7 @@ export class ServicoSaneamento {
     return this.itemOu404(a.hospital, id);
   }
 
-  // ── aplicação (executor do M04, operações do M10) ────────────────────────────────────────────
+  // ── aplicação (operações do executor do núcleo) ────────────────────────────────────────────
 
   private executor(nome: string, h: string): ExecutorSaneamento {
     const x = this.d.executor;
@@ -474,7 +512,7 @@ export class ServicoSaneamento {
   }
 
   private nomeDa(decisao: 'trocar-grupo' | 'bloquear'): string {
-    return decisao === 'trocar-grupo' ? 'acesso.trocarGrupoUsuario' : 'acesso.bloquearUsuario';
+    return decisao === 'trocar-grupo' ? OPERACOES_SANEAMENTO.trocarGrupo : OPERACOES_SANEAMENTO.bloquear;
   }
 
   private async reservar(a: AtorSaneamento, id: string): Promise<void> {
@@ -493,20 +531,21 @@ export class ServicoSaneamento {
   async aplicar(
     a: AtorSaneamento,
     id: string,
-    ctx: Omit<ContextoOperacao, 'rede' | 'hospital' | 'usuarioLegado' | 'traceId'>,
+    ctx: ContextoAplicacao,
   ): Promise<ResultadoAplicacaoSaneamento> {
     await this.pronto(a.hospital);
     const i = await this.itemOu404(a.hospital, id);
     if (i.decisao === 'dissolver-grupo' || i.login === null)
       throw new ErroSaneamento('situacao-nao-permite', TEXTOS_RECUSA['situacao-nao-permite']);
     const u = await this.conta(a.hospital, i.login);
+    if (u.grupo !== i.grupoOrigem) exigir('usuario-fora-do-grupo');
     let perdasAgora = 0;
     if (i.decisao === 'trocar-grupo' && i.grupoDestino) {
       const s = await this.simularCru(a.hospital, u, i.grupoDestino);
       perdasAgora = s.lido ? s.r.perdidasUsadas : i.perdasUsadas;
     }
     exigir(validarAplicacao(i, a.login, perdasAgora));
-    if (grupoDe(u) !== i.grupoOrigem) exigir('usuario-fora-do-grupo');
+    if (u.grupo !== i.grupoOrigem) exigir('usuario-fora-do-grupo');
     const nome = i.decisao === 'manter-administrador' ? null : this.nomeDa(i.decisao);
     const x = nome ? this.executor(nome, a.hospital) : null;
     // Reserva ANTES de gravar no banco (achado 3 da revisão do M59.4): sem ela, um descarte ou um segundo pedido entre
@@ -514,15 +553,16 @@ export class ServicoSaneamento {
     await this.reservar(a, id);
     if (nome && x) {
       const entrada =
-        i.decisao === 'trocar-grupo' ? { login: i.login, grupo: i.grupoDestino } : { login: i.login };
+        i.decisao === 'trocar-grupo'
+          ? { login: i.login, grupoOrigem: i.grupoOrigem, grupo: i.grupoDestino }
+          : { login: i.login, motivo: i.motivo };
       try {
         await x.executar(nome, a.hospital, entrada, {
           ...ctx,
-          rede: a.rede,
           hospital: a.hospital,
-          traceId: a.correlacao,
-          usuarioLegado: a.login,
-          ...(a.estacao ? { estacao: a.estacao } : {}),
+          login: a.login,
+          correlacao: a.correlacao,
+          estacao: a.estacao,
         });
       } catch (e) {
         await this.falhou(a, id, e);
@@ -542,19 +582,21 @@ export class ServicoSaneamento {
 
   /**
    * Dissolução do grupo vazio: registra a decisão e retira as opções em lotes (uma transação por lote, pela receita
-   * do M10). Um lote que falha deixa a decisão como "não aplicada"; os lotes já retirados ficam (repetir retira o resto).
+   * de retirada). Um lote que falha deixa a decisão como "não aplicada"; os lotes já retirados ficam. Repetir o pedido com a
+   * mesma Idempotency-Key retira o resto: a chave de cada lote deriva das ações dele (chaveDoLote), e o lote já retirado
+   * não volta a aparecer, porque as ações são relidas do perfil.
    */
   async dissolver(
     a: AtorSaneamento,
     grupo: string,
     motivo: string,
-    ctx: Omit<ContextoOperacao, 'rede' | 'hospital' | 'usuarioLegado' | 'traceId'>,
+    ctx: ContextoAplicacao,
   ): Promise<ResultadoAplicacaoSaneamento> {
     await this.pronto(a.hospital);
     if (!ehGrupoGenerico(grupo)) exigir('grupo-nao-generico', 400);
     const [g] = await this.d.porta.grupos(a.hospital, [grupo]);
     exigir(validarDissolucao(grupo, g?.ativos ?? 0, g?.existe ? g.opcoes : 0));
-    const nome = 'acesso.revogarOpcoesGrupo';
+    const nome = OPERACOES_SANEAMENTO.retirarOpcoes;
     const x = this.executor(nome, a.hospital);
     const com = await this.d.porta.gruposComOpcoes(a.hospital);
     const opcoes = [...(com.find((c) => c.grupo === grupo)?.opcoes ?? [])].sort((p, q) => p - q);
@@ -577,7 +619,7 @@ export class ServicoSaneamento {
     );
     await this.reservar(a, id);
     const lotes = emLotes(opcoes, LOTE_OPCOES_DISSOLUCAO);
-    for (const [k, lote] of lotes.entries()) {
+    for (const lote of lotes) {
       try {
         await x.executar(
           nome,
@@ -585,12 +627,11 @@ export class ServicoSaneamento {
           { grupo, opcoes: lote },
           {
             ...ctx,
-            idempotencyKey: `${ctx.idempotencyKey}.${k + 1}`,
-            rede: a.rede,
+            chaveIdempotencia: chaveDoLote(ctx.chaveIdempotencia, lote),
             hospital: a.hospital,
-            traceId: a.correlacao,
-            usuarioLegado: a.login,
-            ...(a.estacao ? { estacao: a.estacao } : {}),
+            login: a.login,
+            correlacao: a.correlacao,
+            estacao: a.estacao,
           },
         );
       } catch (e) {

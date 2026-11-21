@@ -3,14 +3,13 @@
 // motivo obrigatório; a recusa de órfão (dispositivo critério de IRAS); a competência fechada (409 com a oferta da
 // reabertura, indicadores inalterados) e a reabertura com motivo e senha; a precaução alterada; a sessão de higiene das
 // mãos corrigida e estornada (fora da adesão); nenhuma rota DELETE física nos controladores da qualidade.
+import { criarAppQualidade } from './teste.spec-util.js';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { INTERNACAO_SINTETICA_CCIH, PortaCcihMemoria } from './porta-ccih-memoria.js';
 
@@ -59,7 +58,7 @@ const codigo = (r: { json(): unknown }) => (r.json() as { codigo?: string }).cod
 beforeAll(async () => {
   trilha = new RegistradorTrilhaMemoria();
   porta = new PortaCcihMemoria({ agora });
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha,
     ccih: porta,
     vigiaEnfermagem: null,

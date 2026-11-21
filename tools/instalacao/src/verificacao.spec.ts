@@ -119,8 +119,6 @@ const corpos: Record<string, unknown> = {
       resumo: null,
       resumoHomologado: null,
       verificadaEm: null,
-      tabelasBloqueadas: 0,
-      bloqueiaTudo: false,
     },
     chaves: { lidas: true, ligadas: [], esperadas: [], inesperadas: [] },
     itens: ITENS_FUMACA_SERVIDOR.map((codigo) => ({ codigo, titulo: codigo, situacao: 'ok', detalhe: 'ok' })),

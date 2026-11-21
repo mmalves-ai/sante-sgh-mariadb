@@ -10,9 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { camposDoDocumentoPep, sha256Hex, TITULOS_PEP } from '@sgh/dominio-documento';
 import { linhasDaPrescricaoImpressa } from '@sgh/dominio-pep';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
@@ -28,6 +26,7 @@ import {
   rasterizarPagina1,
   verapdf,
 } from '../documento/integracao.spec-util.js';
+import { criarAppPep } from './teste.spec-util.js';
 
 const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
@@ -157,7 +156,7 @@ describe('impressão pela API (porta em memória, serviço de emissão do Compos
   };
   beforeAll(async () => {
     const trilha = new RegistradorTrilhaMemoria();
-    app = await criarApp(lerConfiguracao(env), null, env, {
+    app = await criarAppPep(env, {
       trilha,
       cadastro: new PortaCadastroMemoria(),
       prescricao: new PortaPrescricaoMemoria(trilha),

@@ -1,0 +1,23 @@
+# lote 05-07 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: packages/testes/src/massa
+packages/testes/src/massa/reproducao-agenda.ts
+packages/testes/src/massa/reproducao-atendimento.ts
+packages/testes/src/massa/reproducao-catalogos.ts
+packages/testes/src/massa/reproducao-cirurgia.ts
+packages/testes/src/massa/reproducao-dicionario.ts
+packages/testes/src/massa/reproducao-dominios.ts
+packages/testes/src/massa/reproducao-enfermagem.ts
+packages/testes/src/massa/reproducao-exame.ts
+packages/testes/src/massa/reproducao-farmacia.ts
+packages/testes/src/massa/reproducao-faturamento.ts
+packages/testes/src/massa/reproducao-financeiro.ts
+packages/testes/src/massa/reproducao-internacao.ts
+packages/testes/src/massa/reproducao-m10.ts
+packages/testes/src/massa/reproducao-m59-f3.ts
+packages/testes/src/massa/reproducao-m59.ts
+packages/testes/src/massa/reproducao-pep-m23.ts
+packages/testes/src/massa/reproducao-pep.ts
+packages/testes/src/massa/reproducao-permissoes.ts
+packages/testes/src/massa/reproducao-prescricao.ts
+packages/testes/src/massa/reproducao-recepcao.ts

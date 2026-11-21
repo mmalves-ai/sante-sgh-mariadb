@@ -4,11 +4,10 @@
 // permissões efetivas, como no banco. O plano e o uso das opções ficam na porta em memória (a base desta classe).
 // Massa própria e só sintética: dois grupos de acesso amplo sem outro uso nos testes (MASTER_SEM_FINANCEIRO, com dois
 // usuários, e MASTER_CONSULTA_FINANCEIRO, sem ativos: o que se dissolve) e o uso das opções nos últimos 180 dias.
-import type { UsuarioGrupoLido } from '@sgh/legado';
 import { CONTAS_SINTETICAS, estadoAcessoSintetico } from '../fonte-sintetica.js';
 import type { EstadoAcessoSintetico } from '../estado-sintetico.js';
 import { PortaSaneamentoMemoria } from './porta-memoria.js';
-import type { GrupoComOpcoes } from './porta.js';
+import type { GrupoComOpcoes, UsuarioDoGrupo } from './porta.js';
 
 /** As opções do MASTER_SEM_FINANCEIRO sintético: as dos grupos sintéticos ANESTESIA, COORD_ENFERMAGEM e ENFERMAGEM e mais uma. */
 const OPCOES_MSF = [6813, 6814, 6829, 2227, 2293, 5056, 5059, 2582, 1169];
@@ -82,8 +81,8 @@ export class PortaSaneamentoSintetica extends PortaSaneamentoMemoria {
     return e;
   }
 
-  /** As contas do estado como o legado as lê (ativo, bloqueio e a última entrada). */
-  private lidos(): UsuarioGrupoLido[] {
+  /** As contas do estado como o banco as entrega (ativo, bloqueio e a última entrada). */
+  private lidos(): UsuarioDoGrupo[] {
     const e = this.e();
     const hoje = this.agora();
     return [...e.contas].map(([login, c]) => {

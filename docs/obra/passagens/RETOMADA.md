@@ -1,60 +1,58 @@
-# RETOMADA (2026-11-20, 23:00)
+# RETOMADA (2026-11-21, 4h10)
 
-Leia este arquivo primeiro. Depois o `docs/ESTADO.md` e o `AGENTS.md`: o protocolo de tokens é obrigatório e
-o relatório segue o formato de 4 seções, a cada 50 minutos, com os termos da saúde explicados.
+Leia este arquivo primeiro. Depois o `docs/ESTADO.md` e o `AGENTS.md`.
+- O protocolo de tokens é obrigatório, com as regras 20 a 22.
+- Relatório a cada 50 minutos, com a seção Economia (`tools/obra/medir_consumo.py`), os termos da saúde
+  explicados e o fluxo do dono sempre por painel.
+- Ordem do dono: não parar até completar o sistema.
 
-**Ordem do dono:** não parar até completar o sistema.
+## No GitHub
 
-## Pronto e no GitHub
+- F0, F1, F2.1 e F2-L (login).
+- F2.2 ondas 1 a 4: 39 módulos ligados (`eba07ff`).
+- F4 L1 a L4: abridor, fila e motor, painel de onboarding, mapa e verificador (`3f493f4`).
+- ADR 0003, itens 1 a 9.
 
-- F0, F1 (DDL das 3.500 tabelas e catálogos públicos), F2.1 (núcleo) e F2-L (login) (`9b0c83e`).
-- O login está no ar em **https://192.168.0.104:5310**:
-  - subir ou reiniciar: `tools/dev/subir-login.sh`;
-  - cliente `demo`;
-  - logins `admin` (administrador da plataforma, `POST /api/sessao/plataforma`) e `teste`, no estabelecimento
-    `principal`;
-  - senhas em `SEMEAR_*` do `.env`.
+## Rodando agora (workflows desta sessão; não relance)
 
-## Provas do F2-L (conferência independente)
+- **F2.2, ondas finais** (`f22-ondas-finais`): as fatias foram geradas de novo com lotes de até 20 arquivos
+  (regra 22). A numeração recomeçou:
+  - onda 2: acesso, administração, **remoção da coexistência e do `onda0`** e SADT;
+  - onda 3: cirurgia, pessoas, portal do paciente, suprimentos, telemedicina e TISS;
+  - onda 4: contábil e portal do médico;
+  - ondas 5a a 5d: testes, ferramentas, worker e a desmontagem do `app.module`.
 
-- `tsc -p apps/api/tsconfig.login.json`: 0 erros.
-- Vitest: 191 testes da API e 73 do núcleo.
-- Validador do banco: 3.506 tabelas, 0 erros.
-- Login ao vivo pelo IP: 201 com cookie `Secure`; senha errada dá 401.
-- Revisão adversarial: 4 achados altos e 23 médios, todos corrigidos. A mensagem do commit diz "5 e 25" por
-  engano de contagem.
+  Os pedidos das ondas 1 a 4 antigas estão em `docs/obra/fatias/f22/arquivo-ondas-1a4/`.
+- **F4 L5 a L8** (`f4-conector-l5-l8`), no worktree `../sante-sgh-wt/f4`, branch `f4-conector`: carga de todas
+  as áreas em 57 fatias. Depois, faça o merge no `main`, como no L3: mescle o `main` no branch, resolva o
+  `registro.ts` e faça o fast-forward.
+- O worker do conector está no ar (`conector/conector.sh worker`) para o painel.
 
-## Próximo: F2.2 e F2.3, os demais módulos da API sobre o núcleo
+## Dívida da F2.2, a fechar antes de declarar a F2 pronta (F2.4)
 
-1. **Planejar.** Classifique, por script, os 513 arquivos que importam `@sgh/legado`:
-   - use `tools/obra/fecho-imports.py` e `tools/obra/contar-legado.sh`;
-   - agrupe por módulo (`apps/api/src/modulos/*`).
+Medido por script em 2026-11-21:
+- 360 pedidos dos lotes: 163 de DDL, 63 de contrato, 19 de sementes no `criar_cliente` e 115 outros;
+- 77 arquivos de produção ainda respondem 501 ou "modelo-pendente".
 
-   O plano segue as fichas: F2.2 é "adaptadores próprios" e F2.3 é "troca dos imports".
-2. **Construir por módulo, um lote por agente.** Cada lote:
-   - escreve as portas com SQL sobre as tabelas novas, pelo `@sgh/nucleo`;
-   - liga o módulo no `modulos/registro.ts` (`API_MODULOS`);
-   - inclui o fecho do módulo no `tsconfig.login.json` (ou num novo `tsconfig.base-api.json`);
-   - tem os testes verdes.
+Exemplos:
+- domínios básicos não semeados no cliente novo (sexo, tipos, situações da agenda);
+- contratos ainda em HHMM, S/N e `destino: 'legado'`;
+- tabela de feriado;
+- busca fonética.
 
-   Comece pelo fluxo vertical **paciente → atendimento**, que é o portão da F2.
-3. **Revisar adversarialmente e corrigir,** como no F2-L.
+**F2.4:** classificar por script, aplicar o DDL e as sementes, trocar os contratos para vocabulário neutro e zerar
+os 501. A prova é um verificador que conta 501 e "modelo-pendente" até chegar a 0.
 
 ## Pendências
 
 - **Decisão do dono:** segundo fator no login do administrador da plataforma. Recomendado: sim.
-- `usuario.administrador_plataforma` (`02_ADM/04_tabelas.sql:74`) não tem mais efeito. Remover ou documentar.
-- O `ServicoAutorizacao` serve a um cliente por instância. Para vários clientes, crie um por cliente (F2.2).
-- As tentativas de login erradas ficam em memória (sem Valkey). Defina a persistência na F2.2.
-- `topografia_tumor` (CID-O) está sem fonte.
-- Tipos 4 e 5 de compatibilidade do SIGTAP: confirmar o significado na fonte oficial.
-- 72 tabelas sem `estabelecimento_id`: revisar por módulo.
-- 31 scripts do `package.json` citam o legado.
+- O dono ainda não criou a ProntoCardio no painel.
+- Bancos de teste `f22_o1` a `f22_o5` e `teste_*` aparecem na lista do painel. Apague-os ao fim da F2.2.
+- O orquestrador desta sessão passou de 1.000 turnos, mas custa cerca de 43 mil equivalentes por turno, cerca de
+  2% do total. Passe a orquestração para uma sessão nova quando os dois workflows acima terminarem.
 
 ## Ambiente
 
-- MariaDB `127.0.0.1:3410` e Oracle de referência, os dois no ar.
-- Web `0.0.0.0:5310` e API `127.0.0.1:3310`, no ar.
-- Certificado em `certs/`, fora do git.
-- Vigia de disco: `tools/obra/vigia-disco.sh 130`. Havia 145 GB livres.
-- Push: `git push origin main` usa o token do `.env` pelo `credential.helper` local.
+- MariaDB `127.0.0.1:3410`, Oracle de referência, web `0.0.0.0:5310` e API `127.0.0.1:3310`
+  (`API_MODULOS=todos tools/dev/subir-login.sh`).
+- Disco: cerca de 236 GB livres, depois que o volume do ensaio do `new-sgh` foi apagado com autorização do dono.

@@ -35,9 +35,6 @@ test.describe('Migração: o aplicativo de pé depois da aplicação @M60.1 @fas
     await page.getByRole('button', { name: 'Verificar agora' }).click();
     await expect(page.getByRole('button', { name: 'Verificar agora' })).toBeEnabled({ timeout: 90_000 });
     await expect(page.locator('table tbody tr').first()).toBeVisible();
-    const cartao = page.getByTestId('cartao-plataforma');
-    await expect(cartao.getByTestId('plataforma-versao')).toHaveText('3.0.14');
-    await expect(cartao.getByTestId('plataforma-charset-parametro')).toHaveText('CP1252');
     await expect(page.locator('body')).not.toContainText(/SPDATA|legado|sistema atual/i);
     await semViolacaoAxe(page, '/administracao/coexistencia/schema (M60.1)');
     expect(externas).toEqual([]);

@@ -67,7 +67,6 @@ import {
   semSegredos,
   trilhaDe,
 } from './comum.js';
-import { RAIZ_FIM_COEXISTENCIA } from '../coexistencia/public-api.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from '../recepcao/public-api.js';
 import { FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
 import { conferirLoginDePainel } from './login-painel.js';
@@ -91,8 +90,6 @@ export class UsuariosController {
     @Inject(SERVICO_SESSAO) private readonly servico: ServicoSessao | null,
     @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao,
     @Optional() @Inject(PORTA_RECEPCAO) private readonly recepcao: PortaRecepcao | null = null,
-    /** M43: o registro versionado do fim (as substituições de painel conferidas fora da tela; a mesma fonte da revisão). */
-    @Optional() @Inject(RAIZ_FIM_COEXISTENCIA) private readonly raizFim: string | null = null,
     /** M59-F4: o limite de administradores (acesso.saneamento.administradoresMaximo) também vale nesta tela. */
     @Optional() @Inject(SERVICO_SANEAMENTO) private readonly saneamento: ServicoSaneamento | null = null,
     /** W1-01 (parte 3c): os gestores de acessos ativos, para a regra do último gestor. */
@@ -130,8 +127,10 @@ export class UsuariosController {
   private async conferirLoginDePainel(req: RequisicaoAutorizada, login: string): Promise<void> {
     const c = ctxDe(req, 'acesso-usuarios');
     const s = sessaoDe(req);
+    // Sem convivência com sistema anterior (ADR 0003): não há registro de fim a consultar.
+    const fontes = { recepcao: this.recepcao, raizFim: null };
     await conferirLoginDePainel(
-      { recepcao: this.recepcao, raizFim: this.raizFim },
+      fontes,
       { rede: s.rede, hospital: s.hospital },
       login,
       async () => {
@@ -414,7 +413,7 @@ export class UsuariosController {
       .redefinirSenha(
         { rede: s.rede, estabelecimento: s.hospital, login: s.login },
         login,
-        { correlacao: c.traceId ?? 'acesso-usuarios', estacao: c.estacao ?? '' },
+        { correlacao: c.correlacao || 'acesso-usuarios', estacao: c.estacao || '' },
         reaut,
       )
       .catch((e: unknown) => {
