@@ -1607,3 +1607,13 @@ Vale por cima das linhas anteriores da L7-07 para as mesmas tabelas.
   NULL com `valor_fora_do_dominio`.
 - **`#arquivo`** (imagens e anexos binários): não entra pelo conector sem o armazenamento de arquivos do produto;
   as tabelas que dependem dele ficam BLOQUEADAS (nunca descarte) até a decisão de modelo.
+
+## Rodada 4 (modelo): decisões tomadas pela melhor prática ao aplicar o DDL
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| incidencia_rubrica | `tributo` novo e `codigo_incidencia_rubrica_id` anulável, CHECK exige um dos dois | A origem diz em que tributo a rubrica incide, não o código oficial; o fato é gravado e o código oficial fica a completar pelo cliente (pendência visível), sem inventar código. `tributo` anulável porque a API ainda grava sem ele. |
+| cadastro_empregador.geracao_evento_pagamentos | domínio do produto: pagamento_folha, baixa_financeira, manual | As 3 opções da lista fixa da origem; o par letra -> opção é da L5-12 (de-para de valores, conferido por contagem). |
+| MFPARAM | parâmetros `financeiro.*` semeados em parametro_definicao (nível estabelecimento) | Catálogo tipado do produto; a carga grava só parametro_valor. |
+| TBPRINC | `principio_ativo_cliente` criada; ligações aceitam o oficial OU o do cliente | Regra 7: o oficial nunca é gravado; o princípio do hospital sem par fica no cadastro próprio (segurança do paciente na alergia). |
+| politica_senha | periodicidade em quantidade e unidade ao lado da em dias | Não quebrar a API; a F2.2 migra e remove a coluna em dias. |

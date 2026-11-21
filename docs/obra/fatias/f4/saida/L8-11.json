@@ -31,7 +31,8 @@
   },
   {
    "arquivo": "db/migracoes/14_FIN (modelo)",
-   "mudanca": "Pedido 7. conta_bancaria.acesso_restrito BOOLEAN (conta só para os usuários de permissao_conta_bancaria): TBCTABAN.CONTA_RESTRICAO (F em 489 de 489 neste cliente; outro cliente com 'T' perderia a restrição). ATUALIZAÇÃO r3: a chave geral é MFPARAM.REST_CTA_USU (por empresa): ela diz se a lista de MFCTAUSU restringia de fato o acesso às contas; carregar as permissões sem ela pode mudar o comportamento do cliente. Com o pedido 16, REST_CTA_USU vira parâmetro do estabelecimento (ou acesso_restrito de cada conta listada)."
+   "mudanca": "Pedido 7. conta_bancaria.acesso_restrito BOOLEAN (conta só para os usuários de permissao_conta_bancaria): TBCTABAN.CONTA_RESTRICAO (F em 489 de 489 neste cliente; outro cliente com 'T' perderia a restrição). ATUALIZAÇÃO r3: a chave geral é MFPARAM.REST_CTA_USU (por empresa): ela diz se a lista de MFCTAUSU restringia de fato o acesso às contas; carregar as permissões sem ela pode mudar o comportamento do cliente. Com o pedido 16, REST_CTA_USU vira parâmetro do estabelecimento (ou acesso_restrito de cada conta listada).",
+   "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14"
   },
   {
    "arquivo": "L8-12 (TBBANCOS) + carga_mapa (chave alternativa composta)",
@@ -70,7 +71,8 @@
   },
   {
    "arquivo": "db/migracoes (semente de parametro_definicao do financeiro) + L8-11",
-   "mudanca": "Pedido 16. MFPARAM: o produto define em parametro_definicao os parâmetros do financeiro por estabelecimento: centro de custo padrão de crédito a pagar, banco a pagar, devedor a receber, banco a receber e glosa; tipo de ajuste padrão de glosa, acréscimo, desconto, adiantamento e cheque compensado; dias de antecedência do alerta de vencimento e quantidade de dias de vencimento; meses de consulta; forma de pagamento obrigatória; usa empenho; restringe contas bancárias por usuário; natureza financeira padrão. Com eles, a L8-11 declara MFPARAM em parametro_valor (desdobrar por coluna, ref:TBCENCUS, ref:MFREFDES, ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)). Até lá a tabela fica BLOQUEADA (parametro_definicao_faltante), não descartada."
+   "mudanca": "Pedido 16. MFPARAM: o produto define em parametro_definicao os parâmetros do financeiro por estabelecimento: centro de custo padrão de crédito a pagar, banco a pagar, devedor a receber, banco a receber e glosa; tipo de ajuste padrão de glosa, acréscimo, desconto, adiantamento e cheque compensado; dias de antecedência do alerta de vencimento e quantidade de dias de vencimento; meses de consulta; forma de pagamento obrigatória; usa empenho; restringe contas bancárias por usuário; natureza financeira padrão. Com eles, a L8-11 declara MFPARAM em parametro_valor (desdobrar por coluna, ref:TBCENCUS, ref:MFREFDES, ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)). Até lá a tabela fica BLOQUEADA (parametro_definicao_faltante), não descartada.",
+   "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14; falta na fatia: L8-11 declara MFPARAM em parametro_valor (chaves financeiro.*)"
   },
   {
    "arquivo": "catalogos/carregadores/ (codigo_receita_federal) + catalogos/baixar.py",

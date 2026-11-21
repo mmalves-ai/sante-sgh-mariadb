@@ -23,7 +23,8 @@
   {
    "arquivo": "db/migracoes/16_SGO (modelo)",
    "mudanca": "avaliar motivo_movimento_cadastral.situacao_cadastral_beneficiario_id (FK opcional)",
-   "motivo": "L8-13: a origem liga o motivo de movimento à situação cadastral (ID_CDSTATUSCAD); o destino não guarda essa ligação, que hoje se perde"
+   "motivo": "L8-13: a origem liga o motivo de movimento à situação cadastral (ID_CDSTATUSCAD); o destino não guarda essa ligação, que hoje se perde",
+   "atendido": "rodada 4 (DDL): db/migracoes/16_SGO/12"
   }
  ]
 }

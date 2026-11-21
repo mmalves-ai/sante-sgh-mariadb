@@ -38,7 +38,8 @@
    "id": "M5",
    "arquivo": "db/migracoes/07_INT/03_tabelas.sql (F2.2)",
    "mudanca": "remover UNIQUE KEY uq_unidade_internacao_unidade_assistencial (trocar por índice simples): uma unidade assistencial pode ter várias alas/blocos de internação",
-   "motivo": "a origem tem vários blocos por unidade (RIBLOCOS.UNID); com a unicidade, só o primeiro bloco de cada unidade viraria unidade de internação e as acomodações, leitos e internações dos outros recusariam em cadeia"
+   "motivo": "a origem tem vários blocos por unidade (RIBLOCOS.UNID); com a unicidade, só o primeiro bloco de cada unidade viraria unidade de internação e as acomodações, leitos e internações dos outros recusariam em cadeia",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07"
   },
   {
    "id": "L6-14",
@@ -152,7 +153,8 @@
    "id": "LEITO_CRITICIDADE_AREA",
    "arquivo": "db/migracoes/07_INT (F2.2)",
    "mudanca": "leito_hospitalar.criticidade_area_id (FK criticidade_area), para a higienização pela classe sanitária da área do leito; depois TBLEITO.ID_CHCRITICIDADE por ref:CHCRITICIDADE com complementa",
-   "motivo": "65 de 134 leitos têm criticidade de limpeza na origem; a coluna leito_hospitalar.criticidade é clínica (baixa a intensiva), outro conceito"
+   "motivo": "65 de 134 leitos têm criticidade de limpeza na origem; a coluna leito_hospitalar.criticidade é clínica (baixa a intensiva), outro conceito",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07; falta na fatia: TBLEITO.ID_CHCRITICIDADE por complementa"
   },
   {
    "id": "LEITO_DIARIA",
@@ -170,13 +172,15 @@
    "id": "INTERNACAO_AUTORIZACAO",
    "arquivo": "db/migracoes/07_INT/02_tabelas.sql (F2.2)",
    "mudanca": "internacao.autorizacao_validade (DATE) e autorizado_em (DATE), como o agendamento já tem",
-   "motivo": "RICADINT.VALSENHA (2885) e DTAUTORIZ (7755): hoje só no retrato da trilha"
+   "motivo": "RICADINT.VALSENHA (2885) e DTAUTORIZ (7755): hoje só no retrato da trilha",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07"
   },
   {
    "id": "REGIME_SEMENTE",
    "arquivo": "F2.2 (carga inicial do 'criar novo cliente')",
    "mudanca": "semente de regime_atendimento_internacao com codigo_tiss 1 hospitalar, 2 hospital-dia, 3 domiciliar",
-   "motivo": "RICADINT e RIPREINT ligam o regime por cod:regime_atendimento_internacao.codigo_tiss; sem a semente, codigo_inexistente_destino em toda linha"
+   "motivo": "RICADINT e RIPREINT ligam o regime por cod:regime_atendimento_internacao.codigo_tiss; sem a semente, codigo_inexistente_destino em toda linha",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07"
   },
   {
    "id": "DEP_R3B",

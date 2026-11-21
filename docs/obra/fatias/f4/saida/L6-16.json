@@ -195,7 +195,9 @@
     "CCAGENDA\t#retrato:CRM,AUX1,AUX2,AUX3,INSTR,ANEST,CIRCUL,ID_AUX1,ID_AUX2,ID_AUX3,ID_INSTR,ID_ANEST,ID_CIRCUL,ID_TBCBOPRO_PEDIATRA,MIC,IMA,FUR,CAN,VID,TOR,ORT,ELE,ARCO,CONGEL,RX,UCO,OUTR,OUTR_TIPO_ANEST,JUSTIF,TP_CIR\tagendamento_cirurgico.dados_origem\t\t\t\tL6-16",
     "CCAGENDA\tPACIENTE\tagendamento_cirurgico.paciente_informado\ttexto_nome\t\t\tL6-16",
     "CCAGENDA\tDATA_NASCIMENTO\tagendamento_cirurgico.nascimento_informado\tdata\t\t\tL6-16"
-   ]
+   ],
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/08_CC/05; falta na fatia: declarar os #retrato prontos; não aplicado: só (1) dados_origem; (2) já existia; (3) é da cobertura",
+   "atendido": "rodada 4 (DDL): db/migracoes/08_CC/05; falta na fatia: declarar os #retrato prontos"
   }
  ]
 }

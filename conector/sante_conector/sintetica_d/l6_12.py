@@ -474,8 +474,10 @@ ESPERADO = {
     "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_4025": 2}},
     "PRALERGIAPAC_TBPRINC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "codigo_inexistente_destino": 1,
-                                                           "pai_inexistente": 1, "restricao_destino_1048": 3,
+                                                           "pai_inexistente": 1, "restricao_destino_4025": 3,
                                                            "restricao_destino_1062": 1}},
+    # rodada 4 (11_SUP/08): princípio da alergia agora anulável com o do cliente; sem nenhum dos dois o CHECK
+    # ck_alergia_paciente_principio_principio (4025) recusa a linha, no lugar do NOT NULL (1048)
     "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
                                                     "restricao_destino_4025": 1}},
     "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2}},

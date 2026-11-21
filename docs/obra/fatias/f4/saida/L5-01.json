@@ -12,7 +12,8 @@
   {
    "arquivo": "db/migracoes/02_ADM/04_tabelas.sql (trilha F2.2)",
    "mudanca": "usuario_escopo.pode_excluir BOOLEAN NOT NULL DEFAULT FALSE (com o CHECK de permissão incluindo-a)",
-   "motivo": "DIPERMPS distingue gravar (PERM_GRA -> pode_operar) de excluir (PERM_EXC) por prestador; sem a coluna, a exclusão segue só a ação do perfil e PERM_EXC fica sem destino"
+   "motivo": "DIPERMPS distingue gravar (PERM_GRA -> pode_operar) de excluir (PERM_EXC) por prestador; sem a coluna, a exclusão segue só a ação do perfil e PERM_EXC fica sem destino",
+   "atendido": "rodada 4 (DDL): db/migracoes/02_ADM/09"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (motor, genérico)",
@@ -50,7 +51,8 @@
   {
    "arquivo": "db/migracoes/02_ADM/03_tabelas.sql (trilha F2.2)",
    "mudanca": "politica_senha: periodicidade_aceite_quantidade + periodicidade_aceite_unidade ('dia','mes','ano') no lugar de periodicidade_aceite_dias, e reutilizacao_bloqueada_dias",
-   "motivo": "o domínio vence o aceite por mês e ano de calendário; a origem guarda o reuso de senha em dias"
+   "motivo": "o domínio vence o aceite por mês e ano de calendário; a origem guarda o reuso de senha em dias",
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/02_ADM/09; não aplicado: periodicidade_aceite_dias mantida para a API (a F2.2 migra e remove)"
   },
   {
    "arquivo": "db/migracoes (trilha F2.2)",
@@ -81,7 +83,8 @@
   {
    "arquivo": "db/migracoes/02_ADM/03_tabelas.sql (trilha F2.2)",
    "mudanca": "politica_senha.exige_alfanumerico BOOLEAN NOT NULL DEFAULT FALSE",
-   "motivo": "TBCFGLOGIN.CARACTERE_ALFANUMERICO (letra e número juntos) sem coluna; hoje declarada sem destino"
+   "motivo": "TBCFGLOGIN.CARACTERE_ALFANUMERICO (letra e número juntos) sem coluna; hoje declarada sem destino",
+   "atendido": "rodada 4 (DDL): db/migracoes/02_ADM/09"
   },
   {
    "arquivo": "conector/mapa/tabelas.tsv (gerador) e decisão de RETPAGEN",

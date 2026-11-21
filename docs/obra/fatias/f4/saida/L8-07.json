@@ -3,7 +3,8 @@
   {
    "arquivo": "db/migracoes/13_SUS/06_tabelas.sql (novo; ou o próximo número livre do 13_SUS)",
    "mudanca": "-- SUS, lote 06: correção de largura (F4, L8-07). Só para frente.\nALTER TABLE dominio_sus MODIFY COLUMN lista VARCHAR(40) NOT NULL;",
-   "motivo": "dominio_sus.lista VARCHAR(30) é menor que dois valores do próprio CHECK ck_dominio_sus_lista e da API: 'caracteristica_tratamento_dialitico' (35) e 'justificativa_paciente_sem_documento' (36). Hoje toda linha de FAHEMOCARTRAT e FHJUSTPACDESC é recusada (restricao_destino_1406) e nem o produto grava esses itens. Conferido por script: só dominio_sus.lista tem o defeito. Não criei a migração: fora dos arquivos da fatia (criação negada nesta sessão). Ao aplicar: em sintetica_d/l8_07.py trocar LARGURA_LISTA para 40 (LISTA_LONGA fica vazio); os testes da fatia já aceitam os dois estados. Linhas recusadas são relidas na próxima carga (sem Sincronizar)."
+   "motivo": "dominio_sus.lista VARCHAR(30) é menor que dois valores do próprio CHECK ck_dominio_sus_lista e da API: 'caracteristica_tratamento_dialitico' (35) e 'justificativa_paciente_sem_documento' (36). Hoje toda linha de FAHEMOCARTRAT e FHJUSTPACDESC é recusada (restricao_destino_1406) e nem o produto grava esses itens. Conferido por script: só dominio_sus.lista tem o defeito. Não criei a migração: fora dos arquivos da fatia (criação negada nesta sessão). Ao aplicar: em sintetica_d/l8_07.py trocar LARGURA_LISTA para 40 (LISTA_LONGA fica vazio); os testes da fatia já aceitam os dois estados. Linhas recusadas são relidas na próxima carga (sem Sincronizar).",
+   "atendido": "rodada 4 (DDL): db/migracoes/13_SUS/06"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py (ler_ddl, filtro dos ALTER que entram no DDL da conferência)",

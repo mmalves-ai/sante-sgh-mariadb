@@ -15,7 +15,8 @@
   {
    "arquivo": "db/migracoes/14_FIN (DDL proposto para a trilha F2.2) + fatias L8-11 e L8-12",
    "mudanca": "pedido D: coluna `grupo_lancamento_financeiro_id BIGINT UNSIGNED NULL`, com FK para grupo_lancamento_financeiro (ON DELETE RESTRICT) e índice, em titulo_pagar, titulo_receber, movimento_bancario e adiantamento (o produto também preenche ao gerar baixa, borderô, transferência e adiantamento). Depois, as fatias L8-11 (MFLANCTO, MFADIFOR, MFCTAREC) e L8-12 (MFCONPAG, MFCCCONV) trocam o 'sem destino: agrupador descartado' de ID_MFCABECLANC pela referência ao grupo (`ref:MFCABECLANC`, destino <tabela>.grupo_lancamento_financeiro_id).",
-   "motivo": "hoje nenhuma tabela aponta grupo_lancamento_financeiro: o agrupador existe e não tem onde ficar o vínculo, e a relação título, baixa e movimento das 139549 operações da origem se perderia. Revisar com o dono (decisão em F4-decisoes-destino.md)"
+   "motivo": "hoje nenhuma tabela aponta grupo_lancamento_financeiro: o agrupador existe e não tem onde ficar o vínculo, e a relação título, baixa e movimento das 139549 operações da origem se perderia. Revisar com o dono (decisão em F4-decisoes-destino.md)",
+   "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14; falta na fatia: L8-11 e L8-12 trocam ID_MFCABECLANC por ref:MFCABECLANC"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + fatia L7-07",

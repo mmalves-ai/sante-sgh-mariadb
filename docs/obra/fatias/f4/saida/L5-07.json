@@ -28,7 +28,8 @@
   {
    "arquivo": "db/migracoes/15_RH/02_tabelas.sql (trilha F2: vinculo_trabalho e estrangeiro_colaborador)",
    "mudanca": "ck_vinculo_trabalho_tipo_admissao: acrescentar transferencia_consorcio (tpAdmissao 3), transferencia_domestico (5) e transferencia_sucedida_inapta (7); ck_estrangeiro_colaborador_condicao_ingresso: acrescentar reuniao_familiar (condIng 3) e tratado_brasil_portugal (6). Os valores sem código oficial (transferencia_cessao, reintegracao, transferencia_regime, residencia_humanitaria, residencia_trabalho) ficam para revisão do dono",
-   "motivo": "decisão de modelo registrada em F4-decisoes-destino.md (seção L5-07): todo código oficial precisa de um valor de domínio para a ida e volta do eSocial; até a migração, esses códigos dão valor_fora_do_dominio por linha, nunca valor presumido."
+   "motivo": "decisão de modelo registrada em F4-decisoes-destino.md (seção L5-07): todo código oficial precisa de um valor de domínio para a ida e volta do eSocial; até a migração, esses códigos dão valor_fora_do_dominio por linha, nunca valor presumido.",
+   "atendido": "rodada 4 (DDL): db/migracoes/15_RH/06"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d e valores.d das fatias consumidoras (vínculo, estrangeiro, ASO, exame, CAT, deficiência, vacina, colaborador, documento)",

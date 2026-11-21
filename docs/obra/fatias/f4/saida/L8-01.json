@@ -168,12 +168,14 @@
   {
    "arquivo": "db/migracoes/12_FAT/03_tabelas.sql (modelo, trilha F2.2)",
    "mudanca": "favorecido_repasse.profissional_id anulável quando tipo_favorecido é pessoa_juridica ou cooperativa (CHECK: proprio_profissional e terceiro_profissional exigem o profissional; pessoa_juridica exige favorecido_pessoa_juridica_id), para o lançamento de repasse a EMPRESA",
-   "motivo": "RPLANEVE TIPO E: 573 lançamentos na referência (todos em RPA) sem profissional; hoje recusados (1048, visível) porque o favorecido exige o titular. Junto: evidência de qual cadastro COD_PRESTADOR do E aponta (o agregado casa com TBCOOPER, TBPRESER e TBPROFIS ao mesmo tempo)"
+   "motivo": "RPLANEVE TIPO E: 573 lançamentos na referência (todos em RPA) sem profissional; hoje recusados (1048, visível) porque o favorecido exige o titular. Junto: evidência de qual cadastro COD_PRESTADOR do E aponta (o agregado casa com TBCOOPER, TBPRESER e TBPROFIS ao mesmo tempo)",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "db/migracoes/12_FAT/03_tabelas.sql (modelo, trilha F2.2)",
    "mudanca": "guia_fonte_pagadora: unicidade por (estabelecimento_id, fonte_pagadora_id, numero) em vez de (estabelecimento_id, numero)",
-   "motivo": "FCGUIAS: 462 números de guia aparecem em convênios diferentes (1.569 linhas na referência): guias legítimas de operadoras distintas hoje recusadas com 1062. O mesmo número no mesmo convênio já ADOTA a guia gravada"
+   "motivo": "FCGUIAS: 462 números de guia aparecem em convênios diferentes (1.569 linhas na referência): guias legítimas de operadoras distintas hoje recusadas com 1062. O mesmo número no mesmo convênio já ADOTA a guia gravada",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (fatia L8-03) + carga_mapa.py (filtro de linha, pedido 11 da L8-03)",

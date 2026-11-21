@@ -23,7 +23,8 @@
   {
    "arquivo": "db/migracoes/15_RH (modelo, trilha F2.2) e conector/mapa/declarado/colunas.d/L5-12.tsv (+ valores.d/L5-12.tsv)",
    "mudanca": "Coluna cadastro_empregador.geracao_evento_pagamentos VARCHAR(30) NULL com CHECK do domínio do produto (as 3 opções de geração do evento de pagamentos), e FPPARAM.GERAR_S1210_BAIXA_FINANCEIRO declarada para ela com depara=valores (codigo_char; pares pelos 3 códigos de 1 letra da lista fixa FPESOCPARAMS1210, conferidos por contagem, sem valor de pessoa).",
-   "motivo": "Achado 1: a escolha do hospital se perdia em silêncio e o motivo do descarte apontava para uma parametro_definicao inexistente. Decisão (coluna, não parâmetro) e perda provisória registradas em F4-decisoes-destino.md (FPESOCPARAMS1210)."
+   "motivo": "Achado 1: a escolha do hospital se perdia em silêncio e o motivo do descarte apontava para uma parametro_definicao inexistente. Decisão (coluna, não parâmetro) e perda provisória registradas em F4-decisoes-destino.md (FPESOCPARAMS1210).",
+   "atendido": "rodada 4 (DDL): db/migracoes/15_RH/06; falta na fatia: L5-12 declara FPPARAM.GERAR_S1210_BAIXA_FINANCEIRO (pagamento_folha, baixa_financeira, manual)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",

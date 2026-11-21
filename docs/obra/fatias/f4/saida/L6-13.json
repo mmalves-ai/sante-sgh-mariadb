@@ -80,12 +80,14 @@
   {
    "arquivo": "db/migracoes 06_PEP (F2.2)",
    "mudanca": "horario_administracao.observacao_enfermagem (TEXT) e horario_administracao.urgente (BOOLEAN)",
-   "motivo": "PRCHKGERAL.OBSERVACAO_ENFERMAGEM e MEDICAMENTO_URGENTE hoje só no retrato do evento (0 preenchidas/marcadas na referência, mas são campos do prontuário)"
+   "motivo": "PRCHKGERAL.OBSERVACAO_ENFERMAGEM e MEDICAMENTO_URGENTE hoje só no retrato do evento (0 preenchidas/marcadas na referência, mas são campos do prontuário)",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "db/migracoes 06_PEP (F2.2)",
    "mudanca": "receita_medica_item.duracao_descricao, frequencia_descricao e prazo_descricao (VARCHAR, texto como sai impresso, como quantidade_descricao) e semente de unidade_duracao_tratamento (dia, semana, mes, ano)",
-   "motivo": "PRITEMRECEITA: duração em texto em 1.763 de 1.763 itens (14 numéricas, 0 com unidade): sem a coluna, o texto impresso da duração se perde"
+   "motivo": "PRITEMRECEITA: duração em texto em 1.763 de 1.763 itens (14 numéricas, 0 com unidade): sem a coluna, o texto impresso da duração se perde",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "tools/obra/gerar_mapa_conector.py (rodar) + mapa/tabelas.tsv",

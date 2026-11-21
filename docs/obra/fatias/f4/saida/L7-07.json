@@ -136,14 +136,16 @@
    "arquivo": "db/migracoes/11_SUP (trilha F2.2)",
    "trilha": "F2.2",
    "mudanca": "pedido_compra.numero_documento_origem VARCHAR(30) NULL (número que o usuário conhece no sistema anterior)",
-   "motivo": "GECADPED.DOC repete no ano (6.429 grupos): o número único vem do ID e o DOC fica sem destino"
+   "motivo": "GECADPED.DOC repete no ano (6.429 grupos): o número único vem do ID e o DOC fica sem destino",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08"
   },
   {
    "id": "fornecedor_opcional",
    "arquivo": "db/migracoes/11_SUP (trilha F2.2)",
    "trilha": "F2.2",
    "mudanca": "pedido_compra.empresa_fornecedora_id NULL permitido nas situações rascunho e em_cotacao (CHECK), como na melhor prática (pedido em elaboração ainda sem fornecedor)",
-   "motivo": "GECADPED: FORN = 0 em 6.900 de 18.090 linhas medidas; hoje 1048 visível"
+   "motivo": "GECADPED: FORN = 0 em 6.900 de 18.090 linhas medidas; hoje 1048 visível",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08"
   },
   {
    "id": "solicitante_imagem",
@@ -175,7 +177,8 @@
    "mudanca": "CREATE TABLE principio_ativo_cliente (id, nome VARCHAR(255) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, principio_ativo_id NULL FK principio_ativo (ligação ao oficial, por nome ou pelo farmacêutico), classe_terapeutica_codigo VARCHAR(30) NULL, unidade_medida_padrao_id NULL FK unidade_medida, origem, auditoria; UNIQUE(nome)); e nas ligações insumo_principio_ativo, alergia_paciente_principio, item_nao_padronizado_principio e alergeno_principio_ativo: principio_ativo_id NULL + principio_ativo_cliente_id NULL com CHECK (exatamente um)",
    "motivo": "TBPRINC: 138 princípios do hospital sem código DCB; o que não casar pelo nome com o catálogo oficial hoje é recusado nas ligações (pendência visível) e o princípio não tem onde gravar (regra 7: o oficial nunca é gravado)",
    "ddl": "CREATE TABLE principio_ativo_cliente (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NULL, nome VARCHAR(255) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, principio_ativo_id BIGINT UNSIGNED NULL COMMENT 'Ligação ao catálogo oficial (pelo nome ou pelo farmacêutico)', classe_terapeutica_codigo VARCHAR(30) NULL, unidade_medida_padrao_id BIGINT UNSIGNED NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, CONSTRAINT ck_principio_ativo_cliente_origem CHECK (origem IN ('sistema','migracao','integracao')), UNIQUE KEY uq_principio_ativo_cliente_nome (nome)); FKs principio_ativo_id -> principio_ativo(id), unidade_medida_padrao_id -> unidade_medida(id). Nas ligações insumo_principio_ativo, alergia_paciente_principio, item_nao_padronizado_principio e alergeno_principio_ativo: principio_ativo_id NULL + principio_ativo_cliente_id NULL (FK) com CHECK ((principio_ativo_id IS NULL) <> (principio_ativo_cliente_id IS NULL)).",
-   "ao_aplicar": "descomentar as linhas #TBPRINC de colunas.d/L7-07.tsv; tirar TBPRINC de catalogos.tsv (oficial) e de sem_carga.tsv; BLOQUEADAS -> CARREGADAS na sintética l7_07.py com o esperado (1 linha por princípio); ligações sem par no oficial passam a ref:TBPRINC/principio_ativo_cliente concorrente"
+   "ao_aplicar": "descomentar as linhas #TBPRINC de colunas.d/L7-07.tsv; tirar TBPRINC de catalogos.tsv (oficial) e de sem_carga.tsv; BLOQUEADAS -> CARREGADAS na sintética l7_07.py com o esperado (1 linha por princípio); ligações sem par no oficial passam a ref:TBPRINC/principio_ativo_cliente concorrente",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08 e 06_PEP/17; falta na fatia: descomentar #TBPRINC, tirar TBPRINC de catalogos.tsv e sem_carga.tsv, ligações por ref:TBPRINC/principio_ativo_cliente"
   },
   {
    "id": "nome_principio_outras_fatias",

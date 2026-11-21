@@ -67,7 +67,8 @@
   {
    "arquivo": "db/migracoes/07_INT (trilha F2.2) + colunas.d/L6-14.tsv",
    "mudanca": "acomodacao.local_cobranca_id (FK local_cobranca, anulável) para RIACOMOD.LCONS (ref:TBLOCCON)",
-   "motivo": "o quarto da origem guarda o local de cobrança das diárias; o modelo não tem a coluna e LCONS fica sem destino (documentado)"
+   "motivo": "o quarto da origem guarda o local de cobrança das diárias; o modelo não tem a coluna e LCONS fica sem destino (documentado)",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07; falta na fatia: declarar RIACOMOD.LCONS"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L6-14.tsv (com evidência)",
@@ -82,7 +83,8 @@
   {
    "arquivo": "db/migracoes/07_INT (trilha F2.2) + colunas.d/L6-14.tsv",
    "mudanca": "coluna ocupacao_leito.categoria_acomodacao_id (FK categoria_acomodacao, anulável: NULL = a do quarto). Ao aplicar, declarar RICTRLOC ID_TBTIPOACOMOD -> ocupacao_leito.categoria_acomodacao_id via ref:TBTIPOACOMOD",
-   "motivo": "medido: 49 de 15737 períodos com categoria diferente da do quarto (diferença de classe): é a categoria cobrada na diária e hoje se perde"
+   "motivo": "medido: 49 de 15737 períodos com categoria diferente da do quarto (diferença de classe): é a categoria cobrada na diária e hoje se perde",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07; falta na fatia: declarar RICTRLOC.ID_TBTIPOACOMOD"
   },
   {
    "arquivo": "conector/mapa/declarado (chave) + tools/obra/gerar_mapa_conector.py (integrador)",
@@ -92,7 +94,8 @@
   {
    "arquivo": "db/ (semente do 'criar novo cliente', trilha F2.2)",
    "mudanca": "semente versionada de regime_atendimento_internacao: hospitalar (TISS 1), hospital_dia (2), domiciliar (3), até existir o carregador oficial da ANS; registrar em F4-plano.md",
-   "motivo": "TBTISSREGINT é descarte catalogo_oficial (regra 7) e o carregador oficial não existe: sem a semente, o destino fica vazio e o regime das internações e contas não tem onde ligar"
+   "motivo": "TBTISSREGINT é descarte catalogo_oficial (regra 7) e o carregador oficial não existe: sem a semente, o destino fica vazio e o regime das internações e contas não tem onde ligar",
+   "atendido": "rodada 4 (DDL): db/migracoes/07_INT/07"
   },
   {
    "arquivo": "colunas.d/L8-05.tsv (FCCTAEXT) e colunas.d/L6-15.tsv (RICADINT), com valores.d",

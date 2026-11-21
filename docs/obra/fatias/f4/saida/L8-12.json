@@ -29,7 +29,8 @@
   {
    "arquivo": "db/migracoes (F2.2) e semente de parametro_definicao",
    "mudanca": "Definir o parâmetro do produto 'financeiro.naturezaFinanceiraPadrao' (nível estabelecimento, tipo inteiro = id da natureza_financeira); depois, MFPARAM.GRUPO/SUBGRUPO/ITEM_TBITEDES entra como parametro_valor pela ref:TBITEDES(GRUPO_TBITEDES,SUBGRUPO_TBITEDES,ITEM_TBITEDES)",
-   "motivo": "18: a natureza padrão por empresa é a única configuração do cliente com valor em MFPARAM (2/2 válidas na imagem de referência); parametro_definicao é catálogo do produto e não tem semente, por isso MFPARAM fica descarte com o resto do conteúdo sem valor ou legal (F4-decisoes-destino.md)"
+   "motivo": "18: a natureza padrão por empresa é a única configuração do cliente com valor em MFPARAM (2/2 válidas na imagem de referência); parametro_definicao é catálogo do produto e não tem semente, por isso MFPARAM fica descarte com o resto do conteúdo sem valor ou legal (F4-decisoes-destino.md)",
+   "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

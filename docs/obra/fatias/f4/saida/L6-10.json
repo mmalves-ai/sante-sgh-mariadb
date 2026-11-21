@@ -122,7 +122,8 @@
   {
    "arquivo": "F2.2 (modelo): db/migracoes 06_PEP/02_tabelas.sql componente_sumario_alta",
    "mudanca": "Recorte do sumário: o domínio do CHECK de componente_sumario_alta.periodo não tem 'ultimas_48_horas' nem 'nenhum', que o sistema anterior oferece (0 nenhum, 1 todos, 2 últimas 24 h, 3 últimas 48 h). Opções: acrescentar ultimas_48_horas ao CHECK, ou trocar a coluna por FK para periodo_consulta_sumario_alta (cadastro já carregado pela L6-06, com horas_retroativas), que comporta qualquer janela.",
-   "motivo": "Hoje o recorte 3 (48 h) e o 0 ficam NULL com valor_fora_do_dominio (visível por linha, o cliente revisa)."
+   "motivo": "Hoje o recorte 3 (48 h) e o 0 ficam NULL com valor_fora_do_dominio (visível por linha, o cliente revisa).",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "conector/mapa (L6-11: colunas.d/L6-11.tsv, PRPADEVOL)",

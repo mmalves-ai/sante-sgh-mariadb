@@ -3598,3 +3598,6 @@ leitura_dosimetria	RH	principal	F8	Leitura do dosímetro do colaborador exposto 
 exposicao_quimioterapico	RH	principal	F8	Exposição do colaborador a quimioterápico antineoplásico no manuseio	F2.2 onda 3 final (pedido do lote 03-10; db/migracoes)	07	0
 ato_conta_portal_profissional_externo	INTG	historico	F3	Ato sobre a conta do médico externo no portal (bloqueio, desbloqueio, encerramento, trocas), com motivo e quem fez	F2.2 onda 4 (pedido do lote 04-02; db/migracoes)	08	0
 troca_email_conta_portal	INTG	principal	F3	Pedido de troca do e-mail de uma conta do portal, confirmado por código enviado ao endereço novo	F2.2 onda 4 (pedidos dos lotes 03-12 e 04-02; db/migracoes)	08	0
+principio_ativo_cliente	SUP	principal	F4	Princípio ativo do cadastro próprio do hospital sem código oficial, ligado ao catálogo oficial quando houver par	F4 rodada 4, pedido L7-07; SPDATA: TBPRINC	05	1
+item_faturavel_tipo_servico	FAT	vinculo	F4	Tipos de serviço em que o item faturável se enquadra	F4 rodada 4, pedidos L8-03 e L8-04; SPDATA: TBTIPPRO	06	1
+tabela_preco_item_padrao	FAT	configuracao	F4	Item cobrado por padrão em cada finalidade (consulta, consulta eletiva, visita, pedido), por tabela de preço	F4 rodada 4, pedido L8-03; SPDATA: TBCTRTHM	06	1

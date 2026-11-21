@@ -11,7 +11,8 @@
   {
    "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (agenda_servico)",
    "mudanca": "ck_agenda_servico_dono aceita agenda com origem='migracao' sem profissional, recurso nem setor (o cliente vincula o dono no painel, pendência por linha), como pedido pela L6-03 para REAGENDA",
-   "motivo": "SIAGENDA: a agenda de exames com CRM 0 não tem dono na origem (o setor executante não existe no mapa); hoje é recusada com restricao_destino_4025 e, em cadeia, a grade, os convênios, os horários e as marcações dela"
+   "motivo": "SIAGENDA: a agenda de exames com CRM 0 não tem dono na origem (o setor executante não existe no mapa); hoje é recusada com restricao_destino_4025 e, em cadeia, a grade, os convênios, os horários e as marcações dela",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (regerar tabelas.tsv e fatias)",
@@ -53,7 +54,8 @@
   {
    "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (cancelamento_marcacao) + conector (declaração da L6-04)",
    "mudanca": "histórico de cancelamento de consulta e de exame (RECANAGE, SICANAGE) também em cancelamento_marcacao, sem ligar à marcação viva: ou (a) marcacao_horario_id aceita NULL quando origem='migracao', com agenda_servico_id e horario_inicio_em próprios para os relatórios por agenda e período, ou (b) o conector cria a marcação cancelada (situação de significado 'cancelada', destino secundário 'antes', horário pela chave NOME,CRM,DATA,HORA) quando os pedidos 1 e 5 existirem; motivo de operação presumido (=~ 'outro', valor_presumido) com o texto MOTIVO em complemento, solicitante =~paciente, cancelado_em por #data_hora:DT_CAN,HR_CAN, responsável por USU_CAN",
-   "motivo": "os relatórios de cancelamento por motivo, agenda e período leem cancelamento_marcacao (F4-decisoes-destino.md, SICANAGE); hoje RECANAGE carrega só a cópia em registro_excluido, e agenda, data e hora do cancelado ficam só no JSON do retrato. A tabela exige marcacao_horario_id NOT NULL e única, e a marcação foi apagada na origem. Revisar com o dono qual das duas"
+   "motivo": "os relatórios de cancelamento por motivo, agenda e período leem cancelamento_marcacao (F4-decisoes-destino.md, SICANAGE); hoje RECANAGE carrega só a cópia em registro_excluido, e agenda, data e hora do cancelado ficam só no JSON do retrato. A tabela exige marcacao_horario_id NOT NULL e única, e a marcação foi apagada na origem. Revisar com o dono qual das duas",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06; falta na fatia: declarar RECANAGE/SICANAGE pela opção (a)"
   },
   {
    "arquivo": "(medição na carga real, sem mudança de código por ora)",

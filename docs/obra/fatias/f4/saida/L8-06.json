@@ -77,7 +77,8 @@
   {
    "arquivo": "db/migracoes/12_FAT (modelo) — pedido de modelo",
    "mudanca": "conta_hospitalar_item: validade do lote (DATE, 'validade_lote'), CID do item ('cid_termo_terminologia_id', de-para cid10), número da guia complementar e ligação à APAC ('apac_id' ou número e data da APAC); ou, para o imunobiológico, ligar o item a vacina_aplicada (lote e validade). Depois disso REPROEXT/RIPROEXT (complemento do item, declaração pronta e comentada em colunas.d/L8-06.tsv) levam VALVACINA, CID10, GUIACOMPL, TECNICA (via tecnica_termo_terminologia_id) e APAC/DTAPAC",
-   "motivo": "REPROEXT e RIPROEXT deixaram de ser descarte (o 'duplicado' não tinha prova: ID_FCLANEXT é anulável e elas trazem rastreabilidade de vacina, CID e APAC que o lançamento não tem); sem essas colunas, o complemento só leva o lote"
+   "motivo": "REPROEXT e RIPROEXT deixaram de ser descarte (o 'duplicado' não tinha prova: ID_FCLANEXT é anulável e elas trazem rastreabilidade de vacina, CID e APAC que o lançamento não tem); sem essas colunas, o complemento só leva o lote",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: REPROEXT/RIPROEXT pela declaração comentada"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_converter)",
@@ -114,7 +115,8 @@
    "n": 20,
    "arquivo": "db/migracoes/12_FAT/01_tabelas.sql (modelo, trilha F2.2) + colunas.d/L8-06",
    "mudanca": "conta_hospitalar_item: sequencial_item_guia SMALLINT UNSIGNED NULL ('Sequencial do item na guia TISS enviada'), codigo_autorizacao VARCHAR(20) NULL, local_atendimento_id BIGINT UNSIGNED NULL (FK local_atendimento) e funcao_equipe_cobranca_id BIGINT UNSIGNED NULL (FK funcao_equipe_cobranca). Depois: FCLANEXT SEQUENCIAL_ITEM_FATURADO, COD_AUTORIZ (texto), LOCAL (ref:TBLOCAL) e ATO (ref:TBGRAUPARTPROC); trocar a declaração de FCLANEXTSEQITEM em colunas.d/L8-06.tsv (hoje trilha_auditoria do item com retrato) por 'ref:FCLANEXT;complementa' com SEQUENCIAL_ITEM -> conta_hospitalar_item.sequencial_item_guia",
-   "motivo": "o sequencialItem casa o item no demonstrativo de análise e no recurso de glosa (FCLANEXTSEQITEM, 2,9 milhões, hoje carregada como trilha do item com retrato); código de autorização, local e função da equipe do lançamento são usados no faturamento e no repasse e o item não tem coluna para eles. conta_hospitalar_item_autorizacao não serve: exige guia ou resposta de autorização, que a origem não liga ao lançamento"
+   "motivo": "o sequencialItem casa o item no demonstrativo de análise e no recurso de glosa (FCLANEXTSEQITEM, 2,9 milhões, hoje carregada como trilha do item com retrato); código de autorização, local e função da equipe do lançamento são usados no faturamento e no repasse e o item não tem coluna para eles. conta_hospitalar_item_autorizacao não serve: exige guia ou resposta de autorização, que a origem não liga ao lançamento",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: FCLANEXT e FCLANEXTSEQITEM"
   },
   {
    "n": 21,

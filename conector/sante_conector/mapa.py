@@ -520,8 +520,9 @@ def ler_ddl(raiz=RAIZ):
             corpo = m.group(2)
             if "FOREIGN KEY" in corpo:
                 t["fks"].append(m.group(0))
-            # ALTER de coluna, ou de restrição sem FK (CHECK redefinido em lote posterior): entra no DDL da conferência
-            if re.search(r"\b(ADD|DROP) COLUMN\b", corpo) or (
+            # ALTER de coluna (inclusive MODIFY: NOT NULL afrouxado, largura), de índice único (chave trocada) ou de
+            # restrição sem FK (CHECK redefinido em lote posterior): entra no DDL da conferência
+            if re.search(r"\b((ADD|DROP|MODIFY) COLUMN|DROP INDEX|ADD UNIQUE KEY)\b", corpo) or (
                     re.search(r"\b(ADD|DROP) CONSTRAINT\b", corpo) and "FOREIGN KEY" not in corpo):
                 t["alter"].append(m.group(0))
             for c in re.findall(r"\bADD COLUMN (?:IF NOT EXISTS )?`?(\w+)`?", corpo):

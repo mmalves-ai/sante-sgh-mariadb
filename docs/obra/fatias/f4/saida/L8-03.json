@@ -70,7 +70,8 @@
    "n": 11,
    "arquivo": "db/migracoes/12_FAT (F2.2) + conector/mapa/declarado/colunas.d/L8-03.tsv (TBTIPPRO)",
    "mudanca": "DDL: item_faturavel_tipo_servico (id, item_faturavel_id NOT NULL FK, tipo_servico_faturavel_id NOT NULL FK, UNIQUE (item_faturavel_id, tipo_servico_faturavel_id), auditoria padrão). Com ela, TBTIPPRO passa a: principal item_faturavel_tipo_servico; tipo_servico_faturavel secundário 'antes;agrupar:TIPO' (código #codigo_derivado:TIPO:30:tipo_servico_, descrição presumida) ligado por @id:tipo_servico_faturavel; item pela referência ao procedimento (PROCTO = código do procedimento: ref:TBPROCTO.COD_PROCEDIMENTO, repetido entre tabelas -> pai_ambiguo visível; ou a chave composta se a origem disser a tabela)",
-   "motivo": "a classificação procedimento x tipo (431 pares) é usada no faturamento; o item não tem tipo_servico_faturavel_id e a chave da origem admite vários tipos por procedimento. Até o DDL, o tipo carrega (adotado pelo código) e o par fica no conector_origem"
+   "motivo": "a classificação procedimento x tipo (431 pares) é usada no faturamento; o item não tem tipo_servico_faturavel_id e a chave da origem admite vários tipos por procedimento. Até o DDL, o tipo carrega (adotado pelo código) e o par fica no conector_origem",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: TBTIPPRO pela tabela nova"
   },
   {
    "n": 12,
@@ -82,13 +83,15 @@
    "n": 13,
    "arquivo": "db/migracoes/12_FAT (F2.2) + colunas.d/L8-03.tsv (TBCTRTHM)",
    "mudanca": "DDL: tabela_preco_item_padrao (id, tabela_preco_id NOT NULL FK, finalidade VARCHAR(30) CHECK IN ('consulta','consulta_eletiva','visita','pedido'), item_faturavel_id NOT NULL FK, UNIQUE (tabela_preco_id, finalidade)) e tabela_preco.valor_cirurgico BOOLEAN NOT NULL DEFAULT FALSE. Declaração pronta: TBCTRTHM COD_CONS/COD_CONS_ELETIVA/COD_VISITA/COD_PED -> desdobrar no secundário tabela_preco_item_padrao (#item item_faturavel_id por ref:TBTABTHM(COD,#item)@item_faturavel_id, #rotulo finalidade), VLR_CIR booleano_sn",
-   "motivo": "o procedimento padrão de consulta, visita e pedido de cada tabela de honorários é o que o faturamento lança automaticamente; hoje o modelo não tem onde guardá-lo"
+   "motivo": "o procedimento padrão de consulta, visita e pedido de cada tabela de honorários é o que o faturamento lança automaticamente; hoje o modelo não tem onde guardá-lo",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: TBCTRTHM pela declaração pronta"
   },
   {
    "n": 14,
    "arquivo": "db/migracoes/12_FAT (F2.2) + colunas.d/L8-03.tsv (TBLOCCON)",
    "mudanca": "DDL: colunas de cobrança padrão do local em local_cobranca: tabela_preco_matmed_id e tabela_preco_material_id (FK tabela_preco; CODMEM e CODMAT pela ref:TBCTRMEM com o código derivado matmed_), usa_referencia_unificada e usa_referencia_operadora (REFUNI, REFGEAP), cobra_paciente_particular e despesa_paciente (CPP, DESPAC, booleano_sn). Significado exato de cada coluna a confirmar pelo orquestrador com a imagem (só domínio)",
-   "motivo": "são os padrões de cobrança do lançamento por local; o modelo não tem onde guardá-los e o local entra sem eles"
+   "motivo": "são os padrões de cobrança do lançamento por local; o modelo não tem onde guardá-los e o local entra sem eles",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   }
  ],
  "pedidos_rodada2": [

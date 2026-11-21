@@ -104,7 +104,8 @@
   {
    "arquivo": "db/migracoes/11_SUP/05_tabelas.sql (trilha F2.2, modelo)",
    "mudanca": "saldo_estoque_mensal: quantidade_saida_nao_classificada, valor_saida_nao_classificada, quantidade_devolucao_nao_classificada, valor_devolucao_nao_classificada (DEFAULT 0)",
-   "motivo": "GECONITL traz o total de saídas e devoluções do mês sem natureza; hoje vai para setor com a classificação marcada =~ (valor_presumido). Com as colunas, o total entra sem presunção"
+   "motivo": "GECONITL traz o total de saídas e devoluções do mês sem natureza; hoje vai para setor com a classificação marcada =~ (valor_presumido). Com as colunas, o total entra sem presunção",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08"
   },
   {
    "arquivo": "conector/sante_conector/sintetica_d/l7_07.py e testes/test_l7_07.py (fatia L7-07)",

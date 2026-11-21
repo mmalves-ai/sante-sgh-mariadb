@@ -42,7 +42,8 @@
   {
    "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
    "mudanca": "sequencial_guia.tipo_guia: valores 'lote' (contador geral do lote e da transação) e 'recurso_glosa' no CHECK ck_sequencial_guia_tipo_guia",
-   "motivo": "PRIORIDADE ALTA. O tipo 0 é o contador REAL do lote e do recurso (código antigo: TBSEGUIA.TIPO_GUIA = 0, 36 de 37 fontes conferem) e o 8 é o recurso de glosa; sem esses tipos o contador que importa não migra. TBSEGUIA fica BLOQUEADA até este pedido e o da regra inteiro_mais_um"
+   "motivo": "PRIORIDADE ALTA. O tipo 0 é o contador REAL do lote e do recurso (código antigo: TBSEGUIA.TIPO_GUIA = 0, 36 de 37 fontes conferem) e o 8 é o recurso de glosa; sem esses tipos o contador que importa não migra. TBSEGUIA fica BLOQUEADA até este pedido e o da regra inteiro_mais_um",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
@@ -53,7 +54,8 @@
   {
    "arquivo": "db/migracoes/14_FIN (trilha F2.2: modelo)",
    "mudanca": "depara_conta_externa: tipo_conta_id, tipo_lancamento_id, tipo de ato e subtipo da diária opcionais (filtros do de-para), com chave única pelas dimensões",
-   "motivo": "BLOQUEIA TBINTCRC (2422 linhas, declaração pronta e comentada). A chave da origem é EMPRESA, CONV, TIPO_CONTA, TIPO_LANC, TIPO_ATO e SUBTIPO_DIARIA; sem essas colunas, linhas da mesma fonte e natureza com contas diferentes entrariam como de-paras concorrentes e indistinguíveis"
+   "motivo": "BLOQUEIA TBINTCRC (2422 linhas, declaração pronta e comentada). A chave da origem é EMPRESA, CONV, TIPO_CONTA, TIPO_LANC, TIPO_ATO e SUBTIPO_DIARIA; sem essas colunas, linhas da mesma fonte e natureza com contas diferentes entrariam como de-paras concorrentes e indistinguíveis",
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/14_FIN/14; não aplicado: tipo de ato e subtipo da diária sem tabela definida"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
@@ -89,12 +91,14 @@
    "arquivo": "db/migracoes/12_FAT (trilha F2.2: semente)",
    "prioridade": "alta",
    "mudanca": "semente nativa de tipo_conta (códigos ambulatorial, externa, urgencia, internacao, com natureza ambulatorial/externo/pronto_atendimento/internacao) e de tipo_auditoria (codigo 'migracao', 'Auditoria trazida do sistema anterior'), como os tipos de migração do 11_SUP/07_chaves.sql",
-   "motivo": "FCCTAEXT (conta_hospitalar.tipo_conta_id, NOT NULL) e FCCTAAUD (auditoria_conta.tipo_auditoria_id, NOT NULL) acham o id por cod:<tabela>.codigo; nenhuma tabela da origem alimenta os dois cadastros. Sem a semente, toda linha sai codigo_inexistente_destino + 1048 (o mesmo pedido 0 da L8-06, com os mesmos códigos)"
+   "motivo": "FCCTAEXT (conta_hospitalar.tipo_conta_id, NOT NULL) e FCCTAAUD (auditoria_conta.tipo_auditoria_id, NOT NULL) acham o id por cod:<tabela>.codigo; nenhuma tabela da origem alimenta os dois cadastros. Sem a semente, toda linha sai codigo_inexistente_destino + 1048 (o mesmo pedido 0 da L8-06, com os mesmos códigos)",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "db/migracoes/12_FAT/01 (trilha F2.2: modelo)",
    "mudanca": "auditoria_conta_versao.valor_total_conta NULL e auditoria_conta.valor_original NULL sem padrão 0 (o retrato pode vir de origem sem o total)",
-   "motivo": "BLOQUEIA FCCTAAUD (correção r3): zero presumido em valor financeiro não entra; a origem não tem a coluna de total (só DESCONTO, DEPO e PERC_DESC)"
+   "motivo": "BLOQUEIA FCCTAAUD (correção r3): zero presumido em valor financeiro não entra; a origem não tem a coluna de total (só DESCONTO, DEPO e PERC_DESC)",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv e L8-06.tsv (coordenação entre fatias)",
@@ -109,7 +113,8 @@
   {
    "arquivo": "db/migracoes/12_FAT/05 (trilha F2.2: modelo)",
    "mudanca": "ck_preco_negociado_matmed_regra: aceitar também quantidade_fixa (valor_unitario OR percentual_ajuste OR quantidade_fixa), como regra_percentual_cobranca",
-   "motivo": "TBPERMEM tem acordos só de quantidade fixa (QTDE_FIXA); hoje seriam recusados pelo CHECK (4025)"
+   "motivo": "TBPERMEM tem acordos só de quantidade fixa (QTDE_FIXA); hoje seriam recusados pelo CHECK (4025)",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

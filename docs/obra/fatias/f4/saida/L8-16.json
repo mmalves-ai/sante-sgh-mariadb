@@ -37,7 +37,8 @@
   {
    "arquivo": "db/migracoes/17_INTG/01_tabelas.sql (trilha F2.2; banco descartável da conferência)",
    "mudanca": "material_laboratorio_apoio.material_biologico_id e elemento_exame_laboratorio_apoio.analito_id passam a NULL (equivalência a conferir: o cliente liga o material e o analito próprios na tela; o motor de integração só usa a linha com os dois preenchidos)",
-   "motivo": "SIMATHP (321) e SITBELHP (7771) são configuração do cliente com o laboratório de apoio sem outra fonte; a origem não aponta o material nem o analito próprios. Declarações prontas e comentadas em colunas.d/L8-16.tsv"
+   "motivo": "SIMATHP (321) e SITBELHP (7771) são configuração do cliente com o laboratório de apoio sem outra fonte; a origem não aponta o material nem o analito próprios. Declarações prontas e comentadas em colunas.d/L8-16.tsv",
+   "atendido": "rodada 4 (DDL): db/migracoes/17_INTG/05"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (especiais)",

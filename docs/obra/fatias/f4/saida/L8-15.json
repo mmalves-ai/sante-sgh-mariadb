@@ -121,7 +121,8 @@
    "numero": 20,
    "arquivo": "db/migracoes/03_CAD (trilha F2.2): pessoa_fisica ou tabela de óbito informado",
    "mudanca": "coluna para o número da declaração de óbito (VARCHAR(11)) e a causa (CID-10, FK ao catálogo oficial) do óbito INFORMADO (não atestado no hospital), na pessoa física ou numa tabela própria ligada a ela; depois PSBENEFI grava NUM_DECLARACAO_OBITO e ID_TBCID10_OBITO (depara cid10 pela encadeada ao código) nela",
-   "motivo": "achado médio (correção r3): o modelo só guarda número e causa na declaracao_obito, que exige atendimento e médico atestante do hospital; a operadora recebe o óbito sem atendimento (exclusão por óbito no cadastro da ANS). Hoje a carga marca pessoa_fisica.falecida pela presença da declaração ou da guia do óbito"
+   "motivo": "achado médio (correção r3): o modelo só guarda número e causa na declaracao_obito, que exige atendimento e médico atestante do hospital; a operadora recebe o óbito sem atendimento (exclusão por óbito no cadastro da ANS). Hoje a carga marca pessoa_fisica.falecida pela presença da declaração ou da guia do óbito",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08; falta na fatia: PSBENEFI NUM_DECLARACAO_OBITO e ID_TBCID10_OBITO"
   },
   {
    "numero": 21,

@@ -38,7 +38,8 @@
   {
    "arquivo": "db/migracoes/06_PEP/02_tabelas.sql (condicao_se_necessario)",
    "mudanca": "coluna codigo_interoperabilidade VARCHAR(36) NULL, como em tipo_oxigenoterapia",
-   "motivo": "PRSENECESSARIO.ID_DIGITAL não tem destino"
+   "motivo": "PRSENECESSARIO.ID_DIGITAL não tem destino",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-07.tsv (motivo de PRSITUACAOCHECAGEM.ID)",

@@ -51,12 +51,14 @@
   {
    "arquivo": "modelo (F2.2)",
    "mudanca": "documento_estoque: campos opcionais numero_chamada e numero_ocorrencia (saída externa)",
-   "motivo": "GEINFVENEXT: hoje só a folha de gasto vai para documento_referencia; chamada e boletim ficam só no hash"
+   "motivo": "GEINFVENEXT: hoje só a folha de gasto vai para documento_referencia; chamada e boletim ficam só no hash",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08"
   },
   {
    "arquivo": "modelo (F2.2) + conector/sante_conector/carga_mapa.py",
    "mudanca": "documento_estoque: colunas opcionais numero_origem VARCHAR(30) (número que o usuário conhecia) e documento_origem_id (FK documento_estoque: devolução -> saída devolvida); especial genérica '#texto:<C1>,<C2>,<C3>[:sep]' que junta colunas convertidas em texto",
-   "motivo": "GECADSAI/GECADDEV: o número original ANO/MES/DOC se perde (numero = prefixo + ID) e a devolução não liga à saída (DOCSAI/ANO_SAI/MES_SAI, que também usa a chave alternativa composta do pedido 2). Colunas declaradas como 'não carregada por ora' até lá"
+   "motivo": "GECADSAI/GECADDEV: o número original ANO/MES/DOC se perde (numero = prefixo + ID) e a devolução não liga à saída (DOCSAI/ANO_SAI/MES_SAI, que também usa a chave alternativa composta do pedido 2). Colunas declaradas como 'não carregada por ora' até lá",
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/11_SUP/08; não aplicado: a especial #texto é do motor"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",

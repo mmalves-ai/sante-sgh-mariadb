@@ -43,7 +43,8 @@
   {
    "arquivo": "db/migracoes/04_REC/01_tabelas.sql (trilha F2.2: proposta de modelo)",
    "mudanca": "regra_impressao_ficha.clinica_assistencial_id (FK clinica_assistencial), para a restrição do modelo a algumas clínicas; depois, desdobrar REMODFIC.CLINICA (lista separada por vírgula) em uma regra por clínica",
-   "motivo": "o modelo restrito a clínicas, quando ativado, passaria a valer para todas; hoje o modelo migrado entra inativo e o cliente restringe ao ativar"
+   "motivo": "o modelo restrito a clínicas, quando ativado, passaria a valer para todas; hoje o modelo migrado entra inativo e o cliente restringe ao ativar",
+   "atendido": "rodada 4 (DDL): db/migracoes/04_REC/04; falta na fatia: desdobrar REMODFIC.CLINICA"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (colunas concorrentes)",

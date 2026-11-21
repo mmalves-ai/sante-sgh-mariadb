@@ -37,7 +37,8 @@
    "arquivo": "db/migracoes/10_SADT/05_tabelas.sql (trilha F2.2)",
    "mudanca": "requisicao_exame.setor_diagnostico_id anulável (o setor executante é por exame, em exame_item.setor_diagnostico_id) e solicitante externo (solicitante_externo_id) como alternativa ao profissional (DECIDIDO na rodada 2: setor anulável; solicitante_externo_id com CHECK de exatamente um dos dois solicitantes)",
    "motivo": "requisição com exames de vários setores e pedido de médico de fora são casos normais; hoje recusam (pai_ambiguo / 1048)",
-   "gravidade": "alta"
+   "gravidade": "alta",
+   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-01.tsv (fatia L7-01)",
@@ -75,7 +76,8 @@
    "arquivo": "db/migracoes/10_SADT/02_tabelas.sql (trilha F2.2)",
    "mudanca": "exame_item: texto da justificativa do cancelamento (motivo_cancelamento_texto) ou motivo 'outro' no catálogo com texto; e item da conta (conta_hospitalar_item_id)",
    "motivo": "SILANEXA.JUSTIFICATIVA_SUSPENSAO_PEP e ID_FCLANEXT sem destino; a situação 'cancelado' exige motivo do catálogo",
-   "gravidade": "baixa"
+   "gravidade": "baixa",
+   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -125,7 +127,8 @@
    "arquivo": "db/migracoes/10_SADT/05_tabelas.sql (trilha F2.2)",
    "mudanca": "resultado_exame.referencia_texto TEXT NULL COMMENT 'Referência do exame como impressa no laudo (da época)'",
    "motivo": "SIRES01.ID_SIHISTVLREFEXAME (e, como concorrente, ID_SIHISTVLREF) leva o texto de referência do exame da época a cada resultado; resultado_exame.observacao é observação clínica e não pode recebê-lo. Com a coluna: ref:SIHISTVLREFEXAME>VLRREF e ref:SIHISTVLREF>VLRREF, concorrentes, regra texto_longo",
-   "gravidade": "media"
+   "gravidade": "media",
+   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d (fatia do SITPEQV, L7)",

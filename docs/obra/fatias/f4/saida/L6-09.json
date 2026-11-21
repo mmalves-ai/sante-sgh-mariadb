@@ -49,7 +49,8 @@
   {
    "arquivo": "modelo (F2.2): cuidado_enfermagem.acao_restricao_sexo/idade",
    "mudanca": "acrescentar 'exigir_justificativa' ao CHECK (como acao_gravidade_interacao.comportamento)",
-   "motivo": "a notificação da origem tem avisar, exigir justificativa e bloquear; hoje 'exigir justificativa' entra como 'alertar' (perde a exigência)"
+   "motivo": "a notificação da origem tem avisar, exigir justificativa e bloquear; hoje 'exigir justificativa' entra como 'alertar' (perde a exigência)",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "modelo (F2.2): grade_horario_unidade x unidade_assistencial / horario_padrao_dose",

@@ -40,7 +40,8 @@
   {
    "arquivo": "db/migracoes/03_CAD (trilha F2.2)",
    "mudanca": "pre_cadastro.data_nascimento NULL permitido, exigida só na conversão em paciente (CHECK situacao <> 'convertido' OR data_nascimento IS NOT NULL)",
-   "motivo": "SIPACAGN: a agenda de exames não guarda data de nascimento (marcação por telefone). Até lá a data vem do paciente pelo prontuário e o pré-cadastro sem prontuário é recusado com restrição do destino (visível ao cliente)"
+   "motivo": "SIPACAGN: a agenda de exames não guarda data de nascimento (marcação por telefone). Até lá a data vem do paciente pelo prontuário e o pré-cadastro sem prontuário é recusado com restrição do destino (visível ao cliente)",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py e carga_mapa.py",
@@ -82,7 +83,8 @@
   {
    "arquivo": "db/migracoes/11_SUP (trilha F2.2) e colunas.d/L7-07.tsv",
    "mudanca": "pedido_compra.origem_recurso_compra_id e nota_entrada.origem_recurso_compra_id (FK origem_recurso_compra, NULL); GECADPED.FONTE_PAG e GECADNFS.FONTE_PAG por ref:TBFONTE_PAGADORA",
-   "motivo": "TBFONTE_PAGADORA carrega em origem_recurso_compra (fonte do recurso da compra); hoje só solicitacao_compra tem a coluna e o pedido e a nota ficam sem a fonte"
+   "motivo": "TBFONTE_PAGADORA carrega em origem_recurso_compra (fonte do recurso da compra); hoje só solicitacao_compra tem a coluna e o pedido e a nota ficam sem a fonte",
+   "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08; falta na fatia: declarar GECADPED/GECADNFS.FONTE_PAG (pedido_compra já tinha a coluna)"
   },
   {
    "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",

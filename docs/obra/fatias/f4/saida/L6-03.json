@@ -53,7 +53,8 @@
   {
    "arquivo": "db/migracoes/05_AGE/01_tabelas.sql (trilha F2.2: modelo)",
    "mudanca": "motivo_marcacao.categoria_agenda_id e canal_marcacao.categoria_agenda_id (NULL = vale para todas as categorias), com FK para categoria_agenda; ou uma tabela de vínculo motivo x categoria",
-   "motivo": "AGCADMOTIVO.ID_RETPAGEN (NOT NULL na origem) e RETIPAGE.TPAGEN restringem o motivo e o canal a um tipo de agenda da recepção (RETPAGEN, que o mapa descarta como duplicado de categoria_agenda). motivo_marcacao.tipo_marcacao_id é outro conceito (primeira vez, retorno, encaixe). Sem a coluna, a restrição se perde; na imagem de referência não há perda (RETPAGEN tem 1 linha)."
+   "motivo": "AGCADMOTIVO.ID_RETPAGEN (NOT NULL na origem) e RETIPAGE.TPAGEN restringem o motivo e o canal a um tipo de agenda da recepção (RETPAGEN, que o mapa descarta como duplicado de categoria_agenda). motivo_marcacao.tipo_marcacao_id é outro conceito (primeira vez, retorno, encaixe). Sem a coluna, a restrição se perde; na imagem de referência não há perda (RETPAGEN tem 1 linha).",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + motor.py (+ conferencia.py)",
@@ -116,7 +117,8 @@
   {
    "arquivo": "db/migracoes/05_AGE/01_tabelas.sql (trilha F2.2: modelo)",
    "mudanca": "agenda_servico.vigencia_inicio e vigencia_fim (DATE NULL), ou a regra de que a vigência da agenda é a da escala",
-   "motivo": "REAGENDA.PERINI/PERFIN (validade da agenda) não têm coluna no destino; hoje ficam só na origem"
+   "motivo": "REAGENDA.PERINI/PERFIN (validade da agenda) não têm coluna no destino; hoje ficam só na origem",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-03.tsv (esta fatia, rodada seguinte) + modelo",

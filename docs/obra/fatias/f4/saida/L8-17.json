@@ -8,7 +8,8 @@
   {
    "arquivo": "db/migracoes (trilha F2.2: carga inicial do cadastro de sexo)",
    "mudanca": "Preencher sexo.codigo_hl7 na carga inicial do produto pelo padrão HL7 v2 (tabela 0001: M, F, U/O conforme a sigla), como dado do padrão e não do cliente.",
-   "motivo": "L8-17 (cobertura): TBSEXO_PIXPDQ foi descartada como catálogo oficial (códigos HL7 de sexo); sem o preenchimento pelo produto, codigo_hl7 fica nulo."
+   "motivo": "L8-17 (cobertura): TBSEXO_PIXPDQ foi descartada como catálogo oficial (códigos HL7 de sexo); sem o preenchimento pelo produto, codigo_hl7 fica nulo.",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

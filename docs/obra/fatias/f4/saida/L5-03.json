@@ -18,7 +18,8 @@
   {
    "arquivo": "db/migracoes/02_ADM (trilha F2.2)",
    "mudanca": "Modelo: (a) coluna em preferencia_usuario (ou politica de sessão) para 'pode entrar em outro terminal ao mesmo tempo'; (b) registro_excluido.entidade_id anulável para registro excluído antes da migração; (c) papel de segurança ativo no evento_auditoria (hoje só perfil_acesso_id). (d) usuario_papel_seguranca: chave única (usuario_id, papel_seguranca_id, ocupacao_cbo_id, vigencia_inicio), para o mesmo papel em ocupações diferentes (hoje consolidado por adoção na carga).",
-   "motivo": "(a) TBUSERSCOMPL.PERMITE_LOGAR_OUTRO_TERMINAL sem destino; (b) as cópias de exclusão hoje gravam o id do sistema anterior (origem=migracao); (c) TBCABTRILHA.ID_TBUSERS_TBPAPEL_LOGADO sem destino. (d) TBUSERS_TBPAPEL tem uma linha por usuário, papel e inscrição; decisão em F4-decisoes-destino.md."
+   "motivo": "(a) TBUSERSCOMPL.PERMITE_LOGAR_OUTRO_TERMINAL sem destino; (b) as cópias de exclusão hoje gravam o id do sistema anterior (origem=migracao); (c) TBCABTRILHA.ID_TBUSERS_TBPAPEL_LOGADO sem destino. (d) TBUSERS_TBPAPEL tem uma linha por usuário, papel e inscrição; decisão em F4-decisoes-destino.md.",
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/03_CAD/08; não aplicado: só (b) registro_excluido.entidade_id; (a), (c) e (d) ficam para a F2.2"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (opcional, se o dono quiser migrar permissões)",

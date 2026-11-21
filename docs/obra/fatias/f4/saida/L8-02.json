@@ -14,7 +14,8 @@
   {
    "arquivo": "db/migracoes/12_FAT/04_tabelas.sql (lancamento_repasse) — trilha F2.2",
    "mudanca": "modelo: favorecido_repasse_id NULL permitido no lançamento migrado (CHECK origem = 'migracao' OR favorecido_repasse_id IS NOT NULL); o favorecido da origem fica em tipo_favorecido (de-para de RPLANEVE.TIPO = código de RPTIPOPRESTADOR) e profissional_id (ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS); justificativa literal da migração para o tipo ajuste (CHECK ck_lancamento_repasse_ajuste)",
-   "motivo": "L8-02: nenhuma tabela da origem carrega favorecido_repasse antes do lançamento (a regra de favorecido é do produto); sem a mudança RPLANEVE (8675), RPLANEVE_COMPOSICAOBASE e RPLANRPA ficam fora (coluna_obrigatoria_sem_fonte). Decisão registrada em F4-decisoes-destino.md"
+   "motivo": "L8-02: nenhuma tabela da origem carrega favorecido_repasse antes do lançamento (a regra de favorecido é do produto); sem a mudança RPLANEVE (8675), RPLANEVE_COMPOSICAOBASE e RPLANRPA ficam fora (coluna_obrigatoria_sem_fonte). Decisão registrada em F4-decisoes-destino.md",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
@@ -45,7 +46,8 @@
   {
    "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (evento_repasse) — trilha F2.2",
    "mudanca": "modelo: evento_repasse.tipo_deducao_irrf_id (FK tipo_deducao_irrf) e tipo_rendimento_isento_id (FK tipo_rendimento_isento), opcionais",
-   "motivo": "L8-02: RPEVENTO.ID_RPDEDUTIVEL e ID_RPRENDISENTO ligam o evento ao tipo de dedução e ao rendimento isento; o modelo só liga esses tipos à natureza de rendimento, e o vínculo do evento se perde. Com a coluna, declarar ref:RPDEDUTIVEL e ref:RPRENDISENTO"
+   "motivo": "L8-02: RPEVENTO.ID_RPDEDUTIVEL e ID_RPRENDISENTO ligam o evento ao tipo de dedução e ao rendimento isento; o modelo só liga esses tipos à natureza de rendimento, e o vínculo do evento se perde. Com a coluna, declarar ref:RPDEDUTIVEL e ref:RPRENDISENTO",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
@@ -93,7 +95,8 @@
    "rodada": 3,
    "arquivo": "db/migracoes (pessoa_juridica) — trilha F2.2",
    "mudanca": "modelo: ck_pessoa_juridica_cnpj com cnpj NULL deixa passar empresa nacional sem CNPJ (NULL REGEXP dá NULL e o CHECK aceita); trocar por (estrangeira AND cnpj IS NULL) OR (NOT estrangeira AND cnpj IS NOT NULL AND cnpj REGEXP '^[0-9]{14}$'). Decisão (melhor prática, F4-decisoes): empresa nacional sem CNPJ NÃO é permitida; não afrouxar",
-   "motivo": "L8-02 r3: medido na imagem sintética: cooperativa sem CGC grava a pessoa jurídica sem CNPJ. REVISÃO r3: o esperado da imagem sintética recusa a cooperativa sem CNPJ (restricao_destino_4025): até aplicar, a conciliação de TBCOOPER FALHA de propósito"
+   "motivo": "L8-02 r3: medido na imagem sintética: cooperativa sem CGC grava a pessoa jurídica sem CNPJ. REVISÃO r3: o esperado da imagem sintética recusa a cooperativa sem CNPJ (restricao_destino_4025): até aplicar, a conciliação de TBCOOPER FALHA de propósito",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
   },
   {
    "rodada": 3,
@@ -120,14 +123,16 @@
    "revisao": true,
    "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (regra_consistencia_lancamento) — trilha F2.2",
    "mudanca": "modelo: coluna grupo_item VARCHAR(20) NULL (CHECK: clinico, cirurgico, matmed, filme, diaria_taxa; nulo = todos) incluída na chave única (fonte_pagadora_id, tipo_regra, categoria_atendimento_id, grupo_item)",
-   "motivo": "L8-02 r3 (revisão): TBCONVEN tem cinco colunas da mesma regra (data base do cálculo do valor) por grupo de item (CLI, CIR, MATMED, FILME, DTH); sem o grupo, as cinco colidem na chave única e quatro se perdem"
+   "motivo": "L8-02 r3 (revisão): TBCONVEN tem cinco colunas da mesma regra (data base do cálculo do valor) por grupo de item (CLI, CIR, MATMED, FILME, DTH); sem o grupo, as cinco colidem na chave única e quatro se perdem",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "rodada": 3,
    "revisao": true,
    "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (cooperativa_medica) — trilha F2.2",
    "mudanca": "modelo: percentual_repasse_consulta, percentual_repasse_procedimento, percentual_repasse_exame, percentual_repasse_internacao DECIMAL(7,4) NULL, no CHECK de faixa 0 a 100 de ck_cooperativa_medica_aliquotas; depois a L8-02 declara TBCOOPER P_R_CO/P_R_PR/P_R_EX/P_R_IN (faixa:0,100)",
-   "motivo": "L8-02 r3 (revisão do achado): percentual de repasse da cooperativa por tipo, dado financeiro em uso; TBREPGER (L8-06) é outro cadastro (regras próprias, COOP só como critério) e não repete esses valores; regra_repasse exige evento_repasse_id sem fonte em TBCOOPER, então o lugar certo é o cadastro da cooperativa. Não é descarte: até o modelo, as colunas ficam sem destino com motivo 'aguarda modelo'"
+   "motivo": "L8-02 r3 (revisão do achado): percentual de repasse da cooperativa por tipo, dado financeiro em uso; TBREPGER (L8-06) é outro cadastro (regras próprias, COOP só como critério) e não repete esses valores; regra_repasse exige evento_repasse_id sem fonte em TBCOOPER, então o lugar certo é o cadastro da cooperativa. Não é descarte: até o modelo, as colunas ficam sem destino com motivo 'aguarda modelo'",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: declarar TBCOOPER P_R_CO/P_R_PR/P_R_EX/P_R_IN"
   },
   {
    "rodada": 3,

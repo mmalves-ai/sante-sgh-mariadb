@@ -9,7 +9,8 @@
   {
    "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus, CHECK ck_dominio_sus_lista)",
    "mudanca": "acrescentar a lista 'localizacao_tumor' (migração nova se a 01 já estiver aplicada); depois trocar LOCALIZACAO_NO_CHECK para True em sintetica_d/l8_08.py (o teste test_localizacao_tumor_no_check_trava_o_estado acusa a troca)",
-   "motivo": "laudo_apac_oncologia.localizacao_primaria_dominio_sus_id é 'lista SUS', mas a lista não existe no CHECK: hoje toda linha de TBLOCPRI (49 na imagem de referência) é recusada com restricao_destino_4025, visível no painel (a conciliação prova a contagem, não a carga)"
+   "motivo": "laudo_apac_oncologia.localizacao_primaria_dominio_sus_id é 'lista SUS', mas a lista não existe no CHECK: hoje toda linha de TBLOCPRI (49 na imagem de referência) é recusada com restricao_destino_4025, visível no painel (a conciliação prova a contagem, não a carga)",
+   "atendido": "rodada 4 (DDL): db/migracoes/13_SUS/06; falta na fatia: LOCALIZACAO_NO_CHECK = True na sintetica_d/l8_08.py"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (mesmo pedido 13 da L7-08)",
@@ -62,7 +63,8 @@
   {
    "arquivo": "db/migracoes/13_SUS (trilha F2.2) e conector/mapa/declarado/colunas.d/L8-08.tsv",
    "mudanca": "coluna do procedimento informado por lançamento (ex.: conta_hospitalar_item.procedimento_sigtap_informado_id, FK procedimento_sigtap, NULL); depois FCCTRLANCIHA grava também essa coluna por `complementa` na linha do lançamento",
-   "motivo": "a origem guarda o procedimento da CIHA por lançamento (660776 linhas); a equivalência do item guarda só um: o histórico de qual lançamento foi informado com qual procedimento se perde sem a coluna"
+   "motivo": "a origem guarda o procedimento da CIHA por lançamento (660776 linhas); a equivalência do item guarda só um: o histórico de qual lançamento foi informado com qual procedimento se perde sem a coluna",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: FCCTRLANCIHA por complementa"
   },
   {
    "arquivo": "db/migracoes/13_SUS/02_tabelas.sql e 02_chaves.sql (trilha F2.2) ou catalogos/carregadores/sigtap.py",

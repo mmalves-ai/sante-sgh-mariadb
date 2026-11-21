@@ -33,7 +33,8 @@
   {
    "arquivo": "db/migracoes/19_REL (modelo) e colunas.d/L8-18.tsv",
    "mudanca": "atributo de parâmetro oculto em relatorio_parametro (ex.: visivel BOOLEAN NOT NULL DEFAULT TRUE, ou modo_exibicao 'oculto' no CHECK) para receber TBEDITPARAM.VISIVEL por booleano_sn",
-   "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)"
+   "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)",
+   "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04; falta na fatia: TBEDITPARAM.VISIVEL"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
@@ -58,7 +59,8 @@
   {
    "arquivo": "db/migracoes/19_REL (modelo, trilha F2.2)",
    "mudanca": "relatorio_parametro_pesquisa.especificacao TEXT NULL (texto da busca de origem, nunca executado) e relatorio_tela.agrupamento_relatorio_id (botão que imprime um agrupamento, exclusivo com relatorio_id)",
-   "motivo": "L8-18 cobertura: perdas declaradas de TBEDITPESQ.BROWSER e TBBTNOPREL.ID_TBAGRUPRELAT"
+   "motivo": "L8-18 cobertura: perdas declaradas de TBEDITPESQ.BROWSER e TBBTNOPREL.ID_TBAGRUPRELAT",
+   "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",

@@ -87,3 +87,127 @@ Antes eram 835 CARREGA, 285 DESCARTE e 65 BLOQUEADA. Depois são 836 CARREGA, 28
   - `test_l7_05.Sintetica.test_esperado_coerente_com_as_linhas`;
   - `test_l8_16.Plano.test_so_as_carregaveis_entram`;
   - `test_l8_16.Plano.test_obrigatorias_do_destino_cobertas`.
+
+## Pedidos de MODELO aplicados (DDL, rodada 4, etapa de modelo)
+
+Lotes novos em `db/migracoes` (convenções do ADR 0002: PK, auditoria, FK RESTRICT em `*_chaves.sql`, CHECK em vez de ENUM,
+sem gatilho; só para frente). `python3 -I tools/db/validar_migracoes.py`: 0 erros (3608 tabelas, 13850 FKs). Tabelas novas no
+catálogo (`docs/analise/rodada2/final/catalogo.tsv`): `principio_ativo_cliente`, `item_faturavel_tipo_servico`,
+`tabela_preco_item_padrao`. Detalhe para a trilha da API: `docs/obra/passagens/F4-pedidos-f22.md`.
+
+Motor: `mapa.ler_ddl` passa a levar ao DDL da conferência o ALTER com `MODIFY COLUMN`, `DROP INDEX` ou `ADD UNIQUE KEY`
+(antes só ADD/DROP COLUMN e CHECK: o NOT NULL afrouxado não chegava ao banco descartável nem à cobertura).
+
+| Pedido | Fatia | Arquivo | Falta (fatia ou parte não aplicada) |
+|---|---|---|---|
+| 1 | L5-01 | `db/migracoes/02_ADM/09` | — |
+| 8 | L5-01 | `db/migracoes/02_ADM/09` | não aplicado: periodicidade_aceite_dias mantida para a API (a F2.2 migra e remove) |
+| 14 | L5-01 | `db/migracoes/02_ADM/09` | — |
+| 3 | L5-03 | `db/migracoes/03_CAD/08` | não aplicado: só (b) registro_excluido.entidade_id; (a), (c) e (d) ficam para a F2.2 |
+| 6 | L5-04 | `db/migracoes/03_CAD/08` | — |
+| 14 | L5-04 | `db/migracoes/11_SUP/08` | declarar GECADPED/GECADNFS.FONTE_PAG (pedido_compra já tinha a coluna) |
+| 5 | L5-05 | `db/migracoes/03_CAD/08` | — |
+| 6 | L5-05 | `db/migracoes/03_CAD/08` | — |
+| 5 | L5-07 | `db/migracoes/15_RH/06` | — |
+| 4 | L5-08 | `db/migracoes/15_RH/06` | L5-12 declara FPPARAM.GERAR_S1210_BAIXA_FINANCEIRO (pagamento_folha, baixa_financeira, manual) |
+| 7 | L5-12 | `db/migracoes/15_RH/06` | — |
+| 8 | L5-12 | `db/migracoes/15_RH/06` | não aplicado: tributo anulável (a API grava sem ele) e o código oficial anulável; CHECK exige um dos dois |
+| 9 | L5-12 | `db/migracoes/15_RH/06` | — |
+| 6 | L6-01 | `db/migracoes/04_REC/04` | desdobrar REMODFIC.CLINICA |
+| 9 | L6-03 | `db/migracoes/05_AGE/06` | — |
+| 20 | L6-03 | `db/migracoes/05_AGE/06` | — |
+| 1 | L6-04 | `db/migracoes/05_AGE/06` | — |
+| 9 | L6-04 | `db/migracoes/05_AGE/06` | declarar RECANAGE/SICANAGE pela opção (a) |
+| 7 | L6-06 | `db/migracoes/06_PEP/17` | — |
+| 9 | L6-09 | `db/migracoes/06_PEP/17` | — |
+| 20 | L6-10 | `db/migracoes/06_PEP/17` | — |
+| 7 | L6-11 | `db/migracoes/06_PEP/17` | — |
+| 15 | L6-13 | `db/migracoes/06_PEP/17` | — |
+| 16 | L6-13 | `db/migracoes/06_PEP/17` | — |
+| 12 | L6-14 | `db/migracoes/07_INT/07` | declarar RIACOMOD.LCONS |
+| 15 | L6-14 | `db/migracoes/07_INT/07` | declarar RICTRLOC.ID_TBTIPOACOMOD |
+| 17 | L6-14 | `db/migracoes/07_INT/07` | — |
+| M5 | L6-15 | `db/migracoes/07_INT/07` | — |
+| LEITO_CRITICIDADE_AREA | L6-15 | `db/migracoes/07_INT/07` | TBLEITO.ID_CHCRITICIDADE por complementa |
+| INTERNACAO_AUTORIZACAO | L6-15 | `db/migracoes/07_INT/07` | — |
+| REGIME_SEMENTE | L6-15 | `db/migracoes/07_INT/07` | — |
+| 21 | L6-16 | `db/migracoes/08_CC/05` | declarar os #retrato prontos; não aplicado: só (1) dados_origem; (2) já existia; (3) é da cobertura |
+| 1 | L6-18 | `db/migracoes/09_HOT/07` | — |
+| 3 | L7-01 | `db/migracoes/10_SADT/09` | declarar SHDOACAO.CODINTER |
+| 1 | L7-03 | `db/migracoes/10_SADT/09` | descomentar #SITPEQV e #SITBEXHP; não aplicado: (3) laboratorio_apoio nos destinos de SITPEQV é do gerador do mapa |
+| 5 | L7-04 | `db/migracoes/10_SADT/09` | — |
+| 11 | L7-04 | `db/migracoes/10_SADT/09` | — |
+| 19 | L7-04 | `db/migracoes/10_SADT/09` | — |
+| 18 | L7-05 | `db/migracoes/11_SUP/08` | — |
+| numero_origem | L7-07 | `db/migracoes/11_SUP/08` | — |
+| fornecedor_opcional | L7-07 | `db/migracoes/11_SUP/08` | — |
+| principio_ativo_cliente | L7-07 | `db/migracoes/11_SUP/08 e 06_PEP/17` | descomentar #TBPRINC, tirar TBPRINC de catalogos.tsv e sem_carga.tsv, ligações por ref:TBPRINC/principio_ativo_cliente |
+| 8 | L7-08 | `db/migracoes/11_SUP/08` | — |
+| 9 | L7-08 | `db/migracoes/11_SUP/08` | não aplicado: a especial #texto é do motor |
+| 21 | L8-01 | `db/migracoes/12_FAT/12` | — |
+| 22 | L8-01 | `db/migracoes/12_FAT/12` | — |
+| 2 | L8-02 | `db/migracoes/12_FAT/12` | — |
+| 8 | L8-02 | `db/migracoes/12_FAT/12` | — |
+| 16 | L8-02 | `db/migracoes/03_CAD/08` | — |
+| 20 | L8-02 | `db/migracoes/12_FAT/12` | — |
+| 21 | L8-02 | `db/migracoes/12_FAT/12` | declarar TBCOOPER P_R_CO/P_R_PR/P_R_EX/P_R_IN |
+| 10 | L8-03 | `db/migracoes/12_FAT/12` | TBTIPPRO pela tabela nova |
+| 12 | L8-03 | `db/migracoes/12_FAT/12` | TBCTRTHM pela declaração pronta |
+| 13 | L8-03 | `db/migracoes/12_FAT/12` | — |
+| 11 | L8-04 | `db/migracoes/12_FAT/12` | TBTIPPRO pela tabela nova |
+| 7 | L8-05 | `db/migracoes/12_FAT/12` | — |
+| 9 | L8-05 | `db/migracoes/14_FIN/14` | não aplicado: tipo de ato e subtipo da diária sem tabela definida |
+| 15 | L8-05 | `db/migracoes/12_FAT/12` | — |
+| 16 | L8-05 | `db/migracoes/12_FAT/12` | — |
+| 19 | L8-05 | `db/migracoes/12_FAT/12` | — |
+| 13 | L8-06 | `db/migracoes/12_FAT/12` | REPROEXT/RIPROEXT pela declaração comentada |
+| 20 | L8-06 | `db/migracoes/12_FAT/12` | FCLANEXT e FCLANEXTSEQITEM |
+| 0 | L8-07 | `db/migracoes/13_SUS/06` | — |
+| 1 | L8-08 | `db/migracoes/13_SUS/06` | LOCALIZACAO_NO_CHECK = True na sintetica_d/l8_08.py |
+| 11 | L8-08 | `db/migracoes/12_FAT/12` | FCCTRLANCIHA por complementa |
+| 2 | L8-10 | `db/migracoes/14_FIN/14` | L8-11 e L8-12 trocam ID_MFCABECLANC por ref:MFCABECLANC |
+| 6 | L8-11 | `db/migracoes/14_FIN/14` | — |
+| 15 | L8-11 | `db/migracoes/14_FIN/14` | L8-11 declara MFPARAM em parametro_valor (chaves financeiro.*) |
+| 5 | L8-12 | `db/migracoes/14_FIN/14` | — |
+| 4 | L8-13 | `db/migracoes/16_SGO/12` | — |
+| 20 | L8-15 | `db/migracoes/03_CAD/08` | PSBENEFI NUM_DECLARACAO_OBITO e ID_TBCID10_OBITO |
+| 6 | L8-16 | `db/migracoes/17_INTG/05` | — |
+| 1 | L8-17 | `db/migracoes/03_CAD/08` | — |
+| 6 | L8-18 | `db/migracoes/19_REL/04` | TBEDITPARAM.VISIVEL |
+| 11 | L8-18 | `db/migracoes/19_REL/04` | — |
+
+Não aplicados (não são DDL mínimo ou dependem de fonte oficial ou decisão), registrados no F4-pedidos-f22.md:
+
+- L5-01 (9): permissões de prontuário por usuário: estrutura do produto (acao_sistema/parametro_definicao) a definir pela F2.2
+- L5-05 (12): ISS por município do cliente: desenho de retenção maior (F2.2)
+- L5-05 (13): configuração fiscal da mantenedora (NFS-e, ECD): desenho amplo (F2.2)
+- L5-07 (3): carregadores oficiais do eSocial: precisam da fonte oficial (trilha de catálogos)
+- L5-09 (2): idem: carregador oficial do eSocial
+- L5-12 (4): carregador oficial das tabelas legais da folha (trilha de catálogos)
+- L8-09 (8): carregadores oficiais da ECD e NIRE (trilha de catálogos)
+- L8-11 (16): carregador oficial de codigo_receita_federal: fonte da Receita Federal (TBFINCODRECOL segue BLOQUEADA, catalogo_oficial_faltante)
+- L8-15 (12): carregador da taxa de saúde suplementar (fonte da ANS)
+- L6-09 (2): conferência de redundância no modelo (decisão)
+- L6-09 (6): decisão do dono sobre PRSINAIS
+- L6-09 (10): decisão grade x unidade
+- L6-09 (11): significado da letra A/E/M a confirmar
+- L6-10 (17): decisão grade x bloco
+- L6-12 (13): lista de colunas sem destino a detalhar por tabela
+- L6-13 (10): documento_emitido tipo receita: depende do gerador do mapa
+- L6-15 (M2b): sementes de catálogos-base da internação (carater_admissao, modalidade, situacao_leito...): carga inicial do 'criar novo cliente' com domínio de produto a fechar
+- L6-15 (LEITO_DIARIA): diária por leito: decisão de modelo de cobrança
+- L6-16 (16): ficha anestésica do ato migrado: desenho do PEP cirúrgico
+- L7-02 (4): laboratório de apoio por coluna: mecanismo do motor
+- L7-06 (7): numeração na virada: regra do produto
+- L7-06 (14): retenção por credor: desenho fiscal (F2.2)
+- L8-06 (17): glosa agrupada opcional: mecanismo do motor
+- L8-08 (12): domínio do tipo de prestador SUS: decisão de catálogo
+- L8-08 (15): autorizador e órgão gestor SUS: desenho (F2.2)
+- L8-15 (10): foto da pessoa: armazenamento de arquivos do produto
+
+Efeito na cobertura: 836 -> 841 CARREGA, 64 -> 59 BLOQUEADA (FPRUBRICA{FGTS,INSS,IRRF,SIND}_FPEVENTO e
+FPTPEVENTOAUT_TBEMPHOS). TBPRINC (aguarda_modelo) e MFPARAM (parametro_definicao_faltante) têm o modelo pronto e saem da
+lista quando L7-07 e L8-11 declararem; ATCONTA (aguarda_fonte_atendimento_conta) depende só das declarações de L8-05/L8-06;
+TBFINCODRECOL depende do carregador oficial (pedido 17 do L8-11).
+Ajustes de fatia exigidos pela própria aplicação: `colunas.d/L6-18.tsv` (ID_RISETOR_ORIGEM/DESTINO com destino, a guarda do
+test_l6_18 exige) e `sintetica_d/l6_12.py` (alergia sem princípio: CHECK 4025 no lugar do NOT NULL 1048).

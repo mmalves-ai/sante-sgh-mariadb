@@ -18,7 +18,8 @@
   {
    "arquivo": "docs/obra/passagens/F4-decisoes-destino.md (dono) / trilha F2.2 (modelo)",
    "mudanca": "doacao_sangue sem coluna para a intercorrência da doação (SHDOACAO.CODINTER -> tipo_reacao_transfusional de natureza 'intercorrencia'): propor intercorrencia_tipo_reacao_transfusional_id anulável",
-   "motivo": "o catálogo de intercorrências entra (SHINTER), mas a ligação com a doação fica fora"
+   "motivo": "o catálogo de intercorrências entra (SHINTER), mas a ligação com a doação fica fora",
+   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09; falta na fatia: declarar SHDOACAO.CODINTER"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L7-01.tsv (revisão do cliente no painel)",

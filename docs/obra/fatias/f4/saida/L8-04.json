@@ -62,7 +62,8 @@
   {
    "arquivo": "db/migracoes/12_FAT (modelo) + colunas.d/L8-04.tsv",
    "mudanca": "tabela associativa item_faturavel_tipo_servico (item_faturavel_id, tipo_servico_faturavel_id, UNIQUE do par) e carga de TBTIPPRO por ref:TBPROCTO (PROCTO) + tipo pelo código TIPO (tipo_servico_faturavel semeado ou criado com código = TIPO e descrição presumida)",
-   "motivo": "pedido 11: TBTIPPRO (431 linhas) é a classificação de cada procedimento; o modelo não tem onde guardá-la e TIPO não tem cadastro na origem (decisão a revisar com o dono)"
+   "motivo": "pedido 11: TBTIPPRO (431 linhas) é a classificação de cada procedimento; o modelo não tem onde guardá-la e TIPO não tem cadastro na origem (decisão a revisar com o dono)",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: TBTIPPRO pela tabela nova"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh + conector/sante_conector/conferencia.py",

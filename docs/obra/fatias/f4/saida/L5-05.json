@@ -29,12 +29,14 @@
   {
    "arquivo": "db/migracoes/03_CAD/03_tabelas.sql (trilha F2.2)",
    "mudanca": "ck_pessoa_juridica_cnpj: exigir cnpj IS NOT NULL para empresa nacional ((estrangeira AND cnpj IS NULL) OR (NOT estrangeira AND cnpj IS NOT NULL AND cnpj REGEXP ...))",
-   "motivo": "medido na conferência da L5-05: com CNPJ inválido (NULL) a pessoa jurídica nacional é gravada, porque o CHECK com NULL não falha; o comentário do modelo diz que o CNPJ é obrigatório para empresa nacional"
+   "motivo": "medido na conferência da L5-05: com CNPJ inválido (NULL) a pessoa jurídica nacional é gravada, porque o CHECK com NULL não falha; o comentário do modelo diz que o CNPJ é obrigatório para empresa nacional",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
   },
   {
    "arquivo": "db/migracoes (trilha F2.2, proposta de modelo)",
    "mudanca": "lotacao_profissional.unidade_assistencial_id (anulável) e unicidade incluindo a unidade; sequencia_negocio.descricao (anulável)",
-   "motivo": "a lotação da origem é por unidade (TBCBOPRO_TBUNIDAD): hoje a segunda unidade da mesma pessoa e ocupação ADOTA a lotação (adotado_existente) e a carga horária dela não entra; o gerador de números da origem tem nome (TBGERSEQ.NOME) que a sequência do produto não guarda"
+   "motivo": "a lotação da origem é por unidade (TBCBOPRO_TBUNIDAD): hoje a segunda unidade da mesma pessoa e ocupação ADOTA a lotação (adotado_existente) e a carga horária dela não entra; o gerador de números da origem tem nome (TBGERSEQ.NOME) que a sequência do produto não guarda",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_converter, referência encadeada)",

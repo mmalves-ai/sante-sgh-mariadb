@@ -42,7 +42,8 @@
   {
    "arquivo": "db/migracoes/06_PEP (modelo) — trilha F2.2",
    "mudanca": "painel_filtro_usuario: unidade_assistencial_id e bloco_internacao_id opcionais (o filtro da origem é por unidade assistencial e bloco)",
-   "motivo": "PRFAVORITO.ID_TBUNIDAD e ID_RIBLOCOS sem coluna"
+   "motivo": "PRFAVORITO.ID_TBUNIDAD e ID_RIBLOCOS sem coluna",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ armazenamento de arquivos)",
