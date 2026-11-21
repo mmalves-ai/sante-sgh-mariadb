@@ -16,19 +16,14 @@ import {
   type ResultadoFluxoAssinatura,
 } from '@sgh/contratos';
 import { conferirAssinaturas, type ConfiguracaoPsc } from '@sgh/dominio-documento';
-import type {
-  CertificadoGravado,
-  DigitalizacaoSghLida,
-  PedidoAssinaturaGravado,
-  ProvedorGravado,
-} from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 import { linhaTrilha, type SessaoCadastro } from '../cadastro/comum.js';
 import { cpfCruzadoDiverge, type ServicoAssinaturaIcp } from '../assinatura/aplicacao/servico.js';
 import { ErroIndisponivel } from '../assinatura/infra/clientes.js';
 import type { PortaAssinaturaIcp } from '../assinatura/porta.js';
+import type { CertificadoVinculado, PedidoAssinaturaAberto, ProvedorNuvem } from '../assinatura/tipos.js';
 import type { ArmazemDigitalizacao } from './armazem.js';
-import type { PortaDigitalizacao } from './porta.js';
+import type { DocumentoDigitalizado, PortaDigitalizacao } from './porta.js';
 
 const sha256Hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const b64 = (s: string) => Uint8Array.from(Buffer.from(s, 'base64'));
@@ -54,7 +49,7 @@ export class ServicoAssinaturaDigitalizacao {
   }
 
   /** O documento pode ir ao pedido? Conferido pela própria pessoa e o arquivo guardado com o mesmo resumo. */
-  private async apto(s: SessaoCadastro, d: DigitalizacaoSghLida): Promise<string | null> {
+  private async apto(s: SessaoCadastro, d: DocumentoDigitalizado): Promise<string | null> {
     if (d.situacao !== 'conferido') return d.situacao === 'assinado' ? 'ja-assinado' : 'nao-conferido';
     if (!mesma(d.conferidoPor, s.login)) return 'assinante-nao-conferiu';
     const bytes = await this.armazem.ler(s.hospital, d.arquivoChave);
@@ -113,9 +108,9 @@ export class ServicoAssinaturaDigitalizacao {
   }
 
   /** Os itens do pedido: o documento de cada ID com o mesmo resumo do pedido, ainda apto. */
-  private async itensDoPedido(s: SessaoCadastro, pedido: PedidoAssinaturaGravado) {
+  private async itensDoPedido(s: SessaoCadastro, pedido: PedidoAssinaturaAberto) {
     const docs = await this.porta.porIds(s.porta, pedido.documentos);
-    const ok: { d: DigitalizacaoSghLida; hash: string }[] = [];
+    const ok: { d: DocumentoDigitalizado; hash: string }[] = [];
     const recusados: ItemConcluido[] = [];
     for (const [k, id] of pedido.documentos.entries()) {
       const d = docs.find((x) => x.id === id);
@@ -127,17 +122,17 @@ export class ServicoAssinaturaDigitalizacao {
     return { ok, recusados };
   }
 
-  private async certificadoDoPedido(s: SessaoCadastro, pedido: PedidoAssinaturaGravado) {
+  private async certificadoDoPedido(s: SessaoCadastro, pedido: PedidoAssinaturaAberto) {
     const c = pedido.certificado ? await this.portaIcp.certificado(s.porta, pedido.certificado) : null;
     return c?.certificadoDer && c.usuario === s.login ? c : null;
   }
 
   async concluirNuvem(
     s: SessaoCadastro,
-    pedido: PedidoAssinaturaGravado,
+    pedido: PedidoAssinaturaAberto,
     cfg: ConfiguracaoPsc,
     token: string,
-    provedor: ProvedorGravado,
+    provedor: ProvedorNuvem,
   ): Promise<ResultadoFluxoAssinatura> {
     const cert = await this.certificadoDoPedido(s, pedido);
     if (!cert)
@@ -191,7 +186,7 @@ export class ServicoAssinaturaDigitalizacao {
 
   async concluirAgente(
     s: SessaoCadastro,
-    pedido: PedidoAssinaturaGravado,
+    pedido: PedidoAssinaturaAberto,
     porHash: ReadonlyMap<string, string>,
     certificadoB64: string,
   ): Promise<ResultadoFluxoAssinatura> {
@@ -217,9 +212,9 @@ export class ServicoAssinaturaDigitalizacao {
   /** Valida no servidor e grava (válida: o documento assinado; senão, só a evidência), com a trilha. */
   private async concluirItem(
     s: SessaoCadastro,
-    d: DigitalizacaoSghLida,
+    d: DocumentoDigitalizado,
     hash: string,
-    cert: CertificadoGravado,
+    cert: CertificadoVinculado,
     assinatura: Uint8Array,
     provedor: string | null,
   ): Promise<ItemConcluido> {
@@ -273,7 +268,7 @@ export class ServicoAssinaturaDigitalizacao {
       s.porta,
       (id: number) => ({
         ...linhaTrilha(s, evento, P.conferir, 'internacao.conferirDigitalizacao', {
-          tabela: 'SGH_HOT_DIGITALIZACAO',
+          tabela: 'documento_digitalizado',
           id: String(d.id),
           paciente: d.paciente,
           chave: `lote=${d.lote}:assinatura=${id}:${v.resultado}`,

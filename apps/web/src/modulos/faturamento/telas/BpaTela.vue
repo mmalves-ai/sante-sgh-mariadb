@@ -60,7 +60,7 @@ const arquivos = useQuery({
   enabled: computed(() => competencia.value !== ''),
 });
 const parametros = useQuery({
-  queryKey: ['sus', 'parametros-legado'],
+  queryKey: ['sus', 'parametros-ambulatoriais'],
   queryFn: () => lerParametrosLegadoSus(),
 });
 

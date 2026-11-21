@@ -1,8 +1,8 @@
 // Porta da internação, dos leitos, da higienização e do SAME (M21): o que as telas de trabalho leem e gravam,
 // independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04,
+//   - `banco`: a porta própria (porta-propria.ts) sobre o banco do cliente (leituras somente leitura; gravações pelo Executor,
 //     com a trilha na mesma transação; as gravações só do novo — alta médica, bloqueio, precaução e atributos do leito,
-//     as etapas da higienização, o protocolo do SAME — por transação SGH_ com a SGH_TRILHA junto);
+//     as etapas da higienização, o protocolo do SAME — por transação com a trilha de auditoria junto);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): internações, leitos, solicitações e movimentos SINTÉTICOS em
 //     memória, sobre o painel sintético do M16, com as mesmas validações (Zod dos contratos) e as mesmas recusas das
 //     receitas; nada vai à cópia;
@@ -22,21 +22,18 @@ import type {
   Precaucao,
   PreInternacaoItem,
 } from '@sgh/contratos';
-import type {
-  EstadosDoMapaLidos,
-  InternacaoDetalheLegado,
-  ItemIncoerencia,
-  LimpezaGiroLida,
-  SolicitacaoLida,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import { type DetalheInternacao, type EstadosDoMapa, type ItemIncoerencia, type LimpezaGiro, type SolicitacaoLimpezaFila } from './tipos.js';
+import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ProfissionalDaSessao } from '../atendimento/porta.js';
 
 export const PORTA_ADT = Symbol('PORTA_ADT');
 
-export type ContextoAdt = ContextoPortaM18;
+/** Contexto da porta: o do núcleo (cliente, estabelecimento, usuário e correlação por id) mais a rede e o código do
+ * estabelecimento da sessão (a memória separa os dados sintéticos por estabelecimento pelo código). */
+export type ContextoAdt = ContextoPorta;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** Gravações diretas da porta (sem operação nomeada do executor), numa transação com a linha da trilha junto. */
 export interface GravadorSghAdt {
   registrarAltaMedica(r: {
     reg: number;
@@ -49,7 +46,15 @@ export interface GravadorSghAdt {
     observacao: string | null;
     usuario: string;
   }): Promise<number>;
-  cancelarAltaMedica(r: { reg: number; motivo: string; usuario: string }): Promise<number>;
+  cancelarAltaMedica(r: {
+    reg: number;
+    motivo: string;
+    /** Motivo do cadastro (motivo_cancelamento_alta); sem ele, o único ativo; mais de um é recusa. */
+    motivoCodigo?: number | null;
+    /** Versão da alta médica que a tela leu (trava otimista), quando a tela a envia. */
+    versao?: number | null;
+    usuario: string;
+  }): Promise<number>;
   abrirEstadoLeito(r: {
     leito: ChaveLeito;
     estado: EstadoLeitoNovo;
@@ -60,8 +65,8 @@ export interface GravadorSghAdt {
     solicitacao?: number | null;
     usuario: string;
   }): Promise<number>;
-  encerrarEstadoLeito(r: { leito: ChaveLeito; estado: EstadoLeitoNovo; usuario: string }): Promise<number>;
-  /** W0-07: altera o estado aberto sem encerrar (a versão anterior na SGH_INT_ALTERACAO); devolve o id do estado. */
+  encerrarEstadoLeito(r: { leito: ChaveLeito; estado: EstadoLeitoNovo; versao?: number | null; usuario: string }): Promise<number>;
+  /** W0-07: altera o estado aberto sem encerrar (a versão anterior na trilha de auditoria); devolve o id do estado. */
   alterarEstadoLeito(r: {
     leito: ChaveLeito;
     estado: EstadoLeitoNovo;
@@ -70,6 +75,8 @@ export interface GravadorSghAdt {
     previsaoFim?: string | null;
     observacao?: string | null;
     justificativa: string;
+    /** Versão do período que a tela leu (trava otimista), quando a tela a envia. */
+    versao?: number | null;
     usuario: string;
   }): Promise<number>;
   /** W0-07: tira os atributos próprios do leito (volta ao padrão), com o valor anterior. */
@@ -79,9 +86,6 @@ export interface GravadorSghAdt {
     justificativa: string;
     usuario: string;
   }): Promise<number>;
-  registrarConflito(r: { leito: ChaveLeito; reg: number }): Promise<number>;
-  /** M44, regra 12: o conflito da reserva do NIR (o outro sistema ocupou o leito reservado aqui). */
-  registrarConflitoReserva(r: { leito: ChaveLeito; reg: number }): Promise<number>;
   gravarAtributo(r: {
     escopo: 'leito' | 'tipo';
     chave: string;
@@ -124,7 +128,7 @@ export interface GravadorSghAdt {
   }): Promise<number>;
 }
 
-export interface EtapaLida {
+export interface EtapaDaLimpeza {
   readonly id: number;
   readonly etapa: EtapaLimpeza;
   readonly tipoLimpeza: number | null;
@@ -139,7 +143,7 @@ export interface EtapaLida {
   readonly origem: OrigemLimpeza | null;
 }
 
-export interface AltaMedicaLida {
+export interface AltaMedicaDecidida {
   readonly id: number;
   readonly vinculo: number;
   readonly motivo: number;
@@ -184,9 +188,9 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     c: ContextoAdt,
     reg: number,
     intensivas: readonly number[],
-  ): Promise<InternacaoDetalheLegado | null>;
-  altaMedica(c: ContextoAdt, reg: number): Promise<AltaMedicaLida | null>;
-  altasMedicas(c: ContextoAdt, regs: readonly number[]): Promise<Map<number, AltaMedicaLida>>;
+  ): Promise<DetalheInternacao | null>;
+  altaMedica(c: ContextoAdt, reg: number): Promise<AltaMedicaDecidida | null>;
+  altasMedicas(c: ContextoAdt, regs: readonly number[]): Promise<Map<number, AltaMedicaDecidida>>;
   preInternacoes(
     c: ContextoAdt,
     o: { situacao?: 'pendente' | 'todas'; problema?: 'saneamento' },
@@ -202,17 +206,19 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     dataPrevista: string;
     convenio: number;
     especialidade: number;
-    clinica: string;
+    /** Clínica da pré-internação (M, C, N); null quando o agendamento não a tem. */
+    clinica: string | null;
     carater: string;
-    procedimento: number;
+    /** Pendente de modelo (pedido do lote 03-01): null até o agendamento guardar o procedimento. */
+    procedimento: number | null;
     vinculoSolicitante: number;
     vinculoAssistente: number;
     matricula: string;
     plano: string;
   } | null>;
   leiturasPainel(c: ContextoAdt): Promise<LeiturasPainel>;
-  /** Os estados só do novo; com a janela, também a limpeza pedida pela alta do outro sistema (ainda sem etapa aqui). */
-  estadosDoMapa(c: ContextoAdt, o?: { janelaHoras?: number }): Promise<EstadosDoMapaLidos>;
+  /** Os estados do leito (períodos de situação) e as limpezas abertas. */
+  estadosDoMapa(c: ContextoAdt, o?: { janelaHoras?: number }): Promise<EstadosDoMapa>;
   historico(
     c: ContextoAdt,
     o: { inicio: string; fim: string; bloco?: string; pagina: number; porPagina: number },
@@ -220,8 +226,8 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
   solicitacoes(
     c: ContextoAdt,
     o?: { janelaHoras?: number },
-  ): Promise<{ itens: SolicitacaoLida[]; paradasAntigas: number; cortada: boolean }>;
-  etapas(c: ContextoAdt, solicitacao: number): Promise<EtapaLida[]>;
+  ): Promise<{ itens: SolicitacaoLimpezaFila[]; paradasAntigas: number; cortada: boolean }>;
+  etapas(c: ContextoAdt, solicitacao: number): Promise<EtapaDaLimpeza[]>;
   /**
    * W0-07 (M3): as limpezas liberadas no período (datas AAAA-MM-DD) com as etapas gravadas, e o nome das áreas (bloco →
    * nome), para os indicadores de higienização e giro de leito.
@@ -230,7 +236,7 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     c: ContextoAdt,
     de: string,
     ate: string,
-  ): Promise<{ itens: LimpezaGiroLida[]; areas: Record<string, string> }>;
+  ): Promise<{ itens: LimpezaGiro[]; areas: Record<string, string> }>;
   /** O leito do espelho e a criticidade da área (para o prazo). */
   leitoDaSolicitacao(
     c: ContextoAdt,
@@ -239,7 +245,7 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     leito: ChaveLeito;
     espelho: number;
     criticidade: number | null;
-    situacaoLegado: number;
+    situacaoCodigo: number;
   } | null>;
   contaDoCodigo(c: ContextoAdt, codigo: number): Promise<number | null>;
   localizacao(
@@ -313,3 +319,8 @@ export const METODOS_PORTA_ADT: ReadonlySet<string> = new Set([
   'profissional',
   'profissionalLimpeza',
 ]);
+
+/** Porta indisponível (fora de dev/ci sem o núcleo): 503 em tudo (falha fechada). */
+export function portaAdtIndisponivel(): PortaAdt {
+  return portaIndisponivel<PortaAdt>(METODOS_PORTA_ADT);
+}

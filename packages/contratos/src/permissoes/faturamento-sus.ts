@@ -115,6 +115,12 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     [...CIHA, O.ambTabelas, O.aihTabelas],
   ),
   p(
+    'faturamento.susEquivalencia.editarRede',
+    'Registrar ou desativar a equivalência SIGTAP que vale para a rede inteira do cliente (além da ação do estabelecimento)',
+    [...CIHA, O.ambTabelas, O.aihTabelas],
+    { criticidade: 'sensivel' },
+  ),
+  p(
     'faturamento.susCiha.gerar',
     'Gerar o arquivo CIHA da competência no leiaute do Ministério (com hash) e baixá-lo',
     CIHA,

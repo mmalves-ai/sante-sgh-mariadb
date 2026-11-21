@@ -58,7 +58,8 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
-import { exigir, idDaRota, sessaoDe } from '../cadastro/comum.js';
+import { exigir, idDaRota, type SessaoCadastro, sessaoDe as sessaoCadastroDe } from '../cadastro/comum.js';
+import { comPedido } from './pedido.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -98,6 +99,10 @@ const competenciaOuNula = (v: string | undefined) => {
     throw new ErroProblema('entrada-invalida', 400, 'Competência inválida', 'Use AAAA-MM.');
   return c;
 };
+
+
+/** A sessão com a Idempotency-Key do pedido no contexto da porta: o reenvio do mesmo pedido não grava de novo. */
+const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro => comPedido(sessaoCadastroDe(req));
 
 @Controller('repasse')
 export class RepasseController {
@@ -205,7 +210,7 @@ export class RepasseController {
   @HttpCode(200)
   @Permissao('repasse.regra.ler')
   @AuditadoNoHandler(
-    'o simulador não grava; a versão simulada é marcada em SGH_REP_REGRA_VERSAO com a SGH_TRILHA',
+    'o simulador não grava; a versão simulada é marcada em regra_repasse_versao com a trilha',
   )
   simular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<SimulacaoRepasseResposta> {
     return this.servico.simular(sessaoDe(req), corpo(esquemaSimularRepasse, b));
@@ -220,7 +225,7 @@ export class RepasseController {
   @Post('regras/versoes')
   @HttpCode(200)
   @Permissao('repasse.regra.propor')
-  @AuditadoNoHandler('versão de regra em SGH_REP_REGRA_VERSAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('versão de regra em regra_repasse_versao com a trilha na mesma transação')
   propor(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoRepasse> {
     return this.servico.proporRegra(sessaoDe(req), corpo(esquemaProporRegraRepasse, b));
   }
@@ -228,7 +233,7 @@ export class RepasseController {
   @Post('regras/versoes/:id/decisao')
   @HttpCode(200)
   @Permissao('repasse.regra.aprovar')
-  @AuditadoNoHandler('decisão em SGH_REP_REGRA_VERSAO e repasse.incluirRegra pelo executor')
+  @AuditadoNoHandler('decisão em regra_repasse_versao e repasse.incluirRegra pelo executor')
   decidirRegra(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -256,7 +261,7 @@ export class RepasseController {
   @Post('apuracoes')
   @HttpCode(200)
   @Permissao('repasse.apuracao.apurar')
-  @AuditadoNoHandler('apuração e memória de cálculo em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('apuração e memória de cálculo em SGH_ com a trilha na mesma transação')
   apurar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoRepasse> {
     return this.servico.apurar(sessaoDe(req), corpo(esquemaApurarRepasse, b));
   }
@@ -264,7 +269,7 @@ export class RepasseController {
   @Post('apuracoes/:id/decisao')
   @HttpCode(200)
   @Permissao('repasse.apuracao.ler')
-  @AuditadoNoHandler('transição da apuração em SGH_REP_APURACAO (a permissão de agir conferida no serviço)')
+  @AuditadoNoHandler('transição da apuração em apuracao_repasse (a permissão de agir conferida no serviço)')
   decidirApuracao(
     @Param('id') id: string,
     @Body() b: unknown,

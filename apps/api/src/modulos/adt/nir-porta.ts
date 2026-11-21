@@ -1,43 +1,28 @@
 // Porta do NIR (M44, etapa 2; ficha, seções 4 a 7): o que a fila, a reserva, a alta prevista, as barreiras, o quadro de
 // permanência, a reunião de leitos e a calibragem leem e gravam, independente de onde (a API não escreve SQL; fronteira
 // Nx):
-//   - `legado`: leituras READ ONLY (SGH_INT_SOLIC_LEITO e companhia, as internações abertas com os trechos, a
-//     calibragem agregada no banco, as cirurgias que pedem UTI) e as gravações só do novo numa transação SGH_ com a
-//     SGH_TRILHA junto;
+//   - `banco`: a porta própria (nir-porta-propria.ts), leituras somente leitura (pedido_leito e companhia, as internações abertas com os trechos, a
+//     calibragem agregada no banco, as cirurgias que pedem UTI) e as gravações só do novo numa transação com a
+//     trilha de auditoria junto;
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com o estado compartilhado com a internação em memória;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // O mapa de leitos, o paciente (sexo e nascimento) e o profissional da sessão vêm da porta da internação (M21); a
 // admissão e a transferência vindas do NIR são as operações do M21 (executor), com a solicitação na mesma transação.
-import type {
-  ConfiguracaoRegulacaoLida,
-  RegulacaoLida,
-  RegulacaoSgh,
-  BarreiraLida,
-  BarreiraSgh,
-  DpaLida,
-  DpaSgh,
-  EventoSolicitacaoLido,
-  HistogramasLidos,
-  InternadoQuadroLido,
-  LinhaTrilha,
-  ReservaNirLida,
-  ReservaSgh,
-  SolicitacaoLeitoSgh,
-  SolicitacaoNirLida,
-  TransicaoSgh,
-} from '@sgh/legado';
+import { type AltaPrevistaRegistrada, type BarreiraDaAlta, type ConfiguracaoRegulacaoNir, type EventoSolicitacaoNir, type HistogramasPermanencia, type InternadoDoQuadro, type NovaAltaPrevista, type NovaBarreira, type NovaRegulacao, type NovaReserva, type NovaSolicitacaoLeito, type RegistroRegulacaoNir, type ReservaLeitoNir, type SolicitacaoLeitoNir, type TransicaoSolicitacao } from './tipos.js';
+import { type LinhaTrilha } from '@sgh/nucleo';
 import type { ChaveLeito, EscopoLimitePermanencia, EstadoSolicitacaoNir, PerfilLeito } from '@sgh/contratos';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
+import type { ContextoAdt } from './porta.js';
 
 export const PORTA_NIR = Symbol('PORTA_NIR');
 
-export type ContextoNir = ContextoPortaM18;
+export type ContextoNir = ContextoAdt;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** Gravações do NIR numa transação com a linha da trilha junto. */
 export interface GravadorNir {
-  solicitar(s: Omit<SolicitacaoLeitoSgh, 'hospital'>): Promise<number>;
-  transicionar(t: Omit<TransicaoSgh, 'hospital'>): Promise<number>;
-  reservar(r: Omit<ReservaSgh, 'hospital'>): Promise<number>;
+  solicitar(s: Omit<NovaSolicitacaoLeito, 'hospital'>): Promise<number>;
+  transicionar(t: Omit<TransicaoSolicitacao, 'hospital'>): Promise<number>;
+  reservar(r: Omit<NovaReserva, 'hospital'>): Promise<number>;
   confirmarReserva(r: { reserva: number; validadeMin: number; usuario: string }): Promise<number>;
   encerrarReserva(r: {
     reserva: number;
@@ -46,8 +31,8 @@ export interface GravadorNir {
     vencidaEm?: string | null;
     usuario: string;
   }): Promise<number>;
-  registrarDpa(d: Omit<DpaSgh, 'hospital'>): Promise<number>;
-  registrarBarreira(b: Omit<BarreiraSgh, 'hospital'>): Promise<number>;
+  registrarDpa(d: Omit<NovaAltaPrevista, 'hospital'>): Promise<number>;
+  registrarBarreira(b: Omit<NovaBarreira, 'hospital'>): Promise<number>;
   resolverBarreira(b: {
     barreira: number;
     cancelar: boolean;
@@ -71,9 +56,9 @@ export interface GravadorNir {
     observacao: string | null;
     usuario: string;
   }): Promise<void>;
-  /** Evento próprio a mais na SGH_TRILHA, na mesma transação. */
+  /** Evento próprio a mais na trilha, na mesma transação. */
   registrarEvento(linha: LinhaTrilha): Promise<void>;
-  // ── W0-07: correção, alteração e exclusão (só SGH_, a versão anterior na SGH_INT_ALTERACAO) ──
+  // ── W0-07: correção, alteração e exclusão (a versão anterior na trilha de auditoria) ──
   corrigirSolicitacao(c: {
     solicitacao: number;
     versaoVista: number;
@@ -98,7 +83,7 @@ export interface GravadorNir {
     confirmacaoDesfeita: boolean;
   }>;
   /** Exclui a reserva ativa criada por engano (com retrato); a convertida em internação recusa 409. */
-  /** Devolve também o ID do retrato na SGH_HIST_EXCLUSAO (o evento da solicitação o cita). */
+  /** Devolve também o ID do retrato na trilha de auditoria (o evento da solicitação o cita). */
   excluirReserva(r: {
     reserva: number;
     motivo: string;
@@ -126,30 +111,30 @@ export interface GravadorNir {
     usuario: string;
   }): Promise<number>;
   /** M44 (etapa 3): o registro da regulação (e, com o conector, o pedido na outbox na mesma transação). */
-  registrarRegulacao(r: Omit<RegulacaoSgh, 'hospital'>): Promise<{ id: number; outbox: string | null }>;
+  registrarRegulacao(r: Omit<NovaRegulacao, 'hospital'>): Promise<{ id: number; outbox: string | null }>;
 }
 
 export interface PortaNir extends PortaGravacaoM18<GravadorNir> {
   relogio(c: ContextoNir): Promise<{ agora: string; hoje: string }>;
-  abertas(c: ContextoNir): Promise<{ itens: SolicitacaoNirLida[]; cortada: boolean }>;
-  solicitacao(c: ContextoNir, id: number): Promise<SolicitacaoNirLida | null>;
-  eventos(c: ContextoNir, ids: readonly number[]): Promise<EventoSolicitacaoLido[]>;
+  abertas(c: ContextoNir): Promise<{ itens: SolicitacaoLeitoNir[]; cortada: boolean }>;
+  solicitacao(c: ContextoNir, id: number): Promise<SolicitacaoLeitoNir | null>;
+  eventos(c: ContextoNir, ids: readonly number[]): Promise<EventoSolicitacaoNir[]>;
   concluidas(
     c: ContextoNir,
     desde: string,
   ): Promise<{ solicitadoEm: string; internadoEm: string; prazoEm: string }[]>;
-  reservasVigentes(c: ContextoNir): Promise<ReservaNirLida[]>;
-  reservasEncerradas(c: ContextoNir): Promise<ReservaNirLida[]>;
+  reservasVigentes(c: ContextoNir): Promise<ReservaLeitoNir[]>;
+  reservasEncerradas(c: ContextoNir): Promise<ReservaLeitoNir[]>;
   cirurgiasUti(
     c: ContextoNir,
   ): Promise<
     { agendamento: number; paciente: number | null; nome: string; dataHora: string; sala: number }[]
   >;
   cirurgiasComSolicitacao(c: ContextoNir, agendamentos: readonly number[]): Promise<Set<number>>;
-  internados(c: ContextoNir): Promise<{ itens: InternadoQuadroLido[]; cortada: boolean }>;
+  internados(c: ContextoNir): Promise<{ itens: InternadoDoQuadro[]; cortada: boolean }>;
   internacao(c: ContextoNir, reg: number): Promise<{ reg: number; pront: number; internado: boolean } | null>;
-  dpas(c: ContextoNir, regs: readonly number[]): Promise<DpaLida[]>;
-  barreiras(c: ContextoNir, regs: readonly number[]): Promise<BarreiraLida[]>;
+  dpas(c: ContextoNir, regs: readonly number[]): Promise<AltaPrevistaRegistrada[]>;
+  barreiras(c: ContextoNir, regs: readonly number[]): Promise<BarreiraDaAlta[]>;
   barreira(c: ContextoNir, id: number): Promise<{ id: number; reg: number; situacao: string } | null>;
   limites(c: ContextoNir): Promise<
     {
@@ -168,10 +153,10 @@ export interface PortaNir extends PortaGravacaoM18<GravadorNir> {
   histogramas(
     c: ContextoNir,
     o: { escopo: EscopoLimitePermanencia; inicio: string; fim: string; intensivas: readonly number[] },
-  ): Promise<HistogramasLidos>;
+  ): Promise<HistogramasPermanencia>;
   /** M44 (etapa 3): os registros de regulação das solicitações e a configuração de regulação (consulta). */
-  regulacoes(c: ContextoNir, solicitacoes: readonly number[]): Promise<RegulacaoLida[]>;
-  configuracaoRegulacao(c: ContextoNir): Promise<ConfiguracaoRegulacaoLida>;
+  regulacoes(c: ContextoNir, solicitacoes: readonly number[]): Promise<RegistroRegulacaoNir[]>;
+  configuracaoRegulacao(c: ContextoNir): Promise<ConfiguracaoRegulacaoNir>;
 }
 
 export const METODOS_PORTA_NIR: ReadonlySet<string> = new Set([
@@ -199,3 +184,8 @@ export const METODOS_PORTA_NIR: ReadonlySet<string> = new Set([
   'regulacoes',
   'configuracaoRegulacao',
 ]);
+
+/** Porta indisponível (fora de dev/ci sem o núcleo): 503 em tudo (falha fechada). */
+export function portaNirIndisponivel(): PortaNir {
+  return portaIndisponivel<PortaNir>(METODOS_PORTA_NIR);
+}

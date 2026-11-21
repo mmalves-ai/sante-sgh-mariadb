@@ -1,0 +1,113 @@
+{
+  "lote": "03-04",
+  "registrar": [
+    "nutricao",
+    "repasse"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/nutricao/modulo.ts",
+    "src/modulos/nutricao/nutricao-crud.spec.ts",
+    "src/modulos/nutricao/nutricao-portaria.spec.ts",
+    "src/modulos/nutricao/nutricao-vinculo.spec.ts",
+    "src/modulos/nutricao/nutricao.controller.ts",
+    "src/modulos/nutricao/nutricao.spec.ts",
+    "src/modulos/nutricao/pedido.ts",
+    "src/modulos/nutricao/porta-memoria.ts",
+    "src/modulos/nutricao/porta-propria.int.spec.ts",
+    "src/modulos/nutricao/porta-propria.ts",
+    "src/modulos/nutricao/porta.ts",
+    "src/modulos/nutricao/public-api.ts",
+    "src/modulos/nutricao/servico.ts",
+    "src/modulos/nutricao/tipos.ts",
+    "src/modulos/repasse/aplicacao/repasse.spec.ts",
+    "src/modulos/repasse/documentos-pdf.int.spec.ts",
+    "src/modulos/repasse/documentos.ts",
+    "src/modulos/repasse/modulo.ts",
+    "src/modulos/repasse/operacoes.ts",
+    "src/modulos/repasse/pedido.ts",
+    "src/modulos/repasse/porta-memoria.ts",
+    "src/modulos/repasse/porta-propria.int.spec.ts",
+    "src/modulos/repasse/porta-propria.ts",
+    "src/modulos/repasse/porta.ts",
+    "src/modulos/repasse/public-api.ts",
+    "src/modulos/repasse/repasse.controller.ts",
+    "src/modulos/repasse/servico.ts",
+    "src/modulos/repasse/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tabela": "acompanhamento_terapia_nutricional",
+      "motivo": "acompanhamento diário da meta (volume infundido, % kcal/proteína, motivo)",
+      "ddl": "CREATE TABLE acompanhamento_terapia_nutricional (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, terapia_nutricional_id BIGINT UNSIGNED NOT NULL, data_referencia DATE NOT NULL, volume_prescrito_ml DECIMAL(15,4) NULL, volume_infundido_ml DECIMAL(15,4) NOT NULL, origem_volume VARCHAR(20) NOT NULL, calorias_atingidas_kcal DECIMAL(15,4) NOT NULL, proteina_atingida_g DECIMAL(15,4) NOT NULL, percentual_calorico DECIMAL(7,2) NOT NULL, percentual_proteico DECIMAL(7,2) NOT NULL, motivo_meta_nao_atingida VARCHAR(40) NULL, observacao VARCHAR(2000) NULL, profissional_id BIGINT UNSIGNED NOT NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'ativo', substitui_id BIGINT UNSIGNED NULL, motivo_correcao VARCHAR(500) NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, CONSTRAINT ck_acompanhamento_terapia_nutricional_origem_volume CHECK (origem_volume IN ('checagem','balanco','informado')), CONSTRAINT ck_acompanhamento_terapia_nutricional_situacao CHECK (situacao IN ('ativo','retificado','estornado')), UNIQUE KEY uq_acompanhamento_terapia_nutricional_dia (terapia_nutricional_id, data_referencia, situacao)) + FK terapia_nutricional, profissional"
+    },
+    {
+      "tabela": "registro_social",
+      "motivo": "avaliação/evolução do serviço social, adendo e barreira social (rede de apoio, vulnerabilidades, risco, encaminhamentos, parecer)",
+      "ddl": "CREATE TABLE registro_social (id BIGINT UNSIGNED PK AI, estabelecimento_id BIGINT UNSIGNED NOT NULL, internacao_id BIGINT UNSIGNED NOT NULL, paciente_id BIGINT UNSIGNED NOT NULL, tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('avaliacao','evolucao','adendo')), rede_apoio VARCHAR(30) NOT NULL, vulnerabilidades JSON NOT NULL, risco VARCHAR(20) NOT NULL, encaminhamentos JSON NOT NULL, parecer TEXT NOT NULL, orientacoes VARCHAR(2000) NULL, barreira_alta_id BIGINT UNSIGNED NULL, adendo_de_registro_social_id BIGINT UNSIGNED NULL, motivo_adendo VARCHAR(500) NULL, profissional_id BIGINT UNSIGNED NOT NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'ativo', + auditoria/versao/excluido; CHECK (tipo <> 'adendo' OR (adendo_de_registro_social_id IS NOT NULL AND motivo_adendo IS NOT NULL)))"
+    },
+    {
+      "tabela": "correcao_registro_nutricao",
+      "motivo": "log da retificação/estorno/nova versão/encerramento da triagem, meta, acompanhamento e registro social",
+      "ddl": "CREATE TABLE correcao_registro_nutricao (id PK, estabelecimento_id NOT NULL, internacao_id NOT NULL, tipo_registro VARCHAR(20) NOT NULL CHECK IN ('triagem','meta','acompanhamento','social'), registro_id BIGINT UNSIGNED NOT NULL, acao VARCHAR(20) NOT NULL, novo_registro_id BIGINT UNSIGNED NULL, motivo VARCHAR(500) NOT NULL, profissional_id NOT NULL, + auditoria/versao)"
+    },
+    {
+      "tabela": "avaliacao_nutricao_parenteral",
+      "motivo": "avaliação farmacêutica da NPT (parecer, acesso, osmolaridade, estabilidade, compatibilidade)",
+      "ddl": "CREATE TABLE avaliacao_nutricao_parenteral (id PK, terapia_nutricional_id NOT NULL UNIQUE, parecer VARCHAR(20) NOT NULL, acesso VARCHAR(20) NOT NULL, osmolaridade_mosm_l DECIMAL(15,4) NOT NULL, estavel BOOLEAN NOT NULL, compativel BOOLEAN NOT NULL, observacao VARCHAR(2000) NULL, profissional_id NOT NULL, + auditoria/versao/excluido)"
+    },
+    {
+      "tabela": "plano_refeicao_acompanhante",
+      "motivo": "refeições previstas do acompanhante registradas pela nutrição (base legal, refeições do dia, dieta, período) e o log de alteração",
+      "ddl": "CREATE TABLE plano_refeicao_acompanhante (id PK, estabelecimento_id NOT NULL, internacao_id NOT NULL, acompanhante_internacao_id NULL, direito_legal VARCHAR(30) NOT NULL, inicio_em DATETIME(3) NOT NULL, fim_em DATETIME(3) NULL, dieta VARCHAR(250) NULL, observacao VARCHAR(500) NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'ativa', + auditoria/versao/excluido, CHECK (fim_em IS NULL OR fim_em >= inicio_em)); CREATE TABLE plano_refeicao_acompanhante_refeicao (id PK, plano_refeicao_acompanhante_id NOT NULL, refeicao_do_dia_id NOT NULL, UNIQUE(plano, refeicao)); a alteração vai à trilha (dados antes/depois)"
+    },
+    {
+      "tabela": "mapa_dieta / mapa_dieta_item",
+      "motivo": "hash do conteúdo do mapa fechado e linha sem dieta prescrita (jejum, sem prescrição)",
+      "ddl": "ALTER TABLE mapa_dieta ADD hash_conteudo CHAR(64) NULL; ALTER TABLE mapa_dieta_item MODIFY modalidade_dieta_id BIGINT UNSIGNED NULL, ADD tipo_linha VARCHAR(20) NOT NULL DEFAULT 'oral' CHECK (tipo_linha IN ('jejum','livre','oral','enteral','parenteral','sem-prescricao')), ADD CONSTRAINT ck_mapa_dieta_item_modalidade CHECK (modalidade_dieta_id IS NOT NULL OR tipo_linha IN ('jejum','sem-prescricao'))"
+    },
+    {
+      "tabela": "apuracao_repasse / apuracao_repasse_item",
+      "motivo": "resumo da apuração e memória de cálculo completa (item pendente sem profissional) e quem conferiu",
+      "ddl": "ALTER TABLE apuracao_repasse ADD quantidade_itens INT UNSIGNED NOT NULL DEFAULT 0, ADD quantidade_pendentes INT UNSIGNED NOT NULL DEFAULT 0, ADD pendencias JSON NULL, ADD conferida_em DATETIME(3) NULL, ADD conferida_por_usuario_id BIGINT UNSIGNED NULL; ALTER TABLE apuracao_repasse_item MODIFY profissional_id BIGINT UNSIGNED NULL, ADD dimensoes VARCHAR(500) NULL, ADD dimensoes_ignoradas VARCHAR(500) NULL, ADD base_calculo VARCHAR(20) NULL, ADD valor_fixo DECIMAL(15,2) NOT NULL DEFAULT 0, ADD valor_sem_adicional DECIMAL(15,2) NULL, ADD adicional VARCHAR(30) NULL, ADD pendencia VARCHAR(60) NULL, ADD regra_repasse_item_id BIGINT UNSIGNED NULL, CHECK (profissional_id IS NOT NULL OR pendencia IS NOT NULL)"
+    },
+    {
+      "tabela": "rpa",
+      "motivo": "título a pagar do RPA (contas a pagar) e as retenções INSS/IRRF/ISS gravadas por tributo; data de pagamento",
+      "ddl": "ALTER TABLE rpa ADD titulo_pagar_id BIGINT UNSIGNED NULL (FK titulo_pagar), ADD pago_em DATE NULL; a emissão grava rpa_retencao com os tributos 'inss','irrf','iss' do cadastro tributo (precisa da carga dos códigos) e publica o evento repasse.rpa-emitido no outbox para o financeiro criar o título"
+    },
+    {
+      "tabela": "producao_repasse",
+      "motivo": "valor recebido e recurso deferido por item (base 'recebido' da regra) e o adiantamento ao prestador",
+      "ddl": "ALTER TABLE producao_repasse ADD valor_recebido DECIMAL(15,2) NOT NULL DEFAULT 0, ADD valor_recurso_deferido DECIMAL(15,2) NOT NULL DEFAULT 0, ADD conciliado BOOLEAN NOT NULL DEFAULT FALSE; adiantamento: lancamento_repasse tipo 'adiantamento' ou tabela adiantamento_repasse"
+    },
+    {
+      "pacote": "packages/dominio-repasse",
+      "motivo": "podeApurarPeriodo: renomear linhasDoLegadoNoPeriodo → lancamentosDaApuracaoNoPeriodo e a recusa 'periodo-apurado-no-legado' → 'periodo-ja-apurado' (vocabulário neutro; o serviço já responde só 'periodo-ja-apurado')"
+    },
+    {
+      "agenda": "exames com jejum na janela do mapa",
+      "motivo": "ExameDaJanela: a agenda de exames com preparo de jejum (marcacao_horario + item_agendavel com orientação de jejum) — a leitura responde vazio até a ligação ser definida"
+    },
+    {
+      "balanco": "volume parenteral do balanço hídrico",
+      "motivo": "balancoParenteral responde vazio: falta ligar balanco_lancamento ao grupo parenteral (o domínio volumesParenteraisDoBalanco espera os grupos)"
+    },
+    {
+      "tabela": "regra_repasse_item",
+      "prioridade": "alta",
+      "motivo": "dimensão profissional da regra de repasse (a mais forte na especificidade): sem ela a inclusão de regra de um profissional é recusada (modelo-pendente)",
+      "ddl": "ALTER TABLE regra_repasse_item ADD profissional_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os profissionais' AFTER regra_repasse_id, ADD KEY ix_regra_repasse_item_profissional_id (profissional_id), ADD CONSTRAINT fk_regra_repasse_item_profissional FOREIGN KEY (profissional_id) REFERENCES profissional (id)"
+    },
+    {
+      "tabela": "apuracao_repasse",
+      "prioridade": "media",
+      "motivo": "segregação no banco: quem apurou (ou recalculou por último) não aprova",
+      "ddl": "ALTER TABLE apuracao_repasse ADD CONSTRAINT ck_apuracao_repasse_segregacao CHECK (aprovada_por_usuario_id IS NULL OR aprovada_por_usuario_id <> iniciada_por_usuario_id)"
+    },
+    {
+      "tabela": "mapa_dieta_item",
+      "prioridade": "alta",
+      "motivo": "a linha sem prescrição de dieta (sem-prescricao) hoje fica só na trilha do fechamento; o jejum já usa a modalidade de classe 'jejum' do cadastro. Aplicar o pedido 'mapa_dieta / mapa_dieta_item' acima (modalidade_dieta_id NULL + tipo_linha) para gravar a linha"
+    }
+  ]
+}

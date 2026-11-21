@@ -45,8 +45,9 @@ describe('API_MODULOS', () => {
     expect(recusaDosModulos({ API_MODULOS: 'todos,sessao' })).toMatch(/todos/);
   });
 
-  it('"todos": a base e todos os registrados (ondas 1 e 2 da F2.2)', () => {
+  it('"todos": a base e todos os registrados (ondas 1 a 3 da F2.2)', () => {
     expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual([
+      'adt',
       'agenda',
       'assinatura',
       'atendimento',
@@ -56,6 +57,7 @@ describe('API_MODULOS', () => {
       'consultas',
       'contratualizacao',
       'custos',
+      'digitalizacao',
       'documento',
       'enfermagem',
       'especialidades',
@@ -65,6 +67,8 @@ describe('API_MODULOS', () => {
       'financeiro',
       'implantacao',
       'internacao',
+      'manutencao',
+      'nutricao',
       'operadora',
       'orcamento',
       'patrimonio',
@@ -73,9 +77,11 @@ describe('API_MODULOS', () => {
       'precos',
       'recepcao',
       'rede',
+      'repasse',
       'rouparia',
       'sessoes',
       'suporte',
+      'sus',
     ]);
     expect(recusaDosModulos({ API_MODULOS: 'sessao,cadastro,atendimento' })).toBeNull();
     expect(modulosPedidos({ API_MODULOS: 'todos' }, registro)).toEqual(['exemplo']);

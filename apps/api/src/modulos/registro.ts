@@ -40,6 +40,7 @@ export type CarregadorModulo = () => Promise<ModuloApi>;
  * `cadastro: () => import('./cadastro/modulo.js')`.
  */
 export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({
+  adt: () => import('./adt/modulo.js'),
   agenda: () => import('./agenda/modulo.js'),
   assinatura: () => import('./assinatura/modulo.js'),
   atendimento: () => import('./atendimento/modulo.js'),
@@ -49,6 +50,7 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   consultas: () => import('./consultas/modulo.js'),
   contratualizacao: () => import('./contratualizacao/modulo.js'),
   custos: () => import('./custos/modulo.js'),
+  digitalizacao: () => import('./digitalizacao/modulo.js'),
   documento: () => import('./documento/modulo.js'),
   enfermagem: () => import('./enfermagem/modulo.js'),
   especialidades: () => import('./especialidades/modulo.js'),
@@ -58,6 +60,8 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   financeiro: () => import('./financeiro/modulo.js'),
   implantacao: () => import('./implantacao/modulo.js'),
   internacao: () => import('./internacao/modulo.js'),
+  manutencao: () => import('./manutencao/modulo.js'),
+  nutricao: () => import('./nutricao/modulo.js'),
   operadora: () => import('./operadora/modulo.js'),
   orcamento: () => import('./orcamento/modulo.js'),
   patrimonio: () => import('./patrimonio/modulo.js'),
@@ -66,9 +70,11 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   precos: () => import('./precos/modulo.js'),
   recepcao: () => import('./recepcao/modulo.js'),
   rede: () => import('./rede/modulo.js'),
+  repasse: () => import('./repasse/modulo.js'),
   rouparia: () => import('./rouparia/modulo.js'),
   sessoes: () => import('./sessoes/modulo.js'),
   suporte: () => import('./suporte/modulo.js'),
+  sus: () => import('./sus/modulo.js'),
 });
 
 export class ErroModulos extends Error {

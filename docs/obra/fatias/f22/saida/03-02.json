@@ -1,0 +1,79 @@
+{
+  "lote": "03-02",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/autorizacao/interceptor-como.ts",
+    "src/autorizacao/trilha-memoria.ts",
+    "src/sessao/fonte-plataforma.int.spec.ts",
+    "src/sessao/recuperacao-senha.spec.ts",
+    "src/sessao/recuperacao-senha.ts",
+    "src/sessao/sessao.int.spec.ts",
+    "src/telemetria.int.spec.ts",
+    "src/modulos/digitalizacao/armazem.ts",
+    "src/modulos/digitalizacao/assinatura.ts",
+    "src/modulos/digitalizacao/digitalizacao.controller.ts",
+    "src/modulos/digitalizacao/digitalizacao.spec.ts",
+    "src/modulos/digitalizacao/modulo.ts",
+    "src/modulos/digitalizacao/porta-memoria.ts",
+    "src/modulos/digitalizacao/porta-propria.int.spec.ts",
+    "src/modulos/digitalizacao/porta-propria.ts",
+    "src/modulos/digitalizacao/porta.ts",
+    "src/modulos/digitalizacao/public-api.ts",
+    "src/modulos/digitalizacao/tipos.ts",
+    "src/sessao/porta-pin.ts",
+    "src/sessao/porta-pin-propria.ts",
+    "src/sessao/porta-pin-propria.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "documento_digitalizado",
+      "motivo": "o índice e o ciclo da digitalização certificada: lote e ordem no lote, descrição, resolução, cor, motivo da recusa, a assinatura ICP-Brasil de quem conferiu e a situação 'assinado'; CHECKs de segregação (quem confere não capturou), recusa com motivo e assinatura completa; UNIQUE da ordem no lote e da assinatura. Até aplicar, a porta própria falha ao ler o índice e o int spec pula os casos de gravação ('modelo pendente'). DDL conferido numa tabela temporária da sessão (colunas, CHECKs e as consultas da porta).",
+      "ddl": "-- Pedido do lote 03-02 (F2.2, onda 3): o índice e o ciclo da digitalização certificada no documento_digitalizado\n-- (09_HOT). Só para frente; convenções do ADR 0002. As FKs vão para o _chaves.sql do grupo.\nALTER TABLE documento_digitalizado\n  ADD COLUMN lote_digitalizacao_id BIGINT UNSIGNED NULL COMMENT 'Lote de digitalização em que o documento entrou' AFTER volume_prontuario_id,\n  ADD COLUMN ordem_lote SMALLINT UNSIGNED NULL COMMENT 'Ordem do documento no lote' AFTER lote_digitalizacao_id,\n  ADD COLUMN descricao VARCHAR(120) NULL COMMENT 'Descrição do documento no índice' AFTER tipo_documento_arquivo_id,\n  ADD COLUMN resolucao_dpi SMALLINT UNSIGNED NULL COMMENT 'Resolução da imagem (Decreto 10.278/2020)' AFTER quantidade_paginas,\n  ADD COLUMN cor VARCHAR(20) NULL COMMENT 'Modo de cor da captura' AFTER resolucao_dpi,\n  ADD COLUMN motivo_rejeicao VARCHAR(200) NULL COMMENT 'Motivo da recusa na conferência da fidelidade' AFTER conferente_usuario_id,\n  ADD COLUMN assinatura_icp_id BIGINT UNSIGNED NULL COMMENT 'Assinatura ICP-Brasil de quem conferiu' AFTER motivo_rejeicao,\n  ADD COLUMN assinado_em DATETIME(3) NULL AFTER assinatura_icp_id,\n  DROP CONSTRAINT ck_documento_digitalizado_situacao,\n  ADD CONSTRAINT ck_documento_digitalizado_situacao CHECK (situacao IN ('pendente_conferencia','conferido','rejeitado','assinado','substituido')),\n  ADD CONSTRAINT ck_documento_digitalizado_cor CHECK (cor IS NULL OR cor IN ('monocromatico','cinza','colorido')),\n  ADD CONSTRAINT ck_documento_digitalizado_resolucao CHECK (resolucao_dpi IS NULL OR resolucao_dpi BETWEEN 75 AND 1200),\n  ADD CONSTRAINT ck_documento_digitalizado_ordem CHECK (ordem_lote IS NULL OR (ordem_lote > 0 AND lote_digitalizacao_id IS NOT NULL)),\n  ADD CONSTRAINT ck_documento_digitalizado_rejeicao CHECK (situacao <> 'rejeitado' OR (motivo_rejeicao IS NOT NULL AND conferente_usuario_id IS NOT NULL AND conferido_em IS NOT NULL)),\n  ADD CONSTRAINT ck_documento_digitalizado_assinado CHECK (situacao <> 'assinado' OR (conferido AND assinatura_icp_id IS NOT NULL AND assinado_em IS NOT NULL)),\n  ADD CONSTRAINT ck_documento_digitalizado_segregacao CHECK (conferente_usuario_id IS NULL OR conferente_usuario_id <> digitalizador_usuario_id),\n  ADD UNIQUE KEY uq_documento_digitalizado_lote_ordem (lote_digitalizacao_id, ordem_lote),\n  ADD UNIQUE KEY uq_documento_digitalizado_assinatura_icp (assinatura_icp_id);",
+      "chaves": "ALTER TABLE documento_digitalizado\n  ADD CONSTRAINT fk_documento_digitalizado_lote_digitalizacao_id FOREIGN KEY (lote_digitalizacao_id) REFERENCES lote_digitalizacao (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_documento_digitalizado_assinatura_icp_id FOREIGN KEY (assinatura_icp_id) REFERENCES assinatura_icp (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "registro",
+      "modulo": "digitalizacao",
+      "entrada": "digitalizacao: () => import('./digitalizacao/modulo.js'),",
+      "condicao": "Só registrar DEPOIS de aplicar o pedido ddl do documento_digitalizado (saida/03-02.sql) nas migrações e nos clientes; antes disso o módulo fica fora do REGISTRO_MODULOS (a porta própria leria colunas que o banco não tem). O int spec do lote aplica o pedido no cliente f22_o3 e o desfaz; com o DDL nas migrações, ele usa o do banco."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pin_troca_rapida",
+      "arquivo": "docs/obra/fatias/f22/saida/03-02-pin.sql",
+      "motivo": "o PIN da troca rápida no banco do cliente (a porta sessao/porta-pin-propria.ts substitui a porta apagada sobre o banco de origem): uma linha por PIN, um só vivo por usuário e estabelecimento (coluna gerada + UNIQUE), resumo Argon2id apagado ao encerrar, erros seguidos, bloqueio e encerramento com motivo. Destino 02_ADM (tabelas e chaves). O int spec cria a tabela no cliente de teste quando falta e a apaga no fim."
+    },
+    {
+      "tipo": "carga",
+      "tabela": "tipo_documento_arquivo",
+      "motivo": "os 9 tipos documentais do índice (TIPOS_DOCUMENTO_DIGITALIZADO do contrato) no carregador de domínio do produto; sem eles a captura recusa 'tipo-documento-sem-cadastro'.",
+      "sql": "INSERT INTO tipo_documento_arquivo(codigo, descricao, grupo, guardado_no_arquivo, prazo_guarda_anos, criado_em) VALUES\n  ('ficha-atendimento','Ficha de atendimento','prontuario',TRUE,20,NOW(3)),\n  ('evolucao','Evolução','prontuario',TRUE,20,NOW(3)),\n  ('prescricao','Prescrição','prontuario',TRUE,20,NOW(3)),\n  ('exame','Resultado de exame','exame',TRUE,20,NOW(3)),\n  ('laudo','Laudo','exame',TRUE,20,NOW(3)),\n  ('termo-consentimento','Termo de consentimento','prontuario',TRUE,20,NOW(3)),\n  ('folha-sala','Folha de sala','prontuario',TRUE,20,NOW(3)),\n  ('prontuario-antigo','Prontuário antigo','prontuario',TRUE,20,NOW(3)),\n  ('outro','Outro documento do prontuário','outro',TRUE,20,NOW(3))\nON DUPLICATE KEY UPDATE codigo = codigo;"
+    },
+    {
+      "tipo": "aviso",
+      "arquivo": "apps/api/src/modulos/pep/infra/acesso-entre-hospitais.int.spec.ts",
+      "motivo": "importa autorizacao/trilha-legado.js, apagado neste lote (o registrador próprio é autorizacao/trilha-propria.ts); o lote do pep troca pelo RegistradorTrilhaPropria."
+    },
+    {
+      "tipo": "aviso",
+      "arquivo": "apps/api/src/sessao/porta-pin.ts e apps/api/src/autorizacao/trilha.ts",
+      "motivo": "comentários citam porta-pin-legado.ts e trilha-legado.ts, apagados neste lote (arquivos fora da lista)."
+    },
+    {
+      "tipo": "aviso",
+      "arquivo": "apps/api/src/modulos/relatorio/porta-memoria.ts e apps/api/src/modulos/integracao/porta-memoria.ts",
+      "motivo": "registrarNaTrilha agora recebe LinhaTrilhaMemoria (tipo neutro, mesmos campos: evento, rede, hospital, usuario, recurso, correlacao, estacao, tabelaAlvo, idAlvo); a linha antiga é compatível por estrutura."
+    },
+    {
+      "tipo": "ligacao",
+      "arquivo": "apps/api/src/app.module.ts (ou o módulo da troca rápida)",
+      "motivo": "onde hoje usa portaPinDoNucleo(nucleoReal) (arquivo apagado), usar new PortaPinPropria(nucleo, (rede, h) => contextoDoEstabelecimento(h)) de sessao/porta-pin-propria.ts; sem núcleo, portaPinMemoria (dev/ci) ou portaPinIndisponivel."
+    },
+    {
+      "tipo": "aviso",
+      "arquivo": "apps/api/src/modulos/farmacia/porta-propria.ts, apps/api/src/modulos/nutricao/porta-propria.ts (e outras com gravarSgh)",
+      "motivo": "correção transversal (achado da revisão do 03-02): gravarSgh com chave `<modulo>:${randomUUID()}` ignora a Idempotency-Key da requisição; a digitalização passou a levar o pedido (chave + ação + dados efetivos) no contexto da porta (ContextoGravacaoDigitalizacao.pedido) e a conferir a repetição antes das pré-conferências. Vale levar ao ApoioGravacao (exames/apoio-gravacao.ts) para todos."
+    }
+  ]
+}

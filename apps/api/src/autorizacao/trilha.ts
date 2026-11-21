@@ -1,8 +1,7 @@
 // Registro dos eventos auditáveis (ficha do M06, regra 10 e seção 5): todo evento vai à trilha própria do cliente
 // (só inclusão). Usuário não confirmado (login falho com nome inexistente, login vindo de outro banco sem a prova
 // de que é a mesma pessoa) fica como "(desconhecido)": o texto digitado nunca vai à trilha. Em dev/ci com a fonte
-// sintética e nos testes, o registro é em memória. A trilha dupla com o sistema anterior está em trilha-legado.ts,
-// fora do boot da F2-L.
+// sintética e nos testes, o registro é em memória.
 import { eventoAuditavel } from '@sgh/contratos';
 import { type MarcaComo, marcaComoAtual } from './como.js';
 
@@ -37,7 +36,7 @@ export interface EventoParaTrilha {
 export interface RegistroFeito {
   /** Id na trilha própria. */
   readonly sgh: string | null;
-  /** Id na trilha do sistema anterior (só a trilha dupla de trilha-legado.ts; null na própria). */
+  /** Id do evento que tem par no catálogo antigo (só o registro em memória o preenche; a trilha própria devolve null). */
   readonly legado: string | null;
 }
 

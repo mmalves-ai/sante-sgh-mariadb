@@ -1,5 +1,5 @@
 // W0-08, parte 9b (mercado M3: treinamento dos operadores e ciclo de vida; RDC 509/2021, arts. 8º, 15 e 16): as regras
-// puras do domínio entregues à gravação do legado como callback (o legado não importa o domínio) e a montagem do índice
+// puras do domínio entregues à gravação da porta como callback (a porta não importa o domínio) e a montagem do índice
 // de obsolescência a partir das leituras da porta.
 import type {
   AtividadePlano,

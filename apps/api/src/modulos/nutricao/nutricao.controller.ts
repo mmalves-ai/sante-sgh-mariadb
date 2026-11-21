@@ -19,7 +19,7 @@
 //   GET  /api/servico-social/internacoes/:reg         os registros (parecer só da categoria; vínculo; auditado)
 //   POST /api/servico-social/registros                pep.registrarAvaliacaoSocial (com a barreira social no NIR)
 // O total da triagem e os percentuais são SEMPRE calculados aqui pelo domínio; as categorias são conferidas na hora
-// pelo vínculo do login (CBO com o conselho ativo). Gravações só SGH_ com a SGH_TRILHA na mesma transação.
+// pelo vínculo do login (CBO com o conselho ativo). Gravações só SGH_ com a trilha na mesma transação.
 import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -107,7 +107,8 @@ import {
   type RegistroEmergencia,
   VINCULO_ASSISTENCIAL,
 } from '../acesso/emergencia.controller.js';
-import { idDaRota, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { idDaRota, type SessaoCadastro, sessaoDe as sessaoCadastroDe } from '../cadastro/comum.js';
+import { comPedido } from './pedido.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -188,6 +189,10 @@ const prazosDe = (r: Resolvedor, unidade: string | null) => ({
 
 const MOTIVO_CONTA_COMPARTILHADA =
   'Conta compartilhada: o login está ligado a vários cadastros de profissional, e a categoria não é reconhecida. Entre com o login pessoal.';
+
+
+/** A sessão com a Idempotency-Key do pedido no contexto da porta: o reenvio do mesmo pedido não grava de novo. */
+const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro => comPedido(sessaoCadastroDe(req));
 
 @Controller()
 export class NutricaoController {
@@ -483,7 +488,7 @@ export class NutricaoController {
   @Post('nutricao/triagens')
   @HttpCode(201)
   @Permissao(P.nutricaoTriar)
-  @AuditadoNoHandler('pep.triarNutricao (SGH_PEP_NUTRI_TRIAGEM) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pep.triarNutricao (triagem_nutricional) com a trilha na mesma transação')
   async triar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTriagem> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarTriagem, b);
@@ -501,12 +506,13 @@ export class NutricaoController {
       return recusaDominio(x);
     }
     const horas = horasDesdeAdmissao(i.admissao, agora);
+    const dentro = horas <= p.prazos.prazoHoras;
     const id = await this.apoio.sgh(
       s,
       E.nutricaoTriagemRegistrada.codigo,
       P.nutricaoTriar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_TRIAGEM',
+        tabela: 'triagem_nutricional',
         id: String(x),
         paciente: i.paciente,
         chave: `${i.reg}:${r.instrumento}:${r.total}:${r.risco}`,
@@ -530,12 +536,12 @@ export class NutricaoController {
           imc: imc(e.pesoKg, e.alturaCm),
           admissao: i.admissao,
           horasDesdeAdmissao: horas,
+          dentroDoPrazo: dentro,
           reavaliarEm: reavaliarEm(r.risco, hoje, p.prazos),
           vinculo: v.vinculo,
           usuario: s.login,
         }),
     );
-    const dentro = horas <= p.prazos.prazoHoras;
     return {
       ok: true,
       id,
@@ -561,7 +567,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (SGH_PEP_NUTRI_TERAPIA, meta) com a SGH_TRILHA na mesma transação',
+    'pep.acompanharTerapiaNutricional (terapia_nutricional, meta) com a trilha na mesma transação',
   )
   async meta(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTerapia> {
     const s = sessaoDe(req);
@@ -618,7 +624,7 @@ export class NutricaoController {
       E.terapiaNutricionalRegistrada.codigo,
       P.terapiaAcompanhar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_TERAPIA',
+        tabela: 'terapia_nutricional',
         id: String(x),
         paciente: i.paciente,
         chave: `${i.reg}:meta:${e.via}`,
@@ -657,7 +663,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (SGH_PEP_NUTRI_TERAPIA, acompanhamento) com a SGH_TRILHA na mesma transação',
+    'pep.acompanharTerapiaNutricional (terapia_nutricional, acompanhamento) com a trilha na mesma transação',
   )
   async acompanhamento(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTerapia> {
     const s = sessaoDe(req);
@@ -694,7 +700,7 @@ export class NutricaoController {
       E.terapiaNutricionalRegistrada.codigo,
       P.terapiaAcompanhar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_TERAPIA',
+        tabela: 'terapia_nutricional',
         id: String(x),
         paciente: i.paciente,
         chave: `${i.reg}:acompanhamento:${e.data}`,
@@ -774,7 +780,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.mapaFechar)
   @AuditadoNoHandler(
-    'internacao.fecharMapaDietas (SGH_HOT_MAPA_DIETA e as linhas) com a SGH_TRILHA na mesma transação',
+    'internacao.fecharMapaDietas (mapa_dieta e as linhas) com a trilha na mesma transação',
   )
   async fecharMapa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoMapa> {
     const s = sessaoDe(req);
@@ -820,7 +826,7 @@ export class NutricaoController {
       E.mapaDietaFechado.codigo,
       P.mapaFechar,
       (x: number) => ({
-        tabela: 'SGH_HOT_MAPA_DIETA',
+        tabela: 'mapa_dieta',
         id: String(x),
         chave: `${e.unidade}:${e.refeicao}:${e.data}:${m.hash.slice(0, 16)}`,
       }),
@@ -930,7 +936,7 @@ export class NutricaoController {
       correlacao: correlacaoDaRequisicao(s.req, 'etiqueta-bandeja').slice(0, 64),
       recurso: 'hotelaria.mapaDieta',
       resultado: 'sucesso',
-      tabelaAlvo: 'SGH_HOT_MAPA_DIETA',
+      tabelaAlvo: 'mapa_dieta',
       idAlvo: m.mapa.retrato ? String(m.mapa.retrato.id) : `${e.unidade}:${e.refeicao}:${e.data}`,
       chaveNaturalAlvo: `etiqueta-bandeja:${zpls.length}:${createHash('sha256').update(conteudo).digest('hex').slice(0, 16)}`,
     });
@@ -963,7 +969,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.acompanhanteRegistrar)
   @AuditadoNoHandler(
-    'internacao.registrarDietaAcompanhante (SGH_HOT_DIETA_ACOMP) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarDietaAcompanhante (plano_refeicao_acompanhante) com a trilha na mesma transação',
   )
   async registrarAcompanhante(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoMapa> {
     const s = sessaoDe(req);
@@ -981,7 +987,7 @@ export class NutricaoController {
       E.dietaAcompanhanteRegistrada.codigo,
       P.acompanhanteRegistrar,
       (x: number) => ({
-        tabela: 'SGH_HOT_DIETA_ACOMP',
+        tabela: 'plano_refeicao_acompanhante',
         id: String(x),
         paciente: i.paciente,
         chave: `${i.reg}:${e.baseLegal}`,
@@ -1005,7 +1011,7 @@ export class NutricaoController {
   @HttpCode(200)
   @Permissao(P.acompanhanteRegistrar)
   @AuditadoNoHandler(
-    'internacao.registrarDietaAcompanhante (o encerramento em SGH_HOT_DIETA_ACOMP) com a SGH_TRILHA',
+    'internacao.registrarDietaAcompanhante (o encerramento em plano_refeicao_acompanhante) com a trilha',
   )
   async encerrarAcompanhante(
     @Param('id') id: string,
@@ -1027,7 +1033,7 @@ export class NutricaoController {
       s,
       E.dietaAcompanhanteRegistrada.codigo,
       P.acompanhanteRegistrar,
-      { tabela: 'SGH_HOT_DIETA_ACOMP', id: String(a.id), chave: `${a.reg}:encerrada` },
+      { tabela: 'plano_refeicao_acompanhante', id: String(a.id), chave: `${a.reg}:encerrada` },
       (g) => g.encerrarAcompanhante({ id: a.id, motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true, id: a.id, mensagem: 'Refeição do acompanhante encerrada.' };
@@ -1122,7 +1128,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.socialRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarAvaliacaoSocial (SGH_PEP_SOCIAL e a barreira social em SGH_INT_BARREIRA_ALTA) com a SGH_TRILHA na mesma transação',
+    'pep.registrarAvaliacaoSocial (registro_social e a barreira social em barreira_alta) com a trilha na mesma transação',
   )
   async registrarSocial(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSocial> {
     const s = sessaoDe(req);
@@ -1142,7 +1148,7 @@ export class NutricaoController {
       E.avaliacaoSocialRegistrada.codigo,
       P.socialRegistrar,
       (x: { id: number; barreira: number | null }) => ({
-        tabela: 'SGH_PEP_SOCIAL',
+        tabela: 'registro_social',
         id: String(x.id),
         paciente: i.paciente,
         chave: `${i.reg}:${e.tipo}:${risco}${x.barreira ? `:barreira:${x.barreira}` : ''}`,
@@ -1195,7 +1201,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.nutricaoTriar)
   @AuditadoNoHandler(
-    'pep.triarNutricao (a nova versão em SGH_PEP_NUTRI_TRIAGEM e a anterior inativa em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA',
+    'pep.triarNutricao (a nova versão em triagem_nutricional e a anterior inativa em correcao_registro_nutricao) com a trilha',
   )
   async retificarTriagem(
     @Param('id') idRota: string,
@@ -1241,7 +1247,7 @@ export class NutricaoController {
       E.nutricaoRegistroCorrigido.codigo,
       P.nutricaoTriar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_CORRECAO',
+        tabela: 'correcao_registro_nutricao',
         id: String(x),
         paciente: i.paciente,
         chave: `triagem:${id}:retificacao:${x}`,
@@ -1266,6 +1272,7 @@ export class NutricaoController {
           admissao: i.admissao,
           // A retificação corrige o conteúdo, não o momento da triagem: o prazo continua o da versão original.
           horasDesdeAdmissao: t.horasDesdeAdmissao,
+          dentroDoPrazo: t.horasDesdeAdmissao <= p.prazos.prazoHoras,
           reavaliarEm: reavaliarEm(r.risco, diaDaTriagem, p.prazos),
           vinculo: v.vinculo,
           usuario: s.login,
@@ -1334,7 +1341,7 @@ export class NutricaoController {
       social ? E.avaliacaoSocialCorrigida.codigo : E.nutricaoRegistroCorrigido.codigo,
       permissao,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_CORRECAO',
+        tabela: 'correcao_registro_nutricao',
         id: String(x),
         paciente: i.paciente,
         chave: `${registro}:${id}:estorno`,
@@ -1362,7 +1369,7 @@ export class NutricaoController {
   @Post('nutricao/triagens/:id/estornar')
   @HttpCode(200)
   @Permissao(P.nutricaoTriar)
-  @AuditadoNoHandler('pep.triarNutricao (o estorno em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA')
+  @AuditadoNoHandler('pep.triarNutricao (o estorno em correcao_registro_nutricao) com a trilha')
   estornarTriagem(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.estornar(req, 'triagem', id, b);
   }
@@ -1371,7 +1378,7 @@ export class NutricaoController {
   @HttpCode(200)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (o estorno em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA',
+    'pep.acompanharTerapiaNutricional (o estorno em correcao_registro_nutricao) com a trilha',
   )
   estornarAcompanhamento(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.estornar(req, 'acompanhamento', id, b);
@@ -1380,7 +1387,7 @@ export class NutricaoController {
   @Post('servico-social/registros/:id/estornar')
   @HttpCode(200)
   @Permissao(P.socialRegistrar)
-  @AuditadoNoHandler('pep.registrarAvaliacaoSocial (o estorno em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA')
+  @AuditadoNoHandler('pep.registrarAvaliacaoSocial (o estorno em correcao_registro_nutricao) com a trilha')
   estornarSocial(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.estornar(req, 'social', id, b);
   }
@@ -1389,7 +1396,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (a nova versão do dia e a anterior inativa em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA',
+    'pep.acompanharTerapiaNutricional (a nova versão do dia e a anterior inativa em correcao_registro_nutricao) com a trilha',
   )
   async retificarAcompanhamento(
     @Param('id') idRota: string,
@@ -1436,7 +1443,7 @@ export class NutricaoController {
       E.nutricaoRegistroCorrigido.codigo,
       P.terapiaAcompanhar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_CORRECAO',
+        tabela: 'correcao_registro_nutricao',
         id: String(x),
         paciente: i.paciente,
         chave: `acompanhamento:${id}:retificacao:${x}`,
@@ -1486,7 +1493,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (a nova versão da meta e a anterior inativa em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA',
+    'pep.acompanharTerapiaNutricional (a nova versão da meta e a anterior inativa em correcao_registro_nutricao) com a trilha',
   )
   async alterarMeta(
     @Param('id') idRota: string,
@@ -1534,7 +1541,7 @@ export class NutricaoController {
       E.nutricaoRegistroCorrigido.codigo,
       P.terapiaAcompanhar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_CORRECAO',
+        tabela: 'correcao_registro_nutricao',
         id: String(x),
         paciente: i.paciente,
         chave: `meta:${id}:nova-versao:${x}`,
@@ -1584,7 +1591,7 @@ export class NutricaoController {
   @HttpCode(200)
   @Permissao(P.terapiaAcompanhar)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (o encerramento em SGH_PEP_NUTRI_CORRECAO) com a SGH_TRILHA',
+    'pep.acompanharTerapiaNutricional (o encerramento em correcao_registro_nutricao) com a trilha',
   )
   async encerrarMeta(
     @Param('id') idRota: string,
@@ -1602,7 +1609,7 @@ export class NutricaoController {
       E.nutricaoRegistroCorrigido.codigo,
       P.terapiaAcompanhar,
       (x: number) => ({
-        tabela: 'SGH_PEP_NUTRI_CORRECAO',
+        tabela: 'correcao_registro_nutricao',
         id: String(x),
         paciente: i.paciente,
         chave: `meta:${id}:encerramento`,
@@ -1631,7 +1638,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.terapiaAvaliarNpt)
   @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (SGH_PEP_NUTRI_NPT_AVAL) com a SGH_TRILHA na mesma transação',
+    'pep.acompanharTerapiaNutricional (avaliacao_npt) com a trilha na mesma transação',
   )
   async avaliarNpt(
     @Param('id') idRota: string,
@@ -1654,7 +1661,7 @@ export class NutricaoController {
       E.nptAvaliada.codigo,
       P.terapiaAvaliarNpt,
       (r: number) => ({
-        tabela: 'SGH_PEP_NUTRI_NPT_AVAL',
+        tabela: 'avaliacao_npt',
         id: String(r),
         paciente: i.paciente,
         chave: `meta:${id}:${e.parecer}:${e.acesso}`,
@@ -1685,7 +1692,7 @@ export class NutricaoController {
   @HttpCode(201)
   @Permissao(P.socialRegistrar)
   @AuditadoNoHandler(
-    'pep.registrarAvaliacaoSocial (o adendo em SGH_PEP_SOCIAL) com a SGH_TRILHA na mesma transação',
+    'pep.registrarAvaliacaoSocial (o adendo em registro_social) com a trilha na mesma transação',
   )
   async adendoSocial(
     @Param('id') idRota: string,
@@ -1708,7 +1715,7 @@ export class NutricaoController {
       E.avaliacaoSocialCorrigida.codigo,
       P.socialRegistrar,
       (r: number) => ({
-        tabela: 'SGH_PEP_SOCIAL',
+        tabela: 'registro_social',
         id: String(r),
         paciente: i.paciente,
         chave: `social:${id}:adendo`,
@@ -1730,7 +1737,7 @@ export class NutricaoController {
   @HttpCode(200)
   @Permissao(P.acompanhanteRegistrar)
   @AuditadoNoHandler(
-    'internacao.registrarDietaAcompanhante (a alteração em SGH_HOT_DIETA_ACOMP e o log em SGH_HOT_ALTERACAO) com a SGH_TRILHA',
+    'internacao.registrarDietaAcompanhante (a alteração em plano_refeicao_acompanhante e o log em alteracao_hotelaria) com a trilha',
   )
   async alterarAcompanhante(
     @Param('id') idRota: string,
@@ -1789,12 +1796,12 @@ export class NutricaoController {
       s,
       E.dietaAcompanhanteAlterada.codigo,
       P.acompanhanteRegistrar,
-      { tabela: 'SGH_HOT_DIETA_ACOMP', id: String(a.id), chave: `${a.reg}:alterada` },
+      { tabela: 'plano_refeicao_acompanhante', id: String(a.id), chave: `${a.reg}:alterada` },
       async (g) => {
         // O anterior é o relido na transação (linha travada): duas alterações simultâneas não perdem a do meio.
         const antes = await g.alterarAcompanhante({ id: a.id, ...depois });
         return g.registrarAlteracao({
-          tabela: 'SGH_HOT_DIETA_ACOMP',
+          tabela: 'plano_refeicao_acompanhante',
           id: a.id,
           evento: 'alterada',
           antes: valor(antes),

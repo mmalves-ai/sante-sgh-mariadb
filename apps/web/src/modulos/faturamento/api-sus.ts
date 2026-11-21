@@ -278,7 +278,7 @@ export type ParametrosLegadoSus = z.infer<typeof esquemaParametrosLegadoSus>;
 /** Os parâmetros do faturamento ambulatorial do banco do hospital (somente consulta). */
 export async function lerParametrosLegadoSus(buscar: typeof fetch = fetch): Promise<ParametrosLegadoSus> {
   return lerJson(
-    await buscar(`${BASE}/parametros-legado`, { headers: JSON_ACEITO }),
+    await buscar(`${BASE}/parametros-ambulatoriais`, { headers: JSON_ACEITO }),
     esquemaParametrosLegadoSus,
   );
 }

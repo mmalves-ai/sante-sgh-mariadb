@@ -14,33 +14,36 @@ import {
   type TipoRecursoAgenda,
 } from '@sgh/contratos';
 import {
-  type AcaoDeCampoLida,
+  type AcaoDeCampo,
   type CamposAlertaParaGravar,
-  type EquipamentoDoParqueLido,
+  type EquipamentoDoParque,
   recusaAlerta,
   recusaCicloVida,
-  type AvisoSgh,
-  type CoberturaLida,
-  type EquipamentoLido,
+  type AvisoDaCentral,
+  type CoberturaManutencao,
+  type EquipamentoManutencao,
   type EquipamentoParaGravar,
-  type EventoOsLido,
-  type ExecucaoLida,
-  type VersaoPlanoLida,
-  type VersaoCoberturaLida,
-  type FiltroEquipamentosLegado,
-  type FiltroOsLegado,
+  type EventoOrdem,
+  type ExecucaoDoPlano,
+  type VersaoDoPlano,
+  type VersaoDaCobertura,
+  type FiltroEquipamentos,
+  type FiltroOrdens,
   numeroDaOs,
   type OcorrenciasDoPeriodo,
-  type OsLida,
-  type PlanoManutencaoLido,
-  type RecursoAgendaLido,
-  recusa,
-  type SetorLido,
-} from '@sgh/legado';
+  type OrdemServico,
+  type PlanoManutencao,
+  type RecursoDeAgenda,
+  type SetorManutencao,
+} from './tipos.js';
+import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { CursoDoCatalogo, FiltroPeriodoPorta, GravadorManutencao, PortaManutencao } from './porta.js';
 
-export const SETORES_SINTETICOS_MANUTENCAO: readonly SetorLido[] = [
+/** A chave do estado em memória: o estabelecimento da sessão (pelo código, quando a sessão o traz). */
+type ChaveMemoria = Partial<Pick<ContextoPortaM18, 'estabelecimento'>> & { readonly hospital?: string };
+
+export const SETORES_SINTETICOS_MANUTENCAO: readonly SetorManutencao[] = [
   { codigo: 101, nome: 'Pronto-socorro (sintético)', sigla: 'PS', unidade: 1, ativo: true },
   { codigo: 102, nome: 'Centro cirúrgico (sintético)', sigla: 'CC', unidade: 1, ativo: true },
   { codigo: 103, nome: 'Laboratório (sintético)', sigla: 'LAB', unidade: 1, ativo: true },
@@ -52,7 +55,7 @@ export const UNIDADES_SINTETICAS_MANUTENCAO = [
   { codigo: 1, nome: 'Unidade central (sintética)' },
   { codigo: 2, nome: 'Unidade de terapia (sintética)' },
 ] as const;
-export const RECURSOS_SINTETICOS_MANUTENCAO: readonly RecursoAgendaLido[] = [
+export const RECURSOS_SINTETICOS_MANUTENCAO: readonly RecursoDeAgenda[] = [
   {
     tipo: 'agendaConsulta',
     id: 55,
@@ -132,14 +135,14 @@ export const CONCLUSOES_SINTETICAS_MANUTENCAO: readonly ConclusaoDeCurso[] = [
 
 interface Estado {
   equipamentos: (EquipamentoParaGravar & { id: number; versao: number; desativadoEm: string | null })[];
-  coberturas: Mutavel<CoberturaLida>[];
-  versoesCobertura: (VersaoCoberturaLida & { cobertura: number })[];
-  os: OsLida[];
-  eventos: (EventoOsLido & { os: number })[];
-  planos: Mutavel<Omit<PlanoManutencaoLido, 'ultimaExecucao' | 'ultimoResultado'>>[];
-  execucoes: ExecucaoLida[];
-  versoesPlano: (VersaoPlanoLida & { plano: number })[];
-  avisos: (Omit<AvisoSgh, 'rede' | 'hospital'> & { id: number })[];
+  coberturas: Mutavel<CoberturaManutencao>[];
+  versoesCobertura: (VersaoDaCobertura & { cobertura: number })[];
+  os: OrdemServico[];
+  eventos: (EventoOrdem & { os: number })[];
+  planos: Mutavel<Omit<PlanoManutencao, 'ultimaExecucao' | 'ultimoResultado'>>[];
+  execucoes: ExecucaoDoPlano[];
+  versoesPlano: (VersaoDoPlano & { plano: number })[];
+  avisos: (Omit<AvisoDaCentral, 'rede' | 'hospital'> & { id: number })[];
   /** W0-08, parte 8 (M2): os alertas, as OS de ação de campo e a queixa técnica aberta de cada OS. */
   alertas: Mutavel<Omit<AlertaEquipamento, 'acoes'>>[];
   acoesAlerta: { alerta: number; equipamento: number; os: number; por: string; em: string }[];
@@ -308,20 +311,21 @@ export class PortaManutencaoMemoria implements PortaManutencao {
   constructor(private readonly relogioFn: () => { hoje: string; agora: string } = agoraLocal) {}
 
   /** Os avisos gravados (testes). */
-  avisos(c: ContextoPortaM18): readonly (Omit<AvisoSgh, 'rede' | 'hospital'> & { id: number })[] {
+  avisos(c: ChaveMemoria): readonly (AvisoDaCentral & { id: number })[] {
     return this.e(c).avisos;
   }
 
-  private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+  private e(c: ChaveMemoria): Estado {
+    const chave = c.hospital ?? String(c.estabelecimento ?? '');
+    let s = this.porHospital.get(chave);
     if (!s) {
       s = semente();
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(chave, s);
     }
     return s;
   }
 
-  private equipamentoLido(s: Estado, id: number): EquipamentoLido | null {
+  private equipamentoLido(s: Estado, id: number): EquipamentoManutencao | null {
     const e = s.equipamentos.find((x) => x.id === id);
     if (!e) return null;
     const doEq = s.os.filter((o) => o.equipamento === id);
@@ -357,7 +361,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
     return a ? { ...a, acoes: s.acoesAlerta.filter((q) => q.alerta === id).length } : null;
   }
 
-  private acoesDoAlertaLidas(s: Estado, alerta: number): AcaoDeCampoLida[] {
+  private acoesDoAlertaLidas(s: Estado, alerta: number): AcaoDeCampo[] {
     return s.acoesAlerta
       .filter((q) => q.alerta === alerta)
       .map((q) => {
@@ -372,8 +376,8 @@ export class PortaManutencaoMemoria implements PortaManutencao {
       });
   }
 
-  /** Como o SQL do legado: com fabricante e fora os desativados, mais os que já têm OS do alerta. */
-  private parqueDoAlertaLido(s: Estado, alerta: number): EquipamentoDoParqueLido[] {
+  /** Como a leitura do banco: com fabricante e fora os desativados, mais os que já têm OS do alerta. */
+  private parqueDoAlertaLido(s: Estado, alerta: number): EquipamentoDoParque[] {
     const comOs = new Set(s.acoesAlerta.filter((q) => q.alerta === alerta).map((q) => q.equipamento));
     return s.equipamentos
       .filter((e) => (e.fabricante !== null && e.situacao !== 'desativado') || comOs.has(e.id))
@@ -390,7 +394,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
       }));
   }
 
-  private plano(s: Estado, id: number): PlanoManutencaoLido | null {
+  private plano(s: Estado, id: number): PlanoManutencao | null {
     const p = s.planos.find((x) => x.id === id);
     if (!p) return null;
     const ult = s.execucoes
@@ -427,8 +431,8 @@ export class PortaManutencaoMemoria implements PortaManutencao {
     const evento = (
       os: number,
       ator: string,
-      de: OsLida['situacao'] | null,
-      para: OsLida['situacao'],
+      de: OrdemServico['situacao'] | null,
+      para: OrdemServico['situacao'],
       nota: string | null,
     ) => s.eventos.push({ id: novo(), os, em: this.relogioFn().agora, ator: login(ator), de, para, nota });
     const codigoLivre = (codigo: string, id: number | null) => {
@@ -438,7 +442,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
         });
     };
     const retratarCobertura = (
-      c: Mutavel<CoberturaLida>,
+      c: Mutavel<CoberturaManutencao>,
       operacao: 'alteracao' | 'encerramento',
       motivo: string,
       usuario: string,
@@ -1038,7 +1042,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
     }));
   }
 
-  async equipamentos(c: ContextoPortaM18, f: FiltroEquipamentosLegado) {
+  async equipamentos(c: ContextoPortaM18, f: FiltroEquipamentos) {
     const s = this.e(c);
     const termo = f.termo?.trim().toUpperCase();
     const limite = Math.max(1, f.limite ?? 50);
@@ -1071,7 +1075,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
     return e ? this.equipamentoLido(s, e.id) : null;
   }
 
-  async ordens(c: ContextoPortaM18, f: FiltroOsLegado) {
+  async ordens(c: ContextoPortaM18, f: FiltroOrdens) {
     const limite = Math.max(1, f.limite ?? 50);
     const todas = this.e(c)
       .os.filter(
@@ -1232,7 +1236,7 @@ export class PortaManutencaoMemoria implements PortaManutencao {
       .map((x) => ({ ...x }));
   }
 
-  async versoesCobertura(c: ContextoPortaM18, cobertura: number): Promise<VersaoCoberturaLida[]> {
+  async versoesCobertura(c: ContextoPortaM18, cobertura: number): Promise<VersaoDaCobertura[]> {
     return this.e(c)
       .versoesCobertura.filter((x) => x.cobertura === cobertura)
       .sort((a, b) => b.versao - a.versao)

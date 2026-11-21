@@ -6,14 +6,14 @@ import {
   esquemaInstalarModeloPlano,
   responsavelPmocDe,
 } from '@sgh/contratos';
-import type { ExecucaoLida, PlanoManutencaoLido } from '@sgh/legado';
+import type { ExecucaoDoPlano, PlanoManutencao } from './tipos.js';
 import { describe, expect, it } from 'vitest';
 import { htmlPmoc } from './documentos.js';
 import { conferirInstalacaoModelo, conferirPeriodoPmoc, montarPmoc, type EquipamentoDoPmoc } from './pmoc.js';
 
 const plano = (
-  x: Partial<PlanoManutencaoLido> & { id: number; equipamento: number },
-): PlanoManutencaoLido => ({
+  x: Partial<PlanoManutencao> & { id: number; equipamento: number },
+): PlanoManutencao => ({
   versao: 1,
   atividade: 'preventiva',
   periodicidade: { quantidade: 1, unidade: 'meses' },
@@ -28,7 +28,7 @@ const plano = (
   ultimoResultado: null,
   ...x,
 });
-const exec = (id: number, planoId: number, data: string, x: Partial<ExecucaoLida> = {}): ExecucaoLida => ({
+const exec = (id: number, planoId: number, data: string, x: Partial<ExecucaoDoPlano> = {}): ExecucaoDoPlano => ({
   id,
   plano: planoId,
   data,

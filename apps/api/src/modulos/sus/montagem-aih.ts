@@ -1,5 +1,5 @@
 // Montagem da AIH (M51, etapa 4) a partir do que a porta leu: o catálogo SIGTAP da competência da alta de cada AIH
-// (regra 2), as compatibilidades, as equivalências do Sante, os leitos de UTI habilitados, o parâmetro das diárias de UTI
+// (regra 2), as compatibilidades, as equivalências do hospital, os leitos de UTI habilitados, o parâmetro das diárias de UTI
 // e a montagem do domínio (regra 6). Puro: nenhuma leitura nem gravação aqui.
 import { type CompetenciaSus, cnsValido, GRAVIDADE_DA_REGRA_SUS, type RegraCriticaSus } from '@sgh/contratos';
 import {
@@ -20,9 +20,9 @@ import {
   type ResultadoAih,
   utiPorAcomodacaoDoParametro,
 } from '@sgh/dominio-faturamento';
-import type { AihSgh, EquivalenciaSusLinha, ItemAihSgh, NovaCriticaSus } from '@sgh/legado';
 import { cnesDaCompetencia, type ParametrosSus } from './montagem.js';
 import type { DadosAihLidos } from './porta-aih.js';
+import { type AihRegistro, type EquivalenciaSus, type ItemAih, type NovaCriticaSus } from './tipos.js';
 
 /** Os parâmetros da AIH (`faturamento.sus.aih.*`). */
 export interface ParametrosAih {
@@ -33,14 +33,14 @@ export interface ParametrosAih {
 export const PARAMETROS_AIH_VAZIOS: ParametrosAih = { utiPorAcomodacao: '', diretorClinicoCns: '' };
 
 export interface AihMontada {
-  readonly aih: AihSgh;
+  readonly aih: AihRegistro;
   readonly internacao: DadosAihLidos['internacoes'][number] | null;
   readonly resultado: ResultadoAih;
   /** A especialidade do leito do arquivo: a da internação ou, sem ela, a única que a SIGTAP aceita para o principal. */
   readonly especialidade: number | null;
 }
 
-export function aihRegistrada(a: AihSgh): AihRegistrada {
+export function aihRegistrada(a: AihRegistro): AihRegistrada {
   return {
     id: a.id,
     situacao: a.situacao,
@@ -73,10 +73,10 @@ const criticaDe = (
  */
 export function montarAihs(
   dados: DadosAihLidos,
-  aihs: readonly AihSgh[],
+  aihs: readonly AihRegistro[],
   p: ParametrosSus,
   pAih: ParametrosAih,
-  equivalencias: readonly EquivalenciaSusLinha[],
+  equivalencias: readonly EquivalenciaSus[],
   realizado: ReadonlyMap<number, string> = new Map(),
 ): AihMontada[] {
   const catalogos = new Map<string, ReturnType<typeof catalogoSigtapDaCompetencia>>();
@@ -130,7 +130,7 @@ export function montarAihs(
       };
       return { aih: a, internacao: null, resultado, especialidade: null };
     }
-    // Os itens de todas as contas SUS da internação (as parciais) e da conta gravada na AIH (ID_FCCTAEXT).
+    // Os itens de todas as contas SUS da internação (as parciais) e da conta gravada na AIH.
     const contasDaAih = new Set<number>([
       ...i.contasSus,
       ...(a.conta !== null ? [a.conta] : i.conta !== null ? [i.conta] : []),
@@ -194,7 +194,7 @@ export interface MontagemAihCompetencia {
 export function criticaAihDaCompetencia(
   competencia: CompetenciaSus,
   internacoesSus: readonly { registro: number; conta: number }[],
-  vivas: readonly AihSgh[],
+  vivas: readonly AihRegistro[],
   apresentaveis: readonly AihMontada[],
   p: ParametrosSus,
   pAih: ParametrosAih,
@@ -205,7 +205,7 @@ export function criticaAihDaCompetencia(
   if (!cnes) todas.push(criticaDe('sem-cnes', null, {}));
   if (!cnsValido(pAih.diretorClinicoCns))
     todas.push(criticaDe('dado-minimo-ausente', null, { campo: 'diretorClinicoCns' }));
-  const porRegistro = new Map<number, AihSgh[]>();
+  const porRegistro = new Map<number, AihRegistro[]>();
   for (const a of vivas) porRegistro.set(a.registro, [...(porRegistro.get(a.registro) ?? []), a]);
   for (const x of internacoesSus) {
     const lista = porRegistro.get(x.registro) ?? [];
@@ -238,17 +238,17 @@ export function criticaAihDaCompetencia(
   return { criticas, todas, cnes, registros: registros.size, apresentaveis };
 }
 
-const CARATER_DO_LEGADO: Readonly<Record<string, '01' | '02'>> = { '1': '01', '2': '02' };
+const CARATER_DA_INTERNACAO: Readonly<Record<string, '01' | '02'>> = { '1': '01', '2': '02' };
 
-/** O caráter do laudo sugerido pela internação (RICADINT.CARINT: 1 eletivo, 2 urgência). */
+/** O caráter do laudo sugerido pela internação (1 eletivo, 2 urgência). */
 export function caraterDaInternacao(carint: string | null): '01' | '02' | null {
-  return carint ? (CARATER_DO_LEGADO[carint.trim()] ?? null) : null;
+  return carint ? (CARATER_DA_INTERNACAO[carint.trim()] ?? null) : null;
 }
 
 /** A AIH fechada pronta para o arquivo (as linhas do fechamento gravado; o paciente da internação lida agora). */
 export function aihParaArquivo(
   m: AihMontada,
-  linhas: readonly ItemAihSgh[],
+  linhas: readonly ItemAih[],
   documentoSolicitante: string,
 ): AihParaArquivo | null {
   const a = m.aih;

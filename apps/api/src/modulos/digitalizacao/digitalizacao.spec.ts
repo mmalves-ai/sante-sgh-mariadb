@@ -21,10 +21,12 @@ import type { SessaoCadastro } from '../cadastro/comum.js';
 import { type ConfigServicoAssinatura, ServicoAssinaturaIcp } from '../assinatura/aplicacao/servico.js';
 import { configAssinaturaDoAmbiente } from '../assinatura/infra/ambiente.js';
 import { ROTA_NAVEGADOR_SIMULADOR, type SimuladorIcp } from '../assinatura/infra/simulador.js';
+import { modulo as moduloAssinatura } from '../assinatura/modulo.js';
 import { PortaAssinaturaMemoria } from '../assinatura/porta-memoria.js';
 import { ArmazemDigitalizacaoMemoria } from './armazem.js';
 import { ServicoAssinaturaDigitalizacao } from './assinatura.js';
 import { naoComo, semAcoesPessoais } from './digitalizacao.controller.js';
+import { moduloDigitalizacao } from './modulo.js';
 import { PortaDigitalizacaoMemoria } from './porta-memoria.js';
 
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
@@ -47,7 +49,7 @@ const lerPaciente = async (_c: unknown, pront: number) => PACIENTES[pront] ?? nu
 const relogio = () => new Date('2026-10-25T13:00:00Z');
 
 describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'assinatura,digitalizacao' };
   const trilha = new RegistradorTrilhaMemoria();
   const digitalizacao = new PortaDigitalizacaoMemoria(lerPaciente, relogio);
   const armazemDigitalizacao = new ArmazemDigitalizacaoMemoria();
@@ -57,9 +59,12 @@ describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
   beforeAll(async () => {
     app = await criarApp(lerConfiguracao(env), null, env, {
       trilha,
-      digitalizacao,
-      armazemDigitalizacao,
-      vigia: null,
+      registro: {
+        assinatura: async () => ({ modulo: (ctx) => moduloAssinatura(ctx) }),
+        digitalizacao: async () => ({
+          modulo: (ctx) => moduloDigitalizacao(ctx, { porta: digitalizacao, armazem: armazemDigitalizacao }),
+        }),
+      },
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -296,6 +301,25 @@ describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
     expect(armazemDigitalizacao.gravacoes).toBe(recusaTx + 1);
     expect(armazemDigitalizacao.fixadas.has(`aa/same/digitalizacao/${sha(disputa)}.pdf`)).toBe(true);
   });
+
+  it('o pedido repetido (a mesma Idempotency-Key) devolve o resultado gravado; a mesma chave com outros dados, 422', async () => {
+    const b = pdf(2, 'repetivel');
+    const cabecalho = { ...h(capt), 'idempotency-key': `teste-m50-repetido-${Date.now()}` };
+    const enviar = (payload: unknown) =>
+      app.inject({ method: 'POST', url: '/api/digitalizacao', headers: cabecalho, payload: payload as object });
+    const antes = eventos(E.documentoDigitalizado.codigo);
+    const r1 = await enviar(captura(b));
+    expect(r1.statusCode, r1.body).toBe(201);
+    const r2 = await enviar(captura(b));
+    expect(r2.statusCode, r2.body).toBe(201);
+    expect(r2.json()).toEqual(r1.json());
+    expect(eventos(E.documentoDigitalizado.codigo)).toBe(antes + 1);
+    const divergente = await enviar(captura(b, { paginas: 3 }));
+    expect(divergente.statusCode, divergente.body).toBe(422);
+    expect(divergente.json()).toMatchObject({ codigo: 'idempotencia-divergente' });
+    // Sem a chave repetida, o mesmo arquivo continua recusado (o arquivo repetido do estabelecimento).
+    expect((await post(capt, '/digitalizacao', captura(b))).json()).toMatchObject({ codigo: 'ja-digitalizado' });
+  });
 });
 
 // ── A assinatura de quem conferiu pelo serviço do M49 (simulador) ─────────────────────────────────────────────────
@@ -306,7 +330,14 @@ function sessao(login: string): SessaoCadastro {
     hospital: 'pc',
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: {
+      cliente: 'sintetico',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 'teste-digitalizacao',
+      rede: 'rede-sintetica',
+      hospital: 'pc',
+    },
     pode: () => true,
   };
 }

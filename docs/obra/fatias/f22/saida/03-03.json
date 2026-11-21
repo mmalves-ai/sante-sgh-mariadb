@@ -1,0 +1,108 @@
+{
+  "lote": "03-03",
+  "registrar": [
+    "manutencao"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/manutencao/aviso-parada.int.spec.ts",
+    "src/modulos/manutencao/ciclo-vida.int.spec.ts",
+    "src/modulos/manutencao/ciclo-vida.ts",
+    "src/modulos/manutencao/documentos-pdf.int.spec.ts",
+    "src/modulos/manutencao/documentos.spec-util.ts",
+    "src/modulos/manutencao/documentos.spec.ts",
+    "src/modulos/manutencao/documentos.ts",
+    "src/modulos/manutencao/manutencao.controller.ts",
+    "src/modulos/manutencao/manutencao.spec.ts",
+    "src/modulos/manutencao/massa.spec-util.ts",
+    "src/modulos/manutencao/modulo.ts",
+    "src/modulos/manutencao/pgts.spec.ts",
+    "src/modulos/manutencao/pmoc.spec.ts",
+    "src/modulos/manutencao/pmoc.ts",
+    "src/modulos/manutencao/porta-memoria.ts",
+    "src/modulos/manutencao/porta-propria.int.spec.ts",
+    "src/modulos/manutencao/porta-propria.ts",
+    "src/modulos/manutencao/porta.ts",
+    "src/modulos/manutencao/public-api.ts",
+    "src/modulos/manutencao/servico.ts",
+    "src/modulos/manutencao/tecnovigilancia.int.spec.ts",
+    "src/modulos/manutencao/tecnovigilancia.ts",
+    "src/modulos/manutencao/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "alerta_sanitario",
+      "motivo": "Alerta de tecnovigilância/recall ligado ao parque (RDC 67/2009 e 551/2021): o alerta de equipamento precisa do modelo, da faixa de número de série, do registro sanitário, da data de publicação e da ação recomendada para casar com equipamento_saude. Sem isso a porta própria recusa incluir/alterar/encerrar/excluir alerta e gerar ação de campo com modelo-pendente e lê alertas vazios.",
+      "ddl": "ALTER TABLE alerta_sanitario\n  ADD COLUMN modelo VARCHAR(60) NULL COMMENT 'Modelo do equipamento afetado' AFTER fabricante_id,\n  ADD COLUMN numero_serie_inicial VARCHAR(40) NULL COMMENT 'Início da faixa de série afetada',\n  ADD COLUMN numero_serie_final VARCHAR(40) NULL COMMENT 'Fim da faixa de série afetada',\n  ADD COLUMN registro_anvisa CHAR(11) NULL,\n  ADD COLUMN publicado_em DATE NULL COMMENT 'Publicação pelo emissor',\n  ADD COLUMN acao_recomendada TEXT NULL COMMENT 'Ação pedida pelo emissor (troca, inspeção, ajuste)',\n  ADD CONSTRAINT ck_alerta_sanitario_faixa_serie CHECK ((numero_serie_inicial IS NULL) = (numero_serie_final IS NULL)),\n  ADD CONSTRAINT ck_alerta_sanitario_registro CHECK (registro_anvisa IS NULL OR registro_anvisa REGEXP '^[0-9]{11}$');"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "alerta_sanitario_equipamento",
+      "motivo": "Os equipamentos do parque afetados pelo alerta, cada um com a OS de ação de campo gerada (um por alerta e equipamento; uma OS por vínculo). Hoje alerta_sanitario_verificacao só cobre local de estoque/setor e lote.",
+      "ddl": "CREATE TABLE alerta_sanitario_equipamento (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  alerta_sanitario_id BIGINT UNSIGNED NOT NULL,\n  equipamento_saude_id BIGINT UNSIGNED NOT NULL,\n  ordem_servico_manutencao_id BIGINT UNSIGNED NOT NULL COMMENT 'OS de ação de campo gerada',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_alerta_sanitario_equipamento_par (alerta_sanitario_id, equipamento_saude_id),\n  UNIQUE KEY uq_alerta_sanitario_equipamento_os (ordem_servico_manutencao_id),\n  KEY ix_alerta_sanitario_equipamento_equipamento (equipamento_saude_id),\n  CONSTRAINT fk_alerta_sanitario_equipamento_alerta FOREIGN KEY (alerta_sanitario_id) REFERENCES alerta_sanitario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_alerta_sanitario_equipamento_equipamento FOREIGN KEY (equipamento_saude_id) REFERENCES equipamento_saude (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_alerta_sanitario_equipamento_os FOREIGN KEY (ordem_servico_manutencao_id) REFERENCES ordem_servico_manutencao (id) ON DELETE RESTRICT\n) COMMENT='Equipamentos do parque afetados pelo alerta sanitário, com a OS de ação de campo';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "queixa_tecnica_produto",
+      "motivo": "Queixa técnica de equipamento aberta pela OS (tecnovigilância): hoje insumo_id é NOT NULL e não há ligação com o equipamento nem com a OS. Sem isso abrirQueixaDaOs recusa modelo-pendente.",
+      "ddl": "ALTER TABLE queixa_tecnica_produto\n  MODIFY insumo_id BIGINT UNSIGNED NULL,\n  ADD COLUMN equipamento_saude_id BIGINT UNSIGNED NULL AFTER insumo_id,\n  ADD COLUMN ordem_servico_manutencao_id BIGINT UNSIGNED NULL COMMENT 'OS que originou a queixa',\n  ADD CONSTRAINT ck_queixa_tecnica_produto_alvo CHECK (insumo_id IS NOT NULL OR equipamento_saude_id IS NOT NULL),\n  ADD UNIQUE KEY uq_queixa_tecnica_produto_os (ordem_servico_manutencao_id),\n  ADD CONSTRAINT fk_queixa_tecnica_produto_equipamento FOREIGN KEY (equipamento_saude_id) REFERENCES equipamento_saude (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_queixa_tecnica_produto_os FOREIGN KEY (ordem_servico_manutencao_id) REFERENCES ordem_servico_manutencao (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "modelo_equipamento_curso",
+      "motivo": "Curso exigido para operar um modelo de equipamento (RDC 509/2021, art. 15): fabricante + modelo normalizados → curso do treinamento. Sem a tabela, cursosDosModelos lê vazio e vincular/desvincular recusa modelo-pendente.",
+      "ddl": "CREATE TABLE modelo_equipamento_curso (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  fabricante_id BIGINT UNSIGNED NOT NULL,\n  modelo VARCHAR(60) NOT NULL COMMENT 'Modelo normalizado (maiúsculas, sem espaços duplos)',\n  curso_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_modelo_equipamento_curso (estabelecimento_id, fabricante_id, modelo, curso_id),\n  KEY ix_modelo_equipamento_curso_curso (curso_id),\n  CONSTRAINT fk_modelo_equipamento_curso_estabelecimento FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_modelo_equipamento_curso_fabricante FOREIGN KEY (fabricante_id) REFERENCES fabricante (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_modelo_equipamento_curso_curso FOREIGN KEY (curso_id) REFERENCES curso (id) ON DELETE RESTRICT\n) COMMENT='Curso exigido para operar cada modelo de equipamento';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "evento_ciclo_equipamento",
+      "motivo": "Eventos do ciclo de vida do equipamento (incorporação, desativação e descarte, RDC 509/2021 arts. 8º e 16), um de cada tipo, com documento, destino e valores. Sem a tabela, eventosCiclo lê vazio e registrarEventoCiclo recusa modelo-pendente; o índice de obsolescência usa a instalação.",
+      "ddl": "CREATE TABLE evento_ciclo_equipamento (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  equipamento_saude_id BIGINT UNSIGNED NOT NULL,\n  tipo VARCHAR(30) NOT NULL,\n  data_evento DATE NOT NULL,\n  motivo VARCHAR(500) NOT NULL,\n  documento VARCHAR(60) NULL COMMENT 'Laudo ou certificado de destinação',\n  destino VARCHAR(30) NULL,\n  valor_contabil DECIMAL(15,2) NULL COMMENT 'Valor contábil do bem na data',\n  valor_obtido DECIMAL(15,2) NULL,\n  autorizado_por VARCHAR(150) NOT NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_evento_ciclo_equipamento_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  CONSTRAINT ck_evento_ciclo_equipamento_tipo CHECK (tipo IN ('incorporacao','desativacao','descarte')),\n  CONSTRAINT ck_evento_ciclo_equipamento_destino CHECK (destino IS NULL OR destino IN ('residuo','doacao','venda','devolucao')),\n  CONSTRAINT ck_evento_ciclo_equipamento_descarte CHECK (tipo <> 'descarte' OR (documento IS NOT NULL AND destino IS NOT NULL)),\n  CONSTRAINT ck_evento_ciclo_equipamento_valores CHECK ((valor_contabil IS NULL OR valor_contabil >= 0) AND (valor_obtido IS NULL OR valor_obtido >= 0)),\n  UNIQUE KEY uq_evento_ciclo_equipamento_tipo (equipamento_saude_id, tipo),\n  CONSTRAINT fk_evento_ciclo_equipamento_equipamento FOREIGN KEY (equipamento_saude_id) REFERENCES equipamento_saude (id) ON DELETE RESTRICT\n) COMMENT='Incorporação, desativação e descarte do equipamento, com documento e destino';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "equipamento_saude",
+      "motivo": "Data da desativação do equipamento (indicadores de disponibilidade no período). Até lá a porta lê a data da última alteração do equipamento desativado.",
+      "ddl": "ALTER TABLE equipamento_saude\n  ADD COLUMN desativado_em DATE NULL AFTER situacao,\n  ADD CONSTRAINT ck_equipamento_saude_desativado_em CHECK (situacao = 'desativado' OR desativado_em IS NULL);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ordem_servico_manutencao",
+      "motivo": "Laudo anexado à OS (calibração/segurança elétrica feita por OS). Hoje só a execução do plano tem laudo_arquivo_id; mudarOs com laudo recusa modelo-pendente.",
+      "ddl": "ALTER TABLE ordem_servico_manutencao\n  ADD COLUMN laudo_arquivo_id BIGINT UNSIGNED NULL COMMENT 'Laudo técnico da OS',\n  ADD KEY ix_ordem_servico_manutencao_laudo_arquivo_id (laudo_arquivo_id),\n  ADD CONSTRAINT fk_ordem_servico_manutencao_laudo_arquivo_id FOREIGN KEY (laudo_arquivo_id) REFERENCES arquivo (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "plano_preventivo",
+      "motivo": "Modelo pronto de onde o plano veio (PMOC, reservatório de água, gerador: CODIGOS_MODELO_PLANO) e a versão do modelo, para o relatório do PMOC e a reinstalação. Até lá, instalar plano de modelo recusa modelo-pendente.",
+      "ddl": "ALTER TABLE plano_preventivo\n  ADD COLUMN modelo_plano_codigo VARCHAR(30) NULL COMMENT 'Modelo pronto de origem (vocabulário CODIGOS_MODELO_PLANO)',\n  ADD COLUMN modelo_plano_versao SMALLINT UNSIGNED NULL,\n  ADD CONSTRAINT ck_plano_preventivo_modelo CHECK ((modelo_plano_codigo IS NULL) = (modelo_plano_versao IS NULL)),\n  ADD KEY ix_plano_preventivo_modelo (estabelecimento_id, modelo_plano_codigo, ativo);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "contrato_servico_terceirizado",
+      "motivo": "Ligação opcional do contrato de manutenção ao contrato de compra/suprimentos de origem (o campo 'contrato' da tela). Confirmar a tabela do contrato de suprimentos no modelo (FK). Até lá, informar o contrato recusa modelo-pendente.",
+      "ddl": "ALTER TABLE contrato_servico_terceirizado\n  ADD COLUMN contrato_fornecimento_id BIGINT UNSIGNED NULL COMMENT 'Contrato de suprimentos de origem';\n-- + FK para a tabela do contrato de suprimentos do modelo (a confirmar pelo integrador)."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "adt (lote 03-01)",
+      "motivo": "O ManutencaoController injeta (opcional) INTEGRACAO_OS_LEITO, importado de adt/os-leito.ts. O módulo do ADT deve exportá-lo como provider global (ou exportado) para a OS no leito propor e encerrar o bloqueio; sem isso a integração fica desligada, sem erro."
+    },
+    {
+      "tipo": "limpeza",
+      "alvo": "apps/api/src/app.module.ts",
+      "motivo": "Ainda importa portaManutencaoLegado de manutencao/public-api (removido): desmontar na última onda."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "contrato_servico_terceirizado",
+      "motivo": "O número do contrato de manutenção é do fornecedor (dois fornecedores podem usar o mesmo, ex.: 2026/001): unicidade por estabelecimento + fornecedor + número, a mesma regra da porta de memória e do comportamento anterior. Até lá a porta própria recusa o mesmo número de outro fornecedor com mensagem própria (contrato-repetido).",
+      "ddl": "ALTER TABLE contrato_servico_terceirizado\n  DROP INDEX uq_contrato_servico_terceirizado_numero,\n  ADD UNIQUE KEY uq_contrato_servico_terceirizado_fornecedor_numero (estabelecimento_id, empresa_fornecedora_id, numero);\n-- e, na porta própria, trocar o nome da restrição em incluirCobertura (catch de restricaoUnicaViolada)."
+    },
+    {
+      "tipo": "decisao",
+      "alvo": "ADR / plano_preventivo_equipamento",
+      "motivo": "A API de manutenção trata o plano como de UM equipamento (tela e tipos PlanoManutencao.equipamento). O modelo permite N alvos (equipamento, ambiente climatizado, bem patrimonial). Decisão provisória da porta própria: plano com vários equipamentos é lido uma vez (o menor equipamento) e a execução é recusada (plano-varios-alvos); plano só de ambiente/bem não aparece nesta tela. Pede-se registrar no ADR a tela de plano com vários alvos (PMOC por ambiente) e a execução por alvo (uma execucao_preventiva por equipamento)."
+    }
+  ]
+}

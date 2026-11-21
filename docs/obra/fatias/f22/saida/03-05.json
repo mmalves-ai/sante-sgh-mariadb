@@ -1,0 +1,99 @@
+{
+  "lote": "03-05",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/sus/armazem.ts",
+    "src/modulos/sus/modulo.ts",
+    "src/modulos/sus/montagem-aih.ts",
+    "src/modulos/sus/montagem.ts",
+    "src/modulos/sus/porta-aih-memoria.ts",
+    "src/modulos/sus/porta-aih.ts",
+    "src/modulos/sus/porta-memoria.ts",
+    "src/modulos/sus/porta-propria.int.spec.ts",
+    "src/modulos/sus/porta-propria.ts",
+    "src/modulos/sus/porta.ts",
+    "src/modulos/sus/public-api.ts",
+    "src/modulos/sus/selo-solicitante.ts",
+    "src/modulos/sus/servico-aih.spec.ts",
+    "src/modulos/sus/servico-aih.ts",
+    "src/modulos/sus/servico-apac.spec.ts",
+    "src/modulos/sus/servico-bpa.spec.ts",
+    "src/modulos/sus/servico.spec.ts",
+    "src/modulos/sus/servico.ts",
+    "src/modulos/sus/sus-aih.controller.ts",
+    "src/modulos/sus/sus.controller.ts",
+    "src/modulos/sus/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "condicao-registro",
+      "alvo": "apps/api/src/modulos/registro.ts (sus)",
+      "motivo": "NÃO registrar 'sus' em REGISTRO_MODULOS nesta onda. Na porta própria a CIHA (instrumento ligado na etapa 1) ainda não fecha a competência nem gera o arquivo: gravarCriticas e proximoArquivo/gravarArquivo* recusam 'modelo-pendente' até os DDLs de critica_sus, competencia_sus e remessa_* (pedidos abaixo); criticadaEm fica nulo e fechar/gerar recusam 'critica-nao-executada'. Registrar só quando a onda aplicar esses DDLs, a pendência da montagem (dadosCiha lendo a conta própria) estiver feita e o pedido de permissão 'faturamento.susEquivalencia.editarRede' estiver no catálogo; até lá o fluxo segue pelo caminho atual do app.module.ts."
+    },
+    {
+      "tipo": "permissao",
+      "alvo": "packages/contratos/src/permissoes/faturamento-sus.ts",
+      "motivo": "A equivalência SIGTAP (equivalencia_sigtap_item sobre item_faturavel) vale para a rede inteira do cliente, mas a permissão da rota é por estabelecimento. O serviço passou a exigir também a ação 'faturamento.susEquivalencia.editarRede' (ACAO_EQUIVALENCIA_SUS_REDE em sus/servico.ts; recusa 403 'equivalencia-sem-acesso-rede'). Incluir no catálogo: p('faturamento.susEquivalencia.editarRede', 'Registrar ou desativar a equivalência SIGTAP que vale para todos os hospitais da rede (muda a CIHA de todos)', [...CIHA, O.ambTabelas, O.aihTabelas], { criticidade: 'sensivel' }), e a concessão nos perfis sintéticos de faturamento SUS (apps/api/src/modulos/acesso/fonte-sintetica.ts, opcoesSus com 'faturamento.susEquivalencia.*' já cobre). Alternativa, se o dono decidir que o de-para é por hospital: ALTER TABLE equivalencia_sigtap_item ADD COLUMN estabelecimento_id BIGINT UNSIGNED NULL (nulo = rede) com FK e chave única incluindo o estabelecimento."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "critica_sus",
+      "motivo": "a crítica prévia da tela é por conta (CIHA e BPA antes do arquivo) com a regra, o detalhe sem dado pessoal, a chave estável (mantida, reaberta, corrigida) e a justificativa; hoje a critica_sus só aceita alvo AIH/APAC/linha do BPA e não tem regra nem justificativa. Até lá gravarCriticas/justificar recusam 'modelo-pendente' e as leituras de crítica saem vazias.",
+      "ddl": "ALTER TABLE critica_sus\n  ADD COLUMN chave_critica VARCHAR(120) NULL COMMENT 'Chave estável da crítica na competência (regra e alvo)',\n  ADD COLUMN codigo_regra VARCHAR(60) NULL COMMENT 'Regra de crítica do domínio que gerou a linha',\n  ADD COLUMN conta_hospitalar_id BIGINT UNSIGNED NULL,\n  ADD COLUMN conta_hospitalar_item_id BIGINT UNSIGNED NULL,\n  ADD COLUMN atendimento_id BIGINT UNSIGNED NULL,\n  ADD COLUMN fonte_pagadora_id BIGINT UNSIGNED NULL,\n  ADD COLUMN detalhe JSON NULL COMMENT 'Códigos e campos, sem dado pessoal',\n  ADD COLUMN justificativa VARCHAR(1000) NULL,\n  DROP CONSTRAINT ck_critica_sus_situacao,\n  ADD CONSTRAINT ck_critica_sus_situacao CHECK (situacao IN ('aberta','corrigida','ignorada','justificada')),\n  DROP CONSTRAINT ck_critica_sus_alvo,\n  ADD CONSTRAINT ck_critica_sus_alvo CHECK (conta_aih_id IS NOT NULL OR apac_id IS NOT NULL OR laudo_apac_id IS NOT NULL OR producao_ambulatorial_sus_item_id IS NOT NULL OR registro_raas_id IS NOT NULL OR conta_hospitalar_id IS NOT NULL),\n  ADD CONSTRAINT ck_critica_sus_justificada CHECK (situacao <> 'justificada' OR justificativa IS NOT NULL),\n  ADD UNIQUE KEY uq_critica_sus_competencia_chave (competencia_sus_id, chave_critica),\n  ADD KEY ix_critica_sus_conta_hospitalar (conta_hospitalar_id),\n  ADD CONSTRAINT fk_critica_sus_conta_hospitalar_id FOREIGN KEY (conta_hospitalar_id) REFERENCES conta_hospitalar (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_critica_sus_conta_hospitalar_item_id FOREIGN KEY (conta_hospitalar_item_id) REFERENCES conta_hospitalar_item (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_critica_sus_atendimento_id FOREIGN KEY (atendimento_id) REFERENCES atendimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_critica_sus_fonte_pagadora_id FOREIGN KEY (fonte_pagadora_id) REFERENCES fonte_pagadora (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "competencia_sus",
+      "motivo": "o resumo da competência mostra a contagem de registros criticados e o CNES usado na última crítica; hoje a porta devolve registros = 0 e o CNES do cadastro atual.",
+      "ddl": "ALTER TABLE competencia_sus\n  ADD COLUMN quantidade_registros_criticados INT UNSIGNED NOT NULL DEFAULT 0,\n  ADD COLUMN codigo_cnes_critica CHAR(7) NULL COMMENT 'CNES do cabeçalho na última crítica',\n  ADD CONSTRAINT ck_competencia_sus_cnes CHECK (codigo_cnes_critica IS NULL OR codigo_cnes_critica REGEXP '^[0-9]{7}$');"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "remessa_ciha, remessa_bpa, remessa_apac, remessa_sisaih",
+      "motivo": "o arquivo gerado guarda a chave e a versão do objeto no armazenamento com retenção (o conteúdo tem dado pessoal, o download é auditado). As remessas têm arquivo_id, hash e tamanho, mas não a chave/versão do objeto. Até lá proximoArquivo/gravarArquivo*/gravarArquivoSisaih recusam 'modelo-pendente' e arquivos() sai vazio. (Alternativa: as duas colunas na tabela arquivo, se ela for a dona do objeto.)",
+      "ddl": "ALTER TABLE remessa_ciha ADD COLUMN chave_objeto VARCHAR(255) NULL, ADD COLUMN versao_objeto VARCHAR(100) NULL;\nALTER TABLE remessa_bpa ADD COLUMN chave_objeto VARCHAR(255) NULL, ADD COLUMN versao_objeto VARCHAR(100) NULL;\nALTER TABLE remessa_apac ADD COLUMN chave_objeto VARCHAR(255) NULL, ADD COLUMN versao_objeto VARCHAR(100) NULL, ADD COLUMN leiaute VARCHAR(30) NULL, ADD COLUMN versao_leiaute VARCHAR(20) NULL, ADD COLUMN conferido_contra_oficial BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN tamanho_bytes BIGINT UNSIGNED NULL, ADD COLUMN quantidade_linhas INT UNSIGNED NOT NULL DEFAULT 0, ADD COLUMN sem_movimento BOOLEAN NOT NULL DEFAULT FALSE;\nALTER TABLE remessa_sisaih ADD COLUMN chave_objeto VARCHAR(255) NULL, ADD COLUMN versao_objeto VARCHAR(100) NULL;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "faixa_numeracao_aih",
+      "motivo": "a faixa da tela tem órgão emissor, data de liberação e o motivo do cancelamento; hoje inserirFaixaAih/mudarFaixaAih recusam 'modelo-pendente' e faixasAih() sai vazio.",
+      "ddl": "ALTER TABLE faixa_numeracao_aih\n  ADD COLUMN orgao_emissor VARCHAR(10) NULL COMMENT 'Órgão gestor que liberou a faixa',\n  ADD COLUMN data_liberacao DATE NULL,\n  ADD COLUMN motivo_situacao VARCHAR(500) NULL COMMENT 'Motivo do cancelamento',\n  ADD CONSTRAINT ck_faixa_numeracao_aih_cancelada CHECK (situacao <> 'cancelada' OR motivo_situacao IS NOT NULL);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "retorno_sus_item",
+      "motivo": "o retorno do gestor por linha (AIH ou linha do BPA: aprovada, rejeitada, glosada, valores, motivo) e o tratamento (pendente, reapresentar, aceita) com a justificativa; a retorno_sus é por arquivo. Hoje inserirRetornoSus/aplicarRetornoNaAih/tratarRetornoSus recusam 'modelo-pendente'.",
+      "ddl": "CREATE TABLE retorno_sus_item (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  retorno_sus_id BIGINT UNSIGNED NOT NULL,\n  sequencia INT UNSIGNED NOT NULL,\n  identificacao VARCHAR(30) NOT NULL COMMENT 'Número da AIH ou chave da linha do BPA no arquivo do gestor',\n  conta_aih_id BIGINT UNSIGNED NULL,\n  producao_ambulatorial_sus_item_id BIGINT UNSIGNED NULL,\n  procedimento_sigtap_id BIGINT UNSIGNED NULL,\n  situacao VARCHAR(30) NOT NULL,\n  motivo_rejeicao_sus_id BIGINT UNSIGNED NULL,\n  valor_apresentado DECIMAL(15,2) NULL,\n  valor_aprovado DECIMAL(15,2) NULL,\n  valor_glosado DECIMAL(15,2) NOT NULL DEFAULT 0,\n  tratamento VARCHAR(30) NOT NULL DEFAULT 'pendente',\n  justificativa VARCHAR(1000) NULL,\n  tratado_em DATETIME(3) NULL,\n  tratado_por_usuario_id BIGINT UNSIGNED NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_retorno_sus_item_situacao CHECK (situacao IN ('aprovada','rejeitada','glosada')),\n  CONSTRAINT ck_retorno_sus_item_tratamento CHECK (tratamento IN ('pendente','reapresentar','aceita')),\n  CONSTRAINT ck_retorno_sus_item_tratado CHECK (tratamento = 'pendente' OR (justificativa IS NOT NULL AND tratado_em IS NOT NULL)),\n  CONSTRAINT ck_retorno_sus_item_valores CHECK (valor_glosado >= 0 AND (valor_aprovado IS NULL OR valor_aprovado >= 0) AND (valor_apresentado IS NULL OR valor_apresentado >= 0)),\n  UNIQUE KEY uq_retorno_sus_item_retorno_sequencia (retorno_sus_id, sequencia),\n  KEY ix_retorno_sus_item_conta_aih (conta_aih_id), KEY ix_retorno_sus_item_producao (producao_ambulatorial_sus_item_id)\n) COMMENT='Linha do retorno do gestor (AIH ou BPA) com a situação, os valores e o tratamento';\nALTER TABLE retorno_sus_item\n  ADD CONSTRAINT fk_retorno_sus_item_retorno_sus_id FOREIGN KEY (retorno_sus_id) REFERENCES retorno_sus (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_retorno_sus_item_conta_aih_id FOREIGN KEY (conta_aih_id) REFERENCES conta_aih (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_retorno_sus_item_producao_id FOREIGN KEY (producao_ambulatorial_sus_item_id) REFERENCES producao_ambulatorial_sus_item (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_retorno_sus_item_procedimento_sigtap_id FOREIGN KEY (procedimento_sigtap_id) REFERENCES procedimento_sigtap (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_retorno_sus_item_motivo_rejeicao_sus_id FOREIGN KEY (motivo_rejeicao_sus_id) REFERENCES motivo_rejeicao_sus (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "sus/porta-propria (AIH e APAC)",
+      "motivo": "o ciclo da AIH da tela (solicitada → autorizada/negada → fechada → apresentada → aprovada/rejeitada, com itens e OPM) e o da APAC (laudo, autorização, continuidade, encerramento, linhas) ainda não foram mapeados para laudo_internacao_sus/autorizacao_internacao_sus/conta_aih(+_procedimento/_opm/diaria_uti_sus) e laudo_apac(+_nefrologia)/autorizacao_apac/apac(+_procedimento): a tela usa o atendimento/internação e o solicitante por chave do cadastro, e a conta_aih exige competência e número. Hoje as leituras saem vazias e as gravações recusam 'modelo-pendente'. Precisa de um lote próprio (onda 4) com o desenho do mapeamento."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "sus/porta-propria (montagem)",
+      "motivo": "dadosCiha/dadosBpa/dadosAih, internacaoAih, internacoesSus, atendimentoLaudoApac, lotesSaida, solicitanteAih, buscarSolicitantes e as linhas do BPA (producao_ambulatorial_sus*) devem ler a conta própria (conta_hospitalar, conta_hospitalar_item com item_faturavel e equivalencia_sigtap_item), o atendimento, a internação e a trajetória de leitos, o paciente (só para o arquivo) e o solicitante externo; hoje saem vazios (a crítica e o arquivo dão 'sem movimento'). A SIGTAP, os vínculos, o CNES e os leitos de UTI já são lidos do banco."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/dominio-faturamento (sigtap-competencia) e sus/tipos.ts",
+      "motivo": "a vigência aberta da SIGTAP chega à montagem como competenciaFinal = 0 (como a memória já fazia); trocar por null no domínio e nos tipos. ProcedimentoHospital.codigo e EquivalenciaSus.codigoProcedimento são numéricos: o item_faturavel.codigo é texto (o código com letra vira 0 na tela); trocar por texto no contrato faturamento/sus.ts."
+    },
+    {
+      "tipo": "fiacao",
+      "alvo": "apps/web/src/modulos/faturamento/api-sus.ts:281 e telas/BpaTela.vue:63",
+      "motivo": "a rota GET /api/sus/parametros-legado passou a /api/sus/parametros-ambulatoriais (nome sem 'legado'); o método do serviço é parametrosCadastro."
+    },
+    {
+      "tipo": "fiacao",
+      "alvo": "apps/api/src/app.module.ts (desmontagem)",
+      "motivo": "o sus/public-api não exporta mais portaSusLegado, portaSusNasTransacoes, dadosCihaDoLegado nem dadosAihDoLegado; o módulo agora é montado por sus/modulo.ts (porta própria com o núcleo, memória em dev/ci, indisponível fora; armazém S3 só com a porta do banco)."
+    },
+    {
+      "tipo": "remocao",
+      "alvo": "sus.int.spec.ts, sus-aih.int.spec.ts, sus-apac.int.spec.ts, sus-bpa.int.spec.ts, porta-legado.ts, porta-aih-legado.ts",
+      "motivo": "medições contra a cópia do sistema de origem (ambiente M27) e a porta de convivência; substituídos por porta-propria.int.spec.ts no cliente f22_o3."
+    }
+  ]
+}

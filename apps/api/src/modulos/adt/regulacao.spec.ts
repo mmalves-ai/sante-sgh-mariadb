@@ -10,13 +10,15 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAdt } from './modulo.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { EstadoNirMemoria } from './nir-memoria.js';
 import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 import { registroDe } from './regulacao.controller.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const painel = new FonteInternacaoMemoria({});
@@ -32,11 +34,13 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    internacao: painel,
-    adt,
-    nir,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        adt: (ctx) => moduloAdt(ctx, { adt, nir }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

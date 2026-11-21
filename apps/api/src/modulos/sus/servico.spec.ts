@@ -8,7 +8,7 @@ import { armazemSusMemoria } from './armazem.js';
 import { montarCihaDaCompetencia } from './montagem.js';
 import { PortaSusMemoria, PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO } from './porta-memoria.js';
 import type { ContextoSus, GravacaoSus } from './porta.js';
-import { ServicoSus, type SessaoSus } from './servico.js';
+import { ACAO_EQUIVALENCIA_SUS_REDE, ServicoSus, type SessaoSus } from './servico.js';
 
 const LISTA = { inativas: 'nao', pagina: 0, porPagina: 50 } as const;
 
@@ -36,6 +36,7 @@ function sessao(extra: Partial<SessaoSus> = {}): SessaoSus {
       apac: { uf: '33' },
     },
     liberado: async (i) => i === 'ciha',
+    pode: (acao) => acao === ACAO_EQUIVALENCIA_SUS_REDE,
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
       hospital: 'pc',
@@ -301,6 +302,19 @@ describe('faturamento SUS: competência, crítica e CIHA', () => {
         versao: '0000000001',
       }),
     ).rejects.toEqual(recusa('escopo-parcial'));
+    // A equivalência vale para a rede inteira: sem a ação de nível rede, nem registra nem desativa (403).
+    const semRede = sessao({ pode: () => false });
+    const { pode, ...semPode } = sessao();
+    void pode;
+    await expect(
+      sv.registrarEquivalencia(semRede, { procedimento: PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO, sigtap: '0211020036' }),
+    ).rejects.toEqual(recusa('equivalencia-sem-acesso-rede'));
+    await expect(
+      sv.desativarEquivalencia(semPode, {
+        procedimento: PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO,
+        versao: '0000000001',
+      }),
+    ).rejects.toEqual(recusa('equivalencia-sem-acesso-rede'));
     await expect(sv.baixar(s, 999)).rejects.toMatchObject({ tipo: 'nao-encontrado' });
     const comp = (await sv.listarCompetencias(s, null))[0]!;
     await expect(

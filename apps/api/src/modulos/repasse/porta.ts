@@ -1,23 +1,23 @@
 // Porta do repasse médico (M33): o que as telas de regras, apuração, lançamentos, RPA e o extrato leem e gravam,
 // independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas
-//     repasse.*, com a trilha na mesma transação); as só do novo (versão de regra, apuração e memória de cálculo) em
-//     transação SGH_ com a SGH_TRILHA junto;
+//   - `banco`: a porta própria sobre o banco do cliente (porta-propria.ts), pelo @sgh/nucleo: as operações de tela
+//     (lançamento, RPA, inclusão de regra e integração) e as gravações diretas (versão de regra, apuração e memória de
+//     cálculo) com a trilha, o outbox e a idempotência na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): regras, produção, lançamentos e RPAs SINTÉTICOS em memória, com
 //     as mesmas validações (Zod dos contratos) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type { ItemProducao, RegraRepasse } from '@sgh/contratos';
 import type {
-  ApuracaoLida,
-  LancamentoRepasseLido,
-  MemoriaLida,
-  MemoriaParaGravar,
-  PrestadorRepasseLido,
-  RpaDetalheLido,
-  RpaLido,
-  TotaisParaGravar,
-  VersaoRegraLida,
-} from '@sgh/legado';
+  ApuracaoRepasseRegistrada,
+  LancamentoRepasseRegistrado,
+  MemoriaCalculoParaGravar,
+  MemoriaCalculoRegistrada,
+  PrestadorRepasse,
+  RpaDetalhe,
+  RpaRegistrado,
+  TotaisApuracao,
+  VersaoRegraRegistrada,
+} from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_REPASSE = Symbol('PORTA_REPASSE');
@@ -50,8 +50,8 @@ export interface BasesIndicadoresRepassePorta {
   readonly diasAtePagamento: number;
 }
 
-/** As gravações só do novo (SGH_) que a porta faz na transação com a trilha. */
-export interface GravadorSghRepasse {
+/** As gravações diretas da porta, numa operação do executor (trilha na mesma transação). */
+export interface GravadorRepasse {
   proporVersao(d: {
     substitui: number | null;
     proposta: string;
@@ -70,8 +70,8 @@ export interface GravadorSghRepasse {
     competencia: string;
     apuradoPor: string;
     simulacao: boolean;
-    totais: TotaisParaGravar;
-    memorias: readonly MemoriaParaGravar[];
+    totais: TotaisApuracao;
+    memorias: readonly MemoriaCalculoParaGravar[];
   }): Promise<{ apuracao: number; recalculada: boolean }>;
   transicionarApuracao(d: {
     apuracao: number;
@@ -82,14 +82,14 @@ export interface GravadorSghRepasse {
   }): Promise<{ apuracao: number; estado: string }>;
 }
 
-export interface PortaRepasse extends PortaGravacaoM18<GravadorSghRepasse> {
+export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
   hoje(c: ContextoRepasse): Promise<string>;
   opcoes(c: ContextoRepasse): Promise<{ eventos: OpcaoPorta[]; convenios: OpcaoPorta[] }>;
   regras(c: ContextoRepasse, f: FiltroRegrasPorta): Promise<RegraRepasse[]>;
   todasRegras(c: ContextoRepasse, f: { convenio: number; data: string }): Promise<RegraRepasse[]>;
   regrasUsadas(c: ContextoRepasse, ids: readonly number[]): Promise<Set<number>>;
-  versoes(c: ContextoRepasse): Promise<VersaoRegraLida[]>;
-  versao(c: ContextoRepasse, id: number): Promise<VersaoRegraLida | null>;
+  versoes(c: ContextoRepasse): Promise<VersaoRegraRegistrada[]>;
+  versao(c: ContextoRepasse, id: number): Promise<VersaoRegraRegistrada | null>;
   producao(
     c: ContextoRepasse,
     competencia: string,
@@ -101,17 +101,17 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorSghRepasse> {
     empresa: number,
     competencia: string,
   ): Promise<{ lancamentos: number; daApuracao: number }>;
-  apuracaoDoPeriodo(c: ContextoRepasse, empresa: number, competencia: string): Promise<ApuracaoLida | null>;
-  apuracao(c: ContextoRepasse, id: number): Promise<ApuracaoLida | null>;
-  memorias(c: ContextoRepasse, apuracao: number, prestador: number | null): Promise<MemoriaLida[]>;
+  apuracaoDoPeriodo(c: ContextoRepasse, empresa: number, competencia: string): Promise<ApuracaoRepasseRegistrada | null>;
+  apuracao(c: ContextoRepasse, id: number): Promise<ApuracaoRepasseRegistrada | null>;
+  memorias(c: ContextoRepasse, apuracao: number, prestador: number | null): Promise<MemoriaCalculoRegistrada[]>;
   lancamentos(
     c: ContextoRepasse,
     f: { empresa: number; competencia: string; prestador?: number },
-  ): Promise<LancamentoRepasseLido[]>;
+  ): Promise<LancamentoRepasseRegistrado[]>;
   estornos(c: ContextoRepasse, lancamentos: readonly number[]): Promise<Map<number, number>>;
-  rpas(c: ContextoRepasse, f: { empresa: number; competencia: string }): Promise<RpaLido[]>;
-  rpaDetalhe(c: ContextoRepasse, id: number): Promise<RpaDetalheLido | null>;
-  buscarPrestadores(c: ContextoRepasse, termo: string): Promise<PrestadorRepasseLido[]>;
+  rpas(c: ContextoRepasse, f: { empresa: number; competencia: string }): Promise<RpaRegistrado[]>;
+  rpaDetalhe(c: ContextoRepasse, id: number): Promise<RpaDetalhe | null>;
+  buscarPrestadores(c: ContextoRepasse, termo: string): Promise<PrestadorRepasse[]>;
   jaEmRpa(c: ContextoRepasse, lancamentos: readonly number[]): Promise<Set<number>>;
   prestadoresDoUsuario(c: ContextoRepasse, login: string): Promise<number[]>;
   registroDoPrestador(c: ContextoRepasse, prestador: number): Promise<number | null>;
@@ -120,13 +120,13 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorSghRepasse> {
     prestadores: readonly number[],
     desde: string,
     ate?: string | null,
-  ): Promise<LancamentoRepasseLido[]>;
+  ): Promise<LancamentoRepasseRegistrado[]>;
   rpasDosPrestadores(
     c: ContextoRepasse,
     prestadores: readonly number[],
     desde: string,
     ate?: string | null,
-  ): Promise<(RpaLido & { valor: number; titulo: number | null })[]>;
+  ): Promise<(RpaRegistrado & { valor: number; titulo: number | null })[]>;
   adiantamentos(c: ContextoRepasse, prestadores: readonly number[]): Promise<number>;
   basesIndicadores(c: ContextoRepasse, de: string, ate: string): Promise<BasesIndicadoresRepassePorta>;
 }

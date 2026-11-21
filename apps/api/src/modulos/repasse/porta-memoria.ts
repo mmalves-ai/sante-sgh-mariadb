@@ -5,30 +5,40 @@
 // à cópia nem ao banco.
 import type { ItemProducao, RegraRepasse } from '@sgh/contratos';
 import {
-  type ApuracaoLida,
   type ContextoOperacao,
   ErroOperacao,
-  type FonteCatalogo,
-  type LancamentoRepasseLido,
-  type LiberacaoConsultada,
   type LinhaTrilha,
-  type MemoriaLida,
-  operacao,
-  type PrestadorRepasseLido,
-  type RpaDetalheLido,
-  type RpaLido,
   recusa,
   type ResultadoOperacao,
-  type VersaoRegraLida,
-} from '@sgh/legado';
+} from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { ENTRADAS_OPERACAO_REPASSE } from './operacoes.js';
+import type {
+  ApuracaoRepasseRegistrada,
+  LancamentoRepasseRegistrado,
+  MemoriaCalculoRegistrada,
+  PrestadorRepasse,
+  RpaDetalhe,
+  RpaRegistrado,
+  VersaoRegraRegistrada,
+} from './tipos.js';
 import type {
   BasesIndicadoresRepassePorta,
   ContextoRepasse,
   FiltroRegrasPorta,
-  GravadorSghRepasse,
+  GravadorRepasse,
   OpcaoPorta,
   PortaRepasse,
 } from './porta.js';
+
+/** Chave do estabelecimento da sessão no estado em memória (o id; sem ele, o código da sessão). */
+const chaveEstabelecimento = (c: ContextoRepasse) =>
+  String(c.estabelecimento ?? (c as ContextoRepasse & { hospital?: string }).hospital ?? '');
+
+/** Estado de cada operação por estabelecimento (verde, bloqueada); sem ele, todas liberadas. */
+export interface EstadoOperacoesRepasse {
+  estado(operacao: string, estabelecimento: string): string | null;
+}
 
 /** O financeiro em memória que recebe o título do RPA (o M32 em memória). */
 export interface TituloRepasseMemoria {
@@ -62,7 +72,7 @@ const hojeUtc = () => {
   return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
 };
 const centavos = (v: number) => Math.round(v * 100);
-const semCompetencia = (l: LancamentoRepasseLido): LancamentoRepasseLido => ({
+const semCompetencia = (l: LancamentoRepasseRegistrado): LancamentoRepasseRegistrado => ({
   id: l.id,
   tipo: l.tipo,
   prestador: l.prestador,
@@ -107,18 +117,18 @@ function regra(
 interface Estado {
   seq: number;
   regras: RegraRepasse[];
-  versoes: Map<number, VersaoRegraLida>;
-  apuracoes: Map<number, ApuracaoLida>;
-  memorias: Map<number, MemoriaLida[]>;
-  lancamentos: Map<number, LancamentoRepasseLido & { competencia: string }>;
+  versoes: Map<number, VersaoRegraRegistrada>;
+  apuracoes: Map<number, ApuracaoRepasseRegistrada>;
+  memorias: Map<number, MemoriaCalculoRegistrada[]>;
+  lancamentos: Map<number, LancamentoRepasseRegistrado & { competencia: string }>;
   estornos: Map<number, { original: number; valor: number }>;
   rpas: Map<
     number,
-    RpaLido & {
+    RpaRegistrado & {
       valor: number;
       titulo: number | null;
       lancamentosIds: number[];
-      retencoes: RpaDetalheLido['retencoes'];
+      retencoes: RpaDetalhe['retencoes'];
       vencimento: string | null;
     }
   >;
@@ -134,15 +144,15 @@ export class PortaRepasseMemoria implements PortaRepasse {
   private readonly estados = new Map<string, Estado>();
 
   constructor(
-    private readonly catalogo: FonteCatalogo | null,
+    private readonly catalogo: EstadoOperacoesRepasse | null,
     private readonly financeiro: TituloRepasseMemoria | null = null,
   ) {}
 
   private e(c: ContextoRepasse): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveEstabelecimento(c));
     if (!s) {
       s = this.semear();
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveEstabelecimento(c), s);
     }
     return s;
   }
@@ -203,8 +213,8 @@ export class PortaRepasseMemoria implements PortaRepasse {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoRepasse, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoRepasse, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, chaveEstabelecimento(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
@@ -215,14 +225,15 @@ export class PortaRepasseMemoria implements PortaRepasse {
   }
 
   async executar(c: ContextoRepasse, op: string, bruto: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const a = o.entrada.safeParse(bruto);
+    const entrada = ENTRADAS_OPERACAO_REPASSE[op];
+    if (!entrada) throw recusa('operacao-desconhecida', `Operação ${op} não existe no repasse.`);
+    const a = entrada.safeParse(bruto);
     if (!a.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(a.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(a.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -235,7 +246,7 @@ export class PortaRepasseMemoria implements PortaRepasse {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(c, s, op, a.data as Record<string, never>, ctx.usuarioLegado);
+    const resultado = this.aplicar(c, s, op, a.data as Record<string, never>, String(ctx.usuario ?? ''));
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -376,7 +387,7 @@ export class PortaRepasseMemoria implements PortaRepasse {
       }
       case 'repasse.integrarItens': {
         if (x['competencia'] === COMPETENCIA_DO_OUTRO_SISTEMA)
-          throw recusa('periodo-apurado-no-legado', 'O período já tem apuração gravada no outro sistema.');
+          throw recusa('periodo-ja-apurado', 'O período já tem apuração gravada no outro sistema.');
         let n = 0;
         for (const l of x['lancamentos'] as { itens: { item: number }[] }[])
           for (const i of l.itens) {
@@ -416,11 +427,11 @@ export class PortaRepasseMemoria implements PortaRepasse {
   async gravarSgh<T>(
     c: ContextoRepasse,
     _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorSghRepasse) => Promise<T>,
+    fn: (g: GravadorRepasse) => Promise<T>,
   ): Promise<T> {
     const s = this.e(c);
     const agora = () => new Date().toISOString();
-    const g: GravadorSghRepasse = {
+    const g: GravadorRepasse = {
       proporVersao: async (d) => {
         const id = ++s.seq;
         s.versoes.set(id, {
@@ -648,7 +659,7 @@ export class PortaRepasseMemoria implements PortaRepasse {
       }));
   }
 
-  async rpaDetalhe(c: ContextoRepasse, id: number): Promise<RpaDetalheLido | null> {
+  async rpaDetalhe(c: ContextoRepasse, id: number): Promise<RpaDetalhe | null> {
     const s = this.e(c);
     const r = s.rpas.get(id);
     if (!r) return null;
@@ -677,7 +688,7 @@ export class PortaRepasseMemoria implements PortaRepasse {
     };
   }
 
-  async buscarPrestadores(_c: ContextoRepasse, termo: string): Promise<PrestadorRepasseLido[]> {
+  async buscarPrestadores(_c: ContextoRepasse, termo: string): Promise<PrestadorRepasse[]> {
     const t = termo.trim().toUpperCase();
     if (!t) return [];
     return Object.entries(NOMES)

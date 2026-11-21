@@ -1,4 +1,4 @@
-// Montagem das respostas da manutenção (M55, etapa 1): junta o que a porta leu de SGH_MAN_* com os nomes lidos do
+// Montagem das respostas da manutenção (M55, etapa 1): junta o que a porta leu de tabelas da manutenção com os nomes lidos do
 // outro sistema (setor, unidade, recurso de agenda, fornecedor, usuário) e as regras puras de @sgh/dominio-manutencao
 // (prazos do SLA, ações, alerta do crítico parado, situação do plano, cobertura vigente, indicadores com as parcelas).
 // Sem banco e sem Nest: os testes chamam direto.
@@ -31,18 +31,18 @@ import {
   vigenteEm,
 } from '@sgh/dominio-manutencao';
 import type {
-  CoberturaLida,
-  EquipamentoLido,
-  EventoOsLido,
+  CoberturaManutencao,
+  EquipamentoManutencao,
+  EventoOrdem,
   OcorrenciasDoPeriodo,
-  OsLida,
-  PlanoManutencaoLido,
-  RecursoAgendaLido,
-  SetorLido,
-} from '@sgh/legado';
+  OrdemServico,
+  PlanoManutencao,
+  RecursoDeAgenda,
+  SetorManutencao,
+} from './tipos.js';
 
 export interface Nomes {
-  readonly setores: ReadonlyMap<number, SetorLido>;
+  readonly setores: ReadonlyMap<number, SetorManutencao>;
   readonly unidades: ReadonlyMap<number, string>;
   readonly usuarios: ReadonlyMap<string, string>;
   readonly fornecedores: ReadonlyMap<number, string>;
@@ -58,7 +58,7 @@ export function rotuloSetor(n: Nomes, codigo: number): Rotulado<string> {
 const nomeDoUsuario = (n: Nomes, login: string | null): string | null =>
   login === null ? null : (n.usuarios.get(login.trim().toUpperCase()) ?? login);
 
-export function resumoEquipamento(e: EquipamentoLido, n: Nomes, planosVencidos: number): EquipamentoResumo {
+export function resumoEquipamento(e: EquipamentoManutencao, n: Nomes, planosVencidos: number): EquipamentoResumo {
   return {
     id: e.id,
     versao: e.versao,
@@ -80,7 +80,7 @@ export function resumoEquipamento(e: EquipamentoLido, n: Nomes, planosVencidos: 
   };
 }
 
-export function resumoCobertura(c: CoberturaLida, n: Nomes, hoje: string): CoberturaResumo {
+export function resumoCobertura(c: CoberturaManutencao, n: Nomes, hoje: string): CoberturaResumo {
   return {
     id: c.id,
     numero: c.numero,
@@ -97,12 +97,12 @@ export function resumoCobertura(c: CoberturaLida, n: Nomes, hoje: string): Cober
 }
 
 export function detalheEquipamento(
-  e: EquipamentoLido,
+  e: EquipamentoManutencao,
   n: Nomes,
   x: {
     readonly planosVencidos: number;
-    readonly recurso: RecursoAgendaLido | null;
-    readonly coberturas: readonly CoberturaLida[];
+    readonly recurso: RecursoDeAgenda | null;
+    readonly coberturas: readonly CoberturaManutencao[];
     readonly hoje: string;
   },
 ): EquipamentoDetalhe {
@@ -122,7 +122,7 @@ export function detalheEquipamento(
   };
 }
 
-export function peloCodigo(e: EquipamentoLido, n: Nomes): EquipamentoPeloCodigo {
+export function peloCodigo(e: EquipamentoManutencao, n: Nomes): EquipamentoPeloCodigo {
   return {
     id: e.id,
     codigo: e.codigo,
@@ -137,7 +137,7 @@ export function peloCodigo(e: EquipamentoLido, n: Nomes): EquipamentoPeloCodigo 
 }
 
 /** O que as regras puras do ciclo precisam da OS lida. */
-export const osParaAcao = (o: OsLida) => ({
+export const osParaAcao = (o: OrdemServico) => ({
   situacao: o.situacao,
   solicitante: o.solicitante,
   tecnico: o.tecnico,
@@ -146,9 +146,9 @@ export const osParaAcao = (o: OsLida) => ({
 });
 
 export function resumoOs(
-  o: OsLida,
+  o: OrdemServico,
   n: Nomes,
-  equipamentos: ReadonlyMap<number, EquipamentoLido>,
+  equipamentos: ReadonlyMap<number, EquipamentoManutencao>,
   sla: Readonly<Record<PrioridadeOs, SlaPrioridade>>,
   agora: string,
 ): OsResumo {
@@ -175,13 +175,13 @@ export function resumoOs(
 }
 
 export function detalheOs(
-  o: OsLida,
+  o: OrdemServico,
   n: Nomes,
   x: {
-    readonly equipamento: EquipamentoLido | null;
-    readonly recurso: RecursoAgendaLido | null;
-    readonly cobertura: CoberturaLida | null;
-    readonly eventos: readonly EventoOsLido[];
+    readonly equipamento: EquipamentoManutencao | null;
+    readonly recurso: RecursoDeAgenda | null;
+    readonly cobertura: CoberturaManutencao | null;
+    readonly eventos: readonly EventoOrdem[];
     readonly sla: Readonly<Record<PrioridadeOs, SlaPrioridade>>;
     readonly agora: string;
     readonly quem: QuemAge;
@@ -244,8 +244,8 @@ export function detalheOs(
 }
 
 export function painelDoPlano(
-  planos: readonly PlanoManutencaoLido[],
-  equipamentos: ReadonlyMap<number, EquipamentoLido>,
+  planos: readonly PlanoManutencao[],
+  equipamentos: ReadonlyMap<number, EquipamentoManutencao>,
   hoje: string,
   antecedenciaPadrao: number,
 ): PainelPlano {
@@ -281,7 +281,7 @@ export function painelDoPlano(
 
 /** Planos vencidos por equipamento (a coluna da lista). */
 export function vencidosPorEquipamento(
-  planos: readonly PlanoManutencaoLido[],
+  planos: readonly PlanoManutencao[],
   hoje: string,
   antecedenciaPadrao: number,
 ): Map<number, number> {

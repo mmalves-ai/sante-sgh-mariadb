@@ -121,7 +121,7 @@ export class SusAihController {
   @HttpCode(200)
   @Permissao('faturamento.susAih.registrarFaixa')
   @AuditadoNoHandler(
-    'faturamento.registrarFaixaAih: SGH_FAT_SUS_FAIXA_AIH com a SGH_TRILHA na mesma transação',
+    'faturamento.registrarFaixaAih: faixa_numeracao_aih com a trilha_auditoria na mesma transação',
   )
   async registrarFaixa(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<FaixaAihLida> {
     return this.aih.registrarFaixa(await this.base.sessao(req), validar(esquemaRegistrarFaixaAih, corpo));
@@ -135,7 +135,7 @@ export class SusAihController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<InternacaoParaAih> {
     const r = idDaRota(registro);
-    req.sghAlvo = { tabelaAlvo: 'RICADINT', idAlvo: String(r) };
+    req.sghAlvo = { tabelaAlvo: 'internacao', idAlvo: String(r) };
     return this.aih.internacao(await this.base.sessao(req), r);
   }
 
@@ -144,7 +144,7 @@ export class SusAihController {
   @Auditar(E.faturamentoSusLido.codigo)
   async listar(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<PaginaAihs> {
     const f = validar(esquemaFiltroAihs, q);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_AIH', idAlvo: f.situacao ?? 'todas' };
+    req.sghAlvo = { tabelaAlvo: 'conta_aih', idAlvo: f.situacao ?? 'todas' };
     return this.aih.listar(await this.base.sessao(req), f);
   }
 
@@ -152,7 +152,7 @@ export class SusAihController {
   @HttpCode(200)
   @Permissao('faturamento.susAih.registrar')
   @AuditadoNoHandler(
-    'faturamento.registrarAih: SGH_FAT_SUS_AIH e SGH_FAT_SUS_AIH_ITEM com a SGH_TRILHA na mesma transação',
+    'faturamento.registrarAih: conta_aih e conta_aih_procedimento com a trilha_auditoria na mesma transação',
   )
   async registrar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<AihLida> {
     return this.aih.registrar(await this.base.sessao(req), validar(esquemaRegistrarAih, corpo));
@@ -163,7 +163,7 @@ export class SusAihController {
   @Auditar(E.faturamentoSusLido.codigo)
   async espelho(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<EspelhoAih> {
     const n = idDaRota(id);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_AIH', idAlvo: String(n) };
+    req.sghAlvo = { tabelaAlvo: 'conta_aih', idAlvo: String(n) };
     return this.aih.espelho(await this.base.sessao(req), n);
   }
 
@@ -171,7 +171,7 @@ export class SusAihController {
   @HttpCode(201)
   @Permissao('faturamento.susAih.registrar')
   @AuditadoNoHandler(
-    'faturamento.gerarSisaih: SGH_FAT_SUS_ARQUIVO e as AIHs apresentadas com a SGH_TRILHA (hash e contagens)',
+    'faturamento.gerarSisaih: arquivo e as AIHs apresentadas com a trilha_auditoria (hash e contagens)',
   )
   async gerarSisaih(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ArquivoSusGerado> {
     return this.aih.gerarSisaih(await this.base.sessao(req), validar(esquemaGerarSisaih, corpo));
@@ -180,7 +180,7 @@ export class SusAihController {
   @Get('aih/arquivos/:id/conteudo')
   @Permissao('faturamento.susAih.registrar')
   @AuditadoNoHandler(
-    'faturamento.arquivoSus.baixado: a SGH_TRILHA com o hash, gravada antes do envio do conteúdo',
+    'faturamento.arquivoSus.baixado: a trilha_auditoria com o hash, gravada antes do envio do conteúdo',
   )
   async baixar(
     @Param('id') id: string,
@@ -206,7 +206,7 @@ export class SusAihController {
   ): Promise<PaginaRetornosSus> {
     const f = validar(esquemaFiltroRetornosSus, q);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_FAT_SUS_RETORNO',
+      tabelaAlvo: 'retorno_sus',
       idAlvo: `${f.instrumento ?? ''} ${f.competencia ?? ''}`.trim(),
     };
     return this.aih.listarRetornos(await this.base.sessao(req), f);
@@ -216,7 +216,7 @@ export class SusAihController {
   @HttpCode(200)
   @Permissao('faturamento.susRetorno.importar')
   @AuditadoNoHandler(
-    'faturamento.importarRetornoSus: SGH_FAT_SUS_RETORNO e a situação da AIH com a SGH_TRILHA (contagens e hash)',
+    'faturamento.importarRetornoSus: retorno_sus e a situação da AIH com a trilha_auditoria (contagens e hash)',
   )
   async importarRetorno(
     @Body() corpo: unknown,
@@ -229,7 +229,7 @@ export class SusAihController {
   @HttpCode(200)
   @Permissao('faturamento.susRetorno.importar')
   @AuditadoNoHandler(
-    'faturamento.tratarRetornoSus: SGH_FAT_SUS_RETORNO (e a AIH reapresentada) com a SGH_TRILHA',
+    'faturamento.tratarRetornoSus: retorno_sus (e a AIH reapresentada) com a trilha_auditoria',
   )
   async tratarRetorno(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<RetornoSusLido> {
     return this.aih.tratarRetorno(await this.base.sessao(req), validar(esquemaTratarRetornoSus, corpo));

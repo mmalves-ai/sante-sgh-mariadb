@@ -14,12 +14,14 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAdt } from './modulo.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { EstadoNirMemoria } from './nir-memoria.js';
 import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/nir-spec');
@@ -46,11 +48,13 @@ beforeAll(async () => {
   rmSync(porFora, { force: true });
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    internacao: painel,
-    adt,
-    nir,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        adt: (ctx) => moduloAdt(ctx, { adt, nir }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -280,7 +284,7 @@ describe('NIR: reserva, mapa, admissão e expiração', () => {
     ).toBe('reserva-desatualizada');
   });
 
-  it('regra 12: o outro sistema ocupa o leito reservado; o mapa mostra o conflito e a fila avisa o NIR', async () => {
+  it('regra 12: a ocupação por fora do leito reservado aparece no mapa como incoerência, sem gravação na leitura', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
     const nirS = await entrar('SINT.INTERNACAO');
     const id = (await post(med, '/nir/solicitacoes', pedido(1006))).json().id as number;
@@ -303,12 +307,12 @@ describe('NIR: reserva, mapa, admissão e expiração', () => {
     const m = (await get(nirS, '/leitos/mapa')).json();
     const c = m.leitos.find((x: { chave: string }) => x.chave === enf.chave);
     expect(c.situacao).toBe('conflito');
-    expect(c.conflito).toMatchObject({ internacao: 990_044, registrado: true });
+    // Só leitura: o mapa mostra a incoerência e não grava conflito (no banco a internação no leito reservado é recusada).
+    expect(c.conflito).toMatchObject({ internacao: 990_044, registrado: false });
     const f = await fila(nirS);
-    expect(f.conflitos).toHaveLength(1);
-    expect(trilha.eventos.filter((x) => x.evento === 'internacao.reservaLeito.conflito')).toHaveLength(1);
+    expect(f.conflitos).toHaveLength(0);
     await get(nirS, '/leitos/mapa');
-    expect(trilha.eventos.filter((x) => x.evento === 'internacao.reservaLeito.conflito')).toHaveLength(1);
+    expect(trilha.eventos.filter((x) => x.evento === 'internacao.reservaLeito.conflito')).toHaveLength(0);
     rmSync(porFora, { force: true });
     // O NIR cancela a reserva e a solicitação volta à análise (nunca desfaz a ocupação do outro sistema).
     const reservas = (await get(nirS, '/nir/reservas')).json();

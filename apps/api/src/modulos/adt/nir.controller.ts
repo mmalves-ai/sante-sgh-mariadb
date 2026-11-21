@@ -21,10 +21,10 @@
 //   POST /api/nir/limites                          internacao.registrarLimitePermanencia
 //   GET  /api/nir/situacoes                        o de-para das 23 situações (proposto e aprovado)
 //   POST /api/nir/situacoes/:id/aprovar            internacao.aprovarDeparaSituacao
-// W0-07 (programa CRUD completo; todas com o motivo, a versão anterior na SGH_INT_ALTERACAO):
+// W0-07 (programa CRUD completo; todas com o motivo, a versão anterior na trilha de auditoria):
 //   POST /api/nir/solicitacoes/:id/corrigir        perfil, recursos e observação (a versão vista confere)
 //   POST /api/nir/solicitacoes/:id/excluir         a criada por engano, sem desdobramento (senha; recusa com a contagem)
-//   POST /api/nir/reservas/:id/alterar             outro leito e/ou nova validade (só no novo; a gravação no legado é do W1-06)
+//   POST /api/nir/reservas/:id/alterar             outro leito e/ou nova validade
 //   POST /api/nir/reservas/:id/excluir             a ativa criada por engano (a convertida em internação: 409)
 //   POST /api/nir/dpa/retirar                      retira a alta prevista vigente (versão nova marcada)
 //   POST /api/nir/barreiras/:id/alterar            descrição, responsável e prazo da barreira aberta
@@ -103,6 +103,7 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
+import { ApoioGravacaoIdempotente } from './apoio-idempotente.js';
 import {
   BATIDA_EVENTOS_MS,
   BATIDA_EVENTOS_PADRAO_MS,
@@ -173,7 +174,7 @@ export class NirController {
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(BATIDA_EVENTOS_MS) private readonly batidaMs: number = BATIDA_EVENTOS_PADRAO_MS,
   ) {
-    this.apoio = new ApoioGravacao<GravadorNir>(
+    this.apoio = new ApoioGravacaoIdempotente<GravadorNir>(
       { chave: CHAVE_LIBERACAO_NIR, nome: 'o NIR', operacoes: {} },
       porta,
       trilha,
@@ -360,12 +361,12 @@ export class NirController {
     return this.servico.situacoesDepara(ctxAdt(sessaoDe(req)));
   }
 
-  // ── Gravações (só SGH_, com a SGH_TRILHA na mesma transação) ──
+  // ── Gravações (com a trilha de auditoria na mesma transação) ──
 
   @Post('solicitacoes')
   @HttpCode(201)
   @Permissao(P.solicitacaoCriar)
-  @AuditadoNoHandler('internacao.solicitarLeito (SGH_INT_SOLIC_LEITO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.solicitarLeito (pedido_leito) com a trilha de auditoria na mesma transação')
   async solicitar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
     const e = corpo(esquemaSolicitarLeito, b);
@@ -418,7 +419,7 @@ export class NirController {
       EVENTOS_AUDITAVEIS.nirSolicitacaoCriada.codigo,
       'internacao.solicitacaoLeito.criar',
       (x: number) => ({
-        tabela: 'SGH_INT_SOLIC_LEITO',
+        tabela: 'pedido_leito',
         id: String(x),
         paciente,
         chave: `${e.origem}:${e.prioridade}`,
@@ -438,7 +439,7 @@ export class NirController {
           especialidade: e.especialidade ?? null,
           cid: e.cid ?? null,
           justificativa: e.justificativa,
-          situacaoLegado: situacaoEquivalente('solicitado', depara)?.codigo ?? null,
+          situacaoCodigo: situacaoEquivalente('solicitado', depara)?.codigo ?? null,
           vinculo: prof.vinculo,
           usuario: s.login,
         }),
@@ -451,7 +452,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.solicitacaoLer)
   @AuditadoNoHandler(
-    'internacao.transicionarSolicitacao (SGH_INT_SOLIC_LEITO_EVT) com a SGH_TRILHA na mesma transação',
+    'internacao.transicionarSolicitacao (pedido_leito) com a trilha de auditoria na mesma transação',
   )
   async transicionar(
     @Param('id') id: string,
@@ -483,7 +484,7 @@ export class NirController {
       EVENTOS_AUDITAVEIS.nirSolicitacaoTransicao.codigo,
       ACOES_NIR[e.acao] as string,
       {
-        tabela: 'SGH_INT_SOLIC_LEITO',
+        tabela: 'pedido_leito',
         id: String(sol.id),
         paciente: sol.paciente,
         chave: `${t.de}>${t.para}`,
@@ -509,7 +510,7 @@ export class NirController {
           prioridade: e.acao === 'priorizar' ? (e.prioridade ?? null) : null,
           prazoMinDesdeOPedido: e.acao === 'priorizar' && e.prioridade ? p.prazos[e.prioridade] : null,
           motivo: e.motivo ?? null,
-          situacaoLegado: situacaoEquivalente(t.para, depara)?.codigo ?? null,
+          situacaoCodigo: situacaoEquivalente(t.para, depara)?.codigo ?? null,
           reserva: reserva?.id ?? null,
           usuario: s.login,
         });
@@ -523,7 +524,7 @@ export class NirController {
   @HttpCode(201)
   @Permissao(P.reservaCriar)
   @AuditadoNoHandler(
-    'internacao.registrarReserva (SGH_INT_RESERVA_LEITO) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarReserva (reserva_leito) com a trilha de auditoria na mesma transação',
   )
   async reservar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -562,7 +563,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirReservaRegistrada.codigo,
       P.reservaCriar,
-      (x: number) => ({ tabela: 'SGH_INT_RESERVA_LEITO', id: String(x), paciente: sol.paciente, chave }),
+      (x: number) => ({ tabela: 'reserva_leito', id: String(x), paciente: sol.paciente, chave }),
       async (g) => {
         const reserva = await g.reservar({
           solicitacao: sol.id,
@@ -576,7 +577,7 @@ export class NirController {
           acao: 'reservar',
           de: t.de,
           para: 'reservado',
-          situacaoLegado: situacaoEquivalente('reservado', depara)?.codigo ?? null,
+          situacaoCodigo: situacaoEquivalente('reservado', depara)?.codigo ?? null,
           reserva,
           motivo: decisao.comExcecao ? 'Exceção ao perfil autorizada pelo supervisor' : null,
           usuario: s.login,
@@ -592,7 +593,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.reservaConfirmar)
   @AuditadoNoHandler(
-    'internacao.confirmarReserva (SGH_INT_RESERVA_LEITO) com a SGH_TRILHA na mesma transação',
+    'internacao.confirmarReserva (reserva_leito) com a trilha de auditoria na mesma transação',
   )
   async confirmar(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -602,7 +603,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirReservaConfirmada.codigo,
       P.reservaConfirmar,
-      { tabela: 'SGH_INT_RESERVA_LEITO', id: String(reserva) },
+      { tabela: 'reserva_leito', id: String(reserva) },
       (g) => g.confirmarReserva({ reserva, validadeMin: p.validadeReservaMin, usuario: s.login }),
     );
     this.avisar(s);
@@ -612,7 +613,7 @@ export class NirController {
   @Post('reservas/:id/cancelar')
   @HttpCode(200)
   @Permissao(P.reservaCancelar)
-  @AuditadoNoHandler('internacao.cancelarReserva (SGH_INT_RESERVA_LEITO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.cancelarReserva (reserva_leito) com a trilha de auditoria na mesma transação')
   async cancelarReserva(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -638,7 +639,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirReservaCancelada.codigo,
       P.reservaCancelar,
-      { tabela: 'SGH_INT_RESERVA_LEITO', id: String(reserva.id), paciente: sol.paciente },
+      { tabela: 'reserva_leito', id: String(reserva.id), paciente: sol.paciente },
       async (g) => {
         const n = await g.encerrarReserva({
           reserva: reserva.id,
@@ -663,7 +664,7 @@ export class NirController {
             acao: 'liberarReserva',
             de: sol.estado,
             para: 'em_analise',
-            situacaoLegado: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
+            situacaoCodigo: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
             reserva: reserva.id,
             motivo: e.motivo,
             usuario: s.login,
@@ -678,7 +679,7 @@ export class NirController {
   @Post('dpa')
   @HttpCode(201)
   @Permissao(P.altaPrevistaEditar)
-  @AuditadoNoHandler('internacao.registrarDpa (SGH_INT_DPA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('internacao.registrarDpa (previsao_alta) com a trilha de auditoria na mesma transação')
   async dpa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarDpa, b);
@@ -705,7 +706,7 @@ export class NirController {
       EVENTOS_AUDITAVEIS.nirDpaAlterada.codigo,
       P.altaPrevistaEditar,
       (x: number) => ({
-        tabela: 'SGH_INT_DPA',
+        tabela: 'previsao_alta',
         id: String(x),
         chave: `${i.reg}:${e.anterior ? 'mudanca' : 'inicial'}`,
       }),
@@ -728,7 +729,7 @@ export class NirController {
   @HttpCode(201)
   @Permissao(P.barreiraRegistrar)
   @AuditadoNoHandler(
-    'internacao.registrarBarreiraAlta (SGH_INT_BARREIRA_ALTA) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarBarreiraAlta (barreira_alta) com a trilha de auditoria na mesma transação',
   )
   async barreira(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -749,7 +750,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirBarreiraRegistrada.codigo,
       P.barreiraRegistrar,
-      (x: number) => ({ tabela: 'SGH_INT_BARREIRA_ALTA', id: String(x), chave: `${i.reg}:${e.tipo}` }),
+      (x: number) => ({ tabela: 'barreira_alta', id: String(x), chave: `${i.reg}:${e.tipo}` }),
       (g) =>
         g.registrarBarreira({
           reg: i.reg,
@@ -769,7 +770,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.barreiraResolver)
   @AuditadoNoHandler(
-    'internacao.resolverBarreiraAlta (SGH_INT_BARREIRA_ALTA) com a SGH_TRILHA na mesma transação',
+    'internacao.resolverBarreiraAlta (barreira_alta) com a trilha de auditoria na mesma transação',
   )
   async resolver(
     @Param('id') id: string,
@@ -786,7 +787,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirBarreiraResolvida.codigo,
       P.barreiraResolver,
-      { tabela: 'SGH_INT_BARREIRA_ALTA', id: String(barreira), chave: `${x.reg}` },
+      { tabela: 'barreira_alta', id: String(barreira), chave: `${x.reg}` },
       (g) =>
         g.resolverBarreira({
           barreira,
@@ -803,7 +804,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.parametroEditar)
   @AuditadoNoHandler(
-    'internacao.registrarLimitePermanencia (SGH_INT_LIMITE_PERMAN) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarLimitePermanencia (limite_permanencia) com a trilha de auditoria na mesma transação',
   )
   async limite(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -812,7 +813,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirLimiteDefinido.codigo,
       P.parametroEditar,
-      { tabela: 'SGH_INT_LIMITE_PERMAN', chave: `${e.escopo}:${e.chave}` },
+      { tabela: 'limite_permanencia', chave: `${e.escopo}:${e.chave}` },
       (g) =>
         g.gravarLimite({
           escopo: e.escopo,
@@ -833,7 +834,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.parametroEditar)
   @AuditadoNoHandler(
-    'internacao.aprovarDeparaSituacao (SGH_INT_SITREG_DEPARA) com a SGH_TRILHA na mesma transação',
+    'internacao.aprovarDeparaSituacao (situacao_pedido_leito) com a trilha de auditoria na mesma transação',
   )
   async aprovar(
     @Param('id') id: string,
@@ -849,7 +850,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirDeparaAprovado.codigo,
       P.parametroEditar,
-      { tabela: 'SGH_INT_SITREG_DEPARA', id: String(situacao), chave: `${situacao}>${e.estado}` },
+      { tabela: 'situacao_pedido_leito', id: String(situacao), chave: `${situacao}>${e.estado}` },
       (g) =>
         g.aprovarDepara({ situacao, estado: e.estado, observacao: e.observacao ?? null, usuario: s.login }),
     );
@@ -862,7 +863,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.solicitacaoPriorizar)
   @AuditadoNoHandler(
-    'correção da solicitação de leito (SGH_INT_SOLIC_LEITO) com a SGH_TRILHA na mesma transação',
+    'correção da solicitação de leito (pedido_leito) com a trilha de auditoria na mesma transação',
   )
   async corrigir(
     @Param('id') id: string,
@@ -876,7 +877,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirSolicitacaoTransicao.codigo,
       P.solicitacaoPriorizar,
-      { tabela: 'SGH_INT_SOLIC_LEITO', id: String(sol.id), paciente: sol.paciente, chave: 'corrigir' },
+      { tabela: 'pedido_leito', id: String(sol.id), paciente: sol.paciente, chave: 'corrigir' },
       (g) =>
         g.corrigirSolicitacao({
           solicitacao: sol.id,
@@ -896,7 +897,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.solicitacaoCancelar)
   @AuditadoNoHandler(
-    'exclusão da solicitação criada por engano (SGH_INT_SOLIC_LEITO, retrato na SGH_HIST_EXCLUSAO) com a SGH_TRILHA na mesma transação',
+    'exclusão da solicitação criada por engano (pedido_leito, retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
   )
   async excluir(
     @Param('id') id: string,
@@ -913,7 +914,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirSolicitacaoTransicao.codigo,
       P.solicitacaoCancelar,
-      { tabela: 'SGH_INT_SOLIC_LEITO', id: String(sol.id), paciente: sol.paciente, chave: 'excluir' },
+      { tabela: 'pedido_leito', id: String(sol.id), paciente: sol.paciente, chave: 'excluir' },
       (g) => g.excluirSolicitacao({ solicitacao: sol.id, motivo: e.motivo, usuario: s.login }),
     );
     this.avisar(s);
@@ -943,7 +944,7 @@ export class NirController {
   @Post('reservas/:id/alterar')
   @HttpCode(200)
   @Permissao(P.reservaCriar)
-  @AuditadoNoHandler('alteração da reserva (SGH_INT_RESERVA_LEITO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alteração da reserva (reserva_leito) com a trilha de auditoria na mesma transação')
   async alterarReserva(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -979,7 +980,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirReservaRegistrada.codigo,
       P.reservaCriar,
-      { tabela: 'SGH_INT_RESERVA_LEITO', id: String(r.id), paciente: sol.paciente, chave: 'alterar' },
+      { tabela: 'reserva_leito', id: String(r.id), paciente: sol.paciente, chave: 'alterar' },
       (g) =>
         g.alterarReserva({
           reserva: r.id,
@@ -1002,7 +1003,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.reservaCancelar)
   @AuditadoNoHandler(
-    'exclusão da reserva criada por engano (SGH_INT_RESERVA_LEITO, retrato na SGH_HIST_EXCLUSAO) com a SGH_TRILHA na mesma transação',
+    'exclusão da reserva criada por engano (reserva_leito, retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
   )
   async excluirReserva(
     @Param('id') id: string,
@@ -1019,7 +1020,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirReservaCancelada.codigo,
       P.reservaCancelar,
-      { tabela: 'SGH_INT_RESERVA_LEITO', id: String(r.id), paciente: sol.paciente, chave: 'excluir' },
+      { tabela: 'reserva_leito', id: String(r.id), paciente: sol.paciente, chave: 'excluir' },
       async (g) => {
         const { retrato } = await g.excluirReserva({ reserva: r.id, motivo: e.motivo, usuario: s.login });
         // A solicitação reservada volta à análise na mesma transação (nunca fica reservada sem reserva). O evento
@@ -1031,7 +1032,7 @@ export class NirController {
             acao: 'liberarReserva',
             de: sol.estado,
             para: 'em_analise',
-            situacaoLegado: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
+            situacaoCodigo: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
             reserva: null,
             motivo:
               `Reserva nº ${r.id} excluída (criada por engano; retrato nº ${retrato} no histórico de exclusões): ${e.motivo}`.slice(
@@ -1051,7 +1052,7 @@ export class NirController {
   @HttpCode(201)
   @Permissao(P.altaPrevistaEditar)
   @AuditadoNoHandler(
-    'retirada da alta prevista (SGH_INT_DPA, versão nova) com a SGH_TRILHA na mesma transação',
+    'retirada da alta prevista (previsao_alta, versão nova) com a trilha de auditoria na mesma transação',
   )
   async retirarDpa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -1070,7 +1071,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirDpaAlterada.codigo,
       P.altaPrevistaEditar,
-      (x: number) => ({ tabela: 'SGH_INT_DPA', id: String(x), chave: `${i.reg}:retirada` }),
+      (x: number) => ({ tabela: 'previsao_alta', id: String(x), chave: `${i.reg}:retirada` }),
       (g) =>
         g.retirarDpa({
           reg: i.reg,
@@ -1088,7 +1089,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.barreiraRegistrar)
   @AuditadoNoHandler(
-    'alteração da barreira de alta (SGH_INT_BARREIRA_ALTA) com a SGH_TRILHA na mesma transação',
+    'alteração da barreira de alta (barreira_alta) com a trilha de auditoria na mesma transação',
   )
   async alterarBarreira(
     @Param('id') id: string,
@@ -1105,7 +1106,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirBarreiraRegistrada.codigo,
       P.barreiraRegistrar,
-      { tabela: 'SGH_INT_BARREIRA_ALTA', id: String(barreira), chave: `${x.reg}:alterar` },
+      { tabela: 'barreira_alta', id: String(barreira), chave: `${x.reg}:alterar` },
       (g) =>
         g.alterarBarreira({
           barreira,
@@ -1124,7 +1125,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.barreiraResolver)
   @AuditadoNoHandler(
-    'encerramento da barreira de alta (SGH_INT_BARREIRA_ALTA) com a SGH_TRILHA na mesma transação',
+    'encerramento da barreira de alta (barreira_alta) com a trilha de auditoria na mesma transação',
   )
   async encerrarBarreira(
     @Param('id') id: string,
@@ -1142,7 +1143,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirBarreiraResolvida.codigo,
       P.barreiraResolver,
-      { tabela: 'SGH_INT_BARREIRA_ALTA', id: String(barreira), chave: `${x.reg}:${e.resultado}` },
+      { tabela: 'barreira_alta', id: String(barreira), chave: `${x.reg}:${e.resultado}` },
       (g) =>
         g.resolverBarreira({
           barreira,
@@ -1159,7 +1160,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.parametroEditar)
   @AuditadoNoHandler(
-    'remoção do limite de permanência (SGH_INT_LIMITE_PERMAN) com a SGH_TRILHA na mesma transação',
+    'remoção do limite de permanência (limite_permanencia) com a trilha de auditoria na mesma transação',
   )
   async removerLimite(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);
@@ -1168,7 +1169,7 @@ export class NirController {
       s,
       EVENTOS_AUDITAVEIS.nirLimiteDefinido.codigo,
       P.parametroEditar,
-      { tabela: 'SGH_INT_LIMITE_PERMAN', chave: `${e.escopo}:${e.chave}:remover` },
+      { tabela: 'limite_permanencia', chave: `${e.escopo}:${e.chave}:remover` },
       (g) => g.removerLimite({ escopo: e.escopo, chave: e.chave, motivo: e.motivo, usuario: s.login }),
     );
     this.avisar(s);

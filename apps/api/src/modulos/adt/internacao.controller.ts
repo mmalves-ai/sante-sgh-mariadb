@@ -1,5 +1,5 @@
 // Internação (M21; ficha, seções 5 e 7): pré-internação, admissão, guias, trocas, procedimentos extras (leitura), alta
-// em dois tempos (a médica no novo; a saída no outro sistema) e impressos, sobre a mesma internação do outro sistema:
+// em dois tempos (a decisão médica e a saída pela recepção) e impressos, sobre a internação do banco do cliente:
 //   GET  /api/internacoes/gravacao                 as funcionalidades e cada ação gravam agora? (motivo)
 //   GET  /api/internacoes/apoio                    convênios, especialidades, motivos de alta, acomodações, setores…
 //   GET  /api/internacoes?termo&bloco              internados (com a alta médica decidida; auditado: lista com nomes)
@@ -24,13 +24,10 @@ import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, 
 import {
   type ApoioInternacaoTela,
   type DestinoAlta,
-  esquemaCancelarAlta,
-  esquemaCancelarAltaMedica,
   esquemaCorrigirPreInternacao,
   esquemaDarAlta,
   esquemaEmitirImpressoInternacao,
   esquemaExcluirInternacao,
-  esquemaInternar,
   esquemaPreInternar,
   esquemaRegistrarAltaMedica,
   esquemaRegistrarGuia,
@@ -72,6 +69,7 @@ import { ApoiosAdt, ctxAdt, janelaOutroSistema } from './apoios.js';
 import { AVISOS_ADT } from './simbolos.js';
 import { type DadosImpressoInternacao, PORTA_ADT, type PortaAdt } from './porta.js';
 import { ServicoAdt } from './servico.js';
+import { esquemaCancelarAltaBanco, esquemaCancelarAltaMedicaBanco, esquemaInternarBanco } from './esquemas.js';
 
 const TROCAS = {
   convenio: { op: 'internacao.trocarConvenio', esquema: esquemaTrocarConvenio, msg: 'Convênio trocado.' },
@@ -259,8 +257,8 @@ export class InternacaoController {
   @AuditadoNoHandler('internacao.internar pelo executor (trilha na mesma transação)')
   async internar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
-    const e = corpo(esquemaInternar, b);
-    // O leito no mapa operacional: bloqueado ou em higienização no novo não admite aqui (o outro sistema pode).
+    const e = corpo(esquemaInternarBanco, b);
+    // O leito no mapa operacional: bloqueado, em higienização ou reservado não admite a internação.
     // M44: a admissão vinda do NIR pode usar o leito reservado para a solicitação dela (só ela).
     const l = await this.servico.leitoNoMapa(
       ctxAdt(s),
@@ -340,7 +338,7 @@ export class InternacaoController {
   @Post(':reg/alta-medica')
   @HttpCode(201)
   @Permissao('internacao.altaMedica.registrar')
-  @AuditadoNoHandler('alta médica (SGH_INT_ALTA_MEDICA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alta médica (alta_medica) com a trilha de auditoria na mesma transação')
   async altaMedica(
     @Param('reg') reg: string,
     @Body() b: unknown,
@@ -380,7 +378,7 @@ export class InternacaoController {
       s,
       EVENTOS_AUDITAVEIS.internacaoAltaMedica.codigo,
       'internacao.altaMedica.registrar',
-      (x: number) => ({ tabela: 'SGH_INT_ALTA_MEDICA', id: String(x), paciente: d.paciente }),
+      (x: number) => ({ tabela: 'alta_medica', id: String(x), paciente: d.paciente }),
       (g) =>
         g.registrarAltaMedica({
           reg: d.reg,
@@ -406,14 +404,14 @@ export class InternacaoController {
   @Post(':reg/alta-medica/cancelar')
   @HttpCode(200)
   @Permissao('internacao.altaMedica.registrar')
-  @AuditadoNoHandler('cancelamento da alta médica (SGH_INT_ALTA_MEDICA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('cancelamento da alta médica (alta_medica) com a trilha de auditoria na mesma transação')
   async cancelarAltaMedica(
     @Param('reg') reg: string,
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
   ): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
-    const e = corpo(esquemaCancelarAltaMedica, { ...(b as object), internacao: idDaRota(reg) });
+    const e = corpo(esquemaCancelarAltaMedicaBanco, { ...(b as object), internacao: idDaRota(reg) });
     const prof = await this.porta.profissional(ctxAdt(s), s.login);
     if (!prof?.conselhoAtivo)
       throw new ErroProblema(
@@ -429,8 +427,14 @@ export class InternacaoController {
       s,
       EVENTOS_AUDITAVEIS.internacaoAltaMedica.codigo,
       'internacao.altaMedica.registrar',
-      (x: number) => ({ tabela: 'SGH_INT_ALTA_MEDICA', id: String(x) }),
-      (g) => g.cancelarAltaMedica({ reg: e.internacao, motivo: e.motivo, usuario: s.login }),
+      (x: number) => ({ tabela: 'alta_medica', id: String(x) }),
+      (g) =>
+        g.cancelarAltaMedica({
+          reg: e.internacao,
+          motivo: e.motivo,
+          motivoCodigo: e.motivoCancelamento ?? null,
+          usuario: s.login,
+        }),
     );
     return { ok: true, resultado: { altaMedica: id }, repetida: false, mensagem: 'Alta médica cancelada.' };
   }
@@ -491,7 +495,7 @@ export class InternacaoController {
   async cancelarAlta(@Param('reg') reg: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const { senha, ...resto } = (b ?? {}) as Record<string, unknown>;
-    const e = corpo(esquemaCancelarAlta, { ...resto, internacao: idDaRota(reg) });
+    const e = corpo(esquemaCancelarAltaBanco, { ...resto, internacao: idDaRota(reg) });
     await exigir(s, 'internacao.alta.cancelar', this.trilha);
     const reautenticadoEm = await this.reautenticar(req, senha);
     return this.avisar(

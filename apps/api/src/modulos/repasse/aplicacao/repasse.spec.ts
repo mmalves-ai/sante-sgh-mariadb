@@ -11,6 +11,8 @@ import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
 import { PortaFinanceiroMemoria } from '../../financeiro/porta-memoria.js';
+import { moduloFinanceiro } from '../../financeiro/modulo.js';
+import { moduloRepasse } from '../modulo.js';
 import { PortaRepasseMemoria } from '../porta-memoria.js';
 import { ServicoRepasse } from '../servico.js';
 import { htmlRpaEmitido } from '../documentos.js';
@@ -57,15 +59,16 @@ const post = (s: Sessao, url: string, payload: unknown = {}) =>
   });
 
 beforeAll(async () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'repasse,financeiro' };
   financeiro = new PortaFinanceiroMemoria({ estado: () => 'verde' });
   repasse = new PortaRepasseMemoria({ estado: () => 'verde' }, financeiro);
   trilha = new RegistradorTrilhaMemoria();
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    financeiro,
-    repasse,
-    vigia: null,
+    registro: {
+      repasse: async () => ({ modulo: (ctx) => moduloRepasse(ctx, { porta: repasse }) }),
+      financeiro: async () => ({ modulo: (ctx) => moduloFinanceiro(ctx, { porta: financeiro }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -172,17 +175,14 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
     expect((await post(a, '/repasse/apuracoes', { empresa: 1, competencia })).statusCode).toBe(409);
     const outro = await post(a, '/repasse/apuracoes', { empresa: 1, competencia: '2026-06' });
     expect(outro.statusCode).toBe(409);
-    expect(outro.json().codigo).toBe('periodo-apurado-no-legado');
+    expect(outro.json().codigo).toBe('periodo-ja-apurado');
     // O demonstrativo do médico com a conta de cada item.
     const d = (await get(a, `/repasse/apuracoes/${id}/demonstrativo/7001`)).json();
     expect(d.valor).toBe(333);
     expect(d.itens[0].conta).toMatch(/× 18,5000% =/);
-    // D-DOURADO-33: a apuração em simulação (a integração dos itens desligada) não gera lançamento; nada vai ao
-    // RPLANEVE e o período continua sendo lançado no outro sistema (nada de repasse em dobro).
-    expect(ap.simulacao).toBe(true);
-    const l = await post(a, `/repasse/apuracoes/${id}/lancamentos`, { evento: 40 });
-    expect(l.statusCode, l.body).toBe(409);
-    expect(l.json().codigo).toBe('apuracao-em-simulacao');
+    // A apuração gravada vale (o sistema é o de registro do repasse): não é simulação. O lançamento da aprovada é
+    // conferido no teste da porta própria (os testes seguintes contam com o período sem lançamento da apuração).
+    expect(ap.simulacao).toBe(false);
     // Nem pela rota genérica: a origem apuração só sai pela apuração aprovada.
     const g = await post(a, '/repasse/lancamentos', {
       origem: 'apuracao',
@@ -305,7 +305,7 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
     const doc = await get(a, `/repasse/rpas/${r.json().ids.rpa}/pdf`);
     expect(doc.statusCode).toBe(200);
     expect(String(doc.headers['content-type'])).toMatch(/application\/pdf|text\/html/);
-    const relido = await repasse.rpaDetalhe({ rede: '', hospital: 'aa' }, Number(r.json().ids.rpa));
+    const relido = await repasse.rpaDetalhe({ cliente: 'sintetico', estabelecimento: null, usuario: null, correlacao: 'teste', hospital: 'aa' } as never, Number(r.json().ids.rpa));
     const html = htmlRpaEmitido({ ...relido!, eventos: new Map([[40, 'Honorários']]) });
     expect(html).toContain(`RPA nº ${r.json().ids.numero}`);
     expect(html).toContain('MEDICO SINTETICO A');
@@ -373,7 +373,7 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
       regrasUsadas: async () => new Set<number>(),
     };
     const sv = new ServicoRepasse(porta as never, new RegistradorTrilhaMemoria(), null, null);
-    const s = { porta: { rede: 'r', hospital: 'aa' } } as never;
+    const s = { porta: { cliente: 'sintetico', estabelecimento: null, usuario: null, correlacao: 'teste', hospital: 'aa' } as never } as never;
     const p1 = await sv.regras(s, { convenio: 1, data: '2026-10-01', depoisDe: 0 });
     expect([p1.regras.length, p1.depoisDe]).toEqual([500, 500]);
     const p3 = await sv.regras(s, { convenio: 1, data: '2026-10-01', depoisDe: 1000 });

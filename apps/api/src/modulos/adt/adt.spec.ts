@@ -13,10 +13,12 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAdt } from './modulo.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/adt-spec');
@@ -39,10 +41,13 @@ beforeAll(async () => {
   rmSync(porFora, { force: true });
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    internacao: painel,
-    adt,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        adt: (ctx) => moduloAdt(ctx, { adt }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -272,7 +277,7 @@ describe('alta em dois tempos e a higienização até a liberação', () => {
     // O início levou a situação 2 ao outro sistema (a única seguinte que ele já gravou).
     const painel = (await get(hig, '/higienizacao/fila')).json();
     const item = painel.itens.find((x: { solicitacao: number }) => x.solicitacao === sol);
-    expect(item.situacaoLegado).toBe(2);
+    // A execução é uma gravação só no banco (sem o avanço da situação por código antigo numa transação à parte).
     expect(item.prazo).not.toBeNull();
     expect(item.profissional.codigo).toBe(1);
     expect(item.historico.map((x: { etapa: string }) => x.etapa)).toEqual([
@@ -343,7 +348,7 @@ describe('alta em dois tempos e a higienização até a liberação', () => {
 });
 
 describe('bloqueio no novo e o conflito com o outro sistema (regra 8)', () => {
-  it('bloqueia o leito livre; o outro sistema ocupa mesmo assim; o mapa mostra o conflito e registra', async () => {
+  it('bloqueia o leito livre; a ocupação por fora aparece no mapa como incoerência, sem gravação na leitura', async () => {
     const s = await entrar('SINT.INTERNACAO');
     const [l] = await livres(s, 'APT1');
     expect((await post(s, '/leitos/estados', { leito: l!.leito, estado: 'bloqueio' })).statusCode).toBe(400);
@@ -377,14 +382,12 @@ describe('bloqueio no novo e o conflito com o outro sistema (regra 8)', () => {
     expect(conf.situacao).toBe('conflito');
     expect(conf.conflito?.internacao).toBe(990_001);
     expect(m.resumo.conflitos).toBeGreaterThanOrEqual(1);
-    expect(trilha.eventos.some((x) => x.evento === 'leitos.leito.conflito')).toBe(true);
-    // As releituras do mapa (o canal de eventos e o temporizador) não registram de novo: uma linha só na trilha.
+    // A incoerência é só leitura: a leitura do mapa nunca grava (no banco a ocupação do leito bloqueado é recusada).
     const conflitos = () => trilha.eventos.filter((x) => x.evento === 'leitos.leito.conflito').length;
-    const antes = conflitos();
+    expect(conflitos()).toBe(0);
     const m2 = (await get(s, '/leitos/mapa')).json();
-    expect(m2.leitos.find((x: LeitoMapa) => x.chave === l!.chave).conflito.registrado).toBe(true);
-    await get(s, '/leitos/mapa');
-    expect(conflitos()).toBe(antes);
+    expect(m2.leitos.find((x: LeitoMapa) => x.chave === l!.chave).conflito.registrado).toBe(false);
+    expect(conflitos()).toBe(0);
     rmSync(porFora, { force: true });
     expect(
       (await post(s, '/leitos/estados/encerrar', { leito: l!.leito, estado: 'bloqueio' })).statusCode,

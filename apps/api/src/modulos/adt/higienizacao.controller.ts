@@ -4,7 +4,8 @@
 //   GET  /api/higienizacao/eventos                 canal de eventos (text/event-stream): só avisa que mudou
 //   POST /api/higienizacao/solicitacoes            hotelaria.solicitarLimpeza (manual ou QR code do leito)
 //   POST /api/higienizacao/solicitacoes/:id/etapas a etapa no novo (atribuir, iniciar, pausar, concluir, inspecionar,
-//                                                  reprovar, liberar); o início leva a situação 2 ao outro sistema
+//                                                  reprovar, liberar), numa gravação só; a liberação encerra o
+//                                                  período de higienização do leito na mesma transação
 //   POST /api/higienizacao/fotos                   a foto da limpeza ao armazenamento de objetos local
 //   GET  /api/higienizacao/fotos?chave             a foto (a inspeção confere)
 //   GET  /api/higienizacao/indicadores?de&ate      W0-07 (M3): giro do leito, no prazo e execução, com numerador e
@@ -34,7 +35,7 @@ import {
   type Precaucao,
   type ResultadoInternacao,
 } from '@sgh/contratos';
-import { conferirEtapa, prazoMinutos, situacaoLegadoDaEtapa } from '@sgh/dominio-hotelaria';
+import { conferirEtapa, prazoMinutos } from '@sgh/dominio-hotelaria';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -207,7 +208,7 @@ export class HigienizacaoController {
   @Post('solicitacoes/:id/etapas')
   @HttpCode(200)
   @Permissao('hotelaria.limpeza.ler')
-  @AuditadoNoHandler('etapa da higienização (SGH_HOT_LIMPEZA_ETAPA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('etapa da higienização (solicitacao_limpeza) com a trilha de auditoria na mesma transação')
   async etapa(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -264,14 +265,6 @@ export class HigienizacaoController {
         'Envie a foto antes de registrar a etapa.',
         { campos: ['foto'] },
       );
-    // O início da limpeza leva ao outro sistema a única situação seguinte que ele já gravou (2); o resto fica no novo.
-    if (situacaoLegadoDaEtapa(e.etapa) === 2 && sol.situacaoLegado === 1)
-      await this.apoios.limpeza.executar(
-        s,
-        'hotelaria.avancarLimpeza',
-        { solicitacao: e.solicitacao, situacao: 2 },
-        'Situação avançada.',
-      );
     const prazo =
       e.etapa === 'atribuido' && ultima('prazo') === null
         ? prazoMinutos(tipoLimpeza, sol.criticidade, await this.parametrosPrazo(s))
@@ -284,9 +277,14 @@ export class HigienizacaoController {
       s,
       evento,
       permissao,
-      (x: number) => ({ tabela: 'SGH_HOT_LIMPEZA_ETAPA', id: String(x), chave: chaveTextoLeito(sol.leito) }),
-      async (g) => {
-        const r = await g.gravarEtapaLimpeza({
+      (x: number) => ({
+        // A inspeção grava a linha da inspeção; as demais etapas, a própria solicitação.
+        tabela: e.etapa === 'inspecionado' || e.etapa === 'reprovado' ? 'inspecao_limpeza' : 'solicitacao_limpeza',
+        id: String(x),
+        chave: chaveTextoLeito(sol.leito),
+      }),
+      (g) =>
+        g.gravarEtapaLimpeza({
           solicitacao: e.solicitacao,
           leitoEspelho: sol.espelho,
           leito: sol.leito,
@@ -300,12 +298,7 @@ export class HigienizacaoController {
           observacao: e.observacao ?? null,
           aparelho: estacaoDaRequisicao(s.req).slice(0, 80),
           usuario: s.login,
-        });
-        // A liberação no novo: o leito sai da higienização (o outro sistema já o vê livre desde a alta).
-        if (e.etapa === 'liberado')
-          await g.encerrarEstadoLeito({ leito: sol.leito, estado: 'higienizacao', usuario: s.login });
-        return r;
-      },
+        }),
     );
     this.avisos?.avisar(s.hospital);
     const mensagens: Record<string, string> = {
@@ -365,7 +358,7 @@ export class HigienizacaoController {
         { campos: ['conteudo'] },
       );
     const chave = await this.fotos.guardar(s.hospital, e.tipo, bytes);
-    req.sghAlvo = { tabelaAlvo: 'SGH_HOT_LIMPEZA_ETAPA', idAlvo: String(e.solicitacao) };
+    req.sghAlvo = { tabelaAlvo: 'solicitacao_limpeza', idAlvo: String(e.solicitacao) };
     return { chave };
   }
 

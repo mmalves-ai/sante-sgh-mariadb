@@ -4,6 +4,7 @@
 import { definicaoParametro, type GravacaoInternacao } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import { ApoioGravacao } from '../exames/public-api.js';
+import { ApoioGravacaoIdempotente } from './apoio-idempotente.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
@@ -35,7 +36,6 @@ export const OPERACOES_SUPERVISOR: Readonly<Record<string, string>> = {
 };
 export const OPERACOES_LIMPEZA: Readonly<Record<string, string>> = {
   'hotelaria.solicitarLimpeza': 'hotelaria.limpeza.solicitar',
-  'hotelaria.avancarLimpeza': 'hotelaria.limpeza.executar',
   'hotelaria.liberarLeito': 'hotelaria.limpeza.liberar',
 };
 export const OPERACOES_SAME: Readonly<Record<string, string>> = {
@@ -52,7 +52,7 @@ export const ctxAdt = (s: SessaoCadastro): ContextoAdt => s.porta;
 const JANELA_OUTRO_SISTEMA = 'hotelaria.janelaOutroSistemaHoras';
 
 /**
- * As horas da janela das limpezas pedidas pela alta do outro sistema, pelo parâmetro do estabelecimento (ou da rede):
+ * As horas da janela das limpezas pedidas pela alta ainda sem etapa registrada, pelo parâmetro do estabelecimento (ou da rede):
  * só esses níveis, por isso basta o contexto (rede e estabelecimento). Sem a configuração, o padrão do registro.
  */
 export function janelaOutroSistema(
@@ -102,7 +102,7 @@ export class ApoiosAdt {
     cache: CacheConfig | null,
   ) {
     const novo = (chave: string, nome: string, operacoes: Readonly<Record<string, string>>) =>
-      new ApoioGravacao<GravadorSghAdt>({ chave, nome, operacoes }, porta, trilha, configuracao, cache);
+      new ApoioGravacaoIdempotente<GravadorSghAdt>({ chave, nome, operacoes }, porta, trilha, configuracao, cache);
     this.adt = novo(CHAVE_ADT, 'a internação (admissão, transferência e alta)', OPERACOES_ADT);
     this.mapa = novo(CHAVE_MAPA, 'o mapa de leitos operacional', OPERACOES_MAPA);
     this.supervisor = novo(

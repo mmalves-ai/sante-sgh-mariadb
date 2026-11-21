@@ -3,7 +3,7 @@
 // sistema anterior pelo de-para, os leitos compatíveis com o perfil (sobre o mapa operacional do M21), a cor do quadro
 // de permanência pela alta prevista e pelos limites (dias da Portaria 312), a terapia intensiva pela trajetória, a
 // calibragem com as duas réguas e os indicadores da reunião de leitos com numerador e denominador. Nenhuma regra mora na
-// tela; as gravações passam pelas recusas do motor (máquina, reserva) antes de chegar às SGH_.
+// tela; as gravações passam pelas recusas do motor (máquina, reserva) antes de chegar ao banco.
 import {
   type AltasPrevistas,
   type BarreiraAlta,
@@ -40,7 +40,7 @@ import {
   prazoEstourado,
   situacaoEquivalente,
 } from '@sgh/dominio-internacao';
-import type { ReservaNirLida, SolicitacaoNirLida } from '@sgh/legado';
+import { type ReservaLeitoNir, type SolicitacaoLeitoNir } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAdt } from './porta.js';
 import type { ServicoAdt } from './servico.js';
@@ -83,7 +83,7 @@ export class ServicoNir {
     return deparaVigente(aprovados, rotulos);
   }
 
-  reservaDaLinha(r: ReservaNirLida, agora: string): ReservaNir {
+  reservaDaLinha(r: ReservaLeitoNir, agora: string): ReservaNir {
     return {
       id: r.id,
       solicitacao: r.solicitacao,
@@ -101,11 +101,11 @@ export class ServicoNir {
   }
 
   private solicitacaoDaLinha(
-    x: SolicitacaoNirLida,
+    x: SolicitacaoLeitoNir,
     o: {
       agora: string;
       hoje: string;
-      reservas: readonly ReservaNirLida[];
+      reservas: readonly ReservaLeitoNir[];
       depara: readonly LinhaDepara[];
       historico: SolicitacaoNir['historico'];
     },
@@ -190,7 +190,7 @@ export class ServicoNir {
     };
   }
 
-  async solicitacaoAberta(c: ContextoNir, id: number): Promise<SolicitacaoNirLida> {
+  async solicitacaoAberta(c: ContextoNir, id: number): Promise<SolicitacaoLeitoNir> {
     const s = await this.porta.solicitacao(c, id);
     if (!s)
       throw new ErroProblema(

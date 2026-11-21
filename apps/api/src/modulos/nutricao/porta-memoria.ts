@@ -5,24 +5,24 @@
 // e os vínculos profissionais pelo nome do login (NUTRI, SOCIAL, ENFERM, MEDICO, FARMA). As gravações ficam em memória,
 // com as mesmas recusas do banco (um retrato por unidade, refeição e dia; uma refeição de acompanhante vigente). Nenhum
 // dado real.
-import type { LiberacaoConsultada } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
 import type {
-  AlteracaoHotSghLida,
-  CorrecaoSghLida,
-  AcompanhamentoSghLido,
-  AcompanhanteSghLido,
-  BarreiraLida,
-  ChecagemDietaLida,
-  CirurgiaDaJanelaLida,
-  DietaEnteralSghLida,
-  InternadoNutricaoLido,
-  ItemDietaMapaLido,
-  MetaTerapiaSghLida,
-  RegistroSocialSghLido,
-  RetratoMapaLido,
-  TriagemSghLida,
-} from '@sgh/legado';
-import { ErroOperacao } from '@sgh/legado';
+  AlteracaoHotelariaRegistrada,
+  CorrecaoRegistrada,
+  AcompanhamentoTerapiaRegistrado,
+  RefeicaoAcompanhanteRegistrada,
+  BarreiraAltaRegistrada,
+  ChecagemDieta,
+  CirurgiaDaJanela,
+  DietaEnteral,
+  InternadoNutricao,
+  ItemDietaMapa,
+  MetaTerapiaRegistrada,
+  RegistroSocialRegistrado,
+  RetratoMapa,
+  TriagemRegistrada,
+} from './tipos.js';
 import type {
   AvaliacaoNptLida,
   RegistroCorrigivel,
@@ -32,6 +32,8 @@ import type {
 } from '@sgh/contratos';
 import type { ContextoNutricao, GravadorNutricao, PortaNutricao, VinculoDoLogin } from './porta.js';
 
+/** Chave do estabelecimento da sessão nas listas em memória. */
+const estabelecimentoDe = (c: { estabelecimento: number | null }) => String(c.estabelecimento ?? '');
 const p2 = (n: number) => String(n).padStart(2, '0');
 /** "AAAA-MM-DDTHH:MM" de um Date (componentes locais do processo; a sessão sintética roda no fuso da máquina). */
 function local(d: Date): string {
@@ -47,7 +49,7 @@ const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
 
 interface Sintetico {
-  readonly internado: Omit<InternadoNutricaoLido, 'admissao'> & { readonly horasAtras: number };
+  readonly internado: Omit<InternadoNutricao, 'admissao'> & { readonly horasAtras: number };
   readonly dieta: {
     readonly plano: number;
     readonly dieta: number;
@@ -184,22 +186,22 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   readonly destino = 'memoria' as const;
   private seq = 1;
   private readonly inicio: string;
-  readonly triagensGravadas: (TriagemSghLida & { hospital: string })[] = [];
-  readonly metasGravadas: (MetaTerapiaSghLida & { hospital: string; reg: number })[] = [];
-  readonly acompanhamentosGravados: (AcompanhamentoSghLido & { hospital: string; reg: number })[] = [];
-  readonly retratos: (RetratoMapaLido & {
+  readonly triagensGravadas: (TriagemRegistrada & { hospital: string })[] = [];
+  readonly metasGravadas: (MetaTerapiaRegistrada & { hospital: string; reg: number })[] = [];
+  readonly acompanhamentosGravados: (AcompanhamentoTerapiaRegistrado & { hospital: string; reg: number })[] = [];
+  readonly retratos: (RetratoMapa & {
     hospital: string;
     unidade: string;
     refeicao: number;
     data: string;
   })[] = [];
-  readonly acompanhantesGravados: (AcompanhanteSghLido & { hospital: string })[] = [];
-  readonly sociaisGravados: (RegistroSocialSghLido & { hospital: string })[] = [];
-  readonly barreirasGravadas: (BarreiraLida & { hospital: string })[] = [];
+  readonly acompanhantesGravados: (RefeicaoAcompanhanteRegistrada & { hospital: string })[] = [];
+  readonly sociaisGravados: (RegistroSocialRegistrado & { hospital: string })[] = [];
+  readonly barreirasGravadas: (BarreiraAltaRegistrada & { hospital: string })[] = [];
   // W0-05: as correções, as avaliações da NPT e o log das alterações do acompanhante.
-  readonly correcoesGravadas: (CorrecaoSghLida & { hospital: string })[] = [];
+  readonly correcoesGravadas: (CorrecaoRegistrada & { hospital: string })[] = [];
   readonly avaliacoesNptGravadas: (AvaliacaoNptLida & { hospital: string; reg: number })[] = [];
-  readonly alteracoesGravadas: (AlteracaoHotSghLida & { hospital: string })[] = [];
+  readonly alteracoesGravadas: (AlteracaoHotelariaRegistrada & { hospital: string })[] = [];
   /** Testes: o balanço sintético da parenteral por atendimento (o 960005 tem NPT lançada ontem e anteontem). */
   readonly balancos = new Map<number, VolumeBalanco[]>();
   /** Testes: as internações que saíram da unidade (alta ou transferência) e as sem atendimento vinculado. */
@@ -218,7 +220,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     return local(this.agoraDate());
   }
 
-  private internadosBase(): InternadoNutricaoLido[] {
+  private internadosBase(): InternadoNutricao[] {
     return SINTETICOS.filter((x) => !this.sairam.has(x.internado.reg)).map((x) => {
       const { horasAtras, ...i } = x.internado;
       return {
@@ -229,7 +231,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     });
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -242,7 +244,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     _trilha: unknown,
     fn: (g: GravadorNutricao) => Promise<T>,
   ): Promise<T> {
-    const h = c.hospital;
+    const h = estabelecimentoDe(c);
     const agora = this.agora();
     // A transação em memória: o que a função grava só entra no estado se ela terminar sem erro.
     const pendentes: (() => void)[] = [];
@@ -601,13 +603,13 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     return i ? { ...i, aberta: true } : null;
   }
 
-  async triagens(c: ContextoNutricao, regs: readonly number[]): Promise<TriagemSghLida[]> {
+  async triagens(c: ContextoNutricao, regs: readonly number[]): Promise<TriagemRegistrada[]> {
     const inativa = (id: number) =>
       this.correcoesGravadas.some(
-        (k) => k.hospital === c.hospital && k.registro === 'triagem' && k.idRegistro === id,
+        (k) => k.hospital === estabelecimentoDe(c) && k.registro === 'triagem' && k.idRegistro === id,
       );
     return this.triagensGravadas
-      .filter((t) => t.hospital === c.hospital && regs.includes(t.reg))
+      .filter((t) => t.hospital === estabelecimentoDe(c) && regs.includes(t.reg))
       .map((t) => ({ ...t, inativa: inativa(t.id) }));
   }
 
@@ -616,7 +618,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
       this.metasGravadas
         .filter(
           (m) =>
-            m.hospital === c.hospital &&
+            m.hospital === estabelecimentoDe(c) &&
             regs.includes(m.reg) &&
             !this.correcoesGravadas.some(
               (k) => k.registro === 'meta' && k.idRegistro === m.id && k.acao === 'encerramento',
@@ -635,7 +637,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     };
   }
 
-  async dietasEnterais(_c: ContextoNutricao, atendimento: number): Promise<DietaEnteralSghLida[]> {
+  async dietasEnterais(_c: ContextoNutricao, atendimento: number): Promise<DietaEnteral[]> {
     const x = SINTETICOS.find((s) => s.internado.atendimento === atendimento);
     if (!x || (x.dieta.plano !== 4 && x.dieta.plano !== 5)) return [];
     const v = this.vigencia();
@@ -661,8 +663,8 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     _c: ContextoNutricao,
     itens: readonly number[],
     desde: string,
-  ): Promise<ChecagemDietaLida[]> {
-    const r: ChecagemDietaLida[] = [];
+  ): Promise<ChecagemDieta[]> {
+    const r: ChecagemDieta[] = [];
     const hoje = this.agora().slice(0, 10);
     for (const item of itens) {
       if (item < 980_000) continue;
@@ -692,13 +694,13 @@ export class PortaNutricaoMemoria implements PortaNutricao {
 
   async terapia(c: ContextoNutricao, reg: number) {
     return {
-      metas: this.metasGravadas.filter((m) => m.hospital === c.hospital && m.reg === reg),
-      acompanhamentos: this.acompanhamentosGravados.filter((a) => a.hospital === c.hospital && a.reg === reg),
+      metas: this.metasGravadas.filter((m) => m.hospital === estabelecimentoDe(c) && m.reg === reg),
+      acompanhamentos: this.acompanhamentosGravados.filter((a) => a.hospital === estabelecimentoDe(c) && a.reg === reg),
     };
   }
 
   async meta(c: ContextoNutricao, id: number) {
-    const m = this.metasGravadas.find((x) => x.id === id && x.hospital === c.hospital);
+    const m = this.metasGravadas.find((x) => x.id === id && x.hospital === estabelecimentoDe(c));
     return m ?? null;
   }
 
@@ -706,15 +708,15 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     return { quantidade: 0, ultima: null };
   }
 
-  async sociais(c: ContextoNutricao, reg: number): Promise<RegistroSocialSghLido[]> {
-    return this.sociaisGravados.filter((x) => x.hospital === c.hospital && x.reg === reg);
+  async sociais(c: ContextoNutricao, reg: number): Promise<RegistroSocialRegistrado[]> {
+    return this.sociaisGravados.filter((x) => x.hospital === estabelecimentoDe(c) && x.reg === reg);
   }
 
   async ultimosSociais(c: ContextoNutricao, regs: readonly number[]) {
     const m = new Map<number, { risco: RiscoSocial; tipo: TipoRegistroSocial; em: string }>();
     for (const x of this.sociaisGravados)
       if (
-        x.hospital === c.hospital &&
+        x.hospital === estabelecimentoDe(c) &&
         regs.includes(x.reg) &&
         !m.has(x.reg) &&
         x.tipo !== 'adendo' &&
@@ -727,13 +729,13 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   async barreirasSociais(c: ContextoNutricao, regs: readonly number[]) {
     const m = new Map<number, number>();
     for (const b of this.barreirasGravadas)
-      if (b.hospital === c.hospital && regs.includes(b.reg) && b.tipo === 'social' && b.situacao === 'aberta')
+      if (b.hospital === estabelecimentoDe(c) && regs.includes(b.reg) && b.tipo === 'social' && b.situacao === 'aberta')
         m.set(b.reg, (m.get(b.reg) ?? 0) + 1);
     return m;
   }
 
-  async barreiras(c: ContextoNutricao, regs: readonly number[]): Promise<BarreiraLida[]> {
-    return this.barreirasGravadas.filter((b) => b.hospital === c.hospital && regs.includes(b.reg));
+  async barreiras(c: ContextoNutricao, regs: readonly number[]): Promise<BarreiraAltaRegistrada[]> {
+    return this.barreirasGravadas.filter((b) => b.hospital === estabelecimentoDe(c) && regs.includes(b.reg));
   }
 
   async unidades() {
@@ -754,7 +756,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     ];
   }
 
-  async itensDieta(_c: ContextoNutricao, atendimentos: readonly number[]): Promise<ItemDietaMapaLido[]> {
+  async itensDieta(_c: ContextoNutricao, atendimentos: readonly number[]): Promise<ItemDietaMapa[]> {
     const v = this.vigencia();
     return SINTETICOS.filter(
       (x) => x.internado.atendimento !== null && atendimentos.includes(x.internado.atendimento),
@@ -786,8 +788,8 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     return m;
   }
 
-  async cirurgias(_c: ContextoNutricao, de: string, ate: string): Promise<CirurgiaDaJanelaLida[]> {
-    const r: CirurgiaDaJanelaLida[] = [];
+  async cirurgias(_c: ContextoNutricao, de: string, ate: string): Promise<CirurgiaDaJanela[]> {
+    const r: CirurgiaDaJanela[] = [];
     for (let dia = de.slice(0, 10); dia <= ate.slice(0, 10); dia = somarDias(dia, 1)) {
       const inicio = `${dia}T13:30`;
       if (inicio >= de.slice(0, 16) && inicio <= ate.slice(0, 16))
@@ -808,19 +810,19 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   }
 
   async acompanhantesVigentes(c: ContextoNutricao, regs: readonly number[]) {
-    const m = new Map<number, AcompanhanteSghLido>();
+    const m = new Map<number, RefeicaoAcompanhanteRegistrada>();
     for (const a of this.acompanhantesGravados)
-      if (a.hospital === c.hospital && regs.includes(a.reg) && a.situacao === 'ativa') m.set(a.reg, a);
+      if (a.hospital === estabelecimentoDe(c) && regs.includes(a.reg) && a.situacao === 'ativa') m.set(a.reg, a);
     return m;
   }
 
   // ── W0-05 ──
 
   async correcoes(c: ContextoNutricao, registro: RegistroCorrigivel, ids: readonly number[]) {
-    const inativa = new Map<number, CorrecaoSghLida>();
+    const inativa = new Map<number, CorrecaoRegistrada>();
     const substitui = new Map<number, number>();
     for (const k of this.correcoesGravadas) {
-      if (k.hospital !== c.hospital || k.registro !== registro) continue;
+      if (k.hospital !== estabelecimentoDe(c) || k.registro !== registro) continue;
       if (ids.includes(k.idRegistro)) inativa.set(k.idRegistro, k);
       if (k.idNovo !== null && ids.includes(k.idNovo)) substitui.set(k.idNovo, k.idRegistro);
     }
@@ -836,11 +838,11 @@ export class PortaNutricaoMemoria implements PortaNutricao {
           : registro === 'acompanhamento'
             ? this.acompanhamentosGravados
             : this.sociaisGravados;
-    return lista.find((x) => x.hospital === c.hospital && x.id === id)?.reg ?? null;
+    return lista.find((x) => x.hospital === estabelecimentoDe(c) && x.id === id)?.reg ?? null;
   }
 
   async avaliacoesNpt(c: ContextoNutricao, reg: number): Promise<AvaliacaoNptLida[]> {
-    return this.avaliacoesNptGravadas.filter((x) => x.hospital === c.hospital && x.reg === reg);
+    return this.avaliacoesNptGravadas.filter((x) => x.hospital === estabelecimentoDe(c) && x.reg === reg);
   }
 
   async balancoParenteral(
@@ -862,22 +864,22 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   }
 
   async alteracoesAcompanhante(c: ContextoNutricao, ids: readonly number[]) {
-    return this.alteracoesGravadas.filter((x) => x.hospital === c.hospital && ids.includes(x.idRegistro));
+    return this.alteracoesGravadas.filter((x) => x.hospital === estabelecimentoDe(c) && ids.includes(x.idRegistro));
   }
 
   async acompanhantes(c: ContextoNutricao, reg: number) {
-    return this.acompanhantesGravados.filter((a) => a.hospital === c.hospital && a.reg === reg);
+    return this.acompanhantesGravados.filter((a) => a.hospital === estabelecimentoDe(c) && a.reg === reg);
   }
 
   async acompanhante(c: ContextoNutricao, id: number) {
-    return this.acompanhantesGravados.find((a) => a.hospital === c.hospital && a.id === id) ?? null;
+    return this.acompanhantesGravados.find((a) => a.hospital === estabelecimentoDe(c) && a.id === id) ?? null;
   }
 
   async retrato(c: ContextoNutricao, unidade: string, refeicao: number, data: string) {
     return (
       this.retratos.find(
         (r) =>
-          r.hospital === c.hospital && r.unidade === unidade && r.refeicao === refeicao && r.data === data,
+          r.hospital === estabelecimentoDe(c) && r.unidade === unidade && r.refeicao === refeicao && r.data === data,
       ) ?? null
     );
   }

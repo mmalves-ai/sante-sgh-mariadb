@@ -21,7 +21,7 @@ import {
   type TelaRegulacao,
 } from '@sgh/contratos';
 import { contagemRegulacao, decidirRegulacao } from '@sgh/dominio-internacao';
-import type { RegulacaoLida } from '@sgh/legado';
+import { type RegistroRegulacaoNir } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -36,13 +36,14 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
+import { ApoioGravacaoIdempotente } from './apoio-idempotente.js';
 import { ctxAdt } from './apoios.js';
 import { type GravadorNir, PORTA_NIR, type PortaNir } from './nir-porta.js';
 import { AVISOS_ADT } from './simbolos.js';
 
-const TABELA = 'SGH_INT_REGULACAO';
+const TABELA = 'solicitacao_regulacao';
 
-export function registroDe(r: RegulacaoLida): RegistroRegulacao {
+export function registroDe(r: RegistroRegulacaoNir): RegistroRegulacao {
   return {
     id: r.id,
     solicitacao: r.solicitacao,
@@ -60,7 +61,7 @@ export function registroDe(r: RegulacaoLida): RegistroRegulacao {
 }
 
 /** A vigente da solicitação: a última da sucessão (a de maior ID). */
-const vigenteDe = (rs: readonly RegulacaoLida[]) => [...rs].sort((a, b) => a.id - b.id).at(-1) ?? null;
+const vigenteDe = (rs: readonly RegistroRegulacaoNir[]) => [...rs].sort((a, b) => a.id - b.id).at(-1) ?? null;
 
 @Controller('nir/regulacao')
 export class RegulacaoController {
@@ -74,14 +75,14 @@ export class RegulacaoController {
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(AVISOS_ADT) private readonly avisos: AvisosAtendimento | null = null,
   ) {
-    this.apoio = new ApoioGravacao<GravadorNir>(
+    this.apoio = new ApoioGravacaoIdempotente<GravadorNir>(
       { chave: CHAVE_LIBERACAO_NIR, nome: 'a regulação do NIR', operacoes: {} },
       porta,
       trilha,
       configuracao,
       cache,
     );
-    this.conector = new ApoioGravacao<GravadorNir>(
+    this.conector = new ApoioGravacaoIdempotente<GravadorNir>(
       { chave: CHAVE_CONECTOR_REGULACAO, nome: 'o conector com a central de regulação', operacoes: {} },
       porta,
       trilha,
@@ -159,7 +160,7 @@ export class RegulacaoController {
   @HttpCode(201)
   @Permissao(P.regulacaoRegistrar)
   @AuditadoNoHandler(
-    'internacao.registrarRegulacao (SGH_INT_REGULACAO; a outbox com o conector) com a SGH_TRILHA na mesma transação',
+    'internacao.registrarRegulacao (solicitacao_regulacao; a outbox com o conector) com a trilha de auditoria na mesma transação',
   )
   async registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoNir> {
     const s = sessaoDe(req);

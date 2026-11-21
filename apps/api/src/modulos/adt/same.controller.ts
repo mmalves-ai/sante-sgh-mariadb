@@ -3,7 +3,7 @@
 //   GET  /api/same/contas/:codigo           a localização atual e a linha do tempo (auditado: nome do paciente)
 //   POST /api/same/movimentos               same.movimentarProntuario (registro, saída, devolução, descarte…)
 //   POST /api/same/movimentos/:id/excluir   same.excluirMovimento (só o último; exclusão lógica)
-//   POST /api/same/registros                ocorrência, aceite da remessa e cobrança da devolução (só no novo, SGH_)
+//   POST /api/same/registros                ocorrência, aceite da remessa e cobrança da devolução (modelo pendente)
 //   GET  /api/same/devolucoes-atrasadas     os volumes fora do SAME além do prazo (a lista da cobrança)
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
 import {
@@ -114,14 +114,14 @@ export class SameController {
   }
 
   /**
-   * O que só o novo guarda do SAME (SGH_HOT_SAME_EXT, com a trilha na mesma transação): a ocorrência (o recebimento
+   * O que só o novo guarda do SAME (movimento_prontuario, com a trilha na mesma transação): a ocorrência (o recebimento
    * recusado porque o volume não foi enviado a este setor), o aceite da remessa por quem recebe e a cobrança da
-   * devolução atrasada. Nada vai ao legado.
+   * devolução atrasada (modelo pendente: pedido do lote 03-01).
    */
   @Post('registros')
   @HttpCode(201)
   @Permissao('same.movimento.criar')
-  @AuditadoNoHandler('registro do SAME (SGH_HOT_SAME_EXT) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('registro do SAME (movimento_prontuario) com a trilha de auditoria na mesma transação')
   async registro(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistroSame, b);
@@ -156,7 +156,7 @@ export class SameController {
       s,
       EVENTOS_AUDITAVEIS.sameProtocolo.codigo,
       'same.movimento.criar',
-      (x: number) => ({ tabela: 'SGH_HOT_SAME_EXT', id: String(x), chave: `${tipo}:${e.conta}` }),
+      (x: number) => ({ tabela: 'movimento_prontuario', id: String(x), chave: `${tipo}:${e.conta}` }),
       (g) =>
         g.gravarSameExt({
           movimento: e.movimento ?? null,

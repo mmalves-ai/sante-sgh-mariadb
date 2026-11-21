@@ -1,4 +1,4 @@
-// O NIR em MEMÓRIA (M44, etapa 2): a sessão sintética de dev/ci (E2E), com as MESMAS recusas das tabelas SGH_ (uma
+// O NIR em MEMÓRIA (M44, etapa 2): a sessão sintética de dev/ci (E2E), com as MESMAS recusas das tabelas do banco (uma
 // solicitação aberta por paciente, a transição sobre o estado visto, uma reserva vigente por leito, a sucessão única
 // da alta prevista, a barreira resolvida uma vez). O estado é compartilhado com a porta da internação em memória
 // (o mapa vê o leito reservado; a admissão e a transferência vindas do NIR concluem a solicitação e consomem a
@@ -16,21 +16,8 @@ import {
   type Precaucao,
   type SituacaoReserva,
 } from '@sgh/contratos';
-import {
-  type BarreiraLida,
-  type BarreiraSgh,
-  type DpaLida,
-  type DpaSgh,
-  ErroOperacao,
-  EVENTOS_SEM_DESDOBRAMENTO,
-  type EventoSolicitacaoLido,
-  frasesDependenciasNir,
-  type ReservaNirLida,
-  type ReservaSgh,
-  type SolicitacaoLeitoSgh,
-  type SolicitacaoNirLida,
-  type TransicaoSgh,
-} from '@sgh/legado';
+import { type AltaPrevistaRegistrada, type BarreiraDaAlta, EVENTOS_SEM_DESDOBRAMENTO, type EventoSolicitacaoNir, frasesDependenciasNir, type NovaAltaPrevista, type NovaBarreira, type NovaReserva, type NovaSolicitacaoLeito, type ReservaLeitoNir, type SolicitacaoLeitoNir, type TransicaoSolicitacao } from './tipos.js';
+import { ErroOperacao } from '@sgh/nucleo';
 import { transicao } from '@sgh/dominio-internacao';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 
@@ -41,11 +28,11 @@ const iso = (t: number) => new Date(t).toISOString().slice(0, 19);
 const FINAIS: readonly EstadoSolicitacaoNir[] = ['internado', 'cancelado', 'rejeitado'];
 
 interface EstadoHospital {
-  solicitacoes: Map<number, SolicitacaoNirLida & { ativa: string | null }>;
-  eventos: (EventoSolicitacaoLido & { id: number })[];
-  reservas: Map<number, ReservaNirLida & { vigente: string | null; regConsumo: number | null }>;
-  dpas: (DpaLida & { sucede: string })[];
-  barreiras: Map<number, BarreiraLida>;
+  solicitacoes: Map<number, SolicitacaoLeitoNir & { ativa: string | null }>;
+  eventos: (EventoSolicitacaoNir & { id: number })[];
+  reservas: Map<number, ReservaLeitoNir & { vigente: string | null; regConsumo: number | null }>;
+  dpas: (AltaPrevistaRegistrada & { sucede: string })[];
+  barreiras: Map<number, BarreiraDaAlta>;
   limites: Map<
     string,
     {
@@ -67,9 +54,9 @@ interface EstadoHospital {
 /** De quem a solicitação precisa ser: o paciente admitido ou a internação transferida. */
 export type DonoSolicitacaoNir = { paciente: number } | { internacao: number };
 
-/** A solicitação é do paciente admitido (não de troca de leito) ou da internação transferida (a mesma regra das SGH_). */
+/** A solicitação é do paciente admitido (não de troca de leito) ou da internação transferida (a mesma regra do banco). */
 export function solicitacaoDoDono(
-  s: Pick<SolicitacaoNirLida, 'origem' | 'paciente' | 'internacao'>,
+  s: Pick<SolicitacaoLeitoNir, 'origem' | 'paciente' | 'internacao'>,
   dono: DonoSolicitacaoNir,
 ): boolean {
   return 'internacao' in dono
@@ -146,10 +133,10 @@ export class EstadoNirMemoria implements NirParaAdt {
    * Expira as reservas vigentes vencidas no relógio (a mesma regra do `worker`), devolvendo a solicitação à análise;
    * devolve as expiradas agora (para a trilha). Chamado em toda leitura do NIR e do mapa.
    */
-  expirarVencidas(hospital: string): ReservaNirLida[] {
+  expirarVencidas(hospital: string): ReservaLeitoNir[] {
     const s = this.h(hospital);
     const agora = this.agora();
-    const r: ReservaNirLida[] = [];
+    const r: ReservaLeitoNir[] = [];
     for (const x of s.reservas.values())
       if (x.vigente !== null && ms(agora) > ms(x.validaAte)) {
         this.encerrar(hospital, {
@@ -165,7 +152,7 @@ export class EstadoNirMemoria implements NirParaAdt {
             acao: 'liberarReserva',
             de: sol.estado,
             para: 'em_analise',
-            situacaoLegado: 1,
+            situacaoCodigo: 1,
             reserva: x.id,
             motivo: 'Reserva expirada',
             usuario: 'SGH.NIR',
@@ -175,7 +162,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     return r;
   }
 
-  // ── Gravações (as mesmas recusas das SGH_) ──
+  // ── Gravações (as mesmas recusas do banco) ──
 
   evento(
     hospital: string,
@@ -203,7 +190,7 @@ export class EstadoNirMemoria implements NirParaAdt {
 
   solicitar(
     hospital: string,
-    x: Omit<SolicitacaoLeitoSgh, 'hospital'> & {
+    x: Omit<NovaSolicitacaoLeito, 'hospital'> & {
       prontuario: number | null;
       nome: string;
       sexo: string | null;
@@ -259,7 +246,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     return id;
   }
 
-  transicionar(hospital: string, t: Omit<TransicaoSgh, 'hospital'>): number {
+  transicionar(hospital: string, t: Omit<TransicaoSolicitacao, 'hospital'>): number {
     const s = this.h(hospital);
     const x = s.solicitacoes.get(t.solicitacao);
     if (!x || x.estado !== t.de)
@@ -293,7 +280,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     return 1;
   }
 
-  reservar(hospital: string, r: Omit<ReservaSgh, 'hospital'>): number {
+  reservar(hospital: string, r: Omit<NovaReserva, 'hospital'>): number {
     const s = this.h(hospital);
     const chave = chaveTextoLeito(r.leito);
     if ([...s.reservas.values()].some((x) => x.vigente === chave))
@@ -360,7 +347,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     return 1;
   }
 
-  registrarDpa(hospital: string, d: Omit<DpaSgh, 'hospital'>): number {
+  registrarDpa(hospital: string, d: Omit<NovaAltaPrevista, 'hospital'>): number {
     const s = this.h(hospital);
     const sucede = d.anterior === null ? `inicial:${d.reg}` : `apos:${d.anterior}`;
     if (s.dpas.some((x) => x.sucede === sucede))
@@ -373,7 +360,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     return id;
   }
 
-  registrarBarreira(hospital: string, b: Omit<BarreiraSgh, 'hospital'>): number {
+  registrarBarreira(hospital: string, b: Omit<NovaBarreira, 'hospital'>): number {
     const s = this.h(hospital);
     const id = ++s.seq;
     s.barreiras.set(id, {
@@ -427,7 +414,7 @@ export class EstadoNirMemoria implements NirParaAdt {
           'Informe o motivo da alteração: o valor anterior fica no histórico, com quem o definiu.',
         );
       this.alterou(hospital, {
-        tabela: 'SGH_INT_LIMITE_PERMAN',
+        tabela: 'limite_permanencia',
         chave: k,
         acao: 'alterar',
         antes,
@@ -450,9 +437,9 @@ export class EstadoNirMemoria implements NirParaAdt {
     });
   }
 
-  // ── W0-07: correção, alteração e exclusão (as mesmas recusas das gravações SGH_) ──
+  // ── W0-07: correção, alteração e exclusão (as mesmas recusas das gravações no banco) ──
 
-  /** A versão anterior de cada alteração (a SGH_INT_ALTERACAO em memória). */
+  /** A versão anterior de cada alteração (a trilha de auditoria em memória). */
   readonly alteracoes: {
     hospital: string;
     tabela: string;
@@ -463,7 +450,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     por: string;
     em: string;
   }[] = [];
-  /** Os retratos das exclusões físicas (a SGH_HIST_EXCLUSAO em memória). */
+  /** Os retratos das exclusões físicas (a trilha de auditoria em memória). */
   readonly retratos: { hospital: string; tabela: string; chave: string; linha: unknown; motivo: string }[] =
     [];
 
@@ -535,7 +522,7 @@ export class EstadoNirMemoria implements NirParaAdt {
       versao: x.versao + 1,
     });
     this.alterou(hospital, {
-      tabela: 'SGH_INT_SOLIC_LEITO',
+      tabela: 'pedido_leito',
       chave: String(c.solicitacao),
       acao: 'corrigir',
       antes: dif,
@@ -586,7 +573,7 @@ export class EstadoNirMemoria implements NirParaAdt {
       );
     this.retratos.push({
       hospital,
-      tabela: 'SGH_INT_SOLIC_LEITO',
+      tabela: 'pedido_leito',
       chave: String(x.solicitacao),
       linha: { ...sol },
       motivo: x.motivo,
@@ -594,7 +581,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     for (const ev of s.eventos.filter((e) => e.solicitacao === x.solicitacao))
       this.retratos.push({
         hospital,
-        tabela: 'SGH_INT_SOLIC_LEITO_EVT',
+        tabela: 'pedido_leito',
         chave: String(ev.id),
         linha: { ...ev },
         motivo: x.motivo,
@@ -654,7 +641,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     if (Object.keys(antes).length === 0)
       throw recusa('nada-a-alterar', 'Nada mudou: escolha outro leito ou outra validade.');
     this.alterou(hospital, {
-      tabela: 'SGH_INT_RESERVA_LEITO',
+      tabela: 'reserva_leito',
       chave: String(r.reserva),
       acao: 'alterar',
       antes,
@@ -692,7 +679,7 @@ export class EstadoNirMemoria implements NirParaAdt {
       );
     this.retratos.push({
       hospital,
-      tabela: 'SGH_INT_RESERVA_LEITO',
+      tabela: 'reserva_leito',
       chave: String(r.reserva),
       linha: { ...x },
       motivo: r.motivo,
@@ -756,7 +743,7 @@ export class EstadoNirMemoria implements NirParaAdt {
       prazo: b.prazo ?? x.prazo,
     });
     this.alterou(hospital, {
-      tabela: 'SGH_INT_BARREIRA_ALTA',
+      tabela: 'barreira_alta',
       chave: String(b.barreira),
       acao: 'alterar',
       antes,
@@ -775,7 +762,7 @@ export class EstadoNirMemoria implements NirParaAdt {
     const x = s.limites.get(k);
     if (!x) throw recusa('limite-inexistente', 'Não há limite próprio para esta chave: já vale o padrão.');
     this.alterou(hospital, {
-      tabela: 'SGH_INT_LIMITE_PERMAN',
+      tabela: 'limite_permanencia',
       chave: k,
       acao: 'remover',
       antes: { ...x },
@@ -849,7 +836,7 @@ export class EstadoNirMemoria implements NirParaAdt {
       acao: 'internar',
       de: x.estado,
       para: 'internado',
-      situacaoLegado: 9,
+      situacaoCodigo: 9,
       reserva: r?.id ?? null,
       reg,
       usuario,

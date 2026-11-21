@@ -1,7 +1,9 @@
-// Módulo do repasse médico da API (M33): regras com o simulador e a aprovação, apuração com a memória de cálculo e a
-// segregação, lançamentos (ajuste e estorno por glosa), RPA com o título do financeiro e o extrato do próprio médico.
+// M33: repasse médico (regras, apuração, lançamentos, RPA e o extrato do médico).
+export { moduloRepasse, portaDoRepasse } from './modulo.js';
+export { ENTRADAS_OPERACAO_REPASSE } from './operacoes.js';
+export { METODOS_PORTA_REPASSE, PORTA_REPASSE, type PortaRepasse } from './porta.js';
+export { type EstadoOperacoesRepasse, PortaRepasseMemoria, type TituloRepasseMemoria } from './porta-memoria.js';
+export { type NucleoRepasse, portaRepasseIndisponivel, PortaRepassePropria } from './porta-propria.js';
 export { GERADOR_PDF_REPASSE, RepasseController } from './repasse.controller.js';
-export { PORTA_REPASSE, type PortaRepasse } from './porta.js';
-export { portaRepasseIndisponivel, portaRepasseLegado, portaRepasseNaTransacao } from './porta-legado.js';
-export { PortaRepasseMemoria, type TituloRepasseMemoria } from './porta-memoria.js';
 export { ServicoRepasse } from './servico.js';
+export type * from './tipos.js';

@@ -1,17 +1,12 @@
 // Porta do NIR em MEMÓRIA (M44, etapa 2): a sessão sintética de dev/ci (E2E), sobre o estado compartilhado com a
-// internação em memória (EstadoNirMemoria) e as internações sintéticas da porta do M21. Mesmas recusas das SGH_. Sem o
+// internação em memória (EstadoNirMemoria) e as internações sintéticas da porta do M21. Mesmas recusas do banco. Sem o
 // `worker`, a reserva vencida expira na leitura, com o evento na trilha (a mesma regra do `worker`). A calibragem usa um
 // histograma SINTÉTICO fixo (sem banco); as cirurgias que pedem UTI são UMA sintética, amanhã às 8h, do paciente
 // sintético 1006 do cadastro em memória (para o atalho "Pedir o leito" da fila).
 import { DEPARA_SITUACAO_REGULACAO, EVENTOS_AUDITAVEIS } from '@sgh/contratos';
-import type {
-  ConfiguracaoRegulacaoLida,
-  HistogramasLidos,
-  InternadoQuadroLido,
-  LiberacaoConsultada,
-  PacienteLido,
-  RegulacaoLida,
-} from '@sgh/legado';
+import { type ConfiguracaoRegulacaoNir, type HistogramasPermanencia, type InternadoDoQuadro, type RegistroRegulacaoNir } from './tipos.js';
+import { type LiberacaoGravacao } from '../exames/public-api.js';
+import { type PacienteFicha } from '../cadastro/tipos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAdt, PortaAdt } from './porta.js';
@@ -29,7 +24,7 @@ function sem<T extends object, K extends keyof T>(o: T, ...ks: K[]): Omit<T, K> 
 export const CIRURGIA_UTI_SINTETICA = { agendamento: 990_446, paciente: 1006, sala: 1 } as const;
 
 /** A configuração de regulação do fornecedor anterior como a cópia pc tem (só a forma; descrições sintéticas). */
-const CONFIGURACAO_REGULACAO_SINTETICA: ConfiguracaoRegulacaoLida = {
+const CONFIGURACAO_REGULACAO_SINTETICA: ConfiguracaoRegulacaoNir = {
   sistemas: [
     { id: 1, sigla: 'SISTEMA A', ativo: true, servicos: 21, servicosAtivos: 21 },
     { id: 2, sigla: 'SISTEMA B', ativo: false, servicos: 21, servicosAtivos: 0 },
@@ -48,7 +43,7 @@ const CONFIGURACAO_REGULACAO_SINTETICA: ConfiguracaoRegulacaoLida = {
 export class PortaNirMemoria implements PortaNir {
   readonly destino = 'memoria' as const;
   /** M44 (etapa 3): os registros de regulação por estabelecimento (só inclusão, com a sucessão única). */
-  private readonly regs = new Map<string, (RegulacaoLida & { sucede: string })[]>();
+  private readonly regs = new Map<string, (RegistroRegulacaoNir & { sucede: string })[]>();
   private seqRegulacao = 880_000;
 
   constructor(
@@ -56,7 +51,7 @@ export class PortaNirMemoria implements PortaNir {
     private readonly adt: PortaAdt,
     private readonly trilha: Pick<RegistradorTrilha, 'registrar'> | null = null,
     private readonly lerPacientes:
-      ((c: ContextoNir, ids: readonly number[]) => Promise<PacienteLido[]>) | null = null,
+      ((c: ContextoNir, ids: readonly number[]) => Promise<PacienteFicha[]>) | null = null,
   ) {}
 
   private expirar(c: ContextoNir): void {
@@ -77,7 +72,7 @@ export class PortaNirMemoria implements PortaNir {
         .catch(() => undefined);
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
+  async podeGravar(): Promise<LiberacaoGravacao> {
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -242,9 +237,9 @@ export class PortaNirMemoria implements PortaNir {
     );
   }
 
-  async internados(c: ContextoNir): Promise<{ itens: InternadoQuadroLido[]; cortada: boolean }> {
+  async internados(c: ContextoNir): Promise<{ itens: InternadoDoQuadro[]; cortada: boolean }> {
     const lista = await this.adt.internacoes(c as ContextoAdt, { intensivas: [], situacao: 'internados' });
-    const itens: InternadoQuadroLido[] = [];
+    const itens: InternadoDoQuadro[] = [];
     for (const i of lista.itens) {
       const d = await this.adt.detalhe(c as ContextoAdt, i.reg, []);
       itens.push({
@@ -301,7 +296,7 @@ export class PortaNirMemoria implements PortaNir {
   }
 
   /** Histograma SINTÉTICO fixo por clínica (a tela e o E2E mostram as duas réguas sem banco). */
-  async histogramas(): Promise<HistogramasLidos> {
+  async histogramas(): Promise<HistogramasPermanencia> {
     const linhas = (ch: string, base: number) =>
       Array.from({ length: 10 }, (_, i) => ({ chave: ch, dias: i + 1, n: base + ((i * 7) % 5) }));
     const p312 = [...linhas('M', 6), ...linhas('C', 3)];

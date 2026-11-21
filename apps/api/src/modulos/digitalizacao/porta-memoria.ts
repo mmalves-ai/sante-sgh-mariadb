@@ -2,15 +2,20 @@
 // os pacientes do cadastro sintético (o prontuário dá o paciente) e uma internação sintética por paciente. As mesmas
 // recusas do adaptador (o arquivo repetido, a versão, a situação e a segregação), sem banco; a assinatura do M49 fica
 // numerada aqui (o certificado e a validação são os do serviço de assinatura em memória).
-import type { DigitalizacaoSghLida, LinhaTrilha, SituacaoDigitalizacaoSgh } from '@sgh/legado';
-import { recusa } from '@sgh/legado';
+// Melhoria: os tipos são os de negócio do módulo (tipos.ts); a memória é separada por estabelecimento da sessão.
+import { erroIdempotenciaDivergente, hashEntrada, recusa } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
-import type {
-  ContextoDigitalizacao,
-  GravadorDigitalizacao,
-  PacienteDoProntuario,
-  PortaDigitalizacao,
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
+import {
+  type ContextoDigitalizacao,
+  type ContextoGravacaoDigitalizacao,
+  chaveDoPedido,
+  type GravadorDigitalizacao,
+  operacaoDoPedido,
+  type PacienteDoProntuario,
+  type PortaDigitalizacao,
 } from './porta.js';
+import type { DocumentoDigitalizado, SituacaoDigitalizacao } from './tipos.js';
 
 export type LerPacientesDoProntuario = (
   c: ContextoDigitalizacao,
@@ -27,10 +32,12 @@ const mesma = (a: string | null, b: string) => (a ?? '').trim().toUpperCase() ==
 
 export class PortaDigitalizacaoMemoria implements PortaDigitalizacao {
   readonly destino = 'memoria' as const;
-  private readonly docs = new Map<string, DigitalizacaoSghLida[]>();
+  private readonly docs = new Map<string, DocumentoDigitalizado[]>();
   private seq = 500;
   private seqLote = 50;
   private seqAssinatura = 9100;
+  /** Os pedidos já gravados (Idempotency-Key + ação), como a idempotência do núcleo: hash da entrada, quem e o resultado. */
+  private readonly pedidos = new Map<string, { hash: string; usuario: number | null; valor: unknown }>();
   /** As assinaturas do M49 gravadas aqui (para os testes conferirem a origem e a validação). */
   readonly assinaturas: { id: number; origem: string; hash: string; estado: string; resultado: string }[] =
     [];
@@ -42,10 +49,12 @@ export class PortaDigitalizacaoMemoria implements PortaDigitalizacao {
   ) {}
 
   private doHospital(c: ContextoDigitalizacao) {
-    let d = this.docs.get(c.hospital);
+    // A sessão sintética leva o código do estabelecimento; sem ele, o id (nunca mistura estabelecimentos).
+    const chave = (c as { hospital?: string }).hospital ?? `id:${c.estabelecimento ?? 0}`;
+    let d = this.docs.get(chave);
     if (!d) {
       d = [];
-      this.docs.set(c.hospital, d);
+      this.docs.set(chave, d);
     }
     return d;
   }
@@ -65,16 +74,47 @@ export class PortaDigitalizacaoMemoria implements PortaDigitalizacao {
     );
   }
 
+  private chavePedido(c: ContextoGravacaoDigitalizacao) {
+    const p = c.pedido;
+    if (!p) return null;
+    const hospital = (c as { hospital?: string }).hospital ?? `id:${c.estabelecimento ?? 0}`;
+    return {
+      chave: `${hospital}|${operacaoDoPedido(p)}|${chaveDoPedido(p)}`,
+      hash: hashEntrada(operacaoDoPedido(p), { ...p.entrada, acao: p.acao }),
+    };
+  }
+
+  async repeticao<T>(c: ContextoGravacaoDigitalizacao): Promise<{ readonly valor: T } | null> {
+    const k = this.chavePedido(c);
+    const anterior = k ? this.pedidos.get(k.chave) : undefined;
+    if (!k || !anterior) return null;
+    if (anterior.hash !== k.hash || anterior.usuario !== c.usuario) throw erroIdempotenciaDivergente();
+    return { valor: anterior.valor as T };
+  }
+
   async gravarSgh<T>(
     c: ContextoDigitalizacao,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorDigitalizacao) => Promise<T>,
+  ): Promise<T> {
+    const repetida = await this.repeticao<T>(c);
+    if (repetida) return repetida.valor;
+    const valor = await this.gravarDireto(c, trilha, fn);
+    const k = this.chavePedido(c);
+    if (k) this.pedidos.set(k.chave, { hash: k.hash, usuario: c.usuario, valor });
+    return valor;
+  }
+
+  private async gravarDireto<T>(
+    c: ContextoDigitalizacao,
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorDigitalizacao) => Promise<T>,
   ): Promise<T> {
     const lista = this.doHospital(c);
     const copia = lista.map((x) => ({ ...x }));
     const assinaturas = [...this.assinaturas];
     const { agora } = agoraLocal(this.agoraDe);
-    const troca = (i: number, x: Partial<DigitalizacaoSghLida>) => {
+    const troca = (i: number, x: Partial<DocumentoDigitalizado>) => {
       copia[i] = { ...copia[i]!, ...x, versao: copia[i]!.versao + 1 };
     };
     const g: GravadorDigitalizacao = {
@@ -162,7 +202,6 @@ export class PortaDigitalizacaoMemoria implements PortaDigitalizacao {
         });
         return id;
       },
-      registrarEvento: async () => undefined,
     };
     const r = await fn(g);
     lista.splice(0, lista.length, ...copia);
@@ -174,12 +213,12 @@ export class PortaDigitalizacaoMemoria implements PortaDigitalizacao {
     return agoraLocal(this.agoraDe);
   }
 
-  async fila(c: ContextoDigitalizacao, situacao: SituacaoDigitalizacaoSgh | null) {
+  async fila(c: ContextoDigitalizacao, situacao: SituacaoDigitalizacao | null) {
     const todos = this.doHospital(c);
     const itens = todos
       .filter((d) => situacao === null || d.situacao === situacao)
       .sort((a, b) => b.capturadoEm.localeCompare(a.capturadoEm) || b.id - a.id);
-    const contagens: Record<SituacaoDigitalizacaoSgh, number> = {
+    const contagens: Record<SituacaoDigitalizacao, number> = {
       capturado: 0,
       conferido: 0,
       recusado: 0,

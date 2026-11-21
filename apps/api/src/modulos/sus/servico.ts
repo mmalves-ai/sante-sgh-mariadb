@@ -78,17 +78,6 @@ import {
   recusaReabrirCompetencia,
   resumoCriticas,
 } from '@sgh/dominio-faturamento';
-import {
-  type ApacSghLinha,
-  type MudancaApacSgh,
-  type ArquivoSusLinha,
-  type CompetenciaSusLinha,
-  type CriticaSusLinha,
-  type EquivalenciaSusNomeada,
-  ErroSusSgh,
-  type LinhaTrilha,
-  type NovaCriticaSus,
-} from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 import {
   apacParaMontar,
@@ -99,11 +88,23 @@ import {
 } from './montagem.js';
 import type { ContextoSus, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
 import { SeloSolicitanteApac } from './selo-solicitante.js';
+import { type ApacRegistro, type ArquivoSus, type CompetenciaSusRegistro, type CriticaSus, type EquivalenciaSusNomeada, ErroSus, type LinhaTrilhaSus, type MudancaApac, type NovaCriticaSus } from './tipos.js';
+
+/**
+ * A equivalência SIGTAP do item faturável vale para a rede inteira (equivalencia_sigtap_item e item_faturavel não têm
+ * estabelecimento: muda a CIHA de todos os hospitais do cliente). Registrar e desativar exigem, além da permissão da
+ * rota (por estabelecimento) e do escopo total de convênios, esta ação de nível rede.
+ */
+export const ACAO_EQUIVALENCIA_SUS_REDE = 'faturamento.susEquivalencia.editarRede';
 
 export interface SessaoSus {
   readonly rede: string;
   readonly hospital: string;
   readonly login: string;
+  /** O estabelecimento e o usuário da sessão no banco do cliente (a porta própria grava com eles). */
+  readonly estabelecimento?: number | null;
+  readonly usuario?: number | null;
+  readonly correlacao?: string;
   /** AAAA-MM-DD (o relógio do servidor; a competência futura é recusada). */
   readonly hoje: string;
   /** Escopo por convênio (null: todos os convênios do estabelecimento). */
@@ -111,12 +112,14 @@ export interface SessaoSus {
   readonly parametros: ParametrosSus;
   /** A chave de liberação do instrumento ligada no estabelecimento da sessão. */
   liberado(instrumento: InstrumentoSus): Promise<boolean>;
+  /** Se a sessão tem a ação do catálogo (as mesmas regras da rota); ausente, nega (falha fechada). */
+  pode?(acao: string): boolean;
   /** A linha da trilha de uma gravação (o banco é o da sessão). */
   trilha(
     evento: string,
     operacao: string,
     alvo: { tabela: string; id: string | null; diferenca?: string },
-  ): LinhaTrilha;
+  ): LinhaTrilhaSus;
 }
 
 /**
@@ -147,7 +150,12 @@ type RecusaApacServico =
 
 export const MENSAGENS_RECUSA_SUS: Readonly<
   Record<
-    RecusaCompetenciaSus | RecusaApacServico | 'escopo-parcial' | 'versao-alterada' | 'bpa-sem-producao',
+          | RecusaCompetenciaSus
+      | RecusaApacServico
+      | 'escopo-parcial'
+      | 'equivalencia-sem-acesso-rede'
+      | 'versao-alterada'
+      | 'bpa-sem-producao',
     string
   >
 > = {
@@ -188,6 +196,8 @@ export const MENSAGENS_RECUSA_SUS: Readonly<
   'instrumento-desligado': 'Este instrumento está desligado neste estabelecimento.',
   'escopo-parcial':
     'Seu acesso cobre só parte dos convênios: a geração, o fechamento e a equivalência SIGTAP exigem acesso a todos os convênios do estabelecimento.',
+  'equivalencia-sem-acesso-rede':
+    'A equivalência SIGTAP vale para todos os hospitais da rede: registrá-la ou desativá-la exige a permissão de nível rede.',
   'versao-alterada': 'A competência mudou desde que você abriu a tela. Recarregue.',
 };
 
@@ -210,16 +220,16 @@ function recusa(codigo: keyof typeof MENSAGENS_RECUSA_SUS): ErroProblema {
         codigo: 'recurso-desligado',
       },
     );
-  if (codigo === 'escopo-parcial')
+  if (codigo === 'escopo-parcial' || codigo === 'equivalencia-sem-acesso-rede')
     return new ErroProblema('sem-permissao', 403, 'Fora do escopo', MENSAGENS_RECUSA_SUS[codigo], { codigo });
   return new ErroProblema('recusa-de-negocio', 422, 'Operação recusada', MENSAGENS_RECUSA_SUS[codigo], {
     codigo,
   });
 }
 
-/** Os erros das gravações (ErroSusSgh) em Problem Details. */
+/** Os erros das gravações (ErroSus) em Problem Details. */
 function problemaDaGravacao(erro: unknown): never {
-  if (erro instanceof ErroSusSgh) {
+  if (erro instanceof ErroSus) {
     if (erro.codigo === 'equivalencia-alterada')
       throw new ErroProblema('conflito-de-versao', 409, 'Equivalência alterada', erro.message, {
         codigo: 'versao-alterada',
@@ -282,7 +292,7 @@ export type MontadorCriticaSus = (
   s: SessaoSus,
   competencia: CompetenciaSus,
 ) => Promise<{
-  comp: CompetenciaSusLinha;
+  comp: CompetenciaSusRegistro;
   m: {
     criticas: readonly NovaCriticaSus[];
     cnes: string | null;
@@ -312,7 +322,13 @@ export class ServicoSus {
   ) {}
 
   private ctx(s: SessaoSus): ContextoSus {
-    return { rede: s.rede, hospital: s.hospital };
+    return {
+      rede: s.rede,
+      hospital: s.hospital,
+      ...(s.estabelecimento !== undefined ? { estabelecimento: s.estabelecimento } : {}),
+      ...(s.usuario !== undefined ? { usuario: s.usuario } : {}),
+      ...(s.correlacao !== undefined ? { correlacao: s.correlacao } : {}),
+    };
   }
 
   private async exigirLiberado(s: SessaoSus, i: InstrumentoSus): Promise<void> {
@@ -323,7 +339,13 @@ export class ServicoSus {
     if (s.convenios !== null) throw recusa('escopo-parcial');
   }
 
-  resumo(c: CompetenciaSusLinha, liberada: boolean): CompetenciaSusResumo {
+  /** A equivalência é da rede inteira: escopo total de convênios e a ação de nível rede. */
+  private exigirEquivalenciaDaRede(s: SessaoSus): void {
+    this.exigirEscopoTotal(s);
+    if (!s.pode?.(ACAO_EQUIVALENCIA_SUS_REDE)) throw recusa('equivalencia-sem-acesso-rede');
+  }
+
+  resumo(c: CompetenciaSusRegistro, liberada: boolean): CompetenciaSusResumo {
     return {
       instrumento: c.instrumento,
       competencia: c.competencia,
@@ -344,7 +366,7 @@ export class ServicoSus {
     };
   }
 
-  arquivoLido(a: ArquivoSusLinha): ArquivoSusLido {
+  arquivoLido(a: ArquivoSus): ArquivoSusLido {
     return {
       id: a.id,
       instrumento: a.instrumento,
@@ -365,7 +387,7 @@ export class ServicoSus {
     };
   }
 
-  private criticaLida(c: CriticaSusLinha): CriticaSusLida {
+  private criticaLida(c: CriticaSus): CriticaSusLida {
     return {
       id: c.id,
       regra: c.regra as CriticaSusLida['regra'],
@@ -383,7 +405,7 @@ export class ServicoSus {
     i: InstrumentoSus,
     c: CompetenciaSus,
     travar = false,
-  ): Promise<CompetenciaSusLinha> {
+  ): Promise<CompetenciaSusRegistro> {
     const x = await g.competencia(i, c, travar);
     if (!x) throw naoEncontrada();
     return x;
@@ -425,7 +447,7 @@ export class ServicoSus {
           EVENTOS_AUDITAVEIS.faturamentoCompetenciaSusAberta.codigo,
           'faturamento.abrirCompetenciaSus',
           {
-            tabela: 'SGH_FAT_SUS_COMPETENCIA',
+            tabela: 'competencia_sus',
             id: String(c.id),
             diferenca: `instrumento=${c.instrumento};competencia=${c.competencia}`,
           },
@@ -435,7 +457,7 @@ export class ServicoSus {
     });
   }
 
-  /** `faturamento.criticarSus`: lê a competência no outro sistema, monta pela SIGTAP dela e grava as críticas. */
+  /** `faturamento.criticarSus`: lê a produção da competência, monta pela SIGTAP dela e grava as críticas. */
   async criticar(s: SessaoSus, e: CriticarSusEntrada): Promise<ResultadoCriticaSus> {
     await this.exigirLiberado(s, e.instrumento);
     const t0 = Date.now();
@@ -483,7 +505,7 @@ export class ServicoSus {
       });
       await g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoCriticaSusExecutada.codigo, 'faturamento.criticarSus', {
-          tabela: 'SGH_FAT_SUS_COMPETENCIA',
+          tabela: 'competencia_sus',
           id: String(c.id),
           diferenca:
             `competencia=${c.competencia};registros=${m.resultado.registros.length};${contagens(r.porRegra)}`.slice(
@@ -536,7 +558,7 @@ export class ServicoSus {
     });
   }
 
-  /** Etapa 3: a produção SUS da competência (a do BPA) e as APACs apresentáveis, com os solicitantes do FAMEDSOL. */
+  /** Etapa 3: a produção SUS da competência (a do BPA) e as APACs apresentáveis, com os solicitantes do cadastro. */
   private async montarApac(s: SessaoSus, competencia: CompetenciaSus) {
     return this.porta.ler(this.ctx(s), async (l) => {
       const comp = await this.exigirCompetencia(l, 'apac', competencia);
@@ -608,7 +630,7 @@ export class ServicoSus {
           EVENTOS_AUDITAVEIS.faturamentoCriticaSusJustificada.codigo,
           'faturamento.justificarCriticaSus',
           {
-            tabela: 'SGH_FAT_SUS_CRITICA',
+            tabela: 'critica_sus',
             id: String(x.id),
             diferenca: `regra=${x.regra};competencia=${comp.competencia}`,
           },
@@ -649,7 +671,7 @@ export class ServicoSus {
           EVENTOS_AUDITAVEIS.faturamentoCompetenciaSusFechada.codigo,
           'faturamento.fecharCompetenciaSus',
           {
-            tabela: 'SGH_FAT_SUS_COMPETENCIA',
+            tabela: 'competencia_sus',
             id: String(c.id),
             diferenca: `instrumento=${c.instrumento};competencia=${c.competencia};registros=${c.registros}`,
           },
@@ -673,7 +695,7 @@ export class ServicoSus {
           EVENTOS_AUDITAVEIS.faturamentoCompetenciaSusReaberta.codigo,
           'faturamento.reabrirCompetenciaSus',
           {
-            tabela: 'SGH_FAT_SUS_COMPETENCIA',
+            tabela: 'competencia_sus',
             id: String(c.id),
             diferenca: `instrumento=${c.instrumento};competencia=${c.competencia}`,
           },
@@ -750,7 +772,7 @@ export class ServicoSus {
         );
         await g.trilha(
           s.trilha(EVENTOS_AUDITAVEIS.faturamentoCihaGerada.codigo, 'faturamento.gerarCiha', {
-            tabela: 'SGH_FAT_SUS_ARQUIVO',
+            tabela: 'arquivo',
             id: String(id),
             diferenca: `competencia=${c.competencia};registros=${arquivo.registros};procedimentos=${arquivo.procedimentos};sha256=${hash}`,
           }),
@@ -872,7 +894,7 @@ export class ServicoSus {
           arquivo.numeradas.filter((x) => x.tipo === t).reduce((n, x) => n + x.quantidade, 0);
         await g.trilha(
           s.trilha(EVENTOS_AUDITAVEIS.faturamentoBpaGerado.codigo, 'faturamento.gerarBpa', {
-            tabela: 'SGH_FAT_SUS_ARQUIVO',
+            tabela: 'arquivo',
             id: String(id),
             diferenca: `competencia=${c.competencia};bpaC=${r.consolidado.length}/${quantidade('c')};bpaI=${r.individualizado.length}/${quantidade('i')};folhas=${arquivo.folhas};controle=${arquivo.controle};sha256=${hash}`,
           }),
@@ -932,13 +954,13 @@ export class ServicoSus {
     return this.porta.ler(this.ctx(s), (l) => l.buscarSolicitantes(termo));
   }
 
-  /** Os parâmetros do faturamento ambulatorial do outro sistema (consulta: configuram o módulo do fornecedor). */
-  async parametrosLegado(s: SessaoSus): Promise<{
+  /** Os parâmetros do faturamento ambulatorial do estabelecimento (consulta). */
+  async parametrosCadastro(s: SessaoSus): Promise<{
     competenciaAmbulatorio: string | null;
     versao: string | null;
     orgao: string | null;
   }> {
-    return this.porta.ler(this.ctx(s), (l) => l.parametrosLegado());
+    return this.porta.ler(this.ctx(s), (l) => l.parametrosCadastro());
   }
 
   async listarArquivos(
@@ -973,7 +995,7 @@ export class ServicoSus {
     await this.gravar(s, (g) =>
       g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoArquivoSusBaixado.codigo, 'faturamento.baixarArquivoSus', {
-          tabela: 'SGH_FAT_SUS_ARQUIVO',
+          tabela: 'arquivo',
           id: String(a.id),
           diferenca: `competencia=${a.competencia};sha256=${a.hash}`,
         }),
@@ -992,7 +1014,7 @@ export class ServicoSus {
   }
 
   private apacLida(
-    a: ApacSghLinha,
+    a: ApacRegistro,
     nomes: {
       sigtap: ReadonlyMap<number, string>;
       solicitantes: ReadonlyMap<string, { nome: string; crm: number | null }>;
@@ -1034,7 +1056,7 @@ export class ServicoSus {
     };
   }
 
-  private async nomesDasApacs(l: LeituraSus, apacs: readonly ApacSghLinha[]) {
+  private async nomesDasApacs(l: LeituraSus, apacs: readonly ApacRegistro[]) {
     const sigtap = await l.nomesSigtap(apacs.map((a) => a.sigtap));
     const sol = await l.solicitantesApacPorChave(apacs.map((a) => a.solicitante));
     return { sigtap, solicitantes: new Map(sol.map((x) => [x.chave, { nome: x.nome, crm: x.crm }])) };
@@ -1099,7 +1121,7 @@ export class ServicoSus {
   }
 
   /**
-   * Os médicos solicitantes SUS (FAMEDSOL) para o laudo: a chave opaca (nunca o CPF), o nome, o CRM e se o CNS é
+   * Os médicos solicitantes SUS do cadastro para o laudo: a chave opaca (nunca o CPF), o nome, o CRM e se o CNS é
    * válido; com a APAC liberada e o escopo SUS, como o laudo.
    */
   async buscarSolicitantesApac(s: SessaoSus, termo: string): Promise<SolicitanteApac[]> {
@@ -1145,10 +1167,10 @@ export class ServicoSus {
   async registrarApac(s: SessaoSus, e: RegistrarApacEntrada): Promise<ApacLida> {
     await this.exigirLiberado(s, 'apac');
     this.exigirEscopoSus(s);
-    const trilha = (g: GravacaoSus, a: ApacSghLinha, diferenca: string) =>
+    const trilha = (g: GravacaoSus, a: ApacRegistro, diferenca: string) =>
       g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoApacRegistrada.codigo, 'faturamento.registrarApac', {
-          tabela: 'SGH_FAT_SUS_APAC',
+          tabela: 'apac',
           id: String(a.id),
           diferenca: `acao=${e.acao};${diferenca}`.slice(0, 1000),
         }),
@@ -1195,7 +1217,7 @@ export class ServicoSus {
       const antes = await g.apac(e.apac);
       if (!antes) throw new ErroProblema('nao-encontrado', 404, 'APAC não encontrada');
       if (versaoSus(antes.versao) !== e.versao) throw recusa('apac-alterada');
-      let mudanca: MudancaApacSgh;
+      let mudanca: MudancaApac;
       let r: RecusaApac | null;
       let detalhe = '';
       switch (e.acao) {
@@ -1267,11 +1289,11 @@ export class ServicoSus {
           break;
       }
       if (r) throw recusa(r);
-      let depois: ApacSghLinha;
+      let depois: ApacRegistro;
       try {
         ({ depois } = await g.mudarApac({ id: antes.id, versao: antes.versao, por: s.login, mudanca }));
       } catch (erro) {
-        if (erro instanceof ErroSusSgh && erro.codigo === 'apac-numero-duplicado')
+        if (erro instanceof ErroSus && erro.codigo === 'apac-numero-duplicado')
           throw recusa('apac-numero-duplicado');
         throw erro;
       }
@@ -1362,7 +1384,7 @@ export class ServicoSus {
         const porTipo = (t: string) => r.apacs.filter((x) => x.tipoNoArquivo === t).length;
         await g.trilha(
           s.trilha(EVENTOS_AUDITAVEIS.faturamentoApacGerada.codigo, 'faturamento.gerarApac', {
-            tabela: 'SGH_FAT_SUS_ARQUIVO',
+            tabela: 'arquivo',
             id: String(id),
             diferenca: `competencia=${c.competencia};apacs=${r.apacs.length};inicial=${porTipo('1')};continuidade=${porTipo('2')};unica=${porTipo('3')};procedimentos=${arquivo.procedimentos}/${quantidade};controle=${arquivo.controle};sha256=${hash}`,
           }),
@@ -1409,7 +1431,7 @@ export class ServicoSus {
     });
   }
 
-  // ── Equivalência SIGTAP do Sante ─────────────────────────────────────────────────────────────────────
+  // ── Equivalência SIGTAP do hospital ─────────────────────────────────────────────────────────────────────
 
   private equivalenciaLida(x: EquivalenciaSusNomeada): EquivalenciaSusLida {
     return {
@@ -1466,8 +1488,9 @@ export class ServicoSus {
     e: RegistrarEquivalenciaSusEntrada,
   ): Promise<{ equivalencia: EquivalenciaSusLida; mudou: boolean }> {
     await this.exigirLiberado(s, 'ciha');
-    // A equivalência vale para o estabelecimento inteiro (muda a CIHA de todos os convênios): escopo total.
-    this.exigirEscopoTotal(s);
+    // A equivalência vale para a rede inteira (muda a CIHA de todos os hospitais e convênios): escopo total e a ação
+    // de nível rede.
+    this.exigirEquivalenciaDaRede(s);
     return this.gravar(s, async (g) => {
       const [proc] = await g.procedimentosHospital([e.procedimento]);
       if (!proc)
@@ -1501,7 +1524,7 @@ export class ServicoSus {
             EVENTOS_AUDITAVEIS.faturamentoEquivalenciaSusRegistrada.codigo,
             'faturamento.registrarEquivalenciaSus',
             {
-              tabela: 'SGH_FAT_SUS_EQUIVALENCIA',
+              tabela: 'equivalencia_sigtap_item',
               id: String(r.depois.id),
               diferenca: `procedimento=${proc.id};codigo=${proc.codigo};sigtap=${r.antes?.ativa ? r.antes.codigo : ''}->${p.codigo}`,
             },
@@ -1525,7 +1548,7 @@ export class ServicoSus {
     e: DesativarEquivalenciaSusEntrada,
   ): Promise<EquivalenciaSusLida> {
     await this.exigirLiberado(s, 'ciha');
-    this.exigirEscopoTotal(s);
+    this.exigirEquivalenciaDaRede(s);
     return this.gravar(s, async (g) => {
       const r = await g.desativarEquivalencia({
         procedimento: e.procedimento,
@@ -1537,7 +1560,7 @@ export class ServicoSus {
           EVENTOS_AUDITAVEIS.faturamentoEquivalenciaSusDesativada.codigo,
           'faturamento.desativarEquivalenciaSus',
           {
-            tabela: 'SGH_FAT_SUS_EQUIVALENCIA',
+            tabela: 'equivalencia_sigtap_item',
             id: String(r.depois.id),
             diferenca: `procedimento=${r.depois.procedimento};sigtap=${r.antes.codigo}->`,
           },

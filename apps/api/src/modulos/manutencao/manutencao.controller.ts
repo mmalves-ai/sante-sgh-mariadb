@@ -29,7 +29,7 @@
 //   POST /api/manutencao/coberturas/:id/encerramento W0-08: encerrar com motivo e data
 //   POST /api/manutencao/coberturas/:id/exclusao     W0-08: excluir o registrado por engano (409 com os vínculos)
 //   GET  /api/manutencao/indicadores?inicio&fim      disponibilidade, MTBF e MTTR com as parcelas
-// As gravações exigem a chave `manutencao` no estabelecimento (POL-3) e vão só para SGH_MAN_* com a SGH_TRILHA na mesma
+// As gravações exigem a chave `manutencao` no estabelecimento (POL-3) e vão só para tabelas da manutenção com a trilha de auditoria na mesma
 // transação; a consulta segue com a chave desligada (D-LIB-551). O equipamento crítico parado avisa o setor (central
 // de avisos, na mesma transação) e só PROPÕE o bloqueio da agenda pela operação que já existe (D-BLOQ-55).
 import {
@@ -135,14 +135,14 @@ import {
   type QuemAge,
 } from '@sgh/dominio-manutencao';
 import {
-  type CoberturaLida,
-  type EquipamentoLido,
+  type CoberturaManutencao,
+  type EquipamentoManutencao,
   type EquipamentoParaGravar,
-  type OsLida,
-  type PlanoManutencaoLido,
+  type OrdemServico,
+  type PlanoManutencao,
   recusaCicloVida,
-  type SetorLido,
-} from '@sgh/legado';
+  type SetorManutencao,
+} from './tipos.js';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -156,7 +156,7 @@ import {
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
-import { INTEGRACAO_OS_LEITO, type IntegracaoOsLeito } from '../adt/public-api.js';
+import { INTEGRACAO_OS_LEITO, type IntegracaoOsLeito } from '../adt/os-leito.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { PORTA_PATRIMONIO, type PortaPatrimonio } from '../patrimonio/public-api.js';
 import { chaveDoModelo, conferirEvento, inicioDaJanela, montarIndice, montarPgts } from './ciclo-vida.js';
@@ -322,13 +322,13 @@ export class ManutencaoController {
 
   private async mapaEquipamentos(s: SessaoCadastro, ids: readonly (number | null)[]) {
     const unicos = [...new Set(ids.filter((i): i is number => i !== null))];
-    if (unicos.length === 0) return new Map<number, EquipamentoLido>();
+    if (unicos.length === 0) return new Map<number, EquipamentoManutencao>();
     const r = await this.porta.equipamentos(s.porta, { ids: unicos, limite: unicos.length });
     return new Map(r.itens.map((e) => [e.id, e]));
   }
 
   /** Confere o OS lida contra a versão que a tela viu (antes de decidir). */
-  private static conferirVersao(o: OsLida | null, versao: number): OsLida {
+  private static conferirVersao(o: OrdemServico | null, versao: number): OrdemServico {
     if (!o) throw naoEncontrado('Ordem de serviço');
     if (o.versao !== versao)
       throw recusada(
@@ -341,7 +341,7 @@ export class ManutencaoController {
   /** Avisa o setor do equipamento crítico parado (e o setor da sala, se outro) na central de avisos. */
   private static async avisarParada(
     g: GravadorManutencao,
-    eq: EquipamentoLido,
+    eq: EquipamentoManutencao,
     os: { id: number; numero: string },
   ): Promise<{ alerta: ReturnType<typeof alertaDeParada>; avisados: number }> {
     const alerta = alertaDeParada(eq);
@@ -363,7 +363,7 @@ export class ManutencaoController {
         evento: 'manutencao.equipamento.parado',
         titulo: `Equipamento crítico parado: ${eq.nome} (${eq.codigo}), OS ${os.numero}`,
         link: `/manutencao/os?os=${os.id}`,
-        objetoTabela: 'SGH_MAN_OS',
+        objetoTabela: 'ordem_servico_manutencao',
         objetoChave: String(os.id),
       });
       if (id !== null) avisados += 1;
@@ -445,7 +445,7 @@ export class ManutencaoController {
   }
 
   /** A OS que a pessoa pode ver: quem atende vê todas; quem só abre, as que abriu e as dos seus setores. */
-  private async osVisivel(s: SessaoCadastro, id: number): Promise<OsLida> {
+  private async osVisivel(s: SessaoCadastro, id: number): Promise<OrdemServico> {
     const o = await this.porta.os(s.porta, id);
     if (!o) throw naoEncontrado('Ordem de serviço');
     const todas = s.pode(P.osAtender) || s.pode(P.osEncerrar);
@@ -584,7 +584,7 @@ export class ManutencaoController {
   @Post('os')
   @HttpCode(201)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('SGH_MAN_OS, SGH_MAN_OS_EVENTO e o aviso da central com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao, ordem_servico_manutencao_evento e o aviso da central com a trilha de auditoria na mesma transação')
   async abrirOs(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirOs, b);
@@ -592,7 +592,7 @@ export class ManutencaoController {
       s,
       E.manutencaoOsAberta.codigo,
       RECURSO,
-      (y: { id: number }) => ({ tabela: 'SGH_MAN_OS', id: String(y.id), paciente: null }),
+      (y: { id: number }) => ({ tabela: 'ordem_servico_manutencao', id: String(y.id), paciente: null }),
       async (g) => {
         const [relogio, setores] = await Promise.all([g.relogio(), g.setores()]);
         const eq =
@@ -609,7 +609,7 @@ export class ManutencaoController {
           natureza: e.natureza,
           centroCusto: e.centroCusto,
           centrosDoUsuario: meusSetores(s),
-          centrosAtivos: setores.filter((x: SetorLido) => x.ativo).map((x) => x.codigo),
+          centrosAtivos: setores.filter((x: SetorManutencao) => x.ativo).map((x) => x.codigo),
           equipamento: eq,
           equipamentoParado: e.equipamentoParado,
           abertasDoEquipamento: eq ? await g.osAbertasDoEquipamento(eq.id) : [],
@@ -678,11 +678,11 @@ export class ManutencaoController {
     versao: number,
     acao: AcaoOs,
     montar: (
-      o: OsLida,
+      o: OrdemServico,
       g: GravadorManutencao,
       agora: string,
     ) => Promise<{
-      para?: OsLida['situacao'];
+      para?: OrdemServico['situacao'];
       voltaAoUso?: string | null;
       campos: Parameters<GravadorManutencao['mudarOs']>[0]['campos'];
       nota: string | null;
@@ -693,7 +693,7 @@ export class ManutencaoController {
       s,
       evento,
       RECURSO,
-      { tabela: 'SGH_MAN_OS', id: String(id), paciente: null },
+      { tabela: 'ordem_servico_manutencao', id: String(id), paciente: null },
       async (g) => {
         const o = ManutencaoController.conferirVersao(await g.os(id), versao);
         const { agora } = await g.relogio();
@@ -726,7 +726,7 @@ export class ManutencaoController {
   @Post('os/:id/assumir')
   @HttpCode(200)
   @Permissao(P.osAtender)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async assumir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAssumirOs, { ...(b as object), os: idDaRota(id) });
@@ -756,7 +756,7 @@ export class ManutencaoController {
   @Post('os/:id/andamento')
   @HttpCode(200)
   @Permissao(P.osAtender)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async andamento(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAndamentoOs, { ...(b as object), os: idDaRota(id) });
@@ -770,7 +770,7 @@ export class ManutencaoController {
   @Post('os/:id/concluir')
   @HttpCode(200)
   @Permissao(P.osEncerrar)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async concluir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaConcluirOs, { ...(b as object), os: idDaRota(id) });
@@ -810,7 +810,7 @@ export class ManutencaoController {
   @Post('os/:id/encerrar')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async encerrar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaEncerrarOs, { ...(b as object), os: idDaRota(id) });
@@ -845,7 +845,7 @@ export class ManutencaoController {
   @Post('os/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async cancelar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCancelarOs, { ...(b as object), os: idDaRota(id) });
@@ -878,7 +878,7 @@ export class ManutencaoController {
   @Post('os/:id/correcao')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('SGH_MAN_OS e SGH_MAN_OS_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
   async corrigir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCorrigirOs, { ...(b as object), os: idDaRota(id) });
@@ -886,7 +886,7 @@ export class ManutencaoController {
       s,
       E.manutencaoOsCorrigida.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_OS', id: String(e.os), paciente: null },
+      { tabela: 'ordem_servico_manutencao', id: String(e.os), paciente: null },
       async (g) => {
         const o = ManutencaoController.conferirVersao(await g.os(e.os), e.versao);
         const setores = await g.setores();
@@ -909,7 +909,7 @@ export class ManutencaoController {
           },
           quem: quemAge(s),
           centrosDoUsuario: meusSetores(s),
-          centrosAtivos: setores.filter((x: SetorLido) => x.ativo).map((x) => x.codigo),
+          centrosAtivos: setores.filter((x: SetorManutencao) => x.ativo).map((x) => x.codigo),
           equipamentoNovo: eq,
         });
         if (!plano.ok) throw recusada(plano.recusa, plano.mensagem);
@@ -1036,7 +1036,7 @@ export class ManutencaoController {
   /** O bem do patrimônio pelo ID (nulo: não achado, baixado ou o patrimônio fora do ar). */
   private async bemDoPatrimonio(s: SessaoCadastro, id: number): Promise<BemDoEquipamento | null> {
     if (!this.patrimonio || this.patrimonio.destino === 'indisponivel') return null;
-    const b = await this.patrimonio.bem({ rede: s.rede, hospital: s.hospital }, id).catch(() => null);
+    const b = await this.patrimonio.bem(s.porta, id).catch(() => null);
     return b && b.situacao !== 'baixado' ? { id: b.id, plaqueta: b.plaqueta, descricao: b.descricao } : null;
   }
 
@@ -1063,7 +1063,7 @@ export class ManutencaoController {
     const busca = (termo ?? '').trim().slice(0, 60);
     if (!this.patrimonio || this.patrimonio.destino === 'indisponivel' || busca.length < 2) return [];
     const r = await this.patrimonio.bens(
-      { rede: s.rede, hospital: s.hospital },
+      s.porta,
       { busca, pagina: 1, tamanho: 20 },
     );
     return r.bens
@@ -1087,7 +1087,7 @@ export class ManutencaoController {
   @Post('equipamentos')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_EQUIPAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('equipamento_saude com a trilha de auditoria na mesma transação')
   async cadastrarEquipamento(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1099,7 +1099,7 @@ export class ManutencaoController {
       E.manutencaoEquipamentoCadastrado.codigo,
       RECURSO,
       (y: { id: number }) => ({
-        tabela: 'SGH_MAN_EQUIPAMENTO',
+        tabela: 'equipamento_saude',
         id: String(y.id),
         paciente: null,
         chave: e.codigo,
@@ -1117,7 +1117,7 @@ export class ManutencaoController {
   @Post('equipamentos/:id')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_EQUIPAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('equipamento_saude com a trilha de auditoria na mesma transação')
   async alterarEquipamento(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1129,7 +1129,7 @@ export class ManutencaoController {
       s,
       E.manutencaoEquipamentoAlterado.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_EQUIPAMENTO', id: String(e.id), paciente: null, chave: e.codigo },
+      { tabela: 'equipamento_saude', id: String(e.id), paciente: null, chave: e.codigo },
       async (g) => {
         const antes = await g.equipamento(e.id);
         if (!antes) throw naoEncontrado('Equipamento');
@@ -1223,7 +1223,7 @@ export class ManutencaoController {
   @Post('plano')
   @HttpCode(201)
   @Permissao(P.preventivaPlanejar)
-  @AuditadoNoHandler('SGH_MAN_PREVENTIVA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('plano_preventivo com a trilha de auditoria na mesma transação')
   async planejar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaPlanejarManutencao, b);
@@ -1231,7 +1231,7 @@ export class ManutencaoController {
       s,
       E.manutencaoPlanoGravado.codigo,
       RECURSO,
-      (y: { id: number }) => ({ tabela: 'SGH_MAN_PREVENTIVA', id: String(y.id), paciente: null }),
+      (y: { id: number }) => ({ tabela: 'plano_preventivo', id: String(y.id), paciente: null }),
       async (g) => {
         await conferirPlanoNovo(g, e);
         return g.incluirPlano({ ...e, usuario: s.login });
@@ -1256,7 +1256,7 @@ export class ManutencaoController {
   @Post('plano/modelo')
   @HttpCode(201)
   @Permissao(P.preventivaPlanejar)
-  @AuditadoNoHandler('SGH_MAN_PREVENTIVA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('plano_preventivo com a trilha de auditoria na mesma transação')
   async instalarModelo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaInstalarModeloPlano, b);
@@ -1280,7 +1280,7 @@ export class ManutencaoController {
       s,
       E.manutencaoPlanoGravado.codigo,
       RECURSO,
-      (y: { id: number }) => ({ tabela: 'SGH_MAN_PREVENTIVA', id: String(y.id), paciente: null }),
+      (y: { id: number }) => ({ tabela: 'plano_preventivo', id: String(y.id), paciente: null }),
       async (g) => {
         await conferirPlanoNovo(g, plano);
         return g.incluirPlano({
@@ -1367,7 +1367,7 @@ export class ManutencaoController {
   @Post('plano/:id/ativo')
   @HttpCode(200)
   @Permissao(P.preventivaPlanejar)
-  @AuditadoNoHandler('SGH_MAN_PREVENTIVA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('plano_preventivo com a trilha de auditoria na mesma transação')
   async ativar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1380,7 +1380,7 @@ export class ManutencaoController {
       s,
       E.manutencaoPlanoGravado.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_PREVENTIVA', id: String(n), paciente: null },
+      { tabela: 'plano_preventivo', id: String(n), paciente: null },
       (g) => g.ativarPlano({ id: n, versaoVista: e.versao, ativo: e.ativo, usuario: s.login }),
     );
     return { ok: true, ...r, mensagem: e.ativo ? 'Plano reativado.' : 'Plano desativado.' };
@@ -1428,7 +1428,7 @@ export class ManutencaoController {
   @Put('plano/:id')
   @HttpCode(200)
   @Permissao(P.preventivaPlanejar)
-  @AuditadoNoHandler('SGH_MAN_PREVENTIVA e SGH_MAN_PREVENTIVA_VERSAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('plano_preventivo e a versão na trilha com a trilha de auditoria na mesma transação')
   async alterarPlano(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1440,7 +1440,7 @@ export class ManutencaoController {
       s,
       E.manutencaoPlanoAlterado.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_PREVENTIVA', id: String(e.plano), paciente: null },
+      { tabela: 'plano_preventivo', id: String(e.plano), paciente: null },
       async (g) => {
         const plano = await g.plano(e.plano);
         if (!plano) throw naoEncontrado('Plano de manutenção');
@@ -1483,7 +1483,7 @@ export class ManutencaoController {
   @HttpCode(201)
   @Permissao(P.preventivaPlanejar)
   @AuditadoNoHandler(
-    'SGH_MAN_PREVENTIVA_EXEC (e, reprovada, SGH_MAN_OS com a parada e o aviso) com a SGH_TRILHA na mesma transação',
+    'execucao_preventiva (e, reprovada, ordem_servico_manutencao com a parada e o aviso) com a trilha de auditoria na mesma transação',
   )
   async executar(
     @Param('id') id: string,
@@ -1496,7 +1496,7 @@ export class ManutencaoController {
       s,
       E.manutencaoPlanoExecutado.codigo,
       RECURSO,
-      (y: { id: number }) => ({ tabela: 'SGH_MAN_PREVENTIVA_EXEC', id: String(y.id), paciente: null }),
+      (y: { id: number }) => ({ tabela: 'execucao_preventiva', id: String(y.id), paciente: null }),
       async (g) => {
         const plano = await g.plano(e.plano);
         if (!plano || !plano.ativo) throw naoEncontrado('Plano de manutenção');
@@ -1625,7 +1625,7 @@ export class ManutencaoController {
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
   @AuditadoNoHandler(
-    'SGH_MAN_COBERTURA, SGH_MAN_COBERTURA_EQUIP e SGH_MAN_COBERTURA_VERSAO com a SGH_TRILHA na mesma transação',
+    'contrato_servico_terceirizado, contrato_servico_terceirizado_item e a versão na trilha com a trilha de auditoria na mesma transação',
   )
   async alterarCobertura(
     @Param('id') id: string,
@@ -1638,7 +1638,7 @@ export class ManutencaoController {
       s,
       E.manutencaoCoberturaAlterada.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_COBERTURA', id: String(e.id), paciente: null },
+      { tabela: 'contrato_servico_terceirizado', id: String(e.id), paciente: null },
       async (g) => {
         const c = await g.cobertura(e.id);
         if (!c) throw naoEncontrado('Contrato de manutenção');
@@ -1688,7 +1688,7 @@ export class ManutencaoController {
   @Post('coberturas/:id/encerramento')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_COBERTURA e SGH_MAN_COBERTURA_VERSAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('contrato_servico_terceirizado e a versão na trilha com a trilha de auditoria na mesma transação')
   async encerrarCobertura(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1700,7 +1700,7 @@ export class ManutencaoController {
       s,
       E.manutencaoCoberturaEncerrada.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_COBERTURA', id: String(e.id), paciente: null },
+      { tabela: 'contrato_servico_terceirizado', id: String(e.id), paciente: null },
       async (g) => {
         const c = await g.cobertura(e.id);
         if (!c) throw naoEncontrado('Contrato de manutenção');
@@ -1737,7 +1737,7 @@ export class ManutencaoController {
   @Post('coberturas/:id/exclusao')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_COBERTURA* (retrato na SGH_HIST_EXCLUSAO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('contrato_servico_terceirizado* (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação')
   async excluirCobertura(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1749,7 +1749,7 @@ export class ManutencaoController {
       s,
       E.manutencaoCoberturaExcluida.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_COBERTURA', id: String(e.id), paciente: null },
+      { tabela: 'contrato_servico_terceirizado', id: String(e.id), paciente: null },
       async (g) => {
         const c = await g.cobertura(e.id);
         if (!c) throw naoEncontrado('Contrato de manutenção');
@@ -1763,7 +1763,7 @@ export class ManutencaoController {
   @Post('coberturas')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_COBERTURA e SGH_MAN_COBERTURA_EQUIP com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('contrato_servico_terceirizado e contrato_servico_terceirizado_item com a trilha de auditoria na mesma transação')
   async gravarCobertura(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaCoberturaContrato, b);
@@ -1772,7 +1772,7 @@ export class ManutencaoController {
       E.manutencaoCoberturaGravada.codigo,
       RECURSO,
       (y: { id: number }) => ({
-        tabela: 'SGH_MAN_COBERTURA',
+        tabela: 'contrato_servico_terceirizado',
         id: String(y.id),
         paciente: null,
         chave: e.numero,
@@ -1854,7 +1854,7 @@ export class ManutencaoController {
   @Post('alertas')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_ALERTA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alerta_sanitario com a trilha de auditoria na mesma transação')
   async registrarAlerta(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarAlertaEquipamento, b);
@@ -1863,7 +1863,7 @@ export class ManutencaoController {
       E.manutencaoAlertaRegistrado.codigo,
       RECURSO,
       (y: { id: number }) => ({
-        tabela: 'SGH_MAN_ALERTA',
+        tabela: 'alerta_sanitario',
         id: String(y.id),
         paciente: null,
         chave: e.numero,
@@ -1877,7 +1877,7 @@ export class ManutencaoController {
   @Put('alertas/:id')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_ALERTA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alerta_sanitario com a trilha de auditoria na mesma transação')
   async alterarAlerta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1890,7 +1890,7 @@ export class ManutencaoController {
       s,
       E.manutencaoAlertaAlterado.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_ALERTA', id: String(alvo), paciente: null },
+      { tabela: 'alerta_sanitario', id: String(alvo), paciente: null },
       (g) =>
         g.alterarAlerta({
           ...campos,
@@ -1906,7 +1906,7 @@ export class ManutencaoController {
   @Post('alertas/:id/encerramento')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_ALERTA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alerta_sanitario com a trilha de auditoria na mesma transação')
   async encerrarAlerta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1918,7 +1918,7 @@ export class ManutencaoController {
       s,
       E.manutencaoAlertaEncerrado.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_ALERTA', id: String(e.id), paciente: null },
+      { tabela: 'alerta_sanitario', id: String(e.id), paciente: null },
       (g) => g.encerrarAlerta({ id: e.id, versaoVista: e.versao, motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true, ...r, mensagem: 'Alerta encerrado.' };
@@ -1931,7 +1931,7 @@ export class ManutencaoController {
   @Delete('alertas/:id')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_ALERTA (retrato na SGH_HIST_EXCLUSAO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('alerta_sanitario (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação')
   async excluirAlerta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1943,7 +1943,7 @@ export class ManutencaoController {
       s,
       E.manutencaoAlertaExcluido.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_ALERTA', id: String(e.id), paciente: null },
+      { tabela: 'alerta_sanitario', id: String(e.id), paciente: null },
       (g) => g.excluirAlerta({ id: e.id, versaoVista: e.versao, motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true, ...r, mensagem: 'Alerta excluído.' };
@@ -1954,7 +1954,7 @@ export class ManutencaoController {
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
   @AuditadoNoHandler(
-    'SGH_MAN_OS, SGH_MAN_OS_EVENTO e SGH_MAN_ALERTA_EQUIP com a SGH_TRILHA na mesma transação',
+    'ordem_servico_manutencao, ordem_servico_manutencao_evento e alerta_sanitario_equipamento com a trilha de auditoria na mesma transação',
   )
   async acaoDeCampo(
     @Param('id') id: string,
@@ -1967,7 +1967,7 @@ export class ManutencaoController {
       s,
       E.manutencaoAlertaAcaoDeCampo.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_ALERTA', id: String(e.id), paciente: null },
+      { tabela: 'alerta_sanitario', id: String(e.id), paciente: null },
       async (g) =>
         g.gerarAcaoDeCampo({
           id: e.id,
@@ -1997,7 +1997,7 @@ export class ManutencaoController {
   @Post('os/:id/queixa-tecnica')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_QUA_TECNOVIG e SGH_MAN_OS_QUEIXA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('queixa_tecnica_produto e vínculo da queixa com a trilha de auditoria na mesma transação')
   async queixaTecnica(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -2010,7 +2010,7 @@ export class ManutencaoController {
       s,
       E.manutencaoOsQueixaTecnica.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_OS', id: String(e.os), paciente: null },
+      { tabela: 'ordem_servico_manutencao', id: String(e.os), paciente: null },
       async (g) =>
         g.abrirQueixaDaOs({ ...e, usuario: s.login, agora: (await g.relogio()).agora.slice(0, 16) }),
     );
@@ -2050,7 +2050,7 @@ export class ManutencaoController {
   @Post('modelos/cursos')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_MODELO_CURSO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('modelo_equipamento_curso com a trilha de auditoria na mesma transação')
   async vincularCursoModelo(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -2065,7 +2065,7 @@ export class ManutencaoController {
       E.manutencaoCursoModeloVinculado.codigo,
       RECURSO,
       (y: { id: number }) => ({
-        tabela: 'SGH_MAN_MODELO_CURSO',
+        tabela: 'modelo_equipamento_curso',
         id: String(y.id),
         paciente: null,
         chave: `${chave.fabricante} ${chave.modelo}`.slice(0, 60),
@@ -2080,7 +2080,7 @@ export class ManutencaoController {
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
   @AuditadoNoHandler(
-    'SGH_MAN_MODELO_CURSO (retrato na SGH_HIST_EXCLUSAO) com a SGH_TRILHA na mesma transação',
+    'modelo_equipamento_curso (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
   )
   async desvincularCursoModelo(
     @Param('id') id: string,
@@ -2093,7 +2093,7 @@ export class ManutencaoController {
       s,
       E.manutencaoCursoModeloExcluido.codigo,
       RECURSO,
-      { tabela: 'SGH_MAN_MODELO_CURSO', id: String(e.id), paciente: null },
+      { tabela: 'modelo_equipamento_curso', id: String(e.id), paciente: null },
       async (g) => {
         if (!(await g.cursoDoModelo(e.id))) throw naoEncontrado('Curso exigido do modelo');
         return g.desvincularCursoModelo({ ...e, usuario: s.login });
@@ -2145,7 +2145,7 @@ export class ManutencaoController {
   /** O índice e os eventos do ciclo de vida do equipamento já lido (a ficha e o PGTS). */
   private async obsolescenciaDe(
     s: SessaoCadastro,
-    e: EquipamentoLido,
+    e: EquipamentoManutencao,
     hoje: string,
     r: (chave: string) => unknown,
   ): Promise<{ indice: IndiceObsolescencia; eventos: EventoCicloVida[] }> {
@@ -2155,7 +2155,7 @@ export class ManutencaoController {
       this.porta.baseObsolescencia(s.porta, e.id, inicioDaJanela(relogio.hoje)),
       e.bemPatrimonial === null || !this.patrimonio || this.patrimonio.destino === 'indisponivel'
         ? Promise.resolve(null)
-        : this.patrimonio.bem({ rede: s.rede, hospital: s.hospital }, e.bemPatrimonial).catch(() => null),
+        : this.patrimonio.bem(s.porta, e.bemPatrimonial).catch(() => null),
     ]);
     const padrao = Number(r('manutencao.vidaUtilPadraoMeses') ?? 120);
     const indice = montarIndice({
@@ -2179,7 +2179,7 @@ export class ManutencaoController {
   @Auditar(E.manutencaoPgtsGerado.codigo)
   async documentoPgts(@Req() req: RequisicaoAutorizada, @Res() res: Resposta) {
     const s = sessaoDe(req);
-    const equipamentos: EquipamentoLido[] = [];
+    const equipamentos: EquipamentoManutencao[] = [];
     for (let antesDe: number | null = null; ;) {
       const pg = await this.porta.equipamentos(s.porta, { antesDe, limite: TETO_PGTS });
       equipamentos.push(...pg.itens);
@@ -2237,7 +2237,7 @@ export class ManutencaoController {
   @Post('equipamentos/:id/eventos')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('SGH_MAN_EQUIP_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('evento_ciclo_equipamento com a trilha de auditoria na mesma transação')
   async registrarEventoCiclo(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -2250,7 +2250,7 @@ export class ManutencaoController {
       E.manutencaoEquipamentoEvento.codigo,
       RECURSO,
       (y: { id: number }) => ({
-        tabela: 'SGH_MAN_EQUIP_EVENTO',
+        tabela: 'evento_ciclo_equipamento',
         id: String(y.id),
         paciente: null,
         chave: `${e.equipamento} ${e.tipo}`,
@@ -2306,7 +2306,7 @@ async function conferirPlanoNovo(
 }
 
 /** O modelo pronto de onde o plano veio, com o código conferido contra o vocabulário (código estranho: null). */
-function modeloDoPlano(p: PlanoManutencaoLido): { codigo: CodigoModeloPlano; versao: number } | null {
+function modeloDoPlano(p: PlanoManutencao): { codigo: CodigoModeloPlano; versao: number } | null {
   const c = p.modelo?.codigo;
   return p.modelo && c && c in MODELOS_PLANO_INFRA
     ? { codigo: c as CodigoModeloPlano, versao: p.modelo.versao }
@@ -2321,7 +2321,7 @@ const contratoDesatualizado = () =>
 
 /** O contrato na lista: o resumo, a versão e o encerramento (W0-08). */
 function contratoDaLista(
-  c: CoberturaLida,
+  c: CoberturaManutencao,
   nomes: Parameters<typeof resumoCobertura>[1],
   hoje: string,
 ): ContratoManutencao {
@@ -2336,7 +2336,7 @@ function contratoDaLista(
   };
 }
 
-const MENSAGEM_DA_SITUACAO: Readonly<Record<OsLida['situacao'], string>> = {
+const MENSAGEM_DA_SITUACAO: Readonly<Record<OrdemServico['situacao'], string>> = {
   aberta: 'Ordem de serviço aberta.',
   emAtendimento: 'Ordem de serviço em atendimento.',
   aguardandoPeca: 'Ordem de serviço aguardando peça.',

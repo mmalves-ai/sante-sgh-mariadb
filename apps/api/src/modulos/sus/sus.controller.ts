@@ -9,7 +9,7 @@
 //   POST /api/sus/ciha/arquivo                             gerar o arquivo CIHA (faturamento.gerarCiha)
 //   GET  /api/sus/arquivos?instrumento&competencia         os arquivos gerados (metadados e hash; auditada)
 //   GET  /api/sus/arquivos/:id/conteudo                    baixar o arquivo (auditado; conferido pelo hash)
-//   GET  /api/sus/equivalencias?termo&procedimento&…       a página das equivalências SIGTAP do Sante (com os nomes)
+//   GET  /api/sus/equivalencias?termo&procedimento&…       a página das equivalências SIGTAP do hospital (com os nomes)
 //   POST /api/sus/equivalencias                            registrar (ou trocar, com a versão) a equivalência
 //   POST /api/sus/equivalencias/desativacao                desativar a equivalência (com a versão; nada é apagado)
 //   GET  /api/sus/sigtap?termo&competencia                 busca na SIGTAP (código ou nome; a vigência na competência)
@@ -19,7 +19,7 @@
 //   GET  /api/sus/bpa/linhas?arquivo&tipo&procedimento     as linhas do arquivo (sem dado pessoal; auditada)
 //   GET  /api/sus/bpa/arquivos/:id/conteudo                baixar o BPA (auditado; conferido pelo hash)
 //   GET  /api/sus/solicitantes/cadastro-geral?termo        busca no cadastro geral de médicos solicitantes
-//   GET  /api/sus/parametros-legado                        os parâmetros do faturamento ambulatorial (consulta)
+//   GET  /api/sus/parametros-ambulatoriais                        os parâmetros do faturamento ambulatorial (consulta)
 // Etapa 3 (APAC; desligada por estabelecimento até haver contrato SUS, DP-35):
 //   GET  /api/sus/apac?situacao&numero&prontuario&…        as APACs (o paciente pelo prontuário; auditada)
 //   GET  /api/sus/apac/atendimento/:registro               o atendimento do laudo conferido (sem documento)
@@ -267,9 +267,13 @@ export class SusController {
       rede: s.rede,
       hospital: s.hospital,
       login: s.login,
+      estabelecimento: s.porta.estabelecimento,
+      usuario: s.porta.usuario,
+      correlacao: s.porta.correlacao,
       hoje: hojeLocal(),
       convenios: escopo.length === 0 ? null : escopo.map(Number).filter(Number.isFinite),
       parametros: await this.parametros(s),
+      pode: (acao) => s.pode(acao),
       liberado: async (i) => {
         // Regra 8: a CIHA é gerada e mostrada sempre; BPA, APAC e AIH só com a chave ligada (DP-35).
         if (i === 'ciha') return true;
@@ -277,10 +281,27 @@ export class SusController {
           cache.set(i, (await this.liberacao.consultar(s, chaveLiberacaoDoInstrumento(i))).ligada);
         return cache.get(i) ?? false;
       },
-      trilha: (evento, operacao, alvo) => ({
-        ...linhaTrilha(s, evento, 'faturamento.sus', operacao, { tabela: alvo.tabela, id: alvo.id }),
-        ...(alvo.diferenca ? { diferenca: alvo.diferenca.slice(0, 1000) } : {}),
-      }),
+      trilha: (evento, operacao, alvo) => {
+        const base = linhaTrilha(s, evento, 'faturamento.sus', operacao, { tabela: alvo.tabela, id: alvo.id });
+        const estacao = (base.dadosDepois as { estacao?: unknown } | undefined)?.estacao;
+        return {
+          rede: s.rede,
+          hospital: s.hospital,
+          usuario: s.login,
+          evento,
+          recurso: 'faturamento.sus',
+          operacao,
+          tabelaAlvo: alvo.tabela,
+          idAlvo: alvo.id,
+          chaveNaturalAlvo: null,
+          resultado: 'sucesso',
+          estacao: typeof estacao === 'string' ? estacao : null,
+          correlacao: base.correlacao ?? '',
+          estabelecimento: base.estabelecimento,
+          usuarioId: base.usuario,
+          ...(alvo.diferenca ? { diferenca: alvo.diferenca.slice(0, 1000) } : {}),
+        };
+      },
     };
   }
 
@@ -315,7 +336,7 @@ export class SusController {
   @HttpCode(201)
   @Permissao('faturamento.sus.abrirCompetencia')
   @AuditadoNoHandler(
-    'faturamento.abrirCompetenciaSus: SGH_FAT_SUS_COMPETENCIA com a SGH_TRILHA na mesma transação',
+    'faturamento.abrirCompetenciaSus: competencia_sus com a trilha_auditoria na mesma transação',
   )
   async abrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CompetenciaSusResumo> {
     return this.servico.abrir(await this.sessao(req), validar(esquemaAbrirCompetenciaSus, corpo));
@@ -325,7 +346,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.sus.abrirCompetencia')
   @AuditadoNoHandler(
-    'faturamento.criticarSus: SGH_FAT_SUS_CRITICA e a competência com a SGH_TRILHA (contagens por regra)',
+    'faturamento.criticarSus: critica_sus e a competência com a trilha_auditoria (contagens por regra)',
   )
   async criticar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCriticaSus> {
     return this.servico.criticar(await this.sessao(req), validar(esquemaCriticarSus, corpo));
@@ -335,7 +356,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.sus.fecharCompetencia')
   @AuditadoNoHandler(
-    'faturamento.fecharCompetenciaSus: SGH_FAT_SUS_COMPETENCIA com a SGH_TRILHA na mesma transação',
+    'faturamento.fecharCompetenciaSus: competencia_sus com a trilha_auditoria na mesma transação',
   )
   async fechar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CompetenciaSusResumo> {
     return this.servico.fechar(await this.sessao(req), validar(esquemaFecharCompetenciaSus, corpo));
@@ -345,7 +366,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.sus.reabrirCompetencia')
   @AuditadoNoHandler(
-    'faturamento.reabrirCompetenciaSus: SGH_FAT_SUS_COMPETENCIA com a SGH_TRILHA na mesma transação',
+    'faturamento.reabrirCompetenciaSus: competencia_sus com a trilha_auditoria na mesma transação',
   )
   async reabrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CompetenciaSusResumo> {
     return this.servico.reabrir(await this.sessao(req), validar(esquemaReabrirCompetenciaSus, corpo));
@@ -361,7 +382,7 @@ export class SusController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaCriticasSus> {
     const f = validar(esquemaFiltroCriticasSus, q);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_CRITICA', idAlvo: `${f.instrumento} ${f.competencia}` };
+    req.sghAlvo = { tabelaAlvo: 'critica_sus', idAlvo: `${f.instrumento} ${f.competencia}` };
     return this.servico.listarCriticas(await this.sessao(req), f);
   }
 
@@ -369,7 +390,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.sus.justificarCritica')
   @AuditadoNoHandler(
-    'faturamento.justificarCriticaSus: SGH_FAT_SUS_CRITICA com a SGH_TRILHA na mesma transação',
+    'faturamento.justificarCriticaSus: critica_sus com a trilha_auditoria na mesma transação',
   )
   async justificar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CriticaSusLida> {
     return this.servico.justificar(await this.sessao(req), validar(esquemaJustificarCriticaSus, corpo));
@@ -381,7 +402,7 @@ export class SusController {
   @HttpCode(201)
   @Permissao('faturamento.susCiha.gerar')
   @AuditadoNoHandler(
-    'faturamento.gerarCiha: SGH_FAT_SUS_ARQUIVO e SGH_FAT_SUS_CIHA com a SGH_TRILHA (hash e contagens)',
+    'faturamento.gerarCiha: arquivo e registro_ciha com a trilha_auditoria (hash e contagens)',
   )
   async gerarCiha(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ArquivoSusGerado> {
     return this.servico.gerarCiha(await this.sessao(req), validar(esquemaGerarCiha, corpo));
@@ -400,14 +421,14 @@ export class SusController {
         campos: ['instrumento'],
       });
     const competencia = q['competencia'] ? validar(esquemaCompetenciaSus, q['competencia']) : null;
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_ARQUIVO', idAlvo: `${instrumento} ${competencia ?? ''}`.trim() };
+    req.sghAlvo = { tabelaAlvo: 'arquivo', idAlvo: `${instrumento} ${competencia ?? ''}`.trim() };
     return this.servico.listarArquivos(await this.sessao(req), instrumento, competencia);
   }
 
   @Get('arquivos/:id/conteudo')
   @Permissao('faturamento.susCiha.gerar')
   @AuditadoNoHandler(
-    'faturamento.arquivoSus.baixado: a SGH_TRILHA com o hash, gravada antes do envio do conteúdo',
+    'faturamento.arquivoSus.baixado: a trilha_auditoria com o hash, gravada antes do envio do conteúdo',
   )
   async baixar(
     @Param('id') id: string,
@@ -428,7 +449,7 @@ export class SusController {
     res.send(Buffer.from(r.conteudo));
   }
 
-  // ── Equivalência SIGTAP do Sante ─────────────────────────────────────────────────────────────────────
+  // ── Equivalência SIGTAP do hospital ─────────────────────────────────────────────────────────────────────
 
   @Get('equivalencias')
   @Permissao('faturamento.sus.ler')
@@ -477,7 +498,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.susEquivalencia.editar')
   @AuditadoNoHandler(
-    'faturamento.registrarEquivalenciaSus: SGH_FAT_SUS_EQUIVALENCIA com a SGH_TRILHA (antes e depois)',
+    'faturamento.registrarEquivalenciaSus: equivalencia_sigtap_item com a trilha_auditoria (antes e depois)',
   )
   async registrarEquivalencia(
     @Body() corpo: unknown,
@@ -493,7 +514,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.susEquivalencia.editar')
   @AuditadoNoHandler(
-    'faturamento.desativarEquivalenciaSus: SGH_FAT_SUS_EQUIVALENCIA com a SGH_TRILHA (antes e depois)',
+    'faturamento.desativarEquivalenciaSus: equivalencia_sigtap_item com a trilha_auditoria (antes e depois)',
   )
   async desativarEquivalencia(
     @Body() corpo: unknown,
@@ -511,7 +532,7 @@ export class SusController {
   @HttpCode(201)
   @Permissao('faturamento.susBpa.gerar')
   @AuditadoNoHandler(
-    'faturamento.gerarBpa: SGH_FAT_SUS_ARQUIVO e SGH_FAT_SUS_BPA com a SGH_TRILHA (hash, folhas, controle e contagens)',
+    'faturamento.gerarBpa: arquivo e producao_ambulatorial_sus_item com a trilha_auditoria (hash, folhas, controle e contagens)',
   )
   async gerarBpa(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ArquivoSusGerado> {
     return this.servico.gerarBpa(await this.sessao(req), validar(esquemaGerarBpa, corpo));
@@ -525,14 +546,14 @@ export class SusController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaLinhasBpa> {
     const f = validar(esquemaFiltroLinhasBpa, q);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_BPA', idAlvo: String(f.arquivo) };
+    req.sghAlvo = { tabelaAlvo: 'producao_ambulatorial_sus_item', idAlvo: String(f.arquivo) };
     return this.servico.listarLinhasBpa(await this.sessao(req), f);
   }
 
   @Get('bpa/arquivos/:id/conteudo')
   @Permissao('faturamento.susBpa.gerar')
   @AuditadoNoHandler(
-    'faturamento.arquivoSus.baixado: a SGH_TRILHA com o hash, gravada antes do envio do conteúdo',
+    'faturamento.arquivoSus.baixado: a trilha_auditoria com o hash, gravada antes do envio do conteúdo',
   )
   async baixarBpa(
     @Param('id') id: string,
@@ -552,12 +573,12 @@ export class SusController {
     return this.servico.buscarSolicitantes(await this.sessao(req), f.termo);
   }
 
-  @Get('parametros-legado')
+  @Get('parametros-ambulatoriais')
   @Permissao('faturamento.sus.ler')
-  async parametrosLegado(
+  async parametrosCadastro(
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ competenciaAmbulatorio: string | null; versao: string | null; orgao: string | null }> {
-    return this.servico.parametrosLegado(await this.sessao(req));
+    return this.servico.parametrosCadastro(await this.sessao(req));
   }
 
   // ── APAC (etapa 3) ───────────────────────────────────────────────────────────────────────────────────
@@ -567,7 +588,7 @@ export class SusController {
   @Auditar(E.faturamentoSusLido.codigo)
   async apacs(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<PaginaApacs> {
     const f = validar(esquemaFiltroApacs, q);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_APAC', idAlvo: f.competencia ?? f.situacao ?? 'lista' };
+    req.sghAlvo = { tabelaAlvo: 'apac', idAlvo: f.competencia ?? f.situacao ?? 'lista' };
     return this.servico.listarApacs(await this.sessao(req), f);
   }
 
@@ -580,7 +601,7 @@ export class SusController {
   ): Promise<AtendimentoLaudoApac> {
     const reg = idDaRota(registro);
     // Lê CID e prontuário de um atendimento: auditado, com o registro consultado (D-ATEND-513).
-    req.sghAlvo = { tabelaAlvo: 'RECADATE', idAlvo: String(reg) };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', idAlvo: String(reg) };
     return this.servico.atendimentoLaudoApac(await this.sessao(req), reg);
   }
 
@@ -599,7 +620,7 @@ export class SusController {
   ): Promise<SolicitanteApac[]> {
     const f = validar(esquemaBuscaMedicoSolicitante, q);
     // A busca no cadastro de solicitantes (dado pessoal do profissional) é auditada; o termo não vai à trilha.
-    req.sghAlvo = { tabelaAlvo: 'FAMEDSOL', idAlvo: 'busca' };
+    req.sghAlvo = { tabelaAlvo: 'solicitante_externo', idAlvo: 'busca' };
     return this.servico.buscarSolicitantesApac(await this.sessao(req), f.termo);
   }
 
@@ -607,7 +628,7 @@ export class SusController {
   @HttpCode(200)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(
-    'faturamento.registrarApac: SGH_FAT_SUS_APAC com a SGH_TRILHA na mesma transação (ação, procedimento e validade)',
+    'faturamento.registrarApac: apac com a trilha_auditoria na mesma transação (ação, procedimento e validade)',
   )
   async registrarApac(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ApacLida> {
     return this.servico.registrarApac(await this.sessao(req), validar(esquemaRegistrarApac, corpo));
@@ -617,7 +638,7 @@ export class SusController {
   @HttpCode(201)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(
-    'faturamento.gerarApac: SGH_FAT_SUS_ARQUIVO e SGH_FAT_SUS_APAC_ITEM com a SGH_TRILHA (hash, controle e contagens)',
+    'faturamento.gerarApac: arquivo e apac_procedimento com a trilha_auditoria (hash, controle e contagens)',
   )
   async gerarApac(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ArquivoSusGerado> {
     return this.servico.gerarApac(await this.sessao(req), validar(esquemaGerarApac, corpo));
@@ -631,14 +652,14 @@ export class SusController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaLinhasApac> {
     const f = validar(esquemaFiltroLinhasApac, q);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_SUS_APAC_ITEM', idAlvo: String(f.arquivo) };
+    req.sghAlvo = { tabelaAlvo: 'apac_procedimento', idAlvo: String(f.arquivo) };
     return this.servico.listarLinhasApac(await this.sessao(req), f);
   }
 
   @Get('apac/arquivos/:id/conteudo')
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(
-    'faturamento.arquivoSus.baixado: a SGH_TRILHA com o hash, gravada antes do envio do conteúdo',
+    'faturamento.arquivoSus.baixado: a trilha_auditoria com o hash, gravada antes do envio do conteúdo',
   )
   async baixarApac(
     @Param('id') id: string,

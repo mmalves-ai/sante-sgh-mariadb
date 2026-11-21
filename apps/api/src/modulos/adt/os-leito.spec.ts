@@ -19,6 +19,11 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { Module } from '@nestjs/common';
+import { registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { FONTE_CONFIGURACAO } from '../config/public-api.js';
+import { modulo as moduloManutencao } from '../manutencao/modulo.js';
+import { modulo as moduloAdt } from './modulo.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
@@ -29,6 +34,9 @@ import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { PortaManutencaoMemoria } from '../manutencao/porta-memoria.js';
 import { tipoLimpezaPosManutencao } from './os-leito.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
+
+@Module({})
+class ConfiguracaoOsLeito {}
 
 const HOJE = '2026-10-23';
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/os-leito-spec');
@@ -44,7 +52,7 @@ interface LeitoMapa {
 }
 
 async function montar(ligado: boolean, nome: string) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,manutencao,adt' };
   const trilha = new RegistradorTrilhaMemoria();
   const cadastro = new PortaCadastroMemoria();
   const relogio = { hoje: HOJE, agora: `${HOJE}T09:00` };
@@ -81,12 +89,19 @@ async function montar(ligado: boolean, nome: string) {
   });
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    internacao: painel,
-    adt,
-    manutencao,
-    configuracao,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: () => ({
+          module: ConfiguracaoOsLeito,
+          global: true,
+          providers: [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }],
+          exports: [FONTE_CONFIGURACAO],
+        }),
+        manutencao: (ctx) => moduloManutencao(ctx, { porta: manutencao }),
+        adt: (ctx) => moduloAdt(ctx, { adt }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

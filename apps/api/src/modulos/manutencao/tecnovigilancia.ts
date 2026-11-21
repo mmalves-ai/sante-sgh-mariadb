@@ -1,5 +1,5 @@
 // W0-08, parte 8b (mercado M2: tecnovigilância e recall ligados ao parque instalado; RDC 67/2009, RDC 551/2021 e RDC
-// 509/2021): as regras puras do domínio entregues à gravação do legado como callback (o legado não importa o domínio)
+// 509/2021): as regras puras do domínio entregues à gravação da porta como callback (a porta não importa o domínio)
 // e a montagem da lista de afetados para a tela.
 import type {
   AfetadoAlerta,
@@ -14,7 +14,7 @@ import {
   faixaInvertida,
   planejarAcaoDeCampo,
 } from '@sgh/dominio-manutencao';
-import type { AcaoDeCampoLida, EquipamentoDoParqueLido } from '@sgh/legado';
+import type { AcaoDeCampo, EquipamentoDoParque } from './tipos.js';
 
 /** Inclusão: a faixa de série não pode vir invertida. */
 export const conferirFaixaDoAlerta =
@@ -36,8 +36,8 @@ export const conferirAlteracaoDoAlerta =
 /** A lista do parque diante do alerta (afetados e a conferir, com a OS já gerada). */
 export const afetados = (
   alerta: AlertaEquipamento,
-  parque: readonly EquipamentoDoParqueLido[],
-  acoes: readonly AcaoDeCampoLida[],
+  parque: readonly EquipamentoDoParque[],
+  acoes: readonly AcaoDeCampo[],
 ): AfetadoAlerta[] => afetadosDoAlerta(parque, alerta, acoes);
 
 /**
@@ -48,8 +48,8 @@ export const planejarAcaoDoAlerta =
   (versaoVista: number, pedidos: readonly number[]) =>
   (
     alerta: AlertaEquipamento,
-    parque: readonly EquipamentoDoParqueLido[],
-    acoes: readonly AcaoDeCampoLida[],
+    parque: readonly EquipamentoDoParque[],
+    acoes: readonly AcaoDeCampo[],
   ) => {
     const p = planejarAcaoDeCampo(alerta, versaoVista, afetados(alerta, parque, acoes), pedidos);
     if (!p.ok) return p;

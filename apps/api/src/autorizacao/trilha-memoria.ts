@@ -1,11 +1,26 @@
-// Sessão sintética (M34): a gravação SGH_ em memória registra a linha da SGH_TRILHA no registrador da API (como o
-// núcleo grava a trilha na mesma transação). Sem registrador (testes de unidade), nada.
-import type { LinhaTrilha } from '@sgh/legado';
+// Sessão sintética (M34): a gravação em memória registra a linha da trilha no registrador da API (como o núcleo grava a
+// trilha na mesma transação). Sem registrador (testes de unidade), nada.
+// Melhoria: a linha é um tipo neutro do próprio módulo (evento do catálogo, rede, estabelecimento, login, recurso e
+// alvo), sem depender da forma da trilha de nenhum sistema de origem.
 import type { RegistradorTrilha } from './trilha.js';
+
+/** O que a memória sabe da gravação: o evento do catálogo, quem, onde e o alvo (sem dado pessoal). */
+export interface LinhaTrilhaMemoria {
+  readonly evento: string;
+  readonly rede: string;
+  readonly hospital: string;
+  /** Login de quem gravou. */
+  readonly usuario: string;
+  readonly estacao?: string | null;
+  readonly correlacao: string;
+  readonly recurso: string;
+  readonly tabelaAlvo?: string | null;
+  readonly idAlvo?: string | null;
+}
 
 export async function registrarNaTrilha(
   t: RegistradorTrilha | null,
-  l: LinhaTrilha | null | undefined,
+  l: LinhaTrilhaMemoria | null | undefined,
 ): Promise<void> {
   if (!t || !l || typeof l !== 'object' || !('evento' in l)) return;
   await t.registrar({
@@ -17,7 +32,7 @@ export async function registrarNaTrilha(
     correlacao: l.correlacao,
     recurso: l.recurso,
     resultado: 'sucesso',
-    tabelaAlvo: l.tabelaAlvo ?? 'MEMORIA',
+    tabelaAlvo: l.tabelaAlvo ?? 'memoria',
     idAlvo: l.idAlvo ?? '',
   });
 }

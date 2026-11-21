@@ -48,7 +48,7 @@ import {
   somarHoras,
   volumesPorDia,
 } from '@sgh/dominio-pep';
-import type { AcompanhanteSghLido, LinhaRetratoSgh, TriagemSghLida } from '@sgh/legado';
+import type { LinhaRetrato, RefeicaoAcompanhanteRegistrada, TriagemRegistrada } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { AcompanhanteComRefeicao } from '../portaria/public-api.js';
 import type { ContextoNutricao, PortaNutricao } from './porta.js';
@@ -72,15 +72,15 @@ const BASE_DO_FUNDAMENTO: Readonly<
 
 /**
  * A refeição do acompanhante de cada internação, com uma fonte só para a pessoa: o acompanhante vigente registrado na
- * portaria (SGH_HOT_ACOMPANHANTE, com direito à refeição e direito legal) entra em todas as refeições do cadastro desde
- * o dia do registro; o registro da nutrição (SGH_HOT_DIETA_ACOMP), quando existe, prevalece, porque escolhe as refeições.
+ * portaria (acompanhante_internacao, com direito à refeição e direito legal) entra em todas as refeições do cadastro desde
+ * o dia do registro; o registro da nutrição (plano_refeicao_acompanhante), quando existe, prevalece, porque escolhe as refeições.
  */
 export function acompanhantesDoMapa(
-  daNutricao: ReadonlyMap<number, AcompanhanteSghLido>,
+  daNutricao: ReadonlyMap<number, RefeicaoAcompanhanteRegistrada>,
   daPortaria: readonly AcompanhanteComRefeicao[],
   codigosRefeicao: readonly number[],
-): Map<number, AcompanhanteSghLido | AcompanhanteDaPortariaNoMapa> {
-  const m = new Map<number, AcompanhanteSghLido | AcompanhanteDaPortariaNoMapa>(daNutricao);
+): Map<number, RefeicaoAcompanhanteRegistrada | AcompanhanteDaPortariaNoMapa> {
+  const m = new Map<number, RefeicaoAcompanhanteRegistrada | AcompanhanteDaPortariaNoMapa>(daNutricao);
   for (const a of daPortaria) {
     const base = BASE_DO_FUNDAMENTO[a.fundamento];
     if (base === null || m.has(a.internacao)) continue;
@@ -152,7 +152,7 @@ export function comCorrecao(id: number, k: CorrecoesLidas) {
 }
 
 export function triagemLida(
-  t: TriagemSghLida,
+  t: TriagemRegistrada,
   prazoHoras: number,
   k: CorrecoesLidas = SEM_CORRECOES,
 ): TriagemNutricionalLida {
@@ -183,7 +183,7 @@ const leitoDe = (i: { bloco: string; acomodacao: string; leito: string }) => ({
 
 export interface MapaMontado {
   readonly mapa: MapaDietas;
-  readonly retrato: LinhaRetratoSgh[];
+  readonly retrato: LinhaRetrato[];
   readonly hash: string;
   readonly refeicao: Refeicao;
 }
@@ -215,7 +215,7 @@ export class ServicoNutricao {
       this.porta.triagens(c, regs),
       this.porta.comMeta(c, regs),
     ]);
-    const porReg = new Map<number, TriagemSghLida[]>();
+    const porReg = new Map<number, TriagemRegistrada[]>();
     for (const t of triagens) porReg.set(t.reg, [...(porReg.get(t.reg) ?? []), t]);
     const itens: ItemFilaNutricao[] = internados.itens.map((i) => {
       // W0-05: a triagem retificada ou estornada (inativa) não conta: vale a versão ativa mais recente.
@@ -540,7 +540,7 @@ export class ServicoNutricao {
         : null,
     );
     const hash = await hashDoMapa(linhas);
-    const linhaRetrato = (l: LinhaMapa): LinhaRetratoSgh => ({
+    const linhaRetrato = (l: LinhaMapa): LinhaRetrato => ({
       reg: l.internacao,
       pront: l.prontuario,
       acomodacao: l.leito.acomodacao,

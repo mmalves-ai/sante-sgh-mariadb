@@ -1,25 +1,8 @@
 // Porta do faturamento SUS em memória (M51, etapas 1 a 3): a sessão sintética de dev/ci (E2E). A massa é SINTÉTICA (nenhum
 // dado de pessoa): em qualquer competência pedida, seis atendimentos inventados (convênio, particular, internação, um
 // sem equivalente SIGTAP, um com item sem equivalente e um do SUS, que fica fora) e um catálogo SIGTAP sintético. As
-// gravações seguem as mesmas regras das tabelas SGH_ (uma competência por instrumento, versão, críticas mantidas,
+// gravações seguem as mesmas regras das tabelas do faturamento SUS (uma competência por instrumento, versão, críticas mantidas,
 // reabertas e corrigidas sem apagar); cada transação é desfeita se a função falhar.
-import type {
-  ApacSghLinha,
-  LinhaApacSgh,
-  SolicitanteApacLido,
-  ArquivoSusLinha,
-  CompetenciaSusLinha,
-  ContaBpaLida,
-  ItemBpaLido,
-  LinhaBpaSgh,
-  ContaCihaLida,
-  CriticaSusLinha,
-  EquivalenciaSusLinha,
-  ItemSigtapLido,
-  LinhaTrilha,
-  ProcedimentoHospitalLido,
-} from '@sgh/legado';
-import { ErroSusSgh } from '@sgh/legado';
 import {
   type EstadoSusAih,
   estadoAihVazio,
@@ -37,8 +20,9 @@ import type {
   LeituraSus,
   PortaSus,
 } from './porta.js';
+import { type ApacRegistro, type ArquivoSus, type CompetenciaSusRegistro, type ContaBpa, type ContaCiha, type CriticaSus, type EquivalenciaSus, ErroSus, type ItemBpa, type ItemContaSigtap, type LinhaApac, type LinhaBpa, type LinhaTrilhaSus, type ProcedimentoHospital, type SolicitanteApacCadastro } from './tipos.js';
 
-interface CriticaMemoria extends CriticaSusLinha {
+interface CriticaMemoria extends CriticaSus {
   readonly competencia: number;
   readonly convenio: number | null;
   readonly chave: string;
@@ -46,14 +30,14 @@ interface CriticaMemoria extends CriticaSusLinha {
 
 interface EstadoSus {
   seq: number;
-  competencias: CompetenciaSusLinha[];
+  competencias: CompetenciaSusRegistro[];
   criticas: CriticaMemoria[];
-  arquivos: (ArquivoSusLinha & { competenciaId: number })[];
+  arquivos: (ArquivoSus & { competenciaId: number })[];
   registros: { arquivo: number; conta: number; sequencia: number }[];
-  equivalencias: EquivalenciaSusLinha[];
-  linhasBpa: (LinhaBpaSgh & { arquivo: number })[];
-  apacs: ApacSghLinha[];
-  linhasApac: (LinhaApacSgh & { arquivo: number })[];
+  equivalencias: EquivalenciaSus[];
+  linhasBpa: (LinhaBpa & { arquivo: number })[];
+  apacs: ApacRegistro[];
+  linhasApac: (LinhaApac & { arquivo: number })[];
   /** Etapa 4: a faixa, as AIHs, as linhas e o retorno do gestor. */
   aih: EstadoSusAih;
 }
@@ -80,10 +64,10 @@ export const SIGTAP_SINTETICO = [
 export const PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO = 7001;
 
 /**
- * Cadastro sintético de procedimentos do hospital (TBPROCTO: o ID unificado, o código na tabela do convênio, o nome e a
+ * Cadastro sintético de procedimentos do hospital (o id do item faturável, o código na tabela do convênio, o nome e a
  * tabela). O 7101 tem o MESMO código do 7001 em outra tabela: a equivalência de um não vale para o outro.
  */
-export const PROCEDIMENTOS_HOSPITAL_SINTETICOS: readonly ProcedimentoHospitalLido[] = [
+export const PROCEDIMENTOS_HOSPITAL_SINTETICOS: readonly ProcedimentoHospital[] = [
   { id: 6001, codigo: 10101012, nome: 'CONSULTA SINTETICA EM CONSULTORIO', tabela: '1 TABELA SINTETICA A' },
   { id: 6002, codigo: 40301010, nome: 'EXAME SINTETICO DE LABORATORIO', tabela: '1 TABELA SINTETICA A' },
   { id: 6003, codigo: 31001010, nome: 'INTERNACAO SINTETICA CLINICA', tabela: '1 TABELA SINTETICA A' },
@@ -110,7 +94,7 @@ export function cnsSintetico(semente: number): string {
 /**
  * A produção ambulatorial do SUS sintética da competência (etapa 2): quatro fichas do convênio 1 — consulta com CNS (vai
  * ao BPA-I), exame só consolidado (BPA-C), consulta de paciente sem CNS (vai ao BPA-C, D-BPAI-51) e um MAPA sem
- * equivalente SIGTAP (crítica bloqueante até a equivalência do Sante). O executante tem CNS e CBO sintéticos.
+ * equivalente SIGTAP (crítica bloqueante até a equivalência do hospital). O executante tem CNS e CBO sintéticos.
  */
 export function producaoSusSintetica(inicio: string): AtendimentoBpaLido[] {
   const dia = (d: number) => `${inicio.slice(0, 8)}${String(d).padStart(2, '0')}`;
@@ -121,7 +105,7 @@ export function producaoSusSintetica(inicio: string): AtendimentoBpaLido[] {
     comCns = true,
   ): AtendimentoBpaLido => {
     const base = paciente(n);
-    const c: ContaBpaLida = {
+    const c: ContaBpa = {
       conta: 810_000 + n,
       registro: 710_000 + n,
       atendimento: 610_000 + n,
@@ -145,7 +129,7 @@ export function producaoSusSintetica(inicio: string): AtendimentoBpaLido[] {
         bairro: 'CENTRO',
       },
     };
-    const lidos: ItemBpaLido[] = itens.map((x, k) => ({
+    const lidos: ItemBpa[] = itens.map((x, k) => ({
       conta: c.conta,
       item: 510_000 + n * 10 + k,
       sigtap: x.sigtap,
@@ -171,8 +155,8 @@ export function producaoSusSintetica(inicio: string): AtendimentoBpaLido[] {
 /** O registro da ficha da hemodiálise sintética (o E2E da APAC faz o laudo nela). */
 export const REGISTRO_APAC_SINTETICO = 710_025;
 
-/** O médico solicitante SUS sintético (FAMEDSOL): a chave é um CPF gerado pelo algoritmo, nunca de pessoa. */
-export const SOLICITANTES_APAC_SINTETICOS: readonly SolicitanteApacLido[] = [
+/** O médico solicitante SUS sintético: a chave é um CPF gerado pelo algoritmo, nunca de pessoa. */
+export const SOLICITANTES_APAC_SINTETICOS: readonly SolicitanteApacCadastro[] = [
   {
     chave: cpfSintetico('999000017'),
     nome: 'MEDICO SOLICITANTE SINTETICO DA APAC',
@@ -181,7 +165,7 @@ export const SOLICITANTES_APAC_SINTETICOS: readonly SolicitanteApacLido[] = [
   },
 ];
 
-/** Os domínios sintéticos do laudo de nefrologia (o que o banco do hospital traz em FAHEMO*). */
+/** Os domínios sintéticos do laudo de nefrologia (o que o cadastro de domínios do SUS traz). */
 export const DOMINIOS_APAC_SINTETICOS = {
   caracteristicaTratamento: [
     { id: 1, nome: 'TRATAMENTO SINTETICO A' },
@@ -207,7 +191,7 @@ const normal = (x: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase();
 
-function paciente(n: number): ContaCihaLida['paciente'] {
+function paciente(n: number): ContaCiha['paciente'] {
   return {
     cns: '0',
     // CPF sintético válido (base 1000000NN; o dígito é calculado).
@@ -246,7 +230,7 @@ export function atendimentosSinteticos(inicio: string): AtendimentoLido[] {
     modalidade: 'internacao' | 'ambulatorial',
     itens: { sigtap: number | null; procedimento: number; quantidade?: number }[],
   ): AtendimentoLido => {
-    const c: ContaCihaLida = {
+    const c: ContaCiha = {
       conta: 800_000 + n,
       modalidade,
       registro: 700_000 + n,
@@ -262,7 +246,7 @@ export function atendimentosSinteticos(inicio: string): AtendimentoLido[] {
       guiaTiss: convenio === 20 ? `GUIA-SINT-${n}` : null,
       operadora: convenio === 20 ? { regAns: 123456, cnpj: null } : { regAns: null, cnpj: null },
     };
-    const lidos: ItemSigtapLido[] = itens.map((x, k) => ({
+    const lidos: ItemContaSigtap[] = itens.map((x, k) => ({
       conta: c.conta,
       item: 500_000 + n * 10 + k,
       sigtap: x.sigtap,
@@ -287,7 +271,7 @@ export function atendimentosSinteticos(inicio: string): AtendimentoLido[] {
   ];
 }
 
-/** Cadastro geral sintético de médicos solicitantes (TBMEDSOL; nomes inventados). */
+/** Cadastro geral sintético de médicos solicitantes (nomes inventados). */
 export const SOLICITANTES_SINTETICOS = [
   { id: 1, conselho: 520001, nome: 'MEDICO SOLICITANTE SINTETICO A', uf: 'RJ', cbo: '225125', ativo: true },
   { id: 2, conselho: 520002, nome: 'MEDICA SOLICITANTE SINTETICA B', uf: 'RJ', cbo: '225120', ativo: true },
@@ -303,15 +287,15 @@ const atributos = {
 };
 
 function erroVersao(): never {
-  throw new ErroSusSgh('versao-alterada', 'A competência mudou desde que a tela foi aberta.');
+  throw new ErroSus('versao-alterada', 'A competência mudou desde que a tela foi aberta.');
 }
 
 export class PortaSusMemoria implements PortaSus {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, EstadoSus>();
   /** A trilha registrada pelas gravações (confirmadas); o controlador liga o registrador da API. */
-  readonly trilhas: LinhaTrilha[] = [];
-  aoRegistrarTrilha: ((l: LinhaTrilha) => Promise<void>) | null = null;
+  readonly trilhas: LinhaTrilhaSus[] = [];
+  aoRegistrarTrilha: ((l: LinhaTrilhaSus) => Promise<void>) | null = null;
 
   private estado(h: string): EstadoSus {
     let e = this.estados.get(h);
@@ -518,7 +502,7 @@ export class PortaSusMemoria implements PortaSus {
         }
         const ini = f.pagina * f.porPagina;
         return {
-          itens: lista.slice(ini, ini + f.porPagina).map((x): LinhaBpaSgh => ({
+          itens: lista.slice(ini, ini + f.porPagina).map((x): LinhaBpa => ({
             id: x.id,
             tipo: x.tipo,
             folha: x.folha,
@@ -541,7 +525,7 @@ export class PortaSusMemoria implements PortaSus {
           (x) => String(x.conselho).startsWith(t) || normal(x.nome).includes(t),
         );
       },
-      parametrosLegado: async () => ({ competenciaAmbulatorio: null, versao: 'SINTETICO', orgao: null }),
+      parametrosCadastro: async () => ({ competenciaAmbulatorio: null, versao: 'SINTETICO', orgao: null }),
       apac: async (id) => s.apacs.find((x) => x.id === id) ?? null,
       paginaApacs: async (f) => {
         const lista = s.apacs
@@ -599,7 +583,7 @@ export class PortaSusMemoria implements PortaSus {
           .sort((a, b) => a.numero.localeCompare(b.numero) || a.id - b.id);
         const ini = f.pagina * f.porPagina;
         return {
-          itens: todas.slice(ini, ini + f.porPagina).map((x): LinhaApacSgh => ({
+          itens: todas.slice(ini, ini + f.porPagina).map((x): LinhaApac => ({
             id: x.id,
             apac: x.apac,
             numero: x.numero,
@@ -619,12 +603,12 @@ export class PortaSusMemoria implements PortaSus {
   }
 
   private gravacao(s: EstadoSus): GravacaoSus {
-    const comp = (id: number, versao: number, situacao: 'aberta' | 'fechada'): CompetenciaSusLinha => {
+    const comp = (id: number, versao: number, situacao: 'aberta' | 'fechada'): CompetenciaSusRegistro => {
       const c = s.competencias.find((x) => x.id === id);
       if (!c || c.versao !== versao || c.situacao !== situacao) erroVersao();
       return c;
     };
-    const trocar = (c: CompetenciaSusLinha, m: Partial<CompetenciaSusLinha>) => {
+    const trocar = (c: CompetenciaSusRegistro, m: Partial<CompetenciaSusRegistro>) => {
       s.competencias = s.competencias.map((x) => (x.id === c.id ? { ...x, ...m, versao: x.versao + 1 } : x));
     };
     return {
@@ -632,11 +616,11 @@ export class PortaSusMemoria implements PortaSus {
       ...gravacaoAihMemoria(this.baseAih(s)),
       abrir: async (p) => {
         if (s.competencias.some((x) => x.instrumento === p.instrumento && x.competencia === p.competencia))
-          throw new ErroSusSgh(
+          throw new ErroSus(
             'competencia-ja-aberta',
             'Esta competência já está aberta para o instrumento.',
           );
-        const c: CompetenciaSusLinha = {
+        const c: CompetenciaSusRegistro = {
           id: ++s.seq,
           instrumento: p.instrumento,
           competencia: p.competencia,
@@ -725,7 +709,7 @@ export class PortaSusMemoria implements PortaSus {
       justificar: async (c, justificativa) => {
         const x = s.criticas.find((y) => y.id === c.id);
         if (!x || x.versao !== c.versao || x.situacao !== 'aberta' || x.gravidade !== 'aviso')
-          throw new ErroSusSgh(
+          throw new ErroSus(
             'critica-nao-justificavel',
             'Só o aviso aberto, na versão que a tela leu, pode ser justificado.',
           );
@@ -770,7 +754,7 @@ export class PortaSusMemoria implements PortaSus {
         return { substituidos };
       },
       incluirApac: async (a) => {
-        const linha: ApacSghLinha = {
+        const linha: ApacRegistro = {
           id: ++s.seq,
           situacao: 'solicitada',
           paciente: a.paciente,
@@ -808,19 +792,19 @@ export class PortaSusMemoria implements PortaSus {
       },
       mudarApac: async (p) => {
         const antes = s.apacs.find((x) => x.id === p.id);
-        if (!antes) throw new ErroSusSgh('nao-encontrado', 'APAC não encontrada.');
+        if (!antes) throw new ErroSus('nao-encontrado', 'APAC não encontrada.');
         if (antes.versao !== p.versao)
-          throw new ErroSusSgh('apac-alterada', 'A APAC mudou desde que você abriu a tela. Recarregue.');
+          throw new ErroSus('apac-alterada', 'A APAC mudou desde que você abriu a tela. Recarregue.');
         const m = p.mudanca;
         if (
           m.acao === 'autorizar' &&
           s.apacs.some((x) => x.id !== p.id && x.numero !== null && x.numero === m.numero)
         )
-          throw new ErroSusSgh(
+          throw new ErroSus(
             'apac-numero-duplicado',
             'Este número de APAC já está registrado neste estabelecimento.',
           );
-        let campos: Partial<ApacSghLinha>;
+        let campos: Partial<ApacRegistro>;
         switch (m.acao) {
           case 'autorizar':
             campos = {
@@ -865,7 +849,7 @@ export class PortaSusMemoria implements PortaSus {
             };
             break;
         }
-        const depois: ApacSghLinha = {
+        const depois: ApacRegistro = {
           ...antes,
           ...campos,
           alteradaPor: p.por,
@@ -968,12 +952,12 @@ export class PortaSusMemoria implements PortaSus {
       registrarEquivalencia: async (p) => {
         const antes = s.equivalencias.find((x) => x.procedimento === p.procedimento) ?? null;
         if (antes && antes.versao !== p.versao)
-          throw new ErroSusSgh(
+          throw new ErroSus(
             'equivalencia-alterada',
             'A equivalência deste procedimento mudou desde que você abriu a tela. Recarregue.',
           );
         if (antes && antes.ativa && antes.sigtap === p.sigtap) return { antes, depois: antes, mudou: false };
-        const depois: EquivalenciaSusLinha = {
+        const depois: EquivalenciaSus = {
           id: antes?.id ?? ++s.seq,
           procedimento: p.procedimento,
           codigoProcedimento: p.codigoProcedimento,
@@ -990,13 +974,13 @@ export class PortaSusMemoria implements PortaSus {
       desativarEquivalencia: async (p) => {
         const antes = s.equivalencias.find((x) => x.procedimento === p.procedimento && x.ativa);
         if (!antes)
-          throw new ErroSusSgh('nao-encontrado', 'Não há equivalência ativa para este procedimento.');
+          throw new ErroSus('nao-encontrado', 'Não há equivalência ativa para este procedimento.');
         if (antes.versao !== p.versao)
-          throw new ErroSusSgh(
+          throw new ErroSus(
             'equivalencia-alterada',
             'A equivalência mudou desde que você abriu a tela. Recarregue.',
           );
-        const depois: EquivalenciaSusLinha = { ...antes, ativa: false, versao: antes.versao + 1 };
+        const depois: EquivalenciaSus = { ...antes, ativa: false, versao: antes.versao + 1 };
         s.equivalencias = s.equivalencias.map((x) => (x.id === antes.id ? depois : x));
         return { antes, depois };
       },

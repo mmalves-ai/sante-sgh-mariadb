@@ -44,15 +44,18 @@ export function transicaoApuracao(
   }
 }
 
-export type RecusaPeriodo = 'periodo-apurado-no-legado' | 'periodo-ja-apurado';
+export type RecusaPeriodo = 'periodo-ja-apurado';
 
-/** Regra 10: pode o novo abrir a apuração deste período e empresa? */
+/**
+ * Regra 10: pode abrir (ou recalcular) a apuração deste período e empresa? Não quando o período já tem lançamentos
+ * de uma apuração aprovada, nem quando a apuração do período já passou da fase aberta: a correção entra no período
+ * seguinte.
+ */
 export function podeApurarPeriodo(estado: {
-  readonly linhasDoLegadoNoPeriodo: number;
-  readonly apuracaoNoNovo: boolean;
+  readonly lancamentosDaApuracaoNoPeriodo: number;
+  readonly apuracaoFechada: boolean;
 }): { ok: true } | { ok: false; recusa: RecusaPeriodo } {
-  if (estado.apuracaoNoNovo) return { ok: false, recusa: 'periodo-ja-apurado' };
-  if (estado.linhasDoLegadoNoPeriodo > 0) return { ok: false, recusa: 'periodo-apurado-no-legado' };
+  if (estado.apuracaoFechada || estado.lancamentosDaApuracaoNoPeriodo > 0) return { ok: false, recusa: 'periodo-ja-apurado' };
   return { ok: true };
 }
 

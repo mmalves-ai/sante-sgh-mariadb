@@ -74,7 +74,16 @@ export function htmlRpaEmitido(r: RpaParaDocumento): string {
     )
     .join('');
   const t = r.retencoes;
-  const retencoes = t
+  // O recibo só imprime as parcelas quando a conta fecha (bruto − INSS − IRRF − ISS = líquido); senão, mostra o total
+  // retido sem detalhe, nunca zeros que contradizem o líquido.
+  const fecha = (x: NonNullable<typeof t>) =>
+    Math.round(x.bruto * 100) - Math.round(x.inss * 100) - Math.round(x.irrf * 100) - Math.round(x.iss * 100) ===
+    Math.round(x.liquido * 100);
+  const retencoes = t && !fecha(t)
+    ? `<table><tbody>${linha('Bruto', t.bruto)}${linha('Retenções (sem detalhe por tributo)', t.bruto - t.liquido)}</tbody>
+<tfoot>${linha('Líquido', t.liquido)}</tfoot></table>
+<p>O detalhe das retenções por tributo não está registrado para este RPA.</p>`
+    : t
     ? `<table><tbody>${linha('Bruto', t.bruto)}${linha('Base do INSS', t.baseInss)}${linha('INSS', t.inss)}${linha('Base do IRRF', t.baseIrrf)}${linha('IRRF', t.irrf)}${linha('ISS', t.iss)}</tbody>
 <tfoot>${linha('Líquido', t.liquido)}</tfoot></table>
 <p>${reais(t.bruto)} − INSS ${reais(t.inss)} − IRRF ${reais(t.irrf)} − ISS ${reais(t.iss)} = ${reais(t.liquido)}</p>`

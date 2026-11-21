@@ -1,5 +1,5 @@
 // Serviço do faturamento SUS, etapa 2 (BPA), sobre a porta em memória (massa SINTÉTICA): desligado (DP-35) recusa;
-// ligado: abrir → criticar (o validador de compatibilidade e o item sem equivalente) → equivalência do Sante → criticar
+// ligado: abrir → criticar (o validador de compatibilidade e o item sem equivalente) → equivalência do hospital → criticar
 // de novo → gerar o BPA-C e o BPA-I com hash → as linhas sem dado pessoal → baixar pela rota do BPA (a da CIHA não
 // entrega) → a trilha sem dado pessoal; as recusas (escopo parcial, versão, cabeçalho incompleto, sem produção).
 import { createHash } from 'node:crypto';
@@ -10,7 +10,7 @@ import {
   PortaSusMemoria,
   PROCEDIMENTO_BPA_SEM_EQUIVALENTE_SINTETICO,
 } from './porta-memoria.js';
-import { ServicoSus, type SessaoSus } from './servico.js';
+import { ACAO_EQUIVALENCIA_SUS_REDE, ServicoSus, type SessaoSus } from './servico.js';
 
 function sessao(extra: Partial<SessaoSus> = {}, bpaLigado = true, apacLigada = true): SessaoSus {
   return {
@@ -36,6 +36,7 @@ function sessao(extra: Partial<SessaoSus> = {}, bpaLigado = true, apacLigada = t
       apac: { uf: '33' },
     },
     liberado: async (i) => i === 'ciha' || (bpaLigado && i === 'bpa') || (apacLigada && i === 'apac'),
+    pode: (acao) => acao === ACAO_EQUIVALENCIA_SUS_REDE,
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
       hospital: 'pc',
@@ -107,7 +108,7 @@ describe('faturamento SUS, etapa 2: BPA', () => {
       porPagina: 50,
     });
     expect(c1.itens.map((x) => [x.regra, x.origem.conta])).toEqual([['sem-sigtap', 810_024]]);
-    // A tela mostra o procedimento do hospital sem equivalente pelo código e nome (a equivalência do Sante o corrige).
+    // A tela mostra o procedimento do hospital sem equivalente pelo código e nome (a equivalência do hospital o corrige).
     expect(c1.itens[0]?.detalhe['procedimentosNomes']).toBe(
       '40805010 MAPA SINTETICO DE 24 HORAS (1 TABELA SINTETICA A)',
     );
@@ -116,7 +117,7 @@ describe('faturamento SUS, etapa 2: BPA', () => {
       recusa('criticas-bloqueantes-abertas'),
     );
 
-    // A equivalência do Sante do MAPA sintético para o exame (só BPA-C) corrige a crítica (D-EQUIV-BPA-51).
+    // A equivalência do hospital do MAPA sintético para o exame (só BPA-C) corrige a crítica (D-EQUIV-BPA-51).
     await sv.registrarEquivalencia(s, {
       procedimento: PROCEDIMENTO_BPA_SEM_EQUIVALENTE_SINTETICO,
       sigtap: '0202010295',
@@ -206,11 +207,11 @@ describe('faturamento SUS, etapa 2: BPA', () => {
     );
   });
 
-  it('cadastro geral de solicitantes e parâmetros do outro sistema (consultas)', async () => {
+  it('cadastro geral de solicitantes e parâmetros do estabelecimento (consultas)', async () => {
     const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
     const s = sessao();
     expect((await sv.buscarSolicitantes(s, '52000')).map((x) => x.conselho)).toEqual([520001, 520002]);
     expect((await sv.buscarSolicitantes(s, 'sintetica')).map((x) => x.id)).toEqual([2]);
-    expect(await sv.parametrosLegado(s)).toMatchObject({ versao: 'SINTETICO' });
+    expect(await sv.parametrosCadastro(s)).toMatchObject({ versao: 'SINTETICO' });
   });
 });

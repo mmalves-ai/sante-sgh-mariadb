@@ -1,11 +1,9 @@
-// Porta da manutenção e engenharia clínica (M55, etapa 1; ficha, seções 4 a 7), independente de onde (a API não
-// escreve SQL; fronteira Nx):
-//   - `legado`: as leituras READ ONLY (setores, unidades, recursos de agenda, nomes de usuários e fornecedores) e as
-//     de SGH_MAN_*, e as gravações só do novo numa transação SGH_ com a SGH_TRILHA junto (a OS e o plano relidos e
-//     travados na MESMA transação; o aviso da central na mesma transação);
-//   - `memoria`: a sessão sintética de dev/ci (E2E) e os testes da API, com as mesmas regras; nada vai à cópia;
+// Porta da manutenção e engenharia clínica (M55; ficha, seções 4 a 7), independente de onde (a API não escreve SQL):
+//   - `banco`: a porta própria sobre o banco do cliente (porta-propria.ts), pelo @sgh/nucleo: leituras somente leitura
+//     e as gravações diretas numa operação do Executor (trilha, outbox e idempotência na mesma transação; a OS e o plano
+//     relidos e travados na MESMA transação; o aviso da central na mesma transação);
+//   - `memoria`: a sessão sintética de dev/ci (E2E) e os testes da API, com as mesmas regras;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-// Recurso só do novo: nenhuma operação do executor (as GM* do outro sistema estão vazias e ficam como estão).
 import type {
   AlertaEquipamento,
   ConclusaoDeCurso,
@@ -15,54 +13,54 @@ import type {
   TipoRecursoAgenda,
 } from '@sgh/contratos';
 import type {
-  AcaoDeCampoLida,
-  abrirQueixaDaOsSgh,
-  desvincularCursoModeloSgh,
-  registrarEventoCicloSgh,
-  vincularCursoModeloSgh,
-  alterarAlertaEquipamentoSgh,
-  encerrarAlertaEquipamentoSgh,
-  EquipamentoDoParqueLido,
-  excluirAlertaEquipamentoSgh,
-  gerarAcaoDeCampoSgh,
-  incluirAlertaEquipamentoSgh,
   AberturaOsParaGravar,
-  AvisoSgh,
-  CoberturaLida,
-  CoberturaParaGravar,
+  AcaoDeCampo,
+  AcaoDeCampoGerada,
+  AlertaAlterado,
+  AlertaParaAlterar,
+  AlertaParaEncerrar,
+  AlertaParaIncluir,
   AlteracaoCoberturaParaGravar,
-  EncerramentoCoberturaParaGravar,
-  ExclusaoCoberturaParaGravar,
-  EquipamentoLido,
-  EquipamentoParaGravar,
-  EventoOsLido,
   AlteracaoPlanoParaGravar,
-  ExecucaoLida,
-  ExecucaoParaGravar,
-  FiltroEquipamentosLegado,
-  FiltroOsLegado,
+  AvisoDaCentral,
+  CoberturaManutencao,
+  CoberturaParaGravar,
   CorrecaoOsParaGravar,
+  DesvinculoCursoParaGravar,
+  EncerramentoCoberturaParaGravar,
+  EquipamentoDoParque,
+  EquipamentoManutencao,
+  EquipamentoParaGravar,
+  EventoCicloParaGravar,
+  EventoCicloRegistrado,
+  EventoOrdem,
+  ExclusaoCoberturaParaGravar,
+  ExecucaoDoPlano,
+  ExecucaoParaGravar,
+  FiltroEquipamentos,
+  FiltroOrdens,
+  GeracaoAcaoDeCampoParaGravar,
   MudancaOsParaGravar,
   OcorrenciasDoPeriodo,
-  OsLida,
-  PlanoManutencaoLido,
-  PlanoParaGravarMan,
-  RecursoAgendaLido,
-  SetorLido,
-  UnidadeDaManutencaoLida,
+  OrdemServico,
+  PlanoManutencao,
+  PlanoParaGravar,
+  QueixaDaOsAberta,
+  QueixaDaOsParaGravar,
+  RecursoDeAgenda,
+  SetorManutencao,
+  UnidadeManutencao,
   UsuarioDaOs,
-  VersaoPlanoLida,
-  VersaoCoberturaLida,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+  VersaoDaCobertura,
+  VersaoDoPlano,
+  VinculoCursoParaGravar,
+} from './tipos.js';
+import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_MANUTENCAO = Symbol('PORTA_MANUTENCAO');
 
 type C = ContextoPortaM18;
 type Id = { id: number; versao: number };
-/** O segundo argumento da gravação do legado (o primeiro é o escritor da transação). */
-type Arg<F extends (e: never, x: never) => unknown> = Parameters<F>[1];
-type Res<F extends (...a: never[]) => Promise<unknown>> = Awaited<ReturnType<F>>;
 
 /** Filtro do período dos indicadores (datas civis, fim inclusive). */
 export interface FiltroPeriodoPorta {
@@ -70,22 +68,22 @@ export interface FiltroPeriodoPorta {
   readonly fim: string;
   readonly equipamento?: number | null;
   readonly centroCusto?: number | null;
-  readonly criticidade?: EquipamentoLido['criticidade'] | null;
+  readonly criticidade?: EquipamentoManutencao['criticidade'] | null;
 }
 
-/** Leituras e gravações só do novo, numa transação com a SGH_TRILHA junto (as leituras são da mesma transação). */
+/** Leituras e gravações numa transação com a trilha de auditoria junto (as leituras são da mesma transação). */
 export interface GravadorManutencao {
   relogio(): Promise<{ hoje: string; agora: string }>;
-  setores(): Promise<SetorLido[]>;
-  equipamento(id: number): Promise<EquipamentoLido | null>;
-  equipamentoPorCodigo(codigo: string): Promise<EquipamentoLido | null>;
+  setores(): Promise<SetorManutencao[]>;
+  equipamento(id: number): Promise<EquipamentoManutencao | null>;
+  equipamentoPorCodigo(codigo: string): Promise<EquipamentoManutencao | null>;
   /** A OS relida e travada até o fim da transação. */
-  os(id: number): Promise<OsLida | null>;
+  os(id: number): Promise<OrdemServico | null>;
   osAbertasDoEquipamento(equipamento: number): Promise<number[]>;
   /** O plano relido e travado até o fim da transação. */
-  plano(id: number): Promise<PlanoManutencaoLido | null>;
-  cobertura(id: number): Promise<CoberturaLida | null>;
-  recurso(tipo: TipoRecursoAgenda, id: number): Promise<RecursoAgendaLido | null>;
+  plano(id: number): Promise<PlanoManutencao | null>;
+  cobertura(id: number): Promise<CoberturaManutencao | null>;
+  recurso(tipo: TipoRecursoAgenda, id: number): Promise<RecursoDeAgenda | null>;
   fornecedorExiste(codigo: number): Promise<boolean>;
   loginsDoSetor(centroCusto: number): Promise<string[]>;
   equipamentosDoRecurso(recurso: { tipo: TipoRecursoAgenda; id: number }): Promise<number[]>;
@@ -94,7 +92,7 @@ export interface GravadorManutencao {
   abrirOs(x: AberturaOsParaGravar): Promise<Id & { numero: string }>;
   mudarOs(x: MudancaOsParaGravar): Promise<Id>;
   corrigirOs(x: CorrecaoOsParaGravar): Promise<Id>;
-  incluirPlano(x: PlanoParaGravarMan): Promise<Id>;
+  incluirPlano(x: PlanoParaGravar): Promise<Id>;
   ativarPlano(x: { id: number; versaoVista: number; ativo: boolean; usuario: string }): Promise<Id>;
   alterarPlano(x: AlteracaoPlanoParaGravar): Promise<Id>;
   registrarExecucao(x: ExecucaoParaGravar): Promise<{ id: number; versaoPlano: number }>;
@@ -108,57 +106,57 @@ export interface GravadorManutencao {
   /** Exclusão física só sem vínculo (409 `com-dependentes` com quantos e quais). */
   excluirCobertura(x: ExclusaoCoberturaParaGravar): Promise<Id>;
   // W0-08, parte 8 (M2): alerta de tecnovigilância e recall (as regras puras chegam como callback).
-  incluirAlerta(x: Arg<typeof incluirAlertaEquipamentoSgh>): Promise<Id>;
-  alterarAlerta(x: Arg<typeof alterarAlertaEquipamentoSgh>): Promise<Res<typeof alterarAlertaEquipamentoSgh>>;
-  encerrarAlerta(x: Arg<typeof encerrarAlertaEquipamentoSgh>): Promise<Id>;
+  incluirAlerta(x: AlertaParaIncluir): Promise<Id>;
+  alterarAlerta(x: AlertaParaAlterar): Promise<AlertaAlterado>;
+  encerrarAlerta(x: AlertaParaEncerrar): Promise<Id>;
   /** Exclusão física só sem vínculo (409 `com-dependentes` com quantos e quais, oferecendo o encerramento). */
-  excluirAlerta(x: Arg<typeof excluirAlertaEquipamentoSgh>): Promise<Id>;
-  gerarAcaoDeCampo(x: Arg<typeof gerarAcaoDeCampoSgh>): Promise<Res<typeof gerarAcaoDeCampoSgh>>;
-  abrirQueixaDaOs(x: Arg<typeof abrirQueixaDaOsSgh>): Promise<Res<typeof abrirQueixaDaOsSgh>>;
+  excluirAlerta(x: AlertaParaEncerrar): Promise<Id>;
+  gerarAcaoDeCampo(x: GeracaoAcaoDeCampoParaGravar): Promise<AcaoDeCampoGerada>;
+  abrirQueixaDaOs(x: QueixaDaOsParaGravar): Promise<QueixaDaOsAberta>;
   // W0-08, parte 9 (M3): o curso exigido por modelo e os eventos do ciclo de vida (a regra pura chega como callback).
   cursoDoModelo(id: number): Promise<CursoDoModelo | null>;
-  vincularCursoModelo(x: Arg<typeof vincularCursoModeloSgh>): Promise<{ id: number }>;
-  desvincularCursoModelo(x: Arg<typeof desvincularCursoModeloSgh>): Promise<{ id: number }>;
+  vincularCursoModelo(x: VinculoCursoParaGravar): Promise<{ id: number }>;
+  desvincularCursoModelo(x: DesvinculoCursoParaGravar): Promise<{ id: number }>;
   eventosCiclo(equipamento: number): Promise<EventoCicloVida[]>;
-  registrarEventoCiclo(x: Arg<typeof registrarEventoCicloSgh>): Promise<Res<typeof registrarEventoCicloSgh>>;
-  /** O aviso da central (SGH_ADM_AVISO); o mesmo destinatário e objeto não é avisado duas vezes (null). */
-  avisar(a: Omit<AvisoSgh, 'rede' | 'hospital'>): Promise<number | null>;
+  registrarEventoCiclo(x: EventoCicloParaGravar): Promise<EventoCicloRegistrado>;
+  /** O aviso da central (notificacao_usuario); o mesmo destinatário e objeto não é avisado duas vezes (null). */
+  avisar(a: AvisoDaCentral): Promise<number | null>;
 }
 
 export interface PortaManutencao extends PortaGravacaoM18<GravadorManutencao> {
   relogio(c: C): Promise<{ hoje: string; agora: string }>;
-  setores(c: C): Promise<SetorLido[]>;
-  unidades(c: C): Promise<UnidadeDaManutencaoLida[]>;
-  recursos(c: C, tipo: TipoRecursoAgenda): Promise<RecursoAgendaLido[]>;
-  recurso(c: C, tipo: TipoRecursoAgenda, id: number): Promise<RecursoAgendaLido | null>;
+  setores(c: C): Promise<SetorManutencao[]>;
+  unidades(c: C): Promise<UnidadeManutencao[]>;
+  recursos(c: C, tipo: TipoRecursoAgenda): Promise<RecursoDeAgenda[]>;
+  recurso(c: C, tipo: TipoRecursoAgenda, id: number): Promise<RecursoDeAgenda | null>;
   nomesDosUsuarios(c: C, logins: readonly string[]): Promise<UsuarioDaOs[]>;
   /** Fornecedores pelo nome ou código (para o combo), sem documento nem dado bancário. */
   fornecedores(c: C, termo: string): Promise<{ codigo: number; nome: string }[]>;
   nomesDosFornecedores(c: C, codigos: readonly number[]): Promise<{ codigo: number; nome: string }[]>;
   equipamentos(
     c: C,
-    f: FiltroEquipamentosLegado,
-  ): Promise<{ itens: EquipamentoLido[]; proxima: number | null }>;
-  equipamento(c: C, id: number): Promise<EquipamentoLido | null>;
-  equipamentoPorCodigo(c: C, codigo: string): Promise<EquipamentoLido | null>;
-  ordens(c: C, f: FiltroOsLegado): Promise<{ itens: OsLida[]; proxima: number | null }>;
-  os(c: C, id: number): Promise<OsLida | null>;
-  eventos(c: C, os: number): Promise<EventoOsLido[]>;
-  planos(c: C, f?: { equipamento?: number | null; soAtivos?: boolean }): Promise<PlanoManutencaoLido[]>;
-  execucoes(c: C, plano: number): Promise<ExecucaoLida[]>;
-  versoesPlano(c: C, plano: number): Promise<VersaoPlanoLida[]>;
-  planoPorId(c: C, id: number): Promise<PlanoManutencaoLido | null>;
+    f: FiltroEquipamentos,
+  ): Promise<{ itens: EquipamentoManutencao[]; proxima: number | null }>;
+  equipamento(c: C, id: number): Promise<EquipamentoManutencao | null>;
+  equipamentoPorCodigo(c: C, codigo: string): Promise<EquipamentoManutencao | null>;
+  ordens(c: C, f: FiltroOrdens): Promise<{ itens: OrdemServico[]; proxima: number | null }>;
+  os(c: C, id: number): Promise<OrdemServico | null>;
+  eventos(c: C, os: number): Promise<EventoOrdem[]>;
+  planos(c: C, f?: { equipamento?: number | null; soAtivos?: boolean }): Promise<PlanoManutencao[]>;
+  execucoes(c: C, plano: number): Promise<ExecucaoDoPlano[]>;
+  versoesPlano(c: C, plano: number): Promise<VersaoDoPlano[]>;
+  planoPorId(c: C, id: number): Promise<PlanoManutencao | null>;
   coberturas(
     c: C,
     f?: { equipamento?: number | null; ids?: readonly number[] | null },
-  ): Promise<CoberturaLida[]>;
-  versoesCobertura(c: C, cobertura: number): Promise<VersaoCoberturaLida[]>;
+  ): Promise<CoberturaManutencao[]>;
+  versoesCobertura(c: C, cobertura: number): Promise<VersaoDaCobertura[]>;
   ocorrencias(c: C, f: FiltroPeriodoPorta): Promise<OcorrenciasDoPeriodo>;
   // W0-08, parte 8 (M2): o alerta, as OS de ação de campo geradas, o parque candidato e os vínculos da OS.
   alertas(c: C, f?: { situacao?: SituacaoAlertaEquipamento | null }): Promise<AlertaEquipamento[]>;
   alerta(c: C, id: number): Promise<AlertaEquipamento | null>;
-  acoesDoAlerta(c: C, alerta: number): Promise<AcaoDeCampoLida[]>;
-  parqueDoAlerta(c: C, alerta: number): Promise<EquipamentoDoParqueLido[]>;
+  acoesDoAlerta(c: C, alerta: number): Promise<AcaoDeCampo[]>;
+  parqueDoAlerta(c: C, alerta: number): Promise<EquipamentoDoParque[]>;
   vinculosTecnovigDaOs(
     c: C,
     os: number,
@@ -218,3 +216,8 @@ export const METODOS_PORTA_MANUTENCAO: ReadonlySet<string> = new Set([
   'eventosCiclo',
   'baseObsolescencia',
 ]);
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaManutencaoIndisponivel(): PortaManutencao {
+  return portaIndisponivel<PortaManutencao>(METODOS_PORTA_MANUTENCAO);
+}

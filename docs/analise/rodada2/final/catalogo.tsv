@@ -3557,3 +3557,16 @@ inventario_enxoval_item	HOT	item	F3	Quantidade contada de cada peça no inventá
 peca_enxoval_composicao	HOT	item	F3	Peças que compõem um kit do enxoval, com a quantidade	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
 remessa_lavanderia_item	HOT	item	F3	Quantidade de cada peça enviada à lavanderia na remessa	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
 baixa_enxoval_item	HOT	item	F3	Peças e quantidades de cada baixa do enxoval	F2.2 onda 2 (pedido do lote 02-14; db/migracoes)	02	0
+limite_permanencia	INT	configuracao	F3	Limites de permanência (atenção e excesso) do quadro do NIR, por clínica, CID ou procedimento	F2.2 onda 3 (pedido do lote 03-01; db/migracoes)	04	0
+registro_prontuario_ocorrencia	HOT	principal	F3	Ocorrência, aceite e cobrança do prontuário no SAME, com ou sem movimento do volume	F2.2 onda 3 (pedido do lote 03-01; db/migracoes)	04	0
+pin_troca_rapida	ADM	principal	F3	PIN da troca rápida de usuário na estação: resumo forte, erros seguidos, bloqueio e encerramento	F2.2 onda 3 (pedido do lote 03-02; db/migracoes)	01	0
+modelo_equipamento_curso	HOT	vinculo	F7	Curso exigido para operar cada modelo de equipamento	F2.2 onda 3 (pedido do lote 03-03; db/migracoes)	04	0
+evento_ciclo_equipamento	HOT	principal	F7	Incorporação, desativação e descarte do equipamento, com documento, destino e valores	F2.2 onda 3 (pedido do lote 03-03; db/migracoes)	04	0
+alerta_sanitario_equipamento	QUA	vinculo	F8	Equipamentos do parque afetados pelo alerta sanitário, com a OS de ação de campo	F2.2 onda 3 (pedido do lote 03-03; db/migracoes)	10	0
+acompanhamento_terapia_nutricional	PEP	item	F3	Acompanhamento diário da meta da terapia nutricional	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	03	0
+registro_social	PEP	principal	F3	Avaliação, evolução e adendo do serviço social na internação	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	03	0
+correcao_registro_nutricao	PEP	historico	F3	Retificação, estorno, nova versão e encerramento dos registros da nutrição e do serviço social	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	03	0
+avaliacao_nutricao_parenteral	PEP	principal	F3	Avaliação farmacêutica da nutrição parenteral	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	03	0
+plano_refeicao_acompanhante	HOT	principal	F3	Refeições previstas do acompanhante pela nutrição: base legal, período e dieta	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	04	0
+plano_refeicao_acompanhante_refeicao	HOT	vinculo	F3	Refeições do dia a que o acompanhante tem direito no plano	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	04	0
+retorno_sus_item	SUS	item	F7	Linha do retorno do gestor (AIH ou BPA) com a situação, os valores e o tratamento	F2.2 onda 3 (pedido do lote 03-05; db/migracoes)	06	0

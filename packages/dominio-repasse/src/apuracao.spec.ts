@@ -30,13 +30,13 @@ describe('transicaoApuracao', () => {
 });
 
 describe('podeApurarPeriodo', () => {
-  it('recusa período apurado no outro sistema ou já aberto no novo', () => {
-    expect(podeApurarPeriodo({ linhasDoLegadoNoPeriodo: 0, apuracaoNoNovo: false })).toEqual({ ok: true });
-    expect(podeApurarPeriodo({ linhasDoLegadoNoPeriodo: 3, apuracaoNoNovo: false })).toEqual({
+  it('recusa período com lançamentos de apuração aprovada ou com a apuração já fechada', () => {
+    expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 0, apuracaoFechada: false })).toEqual({ ok: true });
+    expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 3, apuracaoFechada: false })).toEqual({
       ok: false,
-      recusa: 'periodo-apurado-no-legado',
+      recusa: 'periodo-ja-apurado',
     });
-    expect(podeApurarPeriodo({ linhasDoLegadoNoPeriodo: 0, apuracaoNoNovo: true })).toEqual({
+    expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 0, apuracaoFechada: true })).toEqual({
       ok: false,
       recusa: 'periodo-ja-apurado',
     });

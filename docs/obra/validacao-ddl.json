@@ -1,15 +1,15 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3564,
-  "catalogo": 3558,
+  "tabelas_criadas": 3577,
+  "catalogo": 3571,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
-  "colunas_id_sem_fk": 68,
-  "fks": 13646,
+  "colunas_id_sem_fk": 71,
+  "fks": 13703,
   "gatilhos": 0,
   "plataforma_erros": 0,
   "total_erros": 0
@@ -19,6 +19,10 @@
  "erros_arquivo": {},
  "erros_tabela": {},
  "avisos_tabela": {
+  "correcao_registro_nutricao": [
+   "registro_id sem FK",
+   "novo_registro_id sem FK"
+  ],
   "aparelho_beira_leito": [
    "estabelecimento_id sem FK",
    "unidade_internacao_id sem FK"
@@ -116,6 +120,9 @@
    "bem_patrimonial_id sem FK",
    "laudo_bem_id sem FK",
    "estorno_usuario_id sem FK"
+  ],
+  "pin_troca_rapida": [
+   "usuario_vivo_id sem FK"
   ],
   "indice_gravidade_uti": [
    "estabelecimento_id sem FK",

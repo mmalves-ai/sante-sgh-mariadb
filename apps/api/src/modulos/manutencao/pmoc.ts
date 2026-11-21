@@ -9,7 +9,7 @@ import {
   type RecusaPmoc,
 } from '@sgh/contratos';
 import { diasEntre, situacaoDoPlano } from '@sgh/dominio-manutencao';
-import type { ExecucaoLida, PlanoManutencaoLido } from '@sgh/legado';
+import type { ExecucaoDoPlano, PlanoManutencao } from './tipos.js';
 import type { PmocParaDocumento } from './documentos.js';
 
 /** Período do relatório: a ordem e o teto de 366 dias. */
@@ -31,7 +31,7 @@ export function conferirPeriodoPmoc(
 
 /** O mesmo modelo não fica ativo duas vezes no mesmo equipamento (o segundo seria o mesmo plano duplicado). */
 export function conferirInstalacaoModelo(
-  planosDoEquipamento: readonly PlanoManutencaoLido[],
+  planosDoEquipamento: readonly PlanoManutencao[],
   modelo: CodigoModeloPlano,
 ): { ok: true } | { ok: false; recusa: RecusaPmoc; mensagem: string } {
   const ja = planosDoEquipamento.find((p) => p.ativo && p.modelo?.codigo === modelo);
@@ -60,9 +60,9 @@ export interface EntradaPmoc {
   readonly hoje: string;
   readonly antecedenciaPadrao: number;
   readonly responsavel: ResponsavelPmoc;
-  readonly planos: readonly PlanoManutencaoLido[];
+  readonly planos: readonly PlanoManutencao[];
   readonly equipamentos: ReadonlyMap<number, EquipamentoDoPmoc>;
-  readonly execucoes: ReadonlyMap<number, readonly ExecucaoLida[]>;
+  readonly execucoes: ReadonlyMap<number, readonly ExecucaoDoPlano[]>;
   readonly emissao: {
     readonly estabelecimento: string;
     readonly emitidoEm: string;

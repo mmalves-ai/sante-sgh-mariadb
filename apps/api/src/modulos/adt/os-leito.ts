@@ -31,6 +31,7 @@ import {
 import { CONFIGURACAO_M16, type ConfiguracaoM16 } from '../internacao/public-api.js';
 import type { AvisosAtendimento } from '../atendimento/public-api.js';
 import { ApoioGravacao } from '../exames/public-api.js';
+import { ApoioGravacaoIdempotente } from './apoio-idempotente.js';
 import { ApoiosAdt, CHAVE_LIMPEZA, ctxAdt, janelaOutroSistema } from './apoios.js';
 import type { GravadorSghAdt } from './porta.js';
 import { intensivasDe } from './internacao.controller.js';
@@ -93,7 +94,7 @@ export class IntegracaoOsLeitoAdt implements IntegracaoOsLeito {
     @Optional() @Inject(AVISOS_ADT) private readonly avisos: AvisosAtendimento | null = null,
   ) {
     this.apoios = new ApoiosAdt(porta, trilha, configuracao, cache);
-    this.limpezaPosOs = new ApoioGravacao<GravadorSghAdt>(
+    this.limpezaPosOs = new ApoioGravacaoIdempotente<GravadorSghAdt>(
       { chave: CHAVE_LIMPEZA, nome: 'a higienização', operacoes: {} },
       porta,
       trilha,
@@ -186,7 +187,7 @@ export class IntegracaoOsLeitoAdt implements IntegracaoOsLeito {
       s,
       EVENTOS_AUDITAVEIS.leitosLeitoBloqueado.codigo,
       'leitos.bloqueio.criar',
-      { tabela: 'SGH_INT_LEITO_ESTADO', chave: chaveTextoLeito(chave) },
+      { tabela: 'periodo_situacao_leito', chave: chaveTextoLeito(chave) },
       (g) => g.encerrarEstadoLeito({ leito: chave, estado: 'bloqueio', usuario: s.login }),
     );
   }

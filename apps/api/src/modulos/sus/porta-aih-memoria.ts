@@ -1,25 +1,16 @@
 // Porta do faturamento SUS em memória, etapa 4 (AIH): a sessão sintética de dev/ci (E2E). A massa é SINTÉTICA (nenhum
 // dado de pessoa): em qualquer competência pedida, duas internações do SUS (convênio 1) com alta nela — uma clínica de
 // dez dias com três diárias na UTI e um OPM, outra curta, sem UTI — e um catálogo SIGTAP sintético da AIH. As gravações
-// seguem as regras das tabelas SGH_ (versão e situação de origem em cada mudança; número único; o retorno não duplica);
+// seguem as regras das tabelas do faturamento SUS (versão e situação de origem em cada mudança; número único; o retorno não duplica);
 // a transação é a da porta em memória (desfeita se a função falhar).
-import type {
-  AihSgh,
-  FaixaAihSgh,
-  InternacaoAihLida,
-  ItemAihSgh,
-  ItemContaAihLido,
-  PassagemLeitoLida,
-  RetornoSusSgh,
-} from '@sgh/legado';
-import { ErroAihSgh } from '@sgh/legado';
 import type { DadosAihLidos, GravacaoSusAih, LeituraSusAih, SolicitanteAihLido } from './porta-aih.js';
+import { type AihRegistro, ErroAih, type FaixaAih, type InternacaoAih, type ItemAih, type ItemContaAih, type PassagemLeito, type RetornoSus } from './tipos.js';
 
 export interface EstadoSusAih {
-  faixas: FaixaAihSgh[];
-  aihs: AihSgh[];
-  itens: (ItemAihSgh & { aih: number; fechamento: number })[];
-  retornos: RetornoSusSgh[];
+  faixas: FaixaAih[];
+  aihs: AihRegistro[];
+  itens: (ItemAih & { aih: number; fechamento: number })[];
+  retornos: RetornoSus[];
 }
 
 export function estadoAihVazio(): EstadoSusAih {
@@ -91,12 +82,12 @@ function cnsSinteticoAih(semente: number): string {
 }
 
 export function internacoesAihSinteticas(inicio: string): {
-  internacoes: InternacaoAihLida[];
-  itens: ItemContaAihLido[];
-  passagens: PassagemLeitoLida[];
+  internacoes: InternacaoAih[];
+  itens: ItemContaAih[];
+  passagens: PassagemLeito[];
 } {
   const dia = (d: number) => `${inicio.slice(0, 8)}${String(d).padStart(2, '0')}`;
-  const internacao = (n: 1 | 2, entrada: number, alta: number): InternacaoAihLida => ({
+  const internacao = (n: 1 | 2, entrada: number, alta: number): InternacaoAih => ({
     registro: 7400 + n,
     prontuario: 547_000 + n,
     atendimento: 647_000 + n,
@@ -158,13 +149,13 @@ export function internacoesAihSinteticas(inicio: string): {
 }
 
 /** O intervalo da competência de hoje e da anterior (a massa existe em toda competência pedida). */
-function internacaoSintetica(registro: number, hoje = new Date()): InternacaoAihLida | null {
+function internacaoSintetica(registro: number, hoje = new Date()): InternacaoAih | null {
   const inicio = `${hoje.toISOString().slice(0, 7)}-01`;
   return internacoesAihSinteticas(inicio).internacoes.find((x) => x.registro === registro) ?? null;
 }
 
 function erro(): never {
-  throw new ErroAihSgh('versao-alterada', 'O registro mudou desde que a tela foi aberta.');
+  throw new ErroAih('versao-alterada', 'O registro mudou desde que a tela foi aberta.');
 }
 
 export function leituraAihMemoria(b: BaseMemoriaAih): LeituraSusAih {
@@ -248,7 +239,7 @@ export function leituraAihMemoria(b: BaseMemoriaAih): LeituraSusAih {
       s()
         .itens.filter((x) => x.aih === id && x.fechamento === fechamento)
         .sort((x, y) => x.sequencia - y.sequencia)
-        .map((x): ItemAihSgh => ({
+        .map((x): ItemAih => ({
           sequencia: x.sequencia,
           tipo: x.tipo,
           procedimento: x.procedimento,
@@ -292,9 +283,9 @@ function dadosSinteticos(
   massas: readonly ReturnType<typeof internacoesAihSinteticas>[],
   registros: readonly number[],
 ): DadosAihLidos {
-  const internacoes: InternacaoAihLida[] = [];
-  const itens: ItemContaAihLido[] = [];
-  const passagens: PassagemLeitoLida[] = [];
+  const internacoes: InternacaoAih[] = [];
+  const itens: ItemContaAih[] = [];
+  const passagens: PassagemLeito[] = [];
   const vistos = new Set<number>();
   for (const m of massas)
     for (const i of m.internacoes) {
@@ -347,14 +338,14 @@ export function gravacaoAihMemoria(b: BaseMemoriaAih): GravacaoSusAih {
   const s = () => b.aih();
   const mudar = (
     a: { id: number; versao: number },
-    de: readonly AihSgh['situacao'][],
-    m: Partial<AihSgh>,
+    de: readonly AihRegistro['situacao'][],
+    m: Partial<AihRegistro>,
     por: string,
   ) => {
     const x = s().aihs.find((y) => y.id === a.id);
     if (!x || x.versao !== a.versao || !de.includes(x.situacao)) erro();
     if (m.numero && s().aihs.some((y) => y.id !== a.id && y.numero === m.numero))
-      throw new ErroAihSgh('numero-em-uso', 'Este número de AIH já foi usado.');
+      throw new ErroAih('numero-em-uso', 'Este número de AIH já foi usado.');
     s().aihs = s().aihs.map((y) =>
       y.id === a.id ? { ...y, ...m, alteradaPor: por, alteradaEm: agora(), versao: y.versao + 1 } : y,
     );
@@ -363,7 +354,7 @@ export function gravacaoAihMemoria(b: BaseMemoriaAih): GravacaoSusAih {
     inserirFaixaAih: async (p) => {
       const inicio = p.inicio.toString().padStart(12, '0');
       if (s().faixas.some((f) => f.inicio === inicio))
-        throw new ErroAihSgh('faixa-sobreposta', 'Já existe uma faixa que começa neste número.');
+        throw new ErroAih('faixa-sobreposta', 'Já existe uma faixa que começa neste número.');
       const id = b.proximo();
       s().faixas.push({
         id,
@@ -556,7 +547,7 @@ export function gravacaoAihMemoria(b: BaseMemoriaAih): GravacaoSusAih {
       if (p.decisao === 'reapresentar' && p.aih !== null) {
         const a = s().aihs.find((y) => y.id === p.aih);
         if (!a || a.situacao !== 'rejeitada')
-          throw new ErroAihSgh('versao-alterada', 'A AIH não está rejeitada: nada foi reapresentado.');
+          throw new ErroAih('versao-alterada', 'A AIH não está rejeitada: nada foi reapresentado.');
         s().aihs = s().aihs.map((y) =>
           y.id === p.aih
             ? {

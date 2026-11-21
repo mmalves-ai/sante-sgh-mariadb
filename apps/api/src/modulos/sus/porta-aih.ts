@@ -1,48 +1,29 @@
-// Porta do faturamento SUS próprio, etapa 4 (M51: AIH, leitos de UTI, espelho, retorno e glosa): as leituras READ ONLY
-// do outro sistema (a internação, a conta, a trajetória, os leitos de UTI habilitados, os lotes da saída de estoque, a
-// SIGTAP e os valores) e as do Sante (faixa, AIH, linhas e retorno), e as gravações só SGH_. As interfaces entram na
+// Porta do faturamento SUS próprio, etapa 4 (M51: AIH, leitos de UTI, espelho, retorno e glosa): as leituras
+// da produção (a internação, a conta, a trajetória, os leitos de UTI habilitados, os lotes da saída de estoque, a
+// SIGTAP e os valores) e as do faturamento SUS (faixa, AIH, linhas e retorno), e as gravações. As interfaces entram na
 // LeituraSus e na GravacaoSus (a mesma transação da competência, da crítica, do arquivo e da trilha).
-import type {
-  AihSgh,
-  CompatibilidadeSigtapLida,
-  FaixaAihSgh,
-  FiltroAihsSgh,
-  FiltroRetornosSusSgh,
-  HistoricoSigtapLido,
-  InternacaoAihLida,
-  ItemAihParaGravar,
-  ItemAihSgh,
-  ItemContaAihLido,
-  LoteSaidaLido,
-  NovoArquivoSus,
-  PassagemLeitoLida,
-  ProcedimentoSigtapLido,
-  RegistroSigtapLido,
-  RetornoSusParaGravar,
-  RetornoSusSgh,
-  ValorSigtapLido,
-} from '@sgh/legado';
+import { type AihRegistro, type CompatibilidadeSigtap, type FaixaAih, type FiltroAihsPorta, type FiltroRetornosPorta, type HistoricoSigtap, type InternacaoAih, type ItemAih, type ItemAihParaGravar, type ItemContaAih, type LoteSaida, type NovoArquivoSus, type PassagemLeito, type ProcedimentoSigtapRegra, type RegistroSigtap, type RetornoSus, type RetornoSusParaGravar, type ValorSigtap } from './tipos.js';
 
-/** O médico solicitante SUS do laudo (FAMEDSOL pela chave, o CPF): nome, CNS e CRM (o documento só vai ao arquivo). */
+/** O médico solicitante SUS do laudo (pela chave do cadastro): nome, CNS e CRM (o documento só vai ao arquivo). */
 export interface SolicitanteAihLido {
   readonly cpf: string;
   readonly nome: string;
   readonly cns: string | null;
 }
 
-/** O que a montagem da AIH lê do outro sistema (nada disso é gravado no Sante). */
+/** O que a montagem da AIH lê da produção do estabelecimento. */
 export interface DadosAihLidos {
-  readonly internacoes: readonly InternacaoAihLida[];
-  readonly itens: readonly ItemContaAihLido[];
-  readonly passagens: readonly PassagemLeitoLida[];
-  readonly procedimentos: readonly ProcedimentoSigtapLido[];
-  readonly historico: readonly HistoricoSigtapLido[];
-  readonly registros: readonly RegistroSigtapLido[];
+  readonly internacoes: readonly InternacaoAih[];
+  readonly itens: readonly ItemContaAih[];
+  readonly passagens: readonly PassagemLeito[];
+  readonly procedimentos: readonly ProcedimentoSigtapRegra[];
+  readonly historico: readonly HistoricoSigtap[];
+  readonly registros: readonly RegistroSigtap[];
   readonly compatibilidades: {
-    readonly cids: readonly CompatibilidadeSigtapLida[];
-    readonly cbos: readonly CompatibilidadeSigtapLida[];
-    readonly habilitacoes: readonly CompatibilidadeSigtapLida[];
-    readonly leitos: readonly CompatibilidadeSigtapLida[];
+    readonly cids: readonly CompatibilidadeSigtap[];
+    readonly cbos: readonly CompatibilidadeSigtap[];
+    readonly habilitacoes: readonly CompatibilidadeSigtap[];
+    readonly leitos: readonly CompatibilidadeSigtap[];
   };
   /** Os códigos SIGTAP pedidos (principal e diárias de UTI) com o ID e o nome. */
   readonly porCodigo: readonly { readonly id: number; readonly codigo: string; readonly nome: string }[];
@@ -53,7 +34,7 @@ export interface DadosAihLidos {
 
 export interface LeituraSusAih {
   /** A internação pelo registro, com a conta SUS escolhida pelos convênios SUS do estabelecimento. */
-  internacaoAih(registro: number, conveniosSus: readonly number[]): Promise<InternacaoAihLida | null>;
+  internacaoAih(registro: number, conveniosSus: readonly number[]): Promise<InternacaoAih | null>;
   internacoesSus(
     intervalo: { readonly inicio: string; readonly fim: string },
     conveniosSus: readonly number[],
@@ -66,33 +47,33 @@ export interface LeituraSusAih {
     conveniosSus: readonly number[],
   ): Promise<DadosAihLidos>;
   leitosUti(): Promise<{ tipo: number; nome: string; leitos: number }[]>;
-  lotesSaida(registro: number): Promise<LoteSaidaLido[]>;
-  valoresSigtap(ids: readonly number[]): Promise<ValorSigtapLido[]>;
+  lotesSaida(registro: number): Promise<LoteSaida[]>;
+  valoresSigtap(ids: readonly number[]): Promise<ValorSigtap[]>;
   solicitanteAih(cpf: string): Promise<SolicitanteAihLido | null>;
-  faixasAih(): Promise<FaixaAihSgh[]>;
-  faixaAih(id: number, travar?: boolean): Promise<FaixaAihSgh | null>;
+  faixasAih(): Promise<FaixaAih[]>;
+  faixaAih(id: number, travar?: boolean): Promise<FaixaAih | null>;
   maiorNumeroDaFaixa(id: number): Promise<string | null>;
   numeroAihEmUso(numero: string): Promise<boolean>;
-  aih(id: number, travar?: boolean): Promise<AihSgh | null>;
-  aihPorNumero(numero: string): Promise<AihSgh | null>;
-  aihsDasInternacoes(registros: readonly number[]): Promise<AihSgh[]>;
-  aihsParaApresentar(competencia: string): Promise<AihSgh[]>;
+  aih(id: number, travar?: boolean): Promise<AihRegistro | null>;
+  aihPorNumero(numero: string): Promise<AihRegistro | null>;
+  aihsDasInternacoes(registros: readonly number[]): Promise<AihRegistro[]>;
+  aihsParaApresentar(competencia: string): Promise<AihRegistro[]>;
   paginaAihs(
-    f: FiltroAihsSgh,
-  ): Promise<{ itens: AihSgh[]; total: number; porSituacao: Record<string, number> }>;
-  itensAih(id: number, fechamento: number): Promise<ItemAihSgh[]>;
+    f: FiltroAihsPorta,
+  ): Promise<{ itens: AihRegistro[]; total: number; porSituacao: Record<string, number> }>;
+  itensAih(id: number, fechamento: number): Promise<ItemAih[]>;
   linhaBpaDaCompetencia(
     competencia: string,
     p: { tipo: 'c' | 'i'; folha: number; sequencia: number },
   ): Promise<{ linha: number; arquivo: number; procedimento: string } | null>;
-  paginaRetornos(f: FiltroRetornosSusSgh): Promise<{
-    itens: RetornoSusSgh[];
+  paginaRetornos(f: FiltroRetornosPorta): Promise<{
+    itens: RetornoSus[];
     total: number;
     porSituacao: Record<string, number>;
     valorGlosado: number;
   }>;
-  retornoSus(id: number, travar?: boolean): Promise<RetornoSusSgh | null>;
-  ultimoRetornoDaAih(id: number): Promise<RetornoSusSgh | null>;
+  retornoSus(id: number, travar?: boolean): Promise<RetornoSus | null>;
+  ultimoRetornoDaAih(id: number): Promise<RetornoSus | null>;
 }
 
 export interface GravacaoSusAih {

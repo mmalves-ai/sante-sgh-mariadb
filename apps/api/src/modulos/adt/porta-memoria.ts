@@ -20,37 +20,31 @@ import {
   type LocalizacaoConta,
   OPERACOES_SAME,
   type PreInternacaoItem,
-  SITUACOES_LIMPEZA_LIBERADAS,
   preservarVinculoOs,
 } from '@sgh/contratos';
 import { conferirMovimentoArquivo } from '@sgh/dominio-hotelaria';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type EstadosDoMapaLidos,
-  type FonteCatalogo,
-  type InternacaoDetalheLegado,
-  type LiberacaoConsultada,
-  operacao,
-  type PacienteLido,
-  recusa,
-  type ResultadoOperacao,
-  type SolicitacaoLida,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import { type DetalheInternacao, type EstadosDoMapa, type SolicitacaoLimpezaFila } from './tipos.js';
+import { type EstadoCatalogo } from '../cadastro/porta.js';
+import { type LiberacaoGravacao } from '../exames/public-api.js';
+import { esquemaDaOperacao } from './esquemas.js';
+import { type PacienteFicha } from '../cadastro/tipos.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { NirParaAdt } from './nir-memoria.js';
 import type { ProfissionalDaSessao } from '../atendimento/porta.js';
 import type {
-  AltaMedicaLida,
+  AltaMedicaDecidida,
   ContextoAdt,
   DadosImpressoInternacao,
-  EtapaLida,
+  EtapaDaLimpeza,
   GravadorSghAdt,
   OpcoesListaInternacoes,
   PortaAdt,
 } from './porta.js';
 
 const M = 'SINTETICO';
+/** Quem grava, para os registros sintéticos (o id do usuário da sessão; sem ele, o marcador sintético). */
+const quemGrava = (ctx: ContextoOperacao) => (ctx.usuario === null ? M : String(ctx.usuario));
 
 interface TrechoM {
   leito: ChaveLeito;
@@ -173,9 +167,9 @@ interface Estado {
       criticidade: number | null;
     }
   >;
-  altasMedicas: (AltaMedicaLida & { reg: number; situacao: string })[];
+  altasMedicas: (AltaMedicaDecidida & { reg: number; situacao: string })[];
   solicitacoes: Map<number, SolicitacaoM>;
-  etapas: (EtapaLida & { solicitacao: number })[];
+  etapas: (EtapaDaLimpeza & { solicitacao: number })[];
   contas: Map<number, { reg: number; numero: number }>;
   movimentos: MovimentoM[];
   sameExt: {
@@ -251,10 +245,10 @@ export class PortaAdtMemoria implements PortaAdt {
   private readonly estados = new Map<string, Estado>();
 
   constructor(
-    private readonly catalogo: FonteCatalogo,
+    private readonly catalogo: EstadoCatalogo,
     private readonly deps: {
       readonly painel: PainelSintetico;
-      readonly lerPacientes?: (c: ContextoAdt, ids: readonly number[]) => Promise<PacienteLido[]>;
+      readonly lerPacientes?: (c: ContextoAdt, ids: readonly number[]) => Promise<PacienteFicha[]>;
       readonly agora?: () => Date;
       /** M44 (etapa 2): o NIR em memória (o leito reservado no mapa; a admissão e a transferência vindas dele). */
       readonly nir?: NirParaAdt;
@@ -355,7 +349,7 @@ export class PortaAdtMemoria implements PortaAdt {
     return i;
   }
 
-  async podeGravar(c: ContextoAdt, op: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoAdt, op: string): Promise<LiberacaoGravacao> {
     const estado = this.catalogo.estado(op, c.hospital);
     if (estado === null || estado === 'bloqueada')
       return { pode: false, codigo: 'operacao-bloqueada', motivo: 'A operação está bloqueada.' };
@@ -427,7 +421,7 @@ export class PortaAdtMemoria implements PortaAdt {
   async executar(c: ContextoAdt, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
     const s = this.e(c);
     await this.materializar(c, s);
-    const e = operacao(op).entrada.parse(entradaBruta) as Record<string, never>;
+    const e = esquemaDaOperacao(op).parse(entradaBruta) as Record<string, never>;
     const r = this.relogioAtual();
     const hora = hhmmDe(r.agora);
     const versao = () => `${r.hoje} ${r.agora.slice(11, 19)}.${String(++s.seq).padStart(4, '0')}`;
@@ -436,8 +430,8 @@ export class PortaAdtMemoria implements PortaAdt {
         throw new ErroOperacao(
           409,
           'conflito-versao',
-          'Registro alterado no outro sistema',
-          'O registro foi alterado no outro sistema desde a leitura. Releia e confira antes de salvar.',
+          'Registro alterado',
+          'O registro foi alterado desde a leitura. Releia e confira antes de salvar.',
           { colunas: ['DATA_HORA_ULTIMA_ATUALIZACAO'] },
         );
     };
@@ -534,12 +528,12 @@ export class PortaAdtMemoria implements PortaAdt {
           origem: 1,
           destino: 1,
           em: r.agora,
-          usuario: ctx.usuarioLegado,
-          responsavel: ctx.usuarioLegado,
+          usuario: quemGrava(ctx),
+          responsavel: quemGrava(ctx),
           excluido: false,
         });
         if (solicitacaoNir !== null)
-          this.deps.nir?.concluir(c.hospital, solicitacaoNir, reg, ctx.usuarioLegado, x.leito);
+          this.deps.nir?.concluir(c.hospital, solicitacaoNir, reg, quemGrava(ctx), x.leito);
         resultado = { reg, cabecalho: cab, conta, paciente: p.id };
         break;
       }
@@ -565,7 +559,7 @@ export class PortaAdtMemoria implements PortaAdt {
         i.versao = versao();
         i.tocada = true;
         if (solicitacaoNir !== null)
-          this.deps.nir?.concluir(c.hospital, solicitacaoNir, i.reg, ctx.usuarioLegado, x.destino);
+          this.deps.nir?.concluir(c.hospital, solicitacaoNir, i.reg, quemGrava(ctx), x.destino);
         resultado = { reg: i.reg, cabecalho: i.cab, origem, destino: k(x.destino) };
         break;
       }
@@ -637,7 +631,7 @@ export class PortaAdtMemoria implements PortaAdt {
           prazo: null,
           checklist: [],
           foto: null,
-          registradoPor: ctx.usuarioLegado,
+          registradoPor: quemGrava(ctx),
           registradoEm: r.agora,
           aparelho: null,
           origem: 'alta',
@@ -738,8 +732,8 @@ export class PortaAdtMemoria implements PortaAdt {
           throw new ErroOperacao(
             409,
             'conflito-versao',
-            'Registro alterado no outro sistema',
-            'O registro foi alterado no outro sistema desde a leitura. Releia e confira antes de salvar.',
+            'Registro alterado',
+            'O registro foi alterado desde a leitura. Releia e confira antes de salvar.',
             { colunas: ['ENTRADA'] },
           );
         p.data = x.dataPrevista ?? DATA_SEM_DATA_PRE;
@@ -795,7 +789,7 @@ export class PortaAdtMemoria implements PortaAdt {
         if (tipo === 'clinica') i.clinica = novo;
         if (tipo === 'especialidade') i.especialidade = Number(novo);
         if (tipo === 'medico') i.solicitante = Number(novo);
-        i.trocas.push({ tipo, data: r.hoje, hora, de: atual, para: novo, usuario: ctx.usuarioLegado });
+        i.trocas.push({ tipo, data: r.hoje, hora, de: atual, para: novo, usuario: quemGrava(ctx) });
         i.versao = versao();
         i.tocada = true;
         resultado = { reg: i.reg, cabecalho: i.cab, de: atual, para: novo };
@@ -891,33 +885,12 @@ export class PortaAdtMemoria implements PortaAdt {
           prazo: null,
           checklist: [],
           foto: null,
-          registradoPor: ctx.usuarioLegado,
+          registradoPor: quemGrava(ctx),
           registradoEm: r.agora,
-          aparelho: ctx.estacao ?? null,
+          aparelho: null,
           origem: x.origem as never,
         });
         resultado = { solicitacao: id, leito: k(x.leito), leitoEspelho: l.id };
-        break;
-      }
-      case 'hotelaria.avancarLimpeza': {
-        const x = e as unknown as { solicitacao: number; situacao: number };
-        if (!(SITUACOES_LIMPEZA_LIBERADAS as readonly number[]).includes(x.situacao))
-          throw recusa(
-            'situacao-nunca-vista',
-            'As situações "Em higienização" e "Liberado" nunca foram gravadas no outro sistema: ficam só no novo até a decisão registrada.',
-          );
-        const sol = s.solicitacoes.get(x.solicitacao);
-        if (!sol)
-          throw new ErroOperacao(
-            404,
-            'solicitacao-inexistente',
-            'Solicitação não encontrada',
-            'A solicitação de limpeza não existe.',
-          );
-        if (sol.situacao >= x.situacao)
-          throw recusa('situacao-atual', 'A execução já está nessa situação ou adiante.');
-        sol.situacao = x.situacao;
-        resultado = { solicitacao: sol.id, execucao: sol.id, situacao: x.situacao };
         break;
       }
       case 'hotelaria.liberarLeito': {
@@ -958,7 +931,7 @@ export class PortaAdtMemoria implements PortaAdt {
           origem: x.setorOrigem,
           destino: x.setorDestino,
           em: r.agora,
-          usuario: ctx.usuarioLegado,
+          usuario: quemGrava(ctx),
           responsavel: x.responsavel,
           excluido: false,
         });
@@ -995,7 +968,7 @@ export class PortaAdtMemoria implements PortaAdt {
     return s.movimentos.filter((m) => m.conta === conta && !m.excluido).at(-1) ?? null;
   }
 
-  /** W0-07: a versão anterior das alterações do mapa (a SGH_INT_ALTERACAO em memória). */
+  /** W0-07: a versão anterior das alterações do mapa (a trilha de auditoria em memória). */
   readonly alteracoes: {
     tabela: string;
     chave: string;
@@ -1063,23 +1036,6 @@ export class PortaAdtMemoria implements PortaAdt {
           }
         return n;
       },
-      registrarConflitoReserva: async (x) =>
-        this.deps.nir?.registrarConflito(c.hospital, x.leito, x.reg) ?? 0,
-      registrarConflito: async (x) => {
-        let n = 0;
-        for (const y of s.estados)
-          if (
-            y.fim === null &&
-            k(y.leito) === k(x.leito) &&
-            y.conflitoEm === null &&
-            (y.estado === 'bloqueio' || y.estado === 'higienizacao')
-          ) {
-            y.conflitoEm = r.agora;
-            y.conflitoReg = x.reg;
-            n++;
-          }
-        return n;
-      },
       alterarEstadoLeito: async (x) => {
         const y = s.estados.find((e) => e.fim === null && e.estado === x.estado && k(e.leito) === k(x.leito));
         if (!y) throw recusa('estado-inexistente', 'O leito não está nesse estado.');
@@ -1108,7 +1064,7 @@ export class PortaAdtMemoria implements PortaAdt {
           );
         Object.assign(y, depois);
         this.alteracoes.push({
-          tabela: 'SGH_INT_LEITO_ESTADO',
+          tabela: 'periodo_situacao_leito',
           chave: String(y.id),
           acao: 'alterar',
           antes: dif,
@@ -1122,7 +1078,7 @@ export class PortaAdtMemoria implements PortaAdt {
         if (!antes)
           throw recusa('atributos-inexistentes', 'O leito não tem atributos próprios: já vale o padrão.');
         this.alteracoes.push({
-          tabela: 'SGH_INT_LEITO_ATRIBUTO',
+          tabela: 'leito_hospitalar',
           chave: `${x.escopo}:${x.chave}`,
           acao: 'limpar',
           antes: { ...antes },
@@ -1153,7 +1109,7 @@ export class PortaAdtMemoria implements PortaAdt {
               { campos: ['motivo'] },
             );
           this.alteracoes.push({
-            tabela: 'SGH_INT_LEITO_ATRIBUTO',
+            tabela: 'leito_hospitalar',
             chave: `${x.escopo}:${x.chave}`,
             acao: 'alterar',
             antes,
@@ -1183,6 +1139,10 @@ export class PortaAdtMemoria implements PortaAdt {
           aparelho: x.aparelho ?? null,
           origem: (x.origem ?? null) as never,
         });
+        // A liberação encerra, na mesma gravação, o período de higienização do leito (se houver).
+        if (x.etapa === 'liberado')
+          for (const y of s.estados)
+            if (y.fim === null && y.estado === 'higienizacao' && k(y.leito) === k(x.leito)) y.fim = r.agora;
         return id;
       },
       gravarSameExt: async (x) => {
@@ -1262,7 +1222,7 @@ export class PortaAdtMemoria implements PortaAdt {
     c: ContextoAdt,
     reg: number,
     intensivas: readonly number[],
-  ): Promise<InternacaoDetalheLegado | null> {
+  ): Promise<DetalheInternacao | null> {
     const s = this.e(c);
     await this.materializar(c, s);
     const i = s.internacoes.get(reg);
@@ -1313,12 +1273,12 @@ export class PortaAdtMemoria implements PortaAdt {
     };
   }
 
-  async altaMedica(c: ContextoAdt, reg: number): Promise<AltaMedicaLida | null> {
+  async altaMedica(c: ContextoAdt, reg: number): Promise<AltaMedicaDecidida | null> {
     return this.e(c).altasMedicas.find((a) => a.reg === reg && a.situacao === 'decidida') ?? null;
   }
 
   async altasMedicas(c: ContextoAdt, regs: readonly number[]) {
-    const m = new Map<number, AltaMedicaLida>();
+    const m = new Map<number, AltaMedicaDecidida>();
     for (const a of this.e(c).altasMedicas)
       if (a.situacao === 'decidida' && regs.includes(a.reg)) m.set(a.reg, a);
     return m;
@@ -1377,7 +1337,7 @@ export class PortaAdtMemoria implements PortaAdt {
     };
   }
 
-  async estadosDoMapa(c: ContextoAdt): Promise<EstadosDoMapaLidos> {
+  async estadosDoMapa(c: ContextoAdt): Promise<EstadosDoMapa> {
     const s = this.e(c);
     const ultimaEtapa = (sol: number) => s.etapas.filter((x) => x.solicitacao === sol).at(-1);
     return {
@@ -1450,7 +1410,7 @@ export class PortaAdtMemoria implements PortaAdt {
 
   async solicitacoes(
     c: ContextoAdt,
-  ): Promise<{ itens: SolicitacaoLida[]; paradasAntigas: number; cortada: boolean }> {
+  ): Promise<{ itens: SolicitacaoLimpezaFila[]; paradasAntigas: number; cortada: boolean }> {
     const s = this.e(c);
     const fechada = (id: number) =>
       s.etapas.some((x) => x.solicitacao === id && (x.etapa === 'liberado' || x.etapa === 'cancelado'));
@@ -1460,7 +1420,7 @@ export class PortaAdtMemoria implements PortaAdt {
         .map((x) => ({
           solicitacao: x.id,
           leito: x.leito,
-          situacaoLegado: x.situacao,
+          situacaoCodigo: x.situacao,
           solicitadaEm: x.solicitadaEm,
           atendimento: x.cab,
         })),
@@ -1469,7 +1429,7 @@ export class PortaAdtMemoria implements PortaAdt {
     };
   }
 
-  async etapas(c: ContextoAdt, solicitacao: number): Promise<EtapaLida[]> {
+  async etapas(c: ContextoAdt, solicitacao: number): Promise<EtapaDaLimpeza[]> {
     return this.e(c).etapas.filter((x) => x.solicitacao === solicitacao);
   }
 
@@ -1506,7 +1466,7 @@ export class PortaAdtMemoria implements PortaAdt {
       leito: x.leito,
       espelho: x.espelho,
       criticidade: x.leito.acomodacao.startsWith('UTI') ? 1 : 2,
-      situacaoLegado: x.situacao,
+      situacaoCodigo: x.situacao,
     };
   }
 

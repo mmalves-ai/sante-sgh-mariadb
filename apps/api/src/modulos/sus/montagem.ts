@@ -1,5 +1,5 @@
 // Montagem da CIHA (M51, etapa 1), do BPA (etapa 2) e da APAC (etapa 3) de uma competência a partir do que a porta leu: o catálogo SIGTAP da competência
-// (regra 2), as equivalências do Sante, os parâmetros do estabelecimento (CNES, convênios SUS e particular, fonte de
+// (regra 2), as equivalências do hospital, os parâmetros do estabelecimento (CNES, convênios SUS e particular, fonte de
 // remuneração) e a crítica prévia do domínio. Puro: nenhuma leitura nem gravação aqui.
 import {
   cnsValido,
@@ -26,18 +26,12 @@ import {
   montarCiha,
   type ResultadoCiha,
 } from '@sgh/dominio-faturamento';
-import type {
-  ApacSghLinha,
-  EquivalenciaSusLinha,
-  NovaCriticaSus,
-  RegistroCihaParaGravar,
-  SolicitanteApacLido,
-} from '@sgh/legado';
 import type { ParametrosAih } from './montagem-aih.js';
 import type { DadosBpaLidos, DadosCihaLidos } from './porta.js';
+import { type ApacRegistro, type EquivalenciaSus, type NovaCriticaSus, type RegistroCihaParaGravar, type SolicitanteApacCadastro } from './tipos.js';
 
 export interface ParametrosSus {
-  /** CNES do parâmetro (vazio: o de TBEMPHOS, quando houver um só). */
+  /** CNES do parâmetro (vazio: o do cadastro do estabelecimento). */
   readonly cnes: string;
   readonly conveniosSus: readonly number[];
   readonly conveniosParticular: readonly number[];
@@ -73,7 +67,7 @@ export function montarCihaDaCompetencia(
   competencia: CompetenciaSus,
   dados: DadosCihaLidos,
   p: ParametrosSus,
-  equivalencias: readonly EquivalenciaSusLinha[],
+  equivalencias: readonly EquivalenciaSus[],
 ): MontagemCiha {
   const procedimento = catalogoSigtapDaCompetencia(
     competencia,
@@ -154,20 +148,20 @@ export interface MontagemBpa {
   readonly resultado: ResultadoBpa;
   readonly cnes: string | null;
   readonly criticas: readonly NovaCriticaSus[];
-  /** O registro da ficha (RECADATE.REG) de cada conta (a linha do BPA-I guarda a chave natural). */
+  /** O registro da ficha (o atendimento) de cada conta (a linha do BPA-I guarda a chave natural). */
   readonly registroDaConta: ReadonlyMap<number, number>;
 }
 
 /**
  * Etapa 2: o BPA da competência pelo que a porta leu (a mesma SIGTAP da competência, as compatibilidades vigentes nela,
- * as habilitações do CNES e as equivalências do Sante). Os campos do cabeçalho que faltam viram crítica
+ * as habilitações do CNES e as equivalências do hospital). Os campos do cabeçalho que faltam viram crítica
  * `dado-minimo-ausente` do estabelecimento (sem conta), antes de gerar.
  */
 export function montarBpaDaCompetencia(
   competencia: CompetenciaSus,
   dados: DadosBpaLidos,
   p: ParametrosSus,
-  equivalencias: readonly EquivalenciaSusLinha[],
+  equivalencias: readonly EquivalenciaSus[],
   /** Com a APAC desligada, o procedimento só de APAC fica no BPA com a crítica do instrumento (D-BPA-APAC-513). */
   apacLiberada = true,
 ): MontagemBpa {
@@ -248,10 +242,10 @@ export interface MontagemApac {
   readonly criticas: readonly NovaCriticaSus[];
 }
 
-/** A APAC gravada no Sante como a montagem lê (o solicitante pelo cadastro FAMEDSOL). */
+/** A APAC gravada como a montagem lê (o solicitante pelo cadastro de solicitantes SUS). */
 export function apacParaMontar(
-  a: ApacSghLinha,
-  solicitantes: ReadonlyMap<string, SolicitanteApacLido>,
+  a: ApacRegistro,
+  solicitantes: ReadonlyMap<string, SolicitanteApacCadastro>,
 ): ApacParaMontar {
   const sol = solicitantes.get(a.solicitante) ?? null;
   return {
@@ -280,7 +274,7 @@ export function apacParaMontar(
 
 /**
  * Etapa 3: a APAC da competência pelo que a porta leu (a produção SUS do BPA, a mesma SIGTAP da competência, as
- * compatibilidades, as habilitações e as equivalências do Sante) e as APACs apresentáveis. Os campos do cabeçalho que
+ * compatibilidades, as habilitações e as equivalências do hospital) e as APACs apresentáveis. Os campos do cabeçalho que
  * faltam viram crítica `dado-minimo-ausente` do estabelecimento (sem conta), antes de gerar.
  */
 export function montarApacDaCompetencia(
@@ -288,7 +282,7 @@ export function montarApacDaCompetencia(
   dados: DadosBpaLidos,
   apacs: readonly ApacParaMontar[],
   p: ParametrosSus,
-  equivalencias: readonly EquivalenciaSusLinha[],
+  equivalencias: readonly EquivalenciaSus[],
 ): MontagemApac {
   const procedimento = catalogoSigtapDaCompetencia(
     competencia,

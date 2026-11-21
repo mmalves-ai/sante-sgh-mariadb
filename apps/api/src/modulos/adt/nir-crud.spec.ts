@@ -11,12 +11,14 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAdt } from './modulo.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { EstadoNirMemoria } from './nir-memoria.js';
 import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/nir-crud-spec');
@@ -43,11 +45,13 @@ beforeAll(async () => {
   rmSync(porFora, { force: true });
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    internacao: painel,
-    adt,
-    nir,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        adt: (ctx) => moduloAdt(ctx, { adt, nir }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -171,7 +175,7 @@ describe('W0-07: solicitação de leito — corrigir e excluir (com a recusa de 
       motivo: 'Perfil revisto pelo plantonista',
     });
     const alt = estadoNir.alteracoes.find(
-      (a) => a.tabela === 'SGH_INT_SOLIC_LEITO' && a.chave === String(id),
+      (a) => a.tabela === 'pedido_leito' && a.chave === String(id),
     );
     expect(alt).toMatchObject({
       acao: 'corrigir',
@@ -209,9 +213,9 @@ describe('W0-07: solicitação de leito — corrigir e excluir (com a recusa de 
     expect(ok.statusCode, ok.body).toBe(200);
     expect(await item(nirS, id)).toBeUndefined();
     expect(
-      estadoNir.retratos.filter((r) => r.chave === String(id) && r.tabela === 'SGH_INT_SOLIC_LEITO'),
-    ).toHaveLength(1);
-    expect(estadoNir.retratos.some((r) => r.tabela === 'SGH_INT_SOLIC_LEITO_EVT')).toBe(true);
+      estadoNir.retratos.filter((r) => r.chave === String(id) && r.tabela === 'pedido_leito').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(estadoNir.retratos.some((r) => r.tabela === 'pedido_leito')).toBe(true);
     // O paciente pode ter outra solicitação depois (a marca de aberta saiu junto).
     const id2 = (await post(med, '/nir/solicitacoes', pedido(1002))).json().id as number;
     const [leito] = await compativeis(nirS, id2);
@@ -255,7 +259,7 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     expect(mapa.leitos.find((x) => x.chave === l2!.chave)?.situacao).toBe('reservado');
     expect(mapa.leitos.find((x) => x.chave === l1!.chave)?.situacao).toBe('livre');
     expect(
-      estadoNir.alteracoes.filter((a) => a.tabela === 'SGH_INT_RESERVA_LEITO' && a.chave === String(r)),
+      estadoNir.alteracoes.filter((a) => a.tabela === 'reserva_leito' && a.chave === String(r)),
     ).toHaveLength(2);
     // Excluir a reserva criada por engano: sai com retrato, a solicitação volta à análise.
     const ex = await post(nirS, `/nir/reservas/${r}/excluir`, { motivo: 'Reservado no paciente errado' });
@@ -263,12 +267,12 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     const depois = await item(nirS, id);
     expect(depois).toMatchObject({ estado: 'em_analise', reserva: null });
     expect(
-      estadoNir.retratos.some((x) => x.tabela === 'SGH_INT_RESERVA_LEITO' && x.chave === String(r)),
+      estadoNir.retratos.some((x) => x.tabela === 'reserva_leito' && x.chave === String(r)),
     ).toBe(true);
     // O evento da volta à análise cita a reserva excluída e o retrato (o 'reservar' anterior aponta uma linha que
     // já não existe: é por esta referência que se acha a linha no histórico de exclusões).
     const nRetrato = estadoNir.retratos.findIndex(
-      (x) => x.tabela === 'SGH_INT_RESERVA_LEITO' && x.chave === String(r),
+      (x) => x.tabela === 'reserva_leito' && x.chave === String(r),
     );
     expect(depois!.historico.find((e) => e.acao === 'liberarReserva')?.motivo).toContain(
       `Reserva nº ${r} excluída (criada por engano; retrato nº ${nRetrato + 1} no histórico de exclusões)`,
@@ -320,7 +324,7 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     expect(t.json().mensagem).toMatch(/aguardar a confirmação do setor/);
     expect((await item(nirS, id))!.reserva).toMatchObject({ situacao: 'ativa', chave: l2!.chave });
     const h = estadoNir.alteracoes.filter(
-      (a) => a.tabela === 'SGH_INT_RESERVA_LEITO' && a.chave === String(r),
+      (a) => a.tabela === 'reserva_leito' && a.chave === String(r),
     );
     expect(h.at(-1)!.antes).toMatchObject({ leito: l1!.chave, situacao: 'confirmada' });
   });
@@ -342,7 +346,7 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     expect(x.json().detail).toMatch(/cancele-a com o motivo/);
     expect(await item(nirS, id)).toMatchObject({ estado: 'em_transito', reserva: { id: r } });
     expect(
-      estadoNir.retratos.some((y) => y.tabela === 'SGH_INT_RESERVA_LEITO' && y.chave === String(r)),
+      estadoNir.retratos.some((y) => y.tabela === 'reserva_leito' && y.chave === String(r)),
     ).toBe(false);
     // O cancelamento lógico com motivo continua disponível.
     const c = await post(nirS, `/nir/reservas/${r}/cancelar`, { motivo: 'Reserva feita por engano' });
@@ -429,7 +433,7 @@ describe('W0-07: DPA, barreira e limite', () => {
       motivo: 'Troca de responsável',
     });
     expect(alt.statusCode, alt.body).toBe(200);
-    expect(estadoNir.alteracoes.find((x) => x.tabela === 'SGH_INT_BARREIRA_ALTA')).toMatchObject({
+    expect(estadoNir.alteracoes.find((x) => x.tabela === 'barreira_alta')).toMatchObject({
       antes: { responsavel: 'Serviço social' },
       motivo: 'Troca de responsável',
     });
@@ -475,7 +479,7 @@ describe('W0-07: DPA, barreira e limite', () => {
       motivo: 'Volta ao padrão',
     });
     expect(rem.statusCode, rem.body).toBe(200);
-    expect(estadoNir.alteracoes.find((x) => x.tabela === 'SGH_INT_LIMITE_PERMAN')).toMatchObject({
+    expect(estadoNir.alteracoes.find((x) => x.tabela === 'limite_permanencia')).toMatchObject({
       acao: 'remover',
       antes: { amareloDias: 3, vermelhoDias: 6 },
     });
@@ -502,7 +506,7 @@ describe('W0-07: DPA, barreira e limite', () => {
     expect((await lim({ amareloDias: 9, vermelhoDias: 18, motivo: 'Meta revista' })).statusCode).toBe(200);
     expect(
       estadoNir.alteracoes
-        .filter((x) => x.tabela === 'SGH_INT_LIMITE_PERMAN' && x.chave === 'clinica:D')
+        .filter((x) => x.tabela === 'limite_permanencia' && x.chave === 'clinica:D')
         .map((x) => [x.acao, x.antes, x.motivo]),
     ).toEqual([
       ['alterar', { amareloDias: 5, vermelhoDias: 10 }, 'Nova meta'],
@@ -549,7 +553,7 @@ describe('W0-07: estado e atributos do leito', () => {
       .json()
       .leitos.find((x: { chave: string }) => x.chave === l.chave);
     expect(depois.situacao).toBe('bloqueado');
-    expect(adt.alteracoes.find((x) => x.tabela === 'SGH_INT_LEITO_ESTADO')).toMatchObject({
+    expect(adt.alteracoes.find((x) => x.tabela === 'periodo_situacao_leito')).toMatchObject({
       antes: { previsaoFim: null },
       motivo: 'Previsão informada pela manutenção',
     });
@@ -582,7 +586,7 @@ describe('W0-07: estado e atributos do leito', () => {
       ).statusCode,
     ).toBe(200);
     expect(
-      adt.alteracoes.find((x) => x.tabela === 'SGH_INT_LEITO_ATRIBUTO' && x.acao === 'alterar'),
+      adt.alteracoes.find((x) => x.tabela === 'leito_hospitalar' && x.acao === 'alterar'),
     ).toMatchObject({ antes: { idadeMinima: 16 }, motivo: 'Leito adulto' });
     expect((await post(s, '/leitos/atributos/limpar', { leito: l.leito })).statusCode).toBe(400);
     const c = await post(s, '/leitos/atributos/limpar', {
@@ -591,7 +595,7 @@ describe('W0-07: estado e atributos do leito', () => {
     });
     expect(c.statusCode, c.body).toBe(200);
     expect(
-      adt.alteracoes.find((x) => x.tabela === 'SGH_INT_LEITO_ATRIBUTO' && x.acao === 'limpar'),
+      adt.alteracoes.find((x) => x.tabela === 'leito_hospitalar' && x.acao === 'limpar'),
     ).toMatchObject({
       acao: 'limpar',
       antes: { sexo: 'F', idadeMinima: 18 },

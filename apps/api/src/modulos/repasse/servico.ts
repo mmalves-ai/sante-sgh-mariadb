@@ -52,21 +52,20 @@ import {
   transicaoVersaoRegra,
 } from '@sgh/dominio-repasse';
 import {
-  type ApuracaoLida,
-  type LancamentoRepasseLido,
+  type ApuracaoRepasseRegistrada,
+  type LancamentoRepasseRegistrado,
   limitesCompetencia,
-  type MemoriaLida,
-  type RpaDetalheLido,
-  type MemoriaParaGravar,
-  operacao,
-  type VersaoRegraLida,
-} from '@sgh/legado';
+  type MemoriaCalculoParaGravar,
+  type MemoriaCalculoRegistrada,
+  type RpaDetalhe,
+  type VersaoRegraRegistrada,
+} from './tipos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { exigir, type SessaoCadastro } from '../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
 import { ApoioGravacao } from '../exames/public-api.js';
-import type { ContextoRepasse, FiltroRegrasPorta, GravadorSghRepasse, PortaRepasse } from './porta.js';
+import type { ContextoRepasse, FiltroRegrasPorta, GravadorRepasse, PortaRepasse } from './porta.js';
 
 const ctx = (s: SessaoCadastro): ContextoRepasse => s.porta;
 const E = EVENTOS_AUDITAVEIS;
@@ -133,7 +132,7 @@ export function memoriaResposta(m: MemoriaCalculo): MemoriaItemResposta {
   return { ...r, conta: contaDaMemoria(r) };
 }
 
-function memoriaLidaResposta(m: MemoriaLida): MemoriaItemResposta {
+function memoriaRegistradaResposta(m: MemoriaCalculoRegistrada): MemoriaItemResposta {
   const adicional = m.adicional ? JSON.parse(m.adicional) : null;
   const r = {
     item: m.item,
@@ -153,7 +152,7 @@ function memoriaLidaResposta(m: MemoriaLida): MemoriaItemResposta {
   return { ...r, conta: contaDaMemoria(r) };
 }
 
-function paraGravar(m: MemoriaCalculo): MemoriaParaGravar {
+function paraGravar(m: MemoriaCalculo): MemoriaCalculoParaGravar {
   return {
     item: m.item,
     prestador: m.beneficiario,
@@ -203,7 +202,7 @@ export function regraDaProposta(id: number, p: ProporRegraRepasseEntrada): Regra
   };
 }
 
-function versaoResposta(v: VersaoRegraLida): VersaoRegraResposta {
+function versaoResposta(v: VersaoRegraRegistrada): VersaoRegraResposta {
   return {
     id: v.id,
     estado: v.estado as EstadoVersaoRegra,
@@ -241,7 +240,7 @@ const PAGINA_REGRAS = 500;
 const PAGINAS_PRODUCAO = 25;
 
 export class ServicoRepasse {
-  readonly apoio: ApoioGravacao<GravadorSghRepasse>;
+  readonly apoio: ApoioGravacao<GravadorRepasse>;
 
   constructor(
     readonly porta: PortaRepasse,
@@ -249,7 +248,7 @@ export class ServicoRepasse {
     configuracao: FonteConfiguracao | null,
     cache: CacheConfig | null,
   ) {
-    this.apoio = new ApoioGravacao<GravadorSghRepasse>(
+    this.apoio = new ApoioGravacao<GravadorRepasse>(
       { chave: 'repasse', nome: 'o repasse médico', operacoes: OPERACOES_REPASSE_TELA },
       porta,
       trilha,
@@ -267,8 +266,7 @@ export class ServicoRepasse {
       motivo: g.motivo,
       operacoes: Object.fromEntries(
         Object.entries(g.operacoes).map(([op, v]) => {
-          const pendente = op in OPERACOES_REPASSE_TELA ? operacao(op).receita.pendente : undefined;
-          return [op, { ligada: v.pode, motivo: v.motivo ?? (pendente && !v.pode ? pendente : null) }];
+          return [op, { ligada: v.pode, motivo: v.motivo ?? null }];
         }),
       ),
     };
@@ -367,7 +365,7 @@ export class ServicoRepasse {
       s,
       E.repasseRegraProposta.codigo,
       'repasse.regra',
-      (x: { versao: number }) => ({ tabela: 'SGH_REP_REGRA_VERSAO', id: String(x.versao) }),
+      (x: { versao: number }) => ({ tabela: 'regra_repasse_versao', id: String(x.versao) }),
       (g) =>
         g.proporVersao({
           substitui: e.substitui,
@@ -420,7 +418,7 @@ export class ServicoRepasse {
         s,
         E.repasseRegraProposta.codigo,
         'repasse.regra',
-        { tabela: 'SGH_REP_REGRA_VERSAO', id: String(e.versao) },
+        { tabela: 'regra_repasse_versao', id: String(e.versao) },
         (g) => g.marcarSimulada({ versao: e.versao as number }),
       );
     return { memoria: memoriaResposta(m), regrasConsideradas: regras.length };
@@ -441,7 +439,7 @@ export class ServicoRepasse {
       s,
       E.repasseRegraDecidida.codigo,
       'repasse.regra',
-      { tabela: 'SGH_REP_REGRA_VERSAO', id: String(v.id) },
+      { tabela: 'regra_repasse_versao', id: String(v.id) },
       (g) =>
         g.decidirVersao({
           versao: v.id,
@@ -495,7 +493,7 @@ export class ServicoRepasse {
   // ── Apuração ─────────────────────────────────────────────────────────────────────────────────────────────────
 
   private apuracaoResposta(
-    a: ApuracaoLida | null,
+    a: ApuracaoRepasseRegistrada | null,
     empresa: number,
     competencia: string,
     outro: { lancamentos: number; daApuracao: number },
@@ -549,7 +547,7 @@ export class ServicoRepasse {
     };
   }
 
-  private async porBeneficiario(s: SessaoCadastro, a: ApuracaoLida | null) {
+  private async porBeneficiario(s: SessaoCadastro, a: ApuracaoRepasseRegistrada | null) {
     if (!a) return [];
     const ms = await this.porta.memorias(ctx(s), a.id, null);
     const mapa = new Map<number, { itens: number; base: number; valor: number }>();
@@ -579,17 +577,17 @@ export class ServicoRepasse {
       this.porta.apuracaoDoPeriodo(ctx(s), e.empresa, e.competencia),
       this.porta.estadoPeriodo(ctx(s), e.empresa, e.competencia),
     ]);
-    // Regra 10: uma apuração por período e empresa num só sistema; a aberta do novo é recalculada.
+    // Regra 10: uma apuração por período e empresa; a aberta é recalculada, a fechada não reabre.
     const p = podeApurarPeriodo({
-      linhasDoLegadoNoPeriodo: outro.daApuracao,
-      apuracaoNoNovo: atual !== null && atual.estado !== 'aberta',
+      lancamentosDaApuracaoNoPeriodo: outro.daApuracao,
+      apuracaoFechada: atual !== null && atual.estado !== 'aberta',
     });
     if (!p.ok)
       throw recusar(
-        p.recusa,
+        'periodo-ja-apurado',
         'Período já apurado',
-        p.recusa === 'periodo-apurado-no-legado'
-          ? 'O período já foi apurado no outro sistema: a apuração continua lá.'
+        outro.daApuracao > 0
+          ? 'O período já tem lançamentos da apuração aprovada: a correção entra no período seguinte.'
           : 'A apuração do período já foi conferida: a correção entra no período seguinte.',
       );
     const itens: ItemProducao[] = [];
@@ -613,12 +611,13 @@ export class ServicoRepasse {
       calcularPeriodo([i], regrasPorConvenio.get(i.convenio) ?? [], ja, o),
     );
     const t = totalizar(memorias);
-    const simulacao = operacao('repasse.integrarItens').receita.pendente !== undefined;
+    // A apuração gravada é a que vale (o sistema é o de registro do repasse): nunca simulação.
+    const simulacao = false;
     const r = await this.apoio.sgh(
       s,
       E.repasseApuracaoGravada.codigo,
       'repasse.apuracao',
-      (x: { apuracao: number }) => ({ tabela: 'SGH_REP_APURACAO', id: String(x.apuracao) }),
+      (x: { apuracao: number }) => ({ tabela: 'apuracao_repasse', id: String(x.apuracao) }),
       (g) =>
         g.gravarApuracao({
           empresa: e.empresa,
@@ -660,7 +659,7 @@ export class ServicoRepasse {
       s,
       E.repasseApuracaoGravada.codigo,
       'repasse.apuracao',
-      { tabela: 'SGH_REP_APURACAO', id: String(a.id) },
+      { tabela: 'apuracao_repasse', id: String(a.id) },
       (g) =>
         g.transicionarApuracao({
           apuracao: a.id,
@@ -689,7 +688,7 @@ export class ServicoRepasse {
   ): Promise<DemonstrativoResposta> {
     const a = await this.porta.apuracao(c, apuracao);
     if (!a) throw naoEncontrado('Apuração');
-    const itens = (await this.porta.memorias(c, apuracao, prestador)).map(memoriaLidaResposta);
+    const itens = (await this.porta.memorias(c, apuracao, prestador)).map(memoriaRegistradaResposta);
     const com = itens.filter((i) => !i.pendencia);
     return {
       apuracao,
@@ -742,7 +741,7 @@ export class ServicoRepasse {
           apuracao: a.id,
         },
         'Lançado.',
-        { idempotencyKey: `rep-ap-${a.id}-${b.prestador}` },
+        { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}` },
       );
       ids.push(Number(r.resultado['lancamento']));
     }
@@ -771,7 +770,7 @@ export class ServicoRepasse {
 
   private async lancamentosResposta(
     c: ContextoRepasse,
-    ls: readonly LancamentoRepasseLido[],
+    ls: readonly LancamentoRepasseRegistrado[],
     eventos: readonly { codigo: number; rotulo: string }[],
   ): Promise<LancamentoRepasseResposta[]> {
     const estornos = await this.porta.estornos(
@@ -892,7 +891,7 @@ export class ServicoRepasse {
   async rpaEmitido(
     s: SessaoCadastro,
     id: number,
-  ): Promise<RpaDetalheLido & { eventos: Map<number, string> }> {
+  ): Promise<RpaDetalhe & { eventos: Map<number, string> }> {
     const [r, op] = await Promise.all([this.porta.rpaDetalhe(ctx(s), id), this.porta.opcoes(ctx(s))]);
     if (!r) throw naoEncontrado('RPA');
     return { ...r, eventos: new Map(op.eventos.map((e) => [e.codigo, e.rotulo])) };

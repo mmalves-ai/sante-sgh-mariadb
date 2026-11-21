@@ -4,7 +4,9 @@
 // `manutencao` desligada pelo administrador num app à parte.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { criarApp } from '../../app.js';
+import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
@@ -14,7 +16,19 @@ import {
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/configuracao-fonte.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import {
+  CACHE_CONFIG,
+  CacheConfig,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+  PORTA_ONDA0,
+  portaOnda0Memoria,
+} from '../config/public-api.js';
+import { criarFonteDocumento, FONTE_DOCUMENTO } from '../documento/public-api.js';
 import type { PortaPatrimonio } from '../patrimonio/public-api.js';
+import type { ContextoModulo } from '../registro.js';
+import { modulo as moduloManutencao } from './modulo.js';
 import { deQuery } from './manutencao.controller.js';
 import { PortaManutencaoMemoria } from './porta-memoria.js';
 
@@ -43,13 +57,35 @@ const patrimonioFalso = {
   },
 } as unknown as PortaPatrimonio;
 const HOJE = '2026-10-28';
+
+@Module({})
+class ConfiguracaoManutencaoTeste {}
+
+/** A configuração sintética com a fonte dada (parâmetros extras ou a chave `manutencao` desligada). */
+function configuracaoCom(fonte: FonteConfiguracao) {
+  return (ctx: ContextoModulo): DynamicModule => ({
+    module: ConfiguracaoManutencaoTeste,
+    global: true,
+    providers: [
+      { provide: FONTE_CONFIGURACAO, useValue: fonte },
+      { provide: CACHE_CONFIG, useValue: new CacheConfig(new ArmazemMemoria()) },
+      { provide: PORTA_ONDA0, useValue: portaOnda0Memoria(fonte, ['aa', 'bb']) },
+      { provide: FONTE_DOCUMENTO, useValue: criarFonteDocumento(ctx.configuracao, ctx.env) },
+    ],
+    exports: [FONTE_CONFIGURACAO, CACHE_CONFIG, PORTA_ONDA0, FONTE_DOCUMENTO],
+  });
+}
 interface Sessao {
   cookie: string;
   csrf: string;
 }
 
 async function montar(o: { semManutencao?: boolean; parametros?: Record<string, string> } = {}) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = {
+    ...envTeste,
+    AMBIENTE: 'dev',
+    API_MODULOS: 'configuracao_teste,cadastro,manutencao',
+  };
   const trilha = new RegistradorTrilhaMemoria();
   const relogio = { hoje: HOJE, agora: `${HOJE}T09:00` };
   const manutencao = new PortaManutencaoMemoria(() => ({ ...relogio }));
@@ -82,9 +118,13 @@ async function montar(o: { semManutencao?: boolean; parametros?: Record<string, 
       : undefined;
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    manutencao,
-    patrimonio: patrimonioFalso,
-    ...(configuracao ? { configuracao } : {}),
+    registro: registroDeTeste(
+      {},
+      {
+        configuracao_teste: configuracao ? configuracaoCom(configuracao) : (ctx) => moduloConfiguracaoDeTeste(ctx),
+        manutencao: (ctx) => moduloManutencao(ctx, { porta: manutencao, patrimonio: patrimonioFalso }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -223,7 +263,7 @@ describe('ordem de serviço: o ciclo (regra 1)', () => {
       operacaoBloqueio: null,
       avisados: 2,
     });
-    expect(a.manutencao.avisos({ rede: 'sintetica', hospital: 'aa' }).map((v) => v.login)).toEqual([
+    expect(a.manutencao.avisos({ hospital: 'aa' }).map((v) => v.login)).toEqual([
       'SINT.MANUTENCAO.SETOR',
       'SINT.PATRIMONIO.SETOR',
     ]);

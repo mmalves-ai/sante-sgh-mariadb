@@ -52,14 +52,6 @@ import {
   utiPorAcomodacaoDoParametro,
   valorNaCompetencia,
 } from '@sgh/dominio-faturamento';
-import {
-  type AihSgh,
-  ErroAihSgh,
-  ErroSusSgh,
-  type FaixaAihSgh,
-  type ItemAihParaGravar,
-  type RetornoSusSgh,
-} from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
 import {
   type AihMontada,
@@ -72,6 +64,7 @@ import {
 } from './montagem-aih.js';
 import type { ContextoSus, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
 import type { ArmazemArquivoSus, MontadorCriticaSus, ServicoSus, SessaoSus } from './servico.js';
+import { type AihRegistro, ErroAih, ErroSus, type FaixaAih, type ItemAihParaGravar, type RetornoSus } from './tipos.js';
 
 export const MENSAGENS_RECUSA_AIH = {
   'instrumento-desligado': 'Este instrumento está desligado neste estabelecimento.',
@@ -126,12 +119,12 @@ function recusa(codigo: RecusaAihApi, detalhe: Record<string, unknown> = {}): Er
 }
 
 function problemaDaGravacao(erro: unknown): never {
-  if (erro instanceof ErroAihSgh) {
+  if (erro instanceof ErroAih) {
     if (erro.codigo === 'nao-encontrado')
       throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', erro.message);
     throw recusa(erro.codigo);
   }
-  if (erro instanceof ErroSusSgh) {
+  if (erro instanceof ErroSus) {
     if (erro.codigo === 'nao-encontrado')
       throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', erro.message);
     if (erro.codigo === 'versao-alterada' || erro.codigo === 'equivalencia-alterada')
@@ -177,7 +170,13 @@ export class ServicoSusAih {
   }
 
   private ctx(s: SessaoSus): ContextoSus {
-    return { rede: s.rede, hospital: s.hospital };
+    return {
+      rede: s.rede,
+      hospital: s.hospital,
+      ...(s.estabelecimento !== undefined ? { estabelecimento: s.estabelecimento } : {}),
+      ...(s.usuario !== undefined ? { usuario: s.usuario } : {}),
+      ...(s.correlacao !== undefined ? { correlacao: s.correlacao } : {}),
+    };
   }
 
   private async gravar<T>(s: SessaoSus, fn: (g: GravacaoSus) => Promise<T>): Promise<T> {
@@ -205,7 +204,7 @@ export class ServicoSusAih {
 
   // ── Leituras e mapeamentos ───────────────────────────────────────────────────────────────────────────
 
-  private async aihsLidas(l: LeituraSus, s: SessaoSus, aihs: readonly AihSgh[]): Promise<AihLida[]> {
+  private async aihsLidas(l: LeituraSus, s: SessaoSus, aihs: readonly AihRegistro[]): Promise<AihLida[]> {
     const nomes = new Map<string, string | null>();
     for (const c of new Set(aihs.map((a) => a.procedimentoSolicitado)))
       nomes.set(c, (await l.sigtapPorCodigo(c))?.nome ?? null);
@@ -221,7 +220,7 @@ export class ServicoSusAih {
   }
 
   private aihLida(
-    a: AihSgh,
+    a: AihRegistro,
     nomes: ReadonlyMap<string, string | null>,
     solicitantes: ReadonlyMap<string, string | null>,
     internacoes: ReadonlyMap<number, { entrada: string | null; alta: string | null }>,
@@ -262,7 +261,7 @@ export class ServicoSusAih {
     };
   }
 
-  private faixaLida(f: FaixaAihSgh): FaixaAihLida {
+  private faixaLida(f: FaixaAih): FaixaAihLida {
     const inicio = BigInt(f.inicio);
     const fim = BigInt(f.fim);
     const total = Number(fim - inicio + 1n);
@@ -283,7 +282,7 @@ export class ServicoSusAih {
     };
   }
 
-  private retornoLido(r: RetornoSusSgh): RetornoSusLido {
+  private retornoLido(r: RetornoSus): RetornoSusLido {
     return {
       id: r.id,
       instrumento: r.instrumento,
@@ -444,7 +443,7 @@ export class ServicoSusAih {
       if (!f) throw new ErroProblema('nao-encontrado', 404, 'Faixa não encontrada');
       await g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoFaixaAihRegistrada.codigo, 'faturamento.registrarFaixaAih', {
-          tabela: 'SGH_FAT_SUS_FAIXA_AIH',
+          tabela: 'faixa_numeracao_aih',
           id: String(id),
           diferenca: `acao=${e.acao};inicial=${f.inicial};final=${f.final};situacao=${f.situacao}`,
         }),
@@ -460,7 +459,7 @@ export class ServicoSusAih {
     await this.exigirLiberado(s);
     this.exigirSus(s);
     const pAih = await this.parametrosAih(s);
-    // O fechamento monta antes da transação (a leitura do outro sistema é longa); a transação confere a versão.
+    // O fechamento monta antes da transação (a leitura da produção é longa); a transação confere a versão.
     let fechamento: { itens: ItemAihParaGravar[]; m: AihMontada } | null = null;
     if (e.acao === 'fechar') fechamento = await this.prepararFechamento(s, e, pAih);
     const id = await this.gravar(s, async (g) => {
@@ -518,7 +517,7 @@ export class ServicoSusAih {
       }
       await g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoAihRegistrada.codigo, 'faturamento.registrarAih', {
-          tabela: 'SGH_FAT_SUS_AIH',
+          tabela: 'conta_aih',
           id: String(a.id),
           diferenca,
         }),
@@ -559,7 +558,7 @@ export class ServicoSusAih {
     });
     await g.trilha(
       s.trilha(EVENTOS_AUDITAVEIS.faturamentoAihRegistrada.codigo, 'faturamento.registrarAih', {
-        tabela: 'SGH_FAT_SUS_AIH',
+        tabela: 'conta_aih',
         id: String(id),
         diferenca: `acao=laudo;registro=${i.registro};procedimento=${laudo.procedimentoSolicitado};cid=${laudo.cidPrincipal}`,
       }),
@@ -567,12 +566,12 @@ export class ServicoSusAih {
     return id;
   }
 
-  /** A montagem das AIHs dadas (a leitura do outro sistema e a SIGTAP), com o realizado do fechamento. */
+  /** A montagem das AIHs dadas (a leitura da produção e a SIGTAP), com o realizado do fechamento. */
   private async montar(
     l: LeituraSus,
     s: SessaoSus,
     pAih: ParametrosAih,
-    aihs: readonly AihSgh[],
+    aihs: readonly AihRegistro[],
     realizado: ReadonlyMap<number, string> = new Map(),
   ): Promise<{ montadas: AihMontada[]; cnesCadastrados: readonly number[] }> {
     if (aihs.length === 0) return { montadas: [], cnesCadastrados: [] };
@@ -834,7 +833,7 @@ export class ServicoSusAih {
         );
         await g.trilha(
           s.trilha(EVENTOS_AUDITAVEIS.faturamentoSisaihGerado.codigo, 'faturamento.gerarSisaih', {
-            tabela: 'SGH_FAT_SUS_ARQUIVO',
+            tabela: 'arquivo',
             id: String(id),
             diferenca: `competencia=${c.competencia};aihs=${arquivo.registros};procedimentos=${arquivo.procedimentos};controle=${arquivo.controle};sha256=${hash}`,
           }),
@@ -957,7 +956,7 @@ export class ServicoSusAih {
       const r = resumoRetornoSus(gravadas);
       await g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoRetornoSusImportado.codigo, 'faturamento.importarRetornoSus', {
-          tabela: 'SGH_FAT_SUS_RETORNO',
+          tabela: 'retorno_sus',
           id: null,
           diferenca:
             `instrumento=${e.instrumento};competencia=${e.competencia};linhas=${leitura.linhas.length};casadas=${gravadas.length};naoCasadas=${naoCasadas.length};repetidas=${repetidas};erros=${leitura.erros.length};glosado=${r.valorGlosado};sha256=${hash}`.slice(
@@ -1000,7 +999,7 @@ export class ServicoSusAih {
       });
       await g.trilha(
         s.trilha(EVENTOS_AUDITAVEIS.faturamentoRetornoSusTratado.codigo, 'faturamento.tratarRetornoSus', {
-          tabela: 'SGH_FAT_SUS_RETORNO',
+          tabela: 'retorno_sus',
           id: String(r.id),
           diferenca: `instrumento=${r.instrumento};competencia=${r.competencia};identificacao=${r.identificacao};decisao=${e.decisao};glosado=${r.valorGlosado}`,
         }),

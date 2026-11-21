@@ -10,7 +10,7 @@
 //   POST /api/digitalizacao/assinatura                  o pedido de assinatura ICP-Brasil (um ou o lote) pelo M49
 // O resumo SHA-256 é SEMPRE recalculado aqui (o da estação só confere); o arquivo vai ao armazenamento com retenção e o
 // banco guarda a chave e o resumo; a segregação (quem confere não é quem capturou; quem assina é quem conferiu) vale aqui
-// e no próprio UPDATE. Gravações só SGH_ com a SGH_TRILHA na mesma transação. Desligada até a comissão de revisão de
+// e no próprio UPDATE. Gravações no banco do cliente com a trilha na mesma transação. Desligada até a comissão de revisão de
 // prontuários aprovar o fluxo (chave `digitalizacao`, POL-3): as telas ficam em consulta.
 import { createHash } from 'node:crypto';
 import {
@@ -53,13 +53,12 @@ import {
   guardaAte,
   transicaoDigitalizacao,
 } from '@sgh/dominio-internacao';
-import type { DigitalizacaoSghLida } from '@sgh/legado';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { idDaRota, sessaoDe } from '../cadastro/comum.js';
+import { idDaRota, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -69,7 +68,13 @@ import {
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { ARMAZEM_DIGITALIZACAO, type ArmazemDigitalizacao } from './armazem.js';
 import { ServicoAssinaturaDigitalizacao } from './assinatura.js';
-import { type GravadorDigitalizacao, PORTA_DIGITALIZACAO, type PortaDigitalizacao } from './porta.js';
+import {
+  type DocumentoDigitalizado,
+  type GravadorDigitalizacao,
+  type PedidoGravacaoDigitalizacao,
+  PORTA_DIGITALIZACAO,
+  type PortaDigitalizacao,
+} from './porta.js';
 
 export const SERVICO_ASSINATURA_DIGITALIZACAO = Symbol('SERVICO_ASSINATURA_DIGITALIZACAO');
 
@@ -89,7 +94,7 @@ const recusaDominio = (x: unknown): never => {
   throw x;
 };
 
-const publica = (d: DigitalizacaoSghLida, nomes: Map<number, string>): DigitalizacaoLida => ({
+const publica = (d: DocumentoDigitalizado, nomes: Map<number, string>): DigitalizacaoLida => ({
   id: d.id,
   lote: d.lote,
   ordem: d.ordem,
@@ -139,6 +144,20 @@ export function naoComo(req: Pick<RequisicaoAutorizada, 'sghComo'>): void {
     });
 }
 
+const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
+
+/**
+ * A sessão com o pedido repetível: a Idempotency-Key da requisição, a ação e os dados efetivos. Sem a chave válida, a
+ * gravação segue sem repetição (uma chave própria por gravação).
+ */
+function comPedido(s: SessaoCadastro, pedido: Omit<PedidoGravacaoDigitalizacao, 'chave'>): SessaoCadastro {
+  const bruto = s.req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave)) return s;
+  const porta = { ...s.porta, pedido: { ...pedido, chave } };
+  return { ...s, porta };
+}
+
 @Controller()
 export class DigitalizacaoController {
   private readonly log = new Logger('Digitalizacao');
@@ -150,7 +169,7 @@ export class DigitalizacaoController {
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional()
     @Inject(SERVICO_ASSINATURA_DIGITALIZACAO)
-    private readonly assinatura: ServicoAssinaturaDigitalizacao | null = null,
+    private readonly assinatura: { readonly servico: ServicoAssinaturaDigitalizacao | null } | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
   ) {
@@ -275,7 +294,7 @@ export class DigitalizacaoController {
   @HttpCode(201)
   @Permissao(P.capturar)
   @AuditadoNoHandler(
-    'internacao.digitalizarDocumento (SGH_HOT_DIGITALIZACAO; o arquivo no armazenamento com retenção) com a SGH_TRILHA',
+    'internacao.digitalizarDocumento (documento_digitalizado; o arquivo no armazenamento com retenção) com a trilha',
   )
   async capturar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoDigitalizacao> {
     const s = sessaoDe(req);
@@ -293,6 +312,23 @@ export class DigitalizacaoController {
         'O resumo calculado pela estação não confere com o arquivo recebido: digitalize de novo.',
         { codigo: 'hash-divergente' },
       );
+    const sp = comPedido(s, {
+      acao: 'capturar',
+      entrada: {
+        hash,
+        prontuario: e.prontuario,
+        internacao: e.internacao,
+        lote: e.lote,
+        tipoDocumento: e.tipoDocumento,
+        descricao: e.descricao,
+        dataDocumento: e.dataDocumento,
+        paginas: e.paginas,
+        resolucaoDpi: e.resolucaoDpi,
+        cor: e.cor,
+      },
+    });
+    const ja = await this.repeticao<{ id: number; lote: number; ordem: number }>(sp);
+    if (ja) return respostaCaptura(ja.valor);
     const [p, { hoje }] = await Promise.all([
       this.porta.paciente(s.porta, e.prontuario),
       this.porta.relogio(s.porta),
@@ -341,11 +377,11 @@ export class DigitalizacaoController {
     // (a nova tentativa reaproveita o mesmo objeto).
     const arquivoChave = await this.armazem.guardar(s.hospital, bytes, hash);
     const r = await this.apoio.sgh(
-      s,
+      sp,
       E.documentoDigitalizado.codigo,
       P.capturar,
       (x: { id: number; lote: number; ordem: number }) => ({
-        tabela: 'SGH_HOT_DIGITALIZACAO',
+        tabela: 'documento_digitalizado',
         id: String(x.id),
         paciente: p.paciente,
         chave: `lote=${x.lote}:${e.tipoDocumento}:${e.paginas}p:${e.resolucaoDpi}dpi:${hash.slice(0, 16)}`,
@@ -370,13 +406,14 @@ export class DigitalizacaoController {
         }),
     );
     await this.fixarGuarda(s.hospital, arquivoChave);
-    return {
-      ok: true,
-      id: r.id,
-      lote: r.lote,
-      situacao: 'capturado',
-      mensagem: `Documento ${r.lote}/${r.ordem} capturado: a conferência da fidelidade é de outra pessoa.`,
-    };
+    return respostaCaptura(r);
+  }
+
+  /** O resultado já gravado para o mesmo pedido (Idempotency-Key), ou null; a chave com outros dados: 422. */
+  private repeticao<T>(s: SessaoCadastro): Promise<{ readonly valor: T } | null> {
+    return this.porta.repeticao<T>(s.porta).catch((x: unknown) => {
+      throw problemaDoCadastro(x);
+    });
   }
 
   /** A retenção da guarda legal depois do COMMIT; a falha não desfaz a captura (a conferência refaz e exige). */
@@ -391,7 +428,7 @@ export class DigitalizacaoController {
   @Post('digitalizacao/:id/conferencia')
   @HttpCode(200)
   @Permissao(P.conferir)
-  @AuditadoNoHandler('internacao.conferirDigitalizacao (SGH_HOT_DIGITALIZACAO, pela versão) com a SGH_TRILHA')
+  @AuditadoNoHandler('internacao.conferirDigitalizacao (documento_digitalizado, pela versão) com a trilha')
   async conferir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -411,6 +448,11 @@ export class DigitalizacaoController {
     const d = await this.porta.documento(s.porta, e.id);
     if (!d)
       throw new ErroProblema('nao-encontrado', 404, 'Documento não encontrado', 'O documento não existe.');
+    const sp = comPedido(s, {
+      acao: 'conferir',
+      entrada: { id: e.id, resultado: e.resultado, motivo: e.motivo ?? null, versao: e.versao },
+    });
+    if (await this.repeticao<null>(sp)) return respostaConferencia(d, e.resultado === 'fiel' ? 'conferido' : 'recusado');
     // A guarda legal antes de aceitar a fidelidade (se a fixação depois da captura falhou, refaz aqui; falhando, recusa).
     await this.armazem.fixar(s.hospital, d.arquivoChave);
     let nova: SituacaoDigitalizacao;
@@ -428,11 +470,11 @@ export class DigitalizacaoController {
       return recusaDominio(x);
     }
     await this.apoio.sgh(
-      s,
+      sp,
       E.digitalizacaoConferida.codigo,
       P.conferir,
       {
-        tabela: 'SGH_HOT_DIGITALIZACAO',
+        tabela: 'documento_digitalizado',
         id: String(d.id),
         paciente: d.paciente,
         chave: `lote=${d.lote}:${e.resultado}`,
@@ -446,23 +488,14 @@ export class DigitalizacaoController {
           usuario: s.login,
         }),
     );
-    return {
-      ok: true,
-      id: d.id,
-      lote: d.lote,
-      situacao: nova,
-      mensagem:
-        nova === 'conferido'
-          ? 'Fidelidade conferida: o documento está pronto para a sua assinatura.'
-          : 'Documento recusado: capture de novo a partir do papel.',
-    };
+    return respostaConferencia(d, nova);
   }
 
   @Post('digitalizacao/assinatura')
   @HttpCode(200)
   @Permissao(P.conferir)
   @AuditadoNoHandler(
-    'o pedido em SGH_DOC_PEDIDO_ASSINATURA (M49, finalidade digitalizacao); a assinatura e o documento na volta, com a trilha',
+    'o pedido de assinatura (M49, finalidade digitalizacao); a assinatura e o documento na volta, com a trilha',
   )
   async assinar(
     @Body() b: unknown,
@@ -472,13 +505,37 @@ export class DigitalizacaoController {
     const s = sessaoDe(req);
     const e = corpo(esquemaAssinarDigitalizacao, b);
     await this.apoio.exigirLiberacao(s);
-    if (!this.assinatura)
+    const servico = this.assinatura?.servico ?? null;
+    if (!servico)
       throw new ErroProblema(
         'indisponivel',
         503,
         'Assinatura indisponível',
         'O serviço de assinatura digital não está disponível.',
       );
-    return this.assinatura.iniciar(s, e.ids, e.certificado);
+    return servico.iniciar(s, e.ids, e.certificado);
   }
+}
+
+function respostaCaptura(r: { id: number; lote: number; ordem: number }): ResultadoDigitalizacao {
+  return {
+    ok: true,
+    id: r.id,
+    lote: r.lote,
+    situacao: 'capturado',
+    mensagem: `Documento ${r.lote}/${r.ordem} capturado: a conferência da fidelidade é de outra pessoa.`,
+  };
+}
+
+function respostaConferencia(d: { id: number; lote: number }, nova: SituacaoDigitalizacao): ResultadoDigitalizacao {
+  return {
+    ok: true,
+    id: d.id,
+    lote: d.lote,
+    situacao: nova,
+    mensagem:
+      nova === 'conferido'
+        ? 'Fidelidade conferida: o documento está pronto para a sua assinatura.'
+        : 'Documento recusado: capture de novo a partir do papel.',
+  };
 }

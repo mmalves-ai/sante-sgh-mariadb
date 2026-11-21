@@ -1,10 +1,10 @@
 // Mapa de leitos operacional, transferência e histórico de ocupação (M21; ficha, seções 4, 5 e 7):
-//   GET  /api/leitos/mapa?abertura=1          o painel do M16 com os estados só do novo, a limpeza e o conflito
+//   GET  /api/leitos/mapa?abertura=1          o painel do M16 com os estados do leito, a limpeza e as incoerências
 //   GET  /api/leitos/eventos                  canal de eventos (text/event-stream): só avisa que mudou
 //   POST /api/leitos/transferencias           internacao.transferirLeito (trava origem e destino em ordem fixa)
-//   POST /api/leitos/estados                  bloqueio, precaução ou leito extra (SGH_; não impede o outro sistema)
+//   POST /api/leitos/estados                  bloqueio, precaução ou leito extra (período de situação do leito)
 //   POST /api/leitos/estados/encerrar         desbloqueia, tira a precaução, retira o leito extra
-//   POST /api/leitos/atributos                sexo, faixa de idade, criticidade, andar e ramal do leito (SGH_)
+//   POST /api/leitos/atributos                sexo, faixa de idade, criticidade, andar e ramal do leito
 //   POST /api/leitos/estados/alterar          W0-07: motivo, precaução, previsão e observação sem encerrar (justificativa)
 //   POST /api/leitos/atributos/limpar         W0-07: tira os atributos próprios (volta ao padrão; justificativa)
 //   POST /api/leitos/etiqueta                 a etiqueta do leito com o QR code da solicitação de limpeza (ZPL)
@@ -15,7 +15,6 @@ import {
   Get,
   HttpCode,
   Inject,
-  Logger,
   type OnModuleDestroy,
   Optional,
   Post,
@@ -32,7 +31,6 @@ import {
   type ImpressoGerado,
   esquemaBloquearLeito,
   esquemaEncerrarEstadoLeito,
-  esquemaTransferirLeito,
   EVENTOS_AUDITAVEIS,
   type ApoioInternacaoTela,
   type HistoricoOcupacao,
@@ -74,12 +72,12 @@ import { avisandoAdt, intensivasDe } from './internacao.controller.js';
 import { PORTA_ADT, type PortaAdt } from './porta.js';
 import { ServicoAdt } from './servico.js';
 import { AVISOS_ADT } from './simbolos.js';
+import { esquemaTransferirLeitoBanco } from './esquemas.js';
 
 @Controller('leitos')
 export class MapaLeitosController implements OnModuleDestroy {
   readonly apoios: ApoiosAdt;
   private readonly servico: ServicoAdt;
-  private readonly log = new Logger('MapaLeitos');
   constructor(
     @Inject(PORTA_ADT) private readonly porta: PortaAdt,
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
@@ -153,43 +151,8 @@ export class MapaLeitosController implements OnModuleDestroy {
         recurso: 'leitos.mapa',
         resultado: 'sucesso',
       });
-    // Regra 8: o conflito visto pela primeira vez (o outro sistema ocupou o leito bloqueado ou em higienização aqui)
-    // fica registrado e vai à trilha, para a coordenação; o outro sistema nunca é impedido. O já registrado não grava
-    // de novo (o mapa relê a cada aviso e a cada 15 s): a leitura só abre a gravação quando há conflito novo.
-    for (const l of m.leitos)
-      if (l.situacao === 'conflito' && l.conflito && !l.conflito.registrado && l.conflito.reserva) {
-        // M44, regra 12: o leito reservado pelo NIR ocupado pelo outro sistema (o NIR vê na fila e é avisado).
-        try {
-          await this.apoios.mapa.sgh(
-            s,
-            EVENTOS_AUDITAVEIS.nirReservaConflito.codigo,
-            'leitos.mapa.ler',
-            { tabela: 'SGH_INT_RESERVA_LEITO', id: String(l.conflito.reserva), chave: l.chave },
-            (g) => g.registrarConflitoReserva({ leito: l.leito, reg: l.conflito?.internacao ?? 0 }),
-          );
-          l.conflito.registrado = true;
-        } catch (x) {
-          this.log.warn(
-            `Conflito da reserva do leito ${l.chave} não registrado: ${x instanceof Error ? x.message : String(x)}`,
-          );
-        }
-      } else if (l.situacao === 'conflito' && l.conflito && !l.conflito.registrado && l.estados.length > 0) {
-        try {
-          await this.apoios.mapa.sgh(
-            s,
-            EVENTOS_AUDITAVEIS.leitosConflito.codigo,
-            'leitos.mapa.ler',
-            { tabela: 'SGH_INT_LEITO_ESTADO', chave: l.chave },
-            (g) => g.registrarConflito({ leito: l.leito, reg: l.conflito?.internacao ?? 0 }),
-          );
-          l.conflito.registrado = true;
-        } catch (x) {
-          // O mapa continua (mostra o conflito); a falha do registro fica no log do servidor para a coordenação.
-          this.log.warn(
-            `Conflito do leito ${l.chave} não registrado: ${x instanceof Error ? x.message : String(x)}`,
-          );
-        }
-      }
+    // O leito ocupado com um estado que não admite ocupação é incoerência mostrada no mapa (só leitura): no banco único
+    // a internação já é recusada em leito bloqueado, em higienização ou reservado, e a leitura nunca grava.
     return m;
   }
 
@@ -216,7 +179,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @AuditadoNoHandler('internacao.transferirLeito pelo executor (trilha na mesma transação)')
   async transferir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
-    const e = corpo(esquemaTransferirLeito, b);
+    const e = corpo(esquemaTransferirLeitoBanco, b);
     const l = await this.servico.leitoNoMapa(
       ctxAdt(s),
       e.destino,
@@ -249,7 +212,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @Post('estados')
   @HttpCode(201)
   @Permissao('leitos.bloqueio.criar')
-  @AuditadoNoHandler('estado do leito (SGH_INT_LEITO_ESTADO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('estado do leito (periodo_situacao_leito) com a trilha de auditoria na mesma transação')
   async bloquear(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaBloquearLeito, b);
@@ -270,7 +233,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.leitosLeitoBloqueado.codigo,
       'leitos.bloqueio.criar',
-      (x: number) => ({ tabela: 'SGH_INT_LEITO_ESTADO', id: String(x), chave: chaveTextoLeito(e.leito) }),
+      (x: number) => ({ tabela: 'periodo_situacao_leito', id: String(x), chave: chaveTextoLeito(e.leito) }),
       (g) =>
         g.abrirEstadoLeito({
           leito: e.leito,
@@ -295,7 +258,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @Post('estados/encerrar')
   @HttpCode(200)
   @Permissao('leitos.bloqueio.criar')
-  @AuditadoNoHandler('fim do estado do leito (SGH_INT_LEITO_ESTADO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('fim do estado do leito (periodo_situacao_leito) com a trilha de auditoria na mesma transação')
   async encerrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEncerrarEstadoLeito, b);
@@ -303,7 +266,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.leitosLeitoBloqueado.codigo,
       'leitos.bloqueio.criar',
-      { tabela: 'SGH_INT_LEITO_ESTADO', chave: chaveTextoLeito(e.leito) },
+      { tabela: 'periodo_situacao_leito', chave: chaveTextoLeito(e.leito) },
       (g) => g.encerrarEstadoLeito({ leito: e.leito, estado: e.estado, usuario: s.login }),
     );
     if (n === 0)
@@ -323,7 +286,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @HttpCode(200)
   @Permissao('leitos.bloqueio.criar')
   @AuditadoNoHandler(
-    'alteração do estado do leito (SGH_INT_LEITO_ESTADO) com a SGH_TRILHA na mesma transação',
+    'alteração do estado do leito (periodo_situacao_leito) com a trilha de auditoria na mesma transação',
   )
   async alterarEstado(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
@@ -332,7 +295,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.leitosLeitoBloqueado.codigo,
       'leitos.bloqueio.criar',
-      { tabela: 'SGH_INT_LEITO_ESTADO', chave: `${chaveTextoLeito(e.leito)}:alterar` },
+      { tabela: 'periodo_situacao_leito', chave: `${chaveTextoLeito(e.leito)}:alterar` },
       (g) =>
         g.alterarEstadoLeito({
           leito: e.leito,
@@ -353,7 +316,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @HttpCode(200)
   @Permissao('leitos.bloqueio.criar')
   @AuditadoNoHandler(
-    'limpeza dos atributos do leito (SGH_INT_LEITO_ATRIBUTO) com a SGH_TRILHA na mesma transação',
+    'limpeza dos atributos do leito (leito_hospitalar) com a trilha de auditoria na mesma transação',
   )
   async limparAtributos(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
@@ -363,7 +326,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.leitosAtributoAlterado.codigo,
       'leitos.bloqueio.criar',
-      { tabela: 'SGH_INT_LEITO_ATRIBUTO', chave: `${chave}:limpar` },
+      { tabela: 'leito_hospitalar', chave: `${chave}:limpar` },
       (g) => g.limparAtributos({ escopo: 'leito', chave, justificativa: e.justificativa, usuario: s.login }),
     );
     this.avisos?.avisar(s.hospital);
@@ -378,7 +341,7 @@ export class MapaLeitosController implements OnModuleDestroy {
   @Post('atributos')
   @HttpCode(200)
   @Permissao('leitos.bloqueio.criar')
-  @AuditadoNoHandler('atributos do leito (SGH_INT_LEITO_ATRIBUTO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('atributos do leito (leito_hospitalar) com a trilha de auditoria na mesma transação')
   async atributos(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAtributoLeito, b);
@@ -397,7 +360,7 @@ export class MapaLeitosController implements OnModuleDestroy {
       s,
       EVENTOS_AUDITAVEIS.leitosAtributoAlterado.codigo,
       'leitos.bloqueio.criar',
-      { tabela: 'SGH_INT_LEITO_ATRIBUTO', chave },
+      { tabela: 'leito_hospitalar', chave },
       (g) =>
         g.gravarAtributo({
           escopo: 'leito',

@@ -1,4 +1,4 @@
-// A chave opaca do médico solicitante da APAC (M51.3, D-SOLICITANTE-513): o cadastro de solicitantes SUS (FAMEDSOL) tem o
+// A chave opaca do médico solicitante da APAC (M51.3, D-SOLICITANTE-513): o cadastro de solicitantes SUS tem o
 // CPF como chave, e o CPF não vai ao navegador. O servidor sela o CPF num identificador opaco (AES-256-GCM com o vetor
 // derivado do próprio CPF por HMAC: o mesmo médico dá sempre a mesma chave, e o combo da tela compara valores) e o abre
 // de volta só na gravação do laudo. As duas chaves derivam (HKDF-SHA256) da chave mestra da plataforma; sem ela (dev/ci,

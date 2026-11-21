@@ -1,19 +1,21 @@
 // M50.5 (correção da revisão): uma fonte só para o acompanhante. O acompanhante com direito legal e com a refeição
-// registrado na portaria (POST /portaria/acompanhantes, em SGH_HOT_ACOMPANHANTE) chega ao mapa de dietas da nutrição
+// registrado na portaria (POST /portaria/acompanhantes, em acompanhante_internacao) chega ao mapa de dietas da nutrição
 // (M45.5) sem um segundo cadastro; o autorizado pela equipe (sem direito legal) não entra. Pela HTTP, com a sessão real
 // sobre a fonte sintética e as duas portas EM MEMÓRIA, com os mesmos internados sintéticos (nada conecta a banco).
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { InternadoPortaria } from '@sgh/legado';
+import type { InternadoPortaria } from '../portaria/tipos.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloPortaria } from '../portaria/modulo.js';
 import { PortaPortariaMemoria } from '../portaria/porta-memoria.js';
 import { acompanhantesDoMapa } from './servico.js';
+import { moduloNutricao } from './modulo.js';
 import { PortaNutricaoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'nutricao,portaria' };
 const trilha = new RegistradorTrilhaMemoria();
 const relogio = () => new Date(2026, 9, 25, 8, 0, 0);
 const nutricao = new PortaNutricaoMemoria(relogio);
@@ -38,7 +40,13 @@ let app: NestFastifyApplication;
 let seq = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, nutricao, portaria, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      nutricao: async () => ({ modulo: (ctx) => moduloNutricao(ctx, { porta: nutricao, portaria }) }),
+      portaria: async () => ({ modulo: (ctx) => moduloPortaria(ctx, { porta: portaria }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

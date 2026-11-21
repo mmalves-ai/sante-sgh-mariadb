@@ -35,7 +35,8 @@ import {
   vencimentoDaGuia,
 } from '@sgh/dominio-internacao';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoAdt, EtapaLida, OpcoesListaInternacoes, PortaAdt } from './porta.js';
+import { destinoDoContrato } from '../exames/public-api.js';
+import type { ContextoAdt, EtapaDaLimpeza, OpcoesListaInternacoes, PortaAdt } from './porta.js';
 
 const ms = (iso: string) => {
   const t = Date.parse(iso.length <= 19 ? `${iso.replace(' ', 'T')}Z` : iso);
@@ -45,7 +46,7 @@ const isoMin = (t: number) => new Date(t).toISOString().slice(0, 19);
 
 export class ServicoAdt {
   /**
-   * @param janela as horas da janela das limpezas pedidas pela alta do outro sistema (parâmetro
+   * @param janela as horas da janela das limpezas pedidas pela alta ainda sem etapa (parâmetro
    *   `hotelaria.janelaOutroSistemaHoras` do estabelecimento); sem ela, 0 (desligado).
    */
   constructor(
@@ -156,7 +157,7 @@ export class ServicoAdt {
       agora: t,
       lidoEm: new Date(t).toISOString(),
       dadosAte: new Date(t).toISOString(),
-      destino: this.porta.destino,
+      destino: destinoDoContrato(this.porta.destino),
     });
     return montarMapaOperacional(
       painel,
@@ -232,7 +233,7 @@ export class ServicoAdt {
   }
 
   /** A situação da limpeza: a última etapa do novo (sem etapa: "solicitado", como a solicitação nasce). */
-  etapaAtual(etapas: readonly EtapaLida[]): EtapaLimpeza {
+  etapaAtual(etapas: readonly EtapaDaLimpeza[]): EtapaLimpeza {
     return etapas.at(-1)?.etapa ?? 'solicitado';
   }
 
@@ -263,7 +264,7 @@ export class ServicoAdt {
     for (const s of r.itens) {
       const etapas = await this.porta.etapas(c, s.solicitacao);
       const etapa = this.etapaAtual(etapas);
-      const ultimaCom = <K extends keyof EtapaLida>(k: K) =>
+      const ultimaCom = <K extends keyof EtapaDaLimpeza>(k: K) =>
         [...etapas].reverse().find((e) => e[k] !== null && e[k] !== undefined)?.[k] ?? null;
       const prazo = ultimaCom('prazo') as string | null;
       const prazoMs = prazo ? ms(prazo) : null;
@@ -271,11 +272,11 @@ export class ServicoAdt {
         solicitacao: s.solicitacao,
         leito: s.leito,
         chave: chaveTextoLeito(s.leito),
-        // A limpeza pedida pela alta dada no outro sistema (sem etapa aqui ainda) nasce como a da alta.
+        // A limpeza pedida pela alta (ainda sem etapa registrada) nasce como a da alta.
         origem: (ultimaCom('origem') as string | null) ?? (s.doOutroSistema ? 'alta' : null),
         tipoLimpeza: nomeTipo(ultimaCom('tipoLimpeza') as number | null),
         etapa,
-        situacaoLegado: s.situacaoLegado,
+        situacaoLegado: s.situacaoCodigo,
         profissional: nomeProf(ultimaCom('profissional') as number | null),
         precaucao: (ultimaCom('precaucao') as string | null) ?? null,
         solicitadaEm: s.solicitadaEm,

@@ -1,0 +1,1009 @@
+// Porta própria do faturamento SUS (M51) sobre o banco do cliente, pelo @sgh/nucleo: leituras numa transação somente
+// leitura e gravações pelo Executor (uma operação `faturamento.sus.gravacao` por pedido, com a trilha, o outbox e a
+// idempotência na mesma transação). Tabelas: competencia_sus e critica_sus (contagens), equivalencia_sigtap_item com
+// item_faturavel, procedimento_sigtap e os vínculos da tabela unificada (procedimento_sigtap_registro, _cid, _cbo,
+// _habilitacao, _leito, _valor, dominio_sigtap), leito_uti_habilitado com dominio_sus e estabelecimento (CNES).
+// Toda leitura de tabela com estabelecimento filtra o da sessão; a tabela unificada, o item faturável e a equivalência
+// são do cliente inteiro (o mesmo catálogo para a rede), sem estabelecimento.
+// Melhoria: a competência segue o ciclo do modelo (aberta, fechada, reaberta, com quem e quando em colunas próprias) e a
+// trava otimista pela coluna `versao`; a equivalência SIGTAP é por vigência (fechar não apaga: a história fica), uma só
+// vigente por item faturável, e a recusa por versão vista é de negócio, não do banco.
+// Melhoria: a trilha da tela (evento, operação, alvo e diferença) vai nos dados da trilha da própria operação, na mesma
+// transação (uma linha por gravação, sem tabela de trilha à parte).
+// Pendências de modelo (pedidos do lote 03-05, docs/obra/fatias/f22/saida/03-05.json): a crítica prévia por conta (a
+// critica_sus só aceita alvo de AIH, APAC ou linha de BPA), o arquivo gerado (remessa_* sem a chave do objeto e a
+// versão), as linhas do BPA e da APAC ligadas ao arquivo, o ciclo da AIH (laudo, autorização e conta) e da APAC pela
+// tela atual, a faixa de AIH (órgão emissor, data de liberação e motivo do cancelamento) e o retorno por linha. Até lá,
+// essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
+// (atendimentos, itens, internação e trajetória da competência) é do lote da conta e da internação: hoje sai vazia.
+import { randomUUID } from 'node:crypto';
+import {
+  type ContextoNucleo,
+  type ContextoOperacao,
+  definirOperacao,
+  type Escritor,
+  type Executor,
+  type Leitor,
+  type NucleoProprio,
+  recusa,
+  type ResultadoOperacao,
+  type TxOperacao,
+} from '@sgh/nucleo';
+import { z } from 'zod';
+import { ErroProblema } from '../../problema.filter.js';
+import type {
+  AtendimentoLido,
+  ContextoSus,
+  DadosBpaLidos,
+  DadosCihaLidos,
+  GravacaoSus,
+  LeituraSus,
+  PortaSus,
+} from './porta.js';
+import type { DadosAihLidos, SolicitanteAihLido } from './porta-aih.js';
+import {
+  type CompatibilidadeSigtap,
+  type CompetenciaSusRegistro,
+  type EquivalenciaSus,
+  type EquivalenciaSusNomeada,
+  ErroAih,
+  ErroSus,
+  type FiltroEquivalenciasPorta,
+  type InstrumentoSusPorta,
+  type LinhaTrilhaSus,
+  type ProcedimentoHospital,
+  type ProcedimentoSigtapRegra,
+  type RegistroSigtap,
+  type ValorSigtap,
+} from './tipos.js';
+
+/** O mínimo do núcleo que a porta usa. */
+export type NucleoSus = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
+
+type Linha = Record<string, unknown>;
+const num = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v));
+const numOuNulo = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+const txt = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+const txtOuNulo = (v: unknown): string | null => {
+  const t = txt(v).trim();
+  return t === '' ? null : t;
+};
+
+/** As tabelas que a operação de gravação do faturamento SUS declara (a transação recusa as outras). */
+export const TABELAS_SUS = ['competencia_sus', 'equivalencia_sigtap_item'] as const;
+
+/** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
+const INSTRUMENTOS: readonly InstrumentoSusPorta[] = ['ciha', 'bpa', 'apac', 'aih'];
+
+/** A recusa da gravação que o modelo ainda não guarda (pedido do lote 03-05). */
+export function modeloPendente(oque: string): never {
+  throw recusa(
+    'modelo-pendente',
+    `O banco do cliente ainda não guarda ${oque}: a gravação foi recusada e nada mudou (pedido de modelo registrado).`,
+  );
+}
+
+/** AAAAMM → primeiro e último dia (texto ISO). */
+export function periodoDaCompetencia(competencia: string): { inicio: string; fim: string } {
+  if (!/^\d{4}(0[1-9]|1[0-2])$/.test(competencia)) throw new Error('competência AAAAMM');
+  const ano = Number(competencia.slice(0, 4));
+  const mes = Number(competencia.slice(4, 6));
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  const m = String(mes).padStart(2, '0');
+  return { inicio: `${ano}-${m}-01`, fim: `${ano}-${m}-${String(ultimo).padStart(2, '0')}` };
+}
+
+/** Data ISO → competência AAAAMM numérica; sem data (vigente), 0, como a montagem lê a vigência aberta. */
+export function competenciaDaData(d: unknown): number {
+  const t = txt(d);
+  return /^\d{4}-\d{2}/.test(t) ? Number(t.slice(0, 4) + t.slice(5, 7)) : 0;
+}
+
+/** A situação do modelo na tela: aberta e reaberta aceitam crítica e arquivo; as demais estão fechadas. */
+export function situacaoDaTela(situacao: string): 'aberta' | 'fechada' {
+  return situacao === 'aberta' || situacao === 'reaberta' ? 'aberta' : 'fechada';
+}
+
+const hojeIso = (): string => new Date().toISOString().slice(0, 10);
+const instante = (col: string) => `DATE_FORMAT(${col}, '%Y-%m-%dT%H:%i:%s.%fZ')`;
+const dia = (col: string) => `DATE_FORMAT(${col}, '%Y-%m-%d')`;
+const login = (col: string) => `(SELECT u.login FROM usuario u WHERE u.id = ${col})`;
+
+const SQL_COMPETENCIA = `
+  SELECT c.id, c.instrumento, c.competencia, c.situacao, c.versao, e.codigo_cnes AS cnes,
+         ${instante('c.aberta_em')} AS aberta_em, ${login('c.aberta_por_usuario_id')} AS aberta_por,
+         ${instante('c.fechada_em')} AS fechada_em, ${login('c.fechada_por_usuario_id')} AS fechada_por,
+         ${instante('c.reaberta_em')} AS reaberta_em, ${login('c.reaberta_por_usuario_id')} AS reaberta_por,
+         (SELECT COUNT(*) FROM critica_sus k WHERE k.competencia_sus_id = c.id AND k.situacao = 'aberta'
+             AND k.gravidade = 'bloqueante') AS bloqueantes,
+         (SELECT COUNT(*) FROM critica_sus k WHERE k.competencia_sus_id = c.id AND k.situacao = 'aberta'
+             AND k.gravidade = 'aviso') AS avisos,
+         (SELECT ${instante('MAX(k.criticada_em)')} FROM critica_sus k WHERE k.competencia_sus_id = c.id) AS criticada_em
+    FROM competencia_sus c JOIN estabelecimento e ON e.id = c.estabelecimento_id
+   WHERE c.estabelecimento_id = ? AND c.excluido_em IS NULL`;
+
+function competenciaDaLinha(x: Linha): CompetenciaSusRegistro {
+  return {
+    id: num(x['id']),
+    instrumento: txt(x['instrumento']) as InstrumentoSusPorta,
+    competencia: txt(x['competencia']),
+    situacao: situacaoDaTela(txt(x['situacao'])),
+    cnes: txtOuNulo(x['cnes']),
+    // A quantidade de registros criticados ainda não tem coluna (pedido): 0 até lá.
+    registros: 0,
+    bloqueantes: num(x['bloqueantes']),
+    avisos: num(x['avisos']),
+    criticadaEm: txtOuNulo(x['criticada_em']),
+    abertaPor: txt(x['aberta_por']),
+    abertaEm: txt(x['aberta_em']),
+    fechadaPor: txtOuNulo(x['fechada_por']),
+    fechadaEm: txtOuNulo(x['fechada_em']),
+    reabertaPor: txtOuNulo(x['reaberta_por']),
+    reabertaEm: txtOuNulo(x['reaberta_em']),
+    versao: num(x['versao']),
+  };
+}
+
+const SQL_EQUIVALENCIA = `
+  SELECT q.id, q.item_faturavel_id, i.codigo AS codigo_item, i.descricao AS nome_item, i.tipo_item,
+         q.procedimento_sigtap_id, p.codigo_sigtap, p.descricao AS nome_sigtap, (q.vigencia_fim IS NULL) AS ativa,
+         ${login('q.criado_por')} AS registrada_por, ${instante('q.criado_em')} AS registrada_em, q.versao
+    FROM equivalencia_sigtap_item q
+    JOIN item_faturavel i ON i.id = q.item_faturavel_id
+    JOIN procedimento_sigtap p ON p.id = q.procedimento_sigtap_id
+   WHERE q.excluido_em IS NULL AND q.instrumento IN ('ciha', 'bpa', 'todos')`;
+
+/** O código do item faturável na tela (numérico; o código com letra fica no nome do item). */
+function codigoDoItem(v: unknown): number {
+  const t = txt(v).trim();
+  return /^\d{1,15}$/.test(t) ? Number(t) : 0;
+}
+
+function equivalenciaDaLinha(x: Linha): EquivalenciaSusNomeada {
+  return {
+    id: num(x['id']),
+    procedimento: num(x['item_faturavel_id']),
+    codigoProcedimento: codigoDoItem(x['codigo_item']),
+    sigtap: num(x['procedimento_sigtap_id']),
+    codigo: txt(x['codigo_sigtap']),
+    ativa: num(x['ativa']) === 1,
+    registradaPor: txt(x['registrada_por']),
+    registradaEm: txt(x['registrada_em']),
+    versao: num(x['versao']),
+    procedimentoNome: txtOuNulo(x['nome_item']),
+    tabela: txtOuNulo(x['tipo_item']),
+    sigtapNome: txtOuNulo(x['nome_sigtap']),
+  };
+}
+
+const semNomes = (x: EquivalenciaSusNomeada): EquivalenciaSus => {
+  const { procedimentoNome, tabela, sigtapNome, ...e } = x;
+  void procedimentoNome;
+  void tabela;
+  void sigtapNome;
+  return e;
+};
+
+const marcadores = (n: number) => Array.from({ length: n }, () => '?').join(', ');
+
+/** As leituras do faturamento SUS sobre uma conexão (a somente leitura ou a da transação da gravação). */
+export class LeituraSusPropria implements LeituraSus {
+  constructor(
+    protected readonly l: Leitor,
+    protected readonly est: number,
+    /** Dentro da gravação, as leituras com `travar` travam a linha (SELECT ... FOR UPDATE do núcleo). */
+    protected readonly travador: Escritor | null = null,
+  ) {}
+
+  // ── Competência ──
+
+  async competencias(instrumento: InstrumentoSusPorta | null): Promise<CompetenciaSusRegistro[]> {
+    const filtro = instrumento ? ' AND c.instrumento = ?' : ` AND c.instrumento IN (${marcadores(INSTRUMENTOS.length)})`;
+    const ls = await this.l.consultar(
+      `${SQL_COMPETENCIA}${filtro} ORDER BY c.competencia DESC, c.instrumento`,
+      [this.est, ...(instrumento ? [instrumento] : INSTRUMENTOS)],
+      { teto: 2_000 },
+    );
+    return ls.map(competenciaDaLinha);
+  }
+
+  async competencia(
+    instrumento: InstrumentoSusPorta,
+    competencia: string,
+    travar?: boolean,
+  ): Promise<CompetenciaSusRegistro | null> {
+    if (travar && this.travador)
+      await this.travador.consultarParaAtualizar(
+        'SELECT id FROM competencia_sus WHERE estabelecimento_id = ? AND instrumento = ? AND competencia = ?',
+        [this.est, instrumento, competencia],
+      );
+    const x = await this.l.uma(`${SQL_COMPETENCIA} AND c.instrumento = ? AND c.competencia = ?`, [
+      this.est,
+      instrumento,
+      competencia,
+    ]);
+    return x ? competenciaDaLinha(x) : null;
+  }
+
+  // ── Crítica e arquivo (pendentes de modelo: leituras vazias) ──
+
+  async criticas(): Promise<{ itens: never[]; total: number; porRegra: Record<string, number> }> {
+    return { itens: [], total: 0, porRegra: {} };
+  }
+
+  async critica(): Promise<null> {
+    return null;
+  }
+
+  async arquivos(): Promise<never[]> {
+    return [];
+  }
+
+  async arquivo(): Promise<null> {
+    return null;
+  }
+
+  // ── Equivalência SIGTAP (do cliente inteiro) ──
+
+  async equivalencias(): Promise<EquivalenciaSus[]> {
+    const ls = await this.l.consultar(`${SQL_EQUIVALENCIA} AND q.vigencia_fim IS NULL ORDER BY q.id`, [], {
+      teto: 50_000,
+    });
+    return ls.map((x) => semNomes(equivalenciaDaLinha(x)));
+  }
+
+  async paginaEquivalencias(f: FiltroEquivalenciasPorta): Promise<{ itens: EquivalenciaSusNomeada[]; total: number }> {
+    let where = '';
+    const p: unknown[] = [];
+    if (!f.inativas) where += ' AND q.vigencia_fim IS NULL';
+    if (f.procedimento !== undefined) {
+      where += ' AND q.item_faturavel_id = ?';
+      p.push(f.procedimento);
+    }
+    const termo = f.termo?.trim();
+    if (termo) {
+      where += ' AND (i.codigo LIKE ? OR i.descricao LIKE ? OR p.codigo_sigtap LIKE ? OR p.descricao LIKE ?)';
+      const like = `%${termo.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      p.push(like, like, like, like);
+    }
+    const total = num(
+      (await this.l.uma(`SELECT COUNT(*) AS n FROM (${SQL_EQUIVALENCIA}${where}) t`, p))?.['n'],
+    );
+    const porPagina = Math.max(1, Math.min(200, f.porPagina));
+    const ls = await this.l.consultar(
+      `${SQL_EQUIVALENCIA}${where} ORDER BY ativa DESC, i.descricao, q.id LIMIT ? OFFSET ?`,
+      [...p, porPagina, (Math.max(1, f.pagina) - 1) * porPagina],
+      { teto: 200 },
+    );
+    return { itens: ls.map(equivalenciaDaLinha), total };
+  }
+
+  // ── Tabela unificada (do cliente inteiro) ──
+
+  async sigtapPorCodigo(codigo: string): Promise<{ id: number; codigo: string; nome: string } | null> {
+    const x = await this.l.uma(
+      'SELECT id, codigo_sigtap, descricao FROM procedimento_sigtap WHERE codigo_sigtap = ?',
+      [codigo],
+    );
+    return x ? { id: num(x['id']), codigo: txt(x['codigo_sigtap']), nome: txt(x['descricao']) } : null;
+  }
+
+  async buscarSigtap(
+    termo: string,
+    competencia: number | null,
+  ): Promise<{ id: number; codigo: string; nome: string; vigente: boolean }[]> {
+    const t = termo.trim();
+    if (t.length < 2) return [];
+    const dia = competencia ? periodoDaCompetencia(String(competencia)).inicio : hojeIso();
+    const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const ls = await this.l.consultar(
+      `SELECT id, codigo_sigtap, descricao,
+              (ativo AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)) AS vigente
+         FROM procedimento_sigtap
+        WHERE codigo_sigtap LIKE ? OR descricao LIKE ?
+        ORDER BY vigente DESC, codigo_sigtap LIMIT 30`,
+      [dia, dia, `${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, like],
+      { teto: 30 },
+    );
+    return ls.map((x) => ({
+      id: num(x['id']),
+      codigo: txt(x['codigo_sigtap']),
+      nome: txt(x['descricao']),
+      vigente: num(x['vigente']) === 1,
+    }));
+  }
+
+  async nomesSigtap(ids: readonly number[]): Promise<Map<number, string>> {
+    const out = new Map<number, string>();
+    if (ids.length === 0) return out;
+    const ls = await this.l.consultar(
+      `SELECT id, descricao FROM procedimento_sigtap WHERE id IN (${marcadores(ids.length)})`,
+      [...ids],
+      { teto: ids.length },
+    );
+    for (const x of ls) out.set(num(x['id']), txt(x['descricao']));
+    return out;
+  }
+
+  async valoresSigtap(ids: readonly number[]): Promise<ValorSigtap[]> {
+    if (ids.length === 0) return [];
+    const ls = await this.l.consultar(
+      `SELECT procedimento_sigtap_id AS id, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS data,
+              valor_servico_hospitalar, valor_servico_profissional, valor_servico_ambulatorial, valor_total_ambulatorial
+         FROM procedimento_sigtap_valor
+        WHERE procedimento_sigtap_id IN (${marcadores(ids.length)})
+        ORDER BY procedimento_sigtap_id, vigencia_inicio`,
+      [...ids],
+      { teto: 50_000 },
+    );
+    return ls.map((x) => ({
+      id: num(x['id']),
+      data: txt(x['data']),
+      servicoHospitalar: num(x['valor_servico_hospitalar']),
+      servicoProfissional: num(x['valor_servico_profissional']),
+      sadt: num(x['valor_servico_ambulatorial']),
+      ambulatorial: num(x['valor_total_ambulatorial']),
+    }));
+  }
+
+  /** Os atributos, os instrumentos de registro e as compatibilidades dos procedimentos pedidos. */
+  protected async sigtapDosIds(ids: readonly number[]): Promise<{
+    procedimentos: ProcedimentoSigtapRegra[];
+    registros: RegistroSigtap[];
+    compatibilidades: DadosBpaLidos['compatibilidades'];
+  }> {
+    const vazio = { cids: [], cbos: [], habilitacoes: [], leitos: [] };
+    const unicos = [...new Set(ids.filter((i) => Number.isFinite(i) && i > 0))];
+    if (unicos.length === 0) return { procedimentos: [], registros: [], compatibilidades: vazio };
+    const em = `IN (${marcadores(unicos.length)})`;
+    const procs = await this.l.consultar(
+      `SELECT p.id, p.codigo_sigtap, ${dia('p.vigencia_inicio')} AS vigencia_inicio, ${dia('p.vigencia_fim')} AS vigencia_fim, p.idade_minima_meses, p.idade_maxima_meses,
+              p.sexo, p.quantidade_maxima, p.permanencia_dias, COALESCE(d.sigla, d.codigo_sigtap) AS complexidade
+         FROM procedimento_sigtap p LEFT JOIN dominio_sigtap d ON d.id = p.complexidade_dominio_sigtap_id
+        WHERE p.id ${em}`,
+      unicos,
+      { teto: unicos.length },
+    );
+    const sexo = (s: string): string | null => (s === 'masculino' ? 'M' : s === 'feminino' ? 'F' : null);
+    const procedimentos = procs.map((x) => ({
+      id: num(x['id']),
+      codigo: txt(x['codigo_sigtap']),
+      competenciaInicial: competenciaDaData(x['vigencia_inicio']),
+      competenciaFinal: competenciaDaData(x['vigencia_fim']),
+      idadeMinima: numOuNulo(x['idade_minima_meses']),
+      idadeMaxima: numOuNulo(x['idade_maxima_meses']),
+      sexo: sexo(txt(x['sexo'])),
+      quantidadeMaxima: numOuNulo(x['quantidade_maxima']),
+      permanencia: numOuNulo(x['permanencia_dias']),
+      complexidade: txtOuNulo(x['complexidade']),
+    }));
+    const datas = (x: Linha) => ({
+      competenciaInicial: competenciaDaData(x['vigencia_inicio']),
+      competenciaFinal: competenciaDaData(x['vigencia_fim']),
+    });
+    const regs = await this.l.consultar(
+      `SELECT r.procedimento_sigtap_id AS id, d.codigo_sigtap AS registro, ${dia('r.vigencia_inicio')} AS vigencia_inicio,
+              ${dia('r.vigencia_fim')} AS vigencia_fim
+         FROM procedimento_sigtap_registro r JOIN dominio_sigtap d ON d.id = r.instrumento_dominio_sigtap_id
+        WHERE r.procedimento_sigtap_id ${em}`,
+      unicos,
+      { teto: 50_000 },
+    );
+    const vinculo = async (sql: string): Promise<CompatibilidadeSigtap[]> =>
+      (await this.l.consultar(sql, unicos, { teto: 200_000 })).map((x) => ({
+        id: num(x['id']),
+        codigo: txt(x['codigo']),
+        ...datas(x),
+      }));
+    return {
+      procedimentos,
+      registros: regs.map((x) => ({ id: num(x['id']), registro: txt(x['registro']), ...datas(x) })),
+      compatibilidades: {
+        cids: await vinculo(
+          `SELECT v.procedimento_sigtap_id AS id, REPLACE(t.codigo_termo, '.', '') AS codigo, DATE_FORMAT(v.vigencia_inicio, '%Y-%m-%d') AS vigencia_inicio,
+                  DATE_FORMAT(v.vigencia_fim, '%Y-%m-%d') AS vigencia_fim
+             FROM procedimento_sigtap_cid v JOIN termo_terminologia t ON t.id = v.cid_termo_terminologia_id
+            WHERE v.procedimento_sigtap_id ${em}`,
+        ),
+        cbos: await vinculo(
+          `SELECT v.procedimento_sigtap_id AS id, o.codigo_cbo AS codigo, DATE_FORMAT(v.vigencia_inicio, '%Y-%m-%d') AS vigencia_inicio,
+                  DATE_FORMAT(v.vigencia_fim, '%Y-%m-%d') AS vigencia_fim
+             FROM procedimento_sigtap_cbo v JOIN ocupacao_cbo o ON o.id = v.ocupacao_cbo_id
+            WHERE v.procedimento_sigtap_id ${em}`,
+        ),
+        habilitacoes: await vinculo(
+          `SELECT v.procedimento_sigtap_id AS id, h.codigo_habilitacao AS codigo, DATE_FORMAT(v.vigencia_inicio, '%Y-%m-%d') AS vigencia_inicio,
+                  DATE_FORMAT(v.vigencia_fim, '%Y-%m-%d') AS vigencia_fim
+             FROM procedimento_sigtap_habilitacao v JOIN habilitacao_sigtap h ON h.id = v.habilitacao_sigtap_id
+            WHERE v.procedimento_sigtap_id ${em}`,
+        ),
+        leitos: await vinculo(
+          `SELECT v.procedimento_sigtap_id AS id, l.codigo_cnes_tipo_leito AS codigo, DATE_FORMAT(v.vigencia_inicio, '%Y-%m-%d') AS vigencia_inicio,
+                  DATE_FORMAT(v.vigencia_fim, '%Y-%m-%d') AS vigencia_fim
+             FROM procedimento_sigtap_leito v JOIN especialidade_leito l ON l.id = v.especialidade_leito_id
+            WHERE v.procedimento_sigtap_id ${em}`,
+        ),
+      },
+    };
+  }
+
+  /** O CNES do estabelecimento da sessão (a crítica confere o do cabeçalho contra os cadastrados). */
+  protected async cnesCadastrados(): Promise<number[]> {
+    const x = await this.l.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ?', [this.est]);
+    const c = txtOuNulo(x?.['codigo_cnes']);
+    return c && /^\d{7}$/.test(c) ? [Number(c)] : [];
+  }
+
+  // ── Itens faturáveis do hospital (a origem da equivalência) ──
+
+  async buscarProcedimentosHospital(termo: string): Promise<ProcedimentoHospital[]> {
+    const t = termo.trim();
+    if (t.length < 2) return [];
+    const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const ls = await this.l.consultar(
+      `SELECT id, codigo, descricao, tipo_item FROM item_faturavel
+        WHERE excluido_em IS NULL AND situacao = 'ativo' AND (codigo LIKE ? OR descricao LIKE ?)
+        ORDER BY descricao, id LIMIT 30`,
+      [like, like],
+      { teto: 30 },
+    );
+    return ls.map((x) => ({ id: num(x['id']), codigo: codigoDoItem(x['codigo']), nome: txt(x['descricao']), tabela: txt(x['tipo_item']) }));
+  }
+
+  async procedimentosHospital(ids: readonly number[]): Promise<ProcedimentoHospital[]> {
+    if (ids.length === 0) return [];
+    const ls = await this.l.consultar(
+      `SELECT id, codigo, descricao, tipo_item FROM item_faturavel WHERE id IN (${marcadores(ids.length)})`,
+      [...ids],
+      { teto: ids.length },
+    );
+    return ls.map((x) => ({ id: num(x['id']), codigo: codigoDoItem(x['codigo']), nome: txt(x['descricao']), tabela: txt(x['tipo_item']) }));
+  }
+
+  // ── Montagem: a produção da competência (a conta própria é do lote da conta; hoje vazia) ──
+
+  async dadosCiha(
+    _intervalo: { readonly inicio: string; readonly fim: string },
+    _conveniosSus: readonly number[],
+    sigtapExtra: readonly number[],
+  ): Promise<DadosCihaLidos> {
+    const atendimentos: AtendimentoLido[] = [];
+    const s = await this.sigtapDosIds(sigtapExtra);
+    return {
+      atendimentos,
+      procedimentos: s.procedimentos,
+      historico: [],
+      registros: s.registros,
+      cids: new Set<string>(),
+      cnesCadastrados: await this.cnesCadastrados(),
+    };
+  }
+
+  async dadosBpa(
+    _intervalo: { readonly inicio: string; readonly fim: string },
+    _conveniosSus: readonly number[],
+    sigtapExtra: readonly number[],
+  ): Promise<DadosBpaLidos> {
+    const s = await this.sigtapDosIds(sigtapExtra);
+    return {
+      atendimentos: [],
+      procedimentos: s.procedimentos,
+      historico: [],
+      registros: s.registros,
+      compatibilidades: s.compatibilidades,
+      cids: new Set<string>(),
+      cnesCadastrados: await this.cnesCadastrados(),
+    };
+  }
+
+  async dadosAih(
+    _registros: readonly number[],
+    codigos: readonly string[],
+    sigtapExtra: readonly number[],
+  ): Promise<DadosAihLidos> {
+    const porCodigo: { id: number; codigo: string; nome: string }[] = [];
+    for (const c of [...new Set(codigos)]) {
+      const x = await this.sigtapPorCodigo(c);
+      if (x) porCodigo.push(x);
+    }
+    const s = await this.sigtapDosIds([...sigtapExtra, ...porCodigo.map((p) => p.id)]);
+    return {
+      internacoes: [],
+      itens: [],
+      passagens: [],
+      procedimentos: s.procedimentos,
+      historico: [],
+      registros: s.registros,
+      compatibilidades: s.compatibilidades,
+      porCodigo,
+      cids: new Set<string>(),
+      leitosUti: await this.leitosUti(),
+      cnesCadastrados: await this.cnesCadastrados(),
+    };
+  }
+
+  async linhasBpa(): Promise<{
+    itens: never[];
+    total: number;
+    porTipo: Record<string, { linhas: number; quantidade: number }>;
+  }> {
+    return { itens: [], total: 0, porTipo: {} };
+  }
+
+  async buscarSolicitantes(): Promise<never[]> {
+    return [];
+  }
+
+  async parametrosCadastro(): Promise<{ competenciaAmbulatorio: null; versao: null; orgao: null }> {
+    return { competenciaAmbulatorio: null, versao: null, orgao: null };
+  }
+
+  // ── APAC (pendente de modelo pela tela atual: leituras vazias) ──
+
+  async apac(): Promise<null> {
+    return null;
+  }
+
+  async paginaApacs(): Promise<{ itens: never[]; total: number; porSituacao: Record<string, number> }> {
+    return { itens: [], total: 0, porSituacao: {} };
+  }
+
+  async apacsDaCompetencia(): Promise<never[]> {
+    return [];
+  }
+
+  async atendimentoLaudoApac(): Promise<null> {
+    return null;
+  }
+
+  async dominiosApac(): Promise<{
+    caracteristicaTratamento: never[];
+    contraindicacaoTransplante: never[];
+    situacaoTransplante: never[];
+    acessoVascular: never[];
+  }> {
+    return { caracteristicaTratamento: [], contraindicacaoTransplante: [], situacaoTransplante: [], acessoVascular: [] };
+  }
+
+  async buscarSolicitantesApac(): Promise<never[]> {
+    return [];
+  }
+
+  async solicitantesApacPorChave(): Promise<never[]> {
+    return [];
+  }
+
+  async linhasApac(): Promise<{ itens: never[]; total: number; apacs: number; quantidade: number }> {
+    return { itens: [], total: 0, apacs: 0, quantidade: 0 };
+  }
+
+  // ── AIH: leitos de UTI habilitados (o restante do ciclo é pendente de modelo) ──
+
+  async leitosUti(): Promise<{ tipo: number; nome: string; leitos: number }[]> {
+    const hoje = hojeIso();
+    const ls = await this.l.consultar(
+      `SELECT d.codigo_oficial, d.codigo, d.descricao, SUM(h.quantidade_leitos) AS leitos
+         FROM leito_uti_habilitado h JOIN dominio_sus d ON d.id = h.tipo_uti_dominio_sus_id
+        WHERE h.estabelecimento_id = ? AND h.ativo
+          AND h.vigencia_inicio <= ? AND (h.vigencia_fim IS NULL OR h.vigencia_fim >= ?)
+        GROUP BY d.id, d.codigo_oficial, d.codigo, d.descricao
+        ORDER BY d.codigo_oficial, d.codigo`,
+      [this.est, hoje, hoje],
+      { teto: 500 },
+    );
+    return ls
+      .map((x) => ({
+        tipo: Number(txtOuNulo(x['codigo_oficial']) ?? txt(x['codigo'])),
+        nome: txt(x['descricao']),
+        leitos: num(x['leitos']),
+      }))
+      .filter((x) => Number.isFinite(x.tipo));
+  }
+
+  async internacaoAih(): Promise<null> {
+    return null;
+  }
+
+  async internacoesSus(): Promise<never[]> {
+    return [];
+  }
+
+  async lotesSaida(): Promise<never[]> {
+    return [];
+  }
+
+  async solicitanteAih(): Promise<SolicitanteAihLido | null> {
+    return null;
+  }
+
+  async faixasAih(): Promise<never[]> {
+    return [];
+  }
+
+  async faixaAih(): Promise<null> {
+    return null;
+  }
+
+  async maiorNumeroDaFaixa(): Promise<null> {
+    return null;
+  }
+
+  async numeroAihEmUso(numero: string): Promise<boolean> {
+    // O número da AIH é único no estabelecimento: na autorização e na conta.
+    const x = await this.l.uma(
+      `SELECT (EXISTS (SELECT 1 FROM autorizacao_internacao_sus WHERE estabelecimento_id = ? AND numero_aih = ?
+                         AND excluido_em IS NULL)
+            OR EXISTS (SELECT 1 FROM conta_aih WHERE estabelecimento_id = ? AND numero_aih = ? AND excluido_em IS NULL))
+              AS usado`,
+      [this.est, numero, this.est, numero],
+    );
+    return num(x?.['usado']) === 1;
+  }
+
+  async aih(): Promise<null> {
+    return null;
+  }
+
+  async aihPorNumero(): Promise<null> {
+    return null;
+  }
+
+  async aihsDasInternacoes(): Promise<never[]> {
+    return [];
+  }
+
+  async aihsParaApresentar(): Promise<never[]> {
+    return [];
+  }
+
+  async paginaAihs(): Promise<{ itens: never[]; total: number; porSituacao: Record<string, number> }> {
+    return { itens: [], total: 0, porSituacao: {} };
+  }
+
+  async itensAih(): Promise<never[]> {
+    return [];
+  }
+
+  async linhaBpaDaCompetencia(): Promise<null> {
+    return null;
+  }
+
+  async paginaRetornos(): Promise<{
+    itens: never[];
+    total: number;
+    porSituacao: Record<string, number>;
+    valorGlosado: number;
+  }> {
+    return { itens: [], total: 0, porSituacao: {}, valorGlosado: 0 };
+  }
+
+  async retornoSus(): Promise<null> {
+    return null;
+  }
+
+  async ultimoRetornoDaAih(): Promise<null> {
+    return null;
+  }
+}
+
+/** As gravações na transação da operação (o Escritor restrito às tabelas declaradas). */
+export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus {
+  readonly linhas: LinhaTrilhaSus[] = [];
+
+  constructor(
+    private readonly tx: TxOperacao,
+    est: number,
+  ) {
+    super(tx, est, tx);
+  }
+
+  private async competenciaPorId(id: number): Promise<CompetenciaSusRegistro> {
+    await this.tx.consultarParaAtualizar('SELECT id FROM competencia_sus WHERE id = ? AND estabelecimento_id = ?', [
+      id,
+      this.est,
+    ]);
+    const x = await this.tx.uma(`${SQL_COMPETENCIA} AND c.id = ?`, [this.est, id]);
+    if (!x) throw new ErroSus('nao-encontrado', 'Competência não encontrada.');
+    return competenciaDaLinha(x);
+  }
+
+  async abrir(p: { instrumento: InstrumentoSusPorta; competencia: string; por: string }): Promise<CompetenciaSusRegistro> {
+    if (await this.competencia(p.instrumento, p.competencia, true))
+      throw new ErroSus('competencia-ja-aberta', 'A competência já foi aberta para o instrumento.');
+    const { inicio, fim } = periodoDaCompetencia(p.competencia);
+    const id = await this.tx.incluir('competencia_sus', {
+      estabelecimento_id: this.est,
+      instrumento: p.instrumento,
+      competencia: p.competencia,
+      periodo_inicio: inicio,
+      periodo_fim: fim,
+      situacao: 'aberta',
+      aberta_em: new Date(),
+      aberta_por_usuario_id: this.tx.contexto.usuario,
+    });
+    return this.competenciaPorId(id);
+  }
+
+  async fechar(c: { id: number; versao: number }): Promise<void> {
+    const atual = await this.competenciaPorId(c.id);
+    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'aberta') throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
+    await this.tx.alterar('competencia_sus', c.id, c.versao, {
+      situacao: 'fechada',
+      fechada_em: new Date(),
+      fechada_por_usuario_id: this.tx.contexto.usuario,
+    });
+  }
+
+  async reabrir(c: { id: number; versao: number }, _por: string, justificativa: string): Promise<void> {
+    const atual = await this.competenciaPorId(c.id);
+    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'fechada') throw new ErroSus('competencia-nao-fechada', 'A competência não está fechada.');
+    const x = await this.tx.uma('SELECT situacao FROM competencia_sus WHERE id = ?', [c.id]);
+    if (txt(x?.['situacao']) !== 'fechada')
+      throw new ErroSus('competencia-nao-fechada', 'A competência enviada ou encerrada não reabre pela tela.');
+    await this.tx.alterar('competencia_sus', c.id, c.versao, {
+      situacao: 'reaberta',
+      reaberta_em: new Date(),
+      reaberta_por_usuario_id: this.tx.contexto.usuario,
+      motivo_reabertura: justificativa.slice(0, 500),
+    });
+  }
+
+  gravarCriticas(): Promise<never> {
+    return Promise.reject(modeloPendente('a crítica prévia por conta (regra, detalhe e justificativa)'));
+  }
+
+  justificar(): Promise<never> {
+    return Promise.reject(modeloPendente('a justificativa da crítica prévia'));
+  }
+
+  proximoArquivo(): Promise<never> {
+    return Promise.reject(modeloPendente('o arquivo gerado do faturamento SUS (chave e versão do objeto)'));
+  }
+
+  gravarArquivo(): Promise<never> {
+    return Promise.reject(modeloPendente('o arquivo da CIHA com os registros'));
+  }
+
+  gravarArquivoBpa(): Promise<never> {
+    return Promise.reject(modeloPendente('o arquivo do BPA com as linhas'));
+  }
+
+  incluirApac(): Promise<never> {
+    return Promise.reject(modeloPendente('a APAC pela tela atual (laudo, solicitante e autorização)'));
+  }
+
+  mudarApac(): Promise<never> {
+    return Promise.reject(modeloPendente('a APAC pela tela atual (laudo, solicitante e autorização)'));
+  }
+
+  gravarArquivoApac(): Promise<never> {
+    return Promise.reject(modeloPendente('o arquivo da APAC com as linhas'));
+  }
+
+  private async vigentesDoItem(item: number): Promise<EquivalenciaSusNomeada[]> {
+    await this.tx.consultarParaAtualizar('SELECT id FROM item_faturavel WHERE id = ?', [item]);
+    const ls = await this.tx.consultarParaAtualizar(
+      `${SQL_EQUIVALENCIA} AND q.item_faturavel_id = ? AND q.vigencia_fim IS NULL ORDER BY q.id`,
+      [item],
+      { teto: 50 },
+    );
+    return ls.map(equivalenciaDaLinha);
+  }
+
+  async registrarEquivalencia(p: {
+    procedimento: number;
+    codigoProcedimento: number;
+    sigtap: number;
+    codigo: string;
+    por: string;
+    versao?: number | undefined;
+  }): Promise<{ antes: EquivalenciaSus | null; depois: EquivalenciaSus; mudou: boolean }> {
+    const item = await this.tx.uma('SELECT id FROM item_faturavel WHERE id = ? AND excluido_em IS NULL', [p.procedimento]);
+    const proc = await this.tx.uma('SELECT id FROM procedimento_sigtap WHERE id = ? AND codigo_sigtap = ?', [
+      p.sigtap,
+      p.codigo,
+    ]);
+    if (!item || !proc) throw new ErroSus('nao-encontrado', 'Item do hospital ou procedimento SIGTAP não encontrado.');
+    const vigentes = await this.vigentesDoItem(p.procedimento);
+    const antes = vigentes[0] ?? null;
+    // Trava otimista: havendo equivalência vigente, o pedido tem de trazer a versão lida (ausente ou diferente é
+    // recusa, como na memória); sem isso, um formulário aberto antes da primeira equivalência a substituiria em silêncio.
+    if (antes && antes.versao !== p.versao)
+      throw new ErroSus('equivalencia-alterada', 'A equivalência mudou desde a leitura.');
+    if (antes && antes.sigtap === p.sigtap && vigentes.length === 1)
+      return { antes: semNomes(antes), depois: semNomes(antes), mudou: false };
+    const hoje = hojeIso();
+    for (const v of vigentes) {
+      if (v.sigtap === p.sigtap) continue;
+      await this.tx.alterar('equivalencia_sigtap_item', v.id, v.versao, { vigencia_fim: hoje });
+    }
+    let id: number;
+    const atual = vigentes.find((v) => v.sigtap === p.sigtap);
+    if (atual) id = atual.id;
+    else {
+      // A mesma ligação fechada hoje volta a valer (a chave única é item, procedimento, instrumento e início).
+      const mesmoDia = await this.tx.uma(
+        `SELECT id, versao FROM equivalencia_sigtap_item
+          WHERE item_faturavel_id = ? AND procedimento_sigtap_id = ? AND instrumento = 'todos' AND vigencia_inicio = ?`,
+        [p.procedimento, p.sigtap, hoje],
+      );
+      if (mesmoDia) {
+        id = num(mesmoDia['id']);
+        await this.tx.alterar('equivalencia_sigtap_item', id, num(mesmoDia['versao']), { vigencia_fim: null });
+      } else
+        id = await this.tx.incluir('equivalencia_sigtap_item', {
+          item_faturavel_id: p.procedimento,
+          procedimento_sigtap_id: p.sigtap,
+          instrumento: 'todos',
+          vigencia_inicio: hoje,
+        });
+    }
+    const depois = await this.tx.uma(`${SQL_EQUIVALENCIA} AND q.id = ?`, [id]);
+    if (!depois) throw new ErroSus('nao-encontrado', 'Equivalência não encontrada.');
+    return { antes: antes ? semNomes(antes) : null, depois: semNomes(equivalenciaDaLinha(depois)), mudou: true };
+  }
+
+  async desativarEquivalencia(p: {
+    procedimento: number;
+    versao: number;
+    por: string;
+  }): Promise<{ antes: EquivalenciaSus; depois: EquivalenciaSus }> {
+    const vigentes = await this.vigentesDoItem(p.procedimento);
+    const antes = vigentes[0];
+    if (!antes) throw new ErroSus('nao-encontrado', 'O item não tem equivalência vigente.');
+    if (antes.versao !== p.versao) throw new ErroSus('equivalencia-alterada', 'A equivalência mudou desde a leitura.');
+    for (const v of vigentes) await this.tx.alterar('equivalencia_sigtap_item', v.id, v.versao, { vigencia_fim: hojeIso() });
+    const depois = await this.tx.uma(`${SQL_EQUIVALENCIA} AND q.id = ?`, [antes.id]);
+    if (!depois) throw new ErroSus('nao-encontrado', 'Equivalência não encontrada.');
+    return { antes: semNomes(antes), depois: semNomes(equivalenciaDaLinha(depois)) };
+  }
+
+  async trilha(linha: LinhaTrilhaSus): Promise<void> {
+    this.linhas.push(linha);
+  }
+
+  // ── AIH, faixa e retorno (pendentes de modelo) ──
+
+  inserirFaixaAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a faixa de AIH com o órgão emissor e a data de liberação'));
+  }
+
+  mudarFaixaAih(): Promise<never> {
+    return Promise.reject(modeloPendente('o motivo do cancelamento da faixa de AIH'));
+  }
+
+  inserirAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  }
+
+  autorizarAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  }
+
+  negarAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  }
+
+  reabrirAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  }
+
+  cancelarAih(): Promise<never> {
+    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  }
+
+  fecharAih(): Promise<never> {
+    return Promise.reject(modeloPendente('o fechamento da AIH com os itens'));
+  }
+
+  gravarArquivoSisaih(): Promise<never> {
+    return Promise.reject(modeloPendente('o arquivo da AIH'));
+  }
+
+  inserirRetornoSus(): Promise<never> {
+    return Promise.reject(modeloPendente('o retorno do gestor por linha'));
+  }
+
+  aplicarRetornoNaAih(): Promise<never> {
+    return Promise.reject(modeloPendente('o retorno do gestor por linha'));
+  }
+
+  tratarRetornoSus(): Promise<never> {
+    return Promise.reject(modeloPendente('o tratamento do retorno do gestor'));
+  }
+}
+
+/** A diferença da tela na trilha da operação: só ids, códigos, contagens e hash (o serviço já filtra). */
+function dadosDaTrilha(linhas: readonly LinhaTrilhaSus[]): unknown {
+  return {
+    eventos: linhas.map((l) => ({
+      evento: l.evento,
+      recurso: l.recurso,
+      operacao: l.operacao,
+      tabela: l.tabelaAlvo,
+      id: l.idAlvo,
+      ...(l.diferenca ? { diferenca: l.diferenca } : {}),
+      ...(l.estacao ? { estacao: l.estacao } : {}),
+    })),
+  };
+}
+
+export class PortaSusPropria implements PortaSus {
+  readonly destino = 'banco' as const;
+  private readonly executor: Executor;
+
+  constructor(
+    private readonly nucleo: NucleoSus,
+    private readonly cliente: string,
+    executorPronto?: Executor,
+  ) {
+    this.executor = executorPronto ?? nucleo.criarExecutor();
+  }
+
+  private contexto(c: ContextoSus, est: number | null): ContextoNucleo {
+    return {
+      cliente: this.cliente,
+      estabelecimento: est,
+      usuario: c.usuario ?? null,
+      correlacao: (c.correlacao || `sus-${c.hospital}`).slice(0, 64),
+    };
+  }
+
+  /** O estabelecimento da sessão (pelo id; sem ele, pelo código do hospital). Sem estabelecimento, nada é lido. */
+  private async estabelecimento(c: ContextoSus): Promise<number> {
+    if (c.estabelecimento) return c.estabelecimento;
+    const r = await this.nucleo.lerSomente(this.contexto(c, null), (l) =>
+      l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [c.hospital]),
+    );
+    if (r) return num(r['id']);
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  }
+
+  async ler<T>(c: ContextoSus, fn: (l: LeituraSus) => Promise<T>): Promise<T> {
+    const est = await this.estabelecimento(c);
+    return this.nucleo.lerSomente(this.contexto(c, est), (l) => fn(new LeituraSusPropria(l, est)));
+  }
+
+  async gravar<T>(c: ContextoSus, fn: (g: GravacaoSus) => Promise<T>): Promise<T> {
+    const est = await this.estabelecimento(c);
+    let saida: { valor: T } | null = null;
+    let linhas: readonly LinhaTrilhaSus[] = [];
+    let recusada: Error | null = null;
+    const op = definirOperacao({
+      nome: 'faturamento.sus.gravacao',
+      tabelas: [...TABELAS_SUS],
+      entrada: z.object({ chave: z.string() }),
+      async gravar(tx) {
+        const g = new GravacaoSusPropria(tx, est);
+        try {
+          saida = { valor: await fn(g) };
+        } catch (erro) {
+          // A recusa de negócio (da porta ou do serviço) volta como é; o resto o núcleo traduz.
+          if (erro instanceof ErroSus || erro instanceof ErroAih || erro instanceof ErroProblema) recusada = erro;
+          throw erro;
+        }
+        linhas = g.linhas;
+        return {} as ResultadoOperacao;
+      },
+      alvo: () => {
+        const l = linhas[linhas.length - 1];
+        const id = l?.idAlvo && /^\d{1,15}$/.test(l.idAlvo) ? Number(l.idAlvo) : null;
+        return { tabela: l?.tabelaAlvo ?? 'competencia_sus', id };
+      },
+      trilha: () => ({ dados: dadosDaTrilha(linhas) }),
+    });
+    // Cada pedido é uma execução nova (a trilha e o outbox são desta execução); a tela confere a versão vista.
+    const chave = `sus:${randomUUID()}`;
+    const ctx: ContextoOperacao = { ...this.contexto(c, est), chaveIdempotencia: chave };
+    try {
+      await this.executor.executar(op, this.cliente, { chave }, ctx);
+    } catch (erro) {
+      if (recusada) throw recusada;
+      throw erro;
+    }
+    if (!saida) throw new Error('Gravação do faturamento SUS sem resultado.');
+    return (saida as { valor: T }).valor;
+  }
+}

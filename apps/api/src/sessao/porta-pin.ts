@@ -1,7 +1,6 @@
 // W1-01 (parte 11b2): a PORTA do PIN da troca rápida. Tipos neutros e as portas sem banco: memória (dev/ci, com as
 // mesmas regras: uma linha viva por usuário, encerrada sem o hash) e indisponível. A gravação sobre o banco do cliente
-// entra com o módulo da troca rápida (F2.2); a versão sobre o banco de origem ficou em porta-pin-legado.ts, fora do
-// boot. Só o hash Argon2id (PHC, feito pelo servidor) passa por aqui; o PIN em claro nunca.
+// (tabela pin_troca_rapida) é a PortaPinPropria, em porta-pin-propria.ts. Só o hash Argon2id (PHC, feito pelo servidor) passa por aqui; o PIN em claro nunca.
 import { recusa } from '@sgh/nucleo';
 
 /** Linha da trilha de um evento do PIN (quem, onde, o quê), sem a tabela-alvo nem a diferença. */
@@ -60,7 +59,7 @@ export interface ConferenciaPin {
 }
 
 export interface PortaPin {
-  /** banco: gravação no banco (a do cliente, na F2.2; a de origem, em porta-pin-legado.ts). */
+  /** banco: gravação no banco do cliente (porta-pin-propria.ts). */
   readonly destino: 'banco' | 'memoria' | 'indisponivel';
   situacao(rede: string, hospital: string, login: string): Promise<SituacaoPinLida>;
   /** O vivo COM o hash: só para a conferência no servidor. */
