@@ -1,6 +1,6 @@
 """Fatia L7-08 (SADT e suprimentos, módulo SUP): declarações, plano e imagem sintética. Sem banco; só valores
-inventados. Rodada 3 de cobertura: 22 tabelas declaradas, GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA descartadas e GEANTIMI
-bloqueada pelo modelo (pedido 6 em saida/L7-08.json). A conciliação na imagem SINTÉTICA roda em
+inventados. Rodada 3 de cobertura: 23 tabelas declaradas (GEANTIMI incluída), GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA
+descartadas. A conciliação na imagem SINTÉTICA roda em
 `conector.sh conferir-fatia L7-08`."""
 import random
 import unittest
@@ -166,9 +166,15 @@ class FatiaL708(unittest.TestCase):
         # entrega ao setor acha o setor pelo código do local de consumo do documento
         self.assertIn("cod:setor_funcional.codigo",
                       self._d("GECTRLENTREGADOCSAIDA", "ID_GECADSAI", "entrega_setor.setor_funcional_id")[0]["via"])
-        # bloqueada só a que espera o modelo; nenhuma declaração dela
-        self.assertEqual(l7_08.BLOQUEADAS, ("GEANTIMI",))
-        self.assertFalse(self._d("GEANTIMI", "ID_GEANTIMI"))
+        # nenhuma bloqueada; a liberação aponta a ficha de GECADANTIMI e a liberação anterior (autorreferência)
+        self.assertEqual(l7_08.BLOQUEADAS, ())
+        lib = "liberacao_antimicrobiano."
+        self.assertEqual(self._d("GEANTIMI", "ID_GECADANTIMI", lib + "ficha_antimicrobiano_id")[0]["via"],
+                         "ref:GECADANTIMI")
+        self.assertEqual(self._d("GEANTIMI", "ID_GEANTIMI_ORIGEM_TRAT",
+                                 lib + "anterior_liberacao_antimicrobiano_id")[0]["via"], "ref:GEANTIMI")
+        self.assertEqual(self._d("GEANTIMI", "DATA_INT", lib + "decisao")[0]["regra"], "preenchido")
+        self.assertTrue(self._d("GEANTIMI", "#retrato:*", lib + "dados"))
 
 
 if __name__ == "__main__":

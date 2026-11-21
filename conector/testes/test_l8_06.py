@@ -10,8 +10,8 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_06
 
 TABELAS = set(l8_06.CARREGADAS)
-# rodada 3 (revisão): nenhum descarte; duas bloqueadas por pedido (modelo e filtro de licença), declaração comentada
-BLOQUEADAS = {"FCLANEXTSEQITEM", "TBHISTBR"}
+# rodada 3: nenhum descarte e nenhuma bloqueada (FCLANEXTSEQITEM e TBHISTBR carregam como trilha)
+BLOQUEADAS = set()
 DESCARTES = {}
 C = "credencial_fonte_pagadora"
 E = "endpoint_tiss_fonte_pagadora"
@@ -144,6 +144,10 @@ class Plano(unittest.TestCase):
                          ["FCLANEXT", "ATO", "TBGRAUPARTPROC"])
         self.assertEqual(self.plano["FCLANAUD"]["destinos"], ["trilha_auditoria"])
         self.assertEqual(self.cols("FCLANAUD", "trilha_auditoria")["dados_antes"]["coluna"], "#retrato:*")
+        for t, ent in (("FCLANEXTSEQITEM", "=conta_hospitalar_item"), ("TBHISTBR", "=tabela_preco")):
+            self.assertEqual(self.plano[t]["destinos"], ["trilha_auditoria"], t)
+            self.assertEqual(self.cols(t, "trilha_auditoria")["entidade"]["coluna"], ent, t)
+            self.assertEqual(self.cols(t, "trilha_auditoria")["dados_depois"]["coluna"], "#retrato:*", t)
         for t in ("REPROEXT", "RIPROEXT"):
             self.assertEqual(self.cols(t, "conta_hospitalar_item")["tecnica_termo_terminologia_id"]["depara"], "tiss:48")
 

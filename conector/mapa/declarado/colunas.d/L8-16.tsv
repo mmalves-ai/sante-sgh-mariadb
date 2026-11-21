@@ -32,15 +32,20 @@ TBMEDSOLWEBCAD	ID_TBCBOPRO		inteiro			L8-16: não aproveitada: aponta a inscriç
 #SITBELHP	COD	elemento_exame_laboratorio_apoio.codigo_elemento_externo	texto			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: código do elemento no apoio; repetido no mesmo exame choca na chave única (1062)
 #SITBELHP	ELEMENTO_NOME	elemento_exame_laboratorio_apoio.nome_elemento_externo	texto_nome			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: nome do elemento no apoio; o analito próprio fica nulo, a conferir na tela
 #SITBELHP	ID_SIMATHP	elemento_exame_laboratorio_apoio.material_laboratorio_apoio_id			ref:SIMATHP	L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: material do apoio (opcional); pai ausente: pai_inexistente e o elemento entra sem ele
-#TBREGUL_TABELAS	@presumido:TBREGUL_SISTEMA/sistema_externo	tabela_codigo_regulacao.sistema_externo_id				L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): central presumida com valor_presumido por linha, para o cliente conferir
-#TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.codigo	texto			L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): nome da tabela na central
-#TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.codigo	texto_resumo:50			L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): sem nome de referência, a descrição (concorrente) vira o código
-#TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): descrição
-#TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): sem descrição, o nome de referência (concorrente)
-#TBREGUL_TABELAS	ATIVO	tabela_codigo_regulacao.ativo	booleano_sn			L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona): S/N; nulo fica no padrão
-#TBREGUL_TABELAS	=migracao	tabela_codigo_regulacao.origem				L8-16 (rodada 3): declaração pronta; entra com o especial @presumido pedido em saida/L8-16.json (a origem não aponta a central dona)
-#TBREGUL_VLR_TABELAS	ID_TBREGUL_TABELAS	valor_codigo_regulacao.tabela_codigo_regulacao_id			ref:TBREGUL_TABELAS	L8-16 (rodada 3): declaração pronta; carrega quando TBREGUL_TABELAS carregar: pai ausente: pai_inexistente e recusa (1048)
-#TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.valor_externo	texto			L8-16 (rodada 3): declaração pronta; carrega quando TBREGUL_TABELAS carregar: código exigido pela central; vazio recusa (1048); repetido na tabela choca (1062)
-#TBREGUL_VLR_TABELAS	DESCRICAO	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): declaração pronta; carrega quando TBREGUL_TABELAS carregar: descrição
-#TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): declaração pronta; carrega quando TBREGUL_TABELAS carregar: sem descrição, o próprio valor (concorrente); registro e código internos ficam nulos para o cliente ligar na tela
-#TBREGUL_VLR_TABELAS	=migracao	valor_codigo_regulacao.origem				L8-16 (rodada 3): declaração pronta; carrega quando TBREGUL_TABELAS carregar
+TBREGUL_TABELAS	=~regulacao_a_conferir	sistema_externo.codigo			antes;adotar:codigo	L8-16 (rodada 3): central a conferir: a origem não aponta a central dona (há mais de uma): as tabelas entram sob a central 'a conferir' (inativa, criada uma vez e adotada nas linhas seguintes), com valor_presumido por linha, e o cliente as move para a central certa no painel (decisão em F4-decisoes-destino.md)
+TBREGUL_TABELAS	=Central de regulação a conferir	sistema_externo.nome				L8-16 (rodada 3): nome da central a conferir
+TBREGUL_TABELAS	=regulacao	sistema_externo.categoria				L8-16 (rodada 3): categoria da central
+TBREGUL_TABELAS	=Tabelas de códigos da regulação sem central indicada na origem	sistema_externo.finalidade				L8-16 (rodada 3): finalidade da central a conferir
+TBREGUL_TABELAS	=0	sistema_externo.ativo				L8-16 (rodada 3): a central a conferir entra INATIVA: nenhuma integração usa as tabelas até o cliente movê-las
+TBREGUL_TABELAS	@id:sistema_externo	tabela_codigo_regulacao.sistema_externo_id				L8-16 (rodada 3): a central da tabela é a central a conferir (secundário gravado antes)
+TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.codigo	texto			L8-16 (rodada 3): nome da tabela na central; repetido na mesma central choca na chave única (1062)
+TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.codigo	texto_resumo:50			L8-16 (rodada 3): sem nome de referência, a descrição resumida (concorrente) vira o código; sem as duas recusa (1048)
+TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
+TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o nome de referência (concorrente)
+TBREGUL_TABELAS	ATIVO	tabela_codigo_regulacao.ativo	booleano_sn			L8-16 (rodada 3): S/N; nulo fica no padrão (ativa)
+TBREGUL_TABELAS	=migracao	tabela_codigo_regulacao.origem				L8-16 (rodada 3): origem da linha
+TBREGUL_VLR_TABELAS	ID_TBREGUL_TABELAS	valor_codigo_regulacao.tabela_codigo_regulacao_id			ref:TBREGUL_TABELAS	L8-16 (rodada 3): tabela da central; pai recusado: pai_pendente; inexistente: pai_inexistente e recusa (1048)
+TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.valor_externo	texto			L8-16 (rodada 3): código exigido pela central; vazio recusa (1048); repetido na tabela choca (1062)
+TBREGUL_VLR_TABELAS	DESCRICAO	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
+TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o próprio valor (concorrente); registro e código internos ficam nulos para o cliente ligar na tela
+TBREGUL_VLR_TABELAS	=migracao	valor_codigo_regulacao.origem				L8-16 (rodada 3): origem da linha

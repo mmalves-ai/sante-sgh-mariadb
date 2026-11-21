@@ -62,7 +62,8 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "SIRES01_DELETE depende de SILANEXA",
    "motivo": "a trilha de exclusão passa a apontar o exame por id (entidade exame_item); hoje a chave do exame vai em correlacao porque a exclusão carrega antes",
-   "gravidade": "baixa"
+   "gravidade": "baixa",
+   "atendido": "retirado na rodada 3 (fechamento): SIRES01_DELETE não tem mais referência a SILANEXA (o exame vai como número em trilha_auditoria.correlacao e a entidade é resultado_exame, com entidade_id nulo); sem referência não há ordem a impor, e a aresta só mudaria a ordem do plano (test_carregadas_em_ordem_e_descartes_fora). Decisão em F4-decisoes-destino.md"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -104,7 +105,8 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L7-03.tsv (fatia L7-03) + sem_carga.tsv",
    "mudanca": "carregar SIVARFORMULA em variavel_formula (as linhas #/declaradas da rodada 3 já existem lá) e tirar o descarte sem_valor de sem_carga.tsv",
    "motivo": "SIRESVAR (147.628 valores informados das variáveis, ENTRADAS do cálculo do laudo) está declarada e provada na imagem sintética, mas fica BLOQUEADA (pai_nao_carregado:SIVARFORMULA) enquanto a variável não carrega",
-   "gravidade": "alta"
+   "gravidade": "alta",
+   "atendido_parcial": "rodada 3: SIVARFORMULA já declarada na L7-03, mas BLOQUEADA por pai_nao_carregado:SIFORMUL (descarte mecanismo_do_produto da L7-01/L7-02); ver o pedido seguinte"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-03.tsv (fatia L7-03, pedido 15 de lá)",
@@ -141,6 +143,18 @@
    "mudanca": "conciliação do #retrato:* confere ao menos uma chave do conteúdo no JSON gravado (ex.: NUMERICO no dados_antes da exclusão)",
    "motivo": "hoje a conciliação conta as linhas e a soma do texto JSON; uma chave obrigatória no JSON prova que o conteúdo, e não só o id, chegou ao histórico",
    "gravidade": "baixa"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-01.tsv ou L7-02.tsv + sem_carga.tsv (fatia dona de SIFORMUL)",
+   "mudanca": "carregar SIFORMUL em formula_calculo (declaração pronta e comentada na L7-02) e tirar o descarte mecanismo_do_produto: a cadeia SIFORMUL -> SIVARFORMULA (L7-03) -> SIRESVAR (L7-04) está toda declarada e só espera a fórmula",
+   "motivo": "SIRESVAR (valores informados das variáveis, entrada do cálculo do analito) é dado clínico do laudo e fica BLOQUEADA (pai_nao_carregado:SIVARFORMULA) enquanto a fórmula não carregar; não há outro destino correto para o valor sem a variável",
+   "gravidade": "alta"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv e L6-12.tsv (fatias donas de PRASSINATURA_CAB e PRASSINATURA_DOC)",
+   "mudanca": "carregar documento_prontuario (PRASSINATURA_CAB) pela alternativa já disponível (PRASSINATURA_DOC grava o documento como secundário antes, agrupado pelo cabeçalho) ou pelo M3 (primeiro filho); reforça o pedido 14",
+   "motivo": "PREXAMEASSINATURA (exame_item_assinatura.documento_prontuario_id NOT NULL) fica BLOQUEADA por pai_nao_carregado:PRASSINATURA_CAB; a declaração da L7-04 está pronta e a imagem sintética já prova os 4 vínculos na ordem certa",
+   "gravidade": "alta"
   }
  ]
 }

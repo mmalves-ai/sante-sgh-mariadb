@@ -31,9 +31,9 @@ class FatiaL512(unittest.TestCase):
     def test_plano_em_ordem_com_destino_principal(self):
         p = [x for x in carga_mapa.planejar(self.m, set(FATIA) | {"TBEMPHOS"}) if x["tabela"] in FATIA]
         self.assertEqual([x["tabela"] for x in p], [
-            "FPEVENTO", "FPLOTTRIBCAD", "FPREMESSA", "FPRESP", "FPRUBRICAFGTS_FPEVENTO",
-            "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO", "FPTPEVENTOAUT_TBEMPHOS",
-            "PEJUSTIF", "TBTPTRIBUTO", "FPPARAM", "FPPARAMVIG"])
+            "FPEVENTO", "FPLOTTRIBCAD", "FPREMESSA", "FPRESP", "FPTPEVENTOAUT_TBEMPHOS", "PEJUSTIF", "TBTPTRIBUTO",
+            "FPRUBRICAFGTS_FPEVENTO", "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO",
+            "FPPARAM", "FPPARAMVIG"])  # o tributo da incidência (cod: em tributo_folha) é gravado antes (pedido 15)
         pl = {x["tabela"]: x for x in p}
         self.assertNotIn("TBTABIRR", pl)  # tabela legal pública: descarte (catálogo oficial), com motivo declarado
         self.assertTrue(any(d["tabela"] == "TBTABIRR" and not d["destino"] and "DESCARTE" in d["motivo"]
@@ -101,7 +101,10 @@ class FatiaL512(unittest.TestCase):
         self.assertEqual(inc["FPRUBRICAFGTS_FPEVENTO"]["tributo_folha_id"]["coluna"], "=fundo_garantia")
         self.assertEqual(inc["FPRUBRICAIRRF_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "tipo"))
         self.assertEqual(inc["FPRUBRICAINSS_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "codigo"))
-        self.assertNotIn("tributo_folha_id", inc["FPRUBRICASIND_FPEVENTO"])  # sindical: tributo criado (pedido 15)
+        # sindical: o tributo do tipo, procurado no destino (a origem não o tem; criação pelo conector: pedido 17)
+        self.assertEqual((inc["FPRUBRICASIND_FPEVENTO"]["tributo_folha_id"]["coluna"],
+                          inc["FPRUBRICASIND_FPEVENTO"]["tributo_folha_id"]["cod"]),
+                         ("=contribuicao_sindical", ("tributo_folha", "tipo")))
 
     def test_regras_de_valor(self):
         self.assertEqual(sentinela.aplicar("flutuante", 1904.98)[0], decimal.Decimal("1904.98"))

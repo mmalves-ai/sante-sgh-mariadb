@@ -6,11 +6,12 @@ ações do alerta de alergia (presumido o mais restritivo) e a gravidade de cada
 gravidade lido na origem); alergenos; formas de validar interação; bloco de internação da grade de horário (complemento
 da grade); variáveis do cálculo de dose; unidades de medida (dois destinos: unidade de prescrição e de resultado);
 variáveis de escala clínica e as respostas pontuadas (opções e faixas); unidades por tipo de validação de dose e por
-tipo de item da prescrição (as duas últimas com carga PARCIAL: a unidade casa pela sigla de integração). O bloco
+tipo de item da prescrição (a primeira com carga PARCIAL: a unidade casa pela sigla de integração; a segunda adota
+ou cria a unidade de prescrição pelo código da unidade de estoque, como a L6-11); as seções do sumário de alta (uma
+linha da origem em até 4 seções, pelo desdobrar no principal; recorte e modelo por seção pedem referência no item). O bloco
 da grade grava uma CÓPIA da grade por bloco (dois blocos na mesma grade: duas cópias, nenhuma sobrescrita).
-Bloqueadas (2): o banco global de perguntas (o campo do modelo, PRPADEVOL da L6-11, ainda não lê tipo, unidade,
-texto padrão e situação da pergunta) e o parâmetro do sumário de alta (desdobrar em 4 componentes pede referência no
-item); entram na imagem para provar que não geram carga. As opções de resposta (PRRESPOSTA) passaram à L6-11.
+Descartada (1): o banco global de perguntas (duplicado: o campo do modelo, PRPADEVOL da L6-11, lê título, tipo,
+unidade, texto padrão e situação da pergunta pela encadeada); entra na imagem para provar que não gera carga. As opções de resposta (PRRESPOSTA) passaram à L6-11.
 REQUER a L6-08: a gravidade (TBCBARASEVERIDADE) é lida na origem pela referência encadeada, e a categoria do
 tipo de alergia (TBCLASSIFALERGIA) vem carregada dela; tipo de alergia e alergeno dividem cadastro com a L6-08
 (códigos com prefixo de domínio).
@@ -95,15 +96,24 @@ def _id_externo(tabela, chave):
 PREPARO_DESTINO = "".join(
     "INSERT INTO grade_horario_unidade (id, estabelecimento_id, tipo_atendimento, hora_inicio_dia, criado_em)"
     " VALUES (%d, 1, 'internacao', '07:00:00', UTC_TIMESTAMP(3));\n" % _id_externo("TBHORMED", k)
-    for k in PAIS_EXTERNOS["TBHORMED"])
+    for k in PAIS_EXTERNOS["TBHORMED"]) + "".join(
+    # a unidade de medida que TBUNICON (L7-07) gravou: PRUNITPLAN copia a descrição dela (ref:TBUNICON@descricao);
+    # forma mínima (a tabela é de outro módulo e não vem com o destino da fatia)
+    ["CREATE TABLE IF NOT EXISTS unidade_medida (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+     " codigo VARCHAR(30) NOT NULL UNIQUE, descricao VARCHAR(150) NOT NULL, sigla VARCHAR(10) NOT NULL,"
+     " criado_em DATETIME(3) NOT NULL);\n"] + [
+    "INSERT IGNORE INTO unidade_medida (id, codigo, descricao, sigla, criado_em)"
+    " VALUES (%d, '%s', 'Unidade externa %s', '%s', UTC_TIMESTAMP(3));\n" % (_id_externo("TBUNICON", k), k, k, k)
+    for k in PAIS_EXTERNOS["TBUNICON"]])
 
 CARREGADAS = ("TBTABENC", "TBTPALERGIA", "TBTPAUTORIDADE", "TBTPINTMED", "TBTPNOTAGRAVO", "TBTPNOTIFCID10",
               "TBTPNOTIFICACAOALERGIA", "TBALERGIA", "TBTPPARTO", "TBTPRN", "TBTPVALIDINTERACAO", "TBUNIDADEMEDIDA",
               "PRINDICEVARIAVEL", "PRGLASGOW", "PRINDICEPONTUACAO", "TBCBARANOTIFICACAO",
-              "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN", "TBTPSITUACAOMP")
-DESCARTADAS = ()
-# bloqueadas com causa em sem_carga.tsv (rodada 3); PRRESPOSTA passou à L6-11 (carrega lá)
-BLOQUEADAS = ("PRPERGUNTA", "PRPARAMSUMARIOALTA")
+              "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN", "TBTPSITUACAOMP",
+              "PRPARAMSUMARIOALTA")
+# descarte duplicado em sem_carga.tsv (rodada 3); PRRESPOSTA passou à L6-11 (carrega lá)
+DESCARTADAS = ("PRPERGUNTA",)
+BLOQUEADAS = ()
 
 D = decimal.Decimal
 
@@ -168,14 +178,17 @@ def linhas(r, ins):
         (4, 4, D("3"), D("131"), D("999")), (5, 5, D("0"), D("36"), D("38")), (6, 5, D("1.5"), D("38.1"), D("39")),
         (7, 5, None, D("39.1"), D("42")), (8, 5, D("1"), D("40"), D("35")), (9, 7, D("1"), D("1"), D("2")),
         (10, 99, D("1"), D("1"), D("2"))])
-    # perguntas (bloqueada até a PRPADEVOL da L6-11 ler tipo, unidade, texto e situação): não geram carga aqui
+    # perguntas (descarte duplicado: entram como campo de cada modelo pela PRPADEVOL da L6-11): não geram carga aqui
     varias("PRPERGUNTA", [(i, 100 + i, 1, "Pergunta exemplo %d" % i, "TX", None,
                            ("texto da pergunta %d" % i).encode("cp1252"), "S", 0, 20, 200, None) for i in range(1, 4)])
-    # parâmetro do sumário de alta (bloqueada: desdobrar com referência no item): prova que não gera carga
-    varias("PRPARAMSUMARIOALTA", [(1, 1, 1, 2, 1, None)])
+    # seções do sumário de alta (ID, tipo de atendimento, período de procedimentos, de exames, pergunta da evolução,
+    # do plano): 1 internação, 3 seções; 2 ambulatório, 3 seções (sem evolução); 3 tipo 4 'nenhum' (fora do domínio:
+    # fica 'todos') e período 3 'últimas 48 h' (fora do domínio: NULL), exames com período 0 (a seção existe), 2 seções
+    varias("PRPARAMSUMARIOALTA", [(1, 2, 1, 2, 7, None), (2, 1, 2, 2, None, 8), (3, 4, 3, 0, None, None)])
     # unidades por validação: 3 sigla sem unidade de medida; 4 validação inexistente; 6 par repetido (único)
     varias("TBUNIDMEDIDA_PRINC_VALID", [(1, 1, 1), (2, 1, 2), (3, 2, 4), (4, 9, 1), (5, 2, 1), (6, 1, 1)])
-    # unidades por tipo de item: X é a sigla da unidade recusada (pai_pendente); tipo 9 e sigla ZZ inexistentes
+    # unidades por tipo de item (unidade de prescrição adotada ou criada pelo código de TBUNICON): MG criada e adotada
+    # na 4a linha; X e ZZ códigos sem unidade de estoque (descrição NOT NULL: recusa); tipo 9 inexistente (recusa)
     varias("PRUNITPLAN", [("1", "MG"), ("2", "ML"), ("1", "X"), ("9", "MG"), ("2", "ZZ")])
     return {
         "TBTABENC": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
@@ -206,8 +219,9 @@ def linhas(r, ins):
         "PRPARVARCAD": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
         "TBUNIDMEDIDA_PRINC_VALID": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2,
                                                                    "restricao_destino_1062": 1}},
-        "PRUNITPLAN": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
-                                                     "restricao_destino_1048": 2}},
+        "PRUNITPLAN": {"gravados": 2, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 3}},
+        # 8 seções (itens) de 3 linhas; tipo 4 e período 3 sem par no domínio
+        "PRPARAMSUMARIOALTA": {"gravados": 8, "pendencias": {"valor_fora_do_dominio": 2}},
         "PRINDICEPONTUACAO": {"gravados": 7, "pendencias": {"valor_presumido": 9, "restricao_destino_4025": 1, "pai_pendente": 1,
                                                             "pai_inexistente": 1, "restricao_destino_1048": 1}},
     }

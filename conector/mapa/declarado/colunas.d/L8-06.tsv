@@ -243,13 +243,17 @@ FCLANAUD	#retrato:*	trilha_auditoria.dados_antes			trilha_auditoria	L8-06: retra
 #FCCTAEXT	DATA_FEC	conta_hospitalar.fechada_em	data_hora			L8-06
 #FCCTAEXT	OBS	conta_hospitalar.observacao	texto_longo			L8-06
 #FCCTAAUD	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_auditoria, NOT NULL) e conta pelos campos de negócio (ANOPRO, MESPRO, TIPO_CTA, COD: colunas que não são a chave do pai); a conta (FCCTAEXT) também espera
-#--- FCLANEXTSEQITEM: BLOQUEADA por pedido de modelo (pedido 20 do saida/L8-06.json): declaração pronta, comentada
-#FCLANEXTSEQITEM	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: COMPLEMENTA o item da conta (FCLANEXT); item recusado: pai_pendente; nunca visto: pai_inexistente
-#FCLANEXTSEQITEM	SEQUENCIAL_ITEM	conta_hospitalar_item.sequencial_item_guia	inteiro			L8-06: sequencial do item na guia TISS enviada (o sequencialItem do demonstrativo de análise e do recurso de glosa); a coluna é o pedido 20
-#--- TBHISTBR: BLOQUEADA até o filtro de linha por licença (pedido 2 do saida/L8-03.json, o mesmo de TBMATMED e TBREFUNI): declaração pronta, comentada
-#TBHISTBR	DATA	trilha_auditoria.ocorrido_em	data			L8-06: histórico do vínculo do item de mat/med do hospital ao código de referência: data da troca
-#TBHISTBR	=alteracao	trilha_auditoria.acao				L8-06: cada linha é uma troca do vínculo
-#TBHISTBR	=item_referencia_matmed	trilha_auditoria.entidade				L8-06: entidade: o item de mat/med (principal de TBMATMED, L8-03)
-#TBHISTBR	ID_TBMATMED	trilha_auditoria.entidade_id			ref:TBMATMED;so_se:TBMATMED>ID_TBCTRMEM>TBCTRMEM>REF_BRA=N|licenca:brasindice	L8-06: item do hospital; a linha de item de tabela de referência comercial só entra com a licença do cliente (sem ela: pulada com licenca_nao_comprovada)
-#TBHISTBR	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS	L8-06: quem trocou o vínculo, pelo login
-#TBHISTBR	#retrato:*	trilha_auditoria.dados_depois				L8-06: retrato da linha (tabela, código, tipo de referência e código de referência, sem preço)
+FCLANEXTSEQITEM	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L8-06 r3: sequencial do item na guia TISS como trilha do item da conta, até a coluna conta_hospitalar_item.sequencial_item_guia (pedido de modelo 20); o único estabelecimento do cliente
+FCLANEXTSEQITEM	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-06 r3: a origem não data o sequencial: data da carga (a data de faturamento do item fica no retrato da trilha do recurso de FCLANEXT)
+FCLANEXTSEQITEM	=operacao	trilha_auditoria.acao			trilha_auditoria	L8-06 r3: numeração do item na guia enviada à fonte pagadora
+FCLANEXTSEQITEM	=conta_hospitalar_item	trilha_auditoria.entidade			trilha_auditoria	L8-06 r3: entidade: o item da conta
+FCLANEXTSEQITEM	ID_FCLANEXT	trilha_auditoria.entidade_id	chave_origem		ref:FCLANEXT;trilha_auditoria	L8-06 r3: o item da conta (FCLANEXT, mesma fatia); item recusado: pai_pendente recusa, visível; nunca visto: NULL com pai_inexistente
+FCLANEXTSEQITEM	=sequencial_item_guia	trilha_auditoria.motivo			trilha_auditoria	L8-06 r3: rótulo que separa esta trilha da do recurso de glosa do mesmo item
+FCLANEXTSEQITEM	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L8-06 r3: retrato JSON da linha (item, autorização TISS da origem e SEQUENCIAL_ITEM): o sequencialItem que casa o demonstrativo de análise e o recurso de glosa não se perde
+TBHISTBR	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L8-06 r3: histórico do vínculo do item de mat/med a um código de referência, como trilha da tabela de mat/med do hospital; o único estabelecimento do cliente
+TBHISTBR	DATA	trilha_auditoria.ocorrido_em	data		trilha_auditoria	L8-06 r3: data da troca do vínculo
+TBHISTBR	=alteracao	trilha_auditoria.acao			trilha_auditoria	L8-06 r3: cada linha é uma troca do vínculo
+TBHISTBR	=tabela_preco	trilha_auditoria.entidade			trilha_auditoria	L8-06 r3: entidade: a tabela de mat/med (TBCTRMEM, L8-03, principal tabela_preco); o item (TBMATMED) segue bloqueado pelo filtro de licença (pedido 2 da L8-03): o código do item fica no retrato
+TBHISTBR	TAB	trilha_auditoria.entidade_id			ref:TBCTRMEM;trilha_auditoria	L8-06 r3: tabela de mat/med do item; nunca vista: NULL com pai_inexistente, visível
+TBHISTBR	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L8-06 r3: quem trocou o vínculo, pelo login; desconhecido: pai_inexistente
+TBHISTBR	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L8-06 r3: retrato da linha (tabela, código do item, tipo de referência e código de referência, usuário): só identificadores, sem preço, nome nem conteúdo da publicação

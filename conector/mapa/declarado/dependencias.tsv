@@ -160,3 +160,17 @@ TBINDICE	TBCONVEN	L8-03 r3 (conferidor): referência declarada na fatia sem FK n
 FCCTAAUD	FCCTAEXT	L8-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
 FCRECIBO	FCCTAEXT	L8-09 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
 MFADIFOR	TBPROFIS	L8-11 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+REAGECRI	REAGENDA	L6-03 r3: referência declarada na fatia sem FK na origem (chave alternativa NOME+CRM da agenda ou profissional pela inscrição): o pai vinha depois do filho na ordem de carga
+RECTRAGE	REAGENDA	L6-03 r3: referência declarada na fatia sem FK na origem (chave alternativa NOME+CRM da agenda ou profissional pela inscrição): o pai vinha depois do filho na ordem de carga
+REAGENDA	TBPROFIS	L6-03 r3: referência declarada na fatia sem FK na origem (chave alternativa NOME+CRM da agenda ou profissional pela inscrição): o pai vinha depois do filho na ordem de carga
+SICTRAGE	SIAGENDA	L6-03 r3: referência declarada na fatia sem FK na origem (chave alternativa NOME+CRM da agenda ou profissional pela inscrição): o pai vinha depois do filho na ordem de carga
+FPRUBRICAFGTS_FPEVENTO	TBTPTRIBUTO	L5-12: o tributo da incidência é achado por cod: em tributo_folha, que TBTPTRIBUTO grava (pedido 15)
+FPRUBRICAINSS_FPEVENTO	TBTPTRIBUTO	L5-12: o tributo da incidência é achado por cod: em tributo_folha, que TBTPTRIBUTO grava (pedido 15)
+FPRUBRICAIRRF_FPEVENTO	TBTPTRIBUTO	L5-12: o tributo da incidência é achado por cod: em tributo_folha, que TBTPTRIBUTO grava (pedido 15)
+FPRUBRICASIND_FPEVENTO	TBTPTRIBUTO	L5-12: o tributo da incidência é achado por cod: em tributo_folha, que TBTPTRIBUTO grava (pedido 15)
+TBNIVEL	TBNIVSUS	L8-08 r3 (conferidor): as duas versões da lista de níveis carregam em dominio_sus lista nivel_atencao com adotar:lista,codigo; a versão com id (TBNIVSUS) carrega antes e cria os códigos comuns com a descrição dela, a antiga sem id adota (adotado_existente) e cria só o código que só ela tem
+TBITEDES	TBSUBDES	L8-12 r3 (conferidor, pedido 24): natureza_financeira lê o subgrupo por ref:TBSUBDES(GRUPO,SUBGRUPO) (NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBITEDES	TBCENCUS	L8-12 r3 (conferidor, pedido 24): centro de custo sugerido da natureza por ref:TBCENCUS sem FK na origem: o pai vinha depois do filho
+TBITEDES	TBGRUDES	L8-12 r3 (conferidor, pedido 24): tipo da natureza pela classificação do grupo (ref:TBGRUDES>CLASSIF); o grupo carrega antes do item, como no plano gerencial
+MFLANCTO	TBITEDES	L8-12 r3 (pedido 24): movimento_bancario.natureza_financeira_id por ref:TBITEDES(GRUPO,SUBGRUPO,ITEM) (L8-11) sem FK na origem: com a natureza depois do subgrupo, o movimento tem de vir depois dela
+MFCONPAG	TBITEDES	L8-12 r3 (pedido 20): titulo_pagar.natureza_financeira_id pela natureza do maior rateio (encadeada até TBITEDES); a natureza vem antes do título

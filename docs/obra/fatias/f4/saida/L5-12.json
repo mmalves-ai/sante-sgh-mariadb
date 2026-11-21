@@ -82,19 +82,27 @@
    "n": "14",
    "arquivo": "conector/sante_conector/carga_mapa.py (cod:)",
    "mudanca": "cod: com chave composta e literal: 'cod:<tabela>.(<c1>,<c2>)=(<v1>,<v2>)', cada v sendo =literal ou o valor da coluna (depois da regra/de-para e da referência encadeada); ausente: codigo_inexistente_destino; repetido: pai_ambiguo. Ex.: FPRUBRICAFGTS_FPEVENTO.ID_FPRUBRICAFGTS via 'ref:FPRUBRICAFGTS>COD_FPRUBRICAFGTS;cod:codigo_incidencia_rubrica.(tributo,codigo_incidencia)=(=fgts,valor)' (idem inss, irrf, contribuicao_sindical)",
-   "motivo": "incidencia_rubrica.codigo_incidencia_rubrica_id (NOT NULL): o catálogo oficial é único só por (tributo, codigo_incidencia) e o mesmo código existe nos 4 tributos; sem isso as 4 incidências (79 linhas na imagem de referência) ficam BLOQUEADAS. A imagem sintética precisa das tabelas FPRUBRICAFGTS/INSS/IRRF/SIND (ID, NOME, COD_*) e o PREPARO do catálogo"
+   "motivo": "incidencia_rubrica.codigo_incidencia_rubrica_id (NOT NULL): o catálogo oficial é único só por (tributo, codigo_incidencia) e o mesmo código existe nos 4 tributos; sem isso as 4 incidências (79 linhas na imagem de referência) ficam BLOQUEADAS. A imagem sintética precisa das tabelas FPRUBRICAFGTS/INSS/IRRF/SIND (ID, NOME, COD_*) e o PREPARO do catálogo",
+   "alternativa_menor": "de-para oficial com parâmetro em conector/sante_conector/depara.py, CATALOGOS_PARAMETRO (mesmo molde de codigo_fiscal): \"codigo_incidencia_rubrica\": dict(tabela=\"codigo_incidencia_rubrica\", coluna=\"codigo_incidencia\", normalizar=norm_esocial, chave=norm_esocial, pai=None, filtro=\"tributo = '{p}' ORDER BY vigencia_fim IS NULL DESC, vigencia_inicio DESC\", descricao=\"código de incidência da rubrica do eSocial pelo tributo (inss, irrf, fgts, contribuicao_sindical) e pelo código; zeros à esquerda não contam; o vigente vence\") (conferir se o verificador exige `pai`). Com ele a fatia declara, como o cfop: ID_FPRUBRICAFGTS -> incidencia_rubrica.codigo_incidencia_rubrica_id, via ref:FPRUBRICAFGTS>COD_FPRUBRICAFGTS, depara=codigo_incidencia_rubrica:fgts (idem inss, irrf, contribuicao_sindical), e a imagem sintética ganha FPRUBRICAFGTS/INSS/IRRF/SIND (forma do dicionário) e o catálogo mínimo no PREPARO. Basta UM dos dois (14 ou esta alternativa); o pedido 3 (parte codigo_incidencia_rubrica) é o mesmo"
   },
   {
    "n": "15",
    "arquivo": "conector/mapa/tabelas.tsv e declarado/dependencias.tsv (gerador do mapa)",
    "mudanca": "FPRUBRICAFGTS_FPEVENTO, FPRUBRICAINSS_FPEVENTO, FPRUBRICAIRRF_FPEVENTO, FPRUBRICASIND_FPEVENTO dependem de TBTPTRIBUTO (ordem); FPRUBRICASIND_FPEVENTO com tabelas_destino incidencia_rubrica;tributo_folha (secundário antes;adotar:tipo, código e tipo contribuicao_sindical, @id:tributo_folha)",
-   "motivo": "o tributo da incidência é procurado por cod: em tributo_folha, que TBTPTRIBUTO grava DEPOIS das incidências na ordem atual (codigo_inexistente_destino); a contribuição sindical não existe na lista de tributos da origem e o verificador recusa destino fora de tabelas_destino"
+   "motivo": "o tributo da incidência é procurado por cod: em tributo_folha, que TBTPTRIBUTO grava DEPOIS das incidências na ordem atual (codigo_inexistente_destino); a contribuição sindical não existe na lista de tributos da origem e o verificador recusa destino fora de tabelas_destino",
+   "atendido": "em parte, pela fatia (rodada 3, correção do conferidor): arestas FPRUBRICA{FGTS,INSS,IRRF,SIND}_FPEVENTO -> TBTPTRIBUTO em declarado/dependencias.tsv, mapa e fatias regerados, test_l5_12 com a ordem nova; o tributo sindical passou a cod:tributo_folha.tipo (=contribuicao_sindical, codigo_inexistente_destino visível sem ele). O destino secundário tributo_folha da FPRUBRICASIND_FPEVENTO segue no pedido 17"
   },
   {
    "n": "16",
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "especial condicional '#se:<COL>=<v>:<COLUNA>' (e '#se~:' presumido): grava o valor da COLUNA (pela regra declarada na linha) só quando COL, depois da sua regra, for igual a v; senão NULL sem pendência. A forma presumida deixa valor_presumido na linha que gravou",
    "motivo": "FPREMESSA: competencia_folha.fechada_em é o instante do fechamento; hoje recebe DTA_FIN_APUR também na competência ABERTA (FECHADA = N). Com o especial a fatia declara '#se~:FECHADA=S:DTA_FIN_APUR' -> fechada_em (NULL na aberta; o CHECK continua exigindo fechada_em na fechada)"
+  },
+  {
+   "n": 17,
+   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa: tabelas_destino de FPRUBRICASIND_FPEVENTO)",
+   "mudanca": "FPRUBRICASIND_FPEVENTO com tabelas_destino incidencia_rubrica;tributo_folha (secundário antes;adotar:tipo, codigo =contribuicao_sindical, tipo =contribuicao_sindical, descricao literal, @id:tributo_folha no tributo_folha_id)",
+   "motivo": "a contribuição sindical não existe na lista de tributos da origem: hoje a incidência sindical procura o tributo do tipo contribuicao_sindical no destino (cod:) e, sem ele, fica com codigo_inexistente_destino (visível). Com o secundário o conector cria o tributo uma vez e adota depois. Resto do pedido 15"
   }
  ],
  "retirados": [

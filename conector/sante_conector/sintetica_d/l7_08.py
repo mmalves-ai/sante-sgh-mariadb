@@ -1,6 +1,7 @@
 """Fatia L7-08 (SADT e suprimentos, módulo SUP): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Rodada 3 de cobertura: 22 tabelas declaradas, GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA descartadas e GEANTIMI bloqueada
+Rodada 3 de cobertura: 23 tabelas declaradas (GEANTIMI carrega a liberação sobre a ficha de GECADANTIMI, L6-05),
+GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA descartadas
 pelo modelo (a ficha do produto exige o item prescrito, que a origem não tem: pedido 6 em saida/L7-08.json). GELANPED,
 GELANPEDENTREGA e GERASVALBAL carregam aqui; na carga real dependem de GECADPED e GELANBAL (L7-07).
 As declaradas trazem as anomalias que a carga trata: pai inexistente (NULL ou recusa 1048), pai pendente, CHECK do
@@ -317,12 +318,13 @@ FORMAS = {
     ]),
 }
 
-# declaradas (carga dirigida pelo mapa); GEANTIMI fica fora do plano (bloqueada pelo modelo)
+# declaradas (carga dirigida pelo mapa)
 CARREGADAS = ("GELANPED", "GELANPEDENTREGA", "GERASVALBAL", "GEUSERS_TBCENCUS", "PRPARINTEGEST", "GECADDEV",
               "GECADDISPENSACAO", "GECADSAI", "GECTRLENTREGADOCSAIDA", "GEINFVENEXT", "GELANDISPENSACAO", "GELANSAI",
               "GEITEMKITRAS_GELANSAI", "GELANDEV", "GEITEMKITRAS_GELANDEV", "GELANSAIREQ", "GERASVALSAIDLOTE",
-              "GERASVALDEVLOTE", "GEDISPHOR", "PREXTRATOITEM_SUBST", "PREXTRATOITEM_TBSITFARM", "PRINTEGRACAOESTOQUE")
-BLOQUEADAS = ("GEANTIMI",)
+              "GERASVALDEVLOTE", "GEDISPHOR", "PREXTRATOITEM_SUBST", "PREXTRATOITEM_TBSITFARM", "PRINTEGRACAOESTOQUE",
+              "GEANTIMI")
+BLOQUEADAS = ()
 DESCARTADAS = ("GEPARAM", "GEQTDELOTEVALLOTEDOCSAIDA")
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
@@ -360,7 +362,7 @@ PAIS_EXTERNOS = {"GECADPED": [1, 2], "GELANBAL": [1, 2], "GEVALMEM": [10, 11, 12
                  "GEKITRAS": [5], "TBUNICON": ["UN", "MG"], "PRLANGERAL": [1],
                  "RECADATE": [1001, 1002], "PRPRESC": [300], "TBPROFIS": [60], "GETABVIA": ["VO"], "TBLOCCON": [5],
                  "TBCBOPRO": [70], "PRPRESCMED": [800], "GELANPAC": [40], "RICADINT": [2001],
-                 "ATCABECATEND": [900]}
+                 "ATCABECATEND": [900], "GECADANTIMI": [1, 2], "PRFREQUENCIA": [1, 2]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
                    # tipos NATIVOS de migração do produto (semente de db/migracoes/11_SUP/07_chaves.sql), achados por cod:
@@ -405,7 +407,7 @@ def _ins(ins, tab, i=1, **v):
 def linhas(r, ins):
     D, dt, ts = decimal.Decimal, datetime.date, datetime.datetime
     for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS and tab != "GEANTIMI":
+        if tab not in CARREGADAS:
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
     # entregas: (2, 1899-12-30) data sentinela em coluna obrigatória (1048); (3) quantidade zero (CHECK 4025); (9)
@@ -552,10 +554,9 @@ def linhas(r, ins):
     # integração horário x estoque: horário fora da carga (pai_inexistente: recusa do complemento)
     for i in (1, 2):
         _ins(ins, "PRINTEGRACAOESTOQUE", ID=i, ID_PRCHKGERAL=900 + i, ID_GEDISPHOR=i, QTDE_DOSE=D("1"))
-    # liberações de antimicrobiano (bloqueada: a ficha do produto exige o item prescrito e dados clínicos que a origem
-    # não tem, pedido 6); anomalias
-    # mantidas para a reativação: 4 dias zero, 6 ficha inexistente, 7 vigência invertida, 8 S/N fora do domínio,
-    # 3 e 9 autorreferência (duas fases), 10 usuário inexistente, 5 interrompida (DATA_INT)
+    # liberações de antimicrobiano sobre a ficha de GECADANTIMI (pai externo): 4 dias zero (CHECK), 6 ficha
+    # inexistente (pai_inexistente + 1048), 7 vigência invertida (CHECK), 8 S/N fora do domínio, 3 e 9 autorreferência
+    # (3 aponta a 5, adiante: duas fases; 9 aponta a 4, recusada), 10 usuário inexistente, 5 interrompida (suspenso)
     ini = ts(2025, 3, 1, 8, 0)
     for i, ficha, dias, ant, fim_d, extra, usu in [
             (1, 1, 7, None, 7, "N", "ana"), (2, 1, 3, 1, 3, "S", "bia"), (3, 2, 5, 5, 5, "N", "ana"),
@@ -564,7 +565,7 @@ def linhas(r, ins):
             (10, 1, 4, None, 4, "N", "ze")]:
         _ins(ins, "GEANTIMI", ID_GEANTIMI=i, ID_GECADANTIMI=ficha, TIPO="T", REG=1000 + i, ITEM=100 + i % 2,
              DATA=ini.date(), DIAS=dias, QTDE_TOMADA=D("1"), QTDE_TOTAL=D(dias * 2), USUARIO=usu,
-             ID_TBUNICON="MG" if i % 2 else "ML", ID_GEANTIMI_ORIGEM_TRAT=ant, DATA_VIGENCIA_INICIAL=ini,
+             ID_TBUNICON="MG", ID_GEANTIMI_ORIGEM_TRAT=ant, DATA_VIGENCIA_INICIAL=ini,
              DATA_VIGENCIA_FINAL=ini + datetime.timedelta(days=fim_d), QUANTIDADE_DOSE=D("500.25"),
              DOSE_EXTRA=extra, ID_PRFREQUENCIA=1 + i % 2, DIA_INICIO=1, ID_RICADPAC=None,
              DATA_INT=ini + datetime.timedelta(days=2) if i == 5 else None, USU_INT="bia" if i == 5 else None)
@@ -592,4 +593,7 @@ def linhas(r, ins):
         "GELANSAIREQ": {"gravados": 2, "pendencias": {pi: 6, r48: 1, r25: 1}},
         "GERASVALDEVLOTE": {"gravados": 1, "pendencias": {pi: 1, r48: 2}},
         "PREXTRATOITEM_SUBST": {"gravados": 1, "pendencias": {r48: 1, r25: 1}},
+        # 4 e 7 CHECK; 6 e 10 pai inexistente (NOT NULL); 8 S/N fora do domínio (padrão falso); 9 anterior recusada
+        "GEANTIMI": {"gravados": 6, "pendencias": {pi: 2, r48: 2, r25: 2, "pai_pendente": 1,
+                                                    "valor_fora_do_dominio": 1}},
     }

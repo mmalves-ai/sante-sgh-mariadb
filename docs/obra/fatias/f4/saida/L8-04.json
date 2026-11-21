@@ -118,6 +118,11 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (TBEMIREFMATMED) + modelo",
    "mudanca": "nenhuma na L8-04: a L8-05 já declarou TBEMIREFMATMED (fonte, item, preço base por REF_VALOR_PFB/PMC). Fica BLOQUEADA por pai_nao_carregado:TBMATMED, e mat/med não tem item_faturavel no mapa (TBMATMED -> item_referencia_matmed; item_faturavel de mat/med exige insumo_id): o item precisa de caminho próprio",
    "motivo": "achado da revisão: o descarte 'licenciado' não se sustentava (configuração de emissão por operadora e item do hospital)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBMATMED) + conector/mapa/declarado/colunas.d/L8-05.tsv (linhas comentadas de TBEMIREFMATMED)",
+   "mudanca": "1) L8-03: ao carregar TBMATMED (filtro de linha por licença, pedido 2/11 da L8-03), dar ao item de tabela própria o destino secundário item_faturavel (ref:TBMATMED/item_faturavel). 2) L8-05: as 4 linhas comentadas '#TBEMIREFMATMED' passam para colunas.d/L8-04.tsv (dona pelo índice), descomentadas quando TBMATMED carregar: ID_TBCONVEN -> fonte_pagadora_id ref:TBCONVEN; ID_TBMATMED -> item_faturavel_id ref:TBMATMED/item_faturavel; REF_VALOR_PFB -> preco_base (pares S/N das duas colunas para preco_fabrica/preco_maximo_consumidor); REF_VALOR_PMC sem destino próprio",
+   "motivo": "rodada 3: TBEMIREFMATMED (1 linha na referência) é configuração do hospital por fonte pagadora e item de mat/med (NÃO é descarte nem licenciado). item_faturavel_id é NOT NULL e só existe quando TBMATMED carregar: segue BLOQUEADA (pai_nao_carregado:TBMATMED), único bloqueio da fatia, sem nada que a L8-04 possa fazer sozinha. Na imagem sintética da L8-04 a tabela está presente (2 linhas) e fora do plano (AGUARDA_PAI)"
   }
  ]
 }

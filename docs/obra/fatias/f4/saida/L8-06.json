@@ -113,8 +113,8 @@
   {
    "n": 20,
    "arquivo": "db/migracoes/12_FAT/01_tabelas.sql (modelo, trilha F2.2) + colunas.d/L8-06",
-   "mudanca": "conta_hospitalar_item: sequencial_item_guia SMALLINT UNSIGNED NULL ('Sequencial do item na guia TISS enviada'), codigo_autorizacao VARCHAR(20) NULL, local_atendimento_id BIGINT UNSIGNED NULL (FK local_atendimento) e funcao_equipe_cobranca_id BIGINT UNSIGNED NULL (FK funcao_equipe_cobranca). Depois: FCLANEXT SEQUENCIAL_ITEM_FATURADO, COD_AUTORIZ (texto), LOCAL (ref:TBLOCAL) e ATO (ref:TBGRAUPARTPROC); descomentar FCLANEXTSEQITEM em colunas.d/L8-06.tsv (complementa o item com SEQUENCIAL_ITEM) e tirá-la de BLOQUEADAS em test_l8_06.py",
-   "motivo": "o sequencialItem casa o item no demonstrativo de análise e no recurso de glosa (FCLANEXTSEQITEM, 2,9 milhões, hoje BLOQUEADA); código de autorização, local e função da equipe do lançamento são usados no faturamento e no repasse e o item não tem coluna para eles. conta_hospitalar_item_autorizacao não serve: exige guia ou resposta de autorização, que a origem não liga ao lançamento"
+   "mudanca": "conta_hospitalar_item: sequencial_item_guia SMALLINT UNSIGNED NULL ('Sequencial do item na guia TISS enviada'), codigo_autorizacao VARCHAR(20) NULL, local_atendimento_id BIGINT UNSIGNED NULL (FK local_atendimento) e funcao_equipe_cobranca_id BIGINT UNSIGNED NULL (FK funcao_equipe_cobranca). Depois: FCLANEXT SEQUENCIAL_ITEM_FATURADO, COD_AUTORIZ (texto), LOCAL (ref:TBLOCAL) e ATO (ref:TBGRAUPARTPROC); trocar a declaração de FCLANEXTSEQITEM em colunas.d/L8-06.tsv (hoje trilha_auditoria do item com retrato) por 'ref:FCLANEXT;complementa' com SEQUENCIAL_ITEM -> conta_hospitalar_item.sequencial_item_guia",
+   "motivo": "o sequencialItem casa o item no demonstrativo de análise e no recurso de glosa (FCLANEXTSEQITEM, 2,9 milhões, hoje carregada como trilha do item com retrato); código de autorização, local e função da equipe do lançamento são usados no faturamento e no repasse e o item não tem coluna para eles. conta_hospitalar_item_autorizacao não serve: exige guia ou resposta de autorização, que a origem não liga ao lançamento"
   },
   {
    "n": 21,

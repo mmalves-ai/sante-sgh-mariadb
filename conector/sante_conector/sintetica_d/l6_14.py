@@ -29,8 +29,8 @@ Dados 100% falsos (nomes e códigos inventados). Carregadas (CARREGADAS) e anoma
   (1048), quarto recusado (pai_pendente), fim antes do início (CHECK). Tipo de movimento 'admissao' presumido.
 - RILEITOS (tabela da L6-15, declarada lá): carrega de fato aqui, porque RICTRLOC aponta o leito pela chave
   alternativa composta na ORIGEM; o leito "1" existe em quartos de unidades diferentes (A/101 e UTI/U1) e a chave
-  composta não confunde; leito de quarto recusado (pai_pendente); sigla de situação sem par (valor_fora_do_dominio,
-  literal 'livre' concorrente). Os códigos de leito são únicos na unidade de internação (UNIQUE do destino).
+  composta não confunde; leito de quarto recusado (pai_pendente); situação no domínio medido da L6-15 (A livre,
+  I inativo); sigla sem par (valor_fora_do_dominio); o literal 'livre' presumido concorrente marca valor_presumido por linha. Os códigos de leito são únicos na unidade de internação (UNIQUE do destino).
 - RIPARAM: só os contadores de numeração, desdobrados em sequencia_negocio inativa (como REPARAM na L6-02): quatro
   com valor (um deles zero) e dois vazios (sem item); médicos padrão e competências não carregam.
 """
@@ -138,8 +138,9 @@ def linhas(r, ins):
     # ID, BLOCO, ACOMOD, LEITO, ANDAR, REG, STATUS, RAMAL, INAMPS, ORDEM: o leito "1" existe em dois quartos de
     # unidades diferentes (A/101 e UTI/U1); D adota a unidade de internação de A (mesma unidade assistencial), por isso
     # o leito do quarto 402 tem código próprio; o leito do quarto 201 (bloco recusado) fica pai_pendente
-    for x in [(1, "A", "101", "1", 1, 0, "L", 201, "0101", 1), (2, "A", "102", "2", 1, 0, "O", 202, None, 2),
-              (3, "UTI", "U1", "1", 2, 0, "X", None, None, 3), (4, "B", "201", "1", 1, 0, "L", None, None, 4),
+    # STATUS no domínio medido A/I da L6-15 (A livre, I inativo); X sem par e vazio: livre presumida
+    for x in [(1, "A", "101", "1", 1, 0, "A", 201, "0101", 1), (2, "A", "102", "2", 1, 0, "I", 202, None, 2),
+              (3, "UTI", "U1", "1", 2, 0, "X", None, None, 3), (4, "B", "201", "1", 1, 0, "A", None, None, 4),
               (5, "D", "402", "5", 1, 0, None, None, None, 5)]:
         ins("RILEITOS", list(x))
     # BLOCO, ACOMOD, LEITO, ENTRADA, HORAENT, SAIDA, HORASAI, REG, ID_TBTIPOACOMOD, COD, ID_DIGITAL
@@ -181,8 +182,10 @@ def linhas(r, ins):
         "RICTRLOC": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
                                                    "restricao_destino_1048": 2, "restricao_destino_4025": 1,
                                                    "valor_presumido": 6}},
-        # 1, 2, 3 e 5 gravam; 4 (quarto do bloco recusado) pai_pendente; sigla X sem par (literal 'livre' concorrente)
-        "RILEITOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "valor_fora_do_dominio": 1}},
+        # 1, 2, 3 e 5 gravam; 4 (quarto do bloco recusado) pai_pendente; sigla X sem par (valor_fora_do_dominio);
+        # o literal presumido 'livre' concorrente da L6-15 (=~livre) marca valor_presumido em cada linha gravada
+        "RILEITOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "valor_fora_do_dominio": 1,
+                                                   "valor_presumido": 4}},
         # quatro sequências (itens) da única linha, inativas e presumidas
         "RIPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 1}},
     }

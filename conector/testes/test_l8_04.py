@@ -139,6 +139,14 @@ class Plano(unittest.TestCase):
         self.assertNotIn("TBPERTHM", {d["tabela"] for d in self.mapa["colunas_decl"]
                                       if d.get("_arquivo", "").endswith("L8-04.tsv")})
 
+    def test_acordo_de_emissao_nao_e_descarte(self):
+        # TBEMIREFMATMED: configuração do hospital por fonte pagadora e item; espera o item faturável do mat/med
+        raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "sem_carga.tsv"
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(raiz)}
+        self.assertNotIn("TBEMIREFMATMED", sc)
+        self.assertNotIn("TBEMIREFMATMED", l8_04.DESCARTADAS)
+        self.assertIn("TBEMIREFMATMED", l8_04.AGUARDA_PAI)
+
     def test_bloqueadas_fora_do_plano(self):
         # presentes na imagem, as bloqueadas nunca entram no plano de carga: zero linha no destino
         self.assertFalse(set(self.plano) & set(l8_04.BLOQUEADAS))
@@ -171,7 +179,8 @@ class Plano(unittest.TestCase):
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
         self.assertFalse(com_destino & set(l8_04.BLOQUEADAS))
-        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 24)  # TBPERTHM passou à L8-03 (rodada 3)
+        # TBPERTHM, TBREFMEMTUSS, TBREFUNI e TBTIPPRO passaram à L8-03 (rodada 3); TBEMIREFMATMED entrou pelo índice
+        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 22)
 
     def test_credito_da_producao(self):
         # rodada 3: profissional e ocupação pela inscrição (encadeadas), tipo de conta pelo código no catálogo do

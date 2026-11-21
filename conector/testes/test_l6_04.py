@@ -123,8 +123,14 @@ class L604(unittest.TestCase):
                 for x in (r["via"] or "").split(";"):
                     if x.startswith("ref:"):
                         self.assertIsNotNone(mapa.passos_ref(x[4:]), (t, x))
-        self.assertNotIn("fim_em", pr["SIPACAGI"])
-        self.assertNotIn("duracao_minutos", pr["SIPACAGD"])
+        # o fim do horário espera só o especial pedido (#data_hora_mais); a duração da marcação já sai pela cópia
+        # da coluna do destino da agenda (ref:T@coluna, grupo 2)
+        self.assertEqual(pr["SIPACAGI"]["fim_em"]["coluna"], "#data_hora_mais:DATA,HORA")
+        self.assertEqual(pr["SIPACAGI"]["fim_em"]["via"], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos")
+        self.assertEqual(pr["SIPACAGD"]["duracao_minutos"]["via"],
+                         "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos")
+        self.assertEqual(pr["REPACAGD"]["duracao_minutos"]["via"],
+                         "ref:REAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos")
         self.assertEqual(pr["SIPACAGI"]["agenda_servico_id"]["via"], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)")
         # a marcação não traz EXAME e acha o horário como o sistema antigo: NOME, CRM, DATA e HORA
         self.assertEqual(pr["SIPACAGD"]["horario_agenda_id"]["via"],

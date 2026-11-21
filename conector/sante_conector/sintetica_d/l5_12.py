@@ -218,6 +218,19 @@ COLUNAS = _colunas()
 FATIA = tuple(t for t in COLUNAS if t != "TBEMPHOS")
 
 
+def __getattr__(nome):
+    """`MAPA_TESTE` (lido pela conferência): o mapa real só com as declarações desta fatia e da dona de TBEMPHOS. A
+    imagem da dona (REQUER) traz pais de outras fatias (TBCBOPRO, TBCBOSUS, TBPROFIS) só com as colunas que as
+    referências dela atravessam; com as declarações das donas deles, a conferência tentaria carregá-los."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    tabs = set(FATIA) | {"TBEMPHOS"} | set(getattr(MOD_DONO, "FATIA", ()) or ())
+    m["colunas_decl"] = [c for c in m["colunas_decl"] if c["tabela"] in tabs]
+    return m
+
+
 def _falso(tipo, i):
     """Valor falso pela forma da coluna (tabelas só com a forma)."""
     if tipo.startswith(("SMALLINT", "INTEGER", "BIGINT")):
@@ -313,7 +326,7 @@ def linhas(r, ins):
              DTA_INI_APUR=D(2025, min(mes, 12), 1), DTA_FIN_APUR=fim, DATA_PAGAMENTO=D(2025, min(mes, 12), 5),
              FECHADA=fech)
     # responsável: 1 válido; 2 UF sem código oficial; 3 CPF inválido (NOT NULL); 4 sem início de vigência (NOT NULL)
-    for i, cpf, uf, ini in [(1, cpf_falso(123456789), "SP", D(2020, 1, 1)), (2, cpf_falso(987654321), "RJ", D(2021, 1, 1)),
+    for i, cpf, uf, ini in [(1, cpf_falso(123456789), "SP", D(2020, 1, 1)), (2, cpf_falso(987654321), "AC", D(2021, 1, 1)),
                             (3, "123", "SP", D(2020, 1, 1)), (4, cpf_falso(111222333), "SP", None)]:
         _ins(ins, "FPRESP", ID_RESP=i, COD_EMP=1, COD_RESP=i, NOME="Responsavel   exemplo %d" % i, CPF=cpf,
              DTA_NASC=D(1970, 1, i), DESC_FUNCAO="Diretor", ID_TBUF=uf, TEL="5555-0000", E_MAIL="resp%d@exemplo.test" % i,
@@ -358,9 +371,11 @@ def linhas(r, ins):
                                                  "pai_pendente": 1}},
         "FPPARAMVIG": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
     }
-    for t in INCIDENCIAS:  # o tributo é procurado antes de TBTPTRIBUTO carregar (ordem pedida: pedido 15)
+    # incidências: o tributo é achado depois de TBTPTRIBUTO (arestas de ordem do pedido 15, aplicadas); o código de
+    # incidência aguarda o de-para por tributo (pedido 14): a linha é recusada com 1364, visível
+    for t in INCIDENCIAS:
         esperado[t] = {"gravados": 0, "pendencias": {"restricao_destino_1364": 2, "vigencia_sem_fonte": 2}}
-        if t != "FPRUBRICASIND_FPEVENTO":
+        if t == "FPRUBRICASIND_FPEVENTO":  # sem tributo sindical na lista da origem nem no destino: visível
             esperado[t]["pendencias"]["codigo_inexistente_destino"] = 2
     if DONO_EMPRESA:  # o esperado de TBEMPHOS é o da dona (lido dela, sem inserir nada) mais as 3 empresas desta fatia
         dono = MOD_DONO.linhas(random.Random(0), lambda t, v: None).get("TBEMPHOS", {"gravados": 0, "pendencias": {}})

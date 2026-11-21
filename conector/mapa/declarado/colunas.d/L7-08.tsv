@@ -228,7 +228,7 @@ GELANSAI	STATUSPEP		codigo_char			L7-08: não carregada: marca de integração c
 GELANSAI	PROCESSADO		codigo_char			L7-08: não carregada: marca de processamento do sistema antigo
 GELANSAI	OBS		texto			L7-08: não carregada: o movimento e o item do documento não têm observação (a do documento vem de GECADSAI)
 GELANSAI	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-08: não carregada: coluna de alteração do diferencial
-GELANSAI	ID_GEANTIMI		chave_origem			L7-08: não carregada: liberação de antimicrobiano (GEANTIMI aguarda o modelo, pedido 6)
+GELANSAI	ID_GEANTIMI		chave_origem			L7-08: não carregada: o movimento não tem coluna da liberação; a liberação (GEANTIMI) carrega com a ficha, o insumo e a vigência
 GELANSAI	JUSTIFICA_ITEM_NAO_PRESC		texto			L7-08: não carregada: justificativa do item não prescrito: fica na dispensação (GELANDISPENSACAO)
 GELANSAI	JUSTIFICA_QTDE_PRESC_X_DISP		texto			L7-08: não carregada: justificativa da diferença prescrito x dispensado sem campo no movimento (fica no hash)
 GELANSAIREQ	@id:requisicao_material	requisicao_material_item.requisicao_material_id				L7-08: requisição do documento (cabeçalho agrupado por ANO, MES, DOC)
@@ -397,3 +397,27 @@ GELANPED	DATA1		data			L7-08: não carregada: datas das propostas da cotação
 GELANPED	DATA2		data			L7-08: não carregada: ver DATA1
 GELANPED	DATA3		data			L7-08: não carregada: ver DATA1
 GELANPED	ITEM_AUTORIZADO_ORCAMENTO		codigo_char			L7-08: não carregada: marca de autorização de orçamento sem destino no item
+GEANTIMI	ID_GECADANTIMI	liberacao_antimicrobiano.ficha_antimicrobiano_id	chave_origem		ref:GECADANTIMI	L7-08: ficha da comissão de controle de infecção (nasce de GECADANTIMI, L6-05); inexistente: NOT NULL recusa
+GEANTIMI	=inclusao	liberacao_antimicrobiano.operacao				L7-08: liberação migrada: registro de inclusão
+GEANTIMI	DATA	liberacao_antimicrobiano.ocorrido_em	data			L7-08: data da liberação à meia-noite (tipar)
+GEANTIMI	USUARIO	liberacao_antimicrobiano.usuario_id			ref:TBUSERS	L7-08: usuário que liberou, pelo login; sem usuário ou inexistente: NOT NULL recusa
+GEANTIMI	DATA_INT	liberacao_antimicrobiano.decisao	preenchido	valores		L7-08: interrompida (DATA_INT preenchida): suspenso; senão liberado (pares em valores.d/L7-08.tsv); a continuação fica na liberação anterior
+GEANTIMI	TIPO	liberacao_antimicrobiano.tipo_tratamento	codigo_char	valores		L7-08: tipo do tratamento P/E/T (pares em valores.d/L7-08.tsv); outro valor: NULL com valor_fora_do_dominio
+GEANTIMI	ITEM	liberacao_antimicrobiano.insumo_id	chave_origem		ref:GEITENS	L7-08: antimicrobiano liberado (insumo pelo código); inexistente: NOT NULL recusa
+GEANTIMI	DATA_VIGENCIA_INICIAL	liberacao_antimicrobiano.vigencia_inicio	data_hora			L7-08: início da vigência
+GEANTIMI	DATA_VIGENCIA_FINAL	liberacao_antimicrobiano.vigencia_fim	data_hora			L7-08: fim da vigência; antes do início: CHECK recusa
+GEANTIMI	DIAS	liberacao_antimicrobiano.dias_tratamento	inteiro			L7-08: dias de tratamento liberados; zero: CHECK recusa
+GEANTIMI	DIA_INICIO	liberacao_antimicrobiano.dia_inicio	inteiro			L7-08: dia do tratamento em que a liberação começa
+GEANTIMI	QUANTIDADE_DOSE	liberacao_antimicrobiano.quantidade_dose	decimal			L7-08: quantidade por dose; zero: CHECK recusa
+GEANTIMI	ID_TBUNICON	liberacao_antimicrobiano.unidade_medida_id	chave_origem		ref:TBUNICON	L7-08: unidade da dose; inexistente: NOT NULL recusa
+GEANTIMI	ID_PRFREQUENCIA	liberacao_antimicrobiano.frequencia_administracao_id	chave_origem		ref:PRFREQUENCIA	L7-08: frequência (L6-05)
+GEANTIMI	QTDE_TOTAL	liberacao_antimicrobiano.quantidade_total	decimal			L7-08: quantidade total liberada
+GEANTIMI	DOSE_EXTRA	liberacao_antimicrobiano.dose_extra	booleano_sn			L7-08: dose extra S/N; fora do domínio: NULL e o padrão do destino (falso)
+GEANTIMI	ID_GEANTIMI_ORIGEM_TRAT	liberacao_antimicrobiano.anterior_liberacao_antimicrobiano_id	chave_origem		ref:GEANTIMI	L7-08: liberação de que esta é continuação (autorreferência)
+GEANTIMI	#retrato:*	liberacao_antimicrobiano.dados				L7-08: retrato de todas as colunas da linha (dose tomada, início e interrupção, quem interrompeu, marca PRO_TER) sem campo próprio
+GEANTIMI	REG		inteiro			L7-08: não carregada: o atendimento é o da ficha (GECADANTIMI)
+GEANTIMI	ID_RICADPAC		chave_origem			L7-08: não carregada: o paciente é o da ficha (GECADANTIMI)
+GEANTIMI	QTDE_TOMADA		decimal			L7-08: não carregada em coluna: fica no retrato (dados)
+GEANTIMI	DATA_INI		data_hora			L7-08: não carregada em coluna: fica no retrato (dados)
+GEANTIMI	USU_INT		texto			L7-08: não carregada em coluna: quem interrompeu fica no retrato (dados); a decisão suspenso vem de DATA_INT
+GEANTIMI	PRO_TER		codigo_char			L7-08: não carregada em coluna: marca sem evidência do significado; fica no retrato (dados)

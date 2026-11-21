@@ -7,9 +7,9 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_12
 
-CARREGADAS = ["TBITEDES", "MFPARAM_MFTIPOLANC", "TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG",
-              "MFCCCONV", "TBTIPOLANCVLR", "TBTIPOPAGFOR", "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO",
-              "TBUNIMEN"]
+CARREGADAS = ["TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG", "TBTIPOLANCVLR", "TBTIPOPAGFOR",
+              "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO", "TBUNIMEN", "TBITEDES", "MFCCCONV",
+              "MFPARAM_MFTIPOLANC"]
 # nenhuma tabela da fatia fica sem mecanismo nem esperando decisão (rodada de cobertura total)
 AGUARDAM = []
 # descartes de produto (declarado/sem_carga.tsv): domínio fixo do produto, parâmetros do software antigo ou duplicado

@@ -304,9 +304,13 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " nome VARCHAR(40) NOT NULL);\nINSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');\n"
                    # catálogo oficial de princípio ativo (DCB) e tipo de item da prescrição (código 6 = medicamento):
                    # só o código, achado por cod: (nunca gravado pelo conector)
+                   # mesma forma mínima da requerida L7-07 (ela acha por cod:principio_ativo.descricao)
                    "CREATE TABLE IF NOT EXISTS principio_ativo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " codigo_dcb VARCHAR(10) NOT NULL UNIQUE);\n"
-                   "INSERT INTO principio_ativo (codigo_dcb) VALUES ('00101'), ('00202');\n"
+                   " codigo_dcb VARCHAR(10) NOT NULL UNIQUE, descricao VARCHAR(255) NOT NULL,"
+                   " versao_fonte VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);\n"
+                   "INSERT IGNORE INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES"
+                   " ('00101', 'Principio falso C', 'exemplo', NOW(3)), ('00202', 'Principio falso D', 'exemplo', NOW(3)),"
+                   " ('01234', 'Principio falso A', 'exemplo', NOW(3)), ('01235', 'Principio falso B', 'exemplo', NOW(3));\n"
                    "CREATE TABLE IF NOT EXISTS tipo_item_prescricao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL UNIQUE);\n"
                    "INSERT INTO tipo_item_prescricao (codigo) VALUES ('6'), ('7');\n"
@@ -359,15 +363,15 @@ def _rodada3(ins):
              PERIODO_MINIMO_ENTRE_DOSE=per, ITEM_CONTABILIZADO_BALANCO_PEP=bal, PADRAO_BOMBA_FICHA_ANEST=bomba,
              INFORMAR_LOCAL_ACESSO_INVASIVO=inv, CONSISTIR_DOSE_MINIMA_MAXIMA=0, ID_GEITEACAODOSE=1)
     # princípio da origem: 1 e 2 com código DCB do catálogo (2 com espaços nas pontas); 3 com código fora do catálogo;
-    # 4 sem código DCB
-    for cod, dcb in [(1, "00101"), (2, " 00202 "), (3, "99999"), (4, None)]:
+    # 4 sem código DCB (códigos 61-64: a requerida L7-07 usa 1-3 na mesma tabela da imagem)
+    for cod, dcb in [(61, "00101"), (62, " 00202 "), (63, "99999"), (64, None)]:
         _pai(ins, "TBPRINC", COD=cod, NOME="Princípio exemplo %d" % cod, ATIVO="A", COD_DCB=dcb)
     # princípio do item não padronizado (PRITEMNAOPAD: 1, 2, 6 gravados; 3 recusado): código fora do catálogo e sem
     # código (codigo_inexistente_destino / NULL: 1048); item recusado (pai_pendente)
-    for it, pr in [(1, 1), (2, 2), (1, 3), (2, 4), (3, 1)]:
+    for it, pr in [(1, 61), (2, 62), (1, 63), (2, 64), (3, 61)]:
         _ins(ins, "PRITEMNAOPAD_TBPRINC", ID_PRITEMNAOPAD=it, ID_TBPRINC=pr)
     # princípio do alergeno: situação fora do domínio (padrão ativo); alergeno nunca visto (pai_inexistente + 1048)
-    for al, pr, sit in [(1, 1, "A"), (2, 1, "I"), (2, 2, "X"), (9, 1, "A"), (1, 3, "A")]:
+    for al, pr, sit in [(1, 61, "A"), (2, 61, "I"), (2, 62, "X"), (9, 61, "A"), (1, 63, "A")]:
         _ins(ins, "TBALERGIA_TBPRINC", ID_TBALERGIA=al, ID_TBPRINC=pr, SITUACAO=sit)
     # perguntas (lidas pela ligação PRPADEVOL): 1 decimal com unidade 'kg', texto padrão e reaproveitamento (65535 h);
     # 2 escolha, MANTERHIST 3 (sem semântica: valor_fora_do_dominio); 3 CID (texto, destino diagnóstico) e INATIVA
@@ -562,3 +566,15 @@ def linhas(r, ins):
         "PRMANCHESTER": {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1406": 1,
                                                       "restricao_destino_1062": 1, "valor_fora_do_dominio": 3}},
     }
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE` (lido pela conferência): o mapa REAL sem as declarações dos pais que a requerida L7-07 põe na
+    imagem só para a referência ler a origem (ORIGEM_PAIS dela: TBCENCUS, TBPRINC, TBCBOPRO), como a própria L7-07
+    faz; na carga real eles vêm antes, nas fatias donas."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    _ORIGEM_SO_REF = ("TBCENCUS", "TBCBOPRO")
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in _ORIGEM_SO_REF])

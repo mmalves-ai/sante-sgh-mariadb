@@ -93,12 +93,13 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + regerar tabelas.tsv e as fatias (compartilhados)",
    "mudanca": "arestas novas (pai antes do filho): REAGECRI -> REAGENDA, RECTRAGE -> REAGENDA, SICTRAGE -> SIAGENDA e REAGENDA -> TBPROFIS; depois, atualizar o esperado de REAGECRI, RECTRAGE e SICTRAGE em sintetica_d/l6_03.py (as linhas passam a ser gravadas; anomalias anotadas em linhas())",
-   "motivo": "ordem atual: REAGECRI 257, RECTRAGE 258, REAGENDA 262, SICTRAGE 265, SIAGENDA 665, TBPROFIS 833. A agenda é NOT NULL na geração e na escala e é resolvida pela chave alternativa NOME+CRM: com o filho antes do pai, toda linha é recusada com pai_inexistente (medido na conferência: REAGECRI 5 de 5, RECTRAGE 6 de 6, SICTRAGE 5 de 5); o profissional da agenda (anulável) fica NULL na carga real"
+   "motivo": "ordem atual: REAGECRI 257, RECTRAGE 258, REAGENDA 262, SICTRAGE 265, SIAGENDA 665, TBPROFIS 833. A agenda é NOT NULL na geração e na escala e é resolvida pela chave alternativa NOME+CRM: com o filho antes do pai, toda linha é recusada com pai_inexistente (medido na conferência: REAGECRI 5 de 5, RECTRAGE 6 de 6, SICTRAGE 5 de 5); o profissional da agenda (anulável) fica NULL na carga real",
+   "atendido": "rodada 3 (fatia, a pedido do conferidor): as 4 arestas em declarado/dependencias.tsv, mapa e fatias regerados (gerar_mapa_conector.py, fatiar_conector.py); esperado de REAGECRI, RECTRAGE e SICTRAGE atualizado em sintetica_d/l6_03.py (linhas gravadas) e a ordem em CARREGADAS"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
    "mudanca": "especial '#data_hora_mais:<DATA>,<HORA>,<DURACAO>[,<DURACAO_PADRAO>]': DATETIME de data + hora HHMM somado da duração HHMM (regra minutos_hhmm) da linha; sem duração na linha, a de outra coluna (ex.: a da agenda pela encadeada terminada em coluna, ref:REAGENDA.(NOME,CRM)=(NOME,CRM)>DURACAO); sem nenhuma, NULL com unidade_ausente",
-   "motivo": "REPACAGI (177.897 horários na imagem de referência) -> horario_agenda.fim_em é DATETIME NOT NULL com CHECK fim_em > inicio_em, e a origem só guarda DATA, HORA (HHMM) e DURACAO (HHMM, por horário, anulável). Sem a regra a tabela fica BLOQUEADA (declaração pronta e comentada em colunas.d/L6-03.tsv); é ela que leva as marcações de consulta (REPACAGD, L6-04)"
+   "motivo": "REPACAGI (177.897 horários na imagem de referência) -> horario_agenda.fim_em é DATETIME NOT NULL com CHECK fim_em > inicio_em, e a origem só guarda DATA, HORA (HHMM) e DURACAO (HHMM, por horário, anulável). Sem a regra a tabela fica BLOQUEADA (declaração pronta e comentada em colunas.d/L6-03.tsv); é ela que leva as marcações de consulta (REPACAGD, L6-04) ÚNICO bloqueio que resta na fatia (cobertura: REPACAGI regra_faltante, rodada 3): a declaração está pronta e comentada em colunas.d/L6-03.tsv; com o especial, basta descomentá-la e trocar REPACAGI de NAO_CARREGADAS para CARREGADAS em sintetica_d/l6_03.py"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
@@ -122,7 +123,7 @@
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-04.tsv e sintetica_d/l6_04.py (fatia L6-04)",
-   "mudanca": "apagar as declarações comentadas de #SICANAGE e #SICTRAGE (as duas passaram à L6-03 no índice e estão declaradas aqui) e manter SIAGENDA na imagem com as 4 agendas iguais às da l6_03 (a L6-03 cria SIAGENDA com a forma inteira do dicionário; numa imagem que junte as fatias vale o CREATE e as linhas da primeira)",
+   "mudanca": "apagar as declarações comentadas de #SICANAGE e #SICTRAGE (as duas passaram à L6-03 no índice e estão declaradas aqui) e manter SIAGENDA na imagem com as agendas iguais às da l6_03 (5 desde a rodada 3: a 5, 'Raio X exemplo', CRM 102, tem profissional e carrega) (a L6-03 cria SIAGENDA com a forma inteira do dicionário; numa imagem que junte as fatias vale o CREATE e as linhas da primeira)",
    "motivo": "evita 'tabela declarada em mais de um arquivo' se a L6-04 descomentar e mantém a mesma agenda de exames nas duas imagens"
   },
   {

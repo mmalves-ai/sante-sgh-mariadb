@@ -438,3 +438,9 @@ GERASVALTRANSFLOTE	ARM_ORI		inteiro			L7-07 r3: sem destino: lote de destino, lo
 GERASVALTRANSFLOTE	ARM_DES		inteiro			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GERASVALTRANSFLOTE	ID_GERASVALFINAL		chave_origem			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GELANPAC	HORA		texto			L7-07 r3: lida pela data e hora do lançamento (#data_hora:DATA,HORA)
+#TBPRINC	NOME	principio_ativo_cliente.nome	texto_nome			L7-07 r3: princípio próprio do hospital (pronto, espera o modelo principio_ativo_cliente da F2.2, pedido no L7-07.json); sem nome recusa (NOT NULL)
+#TBPRINC	ATIVO	principio_ativo_cliente.ativo	booleano_sn			L7-07 r3: S/N
+#TBPRINC	COD_DCB	principio_ativo_cliente.principio_ativo_id	inteiro_zeros_esquerda:5		cod:principio_ativo.codigo_dcb	L7-07 r3: ligação ao oficial pelo DCB quando houver (vazio na referência); concorrente com o NOME abaixo
+#TBPRINC	NOME	principio_ativo_cliente.principio_ativo_id	texto_nome		cod:principio_ativo.descricao	L7-07 r3: ligação ao oficial pelo nome na falta do DCB; sem par fica NULL com codigo_inexistente_destino (o farmacêutico liga depois)
+#TBPRINC	ID_TBTERAPEUTICO	principio_ativo_cliente.classe_terapeutica_codigo	texto			L7-07 r3: só o código da classe (a tabela de classes não existe no dicionário da origem)
+#TBPRINC	ID_TBUNICON_PADRAO	principio_ativo_cliente.unidade_medida_padrao_id	chave_origem		ref:TBUNICON	L7-07 r3: unidade padrão de dose (mesma fatia); nunca vista: pai_inexistente

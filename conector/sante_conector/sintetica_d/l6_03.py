@@ -14,9 +14,8 @@ só com a forma (2 linhas falsas).
 Pais de fora da fatia: TBUSERS (login) e TBPROFIS (profissional) como PAIS_EXTERNOS; TBCBOPRO (inscrição no
 conselho, L5) e SIAGENDA (agenda de exames, L6-04) entram na imagem com a forma inteira do dicionário, para a
 referência encadeada e a chave alternativa (a conferência os carrega junto, sem esperado nesta fatia).
-Ordem: REAGECRI (257) e RECTRAGE (258) vêm antes de REAGENDA (262) no mapa e SICTRAGE (265) antes de SIAGENDA (665):
-as arestas estão pedidas em saida/L6-03.json. Enquanto isso, na carga as linhas de REAGECRI e RECTRAGE ficam sem a
-agenda (pai_inexistente, recusa pelo NOT NULL): o esperado abaixo registra esse estado e muda quando a aresta entrar.
+Ordem (arestas da rodada 3 em declarado/dependencias.tsv): TBPROFIS antes de REAGENDA, REAGENDA antes de REAGECRI
+e RECTRAGE, SIAGENDA antes de SICTRAGE; as filhas acham a agenda pela chave alternativa NOME+CRM.
 Anomalias: descrição nula ou só com espaços (NOT NULL do destino recusa a linha), nome com espaços repetidos, código
 que só difere pela caixa (categoria C/c e situação AG/ag: as duas linhas recusadas com codigo_colisao_caixa), situação
 fora de A/I (valor_fora_do_dominio), situação sem par no de-para, intervalo real da escala (fica
@@ -90,8 +89,8 @@ NAO_CARREGADAS = {"CDTPRETCONS": 2, "PSTPRETORNO": 2, "REPACAGI": 2}
 DESCARTADAS = ("CDTPRETCONS", "PSTPRETORNO")
 PRONTAS = ("REPACAGI",)
 
-CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "REAGECRI", "RECTRAGE",
-              "RESITAGE", "RETIPAGE", "RETP_INTEG_AGENDA_ONLINE", "REAGENDA", "SICANAGE", "SICTRAGE")
+CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "RESITAGE", "RETIPAGE",
+              "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "SICTRAGE", "REAGENDA", "REAGECRI", "RECTRAGE")
 PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia"], "TBPROFIS": ["1", "2"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único vem daqui; a categoria 'exame' já
 # existe no destino (a agenda de exame a adota, sem sobrescrever)
@@ -175,9 +174,12 @@ def linhas(r, ins):
     # inscrições no conselho (pai de outra fatia): 103 repetido em duas inscrições (pai_ambiguo)
     for v in [(1, 101, 1), (2, 102, 2), (3, 103, 1), (4, 103, 2), (5, 104, 2)]:
         ins("TBCBOPRO", [v[0], 1, "SP", v[1], v[2], "S"] + [None] * 12)
-    # agenda de exames (pai de outra fatia; as mesmas linhas da L6-04): 2 e 3 com o mesmo nome; 4 nunca carregada
+    # agenda de exames (pai de outra fatia; as linhas 1 a 4 iguais às da L6-04): 2 e 3 com o mesmo nome; 1 a 4 sem
+    # profissional (CRM 0) são recusadas pelo CHECK de dono até a L6-04 adotar o setor dono (pedido em
+    # saida/L6-03.json); a 5, com profissional pela inscrição 102, carrega e prova a escala de exame
     for v in [(1, 0, "Endoscopia exemplo", "E", "0030"), (2, 0, "Ultrassom exemplo", "U", "0015"),
-              (3, 0, "Ultrassom exemplo", "O", "0015"), (4, 0, "Agenda nao carregada", "E", "0020")]:
+              (3, 0, "Ultrassom exemplo", "O", "0015"), (4, 0, "Agenda nao carregada", "E", "0020"),
+              (5, 102, "Raio X exemplo", "R", "0020")]:
         ins("SIAGENDA", list(v) + [None] * 12 + [1, 0, None])
     obs = ("Observação  da agenda\r\n segunda linha €").encode("cp1252")
     for (i, nome, crm, dur, exa, ativa, dret, usu, fxi, fxf, unid, tele) in [
@@ -214,7 +216,9 @@ def linhas(r, ins):
               (e, 0, "4", "0030", "E", "1800", "1400", "1300", "1330"),
               ("Ultrassom exemplo", 0, "3", "0015", "U", "1100", None, "0700", None),   # nome repetido: pai_ambiguo
               (e, 0, "6", "0020", "E", "2575", None, "0800", None),                     # hora inválida
-              ("Agenda nao carregada", 0, "2", "0030", "E", "1200", None, "0800", None)]:  # pai_inexistente
+              ("Agenda nao carregada", 0, "2", "0030", "E", "1200", None, "0800", None),   # agenda recusada
+              ("Raio X exemplo", 102, "2", "0020", "R", "1200", "0000", "0800", "0000"),    # gravada
+              ("Raio X exemplo", 102, "3", "0020", "R", "2575", None, "0800", None)]:       # hora inválida
         _ins(ins, "SICTRAGE", **dict(zip(("AGENDA", "CRM", "SEMANA", "DURACAO", "EXAME", "HOR_FIN", "INTER_FIN",
                                           "HOR_INC", "INTER_INC"), v)))
     for v in [(e, 0, D(2026, 3, 2), "0800", "0000-0000", "Paciente Ficticio Um", D(2026, 3, 1), "1015", "ana", "bia",
@@ -244,17 +248,21 @@ def linhas(r, ins):
         # agenda, no nome e na unidade do setor. valor_presumido: setor presumido em cada linha lida (6)
         "REAGENDA": {"gravados": 5, "pendencias": {"adotado_existente": 7, "pai_ambiguo": 1, "pai_inexistente": 4,
                                                    "restricao_destino_1048": 1, "valor_presumido": 6}},
-        # ORDEM: REAGECRI (257) e RECTRAGE (258) vêm antes de REAGENDA (262) e SICTRAGE (265) antes de SIAGENDA (665):
-        # toda agenda é pai_inexistente e a linha é recusada (agenda NOT NULL) até as arestas pedidas em
-        # saida/L6-03.json; com elas, este esperado passa a ter as linhas gravadas (anomalias anotadas em linhas())
-        "REAGECRI": {"gravados": 0, "pendencias": {"hora_invalida": 2, "pai_inexistente": 5,
-                                                   "restricao_destino_1048": 5}},
-        # valor_fora_do_dominio: dia 9 e o intervalo real 1500-1515 (pausa visível até hora_hhmm_zero_nulo)
-        "RECTRAGE": {"gravados": 0, "pendencias": {"pai_inexistente": 6, "restricao_destino_1048": 6,
-                                                   "valor_fora_do_dominio": 3, "vigencia_sem_fonte": 6}},
-        "SICTRAGE": {"gravados": 0, "pendencias": {"hora_invalida": 1, "pai_ambiguo": 1, "pai_inexistente": 4,
-                                                   "restricao_destino_1048": 5, "valor_fora_do_dominio": 2,
-                                                   "vigencia_sem_fonte": 5}},
+        # geração: 1 gravada (agenda 1, C); a E da mesma agenda é a reversão (CHECK ck_geracao_grade_reversao: 4025,
+        # visível até a gravação condicional pedida); sem responsável (1048); hora inválida 2575 em solicitada_em e
+        # processada_em (2 hora_invalida, 1048); agenda inexistente (pai_inexistente, 1048)
+        "REAGECRI": {"gravados": 1, "pendencias": {"hora_invalida": 2, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 3, "restricao_destino_4025": 1}},
+        # escala: dia 2, dia 4 (intervalo real 1500-1515: valor_fora_do_dominio nas duas pontas, visível até
+        # hora_hhmm_zero_nulo) e dia 5 gravadas; dia 9 (valor_fora_do_dominio, 1048); fim antes do início (4025);
+        # agenda inexistente (pai_inexistente, 1048)
+        "RECTRAGE": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2,
+                                                   "restricao_destino_4025": 1, "valor_fora_do_dominio": 3,
+                                                   "vigencia_sem_fonte": 6}},
+        # escala de exame: a da agenda 5 (Raio X) gravada; hora inválida na mesma agenda (1048); Ultrassom com nome
+        # repetido (pai_ambiguo, 1048); Endoscopia (3 faixas) e a agenda 4 recusadas na L6-04 (sem dono): pai_pendente
+        "SICTRAGE": {"gravados": 1, "pendencias": {"hora_invalida": 1, "pai_ambiguo": 1, "pai_pendente": 4,
+                                                   "restricao_destino_1048": 2, "vigencia_sem_fonte": 3}},
         # cancelamento de exame na trilha (interino): 3 gravados; data sentinela recusa (1048); login desconhecido
         "SICANAGE": {"gravados": 3, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},

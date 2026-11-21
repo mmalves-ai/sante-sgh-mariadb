@@ -13,9 +13,12 @@ itens do estoque inicial (rodada de contagem do cabeçalho) e descrição do ser
 Rodada 3 (revisão): o item de transferência grava também o movimento de SAÍDA do local de origem (razão do estoque,
 contrapartida no local de destino); a sequência do ano (MES 0) entra com reinício anual; o saldo do local e insumo e a
 classificação das saídas do mês entram PRESUMIDOS (valor_presumido visível).
-Fora da carga (5, entram na imagem para provar que nada é gravado): compras e terceiros (descarte), consumo por
-centro de custo e lote por documento (BLOQUEADAS: destino principal agrupado e lote repetido pedidos ao motor) e
-horários padrão (falta no motor o rótulo resolvido pelo código no destino). Pedidos em saida/L7-05.json.
+Rodada 3 (conferidor): horários padrão por número de doses (GEHORMED, uma linha por coluna H<doses><posição> em
+horario_padrao_dose) e lote dispensado por documento (GECTRVMM: movimento_lote do movimento de saída, com o lote
+físico adotado pelo insumo e número em lote_insumo). O movimento (GELANSAI) e o lote (GEVALMEM) são de outras fatias e
+não estão nesta imagem: recusa visível; a prova positiva vem na carga integrada.
+Fora da carga (3, entram na imagem para provar que nada é gravado): compras e terceiros (descarte) e consumo por
+centro de custo (BLOQUEADA: destino principal agrupado pedido ao motor). Pedidos em saida/L7-05.json.
 Itens do estoque inicial e descrição do serviço: o insumo (unidade) e o item de compra são de outras fatias e não
 estão nesta imagem: recusa visível (pai_inexistente); a prova positiva vem na carga integrada.
 Ordem: o local de estoque (GELOCARM) vem hoje DEPOIS de documentos, estoque inicial e reposição (aresta pedida); o
@@ -110,12 +113,10 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 
 CARREGADAS = ("GECAPELAMP", "GEDESCOM", "GEGRUPOMP", "GECAPELAMP_GEGRUPOMP", "GEGRUPOS", "GEITEACAODOSE", "GEKITS",
               "GELOCARM", "GEKITRAS", "GEATUALIZASALDO", "GECADTRA", "GEESTINI", "GEGERSEQ", "GELIMLOC",
-              "GELANTRA", "GEFECMES", "GEARMLOC", "GECONITL", "GELANESI", "GEDESPDS")
+              "GELANTRA", "GEFECMES", "GEARMLOC", "GECONITL", "GELANESI", "GEDESPDS", "GEHORMED", "GECTRVMM")
 FORMAS_BLOQUEADAS = {
     'GECADTER': ('VARCHAR', 'DATE', 'INTEGER'),
     'GECOMPRA': ('INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC'),
-    'GECTRVMM': ('SMALLINT', 'SMALLINT', 'INTEGER', 'INTEGER', 'DATE', 'NUMERIC', 'VARCHAR'),
-    'GEHORMED': ('SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT', 'SMALLINT'),
     'GEKONCDC': ('SMALLINT', 'SMALLINT', 'INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC'),
 }
 BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
@@ -299,6 +300,21 @@ def linhas(r, ins):
               (1, 2, D("30.000"), D("10.000")), (77, 1, D("1.000"), D("2.000")), (2, 1, D("-5.000"), D("5.000"))]:
         ins("GELIMLOC", list(x))
 
+    # --- horários padrão por número de doses (H<doses><posição>, HHMM inteiro): a grade de 1, 2, 3 e 4 doses (0 =
+    # 00:00, válido) grava 10 horários; H61 com minuto 75 (hora_invalida, sem linha); a 2.ª linha só tem um horário
+    # inválido e nenhum item: recusa com sem_item_a_gravar (a hora inválida da linha recusada não conta à parte)
+    horas = [800, 800, 2000, 600, 1400, 2200, 600, 1200, 1800, 0, 2575] + [None] * 25
+    ins("GEHORMED", horas)
+    ins("GEHORMED", [2575] + [None] * 35)
+
+    # --- lote dispensado por documento (ANO, MES, DOC, ITEM, DATA, QTDE, LOTE): o movimento de saída (GELANSAI) e o
+    # lote (GEVALMEM) são de outras fatias e não estão nesta imagem: movimento e validade pai_inexistente, o lote não
+    # existe para adotar e a criação recusa por validade nula (1048); insumo 77 nunca visto (mais um pai_inexistente)
+    dd = datetime.date(2025, 5, 2)
+    for x in [(2025, 5, 10, 1, dd, D("3.000"), "LOTE-A1"), (2025, 5, 10, 2, dd, D("1.000"), "LOTE-B1"),
+              (2025, 5, 11, 77, dd, D("2.000"), "LOTE-C1")]:
+        ins("GECTRVMM", list(x))
+
     loc_doc, loc_inv, loc_rep = _local_antes("GECADTRA"), _local_antes("GEESTINI"), _local_antes("GELIMLOC")
     loc_sal = _local_antes("GEARMLOC")
     esp = {
@@ -344,6 +360,8 @@ def linhas(r, ins):
                                                      "pai_pendente": 1}} if loc_inv else \
         {"gravados": 0, "pendencias": {"pai_pendente": 3, "pai_inexistente": 5, "restricao_destino_1048": 1}}
     esp["GEDESPDS"] = {"gravados": 0, "pendencias": {"pai_inexistente": 2}}
+    esp["GEHORMED"] = {"gravados": 10, "pendencias": {"hora_invalida": 1, "sem_item_a_gravar": 1}}
+    esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 3}}
 
     return dict(esp, **{
         "GECAPELAMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},

@@ -22,7 +22,7 @@ Anomalias cobertas:
   ato, local e cooperativa não carregada (pai_inexistente); credencial do endpoint com a segunda
   transação da mesma fonte adotando a credencial (adotado_existente) e a senha esperando o cofre.
 Rodada 3: FCLANEXT com glosa, recebimento e recurso (trilha do item, opcional), técnica, nota e autor; contas, segurado e guias da internação, lote TISS, vigências no acordo migrado, itens
-da conta e complementos, produção do repasse e histórico da auditoria (`_rodada3`). Bloqueadas por pedido (FCLANEXTSEQITEM, TBHISTBR) ficam fora da imagem.
+da conta e complementos, produção do repasse e histórico da auditoria (`_rodada3`). Sequencial do item na guia (FCLANEXTSEQITEM) e histórico do vínculo de mat/med (TBHISTBR) como trilha.
 """
 import datetime
 from decimal import Decimal as D
@@ -76,7 +76,8 @@ def _linha(t, **v):
 
 NOVAS = ("FCFAIPAC", "FCIRREGULARID", "TBREPGER", "TBREPGER_TBCBOPRO", "HTPROCTO", "FCTISSLOTEPROT",
          "FCCTAEXT_FCTISSLOTEPROT", "RICONTAS", "FCDIAINT", "RICGUIAS", "TBHISTTABDTH", "TBHISTTABMM",
-         "TBHISTTABTHME", "TBHISTTABTHMI", "FCLANEXT", "REPROEXT", "RIPROEXT", "FCINTEGRPA", "FCLANAUD")
+         "TBHISTTABTHME", "TBHISTTABTHMI", "FCLANEXT", "REPROEXT", "RIPROEXT", "FCINTEGRPA", "FCLANAUD",
+         "FCLANEXTSEQITEM", "TBHISTBR")
 # de outras fatias: só lidas pelas referências encadeadas e chaves alternativas (inscrição > profissional,
 # internação > atendimento/prontuário/fonte, prontuário > paciente, configuração TISS da fonte)
 CADEIA = ("TBCBOPRO", "RICADINT", "RICADPAC", "TBTISS")
@@ -291,6 +292,15 @@ def _rodada3(ins):
       LOCAL=1, ATO=1, DATA_GRA=DA(2025, 3, 20), USUARIO="usuario.exemplo", QTDE=D("1"), VALOR_C=D("100.12"))
     q("FCLANAUD", ANOPRO=2025, MESPRO=3, TIPO_CTA="E", CONTA=11, TIPO=2, DATA=DT(2025, 3, 3), HORA="2300", PROCTO=1,
       LOCAL=1, ATO=1, USUARIO="usuario.fora", QTDE=D("2"))  # auditoria e usuário nunca vistos; data do item
+    # sequencial do item na guia TISS (trilha do item): 1 e 2 gravados; 3 item recusado; 99 item nunca visto
+    for it, seq in [(1, 1), (2, 1), (3, 2), (99, 1)]:
+        q("FCLANEXTSEQITEM", ID_FCLANEXT=it, SEQUENCIAL_ITEM=seq)
+    # histórico do vínculo do item de mat/med ao código de referência (trilha da tabela de mat/med)
+    q("TBHISTBR", TAB=1, COD=10, DATA=DA(2024, 5, 1), TIPO_REF=1, BRAS=12345, USUARIO="usuario.exemplo",
+      ID_TBMATMED=7)
+    q("TBHISTBR", TAB=1, COD=10, DATA=DA(2024, 8, 1), TIPO_REF=1, BRAS=12399, USUARIO="usuario.fora",
+      ID_TBMATMED=7)  # usuário nunca visto
+    q("TBHISTBR", TAB=9, COD=11, DATA=DA(2024, 9, 1), TIPO_REF=2, BRAS=54321, ID_TBMATMED=8)  # tabela nunca vista
     return ESPERADO_R3
 
 
@@ -324,4 +334,8 @@ ESPERADO_R3 = {
     "RIPROEXT": _e(1, catalogo_codigo_inexistente=1),
     "FCINTEGRPA": _e(1, pai_pendente=1, restricao_destino_1048=1),
     "FCLANAUD": _e(2, pai_inexistente=2),
+    # item 3 recusado: a trilha dele também (pai_pendente); item 99 nunca visto: grava com o item NULL
+    "FCLANEXTSEQITEM": _e(3, pai_pendente=1, pai_inexistente=1),
+    # usuário e tabela nunca vistos: gravam com NULL e pendência
+    "TBHISTBR": _e(3, pai_inexistente=2),
 }

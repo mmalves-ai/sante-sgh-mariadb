@@ -24,9 +24,9 @@ CARREGADAS = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARAC
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
               "PREVOLPAC", "PRALERGIAPAC_TBPRINC"}
 # cadastros de outras fatias lidos por chave alternativa/encadeada e carregados pela declaração delas
-DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA"}
+DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA", "PRTPASSINATURA"}
 # lidas só pela encadeada terminada em coluna, sem carga (TBPRINC: descarte catalogo_oficial na L7-07)
-SO_LEITURA = {"TBPRINC", "PRPERGUNTA", "PRCADRESP"}
+SO_LEITURA = {"TBPRINC", "PRPERGUNTA", "PRCADRESP", "PRASSINATURA_CAB"}
 DESCARTES = {"PRASS_DOC_PREXAMEASS", "PRCABEC_MONITORIZACAO", "PRPLANPRESC", "PRCABEVOLTMP",
              "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC"}
 # o anexo do prontuário só existe como binário na origem: bloqueada até o mecanismo de arquivo (#arquivo, M4)
@@ -219,7 +219,8 @@ class ConferenciaL612(unittest.TestCase):
                 def um(sql, *a):
                     c.execute(sql, a)
                     return c.fetchone()
-                lido["ext"] = {k: ids(*k) for k in [("RICADPAC", "1"), ("ATCABECATEND", "2"), ("TBPROFIS", "1"),
+                lido["ext"] = {k: ids(*k) for k in [("RICADPAC", "1"), ("RICADPAC", "2"), ("ATCABECATEND", "1"),
+                                                    ("ATCABECATEND", "2"), ("TBPROFIS", "1"),
                                                     ("TBUSERS", "USR1"), ("TBUSERS", "USR2")]}
                 lido["presc"] = um("SELECT paciente_id, atendimento_id, prescritor_profissional_id, situacao FROM"
                                    " prescricao WHERE numero=1")
@@ -243,6 +244,12 @@ class ConferenciaL612(unittest.TestCase):
                 c.execute("SELECT tipo_valor, COUNT(*), COUNT(modelo_campo_opcao_id), COUNT(valor_hora)"
                           " FROM registro_assistencial_resposta GROUP BY tipo_valor")
                 lido["resp"] = c.fetchall()
+                c.execute("SELECT d.paciente_id, d.atendimento_id, d.entidade_origem, d.entidade_origem_id,"
+                          " d.referencia_em, d.titulo, COUNT(e.id) FROM documento_prontuario d LEFT JOIN"
+                          " documento_prontuario_evento e ON e.documento_prontuario_id=d.id GROUP BY d.id"
+                          " ORDER BY d.entidade_origem_id")
+                lido["docpront"] = c.fetchall()
+                lido["opcao"] = um("SELECT COUNT(*), COUNT(DISTINCT modelo_campo_id), MIN(rotulo) FROM modelo_campo_opcao")
                 c.execute("SELECT p.codigo_dcb FROM alergia_paciente_principio a JOIN principio_ativo p"
                           " ON p.id=a.principio_ativo_id ORDER BY p.codigo_dcb")
                 lido["princ"] = [x[0] for x in c.fetchall()]
@@ -264,6 +271,16 @@ class ConferenciaL612(unittest.TestCase):
         self.assertEqual(lido["mat"], [1, 2])
         # hora '0830' em bytes ainda sai hora_invalida (pedido: hora_hhmm decodificar bytes): nenhuma hora gravada
         self.assertEqual(list(lido["resp"]), [("opcao", 4, 4, 1)])
+        # documento do prontuário pelo primeiro evento de cada cabeçalho (agrupado): o documento 1 tem dois eventos
+        # gravados (o terceiro, sem momento, recusa); o cabeçalho nunca visto não cria documento
+        T0 = datetime.datetime(2026, 3, 2, 8, 30)
+        self.assertEqual([tuple(x) for x in lido["docpront"]],
+                         [(ext[("RICADPAC", "1")], ext[("ATCABECATEND", "1")], "documento_migrado", 1,
+                           T0 + datetime.timedelta(hours=1), "Tipo de assinatura falso", 2),
+                          (ext[("RICADPAC", "2")], None, "documento_migrado", 2, T0 + datetime.timedelta(hours=2),
+                           "Tipo de assinatura falso", 1)])
+        # opção criada pela resposta, uma por campo x código (as respostas 3, 4 e 7 adotam)
+        self.assertEqual(tuple(lido["opcao"]), (2, 2, "Resposta falsa 1"))
         # princípio pelo código DCB no catálogo oficial (zeros à esquerda normalizados)
         self.assertEqual(lido["princ"], ["00777", "01234"])
 

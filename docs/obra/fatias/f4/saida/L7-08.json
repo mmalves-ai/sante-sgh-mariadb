@@ -33,7 +33,8 @@
   {
    "arquivo": "modelo (F2.2)",
    "mudanca": "mudança de modelo (F2.2): ficha_antimicrobiano migrada: prescricao_item_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao e justificativa aceitam nulo quando origem='migracao' (CHECK), com avaliacao_situacao 'pendente'",
-   "motivo": "GEANTIMI (liberação) exige a ficha (NOT NULL) e a origem não tem os dados clínicos da ficha (GECADANTIMI descartada como duplicada no L6-05). Declaração prevista no motivo das colunas da versão anterior desta fatia; anomalias mantidas na imagem sintética. Rodada 3: única tabela da L7-08 bloqueada. A ficha exige prescricao_item_id (NOT NULL) e a origem não liga a liberação ao item prescrito por nenhum caminho (GEANTIMI só tem REG, ITEM, datas e doses; PRLANGERAL e PRPRESCMED não têm o atendimento nem a liberação; GELANSAI.ID_GEANTIMI é N:1). Presumir o item prescrito ou dados clínicos seria dado falso"
+   "motivo": "GEANTIMI (liberação) exige a ficha (NOT NULL) e a origem não tem os dados clínicos da ficha (GECADANTIMI descartada como duplicada no L6-05). Declaração prevista no motivo das colunas da versão anterior desta fatia; anomalias mantidas na imagem sintética. Rodada 3: única tabela da L7-08 bloqueada. A ficha exige prescricao_item_id (NOT NULL) e a origem não liga a liberação ao item prescrito por nenhum caminho (GEANTIMI só tem REG, ITEM, datas e doses; PRLANGERAL e PRPRESCMED não têm o atendimento nem a liberação; GELANSAI.ID_GEANTIMI é N:1). Presumir o item prescrito ou dados clínicos seria dado falso",
+   "atendido": "rodada 3 (refeita): substituído pelo pedido 6 e 14 da L6-05 (a ficha nasce de GECADANTIMI). GEANTIMI declarada em liberacao_antimicrobiano com ficha por ref:GECADANTIMI; carrega na imagem sintética (6 de 10, anomalias recusadas). Só falta o pai: GECADANTIMI (L6-05) aguarda o DDL do pedido 14 (ficha migrada com campos clínicos nulos)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",

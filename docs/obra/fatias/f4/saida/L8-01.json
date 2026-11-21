@@ -198,6 +198,11 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, opcional)",
    "mudanca": "modo de existência na referência por chave alternativa (ex.: 'existe:RPLANRPA.ID_RPLANEVE'): repetido conta como existente (não pai_ambiguo) e ausente não deixa pai_inexistente (só o padrão)",
    "motivo": "a situação do lançamento pela evidência do RPA deixa pai_inexistente (média) nos 198 lançamentos sem RPA, que é o estado normal deles; na referência não há repetição, mas outro cliente com o lançamento em dois RPAs cairia em pai_ambiguo e no padrão aberto"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação do principal desdobrado, integrador; mesma regra vale para TBLOCALHORA)",
+   "mudanca": "no resultado da conciliação do destino PRINCIPAL desdobrado (_desdobrado), registros_destino = linhas da origem gravadas (a variável 'linhas', hoje só usada no ok) e não len(destino) (itens); acrescentar 'itens_destino': len(destino) ao resultado (e, se o painel quiser mostrar, à conciliação/execucao.ts). A soma de controle segue sobre os itens. Teste: na imagem sintética da L8-01, FCHORATE tem 4 linhas lidas, 1 gravada com 6 itens e 3 recusadas: registros_origem 4 = registros_destino 1 + recusados 3",
+   "motivo": "o ponta a ponta do painel (apps/api/src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts) exige registrosOrigem = registrosDestino + recusados por entidade; com o principal desdobrado o motor grava registros_destino = itens (6) e o painel acusa horario_normal_tabela '4 de 9' no Importar (4 linhas contra 6 itens + 3 recusadas). A declaração da fatia segue o mecanismo da rodada 3 como documentado (FCHORATE é o exemplo do brief); mudar a imagem sintética para uma linha com um só item esconderia o defeito. Código compartilhado: a fatia não edita"
   }
  ]
 }

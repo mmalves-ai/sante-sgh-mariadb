@@ -87,6 +87,31 @@
    "arquivo": "conector/mapa/declarado/dependencias.tsv (orquestrador)",
    "mudanca": "arestas de ordem PREXAMEASSINATURA -> PRASSINATURA_CAB e PREXAMEASSINATURA -> SILANEXA (e PRASSINATURA_DOC, lida pela encadeada)",
    "motivo": "exame_item_assinatura (L7-04) lê o documento pela ligação PRASS_DOC_PREXAMEASS (descarte duplicado da L6-12) e o exame por SILANEXA; ordem 848 antes de 1106 e 1145: a primeira carga recusa toda ligação"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv + sem_carga.tsv (fatia L6-11)",
+   "mudanca": "PRASSINATURA_CAB: o documento_prontuario passa a ser criado pela PRASSINATURA_DOC (L6-12, secundário antes;agrupar:ID_PRASSINATURA_CAB, entidade_origem 'documento_migrado', entidade_origem_id = id do cabeçalho). Na L6-11: retirar a declaração comentada que grava o documento e tratar a tabela como 'complementa' do documento só para DOCUMENTO_CONSOLIDADO (conteudo, #retrato) e ID_TABELA, ou descarte duplicado se o motor não achar o documento",
+   "motivo": "a alternativa sem motor novo pedida pela L6-11 está pronta e conferida na L6-12 (2 documentos, 3 eventos na imagem sintética, idempotente); falta só o texto consolidado do cabeçalho"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência por chave alternativa)",
+   "mudanca": "ref:T.K/<destino> com K repetido não dá pai_ambiguo quando todas as linhas candidatas apontam o MESMO id nesse destino secundário (ex.: ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB/documento_prontuario, destino agrupado)",
+   "motivo": "PRASSINATURA_CAB (L6-11) complementar o documento criado pelo grupo dos eventos (documento consolidado) sem M3"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-04.tsv e a fatia de PRASSINAT_DOC_PRCHKGERAL",
+   "mudanca": "o documento do prontuário vem do evento: trocar '>ID_PRASSINATURA_CAB>PRASSINATURA_CAB' por '>ID_PRASSINATURA_DOC>PRASSINATURA_DOC/documento_prontuario' (PREXAMEASSINATURA: ref:PRASS_DOC_PREXAMEASS.ID_PREXAMEASSINATURA>ID_PRASSINATURA_DOC>PRASSINATURA_DOC/documento_prontuario)",
+   "motivo": "PRASSINATURA_CAB não grava mais o documento; PREXAMEASSINATURA (BLOQUEADA por pai_nao_carregado:PRASSINATURA_CAB) passa a carregar"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv (PRRESPOSTA, quando carregar)",
+   "mudanca": "manter código = ID_RESPOSTA (inteiro) e adotar:modelo_campo_id,codigo no modelo_campo_opcao",
+   "motivo": "PREVOLPAC (L6-12) já cria a opção respondida por campo x código pela mesma chave; a carga da L6-11 adota as mesmas linhas sem duplicar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (M3)",
+   "mudanca": "agregado do grupo pelo ÚLTIMO da ordem da chave (ex.: #grupo_ultimo:ID_PRSITDOCUMENTO)",
+   "motivo": "documento_prontuario.situacao_documento_prontuario_id = situação atual (último evento); hoje fica a do primeiro e o histórico completo está nos eventos"
   }
  ]
 }

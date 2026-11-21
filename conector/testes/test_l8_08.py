@@ -95,6 +95,16 @@ class Plano(unittest.TestCase):
         for antiga, atual in MESMA_LISTA.items():
             self.assertEqual(self.cols(antiga)["lista"]["coluna"], self.cols(atual)["lista"]["coluna"])
 
+    def test_versao_com_id_carrega_antes_da_antiga(self):
+        """A versão com id cria os códigos comuns (descrição dela); a antiga só adota e cria o que só ela tem."""
+        ordem = {r["tabela"]: int(r["ordem"]) for r in self.mapa["tabelas"] if (r.get("ordem") or "").isdigit()}
+        for antiga, atual in MESMA_LISTA.items():
+            self.assertLess(ordem[atual], ordem[antiga], (atual, antiga))
+            self.assertIn((antiga, atual), {(d["tabela"], d["depende_de"]) for d in self.mapa["deps"]})
+        e = l8_08.linhas(random.Random(1), lambda t, v: None)
+        self.assertEqual(e["TBNIVEL"]["pendencias"].get("adotado_existente"), 2)
+        self.assertNotIn("adotado_existente", e["TBNIVSUS"]["pendencias"])
+
     def test_descartes_e_sem_mecanismo(self):
         self.assertEqual(set(l8_08.DESCARTADAS.values()), {"mecanismo_do_produto", "catalogo_oficial", "duplicado"})
         self.assertEqual(set(l8_08.BLOQUEADAS), set(l8_08.DESCARTADAS) | set(l8_08.SEM_MECANISMO))

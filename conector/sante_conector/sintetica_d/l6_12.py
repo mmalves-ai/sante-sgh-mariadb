@@ -14,7 +14,9 @@ pais externos. A alergia lê paciente, atendimento, data e autor do registro cl�
 hemocomponente vêm por chave alternativa (sigla); o campo do modelo da resposta, pela opção -> pergunta -> ligação.
 O princípio ativo da alergia (PRALERGIAPAC_TBPRINC) vem do catálogo oficial DCB pelo código guardado no princípio
 da origem (TBPRINC, intermediária: encadeada terminada em coluna + `cod:principio_ativo.codigo_dcb`); o catálogo
-oficial é preparado no destino (nunca gravado pelo conector). Descartes (sem_carga.tsv) entram só com a forma.
+oficial é preparado no destino (nunca gravado pelo conector). O documento do prontuário nasce do primeiro evento de
+assinatura de cada cabeçalho (PRASSINATURA_CAB, só lido: secundário agrupado); a opção respondida, da própria
+resposta (secundário adotado por campo x código). Descartes (sem_carga.tsv) entram só com a forma.
 """
 import csv
 import datetime
@@ -201,7 +203,8 @@ FORMAS = {
 # intermediárias da referência encadeada (de outras fatias): todas as colunas do dicionário, chave ID
 _TIPOS_FB = {"DOUBLE": "DOUBLE PRECISION", "BLOB": "BLOB SUB_TYPE 0"}
 INTERMEDIARIAS = ("HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO", "TBPROFIS", "PRRESPOSTA", "PRPADEVOL", "PRHEMOTLAN",
-                  "TBUNIDADEMEDIDA", "TBPRINC", "PREVOLUCAO", "PRPERGUNTA", "PRCADRESP")
+                  "TBUNIDADEMEDIDA", "TBPRINC", "PREVOLUCAO", "PRPERGUNTA", "PRCADRESP", "PRASSINATURA_CAB",
+                  "PRTPASSINATURA")
 # chave das intermediárias (as demais: ID). PRHEMOTLAN, TBUNIDADEMEDIDA (L7-01, L6-10), PREVOLUCAO, PRPADEVOL e
 # PRRESPOSTA (L6-11, rodada 3) são carregadas pela declaração das outras fatias: o campo do modelo e a opção da
 # resposta saem do destino que elas gravam. PRPERGUNTA e PRCADRESP só são lidas (título do campo e rótulo da opção)
@@ -237,7 +240,7 @@ DDL = "".join("CREATE TABLE %s (%s, PRIMARY KEY (%s));\n" % (
 # avós da referência encadeada e pais de fora da fatia, registrados como já carregados (ids diferentes das
 # intermediárias: a referência direta não acharia nada)
 PAIS_EXTERNOS = {"RICADPAC": [1, 2], "ATCABECATEND": [1, 2], "TBUSERS": ["USR1", "USR2"], "TBPESSOA": [1, 2],
-                 "PRLOCAL_ASSISTENCIA": [1], "PRTPCOMP": [1], "PRASSINATURA_CAB": [1, 2], "PRSITDOCUMENTO": [1],
+                 "PRLOCAL_ASSISTENCIA": [1], "PRTPCOMP": [1], "PRSITDOCUMENTO": [1],
                  "TBALERGIA": [1], "PRTPLAN": [1, 2], "PRFREQUENCIA": [1], "GETABVIA": ["VO", "EV"],
                  "PRPROTGERAL": [1], "TBPROENF": [1, 2], "PRTPINFUSAO": [1], "TBDIETAS": [1, 2], "PRVIAADMIN": [1],
                  "PRUNIDINFUSAO": [1], "PRCARACTDIE": [1, 2], "GEITENS": [1, 2], "PRITEMNAOPAD": [1],
@@ -360,13 +363,14 @@ def linhas(r, ins):
     for i in (1, 2):
         linha("PREVOLUCAO", ID_EVOLUCAO=i, DESCRICAO="Modelo falso %d" % i, ID_PRTPCOMP=1)
     for i in (10, 11, 12):
-        linha("PRPERGUNTA", ID=i, COD_PERGUNTA=i, COLUNA=1, DESCRICAO="Pergunta falsa %d" % i, ATIVO="S")
+        linha("PRPERGUNTA", ID=i, COD_PERGUNTA=i, COLUNA=1, DESCRICAO="Pergunta falsa %d" % i, TIPOPERG="4",
+              ATIVO="T")
     for i in (1, 2, 3):
         linha("PRCADRESP", COD=i, DESCRICAO="Resposta falsa %d" % i)
     for i, perg in ((1, 10), (2, 11), (3, 12)):
         linha("PRRESPOSTA", ID_RESPOSTA=i, ID_PRPERGUNTA=perg, COD=i, CONTEVOL=b"Opcao falsa", ATIVO="S", ORDEM=i)
     for i, modelo, perg in ((1, 1, 10), (2, 1, 11), (3, 1, 12), (4, 2, 12)):
-        linha("PRPADEVOL", ID=i, ID_EVOLUCAO=modelo, ID_PRPERGUNTA=perg, ORDEM="%02d" % i, ATIVO="S")
+        linha("PRPADEVOL", ID=i, ID_EVOLUCAO=modelo, ID_PRPERGUNTA=perg, ORDEM="%02d" % i, ATIVO="T")
     # registros clínicos: 1 normal; 2 suspenso (excluído logicamente) e correção do 1 (fase 2); 3 inscrição de
     # profissional inexistente (profissional e usuário pai_inexistente, NOT NULL); 4 modelo nunca visto (NOT NULL)
     for i, pac, atd, modelo, autor in [(1, 101, 201, 1, 301), (2, 102, 202, 1, 302), (3, 101, 201, 1, 303),
@@ -388,9 +392,11 @@ def linhas(r, ins):
         acao = {"ACAO": "R", "ACAO_DATA_HORA": _h(7), "ID_TBUSERS_ACAO": "USR2"} if i == 2 else {}
         linha("PRALERGIAPAC", ID=i, ID_PRCABEVOL=cab, ID_TBALERGIA=alg, RETIRAR_VINCULO_PACIENTE=ret,
               OBSERVACAO="Reação leve %d" % i, **acao)
-    # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2), 3 no registro 2 (autopreenchida); 4 registro
-    # recusado (pai_pendente); 5 opção de pergunta em dois modelos: a opção é recusada na L6-11 (pai_ambiguo lá) e a
-    # resposta fica pai_pendente (entra quando a opção entrar); 6 opção nunca vista (NOT NULL);
+    # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2) criam a opção do campo (modelo_campo_opcao, uma
+    # por campo x código, rótulo do catálogo de respostas), 3 no registro 2 (autopreenchida) adota a opção da 1; 4
+    # registro recusado (pai_pendente; a opção já existe e é adotada); 5 opção de pergunta em dois modelos: o campo
+    # sai pai_ambiguo (na opção e na resposta) e a linha recusa (NOT NULL); 6 opção nunca vista (pai_inexistente nas
+    # cinco colunas lidas por ela e NOT NULL); 7 adota a opção da 2;
     # 7 hora inválida (NULL com hora_invalida, gravada). A hora '0830' da 2 também sai hora_invalida: a origem entrega
     # VARCHAR em bytes; desde a rodada 2 a regra hora_hhmm decodifica o texto cru: só 2575 fica hora_invalida
     for i, cab, resp, extra in [(1, 1, 1, {"RESPALFA": "Texto livre", "RESPVALOR": D("37.500"), "UNIDRESP": "C"}),
@@ -411,8 +417,15 @@ def linhas(r, ins):
               CONTEUDO_XML=("Declaro, para os devidos fins, documento falso %d." % i).encode("cp1252") if texto else None,
               REGISTRO_VALIDO=valido, ID_PRATESTREQIMP_ORIG_CORREC=1 if i == 5 else None, ID_TBPROFIS_ACOMP_RESP=1,
               **extra)
-    # eventos de assinatura: 1 e 2 normais; 3 documento nunca visto (NOT NULL); 4 sem momento do evento (NOT NULL)
-    for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None)]:
+    # cabeçalhos da assinatura (lidos na origem: o documento do prontuário nasce do primeiro evento de cada um) e o
+    # tipo de assinatura (carregado pela L6-07: pai externo, lido também pela descrição do título)
+    linha("PRTPASSINATURA", ID=1, DESCRICAO="Tipo de assinatura falso", ORDEM_MEDICA="N")
+    for i, pac, atd in ((1, 101, 201), (2, 102, None)):
+        linha("PRASSINATURA_CAB", ID=i, ID_PRTPASSINATURA=1, ID_TABELA=500 + i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=atd)
+    # eventos de assinatura: 1 e 2 normais (criam os documentos 1 e 2); 3 cabeçalho nunca visto (paciente NULL: o
+    # documento recusa NOT NULL e o evento junto); 4 do documento 1 sem momento do evento (NOT NULL); 5 segundo
+    # evento do documento 1 (usa o documento já criado: dois eventos, um documento)
+    for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None), (5, 1, 4)]:
         linha("PRASSINATURA_DOC", ID=i, ID_PRASSINATURA_CAB=cab, ID_PRTPDOCUMENTO=1, ID_PRSITDOCUMENTO=1,
               ID_TBCBOPRO=301 + i % 2, DATA_HORA_EVENTO=None if ev is None else _h(ev), DATA_HORA_GRAVACAO=_h(9))
     # princípios da origem: 1 código sem zeros à esquerda (casa com 01234); 2 código já com 5 dígitos; 3 sem código
@@ -455,8 +468,9 @@ ESPERADO = {
     "PRCABEVOL": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
                                                 "valor_presumido": 4}},
     "PRCONTEVOL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
-    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
-                                                "restricao_destino_1048": 1, "hora_invalida": 1}},
+    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 5, "pai_ambiguo": 2,
+                                                "adotado_existente": 2, "restricao_destino_1048": 2,
+                                                "hora_invalida": 1}},
     "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_4025": 2}},
     "PRALERGIAPAC_TBPRINC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "codigo_inexistente_destino": 1,
@@ -464,5 +478,5 @@ ESPERADO = {
                                                            "restricao_destino_1062": 1}},
     "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
                                                     "restricao_destino_4025": 1}},
-    "PRASSINATURA_DOC": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+    "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2}},
 }

@@ -316,8 +316,9 @@ def linhas(r, ins):
     # tipo de prestador: 3 sem nome (1048); a versão antiga TBPRESSE é descarte duplicado (mesmos códigos)
     for i, cod, nome in [(1, 1, "Prestador exemplo um"), (2, 2, "Prestador   exemplo dois"), (3, 3, None)]:
         _ins(ins, "TBPRESUS", ID=i, COD=cod, NOME=nome)
-    # nível: a versão antiga sem id (TBNIVEL) carrega antes, pela ordem do mapa, e cria 1, 2 e 9; a versão com id adota
-    # 1 e 2 (adotado_existente) e cria 3; o 4 sem nome recusa (1048). O 9 só existe na antiga (por isso ela carrega)
+    # nível: a versão com id (TBNIVSUS) carrega antes (dependencias.tsv: TBNIVEL depende de TBNIVSUS) e cria 1, 2 e 3
+    # com a descrição dela; o 4 sem nome recusa (1048). A antiga sem id (TBNIVEL) adota 1 e 2 (adotado_existente) e
+    # cria o 9, que só existe nela (por isso ela carrega)
     for cod, nome in [(1, "Nível exemplo um"), (2, "Nível exemplo dois"), (9, "Nível exemplo nove")]:
         _ins(ins, "TBNIVEL", COD=cod, NOME=nome.encode("cp1252"))
     for i, cod, nome in [(1, 1, "Nível exemplo um"), (2, 2, "Nível  exemplo dois"), (3, 3, "Nível exemplo três"),
@@ -330,5 +331,5 @@ def linhas(r, ins):
             "TBCARATERATEND": rec(2), "TBDRS": ok(2),
             "TBFONTE_ORCAMENTARIA_SUS": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}, "TBGRUATE": ok(3),
             "TBTIPATE": ok(2), "TBTPAPAC": rec(2), "TBLOCPRI": loc, "FHLEITOUTI": uti, "FCCTRLANCIHA": ciha,
-            "TBPRESUS": rec(2), "TBNIVEL": ok(3),
-            "TBNIVSUS": {"gravados": 3, "pendencias": {"adotado_existente": 2, R1048: 1}}}
+            "TBPRESUS": rec(2), "TBNIVSUS": rec(3),
+            "TBNIVEL": {"gravados": 3, "pendencias": {"adotado_existente": 2}}}

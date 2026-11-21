@@ -5,7 +5,7 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ mapa._ESPECIAIS, verificar_mapa.py)",
    "mudanca": "especial '#data_hora_mais:<DATA>,<HORA>,<MINUTOS>': data + hora HHMM (como '#data_hora') somadas de MINUTOS; MINUTOS é uma coluna desta linha (pela regra declarada, ex. minutos_hhmm) ou vem de outra tabela pela via (ex.: 'ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos', a duração que a agenda referenciada gravou); sem minutos: NULL com 'duracao_ausente'; mesma virada de dia; entra na soma de controle como DATETIME",
-   "motivo": "SIPACAGI (70576 horários de exame) e REPACAGI (L6-03): horario_agenda.fim_em é NOT NULL (CHECK fim > início) e a origem só guarda o início; a duração é a da agenda. Sem isso SIPACAGI, SIPACAGD (50116 marcações de exame) e REPACAGD (122602 marcações de consulta) ficam bloqueadas"
+   "motivo": "SIPACAGI (70576 horários de exame) e REPACAGI (L6-03): horario_agenda.fim_em é NOT NULL (CHECK fim > início) e a origem só guarda o início; a duração é a da agenda. Sem isso SIPACAGI, SIPACAGD (50116 marcações de exame) e REPACAGD (122602 marcações de consulta) ficam bloqueadas. ÚNICO bloqueio restante da fatia (SIPACAGI, SIPACAGD, REPACAGD): nenhum mecanismo existente soma minutos a data e hora; inventar um fim fixo seria dado falso"
   },
   {
    "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (agenda_servico)",
@@ -15,7 +15,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (regerar tabelas.tsv e fatias)",
    "mudanca": "aresta SIPACAGI -> SIAGENDA (horário de exame depois da agenda de exames; hoje ordem 266 antes de 665) e retirar RECANAGE -> REPACAGD (RECANAGE não referencia a marcação); destinos do mapa: RECANAGE -> registro_excluido e REPACAGD_EXCLUSAO -> registro_excluido (tabelas.tsv ainda diz cancelamento_marcacao)",
-   "motivo": "a declaração pronta de SIPACAGI referencia SIAGENDA pela chave composta; com a ordem atual toda linha teria pai_inexistente na primeira carga e entraria na segunda (não idempotente). RECANAGE e REPACAGD_EXCLUSAO são cópias de registro apagado (decisão L6-04, rodada 3)"
+   "motivo": "a declaração pronta de SIPACAGI referencia SIAGENDA pela chave composta; com a ordem atual toda linha teria pai_inexistente na primeira carga e entraria na segunda (não idempotente). RECANAGE e REPACAGD_EXCLUSAO são cópias de registro apagado (decisão L6-04, rodada 3)",
+   "atendido": "aresta SIPACAGI -> SIAGENDA em declarado/dependencias.tsv (conferidor r3)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
@@ -25,7 +26,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "duração da marcação pelo horário referenciado: especial '#minutos_entre:<col_inicio>,<col_fim>' lido do DESTINO que o pai gravou (via 'ref:SIPACAGI.(NOME,CRM,DATA,HORA)=(NOME,CRM,DATA,HORA)'), ou cópia em dois saltos ('@agenda_servico_id>duracao_horario_minutos')",
-   "motivo": "SIPACAGD/REPACAGD: marcacao_horario.duracao_minutos é NOT NULL e a marcação da origem não tem duração própria"
+   "motivo": "SIPACAGD/REPACAGD: marcacao_horario.duracao_minutos é NOT NULL e a marcação da origem não tem duração própria",
+   "atendido": "sem mudança no motor: a cópia de coluna do destino do pai (ref:T@coluna, grupo 2) dá a duração da agenda à marcação (declarada, comentada até o pedido 1)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_converter, de-para de valores)",

@@ -29,11 +29,11 @@ class L6_10(unittest.TestCase):
 
     def test_bloqueadas_com_causa_e_declaracao_pronta(self):
         sem = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
-        self.assertEqual(l6_10.DESCARTADAS, ())
-        causas = {t: (sem[t]["situacao"], sem[t]["causa"]) for t in l6_10.BLOQUEADAS}
-        self.assertEqual(causas, {"PRPERGUNTA": ("bloqueada", "referencia_encadeada:PRPADEVOL"),
-                                  "PRPARAMSUMARIOALTA": ("bloqueada", "desdobrar_item_com_referencia")})
-        for t in ("TBTPSITUACAOMP", "PRRESPOSTA"):
+        self.assertEqual(l6_10.BLOQUEADAS, ())
+        causas = {t: (sem[t]["situacao"], sem[t]["causa"]) for t in l6_10.DESCARTADAS}
+        self.assertEqual(causas, {"PRPERGUNTA": ("descarte", "duplicado")})
+        # PRRESPOSTA é da L6-11 (a linha dela em sem_carga.tsv é de lá); as carregadas daqui não têm linha
+        for t in ("TBTPSITUACAOMP", "PRPARAMSUMARIOALTA"):
             self.assertNotIn(t, sem)
         texto = (mapa.DIR_PACOTE / "declarado" / FATIA).read_text(encoding="utf-8")
         self.assertNotIn("PRRESPOSTA\t", texto)  # obsoleta aqui: a declaração vale na L6-11
@@ -147,8 +147,13 @@ class L6_10(unittest.TestCase):
         # unidade de medida pela sigla casada com o código da unidade (TBUNICON), nunca o id da unidade de prescrição
         self.assertEqual(via[("TBUNIDMEDIDA_PRINC_VALID", "tipo_validacao_dose_unidade.unidade_medida_id")],
                          "ref:TBUNIDADEMEDIDA>SIGLA_API>TBUNICON")
-        self.assertEqual(via[("PRUNITPLAN", "tipo_item_prescricao_unidade.unidade_prescricao_id")],
-                         "ref:TBUNIDADEMEDIDA.SIGLA_API")
+        # a unidade de prescrição do tipo de item: adotada ou criada pelo código de TBUNICON (como na L6-11)
+        self.assertNotIn(("PRUNITPLAN", "tipo_item_prescricao_unidade.unidade_prescricao_id"), via)
+        self.assertEqual(via[("PRUNITPLAN", "unidade_prescricao.codigo")], "unidade_prescricao;antes;adotar:codigo")
+        self.assertEqual(via[("PRUNITPLAN", "unidade_prescricao.unidade_medida_id")], "unidade_prescricao;ref:TBUNICON")
+        self.assertIn(("@id:unidade_prescricao", "tipo_item_prescricao_unidade.unidade_prescricao_id"),
+                      {(c["coluna"], c["destino"]) for c in self.decl if c["tabela"] == "PRUNITPLAN"})
+        self.assertEqual(self.plano["PRUNITPLAN"]["destinos"][0], "tipo_item_prescricao_unidade")
         # o pai da FK é do domínio que ela espera: TBPRINC_VALIDACAO carrega em tipo_validacao_dose (L6-09)
         pv = carga_mapa.planejar(self.m, {"TBPRINC_VALIDACAO"})
         self.assertEqual([p["destinos"][0] for p in pv], ["tipo_validacao_dose"])
@@ -176,10 +181,25 @@ class L6_10(unittest.TestCase):
 
     def test_carga_parcial_da_unidade_declarada(self):
         # a unidade casa pela sigla de integração só em parte das linhas: o motivo traz a medição e o pedido
-        for t, c in (("PRUNITPLAN", "UNI_PRESC"), ("TBUNIDMEDIDA_PRINC_VALID", "ID_TBUNIDADEMEDIDA")):
+        for t, c in (("TBUNIDMEDIDA_PRINC_VALID", "ID_TBUNIDADEMEDIDA"),
+                     ("PRPARAMSUMARIOALTA", "ID_PROPCAOPERIODO_PROC"), ("PRPARAMSUMARIOALTA", "ID_PRPERGUNTA_PLANO")):
             m = next(x["motivo"] for x in self.decl if (x["tabela"], x["coluna"]) == (t, c))
             self.assertIn("CARGA PARCIAL", m, t)
             self.assertIn("pedido", m, t)
+
+    def test_sumario_de_alta_uma_secao_por_coluna(self):
+        p = self.plano["PRPARAMSUMARIOALTA"]
+        self.assertEqual(p["destinos"], ["componente_sumario_alta"])
+        rot = [r.split("|") for _, r in p["opcoes"]["componente_sumario_alta"]["desdobrar"]]
+        self.assertEqual([r[1] for r in rot], ["procedimentos", "exames", "evolucao_clinica", "plano_terapeutico"])
+        self.assertEqual([r[3] for r in rot], ["1", "2", "3", "4"])
+        par = {(v["coluna"], v["valor_origem"]): v["valor_destino"] for v in self.m["valores"]
+               if v["tabela"] == "PRPARAMSUMARIOALTA"}
+        # domínios fixos do sistema anterior: 4 'nenhum' e os recortes 0 e 3 ficam sem par (pendência, nunca chute)
+        self.assertEqual(par, {("ID_PRTPATEND", "1"): "ambulatorio", ("ID_PRTPATEND", "2"): "internacao",
+                               ("ID_PRTPATEND", "3"): "todos",
+                               ("ID_PROPCAOPERIODO_PROC", "1"): "atendimento_inteiro",
+                               ("ID_PROPCAOPERIODO_PROC", "2"): "ultimas_24_horas"})
 
     def test_esperado_da_imagem_so_nas_carregadas(self):
         self.assertEqual(set(self.esp), set(l6_10.CARREGADAS))

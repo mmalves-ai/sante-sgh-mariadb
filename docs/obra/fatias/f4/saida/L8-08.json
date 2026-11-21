@@ -77,7 +77,8 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "TBNIVEL depende de TBNIVSUS (versão com id carrega antes da antiga sem id)",
-   "motivo": "as duas carregam na lista nivel_atencao com adotar:lista,codigo; pela ordem atual (745 antes de 746) a antiga cria e a descrição dela fica nos 8 códigos comuns"
+   "motivo": "as duas carregam na lista nivel_atencao com adotar:lista,codigo; pela ordem atual (745 antes de 746) a antiga cria e a descrição dela fica nos 8 códigos comuns",
+   "atendido": "rodada 3 (conferidor): aresta TBNIVEL -> TBNIVSUS acrescentada pela fatia em declarado/dependencias.tsv e mapa regenerado (gerar_mapa_conector.py, fatiar_conector.py); TBNIVSUS carrega antes (ordem 717, TBNIVEL 718) e os 2 adotado_existente passam a TBNIVEL na sintética"
   },
   {
    "arquivo": "db/migracoes (trilha F2.2): cadastro de autorizador SUS e de órgão gestor por estabelecimento",
@@ -100,6 +101,7 @@
   "FIPARAM, FAPARAM, FAPARAMA: motivos por coluna reescritos sem texto de bloqueio (competência, cadastro, instalação, opção de crítica do catálogo de parâmetros)",
   "TBPRESUS e TBNIVSUS: CARREGAM em dominio_sus (listas tipo_prestador e nivel_atencao); TBNIVEL carrega na mesma lista (1 código só dela); TBPRESSE descarte duplicado (8 de 8 códigos iguais); TBLOCSUS segue catalogo_oficial",
   "FCCTRLANCIHA: uma equivalência vigente por item e instrumento (adotar:item_faturavel_id,instrumento); TBPROSUS.COD INTEGER na sintética, como na origem",
-  "FIPARAM/FAPARAM/FAPARAMA: motivos do CNS do autorizador e do órgão gestor corrigidos (sem destino no modelo; pedido de modelo)"
+  "FIPARAM/FAPARAM/FAPARAMA: motivos do CNS do autorizador e do órgão gestor corrigidos (sem destino no modelo; pedido de modelo)",
+  "TBNIVEL depende de TBNIVSUS (declarado/dependencias.tsv): a versão com id cria os códigos comuns com a descrição dela; a antiga adota 2 e cria 1 (sintética: TBNIVSUS 3 gravadas + 1 recusa 1048; TBNIVEL 3 gravadas, 2 adotado_existente)"
  ]
 }

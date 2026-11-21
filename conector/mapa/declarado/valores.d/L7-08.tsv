@@ -13,3 +13,8 @@ PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	1	requis
 PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	2	dispensacao_direta	L7-08: 2ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
 PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	1	na_prescricao	L7-08: 1ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
 PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	2	no_aprazamento	L7-08: 2ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
+GEANTIMI	DATA_INT	liberacao_antimicrobiano.decisao	1	suspenso	L7-08: liberação interrompida (data de interrupção preenchida)
+GEANTIMI	DATA_INT	liberacao_antimicrobiano.decisao		liberado	L7-08: sem interrupção
+GEANTIMI	TIPO	liberacao_antimicrobiano.tipo_tratamento	P	profilatico	L7-08: tipo do tratamento pela inicial
+GEANTIMI	TIPO	liberacao_antimicrobiano.tipo_tratamento	E	empirico	L7-08: tipo do tratamento pela inicial
+GEANTIMI	TIPO	liberacao_antimicrobiano.tipo_tratamento	T	terapeutico	L7-08: tipo do tratamento pela inicial
