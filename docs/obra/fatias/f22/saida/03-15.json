@@ -1,0 +1,63 @@
+{
+  "registrar": [
+    "telemedicina"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/telemedicina/modulo.ts",
+    "src/modulos/telemedicina/porta-memoria.ts",
+    "src/modulos/telemedicina/porta-propria.int.spec.ts",
+    "src/modulos/telemedicina/porta-propria.ts",
+    "src/modulos/telemedicina/porta.ts",
+    "src/modulos/telemedicina/portal-teleconsulta.controller.ts",
+    "src/modulos/telemedicina/provedor.spec.ts",
+    "src/modulos/telemedicina/provedor.ts",
+    "src/modulos/telemedicina/public-api.ts",
+    "src/modulos/telemedicina/servico.ts",
+    "src/modulos/telemedicina/telemedicina.controller.ts",
+    "src/modulos/telemedicina/telemedicina.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "teleconsulta",
+      "sql": "ALTER TABLE teleconsulta ADD COLUMN local_paciente_municipio_id BIGINT UNSIGNED NULL COMMENT 'Município de onde o paciente participa' AFTER local_paciente_unidade_federativa_id, ADD KEY ix_teleconsulta_municipio (local_paciente_municipio_id), ADD CONSTRAINT fk_teleconsulta_local_paciente_municipio_id FOREIGN KEY (local_paciente_municipio_id) REFERENCES municipio_ibge (id) ON DELETE RESTRICT;",
+      "motivo": "A sala de espera recebe o município do paciente (contrato LocalPaciente.municipio); sem a coluna, só UF e tipo de local são gravados e o município sai vazio. FK para o catálogo IBGE de municípios (municipio_ibge)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "teleconsulta",
+      "sql": "ALTER TABLE teleconsulta ADD COLUMN ciente_alerta_cronico BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'O médico confirmou ciência do alerta do paciente crônico sem consulta presencial' AFTER declaracao_profissional_em;",
+      "motivo": "A ciência do alerta do crônico (TELE-04) hoje fica só na trilha (chave cienteAlerta=0/1 da sala aberta)."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "portal-paciente (lote 03-12)",
+      "pedido": "Exportar SERVICO_PORTAL_PACIENTE e SERVICO_AGENDA_PORTAL para o módulo telemedicina (global ou import). Retirado o pedido de preencher marcacao_horario.executante_profissional_id: a porta da telemedicina agora lê o profissional por COALESCE(executante, agenda_servico.profissional_id) e o horário por horario_agenda.inicio_em."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "pep",
+      "pedido": "SERVICO_DOCUMENTOS visível ao módulo telemedicina para a marca da telemedicina nos documentos."
+    },
+    {
+      "tipo": "desmontagem",
+      "alvo": "apps/api/src/app.module.ts",
+      "pedido": "Remover o uso de portaTelemedicinaLegado (apagado) e do bloco M50 etapa 4; o módulo agora é telemedicina/modulo.ts."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "atendimento (porta-propria, operação atendimento.abrirAtendimento)",
+      "pedido": "No mesmo tx.alterar('teleconsulta', ...) que grava atendimento_id, gravar também situacao='em_andamento' e iniciada_em (e aceitar a teleconsulta em sala_aberta só do profissional que abriu a sala). Com isso o passo 3 do início da teleconsulta vira só a trilha do evento. Hoje o passo 3 é reentrante (telemedicina.vincular_atendimento), e a teleconsulta não trava mais em sala_aberta com atendimento ligado, mas a atomicidade plena depende deste pedido."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "relay de saída (integracao_mensagem)",
+      "pedido": "Novos pontos de outbox, só com ids: telemedicina.teleconsulta_agendada, telemedicina.teleconsulta_iniciada, telemedicina.teleconsulta_encerrada, telemedicina.teleconsulta_cancelada, telemedicina.teleconsulta_remarcada, telemedicina.teleinterconsulta_solicitada, telemedicina.teleinterconsulta_respondida. Nenhum consumidor externo: o relay deve tratá-los como eventos internos (sem envio para fora)."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "portal-teleconsulta.controller / apoio de gravação",
+      "pedido": "Repassar a chave de idempotência do pedido (cabeçalho Idempotency-Key do portal e da tela) em ContextoTelemedicina.chaveIdempotencia; sem ela, cada chamada gera a sua chave e a proteção contra o pedido repetido é a releitura com trava (marcação e teleconsulta FOR UPDATE)."
+    }
+  ]
+}

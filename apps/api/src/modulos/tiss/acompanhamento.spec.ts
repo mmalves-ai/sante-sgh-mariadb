@@ -14,7 +14,7 @@ const ESCOPO: Record<string, number[] | null> = { LIVRE: null, CONTA1: [1] };
 function montar() {
   const leituras: FiltroAcompanhamentoPorta[] = [];
   const porta = {
-    destino: 'legado',
+    destino: 'banco',
     contasBancariasDoEscopo: async (_c: unknown, login: string | null) => ESCOPO[login ?? ''] ?? null,
     convenios: async () => [{ codigo: 91, nome: 'CONVENIO SINTETICO' }],
     painel: async () => {

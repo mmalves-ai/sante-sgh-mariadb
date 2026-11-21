@@ -64,7 +64,6 @@ import {
   esquemaEmitirDocumentoLicitacao,
   type TipoDocumentoLicitacao,
 } from '@sgh/contratos/regras-suprimentos';
-import type { LicitacaoGravacao } from '@sgh/legado';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -82,7 +81,12 @@ import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/public-api.js
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import type { FornecedorContrato, UsuarioContrato } from './contrato-porta.js';
 import { emitirDocumentoLicitacao } from './licitacao-documento.js';
-import { type GravadorLicitacao, PORTA_LICITACAO, type PortaLicitacao } from './licitacao-porta.js';
+import {
+  type GravadorLicitacao,
+  type LicitacaoGravacao,
+  PORTA_LICITACAO,
+  type PortaLicitacao,
+} from './licitacao-porta.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;

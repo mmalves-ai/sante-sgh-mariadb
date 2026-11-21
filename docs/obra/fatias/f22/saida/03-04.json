@@ -1,0 +1,103 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/escala/tipos.ts",
+    "src/modulos/pessoas/escala/porta-escala.ts",
+    "src/modulos/pessoas/escala/porta-realizado.ts",
+    "src/modulos/pessoas/escala/porta-escala-propria.ts",
+    "src/modulos/pessoas/escala/porta-realizado-propria.ts",
+    "src/modulos/pessoas/escala/porta-escala-memoria.ts",
+    "src/modulos/pessoas/escala/porta-realizado-memoria.ts",
+    "src/modulos/pessoas/escala/servico-escala.ts",
+    "src/modulos/pessoas/escala/servico-plantao.ts",
+    "src/modulos/pessoas/escala/servico-realizado.ts",
+    "src/modulos/pessoas/escala/escala.controller.ts",
+    "src/modulos/pessoas/escala/plantao.controller.ts",
+    "src/modulos/pessoas/escala/realizado.controller.ts",
+    "src/modulos/pessoas/escala/crud-escala.spec.ts",
+    "src/modulos/pessoas/escala/crud-realizado.spec.ts",
+    "src/modulos/pessoas/escala/escala.spec.ts",
+    "src/modulos/pessoas/escala/plantao.spec.ts",
+    "src/modulos/pessoas/escala/servico-escala.spec.ts",
+    "src/modulos/pessoas/escala/servico-plantao.spec.ts",
+    "src/modulos/pessoas/aplicacao/escala.int.spec.ts",
+    "src/modulos/pessoas/escala/gravacao-por-acao.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "escala",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE escala ADD COLUMN cobertura_minima_manha SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Profissionais mínimos no turno da manhã', ADD COLUMN cobertura_minima_tarde SMALLINT UNSIGNED NOT NULL DEFAULT 0, ADD COLUMN cobertura_minima_noite SMALLINT UNSIGNED NOT NULL DEFAULT 0;",
+      "motivo": "cobertura mínima por turno da escala. ATÉ O DDL: criar escala com cobertura acima de zero e alterar a cobertura respondem 409 modelo-pendente; a publicação avisa que a conferência de furo não foi feita. Depois do DDL: gravar em incluirEscala/alterarCobertura, ler em escalaDe e trocar coberturaRegistrada para true em PortaEscalaPropria."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "plantao",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE plantao ADD COLUMN fonte_realizado VARCHAR(20) NULL COMMENT 'De onde veio o horário real: informado ou ponto', ADD COLUMN motivo_recusa_realizado VARCHAR(500) NULL COMMENT 'Motivo da recusa do realizado', ADD COLUMN lancamento_repasse_id BIGINT UNSIGNED NULL COMMENT 'Lançamento do plantão no repasse', ADD COLUMN lancado_por_usuario_id BIGINT UNSIGNED NULL, ADD COLUMN estornado_em DATETIME(3) NULL, ADD COLUMN estornado_por_usuario_id BIGINT UNSIGNED NULL, ADD COLUMN motivo_estorno VARCHAR(500) NULL, ADD COLUMN estorno_lancamento_repasse_id BIGINT UNSIGNED NULL COMMENT 'Lançamento negativo do estorno', ADD CONSTRAINT ck_plantao_fonte_realizado CHECK (fonte_realizado IS NULL OR fonte_realizado IN ('informado','ponto')), ADD CONSTRAINT ck_plantao_recusa CHECK (aprovado OR aprovado_em IS NULL OR motivo_recusa_realizado IS NOT NULL), ADD CONSTRAINT ck_plantao_decisor CHECK (aprovado_por_usuario_id IS NULL OR revisado_por_usuario_id IS NULL OR aprovado_por_usuario_id <> revisado_por_usuario_id), ADD CONSTRAINT ck_plantao_estorno CHECK (estornado_em IS NULL OR (motivo_estorno IS NOT NULL AND estornado_por_usuario_id IS NOT NULL)), ADD KEY ix_plantao_lancamento_repasse (lancamento_repasse_id), ADD KEY ix_plantao_estorno_lancamento_repasse (estorno_lancamento_repasse_id), ADD KEY ix_plantao_lancado_por_usuario (lancado_por_usuario_id), ADD KEY ix_plantao_estornado_por_usuario (estornado_por_usuario_id), ADD CONSTRAINT fk_plantao_lancamento_repasse_id FOREIGN KEY (lancamento_repasse_id) REFERENCES lancamento_repasse (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_plantao_estorno_lancamento_repasse_id FOREIGN KEY (estorno_lancamento_repasse_id) REFERENCES lancamento_repasse (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_plantao_lancado_por_usuario_id FOREIGN KEY (lancado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_plantao_estornado_por_usuario_id FOREIGN KEY (estornado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;",
+      "motivo": "Só o que falta ao realizado, que já roda sobre plantao (entrada/saida_registrada_em, revisado_*, aprovado_*) sem tabela paralela (o pedido de plantao_realizado foi RETIRADO). ATÉ O DDL ficam indisponíveis (409 modelo-pendente): lançar o plantão no repasse (repasse.lancarEvento) e estornar o realizado; o motivo da recusa e a fonte 'ponto' vão só na trilha (leitura: motivo nulo, fonte 'informado'). O ck_plantao_decisor leva ao banco a regra dos quatro olhos que o domínio e a porta já aplicam."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "valor_hora_plantao",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE valor_hora_plantao ADD COLUMN tipo_plantao VARCHAR(20) NULL COMMENT 'Tipo de plantão a que o valor se aplica; nulo vale para todos', ADD CONSTRAINT ck_valor_hora_plantao_tipo_plantao CHECK (tipo_plantao IS NULL OR tipo_plantao IN ('presencial','sobreaviso','diarista'));",
+      "motivo": "tarifa por tipo de plantão. HOJE: as tarifas são lidas de valor_hora_plantao (regra geral por hora) e a sem tipo vale para todos os tipos; encerrar tarifa grava. ATÉ O DDL fica indisponível (409 modelo-pendente) só INCLUIR tarifa pela tela do realizado."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "plantao",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE plantao ADD COLUMN registro_conselho_id BIGINT UNSIGNED NULL COMMENT 'Registro do conselho com que o profissional assume o plantão' /* FK para a tabela de registro de conselho do cadastro de profissionais, ON DELETE RESTRICT */, ADD COLUMN alerta_conselho VARCHAR(300) NULL COMMENT 'Alerta de validade do conselho aceito na escala', ADD COLUMN rede_nao_conferida BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Sobreposição na Rede não conferida ao gravar', ADD COLUMN tolerancia_chegada_minutos SMALLINT UNSIGNED NULL COMMENT 'Sobreaviso: minutos para chegar depois do acionamento', ADD KEY ix_plantao_registro_conselho (registro_conselho_id);",
+      "motivo": "registro do conselho, alerta do conselho, Rede não conferida e tolerância de chegada do plantão; hoje só na trilha (pendentesDeModelo) e leem nulo/falso"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "acionamento_sobreaviso",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE acionamento_sobreaviso ADD COLUMN prazo_chegada_em DATETIME(3) NULL, ADD COLUMN atendimento_id BIGINT UNSIGNED NULL COMMENT 'Atendimento que motivou o acionamento', ADD COLUMN motivo_cancelamento VARCHAR(500) NULL, ADD CONSTRAINT ck_acionamento_sobreaviso_prazo CHECK (prazo_chegada_em IS NULL OR prazo_chegada_em >= chamado_em), ADD CONSTRAINT ck_acionamento_sobreaviso_cancelamento CHECK (situacao <> 'cancelado' OR motivo_cancelamento IS NOT NULL), ADD KEY ix_acionamento_sobreaviso_atendimento (atendimento_id), ADD CONSTRAINT fk_acionamento_sobreaviso_atendimento_id FOREIGN KEY (atendimento_id) REFERENCES atendimento (id) ON DELETE RESTRICT;",
+      "motivo": "prazo de chegada e atendimento do acionamento. ATÉ O DDL: prazoChegada é lido como nulo e o atraso fica não calculável (sem alerta, aviso na chegada); o motivo do cancelamento fica em observacao."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "regime_jornada",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE regime_jornada ADD COLUMN tempo_parcial CHAR(1) NULL COMMENT 'Contrato em tempo parcial (tabela do eSocial)', ADD COLUMN tipo_folga_padrao TINYINT UNSIGNED NULL, ADD COLUMN acordo_compensacao VARCHAR(300) NULL, ADD CONSTRAINT ck_regime_jornada_tempo_parcial CHECK (tempo_parcial IS NULL OR tempo_parcial IN ('1','2','3'));",
+      "motivo": "tempo parcial, folga padrão e acordo do regime: hoje o tempo parcial é deduzido de tipo_regime='tempo_parcial' + carga semanal, e folga/acordo só na trilha"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "dimensionamento_enfermagem",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE dimensionamento_enfermagem ADD COLUMN nas_soma DECIMAL(9,2) NULL, ADD COLUMN nas_pacientes SMALLINT UNSIGNED NULL, ADD COLUMN pacientes_nao_classificados SMALLINT UNSIGNED NULL, ADD COLUMN constante_marinho DECIMAL(9,4) NULL COMMENT 'KM da resolução do COFEN', ADD COLUMN categoria_prevalente VARCHAR(30) NULL, ADD COLUMN cobertura_sugerida SMALLINT UNSIGNED NULL; /* as parcelas do cálculo vão para parcela_dimensionamento (já existe) */",
+      "motivo": "detalhes do cálculo do dimensionamento (NAS, KM, não classificados, categoria prevalente, cobertura sugerida, parcelas): hoje só na trilha e leem 0/nulo"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "evento_escala",
+      "convencao": "ADR 0002",
+      "sql": "CREATE TABLE evento_escala (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, escala_id BIGINT UNSIGNED NOT NULL, plantao_id BIGINT UNSIGNED NULL, acao VARCHAR(30) NOT NULL, descricao VARCHAR(200) NOT NULL, motivo VARCHAR(500) NULL, ocorrido_em DATETIME(3) NOT NULL, usuario_id BIGINT UNSIGNED NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, CONSTRAINT ck_evento_escala_acao CHECK (acao IN ('criada','cobertura','plantao_incluido','plantao_alterado','plantao_cancelado','publicada','cancelada','troca','acionamento')), KEY ix_evento_escala_escala (escala_id, ocorrido_em), KEY ix_evento_escala_plantao (plantao_id), KEY ix_evento_escala_usuario (usuario_id)) COMMENT='Histórico de cada mudança da escala e dos plantões'; ALTER TABLE evento_escala ADD CONSTRAINT fk_evento_escala_escala_id FOREIGN KEY (escala_id) REFERENCES escala (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_evento_escala_plantao_id FOREIGN KEY (plantao_id) REFERENCES plantao (id) ON DELETE RESTRICT, ADD CONSTRAINT fk_evento_escala_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;",
+      "motivo": "o histórico da escala na tela: hoje só publicação/cancelamento (publicacao_escala); os demais eventos ficam na trilha"
+    },
+    {
+      "tipo": "registro",
+      "alvo": "apps/api/src/modulos/pessoas/public-api.ts",
+      "pedido": "exportar PortaEscalaPropria e PortaRealizadoPropria (porta-escala-propria.ts / porta-realizado-propria.ts) e os tipos de escala/tipos.ts; nunca a porta antiga (apagada)"
+    },
+    {
+      "tipo": "registro",
+      "alvo": "modulo.ts da unidade pessoas (lote que registra)",
+      "pedido": "PORTA_ESCALA = new PortaEscalaPropria(ctx.nucleo, { liberados }) e PORTA_REALIZADO = new PortaRealizadoPropria(ctx.nucleo) quando ctx.nucleo existe; memória só em dev/ci sem núcleo. Reativar escala.spec.ts e plantao.spec.ts (describe.skip com PENDENTE) quando o módulo estiver em API_MODULOS"
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/pessoas/plantao-respostas.ts",
+      "pedido": "AcionamentoLido.prazoChegada passar a string | null (hoje a API devolve '' quando o prazo não está registrado, com atrasado=false); a tela mostra 'prazo não registrado'."
+    },
+    {
+      "tipo": "catalogo",
+      "pedido": "se a liberação de operações do Executor exigir catálogo, registrar as operações por ação (a genérica pessoas.escala.gravacao deixou de existir): pessoas.regime.gravar, pessoas.regime.atribuir, pessoas.regime.anular_vigencia, pessoas.escala.criar, pessoas.escala.publicar, pessoas.escala.cancelar, pessoas.escala.excluir, pessoas.plantao.gravar, pessoas.troca.pedir, pessoas.troca.responder, pessoas.troca.decidir, pessoas.sobreaviso.acionar, pessoas.dimensionamento.calcular, pessoas.realizado.registrar, pessoas.realizado.decidir, pessoas.realizado.estornar, pessoas.realizado.tarifa"
+    }
+  ]
+}

@@ -2,14 +2,17 @@
 // sintéticos): a competência escolhe a vigência pelo primeiro dia (regra 7); a conferência das incidências e das
 // faixas vem junto; a gravação só aparece ligada com a permissão de editar E a chave `pessoas.folha` (POL-3); os
 // filtros recusam competência mal formada; a porta não grava (o CRUD genérico grava).
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  type PrerequisitoRecurso,
+  fonteConfiguracaoMemoria,
+} from '../../config/public-api.js';
 import { corpo } from '../../exames/public-api.js';
-import { portaRubricasIndisponivel, portaRubricasNaTransacao } from './porta-rubricas-legado.js';
+import { PortaRubricasPropria, portaRubricasIndisponivel } from './porta-rubricas-propria.js';
 import { PortaRubricasMemoria } from './porta-rubricas-memoria.js';
 import {
   esquemaFiltroRubricas,
@@ -17,6 +20,7 @@ import {
   RubricasController,
 } from './rubricas.controller.js';
 import { CADASTROS_RUBRICAS, ServicoRubricas } from './servico-rubricas.js';
+import { ctxTeste, trilhaTeste } from '../sesmt/contexto-teste.spec-util.js';
 
 const sessao = (pode: (c: string) => boolean = () => true): SessaoCadastro =>
   ({
@@ -24,11 +28,11 @@ const sessao = (pode: (c: string) => boolean = () => true): SessaoCadastro =>
     hospital: 'aa',
     rede: '',
     login: 'SINT.DP',
-    porta: { rede: '', hospital: 'aa' },
+    porta: ctxTeste('aa', ''),
     pode,
   }) as unknown as SessaoCadastro;
 
-const chave = (ligada: boolean): ChaveGravada => ({
+const chave = (ligada: boolean): ChaveLiberacao => ({
   id: 'pessoas.folha',
   tipo: 'recurso',
   chave: 'pessoas.folha',
@@ -41,7 +45,7 @@ const chave = (ligada: boolean): ChaveGravada => ({
   alteradoPor: 'SGH.TESTE',
   alteradoEm: '2026-10-26T10:00:00',
 });
-const nenhumPrerequisito: PrerequisitoGravado[] = [];
+const nenhumPrerequisito: PrerequisitoRecurso[] = [];
 
 function montar(ligada: boolean | null) {
   const trilha = new RegistradorTrilhaMemoria();
@@ -105,51 +109,6 @@ describe('tabelas legais da competência (regra 7)', () => {
     const r = await montar(null).tabelasLegais(sessao(), '2024-12');
     expect(r.vigente).toBeNull();
     expect(r.conferencia).toEqual([]);
-  });
-});
-
-describe('inativação feita no Sante (SGH_CFG_DOMINIO_SITUACAO) na leitura da tela', () => {
-  // Leitor falso por consulta (as leituras correm em paralelo): a tabela legal de 2026 foi inativada só no novo, e a
-  // rubrica 10 e o vínculo de FGTS dela também.
-  const dia = (iso: string) => new Date(`${iso}T12:00:00`);
-  const leitor = {
-    consultar: (sql: string, params: unknown[]) => {
-      if (sql.includes('SGH_CFG_DOMINIO_SITUACAO')) {
-        const t = params[0];
-        if (t === 'TBTABIRR') return Promise.resolve([{ CHAVE: '2026-01-01' }]);
-        if (t === 'FPEVENTO' || t === 'FPRUBRICAFGTS_FPEVENTO') return Promise.resolve([{ CHAVE: '10' }]);
-        return Promise.resolve([]);
-      }
-      if (sql.includes('FROM TBTABIRR'))
-        return Promise.resolve([
-          { DTA_INSS_IRRF: dia('2026-01-01'), SAL_MIN: 2000 },
-          { DTA_INSS_IRRF: dia('2025-01-01'), SAL_MIN: 1000 },
-        ]);
-      if (sql.includes('FROM FPEVENTO'))
-        return Promise.resolve([
-          {
-            ID_EVENTO: 10,
-            COD_EMP: 1,
-            COD_EVENTO: 101,
-            NOME: 'Sintética',
-            SITUACAO: 'A',
-            CI: '11',
-            CF: '11',
-          },
-        ]);
-      return Promise.resolve([]);
-    },
-  } as never;
-  const servico = () =>
-    new ServicoRubricas(portaRubricasNaTransacao(leitor), new RegistradorTrilhaMemoria(), null, null);
-  it('a vigência inativada no Sante não é a em vigor: a competência usa a anterior', async () => {
-    const r = await servico().tabelasLegais(sessao(), '2026-03');
-    expect(r.vigente?.inicio).toBe('2025-01-01');
-    expect(r.vigencias).toEqual(['2025-01-01']);
-  });
-  it('a rubrica inativada no Sante sai inativa e o vínculo inativado não traz o código do eSocial', async () => {
-    const r = await servico().rubricas(sessao(), '2026-03', { empresa: null, todas: true });
-    expect(r.rubricas[0]).toMatchObject({ id: 10, ativa: false, esocial: { inss: '11', fgts: null } });
   });
 });
 
@@ -256,9 +215,10 @@ describe('filtros e portas', () => {
         (e: unknown) => (e instanceof ErroProblema ? e.getStatus() : 'outro'),
       );
     const m = new PortaRubricasMemoria();
-    expect(await recusa(m.gravarSgh({ rede: '', hospital: 'aa' }, {} as never, async () => 1))).toBe(409);
-    const t = portaRubricasNaTransacao({} as never);
-    expect(await recusa(t.executar({ rede: '', hospital: 'aa' }, 'x', {}, {} as never))).toBe(409);
-    expect(await recusa(portaRubricasIndisponivel().rubricas({ rede: '', hospital: 'aa' }, null))).toBe(503);
+    expect(await recusa(m.gravarSgh(ctxTeste('aa', ''), trilhaTeste('rubrica'), async () => 1))).toBe(409);
+    const t = new PortaRubricasPropria({} as never);
+    expect(await recusa(t.executar(ctxTeste('aa', ''), 'x', {}, {} as never))).toBe(409);
+    expect(await recusa(t.gravarSgh(ctxTeste('aa', ''), trilhaTeste('rubrica'), async () => 1))).toBe(409);
+    expect(await recusa(portaRubricasIndisponivel().rubricas(ctxTeste('aa', ''), null))).toBe(503);
   });
 });

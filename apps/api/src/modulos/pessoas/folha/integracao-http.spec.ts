@@ -3,21 +3,18 @@
 // (Tabelas › Integração 371, Rotinas › Integração 397, a tabela de integração 4876 a 4882) consulta, configura e lança;
 // quem só consulta a folha (351) não vê a integração. A chave `pessoas.folha` nasce desligada: as leituras e a prévia
 // saem, gravar o de-para e lançar são recusados na chave; a entrada inválida é 400.
+import { criarAppPessoas } from '../opcoes-teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { CifraCpf } from '../cifra-cpf.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPessoas(env, {
     trilha: new RegistradorTrilhaMemoria(),
-    cifraCpf: new CifraCpf(Buffer.alloc(32, 7)),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

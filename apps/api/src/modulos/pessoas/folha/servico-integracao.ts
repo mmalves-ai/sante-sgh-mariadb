@@ -2,8 +2,8 @@
 // 10 e 11): o apoio da tela (empresas, cadastro de rotinas, destinos, sugestão do perfil, de-para vigente), a vigência
 // do de-para, a prévia dos títulos de uma origem (período fechado da folha calculada ou retorno conferido da folha
 // externa) com as parcelas impressas, as pendências e os avisos, o lançamento pelos cenários `origem-folha` e
-// `origem-encargo` de `financeiro.criarTituloPagar` (os títulos, o registro SGH_ e o evento do custo de pessoal numa
-// transação só), a lista e o detalhe dos lançamentos e o custo de pessoal por centro de custo. Atrás da chave
+// `origem-encargo` de `financeiro.criarTituloPagar` (os títulos, o registro do lançamento e o evento do custo de pessoal
+// numa transação só), a lista e o detalhe dos lançamentos e o custo de pessoal por centro de custo. Atrás da chave
 // `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome: credor é código de fornecedor; valores em centavos.
 //
 // D-RESUMO-539 (POL-5): o resumo que a prévia mostra e o lançamento confere é o SHA-256 do plano com os vencimentos
@@ -57,7 +57,6 @@ import {
   SUGESTAO_CLASSIFICACAO_FOLHA,
   textoResumoPlano,
 } from '@sgh/dominio-pessoas';
-import { integracaoVigenteEm, type LancamentoFolhaLido, mesDaData } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -70,6 +69,13 @@ import type {
   GravadorIntegracaoFolha,
   PortaIntegracaoFolha,
 } from './porta-integracao.js';
+import { integracaoVigenteEm, type LancamentoTitulosFolha, mesDaData } from './apoio-folha.js';
+
+/** A recusa 503 `modelo-pendente` da porta (operação sem tabela no modelo). */
+const modeloPendente = (e: unknown): boolean =>
+  typeof e === 'object' &&
+  e !== null &&
+  (e as { problema?: { codigo?: unknown } }).problema?.codigo === 'modelo-pendente';
 
 export const PERMISSOES_INTEGRACAO_FOLHA = {
   ler: 'pessoas.integracao.ler',
@@ -150,7 +156,18 @@ export class ServicoIntegracaoFolha {
     ]);
     const alvo = empresa ?? empresas[0]?.codigo ?? null;
     if (empresa !== null && !empresas.some((e) => e.codigo === empresa)) throw naoEncontrado('Empresa');
-    const vigente = alvo === null ? null : integracaoVigenteEm(await this.porta.integracoes(c, alvo), hoje);
+    // Sem a tabela do de-para no modelo (503 modelo-pendente), o apoio segue como "sem de-para vigente": a tela consulta
+    // as classificações e os credores, e a gravação vem negada pela liberação com o motivo. Outro erro sobe.
+    const vigente =
+      alvo === null
+        ? null
+        : integracaoVigenteEm(
+            await this.porta.integracoes(c, alvo).catch((e: unknown) => {
+              if (modeloPendente(e)) return [];
+              throw e;
+            }),
+            hoje,
+          );
     const [classificacoes, credores] = await Promise.all([
       this.porta.classificacoes(c),
       vigente ? this.porta.credores(c, { codigos: vigente.destinos.map((d) => d.credor) }) : [],
@@ -180,7 +197,7 @@ export class ServicoIntegracaoFolha {
     return this.porta.integracoes(this.ctx(s), empresa);
   }
 
-  /** Nova vigência do de-para (completa), só SGH_ com a trilha; a rotina de cada destino tem de integrar ao financeiro. */
+  /** Nova vigência do de-para (completa), com a trilha; a rotina de cada destino tem de integrar ao financeiro. */
   async gravarIntegracao(s: SessaoCadastro, x: GravarIntegracaoFolhaEntrada): Promise<IntegracaoFolhaLida> {
     await this.exigirEmpresa(s, x.empresa);
     const rotinas = await this.porta.rotinas(this.ctx(s));
@@ -400,7 +417,7 @@ export class ServicoIntegracaoFolha {
     return { lancamento: await this.completo(s, l), conta: p.conta };
   }
 
-  private async completo(s: SessaoCadastro, l: LancamentoFolhaLido): Promise<LancamentoFolha> {
+  private async completo(s: SessaoCadastro, l: LancamentoTitulosFolha): Promise<LancamentoFolha> {
     const ts = await this.porta.titulosDoLancamento(this.ctx(s), l.id);
     const titulos = ts.map((t) => ({
       chave: `${t.destino}:${t.vencimento}`,
@@ -420,7 +437,7 @@ export class ServicoIntegracaoFolha {
   }
 
   /** O lançamento sem a contagem de títulos (a resposta traz os títulos em si ou nenhum). */
-  private cabecalho(l: LancamentoFolhaLido): Omit<LancamentoFolha, 'titulos'> {
+  private cabecalho(l: LancamentoTitulosFolha): Omit<LancamentoFolha, 'titulos'> {
     return {
       id: l.id,
       empresa: l.empresa,

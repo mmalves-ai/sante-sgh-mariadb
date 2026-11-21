@@ -1,11 +1,11 @@
 // W0-06 (programa CRUD completo): a desistência do ajuste de ponto pendente SÓ pelo próprio solicitante (outra pessoa:
 // 403; decidido: 409; o desistido fica no histórico e não conta para lançar de novo) e a desativação e a reativação da
 // regra do banco de horas com motivo (a desativada não entra no fechamento). Portas EM MEMÓRIA; dados SINTÉTICOS.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/configuracao-fonte.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEscalaMemoria } from '../escala/porta-escala-memoria.js';
@@ -14,8 +14,18 @@ import { ServicoPessoas } from '../servico.js';
 import { PortaPontoMemoria } from './porta-ponto-memoria.js';
 import { ServicoPonto } from './servico-ponto.js';
 
+/** Contexto da porta em memória pelo código do estabelecimento da sessão sintética. */
+const ctxMem = (hospital: string) => ({
+  cliente: 'memoria',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede: 'rede-sintetica',
+  hospital,
+});
+
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -28,7 +38,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -67,7 +77,7 @@ function sessao(login = 'SINT.RH', hospital = 'pc'): SessaoCadastro {
     hospital,
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: ctxMem(hospital),
     pode: () => true,
   };
 }
@@ -162,8 +172,8 @@ describe('desistência do ajuste pendente (W0-06)', () => {
 describe('regra do banco de horas: desativação e reativação com motivo (W0-06)', () => {
   it('desativa e reativa pela versão; a desativada fica na lista com o motivo; repetir recusa', async () => {
     const d = montar();
-    const regime = await d.escala.gravarSgh(
-      { rede: 'rede-sintetica', hospital: 'pc' },
+    const regime = await d.escala.gravarSgh<number>(
+      ctxMem('pc'),
       () => ({}) as never,
       (g) =>
         g.incluirRegime({

@@ -1,29 +1,12 @@
 // Porta da gestão de pessoas EM MEMÓRIA (M52.1; dev/ci com a sessão sintética; E2E): pessoas, profissionais,
 // registros de conselho e usuários SINTÉTICOS (CPF de dígito calculado sobre base inventada), centros de custo e
-// tipos de rescisão sintéticos, com as MESMAS regras das gravações SGH_ (versão, matrícula única, histórico só de
+// tipos de rescisão sintéticos, com as MESMAS regras das gravações do banco (versão, matrícula única, histórico só de
 // inclusão) e do bloqueio do M10 (ninguém a si mesmo; o já bloqueado recusa). O bloqueio vale no login sintético (o
 // estado do acesso que a sessão sintética lê). A transação em memória é tudo ou nada (o estado só troca no fim).
-// Nada vai à cópia; nenhum dado real.
-import type {
-  ConselhoDiaSgh,
-  ContextoOperacao,
-  CorrecaoPesLida,
-  DependentePesLido,
-  FonteCatalogo,
-  HabilitacaoPesLida,
-  HistoricoPesLido,
-  LiberacaoConsultada,
-  LinhaTrilha,
-  PessoaLidaPorCpf,
-  ProfissionalLido,
-  RegistroDoColaboradorLido,
-  UnidadeDoRegistroLida,
-  UsuarioLidoPessoa,
-  VinculoPesLido,
-} from '@sgh/legado';
-import { ErroOperacao } from '@sgh/legado';
+// Nada vai ao banco; nenhum dado real.
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import { CONTAS_SINTETICAS, estadoAcessoSintetico, idUsuarioSintetico } from '../acesso/fonte-sintetica.js';
-import type { GravacaoFeita } from '../exames/public-api.js';
+import type { GravacaoFeita, LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
 import type {
   CargoQuadroLido,
   CentroCustoPessoas,
@@ -33,6 +16,25 @@ import type {
   PortaPessoas,
   RegistroConselhoBase,
 } from './porta.js';
+import {
+  chaveMemoria,
+  type CorrecaoRegistrada,
+  type DependenteColaborador,
+  type HabilitacaoRegistro,
+  type HistoricoVinculo,
+  type PessoaPorCpf,
+  type ProfissionalCadastro,
+  type RegistroDoColaborador,
+  type RetratoConselhoDia,
+  type UnidadeDoRegistro,
+  type UsuarioDaPessoa,
+  type VinculoColaborador,
+} from './tipos-pessoas.js';
+
+/** Estado das operações por estabelecimento (o catálogo de operações liberadas; null: operação desconhecida). */
+export interface CatalogoOperacoes {
+  estado(operacao: string, estabelecimento: string): string | null;
+}
 
 function dv11(base: string, pesos: readonly number[]): number {
   let s = 0;
@@ -59,12 +61,12 @@ export const PESSOAS_SINTETICAS_M52 = {
   ponto: { cpf: cpfSintetico('900520006'), login: 'SINT.COLAB.PONTO' },
 } as const;
 
-const PROFISSIONAIS: readonly ProfissionalLido[] = [
+const PROFISSIONAIS: readonly ProfissionalCadastro[] = [
   {
     id: 952001,
     nome: 'ENFERMEIRA SINTETICA UM',
     nomeSocial: null,
-    situacao: 'F',
+    situacao: 'ativo',
     registros: [
       {
         id: 952101,
@@ -83,7 +85,7 @@ const PROFISSIONAIS: readonly ProfissionalLido[] = [
     id: 952002,
     nome: 'TECNICO SINTETICO DOIS',
     nomeSocial: null,
-    situacao: 'O',
+    situacao: 'ativo',
     registros: [
       {
         id: 952102,
@@ -102,7 +104,7 @@ const PROFISSIONAIS: readonly ProfissionalLido[] = [
     id: 952003,
     nome: 'ENFERMEIRA SINTETICA TRES',
     nomeSocial: null,
-    situacao: 'F',
+    situacao: 'ativo',
     registros: [
       {
         id: 952103,
@@ -121,7 +123,7 @@ const PROFISSIONAIS: readonly ProfissionalLido[] = [
     id: 952004,
     nome: 'MEDICO SINTETICO QUATRO',
     nomeSocial: null,
-    situacao: 'O',
+    situacao: 'ativo',
     registros: [
       {
         id: 952104,
@@ -160,21 +162,21 @@ const RESCISOES: readonly OpcaoCodigo[] = [
 
 interface EstadoHospital {
   seq: number;
-  vinculos: Map<number, VinculoPesLido & { cpfHmac: string }>;
-  historico: Map<number, HistoricoPesLido & { vinculo: number }>;
+  vinculos: Map<number, VinculoColaborador & { cpfHmac: string }>;
+  historico: Map<number, HistoricoVinculo & { vinculo: number }>;
   dependentes: Map<
     number,
-    DependentePesLido & {
+    DependenteColaborador & {
       vinculo: number;
       ate: string | null;
       motivoFim: string | null;
       anterior?: number | null;
     }
   >;
-  correcoes: CorrecaoPesLida[];
-  habilitacoes: Map<number, HabilitacaoPesLida>;
+  correcoes: CorrecaoRegistrada[];
+  habilitacoes: Map<number, HabilitacaoRegistro>;
   outbox: { tipo: string; chave: string; carga: Record<string, string | number> }[];
-  retrato: ConselhoDiaSgh | null;
+  retrato: RetratoConselhoDia | null;
   idem: Map<string, { hash: string; resultado: GravacaoFeita['resultado'] }>;
 }
 
@@ -219,16 +221,17 @@ export class PortaPessoasMemoria implements PortaPessoas {
   /** Testes: a data do relógio sintético (sem ela, a data de hoje). */
   hojeFixo: string | null = null;
   /**
-   * W0-06 (5d-3a): de onde vem o cargo do quadro (SGH_PES_CARGO). O módulo liga a porta de cargos em memória; sem
+   * W0-06 (5d-3a): de onde vem o cargo do quadro de cargos. O módulo liga a porta de cargos em memória; sem
    * ela, nenhum cargo existe (a ligação responde 404 do cargo).
    */
   quadroDeCargos: ((hospital: string, id: number) => Promise<CargoQuadroLido | null>) | null = null;
 
-  constructor(private readonly catalogo: FonteCatalogo | null = null) {}
+  constructor(private readonly catalogo: CatalogoOperacoes | null = null) {}
 
   private e(c: ContextoPessoas): EstadoHospital {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novoEstado()));
+    const k = chaveMemoria(c);
+    let s = this.estados.get(k);
+    if (!s) this.estados.set(k, (s = novoEstado()));
     return s;
   }
 
@@ -243,15 +246,17 @@ export class PortaPessoasMemoria implements PortaPessoas {
   }
 
   /** Testes e o worker em memória: grava o retrato do dia. */
-  gravarRetrato(d: ConselhoDiaSgh): void {
-    this.e({ rede: '', hospital: d.hospital }).retrato = d;
+  gravarRetrato(estabelecimento: string, d: RetratoConselhoDia): void {
+    let s = this.estados.get(estabelecimento);
+    if (!s) this.estados.set(estabelecimento, (s = novoEstado()));
+    s.retrato = d;
   }
 
   private bloqueado(login: string): boolean {
     return estadoAcessoSintetico().bloqueio.get(login) ?? CONTAS_SINTETICAS[login]?.bloqueado ?? false;
   }
 
-  private usuario(login: string): UsuarioLidoPessoa {
+  private usuario(login: string): UsuarioDaPessoa {
     return {
       id: idUsuarioSintetico(login),
       login,
@@ -261,8 +266,8 @@ export class PortaPessoasMemoria implements PortaPessoas {
     };
   }
 
-  async podeGravar(c: ContextoPessoas, op: string): Promise<LiberacaoConsultada> {
-    const e = this.catalogo?.estado(op, c.hospital) ?? 'verde';
+  async podeGravar(c: ContextoPessoas, op: string): Promise<LiberacaoGravacao> {
+    const e = this.catalogo?.estado(op, chaveMemoria(c)) ?? 'verde';
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
@@ -282,7 +287,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
       throw recusa('operacao-desconhecida', 'Operação fora da gestão de pessoas.');
     const login = String((bruto as { login?: unknown })?.login ?? '');
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const anterior = s.idem.get(chave);
     if (anterior) {
       if (anterior.hash !== login)
@@ -294,7 +299,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    if (login.toUpperCase() === ctx.usuarioLegado.toUpperCase())
+    if (ctx.usuario !== null && idUsuarioSintetico(login) === ctx.usuario)
       throw recusa('a-si-mesmo', 'Ninguém bloqueia nem desbloqueia a si mesmo.');
     if (!CONTAS_SINTETICAS[login]) throw recusa('usuario-inexistente', 'Usuário inexistente.');
     if (this.bloqueado(login)) throw recusa('ja-bloqueado', 'O usuário já está bloqueado.');
@@ -306,7 +311,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
 
   async gravarSgh<T>(
     c: ContextoPessoas,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorPessoas) => Promise<T>,
   ): Promise<T> {
     const s = copia(this.e(c));
@@ -331,7 +336,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
         const pessoa = v.pessoa ?? id;
         s.vinculos.set(id, {
           id,
-          hospital: c.hospital,
+          estabelecimento: c.estabelecimento,
           pessoa,
           cpfHmac: v.cpfHmac,
           cpfCifrado: v.cpfCifrado,
@@ -434,7 +439,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
         });
         return id;
       },
-      cargoQuadro: async (id) => (this.quadroDeCargos ? this.quadroDeCargos(c.hospital, id) : null),
+      cargoQuadro: async (id) => (this.quadroDeCargos ? this.quadroDeCargos(chaveMemoria(c), id) : null),
       ligarCargo: async (x) => {
         const v = vinc(x.id);
         if (!v || v.versao !== x.versao) throw desatualizado();
@@ -486,7 +491,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
         // Cópia profunda: o valor anterior não pode mudar com a gravação seguinte (armadilha da parte 2).
         s.correcoes.push({
           id: ++s.seq,
-          tabela: 'SGH_PES_VINCULO',
+          tabela: 'vinculo_trabalho',
           registro: x.vinculo,
           operacao: x.operacao,
           antes: JSON.parse(JSON.stringify(x.antes)) as Record<string, unknown>,
@@ -521,7 +526,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveMemoria(c), s);
     return r;
   }
 
@@ -538,7 +543,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
     return [...RESCISOES];
   }
 
-  async pessoaPorCpf(_c: ContextoPessoas, cpf: number): Promise<PessoaLidaPorCpf> {
+  async pessoaPorCpf(_c: ContextoPessoas, cpf: number): Promise<PessoaPorCpf> {
     const d = String(cpf).padStart(11, '0');
     const P = PESSOAS_SINTETICAS_M52;
     const prof = (id: number) => {
@@ -555,31 +560,31 @@ export class PortaPessoasMemoria implements PortaPessoas {
     if (d === P.ponto.cpf) return { profissionais: [], usuarios: [this.usuario(P.ponto.login)] };
     return { profissionais: [], usuarios: [] };
   }
-  async usuariosDoProfissional(_c: ContextoPessoas, profissional: number): Promise<UsuarioLidoPessoa[]> {
+  async usuariosDoProfissional(_c: ContextoPessoas, profissional: number): Promise<UsuarioDaPessoa[]> {
     return profissional === PESSOAS_SINTETICAS_M52.comLogin.profissional
       ? [this.usuario(PESSOAS_SINTETICAS_M52.comLogin.login)]
       : [];
   }
-  async usuarioPorId(_c: ContextoPessoas, id: number): Promise<UsuarioLidoPessoa | null> {
+  async usuarioPorId(_c: ContextoPessoas, id: number): Promise<UsuarioDaPessoa | null> {
     const login = Object.keys(CONTAS_SINTETICAS).find((l) => idUsuarioSintetico(l) === id);
     return login ? this.usuario(login) : null;
   }
-  async profissionais(_c: ContextoPessoas, ids: readonly number[]): Promise<ProfissionalLido[]> {
+  async profissionais(_c: ContextoPessoas, ids: readonly number[]): Promise<ProfissionalCadastro[]> {
     return PROFISSIONAIS.filter((p) => ids.includes(p.id));
   }
-  async vinculosPorCpf(c: ContextoPessoas, h: string): Promise<VinculoPesLido[]> {
+  async vinculosPorCpf(c: ContextoPessoas, h: string): Promise<VinculoColaborador[]> {
     return [...this.e(c).vinculos.values()].filter((v) => v.cpfHmac === h);
   }
-  async vinculo(c: ContextoPessoas, id: number): Promise<VinculoPesLido | null> {
+  async vinculo(c: ContextoPessoas, id: number): Promise<VinculoColaborador | null> {
     return this.e(c).vinculos.get(id) ?? null;
   }
-  async vinculosDaPessoa(c: ContextoPessoas, pessoa: number): Promise<VinculoPesLido[]> {
+  async vinculosDaPessoa(c: ContextoPessoas, pessoa: number): Promise<VinculoColaborador[]> {
     return [...this.e(c).vinculos.values()].filter((v) => v.pessoa === pessoa);
   }
   async listarVinculos(
     c: ContextoPessoas,
     f: Parameters<PortaPessoas['listarVinculos']>[1],
-  ): Promise<{ itens: VinculoPesLido[]; depois: number | null }> {
+  ): Promise<{ itens: VinculoColaborador[]; depois: number | null }> {
     const termo = f.cpfHmac ? undefined : f.termo?.trim().toUpperCase();
     const setor = f.setor?.trim().toUpperCase();
     const todos = [...this.e(c).vinculos.values()]
@@ -598,15 +603,15 @@ export class PortaPessoasMemoria implements PortaPessoas {
     const itens = todos.slice(0, f.limite);
     return { itens, depois: todos.length > f.limite ? (itens.at(-1)?.id ?? null) : null };
   }
-  async historico(c: ContextoPessoas, v: number): Promise<HistoricoPesLido[]> {
+  async historico(c: ContextoPessoas, v: number): Promise<HistoricoVinculo[]> {
     return [...this.e(c).historico.values()]
       .filter((h) => h.vinculo === v)
       .sort((a, b) => b.vigencia.localeCompare(a.vigencia) || b.id - a.id);
   }
-  async dependentes(c: ContextoPessoas, v: number): Promise<DependentePesLido[]> {
+  async dependentes(c: ContextoPessoas, v: number): Promise<DependenteColaborador[]> {
     return [...this.e(c).dependentes.values()]
       .filter((d) => d.vinculo === v && d.ate === null)
-      .map((d): DependentePesLido => ({
+      .map((d): DependenteColaborador => ({
         id: d.id,
         nome: d.nome,
         nascimento: d.nascimento,
@@ -618,20 +623,20 @@ export class PortaPessoasMemoria implements PortaPessoas {
         desde: d.desde ?? null,
       }));
   }
-  async correcoes(c: ContextoPessoas, v: number): Promise<CorrecaoPesLida[]> {
+  async correcoes(c: ContextoPessoas, v: number): Promise<CorrecaoRegistrada[]> {
     return this.e(c)
       .correcoes.filter((x) => x.registro === v)
       .sort((a, b) => b.id - a.id);
   }
-  async habilitacoes(c: ContextoPessoas, regs: readonly number[]): Promise<Map<number, HabilitacaoPesLida>> {
+  async habilitacoes(c: ContextoPessoas, regs: readonly number[]): Promise<Map<number, HabilitacaoRegistro>> {
     const h = this.e(c).habilitacoes;
     return new Map(regs.filter((r) => h.has(r)).map((r) => [r, h.get(r)!]));
   }
-  async registrosDosColaboradoresAtivos(c: ContextoPessoas): Promise<RegistroDoColaboradorLido[]> {
+  async registrosDosColaboradoresAtivos(c: ContextoPessoas): Promise<RegistroDoColaborador[]> {
     const ativos = [...this.e(c).vinculos.values()]
       .filter((v) => v.desligamento === null && v.profissional !== null)
       .sort((a, b) => a.id - b.id);
-    const r: RegistroDoColaboradorLido[] = [];
+    const r: RegistroDoColaborador[] = [];
     for (const p of PROFISSIONAIS) {
       const v = ativos.find((x) => x.profissional === p.id);
       if (!v) continue;
@@ -658,19 +663,19 @@ export class PortaPessoasMemoria implements PortaPessoas {
   async unidadesDosRegistros(
     _c: ContextoPessoas,
     registros: readonly number[],
-  ): Promise<Map<number, UnidadeDoRegistroLida[]>> {
+  ): Promise<Map<number, UnidadeDoRegistro[]>> {
     // O registro da enfermeira sintética atende na unidade sintética; o do técnico, em nenhuma.
-    const r = new Map<number, UnidadeDoRegistroLida[]>();
+    const r = new Map<number, UnidadeDoRegistro[]>();
     if (registros.includes(PESSOAS_SINTETICAS_M52.comLogin.registro))
       r.set(PESSOAS_SINTETICAS_M52.comLogin.registro, [
         { codigo: 1, nome: 'Unidade sintética', ativo: true },
       ]);
     return r;
   }
-  async ultimoRetrato(c: ContextoPessoas): Promise<ConselhoDiaSgh | null> {
+  async ultimoRetrato(c: ContextoPessoas): Promise<RetratoConselhoDia | null> {
     return this.e(c).retrato;
   }
   async cargoQuadro(c: ContextoPessoas, id: number): Promise<CargoQuadroLido | null> {
-    return this.quadroDeCargos ? this.quadroDeCargos(c.hospital, id) : null;
+    return this.quadroDeCargos ? this.quadroDeCargos(chaveMemoria(c), id) : null;
   }
 }

@@ -54,8 +54,8 @@ import { PORTA_ESCALA, type PortaEscala } from './porta-escala.js';
 import { ServicoEscala } from './servico-escala.js';
 import { ServicoPlantao } from './servico-plantao.js';
 
-const TRILHA_TROCA = 'SGH_PES_TROCA com a SGH_TRILHA na mesma transação';
-const TRILHA_ACIONAMENTO = 'SGH_PES_ACIONAMENTO com a SGH_TRILHA na mesma transação';
+const TRILHA_TROCA = 'troca_plantao com a trilha_auditoria na mesma transação';
+const TRILHA_ACIONAMENTO = 'acionamento_sobreaviso com a trilha_auditoria na mesma transação';
 
 @Controller('pessoas')
 export class PlantaoController {
@@ -98,7 +98,7 @@ export class PlantaoController {
   @Post('trocas')
   @HttpCode(200)
   @Permissao('pessoas.troca.pedir')
-  @AuditadoNoHandler('SGH_PES_TROCA e SGH_OUTBOX com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('troca_plantao e integracao_mensagem com a trilha_auditoria na mesma transação')
   pedirTroca(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.pedirTroca(sessaoDe(req), corpo(esquemaPedirTroca, b));
   }
@@ -122,7 +122,7 @@ export class PlantaoController {
   @HttpCode(200)
   @Permissao('pessoas.troca.aprovar')
   @AuditadoNoHandler(
-    'SGH_PES_TROCA; na aprovação, SGH_PES_PLANTAO, SGH_PES_ESCALA (versão), SGH_PES_ESCALA_EVENTO e SGH_OUTBOX, com a SGH_TRILHA na mesma transação',
+    'troca_plantao; na aprovação, plantao, escala (versão), publicacao_escala e integracao_mensagem, com a trilha_auditoria na mesma transação',
   )
   decidirTroca(
     @Param('troca') troca: string,
@@ -161,7 +161,7 @@ export class PlantaoController {
   @Post('plantao-agora/acionamentos')
   @HttpCode(200)
   @Permissao('pessoas.sobreaviso.acionar')
-  @AuditadoNoHandler('SGH_PES_ACIONAMENTO e SGH_OUTBOX com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('acionamento_sobreaviso e integracao_mensagem com a trilha_auditoria na mesma transação')
   acionar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.acionar(sessaoDe(req), corpo(esquemaAcionarSobreaviso, b));
   }
@@ -224,7 +224,7 @@ export class PlantaoController {
   @Post('dimensionamentos')
   @HttpCode(200)
   @Permissao('pessoas.dimensionamento.calcular')
-  @AuditadoNoHandler('SGH_PES_DIMENSIONAMENTO (só inclusão) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dimensionamento_enfermagem (só inclusão) com a trilha_auditoria na mesma transação')
   registrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.registrarDimensionamento(sessaoDe(req), corpo(esquemaCalcularDimensionamento, b));
   }

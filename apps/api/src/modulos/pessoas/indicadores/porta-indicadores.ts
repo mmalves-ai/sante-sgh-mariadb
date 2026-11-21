@@ -1,18 +1,20 @@
 // Porta do painel de indicadores de pessoas (W0-06, parte 7; M4 de mercado): monta a `BaseIndicadoresPessoas` do
 // período e do setor pedidos, a partir do cadastro, do ponto apurado, da folha, das turmas realizadas, do SESMT, do
-// censo e do último dimensionamento do setor. Só leitura: nada se grava (nem na SGH_ nem no sistema anterior).
-//   - `legado`: leituras de @sgh/legado em transação READ ONLY (parte 7b-2);
+// censo e do último dimensionamento do setor. Só leitura: nada se grava.
+//   - `banco`: o banco do cliente pelo @sgh/nucleo, uma transação somente leitura por fonte (porta-indicadores-propria);
 //   - `memoria`: a sessão sintética de dev/ci, com os fatos semeados (testes e E2E);
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 // Fonte que não pôde ser lida não derruba o painel: vem vazia e com um aviso, e o indicador que depende dela sai sem
 // valor dizendo por quê.
 import type { FonteIndicadorPessoas } from '@sgh/contratos';
 import type { BaseIndicadoresPessoas } from '@sgh/dominio-pessoas';
-import { type ContextoPortaM18, portaIndisponivel } from '../../exames/public-api.js';
+import type { ContextoPorta } from '../../cadastro/porta.js';
+import { portaIndisponivel } from '../../exames/public-api.js';
 
 export const PORTA_INDICADORES_PESSOAS = Symbol('PORTA_INDICADORES_PESSOAS');
 
-export type ContextoIndicadores = ContextoPortaM18;
+/** O contexto do núcleo (cliente, estabelecimento por id, usuário) mais o código do estabelecimento da sessão. */
+export type ContextoIndicadores = ContextoPorta;
 
 /** O recorte já validado: o período, o estabelecimento da sessão e, se pedido, o setor. */
 export interface RecorteIndicadores {
@@ -29,7 +31,7 @@ export interface BaseLidaIndicadores {
 }
 
 export interface PortaIndicadoresPessoas {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   hoje(c: ContextoIndicadores): Promise<string>;
   /** Os setores do estabelecimento (o filtro do painel). */
   setores(c: ContextoIndicadores): Promise<{ codigo: number; rotulo: string }[]>;

@@ -5,6 +5,7 @@ export * from './tempo.js';
 export * from './sobreposicao.js';
 export * from './equipe.js';
 export * from './estados.js';
+export * from './agenda-modelo.js';
 export * from './ligacao.js';
 export * from './registro.js';
 export * from './mapa.js';

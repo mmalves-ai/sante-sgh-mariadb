@@ -13,9 +13,11 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaDocumentosMemoria } from '../pep/documentos-porta-memoria.js';
+import { REGISTRO_MODULOS } from '../registro.js';
 import { PortaSadtMemoria } from '../sadt/porta-memoria.js';
+import { moduloPortalPaciente } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'portal-paciente' };
 const trilha = new RegistradorTrilhaMemoria();
 const documentos = new PortaDocumentosMemoria(trilha, null);
 const sadt = new PortaSadtMemoria({ estado: () => 'verde' }, documentos);
@@ -32,7 +34,14 @@ const proximoPasso = () => vi.setSystemTime(Date.now() + 30_000);
 
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, documentos, sadt, vigia: null });
+  // O módulo do portal pelo registro (o registro.ts ganha a entrada na integração do lote), com a SADT em memória.
+  const registro = {
+    ...REGISTRO_MODULOS,
+    'portal-paciente': async () => ({
+      modulo: (ctx: never) => moduloPortalPaciente(ctx, { sadt, vigia: false }),
+    }),
+  };
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

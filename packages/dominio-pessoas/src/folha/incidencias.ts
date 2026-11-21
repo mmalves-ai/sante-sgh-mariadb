@@ -91,3 +91,75 @@ export function conferirIncidenciasRubrica(r: RubricaFolha): ConferenciaRubrica[
 export function conferirRubricas(rs: readonly RubricaFolha[]): ConferenciaRubrica[] {
   return rs.flatMap(conferirIncidenciasRubrica);
 }
+
+/** Códigos do eSocial da rubrica por tributo (null: sem incidência cadastrada na vigência). */
+export interface CodigosIncidenciaRubrica {
+  readonly inss: string | null;
+  readonly irrf: string | null;
+  readonly fgts: string | null;
+  readonly sindical: string | null;
+  readonly pis: string | null;
+}
+
+/** As marcas de tributo que o cálculo usa, tiradas só do código do eSocial (e do uso da rubrica nas férias). */
+export interface MarcasTributoRubrica {
+  readonly inss: boolean;
+  readonly irrf: boolean;
+  readonly fgts: boolean;
+  readonly inss13: boolean;
+  readonly irrf13: boolean;
+  readonly fgts13: boolean;
+  readonly inssFerias: boolean;
+  readonly irrfFerias: boolean;
+  readonly pis: boolean;
+  readonly contribuicaoSindical: boolean;
+}
+
+/** INSS: as bases do 13º (12 normal, 14 exclusiva do empregador, 16 exclusiva do segurado, 22 e 24 maternidade e
+ * auxílio, 26 pago pela previdência, 92 e 94 com exigibilidade suspensa). */
+const INSS_DECIMO = new Set([12, 14, 16, 22, 24, 26, 92, 94]);
+
+const numero = (c: string | null): number | null =>
+  c !== null && /^\d{2,4}$/.test(c.trim()) ? Number(c.trim()) : null;
+
+/** PIS/PASEP (tabela 3 do eSocial): 00 não é base; 11 mensal e 12 13º; 91 e 92 suspensão (base suspensa). */
+function pisEhBase(codigo: string | null): boolean {
+  const n = numero(codigo);
+  return n === 11 || n === 12 || n === 91 || n === 92;
+}
+
+/**
+ * As marcas de incidência da rubrica a partir dos códigos do eSocial (regra única: codigoEsocialEhBase decide se é
+ * base; o grupo do código decide se a base é a mensal, a do 13º ou a das férias):
+ * - INSS: base mensal = base e fora do grupo do 13º; base do 13º = grupo do 13º. As férias entram na base mensal do
+ *   INSS (o leiaute não tem código próprio): inssFerias = base mensal e a rubrica usada nas férias.
+ * - IRRF: 11 mensal, 12 13º, 13 férias (cada um com a sua tributação); 14 (PLR) e 15 (rendimentos acumulados) têm
+ *   tributação exclusiva e não entram em nenhuma das três; 09 e 31 em diante não são base.
+ * - FGTS: 11 e 21 (aviso indenizado) mensal; 12 13º; 91 a 93 suspensão, na base mensal.
+ * Código fora dos grupos conhecidos: nenhuma marca (a conferência da rubrica mostra a divergência).
+ */
+export function marcasTributoRubrica(
+  codigos: CodigosIncidenciaRubrica,
+  usos: { readonly ferias: boolean },
+): MarcasTributoRubrica {
+  const ni = numero(codigos.inss);
+  const inssBase = codigos.inss !== null && codigoEsocialEhBase('inss', codigos.inss) === true;
+  const inss = inssBase && ni !== null && !INSS_DECIMO.has(ni);
+  const irrfBase = codigos.irrf !== null && codigoEsocialEhBase('irrf', codigos.irrf) === true;
+  const nr = numero(codigos.irrf);
+  const fgtsBase = codigos.fgts !== null && codigoEsocialEhBase('fgts', codigos.fgts) === true;
+  const nf = numero(codigos.fgts);
+  return {
+    inss,
+    inss13: inssBase && ni !== null && INSS_DECIMO.has(ni),
+    inssFerias: inss && usos.ferias,
+    irrf: irrfBase && nr === 11,
+    irrf13: irrfBase && nr === 12,
+    irrfFerias: irrfBase && nr === 13,
+    fgts: fgtsBase && nf !== 12,
+    fgts13: fgtsBase && nf === 12,
+    pis: pisEhBase(codigos.pis),
+    contribuicaoSindical:
+      codigos.sindical !== null && codigoEsocialEhBase('sindical', codigos.sindical) === true,
+  };
+}

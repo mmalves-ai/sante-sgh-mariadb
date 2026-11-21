@@ -1,16 +1,16 @@
 // Porta do plantão realizado, fatia F6 (M52.6; ficha, seções 5 e 6; DP-33): os plantões das escalas publicadas, o
-// realizado com a decisão por outra pessoa, as tarifas por hora e o lançamento no repasse pela receita
-// `repasse.lancarEvento` (origem `plantao`, a única escrita no outro sistema, pelo executor do M04):
-//   - `legado`: leituras de @sgh/legado em transação READ ONLY; gravações SGH_ numa transação só SGH_ com a trilha; o
-//     lançamento pelo executor (assinatura verde em origem-plantao);
-//   - `memoria`: a sessão sintética de dev/ci (E2E), com o lançamento simulado; nada vai à cópia;
+// realizado com a decisão por outra pessoa, as tarifas por hora e o lançamento no repasse:
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-realizado-propria.ts): o realizado é o próprio plantão
+//     (horário real, revisado_* e aprovado_*) e a tarifa é a de valor_hora_plantao; o lançamento no repasse, o estorno
+//     e a inclusão de tarifa por tipo de plantão aguardam o modelo (pedido do lote 03-04) e respondem 409 com o motivo;
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com o lançamento simulado;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
-import type {
-  NovoRealizadoSgh,
-  PlantaoParaRealizadoLido,
-  RealizadoPesLido,
-  TarifaPlantaoPesLida,
-} from '@sgh/legado';
+import {
+  type DadosNovoRealizado,
+  type RegistroPlantaoParaRealizado,
+  type RegistroRealizado,
+  type RegistroTarifaPlantao,
+} from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
 
 export const PORTA_REALIZADO = Symbol('PORTA_REALIZADO');
@@ -19,12 +19,12 @@ export type ContextoRealizado = ContextoPortaM18;
 type SemHospital<T> = Omit<T, 'hospital'>;
 
 export interface GravadorRealizado {
-  plantao(id: number): Promise<PlantaoParaRealizadoLido | null>;
-  realizadosDoPlantao(plantao: number): Promise<RealizadoPesLido[]>;
-  realizadosDaPessoa(pessoa: number, de: string, ate: string): Promise<RealizadoPesLido[]>;
-  realizado(id: number): Promise<RealizadoPesLido | null>;
-  tarifas(): Promise<TarifaPlantaoPesLida[]>;
-  incluirRealizado(r: SemHospital<NovoRealizadoSgh>): Promise<number>;
+  plantao(id: number): Promise<RegistroPlantaoParaRealizado | null>;
+  realizadosDoPlantao(plantao: number): Promise<RegistroRealizado[]>;
+  realizadosDaPessoa(pessoa: number, de: string, ate: string): Promise<RegistroRealizado[]>;
+  realizado(id: number): Promise<RegistroRealizado | null>;
+  tarifas(): Promise<RegistroTarifaPlantao[]>;
+  incluirRealizado(r: SemHospital<DadosNovoRealizado>): Promise<number>;
   decidirRealizado(d: {
     id: number;
     versao: number;
@@ -45,8 +45,8 @@ export interface GravadorRealizado {
   }): Promise<number>;
   encerrarTarifa(t: { id: number; fim: string; por: string }): Promise<void>;
   /** Os aprovados sem valor e não lançados que começam na vigência [de, ate] (ate null: sem fim). */
-  realizadosSemValor(de: string, ate: string | null): Promise<RealizadoPesLido[]>;
-  plantoesPorIds(ids: readonly number[]): Promise<PlantaoParaRealizadoLido[]>;
+  realizadosSemValor(de: string, ate: string | null): Promise<RegistroRealizado[]>;
+  plantoesPorIds(ids: readonly number[]): Promise<RegistroPlantaoParaRealizado[]>;
   /** Valorar o aprovado sem valor (a tarifa chegou depois); false se já tinha valor ou já foi lançado. */
   valorarRealizado(v: { id: number; tarifa: number; valorHora: number; valor: number }): Promise<boolean>;
   /** W0-06: a apuração do repasse da competência (empresa 1), relida na transação do estorno. */
@@ -69,13 +69,13 @@ export interface PortaRealizado extends PortaGravacaoM18<GravadorRealizado> {
   plantoes(
     c: ContextoRealizado,
     f: { readonly de: string; readonly ate: string; readonly unidade?: number },
-  ): Promise<PlantaoParaRealizadoLido[]>;
-  plantao(c: ContextoRealizado, id: number): Promise<PlantaoParaRealizadoLido | null>;
-  plantoesPorIds(c: ContextoRealizado, ids: readonly number[]): Promise<PlantaoParaRealizadoLido[]>;
-  realizadosDosPlantoes(c: ContextoRealizado, plantoes: readonly number[]): Promise<RealizadoPesLido[]>;
-  realizadosAprovados(c: ContextoRealizado, de: string, ate: string): Promise<RealizadoPesLido[]>;
-  realizado(c: ContextoRealizado, id: number): Promise<RealizadoPesLido | null>;
-  tarifas(c: ContextoRealizado): Promise<TarifaPlantaoPesLida[]>;
+  ): Promise<RegistroPlantaoParaRealizado[]>;
+  plantao(c: ContextoRealizado, id: number): Promise<RegistroPlantaoParaRealizado | null>;
+  plantoesPorIds(c: ContextoRealizado, ids: readonly number[]): Promise<RegistroPlantaoParaRealizado[]>;
+  realizadosDosPlantoes(c: ContextoRealizado, plantoes: readonly number[]): Promise<RegistroRealizado[]>;
+  realizadosAprovados(c: ContextoRealizado, de: string, ate: string): Promise<RegistroRealizado[]>;
+  realizado(c: ContextoRealizado, id: number): Promise<RegistroRealizado | null>;
+  tarifas(c: ContextoRealizado): Promise<RegistroTarifaPlantao[]>;
   codigosDosRegistros(c: ContextoRealizado, registros: readonly number[]): Promise<Map<number, number>>;
   /** W0-06: a apuração do repasse da competência (empresa 1), ou null. */
   apuracaoRepasse(c: ContextoRealizado, competencia: string): Promise<{ id: number; estado: string } | null>;

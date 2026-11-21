@@ -1,13 +1,16 @@
-// Telemedicina, etapa 4 do M50 (ficha, seções 5, 7, 8 e 12; regra 7; regra 13; cap-13 §13.3.5 TELE-01 a TELE-04):
+// Telemedicina (cap-13 §13.3.5 TELE-01 a TELE-04):
 //   - o portal: a teleconsulta marcada pelo portal numa agenda que a oferece; a sala de espera virtual (o termo vigente
 //     aceito e o local informado antes de o médico iniciar); a entrada na sala do médico pelo provedor;
-//   - o médico (`PEP > Telemedicina`): as teleconsultas do dia com o paciente na espera; o detalhe com o alerta do crônico
-//     sem consulta presencial há mais de 180 dias; INICIAR = abrir a sala no provedor (a declaração do médico) e abrir
-//     o atendimento como uma consulta pela receita do M20 (cenário teleconsulta, pelo executor; a ficha liga a
-//     teleconsulta na mesma transação); ENCERRAR com o motivo; a teleinterconsulta (pedir, abrir a sala, responder,
-//     cancelar);
-//   - a liberação pela chave `telemedicina` (POL-3: o ponto 18 do cap-13 §13.7, a assinatura do M49 e o provedor);
-//   - nenhuma mensagem ao paciente (DP-44 a): ele vê a sala no portal. Toda gravação vai com a SGH_TRILHA.
+//   - o médico: as teleconsultas do dia com o paciente na espera; o detalhe com o alerta do crônico sem consulta
+//     presencial há mais de 180 dias; INICIAR = abrir a sala no provedor (a declaração do médico) e abrir o atendimento
+//     como uma consulta pelo executor do atendimento (que liga a teleconsulta na mesma transação); ENCERRAR com o
+//     motivo; a teleinterconsulta (pedir, abrir a sala, responder, cancelar);
+//   - a liberação pela chave `telemedicina`; nenhuma mensagem ao paciente: ele vê a sala no portal. Toda gravação vai
+//     com a linha da trilha na mesma transação.
+// Melhoria: o médico da sala é conferido pelo id do vínculo profissional (antes, pelo login truncado em 31 letras).
+// Melhoria: a teleconsulta marcada pelo portal é criada pelo gancho na porta própria (sem depender da receita da
+// agenda) e o início liga o atendimento e põe a teleconsulta em andamento na mesma transação da trilha.
+// Melhoria: a trilha do portal leva só ids e códigos (evento, operação, versão do termo), nunca o local nem textos.
 import { randomBytes } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import {
@@ -48,24 +51,23 @@ import {
   podeSolicitarTeleinterconsulta,
   teleconsultaAberta,
 } from '@sgh/dominio-atendimento';
-import {
-  type ContextoOperacao,
-  ErroPortalSgh,
-  type LinhaTrilha,
-  type LiberacaoConsultada,
-  type PacienteLido,
-  type TeleconsultaLida,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import type { PortaAtendimento } from '../atendimento/public-api.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { PacienteFicha } from '../cadastro/tipos.js';
 import type { PortaCadastro } from '../cadastro/public-api.js';
 import type { FonteConfiguracao } from '../config/public-api.js';
 import type {
   ApoioGravacao,
   ContextoPortaM18,
+  DestinoPorta,
   GravacaoFeita,
+  LiberacaoGravacao,
   PortaGravacaoM18,
+  TrilhaDaGravacao,
 } from '../exames/public-api.js';
 import { ligadaNoEstabelecimento } from '../portal-paciente/aplicacao/liberacao.js';
 import {
@@ -74,35 +76,41 @@ import {
   type ServicoPortalPaciente,
   USUARIO_PORTAL,
 } from '../portal-paciente/aplicacao/servico.js';
-import type { ContextoTelemedicina, GravadorTelemedicina, PortaTelemedicina } from './porta.js';
+import {
+  type ContextoTelemedicina,
+  ErroTelemedicina,
+  type GravadorTelemedicina,
+  type PortaTelemedicina,
+  type Teleconsulta,
+} from './porta.js';
 import { type ProvedorTeleconsulta, salaParaQuemVe } from './provedor.js';
 
 const E = EVENTOS_AUDITAVEIS;
-const TABELA = 'SGH_ATD_TELECONSULTA';
+const TABELA = 'teleconsulta';
 
-/** A operação do legado da tela do médico e a permissão de agir (o mapa vale no servidor). */
+/** A operação da tela do médico e a permissão de agir (o mapa vale no servidor). */
 export const OPERACOES_TELEMEDICINA: Readonly<Record<string, string>> = {
   'atendimento.abrirAtendimento': 'atendimento.teleconsulta.realizar',
 };
 
-/** A porta de gravação do apoio: a abertura pelo atendimento (M20) e as gravações SGH_ pela telemedicina. */
+/** A porta de gravação do apoio: a abertura pelo atendimento e as gravações diretas pela telemedicina. */
 export class PortaGravacaoTelemedicina implements PortaGravacaoM18<GravadorTelemedicina> {
   constructor(
     private readonly tele: PortaTelemedicina,
     private readonly atendimento: PortaAtendimento,
   ) {}
-  get destino(): 'legado' | 'memoria' {
+  get destino(): DestinoPorta {
     return this.tele.destino;
   }
-  podeGravar(c: ContextoPortaM18, op: string, u: string): Promise<LiberacaoConsultada> {
-    return this.atendimento.podeGravar(c, op, u);
+  podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
+    return this.atendimento.podeGravar(c, op);
   }
   executar(c: ContextoPortaM18, op: string, e: unknown, ctx: ContextoOperacao): Promise<GravacaoFeita> {
     return this.atendimento.executar(c, op, e, ctx);
   }
   gravarSgh<T>(
     c: ContextoPortaM18,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorTelemedicina) => Promise<T>,
   ): Promise<T> {
     return this.tele.gravar(c, trilha, fn);
@@ -127,7 +135,21 @@ const recusa = (codigo: string, detalhe: string, status = 409): never => {
 
 function traduzir(e: unknown): never {
   if (e instanceof ErroProblema) throw e;
-  if (e instanceof ErroPortalSgh) {
+  if (e instanceof ErroOperacao) {
+    const p = e.problema;
+    const tipo =
+      p.status === 404
+        ? 'nao-encontrado'
+        : p.status === 400
+          ? 'entrada-invalida'
+          : p.status === 403
+            ? 'sem-permissao'
+            : p.codigo === 'conflito-versao'
+              ? 'conflito-de-versao'
+              : 'recusa-de-negocio';
+    throw new ErroProblema(tipo, p.status, p.title, p.detail, p.codigo ? { codigo: p.codigo } : {});
+  }
+  if (e instanceof ErroTelemedicina) {
     if (e.codigo === 'nao-encontrado') recusa('nao-encontrado', e.message, 404);
     if (e.codigo === 'situacao') recusa('situacao', e.message);
     throw new ErroProblema('conflito-de-versao', 409, 'Registro alterado', e.message, { codigo: e.codigo });
@@ -138,8 +160,8 @@ function traduzir(e: unknown): never {
 const hhmmDe = (agora: string) => `${agora.slice(11, 13)}${agora.slice(14, 16)}`;
 const diasAntes = (hoje: string, n: number) =>
   new Date(Date.parse(`${hoje}T12:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
-const nomeDe = (p: PacienteLido | undefined) => (p ? (p.nomeSocial ?? p.nome) : '');
-const local = (l: TeleconsultaLida): LocalPaciente | null =>
+const nomeDe = (p: PacienteFicha | undefined) => (p ? (p.nomeSocial ?? p.nome) : '');
+const local = (l: Teleconsulta): LocalPaciente | null =>
   l.local
     ? {
         uf: l.local.uf as LocalPaciente['uf'],
@@ -154,7 +176,7 @@ const ANTES_DO_ATENDIMENTO: ReadonlySet<string> = new Set(['agendada', 'aguardan
  * A teleconsulta cuja marcação não existe mais na agenda (ou mudou de dia e hora) fora do portal e da central — pelo
  * outro sistema — deixa de valer antes do atendimento: sai como cancelada para o paciente e para o médico.
  */
-function vigente(l: TeleconsultaLida): TeleconsultaLida {
+function vigente(l: Teleconsulta): Teleconsulta {
   return l.modalidade === 'teleconsulta' &&
     l.marcacaoVigente === false &&
     ANTES_DO_ATENDIMENTO.has(l.situacao)
@@ -162,11 +184,24 @@ function vigente(l: TeleconsultaLida): TeleconsultaLida {
     : l;
 }
 
-/** A sessão é o médico que abriu a sala da teleconsulta (a declaração CFM e o vínculo são dele). */
-const doMedicoDaSala = (l: TeleconsultaLida, login: string, vinculo: number | null) =>
-  l.medico === login.slice(0, 31) && (vinculo === null || l.vinculoMedico === vinculo);
+/** A sessão é o médico que abriu a sala da teleconsulta (a declaração e o vínculo são dele). */
+const doMedicoDaSala = (l: Teleconsulta, vinculo: number | null) =>
+  vinculo !== null && l.vinculoMedico === vinculo;
 
-/** A teleconsulta no portal (o gancho que a agenda online do M50.2 chama). */
+/** O contexto das portas do atendimento e do cadastro a partir do contexto da telemedicina (sessão ou portal). */
+const contextoPorta = (c: ContextoTelemedicina): ContextoPorta => {
+  const m = contextoDoEstabelecimento(c.hospital ?? '');
+  return {
+    cliente: c.cliente || m.cliente,
+    estabelecimento: c.estabelecimento ?? m.estabelecimento,
+    usuario: c.usuario ?? null,
+    correlacao: c.correlacao ?? 'telemedicina',
+    rede: c.rede ?? '',
+    hospital: c.hospital ?? '',
+  };
+};
+
+/** A teleconsulta no portal (o gancho que a agenda online do portal chama). */
 export interface GanchoTeleconsultaPortal {
   ligada(hospital: string): Promise<boolean>;
   aoMarcar(
@@ -181,7 +216,7 @@ export interface GanchoTeleconsultaPortal {
     de: number,
     para: { marcacao: number; agenda: number; nomeAgenda: string; crm: number; data: string; hora: string },
   ): Promise<void>;
-  daMarcacao(n: PortalNoPedido, marcacao: number): Promise<TeleconsultaLida | null>;
+  daMarcacao(n: PortalNoPedido, marcacao: number): Promise<Teleconsulta | null>;
   doPaciente(
     n: PortalNoPedido,
     paciente: number,
@@ -202,14 +237,14 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): DestinoPorta {
     return this.porta.destino;
   }
 
   // ── Comum ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   private async relogio(c: ContextoTelemedicina) {
-    const r = await this.atendimento.relogio(c);
+    const r = await this.atendimento.relogio(contextoPorta(c));
     return { hoje: r.hoje, hhmm: hhmmDe(r.agora) };
   }
 
@@ -235,7 +270,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       );
   }
 
-  private async lida(c: ContextoTelemedicina, id: number): Promise<TeleconsultaLida> {
+  private async lida(c: ContextoTelemedicina, id: number): Promise<Teleconsulta> {
     const l = await this.porta.porId(c, id);
     if (!l) return recusa('nao-encontrado', 'Teleconsulta não encontrada.', 404);
     return vigente(l);
@@ -243,7 +278,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
 
   // ── Tela do médico ───────────────────────────────────────────────────────────────────────────────────────────────
 
-  private resumo(l: TeleconsultaLida, p: PacienteLido | undefined): TeleconsultaResumo {
+  private resumo(l: Teleconsulta, p: PacienteFicha | undefined): TeleconsultaResumo {
     return {
       id: l.id,
       modalidade: l.modalidade,
@@ -255,7 +290,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           ? `Teleinterconsulta com ${l.nomeConvidado ?? ''}`
           : l.nomeAgenda,
       paciente: p ? { id: p.id, nome: nomeDe(p), prontuario: p.prontuario } : null,
-      atendimento: l.reg,
+      atendimento: l.atendimento,
       pacienteNaEspera: l.modalidade === 'teleconsulta' && l.situacao === 'aguardando',
       versao: l.versao,
     };
@@ -269,7 +304,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     const [dia, inter, lib] = await Promise.all([
       this.porta.doDia(c, {
         data,
-        crm: f.minhas && prof ? prof.crm : null,
+        profissional: f.minhas && prof ? prof.vinculo : null,
         teto: TETO_LISTA_TELEMEDICINA,
       }),
       this.porta.interconsultas(c, {
@@ -295,18 +330,14 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     };
   }
 
-  /** O alerta do crônico (TELE-04): o histórico do legado, sem os atendimentos que foram teleconsulta. */
+  /** O alerta do crônico (TELE-04): o histórico de atendimentos; os que foram teleconsulta não contam como presencial. */
   async alerta(c: ContextoTelemedicina, paciente: number, hoje: string): Promise<AlertaCronico> {
     const hist = await this.porta.historicoClinico(c, paciente);
-    const tele = await this.porta.regsDeTeleconsulta(
-      c,
-      hist.map((h) => h.reg),
-    );
     return alertaCronico(
       hist.map((h) => ({
         data: h.data,
         cid: h.cid,
-        teleconsulta: tele.has(h.reg),
+        teleconsulta: h.teleconsulta,
         laboratorio: h.laboratorio,
       })),
       hoje,
@@ -334,7 +365,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
             data: l.data,
             termo: l.termo !== null,
             local: l.local !== null,
-            atendimento: l.reg,
+            atendimento: l.atendimento,
           },
           r,
           {
@@ -352,7 +383,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     const comOutroMedico =
       tele &&
       (l.situacao === 'sala-aberta' || l.situacao === 'em-andamento') &&
-      !doMedicoDaSala(l, s.login, null);
+      !doMedicoDaSala(l, prof?.vinculo ?? null);
     const encerrar = !tele
       ? nao('A teleinterconsulta termina com o parecer ou o cancelamento.')
       : comOutroMedico
@@ -380,7 +411,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     const papel: 'medico' | 'convidado' | null = !podeRealizar
       ? null
       : tele
-        ? doMedicoDaSala(l, s.login, null)
+        ? doMedicoDaSala(l, prof?.vinculo ?? null)
           ? 'medico'
           : null
         : paraMim
@@ -434,16 +465,18 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
   }
 
   /**
-   * Iniciar: (1) a sala no provedor com a declaração do médico (SGH_, trilha `salaAberta`), (2) o atendimento como uma
-   * consulta pela receita do M20 (cenário teleconsulta, executor; a ficha liga a teleconsulta na mesma transação) e
-   * (3) a trilha TELECONSULTA_INICIADA. Se (2) recusar, a sala fica aberta e o médico tenta de novo (o passo 1 não se
-   * repete).
+   * Iniciar: (1) a sala no provedor com a declaração do médico (trilha `salaAberta`), (2) o atendimento como uma
+   * consulta pelo executor do atendimento (cenário teleconsulta; ele grava `teleconsulta.atendimento_id` na transação
+   * dele) e (3) a teleconsulta em andamento com a trilha TELECONSULTA_INICIADA, noutra transação. Se (2) recusar, a sala
+   * fica aberta e o médico tenta de novo (o passo 1 não se repete). Se (3) falhar depois de (2), a nova tentativa
+   * encontra a sala aberta com o atendimento já ligado e só conclui o passo 3 (reentrante; ver `retomarInicio`).
    */
   async iniciar(s: SessaoCadastro, id: number, e: IniciarTeleconsulta): Promise<ResultadoTeleconsulta> {
     const c = s.porta;
     const l = await this.lida(c, id);
     if (l.modalidade !== 'teleconsulta' || l.marcacao === null)
       return recusa('nao-teleconsulta', 'Só a teleconsulta abre atendimento.');
+    if (l.situacao === 'sala-aberta' && l.atendimento !== null) return this.retomarInicio(s, l);
     if (l.versao !== e.versao && l.situacao !== 'sala-aberta')
       throw new ErroProblema(
         'conflito-de-versao',
@@ -463,7 +496,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
         data: l.data,
         termo: l.termo !== null,
         local: l.local !== null,
-        atendimento: l.reg,
+        atendimento: l.atendimento,
       },
       r,
       {
@@ -475,7 +508,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     if (!d.pode || !prof)
       return recusa('nao-pode-iniciar', d.motivo ?? 'A teleconsulta não pode ser iniciada.');
     // Na nova tentativa (sala já aberta), só o médico que abriu a sala e declarou abre o atendimento.
-    if (l.situacao === 'sala-aberta' && !doMedicoDaSala(l, s.login, prof.vinculo))
+    if (l.situacao === 'sala-aberta' && !doMedicoDaSala(l, prof.vinculo))
       return recusa(
         'outro-medico',
         'A sala desta teleconsulta foi aberta por outro médico: só ele inicia o atendimento.',
@@ -501,7 +534,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           tabela: TABELA,
           id: String(l.id),
           paciente: l.paciente,
-          chave: `declaracao=${e.declaracao}`,
+          chave: `declaracao=${e.declaracao};cienteAlerta=${alerta.alerta && e.cienteAlerta ? 1 : 0}`,
         }),
         (g) =>
           g.abrirSala(l.id, l.versao, {
@@ -514,7 +547,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           }),
       );
     }
-    // 2. O atendimento como uma consulta, pela receita do M20 (cenário teleconsulta), com o vínculo da sessão.
+    // 2. O atendimento como uma consulta, pelo executor do atendimento (cenário teleconsulta), com o vínculo da sessão.
     const entrada = {
       tipo: 'consulta' as const,
       paciente: l.paciente,
@@ -537,34 +570,48 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       entrada,
       'Teleconsulta iniciada: o atendimento foi aberto.',
     );
-    const reg = Number(g.resultado['reg']);
-    const cabecalho = String(g.resultado['cabecalho'] ?? '');
-    // Na memória, a ligação que o registrarSgh faz no banco (mesma transação da ficha).
-    if (this.porta.destino === 'memoria' && !g.repetida)
-      await this.porta
-        .gravar(c, null, (x) =>
-          x.vincularAtendimento({
-            id: l.id,
-            marcacao: l.marcacao ?? 0,
-            cabecalho,
-            reg,
-            usuario: s.login,
-            profissional: prof.vinculo,
-          }),
-        )
-        .catch(traduzir);
-    // 3. TELECONSULTA_INICIADA (só identificadores).
-    if (!g.repetida)
-      await this.gravarSgh(
-        s,
-        E.teleconsultaIniciada.codigo,
-        () => ({ tabela: TABELA, id: String(l.id), paciente: l.paciente, chave: `reg=${reg}` }),
-        async () => null,
-      );
+    const atendimentoId = Number(g.resultado['atendimento'] ?? g.resultado['id'] ?? g.resultado['reg']);
+    // 3. A teleconsulta em andamento, ligada ao atendimento, e TELECONSULTA_INICIADA (só identificadores). Roda também
+    // na repetição do passo 2: a vinculação é reentrante (já em andamento com o mesmo atendimento, não grava de novo).
+    await this.vincular(s, l, atendimentoId, prof.vinculo);
     return {
       ok: true,
       teleconsulta: await this.detalhe(s, id),
       mensagem: 'Teleconsulta iniciada: o atendimento foi aberto e a sala está disponível para o paciente.',
+    };
+  }
+
+  private vincular(
+    s: SessaoCadastro,
+    l: Teleconsulta,
+    atendimento: number,
+    vinculo: number,
+  ): Promise<boolean> {
+    return this.gravarSgh(
+      s,
+      E.teleconsultaIniciada.codigo,
+      () => ({ tabela: TABELA, id: String(l.id), paciente: l.paciente, chave: `atendimento=${atendimento}` }),
+      (x) => x.vincularAtendimento({ id: l.id, atendimento, profissional: vinculo }),
+    );
+  }
+
+  /** A tentativa anterior abriu o atendimento mas não pôs a teleconsulta em andamento: conclui só o passo 3. */
+  private async retomarInicio(s: SessaoCadastro, l: Teleconsulta): Promise<ResultadoTeleconsulta> {
+    if (!s.pode('atendimento.teleconsulta.realizar'))
+      return recusa('sem-permissao', 'Seu perfil não permite realizar teleconsulta.', 403);
+    const prof = await this.atendimento.profissional(s.porta, s.login);
+    if (!prof || !doMedicoDaSala(l, prof.vinculo))
+      return recusa(
+        'outro-medico',
+        'A sala desta teleconsulta foi aberta por outro médico: só ele inicia o atendimento.',
+        403,
+      );
+    await this.vincular(s, l, Number(l.atendimento), prof.vinculo);
+    return {
+      ok: true,
+      teleconsulta: await this.detalhe(s, l.id),
+      mensagem:
+        'Teleconsulta iniciada: o atendimento já estava aberto e a teleconsulta passou a em andamento.',
     };
   }
 
@@ -576,13 +623,15 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       return recusa('sem-permissao', 'Seu perfil não permite realizar teleconsulta.', 403);
     const d = podeEncerrarTeleconsulta(l, e.motivo);
     if (!d.pode) return recusa('situacao', d.motivo ?? 'A teleconsulta não pode ser encerrada.');
-    if ((l.situacao === 'sala-aberta' || l.situacao === 'em-andamento') && !doMedicoDaSala(l, s.login, null))
+    const prof = await this.atendimento.profissional(c, s.login);
+    const vinculo = prof?.vinculo ?? null;
+    if ((l.situacao === 'sala-aberta' || l.situacao === 'em-andamento') && !doMedicoDaSala(l, vinculo))
       return recusa('outro-medico', 'Esta teleconsulta está com outro médico: só ele a encerra.', 403);
     await this.gravarSgh(
       s,
       E.teleconsultaEncerrada.codigo,
       () => ({ tabela: TABELA, id: String(l.id), paciente: l.paciente, chave: `motivo=${e.motivo}` }),
-      (g) => g.encerrar(l.id, e.versao, { motivo: e.motivo, por: s.login }),
+      (g) => g.encerrar(l.id, e.versao, { motivo: e.motivo, por: s.login, vinculo }),
     );
     return {
       ok: true,
@@ -594,7 +643,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     };
   }
 
-  /** As listas da abertura e do convite (do apoio do atendimento do M20). */
+  /** As listas da abertura e do convite (do apoio do atendimento). */
   async apoioDaAbertura(s: SessaoCadastro): Promise<ApoioTelemedicina> {
     const a = await this.atendimento.apoio(s.porta);
     return {
@@ -660,8 +709,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       }),
       (g) =>
         g.solicitarInterconsulta({
-          cabecalho: ficha.cabecalho,
-          reg: ficha.reg,
+          atendimento: e.atendimento,
           paciente,
           data: r.hoje,
           hora: r.hhmm,
@@ -781,31 +829,34 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     );
   }
 
+  /** A linha da trilha de uma gravação do portal (só ids e códigos; o estabelecimento vem do código da sessão). */
   private linhaPortal(
     n: PortalNoPedido,
     d: { evento: string; operacao: string; id: number | null; paciente: number; chave?: string | null },
-  ): LinhaTrilha {
+  ): TrilhaDaGravacao {
     return {
-      rede: this.portal?.rede ?? '',
-      hospital: n.c.hospital,
-      usuario: quemDaConta(n.conta.id),
-      evento: d.evento,
-      recurso: CHAVE_TELEMEDICINA,
-      operacao: d.operacao,
-      tabelaAlvo: TABELA,
-      idAlvo: d.id === null ? null : String(d.id),
-      chaveNaturalAlvo: d.chave ?? null,
-      resultado: 'sucesso',
-      estacao: 'SGH-PORTAL',
+      estabelecimento: contextoDoEstabelecimento(n.c.hospital).estabelecimento,
+      usuario: null,
+      acao: 'operacao',
+      entidade: TABELA,
+      entidadeId: d.id,
+      dadosDepois: {
+        evento: d.evento,
+        operacao: d.operacao,
+        recurso: CHAVE_TELEMEDICINA,
+        chave: d.chave ?? null,
+        paciente: d.paciente,
+        quem: quemDaConta(n.conta.id),
+        canal: 'portal',
+      },
+      motivo: null,
       correlacao: `portal-tele-${randomBytes(6).toString('hex')}`,
-      origem: null,
-      idPaciente: d.paciente,
     };
   }
 
   private async gravarPortal<T>(
     n: PortalNoPedido,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha | null) | null,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao | null) | null,
     fn: (g: GravadorTelemedicina) => Promise<T>,
   ): Promise<T> {
     try {
@@ -821,7 +872,7 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
   }
 
   private paraPortal(
-    l: TeleconsultaLida,
+    l: Teleconsulta,
     r: { hoje: string; hhmm: string },
     ligada: boolean,
   ): TeleconsultaDoPortal {
@@ -932,24 +983,20 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
     return this.detalhePortal(n, id);
   }
 
-  // ── Gancho da agenda online (M50.2) ──────────────────────────────────────────────────────────────────────────────
+  // ── Gancho da agenda online do portal ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * No banco, a teleconsulta é gravada pela receita da agenda NA MESMA TRANSAÇÃO da marcação (o `registrarSgh` de
-   * agendarConsulta, cancelarConsulta e remarcarConsulta; o portal passa `teleconsulta` na entrada) e a trilha do
-   * executor a cobre; aqui só fica a linha de trilha própria da teleconsulta, que, se falhar, vai ao log (a gravação já
-   * está feita e auditada). Na memória (sem o executor do banco), o gancho grava a teleconsulta.
-   */
-  private async trilhaDoGancho(n: PortalNoPedido, linha: LinhaTrilha): Promise<void> {
+  /** A linha de trilha avulsa do gancho: se falhar, vai ao log (a marcação já está gravada e auditada). */
+  private async trilhaDoGancho(n: PortalNoPedido, linha: TrilhaDaGravacao, evento: string): Promise<void> {
     try {
       await this.porta.gravar(n.c, linha, async () => null);
     } catch (e) {
       this.log.warn(
-        `Trilha da teleconsulta (${linha.evento}, ${linha.chaveNaturalAlvo ?? ''}) não gravada: ${e instanceof Error ? e.message : 'erro'}`,
+        `Trilha da teleconsulta (${evento}) não gravada: ${e instanceof Error ? e.name : 'erro'}`,
       );
     }
   }
 
+  /** A marcação de teleconsulta pelo portal cria a teleconsulta (uma viva por marcação; a repetição só vai à trilha). */
   async aoMarcar(
     n: PortalNoPedido,
     paciente: number,
@@ -963,10 +1010,8 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
         paciente,
         chave: `marcacao=${m.marcacao}`,
       });
-    if (this.porta.destino === 'legado') {
-      const l = await this.porta.daMarcacao(n.c, m.marcacao);
-      return this.trilhaDoGancho(n, linha(l?.id ?? null));
-    }
+    const ja = await this.porta.daMarcacao(n.c, m.marcacao);
+    if (ja) return this.trilhaDoGancho(n, linha(ja.id), E.teleconsultaAgendada.codigo);
     await this.gravarPortal(
       n,
       (x: { id: number }) => linha(x.id),
@@ -975,18 +1020,18 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           marcacao: m.marcacao,
           agenda: m.agenda,
           nomeAgenda: m.nomeAgenda,
-          crmAgenda: m.crm,
+          profissional: null,
           data: m.data,
           hora: m.hora,
           paciente,
-          conta: n.conta.id,
           por: quemDaConta(n.conta.id),
         }),
     );
   }
 
-  /** `havia`: a marcação tinha teleconsulta viva antes do cancelamento (a trilha só nesse caso). */
+  /** `havia`: a marcação tinha teleconsulta viva antes do cancelamento (a trilha só quando alguma foi cancelada). */
   async aoCancelar(n: PortalNoPedido, paciente: number, marcacao: number, havia = true): Promise<void> {
+    void havia;
     const linha = this.linhaPortal(n, {
       evento: E.teleconsultaCancelada.codigo,
       operacao: 'atendimento.agendarTeleconsulta',
@@ -994,7 +1039,6 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       paciente,
       chave: `marcacao=${marcacao}`,
     });
-    if (this.porta.destino === 'legado') return havia ? this.trilhaDoGancho(n, linha) : undefined;
     await this.gravarPortal(
       n,
       (qtd: number) => (qtd > 0 ? linha : null),
@@ -1015,7 +1059,6 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
       paciente,
       chave: `marcacao=${para.marcacao};de=${de}`,
     });
-    if (this.porta.destino === 'legado') return this.trilhaDoGancho(n, linha);
     const qtd = await this.gravarPortal(
       n,
       (q: number) => (q > 0 ? linha : null),
@@ -1025,16 +1068,15 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
           para: para.marcacao,
           agenda: para.agenda,
           nomeAgenda: para.nomeAgenda,
-          crmAgenda: para.crm,
           data: para.data,
           hora: para.hora,
           por: quemDaConta(n.conta.id),
         }),
     );
-    if (qtd !== 1) this.log.warn(`Teleconsulta da marcação ${de} não acompanhou a remarcação (memória).`);
+    if (qtd !== 1) this.log.warn(`Teleconsulta da marcação ${de} não acompanhou a remarcação (${qtd}).`);
   }
 
-  async daMarcacao(n: PortalNoPedido, marcacao: number): Promise<TeleconsultaLida | null> {
+  async daMarcacao(n: PortalNoPedido, marcacao: number): Promise<Teleconsulta | null> {
     const l = await this.porta.daMarcacao(n.c, marcacao);
     return l && vigente(l).situacao !== 'cancelada' ? l : null;
   }
@@ -1049,8 +1091,8 @@ export class ServicoTelemedicina implements GanchoTeleconsultaPortal {
 
   // ── Documentos do PEP (a marca da telemedicina) ──────────────────────────────────────────────────────────────────
 
-  /** O atendimento (cabeçalho) foi teleconsulta? A receita e o atestado levam a marca da modalidade. */
-  async atendimentoEmTeleconsulta(c: ContextoTelemedicina, cabecalho: number): Promise<boolean> {
-    return (await this.porta.doCabecalho(c, String(cabecalho))) !== null;
+  /** O atendimento foi teleconsulta? A receita e o atestado levam a marca da modalidade. */
+  async atendimentoEmTeleconsulta(c: ContextoTelemedicina, atendimento: number): Promise<boolean> {
+    return (await this.porta.doAtendimento(c, atendimento)) !== null;
   }
 }

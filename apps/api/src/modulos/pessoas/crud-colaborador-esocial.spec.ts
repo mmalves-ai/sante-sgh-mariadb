@@ -2,7 +2,10 @@
 // SESMT faz com o S-2210: em lote ou enviado recusa; o não enviado se descarta e sai de novo; o aceito ganha o
 // retificador (admissão) ou o S-3000 (matrícula, que não se retifica). Tudo em memória; nada sai do teste.
 import type { FichaEsocialVinculo } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+import type {
+  ChaveLiberacao as ChaveGravada,
+  PrerequisitoRecurso as PrerequisitoGravado,
+} from '../config/public-api.js';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -16,6 +19,20 @@ import { PortaFolhaMemoria } from './folha/porta-folha-memoria.js';
 import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from './porta-memoria.js';
 import type { PortaRubricas } from './rubricas/porta-rubricas.js';
 import { ServicoPessoas } from './servico.js';
+
+/** Contexto da porta do teste: um estabelecimento sintético distinto por código de hospital. */
+const ESTABS = new Map<string, number>();
+const ctxDe = (hospital: string) => {
+  if (!ESTABS.has(hospital)) ESTABS.set(hospital, ESTABS.size + 1);
+  return {
+    cliente: 'sintetico',
+    estabelecimento: ESTABS.get(hospital) ?? null,
+    usuario: 7,
+    correlacao: 'teste-colaborador',
+    rede: 'rede-sintetica',
+    hospital,
+  };
+};
 
 const chave = (c: string): ChaveGravada => ({
   id: c,
@@ -50,7 +67,7 @@ const sessao = (): SessaoCadastro => ({
   hospital: 'pc',
   rede: 'rede-sintetica',
   login: 'SINT.RH',
-  porta: { rede: 'rede-sintetica', hospital: 'pc' },
+  porta: ctxDe('pc'),
   pode: () => true,
 });
 

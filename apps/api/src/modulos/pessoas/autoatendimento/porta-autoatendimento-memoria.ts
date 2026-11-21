@@ -1,16 +1,7 @@
-// Porta das solicitações do autoatendimento em memória (W0-06, parte 6b-2): a sessão sintética de dev/ci (E2E) e os
-// testes. A gravação abre, aninhadas, as transações em memória do ponto, das férias e do colaborador, e só confirma
-// tudo se a função terminar: o erro no meio desfaz a decisão e o efeito juntos, como a transação SGH_ do legado. O
-// banco confere a decisão por outra pessoa e a desistência só pelo solicitante (CHECK `SGH_CK_PES_SOLIC_QUEM`): aqui,
-// as mesmas recusas. Nada vai à cópia do banco.
-import type {
-  AcessoAtestadoLido,
-  AjusteDaSolicitacaoLido,
-  AtestadoPesLido,
-  DadosAtestadoSgh,
-  SolicitacaoPesLida,
-} from '@sgh/legado';
-import { ErroOperacao, type LinhaTrilha } from '@sgh/legado';
+// Porta das solicitações do autoatendimento em memória (W0-06, parte 6b-2; F2.2 lote 03-02): a sessão sintética de
+// dev/ci (E2E) e os testes. A gravação abre, aninhadas, as transações em memória do ponto, das férias e do colaborador,
+// e só confirma tudo se a função terminar: o erro no meio desfaz a decisão e o efeito juntos, como a operação do banco.
+// A decisão é de outra pessoa e a desistência só do solicitante: aqui, as mesmas recusas da porta do banco.
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaCalculoFolhaMemoria } from '../folha/porta-calculo-memoria.js';
 import type { PortaPessoasMemoria } from '../porta-memoria.js';
@@ -21,6 +12,16 @@ import type {
   GravadorAutoatendimento,
   PortaAutoatendimento,
 } from './porta-autoatendimento.js';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
+import {
+  type AcessoAtestado,
+  type AjusteDaSolicitacao,
+  type AtestadoRegistrado,
+  chaveDoContexto,
+  type DadosAtestado,
+  type SolicitacaoRegistrada,
+} from './tipos.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
@@ -31,20 +32,20 @@ const desatualizado = () =>
   );
 const mesmo = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
 
-interface AtestadoMem extends DadosAtestadoSgh {
+interface AtestadoMem extends DadosAtestado {
   readonly id: number;
   readonly solicitacao: number;
   readonly criadoPor: string;
   readonly criadoEm: string;
 }
-interface AcessoMem extends AcessoAtestadoLido {
+interface AcessoMem extends AcessoAtestado {
   readonly atestado: number;
 }
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
 interface Estado {
   seq: number;
-  solicitacoes: Mut<SolicitacaoPesLida>[];
-  /** ID_SOLICITACAO de SGH_PES_PONTO_AJUSTE (o ajuste mora na porta do ponto). */
+  solicitacoes: Mut<SolicitacaoRegistrada>[];
+  /** A solicitação de cada ajuste (o ajuste mora na porta do ponto). */
   ajustes: { ajuste: number; solicitacao: number }[];
   atestados: AtestadoMem[];
   acessos: AcessoMem[];
@@ -68,9 +69,9 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
     private readonly pessoas: PortaPessoasMemoria,
   ) {}
 
-  private e(c: { hospital: string }): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+  private e(c: object): Estado {
+    let s = this.estados.get(chaveDoContexto(c));
+    if (!s) this.estados.set(chaveDoContexto(c), (s = novo()));
     return s;
   }
 
@@ -85,7 +86,10 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
     return (await this.ponto.relogio()).hoje;
   }
 
-  async solicitacoes(c: ContextoAutoatendimento, f: FiltroSolicitacoesPorta): Promise<SolicitacaoPesLida[]> {
+  async solicitacoes(
+    c: ContextoAutoatendimento,
+    f: FiltroSolicitacoesPorta,
+  ): Promise<SolicitacaoRegistrada[]> {
     const vs = f.vinculos ?? null;
     return this.e(c)
       .solicitacoes.filter(
@@ -95,7 +99,7 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
       .map((x) => ({ ...x }));
   }
 
-  async solicitacao(c: ContextoAutoatendimento, id: number): Promise<SolicitacaoPesLida | null> {
+  async solicitacao(c: ContextoAutoatendimento, id: number): Promise<SolicitacaoRegistrada | null> {
     const x = this.e(c).solicitacoes.find((y) => y.id === id);
     return x ? { ...x } : null;
   }
@@ -104,12 +108,17 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
     s: Estado,
     solicitacao: number,
     ler: (id: number) => Promise<{ id: number; dia: string; situacao: string; versao: number } | null>,
-  ): Promise<AjusteDaSolicitacaoLido[]> {
+  ): Promise<AjusteDaSolicitacao[]> {
     const ids = s.ajustes.filter((l) => l.solicitacao === solicitacao).map((l) => l.ajuste);
     const as = await Promise.all(ids.map(ler));
     return as
       .filter((a): a is NonNullable<typeof a> => a !== null)
-      .map((a) => ({ id: a.id, dia: a.dia, situacao: a.situacao, versao: a.versao }))
+      .map((a) => ({
+        id: a.id,
+        dia: a.dia,
+        situacao: a.situacao as AjusteDaSolicitacao['situacao'],
+        versao: a.versao,
+      }))
       .sort((a, b) => a.dia.localeCompare(b.dia) || a.id - b.id);
   }
 
@@ -117,7 +126,7 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
     return this.ajustesDe(this.e(c), solicitacao, (id) => this.ponto.ajuste(c, id));
   }
 
-  async acessosAtestado(c: ContextoAutoatendimento, solicitacao: number): Promise<AcessoAtestadoLido[]> {
+  async acessosAtestado(c: ContextoAutoatendimento, solicitacao: number): Promise<AcessoAtestado[]> {
     const s = this.e(c);
     const a = s.atestados.find((x) => x.solicitacao === solicitacao);
     if (!a) return [];
@@ -135,12 +144,13 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
 
   async gravarSgh<T>(
     c: ContextoAutoatendimento,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorAutoatendimento) => Promise<T>,
   ): Promise<T> {
-    return this.ponto.gravarSgh(c, trilha, (gp) =>
-      this.folha.gravarSgh(c, trilha, (gf) =>
-        this.pessoas.gravarSgh(c, trilha, async (gv) => {
+    const t = trilha as never;
+    return this.ponto.gravarSgh(c, t, (gp) =>
+      this.folha.gravarSgh(c, t, (gf) =>
+        this.pessoas.gravarSgh(c, t, async (gv) => {
           const s = copiar(this.e(c));
           const { agora } = await this.ponto.relogio();
           const id = () => ++s.seq;
@@ -237,7 +247,7 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
               s.ajustes.push({ ajuste: x.ajuste, solicitacao: x.solicitacao });
             },
             ajustesDaSolicitacao: (i) => this.ajustesDe(s, i, (a) => gp.ajuste(a)),
-            atestado: async (x): Promise<AtestadoPesLido | null> => {
+            atestado: async (x): Promise<AtestadoRegistrado | null> => {
               const a = s.atestados.find((y) => y.solicitacao === x.solicitacao);
               if (!a) return null;
               s.acessos.push({
@@ -267,7 +277,7 @@ export class PortaAutoatendimentoMemoria implements PortaAutoatendimento {
             pessoas: gv,
           };
           const r = await fn(g);
-          this.estados.set(c.hospital, s);
+          this.estados.set(chaveDoContexto(c), s);
           return r;
         }),
       ),

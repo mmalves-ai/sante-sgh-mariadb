@@ -1,7 +1,7 @@
 // Serviço da rescisão, fatia F4 (M53.5; ficha do M53, seções 4 a 8, regras 7 e 8): a fila dos colaboradores desligados
 // (o desligamento é registrado no colaborador, M52), o cálculo do termo (prévia ou gravado: um processamento `rescisao`
-// com a memória por rubrica e a rescisão em SGH_PES_RESCISAO, substituindo a anterior do vínculo), o detalhe e o
-// cancelamento. A conta é a regra pura de @sgh/dominio-pessoas; grava só SGH_ (a rescisão, o processamento, as linhas e o
+// com a memória por rubrica e a rescisão na tabela rescisao, substituindo a anterior do vínculo), o detalhe e o
+// cancelamento. A conta é a regra pura de @sgh/dominio-pessoas; grava pela porta da folha (a rescisão, o processamento, as linhas e o
 // cancelamento das férias programadas que a rescisão indeniza) com a trilha na mesma transação, atrás da chave
 // `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome.
 import { createHash } from 'node:crypto';
@@ -38,14 +38,6 @@ import {
   totalizarCalculo,
   type VinculoParaCalculo,
 } from '@sgh/dominio-pessoas';
-import {
-  type FeriasPesLida,
-  type LinhaCalculoSgh,
-  type RescisaoPesLida,
-  TETO_DESLIGADOS,
-  TETO_RESCISOES_LISTA,
-  type VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -65,6 +57,13 @@ import {
   resumoDoProcesso,
   sobreavisoPorVinculo,
 } from './servico-calculo.js';
+import {
+  type FeriasDoVinculo as FeriasRegistradas,
+  type LinhaCalculoDoVinculo,
+  type RescisaoDaFolha,
+} from './tipos-folha.js';
+import { TETO_DESLIGADOS, TETO_RESCISOES_LISTA, exigirCadastroDoCalculo } from './apoio-folha.js';
+import { type VinculoColaborador } from '../tipos-pessoas.js';
 
 export const PERMISSOES_RESCISAO_FOLHA = {
   ler: 'pessoas.rescisao.ler',
@@ -123,7 +122,15 @@ const TIPOS_VINCULO: readonly TipoVinculoTrabalho[] = [
 const tipoVinculo = (t: string): TipoVinculoTrabalho =>
   (TIPOS_VINCULO as readonly string[]).includes(t) ? (t as TipoVinculoTrabalho) : 'terceiro';
 
-const paraCalculo = (v: VinculoPesLido): VinculoParaCalculo => ({
+/** O vínculo da porta de pessoas no cálculo: sem centro de custo ou carga semanal, recusa (422) com o motivo. */
+const paraCalculo = (bruto: VinculoColaborador): VinculoParaCalculo =>
+  paraCalculoCompleto(exigirCadastroDoCalculo([bruto])[0]!);
+const paraCalculoCompleto = (
+  v: Omit<VinculoColaborador, 'centroCusto' | 'cargaSemanal'> & {
+    readonly centroCusto: number;
+    readonly cargaSemanal: number;
+  },
+): VinculoParaCalculo => ({
   id: v.id,
   matricula: v.matricula,
   tipo: tipoVinculo(v.tipo),
@@ -137,7 +144,7 @@ const paraCalculo = (v: VinculoPesLido): VinculoParaCalculo => ({
  * A rescisão para a saída da API. `verSalario` falso (sem `pessoas.salario.ler`): o saldo e a multa do FGTS saem null,
  * porque a multa é um percentual de (saldo + FGTS desta rescisão) e revela a remuneração (D-PERM-SAL-535).
  */
-export const paraRescisao = (r: RescisaoPesLida, verSalario: boolean): RescisaoDoVinculo => ({
+export const paraRescisao = (r: RescisaoDaFolha, verSalario: boolean): RescisaoDoVinculo => ({
   id: r.id,
   vinculo: r.vinculo,
   empresa: r.empresa,
@@ -163,7 +170,7 @@ export const paraRescisao = (r: RescisaoPesLida, verSalario: boolean): RescisaoD
   versao: r.versao,
 });
 
-const registrada = (f: FeriasPesLida): FeriasRegistrada => ({
+const registrada = (f: FeriasRegistradas): FeriasRegistrada => ({
   id: f.id,
   aquisitivoInicio: f.aquisitivoInicio,
   inicio: f.inicio,
@@ -174,7 +181,7 @@ const registrada = (f: FeriasPesLida): FeriasRegistrada => ({
   situacao: f.situacao,
 });
 
-const linhaSaida = (l: LinhaCalculoSgh | LinhaCalculoFolha): LinhaCalculoFolha => ({
+const linhaSaida = (l: LinhaCalculoDoVinculo | LinhaCalculoFolha): LinhaCalculoFolha => ({
   papel: l.papel,
   tipo: l.tipo,
   rubrica: l.rubrica,
@@ -233,13 +240,13 @@ export class ServicoRescisaoFolha {
     if (!es.some((e) => e.codigo === empresa)) throw naoEncontrado('Empresa');
   }
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoColaborador> {
     const v = await this.pessoas.vinculo(s.porta, id);
     if (!v) throw naoEncontrado('Colaborador');
     return v;
   }
 
-  private async rescisaoOu404(s: SessaoCadastro, id: number): Promise<RescisaoPesLida> {
+  private async rescisaoOu404(s: SessaoCadastro, id: number): Promise<RescisaoDaFolha> {
     const r = await this.porta.rescisaoPorId(this.ctx(s), id);
     if (!r) throw naoEncontrado('Rescisão');
     return r;
@@ -313,7 +320,7 @@ export class ServicoRescisaoFolha {
   // ── Cálculo ─────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Lê o que a rescisão junta (uma vez, fora da transação; D-MONTAGEM-533) e calcula (regra pura). */
-  private async montar(s: SessaoCadastro, v: VinculoPesLido, e: CalcularRescisaoEntrada) {
+  private async montar(s: SessaoCadastro, v: VinculoColaborador, e: CalcularRescisaoEntrada) {
     const c = this.ctx(s);
     const deslig = v.desligamento!;
     const competencia = deslig.slice(0, 7);

@@ -9,7 +9,7 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
-import type { MotorVigia } from '../internacao/public-api.js';
+import { moduloCirurgia } from './modulo.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
@@ -31,16 +31,14 @@ export interface Sessao {
   csrf: string;
 }
 
-export async function montarAppBloco(
-  o: { semChaves?: readonly string[]; hhmm?: string; vigia?: MotorVigia | null } = {},
-) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+export async function montarAppBloco(o: { semChaves?: readonly string[]; hhmm?: string } = {}) {
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'cirurgia' };
   const trilha = new RegistradorTrilhaMemoria();
   const cadastro = new PortaCadastroMemoria();
   const relogio = { hoje: HOJE, hhmm: o.hhmm ?? '0900' };
   const cirurgia = new PortaCirurgiaMemoria(
     null,
-    (c, ids) => cadastro.lerPacientes(c, ids),
+    (c, ids) => cadastro.lerPacientes({ ...c, rede: '', hospital: '' }, ids),
     () => relogio,
   );
   const anestesia = new PortaAnestesiaMemoria(cirurgia);
@@ -56,12 +54,17 @@ export async function montarAppBloco(
       : undefined;
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    cirurgia,
-    anestesia,
-    blocoSeguro,
-    ...(configuracao ? { configuracao } : {}),
-    ...(o.vigia !== undefined ? { vigia: o.vigia } : {}),
+    registro: {
+      cirurgia: async () => ({
+        modulo: (ctx) =>
+          moduloCirurgia(ctx, {
+            cirurgia,
+            anestesia,
+            blocoSeguro,
+            ...(configuracao ? { configuracao } : {}),
+          }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

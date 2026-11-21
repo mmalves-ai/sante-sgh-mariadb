@@ -1,7 +1,7 @@
 // Serviço dos treinamentos e da ciência de POP, fatia F6 (M52.6; ficha, seções 6 a 8, regra 20; RDC63-05, NR32-04): a
 // situação dos colaboradores ativos nos cursos obrigatórios, o catálogo de cursos, as turmas com a lista de presença, as
 // versões de POP com a adesão e a ciência do próprio colaborador. Toda gravação confere a chave `pessoas.treinamento`, a
-// permissão e o estabelecimento da sessão e vai numa transação só SGH_ com a trilha. As regras ficam em
+// permissão e o estabelecimento da sessão e vai numa transação só, com a trilha. As regras ficam em
 // @sgh/dominio-pessoas.
 import {
   type AlterarCursoEntrada,
@@ -64,7 +64,6 @@ import {
   validadeAte,
   vigenteDoCodigo,
 } from '@sgh/dominio-pessoas';
-import type { CursoPesLido, PopPesLido, TurmaPesLida, VinculoAtivoTreinamento } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -72,6 +71,12 @@ import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js'
 import { ApoioGravacao } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { GravadorTreinamento, PortaTreinamento } from './porta-treinamento.js';
+import type {
+  CursoTreinamento,
+  TurmaTreinamento,
+  VersaoPop,
+  VinculoAtivoTreinamento,
+} from './tipos-treinamento.js';
 
 const E = EVENTOS_AUDITAVEIS;
 export const PERMISSOES_TREINAMENTO = {
@@ -135,13 +140,13 @@ export class ServicoTreinamento {
   }
 
   private async nomesUnidades(s: SessaoCadastro): Promise<Map<number, string>> {
-    return new Map((await this.pessoas.unidades(s.porta)).map((u) => [u.codigo, u.nome]));
+    return new Map((await this.porta.unidades(s.porta)).map((u) => [u.codigo, u.nome]));
   }
 
   async apoioTela(s: SessaoCadastro): Promise<ApoioTreinamento> {
     const [relogio, unidades, alertaDias, gravacao] = await Promise.all([
       this.porta.relogio(s.porta),
-      this.pessoas.unidades(s.porta),
+      this.porta.unidades(s.porta),
       this.alertaDias(s),
       this.apoio.gravacao(s, { registrar: P.registrar }),
     ]);
@@ -164,7 +169,7 @@ export class ServicoTreinamento {
 
   // ── Cursos ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private alvosResposta(c: CursoPesLido, unidades: Map<number, string>): AlvoCursoResposta[] {
+  private alvosResposta(c: CursoTreinamento, unidades: Map<number, string>): AlvoCursoResposta[] {
     return c.alvos.map((a) => ({
       tipo: a.tipo,
       valor: a.valor,
@@ -172,7 +177,7 @@ export class ServicoTreinamento {
     }));
   }
 
-  private cursoResposta(c: CursoPesLido, unidades: Map<number, string>): CursoResposta {
+  private cursoResposta(c: CursoTreinamento, unidades: Map<number, string>): CursoResposta {
     return {
       id: c.id,
       codigo: c.codigo,
@@ -220,7 +225,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasCursoGravado.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_CURSO', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'curso', id: String(y.id) }),
       async (g) => ({ id: await g.incluirCurso({ ...e, alvos, por: s.login }) }),
     );
     return { id: x.id, mensagem: 'Curso incluído no catálogo.' };
@@ -235,7 +240,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasCursoGravado.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_CURSO', id: String(e.curso) },
+      { tabela: 'curso', id: String(e.curso) },
       async (g) => {
         if (!(await g.curso(e.curso))) throw naoEncontrado('Curso');
         await g.alterarCurso({ ...e, id: e.curso, alvos, por: s.login });
@@ -246,7 +251,7 @@ export class ServicoTreinamento {
 
   // ── Turmas e lista de presença ──────────────────────────────────────────────────────────────────────────────
 
-  private turmaResumo(t: TurmaPesLida, cursos: Map<number, CursoPesLido>): TurmaResumo {
+  private turmaResumo(t: TurmaTreinamento, cursos: Map<number, CursoTreinamento>): TurmaResumo {
     const c = cursos.get(t.curso);
     return {
       id: t.id,
@@ -264,7 +269,7 @@ export class ServicoTreinamento {
     };
   }
 
-  private async mapaCursos(s: SessaoCadastro): Promise<Map<number, CursoPesLido>> {
+  private async mapaCursos(s: SessaoCadastro): Promise<Map<number, CursoTreinamento>> {
     return new Map((await this.porta.cursos(s.porta)).map((c) => [c.id, c]));
   }
 
@@ -282,7 +287,7 @@ export class ServicoTreinamento {
     return { itens: ts.slice(0, TETO).map((t) => this.turmaResumo(t, cursos)), limitado: ts.length > TETO };
   }
 
-  private async turmaOu404(s: SessaoCadastro, id: number): Promise<TurmaPesLida> {
+  private async turmaOu404(s: SessaoCadastro, id: number): Promise<TurmaTreinamento> {
     const t = await this.porta.turma(s.porta, id);
     if (!t) throw naoEncontrado('Turma');
     return t;
@@ -302,10 +307,10 @@ export class ServicoTreinamento {
         lista.map((p) => p.vinculo),
       ),
       t.pop !== null ? this.porta.pop(s.porta, t.pop) : Promise.resolve(null),
-      this.porta.correcoes(s.porta, 'SGH_PES_TREINAMENTO', [t.id]),
+      this.porta.correcoes(s.porta, 'turma_treinamento', [t.id]),
       this.porta.correcoes(
         s.porta,
-        'SGH_PES_TREIN_PARTICIPANTE',
+        'presenca_treinamento',
         lista.map((p) => p.id),
       ),
     ]);
@@ -387,7 +392,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasTurmaAlterada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_TREINAMENTO', id: String(e.treinamento) },
+      { tabela: 'turma_treinamento', id: String(e.treinamento) },
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -444,7 +449,7 @@ export class ServicoTreinamento {
         };
         await g.alterarTurma({ id: t.id, versao: e.versao, ...depois, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_TREINAMENTO',
+          tabela: 'turma_treinamento',
           registro: t.id,
           operacao: 'pessoas.turma.alterada',
           antes,
@@ -460,7 +465,7 @@ export class ServicoTreinamento {
   /**
    * W0-06: retirada da inscrição feita por engano, só na turma aberta e sem presença lançada (D-CRUD-ORFAOS): com
    * presença ou ciência pela turma, 409 `inscricao-com-presenca`, que oferece a correção da presença. Sem vínculo, o
-   * retrato da linha vai à SGH_HIST_EXCLUSAO antes do DELETE (D-CRUD-SNAP).
+   * registro fica guardado (exclusão lógica, com o motivo na trilha).
    */
   async retirarInscricao(s: SessaoCadastro, e: RetirarInscricaoEntrada): Promise<ResultadoF6> {
     this.exigirRegistrar(s);
@@ -468,7 +473,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasInscricaoRetirada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_TREIN_PARTICIPANTE', id: String(e.treinamento) },
+      { tabela: 'presenca_treinamento', id: String(e.treinamento) },
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -520,7 +525,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasParticipacaoCorrigida.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_TREIN_PARTICIPANTE', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'presenca_treinamento', id: String(y.id) }),
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -563,7 +568,7 @@ export class ServicoTreinamento {
         };
         await g.registrarParticipacao({ id: p.id, versao: e.versao, ...depois, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_TREIN_PARTICIPANTE',
+          tabela: 'presenca_treinamento',
           registro: p.id,
           operacao: 'pessoas.participacao.corrigida',
           antes,
@@ -584,7 +589,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasTurmaGravada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_TREINAMENTO', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'turma_treinamento', id: String(y.id) }),
       async (g) => {
         const curso = await g.curso(e.curso);
         if (!curso) throw naoEncontrado('Curso');
@@ -622,7 +627,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasTurmaGravada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_TREIN_PARTICIPANTE', id: String(e.treinamento) },
+      { tabela: 'presenca_treinamento', id: String(e.treinamento) },
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -659,7 +664,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasParticipacaoRegistrada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_TREIN_PARTICIPANTE', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'presenca_treinamento', id: String(y.id) }),
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -709,7 +714,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasTurmaGravada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_TREINAMENTO', id: String(e.treinamento) },
+      { tabela: 'turma_treinamento', id: String(e.treinamento) },
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -733,7 +738,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasTurmaGravada.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_TREINAMENTO', id: String(e.treinamento) },
+      { tabela: 'turma_treinamento', id: String(e.treinamento) },
       async (g) => {
         const t = await g.turma(e.treinamento);
         if (!t) throw naoEncontrado('Turma');
@@ -831,7 +836,7 @@ export class ServicoTreinamento {
       validoAte: string | null;
       dias: number | null;
     },
-    cursos: Map<number, CursoPesLido>,
+    cursos: Map<number, CursoTreinamento>,
   ): PendenciaCursoResposta {
     const c = cursos.get(p.curso);
     return {
@@ -850,7 +855,7 @@ export class ServicoTreinamento {
     v: Pick<VinculoAtivoTreinamento, 'id' | 'unidade' | 'funcao' | 'cargo' | 'admissao'> & {
       desligamento: string | null;
     },
-  ): Promise<{ cursos: PendenciaCursoResposta[]; pops: PopPesLido[] }> {
+  ): Promise<{ cursos: PendenciaCursoResposta[]; pops: VersaoPop[] }> {
     const [{ hoje }, alerta, cursos, conclusoes, vigentes, ciencias] = await Promise.all([
       this.porta.relogio(s.porta),
       this.alertaDias(s),
@@ -942,7 +947,7 @@ export class ServicoTreinamento {
   // ── POP versionado ──────────────────────────────────────────────────────────────────────────────────────────
 
   private popResposta(
-    p: PopPesLido,
+    p: VersaoPop,
     unidades: Map<number, string>,
     adesao: PopResposta['adesao'],
   ): PopResposta {
@@ -1023,7 +1028,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasPopPublicado.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_POP', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'documento_qualidade_versao', id: String(y.id) }),
       async (g) => {
         const versoes = await g.versoesPop(e.codigo);
         const r = conferirVersaoPop(e, versoes, hoje);
@@ -1060,7 +1065,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasPopPublicado.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      { tabela: 'SGH_PES_POP', id: String(e.pop) },
+      { tabela: 'documento_qualidade_versao', id: String(e.pop) },
       async (g) => {
         const p = await g.pop(e.pop);
         if (!p) throw naoEncontrado('POP');
@@ -1091,7 +1096,7 @@ export class ServicoTreinamento {
       s,
       E.pessoasPopCiencia.codigo,
       CHAVE_PESSOAS_TREINAMENTO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_POP_CIENCIA', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'ciencia_procedimento', id: String(y.id) }),
       async (g) => {
         const pop = await g.pop(e.pop);
         if (!pop) throw naoEncontrado('POP');

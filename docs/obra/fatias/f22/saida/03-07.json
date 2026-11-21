@@ -1,0 +1,37 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/folha/porta-integracao-memoria.spec.ts",
+    "src/modulos/pessoas/folha/porta-integracao-memoria.ts",
+    "src/modulos/pessoas/folha/porta-integracao.ts",
+    "src/modulos/pessoas/folha/rescisao-http.spec.ts",
+    "src/modulos/pessoas/folha/rescisao.controller.ts",
+    "src/modulos/pessoas/folha/servico-calculo.spec.ts",
+    "src/modulos/pessoas/folha/servico-calculo.ts",
+    "src/modulos/pessoas/folha/servico-fechamento.spec.ts",
+    "src/modulos/pessoas/folha/servico-fechamento.ts",
+    "src/modulos/pessoas/folha/servico-ferias.spec.ts",
+    "src/modulos/pessoas/folha/servico-ferias.ts",
+    "src/modulos/pessoas/folha/servico-folha.spec.ts",
+    "src/modulos/pessoas/folha/servico-folha.ts",
+    "src/modulos/pessoas/folha/servico-integracao.spec.ts",
+    "src/modulos/pessoas/folha/servico-integracao.ts",
+    "src/modulos/pessoas/folha/servico-rescisao.spec.ts",
+    "src/modulos/pessoas/folha/servico-rescisao.ts",
+    "src/modulos/pessoas/folha/apoio-folha.ts",
+    "src/modulos/pessoas/folha/porta-integracao-propria.ts",
+    "src/modulos/pessoas/folha/porta-integracao-propria.spec.ts",
+    "src/modulos/pessoas/folha/porta-integracao-propria.int.spec.ts"
+  ],
+  "pedidos": [
+    "DDL (15_RH, convenções do ADR 0002) integracao_folha_financeiro: id, estabelecimento_id FK, vigencia_inicio DATE NOT NULL, criado_em/criado_por/alterado_*/versao/excluido_*; UNIQUE (estabelecimento_id, vigencia_inicio). Filha integracao_folha_financeiro_destino: integracao_folha_financeiro_id FK, destino VARCHAR(30) CHECK nos valores de titulo_folha.destino, empresa_fornecedora_id FK NOT NULL (credor; o mesmo espaço de ids do titulo_pagar.empresa_fornecedora_id), natureza_financeira_id FK (classificação), dia_vencimento TINYINT CHECK 1..31, mes_vencimento VARCHAR(10) CHECK ('mesmo','seguinte'); UNIQUE (integracao_folha_financeiro_id, destino). Sem ela ficam indisponíveis (503 modelo-pendente): PortaIntegracaoFolhaPropria.integracoes e gravarSgh (consultar e gravar o de-para da folha). Com a falta, o serviço fica assim: apoioTela segue com vigente=null (classificações e credores consultáveis, gravação negada pela liberação com o motivo); integracoes e gravarIntegracao respondem 503. A prévia (previa) responde 503, porque lê integracoes, lancamentoDaOrigem e chavesLancadas.",
+    "DDL lancamento_titulos_folha: id, estabelecimento_id FK, competencia_folha_id FK, origem VARCHAR(20) CHECK ('fechamento','interface'), origem_id BIGINT NOT NULL, apuracao VARCHAR(20), resumo VARCHAR(400), total_liquido/total_encargos DECIMAL(15,2) >= 0, lancado_em DATETIME(3), lancado_por FK usuario, versao/criado_*; UNIQUE (estabelecimento_id, origem, origem_id). Em titulo_folha: coluna lancamento_titulos_folha_id FK NOT NULL. Mais definirOperacao 'pessoas.lancarTitulosFolha' (titulo_pagar modulo_origem='folha' + titulo_folha + lancamento_titulos_folha numa transação, idempotente). Sem isso ficam indisponíveis: executar (financeiro.criarTituloPagar acao incluir-folha), lancamentos, lancamento, lancamentoDaOrigem, titulosDoLancamento, chavesLancadas. Ficam indisponíveis no serviço (503): previa, lancar, listar, origens (lê lancamentos), detalhe e custo. CREDOR ÚNICO: hoje titulo_folha.credor_pessoa_juridica_id aponta para pessoa_juridica, outro espaço de ids que o credor do de-para e do titulo_pagar (empresa_fornecedora). Pedido: trocar titulo_folha.credor_pessoa_juridica_id por empresa_fornecedora_id BIGINT UNSIGNED NULL FK empresa_fornecedora(id) (nulo só no líquido, CHECK pelo destino), o mesmo credor do titulo_pagar; sem tradução por pessoa_juridica_id.",
+    "DDL fato_contabil_folha (ou uso do fato_contabil existente com entidade 'lancamento_titulos_folha'): lancamento_titulos_folha_id FK, centro_custo_id FK, natureza VARCHAR(20) CHECK ('provento','encargo'), valor DECIMAL(15,2) > 0. Sem ele fica indisponível: custoPessoal (custo de pessoal por centro).",
+    "DDL rubrica.papel_resumo_folha VARCHAR(20) NULL CHECK ('proventos','descontos','liquido','inss','inss_patronal','fgts','irrf','pis','sindical','pensao','consignado') e lote_folha_externa_item.vencimento DATE NULL: para somar o retorno validado da folha externa por destino. Sem eles fica indisponível: retorno (lançar títulos a partir da folha externa).",
+    "REGISTRO: o módulo pessoas ainda não está em REGISTRO_MODULOS; rescisao-http.spec.ts (4 testes) responde 404 até o lote que registra pessoas (as rotas da rescisão dependem dele). Os 8 specs de unidade do lote e os 2 novos passam.",
+    "COORDENAÇÃO 03-06: tipos-folha.ts é do lote 03-06 (escrito em paralelo); este lote passou a importar dele (ProcessoDaFolha, LinhaCalculoDoVinculo, FeriasDoVinculo, RescisaoDaFolha etc.) e moveu o que é só seu para apoio-folha.ts (tetos, mesDaData, integracaoVigenteEm, rotinas, LancamentoTitulosFolha, TituloFolhaLancado). A memória da integração usa a mesma chave da folha em memória (o estabelecimento).",
+    "DOMÍNIO E CONTRATO (@sgh/dominio-pessoas e packages/contratos, fora da lista deste lote): hoje um vínculo sem centro de custo ou carga semanal faz o cálculo mensal, o 13º e a exportação recusarem a competência INTEIRA (422 cadastro-incompleto com a contagem e os ids, em apoio-folha.ts exigirCentroCusto/exigirCadastroDoCalculo), o que é perda de disponibilidade. Pedido: (1) CODIGOS_PENDENCIA_CALCULO e CODIGOS_PENDENCIA_EXPORTACAO ganham 'cadastro-incompleto' (vinculos: ids) como pendência que NÃO bloqueia; (2) VinculoParaCalculo.cargaSemanal passa a number|null e o domínio só exige a carga quando parametros.divisorHoras é nulo (calculo.ts:339, decimo-terceiro.ts:177, ferias.ts:385, rescisao.ts:508); (3) o serviço então tira só os vínculos incompletos e calcula os demais. Até lá, a recusa explícita fica (nunca um centro ou carga fictícios).",
+    "TRILHA: os serviços da folha ainda gravam a trilha com tabela 'SGH_PES_*' (SALARIO, FOLHA_PARAMETRO, FOLHA_PROCESSO, FERIAS, RESCISAO, FOLHA_FECHAMENTO, FOLHA_INTERFACE, AFASTAMENTO, FOLHA_INTEGRACAO) e os specs http do 03-06 conferem esses nomes; trocar em bloco, no fechamento da onda, pelos nomes do modelo (historico_salarial, calculo_folha/competencia_folha, programacao_ferias, rescisao, lote_folha_externa, afastamento) — não feito aqui para não quebrar os specs do outro lote. Incluir na troca os textos de auditoria: o rescisao.controller.ts já foi trocado neste lote (tabelaAlvo 'rescisao'; AuditadoNoHandler com rescisao, calculo_folha e programacao_ferias); faltam as chamadas apoio.sgh dos serviços (ex.: servico-calculo.ts tabela 'SGH_PES_FOLHA_PROCESSO').",
+    "CONTRATO (packages/contratos ClassificacaoFolha e FiltroTitulosManuais): passar a identificar a classificação pelo id da natureza_financeira (naturezaFinanceira: id), mantendo grupo/subgrupo/item só para exibir. Hoje o contrato é numérico: a porta compara os códigos por CAST(... AS UNSIGNED) (o '01' casa com 1) e as naturezas de código não numérico ficam fora da escolha do de-para; PortaIntegracaoFolhaPropria.naturezasForaDoContrato conta quantas, para o aviso. Depois da troca, titulosManuais filtra por t.natureza_financeira_id = ?."
+  ]
+}

@@ -6,16 +6,16 @@
 //   POST /api/cirurgia/agendamentos                         cirurgia.agendarCirurgia (preparo mínimo do parâmetro)
 //   POST /api/cirurgia/agendamentos/:id/mover               cirurgia.remarcarCirurgia (controle otimista)
 //   POST /api/cirurgia/agendamentos/:id/cancelar            cirurgia.cancelarCirurgia (cancelar ou suspender)
-//   POST /api/cirurgia/solicitacoes                         solicitação (SGH_: não ocupa a sala)
+//   POST /api/cirurgia/solicitacoes                         solicitação (não ocupa a sala)
 //   GET  /api/cirurgia/estados/:id                          detalhe da solicitação ou do agendamento pelo registro do novo
-//   POST /api/cirurgia/estados/:id/andamento                no bloco, em sala, retomar (SGH_)
-//   POST /api/cirurgia/estados/:id/cancelar                 cancela ou suspende a solicitação (SGH_)
-//   POST /api/cirurgia/estados/:id/pendencias               pendência pré-operatória (SGH_)
+//   POST /api/cirurgia/estados/:id/andamento                no bloco, em sala, retomar (banco)
+//   POST /api/cirurgia/estados/:id/cancelar                 cancela ou suspende a solicitação (banco)
+//   POST /api/cirurgia/estados/:id/pendencias               pendência pré-operatória (banco)
 //   GET  /api/cirurgia/cancelamentos?de&ate                 agendamentos cancelados (31 dias)
 //   GET  /api/cirurgia/historico?de&ate                     inclusões e remarcações da agenda (31 dias)
 //   GET  /api/cirurgia/realizadas?de&ate&reg&sala           cirurgias realizadas com o casamento (31 dias; só REG: sem janela)
 //   POST /api/cirurgia/realizadas                           cirurgia.registrarCirurgia
-//   POST /api/cirurgia/realizadas/:id/ligacao               revisão da ligação com o agendamento (SGH_)
+//   POST /api/cirurgia/realizadas/:id/ligacao               revisão da ligação com o agendamento (banco)
 //   GET  /api/cirurgia/salas                                salas e usuários permitidos (contagem)
 //   GET  /api/cirurgia/salas/:sala/usuarios                 usuários permitidos da sala
 //   POST /api/cirurgia/salas/:sala/usuarios                 cirurgia.definirSalaUsuario
@@ -44,7 +44,13 @@ import {
   type UsuariosDaSala,
 } from '@sgh/contratos';
 import { somarDias } from '@sgh/dominio-agenda';
-import { estadoValido, instanteDaIncisao, podeIr, ROTULOS_ESTADO } from '@sgh/dominio-cirurgia';
+import {
+  type EstadoAgendamento,
+  estadoValido,
+  instanteDaIncisao,
+  podeIr,
+  ROTULOS_ESTADO,
+} from '@sgh/dominio-cirurgia';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -58,7 +64,12 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo, dataDaConsulta, inteiroOuNulo } from '../exames/public-api.js';
-import { type GravadorSghCirurgia, PORTA_CIRURGIA, type PortaCirurgia } from './porta.js';
+import {
+  type ContextoGravacaoCirurgia,
+  type GravadorSghCirurgia,
+  PORTA_CIRURGIA,
+  type PortaCirurgia,
+} from './porta.js';
 import { salaResposta, ServicoCirurgia } from './servico.js';
 import { TRAVA_INCISAO, type TravaIncisao } from './trava-incisao.js';
 
@@ -75,18 +86,28 @@ export const OPERACOES_AGENDA_CIRURGIA: Readonly<Record<string, string>> = {
 export const OPERACOES_REGISTRO_CIRURGIA: Readonly<Record<string, string>> = {
   'cirurgia.registrarCirurgia': 'cirurgia.registro.criar',
 };
-const ACOES_SGH_AGENDA = {
+const ACOES_DIRETAS_AGENDA = {
   solicitar: 'cirurgia.agenda.solicitar',
   andamento: 'cirurgia.agenda.agendar',
   pendencia: 'cirurgia.pendencia.editar',
   excecao: 'cirurgia.agenda.excecao',
 };
-const ACOES_SGH_REGISTRO = { ligacao: 'cirurgia.ligacao.revisar' };
+const ACOES_DIRETAS_REGISTRO = { ligacao: 'cirurgia.ligacao.revisar' };
 
-/** Tabelas reais do novo (script 0189), também na linha da trilha. */
-const TABELA_ESTADO = 'SGH_CC_AGENDA_ESTADO';
-const TABELA_PENDENCIA = 'SGH_CC_PENDENCIA';
-const TABELA_LIGACAO = 'SGH_CC_LIGACAO';
+/** Tabelas do modelo, também na linha da trilha (a porta própria grava a tabela que de fato escreveu). */
+const TABELA_ESTADO = 'agendamento_cirurgico';
+const TABELA_PENDENCIA = 'pendencia_agendamento_cirurgico';
+const TABELA_LIGACAO = 'ato_cirurgico';
+const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,100}$/;
+
+/** A sessão com a chave de idempotência da requisição no contexto da porta: o reenvio da gravação direta não grava de novo. */
+function comChave(s: SessaoCadastro): SessaoCadastro {
+  const bruto = s.req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave)) return s;
+  const porta: typeof s.porta & ContextoGravacaoCirurgia = { ...s.porta, chaveIdempotencia: chave };
+  return { ...s, porta };
+}
 
 const janela31 = (de: string | null, ate: string | null, hoje: string) => {
   const d = de ?? hoje;
@@ -157,8 +178,8 @@ export class CirurgiaController {
   ): Promise<{ agenda: GravacaoAgenda; registro: GravacaoAgenda }> {
     const s = sessaoDe(req);
     const [agenda, registro] = await Promise.all([
-      this.agenda.gravacao(s, ACOES_SGH_AGENDA),
-      this.registro.gravacao(s, ACOES_SGH_REGISTRO),
+      this.agenda.gravacao(s, ACOES_DIRETAS_AGENDA),
+      this.registro.gravacao(s, ACOES_DIRETAS_REGISTRO),
     ]);
     return { agenda, registro };
   }
@@ -266,7 +287,7 @@ export class CirurgiaController {
   @Post('solicitacoes')
   @HttpCode(201)
   @Permissao('cirurgia.agenda.solicitar')
-  @AuditadoNoHandler('solicitação (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('solicitação (banco) com a trilha de auditoria na mesma transação')
   async solicitar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAgenda> {
     const s = sessaoDe(req);
     const p = corpo(esquemaPedidoSolicitarCirurgia, b);
@@ -285,7 +306,7 @@ export class CirurgiaController {
         },
       );
     const id = await this.agenda.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.cirurgiaSolicitada.codigo,
       'cirurgia.agenda.solicitar',
       (r: number) => ({ tabela: TABELA_ESTADO, id: String(r), paciente: p.paciente }),
@@ -327,7 +348,7 @@ export class CirurgiaController {
   @Post('estados/:id/andamento')
   @HttpCode(200)
   @Permissao('cirurgia.agenda.agendar')
-  @AuditadoNoHandler('andamento (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('andamento (banco) com a trilha de auditoria na mesma transação')
   async andamento(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -348,11 +369,17 @@ export class CirurgiaController {
     // Retomar a suspensa volta a solicitação (a sala foi liberada na suspensão): exige o pedido de sala.
     if (p.estado === 'solicitado') await exigir(s, 'cirurgia.agenda.solicitar', this.trilha);
     await this.agenda.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.cirurgiaAndamento.codigo,
       'cirurgia.agenda.agendar',
       { tabela: TABELA_ESTADO, id: String(e.id), paciente: e.idPaciente },
-      (g) => g.mudarEstado({ id: e.id, estado: p.estado, usuario: s.login }),
+      (g) =>
+        g.mudarEstado({
+          id: e.id,
+          estado: p.estado,
+          visto: { estado: e.estado as EstadoAgendamento, versao: e.versao ?? null },
+          usuario: s.login,
+        }),
     );
     return {
       ok: true,
@@ -365,7 +392,7 @@ export class CirurgiaController {
   @Post('estados/:id/cancelar')
   @HttpCode(200)
   @Permissao('cirurgia.agenda.cancelar')
-  @AuditadoNoHandler('cancelamento da solicitação (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('cancelamento da solicitação (banco) com a trilha de auditoria na mesma transação')
   async cancelarSolicitacao(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -395,7 +422,7 @@ export class CirurgiaController {
         },
       );
     await this.agenda.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.cirurgiaCancelada.codigo,
       'cirurgia.agenda.cancelar',
       { tabela: TABELA_ESTADO, id: String(e.id), paciente: e.idPaciente },
@@ -403,6 +430,7 @@ export class CirurgiaController {
         g.mudarEstado({
           id: e.id,
           estado: destino,
+          visto: { estado: e.estado as EstadoAgendamento, versao: e.versao ?? null },
           motivo: p.motivo,
           complemento: p.complemento ?? null,
           solicitante: p.solicitante,
@@ -420,7 +448,7 @@ export class CirurgiaController {
   @Post('estados/:id/pendencias')
   @HttpCode(200)
   @Permissao('cirurgia.pendencia.editar')
-  @AuditadoNoHandler('pendência pré-operatória (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pendência pré-operatória (banco) com a trilha de auditoria na mesma transação')
   async pendencia(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -441,7 +469,7 @@ export class CirurgiaController {
         },
       );
     const n = await this.agenda.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.cirurgiaPendencia.codigo,
       'cirurgia.pendencia.editar',
       (r: number) => ({ tabela: TABELA_PENDENCIA, id: String(r), paciente: e.idPaciente }),
@@ -528,7 +556,7 @@ export class CirurgiaController {
   @Post('realizadas/:id/ligacao')
   @HttpCode(200)
   @Permissao('cirurgia.ligacao.revisar')
-  @AuditadoNoHandler('revisão da ligação (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('revisão da ligação (banco) com a trilha de auditoria na mesma transação')
   async ligacao(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -558,7 +586,7 @@ export class CirurgiaController {
         );
     }
     await this.registro.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.cirurgiaLigacaoRevisada.codigo,
       'cirurgia.ligacao.revisar',
       { tabela: TABELA_LIGACAO, id: String(alvo.id), chave: `${alvo.id}:${p.agendamento ?? '-'}` },

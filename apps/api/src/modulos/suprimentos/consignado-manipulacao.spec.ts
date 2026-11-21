@@ -3,7 +3,7 @@
 // dados SINTÉTICOS), o relógio fixo em 2026-10-21 09:00. O consumo consignado nasce do fluxo do OPME (a cirurgia 704,
 // o item 950003 consignado do fornecedor 7001).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AppBloco, montarAppBloco, type Sessao } from '../cirurgia/bloco-seguro.spec-util.js';
+import { type AppSuprimentos, montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
 
 const C = '/api/suprimentos/consignados';
 const M = '/api/farmacia/manipulacao';
@@ -11,7 +11,7 @@ const O = '/api/suprimentos/opme';
 const AG = 704;
 const ITEM = 950003;
 const FORN = 7001;
-let a: AppBloco;
+let a: AppSuprimentos;
 let bloco: Sessao;
 let opme: Sessao;
 let circ: Sessao;
@@ -21,7 +21,7 @@ let farm2: Sessao;
 let aux: Sessao;
 
 beforeAll(async () => {
-  a = await montarAppBloco();
+  a = await montarAppSuprimentos();
   [bloco, opme, circ, consig, farm, farm2, aux] = await Promise.all([
     a.entrar('SINT.BLOCO'),
     a.entrar('SINT.OPME'),

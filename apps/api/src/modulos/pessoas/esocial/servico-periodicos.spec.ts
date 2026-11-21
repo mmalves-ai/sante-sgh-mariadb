@@ -4,12 +4,15 @@
 // demonstrativo, o S-1299 só com tudo aceito (e os recibos de autônomo do repasse barrando, regra 1), o S-1298 e a
 // reabertura da folha recusada com o eSocial fechado.
 import type { FichaEsocialVinculo, LinhaCalculoFolha } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso,
+} from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaCalculoFolhaMemoria } from '../folha/porta-calculo-memoria.js';
 import { PortaFolhaMemoria } from '../folha/porta-folha-memoria.js';
@@ -22,8 +25,15 @@ import { ServicoEsocial } from './servico-esocial.js';
 import { ServicoPeriodicosEsocial, TETO_GERACAO_PERIODICOS } from './servico-periodicos.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
-const chave = (c: string): ChaveGravada => ({
+const CTX = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 1,
+  correlacao: 'teste-esocial',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -36,7 +46,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',

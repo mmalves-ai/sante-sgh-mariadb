@@ -60,7 +60,8 @@ import {
   camposParaConferir,
   type ConfigOnline,
   convenioLiberado,
-  estadoDaMarcacao,
+  type EstadoMarcacao,
+  type Relogio as RelogioDominio,
   horarioDentroDoPortal,
   horariosDoPortal,
   janelaDoPortal,
@@ -72,16 +73,14 @@ import {
   servicoLiberado,
   valorDoPortal,
 } from '@sgh/dominio-agenda';
-import {
-  type ConfigAgendaOnlineLida,
-  type ContextoOperacao,
-  ErroOperacao,
-  ErroPortalSgh,
-  type LinhaTrilha,
-  type PacienteLido,
-  type PagamentoPortalLido,
-  type PreCheckinLido,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { ErroPortal, type RegistroTrilhaPortal } from '../tipos.js';
+import { type ConfigAgendaOnline, type PagamentoPortal, type PreCheckinOnline } from './tipos.js';
+import type { PacienteFicha } from '../../cadastro/tipos.js';
+import type { ContextoAgenda, ContextoGravacao } from '../../agenda/porta.js';
+import type { ContextoGravacao as ContextoGravacaoCadastro } from '../../cadastro/tipos.js';
+import type { ContextoPortalNucleo } from '../porta.js';
+import type { SituacaoMarcacao } from '../../agenda/tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { PortaAgenda } from '../../agenda/porta.js';
 import type { PortaCadastro } from '../../cadastro/porta.js';
@@ -121,7 +120,7 @@ export interface QuemAgendaOnline {
   readonly correlacao: string;
   pode(permissao: string): boolean;
   /** O contexto do executor (Idempotency-Key do pedido); só a conferência com campos o usa. */
-  contextoOperacao(rotulo: string): ContextoOperacao;
+  contextoOperacao(rotulo: string): ContextoGravacaoCadastro;
   /** Na memória, a trilha da gravação do cadastro vai pelo registrador da API (no banco, o executor grava). */
   trilhaMemoria(evento: string, recurso: string, idAlvo: string): Promise<void>;
 }
@@ -138,7 +137,7 @@ const recusa = (codigo: string, detalhe: string, status = 409): never => {
 
 function traduzir(e: unknown): never {
   if (e instanceof ErroProblema) throw e;
-  if (e instanceof ErroPortalSgh) {
+  if (e instanceof ErroPortal) {
     if (e.codigo === 'nao-encontrado') recusa('nao-encontrado', e.message, 404);
     if (e.codigo === 'situacao') recusa('situacao', e.message);
     throw new ErroProblema('conflito-de-versao', 409, 'Registro alterado', e.message, { codigo: e.codigo });
@@ -159,7 +158,48 @@ function traduzir(e: unknown): never {
 
 const COLISAO = new Set(['horario-ocupado', 'registro-em-edicao', 'minuto-ocupado', 'ocupado']);
 
-const paraCfg = (k: ConfigAgendaOnlineLida): ConfigOnline => ({
+/**
+ * O estado da marcação para as regras do portal, pela situação de negócio que as portas de agenda e de exame devolvem
+ * (o mesmo vocabulário: marcada, confirmada, chegou, em_atendimento, realizada, falta, transferida).
+ * Melhoria: o estado sai do significado da situação, e não dos sinais S/N e letras do sistema de origem.
+ */
+export function estadoPelaSituacao(
+  situacao: SituacaoMarcacao | string,
+  atendido = false,
+  chegou = false,
+): EstadoMarcacao {
+  if (atendido || situacao === 'realizada') return 'atendida';
+  if (chegou && (situacao === 'marcada' || situacao === 'aguardando' || situacao === 'confirmada'))
+    return 'chegou';
+  switch (situacao) {
+    case 'marcada':
+    case 'aguardando':
+      return 'marcada';
+    case 'confirmada':
+      return 'confirmada';
+    case 'chegou':
+    case 'em_atendimento':
+      return 'chegou';
+    case 'falta':
+      return 'faltou';
+    case 'transferida':
+      return 'transferida';
+    default:
+      return 'outra';
+  }
+}
+
+/**
+ * A hora no formato do contrato do portal e das regras do domínio da agenda (HHMM): a porta da agenda de consultas
+ * devolve HH:MM e a de exames, HHMM. Pedido na saída do lote: unificar o formato no contrato e no domínio.
+ */
+const paraHhmm = (h: string): string => h.replace(':', '');
+
+/** Registro do profissional da agenda (consulta: o do conselho; exame: o da agenda; 0 = agenda de recurso). */
+const registroDaAgenda = (a: { registroProfissional?: number | null; crm?: number }): number =>
+  a.registroProfissional ?? a.crm ?? 0;
+
+const paraCfg = (k: ConfigAgendaOnline): ConfigOnline => ({
   agenda: k.agenda,
   ativa: k.ativa,
   convenios: k.convenios,
@@ -172,7 +212,7 @@ const paraCfg = (k: ConfigAgendaOnlineLida): ConfigOnline => ({
 });
 
 /** O que está no cadastro hoje, só nos campos do pré-check-in. */
-function atualDoPaciente(p: PacienteLido): Partial<Record<CampoPreCheckin, string | number | null>> {
+function atualDoPaciente(p: PacienteFicha): Partial<Record<CampoPreCheckin, string | number | null>> {
   return {
     celular: p.celular,
     telefone: p.telefone,
@@ -197,7 +237,7 @@ interface MarcacaoUnificada {
   readonly hora: string;
   readonly paciente: number | null;
   readonly convenio: number;
-  readonly estado: ReturnType<typeof estadoDaMarcacao>;
+  readonly estado: EstadoMarcacao;
   readonly peloPortal: boolean;
   /** W0-10: o exame da marcação (só exame; confere se a agenda de destino da remarcação o oferece). */
   readonly exame: number | null;
@@ -223,8 +263,25 @@ export class ServicoAgendaPortal {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'banco' | 'memoria' {
     return this.porta.destino;
+  }
+
+  /** O relógio do estabelecimento (porta da agenda, HH:MM) no formato das regras do domínio da agenda. */
+  private async relogio(c: ContextoAgenda): Promise<RelogioDominio> {
+    const r = await this.agenda.relogio(c);
+    return { hoje: r.hoje, hhmm: paraHhmm(r.hora) };
+  }
+
+  /** O contexto da gravação na agenda de consultas: o usuário de integração do portal e a chave do pedido. */
+  private ctxAgenda(n: PortalNoPedido, ctx: ContextoOperacao): ContextoGravacao {
+    return {
+      rede: n.c.rede,
+      hospital: n.c.hospital,
+      login: USUARIO_PORTAL,
+      correlacao: ctx.correlacao,
+      chaveIdempotencia: ctx.chaveIdempotencia,
+    };
   }
 
   private _tesouraria: TesourariaPortal | null = null;
@@ -288,7 +345,7 @@ export class ServicoAgendaPortal {
   private async gravar<T>(
     c: ContextoAgendaOnline,
     fn: Parameters<PortaAgendaOnline['gravar']>[1],
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha | null) | null,
+    trilha: RegistroTrilhaPortal | ((r: T) => RegistroTrilhaPortal | null) | null,
   ): Promise<T> {
     try {
       return (await this.porta.gravar(c, fn, trilha as never)) as T;
@@ -311,7 +368,7 @@ export class ServicoAgendaPortal {
       correlacao?: string;
       resultado?: 'sucesso' | 'falha';
     },
-  ): LinhaTrilha {
+  ): RegistroTrilhaPortal {
     return {
       rede: this.portal.rede,
       hospital,
@@ -342,15 +399,15 @@ export class ServicoAgendaPortal {
   ): ContextoOperacao {
     const pedido = idem && /^[A-Za-z0-9._-]{8,64}$/.test(idem) ? idem : randomBytes(12).toString('hex');
     return {
-      rede: this.portal.rede,
-      hospital: n.c.hospital,
-      traceId: `portal-${rotulo}-${n.conta.id}`.slice(0, 64),
-      usuarioLegado: USUARIO_PORTAL,
-      idempotencyKey: `portal-${n.conta.id}-${rotulo}-${sha256(`${chave}|${pedido}`).slice(0, 32)}`.slice(
+      cliente: n.c.cliente,
+      estabelecimento: n.c.estabelecimento,
+      // O portal grava pelo usuário de integração (sem usuário do hospital): a conta vai na chave e na trilha.
+      usuario: null,
+      correlacao: `portal-${rotulo}-${n.conta.id}`.slice(0, 64),
+      chaveIdempotencia: `portal-${n.conta.id}-${rotulo}-${sha256(`${chave}|${pedido}`).slice(0, 32)}`.slice(
         0,
         80,
       ),
-      estacao: 'SGH-PORTAL',
     };
   }
 
@@ -362,7 +419,7 @@ export class ServicoAgendaPortal {
    * (`detalheConfig`), ao abrir a agenda.
    */
   async listaConfig(q: QuemAgendaOnline): Promise<ListaConfigAgendaOnline> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const [cfgs, agendas, exames] = await Promise.all([
       this.porta.configs(c),
       this.agenda.agendas(c),
@@ -371,9 +428,9 @@ export class ServicoAgendaPortal {
     const cfgDe = (tipo: TipoAgendaOnline, id: number) =>
       cfgs.find((k) => k.tipo === tipo && k.agenda === id) ?? null;
     const itens: ConfigAgendaOnlineItem[] = [];
-    const juntar = (tipo: TipoAgendaOnline, a: { id: number; nome: string; ativa: string }) => {
+    const juntar = (tipo: TipoAgendaOnline, a: { id: number; nome: string; ativa: boolean }) => {
       const k = cfgDe(tipo, a.id);
-      if (a.ativa !== 'S' && !k) return;
+      if (!a.ativa && !k) return;
       itens.push(this.itemDaConfig(tipo, a, k));
     };
     for (const a of agendas) juntar('consulta', a);
@@ -391,8 +448,8 @@ export class ServicoAgendaPortal {
 
   private itemDaConfig(
     tipo: TipoAgendaOnline,
-    a: { id: number; nome: string; ativa: string },
-    k: ConfigAgendaOnlineLida | null,
+    a: { id: number; nome: string; ativa: boolean },
+    k: ConfigAgendaOnline | null,
   ): ConfigAgendaOnlineItem {
     const { procedimento, profissional } = partesDoNome(a.nome);
     return {
@@ -401,7 +458,7 @@ export class ServicoAgendaPortal {
       nomeAgenda: a.nome,
       procedimento,
       profissional,
-      agendaAtiva: a.ativa === 'S',
+      agendaAtiva: a.ativa,
       config: k ? this.configDoItem(k) : null,
     };
   }
@@ -412,7 +469,7 @@ export class ServicoAgendaPortal {
     tipo: TipoAgendaOnline,
     agenda: number,
   ): Promise<ConfigAgendaOnlineDetalhe> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const [k, a] = await Promise.all([
       this.porta.config(c, tipo, agenda),
       tipo === 'consulta' ? this.agenda.agenda(c, agenda) : this.exame.agenda(c, agenda),
@@ -451,7 +508,7 @@ export class ServicoAgendaPortal {
     };
   }
 
-  private configDoItem(k: ConfigAgendaOnlineLida): NonNullable<ConfigAgendaOnlineItem['config']> {
+  private configDoItem(k: ConfigAgendaOnline): NonNullable<ConfigAgendaOnlineItem['config']> {
     return {
       ativa: k.ativa,
       convenios: k.convenios,
@@ -470,11 +527,11 @@ export class ServicoAgendaPortal {
 
   /** `agenda.configurarAgendaOnline`: liberar, alterar ou retirar uma agenda do portal (versão conferida). */
   async configurar(q: QuemAgendaOnline, e: ConfigAgendaOnlineEntrada): Promise<ListaConfigAgendaOnline> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const a =
       e.tipo === 'consulta' ? await this.agenda.agenda(c, e.agenda) : await this.exame.agenda(c, e.agenda);
     if (!a) return recusa('agenda-inexistente', 'A agenda não existe.', 404);
-    if (e.ativa && a.ativa !== 'S')
+    if (e.ativa && !a.ativa)
       recusa('agenda-inativa', 'A agenda está inativa: ative-a antes de liberar no portal.');
     const daAgenda =
       e.tipo === 'consulta'
@@ -495,7 +552,7 @@ export class ServicoAgendaPortal {
           tipo: e.tipo,
           agenda: e.agenda,
           nomeAgenda: a.nome,
-          crm: a.crm,
+          crm: registroDaAgenda(a),
           ativa: e.ativa,
           convenios: e.convenios,
           servicos: e.servicos,
@@ -512,7 +569,7 @@ export class ServicoAgendaPortal {
         this.linha(q.hospital, {
           evento: EVENTOS_AUDITAVEIS.agendaOnlineConfigurada.codigo,
           operacao: 'agenda.configurarAgendaOnline',
-          tabela: 'SGH_AGE_ONLINE_CFG',
+          tabela: 'agenda_online_configuracao',
           id: r.id,
           usuario: q.login,
           chave: `${e.tipo}:${e.agenda}:${e.ativa ? 'ativa' : 'retirada'}`,
@@ -525,11 +582,11 @@ export class ServicoAgendaPortal {
 
   // ── Portal: agendar ──────────────────────────────────────────────────────────────────────────────────────────────
 
-  private async cfgsAtivas(c: ContextoAgendaOnline, tipo: TipoAgendaOnline) {
+  private async cfgsAtivas(c: ContextoPortalNucleo, tipo: TipoAgendaOnline) {
     return (await this.porta.configs(c)).filter((k) => k.tipo === tipo && k.ativa);
   }
 
-  private async conveniosDaAgendaDe(c: ContextoAgendaOnline, tipo: TipoAgendaOnline, agenda: number) {
+  private async conveniosDaAgendaDe(c: ContextoPortalNucleo, tipo: TipoAgendaOnline, agenda: number) {
     return tipo === 'consulta'
       ? (await this.agenda.conveniosDaAgenda(c, agenda)).map((x) => ({
           codigo: x.codigo,
@@ -539,7 +596,7 @@ export class ServicoAgendaPortal {
       : (await this.exame.convenios(c, agenda)).map((x) => ({ codigo: x.codigo, nome: x.nome, ativo: true }));
   }
 
-  private async servicosDaAgendaDe(c: ContextoAgendaOnline, tipo: TipoAgendaOnline, agenda: number) {
+  private async servicosDaAgendaDe(c: ContextoPortalNucleo, tipo: TipoAgendaOnline, agenda: number) {
     return tipo === 'consulta'
       ? await this.agenda.especialidadesDaAgenda(c, agenda)
       : [
@@ -566,7 +623,7 @@ export class ServicoAgendaPortal {
         tipo === 'consulta'
           ? await this.agenda.agenda(n.c, k.agenda)
           : await this.exame.agenda(n.c, k.agenda);
-      if (!a || a.ativa !== 'S') continue;
+      if (!a || !a.ativa) continue;
       const conv = await this.conveniosDaAgendaDe(n.c, tipo, k.agenda);
       const daAgenda = conv.map((x) => x.codigo);
       const convenios = (k.convenios.length ? k.convenios : daAgenda).filter((x) =>
@@ -603,7 +660,7 @@ export class ServicoAgendaPortal {
   }
 
   private async vagas(
-    c: ContextoAgendaOnline,
+    c: ContextoPortalNucleo,
     tipo: TipoAgendaOnline,
     agendas: readonly number[],
     de: string,
@@ -614,7 +671,12 @@ export class ServicoAgendaPortal {
       tipo === 'consulta'
         ? await this.agenda.vagas(c, { agendas, de, ate, limite: 1000 })
         : await this.exame.vagas(c, { agendas, de, ate, limite: 1000 });
-    return r.itens.map((v) => ({ agenda: v.agenda, nomeAgenda: v.nomeAgenda, data: v.data, hora: v.hora }));
+    return r.itens.map((v) => ({
+      agenda: v.agenda,
+      nomeAgenda: v.nomeAgenda,
+      data: v.data,
+      hora: paraHhmm(v.hora),
+    }));
   }
 
   private paraHorario(v: { agenda: number; nomeAgenda: string; data: string; hora: string }): HorarioPortal {
@@ -626,7 +688,7 @@ export class ServicoAgendaPortal {
   async horarios(n: PortalNoPedido, b: BuscaHorariosPortal): Promise<HorariosPortal> {
     this.portal.titularComEscopo(n, 'agendamentos');
     await this.exigirAgenda(n.c.hospital);
-    const r = await this.agenda.relogio(n.c);
+    const r = await this.relogio(n.c);
     const elegiveis: ConfigOnline[] = [];
     if (b.modalidade === 'teleconsulta') await this.exigirTeleconsulta(n.c.hospital, b.tipo);
     for (const k of await this.cfgsAtivas(n.c, b.tipo)) {
@@ -655,7 +717,7 @@ export class ServicoAgendaPortal {
     return { itens: h.itens.map((v) => this.paraHorario(v)), truncado: h.truncado, de: j.de, ate: j.ate };
   }
 
-  private async cfgDaAgenda(c: ContextoAgendaOnline, tipo: TipoAgendaOnline, agenda: number) {
+  private async cfgDaAgenda(c: ContextoPortalNucleo, tipo: TipoAgendaOnline, agenda: number) {
     const k = await this.porta.config(c, tipo, agenda);
     if (!k || !k.ativa) return recusa('agenda-fora-do-portal', 'Esta agenda não está disponível no portal.');
     return k;
@@ -665,10 +727,10 @@ export class ServicoAgendaPortal {
   private async proximo(
     n: PortalNoPedido,
     tipo: TipoAgendaOnline,
-    k: ConfigAgendaOnlineLida,
+    k: ConfigAgendaOnline,
     ocupado: { agenda: number; data: string; hora: string },
   ): Promise<HorarioPortal | null> {
-    const r = await this.agenda.relogio(n.c);
+    const r = await this.relogio(n.c);
     const cfg = paraCfg(k);
     const j = janelaDoPortal(cfg, r);
     const vagas = await this.vagas(n.c, tipo, [k.agenda], ocupado.data < j.de ? j.de : ocupado.data, j.ate);
@@ -696,7 +758,7 @@ export class ServicoAgendaPortal {
       if (!servicoLiberado(k, serv, e.servico))
         recusa('servico-nao-liberado', 'Este exame não é marcado por esta agenda no portal.');
     }
-    const r = await this.agenda.relogio(n.c);
+    const r = await this.relogio(n.c);
     if (!horarioDentroDoPortal(e, paraCfg(k), r))
       recusa(
         'fora-da-janela',
@@ -708,24 +770,19 @@ export class ServicoAgendaPortal {
     try {
       const g =
         e.tipo === 'consulta'
-          ? await this.agenda.executar(
-              n.c,
-              'agenda.agendarConsulta',
-              {
-                agenda: e.agenda,
-                data: e.data,
-                hora: e.hora,
-                paciente: t.paciente,
-                convenio: e.convenio,
-                retorno: false,
-                canal: 'portal',
-                // M50, etapa 4: a teleconsulta nasce na mesma transação da marcação (registrarSgh da receita).
-                ...(e.modalidade === 'teleconsulta' && this.teleconsulta
-                  ? { teleconsulta: { conta: n.conta.id } }
-                  : {}),
-              },
-              ctx,
-            )
+          ? await this.agenda.executar(this.ctxAgenda(n, ctx), 'agenda.agendarConsulta', {
+              agenda: e.agenda,
+              data: e.data,
+              hora: e.hora,
+              paciente: t.paciente,
+              convenio: e.convenio,
+              retorno: false,
+              canal: 'portal',
+              // M50, etapa 4: a teleconsulta nasce na mesma transação da marcação (registrarSgh da receita).
+              ...(e.modalidade === 'teleconsulta' && this.teleconsulta
+                ? { teleconsulta: { conta: n.conta.id } }
+                : {}),
+            })
           : await this.exame.executar(
               n.c,
               'agenda.agendarExame',
@@ -786,7 +843,7 @@ export class ServicoAgendaPortal {
     tipo: TipoAgendaOnline,
     marcacao: number,
     acao: 'marcacao' | 'cancelamento' | 'remarcacao',
-  ): LinhaTrilha {
+  ): RegistroTrilhaPortal {
     return this.linha(n.c.hospital, {
       evento: EVENTOS_AUDITAVEIS.portalAgendamento.codigo,
       operacao:
@@ -801,7 +858,7 @@ export class ServicoAgendaPortal {
             : tipo === 'consulta'
               ? 'agenda.agendarConsulta'
               : 'agenda.agendarExame',
-      tabela: tipo === 'consulta' ? 'REPACAGD' : 'SIPACAGD',
+      tabela: 'marcacao_horario',
       id: marcacao,
       usuario: quemDaConta(n.conta.id),
       paciente: t.paciente,
@@ -809,34 +866,34 @@ export class ServicoAgendaPortal {
     });
   }
 
-  private async marcacoesDoTitular(c: ContextoAgendaOnline, paciente: number) {
+  private async marcacoesDoTitular(c: ContextoPortalNucleo, paciente: number) {
     const [cons, exs] = await Promise.all([
       this.agenda.marcacoesDoPaciente(c, paciente),
       this.exame.marcacoesDoPaciente(c, paciente),
     ]);
-    const [extC, extE] = await Promise.all([
-      this.agenda.marcacoesExt(
-        c,
-        cons.itens.map((m) => m.id),
-      ),
+    const [extE, agendasC, agendasE] = await Promise.all([
       this.exame.extensoes(
         c,
         exs.itens.map((m) => m.id),
       ),
+      cons.itens.length ? this.agenda.agendas(c) : Promise.resolve([]),
+      exs.itens.length ? this.exame.agendas(c) : Promise.resolve([]),
     ]);
+    const regC = new Map(agendasC.map((a) => [a.id, registroDaAgenda(a)]));
+    const regE = new Map(agendasE.map((a) => [a.id, registroDaAgenda(a)]));
     const lista: MarcacaoUnificada[] = [
       ...cons.itens.map((m) => ({
         tipo: 'consulta' as const,
         id: m.id,
         agenda: m.agenda,
         nomeAgenda: m.nomeAgenda,
-        crm: m.crm,
+        crm: m.agenda === null ? 0 : (regC.get(m.agenda) ?? 0),
         data: m.data,
-        hora: m.hora,
+        hora: paraHhmm(m.hora),
         paciente: m.idPaciente,
         convenio: m.convenio,
-        estado: estadoDaMarcacao(m),
-        peloPortal: extC.get(m.id)?.canal === 'portal',
+        estado: estadoPelaSituacao(m.situacao),
+        peloPortal: m.canal === 'portal',
         exame: null,
       })),
       ...exs.itens.map((m) => ({
@@ -844,12 +901,12 @@ export class ServicoAgendaPortal {
         id: m.id,
         agenda: m.agenda,
         nomeAgenda: m.nomeAgenda,
-        crm: m.crm,
+        crm: m.agenda === null ? 0 : (regE.get(m.agenda) ?? 0),
         data: m.data,
-        hora: m.hora,
+        hora: paraHhmm(m.hora),
         paciente: m.idPaciente,
         convenio: m.convenio,
-        estado: estadoDaMarcacao(m),
+        estado: estadoPelaSituacao(m.situacao, m.atendido, m.temSenha),
         peloPortal: extE.get(m.id)?.canal === 'portal',
         exame: extE.get(m.id)?.idExame ?? null,
       })),
@@ -875,7 +932,7 @@ export class ServicoAgendaPortal {
       this.porta.preCheckinsDoPaciente(n.c, t.paciente),
       this.porta.pagamentosDoPaciente(n.c, t.paciente),
       this.porta.pesquisasDoPaciente(n.c, t.paciente),
-      this.agenda.relogio(n.c),
+      this.relogio(n.c),
     ]);
     const ligado = await this.agendaLigada(n.c.hospital);
     const teles = this.teleconsulta ? await this.teleconsulta.doPaciente(n, t.paciente) : new Map();
@@ -888,9 +945,9 @@ export class ServicoAgendaPortal {
 
   private item(
     m: MarcacaoUnificada,
-    cfgs: readonly ConfigAgendaOnlineLida[],
-    pres: readonly PreCheckinLido[],
-    pags: readonly PagamentoPortalLido[],
+    cfgs: readonly ConfigAgendaOnline[],
+    pres: readonly PreCheckinOnline[],
+    pags: readonly PagamentoPortal[],
     pesq: readonly { tipo: string; marcacao: number }[],
     r: { hoje: string; hhmm: string },
     ligado: boolean,
@@ -952,14 +1009,15 @@ export class ServicoAgendaPortal {
     await this.exigirAgenda(n.c.hospital);
     const m = await this.marcacaoDoTitular(n, t, tipo, id);
     const k = m.agenda === null ? null : await this.porta.config(n.c, tipo, m.agenda);
-    const d = podeMudarPeloPortal(m, k ? paraCfg(k) : null, await this.agenda.relogio(n.c));
+    const d = podeMudarPeloPortal(m, k ? paraCfg(k) : null, await this.relogio(n.c));
     if (!d.pode) recusa('fora-do-prazo', d.motivo ?? 'Esta marcação não pode ser cancelada pelo portal.');
     const ctx = this.ctxExecutor(n, 'cancelar', `${tipo}-${id}`, idem);
     const entrada = { marcacao: id, motivo, solicitante: 'paciente' as const };
     // M50, etapa 4: a teleconsulta viva da marcação é cancelada junto (no banco, na transação do cancelamento).
     const tele = tipo === 'consulta' && this.teleconsulta ? await this.teleconsulta.daMarcacao(n, id) : null;
     try {
-      if (tipo === 'consulta') await this.agenda.executar(n.c, 'agenda.cancelarConsulta', entrada, ctx);
+      if (tipo === 'consulta')
+        await this.agenda.executar(this.ctxAgenda(n, ctx), 'agenda.cancelarConsulta', entrada);
       else await this.exame.executar(n.c, 'agenda.cancelarExame', entrada, ctx);
     } catch (x) {
       return traduzir(x);
@@ -985,7 +1043,7 @@ export class ServicoAgendaPortal {
     await this.exigirAgenda(n.c.hospital);
     const m = await this.marcacaoDoTitular(n, t, tipo, id);
     const origem = m.agenda === null ? null : await this.porta.config(n.c, tipo, m.agenda);
-    const r = await this.agenda.relogio(n.c);
+    const r = await this.relogio(n.c);
     const d = podeMudarPeloPortal(m, origem ? paraCfg(origem) : null, r);
     if (!d.pode) recusa('fora-do-prazo', d.motivo ?? 'Esta marcação não pode ser remarcada pelo portal.');
     const k = await this.cfgDaAgenda(n.c, tipo, e.destino.agenda);
@@ -1023,7 +1081,7 @@ export class ServicoAgendaPortal {
       const entrada = { marcacao: id, destino: e.destino, modo: 'liberar', canal: 'portal', motivo };
       const g =
         tipo === 'consulta'
-          ? await this.agenda.executar(n.c, 'agenda.remarcarConsulta', entrada, ctx)
+          ? await this.agenda.executar(this.ctxAgenda(n, ctx), 'agenda.remarcarConsulta', entrada)
           : await this.exame.executar(n.c, 'agenda.remarcarExame', entrada, ctx);
       nova = Number(g.resultado['marcacao']);
     } catch (x) {
@@ -1138,7 +1196,7 @@ export class ServicoAgendaPortal {
       m,
       k ? paraCfg(k) : null,
       atual?.situacao ?? null,
-      await this.agenda.relogio(n.c),
+      await this.relogio(n.c),
     );
     if (!d.pode) recusa('precheckin-fechado', d.motivo ?? 'O pré-check-in não está disponível.');
     if (Object.keys(e.dados).length === 0 && e.documentos.length === 0 && !e.carteirinha)
@@ -1175,7 +1233,7 @@ export class ServicoAgendaPortal {
         this.linha(n.c.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalPreCheckinEnviado.codigo,
           operacao: 'portal.enviarPreCheckin',
-          tabela: 'SGH_POR_PRECHECKIN',
+          tabela: 'pre_checkin',
           id: r.id,
           usuario: quemDaConta(n.conta.id),
           paciente: t.paciente,
@@ -1210,19 +1268,20 @@ export class ServicoAgendaPortal {
    * A marcação do pré-check-in ainda existe para o mesmo paciente? Relida ao vivo (o outro canal pode ter cancelado,
    * o que apaga a linha, ou transferido); só vale para o pré-check-in ainda não decidido.
    */
-  private async marcacaoViva(c: ContextoAgendaOnline, pre: PreCheckinLido): Promise<boolean> {
+  private async marcacaoViva(c: ContextoPortalNucleo, pre: PreCheckinOnline): Promise<boolean> {
     const lida =
       pre.tipo === 'consulta'
         ? await this.agenda.marcacao(c, pre.marcacao)
         : await this.exame.marcacao(c, pre.marcacao);
     if (!lida) return false;
     const m = lida.marcacao;
-    return m.idPaciente === pre.paciente && estadoDaMarcacao(m) !== 'transferida';
+    const atendido = 'atendido' in m ? m.atendido : false;
+    return m.idPaciente === pre.paciente && estadoPelaSituacao(m.situacao, atendido) !== 'transferida';
   }
 
   private itemDaFila(
-    pre: PreCheckinLido,
-    pacientes: ReadonlyMap<number, PacienteLido>,
+    pre: PreCheckinOnline,
+    pacientes: ReadonlyMap<number, PacienteFicha>,
     viva = true,
   ): ItemFilaPreCheckin {
     const p = pacientes.get(pre.paciente);
@@ -1242,8 +1301,8 @@ export class ServicoAgendaPortal {
   }
 
   async fila(q: QuemAgendaOnline, f: FiltroFilaPreCheckin): Promise<FilaPreCheckin> {
-    const c = { rede: q.rede, hospital: q.hospital };
-    const r = await this.agenda.relogio(c);
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
+    const r = await this.relogio(c);
     const de = f.data ?? r.hoje;
     const ate =
       f.data ?? new Date(Date.parse(`${r.hoje}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
@@ -1282,14 +1341,14 @@ export class ServicoAgendaPortal {
     };
   }
 
-  private async preDoEstabelecimento(c: ContextoAgendaOnline, id: number) {
+  private async preDoEstabelecimento(c: ContextoPortalNucleo, id: number) {
     const pre = await this.porta.preCheckinPorId(c, id);
     if (!pre) return recusa('nao-encontrado', 'Pré-check-in não encontrado.', 404);
     return pre;
   }
 
   async detalhe(q: QuemAgendaOnline, id: number): Promise<DetalhePreCheckin> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const pre = await this.preDoEstabelecimento(c, id);
     const [[p], viva] = await Promise.all([
       this.cadastro.lerPacientes(c, [pre.paciente]),
@@ -1320,7 +1379,7 @@ export class ServicoAgendaPortal {
     id: number,
     indice: number,
   ): Promise<{ tipo: string; conteudo: string }> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const pre = await this.preDoEstabelecimento(c, id);
     const d = pre.documentos[indice];
     if (!d) return recusa('nao-encontrado', 'Documento não encontrado.', 404);
@@ -1337,7 +1396,7 @@ export class ServicoAgendaPortal {
       this.linha(q.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalPreCheckinConferido.codigo,
         operacao: 'portal.enviarPreCheckin',
-        tabela: 'SGH_POR_PRECHECKIN',
+        tabela: 'pre_checkin',
         id: pre.id,
         usuario: q.login,
         paciente: pre.paciente,
@@ -1359,7 +1418,7 @@ export class ServicoAgendaPortal {
    * encerrado (cancelado) e a conferência recusada, sem tocar no cadastro.
    */
   async conferir(q: QuemAgendaOnline, id: number, e: ConferirPreCheckin): Promise<DetalhePreCheckin> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const pre = await this.preDoEstabelecimento(c, id);
     if (pre.situacao !== 'enviado') recusa('situacao', 'Este pré-check-in já foi decidido.');
     if (pre.versao !== e.versao)
@@ -1381,7 +1440,7 @@ export class ServicoAgendaPortal {
         this.linha(q.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalPreCheckinConferido.codigo,
           operacao: 'portal.enviarPreCheckin',
-          tabela: 'SGH_POR_PRECHECKIN',
+          tabela: 'pre_checkin',
           id: pre.id,
           usuario: q.login,
           paciente: pre.paciente,
@@ -1439,7 +1498,7 @@ export class ServicoAgendaPortal {
         this.linha(q.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalPreCheckinConferido.codigo,
           operacao: 'portal.enviarPreCheckin',
-          tabela: 'SGH_POR_PRECHECKIN',
+          tabela: 'pre_checkin',
           id: pre.id,
           usuario: q.login,
           paciente: pre.paciente,
@@ -1480,7 +1539,7 @@ export class ServicoAgendaPortal {
       this.linha(q.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalPreCheckinConferido.codigo,
         operacao: 'portal.enviarPreCheckin',
-        tabela: 'SGH_POR_PRECHECKIN',
+        tabela: 'pre_checkin',
         id: pre.id,
         usuario: q.login,
         paciente: pre.paciente,
@@ -1493,7 +1552,7 @@ export class ServicoAgendaPortal {
   }
 
   async recusar(q: QuemAgendaOnline, id: number, e: RecusarPreCheckin): Promise<DetalhePreCheckin> {
-    const c = { rede: q.rede, hospital: q.hospital };
+    const c = await this.portal.contextoDoEstabelecimento(q.hospital);
     const pre = await this.preDoEstabelecimento(c, id);
     await this.gravar(
       c,
@@ -1501,7 +1560,7 @@ export class ServicoAgendaPortal {
       this.linha(q.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalPreCheckinConferido.codigo,
         operacao: 'portal.enviarPreCheckin',
-        tabela: 'SGH_POR_PRECHECKIN',
+        tabela: 'pre_checkin',
         id: pre.id,
         usuario: q.login,
         paciente: pre.paciente,
@@ -1515,7 +1574,7 @@ export class ServicoAgendaPortal {
 
   // ── Pagamento ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private cobranca(p: PagamentoPortalLido): CobrancaPortal {
+  private cobranca(p: PagamentoPortal): CobrancaPortal {
     return {
       id: String(p.id),
       agendamento: String(p.marcacao),
@@ -1612,7 +1671,7 @@ export class ServicoAgendaPortal {
         this.linha(n.c.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalPagamentoIniciado.codigo,
           operacao: 'portal.iniciarPagamento',
-          tabela: 'SGH_POR_PAGAMENTO',
+          tabela: 'intencao_pagamento_portal',
           id: x.id,
           usuario: quemDaConta(n.conta.id),
           paciente: t.paciente,
@@ -1620,7 +1679,7 @@ export class ServicoAgendaPortal {
         }),
     );
     const p = await this.porta.pagamentoPorId(n.c, (r as { id: number }).id);
-    return this.cobranca(p as PagamentoPortalLido);
+    return this.cobranca(p as PagamentoPortal);
   }
 
   /**
@@ -1633,7 +1692,7 @@ export class ServicoAgendaPortal {
     hospital: string,
     transacao: string,
     por: 'retorno' | 'conferencia',
-  ): Promise<PagamentoPortalLido | null> {
+  ): Promise<PagamentoPortal | null> {
     const c = { rede: this.portal.rede, hospital };
     const p = await this.porta.pagamentoPorTransacao(c, transacao);
     if (!p) return null;
@@ -1650,12 +1709,12 @@ export class ServicoAgendaPortal {
           comprovante: g.comprovante,
           por,
         }),
-      (x: { mudou: boolean; pagamento: PagamentoPortalLido }) =>
+      (x: { mudou: boolean; pagamento: PagamentoPortal }) =>
         x.mudou
           ? this.linha(hospital, {
               evento: EVENTOS_AUDITAVEIS.portalPagamentoConfirmado.codigo,
               operacao: 'portal.confirmarPagamento',
-              tabela: 'SGH_POR_PAGAMENTO',
+              tabela: 'intencao_pagamento_portal',
               id: x.pagamento.id,
               usuario: por === 'retorno' ? `${USUARIO_PORTAL}.GATEWAY` : quemDaConta(x.pagamento.conta),
               paciente: x.pagamento.paciente,
@@ -1663,7 +1722,7 @@ export class ServicoAgendaPortal {
             })
           : null,
     );
-    return (r as { pagamento: PagamentoPortalLido }).pagamento;
+    return (r as { pagamento: PagamentoPortal }).pagamento;
   }
 
   async conferirPagamento(n: PortalNoPedido, id: number): Promise<CobrancaPortal> {
@@ -1699,7 +1758,7 @@ export class ServicoAgendaPortal {
     const t = this.portal.titularComEscopo(n, 'agendamentos');
     await this.exigirAgenda(n.c.hospital);
     const m = await this.marcacaoDoTitular(n, t, tipo, id);
-    const r = await this.agenda.relogio(n.c);
+    const r = await this.relogio(n.c);
     const respondidas = await this.porta.pesquisasDoPaciente(n.c, t.paciente);
     const ja = respondidas.some((x) => x.tipo === tipo && x.marcacao === id);
     if (!pesquisaAberta(m, ja, r))
@@ -1726,7 +1785,7 @@ export class ServicoAgendaPortal {
         this.linha(n.c.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalPesquisaRespondida.codigo,
           operacao: 'portal.responderPesquisa',
-          tabela: 'SGH_POR_PESQUISA',
+          tabela: 'resposta_pesquisa_satisfacao',
           id: x.id,
           usuario: quemDaConta(n.conta.id),
           paciente: t.paciente,

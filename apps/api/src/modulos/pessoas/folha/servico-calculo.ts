@@ -2,8 +2,8 @@
 // do vínculo, os parâmetros da folha da empresa, o cálculo da competência (prévia ou gravado, com a memória por vínculo e
 // rubrica), o detalhe com a prova da soma e o descarte. Lê o vínculo e os dependentes (contagem) desta porta, o ponto
 // fechado e o sobreaviso aprovado das portas do M52, os afastamentos da interface (M53-F0) e as rubricas e tabelas legais
-// do M53-F1; a conta é a regra pura de @sgh/dominio-pessoas. Grava só SGH_ (salário, parâmetros, processamento e linhas)
-// com a trilha na mesma transação, atrás da chave `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome.
+// do M53-F1; a conta é a regra pura de @sgh/dominio-pessoas. Grava o salário, os parâmetros, o processamento e as
+// linhas pela porta da folha, com a trilha na mesma transação (o nome de tabela da trilha troca na onda; pedido 03-07), atrás da chave `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome.
 import { createHash } from 'node:crypto';
 import {
   type ApoioCalculoFolha,
@@ -45,17 +45,6 @@ import {
   type ResultadoCalculoFolhaPuro,
   type VinculoParaCalculo,
 } from '@sgh/dominio-pessoas';
-import {
-  type EventoPeriodoLidoSgh,
-  type LinhaCalculoSgh,
-  type ProcessoFolhaLido,
-  type ResumoVinculoProcessoLido,
-  type SalarioPesLido,
-  TETO_AFASTAMENTOS,
-  TETO_PLANTOES_REALIZADO,
-  TETO_PROCESSOS_FOLHA,
-  TETO_VINCULOS_FOLHA,
-} from '@sgh/legado';
 import type { TipoVinculoTrabalho } from '@sgh/contratos';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -68,6 +57,20 @@ import type { PortaPessoas } from '../porta.js';
 import type { PortaRubricas } from '../rubricas/porta-rubricas.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
 import type { PortaFolha } from './porta-folha.js';
+import { type EventoDoPeriodo } from '../ponto/tipos-ponto.js';
+import {
+  type LinhaCalculoDoVinculo,
+  type ProcessoDaFolha,
+  type ResumoVinculoDoProcesso,
+  type SalarioDoVinculo,
+} from './tipos-folha.js';
+import {
+  TETO_AFASTAMENTOS,
+  TETO_PLANTOES_REALIZADO,
+  TETO_PROCESSOS_FOLHA,
+  TETO_VINCULOS_FOLHA,
+  exigirCadastroDoCalculo,
+} from './apoio-folha.js';
 
 export const PERMISSOES_CALCULO_FOLHA = {
   ler: 'pessoas.folha.ler',
@@ -168,7 +171,7 @@ const TIPOS_VINCULO: readonly TipoVinculoTrabalho[] = [
   'terceiro',
 ];
 
-export function resumoDoProcesso(p: ProcessoFolhaLido): ResumoProcessoFolha {
+export function resumoDoProcesso(p: ProcessoDaFolha): ResumoProcessoFolha {
   return {
     id: p.id,
     empresa: p.empresa,
@@ -192,7 +195,7 @@ export function resumoDoProcesso(p: ProcessoFolhaLido): ResumoProcessoFolha {
 }
 
 /** O cabeçalho sem os totais nem o resumo, para quem não consulta salário (D-PERM-SAL-533). */
-export function cabecalhoDoProcesso(p: ProcessoFolhaLido): CabecalhoProcessoFolha {
+export function cabecalhoDoProcesso(p: ProcessoDaFolha): CabecalhoProcessoFolha {
   return {
     id: p.id,
     empresa: p.empresa,
@@ -215,7 +218,7 @@ export function cabecalhoDoProcesso(p: ProcessoFolhaLido): CabecalhoProcessoFolh
 
 /** O resumo do vínculo a partir das somas por papel que o banco devolve. */
 export function colaboradorDoResumo(
-  r: ResumoVinculoProcessoLido,
+  r: ResumoVinculoDoProcesso,
   matricula: string | null,
 ): ColaboradorCalculado {
   const v = (p: keyof typeof r.porPapel) => r.porPapel[p] ?? 0;
@@ -238,7 +241,7 @@ export function colaboradorDoResumo(
   };
 }
 
-const paraSalario = (x: SalarioPesLido): SalarioVinculo => ({
+const paraSalario = (x: SalarioDoVinculo): SalarioVinculo => ({
   id: x.id,
   vinculo: x.vinculo,
   inicio: x.inicio,
@@ -278,9 +281,9 @@ export function sobreavisoPorVinculo(
 
 /** O ponto FECHADO da competência por vínculo (minutos por tipo de integração e por tipo de hora do fechamento). */
 export function pontoFechadoPorVinculo(
-  eventosPeriodo: readonly EventoPeriodoLidoSgh[],
+  eventosPeriodo: readonly EventoDoPeriodo[],
 ): Map<number, PontoFechadoParaCalculo> {
-  const porVinculo = new Map<number, EventoPeriodoLidoSgh[]>();
+  const porVinculo = new Map<number, EventoDoPeriodo[]>();
   for (const e of eventosPeriodo) porVinculo.set(e.vinculo, [...(porVinculo.get(e.vinculo) ?? []), e]);
   const ponto = new Map<number, PontoFechadoParaCalculo>();
   for (const [v, xs] of porVinculo) {
@@ -557,7 +560,7 @@ export class ServicoCalculoFolha {
     const sobreaviso = sobreavisoPorVinculo(realizados, plantoes);
     const ponto = pontoFechadoPorVinculo(eventosPeriodo);
 
-    const paraCalculo: VinculoParaCalculo[] = vinculos.map((v) => ({
+    const paraCalculo: VinculoParaCalculo[] = exigirCadastroDoCalculo(vinculos).map((v) => ({
       id: v.id,
       matricula: v.matricula,
       tipo: (TIPOS_VINCULO as readonly string[]).includes(v.tipo)
@@ -668,7 +671,7 @@ export class ServicoCalculoFolha {
           resumo: resumoDoCalculo(e.empresa, e.competencia, calc),
           por: s.login,
         });
-        const linhas: LinhaCalculoSgh[] = calc.colaboradores.flatMap((c) =>
+        const linhas: LinhaCalculoDoVinculo[] = calc.colaboradores.flatMap((c) =>
           c.linhas.map((l) => ({
             ...l,
             vinculo: c.resumo.vinculo,
@@ -702,7 +705,7 @@ export class ServicoCalculoFolha {
     };
   }
 
-  private async processoOu404(s: SessaoCadastro, id: number): Promise<ProcessoFolhaLido> {
+  private async processoOu404(s: SessaoCadastro, id: number): Promise<ProcessoDaFolha> {
     const p = await this.porta.processo(this.ctx(s), id);
     if (!p) throw naoEncontrado('Cálculo da folha');
     return p;

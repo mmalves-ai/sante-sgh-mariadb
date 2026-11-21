@@ -53,7 +53,6 @@ import {
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
-import { RAIZ_FIM_COEXISTENCIA } from '../coexistencia/public-api.js';
 import { corpo } from '../exames/public-api.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from '../recepcao/public-api.js';
 import type { CifraCpf } from './cifra-cpf.js';
@@ -92,7 +91,6 @@ export class PessoasController {
     @Optional() @Inject(CIFRA_CPF_PESSOAS) cifra: CifraCpf | null = null,
     /** M43: a conferência do login de painel (TV ou totem) antes do bloqueio, a mesma da tela de usuários. */
     @Optional() @Inject(PORTA_RECEPCAO) private readonly recepcao: PortaRecepcao | null = null,
-    @Optional() @Inject(RAIZ_FIM_COEXISTENCIA) private readonly raizFim: string | null = null,
     // Revisão W0-06: a fila do eSocial do S-2200/S-2300 (a correção de matrícula ou admissão a confere).
     @Optional() @Inject(PORTA_ESOCIAL) esocial: PortaEsocial | null = null,
     @Optional() @Inject(PORTA_FOLHA) folha: PortaFolha | null = null,
@@ -285,7 +283,7 @@ export class PessoasController {
       // O login lido com o grupo de painéis passa pela conferência do aparelho (409 em uso; 503 sem conferir).
       (s, login) =>
         conferirLoginDePainel(
-          { recepcao: this.recepcao, raizFim: this.raizFim },
+          { recepcao: this.recepcao },
           { rede: s.rede, hospital: s.hospital },
           login,
           async () => GRUPO_PAINEIS,

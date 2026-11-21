@@ -221,7 +221,7 @@ export class ConsignadoController {
   @HttpCode(201)
   @Permissao(P.registrar)
   @AuditadoNoHandler(
-    'suprimentos.registrarRemessaConsignado: SGH_SUP_CONSIGNADO com a SGH_TRILHA na mesma transação',
+    'suprimentos.registrarRemessaConsignado: remessa_consignada com a trilha na mesma transação',
   )
   async remessa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoConsignado> {
     const s = sessaoDe(req);
@@ -250,7 +250,7 @@ export class ConsignadoController {
       E.consignadoRemessa.codigo,
       P.registrar,
       (y: { grupo: number }) => ({
-        tabela: 'SGH_SUP_CONSIGNADO',
+        tabela: 'remessa_consignada',
         id: String(y.grupo),
         paciente: null,
         chave: `${e.fornecedor}:${e.item}`,
@@ -261,6 +261,7 @@ export class ConsignadoController {
           item: e.item,
           usuario: s.login,
           chave,
+          pedido: e,
           linhas: [
             {
               tipo: 'remessa',
@@ -289,7 +290,7 @@ export class ConsignadoController {
   @Post('reposicoes')
   @HttpCode(201)
   @Permissao(P.registrar)
-  @AuditadoNoHandler('suprimentos.reporConsignado: SGH_SUP_CONSIGNADO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('suprimentos.reporConsignado: reposicao_consignada com a trilha na mesma transação')
   async repor(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoConsignado> {
     const s = sessaoDe(req);
     const e = corpo(esquemaReporConsignado, b);
@@ -309,16 +310,23 @@ export class ConsignadoController {
       evento,
       P.registrar,
       (y: { grupo: number }) => ({
-        tabela: 'SGH_SUP_CONSIGNADO',
+        tabela: 'reposicao_consignada',
         id: String(y.grupo),
         paciente: null,
         chave: `${e.fornecedor}:${e.item}:${e.tipo}`,
       }),
       async (g) => {
         // O reenvio relê o grupo gravado sem conferir de novo (os consumos já estão ligados a ele).
-        const ja = await g.movimentosPelaChave(chave);
+        const ja = await g.movimentosPelaChave(chave, e);
         if (ja && ja.length)
-          return g.gravar({ fornecedor: e.fornecedor, item: e.item, usuario: s.login, chave, linhas: [] });
+          return g.gravar({
+            fornecedor: e.fornecedor,
+            item: e.item,
+            usuario: s.login,
+            chave,
+            pedido: e,
+            linhas: [],
+          });
         // Relidos e travados na transação: os consumos pedidos e, na devolução, o saldo do par (a linha-guarda travada
         // antes da soma; a devolução simultânea do mesmo par espera e recusa).
         const consumos = e.consumos.length ? await g.consumos(e.consumos) : [];
@@ -363,7 +371,14 @@ export class ConsignadoController {
                 .slice()
                 .sort((a, z) => a.consumo - z.consumo)
                 .map((c) => ({ ...comum, tipo: e.tipo, quantidade: c.quantidade, consumo: c.consumo }));
-        return g.gravar({ fornecedor: e.fornecedor, item: e.item, usuario: s.login, chave, linhas });
+        return g.gravar({
+          fornecedor: e.fornecedor,
+          item: e.item,
+          usuario: s.login,
+          chave,
+          pedido: e,
+          linhas,
+        });
       },
     );
     const msg =

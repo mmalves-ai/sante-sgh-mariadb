@@ -1,5 +1,5 @@
-// Aplicação do pós-fechamento (M31): as gravações das telas (pelo executor, com a trilha na mesma transação, ou só do
-// novo em SGH_ com a SGH_TRILHA junto), o escopo por convênio conferido no servidor em toda leitura e gravação (como no
+// Aplicação do pós-fechamento (M31): as gravações das telas (pelo executor, com a trilha na mesma transação, ou
+// gravações diretas no banco do estabelecimento com a trilha_auditoria junto, sobre a entidade do modelo), o escopo por convênio conferido no servidor em toda leitura e gravação (como no
 // M30), o envio do lote (fora de produção, ao simulador de operadora; em produção, só com as credenciais da operadora no
 // cofre), a importação do demonstrativo (XML guardado no S3 com Object Lock), a decisão da glosa (o prazo por operadora)
 // e o painel de glosas em cache de horas.
@@ -186,7 +186,7 @@ export class ServicoTiss {
     );
   }
 
-  /** Gravação só do novo pela funcionalidade, com a trilha. */
+  /** Gravação direta pela funcionalidade, com a trilha sobre a entidade do modelo. */
   sgh<T>(
     s: SessaoCadastro,
     f: FuncionalidadeTiss,
@@ -242,7 +242,7 @@ export class ServicoTiss {
       s,
       'lote',
       E.faturamentoLoteEnviado.codigo,
-      () => ({ tabela: 'SGH_INTG_TISS_MENSAGEM', id: String(lote) }),
+      () => ({ tabela: 'lote_tiss', id: String(lote) }),
       async (g: GravadorSghTiss) => {
         await g.registrarMensagem({
           usuario: s.login,
@@ -333,7 +333,7 @@ export class ServicoTiss {
       s,
       'conciliacao',
       E.faturamentoDemonstrativoImportado.codigo,
-      (x) => ({ tabela: 'SGH_FAT_DEMONSTRATIVO', id: String(x.id) }),
+      (x) => ({ tabela: 'demonstrativo_analise_conta', id: String(x.id) }),
       (g: GravadorSghTiss) =>
         g.importarDemonstrativo({
           usuario: s.login,
@@ -372,7 +372,7 @@ export class ServicoTiss {
       s,
       'conciliacao',
       E.faturamentoGlosaDecidida.codigo,
-      (d) => ({ tabela: 'SGH_FAT_GLOSA_DECISAO', id: String(d.id) }),
+      (d) => ({ tabela: 'glosa_item', id: String(d.id) }),
       (g: GravadorSghTiss) => g.decidirGlosa({ ...e, usuario: s.login, prazo: prazo.prazo }),
     );
     return resultadoTiss(
@@ -388,7 +388,7 @@ export class ServicoTiss {
       s,
       'integracaoTiss',
       E.integracaoEndpointTissEditado.codigo,
-      (x) => ({ tabela: 'SGH_INTG_TISS_ENDPOINT', id: String(x.id) }),
+      (x) => ({ tabela: 'endpoint_tiss_fonte_pagadora', id: String(x.id) }),
       (g: GravadorSghTiss) => g.editarEndpoint({ ...e, usuario: s.login }),
     );
     return resultadoTiss('Endpoint da operadora gravado (a credencial fica no cofre).', false, {

@@ -113,11 +113,11 @@ test.describe('gestão de pessoas, fatia F1: colaboradores e admissão @M52.1', 
     await expect(page.getByTestId('admissao-concluida')).toBeVisible();
     await page.getByTestId('abrir-ficha-admitido').click();
 
-    // Ficha: CPF mascarado; a situação do cadastro com "a confirmar" (regra 4); o acesso liberado.
+    // Ficha: CPF mascarado; a situação do cadastro do profissional; o acesso liberado.
     await expect(page.getByTestId('tela-ficha-colaborador')).toBeVisible();
     await expect(page.getByTestId('ficha-cpf')).toContainText('***.***.');
     await expect(page.getByTestId('ficha-cpf')).not.toContainText(CPF.slice(0, 6));
-    await expect(page.getByTestId('ficha-situacao-cadastro')).toContainText('a confirmar');
+    await expect(page.getByTestId('ficha-situacao-cadastro')).toBeVisible();
     await expect(page.getByTestId('ficha-acesso')).toContainText('SINT.COLAB: liberado');
     await expect(page.getByTestId('registro-952101')).toContainText('Validade não informada');
     await semViolacaoAxe(page, 'ficha do colaborador');

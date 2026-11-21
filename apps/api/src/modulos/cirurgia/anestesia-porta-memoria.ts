@@ -4,19 +4,19 @@
 // que fica aberto, o adendo só na ficha assinada). Nada vai à cópia. Os domínios são os de um estabelecimento
 // sintético (a função "Anestesista" pelo nome, como no banco). Nenhum nome aqui é de pessoa real.
 import type {
-  AberturaFichaSgh,
-  ApaLidaSgh,
-  ApaSgh,
-  AvaliacaoSrpaLidaSgh,
-  AvaliacaoSrpaSgh,
-  ContextoAnestesiaLido,
-  DominiosFichaLidos,
-  FichaLidaSgh,
-  LancamentoFichaSgh,
-  LancamentoLidoSgh,
-  LoteFichaSgh,
-} from '@sgh/legado';
-import { recusa } from '@sgh/legado';
+  AberturaFicha,
+  AvaliacaoPreAnestesica,
+  AvaliacaoRecuperacao,
+  ContextoAnestesia,
+  DominiosFicha,
+  FichaAnestesica,
+  LancamentoDaFicha,
+  LancamentoFicha,
+  LoteFicha,
+  RegistroApa,
+  RegistroSrpa,
+} from './tipos.js';
+import { recusa } from '@sgh/nucleo';
 import type { MarcoFicha, SituacaoFicha } from '@sgh/contratos';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { GravadorAnestesia, PortaAnestesia, ProfissionalDaSessao } from './anestesia-porta.js';
@@ -25,12 +25,12 @@ import type { PortaCirurgia } from './porta.js';
 const M = 'SINTETICO';
 const d = (id: number, rotulo: string, sigla: string | null = null) => ({ id, rotulo, sigla, ativo: true });
 
-export const DOMINIOS_ANESTESIA_SINTETICOS: DominiosFichaLidos = {
+export const DOMINIOS_ANESTESIA_SINTETICOS: DominiosFicha = {
   tiposAnestesia: [d(1, 'Geral'), d(2, 'Raquidiana'), d(3, 'Local'), d(4, 'Sedação')],
   posicoes: [d(1, 'Decúbito dorsal'), d(2, 'Decúbito ventral'), d(3, 'Litotomia')],
   modosRespiratorios: [d(1, 'Espontânea', 'E'), d(2, 'Assistida', 'A'), d(3, 'Controlada', 'C')],
   funcoesEquipe: [d(1, 'Cirurgião'), d(2, 'Auxiliar'), d(6, 'Anestesista'), d(7, 'Circulante')],
-  tiposSinalLegado: [
+  tiposSinal: [
     d(1, 'Frequência cardíaca', 'FC'),
     d(2, 'Pressão sistólica', 'PAS'),
     d(3, 'Pressão diastólica', 'PAD'),
@@ -53,20 +53,20 @@ export const PROFISSIONAIS_ANESTESIA_SINTETICOS: Readonly<Record<string, Profiss
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
 interface Estado {
-  apas: (ApaLidaSgh & { chave: string | null })[];
-  fichas: (Mut<Omit<FichaLidaSgh, 'lancamentos' | 'passagens' | 'lacunas' | 'adendos'>> & {
-    lancamentos: (Mut<LancamentoLidoSgh> & { chave: string | null })[];
-    passagens: (FichaLidaSgh['passagens'][number] & { chave: string | null })[];
-    lacunas: (FichaLidaSgh['lacunas'][number] & { chave: string | null })[];
-    adendos: (FichaLidaSgh['adendos'][number] & { chave: string | null })[];
+  apas: (AvaliacaoPreAnestesica & { chave: string | null })[];
+  fichas: (Mut<Omit<FichaAnestesica, 'lancamentos' | 'passagens' | 'lacunas' | 'adendos'>> & {
+    lancamentos: (Mut<LancamentoDaFicha> & { chave: string | null })[];
+    passagens: (FichaAnestesica['passagens'][number] & { chave: string | null })[];
+    lacunas: (FichaAnestesica['lacunas'][number] & { chave: string | null })[];
+    adendos: (FichaAnestesica['adendos'][number] & { chave: string | null })[];
   })[];
-  srpa: (AvaliacaoSrpaLidaSgh & { chave: string | null; chaveMomento: string | null })[];
+  srpa: (AvaliacaoRecuperacao & { chave: string | null; chaveMomento: string | null })[];
   seq: number;
 }
 
 const agoraLocal = () => new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 16);
 
-function dadosDe(l: LancamentoFichaSgh): Record<string, string | number | null> {
+function dadosDe(l: LancamentoFicha): Record<string, string | number | null> {
   const r: Record<string, string | number | null> = {};
   for (const [k, v] of Object.entries(l)) {
     if (k === 'parte' || k === 'momento' || k === 'fim' || k === 'balanco') continue;
@@ -82,10 +82,10 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
   constructor(private readonly cirurgia: PortaCirurgia) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    let s = this.porHospital.get(String(c.estabelecimento ?? 0));
     if (!s) {
       s = { apas: [], fichas: [], srpa: [], seq: 46_000 };
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(String(c.estabelecimento ?? 0), s);
     }
     return s;
   }
@@ -137,7 +137,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
       if (!f) throw recusa('ficha-sem-ficha', 'A ficha não existe.');
       return f;
     };
-    const ler = (agendamento: number): FichaLidaSgh | null => {
+    const ler = (agendamento: number): FichaAnestesica | null => {
       const f = s.fichas.find((x) => x.agendamento === agendamento);
       return f ? structuredClone(f) : null;
     };
@@ -147,7 +147,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
         const e = (await this.cirurgia.estadosDosAgendamentos(c, [agendamento])).get(agendamento);
         return { existe: a !== null && a !== undefined, estado: e?.estado ?? null };
       },
-      registrarApa: async (a: Omit<ApaSgh, 'hospital'>) => {
+      registrarApa: async (a: Omit<RegistroApa, 'hospital'>) => {
         const ja = a.chave ? s.apas.find((x) => x.chave === a.chave) : undefined;
         if (ja) {
           if (ja.agendamento !== a.agendamento)
@@ -192,7 +192,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
         return { id, versao: vigente + 1, repetida: false, pendencias: [...a.pendencias] };
       },
       ficha: async (agendamento) => ler(agendamento),
-      abrirFicha: async (f: Omit<AberturaFichaSgh, 'hospital'>) => {
+      abrirFicha: async (f: Omit<AberturaFicha, 'hospital'>) => {
         const ja = s.fichas.find((x) => x.agendamento === f.agendamento);
         if (ja) return { id: ja.id, versao: ja.versao, nova: false };
         const id = prox();
@@ -235,7 +235,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
         if (v.situacao) f.situacao = v.situacao;
         return f.versao;
       },
-      lancar: async (l: Omit<LoteFichaSgh, 'hospital'>) => {
+      lancar: async (l: Omit<LoteFicha, 'hospital'>) => {
         const f = ficha(l.ficha);
         const ids: number[] = [];
         let repetida = false;
@@ -352,7 +352,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
         return { id, repetida: false };
       },
       srpa: async (agendamento) => structuredClone(s.srpa.filter((x) => x.agendamento === agendamento)),
-      registrarSrpa: async (x: Omit<AvaliacaoSrpaSgh, 'hospital'>) => {
+      registrarSrpa: async (x: Omit<RegistroSrpa, 'hospital'>) => {
         const ja = x.chave ? s.srpa.find((y) => y.chave === x.chave) : undefined;
         if (ja) {
           if (ja.agendamento !== x.agendamento)
@@ -393,7 +393,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
     return structuredClone(DOMINIOS_ANESTESIA_SINTETICOS);
   }
 
-  async contexto(c: ContextoPortaM18, agendamento: number): Promise<ContextoAnestesiaLido | null> {
+  async contexto(c: ContextoPortaM18, agendamento: number): Promise<ContextoAnestesia | null> {
     const a = await this.cirurgia.agendamento(c, agendamento);
     if (!a) return null;
     const p = await this.cirurgia.pacientePorProntuario(c, a.prontuario);
@@ -431,7 +431,7 @@ export class PortaAnestesiaMemoria implements PortaAnestesia {
 
   async ficha(c: ContextoPortaM18, agendamento: number) {
     const f = this.e(c).fichas.find((x) => x.agendamento === agendamento);
-    return f ? (structuredClone(f) as FichaLidaSgh) : null;
+    return f ? (structuredClone(f) as FichaAnestesica) : null;
   }
 
   async srpa(c: ContextoPortaM18, agendamento: number) {

@@ -39,13 +39,13 @@ describe('API_MODULOS', () => {
   });
 
   it('nome desconhecido ou ainda não migrado: recusa a partida, com a mensagem', () => {
-    const r = recusaDosModulos({ API_MODULOS: 'sessao,cirurgia' });
-    expect(r).toMatch(/cirurgia/);
+    const r = recusaDosModulos({ API_MODULOS: 'sessao,contabil' });
+    expect(r).toMatch(/contabil/);
     expect(r).toMatch(/ainda não migrado/);
     expect(recusaDosModulos({ API_MODULOS: 'todos,sessao' })).toMatch(/todos/);
   });
 
-  it('"todos": a base e todos os registrados (F2.2, até a onda 2 das ondas finais)', () => {
+  it('"todos": a base e todos os registrados (F2.2, até a onda 3 das ondas finais)', () => {
     expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual([
       'acesso',
       'administracao',
@@ -56,6 +56,7 @@ describe('API_MODULOS', () => {
       'cadastro',
       'carga',
       'catalogos',
+      'cirurgia',
       'config',
       'consultas',
       'contratualizacao',
@@ -77,7 +78,9 @@ describe('API_MODULOS', () => {
       'orcamento',
       'patrimonio',
       'pep',
+      'pessoas',
       'plataforma-onboarding',
+      'portal-paciente',
       'portaria',
       'precos',
       'qualidade',
@@ -89,7 +92,10 @@ describe('API_MODULOS', () => {
       'sadt',
       'sessoes',
       'suporte',
+      'suprimentos',
       'sus',
+      'telemedicina',
+      'tiss',
     ]);
     expect(recusaDosModulos({ API_MODULOS: 'sessao,cadastro,atendimento' })).toBeNull();
     expect(modulosPedidos({ API_MODULOS: 'todos' }, registro)).toEqual(['exemplo']);

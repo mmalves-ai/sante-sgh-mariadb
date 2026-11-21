@@ -345,7 +345,7 @@ export class EsocialController {
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,
   ): Promise<PendenciasLegadoEsocial> {
-    return this.servico.pendenciasLegado(sessaoDe(req), corpo(esquemaEmpresaOpcional, q).empresa ?? null);
+    return this.servico.pendenciasMigradas(sessaoDe(req), corpo(esquemaEmpresaOpcional, q).empresa ?? null);
   }
 
   @Get('conciliacao')

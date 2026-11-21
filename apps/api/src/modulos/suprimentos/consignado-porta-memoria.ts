@@ -5,7 +5,7 @@
 // vai à cópia; nenhum nome é de pessoa real.
 import type { ConsumoConsignado, ItemBusca, MovimentoConsignado } from '@sgh/contratos';
 import { saldoConsignado } from '@sgh/dominio-suprimentos';
-import { recusa } from '@sgh/legado';
+import { erroIdempotenciaDivergente, hashEntrada, recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { GravadorConsignado, PortaConsignado } from './consignado-porta.js';
 import { ITENS_OPME_SINTETICOS, type PortaOpmeMemoria } from './opme-porta-memoria.js';
@@ -31,21 +31,21 @@ const NOTAS = new Map([
 const minuto = () => new Date().toISOString().slice(0, 16);
 
 interface Estado {
-  movimentos: (MovimentoConsignado & { chave: string })[];
+  movimentos: (MovimentoConsignado & { chave: string; hash?: string })[];
   seq: number;
 }
 
 export class PortaConsignadoMemoria implements PortaConsignado {
   readonly destino = 'memoria' as const;
-  private readonly porHospital = new Map<string, Estado>();
+  private readonly porEstabelecimento = new Map<number | null, Estado>();
 
   constructor(private readonly opme: PortaOpmeMemoria | null = null) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    let s = this.porEstabelecimento.get(c.estabelecimento ?? null);
     if (!s) {
       s = { movimentos: [], seq: 46_400 };
-      this.porHospital.set(c.hospital, s);
+      this.porEstabelecimento.set(c.estabelecimento ?? null, s);
     }
     return s;
   }
@@ -88,8 +88,9 @@ export class PortaConsignadoMemoria implements PortaConsignado {
   private gravador(c: ContextoPortaM18, usuario: string): GravadorConsignado {
     const s = this.e(c);
     return {
-      movimentosPelaChave: async (chave) => {
+      movimentosPelaChave: async (chave, pedido) => {
         const xs = s.movimentos.filter((m) => m.chave === chave);
+        if (xs.some((x) => x.hash !== hashEntrada('consignado', pedido))) throw erroIdempotenciaDivergente();
         return xs.length ? xs : null;
       },
       consumos: async (ids) => (await this.consumosDe(c)).filter((x) => ids.includes(x.consumo)),
@@ -98,11 +99,9 @@ export class PortaConsignadoMemoria implements PortaConsignado {
       gravar: async (m) => {
         const ja = s.movimentos.filter((x) => x.chave === m.chave);
         if (ja.length) {
-          if (ja.some((x) => x.fornecedor !== m.fornecedor || x.item !== m.item))
-            throw recusa(
-              'chave-de-outro-movimento',
-              'A chave do pedido já foi usada em outro movimento do consignado.',
-            );
+          // A mesma chave com outra entrada é outro pedido: recusa, nunca a repetição do antigo.
+          if (ja.some((x) => x.hash !== hashEntrada('consignado', m.pedido)))
+            throw erroIdempotenciaDivergente();
           return { grupo: ja[0]!.grupo, movimentos: ja.map((x) => x.id), repetido: true };
         }
         for (const l of m.linhas)
@@ -140,6 +139,7 @@ export class PortaConsignadoMemoria implements PortaConsignado {
             usuario: m.usuario || usuario,
             em: minuto(),
             chave: m.chave,
+            hash: hashEntrada('consignado', m.pedido),
           });
           ids.push(id);
         }
@@ -171,6 +171,7 @@ export class PortaConsignadoMemoria implements PortaConsignado {
       itens: xs.map((m): MovimentoConsignado => {
         const y: Partial<typeof m> = { ...m };
         delete y.chave;
+        delete y.hash;
         return y as MovimentoConsignado;
       }),
       cortada: false,

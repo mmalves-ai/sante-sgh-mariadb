@@ -1,28 +1,27 @@
-// Porta da escala EM MEMÓRIA (M52.2; dev/ci com a sessão sintética; E2E): domínios sintéticos do ramo (jornada, tempo
+// Porta da escala EM MEMÓRIA (M52.2; F2.2 lote 03-04: chave do estado pelo estabelecimento do contexto; dev/ci com a sessão sintética; E2E): domínios sintéticos do ramo (jornada, tempo
 // parcial com o limite da ref 02, trabalho/folga), regimes, escalas, plantões e a trilha da escala, com as MESMAS regras
-// das gravações SGH_ (versão, chaves únicas, escala tocada a cada plantão, publicação uma vez, vigência e trilha só de
+// das gravações da porta própria (versão, chaves únicas, escala tocada a cada plantão, publicação uma vez, vigência e trilha só de
 // inclusão). A Rede em memória são os outros estabelecimentos que já têm estado aqui; a mesma pessoa é achada pelo HMAC
 // do CPF do vínculo na porta de pessoas em memória. A transação é tudo ou nada (o estado só troca no fim). Nada vai à
 // cópia; nenhum dado real.
-import type {
-  AcionamentoPesLido,
-  DimensionamentoPesLido,
-  EscalaPesLida,
-  EventoEscalaPesLido,
-  LiberacaoConsultada,
-  LinhaTrilha,
-  OpcaoDominioLida,
-  PlantaoPesLido,
-  RegimePesLido,
-  PlantaoNoInstanteLido,
-  TempoParcialLido,
-  TrocaPesLida,
-  UnidadeInternacaoLida,
-  VigenciaRegimeHistoricoLida,
-  VigenciaRegimeLida,
-  VinculoPessoasContado,
-} from '@sgh/legado';
-import { ErroOperacao } from '@sgh/legado';
+import {
+  type DependenciaContada,
+  type OpcaoDominioEscala,
+  type OpcaoTempoParcial,
+  type RegistroAcionamento,
+  type RegistroDimensionamento,
+  type RegistroEscala,
+  type RegistroEventoEscala,
+  type RegistroPlantao,
+  type RegistroPlantaoNoInstante,
+  type RegistroRegime,
+  type RegistroTroca,
+  type RegistroVigencia,
+  type RegistroVigenciaHistorico,
+  type UnidadeInternacaoOcupada,
+} from './tipos.js';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../../exames/public-api.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoasMemoria } from '../porta-memoria.js';
 import {
@@ -34,50 +33,48 @@ import {
   soLiberados,
 } from './porta-escala.js';
 
-const JORNADAS: readonly OpcaoDominioLida[] = [
+const JORNADAS: readonly OpcaoDominioEscala[] = [
   { codigo: 1, nome: 'Normal' },
   { codigo: 2, nome: 'Escalonada' },
   { codigo: 3, nome: 'Horista, mensal' },
 ];
-const PARCIAIS: readonly TempoParcialLido[] = [
+const PARCIAIS: readonly OpcaoTempoParcial[] = [
   { codigo: 0, nome: 'Não é contrato em tempo parcial', limiteSemanalHoras: null },
   { codigo: 1, nome: 'Limitado a 25 horas semanais', limiteSemanalHoras: 25 },
   { codigo: 2, nome: 'Limitado a 30 horas semanais', limiteSemanalHoras: 30 },
   { codigo: 3, nome: 'Limitado a 26 horas semanais', limiteSemanalHoras: 26 },
 ];
-const FOLGAS: readonly OpcaoDominioLida[] = [
+const FOLGAS: readonly OpcaoDominioEscala[] = [
   { codigo: 1, nome: 'Folga, por dias para folga conforme horário padrão' },
   { codigo: 3, nome: 'Folga, por troca de plantão' },
 ];
 
-interface PlantaoMem extends PlantaoPesLido {
-  readonly hospital: string;
-}
+type PlantaoMem = RegistroPlantao;
 
 interface Estado {
   seq: number;
-  regimes: Map<number, RegimePesLido>;
-  vigencias: (VigenciaRegimeLida & {
+  regimes: Map<number, RegistroRegime>;
+  vigencias: (RegistroVigencia & {
     id: number;
     em?: string;
     anulada?: { por: string; em: string; motivo: string } | null;
   })[];
-  /** W0-06: o retrato das linhas apagadas (a SGH_HIST_EXCLUSAO em memória). */
+  /** W0-06: o retrato das linhas apagadas (a o retrato na trilha em memória). */
   retratos: { tabela: string; chave: string; motivo: string; por: string }[];
-  escalas: Map<number, Omit<EscalaPesLida, 'plantoes'>>;
+  escalas: Map<number, Omit<RegistroEscala, 'plantoes'>>;
   plantoes: Map<number, PlantaoMem>;
-  eventos: (EventoEscalaPesLido & { escala: number })[];
+  eventos: (RegistroEventoEscala & { escala: number })[];
   outbox: { tipo: string; chave: string; carga: Record<string, string | number> }[];
-  trocas: Map<number, TrocaPesLida>;
-  acionamentos: Map<number, AcionamentoPesLido>;
-  dimensionamentos: DimensionamentoPesLido[];
+  trocas: Map<number, RegistroTroca>;
+  acionamentos: Map<number, RegistroAcionamento>;
+  dimensionamentos: RegistroDimensionamento[];
 }
 
 /**
  * M52.3: a unidade de internação sintética da classificação de pacientes, com 12 internados e as classificações do
  * turno (5 mínimos, 4 intermediários, 2 de alta dependência e 1 pelo NAS); nenhum paciente real.
  */
-export const UNIDADE_INTERNACAO_SINTETICA: UnidadeInternacaoLida = {
+export const UNIDADE_INTERNACAO_SINTETICA: UnidadeInternacaoOcupada = {
   unidade: 'UIS',
   nome: 'Internação sintética',
   internados: 12,
@@ -124,6 +121,22 @@ const copia = (s: Estado): Estado => ({
   retratos: [...s.retratos],
 });
 
+/** O contexto sintético de dev/ci e dos testes de unidade (estabelecimento 1; nenhum dado real). */
+export const CONTEXTO_SINTETICO: ContextoEscala = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 1,
+  correlacao: 'sintetico',
+};
+/**
+ * A chave do estado em memória: o código do estabelecimento da sessão quando o contexto o traz (a sessão de dev/ci e
+ * a porta de pessoas em memória usam o mesmo código), senão o id do estabelecimento.
+ */
+export const chaveDe = (c: ContextoEscala): string => {
+  const h = (c as { readonly hospital?: unknown }).hospital;
+  return typeof h === 'string' && h !== '' ? h : String(c.estabelecimento ?? 0);
+};
+
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
 const desatualizado = () =>
@@ -137,15 +150,17 @@ const toca = (a: { inicio: string; fim: string }, j: JanelaPlantoes) =>
 
 export class PortaEscalaMemoria implements PortaEscala {
   readonly destino = 'memoria' as const;
+  readonly coberturaRegistrada = true;
   private readonly estados = new Map<string, Estado>();
   /** Testes: estabelecimentos da Rede que não respondem. */
   readonly indisponiveis = new Set<string>();
 
   constructor(private readonly pessoas: PortaPessoasMemoria | null = null) {}
 
-  private e(c: { hospital: string }): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+  private e(c: ContextoEscala | string): Estado {
+    const k = typeof c === 'string' ? c : chaveDe(c);
+    let s = this.estados.get(k);
+    if (!s) this.estados.set(k, (s = novo()));
     return s;
   }
 
@@ -154,27 +169,27 @@ export class PortaEscalaMemoria implements PortaEscala {
     return [...(this.estados.get(hospital)?.outbox ?? [])];
   }
 
-  private comContagem(s: Estado, x: Omit<EscalaPesLida, 'plantoes'>): EscalaPesLida {
+  private comContagem(s: Estado, x: Omit<RegistroEscala, 'plantoes'>): RegistroEscala {
     const plantoes = [...s.plantoes.values()].filter(
       (p) => p.escala === x.id && p.situacao === 'previsto',
     ).length;
     return { ...x, plantoes };
   }
 
-  async podeGravar(): Promise<LiberacaoConsultada> {
-    return { pode: false, codigo: 'operacao-desconhecida', motivo: 'A escala não grava no outro sistema.' };
+  async podeGravar(): Promise<LiberacaoGravacao> {
+    return {
+      pode: false,
+      codigo: 'operacao-desconhecida',
+      motivo: 'A escala grava pelas ações da própria tela.',
+    };
   }
   async executar(): Promise<GravacaoFeita> {
-    throw recusa('operacao-desconhecida', 'A escala só grava em SGH_.');
+    throw recusa('operacao-desconhecida', 'A escala grava pelas ações da própria tela.');
   }
 
-  async gravarSgh<T>(
-    c: ContextoEscala,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorEscala) => Promise<T>,
-  ): Promise<T> {
+  async gravarSgh<T>(c: ContextoEscala, _trilha: unknown, fn: (g: GravadorEscala) => Promise<T>): Promise<T> {
     const s = copia(this.e(c));
-    const h = c.hospital;
+    const h = chaveDe(c);
     const escala = (id: number) => s.escalas.get(id) ?? null;
     const g: GravadorEscala = {
       escala: async (id) => {
@@ -205,7 +220,6 @@ export class PortaEscalaMemoria implements PortaEscala {
           acordo: r.acordo,
           ativo: r.ativo,
           id,
-          hospital: h,
           versao: 0,
         });
         return id;
@@ -262,7 +276,6 @@ export class PortaEscalaMemoria implements PortaEscala {
         const id = ++s.seq;
         s.escalas.set(id, {
           id,
-          hospital: h,
           unidade: x.unidade,
           setor: x.setor,
           competencia: x.competencia,
@@ -310,7 +323,6 @@ export class PortaEscalaMemoria implements PortaEscala {
         const id = ++s.seq;
         s.plantoes.set(id, {
           id,
-          hospital: h,
           escala: p.escala,
           vinculo: p.vinculo,
           pessoa: p.pessoa,
@@ -364,7 +376,7 @@ export class PortaEscalaMemoria implements PortaEscala {
         return id;
       },
       outbox: async (ev) => {
-        // A chave do evento é única, como na SGH_OUTBOX (CHAVE_EVENTO).
+        // A chave do evento é única, como na integracao_mensagem (CHAVE_EVENTO).
         if (s.outbox.some((o) => o.chave === ev.chave))
           throw new Error(`Chave de evento repetida: ${ev.chave}`);
         s.outbox.push(ev);
@@ -377,7 +389,6 @@ export class PortaEscalaMemoria implements PortaEscala {
         const id = ++s.seq;
         s.trocas.set(id, {
           id,
-          hospital: h,
           tipo: t.tipo,
           estado: 'pedida',
           plantao: t.plantao,
@@ -518,9 +529,9 @@ export class PortaEscalaMemoria implements PortaEscala {
           por: x.por,
         });
         s.retratos.push(
-          foto('SGH_PES_ESCALA', x.id),
-          ...plantoes.map((p) => foto('SGH_PES_PLANTAO', p.id)),
-          ...eventos.map((e) => foto('SGH_PES_ESCALA_EVENTO', e.id)),
+          foto('escala', x.id),
+          ...plantoes.map((p) => foto('plantao', p.id)),
+          ...eventos.map((e) => foto('publicacao_escala', e.id)),
         );
         for (const p of plantoes) s.plantoes.delete(p.id);
         s.eventos = s.eventos.filter((e) => e.escala !== x.id);
@@ -559,28 +570,28 @@ export class PortaEscalaMemoria implements PortaEscala {
     return r;
   }
 
-  async tiposJornada(): Promise<OpcaoDominioLida[]> {
+  async tiposJornada(): Promise<OpcaoDominioEscala[]> {
     return [...JORNADAS];
   }
-  async temposParciais(): Promise<TempoParcialLido[]> {
+  async temposParciais(): Promise<OpcaoTempoParcial[]> {
     return [...PARCIAIS];
   }
-  async tiposTrabalhoFolga(): Promise<OpcaoDominioLida[]> {
+  async tiposTrabalhoFolga(): Promise<OpcaoDominioEscala[]> {
     return [...FOLGAS];
   }
-  async regimes(c: ContextoEscala): Promise<RegimePesLido[]> {
+  async regimes(c: ContextoEscala): Promise<RegistroRegime[]> {
     return [...this.e(c).regimes.values()].sort((a, b) => a.codigo.localeCompare(b.codigo) || a.id - b.id);
   }
-  async regime(c: ContextoEscala, id: number): Promise<RegimePesLido | null> {
+  async regime(c: ContextoEscala, id: number): Promise<RegistroRegime | null> {
     return this.e(c).regimes.get(id) ?? null;
   }
-  async vigencias(c: ContextoEscala, vinculos: readonly number[]): Promise<VigenciaRegimeLida[]> {
+  async vigencias(c: ContextoEscala, vinculos: readonly number[]): Promise<RegistroVigencia[]> {
     return this.e(c)
       .vigencias.filter((v) => vinculos.includes(v.vinculo) && !v.anulada)
       .map((v) => ({ vinculo: v.vinculo, regime: v.regime, desde: v.desde, por: v.por }))
       .sort((a, b) => a.vinculo - b.vinculo || a.desde.localeCompare(b.desde));
   }
-  async escalas(c: ContextoEscala, f: Parameters<PortaEscala['escalas']>[1]): Promise<EscalaPesLida[]> {
+  async escalas(c: ContextoEscala, f: Parameters<PortaEscala['escalas']>[1]): Promise<RegistroEscala[]> {
     const s = this.e(c);
     return [...s.escalas.values()]
       .filter(
@@ -594,20 +605,20 @@ export class PortaEscalaMemoria implements PortaEscala {
       .slice(0, 200)
       .map((x) => this.comContagem(s, x));
   }
-  async escala(c: ContextoEscala, id: number): Promise<EscalaPesLida | null> {
+  async escala(c: ContextoEscala, id: number): Promise<RegistroEscala | null> {
     const s = this.e(c);
     const x = s.escalas.get(id);
     return x ? this.comContagem(s, x) : null;
   }
-  async plantoesDaEscala(c: ContextoEscala, escala: number): Promise<PlantaoPesLido[]> {
+  async plantoesDaEscala(c: ContextoEscala, escala: number): Promise<RegistroPlantao[]> {
     return [...this.e(c).plantoes.values()].filter((p) => p.escala === escala).sort((a, b) => a.id - b.id);
   }
-  async plantoesDaPessoa(c: ContextoEscala, pessoa: number, j: JanelaPlantoes): Promise<PlantaoPesLido[]> {
+  async plantoesDaPessoa(c: ContextoEscala, pessoa: number, j: JanelaPlantoes): Promise<RegistroPlantao[]> {
     return [...this.e(c).plantoes.values()].filter(
       (p) => p.pessoa === pessoa && p.situacao === 'previsto' && toca(p, j),
     );
   }
-  async eventos(c: ContextoEscala, escala: number): Promise<EventoEscalaPesLido[]> {
+  async eventos(c: ContextoEscala, escala: number): Promise<RegistroEventoEscala[]> {
     return this.e(c)
       .eventos.filter((x) => x.escala === escala)
       .sort((a, b) => b.id - a.id)
@@ -628,11 +639,11 @@ export class PortaEscalaMemoria implements PortaEscala {
     liberado?: (estabelecimento: string) => Promise<boolean>,
   ): Promise<PlantoesDaRede> {
     const outros = await soLiberados(
-      [...this.estados.keys()].filter((h) => h !== c.hospital),
+      [...this.estados.keys()].filter((h) => h !== chaveDe(c)),
       liberado,
     );
     if (outros.length === 0) return { intervalos: [], semResposta: 0 };
-    const hmac = this.pessoas?.cpfHmacDoVinculo(c.hospital, vinculo) ?? null;
+    const hmac = this.pessoas?.cpfHmacDoVinculo(chaveDe(c), vinculo) ?? null;
     if (!hmac) return { intervalos: [], semResposta: outros.length };
     const intervalos: { inicio: string; fim: string }[] = [];
     let semResposta = 0;
@@ -649,10 +660,10 @@ export class PortaEscalaMemoria implements PortaEscala {
   }
 
   // ── F3 (M52.3) ──
-  async plantao(c: ContextoEscala, id: number): Promise<PlantaoPesLido | null> {
+  async plantao(c: ContextoEscala, id: number): Promise<RegistroPlantao | null> {
     return this.e(c).plantoes.get(id) ?? null;
   }
-  async trocas(c: ContextoEscala, f: Parameters<PortaEscala['trocas']>[1]): Promise<TrocaPesLida[]> {
+  async trocas(c: ContextoEscala, f: Parameters<PortaEscala['trocas']>[1]): Promise<RegistroTroca[]> {
     const s = this.e(c);
     const daEscala = (p: number | null) => p !== null && s.plantoes.get(p)?.escala === f.escala;
     return [...s.trocas.values()]
@@ -665,7 +676,7 @@ export class PortaEscalaMemoria implements PortaEscala {
       .sort((a, b) => b.id - a.id)
       .slice(0, 200);
   }
-  async troca(c: ContextoEscala, id: number): Promise<TrocaPesLida | null> {
+  async troca(c: ContextoEscala, id: number): Promise<RegistroTroca | null> {
     return this.e(c).trocas.get(id) ?? null;
   }
   async plantoesEmTrocaAberta(c: ContextoEscala, ids: readonly number[]): Promise<Set<number>> {
@@ -676,9 +687,9 @@ export class PortaEscalaMemoria implements PortaEscala {
     instante: string,
     inicioDesde: string,
     f: Parameters<PortaEscala['plantoesNoInstante']>[3],
-  ): Promise<PlantaoNoInstanteLido[]> {
+  ): Promise<RegistroPlantaoNoInstante[]> {
     const s = this.e(c);
-    const r: PlantaoNoInstanteLido[] = [];
+    const r: RegistroPlantaoNoInstante[] = [];
     for (const p of s.plantoes.values()) {
       const x = s.escalas.get(p.escala);
       if (!x || x.estado !== 'publicada' || p.situacao !== 'previsto') continue;
@@ -706,22 +717,22 @@ export class PortaEscalaMemoria implements PortaEscala {
     }
     return r.sort((a, b) => a.inicio.localeCompare(b.inicio) || a.id - b.id);
   }
-  async acionamentos(c: ContextoEscala, ids: readonly number[]): Promise<AcionamentoPesLido[]> {
+  async acionamentos(c: ContextoEscala, ids: readonly number[]): Promise<RegistroAcionamento[]> {
     return acionamentosDe(this.e(c), ids);
   }
-  async acionamento(c: ContextoEscala, id: number): Promise<AcionamentoPesLido | null> {
+  async acionamento(c: ContextoEscala, id: number): Promise<RegistroAcionamento | null> {
     return this.e(c).acionamentos.get(id) ?? null;
   }
   async dimensionamentos(
     c: ContextoEscala,
     f: { readonly unidade?: number },
-  ): Promise<DimensionamentoPesLido[]> {
+  ): Promise<RegistroDimensionamento[]> {
     return this.e(c)
       .dimensionamentos.filter((d) => f.unidade === undefined || d.unidade === f.unidade)
       .sort((a, b) => b.id - a.id)
       .slice(0, 100);
   }
-  async unidadesInternacao(): Promise<UnidadeInternacaoLida[]> {
+  async unidadesInternacao(): Promise<UnidadeInternacaoOcupada[]> {
     return [UNIDADE_INTERNACAO_SINTETICA];
   }
   async classificacoesDoTurno(_c: ContextoEscala, unidade: string) {
@@ -736,39 +747,39 @@ export class PortaEscalaMemoria implements PortaEscala {
    */
   realizadosDosPlantoes: ((hospital: string, plantoes: readonly number[]) => number) | null = null;
 
-  private dependencias(s: Estado, h: string, escala: number): VinculoPessoasContado[] {
+  private dependencias(s: Estado, h: string, escala: number): DependenciaContada[] {
     const ids = [...s.plantoes.values()].filter((p) => p.escala === escala).map((p) => p.id);
-    const r: VinculoPessoasContado[] = [];
+    const r: DependenciaContada[] = [];
     const trocas = [...s.trocas.values()].filter(
       (t) => ids.includes(t.plantao) || (t.plantaoColega !== null && ids.includes(t.plantaoColega)),
     ).length;
     if (trocas > 0)
       r.push({
         grupo: 'Trocas de plantão',
-        tabela: 'SGH_PES_TROCA',
-        coluna: 'ID_PLANTAO',
+        tabela: 'troca_plantao',
+        coluna: 'plantao_id',
         quantidade: trocas,
       });
     const realizados = this.realizadosDosPlantoes?.(h, ids) ?? 0;
     if (realizados > 0)
       r.push({
         grupo: 'Plantões realizados',
-        tabela: 'SGH_PES_PLANTAO_REALIZADO',
-        coluna: 'ID_PLANTAO',
+        tabela: 'plantao',
+        coluna: 'plantao_id',
         quantidade: realizados,
       });
     const acion = acionamentosDe(s, ids).length;
     if (acion > 0)
       r.push({
         grupo: 'Acionamentos do sobreaviso',
-        tabela: 'SGH_PES_ACIONAMENTO',
-        coluna: 'ID_PLANTAO',
+        tabela: 'acionamento_sobreaviso',
+        coluna: 'plantao_id',
         quantidade: acion,
       });
     return r;
   }
 
-  private historico(s: Estado, vinculo: number): VigenciaRegimeHistoricoLida[] {
+  private historico(s: Estado, vinculo: number): RegistroVigenciaHistorico[] {
     return s.vigencias
       .filter((v) => v.vinculo === vinculo)
       .sort((a, b) => a.desde.localeCompare(b.desde) || a.id - b.id)
@@ -783,23 +794,22 @@ export class PortaEscalaMemoria implements PortaEscala {
       }));
   }
 
-  async dependenciasEscala(c: ContextoEscala, escala: number): Promise<VinculoPessoasContado[]> {
-    return this.dependencias(this.e(c), c.hospital, escala);
+  async dependenciasEscala(c: ContextoEscala, escala: number): Promise<DependenciaContada[]> {
+    return this.dependencias(this.e(c), chaveDe(c), escala);
   }
-  async historicoVigencias(c: ContextoEscala, vinculo: number): Promise<VigenciaRegimeHistoricoLida[]> {
+  async historicoVigencias(c: ContextoEscala, vinculo: number): Promise<RegistroVigenciaHistorico[]> {
     return this.historico(this.e(c), vinculo);
   }
-  async vigencia(c: ContextoEscala, id: number): Promise<VigenciaRegimeHistoricoLida | null> {
+  async vigencia(c: ContextoEscala, id: number): Promise<RegistroVigenciaHistorico | null> {
     const v = this.e(c).vigencias.find((x) => x.id === id);
     return v ? (this.historico(this.e(c), v.vinculo).find((x) => x.id === id) ?? null) : null;
   }
   /** Testes: uma troca sintética ligada a um plantão (o vínculo do mapa de dependências, sem passar pelo fluxo). */
   semearTroca(hospital: string, plantao: number): void {
-    const s = this.e({ hospital });
+    const s = this.e(hospital);
     const id = ++s.seq;
     s.trocas.set(id, {
       id,
-      hospital,
       tipo: 'cessao',
       estado: 'pedida',
       plantao,
@@ -834,6 +844,6 @@ function emTrocaAberta(s: Estado, ids: readonly number[]): Set<number> {
   return r;
 }
 
-function acionamentosDe(s: Estado, ids: readonly number[]): AcionamentoPesLido[] {
+function acionamentosDe(s: Estado, ids: readonly number[]): RegistroAcionamento[] {
   return [...s.acionamentos.values()].filter((a) => ids.includes(a.plantao)).sort((a, b) => b.id - a.id);
 }

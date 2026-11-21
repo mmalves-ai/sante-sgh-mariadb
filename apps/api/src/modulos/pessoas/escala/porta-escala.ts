@@ -1,42 +1,42 @@
 // Porta da escala de plantão, fatia F2 (M52.2; ficha, seções 4 e 6): o que as telas de escala e de regimes leem e
 // gravam, independente de onde (a API não escreve SQL; fronteira Nx). O colaborador, o profissional e a validade do
-// conselho vêm da porta da gestão de pessoas (F1); aqui, os domínios do ramo, os regimes, a escala, os plantões e a
-// trilha da escala. Fatia F3 (M52.3): as trocas, o instante ("quem está de plantão agora"), os acionamentos do
-// sobreaviso e o dimensionamento, com a classificação de pacientes do M45 só pela categoria e pelo total.
-//   - `legado`: as leituras de @sgh/legado em transação READ ONLY no banco do estabelecimento; as gravações SGH_ numa
-//     transação só SGH_ com a SGH_TRILHA junto; a consulta à Rede (regra 7) só de leitura, no banco de CADA outro
-//     estabelecimento configurado, e só os intervalos;
-//   - `memoria`: a sessão sintética de dev/ci (E2E); nada vai à cópia;
+// conselho vêm da porta da gestão de pessoas (F1); aqui, os regimes, a escala, os plantões e o histórico da escala.
+// Fatia F3 (M52.3): as trocas, o instante ("quem está de plantão agora"), os acionamentos do sobreaviso e o
+// dimensionamento, com a classificação de pacientes só pela categoria e pelo total.
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-escala-propria.ts): leituras somente leitura filtradas
+//     pelo estabelecimento da sessão; as gravações numa operação do Executor (trilha, outbox e idempotência juntas);
+//     a Rede são os outros estabelecimentos do mesmo cliente (o colaborador é do cliente inteiro);
+//   - `memoria`: a sessão sintética de dev/ci (E2E);
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
-import type {
-  AcionamentoPesLido,
-  CamposRegimeSgh,
-  ClassificacaoLidaSgh,
-  DimensionamentoPesLido,
-  DimensionamentoSgh,
-  FiltroInstanteSgh,
-  FiltroTrocasSgh,
-  NovaTrocaSgh,
-  NovoAcionamentoSgh,
-  PlantaoNoInstanteLido,
-  TrocaPesLida,
-  UnidadeInternacaoLida,
-  EscalaPesLida,
-  EventoPeriodoLidoSgh,
-  EventoEscalaPesLido,
-  EventoEscalaSgh,
-  FiltroEscalasSgh,
-  MudancaPlantaoSgh,
-  NovaEscalaSgh,
-  NovoPlantaoSgh,
-  OpcaoDominioLida,
-  PlantaoPesLido,
-  RegimePesLido,
-  TempoParcialLido,
-  VigenciaRegimeLida,
-  VigenciaRegimeHistoricoLida,
-  VinculoPessoasContado,
-} from '@sgh/legado';
+import {
+  type CamposRegimeJornada,
+  type ClassificacaoDoTurno,
+  type DadosDimensionamento,
+  type DadosEventoEscala,
+  type DadosMudancaPlantao,
+  type DadosNovaEscala,
+  type DadosNovaTroca,
+  type DadosNovoAcionamento,
+  type DadosNovoPlantao,
+  type DependenciaContada,
+  type EventoPeriodoPonto,
+  type FiltroPlantaoNoInstante,
+  type FiltroRegistrosEscala,
+  type FiltroRegistrosTroca,
+  type OpcaoDominioEscala,
+  type OpcaoTempoParcial,
+  type RegistroAcionamento,
+  type RegistroDimensionamento,
+  type RegistroEscala,
+  type RegistroEventoEscala,
+  type RegistroPlantao,
+  type RegistroPlantaoNoInstante,
+  type RegistroRegime,
+  type RegistroTroca,
+  type RegistroVigencia,
+  type RegistroVigenciaHistorico,
+  type UnidadeInternacaoOcupada,
+} from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
 
 export const PORTA_ESCALA = Symbol('PORTA_ESCALA');
@@ -58,18 +58,18 @@ export interface PlantoesDaRede {
 
 type SemHospital<T> = Omit<T, 'hospital'>;
 
-/** As gravações SGH_ da F2 numa transação só SGH_, com as releituras dentro dela (o estabelecimento vem do contexto). */
+/** As gravações da F2 numa transação (operação do Executor), com as releituras dentro dela (o estabelecimento vem do contexto). */
 export interface GravadorEscala {
-  escala(id: number): Promise<EscalaPesLida | null>;
-  plantao(id: number): Promise<PlantaoPesLido | null>;
-  plantoesDaEscala(escala: number): Promise<PlantaoPesLido[]>;
-  plantoesDaPessoa(pessoa: number, janela: JanelaPlantoes): Promise<PlantaoPesLido[]>;
+  escala(id: number): Promise<RegistroEscala | null>;
+  plantao(id: number): Promise<RegistroPlantao | null>;
+  plantoesDaEscala(escala: number): Promise<RegistroPlantao[]>;
+  plantoesDaPessoa(pessoa: number, janela: JanelaPlantoes): Promise<RegistroPlantao[]>;
   /** Trava os vínculos da pessoa até o fim da transação (inclusões simultâneas da mesma pessoa). */
   travarPessoa(pessoa: number): Promise<void>;
-  regime(id: number): Promise<RegimePesLido | null>;
-  incluirRegime(r: CamposRegimeSgh & { readonly por: string }): Promise<number>;
+  regime(id: number): Promise<RegistroRegime | null>;
+  incluirRegime(r: CamposRegimeJornada & { readonly por: string }): Promise<number>;
   alterarRegime(
-    r: CamposRegimeSgh & { readonly id: number; readonly versao: number; readonly por: string },
+    r: CamposRegimeJornada & { readonly id: number; readonly versao: number; readonly por: string },
   ): Promise<void>;
   atribuirRegime(a: {
     readonly vinculo: number;
@@ -77,7 +77,7 @@ export interface GravadorEscala {
     readonly desde: string;
     readonly por: string;
   }): Promise<number>;
-  incluirEscala(s: SemHospital<NovaEscalaSgh>): Promise<number>;
+  incluirEscala(s: SemHospital<DadosNovaEscala>): Promise<number>;
   alterarCobertura(c: {
     readonly id: number;
     readonly versao: number;
@@ -91,21 +91,21 @@ export interface GravadorEscala {
     readonly justificativaFuro: string | null;
     readonly por: string;
   }): Promise<void>;
-  incluirPlantao(p: SemHospital<NovoPlantaoSgh>): Promise<number>;
-  alterarPlantao(m: SemHospital<MudancaPlantaoSgh>): Promise<void>;
+  incluirPlantao(p: SemHospital<DadosNovoPlantao>): Promise<number>;
+  alterarPlantao(m: SemHospital<DadosMudancaPlantao>): Promise<void>;
   cancelarPlantao(c: {
     readonly id: number;
     readonly versao: number;
     readonly motivo: string | null;
     readonly por: string;
   }): Promise<void>;
-  evento(ev: SemHospital<EventoEscalaSgh>): Promise<number>;
-  /** Evento na SGH_OUTBOX, na mesma transação (a F3 consome a publicação e as mudanças). */
+  evento(ev: SemHospital<DadosEventoEscala>): Promise<number>;
+  /** Evento na integracao_mensagem, na mesma transação (a F3 consome a publicação e as mudanças). */
   outbox(ev: { tipo: string; chave: string; carga: Record<string, string | number> }): Promise<string>;
   // ── F3 (M52.3): troca, acionamento e dimensionamento ──
-  troca(id: number): Promise<TrocaPesLida | null>;
+  troca(id: number): Promise<RegistroTroca | null>;
   plantoesEmTrocaAberta(plantoes: readonly number[]): Promise<Set<number>>;
-  incluirTroca(t: SemHospital<NovaTrocaSgh>): Promise<number>;
+  incluirTroca(t: SemHospital<DadosNovaTroca>): Promise<number>;
   responderTroca(r: {
     readonly id: number;
     readonly versao: number;
@@ -139,9 +139,9 @@ export interface GravadorEscala {
     readonly motivo: string;
     readonly por: string;
   }): Promise<void>;
-  acionamento(id: number): Promise<AcionamentoPesLido | null>;
-  acionamentosDosPlantoes(plantoes: readonly number[]): Promise<AcionamentoPesLido[]>;
-  incluirAcionamento(a: SemHospital<NovoAcionamentoSgh>): Promise<number>;
+  acionamento(id: number): Promise<RegistroAcionamento | null>;
+  acionamentosDosPlantoes(plantoes: readonly number[]): Promise<RegistroAcionamento[]>;
+  incluirAcionamento(a: SemHospital<DadosNovoAcionamento>): Promise<number>;
   registrarChegada(c: {
     readonly id: number;
     readonly versao: number;
@@ -154,10 +154,10 @@ export interface GravadorEscala {
     readonly motivo: string;
     readonly por: string;
   }): Promise<void>;
-  incluirDimensionamento(d: SemHospital<DimensionamentoSgh>): Promise<number>;
+  incluirDimensionamento(d: SemHospital<DadosDimensionamento>): Promise<number>;
   // ── W0-06 (programa CRUD completo) ──
   /** As dependências (não próprias) da escala, contadas na transação (mapa de dependências da gestão de pessoas). */
-  dependenciasEscala(escala: number): Promise<VinculoPessoasContado[]>;
+  dependenciasEscala(escala: number): Promise<DependenciaContada[]>;
   /** Exclui o rascunho (versão lida) sem vínculo, com o retrato de cada linha antes do DELETE. */
   excluirEscalaRascunho(x: {
     readonly id: number;
@@ -172,27 +172,32 @@ export interface GravadorEscala {
     readonly motivo: string;
     readonly por: string;
   }): Promise<number>;
-  historicoVigencias(vinculo: number): Promise<VigenciaRegimeHistoricoLida[]>;
+  historicoVigencias(vinculo: number): Promise<RegistroVigenciaHistorico[]>;
   anularVigencia(a: { readonly id: number; readonly motivo: string; readonly por: string }): Promise<void>;
   /**
    * Revisão W0-06: os eventos de período do ponto do vínculo lidos na MESMA transação (depois de travar a pessoa,
    * a mesma trava do fechamento). `null`: a porta não tem o ponto (memória); o serviço lê pela porta do ponto.
    */
-  eventosPeriodo(vinculo: number): Promise<EventoPeriodoLidoSgh[] | null>;
+  eventosPeriodo(vinculo: number): Promise<EventoPeriodoPonto[] | null>;
 }
 
 export interface PortaEscala extends PortaGravacaoM18<GravadorEscala> {
-  tiposJornada(c: ContextoEscala): Promise<OpcaoDominioLida[]>;
-  temposParciais(c: ContextoEscala): Promise<TempoParcialLido[]>;
-  tiposTrabalhoFolga(c: ContextoEscala): Promise<OpcaoDominioLida[]>;
-  regimes(c: ContextoEscala): Promise<RegimePesLido[]>;
-  regime(c: ContextoEscala, id: number): Promise<RegimePesLido | null>;
-  vigencias(c: ContextoEscala, vinculos: readonly number[]): Promise<VigenciaRegimeLida[]>;
-  escalas(c: ContextoEscala, f: FiltroEscalasSgh): Promise<EscalaPesLida[]>;
-  escala(c: ContextoEscala, id: number): Promise<EscalaPesLida | null>;
-  plantoesDaEscala(c: ContextoEscala, escala: number): Promise<PlantaoPesLido[]>;
-  plantoesDaPessoa(c: ContextoEscala, pessoa: number, janela: JanelaPlantoes): Promise<PlantaoPesLido[]>;
-  eventos(c: ContextoEscala, escala: number): Promise<EventoEscalaPesLido[]>;
+  /**
+   * A porta grava e lê a cobertura mínima por turno. Falso no banco até o DDL (pedido 03-04): a criação com cobertura
+   * e a alteração respondem 409, e a publicação avisa que a conferência de furo não foi feita.
+   */
+  readonly coberturaRegistrada: boolean;
+  tiposJornada(c: ContextoEscala): Promise<OpcaoDominioEscala[]>;
+  temposParciais(c: ContextoEscala): Promise<OpcaoTempoParcial[]>;
+  tiposTrabalhoFolga(c: ContextoEscala): Promise<OpcaoDominioEscala[]>;
+  regimes(c: ContextoEscala): Promise<RegistroRegime[]>;
+  regime(c: ContextoEscala, id: number): Promise<RegistroRegime | null>;
+  vigencias(c: ContextoEscala, vinculos: readonly number[]): Promise<RegistroVigencia[]>;
+  escalas(c: ContextoEscala, f: FiltroRegistrosEscala): Promise<RegistroEscala[]>;
+  escala(c: ContextoEscala, id: number): Promise<RegistroEscala | null>;
+  plantoesDaEscala(c: ContextoEscala, escala: number): Promise<RegistroPlantao[]>;
+  plantoesDaPessoa(c: ContextoEscala, pessoa: number, janela: JanelaPlantoes): Promise<RegistroPlantao[]>;
+  eventos(c: ContextoEscala, escala: number): Promise<RegistroEventoEscala[]>;
   /**
    * Regra 7: os plantões da pessoa do vínculo nos OUTROS estabelecimentos da Rede (pelo HMAC do CPF). Só os que a porta
    * conhece (HS-1, no núcleo) e que `liberado` aceitar são consultados (D-ESCALA-REDE-52): um estabelecimento fora disso
@@ -205,34 +210,34 @@ export interface PortaEscala extends PortaGravacaoM18<GravadorEscala> {
     liberado?: (estabelecimento: string) => Promise<boolean>,
   ): Promise<PlantoesDaRede>;
   // ── F3 (M52.3) ──
-  plantao(c: ContextoEscala, id: number): Promise<PlantaoPesLido | null>;
-  trocas(c: ContextoEscala, f: FiltroTrocasSgh): Promise<TrocaPesLida[]>;
-  troca(c: ContextoEscala, id: number): Promise<TrocaPesLida | null>;
+  plantao(c: ContextoEscala, id: number): Promise<RegistroPlantao | null>;
+  trocas(c: ContextoEscala, f: FiltroRegistrosTroca): Promise<RegistroTroca[]>;
+  troca(c: ContextoEscala, id: number): Promise<RegistroTroca | null>;
   plantoesEmTrocaAberta(c: ContextoEscala, plantoes: readonly number[]): Promise<Set<number>>;
   /** Os plantões previstos da escala publicada em curso no instante (o início nas 24 h antes; regra 10). */
   plantoesNoInstante(
     c: ContextoEscala,
     instante: string,
     inicioDesde: string,
-    f: FiltroInstanteSgh,
-  ): Promise<PlantaoNoInstanteLido[]>;
-  acionamentos(c: ContextoEscala, plantoes: readonly number[]): Promise<AcionamentoPesLido[]>;
-  acionamento(c: ContextoEscala, id: number): Promise<AcionamentoPesLido | null>;
-  dimensionamentos(c: ContextoEscala, f: { readonly unidade?: number }): Promise<DimensionamentoPesLido[]>;
+    f: FiltroPlantaoNoInstante,
+  ): Promise<RegistroPlantaoNoInstante[]>;
+  acionamentos(c: ContextoEscala, plantoes: readonly number[]): Promise<RegistroAcionamento[]>;
+  acionamento(c: ContextoEscala, id: number): Promise<RegistroAcionamento | null>;
+  dimensionamentos(c: ContextoEscala, f: { readonly unidade?: number }): Promise<RegistroDimensionamento[]>;
   /** As unidades de internação com a contagem de internados (só a contagem; nada do paciente). */
-  unidadesInternacao(c: ContextoEscala): Promise<UnidadeInternacaoLida[]>;
+  unidadesInternacao(c: ContextoEscala): Promise<UnidadeInternacaoOcupada[]>;
   /** A classificação de pacientes do turno (M45), para o dimensionamento: só a categoria e o total. */
   classificacoesDoTurno(
     c: ContextoEscala,
     unidadeInternacao: string,
     data: string,
     turno: string,
-  ): Promise<readonly Pick<ClassificacaoLidaSgh, 'paciente' | 'instrumento' | 'categoria' | 'total'>[]>;
+  ): Promise<readonly Pick<ClassificacaoDoTurno, 'paciente' | 'instrumento' | 'categoria' | 'total'>[]>;
   // ── W0-06 ──
-  dependenciasEscala(c: ContextoEscala, escala: number): Promise<VinculoPessoasContado[]>;
+  dependenciasEscala(c: ContextoEscala, escala: number): Promise<DependenciaContada[]>;
   /** Todas as vigências do vínculo, as anuladas inclusive (o histórico da tela). */
-  historicoVigencias(c: ContextoEscala, vinculo: number): Promise<VigenciaRegimeHistoricoLida[]>;
-  vigencia(c: ContextoEscala, id: number): Promise<VigenciaRegimeHistoricoLida | null>;
+  historicoVigencias(c: ContextoEscala, vinculo: number): Promise<RegistroVigenciaHistorico[]>;
+  vigencia(c: ContextoEscala, id: number): Promise<RegistroVigenciaHistorico | null>;
 }
 
 /** D-ESCALA-REDE-52: dos outros estabelecimentos, só os liberados (falha fechada: erro na conferência = não liberado). */

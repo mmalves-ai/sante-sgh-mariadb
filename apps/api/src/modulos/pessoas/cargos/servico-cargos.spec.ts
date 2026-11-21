@@ -1,8 +1,11 @@
 // W0-06, parte 4 (programa CRUD completo, M1 de mercado): cargos e salários pelo serviço da API. Cargo com CBO e
 // conselho conferidos, alteração com motivo e o valor anterior no histórico; faixa salarial e vaga do quadro por versão
 // a partir de uma data; inativação com motivo; exclusão só do nunca usado (o referenciado devolve 409 com a contagem e
-// a oferta da inativação). Portas em memória (nada conecta a banco); dados sintéticos.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+// a oferta da inativação). Melhoria: tipos próprios da porta, sem o sistema de origem. Portas em memória (nada conecta a banco); dados sintéticos.
+import type {
+  ChaveLiberacao as ChaveGravada,
+  PrerequisitoRecurso as PrerequisitoGravado,
+} from '../../config/public-api.js';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -34,7 +37,14 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
+const CTX = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 7,
+  correlacao: 'teste-cargos',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
 let k = 0;
 const sessao = (pode: (p: string) => boolean = () => true): SessaoCadastro => ({
   req: {
@@ -222,14 +232,14 @@ describe('W0-06 parte 4: cargos e salários (serviço)', () => {
     const s = sessao();
     const { id: cargo } = await svc.incluirCargo(s, ENFERMEIRO);
     await svc.incluirVaga(s, { cargo, centroCusto: 9521, quantidade: 3, desde: '2026-01-01' });
-    porta.ligarColaborador('pc', { vinculo: 7001, cargo, centroCusto: 9521, desligado: false });
+    porta.ligarColaborador(CTX, { vinculo: 7001, cargo, centroCusto: 9521, desligado: false });
     const versao = (await svc.ficha(s, cargo)).cargo.versao;
     const e = await erro(svc.excluir(s, { alvo: 'cargo', id: cargo, versao, motivo: MOTIVO }));
     expect(e.getStatus()).toBe(409);
     expect(String(e.extras['codigo'])).toMatch(/-com-vinculos$/);
     expect(e.extras['bloqueios']?.length).toBeGreaterThanOrEqual(2);
     expect(e.detalhe).toMatch(/inative/);
-    expect(porta.exclusoes('pc')).toHaveLength(0);
+    expect(porta.exclusoes(CTX.cliente)).toHaveLength(0);
     // A oferta: inativar com motivo (o histórico fica); a ocupação continua contada.
     await svc.situacao(s, { alvo: 'cargo', id: cargo, versao, ativo: false, motivo: MOTIVO });
     const f = await svc.ficha(s, cargo);
@@ -248,7 +258,7 @@ describe('W0-06 parte 4: cargos e salários (serviço)', () => {
     const versao = (await svc.ficha(s, cargo)).cargo.versao;
     await svc.excluir(s, { alvo: 'cargo', id: cargo, versao, motivo: MOTIVO });
     expect((await svc.lista(s)).cargos).toHaveLength(0);
-    expect(porta.exclusoes('pc')).toMatchObject([{ id: cargo, motivo: MOTIVO, por: 'SINT.RH' }]);
+    expect(porta.exclusoes(CTX.cliente)).toMatchObject([{ id: cargo, motivo: MOTIVO, por: 'SINT.RH' }]);
     expect((await erro(svc.ficha(s, cargo))).getStatus()).toBe(404);
   });
 

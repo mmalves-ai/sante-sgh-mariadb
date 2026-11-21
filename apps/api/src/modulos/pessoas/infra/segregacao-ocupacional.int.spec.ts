@@ -1,23 +1,27 @@
 // Regra 16 do M52 (cap-07 §7.1.4): o prontuário ocupacional fica separado do PEP. Prova em três camadas:
-//   1. no banco da cópia: nenhum objeto do outro sistema (visão, trigger, procedure) depende das tabelas do SESMT, e o
-//      papel da aplicação só lê e inclui no prontuário ocupacional e nas vacinas (nem UPDATE nem DELETE);
-//   2. no catálogo de permissões: nenhuma opção do outro sistema que dá permissão do PEP dá permissão do SESMT, e
+//   1. no banco do cliente: nenhum gatilho nem visão depende das tabelas do SESMT (a regra fica no domínio);
+//   2. no catálogo de permissões: nenhuma opção de origem que dá permissão do PEP dá permissão do SESMT, e
 //      vice-versa (quem tem só o PEP não abre o SESMT; o SESMT não abre o PEP);
-//   3. no código: nenhum repositório nem módulo do PEP lê SGH_PES_*, e o módulo do SESMT não importa o PEP.
+//   3. no código: nenhum módulo do PEP cita as tabelas do SESMT, e o módulo do SESMT não importa o PEP.
 // A leitura auditada como dado de saúde está no teste HTTP (`sesmt.spec.ts`: `pessoas.ocupacional.lido`).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { CATALOGO_DECLARADO, PERMISSOES_PESSOAS_M52_F5 } from '@sgh/contratos';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AmbienteM27, ambienteM27, NA_COPIA } from '../../acesso/aplicacao/copia.spec-util.js';
+import { afterAll, describe, expect, it } from 'vitest';
+import { NucleoProprio } from '@sgh/nucleo';
+
+const CLIENTE_O3 = 'f22_o3';
+const SEM_BANCO_O3 = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 const TABELAS = [
-  'SGH_PES_OCUPACIONAL',
-  'SGH_PES_VACINA',
-  'SGH_PES_ACIDENTE',
-  'SGH_PES_ACID_SOROLOGIA',
-  'SGH_PES_RISCO_FUNCAO',
-  'SGH_PES_EPI_ENTREGA',
+  'aso',
+  'exame_ocupacional',
+  'vacina_colaborador',
+  'comunicacao_acidente',
+  'exposicao_biologica',
+  'risco_funcao',
+  'epi_funcao',
+  'entrega_epi',
 ];
 const raiz = resolve(import.meta.dirname, '../../../../../..');
 
@@ -44,14 +48,16 @@ describe('segregação do prontuário ocupacional (regra 16)', () => {
     }
   });
 
-  it('código: o PEP não lê SGH_PES_* e o SESMT não importa o PEP', () => {
+  it('código: o PEP não lê as tabelas do SESMT e o SESMT não importa o PEP', () => {
     const pep = [
-      ...arquivos(join(raiz, 'packages/legado/src/pep')),
       ...arquivos(join(raiz, 'apps/api/src/modulos/pep')),
       ...arquivos(join(raiz, 'apps/web/src/modulos/pep')),
     ];
     expect(pep.length).toBeGreaterThan(10);
-    for (const f of pep) expect(readFileSync(f, 'utf8'), f).not.toMatch(/SGH_PES_|pessoas\/sesmt|sesmt\//);
+    for (const f of pep)
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(
+        /\b(aso|exame_ocupacional|vacina_colaborador|exposicao_biologica|entrega_epi)\b|pessoas\/sesmt|sesmt\//,
+      );
     const sesmt = [
       ...arquivos(join(raiz, 'apps/api/src/modulos/pessoas/sesmt')),
       ...arquivos(join(raiz, 'apps/web/src/modulos/pessoas/sesmt')),
@@ -59,50 +65,42 @@ describe('segregação do prontuário ocupacional (regra 16)', () => {
     for (const f of sesmt) expect(readFileSync(f, 'utf8'), f).not.toMatch(/from '[./]*\/?pep\/|modulos\/pep/);
   });
 
-  describe.skipIf(!NA_COPIA)('na cópia', () => {
-    let a: AmbienteM27;
-    beforeAll(async () => {
-      a = await ambienteM27();
-    }, 900_000);
+  describe.skipIf(SEM_BANCO_O3)('no banco do cliente (f22_o3)', () => {
+    const nucleo = new NucleoProprio();
     afterAll(async () => {
-      await a?.nucleo.encerrar();
+      await nucleo.encerrar();
     });
 
-    it('nenhum objeto do outro sistema depende das tabelas do SESMT; o papel só lê e inclui no prontuário', async () => {
-      const r = await a.nucleo.lerSomente({ ...a.c, traceId: 'int-m525-segregacao' }, async (l) => {
-        const lista = TABELAS.map(() => '?').join(', ');
-        const [dep] = await l.consultar(
-          `SELECT COUNT(*) N FROM RDB$DEPENDENCIES WHERE RDB$DEPENDED_ON_NAME IN (${lista})
-             AND RDB$DEPENDENT_NAME NOT STARTING WITH 'SGH_'
-             AND RDB$DEPENDENT_NAME NOT IN (SELECT RDB$TRIGGER_NAME FROM RDB$TRIGGERS WHERE RDB$RELATION_NAME IN (${lista}))`,
-          [...TABELAS, ...TABELAS],
-          { teto: 1 },
-        );
-        const [existem] = await l.consultar(
-          `SELECT COUNT(*) N FROM RDB$RELATIONS WHERE RDB$RELATION_NAME IN (${lista})`,
-          TABELAS,
-          { teto: 1 },
-        );
-        const privs = await l.consultar(
-          `SELECT TRIM(RDB$RELATION_NAME) T, RDB$PRIVILEGE P FROM RDB$USER_PRIVILEGES
-             WHERE RDB$USER = 'SGH_APLICACAO' AND RDB$RELATION_NAME IN ('SGH_PES_OCUPACIONAL', 'SGH_PES_VACINA')`,
-          [],
-          { teto: 50 },
-        );
-        return {
-          dependentes: Number(dep?.['N'] ?? -1),
-          existem: Number(existem?.['N'] ?? 0),
-          privilegios: [...new Set(privs.map((x) => `${String(x['T'])}:${String(x['P']).trim()}`))].sort(),
-        };
-      });
+    it('nenhum gatilho nem visão do banco depende das tabelas do SESMT (regra 2 e regra 16)', async () => {
+      const r = await nucleo.lerSomente(
+        { cliente: CLIENTE_O3, correlacao: 'int-l0310-segregacao' },
+        async (l) => {
+          const lista = TABELAS.map(() => '?').join(', ');
+          const [gatilhos] = await l.consultar<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM information_schema.triggers
+            WHERE trigger_schema = DATABASE() AND event_object_table IN (${lista})`,
+            TABELAS,
+          );
+          const visoes = await l.consultar<{ nome: string; definicao: string }>(
+            `SELECT table_name AS nome, view_definition AS definicao FROM information_schema.views WHERE table_schema = DATABASE()`,
+            [],
+          );
+          const [existem] = await l.consultar<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN (${lista})`,
+            TABELAS,
+          );
+          return {
+            gatilhos: Number(gatilhos?.n ?? -1),
+            existem: Number(existem?.n ?? 0),
+            visoes: visoes
+              .filter((v) => TABELAS.some((t) => new RegExp(`\\b${t}\\b`).test(String(v.definicao))))
+              .map((v) => v.nome),
+          };
+        },
+      );
       expect(r.existem).toBe(TABELAS.length);
-      expect(r.dependentes).toBe(0);
-      expect(r.privilegios).toEqual([
-        'SGH_PES_OCUPACIONAL:I',
-        'SGH_PES_OCUPACIONAL:S',
-        'SGH_PES_VACINA:I',
-        'SGH_PES_VACINA:S',
-      ]);
-    }, 900_000);
+      expect(r.gatilhos).toBe(0);
+      expect(r.visoes).toEqual([]);
+    }, 60_000);
   });
 });

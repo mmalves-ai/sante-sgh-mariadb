@@ -1,0 +1,45 @@
+{
+ "registrar": [
+  "suprimentos: () => import('./suprimentos/modulo.js'),"
+ ],
+ "fecho_tsconfig": [
+  "src/modulos/suprimentos/apoios.ts",
+  "src/modulos/suprimentos/manipulacao-porta-memoria.ts",
+  "src/modulos/suprimentos/manipulacao-porta-propria.ts",
+  "src/modulos/suprimentos/manipulacao-porta.ts",
+  "src/modulos/suprimentos/manipulacao.controller.ts",
+  "src/modulos/suprimentos/massa-propria.spec-util.ts",
+  "src/modulos/suprimentos/modulo.ts",
+  "src/modulos/suprimentos/nfe-xml.ts",
+  "src/modulos/suprimentos/operacoes.ts",
+  "src/modulos/suprimentos/opme-porta-memoria.ts",
+  "src/modulos/suprimentos/opme-porta-propria.int.spec.ts",
+  "src/modulos/suprimentos/opme-porta-propria.ts",
+  "src/modulos/suprimentos/opme-porta.ts",
+  "src/modulos/suprimentos/opme.controller.ts",
+  "src/modulos/suprimentos/opme.spec.ts",
+  "src/modulos/suprimentos/porta-memoria.ts",
+  "src/modulos/suprimentos/porta-propria.int.spec.ts",
+  "src/modulos/suprimentos/porta-propria.ts",
+  "src/modulos/suprimentos/porta.ts",
+  "src/modulos/suprimentos/public-api.ts",
+  "src/modulos/suprimentos/servico.ts",
+  "src/modulos/suprimentos/suprimentos-http.spec-util.ts",
+  "src/modulos/suprimentos/suprimentos.controller.ts",
+  "src/modulos/suprimentos/suprimentos.spec.ts"
+ ],
+ "pedidos": [
+  "REGISTRO: incluir suprimentos em REGISTRO_MODULOS (apps/api/src/modulos/registro.ts), em ordem alfabética. O modulo.ts liga SuprimentosController sempre e OpmeController/ManipulacaoController só com 'cirurgia' em API_MODULOS (injetam PORTA_CIRURGIA); exporta PORTA_SUPRIMENTOS, PORTA_OPME e PORTA_MANIPULACAO. Consignado, contrato e licitação (outros lotes) devem entrar no mesmo modulo.ts (controllers + PORTA_*) pelo integrador.",
+  "criar_cliente: semear a sequencia_negocio 'inventario_estoque' por estabelecimento (prefixo 'INV-'); sem ela abrirInventario responde 409 'Numeração indisponível'. O teste semeia com garantirSequencia.",
+  "CONVIVÊNCIA REMOVIDA (ADR 0003): apagados onda3.ts e onda3.spec.ts (painel M41 'documentos do novo', conferência numérica e regra 1) e as rotas /api/suprimentos/onda3/*; os métodos onda3* saíram da PortaSuprimentos; o SuprimentosController não injeta mais CRITERIO_LIGAR_SETOR (regraFarmacia/mapaRegra1 do config ficam sem o gancho da farmácia: o lote do config deve tirar esses ganchos). Os contratos suprimentos/onda3.ts e regras/onda3.ts ficam sem uso: remover no lote de contratos.",
+  "public-api.ts (deste lote): consignado agora exporta de consignado-porta-propria.js; as linhas de contrato-porta-legado.js e licitacao-porta-legado.js foram tiradas (o pacote não existe; quebrava o opme.spec pelo fecho de imports). Os lotes de contrato e licitação: pedir ao integrador a linha 'export { portaXIndisponivel, PortaXPropria } from ./x-porta-propria.js'. app.module.ts (desmontagem) ainda importa portaSuprimentosLegado/portaOpmeLegado/portaManipulacaoLegado.",
+  "Memória (dev/ci): o estado é por estabelecimento (chaveMemoria: id do estabelecimento) e o login vem do ContextoGravacao (loginDaOperacao); contaDoPaciente(null, atendimento) lê o único estado (testes HTTP).",
+  "PORTA PENDENTE (não é DDL; as tabelas existem em 11_SUP e 06_PEP): leituras ainda 409 modelo-pendente em LEITURAS_SUPRIMENTOS_PENDENTES (porta-propria.ts): buscarItens, posicaoMensal, fichaItem, documentos, documento, requisicoes, rastreio, lotesDoPaciente, consumo, consumoMensalPorItem, emPedidoPorItem, pedidos, pedido, historicoCompras, fechamentos, recalculos, parametros, escopo, usuarios, fornecedores, terceiros, prestadores, kits, kit, kitsPadrao, estoqueInicial, transferencias, envio, pontosPedido. Abrir lote próprio (onda seguinte) com tipos de negócio por id: local_estoque_usuario, empresa_fornecedora, kit_rastreavel, requisicao_material, pedido_compra, saldo_estoque_mensal, documento_estoque/_item, movimento_estoque.",
+  "PORTA PENDENTE (gravações diretas): aprovarPedido, enviarTransferencia, cancelarTransferencia, registrarDivergencia, conferirCarrinho, definirPontoPedido, autorizarRequisicao (GRAVACOES_SUPRIMENTOS_PENDENTES).",
+  "PORTA PENDENTE (executor, OPERACOES_SUPRIMENTOS_PENDENTES em operacoes.ts): registrarSaida, registrarDevolucao, requisitarMaterial, transferir, registrarEntradaNF, criarPedido, registrarProposta, definirVencedorCotacao, registrarMovimentoDireto, registrarBalanco, fecharMes, reabrirMes, reporKitRastreavel, desconsolidarDocumento, corrigirValidadeLote. Lote próprio: documento_estoque + documento_estoque_item + movimento_estoque + saldo_estoque/saldo_lote, custo médio no domínio (nunca gatilho). O registrarBalanco fecha o ciclo do inventário aprovado (documento de acerto: exige motivo_ajuste_estoque_id e tipo_movimento_estoque_id no modelo).",
+  "PORTA PENDENTE (OPME e manipulação): OPME_PENDENTE em opme-porta-propria.ts (solicitação e etapas: solicitacao_opme/_item; consumo e devolução: consumo_opme + movimento_estoque; listagens, rastreio reverso, fornecedores, itens com saldo, itens da conta) e MANIPULACAO_PENDENTE em manipulacao-porta-propria.ts (itensAManipular, ordens, ordem, vinculos, abertura e conferência: ordem_manipulacao, conferencia_manipulacao; a baixa do insumo depende da saída). A avaliação farmacêutica do item (avaliacao) já lê avaliacao_farmaceutica/_item (06_PEP): o pedido de DDL avaliacao_farmaceutica_item foi RETIRADO (a tabela existe).",
+  "CONTRATO (packages/contratos, lote de contratos): esquemaRegistrarContagem sem lote: o inventário com item que controla lote grava inventario_estoque.controla_lote = TRUE, mas a contagem por lote (inventario_estoque_lote, quantidade_contada NOT NULL) fica indisponível até o contrato trazer os lotes contados. esquemaRegistrarContagem/esquemaDecidirInventario sem versaoVista: a porta trava e lê a versão na própria transação (FOR UPDATE + alterar com versão), então não há conflito de versão vindo da tela; pedir a versão vista para recusar decisão sobre tela velha.",
+  "CONTRATO (exames/apoio-gravacao.ts, outro lote): destinoDoContrato ainda devolve 'legado' para o banco; trocar o enum do contrato para 'banco' (ADR 0003).",
+  "DDL (convenções ADR 0002, opcional): o prazo de reposição do ponto de pedido existe só em insumo.prazo_reposicao_dias (rede inteira); se o prazo for por local, coluna saldo_estoque.prazo_reposicao_dias SMALLINT UNSIGNED NULL."
+ ]
+}

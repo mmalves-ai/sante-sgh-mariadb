@@ -8,6 +8,7 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloCirurgia } from './modulo.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
@@ -15,6 +16,7 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/configuracao-fonte.js';
 import { PortaAnestesiaMemoria } from './anestesia-porta-memoria.js';
+import { PortaBlocoSeguroMemoria } from './bloco-seguro-porta-memoria.js';
 import { PortaCirurgiaMemoria } from './porta-memoria.js';
 
 export { SENHA };
@@ -27,15 +29,16 @@ export interface Sessao {
 }
 
 export async function montarAppAnestesia(o: { semChave?: boolean } = {}) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'cirurgia' };
   const trilha = new RegistradorTrilhaMemoria();
   const cadastro = new PortaCadastroMemoria();
   const cirurgia = new PortaCirurgiaMemoria(
     null,
-    (c, ids) => cadastro.lerPacientes(c, ids),
+    (c, ids) => cadastro.lerPacientes({ ...c, rede: '', hospital: '' }, ids),
     () => ({ hoje: HOJE, hhmm: '0900' }),
   );
   const anestesia = new PortaAnestesiaMemoria(cirurgia);
+  const blocoSeguro = new PortaBlocoSeguroMemoria(cirurgia);
   const configuracao = o.semChave
     ? fonteConfiguracaoMemoria(trilha, {
         chavesIniciais: () => chavesIniciaisSinteticas().filter((c) => c.chave !== 'bloco.ficha'),
@@ -45,10 +48,17 @@ export async function montarAppAnestesia(o: { semChave?: boolean } = {}) {
     : undefined;
   const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    cirurgia,
-    anestesia,
-    ...(configuracao ? { configuracao } : {}),
+    registro: {
+      cirurgia: async () => ({
+        modulo: (ctx) =>
+          moduloCirurgia(ctx, {
+            cirurgia,
+            anestesia,
+            blocoSeguro,
+            ...(configuracao ? { configuracao } : {}),
+          }),
+      }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

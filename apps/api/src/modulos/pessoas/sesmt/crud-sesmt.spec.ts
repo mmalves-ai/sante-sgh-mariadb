@@ -2,12 +2,15 @@
 // (o original fica guardado; o retificador leva indRetif 2 com o recibo; a anulação gera o S-3000) e cancelamento da
 // entrega de EPI. Portas em memória (nada conecta a banco; nada sai: a transmissão fica desligada); dados sintéticos.
 import type { DadosCatEntrada, FichaEsocialVinculo } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  type PrerequisitoRecurso,
+  fonteConfiguracaoMemoria,
+} from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEsocialMemoria } from '../esocial/porta-esocial-memoria.js';
 import { ServicoEsocial } from '../esocial/servico-esocial.js';
@@ -18,8 +21,9 @@ import type { PortaRubricas } from '../rubricas/porta-rubricas.js';
 import { ServicoPessoas } from '../servico.js';
 import { PortaSesmtMemoria } from './porta-sesmt-memoria.js';
 import { ServicoSesmt } from './servico-sesmt.js';
+import { ctxTeste } from './contexto-teste.spec-util.js';
 
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -32,7 +36,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -42,7 +46,7 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
   alteradoEm: '2026-10-25T10:00:00',
 });
 const cifra = new CifraCpf(Buffer.alloc(32, 9));
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
+const CTX = ctxTeste('pc', 'rede-sintetica');
 let k = 0;
 const sessao = (): SessaoCadastro => ({
   req: {
@@ -288,7 +292,7 @@ describe('W0-06: retificação e anulação do acidente e da CAT (S-2210 na fila
     // O original continua guardado, aceito, até o retorno do retificador.
     expect((await m.esocial.detalheEvento(m.s, original)).evento.situacao).toBe('aceito');
     // A trilha do valor anterior: antes e depois.
-    const corr = await m.porta.correcoes(CTX, 'SGH_PES_ACIDENTE', [id]);
+    const corr = await m.porta.correcoes(CTX, 'comunicacao_acidente', [id]);
     expect(corr[0]).toMatchObject({
       operacao: 'acidente.retificado',
       motivo: MOTIVO,
@@ -405,7 +409,7 @@ describe('W0-06: retificação e anulação do acidente e da CAT (S-2210 na fila
       'cat-com-pendencia',
     );
     expect((await m.sesmt.acidente(m.s, id)).versao).toBe(ac.versao);
-    expect(await m.porta.correcoes(CTX, 'SGH_PES_ACIDENTE', [id])).toEqual([]);
+    expect(await m.porta.correcoes(CTX, 'comunicacao_acidente', [id])).toEqual([]);
     // Versão velha: desatualizado.
     expect(await codigo(m.sesmt.retificarAcidente(m.s, { ...base, versao: ac.versao - 1 }))).toBe(
       'desatualizado',
@@ -438,7 +442,7 @@ describe('W0-06: retificação e anulação do acidente e da CAT (S-2210 na fila
       encerradoEm: e4.encerradoEm,
       anuladoPor: 'SINT.SESMT2',
     });
-    const corr4 = await m.porta.correcoes(CTX, 'SGH_PES_ACIDENTE', [id4]);
+    const corr4 = await m.porta.correcoes(CTX, 'comunicacao_acidente', [id4]);
     expect(corr4[0]).toMatchObject({
       operacao: 'acidente.anulado',
       por: 'SINT.SESMT2',
@@ -487,7 +491,7 @@ describe('W0-06: cancelamento da entrega de EPI', () => {
       'ja-cancelada',
     );
     expect(await codigo(m.sesmt.assinarEpi(m.s, { entrega: id, conferida: true }))).toBe('ja-cancelada');
-    expect((await m.porta.correcoes(CTX, 'SGH_PES_EPI_ENTREGA', [id]))[0]).toMatchObject({
+    expect((await m.porta.correcoes(CTX, 'entrega_epi', [id]))[0]).toMatchObject({
       operacao: 'epi.cancelado',
       antes: { cancelado: false, assinatura: 'pendente' },
     });

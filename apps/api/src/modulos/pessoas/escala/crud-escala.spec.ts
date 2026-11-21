@@ -2,7 +2,7 @@
 // regime, desistência do ajuste de ponto e situação da regra do banco, sobre as portas EM MEMÓRIA (dados SINTÉTICOS;
 // nada conecta a banco). Recusa de órfão (D-CRUD-ORFAOS): escala em rascunho com troca ou realizado ligado devolve 409
 // com a contagem; vigência usada em ponto fechado recusa; só o solicitante desiste do ajuste.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/public-api.js';
 import { EVENTO_ESCALA_ALTERADA } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -13,11 +13,13 @@ import { CifraCpf } from '../cifra-cpf.js';
 import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js';
 import { PortaPontoMemoria } from '../ponto/porta-ponto-memoria.js';
 import { ServicoPessoas } from '../servico.js';
-import { PortaEscalaMemoria } from './porta-escala-memoria.js';
+import { CONTEXTO_SINTETICO, PortaEscalaMemoria } from './porta-escala-memoria.js';
 import { ServicoEscala } from './servico-escala.js';
 
+const CTX_PC = { ...CONTEXTO_SINTETICO, rede: 'rede-sintetica', hospital: 'pc' };
+
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -30,7 +32,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -67,7 +69,7 @@ function sessao(login = 'SINT.ESCALA'): SessaoCadastro {
     hospital: 'pc',
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: { ...CONTEXTO_SINTETICO, rede: 'rede-sintetica', hospital: 'pc' },
     pode: () => true,
   };
 }
@@ -148,7 +150,7 @@ describe('escala em rascunho: exclusão física só sem vínculo, com retrato (W
     expect((await recusa(m.servico.grade(sessao(), m.escala))).status).toBe(404);
     const fotos = m.porta.retratosDe('pc');
     expect(fotos.map((f) => f.tabela).sort()).toEqual(
-      ['SGH_PES_ESCALA', 'SGH_PES_ESCALA_EVENTO', 'SGH_PES_ESCALA_EVENTO', 'SGH_PES_PLANTAO'].sort(),
+      ['escala', 'publicacao_escala', 'publicacao_escala', 'plantao'].sort(),
     );
     expect(new Set(fotos.map((f) => f.motivo))).toEqual(new Set([MOTIVO]));
     expect(m.trilha.eventos.some((l) => l.evento === 'pessoas.escala.excluida')).toBe(true);
@@ -300,7 +302,7 @@ describe('vigência do regime: anulação com motivo (W0-06)', () => {
       vigencia: errada,
       motivo: 'Regime lançado no colaborador errado',
     });
-    expect(await m.porta.vigencias({ rede: 'rede-sintetica', hospital: 'pc' }, [v])).toEqual([]);
+    expect(await m.porta.vigencias(CTX_PC, [v])).toEqual([]);
     await m.servico.atribuirRegime(sessao(), { vinculo: v, regime: r2, desde: '2026-10-01' });
     const hist = await m.servico.vigencias(sessao(), v);
     expect(hist.map((x) => [x.codigo, x.anulada?.motivo ?? null])).toEqual([
@@ -323,7 +325,7 @@ describe('vigência do regime: anulação com motivo (W0-06)', () => {
     const r1 = (await m.servico.incluirRegime(sessao(), regime)).id;
     const vig = (await m.servico.atribuirRegime(sessao(), { vinculo: v, regime: r1, desde: '2026-10-01' }))
       .id;
-    const ctx = { rede: 'rede-sintetica', hospital: 'pc' };
+    const ctx = CTX_PC;
     // O fechamento do ponto entra logo antes de a transação da anulação abrir (depois das leituras do serviço).
     const original = m.porta.gravarSgh.bind(m.porta);
     let primeira = true;
@@ -362,7 +364,7 @@ describe('vigência do regime: anulação com motivo (W0-06)', () => {
     const r1 = (await m.servico.incluirRegime(sessao(), regime)).id;
     const vig = (await m.servico.atribuirRegime(sessao(), { vinculo: v, regime: r1, desde: '2026-10-01' }))
       .id;
-    const ctx = { rede: 'rede-sintetica', hospital: 'pc' };
+    const ctx = CTX_PC;
     const fechado = await m.ponto.gravarSgh(
       ctx,
       () => ({}) as never,

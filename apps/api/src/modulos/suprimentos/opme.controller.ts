@@ -15,7 +15,7 @@
 //   GET  /api/suprimentos/opme/rastreio?item=&lote=&serie=&registroAnvisa=  o rastreio reverso (lote, série ou registro
 //                                                               Anvisa → pacientes; as saídas do lote no estoque; regra 8)
 // O consumo e a devolução vão pelo EXECUTOR (o rastreio na mesma transação da saída, passo 7); a solicitação e as etapas,
-// só do novo (SGH_), com a SGH_TRILHA na mesma transação. Nasce desligado (chave `suprimentos.opme`, POL-3).
+// diretas, com a trilha na mesma transação. Nasce desligado (chave `suprimentos.opme`, POL-3).
 import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -47,7 +47,6 @@ import {
   consumoExigeExcecao,
   situacaoDepoisDaEtapa,
 } from '@sgh/dominio-suprimentos';
-import type { ConsumoOpmeLido } from '@sgh/legado';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -62,7 +61,7 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
-import { type GravadorOpme, PORTA_OPME, type PortaOpme } from './opme-porta.js';
+import { type ConsumoOpmeLeitura, type GravadorOpme, PORTA_OPME, type PortaOpme } from './opme-porta.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
 
 const E = EVENTOS_AUDITAVEIS;
@@ -235,12 +234,12 @@ export class OpmeController {
     const l = linhaTrilha(s, evento, recurso, evento, alvo);
     await this.trilha.registrar({
       evento,
-      rede: l.rede,
-      hospital: l.hospital,
-      usuario: l.usuario,
-      estacao: l.estacao ?? '',
+      rede: s.rede,
+      hospital: s.hospital,
+      usuario: s.login,
+      estacao: String((l.dadosDepois as { estacao?: unknown } | undefined)?.estacao ?? ''),
       correlacao: l.correlacao ?? '',
-      recurso: l.recurso ?? recurso,
+      recurso,
       resultado: 'sucesso',
       tabelaAlvo: alvo.tabela,
       idAlvo: alvo.id,
@@ -278,7 +277,7 @@ export class OpmeController {
   @Auditar(E.opmeConsumoLido.codigo)
   async cirurgias(@Query('data') data: string | undefined, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUP_OPME_SOLIC' };
+    req.sghAlvo = { tabelaAlvo: 'solicitacao_opme' };
     const agora = await this.agora(s);
     const dia = data && DATA.test(data) ? data : agora.slice(0, 10);
     const { itens, truncado } = await this.cirurgia.agendamentos(s.porta, dia, dia, null);
@@ -372,9 +371,7 @@ export class OpmeController {
   @Post()
   @HttpCode(201)
   @Permissao(P.solicitar)
-  @AuditadoNoHandler(
-    'suprimentos.solicitarOpme: SGH_SUP_OPME_SOLIC e a etapa com a SGH_TRILHA na mesma transação',
-  )
+  @AuditadoNoHandler('suprimentos.solicitarOpme: solicitacao_opme e a etapa com a trilha na mesma transação')
   async solicitar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoOpme> {
     const s = sessaoDe(req);
     const e = corpo(esquemaSolicitarOpme, b);
@@ -405,7 +402,7 @@ export class OpmeController {
       E.opmeSolicitado.codigo,
       P.solicitar,
       (y: { id: number }) => ({
-        tabela: 'SGH_SUP_OPME_SOLIC',
+        tabela: 'solicitacao_opme',
         id: String(y.id),
         paciente: estado?.idPaciente ?? null,
         chave: `${e.agendamento}:${e.item}`,
@@ -439,7 +436,7 @@ export class OpmeController {
   @HttpCode(201)
   @Permissao(P.avancar)
   @AuditadoNoHandler(
-    'suprimentos.avancarEtapaOpme: SGH_SUP_OPME_ETAPA e a solicitação com a SGH_TRILHA na mesma transação',
+    'suprimentos.avancarEtapaOpme: solicitacao_opme_item e a solicitação com a trilha na mesma transação',
   )
   async avancar(
     @Param('id') id: string,
@@ -475,7 +472,7 @@ export class OpmeController {
       E.opmeEtapa.codigo,
       e.etapa === 'autorizacao' || e.etapa === 'negativa' ? P.autorizar : P.avancar,
       (y: { etapa: number }) => ({
-        tabela: 'SGH_SUP_OPME_ETAPA',
+        tabela: 'solicitacao_opme_item',
         id: String(y.etapa),
         chave: `${e.solicitacao}:${e.etapa}`,
       }),
@@ -568,7 +565,7 @@ export class OpmeController {
     ]);
     req.sghAlvo = {
       ...(estado?.idPaciente ? { paciente: estado.idPaciente } : {}),
-      tabelaAlvo: 'SGH_SUP_OPME_RASTREIO',
+      tabelaAlvo: 'consumo_opme',
     };
     const cirurgiao = estado?.cirurgiao ?? a.pares['ID_CRM'] ?? null;
     const nomes = cirurgiao
@@ -606,7 +603,7 @@ export class OpmeController {
     return l ?? locais[0]?.codigo ?? null;
   }
 
-  private consumoPublico(c: ConsumoOpmeLido): ConsumoOpme {
+  private consumoPublico(c: ConsumoOpmeLeitura): ConsumoOpme {
     const { paciente: _p, cirurgiao: _c, fornecedor: _f, ...resto } = c;
     void _p;
     void _c;
@@ -618,7 +615,7 @@ export class OpmeController {
   @HttpCode(201)
   @Permissao(P.consumir)
   @AuditadoNoHandler(
-    'suprimentos.registrarSaida pelo executor com o rastreio do OPME (SGH_SUP_OPME_RASTREIO) na mesma transação',
+    'suprimentos.registrarSaida pelo executor com o rastreio do OPME (consumo_opme) na mesma transação',
   )
   async consumir(
     @Param('agenda') agenda: string,
@@ -712,13 +709,13 @@ export class OpmeController {
         },
       },
       'OPME consumido.',
-      { idempotencyKey: chave },
+      { chaveIdempotencia: chave },
     );
     const c = await this.porta.consumoPelaChave(s.porta, chave);
     if (!c)
       throw new ErroProblema('indisponivel', 503, 'Consumo não relido', 'O consumo gravado não foi relido.');
     const alvo = {
-      tabela: 'SGH_SUP_OPME_RASTREIO',
+      tabela: 'consumo_opme',
       id: String(c.id),
       paciente: estado?.idPaciente ?? null,
       chave: `${id}:${e.item}`,
@@ -730,7 +727,7 @@ export class OpmeController {
 
   private async registrado(
     s: SessaoCadastro,
-    c: ConsumoOpmeLido,
+    c: ConsumoOpmeLeitura,
     paciente: string,
     repetida: boolean,
     tuss?: string | null,
@@ -763,7 +760,7 @@ export class OpmeController {
         'Consumo não encontrado',
         'O consumo de OPME não existe.',
       );
-    req.sghAlvo = { ...(c.paciente ? { paciente: c.paciente } : {}), tabelaAlvo: 'SGH_SUP_OPME_RASTREIO' };
+    req.sghAlvo = { ...(c.paciente ? { paciente: c.paciente } : {}), tabelaAlvo: 'consumo_opme' };
     const a = await this.cirurgia.agendamento(s.porta, c.agendamento);
     return (await this.registrado(s, c, a?.paciente ?? '', true)).etiqueta;
   }
@@ -807,10 +804,10 @@ export class OpmeController {
         opme: { consumo: c.id, motivo: e.motivo, chave },
       },
       'OPME devolvido ao estoque.',
-      { idempotencyKey: chave },
+      { chaveIdempotencia: chave },
     );
     await this.registrarTrilha(s, E.opmeDevolvido.codigo, P.consumir, {
-      tabela: 'SGH_SUP_OPME_RASTREIO',
+      tabela: 'consumo_opme',
       id: String(c.id),
       paciente: c.paciente,
       chave: `${id}:${c.item}`,
@@ -887,7 +884,7 @@ export class OpmeController {
       serie: serie?.trim() || null,
       registroAnvisa: registroAnvisa?.trim() || null,
     });
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUP_OPME_RASTREIO' };
+    req.sghAlvo = { tabelaAlvo: 'consumo_opme' };
     const r = await this.porta.rastreioReverso(s.porta, f);
     return { item: f.item, lote: f.lote, serie: f.serie, registroAnvisa: f.registroAnvisa, ...r };
   }

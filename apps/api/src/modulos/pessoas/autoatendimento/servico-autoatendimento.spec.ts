@@ -3,7 +3,6 @@
 // solicitante nem do próprio vínculo; a aprovação grava o efeito na mesma transação (férias programadas, ajustes
 // aprovados no ponto, correção do nome com o valor anterior) e, se o efeito recusar, a solicitação continua pendente;
 // o atestado com o CID restrito e a trilha de acesso. Portas EM MEMÓRIA (nada conecta a banco); dados SINTÉTICOS.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -20,6 +19,10 @@ import type { PortaRubricas } from '../rubricas/porta-rubricas.js';
 import { ServicoPessoas } from '../servico.js';
 import { PortaAutoatendimentoMemoria } from './porta-autoatendimento-memoria.js';
 import { PERMISSOES_AUTOATENDIMENTO, ServicoAutoatendimento } from './servico-autoatendimento.js';
+
+type OpcoesConfiguracao = NonNullable<Parameters<typeof fonteConfiguracaoMemoria>[1]>;
+type ChaveGravada = ReturnType<NonNullable<OpcoesConfiguracao['chavesIniciais']>>[number];
+type PrerequisitoGravado = ReturnType<NonNullable<OpcoesConfiguracao['prerequisitosIniciais']>>[number];
 
 const C = PESSOAS_SINTETICAS_M52;
 const COLAB = C.ponto.login;
@@ -58,7 +61,14 @@ function sessao(login = 'SINT.RH', pode: (p: string) => boolean = () => true): S
     hospital: 'pc',
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: {
+      cliente: 'sintetico',
+      estabelecimento: 1,
+      usuario: null,
+      correlacao: 'teste-l0302',
+      rede: 'rede-sintetica',
+      hospital: 'pc',
+    },
     pode,
   };
 }

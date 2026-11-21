@@ -64,7 +64,7 @@ import {
 import { PORTA_REALIZADO, type PortaRealizado } from './porta-realizado.js';
 import { ServicoRealizado } from './servico-realizado.js';
 
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha_auditoria na mesma transação`;
 
 @Controller('pessoas/realizado')
 export class RealizadoController {
@@ -103,7 +103,7 @@ export class RealizadoController {
   @Post('plantoes/:id')
   @HttpCode(200)
   @Permissao('pessoas.realizado.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_PLANTAO_REALIZADO'))
+  @AuditadoNoHandler(NA_TABELA('plantao'))
   registrar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -118,7 +118,7 @@ export class RealizadoController {
   @Post(':id/decisao')
   @HttpCode(200)
   @Permissao('pessoas.realizado.aprovar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_PLANTAO_REALIZADO e SGH_PES_PLANTAO'))
+  @AuditadoNoHandler(NA_TABELA('plantao'))
   decidir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -133,9 +133,7 @@ export class RealizadoController {
   @Post(':id/estorno')
   @HttpCode(200)
   @Permissao('pessoas.realizado.aprovar')
-  @AuditadoNoHandler(
-    NA_TABELA('SGH_PES_PLANTAO_REALIZADO e SGH_PES_PLANTAO (o lançamento negativo pelo executor)'),
-  )
+  @AuditadoNoHandler(NA_TABELA('plantao (o lançamento negativo pelo executor)'))
   estornar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -156,7 +154,7 @@ export class RealizadoController {
   @Post('tarifas')
   @HttpCode(200)
   @Permissao('pessoas.realizado.lancar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TARIFA_PLANTAO'))
+  @AuditadoNoHandler(NA_TABELA('valor_hora_plantao'))
   incluirTarifa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoF6> {
     return this.servico.incluirTarifa(sessaoDe(req), corpo(esquemaTarifaPlantao, b));
   }
@@ -164,7 +162,7 @@ export class RealizadoController {
   @Post('tarifas/:id/encerramento')
   @HttpCode(200)
   @Permissao('pessoas.realizado.lancar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TARIFA_PLANTAO'))
+  @AuditadoNoHandler(NA_TABELA('valor_hora_plantao'))
   encerrarTarifa(
     @Param('id') id: string,
     @Body() b: unknown,

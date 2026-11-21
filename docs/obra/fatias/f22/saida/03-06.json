@@ -1,0 +1,137 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/folha/tipos-folha.ts",
+    "src/modulos/pessoas/folha/tipos-folha.spec.ts",
+    "src/modulos/pessoas/folha/porta-folha.ts",
+    "src/modulos/pessoas/folha/porta-calculo.ts",
+    "src/modulos/pessoas/folha/porta-folha-memoria.ts",
+    "src/modulos/pessoas/folha/porta-calculo-memoria.ts",
+    "src/modulos/pessoas/folha/porta-folha-propria.ts",
+    "src/modulos/pessoas/folha/porta-calculo-propria.ts",
+    "src/modulos/pessoas/folha/porta-integracao-indisponivel.ts",
+    "src/modulos/pessoas/folha/calculo-http.spec.ts",
+    "src/modulos/pessoas/folha/calculo.controller.ts",
+    "src/modulos/pessoas/folha/documentos-calculo.spec.ts",
+    "src/modulos/pessoas/folha/documentos-calculo.ts",
+    "src/modulos/pessoas/folha/fechamento-http.spec.ts",
+    "src/modulos/pessoas/folha/fechamento.controller.ts",
+    "src/modulos/pessoas/folha/ferias-http.spec.ts",
+    "src/modulos/pessoas/folha/ferias.controller.ts",
+    "src/modulos/pessoas/folha/folha.controller.ts",
+    "src/modulos/pessoas/folha/integracao-http.spec.ts",
+    "src/modulos/pessoas/folha/integracao.controller.ts",
+    "src/modulos/pessoas/aplicacao/folha.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "lote_folha_intercambio (+ lote_folha_intercambio_resumo)",
+      "motivo": "Lotes trocados com a folha externa: sentido (exportado|recebido), lote exportado de origem, leiaute, situacao, colaboradores, soma, totais JSON, vinculos JSON (só ids), divergencias JSON, resumo, gerado_em; e o resumo por rubrica do retorno (vinculo_trabalho_id NULL, centro_custo_id NULL, rubrica, valor, vencimento). lote_folha_externa só cobre o lote importado (arquivo_id NOT NULL, identificador_externo) e não tem sentido nem leiaute.",
+      "ddl": "CREATE TABLE lote_folha_intercambio (id BIGINT UNSIGNED AUTO_INCREMENT PK, estabelecimento_id BIGINT UNSIGNED NOT NULL FK, competencia_folha_id BIGINT UNSIGNED NULL FK, competencia DATE NOT NULL CHECK(DAYOFMONTH=1), sentido VARCHAR(20) NOT NULL CHECK IN ('exportado','recebido'), lote_exportado_id BIGINT UNSIGNED NULL FK self, leiaute VARCHAR(30) NOT NULL, situacao VARCHAR(30) NOT NULL CHECK IN ('gerado','conferido','divergente','lancado','cancelado'), quantidade_colaboradores INT UNSIGNED NOT NULL, soma DECIMAL(15,2) NOT NULL, totais JSON NOT NULL, vinculos JSON NULL, divergencias JSON NULL, resumo VARCHAR(1000) NOT NULL, gerado_em DATETIME(3) NOT NULL, origem, auditoria (criado_*, alterado_*, versao, excluido_*), CHECK (sentido='recebido' OR lote_exportado_id IS NULL), CHECK (sentido='exportado' OR vinculos IS NULL)); CREATE TABLE lote_folha_intercambio_resumo (id PK, lote_folha_intercambio_id FK NOT NULL, sequencia, vinculo_trabalho_id NULL FK, centro_custo_id NULL FK, rubrica VARCHAR(30) NOT NULL, valor DECIMAL(15,2) NOT NULL, vencimento DATE NULL, auditoria, UNIQUE(lote, vinculo, rubrica))",
+      "operacoes_indisponiveis": [
+        "PortaFolha.lotes",
+        "PortaFolha.lote",
+        "PortaFolha.competenciaLancada",
+        "GravadorFolha.proximoIdLote/lote/lotesDaCompetencia/competenciaLancada/incluirLote/situacaoLote/incluirResumo/resumo"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "afastamento.motivo_cancelamento",
+      "motivo": "Motivo do cancelamento do afastamento (hoje só vai à trilha; a leitura devolve motivoCancelamento null)",
+      "ddl": "ALTER TABLE afastamento ADD COLUMN motivo_cancelamento VARCHAR(400) NULL, ADD CONSTRAINT ck_afastamento_cancelamento CHECK (situacao <> 'cancelado' OR motivo_cancelamento IS NOT NULL)"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "processamento_folha + processamento_folha_linha (ou colunas em competencia_folha/calculo_folha_item)",
+      "motivo": "O cálculo próprio registra o processamento (empresa=estabelecimento, competência, tipo, número, situação calculada|descartada, pagamento, totais JSON, fora_da_folha, tabela_legal JSON, parametros JSON, resumo, motivo) e as linhas por vínculo e PAPEL (papel, quantidade, valor, centro de custo, dias pagos). calculo_folha_item exige rubrica_id e não tem o papel; decidir com o dono se o papel vira coluna de calculo_folha_item (com de-para papel→rubrica) ou tabela própria.",
+      "operacoes_indisponiveis": [
+        "PortaCalculoFolha.processos/processo/resumoVinculos/linhasDoVinculo/processosDoVinculo/historico/itensRubricaDoProcesso",
+        "toda a gravação do cálculo (podeGravar=false com o motivo)"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "parametro_folha",
+      "motivo": "Parâmetros da folha por vigência e estabelecimento (ParametrosFolha do contrato): estabelecimento_id, vigencia_inicio, dados JSON validado, auditoria, UNIQUE(estabelecimento_id, vigencia_inicio)",
+      "operacoes_indisponiveis": [
+        "PortaCalculoFolha.parametros",
+        "GravadorCalculoFolha.parametros/incluirParametros"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "historico_salarial.adicional_escolhido",
+      "motivo": "A leitura das vigências já funciona: salário de historico_salarial e adicional do risco da função (risco_funcao) em vigor no início da vigência. Falta só registrar a escolha do empregado quando a função tem insalubridade e periculosidade (não se acumulam, CLT art. 193 §2º; hoje a porta assume a periculosidade) e o adicional que muda sem nova vigência de salário (mudança de risco no meio da vigência não aparece). A gravação da vigência segue desligada com o cálculo (processamento_folha).",
+      "ddl": "ALTER TABLE historico_salarial ADD COLUMN adicional_escolhido VARCHAR(20) NULL, ADD CONSTRAINT ck_historico_salarial_adicional CHECK (adicional_escolhido IS NULL OR adicional_escolhido IN ('insalubridade','periculosidade'))",
+      "operacoes_indisponiveis": [
+        "Alterar o salário do vínculo (GravadorCalculoFolha.incluirSalario), junto com toda gravação do cálculo"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "programacao_ferias, recibo_ferias, rescisao, parcela_decimo_terceiro (só colunas que faltam)",
+      "motivo": "As tabelas existem; faltam as colunas que ligam o registro ao vínculo e ao processamento da folha. Já lidos: rescisao/desligamento em desligados(); parcela_decimo_terceiro em adiantamentosDecimo() (vínculo pelo calculo_folha da parcela ou pelo único vínculo do colaborador no ano; ambíguo recusa 'adiantamento-sem-vinculo').",
+      "ddl": "ALTER TABLE programacao_ferias ADD COLUMN vinculo_trabalho_id BIGINT UNSIGNED NULL (FK vinculo_trabalho), ADD COLUMN dias_dobra SMALLINT UNSIGNED NOT NULL DEFAULT 0 CHECK (dias_dobra <= 30), ADD COLUMN pagamento_previsto_em DATE NULL; ALTER TABLE recibo_ferias ADD COLUMN processamento_folha_id BIGINT UNSIGNED NULL (FK processamento_folha), ADD COLUMN base_inss DECIMAL(15,2) NULL CHECK (base_inss >= 0); ALTER TABLE rescisao ADD COLUMN processamento_folha_id BIGINT UNSIGNED NULL (FK), ADD COLUMN modalidade VARCHAR(30) NULL CHECK (modalidade IN ('sem_justa_causa','justa_causa','pedido_demissao','acordo','termino_contrato','antecipada_empregador','antecipada_empregado','culpa_reciproca','rescisao_indireta','falecimento')), ADD COLUMN dias_aviso_indenizados SMALLINT UNSIGNED NOT NULL DEFAULT 0, ADD COLUMN saldo_fgts_informado BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN motivo_situacao VARCHAR(400) NULL, CHECK situacao + 'substituida'; ALTER TABLE parcela_decimo_terceiro ADD COLUMN vinculo_trabalho_id BIGINT UNSIGNED NULL (FK), UNIQUE passa a (colaborador_id, vinculo_trabalho_id, ano_referencia, parcela)",
+      "operacoes_indisponiveis": [
+        "PortaCalculoFolha.ferias/feriasPorId/feriasNaCompetencia/rescisoes/rescisaoPorId",
+        "GravadorCalculoFolha.feriasDoVinculoComTrava/incluirFerias/situacaoFerias/rescisoesDoVinculoComTrava/incluirRescisao/situacaoRescisao"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "fechamento_periodo_folha",
+      "motivo": "Fechamento do período (mensal AAAA-MM ou anual AAAA) por estabelecimento: apuracao, periodo, numero, situacao fechado|reaberto, pagamento, processamentos JSON, totais JSON, resumo, fechado_em/por, reaberto_em/por, motivo",
+      "operacoes_indisponiveis": [
+        "PortaCalculoFolha.fechamentos/fechamento",
+        "GravadorCalculoFolha.fechamentoEmVigorComTrava/processosCalculadosComTrava/incluirFechamento/reabrirFechamento"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "obrigacao_trabalhista, arquivo_obrigacao (só colunas que faltam) + obrigacao_fechamento + parametro_obrigacao",
+      "motivo": "obrigacao_trabalhista (tipo, competência, retificação, situação, protocolo, valor_apurado, arquivo_id) e arquivo_obrigacao (sequência, arquivo, hash, tamanho, entrega) existem. Faltam: leiaute e conferência do leiaute, totais apurados, acréscimos da guia, motivo do cancelamento, nome do arquivo, o vínculo com os fechamentos usados e os parâmetros por vigência. Os catálogos SEFIP/CAGED/RAIS cabem em tabela_esocial/codigo_esocial (fontes sefip, caged, rais já previstas no CHECK): falta o carregador oficial e o de-para chave→tabela (categoriasSefip, movimentacoesSefip, desligamentosCaged, admissoesCaged, vinculosRais, desligamentosRais, admissoesRais).",
+      "ddl": "ALTER TABLE obrigacao_trabalhista ADD COLUMN leiaute VARCHAR(30) NULL, ADD COLUMN leiaute_conferido BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN totais JSON NULL, ADD COLUMN valor_acrescimos DECIMAL(15,2) NULL CHECK (valor_acrescimos >= 0), ADD COLUMN motivo_cancelamento VARCHAR(400) NULL, CHECK (situacao <> 'cancelada' OR motivo_cancelamento IS NOT NULL); ALTER TABLE arquivo_obrigacao ADD COLUMN nome_arquivo VARCHAR(120) NULL; CREATE TABLE obrigacao_fechamento (id PK, obrigacao_trabalhista_id FK NOT NULL, fechamento_periodo_folha_id FK NOT NULL, auditoria, UNIQUE(obrigacao_trabalhista_id, fechamento_periodo_folha_id)); CREATE TABLE parametro_obrigacao (id PK, estabelecimento_id FK NULL, vigencia_inicio DATE NOT NULL, dados JSON NOT NULL, auditoria, UNIQUE(estabelecimento_id, vigencia_inicio))",
+      "operacoes_indisponiveis": [
+        "PortaCalculoFolha.parametrosObrigacoes/obrigacoes/obrigacao/conteudoObrigacao/catalogosObrigacoes",
+        "GravadorCalculoFolha.*Obrigac*"
+      ]
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "apps/api/src/modulos/pessoas/public-api.ts (lote 03-09)",
+      "pedido": "Trocar as exportações de ./folha/porta-folha-legado.js, ./folha/porta-calculo-legado.js e ./folha/porta-integracao-legado.js (apagados) por: PortaFolhaPropria, portaFolhaIndisponivel, type NucleoFolha, type CifradorCpf de ./folha/porta-folha-propria.js; PortaCalculoFolhaPropria, portaCalculoFolhaIndisponivel de ./folha/porta-calculo-propria.js; portaIntegracaoFolhaIndisponivel de ./folha/porta-integracao-indisponivel.js; e export type * from ./folha/tipos-folha.js"
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "lotes 03-07/03-09 (servico-*.ts, porta-integracao*.ts, autoatendimento, aplicacao/*.int.spec.ts)",
+      "pedido": "Tipos do sistema de origem renomeados em folha/tipos-folha.ts: AfastamentoPesLido→AfastamentoFolha, ConselhoDoProfissionalLido→ConselhoDoProfissional, DesligadoLido→VinculoDesligado, FechamentoFolhaLido→FechamentoDaFolha, FeriasNaCompetenciaLida→FeriasNaCompetencia, FeriasPesLida→FeriasDoVinculo, Filtro*Sgh→Filtro*DaFolha (FiltroAfastamentosSgh→FiltroAfastamentosFolha), HistoricoFolhaLido→HistoricoDaFolha, ItemRubricaProcessoLido→ItemRubricaDoProcesso, LinhaCalculoSgh→LinhaCalculoDoVinculo, LoteFolhaCompletoLido→LoteFolhaCompleto, LoteFolhaLido→LoteDaFolha, ObrigacaoPesLida→ObrigacaoDaFolha, ProcessoFolhaLido→ProcessoDaFolha, RescisaoPesLida→RescisaoDaFolha, ResumoFolhaLido→ResumoDaFolha, ResumoVinculoProcessoLido→ResumoVinculoDoProcesso, SalarioPesLido→SalarioDoVinculo, TipoRescisaoLido→TipoRescisaoDaFolha, VinculoCalculoLido→VinculoDoCalculo, VinculoFolhaLido→VinculoDaFolha, LinhaResumoFolhaSgh→LinhaResumoDaFolha, NovaFeriasSgh→NovasFerias, NovaObrigacaoSgh→NovaObrigacaoDaFolha, NovaRescisaoSgh→NovaRescisaoDaFolha, NovoAfastamentoSgh→NovoAfastamentoFolha, NovoFechamentoFolhaSgh→NovoFechamentoDaFolha, NovoLoteFolhaSgh→NovoLoteDaFolha, NovoProcessoFolhaSgh→NovoProcessoDaFolha, NovoSalarioSgh→NovoSalarioDoVinculo, NovosParametrosObrigacoesSgh→NovosParametrosObrigacoes, RemessaFolhaLegada→RemessaDaFolha, RetornoParaTitulosLido→RetornoParaTitulos; ItemDominioFolha, DependentesDoVinculo, OrigemAdiantamentoDecimo, PAPEIS_HISTORICO_FOLHA, TIPOS_VINCULO_DA_FOLHA e CodigosCatalogosObrigacoes mantêm o nome. Os campos 'hospital' saem dos New*; VinculoDaFolha.centroCusto, VinculoDoCalculo.centroCusto e VinculoDoCalculo.cargaSemanal passam a number|null. PortaFolhaMemoria.retornoParaTitulos/marcarLancado recebem o estabelecimento (number) no lugar do hospital. gravadorCalculoFolhaSgh (autoatendimento) não existe mais: a aprovação da solicitação grava pelo executor do cálculo quando o processamento tiver modelo."
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "lote que migra porta-integracao.ts / porta-integracao-memoria.ts",
+      "pedido": "Criar a porta própria da integração da folha (titulo_folha, depara_folha_financeiro, títulos pelo executor do financeiro); este lote apagou porta-integracao-legado.ts e deixou só portaIntegracaoFolhaIndisponivel."
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "registro do módulo pessoas (lote de registro)",
+      "pedido": "Os specs HTTP do lote (folha.spec.ts, calculo-http, fechamento-http, ferias-http, integracao-http) já não passam cifraCpf ao criarApp (opção que o AppBaseModule não tem mais), mas dependem do módulo pessoas registrado em API_MODULOS (lote 03-11): ficam vermelhos até o registro. O modulo.ts do pessoas deve montar a CifraCpf pela configuração e usar PortaFolhaPropria(ctx.nucleo, cifraCpf) e PortaCalculoFolhaPropria(ctx.nucleo) quando há núcleo."
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "leitores de afastamento.situacao (eSocial, ponto, motor de vínculo; lotes que os migram)",
+      "pedido": "A porta da folha passou a gravar só o fato no afastamento: 'em_andamento' (ativo) ou 'cancelado'; 'previsto' e 'encerrado' dependem do relógio e não são mais gravados por ela. Quem lê a coluna deve tratar 'em_andamento' como ativo e calcular previsto/encerrado na leitura com situacaoDoAfastamento (folha/tipos-folha.ts). Decidir com o dono se o CHECK fica só com ('em_andamento','cancelado') depois que o conector converter os migrados."
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "apps/api/src/modulos/pessoas/folha/servico-rescisao.ts (lote 03-07)",
+      "pedido": "fgtsDepositado agora recusa ('saldo-fgts-incompleto', 409) quando falta folha fechada em algum mês do contrato (meses antes da virada); a soma não inclui a JAM. O serviço já usa o saldo informado quando vem (linha 364); a tela da rescisão deve pedir o saldo do extrato quando a recusa vier e mostrar a origem da base da multa (informado x soma das folhas)."
+    },
+    {
+      "tipo": "orquestrador",
+      "arquivo": "apps/api/src/modulos/pessoas/folha/folha.spec.ts e os specs HTTP do lote (lote 03-11, registro do pessoas)",
+      "pedido": "folha.spec.ts usa criarApp({ configuracao: fonteConfiguracaoMemoria(...) }), opção que o AppBaseModule não tem mais (tsc TS2353 na linha 45). O padrão migrado é registro: { pessoas: { modulo: (ctx) => moduloPessoas(ctx, { configuracao }) } } (ver contratualizacao.spec.ts). Quando o 03-11 criar pessoas/modulo.ts com essa opção, reescrever o beforeAll dos 5 specs HTTP do lote assim e só então incluir folha.spec.ts no tsconfig.migrado (tirado do fecho_tsconfig deste lote para não quebrar o tsc cumulativo)."
+    }
+  ]
+}

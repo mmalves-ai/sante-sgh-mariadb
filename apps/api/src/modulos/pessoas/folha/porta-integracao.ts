@@ -1,7 +1,7 @@
-// Porta da integração da folha com o financeiro e o contábil, fatia F8 (M53.9; ficha do M53, seções 4 a 8): o cadastro
-// de rotinas (FPINTROTINA) e o aviso de títulos manuais lidos do outro sistema; o de-para, o retorno conferido, os
-// lançamentos e o custo de pessoal em SGH_; o lançamento dos títulos pelo EXECUTOR (`financeiro.criarTituloPagar`,
-// ação `incluir-folha`, com o registro SGH_ na mesma transação); a vigência do de-para em transação só SGH_ com a trilha.
+// Porta da integração da folha com o financeiro e o contábil (M53.9): o catálogo de rotinas, o de-para por vigência,
+// o retorno conferido da folha externa, os lançamentos dos títulos no contas a pagar, o custo de pessoal por centro,
+// o aviso de títulos manuais, as classificações gerenciais e os credores. Duas implementações: a própria, sobre o
+// MariaDB do cliente (porta-integracao-propria.ts), e a de memória (dev/ci e testes).
 import type {
   ApuracaoFolha,
   ClassificacaoFolha,
@@ -12,14 +12,15 @@ import type {
   OrigemLancamentoFolha,
   RotinaIntegracaoFolha,
 } from '@sgh/contratos';
-import type { LancamentoFolhaLido, RetornoParaTitulosLido, TituloFolhaLancadoLido } from '@sgh/legado';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
+import { type LancamentoTitulosFolha, type TituloFolhaLancado } from './apoio-folha.js';
+import { type RetornoParaTitulos } from './tipos-folha.js';
 
 export const PORTA_INTEGRACAO_FOLHA = Symbol('PORTA_INTEGRACAO_FOLHA');
 
 export type ContextoIntegracaoFolha = ContextoPortaM18;
 
-/** A gravação só SGH_ da integração (a vigência do de-para), com a releitura dentro da transação. */
+/** A gravação direta da integração (a vigência do de-para), com a releitura dentro da transação. */
 export interface GravadorIntegracaoFolha {
   integracoes(empresa: number): Promise<IntegracaoFolhaLida[]>;
   incluirIntegracao(x: {
@@ -43,15 +44,15 @@ export interface FiltroTitulosManuais {
 export interface PortaIntegracaoFolha extends PortaGravacaoM18<GravadorIntegracaoFolha> {
   rotinas(c: ContextoIntegracaoFolha): Promise<RotinaIntegracaoFolha[]>;
   integracoes(c: ContextoIntegracaoFolha, empresa: number): Promise<IntegracaoFolhaLida[]>;
-  retorno(c: ContextoIntegracaoFolha, id: number): Promise<RetornoParaTitulosLido | null>;
-  lancamentos(c: ContextoIntegracaoFolha, empresa: number, ano: number): Promise<LancamentoFolhaLido[]>;
-  lancamento(c: ContextoIntegracaoFolha, id: number): Promise<LancamentoFolhaLido | null>;
+  retorno(c: ContextoIntegracaoFolha, id: number): Promise<RetornoParaTitulos | null>;
+  lancamentos(c: ContextoIntegracaoFolha, empresa: number, ano: number): Promise<LancamentoTitulosFolha[]>;
+  lancamento(c: ContextoIntegracaoFolha, id: number): Promise<LancamentoTitulosFolha | null>;
   lancamentoDaOrigem(
     c: ContextoIntegracaoFolha,
     origem: OrigemLancamentoFolha,
     id: number,
-  ): Promise<LancamentoFolhaLido | null>;
-  titulosDoLancamento(c: ContextoIntegracaoFolha, lancamento: number): Promise<TituloFolhaLancadoLido[]>;
+  ): Promise<LancamentoTitulosFolha | null>;
+  titulosDoLancamento(c: ContextoIntegracaoFolha, lancamento: number): Promise<TituloFolhaLancado[]>;
   chavesLancadas(
     c: ContextoIntegracaoFolha,
     empresa: number,

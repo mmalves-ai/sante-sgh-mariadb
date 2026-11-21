@@ -74,7 +74,7 @@ export const GERADOR_PDF_F6 = Symbol('GERADOR_PDF_F6');
 export type GeradorPdfF6 = (html: string, titulo: string) => Promise<Buffer>;
 export type RespostaF6 = { header(n: string, v: string): unknown; send(b: unknown): unknown };
 
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha_auditoria na mesma transação`;
 const esquemaBusca = z
   .object({ termo: z.string().trim().min(2).max(60), estado: z.enum(['ativo', 'todos']).default('ativo') })
   .strict();
@@ -171,7 +171,7 @@ export class TreinamentoController {
   @Post('cursos')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CURSO'))
+  @AuditadoNoHandler(NA_TABELA('curso'))
   incluirCurso(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoF6> {
     return this.servico.incluirCurso(sessaoDe(req), corpo(esquemaCurso, b));
   }
@@ -179,7 +179,7 @@ export class TreinamentoController {
   @Post('cursos/:id')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CURSO'))
+  @AuditadoNoHandler(NA_TABELA('curso'))
   alterarCurso(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -221,7 +221,7 @@ export class TreinamentoController {
   @Post('turmas')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREINAMENTO'))
+  @AuditadoNoHandler(NA_TABELA('turma_treinamento'))
   abrirTurma(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoF6> {
     return this.servico.abrirTurma(sessaoDe(req), corpo(esquemaTurma, b));
   }
@@ -229,7 +229,7 @@ export class TreinamentoController {
   @Post('turmas/:id/inscricoes')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREIN_PARTICIPANTE'))
+  @AuditadoNoHandler(NA_TABELA('presenca_treinamento'))
   inscrever(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -244,7 +244,7 @@ export class TreinamentoController {
   @Post('turmas/:id/participacao')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREIN_PARTICIPANTE e SGH_PES_POP_CIENCIA'))
+  @AuditadoNoHandler(NA_TABELA('presenca_treinamento e ciencia_procedimento'))
   participacao(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -259,7 +259,7 @@ export class TreinamentoController {
   @Post('turmas/:id/alteracao')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREINAMENTO e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('turma_treinamento (valor anterior na trilha)'))
   alterarTurma(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -274,7 +274,7 @@ export class TreinamentoController {
   @Post('turmas/:id/inscricoes/:vinculo/retirada')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREIN_PARTICIPANTE e SGH_HIST_EXCLUSAO'))
+  @AuditadoNoHandler(NA_TABELA('presenca_treinamento (exclusão lógica)'))
   retirarInscricao(
     @Param('id') id: string,
     @Param('vinculo') vinculo: string,
@@ -294,7 +294,7 @@ export class TreinamentoController {
   @Post('turmas/:id/participacao/:vinculo/correcao')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREIN_PARTICIPANTE e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('presenca_treinamento (valor anterior na trilha)'))
   corrigirParticipacao(
     @Param('id') id: string,
     @Param('vinculo') vinculo: string,
@@ -314,7 +314,7 @@ export class TreinamentoController {
   @Post('turmas/:id/encerramento')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREINAMENTO'))
+  @AuditadoNoHandler(NA_TABELA('turma_treinamento'))
   encerrar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -329,7 +329,7 @@ export class TreinamentoController {
   @Post('turmas/:id/cancelamento')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_TREINAMENTO'))
+  @AuditadoNoHandler(NA_TABELA('turma_treinamento'))
   cancelar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -360,7 +360,7 @@ export class TreinamentoController {
   @Post('pops')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_POP'))
+  @AuditadoNoHandler(NA_TABELA('documento_qualidade_versao'))
   publicarPop(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoF6> {
     return this.servico.publicarPop(sessaoDe(req), corpo(esquemaVersaoPop, b));
   }
@@ -368,7 +368,7 @@ export class TreinamentoController {
   @Post('pops/:id/revogacao')
   @HttpCode(200)
   @Permissao('pessoas.treinamento.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_POP'))
+  @AuditadoNoHandler(NA_TABELA('documento_qualidade_versao'))
   revogarPop(
     @Param('id') id: string,
     @Body() b: unknown,

@@ -35,10 +35,10 @@ import {
   type RecusaSuprimentos,
   resumoLicitacao,
 } from '@sgh/dominio-suprimentos';
-import { type LicitacaoGravacao, recusa } from '@sgh/legado';
+import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { PEDIDOS_CONTRATO_SINTETICOS } from './contrato-porta-memoria.js';
-import type { GravadorLicitacao, PortaLicitacao } from './licitacao-porta.js';
+import type { LicitacaoGravacao, GravadorLicitacao, PortaLicitacao } from './licitacao-porta.js';
 
 const FORNECEDORES = new Map([
   [7001, 'DISTRIBUIDORA SINTÉTICA ALFA LTDA'],
@@ -102,15 +102,15 @@ interface Estado {
 
 export class PortaLicitacaoMemoria implements PortaLicitacao {
   readonly destino = 'memoria' as const;
-  private readonly porHospital = new Map<string, Estado>();
+  private readonly porEstabelecimento = new Map<number | null, Estado>();
 
   constructor(
     private readonly hoje: () => string = hojeLocal,
     private readonly feriados: readonly string[] = FERIADOS_SINTETICOS_LICITACAO,
   ) {}
 
-  private e(c: Pick<ContextoPortaM18, 'hospital'>): Estado {
-    let s = this.porHospital.get(c.hospital);
+  private e(c: Pick<ContextoPortaM18, 'estabelecimento'>): Estado {
+    let s = this.porEstabelecimento.get(c.estabelecimento ?? null);
     if (!s) {
       s = {
         processos: [],
@@ -121,7 +121,7 @@ export class PortaLicitacaoMemoria implements PortaLicitacao {
         chaves: new Map(),
         seq: 56_000,
       };
-      this.porHospital.set(c.hospital, s);
+      this.porEstabelecimento.set(c.estabelecimento ?? null, s);
     }
     return s;
   }

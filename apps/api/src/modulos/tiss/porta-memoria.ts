@@ -1,6 +1,6 @@
 // Porta do pós-fechamento em MEMÓRIA (M31): a sessão sintética de dev/ci (E2E). Contas, lotes, itens, demonstrativos e
 // competências SINTÉTICOS (nenhum dado real; nada vai à cópia), com as mesmas validações (Zod dos contratos) e as mesmas
-// regras do domínio que o adaptador do legado confere (lote, numeração do contador, XSD 04.03.00, protocolo, baixa,
+// regras do domínio que a porta do banco confere (lote, numeração do contador, XSD 04.03.00, protocolo, baixa,
 // recurso, desfecho, competência e decisão da glosa). As contas 9101 a 9103 (convênio 91) nascem emitidas e fechadas,
 // prontas para o lote; o lote 8002 (do outro sistema, protocolado) tem a conta 9201 com uma glosa pendente, um item em
 // recurso e um não conciliado; o lote 8001 é antigo e sem protocolo (situação inferida).
@@ -53,21 +53,18 @@ import {
   tipoGuiaCompativel,
   VERSAO_TISS_VIGENTE,
 } from '@sgh/dominio-faturamento';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type FiltroContasLote,
-  type FiltroGlosa,
-  type FiltroLotes,
-  type FonteCatalogo,
-  type LiberacaoConsultada,
-  operacao,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import type { EstadoCatalogo } from '../cadastro/porta.js';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { ENTRADAS_TISS } from './esquemas.js';
 import type { LinhaContasCompetencia } from '@sgh/contratos/regras-faturamento';
 import { type ArmazemXmlTiss, armazemXmlMemoria } from './armazem-xml.js';
 import type {
   ContextoTiss,
   FiltroAcompanhamentoPorta,
+  FiltroContasLote,
+  FiltroGlosa,
+  FiltroLotes,
   GravadorSghTiss,
   LeituraAcompanhamento,
   PortaTiss,
@@ -201,7 +198,7 @@ export class PortaTissMemoria implements PortaTiss {
   private readonly estados = new Map<string, Estado>();
   private readonly montador = criarMontadorLote(this.armazem.guardar);
 
-  constructor(private readonly catalogo: FonteCatalogo | null) {}
+  constructor(private readonly catalogo: EstadoCatalogo | null) {}
 
   private e(c: ContextoTiss): Estado {
     let s = this.estados.get(c.hospital);
@@ -353,7 +350,7 @@ export class PortaTissMemoria implements PortaTiss {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoTiss, op: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoTiss, op: string): Promise<LiberacaoGravacao> {
     const e = this.estadoOp(op, c.hospital);
     if (e === null || e === 'bloqueada')
       return {
@@ -365,14 +362,15 @@ export class PortaTissMemoria implements PortaTiss {
   }
 
   async executar(c: ContextoTiss, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+    const esquema = ENTRADAS_TISS[op];
+    if (!esquema) throw recusa('operacao-desconhecida', `Operação ${op} sem gravação em memória.`);
+    const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -385,7 +383,13 @@ export class PortaTissMemoria implements PortaTiss {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = await this.aplicar(s, c, op, analise.data as never, ctx.usuarioLegado);
+    const resultado = await this.aplicar(
+      s,
+      c,
+      op,
+      analise.data as never,
+      (ctx as ContextoOperacao & { readonly login?: string }).login ?? '',
+    );
     s.idem.set(chave, { hash, resultado });
     const g = this.gravadas.get(c.hospital) ?? new Map<string, number>();
     g.set(op, (g.get(op) ?? 0) + 1);
@@ -402,8 +406,8 @@ export class PortaTissMemoria implements PortaTiss {
    */
   fonteContas: FonteContasMemoria | null = null;
 
-  async contasBancariasDoEscopo(_c: ContextoTiss, usuarioLegado: string | null): Promise<number[] | null> {
-    return contasBancariasSinteticasDoEscopo(usuarioLegado);
+  async contasBancariasDoEscopo(_c: ContextoTiss, login: string | null): Promise<number[] | null> {
+    return contasBancariasSinteticasDoEscopo(login);
   }
 
   async acompanhamento(c: ContextoTiss, f: FiltroAcompanhamentoPorta): Promise<LeituraAcompanhamento> {

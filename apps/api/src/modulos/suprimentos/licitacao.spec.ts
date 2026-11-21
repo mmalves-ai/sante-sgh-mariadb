@@ -2,10 +2,10 @@
 // sintética e a porta do processo EM MEMÓRIA (nada conecta a banco; fornecedores e pedidos SINTÉTICOS 7001 a 7003). As
 // datas são relativas ao dia de hoje (a porta em memória usa o relógio da máquina).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AppBloco, montarAppBloco, type Sessao } from '../cirurgia/bloco-seguro.spec-util.js';
+import { type AppSuprimentos, montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
 
 const L = '/api/suprimentos/licitacoes';
-let a: AppBloco;
+let a: AppSuprimentos;
 let agente: Sessao;
 let autoridade: Sessao;
 let semAcesso: Sessao;
@@ -18,7 +18,7 @@ const dia = (deslocamento: number) => {
 };
 
 beforeAll(async () => {
-  a = await montarAppBloco();
+  a = await montarAppSuprimentos();
   [agente, autoridade, semAcesso] = await Promise.all([
     a.entrar('SINT.LICITACAO'),
     a.entrar('SINT.AUTORIDADE'),

@@ -28,7 +28,7 @@ export class PainelBlocoFamilia {
   ) {}
 
   async painel(c: ContextoPortaM18): Promise<{ agora: string; linhas: LinhaPainelFamilia[] }> {
-    const k = `${c.rede}:${c.hospital}`;
+    const k = `${c.cliente}:${c.estabelecimento}`;
     const x = this.cache.get(k);
     if (x && Date.now() - x.em < CACHE_MS) return x.v;
     const v = await this.montar(c);

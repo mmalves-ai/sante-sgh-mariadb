@@ -3,21 +3,70 @@
 // tudo; quem só acompanha as pendências (5109) consulta eventos, lotes, pendências e conciliação, sem ficha, sem gerar
 // e sem transmitir; quem só consulta a folha (351) não abre o eSocial. A chave `pessoas.folha` nasce desligada: gravar
 // é recusado na chave; a prévia sai; a entrada inválida é 400.
+//
+// F2.2 (lote 03-05): o módulo pessoas ainda não está em REGISTRO_MODULOS (é registrado num lote seguinte); o teste monta
+// o EsocialController num módulo de teste, com as portas em memória, pelo `registro` da base. Assim a prova da HTTP do
+// eSocial não depende da ordem dos lotes.
+import { type DynamicModule, Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../../cadastro/teste.spec-util.js';
 import { CifraCpf } from '../cifra-cpf.js';
+import { PORTA_CALCULO_FOLHA } from '../folha/porta-calculo.js';
+import { PortaCalculoFolhaMemoria } from '../folha/porta-calculo-memoria.js';
+import { PORTA_FOLHA } from '../folha/porta-folha.js';
+import { PortaFolhaMemoria } from '../folha/porta-folha-memoria.js';
+import { CIFRA_CPF_PESSOAS } from '../pessoas.controller.js';
+import { PORTA_PESSOAS } from '../porta.js';
+import { PortaPessoasMemoria } from '../porta-memoria.js';
+import { PORTA_RUBRICAS } from '../rubricas/porta-rubricas.js';
+import { PortaRubricasMemoria } from '../rubricas/porta-rubricas-memoria.js';
+import { EsocialController } from './esocial.controller.js';
+import { PORTA_ESOCIAL } from './porta-esocial.js';
+import { PortaEsocialMemoria } from './porta-esocial-memoria.js';
+import { TRANSMISSOR_ESOCIAL, transmissorEsocialDoAmbiente } from './transmissor/transmissor-esocial.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,esocial_teste',
+};
 let app: NestFastifyApplication;
+
+@Module({})
+class EsocialDeTeste {}
+
+function moduloEsocialDeTeste(): DynamicModule {
+  const pessoas = new PortaPessoasMemoria();
+  return {
+    module: EsocialDeTeste,
+    controllers: [EsocialController],
+    providers: [
+      { provide: PORTA_ESOCIAL, useValue: new PortaEsocialMemoria() },
+      { provide: PORTA_PESSOAS, useValue: pessoas },
+      { provide: PORTA_FOLHA, useValue: new PortaFolhaMemoria(pessoas) },
+      { provide: PORTA_CALCULO_FOLHA, useValue: new PortaCalculoFolhaMemoria(pessoas) },
+      { provide: PORTA_RUBRICAS, useValue: new PortaRubricasMemoria() },
+      { provide: TRANSMISSOR_ESOCIAL, useValue: transmissorEsocialDoAmbiente(env) },
+      { provide: CIFRA_CPF_PESSOAS, useValue: new CifraCpf(Buffer.alloc(32, 7)) },
+    ],
+  };
+}
 
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha: new RegistradorTrilhaMemoria(),
-    cifraCpf: new CifraCpf(Buffer.alloc(32, 7)),
+    registro: registroDeTeste(
+      {},
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        esocial_teste: () => moduloEsocialDeTeste(),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

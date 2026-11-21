@@ -1,16 +1,15 @@
 // Porta do estoque, do almoxarifado e das compras (M28): o que as telas leem e gravam, independente de onde (a API não
 // escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas
-//     suprimentos.*, com a trilha na mesma transação); as só do novo (aprovação por alçada, envio da transferência,
-//     inventário, carrinho, ponto de pedido) em transação SGH_ com a SGH_TRILHA junto;
+//   - `banco`: o banco do cliente (MariaDB) pelo @sgh/nucleo (porta-propria.ts): leituras somente leitura e gravações
+//     pelo Executor, com a trilha na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): itens, saldos, lotes, documentos e pedidos SINTÉTICOS em memória,
-//     com as mesmas validações (Zod dos contratos e regras do domínio) e as mesmas recusas; nada vai à cópia;
+//     com as mesmas validações (Zod dos contratos e regras do domínio) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+// Melhoria: o item do cadastro é um tipo de negócio do módulo (sem o tipo do sistema de origem).
 import type {
   DocumentosPorSistema,
   EfeitoDocumentoNovo,
   HorariosUnidade,
-  LeituraNumericaOnda3,
   RequisicoesPorLocal,
   UsoEstoquePorLocal,
   ConsumoEstoque,
@@ -39,16 +38,28 @@ import type {
   TransferenciaEnviada,
 } from '@sgh/contratos';
 import type { FaixaAlcada } from '@sgh/dominio-suprimentos';
-import type { ItemEstoqueTx } from '@sgh/legado';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_SUPRIMENTOS = Symbol('PORTA_SUPRIMENTOS');
 
 export type ContextoSuprimentos = ContextoPortaM18;
 
-export type ItemCadastroEstoque = ItemEstoqueTx;
+/** O item do cadastro com o saldo e o valor no estabelecimento (custo médio = valor / quantidade). */
+export interface ItemCadastroEstoque {
+  readonly codigo: number;
+  readonly nome: string;
+  /** Controla lote e validade. */
+  readonly rastreavel: boolean;
+  readonly controlado: boolean;
+  readonly consignado: boolean;
+  /** Quantidade em estoque no estabelecimento. */
+  readonly estoque: number;
+  /** Valor do estoque no estabelecimento. */
+  readonly total: number;
+  readonly custoMedio: number;
+}
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
+/** Gravações diretas da porta, numa transação com a trilha junto (o estabelecimento vem do contexto). */
 export interface GravadorSghSuprimentos {
   aprovarPedido(a: {
     ano: number;
@@ -75,7 +86,10 @@ export interface GravadorSghSuprimentos {
   abrirInventario(i: {
     local: number;
     tipo: 'geral' | 'ciclico';
+    /** Cíclico pela curva ABC do saldo no local (sem itens escolhidos). */
+    curva?: 'A' | 'B' | 'C';
     limitePct: number;
+    /** No banco, vazio no geral (todo o saldo do local); o saldo mandado é ignorado (o do banco vale). */
     itens: readonly { item: number; saldo: number }[];
     usuario: string;
   }): Promise<number>;
@@ -209,25 +223,6 @@ export interface PortaSuprimentos extends PortaGravacaoM18<GravadorSghSuprimento
     c: ContextoSuprimentos,
     local?: number,
   ): Promise<Map<string, { prazoDias: number; estoqueSeguranca: number | null }>>;
-  /**
-   * M41 (campo 4): as leituras do painel "Efeito no estoque dos documentos do novo" num dia (READ ONLY, só agregados ou
-   * chaves de documento): os documentos do dia por sistema, o efeito dos gatilhos nos documentos do novo, os horários
-   * prescritos × dispensados por unidade, as requisições pendentes e quem ainda usa o estoque pelo outro sistema.
-   */
-  onda3(c: ContextoSuprimentos, dia: string, hoje: string): Promise<LeituraOnda3>;
-  /** M41 (campo 10): saldo do local e preço médio, lidos agora, dos itens movimentados pelo novo no dia. */
-  onda3Numerica(c: ContextoSuprimentos, dia: string): Promise<LeituraNumericaOnda3[]>;
-  /**
-   * M41 (campo 10): saldo do local e preço médio, lidos agora na competência do dia, dos pares item × local pedidos
-   * (os que o chave-usuário informou; teto de 500), movimentados ou não pelo novo no dia.
-   */
-  onda3LerPares(
-    c: ContextoSuprimentos,
-    dia: string,
-    pares: readonly { item: number; local: number | null }[],
-  ): Promise<LeituraNumericaOnda3[]>;
-  /** M41 (regra 1): as unidades atendidas por local (competência corrente e anterior) e as prescrições do novo. */
-  onda3Regra1(c: ContextoSuprimentos, hoje: string): Promise<LeituraRegra1Onda3>;
 }
 
 export interface LeituraOnda3 {
@@ -285,8 +280,4 @@ export const METODOS_PORTA_SUPRIMENTOS: ReadonlySet<string> = new Set([
   'transferencias',
   'envio',
   'pontosPedido',
-  'onda3',
-  'onda3Numerica',
-  'onda3LerPares',
-  'onda3Regra1',
 ]);

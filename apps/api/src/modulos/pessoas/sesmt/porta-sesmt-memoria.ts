@@ -2,24 +2,29 @@
 // eSocial (públicos), com poucas linhas; os registros vivem por estabelecimento, numa cópia por transação (o erro no meio
 // desfaz tudo). Nada vai à cópia do banco. As regras de banco que importam ao teste também valem aqui: só inclusão no
 // ocupacional e nas vacinas, versão no acidente, o marco da sorologia uma vez, a assinatura só da entrega pendente.
-import {
-  type AcidenteLido,
-  type CorrecaoPesLida,
-  DADOS_CAT_VAZIOS,
-  type DominiosSesmt,
-  ErroOperacao,
-  type LinhaRiscoLidaSgh,
-  type OcupacionalLido,
-  type RegistroEpiLido,
-  type ResumoSesmtSgh,
-  type SorologiaLida,
-  type VacinaLida,
-  type VinculoAtivoSesmt,
-} from '@sgh/legado';
-import type { LinhaTrilha } from '@sgh/legado';
+import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
-import type { ContextoSesmt, GravadorSesmt, PortaSesmt } from './porta-sesmt.js';
+import {
+  type AcidenteTrabalho,
+  type ContextoSesmt,
+  type CorrecaoSesmt,
+  DADOS_CAT_VAZIOS,
+  type DominiosSesmt,
+  type DoseVacinaColaborador,
+  type GravadorSesmt,
+  type LinhaRiscoFuncao,
+  type PortaSesmt,
+  type RegistroOcupacional,
+  type RegistroProtecao,
+  type ResumoSesmt,
+  type SorologiaAcidente,
+  type VinculoAtivoSesmt,
+} from './porta-sesmt.js';
+
+/** A memória separa os registros pelo código do estabelecimento da sessão (ou pelo id, sem ele). */
+const hospitalDe = (c: ContextoSesmt): string =>
+  (c as ContextoSesmt & { readonly hospital?: string }).hospital ?? String(c.estabelecimento ?? '');
 
 const desatualizado = () =>
   new ErroOperacao(
@@ -31,13 +36,13 @@ const desatualizado = () =>
 
 interface Estado {
   seq: number;
-  ocupacional: OcupacionalLido[];
-  vacinas: VacinaLida[];
-  acidentes: AcidenteLido[];
-  sorologias: SorologiaLida[];
-  riscos: (LinhaRiscoLidaSgh & { hospital: string })[];
-  epis: RegistroEpiLido[];
-  correcoes: CorrecaoPesLida[];
+  ocupacional: RegistroOcupacional[];
+  vacinas: DoseVacinaColaborador[];
+  acidentes: AcidenteTrabalho[];
+  sorologias: SorologiaAcidente[];
+  riscos: (LinhaRiscoFuncao & { hospital: string })[];
+  epis: RegistroProtecao[];
+  correcoes: CorrecaoSesmt[];
 }
 const novo = (): Estado => ({
   seq: 5200,
@@ -143,8 +148,8 @@ export class PortaSesmtMemoria implements PortaSesmt {
   constructor(private readonly pessoas: PortaPessoas | null = null) {}
 
   private e(c: ContextoSesmt): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    let s = this.estados.get(hospitalDe(c));
+    if (!s) this.estados.set(hospitalDe(c), (s = novo()));
     return s;
   }
 
@@ -221,8 +226,8 @@ export class PortaSesmtMemoria implements PortaSesmt {
         const n = id();
         this.codigosVacinaGravados.push({
           vacina: v.vacina,
-          codigo: v.codigoLegado,
-          dose: v.codigoDoseLegado,
+          codigo: v.codigoVacina,
+          dose: v.codigoDose,
         });
         s.vacinas.push({
           id: n,
@@ -335,7 +340,7 @@ export class PortaSesmtMemoria implements PortaSesmt {
         const n = id();
         s.riscos.push({
           id: n,
-          hospital: c.hospital,
+          hospital: hospitalDe(c),
           unidade: x.unidade,
           setor: x.setor,
           funcao: x.funcao,
@@ -443,15 +448,11 @@ export class PortaSesmtMemoria implements PortaSesmt {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(hospitalDe(c), s);
     return r;
   }
 
-  async correcoes(
-    c: ContextoSesmt,
-    tabela: string,
-    registros: readonly number[],
-  ): Promise<CorrecaoPesLida[]> {
+  async correcoes(c: ContextoSesmt, tabela: string, registros: readonly number[]): Promise<CorrecaoSesmt[]> {
     return this.e(c).correcoes.filter((x) => x.tabela === tabela && registros.includes(x.registro));
   }
 
@@ -513,7 +514,7 @@ export class PortaSesmtMemoria implements PortaSesmt {
   async registroEpi(c: ContextoSesmt, id: number) {
     return this.e(c).epis.find((x) => x.id === id) ?? null;
   }
-  async resumo(c: ContextoSesmt, ano: number): Promise<ResumoSesmtSgh> {
+  async resumo(c: ContextoSesmt, ano: number): Promise<ResumoSesmt> {
     const vinculos: VinculoAtivoSesmt[] = [];
     if (this.pessoas) {
       let depois: number | undefined;

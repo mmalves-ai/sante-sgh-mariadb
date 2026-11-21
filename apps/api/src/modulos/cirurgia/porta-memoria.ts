@@ -1,37 +1,37 @@
 // Porta do centro cirúrgico EM MEMÓRIA (M18): a sessão sintética de dev/ci (E2E) lê e grava salas, agendamentos,
 // solicitações, pendências e cirurgias realizadas SINTÉTICOS, sem tocar a cópia. As gravações aplicam o mesmo Zod das
-// receitas (operacao(op).entrada) e as mesmas recusas (sala não permitida, horário passado, sala ocupada sem exceção,
+// receitas (entradaDaOperacao(op).entrada) e as mesmas recusas (sala não permitida, horário passado, sala ocupada sem exceção,
 // profissional que não confere, tempos inválidos, cirurgia com procedimento adicional na remarcação); o relógio é o
 // do estabelecimento (America/Sao_Paulo). Os pacientes são os do cadastro em memória (marca "SINTETICO"). Nenhum nome
 // aqui é de pessoa real; os nomes de procedimento e anestesia são do vocabulário clínico.
 import { type EstadoOperacao, RECURSOS_SALA } from '@sgh/contratos';
-import { conferirTempos, conflitosNaSala, somarMinutos } from '@sgh/dominio-cirurgia';
-import {
-  type AgendamentoLido,
-  type CancelamentoCirurgiaLido,
-  conferirAlteracaoPedido,
-  type ContextoOperacao,
-  ErroOperacao,
-  type EstadoCirurgiaLido,
-  type FiltroRealizadas,
-  type FonteCatalogo,
-  type HistoricoLido,
-  type LiberacaoConsultada,
-  type LigacaoCirurgiaLida,
-  operacao,
-  type PendenciaLida,
-  type RealizadaLida,
-  recusa,
-  type RegistroExtLido,
-  type RelogioLido,
-  type ResultadoOperacao,
-  type VersaoPedidoLida,
-} from '@sgh/legado';
+import { conferirTempos, conflitosNaSala, estadoValido, podeIr, somarMinutos } from '@sgh/dominio-cirurgia';
+import type {
+  AgendamentoDaSala,
+  AtoRealizado,
+  CancelamentoDaAgenda,
+  CatalogoOperacoes,
+  FiltroRealizadas,
+  HistoricoDaAgenda,
+  LigacaoDoAto,
+  PedidoCirurgia,
+  PendenciaDoPedido,
+  RegistroComplementarAto,
+  RelogioDoEstabelecimento,
+  VersaoDoPedido,
+} from './tipos.js';
+import { conferirAlteracaoPedido } from './regras.js';
+import { type ContextoOperacao, ErroOperacao, type ResultadoOperacao, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { entradaDaOperacao } from './esquemas.js';
 import { relogioLocal } from '../agenda/public-api.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { GravadorSghCirurgia, PacienteDaCirurgia, PortaCirurgia } from './porta.js';
 
 const M = 'SINTETICO';
+/** Login de quem grava (a sessão o põe no contexto da gravação; sem ele, o id do usuário). */
+const loginDe = (ctx: ContextoOperacao) =>
+  (ctx as ContextoOperacao & { login?: string }).login ?? String(ctx.usuario ?? '');
 
 const somarDia = (d: string, n: number) => {
   const x = new Date(`${d}T00:00:00Z`);
@@ -94,23 +94,23 @@ const ESPECIALIDADES = [
 const LOGINS_DO_BLOCO = ['SINT.BLOCO', 'SINT.ADMIN'];
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
-interface AgendamentoM extends Mut<AgendamentoLido> {
+interface AgendamentoM extends Mut<AgendamentoDaSala> {
   idPaciente: number | null;
 }
 interface Estado {
   usuarios: Map<number, Set<string>>;
   agendamentos: AgendamentoM[];
-  estados: Mut<EstadoCirurgiaLido>[];
-  pendencias: Map<number, Mut<PendenciaLida>[]>;
-  cancelados: CancelamentoCirurgiaLido[];
-  historico: (HistoricoLido & { chave: string })[];
+  estados: Mut<PedidoCirurgia>[];
+  pendencias: Map<number, Mut<PendenciaDoPedido>[]>;
+  cancelados: CancelamentoDaAgenda[];
+  historico: (HistoricoDaAgenda & { chave: string })[];
   adicionais: Map<string, number[]>;
-  realizadas: RealizadaLida[];
-  ligacoes: Map<number, LigacaoCirurgiaLida>;
-  ext: Map<number, RegistroExtLido>;
+  realizadas: AtoRealizado[];
+  ligacoes: Map<number, LigacaoDoAto>;
+  ext: Map<number, RegistroComplementarAto>;
   excecoes: Set<number>;
   /** W0-10 (script 1147): as versões anteriores dos pedidos do portal. */
-  versoes: VersaoPedidoLida[];
+  versoes: VersaoDoPedido[];
   seq: number;
   idem: Map<string, { hash: string; resultado: ResultadoOperacao }>;
 }
@@ -133,7 +133,7 @@ const paresVazios = (): Record<string, number | null> => ({
   ID_TBCBOPRO_PEDIATRA: 1,
 });
 
-function semear(r: RelogioLido): Estado {
+function semear(r: RelogioDoEstabelecimento): Estado {
   const usuarios = new Map<number, Set<string>>([
     [1, new Set(LOGINS_DO_BLOCO)],
     [2, new Set(LOGINS_DO_BLOCO)],
@@ -182,7 +182,7 @@ function semear(r: RelogioLido): Estado {
       pares: { ...paresVazios(), CRM: 9007, ID_CRM: 5007, ANEST: 9002, ID_ANEST: 5002 },
     },
   ];
-  const realizadas: RealizadaLida[] = [
+  const realizadas: AtoRealizado[] = [
     {
       id: 880,
       reg: 77001,
@@ -227,17 +227,17 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
   constructor(
-    private readonly catalogo: FonteCatalogo | null = null,
+    private readonly catalogo: CatalogoOperacoes | null = null,
     private readonly lerPacientes: (
       c: ContextoPortaM18,
       ids: readonly number[],
     ) => Promise<{ id: number; nome: string; prontuario: number; ativo: boolean }[]> = async () => [],
-    private readonly relogioFn: () => RelogioLido = () => relogioLocal(),
+    private readonly relogioFn: () => RelogioDoEstabelecimento = () => relogioLocal(),
   ) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
-    if (!s) this.porHospital.set(c.hospital, (s = semear(this.relogioFn())));
+    let s = this.porHospital.get(String(c.estabelecimento ?? 0));
+    if (!s) this.porHospital.set(String(c.estabelecimento ?? 0), (s = semear(this.relogioFn())));
     return s;
   }
 
@@ -245,29 +245,29 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, String(c.estabelecimento ?? 0));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
         codigo: 'operacao-bloqueada',
         motivo: 'A gravação está bloqueada neste estabelecimento (catálogo de operações).',
       };
-    const r = operacao(op).receita;
+    const r = entradaDaOperacao(op).receita;
     if (r.pendente)
       return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Falta provar: ${r.pendente}.` };
     return { pode: true, codigo: null, motivo: null };
   }
 
   async executar(c: ContextoPortaM18, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
+    const o = entradaDaOperacao(op);
     const analise = o.entrada.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -281,7 +281,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
     if (o.receita.pendente) throw recusa('operacao-especificada', `Falta provar: ${o.receita.pendente}.`);
-    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.usuarioLegado); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, loginDe(ctx)); // eslint-disable-line @typescript-eslint/no-explicit-any
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -297,7 +297,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
       );
   }
 
-  private exigirFuturo(data: string, hora: string, r: RelogioLido) {
+  private exigirFuturo(data: string, hora: string, r: RelogioDoEstabelecimento) {
     if (data < r.hoje || (data === r.hoje && hora <= r.hhmm))
       throw recusa('horario-passado', 'O início já passou pelo relógio do servidor: escolha outro horário.');
   }
@@ -787,7 +787,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
             : null,
           x,
         );
-        const a = est as Mut<EstadoCirurgiaLido>;
+        const a = est as Mut<PedidoCirurgia>;
         s.versoes.unshift({
           idEstado: a.id,
           versao: guardadas + 1,
@@ -819,6 +819,19 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
       mudarEstado: async (x) => {
         const est = s.estados.find((y) => y.id === x.id);
         if (!est) throw recusa('registro-inexistente', 'O registro do agendamento não existe.');
+        // A mesma conferência da porta própria: o estado visto pela tela e a transição do domínio.
+        if (x.visto && est.estado !== x.visto.estado)
+          throw new ErroOperacao(
+            409,
+            'conflito-versao',
+            'O agendamento mudou',
+            'O agendamento foi alterado em outro terminal: atualize e tente de novo.',
+          );
+        if (est.estado !== x.estado && (!estadoValido(est.estado) || !podeIr(est.estado, x.estado)))
+          throw recusa(
+            'estado-invalido',
+            `O agendamento está em "${est.estado}" e não pode ir a "${x.estado}".`,
+          );
         Object.assign(est, {
           estado: x.estado,
           atualizadoEm: instante(r.hoje, r.hhmm),
@@ -870,7 +883,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
     });
   }
 
-  async relogio(): Promise<RelogioLido> {
+  async relogio(): Promise<RelogioDoEstabelecimento> {
     return this.relogioFn();
   }
 
@@ -891,7 +904,7 @@ export class PortaCirurgiaMemoria implements PortaCirurgia {
       .map((login) => ({ login, nome: login, ativo: true }));
   }
 
-  private lido(a: AgendamentoM): AgendamentoLido {
+  private lido(a: AgendamentoM): AgendamentoDaSala {
     return {
       id: a.id,
       sala: a.sala,

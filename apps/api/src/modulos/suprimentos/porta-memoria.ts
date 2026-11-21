@@ -1,6 +1,6 @@
 // Porta do estoque em MEMÓRIA (M28): a sessão sintética de dev/ci (E2E). Itens, locais, saldos, lotes, documentos,
 // pedidos e propostas SINTÉTICOS (nomes claramente fictícios); as gravações aplicam o mesmo Zod das receitas
-// (operacao(op).entrada) e as mesmas regras do domínio (saldo, lote, escopo, mês fechado, cotação, conferência da nota),
+// (operacaoSuprimentos(op).entrada) e as mesmas regras do domínio (saldo, lote, escopo, mês fechado, cotação, conferência da nota),
 // e simulam o que os gatilhos fazem no banco (número do documento, saldo, lote, custo médio, consumo). Nada vai à cópia.
 // As operações de documento ficam DESLIGADAS no banco real até a prova do cenário controlado (POL-3, D-MOTOR-28): aqui,
 // como as outras portas em memória, a tela percorre o fluxo inteiro.
@@ -77,14 +77,9 @@ import {
   valorPrevisto,
   vencido,
 } from '@sgh/dominio-suprimentos';
-import {
-  type ContextoOperacao,
-  ErroOperacao,
-  type FonteCatalogo,
-  type LiberacaoConsultada,
-  operacao,
-  recusa,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { chaveMemoria, type FonteEstadoOperacao, loginDaOperacao, operacaoSuprimentos } from './operacoes.js';
 import {
   contagemAgregada,
   documentosPorSistema,
@@ -349,15 +344,15 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
 
-  constructor(private readonly catalogo: FonteCatalogo | null) {}
+  constructor(private readonly catalogo: FonteEstadoOperacao | null) {}
 
   // ── Estado ─────────────────────────────────────────────────────────────────────────────────────────
 
   private e(c: ContextoSuprimentos): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveMemoria(c));
     if (!s) {
       s = this.semear();
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveMemoria(c), s);
     }
     return s;
   }
@@ -702,8 +697,8 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoSuprimentos, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estadoOp(op, c.hospital);
+  async podeGravar(c: ContextoSuprimentos, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estadoOp(op, chaveMemoria(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
@@ -714,14 +709,14 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
   }
 
   async executar(c: ContextoSuprimentos, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
+    const o = operacaoSuprimentos(op);
     const analise = o.entrada.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -734,7 +729,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as never, ctx.usuarioLegado);
+    const resultado = this.aplicar(s, op, analise.data as never, loginDaOperacao(ctx));
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -2462,7 +2457,8 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
   }
 
   /** Testes e E2E: os itens lançados na conta do paciente (o que a consolidação do outro sistema faz). */
-  contaDoPaciente(c: ContextoSuprimentos, atendimento: number) {
-    return [...(this.e(c).conta.get(atendimento) ?? [])];
+  contaDoPaciente(c: ContextoSuprimentos | null, atendimento: number) {
+    const s = c ? this.e(c) : [...this.estados.values()][0];
+    return [...(s?.conta.get(atendimento) ?? [])];
   }
 }

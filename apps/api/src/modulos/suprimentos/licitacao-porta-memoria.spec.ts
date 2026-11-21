@@ -3,9 +3,15 @@
 // calendário sintético: o prazo de recurso pula o feriado. Massa sintética.
 import { esquemaCriarLicitacao, PARAMETROS_LICITACAO_PADRAO } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
+import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { PortaLicitacaoMemoria } from './licitacao-porta-memoria.js';
 
-const c = { rede: 'sint', hospital: 'pc' };
+const c: ContextoPortaM18 = {
+  cliente: 'sint',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 'teste-licitacao',
+};
 const parametros = PARAMETROS_LICITACAO_PADRAO;
 
 describe('porta da licitação em memória', () => {

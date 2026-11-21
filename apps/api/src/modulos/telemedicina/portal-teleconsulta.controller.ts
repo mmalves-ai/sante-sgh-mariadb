@@ -1,11 +1,11 @@
-// Portal do paciente, etapa 4 do M50 (ficha, seção 7: "Sala de espera virtual", `/paciente/teleconsulta/:id`; regra 7):
+// Portal do paciente, sala de espera virtual da teleconsulta (`/paciente/teleconsulta/:id`):
 // as rotas são @Publica para a guarda das sessões internas: cada handler confere a SESSÃO DO PORTAL (o mesmo cookie e o
 // mesmo CSRF da etapa 1) e o escopo `agendamentos` do titular escolhido.
 //   GET  /api/paciente/teleconsultas                      as teleconsultas do titular e o termo vigente
 //   GET  /api/paciente/teleconsultas/:id                  a sala de espera (a sala do médico, quando aberta)
 //   POST /api/paciente/teleconsultas/:id/espera           o termo aceito e o local informado (portal.entrarSalaEspera)
 //   POST /api/paciente/teleconsultas/:id/entrada          entrar na sala do médico
-import { Body, Controller, Get, Header, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
 import { esquemaEntrarSalaEspera } from '@sgh/contratos';
 import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
@@ -39,11 +39,14 @@ const idRota = (v: string): number => {
 export class PortalTeleconsultaController {
   constructor(
     @Inject(CONFIGURACAO) private readonly configuracao: Configuracao,
-    @Inject(SERVICO_PORTAL_PACIENTE) private readonly portal: ServicoPortalPaciente,
+    @Optional() @Inject(SERVICO_PORTAL_PACIENTE) private readonly portal: ServicoPortalPaciente | null,
     @Inject(SERVICO_TELEMEDICINA) private readonly tele: ServicoTelemedicina,
   ) {}
 
   private sessao(req: Req, escrita = false): Promise<PortalNoPedido> {
+    // Sem o módulo do portal montado, as rotas do paciente ficam indisponíveis (503), nunca abertas.
+    if (!this.portal)
+      throw new ErroProblema('indisponivel', 503, 'Indisponível', 'O portal do paciente não está montado.');
     const nome = ['dev', 'ci'].includes(this.configuracao.ambiente) ? COOKIE_PACIENTE_DEV : COOKIE_PACIENTE;
     const cookies = um(req.headers['cookie']) ?? undefined;
     return this.portal.sessao(
@@ -74,7 +77,7 @@ export class PortalTeleconsultaController {
   @Post(':id/espera')
   @HttpCode(200)
   @Publica('aceitar o termo e informar o local da teleconsulta (sessão, CSRF e escopo conferidos)')
-  @AuditadoNoHandler('portal.entrarSalaEspera (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('portal.entrarSalaEspera com a trilha na mesma transação')
   async espera(@Param('id') id: string, @Body() b: unknown, @Req() req: Req) {
     return this.tele.entrarSalaEspera(
       await this.sessao(req, true),
@@ -86,7 +89,7 @@ export class PortalTeleconsultaController {
   @Post(':id/entrada')
   @HttpCode(200)
   @Publica('entrar na sala do médico (sessão, CSRF e escopo conferidos)')
-  @AuditadoNoHandler('entrada do paciente na sala (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('entrada do paciente na sala com a trilha na mesma transação')
   async entrada(@Param('id') id: string, @Req() req: Req) {
     return this.tele.entrarNaSala(await this.sessao(req, true), idRota(id));
   }

@@ -1,31 +1,31 @@
-// Porta da avaliação de desempenho, das competências e do PDI (W0-06, parte 5; M2 de mercado): o que as telas leem e
-// gravam, independente de onde (a API não escreve SQL; fronteira Nx). Só tabelas SGH_ (script 1066).
-//   - `legado`: leituras de @sgh/legado em transação READ ONLY; gravações numa transação só SGH_ com a SGH_TRILHA junto;
-//   - `memoria`: a sessão sintética de dev/ci (E2E); nada vai à cópia;
+// Porta da avaliação de desempenho, das competências e do PDI (W0-06, parte 5; M2 de mercado; F2.2 lote 03-02): o que
+// as telas leem e gravam, independente de onde (a API não escreve SQL; fronteira Nx).
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-propria.ts), gravações numa operação do Executor;
+//   - `memoria`: a sessão sintética de dev/ci (E2E); nada vai ao banco;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
+import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
 import type {
-  AvaliacaoLida,
-  CicloAvaliacaoLido,
-  CompetenciaAvalLida,
-  CompetenciaCargoLida,
-  CorrecaoPesLida,
-  DadosCicloSgh,
-  DadosPdiSgh,
-  NotaAvaliacaoLida,
-  PdiLido,
+  AvaliacaoRegistrada,
+  CicloRegistrado,
+  CompetenciaDoCargo,
+  CompetenciaRegistrada,
+  CorrecaoRegistrada,
+  DadosCiclo,
+  DadosPdi,
+  DependenciaContada,
+  NotaAvaliacao,
+  PdiRegistrado,
   SituacaoCiclo,
   SituacaoPdi,
-  VinculoExperienciaLido,
-  VinculoPessoasContado,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
+  VinculoEmExperiencia,
+} from './tipos.js';
 
 export const PORTA_AVALIACAO = Symbol('PORTA_AVALIACAO');
 
 export type ContextoAvaliacao = ContextoPortaM18;
 export type AlvoDependenciaAvaliacao = 'competencia' | 'ciclo-avaliacao' | 'avaliacao-rascunho';
 
-/** As gravações SGH_ da avaliação numa transação só SGH_, com as releituras dentro dela. */
+/** As gravações da avaliação numa só transação, com as releituras dentro dela. */
 export interface GravadorAvaliacao {
   incluirCompetencia(x: { nome: string; descricao: string | null; por: string }): Promise<number>;
   alterarCompetencia(x: {
@@ -50,8 +50,8 @@ export interface GravadorAvaliacao {
     motivo: string;
     por: string;
   }): Promise<void>;
-  incluirCiclo(x: DadosCicloSgh & { por: string }): Promise<number>;
-  alterarCiclo(x: DadosCicloSgh & { id: number; versao: number; por: string }): Promise<void>;
+  incluirCiclo(x: DadosCiclo & { por: string }): Promise<number>;
+  alterarCiclo(x: DadosCiclo & { id: number; versao: number; por: string }): Promise<void>;
   situacaoCiclo(x: {
     id: number;
     versao: number;
@@ -92,8 +92,8 @@ export interface GravadorAvaliacao {
     por: string;
   }): Promise<number>;
   excluirAvaliacao(x: { id: number; versao: number; motivo: string; por: string }): Promise<void>;
-  incluirPdi(x: DadosPdiSgh & { vinculo: number; por: string }): Promise<number>;
-  alterarPdi(x: DadosPdiSgh & { id: number; versao: number; por: string }): Promise<void>;
+  incluirPdi(x: DadosPdi & { vinculo: number; por: string }): Promise<number>;
+  alterarPdi(x: DadosPdi & { id: number; versao: number; por: string }): Promise<void>;
   situacaoPdi(x: {
     id: number;
     versao: number;
@@ -115,31 +115,35 @@ export interface GravadorAvaliacao {
 
 export interface PortaAvaliacao extends PortaGravacaoM18<GravadorAvaliacao> {
   hoje(c: ContextoAvaliacao): Promise<string>;
-  competencias(c: ContextoAvaliacao): Promise<CompetenciaAvalLida[]>;
-  competencia(c: ContextoAvaliacao, id: number): Promise<CompetenciaAvalLida | null>;
+  competencias(c: ContextoAvaliacao): Promise<CompetenciaRegistrada[]>;
+  competencia(c: ContextoAvaliacao, id: number): Promise<CompetenciaRegistrada | null>;
   /** As competências ligadas a um cargo (ou a todos, cargo nulo). */
-  competenciasDoCargo(c: ContextoAvaliacao, cargo: number | null): Promise<CompetenciaCargoLida[]>;
-  ciclos(c: ContextoAvaliacao): Promise<CicloAvaliacaoLido[]>;
-  ciclo(c: ContextoAvaliacao, id: number): Promise<CicloAvaliacaoLido | null>;
+  competenciasDoCargo(c: ContextoAvaliacao, cargo: number | null): Promise<CompetenciaDoCargo[]>;
+  ciclos(c: ContextoAvaliacao): Promise<CicloRegistrado[]>;
+  ciclo(c: ContextoAvaliacao, id: number): Promise<CicloRegistrado | null>;
   avaliacoes(
     c: ContextoAvaliacao,
     filtro: { readonly ciclo: number } | { readonly vinculo: number },
-  ): Promise<AvaliacaoLida[]>;
-  avaliacao(c: ContextoAvaliacao, id: number): Promise<AvaliacaoLida | null>;
-  notas(c: ContextoAvaliacao, avaliacao: number): Promise<NotaAvaliacaoLida[]>;
-  /** O cargo (SGH_PES_CARGO) do vínculo, se houver. */
+  ): Promise<AvaliacaoRegistrada[]>;
+  avaliacao(c: ContextoAvaliacao, id: number): Promise<AvaliacaoRegistrada | null>;
+  notas(c: ContextoAvaliacao, avaliacao: number): Promise<NotaAvaliacao[]>;
+  /** O cargo do vínculo de trabalho, se houver. */
   cargoDoVinculo(c: ContextoAvaliacao, vinculo: number): Promise<number | null>;
   /** Vínculos CLT não desligados admitidos desde a data (candidatos ao alerta de experiência). */
-  vinculosEmExperiencia(c: ContextoAvaliacao, admitidoDesde: string): Promise<VinculoExperienciaLido[]>;
-  pdiDoColaborador(c: ContextoAvaliacao, vinculo: number): Promise<PdiLido[]>;
-  pdi(c: ContextoAvaliacao, id: number): Promise<PdiLido | null>;
-  /** O que barra a exclusão física (o mapa de dependências de packages/legado). */
+  vinculosEmExperiencia(c: ContextoAvaliacao, admitidoDesde: string): Promise<VinculoEmExperiencia[]>;
+  pdiDoColaborador(c: ContextoAvaliacao, vinculo: number): Promise<PdiRegistrado[]>;
+  pdi(c: ContextoAvaliacao, id: number): Promise<PdiRegistrado | null>;
+  /** O que barra a exclusão física (as dependências contadas). */
   dependencias(
     c: ContextoAvaliacao,
     alvo: AlvoDependenciaAvaliacao,
     id: number,
-  ): Promise<VinculoPessoasContado[]>;
-  correcoes(c: ContextoAvaliacao, tabela: string, registros: readonly number[]): Promise<CorrecaoPesLida[]>;
+  ): Promise<DependenciaContada[]>;
+  correcoes(
+    c: ContextoAvaliacao,
+    tabela: string,
+    registros: readonly number[],
+  ): Promise<CorrecaoRegistrada[]>;
 }
 
 export const METODOS_PORTA_AVALIACAO: ReadonlySet<string> = new Set([

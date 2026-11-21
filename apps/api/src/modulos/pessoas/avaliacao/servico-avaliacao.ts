@@ -1,6 +1,6 @@
 // Avaliação de desempenho e de competências, alerta de experiência e PDI (W0-06, parte 5; M2 de mercado; matriz,
 // linhas "Tabelas de domínio" e "Avaliação de desempenho"):
-//   - competência: a alteração leva motivo e o valor anterior (SGH_PES_CORRECAO); a usada se inativa; a exclusão física
+//   - competência: a alteração leva motivo e o valor anterior (correcao_registro); a usada se inativa; a exclusão física
 //     só da nunca usada (409 com a contagem e a oferta da inativação);
 //   - ciclo: alteração do aberto com motivo e o valor anterior; encerrar, cancelar e reabrir com motivo; exclusão só
 //     sem avaliação (409 com a contagem e a oferta do cancelamento);
@@ -48,13 +48,6 @@ import {
   type SituacaoPdiEntrada,
 } from '@sgh/contratos';
 import { alertasExperiencia, type MarcoExperiencia } from '@sgh/dominio-pessoas';
-import type {
-  AvaliacaoLida,
-  CicloAvaliacaoLido,
-  CorrecaoPesLida,
-  PdiLido,
-  VinculoPessoasContado,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -67,6 +60,13 @@ import type { PortaPonto } from '../ponto/porta-ponto.js';
 import { CHAVE_PESSOAS_COLABORADOR } from '../servico.js';
 import type { PortaTreinamento } from '../treinamento/porta-treinamento.js';
 import type { AlvoDependenciaAvaliacao, GravadorAvaliacao, PortaAvaliacao } from './porta-avaliacao.js';
+import type {
+  AvaliacaoRegistrada,
+  CicloRegistrado,
+  CorrecaoRegistrada,
+  DependenciaContada,
+  PdiRegistrado,
+} from './tipos.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const CHAVE = CHAVE_PESSOAS_COLABORADOR;
@@ -103,7 +103,7 @@ function recusaComVinculos(
   alvo: AlvoDependenciaAvaliacao,
   nome: string,
   caminho: string,
-  v: readonly VinculoPessoasContado[],
+  v: readonly DependenciaContada[],
 ): ErroProblema {
   const porGrupo = new Map<string, number>();
   for (const x of v) porGrupo.set(x.grupo, (porGrupo.get(x.grupo) ?? 0) + x.quantidade);
@@ -118,7 +118,7 @@ function recusaComVinculos(
   );
 }
 
-const correcaoResposta = (c: CorrecaoPesLida): CorrecaoResposta => ({
+const correcaoResposta = (c: CorrecaoRegistrada): CorrecaoResposta => ({
   id: c.id,
   operacao: c.operacao,
   registro: c.registro,
@@ -129,8 +129,8 @@ const correcaoResposta = (c: CorrecaoPesLida): CorrecaoResposta => ({
   em: c.em,
 });
 
-const avaliacaoResposta = (a: AvaliacaoLida): AvaliacaoResposta => ({ ...a });
-const pdiResposta = (p: PdiLido): PdiResposta => ({ ...p });
+const avaliacaoResposta = (a: AvaliacaoRegistrada): AvaliacaoResposta => ({ ...a });
+const pdiResposta = (p: PdiRegistrado): PdiResposta => ({ ...p });
 
 /** Só os campos que mudaram, antes e depois (o histórico guarda o valor anterior). */
 function diferenca<T extends Record<string, unknown>>(
@@ -199,7 +199,7 @@ export class ServicoAvaliacao {
     ]);
     const correcoes = await this.porta.correcoes(
       s.porta,
-      'SGH_PES_COMPETENCIA',
+      'competencia_avaliacao',
       ks.map((k) => k.id),
     );
     return {
@@ -221,9 +221,9 @@ export class ServicoAvaliacao {
     }));
   }
 
-  private cicloResposta(c: CicloAvaliacaoLido, avs: readonly AvaliacaoLida[]): CicloAvaliacaoResposta {
+  private cicloResposta(c: CicloRegistrado, avs: readonly AvaliacaoRegistrada[]): CicloAvaliacaoResposta {
     const vigor = avs.filter((a) => a.ciclo === c.id && !a.substituida);
-    const n = (st: AvaliacaoLida['situacao']) => vigor.filter((a) => a.situacao === st).length;
+    const n = (st: AvaliacaoRegistrada['situacao']) => vigor.filter((a) => a.situacao === st).length;
     return {
       ...c,
       avaliacoes: { rascunho: n('rascunho'), finalizada: n('finalizada'), ciente: n('ciente') },
@@ -240,7 +240,7 @@ export class ServicoAvaliacao {
     const c = await this.cicloOu404(s, id);
     const [avs, corr] = await Promise.all([
       this.porta.avaliacoes(s.porta, { ciclo: c.id }),
-      this.porta.correcoes(s.porta, 'SGH_PES_AVAL_CICLO', [c.id]),
+      this.porta.correcoes(s.porta, 'ciclo_avaliacao', [c.id]),
     ]);
     return {
       ciclo: this.cicloResposta(c, avs),
@@ -298,7 +298,7 @@ export class ServicoAvaliacao {
     ]);
     const corr = await this.porta.correcoes(
       s.porta,
-      'SGH_PES_PDI',
+      'plano_desenvolvimento',
       pdi.map((p) => p.id),
     );
     return {
@@ -381,7 +381,7 @@ export class ServicoAvaliacao {
   }
   private async vinculoOu404(s: SessaoCadastro, id: number) {
     const v = await this.pessoas.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital) throw naoEncontrado('O colaborador');
+    if (!v) throw naoEncontrado('O colaborador'); // a porta de pessoas só lê o estabelecimento da sessão
     return v;
   }
   private correcao(
@@ -406,7 +406,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_COMPETENCIA', id: String(r) }),
+      (r: number) => ({ tabela: 'competencia_avaliacao', id: String(r) }),
       (g) => g.incluirCompetencia({ ...e, por: s.login }),
     );
     return { id, mensagem: 'Competência incluída.' };
@@ -425,7 +425,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_COMPETENCIA', id: String(k.id), chave: 'alteracao' },
+      { tabela: 'competencia_avaliacao', id: String(k.id), chave: 'alteracao' },
       async (g) => {
         await g.alterarCompetencia({
           id: k.id,
@@ -434,7 +434,7 @@ export class ServicoAvaliacao {
           descricao: e.descricao,
           por: s.login,
         });
-        await this.correcao(g, s, 'SGH_PES_COMPETENCIA', k.id, 'competencia.alterada', d, e.motivo);
+        await this.correcao(g, s, 'competencia_avaliacao', k.id, 'competencia.alterada', d, e.motivo);
       },
     );
     return { id: k.id, mensagem: 'Competência alterada. O valor anterior ficou no histórico.' };
@@ -455,7 +455,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_COMPETENCIA', id: String(k.id), chave: e.ativo ? 'reativacao' : 'inativacao' },
+      { tabela: 'competencia_avaliacao', id: String(k.id), chave: e.ativo ? 'reativacao' : 'inativacao' },
       async (g) => {
         await g.situacaoCompetencia({
           id: k.id,
@@ -467,7 +467,7 @@ export class ServicoAvaliacao {
         await this.correcao(
           g,
           s,
-          'SGH_PES_COMPETENCIA',
+          'competencia_avaliacao',
           k.id,
           e.ativo ? 'competencia.reativada' : 'competencia.inativada',
           { antes: { ativo: k.ativo }, depois: { ativo: e.ativo } },
@@ -497,7 +497,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_COMPETENCIA', id: String(k.id), chave: 'exclusao' },
+      { tabela: 'competencia_avaliacao', id: String(k.id), chave: 'exclusao' },
       (g) => g.excluirCompetencia({ id: k.id, versao: e.versao, motivo: e.motivo, por: s.login }),
     );
     return { id: k.id, mensagem: 'Competência excluída. O retrato ficou guardado.' };
@@ -521,7 +521,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_CARGO_COMPETENCIA', id: String(r) }),
+      (r: number) => ({ tabela: 'cargo_competencia', id: String(r) }),
       (g) => g.ligarCompetenciaCargo({ cargo: c.id, competencia: k.id, por: s.login }),
     );
     return { id, mensagem: 'Competência ligada ao cargo.' };
@@ -539,7 +539,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCompetenciaGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_CARGO_COMPETENCIA', id: String(l.id), chave: 'exclusao' },
+      { tabela: 'cargo_competencia', id: String(l.id), chave: 'exclusao' },
       (g) => g.desligarCompetenciaCargo({ ...e, por: s.login }),
     );
     return {
@@ -555,7 +555,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCicloAvaliacaoGravado.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_AVAL_CICLO', id: String(r) }),
+      (r: number) => ({ tabela: 'ciclo_avaliacao', id: String(r) }),
       (g) => g.incluirCiclo({ ...e, por: s.login }),
     );
     return { id, mensagem: 'Ciclo de avaliação incluído.' };
@@ -593,10 +593,10 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCicloAvaliacaoGravado.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVAL_CICLO', id: String(c.id), chave: 'alteracao' },
+      { tabela: 'ciclo_avaliacao', id: String(c.id), chave: 'alteracao' },
       async (g) => {
         await g.alterarCiclo({ ...dados, id: c.id, versao: e.versao, por: s.login });
-        await this.correcao(g, s, 'SGH_PES_AVAL_CICLO', c.id, 'ciclo.alterado', d, e.motivo);
+        await this.correcao(g, s, 'ciclo_avaliacao', c.id, 'ciclo.alterado', d, e.motivo);
       },
     );
     return { id: c.id, mensagem: 'Ciclo alterado. O valor anterior ficou no histórico.' };
@@ -611,7 +611,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCicloAvaliacaoGravado.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVAL_CICLO', id: String(c.id), chave: e.situacao },
+      { tabela: 'ciclo_avaliacao', id: String(c.id), chave: e.situacao },
       async (g) => {
         await g.situacaoCiclo({
           id: c.id,
@@ -623,7 +623,7 @@ export class ServicoAvaliacao {
         await this.correcao(
           g,
           s,
-          'SGH_PES_AVAL_CICLO',
+          'ciclo_avaliacao',
           c.id,
           `ciclo.${e.situacao}`,
           { antes: { situacao: c.situacao }, depois: { situacao: e.situacao } },
@@ -651,7 +651,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasCicloAvaliacaoGravado.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVAL_CICLO', id: String(c.id), chave: 'exclusao' },
+      { tabela: 'ciclo_avaliacao', id: String(c.id), chave: 'exclusao' },
       (g) => g.excluirCiclo({ id: c.id, versao: e.versao, motivo: e.motivo, por: s.login }),
     );
     return { id: c.id, mensagem: 'Ciclo excluído. O retrato ficou guardado.' };
@@ -703,7 +703,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoGravada.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_AVALIACAO', id: String(r) }),
+      (r: number) => ({ tabela: 'avaliacao_desempenho', id: String(r) }),
       (g) =>
         g.incluirAvaliacao({
           ciclo: c.id,
@@ -743,7 +743,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVALIACAO', id: String(a.id), chave: 'notas' },
+      { tabela: 'avaliacao_desempenho', id: String(a.id), chave: 'notas' },
       (g) => g.lancarNotas({ id: a.id, versao: e.versao, parecer: e.parecer, notas: e.notas, por: s.login }),
     );
     return { id: a.id, mensagem: 'Notas gravadas.' };
@@ -755,7 +755,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVALIACAO', id: String(a.id), chave: 'finalizacao' },
+      { tabela: 'avaliacao_desempenho', id: String(a.id), chave: 'finalizacao' },
       (g) => g.finalizarAvaliacao({ id: a.id, versao: e.versao, por: s.login }),
     );
     return { id: a.id, mensagem: 'Avaliação finalizada. Falta a ciência do colaborador.' };
@@ -785,7 +785,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoCiencia.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVALIACAO', id: String(a.id), chave: 'ciencia' },
+      { tabela: 'avaliacao_desempenho', id: String(a.id), chave: 'ciencia' },
       (g) =>
         g.ciencia({ id: a.id, versao: e.versao, modo: 'proprio', observacao: e.observacao, por: s.login }),
     );
@@ -802,7 +802,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoCiencia.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVALIACAO', id: String(a.id), chave: 'ciencia-registrada' },
+      { tabela: 'avaliacao_desempenho', id: String(a.id), chave: 'ciencia-registrada' },
       (g) =>
         g.ciencia({ id: a.id, versao: e.versao, modo: 'registrada', observacao: e.observacao, por: s.login }),
     );
@@ -821,7 +821,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoGravada.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_AVALIACAO', id: String(r), chave: 'correcao' }),
+      (r: number) => ({ tabela: 'avaliacao_desempenho', id: String(r), chave: 'correcao' }),
       (g) =>
         g.corrigirAvaliacao({
           anterior: a.id,
@@ -841,7 +841,7 @@ export class ServicoAvaliacao {
     await this.apoio.exigirLiberacao(s);
     const a = await this.rascunho(s, e.avaliacao, e.versao);
     const v = await this.porta.dependencias(s.porta, 'avaliacao-rascunho', a.id);
-    const fora = v.filter((x) => x.tabela !== 'SGH_PES_AVAL_ITEM');
+    const fora = v.filter((x) => x.tabela !== 'avaliacao_desempenho_item');
     if (fora.length > 0)
       throw recusaComVinculos(
         'avaliacao-rascunho',
@@ -853,7 +853,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasAvaliacaoGravada.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_AVALIACAO', id: String(a.id), chave: 'exclusao' },
+      { tabela: 'avaliacao_desempenho', id: String(a.id), chave: 'exclusao' },
       (g) => g.excluirAvaliacao({ id: a.id, versao: e.versao, motivo: e.motivo, por: s.login }),
     );
     return { id: a.id, mensagem: 'Rascunho excluído. O retrato ficou guardado.' };
@@ -891,7 +891,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasPdiGravado.codigo,
       CHAVE,
-      (r: number) => ({ tabela: 'SGH_PES_PDI', id: String(r) }),
+      (r: number) => ({ tabela: 'plano_desenvolvimento', id: String(r) }),
       (g) => g.incluirPdi({ ...e, por: s.login }),
     );
     return { id, mensagem: 'Ação incluída no PDI.' };
@@ -923,10 +923,10 @@ export class ServicoAvaliacao {
       s,
       E.pessoasPdiGravado.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_PDI', id: String(p.id), chave: 'alteracao' },
+      { tabela: 'plano_desenvolvimento', id: String(p.id), chave: 'alteracao' },
       async (g) => {
         await g.alterarPdi({ ...dados, id: p.id, versao: e.versao, por: s.login });
-        await this.correcao(g, s, 'SGH_PES_PDI', p.id, 'pdi.alterado', d, e.motivo);
+        await this.correcao(g, s, 'plano_desenvolvimento', p.id, 'pdi.alterado', d, e.motivo);
       },
     );
     return { id: p.id, mensagem: 'Ação do PDI alterada. O valor anterior ficou no histórico.' };
@@ -944,7 +944,7 @@ export class ServicoAvaliacao {
       s,
       E.pessoasPdiGravado.codigo,
       CHAVE,
-      { tabela: 'SGH_PES_PDI', id: String(p.id), chave: e.situacao },
+      { tabela: 'plano_desenvolvimento', id: String(p.id), chave: e.situacao },
       async (g) => {
         await g.situacaoPdi({
           id: p.id,
@@ -957,7 +957,7 @@ export class ServicoAvaliacao {
         await this.correcao(
           g,
           s,
-          'SGH_PES_PDI',
+          'plano_desenvolvimento',
           p.id,
           `pdi.${e.situacao}`,
           { antes: { situacao: p.situacao }, depois: { situacao: e.situacao } },

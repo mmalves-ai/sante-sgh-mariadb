@@ -2,7 +2,7 @@
 // fechamentos, a prévia e o fechamento do período (mensal ou anual) com os processamentos fixados, a data de pagamento
 // da folha mensal e a prova da soma, e a reabertura com motivo. Fechado, o período não aceita cálculo, recálculo nem
 // descarte (o gravador confere na mesma transação). A reabertura é recusada enquanto o eSocial do período estiver
-// fechado (S-1299 em andamento ou aceito): primeiro a reabertura dos periódicos (S-1298). Grava só SGH_ com a trilha na
+// fechado (S-1299 em andamento ou aceito): primeiro a reabertura dos periódicos (S-1298). Grava pela porta da folha, com a trilha na
 // mesma transação, atrás da chave `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome.
 //
 // D-PERM-FECH-537 (POL-5): o recibo de férias e a rescisão são de um colaborador só; sem `pessoas.salario.ler` o líquido
@@ -31,7 +31,6 @@ import {
   textoResumoFechamento,
   totaisFechamento,
 } from '@sgh/dominio-pessoas';
-import { type FechamentoFolhaLido, type ProcessoFolhaLido, TETO_FECHAMENTOS_FOLHA } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -40,6 +39,8 @@ import { ApoioGravacao } from '../../exames/public-api.js';
 import type { PortaEsocial } from '../esocial/porta-esocial.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
 import type { PortaFolha } from './porta-folha.js';
+import { type FechamentoDaFolha, type ProcessoDaFolha } from './tipos-folha.js';
+import { TETO_FECHAMENTOS_FOLHA } from './apoio-folha.js';
 
 export const PERMISSOES_FECHAMENTO_FOLHA = {
   ler: 'pessoas.folha.ler',
@@ -64,7 +65,7 @@ const recusa = (codigo: string, mensagem: string, extra: object = {}) =>
 export const intervaloDoPeriodo = (apuracao: 'mensal' | 'anual', periodo: string) =>
   apuracao === 'anual' ? { de: `${periodo}-01`, ate: `${periodo}-12` } : { de: periodo, ate: periodo };
 
-const paraFechamento = (p: ProcessoFolhaLido): ProcessoParaFechamento => ({
+const paraFechamento = (p: ProcessoDaFolha): ProcessoParaFechamento => ({
   id: p.id,
   tipo: p.tipo,
   competencia: p.competencia,
@@ -100,7 +101,7 @@ const mascararConferencia = (
         ],
       };
 
-export const paraFechamentoApi = (f: FechamentoFolhaLido, verSalario: boolean): FechamentoFolha => ({
+export const paraFechamentoApi = (f: FechamentoDaFolha, verSalario: boolean): FechamentoFolha => ({
   ...f,
   processos: mascararProcessos(f.processos, verSalario),
 });
@@ -160,17 +161,12 @@ export class ServicoFechamentoFolha {
     empresa: number,
     apuracao: 'mensal' | 'anual',
     periodo: string,
-  ): Promise<FechamentoFolhaLido | null> {
+  ): Promise<FechamentoDaFolha | null> {
     const xs = await this.porta.fechamentos(this.ctx(s), { empresa, apuracao, periodo, situacao: 'fechada' });
     return xs[0] ?? null;
   }
 
-  private montar(
-    x: FecharFolhaEntrada,
-    hoje: string,
-    jaFechado: boolean,
-    lidos: readonly ProcessoFolhaLido[],
-  ) {
+  private montar(x: FecharFolhaEntrada, hoje: string, jaFechado: boolean, lidos: readonly ProcessoDaFolha[]) {
     const processos = processosDoPeriodo(x.apuracao, x.periodo, lidos.map(paraFechamento));
     const pagamento = x.apuracao === 'mensal' ? x.pagamento : null;
     const pendencias = pendenciasFechamento({
@@ -272,7 +268,7 @@ export class ServicoFechamentoFolha {
   }
 
   /** O eSocial do período está fechado (S-1299 em andamento ou aceito, sem S-1298 aceito depois). */
-  private async esocialFechado(s: SessaoCadastro, f: FechamentoFolhaLido): Promise<boolean> {
+  private async esocialFechado(s: SessaoCadastro, f: FechamentoDaFolha): Promise<boolean> {
     if (!this.esocial) return false;
     const evs = await this.esocial.eventos(this.ctx(s), {
       empresa: f.empresa,

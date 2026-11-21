@@ -1,25 +1,24 @@
-// Porta de cargos e salários em memória (W0-06, parte 4): a sessão sintética de dev/ci e o E2E. Os registros vivem por
-// estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. As regras de
-// banco que importam ao teste também valem aqui: nome único, versão otimista, a versão encerra a anterior na véspera,
-// a exclusão física recontada com o mapa (com vínculo: 409) e o retrato guardado. O CBO e os conselhos são sintéticos
-// (códigos públicos da CBO). `ligarColaborador` simula o vínculo de um colaborador ao cargo (SGH_PES_VINCULO.ID_CARGO).
-import {
-  type CargoLido,
-  type CorrecaoPesLida,
-  ErroOperacao,
-  type FaixaSalarialLida,
-  type OcupacaoCargoLida,
-  recusa,
-  type VagaQuadroLida,
-  type VinculoPessoasContado,
-} from '@sgh/legado';
-import type { LinhaTrilha } from '@sgh/legado';
+// Porta de cargos e salários em memória (W0-06, parte 4): a sessão sintética de dev/ci e o E2E. Como no modelo do banco,
+// o cargo (com as correções e os retratos de exclusão) é do cliente inteiro: a lista, o nome único e a recontagem das
+// dependências valem para todos os estabelecimentos. Faixas, quadro de vagas e colaboradores (ocupação) são do
+// estabelecimento. Tudo numa cópia por transação (o erro no meio desfaz tudo). As regras que importam ao teste também valem
+// aqui: nome único, versão otimista, a versão encerra a anterior na véspera, a exclusão recontada (com vínculo: 409) e o
+// retrato guardado. O CBO e os conselhos são sintéticos (códigos públicos da CBO). `ligarColaborador` simula o vínculo
+// de trabalho de um colaborador no cargo.
+import { ErroOperacao, recusa } from '@sgh/nucleo';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
 import type {
   AlvoDependenciaCargos,
+  CargoRegistrado,
   ContextoCargos,
+  CorrecaoRegistrada,
+  DependenciaContada,
+  FaixaSalarialRegistrada,
   GravadorCargos,
+  OcupacaoCargo,
   PortaCargos,
   TabelaCargos,
+  VagaQuadroRegistrada,
 } from './porta-cargos.js';
 
 const desatualizado = () =>
@@ -53,33 +52,51 @@ interface Colaborador {
   readonly desligado: boolean;
 }
 
+/** O que é do estabelecimento: faixas, quadro de vagas e a ocupação. */
+interface Local {
+  faixas: FaixaSalarialRegistrada[];
+  vagas: VagaQuadroRegistrada[];
+  colaboradores: Colaborador[];
+}
+
+/** O estado de um cliente: o cargo é da rede; o resto, por estabelecimento. */
 interface Estado {
   seq: number;
-  cargos: CargoLido[];
-  faixas: FaixaSalarialLida[];
-  vagas: VagaQuadroLida[];
-  colaboradores: Colaborador[];
-  correcoes: CorrecaoPesLida[];
+  cargos: CargoRegistrado[];
+  correcoes: CorrecaoRegistrada[];
   exclusoes: { tabela: TabelaCargos; id: number; linha: unknown; motivo: string; por: string }[];
+  locais: Map<string, Local>;
 }
-const novo = (): Estado => ({
-  seq: 8100,
-  cargos: [],
-  faixas: [],
-  vagas: [],
-  colaboradores: [],
-  correcoes: [],
-  exclusoes: [],
-});
+const novo = (): Estado => ({ seq: 8100, cargos: [], correcoes: [], exclusoes: [], locais: new Map() });
 const copiar = (s: Estado): Estado => ({
   seq: s.seq,
   cargos: s.cargos.map((x) => ({ ...x })),
-  faixas: s.faixas.map((x) => ({ ...x })),
-  vagas: s.vagas.map((x) => ({ ...x })),
-  colaboradores: [...s.colaboradores],
   correcoes: [...s.correcoes],
   exclusoes: [...s.exclusoes],
+  locais: new Map(
+    [...s.locais].map(([k, l]) => [
+      k,
+      {
+        faixas: l.faixas.map((x) => ({ ...x })),
+        vagas: l.vagas.map((x) => ({ ...x })),
+        colaboradores: [...l.colaboradores],
+      },
+    ]),
+  ),
 });
+
+const chaveDe = (estabelecimento: number | null) => String(estabelecimento ?? 0);
+const localDe = (s: Estado, estabelecimento: number | null): Local => {
+  const k = chaveDe(estabelecimento);
+  let l = s.locais.get(k);
+  if (!l) {
+    l = { faixas: [], vagas: [], colaboradores: [] };
+    s.locais.set(k, l);
+  }
+  return l;
+};
+const todos = <K extends keyof Local>(s: Estado, k: K): Local[K][number][] =>
+  [...s.locais.values()].flatMap((l) => l[k] as Local[K][number][]);
 
 const p2 = (x: number) => String(x).padStart(2, '0');
 const local = (d: Date) =>
@@ -90,38 +107,50 @@ const vespera = (dia: string): string => {
   return d.toISOString().slice(0, 10);
 };
 
-function contar(s: Estado, alvo: AlvoDependenciaCargos, id: number): VinculoPessoasContado[] {
-  const r: VinculoPessoasContado[] = [];
+function contar(
+  s: Estado,
+  estabelecimento: number | null,
+  alvo: AlvoDependenciaCargos,
+  id: number,
+): DependenciaContada[] {
+  const r: DependenciaContada[] = [];
   const somar = (grupo: string, tabela: string, coluna: string, quantidade: number) => {
     if (quantidade > 0) r.push({ grupo, tabela, coluna, quantidade });
   };
   if (alvo === 'cargo') {
+    // O cargo é da rede: conta em todos os estabelecimentos do cliente.
     somar(
       'Colaboradores no cargo',
-      'SGH_PES_VINCULO',
-      'ID_CARGO',
-      s.colaboradores.filter((c) => c.cargo === id).length,
+      'vinculo_trabalho',
+      'cargo_id',
+      todos(s, 'colaboradores').filter((c) => c.cargo === id).length,
     );
     somar(
       'Faixas da tabela salarial',
-      'SGH_PES_CARGO_FAIXA',
-      'ID_CARGO',
-      s.faixas.filter((f) => f.cargo === id).length,
+      'faixa_salarial',
+      'cargo_id',
+      todos(s, 'faixas').filter((f) => f.cargo === id).length,
     );
-    somar('Vagas do quadro', 'SGH_PES_VAGA', 'ID_CARGO', s.vagas.filter((v) => v.cargo === id).length);
+    somar(
+      'Vagas do quadro',
+      'quadro_vaga',
+      'cargo_id',
+      todos(s, 'vagas').filter((v) => v.cargo === id).length,
+    );
   } else {
+    const l = localDe(s, estabelecimento);
     const [linhas, nome, tabela] =
       alvo === 'salario-faixa'
-        ? ([s.faixas, 'faixa', 'SGH_PES_CARGO_FAIXA'] as const)
-        : ([s.vagas, 'vaga', 'SGH_PES_VAGA'] as const);
+        ? ([l.faixas, 'faixa', 'faixa_salarial'] as const)
+        : ([l.vagas, 'vaga', 'quadro_vaga'] as const);
     const proprio = (linhas as readonly { id: number; anterior: number | null }[]).find((x) => x.id === id);
     somar(
       `Versão posterior da ${nome}`,
       tabela,
-      'ID_ANTERIOR',
+      'anterior_id',
       (linhas as readonly { anterior: number | null }[]).filter((x) => x.anterior === id).length,
     );
-    somar(`Versão anterior da ${nome}`, tabela, 'ID', proprio?.anterior ? 1 : 0);
+    somar(`Versão anterior da ${nome}`, tabela, 'id', proprio?.anterior ? 1 : 0);
   }
   return r;
 }
@@ -132,23 +161,31 @@ export class PortaCargosMemoria implements PortaCargos {
   agoraFixo: string | null = null;
   private readonly estados = new Map<string, Estado>();
 
-  private e(c: ContextoCargos): Estado {
-    let s = this.estados.get(c.hospital);
+  private porCliente(cliente: string): Estado {
+    let s = this.estados.get(cliente);
     if (!s) {
       s = novo();
-      this.estados.set(c.hospital, s);
+      this.estados.set(cliente, s);
     }
     return s;
   }
 
-  /** Simula o colaborador ligado ao cargo (SGH_PES_VINCULO.ID_CARGO), para a ocupação e a recusa de exclusão. */
-  ligarColaborador(hospital: string, x: Colaborador): void {
-    this.e({ rede: '', hospital }).colaboradores.push(x);
+  private e(c: ContextoCargos): Estado {
+    return this.porCliente(c.cliente);
   }
 
-  /** Os retratos guardados das exclusões físicas (D-CRUD-SNAP), para o teste. */
-  exclusoes(hospital: string): Estado['exclusoes'] {
-    return [...this.e({ rede: '', hospital }).exclusoes];
+  private l(c: ContextoCargos): Local {
+    return localDe(this.e(c), c.estabelecimento);
+  }
+
+  /** Simula o vínculo de trabalho de um colaborador no cargo (no estabelecimento do contexto). */
+  ligarColaborador(c: Pick<ContextoCargos, 'cliente' | 'estabelecimento'>, x: Colaborador): void {
+    localDe(this.porCliente(c.cliente), c.estabelecimento).colaboradores.push(x);
+  }
+
+  /** Os retratos guardados das exclusões (D-CRUD-SNAP) do cliente, para o teste. */
+  exclusoes(cliente: string): Estado['exclusoes'] {
+    return [...this.porCliente(cliente).exclusoes];
   }
 
   private agora(): string {
@@ -169,14 +206,15 @@ export class PortaCargosMemoria implements PortaCargos {
 
   async gravarSgh<T>(
     c: ContextoCargos,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorCargos) => Promise<T>,
   ): Promise<T> {
     const s = copiar(this.e(c));
+    const loc = localDe(s, c.estabelecimento);
     const id = () => ++s.seq;
     const agora = this.agora();
     const tabelaDe = (t: TabelaCargos) =>
-      (t === 'SGH_PES_CARGO' ? s.cargos : t === 'SGH_PES_CARGO_FAIXA' ? s.faixas : s.vagas) as {
+      (t === 'cargo' ? s.cargos : t === 'faixa_salarial' ? loc.faixas : loc.vagas) as {
         id: number;
         versao: number;
         ativo: boolean;
@@ -184,14 +222,14 @@ export class PortaCargosMemoria implements PortaCargos {
       }[];
     const nomeUnico = (nome: string, outro: number | null) => {
       if (s.cargos.some((x) => x.id !== outro && x.nome.toUpperCase() === nome.toUpperCase()))
-        throw recusa('cargo-nome-em-uso', 'Já existe um cargo com este nome neste estabelecimento.', {
+        throw recusa('cargo-nome-em-uso', 'Já existe um cargo com este nome.', {
           campos: ['nome'],
         });
     };
     const g: GravadorCargos = {
       cargo: async (i) => s.cargos.find((x) => x.id === i) ?? null,
-      faixa: async (i) => s.faixas.find((x) => x.id === i) ?? null,
-      vaga: async (i) => s.vagas.find((x) => x.id === i) ?? null,
+      faixa: async (i) => loc.faixas.find((x) => x.id === i) ?? null,
+      vaga: async (i) => loc.vagas.find((x) => x.id === i) ?? null,
       incluirCargo: async (x) => {
         nomeUnico(x.nome, null);
         const n = id();
@@ -239,12 +277,8 @@ export class PortaCargosMemoria implements PortaCargos {
         const i = linhas.findIndex((y) => y.id === x.id && y.versao === x.versao);
         if (i < 0) throw desatualizado();
         const alvo: AlvoDependenciaCargos =
-          x.tabela === 'SGH_PES_CARGO'
-            ? 'cargo'
-            : x.tabela === 'SGH_PES_CARGO_FAIXA'
-              ? 'salario-faixa'
-              : 'vaga';
-        const v = contar(s, alvo, x.id);
+          x.tabela === 'cargo' ? 'cargo' : x.tabela === 'faixa_salarial' ? 'salario-faixa' : 'vaga';
+        const v = contar(s, c.estabelecimento, alvo, x.id);
         if (v.length > 0)
           throw recusa(
             `${alvo}-com-vinculos`,
@@ -261,7 +295,7 @@ export class PortaCargosMemoria implements PortaCargos {
       },
       incluirFaixa: async (x) => {
         if (
-          s.faixas.some(
+          loc.faixas.some(
             (f) => f.cargo === x.cargo && f.faixa === x.faixa && f.nivel === x.nivel && f.desde === x.desde,
           )
         )
@@ -273,7 +307,7 @@ export class PortaCargosMemoria implements PortaCargos {
             },
           );
         const n = id();
-        s.faixas.push({
+        loc.faixas.push({
           id: n,
           cargo: x.cargo,
           faixa: x.faixa,
@@ -292,7 +326,7 @@ export class PortaCargosMemoria implements PortaCargos {
         return n;
       },
       versionarFaixa: async (x) => {
-        const r = s.faixas.find(
+        const r = loc.faixas.find(
           (y) =>
             y.id === x.anterior.id &&
             y.versao === x.anterior.versao &&
@@ -300,10 +334,10 @@ export class PortaCargosMemoria implements PortaCargos {
             y.ativo &&
             y.desde < x.desde,
         );
-        if (!r || s.faixas.some((y) => y.anterior === r.id)) throw desatualizado();
+        if (!r || loc.faixas.some((y) => y.anterior === r.id)) throw desatualizado();
         Object.assign(r, { ate: vespera(x.desde), versao: r.versao + 1 });
         const n = id();
-        s.faixas.push({
+        loc.faixas.push({
           ...r,
           id: n,
           valor: x.valor,
@@ -321,7 +355,7 @@ export class PortaCargosMemoria implements PortaCargos {
       },
       incluirVaga: async (x) => {
         if (
-          s.vagas.some((v) => v.cargo === x.cargo && v.centroCusto === x.centroCusto && v.desde === x.desde)
+          loc.vagas.some((v) => v.cargo === x.cargo && v.centroCusto === x.centroCusto && v.desde === x.desde)
         )
           throw recusa(
             'vaga-ja-existe',
@@ -331,7 +365,7 @@ export class PortaCargosMemoria implements PortaCargos {
             },
           );
         const n = id();
-        s.vagas.push({
+        loc.vagas.push({
           id: n,
           cargo: x.cargo,
           centroCusto: x.centroCusto,
@@ -349,7 +383,7 @@ export class PortaCargosMemoria implements PortaCargos {
         return n;
       },
       versionarVaga: async (x) => {
-        const r = s.vagas.find(
+        const r = loc.vagas.find(
           (y) =>
             y.id === x.anterior.id &&
             y.versao === x.anterior.versao &&
@@ -357,10 +391,10 @@ export class PortaCargosMemoria implements PortaCargos {
             y.ativo &&
             y.desde < x.desde,
         );
-        if (!r || s.vagas.some((y) => y.anterior === r.id)) throw desatualizado();
+        if (!r || loc.vagas.some((y) => y.anterior === r.id)) throw desatualizado();
         Object.assign(r, { ate: vespera(x.desde), versao: r.versao + 1 });
         const n = id();
-        s.vagas.push({
+        loc.vagas.push({
           ...r,
           id: n,
           quantidade: x.quantidade,
@@ -391,34 +425,34 @@ export class PortaCargosMemoria implements PortaCargos {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(c.cliente, s);
     return r;
   }
 
   async hoje(): Promise<string> {
     return this.agora().slice(0, 10);
   }
-  async cargos(c: ContextoCargos): Promise<CargoLido[]> {
+  async cargos(c: ContextoCargos): Promise<CargoRegistrado[]> {
     return [...this.e(c).cargos].sort((a, b) => a.nome.localeCompare(b.nome));
   }
-  async cargo(c: ContextoCargos, id: number): Promise<CargoLido | null> {
+  async cargo(c: ContextoCargos, id: number): Promise<CargoRegistrado | null> {
     return this.e(c).cargos.find((x) => x.id === id) ?? null;
   }
-  async faixas(c: ContextoCargos, cargo: number | null): Promise<FaixaSalarialLida[]> {
-    return this.e(c).faixas.filter((x) => cargo === null || x.cargo === cargo);
+  async faixas(c: ContextoCargos, cargo: number | null): Promise<FaixaSalarialRegistrada[]> {
+    return this.l(c).faixas.filter((x) => cargo === null || x.cargo === cargo);
   }
-  async faixa(c: ContextoCargos, id: number): Promise<FaixaSalarialLida | null> {
-    return this.e(c).faixas.find((x) => x.id === id) ?? null;
+  async faixa(c: ContextoCargos, id: number): Promise<FaixaSalarialRegistrada | null> {
+    return this.l(c).faixas.find((x) => x.id === id) ?? null;
   }
-  async vagas(c: ContextoCargos, cargo: number | null): Promise<VagaQuadroLida[]> {
-    return this.e(c).vagas.filter((x) => cargo === null || x.cargo === cargo);
+  async vagas(c: ContextoCargos, cargo: number | null): Promise<VagaQuadroRegistrada[]> {
+    return this.l(c).vagas.filter((x) => cargo === null || x.cargo === cargo);
   }
-  async vaga(c: ContextoCargos, id: number): Promise<VagaQuadroLida | null> {
-    return this.e(c).vagas.find((x) => x.id === id) ?? null;
+  async vaga(c: ContextoCargos, id: number): Promise<VagaQuadroRegistrada | null> {
+    return this.l(c).vagas.find((x) => x.id === id) ?? null;
   }
-  async ocupacao(c: ContextoCargos): Promise<OcupacaoCargoLida[]> {
-    const m = new Map<string, OcupacaoCargoLida>();
-    for (const x of this.e(c).colaboradores.filter((y) => !y.desligado)) {
+  async ocupacao(c: ContextoCargos): Promise<OcupacaoCargo[]> {
+    const m = new Map<string, OcupacaoCargo>();
+    for (const x of this.l(c).colaboradores.filter((y) => !y.desligado)) {
       const k = `${x.cargo}:${x.centroCusto}`;
       const a = m.get(k);
       m.set(k, { cargo: x.cargo, centroCusto: x.centroCusto, ocupadas: (a?.ocupadas ?? 0) + 1 });
@@ -429,8 +463,8 @@ export class PortaCargosMemoria implements PortaCargos {
     c: ContextoCargos,
     alvo: AlvoDependenciaCargos,
     id: number,
-  ): Promise<VinculoPessoasContado[]> {
-    return contar(this.e(c), alvo, id);
+  ): Promise<DependenciaContada[]> {
+    return contar(this.e(c), c.estabelecimento, alvo, id);
   }
   async buscarCbo(_c: ContextoCargos, termo: string) {
     const t = termo.trim().toUpperCase();
@@ -452,9 +486,9 @@ export class PortaCargosMemoria implements PortaCargos {
   }
   async correcoes(
     c: ContextoCargos,
-    tabela: string,
+    tabela: TabelaCargos,
     registros: readonly number[],
-  ): Promise<CorrecaoPesLida[]> {
+  ): Promise<CorrecaoRegistrada[]> {
     return this.e(c).correcoes.filter((x) => x.tabela === tabela && registros.includes(x.registro));
   }
 }

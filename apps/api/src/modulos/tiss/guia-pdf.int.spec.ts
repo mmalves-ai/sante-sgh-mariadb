@@ -10,11 +10,13 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { converterHtmlEmPdfA, gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { pastaTemporaria, verapdf } from '../documento/integracao.spec-util.js';
+import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo } from './modulo.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 
 const GOTENBERG = process.env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318';
 const disponivel = await gotenbergDisponivel(GOTENBERG);
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,tiss' };
 
 describe.skipIf(!disponivel)('guia TISS em PDF/A (veraPDF)', () => {
   let app: NestFastifyApplication;
@@ -23,9 +25,10 @@ describe.skipIf(!disponivel)('guia TISS em PDF/A (veraPDF)', () => {
     const tiss = new PortaTissMemoria({ estado: () => 'verde' });
     app = await criarApp(lerConfiguracao(env), null, env, {
       trilha: new RegistradorTrilhaMemoria(),
-      tiss,
-      armazemXmlTiss: tiss.armazem,
-      vigia: null,
+      registro: {
+        configuracao_teste: async () => ({ modulo: (ctx) => moduloConfiguracaoDeTeste(ctx) }),
+        tiss: async () => ({ modulo: (ctx) => modulo(ctx, { porta: tiss, armazem: tiss.armazem }) }),
+      },
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

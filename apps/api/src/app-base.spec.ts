@@ -57,7 +57,7 @@ describe('boot mínimo', () => {
   });
 
   it('API_MODULOS com módulo não migrado: a montagem é recusada com a mensagem', async () => {
-    const ruim = { ...env, API_MODULOS: 'sessao,cirurgia' };
+    const ruim = { ...env, API_MODULOS: 'sessao,contabil' };
     await expect(criarApp(lerConfiguracao(ruim), null, ruim)).rejects.toThrow(/faturamento/);
   });
 });
@@ -73,7 +73,8 @@ describe('sessão sintética com o núcleo do cliente em dev', () => {
     try {
       await a.init();
       await a.getHttpAdapter().getInstance().ready();
-      return (await a.inject({ method: 'GET', url: '/api/sessao', headers: { host: 'localhost' } })).statusCode;
+      return (await a.inject({ method: 'GET', url: '/api/sessao', headers: { host: 'localhost' } }))
+        .statusCode;
     } finally {
       await a.close();
     }

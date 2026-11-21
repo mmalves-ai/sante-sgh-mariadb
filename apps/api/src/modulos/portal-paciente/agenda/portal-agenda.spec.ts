@@ -14,10 +14,15 @@ import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { ErroOperacao } from '@sgh/legado';
-import { PORTA_CADASTRO, type PortaCadastro } from '../../cadastro/porta.js';
+import { ErroOperacao } from '@sgh/nucleo';
+import { moduloAgenda, pacientesSinteticos } from '../../agenda/modulo.js';
+import { PortaAgendaMemoria } from '../../agenda/porta-memoria.js';
+import { portaDoCadastro } from '../../cadastro/modulo.js';
+import type { ContextoPorta, PortaCadastro } from '../../cadastro/porta.js';
 import { PortaDocumentosMemoria } from '../../pep/documentos-porta-memoria.js';
+import { type ContextoModulo, REGISTRO_MODULOS } from '../../registro.js';
 import { PortaSadtMemoria } from '../../sadt/porta-memoria.js';
+import { moduloPortalPaciente } from '../modulo.js';
 import { GatewaySimulado } from './gateway.js';
 import { SERVICO_AGENDA_PORTAL } from './portal-agenda.controller.js';
 import { PortaAgendaOnlineMemoria, sementeAgendaOnline } from './porta-memoria.js';
@@ -25,25 +30,46 @@ import type { ServicoAgendaPortal } from './servico.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'sgh-m502-'));
 const PORFORA = join(tmp, 'agenda-por-fora.json');
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', AGENDA_SINTETICA_POR_FORA: PORFORA };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  AGENDA_SINTETICA_POR_FORA: PORFORA,
+  API_MODULOS: 'agenda,portal-paciente',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const documentos = new PortaDocumentosMemoria(trilha, null);
 const sadt = new PortaSadtMemoria({ estado: () => 'verde' }, documentos);
 const agendaOnline = new PortaAgendaOnlineMemoria(undefined, sementeAgendaOnline);
 const gateway = new GatewaySimulado();
+// A mesma agenda em memória nas telas da agenda (o call center) e no portal: a colisão e o cancelamento por outro canal.
+const agendaPorta = new PortaAgendaMemoria(null, async (_c, ids) => pacientesSinteticos(ids), undefined, {
+  arquivoPorFora: PORFORA,
+});
 let app: NestFastifyApplication;
+let portaCadastro: PortaCadastro;
 let chave = 0;
 
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
-  app = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    documentos,
-    sadt,
-    vigia: null,
-    agendaOnline,
-    gatewayPortal: gateway,
-  });
+  // O módulo do portal pelo registro (o registro.ts ganha a entrada na integração do lote), com as portas de teste.
+  const registro = {
+    ...REGISTRO_MODULOS,
+    agenda: async () => ({ modulo: (ctx: ContextoModulo) => moduloAgenda(ctx, { porta: agendaPorta }) }),
+    'portal-paciente': async () => ({
+      modulo: async (ctx: ContextoModulo) => {
+        portaCadastro = await portaDoCadastro(ctx);
+        return moduloPortalPaciente(ctx, {
+          sadt,
+          agendaOnline,
+          gateway,
+          agenda: agendaPorta,
+          cadastro: portaCadastro,
+          vigia: false,
+        });
+      },
+    }),
+  };
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -512,7 +538,7 @@ describe('exame pelo portal', () => {
         (t) =>
           t.evento === 'portal.agendamento.registrado' &&
           t.operacao === 'agenda.remarcarExame' &&
-          t.tabelaAlvo === 'SIPACAGD' &&
+          t.tabelaAlvo === 'marcacao_horario' &&
           t.idAlvo === id,
       ),
     ).toBe(true);
@@ -601,9 +627,16 @@ describe('configuração da agenda online (tela interna)', () => {
 });
 
 describe('correções da revisão do M50.2', () => {
-  const ctx = { rede: '', hospital: 'aa' };
+  const ctx: ContextoPorta = {
+    rede: '',
+    hospital: 'aa',
+    cliente: '',
+    estabelecimento: null,
+    usuario: null,
+    correlacao: 'teste',
+  };
   const servico = () => app.get<ServicoAgendaPortal>(SERVICO_AGENDA_PORTAL);
-  const cadastro = () => app.get<PortaCadastro>(PORTA_CADASTRO);
+  const cadastro = () => portaCadastro;
 
   async function marcar(): Promise<string> {
     const h = (await p(cinthya, 'GET', '/agenda/horarios?tipo=consulta&convenio=10')).json().itens as {
@@ -838,7 +871,14 @@ describe('correções da revisão do M50.2', () => {
 });
 
 describe('W0-10: tesouraria das cobranças do portal', () => {
-  const ctx = { rede: '', hospital: 'aa' };
+  const ctx: ContextoPorta = {
+    rede: '',
+    hospital: 'aa',
+    cliente: '',
+    estabelecimento: null,
+    usuario: null,
+    correlacao: 'teste',
+  };
   const hoje = () => {
     const d = new Date();
     return d.toISOString().slice(0, 10);

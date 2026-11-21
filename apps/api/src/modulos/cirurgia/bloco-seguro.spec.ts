@@ -14,10 +14,7 @@ import {
   montarAppBloco,
   respostasQueConcluem,
 } from './bloco-seguro.spec-util.js';
-import { ArmazemMemoria } from '../../sessao/armazem.js';
-import type { AvisosAtendimento } from '../atendimento/avisos.js';
-import { MotorVigia } from '../internacao/public-api.js';
-import { AVISOS_BLOCO } from './bloco-seguro.controller.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
 import { PainelBlocoFamilia } from './painel-bloco-familia.js';
 
 let a: AppBloco;
@@ -294,7 +291,7 @@ describe('quadro do bloco, rastreio e painel para familiares', () => {
 
   it('o painel para familiares só com o código, a etapa e o horário (nunca nome, procedimento nem sala)', async () => {
     const p = new PainelBlocoFamilia(a.blocoSeguro, a.cirurgia);
-    const v = await p.painel({ rede: '', hospital: 'aa' });
+    const v = await p.painel({ ...contextoDoEstabelecimento('aa'), usuario: null, correlacao: 'teste' });
     expect(v.linhas).toHaveLength(1);
     expect(v.linhas[0]).toEqual({
       codigo: expect.stringMatching(FORMATO_CODIGO_PAINEL),
@@ -332,41 +329,6 @@ describe('chaves desligadas (POL-3)', () => {
         em: `${HOJE}T08:40`,
       });
       expect(m.json().codigo).toBe('recurso-desligado');
-    } finally {
-      await b.fechar();
-    }
-  });
-});
-
-describe('quadro do bloco em tempo real (ficha, seção 7)', () => {
-  it('a mudança gravada fora do controlador do bloco (o agendamento pelo outro caminho) chega ao quadro pelo vigia', async () => {
-    const lidos: string[] = [];
-    let selo = 's1';
-    const vigia = new MotorVigia({
-      rede: 'rede-sintetica',
-      lerCanal: async (_h, canal, marca) => {
-        lidos.push(canal);
-        return { selo, marca, consultas: 1 };
-      },
-      armazem: new ArmazemMemoria(),
-      tipoArmazem: 'memoria',
-      intervaloMs: 2_000,
-    });
-    const b = await montarAppBloco({ vigia });
-    try {
-      const avisos = b.app.get<AvisosAtendimento>(AVISOS_BLOCO);
-      const versoes: number[] = [];
-      const cancelar = avisos.assinar('aa', (v) => versoes.push(v));
-      await vigia.cicloAgora('aa', 'bloco');
-      const antes = versoes.length;
-      // O outro sistema (ou outra instância da API, ou o controlador do centro cirúrgico) agenda ou cancela: o selo
-      // do canal "bloco" muda no ciclo seguinte e o quadro aberto relê, sem gravação do controlador do bloco.
-      selo = 's2';
-      await vigia.cicloAgora('aa', 'bloco');
-      expect(versoes.length).toBe(antes + 1);
-      expect(new Set(lidos)).toEqual(new Set(['bloco']));
-      cancelar();
-      vigia.parar();
     } finally {
       await b.fechar();
     }

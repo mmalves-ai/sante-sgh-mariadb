@@ -3,18 +3,19 @@
 // pendências, nunca o CPF); quem só consulta a folha (SINT.FOLHA.CONSULTA) abre o apoio sem as ações e é barrado (403) ao
 // gerar, baixar, importar e registrar afastamento; quem não tem a folha não abre nada.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
-import { CifraCpf } from '../cifra-cpf.js';
+import {
+  type ChaveLiberacao,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso,
+} from '../../config/public-api.js';
+import { criarAppPessoas } from '../opcoes-teste.spec-util.js';
 import { FolhaController } from './folha.controller.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -27,7 +28,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -42,9 +43,8 @@ const trilha = new RegistradorTrilhaMemoria();
 
 beforeAll(async () => {
   const recursos = ['pessoas.colaborador', 'pessoas.folhaExterna'];
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPessoas(env, {
     trilha,
-    cifraCpf: new CifraCpf(Buffer.alloc(32, 7)),
     configuracao: fonteConfiguracaoMemoria(trilha, {
       chavesIniciais: () => recursos.map(chave),
       prerequisitosIniciais: () => recursos.map(cumprido),

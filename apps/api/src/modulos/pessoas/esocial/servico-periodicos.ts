@@ -46,11 +46,15 @@ import {
   TIPOS_NO_S1210,
   tpPgtoDoTipo,
 } from '@sgh/dominio-pessoas';
-import type { EventoEsocialSghLido, FechamentoFolhaLido } from '@sgh/legado';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
+import type { PortaCalculoFolha } from '../folha/porta-calculo.js';
 import { paraFechamentoApi } from '../folha/servico-fechamento.js';
+import type { RegistroEventoEsocial } from './porta-esocial.js';
 import { type EventoMontado, PERMISSOES_ESOCIAL, type ServicoEsocial } from './servico-esocial.js';
+
+/** O fechamento da folha como a porta do cálculo o lê. */
+type FechamentoDaFolha = NonNullable<Awaited<ReturnType<PortaCalculoFolha['fechamento']>>>;
 
 const P = PERMISSOES_ESOCIAL;
 const FECHAR_FOLHA = 'pessoas.folha.fechar';
@@ -61,7 +65,7 @@ const LER_FOLHA = 'pessoas.folha.ler';
  * processamentos (com o líquido de cada um) só vão a quem tem `pessoas.folha.ler`, com a máscara de
  * `pessoas.salario.ler` da tela da folha. A tela do painel usa só o número, quem fechou e quando.
  */
-function resumoNoPainel(f: FechamentoFolhaLido, s: SessaoCadastro): ResumoFechamentoNoPainel {
+function resumoNoPainel(f: FechamentoDaFolha, s: SessaoCadastro): ResumoFechamentoNoPainel {
   const lerFolha = s.pode(LER_FOLHA);
   const api = lerFolha ? paraFechamentoApi(f, s.pode('pessoas.salario.ler')) : null;
   return {
@@ -91,7 +95,7 @@ const fimDo = (p: PeriodoFolha) => {
   return `${comp}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`;
 };
 
-const paraLido = (e: EventoEsocialSghLido): EventoPeriodicoLido => ({
+const paraLido = (e: RegistroEventoEsocial): EventoPeriodicoLido => ({
   id: e.id,
   evento: e.evento,
   vinculo: e.vinculo,
@@ -115,7 +119,7 @@ export class ServicoPeriodicosEsocial {
     return this.esocial.calculo;
   }
 
-  private async fechamentoVigente(s: SessaoCadastro, p: PeriodoFolha): Promise<FechamentoFolhaLido | null> {
+  private async fechamentoVigente(s: SessaoCadastro, p: PeriodoFolha): Promise<FechamentoDaFolha | null> {
     const xs = await this.calculo.fechamentos(s.porta, {
       empresa: p.empresa,
       apuracao: p.apuracao,
@@ -132,7 +136,7 @@ export class ServicoPeriodicosEsocial {
   }
 
   /** Os vínculos de cada processamento fixado que vai ao S-1200 (e os itens por rubrica deles). */
-  private async remuneracoes(s: SessaoCadastro, f: FechamentoFolhaLido) {
+  private async remuneracoes(s: SessaoCadastro, f: FechamentoDaFolha) {
     const porVinculo = new Map<number, DemonstrativoRemuneracao[]>();
     for (const p of f.processos.filter((x) => TIPOS_NO_S1200.includes(x.tipo))) {
       const itens = await this.calculo.itensRubricaDoProcesso(s.porta, p.id);
@@ -244,7 +248,7 @@ export class ServicoPeriodicosEsocial {
   }
 
   /** Recusa gerar remuneração ou pagamento com o período do eSocial fechado (ou fechando). */
-  private exigirPeriodoAberto(eventos: readonly EventoEsocialSghLido[]) {
+  private exigirPeriodoAberto(eventos: readonly RegistroEventoEsocial[]) {
     const sit = situacaoDoPeriodo(eventos.map(paraLido)).situacao;
     if (sit !== 'aberto')
       throw recusa(
@@ -254,7 +258,11 @@ export class ServicoPeriodicosEsocial {
   }
 
   /** O evento do vínculo no período: em andamento (fica de fora) ou aceito (vira retificação). */
-  private anteriorDo(eventos: readonly EventoEsocialSghLido[], evento: 'S-1200' | 'S-1210', vinculo: number) {
+  private anteriorDo(
+    eventos: readonly RegistroEventoEsocial[],
+    evento: 'S-1200' | 'S-1210',
+    vinculo: number,
+  ) {
     const doV = eventos.filter((x) => x.evento === evento && x.vinculo === vinculo);
     const andamento = doV.find((x) => EM_ANDAMENTO.includes(x.situacao));
     const aceito = doV.find((x) => x.situacao === 'aceito' && x.recibo);

@@ -1,7 +1,7 @@
 // Guarda do XML TISS (M31; ficha, regra 4): o XML enviado e recebido vai ao S3 do projeto com Object Lock (retenção
 // COMPLIANCE em homologação e produção, GOVERNANCE curta no dev), numa chave única por lote e hash: a sobrescrita é
 // recusada antes de gravar (a chave existente nunca é reescrita) e o S3 recusa apagar a versão travada. No banco fica
-// só a chave, a versão e os hashes (SGH_FAT_LOTE_XML, SGH_FAT_DEMONSTRATIVO). Em memória na sessão sintética.
+// só a chave, a versão e os hashes (arquivo ligado ao lote_tiss e ao demonstrativo_analise_conta). Em memória na sessão sintética.
 import type { GuardarXml } from '@sgh/dominio-faturamento';
 import { guardaXmlMemoria } from '@sgh/dominio-faturamento';
 import type { ClienteS3 } from '../documento/public-api.js';

@@ -1,25 +1,9 @@
-// Porta da avaliação de desempenho em memória (W0-06, parte 5): a sessão sintética de dev/ci e o E2E. Os registros
-// vivem por estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. As regras
-// do banco que importam ao teste também valem aqui: nome único, versão otimista, a finalizada nunca muda (a correção é
-// linha nova com ID_ANTERIOR), uma correção por versão, a exclusão física recontada com o mapa (com vínculo: 409) e o
-// retrato guardado. Os vínculos em experiência saem da porta de pessoas (CLT, ativos); o cargo do vínculo e os cursos
-// do PDI se ligam por `ligarCargo` e `ligarCurso` (simulam SGH_PES_VINCULO.ID_CARGO e SGH_PES_CURSO/turma). Na sessão
-// sintética, `treinamento` liga a porta dos treinamentos em memória: o PDI lê o título do curso e a conclusão numa turma
-// (aprovado ou sem avaliação), como o SELECT da gravação SGH_ (achado no E2E da parte 5d-3-3).
-import {
-  type AvaliacaoLida,
-  type CicloAvaliacaoLido,
-  type CompetenciaAvalLida,
-  type CompetenciaCargoLida,
-  type CorrecaoPesLida,
-  ErroOperacao,
-  type LinhaTrilha,
-  type NotaAvaliacaoLida,
-  type PdiLido,
-  recusa,
-  type VinculoExperienciaLido,
-  type VinculoPessoasContado,
-} from '@sgh/legado';
+// Porta da avaliação de desempenho em memória (W0-06, parte 5; F2.2 lote 03-02): a sessão sintética de dev/ci e o E2E.
+// Os registros vivem por estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai ao banco. As
+// regras que importam ao teste também valem aqui: nome único, versão otimista, a finalizada nunca muda (a correção é
+// linha nova com a anterior), uma correção por versão, a exclusão física recontada (com vínculo: 409) e o retrato
+// guardado. Os vínculos em experiência saem da porta de pessoas (CLT, ativos); o cargo do vínculo e os cursos do PDI se
+// ligam por `ligarCargo` e `ligarCurso`. Na sessão sintética, `treinamento` liga a porta dos treinamentos em memória.
 import type { PortaPessoas } from '../porta.js';
 import type { PortaTreinamento } from '../treinamento/porta-treinamento.js';
 import type {
@@ -28,6 +12,20 @@ import type {
   GravadorAvaliacao,
   PortaAvaliacao,
 } from './porta-avaliacao.js';
+import { ErroOperacao, recusa } from '@sgh/nucleo';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
+import {
+  type AvaliacaoRegistrada,
+  chaveDoContexto,
+  type CicloRegistrado,
+  type CompetenciaDoCargo,
+  type CompetenciaRegistrada,
+  type CorrecaoRegistrada,
+  type DependenciaContada,
+  type NotaAvaliacao,
+  type PdiRegistrado,
+  type VinculoEmExperiencia,
+} from './tipos.js';
 
 const desatualizado = (o = 'O registro') =>
   new ErroOperacao(
@@ -49,18 +47,18 @@ interface Curso {
   /** Conclusão (aprovado ou sem avaliação) por vínculo. */
   readonly conclusoes: Readonly<Record<number, string>>;
 }
-type Avaliacao = Omit<AvaliacaoLida, 'substituida' | 'colaborador'>;
-type Pdi = Omit<PdiLido, 'competenciaNome' | 'cursoTitulo' | 'cursoConcluidoEm'>;
+type Avaliacao = Omit<AvaliacaoRegistrada, 'substituida' | 'colaborador'>;
+type Pdi = Omit<PdiRegistrado, 'competenciaNome' | 'cursoTitulo' | 'cursoConcluidoEm'>;
 
 interface Estado {
   seq: number;
-  competencias: CompetenciaAvalLida[];
+  competencias: CompetenciaRegistrada[];
   ligacoes: { id: number; cargo: number; competencia: number }[];
-  ciclos: CicloAvaliacaoLido[];
+  ciclos: CicloRegistrado[];
   avaliacoes: Avaliacao[];
   itens: Item[];
   pdi: Pdi[];
-  correcoes: CorrecaoPesLida[];
+  correcoes: CorrecaoRegistrada[];
   exclusoes: { tabela: string; id: number; linha: unknown; motivo: string; por: string }[];
 }
 const novo = (): Estado => ({
@@ -80,40 +78,50 @@ const p2 = (x: number) => String(x).padStart(2, '0');
 const local = (d: Date) =>
   `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
 
-function contar(s: Estado, alvo: AlvoDependenciaAvaliacao, id: number): VinculoPessoasContado[] {
-  const r: VinculoPessoasContado[] = [];
+function contar(s: Estado, alvo: AlvoDependenciaAvaliacao, id: number): DependenciaContada[] {
+  const r: DependenciaContada[] = [];
   const somar = (grupo: string, tabela: string, coluna: string, quantidade: number) => {
     if (quantidade > 0) r.push({ grupo, tabela, coluna, quantidade });
   };
   if (alvo === 'competencia') {
     somar(
       'Cargos com a competência',
-      'SGH_PES_CARGO_COMPETENCIA',
-      'ID_COMPETENCIA',
+      'cargo_competencia',
+      'competencia_id',
       s.ligacoes.filter((x) => x.competencia === id).length,
     );
     somar(
       'Notas de avaliação',
-      'SGH_PES_AVAL_ITEM',
-      'ID_COMPETENCIA',
+      'avaliacao_desempenho_item',
+      'competencia_id',
       s.itens.filter((x) => x.competencia === id).length,
     );
-    somar('Ações do PDI', 'SGH_PES_PDI', 'ID_COMPETENCIA', s.pdi.filter((x) => x.competencia === id).length);
+    somar(
+      'Ações do PDI',
+      'plano_desenvolvimento',
+      'competencia_id',
+      s.pdi.filter((x) => x.competencia === id).length,
+    );
   } else if (alvo === 'ciclo-avaliacao') {
     somar(
       'Avaliações do ciclo',
-      'SGH_PES_AVALIACAO',
-      'ID_CICLO',
+      'avaliacao_desempenho',
+      'ciclo_avaliacao_id',
       s.avaliacoes.filter((x) => x.ciclo === id).length,
     );
   } else {
     somar(
       'Versão posterior da avaliação',
-      'SGH_PES_AVALIACAO',
-      'ID_ANTERIOR',
+      'avaliacao_desempenho',
+      'anterior_id',
       s.avaliacoes.filter((x) => x.anterior === id).length,
     );
-    somar('Ações do PDI', 'SGH_PES_PDI', 'ID_AVALIACAO', s.pdi.filter((x) => x.avaliacao === id).length);
+    somar(
+      'Ações do PDI',
+      'plano_desenvolvimento',
+      'avaliacao_id',
+      s.pdi.filter((x) => x.avaliacao === id).length,
+    );
   }
   return r;
 }
@@ -132,15 +140,15 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
   constructor(private readonly pessoas: PortaPessoas | null = null) {}
 
   private e(c: ContextoAvaliacao): Estado {
-    let s = this.estados.get(c.hospital);
+    let s = this.estados.get(chaveDoContexto(c));
     if (!s) {
       s = novo();
-      this.estados.set(c.hospital, s);
+      this.estados.set(chaveDoContexto(c), s);
     }
     return s;
   }
 
-  /** Simula o cargo do vínculo (SGH_PES_VINCULO.ID_CARGO). */
+  /** Simula o cargo do vínculo de trabalho. */
   ligarCargo(hospital: string, vinculo: number, cargo: number): void {
     this.cargosDosVinculos.set(`${hospital}:${vinculo}`, cargo);
   }
@@ -152,7 +160,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
 
   /** Os retratos guardados das exclusões físicas (D-CRUD-SNAP), para o teste. */
   exclusoes(hospital: string): Estado['exclusoes'] {
-    return [...this.e({ rede: '', hospital }).exclusoes];
+    return [...(this.estados.get(hospital)?.exclusoes ?? [])];
   }
 
   private agora(): string {
@@ -173,7 +181,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
 
   async gravarSgh<T>(
     c: ContextoAvaliacao,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorAvaliacao) => Promise<T>,
   ): Promise<T> {
     const s = copiar(this.e(c));
@@ -184,12 +192,12 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
     const competencia = (i: number, versao: number) => {
       const x = s.competencias.find((k) => k.id === i);
       if (!x || x.versao !== versao) throw desatualizado('A competência');
-      return x as { -readonly [K in keyof CompetenciaAvalLida]: CompetenciaAvalLida[K] };
+      return x as { -readonly [K in keyof CompetenciaRegistrada]: CompetenciaRegistrada[K] };
     };
     const ciclo = (i: number, versao: number) => {
       const x = s.ciclos.find((k) => k.id === i);
       if (!x || x.versao !== versao) throw desatualizado('O ciclo');
-      return x as { -readonly [K in keyof CicloAvaliacaoLido]: CicloAvaliacaoLido[K] };
+      return x as { -readonly [K in keyof CicloRegistrado]: CicloRegistrado[K] };
     };
     type Mut<T> = { -readonly [K in keyof T]: T[K] };
     const avaliacao = (i: number, versao: number | null, situacoes: readonly string[]) => {
@@ -266,7 +274,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
         const k = competencia(x.id, x.versao);
         if (contar(s, 'competencia', x.id).length > 0)
           throw recusa('competencia-com-vinculos', 'A competência está em uso: inative-a com o motivo.');
-        retratar('SGH_PES_COMPETENCIA', x.id, k, x.motivo, x.por);
+        retratar('competencia_avaliacao', x.id, k, x.motivo, x.por);
         s.competencias = s.competencias.filter((y) => y.id !== x.id);
       },
       ligarCompetenciaCargo: async (x) => {
@@ -287,7 +295,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       desligarCompetenciaCargo: async (x) => {
         const l = s.ligacoes.find((y) => y.cargo === x.cargo && y.competencia === x.competencia);
         if (!l) throw desatualizado('A competência do cargo');
-        retratar('SGH_PES_CARGO_COMPETENCIA', l.id, l, x.motivo, x.por);
+        retratar('cargo_competencia', l.id, l, x.motivo, x.por);
         s.ligacoes = s.ligacoes.filter((y) => y !== l);
       },
       incluirCiclo: async (x) => {
@@ -360,7 +368,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
         const k = ciclo(x.id, x.versao);
         if (contar(s, 'ciclo-avaliacao', x.id).length > 0)
           throw recusa('ciclo-com-vinculos', 'O ciclo tem avaliações e não pode ser excluído.');
-        retratar('SGH_PES_AVAL_CICLO', x.id, k, x.motivo, x.por);
+        retratar('ciclo_avaliacao', x.id, k, x.motivo, x.por);
         s.ciclos = s.ciclos.filter((y) => y.id !== x.id);
       },
       incluirAvaliacao: async (x) => {
@@ -477,8 +485,8 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
             'A avaliação tem registros ligados e não pode ser excluída.',
           );
         for (const i of s.itens.filter((k) => k.avaliacao === x.id))
-          retratar('SGH_PES_AVAL_ITEM', x.id, i, x.motivo, x.por);
-        retratar('SGH_PES_AVALIACAO', x.id, a, x.motivo, x.por);
+          retratar('avaliacao_desempenho_item', x.id, i, x.motivo, x.por);
+        retratar('avaliacao_desempenho', x.id, a, x.motivo, x.por);
         s.itens = s.itens.filter((k) => k.avaliacao !== x.id);
         s.avaliacoes = s.avaliacoes.filter((k) => k.id !== x.id);
       },
@@ -542,7 +550,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveDoContexto(c), s);
     return r;
   }
 
@@ -551,13 +559,13 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
   async hoje(): Promise<string> {
     return this.agora().slice(0, 10);
   }
-  async competencias(c: ContextoAvaliacao): Promise<CompetenciaAvalLida[]> {
+  async competencias(c: ContextoAvaliacao): Promise<CompetenciaRegistrada[]> {
     return structuredClone(this.e(c).competencias).sort((a, b) => a.nome.localeCompare(b.nome));
   }
-  async competencia(c: ContextoAvaliacao, id: number): Promise<CompetenciaAvalLida | null> {
+  async competencia(c: ContextoAvaliacao, id: number): Promise<CompetenciaRegistrada | null> {
     return structuredClone(this.e(c).competencias.find((x) => x.id === id) ?? null);
   }
-  async competenciasDoCargo(c: ContextoAvaliacao, cargo: number | null): Promise<CompetenciaCargoLida[]> {
+  async competenciasDoCargo(c: ContextoAvaliacao, cargo: number | null): Promise<CompetenciaDoCargo[]> {
     const s = this.e(c);
     return s.ligacoes
       .filter((l) => cargo === null || l.cargo === cargo)
@@ -573,13 +581,13 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       })
       .sort((a, b) => a.cargo - b.cargo || a.nome.localeCompare(b.nome));
   }
-  async ciclos(c: ContextoAvaliacao): Promise<CicloAvaliacaoLido[]> {
+  async ciclos(c: ContextoAvaliacao): Promise<CicloRegistrado[]> {
     return structuredClone(this.e(c).ciclos).sort((a, b) => b.inicio.localeCompare(a.inicio) || b.id - a.id);
   }
-  async ciclo(c: ContextoAvaliacao, id: number): Promise<CicloAvaliacaoLido | null> {
+  async ciclo(c: ContextoAvaliacao, id: number): Promise<CicloRegistrado | null> {
     return structuredClone(this.e(c).ciclos.find((x) => x.id === id) ?? null);
   }
-  private async lida(c: ContextoAvaliacao, a: Avaliacao): Promise<AvaliacaoLida> {
+  private async lida(c: ContextoAvaliacao, a: Avaliacao): Promise<AvaliacaoRegistrada> {
     const v = this.pessoas ? await this.pessoas.vinculo(c, a.vinculo) : null;
     return {
       ...structuredClone(a),
@@ -590,17 +598,17 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
   async avaliacoes(
     c: ContextoAvaliacao,
     f: { readonly ciclo: number } | { readonly vinculo: number },
-  ): Promise<AvaliacaoLida[]> {
+  ): Promise<AvaliacaoRegistrada[]> {
     const xs = this.e(c).avaliacoes.filter((a) =>
       'ciclo' in f ? a.ciclo === f.ciclo : a.vinculo === f.vinculo,
     );
     return Promise.all(xs.sort((a, b) => b.id - a.id).map((a) => this.lida(c, a)));
   }
-  async avaliacao(c: ContextoAvaliacao, id: number): Promise<AvaliacaoLida | null> {
+  async avaliacao(c: ContextoAvaliacao, id: number): Promise<AvaliacaoRegistrada | null> {
     const a = this.e(c).avaliacoes.find((x) => x.id === id);
     return a ? this.lida(c, a) : null;
   }
-  async notas(c: ContextoAvaliacao, avaliacao: number): Promise<NotaAvaliacaoLida[]> {
+  async notas(c: ContextoAvaliacao, avaliacao: number): Promise<NotaAvaliacao[]> {
     const s = this.e(c);
     return s.itens
       .filter((i) => i.avaliacao === avaliacao)
@@ -613,22 +621,22 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }
   async cargoDoVinculo(c: ContextoAvaliacao, vinculo: number): Promise<number | null> {
-    const simulado = this.cargosDosVinculos.get(`${c.hospital}:${vinculo}`);
+    const simulado = this.cargosDosVinculos.get(`${chaveDoContexto(c)}:${vinculo}`);
     if (simulado !== undefined) return simulado;
-    // O cargo ligado na ficha do colaborador (a porta de pessoas em memória guarda o ID_CARGO do vínculo).
+    // O cargo ligado na ficha do colaborador (a porta de pessoas em memória guarda o cargo do vínculo).
     return (await this.pessoas?.vinculo(c, vinculo))?.idCargo ?? null;
   }
-  async vinculosEmExperiencia(c: ContextoAvaliacao, desde: string): Promise<VinculoExperienciaLido[]> {
+  async vinculosEmExperiencia(c: ContextoAvaliacao, desde: string): Promise<VinculoEmExperiencia[]> {
     if (!this.pessoas) return [];
     const { itens } = await this.pessoas.listarVinculos(c, { estado: 'ativo', tipo: 'clt', limite: 2000 });
     return itens
-      .filter((v) => v.hospital === c.hospital && v.admissao >= desde)
+      .filter((v) => v.admissao >= desde)
       .sort((a, b) => a.admissao.localeCompare(b.admissao) || a.nome.localeCompare(b.nome))
       .map((v) => ({
         vinculo: v.id,
         nome: v.nome,
         matricula: v.matricula,
-        cargo: this.cargosDosVinculos.get(`${c.hospital}:${v.id}`) ?? v.idCargo ?? null,
+        cargo: this.cargosDosVinculos.get(`${chaveDoContexto(c)}:${v.id}`) ?? v.idCargo ?? null,
         admissao: v.admissao,
         centroCusto: v.centroCusto,
         setor: v.setor,
@@ -636,7 +644,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
   }
   /** Os cursos simulados (`ligarCurso`) e os do treinamento em memória, com a última conclusão por vínculo. */
   private async cursosDe(c: ContextoAvaliacao): Promise<Curso[]> {
-    const simulados = this.cursos.get(c.hospital) ?? [];
+    const simulados = this.cursos.get(chaveDoContexto(c)) ?? [];
     if (!this.treinamento) return simulados;
     const [cursos, conclusoes] = await Promise.all([
       this.treinamento.cursos(c),
@@ -654,7 +662,7 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       });
     return [...simulados, ...doTreinamento];
   }
-  private pdiLido(c: ContextoAvaliacao, p: Pdi, cursos: readonly Curso[]): PdiLido {
+  private pdiLido(c: ContextoAvaliacao, p: Pdi, cursos: readonly Curso[]): PdiRegistrado {
     const curso = cursos.find((k) => k.id === p.curso);
     return {
       ...structuredClone(p),
@@ -663,14 +671,14 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
       cursoConcluidoEm: curso?.conclusoes[p.vinculo] ?? null,
     };
   }
-  async pdiDoColaborador(c: ContextoAvaliacao, vinculo: number): Promise<PdiLido[]> {
+  async pdiDoColaborador(c: ContextoAvaliacao, vinculo: number): Promise<PdiRegistrado[]> {
     const cursos = await this.cursosDe(c);
     return this.e(c)
       .pdi.filter((p) => p.vinculo === vinculo)
       .sort((a, b) => a.prazo.localeCompare(b.prazo) || a.id - b.id)
       .map((p) => this.pdiLido(c, p, cursos));
   }
-  async pdi(c: ContextoAvaliacao, id: number): Promise<PdiLido | null> {
+  async pdi(c: ContextoAvaliacao, id: number): Promise<PdiRegistrado | null> {
     const p = this.e(c).pdi.find((x) => x.id === id);
     return p ? this.pdiLido(c, p, await this.cursosDe(c)) : null;
   }
@@ -678,14 +686,14 @@ export class PortaAvaliacaoMemoria implements PortaAvaliacao {
     c: ContextoAvaliacao,
     alvo: AlvoDependenciaAvaliacao,
     id: number,
-  ): Promise<VinculoPessoasContado[]> {
+  ): Promise<DependenciaContada[]> {
     return contar(this.e(c), alvo, id);
   }
   async correcoes(
     c: ContextoAvaliacao,
     tabela: string,
     registros: readonly number[],
-  ): Promise<CorrecaoPesLida[]> {
+  ): Promise<CorrecaoRegistrada[]> {
     return this.e(c).correcoes.filter((x) => x.tabela === tabela && registros.includes(x.registro));
   }
 }

@@ -4,7 +4,7 @@
 // que refaz o acesso com um convite novo, o encerramento que leva os vínculos junto, o convite vencido e esgotado, o
 // segundo fator com tentativas e o portal desligado. Pacientes SINTÉTICOS.
 import { codigoTotp } from '@sgh/dominio-acesso';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { RegistroTrilhaPortal } from '../tipos.js';
 import { describe, expect, it } from 'vitest';
 import { PortaGestaoMemoria } from '../../qualidade/public-api.js';
 import { PortaPortalMemoria } from '../porta-memoria.js';
@@ -534,7 +534,7 @@ describe('correções da revisão do M50.1', () => {
   it('o pedido de vínculo não serve de busca de cadastro: recusas contadas por conta, 429, arquivo consumido e trilha', async () => {
     const m = montar();
     const mae = await m.conta(1003, '1990-07-01', 'mae@portal.test');
-    const linhas: LinhaTrilha[] = [];
+    const linhas: RegistroTrilhaPortal[] = [];
     const gravar = m.porta.gravar.bind(m.porta);
     m.porta.gravar = (async (c, fn, t) => {
       const r = await gravar(c, fn, t);
@@ -650,8 +650,8 @@ describe('correções da revisão do M50.1', () => {
 describe('W0-10: troca do e-mail e do autenticador', () => {
   const SENHA = 'frase-sintetica-longa';
   /** A trilha de cada gravação (a porta em memória não guarda a trilha das contas). */
-  function comTrilha(m: ReturnType<typeof montar>): LinhaTrilha[] {
-    const linhas: LinhaTrilha[] = [];
+  function comTrilha(m: ReturnType<typeof montar>): RegistroTrilhaPortal[] {
+    const linhas: RegistroTrilhaPortal[] = [];
     const orig = m.porta.gravar.bind(m.porta);
     m.porta.gravar = async (c, fn, t) => {
       const r = await orig(c, fn, t);
@@ -950,7 +950,7 @@ describe('W0-10 (M1): ouvidoria pelo portal', () => {
       {
         protocolo: r.protocolo,
         tipo: 'elogio',
-        area: 'Ouvidoria',
+        area: 'geral',
         relato: 'Equipe da enfermagem muito atenciosa.',
         recebidaEm: '2026-10-24T09:00:00',
         prazoEm: r.prazoEm,
@@ -1194,7 +1194,7 @@ describe('W0-10 (M3): portabilidade em FHIR/IPS pelo portal', () => {
   it('só o pedido de portabilidade atendido baixa o pacote; o Bundle valida e o SHA-256 vai à trilha', async () => {
     const { validarPacoteIps } = await import('@sgh/dominio-integracao');
     const m = montar();
-    const linhas: LinhaTrilha[] = [];
+    const linhas: RegistroTrilhaPortal[] = [];
     const orig = m.porta.gravar.bind(m.porta);
     m.porta.gravar = async (c, fn, t) => {
       const r = await orig(c, fn, t);
@@ -1250,7 +1250,7 @@ describe('W0-10 (M3): portabilidade em FHIR/IPS pelo portal', () => {
     expect(l).toHaveLength(2);
     expect(l[0]).toMatchObject({
       operacao: 'portal.portabilidadeIps',
-      tabelaAlvo: 'SGH_AUD_PEDIDO_TITULAR',
+      tabelaAlvo: 'pedido_titular',
       chaveNaturalAlvo: `${port.protocolo}:ips:${r.hash}`,
     });
     // O pedido de outro tipo e o protocolo inexistente: 404.

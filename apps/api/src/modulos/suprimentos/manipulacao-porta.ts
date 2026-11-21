@@ -1,19 +1,51 @@
-// Porta da manipulação (M46, etapa 4; ficha, seções 4, 5 e 7), independente de onde (a API não escreve SQL; fronteira
-// Nx):
-//   - `legado`: as leituras READ ONLY (os itens validados a manipular, as ordens, as capelas e os grupos); a abertura e a
-//     conferência numa transação SGH_ com a SGH_TRILHA junto (a ordem relida e travada na MESMA transação); a baixa do
-//     insumo pelo EXECUTOR do M04 (suprimentos.registrarSaida com o bloco `manipulacao`, a ordem ligada no registro
-//     próprio da mesma transação);
-//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas regras e recusas; nada vai à cópia;
+// Porta da manipulação (M46, etapa 4), independente de onde (a API não escreve SQL; fronteira Nx):
+//   - `banco`: o banco do cliente pelo @sgh/nucleo (manipulacao-porta-propria.ts);
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas regras e recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // O insumo, o saldo, os lotes, os locais e os centros de custo vêm da porta do estoque (M28).
-import type { CapelaManipulacao, ItemAManipular, OrdemManipulacao } from '@sgh/contratos';
-import type { ConferenciaManipulacaoSgh, OrdemManipulacaoSgh } from '@sgh/legado';
+// Melhoria: a ordem nova e a conferência são tipos de negócio do módulo (sem o tipo do sistema de origem).
+import type {
+  CapelaManipulacao,
+  ItemAManipular,
+  OrdemManipulacao,
+  SituacaoManipulacao,
+} from '@sgh/contratos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_MANIPULACAO = Symbol('PORTA_MANIPULACAO');
 
-type SemHospital<T> = Omit<T, 'hospital'>;
+/** A ordem de manipulação a abrir. */
+export interface NovaOrdemManipulacao {
+  readonly itemPrescrito: number;
+  readonly avaliacao: number;
+  /** O atendimento do paciente. */
+  readonly reg: number;
+  readonly produto: number | null;
+  readonly capela: number;
+  readonly grupo: number | null;
+  readonly insumo: number;
+  readonly local: number;
+  readonly loteInsumo: string;
+  readonly validadeInsumo: string;
+  readonly quantidade: number;
+  readonly dose: string | null;
+  readonly validadeSobra: string | null;
+  /** AAAA-MM-DDTHH:mm (o preparo). */
+  readonly em: string;
+  readonly usuario: string;
+  readonly chave: string;
+}
+
+/** A dupla conferência da ordem. */
+export interface ConferenciaDaManipulacao {
+  readonly ordem: number;
+  readonly versaoVista: number;
+  readonly situacao: SituacaoManipulacao;
+  readonly observacao: string | null;
+  /** AAAA-MM-DDTHH:mm */
+  readonly em: string;
+  readonly usuario: string;
+}
 
 export interface AvaliacaoDoItem {
   readonly id: number;
@@ -23,15 +55,15 @@ export interface AvaliacaoDoItem {
   readonly produto: number | null;
 }
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto; as leituras aqui são da mesma transação. */
+/** Gravações diretas, numa transação com a trilha junto; as leituras aqui são da mesma transação. */
 export interface GravadorManipulacao {
   /** A ordem relida na transação (travada até o fim), ou null. */
   ordem(id: number): Promise<OrdemManipulacao | null>;
   ordemPelaChave(chave: string): Promise<OrdemManipulacao | null>;
   avaliacao(itemPrescrito: number): Promise<AvaliacaoDoItem | null>;
   ordemEmCurso(itemPrescrito: number): Promise<boolean>;
-  abrir(o: SemHospital<OrdemManipulacaoSgh>): Promise<{ id: number; versao: number; repetida: boolean }>;
-  conferir(c: SemHospital<ConferenciaManipulacaoSgh>): Promise<{ versao: number }>;
+  abrir(o: NovaOrdemManipulacao): Promise<{ id: number; versao: number; repetida: boolean }>;
+  conferir(c: ConferenciaDaManipulacao): Promise<{ versao: number }>;
 }
 
 export interface PortaManipulacao extends PortaGravacaoM18<GravadorManipulacao> {

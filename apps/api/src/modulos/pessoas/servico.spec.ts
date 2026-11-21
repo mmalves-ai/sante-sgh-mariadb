@@ -3,18 +3,25 @@
 // apagado), as unidades onde o profissional atende na ficha, a validade conferida de registro sem número, e o
 // desligamento: recusado quando o CPF não decifra com a chave atual, recusado ao perfil só de auditoria e ao login de
 // painel em uso, com a sessão que não caiu devolvida como pendente, e a chave de idempotência por usuário nunca cortada.
-import type { ChaveGravada, PrerequisitoGravado, UsuarioLidoPessoa } from '@sgh/legado';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { estadoAcessoSintetico, idUsuarioSintetico } from '../acesso/fonte-sintetica.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  type PrerequisitoRecurso,
+  fonteConfiguracaoMemoria,
+} from '../config/public-api.js';
 import { CifraCpf } from './cifra-cpf.js';
 import { cpfSintetico, PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from './porta-memoria.js';
+import type { PortaPessoas } from './porta.js';
 import { chaveDoBloqueio, ServicoPessoas } from './servico.js';
+import { ctxTeste } from './sesmt/contexto-teste.spec-util.js';
 
-const ligada: ChaveGravada = {
+type UsuarioPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['usuarioPorId']>>>;
+
+const ligada: ChaveLiberacao = {
   id: 'pessoas.colaborador',
   tipo: 'recurso',
   chave: 'pessoas.colaborador',
@@ -27,7 +34,7 @@ const ligada: ChaveGravada = {
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 };
-const conferencia: PrerequisitoGravado = {
+const conferencia: PrerequisitoRecurso = {
   recurso: 'pessoas.colaborador',
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -72,7 +79,7 @@ function sessao(
     hospital,
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: ctxTeste(hospital, 'rede-sintetica'),
     pode: () => true,
   };
 }
@@ -238,7 +245,7 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     expect(
       await recusa(nova.servico.desligar(sessao('t-chave'), desligamento(v), Date.now(), null)),
     ).toMatchObject({ status: 409, codigo: 'cpf-ilegivel' });
-    expect((await porta.vinculo({ rede: '', hospital: 't-chave' }, v))?.desligamento).toBeNull();
+    expect((await porta.vinculo(ctxTeste('t-chave', ''), v))?.desligamento).toBeNull();
     expect(estadoAcessoSintetico().bloqueio.get(C.comLogin.login) ?? false).toBe(false);
     // Sem chave nenhuma: o desligamento fica desligado como a admissão (403), sem gravar.
     const sem = montar(porta, null);
@@ -270,7 +277,7 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     class Painel extends PortaPessoasMemoria {
       override async pessoaPorCpf(...a: Parameters<PortaPessoasMemoria['pessoaPorCpf']>) {
         const r = await super.pessoaPorCpf(...a);
-        return { ...r, usuarios: r.usuarios.map((u): UsuarioLidoPessoa => ({ ...u, grupo: 'PAINEIS' })) };
+        return { ...r, usuarios: r.usuarios.map((u): UsuarioPessoa => ({ ...u, grupo: 'PAINEIS' })) };
       }
       override async usuarioPorId(...a: Parameters<PortaPessoasMemoria['usuarioPorId']>) {
         const u = await super.usuarioPorId(...a);
@@ -295,7 +302,7 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     ).toMatchObject({ status: 409, codigo: 'login-de-painel-em-uso' });
     expect(conferidos).toEqual([C.comLogin.login]);
     expect(estadoAcessoSintetico().bloqueio.get(C.comLogin.login) ?? false).toBe(false);
-    expect((await porta.vinculo({ rede: '', hospital: 't-painel' }, v))?.desligamento).toBeNull();
+    expect((await porta.vinculo(ctxTeste('t-painel', ''), v))?.desligamento).toBeNull();
     // Conferido (o aparelho já passou ao novo): o desligamento segue.
     const r = await servico.desligar(
       sessao('t-painel'),
@@ -316,7 +323,7 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     expect(r.usuarios).toEqual([expect.objectContaining({ login: C.comLogin.login, acao: 'bloqueado' })]);
     expect(r.sessoesEncerradas).toBe(0);
     expect(r.sessoesPendentes).toEqual([C.comLogin.login]);
-    expect((await porta.vinculo({ rede: '', hospital: 't-sessao' }, v))?.desligamento).toBe('2026-10-25');
+    expect((await porta.vinculo(ctxTeste('t-sessao', ''), v))?.desligamento).toBe('2026-10-25');
     expect(
       trilha.eventos.some(
         (l) =>

@@ -11,7 +11,8 @@ import {
   type OrdemManipulacao,
 } from '@sgh/contratos';
 import { conferirBaixaManipulacao } from '@sgh/dominio-suprimentos';
-import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import { chaveMemoria } from './operacoes.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { AvaliacaoDoItem, GravadorManipulacao, PortaManipulacao } from './manipulacao-porta.js';
 
@@ -95,10 +96,10 @@ export class PortaManipulacaoMemoria implements PortaManipulacao {
   private readonly porHospital = new Map<string, Estado>();
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    let s = this.porHospital.get(chaveMemoria(c));
     if (!s) {
       s = { ordens: [], chaves: new Map(), seq: 46_480, doc: 4_680 };
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(chaveMemoria(c), s);
     }
     return s;
   }
@@ -112,7 +113,7 @@ export class PortaManipulacaoMemoria implements PortaManipulacao {
     if (op !== 'suprimentos.registrarSaida')
       throw new Error(`Operação ${op} fora da manipulação em memória.`);
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const ja = s.chaves.get(chave);
     if (ja !== undefined) return { resultado: { id: ja }, repetida: true, trilha: null };
     const a = esquemaRegistrarSaida.safeParse(entradaBruta);

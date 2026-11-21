@@ -5,7 +5,14 @@
 // do cálculo não grava). O estabelecimento vem da sessão (escala, plantão, troca ou acionamento de outro: 404). Na
 // aprovação da troca, cada plantão é conferido de novo com o novo colaborador pela montagem da F2 (conselho no dia,
 // interjornada, limite do contrato, sobreposição local e na Rede), com as duas pessoas travadas na transação; os
-// plantões mudam de vínculo com o motivo na trilha da escala e o evento de mudança na SGH_OUTBOX (regra 8).
+// plantões mudam de vínculo com o motivo na trilha da escala e o evento de mudança na integracao_mensagem (regra 8).
+import {
+  type RegistroAcionamento,
+  type RegistroEscala,
+  type RegistroPlantao,
+  type RegistroTroca,
+  TETO_LEITURA_INSTANTE,
+} from './tipos.js';
 import {
   type AcionamentoLido,
   CATEGORIAS_SCP,
@@ -65,14 +72,6 @@ import {
   type PassoDaTroca,
   plantoesNoInstante,
 } from '@sgh/dominio-pessoas';
-import type {
-  AcionamentoPesLido,
-  EscalaPesLida,
-  PlantaoPesLido,
-  TrocaPesLida,
-  VinculoPesLido,
-} from '@sgh/legado';
-import { TETO_LEITURA_INSTANTE } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -81,6 +80,9 @@ import { ApoioGravacao } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { GravadorEscala, PortaEscala } from './porta-escala.js';
 import { CHAVE_PESSOAS_ESCALA, descricaoPlantao, ServicoEscala } from './servico-escala.js';
+
+/** O vínculo de trabalho como a porta da gestão de pessoas o lê. */
+type VinculoDaPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
 
 const E = EVENTOS_AUDITAVEIS;
 export const CHAVE_PESSOAS_DIMENSIONAMENTO = 'pessoas.dimensionamento';
@@ -139,7 +141,7 @@ export class ServicoPlantao {
   /** O vínculo é da pessoa da sessão: o usuário ligado ao vínculo é o da sessão (pelo ID; senão, pelo login). */
   private async ehMeu(
     s: SessaoCadastro,
-    v: VinculoPesLido | null,
+    v: VinculoDaPessoa | null,
     memo: Map<number, boolean>,
   ): Promise<boolean> {
     if (!v || v.usuario === null) return false;
@@ -155,28 +157,30 @@ export class ServicoPlantao {
     return r;
   }
 
-  private async vinculos(s: SessaoCadastro, ids: readonly number[]): Promise<Map<number, VinculoPesLido>> {
+  private async vinculos(s: SessaoCadastro, ids: readonly number[]): Promise<Map<number, VinculoDaPessoa>> {
     const lidos = await Promise.all([...new Set(ids)].map((id) => this.pessoas.vinculo(s.porta, id)));
-    return new Map(lidos.filter((v): v is VinculoPesLido => v !== null).map((v) => [v.id, v]));
+    return new Map<number, VinculoDaPessoa>(
+      lidos
+        .filter((v: VinculoDaPessoa | null): v is VinculoDaPessoa => v !== null)
+        .map((v: VinculoDaPessoa) => [v.id as number, v] as const),
+    );
   }
 
-  private async escalaOu404(s: SessaoCadastro, id: number): Promise<EscalaPesLida> {
+  private async escalaOu404(s: SessaoCadastro, id: number): Promise<RegistroEscala> {
     const x = await this.porta.escala(s.porta, id);
-    if (!x || x.hospital !== s.hospital)
-      throw naoEncontrado('Escala', 'A escala não existe neste estabelecimento.');
+    if (!x) throw naoEncontrado('Escala', 'A escala não existe neste estabelecimento.');
     return x;
   }
 
-  private async plantaoOu404(s: SessaoCadastro, id: number): Promise<PlantaoPesLido> {
+  private async plantaoOu404(s: SessaoCadastro, id: number): Promise<RegistroPlantao> {
     const p = await this.porta.plantao(s.porta, id);
     if (!p) throw naoEncontrado('Plantão', 'O plantão não existe neste estabelecimento.');
     return p;
   }
 
-  private async trocaOu404(s: SessaoCadastro, id: number): Promise<TrocaPesLida> {
+  private async trocaOu404(s: SessaoCadastro, id: number): Promise<RegistroTroca> {
     const t = await this.porta.troca(s.porta, id);
-    if (!t || t.hospital !== s.hospital)
-      throw naoEncontrado('Troca', 'O pedido de troca não existe neste estabelecimento.');
+    if (!t) throw naoEncontrado('Troca', 'O pedido de troca não existe neste estabelecimento.');
     return t;
   }
 
@@ -260,7 +264,7 @@ export class ServicoPlantao {
     };
   }
 
-  private lado(p: PlantaoPesLido | null, v: VinculoPesLido | undefined, vinculo: number): LadoTroca | null {
+  private lado(p: RegistroPlantao | null, v: VinculoDaPessoa | undefined, vinculo: number): LadoTroca | null {
     if (!p) return null;
     return {
       plantao: p.id,
@@ -275,8 +279,8 @@ export class ServicoPlantao {
 
   private async papel(
     s: SessaoCadastro,
-    t: TrocaPesLida,
-    vs: ReadonlyMap<number, VinculoPesLido>,
+    t: RegistroTroca,
+    vs: ReadonlyMap<number, VinculoDaPessoa>,
     memo: Map<number, boolean>,
   ): Promise<PapelNaTroca> {
     if (await this.ehMeu(s, vs.get(t.vinculo) ?? null, memo)) return 'quemPediu';
@@ -296,7 +300,7 @@ export class ServicoPlantao {
     const memo = new Map<number, boolean>();
     // Quem não acompanha a escala (só pede) vê só as trocas de que é parte.
     const soAsMinhas = f.minhas || !(s.pode(P.escalaLer) || s.pode(P.aprovar));
-    const plantoes = new Map<number, PlantaoPesLido>();
+    const plantoes = new Map<number, RegistroPlantao>();
     const ids = [
       ...new Set(lidas.flatMap((t) => [t.plantao, ...(t.plantaoColega ? [t.plantaoColega] : [])])),
     ];
@@ -372,7 +376,7 @@ export class ServicoPlantao {
     const daEscala = await this.porta.plantoesDaEscala(s.porta, xa.id);
     if (!daEscala.some((p) => p.vinculo === vc.id && p.situacao === 'previsto'))
       throw recusaRegra('colega-fora-da-escala', 'Escolha um colega desta escala.', ['colega']);
-    const conferir = async (emTroca: ReadonlySet<number>, pa: PlantaoPesLido, pb: PlantaoPesLido | null) =>
+    const conferir = async (emTroca: ReadonlySet<number>, pa: RegistroPlantao, pb: RegistroPlantao | null) =>
       conferirPedidoDeTroca({
         tipo: e.tipo,
         plantao: pa,
@@ -398,7 +402,7 @@ export class ServicoPlantao {
       s,
       E.pessoasTrocaPedida.codigo,
       CHAVE_PESSOAS_ESCALA,
-      (x: number) => ({ tabela: 'SGH_PES_TROCA', id: String(x), chave: `SGH_PES_PLANTAO:${a.id}` }),
+      (x: number) => ({ tabela: 'troca_plantao', id: String(x), chave: `plantao:${a.id}` }),
       async (g) => {
         // As duas pessoas travadas (na ordem do ID): dois pedidos ao mesmo tempo com o mesmo plantão não passam juntos.
         for (const pessoa of [...new Set([va.pessoa, vc.pessoa])].sort((x, y) => x - y))
@@ -438,7 +442,7 @@ export class ServicoPlantao {
   private async conferirMovimentos(
     s: SessaoCadastro,
     motivo: string,
-    movimentos: readonly { p: PlantaoPesLido; x: EscalaPesLida; para: VinculoPesLido }[],
+    movimentos: readonly { p: RegistroPlantao; x: RegistroEscala; para: VinculoDaPessoa }[],
   ) {
     const fora = new Set(movimentos.map((m) => m.p.id));
     const preparados = [];
@@ -456,7 +460,7 @@ export class ServicoPlantao {
   }
 
   /** Confere um passo da troca para a pessoa da sessão (ou recusa com a mensagem do domínio). */
-  private async passo(s: SessaoCadastro, t: TrocaPesLida, passo: PassoDaTroca) {
+  private async passo(s: SessaoCadastro, t: RegistroTroca, passo: PassoDaTroca) {
     const vs = await this.vinculos(s, [t.vinculo, t.vinculoColega]);
     const papel = await this.papel(s, t, vs, new Map());
     const colega = vs.get(t.vinculoColega);
@@ -486,7 +490,7 @@ export class ServicoPlantao {
       s,
       E.pessoasTrocaRespondida.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_TROCA', id: String(t.id) },
+      { tabela: 'troca_plantao', id: String(t.id) },
       (g) =>
         g.responderTroca({
           id: t.id,
@@ -511,7 +515,7 @@ export class ServicoPlantao {
       s,
       E.pessoasTrocaPedida.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_TROCA', id: String(t.id) },
+      { tabela: 'troca_plantao', id: String(t.id) },
       (g) => g.cancelarTroca({ id: t.id, versao: e.versao, motivo: e.motivo, por: s.login }),
     );
     return { id: t.id, mensagem: 'Pedido de troca cancelado.', alertas: [] };
@@ -526,7 +530,7 @@ export class ServicoPlantao {
         s,
         E.pessoasTrocaDecidida.codigo,
         CHAVE_PESSOAS_ESCALA,
-        { tabela: 'SGH_PES_TROCA', id: String(t.id) },
+        { tabela: 'troca_plantao', id: String(t.id) },
         (g) =>
           g.decidirTroca({ id: t.id, versao: e.versao, estado: 'reprovada', motivo: e.motivo, por: s.login }),
       );
@@ -538,9 +542,9 @@ export class ServicoPlantao {
   /** A aprovação: os plantões mudam de colaborador, conferidos de novo com as duas pessoas travadas (regra 8). */
   private async aprovar(
     s: SessaoCadastro,
-    t: TrocaPesLida,
+    t: RegistroTroca,
     e: DecidirTrocaEntrada,
-    vs: ReadonlyMap<number, VinculoPesLido>,
+    vs: ReadonlyMap<number, VinculoDaPessoa>,
   ): Promise<ResultadoEscala> {
     const va = vs.get(t.vinculo);
     const vc = vs.get(t.vinculoColega);
@@ -568,14 +572,14 @@ export class ServicoPlantao {
       s,
       E.pessoasTrocaDecidida.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_TROCA', id: String(t.id), chave: `SGH_PES_PLANTAO:${t.plantao}` },
+      { tabela: 'troca_plantao', id: String(t.id), chave: `plantao:${t.plantao}` },
       async (g) => {
         for (const pessoa of [...new Set([va.pessoa, vc.pessoa])].sort((x, y) => x - y))
           await g.travarPessoa(pessoa);
         const tr = await g.troca(t.id);
         if (!tr || tr.estado !== 'aceita' || tr.versao !== e.versao)
           throw recusaRegra('desatualizado', 'O pedido de troca mudou depois que você abriu. Abra de novo.');
-        const tocadas = new Map<number, EscalaPesLida>();
+        const tocadas = new Map<number, RegistroEscala>();
         for (const m of movimentos) {
           const p = await g.plantao(m.p.id);
           const ok = conferirPlantaoNaAprovacao(p, m.p.versao, m.de.id, this.agora());
@@ -635,7 +639,7 @@ export class ServicoPlantao {
 
   // ── Quem está de plantão agora (regra 10) ───────────────────────────────────────────────────────────────────
 
-  private acionamentoLido(a: AcionamentoPesLido, agora: string): AcionamentoLido {
+  private acionamentoLido(a: RegistroAcionamento, agora: string): AcionamentoLido {
     const situacao = a.situacao === 'chegou' || a.situacao === 'cancelado' ? a.situacao : 'acionado';
     return {
       id: a.id,
@@ -645,9 +649,12 @@ export class ServicoPlantao {
       acionadoPor: a.acionadoPor,
       motivo: a.motivo,
       atendimento: a.atendimento,
-      prazoChegada: a.prazoChegada,
+      // Sem prazo registrado (pendência de modelo 03-04) o atraso não é calculável: nunca marcado como atrasado.
+      prazoChegada: a.prazoChegada ?? '',
       chegouEm: a.chegouEm,
-      atrasado: atrasado({ situacao, prazoChegada: a.prazoChegada, chegouEm: a.chegouEm }, agora),
+      atrasado:
+        a.prazoChegada !== null &&
+        atrasado({ situacao, prazoChegada: a.prazoChegada, chegouEm: a.chegouEm }, agora),
       versao: a.versao,
     };
   }
@@ -681,7 +688,7 @@ export class ServicoPlantao {
     const corte = filtrados.slice(0, TETO_PLANTAO_AGORA);
     const sobreavisos = corte.filter(({ p }) => p.tipo === 'sobreaviso').map(({ p }) => p.id);
     const acion = await this.porta.acionamentos(s.porta, sobreavisos);
-    const ultimo = new Map<number, AcionamentoPesLido>();
+    const ultimo = new Map<number, RegistroAcionamento>();
     for (const a of acion) {
       const atual = ultimo.get(a.plantao);
       // O acionamento em aberto vence; senão, o mais novo.
@@ -744,9 +751,9 @@ export class ServicoPlantao {
     const x = await this.escalaOu404(s, p.escala);
     const v = await this.pessoas.vinculo(s.porta, p.vinculo);
     const agora = this.agora();
-    const conferir = (pl: PlantaoPesLido, estado: string, abertos: number) =>
+    const conferir = (pl: RegistroPlantao, estado: string, abertos: number) =>
       conferirAcionamento({ ...pl, estadoEscala: estado }, agora, abertos);
-    const abertos = async (ids: AcionamentoPesLido[]) => ids.filter((a) => a.situacao === 'acionado').length;
+    const abertos = async (ids: RegistroAcionamento[]) => ids.filter((a) => a.situacao === 'acionado').length;
     const antes = conferir(p, x.estado, await abertos(await this.porta.acionamentos(s.porta, [p.id])));
     if (!antes.ok) throw recusaRegra(antes.codigo, antes.mensagem);
     const r = await this.apoio.sgh(
@@ -754,9 +761,9 @@ export class ServicoPlantao {
       E.pessoasSobreavisoAcionado.codigo,
       CHAVE_PESSOAS_ESCALA,
       (y: { id: number }) => ({
-        tabela: 'SGH_PES_ACIONAMENTO',
+        tabela: 'acionamento_sobreaviso',
         id: String(y.id),
-        chave: `SGH_PES_PLANTAO:${p.id}`,
+        chave: `plantao:${p.id}`,
       }),
       async (g) => {
         await g.travarPessoa(p.pessoa);
@@ -789,7 +796,7 @@ export class ServicoPlantao {
     };
   }
 
-  private async acionamentoOu404(s: SessaoCadastro, id: number): Promise<AcionamentoPesLido> {
+  private async acionamentoOu404(s: SessaoCadastro, id: number): Promise<RegistroAcionamento> {
     const a = await this.porta.acionamento(s.porta, id);
     if (!a) throw naoEncontrado('Acionamento', 'O acionamento não existe neste estabelecimento.');
     return a;
@@ -805,14 +812,23 @@ export class ServicoPlantao {
       s,
       E.pessoasSobreavisoAcionado.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ACIONAMENTO', id: String(a.id) },
+      { tabela: 'acionamento_sobreaviso', id: String(a.id) },
       (g) => g.registrarChegada({ id: a.id, versao: e.versao, chegouEm: e.chegouEm, por: s.login }),
     );
-    const tarde = atrasado({ situacao: 'chegou', prazoChegada: a.prazoChegada, chegouEm: e.chegouEm }, agora);
+    const prazo = a.prazoChegada;
+    const tarde =
+      prazo !== null && atrasado({ situacao: 'chegou', prazoChegada: prazo, chegouEm: e.chegouEm }, agora);
     return {
       id: a.id,
       mensagem: 'Chegada registrada.',
-      alertas: tarde ? [`A chegada passou do prazo (${HORA(a.prazoChegada)}).`] : [],
+      alertas:
+        prazo === null
+          ? [
+              'O prazo de chegada não está registrado neste banco (pendência de modelo): o atraso não foi calculado.',
+            ]
+          : tarde
+            ? [`A chegada passou do prazo (${HORA(prazo)}).`]
+            : [],
     };
   }
 
@@ -828,7 +844,7 @@ export class ServicoPlantao {
       s,
       E.pessoasSobreavisoAcionado.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ACIONAMENTO', id: String(a.id) },
+      { tabela: 'acionamento_sobreaviso', id: String(a.id) },
       (g) => g.cancelarAcionamento({ id: a.id, versao: e.versao, motivo: e.motivo, por: s.login }),
     );
     return { id: a.id, mensagem: 'Acionamento cancelado.', alertas: [] };
@@ -962,7 +978,7 @@ export class ServicoPlantao {
       s,
       E.pessoasDimensionamentoCalculado.codigo,
       CHAVE_PESSOAS_DIMENSIONAMENTO,
-      (x: number) => ({ tabela: 'SGH_PES_DIMENSIONAMENTO', id: String(x) }),
+      (x: number) => ({ tabela: 'dimensionamento_enfermagem', id: String(x) }),
       (g) =>
         g.incluirDimensionamento({
           unidade: d.unidade,
@@ -1057,7 +1073,7 @@ export class ServicoPlantao {
 }
 
 /** A pessoa da sessão registrou o pedido ou a resposta da troca (D-QUATRO-OLHOS-52.3: então não a aprova). */
-function registrou(s: SessaoCadastro, t: TrocaPesLida): boolean {
+function registrou(s: SessaoCadastro, t: RegistroTroca): boolean {
   const eu = s.login.toUpperCase();
   return t.pedidoPor.toUpperCase() === eu || (t.respostaPor ?? '').toUpperCase() === eu;
 }

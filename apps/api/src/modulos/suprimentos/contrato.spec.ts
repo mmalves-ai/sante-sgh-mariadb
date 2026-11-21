@@ -2,10 +2,10 @@
 // fonte sintética e a porta dos contratos EM MEMÓRIA (nada conecta a banco; pedidos e títulos SINTÉTICOS dos
 // fornecedores 7001 e 7002). As datas são relativas ao dia de hoje (a porta em memória usa o relógio da máquina).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AppBloco, montarAppBloco, type Sessao } from '../cirurgia/bloco-seguro.spec-util.js';
+import { type AppSuprimentos, montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
 
 const C = '/api/suprimentos/contratos';
-let a: AppBloco;
+let a: AppSuprimentos;
 let comprador: Sessao;
 let gerente: Sessao;
 let semAcesso: Sessao;
@@ -18,7 +18,7 @@ const dia = (deslocamento: number) => {
 };
 
 beforeAll(async () => {
-  a = await montarAppBloco();
+  a = await montarAppSuprimentos();
   [comprador, gerente, semAcesso] = await Promise.all([
     a.entrar('SINT.CONTRATOS'),
     a.entrar('SINT.GERCOMPRAS'),

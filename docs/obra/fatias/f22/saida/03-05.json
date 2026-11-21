@@ -1,0 +1,125 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/esocial/porta-esocial.ts",
+    "src/modulos/pessoas/esocial/porta-esocial-propria.ts",
+    "src/modulos/pessoas/esocial/porta-esocial-propria.int.spec.ts",
+    "src/modulos/pessoas/esocial/porta-esocial-memoria.ts",
+    "src/modulos/pessoas/esocial/cache-catalogos-esocial.ts",
+    "src/modulos/pessoas/esocial/cache-catalogos-esocial.spec.ts",
+    "src/modulos/pessoas/esocial/servico-esocial.ts",
+    "src/modulos/pessoas/esocial/servico-esocial.spec.ts",
+    "src/modulos/pessoas/esocial/servico-periodicos.ts",
+    "src/modulos/pessoas/esocial/servico-periodicos.spec.ts",
+    "src/modulos/pessoas/esocial/esocial.controller.ts",
+    "src/modulos/pessoas/esocial/esocial-http.spec.ts",
+    "src/modulos/pessoas/esocial/transmissor/certificado-esocial.ts",
+    "src/modulos/pessoas/esocial/transmissor/simulador-esocial.spec-util.ts",
+    "src/modulos/pessoas/esocial/transmissor/soap-esocial.ts",
+    "src/modulos/pessoas/esocial/transmissor/transmissor-esocial.spec.ts",
+    "src/modulos/pessoas/esocial/transmissor/transmissor-esocial.ts",
+    "src/modulos/pessoas/esocial/transmissor/xml-leitura.ts",
+    "src/modulos/pessoas/esocial/transmissor/xmldsig.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "cadastro_empregador",
+      "motivo": "Parâmetros do eSocial do empregador (vigência AAAA-MM, transmissor único por raiz de CNPJ, leiaute e parâmetros do S-1000/S-1005/S-1020). Até o DDL, a porta própria RECUSA com 'modelo-pendente' (nunca lista vazia): ler e registrar os parâmetros; e, por dependerem da vigência do empregador, gerar eventos de tabela (S-1000/S-1005/S-1010/S-1020), do trabalhador (S-2200/S-2205/S-2206/S-2230/S-2299/S-2300/S-2399), periódicos (S-1200/S-1298/S-1299) e calcular a conciliação. A mensagem da recusa diz exatamente o que fica indisponível.",
+      "sql": "ALTER TABLE cadastro_empregador ADD transmissor VARCHAR(20) NOT NULL DEFAULT 'sistema' COMMENT 'Quem transmite o eSocial da raiz de CNPJ', ADD leiaute_esocial_versao VARCHAR(20) NULL COMMENT 'Versão do leiaute em uso (ex.: S-1.3)', ADD cnae_preponderante CHAR(7) NULL, ADD aliquota_rat TINYINT UNSIGNED NULL, ADD fap DECIMAL(5,4) NULL, ADD codigo_lotacao_tributaria VARCHAR(30) NULL, ADD identificador_tabela_rubricas VARCHAR(8) NULL, ADD sindicato_pessoa_juridica_id BIGINT UNSIGNED NULL, ADD registro_eletronico_empregados BOOLEAN NOT NULL DEFAULT FALSE, ADD CONSTRAINT ck_cadastro_empregador_transmissor CHECK (transmissor IN ('sistema','externo')), ADD CONSTRAINT ck_cadastro_empregador_aliquota_rat CHECK (aliquota_rat IS NULL OR aliquota_rat BETWEEN 1 AND 3), ADD CONSTRAINT ck_cadastro_empregador_fap CHECK (fap IS NULL OR fap BETWEEN 0.5 AND 2), ADD CONSTRAINT ck_cadastro_empregador_cnae CHECK (cnae_preponderante IS NULL OR cnae_preponderante REGEXP '^[0-9]{7}$'), ADD CONSTRAINT fk_cadastro_empregador_sindicato_pessoa_juridica_id FOREIGN KEY (sindicato_pessoa_juridica_id) REFERENCES pessoa_juridica (id) ON DELETE RESTRICT; ALTER TABLE cadastro_empregador DROP CONSTRAINT ck_cadastro_empregador_indicador_desoneracao, ADD CONSTRAINT ck_cadastro_empregador_indicador_desoneracao CHECK (indicador_desoneracao IN ('nao_aplicavel','empresa_enquadrada','municipio_enquadrado'));",
+      "depois": "A porta própria passa a ler/gravar a vigência em cadastro_empregador (classTrib = tributaria_codigo_esocial_id da tabela 8; indCoop = indicador_cooperativa; indConstr = construtora; FPAS = fpas_id; codTercs = codigo_terceiros; de-para do afastamento = motivo_afastamento.codigo_esocial). Lote de continuação do eSocial."
+    },
+    {
+      "tipo": "decisao+ddl",
+      "tabela": "pessoa_fisica / vinculo_trabalho",
+      "motivo": "Ficha do eSocial do vínculo (sexo, raça/cor, estado civil, grau de instrução, nome social, nascimento, países, endereço, dependentes). No modelo novo esses dados são cadastro estruturado da pessoa e do vínculo, não um JSON cifrado à parte. Pedido: o lote de pessoas (03-06) expõe a leitura/gravação desses campos na PortaPessoas e o DDL completa as colunas que faltarem; até lá ficha() devolve null e gravarFicha recusa 'modelo-pendente'."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conferencia_eventos_esocial",
+      "motivo": "Conferência gravada da conciliação de eventos (contagem por evento: sistema, externo, repasse, migrados). conciliacao_esocial é a conferência de VALORES por tributo e não serve. Até o DDL: incluirConciliacao recusa 'modelo-pendente' e ultimaConciliacao também RECUSA 'modelo-pendente' (nunca 'sem conferência' calado).",
+      "sql": "CREATE TABLE conferencia_eventos_esocial (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, competencia DATE NOT NULL COMMENT 'Primeiro dia do mês', transmissor VARCHAR(20) NULL, situacao VARCHAR(20) NOT NULL, observacao VARCHAR(1000) NULL, conferente_usuario_id BIGINT UNSIGNED NULL, conferido_em DATETIME(3) NOT NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, CONSTRAINT ck_conferencia_eventos_esocial_situacao CHECK (situacao IN ('conciliada','divergente','sem_transmissor')), CONSTRAINT ck_conferencia_eventos_esocial_transmissor CHECK (transmissor IS NULL OR transmissor IN ('sistema','externo')), CONSTRAINT ck_conferencia_eventos_esocial_origem CHECK (origem IN ('sistema','migracao','integracao')), KEY ix_conferencia_eventos_esocial_estabelecimento_competencia (estabelecimento_id, competencia), CONSTRAINT fk_conferencia_eventos_esocial_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT, CONSTRAINT fk_conferencia_eventos_esocial_conferente_usuario_id FOREIGN KEY (conferente_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT) COMMENT='Conferência das contagens de eventos do eSocial na competência'; CREATE TABLE conferencia_eventos_esocial_item (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, conferencia_eventos_esocial_id BIGINT UNSIGNED NOT NULL, tipo_evento_esocial_id BIGINT UNSIGNED NOT NULL, quantidade_sistema INT UNSIGNED NOT NULL, quantidade_externo INT UNSIGNED NULL, quantidade_repasse INT UNSIGNED NOT NULL DEFAULT 0, quantidade_migrada_pendente INT UNSIGNED NOT NULL DEFAULT 0, situacao VARCHAR(20) NOT NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, UNIQUE KEY uq_conferencia_eventos_esocial_item_evento (conferencia_eventos_esocial_id, tipo_evento_esocial_id), CONSTRAINT fk_conferencia_eventos_esocial_item_conferencia FOREIGN KEY (conferencia_eventos_esocial_id) REFERENCES conferencia_eventos_esocial (id) ON DELETE RESTRICT, CONSTRAINT fk_conferencia_eventos_esocial_item_tipo FOREIGN KEY (tipo_evento_esocial_id) REFERENCES tipo_evento_esocial (id) ON DELETE RESTRICT) COMMENT='Contagem por evento na conferência do eSocial';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "evento_esocial / lote_esocial",
+      "motivo": "Ambiente 'coletor' (entrega local fora de produção, regra 3). Sem isto, montar lote em dev/homologação (ambiente coletor) recusa 'modelo-pendente'.",
+      "sql": "ALTER TABLE evento_esocial DROP CONSTRAINT ck_evento_esocial_ambiente, ADD CONSTRAINT ck_evento_esocial_ambiente CHECK (ambiente IN ('coletor','producao','producao_restrita')); ALTER TABLE lote_esocial DROP CONSTRAINT ck_lote_esocial_ambiente, ADD CONSTRAINT ck_lote_esocial_ambiente CHECK (ambiente IN ('coletor','producao','producao_restrita')), DROP CONSTRAINT ck_lote_esocial_situacao_2, ADD CONSTRAINT ck_lote_esocial_situacao_2 CHECK (situacao IN ('montando','cancelado') OR ambiente = 'coletor' OR protocolo IS NOT NULL);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "evento_esocial",
+      "motivo": "Operação dos eventos de tabela (inclusão/alteração/exclusão do S-1000/S-1005/S-1010/S-1020) e data de referência do evento não periódico (hoje vai em competencia). REGRA DEPENDENTE: o bloqueio de duplicidade 'evento-ja-gerado' do serviço (servico-esocial.ts, gravarEventos: mesmo registro E mesma operação em andamento) só funciona com a operação gravada e relida. Por isso, até a coluna existir, a porta própria RECUSA com 'modelo-pendente' a gravação de evento com operação não nula (nunca grava sem a operação). Depois do DDL: gravar operacao_tabela em incluirEvento, ler em eventoDaLinha (hoje operacao: null) e incluir no filtro, e reativar o teste de duplicidade do S-1010 no int spec.",
+      "sql": "ALTER TABLE evento_esocial ADD operacao_tabela VARCHAR(20) NULL COMMENT 'Inclusão, alteração ou exclusão nos eventos de tabela', ADD data_referencia DATE NULL COMMENT 'Data do fato (admissão, afastamento, desligamento) ou competência', ADD CONSTRAINT ck_evento_esocial_operacao_tabela CHECK (operacao_tabela IS NULL OR operacao_tabela IN ('inclusao','alteracao','exclusao')), ADD KEY ix_evento_esocial_data_referencia (estabelecimento_id, data_referencia);"
+    },
+    {
+      "tipo": "integracao",
+      "arquivo": "apps/api/src/modulos/pessoas/public-api.ts",
+      "motivo": "Trocar as linhas 150-154 (export de './esocial/porta-esocial-legado.js', apagado) por: export { PortaEsocialPropria, portaEsocialDoAmbiente, portaEsocialIndisponivel } from './esocial/porta-esocial-propria.js'; export { comCacheCurtoDosCatalogos } from './esocial/cache-catalogos-esocial.js';"
+    },
+    {
+      "tipo": "integracao",
+      "arquivo": "apps/api/src/app.module.ts / modulos/pessoas/modulo.ts",
+      "motivo": "Na ligação do módulo pessoas: PORTA_ESOCIAL = portaEsocialDoAmbiente(ctx.nucleo, AMBIENTE) (a própria com cache quando há núcleo; memória só em dev/ci sem núcleo; indisponível fora disso). O esocial-http.spec.ts agora monta o EsocialController num módulo de teste pelo `registro` da base (não depende de pessoas estar em REGISTRO_MODULOS) e passa (3/3)."
+    },
+    {
+      "tipo": "testes",
+      "motivo": "Apagados os 3 specs de integração que rodavam sobre a cópia do sistema de origem pelas portas *NaTransacao de pessoas, folha, cálculo, ponto, escala e rubricas (importavam o pacote antigo; não dá para mantê-los com describe.skip). Refazer no MariaDB (cliente f22_o3) quando as portas próprias de 03-06/03-07/03-09 existirem, SEM perder nenhum destes casos:",
+      "casos": [
+        {
+          "spec": "apps/api/src/modulos/pessoas/aplicacao/esocial.int.spec.ts",
+          "lote_que_refaz": "continuação do eSocial (depois de 03-06 e do DDL de cadastro_empregador)",
+          "it": "parâmetros → tabela no XSD → ficha → S-2200 → lote ao coletor → retorno → conciliação",
+          "regras": [
+            "parâmetros do eSocial da empresa com o sistema como transmissor (regra 1: transmissor único por raiz de CNPJ)",
+            "eventos de tabela sobre as rubricas, conferidos no XSD oficial; rubrica sem natureza fica com a pendência",
+            "colaborador sintético com a ficha cifrada e o S-2200 gravado cifrado",
+            "lote ao coletor e retorno com recibo (aceito → processado com numero_recibo)",
+            "conciliação da competência; pendências migradas só contadas"
+          ]
+        },
+        {
+          "spec": "apps/api/src/modulos/pessoas/aplicacao/fechamento-periodicos.int.spec.ts",
+          "lote_que_refaz": "03-07/03-09 (fechamento da folha) + eSocial",
+          "it": [
+            "folha mensal → fechamento → período fechado → S-1200 no XSD → lote → retorno → S-1299 → reabertura",
+            "corrida: o processamento novo que entra enquanto o fechamento grava esbarra na guarda do período"
+          ],
+          "regras": [
+            "prévia e fechamento do período; período fechado recusa novo processamento",
+            "painel dos periódicos; S-1200 conferido no XSD e gravado",
+            "lote com retorno; S-1299 (ou pendência do autônomo do repasse, regra 1)",
+            "reabertura da folha recusada enquanto o eSocial do período está fechado",
+            "concorrência: processamento novo durante o fechamento é recusado pela trava do período"
+          ]
+        },
+        {
+          "spec": "apps/api/src/modulos/pessoas/aplicacao/ferias-decimo.int.spec.ts",
+          "lote_que_refaz": "03-07/03-09 (férias e 13º da folha; não é eSocial)",
+          "it": [
+            "saldo → programação → recibo gravado e relido → cancelamento → 13º 1ª parcela e final",
+            "a trava no colaborador segura a 1ª programação: outra transação no vínculo sem férias é recusada"
+          ],
+          "regras": [
+            "saldo dos períodos aquisitivos; programação com as restrições do banco",
+            "recibo de férias gravado (processamento de férias com tipo e pagamento) e relido",
+            "férias da competência entram na folha mensal",
+            "cancelamento descarta o recibo junto",
+            "13º: 1ª parcela e parcela final (dezembro) com desconto do adiantamento; tabela legal sintética",
+            "concorrência: trava no colaborador na 1ª programação"
+          ]
+        }
+      ]
+    },
+    {
+      "tipo": "integracao",
+      "arquivo": "apps/api/src/modulos/pessoas/folha/servico-fechamento.spec.ts (lote 03-07)",
+      "motivo": "GravadorEsocial mudou: proximoIdEvento() → proximoSequencialEvento() (número de negócio do estabelecimento, sequencia_negocio 'evento_esocial'), e incluirEvento(id, x) → incluirEvento(x) devolvendo o id gerado pelo banco. Na linha ~242: `const sequencial = await g.proximoSequencialEvento(); const id = await g.incluirEvento({ ..., idEsocial: `...${String(sequencial).padStart(3, '0')}`.slice(0, 36), ... });`."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "sequencia_negocio",
+      "motivo": "Sem DDL novo: a porta própria cria por garantirSequencia a sequência 'evento_esocial' por estabelecimento na primeira geração (sequencial do Id do evento; substitui o MAX(id)+1 com trava na tabela inteira). Se o carregador de configuração do cliente preferir criá-la no 'criar novo cliente', incluir ali."
+    }
+  ]
+}

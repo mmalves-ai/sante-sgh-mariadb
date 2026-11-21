@@ -2,7 +2,7 @@
 // do vínculo, a escala de férias, a programação de uma fração (conferida contra a CLT), o recibo de férias (prévia ou
 // gravado: um processamento `ferias` com a memória por rubrica), o cancelamento, as férias do próprio colaborador e as
 // duas parcelas do 13º da empresa (processamentos `decimo1` e `decimo2`). A conta é a regra pura de
-// @sgh/dominio-pessoas; grava só SGH_ (SGH_PES_FERIAS, o processamento e as linhas) com a trilha na mesma transação, atrás
+// @sgh/dominio-pessoas; grava a programação de férias, o processamento e as linhas pela porta da folha, com a trilha na mesma transação, atrás
 // da chave `pessoas.folha` (POL-3). Nenhuma resposta traz CPF ou nome.
 import { createHash } from 'node:crypto';
 import {
@@ -46,15 +46,6 @@ import {
   type VinculoParaCalculo,
   vigenteNaData,
 } from '@sgh/dominio-pessoas';
-import {
-  type FeriasPesLida,
-  type HistoricoFolhaLido,
-  type LinhaCalculoSgh,
-  TETO_FERIAS_LISTA,
-  TETO_PROCESSOS_FOLHA,
-  TETO_VINCULOS_FOLHA,
-  type VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -65,6 +56,18 @@ import type { PortaRubricas } from '../rubricas/porta-rubricas.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
 import type { PortaFolha } from './porta-folha.js';
 import { cabecalhoDoProcesso, colaboradorDoResumo, resumoDoProcesso } from './servico-calculo.js';
+import {
+  type FeriasDoVinculo as FeriasRegistradas,
+  type HistoricoDaFolha,
+  type LinhaCalculoDoVinculo,
+} from './tipos-folha.js';
+import {
+  TETO_FERIAS_LISTA,
+  TETO_PROCESSOS_FOLHA,
+  TETO_VINCULOS_FOLHA,
+  exigirCadastroDoCalculo,
+} from './apoio-folha.js';
+import { type VinculoColaborador } from '../tipos-pessoas.js';
 
 export const PERMISSOES_FERIAS_FOLHA = {
   ler: 'pessoas.ferias.ler',
@@ -136,7 +139,10 @@ const TIPOS_VINCULO: readonly TipoVinculoTrabalho[] = [
 const tipoVinculo = (t: string): TipoVinculoTrabalho =>
   (TIPOS_VINCULO as readonly string[]).includes(t) ? (t as TipoVinculoTrabalho) : 'terceiro';
 
-const paraCalculo = (v: {
+/** O vínculo da porta de pessoas no cálculo: sem centro de custo ou carga semanal, recusa (422) com o motivo. */
+const paraCalculo = (v: VinculoColaborador): VinculoParaCalculo =>
+  paraCalculoCompleto(exigirCadastroDoCalculo([v])[0]!);
+const paraCalculoCompleto = (v: {
   id: number;
   matricula: string | null;
   tipo: string;
@@ -154,7 +160,7 @@ const paraCalculo = (v: {
   cargaSemanal: v.cargaSemanal,
 });
 
-export const paraFerias = (f: FeriasPesLida): FeriasDoVinculo => ({
+export const paraFerias = (f: FeriasRegistradas): FeriasDoVinculo => ({
   id: f.id,
   vinculo: f.vinculo,
   empresa: f.empresa,
@@ -177,7 +183,7 @@ export const paraFerias = (f: FeriasPesLida): FeriasDoVinculo => ({
   versao: f.versao,
 });
 
-const registrada = (f: FeriasPesLida): FeriasRegistrada => ({
+const registrada = (f: FeriasRegistradas): FeriasRegistrada => ({
   id: f.id,
   aquisitivoInicio: f.aquisitivoInicio,
   inicio: f.inicio,
@@ -195,7 +201,7 @@ const competenciaMais = (c: string, n: number) => {
 };
 
 /** O carimbo das frações lidas (id, situação e versão): muda se outra pessoa gravou no colaborador. */
-const carimboFerias = (fs: readonly FeriasPesLida[]) =>
+const carimboFerias = (fs: readonly FeriasRegistradas[]) =>
   fs
     .map((f) => `${f.id}:${f.situacao}:${f.versao}`)
     .sort()
@@ -210,7 +216,7 @@ const carimboInsumos = (sal: readonly unknown[], par: readonly unknown[]): strin
     )
     .join('\n--\n');
 
-const linhaSaida = (l: LinhaCalculoSgh | LinhaCalculoFolha): LinhaCalculoFolha => ({
+const linhaSaida = (l: LinhaCalculoDoVinculo | LinhaCalculoFolha): LinhaCalculoFolha => ({
   papel: l.papel,
   tipo: l.tipo,
   rubrica: l.rubrica,
@@ -221,7 +227,7 @@ const linhaSaida = (l: LinhaCalculoSgh | LinhaCalculoFolha): LinhaCalculoFolha =
   memoria: l.memoria,
 });
 
-const historicoDe = (hs: readonly HistoricoFolhaLido[], vinculo: number) =>
+const historicoDe = (hs: readonly HistoricoDaFolha[], vinculo: number) =>
   hs
     .filter((h) => h.vinculo === vinculo)
     .map((h) => ({ competencia: h.competencia, papel: h.papel, quantidade: h.quantidade, valor: h.valor }));
@@ -275,13 +281,13 @@ export class ServicoFeriasFolha {
     if (!es.some((e) => e.codigo === empresa)) throw naoEncontrado('Empresa');
   }
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoColaborador> {
     const v = await this.pessoas.vinculo(s.porta, id);
     if (!v) throw naoEncontrado('Colaborador');
     return v;
   }
 
-  private async feriasOu404(s: SessaoCadastro, id: number): Promise<FeriasPesLida> {
+  private async feriasOu404(s: SessaoCadastro, id: number): Promise<FeriasRegistradas> {
     const f = await this.porta.feriasPorId(this.ctx(s), id);
     if (!f) throw naoEncontrado('Férias');
     return f;
@@ -321,7 +327,7 @@ export class ServicoFeriasFolha {
   // ── Saldo e escala ──────────────────────────────────────────────────────────────────────────────────────────
 
   /** O saldo dos períodos do vínculo, com as frações lidas (para a programação conferir depois da trava). */
-  private async montarSaldo(s: SessaoCadastro, v: VinculoPesLido, hoje: string) {
+  private async montarSaldo(s: SessaoCadastro, v: VinculoColaborador, hoje: string) {
     const c = this.ctx(s);
     const ate = hoje.slice(0, 7);
     const [ferias, afastamentos, historico, dias] = await Promise.all([
@@ -446,7 +452,7 @@ export class ServicoFeriasFolha {
   // ── Recibo ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Lê o que o recibo junta e calcula (regra pura), com os avisos e o carimbo dos insumos. */
-  private async montarRecibo(s: SessaoCadastro, f: FeriasPesLida) {
+  private async montarRecibo(s: SessaoCadastro, f: FeriasRegistradas) {
     const c = this.ctx(s);
     const v = await this.vinculoOu404(s, f.vinculo);
     const competencia = f.inicio.slice(0, 7);
@@ -748,7 +754,7 @@ export class ServicoFeriasFolha {
       parcela: e.parcela,
       pagamento: e.pagamento,
       hoje: relogio.hoje,
-      vinculos: vinculos.map(paraCalculo),
+      vinculos: exigirCadastroDoCalculo(vinculos).map(paraCalculoCompleto),
       salarios: salarios.map((x) => ({
         vinculo: x.vinculo,
         inicio: x.inicio,

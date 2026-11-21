@@ -7,7 +7,6 @@ import type {
   EstadoVinculo,
   ParentescoDependente,
   SituacaoHabilitacao,
-  SituacaoProfissionalLegado,
   TipoEventoHistorico,
   TipoVinculo,
 } from './vocabulario.js';
@@ -19,7 +18,8 @@ export interface OpcaoPessoas {
 
 /** Lotação lida: centro de custo e unidade com o nome (TBCENCUS e TBUNIDAD). */
 export interface LotacaoLida {
-  readonly centroCusto: number;
+  /** Nulo: vínculo sem centro de custo. */
+  readonly centroCusto: number | null;
   readonly centroCustoNome: string | null;
   readonly unidade: number | null;
   readonly unidadeNome: string | null;
@@ -151,7 +151,8 @@ export interface FichaColaborador {
   }[];
   readonly profissional: {
     readonly id: number;
-    readonly situacaoLegado: SituacaoProfissionalLegado | null;
+    /** Situação do profissional no cadastro (ex.: ativo, inativo); null quando não informada. */
+    readonly situacao: string | null;
     readonly registros: readonly RegistroConselhoLido[];
   } | null;
   readonly usuarios: readonly UsuarioDaPessoa[];

@@ -1,5 +1,5 @@
 // Aplicação do estoque, do almoxarifado e das compras (M28): as gravações das telas (pelo executor, com a trilha na
-// mesma transação, ou só do novo em SGH_ com a SGH_TRILHA junto), o recebimento da transferência em dois passos, a
+// mesma transação, ou só do novo em com a trilha junto), o recebimento da transferência em dois passos, a
 // conferência da nota com as tolerâncias do parâmetro, a aprovação por alçada, o inventário e a sugestão de compra.
 // A tela nunca manda número de documento, valor de saída nem data gravada: o banco e os gatilhos fazem.
 import {
@@ -28,6 +28,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { ApoiosSuprimentos } from './apoios.js';
 import type { ContextoSuprimentos, PortaSuprimentos } from './porta.js';
+import { comChave } from './operacoes.js';
 
 const ctx = (s: SessaoCadastro): ContextoSuprimentos => s.porta;
 
@@ -141,10 +142,10 @@ export class ServicoSuprimentos {
     },
   ): Promise<ResultadoSuprimentos> {
     const id = await this.apoios.apoios.estoque.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosTransferenciaEnviada.codigo,
       'suprimentos.estoque',
-      (x: number) => ({ tabela: 'SGH_SUP_TRANSF_ETAPA', id: String(x) }),
+      (x: number) => ({ tabela: 'documento_estoque', id: String(x) }),
       (g) =>
         g.enviarTransferencia({
           origem: e.origem,
@@ -223,10 +224,10 @@ export class ServicoSuprimentos {
     });
     if (divergente)
       await this.apoios.apoios.estoque.sgh(
-        s,
+        comChave(s),
         EVENTOS_AUDITAVEIS.suprimentosTransferenciaRecebida.codigo,
         'suprimentos.estoque',
-        { tabela: 'SGH_SUP_TRANSF_ETAPA', id: String(envio) },
+        { tabela: 'documento_estoque', id: String(envio) },
         (g) => g.registrarDivergencia({ id: envio, motivo: e.motivoDivergencia ?? '' }),
       );
     return divergente ? { ...r, avisos: [...r.avisos, 'Recebimento com divergência registrada.'] } : r;
@@ -238,10 +239,10 @@ export class ServicoSuprimentos {
     r: { ano: number; mes: number; doc: number },
   ): Promise<ResultadoSuprimentos> {
     await this.apoios.apoios.estoque.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosRequisicaoAutorizada.codigo,
       'suprimentos.estoque',
-      { tabela: 'SGH_SUP_DOC_OCORRENCIA', id: `requisicao ${r.ano}/${r.mes}/${r.doc}` },
+      { tabela: 'documento_estoque', id: `requisicao ${r.ano}/${r.mes}/${r.doc}` },
       (g) => g.autorizarRequisicao({ ...r, usuario: s.login }),
     );
     return resultado('Requisição autorizada.', false, { doc: r.doc });
@@ -249,10 +250,10 @@ export class ServicoSuprimentos {
 
   async cancelarEnvio(s: SessaoCadastro, envio: number, motivo: string): Promise<ResultadoSuprimentos> {
     await this.apoios.apoios.estoque.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosTransferenciaEnviada.codigo,
       'suprimentos.estoque',
-      { tabela: 'SGH_SUP_TRANSF_ETAPA', id: String(envio) },
+      { tabela: 'documento_estoque', id: String(envio) },
       (g) => g.cancelarTransferencia({ id: envio, motivo, usuario: s.login }),
     );
     return resultado('Envio cancelado: o saldo continua na origem.', false, { envio });
@@ -305,11 +306,11 @@ export class ServicoSuprimentos {
   ): Promise<ResultadoSuprimentos> {
     const faixas = await this.faixas(s);
     const r = await this.apoios.apoios.compras.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosPedidoAprovado.codigo,
       'suprimentos.compras',
       (x: { id: number }) => ({
-        tabela: 'SGH_SUP_APROVACAO_PEDIDO',
+        tabela: 'pedido_compra_acompanhamento',
         id: String(x.id),
         chave: `${e.pedido.ano}/${e.pedido.doc}`,
       }),

@@ -4,7 +4,6 @@
 // colaborador só omitido sem `pessoas.salario.ler`, a reabertura com motivo (e recusada com o eSocial do período fechado)
 // e a chave desligada.
 import type { TotaisCalculoFolha } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -15,9 +14,17 @@ import { PortaPessoasMemoria } from '../porta-memoria.js';
 import { PortaCalculoFolhaMemoria } from './porta-calculo-memoria.js';
 import { PortaFolhaMemoria } from './porta-folha-memoria.js';
 import { intervaloDoPeriodo, ServicoFechamentoFolha } from './servico-fechamento.js';
+import { type ChaveLiberacao, type PrerequisitoRecurso } from '../../config/public-api.js';
 
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
-const chave = (c: string): ChaveGravada => ({
+const CTX = {
+  cliente: 'pc',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 'teste-folha',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -30,7 +37,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -232,13 +239,13 @@ describe('fechamento do período da folha (serviço)', () => {
     const f = (await m.servico.fechar(sessao(), { ...MENSAL, simular: false })).fechamento!;
     // Um S-1299 aceito no período fecha o eSocial.
     await m.esocial.gravarSgh(CTX, {} as never, async (g) => {
-      const id = await g.proximoIdEvento();
-      await g.incluirEvento(id, {
+      const seq = await g.proximoSequencialEvento();
+      return g.incluirEvento({
         empresa: 1,
         evento: 'S-1299',
         grupo: 'periodico',
         operacao: null,
-        idEsocial: `ID1112223330000002026102810000000${String(id).padStart(3, '0')}`.slice(0, 36),
+        idEsocial: `ID1112223330000002026102810000000${String(seq).padStart(3, '0')}`.slice(0, 36),
         vinculo: null,
         origem: 'fechamento-periodo',
         referencia: 1,
@@ -252,7 +259,6 @@ describe('fechamento do período da folha (serviço)', () => {
         eventoAnterior: null,
         por: 'SINT',
       });
-      return id;
     });
     expect(
       await codigo(m.servico.reabrir(sessao(), f.id, { versao: 0, motivo: 'Correção das férias' })),
