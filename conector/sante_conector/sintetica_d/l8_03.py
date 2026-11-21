@@ -24,7 +24,7 @@ from pathlib import Path
 _MAPA = Path(__file__).resolve().parents[2] / "mapa"
 FATIA = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC", "TBINDICE",
          "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED", "TBPROCTO",
-         "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM"]
+         "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI"]
 # r4: TBCTRTAT é só LIDA (a TAB do tipo de atendimento segue pelo nome da lista; a lista é descarte de produto)
 PAIS_ORIGEM = ["TBCBOPRO", "TBPRESER", "TBTABDTH", "TBCTRTAT"]
 
@@ -209,6 +209,11 @@ def linhas(r, ins):
                                    (3, 1, 100, 70000001, None), (4, 2, 999, 70000001, None), (5, 2, 103, 11111111, None)):
         q("TBREFMEMTUSS", ID=i, TAB_FCREFUND=tab, COD_FCREFUND=cod, CLASSIF_FCREFUND=1, COD_TUSS=tuss,
           DATA_VIGENCIA_INICIAL=ini)
+    # r4 (conferidor): equivalência à referência UNIFICADA (sem fonte pagadora): 1 e 5 gravadas; 2 sem código (0 ->
+    # NULL, 1048); 3 do item licenciado (pai_pendente); 4 item inexistente (pai_inexistente, 1048)
+    for tab, cod, it, ref, alfa in ((2, 100, 1, 123456, "AB"), (2, 101, 2, 0, None), (1, 100, 3, 222222, None),
+                                    (2, 999, 99, 333333, None), (2, 103, 5, 654321, "CD")):
+        q("TBREFUNI", TAB=tab, COD=cod, ID_TBMATMED=it, CODREF=ref, CLASSIFREF=1, COD_ALFAREF=alfa)
     # r4 (revisão): procedimento pelo código na tabela (TAB, PROCTO) -> TBPROCTO (ID_TBCTRTHM, COD_PROCEDIMENTO): 10101012
     # r4: percentual por componente (desdobrado): 1 dois componentes; 2 procedimento sem preço na tabela (RECUSADA:
     # item NULL valeria para a tabela inteira); 3 tipo de paciente fora do domínio (RECUSADA, nunca 'todos'); 4 sem
@@ -226,6 +231,8 @@ def linhas(r, ins):
                                                    "codigo_inexistente_destino": 1}},
         # o código de material (tabela 19) também é procurado na 20 e o contrário (concorrentes): uma
         # catalogo_codigo_inexistente por tabela que não tem o código (pedido r4: tiss com várias tabelas)
+        "TBREFUNI": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 2, "vigencia_sem_fonte": 4}},
         "TBREFMEMTUSS": {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 5, "licenca_nao_comprovada": 1,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
                                                        "vigencia_sem_fonte": 4}},

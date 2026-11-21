@@ -201,8 +201,8 @@ def ref_simples(spec):
 
 
 # colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
-_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item[2-9]?|#rotulo[2-9]?|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
-                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?"
+_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item[2-9]?|#item@[A-Z0-9_$]+|#rotulo[2-9]?|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
+                        r"|#cofre:[A-Z0-9_$]+|#arquivo:[A-Z0-9_$]+(?::[a-z][a-z0-9_]{0,59})?|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?"
                         r"|#dias:[A-Z0-9_$]+,(?:[A-Z0-9_$]+|=[a-z]+)"
                         r"|(?:#sha256:)?#retrato:(?:\*(?:-[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)"
                         r"|#sha256:#retrato|#grupo_contar|#grupo_seq|#grupo_(?:somar|min|max):[A-Z0-9_$]+"
@@ -396,6 +396,13 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
             erros.append("#grupo_* sem destino agrupado (via antes;agrupar:) em %s" % t)
         por_dc = {}
         for c in cols:
+            if c["coluna"].startswith("#item@"):  # declaração do item por coluna do desdobrar (conferidor r4)
+                o = ops.get(c["destino"].split(".")[0]) or {}
+                specs = {x for spec, _ in (o.get("desdobrar") or []) for x in spec.split("+")[:1]}
+                if c["coluna"][6:] not in specs:
+                    erros.append("#item@<COLUNA> sem a coluna no desdobrar do destino: %s -> %s (%s)"
+                                 % (t, c["destino"], c["coluna"]))
+                continue
             por_dc.setdefault(c["destino"], []).append(c["coluna"])
         for dc, ns in sorted(por_dc.items()):
             if len(ns) > 1 and any(eh_item(n) or n.startswith("@id") for n in ns):

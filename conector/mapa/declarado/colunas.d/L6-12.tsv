@@ -188,19 +188,20 @@ PREVOLPAC	TAB		inteiro			não aproveitada: posição de tela
 PREVOLPAC	ORDEM		texto			não aproveitada: ordem de layout; a sequência é a da chave
 PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id	chave_origem		ref:PRALERGIAPAC	alerta de alergia do paciente (mesma fatia); alerta recusado: pai_pendente
 PRALERGIAPAC_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id	inteiro_zeros_esquerda:5		ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb	decisão (F4-decisoes-destino, L6-12, rodada 3): princípio ativo é o catálogo oficial DCB (regra 7, nunca gravado): o código DCB guardado no princípio da origem (encadeada terminada em coluna, 5 dígitos com zeros à esquerda) acha o id no catálogo já carregado (cod:); código ausente no catálogo: codigo_inexistente_destino e a linha recusa (NOT NULL) até o carregador oficial trazê-lo; princípio sem código DCB: NULL e recusa
-#--- PRGEDIMP (BLOQUEADA, regra_faltante #arquivo/M4): declaração pronta; anexo_prontuario.arquivo_id NOT NULL espera o mecanismo de arquivo
-#PRGEDIMP	@estabelecimento	anexo_prontuario.estabelecimento_id				único estabelecimento
-#PRGEDIMP	ID_RICADPAC	anexo_prontuario.paciente_id				paciente (chave do cadastro)
-#PRGEDIMP	ID_ATCABECATEND	anexo_prontuario.atendimento_id				atendimento (opcional)
-#PRGEDIMP	ID_PRTIPODOCANEXO	anexo_prontuario.tipo_anexo_id				tipo de anexo; sem tipo recusa (NOT NULL)
-#PRGEDIMP	#arquivo:DOCUMENTO	anexo_prontuario.arquivo_id				binário do anexo (DOCUMENTO; IMAGEM quando houver) no armazenamento: mecanismo #arquivo (M4)
-#PRGEDIMP	NOME_DOCUMENTO	anexo_prontuario.titulo	texto_nome			nome do documento; sem nome recusa (NOT NULL)
-#PRGEDIMP	REFERENCIA	anexo_prontuario.referencia_em	data			data do documento original
-#PRGEDIMP	DATA_HORA_EVENTO	anexo_prontuario.evento_em	data_hora			evento clínico
-#PRGEDIMP	JUSTIFICATIVA_EVENTO_RETROATIVO	anexo_prontuario.justificativa_retroativo	texto			justificativa
-#PRGEDIMP	LOCAL_ORIGEM	anexo_prontuario.local_origem	texto			serviço de origem
-#PRGEDIMP	DATA_HORA_IMPORTACAO	anexo_prontuario.importado_em	data_hora			importação
-#PRGEDIMP	ID_TBCBOPRO_IMPORTACAO	anexo_prontuario.importado_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	quem importou
-#PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.suspenso_em	data_hora			suspensão
-#PRGEDIMP	JUSTIFICATIVA_SUSPENSAO	anexo_prontuario.justificativa_suspensao	texto			justificativa da suspensão
-#PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.situacao	preenchido	valores		suspenso / ativo (pares em valores.d ao ativar)
+PRGEDIMP	@estabelecimento	anexo_prontuario.estabelecimento_id				L6-12 conferidor r4: único estabelecimento
+PRGEDIMP	ID_RICADPAC	anexo_prontuario.paciente_id				L6-12 conferidor r4: paciente (chave do cadastro)
+PRGEDIMP	ID_ATCABECATEND	anexo_prontuario.atendimento_id				L6-12 conferidor r4: atendimento (opcional)
+PRGEDIMP	ID_PRTIPODOCANEXO	anexo_prontuario.tipo_anexo_id				L6-12 conferidor r4: tipo de anexo; sem tipo recusa (NOT NULL)
+PRGEDIMP	#arquivo:DOCUMENTO:anexo	anexo_prontuario.arquivo_id				L6-12 conferidor r4: binário do anexo no armazenamento de arquivos (#arquivo, ADR 0004), gravado como veio da origem
+PRGEDIMP	#arquivo:IMAGEM:anexo	anexo_prontuario.arquivo_id				L6-12 conferidor r4: sem DOCUMENTO, o binário da IMAGEM (concorrente)
+PRGEDIMP	NOME_DOCUMENTO	anexo_prontuario.titulo	texto_nome			L6-12 conferidor r4: nome do documento; sem nome recusa (NOT NULL)
+PRGEDIMP	=~Documento migrado	anexo_prontuario.titulo				L6-12 conferidor r4: sem nome na origem: título presumido (valor_presumido), o documento do paciente não se perde
+PRGEDIMP	REFERENCIA	anexo_prontuario.referencia_em	data			L6-12 conferidor r4: data do documento original
+PRGEDIMP	DATA_HORA_EVENTO	anexo_prontuario.evento_em	data_hora			L6-12 conferidor r4: evento clínico
+PRGEDIMP	JUSTIFICATIVA_EVENTO_RETROATIVO	anexo_prontuario.justificativa_retroativo	texto			L6-12 conferidor r4: justificativa
+PRGEDIMP	LOCAL_ORIGEM	anexo_prontuario.local_origem	texto			L6-12 conferidor r4: serviço de origem
+PRGEDIMP	DATA_HORA_IMPORTACAO	anexo_prontuario.importado_em	data_hora			L6-12 conferidor r4: importação
+PRGEDIMP	ID_TBCBOPRO_IMPORTACAO	anexo_prontuario.importado_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-12 conferidor r4: quem importou
+PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.suspenso_em	data_hora			L6-12 conferidor r4: suspensão
+PRGEDIMP	JUSTIFICATIVA_SUSPENSAO	anexo_prontuario.justificativa_suspensao	texto			L6-12 conferidor r4: justificativa da suspensão
+PRGEDIMP	=suspenso	anexo_prontuario.situacao			se:DATA_HORA_SUSPENSAO	L6-12 conferidor r4: suspenso quando a origem tem a data da suspensão (senão o padrão ativo)

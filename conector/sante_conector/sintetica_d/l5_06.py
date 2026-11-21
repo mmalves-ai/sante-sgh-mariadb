@@ -17,6 +17,12 @@ import os
 import re
 
 DDL = """
+CREATE TABLE TBCONSBRASINATIVO ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONSIDCALCVLR ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVCOBTXPA ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVCONSMAT ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVMEDREQATD ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVPERCTAPAC ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE TBCONVEN ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(75), "DTH" SMALLINT, "THM" SMALLINT, "THM_E" SMALLINT,
   "MEM" SMALLINT, "DTH_VI" VARCHAR(1), "THM_VI" VARCHAR(1), "THM_VI_E" VARCHAR(1), "CLASSE" SMALLINT, "TATO"
   VARCHAR(40), "TRTC" VARCHAR(1), "TSTC" VARCHAR(1), "LANDEP" VARCHAR(1), "LOCAL" VARCHAR(40), "NUMERO" INTEGER,
@@ -351,7 +357,14 @@ def profissional_antes_do_vinculo():
     return o["TBPROFIS"] < o["TBCBOPRO_TBCONVEN"]
 
 
+ESCOLHAS = ('ID_TBCONVCONSMAT', 'ID_TBCONSBRASINATIVO', 'ID_TBCONSIDCALCVLR_CLI', 'ID_TBCONSIDCALCVLR_CIR', 'ID_TBCONSIDCALCVLR_MATMED', 'ID_TBCONSIDCALCVLR_FILME', 'ID_TBCONSIDCALCVLR_DTH', 'ID_TBCONVMEDREQATD', 'ID_TBCONVCOBTXPA', 'ID_TBCONVPERCTAPAC')
+
+
 def linhas(r, ins):
+    # conferidor r4: listas de opção das regras de consistência do convênio (lidas pela encadeada, descarte de produto)
+    for t in ['TBCONSBRASINATIVO', 'TBCONSIDCALCVLR', 'TBCONVCOBTXPA', 'TBCONVCONSMAT', 'TBCONVMEDREQATD', 'TBCONVPERCTAPAC']:
+        for i, n in ((1, "Opcao exemplo um"), (2, "Opcao exemplo dois")):
+            _ins(ins, t, ID=i, NOME=n)
     # fontes pagadoras: 2 registro ANS com zero à esquerda, 3 inativa, 4 situação fora do domínio (fica com o padrão),
     # 5 retorno negativo, 6 registro ANS zero e classe nunca vista, 7 sem nome (1048), 8 grupo nunca visto
     for cod in range(1, 9):
@@ -360,7 +373,9 @@ def linhas(r, ins):
              CLASSE=9 if cod == 6 else 1 + cod % 2, ID_TBGRUCONVEN=99 if cod == 8 else 1 + cod % 2,
              RETORNO=-1 if cod == 5 else 30, PRAZO_PGTO=r.randint(10, 90), CONV_CONTATO="  Contato ação %d " % cod,
              CONV_EMAIL="fonte%d@exemplo.invalid" % cod, FONE="0000-000%d" % cod,
-             OBS=("Observação %d\r\n  segunda  linha " % cod).encode("cp1252"))
+             OBS=("Observação %d\r\n  segunda  linha " % cod).encode("cp1252"),
+             # conferidor r4: escolha nas listas das regras de consistência (taxa de porte só nas fontes pares)
+             **dict({c: 1 + cod % 2 for c in ESCOLHAS}, ID_TBCONVCOBTXPA=1 if cod % 2 == 0 else None))
     # inscrições no conselho (pais de fora da fatia, só para a referência encadeada ao profissional)
     for i, prof in PROF_POR_INSCRICAO.items():
         _ins(ins, "TBCBOPRO", ID=i, ID_TBCBOSUS=1, UF="SP", COD=1000 + i, ID_TBPROFIS=prof, VINC_EMPR="N")

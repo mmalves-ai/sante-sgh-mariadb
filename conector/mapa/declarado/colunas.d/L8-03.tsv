@@ -287,3 +287,13 @@ TBREFMEMTUSS	DATA_VIGENCIA_INICIAL	equivalencia_matmed_tuss.vigencia_inicio	data
 TBREFMEMTUSS	@vigencia_carga	equivalencia_matmed_tuss.vigencia_inicio				L8-03 r4: sem início na origem: data da carga (vigencia_sem_fonte, baixa)
 TBREFMEMTUSS	DATA_VIGENCIA_FINAL	equivalencia_matmed_tuss.vigencia_fim	data			L8-03 r4: fim da vigência
 TBREFMEMTUSS	OLD_ATIVO		booleano_sn			L8-03 r4: marca antiga substituída pela vigência (coluna OLD_ da origem)
+TBREFUNI	ID_TBMATMED	equivalencia_matmed_fonte_pagadora.item_referencia_matmed_id	chave_origem		ref:TBMATMED	L8-03 conferidor r4: item da tabela do hospital (TBMATMED, mesmo filtro de licença: item não carregado deixa pai_pendente); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	CODREF	equivalencia_matmed_fonte_pagadora.codigo_na_fonte	inteiro_zero_nulo			L8-03 conferidor r4: código do item na referência unificada; 0 ou nulo recusa (NOT NULL); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	CLASSIFREF	equivalencia_matmed_fonte_pagadora.classificacao_na_fonte	inteiro			L8-03 conferidor r4: classificação do item na referência unificada (modelo 12_FAT/13); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	COD_ALFAREF	equivalencia_matmed_fonte_pagadora.codigo_alfa_na_fonte	texto			L8-03 conferidor r4: código alfanumérico da referência unificada (modelo 12_FAT/13); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	@vigencia_carga	equivalencia_matmed_fonte_pagadora.vigencia_inicio				L8-03 conferidor r4: a origem não data a equivalência: vigente desde a carga (vigencia_sem_fonte); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	TAB		inteiro			L8-03 conferidor r4: chave da origem (tabela do item), lida no conector_origem; fonte_pagadora_id nulo = referência unificada
+TBREFUNI	COD		inteiro			L8-03 conferidor r4: chave da origem (código do item), lida no conector_origem; fonte_pagadora_id nulo = referência unificada
+TBREFUNI	CLASSIF		inteiro			L8-03 conferidor r4: não carregada: duplicado: a classificação do item já está no item (TBMATMED.CLASSIF, código derivado); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	CONDIA		decimal			L8-03 conferidor r4: não carregada: sem significado confirmado no dicionário (sem destino no modelo); fonte_pagadora_id nulo = referência unificada
+TBREFUNI	OLD_ID_TBREFMEMTUSS		inteiro			L8-03 conferidor r4: não carregada: identificador técnico antigo da origem, sem uso; fonte_pagadora_id nulo = referência unificada

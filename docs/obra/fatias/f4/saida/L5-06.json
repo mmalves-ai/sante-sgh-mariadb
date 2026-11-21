@@ -74,6 +74,13 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L6-02.tsv (fatia L6-02)",
    "mudanca": "HTATENDIMENTO: #retrato:* em trilha_auditoria.dados_depois (hoje dados_antes)",
    "motivo": "semântica dos históricos decidida por contagem na imagem de referência (F4-decisoes-destino.md seção 4, revisão r3): o retrato mais recente é igual à linha atual em 47.063 de 47.063 pacientes (nome, nascimento, CNS), 871 de 871 profissionais (nome), 77 de 77 fontes e 1.890 de 1.895 inscrições: o histórico guarda o estado DEPOIS da alteração. HTATENDRESP (L5-06) já foi alinhado"
+  },
+  {
+   "rodada": 4,
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (integrador; código compartilhado, fora do alcance da fatia em paralelo)",
+   "mudanca": "declaração do #item POR COLUNA do desdobrar: linha `#item@<COLUNA>` (mesmo destino do #item) com regra, depara (inclusive `valores`, pares em valores.d com coluna `#item@<COLUNA>`) e `ref:` encadeada próprias; no laço do desdobrar (carga_mapa._valores, `cis[j]`), o item da coluna COL usa a declaração `#item@COL` quando existe, senão a do `#item`. O verificador aceita `#item@COL` só quando COL está no `desdobrar:` do mesmo destino e não o conta como concorrente",
+   "motivo": "TBCONVEN -> regra_consistencia_lancamento (secundário `desdobrar:`, uma linha por regra; #rotulo = tipo_regra|grupo_item): as 10 colunas ID_TBCONVCONSMAT, ID_TBCONSBRASINATIVO, ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH, ID_TBCONVMEDREQATD, ID_TBCONVCOBTXPA e ID_TBCONVPERCTAPAC apontam SEIS listas diferentes cujos ids se repetem (1, 2, 3...): o de-para de valores e a referência do #item são um só por destino (chave (tabela, '#item', destino) em _compilar), então o id 1 de uma lista e o id 1 de outra virariam a mesma opção. Sem o mecanismo não há declaração correta possível na fatia (concorrente de item é erro do verificador). Declaração pronta para depois: `#item@ID_TBCONVCONSMAT` via `ref:TBCONVCONSMAT>NOME` (ou depara=valores com os códigos canônicos de cada tipo_regra), idem para cada lista; destino secundário `regra_consistencia_lancamento` com `fonte_pagadora_id`=@id, `desdobrar:ID_TBCONVCONSMAT=material_obrigatorio|,ID_TBCONSBRASINATIVO=item_referencia_inativo|,ID_TBCONSIDCALCVLR_CLI=data_base_calculo|clinico,_CIR=..|cirurgico,_MATMED=..|matmed,_FILME=..|filme,_DTH=..|diaria_taxa,ID_TBCONVMEDREQATD=requisitante_obrigatorio|,ID_TBCONVCOBTXPA=taxa_porte_anestesico|,ID_TBCONVPERCTAPAC=percentual_taxa_pacote|`. Com isso as 6 listas (L8-02) voltam a descarte mecanismo_do_produto (meta da regra 23: zero bloqueadas).",
+   "atendido": "conferidor r4 (tentativa 2)"
   }
  ]
 }

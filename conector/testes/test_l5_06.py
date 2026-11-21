@@ -38,7 +38,7 @@ class PlanoL506(unittest.TestCase):
                                                               "pessoa_fisica", "usuario_profissional"])
         self.assertTrue(self.plano["TBPROFIS"]["opcoes"]["pessoa_fisica"]["antes"])
         self.assertTrue(self.plano["TBPROFIS"]["opcoes"]["profissional_dado_fiscal"]["opcional"])
-        self.assertEqual(self.plano["TBCONVEN"]["destinos"], ["fonte_pagadora"])
+        self.assertEqual(self.plano["TBCONVEN"]["destinos"], ["fonte_pagadora", "regra_consistencia_lancamento"])  # conferidor r4
 
     def test_situacao_pelo_depara_de_valores(self):
         # sem o de-para, fonte encerrada e profissional desligado entrariam com o padrão (ativos)

@@ -27,7 +27,7 @@ L6-01 (o tipo de painel também vem de lá, não mais como pai externo).
 - contadores de numeração da linha única de parâmetros (REPARAM, desdobrados em sequencia_negocio inativa): quatro
   contadores com valor (um deles zero) e três vazios (sem item); competência e opções não carregam.
 Fora da imagem: descartes da fatia (TBREFCANCMODTP, TBSTATUSGUICHE, TBTIPO_ATENDIMENTO; motivos em sem_carga.tsv) e
-ATCONTA, BLOQUEADA até atendimento_conta nascer da carga das contas (pedido às L8-05 e L8-06).
+ATCONTA, descarte duplicado: atendimento_conta nasce da carga das contas (FCCTAEXT na L8-05, RICONTAS na L8-06).
 Situação 'S' (suspensa) vira 'suspensa': o esperado supõe o CHECK do modelo com 'suspensa' (pedido de ler_ddl).
 """
 import datetime
@@ -78,8 +78,8 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALHORA", "TBLOCALPESATE",
               "TBGERASENHA", "TBSENHAATEND", "ATCABECATEND_TBSENHAATEND", "TBSENHAATEND_REPACAGD",
               "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO", "REPARAM")
-DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO")
-BLOQUEADAS = ("ATCONTA",)   # sem declaração: aguarda atendimento_conta pela carga das contas (L8-05, L8-06)
+DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO", "ATCONTA")
+BLOQUEADAS = ()   # ATCONTA: descarte duplicado, atendimento_conta nasce da carga das contas (L8-05, L8-06)
 DESDOBRADAS = {"TBLOCALHORA": 2, "REPARAM": 1}   # linhas da origem que gravam itens (o esperado "gravados" conta itens)
 
 

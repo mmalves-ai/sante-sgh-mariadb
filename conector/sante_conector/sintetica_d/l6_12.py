@@ -245,7 +245,7 @@ PAIS_EXTERNOS = {"RICADPAC": [1, 2], "ATCABECATEND": [1, 2], "TBUSERS": ["USR1",
                  "TBALERGIA": [1], "PRTPLAN": [1, 2], "PRFREQUENCIA": [1], "GETABVIA": ["VO", "EV"],
                  "PRPROTGERAL": [1], "TBPROENF": [1, 2], "PRTPINFUSAO": [1], "TBDIETAS": [1, 2], "PRVIAADMIN": [1],
                  "PRUNIDINFUSAO": [1], "PRCARACTDIE": [1, 2], "GEITENS": [1, 2], "PRITEMNAOPAD": [1],
-                 "PRFORMULA": [1], "PRKITSOL": [1]}
+                 "PRFORMULA": [1], "PRKITSOL": [1], "PRTIPODOCANEXO": [1]}
 # único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
@@ -438,18 +438,32 @@ def linhas(r, ins):
     # origem (pai_inexistente, NOT NULL); 7 repete o par da 1 (UNIQUE)
     for i, alg, princ in [(1, 1, 1), (2, 2, 2), (3, 3, 1), (4, 1, 4), (5, 1, 3), (6, 1, 99), (7, 1, 1)]:
         linha("PRALERGIAPAC_TBPRINC", ID=i, ID_PRALERGIAPAC=alg, ID_TBPRINC=princ)
+    # conferidor r4: anexo do prontuário (#arquivo): 1 PDF; 2 sem DOCUMENTO, pela IMAGEM, suspenso; 3 sem binário
+    # nenhum (1048); 4 sem nome (título presumido); 5 paciente nunca visto (pai_inexistente, 1048)
+    for i, pac, doc, img, nome, susp in [(1, 1, b"%PDF-1.4 falso 1", None, "Laudo externo exemplo", None),
+                                         (2, 2, None, b"\xff\xd8\xff falsa", "Foto exemplo", _h(3)),
+                                         (3, 1, None, None, "Sem arquivo exemplo", None),
+                                         (4, 2, b"%PDF-1.4 falso 4", None, None, None),
+                                         (5, 9, b"%PDF-1.4 falso 5", None, "Orfao exemplo", None)]:
+        linha("PRGEDIMP", ID=i, ID_RICADPAC=pac, ID_ATCABECATEND=pac if pac < 3 else None, DATA_HORA_IMPORTACAO=_h(-i),
+              ID_TBCBOPRO_IMPORTACAO=301, MAQUINA_IMPORTACAO="MAQ1", DOCUMENTO=doc, IMAGEM=img, NOME_DOCUMENTO=nome,
+              ID_PRTIPODOCANEXO=1, DATA_HORA_SUSPENSAO=susp,
+              JUSTIFICATIVA_SUSPENSAO="Suspenso exemplo" if susp else None)
+    feitas_r4 = {"PRGEDIMP"}
     # descartes: só a forma, duas linhas falsas cada
     feitas = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
              "PREVOLPAC", "PRALERGIAPAC_TBPRINC"}
     for t in FORMAS:
-        if t not in feitas:
+        if t not in feitas and t not in feitas_r4:
             for i in (1, 2):
                 linha(t, **{c: i for c in FORMAS[t][0].split(",")})
     return ESPERADO
 
 
 ESPERADO = {
+    "PRGEDIMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 1,
+                                               "valor_presumido": 1}},
     "PRPRESC": {"gravados": 2, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1, "restricao_destino_1048": 2,
                                               "restricao_destino_4025": 2, "valor_fora_do_dominio": 1}},
     "PRLANGERAL": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,

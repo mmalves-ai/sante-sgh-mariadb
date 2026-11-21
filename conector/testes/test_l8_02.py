@@ -176,7 +176,7 @@ class FatiaL802(unittest.TestCase):
         # r4 (revisão): a lista só é descarte (domínio do produto) quando a escolha de cada fonte pagadora (colunas
         # ID_TBCONS*/ID_TBCONV* de TBCONVEN, L5-06, pedido 19) está declarada com destino; antes, bloqueada e visível
         escolha = [c for c in self.m["colunas_decl"] if c["tabela"] == "TBCONVEN" and c["destino"]
-                   and c["coluna"].startswith(ESCOLHA_TBCONVEN)]
+                   and c["coluna"].replace("#item@", "").startswith(ESCOLHA_TBCONVEN)]
         for t in LISTAS_SEM_CARGA - {"TBCTRTAT"}:
             if escolha:
                 self.assertEqual(sc[t]["situacao"], "descarte", t)

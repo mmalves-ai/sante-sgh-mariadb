@@ -12,7 +12,7 @@ from sante_conector.sintetica_d import l8_03
 
 CARREGADAS = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC",
               "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED",
-              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM"]
+              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI"]
 # descarte de produto (linha em sem_carga.tsv pedida no L8-03.json; TBIRREGCTRCTA já está lá)
 DESCARTE = ["TBIRREGCTRCTA", "TBCTRTAT"]
 # aguardam regra genérica do motor (pedidos em docs/obra/fatias/f4/saida/L8-03.json)
@@ -260,9 +260,10 @@ class Declaracoes(unittest.TestCase):
         # r3 (correção): equivalências do item de mat/med carregam nas tabelas PRÓPRIAS; só a licenciada espera licença
         with open(_raiz() / "sem_carga.tsv", newline="", encoding="utf-8") as f:
             sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
-        # r4: TBREFMEMTUSS carrega (filtro de licença); TBREFUNI aguarda o modelo (sem fonte pagadora na linha)
+        # r4: TBREFMEMTUSS carrega (filtro de licença); TBREFUNI carrega com fonte nula = referência unificada
+        # (modelo 12_FAT/13, conferidor r4)
         self.assertNotIn("TBREFMEMTUSS", sc)
-        self.assertEqual((sc["TBREFUNI"]["situacao"], sc["TBREFUNI"]["causa"]), ("bloqueada", "aguarda_modelo"))
+        self.assertNotIn("TBREFUNI", sc)
         self.assertNotIn("TBTIPPRO", sc)
 
 

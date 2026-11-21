@@ -76,10 +76,6 @@ FORMAS = {
         ('REF_COD', 'VARCHAR(1)', False), ('REF_DESC', 'VARCHAR(1)', False), ('REF_VALOR', 'VARCHAR(1)', False),
         ('REF_VALOR_PFB', 'CHAR(1)', False), ('REF_VALOR_PMC', 'CHAR(1)', False),
     ]),
-    'TBEMIREFMATMED': ('ID_TBCONVEN,ID_TBMATMED', [
-        ('ID_TBCONVEN', 'SMALLINT', True), ('ID_TBMATMED', 'INTEGER', True), ('REF_VALOR_PMC', 'CHAR(1)', True),
-        ('REF_VALOR_PFB', 'CHAR(1)', True),
-    ]),
     'TBENTCON': ('CONV,ENTREGA', [
         ('CONV', 'SMALLINT', True), ('ENTREGA', 'DATE', True), ('PAGAMENTO', 'DATE', False),
     ]),
@@ -307,9 +303,9 @@ if RPLANRPA_ATIVA:
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TBUSERS", "TBCONVEN_TBTISSPARDEF",
               "TBEMIREF", "TBENTCON", "TBVLRTHM", "TBTIPPLCONV", "TBTISS", "TBVLRDTH",
-              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
+              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
 # declaração pronta e comentada (BLOQUEADA, motivo na linha); as três primeiras com linhas específicas na imagem
-COMENTADAS = ("TBPERMEM", "TBEMIREFMATMED")
+COMENTADAS = ()  # conferidor r4: TBPERMEM carrega (modelo 12_FAT/13); TBEMIREFMATMED é da L8-04
 COM_LINHAS = ()
 # só lida pela referência encadeada (cadastro de versões TISS da origem, catálogo oficial nunca gravado)
 SO_ORIGEM = ("TBVERSAOTISS",)
@@ -333,7 +329,8 @@ DDL = _ddl()
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"], "TBUSERS": ["ANA.EX", "BRUNO.EX"],
                  "TBCLASSI": ["1", "2"], "TBTABTHM": ["1|10", "1|11"],
                  "RECADATE": ["500", "501"], "TBLOCCON": ["1"],
-                 "TBTPLANC": ["1", "2"], "TBITEDES": ["1|1|1"]}
+                 "TBTPLANC": ["1", "2"], "TBITEDES": ["1|1|1"],
+                 "TBMATMED": ["1", "2"], "TBCTRMEM": ["1"]}
 if RPLANRPA_ATIVA:  # RPA da L8-02 e lançamento de repasse da L8-01
     PAIS_EXTERNOS.update({"RPRPA": ["1", "2"], "RPLANEVE": ["10", "11"]})
 # id de destino dado pela conferência a cada pai externo: 1, 2... na ordem das tabelas (nome) e das chaves
@@ -380,6 +377,13 @@ def _ins(ins, tab, **v):
 
 def linhas(r, ins):
     D, dt = decimal.Decimal, datetime.date
+    # conferidor r4: preço negociado (CON, COD, DATA, PERC, TAB, VLR_FIXO, QTDE_FIXA, ID_TBMATMED, TP_CONTA): 1, 2 e 4
+    # gravados (4 com tipo de conta fora do domínio: NULL = qualquer tipo); 3 item inexistente (sem item: CHECK 4025)
+    for x in [(1, 1, dt(2025, 1, 1), None, 1, D("10.50"), None, 1, "I"),
+              (2, 2, dt(2025, 2, 1), D("5.0"), 1, None, None, 2, "A"),
+              (1, 3, dt(2025, 3, 1), None, 1, D("7.00"), None, 99, "E"),
+              (2, 4, dt(2025, 4, 1), None, 1, D("3.25"), D("1.000"), 1, "Z")]:
+        ins("TBPERMEM", list(x))
     for tab in BLOQUEADAS:
         if tab in COM_LINHAS:
             continue
@@ -542,7 +546,7 @@ def linhas(r, ins):
         "TBVLRDTH": {"gravados": 2, "pendencias": {"restricao_destino_1048": 3, "pai_ambiguo": 1,
                                                    "pai_inexistente": 1, "restricao_destino_4025": 1,
                                                    "pai_pendente": 1}},
-        "FCCTAEXT": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3,
+        "FCCTAEXT": {"gravados": 4, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
                                                    "restricao_destino_4025": 1, "valor_fora_do_dominio": 2}},
         "FCDIAEXT": {"gravados": 2, "pendencias": {"pai_ambiguo": 2, "pai_inexistente": 2, "pai_pendente": 1,
                                                    "restricao_destino_1048": 2}},
@@ -555,6 +559,9 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 2, "restricao_destino_4025": 1,
                                                    "valor_presumido": 4}},
     })
+    # conferidor r4: preço negociado de mat/med pelo item de referência
+    esperado["TBPERMEM"] = {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
+                                                          "valor_fora_do_dominio": 1}}
     if RPLANRPA_ATIVA:
         esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     return esperado

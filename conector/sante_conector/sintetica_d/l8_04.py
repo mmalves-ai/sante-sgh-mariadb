@@ -113,7 +113,7 @@ CREATE TABLE TBFORMULAPAGTO (ID SMALLINT NOT NULL, NOME VARCHAR(30) NOT NULL, ID
 CREATE TABLE TBCBOSUS (ID INTEGER NOT NULL, COD VARCHAR(6), PRIMARY KEY (ID));
 """ + "\n".join(_create(t) for t in R3 + CADEIA) + "\n"
 
-CARREGADAS = ('TBGRAUPARTPROC', 'TBRPATPREPASSE', 'TBSRVCON', 'TBTABATO', 'TBTIPO_PROCEDIMENTO', 'TBTPLANC',
+CARREGADAS = ('TBEMIREFMATMED', 'TBGRAUPARTPROC', 'TBRPATPREPASSE', 'TBSRVCON', 'TBTABATO', 'TBTIPO_PROCEDIMENTO', 'TBTPLANC',
               'TBPRESER', 'TBSUBDES', 'TBTABTHM', 'TBFORMULAPAGTO') + R3
 DESCARTADAS = ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP', 'TBTISSFORMAENVPAD',
                'TBTISSGERSPSADTPS', 'TBTISSPARDEF', 'TBTISSTPGUIA_TBTISSPARDEF', 'TBTISSPOSPROF')
@@ -121,7 +121,7 @@ DESCARTADAS = ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP
 SEM_MECANISMO = ()  # TBPERTHM saiu da fatia: a L8-03 (dona pelo índice) a declara desdobrada no principal
 # acordo do cliente (NÃO é descarte): declaração pronta e comentada (colunas.d/L8-05.tsv) com o item faturável do
 # mat/med (ref:TBMATMED/item_faturavel); só carrega quando a L8-03 carregar TBMATMED com esse destino secundário
-AGUARDA_PAI = ('TBEMIREFMATMED',)
+AGUARDA_PAI = ()  # TBEMIREFMATMED carrega pelo item de referência (modelo 12_FAT/13, conferidor r4)
 BLOQUEADAS = DESCARTADAS + SEM_MECANISMO + AGUARDA_PAI  # fora do plano de carga (nome mantido para os testes)
 # linhas recusadas por pai_inexistente no complemento (não é restrição do destino)
 RECUSADAS_SEM_PAI = {"TBTABTHM": 1}
@@ -129,7 +129,8 @@ RECUSADAS_SEM_PAI = {"TBTABTHM": 1}
 # TBTISSVIAACES NÃO entra: é terminologia oficial; a via vem do cadastro do produto pelo código TISS (cod:), semeado
 # no preparo como a semente do produto pedida (pedido 4 revisto)
 PAIS_EXTERNOS = {"TBCTRTHM": ["7"], "TBGRUDES": ["3", "4"], "TBPROCTO": ["501", "502", "503"], "TBCENCUS": ["40"],
-                 "TBFORNEC": ["900"], "TBPROFIS": ["300", "301"], "TBCONVEN": ["10", "11"]}
+                 "TBFORNEC": ["900"], "TBPROFIS": ["300", "301"], "TBCONVEN": ["10", "11"],
+                 "TBMATMED": ["1", "2"]}
 
 
 def id_externo(tabela, chave):
@@ -185,7 +186,6 @@ PREPARO_DESTINO = (
     tuple(_ITENS) + (CBO_VALIDO, id_externo("TBGRUDES", "3"), id_externo("TBGRUDES", "4")))
 
 FORMAS_FORA = {
-    'TBEMIREFMATMED': ('SMALLINT', 'INTEGER', 'CHAR', 'CHAR'),
     'TBSTATUSPROCESSA': ('SMALLINT', 'VARCHAR'),
     'TBTIPCOPART': ('SMALLINT', 'VARCHAR'),
     'TBTISSEMIEXP': ('SMALLINT', 'VARCHAR'),
@@ -330,8 +330,14 @@ def linhas(r, ins):
     # (1048), tipo recusado (pai_pendente), tipo 9 inexistente (1048), par repetido (1062)
     for x in [(1, 18, 1), (2, 22, 2), (3, 19, 4), (4, 18, 3), (5, 22, 9), (6, 22, 1), (7, 18, 1)]:
         ins("TBTISSTERMO_TBTPLANC", list(x))
+    # --- exceção de preço base por fonte e item de referência (conferidor r4): PFB S = fábrica, senão PMC; 4 fonte
+    # inexistente (pai_inexistente, 1048); 5 item inexistente (pai_inexistente; sem item nenhum: CHECK 4025)
+    for x in [(10, 1, "N", "S"), (10, 2, "S", "N"), (11, 1, "N", "N"), (99, 2, "N", "S"), (11, 77, "N", "S")]:
+        ins("TBEMIREFMATMED", list(x))
 
     return {
+        "TBEMIREFMATMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
+                                                         "restricao_destino_4025": 1}},
         "FCCRECUN": {"gravados": 6, "pendencias": {"catalogo_codigo_inexistente": 2, "valor_fora_do_dominio": 1,
                                                    "codigo_inexistente_destino": 1, "pai_inexistente": 2,
                                                    "restricao_destino_1048": 2}},

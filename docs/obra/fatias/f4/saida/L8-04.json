@@ -130,14 +130,16 @@
    "n": 25,
    "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
    "mudanca": "referencia_emissao_matmed_excecao: item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), item_faturavel_id anulável e CHECK de exatamente um dos dois; UNIQUE (fonte_pagadora_id, item_referencia_matmed_id)",
-   "motivo": "TBEMIREFMATMED (1 na referência): o preço base PMC/PF é atributo do item de referência; o item faturável de mat/med exige insumo (ck_item_faturavel_insumo) e TBMATMED (L8-03 r4) carrega em item_referencia_matmed sem insumo na origem. Com o modelo: ID_TBMATMED -> item_referencia_matmed_id por ref:TBMATMED, ID_TBCONVEN por ref:TBCONVEN, REF_VALOR_PFB por de-para de valores; segue BLOQUEADA (aguarda_modelo)"
+   "motivo": "TBEMIREFMATMED (1 na referência): o preço base PMC/PF é atributo do item de referência; o item faturável de mat/med exige insumo (ck_item_faturavel_insumo) e TBMATMED (L8-03 r4) carrega em item_referencia_matmed sem insumo na origem. Com o modelo: ID_TBMATMED -> item_referencia_matmed_id por ref:TBMATMED, ID_TBCONVEN por ref:TBCONVEN, REF_VALOR_PFB por de-para de valores; segue BLOQUEADA (aguarda_modelo)",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "rodada": 4,
    "revisao": true,
    "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
    "mudanca": "DDL decidido (F4-decisoes-destino.md, L8-02/03/04 r4 revisão): ALTER TABLE referencia_emissao_matmed_excecao ADD item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), MODIFY item_faturavel_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_referencia_emissao_matmed_excecao_alvo CHECK (item_faturavel_id IS NOT NULL OR item_referencia_matmed_id IS NOT NULL), UNIQUE (fonte_pagadora_id, item_referencia_matmed_id); depois a L8-04 declara TBEMIREFMATMED com ref:TBMATMED e o mesmo filtro de licença",
-   "motivo": "revisão adversarial r4: TBEMIREFMATMED segue BLOQUEADA só pelo modelo (o item faturável de mat/med exige insumo); a decisão de destino está tomada e registrada"
+   "motivo": "revisão adversarial r4: TBEMIREFMATMED segue BLOQUEADA só pelo modelo (o item faturável de mat/med exige insumo); a decisão de destino está tomada e registrada",
+   "atendido": "conferidor r4 (tentativa 2)"
   }
  ]
 }

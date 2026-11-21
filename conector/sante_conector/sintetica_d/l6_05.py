@@ -1,7 +1,11 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
-As 19 tabelas carregadas pela carga dirigida pelo mapa (3 da fatia são descarte de produto em declarado/sem_carga.tsv;
-GECADANTIMI tem a declaração pronta, comentada, à espera do modelo). PRFICHAREL grava um leiaute de impressão por
+As 21 tabelas carregadas pela carga dirigida pelo mapa (3 da fatia são descarte de produto em declarado/sem_carga.tsv).
+GECADANTIMI grava a ficha do antimicrobiano migrada (origem 'migracao', 06_PEP/18): atendimento pelo registro, paciente
+pela encadeada RECADATE > PRONT > RICADPAC (pais de L3 na imagem só com as colunas da referência), prescritor pela
+inscrição no conselho (TBCBOPRO > profissional), convênio e finalidade nativa pela inicial do tipo; anomalias: convênio e
+profissional nunca carregados (NULL com pai_inexistente, a ficha migrada aceita), tipo sem par (valor_fora_do_dominio),
+atendimento nunca carregado e atendimento sem paciente (pai_inexistente e recusa 1048). PRFICHAREL grava um leiaute de impressão por
 COD (agrupar no principal), com os componentes numa lista JSON e o tipo de migração criado antes e adotado. PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
 pela primeira linha, adotado pelas seguintes). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
 de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
@@ -52,10 +56,31 @@ CREATE TABLE PRFAVORITO_EXIBIR (ID INTEGER NOT NULL PRIMARY KEY, LOCPACDEFAULT I
 CREATE TABLE PRFICHAREL (ID_FICHAREL INTEGER NOT NULL PRIMARY KEY, COD SMALLINT NOT NULL, NOMECOMP VARCHAR(30) NOT NULL,
   NOMECLASSE VARCHAR(30), NOME VARCHAR(50), COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1, PARENT VARCHAR(30),
   TIPO SMALLINT NOT NULL, SEQUENCIA SMALLINT);
+CREATE TABLE GECADANTIMI (ID_GECADANTIMI INTEGER NOT NULL PRIMARY KEY, REG INTEGER NOT NULL, TIPO VARCHAR(1) NOT NULL,
+  CRM INTEGER NOT NULL, ID_TBCBOPRO INTEGER NOT NULL, CONV SMALLINT NOT NULL);
+CREATE TABLE RICADPAC ("ID" INTEGER NOT NULL, "PRONT" INTEGER NOT NULL, CONSTRAINT PK_L605_RICADPAC PRIMARY KEY ("ID"));
+CREATE TABLE RECADATE ("REG" INTEGER NOT NULL, "PRONT" INTEGER, CONSTRAINT PK_L605_RECADATE PRIMARY KEY ("REG"));
+CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL, "ID_TBCBOSUS" INTEGER NOT NULL, "UF" VARCHAR(2) NOT NULL, "COD"
+  INTEGER NOT NULL, "ID_TBPROFIS" INTEGER NOT NULL, "VINC_EMPR" VARCHAR(1) NOT NULL, "CONS_PROF" VARCHAR(7), "ATIVO"
+  VARCHAR(1), "VINCULO" SMALLINT, "COMP_INICIAL" INTEGER, "COMP_FINAL" INTEGER, "ATENDE_SUS" CHAR(1), "CRM_DIGITO"
+  VARCHAR(1), "REGIONAL" INTEGER, "ID_TBSIGLACONSPROF" SMALLINT, "REG_QUALIF_ESPECIALISTA" VARCHAR(9),
+  "AXREG_ID_ANESTHESIOLOGISTS" BIGINT, "ID_DIGITAL" VARCHAR(36), CONSTRAINT PK_L605_TBCBOPRO PRIMARY KEY ("ID"));
 """
 
 # logins inventados de usuários já carregados (L3)
-PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"]}
+PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"],
+                 # atendimentos e pacientes (L3), convênio e profissional (L3/L5) já carregados; 5002 nunca carregado
+                 "RECADATE": ["5000", "5001", "5003"], "RICADPAC": ["1", "2"], "TBCONVEN": ["3"], "TBPROFIS": ["900"]}
+# pais de outras fatias na imagem só como origem das ref: encadeadas (sem esperado desta fatia)
+PAIS_ORIGEM = ("PRLOCPACDEFAULT", "RECADATE", "RICADPAC", "TBCBOPRO")
+# a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo e as finalidades
+# nativas do antimicrobiano (semente de 06_PEP/18_chaves.sql) vêm daqui
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
+                   " CREATE TABLE IF NOT EXISTS finalidade_terapeutica (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo VARCHAR(30) NOT NULL UNIQUE, descricao VARCHAR(150) NOT NULL);"
+                   " INSERT INTO finalidade_terapeutica (codigo, descricao) VALUES ('profilatica', 'Profilática'),"
+                   " ('empirica', 'Empírica'), ('terapeutica', 'Terapêutica')")
 
 
 U1, U2 = PAIS_EXTERNOS["TBUSERS"]
@@ -161,10 +186,26 @@ DADOS = [
 PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")]
 
 
+# ficha do antimicrobiano (ID, REG, TIPO, CRM, ID_TBCBOPRO, CONV): 1 completa; 2 convênio nunca carregado; 3 tipo sem
+# par e profissional nunca carregado (inscrição 51); 4 atendimento nunca carregado (recusa); 5 atendimento sem paciente
+FICHAS = [[1, 5000, "P", 1234, 50, 3], [2, 5001, "E", 1234, 50, 9], [3, 5001, "X", 4321, 51, 3],
+          [4, 5002, "T", 1234, 50, 3], [5, 5003, "T", 1234, 50, 3]]
+
+
 def linhas(r, ins):
     esperado = {}
     for v in PREFERENCIAS:
         ins("PRLOCPACDEFAULT", list(v))
+    for v in [(5000, 700), (5001, 701), (5002, 700), (5003, 702)]:   # 702: prontuário sem paciente
+        ins("RECADATE", list(v))
+    for v in [(1, 700), (2, 701)]:
+        ins("RICADPAC", list(v))
+    for i, prof in [(50, 900), (51, 999)]:                           # 999: profissional nunca carregado
+        ins("TBCBOPRO", [i, 1, "SP", 1000 + i, prof, "N"] + [None] * 12)
+    for v in FICHAS:
+        ins("GECADANTIMI", list(v))
+    esperado["GECADANTIMI"] = {"gravados": 3, "pendencias": {"pai_inexistente": 4, "valor_fora_do_dominio": 1,
+                                                             "restricao_destino_1048": 2}}
     for tab, ls, esp in DADOS:
         for v in ls:
             ins(tab, list(v))

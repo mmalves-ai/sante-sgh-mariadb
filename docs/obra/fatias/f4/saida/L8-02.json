@@ -9,7 +9,8 @@
   {
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
    "mudanca": "acrescentar (situacao descarte): RPPARAM mecanismo_do_produto ('linha única de parâmetros do RPA: definição é catálogo do produto, valor confirmado na implantação, como RIPARAM e PEPARAM; a numeração continua da série e do maior número dos RPAs migrados'); RPRPA_TBCBOPRO duplicado ('o RPA lê o profissional pela origem encadeada ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS'); RPLANEVE_TBCBOPRO duplicado ('o lançamento lê o profissional pela origem encadeada ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS: o CHECK de médico exige o profissional no INSERT'); TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD mecanismo_do_produto ('lista fixa de opções (id, nome) de uma regra de consistência do convênio: domínio do produto, regra_consistencia_lancamento.tipo_regra e opcao; a escolha de cada convênio entra pela coluna do cadastro do convênio (TBCONVEN) com de-para de valores para a opção')",
-   "motivo": "L8-02: descartes de produto da rodada de cobertura; a fatia já não declara coluna dessas tabelas (o verificador recusa tabela declarada e descartada). Edição negada a esta fatia: o orquestrador aplica"
+   "motivo": "L8-02: descartes de produto da rodada de cobertura; a fatia já não declara coluna dessas tabelas (o verificador recusa tabela declarada e descartada). Edição negada a esta fatia: o orquestrador aplica",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "db/migracoes/12_FAT/04_tabelas.sql (lancamento_repasse) — trilha F2.2",
@@ -117,7 +118,8 @@
    "revisao": true,
    "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (TBCONVEN) + valores.d/L5-06.tsv",
    "mudanca": "declarar as 10 colunas de regra do convênio para regra_consistencia_lancamento (fonte_pagadora = a própria linha, desdobrar uma linha por regra, tipo_regra fixo por coluna, opcao por de-para de valores do id da lista -> código da opção, com os nomes lidos das listas na imagem de referência): ID_TBCONVCONSMAT -> material_obrigatorio; ID_TBCONSBRASINATIVO -> item_referencia_inativo; ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH -> data_base_calculo (um por grupo, ver pedido de modelo); ID_TBCONVMEDREQATD -> requisitante_obrigatorio; ID_TBCONVCOBTXPA -> taxa_porte_anestesico; ID_TBCONVPERCTAPAC -> percentual_taxa_pacote. Depois, o orquestrador volta TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD e TBCONVPERCTAPAC a descarte (mecanismo_do_produto) em sem_carga.tsv",
-   "motivo": "L8-02 r3 (revisão do achado): as seis listas só são descartáveis se a escolha de cada fonte pagadora for gravada; hoje nenhuma declaração grava regra_consistencia_lancamento e a regra de faturamento por convênio se perderia. As seis ficam BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN) até lá"
+   "motivo": "L8-02 r3 (revisão do achado): as seis listas só são descartáveis se a escolha de cada fonte pagadora for gravada; hoje nenhuma declaração grava regra_consistencia_lancamento e a regra de faturamento por convênio se perderia. As seis ficam BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN) até lá",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "rodada": 3,
@@ -155,7 +157,8 @@
    "revisao": true,
    "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06; atribuir pelo orquestrador)",
    "mudanca": "pedido 19 REAFIRMADO: declarar em TBCONVEN as colunas ID_TBCONVMEDREQATD, ID_TBCONVCOBTXPA, ID_TBCONVCONSMAT, ID_TBCONVPERCTAPAC, ID_TBCONSBRASINATIVO e ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH com destino em regra_consistencia_lancamento (de-para de valores das listas)",
-   "motivo": "as 6 listas (TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC) voltaram a BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN): o descarte da r4 escondia que a escolha de cada convênio não carrega. test_l8_02 aceita o descarte sozinho quando essas colunas estiverem declaradas com destino"
+   "motivo": "as 6 listas (TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC) voltaram a BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN): o descarte da r4 escondia que a escolha de cada convênio não carrega. test_l8_02 aceita o descarte sozinho quando essas colunas estiverem declaradas com destino",
+   "atendido": "conferidor r4 (tentativa 2)"
   }
  ]
 }

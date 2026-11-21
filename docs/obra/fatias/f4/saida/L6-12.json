@@ -56,7 +56,8 @@
   {
    "arquivo": "conector (integrador)",
    "mudanca": "mecanismo #arquivo (M4): XML/QRP/assinatura do registro (PRCONTEVOL), documento assinado (PRASSINATURA_DOC -> arquivo_id, assinatura_documento, documento_assinado; hoje no retrato do evento) e anexos (PRGEDIMP, BLOQUEADA, declaração comentada pronta; PRPAREVOLIMG na L6-11)",
-   "motivo": "pendência ALTA: prova legal da assinatura e anexos clínicos só existem como binário/texto na imagem; anexo_prontuario.arquivo_id e documento_assinado.arquivo_id são NOT NULL"
+   "motivo": "pendência ALTA: prova legal da assinatura e anexos clínicos só existem como binário/texto na imagem; anexo_prontuario.arquivo_id e documento_assinado.arquivo_id são NOT NULL",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + pendencia.py",
@@ -81,7 +82,8 @@
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "estado de carga parcial: tabela planejada cuja recusa medida na referência passa de um limite (ex.: 20%) ou com coluna de origem esperando #arquivo conta à parte de CARREGA (ex.: CARREGA_PARCIAL com a causa)",
-   "motivo": "PRPRESCMED (~99,9% recusam pelo CHECK), PRITENSGERAL (~98% pela unidade), PRPRESCHEMO (0 de 910), PREVOLPAC (pergunta em vários modelos), PRASSINATURA_DOC e PRCONTEVOL (documento assinado sem arquivo) contam CARREGA: a meta zero bloqueadas fica só no papel"
+   "motivo": "PRPRESCMED (~99,9% recusam pelo CHECK), PRITENSGERAL (~98% pela unidade), PRPRESCHEMO (0 de 910), PREVOLPAC (pergunta em vários modelos), PRASSINATURA_DOC e PRCONTEVOL (documento assinado sem arquivo) contam CARREGA: a meta zero bloqueadas fica só no papel",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (orquestrador)",

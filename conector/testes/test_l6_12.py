@@ -20,7 +20,7 @@ from sante_conector.sintetica_d import l6_12
 
 VALORES = mapa.DIR_PACOTE / "declarado" / "valores.d" / "L6-12.tsv"
 SEM_CARGA = mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv"
-CARREGADAS = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
+CARREGADAS = {"PRGEDIMP", "PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
               "PREVOLPAC", "PRALERGIAPAC_TBPRINC"}
 # cadastros de outras fatias lidos por chave alternativa/encadeada e carregados pela declaração delas
@@ -32,7 +32,7 @@ SO_LEITURA = {"PRPERGUNTA", "PRCADRESP"}
 DESCARTES = {"PRASS_DOC_PREXAMEASS", "PRCABEC_MONITORIZACAO", "PRPLANPRESC", "PRCABEVOLTMP",
              "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC"}
 # o anexo do prontuário só existe como binário na origem: bloqueada até o mecanismo de arquivo (#arquivo, M4)
-BLOQUEADA = {"PRGEDIMP"}
+BLOQUEADA = set()  # conferidor r4: PRGEDIMP carrega com #arquivo
 INTERMEDIARIAS = {"HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO"}
 COMPLEMENTAM = {"PRCONTEVOL"}
 AUDITORIA = {"id", "criado_em", "origem", "versao"}

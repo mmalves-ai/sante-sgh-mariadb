@@ -134,3 +134,9 @@ FCCRECUN	CRM					L8-04 r3: sem destino (duplicado): o número no conselho é o d
 TBTISSTERMO_TBTPLANC	ID		chave_origem			L8-04 r3: chave da origem (conector_origem); o par tipo x terminologia é a chave de negócio
 TBTISSTERMO_TBTPLANC	ID_TBTISSTERMO	terminologia_tipo_lancamento.terminologia_id	inteiro	terminologia		L8-04 r3: terminologia TISS pelo número da tabela (de-para oficial terminologia; a chave da tabela de terminologias da origem é o número da tabela TISS, ex. 18, 22); catálogo nunca gravado (regra 7); número ausente: catalogo_codigo_inexistente e a linha cai no NOT NULL (1048)
 TBTISSTERMO_TBTPLANC	ID_TBTPLANC	terminologia_tipo_lancamento.tipo_lancamento_id	chave_origem		ref:TBTPLANC	L8-04 r3: tipo de lançamento (TBTPLANC, mesma fatia, antes); recusado: pai_pendente; inexistente: pai_inexistente e NOT NULL (1048); par repetido: chave única (1062)
+TBEMIREFMATMED	ID_TBCONVEN	referencia_emissao_matmed_excecao.fonte_pagadora_id	chave_origem		ref:TBCONVEN	L8-04 conferidor r4: fonte pagadora (L5-06)
+TBEMIREFMATMED	ID_TBMATMED	referencia_emissao_matmed_excecao.item_referencia_matmed_id	chave_origem		ref:TBMATMED	L8-04 conferidor r4: item de referência de mat/med (TBMATMED, L8-03; modelo 12_FAT/13)
+TBEMIREFMATMED	=preco_fabrica	referencia_emissao_matmed_excecao.preco_base			se:REF_VALOR_PFB=S	L8-04 conferidor r4: REF_VALOR_PFB = S: preço de fábrica (mesma convenção de TBEMIREF)
+TBEMIREFMATMED	=preco_maximo_consumidor	referencia_emissao_matmed_excecao.preco_base				L8-04 conferidor r4: senão: preço máximo ao consumidor (N no PFB, convenção de TBEMIREF)
+TBEMIREFMATMED	REF_VALOR_PFB		codigo_char			L8-04 conferidor r4: lida pela condição do preço base
+TBEMIREFMATMED	REF_VALOR_PMC		codigo_char			L8-04 conferidor r4: não carregada: duplicado: PMC é o complemento do PFB (preço base único na exceção)

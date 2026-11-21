@@ -7,7 +7,7 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_05
 
-CARREGADAS = ["GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
+CARREGADAS = ["GECADANTIMI", "GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
               "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC",
               "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFICHAREL", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
               "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA"]
@@ -16,16 +16,16 @@ DESCARTADAS = {"PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
                "PRLAYIMPPRESC": "mecanismo_do_produto"}
 # dado que o hospital usa e que ainda não carrega: declaração pronta, comentada, à espera do pedido (saida/L6-05.json);
 # nunca descarte (a ficha do antimicrobiano é clínica; o leiaute é do hospital)
-BLOQUEADAS = {"GECADANTIMI": "pedido 14"}
+BLOQUEADAS = {}
 AGUARDAM = list(DESCARTADAS) + list(BLOQUEADAS)
 # chaves de atributo que a tela do painel exibe (COLUNAS_PAINEL, packages/contratos/src/pep/documentos.ts)
 COLUNAS_PAINEL = {"leito", "paciente", "idade", "atendimento", "entrada", "dias", "convenio", "medico", "alergias",
                   "alertas"}
 # tabela -> destinos (principal primeiro); as outras têm um destino só
-MULTIDESTINO = {"PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"],
+MULTIDESTINO = {"GECADANTIMI": ["ficha_antimicrobiano"], "PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"],
                 "PRFICHAREL": ["modelo_impressao_clinica", "tipo_modelo_impressao"]}
 # colunas da origem declaradas sem destino, de propósito (motivo na declaração)
-SEM_DESTINO = {("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
+SEM_DESTINO = {("GECADANTIMI", "ID_GECADANTIMI"), ("GECADANTIMI", "CRM"), ("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
                ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")} | {("PRFICHAREL", c) for c in ("ID_FICHAREL", "COD", "NOMECOMP", "NOMECLASSE", "NOME",
                                                  "COMPONENTE", "CONTEUDO", "PARENT", "TIPO", "SEQUENCIA")}
 DECLARADO = Path(__file__).resolve().parents[1] / "mapa" / "declarado"
@@ -236,13 +236,39 @@ class Plano(unittest.TestCase):
         for p in self.plano:
             dt = p["destinos"][0]
             decl = {c["destino"] for c in p["colunas"][dt]}
+            # NOT NULL afrouxado em lote posterior (MODIFY COLUMN ... NULL, ex.: a ficha do antimicrobiano migrada)
+            livres_dt = livres | {c for a in ddl[dt]["alter"]
+                                  for c in re.findall(r"MODIFY COLUMN (\w+) [^,;]*?\bNULL\b(?<!NOT NULL)", a)}
             for linha in ddl[dt]["create"].splitlines()[1:]:
                 x = linha.strip().split()
-                if len(x) < 2 or not re.fullmatch(r"[a-z_0-9]+", x[0]) or x[0] in livres:
+                if len(x) < 2 or not re.fullmatch(r"[a-z_0-9]+", x[0]) or x[0] in livres_dt:
                     continue
                 corpo = linha.upper()
                 if "NOT NULL" in corpo and "DEFAULT" not in corpo and "AUTO_INCREMENT" not in corpo:
                     self.assertIn(x[0], decl, "%s.%s" % (dt, x[0]))
+
+
+class FichaAntimicrobiano(unittest.TestCase):
+    def test_ficha_migrada_anulavel_so_na_migracao(self):
+        """06_PEP/18: os campos que a origem não tem ficam nulos só na ficha migrada (CHECK obriga a ficha do sistema),
+        e a ficha nasce de GECADANTIMI com origem 'migracao' e a finalidade nativa pela inicial do tipo."""
+        raiz = _raiz_ddl()
+        if raiz is None:
+            self.skipTest("DDL do modelo ausente")
+        alt = " ".join(mapa.ler_ddl(raiz)["ficha_antimicrobiano"]["alter"])
+        for c in ("prescricao_item_id", "antimicrobiano_id", "prescritor_profissional_id", "finalidade_terapeutica_id",
+                  "origem_infeccao", "justificativa", "data_inicio", "dias_previstos", "data_fim_prevista"):
+            self.assertRegex(alt, r"MODIFY COLUMN %s \w+[^,;]* NULL" % c)
+            self.assertRegex(alt, r"ck_ficha_antimicrobiano_completa CHECK \(origem = 'migracao' OR \(.*%s IS NOT NULL" % c)
+        sem = (raiz / "db/migracoes/06_PEP/18_chaves.sql").read_text(encoding="utf-8")
+        for cod in ("profilatica", "empirica", "terapeutica"):
+            self.assertIn("('%s'," % cod, sem)
+        val = {(r["valor_origem"], r["valor_destino"]) for r in mapa.ler_tsv(DECLARADO / "valores.d" / "L6-05.tsv")
+               if r["tabela"] == "GECADANTIMI"}
+        self.assertEqual(val, {("P", "profilatica"), ("E", "empirica"), ("T", "terapeutica")})
+        dec = {r["coluna"]: r for r in mapa.ler_tsv(DECLARADO / "colunas.d" / "L6-05.tsv") if r["tabela"] == "GECADANTIMI"}
+        self.assertEqual(dec["=migracao"]["destino"], "ficha_antimicrobiano.origem")
+        self.assertEqual(dec["TIPO"]["via"], "cod:finalidade_terapeutica.codigo")
 
 
 class Regras(unittest.TestCase):
@@ -276,7 +302,9 @@ class Sintetica(unittest.TestCase):
             self.assertNotIn("CREATE TABLE %s " % t, l6_05.DDL)
         # pai de fora da fatia só como origem da ref: encadeada (sem esperado desta fatia)
         self.assertIn("CREATE TABLE PRLOCPACDEFAULT ", l6_05.DDL)
-        self.assertNotIn("PRLOCPACDEFAULT", esp)
+        for t in l6_05.PAIS_ORIGEM:
+            self.assertIn("CREATE TABLE %s " % t, l6_05.DDL)
+            self.assertNotIn(t, esp)
         self.assertEqual(cont["PRLOCPACDEFAULT"], len(l6_05.PREFERENCIAS))
 
     def test_so_dados_inventados(self):

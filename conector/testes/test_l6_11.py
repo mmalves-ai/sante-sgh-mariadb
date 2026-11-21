@@ -20,7 +20,7 @@ FORMA_FORA = set()
 _DIR = Path(os.environ.get("CONECTOR_MAPA_DIR") or mapa.DIR_PACOTE)
 DESCARTE = {"PRAGRUP_PRFILTROCLASSIF": "sem_valor", "PRPARAM": "mecanismo_do_produto"}
 # rodada 3 (revisão do achado): bloqueadas por falta de mecanismo, com a declaração pronta e comentada; nunca descarte
-BLOQUEADA = {"PRPAREVOLIMG"}
+BLOQUEADA = set()  # conferidor r4: PRPAREVOLIMG carrega com #arquivo
 
 
 def _sem_carga():
@@ -127,7 +127,8 @@ class FatiaL611(unittest.TestCase):
                       "via_de_uso_id": "GETABVIA", "insumo_id": "GEITENS", "unidade_prescricao_id": "TBUNIDADEMEDIDA",
                       "cuidado_enfermagem_id": "TBPROENF", "acomodacao_id": "TBACOMODLEITO",
                       "especialidade_medica_id": "TBESPEC", "alergeno_id": "TBALERGIA",
-                      "tipo_documento_clinico_id": "PRTPASSINATURA"}
+                      "tipo_documento_clinico_id": "PRTPASSINATURA",
+                      "modelo_documento_clinico_id": "PREVOLUCAO"}  # PRPAREVOLIMG (conferidor r4)
         for (t, d), r in novas.items():
             esperado = {"PRITENSKITMED": "PRKITMED", "PRKITSOLITENS": "PRKITSOL"}.get(t) \
                 if d == "kit_prescricao_id" else por_coluna[d]
@@ -166,7 +167,7 @@ class FatiaL611(unittest.TestCase):
         self.assertIn(("PREVOLUCAO", "=1000", "modelo_documento_versao.numero_versao"), decl)
         for spec in set(x[4:] for v in via.values() for x in v.split(";") if x.startswith("ref:")):
             self.assertIsNotNone(mapa.passos_ref(spec), spec)
-        self.assertIn("M4", self.sem_carga["PRPAREVOLIMG"]["motivo"])
+        self.assertNotIn("PRPAREVOLIMG", self.sem_carga)  # conferidor r4: carrega com #arquivo
 
     def test_pergunta_lida_pela_ligacao(self):
         """Guarda do descarte 'duplicado' de PRPERGUNTA (L6-10): o campo do modelo lê da pergunta, na origem, o título,

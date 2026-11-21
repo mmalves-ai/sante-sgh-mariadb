@@ -195,7 +195,6 @@ PRRESPOSTA	COD	modelo_campo_opcao.rotulo	texto		ref:PRCADRESP>DESCRICAO	L6-11: r
 PRRESPOSTA	CONTEVOL	modelo_campo_opcao.rotulo	texto_resumo:300			L6-11: rótulo alternativo: texto que a resposta insere na evolução; maior que 300: resumo
 PRRESPOSTA	ATIVO	modelo_campo_opcao.ativo	booleano_sn			L6-11: S/N; nulo fica o padrão
 PRRESPOSTA	ORDEM	modelo_campo_opcao.sequencia	inteiro_nao_negativo			L6-11: ordem da opção no campo; repetida no mesmo campo: restricao_destino_1062
-#--- PRPAREVOLIMG: BLOQUEADA (sem_carga.tsv, regra_faltante): imagem do modelo (dado clínico do modelo, mapa do corpo); espera #arquivo (M4); declaração pronta em F4-decisoes-destino.md
 #--- PRASSINATURA_CAB (rodada 4): o documento do prontuário nasce do cabeçalho; autor, momento e gravação pelo PRIMEIRO evento (min:DATA_HORA_EVENTO), situação atual pelo ÚLTIMO (max:); os eventos (PRASSINATURA_DOC, L6-12) apontam o documento por ref:PRASSINATURA_CAB
 PRASSINATURA_CAB	@estabelecimento	documento_prontuario.estabelecimento_id				L6-11: estabelecimento único do cliente
 PRASSINATURA_CAB	ID_HTPACIENTE	documento_prontuario.paciente_id	chave_origem		ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-11: paciente pela versão do cadastro (como PRCABEVOL na L6-12)
@@ -213,3 +212,9 @@ PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.lancado_em	data_hora		ref
 PRASSINATURA_CAB	ID	documento_prontuario.situacao_documento_prontuario_id	chave_origem		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>max:ID>ID_PRSITDOCUMENTO>PRSITDOCUMENTO	L6-11 r4: situação atual = a do ÚLTIMO evento GRAVADO (maior ID do evento, sequencial e único: sem empate; o evento retroativo de data menor gravado depois também vale como o mais recente)
 #PRASSINATURA_CAB	=~migrado_sem_assinatura	documento_prontuario.situacao_documento_prontuario_id			cod:situacao_documento_prontuario.codigo	L6-11 r5: cabeçalho SEM evento de assinatura (concorrente): situação nativa de migração migrado_sem_assinatura (categoria aguardando_assinatura; semente pedida à F2.2 em saida/L6-11.json; PRONTA e comentada até a semente: o cod: concorrente é avaliado em toda linha e deixaria codigo_inexistente_destino em todos os documentos; até lá o cabeçalho sem evento é recusado com pai_inexistente + 1048, visível no painel (F4-decisoes-destino.md)
 PRASSINATURA_CAB	#retrato:DOCUMENTO_CONSOLIDADO,ID_TABELA,ID_PRTPASSINATURA	documento_prontuario.conteudo				L6-11 r4: documento consolidado (texto, sem perda) e o registro assinado na origem (tipo e ID_TABELA) no conteúdo do documento, até o arquivo (#arquivo, M4)
+PRPAREVOLIMG	ID	imagem_anotacao_modelo.codigo	texto			L6-11 conferidor r4: código pela chave da origem
+PRPAREVOLIMG	NOME	imagem_anotacao_modelo.descricao	texto_nome			L6-11 conferidor r4: nome da imagem; vazio recusa (NOT NULL)
+PRPAREVOLIMG	ATIVO	imagem_anotacao_modelo.ativo	booleano_sn			L6-11 conferidor r4: S/N
+PRPAREVOLIMG	#arquivo:IMAGEM:imagem	imagem_anotacao_modelo.arquivo_id				L6-11 conferidor r4: imagem de base (mapa do corpo) no armazenamento de arquivos (#arquivo, ADR 0004)
+PRPAREVOLIMG	ID_PREVOLUCAO	imagem_anotacao_modelo.modelo_documento_clinico_id	chave_origem		ref:PREVOLUCAO	L6-11 conferidor r4: modelo em que a imagem é usada (mesma fatia); recusado: pai_pendente
+PRPAREVOLIMG	ANOTACOES		texto_longo			L6-11 conferidor r4: não carregada: marcações no formato do componente gráfico da origem, sem leitura no produto; a imagem de base (o dado) carrega e as marcações padrão são refeitas no modelo

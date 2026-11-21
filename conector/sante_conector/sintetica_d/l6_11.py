@@ -254,7 +254,7 @@ FORMAS = {
 CARREGADAS = ("PRLOCAL_ASSISTENCIA", "TBCBARAREACAOADVERSA", "PRPROTGERALESP", "PREVOLUCAO", "PREVOLESPEC",
               "PREVOLTIPOACO", "PRITEMNAOPAD", "PRITEMNAOPAD_GETABVIA", "PRKITMED", "PRITENSKITMED", "PRKITSOLITENS",
               "PRFAVORITO", "PRMANCHESTER", "PRITEM_GEITENS", "PRITEMNAOPAD_TBPRINC", "TBALERGIA_TBPRINC",
-              "PRPADEVOL", "PRFORMULCOMP", "PRASSINATURA_CAB", "TBKITPRO", "PRRESPOSTA")
+              "PRPADEVOL", "PRFORMULCOMP", "PRASSINATURA_CAB", "TBKITPRO", "PRRESPOSTA", "PRPAREVOLIMG")
 # rodada 3 (revisão): BLOQUEADAS com a declaração pronta e comentada (sem_carga.tsv): a forma e as linhas entram na
 # imagem (provam a declaração quando o mecanismo chegar), mas a tabela não é carregada. PRRESPOSTA (forma da L6-10)
 # também fica só como pai lido na origem.
@@ -477,6 +477,12 @@ def linhas(r, ins):
                         (4, "Modelo órfão exemplo", 9), (5, "  Evolução   diária\r\nexemplo ", 1),
                         (6, "Admissão exemplo", 2)]:
         _ins(ins, "PREVOLUCAO", ID_EVOLUCAO=i, COD="M%d" % i, DESCRICAO=desc, ID_PRTPCOMP=tp)
+    # conferidor r4: imagem de base do modelo (#arquivo): 1 PNG do modelo 1; 2 o MESMO binário no modelo 2 (um arquivo
+    # só no armazenamento); 3 imagem vazia (1048); 4 do modelo 3 recusado (pai_pendente)
+    for i, nome, img, mod in [(1, "Mapa do corpo exemplo", b"\x89PNG\r\n\x1a\nimagem falsa 1", 1),
+                              (2, "Mapa do corpo copia", b"\x89PNG\r\n\x1a\nimagem falsa 1", 2),
+                              (3, "Imagem vazia exemplo", b"", 1), (4, "Imagem orfa exemplo", b"GIF89a falsa", 3)]:
+        _ins(ins, "PRPAREVOLIMG", ID=i, NOME=nome, ATIVO="S", IMAGEM=img, ID_PREVOLUCAO=mod)
     # especialidade do modelo: modelo 3 recusado (pai_pendente); especialidade 7 inexistente
     for mod, esp in [(1, 1), (1, 2), (2, 1), (5, 3), (6, 1), (3, 1), (6, 7)]:
         _ins(ins, "PREVOLESPEC", ID_EVOLUCAO=mod, ESPEC=esp)
@@ -549,6 +555,7 @@ def linhas(r, ins):
                              (9, -32000, "Pouco urgente", "clLime"), (10, 1, "Emergência dois", "clRed")]:
         _ins(ins, "PRMANCHESTER", ID=i, COD_PROTOCOLO=prot, CLASSIFICACAO=cl, COR=cor)
     return {
+        "PRPAREVOLIMG": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "pai_pendente": 1}},
         "PRLOCAL_ASSISTENCIA": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1406": 1,
                                                              "valor_fora_do_dominio": 2}},
         "TBCBARAREACAOADVERSA": {"gravados": 4, "pendencias": {"codigo_colisao_caixa": 2, "restricao_destino_1406": 1,

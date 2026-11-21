@@ -49,7 +49,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ armazenamento de arquivos)",
    "mudanca": "M4: coluna especial '#arquivo:<COLUNA>' para BLOB binário (grava no armazenamento do produto e põe o id em arquivo_id)",
-   "motivo": "PRPAREVOLIMG (BLOQUEADA regra_faltante, não descarte: imagem do modelo é dado clínico) e PRASSINATURA_CAB.DOCUMENTO_CONSOLIDADO"
+   "motivo": "PRPAREVOLIMG (BLOQUEADA regra_faltante, não descarte: imagem do modelo é dado clínico) e PRASSINATURA_CAB.DOCUMENTO_CONSOLIDADO",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "tools/obra (relatório de implantação)",

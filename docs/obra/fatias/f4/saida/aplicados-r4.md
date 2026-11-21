@@ -239,3 +239,15 @@ Não aplicados nesta etapa (seguem pedidos abertos):
 - componente encadeado na chave composta `ref:TBTABTHM(ref:TBCONVEN>THM,THM)` (TBPACTHM, L8-03 #3).
 - tributo nativo semeado pelo produto (TBINTIMP, L8-11 #15b): é semente do modelo (trilha F2.2), não motor.
 - MFCTAREC: aguarda a medição na imagem de referência (L8-11 #13), não motor.
+
+## Conferidor da rodada 4, tentativa 2 (sozinho no código compartilhado)
+Prova: `testes/test_carga_mapa_r4c.py` (forma e armazenamento) e a conciliação das fatias L6-11, L6-12 (#arquivo), L5-06
+(#item@) e L8-03/L8-04/L8-05 (modelo 12_FAT/13). Decisões em `F4-decisoes-destino.md` (seção do conferidor).
+
+| Pedido | Fatia | Mecanismo ou modelo | Exemplo de uso (`colunas.d`) |
+|---|---|---|---|
+| #arquivo (M4) | L6-11, L6-12 | `#arquivo:<COLUNA>[:<finalidade>]`: binário no armazenamento local (`ARQUIVOS_RAIZ/<banco>/migracao/<sha2>/<sha256>`, gravado uma vez, só leitura) e id do registro em `arquivo`; sem raiz: `armazenamento_indefinido` (alta); a conferência usa uma pasta descartável | `PRGEDIMP	#arquivo:DOCUMENTO:anexo	anexo_prontuario.arquivo_id` |
+| 14 | L5-06 | `#item@<COLUNA>`: item daquela coluna do `desdobrar` com regra, de-para e referência próprios (o verificador exige a coluna no desdobrar) | `TBCONVEN	#item@ID_TBCONVCONSMAT	regra_consistencia_lancamento.opcao	texto_resumo:40		ref:TBCONVCONSMAT>NOME` |
+| 16 / 25 / 22 | L8-03, L8-04, L8-05 | modelo `12_FAT/13`: equivalência sem fonte (referência unificada), `item_referencia_matmed_id` na exceção de emissão e no preço negociado | `TBPERMEM	ID_TBMATMED	preco_negociado_matmed.item_referencia_matmed_id	chave_origem		ref:TBMATMED` |
+
+Não aplicado: componente encadeado na chave composta (TBPACTHM, L8-03 pedido 4), única tabela ainda BLOQUEADA.

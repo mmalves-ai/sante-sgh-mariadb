@@ -104,7 +104,8 @@
    "n": 16,
    "arquivo": "db/migracoes/12_FAT (trilha F2.2)",
    "mudanca": "modelo para TBREFUNI: equivalência do item de mat/med (item_referencia_matmed) ao código da referência UNIFICADA (codigo, classificação, código alfa), sem fonte pagadora (ou equivalencia_matmed_fonte_pagadora.fonte_pagadora_id anulável = vale para os locais de cobrança que usam a referência unificada, local_cobranca com a marca)",
-   "motivo": "TBREFUNI (6974 na referência) liga o item da tabela do hospital ao código da referência unificada; a linha não tem fonte pagadora e o destino do mapa exige fonte_pagadora_id NOT NULL: segue BLOQUEADA (aguarda_modelo); com o modelo, carrega com o filtro de licença de TBMATMED"
+   "motivo": "TBREFUNI (6974 na referência) liga o item da tabela do hospital ao código da referência unificada; a linha não tem fonte pagadora e o destino do mapa exige fonte_pagadora_id NOT NULL: segue BLOQUEADA (aguarda_modelo); com o modelo, carrega com o filtro de licença de TBMATMED",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "n": 17,

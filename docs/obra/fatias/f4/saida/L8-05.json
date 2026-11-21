@@ -109,7 +109,8 @@
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv",
    "mudanca": "TBMATMED: gravar também o item faturável do mat/med (destino secundário `item_faturavel`, tipo material ou medicamento, com o insumo exigido por ck_item_faturavel_insumo) para os itens que carregarem",
-   "motivo": "TBPERMEM (33910 linhas) e TBEMIREFMATMED apontam o item por `ref:TBMATMED/item_faturavel`: preco_negociado_matmed e referencia_emissao_matmed_excecao exigem item_faturavel_id, e o principal de TBMATMED é item_referencia_matmed. Sem isso as duas ficam BLOQUEADAS por pai (declaração pronta)"
+   "motivo": "TBPERMEM (33910 linhas) e TBEMIREFMATMED apontam o item por `ref:TBMATMED/item_faturavel`: preco_negociado_matmed e referencia_emissao_matmed_excecao exigem item_faturavel_id, e o principal de TBMATMED é item_referencia_matmed. Sem isso as duas ficam BLOQUEADAS por pai (declaração pronta)",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "db/migracoes/12_FAT/05 (trilha F2.2: modelo)",
@@ -132,7 +133,8 @@
   {
    "arquivo": "modelo (F2.2) e L8-03",
    "mudanca": "rodada 4: TBPERMEM (preco_negociado_matmed.item_faturavel_id NOT NULL) segue BLOQUEADA por pai: TBMATMED (L8-03 r4) carrega em item_referencia_matmed, sem item faturável; falta o item faturável do mat/med (pedido 18) ou preco_negociado_matmed apontar item_referencia_matmed",
-   "motivo": "pai_nao_carregado: TBMATMED"
+   "motivo": "pai_nao_carregado: TBMATMED",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "db/migracoes/14_FIN (F2.2)",

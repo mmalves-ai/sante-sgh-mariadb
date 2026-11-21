@@ -145,9 +145,11 @@ class Plano(unittest.TestCase):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(raiz)}
         # r4: bloqueada pelo MODELO (o item faturável de mat/med exige insumo; pedido de item_referencia_matmed_id na
         # exceção, saida/L8-04.json), nunca descarte
-        self.assertEqual((sc["TBEMIREFMATMED"]["situacao"], sc["TBEMIREFMATMED"]["causa"]), ("bloqueada", "aguarda_modelo"))
+        # conferidor r4: modelo aplicado (12_FAT/13): carrega pelo item de referência de mat/med
+        self.assertNotIn("TBEMIREFMATMED", sc)
         self.assertNotIn("TBEMIREFMATMED", l8_04.DESCARTADAS)
-        self.assertIn("TBEMIREFMATMED", l8_04.AGUARDA_PAI)
+        self.assertIn("TBEMIREFMATMED", l8_04.CARREGADAS)
+        self.assertIn("TBEMIREFMATMED", self.plano)
 
     def test_bloqueadas_fora_do_plano(self):
         # presentes na imagem, as bloqueadas nunca entram no plano de carga: zero linha no destino

@@ -168,6 +168,8 @@ linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em
 import datetime
 import decimal
 import hashlib
+import re
+import os
 import json
 import time
 
@@ -190,6 +192,7 @@ GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_i
 GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
                         "sem_item_a_gravar": "baixa"})
 GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
+GRAVIDADE_REGRA.update({"armazenamento_indefinido": "alta", "arquivo_divergente_no_armazenamento": "alta"})
 GRAVIDADE_REGRA.update({"duracao_ausente": "media", "escolha_pelo_maior": "baixa", "escolha_pelo_menor": "baixa",
                         "sem_filho_com_valor": "media", "fora_do_filtro_da_carga": "baixa"})
 FILTRO_PADRAO = "fora_do_filtro_da_carga"
@@ -240,6 +243,20 @@ def tipar(x, tipo):
     return x
 
 
+_ASSINATURAS = ((b"%PDF", "application/pdf", ".pdf"), (b"\x89PNG", "image/png", ".png"),
+                (b"\xff\xd8\xff", "image/jpeg", ".jpg"), (b"GIF8", "image/gif", ".gif"),
+                (b"BM", "image/bmp", ".bmp"), (b"II*\x00", "image/tiff", ".tif"), (b"MM\x00*", "image/tiff", ".tif"),
+                (b"PK\x03\x04", "application/zip", ".zip"), (b"{\\rtf", "application/rtf", ".rtf"))
+
+
+def _tipo_arquivo(v):
+    """Tipo (MIME, extensão) pelos primeiros bytes do binário; desconhecido: application/octet-stream."""
+    for ass, mime, ext in _ASSINATURAS:
+        if v.startswith(ass):
+            return mime, ext
+    return "application/octet-stream", ".bin"
+
+
 def _especial(nome):
     return nome[:1] in ("=", "@", "#")
 
@@ -249,7 +266,8 @@ def fonte_especial(nome):
     `#grupo_somar:X`, `#grupo_min:X`, `#grupo_max:X`). `#sha256:#retrato...` não lê coluna própria."""
     if nome.startswith("#sha256:#"):
         return None
-    for pre in ("#seq:", "#sha256:", "#cofre:", "#codigo_derivado:", "#grupo_somar:", "#grupo_min:", "#grupo_max:"):
+    for pre in ("#seq:", "#sha256:", "#cofre:", "#codigo_derivado:", "#grupo_somar:", "#grupo_min:", "#grupo_max:",
+                "#arquivo:"):
         if nome.startswith(pre):
             return nome[len(pre):].split(":")[0]
     return None
@@ -964,6 +982,58 @@ class CargaMapa(carga.Carga):
                 itens.append((cpai, [x]))
         return itens, (None if itens else ("pai_inexistente", "media"))
 
+    def _arquivo(self, t, chave, dt, linha, nome, pend):
+        """`#arquivo:<COLUNA>[:<finalidade>]` (conferidor r4, ADR 0004): o binário da coluna vai para o armazenamento
+        de arquivos da instalação (`ARQUIVOS_RAIZ`, uma pasta por banco de cliente), gravado UMA vez (temporário +
+        rename, somente leitura, endereçado pelo SHA-256: o mesmo conteúdo é o mesmo arquivo), e o registro em `arquivo`
+        (hash, tamanho, tipo, origem migracao, imutável) dá o id. Sem valor: NULL. Sem armazenamento configurado: NULL
+        com `armazenamento_indefinido` (alta). Nunca grava o binário no banco nem fora da raiz."""
+        partes = nome.split(":")
+        col, fin = partes[1], (partes[2] if len(partes) > 2 else "anexo")
+        v = linha.get(col)
+        if isinstance(v, str):
+            v = v.encode("cp1252", errors="replace")
+        if v is None or len(v) == 0:
+            return None
+        v = bytes(v)
+        raiz = os.environ.get("ARQUIVOS_RAIZ") or ""
+        if not raiz or not os.path.isdir(raiz):
+            pend.append(("armazenamento_indefinido", "alta"))
+            return None
+        h = hashlib.sha256(v).hexdigest()
+        mime, ext = _tipo_arquivo(v)
+        rel = "migracao/%s/%s" % (h[:2], h)
+        if not hasattr(self, "_banco_cliente"):
+            self._banco_cliente = re.sub(r"[^A-Za-z0-9_]", "_", self._um("SELECT DATABASE()") or "cliente")
+        destino = os.path.join(raiz, self._banco_cliente, rel)
+        if os.path.exists(destino):
+            if os.path.getsize(destino) != len(v):
+                pend.append(("arquivo_divergente_no_armazenamento", "alta"))
+                return None
+        else:
+            os.makedirs(os.path.dirname(destino), exist_ok=True)
+            tmp = "%s.%d.tmp" % (destino, os.getpid())
+            with open(tmp, "xb") as fh:
+                fh.write(v)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.chmod(tmp, 0o444)
+            try:
+                os.link(tmp, destino)  # criação exclusiva: nunca sobrescreve
+            except FileExistsError:
+                pass
+            finally:
+                os.unlink(tmp)
+        r = self._um("SELECT id FROM arquivo WHERE chave_armazenamento=%s", (rel,))
+        if r is None:
+            with self._c() as c:
+                c.execute("INSERT INTO arquivo (entidade, finalidade, nome_original, tipo_mime, tamanho_bytes, hash_sha256,"
+                          " chave_armazenamento, imutavel, origem, criado_em) VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE,"
+                          " 'migracao', UTC_TIMESTAMP(3))",
+                          (dt, fin, ("%s-%s%s" % (t, chave, ext))[:255], mime, len(v), h, rel))
+                r = c.lastrowid
+        return r
+
     def _texto_fonte(self, c, linha):
         """Valor convertido da coluna de origem de uma especial (`#sha256`, `#codigo_derivado`), pela regra declarada
         na própria linha especial (padrão: texto)."""
@@ -1187,7 +1257,7 @@ class CargaMapa(carga.Carga):
             marcas = {}                        # marca de item -> declaração (`cod:` no #item/#rotulo)
             for c in p["colunas"][dt]:
                 nome, dc = c["coluna"], c["destino"]
-                if nome == "@id" or nome.startswith("@id:"):
+                if nome == "@id" or nome.startswith("@id:") or nome.startswith("#item@"):
                     continue  # preenchido na gravação (id do principal ou do secundário `antes`); fora do resumo
                 if mapa.eh_item(nome):
                     pos[dc] = len(modelo)
@@ -1268,6 +1338,9 @@ class CargaMapa(carga.Carga):
                 elif nome.startswith("#dif:") or nome.startswith("#soma:"):
                     x = self._aritmetica(linha, c, pend)
                     algum = algum or x is not None
+                elif nome.startswith("#arquivo:"):
+                    x = self._arquivo(t, chave, dt, linha, nome, pend)
+                    algum = algum or x is not None
                 elif nome.startswith("#cofre:"):
                     # segredo nunca gravado em claro: o conector não tem cofre; a linha pede a credencial no cofre
                     x = None
@@ -1315,18 +1388,21 @@ class CargaMapa(carga.Carga):
             elif op.get("desdobrar"):
                 itens = []
                 cis = {mapa.posicao_item(c["coluna"]): c for c in p["colunas"][dt]
-                       if c["coluna"].startswith("#item")}
+                       if c["coluna"].startswith("#item") and not c["coluna"].startswith("#item@")}
+                # conferidor r4: `#item@<COLUNA>` dá ao item daquela coluna a própria regra, de-para e referência
+                cis_col = {c["coluna"][6:]: c for c in p["colunas"][dt] if c["coluna"].startswith("#item@")}
                 for spec, rot in op["desdobrar"]:
                     xs = []
                     for j, col in enumerate(spec.split("+")):
                         # rodada 4: a referência do #item (encadeada ou composta) e o `cod:` valem para o item
-                        x, recusa, _ = self._converter(t, chave, p, linha, dict(cis[j], coluna=col,
-                                                                                passos=cis[j].get("passos")),
+                        ci = cis_col.get(col, cis[j]) if j == 0 else cis[j]
+                        x, recusa, _ = self._converter(t, chave, p, linha, dict(ci, coluna=col,
+                                                                                passos=ci.get("passos")),
                                                        linha[col], pend)
                         if recusa:
                             return None, None, pend, recusa, []
-                        if cis[j].get("cod") and x is not None:
-                            x = self._resolver_cod(cis[j]["cod"], x, pend)
+                        if ci.get("cod") and x is not None:
+                            x = self._resolver_cod(ci["cod"], x, pend)
                         xs.append(x)
                     if any(x is not None and (x is not False or op.get("com_falso")) for x in xs):
                         itens.append((rot, xs))
@@ -1681,7 +1757,7 @@ class CargaMapa(carga.Carga):
         info = self._info(dt)
         cols, vistos = [], set()
         for c in p["colunas"][dt]:
-            if c["coluna"].startswith("@id") or c["destino"] in vistos or (
+            if c["coluna"].startswith("@id") or c["coluna"].startswith("#item@") or c["destino"] in vistos or (
                     _passos_em_duas_fases(c, p) and (info.get(c["destino"]) or (True,))[0]) or (
                     not _especial(c["coluna"]) and (c["regra"] == "chave_origem" and c["referencia"] in p["duas_fases"]
                                                     and not c.get("passos") and not depara.conhecido(c["depara"]))):

@@ -15,7 +15,7 @@ DESTINOS = {"TBTIPPLANO": ["plano_fonte_pagadora"], "TBTABDTH": ["preco_diaria_t
             "TBEMIREF": ["referencia_emissao_matmed"], "TBENTCON": ["calendario_entrega_fatura"],
             "TBVLRTHM": ["preco_procedimento_valor"], "TBTIPPLCONV": ["diaria_por_plano_local"],
             "TBTISS": ["regra_apresentacao_tiss", "configuracao_tiss_fonte_pagadora"],
-            "TBVLRDTH": ["preco_diaria_taxa_valor"], "FCCTAEXT": ["conta_hospitalar"],
+            "TBVLRDTH": ["preco_diaria_taxa_valor"], "FCCTAEXT": ["conta_hospitalar", "atendimento_conta"],
             "FCDIAEXT": ["conta_hospitalar_segurado"]}
 OBRIGATORIAS = {
     "TBTIPPLANO": {"fonte_pagadora_id", "codigo", "descricao"},
@@ -140,9 +140,10 @@ class Plano(unittest.TestCase):
             self.assertNotIn(t, TABELAS, t)
             self.assertNotIn(t, sc, t)  # bloqueio visível, nunca descarte
             self.assertTrue(all("BLOQUEADA" in m[-1] or "NÃO é descarte" in m[-1] for m in com[t]), t)
-        # acordo de mat/med: item pelo item faturável que TBMATMED gravar, valor, percentual e quantidade da origem
-        pm = {m[2]: m[5] for m in com["TBPERMEM"] if m[2]}
-        self.assertEqual(pm["preco_negociado_matmed.item_faturavel_id"], "ref:TBMATMED/item_faturavel")
+        # conferidor r4: acordo de mat/med carrega pelo item de referência (modelo 12_FAT/13), nunca descarte
+        pm = {d["destino"]: d.get("via") for d in self.mapa["colunas_decl"] if d["tabela"] == "TBPERMEM" and d["destino"]}
+        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED")
+        self.assertNotIn("TBPERMEM", sc)
         self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
         self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
                          "preco_negociado_matmed.quantidade_fixa", "preco_negociado_matmed.vigencia_inicio"} <= set(pm))
@@ -267,7 +268,7 @@ class Sintetica(unittest.TestCase):
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
         self.assertEqual(criadas, TABELAS | set(l8_05.BLOQUEADAS) | set(l8_05.SO_ORIGEM))
-        self.assertEqual(len(criadas), 26 + (1 if l8_05.RPLANRPA_ATIVA else 0))  # r4: RPLANRPA entra aqui
+        self.assertEqual(len(criadas), 25 + (1 if l8_05.RPLANRPA_ATIVA else 0))  # r4: RPLANRPA entra aqui
         self.assertNotIn("TBTISSPARDEF", criadas)  # DDL da L8-04 (imagem conjunta dos lotes)
 
     def test_colunas_das_linhas_batem_com_a_forma(self):

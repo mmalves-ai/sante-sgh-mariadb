@@ -26,3 +26,7 @@ FCCTAEXT	FECHADA	conta_hospitalar.situacao	S	fechada	L8-05 r3: conta fechada
 FCCTAEXT	FECHADA	conta_hospitalar.situacao	N	aberta	L8-05 r3: conta aberta
 FCCTAAUD	AUDITADA	auditoria_conta.situacao	S	concluida	L8-05 r3: auditoria concluída
 FCCTAAUD	AUDITADA	auditoria_conta.situacao	N	em_andamento	L8-05 r3: auditoria em andamento
+TBPERMEM	TP_CONTA	preco_negociado_matmed.tipo_conta_id	A	ambulatorial	L8-05 conferidor r4: tipo de conta ambulatorial (código do catálogo do produto)
+TBPERMEM	TP_CONTA	preco_negociado_matmed.tipo_conta_id	E	externa	L8-05 conferidor r4: tipo de conta externa (código do catálogo do produto)
+TBPERMEM	TP_CONTA	preco_negociado_matmed.tipo_conta_id	U	urgencia	L8-05 conferidor r4: tipo de conta urgência (código do catálogo do produto)
+TBPERMEM	TP_CONTA	preco_negociado_matmed.tipo_conta_id	I	internacao	L8-05 conferidor r4: tipo de conta internação (código do catálogo do produto)

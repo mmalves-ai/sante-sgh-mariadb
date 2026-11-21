@@ -43,6 +43,8 @@ def ddl_destino(plano, raiz=RAIZ_APP):
                         alvo.append(cat["pai"])
                     if c["depara"] == "cid10":
                         alvo.append("terminologia")
+                if c["coluna"].startswith("#arquivo:"):  # registro do binário no armazenamento (conferidor r4)
+                    alvo.append("arquivo")
     faltam = sorted({t for t in alvo if t not in ddl})
     if faltam:
         raise RuntimeError("destino sem DDL no modelo: %s" % ", ".join(faltam))
@@ -94,6 +96,10 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
     d = os.path.join(trabalho, "conferir-" + nome)
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
+    # armazenamento de arquivos (`#arquivo`, ADR 0004) da conferência: pasta descartável no trabalho, se não configurado
+    if not os.environ.get("ARQUIVOS_RAIZ"):
+        os.environ["ARQUIVOS_RAIZ"] = os.path.join(d, "arquivos")
+    os.makedirs(os.environ["ARQUIVOS_RAIZ"], exist_ok=True)
     arq = os.path.join(d, nome + ".fdb")
     manif = sintetica.gerar(arq, fatias=[nome])
     esperado = {}

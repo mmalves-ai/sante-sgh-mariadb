@@ -83,6 +83,8 @@ RICONTAS	#data:ANOPRO,MESPRO	conta_hospitalar.competencia				L8-06: competência
 RICONTAS	#data_hora:DATAINI,HORAINI	conta_hospitalar.inicio_em				L8-06: início do período da conta (data + hora HHMM em texto)
 RICONTAS	DATA	conta_hospitalar.inicio_em	data			L8-06: sem início do período: a data da conta (concorrente; data em DATETIME à meia-noite pelo tipar)
 RICONTAS	#data_hora:DATAFIN,HORAFIN	conta_hospitalar.fim_em				L8-06: fim do período da conta; fim antes do início: CHECK recusa, visível
+RICONTAS	@id	atendimento_conta.conta_hospitalar_id			atendimento_conta;opcional	L8-06 (pedido L6-02): a conta de internação gravada nesta linha liga-se ao atendimento da internação
+RICONTAS	REG	atendimento_conta.atendimento_id			ref:RICADINT>ID_ATCABECATEND>ATCABECATEND;atendimento_conta;opcional	L8-06 (pedido L6-02): o mesmo atendimento de conta_hospitalar.atendimento_id
 FCDIAINT	COD	conta_hospitalar_segurado.conta_hospitalar_id			ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD)	L8-06: conta de internação pela competência e o código da conta (chave alternativa composta de RICONTAS; repetida: pai_ambiguo)
 FCDIAINT	#seq:COD	conta_hospitalar_segurado.sequencia				L8-06: 1 por conta (a chave da origem é a própria conta)
 FCDIAINT	ANOPRO	conta_hospitalar_segurado.numero_carteira	texto		ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD)>MATRIC	L8-06: carteira/matrícula do segurado na conta (RICONTAS.MATRIC, encadeada terminada em coluna); sem matrícula: NOT NULL recusa, visível

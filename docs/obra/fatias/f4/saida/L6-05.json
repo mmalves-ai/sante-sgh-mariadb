@@ -72,7 +72,8 @@
   {
    "arquivo": "db/migracoes/06_PEP/04_tabelas.sql (trilha F2.2), junto do pedido 6 da L7-08",
    "mudanca": "ficha_antimicrobiano migrada (origem='migracao'): além de prescricao_item_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao e justificativa (pedido 6 da L7-08), também antimicrobiano_id, data_inicio, dias_previstos e data_fim_prevista aceitam nulo quando origem='migracao' (CHECK: origem<>'migracao' exige todos), avaliação 'pendente'; os CHECK de dias e datas só valem com valor",
-   "motivo": "GECADANTIMI (45 fichas na referência, dado clínico da comissão de controle de infecção) é a ficha: tem atendimento, tipo de tratamento, prescritor e convênio, mas não o antimicrobiano nem as datas, que vêm da liberação (GEANTIMI, complementa) e podem não existir (ficha sem liberação). Declaração pronta e comentada em colunas.d/L6-05.tsv (#GECADANTIMI); a tabela fica BLOQUEADA até o modelo, nunca descarte. De-para TIPO -> finalidade_terapeutica.codigo depois da contagem por valor."
+   "motivo": "GECADANTIMI (45 fichas na referência, dado clínico da comissão de controle de infecção) é a ficha: tem atendimento, tipo de tratamento, prescritor e convênio, mas não o antimicrobiano nem as datas, que vêm da liberação (GEANTIMI, complementa) e podem não existir (ficha sem liberação). Declaração pronta e comentada em colunas.d/L6-05.tsv (#GECADANTIMI); a tabela fica BLOQUEADA até o modelo, nunca descarte. De-para TIPO -> finalidade_terapeutica.codigo depois da contagem por valor.",
+   "atendido": "rodada 4 (L6-05): db/migracoes/06_PEP/18_tabelas.sql (MODIFY ... NULL + ck_ficha_antimicrobiano_completa) e 18_chaves.sql (finalidades nativas profilatica, empirica, terapeutica); GECADANTIMI carrega"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (agrupar, agregados #grupo_*)",
