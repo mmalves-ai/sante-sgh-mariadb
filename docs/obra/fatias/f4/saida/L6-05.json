@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência derivada: `chave_origem` que resolve o pai e grava uma coluna de outro destino do pai (ex.: PRFAVORITO_EXIBIR.LOCPACDEFAULT -> PRLOCPACDEFAULT -> preferencia_usuario.usuario_id), já pedida no L5-06",
+   "motivo": "PRFAVORITO_EXIBIR -> painel_coluna_usuario exige usuario_id NOT NULL e a origem só aponta a preferência; além disso PRLOCPACDEFAULT precisa estar declarada no L5. A coluna da tela (`coluna`) seria CAMPOSLOCALIZACAOPACIENTE em texto, igual à chave_atributo já carregada em coluna_painel_paciente"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "destino de GECADANTIMI: a origem tem só registro, tipo, CRM, CBO e convênio; ficha_antimicrobiano exige paciente, atendimento, item prescrito, antimicrobiano, finalidade, origem da infecção, justificativa e datas",
+   "motivo": "sem fonte para 10 colunas NOT NULL sem padrão; carregar com presumidos inventaria fichas clínicas. Provável destino: liberação/cadastro de prescritores habilitados, não a ficha"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "destino de PRCADRESP (COD, DESCRICAO): modelo_campo_opcao exige modelo_campo_id e a origem é catálogo solto de respostas",
+   "motivo": "sem campo pai na linha; precisa da tabela de ligação campo x resposta (outra fatia) como fonte, com @id/#seq"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "destino de PRDADOSENVIOOPERADORA (ID, NOME): a origem parece ser o catálogo das informações clínicas enviáveis (os itens de `campos`), não um formato de envio",
+   "motivo": "gravar cada linha como formato com `campos` vazio criaria 15 formatos falsos; confirmar na imagem de referência só por metadado/contagem e decidir"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "mecanismo `parametro` (tipo MECANISMO): linha da origem vira parametro_definicao (chave modulo.nome, modulo_sistema_id resolvido por de-para do módulo) e parametro_valor no nível rede",
+   "motivo": "PREMAILOPCAO não cabe na carga por tabela (modulo_sistema_id NOT NULL; o pai PREMAILMODULO foi para finalidade_email, não para módulo do sistema); o mesmo vale para CTPARAM (L8)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial `{json}` (já pedida no L5-06) ou conversão declarada de BLOB de leiaute para JSON envelopado ({\"formato_origem\":..., \"texto\":...}); e referência ao tipo de modelo de impressão por de-para de valores de TIPO",
+   "motivo": "PRFICHAREL -> modelo_impressao_clinica: conteudo JSON NOT NULL com CHECK JSON_VALID e a origem guarda o leiaute em BLOB de texto; tipo_modelo_impressao_id NOT NULL sem referência gerada"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "PRLAYIMPPRESC (ID, NOME: catálogo de leiautes) contra configuracao_impressao_prescricao (uma linha por estabelecimento e setor, leiaute em domínio fechado)",
+   "motivo": "gravar as 4 linhas como 4 configurações do mesmo estabelecimento com o leiaute padrão seria falso; o leiaute deveria vir do vínculo setor x leiaute (outra tabela), com de-para de valores do NOME confirmado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "`#seq:<COLUNA>` estável no diferencial: linha NOVA recebe max(sequência já gravada no grupo pelo conector_origem)+1, linha já carregada nunca é renumerada; corrigir o cabeçalho ('contada em toda leitura, estável no diferencial' não é verdade hoje)",
+   "motivo": "hoje a sequência é recontada a cada leitura só sobre as linhas que existem; com uma linha apagada aguardando o Sincronizar, a linha nova recebe a posição de outra e cai em 1062. O L6-05 deixou de usar `#seq` (sequência = id da origem), mas outras fatias usam"
+  },
+  {
+   "arquivo": "conector/sante_conector/sintetica.py e conferencia.py",
+   "mudanca": "segunda imagem da fatia na conferência (ex.: `linhas_segunda(r, ins)` opcional com o esperado da segunda rodada) para provar linha apagada seguida de linha nova no mesmo grupo",
+   "motivo": "a conferência só repete a mesma carga; o caso apagada+nova do diferencial não tem prova automatizada em nenhuma fatia"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (GRAVIDADE_REGRA) e mapa.py",
+   "mudanca": "gravidade do presumido declarável por coluna (ex.: `=~media:<valor>` ou campo `via`=`grav:media`) e presumido no de-para de valores (par com valor_origem `*` = valor sem par, valor_destino `~<valor>` grava o valor com valor_presumido, em vez de NULL + valor_fora_do_dominio)",
+   "motivo": "valor_presumido é sempre 'baixa'; em coluna clínica (aprazamento, base de cálculo de dose) a revisão tem de ser obrigatória antes do uso"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv + colunas.d/L6-05.tsv (reativar PRFREQUENCIA e PRHRRELATIVA)",
+   "mudanca": "PRFREQUENCIA.NUM_DOSE -> frequencia_administracao.tipo com depara=valores, regra inteiro_zero_nulo: pares '1'..'48' -> vezes_ao_dia; '*' -> ~a_criterio_medico (presumido, gravidade média, depende do pedido acima); NUM_DOSE também em doses_por_dia (já declarado). TP_PRESCRICAO -> uso_prescricao por de-para de valores depois da contagem por valor na imagem de referência (só contagens); até lá, pendência visível. Depois disso, reativar as linhas 'não carregada' do PRFREQUENCIA e do PRHRRELATIVA no L6-05.tsv (hora_em_timestamp no HORARIO, ORDEM -> sequencia) e devolver as tabelas à sintética",
+   "motivo": "o literal '=~a_criterio_medico' com pendência baixa desligava o aprazamento de todas as frequências (ex.: 'de 6 em 6 horas' sem horários); a tabela ficou fora da carga até o tipo ser derivado com revisão obrigatória"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (revisão do cliente no painel)",
+   "mudanca": "de-para de valores pelo NOME (texto_nome) para grupo_balanco_hidrico.tipo (ganho, perda, perda_insensivel), tipo_assinante.papel (autor, supervisor, substituto, paciente, responsavel_legal, testemunha) e tipo_fechamento_balanco.periodo_horas/parcial; nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de gravar valor errado. Depois, reativar as linhas 'não carregada' de PRAGRUPBALANCO, PRASSINANTE e PRBHTIPOFECHAMENTO no L6-05.tsv",
+   "motivo": "os presumidos '=~ganho', '=~autor' e '=~24' contradiziam a descrição da linha (perdas somando como ganho e invertendo o total do balanço; paciente como autor; fechamento parcial de 24 horas). Os pares não são fixados no código sem ver os nomes, e nomes reais não são lidos (regra 5)"
+  },
+  {
+   "arquivo": "domínio da prescrição (validador de expressão) + conector",
+   "mudanca": "regra genérica `expressao_a_validar`: a expressão migrada passa pelo validador do domínio (variáveis peso, altura, superficie_corporal, clearance, idade; ponto decimal); inválida vira pendência média. Até lá a fórmula migrada entra inativa ('=~0', valor_presumido) e a base de cálculo presumida 'peso'",
+   "motivo": "a fórmula da origem usa a sintaxe dela (ex.: vírgula decimal) e não pode calcular dose sem revisão (ADR 0003)"
+  }
+ ]
+}

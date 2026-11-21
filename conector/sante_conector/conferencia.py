@@ -113,7 +113,9 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 contagens = {t: lt.contar(t) for t in presentes}
                 plano = carga_mapa.planejar(mapa_exec, presentes)
                 root.select_db(cliente)
-                banco.aplicar_script(root, getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano))
+                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano)
+                if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
+                    banco.aplicar_script(root, ddl)
                 if getattr(mod, "PREPARO_DESTINO", None):
                     banco.aplicar_script(root, mod.PREPARO_DESTINO)
                 with root.cursor() as cur:
@@ -149,7 +151,7 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                                         "pendencias_por_regra": res2["pendencias"]["por_regra"]}
                 finally:
                     cc.close()
-        if not esperado:
+        if not esperado and plano:  # fatia sem tabela carregável (plano vazio): esperado {} é o correto (L6-13)
             erros.append("a fatia não declarou o esperado no destino (linhas() devolveu vazio)")
     finally:
         if not manter:

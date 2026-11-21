@@ -1,1 +1,15 @@
 tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBGERASENHA	TIPO	gerador_senha.tipo	0	geral	L6-02
+TBGERASENHA	TIPO	gerador_senha.tipo	2	profissional	L6-02
+TBGERASENHA	TIPO	gerador_senha.tipo	3	especialidade	L6-02
+TBGERASENHA	TIPO	gerador_senha.tipo	4	agenda	L6-02
+TBGERASENHA	TIPO	gerador_senha.tipo	5	diverso	L6-02
+TBSENHAATEND	PRIORIDADE	senha_emitida.prioritaria	0	1	L6-02
+TBSENHAATEND	PRIORIDADE	senha_emitida.prioritaria	1	1	L6-02
+TBSENHAATEND	PRIORIDADE	senha_emitida.prioritaria	2	0	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao		aguardando	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	G	aguardando	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	C	chamada	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	A	em_atendimento	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	L	atendida	L6-02
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	S	suspensa	L6-02

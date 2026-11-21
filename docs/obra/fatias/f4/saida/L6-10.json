@@ -1,0 +1,64 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado: mapa_analise/gerador) ou declarado/valores.tsv",
+   "mudanca": "TBCBARANOTIFICACAO (ordem 404): tirar o destino de linha acao_alerta_alergia. A linha (gravidade x ação) vira o campo acao_alerta_alergia.gravidade_aplicavel da ação já carregada de TBTPNOTIFICACAOALERGIA: regra genérica de 'atualizar campo do registro referenciado' (via=ref:<TABELA>, destino = coluna do registro do pai) + de-para de valores da gravidade (gravidade_reacao_adversa -> leve/moderada/grave/fatal/desconhecida). Sem isso, descarte justificado.",
+   "motivo": "Carregar como linha cria ação nova sem nome e colide no código com TBTPNOTIFICACAOALERGIA (as duas com chave inteira). Hoje bloqueada."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (após leitura do PSQL da origem)",
+   "mudanca": "TBTPSITUACAOMP: de-para de valores PROCESSO (smallint) -> regra_transicao_situacao_prescricao.processo (prescricao, validacao_farmaceutica, aprazamento, checagem, dispensacao, faturamento) e, se for o caso, MODULO; NEC_SENHA (0/1?) e NEC_MOTIVO/SENHA_* (S/N?) com domínio confirmado. Declaração pronta: ID_TBSITUACAOMP -> destino_situacao_prescricao_id, PROCESSO -> processo (depara=valores), NEC_SENHA -> exige_reautenticacao (booleano_01), NEC_MOTIVO -> exige_motivo (booleano_sn).",
+   "motivo": "processo é NOT NULL sem padrão; literal fundiria processos distintos (e duplicaria regras sob o UNIQUE). Hoje bloqueada."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado) / decisão de modelagem",
+   "mudanca": "TBHORMED_RIBLOCOS (ordem 412): não é grade nova; é o bloco de internação que usa a grade de TBHORMED. Opções: (a) regra genérica 'cópia do registro do pai com campo a mais' (grade de TBHORMED + bloco_internacao_id), (b) tabela de associação grade x bloco no modelo, (c) descarte justificado.",
+   "motivo": "A linha não tem estabelecimento, tipo de atendimento nem hora de início do dia (NOT NULL em grade_horario_unidade). Hoje bloqueada."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado: mapa_analise/gerador)",
+   "mudanca": "Coerência de domínio das referências: PRPARVARUNIRESP tem destino unidade_medida, mas variavel_calculo_dose.unidade_resposta_id referencia unidade_resposta (alimentada por PRUNIDRESPOSTA); TBPRINC_VALIDACAO tem destino referencia_dose, mas tipo_validacao_dose_unidade.tipo_validacao_dose_id referencia tipo_validacao_dose (alimentada por TBREFERENCIA); TBUNIDADEMEDIDA tem destino unidade_prescricao/unidade_resultado, mas escala_clinica_variavel.unidade_medida_id e tipo_validacao_dose_unidade.unidade_medida_id referenciam unidade_medida. Corrigir o destino do pai no mapa, ou referência por destino secundário (ref:<TABELA>/<destino>), ou de-para por código entre unidade_prescricao e unidade_medida. Sugestão ao verificador: recusar coluna declarada cujo destino é FK para tabela diferente do destino do pai.",
+   "motivo": "Gravar o id do pai seria id de outro domínio (FK quebrada no banco com FKs). Bloqueia PRPARVARCAD (unidade_resposta_id NOT NULL; também falta sigla_formula NOT NULL única) e TBUNIDMEDIDA_PRINC_VALID; PRINDICEVARIAVEL.ID_TBUNIDADEMEDIDA ficou não aproveitada."
+  },
+  {
+   "arquivo": "decisão do dono / conector/sante_conector/carga_mapa.py",
+   "mudanca": "PRPERGUNTA -> modelo_campo: modelo_documento_versao_id (NOT NULL) não existe na pergunta (é global; a ligação ao formulário está em outra tabela). Decidir: versão de modelo 'importado' por formulário (regra genérica de pai por tabela de ligação) ou modelo_campo fora do modelo versionado. Mais de-para de valores TIPOPERG -> tipo_campo (PSQL). PRRESPOSTA -> modelo_campo_opcao depende disso (e rotulo VARCHAR(300) vem de BLOB de texto: recusa se maior).",
+   "motivo": "PRPERGUNTA (1514) e PRRESPOSTA (3849) bloqueadas."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "PRPARAMSUMARIOALTA -> componente_sumario_alta: regra genérica de despivotar 'uma linha da origem em N linhas do mesmo destino' (ex.: declaração com sufixo de instância: componente_sumario_alta#procedimentos, #exames, #evolucao_clinica, #plano_terapeutico, cada uma com seus literais de tipo_conteudo e colunas). Também PRTPATEND está fora do mapa (dep_fora_do_mapa) e o período (PROPCAOPERIODO) precisa virar o domínio periodo.",
+   "motivo": "Uma linha de parâmetros = quatro seções do sumário; o motor grava uma linha por destino. Hoje bloqueada (1 linha na imagem de referência)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Vários destinos: hoje a restrição de um destino secundário ou do principal recusa a linha inteira (TBUNIDADEMEDIDA com símbolo de 11 a 30 caracteres cabe em unidade_resultado.simbolo mas não em unidade_prescricao.sigla VARCHAR(10), e a unidade some dos dois). Avaliar recusa por destino quando os destinos não dependem um do outro (sem @id).",
+   "motivo": "Perda de unidades de resultado válidas por limite só da prescrição; está com pendência restricao_destino_1406 (não é silencioso)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (após PSQL/agregados)",
+   "mudanca": "De-para de valores pela chave para as classificações que hoje entram como literal presumido (=~): tipo_encaminhamento.direcao, tipo_alergia.classificacao, autoridade_notificacao.esfera, tipo_interacao.alvo, acao_alerta_alergia.comportamento, alergeno.natureza, tipo_parto.cirurgico, condicao_recem_nascido.nascido_vivo, forma_validacao_interacao.nivel_comparacao, escala_clinica_variavel.tipo_resposta. Confirmar também o domínio de TBUNIDADEMEDIDA.SITUACAO (declarado A/I; outro valor vira valor_fora_do_dominio).",
+   "motivo": "Os presumidos ficam com pendência valor_presumido por linha para revisão do cliente; o de-para tira a pendência onde o valor for conhecido."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (planejar, conciliar) e motor.py",
+   "mudanca": "Regra genérica 'tabela_bloqueada': tabela do mapa com tabelas_destino, presente na origem e com linhas, mas sem nenhuma coluna declarada com destino, ganha UMA pendência por tabela (regra tabela_bloqueada, gravidade alta, chave '*', sem valor) e uma entidade de conciliação (nome da tabela de destino ou '<tabela>:bloqueada') com registros_origem=linhas lidas, registros_destino=0 e conferido=false. Expor carga_mapa.tabelas_bloqueadas(mapa_exec, presentes) -> lista de tabelas (mesmo filtro de planejar, invertido em 't not in decl'); test_l6_10.test_bloqueadas_aparecem_na_conciliacao passa a rodar quando ela existir (hoje skip). A conferência da fatia (sintetica) deve esperar a pendência nas 8 bloqueadas.",
+   "motivo": "Achado alto: as 8 bloqueadas da L6-10 (cerca de 5,4 mil linhas na imagem de referência) somem sem pendência e a conciliação dá conferido=true; tabela_sem_mapa só cobre tabela FORA do mapa. Vale para toda fatia com bloqueadas."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (#seq, linhas ~379-388) e sintetica.py",
+   "mudanca": "#seq estável no diferencial: para a linha NOVA, sequência = MAX(sequencia)+1 do mesmo pai já gravado no destino (consulta por destino e valor da coluna-pai), e não a posição na leitura; linhas já carregadas mantêm a sua. Alternativa: incluir a posição no hash para que a mudança vire alteracao_aguarda_sincronizar. Resolve também a colisão entre PRGLASGOW e PRINDICEPONTUACAO na mesma variável (mesmo destino escala_clinica_opcao). Sintética: mecanismo por fatia para uma segunda rodada com dados alterados (ex.: linhas(r, ins, rodada)), para a L6-10 apagar a opção ID 2 e incluir a ID 10 na variável 1 de PRGLASGOW entre as rodadas.",
+   "motivo": "Achado médio confirmado: com IDs 1-4 (seq 1-4), apagar o 2 e criar o 5 dá seq 4 ao 5, que colide no UNIQUE (escala_clinica_variavel_id, sequencia) com o 4 (pulado como igual porque o hash não cobre a posição): restricao_destino_1062 numa opção legítima. Mesmo risco em escala_clinica_variavel (escala_clinica_id, sequencia)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_valores, GRAVIDADE_REGRA) e verificador do mapa",
+   "mudanca": "Marcador genérico '=~!<texto>': literal presumido de SEGURANÇA CLÍNICA; grava como '=~' mas a pendência é valor_presumido_seguranca (ou valor_presumido com gravidade 'alta'). Depois de aplicado, a L6-10 troca para '=~!' em acao_alerta_alergia.comportamento, tipo_parto.cirurgico e condicao_recem_nascido.nascido_vivo (os três precisam de revisão antes do uso clínico).",
+   "motivo": "Achado médio: hoje o presumido fica com pendência de gravidade baixa; ação de alerta que bloqueava, natimorto como nascido vivo e cesárea como não cirúrgica são regra de segurança rebaixada. Já feito na fatia: comportamento presumido passou de 'avisar' para 'exigir_justificativa' (nunca o mais permissivo) e os motivos marcam 'revisão obrigatória antes do uso'."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e declarado/colunas.d (regra genérica)",
+   "mudanca": "(1) Derivar escala_clinica_variavel.tipo_resposta='numero' quando a variável tem filhas de faixa (PRINDICEPONTUACAO) e 'opcao_unica' quando tem opções (PRGLASGOW): regra genérica 'valor pela existência de filhas' (ex.: via=filhas:<TABELA>=<valor>), aplicada na fase 2. (2) Faixa com as duas pontas nulas: regra genérica de recusa 'ao menos um de' (ex.: regra 'exige_um:VALOR_REF_INI,VALOR_REF_FIN' -> recusa faixa_sem_limite). (3) Avaliar mandar as faixas para escala_clinica_faixa (valor_inicial/valor_final NOT NULL, escala do avô PRINDICEVARIAVEL.ID_PRINDICEAGRUPAMENTO), o que pede referência ao avô (via=ref:<PAI>.<COLUNA>).",
+   "motivo": "Achado médio: variável de faixa fica como opcao_unica com N opções de mesmo rótulo. Já feito na fatia: o rótulo 'Faixa de valores' passou a presumido (=~), com pendência por linha (9 na sintética)."
+  }
+ ]
+}

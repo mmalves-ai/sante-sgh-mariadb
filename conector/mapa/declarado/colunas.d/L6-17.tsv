@@ -1,0 +1,47 @@
+tabela	coluna	destino	regra	depara	via	motivo
+CHCRITICIDADE	ID	criticidade_area.codigo	texto			L6-17: chave inteira da origem gravada como código (texto); CHCRITICIDADE é a única alimentadora
+CHCRITICIDADE	NOME	criticidade_area.descricao	texto_nome			L6-17: nome da criticidade
+CHCRITICIDADE	=~critica	criticidade_area.classificacao_sanitaria				L6-17: a origem não traz a classe sanitária; entra 'critica' (a mais exigente) com pendência valor_presumido por linha até o de-para de valores (pedido no L6-17.json)
+CHAREA	@estabelecimento	area_higienizavel.estabelecimento_id				L6-17: a origem não tem coluna de unidade; o único estabelecimento do cliente, ou recusa com estabelecimento_indefinido
+CHAREA	SIGLA	area_higienizavel.sigla	texto			L6-17: sigla nula na origem recusa a linha (NOT NULL no destino)
+CHAREA	NOME	area_higienizavel.nome	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL); nome repetido no estabelecimento recusa (uq nome)
+CHAREA	ID_CHCRITICIDADE	area_higienizavel.criticidade_area_id	chave_origem			L6-17: criticidade pelo conector_origem
+CHAREA	ATIVO	area_higienizavel.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+CHOCORRENCIA	ID	tipo_ocorrencia_limpeza.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CHOCORRENCIA	NOME	tipo_ocorrencia_limpeza.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
+CHOCORRENCIA	=~emergencial	tipo_ocorrencia_limpeza.modalidade				L6-17: a origem não diz se a ocorrência é programada ou emergencial; entra 'emergencial' com valor_presumido (de-para pedido no L6-17.json); material_biologico e prioridade ficam no padrão do destino
+CHSITUACAO	ID	situacao_limpeza.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CHSITUACAO	NOME	situacao_limpeza.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
+CHSITUACAO	ORDEM	situacao_limpeza.ordem	inteiro			L6-17: ordem nula recusa a linha (NOT NULL, sem padrão); repetida recusa (uq ordem)
+CHSITUACAO	ID_CHSITUACAO_ANTERIOR	situacao_limpeza.anterior_situacao_limpeza_id	chave_origem		ref:CHSITUACAO	L6-17: autorreferência (etapa anterior do fluxo), gravada em duas fases
+CHSITUACAO	COR	situacao_limpeza.cor	texto			L6-17: cor do painel, como está na origem
+CHSITUACAO	ATIVO	situacao_limpeza.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+CHSITUACAO	=~aguardando	situacao_limpeza.etapa				L6-17: a origem não diz o papel da etapa no fluxo; entra 'aguardando' (libera_leito no padrão FALSE) com valor_presumido, para o cliente reclassificar (de-para pedido no L6-17.json)
+CVTERMINALFAB	ID	fabricante_terminal_acesso.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTERMINALFAB	NOME	fabricante_terminal_acesso.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
+CVTPIDENTIFIC	ID	forma_identificacao_visitante.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTPIDENTIFIC	NOME	forma_identificacao_visitante.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL); biometrica e exige_cracha ficam no padrão FALSE
+CVTPSITACESSO	ID	situacao_acesso_visitante.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTPSITACESSO	NOME	situacao_acesso_visitante.descricao	texto_nome			L6-17: nome da situação
+CVTPSITACESSO	=~0	situacao_acesso_visitante.permite_entrada				L6-17: a origem não diz se a situação libera a entrada; presunção sempre do lado restritivo (critério da fatia, como 'critica' na criticidade): entra FALSE com valor_presumido, e o cliente libera as situações de entrada pelo de-para de valores (pedido no L6-17.json); nenhuma situação bloqueada ou restrita fica liberada por presunção
+CVTPTERMINAL	ID	modelo_terminal_acesso.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTPTERMINAL	NOME	modelo_terminal_acesso.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
+CVTPTERMINAL	ID_CVTERMINALFAB	modelo_terminal_acesso.fabricante_terminal_acesso_id	chave_origem			L6-17: fabricante pelo conector_origem; inexistente recusa a linha (NOT NULL)
+CVTPTERMINAL	ATIVO	modelo_terminal_acesso.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+CVTPTERMINAL	=~terminal	modelo_terminal_acesso.tipo				L6-17: a origem não diz se é catraca, totem ou terminal; entra 'terminal' com valor_presumido (de-para pedido no L6-17.json)
+CVTPVISITADO	ID	tipo_visitado.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTPVISITADO	NOME	tipo_visitado.descricao	texto_nome			L6-17: nome do tipo de visitado
+CVTPVISITADO	=~outro	tipo_visitado.alvo				L6-17: COD_TP_VISITADO é código interno sem tabela de valores; até o de-para de valores (pedido no L6-17.json) o alvo entra 'outro' com valor_presumido
+CVTPVISITANTE	ID	tipo_visitante.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+CVTPVISITANTE	NOME	tipo_visitante.descricao	texto_nome			L6-17: nome do tipo de visitante
+CVTPVISITANTE	ATIVO	tipo_visitante.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+CVTPVISITANTE	=~outro	tipo_visitante.categoria				L6-17: COD_TP_VISITANTE é código interno sem tabela de valores; até o de-para de valores (pedido no L6-17.json) a categoria entra 'outro' com valor_presumido
+GDPRONTCADOPER	ID	operacao_movimento_prontuario.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+GDPRONTCADOPER	NOME	operacao_movimento_prontuario.descricao	texto_nome			L6-17: nome da operação
+GDPRONTCADOPER	=~registro	operacao_movimento_prontuario.tipo				L6-17: a origem não classifica a operação; entra 'registro' com valor_presumido (de-para pedido no L6-17.json)
+GDPRONTCADOPER	=~neutro	operacao_movimento_prontuario.sentido				L6-17: a origem não diz o efeito na guarda; entra 'neutro' com valor_presumido (de-para pedido no L6-17.json)
+PRCARACTDIE	ID_CARACTDIE	caracteristica_dieta.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
+PRCARACTDIE	DESCRICAO	caracteristica_dieta.descricao	texto			L6-17: descrição nula recusa a linha (NOT NULL)
+PRCARACTDIE	ATIVO	caracteristica_dieta.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
+PRCARACTDIE	=~outra	caracteristica_dieta.categoria				L6-17: TIPO (código de 1 caractere) sem tabela de valores; categoria entra 'outra' com valor_presumido até o de-para (pedido no L6-17.json)
+PRCARACTDIE	=~nenhuma	caracteristica_dieta.tipo_resposta				L6-17: TPRESP é código interno sem tabela de valores; entra 'nenhuma' com valor_presumido até o de-para; unidade (ID_PRUNIDRESPOSTA aponta unidade_resposta, não unidade_medida) e respostas possíveis (texto, não JSON) ficam para os pedidos do L6-17.json

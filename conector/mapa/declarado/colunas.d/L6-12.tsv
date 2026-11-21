@@ -1,0 +1,187 @@
+tabela	coluna	destino	regra	depara	via	motivo
+#L6-12	(nota)					FATIA BLOQUEADA: toda linha da fatia leva paciente, atendimento ou profissional por tabela intermediária da origem (histórico do paciente, do atendimento, inscrição no conselho), e a referência direta daria o id de outra entidade. As declarações ficam prontas e comentadas (#) até o motor ter a referência pela coluna do pai (via encadeada ref:<T1>.<C1>>[<T2>.<C2>>...]<FIM>, pedido 1 em saida/L6-12.json), do literal condicional (pedido 4) e da referência pela coluna do destino do pai (pedido 8). Nada da fatia foi conciliado com as referências certas: a conferência fica por fazer ao ativar (saida/L6-12.md). Fuso, horário de verão, cópias UTC e colunas OLD_ não listadas ficam fora (o instante já vem na coluna data_hora; OLD_ são do sistema anterior da origem).
+#PRPRESC	@estabelecimento	prescricao.estabelecimento_id				único estabelecimento do cliente (a origem não traz unidade na prescrição)
+#PRPRESC	ID	prescricao.numero	inteiro			número da prescrição = chave da origem (única); COD_AGRUPAMENTO_PRESCRICAO agrupa e repete
+#PRPRESC	ID_HTPACIENTE	prescricao.paciente_id			ref:HTPACIENTE.ID_RICADPAC>RICADPAC	aguarda referência pela coluna do pai na origem (histórico do paciente -> paciente; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRPRESC	ID_HTATENDIMENTO	prescricao.atendimento_id			ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND	aguarda referência pela coluna do pai na origem (histórico do atendimento -> atendimento; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRPRESC	ID_PRLOCAL_ASSISTENCIA	prescricao.local_assistencia_id				local de assistência (L6 ordem 840)
+#PRPRESC	ID_TBCBOPRO_PRESCRICAO	prescricao.prescritor_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRPRESC	=?suspensa:DATA_HORA_SUSPENSAO|futura:DATA_HORA_INICIAL_VIGENCIA>@carga|vigente:DATA_HORA_FINAL_VIGENCIA>@carga|vencida	prescricao.situacao				situação derivada da própria linha (literal condicional, pedido 4): suspensa quando houve suspensão; futura ou vigente pela vigência comparada ao instante da carga (a prescrição ativa do internado chega vigente); vencida no resto. Sem presunção por linha
+#PRPRESC	DATA_HORA_PRESCRICAO	prescricao.prescrito_em	data_hora			sentinela recusa (NOT NULL)
+#PRPRESC	DATA_HORA_INICIAL_VIGENCIA	prescricao.vigencia_inicio_em	data_hora			início da vigência
+#PRPRESC	DATA_HORA_FINAL_VIGENCIA	prescricao.vigencia_fim_em	data_hora			fim da vigência; fim <= início é recusado pelo CHECK do destino (4025)
+#PRPRESC	LANCAMENTO_RETROATIVO	prescricao.retroativo	booleano_sn			S/N; retroativo sem justificativa é recusado pelo CHECK (4025)
+#PRPRESC	JUSTIFICATIVA_LANC_RETROATIVO	prescricao.justificativa_retroativo	texto			justificativa do lançamento retroativo
+#PRPRESC	DATA_HORA_GRAVACAO	prescricao.liberada_em	data_hora			gravação na origem = liberação da prescrição
+#PRPRESC	DATA_HORA_SUSPENSAO	prescricao.suspensa_em	data_hora			suspensão
+#PRPRESC	ID_TBCBOPRO_SUSPENSAO	prescricao.suspensao_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRPRESC	JUSTIFICATIVA_SUSPENSAO	prescricao.motivo_suspensao	texto			motivo da suspensão
+#PRPRESC	OBS_GERAL_PRESCRICAO	prescricao.observacao_geral	texto_longo			observação geral (BLOB de texto)
+#PRPRESC	OLD_PESO	prescricao.peso_kg	decimal			peso do sistema anterior da origem (quase sempre nulo)
+#PRPRESC	OLD_ALTURA	prescricao.altura_cm	decimal			altura do sistema anterior; fora de DECIMAL(5,1) recusa (1264)
+#PRPRESC	OLD_SC	prescricao.superficie_corporal_m2	decimal			superfície corporal do sistema anterior
+#PRPRESC	OLD_TFG	prescricao.clearance_creatinina	decimal			taxa de filtração glomerular estimada = clearance
+#PRPRESC	TP_PRESCRICAO		codigo_char			não carregada por ora: tipo da prescrição pede de-para de valores (pares em declarado/valores.tsv, compartilhado; pedido); fica o padrão medica
+#PRPRESC	ID_ATCABECATEND_INTEGRACAO					sem destino: atendimento da integração; o atendimento vem do histórico
+#PRPRESC	ID_DIGITAL		texto			sem destino: identificador da assinatura digital; o documento assinado vem do mecanismo de assinatura (pedido)
+#PRLANGERAL	ID_PRPRESC	prescricao_item.prescricao_id				prescrição (mesma fatia); item de planejamento (sem prescrição) recusa pelo NOT NULL
+#PRLANGERAL	#seq:ID_PRPRESC	prescricao_item.sequencia				sequência do item dentro da prescrição, na ordem da chave
+#PRLANGERAL	ID_PRTPLAN	prescricao_item.tipo_item_prescricao_id				tipo do item (L6 ordem 347)
+#PRLANGERAL	ID_PRFREQUENCIA	prescricao_item.frequencia_administracao_id				frequência (L6 ordem 299)
+#PRLANGERAL	ID_GETABVIA	prescricao_item.via_de_uso_id			ref:GETABVIA	via de uso pelo código (chave COD do pai; sem referência gerada por ser texto)
+#PRLANGERAL	ID_PRPROTGERAL	prescricao_item.protocolo_prescricao_id				protocolo de origem do item (L6 ordem 319)
+#PRLANGERAL	ID_TBCBOPRO_LANCAMENTO	prescricao_item.lancamento_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRLANGERAL	DATA_HORA_INCLUSAO	prescricao_item.inicio_em	data_hora			inclusão do item = início; nula recusa (NOT NULL) até haver a vigência da prescrição como padrão (pedido)
+#PRLANGERAL	OBS_ENFERMAGEM	prescricao_item.observacao_enfermagem	texto			observação para a enfermagem
+#PRLANGERAL	OBS_MEDICA_PARA_CHECAGEM_ENF	prescricao_item.observacao_aprazamento	texto_longo			observação médica para aprazamento e checagem da enfermagem; acima de 2000 recusa (1406)
+#PRLANGERAL	DATA_HORA_SUSP_CORRECAO	prescricao_item.suspenso_em	data_hora			suspensão por correção; a situação suspenso_correcao pede literal condicional (pedido); fica o padrão ativo
+#PRLANGERAL	=?suspenso_correcao:DATA_HORA_SUSP_CORRECAO	prescricao_item.situacao				suspenso por correção quando a suspensão está preenchida (literal condicional, pedido 4); senão o padrão ativo
+#PRLANGERAL	ID_TBCBOPRO_SUSP_CORRECAO	prescricao_item.suspensao_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRLANGERAL	ID_PRPLANPRESC					sem destino por ora: planejamento não carregado (sem prescrição de destino na origem)
+#PRLANGERAL	ID_PRLANGERAL_AGRUPAMENTO					sem destino: agrupamento de itens sem coluna no modelo
+#PRLANGERAL	JUSTIFICATIVA_INC_ITEM_AVULSO		texto			sem destino: item avulso não é item não padronizado (justificativa_nao_padronizado exige o item); pedido de coluna
+#PRLANGERAL	NUM_DOSE		inteiro			sem destino: número da dose sem coluna no item
+#PRPRESCPROCED	ID_PRLANGERAL	prescricao_item_procedimento.prescricao_item_id				item (mesma fatia); dois procedimentos no mesmo item recusam (UNIQUE, 1062)
+#PRPRESCPROCED	ID_TBPROENF	prescricao_item_procedimento.cuidado_enfermagem_id				cuidado de enfermagem (L6 ordem 390); sem pai, o CHECK de alvo recusa (4025)
+#PRPRESCPROCED	INICIAR_ADM_AGORA	prescricao_item_procedimento.iniciar_agora	booleano_sn			S/N
+#PRPRESCPROCED	NAO_AJUSTAR_ESQUEMA_ENF	prescricao_item_procedimento.nao_ajustar_horario	booleano_sn			S/N
+#PRPRESCSOL	ID_PRLANGERAL	prescricao_item_solucao.prescricao_item_id				item (mesma fatia)
+#PRPRESCSOL	VOLUME_KG	prescricao_item_solucao.volume_por_kg	decimal			volume por kg
+#PRPRESCSOL	ID_PRTPINFUSAO	prescricao_item_solucao.tipo_infusao_id				tipo de infusão (L6 ordem 346)
+#PRPRESCSOL	ID_PRKITSOL	prescricao_item_solucao.kit_prescricao_id				kit (L6 ordem 361)
+#PRPRESCSOL	INICIAR_ADM_AGORA	prescricao_item_solucao.iniciar_agora	booleano_sn			S/N
+#PRPRESCSOL	NAO_AJUSTAR_ESQUEMA_ENF	prescricao_item_solucao.nao_ajustar_horario	booleano_sn			S/N
+#PRPRESCSOL	PERMITIR_ENF_ALT_VEL_INFUSAO	prescricao_item_solucao.enfermagem_altera_velocidade	booleano_sn			S/N
+#PRPRESCSOL	VOLUME_TOTAL		decimal			não carregada por ora: o CHECK exige a unidade junto do volume total e a unidade da origem é de outra entidade (pedido)
+#PRPRESCSOL	ID_TBUNICON_UNI_PRESC		texto			não carregada por ora: a unidade da origem vira unidade_medida e o destino pede unidade_prescricao (pedido de de-para)
+#PRPRESCDIETA	ID_PRLANGERAL	prescricao_item_dieta.prescricao_item_id				item (mesma fatia); duas dietas no mesmo item recusam (UNIQUE, 1062)
+#PRPRESCDIETA	ID_TBDIETAS	prescricao_item_dieta.modalidade_dieta_id				modalidade de dieta (L6 ordem 557); sem pai recusa (NOT NULL)
+#PRPRESCDIETA	ID_PRVIAADMIN	prescricao_item_dieta.via_dieta_id				via da dieta (L6 ordem 468)
+#PRPRESCDIETA	QTDE_DOSE	prescricao_item_dieta.volume	decimal			quantidade por dose da dieta
+#PRPRESCDIETA	ID_PRTPINFUSAO	prescricao_item_dieta.tipo_infusao_id				tipo de infusão
+#PRPRESCDIETA	VELOCIDADE_INFUSAO	prescricao_item_dieta.velocidade_infusao	decimal			velocidade; sem unidade de infusão o CHECK recusa (4025)
+#PRPRESCDIETA	ID_PRUNIDINFUSAO	prescricao_item_dieta.unidade_infusao_id				unidade de infusão (L6 ordem 360)
+#PRPRESCDIETA	ID_TBUNICON_UNI_PRESC		texto			não carregada por ora: unidade de outra entidade (pedido de de-para para unidade_prescricao)
+#PRCARACTLAN	ID_PRPRESCDIETA	prescricao_item_dieta_caracteristica.prescricao_item_dieta_id				dieta prescrita (mesma fatia)
+#PRCARACTLAN	ID_PRCARACTDIE	prescricao_item_dieta_caracteristica.caracteristica_dieta_id				característica (L6 ordem 464)
+#PRCARACTLAN	RESPOSTA	prescricao_item_dieta_caracteristica.resposta	texto			resposta da característica
+#PRCARACTLAN	ID_PRUNIDRESPOSTA					não carregada por ora: a unidade da resposta vira unidade_resposta e o destino pede unidade_medida (pedido)
+#PRASSINATURA_CAB	@estabelecimento	documento_prontuario.estabelecimento_id				único estabelecimento
+#PRASSINATURA_CAB	ID_HTPACIENTE	documento_prontuario.paciente_id			ref:HTPACIENTE.ID_RICADPAC>RICADPAC	aguarda referência pela coluna do pai na origem (histórico do paciente -> paciente; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.atendimento_id			ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND	aguarda referência pela coluna do pai na origem (histórico do atendimento -> atendimento; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.tipo_documento_clinico_id				tipo do documento (L6 ordem 336)
+#PRASSINATURA_CAB	ID_TABELA					aguarda mecanismo do documento do prontuário: entidade_origem/_id apontam a entidade do modelo (registro, prescrição...) pelo tipo; situação, profissional, datas e título vêm dos eventos (PRASSINATURA_DOC); pedido
+#PRASSINATURA_CAB	DOCUMENTO_CONSOLIDADO		texto_longo			aguarda mecanismo de arquivo (documento consolidado vira arquivo, não JSON); pedido
+#PRASSINATURA_DOC	ID_PRASSINATURA_CAB	documento_prontuario_evento.documento_prontuario_id				documento (mesma fatia; bloqueado com ele)
+#PRASSINATURA_DOC	=inclusao	documento_prontuario_evento.operacao				cada linha é um evento registrado
+#PRASSINATURA_DOC	=~assinatura	documento_prontuario_evento.acao				a origem registra eventos de assinatura; a ação pela situação pede de-para de valores (pedido)
+#PRASSINATURA_DOC	ID_PRSITDOCUMENTO	documento_prontuario_evento.situacao_documento_prontuario_id				situação (L6 ordem 326)
+#PRASSINATURA_DOC	ID_TBCBOPRO	documento_prontuario_evento.profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRASSINATURA_DOC	DATA_HORA_EVENTO	documento_prontuario_evento.evento_em	data_hora			momento do evento
+#PRASSINATURA_DOC	DATA_HORA_GRAVACAO	documento_prontuario_evento.ocorrido_em	data_hora			gravação do evento
+#PRASSINATURA_DOC	DOCUMENTO_ORIGINAL		texto_longo			aguarda mecanismo de arquivo e de assinatura (documento_assinado e assinatura_documento pedem arquivo, hash, código de verificação e signatário); pedido
+#PRASS_DOC_PREXAMEASS	ID_PRASSINATURA_DOC					sem destino próprio: liga o evento de assinatura à assinatura do exame; entra no mecanismo do documento (pedido de reclassificação no mapa)
+#PRATESTREQIMP	@estabelecimento	documento_emitido.estabelecimento_id				único estabelecimento
+#PRATESTREQIMP	ID_HTPACIENTE	documento_emitido.paciente_id			ref:HTPACIENTE.ID_RICADPAC>RICADPAC	aguarda referência pela coluna do pai na origem (histórico do paciente -> paciente; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRATESTREQIMP	ID_HTATENDIMENTO	documento_emitido.atendimento_id			ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND	aguarda referência pela coluna do pai na origem (histórico do atendimento -> atendimento; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRATESTREQIMP	=~declaracao	documento_emitido.tipo				a origem não separa atestado de declaração e atestado exige dias de afastamento que ela não tem: presumido, o cliente reclassifica
+#PRATESTREQIMP	ID_TBCBOPRO	documento_emitido.profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRATESTREQIMP	ID_PRLOCAL_ASSISTENCIA	documento_emitido.local_assistencia_id				local de assistência
+#PRATESTREQIMP	DATA_HORA_INCLUSAO	documento_emitido.emitido_em	data_hora			emissão
+#PRATESTREQIMP	DATA_HORA_LANCAMENTO	documento_emitido.lancado_em	data_hora			lançamento
+#PRATESTREQIMP	JUSTIFICATIVA_LANC_RETROATIVO	documento_emitido.justificativa_retroativo	texto			justificativa
+#PRATESTREQIMP	CONTEUDO_XML	documento_emitido.texto	texto_longo			texto do documento; CONTEUDO (binário) e o PDF vão para arquivo pelo mecanismo (pedido)
+#PRATESTREQIMP	PRE_IMPRESSO	documento_emitido.pre_impresso	booleano_sn			S/N
+#PRATESTREQIMP	DATA_HORA_SUSPENSAO	documento_emitido.suspenso_em	data_hora			suspensão; a situação suspenso pede literal condicional (pedido)
+#PRATESTREQIMP	ID_TBCBOPRO_SUSPENSAO	documento_emitido.suspenso_por_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRATESTREQIMP	JUSTIFICATIVA_SUSPENSAO	documento_emitido.justificativa_suspensao	texto			justificativa da suspensão
+#PRATESTREQIMP	DATA_HORA_ARQUIVADO	documento_emitido.arquivado_em	data_hora			arquivamento
+#PRATESTREQIMP	=?suspenso:DATA_HORA_SUSPENSAO|cancelado:REGISTRO_VALIDO=N	documento_emitido.situacao				situação derivada (literal condicional, pedido 4): suspenso quando houve suspensão; cancelado quando o registro não é válido na origem; senão o padrão valido. O CHECK exige suspensão e justificativa fora de valido: sem elas a linha é recusada (4025) e fica para o cliente
+#PRATESTREQIMP	REGISTRO_VALIDO		codigo_char			lida pela situação derivada (linha acima); sem coluna própria
+#PRATESTREQIMP	DATA_HORA_EXCLUSAO	documento_emitido.excluido_em	data_hora			exclusão na origem = exclusão lógica no destino (o documento excluído não aparece como válido)
+#PRATESTREQIMP	ID_PRATESTREQIMP_ORIG_CORREC	documento_emitido.corrige_documento_emitido_id			ref:PRATESTREQIMP	documento original que este corrige (autorreferência, duas fases)
+#PRATESTREQIMP	ID_TBPROFIS_ACOMP_RESP	documento_emitido.acompanhante_responsavel_profissional_id				profissional responsável pelo acompanhamento (referência direta ao profissional, sem tabela intermediária)
+#PRATESTREQIMP	ID_PRATESTREQIMP					sem destino: vínculo entre documentos sem significado documentado (a correção vem de ID_PRATESTREQIMP_ORIG_CORREC); contar as preenchidas na imagem de referência antes de decidir (pedido 7)
+#PRATESTREQIMP	DATA_HORA_GRAVACAO_SUSPENSAO		data_hora			sem coluna no modelo: suspenso_em guarda o momento da suspensão; a gravação da suspensão pede coluna (pedido 7)
+#PRATESTREQIMP	JUSTIFICATIVA_SUSP_RETROATIVA		texto			sem coluna no modelo: justificativa da suspensão retroativa pede coluna (pedido 7)
+#PRATESTREQIMP	NOME_ATESTADO_MODELO		texto			sem destino: nome do modelo em texto; modelo_documento_clinico_id pede o modelo por id (de-para pelo nome, pedido 7)
+#PRATESTREQIMP	CONTEUDO		blob			aguarda mecanismo de arquivo (pedido 6d)
+#PRATESTREQIMP	CONTEUDO_QRP		texto_longo			aguarda mecanismo de arquivo (pedido 6d)
+#PRATESTREQIMP	CONTEUDO_PDF		texto_longo			aguarda mecanismo de arquivo: o PDF vira arquivo_id (pedido 6d)
+#PRATESTREQIMP	ASSINATURA		texto_longo			aguarda mecanismo de assinatura (pedido 6b)
+#PRCABEC_MONITORIZACAO	@estabelecimento	monitorizacao_paciente.estabelecimento_id				único estabelecimento
+#PRCABEC_MONITORIZACAO	ID_HTATENDIMENTO	monitorizacao_paciente.atendimento_id			ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND	aguarda referência pela coluna do pai na origem (histórico do atendimento -> atendimento; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRCABEC_MONITORIZACAO	ID_HTPACIENTE	monitorizacao_paciente.paciente_id			ref:HTPACIENTE.ID_RICADPAC>RICADPAC	aguarda referência pela coluna do pai na origem (histórico do paciente -> paciente; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRCABEC_MONITORIZACAO	VIGENCIA_INICIAL	monitorizacao_paciente.inicio_em	data_hora			início
+#PRCABEC_MONITORIZACAO	VIGENCIA_FINAL	monitorizacao_paciente.fim_em	data_hora			fim; a origem não traz o responsável (responsavel_profissional_id NOT NULL): pedido de coluna anulável ou de presunção
+#PRCABEC_MONITORIZACAO	JUSTIFICATIVA_LANC_RETROATIVO	monitorizacao_paciente.justificativa_retroativo	texto			justificativa
+#PRCABEVOL	@estabelecimento	registro_assistencial.estabelecimento_id				único estabelecimento
+#PRCABEVOL	ID_HTPACIENTE	registro_assistencial.paciente_id			ref:HTPACIENTE.ID_RICADPAC>RICADPAC	aguarda referência pela coluna do pai na origem (histórico do paciente -> paciente; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRCABEVOL	ID_HTATENDIMENTO	registro_assistencial.atendimento_id			ref:HTATENDIMENTO.ID_ATCABECATEND>ATCABECATEND	aguarda referência pela coluna do pai na origem (histórico do atendimento -> atendimento; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRCABEVOL	ID_EVOLUCAO	registro_assistencial.modelo_documento_clinico_id			ref:PREVOLUCAO	modelo do registro (L6 ordem 1070; sem referência gerada pelo nome)
+#PRCABEVOL	ID_TBCBOPRO_EVOLUCAO	registro_assistencial.autor_profissional_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS	aguarda referência pela coluna do pai na origem (inscrição no conselho -> profissional; pedido em saida/L6-12.json): a referência direta daria o id de outra entidade
+#PRCABEVOL	ID_TBCBOPRO_EVOLUCAO	registro_assistencial.autor_usuario_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS.ID_TBUSERS>TBUSERS	aguarda a via encadeada (pedido 1): inscrição no conselho -> profissional -> login -> usuário (a inscrição não guarda o login; o profissional guarda, e a chave do usuário é o login)
+#PRCABEVOL	ID_PRLOCAL_ASSISTENCIA	registro_assistencial.local_assistencia_id				local de assistência
+#PRCABEVOL	DATA_HORA_EVOLUCAO	registro_assistencial.data_hora_clinica	data_hora			data clínica
+#PRCABEVOL	DATA_HORA_LANCAMENTO	registro_assistencial.data_hora_lancamento	data_hora			lançamento; impressao_digital (SHA-256 do texto, NOT NULL) e o texto (PRCONTEVOL) pedem mecanismo (pedido)
+#PRCABEVOL	JUSTIFICATIVA_LANC_RETROATIVO	registro_assistencial.justificativa_retroativo	texto			justificativa
+#PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.suspenso_em	data_hora			suspensão
+#PRCABEVOL	JUSTIFICATIVA_SUSPENSAO	registro_assistencial.justificativa_suspensao	texto			justificativa (acima de 255 recusa, 1406)
+#PRCABEVOL	ID_PRCABEVOL_ORIG_CORREC	registro_assistencial.corrige_registro_assistencial_id			ref:PRCABEVOL	autorreferência (duas fases)
+#PRCABEVOL	ID_TBCBOPRO_SUSPENSAO	registro_assistencial.suspenso_por_usuario_id			ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS.ID_TBUSERS>TBUSERS	quem suspendeu, pela via encadeada (pedido 1): inscrição -> profissional -> login -> usuário; exigido pelo CHECK de suspensão
+#PRCABEVOL	=?suspenso:DATA_HORA_SUSPENSAO	registro_assistencial.situacao				suspenso quando houve suspensão (literal condicional, pedido 4); o CHECK exige suspenso_em, suspenso_por_usuario_id e justificativa: sem eles a linha é recusada (4025), nunca entra como finalizado
+#PRCABEVOL	ID_TBPROFIS_ACOMP_RESP					sem coluna no registro_assistencial para o responsável pelo acompanhamento (pedido 7)
+#PRCABEVOL	PRE_IMPRESSO		codigo_char			sem coluna no registro_assistencial (formulário pré-impresso só existe no documento emitido)
+#PRCABEVOL	DATA_HORA_GRAVACAO_SUSPENSAO		data_hora			sem coluna no modelo: suspenso_em guarda o momento da suspensão (pedido 7)
+#PRCABEVOL	JUSTIFICATIVA_SUSP_RETROATIVA		texto			sem coluna no modelo para a justificativa da suspensão retroativa (pedido 7)
+#PRCABEVOL	ID_PRLANIMAG					sem destino: imagem lançada no registro entra pelo mecanismo de arquivo (pedido 6)
+#PRCABEVOL	ARQUIVO_EXPORTADO		texto			sem destino: nome de arquivo exportado; o documento vai para arquivo pelo mecanismo (pedido 6)
+#PRCABEVOL	ID_DIGITAL		texto			sem destino: identificador da assinatura digital; vem do mecanismo de assinatura (pedido 6b)
+#PRCABEVOL	OLD_USUARIO		texto			sem destino: autor do sistema anterior; autor e usuário vêm da inscrição atual (OLD_REG, OLD_TIPOATE, OLD_CRM e OLD_USERSUSP idem)
+#PRALERGIAPAC	ID_PRCABEVOL	alergia_paciente.registro_assistencial_id				registro em que a alergia foi informada (bloqueado com ele); paciente e data vêm dele pela coluna do pai (pedido)
+#PRALERGIAPAC	ID_TBALERGIA	alergia_paciente.alergeno_id				alérgeno (L6 ordem 403)
+#PRALERGIAPAC	=alergia	alergia_paciente.tipo_registro				a origem só registra alergia
+#PRALERGIAPAC	OBSERVACAO	alergia_paciente.observacao	texto			observação
+#PRALERGIAPAC	ACAO_DATA_HORA	alergia_paciente_evento.ocorrido_em	data_hora			momento da ação; nula recusa a linha (NOT NULL) até haver a alternativa pela data do registro pai (pedido 4)
+#PRALERGIAPAC	ID_TBUSERS_ACAO	alergia_paciente_evento.usuario_id			ref:TBUSERS	usuário pelo login
+#PRALERGIAPAC	@estabelecimento	alergia_paciente.estabelecimento_id				único estabelecimento
+#PRALERGIAPAC	ID_PRCABEVOL	alergia_paciente.paciente_id			ref:PRCABEVOL>paciente_id	paciente do registro pai, pela coluna do destino do pai (pedido 8)
+#PRALERGIAPAC	ID_PRCABEVOL	alergia_paciente.atendimento_id			ref:PRCABEVOL>atendimento_id	atendimento do registro pai (pedido 8)
+#PRALERGIAPAC	ID_PRCABEVOL	alergia_paciente.registrado_em			ref:PRCABEVOL>data_hora_clinica	registrada no momento clínico do registro pai (pedido 8; NOT NULL)
+#PRALERGIAPAC	ID_PRCABEVOL	alergia_paciente.registrado_profissional_id			ref:PRCABEVOL>autor_profissional_id	autor do registro pai (pedido 8)
+#PRALERGIAPAC	RETIRAR_VINCULO_PACIENTE	alergia_paciente.ativa	codigo_char	valores		retirada do paciente na origem = inativa (pares S->0, N e nulo->1 em declarado/valores.tsv, pedido 5); nunca entra ativa
+#PRALERGIAPAC	?RETIRAR_VINCULO_PACIENTE=S:ACAO_DATA_HORA	alergia_paciente.inativado_em	data_hora			momento da retirada quando retirada (cópia condicional, pedido 4); o CHECK de inativação exige data e motivo
+#PRALERGIAPAC	=?retirada do paciente no sistema anterior:RETIRAR_VINCULO_PACIENTE=S	alergia_paciente.motivo_inativacao				motivo fixo da inativação migrada (literal condicional, pedido 4)
+#PRALERGIAPAC	?RETIRAR_VINCULO_PACIENTE=S:ID_TBUSERS_ACAO	alergia_paciente.inativado_por_usuario_id			ref:TBUSERS	quem retirou, pelo login (cópia condicional, pedido 4)
+#PRALERGIAPAC	@id	alergia_paciente_evento.alergia_paciente_id				evento ligado à alergia (destino principal)
+#PRALERGIAPAC	=inclusao	alergia_paciente_evento.operacao				cada linha migrada é um evento registrado
+#PRALERGIAPAC	ACAO	alergia_paciente_evento.evento	codigo_char	valores		ação da origem -> evento (inclusao, alteracao, inativacao...; nulo -> inclusao): pares em declarado/valores.tsv depois de contar os códigos (pedido 5)
+#PRALERGIAPAC	ID_PRCABEVOL_ACAO	alergia_paciente_evento.registro_assistencial_id				registro em que a ação foi feita (referência direta ao registro, mesma fatia)
+#PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id				alergia (mesma fatia)
+#PRALERGIAPAC_TBPRINC	ID_TBPRINC					não carregada por ora: o princípio da origem vira classe_terapeutica e o destino pede principio_ativo (pedido)
+#PRCABEVOLTMP	ID_CABEVOL					aguarda mecanismo: o rascunho exige respostas em JSON (montagem das respostas do modelo) e as mesmas referências do registro (pedido)
+#PRALERGIAPACTMP	ID					aguarda mecanismo: alergia em edição entra no JSON alergias do rascunho (pedido)
+#PRALERGIAPACTMP_TBPRINC	ID					aguarda mecanismo: princípio da alergia em edição entra no JSON do rascunho (pedido)
+#PRCONTEVOL	EVOLUCAO		texto_longo			mecanismo: o texto da evolução é o texto_consolidado e a impressao_digital do registro_assistencial, e o XML, o QRP e a assinatura vão para arquivo (pedido)
+#PRGEDIMP	DOCUMENTO		texto_longo			aguarda mecanismo de arquivo: anexo_prontuario exige arquivo_id; ID_RICADPAC e ID_ATCABECATEND são referências diretas certas (pedido)
+#PRPLANPRESC	ID					aguarda mecanismo: o planejamento aponta uma prescrição (prescricao_id NOT NULL) que a origem não tem; os itens ligam pelo ID_PRPLANPRESC (pedido)
+#PRPRESCHEMO	ID_PRLANGERAL	prescricao_item_hemocomponente.prescricao_item_id				item (mesma fatia)
+#PRPRESCHEMO	CODALF_SITABPRO		texto			não carregada por ora: hemocomponente pela tabela de procedimentos (chave ATO+CODALF) vira exame; o destino pede hemocomponente e a unidade pede unidade_prescricao (pedido)
+#PRPRESCHEMO	INDICACAO_CLINICA	prescricao_item_hemocomponente.indicacao_clinica	texto_longo			indicação clínica
+#PRPRESCVI	ID_PRLANGERAL	prescricao_item_ventilacao.prescricao_item_id				item (mesma fatia)
+#PRPRESCVI	=invasiva	prescricao_item_ventilacao.modalidade				a tabela da origem é a da ventilação invasiva
+#PRPRESCVI	ID_PRVIAAEREA	prescricao_item_ventilacao.via_aerea_id				via aérea (L6 ordem 364)
+#PRPRESCVI	ID_PRMODOVENT					não carregada por ora: o modo da origem vira modo_ventilacao_mecanica e o destino pede modo_ventilatorio, exigido pelo CHECK na ventilação invasiva e não invasiva (pedido)
+#PRPRESCVI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	inteiro			FiO2 em %; fora de 21..100 recusa (CHECK)
+#PRPRESCVNI	ID_PRLANGERAL	prescricao_item_ventilacao.prescricao_item_id				item (mesma fatia)
+#PRPRESCVNI	=nao_invasiva	prescricao_item_ventilacao.modalidade				a tabela da origem é a da ventilação nao invasiva
+#PRPRESCVNI	ID_PRVIAAEREA	prescricao_item_ventilacao.via_aerea_id				via aérea (L6 ordem 364)
+#PRPRESCVNI	ID_PRMODOVENT					não carregada por ora: o modo da origem vira modo_ventilacao_mecanica e o destino pede modo_ventilatorio, exigido pelo CHECK na ventilação invasiva e não invasiva (pedido)
+#PRPRESCVNI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	inteiro			FiO2 em %; fora de 21..100 recusa (CHECK)
+#PRPRESCVI	FREQUENCIA_RESPIRATORIA	prescricao_item_ventilacao.frequencia_respiratoria	inteiro			frequência
+#PRPRESCVI	PEEP	prescricao_item_ventilacao.peep_cmh2o	inteiro			PEEP
+#PRPRESCVI	VOLUME_CORRENTE	prescricao_item_ventilacao.volume_corrente_ml	decimal			volume corrente
+#PRPRESCVI	TEMPO_INSPIRATORIO	prescricao_item_ventilacao.tempo_inspiratorio_segundos	decimal			tempo inspiratório
+#PRPRESCVI	TEMPO_EXPIRATORIO	prescricao_item_ventilacao.tempo_expiratorio_segundos	decimal			tempo expiratório
+#PRPRESCVNI	PRESSAO_INSPIRATORIA	prescricao_item_ventilacao.pressao_inspiratoria_cmh2o	inteiro			IPAP
+#PRPRESCVNI	PRESSAO_EXPIRATORIA	prescricao_item_ventilacao.pressao_expiratoria_cmh2o	inteiro			EPAP

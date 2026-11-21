@@ -534,3 +534,44 @@ pela linha-pai do catálogo; especiais `#sha256`, `#retrato`, `#cofre`, `#codigo
 destino secundário opcional; adoção pela chave natural ou CPF; pendência por linha para tabela sem declaração;
 histórico com vigência implícita; colunas novas no DDL de RH (redução do IRRF 2026, justificativa por mantenedora);
 TBGRUUSU antes de TBUSERS. Pedidos completos em `docs/obra/fatias/f4/saida/L5-*.json`.
+
+## 14. Integração do L6 (2026-11-21, tentativa 1): prova verde
+
+18 fatias (L6-01 a L6-18) integradas. Prova: `tools/obra/conferir-fatia-f4.sh` ok nas 18 fatias do L6, nas 12 do L5,
+em `exemplo` e `exemplo_l5` (32 de 32); `verificar_mapa` ok (1725 colunas declaradas em 30 arquivos);
+`fatiar_conector --conferir` ok (fatias regeneradas); `conector.sh testes` 362 testes ok (4 pulados); ponta a ponta do
+painel (`ponta-a-ponta.int.spec.ts`, 4 testes, `--fatias lotes` com as tabelas do L6) verde, toda entidade conferida.
+Cobertura: 168 das 360 tabelas carregáveis do L6 com colunas declaradas (170 entidades na conciliação das fatias);
+L6-12 e L6-13 ficam bloqueadas (nenhuma tabela na carga, declarações comentadas com motivo).
+Pendências na imagem sintética (soma das 18 fatias, primeira carga): valor_presumido 411, restricao_destino_1048 113,
+valor_fora_do_dominio 45, pai_inexistente 40, pai_pendente 29, restricao_destino_1062 21, restricao_destino_4025 12,
+codigo_colisao_caixa 12, restricao_destino_1264 7, restricao_destino_1406 6, data_sentinela 5, hora_sem_data 2.
+
+Aplicado (genérico, com prova em `testes/test_carga_mapa_l6.py`):
+- `mapa.ler_ddl`: `;` dentro de literal (COMMENT) não corta mais o CREATE/ALTER; ALTER só de restrição (CHECK
+  redefinido em lote posterior) entra no DDL da conferência (L6-02). Efeito: DDL de várias fatias deixou de sair
+  truncado (fatias L5 a L8 regeneradas);
+- pares de de-para de valores da L6-02 em `declarado/valores.tsv` (senha: tipo do gerador, prioridade, situação);
+- `declarado/valores.d/<fatia>.tsv` lido junto com `valores.tsv` (`mapa.ler_valores`), como colunas.d (L6-08, L6-11);
+- `carga_mapa.tipar`: texto não numérico em coluna numérica vira NULL com `valor_fora_do_dominio`, sem derrubar a
+  carga (L6-06);
+- `hora_hhmm` aceita texto 'HHMM'/'HH:MM' (L6-09, L6-18); regras `inteiro_nao_negativo` (L6-07, L6-14) e
+  `decimal_zero_nulo` (L6-08);
+- conferência: plano sem tabela carregável não aplica DDL vazio e aceita esperado `{}` (L6-12, L6-13).
+
+Fica para a próxima rodada (decisão do dono ou mecanismo maior; pedidos completos em
+`docs/obra/fatias/f4/saida/L6-*.json`): referência por chave composta/alternativa e encadeada (`ref:T(C1,C2)`,
+`ref:T.C>...`, `ref:T>coluna`, `ref:T/destino`) (L6-01, 02, 03, 04, 11, 12, 13, 15, 16); `@chave`, `@unico:<tabela>`,
+`@data_carga`, `=>tabela.codigo=<v>`, `#concat`/`#juntar`/`#json`/`@json`, `#data_hora`, `#arquivo`, literal
+condicional `=?`, presumido `~<COLUNA>` e `<COL>|~<alt>`; gravidade do presumido por coluna (`=~!`) e presumido no
+de-para de valores; não contar `valor_presumido` em linha recusada (L6-07, L6-08: mudaria os esperados); pendência por
+tabela `tabela_bloqueada`/`tabela_nao_carregada` (L6-03, 06, 10, 17); `#seq` estável no diferencial e segunda imagem
+na conferência (L6-05, L6-10); prefixo de domínio por tabela da origem no código único (L6-04, 06, 07, 08, 09, 18);
+despivotar parâmetros e grupos repetidos (L6-01, 02, 03, 04, 06, 10, 11, 14, 16, 18); destino complementar (UPDATE)
+e secundário condicional; regras `cor_hex`, `minutos_em_timestamp`, `lista_texto_json`, `inteiro_em_texto`,
+`texto_derivado`, `booleano_sn_nulo_falso`, idade com unidade; dependências e ordem novas no gerador do mapa
+(RECONFIC e afins -> REMODFIC, REAGENDA antes das filhas, RITRANSF e afins -> RICADINT, RICADINT -> RICADPAC);
+destinos a rever no gerador (TBESTADOCONFIRMACAO, TBACAOGRAUGRA, PRTPREQUISICAO, TBREFERENCIA, TBLANC_DIAG_*,
+PRITENSESQ, HTPARAMORIGEMCABIMP, unidade_prescricao e unidade_internacao sem alimentadora); de-para de valores por
+cliente no painel (situação da marcação, classificações hoje presumidas); mudanças de modelo pedidas (06_PEP, 09_HOT,
+04_REC).

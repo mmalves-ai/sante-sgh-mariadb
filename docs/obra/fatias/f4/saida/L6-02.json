@@ -1,0 +1,84 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv",
+   "mudanca": "Acrescentar as 14 linhas abaixo (tabela, coluna, destino, valor_origem, valor_destino, motivo), exatamente:\nTBGERASENHA\tTIPO\tgerador_senha.tipo\t0\tgeral\tL6-02\nTBGERASENHA\tTIPO\tgerador_senha.tipo\t2\tprofissional\tL6-02\nTBGERASENHA\tTIPO\tgerador_senha.tipo\t3\tespecialidade\tL6-02\nTBGERASENHA\tTIPO\tgerador_senha.tipo\t4\tagenda\tL6-02\nTBGERASENHA\tTIPO\tgerador_senha.tipo\t5\tdiverso\tL6-02\nTBSENHAATEND\tPRIORIDADE\tsenha_emitida.prioritaria\t0\t1\tL6-02\nTBSENHAATEND\tPRIORIDADE\tsenha_emitida.prioritaria\t1\t1\tL6-02\nTBSENHAATEND\tPRIORIDADE\tsenha_emitida.prioritaria\t2\t0\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\t\taguardando\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\tG\taguardando\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\tC\tchamada\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\tA\tem_atendimento\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\tL\tatendida\tL6-02\nTBSENHAATEND\tSITUACAO\tsenha_emitida.situacao\tS\tsuspensa\tL6-02\n",
+   "motivo": "De-para de valores das colunas declaradas com depara=valores no L6-02.tsv (TBGERASENHA.TIPO, TBSENHAATEND.PRIORIDADE e SITUACAO). Domínios do perfil agregado da cópia (new-sgh, contratos/recepcao/vocabulario.ts). SITUACAO 'S' é 'Suspensa' (vocabulario.ts:17) e vai para 'suspensa', que o modelo já aceita (04_REC/03_tabelas.sql redefine ck_senha_emitida_situacao com 'suspensa'): nenhuma mudança de significado. Sem os pares o verificador acusa 3 erros e todo valor vira valor_fora_do_dominio."
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (ler_ddl)",
+   "mudanca": "Ignorar ';' dentro de literal entre aspas simples nas duas expressões: CREATE TABLE `^\\)[^;]*;` -> `^\\)(?:[^;']|'[^']*')*;` e ALTER TABLE `^ALTER TABLE `?(\\w+)`?\\s(.*?);` -> `^ALTER TABLE `?(\\w+)`?\\s((?:[^;']|'[^']*')*?);`.",
+   "motivo": "COMMENT com ';' corta o texto: senha_emitida (COMMENT da tabela, 04_REC/01_tabelas.sql:516) e o ALTER de gerador_senha (COMMENT de tempo_alvo_espera_minutos) saem truncados e o DDL de destino da conferência falha com erro de sintaxe. Bloqueia toda a conciliação da L6-02 no worktree; com a correção (aplicada só numa cópia de rascunho) a conciliação passa. Junto com o pedido 2b, é condição para a autoconferência da L6-02 voltar 'ok' no worktree."
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (ler_ddl) [pedido 2b]",
+   "mudanca": "Guardar em t['alter'] também o ALTER TABLE sem FOREIGN KEY que tenha ADD/DROP CONSTRAINT (CHECK): trocar a condição `re.search(r\"\\b(ADD|DROP) COLUMN\\b\", corpo)` por `re.search(r\"\\b(ADD|DROP) (COLUMN|CONSTRAINT)\\b\", corpo) and \"FOREIGN KEY\" not in corpo` (a parte com FK continua só em t['fks']).",
+   "motivo": "04_REC/03_tabelas.sql redefine ck_senha_emitida_situacao com 'suspensa' num ALTER só de CONSTRAINT, que ler_ddl ignora: o banco da conferência fica com o CHECK antigo e toda senha suspensa (73.417 na cópia, agregado do new-sgh) seria recusada com restricao_destino_4025, embora o modelo a aceite. Vale para qualquer CHECK redefinido em lote posterior (genérico)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores antes da referência)",
+   "mudanca": "Quando a coluna tem depara=valores E referência (via ref:<TABELA>), aplicar os pares ANTES de resolver a referência; par com destino vazio = NULL sem pendência. Declaração que fica possível: TBSENHAATEND PRIORIDADE -> senha_emitida.grupo_prioridade_legal_id, regra chave_origem, depara valores, via ref:TBGRUPOPRIORIDADE, pares 0->0, 1->1, 2->'' (normal: nulo; o CHECK ck_senha_emitida_prioridade exige prioritaria=TRUE quando há grupo, o que os pares 0/1 garantem).",
+   "motivo": "Hoje PRIORIDADE 0 e 1 viram só prioritaria=TRUE e o grupo legal se perde (0 = acima de 80 anos, a confirmar no cadastro TBGRUPOPRIORIDADE da L6-01, que grava ID como código). Declarar a referência direta deixaria '2' como pai_inexistente em toda senha normal (ou recusa pelo CHECK, se houver grupo 2). Perda registrada no motivo do L6-02.tsv até o mecanismo existir."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/descartes.tsv ou tabelas.tsv (decisão do integrador/dono)",
+   "mudanca": "Rever o destino de TBTIPO_ATENDIMENTO: hoje o mapa manda para modulo_recepcao, mas é o cadastro de TIPO DE PRÉ-ATENDIMENTO (new-sgh docs/operacoes/catalogo/recepcao.yaml: recepcao.incluirTipoPreAtendimento e alterarTipoPreAtendimento), usado só por ATPRE_ATENDIMENTO (vazio, fora do mapa). Proposta: descarte justificado em declarado/descartes.tsv ('tipo de pré-atendimento sem uso: a tabela que o usa está vazia') ou destino próprio de tipo de pré-atendimento no modelo.",
+   "motivo": "Carregar em modulo_recepcao criaria 'módulos de recepção' falsos ao lado dos contextos reais (L6-01). A L6-02 retirou a declaração (tabela na lista de bloqueadas) até a revisão."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial genérica de concatenação/coalesce, ex.: `#concat:<COL|=literal|ref:TABELA.COLUNA>,...` e `#coalesce:<COL>,<COL|=~literal>`.",
+   "motivo": "senha_emitida.codigo_exibicao deveria ser prefixo do gerador + número (hoje só o número, motivo no L6-02.tsv); gerador_senha.descricao deveria ser NOME_TIPO_DIVERSO quando houver, senão nome presumido (hoje '=~Gerador de senha' em toda linha); gerador_senha.agenda_servico_id deveria ser ID_REAGENDA ou ID_SIAGENDA (hoje só ID_REAGENDA; tipo 4 sem uso na origem)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.referencia_declarada",
+   "mudanca": "Referência por coluna não-chave e por chave composta do pai: `ref:TABELA.COLUNA` (ex.: TBFLUXOATEND.ACAO -> TBACAOFLUXOSENHA.SIGLA) e `ref:TABELA(COL1,COL2)` montando a chave 'a|b' do conector_origem (ex.: TBSENHAATEND.GUICHE + recepção do gerador -> TBGUICHE; TBSTATUSGUICHE NUMERO_GUICHE,ID_TBRECEPCAO -> TBGUICHE).",
+   "motivo": "TBFLUXOATEND -> evento_senha (555.695 linhas na imagem de referência) BLOQUEADA: acao_fluxo_senha_id é NOT NULL e a origem guarda a letra (SIGLA), não o id. Declaração pronta: ID_TBSENHAATEND->senha_emitida_id, ID_TBLOCAL->local_atendimento_id, DATA_HORA->ocorrido_em (data_hora), USUARIO->usuario_id (ref:TBUSERS), =inclusao->operacao, ACAO->acao_fluxo_senha_id. senha_emitida.guiche_recepcao_id fica NULL sem a chave composta."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Mecanismo genérico de despivotar colunas em linhas (uma declaração por grupo de colunas -> uma linha do destino com literais por grupo), para TBLOCALHORA (16 horas -> até 8 faixas de local_atendimento_horario: dia_semana 2..7/1 e dia_nao_util para FERIADO_*), REPARAM (cerca de 250 colunas -> parametro_valor por chave de parametro_definicao) e TBUSUCPL (já pedido na L5-03).",
+   "motivo": "TBLOCALHORA (31) e REPARAM (1) BLOQUEADAS: uma linha da origem vira várias do destino. TBLOCALHORA: faixa sem início ou fim não vira linha; fim <= início recusa pelo CHECK. REPARAM pede também a lista de chaves de parametro_definicao (decisão de produto)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial genérica `#json:<COL1>,<COL2>,...` (objeto JSON com os valores convertidos pelas regras) e regra `texto_json` (texto livre embrulhado como {\"texto\": ...}).",
+   "motivo": "HTATENDIMENTO (1.908.921; MECANISMO historico_entidade:atendimento) BLOQUEADA: trilha_auditoria sem dados_depois não serve de histórico, e o segundo destino 'atendimento' do mapa criaria atendimentos novos a partir do histórico (revisar o tabelas_destino: só trilha_auditoria, entidade='atendimento', entidade_id <- ID_ATCABECATEND, ocorrido_em <- DATA_HORA_HISTORICO, acao='alteracao'). PNCONFIG.CONFIGURACAO (texto livre) não vai para painel_chamada.configuracao (JSON com CHECK) sem texto_json."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado) / decisão do dono",
+   "mudanca": "ATCONTA -> atendimento_conta: nenhuma tabela do mapa alimenta conta_hospitalar; declarar a origem da conta e COD_CONTA como referência (ref:<TABELA DA CONTA>) quando o lote do faturamento mapear conta_hospitalar.",
+   "motivo": "ATCONTA (218.248) BLOQUEADA: conta_hospitalar_id NOT NULL e COD_CONTA é número de negócio, não id resolvível hoje."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado) / L6-01",
+   "mudanca": "TBREFCANCMODTP (módulo x tipo de operação, sem motivo) não forma motivo_cancelamento_operacao_escopo (motivo_cancelamento_operacao_id NOT NULL). TBMOTCANCTP (L6-01) deveria ser de-para de domínio para escopo.operacao ('atendimento','marcacao'), não linha. Sugestão: o escopo nasce do produto TBMOTEXC x TBREFCANCMODTP (todo motivo vale nos pares módulo x operação permitidos) — mecanismo de produto cartesiano declarado, ou descarte justificado com o cliente configurando no painel.",
+   "motivo": "TBREFCANCMODTP (5) BLOQUEADA."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/descartes.tsv (decisão do dono)",
+   "mudanca": "TBSTATUSGUICHE (4): estado volátil de quem está no guichê agora, sem momento de início (ocupacao_guiche.inicio_em e ocorrido_em NOT NULL). Propor descarte justificado (o guichê é reocupado no primeiro login após a virada) ou literal de momento da migração com valor_presumido.",
+   "motivo": "TBSTATUSGUICHE BLOQUEADA; também exige a referência composta ao guichê."
+  },
+  {
+   "arquivo": "modelo (db/migracoes/04_REC) / decisão do dono",
+   "mudanca": "Colunas de TBLOCAL sem destino: IP_PAINEL, PORTA_PAINEL e PAINEL_WEB (painel físico do local; painel_chamada tem endereco_rede, porta e web, mas exige tipo_painel_id), CONDICAO_LOCALIZACAO_PACIENTE e LOCAL_ENC. TBGERASENHA: ICONE (BLOB -> arquivo, icone_arquivo_id), ORDENAR_LISTA_PACIENTE_POR (domínio a confirmar -> ordem_lista). Registrar descarte por coluna ou criar a via.",
+   "motivo": "Hoje não declaradas (não carregadas); ao declarar, as linhas aparecem alteradas e o Sincronizar corrige."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (@estabelecimento)",
+   "mudanca": "Nenhuma mudança se o cliente tiver um só estabelecimento. Com vários, as recepções, locais, painéis e senhas desta fatia são recusadas com estabelecimento_indefinido: a recepção deveria herdar o estabelecimento por configuração do cliente no painel (genérico, nunca fixo por cliente).",
+   "motivo": "TBRECEPCAO, TBLOCAL, PNCONFIG e TBSENHAATEND não trazem estabelecimento."
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py (integrador)",
+   "mudanca": "Regenerar as fatias depois de integrar colunas.d (já pedido nas L5).",
+   "motivo": "Mesmo caso das L5."
+  },
+  {
+   "arquivo": "decisão do dono",
+   "mudanca": "Confirmar o domínio de IMPRESSORA_MODO_GRAFICO, LOCAL_BASE_CALC_ESPERA_PEP, FLUXO_REAVALIACAO_MEDICA (declarados booleano_sn) e de TBGERASENHA.SITUACAO (booleano_ai): valor fora vira pendência visível, nunca silêncio. (SITUACAO 'S' da senha deixou de ser pergunta: vai para 'suspensa', que o modelo já tem.)",
+   "motivo": "Domínios não confirmados no perfil agregado."
+  }
+ ]
+}

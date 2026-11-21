@@ -1,0 +1,78 @@
+tabela	coluna	destino	regra	depara	via	motivo
+PRSITDOCUMENTO	ID	situacao_documento_prontuario.codigo	texto			L6-07: a chave inteira da origem vira o código (texto, destino VARCHAR); a referência das outras tabelas segue pelo conector_origem
+PRSITDOCUMENTO	NOME	situacao_documento_prontuario.descricao	texto_nome			L6-07: descrição da situação; vazia é recusada pelo NOT NULL do destino
+PRSITDOCUMENTO	=~rascunho	situacao_documento_prontuario.categoria				L6-07: a origem não classifica a situação: entra como rascunho PRESUMIDO (pendência baixa valor_presumido por linha) e o cliente reclassifica na tela; de-para por código pedido em saida/L6-07.json
+PRSITDOCUMENTOASSINADO	ID	situacao_assinatura_documento.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRSITDOCUMENTOASSINADO	NOME	situacao_assinatura_documento.descricao	texto_nome			L6-07: descrição da situação da assinatura
+PRSITDOCUMENTOASSINADO	=~pendente	situacao_assinatura_documento.categoria				L6-07: a origem não classifica: pendente PRESUMIDO (valor_presumido), revisão do cliente; de-para por código pedido em saida/L6-07.json
+PRSITEXAME	ID	situacao_procedimento_prescrito.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRSITEXAME	NOME	situacao_procedimento_prescrito.descricao	texto_nome			L6-07: descrição da situação do exame ou procedimento prescrito
+PRSITEXAME	=~pedido	situacao_procedimento_prescrito.etapa				L6-07: a origem não traz a etapa: pedido PRESUMIDO (valor_presumido), revisão do cliente; de-para por código pedido em saida/L6-07.json
+PRSITUACAOCHECAGEM	ID	situacao_checagem.codigo	codigo_char			L6-07: código de 1 caractere com caixa preservada; colisão de caixa no código único vira codigo_colisao_caixa (as duas linhas); PRSITCHECAGEM (L6-06, ordem 325) grava antes no mesmo destino com código numérico: ID de um dígito choca (restricao_destino_1062) até o prefixo de domínio pedido em saida/L6-07.json
+PRSITUACAOCHECAGEM	NOME	situacao_checagem.descricao	texto_nome			L6-07: descrição da situação da checagem
+PRSITUACAOCHECAGEM	ATIVO	situacao_checagem.ativo	booleano_sn			L6-07: S/N; nulo fica com o padrão do destino (ativo)
+PRSITUACAOCHECAGEM	=~pendente	situacao_checagem.categoria				L6-07: a origem não classifica o comportamento: pendente PRESUMIDO (valor_presumido); de-para por código pedido em saida/L6-07.json
+PRSITUACAOCHECAGEM	NOME_PROCESSO_ENFERMAGEM		texto			L6-07: não carregada por ora: nome livre do processo; processo_enfermagem é domínio com CHECK e recebe administracao PRESUMIDO (linha abaixo); de-para de valores pedido em saida/L6-07.json
+PRSITUACAOCHECAGEM	=~administracao	situacao_checagem.processo_enfermagem				L6-07: a origem tem o processo só como nome livre: administracao PRESUMIDO (valor_presumido por linha), para a situação de aferição, coleta ou cuidado não passar em silêncio como administração; de-para de NOME_PROCESSO_ENFERMAGEM pedido em saida/L6-07.json
+PRSITUACAOCHECAGEM	ID_DIGITAL		texto			L6-07: descartada: identificador de integração do sistema de origem, sem significado no produto
+PRSUMARIO_ALTA_COMP	ID	componente_sumario_alta.codigo	texto			L6-07: chave inteira vira o código (texto); estabelecimento nulo = vale para todos
+PRSUMARIO_ALTA_COMP	DESCRICAO	componente_sumario_alta.descricao	texto			L6-07: título da seção do sumário de alta
+PRSUMARIO_ALTA_COMP	STATUS	componente_sumario_alta.ativo	booleano_ai			L6-07: situação da seção A (ativa) / I (inativa); outro valor vira valor_fora_do_dominio e fica o padrão (ativo); confirmar o domínio pela contagem por valor (pedido em saida/L6-07.json)
+PRSUMARIO_ALTA_COMP	=~texto_livre	componente_sumario_alta.tipo_conteudo				L6-07: a origem não diz de onde a seção tira o conteúdo: texto_livre PRESUMIDO (valor_presumido), revisão do cliente
+PRTIPODOCANEXO	ID	tipo_anexo.codigo	texto			L6-07: chave inteira vira o código (texto); PROFTTPARQUIV (L6-06, ordem 309) grava antes no mesmo destino com código numérico: ID igual choca (restricao_destino_1062) e os anexos do tipo caem em pai_pendente, até o prefixo de domínio pedido em saida/L6-07.json
+PRTIPODOCANEXO	NOME	tipo_anexo.descricao	texto_nome			L6-07: descrição do tipo de anexo; finalidade fica o padrão outro
+PRTIPODOCANEXO	ATIVO	tipo_anexo.ativo	booleano_sn			L6-07: S/N
+PRTIPODOCANEXO	ID_DIGITAL		texto			L6-07: descartada: identificador de integração do sistema de origem
+PRTIPONOTIFICACAO	NOME		texto_nome			L6-07: não carregada: a tabela é uma lista de tipos de notificação e o destino do mapa (configuracao_alerta_prescricao) é a configuração por regra (regra_alerta_id NOT NULL); destino pedido em saida/L6-07.json
+PRTIPOPERGPAR	COD_TIPO_PERGUNTA_PARAMETRO		inteiro			L6-07: não carregada por ora: o código diz qual dado estruturado o campo alimenta; entidade_destino e tipo_dado são NOT NULL sem padrão e pedem de-para de valores (saida/L6-07.json), sem valor inventado
+PRTIPOPERGPAR	NOME		texto_nome			L6-07: não carregada por ora: entra com a tabela quando houver o de-para do código (saida/L6-07.json)
+PRTIPOPRESENTEADMISSAO	ID	presenca_admissao.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTIPOPRESENTEADMISSAO	NOME	presenca_admissao.descricao	texto_nome			L6-07: descrição do indicador de presença na admissão
+PRTIPOPRESENTEADMISSAO	ATIVO	presenca_admissao.ativo	booleano_sn			L6-07: S/N
+PRTIPOPRESENTEADMISSAO	=~indeterminado	presenca_admissao.significado				L6-07: a origem não traz o significado padronizado: indeterminado PRESUMIDO (valor_presumido); de-para por código pedido em saida/L6-07.json
+PRTPALERTA	ID	tipo_alerta_clinico.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTPALERTA	NOME	tipo_alerta_clinico.descricao	texto_nome			L6-07: descrição do tipo de alerta
+PRTPALERTA	=outro	tipo_alerta_clinico.categoria				L6-07: a origem não classifica o alerta: outro (valor neutro do domínio), o cliente reclassifica na tela
+PRTPASSINATURA	ID	tipo_documento_clinico.codigo	texto			L6-07: chave inteira vira o código (texto); único destino carregado de tipo_documento_clinico nesta fatia
+PRTPASSINATURA	DESCRICAO	tipo_documento_clinico.descricao	texto			L6-07: descrição do tipo de documento
+PRTPASSINATURA	ORDEM_MEDICA	tipo_documento_clinico.ordem_medica	booleano_sn			L6-07: S/N: documento é ordem médica; nulo fica com o padrão (falso)
+PRTPASSINATURA	=outro	tipo_documento_clinico.categoria				L6-07: a origem não classifica o documento: outro (valor neutro), o cliente reclassifica na tela
+PRINDICEAGRUPAMENTO	ID	escala_clinica.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRINDICEAGRUPAMENTO	ID_PRTPASSINATURA	escala_clinica.tipo_documento_clinico_id	chave_origem			L6-07: tipo de documento em que a escala é registrada, pelo conector_origem
+PRINDICEAGRUPAMENTO	DESCRICAO	escala_clinica.descricao	texto			L6-07: nome da escala; vazio é recusado pelo NOT NULL do destino
+PRPARAMORIGEMCABIMP	ID_PRTPASSINATURA	cabecalho_impressao_documento.tipo_documento_clinico_id	chave_origem			L6-07: tipo de documento do cabeçalho; nulo = cabeçalho padrão
+PRPARAMORIGEMCABIMP	GERENCIAVEL	cabecalho_impressao_documento.gerenciavel	booleano_sn			L6-07: S/N; nulo fica com o padrão (gerenciável)
+PRPARAMORIGEMCABIMP	=~estabelecimento	cabecalho_impressao_documento.fonte_dados				L6-07: fonte dos dados do cabeçalho PRESUMIDA (valor_presumido) até o de-para de ORIGEM_DADOS
+PRPARAMORIGEMCABIMP	ORIGEM_DADOS		codigo_char			L6-07: não carregada por ora: código da origem dos dados do cabeçalho; vai para fonte_dados (domínio com CHECK) pelo de-para de valores pedido em saida/L6-07.json
+PRTPASSINATURA_PRSITDOC	ORDEM		inteiro			L6-07: não carregada por ora: a origem lista as situações permitidas por tipo com ordem; o destino guarda transições (origem, destino) e origem nula significa situação inicial; carregar cada linha com origem nula marcaria todas como iniciais. Regra de derivação pedida em saida/L6-07.json
+PRTPASSINATURA_PRSITDOC	ID_PRTPASSINATURA		chave_origem			L6-07: não carregada por ora (ver ORDEM)
+PRTPASSINATURA_PRSITDOC	ID_PRSITDOCUMENTO		chave_origem			L6-07: não carregada por ora (ver ORDEM)
+PRTPASSINATURA_TBOID	ID_TBOID		chave_origem			L6-07: não carregada: associação tipo de documento x OID (N:N); tipo_documento_clinico.codigo_oid é um valor só e uma linha da associação não é um tipo de documento; destino pedido em saida/L6-07.json
+PRTPASSINATURA_TBOID	ID_PRTPASSINATURA		chave_origem			L6-07: não carregada (ver ID_TBOID)
+PRTPCOMP	NOME		texto_nome			L6-07: não carregada: o mapa manda para tipo_documento_clinico, mas a chave inteira colidiria no código único com PRTPASSINATURA e a lista não é de tipos de documento; destino ou prefixo de domínio pedido em saida/L6-07.json
+PRTPDOCUMENTO	ID	tipo_exigencia_assinatura.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTPDOCUMENTO	NOME	tipo_exigencia_assinatura.descricao	texto_nome			L6-07: descrição da exigência de assinatura
+PRTPDOCUMENTO	=~eletronica	tipo_exigencia_assinatura.nivel				L6-07: a origem não traz o nível: eletronica PRESUMIDO (valor_presumido), revisão do cliente; de-para por código pedido em saida/L6-07.json
+PRTPINFOPERGOPERADORA	ID	grupo_informacao_clinica_operadora.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTPINFOPERGOPERADORA	NOME	grupo_informacao_clinica_operadora.descricao	texto_nome			L6-07: nome do grupo; vazio é recusado pelo NOT NULL do destino
+PRINFOPERGOPERADORA	ID	informacao_clinica_operadora.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRINFOPERGOPERADORA	NOME	informacao_clinica_operadora.descricao	texto_nome			L6-07: nome da informação; vazio é recusado pelo NOT NULL do destino
+PRINFOPERGOPERADORA	ID_PRTPINFOPERGOPERADORA	informacao_clinica_operadora.grupo_informacao_clinica_operadora_id	chave_origem			L6-07: grupo pelo conector_origem; nulo na origem é recusado pelo NOT NULL do destino
+PRTPINFUSAO	ID	tipo_infusao.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTPINFUSAO	NOME	tipo_infusao.descricao	texto_nome			L6-07: descrição do tipo de infusão
+PRTPINFUSAO	=outro	tipo_infusao.modo				L6-07: a origem não classifica o modo: outro (valor neutro), o cliente reclassifica
+PRTPINFUSAO	ID_DIGITAL		texto			L6-07: descartada: identificador de integração do sistema de origem
+PRTPLAN	ID	tipo_item_prescricao.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRTPLAN	NOME	tipo_item_prescricao.descricao	texto_nome			L6-07: descrição do tipo de item
+PRTPLAN	ORDEM	tipo_item_prescricao.ordem_exibicao	inteiro			L6-07: ordem de exibição (só apresentação); negativa hoje recusa a linha pelo destino (SMALLINT UNSIGNED, restricao_destino_1264) e derruba a cadeia (vias e itens em pai_pendente); regra genérica inteiro_nao_negativo (NULL com valor_fora_do_dominio, linha gravada) pedida em saida/L6-07.json
+PRTPLAN	ID_DIGITAL_SERV_REQ_CATEGORY	tipo_item_prescricao.codigo_categoria_solicitacao	texto			L6-07: categoria da solicitação na troca padronizada
+PRTPLAN	=outro	tipo_item_prescricao.categoria				L6-07: a origem não classifica o item: outro (valor neutro), o cliente reclassifica
+PRMODOVENT	ID	modo_ventilacao_mecanica.codigo	texto			L6-07: chave inteira vira o código (texto)
+PRMODOVENT	NOME	modo_ventilacao_mecanica.descricao	texto_nome			L6-07: descrição do modo de ventilação
+PRMODOVENT	ID_PRTPLAN		chave_origem			L6-07: não carregada por ora: é a única coluna que separa o modo invasivo (VMI) do não invasivo (VNI) pelo tipo de item; vai para tipo_ventilacao pelo de-para de PRTPLAN pedido em saida/L6-07.json
+PRMODOVENT	=~invasiva	modo_ventilacao_mecanica.tipo_ventilacao				L6-07: invasiva PRESUMIDO (valor_presumido por linha) até o de-para de ID_PRTPLAN: um modo não invasivo não passa em silêncio como invasivo
+PRMODOVENT	ID_DIGITAL		texto			L6-07: descartada: identificador de integração do sistema de origem
+PRTPLAN_GETABVIA	ID_PRTPLAN	tipo_item_prescricao_via.tipo_item_prescricao_id	chave_origem			L6-07: tipo de item pelo conector_origem
+PRTPLAN_GETABVIA	ID_GETABVIA	tipo_item_prescricao_via.via_de_uso_id			ref:GETABVIA	L6-07: via de uso pela chave textual do pai (referência declarada: a gerada não liga coluna de texto)
+PRTPLAN_GETABVIA	VISIVEL	tipo_item_prescricao_via.visivel	booleano_sn			L6-07: S/N; nulo fica com o padrão (visível)
+PRTPLAN_GETABVIA	PREVIAMENTE_MARCADO_LANCAMENTO	tipo_item_prescricao_via.marcada_por_padrao	booleano_sn			L6-07: S/N; nulo fica com o padrão (falso)

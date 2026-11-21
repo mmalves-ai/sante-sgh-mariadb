@@ -109,6 +109,16 @@ def referencia_declarada(c):
             return x[4:]
     return ""
 COLUNAS_D = "declarado/colunas.d"
+VALORES_D = "declarado/valores.d"
+
+
+def ler_valores(d):
+    """declarado/valores.tsv + declarado/valores.d/<fatia>.tsv (ordem de nome): pares de valores por fatia, como
+    colunas.d, para lotes em paralelo (L6-08, L6-11)."""
+    d = Path(d)
+    arqs = ([d / "declarado/valores.tsv"] if (d / "declarado/valores.tsv").exists() else []) + \
+        sorted((d / VALORES_D).glob("*.tsv"))
+    return [{k: (v or "") for k, v in r.items() if k is not None} for a in arqs for r in ler_tsv(a)]
 
 
 def ler_colunas_declaradas(d):
@@ -170,21 +180,23 @@ def ler_ddl(raiz=RAIZ):
     for arq in _arquivos_ddl(raiz):
         txt = arq.read_text(encoding="utf-8")
         rel = str(arq.relative_to(raiz))
-        for m in re.finditer(r"^CREATE TABLE (?:IF NOT EXISTS )?`?(\w+)`? \((.*?)^\)[^;]*;", txt, re.M | re.S):
+        for m in re.finditer(r"^CREATE TABLE (?:IF NOT EXISTS )?`?(\w+)`? \((.*?)^\)(?:[^;']|'[^']*')*;", txt, re.M | re.S):
             cols = []
             for linha in m.group(2).splitlines():
                 p = linha.strip().split()
                 if p and p[0].strip("`").upper() not in _RESERV and re.fullmatch(r"`?\w+`?", p[0]):
                     cols.append(p[0].strip("`"))
             ddl[m.group(1)] = {"colunas": cols, "arquivo": rel, "create": m.group(0), "alter": [], "fks": []}
-        for m in re.finditer(r"^ALTER TABLE `?(\w+)`?\s(.*?);", txt, re.M | re.S):
+        for m in re.finditer(r"^ALTER TABLE `?(\w+)`?\s((?:[^;']|'[^']*')*?);", txt, re.M | re.S):
             t = ddl.get(m.group(1))
             if t is None:
                 continue
             corpo = m.group(2)
             if "FOREIGN KEY" in corpo:
                 t["fks"].append(m.group(0))
-            if re.search(r"\b(ADD|DROP) COLUMN\b", corpo):
+            # ALTER de coluna, ou de restrição sem FK (CHECK redefinido em lote posterior): entra no DDL da conferência
+            if re.search(r"\b(ADD|DROP) COLUMN\b", corpo) or (
+                    re.search(r"\b(ADD|DROP) CONSTRAINT\b", corpo) and "FOREIGN KEY" not in corpo):
                 t["alter"].append(m.group(0))
             for c in re.findall(r"\bADD COLUMN (?:IF NOT EXISTS )?`?(\w+)`?", corpo):
                 if c not in t["colunas"]:
@@ -549,7 +561,7 @@ def carregar(raiz=RAIZ):
                 tabelas=ler("tabelas.tsv"), deps=ler("dependencias.tsv"), ciclos_decl=ler("declarado/ciclos.tsv"),
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
                 colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
-                oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler("declarado/valores.tsv"))
+                oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler_valores(d))
 
 
 def verificar(raiz=RAIZ):
@@ -568,7 +580,7 @@ def carregar_execucao(d=None):
     ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
             "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
-            "valores": ler("declarado/valores.tsv")}
+            "valores": ler_valores(d)}
 
 
 def tabelas_sem_mapa(contagens, tabelas, descartes):

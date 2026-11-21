@@ -1,0 +1,54 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBRECEPCAO	@estabelecimento	ponto_recepcao.estabelecimento_id				L6-02: a origem não traz o estabelecimento da recepção; id do único estabelecimento do cliente (vários: estabelecimento_indefinido)
+TBRECEPCAO	ID	ponto_recepcao.codigo	texto			L6-02: chave inteira gravada como código (único por estabelecimento)
+TBRECEPCAO	DESCRICAO	ponto_recepcao.descricao	texto			L6-02
+TBRECEPCAO	TEXTOIMP	ponto_recepcao.texto_impressao_senha	texto_longo			L6-02: texto do comprovante, sem mexer em quebras de linha
+TBRECEPCAO	IMPRESSORA_MODO_GRAFICO	ponto_recepcao.impressao_grafica	booleano_sn			L6-02: S/N; outro valor fica com pendência e o padrão do destino
+TBRECEPCAO	QTDE_CHAM_SUGES_CANC_SENHA	ponto_recepcao.chamadas_sugerir_cancelamento	inteiro			L6-02
+TBGUICHE	ID_TBRECEPCAO	guiche_recepcao.ponto_recepcao_id				L6-02
+TBGUICHE	NUMERO_GUICHE	guiche_recepcao.numero	inteiro			L6-02: número 0 é recusado pelo CHECK do destino (numero > 0)
+TBLOCAL	@estabelecimento	local_atendimento.estabelecimento_id				L6-02: a origem não traz o estabelecimento do local
+TBLOCAL	ID_TBRECEPCAO	local_atendimento.ponto_recepcao_id				L6-02
+TBLOCAL	COD	local_atendimento.codigo	texto			L6-02: código inteiro gravado como texto (único por estabelecimento)
+TBLOCAL	DESCRICAO	local_atendimento.descricao	texto			L6-02: sem descrição recusa a linha (NOT NULL)
+TBLOCAL	PERMITE_ENC	local_atendimento.permite_encaminhamento	booleano_sn			L6-02
+TBLOCAL	LOCAL_BASE_CALC_ESPERA_PEP	local_atendimento.base_tempo_espera	booleano_sn			L6-02: indicador S/N (gerado como codigo_char)
+TBLOCAL	FLUXO_REAVALIACAO_MEDICA	local_atendimento.reavaliacao_medica	booleano_sn			L6-02: indicador S/N (gerado como codigo_char)
+TBLOCAL	CANAL	local_atendimento.canal_audio	texto			L6-02
+TBLOCAL	ATIVO	local_atendimento.ativo	booleano_sn			L6-02; IP_PAINEL, PORTA_PAINEL, PAINEL_WEB, CONDICAO_LOCALIZACAO_PACIENTE e LOCAL_ENC sem coluna no destino (pedido no L6-02.json)
+PNCONFIG	@estabelecimento	painel_chamada.estabelecimento_id				L6-02: a origem não traz o estabelecimento do painel
+PNCONFIG	ID_PNTIPO	painel_chamada.tipo_painel_id				L6-02
+PNCONFIG	=~Painel de chamada	painel_chamada.descricao				L6-02: a origem não nomeia o painel; nome presumido (pendência baixa valor_presumido) para o cliente revisar. CONFIGURACAO (texto livre) não vai para o JSON do destino sem regra de embrulho (pedido no L6-02.json)
+PNCONFIG	ID_TBLOCAL	painel_chamada.local_atendimento_id				L6-02
+TBLOCALENCATE	ID_TBLOCAL	local_atendimento_encaminhamento.local_atendimento_id				L6-02
+TBLOCALENCATE	ID_TBLOCAL_ENCAM_ATEND	local_atendimento_encaminhamento.destino_local_atendimento_id				L6-02: local igual ao de origem é recusado pelo CHECK do destino
+TBLOCALPESATE	ID_TBLOCAL	local_atendimento_visibilidade.local_atendimento_id				L6-02
+TBLOCALPESATE	ID_TBLOCAL_PESQ_ATEND	local_atendimento_visibilidade.consultado_local_atendimento_id				L6-02
+TBGERASENHA	ID_TBRECEPCAO	gerador_senha.ponto_recepcao_id				L6-02
+TBGERASENHA	=~Gerador de senha	gerador_senha.descricao				L6-02: a origem não nomeia o gerador (NOME_TIPO_DIVERSO só nos de serviços diversos, nulo nos demais); nome presumido até haver coalesce de colunas (pedido no L6-02.json)
+TBGERASENHA	LETRA_SENHA	gerador_senha.prefixo	texto			L6-02: sem letra recusa (NOT NULL); letra repetida na mesma recepção recusa (único)
+TBGERASENHA	TIPO	gerador_senha.tipo	codigo_char	valores		L6-02: 0 recepção, 2 profissional, 3 especialidade, 4 agenda, 5 serviços diversos; 1 (por unidade) não tem tipo no destino: pendência e padrão 'geral' (pares no pedido L6-02.json)
+TBGERASENHA	ID_TBESPEC	gerador_senha.especialidade_medica_id				L6-02
+TBGERASENHA	ID_TBPROFIS	gerador_senha.profissional_id				L6-02
+TBGERASENHA	ID_TBUNIDAD	gerador_senha.unidade_assistencial_id				L6-02
+TBGERASENHA	ID_REAGENDA	gerador_senha.agenda_servico_id				L6-02: ID_SIAGENDA também aponta agenda_servico; duas origens na mesma coluna pedem coalesce (pedido no L6-02.json); o tipo 4 não tem uso na origem
+TBGERASENHA	GERAR_PRIORITARIA	gerador_senha.gera_prioritaria	booleano_sn			L6-02
+TBGERASENHA	GERAR_SENHA_AUTOMATICA	gerador_senha.emissao_automatica	booleano_sn			L6-02
+TBGERASENHA	LIMITE_SENHA_DIA	gerador_senha.limite_dia	inteiro_zero_nulo			L6-02: 0 é 'sem limite' (no destino, nulo)
+TBGERASENHA	SITUACAO	gerador_senha.ativo	booleano_ai			L6-02: A ativo, I inativo; ICONE (arquivo), ORDENAR_LISTA_PACIENTE_POR (domínio a confirmar) e OLD_ID_TBMEDICO fora (pedido no L6-02.json)
+TBSENHAATEND	@estabelecimento	senha_emitida.estabelecimento_id				L6-02: a senha não traz o estabelecimento
+TBSENHAATEND	ID_TBGERASENHA	senha_emitida.gerador_senha_id				L6-02
+TBSENHAATEND	DATA_SENHA	senha_emitida.data_referencia	data			L6-02
+TBSENHAATEND	SENHA	senha_emitida.numero	inteiro			L6-02: número repetido no mesmo gerador e dia recusa (único)
+TBSENHAATEND	SENHA	senha_emitida.codigo_exibicao	texto			L6-02: só o número; o prefixo fica no gerador até haver concatenação de colunas (pedido no L6-02.json)
+TBSENHAATEND	PRIORIDADE	senha_emitida.prioritaria	codigo_char	valores		L6-02: 0 (grupo 0 de TBGRUPOPRIORIDADE) e 1 (grupo 1) viram prioritária; 2 normal. PERDA REGISTRADA: o grupo (0 = acima de 80 anos, a confirmar) não vai para grupo_prioridade_legal_id porque o motor não aplica de-para de valores antes de referência ('2' viraria pai_inexistente em toda senha normal); pedido no L6-02.json
+TBSENHAATEND	SITUACAO	senha_emitida.situacao	codigo_char	valores		L6-02: G e vazio aguardando, C chamada, A em atendimento, L atendida, S suspensa (o modelo tem 'suspensa' no CHECK desde 04_REC/03_tabelas.sql); outro valor: valor_fora_do_dominio e padrão do destino
+TBSENHAATEND	DATA_HORA	senha_emitida.emitida_em	data_hora			L6-02
+TBSENHAATEND	USUARIO	senha_emitida.emitida_usuario_id			ref:TBUSERS	L6-02: login do usuário que emitiu
+TBSENHAATEND	MOTIVO	senha_emitida.motivo_complemento	texto			L6-02: texto livre da suspensão; GUICHE (número do guichê, chave composta) fica fora (pedido no L6-02.json)
+ATCABECATEND_TBSENHAATEND	ID_ATCABECATEND	atendimento_senha.atendimento_id				L6-02
+ATCABECATEND_TBSENHAATEND	ID_TBSENHAATEND	atendimento_senha.senha_emitida_id				L6-02
+TBSENHAATEND_REPACAGD	ID_TBSENHAATEND	senha_emitida_marcacao.senha_emitida_id				L6-02
+TBSENHAATEND_REPACAGD	ID_REPACAGD	senha_emitida_marcacao.marcacao_horario_id				L6-02: marcação de consulta
+TBSENHAATEND_SIPACAGD	ID_TBSENHAATEND	senha_emitida_marcacao.senha_emitida_id				L6-02
+TBSENHAATEND_SIPACAGD	ID_SIPACAGD	senha_emitida_marcacao.marcacao_horario_id				L6-02: marcação de exame (destino principal da origem: marcacao_horario)

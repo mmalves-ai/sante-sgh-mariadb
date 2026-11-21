@@ -30,7 +30,9 @@ REGRAS = {
     "hora_em_timestamp": "TIMESTAMP que guarda só a hora (convenção 1899-12-30 HH:MM): vira TIME; outra data: a hora "
                          "é usada e fica pendência hora_com_data",
     "hora": "TIME, sem conversão",
-    "hora_hhmm": "inteiro HHMM vira TIME; fora de 0..2359 ou minuto >= 60: pendência hora_invalida",
+    "hora_hhmm": "inteiro HHMM (ou texto 'HHMM'/'HH:MM') vira TIME; fora de 0..2359 ou minuto >= 60: pendência hora_invalida",
+    "inteiro_nao_negativo": "inteiro em que negativo não tem sentido: negativo vira NULL com valor_fora_do_dominio (linha gravada)",
+    "decimal_zero_nulo": "NUMERIC em que 0 é a convenção de 'sem valor': 0 vira NULL, sem pendência",
     "inteiro": "inteiro, sem conversão",
     "inteiro_zero_nulo": "inteiro em que 0 é a convenção de 'sem valor' (ex.: sem limite): 0 vira NULL, sem pendência",
     "decimal": "NUMERIC com a escala da origem, sem perda",
@@ -196,7 +198,18 @@ def aplicar(regra, v):
         if not isinstance(v, datetime.datetime):
             return (v, None) if isinstance(v, datetime.time) else (None, "valor_fora_do_dominio")
         return v.time(), (None if v.date() == DATA_ZERO else "hora_com_data")
+    if regra == "inteiro_nao_negativo":
+        return (None, "valor_fora_do_dominio") if v is not None and v < 0 else (v, None)
+    if regra == "decimal_zero_nulo":
+        if v is None or v == 0:
+            return None, None
+        return (v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))), None
     if regra == "hora_hhmm":
+        if isinstance(v, str):
+            s = v.strip().replace(":", "")
+            if not s:
+                return None, None
+            v = int(s) if re.fullmatch(r"\d{3,4}", s) else -1
         if isinstance(v, int) and 0 <= v <= 2359 and v % 100 < 60:
             return datetime.time(v // 100, v % 100), None
         return None, "hora_invalida"

@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ mapa.py, verificar_mapa.py)",
+   "mudanca": "referência pela CHAVE NATURAL composta declarada no campo via (ex.: 'ref:SIAGENDA(CRM,NOME,EXAME)' ou 'ref:SIPACAGD(NOME,CRM,DATA,HORA)'): monta a chave do pai com as colunas da própria linha e busca o id no conector_origem pela chave natural registrada do pai; sem pai: pai_inexistente; pai pendente: pai_pendente",
+   "motivo": "SIAGECRI (geracao_grade), SIPACAGI (horario_agenda), SICTRAGE (agenda_escala, pelo nome da agenda em AGENDA) e SICANAGE (cancelamento_marcacao.marcacao_horario_id) não têm id do pai: a agenda e a marcação são identificadas por nome/CRM/exame/data/hora. Sem isso as quatro tabelas não entram (agenda_servico_id e marcacao_horario_id são NOT NULL)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e sentinela.py",
+   "mudanca": "coluna especial '#data_hora:<COL_DATA>,<COL_HORA>' (DATE + VARCHAR HHMM vira DATETIME, hora inválida: hora_invalida) e regras 'hora_hhmm_texto' (VARCHAR(4/5) 'HHMM' ou 'HH:MM' vira TIME) e 'minutos_hhmm_texto' (duração 'HHMM' vira minutos inteiros)",
+   "motivo": "SIAGECRI (DT_CRIACAO+HR_CRIACAO -> solicitada_em; DURACAO -> duracao_horario_minutos), SICANAGE (DT_CAN+HR_CAN -> cancelado_em), SICTRAGE (HOR_INC/HOR_FIN/INTER_* -> TIME; DURACAO -> minutos), SIPACAGI/REPACAGD/SIPACAGD (DATA+HORA -> inicio do horário), SIAGENDA (DURACAO -> duracao_horario_minutos NOT NULL). hora_hhmm só aceita inteiro"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (tabelas.tsv ou declarado)",
+   "mudanca": "agenda_servico vindo de SIAGENDA e AGCADAGENDA: categoria_agenda_id NOT NULL e o CHECK ck_agenda_servico_dono (profissional, recurso ou setor) não têm fonte direta. Propor: categoria por literal de domínio por código (coluna especial de referência por código, ex.: '=@categoria_agenda:codigo:consulta' ou por EXAME via de-para de valores) e profissional pelo CRM (referência por chave natural ao cadastro do profissional, pedido 1)",
+   "motivo": "SIAGENDA (40 agendas) e AGCADAGENDA ficam fora; por consequência SIAGENDA_TBCONVEN (agenda_fonte_pagadora, 968) fica fora (pai nunca carregado = pai_inexistente em NOT NULL em todas as linhas)"
+  },
+  {
+   "arquivo": "decisão do dono / integrador",
+   "mudanca": "recurso_agendavel vindo de AGCADEIRA: descricao e setor_funcional_id NOT NULL sem fonte (COD_IDENT é o único texto). Propor descrição derivada (COD_IDENT ou 'Cadeira <ID>' por literal presumido) e setor pela agenda (AGCADAGENDA.ID_TBCENCUS -> centro de custo -> setor), ou decisão de não migrar (1 linha na referência)",
+   "motivo": "AGCADEIRA (e a segunda saída agenda_recurso) fica fora"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo de parâmetro)",
+   "mudanca": "tabela MECANISMO de parâmetros (uma linha, uma coluna por parâmetro): despivotar cada coluna declarada em parametro_valor (nível rede) ligado a parametro_definicao pela chave do produto declarada por coluna (ex.: via 'parametro:agenda.duracaoMedia'); a definição é do produto, nunca criada pela carga; referência por código (AGPARAM.SITAGE_DES, ID_TBSITAGE_REALIZADO -> situacao_marcacao pelo código)",
+   "motivo": "AGPARAM fica fora; mesmo pedido de desdobrar uma linha em várias da L5-02 e L5-03"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (desenho da marcação migrada)",
+   "mudanca": "marcacao_horario de REPACAGD (122602) e SIPACAGD (50116): horario_agenda_id, tipo_marcacao_id, situacao_marcacao_id, canal_marcacao_id, fonte_pagadora_id, numero e duracao_minutos são NOT NULL e a origem não traz o horário gerado nem o tipo/canal. Propor: horário 'extra' criado pela carga para cada marcação (destino secundário horario_agenda com @id invertido), agenda pela chave natural (pedido 1), fonte pela referência ao código do convênio (CONV), numero pelo ID da origem (texto), canal/tipo/situação por literal presumido, responsável por 'ref:TBUSERS' no login (ID_TBUSERS_INCLUSAO/USUARIO). SIPACAGD também alimenta marcacao_horario_item (PROCED -> item faturável)",
+   "motivo": "as duas maiores tabelas da fatia ficam fora até a decisão; SICANAGE depende delas"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/descartes.tsv",
+   "mudanca": "descartar AGDIASINDISP com motivo: a única linha da imagem de referência é fictícia (motivo já registrado no mapa); conceito coberto por bloqueio_agenda (motivo_bloqueio_agenda_id NOT NULL sem fonte)",
+   "motivo": "tabela sem dado real; evita ficar sem declaração no painel"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial de arquivo ('#arquivo:<COL_BLOB>,<COL_EXTENSAO>'): grava o BLOB binário no armazenamento de arquivos do cliente e põe o id em <x>_arquivo_id, com sha256 na conciliação",
+   "motivo": "TBSITAGE.ICONE/EXTENSAO -> situacao_marcacao.icone_arquivo_id (hoje declarada sem destino)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (revisão do cliente no painel)",
+   "mudanca": "de-para de valores por código para situacao_marcacao.significado (TBSITAGE.COD); enquanto não houver, o literal presumido '=~aguardando' grava com valor_presumido por linha",
+   "motivo": "o significado fixo do sistema não existe na origem; não se leem valores reais para fixar pares no código"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (domínio compartilhado)",
+   "mudanca": "situacao_marcacao recebe RESITAGE (L6) e TBSITAGE (L6-04) na mesma chave única de codigo: aplicar a regra já pedida (L5-04/L5-09) de prefixo de domínio por tabela de origem ou adoção pelo código já gravado",
+   "motivo": "códigos iguais nas duas origens recusariam a segunda com restricao_destino_1062"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) e conector/mapa/declarado/valores.tsv",
+   "mudanca": "TBESTADOCONFIRMACAO deixa de ter destino situacao_confirmacao (tabelas.tsv:276): vira domínio de de-para de valores por ID para alergia_paciente.certeza (CHECK 'suspeita','provavel','confirmada','refutada'), usado pela fatia que carrega PRALERGIAPACIENTE/HTALERGIAPACIENTE; ou descarte com motivo em declarado/descartes.tsv. Enquanto isso a fatia L6-04 declara ID/NOME/ATIVO sem destino",
+   "motivo": "é o estado de confirmação de ALERGIA: no volume-pc-20261019.tsv só PRALERGIAPACIENTE e HTALERGIAPACIENTE têm FK para ela (junto de TBCBARAAGENTE, TBCBARASEVERIDADE...); nenhuma tabela de agenda a referencia; o vocabulário (confirmado, refutado) só existe em alergia_paciente.certeza. Gravá-la em situacao_confirmacao poria estados de alergia na lista da agenda e perderia o de-para da certeza"
+  },
+  {
+   "arquivo": "docs/obra/fatias/ddl/05_AGE-02.md (linhas 105-106) e docs/analise/02-cadastro-recepcao-agenda.md (itens 42 e 54)",
+   "mudanca": "corrigir o descritivo de TBESTADOCONFIRMACAO de 'Estado de confirmação de agendamento' para 'Estado de confirmação de alergia' e tirá-la da evidência da confirmação da marcação; situacao_confirmacao fica sem origem no conector (domínio do produto)",
+   "motivo": "descritivo errado levou o mapa a apontar a tabela para a agenda"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (conector/mapa/declarado/colunas.d/L6-04.tsv depois da regra)",
+   "mudanca": "agenda_fonte_pagadora.aceita_marcacao_online e agenda_especialidade.principal: hoje '=~0' (FALSE presumido com valor_presumido por linha). Decidir o valor (FALSE por segurança proposto) ou derivar aceita_marcacao_online pelo modo de integração online da agenda (REAGENDA/SIAGENDA, referência por coluna do pai) e principal pela especialidade da própria agenda quando houver",
+   "motivo": "a origem não informa se o convênio vale na marcação online nem a especialidade principal; o padrão do destino (TRUE) liberaria em silêncio vagas online por convênios que o hospital nunca liberou"
+  }
+ ]
+}

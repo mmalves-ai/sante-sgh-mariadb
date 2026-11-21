@@ -1,0 +1,54 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + verificar_mapa.py",
+   "mudanca": "coluna especial '@unico:<tabela_destino>' (como @estabelecimento): id da única linha ativa da tabela de destino no banco do cliente (nenhuma ou várias: recusa com pendência '<tabela>_indefinida'), para cadastros que o cliente cria no painel antes da migração",
+   "motivo": "CCSALAS -> sala_cirurgica exige unidade_cirurgica_id NOT NULL e a origem não tem unidade cirúrgica (nenhuma tabela do mapa alimenta unidade_cirurgica); sem a sala também ficam bloqueadas CCSALAS_TBUSERS (permissao_sala_usuario), CCCADCIR e CCAGENDA (sala_cirurgica_id)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (ou mapa.py)",
+   "mudanca": "referência derivada: preencher uma coluna do destino a partir de outra coluna do destino do pai já resolvido (ex.: 'via=ref:<TABELA>;campo=paciente_id' copia atendimento.paciente_id do atendimento achado pelo REG)",
+   "motivo": "CCCADCIR -> ato_cirurgico exige atendimento_id e paciente_id NOT NULL; a origem só tem REG (atendimento) e o paciente vem do atendimento; o mesmo para CCAGENDA (PRONT/REG) e para registro_excluido.paciente_id"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (geração) ou declarado",
+   "mudanca": "declarar a referência de REG ao atendimento (RECADATE) e de ID_CRM/ID_AUX*/ID_INSTR/ID_ANEST/ID_CIRCUL/ID_CIRUR/ID_PED/ID_CIRC ao cadastro do profissional (TBCBOPRO, inscricao_conselho -> profissional_id), com regra genérica de 'profissional pela inscrição no conselho'",
+   "motivo": "agendamento_cirurgico.cirurgiao_profissional_id, agendamento_cirurgico_equipe.profissional_id e participante_cirurgia.profissional_id são NOT NULL e apontam para profissional; a origem aponta para a inscrição no conselho (TBCBOPRO, destino inscricao_conselho). Sem a ponte inscrição -> profissional, CCAGENDA e CCLANCIR não carregam"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "destino secundário 'desdobrado' (uma linha por grupo de colunas repetidas: ID_CRM/ID_AUX1/ID_AUX2/ID_AUX3/ID_INSTR/ID_ANEST/ID_CIRCUL -> agendamento_cirurgico_equipe com funcao_equipe_cirurgica literal por coluna e sequencia por posição; idem CCLANCIR -> participante_cirurgia)",
+   "motivo": "a equipe vem em colunas repetidas na mesma linha; o modelo tem uma linha por profissional e função"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regras 'hora_texto_hhmm' e junção DATA + HORA texto em DATETIME (já pedidas em L6-03.json), mais 'minutos_de_timestamp' (TIMESTAMP 1899-12-30 HH:MM -> minutos, para duração)",
+   "motivo": "CCCADCIR tem HORA_I/HORA_T/HORA_IA/HORA_TA/HORA_P_I/HORA_P_F em VARCHAR(4) com a data em coluna separada (entrada_sala_em, inicio_anestesia_em... são DATETIME); CCAGENDA.DURACAO e CCHISAGE.DURACAO são TIMESTAMP de hora para duracao_prevista_minutos/duracao_minutos"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "referência por chave alternativa composta (já pedida em L6-03.json), aplicada a CCPROEXT (SALA + DATA_HORA -> agendamento_cirurgico) e CCHISAGE (SALA_ANT + DATA_HORA_ANT ou REG -> agendamento_cirurgico)",
+   "motivo": "agendamento_cirurgico_procedimento e reagendamento_cirurgico exigem agendamento_cirurgico_id NOT NULL e a origem só traz sala e data/hora; além disso CCAGENDA carrega na ordem 986, depois de CCHISAGE (435) e CCPROEXT (437): pede reordenar ou declarar a dependência"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "retrato JSON da linha (dados) e literal presumido para justificativa/operacao em registro_excluido (já pedido em L6-01.json e L6-03.json)",
+   "motivo": "CCAGENDA_EXC_CANC: a agenda excluída/cancelada não existe no destino (suspensao_cirurgia.agendamento_cirurgico_id e motivo_suspensao_cirurgia_id NOT NULL sem origem); só cabe como registro_excluido, que exige dados JSON, justificativa e usuario_id"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra 'arquivo' para BLOB SUB_TYPE 0: grava o binário no repositório de arquivos do produto e devolve o id para a coluna *_arquivo_id",
+   "motivo": "PRFA_CAD_POSICAO_CIR.ICONE -> posicao_cirurgica.icone_arquivo_id ficou fora"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py + verificar_mapa.py (novo conector/mapa/declarado/chaves.tsv)",
+   "mudanca": "chave declarada para tabela da origem sem PK (linha a declarar: CCPARAM\tUSUARIO\tL6-16: login único por usuário; o destino já é único por usuário e estabelecimento): a estratégia passa de hash_linha_sem_chave a hash_linha pela chave declarada (mudança de valor vira alteracao_aguarda_sincronizar da mesma linha, e a origem vence no Sincronizar); as linhas da origem com a MESMA chave declarada (ou que colidem na mesma chave única do destino) são TODAS recusadas antes de gravar com a pendência nova 'chave_declarada_repetida' (média), como em codigo_colisao_caixa: nenhuma vence pela ordem nem pelo hash; chave declarada nula: recusa com 'chave_declarada_nula'",
+   "motivo": "CCPARAM não tem PK: hoje, com o mesmo usuário repetido, a linha gravada é a de menor hash (carga_mapa.py, ordenação por hash) e a outra cai em 1062, então o conjunto de permissões gravado é arbitrário e pode ser o mais permissivo; e mudar uma permissão na origem vira apagada + nova com 1062, sem que a origem vença. Depois de aplicado, o esperado de CCPARAM em sintetica_d/l6_16.py passa a gravados 3 (B, C, E) com chave_declarada_repetida 2 (as duas de USR_EXEMPLO_A), pai_inexistente 1 + restricao_destino_1048 1 (D) e chave_declarada_nula 1 (usuário nulo), e o test_l6_16 deve conferir que nenhuma linha de USR_EXEMPLO_A foi gravada"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'booleano_sn_nulo_falso' para permissões: como booleano_sn, mas vazio vira FALSE com pendência 'permissao_ausente_negada' (baixa) e fora do domínio vira FALSE com valor_fora_do_dominio (nunca NULL, que cairia no padrão do destino)",
+   "motivo": "configuracao_usuario_bloco.pode_ver_mapa_salas tem DEFAULT TRUE: CON_AGE nulo ou inválido hoje CONCEDE a permissão. Depois de aplicada, trocar a regra das 8 permissões de CCPARAM em colunas.d/L6-16.tsv para booleano_sn_nulo_falso e acrescentar ao esperado de CCPARAM 'permissao_ausente_negada': 1 (USR_EXEMPLO_E)"
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+tabela	coluna	destino	regra	depara	via	motivo
+PRTPREFEIC	COD	refeicao_do_dia.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); PRTPREFEIC é a única alimentadora
+PRTPREFEIC	COD	refeicao_do_dia.ordem	inteiro			L6-18: a origem não tem ordem própria; o código numérico ordena as refeições do dia (único, como a chave)
+PRTPREFEIC	NOME	refeicao_do_dia.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
+PRTPREFEIC	TPDIETA		inteiro			L6-18: sem destino: domínio a confirmar (tipo de dieta da refeição; o modelo não guarda vínculo da refeição com a dieta) (pedido no L6-18.json)
+RISETOR	COD	setor_tramite.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); RISETOR é a única alimentadora
+RISETOR	NOME	setor_tramite.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
+RISETOR	=~unidade	setor_tramite.tipo				L6-18: a origem não classifica o setor (SAME marca o arquivo de prontuários, mas tipo 'arquivo' exige local_arquivo_id): entra 'unidade' com pendência valor_presumido por linha (de-para pedido no L6-18.json)
+RISETOR	SAME		codigo_char			L6-18: sem destino até o de-para do tipo 'arquivo' com o local de arquivo (pedido no L6-18.json)
+PRVIAADMIN	ID	via_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); via_dieta recebe só PRVIAADMIN até o prefixo de domínio por origem (TBTPDIETA no mesmo código único, pedido no L6-18.json)
+PRVIAADMIN	NOME	via_dieta.descricao	texto_nome			L6-18: nome vazio recusa a linha (NOT NULL)
+PRVIAADMIN	=~oral	via_dieta.modalidade				L6-18: a modalidade vem do tipo de dieta (ID_TBTPDIETA), domínio próprio do cliente sem de-para; entra 'oral' com pendência valor_presumido por linha para o cliente reclassificar (de-para pedido no L6-18.json)
+PRVIAADMIN	=0	via_dieta.ativo				L6-18: via migrada INATIVA até o de-para do tipo de dieta dar a modalidade real: uma via enteral ou parenteral nunca fica oferecida na prescrição como oral
+TBTPDIETA	ID		chave_origem			L6-18: não carregada: via_dieta.codigo é único e PRVIAADMIN já ocupa os mesmos códigos; espera o prefixo de domínio por origem (pedido no L6-18.json)
+TBTPDIETA	NOME		texto_nome			L6-18: não carregada (ver ID)
+TBDIETAS	COD	modalidade_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); TBDIETAS é a única alimentadora
+TBDIETAS	NOME	modalidade_dieta.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
+TBDIETAS	SITUACAO		booleano_ai			L6-18: sem destino enquanto a classe for presumida (ativo fica FALSE); volta a modalidade_dieta.ativo com o de-para do tipo de dieta (pedido no L6-18.json)
+TBDIETAS	=0	modalidade_dieta.ativo				L6-18: dieta migrada INATIVA até o de-para do tipo de dieta dar a classe real: uma dieta enteral nunca fica oferecida como oral
+TBDIETAS	=~oral	modalidade_dieta.classe				L6-18: a origem não classifica a dieta (TPDIETA aponta o tipo de dieta, sem de-para); entra 'oral' com pendência valor_presumido por linha e a dieta inativa (ver ativo)
+TBDIETAS	ID_GELOCARM	modalidade_dieta.local_estoque_id	chave_origem			L6-18: estoque que abastece a dieta; nunca visto: NULL com pai_inexistente
+TBDIETAS	TPDIETA		inteiro			L6-18: sem destino: tipo de dieta (TBTPDIETA, não carregada) para via_dieta_id ou classe (pedido no L6-18.json)
+PRCARACT_TBDIETAS	ID_TBDIETAS	modalidade_dieta_caracteristica.modalidade_dieta_id	chave_origem			L6-18: dieta (mesma fatia); recusada: pai_pendente
+PRCARACT_TBDIETAS	ID_PRCARACTDIE	modalidade_dieta_caracteristica.caracteristica_dieta_id	chave_origem			L6-18: característica (L6, ordem 464); nunca vista: pai_inexistente e recusa (NOT NULL)
+PRCARACT_TBDIETAS	ORDEM		texto			L6-18: sem destino (ordem fica o padrão 0): a origem guarda a ordem em texto e a conversão ao inteiro do destino derruba a carga com texto não numérico; volta com a regra genérica inteiro_em_texto (pedido no L6-18.json)
+PRCARACT_TBDIETAS	SITUACAO	modalidade_dieta_caracteristica.ativo	booleano_ai			L6-18: A ativo, I inativo; vazio fica o padrão do destino (ativo)
+CHTPLIMPEZA_GEITENS	ID_CHTPLIMPEZA	material_modalidade_limpeza.modalidade_limpeza_id	chave_origem			L6-18: tipo de limpeza (L6, ordem 456); nunca visto: pai_inexistente e recusa (NOT NULL)
+CHTPLIMPEZA_GEITENS	ID_GEITENS	material_modalidade_limpeza.insumo_id	chave_origem			L6-18: item de estoque (L7, ordem 599; destino principal insumo); nunca visto: pai_inexistente e recusa (NOT NULL)
+CHTPLIMPEZA_GEITENS	QTDE	material_modalidade_limpeza.quantidade	decimal			L6-18: quantidade zero ou negativa recusa a linha (ck quantidade > 0)
+PRHORPAD	ID_HORPAD		chave_origem			L6-18: não carregada: horario_fim e horario_corte_mapa são NOT NULL sem origem e HORARIO é HHMM em texto (pedido no L6-18.json)
+PRHORPAD	HORARIO		texto			L6-18: não carregada (ver ID_HORPAD)
+CHPARAM	ID_TBHOSPIT		chave_origem			L6-18: não carregada: parâmetros em colunas (uma linha por estabelecimento) pedem o despivotamento para parametro_definicao/parametro_valor (pedido no L6-18.json)
+CVPARAM	COD_TBHOSPIT		inteiro			L6-18: não carregada: parâmetros em colunas pedem o despivotamento (pedido no L6-18.json); a senha mestra nunca é migrada em claro
+TBLEITO_CHPROFISLIMP	ID_TBLEITO		chave_origem			L6-18: não carregada: vigencia_inicio é NOT NULL sem origem (pedido no L6-18.json)
+TBLEITO_CHPROFISLIMP	ID_CHPROFISLIMP		chave_origem			L6-18: não carregada (ver ID_TBLEITO)
+CHSOLICITLIMP	ID		chave_origem			L6-18: não carregada: situacao_limpeza_id é NOT NULL e a origem guarda a situação só na execução (pedido no L6-18.json)
+CHEXECLIMPEZA	ID		chave_origem			L6-18: não carregada: depende da solicitação (CHSOLICITLIMP), bloqueada (pedido no L6-18.json)
+CHSOLICITLIMP_TBLEITO	ID_CHSOLICITLIMP		chave_origem			L6-18: não carregada: depende da solicitação (CHSOLICITLIMP), bloqueada; sequencia viria de #seq:ID_CHSOLICITLIMP (pedido no L6-18.json)
+GDPRONTMOVIM	ID		chave_origem			L6-18: não carregada: volume_prontuario_id e paciente_id são NOT NULL sem origem direta e os setores da origem são de trâmite, não funcionais (pedido no L6-18.json)

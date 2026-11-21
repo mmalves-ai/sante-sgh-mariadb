@@ -1,0 +1,59 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa (alimentadora de unidade_internacao) ou decisão do dono",
+   "mudanca": "definir de onde vem unidade_internacao: nenhuma tabela do mapa a alimenta. Opções: cadastro da unidade no painel antes da migração e de-para por bloco (RIBLOCOS.BLOCO -> unidade_internacao), ou herança declarada 'via pai:RIBLOCOS' em RIACOMOD.BLOCO / TBACOMODLEITO.ID_RIBLOCOS / RICTRLOC.BLOCO / RICADINT.BLOCO",
+   "motivo": "acomodacao, leito_hospitalar, internacao e ocupacao_leito têm unidade_internacao_id NOT NULL: sem a alimentadora, RIACOMOD, TBACOMODLEITO, TBLEITO, RICADINT e RICTRLOC recusariam toda linha (ficaram não carregadas)"
+  },
+  {
+   "arquivo": "decisão do dono + colunas.d/L6-15.tsv",
+   "mudanca": "acomodacao tem duas alimentadoras: RIACOMOD (chave BLOCO,ACOMOD) e TBACOMODLEITO (ID, com ID_RIBLOCOS e COD_ACOMODACAO). Decidir se descrevem os mesmos quartos (então uma vence e a outra só liga pelo código composto) ou quartos distintos; depois declarar categoria_acomodacao_id por ID_TBTIPOACOMOD e TBLEITO.ID_TBACOMODLEITO -> leito_hospitalar.acomodacao_id",
+   "motivo": "carregar as duas daria quartos em dobro ou 1062 na chave (estabelecimento, unidade, codigo)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "o mesmo pedido 5 da L6-14 (id por código fixo '=>tabela.codigo=<valor>'), para leito_hospitalar.situacao_leito_id (situação inicial 'livre' ou pela ocupação vigente), internacao/agendamento_internacao.carater_admissao_id e internacao.modalidade_internacao_id",
+   "motivo": "colunas NOT NULL sem origem direta e sem alimentadora no mapa (situacao_leito, carater_admissao, modalidade_internacao não têm tabela de origem)"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (dependências e ordem: tools/obra/gerar mapa)",
+   "mudanca": "RICADINT e RIPREINT dependem de RICADPAC (PRONT -> paciente, destino principal) e de TBCONVEN (CONV -> fonte_pagadora); RICTRLOC (432) depende de RICADINT (REG -> internacao, ordem 1030) e de RILEITOS/TBLEITO: precisa vir depois deles; HTLEITO depende de TBLEITO carregado",
+   "motivo": "paciente_id, fonte_pagadora_id e internacao_id são NOT NULL; hoje o depende_de não traz RICADPAC e RICTRLOC vem antes da internação"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "os pedidos 2 (referência por chave composta, ex.: 'ref:RILEITOS(BLOCO,ACOMOD,LEITO)' em RICTRLOC e RICADINT, código composto '={PRONT}-{TIPOPAC}-{OTMU}' para agendamento_internacao.numero) e 3 (data + hora HHMM '@datahora:ENTRADA,HORAENT') da L6-14, também para RICADINT (data_hora_entrada, data_hora_alta por ALTA+HORASAI), RIPREINT (previsto_para) e RICTRLOC (data_hora_inicio/fim)",
+   "motivo": "internacao.data_hora_entrada, agendamento_internacao.previsto_para e ocupacao_leito.data_hora_inicio são NOT NULL e a origem guarda data e hora separadas; o leito é apontado por três colunas"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-15.tsv (via) ou motor",
+   "mudanca": "profissional a partir da inscrição no conselho: RICADINT.ID_TBCBOPRO_MEDASS / RIPREINT.ID_TBCBOPRO_ASSISTENTE apontam TBCBOPRO, cujo destino é inscricao_conselho; o destino pede medico_assistente_profissional_id. Pede referência pelo pai do pai ('via ref:TBCBOPRO->profissional_id' da inscrição)",
+   "motivo": "medico_assistente_profissional_id e agendamento_internacao.medico_profissional_id são NOT NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py ou sentinela.py",
+   "mudanca": "regra de idade com unidade para dias: combinar IDADE_MINIMA + ID_TBUNID_IDADE_MIN (e a máxima) em idade_*_dias (RELOCLEITO, TBACOMODLEITO, RIACOMOD), pela unidade_idade já carregada (dias, meses, anos); e regra de cor da origem para #RRGGBB (COR VARCHAR(20) em RELOCLEITO e TBACOMODLEITO)",
+   "motivo": "local_observacao/acomodacao.idade_*_dias e cor ficam NULL hoje (não declaradas, sem perda: a tabela é relida no Sincronizar)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (pares por tabela, coluna e destino) + colunas.d/L6-15.tsv",
+   "mudanca": "de-para de valores, a preencher com o cliente: TBDESFECHO_INTERNACAO.ID -> desfecho_internacao.obito/transferencia; TBMOTALT.COD (e STATUS, significado a confirmar) -> motivo_saida_hospitalar.tipo_saida e exige_declaracao_obito; TBTIPOACOMOD.ID -> categoria_acomodacao.tipo; TBREGUL_SERVICO.ID -> servico_regulacao.tipo; TBREGUL_SISTEMA.ID -> central_reguladora.esfera; ID_TBSEXO -> sexo_permitido (RELOCLEITO, TBACOMODLEITO) e RIACOMOD.SEXO; REOCUPLEITO.TIPO -> ocupacao_leito_observacao.finalidade. Ao declarar, trocar o literal presumido pela coluna com depara=valores",
+   "motivo": "hoje obito FALSE, tipo_saida 'alta', tipo 'outro'/'internacao' e esfera 'estadual' entram presumidos (valor_presumido por linha). Atenção: tipo_saida 'obito' exige exige_declaracao_obito (CHECK) e os dois têm de vir juntos"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "literal condicional pela presença do valor CRU da origem (antes da regra), ex.: '=?DATA_HORA_SAIDA:encerrada:ativa' -> ocupacao_leito_observacao.situacao: 'encerrada' quando DATA_HORA_SAIDA não é nula na origem, inclusive data sentinela (que a regra data_hora anula com data_sentinela/hora_sem_data), senão 'ativa'. Aplicado, trocar o '=~ativa' da L6-15.tsv por ele",
+   "motivo": "hoje a situação entra presumida 'ativa' (valor_presumido por linha) até nas encerradas, e uma saída sentinela vira ocupação aberta fantasma: ocupa leito_vigente_id e faz recusar com 1062 a aberta verdadeira do mesmo leito. Medido na imagem de referência (só contagem): 804 ocupações, 2 abertas, 0 saídas sentinela; a sintética cobre os dois casos de sentinela (00:00 e com hora)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "desempate de unicidade de vigência: para destino com coluna gerada de vigência (leito_vigente_id), ler as linhas candidatas abertas do mesmo pai em ordem decrescente de entrada (a mais recente vence) e gravar as abertas mais antigas com situacao 'encerrada' (saída NULL) e pendência própria 'vigencia_duplicada', em vez de recusar a mais recente com restricao_destino_1062",
+   "motivo": "hoje a primeira na ordem da chave da origem (atendimento, tipo, entrada) fica vigente e a outra recusa com 1062, que pode ser a atual. Medido na imagem de referência (só contagem): 0 leitos e 0 atendimentos com mais de uma ocupação aberta; o destino não tem unicidade por atendimento (só leito_vigente_id). Escolha registrada até a regra"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv + colunas.d/L6-15.tsv",
+   "mudanca": "TBMOTALT.STATUS tem 3 códigos na imagem de referência (A 30, I 19, T 6): confirmar com o cliente se é ativo/inativo (então booleano por de-para A->1, I->0 e T a decidir, para motivo_saida_hospitalar.ativo) ou tipo de saída; REOCUPLEITO.TIPO tem 2 códigos (783 e 21 linhas) para o de-para de finalidade; RELOCLEITO: 2 locais, ambos com idade mínima, máxima e cor preenchidas (regras de idade e cor do pedido acima)",
+   "motivo": "ativo, finalidade e sexo_permitido entram hoje por literal presumido (=~1, =~observacao, =~qualquer) com valor_presumido por linha, para o cliente revisar"
+  }
+ ]
+}

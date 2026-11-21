@@ -1,0 +1,630 @@
+tabela	coluna	destino	regra	depara	via	motivo
+#--- PRPRESC_AUTOPREENCHIDO: bloqueada: cada linha marca um campo autopreenchido (TBTABELA_CAMPO) de um item já gravado por PRLANGERAL: vira -> prescricao_item.dose_autopreenchida, quantidade_autopreenchida e etapa_autopreenchida por atualização do item pai, não linha nova em prescricao_item; falta regra genérica de marca no pai (pedido L6-13.json)
+PRPRESC_AUTOPREENCHIDO	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRPRESC_AUTOPREENCHIDO	ID_PRLANGERAL		chave_origem			bloqueada: cada linha marca um campo autopreenchido (TBTABELA_CAMPO) de um item já gravado por PRLANGERAL: vira -> prescricao_item.dose_autopreenchida, quantidade_autopreenchida e etapa_autopreenchida por atualização do item pai, não linha nova em prescricao_item; falta regra genérica de marca no pai (pedido L6-13.json)
+PRPRESC_AUTOPREENCHIDO	ID_GEITENS		chave_origem			bloqueada: cada linha marca um campo autopreenchido (TBTABELA_CAMPO) de um item já gravado por PRLANGERAL: vira -> prescricao_item.dose_autopreenchida, quantidade_autopreenchida e etapa_autopreenchida por atualização do item pai, não linha nova em prescricao_item; falta regra genérica de marca no pai (pedido L6-13.json)
+PRPRESC_AUTOPREENCHIDO	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRPRESC_AUTOPREENCHIDO	ID_PRITEMNAOPAD		chave_origem			bloqueada: cada linha marca um campo autopreenchido (TBTABELA_CAMPO) de um item já gravado por PRLANGERAL: vira -> prescricao_item.dose_autopreenchida, quantidade_autopreenchida e etapa_autopreenchida por atualização do item pai, não linha nova em prescricao_item; falta regra genérica de marca no pai (pedido L6-13.json)
+PRPRESC_AUTOPREENCHIDO	ID_TBTABELA_CAMPO		chave_origem			bloqueada: cada linha marca um campo autopreenchido (TBTABELA_CAMPO) de um item já gravado por PRLANGERAL: vira -> prescricao_item.dose_autopreenchida, quantidade_autopreenchida e etapa_autopreenchida por atualização do item pai, não linha nova em prescricao_item; falta regra genérica de marca no pai (pedido L6-13.json)
+PRPRESC_AUTOPREENCHIDO	SOLUCAO_ETAPA		inteiro			não aproveitada: etapa da solução marcada como autopreenchida; vai com a marca no pai
+#--- PRRECEITA: bloqueada: paciente_id, atendimento_id e prescritor_profissional_id (NOT NULL) apontam o destino errado do pai (HTPACIENTE -> paciente_versao, HTATENDIMENTO -> trilha_auditoria, TBCBOPRO -> inscricao_conselho, fora da carga) e tipo_receita_id (NOT NULL) precisa de de-para do código para id; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json) e de-para para id; situacao precisa de regra de valor derivado (o padrão emitida contradiria a suspensão preenchida)
+PRRECEITA	ID_RECEITA		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.numero)
+PRRECEITA	ID_HTATENDIMENTO		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.atendimento_id)
+PRRECEITA	ID_HTPACIENTE		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.paciente_id)
+PRRECEITA	DATA_HORA_LANCAMENTO		data_hora			bloqueada: declaração pronta comentada (-> receita_medica.emitida_em)
+PRRECEITA	OLD_REG		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRRECEITA	OLD_TIPOATE		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRRECEITA	ID_TBCBOPRO_LANCAMENTO		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.prescritor_profissional_id)
+PRRECEITA	RECEITA		texto_longo			bloqueada: declaração pronta comentada (-> receita_medica.orientacoes)
+PRRECEITA	OLD_CRM		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRRECEITA	OLD_USUARIO		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRRECEITA	ID_TBCBOPRO_SUSPENSAO		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.suspensa_por_profissional_id)
+PRRECEITA	DATA_HORA_SUSPENSAO		data_hora			bloqueada: declaração pronta comentada (-> receita_medica.suspensa_em e situacao)
+PRRECEITA	HORARIO_VERAO_SUSPENSAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	JUSTIFICATIVA_SUSPENSAO		texto			bloqueada: declaração pronta comentada (-> receita_medica.justificativa_suspensao)
+PRRECEITA	PRE_IMPRESSO		codigo_char			bloqueada: declaração pronta comentada (-> receita_medica.pre_impressa)
+PRRECEITA	GRUPO_RECEITA		inteiro			não aproveitada: agrupador de impressão de receitas; sem coluna no destino
+PRRECEITA	TP_RECEITA_PADRAO_PSICOTROPICO		inteiro			não aproveitada: tipo da receita (comum ou controle especial) -> receita_medica.tipo_receita_id: precisa de de-para do código para o id do tipo
+PRRECEITA	DOCUMENTO_QRP		texto_longo			não aproveitada: documento da receita com código de verificação; vai para o documento emitido (documento_emitido), outra entidade
+PRRECEITA	ASSINATURA		texto_longo			não aproveitada: assinatura digital da receita; vai para o documento emitido e assinado (documento_emitido), outra entidade
+PRRECEITA	FUSO_HORARIO_SUSPENSAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	FUSO_HORARIO_LANCAMENTO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	HORARIO_VERAO_LANCAMENTO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	ID_PRLOCAL_ASSISTENCIA		chave_origem			não aproveitada: local da assistência; receita_medica não tem coluna de local
+PRRECEITA	DATA_HORA_LANCAMENTO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRRECEITA	DATA_HORA_SUSPENSAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRRECEITA	ID_TBPROFIS_ACOMP_RESP		chave_origem			não aproveitada: profissional responsável pelo acompanhamento; sem coluna no destino
+PRRECEITA	REGISTRO_VALIDO		codigo_char			bloqueada: entra na situação da receita (-> receita_medica.situacao) pela regra de valor derivado
+PRRECEITA	DATA_HORA_GRAVACAO		data_hora			bloqueada: declaração pronta comentada (-> receita_medica.registrada_em)
+PRRECEITA	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRRECEITA	JUSTIFICATIVA_LANC_RETROATIVO		texto			bloqueada: declaração pronta comentada (-> receita_medica.justificativa_retroativa)
+PRRECEITA	FUSO_HORARIO_GRAVACAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	HORARIO_VERAO_GRAVACAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	DATA_HORA_GRAVACAO_SUSPENSAO		data_hora			não aproveitada: gravação da suspensão; o destino guarda só o momento da suspensão
+PRRECEITA	HORARIO_VERAO_GRAVACAO_SUSPENSA		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	JUSTIFICATIVA_SUSP_RETROATIVA		texto			não aproveitada: justificativa de suspensão retroativa; sem coluna no destino
+PRRECEITA	DATA_HORA_GRAVACAO_SUSPENSA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRRECEITA	FUSO_HORARIO_GRAVACAO_SUSPENSAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRRECEITA	DATA_HORA_EXCLUSAO		data_hora			bloqueada: declaração pronta comentada (-> receita_medica.excluido_em)
+PRRECEITA	DATA_HORA_ARQUIVADO		data_hora			bloqueada: declaração pronta comentada (-> receita_medica.arquivada_em)
+PRRECEITA	ID_PRRECEITA		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica.origem_receita_medica_id)
+#PRRECEITA	@estabelecimento	receita_medica.estabelecimento_id				estabelecimento do cliente
+#PRRECEITA	ID_RECEITA	receita_medica.numero	inteiro			número da receita (inteiro gravado como texto)
+#PRRECEITA	ID_HTPACIENTE	receita_medica.paciente_id				[bloqueia] precisa de ref:HTPACIENTE>paciente_id
+#PRRECEITA	ID_HTATENDIMENTO	receita_medica.atendimento_id				[bloqueia] precisa do destino atendimento de HTATENDIMENTO, não do principal
+#PRRECEITA	ID_TBCBOPRO_LANCAMENTO	receita_medica.prescritor_profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRRECEITA	DATA_HORA_LANCAMENTO	receita_medica.emitida_em	data_hora			emissão
+#PRRECEITA	DATA_HORA_GRAVACAO	receita_medica.registrada_em	data_hora			gravação
+#PRRECEITA	JUSTIFICATIVA_LANC_RETROATIVO	receita_medica.justificativa_retroativa	texto			lançamento retroativo
+#PRRECEITA	RECEITA	receita_medica.orientacoes	texto_longo			texto da receita
+#PRRECEITA	PRE_IMPRESSO	receita_medica.pre_impressa	booleano_sn			receita em formulário pré-impresso
+#PRRECEITA	DATA_HORA_SUSPENSAO	receita_medica.suspensa_em	data_hora			suspensão
+#PRRECEITA	ID_TBCBOPRO_SUSPENSAO	receita_medica.suspensa_por_profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRRECEITA	JUSTIFICATIVA_SUSPENSAO	receita_medica.justificativa_suspensao	texto			motivo da suspensão
+#PRRECEITA	DATA_HORA_ARQUIVADO	receita_medica.arquivada_em	data_hora			arquivamento
+#PRRECEITA	DATA_HORA_EXCLUSAO	receita_medica.excluido_em	data_hora			exclusão lógica
+#PRRECEITA	ID_PRRECEITA	receita_medica.origem_receita_medica_id			ref:PRRECEITA	receita de origem (autorreferência, segunda fase)
+#PRRECEITA	DATA_HORA_SUSPENSAO	receita_medica.situacao				[bloqueia] precisa de regra de valor derivado: suspensão preenchida = suspensa, REGISTRO_VALIDO inválido = cancelada, senão emitida (ck_receita_medica_suspensao)
+#--- PRITEMRECEITA: bloqueada: o pai PRRECEITA está bloqueado nesta fatia (linha recusada por falta de pai não é refeita pelo diferencial) e item_prescritivel_id é destino secundário de GEITENS
+PRITEMRECEITA	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRITEMRECEITA	ID_RECEITA		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica_item.receita_medica_id)
+PRITEMRECEITA	NOME_MEDICAMENTO_SUBSTANCIA		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.medicamento)
+PRITEMRECEITA	DOSE_CONCENTRACAO		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.concentracao)
+PRITEMRECEITA	FORMA_FARMACEUTICA		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.forma_farmaceutica)
+PRITEMRECEITA	VIA_ADMINISTRACAO		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.via_descricao)
+PRITEMRECEITA	POSOLOGIA		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.posologia)
+PRITEMRECEITA	QUANTIDADE		texto			bloqueada: declaração pronta comentada (-> receita_medica_item.quantidade_descricao)
+PRITEMRECEITA	DURACAO_TRATAMENTO		texto			não aproveitada: duração em texto livre; duracao_tratamento é número com unidade: precisa de regra de número a partir de texto
+PRITEMRECEITA	OBSERVACAO		blob			não aproveitada: BLOB binário (SUB_TYPE 0) pelo dicionário; se for texto, regra texto_longo -> receita_medica_item.observacao
+PRITEMRECEITA	UNIDADE_MEDICA		texto			não aproveitada: unidade em texto; unidade_prescricao_id não tem tabela que a alimente
+PRITEMRECEITA	FREQUENCIA		texto			não aproveitada: frequência em texto livre; já faz parte da posologia
+PRITEMRECEITA	INICIO_TRATAMENTO		data			bloqueada: declaração pronta comentada (-> receita_medica_item.inicio_tratamento)
+PRITEMRECEITA	USO_CONTINUO		codigo_char			bloqueada: declaração pronta comentada (-> receita_medica_item.uso_continuo)
+PRITEMRECEITA	PRAZO_UTILIZACAO		texto			não aproveitada: prazo em texto livre; prazo_utilizacao é número com unidade
+PRITEMRECEITA	ID_TBUNID_IDADE_DURACAO_TRAT		chave_origem			não aproveitada: unidade da duração aponta unidade_idade; o destino usa unidade_duracao_tratamento
+PRITEMRECEITA	ID_TBUNID_IDADE_PRAZO_UTILI		chave_origem			não aproveitada: unidade do prazo aponta unidade_idade; o destino usa unidade_duracao_tratamento
+PRITEMRECEITA	ID_GEITENS		chave_origem			não aproveitada: item do estoque -> receita_medica_item.item_prescritivel_id: precisa do destino item_prescritivel de GEITENS, não do principal (insumo)
+PRITEMRECEITA	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRITEMRECEITA	ID_PRITEMNAOPAD		chave_origem			bloqueada: declaração pronta comentada (-> receita_medica_item.item_nao_padronizado_id)
+#PRITEMRECEITA	ID_RECEITA	receita_medica_item.receita_medica_id			ref:PRRECEITA	receita do item
+#PRITEMRECEITA	#seq:ID_RECEITA	receita_medica_item.sequencia				ordem do item na receita
+#PRITEMRECEITA	ID_PRITEMNAOPAD	receita_medica_item.item_nao_padronizado_id				item não padronizado
+#PRITEMRECEITA	NOME_MEDICAMENTO_SUBSTANCIA	receita_medica_item.medicamento	texto			medicamento como escrito; vazio recusa a linha
+#PRITEMRECEITA	DOSE_CONCENTRACAO	receita_medica_item.concentracao	texto			concentração
+#PRITEMRECEITA	FORMA_FARMACEUTICA	receita_medica_item.forma_farmaceutica	texto			forma farmacêutica
+#PRITEMRECEITA	VIA_ADMINISTRACAO	receita_medica_item.via_descricao	texto			via como escrita
+#PRITEMRECEITA	POSOLOGIA	receita_medica_item.posologia	texto			posologia; vazia recusa a linha
+#PRITEMRECEITA	QUANTIDADE	receita_medica_item.quantidade_descricao	texto			quantidade como escrita; vazia recusa a linha
+#PRITEMRECEITA	INICIO_TRATAMENTO	receita_medica_item.inicio_tratamento	data			início do tratamento
+#PRITEMRECEITA	USO_CONTINUO	receita_medica_item.uso_continuo	booleano_sn			uso contínuo
+#--- PRSENECESSARIO_PRPRESCPROCED: bloqueada: prescricao_item_id (NOT NULL) é a coluna prescricao_item_id do destino de PRPRESCPROCED (prescricao_item_procedimento), não o id dele; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json)
+PRSENECESSARIO_PRPRESCPROCED	ID_PRSENECESSARIO		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_se_necessario.condicao_se_necessario_id)
+PRSENECESSARIO_PRPRESCPROCED	ID_PRPRESCPROCED		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_se_necessario.prescricao_item_id)
+#PRSENECESSARIO_PRPRESCPROCED	ID_PRSENECESSARIO	prescricao_item_se_necessario.condicao_se_necessario_id				condição se necessário
+#PRSENECESSARIO_PRPRESCPROCED	ID_PRPRESCPROCED	prescricao_item_se_necessario.prescricao_item_id				[bloqueia] precisa de ref:PRPRESCPROCED>prescricao_item_id
+#--- PRVELOCINFUSAO: bloqueada: profissional_id (NOT NULL) vem de TBCBOPRO, cujo destino é inscricao_conselho (fora da carga); falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json); ocorrido_em (NOT NULL, sem padrão) sai de DATA_HORA_INICIAL, porque a origem não guarda o momento de gravação
+PRVELOCINFUSAO	ID_PRPRESCSOL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.prescricao_item_solucao_id)
+PRVELOCINFUSAO	SEQ		inteiro			não aproveitada: posição do registro dentro da etapa; a ordem fica em inicio_em
+PRVELOCINFUSAO	ETAPA		inteiro			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.etapa)
+PRVELOCINFUSAO	VELOCIDADE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.velocidade)
+PRVELOCINFUSAO	ID_PRUNIDINFUSAO		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.unidade_infusao_id)
+PRVELOCINFUSAO	ID_TBCBOPRO_LANCAMENTO		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.profissional_id)
+PRVELOCINFUSAO	ARREDONDAR		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.arredondar)
+PRVELOCINFUSAO	DATA_HORA_INICIAL		data_hora			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.inicio_em e ocorrido_em)
+PRVELOCINFUSAO	DATA_HORA_FINAL		data_hora			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.fim_em)
+PRVELOCINFUSAO	VOLUME		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_velocidade.volume_ml)
+PRVELOCINFUSAO	FUSO_HORARIO_INICIAL		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRVELOCINFUSAO	HORARIO_VERAO_FINAL		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRVELOCINFUSAO	FUSO_HORARIO_FINAL		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRVELOCINFUSAO	HORARIO_VERAO_INICIAL		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRVELOCINFUSAO	DATA_HORA_INICIAL_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRVELOCINFUSAO	DATA_HORA_FINAL_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+#PRVELOCINFUSAO	ID_PRPRESCSOL	prescricao_item_velocidade.prescricao_item_solucao_id				solução prescrita
+#PRVELOCINFUSAO	=inclusao	prescricao_item_velocidade.operacao				cada linha da origem é um registro de velocidade incluído
+#PRVELOCINFUSAO	ETAPA	prescricao_item_velocidade.etapa	inteiro			etapa da solução
+#PRVELOCINFUSAO	VELOCIDADE	prescricao_item_velocidade.velocidade	decimal			velocidade; vazia recusa a linha (NOT NULL)
+#PRVELOCINFUSAO	ID_PRUNIDINFUSAO	prescricao_item_velocidade.unidade_infusao_id				unidade da velocidade
+#PRVELOCINFUSAO	VOLUME	prescricao_item_velocidade.volume_ml	decimal			volume
+#PRVELOCINFUSAO	ARREDONDAR	prescricao_item_velocidade.arredondar	booleano_sn			arredondar a velocidade
+#PRVELOCINFUSAO	DATA_HORA_INICIAL	prescricao_item_velocidade.inicio_em	data_hora			início da velocidade
+#PRVELOCINFUSAO	DATA_HORA_FINAL	prescricao_item_velocidade.fim_em	data_hora			fim da velocidade
+#PRVELOCINFUSAO	ID_TBCBOPRO_LANCAMENTO	prescricao_item_velocidade.profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRVELOCINFUSAO	DATA_HORA_INICIAL	prescricao_item_velocidade.ocorrido_em	data_hora			momento do registro: a origem não guarda a gravação da velocidade, então vale o início dela; vazia recusa a linha (NOT NULL)
+#--- PRLANCAMENTOEXAME: bloqueada: profissional_id (NOT NULL) vem de TBCBOPRO, cujo destino é inscricao_conselho (fora da carga); local de realização, local e responsável do laudo vêm de tabelas fora do mapa; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json); situacao precisa de regra de valor derivado (o padrão ativo contradiria a suspensão preenchida)
+PRLANCAMENTOEXAME	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRLANCAMENTOEXAME	ID_SILANEXA		flutuante			não aproveitada: exame da requisição interna (destino exame_item); exame_id aponta o cadastro de exame, outra entidade
+PRLANCAMENTOEXAME	ID_PRLOCALREALIZACAOEXAME		chave_origem			não aproveitada: local de realização em tabela fora do mapa; local_realizacao é texto: precisa do nome pelo pai
+PRLANCAMENTOEXAME	ID_PRLOCALREALIZACAOLAUDO		chave_origem			não aproveitada: local do laudo em tabela fora do mapa; local_laudo é texto: precisa do nome pelo pai
+PRLANCAMENTOEXAME	ID_PRRESPONSAVELLAUDO		chave_origem			não aproveitada: responsável do laudo em tabela fora do mapa; responsavel_laudo é texto: precisa do nome pelo pai
+PRLANCAMENTOEXAME	NOME_METODO		texto_nome			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.metodo)
+PRLANCAMENTOEXAME	DATA_HORA_REALIZACAO		data_hora			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.realizado_em)
+PRLANCAMENTOEXAME	DATA_HORA_REALIZACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCAMENTOEXAME	DATA_HORA_EVENTO		data_hora			não aproveitada: data de referência clínica do lançamento; o destino guarda realização e lançamento
+PRLANCAMENTOEXAME	DATA_HORA_EVENTO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCAMENTOEXAME	HORARIO_VERAO_EVENTO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	FUSO_HORARIO_EVENTO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	ID_TBCBOPRO		chave_origem			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.profissional_id)
+PRLANCAMENTOEXAME	DATA_HORA_GRAVACAO		data_hora			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.lancado_em)
+PRLANCAMENTOEXAME	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCAMENTOEXAME	RESULTADO		texto_longo			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.resultado)
+PRLANCAMENTOEXAME	JUSTIFICATIVA_LANC_RETROATIVO		texto			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.justificativa_retroativo)
+PRLANCAMENTOEXAME	DATA_HORA_SUSPENSAO		data_hora			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.suspenso_em e situacao)
+PRLANCAMENTOEXAME	DATA_HORA_SUSPENSAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCAMENTOEXAME	FUSO_HORARIO_SUSPENSAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	HORARIO_VERAO_SUSPENSAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	ID_TBCBOPRO_SUSPENSAO		chave_origem			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.suspenso_por_profissional_id)
+PRLANCAMENTOEXAME	DATA_HORA_GRAVACAO_SUSPENSAO		data_hora			não aproveitada: gravação da suspensão; o destino guarda só o momento da suspensão
+PRLANCAMENTOEXAME	DATA_HORA_GRAVACAO_SUSPENSA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCAMENTOEXAME	JUST_LANC_RETROATIVO_SUSPENSAO		texto			não aproveitada: justificativa de suspensão retroativa; sem coluna no destino
+PRLANCAMENTOEXAME	FUSO_HORARIO_GRAVACAO_SUSPENSAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	JUSTIFICATIVA_SUSPENSAO		texto			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.motivo_suspensao)
+PRLANCAMENTOEXAME	FUSO_HORARIO_GRAVACAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	HORARIO_VERAO_GRAVACAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	HORARIO_VERAO_GRAVACAO_SUSPENSA		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCAMENTOEXAME	DATA_HORA_COLETA		data_hora			não aproveitada: coleta; sem coluna no destino
+PRLANCAMENTOEXAME	URLACESSO		texto			não aproveitada: endereço do resultado externo; o destino guarda arquivo, não endereço
+PRLANCAMENTOEXAME	NOME_EXAME		texto_nome			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.nome_exame)
+PRLANCAMENTOEXAME	ID_RICADPAC		chave_origem			bloqueada: declaração pronta comentada (-> exame_lancado_prontuario.paciente_id)
+PRLANCAMENTOEXAME	ACHADOCRITICO		codigo_char			não aproveitada: marca de achado crítico; sem coluna no destino
+#PRLANCAMENTOEXAME	@estabelecimento	exame_lancado_prontuario.estabelecimento_id				estabelecimento do cliente
+#PRLANCAMENTOEXAME	ID_RICADPAC	exame_lancado_prontuario.paciente_id				paciente; vazio recusa a linha (NOT NULL)
+#PRLANCAMENTOEXAME	NOME_EXAME	exame_lancado_prontuario.nome_exame	texto_nome			nome do exame como lançado
+#PRLANCAMENTOEXAME	NOME_METODO	exame_lancado_prontuario.metodo	texto_nome			método
+#PRLANCAMENTOEXAME	DATA_HORA_REALIZACAO	exame_lancado_prontuario.realizado_em	data_hora			realização
+#PRLANCAMENTOEXAME	DATA_HORA_GRAVACAO	exame_lancado_prontuario.lancado_em	data_hora			lançamento no prontuário
+#PRLANCAMENTOEXAME	RESULTADO	exame_lancado_prontuario.resultado	texto_longo			resultado em texto
+#PRLANCAMENTOEXAME	JUSTIFICATIVA_LANC_RETROATIVO	exame_lancado_prontuario.justificativa_retroativo	texto			lançamento retroativo
+#PRLANCAMENTOEXAME	DATA_HORA_SUSPENSAO	exame_lancado_prontuario.suspenso_em	data_hora			suspensão
+#PRLANCAMENTOEXAME	JUSTIFICATIVA_SUSPENSAO	exame_lancado_prontuario.motivo_suspensao	texto			motivo da suspensão
+#PRLANCAMENTOEXAME	ID_TBCBOPRO	exame_lancado_prontuario.profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRLANCAMENTOEXAME	ID_TBCBOPRO_SUSPENSAO	exame_lancado_prontuario.suspenso_por_profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRLANCAMENTOEXAME	DATA_HORA_SUSPENSAO	exame_lancado_prontuario.situacao				[bloqueia] precisa de regra de valor derivado: suspensão preenchida = suspenso, senão ativo (ck_exame_lancado_prontuario_suspensao)
+#--- PRLANCEXAMEESTRUTURADO: bloqueada: o pai PRLANCAMENTOEXAME está bloqueado nesta fatia (linha recusada por falta de pai não é refeita pelo diferencial)
+PRLANCEXAMEESTRUTURADO	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRLANCEXAMEESTRUTURADO	ID_PRLANCAMENTOEXAME		chave_origem			bloqueada: declaração pronta comentada (-> exame_lancado_valor.exame_lancado_prontuario_id)
+PRLANCEXAMEESTRUTURADO	ELEMENTO		texto			bloqueada: declaração pronta comentada (-> exame_lancado_valor.elemento)
+PRLANCEXAMEESTRUTURADO	TIPO_RESULTADO		codigo_char			não aproveitada: tipo do resultado da origem; o valor fica em texto até haver regra de texto para decimal
+PRLANCEXAMEESTRUTURADO	RESULTADO		texto			bloqueada: declaração pronta comentada (-> exame_lancado_valor.valor_texto)
+PRLANCEXAMEESTRUTURADO	UNIDADE		texto			bloqueada: declaração pronta comentada (-> exame_lancado_valor.unidade_texto)
+PRLANCEXAMEESTRUTURADO	FAIXA_NORMALIDADE		texto			bloqueada: declaração pronta comentada (-> exame_lancado_valor.faixa_normalidade)
+#PRLANCEXAMEESTRUTURADO	ID_PRLANCAMENTOEXAME	exame_lancado_valor.exame_lancado_prontuario_id				exame lançado
+#PRLANCEXAMEESTRUTURADO	#seq:ID_PRLANCAMENTOEXAME	exame_lancado_valor.sequencia				ordem do valor no exame
+#PRLANCEXAMEESTRUTURADO	ELEMENTO	exame_lancado_valor.elemento	texto			elemento medido; vazio recusa a linha
+#PRLANCEXAMEESTRUTURADO	=texto	exame_lancado_valor.tipo_resultado				a origem guarda o resultado em texto (VARCHAR); valor numérico pede regra de texto para decimal
+#PRLANCEXAMEESTRUTURADO	RESULTADO	exame_lancado_valor.valor_texto	texto			resultado como escrito
+#PRLANCEXAMEESTRUTURADO	UNIDADE	exame_lancado_valor.unidade_texto	texto			unidade como escrita
+#PRLANCEXAMEESTRUTURADO	FAIXA_NORMALIDADE	exame_lancado_valor.faixa_normalidade	texto			faixa de normalidade
+#--- PRLANCREGISTROTEMPO: bloqueada: estabelecimento, paciente e atendimento vêm do pai PRCABNEXODATA (destino envio_prescricao_plataforma), tipo_evento_tempo_id e usuario_id (NOT NULL) não têm origem e profissional_id vem de TBCBOPRO; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json) e decisão sobre o tipo de evento; situacao sai da situação do documento por de-para de valores (o padrão valido contradiria a justificativa de cancelamento)
+PRLANCREGISTROTEMPO	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRLANCREGISTROTEMPO	ID_TBCBOPRO		chave_origem			bloqueada: declaração pronta comentada (-> registro_tempo_evento.profissional_id)
+PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO		chave_origem			bloqueada: declaração pronta comentada (-> registro_tempo_evento.situacao)
+PRLANCREGISTROTEMPO	ID_PRCABNEXODATA		chave_origem			não aproveitada: envio à plataforma de onde vêm paciente e atendimento; precisa de referência a coluna do pai
+PRLANCREGISTROTEMPO	DATA_HORA		data_hora			bloqueada: declaração pronta comentada (-> registro_tempo_evento.ocorrido_em)
+PRLANCREGISTROTEMPO	FUSO_HORARIO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCREGISTROTEMPO	HORARIO_VERAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCREGISTROTEMPO	DATA_HORA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO		data_hora			bloqueada: declaração pronta comentada (-> registro_tempo_evento.registrado_em)
+PRLANCREGISTROTEMPO	FUSO_HORARIO_GRAVACAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCREGISTROTEMPO	HORARIO_VERAO_GRAVACAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO		texto			bloqueada: declaração pronta comentada (-> registro_tempo_evento.justificativa_cancelamento)
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSP_RETROATIVA		texto			não aproveitada: justificativa de cancelamento retroativo; sem coluna no destino
+#PRLANCREGISTROTEMPO	DATA_HORA	registro_tempo_evento.ocorrido_em	data_hora			momento do evento
+#PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO	registro_tempo_evento.registrado_em	data_hora			gravação
+#PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO	registro_tempo_evento.justificativa_cancelamento	texto			motivo do cancelamento
+#PRLANCREGISTROTEMPO	ID_TBCBOPRO	registro_tempo_evento.profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO	registro_tempo_evento.situacao		valores		[bloqueia] precisa dos pares em declarado/valores.tsv (situação do documento -> valido ou cancelado); cancelado exige cancelado_em, cancelado_por_usuario_id e justificativa_cancelamento
+#--- PREVOLPAC: bloqueada: modelo_campo_id (NOT NULL) é a coluna modelo_campo_id do destino de PRRESPOSTA (modelo_campo_opcao) e tipo_valor (NOT NULL) sai de qual coluna RESP* veio preenchida; codigo_cid10 é o código do termo de HTCID; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json) e regra de primeiro preenchido
+PREVOLPAC	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PREVOLPAC	ID_CABEVOL		chave_origem			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.registro_assistencial_id)
+PREVOLPAC	SEQ		inteiro			não aproveitada: posição da pergunta no modelo; vem do campo do modelo
+PREVOLPAC	ID_RESPOSTA		chave_origem			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.modelo_campo_opcao_id)
+PREVOLPAC	UNIDRESP		texto			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.unidade)
+PREVOLPAC	CONTEVOL		texto_longo			não aproveitada: texto livre longo da resposta; vai para valor_texto pela regra de primeiro preenchido junto com RESPALFA (pedido)
+PREVOLPAC	RESPDATA		data			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.valor_data)
+PREVOLPAC	RESPHORA		texto			não aproveitada: hora HHMM em texto; valor_hora pede regra de hora a partir de texto
+PREVOLPAC	RESPSNAO		texto			não aproveitada: sim ou não em texto de até 5 letras; valor_booleano pede de-para de valores
+PREVOLPAC	RESPVALOR		decimal			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.valor_numero)
+PREVOLPAC	RESPALFA		texto			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.valor_texto)
+PREVOLPAC	ORDEM		texto			não aproveitada: posição da resposta na tela; vem do leiaute do modelo
+PREVOLPAC	TAB		inteiro			não aproveitada: aba da tela; vem do leiaute do modelo
+PREVOLPAC	ID_HTPROCTO		chave_origem			não aproveitada: procedimento da resposta; sem coluna no destino
+PREVOLPAC	ID_HTCID		chave_origem			não aproveitada: diagnóstico -> codigo_cid10: precisa do código do termo pelo pai
+PREVOLPAC	RESPDATA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PREVOLPAC	OBSERVACAO		texto			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.observacao)
+PREVOLPAC	AUTOPREENCHIDO		codigo_char			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.autopreenchido)
+PREVOLPAC	JUSTIFICATIVA_DIAGNOSTICO		texto			bloqueada: declaração pronta comentada (-> registro_assistencial_resposta.justificativa_diagnostico)
+#PREVOLPAC	ID_CABEVOL	registro_assistencial_resposta.registro_assistencial_id			ref:PRCABEVOL	registro clínico (cabeçalho)
+#PREVOLPAC	#seq:ID_CABEVOL	registro_assistencial_resposta.sequencia				ordem da resposta no registro (chave única com o registro)
+#PREVOLPAC	ID_RESPOSTA	registro_assistencial_resposta.modelo_campo_opcao_id			ref:PRRESPOSTA	opção do campo respondida
+#PREVOLPAC	RESPALFA	registro_assistencial_resposta.valor_texto	texto			resposta em texto
+#PREVOLPAC	RESPVALOR	registro_assistencial_resposta.valor_numero	decimal			resposta numérica
+#PREVOLPAC	RESPDATA	registro_assistencial_resposta.valor_data	data			resposta em data
+#PREVOLPAC	UNIDRESP	registro_assistencial_resposta.unidade	texto			unidade da resposta
+#PREVOLPAC	JUSTIFICATIVA_DIAGNOSTICO	registro_assistencial_resposta.justificativa_diagnostico	texto			justificativa do diagnóstico
+#PREVOLPAC	OBSERVACAO	registro_assistencial_resposta.observacao	texto			observação
+#PREVOLPAC	AUTOPREENCHIDO	registro_assistencial_resposta.autopreenchido	booleano_sn			resposta autopreenchida
+#--- PREVOLPACTMP: bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	ID_CABEVOL		chave_origem			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	ID_RESPOSTA		chave_origem			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	SEQ		inteiro			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	UNIDRESP		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	CONTEVOL		texto_longo			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	RESPDATA		data			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	RESPHORA		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	RESPSNAO		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	RESPVALOR		decimal			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	RESPALFA		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	ORDEM		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	TAB		inteiro			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	ID_HTPROCTO		chave_origem			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	ID_HTCID		chave_origem			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	OBSERVACAO		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	AUTOPREENCHIDO		codigo_char			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+PREVOLPACTMP	JUSTIFICATIVA_DIAGNOSTICO		texto			bloqueada: uma linha por resposta do rascunho, mas o destino guarda um rascunho por linha (cabeçalho PRCABEVOLTMP) com as respostas em JSON (respostas NOT NULL): falta agregação das filhas no JSON do pai (pedido L6-13.json)
+#--- PRITENSESQ: bloqueada: unidade_prescricao_id (NOT NULL) vem do código de TBUNICON, cujo destino é unidade_medida: nenhuma tabela do mapa alimenta unidade_prescricao; item_prescritivel_id é destino secundário de GEITENS; e o segundo destino prescricao_item_solucao_componente duplicaria cada linha da etapa (pedido L6-13.json)
+PRITENSESQ	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRITENSESQ	ID_PRPRESCSOL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.prescricao_item_solucao_id)
+PRITENSESQ	ID_GEITENS		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.item_prescritivel_id)
+PRITENSESQ	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRITENSESQ	ID_PRITEMNAOPAD		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.item_nao_padronizado_id)
+PRITENSESQ	JUSTIFICATIVA_NAO_PADRONIZ		texto			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.justificativa_nao_padronizado)
+PRITENSESQ	ID_HTCID_NAO_PADRONIZ		chave_origem			não aproveitada: indicação do item não padronizado (HTCID, destino termo_terminologia_vigencia); o destino aponta termo_terminologia: precisa do termo pelo pai
+PRITENSESQ	ITEM_PRINCIPAL		booleano_01			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.componente_principal)
+PRITENSESQ	ETAPA		inteiro			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.etapa)
+PRITENSESQ	QTDE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.quantidade)
+PRITENSESQ	ID_PRFORMULA		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.formula_calculo_dose_id)
+PRITENSESQ	QTDE_DOSE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.dose)
+PRITENSESQ	ID_TBUNICON_UNI_PRESC		texto			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.unidade_prescricao_id)
+PRITENSESQ	OLD_ID_GERAL		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_SEQ		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_ETAPA		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_QTDE		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_OBSENF		texto_longo			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_JUSTIFICATIVA		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_STATUS		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	OLD_ID_GELANSAI		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSESQ	DOSE_EXTRA_ANTIMICROBIANO		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.dose_extra_antimicrobiano)
+PRITENSESQ	ID_PRKITSOL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.kit_prescricao_id)
+PRITENSESQ	JUSTIFICATIVA_ITEM_ALERGICO		texto			bloqueada: declaração pronta comentada (-> prescricao_item_solucao_etapa.justificativa_item_alergico)
+#PRITENSESQ	ID_PRPRESCSOL	prescricao_item_solucao_etapa.prescricao_item_solucao_id				solução prescrita
+#PRITENSESQ	#seq:ID_PRPRESCSOL	prescricao_item_solucao_etapa.sequencia				ordem do componente na solução
+#PRITENSESQ	ETAPA	prescricao_item_solucao_etapa.etapa	inteiro			etapa
+#PRITENSESQ	ID_PRITEMNAOPAD	prescricao_item_solucao_etapa.item_nao_padronizado_id				item não padronizado
+#PRITENSESQ	JUSTIFICATIVA_NAO_PADRONIZ	prescricao_item_solucao_etapa.justificativa_nao_padronizado	texto			justificativa do item não padronizado
+#PRITENSESQ	ITEM_PRINCIPAL	prescricao_item_solucao_etapa.componente_principal	booleano_01			componente principal
+#PRITENSESQ	QTDE	prescricao_item_solucao_etapa.quantidade	decimal			quantidade
+#PRITENSESQ	QTDE_DOSE	prescricao_item_solucao_etapa.dose	decimal			dose
+#PRITENSESQ	ID_PRFORMULA	prescricao_item_solucao_etapa.formula_calculo_dose_id				fórmula de cálculo
+#PRITENSESQ	ID_PRKITSOL	prescricao_item_solucao_etapa.kit_prescricao_id				kit de solução
+#PRITENSESQ	DOSE_EXTRA_ANTIMICROBIANO	prescricao_item_solucao_etapa.dose_extra_antimicrobiano	booleano_sn			dose extra de antimicrobiano
+#PRITENSESQ	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_solucao_etapa.justificativa_item_alergico	texto			justificativa de item com alergia
+#PRITENSESQ	ID_TBUNICON_UNI_PRESC	prescricao_item_solucao_etapa.unidade_prescricao_id				[bloqueia] nenhuma tabela alimenta unidade_prescricao
+#PRITENSESQ	ID_GEITENS	prescricao_item_solucao_etapa.item_prescritivel_id				[bloqueia] precisa do destino item_prescritivel de GEITENS, não do principal (insumo)
+#--- PRITENSGERAL: bloqueada: unidade_prescricao_id (NOT NULL) vem do código de TBUNICON, cujo destino é unidade_medida: nenhuma tabela do mapa alimenta unidade_prescricao (pedido L6-13.json)
+PRITENSGERAL	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRITENSGERAL	ID_PRLANGERAL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_material.prescricao_item_id)
+PRITENSGERAL	ID_GEITENS		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_material.insumo_id)
+PRITENSGERAL	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRITENSGERAL	ID_PRITEMNAOPAD		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_material.item_nao_padronizado_id)
+PRITENSGERAL	JUSTIFICATIVA_NAO_PADRONIZ		texto			bloqueada: declaração pronta comentada (-> prescricao_item_material.justificativa_nao_padronizado)
+PRITENSGERAL	ID_HTCID_NAO_PADRONIZ		chave_origem			não aproveitada: indicação do item não padronizado (HTCID, destino termo_terminologia_vigencia); o destino aponta termo_terminologia: precisa do termo pelo pai
+PRITENSGERAL	QTDE		decimal			não aproveitada: sem coluna correspondente no destino
+PRITENSGERAL	ID_PRFORMULA		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_material.formula_calculo_dose_id)
+PRITENSGERAL	QTDE_DOSE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_material.quantidade)
+PRITENSGERAL	ID_TBUNICON_UNI_PRESC		texto			bloqueada: declaração pronta comentada (-> prescricao_item_material.unidade_prescricao_id)
+PRITENSGERAL	JUSTIFICATIVA_INC_ITEM_ENF		texto			bloqueada: declaração pronta comentada (-> prescricao_item_material.justificativa_inclusao_enfermagem)
+PRITENSGERAL	OBS_ENFERMAGEM		texto			bloqueada: declaração pronta comentada (-> prescricao_item_material.observacao_enfermagem)
+PRITENSGERAL	ITEM_IMPRESSO		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRITENSGERAL	IMPRIMIR_FOLHA_SALA		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_material.imprimir_folha_sala)
+PRITENSGERAL	ID_PRLOCALINVASIVO		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRITENSGERAL	OLD_ITEM		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_QTDE		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_QTDEADM		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_JUSTIFICATIVA		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_OBSENF		texto_longo			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_STATUS		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ID_ITEMNAOPAD		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_JUSTIFNAOPAD		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ITEMIMPRESSO		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_FORMULA		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_UNI_PRESC		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ID_GELANSAI		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ID_GENOMCOM		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ID_PRLOCALINVASIVO		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_FOLHA_SALA		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	OLD_ID_HTCID		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGERAL	ITEM_KIT		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_material.item_de_kit)
+PRITENSGERAL	DOSE_EXTRA_ANTIMICROBIANO		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_material.dose_extra_antimicrobiano)
+PRITENSGERAL	ID_PRKITSOL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_material.kit_prescricao_id)
+PRITENSGERAL	JUSTIFICATIVA_ITEM_ALERGICO		texto			bloqueada: declaração pronta comentada (-> prescricao_item_material.justificativa_alergia)
+PRITENSGERAL	ID_DIGITAL		texto			não aproveitada: identificador do envio digital (integração), sem coluna no destino
+#PRITENSGERAL	ID_PRLANGERAL	prescricao_item_material.prescricao_item_id				item prescrito
+#PRITENSGERAL	#seq:ID_PRLANGERAL	prescricao_item_material.sequencia				ordem do material no item
+#PRITENSGERAL	ID_GEITENS	prescricao_item_material.insumo_id				insumo (destino principal de GEITENS)
+#PRITENSGERAL	ID_PRITEMNAOPAD	prescricao_item_material.item_nao_padronizado_id				item não padronizado
+#PRITENSGERAL	JUSTIFICATIVA_NAO_PADRONIZ	prescricao_item_material.justificativa_nao_padronizado	texto			justificativa do item não padronizado
+#PRITENSGERAL	QTDE_DOSE	prescricao_item_material.quantidade	decimal			quantidade na unidade de prescrição
+#PRITENSGERAL	ID_PRFORMULA	prescricao_item_material.formula_calculo_dose_id				fórmula de cálculo
+#PRITENSGERAL	JUSTIFICATIVA_INC_ITEM_ENF	prescricao_item_material.justificativa_inclusao_enfermagem	texto			inclusão pela enfermagem
+#PRITENSGERAL	OBS_ENFERMAGEM	prescricao_item_material.observacao_enfermagem	texto			observação da enfermagem
+#PRITENSGERAL	IMPRIMIR_FOLHA_SALA	prescricao_item_material.imprimir_folha_sala	booleano_sn			imprimir na folha de sala
+#PRITENSGERAL	ITEM_KIT	prescricao_item_material.item_de_kit	booleano_sn			item de kit
+#PRITENSGERAL	ID_PRKITSOL	prescricao_item_material.kit_prescricao_id				kit
+#PRITENSGERAL	DOSE_EXTRA_ANTIMICROBIANO	prescricao_item_material.dose_extra_antimicrobiano	booleano_sn			dose extra de antimicrobiano
+#PRITENSGERAL	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_material.justificativa_alergia	texto			justificativa de item com alergia
+#PRITENSGERAL	ID_TBUNICON_UNI_PRESC	prescricao_item_material.unidade_prescricao_id				[bloqueia] nenhuma tabela alimenta unidade_prescricao
+#--- PRITENSGLICEMIA: bloqueada: prescricao_item_id (NOT NULL) é a coluna prescricao_item_id do destino de PRPRESCPROCED, unidade_prescricao_id (NOT NULL) não tem tabela que a alimente e item_prescritivel_id é destino secundário de GEITENS; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json)
+PRITENSGLICEMIA	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRITENSGLICEMIA	ID_PRPRESCPROCED		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.prescricao_item_id)
+PRITENSGLICEMIA	ID_GEITENS		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.item_prescritivel_id)
+PRITENSGLICEMIA	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRITENSGLICEMIA	ID_PRITEMNAOPAD		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.item_nao_padronizado_id)
+PRITENSGLICEMIA	JUSTIFICATIVA_NAO_PADRONIZ		texto			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.justificativa_nao_padronizado)
+PRITENSGLICEMIA	ID_HTCID_NAO_PADRONIZ		chave_origem			não aproveitada: indicação do item não padronizado (HTCID, destino termo_terminologia_vigencia); o destino aponta termo_terminologia: precisa do termo pelo pai
+PRITENSGLICEMIA	INTERVALO_INICIAL_DOSE		inteiro			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.glicemia_minima)
+PRITENSGLICEMIA	INTERVALO_FINAL_DOSE		inteiro			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.glicemia_maxima)
+PRITENSGLICEMIA	QTDE		decimal			não aproveitada: sem coluna correspondente no destino
+PRITENSGLICEMIA	ID_PRFORMULA		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRITENSGLICEMIA	QTDE_DOSE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.dose)
+PRITENSGLICEMIA	ID_PRFREQUENCIA		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRITENSGLICEMIA	ID_TBUNICON_UNI_PRESC		texto			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.unidade_prescricao_id)
+PRITENSGLICEMIA	ID_GETABVIA		texto			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.via_de_uso_id)
+PRITENSGLICEMIA	OLD_ID_GERAL		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_ACM		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_QTDEADM		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_JUSTIFICATIVA		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_OBSENF		texto_longo			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_STATUS		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	OLD_ID_GELANSAI		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRITENSGLICEMIA	JUSTIFICATIVA_ITEM_ALERGICO		texto			bloqueada: declaração pronta comentada (-> prescricao_item_glicemia.justificativa_alergia)
+PRITENSGLICEMIA	ID_DIGITAL		texto			não aproveitada: identificador do envio digital (integração), sem coluna no destino
+#PRITENSGLICEMIA	ID_PRPRESCPROCED	prescricao_item_glicemia.prescricao_item_id				[bloqueia] precisa de ref:PRPRESCPROCED>prescricao_item_id
+#PRITENSGLICEMIA	#seq:ID_PRPRESCPROCED	prescricao_item_glicemia.sequencia				ordem da faixa na escala
+#PRITENSGLICEMIA	INTERVALO_INICIAL_DOSE	prescricao_item_glicemia.glicemia_minima	inteiro			início da faixa de glicemia
+#PRITENSGLICEMIA	INTERVALO_FINAL_DOSE	prescricao_item_glicemia.glicemia_maxima	inteiro			fim da faixa de glicemia
+#PRITENSGLICEMIA	ID_PRITEMNAOPAD	prescricao_item_glicemia.item_nao_padronizado_id				item não padronizado
+#PRITENSGLICEMIA	JUSTIFICATIVA_NAO_PADRONIZ	prescricao_item_glicemia.justificativa_nao_padronizado	texto			justificativa do item não padronizado
+#PRITENSGLICEMIA	QTDE_DOSE	prescricao_item_glicemia.dose	decimal			dose da faixa
+#PRITENSGLICEMIA	ID_GETABVIA	prescricao_item_glicemia.via_de_uso_id			ref:GETABVIA	via de uso pelo código
+#PRITENSGLICEMIA	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_glicemia.justificativa_alergia	texto			justificativa de item com alergia
+#PRITENSGLICEMIA	ID_TBUNICON_UNI_PRESC	prescricao_item_glicemia.unidade_prescricao_id				[bloqueia] nenhuma tabela alimenta unidade_prescricao
+#PRITENSGLICEMIA	ID_GEITENS	prescricao_item_glicemia.item_prescritivel_id				[bloqueia] precisa do destino item_prescritivel de GEITENS
+#--- PRPRESCMED: bloqueada: unidade_prescricao_id (NOT NULL) vem do código de TBUNICON, cujo destino é unidade_medida: nenhuma tabela do mapa alimenta unidade_prescricao (pedido L6-13.json); item_prescritivel_id é destino secundário de GEITENS (o principal é insumo) e, sem ele, a linha de medicamento padronizado fica sem item e é recusada por ck_prescricao_item_medicamento_04; TEMPO_INFUSAO precisa de regra TIME para minutos e INTERVALO_ENTRE_DOSES da unidade confirmada
+PRPRESCMED	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRPRESCMED	ID_PRLANGERAL		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.prescricao_item_id)
+PRPRESCMED	ID_GEITENS		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.item_prescritivel_id)
+PRPRESCMED	ID_GENOMCOM		chave_origem			não aproveitada: apresentação comercial; o destino não tem coluna dela (o item vem de ID_GEITENS ou ID_PRITEMNAOPAD)
+PRPRESCMED	ID_PRITEMNAOPAD		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.item_nao_padronizado_id)
+PRPRESCMED	JUSTIFICATIVA_NAO_PADRONIZ		texto			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.justificativa_nao_padronizado)
+PRPRESCMED	ID_HTCID_NAO_PADRONIZ		chave_origem			não aproveitada: indicação do item não padronizado (HTCID, destino termo_terminologia_vigencia); o destino aponta termo_terminologia: precisa do termo pelo pai
+PRPRESCMED	QTDE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.quantidade_calculada)
+PRPRESCMED	ID_PRFORMULA		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.formula_calculo_dose_id)
+PRPRESCMED	QTDE_DOSE		decimal			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.dose)
+PRPRESCMED	ID_TBUNICON_UNI_PRESC		texto			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.unidade_prescricao_id)
+PRPRESCMED	INICIAR_ADM_AGORA		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.iniciar_agora)
+PRPRESCMED	NAO_AJUSTAR_ESQUEMA_ENF		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.nao_ajustar_horario)
+PRPRESCMED	TEMPO_INFUSAO		hora			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.tempo_infusao_minutos)
+PRPRESCMED	DOSE_EXTRA_ANTIMICROBIANO		codigo_char			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.dose_extra_antimicrobiano)
+PRPRESCMED	INTERVALO_ENTRE_DOSES		inteiro			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.intervalo_doses_minutos)
+PRPRESCMED	JUSTIFICATIVA_ITEM_ALERGICO		texto			bloqueada: declaração pronta comentada (-> prescricao_item_medicamento.justificativa_alergia)
+#PRPRESCMED	ID_PRLANGERAL	prescricao_item_medicamento.prescricao_item_id				item prescrito
+#PRPRESCMED	ID_GEITENS	prescricao_item_medicamento.item_prescritivel_id				[bloqueia] precisa do destino item_prescritivel de GEITENS (ref:GEITENS/item_prescritivel), não do principal (insumo): insumo_id é só a apresentação escolhida, e ck_prescricao_item_medicamento_04 exige item_prescritivel_id ou item_nao_padronizado_id
+#PRPRESCMED	ID_PRITEMNAOPAD	prescricao_item_medicamento.item_nao_padronizado_id				item não padronizado
+#PRPRESCMED	JUSTIFICATIVA_NAO_PADRONIZ	prescricao_item_medicamento.justificativa_nao_padronizado	texto			justificativa do item não padronizado
+#PRPRESCMED	QTDE	prescricao_item_medicamento.quantidade_calculada	decimal			quantidade calculada
+#PRPRESCMED	QTDE_DOSE	prescricao_item_medicamento.dose	decimal			dose
+#PRPRESCMED	ID_PRFORMULA	prescricao_item_medicamento.formula_calculo_dose_id				fórmula de cálculo
+#PRPRESCMED	INICIAR_ADM_AGORA	prescricao_item_medicamento.iniciar_agora	booleano_sn			iniciar agora
+#PRPRESCMED	NAO_AJUSTAR_ESQUEMA_ENF	prescricao_item_medicamento.nao_ajustar_horario	booleano_sn			não ajustar o horário da enfermagem
+#PRPRESCMED	DOSE_EXTRA_ANTIMICROBIANO	prescricao_item_medicamento.dose_extra_antimicrobiano	booleano_sn			dose extra de antimicrobiano
+#PRPRESCMED	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_medicamento.justificativa_alergia	texto			justificativa de item com alergia
+#PRPRESCMED	ID_TBUNICON_UNI_PRESC	prescricao_item_medicamento.unidade_prescricao_id				[bloqueia] nenhuma tabela alimenta unidade_prescricao
+#PRPRESCMED	TEMPO_INFUSAO	prescricao_item_medicamento.tempo_infusao_minutos				[bloqueia] precisa de regra TIME para minutos
+#PRPRESCMED	INTERVALO_ENTRE_DOSES	prescricao_item_medicamento.intervalo_doses_minutos	inteiro			[bloqueia] confirmar na origem a unidade do intervalo (minutos ou horas); em horas, precisa de regra de conversão
+#--- PRCHKGERAL: bloqueada: atendimento_id e prescricao_id (NOT NULL) são colunas do destino de PRLANGERAL (prescricao_item.prescricao_id e a prescrição dele), não ids do pai; profissionais vêm de TBCBOPRO; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json) em cadeia; administrado_por_profissional_id e administrado_em saem de quem e quando registrou a situação, só para situação de administrado (regra de valor derivado); o vínculo com a filha do item (ID_PRITENSGERAL, ID_PRITENSESQ, ID_PRITENSGLICEMIA, ID_PRPRESCMED e demais) não tem coluna no destino e pode colidir na chave única (prescricao_item_id, previsto_em): medir os pares repetidos na imagem antes de liberar (não medido)
+PRCHKGERAL	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRCHKGERAL	ID_PRITENSGERAL		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRITENSESQ		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCPROCED		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRITENSGLICEMIA		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRITENSSINAIS		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCRESPIR		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCVNI		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCVI		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCDIETA		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCMED		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCATIV		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESCHEMO		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	ID_PRPRESC_PROD_LEITE		chave_origem			bloqueada: vínculo com a filha do item (material, componente, faixa ou detalhe); o horário do destino liga só ao item (ID_PRLANGERAL) e é único por (prescricao_item_id, previsto_em): antes de liberar, medir na imagem (só contagem) os pares (ID_PRLANGERAL, DATA_HORA_CHECAR) repetidos; se houver, falta o vínculo com a filha no destino (pedido L6-13.json)
+PRCHKGERAL	DATA_HORA_CHECAR		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao.previsto_em)
+PRCHKGERAL	DATA_HORA_SITUACAO_CHECAGEM		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao.situacao_checagem_em e administrado_em)
+PRCHKGERAL	ID_PRHRRELATIVA		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao.frequencia_horario_relativo_id)
+PRCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao.administrado_por_profissional_id)
+PRCHKGERAL	ID_TBCBOPRO_NOVO_HORARIO		chave_origem			não aproveitada: quem mudou o horário é o autor do reaprazamento, registrado no evento do horário (horario_administracao_evento, por PREXTRATOITEM_PRCHKGERAL e HTCHKGERAL); o horário guarda só quem aprazou (ID_TBCBOPRO_APZ)
+PRCHKGERAL	JUSTIFICATIVA_NOVO_HORARIO		texto			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	QTDE_ADMINISTRADA		decimal			bloqueada: declaração pronta comentada (-> horario_administracao.quantidade_administrada)
+PRCHKGERAL	SINAIS_ALFA		texto			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	JUSTIFICATIVA_SITUACAO_CHECAGEM		texto			bloqueada: declaração pronta comentada (-> horario_administracao.justificativa)
+PRCHKGERAL	SITUACAO_CHECAGEM		codigo_char			bloqueada: declaração pronta comentada (-> horario_administracao.situacao_checagem_id)
+PRCHKGERAL	OLD_ID_GERAL		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_ID_CHK		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_ID_HORPAD		inteiro			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_QTDE		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_CHECADO		codigo_char			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_USERCHECK		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_JUSTIF		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_JUSTIFNHR		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_USERNHR		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_QTDEADM		decimal			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	OLD_SINAIS_ALFA		texto			não aproveitada: coluna OLD_ da conversão anterior da própria origem, sem uso
+PRCHKGERAL	SUSPENSAO_PREDEFINIDA		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	ID_PRSITAPRAZAM		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao.situacao_aprazamento_id)
+PRCHKGERAL	OBS_MONITORIZACAO		texto			bloqueada: declaração pronta comentada (-> horario_administracao.observacao_monitorizacao)
+PRCHKGERAL	FUSO_HORARIO_SITUACAO_CHECAGEM		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_SITUACAO_CHECAGEM		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	FUSO_HORARIO_DATA_HORA_CHECAR		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_DATA_HORA_CHECAR		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	ID_PRLANGERAL		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao.prescricao_item_id)
+PRCHKGERAL	DATA_HORA_CHECAR_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	DATA_HORA_SITUACAO_CHECAGEM_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	ID_TBPROFIS_ACOMP_RESP_APZ		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	DATA_HORA_ACOMP_RESP_APZ		data_hora			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	DATA_HORA_ACOMP_RESP_APZ_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	ID_TBPROFIS_ACOMP_RESP_CHK		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	DATA_HORA_ACOMP_RESP_CHK		data_hora			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	DATA_HORA_ACOMP_RESP_CHK_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	SITUACAO_ACOMP_RESP_CHK		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	CHECAGEM_AVALIADA		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	DATA_HORA_GRAVACAO		data_hora			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	FUSO_HORARIO_GRAVACAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_GRAVACAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	JUSTIFICATIVA_SUSP_RETROATIVA		texto			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	ID_TBCBOPRO_INCLUSAO		chave_origem			não aproveitada: quem incluiu o horário é dado de auditoria; criado_por do destino aponta usuário, não profissional, e não há coluna de profissional de inclusão
+PRCHKGERAL	DATA_HORA_INCLUSAO		data_hora			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	FUSO_HORARIO_INCLUSAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_INCLUSAO		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	DATA_HORA_INCLUSAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	FUSO_HORARIO_ACOMP_RESP_APZ		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_ACOMP_RESP_APZ		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	FUSO_HORARIO_ACOMP_RESP_CHK		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_ACOMP_RESP_CHK		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	ID_TBCBOPRO_APZ		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao.aprazado_por_profissional_id)
+PRCHKGERAL	DATA_HORA_APZ		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao.aprazado_em)
+PRCHKGERAL	FUSO_HORARIO_APZ		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	HORARIO_VERAO_APZ		codigo_char			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PRCHKGERAL	DATA_HORA_APZ_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PRCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO		texto			bloqueada: declaração pronta comentada (-> horario_administracao.justificativa_retroativo)
+PRCHKGERAL	INTEGRACAO_ESTOQUE		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	MEDICAMENTO_URGENTE		booleano_sn			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	ID_PRCHKGERAL_AGRUPAMENTO		chave_origem			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	ITEM_INCLUIDO_JSON_DIGITAL		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	ID_DIGITAL		texto			não aproveitada: identificador do envio digital (integração), sem coluna no destino
+PRCHKGERAL	ETIQUETA_CHECAGEM_IMPRESSA		codigo_char			não aproveitada: sem coluna correspondente no destino
+PRCHKGERAL	OBSERVACAO_ENFERMAGEM		texto			não aproveitada: sem coluna correspondente no destino
+#PRCHKGERAL	@estabelecimento	horario_administracao.estabelecimento_id				estabelecimento do cliente
+#PRCHKGERAL	ID_PRLANGERAL	horario_administracao.prescricao_item_id				item prescrito
+#PRCHKGERAL	DATA_HORA_CHECAR	horario_administracao.previsto_em	data_hora			horário previsto
+#PRCHKGERAL	SITUACAO_CHECAGEM	horario_administracao.situacao_checagem_id			ref:PRSITUACAOCHECAGEM	situação da checagem pelo código
+#PRCHKGERAL	DATA_HORA_SITUACAO_CHECAGEM	horario_administracao.situacao_checagem_em	data_hora			momento da situação
+#PRCHKGERAL	ID_PRSITAPRAZAM	horario_administracao.situacao_aprazamento_id				situação do aprazamento
+#PRCHKGERAL	ID_PRHRRELATIVA	horario_administracao.frequencia_horario_relativo_id				horário relativo
+#PRCHKGERAL	DATA_HORA_APZ	horario_administracao.aprazado_em	data_hora			aprazamento
+#PRCHKGERAL	QTDE_ADMINISTRADA	horario_administracao.quantidade_administrada	decimal			quantidade administrada
+#PRCHKGERAL	JUSTIFICATIVA_SITUACAO_CHECAGEM	horario_administracao.justificativa	texto			justificativa da situação
+#PRCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO	horario_administracao.justificativa_retroativo	texto			lançamento retroativo
+#PRCHKGERAL	OBS_MONITORIZACAO	horario_administracao.observacao_monitorizacao	texto			observação de monitorização
+#PRCHKGERAL	ID_TBCBOPRO_APZ	horario_administracao.aprazado_por_profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#PRCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM	horario_administracao.administrado_por_profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id e de regra de valor derivado: só quando a situação da checagem for de administrado
+#PRCHKGERAL	DATA_HORA_SITUACAO_CHECAGEM	horario_administracao.administrado_em	data_hora			[bloqueia] precisa de regra de valor derivado: só quando a situação da checagem for de administrado (ck_horario_administracao_administrado exige o profissional)
+#--- PRASSINAT_DOC_PRCHKGERAL: bloqueada: é ligação entre o documento assinado (PRASSINATURA_DOC) e o horário checado (PRCHKGERAL), não um documento novo: gravar em documento_prontuario criaria documento sem paciente, tipo, título nem autor; destino a rever no mapa (pedido L6-13.json)
+PRASSINAT_DOC_PRCHKGERAL	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PRASSINAT_DOC_PRCHKGERAL	ID_PRASSINATURA_DOC		chave_origem			bloqueada: é ligação entre o documento assinado (PRASSINATURA_DOC) e o horário checado (PRCHKGERAL), não um documento novo: gravar em documento_prontuario criaria documento sem paciente, tipo, título nem autor; destino a rever no mapa (pedido L6-13.json)
+PRASSINAT_DOC_PRCHKGERAL	ID_PRCHKGERAL		chave_origem			bloqueada: é ligação entre o documento assinado (PRASSINATURA_DOC) e o horário checado (PRCHKGERAL), não um documento novo: gravar em documento_prontuario criaria documento sem paciente, tipo, título nem autor; destino a rever no mapa (pedido L6-13.json)
+#--- PREXTRATOITEM_PRCHKGERAL: bloqueada: o pai PRCHKGERAL está bloqueado nesta fatia; o evento (NOT NULL) sai da situação (reaprazamento ou checagem) e o profissional vem de TBCBOPRO
+PREXTRATOITEM_PRCHKGERAL	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+PREXTRATOITEM_PRCHKGERAL	ID_PRCHKGERAL		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao_evento.horario_administracao_id)
+PREXTRATOITEM_PRCHKGERAL	ID_PRSITUACAOCHECAGEM		codigo_char			bloqueada: declaração pronta comentada (-> horario_administracao_evento.situacao_checagem_id)
+PREXTRATOITEM_PRCHKGERAL	ID_PRSITAPRAZAM		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao_evento.situacao_aprazamento_id)
+PREXTRATOITEM_PRCHKGERAL	ID_TBCBOPRO		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao_evento.profissional_id)
+PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao_evento.previsto_novo_em)
+PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PREXTRATOITEM_PRCHKGERAL	FUSO_HORARIO_APRAZADO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PREXTRATOITEM_PRCHKGERAL	JUSTIFICATIVA_REAPRAZAMENTO		texto			bloqueada: declaração pronta comentada (-> horario_administracao_evento.motivo)
+PREXTRATOITEM_PRCHKGERAL	DATA_HORA_HISTORICO		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao_evento.ocorrido_em)
+PREXTRATOITEM_PRCHKGERAL	DATA_HORA_HISTORICO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+PREXTRATOITEM_PRCHKGERAL	FUSO_HORARIO_HISTORICO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+PREXTRATOITEM_PRCHKGERAL	ETIQUETA_CHECAGEM_IMPRESSA		codigo_char			não aproveitada: sem coluna correspondente no destino
+#PREXTRATOITEM_PRCHKGERAL	ID_PRCHKGERAL	horario_administracao_evento.horario_administracao_id				horário
+#PREXTRATOITEM_PRCHKGERAL	=inclusao	horario_administracao_evento.operacao				cada linha é um evento registrado
+#PREXTRATOITEM_PRCHKGERAL	DATA_HORA_HISTORICO	horario_administracao_evento.ocorrido_em	data_hora			momento do evento
+#PREXTRATOITEM_PRCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.situacao_checagem_id			ref:PRSITUACAOCHECAGEM	situação da checagem pelo código
+#PREXTRATOITEM_PRCHKGERAL	ID_PRSITAPRAZAM	horario_administracao_evento.situacao_aprazamento_id				situação do aprazamento
+#PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO	horario_administracao_evento.previsto_novo_em	data_hora			novo horário aprazado
+#PREXTRATOITEM_PRCHKGERAL	JUSTIFICATIVA_REAPRAZAMENTO	horario_administracao_evento.motivo	texto			motivo do reaprazamento
+#PREXTRATOITEM_PRCHKGERAL	ID_TBCBOPRO	horario_administracao_evento.profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#--- PRSENECESSARIO_PRPRESCMED: bloqueada: prescricao_item_id (NOT NULL) é a coluna prescricao_item_id do destino de PRPRESCMED (prescricao_item_medicamento), bloqueado nesta fatia; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json)
+PRSENECESSARIO_PRPRESCMED	ID_PRSENECESSARIO		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_se_necessario.condicao_se_necessario_id)
+PRSENECESSARIO_PRPRESCMED	ID_PRPRESCMED		chave_origem			bloqueada: declaração pronta comentada (-> prescricao_item_se_necessario.prescricao_item_id)
+#PRSENECESSARIO_PRPRESCMED	ID_PRSENECESSARIO	prescricao_item_se_necessario.condicao_se_necessario_id				condição se necessário
+#PRSENECESSARIO_PRPRESCMED	ID_PRPRESCMED	prescricao_item_se_necessario.prescricao_item_id				[bloqueia] precisa de ref:PRPRESCMED>prescricao_item_id
+#--- HTATENDALTA: bloqueada: atendimento_id aponta HTATENDIMENTO, cujo destino principal é trilha_auditoria, paciente_id é coluna do atendimento e profissional_id (NOT NULL) não tem origem na tabela; falta referência a coluna do destino do pai (ref:<TABELA>><coluna>, pedido L6-13.json) e decisão sobre o profissional da alta; situacao precisa de regra de valor derivado (o padrão prevista contradiria a alta efetivada)
+HTATENDALTA	ID_HTATENDIMENTO		chave_origem			bloqueada: declaração pronta comentada (-> alta_medica.atendimento_id)
+HTATENDALTA	DATA_HORA_PREVISTA		data_hora			bloqueada: declaração pronta comentada (-> alta_medica.prevista_para)
+HTATENDALTA	ID_TBMOTALT		chave_origem			bloqueada: declaração pronta comentada (-> alta_medica.motivo_saida_hospitalar_id)
+HTATENDALTA	DATA_HORA_ALTA_MEDICA		data_hora			bloqueada: declaração pronta comentada (-> alta_medica.alta_medica_em e situacao)
+HTATENDALTA	DATA_HORA_SAIDA_LEITO		data_hora			bloqueada: declaração pronta comentada (-> alta_medica.saida_leito_em)
+HTATENDALTA	OBSERVACAO		texto_longo			bloqueada: declaração pronta comentada (-> alta_medica.observacao)
+HTATENDALTA	DIAGNOSTICO		texto_longo			bloqueada: declaração pronta comentada (-> alta_medica.diagnostico)
+HTATENDALTA	JUSTIFICATIVA		texto_longo			bloqueada: declaração pronta comentada (-> alta_medica.justificativa)
+HTATENDALTA	TRATAMENTO		texto_longo			bloqueada: declaração pronta comentada (-> alta_medica.tratamento)
+HTATENDALTA	DATA_HORA_ALTA_MEDICA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTATENDALTA	DATA_HORA_PREVISTA_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTATENDALTA	DATA_HORA_SAIDA_LEITO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTATENDALTA	TIPO_ALTERACAO		codigo_char			bloqueada: entra na situação da alta (-> alta_medica.situacao) pela regra de valor derivado; códigos a confirmar
+#HTATENDALTA	@estabelecimento	alta_medica.estabelecimento_id				estabelecimento do cliente
+#HTATENDALTA	ID_HTATENDIMENTO	alta_medica.atendimento_id				[bloqueia] precisa do destino atendimento de HTATENDIMENTO
+#HTATENDALTA	DATA_HORA_PREVISTA	alta_medica.prevista_para	data_hora			alta prevista
+#HTATENDALTA	ID_TBMOTALT	alta_medica.motivo_saida_hospitalar_id				motivo da saída
+#HTATENDALTA	DATA_HORA_ALTA_MEDICA	alta_medica.alta_medica_em	data_hora			alta médica
+#HTATENDALTA	DATA_HORA_SAIDA_LEITO	alta_medica.saida_leito_em	data_hora			saída do leito
+#HTATENDALTA	OBSERVACAO	alta_medica.observacao	texto_longo			observação
+#HTATENDALTA	DIAGNOSTICO	alta_medica.diagnostico	texto_longo			diagnóstico
+#HTATENDALTA	JUSTIFICATIVA	alta_medica.justificativa	texto_longo			justificativa
+#HTATENDALTA	TRATAMENTO	alta_medica.tratamento	texto_longo			tratamento
+#HTATENDALTA	DATA_HORA_ALTA_MEDICA	alta_medica.situacao				[bloqueia] precisa de regra de valor derivado: alta preenchida = efetivada (exige motivo_saida_hospitalar_id), TIPO_ALTERACAO de cancelamento = cancelada, senão prevista; confirmar os códigos de TIPO_ALTERACAO
+#--- HTCABECFORMULCOMP: bloqueada: dados (JSON NOT NULL, definição congelada da versão) só existe agregando as filhas HTFORMULCOMP; literal vazio diria que a versão não tem definição (pedido L6-13.json)
+HTCABECFORMULCOMP	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+HTCABECFORMULCOMP	ID_PREVOLUCAO		chave_origem			bloqueada: declaração pronta comentada (-> modelo_documento_versao.modelo_documento_clinico_id)
+HTCABECFORMULCOMP	DATA_HORA_GRAVACAO		data_hora			bloqueada: declaração pronta comentada (-> modelo_documento_versao.ocorrido_em)
+HTCABECFORMULCOMP	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTCABECFORMULCOMP	ID_TBUSERS		texto			bloqueada: declaração pronta comentada (-> modelo_documento_versao.usuario_id)
+HTCABECFORMULCOMP	VERSAO		inteiro			bloqueada: declaração pronta comentada (-> modelo_documento_versao.numero_versao)
+#HTCABECFORMULCOMP	ID_PREVOLUCAO	modelo_documento_versao.modelo_documento_clinico_id				modelo do documento
+#HTCABECFORMULCOMP	VERSAO	modelo_documento_versao.numero_versao	inteiro			número da versão
+#HTCABECFORMULCOMP	=inclusao	modelo_documento_versao.operacao				cada linha é uma versão gravada
+#HTCABECFORMULCOMP	DATA_HORA_GRAVACAO	modelo_documento_versao.ocorrido_em	data_hora			gravação da versão
+#HTCABECFORMULCOMP	ID_TBUSERS	modelo_documento_versao.usuario_id			ref:TBUSERS	usuário pelo login
+#--- HTCHKGERAL: bloqueada: o pai PRCHKGERAL está bloqueado nesta fatia e o profissional vem de TBCBOPRO; o evento (NOT NULL) sai da situação da linha por de-para de valores, nunca de literal
+HTCHKGERAL	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+HTCHKGERAL	ID_PRCHKGERAL		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao_evento.horario_administracao_id)
+HTCHKGERAL	DATA_HORA_HISTORICO		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao_evento.ocorrido_em)
+HTCHKGERAL	DATA_HORA_HISTORICO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTCHKGERAL	DATA_HORA_CHECAR		data_hora			bloqueada: declaração pronta comentada (-> horario_administracao_evento.previsto_anterior_em)
+HTCHKGERAL	DATA_HORA_CHECAR_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM		chave_origem			bloqueada: declaração pronta comentada (-> horario_administracao_evento.profissional_id)
+HTCHKGERAL	QTDE_ADMINISTRADA		decimal			bloqueada: declaração pronta comentada (-> horario_administracao_evento.quantidade_administrada)
+HTCHKGERAL	JUSTIFICATIVA_SITUACAO_CHECAGEM		texto			bloqueada: declaração pronta comentada (-> horario_administracao_evento.motivo)
+HTCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO		texto			não aproveitada: sem coluna correspondente no destino
+HTCHKGERAL	ID_PRSITUACAOCHECAGEM		codigo_char			bloqueada: declaração pronta comentada (-> horario_administracao_evento.situacao_checagem_id e evento)
+HTCHKGERAL	DATA_HORA_GRAVACAO		data_hora			não aproveitada: sem coluna correspondente no destino
+HTCHKGERAL	DATA_HORA_GRAVACAO_UTC		texto			não aproveitada: a mesma data e hora em texto UTC; o destino guarda a coluna TIMESTAMP
+HTCHKGERAL	FUSO_HORARIO_GRAVACAO		inteiro			não aproveitada: fuso e horário de verão do registro; o destino guarda a data e hora local, sem coluna de fuso
+#HTCHKGERAL	ID_PRCHKGERAL	horario_administracao_evento.horario_administracao_id				horário
+#HTCHKGERAL	=inclusao	horario_administracao_evento.operacao				cada linha é um evento registrado
+#HTCHKGERAL	DATA_HORA_HISTORICO	horario_administracao_evento.ocorrido_em	data_hora			momento do evento
+#HTCHKGERAL	DATA_HORA_CHECAR	horario_administracao_evento.previsto_anterior_em	data_hora			horário previsto no momento do evento
+#HTCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.situacao_checagem_id			ref:PRSITUACAOCHECAGEM	situação da checagem pelo código
+#HTCHKGERAL	QTDE_ADMINISTRADA	horario_administracao_evento.quantidade_administrada	decimal			quantidade administrada
+#HTCHKGERAL	JUSTIFICATIVA_SITUACAO_CHECAGEM	horario_administracao_evento.motivo	texto			justificativa da situação
+#HTCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM	horario_administracao_evento.profissional_id				[bloqueia] precisa de ref:TBCBOPRO>profissional_id
+#HTCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.evento		valores		[bloqueia] precisa dos pares em declarado/valores.tsv (situação da checagem -> checagem, nao_administrado, estorno, suspensao...); nao_administrado e estorno exigem motivo (ck_horario_administracao_evento_motivo)
+#--- HTFORMULCOMP: bloqueada: cada linha é um componente, e modelo_layout guarda um leiaute por versão com conteudo em JSON (NOT NULL, JSON_VALID); o COMPONENTE da origem é texto de componente de tela, não JSON: falta agregação das filhas no JSON do pai (pedido L6-13.json)
+HTFORMULCOMP	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+HTFORMULCOMP	ID_HTCABECFORMULCOMP		chave_origem			bloqueada: declaração pronta comentada (-> modelo_layout.modelo_documento_versao_id)
+HTFORMULCOMP	ID_PRPADEVOL		chave_origem			não aproveitada: sem coluna correspondente no destino
+HTFORMULCOMP	NOME_CLASSE		texto_nome			não aproveitada: sem coluna correspondente no destino
+HTFORMULCOMP	NOME_COMPONENTE_PAI		texto			bloqueada: declaração pronta comentada (-> modelo_layout.nome)
+HTFORMULCOMP	COMPONENTE		texto_longo			bloqueada: declaração pronta comentada (-> modelo_layout.conteudo)
+HTFORMULCOMP	ORDEM_CRIACAO		inteiro			não aproveitada: sem coluna correspondente no destino
+#HTFORMULCOMP	ID_HTCABECFORMULCOMP	modelo_layout.modelo_documento_versao_id				versão do modelo
+#HTFORMULCOMP	NOME_COMPONENTE_PAI	modelo_layout.nome	texto			nome do componente
+#HTFORMULCOMP	COMPONENTE	modelo_layout.conteudo	texto_longo			[bloqueia] texto de componente de tela, não JSON
+#--- HTPARAMORIGEMCABIMP: bloqueada: é o histórico (DATA e usuário de cada mudança) da configuração viva PRPARAMORIGEMCABIMP, que já vai para cabecalho_impressao_documento na fatia L6-07: carregar as duas duplicaria o cabeçalho por tipo de documento (estabelecimento nulo não trava a chave única); destino a rever no mapa: trilha ou descarte (pedido L6-13.json)
+HTPARAMORIGEMCABIMP	ID		chave_origem			não aproveitada: chave da origem: fica em conector_origem
+HTPARAMORIGEMCABIMP	DATA		data_hora			não aproveitada: sem coluna correspondente no destino
+HTPARAMORIGEMCABIMP	ID_PRTPASSINATURA		chave_origem			bloqueada: declaração pronta comentada (-> cabecalho_impressao_documento.tipo_documento_clinico_id)
+HTPARAMORIGEMCABIMP	ORIGEM_DADOS		codigo_char			não aproveitada: sem coluna correspondente no destino
+HTPARAMORIGEMCABIMP	ID_TBUSERS		texto			não aproveitada: sem coluna correspondente no destino
+#HTPARAMORIGEMCABIMP	ID_PRTPASSINATURA	cabecalho_impressao_documento.tipo_documento_clinico_id				[bloqueia] histórico da configuração; ver motivo da tabela

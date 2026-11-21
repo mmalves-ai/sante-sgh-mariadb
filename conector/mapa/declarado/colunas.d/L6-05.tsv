@@ -1,0 +1,64 @@
+tabela	coluna	destino	regra	depara	via	motivo
+GETABVIA	COD	via_de_uso.codigo	codigo_char			código de 2 caracteres, caixa preservada; colisão de caixa na chave única vira codigo_colisao_caixa nas duas linhas
+GETABVIA	NOME	via_de_uso.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
+GETABVIA	ATIVO	via_de_uso.ativo	booleano_sn			S/N; vazio ou fora do domínio fica com o padrão do destino (ativo)
+PRAGRAVOTPARQUETIPO	ID	agravo_notificavel.codigo	texto			a origem só tem o id: vira o código de negócio
+PRAGRAVOTPARQUETIPO	NOME	agravo_notificavel.descricao	texto_nome			descrição do agravo; vazia recusa a linha
+PRAGRAVOPERGUNTA	ID_PRAGRAVOTPARQUETIPO	agravo_pergunta.agravo_notificavel_id	chave_origem			agravo pai pelo conector_origem
+PRAGRAVOPERGUNTA	ID	agravo_pergunta.sequencia	inteiro			a origem não tem ordem: a posição é a chave da origem, que nunca muda nem se repete (ordem da chave preservada; linha apagada ou nova no diferencial não desloca as outras); ID acima de 65535 recusa pela restrição do destino
+PRAGRAVOPERGUNTA	CODIGO	agravo_pergunta.codigo_campo	texto			código do campo na ficha oficial, inteiro gravado como texto
+PRAGRAVOPERGUNTA	SUBCODIGO	agravo_pergunta.subcodigo	inteiro			subdivisão do campo
+PRAGRAVOPERGUNTA	NOME	agravo_pergunta.enunciado	texto_nome			enunciado da pergunta
+PRAGRAVOPERGUNTA	=texto	agravo_pergunta.tipo_resposta				a origem não tem tipo de resposta: 'texto' é o tipo neutro do modelo (aceita qualquer resposta, sem opções); o cliente reclassifica
+PRAGRUPBALANCO	ID		texto			não carregada (L6-05): lado do balanço (ganho, perda, perda insensível) não existe na origem; presumir inverteria o sinal do total: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRAGRUPBALANCO	NOME		texto_nome			não carregada (L6-05): lado do balanço (ganho, perda, perda insensível) não existe na origem; presumir inverteria o sinal do total: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRASSINANTE	ID		texto			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRASSINANTE	NOME		texto_nome			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRASSINANTE	ATIVO		booleano_sn			não carregada (L6-05): papel de quem assina não existe na origem; presumir trocaria o papel (ex.: paciente como autor): aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRBHINTENSIDADE	ID	intensidade_perda.codigo	texto			a origem só tem o id: vira o código de negócio
+PRBHINTENSIDADE	NOME	intensidade_perda.descricao	texto_nome			descrição da intensidade
+PRBHTIPOFECHAMENTO	ID		texto			não carregada (L6-05): duração do período e fechamento parcial não existem na origem; presumir 24 horas contradiz o fechamento parcial: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRBHTIPOFECHAMENTO	NOME		texto_nome			não carregada (L6-05): duração do período e fechamento parcial não existem na origem; presumir 24 horas contradiz o fechamento parcial: aguarda de-para de valores pelo NOME revisado pelo cliente (pedido no L6-05.json)
+PRBHTPELIMINA	ID	tipo_ganho_perda.codigo	texto			a origem só tem o id: vira o código de negócio
+PRBHTPELIMINA	NOME	tipo_ganho_perda.descricao	texto_nome			descrição do tipo
+PRBHTPELIMINA	=perda	tipo_ganho_perda.natureza				a tabela da origem só cadastra eliminações: natureza perda
+PRBHTPELIMINA	DIGITAR_VOLUME_ELIMINADO	tipo_ganho_perda.exige_volume_medido	booleano_sn			S/N (gerada codigo_char); vazio fica com o padrão (falso)
+PRBHTPELIMINA	DIGITAR_VOLUME_ESTIMADO	tipo_ganho_perda.exige_volume_estimado	booleano_sn			S/N (gerada codigo_char)
+PRBHTPELIMINA	DIGITAR_INTENSIDADE	tipo_ganho_perda.exige_intensidade	booleano_sn			S/N (gerada codigo_char)
+PRBHTPELIMINA	DIGITAR_ASPECTO	tipo_ganho_perda.exige_aspecto	booleano_sn			S/N (gerada codigo_char)
+PRBHTPELIMINA	DIGITAR_ITEM_PRESCRITO	tipo_ganho_perda.exige_item_prescrito	booleano_sn			S/N (gerada codigo_char)
+PRBHTPELIMINA	ATIVO	tipo_ganho_perda.ativo	booleano_sn			S/N
+PRCAB_IDENTIFIC_PAC	ID	identificacao_paciente_documento.codigo	texto			a origem só tem o id: vira o código de negócio
+PRCAB_IDENTIFIC_PAC	NOME	identificacao_paciente_documento.descricao	texto_nome			descrição; vazia recusa a linha
+PRCAB_IDENTIFIC_PAC	ATIVO	identificacao_paciente_documento.ativo	booleano_sn			S/N
+PRCAMPOSLOCALIZACAOPACIENTE	ID	coluna_painel_paciente.codigo	texto			a origem só tem o id: vira o código de negócio
+PRCAMPOSLOCALIZACAOPACIENTE	ID	coluna_painel_paciente.chave_atributo	texto			chave única do atributo exibido: o id da coluna na origem (o mesmo que a preferência do usuário guarda); a aplicação liga ao atributo
+PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.descricao	texto_nome			descrição da coluna
+PRFA_UTILIZACAO	ID	utilizacao_item_prescricao.codigo	texto			a origem só tem o id: vira o código de negócio
+PRFA_UTILIZACAO	DESCRICAO	utilizacao_item_prescricao.descricao	texto			descrição (só as pontas aparadas)
+PRFA_UTILIZACAO	ATIVO	utilizacao_item_prescricao.ativo	booleano_sn			S/N
+PRFILTROCLASSIF	ID	classificacao_filtro_painel.codigo	texto			a origem só tem o id: vira o código de negócio
+PRFILTROCLASSIF	NOME	classificacao_filtro_painel.descricao	texto_nome			descrição; vazia recusa a linha
+PRFILTROUSUARIO	ID_TBUSERS	filtro_resultado_usuario.usuario_id			ref:TBUSERS	usuário pelo login (chave do pai); inexistente: pai_inexistente e recusa (NOT NULL)
+PRFILTROUSUARIO	ID	filtro_resultado_usuario.nome	texto			a origem não dá nome ao filtro: o id (único por usuário) vira o nome, que o profissional renomeia
+PRFILTROUSUARIO	SITUACAO_NAO_EMITIDOS	filtro_resultado_usuario.incluir_nao_emitidos	booleano_sn			S/N (gerada codigo_char); vazio fica com o padrão (falso)
+PRFILTROUSUARIO	RESULTADO_LIBERADO	filtro_resultado_usuario.somente_liberados	booleano_sn			S/N; vazio fica com o padrão (verdadeiro)
+PRFILTROUSUARIO	SOMENTE_MEUS_PEDIDOS	filtro_resultado_usuario.somente_meus_pedidos	booleano_sn			S/N (gerada codigo_char)
+PRFINALIDADETRAT	ID	intencao_tratamento_oncologico.codigo	texto			a origem só tem o id: vira o código de negócio
+PRFINALIDADETRAT	NOME	intencao_tratamento_oncologico.descricao	texto_nome			descrição; vazia recusa a linha
+PRFORMULA	COD	formula_calculo_dose.codigo	texto			código numérico da origem gravado como texto
+PRFORMULA	NOME	formula_calculo_dose.nome	texto_nome			nome da fórmula; vazio recusa a linha
+PRFORMULA	FORMULA	formula_calculo_dose.expressao	texto			expressão como está na origem (só as pontas); NÃO validada contra as variáveis do modelo: a fórmula migrada entra inativa (ativo presumido) até a revisão; vazia recusa a linha (NOT NULL)
+PRFORMULA	ATIVO		booleano_sn			não gravada (L6-05): a fórmula migrada entra sempre inativa até a revisão da expressão e da base de cálculo
+PRFORMULA	=~peso	formula_calculo_dose.base_calculo				base de cálculo não existe na origem: presumida peso com pendência valor_presumido; a fórmula fica inativa até a revisão (ativo presumido falso)
+PRFORMULA	=~0	formula_calculo_dose.ativo				fórmula migrada sem validação da expressão nem da base de cálculo: entra inativa (presumido falso, pendência valor_presumido) e só é ativada depois da revisão
+PRFREQUENCIA	ID		texto			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRFREQUENCIA	NOME		texto_nome			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRFREQUENCIA	NUM_DOSE		inteiro_zero_nulo			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRFREQUENCIA	ESTOQUE		booleano_sn			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRFREQUENCIA	RECEITA_ESTRUTURADA		booleano_sn			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRFREQUENCIA	ORDEM		inteiro			não carregada (L6-05): tipo da frequência decide o aprazamento do medicamento e não existe na origem; presumir a critério médico com pendência baixa desliga os horários: aguarda o tipo derivado de NUM_DOSE por de-para de valores com presumido de gravidade média (pedido no L6-05.json)
+PRHRRELATIVA	ID_PRFREQUENCIA		chave_origem			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
+PRHRRELATIVA	ORDEM		inteiro			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
+PRHRRELATIVA	NOME		texto_nome			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)
+PRHRRELATIVA	HORARIO		hora_em_timestamp			não carregada (L6-05): horário relativo da frequência: aguarda a frequência pai (PRFREQUENCIA, pedido no L6-05.json)

@@ -1,0 +1,61 @@
+tabela	coluna	destino	regra	depara	via	motivo
+CCTIPOLOCALBLC	ID	local_bloco.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+CCTIPOLOCALBLC	NOME	local_bloco.descricao	texto_nome			L6-16
+CCTIPOLOCALBLC	ATIVO	local_bloco.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+CCTIPOLOCALBLC	=~no_bloco	local_bloco.etapa_painel				L6-16: a origem não diz a etapa do painel; presumida no_bloco (valor_presumido, o cliente revisa)
+CCTIPOMOVIMENTACAOPAC	ID	tipo_movimento_bloco.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+CCTIPOMOVIMENTACAOPAC	NOME	tipo_movimento_bloco.descricao	texto_nome			L6-16
+CCTIPOMOVIMENTACAOPAC	ATIVO	tipo_movimento_bloco.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+CCTIPOMOVIMENTACAOPAC	=~transferencia_interna	tipo_movimento_bloco.efeito				L6-16: a origem não diz o efeito do movimento; presumido transferencia_interna (valor_presumido)
+CCTPURGENCIA	ID	carater_cirurgia.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+CCTPURGENCIA	NOME	carater_cirurgia.descricao	texto_nome			L6-16
+CCTPURGENCIA	ATIVO	carater_cirurgia.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+CCTPURGENCIA	=~eletiva	carater_cirurgia.natureza				L6-16: a origem não classifica a natureza; presumida eletiva (valor_presumido, o cliente revisa pelo painel)
+PRFA_CAD_MODO_RESPIR	ID	modo_ventilatorio.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+PRFA_CAD_MODO_RESPIR	DESCRICAO	modo_ventilatorio.descricao	texto			L6-16
+PRFA_CAD_MODO_RESPIR	ATIVO	modo_ventilatorio.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+PRFA_CAD_MODO_RESPIR	SIGLA	modo_ventilatorio.sigla	texto			L6-16
+PRFA_CAD_POSICAO_CIR	ID	posicao_cirurgica.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+PRFA_CAD_POSICAO_CIR	DESCRICAO	posicao_cirurgica.descricao	texto			L6-16
+PRFA_CAD_POSICAO_CIR	ATIVO	posicao_cirurgica.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+PRFA_TIPO_SINAL	ID	tipo_sinal_monitorado.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+PRFA_TIPO_SINAL	DESCRICAO	tipo_sinal_monitorado.descricao	texto			L6-16
+PRFA_TIPO_SINAL	ATIVO	tipo_sinal_monitorado.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+PRFA_TIPO_SINAL	SIGLA	tipo_sinal_monitorado.sigla	texto			L6-16: sigla única no destino (repetida: restricao_destino_1062)
+PRTIPO_PROFISSIONAL	ID	funcao_equipe_cirurgica.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+PRTIPO_PROFISSIONAL	NOME	funcao_equipe_cirurgica.descricao	texto_nome			L6-16
+PRTIPO_PROFISSIONAL	ATIVO	funcao_equipe_cirurgica.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+TBANESTESIA	COD	tipo_anestesia.codigo	texto			L6-16: a origem só tem o id: vira o código de negócio (texto)
+TBANESTESIA	NOME	tipo_anestesia.descricao	texto_nome			L6-16: nome ausente recusa a linha (NOT NULL)
+TBANESTESIA	ATIVO	tipo_anestesia.ativo	booleano_sn			L6-16: S/N para booleano (nulo ou fora do domínio fica com o padrão TRUE)
+TBANESTESIA	=~geral	tipo_anestesia.grupo				L6-16: a origem não classifica o grupo da técnica; presumido geral (valor_presumido)
+PRFA_CAD_POSICAO_CIR	ICONE		blob			L6-16: ícone binário vai para arquivo (icone_arquivo_id); sem regra de carga de arquivo (pedido em saida/L6-16.json)
+CCPARAM	@estabelecimento	configuracao_usuario_bloco.estabelecimento_id				L6-16: a origem não traz o estabelecimento; id do único estabelecimento do cliente (vários: estabelecimento_indefinido)
+CCPARAM	USUARIO	configuracao_usuario_bloco.usuario_id	chave_origem		ref:TBUSERS	L6-16: usuário pelo login (chave do pai, L3); nunca visto: pai_inexistente e recusa (NOT NULL); repetido: hoje 1062 numa das linhas (qual fica decide o hash): chave declarada e recusa de todas as repetidas pedidas no L6-16.json
+CCPARAM	CON_AGE	configuracao_usuario_bloco.pode_ver_mapa_salas	booleano_sn			L6-16: consultar a agenda do bloco = ver o mapa de salas (o mapa é a agenda por sala e horário, só leitura). ATENÇÃO: o destino tem padrão TRUE, então hoje nulo ou fora do domínio CONCEDE a permissão; regra booleano_sn_nulo_falso (nulo/fora vira FALSE com pendência) pedida no L6-16.json
+CCPARAM	PERMITIR_REAGENDAR	configuracao_usuario_bloco.pode_alterar_agendamento	booleano_sn			L6-16: reagendar = mudar sala, data ou hora do agendamento (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	PERMITIR_DESAGENDAR	configuracao_usuario_bloco.pode_cancelar_agendamento	booleano_sn			L6-16: desagendar = tirar o paciente da agenda aplicando uma situação (SITUACAO_DESAGENDAMENTO): é o cancelamento do produto (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	GERIR_SALA_BLOCO_CIRURGICO	configuracao_usuario_bloco.pode_reservar_sala	booleano_sn			L6-16: gerir a sala = reservar e bloquear horários da sala (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	DIG_CIR	configuracao_usuario_bloco.pode_registrar_cirurgia	booleano_sn			L6-16: digitar a cirurgia = registrar o ato cirúrgico (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	DIG_MATERIAIS	configuracao_usuario_bloco.pode_lancar_consumo	booleano_sn			L6-16: digitar materiais = lançar o consumo do ato (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	LANCAR_OPM	configuracao_usuario_bloco.pode_lancar_opme	booleano_sn			L6-16: lançar OPM = lançar órtese, prótese e material especial (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	DADOS_CIH	configuracao_usuario_bloco.pode_registrar_dados_ccih	booleano_sn			L6-16: dados da comissão de infecção do ato (hoje nulo ou fora do domínio fica com o padrão FALSE do destino; regra booleano_sn_nulo_falso pedida no L6-16.json)
+CCPARAM	=~0	configuracao_usuario_bloco.pode_criar_agendamento				L6-16: a origem não controla quem cria agendamento (só reagendar, desagendar, excluir e atender); FALSE presumido com valor_presumido por linha: o cliente libera pelo painel quem agenda (nunca concedido sem decisão)
+CCPARAM	PERMITIR_EXCLUIR_AGENDAMENTO		codigo_char			L6-16: sem destino: apagar o agendamento: o produto não apaga, só cancela (o apagado vira registro_excluido); dar cancelar a quem só podia excluir ampliaria o acesso sem decisão
+CCPARAM	PERMITIR_ATENDER_AGENDAMENTO		codigo_char			L6-16: sem destino: atender o agendamento abre o atendimento do paciente na recepção: permissão do atendimento, sem par no bloco (pode_liberar_internacao é a liberação clínica, não equivalente)
+CCPARAM	DIG_RESER		codigo_char			L6-16: sem destino: digitar as reservas do agendamento (sangue, UTI, materiais): o produto não tem permissão própria para isso
+CCPARAM	DIG_CDC		codigo_char			L6-16: sem destino: digitar o centro de custo do ato: campo de tela, sem permissão no produto
+CCPARAM	ATU_INT_S		codigo_char			L6-16: sem destino: atualizar a conta de internado (faturamento), fora do bloco
+CCPARAM	ATU_INT_C		codigo_char			L6-16: sem destino: atualizar a conta de internado (faturamento), fora do bloco
+CCPARAM	ATU_EXT_S		codigo_char			L6-16: sem destino: atualizar a conta de externo (faturamento), fora do bloco
+CCPARAM	ATU_EXT_C		codigo_char			L6-16: sem destino: atualizar a conta de externo (faturamento), fora do bloco
+CCPARAM	DIG_INVAS		codigo_char			L6-16: sem destino: digitar procedimentos invasivos: dado da comissão de infecção, já coberto por DADOS_CIH
+CCPARAM	DIG_SUPUR		codigo_char			L6-16: sem destino: digitar supuração: dado da comissão de infecção, já coberto por DADOS_CIH
+CCPARAM	LANC_EXAME_PAT		codigo_char			L6-16: sem destino: lançar exame anatomopatológico: permissão do laboratório, sem par no bloco
+CCPARAM	CONSIS_FERIADO_AGE		codigo_char			L6-16: sem destino: preferência de tela (consistir feriado na agenda), não permissão
+CCPARAM	DIGITAR_TECNICA_UTIL		codigo_char			L6-16: sem destino: campo de tela (técnica utilizada), não permissão
+CCPARAM	DIGITAR_ESPECIALIDADE		codigo_char			L6-16: sem destino: campo de tela (especialidade), não permissão
+CCPARAM	DIGITAR_OFTALMOLOGIA		codigo_char			L6-16: sem destino: campos de tela da oftalmologia, não permissão
+CCPARAM	SITUACAO_DESAGENDAMENTO		codigo_char			L6-16: sem destino: situação aplicada ao desagendar: preferência, sem destino (o motivo do cancelamento é escolhido no produto)
+CCPARAM	PERM_LAN_DATHOR_FUT_FIN_POS_OPE		codigo_char			L6-16: sem destino: lançar data e hora futura no fim do pós-operatório: o produto não permite data futura para ninguém
+CCPARAM	CONSID_ESPEC_PESQ_ANEST		inteiro			L6-16: sem destino: preferência de pesquisa do anestesista, não permissão

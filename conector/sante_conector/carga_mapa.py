@@ -68,15 +68,25 @@ DEC_DESTINO = {"decimal"}
 TXT_DESTINO = {"char", "varchar", "text", "tinytext", "mediumtext", "longtext"}
 
 
+# texto não numérico em coluna numérica do destino (L6-06): o chamador grava NULL com valor_fora_do_dominio
+NAO_NUMERICO = object()
+
+
 def tipar(x, tipo):
     """Valor no tipo da coluna de destino (o que o banco devolve na releitura): literal numérico em coluna numérica
     vira número; inteiro ou decimal em coluna de texto vira texto. Sem tipo conhecido, fica como está."""
     if x is None or tipo is None or isinstance(x, bool):
         return x
     if tipo in INT_DESTINO and isinstance(x, str):
-        return int(x)
+        try:
+            return int(x.strip())
+        except ValueError:
+            return NAO_NUMERICO
     if tipo in DEC_DESTINO and isinstance(x, (str, int, float)):
-        return decimal.Decimal(str(x))
+        try:
+            return decimal.Decimal(str(x).strip())
+        except decimal.InvalidOperation:
+            return NAO_NUMERICO
     if tipo in TXT_DESTINO and isinstance(x, (int, decimal.Decimal)):
         return str(x)
     return x
@@ -349,6 +359,9 @@ class CargaMapa(carga.Carga):
                             pend.append(("valor_fora_do_dominio", "media"))
                 ic = info.get(dc) or (True, None, None, False)
                 x = tipar(x, ic[1])
+                if x is NAO_NUMERICO:
+                    x = None
+                    pend.append(("valor_fora_do_dominio", "media"))
                 if x is None and ic[3]:  # NOT NULL com padrão: o destino decide; o resumo usa o valor relido
                     cs.append(_PADRAO(dc))
                     continue

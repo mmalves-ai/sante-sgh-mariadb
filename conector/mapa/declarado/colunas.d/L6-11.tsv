@@ -1,0 +1,40 @@
+tabela	coluna	destino	regra	depara	via	motivo
+PRLOCAL_ASSISTENCIA	ID	local_assistencia.codigo	texto			código do local como texto (destino VARCHAR); chave da origem, sem referência
+PRLOCAL_ASSISTENCIA	LOCAL_ASSISTENCIA	local_assistencia.descricao	texto			descrição do local (sem descrição: NOT NULL do destino recusa; acima de 150: 1406)
+PRLOCAL_ASSISTENCIA	SITUACAO	local_assistencia.ativo	booleano_ai			situação A/I vira ativo; fora do domínio fica com o padrão do destino, com pendência
+PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO		codigo_char			não carregada por ora: código do tipo de atendimento pede de-para de valores para o domínio do destino; pares pedidos em saida/L6-11.json (até lá o destino entra presumido 'todos', abaixo)
+PRLOCAL_ASSISTENCIA	=~todos	local_assistencia.tipo_atendimento				sem de-para do código da origem: entra como todos, presumido (pendência valor_presumido por linha) e o cliente reclassifica na tela; troca pelo de-para quando os pares existirem
+PRLOCAL_ASSISTENCIA	ID_TBLEITO		chave_origem			não carregada por ora: local_assistencia não tem coluna de leito; coluna leito_hospitalar_id pedida em saida/L6-11.json
+PRLOCAL_ASSISTENCIA	ID_TBUNIDAD		chave_origem			não carregada por ora: local_assistencia não tem coluna de unidade; coluna unidade_assistencial_id pedida em saida/L6-11.json
+TBCBARAREACAOADVERSA	CODIGO	manifestacao_alergica.codigo	codigo_char			código da reação (único no destino: colisão de caixa recusa as duas; acima de 30: 1406)
+TBCBARAREACAOADVERSA	NOME	manifestacao_alergica.descricao	texto_nome			nome da reação
+TBCBARAREACAOADVERSA	DESCRICAO	manifestacao_alergica.descricao_detalhada	texto			descrição detalhada
+TBCBARAREACAOADVERSA	SINONIMO_1	manifestacao_alergica.sinonimos	texto			primeiro sinônimo; o segundo pede junção de colunas (saida/L6-11.json)
+TBCBARAREACAOADVERSA	ATIVO	manifestacao_alergica.ativo	booleano_sn			S/N vira ativo; fora do domínio fica com o padrão do destino, com pendência
+TBCBARAREACAOADVERSA	SINONIMO_2		texto			não carregada por ora: sinonimos é uma coluna só; junção de colunas com separador pedida em saida/L6-11.json
+TBCBARAREACAOADVERSA	ID_TBCID10		chave_origem			não carregada por ora: id interno do catálogo oficial; resolver pelo código da linha-pai (de-para cid10 para termo_terminologia) pedido em saida/L6-11.json
+TBCBARAREACAOADVERSA	ID_TBCIAP		chave_origem			não carregada: pai fora do mapa (catálogo não carregado)
+TBCBARAREACAOADVERSA	ID_TBVERSAOCBARA		chave_origem			não carregada: pai fora do mapa (versão da classificação não carregada)
+TBCBARAREACAOADVERSA	ID_DIGITAL		texto			descartada: identificador técnico da origem, sem destino no modelo
+PRPROTGERALESP	ID_PROTGERAL	protocolo_prescricao_especialidade.protocolo_prescricao_id	chave_origem		ref:PRPROTGERAL	protocolo de prescrição (pai de fora da fatia, chave ID_PROTGERAL)
+PRPROTGERALESP	ESPEC	protocolo_prescricao_especialidade.especialidade_medica_id	chave_origem		ref:TBESPEC	especialidade médica pela chave COD do pai
+PREVOLUCAO	ID_EVOLUCAO	modelo_documento_clinico.codigo	texto			código do modelo como texto (atende o CHECK ^[A-Z0-9_]+$); o código livre COD da origem pode ter caixa e símbolos fora do CHECK, pedido de coluna de código de exibição em saida/L6-11.json
+PREVOLUCAO	DESCRICAO	modelo_documento_clinico.titulo	texto			título do modelo (sem título: NOT NULL do destino recusa)
+PREVOLUCAO	ID_PRTPCOMP	modelo_documento_clinico.tipo_documento_clinico_id	chave_origem			tipo de documento clínico (referência gerada PRTPCOMP; sem tipo: NOT NULL recusa)
+PREVOLUCAO	=~outro	modelo_documento_clinico.tipo_registro				a origem não classifica o registro: entra como outro, presumido (pendência baixa valor_presumido) e o cliente reclassifica na tela
+PREVOLUCAO	COD		texto			não carregada por ora: código livre fora do CHECK do destino; coluna pedida em saida/L6-11.json
+PREVOLUCAO	ID_TBEDITREL		chave_origem			não carregada por ora: o cabeçalho de impressão do destino não é o relatório da origem; ligação pedida em saida/L6-11.json
+PREVOLESPEC	ID_EVOLUCAO	modelo_especialidade.modelo_documento_clinico_id	chave_origem		ref:PREVOLUCAO	modelo de documento (mesma fatia)
+PREVOLESPEC	ESPEC	modelo_especialidade.especialidade_medica_id	chave_origem		ref:TBESPEC	especialidade médica pela chave COD do pai
+PREVOLTIPOACO	ID_EVOLUCAO	modelo_acomodacao.modelo_documento_clinico_id	chave_origem		ref:PREVOLUCAO	modelo de documento (mesma fatia)
+PREVOLTIPOACO	COD	modelo_acomodacao.categoria_acomodacao_id	chave_origem		ref:TBTIPOACOMOD	categoria de acomodação pela chave ID do pai; 0 é vazio
+PREVOLTIPOACO	NOME		texto_nome			descartada: repete o nome da categoria de acomodação
+PREVOLUCAO	TP_ATENDIMENTO		inteiro			não carregada por ora: restringe o modelo a um tipo de atendimento; modelo_documento_clinico não tem essa coluna (modelo_acomodacao é por categoria de acomodação, não por tipo de atendimento); coluna e de-para de valores pedidos em saida/L6-11.json
+PREVOLUCAO	CODCAB		inteiro			não carregada por ora: código do cabeçalho de impressão da origem sem tabela-pai no mapa; cabecalho_impressao_documento não tem código para resolver a referência; ligação pedida em saida/L6-11.json
+PREVOLUCAO	LAYOUT_VISUALIZACAO_IMPRESSAO		codigo_char			não carregada por ora: código de leiaute de visualização/impressão sem domínio conhecido; a relação com apenas_impressao/imprime_apenas_respondidos pede de-para de valores, pedido em saida/L6-11.json (até lá ficam os padrões do destino)
+PREVOLUCAO	FASE		inteiro			descartada: fase interna do modelo na origem, sem equivalente no modelo (a situação do destino é do ciclo de publicação e não deriva dela)
+PREVOLUCAO	OLD_TIPOCOMP		inteiro			descartada: tipo antigo, substituído na própria origem por ID_PRTPCOMP (carregado)
+PREVOLUCAO	HIST_CLINICO_ABA		inteiro			descartada: preferência de tela do histórico clínico da origem (aba inicial), sem equivalente no modelo de documento
+PREVOLUCAO	HIST_CLINICO_PERIODO		inteiro			descartada: preferência de tela do histórico clínico da origem (período exibido), sem equivalente no modelo de documento
+PREVOLUCAO	HIST_CLINICO_TIPOATENDIMENTO		inteiro			descartada: preferência de tela do histórico clínico da origem (filtro por tipo de atendimento), sem equivalente no modelo de documento
+PREVOLUCAO	HIST_CLINICO_HISTORICO		inteiro			descartada: preferência de tela do histórico clínico da origem (histórico exibido), sem equivalente no modelo de documento

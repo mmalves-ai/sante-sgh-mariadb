@@ -1,0 +1,54 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (planejar/conciliação) + mapa.py (tabelas_sem_mapa)",
+   "mudanca": "tabela do mapa PRESENTE na origem, com linhas e sem nenhuma coluna declarada com destino (bloqueada ou não carregada com motivo em colunas.d): contar as linhas, registrar UMA pendência alta por tabela, regra tabela_bloqueada (tabela, número de registros, motivo de colunas.d; nunca valores) e entrar na conciliação como entidade própria origem=N, destino=0, recusados=N; o painel mostra o motivo",
+   "motivo": "hoje planejar() faz continue (t not in decl) e tabelas_sem_mapa() só pega tabela fora do mapa: as 9 tabelas de L6-06 fora da carga (PRPRESC_PRPROTGERAL, PROFTGABARITO, PROFTTPARQUIV, PROFTGRADUACAO, PRPARTAMPADPRESC, PRPROCESSOPEP e os 3 parâmetros) somem da conferência, que dá ok sem provar o que ficou de fora. Até a regra, a fatia NÃO se declara conferida para essas tabelas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "destino DATE recebendo datetime: gravar e somar só a data (datetime -> date); hora diferente de 00:00 vira pendência baixa hora_descartada; data sentinela 1899-12-30 (convenção 'sem fim' do cadastro antigo em VIGENCIAF) vira NULL",
+   "motivo": "PRPROTGERAL.VIGENCIAI/VIGENCIAF (TIMESTAMP) -> protocolo_prescricao.vigencia_inicio/fim (DATE): o resumo da origem sai com data e hora e o relido só com a data, e a conciliação diverge. As duas colunas estão suspensas (#) em colunas.d/L6-06.tsv até a regra; ao liberar, as linhas já carregadas aparecem como alteradas (Sincronizar). Enquanto isso todo protocolo leva valor_presumido (linha =~todos), para que o protocolo vencido não entre como vigente sem aviso"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "texto não numérico em destino inteiro ou decimal: NULL com pendência valor_fora_do_dominio, sem exceção (hoje int(x) levanta ValueError e derruba a carga inteira)",
+   "motivo": "PRSAE_LIKERT.PONTO_LIKERT (VARCHAR(2)) -> escala_resultado_enfermagem.ponto: a imagem sintética só tem texto numérico; um rótulo como 'NA' na imagem real pararia a carga. Achado ao declarar USUARIO com regra texto e via ref:TBUSERS (ValueError em criado_por): a via ref só vale com regra chave_origem; o verificador poderia recusar via ref com outra regra"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (mecanismo parametro)",
+   "mudanca": "regra genérica para tabela de parâmetros de linha única: cada COLUNA declarada vira um parâmetro (parametro_definicao pela chave modulo.nome, com módulo e tipo declarados) e parametro_valor no nível rede, com vigência na data da migração",
+   "motivo": "PRPARAM_CHECAGEM (3 S/N de lote e validade obrigatórios), PRPARAM_PRESCFUTURA (2 TIME) e PRPAROFTALMO (2 inteiros) ficam sem carga: a carga por linha não desdobra colunas em parâmetros (mesma lacuna de FPESOCPARAMS1210 em L5-08)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (ou valores.d/L6-06.tsv)",
+   "mudanca": "de-para de valores por cliente: PROFTGRADUACAO.COD_GRADUACAO -> gabarito_acuidade_visual.graduacao; PRPROTGERAL.SEXO -> protocolo_prescricao.sexo, domínio fixo do cadastro antigo: A -> todos, F -> feminino, M -> masculino, nulo -> todos (ao aplicar, declarar SEXO com depara=valores e retirar a linha =~todos de colunas.d/L6-06.tsv); PRPADRECEITA.GERAL -> modelo_receita.abrangencia (geral/profissional); PROFTTPACUID.TP_EXAME -> tipo_acuidade_visual.tipo_exame_oftalmologico_id; PRSITAPRAZAM.ID e PRSITCHECAGEM.ID -> categoria",
+   "motivo": "os valores dependem do conteúdo da imagem do cliente (não lido aqui); até lá SEXO fica 'todos' e abrangência e categorias entram PRESUMIDAS com valor_presumido por linha"
+  },
+  {
+   "arquivo": "conector/mapa (modelo_receita)",
+   "mudanca": "ligação usuário -> profissional para o dono da receita pessoal (modelo_receita.profissional_id), para trocar a abrangência presumida 'geral' por 'profissional' quando GERAL = N",
+   "motivo": "o CHECK ck_modelo_receita_dono exige profissional na receita pessoal; a origem só tem o login. Hoje receitas pessoais entram como gerais, com valor_presumido para revisão"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + dependencias (PRPRESC_PRPROTGERAL)",
+   "mudanca": "mover PRPRESC_PRPROTGERAL para depois de PRPRESC (ordem 1120) e PRPROTGERAL (319), com dependência declarada; aplicado_em (NOT NULL) derivado da data da prescrição (referência a coluna do pai) ou literal presumido",
+   "motivo": "na ordem 317 os dois pais ainda não existem: toda linha (8215 na referência) seria pai_inexistente e recusada; ID_PROTGERAL nem tem referência gerada"
+  },
+  {
+   "arquivo": "conector/mapa (PROFTGABARITO, PRPROCESSOPEP, PRPARTAMPADPRESC, PROFTTPARQUIV)",
+   "mudanca": "reclassificar: PROFTGABARITO exige tipo_acuidade_visual_id e graduação (FORMA sem referência declarável); PRPROCESSOPEP não tem transição para fluxo_situacao_documento (tipo de documento, situação de destino, ordem); PRPARTAMPADPRESC é lista de tamanhos de fonte, não configuração por setor; PROFTTPARQUIV guarda extensões de arquivo (VARCHAR(4)), não tipos de documento: sem linhas em tipo_anexo; aproveitar como tipo_anexo.extensoes_permitidas por regra própria (lista de extensões aceitas), se o dono quiser",
+   "motivo": "destinos atuais NOT NULL sem dado na origem; ficam sem carga com motivo em colunas.d/L6-06.tsv"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (código de negócio)",
+   "mudanca": "prefixo de domínio no código quando duas tabelas da origem gravam no mesmo destino de código único",
+   "motivo": "PRSITCHECAGEM e PRSITUACAOCHECAGEM -> situacao_checagem: códigos numéricos iguais chocam (restricao_destino_1062) — mesma lacuna de L5-09. (PROFTTPARQUIV saiu de tipo_anexo: guarda extensões, não tipos de documento)"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP/02_tabelas.sql (condicao_se_necessario)",
+   "mudanca": "coluna codigo_interoperabilidade VARCHAR(36) NULL, como em tipo_oxigenoterapia",
+   "motivo": "PRSENECESSARIO.ID_DIGITAL não tem destino"
+  }
+ ]
+}

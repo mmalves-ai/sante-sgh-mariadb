@@ -1,0 +1,16 @@
+tabela	coluna	destino	regra	depara	via	motivo
+RETPLEITO	ID	tipo_leito_observacao.codigo	texto			L6-14: chave inteira da origem gravada como código (texto); RETPLEITO é a única alimentadora
+RETPLEITO	NOME	tipo_leito_observacao.descricao	texto_nome			L6-14: sem nome recusa a linha (NOT NULL)
+RETPLEITO	=~outro	tipo_leito_observacao.categoria				L6-14: a origem classifica por COD_TP_LEITO (código interno sem tabela de valores); até o de-para de valores (pedido no L6-14.json) entra 'outro' com pendência valor_presumido para o cliente revisar
+RIBLOCOS	@estabelecimento	bloco_internacao.estabelecimento_id				L6-14: a origem não diz o estabelecimento com certeza (UNID sem referência gerada, pedido no L6-14.json); com vários estabelecimentos a linha é recusada com estabelecimento_indefinido, nunca atribuída a um deles
+RIBLOCOS	BLOCO	bloco_internacao.codigo	codigo_char			L6-14: código do bloco (chave da origem, comparação binária): codigo_char preserva a caixa e as pontas e apara só o preenchimento; 'A' e 'a' são blocos distintos (colisão pela chave composta: pedido 8)
+RIBLOCOS	NOME	bloco_internacao.nome	texto_nome			L6-14: sem nome recusa a linha (NOT NULL)
+RISITREGLEITO	ID	situacao_pedido_leito.codigo	texto			L6-14: chave inteira da origem gravada como código (texto); RISITREGLEITO é a única alimentadora
+RISITREGLEITO	NOME	situacao_pedido_leito.descricao	texto_nome			L6-14: sem nome recusa a linha (NOT NULL)
+RISITREGLEITO	CODIGO	situacao_pedido_leito.codigo_central	texto			L6-14: código da situação na central reguladora, guardado como texto
+RISITREGLEITO	=~solicitado	situacao_pedido_leito.estado				L6-14: a origem não diz o estado do fluxo do NIR; entra 'solicitado' presumido (valor_presumido por linha) e a linha fica INATIVA (ativo=FALSE) até o de-para de valores (pedido 7), para que o NIR nunca a escolha nem a ofereça
+RISITREGLEITO	=0	situacao_pedido_leito.ativo				L6-14: situação migrada inativa até a reclassificação do estado e do final pelo de-para de valores (pedido 7): o NIR só usa situação ativa (situacaoDoEstado e o cadastro filtram ativo)
+TBALTARN	ID	desfecho_recem_nascido.codigo	texto			L6-14: chave inteira da origem gravada como código (texto); TBALTARN é a única alimentadora
+TBALTARN	NOME	desfecho_recem_nascido.descricao	texto_nome			L6-14: nome vazio recusa a linha (NOT NULL)
+TBALTARN	=~0	desfecho_recem_nascido.obito				L6-14: a origem não marca óbito nem permanência; obito entra FALSE e permanece_internado fica no padrão FALSE, com pendência valor_presumido por linha para o cliente marcar o desfecho de óbito e o de permanência (de-para de valores pedido no L6-14.json)
+TBALTARN	=0	desfecho_recem_nascido.ativo				L6-14: desfecho migrado inativo até o de-para de valores (pedido 7) marcar óbito e permanência: o desfecho de óbito nunca fica oferecido como não-óbito

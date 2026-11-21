@@ -1,0 +1,79 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (geração da ordem e das dependências: tools/obra/gerar mapa) ",
+   "mudanca": "acrescentar as dependências que faltam e reordenar: RITRANSF, RITRFCLI, RITRFCON, RITRFESP, RITRFMED, RIEXCINT e RIALTA_EXCLUSAO dependem de RICADINT (internação, ordem 1030; REG/ID_ATCABECATEND é a internação ou o atendimento); RILEITOS (416) depende de RIACOMOD (acomodação, ordem 837) e de RIBLOCOS (411); RICONFIC (413) e RIESPFIC (414) dependem de RIMODFIC (420), que depende de RITITFIC (419). Todas precisam vir depois dos pais na ordem de carga",
+   "motivo": "hoje essas tabelas vêm ANTES dos pais na ordem e o depende_de só traz TBUSERS: a referência daria pai_inexistente e, em coluna NOT NULL (internacao_id, acomodacao_id, modelo_documento_internacao_id), recusaria toda linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/verificar_mapa.py",
+   "mudanca": "(a) código composto '=<texto>{COL}<texto>' (o mesmo pedido 1 da L5-07), para titulo_documento_internacao.codigo e modelo_documento_internacao.codigo a partir de COD e GRAFICA (ex.: '={COD}-{GRAFICA}'); (b) referência declarada por chave composta na via, ex.: 'ref:RITITFIC(COD,GRAFICA)' em RIMODFIC e 'ref:RIMODFIC(COD,GRAFICA)' em RICONFIC/RIESPFIC (chave do pai = valores das colunas nomeadas, na ordem da chave do pai), e 'ref:RILEITOS(BLOCO,ACOMOD,LEITO)' em RITRANSF para leito de origem (BLOCOO,ACOMODO,LEITOO) e destino (BLOCOD,ACOMODD,LEITOD), o que pede a forma 'ref:RILEITOS(BLOCO=BLOCOO,ACOMOD=ACOMODO,LEITO=LEITOO)'",
+   "motivo": "RITITFIC e RIMODFIC têm chave COD,GRAFICA: com só COD, a segunda variante gráfica do mesmo título colide no codigo único (restricao_destino_1062; a imagem sintética da L6-14 tem o caso em RITITFIC, não carregada). As regras de documento e a transferência de leito apontam o pai por mais de uma coluna"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial de data e hora combinadas: '@datahora:<DATA>,<HORA>' com HORA em texto HHMM (VARCHAR(4)) para DATETIME; hora inválida = pendência hora_invalida, data sentinela = data_sentinela",
+   "motivo": "RITRANSF (transferido_em NOT NULL), RITRFCLI/CON/ESP/MED (ocorrido_em NOT NULL) guardam DATA (DATE) e HORA (VARCHAR(4)) separadas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial de retrato JSON: '@json:<COL1>,<COL2>,...' grava um objeto JSON com as colunas da origem convertidas pelas regras declaradas/geradas (chaves em nome de negócio, por um de-para de nomes no mapa, nunca o nome da origem — regra 1); a soma de controle usa o JSON canônico (chaves ordenadas)",
+   "motivo": "cancelamento_alta.dados_alta, cancelamento_internacao.dados_internacao e registro_excluido.dados são JSON NOT NULL com o retrato do registro (RIALTA_EXCLUSAO tem 18 colunas de retrato; RIEXCINT, 8)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + db (linha de catálogo do sistema)",
+   "mudanca": "referência a linha de cadastro por código fixo: '=>tabela.codigo=<valor>' grava o id da linha do destino cujo codigo é o valor (ex.: motivo 'migrado' em motivo_cancelamento_alta, tipo de troca 'fonte_pagadora', 'clinica', 'especialidade', 'profissional' em tipo_troca_internacao, motivo 'nao_informado' em motivo_troca_leito); linha ausente = recusa com pendência catalogo_codigo_inexistente, nunca criada pelo conector",
+   "motivo": "troca_internacao.tipo_troca_internacao_id (cada RITRF* é um tipo de troca fixo), transferencia_leito.motivo_troca_leito_id, cancelamento_alta.motivo_cancelamento_alta_id e cancelamento_internacao.motivo_cancelamento_internacao_id são NOT NULL e a origem não traz o valor (ou traz por tabela fora do mapa: RIEXCINT.ID_TBMOTCANCCAD -> TBMOTCANCCAD, dep_fora_do_mapa)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "destino secundário condicional: declarar a condição por tabela de destino (ex.: reserva_leito só quando RESERVADO = 'S'); linha sem a condição não cria a entidade secundária e não entra na conciliação dela",
+   "motivo": "RILEITOS -> reserva_leito: só os leitos reservados têm reserva; sem condição, todo leito geraria uma reserva. Além disso reserva_leito exige valida_ate (NOT NULL, sem coluna na origem) e paciente_id ou pre_cadastro_id (CHECK; a origem só tem nome e CPF): decisão do dono se a reserva vigente migra (ou fica só no relatório de virada)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (pares por tabela, coluna e destino) + colunas.d/L6-14.tsv",
+   "mudanca": "de-para de valores, a preencher com o cliente (o painel lista os valores distintos): RETPLEITO.COD_TP_LEITO -> tipo_leito_observacao.categoria (maca, poltrona, leito, berco, cadeira, outro); RISITREGLEITO.ID -> situacao_pedido_leito.estado (solicitado, em_analise, reservado, em_transito, internado, cancelado, rejeitado) e final; TBALTARN.ID -> desfecho_recem_nascido.obito e permanece_internado; RILEITOS.STATUS -> leito_hospitalar.situacao_leito_id (pela situação do leito). Ao declarar, trocar o literal presumido pela coluna com depara=valores. Ao declarar RISITREGLEITO.ID e TBALTARN.ID com depara=valores, retirar a linha '=0' de ativo (as linhas voltam ativas só reclassificadas). Os pedidos de leito (pedido_leito) não devem migrar antes deste de-para",
+   "motivo": "hoje categoria 'outro', estado 'solicitado' e obito FALSE entram presumidos (pendência valor_presumido por linha). valores.tsv é compartilhado: a fatia não pode editá-lo. Sem o de-para, a situação 'negado' não encerra o pedido de leito e o desfecho de óbito do recém-nascido não marca óbito"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (colisões de caixa)",
+   "mudanca": "estender sentinela.colisoes_caixa/_colisoes/_unicos_sem_caixa às chaves únicas compostas cujas outras colunas são fixas na carga (ex.: uq_bloco_internacao_estabelecimento_codigo com @estabelecimento), para colunas com regra codigo_char (RIBLOCOS.BLOCO já é codigo_char): os grupos que só diferem pela caixa viram codigo_colisao_caixa em TODAS as linhas do grupo. Ao aplicar, o esperado da sintética da L6-14 passa a RIBLOCOS gravados 4, restricao_destino_1048: 1, codigo_colisao_caixa: 2 (sem restricao_destino_1062)",
+   "motivo": "RIBLOCOS.BLOCO 'A' e 'a' são blocos distintos na origem (comparação binária); hoje o segundo lido perde com restricao_destino_1062 e quem vence depende da ordem de leitura (leitos e transferências do perdedor ficariam pai_pendente)"
+  },
+  {
+   "arquivo": "conector/mapa (referência gerada) ou decisão de análise",
+   "mudanca": "confirmar o que RIBLOCOS.UNID referencia (unidade de internação ou estabelecimento) e gerar a referência; IDAMIN/IDAMAX em anos ou dias? (destino em dias: regra 'anos_para_dias' se forem anos). RILEITOS não tem unidade de internação: herdá-la do bloco exige regra de herança do pai ('via pai:RIBLOCOS.UNID')",
+   "motivo": "bloco_internacao.unidade_internacao_id e idade_minima/maxima_dias ficam NULL hoje (não declaradas, sem perda da origem: a tabela é relida no Sincronizar); leito_hospitalar.unidade_internacao_id é NOT NULL"
+  },
+  {
+   "arquivo": "decisão do dono + carga_mapa.py (mecanismo de despivotar)",
+   "mudanca": "RIPARAM (MECANISMO, 1 linha, ~150 colunas de opção): de-para coluna -> parametro_definicao.chave do produto (só as opções que o produto tem) e gravação em parametro_valor nível 'rede' com vigência no início da migração; as opções sem parâmetro no produto ficam registradas como descartadas, com motivo",
+   "motivo": "parametro_definicao é o catálogo do produto (não vem do cliente); a tabela é uma linha com uma coluna por opção, sem chave"
+  },
+  {
+   "arquivo": "decisão do dono (modelo) ",
+   "mudanca": "RIMODFIC -> modelo_documento_internacao: o CHECK ck_modelo_documento_internacao_conteudo exige conteudo ou modelo_documento_clinico_id e a origem não tem o conteúdo do modelo (só nome, cópias, ordem, clínica, idade). Opções: carregar com conteudo vazio marcado para revisão, ou migrar só o título e a regra (o modelo é refeito no editor)",
+   "motivo": "sem decisão, toda linha seria recusada pela restrição do destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py (opcional)",
+   "mudanca": "criar no banco descartável a tabela estabelecimento com uma linha quando o plano usa @estabelecimento (hoje cada fatia põe isso no PREPARO_DESTINO)",
+   "motivo": "a conferência cria só as tabelas de destino da fatia; sem estabelecimento, @estabelecimento recusa tudo com estabelecimento_indefinido"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (GRAVIDADE_REGRA / literal presumido)",
+   "mudanca": "gravidade do valor_presumido por coluna declarada (ex.: forma '=~!<texto>' para presumido de gravidade media, ou coluna de gravidade no colunas.d); usar media em situacao_pedido_leito.estado e desfecho_recem_nascido.obito",
+   "motivo": "estado do NIR e óbito são colunas que o domínio usa para decidir (fila ativa, encerramento, óbito); a pendência baixa esconde do cliente que o significado da linha foi presumido. Hoje a fatia mitiga gravando ativo=FALSE"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (REGRAS) + carga_mapa.py",
+   "mudanca": "regra 'inteiro_nao_negativo': negativo vira NULL (ou o padrão do destino, se NOT NULL com padrão) com pendência valor_fora_do_dominio (gravidade baixa), sem recusar a linha; depois declarar RIBLOCOS.ANDARES -> bloco_internacao.quantidade_andares e RIBLOCOS.ORDEM -> bloco_internacao.ordem_exibicao com essa regra. Na sintética da L6-14 o esperado ganha valor_fora_do_dominio: 2 (bloco D andares -1, bloco E ordem -2)",
+   "motivo": "com 'inteiro', um atributo opcional negativo em destino UNSIGNED recusa o bloco (restricao_destino_1264) e derruba em cascata os leitos e transferências do bloco como pai_pendente; até a regra existir ANDARES e ORDEM ficam sem declaração (a tabela é relida no Sincronizar)"
+  },
+  {
+   "arquivo": "decisão do dono (Sincronizar)",
+   "mudanca": "linha de cadastro com valor presumido que o cliente reclassifica no destino (estado, final, ativo): no Sincronizar, a origem vence só nas colunas que vêm da origem; os literais presumidos não devem sobrescrever a reclassificação do cliente",
+   "motivo": "sem isso, a primeira alteração da linha na origem devolveria estado 'solicitado' e ativo=FALSE às situações já reclassificadas"
+  }
+ ]
+}
