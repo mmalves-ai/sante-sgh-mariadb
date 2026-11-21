@@ -59,16 +59,6 @@ const GERAR_32 = 'openssl rand -base64 32';
 const GERAR_TOKEN = 'openssl rand -hex 32';
 const LIG = ['ligado', 'desligado'] as const;
 
-/** As combinações aceitas por ACESSO_COMBINACAO_SENHA (as de packages/legado/src/acesso/credencial.ts; o teste confere). */
-export const COMBINACOES_SENHA = [
-  'texto-puro',
-  'sha1-senha',
-  'sha1-salt-senha',
-  'sha1-senha-salt',
-  'sha1-senha-maiuscula',
-  'sha1-salt-senha-maiuscula',
-] as const;
-
 const v = (
   chave: string,
   grupo: GrupoVariavel,
@@ -222,13 +212,6 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Códigos dos estabelecimentos deste servidor, separados por vírgula.',
   ),
   v(
-    'PLATAFORMA_ESTABELECIMENTO',
-    'banco',
-    'opcional',
-    '',
-    'Estabelecimento que guarda as contas da plataforma (padrão: o primeiro).',
-  ),
-  v(
     'REDE_MPI_ESTABELECIMENTOS',
     'banco',
     'opcional',
@@ -236,53 +219,6 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Estabelecimentos que entram no índice de pacientes da rede.',
   ),
   // Banco
-  v(
-    'FB_CLIENTE_BIBLIOTECA',
-    'banco',
-    'recomendada',
-    '/usr/lib/x86_64-linux-gnu/libfbclient.so.2',
-    'Caminho absoluto da biblioteca cliente do Firebird 3.',
-  ),
-  v('FB_POOL_TETO', 'banco', 'opcional', '4', 'Conexões por estabelecimento (1 a 64).'),
-  v(
-    'FB_REDE_TETO',
-    'banco',
-    'opcional',
-    '16',
-    'Conexões somadas da rede (1 a 512; não menor que FB_POOL_TETO).',
-  ),
-  v('FB_POOL_ESPERA_MS', 'banco', 'opcional', '5000', 'Espera máxima por uma conexão livre, em ms.'),
-  v('FB_CONSULTA_TEMPO_MS', 'banco', 'opcional', '15000', 'Tempo máximo de uma consulta de leitura, em ms.'),
-  v('FB_CONSULTA_TETO_LINHAS', 'banco', 'opcional', '1000', 'Teto padrão de linhas por consulta.'),
-  v('FB_LOCK_TIMEOUT_S', 'banco', 'opcional', '5', 'Espera de trava das gravações, em segundos (1 a 60).'),
-  v(
-    'FB_TRILHA_ELO_ESPERA_MS',
-    'banco',
-    'opcional',
-    '1000',
-    'Espera de cada tentativa de encadear o elo da trilha de auditoria, em ms (100 a 10000).',
-  ),
-  v(
-    'FB_TRILHA_ELO_TETO_MS',
-    'banco',
-    'opcional',
-    '25000',
-    'Teto total para encadear o elo da trilha antes do 503 trilha-indisponivel, em ms (200 a 30000; não menor que a espera; padrão 3000 com AMBIENTE=dev).',
-  ),
-  v(
-    'FB_REVERIFICACAO_MS',
-    'banco',
-    'opcional',
-    '60000',
-    'Intervalo da nova tentativa de um banco indisponível, em ms.',
-  ),
-  v(
-    'SGH_MARCA_CONEXAO',
-    'banco',
-    'opcional',
-    '',
-    'Marca fixa das conexões no monitoramento do banco (padrão: api/worker).',
-  ),
   // Serviços
   v(
     'API_PORTA',
@@ -364,14 +300,6 @@ export const VARIAVEIS: readonly Variavel[] = [
       comoGerar: GERAR_32,
     },
   ),
-  v(
-    'ACESSO_COMBINACAO_SENHA',
-    'seguranca',
-    'obrigatoria',
-    MARCADOR_PREENCHER,
-    'Como as senhas das contas do sistema anterior são conferidas no login (informado pelo suporte do produto; o mesmo valor em todos os servidores da rede).',
-    { valores: [...COMBINACOES_SENHA] },
-  ),
   v('PLATAFORMA_EM_NOME_DE', 'seguranca', 'opcional', '', 'Rótulo do atendimento da plataforma na trilha.'),
   v(
     'ACESSO_BLOQUEIO_PORTA_MINUTOS',
@@ -381,14 +309,6 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Minutos de bloqueio após tentativas de login erradas.',
   ),
   v('ACESSO_EMERGENCIA_MINUTOS', 'seguranca', 'opcional', '', 'Duração do acesso de emergência, em minutos.'),
-  v(
-    'ACESSO_TROCA_SENHA_PELO_NOVO',
-    'seguranca',
-    'opcional',
-    '',
-    'sim: a troca de senha é feita pelas telas do produto.',
-    { valores: ['', 'sim', 'nao'] },
-  ),
   v('SUPORTE_SESSAO_MINUTOS', 'seguranca', 'opcional', '', 'Duração da sessão de suporte, em minutos.'),
   v(
     'SUPORTE_AVISO_AUDITOR',
@@ -528,7 +448,6 @@ export const VARIAVEIS: readonly Variavel[] = [
     '',
     'Provedor da teleconsulta (vazio: desligado).',
   ),
-  v('REGULACAO_MODO', 'integracoes', 'opcional', '', 'Saída para a central de regulação (vazio: desligada).'),
   v(
     'RNDS_HOMOLOGACAO_AUTORIZADA',
     'integracoes',
@@ -605,7 +524,6 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['CENSO_FECHAMENTO', 'Fechamento diário do censo.'],
       ['CLASSIFICACAO_ESTOURO', 'Aviso de estouro do tempo da classificação de risco.'],
       ['COEX_RETRATO', 'Retrato das conexões do sistema anterior (migração gradual).'],
-      ['COEX_USO_DIA', 'Medida diária do uso (migração gradual).'],
       ['CONTABIL_LEITURA', 'Leitura dos fatos contábeis dos módulos.'],
       [
         'CONTABIL_CONTABILIZAR',
@@ -625,7 +543,6 @@ export const VARIAVEIS: readonly Variavel[] = [
         'Vigia da contenção mecânica vencida (aviso ao prescritor; "nao" desliga).',
       ],
       ['SADT_VIGIA_CRITICOS', 'Vigia dos resultados críticos.'],
-      ['CRUD_VIGIA_RECONCILIACAO', 'Vigia de reconciliação dos cadastros (nao desliga o despertar).'],
       [
         'ACESSO_CONTAS_DORMENTES_DESPERTAR',
         'Despertar diário das contas dormentes (sim liga em dev/ci; nao desliga).',
@@ -636,7 +553,6 @@ export const VARIAVEIS: readonly Variavel[] = [
   ...(
     [
       ['VIGIA_MUDANCAS_MS', 'vigia de mudanças das telas ao vivo'],
-      ['VIGIA_INTERVALO_MS', 'coletor das conexões'],
       ['VIGIA_GRAVACAO_MS', 'vigia das gravações'],
       ['VIGIA_GRAVACAO_JANELA', 'janela da vigia das gravações'],
       ['VIGIA_VAZIAS_MS', 'vigia das tabelas vazias'],
@@ -657,7 +573,6 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['BUSCA_CONFERENCIA_MS', 'conferência do índice de busca'],
       ['PEP_REPRESENTACAO_MS', 'representação dos registros do prontuário'],
       ['RELATORIO_ENVIO_INTERVALO_MS', 'envio agendado de relatórios'],
-      ['VIGIA_TRANSACAO_LIMITE_MS', 'limite das transações longas no monitoramento'],
     ] as const
   ).map(([k, d]) => v(k, 'rotinas', 'opcional', '', `Intervalo ou tamanho: ${d}. Vazio: o padrão.`)),
   v(
@@ -667,12 +582,9 @@ export const VARIAVEIS: readonly Variavel[] = [
     '',
     'Estações técnicas fora da contagem de uso (lista).',
   ),
-  v('ONDA0_INICIADOS', 'rotinas', 'opcional', '', 'Estabelecimentos com a onda 0 iniciada (lista).'),
-  v('TREINO_METODO_MASCARAMENTO', 'rotinas', 'opcional', '', 'Método de mascaramento da base de treino.'),
   // Observabilidade
   v('OTEL_EXPORTER_URL', 'observabilidade', 'recomendada', '', 'Coletor OpenTelemetry (métricas e rastros).'),
   v('OTEL_INTERVALO_MS', 'observabilidade', 'opcional', '', 'Intervalo de exportação das métricas, em ms.'),
-  v('GRAFANA_URL', 'observabilidade', 'opcional', '', 'Endereço dos painéis de saúde.'),
   v(
     'SONDA_TOKEN',
     'observabilidade',
@@ -708,21 +620,29 @@ export const VARIAVEIS: readonly Variavel[] = [
     '',
     'Chaves de liberação que podem estar ligadas (lista; prefixo.* vale para o prefixo; todas; todas-exceto:<lista>; nenhuma). Vazio: o padrão da liberação full na instalação (todas, menos as que o liberacao:ligar-tudo não liga sem decisão do dono).',
   ),
+  // Banco próprio (MariaDB): um banco por cliente e o banco da plataforma no mesmo servidor.
+  v('SGH_MARIADB_HOST', 'banco', 'obrigatoria', MARCADOR_PREENCHER, 'Servidor do MariaDB dos bancos dos clientes e da plataforma (nome ou endereço).'),
+  v('SGH_MARIADB_USUARIO', 'banco', 'obrigatoria', MARCADOR_PREENCHER, 'Conta da aplicação no MariaDB, com o papel_aplicacao como papel padrão (anexos de privilégios do manual).'),
+  v('MARIADB_SENHA', 'banco', 'obrigatoria', MARCADOR_SEGREDO, 'Senha da conta da aplicação no MariaDB (definida pela TI ao criar a conta).', { segredo: true }),
+  v('SGH_MARIADB_USUARIO_MIGRACOES', 'banco', 'opcional', '', 'Conta que aplica as migrações (DDL) dos bancos; vazio: as migrações não rodam pela aplicação.'),
+  v('SGH_BANCO_PLATAFORMA', 'banco', 'opcional', '', 'Nome do banco da plataforma (clientes, credenciais e fila do conector). Vazio: plataforma.'),
+  v('CLIENTE_PADRAO', 'produto', 'opcional', '', 'Cliente usado quando a requisição não traz o cliente (instalação com um só cliente).'),
+  v('API_MODULOS', 'servicos', 'opcional', 'todos', 'Módulos da API ligados: todos ou a lista separada por vírgula.'),
+  v('INTEGRACAO_CLIENTES', 'integracoes', 'opcional', '', 'Clientes cujo ciclo de integração o worker roda (separados por vírgula). Vazio: os ativos da plataforma.'),
+  v('ACESSO_CONTAS_DORMENTES_ESTABELECIMENTOS', 'seguranca', 'opcional', '', 'Estabelecimentos (códigos separados por vírgula) em que o aviso de contas sem uso roda.'),
+  v('SMTP_HOST', 'email', 'opcional', '', 'Servidor SMTP de saída. Fora de produção só é aceito destino local (neutralização).'),
+  v('CONECTOR_ORIGENS_DIR', 'caminhos', 'opcional', '', 'Pasta das imagens de origem lidas pelo conector (somente leitura). Vazio: a do pacote.'),
+  v('SGH_RAIZ_REPOSITORIO', 'caminhos', 'opcional', '', 'Pasta das ferramentas do pacote usadas pelo painel da plataforma (criar cliente). Vazio: a do pacote.'),
+  v('ESTRUTURA_HOMOLOGADA', 'caminhos', 'opcional', '', 'Resumo homologado da estrutura do banco, conferido pela fumaça da implantação. Vazio: o do pacote.'),
   // Caminhos do pacote (relativos à pasta da versão; o padrão serve)
   ...(
     [
       ['SCHEMA_HOMOLOGADO_DIR', 'impressões digitais homologadas do banco'],
       ['SGH_CATALOGO_OPERACOES', 'catálogo das operações'],
       ['CATALOGO_OPERACOES', 'catálogo das operações (worker)'],
-      ['SGH_COEX_FIM', 'registro do fim da coexistência'],
-      ['SGH_COEX_DESLIGAMENTO', 'registro do desligamento'],
-      ['SGH_COEX_RETROCOMPAT', 'registro da retrocompatibilidade'],
       ['SGH_M58_ENSAIOS', 'relatórios do ensaio da versão 5 do banco'],
       ['SGH_HOMOLOGACAO', 'registro da homologação'],
       ['SGH_PRONTIDAO', 'relatório de prontidão'],
-      ['SGH_TREINAMENTO', 'material de treinamento'],
-      ['SGH_RESPOSTAS', 'respostas das entrevistas'],
-      ['SGH_RESULTADOS_ASSINATURA', 'resultados das provas de assinatura'],
       ['VIGIA_VAZIAS_POVOADAS_DIR', 'tabelas já povoadas'],
     ] as const
   ).map(([k, d]) => v(k, 'caminhos', 'opcional', '', `Pasta ou arquivo: ${d}. Vazio: o do pacote.`)),
@@ -763,6 +683,7 @@ export const NAO_CONFIGURAVEIS: Readonly<Record<string, string>> = {
   FB_ABC_BANCO: 'teste: estabelecimento fictício',
   SGH_ARQUIVO_AMBIENTE: 'definida pela unit do systemd (aponta para este arquivo)',
   SGH_PROCESSO: 'definida pelo próprio processo (api ou worker)',
+  SGH_CONTAINERS_LOCAIS: 'dev/homologação: containers locais aceitos como destino pela neutralização',
   ORIGEM: 'nome de coluna, não variável',
   DESTINO: 'nome de coluna, não variável',
   ENVIADA_POR: 'nome de coluna, não variável',

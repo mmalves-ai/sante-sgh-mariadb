@@ -1,35 +1,46 @@
-// M60, etapa 1: anexo dos scripts SGH_ gerado do repositório (todos, na ordem, com o hash) e a conferência.
+// M60, etapa 1, sobre o banco próprio: o anexo das migrações do banco do cliente gerado do repositório (todas, na
+// ordem do "criar novo cliente", com o hash) e a conferência.
 import { resolve } from 'node:path';
-import { lerScriptsSgh, ordemDeAplicacao } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
-import { anexoDeScripts, conferirAnexo, listaDeScripts } from './listas.ts';
+import {
+  anexoDeMigracoes,
+  conferirAnexo,
+  contarComandos,
+  lerMigracoes,
+  listaDeMigracoes,
+  type MigracaoBanco,
+} from './listas.ts';
 
-const scripts = lerScriptsSgh(resolve(import.meta.dirname, '../../../packages/legado/src'));
+const migracoes = lerMigracoes(resolve(import.meta.dirname, '../../..'));
 
-describe('anexo de scripts', () => {
-  it('todos os scripts do repositório, na ordem de aplicação (a de dependência), com o sha256 completo', () => {
-    const itens = listaDeScripts([...scripts].reverse());
-    expect(itens).toHaveLength(scripts.length);
-    expect(itens[0]).toMatchObject({
-      ordem: 1,
-      numero: '0001',
-      arquivo: 'config/sgh/0001_versao_script.sql',
-    });
-    const esperada = ordemDeAplicacao([...scripts].sort((a, b) => a.numero - b.numero));
-    expect(itens.map((i) => i.arquivo)).toEqual(esperada.map((s) => s.arquivo));
+describe('anexo das migrações', () => {
+  it('todas as migrações do repositório: tabelas antes das chaves, pelo caminho, com o sha256 completo', () => {
+    const itens = listaDeMigracoes([...migracoes].reverse());
+    expect(itens).toHaveLength(migracoes.length);
+    expect(itens.length).toBeGreaterThan(10);
+    expect(itens[0]).toMatchObject({ ordem: 1, arquivo: '00_NUCLEO/00_nucleo_tabelas.sql', etapa: 'tabelas' });
+    const primeiraChave = itens.findIndex((i) => i.etapa === 'chaves');
+    expect(primeiraChave).toBeGreaterThan(0);
+    expect(itens.slice(primeiraChave).every((i) => i.etapa === 'chaves')).toBe(true);
+    const tabelas = itens.slice(0, primeiraChave).map((i) => i.arquivo);
+    expect(tabelas).toEqual([...tabelas].sort());
     expect(itens.map((i) => i.ordem)).toEqual(itens.map((_, k) => k + 1));
-    const md = anexoDeScripts(itens);
-    expect(md).toContain('na ordem em que `sgh:aplicar` os aplica');
-    expect(md).not.toContain('pela ordem do número');
+    expect(itens.every((i) => /^[0-9a-f]{64}$/.test(i.sha256))).toBe(true);
+    // Arquivo de chaves pode vir vazio (o módulo sem chave estrangeira nova); o de tabelas, nunca.
+    expect(itens.filter((i) => i.etapa === 'tabelas' && i.comandos === 0)).toEqual([]);
+    const md = anexoDeMigracoes(itens);
+    expect(md).toContain('criar novo cliente');
     expect(conferirAnexo(md, itens)).toEqual({ faltam: [], hashDivergente: [] });
   });
 
-  it('conferência aponta script faltando e hash velho', () => {
-    const itens = listaDeScripts(scripts.slice(0, 3));
-    const md = anexoDeScripts(itens.slice(0, 2)).replace(itens[1]?.sha256 ?? '', 'velho');
-    expect(conferirAnexo(md, itens)).toEqual({
-      faltam: [itens[2]?.arquivo],
-      hashDivergente: [itens[1]?.arquivo],
-    });
+  it('conferência aponta migração faltando e hash velho', () => {
+    const m = (arquivo: string, hash: string): MigracaoBanco => ({ arquivo, etapa: 'tabelas', hash, comandos: 1 });
+    const itens = listaDeMigracoes([m('01_A/01_tabelas.sql', 'a'.repeat(64)), m('02_B/01_tabelas.sql', 'b'.repeat(64)), m('03_C/01_tabelas.sql', 'c'.repeat(64))]);
+    const md = anexoDeMigracoes(itens.slice(0, 2)).replace('b'.repeat(64), 'velho');
+    expect(conferirAnexo(md, itens)).toEqual({ faltam: ['03_C/01_tabelas.sql'], hashDivergente: ['02_B/01_tabelas.sql'] });
+  });
+
+  it('conta os comandos sem os comentários', () => {
+    expect(contarComandos('-- cabeçalho; com ponto e vírgula\nCREATE TABLE a (x INT);\nALTER TABLE a\n  ADD y INT;\n')).toBe(2);
   });
 });

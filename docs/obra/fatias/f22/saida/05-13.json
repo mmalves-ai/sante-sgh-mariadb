@@ -1,0 +1,83 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    {
+      "arquivo": "apps/worker/tsconfig.migrado.json",
+      "acrescentar": [
+        "src/financeiro/glosa-propria.ts",
+        "src/financeiro/consumidor-financeiro.ts",
+        "src/financeiro/consumidor-financeiro.spec.ts",
+        "src/financeiro/glosa-propria.int.spec.ts",
+        "src/importadores/publicador.ts",
+        "src/importadores/publicador.spec.ts",
+        "src/importadores/porta-propria.ts",
+        "src/importadores/escrita-catalogo.ts",
+        "src/importadores/porta-propria.int.spec.ts",
+        "src/importadores/integracao.spec-util.ts",
+        "src/importadores/brasindice/licenca.int.spec.ts"
+      ],
+      "motivo": "a edição direta do tsconfig.migrado.json do worker foi negada pela permissão; tsc conferido com um tsconfig temporário (0 erros)"
+    }
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "carga_catalogo",
+      "motivo": "marca da sessão 'como' da aprovação (ADR 0021): hoje a publicação não roda marcada como a sessão de suporte; a porta lê como=null",
+      "ddl": "ALTER TABLE carga_catalogo ADD COLUMN aprovada_como_sessao_suporte_id BIGINT UNSIGNED NULL COMMENT 'Sessão de suporte em que a carga foi aprovada (publicação marcada como a sessão)' AFTER aprovada_por_usuario_id, ADD COLUMN aprovada_como_acao_suporte_id BIGINT UNSIGNED NULL COMMENT 'Ação de suporte da aprovação' AFTER aprovada_como_sessao_suporte_id, ADD KEY ix_carga_catalogo_aprovada_como (aprovada_como_sessao_suporte_id); -- FK em 03_chaves.sql para a tabela da sessão de suporte (ADM 05); a API grava na aprovação e a porta do worker monta MarcaComo",
+      "indisponivel": "publicação marcada como a sessão 'como' (a trilha leva só o aprovador)"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "item_catalogo_licenciado",
+      "motivo": "publicação dos catálogos licenciados (Brasíndice: apresentação; Simpro: produto) com preço por edição. Regra 7 do AGENTS.md: a escrita é POR ESTABELECIMENTO licenciado (estabelecimento_id NOT NULL + FK para licenca_catalogo), nunca pela rede como o mapa dos catálogos públicos de escrita-catalogo.ts. Com o DDL aplicado, o mapa entra num ramo próprio de escrita-catalogo.ts (escopo pelo estabelecimento da carga e conferência da licença na transação) e na leitura da comparação da API (MAPAS)",
+      "ddl": "CREATE TABLE item_catalogo_licenciado (\n  id                          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id          BIGINT UNSIGNED NOT NULL COMMENT 'Estabelecimento que comprovou a licença (regra 7: nunca vale para a rede)',\n  licenca_catalogo_id         BIGINT UNSIGNED NOT NULL COMMENT 'Licença vigente que autorizou a carga desta edição',\n  catalogo                    VARCHAR(30) NOT NULL COMMENT 'Catálogo licenciado (brasindice, simpro)',\n  codigo                      VARCHAR(10) NOT NULL COMMENT 'Código do item no catálogo (apresentação ou produto)',\n  edicao                      VARCHAR(12) NOT NULL COMMENT 'Edição do arquivo oficial carregado',\n  nome                        VARCHAR(150) NOT NULL,\n  classificacao               VARCHAR(20) NULL COMMENT 'material, medicamento ou outra classe do catálogo',\n  codigo_apresentacao         VARCHAR(4) NULL,\n  codigo_fabricante           INT UNSIGNED NULL COMMENT 'Laboratório ou fabricante no catálogo',\n  fator_conversao             INT UNSIGNED NULL,\n  unidade                     VARCHAR(10) NULL,\n  registro_anvisa             VARCHAR(15) NULL,\n  referencia_fabricante       VARCHAR(100) NULL,\n  codigo_tuss                 VARCHAR(10) NULL,\n  preco_maximo_consumidor     DECIMAL(14,4) NULL,\n  preco_fabrica               DECIMAL(14,4) NULL,\n  preco                       DECIMAL(14,4) NULL COMMENT 'Preço único do catálogo que não separa fábrica e consumidor',\n  ativo                       BOOLEAN NOT NULL DEFAULT TRUE,\n  criado_em                   DATETIME(3) NOT NULL,\n  criado_por                  BIGINT UNSIGNED NULL,\n  alterado_em                 DATETIME(3) NULL,\n  alterado_por                BIGINT UNSIGNED NULL,\n  versao                      INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_item_catalogo_licenciado_catalogo CHECK (catalogo IN ('brasindice','simpro')),\n  CONSTRAINT ck_item_catalogo_licenciado_precos CHECK ((preco_maximo_consumidor IS NULL OR preco_maximo_consumidor >= 0) AND (preco_fabrica IS NULL OR preco_fabrica >= 0) AND (preco IS NULL OR preco >= 0)),\n  UNIQUE KEY uq_item_catalogo_licenciado_edicao (estabelecimento_id, catalogo, codigo, edicao),\n  KEY ix_item_catalogo_licenciado_licenca (licenca_catalogo_id),\n  KEY ix_item_catalogo_licenciado_tuss (codigo_tuss)\n) COMMENT='Apresentação ou produto de catálogo licenciado, com os preços por edição, só no estabelecimento licenciado';\n-- 03_chaves.sql: FK (estabelecimento_id) -> estabelecimento(id); FK (licenca_catalogo_id) -> licenca_catalogo(id).\n-- A escrita confere na transação que licenca_catalogo.estabelecimento_id = estabelecimento_id, catalogo igual e vigente na data.",
+      "indisponivel": "publicar carga de brasindice e de simpro (a comparação da API já recusa com 409 catalogo-sem-mapa, então nenhuma carga desses catálogos chega aprovada)"
+    },
+    {
+      "tipo": "mover",
+      "de": "apps/api/src/modulos/config/catalogo-operacoes.ts (operacoesDeclaradas, catalogoOperacoesProprio)",
+      "para": "@sgh/contratos ou @sgh/dominio-config",
+      "motivo": "tools/instalacao/src/liberacao-ligar-tudo.ts importa o arquivo da API por caminho relativo (o arquivo só depende de @sgh/contratos)"
+    },
+    {
+      "tipo": "renomear",
+      "arquivo": "tools/instalacao/src/pacote.ts (+ instalacao.spec.ts)",
+      "motivo": "campo scriptsSgh do manifesto agora leva as migrações do banco (db/migracoes): renomear para migracoes"
+    },
+    {
+      "tipo": "ajuste",
+      "arquivo": "tools/instalacao/src/variaveis.ts",
+      "motivo": "variaveis.spec 'toda chave lida pelo código de produção tem entrada' falha (anterior a este lote; antes o spec nem carregava): 14 chaves do código novo sem entrada no catálogo: ACESSO_CONTAS_DORMENTES_ESTABELECIMENTOS, API_MODULOS, CLIENTE_PADRAO, CONECTOR_ORIGENS_DIR, ESTRUTURA_HOMOLOGADA, INTEGRACAO_CLIENTES, MARIADB_SENHA, SGH_BANCO_PLATAFORMA, SGH_CONTAINERS_LOCAIS, SGH_MARIADB_HOST, SGH_MARIADB_USUARIO, SGH_MARIADB_USUARIO_MIGRACOES, SGH_RAIZ_REPOSITORIO, SMTP_HOST; revisar também se ACESSO_COMBINACAO_SENHA (senhas do sistema anterior) ainda tem leitor"
+    },
+    {
+      "tipo": "religar",
+      "arquivo": "apps/worker/src/publicador-catalogos.service.ts (worker-raiz)",
+      "motivo": "DependenciasPublicador mudou: { porta: new PortaPublicacaoPropria(nucleo, cliente, hospital), janela, agoraMinutos, ignorarJanela, lotesPorCiclo, log }; os estabelecimentos vêm do banco do cliente; sai executor/ler/gravarSgh/rede/hospital"
+    },
+    {
+      "tipo": "religar",
+      "arquivo": "apps/worker/src/relay-outbox.service.ts (worker-raiz)",
+      "motivo": "consumirEventoFinanceiro(acesso, cliente, ev) mantém a assinatura; o acesso é acessoDoNucleo(nucleo, cliente, rotulo)"
+    },
+    {
+      "tipo": "decisao",
+      "arquivo": "packages/contratos/src/catalogo/definicoes.ts (catálogo cbo, entidade ocupacao de 5 dígitos)",
+      "motivo": "sem tabela no modelo; a comparação da API já recusa o arquivo que a traz (catalogo-sem-mapa). Decidir se sai da definição ou se ganha tabela; as demais entidades sem mapa (tuss, fiscal, listas oficiais, pares procedimento×CID/CBO) idem",
+      "indisponivel": "carga da entidade ocupacao (5 dígitos) e das entidades sem mapa de leitura"
+    },
+    {
+      "tipo": "implementacao",
+      "arquivo": "apps/api/src/modulos/config/criterio-ligar.ts (lote dono)",
+      "motivo": "a tela devolve regraFarmacia: null; usar a mesma leitura do ligar-tudo, lerRegraFarmacia(l, estabelecimento, agora) de tools/instalacao/src/liberacao-propria.ts (mover para um pacote comum, ex. junto do catálogo de operações, para a API e o comando lerem pelo mesmo caminho)"
+    }
+  ],
+  "apagados": [
+    "apps/worker/src/importadores/responsavel.int.spec.ts"
+  ],
+  "feito_nesta_rodada": [
+    "glosa-propria.ts: corrida corrigida (trava do título antes de qualquer leitura; chave, aceito e lançado lidos com FOR UPDATE) + teste de duas entregas concorrentes",
+    "escrita-catalogo.ts: mapas de procedimento (só alteração), municipio e cep (UF e município resolvidos na transação) + teste por entidade",
+    "liberacao-propria.ts: lerRegraFarmacia sobre dispensacao, local_estoque_setor, prescricao e liberacao_chave; regra 1 volta a ligar pelo ligar-tudo + liberacao-propria.int.spec.ts (liga e não liga)"
+  ]
+}

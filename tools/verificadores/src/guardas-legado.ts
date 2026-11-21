@@ -88,17 +88,11 @@ export const EXCECOES: readonly {
       'M59-F1 (regra 4; ficha, seção 10): prova na cópia que o papel do módulo lê e grava só o que o plano dá: leituras de PRTERMOCAD e PRTERMOACEITE e um UPDATE na trilha que o banco tem de RECUSAR (sem privilégio), numa transação desfeita; a DDL é o DROP ROLE da limpeza dos papéis efêmeros do teste, pelo isql',
   },
   {
-    arquivo: /^packages\/testes\/src\/integracao\/imutabilidade-clinica\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora', 'c-ddl-fora-sgh'],
-    motivo:
-      'M59-F3 (regra 6; ficha, seção 10): prova na cópia que o DELETE em tabela clínica é RECUSADO pelo banco ao papel do pep (WHERE 1 = 0, transação desfeita) e ensaia o par 0002 com uma conta efêmera (GRANT, REVOKE e DROP USER da limpeza, pelo isql); nenhuma tabela, coluna ou procedure é criada ou alterada',
-  },
-  {
     arquivo:
-      /^(docs\/implantacao\/anexos\/privilegios-papel\.sql|tools\/implantacao\/src\/privilegios(\.spec)?\.ts)$/,
+      /^(docs\/implantacao\/anexos\/privilegios-(papel|plataforma)\.sql|tools\/implantacao\/src\/privilegios(\.spec)?\.ts)$/,
     regras: ['c-ddl-fora-sgh', 'a-tabela-legada-fora'],
     motivo:
-      'M60.3: anexo C do manual (e o gerador com o teste), executado pela TI como administrador do banco: só GRANT ao papel SGH_APLICACAO das tabelas gravadas pelas receitas (gerado e conferido por implantacao:listas; D-PRIVILEGIOS-60.3)',
+      'M60.3: anexos de privilégios do manual (banco de cada cliente e banco da plataforma), executados pela TI como administrador do MariaDB: GRANT ao papel_aplicacao das tabelas gravadas pelas operações e REVOKE do que a tabela não deve ter (gerados e conferidos por implantacao:listas; D-PRIVILEGIOS-60.3)',
   },
   {
     arquivo: /^packages\/dominio-relatorio\/src\/datamart\.ts$/,
@@ -218,12 +212,6 @@ export const EXCECOES: readonly {
     regras: ['b-escrita-fora', 'c-ddl-fora-sgh'],
     motivo:
       'M60.1: prova de que o Firebird aceita o DDL de um script SGH_ (SGH_M60_PROVA_TX) e o INSERT do registro em SGH_VERSAO_SCRIPT na mesma transação, SEMPRE desfeita (desfazendoNaCopia); nenhum objeto do legado',
-  },
-  {
-    arquivo: /^tools\/implantacao\/src\/ensaio-relatorio\.ts$/,
-    regras: ['b-escrita-fora'],
-    motivo:
-      'M60.1: o ensaio da primeira aplicação simula o sistema anterior em uso com um UPDATE da chave no mesmo valor, SEMPRE desfeito (ROLLBACK), só na cópia limpa descartável da porta própria (nunca nas compartilhadas nem em produção), em tabela legada sem trigger e sem FK',
   },
   // M52.4 (regra 11): a marcação original só de inclusão, provada com o papel da aplicação.
   {

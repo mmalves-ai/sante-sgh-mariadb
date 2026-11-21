@@ -19,7 +19,7 @@ import { METODOS_PORTA_BALANCO, PORTA_BALANCO, type PortaBalanco } from './balan
 import { PortaBalancoMemoria } from './balanco-porta-memoria.js';
 import { PortaBalancoPropria } from './balanco-porta-propria.js';
 import { ContencaoController, VIGIA_CONTENCAO } from './contencao.controller.js';
-import type { VigiaContencao } from './contencao-servico.js';
+import { VigiaContencao } from './contencao-servico.js';
 import { EnfermagemController } from './enfermagem.controller.js';
 import { ClassificacaoPacientesController, EscoresController } from './escores.controller.js';
 import { METODOS_PORTA_ESCORES, PORTA_ESCORES, type PortaEscores } from './escores-porta.js';
@@ -117,6 +117,32 @@ export async function portasDaEnfermagem(
 @Module({})
 export class ModuloEnfermagem {}
 
+/**
+ * A vigia da contenção vencida (W0-03, M5: o aviso na central), com o núcleo: vigia cada estabelecimento ativo do
+ * cliente da instalação (CLIENTE_PADRAO). Antes só o boot antigo a ligava, e só no caminho do sistema anterior.
+ * Leitura da rede inteira de propósito: a lista de estabelecimentos do cliente é o alvo da vigia, não dado de sessão.
+ * Melhoria: a vigia nasce no módulo dono e sobre o banco próprio; ENFERMAGEM_VIGIA_CONTENCAO=nao desliga.
+ */
+async function vigiaDaContencao(
+  ctx: ContextoModulo,
+  p: { escores: PortaEscores; enfermagem: PortaEnfermagem },
+  opcoes: OpcoesModuloEnfermagem,
+): Promise<VigiaContencao | null> {
+  if (opcoes.vigiaContencao !== undefined) return opcoes.vigiaContencao;
+  const cliente = ctx.configuracao.clientePadrao;
+  if (!ctx.nucleo || !cliente || ctx.env['ENFERMAGEM_VIGIA_CONTENCAO'] === 'nao') return null;
+  const linhas = await ctx.nucleo.lerSomente({ cliente, correlacao: 'vigia-contencao-alvos' }, (l) =>
+    l.consultar('SELECT id FROM estabelecimento WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY id', []),
+  );
+  const alvos = linhas.map((r) => ({
+    cliente,
+    estabelecimento: Number(r['id']),
+    usuario: null,
+    correlacao: 'vigia-contencao',
+  }));
+  return new VigiaContencao(p.escores, p.enfermagem, alvos);
+}
+
 export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloEnfermagem = {}): Promise<DynamicModule> {
   const p = await portasDaEnfermagem(ctx, opcoes);
   const vigia =
@@ -125,6 +151,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloEnfermagem
       : ctx.env['ENFERMAGEM_VIGIA'] === 'nao'
         ? null
         : new VigiaHorarios(p.enfermagem);
+  const vigiaContencao = await vigiaDaContencao(ctx, p, opcoes);
   return {
     module: ModuloEnfermagem,
     // Global: a cirurgia (balanço na ficha anestésica) e a farmácia leem as portas da enfermagem.
@@ -153,7 +180,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloEnfermagem
       { provide: PORTA_TRANSFUSAO, useValue: p.transfusao },
       { provide: PORTA_AGENCIA, useValue: p.agencia },
       { provide: AVISOS_ENFERMAGEM, useValue: new AvisosAtendimento(vigia, 'leitos') },
-      { provide: VIGIA_CONTENCAO, useValue: opcoes.vigiaContencao ?? null },
+      { provide: VIGIA_CONTENCAO, useValue: vigiaContencao },
     ],
     exports: [PORTA_ENFERMAGEM, PORTA_ESCORES, PORTA_BALANCO, PORTA_SAE, PORTA_TRANSFUSAO, PORTA_AGENCIA, AVISOS_ENFERMAGEM],
   };

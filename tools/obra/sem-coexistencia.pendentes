@@ -1,6 +1,5 @@
 # Linha de base do tools/obra/sem-coexistencia.sh (lote 02-07, 2026-11-21): caminho e ocorrências de texto de
 # convivência que ainda restam. Sai na onda 5 da F2.2 (ADR 0003, item 9). Só se baixa ou se apaga linha.
-apps/api/src/app.module.ts 43
 apps/api/src/modulos/acesso/acesso.spec.ts 1
 apps/api/src/modulos/acesso/contas-banco/contas-banco.controller.ts 2
 apps/api/src/modulos/acesso/contas-banco/servico.ts 2

@@ -1,126 +1,154 @@
-// M60.3: o anexo dos privilégios de escrita do papel SGH_APLICACAO, gerado do registro das receitas.
-import { readFileSync } from 'node:fs';
+// M60.3, sobre o banco próprio: o anexo dos privilégios do papel da aplicação, gerado das migrações e do código.
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { OPERACOES } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
+import { lerMigracoes } from './listas.ts';
 import {
+  ANEXOS_PRIVILEGIOS,
   anexoDePrivilegios,
   comandoGrant,
+  COMANDO_PAPEL,
+  comandoRevoke,
   conferirAnexoPrivilegios,
-  MARCA_EXCECOES,
-  MARCA_PSQL,
+  lerFontes,
   PAPEL,
   privilegiosDoPapel,
+  privilegiosDoRepositorio,
+  tabelasComExclusaoFisica,
+  tabelasDoDdl,
+  tabelasDoModelo,
 } from './privilegios.ts';
 
-const passo = (tabela: string, acao: 'INSERT' | 'UPDATE' | 'DELETE') => ({
-  ordem: 1,
-  tabela,
-  acao,
-  colunas: {},
-});
-const efeito = (tabela: string, acao: 'INSERT' | 'UPDATE' | 'DELETE') => ({
-  trigger: 'TRG_X',
-  tabela,
-  acao,
-  faz: '',
-});
+const DDL = `-- CREATE TABLE no comentário não conta
+CREATE TABLE trilha_auditoria (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  criado_em DATETIME(3) NOT NULL
+) COMMENT='Trilha';
+CREATE TABLE paciente (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(150) NOT NULL COMMENT 'Nome (excluido_em no comentário não conta)',
+  excluido_em DATETIME(3) NULL
+) COMMENT='Paciente';
+ALTER TABLE paciente ADD CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES paciente (id);
+CREATE TABLE IF NOT EXISTS sequencia_negocio (
+  id BIGINT UNSIGNED NOT NULL
+);
+CREATE TABLE reserva (
+  id BIGINT UNSIGNED NOT NULL,
+  excluido_em DATETIME(3) NULL
+);`;
 
-describe('privilégios do papel nas tabelas do sistema anterior', () => {
-  it('junta passos e efeitos por tabela, ações em ordem fixa, sem tabela SGH_', () => {
-    const itens = privilegiosDoPapel([
-      {
-        nome: 'a.um',
-        passos: [passo('TBB', 'UPDATE'), passo('SGH_X', 'INSERT')],
-        efeitos: [efeito('TBA', 'INSERT')],
-      },
-      { nome: 'a.dois', passos: [passo('tbb', 'INSERT'), passo('TBB', 'DELETE')], efeitos: [] },
+const raiz = resolve(import.meta.dirname, '../../..');
+
+describe('privilégios do papel da aplicação no banco do cliente e no da plataforma', () => {
+  it('lê as tabelas do DDL com a marca da exclusão lógica', () => {
+    expect(tabelasDoDdl(DDL)).toEqual([
+      { tabela: 'trilha_auditoria', exclusaoLogica: false },
+      { tabela: 'paciente', exclusaoLogica: true },
+      { tabela: 'sequencia_negocio', exclusaoLogica: false },
+      { tabela: 'reserva', exclusaoLogica: true },
     ]);
+  });
+
+  it('menor privilégio: trilha só de acréscimo; exclusão lógica sem DELETE, salvo exclusão física no código', () => {
+    const fisica = tabelasComExclusaoFisica(['await l.executar("DELETE FROM reserva WHERE id = ?", [id]);']);
+    const itens = privilegiosDoPapel(tabelasDoDdl(DDL), fisica);
     expect(itens).toEqual([
-      { tabela: 'TBA', acoes: ['INSERT'], receitas: 1 },
-      { tabela: 'TBB', acoes: ['INSERT', 'UPDATE', 'DELETE'], receitas: 2 },
+      { tabela: 'paciente', acoes: ['SELECT', 'INSERT', 'UPDATE'] },
+      { tabela: 'reserva', acoes: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
+      { tabela: 'sequencia_negocio', acoes: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
+      { tabela: 'trilha_auditoria', acoes: ['SELECT', 'INSERT'] },
     ]);
-    expect(comandoGrant(itens[1]!)).toBe('GRANT INSERT, UPDATE, DELETE ON "TBB" TO ROLE SGH_APLICACAO;');
+    expect(comandoGrant(itens[0]!)).toBe(`GRANT SELECT, INSERT, UPDATE ON paciente TO ${PAPEL};`);
+    expect(comandoRevoke(itens[0]!)).toBe(`REVOKE DELETE ON paciente FROM ${PAPEL};`);
+    expect(comandoRevoke(itens[1]!)).toBeNull();
+    expect(comandoRevoke(itens[3]!)).toBe(`REVOKE UPDATE, DELETE ON trilha_auditoria FROM ${PAPEL};`);
   });
 
-  it('recusa nome de tabela fora do padrão de identificador (nada de SQL montado com texto livre)', () => {
-    expect(() =>
-      privilegiosDoPapel([{ nome: 'a.mau', passos: [passo('TB"; DROP', 'INSERT')], efeitos: [] }]),
-    ).toThrow(/nome inválido/);
+  it('exclusão física pelo núcleo: Escritor.excluir e excluirAuditado com a tabela literal', () => {
+    const fisica = tabelasComExclusaoFisica([
+      "await tx.excluir('plantao', num(p['id']), num(p['versao']));",
+      'await tx.excluir("escala", e.id, e.versao);',
+      "await excluirAuditado(e, 'reserva_leito', id, versao);",
+      'return this.servico.excluir(sessaoDe(req), idDaRota(id), corpo(x, b));',
+    ]);
+    expect([...fisica].sort()).toEqual(['escala', 'plantao', 'reserva_leito']);
   });
 
-  it('o anexo só concede (GRANT), traz o bloco das sequências e a conferência acusa a tabela nova', () => {
-    const itens = privilegiosDoPapel([{ nome: 'a.um', passos: [passo('TBA', 'INSERT')], efeitos: [] }]);
+  it('exclusão lógica acrescentada depois por ALTER TABLE (em outra migração) tira o DELETE', () => {
+    const criacao = 'CREATE TABLE regra_visita (\n  id BIGINT UNSIGNED NOT NULL\n);';
+    const depois = `-- ALTER TABLE regra_visita ADD COLUMN excluido_em no comentário não conta
+ALTER TABLE outra ADD COLUMN nome VARCHAR(10) NULL;
+ALTER TABLE regra_visita
+  ADD COLUMN excluido_em DATETIME(3) NULL AFTER versao,
+  ADD COLUMN excluido_por BIGINT UNSIGNED NULL;`;
+    expect(tabelasDoModelo([criacao, depois])).toEqual([{ tabela: 'regra_visita', exclusaoLogica: true }]);
+    expect(tabelasDoModelo([criacao])).toEqual([{ tabela: 'regra_visita', exclusaoLogica: false }]);
+    const [item] = privilegiosDoPapel(tabelasDoModelo([criacao, depois]));
+    expect(item?.acoes).toEqual(['SELECT', 'INSERT', 'UPDATE']);
+  });
+
+  it('recusa nome de tabela fora do padrão de identificador', () => {
+    expect(() => privilegiosDoPapel([{ tabela: 'tb"; DROP', exclusaoLogica: false }])).toThrow(/nome inválido/);
+  });
+
+  it('o anexo só cria o papel, concede e retira (convergente); a conferência acusa a tabela nova e o papel ausente', () => {
+    const itens = privilegiosDoPapel(tabelasDoDdl(DDL));
     const sql = anexoDePrivilegios(itens);
     const comandos = sql
       .split('\n')
       .filter((l) => l.trim() && !l.startsWith('--'))
       .join('\n');
-    expect(comandos).not.toMatch(/\b(ALTER|DROP|CREATE|DELETE FROM|UPDATE \w+ SET|INSERT INTO|REVOKE)\b/i);
-    expect(sql).toContain('GRANT USAGE ON SEQUENCE');
-    expect(sql).toContain("NOT STARTING WITH 'SGH_'");
+    expect(comandos).not.toMatch(/\b(ALTER|DROP|CREATE TABLE|DELETE FROM|UPDATE \w+ SET|INSERT INTO)\b/i);
+    expect(comandos.split('\n').every((l) => /^(CREATE ROLE IF NOT EXISTS|GRANT|REVOKE) /.test(l))).toBe(true);
+    // Cada REVOKE vem logo depois do GRANT da mesma tabela (o REVOKE nunca falha por falta de concessão).
+    const linhas = comandos.split('\n');
+    linhas.forEach((l, i) => {
+      if (l.startsWith('REVOKE')) expect(linhas[i - 1]).toMatch(new RegExp(`^GRANT .* ON ${l.split(' ON ')[1]!.split(' ')[0]} TO`));
+    });
+    expect(sql).toContain(COMANDO_PAPEL);
+    expect(conferirAnexoPrivilegios(sql.replace(`REVOKE DELETE ON paciente FROM ${PAPEL};`, ''), itens)).toEqual(['paciente']);
     expect(conferirAnexoPrivilegios(sql, itens)).toEqual([]);
-    const mais = privilegiosDoPapel([
-      { nome: 'a.um', passos: [passo('TBA', 'INSERT'), passo('TBN', 'UPDATE')], efeitos: [] },
-    ]);
-    expect(conferirAnexoPrivilegios(sql, mais)).toEqual(['TBN']);
+    const mais = privilegiosDoPapel([...tabelasDoDdl(DDL), { tabela: 'nova', exclusaoLogica: false }]);
+    expect(conferirAnexoPrivilegios(sql, mais)).toEqual(['nova']);
+    expect(conferirAnexoPrivilegios(sql.replace(COMANDO_PAPEL, ''), itens)).toEqual(['(papel)']);
   });
 
-  it('efeito com procedimento: o anexo dá ao papel o EXECUTE nos módulos que os gatilhos chamam, sem escrita direta a mais', () => {
-    // O retrato do atendimento: o gatilho de ATCABECATEND chama SPHISTATENDIMENTO, que grava HTATENDIMENTO.
-    const itens = privilegiosDoPapel([
-      {
-        nome: 'internacao.internar',
-        passos: [passo('ATCABECATEND', 'UPDATE')],
-        efeitos: [
-          {
-            trigger: 'TRG_ATCABECATEND_AIU',
-            tabela: 'HTATENDIMENTO',
-            acao: 'INSERT',
-            faz: 'retrato do atendimento (SPHISTATENDIMENTO)',
-          },
-        ],
-      },
-    ]);
-    const sql = anexoDePrivilegios(itens);
-    const bloco = sql.slice(sql.indexOf(MARCA_PSQL));
-    expect(bloco.length).toBeGreaterThan(0);
-    // Fecho tirado do banco: os módulos (5 procedimento, 15 função) que os gatilhos chamam e os que esses chamam;
-    // a escrita vai a todo gatilho do sistema anterior e aos módulos do fecho (caminhos que a assinatura não percorreu).
-    expect(bloco).toContain('WHERE d.RDB$DEPENDENT_TYPE = 2 AND d.RDB$DEPENDED_ON_TYPE IN (5, 15)');
-    expect(bloco).toContain('(d.RDB$DEPENDENT_TYPE = 2 AND COALESCE(g.RDB$SYSTEM_FLAG, 1) = 0)');
-    expect(bloco).toContain('d.RDB$DEPENDED_ON_TYPE IN (5, 15)');
-    expect(bloco).toContain('WHILE (novos > 0) DO');
-    expect(bloco).toContain(`'GRANT EXECUTE ON PROCEDURE "' || :n || '" TO ROLE ${PAPEL}'`);
-    expect(bloco).toContain(`'GRANT EXECUTE ON FUNCTION "' || :n || '" TO ROLE ${PAPEL}'`);
-    // A escrita das tabelas que o módulo toca vai ao próprio módulo ou gatilho, nunca ao papel.
-    expect(bloco).toContain("DECODE(:k, 2, 'TRIGGER', 5, 'PROCEDURE', 'FUNCTION')");
-    const aoPapel = bloco.match(/GRANT [A-Z, ]+ ON [A-Z]* ?"' \|\| :\w+ \|\| '" TO ROLE/g) ?? [];
-    expect(aoPapel.every((g) => g.startsWith('GRANT EXECUTE ON '))).toBe(true);
-    expect(aoPapel).toHaveLength(2);
-    // Só concede; o bloco fecha com COMMIT.
-    expect(bloco).not.toMatch(/\b(ALTER|DROP|CREATE|DELETE FROM|UPDATE \w+ SET|INSERT INTO|REVOKE)\b/i);
-    expect(bloco.trimEnd().endsWith('COMMIT;')).toBe(true);
-    expect(conferirAnexoPrivilegios(sql, itens)).toEqual([]);
-    // Um anexo sem o bloco (o da 1ª versão do M60.3) é acusado pela conferência do verificar.
-    expect(conferirAnexoPrivilegios(sql.slice(0, sql.indexOf(MARCA_EXCECOES)), itens)).toEqual([
-      '(exceções dos gatilhos)',
-      '(procedimentos e funções dos gatilhos)',
-    ]);
-    // As exceções que as regras dos gatilhos levantam: USAGE ao papel, todas as do sistema anterior.
-    expect(sql).toContain(`'GRANT USAGE ON EXCEPTION "' || :e || '" TO ROLE ${PAPEL}'`);
-    expect(sql.indexOf(MARCA_EXCECOES)).toBeLessThan(sql.indexOf(MARCA_PSQL));
+  it('o modelo do repositório: toda tabela das migrações tem privilégio e a trilha só de acréscimo', () => {
+    const itens = privilegiosDoRepositorio(raiz).cliente;
+    const criadas = lerMigracoes(raiz)
+      .filter((m) => m.etapa === 'tabelas')
+      .map((m) => readFileSync(resolve(raiz, 'db/migracoes', m.arquivo), 'utf8'))
+      .join('\n')
+      .split('\n')
+      .filter((l) => /^\s*CREATE\s+TABLE\b/i.test(l)).length;
+    expect(itens.length).toBe(criadas);
+    expect(itens.find((i) => i.tabela === 'trilha_auditoria')?.acoes).toEqual(['SELECT', 'INSERT']);
+    expect(itens.find((i) => i.tabela === 'regra_visita_unidade')?.acoes).not.toContain('DELETE');
   });
 
-  it('o anexo do repositório está em dia com as receitas registradas (inclui a trilha do login)', () => {
-    const itens = privilegiosDoPapel(Object.values(OPERACOES).map((o) => o.receita));
-    const texto = readFileSync(
-      resolve(import.meta.dirname, '../../../docs/implantacao/anexos/privilegios-papel.sql'),
-      'utf8',
+  it('o repositório: toda tabela apagada pelo núcleo (.excluir) tem DELETE, e os anexos gerados estão em dia', () => {
+    const p = privilegiosDoRepositorio(raiz);
+    const fontes = lerFontes([resolve(raiz, 'apps'), resolve(raiz, 'packages')]);
+    const apagadas = new Set(
+      fontes.flatMap((f) => [...f.matchAll(/\.excluir\(\s*['"`]([a-z][a-z0-9_]*)['"`]\s*,/g)].map((m) => m[1]!)),
     );
-    expect(conferirAnexoPrivilegios(texto, itens)).toEqual([]);
-    expect(texto).toContain('GRANT INSERT ON "TBCABTRILHA" TO ROLE SGH_APLICACAO;');
-    expect(texto).toContain(MARCA_PSQL);
-    expect(itens.every((i) => !i.tabela.startsWith('SGH_'))).toBe(true);
+    expect(apagadas.size).toBeGreaterThan(0);
+    const semDelete = [...apagadas].filter((t) => !p.cliente.find((i) => i.tabela === t)?.acoes.includes('DELETE'));
+    expect(semDelete).toEqual([]);
+    for (const banco of ['cliente', 'plataforma'] as const) {
+      const anexo = resolve(raiz, ANEXOS_PRIVILEGIOS[banco]);
+      expect(existsSync(anexo)).toBe(true);
+      expect(conferirAnexoPrivilegios(readFileSync(anexo, 'utf8'), p[banco])).toEqual([]);
+    }
+  });
+
+  it('o banco da plataforma tem o seu anexo: clientes, credencial e fila do conector; a linha do tempo só de acréscimo', () => {
+    const p = privilegiosDoRepositorio(raiz).plataforma;
+    expect(p.map((i) => i.tabela)).toEqual(
+      expect.arrayContaining(['cliente', 'administrador_plataforma', 'credencial_administrador_plataforma', 'conector_execucao']),
+    );
+    expect(p.find((i) => i.tabela === 'cliente_evento')?.acoes).toEqual(['SELECT', 'INSERT']);
+    expect(anexoDePrivilegios(p, 'plataforma')).toContain('banco da PLATAFORMA');
   });
 });

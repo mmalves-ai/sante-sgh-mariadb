@@ -179,7 +179,7 @@ describe('M60.2: o artefato de release e o manifesto', () => {
         identificacao: '0.1.0+abcdef123456',
         construidoEm: '2026-10-27T00:00:00.000Z',
         node: '24.22.0',
-        scriptsSgh: { quantidade: 1, ultimo: '0001' },
+        migracoes: { quantidade: 1, ultimo: '0001' },
       },
       arq,
     );

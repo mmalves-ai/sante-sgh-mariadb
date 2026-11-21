@@ -1,10 +1,8 @@
 import { resolve } from 'node:path';
-import { COMBINACOES, PARAMETRO_COMBINACAO } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { chavesDoRepositorio } from './repositorio.ts';
 import {
   CAMPOS_ESTABELECIMENTO,
-  COMBINACOES_SENHA,
   conferirCatalogo,
   ehChaveDeEstabelecimento,
   GRUPOS,
@@ -25,14 +23,6 @@ describe('M60.2: catálogo das variáveis do arquivo de ambiente do servidor', (
   it('acha a leitura indireta env[CONSTANTE] pela constante do mesmo arquivo (achado do ensaio)', () => {
     const t = `export const PARAMETRO_X = 'E_CINCO'; const v = env[PARAMETRO_X]; const w = env[SEM_DECLARACAO];`;
     expect([...varrerChaves(t)]).toEqual(['E_CINCO']);
-  });
-
-  it('ACESSO_COMBINACAO_SENHA: obrigatória e com as combinações do login', () => {
-    expect(PARAMETRO_COMBINACAO).toBe('ACESSO_COMBINACAO_SENHA');
-    expect([...COMBINACOES_SENHA]).toEqual([...COMBINACOES]);
-    const x = VARIAVEIS.find((v) => v.chave === PARAMETRO_COMBINACAO);
-    expect(x).toMatchObject({ uso: 'obrigatoria' });
-    expect(x?.valores).toEqual([...COMBINACOES]);
   });
 
   it('toda chave lida pelo código de produção tem entrada (ou o motivo de não ir ao servidor), e nada obsoleto', () => {

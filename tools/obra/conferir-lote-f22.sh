@@ -88,7 +88,7 @@ fi
 
 # 5. vitest dos specs do lote
 if [ "$SEM_TESTES" != "--sem-testes" ]; then
-  for raiz in apps/api apps/worker packages/testes; do
+  for raiz in apps/api apps/worker packages/testes tools; do
     specs=$(grep "^$raiz/.*\.spec\.ts$" "$TMP" | sed "s#^$raiz/##" | tr '\n' ',' | sed 's/,$//')
     [ -n "$specs" ] || continue
     if ! LOTE_RAIZ="$raiz" LOTE_SPECS="$specs" timeout 1800 ./pnpm exec vitest run --config tools/obra/vitest-lote.config.ts \

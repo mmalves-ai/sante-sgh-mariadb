@@ -1,0 +1,138 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: os 17 specs apagados testavam a cópia do sistema de origem (trava da cópia, driver nativo, tabelas TB*/SGH_*, gatilhos, isql, vigia de reconciliação, código de página antigo). Não há o que portar ao MariaDB. O cenário de negócio de cada um tem spec de integração do módulo na API, salvo onde 'onde' diz 'nenhum'. A coluna 'onde' foi casada por palavra-chave (grep), não lida teste a teste: o integrador confere o cenário marcado.",
+      "arquivos": {
+        "administracao.int.spec.ts": {
+          "cenario": "usuários, escopo, termo, setor, pedido do titular, acomodação e leito",
+          "onde": "apps/api/src/modulos/administracao/fonte-propria.int.spec.ts; acesso/gestao-fonte-propria.int.spec.ts; adt/porta-propria.int.spec.ts"
+        },
+        "agenda.int.spec.ts": {
+          "cenario": "grade, marcação, disputa do horário, encaixe, remarcação, cancelamento, teleconsulta",
+          "onde": "apps/api/src/modulos/agenda/porta-propria.int.spec.ts; telemedicina/porta-propria.int.spec.ts"
+        },
+        "cadastro.int.spec.ts": {
+          "cenario": "índice de busca por nome na transação do cadastro, colisão de versão",
+          "onde": "apps/api/src/modulos/cadastro/porta-propria.int.spec.ts"
+        },
+        "catalogos.int.spec.ts": {
+          "cenario": "importadores CBO/SIGTAP/CEP com arquivo sintético, publicação em lotes, retomada",
+          "onde": "apps/api/src/modulos/catalogos/porta-propria.int.spec.ts"
+        },
+        "censo-fechamento.int.spec.ts": {
+          "cenario": "censo do dia fechado uma só vez com dois processos",
+          "onde": "nenhum: a operação de fechar o censo não existe sobre o MariaDB (ver pedido operacao-faltante internacao.fechar_censo)"
+        },
+        "colisao-portal.int.spec.ts": {
+          "cenario": "horário ocupado por outro canal some e o próximo é oferecido",
+          "onde": "apps/api/src/modulos/agenda/porta-propria.int.spec.ts; portal-paciente/porta-propria.int.spec.ts"
+        },
+        "crud-motor-w002.int.spec.ts": {
+          "cenario": "CRUD genérico: recusa por dependentes, exclusão com retrato, reativar, chave composta",
+          "onde": "apps/api/src/modulos/config/dominios-propria.int.spec.ts"
+        },
+        "dominios.int.spec.ts": {
+          "cenario": "CRUD genérico de domínios: incluir, alterar, inativar, conflito de versão",
+          "onde": "apps/api/src/modulos/config/dominios-propria.int.spec.ts"
+        },
+        "inativar.int.spec.ts": {
+          "cenario": "inativar preserva referências; item em uso pede confirmação",
+          "onde": "apps/api/src/modulos/config/dominios-propria.int.spec.ts"
+        },
+        "emergencia.int.spec.ts": {
+          "cenario": "quebra de vidro: abertura com trilha, vigência, revisão",
+          "onde": "apps/api/src/modulos/acesso/emergencia-propria.int.spec.ts"
+        },
+        "enfermagem.int.spec.ts": {
+          "cenario": "checagem com idempotência, concorrente recusada, aprazamento",
+          "onde": "apps/api/src/modulos/enfermagem/porta-propria.int.spec.ts; enfermagem/aplicacao/checar.idempotencia.int.spec.ts"
+        },
+        "escopo.int.spec.ts": {
+          "cenario": "escopo de unidades do usuário",
+          "onde": "apps/api/src/modulos/acesso/leitura-acesso.int.spec.ts"
+        },
+        "gestao-acesso.int.spec.ts": {
+          "cenario": "concessão e revogação de perfil, concessão temporária, mapa grupo-perfil",
+          "onde": "apps/api/src/modulos/acesso/gestao-fonte-propria.int.spec.ts"
+        },
+        "liberacao.int.spec.ts": {
+          "cenario": "chave de liberação por estabelecimento, setor e pessoa no executor",
+          "onde": "apps/api/src/modulos/config/configuracao-propria.int.spec.ts"
+        },
+        "liberacao-lote.int.spec.ts": {
+          "cenario": "liberação em lote reversível e pré-requisito",
+          "onde": "apps/api/src/modulos/config/configuracao-propria.int.spec.ts"
+        },
+        "imutabilidade-clinica.int.spec.ts": {
+          "cenario": "DELETE em tabela clínica negado ao papel do módulo",
+          "onde": "nenhum spec de integração encontrado (ver pedido)"
+        },
+        "dois-hospitais.int.spec.ts": {
+          "cenario": "cada hospital no seu banco",
+          "onde": "packages/testes/src/integracao/executor.int.spec.ts (cada cliente no seu banco: estabelecimento gravado no f22_o5, em transação desfeita, procurado no f22_o5_b pelo mesmo núcleo = 0; DATABASE() distinto; contexto trocado recusado com contexto-invalido; cliente sem registro recusado com ErroClienteDesconhecido)"
+        }
+      }
+    },
+    {
+      "tipo": "operacao-faltante",
+      "lote": "05-15 (dono de apps/worker/src/censo-fechamento.service.ts; internação: apps/api/src/modulos/internacao)",
+      "operacao": "internacao.fechar_censo",
+      "motivo": "Nenhum código de apps/ ou packages/ grava fechamento_censo (só leituras: internação, indicadores, rouparia, escores). O fechamento antigo (fecharCenso do pacote antigo, usado pelo worker) some com a migração. Sem ele, fechar o censo do dia fica indisponível e quem lê fechamento_censo (dias de censo fechado, indicadores) só enxerga massa ou carga do conector.",
+      "especificacao": [
+        "operação própria pelo Executor (definirOperacao, tabelas ['fechamento_censo']), com trilha e evento de saída na mesma transação;",
+        "cálculo do retrato (pacientes_dia, internacoes, altas, obitos, transferências, leitos_operacionais, resumo) no domínio (@sgh/dominio-internacao: diaDoCenso, MotorInternacao), não no SQL;",
+        "uma linha por (estabelecimento_id, unidade_internacao_id, data_referencia): a UNIQUE uq_fechamento_censo_estabelecimento_unidade_data já existe no DDL 07_INT/01_tabelas.sql; sem DDL novo;",
+        "segundo fechamento concorrente do mesmo dia e unidade recusado: a violação da UNIQUE vira recusa 'censo-ja-fechado' (restricaoViolada), o worker desiste sem erro e registra só a contagem;",
+        "reabertura com motivo (situacao 'reaberto', CHECK já existe) e nova versão pela trava otimista;",
+        "spec de integração no cliente de teste do lote: dois processos fecham o mesmo dia e só um grava (o teste que censo-fechamento.int.spec.ts fazia sobre a cópia)."
+      ]
+    },
+    {
+      "tipo": "api-do-util-mudou",
+      "lotes": [
+        "05-02",
+        "05-03",
+        "05-04",
+        "05-05"
+      ],
+      "arquivo": "packages/testes/src/integracao/escrita.spec-util.ts",
+      "motivo": "A partida comum foi reescrita sobre o @sgh/nucleo (cliente f22_o5). Os specs dos lotes seguintes que importam os nomes antigos têm de trocar assim.",
+      "mapa": {
+        "PODE_ESCREVER": "!SEM_BANCO (PODE_ESCREVER segue exportado, marcado @deprecated, só durante a onda 5; o integrador o tira quando 'grep -rn PODE_ESCREVER packages/testes' der só o util)",
+        "codigos": "sai (códigos de hospital da cópia): use o cliente de teste (CLIENTE ou um próprio do lote) e a.estabelecimento",
+        "env": "sai: o núcleo lê a configuração sozinho; nenhum spec lê o .env",
+        "criarNucleo": "sai: prepararAmbiente() devolve { nucleo: NucleoProprio, executor, estabelecimento }",
+        "prepararAmbiente(extra)": "prepararAmbiente() sem argumentos; cliente CLIENTE ('f22_o5'), criado por garantirCliente() se faltar",
+        "ctx(a)": "ctx(a, correlacao?) devolve ContextoNucleo { cliente, estabelecimento, usuario: null, correlacao }",
+        "ctxOperacao(a, usuario, chave?)": "ctxOperacao(a, extra?: Partial<ContextoOperacao>) — usuário é id numérico (extra.usuario), chave por chaveNova()",
+        "partirSemDecisao": "sai: não há cópia a partir; massa sintética no beforeAll e gravação em transação desfeita (desfeito(a, fn)) ou executar(..., { desfazer: true })",
+        "CATALOGO": "sai: operações de teste por definirOperacao (o catálogo de operações do sistema antigo não é usado)",
+        "contar(l, sql, p)": "igual, com Leitor do @sgh/nucleo",
+        "num, raiz": "iguais",
+        "novos": "SEM_BANCO, CLIENTE, CLIENTE_B, MARCA, garantirCliente(cliente?, nome?), chaveNova, desfeito, codigoDe, codigoSintetico, incluirEstabelecimento, alterarEstabelecimento, incluirSemEfeito, gravarForaDasTabelas"
+      }
+    },
+    {
+      "tipo": "cenario-sem-prova",
+      "lote_sugerido": "05-05 ou dono de apps/api/src/modulos/acesso/contas-banco",
+      "motivo": "imutabilidade clínica no MariaDB: provar que o papel de banco de um módulo (infra/mariadb/privilegios, privilegios:gerar) NÃO tem DELETE em tabela clínica (deleteClinicoProibido) e que um DELETE clínico com a conta do módulo é recusado pelo servidor. O spec antigo fazia isso com isql no Firebird. Nenhuma operação fica indisponível; falta só a prova."
+    },
+    {
+      "tipo": "cenario-a-confirmar",
+      "motivo": "registro-em-edicao (linha travada por outra conexão) não aparece em nenhum spec de módulo da API; agora está provado de forma transversal em packages/testes/src/integracao/executor.int.spec.ts (travar + versaoEsperada). Os módulos com travar() herdam o comportamento."
+    },
+    {
+      "tipo": "ddl",
+      "itens": []
+    }
+  ],
+  "avisos": [
+    "Fechar o censo do dia (internacao.fechar_censo, antes internacao.fecharCenso) fica INDISPONÍVEL sobre o MariaDB até o pedido 'operacao-faltante' ser atendido (lote 05-15/internação): nada grava fechamento_censo; o spec antigo censo-fechamento.int.spec.ts foi apagado sem substituto. A tabela e a UNIQUE já existem; falta só a operação.",
+    "O conferidor sai com 'tsc packages/testes: N erros' porque o passo 4 conta TODOS os erros do pacote, sem separar os arquivos dos lotes em andamento (05-02 a 05-05 e outros): 0 erro nos 20 arquivos deste lote. Na medição após a correção, os erros restantes estão só em specs de outros lotes (e em m34-protolife.int.spec.ts e registro-clinico-perfil.int.spec.ts, fora das listas da onda 5).",
+    "Criado o cliente de teste f22_o5_b (banco cliente_f22_o5_b, vazio) para a prova de isolamento entre clientes em executor.int.spec.ts.",
+    "Achado reavaliado (imutabilidade clínica): continua sem prova de integração; pedido 'cenario-sem-prova' mantido, nenhuma operação indisponível."
+  ]
+}

@@ -20,6 +20,17 @@
     "src/integracao/vigia-fatos.ts",
     "src/integracao/porta-propria.ts",
     "src/integracao/porta-propria.spec.ts",
-    "src/integracao/porta-propria.int.spec.ts"
+    "src/integracao/porta-propria.int.spec.ts",
+    "src/financeiro/glosa-propria.ts",
+    "src/financeiro/consumidor-financeiro.ts",
+    "src/financeiro/consumidor-financeiro.spec.ts",
+    "src/financeiro/glosa-propria.int.spec.ts",
+    "src/importadores/publicador.ts",
+    "src/importadores/publicador.spec.ts",
+    "src/importadores/porta-propria.ts",
+    "src/importadores/escrita-catalogo.ts",
+    "src/importadores/porta-propria.int.spec.ts",
+    "src/importadores/integracao.spec-util.ts",
+    "src/importadores/brasindice/licenca.int.spec.ts"
   ]
 }

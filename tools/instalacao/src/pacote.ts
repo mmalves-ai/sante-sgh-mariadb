@@ -67,7 +67,7 @@ export interface Manifesto {
   readonly identificacao: string;
   readonly construidoEm: string;
   readonly node: string;
-  readonly scriptsSgh: { readonly quantidade: number; readonly ultimo: string | null };
+  readonly migracoes: { readonly quantidade: number; readonly ultimo: string | null };
   readonly arquivos: number;
   readonly bytes: number;
   /** sha256 das linhas "sha256  caminho" ordenadas pelo caminho (o hash do conjunto). */

@@ -107,7 +107,7 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
       'tools/verificadores/src/textos-de-produto.ts',
     ],
   },
-  // M60: o anexo do manual de implantação cita todos os scripts SGH_ do repositório com o hash atual.
+  // M60: o anexo do manual de implantação cita todas as migrações de db/migracoes com o hash atual e os anexos de privilégios do papel_aplicacao.
   {
     nome: 'implantacao:listas --conferir',
     comando: 'node',

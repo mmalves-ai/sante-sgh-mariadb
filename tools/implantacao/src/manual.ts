@@ -24,8 +24,10 @@ export const SECOES_MANUAL: readonly { numero: number; palavra: RegExp; nome: st
 export const ANEXOS_MANUAL = [
   'anexos/scripts-sgh.md',
   'anexos/variaveis.md',
-  // M60.3: o SQL dos privilégios do papel (seção 7.4); no PDF, como bloco de código.
+  // M60.3: o SQL dos privilégios do papel_aplicacao (seção 7.4); no PDF, como bloco de código. Dois anexos: o do
+  // banco de cada cliente e o do banco da plataforma, ambos executados antes de dar o papel à conta da aplicação.
   'anexos/privilegios-papel.sql',
+  'anexos/privilegios-plataforma.sql',
 ] as const;
 
 /** Momentos da lista de verificação imprimível (seção 12), cada um com responsável e assinatura. */
