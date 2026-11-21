@@ -13,6 +13,7 @@ import {
   esquemaPublicarEscala,
 } from './escala-entradas.js';
 import { CONSELHO_DA_ESCALA, LIMITES_TEMPO_PARCIAL, TURNOS_ESCALA } from './escala-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const regime = {
   codigo: '12x36',
@@ -92,12 +93,12 @@ describe('contratos da escala (M52.2)', () => {
       'pessoas.regime.ler',
       'pessoas.regime.editar',
     ]);
+    expect(opcoesDoMapa('pessoas.escala.publicar')).toEqual([]);
     expect(por.get('pessoas.escala.publicar')).toMatchObject({
-      opcoesLegado: [],
       concessaoPorPerfil: 'por-perfil',
       perfis: ['gestor-escala'],
     });
-    expect(por.get('pessoas.escala.montar')?.opcoesLegado).toEqual([5073]);
+    expect(opcoesDoMapa(por.get('pessoas.escala.montar')?.codigo)).toEqual([5073]);
     expect(PERFIS_COMPLEMENTARES).toContain('gestor-escala');
   });
 

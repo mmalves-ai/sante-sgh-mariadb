@@ -1,0 +1,20 @@
+# assunto: assinatura+especialidades+exames+manutencao+nutricao+portal-medico+portaria+precos+recepcao+sus+formatacao+onda2+cadastro+config+organizacao
+# cliente_teste: f24_08mistoassinatura
+apps/api/src/modulos/assinatura/porta-propria.ts
+apps/api/src/modulos/especialidades/porta-propria.ts
+apps/api/src/modulos/exames/relogio.ts
+apps/api/src/modulos/manutencao/porta-propria.ts
+apps/api/src/modulos/nutricao/porta-propria.ts
+apps/api/src/modulos/portal-medico/porta-propria.ts
+apps/api/src/modulos/portaria/porta-propria.ts
+apps/api/src/modulos/precos/fonte-propria.ts
+apps/api/src/modulos/recepcao/porta-propria.ts
+apps/api/src/modulos/sus/porta-propria.ts
+packages/contratos/src/formatacao/hora-legada.ts
+packages/contratos/src/onda2/onda2.ts
+packages/dominio-cadastro/dist/documento/cpf.d.ts
+packages/dominio-cadastro/dist/profissional/categoria.d.ts
+packages/dominio-config/dist/fim-coexistencia/usuarios-restantes.d.ts
+packages/dominio-config/dist/homologacao/homologacao.d.ts
+packages/dominio-organizacao/dist/conferencia-leitos.d.ts
+packages/dominio-organizacao/dist/hierarquia.d.ts

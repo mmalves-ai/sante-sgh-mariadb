@@ -13,39 +13,11 @@
 // (permissoes/dominios.ts), com as opções na parte pública da declaração (dominios/catalogo.ts).
 import type { DeclaracaoPermissao } from './tipos.js';
 
-export const OPCOES_CADASTRO_PACIENTE = {
-  acessarExterna: 3253,
-  consultarExterna: 6027,
-  incluirExterna: 3255,
-  alterarExterna: 3254,
-  acessarInterna: 2347,
-  consultarInterna: 6061,
-  incluirInterna: 2349,
-  alterarInterna: 2348,
-  pesquisa: 3290,
-} as const;
-
-const P = OPCOES_CADASTRO_PACIENTE;
-const UNIFICACAO = [3272, 4005, 4790] as const;
-const REVERSAO_UNIFICACAO = [6544, 6608, 6531] as const;
-const PROFISSIONAIS = [3984, 6390, 6391, 6392, 6394] as const;
-
 export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.paciente.ler',
     descricao: 'Buscar paciente e abrir a ficha (toda abertura é registrada na trilha)',
-    opcoesLegado: [
-      P.acessarExterna,
-      P.consultarExterna,
-      P.incluirExterna,
-      P.alterarExterna,
-      P.acessarInterna,
-      P.consultarInterna,
-      P.incluirInterna,
-      P.alterarInterna,
-      P.pesquisa,
-      ...UNIFICACAO,
-    ],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['assistencial-com-conselho'],
     categoria: 'administrativa',
@@ -54,21 +26,21 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.paciente.criar',
     descricao: 'Cadastrar paciente (procura pelo CPF antes de criar)',
-    opcoesLegado: [P.incluirExterna, P.incluirInterna],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
   {
     codigo: 'cadastro.paciente.editar',
     descricao: 'Alterar o cadastro do paciente (só as colunas que mudaram; aviso de colisão)',
-    opcoesLegado: [P.alterarExterna, P.alterarInterna],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
   {
     codigo: 'cadastro.paciente.verDocumento',
     descricao: 'Ver CPF, CNS e documentos sem máscara na ficha do paciente',
-    opcoesLegado: [P.incluirExterna, P.alterarExterna, P.incluirInterna, P.alterarInterna, ...UNIFICACAO],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -76,7 +48,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.paciente.verSensivel',
     descricao: 'Ver raça/cor, religião, vulnerabilidade e responsável legal do paciente',
-    opcoesLegado: [...UNIFICACAO],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['assistencial-com-conselho'],
     categoria: 'administrativa',
@@ -85,7 +57,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.consentimento.ler',
     descricao: 'Ver os consentimentos do paciente (finalidade, versão, revogação e signatário)',
-    opcoesLegado: [6533, 6534, 6538, 6539, 6589, 6590],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['assistencial-com-conselho'],
     categoria: 'administrativa',
@@ -93,7 +65,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.consentimento.registrar',
     descricao: 'Registrar ou revogar consentimento do paciente por finalidade',
-    opcoesLegado: [6535, 6536, 6540, 6541, 6591, 6592],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -102,7 +74,7 @@ export const PERMISSOES_CADASTRO_M11 = [
     codigo: 'cadastro.historico.ler',
     descricao:
       'Ver a linha do tempo do cadastro do paciente e do profissional (versões gravadas a cada alteração)',
-    opcoesLegado: [P.alterarExterna, P.alterarInterna, ...UNIFICACAO, 6391, 6394],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -110,7 +82,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.duplicidade.ler',
     descricao: 'Ver a fila de duplicidades e comparar cadastros lado a lado',
-    opcoesLegado: [...UNIFICACAO, ...REVERSAO_UNIFICACAO],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -118,14 +90,14 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.duplicidade.decidir',
     descricao: 'Decidir um par da fila ("É outra pessoa") e atualizar a fila',
-    opcoesLegado: [...UNIFICACAO],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
   {
     codigo: 'cadastro.pessoa.ler',
     descricao: 'Consultar pessoas por CPF ou CNPJ e onde são usadas',
-    opcoesLegado: [P.consultarExterna, P.consultarInterna, P.pesquisa, 6394],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -133,7 +105,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.profissional.ler',
     descricao: 'Consultar profissionais, registros em conselho, CBO, especialidades e lotação',
-    opcoesLegado: [...PROFISSIONAIS],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
@@ -141,7 +113,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.solicitante.ler',
     descricao: 'Consultar médicos solicitantes externos (conselho, UF e número)',
-    opcoesLegado: [...PROFISSIONAIS],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
@@ -152,7 +124,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.profissional.criar',
     descricao: 'Incluir profissional do corpo clínico com o registro no conselho e o CBO',
-    opcoesLegado: [6392],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
@@ -161,7 +133,7 @@ export const PERMISSOES_CADASTRO_M11 = [
     codigo: 'cadastro.profissional.editar',
     descricao:
       'Alterar profissional do corpo clínico: dados, registros (conselho e sigla), especialidades, lotação e convênios',
-    opcoesLegado: [6391],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
@@ -173,7 +145,7 @@ export const PERMISSOES_CADASTRO_M11 = [
     codigo: 'cadastro.profissional.excluir',
     descricao:
       'Inativar e reativar o profissional do corpo clínico (e cada registro dele) e excluir o cadastrado por engano (só sem nenhum vínculo)',
-    opcoesLegado: [6393],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
@@ -183,7 +155,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   {
     codigo: 'cadastro.solicitante.criar',
     descricao: 'Incluir médico solicitante externo (conselho, UF e número; sem repetir o mesmo registro)',
-    opcoesLegado: [6392],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',

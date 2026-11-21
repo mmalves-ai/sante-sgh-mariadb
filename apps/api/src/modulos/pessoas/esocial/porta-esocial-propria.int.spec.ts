@@ -3,8 +3,9 @@
 // versão velha, retorno aceito com recibo, retificação aceita (o original passa a ser lido como substituído) e lote.
 // Só no banco (contrato de efeito): linhas, versão, criado_por/alterado_por do usuário da sessão, trilha da operação,
 // nenhuma mensagem no outbox (o eSocial sai pelo lote e pelo transmissor, não pelo outbox), o sequencial do Id pela
-// sequencia_negocio do estabelecimento (concorrência sem colisão), o CHECK processado → recibo e as recusas por
-// modelo pendente (parâmetros do empregador, ficha, conferência, operação do evento de tabela, lote ao coletor).
+// sequencia_negocio do estabelecimento (concorrência sem colisão), o CHECK processado → recibo, a operação do evento
+// de tabela, o lote ao coletor, a conferência da conciliação gravada e relida e as recusas por modelo pendente
+// (parâmetros do empregador e ficha).
 // Massa sintética (identificadores e XML de teste, nenhuma pessoa); o que o teste cria é apagado no fim (a trilha fica:
 // é só de inclusão).
 // Rodar: vitest run --config apps/api/vitest.integracao.config.ts src/modulos/pessoas/esocial/porta-esocial-propria.int.spec.ts
@@ -153,6 +154,12 @@ afterAll(async () => {
       await e.executar(`DELETE FROM evento_esocial WHERE id IN (${em(todos)})`, todos);
     }
     if (lotes.length) await e.executar(`DELETE FROM lote_esocial WHERE id IN (${em(lotes)})`, lotes);
+    await e.executar(
+      `DELETE i FROM conferencia_eventos_esocial_item i
+         JOIN conferencia_eventos_esocial f ON f.id = i.conferencia_eventos_esocial_id WHERE f.estabelecimento_id = ?`,
+      [est],
+    );
+    await e.executar('DELETE FROM conferencia_eventos_esocial WHERE estabelecimento_id = ?', [est]);
     if (tiposCriados.length)
       await e.executar(`DELETE FROM tipo_evento_esocial WHERE id IN (${em(tiposCriados)})`, tiposCriados);
     if (sequenciaCriada)
@@ -413,23 +420,114 @@ describe.skipIf(SEM_BANCO)('porta própria do eSocial: contrato de efeito no Mar
     });
   });
 
-  it('recusa sem gravar: evento de tabela com operação, lote ao coletor, outro estabelecimento, parâmetros', async () => {
-    const n = () =>
-      contar('SELECT COUNT(*) AS n FROM evento_esocial WHERE estabelecimento_id = ? AND entidade_id = ?', [
-        est,
-        REF,
-      ]);
+  it('grava a operação do evento de tabela, a data de referência e o lote ao coletor', async () => {
+    const id = await incluirEm(porta, {
+      evento: 'S-1010',
+      grupo: 'tabela',
+      operacao: 'inclusao',
+      dataReferencia: '2026-10-15',
+    });
+    const [lido] = await porta.eventos(contexto(), { referencia: REF, evento: 'S-1010' });
+    expect(lido).toMatchObject({ id, operacao: 'inclusao', dataReferencia: '2026-10-15' });
+    expect(
+      await banco('SELECT operacao_tabela, data_referencia FROM evento_esocial WHERE id = ?', [id]),
+    ).toMatchObject({
+      operacao_tabela: 'inclusao',
+    });
+    const lote = await porta.gravarSgh(contexto(), trilhaDo('lote_esocial'), (g) =>
+      g.incluirLote({ empresa: est, grupo: 'tabela', ambiente: 'coletor', quantidade: 1, por: 'SINT' }),
+    );
+    lotes.push(lote);
+    expect(await banco('SELECT ambiente FROM lote_esocial WHERE id = ?', [lote])).toMatchObject({
+      ambiente: 'coletor',
+    });
+    expect((await porta.lote(contexto(), lote))?.ambiente).toBe('coletor');
+  });
+
+  const linhaDe = (evento: string, situacao: string, externo: number | null, pendenciaLegado: number) => ({
+    evento,
+    rotulo: 'rótulo da tela',
+    sante: 2,
+    externo,
+    repasse: 0,
+    pendenciaLegado,
+    situacao,
+  });
+  const conferir = (competencia: string, situacao: 'conciliada' | 'divergente', linhas: unknown[]) =>
+    porta.gravarSgh(contexto(), trilhaDo('conferencia_eventos_esocial'), (g) =>
+      g.incluirConciliacao({
+        empresa: est,
+        competencia,
+        transmissor: 'sante',
+        situacao,
+        linhas: JSON.stringify(linhas),
+        observacao: 'Conferência sintética',
+        por: 'SINT',
+      }),
+    );
+
+  it('grava a conferência da conciliação e relê a última, com a situação exata e as contagens por evento', async () => {
+    expect(await porta.ultimaConciliacao(contexto(), est, '2026-09')).toBeNull();
+    const id = await conferir('2026-09', 'conciliada', [
+      linhaDe('S-1010', 'conciliado', 2, 0),
+      linhaDe(EVENTO, 'sem-transmissor', null, 3),
+    ]);
+    const u = await porta.ultimaConciliacao(contexto(), est, '2026-09');
+    expect(u).toMatchObject({
+      id,
+      empresa: est,
+      competencia: '2026-09',
+      transmissor: 'sante',
+      situacao: 'conciliada',
+    });
+    expect(u?.observacao).toBe('Conferência sintética');
+    const lidas = JSON.parse(u!.linhas) as {
+      evento: string;
+      rotulo: string;
+      externo: number | null;
+      pendenciaLegado: number;
+      situacao: string;
+    }[];
+    expect(lidas.map((x) => [x.evento, x.externo, x.pendenciaLegado, x.situacao]).sort()).toEqual(
+      [
+        ['S-1010', 2, 0, 'conciliado'],
+        [EVENTO, null, 3, 'sem-transmissor'],
+      ].sort(),
+    );
+    // O rótulo é o nome do tipo de evento no catálogo do cliente (nunca vazio).
+    for (const l of lidas) expect(l.rotulo.length).toBeGreaterThan(0);
+    expect(
+      await porta.ultimaConciliacao({ ...contexto(), estabelecimento: est + 1_000_000 }, est, '2026-09'),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['dois-transmissores', '2026-05'],
+    ['repasse-no-periodico', '2026-06'],
+    ['repasse-no-externo', '2026-07'],
+    ['so-contagem', '2026-08'],
+  ])(
+    'linha %s: grava as contagens e a releitura recusa com modelo-pendente (nunca outro diagnóstico)',
+    async (sit, comp) => {
+      await conferir(comp, 'divergente', [linhaDe('S-1010', 'conciliado', 2, 0), linhaDe(EVENTO, sit, 1, 0)]);
+      expect(
+        await contar(
+          `SELECT COUNT(*) AS n FROM conferencia_eventos_esocial_item i
+           JOIN conferencia_eventos_esocial f ON f.id = i.conferencia_eventos_esocial_id
+          WHERE f.estabelecimento_id = ? AND f.competencia = ? AND i.situacao = 'divergente'`,
+          [est, `${comp}-01`],
+        ),
+      ).toBe(1);
+      await expect(porta.ultimaConciliacao(contexto(), est, comp)).rejects.toMatchObject({
+        problema: { codigo: 'modelo-pendente' },
+      });
+      await expect(porta.ultimaConciliacao(contexto(), est, comp)).rejects.toThrow(/detalhe da divergência/);
+    },
+  );
+
+  it('recusa sem gravar: outro estabelecimento e parâmetros do empregador', async () => {
     const l = () => contar('SELECT COUNT(*) AS n FROM lote_esocial WHERE estabelecimento_id = ?', [est]);
-    const [eventosAntes, lotesAntes] = [await n(), await l()];
-    // Sem a coluna da operação, a duplicidade do evento de tabela não seria detectada: recusa (modelo pendente).
-    await expect(
-      incluirEm(porta, { evento: 'S-1010', grupo: 'tabela', operacao: 'inclusao', origem: 'rubrica' }),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(
-      porta.gravarSgh(contexto(), trilhaDo('lote_esocial'), (g) =>
-        g.incluirLote({ empresa: est, grupo: 'tabela', ambiente: 'coletor', quantidade: 1, por: 'SINT' }),
-      ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    const lotesAntes = await l();
     await expect(
       porta.gravarSgh(contexto(), trilhaDo('lote_esocial'), (g) =>
         g.incluirLote({
@@ -453,7 +551,6 @@ describe.skipIf(SEM_BANCO)('porta própria do eSocial: contrato de efeito no Mar
         }),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    expect(await n()).toBe(eventosAntes);
     expect(await l()).toBe(lotesAntes);
   });
 
@@ -463,9 +560,6 @@ describe.skipIf(SEM_BANCO)('porta própria do eSocial: contrato de efeito no Mar
     });
     await expect(porta.empregadores(contexto(), null)).rejects.toThrow(/gerar eventos/);
     await expect(porta.ficha(contexto(), 1)).rejects.toMatchObject({
-      problema: { codigo: 'modelo-pendente' },
-    });
-    await expect(porta.ultimaConciliacao(contexto(), est, '2026-10')).rejects.toMatchObject({
       problema: { codigo: 'modelo-pendente' },
     });
   });

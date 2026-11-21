@@ -86,7 +86,7 @@ test.describe('Imutabilidade clínica e segredos @M59.3 @fase7', () => {
     await expect(page.getByTestId('segredos-parceiros')).toBeVisible();
     await expect(page.getByTestId('segredos-contingencia')).toContainText('contingência está ligado');
     await expect(page.getByTestId('segredos-resumo')).toBeVisible();
-    await expect(page.getByTestId('segredos-resumo-TBCONVEN')).toBeVisible();
+    await expect(page.getByTestId('segredos-resumo-convenio')).toBeVisible();
     // A exceção registrada (as contas bancárias, lidas pelas rotinas do banco) aparece com rótulo de produto.
     await expect(page.getByTestId('segredos-excecoes')).toBeVisible();
     await semViolacaoAxe(page, '/admin/integracoes/parceiros?vista=credenciais (M59.3)');
@@ -119,8 +119,8 @@ test.describe('Imutabilidade clínica e segredos @M59.3 @fase7', () => {
 
     // A retirada pelo servidor, com a contingência ligada: recusada (regra 1), nada muda.
     const recusa = await postar(page, '/api/administracao/integracao/segredos-legado/retirar', {
-      tabela: 'TBCONVEN',
-      chave: 'COD=901',
+      tabela: 'convenio',
+      chave: 'id=901',
       senha: SENHA,
     });
     expect(recusa.status()).toBe(409);

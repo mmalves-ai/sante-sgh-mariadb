@@ -55,8 +55,6 @@ export const OPCOES_ATENDIMENTO = {
   liberarPacienteRapido: 4645,
 } as const;
 
-const O = OPCOES_ATENDIMENTO;
-
 export const PERMISSOES_ATENDIMENTO_CODIGOS = {
   atendimentoLer: 'atendimento.atendimento.ler',
   atendimentoAbrir: 'atendimento.atendimento.abrir',
@@ -80,122 +78,83 @@ export const PERMISSOES_ATENDIMENTO_CODIGOS = {
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
   criticidade: 'normal',
   ...extra,
 });
 
-const LER_ATENDIMENTO = [
-  O.atendimentos,
-  O.atendimentosConsultar,
-  O.listaAtendimentos,
-  O.atendimentosAnteriores,
-  O.sadtExternoConsultar,
-  O.sadtAtendimentos,
-  O.sadtControle,
-  O.localizarPaciente,
-];
-
 export const PERMISSOES_ATENDIMENTO_M20: readonly DeclaracaoPermissao[] = [
-  p(
-    'atendimento.atendimento.ler',
-    'Consultar os atendimentos externos do dia e a ficha do atendimento',
-    LER_ATENDIMENTO,
-  ),
+  p('atendimento.atendimento.ler', 'Consultar os atendimentos externos do dia e a ficha do atendimento'),
   p(
     'atendimento.atendimento.abrir',
     'Abrir atendimento externo (ambulatório, pronto atendimento, central de exames, requisição de laboratório)',
-    [O.atendimentosIncluir, O.sadtExternoIncluir, O.sadtLaboratorioIncluir],
   ),
   p(
     'atendimento.atendimento.encerrar',
     'Encerrar o atendimento com desfecho administrativo (evasão, encerramento) e liberar o paciente do local',
-    [O.atendimentosAlterar, O.liberarPaciente, O.liberarPacienteRapido, O.sadtExternoAlterar],
   ),
   p(
     'atendimento.atendimento.cancelar',
     'Excluir atendimento aberto por engano (supervisor; motivo e justificativa; mostra o que será desfeito)',
-    [O.atendimentosExcluir, O.atendimentosCancelar],
+
     { criticidade: 'critica' },
   ),
   p(
     'atendimento.desfecho.medico',
     'Registrar desfecho clínico do atendimento externo (alta, encaminhamento, internação, transferência, óbito)',
-    [O.liberarPaciente, O.liberarPacienteRapido],
+
     { categoria: 'clinica', exigeConselho: true },
   ),
   p(
     'atendimento.segurado.editar',
     'Corrigir o atendimento aberto (convênio, profissional, especialidade, procedimento, CID, solicitante, responsável, observação, caráter, carteirinha, guia, senha e plano), com justificativa',
-    [O.atendimentosAlterar, O.alteracaoConvenio, O.sadtExternoAlterar],
   ),
   p(
     'atendimento.procedimento.lancar',
     'Lançar, corrigir e estornar procedimento extra no atendimento externo com a conta aberta (conferindo antes a situação da conta)',
-    [O.atendimentosAlterar, O.lancamentoRapido, O.sadtExternoAlterar],
+
     { categoria: 'financeira' },
   ),
-  p(
-    'atendimento.fila.ler',
-    'Ver a fila do consultório (pacientes do dia do local, agendados e espontâneos)',
-    [O.localizarPaciente, O.chamarPaciente, O.liberarPaciente, O.atendimentosConsultar],
-  ),
+  p('atendimento.fila.ler', 'Ver a fila do consultório (pacientes do dia do local, agendados e espontâneos)'),
   // A escrita da fila (chamar ao consultório e iniciar o atendimento grava a senha e o fluxo do paciente): só quem
   // chama ou libera o paciente no legado. Localizar paciente (3900) e Atendimentos › Consultar (6026) só leem.
   p(
     'atendimento.fila.conduzir',
     'Chamar o paciente ao consultório e iniciar o atendimento (a senha e o fluxo do paciente no local)',
-    [O.chamarPaciente, O.liberarPaciente],
+
     { categoria: 'clinica' },
   ),
-  p('atendimento.impresso.emitir', 'Emitir ficha, etiquetas e pulseira de identificação do atendimento', [
-    O.emissaoFichas,
-    O.emissaoEtiquetas,
-    O.fichasImprimir,
-    O.etiquetasImprimir,
-    O.atendimentosIncluir,
-  ]),
-  p('atendimento.indicador.ler', 'Ver os indicadores do ambulatório e do pronto atendimento', [
-    O.estatisticas,
-  ]),
+  p('atendimento.impresso.emitir', 'Emitir ficha, etiquetas e pulseira de identificação do atendimento'),
+  p('atendimento.indicador.ler', 'Ver os indicadores do ambulatório e do pronto atendimento'),
   p(
     'atendimento.heranca.editar',
     'Configurar o que a ficha nova copia do atendimento anterior do paciente (convênio, profissional, carteirinha…)',
-    [O.parametros, O.parametrosAlterar],
   ),
-  p('pa.quadro.ler', 'Ver o quadro de acompanhamento do pronto atendimento por etapa, com os tempos', [
-    O.localizarPaciente,
-    O.atendimentosConsultar,
-    O.painelLeitos,
-  ]),
+  p('pa.quadro.ler', 'Ver o quadro de acompanhamento do pronto atendimento por etapa, com os tempos'),
   p(
     'pa.etapa.registrar',
     'Registrar a etapa do paciente no quadro do pronto atendimento (atendimento médico, exames, reavaliação)',
-    [O.chamarPaciente, O.liberarPaciente, O.localizarPaciente],
+
     { categoria: 'clinica' },
   ),
-  p('pa.observacao.ler', 'Ver os leitos e poltronas de observação do pronto atendimento e a ocupação', [
-    O.leitos,
-    O.painelLeitos,
-    O.leitoEntradaConsultar,
-  ]),
+  p('pa.observacao.ler', 'Ver os leitos e poltronas de observação do pronto atendimento e a ocupação'),
   p(
     'pa.observacao.alocar',
     'Pôr e tirar o paciente do leito ou poltrona de observação (alerta de 24 horas)',
-    [O.leitoEntrada, O.leitoEntradaIncluir, O.leitoEntradaAlterar, O.leitoTransferencia, O.leitoAlta],
+
     { categoria: 'clinica' },
   ),
   p(
     'pa.desfecho.registrar',
     'Registrar o desfecho do pronto atendimento (a evasão e o encerramento; o ato médico exige também o desfecho clínico)',
-    [O.liberarPaciente, O.liberarPacienteRapido, O.leitoAlta],
+
     { categoria: 'clinica' },
   ),
 ];

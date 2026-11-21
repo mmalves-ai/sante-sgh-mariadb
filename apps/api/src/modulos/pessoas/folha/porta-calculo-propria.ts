@@ -1,12 +1,16 @@
 // Porta do cálculo da folha sobre o MariaDB do cliente (M53.3 a M53.8), pelo @sgh/nucleo. Leituras numa transação curta
 // somente leitura, filtradas pelo estabelecimento da sessão.
 // Tabelas lidas: vinculo_trabalho, categoria_trabalhador, colaborador, cargo, dependente, historico_salarial, risco_funcao,
-// usuario, tipo_rescisao, desligamento, rescisao, competencia_folha, calculo_folha e parcela_decimo_terceiro.
-// O processamento da folha (totais, tabela legal e parâmetros usados, linhas por papel do cálculo) não tem registro no
-// modelo: competencia_folha e calculo_folha guardam o resultado por rubrica, sem o processamento nem o papel da linha. As
-// leituras que devolvem o processamento, ou registros que o exigem (férias, rescisão e obrigação ligadas a ele, o
-// fechamento do período), recusam com `modelo-pendente`, e a gravação fica desligada (`podeGravar` diz o motivo) até o
-// DDL pedido em docs/obra/fatias/f22/saida/03-06.json, que lista só as colunas e tabelas que faltam.
+// usuario, tipo_rescisao, desligamento, rescisao, competencia_folha, calculo_folha, parcela_decimo_terceiro,
+// parametro_folha e fechamento_periodo_folha.
+// Gravam (gravação direta pelo executor, com a trilha na mesma transação): a vigência do salário (historico_salarial),
+// os parâmetros da folha por vigência (parametro_folha) e o fechamento do período e a reabertura
+// (fechamento_periodo_folha).
+// O processamento da folha (processamento_folha e processamento_folha_linha) tem tabela, mas o DDL aplicado não cabe no
+// contrato: falta a situação `substituida`, `fora_da_folha` é booleano e o contrato conta vínculos, a tabela legal e os
+// parâmetros usados são a data da vigência e não JSON, e a linha não tem a unidade nem a memória do cálculo. Até a
+// correção pedida em docs/obra/fatias/f24/saida/03-pessoas.json, as leituras do processamento e as gravações que
+// dependem dele (férias, rescisão, obrigações) recusam com `modelo-pendente`, nunca vazio nem gravação pela metade.
 // Melhoria: o tipo do vínculo sai da categoria do trabalhador (901 estagiário, 902 residente) e do regime, pela regra pura
 // `tipoVinculoDaFolha`; categoria fora da folha de empregados não entra (antes, todo vínculo saía como CLT).
 // Melhoria: o FGTS depositado só é somado das folhas de competência fechada quando todo mês do contrato tem folha; se
@@ -15,21 +19,45 @@
 // Melhoria: o adicional de insalubridade e de periculosidade da vigência do salário vem do risco da função (risco_funcao,
 // laudo do SESMT) em vigor no início da vigência, em vez de digitado à parte.
 // Melhoria: a carga semanal vem do cargo; sem ela, null (antes, um valor fixo).
-import { type ContextoNucleo, ErroOperacao, type Leitor, type NucleoProprio, recusa } from '@sgh/nucleo';
+// Melhoria: o adicional da vigência nova tem de bater com o risco da função (laudo do SESMT): sem laudo, nada de
+// adicional; com direito aos dois, a escolha do empregado vai em `adicional_escolhido` (CLT art. 193, § 2º).
+// Decisão: o motivo do salário é texto livre na tela e um código no modelo; grava-se o código `outro` com o texto em
+// `dados.justificativa`, e a leitura devolve o texto (ou o código, nas linhas vindas de outra origem).
+import type {
+  ParametrosFolhaLidos,
+  ProcessoNoFechamento,
+  SituacaoFechamentoFolha,
+  TotaisFechamentoFolha,
+} from '@sgh/contratos';
+import {
+  type ContextoNucleo,
+  ErroOperacao,
+  type Leitor,
+  type NucleoProprio,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
+import { gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
 import {
   type ContextoPortaM18,
   type GravacaoFeita,
   type LiberacaoGravacao,
   portaIndisponivel,
+  type TrilhaDaGravacao,
 } from '../../exames/public-api.js';
+import { exigirUsuario, paraBanco, relogioDoEstabelecimento } from '../../qualidade/apoio-propria.js';
 import {
   type ContextoCalculoFolha,
+  type GravadorCalculoFolha,
   METODOS_PORTA_CALCULO_FOLHA,
   type PortaCalculoFolha,
 } from './porta-calculo.js';
+import { TETO_FECHAMENTOS_FOLHA } from './apoio-folha.js';
 import {
   competenciasDescobertas,
   type DependentesDoVinculo,
+  type FechamentoDaFolha,
+  type FiltroFechamentosDaFolha,
   insalubridadeDoGrau,
   type OrigemAdiantamentoDecimo,
   type SalarioDoVinculo,
@@ -89,27 +117,324 @@ const SQL_VINCULOS = `
      AND v.data_admissao <= ? AND (v.data_desligamento IS NULL OR v.data_desligamento >= ?)
    ORDER BY v.id`;
 
-export type NucleoCalculoFolha = Pick<NucleoProprio, 'lerSomente'>;
+export type NucleoCalculoFolha = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
+
+/** As tabelas que a gravação do cálculo escreve hoje (a transação recusa as outras). */
+export const TABELAS_CALCULO_FOLHA = ['historico_salarial', 'parametro_folha', 'fechamento_periodo_folha'] as const;
 
 const FALTA = {
   processo:
-    'o processamento da folha (totais, tabela legal e parâmetros usados) e as linhas por papel do cálculo',
-  parametros: 'os parâmetros da folha por vigência',
-  ferias:
-    'o vínculo, a dobra e o pagamento previsto na programação de férias e o processamento da folha no recibo (programacao_ferias e recibo_ferias existem sem eles)',
-  feriasCompetencia: 'o processamento da folha e a base do INSS no recibo de férias',
-  rescisao:
-    'o processamento da folha, a modalidade, os dias indenizados e a origem do saldo do FGTS na rescisão (rescisao e desligamento existem sem eles)',
-  fechamento: 'o fechamento do período da folha',
+    'o processamento da folha no formato do cálculo (situação substituída, a contagem fora da folha, a data da tabela legal e dos parâmetros usados, a unidade e a memória de cada linha)',
+  ferias: 'o processamento da folha no formato do cálculo, a que o recibo de férias se liga',
+  feriasCompetencia: 'o processamento da folha no formato do cálculo, a que o recibo de férias se liga',
+  rescisao: 'o processamento da folha no formato do cálculo, a que a rescisão se liga',
   obrigacoes:
-    'o leiaute, os totais, os fechamentos usados, o nome e o conteúdo cifrado do arquivo e os acréscimos da guia na obrigação (obrigacao_trabalhista e arquivo_obrigacao existem sem eles), os parâmetros das obrigações e os códigos SEFIP, CAGED e RAIS dos catálogos',
+    'o arquivo cifrado da obrigação, os parâmetros das obrigações por vigência e os códigos SEFIP, CAGED e RAIS dos catálogos oficiais',
 } as const;
+
+const GRAUS = ['nenhum', 'minimo', 'medio', 'maximo'] as const;
+const GRAU_SQL = `CASE rf.grau_insalubridade WHEN 'maximo' THEN 3 WHEN 'medio' THEN 2 WHEN 'minimo' THEN 1 ELSE 0 END`;
+const json = <T>(v: unknown, padrao: T): T => {
+  if (v === null || v === undefined) return padrao;
+  if (typeof v === 'object') return v as T;
+  try {
+    return JSON.parse(String(v)) as T;
+  } catch {
+    return padrao;
+  }
+};
+
+/** O período do contrato (AAAA-MM ou AAAA) no primeiro dia do banco, e de volta. */
+const periodoNoBanco = (periodo: string): string => (periodo.length === 4 ? `${periodo}-01-01` : `${periodo}-01`);
+const periodoDoBanco = (apuracao: unknown, v: unknown): string =>
+  apuracao === 'anual' ? diaObrigatorio(v).slice(0, 4) : diaObrigatorio(v).slice(0, 7);
+const SITUACAO_FECHAMENTO: Readonly<Record<string, SituacaoFechamentoFolha>> = {
+  fechado: 'fechada',
+  reaberto: 'reaberta',
+};
+
+const SQL_PARAMETROS = `
+  SELECT p.id, p.estabelecimento_id, p.vigencia_inicio, p.dados, p.criado_em, u.login
+    FROM parametro_folha p LEFT JOIN usuario u ON u.id = p.criado_por
+   WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL
+   ORDER BY p.vigencia_inicio DESC, p.id DESC`;
+
+function parametrosDe(r: Record<string, unknown>): ParametrosFolhaLidos {
+  const d = json<Omit<ParametrosFolhaLidos, 'id' | 'empresa' | 'inicio' | 'registradoPor' | 'registradoEm'>>(
+    r['dados'],
+    {} as never,
+  );
+  return {
+    ...d,
+    empresa: n(r['estabelecimento_id']),
+    inicio: diaObrigatorio(r['vigencia_inicio']),
+    id: n(r['id']),
+    registradoPor: texto(r['login']),
+    registradoEm: instante(r['criado_em']),
+  };
+}
+
+const SQL_FECHAMENTOS = `
+  SELECT f.*, uf.login AS fechado_login, ur.login AS reaberto_login
+    FROM fechamento_periodo_folha f
+    LEFT JOIN usuario uf ON uf.id = f.fechado_por_usuario_id
+    LEFT JOIN usuario ur ON ur.id = f.reaberto_por_usuario_id
+   WHERE f.estabelecimento_id = ?`;
+
+function fechamentoDe(r: Record<string, unknown>): FechamentoDaFolha {
+  return {
+    id: n(r['id']),
+    empresa: n(r['estabelecimento_id']),
+    apuracao: r['apuracao'] === 'anual' ? 'anual' : 'mensal',
+    periodo: periodoDoBanco(r['apuracao'], r['periodo_inicio']),
+    numero: n(r['numero']),
+    situacao: SITUACAO_FECHAMENTO[texto(r['situacao'])] ?? 'fechada',
+    pagamento: dia(r['pagamento_em']),
+    processos: json<ProcessoNoFechamento[]>(r['processamentos'], []),
+    totais: json<TotaisFechamentoFolha>(r['totais'], {} as TotaisFechamentoFolha),
+    resumo: texto(r['resumo']),
+    fechadoPor: texto(r['fechado_login']),
+    fechadoEm: instante(r['fechado_em']),
+    reabertoPor: textoOuNulo(r['reaberto_login']),
+    reabertoEm: r['reaberto_em'] === null || r['reaberto_em'] === undefined ? null : instante(r['reaberto_em']),
+    motivo: textoOuNulo(r['motivo_reabertura']),
+    versao: n(r['versao']),
+  };
+}
+
+/** O risco da função do vínculo em vigor na data: o maior grau de insalubridade dos ambientes e a periculosidade. */
+async function riscoDaFuncao(
+  l: Pick<Leitor, 'uma'>,
+  vinculo: number,
+  data: string,
+): Promise<{ insalubridade: number; periculosidade: boolean }> {
+  const r = await l.uma(
+    `SELECT MAX(${GRAU_SQL}) AS grau, MAX(rf.periculosidade) AS periculosidade
+       FROM vinculo_trabalho v
+       JOIN risco_funcao rf ON rf.funcao_id = v.funcao_id AND rf.excluido_em IS NULL
+            AND rf.vigencia_inicio <= ? AND (rf.vigencia_fim IS NULL OR rf.vigencia_fim >= ?)
+      WHERE v.id = ?`,
+    [data, data, vinculo],
+  );
+  return {
+    insalubridade: insalubridadeDoGrau(GRAUS[n(r?.['grau'])] ?? null),
+    periculosidade: n(r?.['periculosidade']) === 1,
+  };
+}
+
+/** O adicional escolhido da vigência nova, conferido contra o risco da função; diverge: recusa (o laudo manda). */
+export function adicionalDaVigencia(
+  x: { readonly insalubridade: number; readonly periculosidade: boolean },
+  risco: { readonly insalubridade: number; readonly periculosidade: boolean },
+): 'insalubridade' | 'periculosidade' | null {
+  const divergente = () =>
+    recusa(
+      'adicional-diverge-do-laudo',
+      'O adicional informado não bate com o risco da função no início da vigência (laudo do SESMT): corrija o risco da função ou o adicional.',
+    );
+  if (x.periculosidade) {
+    if (!risco.periculosidade || x.insalubridade !== 0) throw divergente();
+    return risco.insalubridade > 0 ? 'periculosidade' : null;
+  }
+  if (x.insalubridade !== risco.insalubridade) throw divergente();
+  if (risco.periculosidade) {
+    // Com direito aos dois, o empregado escolhe; sem insalubridade, deixar a periculosidade de fora não é escolha.
+    if (risco.insalubridade === 0) throw divergente();
+    return 'insalubridade';
+  }
+  return null;
+}
+
+/** O gravador do cálculo sobre a transação: o que tem modelo grava; o resto recusa com `modelo-pendente`. */
+function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPropria): GravadorCalculoFolha {
+  const agora = async () => paraBanco(await relogioDoEstabelecimento(tx, est));
+  const daSessao = (empresa: number) => {
+    if (empresa !== est) throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
+  };
+  const sem = (operacao: string, falta: string) => () => Promise.reject(erroModeloPendente(operacao, falta));
+  return {
+    salarios: (vinculos) => lerSalarios(tx, est, vinculos),
+    async incluirSalario(x) {
+      const [v] = await tx.consultarParaAtualizar(
+        'SELECT id FROM vinculo_trabalho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.vinculo, est],
+      );
+      if (!v) throw recusa('vinculo-inexistente', 'O vínculo não existe neste estabelecimento.');
+      if ((await lerSalarios(tx, est, [x.vinculo])).some((y) => y.inicio === x.inicio))
+        throw recusa('vigencia-repetida', 'Já existe uma vigência do salário com este início: escolha outra data.');
+      const escolhido = adicionalDaVigencia(x, await riscoDaFuncao(tx, x.vinculo, x.inicio));
+      const usuario = await exigirUsuario(tx, x.por);
+      return tx.incluir('historico_salarial', {
+        vinculo_trabalho_id: x.vinculo,
+        data_vigencia: x.inicio,
+        valor_salario: x.salario,
+        unidade_pagamento: 'mes',
+        motivo: 'outro',
+        operacao: 'inclusao',
+        dados: JSON.stringify({ justificativa: x.motivo }),
+        adicional_escolhido: escolhido,
+        ocorrido_em: await agora(),
+        usuario_id: usuario,
+      });
+    },
+    parametros: async (empresa) =>
+      empresa === est ? (await tx.consultar(SQL_PARAMETROS, [est])).map(parametrosDe) : [],
+    async incluirParametros(x) {
+      daSessao(x.empresa);
+      const repetida = await tx.consultarParaAtualizar(
+        'SELECT id FROM parametro_folha WHERE estabelecimento_id = ? AND vigencia_inicio = ? AND excluido_em IS NULL',
+        [est, x.inicio],
+      );
+      if (repetida.length > 0)
+        throw recusa(
+          'vigencia-repetida',
+          'Já existem parâmetros da folha com este início para a empresa: escolha outra data.',
+        );
+      await exigirUsuario(tx, x.por);
+      const { inicio } = x;
+      const dados = Object.fromEntries(
+        Object.entries(x).filter(([k]) => k !== 'empresa' && k !== 'inicio' && k !== 'por'),
+      ) as Omit<typeof x, 'empresa' | 'inicio' | 'por'>;
+      return tx.incluir('parametro_folha', {
+        estabelecimento_id: est,
+        vigencia_inicio: inicio,
+        dados: JSON.stringify(dados),
+      });
+    },
+    emVigorComTrava: sem('Calcular a folha', FALTA.processo),
+    incluirProcesso: sem('Gravar o processamento da folha', FALTA.processo),
+    incluirLinhas: sem('Gravar as linhas do processamento', FALTA.processo),
+    situacaoProcesso: sem('Trocar a situação do processamento', FALTA.processo),
+    processo: sem('Ler o processamento da folha', FALTA.processo),
+    resumoVinculos: sem('Ler o resumo por vínculo do processamento', FALTA.processo),
+    feriasDoVinculoComTrava: sem('Ler as férias do vínculo', FALTA.ferias),
+    incluirFerias: sem('Gravar as férias', FALTA.ferias),
+    situacaoFerias: sem('Trocar a situação das férias', FALTA.ferias),
+    rescisoesDoVinculoComTrava: sem('Ler as rescisões do vínculo', FALTA.rescisao),
+    incluirRescisao: sem('Gravar a rescisão', FALTA.rescisao),
+    situacaoRescisao: sem('Trocar a situação da rescisão', FALTA.rescisao),
+    async fechamentoEmVigorComTrava(empresa, apuracao, periodo) {
+      daSessao(empresa);
+      const rs = await tx.consultarParaAtualizar(
+        'SELECT id, numero, situacao FROM fechamento_periodo_folha WHERE estabelecimento_id = ? AND apuracao = ? AND periodo_inicio = ?',
+        [est, apuracao, periodoNoBanco(periodo)],
+      );
+      const vigente = rs.find((r) => r['situacao'] === 'fechado');
+      return {
+        vigente: vigente ? await porta.fechamentoNaTransacao(tx, est, n(vigente['id'])) : null,
+        proximoNumero: rs.reduce((m, r) => Math.max(m, n(r['numero'])), 0) + 1,
+      };
+    },
+    processosCalculadosComTrava: sem('Ler os processamentos calculados do período', FALTA.processo),
+    async incluirFechamento(x) {
+      daSessao(x.empresa);
+      const usuario = await exigirUsuario(tx, x.por);
+      const ja = await tx.uma(
+        'SELECT id FROM fechamento_periodo_folha WHERE estabelecimento_id = ? AND apuracao = ? AND periodo_inicio = ? AND numero = ?',
+        [est, x.apuracao, periodoNoBanco(x.periodo), x.numero],
+      );
+      if (ja)
+        throw recusa('periodo-ja-fechado', 'Outra pessoa fechou este período ao mesmo tempo: abra de novo e confira.');
+      return tx.incluir('fechamento_periodo_folha', {
+        estabelecimento_id: est,
+        apuracao: x.apuracao,
+        periodo_inicio: periodoNoBanco(x.periodo),
+        numero: x.numero,
+        situacao: 'fechado',
+        pagamento_em: x.apuracao === 'mensal' ? x.pagamento : null,
+        processamentos: JSON.stringify(x.processos),
+        totais: JSON.stringify(x.totais),
+        resumo: x.resumo,
+        fechado_em: await agora(),
+        fechado_por_usuario_id: usuario,
+      });
+    },
+    async reabrirFechamento(x) {
+      const [r] = await tx.consultarParaAtualizar(
+        'SELECT id, situacao, versao FROM fechamento_periodo_folha WHERE id = ? AND estabelecimento_id = ?',
+        [x.id, est],
+      );
+      if (!r || r['situacao'] !== 'fechado' || n(r['versao']) !== x.versao)
+        throw recusa('desatualizado', 'O fechamento mudou desde a leitura: abra de novo e confira.');
+      await tx.alterar('fechamento_periodo_folha', x.id, x.versao, {
+        situacao: 'reaberto',
+        reaberto_em: await agora(),
+        reaberto_por_usuario_id: await exigirUsuario(tx, x.por),
+        motivo_reabertura: x.motivo,
+      });
+    },
+    incluirParametrosObrigacoes: sem('Gravar os parâmetros das obrigações', FALTA.obrigacoes),
+    obrigacoesEmVigorComTrava: sem('Ler as obrigações em vigor', FALTA.obrigacoes),
+    obrigacaoComTrava: sem('Ler a obrigação', FALTA.obrigacoes),
+    incluirObrigacao: sem('Gravar a obrigação', FALTA.obrigacoes),
+    substituirObrigacao: sem('Substituir a obrigação', FALTA.obrigacoes),
+    registrarEntregaObrigacao: sem('Registrar a entrega da obrigação', FALTA.obrigacoes),
+    cancelarObrigacao: sem('Cancelar a obrigação', FALTA.obrigacoes),
+  };
+}
+
+/**
+ * Vigências do salário dos vínculos (historico_salarial: a última operação de cada data de vigência, sem as excluídas).
+ * O adicional é o do risco da função do vínculo (risco_funcao) em vigor no início da vigência: o maior grau de
+ * insalubridade dos ambientes da função e a periculosidade; com direito aos dois, vale o `adicional_escolhido` (sem
+ * escolha, a periculosidade). Vínculo sem função ou função sem risco: sem adicional.
+ */
+async function lerSalarios(
+  l: Pick<Leitor, 'consultar'>,
+  est: number,
+  vinculos: readonly number[],
+): Promise<SalarioDoVinculo[]> {
+  if (vinculos.length === 0) return [];
+  const rs = await l.consultar(
+    `SELECT h.id, h.vinculo_trabalho_id, h.data_vigencia, h.valor_salario, h.motivo, h.dados, h.operacao, h.ocorrido_em,
+            h.adicional_escolhido, u.login,
+            (SELECT MAX(${GRAU_SQL})
+               FROM risco_funcao rf
+              WHERE rf.funcao_id = v.funcao_id AND rf.excluido_em IS NULL AND rf.vigencia_inicio <= h.data_vigencia
+                AND (rf.vigencia_fim IS NULL OR rf.vigencia_fim >= h.data_vigencia)) AS grau,
+            (SELECT MAX(rf.periculosidade)
+               FROM risco_funcao rf
+              WHERE rf.funcao_id = v.funcao_id AND rf.excluido_em IS NULL AND rf.vigencia_inicio <= h.data_vigencia
+                AND (rf.vigencia_fim IS NULL OR rf.vigencia_fim >= h.data_vigencia)) AS periculosidade
+       FROM historico_salarial h
+       JOIN vinculo_trabalho v ON v.id = h.vinculo_trabalho_id
+       LEFT JOIN usuario u ON u.id = h.usuario_id
+      WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL
+        AND h.vinculo_trabalho_id IN (${vinculos.map(() => '?').join(', ')})
+        AND NOT EXISTS (SELECT 1 FROM historico_salarial h2
+                         WHERE h2.vinculo_trabalho_id = h.vinculo_trabalho_id AND h2.data_vigencia = h.data_vigencia
+                           AND (h2.ocorrido_em > h.ocorrido_em OR (h2.ocorrido_em = h.ocorrido_em AND h2.id > h.id)))
+      ORDER BY h.vinculo_trabalho_id, h.data_vigencia`,
+    [est, ...vinculos],
+  );
+  return rs
+    .filter((r) => r['operacao'] !== 'exclusao')
+    .map((r) => {
+      const insalubridade = insalubridadeDoGrau(GRAUS[n(r['grau'])] ?? null);
+      // Os adicionais não se acumulam (CLT art. 193, § 2º): com os dois, vale a escolha; sem ela, a periculosidade.
+      const periculosidade = n(r['periculosidade']) === 1 && r['adicional_escolhido'] !== 'insalubridade';
+      const justificativa = json<{ justificativa?: unknown }>(r['dados'], {}).justificativa;
+      return {
+        id: n(r['id']),
+        vinculo: n(r['vinculo_trabalho_id']),
+        inicio: diaObrigatorio(r['data_vigencia']),
+        salario: n(r['valor_salario']),
+        insalubridade: periculosidade ? 0 : insalubridade,
+        periculosidade,
+        motivo: typeof justificativa === 'string' ? justificativa : texto(r['motivo']),
+        registradoPor: texto(r['login']),
+        registradoEm: instante(r['ocorrido_em']),
+      };
+    });
+}
 
 const pendente = (operacao: string, falta: string) => () =>
   Promise.reject(erroModeloPendente(operacao, falta));
 
 export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
   readonly destino = 'banco' as const;
+
+  private executor: ReturnType<NucleoCalculoFolha['criarExecutor']> | null = null;
 
   constructor(private readonly nucleo: NucleoCalculoFolha) {}
 
@@ -120,22 +445,77 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
-  // ── Gravação: desligada até o modelo ter o processamento da folha ─────────────────────────────────────────
+  // ── Gravação direta (o que depende do processamento recusa dentro do gravador, sem gravar nada) ─────────────
 
   async podeGravar(): Promise<LiberacaoGravacao> {
-    return {
-      pode: false,
-      codigo: 'modelo-pendente',
-      motivo: `O cálculo da folha não grava: o modelo do banco ainda não tem ${FALTA.processo}.`,
-    };
+    return { pode: true, codigo: null, motivo: null };
   }
 
   async executar(): Promise<GravacaoFeita> {
-    throw erroModeloPendente('Gravar o cálculo da folha', FALTA.processo);
+    throw recusa('operacao-desconhecida', 'O cálculo da folha não usa operação de tela do executor.');
   }
 
-  async gravarSgh<T>(): Promise<T> {
-    throw erroModeloPendente('Gravar o cálculo da folha', FALTA.processo);
+  gravarSgh<T>(
+    c: ContextoCalculoFolha,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorCalculoFolha) => Promise<T>,
+  ): Promise<T> {
+    if (c.estabelecimento === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    this.executor ??= this.nucleo.criarExecutor();
+    return gravacaoDireta(this.executor, contextoDe(c), {
+      nome: 'pessoas.calculo_folha.gravar',
+      tabelas: TABELAS_CALCULO_FOLHA,
+      trilha,
+      gravador: (tx, est) => gravadorCalculo(tx, est, this),
+      fn,
+    });
+  }
+
+  /** O fechamento relido na transação da gravação. */
+  async fechamentoNaTransacao(l: Pick<Leitor, 'uma'>, est: number, id: number): Promise<FechamentoDaFolha | null> {
+    const r = await l.uma(`${SQL_FECHAMENTOS} AND f.id = ?`, [est, id]);
+    return r ? fechamentoDe(r) : null;
+  }
+
+  parametros(c: ContextoCalculoFolha, empresa: number): Promise<ParametrosFolhaLidos[]> {
+    return this.ler(c, async (l, est) =>
+      empresa === est ? (await l.consultar(SQL_PARAMETROS, [est])).map(parametrosDe) : [],
+    );
+  }
+
+  fechamentos(c: ContextoCalculoFolha, f: FiltroFechamentosDaFolha): Promise<FechamentoDaFolha[]> {
+    return this.ler(c, async (l, est) => {
+      if (f.empresa !== undefined && f.empresa !== est) return [];
+      const filtros: string[] = [];
+      const p: unknown[] = [est];
+      if (f.apuracao !== undefined) {
+        filtros.push('f.apuracao = ?');
+        p.push(f.apuracao);
+      }
+      if (f.periodo !== undefined) {
+        filtros.push('DATE_FORMAT(f.periodo_inicio, ?) = ?');
+        p.push(f.periodo.length === 4 ? '%Y' : '%Y-%m', f.periodo);
+      }
+      if (f.ano !== undefined) {
+        filtros.push('YEAR(f.periodo_inicio) = ?');
+        p.push(Number(f.ano));
+      }
+      if (f.situacao !== undefined) {
+        filtros.push('f.situacao = ?');
+        p.push(f.situacao === 'reaberta' ? 'reaberto' : 'fechado');
+      }
+      const rs = await l.consultar(
+        `${SQL_FECHAMENTOS}${filtros.map((x) => ` AND ${x}`).join('')}
+          ORDER BY f.periodo_inicio DESC, f.apuracao, f.numero DESC LIMIT ${TETO_FECHAMENTOS_FOLHA}`,
+        p,
+      );
+      return rs.map(fechamentoDe);
+    });
+  }
+
+  fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoDaFolha | null> {
+    return this.ler(c, (l, est) => this.fechamentoNaTransacao(l, est, id));
   }
 
   // ── Leituras sobre o modelo ──────────────────────────────────────────────────────────────────────────────
@@ -266,55 +646,9 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     });
   }
 
-  /**
-   * Vigências do salário do vínculo (historico_salarial: a última operação de cada data de vigência, sem as excluídas).
-   * O adicional é o do risco da função do vínculo (risco_funcao) em vigor no início da vigência: o maior grau de
-   * insalubridade dos ambientes da função e a periculosidade. Vínculo sem função ou função sem risco: sem adicional.
-   */
   salarios(c: ContextoCalculoFolha, vinculos: readonly number[]): Promise<SalarioDoVinculo[]> {
     if (vinculos.length === 0) return Promise.resolve([]);
-    return this.ler(c, async (l, est) => {
-      const rs = await l.consultar(
-        `SELECT h.id, h.vinculo_trabalho_id, h.data_vigencia, h.valor_salario, h.motivo, h.operacao, h.ocorrido_em,
-                u.login,
-                (SELECT MAX(CASE rf.grau_insalubridade WHEN 'maximo' THEN 3 WHEN 'medio' THEN 2 WHEN 'minimo' THEN 1 ELSE 0 END)
-                   FROM risco_funcao rf
-                  WHERE rf.funcao_id = v.funcao_id AND rf.excluido_em IS NULL AND rf.vigencia_inicio <= h.data_vigencia
-                    AND (rf.vigencia_fim IS NULL OR rf.vigencia_fim >= h.data_vigencia)) AS grau,
-                (SELECT MAX(rf.periculosidade)
-                   FROM risco_funcao rf
-                  WHERE rf.funcao_id = v.funcao_id AND rf.excluido_em IS NULL AND rf.vigencia_inicio <= h.data_vigencia
-                    AND (rf.vigencia_fim IS NULL OR rf.vigencia_fim >= h.data_vigencia)) AS periculosidade
-           FROM historico_salarial h
-           JOIN vinculo_trabalho v ON v.id = h.vinculo_trabalho_id
-           LEFT JOIN usuario u ON u.id = h.usuario_id
-          WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL
-            AND h.vinculo_trabalho_id IN (${vinculos.map(() => '?').join(', ')})
-            AND NOT EXISTS (SELECT 1 FROM historico_salarial h2
-                             WHERE h2.vinculo_trabalho_id = h.vinculo_trabalho_id AND h2.data_vigencia = h.data_vigencia
-                               AND (h2.ocorrido_em > h.ocorrido_em OR (h2.ocorrido_em = h.ocorrido_em AND h2.id > h.id)))
-          ORDER BY h.vinculo_trabalho_id, h.data_vigencia`,
-        [est, ...vinculos],
-      );
-      const GRAUS = ['nenhum', 'minimo', 'medio', 'maximo'] as const;
-      return rs
-        .filter((r) => r['operacao'] !== 'exclusao')
-        .map((r) => {
-          const periculosidade = n(r['periculosidade']) === 1;
-          return {
-            id: n(r['id']),
-            vinculo: n(r['vinculo_trabalho_id']),
-            inicio: diaObrigatorio(r['data_vigencia']),
-            salario: n(r['valor_salario']),
-            // Os adicionais não se acumulam (CLT art. 193, § 2º): com periculosidade, a insalubridade sai zerada.
-            insalubridade: periculosidade ? 0 : insalubridadeDoGrau(GRAUS[n(r['grau'])] ?? null),
-            periculosidade,
-            motivo: texto(r['motivo']),
-            registradoPor: texto(r['login']),
-            registradoEm: instante(r['ocorrido_em']),
-          };
-        });
-    });
+    return this.ler(c, (l, est) => lerSalarios(l, est, vinculos));
   }
 
   /**
@@ -391,7 +725,6 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
 
   // ── Leituras que aguardam o modelo (recusa explícita, nunca lista vazia) ────────────────────────────────────
 
-  parametros = pendente('Ler os parâmetros da folha', FALTA.parametros);
   processos = pendente('Listar os processamentos da folha', FALTA.processo);
   processo = pendente('Ler o processamento da folha', FALTA.processo);
   resumoVinculos = pendente('Ler o resumo por vínculo do processamento', FALTA.processo);
@@ -403,8 +736,6 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
   feriasNaCompetencia = pendente('Ler as férias com recibo na competência', FALTA.feriasCompetencia);
   rescisoes = pendente('Listar as rescisões', FALTA.rescisao);
   rescisaoPorId = pendente('Ler a rescisão', FALTA.rescisao);
-  fechamentos = pendente('Listar os fechamentos do período', FALTA.fechamento);
-  fechamento = pendente('Ler o fechamento do período', FALTA.fechamento);
   itensRubricaDoProcesso = pendente('Ler os itens por rubrica do processamento', FALTA.processo);
   parametrosObrigacoes = pendente('Ler os parâmetros das obrigações', FALTA.obrigacoes);
   obrigacoes = pendente('Listar as obrigações geradas', FALTA.obrigacoes);

@@ -19,37 +19,6 @@
 // dispositivo (perfil Painel/Totem, cap-08 §8.3), nunca por estas permissões.
 import type { DeclaracaoPermissao } from './tipos.js';
 
-export const OPCOES_RECEPCAO = {
-  geradorSenhas: 3308,
-  atendimentos: 5739,
-  atendimentosIncluir: 5745,
-  atendimentosConsultar: 6026,
-  encaminhamento: 6034,
-  encaminhamentoAlterar: 6035,
-  encaminhamentoIncluir: 6036,
-  encaminhamentoConsultar: 6038,
-  estatisticas: 3293,
-  sadtAtendimentos: 2728,
-  sadtControle: 2781,
-  liberarGuicheExterna: 5572,
-  liberarGuicheInterna: 5571,
-  liberarGuicheSadt: 5569,
-  localizarPaciente: 3900,
-  chamarPaciente: 5149,
-  liberarPaciente: 5147,
-  encaminharPaciente: 3907,
-  desfazerChamada: 5148,
-  senhaAtendimento: 3969,
-  painelAtendimento: 3970,
-  painelAtendimentoSalvar: 3971,
-  painelPortal: 3972,
-  painelPortalSalvar: 3973,
-  painelEletronico: 3724,
-} as const;
-
-const O = OPCOES_RECEPCAO;
-const LIBERAR_GUICHE = [O.liberarGuicheExterna, O.liberarGuicheInterna, O.liberarGuicheSadt];
-
 export const PERMISSOES_RECEPCAO_CODIGOS = {
   senhaLer: 'recepcao.senha.ler',
   senhaEmitir: 'recepcao.senha.emitir',
@@ -69,12 +38,12 @@ export const PERMISSOES_RECEPCAO_CODIGOS = {
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
   criticidade: 'normal',
@@ -86,68 +55,40 @@ export const PERMISSOES_RECEPCAO_M19: readonly DeclaracaoPermissao[] = [
   p(
     'recepcao.senha.ler',
     'Ver a fila de senhas do guichê e do local (nome do paciente só na tela do guichê)',
-    [
-      O.geradorSenhas,
-      O.atendimentos,
-      O.atendimentosConsultar,
-      O.encaminhamento,
-      O.encaminhamentoConsultar,
-      O.sadtAtendimentos,
-      O.sadtControle,
-      O.localizarPaciente,
-    ],
   ),
-  p('recepcao.senha.emitir', 'Emitir senha no balcão (o totem emite pelo token do dispositivo)', [
-    O.geradorSenhas,
-    O.atendimentosIncluir,
-    O.sadtAtendimentos,
-  ]),
+  p('recepcao.senha.emitir', 'Emitir senha no balcão (o totem emite pelo token do dispositivo)'),
   p(
     'recepcao.senha.chamar',
     'Abrir o guichê, chamar a próxima senha e conduzi-la (chamar de novo, suspender, não localizado, concluir)',
-    [O.atendimentos, O.atendimentosIncluir, O.sadtAtendimentos, O.sadtControle],
   ),
-  p('recepcao.senha.encaminhar', 'Encaminhar o paciente entre locais de atendimento permitidos', [
-    O.encaminhamento,
-    O.encaminhamentoAlterar,
-    O.encaminhamentoIncluir,
-    O.encaminharPaciente,
-  ]),
+  p('recepcao.senha.encaminhar', 'Encaminhar o paciente entre locais de atendimento permitidos'),
   p(
     'recepcao.fluxo.registrar',
     'Registrar os eventos da senha no local de atendimento (chamar ao local, cancelar a chamada, não localizado, liberar)',
-    [O.localizarPaciente, O.chamarPaciente, O.liberarPaciente, O.desfazerChamada, O.encaminhamentoAlterar],
   ),
   p(
     'recepcao.checkin.registrar',
     'Registrar a chegada do paciente agendado (check-in) ligando a senha à marcação',
-    [O.atendimentosIncluir, O.geradorSenhas, O.sadtAtendimentos],
   ),
   p(
     'recepcao.guiche.liberar',
     'Fechar o guichê deixado aberto por outra pessoa (liberação de guichê bloqueado), com justificativa',
-    LIBERAR_GUICHE,
+
     { criticidade: 'sensivel' },
   ),
   p(
     'recepcao.supervisor.ler',
     'Ver o painel do supervisor da recepção (filas, esperas, guichês abertos e senhas mais antigas)',
-    [...LIBERAR_GUICHE, O.estatisticas],
   ),
   p(
     'recepcao.indicador.ler',
     'Consultar os indicadores da recepção (senhas por hora, serviço, prioridade e tempos de espera)',
-    [O.estatisticas, ...LIBERAR_GUICHE],
   ),
-  p('recepcao.dispositivo.ler', 'Consultar os totens e os painéis de TV cadastrados (sem o token)', [
-    O.painelEletronico,
-    O.painelAtendimentoSalvar,
-    O.painelPortalSalvar,
-  ]),
+  p('recepcao.dispositivo.ler', 'Consultar os totens e os painéis de TV cadastrados (sem o token)'),
   p(
     'recepcao.dispositivo.editar',
     'Cadastrar, renovar e revogar o token de totem e de painel de TV (o token aparece uma vez)',
-    [O.painelAtendimentoSalvar, O.painelPortalSalvar],
+
     { criticidade: 'sensivel' },
   ),
   // W1-04 (mercado): termos de consentimento e LGPD. Sem opção própria na árvore (POL-1b): assinar e revogar com quem
@@ -155,13 +96,13 @@ export const PERMISSOES_RECEPCAO_M19: readonly DeclaracaoPermissao[] = [
   p(
     'recepcao.termo.assinar',
     'Colher a assinatura do termo de consentimento no balcão e revogar o termo assinado, com motivo',
-    [O.atendimentosIncluir, O.geradorSenhas, O.sadtAtendimentos],
+
     { criticidade: 'sensivel' },
   ),
   p(
     'recepcao.termo.editar',
     'Cadastrar os modelos de termo de consentimento (nova versão, inativar e excluir o nunca assinado)',
-    [O.painelEletronico],
+
     { criticidade: 'sensivel' },
   ),
 ];

@@ -12,7 +12,8 @@ import {
   horariosDaUti,
   SENHA,
 } from './enfermagem.spec-util.js';
-import { PERMISSOES_ENFERMAGEM as P, PERMISSOES_ENFERMAGEM_M25 } from '@sgh/contratos';
+import { PERMISSOES_ENFERMAGEM as P } from '@sgh/contratos';
+import { opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 import { estadoAcessoSintetico } from '../acesso/fonte-sintetica.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
@@ -331,12 +332,8 @@ describe('aprazamento, sinais vitais, plantão, aparelhos e estorno', () => {
   it('sem rede: o sinal vital do lote pede a permissão dele; a anotação tem o evento próprio', async () => {
     const estado = estadoAcessoSintetico();
     const grupo = estado.opcoesGrupo.get('TECNICO_ENFERMAGEM')!;
-    const checar = new Set(
-      PERMISSOES_ENFERMAGEM_M25.find((p) => p.codigo === P.administracaoChecar)!.opcoesLegado,
-    );
-    const doSinal = PERMISSOES_ENFERMAGEM_M25.find((p) => p.codigo === P.sinalCriar)!.opcoesLegado.filter(
-      (o) => !checar.has(o) && grupo.has(o),
-    );
+    const checar = new Set(opcoesDasPermissoes(P.administracaoChecar));
+    const doSinal = opcoesDasPermissoes(P.sinalCriar).filter((o) => !checar.has(o) && grupo.has(o));
     const autorizacao = a.app.get<ServicoSessao>(SERVICO_SESSAO).servicoAutorizacao!;
     for (const o of doSinal) grupo.delete(o);
     await autorizacao.invalidar(REDE, 'aa', 'SINT.TECNICO.ENF');

@@ -4,7 +4,7 @@
 // dia em "HH:MM" (a tela aceita a hora digitada sem os dois-pontos e converte); datas AAAA-MM-DD; textos restritos ao CP1252 com o tamanho da coluna. Nas respostas, nenhum nome de
 // tabela ou coluna; nome e contato do paciente mascarados nas listas.
 import { z } from 'zod';
-import { esquemaHoraLegada } from '../formatacao/hora-legada.js';
+import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import {
@@ -23,12 +23,8 @@ const n = z.number().int();
 const txt = z.string();
 const nul = <T extends z.ZodType>(t: T) => t.nullable();
 
-// Transição (F2.4, lote 12-agenda): a tela e a agenda de consultas já mandam a hora do dia em "HH:MM", mas o módulo
-// de exames da API ainda trabalha com a hora sem os dois-pontos. As entradas das operações de exame aceitam as duas
-// formas e entregam a forma antiga ao módulo, até o lote 20 trocar o relógio e os tipos dos exames para "HH:MM"
-// (pedido na saída do lote 12-agenda). Depois disso, estas três linhas voltam a ser `esquemaHora`, `esquemaHorario`
-// e `esquemaLinhaEscala` da agenda.
-const horaExame = esquemaHoraLegada;
+// A hora do dia das operações de exame é "HH:MM", como na agenda de consultas.
+const horaExame = esquemaHora;
 const horarioExame = z.object({ data: esquemaDataIso, hora: horaExame }).strict();
 const linhaEscalaExame = z
   .object({

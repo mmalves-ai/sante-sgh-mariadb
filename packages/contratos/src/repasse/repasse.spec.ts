@@ -14,6 +14,7 @@ import {
   esquemaSimularRepasse,
 } from './entradas.js';
 import { DIMENSOES_REGRA, TIPOS_PRESTADOR_REPASSE } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const regraBase = {
   vigencia: '2026-11-01',
@@ -33,7 +34,7 @@ describe('permissões do repasse', () => {
     expect(new Set(codigos).size).toBe(codigos.length);
     for (const p of PERMISSOES_REPASSE_M33) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length > 0 || p.concessaoPorPerfil !== null).toBe(true);
+      expect(opcoesDoMapa(p.codigo).length > 0 || p.concessaoPorPerfil !== null).toBe(true);
       expect(CATALOGO_DECLARADO).toContain(p);
     }
     for (const c of [

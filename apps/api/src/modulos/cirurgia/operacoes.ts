@@ -19,11 +19,15 @@ import {
   esquemaCancelarCirurgia,
   esquemaDefinirSalaUsuario,
   esquemaRemarcarCirurgia,
+  esquemaRegistrarCirurgia,
+  type RegistrarCirurgiaEntrada,
   type RemarcarCirurgiaEntrada,
 } from '@sgh/contratos';
 import {
   conferirHorarioNaSala,
+  conferirTempos,
   conferirTransicao,
+  TECNICAS,
   type OcupacaoSala,
   type SalaDaAgenda,
   situacaoDoEstado,
@@ -70,9 +74,6 @@ export const TABELAS_GRAVACAO_DIRETA = [
   'agendamento_cirurgico_versao',
   'ato_cirurgico',
 ];
-
-export const modeloPendente = (detalhe: string) =>
-  new ErroOperacao(409, 'modelo-pendente', 'Operação aguardando o modelo', detalhe);
 
 function est(tx: TxOperacao): number {
   const e = tx.contexto.estabelecimento;
@@ -734,6 +735,174 @@ const definirSalaUsuario = definirOperacao<DefinirSalaUsuarioEntrada, ResultadoO
   alvo: (e) => ({ tabela: 'sala_cirurgica', id: e.sala }),
 });
 
+// ── cirurgia.registrarCirurgia ─────────────────────────────────────────────────────────────────────────────
+
+/** Funções da equipe do registro (contrato) → código da função no cadastro. */
+const FUNCOES_REGISTRO = [
+  'cirurgiao',
+  'auxiliar1',
+  'auxiliar2',
+  'auxiliar3',
+  'instrumentador',
+  'anestesista',
+  'pediatra',
+  'circulante',
+] as const;
+const PORTE_CODIGO: Readonly<Record<string, string>> = { P: 'pequeno', M: 'medio', G: 'grande' };
+const CONTAMINACAO_CLASSE: Readonly<Record<string, string>> = {
+  L: 'limpa',
+  P: 'potencialmente_contaminada',
+  C: 'contaminada',
+};
+const DISPOSITIVOS = ['tubo', 'antimicrobiano', 'sonda', 'cateter', 'puncao'] as const;
+export const TABELAS_REGISTRO_ATO = [
+  'ato_cirurgico',
+  'ato_cirurgico_procedimento',
+  'ato_cirurgico_dispositivo',
+  'participante_cirurgia',
+] as const;
+
+const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
+  nome: 'cirurgia.registrar-cirurgia',
+  tabelas: [...TABELAS_REGISTRO_ATO],
+  entrada: esquemaRegistrarCirurgia as never,
+  async gravar(tx, e) {
+    await exigirSala(tx, e.sala);
+    const t = conferirTempos({
+      inicio: e.inicio,
+      fim: e.fim,
+      inicioAnestesia: e.inicioAnestesia,
+      fimAnestesia: e.fimAnestesia,
+    });
+    const mi = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+    // O término antes do início só vale virando a meia-noite (6 h ou mais de diferença).
+    if (e.fim === e.inicio || (mi(e.fim) < mi(e.inicio) && mi(e.inicio) - mi(e.fim) < 360))
+      throw recusa('tempos-invalidos', 'O término tem de vir depois do início.', { campos: ['fim'] });
+    if (t.problemas.length > 0)
+      throw recusa('tempos-invalidos', t.problemas[0]?.texto ?? 'Tempos inválidos.');
+    const atendimento = await tx.uma(
+      'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [e.reg, est(tx)],
+    );
+    if (!atendimento)
+      throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
+    if (e.agendamento !== null) {
+      const a =
+        (
+          await tx.consultarParaAtualizar(
+            'SELECT id, atendimento_id FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [e.agendamento, est(tx)],
+          )
+        )[0] ?? null;
+      if (!a) throw recusa('agendamento-inexistente', 'O agendamento informado não existe.');
+      if (a['atendimento_id'] !== null && n(a['atendimento_id']) !== e.reg)
+        throw recusa('agendamento-de-outra-internacao', 'O agendamento é de outra internação.');
+      const ja = await tx.uma(
+        "SELECT id FROM ato_cirurgico WHERE agendamento_cirurgico_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'",
+        [e.agendamento],
+      );
+      if (ja) throw recusa('agendamento-ja-registrado', 'O agendamento já tem a cirurgia registrada.');
+    }
+    const fuso = await fusoDe(tx);
+    // As horas são do dia do ato; as que vêm depois da incisão e são menores viram o dia seguinte (meia-noite).
+    const base = instante(`${e.data} ${e.inicio}`, fuso);
+    const hora = (h: string | null, depois: boolean) => {
+      if (h === null) return null;
+      const d = instante(`${e.data} ${horaDe(h)}`, fuso);
+      return depois && d.getTime() < base.getTime() ? new Date(d.getTime() + 86_400_000) : d;
+    };
+    const fim = hora(e.fim, true) as Date;
+    const porte = await tx.uma<{ id: number }>(
+      'SELECT id FROM porte_cirurgico WHERE sigla = ? OR codigo = ? ORDER BY sigla = ? DESC LIMIT 1',
+      [e.porte, PORTE_CODIGO[e.porte], e.porte],
+    );
+    if (!porte)
+      throw recusa('cadastro-inexistente', 'O porte cirúrgico não está cadastrado.', { campos: ['porte'] });
+    const contaminacao = await tx.uma<{ id: number }>(
+      'SELECT id FROM classe_contaminacao_cirurgica WHERE classe = ?',
+      [CONTAMINACAO_CLASSE[e.potencialContaminacao]],
+    );
+    if (!contaminacao)
+      throw recusa('cadastro-inexistente', 'A classe de contaminação não está cadastrada.', {
+        campos: ['potencialContaminacao'],
+      });
+    let asa: number | null = null;
+    if (e.extensao.asa !== null) {
+      const c = await tx.uma<{ id: number }>('SELECT id FROM classificacao_asa WHERE classe = ?', [
+        e.extensao.asa,
+      ]);
+      if (!c) throw recusa('cadastro-inexistente', `A classe ASA ${e.extensao.asa} não está cadastrada.`);
+      asa = n(c.id);
+    }
+    const pressao = e.pressao ? e.pressao.split(/[x/]/).map(Number) : null;
+    const numero = await tx.proximoNumero('ato_cirurgico');
+    const id = await tx.incluir('ato_cirurgico', {
+      estabelecimento_id: est(tx),
+      numero: numero.formatado,
+      agendamento_cirurgico_id: e.agendamento,
+      atendimento_id: e.reg,
+      paciente_id: n(atendimento['paciente_id']),
+      sala_cirurgica_id: e.sala,
+      carater_cirurgia_id: e.carater,
+      tipo_anestesia_id: e.tipoAnestesia > 0 ? e.tipoAnestesia : null,
+      classe_contaminacao_cirurgica_id: n(contaminacao.id),
+      porte_cirurgico_id: n(porte.id),
+      fonte_pagadora_id: e.convenio > 0 ? e.convenio : null,
+      codigo_cid10_pre_operatorio: e.cid10,
+      entrada_sala_em: hora(e.extensao.entradaSala, false) ?? base,
+      inicio_anestesia_em: hora(e.inicioAnestesia, false),
+      inicio_cirurgia_em: hora(e.extensao.incisao, false) ?? base,
+      fim_cirurgia_em: fim,
+      fim_anestesia_em: hora(e.fimAnestesia, true),
+      saida_sala_em: hora(e.extensao.saidaSala, true) ?? fim,
+      supuracao: e.supuracao,
+      classificacao_asa_id: asa,
+      pressao_sistolica: pressao ? pressao[0] : null,
+      pressao_diastolica: pressao ? pressao[1] : null,
+      frequencia_cardiaca: e.pulso,
+      situacao: 'realizado',
+      observacao: e.extensao.observacao,
+    });
+    const funcoes = new Map<string, number>();
+    let participante = 0;
+    for (const [i, p] of e.procedimentos.entries()) {
+      const proc = await tx.incluir('ato_cirurgico_procedimento', {
+        ato_cirurgico_id: id,
+        sequencia: i + 1,
+        procedimento_cirurgico_id: p.procedimento,
+        especialidade_medica_id: p.especialidade > 0 ? p.especialidade : null,
+        principal: i === 0,
+        tecnica: TECNICAS.find((x) => x.codigo === p.tecnica)?.rotulo ?? null,
+      });
+      for (const f of FUNCOES_REGISTRO) {
+        const pr = p.equipe[f];
+        if (!pr) continue;
+        if (!funcoes.has(f))
+          funcoes.set(f, await idPorCodigo(tx, 'funcao_equipe_cirurgica', f, 'A função da equipe'));
+        await tx.incluir('participante_cirurgia', {
+          ato_cirurgico_id: id,
+          sequencia: ++participante,
+          profissional_id: pr.id,
+          funcao_equipe_cirurgica_id: funcoes.get(f),
+          ato_cirurgico_procedimento_id: proc,
+          principal: i === 0 && f === 'cirurgiao',
+        });
+      }
+    }
+    for (const d of DISPOSITIVOS) {
+      const u = e.usos[d];
+      if (u.usado)
+        await tx.incluir('ato_cirurgico_dispositivo', {
+          ato_cirurgico_id: id,
+          dispositivo: d,
+          descricao: u.descricao,
+        });
+    }
+    return { cirurgia: id, procedimentos: e.procedimentos.length } as ResultadoOperacao;
+  },
+  alvo: (_e, r) => ({ tabela: 'ato_cirurgico', id: Number(r['cirurgia']) }),
+});
+
 /** Operações da tela → operação do Executor. */
 export const OPERACOES_CIRURGIA: Readonly<Record<string, Operacao<never, ResultadoOperacao>>> = Object.freeze(
   {
@@ -741,11 +910,6 @@ export const OPERACOES_CIRURGIA: Readonly<Record<string, Operacao<never, Resulta
     'cirurgia.remarcarCirurgia': remarcar as unknown as Operacao<never, ResultadoOperacao>,
     'cirurgia.cancelarCirurgia': cancelar as unknown as Operacao<never, ResultadoOperacao>,
     'cirurgia.definirSalaUsuario': definirSalaUsuario as unknown as Operacao<never, ResultadoOperacao>,
+    'cirurgia.registrarCirurgia': registrar as unknown as Operacao<never, ResultadoOperacao>,
   },
 );
-
-/** Operações que aguardam o modelo ou a implementação sobre ele (o motivo vai à tela; nada é gravado). */
-export const OPERACOES_CIRURGIA_PENDENTES: Readonly<Record<string, string>> = Object.freeze({
-  'cirurgia.registrarCirurgia':
-    'O registro do ato cirúrgico pela tela aguarda as colunas do ato para os dispositivos usados (tubo, antimicrobiano, sonda, cateter, punção), a pressão e o pulso, a classificação ASA e a especialidade de cada procedimento (pedido de modelo do lote 08-cirurgia).',
-});

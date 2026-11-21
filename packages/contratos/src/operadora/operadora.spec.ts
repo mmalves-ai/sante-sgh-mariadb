@@ -20,6 +20,7 @@ import {
   VINCULO_TITULAR,
   VINCULOS_TITULAR,
 } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 describe('telas da operadora', () => {
   it('cada tela da operadora existe na árvore do menu', () => {
@@ -89,7 +90,7 @@ describe('permissões da operadora', () => {
     for (const p of PERMISSOES_OPERADORA_M56) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
       expect(p.codigo.startsWith('operadora.')).toBe(true);
-      expect(p.opcoesLegado).toEqual([]);
+      expect(opcoesDoMapa(p.codigo)).toEqual([]);
       expect(p.concessaoPorPerfil).toBe('por-perfil');
       expect(p.perfis?.length, p.codigo).toBeGreaterThan(0);
       for (const x of p.perfis ?? []) expect(perfis.has(x), `${p.codigo}: ${x}`).toBe(true);

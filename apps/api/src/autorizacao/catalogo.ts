@@ -1,24 +1,64 @@
-// Catálogo completo de permissões no servidor (M06): as geradas da árvore do legado mais as declaradas pelos
-// módulos, e o índice opção/flag/perfil → permissão, montados uma vez por processo.
-import { CATALOGO_DECLARADO, type DeclaracaoPermissao, type FlagLegado } from '@sgh/contratos';
-import { CATALOGO_LEGADO } from '@sgh/contratos/catalogo-legado';
-import { indexarCatalogo, type IndiceCatalogo, type PermissaoDoPerfil } from '@sgh/dominio-acesso';
+// Catálogo completo de permissões no servidor (M06): o catálogo-base do produto mais as permissões declaradas pelos
+// módulos, e o índice opção/marca/perfil → permissão, montados uma vez por processo. A correspondência com a origem
+// (opção do menu e marca de usuário) não fica na declaração da permissão (ADR 0007, item 8): vem do mapa do conector,
+// conector/mapa/permissoes.tsv, lido uma vez e só quando se lê a origem (fonte sintética e de memória). Sem o arquivo,
+// nenhuma permissão vem da origem (falha fechada).
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { CATALOGO_DECLARADO, type DeclaracaoPermissao } from '@sgh/contratos';
+import { CATALOGO_BASE } from '@sgh/contratos/catalogo-base';
+import {
+  type CorrespondenciaOrigem,
+  indexarCatalogo,
+  type IndiceCatalogo,
+  lerMapaOrigem,
+  marcasDoMapa,
+  type MarcaUsuarioOrigem,
+  opcoesPorPermissao,
+  type PermissaoDoPerfil,
+} from '@sgh/dominio-acesso';
 
-export const CATALOGO_COMPLETO: readonly DeclaracaoPermissao[] = [...CATALOGO_LEGADO, ...CATALOGO_DECLARADO];
+export const CATALOGO_COMPLETO: readonly DeclaracaoPermissao[] = [...CATALOGO_BASE, ...CATALOGO_DECLARADO];
 
-/** Marcas do usuário na origem que alguma permissão declara (só elas são lidas). */
-export const FLAGS_DECLARADAS: readonly FlagLegado[] = [
-  ...new Map(
-    CATALOGO_COMPLETO.flatMap((p) => p.flagsLegado ?? []).map((f) => [`${f.tabela}.${f.coluna}`, f]),
-  ).values(),
-];
+/** Arquivo do mapa do conector; `SGH_MAPA_PERMISSOES` troca o caminho (implantação fora do repositório). */
+export function arquivoMapaOrigem(): string {
+  return (
+    process.env['SGH_MAPA_PERMISSOES'] ??
+    resolve(import.meta.dirname, '../../../../conector/mapa/permissoes.tsv')
+  );
+}
+
+let mapa: readonly CorrespondenciaOrigem[] | null = null;
+
+/** Mapa do conector (origem → permissão), lido uma vez por processo. */
+export function mapaDeOrigem(): readonly CorrespondenciaOrigem[] {
+  if (mapa) return mapa;
+  const arquivo = arquivoMapaOrigem();
+  mapa = existsSync(arquivo) ? lerMapaOrigem(readFileSync(arquivo, 'utf8')) : [];
+  return mapa;
+}
+
+let opcoes: ReadonlyMap<string, readonly number[]> | null = null;
+
+/** Opções do menu de origem ligadas às permissões dadas (ordenadas, sem repetição). */
+export function opcoesDasPermissoes(...codigos: readonly string[]): number[] {
+  opcoes ??= opcoesPorPermissao(mapaDeOrigem());
+  const r = new Set<number>();
+  for (const c of codigos) for (const o of opcoes.get(c) ?? []) r.add(o);
+  return [...r].sort((a, b) => a - b);
+}
+
+/** Marcas do usuário na origem que o mapa liga a alguma permissão (só elas são lidas). */
+export function marcasDeclaradas(): readonly MarcaUsuarioOrigem[] {
+  return marcasDoMapa(mapaDeOrigem());
+}
 
 let base: IndiceCatalogo | null = null;
 const comMapa = new Map<string, IndiceCatalogo>();
 
 /** Índice do catálogo; com o mapa SGH_ACESSO_MAPA_OPCAO aprovado, um índice por versão do mapa. */
 export function indiceDoCatalogo(mapa: readonly PermissaoDoPerfil[] = []): IndiceCatalogo {
-  if (mapa.length === 0) return (base ??= indexarCatalogo(CATALOGO_COMPLETO));
+  if (mapa.length === 0) return (base ??= indexarCatalogo(CATALOGO_COMPLETO, [], mapaDeOrigem()));
   const chave = mapa
     .map((m) => `${m.perfil}\u0000${m.permissao}`)
     .sort()
@@ -26,7 +66,7 @@ export function indiceDoCatalogo(mapa: readonly PermissaoDoPerfil[] = []): Indic
   let i = comMapa.get(chave);
   if (!i) {
     if (comMapa.size > 16) comMapa.clear();
-    i = indexarCatalogo(CATALOGO_COMPLETO, mapa);
+    i = indexarCatalogo(CATALOGO_COMPLETO, mapa, mapaDeOrigem());
     comMapa.set(chave, i);
   }
   return i;

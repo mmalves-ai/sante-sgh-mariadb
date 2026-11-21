@@ -12,7 +12,7 @@ export const PERMISSOES_M59_F4: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F4_CODIGOS.grupoSanear,
     descricao:
       'Sanear os grupos de acesso amplo: decidir o grupo de trabalho de cada usuário, aprovar pela área, aplicar e retirar as opções do grupo vazio',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'tecnica',

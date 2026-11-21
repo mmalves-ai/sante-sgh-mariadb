@@ -25,6 +25,7 @@ import {
   TIPOS_ATO_LEGADO_POR_TIPO_POLITICA,
   TIPOS_DOCUMENTO_POLITICA,
 } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const H = 'a'.repeat(64);
 
@@ -44,7 +45,7 @@ describe('permissões do M49', () => {
       expect(codigos.has(c), c).toBe(true);
     for (const p of PERMISSOES_DOCUMENTO_M49) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length > 0 || p.concessaoPorPerfil !== null, p.codigo).toBe(true);
+      expect(opcoesDoMapa(p.codigo).length > 0 || p.concessaoPorPerfil !== null, p.codigo).toBe(true);
     }
   });
 

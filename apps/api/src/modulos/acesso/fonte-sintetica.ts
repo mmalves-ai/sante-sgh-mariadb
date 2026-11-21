@@ -39,7 +39,6 @@ import {
   PERMISSOES_BALANCO_M45,
   PERMISSOES_PORTARIA,
   PERMISSOES_PORTARIA_M50,
-  OPCOES_PORTARIA as OPCOES_PORTARIA_LEGADO,
   PERMISSOES_PEP_M23,
   PERMISSOES_SUPRIMENTOS_M28,
   PERMISSOES_FARMACIA_M29,
@@ -48,15 +47,17 @@ import {
   PERMISSOES_FATURAMENTO_M51,
   PERMISSOES_FINANCEIRO_M32,
   PERMISSOES_REPASSE_M33,
-  OPCOES_PEP_ANEXO_CRIAR,
-  OPCOES_PEP_ANEXO_LER,
-  OPCOES_PEP_EVOLUCAO_CRIAR,
-  OPCOES_PEP_EVOLUCAO_LER,
   type UnidadeSessao,
 } from '@sgh/contratos';
 import type { ConcessoesLegado } from '@sgh/dominio-acesso';
 import type { DadosAutorizacaoLegado } from '../../autorizacao/servico-autorizacao.js';
-import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
+import { CATALOGO_COMPLETO, mapaDeOrigem, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
+
+// Opções do menu de origem das permissões do prontuário usadas pelos usuários sintéticos (mapa do conector).
+const OPCOES_PEP_EVOLUCAO_LER = opcoesDasPermissoes('pep.evolucao.ler');
+const OPCOES_PEP_EVOLUCAO_CRIAR = opcoesDasPermissoes('pep.evolucao.criar');
+const OPCOES_PEP_ANEXO_LER = opcoesDasPermissoes('pep.anexo.ler');
+const OPCOES_PEP_ANEXO_CRIAR = opcoesDasPermissoes('pep.anexo.criar');
 import type { FonteAcesso } from '../../sessao/fonte-acesso.js';
 import { EstadoAcessoSintetico } from './estado-sintetico.js';
 
@@ -112,12 +113,16 @@ export const CONCESSOES_VAZIAS: ConcessoesLegado = {
 const SENHA_SINTETICA = 'Sintetico#2026';
 
 /** M23: as opções do legado do prontuário de uso diário (painel, documentos, exames, resultados, alta, anexos…). */
-const OPCOES_PEP_M23 = [...new Set(PERMISSOES_PEP_M23.flatMap((p) => p.opcoesLegado))].sort((a, b) => a - b);
+const OPCOES_PEP_M23 = [...new Set(PERMISSOES_PEP_M23.flatMap((p) => opcoesDasPermissoes(p.codigo)))].sort(
+  (a, b) => a - b,
+);
 
 /** M25: as opções do legado do enfermeiro e do técnico de enfermagem (permissões da beira do leito). */
 const opcoesDe = (...codigos: readonly string[]) => [
   ...new Set(
-    PERMISSOES_ENFERMAGEM_M25.filter((p) => codigos.includes(p.codigo)).flatMap((p) => p.opcoesLegado),
+    PERMISSOES_ENFERMAGEM_M25.filter((p) => codigos.includes(p.codigo)).flatMap((p) =>
+      opcoesDasPermissoes(p.codigo),
+    ),
   ),
 ];
 const OPCOES_ENFERMEIRO_M25 = opcoesDe(
@@ -134,7 +139,11 @@ const OPCOES_TECNICO_M25 = opcoesDe(
 
 /** M45 (etapa 3): o balanço hídrico (o enfermeiro lança e fecha; o técnico lança). */
 const opcoesBalanco = (...codigos: readonly string[]) => [
-  ...new Set(PERMISSOES_BALANCO_M45.filter((p) => codigos.includes(p.codigo)).flatMap((p) => p.opcoesLegado)),
+  ...new Set(
+    PERMISSOES_BALANCO_M45.filter((p) => codigos.includes(p.codigo)).flatMap((p) =>
+      opcoesDasPermissoes(p.codigo),
+    ),
+  ),
 ];
 const OPCOES_BALANCO_ENFERMEIRO = opcoesBalanco(
   PERMISSOES_BALANCO.ler,
@@ -146,7 +155,9 @@ const OPCOES_BALANCO_TECNICO = opcoesBalanco(PERMISSOES_BALANCO.ler, PERMISSOES_
 /** M50 (etapa 5): as opções do controle de acesso do porteiro, do supervisor e do integrador da catraca. */
 const opcoesPortaria = (...codigos: readonly string[]) => [
   ...new Set(
-    PERMISSOES_PORTARIA_M50.filter((p) => codigos.includes(p.codigo)).flatMap((p) => p.opcoesLegado),
+    PERMISSOES_PORTARIA_M50.filter((p) => codigos.includes(p.codigo)).flatMap((p) =>
+      opcoesDasPermissoes(p.codigo),
+    ),
   ),
 ];
 const OPCOES_PORTEIRO_M50 = opcoesPortaria(
@@ -171,15 +182,26 @@ function opcoesFarmacia(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of [...PERMISSOES_FARMACIA_M29, ...PERMISSOES_SUPRIMENTOS_M28])
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
+}
+
+/**
+ * As marcas do usuário na origem que o mapa do conector (conector/mapa/permissoes.tsv) liga às permissões dadas: a
+ * conta sintética guarda a marca como a origem a guardaria, sem o nome dela no código.
+ */
+function marcasDasPermissoes(...codigos: readonly string[]): string[] {
+  const alvo = new Set(codigos);
+  const r = new Set<string>();
+  for (const c of mapaDeOrigem()) if (c.tipo !== 'opcao_menu' && alvo.has(c.permissao)) r.add(c.chave);
+  return [...r].sort();
 }
 
 function opcoesSuprimentos(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_SUPRIMENTOS_M28)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -188,7 +210,7 @@ function opcoesFinanceiro(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_FINANCEIRO_M32)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -197,7 +219,7 @@ function opcoesRepasse(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_REPASSE_M33)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -206,7 +228,7 @@ function opcoesTiss(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_FATURAMENTO_M31)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -218,7 +240,7 @@ function opcoesSus(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_FATURAMENTO_M51)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -227,7 +249,7 @@ function opcoesFaturamento(...codigos: readonly string[]): number[] {
   const ids = new Set<number>();
   for (const p of PERMISSOES_FATURAMENTO_M30)
     if (codigos.some((c) => p.codigo === c || (c.endsWith('*') && p.codigo.startsWith(c.slice(0, -1)))))
-      for (const i of p.opcoesLegado) ids.add(i);
+      for (const i of opcoesDasPermissoes(p.codigo)) ids.add(i);
   return [...ids].sort((a, b) => a - b);
 }
 
@@ -1390,11 +1412,11 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'SUPERVISAO_ESTOQUE',
       opcoesGrupo: opcoesSuprimentos('suprimentos.*', 'acesso.escopo.ler'),
-      flags: [
-        'GEUSERS.PERMITIR_AUTORIZAR_PEDIDO',
-        'GEUSERS.AUT_REQ',
-        'GEUSERS.PERMITIR_DESBLOQUEIO_FECHAMENTO',
-      ],
+      flags: marcasDasPermissoes(
+        'suprimentos.pedido.aprovar',
+        'suprimentos.requisicao.autorizar',
+        'suprimentos.fechamento.reabrir',
+      ),
     },
   },
   /**
@@ -2167,7 +2189,10 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     ativo: true,
     bloqueado: false,
     senhaAlteradaEm: new Date(),
-    concessoes: { grupo: 'RECEPCAO_INTERNA', opcoesGrupo: [OPCOES_PORTARIA_LEGADO.acompanhantesRecepcao] },
+    concessoes: {
+      grupo: 'RECEPCAO_INTERNA',
+      opcoesGrupo: [2457] /* acompanhantes da recepção, no menu de origem */,
+    },
   },
   'SINT.SCIH': {
     senha: SENHA_SINTETICA,
@@ -3160,7 +3185,7 @@ export function estadoAcessoSintetico(): EstadoAcessoSintetico {
       concessoes: c.concessoes ?? {},
       perfis: c.perfisConcedidos ?? [],
     })),
-    new Set(CATALOGO_COMPLETO.flatMap((p) => p.opcoesLegado)),
+    new Set(CATALOGO_COMPLETO.flatMap((p) => opcoesDasPermissoes(p.codigo))),
   ));
 }
 

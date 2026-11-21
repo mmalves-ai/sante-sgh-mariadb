@@ -117,10 +117,10 @@ afterEach(() => {
 });
 
 const linha = (l: Partial<LinhaSegredoLegado>): LinhaSegredoLegado => ({
-  tabela: 'TBCONVEN',
-  chave: 'COD=901',
+  tabela: 'convenio',
+  chave: 'id=901',
   descricao: 'CONVENIO SINTETICO',
-  comValor: ['SENHA'],
+  comValor: ['senha_portal'],
   noCofre: [],
   rotacionadoEm: null,
   retiradoEm: null,
@@ -130,27 +130,27 @@ const linha = (l: Partial<LinhaSegredoLegado>): LinhaSegredoLegado => ({
 
 describe('regras de tela', () => {
   it('a linha aparece pela descrição ou pelos valores da chave (nunca o nome da tabela)', () => {
-    expect(valoresDaChave('ID_TBCONVEN=7;ID_TBTISSSCHEMA=2')).toBe('7 · 2');
-    expect(identificacaoDaLinha({ chave: 'COD=901', descricao: 'CONVENIO SINTETICO' })).toBe(
+    expect(valoresDaChave('convenio_id=7;versao_tiss_id=2')).toBe('7 · 2');
+    expect(identificacaoDaLinha({ chave: 'id=901', descricao: 'CONVENIO SINTETICO' })).toBe(
       'CONVENIO SINTETICO (901)',
     );
     expect(identificacaoDaLinha({ chave: 'ID=3', descricao: null })).toBe('3');
   });
 
   it('o que falta no cofre segue a ordem do catálogo; a situação decide as ações', () => {
-    const h = linha({ tabela: 'TBHOSPIT', chave: 'COD=1', descricao: null });
+    const h = linha({ tabela: 'estabelecimento', chave: 'id=1', descricao: null });
     expect(
-      colunasSemCofre({ ...h, comValor: ['SENHA_ASSINATURA', 'SENHAPROV'], noCofre: ['SENHA_ASSINATURA'] }),
-    ).toEqual(['SENHAPROV']);
+      colunasSemCofre({ ...h, comValor: ['senha_assinatura', 'senha_provedor'], noCofre: ['senha_assinatura'] }),
+    ).toEqual(['senha_provedor']);
     expect(situacaoDaLinha(linha({}))).toBe('falta-cofre');
-    const pronta = linha({ noCofre: ['SENHA'], bloqueio: null });
+    const pronta = linha({ noCofre: ['senha_portal'], bloqueio: null });
     expect(situacaoDaLinha(pronta)).toBe('pronto');
     expect(podeRetirarLinha(pronta, true)).toBe(true);
     expect(podeRetirarLinha(pronta, false)).toBe(false);
-    const aguardando = linha({ noCofre: ['SENHA'], bloqueio: 'contingencia-ativa' });
+    const aguardando = linha({ noCofre: ['senha_portal'], bloqueio: 'contingencia-ativa' });
     expect(situacaoDaLinha(aguardando)).toBe('bloqueado');
     expect(podeRetirarLinha(aguardando, true)).toBe(false);
-    const retirada = linha({ comValor: [], noCofre: ['SENHA'], retiradoEm: '2026-10-28T13:05:00.000Z' });
+    const retirada = linha({ comValor: [], noCofre: ['senha_portal'], retiradoEm: '2026-10-28T13:05:00.000Z' });
     expect(situacaoDaLinha(retirada)).toBe('retirado');
     expect(podeGuardarNaLinha(retirada, true)).toBe(false);
     expect(podeGuardarNaLinha(linha({}), true)).toBe(true);
@@ -169,7 +169,7 @@ describe('regras de tela', () => {
     const colunas = mensagensSegredos.colunas as Record<string, Record<string, string>>;
     for (const s of SEGREDOS_LEGADO)
       for (const c of s.colunas) expect(colunas[s.tabela]?.[c], `${s.tabela}.${c}`).toBeTruthy();
-    expect(Object.keys(mensagensSegredos.excecoes).sort()).toEqual(['SP_MODULO_USUARIO', 'TBINFBANCO']);
+    expect(Object.keys(mensagensSegredos.excecoes).sort()).toEqual(['contas_acesso_modulos', 'integracao_bancaria_externa']);
     // O motivo da tela é de produto: sem código de pendência do planejamento nem menção à cópia de dev.
     const motivos = mensagensSegredos.excecoesMotivo as Record<string, string>;
     for (const e of EXCECOES_SEGREDO_LEGADO) {
@@ -189,7 +189,7 @@ const segredos = (sobre: Partial<SegredosLegadoResposta> = {}): SegredosLegadoRe
   receita: { ligada: true, motivo: null },
   tabelas: [
     {
-      tabela: 'TBCONVEN',
+      tabela: 'convenio',
       rotulo: 'Senha de acesso ao portal do convênio',
       comValor: 12,
       noCofre: '<5',
@@ -197,7 +197,7 @@ const segredos = (sobre: Partial<SegredosLegadoResposta> = {}): SegredosLegadoRe
       retirados: 0,
     },
     {
-      tabela: 'SITPEQV',
+      tabela: 'equipamento_laboratorio',
       rotulo: 'Senhas de transferência dos equipamentos de laboratório',
       comValor: '<5',
       noCofre: 0,
@@ -208,21 +208,21 @@ const segredos = (sobre: Partial<SegredosLegadoResposta> = {}): SegredosLegadoRe
   linhas: [
     linha({}),
     linha({
-      chave: 'COD=902',
+      chave: 'id=902',
       descricao: 'CONVENIO PRONTO',
-      noCofre: ['SENHA'],
+      noCofre: ['senha_portal'],
       bloqueio: null,
       rotacionadoEm: '2026-10-20T09:00:00.000Z',
     }),
     linha({
-      tabela: 'SITPEQV',
+      tabela: 'equipamento_laboratorio',
       chave: 'CODIGO=5',
       descricao: 'EQUIPAMENTO SINTETICO',
-      comValor: ['SENHA_FTP', 'SENHA_EXPORTACAO'],
+      comValor: ['senha_transferencia', 'senha_exportacao'],
     }),
   ],
   linhasTotal: 3,
-  excecoes: [{ objeto: 'TBINFBANCO', motivo: 'lida por gatilhos que escrevem em banco externo' }],
+  excecoes: [{ objeto: 'integracao_bancaria_externa', motivo: 'lida por gatilhos que escrevem em banco externo' }],
   ...sobre,
 });
 
@@ -238,8 +238,8 @@ describe('Credenciais guardadas no banco', () => {
     });
     const w = await montar(SegredosParceiros);
     await flushPromises();
-    expect(w.get('[data-testid="segredos-resumo-TBCONVEN"]').text()).toContain('<5');
-    expect(w.text()).not.toContain('TBCONVEN');
+    expect(w.get('[data-testid="segredos-resumo-convenio"]').text()).toContain('<5');
+    expect(w.text()).not.toContain('convenio');
     expect(w.get('[data-testid="segredos-situacao-tbconven-cod-901"]').text()).toBe('Falta guardar no cofre');
     expect(w.get('[data-testid="segredos-situacao-tbconven-cod-902"]').text()).toBe('Pronta para retirar');
     expect(w.find('[data-testid="segredos-retirar-tbconven-cod-901"]').exists()).toBe(false);
@@ -254,9 +254,9 @@ describe('Credenciais guardadas no banco', () => {
     enviarForm('form-segredo');
     await flushPromises();
     expect(pedidos.find((p) => p.url.endsWith('/guardar'))?.corpo).toEqual({
-      tabela: 'SITPEQV',
+      tabela: 'equipamento_laboratorio',
       chave: 'CODIGO=5',
-      coluna: 'SENHA_FTP',
+      coluna: 'senha_transferencia',
       valor: 'credencial-sintetica',
       rotacionado: true,
       senha: 'senha-sintetica',
@@ -271,7 +271,7 @@ describe('Credenciais guardadas no banco', () => {
     await flushPromises();
     const r = pedidos.find((p) => p.url.endsWith('/retirar'));
     expect(r?.metodo).toBe('POST');
-    expect(r?.corpo).toEqual({ tabela: 'TBCONVEN', chave: 'COD=902', senha: 'senha-sintetica' });
+    expect(r?.corpo).toEqual({ tabela: 'convenio', chave: 'id=902', senha: 'senha-sintetica' });
   });
 
   it('quem só lê não tem ações; contingência, cofre e retirada desligada aparecem com o motivo', async () => {
@@ -305,15 +305,15 @@ const senhas = (sobre: Partial<SenhasSecundariasResposta> = {}): SenhasSecundari
   contingenciaLigada: false,
   receita: { ligada: true, motivo: null },
   porColuna: [
-    { coluna: 'SENHA_SEC', usuarios: 8 },
-    { coluna: 'SENHA_CAN_NF', usuarios: '<5' },
+    { coluna: 'senha_liberacao', usuarios: 8 },
+    { coluna: 'senha_cancelamento_nota', usuarios: '<5' },
   ],
   usuariosComSenha: 9,
   pagina: 1,
   total: 2,
   usuarios: [
-    { login: 'SINT.OUTRO', colunas: ['SENHA_SEC', 'SENHA_CAN_NF'], proprio: false },
-    { login: 'SINT.GESTOR', colunas: ['SENHA_SEC'], proprio: true },
+    { login: 'SINT.OUTRO', colunas: ['senha_liberacao', 'senha_cancelamento_nota'], proprio: false },
+    { login: 'SINT.GESTOR', colunas: ['senha_liberacao'], proprio: true },
   ],
   ...sobre,
 });
@@ -330,7 +330,7 @@ describe('Senhas secundárias', () => {
     const w = await montar(SenhasSecundariasUsuarios);
     await flushPromises();
     expect(w.get('[data-testid="senhas-sec-total"]').text()).toBe('9');
-    expect(w.get('[data-testid="senhas-sec-tipo-SENHA_CAN_NF"]').text()).toContain('<5');
+    expect(w.get('[data-testid="senhas-sec-tipo-senha_cancelamento_nota"]').text()).toContain('<5');
     expect(w.get('[data-testid="senhas-sec-linha-SINT.OUTRO"]').text()).toContain(
       'Senha de liberação, Senha de cancelamento de nota fiscal',
     );

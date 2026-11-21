@@ -1,0 +1,22 @@
+# assunto: pacote-contratos-2
+# cliente_teste: f24_02pacotecontratos2
+packages/contratos/dist/repasse/respostas.d.ts
+packages/contratos/dist/repasse/vocabulario.d.ts
+packages/contratos/dist/sadt/vocabulario.d.ts
+packages/contratos/dist/suporte/suporte.d.ts
+packages/contratos/dist/suprimentos/onda3.d.ts
+packages/contratos/dist/suprimentos/opme-respostas.d.ts
+packages/contratos/dist/suprimentos/opme-vocabulario.d.ts
+packages/contratos/dist/suprimentos/regras/cotacao.d.ts
+packages/contratos/dist/suprimentos/regras/escopo.d.ts
+packages/contratos/dist/suprimentos/regras/farmacia-avaliacao.d.ts
+packages/contratos/dist/suprimentos/regras/farmacia-controlado.d.ts
+packages/contratos/dist/suprimentos/regras/farmacia-entrega.d.ts
+packages/contratos/dist/suprimentos/regras/farmacia-fila.d.ts
+packages/contratos/dist/suprimentos/regras/farmacia-situacao.d.ts
+packages/contratos/dist/suprimentos/regras/onda3.d.ts
+packages/contratos/dist/suprimentos/regras/opme.d.ts
+packages/contratos/dist/suprimentos/regras/saida.d.ts
+packages/contratos/dist/suprimentos/respostas.d.ts
+packages/contratos/dist/telemedicina/teleconsulta.d.ts
+packages/contratos/dist/texto/fonetica.d.ts

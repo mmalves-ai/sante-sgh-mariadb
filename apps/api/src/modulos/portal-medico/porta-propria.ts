@@ -37,7 +37,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { portaIndisponivel } from '../exames/public-api.js';
 import {
+  type AtoContaMedicoRegistrado,
   type ContextoPortalMedico,
+  type DecisaoPedidosConta,
   type EnvioCriticoMedico,
   type EnvioTrocaEmailMedico,
   type GravadorPortalMedico,
@@ -56,19 +58,20 @@ import { conferirAtoContaMedico, SITUACAO_DO_MODELO, situacaoDaTela } from './re
 export type NucleoPortalMedico = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 export const TABELA_CONTA = 'conta_portal_profissional_externo';
-const TABELAS_GRAVACAO = [TABELA_CONTA, 'troca_email_conta_portal', 'aviso_valor_critico_tentativa'] as const;
+const TABELAS_GRAVACAO = [
+  TABELA_CONTA,
+  'ato_conta_portal_profissional_externo',
+  'troca_email_conta_portal',
+  'aviso_valor_critico_tentativa',
+] as const;
 /** O canal da notificação do crítico pelo portal do médico externo (cadastro canal_notificacao do cliente). */
 export const CANAL_CRITICO_PORTAL_MEDICO = 'portal_medico_externo';
 const TETO_BUSCA = 20;
 
 /** Operações que o banco próprio ainda não atende, com o que falta (pedidos do lote 21-misto-farmacia da F2.4). */
 export const OPERACOES_PENDENTES: Readonly<Record<string, string>> = {
-  atosConta:
-    'o histórico dos atos da conta do médico externo (a tabela do histórico ainda não existe no modelo)',
   trocarSenha:
     'a troca de senha da conta do médico externo (a senha fica no provedor de identidade, ainda não ligado)',
-  religar:
-    'religar o profissional a outra conta depois de desligar ou encerrar a antiga (a chave única do profissional ainda cobre a conta não vigente)',
 };
 
 const id = z.number().int().positive();
@@ -100,6 +103,12 @@ const pendente = (o: string): ErroOperacao =>
     'Recurso ainda não disponível no banco',
     `${o.slice(0, 1).toUpperCase()}${o.slice(1)} ainda não está disponível neste banco.`,
   );
+
+/** O ato gravado (snake_case) → o da tela (as trocas usam hífen). */
+const ATO_DO_BANCO: Readonly<Record<string, AtoContaMedicoRegistrado['ato']>> = {
+  troca_senha: 'troca-senha',
+  troca_email: 'troca-email',
+};
 
 const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
 const comoData = (v: unknown): Date | null =>
@@ -258,10 +267,8 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
               });
             } catch (erro) {
               const unica = restricaoUnicaViolada(erro);
+              // A chave única cobre só a conta vigente: a desligada ou a encerrada não impede religar.
               if (unica && /vigente/i.test(unica)) throw emOutraConta();
-              // A chave única do modelo atual cobre o profissional de qualquer conta (também a desligada ou a
-              // encerrada): religar fica indisponível até o DDL da chave do profissional vigente (pedido do 04-02).
-              if (unica && /profissional/i.test(unica)) throw pendente(OPERACOES_PENDENTES['religar']!);
               throw erro;
             }
             return {};
@@ -311,6 +318,16 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
               );
             const situacao = conferirAtoContaMedico(anterior, { ...x, ...e });
             const agora = new Date();
+            await tx.incluir('ato_conta_portal_profissional_externo', {
+              conta_portal_profissional_externo_id: e.acesso,
+              ato: e.ato,
+              situacao_anterior: String(conta['situacao']),
+              motivo: e.motivo.trim().slice(0, 250),
+              pedidos_pendentes: e.pedidosPendentes,
+              decisao_pedidos: e.pedidosPendentes > 0 ? e.decisaoPedidos : null,
+              realizado_por_usuario_id: c.usuario,
+              realizado_em: agora,
+            });
             await tx.alterar(TABELA_CONTA, e.acesso, n(conta['versao']), {
               situacao: SITUACAO_DO_MODELO[situacao],
               bloqueada_ate: null,
@@ -677,8 +694,33 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
     });
   }
 
-  atosConta(): Promise<never> {
-    return Promise.reject(pendente(OPERACOES_PENDENTES['atosConta']!));
+  atosConta(c: ContextoPortalMedico, acesso: number): Promise<AtoContaMedicoRegistrado[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT a.id, a.ato, a.situacao_anterior, a.motivo, a.pedidos_pendentes, a.decisao_pedidos, a.realizado_em,
+                  u.login
+             FROM ato_conta_portal_profissional_externo a
+             LEFT JOIN usuario u ON u.id = a.realizado_por_usuario_id
+            WHERE a.conta_portal_profissional_externo_id = ?
+            ORDER BY a.realizado_em DESC, a.id DESC`,
+          [acesso],
+          { teto: 500 },
+        )
+      ).map((x) => ({
+        id: n(x['id']),
+        ato: ATO_DO_BANCO[String(x['ato'])] ?? (String(x['ato']) as AtoContaMedicoRegistrado['ato']),
+        situacaoAnterior: situacaoDaTela(String(x['situacao_anterior'])) ?? String(x['situacao_anterior']),
+        motivo: x['motivo'] === null || x['motivo'] === undefined ? null : String(x['motivo']),
+        pedidosPendentes: n(x['pedidos_pendentes']),
+        decisaoPedidos:
+          x['decisao_pedidos'] === null || x['decisao_pedidos'] === undefined
+            ? null
+            : (String(x['decisao_pedidos']) as DecisaoPedidosConta),
+        usuario: x['login'] === null || x['login'] === undefined ? '' : String(x['login']),
+        em: instante(x['realizado_em']) ?? '',
+      })),
+    );
   }
 
   private trocaEmail(c: ContextoPortalMedico, filtro: string, p: unknown[]): Promise<TrocaEmailMedico | null> {

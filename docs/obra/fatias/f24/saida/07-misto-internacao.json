@@ -1,0 +1,45 @@
+{
+  "lote": "07-misto-internacao",
+  "volta": 2,
+  "pedidos": [
+    {
+      "tipo": "implementacao",
+      "arquivo": "apps/api/src/modulos/sadt/porta-propria.ts",
+      "linhas": [
+        115,
+        302,
+        456,
+        459,
+        462,
+        830,
+        833,
+        836,
+        839,
+        842,
+        845,
+        848,
+        965,
+        968,
+        971,
+        974,
+        977,
+        1004,
+        1007,
+        1010,
+        1013,
+        1064,
+        1327
+      ],
+      "motivo": "Não coube no lote misto: são 19 leituras (LEITURAS_PENDENTES), 6 gravações (GRAVACOES_PENDENTES: registrarOrcamento, marcarOrcamentoConvertido, criarProtocoloPortal, registrarAutocadastro, decidirAutocadastro, registrarTentativaPortal), OPERACOES_SADT_PENDENTES e o registro da leitura do resultado feita no portal. Nenhum item consta de ddl-aplicado.md nem de ddl-aplicado-v2.md; o pedido do 22-misto-sadt (1ª volta) já dizia que é ligação da porta ao modelo e pedia lote próprio com 2 agentes (leitura e gravação). Repete-se o pedido: lote próprio do SADT, com fatia que traga, por item, o contrato da porta (porta.ts do sadt) e as tabelas do modelo que o atendem (portal de resultados, orçamento do diagnóstico, filas da bancada). Onde faltar estrutura, o lote pede o DDL com colunas."
+    },
+    {
+      "tipo": "implementacao",
+      "arquivo": "apps/api/src/modulos/adt/same.controller.ts",
+      "linhas": [
+        121,
+        157
+      ],
+      "motivo": "Fora da lista do lote. O POST registros grava em ocorrencia_arquivo_prontuario (gravarSameExt devolve o id dessa linha), mas a trilha registra { tabela: 'movimento_prontuario', id: String(x) }: ligaria o registro a um movimento com o id de outra tabela. Trocar para { tabela: 'ocorrencia_arquivo_prontuario', id: String(x), chave: `${tipo}:${e.conta}` } e atualizar o JSDoc e o texto do @AuditadoNoHandler ('registro do arquivo de prontuários (ocorrencia_arquivo_prontuario) com a trilha na mesma transação'), tirando a menção a 'modelo pendente'."
+    }
+  ]
+}

@@ -17,49 +17,15 @@
 // competência (o serviço recusa com `escopo-parcial`; desenho em docs/marcos/M51/preparo-e1.md).
 import type { DeclaracaoPermissao } from './tipos.js';
 
-export const OPCOES_FATURAMENTO_SUS = {
-  exportacaoRecepcaoExterna: 3263,
-  ciha: 3264,
-  controleAtendimentoSus: 2487,
-  aihRaiz: 4252,
-  aihTabelas: 643,
-  aihParametros: 644,
-  aihCadastro: 646,
-  aihManutencao: 647,
-  aihGerarArquivo: 690,
-  aihCriarArquivo: 691,
-  aihSisaih01: 3217,
-  aihImportacao: 3198,
-  aihFechamentoFatura: 3201,
-  aihFechamentoMensal: 4388,
-  ambRaiz: 4253,
-  ambTabelas: 701,
-  bpa: 724,
-  bpaCriacao: 725,
-  bpaManutencao: 726,
-  bpaArquivo: 728,
-  bpaImportacao: 733,
-  ambFechamentoFatura: 906,
-  apacRaiz: 4262,
-  apacTabelas: 920,
-  apacCadastro: 929,
-  apacArquivo: 951,
-  apacEncerramento: 961,
-  apacImportaMedSol: 1100,
-  apacFechamentoFatura: 1103,
-} as const;
-
-const O = OPCOES_FATURAMENTO_SUS;
-
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'financeira',
   criticidade: 'normal',
@@ -67,95 +33,65 @@ const p = (
   ...extra,
 });
 
-const RAIZES = [O.aihRaiz, O.ambRaiz, O.apacRaiz];
-const CIHA = [O.exportacaoRecepcaoExterna, O.ciha];
-const FECHAMENTO = [
-  O.aihFechamentoFatura,
-  O.aihFechamentoMensal,
-  O.ambFechamentoFatura,
-  O.apacFechamentoFatura,
-  O.controleAtendimentoSus,
-];
-const BPA = [O.bpa, O.bpaCriacao, O.bpaManutencao, O.bpaArquivo];
-const APAC = [O.apacCadastro, O.apacArquivo, O.apacEncerramento];
-const AIH = [O.aihCadastro, O.aihManutencao, O.aihGerarArquivo, O.aihCriarArquivo, O.aihSisaih01];
-
 export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
   p(
     'faturamento.sus.ler',
     'Consultar as competências SUS, as críticas e os arquivos exportados (CIHA, BPA, APAC, AIH)',
-    [...RAIZES, ...CIHA, O.controleAtendimentoSus],
   ),
-  p(
-    'faturamento.sus.abrirCompetencia',
-    'Abrir a competência SUS de um instrumento e rodar a crítica prévia',
-    [...CIHA, ...BPA, ...APAC, ...AIH],
-  ),
+  p('faturamento.sus.abrirCompetencia', 'Abrir a competência SUS de um instrumento e rodar a crítica prévia'),
   p(
     'faturamento.sus.fecharCompetencia',
     'Fechar a competência SUS (sem crítica bloqueante aberta; supervisor)',
-    FECHAMENTO,
+
     { criticidade: 'sensivel' },
   ),
   p(
     'faturamento.sus.reabrirCompetencia',
     'Reabrir a competência SUS fechada (supervisor, com justificativa)',
-    FECHAMENTO,
+
     { criticidade: 'sensivel' },
   ),
-  p('faturamento.sus.justificarCritica', 'Justificar uma crítica de aviso da competência SUS', [
-    ...CIHA,
-    ...BPA,
-    ...APAC,
-    ...AIH,
-  ]),
+  p('faturamento.sus.justificarCritica', 'Justificar uma crítica de aviso da competência SUS'),
   p(
     'faturamento.susEquivalencia.editar',
     'Registrar a equivalência SIGTAP de um procedimento do hospital para a CIHA (sem mexer no de-para da tabela de preços)',
-    [...CIHA, O.ambTabelas, O.aihTabelas],
   ),
   p(
     'faturamento.susEquivalencia.editarRede',
     'Registrar ou desativar a equivalência SIGTAP que vale para a rede inteira do cliente (além da ação do estabelecimento)',
-    [...CIHA, O.ambTabelas, O.aihTabelas],
+
     { criticidade: 'sensivel' },
   ),
   p(
     'faturamento.susCiha.gerar',
     'Gerar o arquivo CIHA da competência no leiaute do Ministério (com hash) e baixá-lo',
-    CIHA,
+
     { criticidade: 'sensivel' },
   ),
-  p('faturamento.susBpa.gerar', 'Gerar o BPA-C e o BPA-I da competência (BPA-Mag)', BPA, {
+  p('faturamento.susBpa.gerar', 'Gerar o BPA-C e o BPA-I da competência (BPA-Mag)', {
     criticidade: 'sensivel',
   }),
-  p('faturamento.susApac.registrar', 'Registrar laudo, autorização e encerramento de APAC', APAC, {
+  p('faturamento.susApac.registrar', 'Registrar laudo, autorização e encerramento de APAC', {
     criticidade: 'sensivel',
   }),
   p(
     'faturamento.susAih.registrar',
     'Registrar a AIH (laudo autorizado, procedimentos, OPM e diárias) e gerar o SISAIH01',
-    AIH,
+
     { criticidade: 'sensivel' },
   ),
   p(
     'faturamento.susAih.registrarFaixa',
     'Registrar a faixa numérica de AIH liberada pelo gestor',
-    [O.aihParametros, O.aihFechamentoMensal],
+
     { criticidade: 'sensivel' },
   ),
-  p('faturamento.susCadastro.editar', 'Editar os leitos de UTI habilitados e os domínios SIH e SIA', [
-    O.aihTabelas,
-    O.aihParametros,
-    O.ambTabelas,
-    O.apacTabelas,
-  ]),
+  p('faturamento.susCadastro.editar', 'Editar os leitos de UTI habilitados e os domínios SIH e SIA'),
   // Os médicos solicitantes SUS vão pelo CRUD genérico (M51, etapa 2): as permissões
   // `faturamento.susSolicitante.{ler,criar,editar,exportar}` são geradas do domínio (dominios-m51.ts), com as opções
   // 920 e 1100 do módulo A.P.A.C.
   p(
     'faturamento.susRetorno.importar',
     'Importar o espelho e o retorno do gestor (rejeições e reapresentação)',
-    [O.aihImportacao, O.bpaImportacao],
   ),
 ];

@@ -12,6 +12,7 @@ import { CATALOGO_DECLARADO } from '../permissoes/catalogo.js';
 import { FORMATO_CODIGO_PERMISSAO } from '../permissoes/tipos.js';
 import { CATALOGO_EVENTOS } from '../auditoria/eventos.js';
 import { recursoDesligado } from '../liberacao/recursos.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const base = {
   atendimento: 900101,
@@ -112,7 +113,7 @@ describe('catálogos', () => {
     for (const p of PERMISSOES_CLASSIFICACAO_M44) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
       expect(CATALOGO_DECLARADO.filter((x) => x.codigo === p.codigo)).toHaveLength(1);
-      expect(p.opcoesLegado.length > 0 || p.concessaoPorPerfil !== null).toBe(true);
+      expect(opcoesDoMapa(p.codigo).length > 0 || p.concessaoPorPerfil !== null).toBe(true);
     }
     const por = new Map(PERMISSOES_CLASSIFICACAO_M44.map((p) => [p.codigo, p]));
     expect(por.get('recepcao.classificacao.criar')?.exigeConselho).toBe(true);

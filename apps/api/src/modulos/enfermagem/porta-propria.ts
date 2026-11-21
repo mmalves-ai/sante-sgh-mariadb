@@ -16,13 +16,15 @@
 // (passagem_turno.data_referencia) e o SBAR em colunas (hoje o SBAR vai como JSON em observacao_enfermagem).
 // Os eventos da infusão contínua vão ao evento do horário (velocidade e volume em colunas; o código do contrato nos
 // dados); o aparelho da beira do leito guarda só o resumo do identificador; o conflito de sincronização é um por chave.
-// Pendências de modelo (pedido do lote 11-enfermagem-1): a retomada e a troca de bolsa da infusão (o CHECK do evento
-// não as tem) e a resposta de extensão do formulário (sem tabela) recusam com 'modelo-pendente'.
+// Todos os eventos da infusão contínua (início, pausa, retomada, troca de bolsa, velocidade e fim) vão ao evento do
+// horário; a resposta de extensão do formulário (sinal vital, mapa corporal ou anexo) grava em
+// registro_assistencial_extensao, ligada a um registro assistencial do mesmo estabelecimento e paciente (o reenvio da
+// mesma chave atualiza a resposta, sem duplicar).
 import { createHash } from 'node:crypto';
+import type { EventoInfusao as EventoInfusaoContrato } from '@sgh/contratos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
-  ErroOperacao,
   erroConflitoVersao,
   type Executor,
   type Leitor,
@@ -89,9 +91,18 @@ const TIPO_CONFLITO_CONTRATO: Readonly<Record<string, ConflitoSincronizacao['tip
 const EVENTO_INFUSAO_BANCO: Readonly<Record<string, string>> = {
   inicio: 'infusao_inicio',
   pausa: 'infusao_pausa',
+  retomada: 'infusao_retomada',
+  trocaBolsa: 'infusao_troca_bolsa',
   velocidade: 'infusao_velocidade',
   fim: 'infusao_termino',
-};
+} satisfies Readonly<Record<EventoInfusaoContrato, string>>;
+
+/** Componente da resposta de extensão do formulário: contrato → banco. */
+const COMPONENTE_EXTENSAO_BANCO = {
+  sinalVital: 'sinal_vital',
+  mapaCorporal: 'mapa_corporal',
+  anexo: 'anexo',
+} as const;
 
 const SQL_APARELHOS = `
   SELECT a.id, a.nome, u.codigo AS unidade, a.tipo, a.ativo, a.ultimo_sincronismo_em,
@@ -208,13 +219,6 @@ function contextoDe(c: ContextoNucleo): ContextoNucleo {
 
 const foraDaFaixa = (nivel: unknown) => ['atencao', 'critico', 'fora_faixa_plausivel'].includes(texto(nivel));
 
-const pendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Gravação indisponível',
-    `${o} aguarda a tabela no modelo do banco próprio: nada foi gravado.`,
-  );
 
 export class PortaEnfermagemPropria implements PortaEnfermagem {
   readonly destino = 'banco' as const;
@@ -1068,7 +1072,8 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
     },
     async gravarEventoInfusao(r) {
       const evento = EVENTO_INFUSAO_BANCO[r.evento];
-      if (!evento) throw pendente(`O evento "${r.evento}" da infusão contínua`);
+      if (!evento)
+        throw recusa('evento-infusao-invalido', `O evento "${r.evento}" da infusão contínua não existe.`);
       await conferirHorarioDoPaciente(r.horario, r.paciente);
       return tx.incluir('horario_administracao_evento', {
         horario_administracao_id: r.horario,
@@ -1318,8 +1323,42 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
       if (!e) throw recusa('horario-mudou', 'O estorno do horário não foi gravado.');
       return Number(e.id);
     },
-    gravarRespostaExt: async () => {
-      throw pendente('A resposta de extensão do formulário');
+    async gravarRespostaExt(r) {
+      const componente = COMPONENTE_EXTENSAO_BANCO[r.componente];
+      if (!componente) throw recusa('componente-invalido', 'O componente da resposta de extensão não existe.');
+      const chave = r.chave.trim().slice(0, 80);
+      if (!chave) throw recusa('chave-obrigatoria', 'A resposta de extensão exige a chave do item.');
+      if (r.valor === null && r.referencia === null)
+        throw recusa('resposta-vazia', 'A resposta de extensão exige o valor ou o registro ligado.');
+      const registro = await tx.uma<{ id: number }>(
+        `SELECT id FROM registro_assistencial
+          WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL`,
+        [r.registro, est, r.paciente],
+      );
+      if (!registro)
+        throw recusa(
+          'registro-inexistente',
+          'O registro do formulário não foi encontrado para este paciente neste estabelecimento: nada foi gravado.',
+        );
+      const [ja] = await tx.consultarParaAtualizar<{ id: number; versao: number }>(
+        `SELECT id, versao FROM registro_assistencial_extensao
+          WHERE registro_assistencial_id = ? AND componente = ? AND chave = ? AND excluido_em IS NULL`,
+        [r.registro, componente, chave],
+      );
+      if (ja) {
+        await tx.alterar('registro_assistencial_extensao', Number(ja.id), Number(ja.versao), {
+          valor: r.valor,
+          referencia_id: r.referencia,
+        });
+        return Number(ja.id);
+      }
+      return tx.incluir('registro_assistencial_extensao', {
+        registro_assistencial_id: r.registro,
+        componente,
+        chave,
+        valor: r.valor,
+        referencia_id: r.referencia,
+      });
     },
   };
 }

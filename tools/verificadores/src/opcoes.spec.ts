@@ -1,11 +1,10 @@
 // Ficha do M06, regra 2 (teste nomeado na ficha: opções do legado): o retrato versionado da árvore de
 // TBOPCOES do pc tem 6.985 opções lidas, 5.593 ativas, distribuição por nível 86/322/1.743/3.109/1.368/351/6
-// e 75 módulos; o catálogo gerado em quatro passos está em dia com o retrato.
-import { readFileSync } from 'node:fs';
-import { CATALOGO_LEGADO, CATALOGO_LEGADO_ORIGEM } from '@sgh/contratos/catalogo-legado';
+// e 75 módulos; o catálogo gerado em quatro passos está coberto pelo catálogo-base e pelo mapa do conector.
+import { CATALOGO_BASE, CATALOGO_BASE_ORIGEM } from '@sgh/contratos/catalogo-base';
 import { construirCatalogo } from '@sgh/dominio-acesso';
 import { describe, expect, it } from 'vitest';
-import { ARQUIVO_DADOS_CATALOGO, textoCatalogo } from './permissoes.ts';
+import { conferirOrigem, lerMapaDoConector } from './permissoes.ts';
 import { lerRetrato } from './permissoes-dados.ts';
 
 const retrato = lerRetrato('pc');
@@ -32,12 +31,12 @@ describe('opções do legado (TBOPCOES) e o catálogo gerado', () => {
     expect(c.exclusoes.filter((e) => e.motivo === 'opcao-inativa')).toHaveLength(1_392);
     expect(c.exclusoes.filter((e) => e.motivo === 'sistema-sgo-sgs')).toHaveLength(233);
     expect(c.exclusoes.filter((e) => e.motivo === 'modulo-sem-destino')).toHaveLength(0);
-    expect(readFileSync(ARQUIVO_DADOS_CATALOGO, 'utf8')).toBe(textoCatalogo(c, 'pc'));
-    expect(CATALOGO_LEGADO).toHaveLength(c.permissoes.length);
-    expect(CATALOGO_LEGADO_ORIGEM).toMatchObject({ estabelecimento: 'pc', opcoes: 6_985, ativas: 5_593 });
-    // Toda opção ativa do SGH tem exatamente uma permissão; cada permissão tem opção do legado.
+    expect(conferirOrigem(c, CATALOGO_BASE, lerMapaDoConector())).toEqual([]);
+    expect(CATALOGO_BASE).toHaveLength(c.permissoes.length);
+    expect(CATALOGO_BASE_ORIGEM.permissoes).toBe(CATALOGO_BASE.length);
+    // Toda opção ativa do SGH tem exatamente uma permissão; cada permissão gerada tem opção do menu de origem.
     expect(c.permissaoDaOpcao.size).toBe(5_593 - 233);
-    expect(CATALOGO_LEGADO.every((p) => p.opcoesLegado.length > 0)).toBe(true);
+    expect(c.permissoes.every((p) => p.opcoesLegado.length > 0)).toBe(true);
   });
 
   it('o retrato não tem pessoa: usuários só em faixa (0, "<5" ou 5 ou mais)', () => {

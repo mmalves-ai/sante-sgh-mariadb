@@ -20,7 +20,7 @@
     "types": [],
     "paths": {
       "@sgh/contratos": ["./packages/contratos/src/index.ts"],
-      "@sgh/contratos/catalogo-legado": ["./packages/contratos/src/permissoes/catalogo-legado.ts"],
+      "@sgh/contratos/catalogo-base": ["./packages/contratos/src/permissoes/catalogo-base.ts"],
       "@sgh/contratos/regras-suprimentos": ["./packages/contratos/src/suprimentos/regras/index.ts"],
       "@sgh/contratos/regras-faturamento": ["./packages/contratos/src/faturamento/regras/index.ts"],
       "@sgh/contratos/regras-financeiro": ["./packages/contratos/src/financeiro/regras/index.ts"],

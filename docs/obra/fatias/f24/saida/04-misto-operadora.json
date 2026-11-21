@@ -1,0 +1,52 @@
+[
+ {
+  "tipo": "construcao",
+  "arquivo": "apps/api/src/modulos/qualidade/porta-ccih-propria.ts",
+  "motivo": "45 leituras e as gravações do controle de infecção hospitalar seguem falhando fechadas (leituraPendente/modeloPendente). As tabelas existem; é construção da porta inteira (fatia própria, com spec de integração), grande demais para o lote misto."
+ },
+ {
+  "tipo": "construcao",
+  "arquivo": "apps/api/src/modulos/qualidade/porta-gestao-propria.ts",
+  "motivo": "46 leituras e as gravações da gestão da qualidade (documentos, indicadores, auditorias, comissões) seguem falhando fechadas. Tabelas existem; construção da porta inteira em fatia própria."
+ },
+ {
+  "tipo": "construcao",
+  "arquivo": "apps/api/src/modulos/qualidade/porta-propria.ts",
+  "motivo": "Etapa 2 da notificação de incidente (análise, plano de ação, queixa técnica, sugestão resolvida) e as 7 leituras DE_OUTROS seguem pendentes; tabelas existem."
+ },
+ {
+  "tipo": "observacao",
+  "arquivo": "apps/api/src/modulos/qualidade/apoio-propria.ts e seguranca.controller.ts",
+  "motivo": "O mecanismo modeloPendente/leituraPendente/ehLeituraPendente e o 'indisponiveis' do painel só saem quando as três portas que faltam (controle de infecção, gestão e etapa 2 da notificação) estiverem completas; tirar antes trocaria a recusa por vazio. A porta do agravo já não usa o mecanismo (2ª volta)."
+ },
+ {
+  "tipo": "codigo-compartilhado",
+  "arquivo": "apps/worker/src/contabil/porta-propria.ts e leitura-fatos.service.ts",
+  "motivo": "ler() e gravar() da contabilização automática do worker: a tabela versao_regra_contabil existe, mas a leitura (candidatos, registrados, lançamentos, plano, de-para, regras publicadas, períodos) e a gravação do lote (marcarSituacao e gravarLancamento com trilha) são as da porta da API. Pedido: mover essas consultas e o gravador para um pacote comum (ex.: packages/persistencia ou um módulo contabil compartilhado) e o worker usar a mesma, sem cópia; o NucleoContabilWorker precisa também de escrita (hoje só lerSomente). Fora da .lista (apps/api/src/modulos/contabil/porta-propria.ts)."
+ },
+ {
+  "tipo": "implementacao",
+  "arquivo": "apps/api/src/modulos/operadora/cobranca-porta-propria.ts + cobranca-porta.ts + cobranca-servico.ts",
+  "motivo": "Acordo, renegociação e notificação de inadimplência: o gravador pede proximoAcordo() antes de saber contrato, valores e parcelas, e acordo_inadimplencia exige contrato_plano_id; a assinatura da porta (fora da .lista) precisa mudar para passar o contrato e as parcelas numa chamada só. fatura_plano.acordo_inadimplencia_id já existe."
+ },
+ {
+  "tipo": "implementacao",
+  "arquivo": "apps/api/src/modulos/operadora/ans-porta-propria.ts",
+  "motivo": "GRU e decisão do ressarcimento ao SUS: o CHECK de envio_ans.cobranca_ressarcimento_sus_id entrou, mas a geração do envio da obrigação ressarcimento_sus ainda não cria nem liga a cobranca_ressarcimento_sus e os atendimentos (depende da identificação dos beneficiários do aviso, também pendente). Ligar a geração primeiro, depois pagar() e decidir()."
+ },
+ {
+  "tipo": "implementacao",
+  "arquivo": "apps/api/src/modulos/operadora/ans-porta-propria.ts, atendimento-porta-propria.ts, autorizacao-porta-propria.ts",
+  "motivo": "Seguem dependentes de outra frente: arquivo do envio à ANS e anexos da resposta do prestador (armazenamento em disco, ADR 0004); credenciais, ativação e tentativas do portal do prestador (identidade no módulo de administração); pendências do SIB e bases do SIP, contraprestações do DIOPS e monitoramento TISS (sem fonte no modelo ainda)."
+ },
+ {
+  "tipo": "semente",
+  "tabela": "motivo_contato_beneficiario, vinculo_solicitante_protocolo",
+  "motivo": "O registro do protocolo escolhe o primeiro motivo de contato ativo do tipo da natureza (informacao, reclamacao, solicitacao) e o vínculo do solicitante pelo grau. O comando 'criar novo cliente' deve semear ao menos um motivo de cada tipo e um vínculo por grau usado (proprio, representante_legal, prestador, orgao_publico, terceiro); sem motivo, o registro recusa com 'motivo-contato-ausente'."
+ },
+ {
+  "tipo": "carga",
+  "tabela": "agravo_notificavel, agravo_notificavel_cid, agravo_pergunta, periodicidade_notificacao",
+  "motivo": "A porta do agravo (2ª volta) lê o cadastro de agravos notificáveis e as perguntas da ficha dessas tabelas. É catálogo público do Ministério da Saúde: entra por carregador versionado (regra 7), no 'criar novo cliente'. Sem agravo ativo para o CID, abrir o caso recusa com 'agravo-nao-cadastrado' e a fila não mostra gatilho de CID."
+ }
+]

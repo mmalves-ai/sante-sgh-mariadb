@@ -20,7 +20,7 @@ export const PERMISSOES_M58: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M58_CODIGOS.checklistRegistrar,
     descricao:
       'Registrar, na checklist do desligamento, o substituto em uso ou o aceite de perder cada item do inventário, com a contingência e a evidência (reautenticação)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -29,7 +29,7 @@ export const PERMISSOES_M58: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_M58_CODIGOS.fachadaLer,
     descricao: 'Ver o painel de estado da fachada de compatibilidade da API de integração da Hal-AI',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -38,7 +38,7 @@ export const PERMISSOES_M58: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M58_CODIGOS.fachadaConfigurar,
     descricao:
       'Configurar a fachada da API de integração da Hal-AI (superfícies, escopos de token e escrita, desligada por padrão; reautenticação)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',

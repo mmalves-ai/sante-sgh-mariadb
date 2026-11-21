@@ -48,6 +48,8 @@ export async function limparQualidade(e: Escritor, ests: readonly number[]): Pro
   await e.executar(`DELETE FROM notificacao_incidente WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em}) AND tipo LIKE 'notificacao_incidente_%'`, ests);
   await e.executar(`DELETE FROM feriado WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM notificacao_agravo WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM gatilho_exame_agravo WHERE estabelecimento_id IN (${em})`, ests);
 }
 
 /** `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). */

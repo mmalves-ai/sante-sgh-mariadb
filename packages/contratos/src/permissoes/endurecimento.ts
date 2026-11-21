@@ -19,7 +19,7 @@ export const PERMISSOES_M59: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_CODIGOS.contaBancoLer,
     descricao:
       'Consultar as contas do banco de dados e os seus privilégios (inventário, uso medido e desvios do privilégio mínimo por módulo)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema', 'auditor'],
     categoria: 'tecnica',
@@ -32,7 +32,7 @@ export const PERMISSOES_M59: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_CODIGOS.segredoLegadoLer,
     descricao:
       'Consultar a situação dos segredos de parceiros guardados no banco (convênios, TISS, e-mail, equipamentos): cofre, rotação e retirada',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema', 'auditor'],
     categoria: 'tecnica',
@@ -42,7 +42,7 @@ export const PERMISSOES_M59: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_CODIGOS.segredoLegadoGerir,
     descricao:
       'Guardar no cofre a credencial que o sistema usa com o parceiro e retirar o segredo antigo do banco (depois do fim da contingência)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'tecnica',
@@ -52,7 +52,7 @@ export const PERMISSOES_M59: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_M59_CODIGOS.senhaSecundariaLer,
     descricao: 'Consultar quais usuários ainda têm senha secundária guardada (nunca a senha)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos', 'administrador-sistema', 'auditor'],
     categoria: 'administrativa',
@@ -62,7 +62,7 @@ export const PERMISSOES_M59: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_CODIGOS.senhaSecundariaRetirar,
     descricao:
       'Retirar as senhas secundárias de um usuário (a reautenticação ocupa o lugar delas), depois do fim da contingência',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'administrativa',

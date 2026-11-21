@@ -47,6 +47,7 @@ import {
   TIPOS_DOCUMENTO_PORTAL,
   TIPOS_VINCULO_RESPONSAVEL,
 } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const SEM_OUTRO_SISTEMA = /spdata|legado|sistema atual|sistema antigo/i;
 
@@ -301,7 +302,7 @@ describe('permissões, eventos, liberação e parâmetros', () => {
       expect(FORMATO_CODIGO_PERMISSAO.test(p.codigo)).toBe(true);
       expect(codigos.filter((c) => c === p.codigo)).toHaveLength(1);
       expect(
-        p.opcoesLegado.length > 0 || (p.concessaoPorPerfil === 'por-perfil' && p.perfis!.length > 0),
+        opcoesDoMapa(p.codigo).length > 0 || (p.concessaoPorPerfil === 'por-perfil' && p.perfis!.length > 0),
       ).toBe(true);
       expect(p.descricao).not.toMatch(SEM_OUTRO_SISTEMA);
     }
@@ -312,9 +313,9 @@ describe('permissões, eventos, liberação e parâmetros', () => {
   it('as do portal só vão a perfil de portal; as internas nunca a perfil de portal', () => {
     for (const p of PERMISSOES_PORTAL_M50) {
       if (p.concessaoPorPerfil === 'por-perfil') {
-        expect(p.opcoesLegado).toEqual([]);
+        expect(opcoesDoMapa(p.codigo)).toEqual([]);
         for (const perfil of p.perfis!) expect(perfil.startsWith('portal-')).toBe(true);
-      } else expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      } else expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
     }
     const criticas = PERMISSOES_PORTAL_M50.filter((p) => p.criticidade === 'critica').map((p) => p.codigo);
     expect(criticas).toEqual([

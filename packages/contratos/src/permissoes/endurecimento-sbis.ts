@@ -18,7 +18,7 @@ export const PERMISSOES_M59_F5: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F5_CODIGOS.sbisLer,
     descricao:
       'Consultar a certificação: requisitos, pacote de evidências, autoavaliações, pré-auditorias e auditorias',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor', 'administrador-sistema', 'gestao-qualidade'],
     categoria: 'tecnica',
@@ -28,7 +28,7 @@ export const PERMISSOES_M59_F5: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F5_CODIGOS.sbisAvaliar,
     descricao:
       'Conduzir a autoavaliação, registrar a pré-auditoria e a auditoria, as não conformidades e a correção de cada uma',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestao-qualidade'],
     categoria: 'tecnica',
@@ -37,7 +37,7 @@ export const PERMISSOES_M59_F5: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_M59_F5_CODIGOS.concessaoEncerrar,
     descricao: 'Encerrar ou reabrir uma concessão da coexistência no termo, com a evidência do endurecimento',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'tecnica',
@@ -47,7 +47,7 @@ export const PERMISSOES_M59_F5: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F5_CODIGOS.backupRegistrar,
     descricao:
       'Registrar o relatório da restauração do backup (diária e mensal, com a verificação de integridade)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['operador-backup'],
     categoria: 'tecnica',

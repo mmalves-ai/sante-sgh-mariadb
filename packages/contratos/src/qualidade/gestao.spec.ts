@@ -13,6 +13,7 @@ import {
   rotuloTipoEnvioRegulatorio,
   TIPOS_COMISSAO,
 } from './gestao.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const manifestacao = {
   canal: 'telefone',
@@ -108,7 +109,7 @@ describe('vocabulário e permissões', () => {
     expect(PERMISSOES_QUALIDADE_GESTAO_M48).toHaveLength(9);
     for (const p of PERMISSOES_QUALIDADE_GESTAO_M48) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado).toEqual([]);
+      expect(opcoesDoMapa(p.codigo)).toEqual([]);
     }
     expect(
       PERMISSOES_QUALIDADE_GESTAO_M48.find((p) => p.codigo === 'qualidade.documento.ler')?.concessaoPorPerfil,

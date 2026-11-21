@@ -3,9 +3,20 @@
 // no beforeAll e apagada no afterAll. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { NucleoProprio } from '@sgh/nucleo';
+import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
 import { PortaIntegracaoFolhaPropria } from './porta-integracao-propria.js';
+import { OPERACAO_TITULOS_FOLHA } from './servico-integracao.js';
+
+const codigo = async (p: Promise<unknown>) => {
+  try {
+    await p;
+    return 'ok';
+  } catch (e) {
+    return e instanceof ErroOperacao ? String(e.problema.codigo) : String(e);
+  }
+};
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -24,6 +35,16 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
 
   async function limpar() {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-03-07' }, async (e) => {
+      await e.executar(
+        `DELETE d FROM integracao_folha_financeiro_destino d
+           JOIN natureza_financeira n ON n.id = d.natureza_financeira_id WHERE n.codigo = ?`,
+        [COD.natureza],
+      );
+      await e.executar(
+        `DELETE i FROM integracao_folha_financeiro i
+          WHERE i.vigencia_inicio >= '2099-01-01'
+            AND NOT EXISTS (SELECT 1 FROM integracao_folha_financeiro_destino d WHERE d.integracao_folha_financeiro_id = i.id)`,
+      );
       await e.executar(
         'DELETE p FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE t.numero = ?',
         [NUMERO_TITULO],
@@ -147,11 +168,78 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
     expect(await porta.naturezasForaDoContrato(ctx())).toBeGreaterThanOrEqual(0);
   });
 
-  it('operações sem modelo recusam com 503 (nunca vazio)', async () => {
-    await expect(porta.integracoes()).rejects.toMatchObject({
-      problema: { status: 503, codigo: 'modelo-pendente' },
+  it('de-para: grava a vigência com os destinos, relê, recusa a repetida e a conta sugerida sem coluna', async () => {
+    const conta = await nucleo.lerSomente(ctx(), (l) =>
+      l.uma<{ id: number; login: string }>('SELECT id, login FROM usuario WHERE excluido_em IS NULL ORDER BY id LIMIT 1'),
+    );
+    const login = String(conta?.login ?? '');
+    expect(login).not.toBe('');
+    // A auditoria (quem criou) é a conta da sessão.
+    const cc = () => ({ cliente: CLIENTE, estabelecimento: est, usuario: Number(conta?.id), correlacao: 'teste-03-07' });
+    // O teste dos credores inativa o fornecedor sintético: o de-para precisa dele ativo.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'ativar-03-07' }, (e) =>
+      e.executar("UPDATE empresa_fornecedora SET situacao = 'ativo' WHERE id = ?", [credor]),
+    );
+    const classificacao = { grupo: Number(COD.grupo), subgrupo: Number(COD.subgrupo), item: Number(COD.natureza) };
+    const destinos = [
+      { destino: 'liquido-mensal' as const, credor, classificacao, diaVencimento: 5, mesesDepois: 1, contaContabil: '' },
+      { destino: 'fgts' as const, credor, classificacao, diaVencimento: 20, mesesDepois: 0, contaContabil: '' },
+    ];
+    const trilha = (r: number): TrilhaDaGravacao => ({
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao',
+      entidade: 'integracao_folha_financeiro',
+      entidadeId: r,
+      dadosDepois: { evento: 'teste' },
+      correlacao: 'teste-03-07',
     });
-    await expect(porta.lancamentos()).rejects.toMatchObject({ problema: { status: 503 } });
-    expect(await porta.podeGravar()).toMatchObject({ pode: false });
+    const id = await porta.gravarSgh(cc(), trilha, (g) =>
+      g.incluirIntegracao({ empresa: est, inicio: '2099-08-01', destinos, por: login }),
+    );
+    const lidas = await porta.integracoes(cc(), est);
+    const v = lidas.find((x) => x.id === id);
+    expect(v).toMatchObject({ empresa: est, inicio: '2099-08-01', criadoPor: login });
+    expect(v?.destinos).toEqual([
+      { ...destinos[0], rotina: 4 },
+      { ...destinos[1], rotina: 15 },
+    ]);
+    expect(
+      await codigo(
+        porta.gravarSgh(cc(), trilha, (g) =>
+          g.incluirIntegracao({ empresa: est, inicio: '2099-08-01', destinos, por: login }),
+        ),
+      ),
+    ).toBe('vigencia-repetida');
+    expect(
+      await codigo(
+        porta.gravarSgh(cc(), trilha, (g) =>
+          g.incluirIntegracao({
+            empresa: est,
+            inicio: '2099-09-01',
+            destinos: [{ ...destinos[0]!, contaContabil: '3.1.1' }],
+            por: login,
+          }),
+        ),
+      ),
+    ).toBe('modelo-pendente');
+    expect(
+      await codigo(
+        porta.gravarSgh(cc(), trilha, (g) =>
+          g.incluirIntegracao({
+            empresa: est,
+            inicio: '2099-09-01',
+            destinos: [{ ...destinos[0]!, classificacao: { ...classificacao, item: classificacao.item + 1 } }],
+            por: login,
+          }),
+        ),
+      ),
+    ).toBe('classificacao-inexistente');
+    expect((await porta.integracoes(cc(), est)).some((x) => x.inicio === '2099-09-01')).toBe(false);
+  });
+
+  it('lançamento dos títulos ainda não ligado: recusa com 503 (nunca vazio) e liberação negada', async () => {
+    await expect(porta.lancamentos()).rejects.toMatchObject({ problema: { status: 503, codigo: 'modelo-pendente' } });
+    expect(await porta.podeGravar(ctx(), OPERACAO_TITULOS_FOLHA)).toMatchObject({ pode: false });
   });
 });

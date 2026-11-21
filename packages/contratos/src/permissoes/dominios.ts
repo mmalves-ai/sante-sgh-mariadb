@@ -20,7 +20,7 @@ export const PERMISSOES_DOMINIOS: readonly DeclaracaoPermissao[] = DOMINIOS_DECL
   d.acoes.map((a): DeclaracaoPermissao => ({
     codigo: permissaoDoDominio(d, a),
     descricao: `${VERBO[a] ?? a} ${d.rotulo.plural.toLowerCase()} (CRUD genérico)`,
-    opcoesLegado: d.opcoesLegado[a] ?? d.opcoesLegado.ler,
+
     // M56 (D-PERM-56): o domínio com perfis próprios também é concedido por perfil.
     ...(d.perfis
       ? {
@@ -39,14 +39,14 @@ export const PERMISSOES_CONFIG_M08 = [
   {
     codigo: 'config.dominio.ler',
     descricao: 'Ver o índice dos domínios e tabelas auxiliares (só os que a pessoa pode ler)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     categoria: 'administrativa',
   },
   {
     codigo: 'config.parametro.ler',
     descricao: 'Ver os parâmetros configuráveis e os gravados no banco de dados, com a origem do valor',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -54,7 +54,7 @@ export const PERMISSOES_CONFIG_M08 = [
   {
     codigo: 'config.parametro.editar',
     descricao: 'Definir parâmetro do sistema novo por nível (com justificativa; crítico pede a senha)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -63,7 +63,7 @@ export const PERMISSOES_CONFIG_M08 = [
   {
     codigo: 'config.liberacao.ler',
     descricao: 'Ver as funcionalidades por estabelecimento (chaves de liberação e pré-requisitos)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -71,7 +71,7 @@ export const PERMISSOES_CONFIG_M08 = [
   {
     codigo: 'config.liberacao.editar',
     descricao: 'Ligar ou desligar funcionalidade por estabelecimento, setor ou pessoa (reautenticação)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',

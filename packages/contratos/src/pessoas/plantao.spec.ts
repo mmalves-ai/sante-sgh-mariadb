@@ -18,6 +18,7 @@ import {
   PERCENTUAL_ENFERMEIROS_SCP,
   TURNO_CLASSIFICACAO_DA_ESCALA,
 } from './plantao-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const motivo = 'Compromisso familiar no dia';
 
@@ -97,15 +98,16 @@ describe('contratos da fatia F3 (M52.3)', () => {
       'pessoas.dimensionamento.ler',
       'pessoas.dimensionamento.calcular',
     ]);
-    for (const c of ['pessoas.troca.aprovar', 'pessoas.dimensionamento.calcular'])
+    for (const c of ['pessoas.troca.aprovar', 'pessoas.dimensionamento.calcular']) {
+      expect(opcoesDoMapa(c)).toEqual([]);
       expect(por.get(c)).toMatchObject({
-        opcoesLegado: [],
         concessaoPorPerfil: 'por-perfil',
         perfis: ['gestor-escala'],
       });
+    }
     for (const c of ['pessoas.troca.pedir', 'pessoas.plantao.ler'])
       expect(por.get(c)?.concessaoPorPerfil).toBe('todos-os-perfis-de-pessoa');
-    expect(por.get('pessoas.sobreaviso.acionar')?.opcoesLegado).toEqual([3399, 5073]);
+    expect(opcoesDoMapa(por.get('pessoas.sobreaviso.acionar')?.codigo)).toEqual([3399, 5073]);
   });
 
   it('chave do dimensionamento com o pré-requisito e os eventos auditáveis', () => {

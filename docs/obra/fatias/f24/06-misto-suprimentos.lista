@@ -1,0 +1,19 @@
+# assunto: suprimentos+integracao+acesso+farmacia+atendimento
+# cliente_teste: f24_06mistosuprimentos
+apps/api/src/modulos/suprimentos/manipulacao-porta-propria.ts
+apps/api/src/modulos/suprimentos/operacoes.ts
+apps/api/src/modulos/suprimentos/opme-porta-propria.ts
+apps/api/src/modulos/suprimentos/porta-propria.ts
+packages/contratos/src/integracao/segredos-legado.ts
+packages/dominio-integracao/dist/apoio.d.ts
+packages/dominio-integracao/dist/fachada/convenio-situacao.d.ts
+packages/dominio-integracao/dist/fachada/convenios.d.ts
+packages/dominio-integracao/dist/hl7/mensagem.d.ts
+apps/api/src/modulos/acesso/fonte-sintetica.ts
+apps/web/src/modulos/acesso/i18n-segredos.ts
+packages/contratos/src/acesso/tabelas-clinicas.gerado.ts
+apps/api/src/modulos/farmacia/gravador-avaliacao.ts
+apps/api/src/modulos/farmacia/operacoes.ts
+apps/api/src/modulos/farmacia/porta-propria.ts
+packages/dominio-atendimento/dist/impressos.d.ts
+packages/dominio-atendimento/dist/teleconsulta/regras.d.ts

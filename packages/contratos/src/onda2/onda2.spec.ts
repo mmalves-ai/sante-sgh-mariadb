@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recursoDesligado } from '../liberacao/recursos.js';
-import { operacoesDoSetor, SETORES_PRONTIDAO } from '../prontidao/catalogo.js';
+import { SETORES_PRONTIDAO } from '../prontidao/catalogo.js';
 import {
   esquemaAcompanhamentoOnda2,
   esquemaJanelaSemVersao,
@@ -9,7 +9,6 @@ import {
   esquemaPedidoContingencia,
   ITENS_CALCULADOS_ONDA_2,
   ITENS_REGISTRAVEIS_ONDA_2,
-  EXCECOES_REGRA_15,
   ITENS_CRITERIO_GERAIS,
   ITENS_CRITERIO_LIBERACAO,
   ITENS_CRITERIO_POR_SETOR_ONDA_2,
@@ -20,7 +19,6 @@ import {
   RECURSOS_SO_NO_NOVO,
   ROTULOS_CRITERIO_LIBERACAO,
   SETORES_ONDA_2,
-  TABELAS_NUNCA_GRAVADAS,
 } from './onda2.js';
 
 describe('onda 2: setores e ordem (campo 12)', () => {
@@ -76,17 +74,7 @@ describe('onda 2: critério de liberação (regra 1 e condições da onda)', () 
   });
 });
 
-describe('onda 2: regras 14, 15 e 16', () => {
-  it('exceções da regra 15 só em tabelas proibidas e operações de setores da onda', () => {
-    const setores = SETORES_PRONTIDAO.filter((s) => SETORES_ONDA_2.includes(s.id));
-    for (const e of EXCECOES_REGRA_15) {
-      expect(TABELAS_NUNCA_GRAVADAS).toContain(e.tabela);
-      expect(
-        setores.some((s) => operacoesDoSetor(s, [e.operacao]).length > 0),
-        e.operacao,
-      ).toBe(true);
-    }
-  });
+describe('onda 2: regras 14 e 16', () => {
   it('janelas sem versão válidas; a invertida é recusada', () => {
     for (const j of JANELAS_SEM_VERSAO_PADRAO) expect(esquemaJanelaSemVersao.parse(j)).toEqual(j);
     expect(() =>

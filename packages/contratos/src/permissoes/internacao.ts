@@ -14,14 +14,6 @@
 // (`config.parametro.editar`, M08).
 import type { DeclaracaoPermissao } from './tipos.js';
 
-export const OPCOES_LEITOS = [2322, 3990, 2483, 2428, 4555, 6009, 5012] as const;
-export const OPCOES_CENSO = [2378, 2517, 2548, 2549, 2564, 5415, 5595] as const;
-export const OPCOES_CENSO_EXPORTAR = [2549, 2548, 5415, 5595] as const;
-export const OPCOES_PAINEIS = [2324, 6785, 6789] as const;
-export const OPCOES_INDICADORES = [2517, 2324, 6785, 6789] as const;
-export const OPCOES_INDICADORES_EXPORTAR = [2517, 6790] as const;
-export const OPCOES_FINANCEIRO = [1169] as const;
-
 export const PERMISSOES_M16_CODIGOS = {
   leitosLer: 'internacao.leitos.ler',
   censoLer: 'internacao.censo.ler',
@@ -40,7 +32,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
     codigo: C.leitosLer,
     descricao:
       'Ver o painel de leitos ao vivo (ocupação por bloco e acomodação; cartão sem nome) e a divergência de cadastro de leitos',
-    opcoesLegado: [...OPCOES_LEITOS],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -48,7 +40,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.censoLer,
     descricao: 'Ver o censo hospitalar diário (dia em aberto, dias fechados e a série desde 2020)',
-    opcoesLegado: [...OPCOES_CENSO],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -56,7 +48,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.censoExportar,
     descricao: 'Exportar o censo hospitalar diário e a série (planilha, só contagens)',
-    opcoesLegado: [...OPCOES_CENSO_EXPORTAR],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -64,7 +56,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.paineisLer,
     descricao: 'Ver os painéis gerenciais assistencial e operacional (só contagens agregadas)',
-    opcoesLegado: [...OPCOES_PAINEIS],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -73,7 +65,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
     codigo: C.financeiroLer,
     descricao:
       'Ver o painel financeiro nas duas réguas (data do item e competência da conta), com a glosa sobre os itens baixados',
-    opcoesLegado: [...OPCOES_FINANCEIRO],
+
     concessaoPorPerfil: null,
     categoria: 'financeira',
     criticidade: 'sensivel',
@@ -82,7 +74,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
     codigo: C.indicadoresLer,
     descricao:
       'Ver os indicadores hospitalares com a ficha técnica, a série, os recortes, o ano anterior e o detalhe',
-    opcoesLegado: [...OPCOES_INDICADORES],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -90,7 +82,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.indicadoresExportar,
     descricao: 'Exportar a série de um indicador (planilha com numerador e denominador)',
-    opcoesLegado: [...OPCOES_INDICADORES_EXPORTAR],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -98,7 +90,7 @@ export const PERMISSOES_M16: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.biAcessar,
     descricao: 'Abrir a análise livre no BI (data mart sem dado pessoal, a partir da cópia diária)',
-    opcoesLegado: [6785, 6789],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',

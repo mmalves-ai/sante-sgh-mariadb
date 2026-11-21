@@ -6,7 +6,7 @@
 // Rodado direto pelo Node, imprime o catálogo em JSON (uma linha), que o carregador lê:
 //   node --import ./tools/verificadores/src/caminhos-sgh.ts tools/db/acoes-sistema.ts
 import { CATALOGO_DECLARADO, type DeclaracaoPermissao } from '@sgh/contratos';
-import { CATALOGO_LEGADO } from '@sgh/contratos/catalogo-legado';
+import { CATALOGO_BASE } from '@sgh/contratos/catalogo-base';
 
 /** Valores do CHECK ck_acao_sistema_tipo_acao (db/migracoes/02_ADM/01_tabelas.sql). */
 export const TIPOS_ACAO = [
@@ -81,7 +81,7 @@ export interface AcaoSistema {
 
 /** O catálogo completo do produto (o mesmo que a API usa para autorizar). */
 export function catalogoDoProduto(): readonly DeclaracaoPermissao[] {
-  return [...CATALOGO_LEGADO, ...CATALOGO_DECLARADO];
+  return [...CATALOGO_BASE, ...CATALOGO_DECLARADO];
 }
 
 /**

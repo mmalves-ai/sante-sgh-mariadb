@@ -1,6 +1,7 @@
 import type { DeclaracaoPermissao } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { conceder, type ConcessoesLegado } from './concessao.js';
+import type { CorrespondenciaOrigem } from './mapa-origem.js';
 import { aplicarSegregacao, podeConceder } from './segregacao.js';
 import { destinoDoGrupo } from './mapa-grupos.js';
 
@@ -8,36 +9,31 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'pep.evolucao.ler',
     descricao: 'x',
-    opcoesLegado: [1],
     concessaoPorPerfil: null,
     categoria: 'clinica',
   },
   {
     codigo: 'pep.evolucao.criar',
     descricao: 'x',
-    opcoesLegado: [2],
     concessaoPorPerfil: null,
     categoria: 'clinica',
   },
-  { codigo: 'faturamento.conta.fechar', descricao: 'x', opcoesLegado: [3], concessaoPorPerfil: null },
-  { codigo: 'faturamento.conta.ler', descricao: 'x', opcoesLegado: [4], concessaoPorPerfil: null },
+  { codigo: 'faturamento.conta.fechar', descricao: 'x', concessaoPorPerfil: null },
+  { codigo: 'faturamento.conta.ler', descricao: 'x', concessaoPorPerfil: null },
   {
     codigo: 'acesso.senha.trocar',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: 'acesso.perfil.conceder',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor'],
   },
   {
     codigo: 'sadt.laudo.criar',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema', 'gestor-acessos'],
     categoria: 'clinica',
@@ -45,10 +41,16 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'auditoria.trilha.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor', 'gestor-acessos'],
   },
+];
+/** Mapa do conector (origem → permissão) do catálogo de teste. */
+const MAPA_ORIGEM: CorrespondenciaOrigem[] = [
+  { tipo: 'opcao_menu', chave: '1', permissao: 'pep.evolucao.ler' },
+  { tipo: 'opcao_menu', chave: '2', permissao: 'pep.evolucao.criar' },
+  { tipo: 'opcao_menu', chave: '3', permissao: 'faturamento.conta.fechar' },
+  { tipo: 'opcao_menu', chave: '4', permissao: 'faturamento.conta.ler' },
 ];
 const legado = (c: Partial<ConcessoesLegado>): ConcessoesLegado => ({
   grupo: null,
@@ -62,7 +64,11 @@ const legado = (c: Partial<ConcessoesLegado>): ConcessoesLegado => ({
 
 describe('segregação nas telas do novo (regra 9)', () => {
   it('Gestor de acessos não lê a trilha', () => {
-    const r = conceder({ legado: legado({ papeis: [0] }), catalogo: CATALOGO });
+    const r = conceder({
+      legado: legado({ papeis: [0] }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(r.permissoes.has('auditoria.trilha.ler')).toBe(false);
     expect(r.retiradas).toContainEqual({
       permissao: 'auditoria.trilha.ler',
@@ -71,7 +77,11 @@ describe('segregação nas telas do novo (regra 9)', () => {
   });
 
   it('Auditor: recurso novo de escrita retirado; o que o legado concede e o autosserviço ficam (regra 4)', () => {
-    const r = conceder({ legado: legado({ papeis: [2], grupo: 'MEDICOS' }), catalogo: CATALOGO });
+    const r = conceder({
+      legado: legado({ papeis: [2], grupo: 'MEDICOS' }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(r.permissoes.has('auditoria.trilha.ler')).toBe(true);
     expect(r.permissoes.has('pep.evolucao.ler')).toBe(true);
     // Escrita só de perfil do novo: retirada.
@@ -89,7 +99,11 @@ describe('segregação nas telas do novo (regra 9)', () => {
   });
 
   it('perfil administrativo: o que o legado concede fica (conflito à revisão); clínico só de perfil sai', () => {
-    const r = conceder({ legado: legado({ grupo: 'FATURAMENTO', papeis: [0] }), catalogo: CATALOGO });
+    const r = conceder({
+      legado: legado({ grupo: 'FATURAMENTO', papeis: [0] }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(r.permissoes.has('pep.evolucao.ler')).toBe(true);
     expect(r.permissoes.has('faturamento.conta.fechar')).toBe(true);
     expect(r.conflitos).toContainEqual({
@@ -104,12 +118,20 @@ describe('segregação nas telas do novo (regra 9)', () => {
   });
 
   it('Administrador do sistema sem perfil assistencial: clínico só de perfil sai; o do legado fica', () => {
-    const semPerfil = conceder({ legado: legado({ papeis: [1], grupo: 'MASTER' }), catalogo: CATALOGO });
+    const semPerfil = conceder({
+      legado: legado({ papeis: [1], grupo: 'MASTER' }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(semPerfil.permissoes.has('sadt.laudo.criar')).toBe(false);
     expect(semPerfil.retiradas.map((x) => x.motivo)).toContain('administrador-sem-perfil-assistencial');
     expect(semPerfil.permissoes.has('pep.evolucao.ler')).toBe(true);
     expect(semPerfil.conflitos.map((x) => x.motivo)).toContain('administrador-sem-perfil-assistencial');
-    const medico = conceder({ legado: legado({ papeis: [1], grupo: 'MEDICOS' }), catalogo: CATALOGO });
+    const medico = conceder({
+      legado: legado({ papeis: [1], grupo: 'MEDICOS' }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(medico.permissoes.has('sadt.laudo.criar')).toBe(true);
   });
 

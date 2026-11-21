@@ -47,12 +47,34 @@ export function ctxO3(est: number, usuario: number | null, codigo?: string): Con
 
 export async function limparO3(e: Escritor, ests: readonly number[]): Promise<void> {
   const em = ests.map(() => '?').join(', ');
+  // O PDI, as correções (a versão nova aponta para a anterior), as ligações ao cargo e as competências do estabelecimento.
+  await e.executar(`DELETE FROM plano_desenvolvimento WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `UPDATE avaliacao_desempenho SET avaliacao_anterior_id = NULL, motivo_correcao = NULL WHERE estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
+    `DELETE cc FROM cargo_competencia cc JOIN competencia_avaliacao k ON k.id = cc.competencia_avaliacao_id WHERE k.estabelecimento_id IN (${em})`,
+    ests,
+  );
   await e.executar(
     `DELETE i FROM avaliacao_desempenho_item i JOIN avaliacao_desempenho a ON a.id = i.avaliacao_desempenho_id WHERE a.estabelecimento_id IN (${em})`,
     ests,
   );
   await e.executar(`DELETE FROM avaliacao_desempenho WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM ciclo_avaliacao WHERE estabelecimento_id IN (${em})`, ests);
+  // Os critérios que as competências criaram nos modelos (código competencia-<id>), sem nota que os use.
+  await e.executar(
+    `UPDATE competencia_avaliacao SET criterio_avaliacao_id = NULL WHERE estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
+    `DELETE c FROM criterio_avaliacao c JOIN competencia_avaliacao k ON c.codigo = CONCAT('competencia-', k.id)
+      WHERE k.estabelecimento_id IN (${em})
+        AND NOT EXISTS (SELECT 1 FROM avaliacao_desempenho_item i WHERE i.criterio_avaliacao_id = c.id)`,
+    ests,
+  );
+  await e.executar(`DELETE FROM competencia_avaliacao WHERE estabelecimento_id IN (${em})`, ests);
   const doAtestado = `SELECT a.id FROM atestado_colaborador a JOIN solicitacao_colaborador s ON s.id = a.solicitacao_colaborador_id WHERE s.estabelecimento_id IN (${em})`;
   await e.executar(
     `DELETE FROM atestado_colaborador_acesso WHERE atestado_colaborador_id IN (SELECT id FROM (${doAtestado}) x)`,

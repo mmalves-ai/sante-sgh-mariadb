@@ -4,21 +4,20 @@ import type { DeclaracaoPermissao } from '@sgh/contratos';
 import { CATALOGO_DECLARADO } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { conceder, concederAcessoTotal, indexarCatalogo, type ConcessoesLegado } from './concessao.js';
+import type { CorrespondenciaOrigem } from './mapa-origem.js';
 import { conferirSessaoComo, podeAcessoTotal, type ContaRegra } from './suporte.js';
 
 const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'pep.evolucao.ler',
     descricao: 'x',
-    opcoesLegado: [10],
     concessaoPorPerfil: null,
     categoria: 'clinica',
   },
-  { codigo: 'recepcao.cadastro.criar', descricao: 'x', opcoesLegado: [20], concessaoPorPerfil: null },
+  { codigo: 'recepcao.cadastro.criar', descricao: 'x', concessaoPorPerfil: null },
   {
     codigo: 'config.schema.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'tecnica',
@@ -26,7 +25,6 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'auditoria.trilha.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor'],
     categoria: 'tecnica',
@@ -34,9 +32,13 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'acesso.inicio.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
+];
+/** Mapa do conector (origem → permissão) do catálogo de teste. */
+const MAPA_ORIGEM: CorrespondenciaOrigem[] = [
+  { tipo: 'opcao_menu', chave: '10', permissao: 'pep.evolucao.ler' },
+  { tipo: 'opcao_menu', chave: '20', permissao: 'recepcao.cadastro.criar' },
 ];
 
 const base = (c: Partial<ConcessoesLegado> = {}): ConcessoesLegado => ({
@@ -51,7 +53,7 @@ const base = (c: Partial<ConcessoesLegado> = {}): ConcessoesLegado => ({
 
 describe('acesso total da plataforma', () => {
   it('concede TODAS as permissões do catálogo, inclusive as das opções do legado e as clínicas', () => {
-    const r = concederAcessoTotal(indexarCatalogo(CATALOGO));
+    const r = concederAcessoTotal(indexarCatalogo(CATALOGO, [], MAPA_ORIGEM));
     expect([...r.permissoes]).toEqual(CATALOGO.map((p) => p.codigo).sort());
     expect(r.retiradas).toEqual([]);
     expect(r.origens.get('pep.evolucao.ler')).toEqual([{ tipo: 'acesso-total' }]);
@@ -62,10 +64,11 @@ describe('acesso total da plataforma', () => {
     const comum = conceder({
       legado: base({ papeis: [0, 2], opcoesGrupo: [10] }),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
       perfisConcedidos: [{ perfil: 'auditor', inicio: new Date(0), fim: null }],
     });
     expect(comum.retiradas.length).toBeGreaterThan(0);
-    const total = concederAcessoTotal(indexarCatalogo(CATALOGO));
+    const total = concederAcessoTotal(indexarCatalogo(CATALOGO, [], MAPA_ORIGEM));
     expect(total.permissoes.has('auditoria.trilha.ler')).toBe(true);
     expect(total.permissoes.has('recepcao.cadastro.criar')).toBe(true);
   });
@@ -123,9 +126,14 @@ describe('acesso total da plataforma', () => {
 describe('mapa grupo → perfil aprovado (ADR 0022)', () => {
   it('aprovar muda as permissões efetivas de quem é do grupo; proposta não concede', () => {
     const legado = base({ grupo: 'DIRETOR_FINANCEIRO', opcoesGrupo: [20] });
-    const antes = conceder({ legado, catalogo: CATALOGO });
+    const antes = conceder({ legado, catalogo: CATALOGO, mapaOrigem: MAPA_ORIGEM });
     expect(antes.permissoes.has('config.schema.ler')).toBe(false);
-    const depois = conceder({ legado, catalogo: CATALOGO, perfisDoGrupo: ['administrador-sistema'] });
+    const depois = conceder({
+      legado,
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+      perfisDoGrupo: ['administrador-sistema'],
+    });
     expect(depois.permissoes.has('config.schema.ler')).toBe(true);
     expect(depois.origensPerfis.get('administrador-sistema')).toEqual(['grupo']);
     expect(depois.origens.get('config.schema.ler')).toEqual([
@@ -137,12 +145,14 @@ describe('mapa grupo → perfil aprovado (ADR 0022)', () => {
     const semGrupo = conceder({
       legado: base(),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
       perfisDoGrupo: ['administrador-sistema'],
     });
     expect(semGrupo.permissoes.has('config.schema.ler')).toBe(false);
     const painel = conceder({
       legado: base({ grupo: 'PAINEIS' }),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
       perfisDoGrupo: ['administrador-sistema'],
     });
     expect(painel.permissoes.has('config.schema.ler')).toBe(false);
@@ -156,7 +166,6 @@ describe('mapa grupo → perfil aprovado (ADR 0022)', () => {
         {
           codigo: 'pep.escala.ler',
           descricao: 'x',
-          opcoesLegado: [],
           concessaoPorPerfil: 'por-perfil',
           perfis: ['administrador-sistema'],
           categoria: 'clinica',

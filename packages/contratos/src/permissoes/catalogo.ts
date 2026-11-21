@@ -1,6 +1,6 @@
-// Catálogo das permissões DECLARADAS à mão pelos módulos (recursos novos e as que as fichas nomeiam). As
-// geradas da árvore do legado ficam em catalogo-legado.ts (gerado; `@sgh/contratos/catalogo-legado`, fora
-// do índice para não entrar no pacote da tela).
+// Catálogo das permissões DECLARADAS à mão pelos módulos (recursos novos e as que as fichas nomeiam). O
+// catálogo-base do produto fica em catalogo-base.ts (`@sgh/contratos/catalogo-base`, fora do índice para não entrar
+// no pacote da tela).
 import { CATALOGO_ACESSO } from './acesso.js';
 import { PERMISSOES_CONFIG_COEXISTENCIA } from './config.js';
 import { PERMISSOES_M09 } from './sistema.js';

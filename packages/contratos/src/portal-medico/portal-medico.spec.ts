@@ -21,6 +21,7 @@ import {
   esquemaTrocarSenhaMedico,
   esquemaVincularMedicoExterno,
 } from './portal-medico.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const pedido = {
   sala: 2,
@@ -77,14 +78,16 @@ describe('permissões, eventos e chave', () => {
   it('as internas pela opção do outro sistema; as do portal só pelo perfil da sessão do portal', () => {
     const P = PERMISSOES_CODIGOS_PORTAL_MEDICO;
     const por = new Map(PERMISSOES_PORTAL_MEDICO_M50.map((p) => [p.codigo, p]));
-    expect(por.get(P.contasLer)?.opcoesLegado).toEqual([4748]);
-    expect(por.get(P.vincular)).toMatchObject({ opcoesLegado: [4748], criticidade: 'sensivel' });
-    for (const c of [P.extratoLer, P.agendaLer, P.cirurgiaPedir, P.pacientesLer])
+    expect(opcoesDoMapa(por.get(P.contasLer)?.codigo)).toEqual([4748]);
+    expect(opcoesDoMapa(P.vincular)).toEqual([4748]);
+    expect(por.get(P.vincular)).toMatchObject({ criticidade: 'sensivel' });
+    for (const c of [P.extratoLer, P.agendaLer, P.cirurgiaPedir, P.pacientesLer]) {
+      expect(opcoesDoMapa(c)).toEqual([]);
       expect(por.get(c)).toMatchObject({
-        opcoesLegado: [],
         concessaoPorPerfil: 'por-perfil',
         perfis: PERFIS_SESSAO_PORTAL_MEDICO,
       });
+    }
   });
   it('os eventos do portal do médico existem, sem trilha do legado, e não repetem código', () => {
     const doMedico = CATALOGO_EVENTOS.filter((e) => e.codigo.startsWith('portal.medico.'));

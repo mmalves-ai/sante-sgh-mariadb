@@ -67,26 +67,69 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
     await encerrarMassaPatrimonio(m);
   });
 
-  const contarTrilha = async () =>
-    Number(
-      (
-        await m!.nucleo.lerSomente({ cliente: CLIENTE_PAT, correlacao: 'int-0211-aj' }, (l) =>
-          l.uma<{ n: number }>("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'bem_patrimonial' AND entidade_id = ?", [bem]),
-        )
-      )?.n,
+  it('registrar e estornar o ajuste: grava o ajuste com a trilha, sobe a versão do bem e estorna uma vez só', async () => {
+    const c = contextoPat(m!);
+    const antes = (await porta.bem(c, bem))!;
+    const trilha = trilhaPat(m!, 'patrimonio.ajuste.registrado', 'ajuste_valor_bem', bem);
+    await expect(
+      porta.registrarAjuste(contextoPat(m!), { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' }, 't', () => ({
+        impedimento: { codigo: 'sem-conta', detalhe: 'Sem a conta da perda.' },
+      }), trilha),
+    ).rejects.toMatchObject({ problema: { codigo: 'sem-conta' } });
+    let vista: { bem: number; marco: unknown; contas: boolean } | null = null;
+    const a = await porta.registrarAjuste(
+      contextoPat(m!),
+      { bem, versao: antes.versao, motivo: 'Teste de recuperabilidade sintético', hoje: '2026-11-21' },
+      't',
+      (s) => {
+        vista = { bem: s.bem.id, marco: s.marco, contas: s.contasConfiguradas };
+        return {
+          ajuste: {
+            tipo: 'impairment',
+            competenciaMarco: '2025-12',
+            data: '2025-12-31',
+            valorContabilAntesCent: 50_000_00,
+            valorContabilDepoisCent: 40_000_00,
+            acumuladaMarcoCent: 10_000_00,
+            perdaCent: 10_000_00,
+            residualCent: 0,
+            vidaRestanteMeses: 49,
+            valorJustoCent: null,
+            laudo: null,
+            origem: 'tela',
+          },
+        };
+      },
+      trilha,
     );
+    expect(vista).toEqual({ bem, marco: null, contas: expect.any(Boolean) });
+    expect(a).toMatchObject({ bem, tipo: 'impairment', competenciaMarco: '2025-12', perdaCent: 10_000_00, estorno: null });
+    expect(a.registradoEm).not.toBe('');
+    const depois = (await porta.bem(c, bem))!;
+    expect(depois.versao).toBeGreaterThan(antes.versao);
+    await expect(
+      porta.registrarAjuste(contextoPat(m!), { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' }, 't', () => {
+        throw new Error('não deveria planejar');
+      }, trilha),
+    ).rejects.toMatchObject({ problema: { codigo: 'desatualizado' } });
+    expect((await porta.ajustes(c, bem)).map((x) => x.id)).toEqual([a.id]);
+    // O marco vale para a depreciação das competências seguintes, não para a própria.
+    const marco = (await porta.bensParaDepreciar(c, 1, '2026-01')).bens.find((b) => b.id === bem)?.marco;
+    expect(marco).toMatchObject({ ajuste: a.id, competencia: '2025-12', baseCent: 40_000_00, vidaRestanteMeses: 49 });
+    expect((await porta.bensParaDepreciar(c, 1, '2025-12')).bens.find((b) => b.id === bem)?.marco).toBeNull();
 
-  it('registrar e estornar o ajuste: recusados com modelo-pendente, sem gravar', async () => {
-    const antes = (await porta.bem(contextoPat(m!), bem))!;
-    const trilhaAntes = await contarTrilha();
-    for (const p of [porta.registrarAjuste(), porta.estornarAjuste()])
-      await expect(p).rejects.toMatchObject({ problema: { status: 409, codigo: 'modelo-pendente' } });
-    expect((await porta.bem(contextoPat(m!), bem))?.versao).toBe(antes.versao);
-    expect(await contarTrilha()).toBe(trilhaAntes);
-  });
-
-  it('leitura do ajuste: vazia', async () => {
-    expect(await porta.ajustes()).toEqual([]);
+    const e = await porta.estornarAjuste(
+      contextoPat(m!),
+      { ajuste: a.id, motivo: 'Registrado por engano', origem: 'tela', hoje: '2026-11-21' },
+      't',
+      (s) => (s.ultimoComMarco?.id === a.id && s.cotasPosteriores.length === 0 ? null : { codigo: 'x', detalhe: 'x' }),
+      trilha,
+    );
+    expect(e.estorno).toMatchObject({ data: '2026-11-21', motivo: 'Registrado por engano', origem: 'tela' });
+    await expect(
+      porta.estornarAjuste(contextoPat(m!), { ajuste: a.id, motivo: 'de novo', origem: 'tela', hoje: '2026-11-21' }, 't', () => null, trilha),
+    ).rejects.toMatchObject({ problema: { codigo: 'ja-estornado' } });
+    expect((await porta.bensParaDepreciar(c, 1, '2026-01')).bens.find((b) => b.id === bem)?.marco).toBeNull();
   });
 
   it('laudo: anexa ao bem, o mesmo PDF não duplica e as leituras devolvem o laudo', async () => {

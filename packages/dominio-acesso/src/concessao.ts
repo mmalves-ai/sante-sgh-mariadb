@@ -1,12 +1,13 @@
-// Concessão direta (ficha do M06, regra 1; cap-08 §8.6): o usuário tem a permissão P se o legado lhe concede
-// uma opção de P.opcoesLegado (pelo grupo ou pelo papel de segurança) ou uma marca de usuário listada
-// (complemento do usuário, usuário do estoque, parâmetros do financeiro); perde quando perde no legado (o novo lê ao vivo, com cache curto). Recurso
+// Concessão direta (ficha do M06, regra 1; cap-08 §8.6): o usuário tem a permissão P se a origem lhe concede
+// uma opção do menu que o mapa do conector liga a P (pelo grupo ou pelo papel de segurança) ou uma marca de usuário
+// ligada a P (ADR 0007, item 8: a correspondência é dado do conector, não da declaração da permissão). Recurso
 // novo (sem opção legada) só por perfil complementar (regra 3): os perfis vêm dos papéis SBIS do legado,
 // da categoria com conselho e das concessões de SGH_ACESSO_PERFIL_USUARIO, e o que cada perfil concede
 // vem do catálogo e do mapa SGH_ACESSO_MAPA_OPCAO. Depois, a segregação (regra 9) retira o que
 // conflita e veio só de perfil do novo; o que o legado concede fica, e o conflito vai à revisão (regra 4).
 import type { DeclaracaoPermissao, PerfilComplementar } from '@sgh/contratos';
 import { CATEGORIAS_COM_CONSELHO, type DestinoGrupo, destinoDoGrupo } from './mapa-grupos.js';
+import type { CorrespondenciaOrigem } from './mapa-origem.js';
 import { aplicarSegregacao, type Conflito, type Retirada } from './segregacao.js';
 
 /** Papéis SBIS (código do papel de segurança) → perfil complementar do novo (cap-08 §8.3.4). */
@@ -65,7 +66,10 @@ export interface ResultadoConcessao {
   readonly conflitos: readonly Conflito[];
 }
 
-/** Índice do catálogo (montado uma vez por processo): opção, flag e perfil → permissões. */
+/**
+ * Índice do catálogo (montado uma vez por processo): opção do menu e marca de usuário de origem (do mapa do
+ * conector) e perfil → permissões.
+ */
 export interface IndiceCatalogo {
   readonly porOpcao: ReadonlyMap<number, readonly string[]>;
   readonly porFlag: ReadonlyMap<string, readonly string[]>;
@@ -77,6 +81,7 @@ export interface IndiceCatalogo {
 export function indexarCatalogo(
   catalogo: readonly DeclaracaoPermissao[],
   mapaPerfis: readonly PermissaoDoPerfil[] = [],
+  mapaOrigem: readonly CorrespondenciaOrigem[] = [],
 ): IndiceCatalogo {
   const porOpcao = new Map<number, string[]>();
   const porFlag = new Map<string, string[]>();
@@ -86,8 +91,6 @@ export function indexarCatalogo(
   const juntar = <K>(m: Map<K, string[]>, k: K, v: string) => m.set(k, [...(m.get(k) ?? []), v]);
   for (const p of catalogo) {
     categorias.set(p.codigo, p.categoria ?? 'administrativa');
-    for (const o of p.opcoesLegado) juntar(porOpcao, o, p.codigo);
-    for (const f of p.flagsLegado ?? []) juntar(porFlag, `${f.tabela}.${f.coluna}`, p.codigo);
     if (p.concessaoPorPerfil === 'todos-os-perfis-de-pessoa') todos.push(p.codigo);
     if (p.concessaoPorPerfil === 'por-perfil')
       for (const perfil of p.perfis ?? []) juntar(porPerfil, perfil, p.codigo);
@@ -98,6 +101,12 @@ export function indexarCatalogo(
   );
   for (const m of mapaPerfis)
     if (porPerfilDoCatalogo.has(m.permissao)) juntar(porPerfil, m.perfil, m.permissao);
+  // Mapa do conector (origem → permissão): só permissão que existe no catálogo (falha fechada).
+  for (const c of mapaOrigem) {
+    if (!categorias.has(c.permissao)) continue;
+    if (c.tipo === 'opcao_menu') juntar(porOpcao, Number(c.chave), c.permissao);
+    else juntar(porFlag, c.chave, c.permissao);
+  }
   return { porOpcao, porFlag, porPerfil, todosOsPerfisDePessoa: todos, categorias };
 }
 
@@ -106,6 +115,8 @@ export interface EntradaConcessao {
   readonly catalogo: readonly DeclaracaoPermissao[];
   readonly perfisConcedidos?: readonly PerfilConcedido[];
   readonly mapaPerfis?: readonly PermissaoDoPerfil[];
+  /** Mapa do conector (opção do menu e marca de usuário de origem → permissão). */
+  readonly mapaOrigem?: readonly CorrespondenciaOrigem[];
   /**
    * ADR 0022: perfis do mapa grupo → perfil APROVADOS (SGH_ACESSO_MAPA_OPCAO, TIPO grupo-perfil) para o grupo
    * do usuário: todo usuário do grupo recebe o perfil (a proposta não aprovada não concede nada).
@@ -159,7 +170,7 @@ export function conceder(e: EntradaConcessao): ResultadoConcessao {
   const destino = destinoDoGrupo(e.legado.grupo);
   const origensPerfis = origensDosPerfis(e, destino);
   const perfis = [...origensPerfis.keys()].sort();
-  const indice = e.indice ?? indexarCatalogo(e.catalogo, e.mapaPerfis);
+  const indice = e.indice ?? indexarCatalogo(e.catalogo, e.mapaPerfis, e.mapaOrigem);
   const origens = new Map<string, OrigemConcessao[]>();
   const anotar = (codigo: string, o: OrigemConcessao) => {
     const l = origens.get(codigo) ?? [];
@@ -187,7 +198,7 @@ export function conceder(e: EntradaConcessao): ResultadoConcessao {
 }
 
 /**
- * ADR 0022: acesso total da plataforma. TODAS as permissões do catálogo (as geradas das opções do legado e as
+ * ADR 0022: acesso total da plataforma. TODAS as permissões do catálogo (as do catálogo-base e as
  * declaradas, inclusive as por perfil e as de categoria clínica), SEM a segregação de funções: o controle é
  * a auditoria e a correção (ADR 0021), não limites. Nada vem do legado do usuário "em nome de".
  */

@@ -1,0 +1,56 @@
+-- F2.4 (dívida da migração), 2ª volta: DDL pedido pelos lotes, só para frente (ADR 0002).
+-- Origem e decisões: docs/obra/fatias/f24/saida/ddl-aplicado-v2.md
+
+CREATE TABLE IF NOT EXISTS carga_tabela_preco (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  estabelecimento_id BIGINT UNSIGNED NOT NULL,
+  tabela_preco_id BIGINT UNSIGNED NOT NULL,
+  fonte VARCHAR(100) NOT NULL COMMENT 'De onde veio a carga (arquivo do fornecedor, digitação, edição)',
+  arquivo_id BIGINT UNSIGNED NULL,
+  arquivo_sha256 CHAR(64) NULL,
+  situacao VARCHAR(20) NOT NULL DEFAULT 'preparada',
+  vigencia_inicio DATE NOT NULL,
+  total_linhas INT UNSIGNED NOT NULL DEFAULT 0,
+  linhas_erro INT UNSIGNED NOT NULL DEFAULT 0,
+  motivo VARCHAR(500) NULL,
+  publicada_em DATETIME(3) NULL,
+  publicada_por_usuario_id BIGINT UNSIGNED NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em DATETIME(3) NULL,
+  excluido_por BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_carga_tabela_preco_situacao CHECK (situacao IN ('preparada','validada','comparada','publicada','rejeitada')),
+  CONSTRAINT ck_carga_tabela_preco_rejeicao CHECK (situacao <> 'rejeitada' OR motivo IS NOT NULL),
+  CONSTRAINT ck_carga_tabela_preco_publicacao CHECK (situacao <> 'publicada' OR (publicada_em IS NOT NULL AND publicada_por_usuario_id IS NOT NULL)),
+  CONSTRAINT ck_carga_tabela_preco_linhas CHECK (linhas_erro <= total_linhas),
+  UNIQUE KEY uq_carga_tabela_preco_arquivo (tabela_preco_id, arquivo_sha256),
+  KEY ix_carga_tabela_preco_estabelecimento (estabelecimento_id, situacao),
+  KEY ix_carga_tabela_preco_arquivo (arquivo_id),
+  KEY ix_carga_tabela_preco_publicada_por (publicada_por_usuario_id)
+) COMMENT='Carga de valores numa tabela de preço do cliente: arquivo, conferência e publicação';
+
+CREATE TABLE IF NOT EXISTS carga_tabela_preco_linha (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  carga_tabela_preco_id BIGINT UNSIGNED NOT NULL,
+  sequencia INT UNSIGNED NOT NULL,
+  codigo_item VARCHAR(30) NOT NULL COMMENT 'Código do item como veio na carga',
+  item_faturavel_id BIGINT UNSIGNED NULL COMMENT 'Item faturável reconhecido (nulo enquanto não casou)',
+  valor DECIMAL(19,6) NOT NULL,
+  situacao VARCHAR(20) NOT NULL DEFAULT 'novo',
+  divergencia VARCHAR(500) NULL,
+  criado_em DATETIME(3) NOT NULL,
+  criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL,
+  alterado_por BIGINT UNSIGNED NULL,
+  versao INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em DATETIME(3) NULL,
+  excluido_por BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_carga_tabela_preco_linha_valor CHECK (valor >= 0),
+  CONSTRAINT ck_carga_tabela_preco_linha_situacao CHECK (situacao IN ('novo','alterado','igual','removido','erro')),
+  CONSTRAINT ck_carga_tabela_preco_linha_erro CHECK (situacao <> 'erro' OR divergencia IS NOT NULL),
+  UNIQUE KEY uq_carga_tabela_preco_linha_sequencia (carga_tabela_preco_id, sequencia),
+  KEY ix_carga_tabela_preco_linha_item (item_faturavel_id)
+) COMMENT='Linha da carga de tabela de preço: código, item reconhecido, valor e divergência';

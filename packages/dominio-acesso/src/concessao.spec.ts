@@ -1,41 +1,36 @@
 import type { DeclaracaoPermissao } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { conceder, indexarCatalogo, perfisDoUsuario, type ConcessoesLegado } from './concessao.js';
+import type { CorrespondenciaOrigem } from './mapa-origem.js';
 import { destinoDoGrupo } from './mapa-grupos.js';
 
 const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'pep.evolucao.ler',
     descricao: 'x',
-    opcoesLegado: [10, 11],
     concessaoPorPerfil: null,
     categoria: 'clinica',
   },
   {
     codigo: 'pep.evolucao.criar',
     descricao: 'x',
-    opcoesLegado: [12],
     concessaoPorPerfil: null,
     categoria: 'clinica',
   },
-  { codigo: 'recepcao.cadastro.criar', descricao: 'x', opcoesLegado: [20], concessaoPorPerfil: null },
+  { codigo: 'recepcao.cadastro.criar', descricao: 'x', concessaoPorPerfil: null },
   {
     codigo: 'suprimentos.pedido.aprovar',
     descricao: 'x',
-    opcoesLegado: [],
-    flagsLegado: [{ tabela: 'GEUSERS', coluna: 'PERMITIR_AUTORIZAR_PEDIDO' }],
     concessaoPorPerfil: null,
   },
   {
     codigo: 'acesso.inicio.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: 'config.schema.ler',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'tecnica',
@@ -43,7 +38,6 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'acesso.emergencia.solicitar',
     descricao: 'x',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: ['assistencial-com-conselho'],
     categoria: 'clinica',
@@ -51,10 +45,21 @@ const CATALOGO: DeclaracaoPermissao[] = [
   {
     codigo: 'pep.escala.ler',
     descricao: 'recurso novo, só pelo mapa',
-    opcoesLegado: [],
     concessaoPorPerfil: 'por-perfil',
     perfis: [],
     categoria: 'clinica',
+  },
+];
+/** Mapa do conector (origem → permissão) do catálogo de teste. */
+const MAPA_ORIGEM: CorrespondenciaOrigem[] = [
+  { tipo: 'opcao_menu', chave: '10', permissao: 'pep.evolucao.ler' },
+  { tipo: 'opcao_menu', chave: '11', permissao: 'pep.evolucao.ler' },
+  { tipo: 'opcao_menu', chave: '12', permissao: 'pep.evolucao.criar' },
+  { tipo: 'opcao_menu', chave: '20', permissao: 'recepcao.cadastro.criar' },
+  {
+    tipo: 'marca_usuario',
+    chave: 'GEUSERS.PERMITIR_AUTORIZAR_PEDIDO',
+    permissao: 'suprimentos.pedido.aprovar',
   },
 ];
 
@@ -78,6 +83,7 @@ describe('concessão direta (regra 1)', () => {
         flags: ['GEUSERS.PERMITIR_AUTORIZAR_PEDIDO'],
       }),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
     });
     expect([...r.permissoes].sort()).toEqual([
       'acesso.inicio.ler',
@@ -90,22 +96,39 @@ describe('concessão direta (regra 1)', () => {
     expect(r.origens.get('suprimentos.pedido.aprovar')).toEqual([
       { tipo: 'flag', flag: 'GEUSERS.PERMITIR_AUTORIZAR_PEDIDO' },
     ]);
-    const depois = conceder({ legado: base({ grupo: 'MEDICOS', opcoesGrupo: [] }), catalogo: CATALOGO });
+    const depois = conceder({
+      legado: base({ grupo: 'MEDICOS', opcoesGrupo: [] }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(depois.permissoes.has('pep.evolucao.ler')).toBe(false);
   });
 
   it('recurso novo só por perfil complementar: papel SBIS, conselho e concessão vigente (regra 3)', () => {
-    const admin = conceder({ legado: base({ papeis: [1, 4] }), catalogo: CATALOGO });
+    const admin = conceder({
+      legado: base({ papeis: [1, 4] }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(admin.permissoes.has('config.schema.ler')).toBe(true);
     expect(admin.perfis).toEqual(['administrador-sistema']);
-    const medico = conceder({ legado: base({ grupo: 'MEDICOS', conselho: true }), catalogo: CATALOGO });
+    const medico = conceder({
+      legado: base({ grupo: 'MEDICOS', conselho: true }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(medico.permissoes.has('acesso.emergencia.solicitar')).toBe(true);
-    const semConselho = conceder({ legado: base({ grupo: 'MEDICOS', conselho: false }), catalogo: CATALOGO });
+    const semConselho = conceder({
+      legado: base({ grupo: 'MEDICOS', conselho: false }),
+      catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
+    });
     expect(semConselho.permissoes.has('acesso.emergencia.solicitar')).toBe(false);
     const agora = new Date('2026-10-20T12:00:00Z');
     const comConcessao = conceder({
       legado: base(),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
       agora,
       perfisConcedidos: [
         { perfil: 'administrador-sistema', inicio: new Date('2026-10-01'), fim: null },
@@ -117,6 +140,7 @@ describe('concessão direta (regra 1)', () => {
     const mapa = conceder({
       legado: base({ grupo: 'MEDICOS', conselho: true }),
       catalogo: CATALOGO,
+      mapaOrigem: MAPA_ORIGEM,
       mapaPerfis: [
         { perfil: 'assistencial-com-conselho', permissao: 'pep.escala.ler' },
         { perfil: 'assistencial-com-conselho', permissao: 'pep.evolucao.ler' }, // do legado: o mapa não concede
@@ -127,7 +151,7 @@ describe('concessão direta (regra 1)', () => {
   });
 
   it('painel não recebe os recursos de pessoa; o índice é reaproveitável', () => {
-    const indice = indexarCatalogo(CATALOGO);
+    const indice = indexarCatalogo(CATALOGO, [], MAPA_ORIGEM);
     const painel = conceder({ legado: base({ grupo: 'PAINEIS', opcoesGrupo: [20] }), catalogo: [], indice });
     expect([...painel.permissoes]).toEqual(['recepcao.cadastro.criar']);
     expect(

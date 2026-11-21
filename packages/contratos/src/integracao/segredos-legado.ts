@@ -1,14 +1,17 @@
-// M59-F3 (ficha do M59, seção 5 e regra 7; cap-08 §8.11 "Onde está hoje"): os segredos de parceiros que ficam em texto
-// puro em tabelas do banco do hospital e que só o sistema anterior lia. O Sante SGH já usa credencial própria, no
-// cofre (M31, M49): para cada segredo, o gestor guarda no cofre a credencial que o Sante usa (de preferência a nova,
-// combinada com o parceiro: rotação) e, com o período de contingência DESLIGADO, a coluna antiga recebe o valor "vazio"
-// (integracao.cifrarSegredoLegado). O valor antigo nunca é lido pelo Sante: nem para copiar, nem para mostrar.
+// M59-F3 (ficha do M59, seção 5 e regra 7; cap-08 §8.11 "Onde está hoje"): os segredos de parceiros que o hospital
+// guardava em texto puro no banco do sistema anterior. O Sante SGH usa credencial própria, no cofre (M31, M49): para
+// cada segredo, o gestor guarda no cofre a credencial que o Sante usa (de preferência a nova, combinada com o parceiro:
+// rotação) e, com o período de contingência DESLIGADO, o valor antigo é retirado (integracao.cifrarSegredoLegado). O
+// valor antigo nunca é lido pelo Sante: nem para copiar, nem para mostrar.
 //
-// Exceções (regra 7): a tabela de informações bancárias é lida por 4 gatilhos que escrevem em banco externo e fica como está enquanto eles
-// existirem (ou a TI desliga a integração, DP-16); as contas citadas em SP_MODULO_USUARIO (procedure que não pode ser
-// alterada) só são rotacionadas depois de provar na cópia que o banco não depende delas.
+// Os tipos e as colunas aqui são nomes de negócio do Sante. A correspondência com as tabelas e colunas da origem é dado
+// do conector (conector/mapa/segredos-origem.tsv), nunca do produto.
 //
-// As senhas secundárias do usuário (cancelamento de nota fiscal e a secundária) deixam de existir
+// Exceções (regra 7): os dados de acesso ao banco externo do estabelecimento ficam como estão enquanto a integração
+// bancária automática da origem existir (ou a TI a desligar, DP-16); as contas de acesso dos módulos só são rotacionadas
+// depois de provar na cópia que o banco não depende delas.
+//
+// As senhas secundárias do usuário (cancelamento de nota fiscal e a de liberação) deixam de existir
 // (acesso.retirarSenhaSecundaria): o Sante pede a reautenticação no lugar delas.
 import { z } from 'zod';
 import { esquemaLogin } from '../acesso/entrada.js';
@@ -30,62 +33,62 @@ export interface SegredoLegadoCatalogado {
   readonly rotulo: string;
 }
 
-/** Os segredos de parceiro guardados no sistema anterior (convênio, serviço TISS, atividade, estabelecimento, estoque, e-mail e equipamento de laboratório). */
+/** Os segredos de parceiro guardados no banco anterior (convênio, serviço TISS, atividade, estabelecimento, estoque, e-mail e equipamento de laboratório). */
 export const SEGREDOS_LEGADO: readonly SegredoLegadoCatalogado[] = [
   {
-    tabela: 'TBCONVEN',
-    chave: ['COD'],
-    colunas: ['SENHA'],
-    vazio: { SENHA: '' },
-    descricao: 'NOME',
+    tabela: 'convenio',
+    chave: ['id'],
+    colunas: ['senha_portal'],
+    vazio: { senha_portal: '' },
+    descricao: 'nome',
     rotulo: 'Senha de acesso ao portal do convênio',
   },
   {
-    tabela: 'TBTISSWEBSERV',
-    chave: ['ID_TBCONVEN', 'ID_TBTISSSCHEMA'],
-    colunas: ['SENHA_PRESTADOR'],
-    vazio: { SENHA_PRESTADOR: null },
+    tabela: 'servico_tiss_convenio',
+    chave: ['convenio_id', 'versao_tiss_id'],
+    colunas: ['senha_prestador'],
+    vazio: { senha_prestador: null },
     descricao: null,
     rotulo: 'Senha do prestador no serviço TISS da operadora',
   },
   {
-    tabela: 'TBCODATI',
-    chave: ['ID'],
-    colunas: ['SENHA_PRESTADOR'],
-    vazio: { SENHA_PRESTADOR: '' },
+    tabela: 'atividade_convenio',
+    chave: ['id'],
+    colunas: ['senha_prestador'],
+    vazio: { senha_prestador: '' },
     descricao: null,
     rotulo: 'Senha do prestador por atividade do convênio',
   },
   {
-    tabela: 'TBHOSPIT',
-    chave: ['COD'],
-    colunas: ['SENHAPROV', 'SENHA_PROXY', 'SENHA_ASSINATURA'],
-    vazio: { SENHAPROV: '', SENHA_PROXY: '', SENHA_ASSINATURA: '' },
+    tabela: 'estabelecimento',
+    chave: ['id'],
+    colunas: ['senha_provedor', 'senha_proxy', 'senha_assinatura'],
+    vazio: { senha_provedor: '', senha_proxy: '', senha_assinatura: '' },
     descricao: null,
     rotulo: 'Senhas do estabelecimento (provedor, proxy e assinatura)',
   },
   {
-    tabela: 'GEUSERS',
-    chave: ['USUARIO'],
-    colunas: ['SENHA'],
-    vazio: { SENHA: null },
+    tabela: 'usuario_estoque',
+    chave: ['login'],
+    colunas: ['senha'],
+    vazio: { senha: null },
     descricao: null,
     rotulo: 'Senha antiga do almoxarifado por usuário',
   },
   {
-    tabela: 'PREMAILCFG',
-    chave: ['ID'],
-    colunas: ['SENHA_AUTENTICACAO'],
-    vazio: { SENHA_AUTENTICACAO: '' },
+    tabela: 'servidor_email',
+    chave: ['id'],
+    colunas: ['senha_autenticacao'],
+    vazio: { senha_autenticacao: '' },
     descricao: null,
     rotulo: 'Senha do servidor de e-mail',
   },
   {
-    tabela: 'SITPEQV',
-    chave: ['CODIGO'],
-    colunas: ['SENHA_FTP', 'SENHA_EXPORTACAO'],
-    vazio: { SENHA_FTP: null, SENHA_EXPORTACAO: null },
-    descricao: 'DESCRICAO',
+    tabela: 'equipamento_laboratorio',
+    chave: ['id'],
+    colunas: ['senha_transferencia', 'senha_exportacao'],
+    vazio: { senha_transferencia: null, senha_exportacao: null },
+    descricao: 'descricao',
     rotulo: 'Senhas de transferência dos equipamentos de laboratório',
   },
 ];
@@ -96,25 +99,26 @@ export type TabelaSegredoLegado = (typeof SEGREDOS_LEGADO)[number]['tabela'];
 /** Exceções registradas da regra 7 (o verificador de segredos e a tela as mostram com o motivo). */
 export const EXCECOES_SEGREDO_LEGADO: readonly { readonly objeto: string; readonly motivo: string }[] = [
   {
-    objeto: 'TBINFBANCO',
+    objeto: 'integracao_bancaria_externa',
     motivo:
-      'lida por 4 gatilhos que escrevem em banco externo: fica como está enquanto eles existirem ou até a TI desligar a integração (DP-16)',
+      'lida pela integração bancária automática da origem, que escreve em banco externo: fica como está enquanto ela existir ou até a TI desligá-la (DP-16)',
   },
   {
-    objeto: 'SP_MODULO_USUARIO',
+    objeto: 'contas_acesso_modulos',
     motivo:
-      'procedure que não pode ser alterada: as contas citadas nela só são trocadas depois de provar na cópia que o banco não depende delas',
+      'rotina da origem que não pode ser alterada: as contas citadas nela só são trocadas depois de provar na cópia que o banco não depende delas',
   },
 ];
 
 /** Colunas de senha secundária do complemento do usuário (chave: empresa e usuário). */
-export const COLUNAS_SENHA_SECUNDARIA = ['SENHA_SEC', 'SENHA_CAN_NF'] as const;
+export const COLUNAS_SENHA_SECUNDARIA = ['senha_liberacao', 'senha_cancelamento_nota'] as const;
 
 export const segredoCatalogado = (tabela: string): SegredoLegadoCatalogado | null =>
   SEGREDOS_LEGADO.find((s) => s.tabela === tabela) ?? null;
 
 // ── chave da linha ───────────────────────────────────────────────────────────────────────────────
-// A linha vai na API e na tabela SGH_ como texto "COL=valor;COL=valor" (valores inteiros ou login; nada de ';' nem '=').
+// A linha vai na API e no registro da retirada como texto "coluna=valor;coluna=valor" (valores inteiros ou login; nada de
+// ';' nem '=').
 
 const VALOR_CHAVE = /^[A-Za-z0-9 ._@-]{1,31}$/;
 
@@ -147,11 +151,11 @@ export function lerChaveDaLinha(tabela: string, texto: string): Record<string, s
 }
 
 // ── referência no cofre ──────────────────────────────────────────────────────────────────────────
-// `cofre:parceiro/<estab>/<tabela>/<resumo da chave da linha>/<coluna>`: o resumo (16 hex do SHA-256 da chave) evita
+// `cofre:parceiro/<estab>/<tipo>/<resumo da chave da linha>/<coluna>`: o resumo (16 hex do SHA-256 da chave) evita
 // pôr a chave em claro no nome do arquivo do cofre; o cofre de arquivo ainda resume a referência inteira.
 
 const REF =
-  /^cofre:parceiro\/([a-z][a-z0-9]{0,9})\/([A-Z][A-Z0-9_]{1,30})\/([0-9a-f]{16})\/([A-Z][A-Z0-9_]{1,30})$/;
+  /^cofre:parceiro\/([a-z][a-z0-9]{0,9})\/([a-z][a-z0-9_]{1,30})\/([0-9a-f]{16})\/([a-z][a-z0-9_]{1,30})$/;
 
 export function referenciaSegredoLegado(
   hospital: string,
@@ -200,7 +204,7 @@ export const esquemaGuardarSegredoPedido = z
   .object({
     tabela: tabelaSegredo,
     chave: textoChave,
-    coluna: z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/),
+    coluna: z.string().regex(/^[a-z][a-z0-9_]{1,30}$/),
     valor: z.string().min(1).max(200),
     /** O valor é o novo, combinado com o parceiro (rotação), e não o mesmo de antes. */
     rotacionado: z.boolean(),

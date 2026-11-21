@@ -12,7 +12,7 @@ import {
 } from './acoes-sistema.js';
 
 const p = (codigo: string, descricao = 'Ação de teste'): DeclaracaoPermissao =>
-  ({ codigo, descricao, opcoesLegado: [], concessaoPorPerfil: null }) as DeclaracaoPermissao;
+  ({ codigo, descricao, concessaoPorPerfil: null }) as DeclaracaoPermissao;
 
 describe('tipo da ação', () => {
   it('pelo verbo final do código', () => {

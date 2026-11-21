@@ -1,9 +1,10 @@
 // Integração da porta PRÓPRIA da avaliação de desempenho (F2.2, lote 03-02) contra o MariaDB do cliente de teste da
 // onda 3 (f22_o3), com massa SINTÉTICA: o contrato de efeito das gravações do ciclo (a linha, o modelo pela escala, a
 // versão, a exclusão lógica e a trilha), as recusas (versão desatualizada, modelo ausente, nome repetido, ciclo de
-// outro estabelecimento, operação que aguarda o modelo) e a mesma bateria básica na memória e no banco. A avaliação
-// (a abertura ainda aguarda o modelo) nasce direto no SQL do teste, com os itens, e prova lançar notas, finalizar, dar ou
-// registrar a ciência e excluir: linhas, versão, trilha da operação, nenhuma mensagem de saída e as recusas.
+// outro estabelecimento) e a mesma bateria básica na memória e no banco. A avaliação
+// dos casos de notas nasce direto no SQL do teste, com os itens, e prova lançar notas, finalizar, dar ou
+// registrar a ciência e excluir: linhas, versão, trilha da operação, nenhuma mensagem de saída e as recusas. As
+// competências, a abertura pela porta, a correção e o PDI têm o caso próprio.
 import { ErroOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../../exames/public-api.js';
@@ -56,8 +57,9 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
   let avaliador = 0;
   let criterios: number[] = [];
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 't' }, (l) =>
-      l.consultar<Record<string, unknown>>(sql, p),
+    m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3', correlacao: 't' },
+      (l) => l.consultar<Record<string, unknown>>(sql, p),
     );
   const contar = async (sql: string, p: unknown[]) => Number((await ler(sql, p))[0]?.['q'] ?? 0);
   /** Linhas que a avaliação deixa no estabelecimento da massa (para provar que a recusa nada grava). */
@@ -82,7 +84,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
       g.incluirCiclo({ ...ciclo(nomeCiclo), por: m.login }),
     );
     const id = await m.nucleo.escrever(
-      { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 'massa-avaliacao-l0302' },
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3', correlacao: 'massa-avaliacao-l0302' },
       async (e) => {
         const a = await e.inserir(
           "INSERT INTO avaliacao_desempenho (estabelecimento_id, ciclo_avaliacao_id, colaborador_id, avaliador_colaborador_id, tipo, situacao, criado_em, criado_por) VALUES (?, ?, ?, ?, 'gestor', 'pendente', ?, ?)",
@@ -107,7 +109,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
     gestor = ctxO3(m.est, m.gestor);
     // Os critérios do modelo da massa e o colaborador avaliador (o gestor), sintéticos e reaproveitados.
     const x = await m.nucleo.escrever(
-      { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 'massa-criterios-l0302' },
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3', correlacao: 'massa-criterios-l0302' },
       async (e) => {
         const ks: number[] = [];
         for (const [i, cod] of ['L0302-COMUNICACAO', 'L0302-TRABALHO-EQUIPE'].entries()) {
@@ -476,47 +478,150 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
     expect(await saidas(id)).toBe(0);
   });
 
-  it('o que aguarda o modelo recusa com modelo-pendente e nada grava', async () => {
-    const antes = await pegada();
+  it('competências, abertura, correção e PDI: linhas, leitura e recusas', async () => {
+    const sufixo = String(Date.now()).slice(-8);
+    const k = await porta.gravarSgh(c, trilha(), (g) =>
+      g.incluirCompetencia({ nome: `Comunicação ${sufixo}`, descricao: null, por: m.login }),
+    );
+    expect(await porta.competencia(c, k)).toMatchObject({ nome: `Comunicação ${sufixo}`, ativo: true });
+    expect(await porta.competencia(fora, k)).toBeNull();
     expect(
       await codigo(
         porta.gravarSgh(c, trilha(), (g) =>
-          g.incluirCompetencia({ nome: 'Comunicação', descricao: null, por: m.login }),
+          g.incluirCompetencia({ nome: `Comunicação ${sufixo}`, descricao: null, por: m.login }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('competencia-nome-em-uso');
+    await porta.gravarSgh(c, trilha(), (g) =>
+      g.ligarCompetenciaCargo({ cargo: m.cargo, competencia: k, por: m.login }),
+    );
+    expect((await porta.competenciasDoCargo(c, m.cargo)).map((x) => x.competencia)).toContain(k);
     expect(
       await codigo(
         porta.gravarSgh(c, trilha(), (g) =>
-          g.incluirPdi({
-            vinculo: m.vinculo,
-            avaliacao: null,
-            competencia: null,
-            curso: null,
-            acao: 'Ação sintética',
-            prazo: '2026-12-31',
-            por: m.login,
-          } as never),
+          g.ligarCompetenciaCargo({ cargo: m.cargo, competencia: k, por: m.login }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('competencia-ja-no-cargo');
+
+    // Abertura: a competência vira o critério do modelo do ciclo, e a nota é lida pela competência.
+    const cid = await porta.gravarSgh(c, trilha(), (g) =>
+      g.incluirCiclo({ ...ciclo(`Ciclo abertura ${sufixo}`), por: m.login }),
+    );
+    const id = await porta.gravarSgh(c, trilha(), (g) =>
+      g.incluirAvaliacao({
+        ciclo: cid,
+        vinculo: m.vinculo,
+        cargo: m.cargo,
+        marco: null,
+        avaliador: m.loginGestor,
+        competencias: [k],
+        por: m.login,
+      }),
+    );
+    expect(await porta.avaliacao(c, id)).toMatchObject({
+      ciclo: cid,
+      cargo: m.cargo,
+      numero: 1,
+      anterior: null,
+      situacao: 'rascunho',
+    });
+    expect((await porta.notas(c, id)).map((x) => x.competencia)).toEqual([k]);
+    await porta.gravarSgh(c, trilhaAval(id), (g) =>
+      g.lancarNotas({
+        id,
+        versao: 1,
+        parecer: null,
+        notas: [{ competencia: k, nota: 4, comentario: null }],
+        por: m.login,
+      }),
+    );
+    await porta.gravarSgh(c, trilhaAval(id), (g) => g.finalizarAvaliacao({ id, versao: 2, por: m.login }));
+    const fin = await porta.avaliacao(c, id);
+    expect(fin).toMatchObject({ situacao: 'finalizada', finalizadaPor: m.login });
+
+    // Correção: versão nova em rascunho com as notas copiadas; a anterior fica substituída.
+    const nova = await porta.gravarSgh(c, trilhaAval(id), (g) =>
+      g.corrigirAvaliacao({
+        anterior: id,
+        versao: fin!.versao,
+        motivo: 'Nota lançada errada',
+        avaliador: m.loginGestor,
+        por: m.login,
+      }),
+    );
+    expect(await porta.avaliacao(c, nova)).toMatchObject({
+      numero: 2,
+      anterior: id,
+      motivoCorrecao: 'Nota lançada errada',
+      situacao: 'rascunho',
+    });
+    expect((await porta.notas(c, nova))[0]).toMatchObject({ competencia: k, nota: 4 });
+    expect((await porta.avaliacao(c, id))?.substituida).toBe(true);
     expect(
       await codigo(
-        porta.gravarSgh(c, trilha(), (g) =>
-          g.incluirAvaliacao({
-            ciclo: 1,
-            vinculo: m.vinculo,
-            cargo: m.cargo,
-            marco: null,
+        porta.gravarSgh(c, trilhaAval(id), (g) =>
+          g.corrigirAvaliacao({
+            anterior: id,
+            versao: fin!.versao,
+            motivo: 'De novo',
             avaliador: m.loginGestor,
-            competencias: [],
             por: m.login,
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
-    expect(await pegada()).toEqual(antes);
-    expect(await porta.competenciasDoCargo(c, m.cargo)).toEqual([]);
+    ).toBe('desatualizado');
+
+    // PDI: inclusão, leitura com a competência e conclusão com o motivo.
+    const p = await porta.gravarSgh(c, trilha(), (g) =>
+      g.incluirPdi({
+        vinculo: m.vinculo,
+        avaliacao: id,
+        competencia: k,
+        curso: null,
+        acao: 'Ação sintética',
+        prazo: '2026-12-31',
+        por: m.login,
+      }),
+    );
+    expect(await porta.pdi(c, p)).toMatchObject({
+      vinculo: m.vinculo,
+      competencia: k,
+      competenciaNome: `Comunicação ${sufixo}`,
+      situacao: 'aberta',
+    });
+    expect(await porta.pdi(fora, p)).toBeNull();
+    await porta.gravarSgh(c, trilha(), (g) =>
+      g.situacaoPdi({
+        id: p,
+        versao: 1,
+        situacao: 'concluida',
+        concluidaEm: '2026-06-30',
+        motivo: 'Concluída',
+        por: m.login,
+      }),
+    );
+    expect(await porta.pdi(c, p)).toMatchObject({
+      situacao: 'concluida',
+      concluidaEm: '2026-06-30',
+      motivoSituacao: 'Concluída',
+    });
+    expect((await porta.pdiDoColaborador(c, m.vinculo)).map((x) => x.id)).toContain(p);
+
+    // A competência em uso não se exclui (o cargo, as notas e o PDI contam).
+    const kv = (await porta.competencia(c, k))!.versao;
+    expect(
+      await codigo(
+        porta.gravarSgh(c, trilha(), (g) =>
+          g.excluirCompetencia({ id: k, versao: kv, motivo: 'Teste', por: m.login }),
+        ),
+      ),
+    ).toBe('competencia-com-vinculos');
+    expect((await porta.dependencias(c, 'competencia', k)).map((x) => x.tabela).sort()).toEqual([
+      'avaliacao_desempenho_item',
+      'cargo_competencia',
+      'plano_desenvolvimento',
+    ]);
     expect(await porta.cargoDoVinculo(c, m.vinculo)).toBe(m.cargo);
     expect(await porta.cargoDoVinculo(fora, m.vinculo)).toBeNull();
   });

@@ -18,21 +18,28 @@
 // Melhoria: o sequencial do Id do evento é número de negócio do estabelecimento (sequencia_negocio "evento_esocial",
 // travado na transação); o id do registro é do banco (AUTO_INCREMENT). Nada de MAX + 1 nem de trava na tabela inteira.
 // Melhoria: o autor é o usuário da sessão (criado_por/alterado_por pelo núcleo), mostrado pelo login do cadastro.
-// Pendente (pedidos ao orquestrador, DDL em docs/obra/fatias/f22/saida/03-05.json): os parâmetros do eSocial do
-// empregador (transmissor, leiaute e parâmetros do S-1000/S-1005), a ficha do eSocial do vínculo, a conferência gravada
-// da conciliação, o ambiente `coletor` no evento e no lote, a operação dos eventos de tabela e a data de referência do
-// evento não periódico. Até lá, recusa com o código `modelo-pendente` (nunca vazio calado nem gravação pela metade):
+// Melhoria: o ambiente `coletor` (entrega local fora de produção) é gravado no evento e no lote; a operação do evento de
+// tabela (inclusão, alteração ou exclusão) fica em operacao_tabela, e a data do fato em data_referencia (a competência
+// segue no seu campo para os filtros por período).
+// Melhoria: a conferência da conciliação é gravada por competência (conferencia_eventos_esocial) com a contagem por
+// tipo de evento (conferencia_eventos_esocial_item). O banco ainda só guarda o resumo da situação da linha (conciliada,
+// divergente ou sem transmissor): a leitura devolve a linha conciliada e a sem transmissor como foram conferidas, e
+// recusa com `modelo-pendente` a conferência com linha divergente, porque o detalhe (dois transmissores, repasse nos
+// periódicos ou no externo, só contagem) não foi guardado e não se inventa (pedido de DDL no lote 03-pessoas da F2.4).
+// O rótulo da linha é o nome do tipo de evento no catálogo do cliente.
+// Pendente (pedido no lote 03-pessoas da F2.4): os parâmetros do eSocial do empregador por vigência e a ficha do
+// eSocial do vínculo. Até lá, recusa com o código `modelo-pendente` (nunca vazio calado nem gravação pela metade):
 // - gravar e ler os parâmetros do empregador; por consequência, gerar eventos (tabela, trabalhador e periódicos) e
 //   calcular a conciliação, que dependem da vigência do empregador;
-// - gravar e ler a ficha do eSocial do vínculo; gravar e ler a conferência da conciliação;
-// - gravar evento de tabela com operação (inclusão, alteração ou exclusão): sem a coluna, a duplicidade do evento de
-//   tabela (mesmo registro e operação em andamento) não seria detectada;
-// - montar lote no ambiente `coletor`. A data de referência do evento não periódico vai em `competencia`.
+// - gravar e ler a ficha do eSocial do vínculo.
 import {
   type AmbienteEsocial,
   type GrupoEventoEsocial,
+  type LinhaConciliacaoEsocial,
   type SituacaoEventoEsocial,
+  type SituacaoLinhaConciliacao,
   type SituacaoLoteEsocial,
+  type TransmissorEsocial,
 } from '@sgh/contratos';
 import {
   type ContextoNucleo,
@@ -80,12 +87,14 @@ export const TABELAS_ESOCIAL = [
   'lote_esocial',
   'retorno_esocial',
   'sequencia_negocio',
+  'conferencia_eventos_esocial',
+  'conferencia_eventos_esocial_item',
 ] as const;
 
 /** Tipo da sequência do sequencial do Id do evento (por estabelecimento). */
 export const SEQUENCIA_EVENTO_ESOCIAL = 'evento_esocial';
 
-type AmbienteBanco = 'producao' | 'producao_restrita';
+type AmbienteBanco = 'coletor' | 'producao' | 'producao_restrita';
 type Linha = Record<string, unknown>;
 
 const MODELO_PENDENTE = (o: string) =>
@@ -109,12 +118,6 @@ const FICHA_PENDENTE = () =>
     'A ficha do eSocial do vínculo',
     'registrar e consultar a ficha e gerar os eventos do trabalhador',
   );
-const CONFERENCIA_PENDENTE = () =>
-  LEITURA_PENDENTE(
-    'A conferência gravada da conciliação',
-    'conferir a conciliação e consultar a última conferência',
-  );
-
 // ── Traduções entre a tela e o banco ─────────────────────────────────────────────────────────────────────────
 
 const SITUACAO_EVENTO_BANCO: Readonly<Record<Exclude<SituacaoEventoEsocial, 'substituido'>, string>> = {
@@ -169,11 +172,32 @@ const grupoDaClasse = (classe: unknown): GrupoEventoEsocial =>
 const numeroDoGrupo = (g: GrupoEventoEsocial): 1 | 2 | 3 => (g === 'tabela' ? 1 : g === 'periodico' ? 3 : 2);
 
 function ambienteDoBanco(a: AmbienteEsocial): AmbienteBanco {
-  if (a === 'producao') return 'producao';
-  if (a === 'producao-restrita') return 'producao_restrita';
-  throw MODELO_PENDENTE('O lote ao coletor local (ambiente de teste fora do eSocial)');
+  return a === 'producao' ? 'producao' : a === 'producao-restrita' ? 'producao_restrita' : 'coletor';
 }
-const ambienteDaTela = (a: unknown): AmbienteEsocial => (a === 'producao' ? 'producao' : 'producao-restrita');
+const ambienteDaTela = (a: unknown): AmbienteEsocial =>
+  a === 'producao' ? 'producao' : a === 'coletor' ? 'coletor' : 'producao-restrita';
+
+/** O transmissor da tela (o próprio sistema ou o externo) e o do banco. */
+const transmissorDoBanco = (t: TransmissorEsocial | null): string | null =>
+  t === null ? null : t === 'externo' ? 'externo' : 'sistema';
+const transmissorDaTela = (t: unknown): TransmissorEsocial | null =>
+  t === 'externo' ? 'externo' : t === 'sistema' ? 'sante' : null;
+/** A situação da conferência: a tela usa hífen, o banco usa sublinhado. */
+const situacaoConferenciaDoBanco = (s: string): string => s.replace(/-/g, '_');
+const situacaoConferenciaDaTela = (s: unknown): RegistroConciliacaoEsocial['situacao'] =>
+  String(s).replace(/_/g, '-') as RegistroConciliacaoEsocial['situacao'];
+/** A situação da linha guardada é o resumo: o detalhe da divergência ainda não tem coluna (pedido de DDL). */
+const situacaoLinhaDoBanco = (s: string): string =>
+  s === 'conciliado' ? 'conciliada' : s === 'sem-transmissor' ? 'sem_transmissor' : 'divergente';
+/** Só o resumo que não perde significado volta; a linha divergente recusa (nunca se inventa o detalhe). */
+const situacaoLinhaDaTela = (s: unknown): SituacaoLinhaConciliacao => {
+  if (s === 'conciliada') return 'conciliado';
+  if (s === 'sem_transmissor') return 'sem-transmissor';
+  throw LEITURA_PENDENTE(
+    'O detalhe da divergência de cada linha da conferência do eSocial',
+    'reler a conferência gravada com linha divergente (dois transmissores, repasse nos periódicos ou no externo, só contagem)',
+  );
+};
 
 const pad2 = (s: string) => s.padStart(2, '0');
 /** Versão do catálogo (S-1.3) no formato do XSD (v_S_01_03_00); outro formato volta como está. */
@@ -199,7 +223,8 @@ const txtOuNulo = (v: unknown) => (v === null || v === undefined ? null : String
 // ── Leituras (as mesmas no Leitor e dentro da transação da gravação) ─────────────────────────────────────────
 
 const CAMPOS_EVENTO = `e.id, e.estabelecimento_id, t.codigo_esocial AS evento, t.classe, e.identificador_evento,
-  e.vinculo_trabalho_id, e.entidade, e.entidade_id, DATE_FORMAT(e.competencia, '%Y-%m-%d') AS data_referencia,
+  e.vinculo_trabalho_id, e.entidade, e.entidade_id, e.operacao_tabela,
+  DATE_FORMAT(COALESCE(e.data_referencia, e.competencia), '%Y-%m-%d') AS data_referencia,
   lv.codigo_versao AS leiaute, (e.xml IS NOT NULL AND LEFT(e.xml, 1) <> '<') AS xml_cifrado, e.hash_xml, e.situacao,
   e.evento_retificado_id, e.lote_esocial_id, e.numero_recibo, e.codigo_resposta, e.descricao_resposta,
   uc.login AS criado_por_login, DATE_FORMAT(e.criado_em, '%Y-%m-%dT%H:%i:%s') AS criado_em_txt,
@@ -228,7 +253,7 @@ function eventoDaLinha(
     empresa: num(x['estabelecimento_id']),
     evento: String(x['evento']) as RegistroEventoEsocial['evento'],
     grupo: grupoDaClasse(x['classe']),
-    operacao: null,
+    operacao: (txtOuNulo(x['operacao_tabela']) as RegistroEventoEsocial['operacao']) ?? null,
     idEsocial: String(x['identificador_evento']),
     vinculo: numOuNulo(x['vinculo_trabalho_id']),
     origem: txtOuNulo(x['entidade']),
@@ -474,10 +499,6 @@ function gravador(tx: TxOperacao, est: number, ambienteEventos: AmbienteBanco): 
       daEmpresa(x.empresa);
       if (x.situacao === 'substituido')
         throw recusa('situacao-invalida', 'O evento novo não nasce substituído.');
-      // Sem a coluna da operação (pedido de DDL operacao_tabela), o evento de tabela perderia a operação e, com ela, o
-      // bloqueio de duplicidade (mesmo registro e operação em andamento): recusa em vez de gravar sem ela.
-      if (x.operacao !== null)
-        throw MODELO_PENDENTE('A operação do evento de tabela (inclusão, alteração ou exclusão)');
       const tipo = await tipoDoEvento(tx, x.evento);
       const leiaute = await leiauteDoEvento(tx, tipo, x.leiaute);
       // A auditoria (criado_em, criado_por, versao 1) é do núcleo; o id é do banco.
@@ -490,6 +511,8 @@ function gravador(tx: TxOperacao, est: number, ambienteEventos: AmbienteBanco): 
           entidade: x.origem,
           entidade_id: x.referencia,
           competencia: dataDoBanco(x.dataReferencia),
+          data_referencia: x.dataReferencia ? dataDoBanco(x.dataReferencia) : null,
+          operacao_tabela: x.operacao,
           identificador_evento: x.idEsocial,
           ambiente: ambienteEventos,
           tipo_operacao: tipoOperacao(x),
@@ -568,8 +591,37 @@ function gravador(tx: TxOperacao, est: number, ambienteEventos: AmbienteBanco): 
         'O protocolo do lote já existe.',
       );
     },
-    incluirConciliacao: () =>
-      Promise.reject(MODELO_PENDENTE('A conferência gravada da conciliação do eSocial')),
+    async incluirConciliacao(x) {
+      daEmpresa(x.empresa);
+      const linhas = JSON.parse(x.linhas) as LinhaConciliacaoEsocial[];
+      const tipos = new Map<string, number>();
+      for (const l of linhas) tipos.set(l.evento, await tipoDoEvento(tx, l.evento));
+      const id = await tx.incluir('conferencia_eventos_esocial', {
+        estabelecimento_id: est,
+        competencia: dataDoBanco(x.competencia),
+        transmissor: transmissorDoBanco(x.transmissor),
+        situacao: situacaoConferenciaDoBanco(x.situacao),
+        observacao: x.observacao,
+        conferente_usuario_id: tx.contexto.usuario,
+        conferido_em: new Date(),
+        origem: 'sistema',
+      });
+      for (const l of linhas)
+        await semRepeticao(
+          tx.incluir('conferencia_eventos_esocial_item', {
+            conferencia_eventos_esocial_id: id,
+            tipo_evento_esocial_id: tipos.get(l.evento),
+            quantidade_sistema: l.sante,
+            quantidade_externo: l.externo,
+            quantidade_repasse: l.repasse,
+            quantidade_migrada_pendente: l.pendenciaLegado,
+            situacao: situacaoLinhaDoBanco(l.situacao),
+          }),
+          'evento-repetido',
+          'O mesmo evento aparece duas vezes na conferência.',
+        );
+      return id;
+    },
   };
 }
 
@@ -828,15 +880,53 @@ export class PortaEsocialPropria implements PortaEsocial {
     return this.ler(c, (l, est) => loteDe(l, est, id));
   }
 
-  /** Pendente de DDL (conferência gravada da conciliação): recusa (nunca "sem conferência" calado). */
-  /* eslint-disable @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo */
-  async ultimaConciliacao(
-    _c: ContextoEsocial,
-    _empresa: number,
-    _competencia: string,
+  /** A última conferência gravada da competência (as linhas pela contagem guardada de cada tipo de evento). */
+  ultimaConciliacao(
+    c: ContextoEsocial,
+    empresa: number,
+    competencia: string,
   ): Promise<RegistroConciliacaoEsocial | null> {
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-    throw CONFERENCIA_PENDENTE();
+    return this.ler(c, async (l, est) => {
+      if (empresa !== est) return null;
+      const x = await l.uma(
+        `SELECT f.id, f.estabelecimento_id, DATE_FORMAT(f.competencia, '%Y-%m') AS competencia, f.transmissor,
+                f.situacao, f.observacao, u.login, DATE_FORMAT(f.conferido_em, '%Y-%m-%dT%H:%i:%s') AS conferido_em
+           FROM conferencia_eventos_esocial f
+           LEFT JOIN usuario u ON u.id = f.conferente_usuario_id
+          WHERE f.estabelecimento_id = ? AND f.competencia = ? AND f.excluido_em IS NULL
+          ORDER BY f.conferido_em DESC, f.id DESC LIMIT 1`,
+        [est, dataDoBanco(competencia)],
+      );
+      if (!x) return null;
+      const itens = await l.consultar(
+        `SELECT t.codigo_esocial AS evento, t.descricao AS nome, i.quantidade_sistema, i.quantidade_externo, i.quantidade_repasse,
+                i.quantidade_migrada_pendente, i.situacao
+           FROM conferencia_eventos_esocial_item i
+           JOIN tipo_evento_esocial t ON t.id = i.tipo_evento_esocial_id
+          WHERE i.conferencia_eventos_esocial_id = ? ORDER BY t.codigo_esocial`,
+        [num(x['id'])],
+      );
+      const linhas: LinhaConciliacaoEsocial[] = itens.map((i) => ({
+        evento: String(i['evento']),
+        rotulo: String(i['nome'] ?? i['evento']),
+        sante: num(i['quantidade_sistema']),
+        externo: numOuNulo(i['quantidade_externo']),
+        repasse: num(i['quantidade_repasse']),
+        pendenciaLegado: num(i['quantidade_migrada_pendente']),
+        situacao: situacaoLinhaDaTela(i['situacao']),
+      }));
+      return {
+        id: num(x['id']),
+        empresa: num(x['estabelecimento_id']),
+        competencia: String(x['competencia']),
+        transmissor: transmissorDaTela(x['transmissor']),
+        situacao: situacaoConferenciaDaTela(x['situacao']),
+        linhas: JSON.stringify(linhas),
+        observacao: txtOuNulo(x['observacao']),
+        conferidoPor: String(x['login'] ?? ''),
+        conferidoEm: String(x['conferido_em'] ?? ''),
+      };
+    });
   }
 }
 

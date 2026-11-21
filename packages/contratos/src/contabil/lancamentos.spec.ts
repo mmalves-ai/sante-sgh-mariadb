@@ -14,6 +14,7 @@ import {
   TETO_LANCAMENTOS_PAGINA,
 } from './lancamentos.js';
 import { ROTAS_CONTABIL_F1 } from './rotas.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const manual = {
   empresa: 1,
@@ -90,11 +91,11 @@ describe('rotas, permissões e eventos da etapa 2', () => {
       const p = CATALOGO_DECLARADO.find((x) => x.codigo === c);
       expect(p, c).toBeDefined();
       expect(FORMATO_CODIGO_PERMISSAO.test(c)).toBe(true);
-      expect(p!.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p!.codigo).length).toBeGreaterThan(0);
     }
     // D-PERM-FATOS-542: quem acompanha os fatos (82, 83, 84, 81) abre a tela dos lançamentos, onde a aba Fatos mora.
-    const ler = CATALOGO_DECLARADO.find((x) => x.codigo === 'contabil.lancamento.ler')!.opcoesLegado;
-    for (const o of CATALOGO_DECLARADO.find((x) => x.codigo === 'contabil.fato.ler')!.opcoesLegado)
+    const ler = opcoesDoMapa(CATALOGO_DECLARADO.find((x) => x.codigo === 'contabil.lancamento.ler')!.codigo);
+    for (const o of opcoesDoMapa(CATALOGO_DECLARADO.find((x) => x.codigo === 'contabil.fato.ler')!.codigo))
       expect(ler, String(o)).toContain(o);
     for (const c of ['contabil.periodo.encerrar', 'contabil.periodo.reabrir'])
       expect(CATALOGO_DECLARADO.find((x) => x.codigo === c)!.criticidade).toBe('critica');

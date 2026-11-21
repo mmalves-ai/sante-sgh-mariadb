@@ -25,6 +25,7 @@ import {
   TIPOS_INCIDENTE,
   type NotificarIncidenteEntrada,
 } from './notificacao.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const base: NotificarIncidenteEntrada = {
   atendimento: 500,
@@ -221,7 +222,7 @@ describe('permissões, eventos e chave de liberação', () => {
     ]);
     for (const p of PERMISSOES_QUALIDADE_M48.filter((x) => daEnfermagem.has(x.codigo))) {
       expect(p.categoria).toBe('clinica');
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
     }
     // W0-04 (M5): a comissão de revisão de prontuários é do escritório da qualidade com a direção clínica; a resposta à
     // própria pendência, de todo profissional; o aval, do SAME (opções do controle de prontuários).
@@ -236,7 +237,7 @@ describe('permissões, eventos e chave de liberação', () => {
     );
     expect(responder?.concessaoPorPerfil).toBe('todos-os-perfis-de-pessoa');
     const aval = PERMISSOES_QUALIDADE_M48.find((p) => p.codigo === PERMISSOES_QUALIDADE.revisaoAvalLer);
-    expect(aval?.opcoesLegado).toEqual([2361, 2367]);
+    expect(opcoesDoMapa(aval?.codigo)).toEqual([2361, 2367]);
     const outras = new Set<string>([responder?.codigo ?? '', aval?.codigo ?? '', ...daRevisao]);
     for (const p of PERMISSOES_QUALIDADE_M48.filter(
       (x) => x !== criar && !daEnfermagem.has(x.codigo) && !outras.has(x.codigo),

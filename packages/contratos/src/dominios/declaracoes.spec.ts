@@ -19,6 +19,7 @@ import {
   violacoesExclusao,
 } from './portao-iae.js';
 import { SUBITENS_DOMINIOS, permissaoDoDominio, permissoesExigidasDoDominio } from './tipos.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const TERMO_PROIBIDO = /\bSP[\s-]?DATA\b|\blegad[oa]s?\b|\bsistemas? (?:atual|atuais|antigos?)\b/i;
 const permissoes = new Map(CATALOGO_DECLARADO.map((p) => [p.codigo, p]));
@@ -52,7 +53,7 @@ describe('lote do M14: domínios', () => {
       for (const a of d.acoes) {
         const p = permissoes.get(permissaoDoDominio(d, a));
         expect(p, permissaoDoDominio(d, a)).toBeDefined();
-        expect(p?.opcoesLegado.length, permissaoDoDominio(d, a)).toBeGreaterThan(0);
+        expect(opcoesDoMapa(p?.codigo).length, permissaoDoDominio(d, a)).toBeGreaterThan(0);
       }
   });
   it('subitem existe e nenhum rótulo cita o sistema anterior', () => {

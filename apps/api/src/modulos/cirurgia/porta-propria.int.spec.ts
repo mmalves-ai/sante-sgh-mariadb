@@ -1,8 +1,9 @@
 // Integração das portas próprias do centro cirúrgico (lote 03-01) no cliente f22_o3 (onda 3), com massa SINTÉTICA
 // (códigos "C0301"; nenhuma pessoa real): contrato de efeito do agendamento, da remarcação, do cancelamento, da
 // permissão da sala e da gravação direta (solicitação, pendência e andamento) — linhas, versão, histórico e trilha —,
-// as recusas (sala ocupada, versão vista, entrada inválida, outro estabelecimento, operação pendente do modelo) e as
-// leituras da anestesia e do bloco seguro (gravações destas ainda recusam com modelo-pendente, sem gravar nada). Também: as
+// as recusas (sala ocupada, versão vista, entrada inválida, outro estabelecimento), o registro do ato cirúrgico (ato,
+// procedimentos, equipe, dispositivos) e as gravações da anestesia (APA, ficha, SRPA) e do bloco seguro (checklist e
+// rastreio), com o reenvio da mesma chave. Também: as
 // regras de horário do domínio sob a trava da sala (passado, mesmo horário, vedado, duração mínima, preparo da sala),
 // duas marcações concorrentes, o andamento confirmado → em sala → realizado com o estado e a versão vistos, a chave de
 // idempotência da requisição na gravação direta e a trilha pela tabela real.
@@ -34,6 +35,10 @@ interface Massa {
   carater: number;
   anestesia: number;
   procedimento: number;
+  atendimento: number;
+  especialidade: number;
+  modeloChecklist: number;
+  local: number;
 }
 
 const nucleo = new NucleoProprio();
@@ -55,6 +60,37 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 async function limpar(e: Escritor, ests: readonly number[]) {
   const em = ests.map(() => '?').join(', ');
   const ags = `SELECT id FROM agendamento_cirurgico WHERE estabelecimento_id IN (${em})`;
+  const atos = `SELECT id FROM ato_cirurgico WHERE estabelecimento_id IN (${em})`;
+  const fichas = `SELECT id FROM ficha_anestesica WHERE agendamento_cirurgico_id IN (${ags}) OR ato_cirurgico_id IN (${atos})`;
+  const srpas = `SELECT id FROM registro_recuperacao_anestesica WHERE estabelecimento_id IN (${em})`;
+  const lists = `SELECT id FROM checklist_cirurgia_segura WHERE agendamento_cirurgico_id IN (${ags}) OR ato_cirurgico_id IN (${atos})`;
+  await e.executar(
+    `DELETE FROM avaliacao_recuperacao_anestesica WHERE registro_recuperacao_anestesica_id IN (${srpas})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM registro_recuperacao_anestesica WHERE estabelecimento_id IN (${em})`, ests);
+  for (const t of ['adendo', 'lacuna', 'passagem', 'marco', 'lancamento'])
+    await e.executar(`DELETE FROM ${t}_ficha_anestesica WHERE ficha_anestesica_id IN (${fichas})`, [
+      ...ests,
+      ...ests,
+    ]);
+  await e.executar(`DELETE FROM ficha_anestesica WHERE id IN (SELECT id FROM (${fichas}) x)`, [
+    ...ests,
+    ...ests,
+  ]);
+  await e.executar(`DELETE FROM avaliacao_pre_anestesica WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE FROM confirmacao_checklist_cirurgia WHERE checklist_cirurgia_segura_id IN (${lists})`,
+    [...ests, ...ests],
+  );
+  await e.executar(`DELETE FROM checklist_cirurgia_segura WHERE id IN (SELECT id FROM (${lists}) x)`, [
+    ...ests,
+    ...ests,
+  ]);
+  await e.executar(`DELETE FROM movimento_paciente_bloco WHERE estabelecimento_id IN (${em})`, ests);
+  for (const t of ['ato_cirurgico_dispositivo', 'participante_cirurgia', 'ato_cirurgico_procedimento'])
+    await e.executar(`DELETE FROM ${t} WHERE ato_cirurgico_id IN (${atos})`, ests);
+  await e.executar(`DELETE FROM ato_cirurgico WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM reagendamento_cirurgico WHERE agendamento_cirurgico_id IN (${ags})`, ests);
   await e.executar(
     `DELETE FROM agendamento_cirurgico_versao WHERE agendamento_cirurgico_id IN (${ags})`,
@@ -168,11 +204,114 @@ beforeAll(async () => {
     await cad('tipo_pendencia_cirurgica', 'apa');
     await g(
       'SELECT id FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = ?',
+      [est, 'ato_cirurgico'],
+      'INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, ?, 1, ?)',
+      [est, 'ato_cirurgico', agora],
+    );
+    await g(
+      'SELECT id FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = ?',
       [est, 'agendamento_cirurgico'],
       'INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, ?, 1, ?)',
       [est, 'agendamento_cirurgico', agora],
     );
+    // Massa do registro do ato, da anestesia e do bloco seguro.
+    const cirurgiao = await prof(`CIRURGIAO SINTETICO ${P}`);
+    const anestesista = await prof(`ANESTESISTA SINTETICO ${P}`);
+    const convenio = await g(
+      'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+      [P],
+      "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, ?, 'operadora', 'ativa', ?)",
+      [P, `OPERADORA ${P}`, agora],
+    );
+    const categoria = await g(
+      'SELECT id FROM categoria_atendimento WHERE codigo = ?',
+      [`${P}int`],
+      "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, 'CATEGORIA SINTETICA', 'internacao', ?)",
+      [`${P}int`, agora],
+    );
+    const caraterTiss = await g(
+      'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+      [`${P}c`],
+      "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES (?, 'CARATER SINTETICO', 'teste', ?)",
+      [`${P}c`, agora],
+    );
+    const atendimento = await g(
+      'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+      [est, `${P}-AT`],
+      `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+         fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [est, `${P}-AT`, paciente, categoria, caraterTiss, convenio, cirurgiao, agora, agora],
+    );
+    const setor = await g(
+      'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+      [est, `${P}-RPA`],
+      "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'RECUPERACAO SINTETICA', 'assistencial', ?)",
+      [est, `${P}-RPA`, agora],
+    );
+    await e.executar('UPDATE sala_cirurgica SET setor_funcional_id = ? WHERE estabelecimento_id = ?', [
+      setor,
+      est,
+    ]);
+    await g(
+      'SELECT id FROM classificacao_asa WHERE classe = 2',
+      [],
+      "INSERT INTO classificacao_asa (codigo, descricao, classe, rotulo, criado_em) VALUES ('asa2', 'ASA II', 2, 'ASA II', ?)",
+      [agora],
+    );
+    await g(
+      "SELECT id FROM porte_cirurgico WHERE sigla = 'P' OR codigo = 'pequeno'",
+      [],
+      "INSERT INTO porte_cirurgico (codigo, descricao, sigla, criado_em) VALUES ('pequeno', 'PEQUENO', 'P', ?)",
+      [agora],
+    );
+    await g(
+      "SELECT id FROM classe_contaminacao_cirurgica WHERE classe = 'limpa'",
+      [],
+      "INSERT INTO classe_contaminacao_cirurgica (codigo, descricao, classe, criado_em) VALUES ('limpa', 'LIMPA', 'limpa', ?)",
+      [agora],
+    );
+    await g(
+      "SELECT id FROM tipo_sinal_monitorado WHERE codigo = 'fc'",
+      [],
+      "INSERT INTO tipo_sinal_monitorado (codigo, descricao, sigla, criado_em) VALUES ('fc', 'FREQUENCIA CARDIACA', 'FC', ?)",
+      [agora],
+    );
+    const especialidade = await cad('especialidade_medica', `${P}-ESP`);
+    const modeloChecklist = await g(
+      'SELECT id FROM modelo_checklist_cirurgia WHERE estabelecimento_id = ? AND codigo = ?',
+      [est, P],
+      "INSERT INTO modelo_checklist_cirurgia (estabelecimento_id, codigo, descricao, numero_versao, tipo, vigencia_inicio, criado_em) VALUES (?, ?, 'CHECKLIST SINTETICO', 1, 'cirurgia_segura', '2020-01-01', ?)",
+      [est, P, agora],
+    );
+    await g(
+      "SELECT id FROM item_checklist_cirurgia WHERE modelo_checklist_cirurgia_id = ? AND codigo = 'identidade'",
+      [modeloChecklist],
+      "INSERT INTO item_checklist_cirurgia (modelo_checklist_cirurgia_id, codigo, momento, pergunta, ordem, criado_em) VALUES (?, 'identidade', 'inducao', 'IDENTIDADE CONFIRMADA?', 1, ?)",
+      [modeloChecklist, agora],
+    );
+    const local = await g(
+      'SELECT id FROM local_bloco WHERE codigo = ?',
+      [`${P}-REC`],
+      "INSERT INTO local_bloco (codigo, descricao, etapa_painel, criado_em) VALUES (?, 'RECEPCAO SINTETICA', 'preparo', ?)",
+      [`${P}-REC`, agora],
+    );
+    await g(
+      "SELECT id FROM tipo_movimento_bloco WHERE codigo = 'admissao'",
+      [],
+      "INSERT INTO tipo_movimento_bloco (codigo, descricao, efeito, criado_em) VALUES ('admissao', 'ENTRADA NO BLOCO', 'admissao', ?)",
+      [agora],
+    );
+    await g(
+      'SELECT id FROM usuario_vinculo_profissional WHERE usuario_id = ? AND estabelecimento_id = ?',
+      [usuario, est],
+      'INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
+      [usuario, est, anestesista, '2020-01-01', agora],
+    );
     return {
+      atendimento,
+      especialidade,
+      modeloChecklist,
+      local,
       est,
       outro,
       usuario,
@@ -180,14 +319,9 @@ beforeAll(async () => {
       sala: await sala(est),
       salaOutro: await sala(outro),
       paciente,
-      cirurgiao: await prof(`CIRURGIAO SINTETICO ${P}`),
-      anestesista: await prof(`ANESTESISTA SINTETICO ${P}`),
-      convenio: await g(
-        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
-        [P],
-        "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, ?, 'operadora', 'ativa', ?)",
-        [P, `OPERADORA ${P}`, agora],
-      ),
+      cirurgiao,
+      anestesista,
+      convenio,
       carater: await cad('carater_cirurgia', `${P}-ELE`),
       anestesia: await cad('tipo_anestesia', `${P}-GER`),
       procedimento: await cad('procedimento_cirurgico', `${P}-PROC`),
@@ -716,15 +850,100 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     ).toHaveLength(1);
   });
 
-  it('o registro do ato pela tela fica indisponível com o motivo (modelo pendente), sem gravar', async () => {
-    expect(await porta.podeGravar(ctx(m.est), 'cirurgia.registrarCirurgia')).toMatchObject({
-      pode: false,
-      codigo: 'modelo-pendente',
-    });
-    await expect(porta.executar(ctx(m.est), 'cirurgia.registrarCirurgia', {}, op(m.est))).rejects.toThrow(
-      /modelo-pendente/,
+  it('registrar o ato: ato realizado, procedimentos com especialidade, equipe, dispositivos, ASA e pressão; agendamento uma vez só', async () => {
+    const ag = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('16:00'),
+      op(m.est),
     );
-    expect(await porta.podeGravar(ctx(m.est), 'cirurgia.agendarCirurgia')).toMatchObject({ pode: true });
+    const agendamento = Number(ag.resultado['agendamento']);
+    const uso = (usado: boolean, descricao: string | null = null) => ({ usado, descricao });
+    const entrada = {
+      agendamento,
+      reg: m.atendimento,
+      data: amanha(),
+      sala: m.sala,
+      convenio: m.convenio,
+      porte: 'P',
+      potencialContaminacao: 'L',
+      carater: m.carater,
+      tipoAnestesia: m.anestesia,
+      inicio: '16:10',
+      fim: '17:00',
+      inicioAnestesia: '16:00',
+      fimAnestesia: '17:10',
+      cid10: 'K40.9',
+      pressao: '120x80',
+      pulso: 72,
+      supuracao: false,
+      usos: {
+        tubo: uso(true, 'TUBO 7,5'),
+        antimicrobiano: uso(false),
+        sonda: uso(false),
+        cateter: uso(false),
+        puncao: uso(false),
+      },
+      procedimentos: [
+        {
+          procedimento: m.procedimento,
+          especialidade: m.especialidade,
+          tecnica: 1,
+          equipe: {
+            cirurgiao: { id: m.cirurgiao, cod: m.cirurgiao },
+            anestesista: { id: m.anestesista, cod: m.anestesista },
+          },
+        },
+      ],
+      extensao: { entradaSala: '15:55', incisao: '16:10', saidaSala: '17:20', asa: 2, observacao: null },
+    };
+    expect(await porta.podeGravar(ctx(m.est), 'cirurgia.registrarCirurgia')).toMatchObject({ pode: true });
+    const r = await porta.executar(ctx(m.est), 'cirurgia.registrarCirurgia', entrada, op(m.est));
+    const id = Number(r.resultado['cirurgia']);
+    const [ato] = await ler<Record<string, unknown>>(
+      `SELECT t.situacao, t.agendamento_cirurgico_id, t.pressao_sistolica, t.pressao_diastolica, t.frequencia_cardiaca,
+              ca.classe AS asa, pc.sigla AS porte
+         FROM ato_cirurgico t LEFT JOIN classificacao_asa ca ON ca.id = t.classificacao_asa_id
+         LEFT JOIN porte_cirurgico pc ON pc.id = t.porte_cirurgico_id WHERE t.id = ?`,
+      [id],
+    );
+    expect(ato).toMatchObject({
+      situacao: 'realizado',
+      agendamento_cirurgico_id: agendamento,
+      pressao_sistolica: 120,
+      pressao_diastolica: 80,
+      frequencia_cardiaca: 72,
+      asa: 2,
+      porte: 'P',
+    });
+    expect(
+      await ler(
+        'SELECT especialidade_medica_id, principal, tecnica FROM ato_cirurgico_procedimento WHERE ato_cirurgico_id = ?',
+        [id],
+      ),
+    ).toEqual([{ especialidade_medica_id: m.especialidade, principal: 1, tecnica: 'Videolaparoscopia' }]);
+    expect(await ler('SELECT id FROM participante_cirurgia WHERE ato_cirurgico_id = ?', [id])).toHaveLength(
+      2,
+    );
+    expect(
+      await ler('SELECT dispositivo, descricao FROM ato_cirurgico_dispositivo WHERE ato_cirurgico_id = ?', [
+        id,
+      ]),
+    ).toEqual([{ dispositivo: 'tubo', descricao: 'TUBO 7,5' }]);
+    expect(
+      await ler("SELECT id FROM trilha_auditoria WHERE entidade = 'ato_cirurgico' AND entidade_id = ?", [id]),
+    ).not.toHaveLength(0);
+    await expect(
+      porta.executar(ctx(m.est), 'cirurgia.registrarCirurgia', entrada, op(m.est)),
+    ).rejects.toThrow(/agendamento-ja-registrado/);
+    await expect(
+      porta.executar(
+        ctx(m.est),
+        'cirurgia.registrarCirurgia',
+        { ...entrada, agendamento: null, fim: '16:05' },
+        op(m.est),
+      ),
+    ).rejects.toThrow(/tempos-invalidos/);
   });
 
   it('leituras de catálogo: opções, profissionais, procedimentos e paciente', async () => {
@@ -744,19 +963,249 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
 });
 
 describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22_o3)', () => {
-  it('lêem do banco e recusam a gravação com o motivo do modelo pendente', async () => {
+  const agendar = async (hora: string) =>
+    Number(
+      (await porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar(hora), op(m.est)))
+        .resultado['agendamento'],
+    );
+  const cirurgia = (agendamento: number) => ({
+    agendamento,
+    sala: m.sala,
+    dataHora: `${amanha()}T18:00`,
+    reg: m.atendimento,
+    paciente: m.paciente,
+  });
+
+  it('APA, ficha e SRPA: gravam pelo Executor, a versão vista trava, o reenvio da chave não grava de novo', async () => {
     const an = new PortaAnestesiaPropria(nucleo);
-    const bl = new PortaBlocoSeguroPropria(nucleo);
-    const { itens } = await porta.agendamentos(ctx(m.est), amanha(), amanha(), null);
-    const id = itens[0]?.id ?? 0;
+    const agendamento = await agendar('18:00');
+    expect(await an.podeGravar(ctx(m.est))).toMatchObject({ pode: true });
     expect((await an.dominios(ctx(m.est))).funcoesEquipe.map((f) => f.sigla)).toContain('anestesista');
-    expect(await an.ficha(ctx(m.est), id)).toBeNull();
-    expect(await an.apas(ctx(m.est), id)).toEqual([]);
-    expect(await an.podeGravar()).toMatchObject({ pode: false, codigo: 'modelo-pendente' });
-    await expect(an.gravarSgh(ctx(m.est), null, async () => 1)).rejects.toThrow(/modelo-pendente/);
-    expect(await bl.checklist(ctx(m.est), id)).toBeNull();
-    expect(await bl.movimentos(ctx(m.est), id)).toEqual([]);
-    expect(await bl.podeGravar()).toMatchObject({ pode: false, codigo: 'modelo-pendente' });
-    await expect(bl.gravarSgh(ctx(m.est), null, async () => 1)).rejects.toThrow(/modelo-pendente/);
+    const apa = {
+      ...cirurgia(agendamento),
+      versaoVista: 0,
+      avaliadoEm: `${amanha()}T07:00`,
+      profissional: m.anestesista,
+      asa: 2,
+      emergencia: false,
+      pesoKg: 70,
+      alturaCm: 170,
+      viaAerea: { mallampati: 2, mobilidadeCervicalReduzida: false },
+      jejum: { liquidosClaros: `${amanha()}T05:00`, refeicaoLeve: `${amanha()}T00:00` },
+      criteriosLee: ['cirurgia-alto-risco'],
+      leePontos: 1,
+      alergiasConferidas: true,
+      comorbidades: null,
+      medicacoes: null,
+      exames: null,
+      anestesiasAnteriores: null,
+      plano: { texto: 'GERAL' },
+      tipoAnestesia: m.anestesia,
+      conclusao: 'apto-ressalvas',
+      ressalvas: null,
+      pendencias: [],
+      usuario: m.login,
+      chave: `t0301-apa-${randomUUID()}`,
+    };
+    const r1 = await an.gravarSgh(ctx(m.est), null, (g) => g.registrarApa(apa));
+    expect(r1).toMatchObject({ versao: 1, repetida: false });
+    expect(await an.gravarSgh(ctx(m.est), null, (g) => g.registrarApa(apa))).toMatchObject({
+      id: r1.id,
+      repetida: true,
+    });
+    await expect(
+      an.gravarSgh(ctx(m.est), null, (g) => g.registrarApa({ ...apa, chave: `t0301-apa-${randomUUID()}` })),
+    ).rejects.toThrow(/apa-mudou/);
+    const [lida] = await an.apas(ctx(m.est), agendamento);
+    expect(lida).toMatchObject({
+      versao: 1,
+      asa: 2,
+      conclusao: 'apto-ressalvas',
+      criteriosLee: ['cirurgia-alto-risco'],
+    });
+    expect(lida?.jejum['liquidosClaros']).toBe(`${amanha()}T05:00`);
+
+    const aberta = await an.gravarSgh(ctx(m.est), null, async (g) => {
+      await g.abrirFicha({
+        ...cirurgia(agendamento),
+        abertura: m.anestesista,
+        abertaEm: `${amanha()}T18:00`,
+        usuario: m.login,
+        chave: null,
+      });
+      return g.ficha(agendamento);
+    });
+    expect(aberta).toMatchObject({ situacao: 'aberta', versao: 1, agendamento });
+    const ficha = aberta!.id;
+    const lote = {
+      ficha,
+      lancamentos: [{ parte: 'sinal' as const, momento: `${amanha()}T18:05`, tipo: 'fc', valor: 80 }],
+      profissional: m.anestesista,
+      usuario: m.login,
+      chave: `t0301-l-${randomUUID()}`,
+    };
+    const l1 = await an.gravarSgh(ctx(m.est), null, (g) => g.lancar(lote));
+    expect(await an.gravarSgh(ctx(m.est), null, (g) => g.lancar(lote))).toMatchObject({
+      ids: l1.ids,
+      repetida: true,
+    });
+    await an.gravarSgh(ctx(m.est), null, (g) =>
+      g.subirVersao({
+        ficha,
+        versaoVista: 1,
+        usuario: m.login,
+        marco: { marco: 'inicioAnestesia', momento: `${amanha()}T18:02` },
+      }),
+    );
+    await expect(
+      an.gravarSgh(ctx(m.est), null, (g) => g.subirVersao({ ficha, versaoVista: 1, usuario: m.login })),
+    ).rejects.toThrow(/ficha-mudou/);
+    await an.gravarSgh(ctx(m.est), null, (g) =>
+      g.justificar({
+        ficha,
+        inicio: `${amanha()}T18:10`,
+        fim: `${amanha()}T18:20`,
+        motivo: 'MONITOR SEM SINAL',
+        profissional: m.anestesista,
+        usuario: m.login,
+        chave: null,
+      }),
+    );
+    await an.gravarSgh(ctx(m.est), null, (g) =>
+      g.subirVersao({ ficha, versaoVista: 2, usuario: m.login, situacao: 'encerrada' }),
+    );
+    await an.gravarSgh(ctx(m.est), null, (g) =>
+      g.assinar({
+        ficha,
+        versaoVista: 3,
+        profissional: m.anestesista,
+        hash: 'a'.repeat(64),
+        usuario: m.login,
+      }),
+    );
+    await an.gravarSgh(ctx(m.est), null, (g) =>
+      g.adendo({
+        ficha,
+        texto: 'ADENDO SINTETICO',
+        profissional: m.anestesista,
+        usuario: m.login,
+        chave: null,
+      }),
+    );
+    const f = await an.ficha(ctx(m.est), agendamento);
+    expect(f).toMatchObject({ situacao: 'assinada', assinadaPor: m.anestesista, hash: 'a'.repeat(64) });
+    expect(f?.marcos.inicioAnestesia).toBe(`${amanha()} 18:02`);
+    expect(f?.lancamentos).toHaveLength(1);
+    expect(f?.lacunas).toHaveLength(1);
+    expect(f?.adendos.map((x) => x.texto)).toEqual(['ADENDO SINTETICO']);
+
+    const srpa = (momento: 'admissao' | 'alta', ultimaVista: number) => ({
+      ...cirurgia(agendamento),
+      cirurgia: null,
+      momento,
+      em: `${amanha()}T${momento === 'admissao' ? '19:00' : '20:00'}`,
+      aldrete: { atividade: 2, respiracao: 2, circulacao: 2, consciencia: 2, saturacao: 2 },
+      dor: 2,
+      nvpo: 0,
+      pas: null,
+      pad: null,
+      fc: null,
+      spo2: null,
+      temperatura: 36.5,
+      observacao: null,
+      destino: momento === 'alta' ? ('unidade' as const) : null,
+      motivoDestino: null,
+      regraVersao: null,
+      ultimaVista,
+      profissional: m.anestesista,
+      usuario: m.login,
+      chave: null,
+    });
+    const s1 = await an.gravarSgh(ctx(m.est), null, (g) => g.registrarSrpa(srpa('admissao', 0)));
+    await expect(an.gravarSgh(ctx(m.est), null, (g) => g.registrarSrpa(srpa('alta', 0)))).rejects.toThrow(
+      /srpa-mudou/,
+    );
+    await an.gravarSgh(ctx(m.est), null, (g) => g.registrarSrpa(srpa('alta', s1.id)));
+    expect((await an.srpa(ctx(m.est), agendamento)).map((x) => [x.momento, x.total, x.destino])).toEqual([
+      ['admissao', 10, null],
+      ['alta', 10, 'unidade'],
+    ]);
+    expect((await an.situacoes(ctx(m.est), [agendamento])).get(agendamento)).toEqual({
+      apa: 'concluida',
+      ficha: 'assinada',
+      srpa: 'alta',
+    });
+  });
+
+  it('checklist e rastreio: abre, confirma, conclui o momento, move o paciente com o código do painel', async () => {
+    const bl = new PortaBlocoSeguroPropria(nucleo);
+    const agendamento = await agendar('20:00');
+    expect(await bl.podeGravar(ctx(m.est))).toMatchObject({ pode: true });
+    const { id: checklist } = await bl.gravarSgh(ctx(m.est), null, (g) =>
+      g.abrirChecklist({ ...cirurgia(agendamento), lista: m.modeloChecklist, usuario: m.login }),
+    );
+    const conf = {
+      checklist,
+      versaoVista: 1,
+      momento: 'inducao' as const,
+      em: `${amanha()}T20:01`,
+      itens: [{ item: 'identidade', resposta: 'sim' as const, observacao: null }],
+      profissional: null,
+      usuario: m.login,
+      chave: `t0301-c-${randomUUID()}`,
+    };
+    const c1 = await bl.gravarSgh(ctx(m.est), null, (g) => g.confirmarItens(conf));
+    expect(c1).toMatchObject({ versao: 2, repetida: false });
+    expect(await bl.gravarSgh(ctx(m.est), null, (g) => g.confirmarItens(conf))).toMatchObject({
+      repetida: true,
+    });
+    await bl.gravarSgh(ctx(m.est), null, (g) =>
+      g.concluirMomento({
+        checklist,
+        versaoVista: 2,
+        momento: 'inducao',
+        em: `${amanha()}T20:02`,
+        usuario: m.login,
+      }),
+    );
+    const k = await bl.checklist(ctx(m.est), agendamento);
+    expect(k).toMatchObject({ situacao: 'aberto', versao: 3, inducaoEm: `${amanha()} 20:02` });
+    expect(k?.confirmacoes.map((x) => [x.item, x.resposta, x.profissional])).toEqual([
+      ['identidade', 'sim', m.anestesista],
+    ]);
+
+    const mov = {
+      ...cirurgia(agendamento),
+      ultimoVisto: 0,
+      tipo: 'admissao' as const,
+      local: m.local,
+      localAnterior: null,
+      salaCirurgica: null,
+      em: `${amanha()}T19:50`,
+      destino: null,
+      observacao: null,
+      estadoAgendamento: null,
+      codigo: { dia: amanha(), sortear: () => 'K7Q2', validoAte: `${amanha()}T23:59` },
+      usuario: m.login,
+      chave: `t0301-m-${randomUUID()}`,
+    };
+    const m1 = await bl.gravarSgh(ctx(m.est), null, (g) => g.mover(mov));
+    expect(m1).toMatchObject({ sequencia: 1, repetida: false, codigo: 'K7Q2' });
+    expect(await bl.gravarSgh(ctx(m.est), null, (g) => g.movimentoPelaChave(mov.chave))).toMatchObject({
+      id: m1.id,
+    });
+    expect(await bl.gravarSgh(ctx(m.est), null, (g) => g.mover(mov))).toMatchObject({
+      id: m1.id,
+      repetida: true,
+    });
+    await expect(
+      bl.gravarSgh(ctx(m.est), null, (g) => g.mover({ ...mov, chave: `t0301-m-${randomUUID()}` })),
+    ).rejects.toThrow(/rastreio-mudou/);
+    expect((await bl.movimentos(ctx(m.est), agendamento)).map((x) => [x.tipo, x.local])).toEqual([
+      ['admissao', m.local],
+    ]);
+    expect((await bl.codigos(ctx(m.est), `${amanha()}T20:00`, [agendamento])).get(agendamento)?.codigo).toBe(
+      'K7Q2',
+    );
   });
 });

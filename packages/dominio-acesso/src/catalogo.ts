@@ -111,7 +111,9 @@ export interface NoArvore {
   readonly folha: boolean;
 }
 
+/** Permissão gerada da árvore do menu de origem, com as opções que a concedem (viram linhas do mapa do conector). */
 export interface PermissaoGerada extends DeclaracaoPermissao {
+  readonly opcoesLegado: readonly number[];
   readonly modulosLegado: readonly number[];
 }
 

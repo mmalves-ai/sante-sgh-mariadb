@@ -79,7 +79,7 @@ export function validarDeclaracao(d: DeclaracaoDominio, ctx: ContextoDeclaracao)
     const perm = ctx.permissoes.get(codigo);
     const opcoes = pub.opcoesLegado[a] ?? (a === 'ler' ? pub.opcoesLegado.ler : undefined);
     if (!perm) falha('permissao', `${id}: falta a permissão ${codigo} no catálogo.`);
-    else if (perm.opcoesLegado.length === 0 && perm.concessaoPorPerfil === null)
+    else if ((!opcoes || opcoes.length === 0) && perm.concessaoPorPerfil === null)
       falha('permissao', `${id}: ${codigo} sem opção do legado nem concessão por perfil.`);
     if (!opcoes || opcoes.length === 0) falha('opcoes-legado', `${id}: a ação ${a} não tem opção do legado.`);
   }

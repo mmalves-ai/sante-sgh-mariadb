@@ -11,6 +11,7 @@ import {
   GRAVIDADE_DA_REGRA_SUS,
   REGRAS_CRITICA_SUS,
 } from './sus.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 describe('vocabulário do faturamento SUS (M51)', () => {
   it('competência AAAAMM desde a SIGTAP', () => {
@@ -47,7 +48,7 @@ describe('vocabulário do faturamento SUS (M51)', () => {
     expect(sus.length).toBeGreaterThanOrEqual(12);
     for (const p of sus) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
     }
     const eventos = Object.values(EVENTOS_AUDITAVEIS).map((e) => e.codigo);
     for (const c of [

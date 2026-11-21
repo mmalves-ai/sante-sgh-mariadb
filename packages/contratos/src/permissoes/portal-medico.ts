@@ -1,12 +1,3 @@
-// Permissões do portal do médico externo, etapa 3 do M50 (ficha, seção 7; regra 6; DP-43; convencoes.md §12). Dois
-// lados:
-//   - tela interna: ver as contas do portal do médico externo e ligar a conta ao profissional do corpo clínico (de onde
-//     saem o extrato do repasse e a agenda do bloco). Quem aprova o autocadastro no outro sistema (opção "Web - acesso
-//     do médico solicitante", 4748, a mesma do M26) tem as permissões no novo (regra 1 do M06);
-//   - portal (identidade própria do acesso ao portal, nunca o usuário do sistema): a SESSÃO DO PORTAL do perfil
-//     `portal-medico-externo` vê só o extrato e a agenda do profissional ligado e pede cirurgia; nunca vem de usuário
-//     interno.
-import { OPCOES_SADT } from './sadt.js';
 import type { DeclaracaoPermissao } from './tipos.js';
 
 export const PERMISSOES_CODIGOS_PORTAL_MEDICO = {
@@ -34,7 +25,7 @@ export const PERFIS_SESSAO_PORTAL_MEDICO = ['portal-medico-externo'] as const;
 const doPortal = (codigo: string, descricao: string): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado: [],
+
   concessaoPorPerfil: 'por-perfil',
   perfis: PERFIS_SESSAO_PORTAL_MEDICO,
   categoria: 'administrativa',
@@ -46,7 +37,7 @@ export const PERMISSOES_PORTAL_MEDICO_M50: readonly DeclaracaoPermissao[] = [
     codigo: C.contasLer,
     descricao:
       'Ver as contas do portal do médico externo, o profissional ligado e os pedidos de cirurgia em aberto',
-    opcoesLegado: [OPCOES_SADT.webAcessoMedicoSolicitante],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
@@ -54,7 +45,7 @@ export const PERMISSOES_PORTAL_MEDICO_M50: readonly DeclaracaoPermissao[] = [
     codigo: C.vincular,
     descricao:
       'Ligar ou desligar a conta do médico externo ao profissional do corpo clínico (extrato e agenda dele no portal)',
-    opcoesLegado: [OPCOES_SADT.webAcessoMedicoSolicitante],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -63,7 +54,7 @@ export const PERMISSOES_PORTAL_MEDICO_M50: readonly DeclaracaoPermissao[] = [
     codigo: C.contaGerir,
     descricao:
       'Bloquear, desbloquear ou encerrar com motivo a conta do médico externo (a conta que operou não se exclui)',
-    opcoesLegado: [OPCOES_SADT.webAcessoMedicoSolicitante],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'critica',

@@ -2,14 +2,15 @@
 // Lê do modelo próprio: os credores (empresa_fornecedora), as classificações gerenciais (grupo, subgrupo e natureza
 // financeira) e o aviso de títulos manuais (titulo_pagar de outro módulo, do mesmo credor, classificação e período).
 // O catálogo de rotinas é fixo do produto (ROTINAS_INTEGRACAO_FOLHA).
-// O que ainda não tem tabela no modelo NÃO devolve vazio: recusa com 503 `modelo-pendente`, dizendo a operação, e a
-// liberação de gravação responde "não pode" com o mesmo motivo. O DDL foi pedido em docs/obra/fatias/f22/saida/03-07.json.
-// No serviço, o apoio da tela trata a falta do de-para como "sem de-para vigente" (as classificações e os credores
-// continuam consultáveis); a prévia, o lançamento, a lista, as origens, o detalhe e o custo de pessoal respondem 503.
-// O que falta:
-//   - o de-para de integração por vigência (integracoes; gravarSgh, que grava a vigência);
-//   - o lançamento dos títulos da folha (executar `financeiro.criarTituloPagar`; lancamentos, lancamento,
-//     lancamentoDaOrigem, titulosDoLancamento, chavesLancadas);
+// O de-para por vigência é lido e gravado em integracao_folha_financeiro e integracao_folha_financeiro_destino: o credor
+// é a empresa_fornecedora, a classificação é a natureza_financeira achada pelos códigos numéricos do grupo, do subgrupo
+// e do item, e o mês do vencimento é `mesmo` ou `seguinte`.
+// O que ainda não está ligado NÃO devolve vazio: recusa com 503 `modelo-pendente`, dizendo a operação, e a liberação da
+// operação do lançamento responde "não pode" com o mesmo motivo. O que falta:
+//   - o lançamento dos títulos da folha (executar `financeiro.criarTituloPagar`, que grava o título a pagar pela operação
+//     do financeiro na mesma transação; lancamentos, lancamento, lancamentoDaOrigem, titulosDoLancamento,
+//     chavesLancadas leem o que ele grava): pedido de composição em docs/obra/fatias/f24/saida/03-pessoas.json;
+//   - a conta contábil sugerida do destino (o de-para não tem a coluna; pedido de DDL no mesmo arquivo);
 //   - o custo de pessoal por centro (custoPessoal);
 //   - o retorno conferido da folha externa somado por destino (retorno; falta o papel de resumo da rubrica).
 // Melhoria: o credor é o cadastro único de fornecedor (empresa_fornecedora), só os ativos e não excluídos.
@@ -26,8 +27,16 @@ import type {
   IntegracaoFolhaLida,
   RotinaIntegracaoFolha,
 } from '@sgh/contratos';
-import { ErroOperacao, type Leitor, type NucleoProprio, recusa } from '@sgh/nucleo';
-import type { GravacaoFeita, LiberacaoGravacao } from '../../exames/public-api.js';
+import {
+  DESTINOS_TITULO_FOLHA,
+  type DestinoIntegracaoFolha,
+  type DestinoTituloFolha,
+  ROTINA_DO_DESTINO,
+} from '@sgh/contratos';
+import { ErroOperacao, type Leitor, type NucleoProprio, recusa, type TxOperacao } from '@sgh/nucleo';
+import { gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
+import type { GravacaoFeita, LiberacaoGravacao, TrilhaDaGravacao } from '../../exames/public-api.js';
+import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import type {
   ContextoIntegracaoFolha,
   FiltroTitulosManuais,
@@ -40,30 +49,27 @@ import {
   type TituloFolhaLancado,
 } from './apoio-folha.js';
 import { type RetornoParaTitulos } from './tipos-folha.js';
+import { OPERACAO_TITULOS_FOLHA } from './servico-integracao.js';
 
 /** O mínimo do núcleo que a porta usa. */
-export type NucleoIntegracaoFolha = Pick<NucleoProprio, 'lerSomente'>;
+export type NucleoIntegracaoFolha = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 /** Quantos credores a busca devolve. */
 export const TETO_CREDORES_FOLHA = 50;
 
 /** As operações sem tabela no modelo e o recurso que falta a cada uma (o texto vai na recusa). */
+const SEM_LANCAMENTO = '(o lançamento dos títulos da folha ainda não está ligado à operação do título a pagar do financeiro)';
 export const SEM_MODELO_INTEGRACAO_FOLHA = {
-  integracoes: 'consultar o de-para da integração da folha (falta a tabela da vigência do de-para)',
-  gravarSgh: 'gravar o de-para da integração da folha (falta a tabela da vigência do de-para)',
-  executar:
-    'lançar os títulos da folha no contas a pagar (falta a tabela do lançamento dos títulos da folha)',
-  lancamentos:
-    'listar os lançamentos dos títulos da folha (falta a tabela do lançamento dos títulos da folha)',
-  lancamento:
-    'consultar o lançamento dos títulos da folha (falta a tabela do lançamento dos títulos da folha)',
-  lancamentoDaOrigem: 'consultar o lançamento da origem (falta a tabela do lançamento dos títulos da folha)',
-  titulosDoLancamento:
-    'listar os títulos do lançamento da folha (falta a tabela do lançamento dos títulos da folha)',
-  chavesLancadas:
-    'conferir os títulos já lançados da competência (falta a tabela do lançamento dos títulos da folha)',
-  custoPessoal: 'consultar o custo de pessoal por centro (falta a tabela dos fatos contábeis da folha)',
-  retorno: 'ler o retorno conferido da folha externa para os títulos (falta o papel de resumo da rubrica)',
+  executar: `lançar os títulos da folha no contas a pagar ${SEM_LANCAMENTO}`,
+  lancamentos: `listar os lançamentos dos títulos da folha ${SEM_LANCAMENTO}`,
+  lancamento: `consultar o lançamento dos títulos da folha ${SEM_LANCAMENTO}`,
+  lancamentoDaOrigem: `consultar o lançamento da origem ${SEM_LANCAMENTO}`,
+  titulosDoLancamento: `listar os títulos do lançamento da folha ${SEM_LANCAMENTO}`,
+  chavesLancadas: `conferir os títulos já lançados da competência ${SEM_LANCAMENTO}`,
+  custoPessoal: `consultar o custo de pessoal por centro (os fatos contábeis da folha nascem do lançamento) ${SEM_LANCAMENTO}`,
+  retorno: 'ler o retorno conferido da folha externa para os títulos (a leitura do lote conferido por papel de resumo da rubrica ainda não está ligada)',
+  contaContabil:
+    'gravar a conta contábil sugerida do destino (o de-para do modelo ainda não tem a coluna; deixe a sugestão vazia)',
 } as const;
 
 export type OperacaoSemModeloIntegracaoFolha = keyof typeof SEM_MODELO_INTEGRACAO_FOLHA;
@@ -77,14 +83,143 @@ export function erroSemModelo(op: OperacaoSemModeloIntegracaoFolha): ErroOperaca
   );
 }
 
-const MOTIVO_SEM_GRAVACAO =
-  'A integração da folha com o financeiro ainda não tem as tabelas do de-para e do lançamento dos títulos no modelo: as telas ficam em consulta.';
+const MOTIVO_SEM_LANCAMENTO =
+  'O lançamento dos títulos da folha no contas a pagar ainda não está ligado ao financeiro: a prévia fica em consulta.';
+
+/** As tabelas que a gravação do de-para escreve (a transação recusa as outras). */
+export const TABELAS_INTEGRACAO_FOLHA = ['integracao_folha_financeiro', 'integracao_folha_financeiro_destino'] as const;
+
+/** O destino do contrato (`liquido-mensal`) no banco (`liquido_mensal`) e de volta. */
+const destinoNoBanco = (d: DestinoTituloFolha): string => d.replace(/-/g, '_');
+const destinoDoBanco = (v: unknown): DestinoTituloFolha | null => {
+  const d = texto(v).replace(/_/g, '-');
+  return (DESTINOS_TITULO_FOLHA as readonly string[]).includes(d) ? (d as DestinoTituloFolha) : null;
+};
+const doisDigitos = (x: number) => String(x).padStart(2, '0');
+const dia = (v: unknown): string =>
+  v instanceof Date
+    ? `${v.getFullYear()}-${doisDigitos(v.getMonth() + 1)}-${doisDigitos(v.getDate())}`
+    : texto(v).slice(0, 10);
+const instante = (v: unknown): string => (v instanceof Date ? v.toISOString() : texto(v));
+
+const SQL_INTEGRACOES = `
+  SELECT i.id, i.vigencia_inicio, i.criado_em, u.login,
+         d.destino, d.empresa_fornecedora_id, d.dia_vencimento, d.mes_vencimento,
+         g.codigo AS grupo, s.codigo AS subgrupo, n.codigo AS item
+    FROM integracao_folha_financeiro i
+    JOIN integracao_folha_financeiro_destino d ON d.integracao_folha_financeiro_id = i.id
+    JOIN natureza_financeira n ON n.id = d.natureza_financeira_id
+    JOIN subgrupo_natureza_financeira s ON s.id = n.subgrupo_natureza_financeira_id
+    JOIN grupo_natureza_financeira g ON g.id = s.grupo_natureza_financeira_id
+    LEFT JOIN usuario u ON u.id = i.criado_por
+   WHERE i.estabelecimento_id = ? AND i.excluido_em IS NULL
+   ORDER BY i.vigencia_inicio DESC, i.id DESC, d.id`;
+
+/** As vigências do de-para do estabelecimento (a mais recente primeiro), com os destinos na ordem gravada. */
+async function lerIntegracoes(l: Pick<Leitor, 'consultar'>, est: number): Promise<IntegracaoFolhaLida[]> {
+  const porId = new Map<number, IntegracaoFolhaLida & { destinos: (DestinoIntegracaoFolha & { rotina: number })[] }>();
+  for (const r of await l.consultar(SQL_INTEGRACOES, [est])) {
+    const id = numero(r['id']);
+    let v = porId.get(id);
+    if (!v) {
+      v = {
+        id,
+        empresa: est,
+        inicio: dia(r['vigencia_inicio']),
+        destinos: [],
+        criadoPor: texto(r['login']),
+        criadoEm: instante(r['criado_em']),
+      };
+      porId.set(id, v);
+    }
+    const destino = destinoDoBanco(r['destino']);
+    // O CHECK do banco aceita `outro`, que o contrato não tem: esse destino não entra no de-para da tela.
+    if (destino === null) continue;
+    v.destinos.push({
+      destino,
+      rotina: ROTINA_DO_DESTINO[destino],
+      credor: numero(r['empresa_fornecedora_id']),
+      classificacao: { grupo: numero(r['grupo']), subgrupo: numero(r['subgrupo']), item: numero(r['item']) },
+      diaVencimento: numero(r['dia_vencimento']),
+      mesesDepois: r['mes_vencimento'] === 'mesmo' ? 0 : 1,
+      contaContabil: '',
+    });
+  }
+  return [...porId.values()];
+}
+
+/** A natureza de despesa ativa pelos códigos numéricos do grupo, do subgrupo e do item (a classificação do contrato). */
+async function naturezaDaClassificacao(
+  tx: TxOperacao,
+  c: DestinoIntegracaoFolha['classificacao'],
+): Promise<number> {
+  const rs = await tx.consultar(
+    `SELECT n.id
+       FROM natureza_financeira n
+       JOIN subgrupo_natureza_financeira s ON s.id = n.subgrupo_natureza_financeira_id
+       JOIN grupo_natureza_financeira g ON g.id = s.grupo_natureza_financeira_id
+      WHERE n.excluido_em IS NULL AND s.excluido_em IS NULL AND g.excluido_em IS NULL
+        AND n.ativo = TRUE AND n.tipo = 'despesa'
+        AND g.codigo REGEXP '^[0-9]{1,5}$' AND s.codigo REGEXP '^[0-9]{1,5}$' AND n.codigo REGEXP '^[0-9]{1,5}$'
+        AND CAST(g.codigo AS UNSIGNED) = ? AND CAST(s.codigo AS UNSIGNED) = ? AND CAST(n.codigo AS UNSIGNED) = ?`,
+    [c.grupo, c.subgrupo, c.item],
+  );
+  if (rs.length !== 1)
+    throw recusa(
+      rs.length === 0 ? 'classificacao-inexistente' : 'classificacao-ambigua',
+      rs.length === 0
+        ? `A classificação ${c.grupo}.${c.subgrupo}.${c.item} não é uma natureza de despesa ativa.`
+        : `A classificação ${c.grupo}.${c.subgrupo}.${c.item} casa com mais de uma natureza de despesa: corrija os códigos no plano.`,
+    );
+  return numero(rs[0]!['id']);
+}
+
+function gravadorIntegracao(tx: TxOperacao, est: number): GravadorIntegracaoFolha {
+  return {
+    integracoes: async (empresa) => (empresa === est ? lerIntegracoes(tx, est) : []),
+    async incluirIntegracao(x) {
+      if (x.empresa !== est)
+        throw recusa('empresa-fora-da-sessao', 'A empresa do de-para é o estabelecimento da sessão.');
+      if (x.destinos.some((d) => d.contaContabil.trim() !== '')) throw erroSemModelo('contaContabil');
+      const repetida = await tx.consultarParaAtualizar(
+        'SELECT id FROM integracao_folha_financeiro WHERE estabelecimento_id = ? AND vigencia_inicio = ? AND excluido_em IS NULL',
+        [est, x.inicio],
+      );
+      if (repetida.length > 0)
+        throw recusa('vigencia-repetida', 'Já existe um de-para com este início para a empresa: escolha outra data.');
+      for (const d of x.destinos) {
+        const credor = await tx.uma(
+          "SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL AND situacao = 'ativo'",
+          [d.credor],
+        );
+        if (!credor) throw recusa('credor-inexistente', `O credor ${d.credor} não é um fornecedor ativo.`);
+      }
+      await exigirUsuario(tx, x.por);
+      const id = await tx.incluir('integracao_folha_financeiro', {
+        estabelecimento_id: est,
+        vigencia_inicio: x.inicio,
+      });
+      for (const d of x.destinos)
+        await tx.incluir('integracao_folha_financeiro_destino', {
+          integracao_folha_financeiro_id: id,
+          destino: destinoNoBanco(d.destino),
+          empresa_fornecedora_id: d.credor,
+          natureza_financeira_id: await naturezaDaClassificacao(tx, d.classificacao),
+          dia_vencimento: d.diaVencimento,
+          mes_vencimento: d.mesesDepois === 0 ? 'mesmo' : 'seguinte',
+        });
+      return id;
+    },
+  };
+}
 
 const numero = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0));
 const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 
 export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
   readonly destino = 'banco' as const;
+
+  private executor: ReturnType<NucleoIntegracaoFolha['criarExecutor']> | null = null;
 
   constructor(private readonly nucleo: NucleoIntegracaoFolha) {}
 
@@ -95,24 +230,39 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
     return this.nucleo.lerSomente(c, (l) => fn(l, est));
   }
 
-  // ── Gravação (sem modelo: liberação negada com o motivo; a chamada recusa com 503) ─────────────────────────────
+  // ── Gravação: o de-para grava; o lançamento dos títulos recusa com o motivo ────────────────────────────────────
 
-  async podeGravar(): Promise<LiberacaoGravacao> {
-    return { pode: false, codigo: 'modelo-pendente', motivo: MOTIVO_SEM_GRAVACAO };
+  async podeGravar(_c: ContextoIntegracaoFolha, operacao?: string): Promise<LiberacaoGravacao> {
+    return operacao === OPERACAO_TITULOS_FOLHA
+      ? { pode: false, codigo: 'modelo-pendente', motivo: MOTIVO_SEM_LANCAMENTO }
+      : { pode: true, codigo: null, motivo: null };
   }
 
   async executar(): Promise<GravacaoFeita> {
     throw erroSemModelo('executar');
   }
 
-  /* eslint-disable @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo */
-  async gravarSgh<T>(
-    _c: ContextoIntegracaoFolha,
-    _t: unknown,
-    _fn: (g: GravadorIntegracaoFolha) => Promise<T>,
+  /** Grava a vigência do de-para numa operação do executor, com a trilha e a releitura na mesma transação. */
+  gravarSgh<T>(
+    c: ContextoIntegracaoFolha,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorIntegracaoFolha) => Promise<T>,
   ): Promise<T> {
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-    throw erroSemModelo('gravarSgh');
+    if (c.estabelecimento === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    this.executor ??= this.nucleo.criarExecutor();
+    return gravacaoDireta(this.executor, c, {
+      nome: 'pessoas.integracao_folha.gravar',
+      tabelas: TABELAS_INTEGRACAO_FOLHA,
+      trilha,
+      gravador: (tx, est) => gravadorIntegracao(tx, est),
+      fn,
+    });
+  }
+
+  /** As vigências do de-para da empresa (o estabelecimento da sessão), a mais recente primeiro. */
+  integracoes(c: ContextoIntegracaoFolha, empresa: number): Promise<IntegracaoFolhaLida[]> {
+    return this.ler(c, async (l, est) => (empresa === est ? lerIntegracoes(l, est) : []));
   }
 
   // ── Leituras com modelo ─────────────────────────────────────────────────────────────────────────────────────
@@ -215,9 +365,6 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
 
   // ── Leituras sem modelo (recusa explícita, nunca vazio) ─────────────────────────────────────────────────────
 
-  async integracoes(): Promise<IntegracaoFolhaLida[]> {
-    throw erroSemModelo('integracoes');
-  }
   async retorno(): Promise<RetornoParaTitulos | null> {
     throw erroSemModelo('retorno');
   }

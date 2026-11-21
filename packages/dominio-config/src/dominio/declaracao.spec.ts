@@ -95,7 +95,7 @@ function permissoes(
   return new Map(
     d.acoes.map((a) => {
       const codigo = permissaoDoDominio(d, a);
-      return [codigo, { codigo, descricao: 'x', opcoesLegado: [1], concessaoPorPerfil: null, ...extra }];
+      return [codigo, { codigo, descricao: 'x', concessaoPorPerfil: null, ...extra }];
     }),
   );
 }
@@ -130,13 +130,15 @@ describe('declaração do CRUD genérico (regra 1)', () => {
   });
 
   it('permissão sem opção legada nem concessão por perfil (permissão nova) é recusada', () => {
-    const c = ctx({ permissoes: permissoes(publico, { opcoesLegado: [], concessaoPorPerfil: null }) });
-    expect(validarDeclaracao(base, c).map((p) => p.regra)).toContain('permissao');
+    const semOpcao = { ...publico, opcoesLegado: { ...publico.opcoesLegado, criar: [] } };
+    const d = { ...base, publico: semOpcao };
+    const c = ctx({ permissoes: permissoes(semOpcao, { concessaoPorPerfil: null }) });
+    expect(validarDeclaracao(d, c).map((p) => p.regra)).toContain('permissao');
   });
 
   it('permissão nova concedida por perfil é aceita', () => {
     const c = ctx({
-      permissoes: permissoes(publico, { opcoesLegado: [], concessaoPorPerfil: 'por-perfil' }),
+      permissoes: permissoes(publico, { concessaoPorPerfil: 'por-perfil' }),
     });
     expect(validarDeclaracao(base, c)).toEqual([]);
   });

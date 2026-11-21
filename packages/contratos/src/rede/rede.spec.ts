@@ -11,6 +11,7 @@ import {
   TETO_PAGINA_FILA_REDE,
 } from './telas.js';
 import { faixaPontuacaoRede, LIMIAR_FILA_REDE, TABELAS_INDICE_REDE } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 describe('faixas da pontuação', () => {
   it('cobre do limiar a 100 sem buraco e nada abaixo do limiar', () => {
@@ -81,7 +82,7 @@ describe('permissões do MPI no catálogo', () => {
     expect(rede.map((p) => p.codigo)).toEqual(['rede.mpi.ler', 'rede.mpi.vincular', 'rede.mpi.desfazer']);
     for (const p of rede) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
       expect(p.categoria).toBe('administrativa');
     }
   });
@@ -92,7 +93,7 @@ describe('permissões do MPI no catálogo', () => {
     expect(e2.map((p) => p.codigo).sort()).toEqual([...codigos].sort());
     for (const p of e2) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
     }
     expect(e2.find((p) => p.codigo === 'cadastro.paciente.unificar')?.criticidade).toBe('critica');
     // O aviso e o acesso cruzado são clínicos (abrem a partir do prontuário).

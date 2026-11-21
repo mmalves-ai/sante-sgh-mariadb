@@ -19,7 +19,7 @@ export const PERMISSOES_REDE_BI_M57 = [
     codigo: PERMISSOES_REDE_BI_CODIGOS.biRedeAcessar,
     descricao:
       'Ver o BI consolidado da Rede (indicadores com a mesma ficha técnica, painel operacional e financeiro, por estabelecimento e da Rede; só agregados) e os serviços compartilhados registrados',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: [PERFIL_DIRETORIA_REDE],
     categoria: 'administrativa',
@@ -29,7 +29,7 @@ export const PERMISSOES_REDE_BI_M57 = [
     codigo: PERMISSOES_REDE_BI_CODIGOS.servicoRegistrar,
     descricao:
       'Registrar e alterar as oportunidades de serviços compartilhados da Rede (catálogo, fornecedores, compras, laudos), sem compromisso de escopo',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: [PERFIL_DIRETORIA_REDE],
     categoria: 'administrativa',

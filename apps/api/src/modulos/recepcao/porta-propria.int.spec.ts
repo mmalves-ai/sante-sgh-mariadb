@@ -471,7 +471,7 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
   });
 
   it('dispositivo do painel e do totem: só o resumo do token, locais e serviços ligados, renovação, conferência e revogação', async () => {
-    const criar = (x: Partial<{ portalOrdem: number | null; tipo: 'totem' | 'painel' }> = {}) =>
+    const criar = (x: Partial<{ portalOrdem: number | null; tipo: 'totem' | 'painel' | 'paineltv' }> = {}) =>
       porta.gravar(
         c,
         (r: { id: number }) => trilhaDe('dispositivo_recepcao', r.id),
@@ -561,9 +561,27 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
         ),
       ),
     ).toBe('dispositivo-revogado');
-    // O dispositivo não aparece no outro estabelecimento; o vínculo com o painel substituído aguarda coluna.
+    // O dispositivo não aparece no outro estabelecimento.
     expect((await porta.dispositivos(outro)).some((x) => x.id === d.id)).toBe(false);
-    expect(await recusada(criar({ portalOrdem: 3 }))).toBe('modelo-pendente');
+    // O painel de TV de setor liga-se ao painel_tv ativo da ordem informada; outro tipo ou ordem sem painel recusa.
+    expect(await recusada(criar({ portalOrdem: 3 }))).toBe('painel-tv-so-no-tipo');
+    expect(await recusada(criar({ portalOrdem: 98, tipo: 'paineltv' }))).toBe('painel-tv-inexistente');
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'rc0101-painel-tv' }, async (e) => {
+      const tipo = await garantir(
+        e,
+        'tipo_painel_tv',
+        { codigo: 'chamada_sintetico' },
+        { descricao: 'Chamada SINTETICO', categoria: 'chamada', componente: 'painel-chamada' },
+      );
+      await garantir(
+        e,
+        'painel_tv',
+        { estabelecimento_id: m.est, codigo: 'TV97_SINTETICO' },
+        { tipo_painel_tv_id: tipo, nome: 'Painel SINTETICO', ordem: 97, situacao: 'ativo' },
+      );
+    });
+    const tv = await criar({ portalOrdem: 97, tipo: 'paineltv' });
+    expect((await porta.dispositivos(c)).find((x) => x.id === tv.id)?.portalOrdem).toBe(97);
   });
 
   it('termos de consentimento: versão nova, assinatura imutável com resumo, revogação única e exclusão só sem assinatura', async () => {

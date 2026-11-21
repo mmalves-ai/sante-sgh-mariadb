@@ -14,6 +14,7 @@ import {
 } from './demonstracoes.js';
 import { ROTAS_CONTABIL_F2, TIPOS_LANCAMENTO } from './lancamentos.js';
 import { ROTAS_CONTABIL_F1 } from './rotas.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const contador = {
   nome: 'Contador Sintético',
@@ -103,7 +104,7 @@ describe('rotas, permissões e eventos da etapa 3', () => {
       const p = CATALOGO_DECLARADO.find((x) => x.codigo === c);
       expect(p, c).toBeDefined();
       expect(FORMATO_CODIGO_PERMISSAO.test(c)).toBe(true);
-      expect(p!.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p!.codigo).length).toBeGreaterThan(0);
     }
     expect(CATALOGO_DECLARADO.find((x) => x.codigo === 'contabil.sped.gerar')!.criticidade).toBe('sensivel');
   });

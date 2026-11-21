@@ -1,0 +1,77 @@
+{
+  "lote": "05-misto-agenda",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "lote_alvo": "orquestrador (dono de apps/api/src/modulos/enfermagem/enfermagem.controller.ts)",
+      "arquivos": [
+        "apps/api/src/modulos/enfermagem/enfermagem.controller.ts"
+      ],
+      "motivo": "A anotação offline da beira do leito chama gravarRespostaExt com registro 0. A resposta de extensão agora grava em registro_assistencial_extensao, que exige um registro assistencial do paciente (FK NOT NULL). Com registro 0 a porta recusa com 'registro-inexistente'. A anotação deve gravar primeiro o registro assistencial (anotação de enfermagem do atendimento) e só depois as respostas de extensão, ou ir por outro gravador próprio de anotação."
+    },
+    {
+      "tipo": "contrato",
+      "lote_alvo": "orquestrador (packages/contratos/src/patrimonio/patrimonio.ts)",
+      "arquivos": [
+        "packages/contratos/src/patrimonio/patrimonio.ts",
+        "apps/web (cadastro do bem)"
+      ],
+      "motivo": "O responsável pelo bem é texto livre no contrato (80), mas no modelo é um usuário (bem_patrimonial.responsavel_usuario_id). A porta passou a achar o usuário pelo login ou pelo nome exato (recusa 'responsavel-inexistente' ou 'responsavel-ambiguo'). Melhor prática: o contrato levar o id do usuário, com a escolha numa lista na tela."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "cota_depreciacao",
+      "colunas": [
+        "vida_util_meses SMALLINT UNSIGNED NULL",
+        "coeficiente_turno DECIMAL(7,4) NULL",
+        "centro_custo_id BIGINT UNSIGNED NULL (FK)",
+        "valor_residual_bem DECIMAL(15,2) NULL"
+      ],
+      "motivo": "Prioridade baixa. A cota guarda a taxa anual e o valor depreciável; a leitura deriva a vida útil da taxa e lê o centro, o coeficiente e o residual do bem atual. Guardar o retrato do cálculo evita que a cota antiga mude de leitura se o bem for alterado depois."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "avaliacao_pre_anestesica",
+      "colunas": [
+        "jejum_por_tipo JSON NULL (CHECK JSON_VALID): a última ingestão de cada tipo (líquidos claros, leite materno, refeição leve, refeição gordurosa)"
+      ],
+      "motivo": "O contrato da APA traz a última ingestão de cada um dos quatro tipos (regra de jejum da ASA); o modelo guarda só a última ingestão e o tipo dela (ultima_ingestao_em, tipo_ultima_ingestao). A porta grava a mais recente; as outras se perdem."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "avaliacao_recuperacao_anestesica",
+      "colunas": [
+        "pressao_sistolica SMALLINT UNSIGNED NULL",
+        "pressao_diastolica SMALLINT UNSIGNED NULL",
+        "frequencia_cardiaca SMALLINT UNSIGNED NULL",
+        "saturacao_oxigenio TINYINT UNSIGNED NULL (CHECK 0 a 100)",
+        "regra_alta_versao SMALLINT UNSIGNED NULL"
+      ],
+      "motivo": "A avaliação da recuperação pós-anestésica (SRPA) recebe pressão, pulso e saturação, e a alta traz a versão da regra de alta usada; o modelo só tem a temperatura. Hoje esses valores não são gravados."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "registro_recuperacao_anestesica",
+      "colunas": [
+        "ck_registro_recuperacao_anestesica_nausea: nausea_vomito_alta <= 3 (hoje <= 2)"
+      ],
+      "motivo": "A escala de náusea e vômito da avaliação vai de 0 a 3 (CHECK da avaliação e contrato); o resumo da alta aceita só até 2. Com 3 na alta, a porta grava nulo no resumo (o valor fica na avaliação)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lancamento_ficha_anestesica",
+      "colunas": [
+        "procedimento_cirurgico_id BIGINT UNSIGNED NULL (FK)"
+      ],
+      "motivo": "Prioridade baixa. O lançamento de procedimento da ficha traz o código do procedimento; o modelo guarda só a descrição."
+    },
+    {
+      "tipo": "codigo",
+      "lote_alvo": "orquestrador (tools/db/criar_cliente.py e carga do cliente)",
+      "arquivos": [
+        "tools/db/criar_cliente.py"
+      ],
+      "motivo": "O registro do ato cirúrgico usa a numeração 'ato_cirurgico' (sequencia_negocio) por estabelecimento, como o agendamento usa 'agendamento_cirurgico'. Sem ela a gravação recusa 'sequencia-nao-configurada'. O comando de criar cliente ou de criar estabelecimento deve configurar as duas. A recuperação pós-anestésica exige o setor funcional da sala (sala_cirurgica.setor_funcional_id); sem ele recusa 'srpa-sem-setor'."
+    }
+  ]
+}

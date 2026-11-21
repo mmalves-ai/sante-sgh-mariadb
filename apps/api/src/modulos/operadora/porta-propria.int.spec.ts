@@ -1,8 +1,8 @@
 // Integração da porta própria da operadora (F0 e F1) contra o MariaDB real, no cliente de teste da onda 2 (f22_o2).
 // Massa SINTÉTICA (códigos "L0210"/"9021", nenhuma pessoa real). Contrato de efeito de cada gravação: as linhas, a
-// versão e a trilha na mesma transação; e as recusas (versão velha, registro na ANS repetido, cartão de desconto ainda
-// sem modelo, outro estabelecimento). Também: a regravação do produto sem mudança (nenhuma linha nova) e com preço novo
-// (a tabela anterior encerrada, nada apagado), a operadora que não é a principal, a carteirinha e o contratante pela
+// versão e a trilha na mesma transação; e as recusas (versão velha, registro na ANS repetido, operadora dona que não
+// muda, outro estabelecimento). Também: a regravação do produto sem mudança (nenhuma linha nova) e com preço novo
+// (a tabela anterior encerrada, nada apagado), o cartão de desconto, o produto de outra operadora, a carteirinha e o contratante pela
 // sequência do cliente com a mesma operadora em dois estabelecimentos, o CPF de outra pessoa e a alteração do
 // beneficiário sem regravar o cadastro de pessoas. No fim, a massa de negócio e os catálogos sintéticos são apagados; ficam os
 // domínios e os estabelecimentos de teste. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
@@ -48,7 +48,9 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
   const gravar = <T extends { id: number }>(entidade: string, fn: (g: GravadorOperadora) => Promise<T>) =>
     porta.gravar(c, linha(entidade), fn);
   const um = <T>(sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) => l.uma<T & Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) =>
+      l.uma<T & Record<string, unknown>>(sql, p),
+    );
 
   const limparCatalogos = () =>
     nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-10' }, async (e) => {
@@ -79,12 +81,10 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
         [agora],
       );
       const termo = (codigo: string, d: string) =>
-        e.inserir('INSERT INTO termo_terminologia (terminologia_id, codigo_termo, descricao, criado_em) VALUES (?, ?, ?, ?)', [
-          sip.terminologia,
-          codigo,
-          d,
-          agora,
-        ]);
+        e.inserir(
+          'INSERT INTO termo_terminologia (terminologia_id, codigo_termo, descricao, criado_em) VALUES (?, ?, ?, ?)',
+          [sip.terminologia, codigo, d, agora],
+        );
       const item = (codigo: string, ordem: number, fim: string | null) =>
         e.inserir(
           'INSERT INTO item_assistencial_ans (codigo, descricao, ordem, vigencia_inicio, vigencia_fim, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
@@ -128,8 +128,20 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     expect(grupos).toEqual(expect.arrayContaining([{ id: sip.g1, nome: 'Grupo sintético L0210-G1' }]));
     const g1 = await porta.procedimentosSip(c, { grupo: sip.g1 });
     expect(g1.itens).toEqual([
-      { procedimento: 90210001, nome: 'Consulta sintética 1', grupo: sip.g1, vigenciaInicial: '2009-01-01', vigenciaFinal: null },
-      { procedimento: 90210002, nome: 'Consulta sintética 2', grupo: sip.g1, vigenciaInicial: '2009-01-01', vigenciaFinal: null },
+      {
+        procedimento: 90210001,
+        nome: 'Consulta sintética 1',
+        grupo: sip.g1,
+        vigenciaInicial: '2009-01-01',
+        vigenciaFinal: null,
+      },
+      {
+        procedimento: 90210002,
+        nome: 'Consulta sintética 2',
+        grupo: sip.g1,
+        vigenciaInicial: '2009-01-01',
+        vigenciaFinal: null,
+      },
     ]);
     expect(g1.proxima).toBeNull();
     // A chave da página: depois do primeiro, só o segundo do grupo.
@@ -139,7 +151,13 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     });
     expect(apos.itens.map((i) => i.procedimento)).toEqual([90210002]);
     expect((await porta.procedimentosSip(c, { procedimento: 90210003 })).itens).toEqual([
-      { procedimento: 90210003, nome: 'Exame sintético 3', grupo: sip.g2, vigenciaInicial: '2009-01-01', vigenciaFinal: '2020-12-31' },
+      {
+        procedimento: 90210003,
+        nome: 'Exame sintético 3',
+        grupo: sip.g2,
+        vigenciaInicial: '2009-01-01',
+        vigenciaFinal: '2020-12-31',
+      },
     ]);
     // Vigentes em 2026: o grupo encerrado em 2020 sai.
     expect((await porta.procedimentosSip(c, { grupo: sip.g2, vigentesEm: '2026-10-24' })).itens).toEqual([]);
@@ -161,7 +179,9 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       modalidade: 'medicinaGrupo',
       situacao: 'ativa',
     };
-    const { id } = await gravar('operadora_saude', (g) => g.gravarOperadora({ id: null, versao: null, dados, por: 'x' }));
+    const { id } = await gravar('operadora_saude', (g) =>
+      g.gravarOperadora({ id: null, versao: null, dados, por: 'x' }),
+    );
     const lida = await porta.operadora(c, id);
     expect(lida).toMatchObject({ ...dados, id, versao: 1 });
     expect(await porta.operadora(outro, id)).toBeNull();
@@ -178,28 +198,47 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     expect(Number(trilha?.n)).toBe(1);
 
     await gravar('operadora_saude', (g) =>
-      g.gravarOperadora({ id, versao: 1, dados: { ...dados, situacao: 'inativa', nomeFantasia: null }, por: 'x' }),
+      g.gravarOperadora({
+        id,
+        versao: 1,
+        dados: { ...dados, situacao: 'inativa', nomeFantasia: null },
+        por: 'x',
+      }),
     );
-    expect(await porta.operadora(c, id)).toMatchObject({ situacao: 'inativa', nomeFantasia: null, versao: 2 });
-    const hist = await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM operadora_saude_historico WHERE operadora_saude_id = ?', [id]);
+    expect(await porta.operadora(c, id)).toMatchObject({
+      situacao: 'inativa',
+      nomeFantasia: null,
+      versao: 2,
+    });
+    const hist = await um<{ n: unknown }>(
+      'SELECT COUNT(*) AS n FROM operadora_saude_historico WHERE operadora_saude_id = ?',
+      [id],
+    );
     expect(Number(hist?.n)).toBe(2);
     // Versão velha: conflito; nada muda.
-    expect(await codigoDe(gravar('operadora_saude', (g) => g.gravarOperadora({ id, versao: 1, dados, por: 'x' })))).toBe(
-      'conflito-versao',
-    );
+    expect(
+      await codigoDe(gravar('operadora_saude', (g) => g.gravarOperadora({ id, versao: 1, dados, por: 'x' }))),
+    ).toBe('conflito-versao');
     expect((await porta.operadora(c, id))?.versao).toBe(2);
     // O mesmo registro na ANS com outro CNPJ: recusa de negócio pelo campo.
     expect(
       await codigoDe(
         gravar('operadora_saude', (g) =>
-          g.gravarOperadora({ id: null, versao: null, dados: { ...dados, cnpj: cnpjSintetico('902100000102') }, por: 'x' }),
+          g.gravarOperadora({
+            id: null,
+            versao: null,
+            dados: { ...dados, cnpj: cnpjSintetico('902100000102') },
+            por: 'x',
+          }),
         ),
       ),
     ).toBe('registro-ans-em-uso');
     // Outro estabelecimento não altera a operadora deste.
     expect(
       await codigoDe(
-        porta.gravar(outro, linha('operadora_saude'), (g) => g.gravarOperadora({ id, versao: 2, dados, por: 'x' })),
+        porta.gravar(outro, linha('operadora_saude'), (g) =>
+          g.gravarOperadora({ id, versao: 2, dados, por: 'x' }),
+        ),
       ),
     ).toBe('nao-encontrado');
   });
@@ -222,14 +261,20 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       precos: PRECOS,
       situacao: 'ativo',
     };
-    const prod = await gravar('produto_plano', (g) => g.gravarProduto({ id: null, versao: null, dados: produto, por: 'x' }));
+    const prod = await gravar('produto_plano', (g) =>
+      g.gravarProduto({ id: null, versao: null, dados: produto, por: 'x' }),
+    );
     expect(await porta.produto(c, prod.id)).toMatchObject({ ...produto, id: prod.id, versao: 1 });
     expect(await porta.produto(outro, prod.id)).toBeNull();
     await gravar('produto_plano', (g) =>
       g.gravarProduto({
         id: prod.id,
         versao: 1,
-        dados: { ...produto, coparticipacao: { tipo: 3, valor: 25 }, carencias: { ...produto.carencias, demais: 90 } },
+        dados: {
+          ...produto,
+          coparticipacao: { tipo: 3, valor: 25 },
+          carencias: { ...produto.carencias, demais: 90 },
+        },
         por: 'x',
       }),
     );
@@ -239,13 +284,34 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       precos: PRECOS,
       versao: 2,
     });
-    expect(
-      await codigoDe(
-        gravar('produto_plano', (g) =>
-          g.gravarProduto({ id: null, versao: null, dados: { ...produto, codigo: `${P}-CD`, natureza: 'cartaoDesconto' }, por: 'x' }),
-        ),
-      ),
-    ).toBe('modelo-pendente');
+    // Cartão de desconto: produto sem registro de plano na ANS, com a natureza e a operadora dona gravadas.
+    const cartao = await gravar('produto_plano', (g) =>
+      g.gravarProduto({
+        id: null,
+        versao: null,
+        dados: {
+          ...produto,
+          codigo: `${P}-CD`,
+          natureza: 'cartaoDesconto',
+          registroAns: null,
+          segmentacao: null,
+        },
+        por: 'x',
+      }),
+    );
+    expect(await porta.produto(c, cartao.id)).toMatchObject({
+      natureza: 'cartaoDesconto',
+      operadora: ope,
+      registroAns: null,
+    });
+    const gravado = await um<Record<string, unknown>>(
+      'SELECT natureza, operadora_saude_id FROM produto_plano WHERE id = ?',
+      [cartao.id],
+    );
+    expect([gravado?.['natureza'], Number(gravado?.['operadora_saude_id'])]).toEqual([
+      'cartao_desconto',
+      ope,
+    ]);
 
     // Regravação sem mudança: nenhuma linha nova nos satélites, nada apagado; só a versão do produto e a trilha.
     const satelites = async () => {
@@ -258,18 +324,42 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
                 (SELECT COUNT(*) FROM regra_coparticipacao r JOIN plano_comercializado pc ON pc.id = r.plano_comercializado_id
                   WHERE pc.produto_plano_id = ?) AS copart,
                 (SELECT COUNT(*) FROM trilha_auditoria WHERE entidade = 'produto_plano' AND entidade_id = ?) AS trilhas`,
-        [`PRODUTO-${prod.id}`, `PRODUTO-${prod.id}-V%`, `PRODUTO-${prod.id}`, `PRODUTO-${prod.id}-V%`, prod.id, prod.id, prod.id, prod.id, prod.id],
+        [
+          `PRODUTO-${prod.id}`,
+          `PRODUTO-${prod.id}-V%`,
+          `PRODUTO-${prod.id}`,
+          `PRODUTO-${prod.id}-V%`,
+          prod.id,
+          prod.id,
+          prod.id,
+          prod.id,
+          prod.id,
+        ],
       );
       return Object.fromEntries(Object.entries(r ?? {}).map(([k, v]) => [k, Number(v)]));
     };
     const antes = await satelites();
-    expect(antes).toMatchObject({ tabelas: 1, vigentes: 1, faixas: 10, segmentacoes: 1, carencias: 4, copart: 1, trilhas: 2 });
-    const mesmo = { ...produto, coparticipacao: { tipo: 3, valor: 25 }, carencias: { ...produto.carencias, demais: 90 } };
+    expect(antes).toMatchObject({
+      tabelas: 1,
+      vigentes: 1,
+      faixas: 10,
+      segmentacoes: 1,
+      carencias: 4,
+      copart: 1,
+      trilhas: 2,
+    });
+    const mesmo = {
+      ...produto,
+      coparticipacao: { tipo: 3, valor: 25 },
+      carencias: { ...produto.carencias, demais: 90 },
+    };
     await gravar('produto_plano', (g) => g.gravarProduto({ id: prod.id, versao: 2, dados: mesmo, por: 'x' }));
     expect(await satelites()).toEqual({ ...antes, trilhas: 3 });
     // Preço novo: a tabela vigente se encerra (com o fim da vigência) e outra abre; as faixas antigas ficam.
     const NOVOS = PRECOS.map((v) => v + 10);
-    await gravar('produto_plano', (g) => g.gravarProduto({ id: prod.id, versao: 3, dados: { ...mesmo, precos: NOVOS }, por: 'x' }));
+    await gravar('produto_plano', (g) =>
+      g.gravarProduto({ id: prod.id, versao: 3, dados: { ...mesmo, precos: NOVOS }, por: 'x' }),
+    );
     expect(await satelites()).toEqual({ ...antes, tabelas: 2, faixas: 20, trilhas: 4 });
     const encerrada = await um<{ n: unknown }>(
       "SELECT COUNT(*) AS n FROM tabela_preco_plano WHERE codigo = ? AND situacao = 'encerrada' AND vigencia_fim IS NOT NULL",
@@ -279,7 +369,12 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     expect(await porta.produto(c, prod.id)).toMatchObject({ precos: NOVOS, versao: 4 });
     // Outra segmentação: a anterior sai por exclusão lógica (a linha fica), a nova entra.
     await gravar('produto_plano', (g) =>
-      g.gravarProduto({ id: prod.id, versao: 4, dados: { ...mesmo, precos: NOVOS, segmentacao: 'ambulatorial' }, por: 'x' }),
+      g.gravarProduto({
+        id: prod.id,
+        versao: 4,
+        dados: { ...mesmo, precos: NOVOS, segmentacao: 'ambulatorial' },
+        por: 'x',
+      }),
     );
     const segs = await um<Record<string, unknown>>(
       'SELECT COUNT(*) AS n, SUM(excluido_em IS NOT NULL) AS excluidas FROM produto_plano_segmentacao WHERE produto_plano_id = ?',
@@ -287,9 +382,12 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     );
     expect([Number(segs?.['n']), Number(segs?.['excluidas'])]).toEqual([2, 1]);
     expect((await porta.produto(c, prod.id))?.segmentacao).toBe('ambulatorial');
-    await gravar('produto_plano', (g) => g.gravarProduto({ id: prod.id, versao: 5, dados: { ...mesmo, precos: NOVOS }, por: 'x' }));
+    await gravar('produto_plano', (g) =>
+      g.gravarProduto({ id: prod.id, versao: 5, dados: { ...mesmo, precos: NOVOS }, por: 'x' }),
+    );
     expect(await porta.produto(c, prod.id)).toMatchObject({ segmentacao: produto.segmentacao, versao: 6 });
-    // Outra operadora no mesmo estabelecimento (não a principal): o produto ainda não guarda a dona, recusa explícita.
+    // Outra operadora no mesmo estabelecimento (não a principal): o produto guarda a dona. Trocar a dona de um produto é
+    // recusado (os preços e os contratos são dela); o produto novo da outra operadora é lido como dela.
     const opeB = await gravar('operadora_saude', (g) =>
       g.gravarOperadora({
         id: null,
@@ -308,11 +406,29 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     expect(
       await codigoDe(
         gravar('produto_plano', (g) =>
-          g.gravarProduto({ id: prod.id, versao: 6, dados: { ...mesmo, precos: NOVOS, operadora: opeB.id }, por: 'x' }),
+          g.gravarProduto({
+            id: prod.id,
+            versao: 6,
+            dados: { ...mesmo, precos: NOVOS, operadora: opeB.id },
+            por: 'x',
+          }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('operadora-do-produto');
     expect((await porta.produto(c, prod.id))?.versao).toBe(6);
+    const produtoB = await gravar('produto_plano', (g) =>
+      g.gravarProduto({
+        id: null,
+        versao: null,
+        dados: { ...mesmo, codigo: `${P}-B`, registroAns: '902103001', precos: NOVOS, operadora: opeB.id },
+        por: 'x',
+      }),
+    );
+    expect(await porta.produto(c, produtoB.id)).toMatchObject({
+      operadora: opeB.id,
+      natureza: 'plano',
+      precos: NOVOS,
+    });
 
     const ctr = await gravar('contrato_plano', (g) =>
       g.gravarContrato({
@@ -352,7 +468,9 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       beneficiariosAtivos: 0,
       versao: 1,
     });
-    expect((await porta.contratos(c, { operadora: ope, nome: 'contratante sint' })).itens.map((x) => x.id)).toEqual([ctr.id]);
+    expect(
+      (await porta.contratos(c, { operadora: ope, nome: 'contratante sint' })).itens.map((x) => x.id),
+    ).toEqual([ctr.id]);
     expect((await porta.contratos(outro, { operadora: ope })).itens).toEqual([]);
 
     const base: DadosBeneficiario = {
@@ -372,7 +490,13 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     };
     const tit = await gravar('beneficiario_plano', async (g) => {
       const n = await g.proximaSequenciaCarteirinha();
-      return g.incluirBeneficiario({ operadora: ope, dados: base, carteirinha: numeroCarteirinha('902101', n), validade: '2028-12-31', por: 'x' });
+      return g.incluirBeneficiario({
+        operadora: ope,
+        dados: base,
+        carteirinha: numeroCarteirinha('902101', n),
+        validade: '2028-12-31',
+        por: 'x',
+      });
     });
     // O CPF já cadastrado com outro nome: é de outra pessoa (nada é gravado; a pessoa não muda).
     expect(
@@ -421,14 +545,28 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     const dep = await gravar('beneficiario_plano', async (g) =>
       g.incluirBeneficiario({
         operadora: ope,
-        dados: { ...base, titular: tit.id, vinculo: 5, nome: 'DEPENDENTE SINTETICO L0210', cpf: null, sexo: 'M' },
+        dados: {
+          ...base,
+          titular: tit.id,
+          vinculo: 5,
+          nome: 'DEPENDENTE SINTETICO L0210',
+          cpf: null,
+          sexo: 'M',
+        },
         carteirinha: `${P}D${tit.id}`,
         validade: '2028-12-31',
         por: 'x',
       }),
     );
     const t = await porta.beneficiario(c, tit.id);
-    expect(t).toMatchObject({ contrato: ctr.id, titular: null, vinculo: 1, situacao: 'ativo', via: 1, operadora: ope });
+    expect(t).toMatchObject({
+      contrato: ctr.id,
+      titular: null,
+      vinculo: 1,
+      situacao: 'ativo',
+      via: 1,
+      operadora: ope,
+    });
     expect(await porta.beneficiario(outro, tit.id)).toBeNull();
     expect((await porta.dependentes(c, tit.id)).map((d) => [d.id, d.vinculo])).toEqual([[dep.id, 5]]);
     expect(await porta.contagensDoContrato(c, { contrato: ctr.id, cpf: base.cpf, exceto: null })).toEqual({
@@ -440,7 +578,11 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       contratosEmUso: 1,
     });
     const eleg = await porta.elegibilidade(c, t?.carteirinha ?? '');
-    expect(eleg).toMatchObject({ beneficiario: { id: tit.id }, contrato: { situacao: 'ativo', inicio: '2026-01-01' }, produto: { id: prod.id } });
+    expect(eleg).toMatchObject({
+      beneficiario: { id: tit.id },
+      contrato: { situacao: 'ativo', inicio: '2026-01-01' },
+      produto: { id: prod.id },
+    });
     const movs = await um<{ n: unknown }>(
       "SELECT COUNT(*) AS n FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN (?, ?) AND tipo_movimento = 'inclusao'",
       [tit.id, dep.id],
@@ -458,24 +600,38 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       [1, null, '2028-12-31'],
       [2, perda, '2029-12-31'],
     ]);
-    const cancelada = await um<{ situacao: string }>('SELECT situacao FROM cartao_beneficiario WHERE beneficiario_plano_id = ? AND via = 1', [
-      tit.id,
-    ]);
+    const cancelada = await um<{ situacao: string }>(
+      'SELECT situacao FROM cartao_beneficiario WHERE beneficiario_plano_id = ? AND via = 1',
+      [tit.id],
+    );
     expect(cancelada?.situacao).toBe('cancelado');
 
     // Baixa do titular: o dependente ativo vai junto, cada um com o seu movimento; versão velha recusada.
     const pedido = dominios.motivosBaixa.find((x) => x.nome === 'A pedido (sintético)')?.codigo ?? 0;
     expect(
-      await codigoDe(gravar('beneficiario_plano', (g) => g.baixarBeneficiario({ id: tit.id, versao: 1, motivo: pedido, data: '2026-06-30', por: 'x' }))),
+      await codigoDe(
+        gravar('beneficiario_plano', (g) =>
+          g.baixarBeneficiario({ id: tit.id, versao: 1, motivo: pedido, data: '2026-06-30', por: 'x' }),
+        ),
+      ),
     ).toBe('desatualizado');
     const baixa = await gravar('beneficiario_plano', (g) =>
       g.baixarBeneficiario({ id: tit.id, versao: 2, motivo: pedido, data: '2026-06-30', por: 'x' }),
     );
     expect(baixa).toEqual({ id: tit.id, dependentes: 1 });
-    expect(await porta.beneficiario(c, dep.id)).toMatchObject({ situacao: 'excluido', exclusao: '2026-06-30', motivoBaixa: pedido });
+    expect(await porta.beneficiario(c, dep.id)).toMatchObject({
+      situacao: 'excluido',
+      exclusao: '2026-06-30',
+      motivoBaixa: pedido,
+    });
     expect((await porta.contrato(c, ctr.id))?.beneficiariosAtivos).toBe(0);
     await gravar('beneficiario_plano', (g) => g.reativarBeneficiario({ id: tit.id, versao: 3, por: 'x' }));
-    expect(await porta.beneficiario(c, tit.id)).toMatchObject({ situacao: 'ativo', exclusao: null, motivoBaixa: null, versao: 4 });
+    expect(await porta.beneficiario(c, tit.id)).toMatchObject({
+      situacao: 'ativo',
+      exclusao: null,
+      motivoBaixa: null,
+      versao: 4,
+    });
     const tipos = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) =>
       l.consultar<{ tipo_movimento: string }>(
         'SELECT tipo_movimento FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id = ? ORDER BY id',
@@ -511,21 +667,36 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
     expect(
       await codigoDe(
         gravar('beneficiario_plano', (g) =>
-          g.alterarBeneficiario({ id: tit.id, versao: 5, dados: { ...base, nome: 'NOME TROCADO L0210', inclusao: '2026-02-15' }, por: 'x' }),
+          g.alterarBeneficiario({
+            id: tit.id,
+            versao: 5,
+            dados: { ...base, nome: 'NOME TROCADO L0210', inclusao: '2026-02-15' },
+            por: 'x',
+          }),
         ),
       ),
     ).toBe('dados-pessoais-pelo-cadastro');
     // Versão velha e outro estabelecimento: recusa; nada muda.
     expect(
-      await codigoDe(gravar('beneficiario_plano', (g) => g.alterarBeneficiario({ id: tit.id, versao: 4, dados: base, por: 'x' }))),
+      await codigoDe(
+        gravar('beneficiario_plano', (g) =>
+          g.alterarBeneficiario({ id: tit.id, versao: 4, dados: base, por: 'x' }),
+        ),
+      ),
     ).toBe('desatualizado');
     expect(
       await codigoDe(
-        porta.gravar(outro, linha('beneficiario_plano'), (g) => g.alterarBeneficiario({ id: tit.id, versao: 5, dados: base, por: 'x' })),
+        porta.gravar(outro, linha('beneficiario_plano'), (g) =>
+          g.alterarBeneficiario({ id: tit.id, versao: 5, dados: base, por: 'x' }),
+        ),
       ),
     ).toBe('desatualizado');
     const p2 = await pessoaDe();
-    expect([Number(p2?.['versao_b']), Number(p2?.['versao']), p2?.['nome']]).toEqual([5, Number(p0?.['versao']), p0?.['nome']]);
+    expect([Number(p2?.['versao_b']), Number(p2?.['versao']), p2?.['nome']]).toEqual([
+      5,
+      Number(p0?.['versao']),
+      p0?.['nome'],
+    ]);
 
     // A mesma operadora em dois estabelecimentos: carteirinha e contratante pela sequência do cliente, sem repetir.
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-10' }, (e) =>
@@ -534,10 +705,17 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
         [ope, m.outroEst, '2020-01-01', new Date()],
       ),
     );
-    const gravarOutro = <T extends { id: number }>(entidade: string, fn: (g: GravadorOperadora) => Promise<T>) =>
-      porta.gravar(outro, linha(entidade), fn);
+    const gravarOutro = <T extends { id: number }>(
+      entidade: string,
+      fn: (g: GravadorOperadora) => Promise<T>,
+    ) => porta.gravar(outro, linha(entidade), fn);
     const prodB = await gravarOutro('produto_plano', (g) =>
-      g.gravarProduto({ id: null, versao: null, dados: { ...produto, codigo: `${P}-P2`, registroAns: '902101002' }, por: 'x' }),
+      g.gravarProduto({
+        id: null,
+        versao: null,
+        dados: { ...produto, codigo: `${P}-P2`, registroAns: '902101002' },
+        por: 'x',
+      }),
     );
     const ctrB = await gravarOutro('contrato_plano', (g) =>
       g.gravarContrato({
@@ -568,7 +746,13 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
       const n = await g.proximaSequenciaCarteirinha();
       return g.incluirBeneficiario({
         operadora: ope,
-        dados: { ...base, contrato: ctrB.id, nome: 'TITULAR SINTETICO L0210 B', cpf: cpfSintetico('902100005'), sexo: 'M' },
+        dados: {
+          ...base,
+          contrato: ctrB.id,
+          nome: 'TITULAR SINTETICO L0210 B',
+          cpf: cpfSintetico('902100005'),
+          sexo: 'M',
+        },
         carteirinha: numeroCarteirinha('902101', n),
         validade: '2028-12-31',
         por: 'x',

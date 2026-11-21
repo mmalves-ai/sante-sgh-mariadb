@@ -41,7 +41,7 @@ import {
   proporPerfilDoGrupo,
   reconstruirArvoreOpcoes,
 } from '@sgh/dominio-acesso';
-import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
+import { CATALOGO_COMPLETO, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -64,13 +64,13 @@ const C = PERMISSOES_M10_CODIGOS;
 const DESCRICAO = new Map(CATALOGO_COMPLETO.map((p) => [p.codigo, p.descricao]));
 const CATEGORIA = new Map(CATALOGO_COMPLETO.map((p) => [p.codigo, p.categoria ?? null]));
 /**
- * Fonte em memória (dev/ci): o id do nó é o da opção do menu sintético, ligado às permissões pelo catálogo. No banco
+ * Fonte em memória (dev/ci): o id do nó é o da opção do menu sintético, ligado às permissões pelo mapa do conector. No banco
  * próprio o nó é a acao_sistema, cujo código JÁ É a permissão (a sessão concede por acao_sistema.codigo): os dois
  * conjuntos de ids não têm relação e nunca se cruzam.
  */
 const PERMISSOES_DA_OPCAO = new Map<number, string[]>();
 for (const p of CATALOGO_COMPLETO)
-  for (const o of p.opcoesLegado)
+  for (const o of opcoesDasPermissoes(p.codigo))
     PERMISSOES_DA_OPCAO.set(o, [...(PERMISSOES_DA_OPCAO.get(o) ?? []), p.codigo]);
 
 const MOTIVO_ORIGEM: Readonly<Record<string, (o: Record<string, unknown>, grupo: string | null) => string>> =
@@ -355,9 +355,9 @@ export class PermissoesController {
             )
           : retirada
             ? [`retirada pela segregação: ${retirada.motivo}`]
-            : x.opcoesLegado.length > 0
+            : opcoesDasPermissoes(x.codigo).length > 0
               ? [
-                  `nem o grupo nem os papéis do usuário têm alguma das opções ${x.opcoesLegado.slice(0, 5).join(', ')} do menu`,
+                  `nem o grupo nem os papéis do usuário têm alguma das opções ${opcoesDasPermissoes(x.codigo).slice(0, 5).join(', ')} do menu`,
                 ]
               : ['recurso do sistema novo concedido por perfil: o usuário não tem o perfil'];
         return { permissao: x.codigo, descricao: DESCRICAO.get(x.codigo) ?? x.codigo, pode, motivos };

@@ -9,7 +9,7 @@ export const PERMISSOES_M09 = [
   {
     codigo: 'sistema.saude.ler',
     descricao: 'Ver a saúde do sistema e do banco (painéis do Grafana)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -17,7 +17,7 @@ export const PERMISSOES_M09 = [
   {
     codigo: 'documento.emissao.criar',
     descricao: 'Emitir documento de prova (fora de produção)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -25,7 +25,7 @@ export const PERMISSOES_M09 = [
   {
     codigo: 'documento.emissao.reemitir',
     descricao: 'Emitir 2ª via de documento, com motivo',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -33,7 +33,7 @@ export const PERMISSOES_M09 = [
   {
     codigo: 'documento.etiqueta.imprimir',
     descricao: 'Imprimir pulseira ou etiqueta de prova',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',

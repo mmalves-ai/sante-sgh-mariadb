@@ -13,27 +13,27 @@ const livre = { contingenciaLigada: false, receitaLigada: true, cofreDisponivel:
 
 describe('M59-F3 regra 7: chave da linha e referência do cofre', () => {
   it('monta e lê a chave na ordem do catálogo; recusa coluna trocada, separador e tamanho', () => {
-    const k = chaveDaLinha('TBTISSWEBSERV', { ID_TBCONVEN: 12, ID_TBTISSSCHEMA: 3 });
-    expect(k).toBe('ID_TBCONVEN=12;ID_TBTISSSCHEMA=3');
-    expect(lerChaveDaLinha('TBTISSWEBSERV', k)).toEqual({ ID_TBCONVEN: '12', ID_TBTISSSCHEMA: '3' });
-    expect(lerChaveDaLinha('TBTISSWEBSERV', 'ID_TBTISSSCHEMA=3;ID_TBCONVEN=12')).toBeNull();
-    expect(lerChaveDaLinha('TBCONVEN', 'COD=1;X=2')).toBeNull();
-    expect(lerChaveDaLinha('TBCONVEN', 'COD=1=2')).toBeNull();
-    expect(lerChaveDaLinha('TBINFBANCO', 'BANCO=1')).toBeNull();
-    expect(() => chaveDaLinha('TBCONVEN', { COD: "1'; --" })).toThrow(/inválida/);
+    const k = chaveDaLinha('servico_tiss_convenio', { convenio_id: 12, versao_tiss_id: 3 });
+    expect(k).toBe('convenio_id=12;versao_tiss_id=3');
+    expect(lerChaveDaLinha('servico_tiss_convenio', k)).toEqual({ convenio_id: '12', versao_tiss_id: '3' });
+    expect(lerChaveDaLinha('servico_tiss_convenio', 'versao_tiss_id=3;convenio_id=12')).toBeNull();
+    expect(lerChaveDaLinha('convenio', 'id=1;X=2')).toBeNull();
+    expect(lerChaveDaLinha('convenio', 'id=1=2')).toBeNull();
+    expect(lerChaveDaLinha('integracao_bancaria_externa', 'BANCO=1')).toBeNull();
+    expect(() => chaveDaLinha('convenio', { id: "1'; --" })).toThrow(/inválida/);
   });
   it('referência por estabelecimento, tabela, resumo da chave e coluna do catálogo; o resumo não traz a chave', () => {
-    const r = referenciaDaColuna('pc', 'TBHOSPIT', 'COD=1', 'SENHA_PROXY');
-    expect(r).toMatch(/^cofre:parceiro\/pc\/TBHOSPIT\/[0-9a-f]{16}\/SENHA_PROXY$/);
-    expect(r).not.toContain('COD=1');
+    const r = referenciaDaColuna('pc', 'estabelecimento', 'id=1', 'senha_proxy');
+    expect(r).toMatch(/^cofre:parceiro\/pc\/estabelecimento\/[0-9a-f]{16}\/senha_proxy$/);
+    expect(r).not.toContain('id=1');
     expect(lerReferenciaSegredoLegado(r)).toEqual({
       hospital: 'pc',
-      tabela: 'TBHOSPIT',
-      resumoChave: resumoChave('TBHOSPIT', 'COD=1'),
-      coluna: 'SENHA_PROXY',
+      tabela: 'estabelecimento',
+      resumoChave: resumoChave('estabelecimento', 'id=1'),
+      coluna: 'senha_proxy',
     });
-    expect(resumoChave('TBHOSPIT', 'COD=1')).not.toBe(resumoChave('TBHOSPIT', 'COD=2'));
-    expect(() => referenciaDaColuna('pc', 'TBHOSPIT', 'COD=1', 'NOME')).toThrow();
+    expect(resumoChave('estabelecimento', 'id=1')).not.toBe(resumoChave('estabelecimento', 'id=2'));
+    expect(() => referenciaDaColuna('pc', 'estabelecimento', 'id=1', 'nome')).toThrow();
     expect(lerReferenciaSegredoLegado('cofre:psc/pc/x/client-secret')).toBeNull();
   });
   it('catálogo: chave e colunas sem repetição; vazio declarado para cada coluna', () => {
@@ -47,18 +47,18 @@ describe('M59-F3 regra 7: chave da linha e referência do cofre', () => {
 
 describe('M59-F3 regras 1 e 7: retirada do segredo de parceiro', () => {
   const linha = {
-    tabela: 'TBHOSPIT',
-    comValor: ['SENHA_PROXY', 'SENHAPROV'],
-    noCofre: ['SENHA_PROXY', 'SENHAPROV'],
-    rotacionadas: ['SENHA_PROXY', 'SENHAPROV'],
+    tabela: 'estabelecimento',
+    comValor: ['senha_proxy', 'senha_provedor'],
+    noCofre: ['senha_proxy', 'senha_provedor'],
+    rotacionadas: ['senha_proxy', 'senha_provedor'],
   };
   it('na ordem: sem valor, contingência, receita, cofre, falta no cofre, rotação pendente', () => {
     expect(bloqueioRetiradaSegredo({ ...linha, comValor: [] }, livre)).toBe('sem-valor');
     expect(bloqueioRetiradaSegredo(linha, { ...livre, contingenciaLigada: true })).toBe('contingencia-ativa');
     expect(bloqueioRetiradaSegredo(linha, { ...livre, receitaLigada: false })).toBe('operacao-desligada');
     expect(bloqueioRetiradaSegredo(linha, { ...livre, cofreDisponivel: false })).toBe('cofre-indisponivel');
-    expect(bloqueioRetiradaSegredo({ ...linha, noCofre: ['SENHA_PROXY'] }, livre)).toBe('falta-no-cofre');
-    expect(bloqueioRetiradaSegredo({ ...linha, rotacionadas: ['SENHA_PROXY'] }, livre)).toBe(
+    expect(bloqueioRetiradaSegredo({ ...linha, noCofre: ['senha_proxy'] }, livre)).toBe('falta-no-cofre');
+    expect(bloqueioRetiradaSegredo({ ...linha, rotacionadas: ['senha_proxy'] }, livre)).toBe(
       'rotacao-pendente',
     );
     expect(bloqueioRetiradaSegredo({ ...linha, rotacionadas: [] }, livre)).toBe('rotacao-pendente');
@@ -67,13 +67,13 @@ describe('M59-F3 regras 1 e 7: retirada do segredo de parceiro', () => {
   it('coluna fora do catálogo não conta como valor; tabela fora do catálogo é erro', () => {
     expect(
       bloqueioRetiradaSegredo(
-        { tabela: 'TBHOSPIT', comValor: ['NOME'], noCofre: [], rotacionadas: [] },
+        { tabela: 'estabelecimento', comValor: ['nome'], noCofre: [], rotacionadas: [] },
         livre,
       ),
     ).toBe('sem-valor');
     expect(() =>
       bloqueioRetiradaSegredo(
-        { tabela: 'TBINFBANCO', comValor: ['SENHA'], noCofre: [], rotacionadas: [] },
+        { tabela: 'integracao_bancaria_externa', comValor: ['senha_portal'], noCofre: [], rotacionadas: [] },
         livre,
       ),
     ).toThrow();
@@ -84,20 +84,20 @@ describe('M59-F3: senhas secundárias', () => {
   const c = { contingenciaLigada: false, receitaLigada: true, operador: 'GESTOR' };
   it('sem valor, contingência, receita e a própria', () => {
     expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: [] }, c)).toBe('sem-valor');
-    expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['DIG_SENHA'] }, c)).toBe('sem-valor');
+    expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['outra_coluna'] }, c)).toBe('sem-valor');
     expect(
       bloqueioRetiradaSenhaSecundaria(
-        { login: 'A', colunas: ['SENHA_SEC'] },
+        { login: 'A', colunas: ['senha_liberacao'] },
         { ...c, contingenciaLigada: true },
       ),
     ).toBe('contingencia-ativa');
     expect(
-      bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['SENHA_SEC'] }, { ...c, receitaLigada: false }),
+      bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['senha_liberacao'] }, { ...c, receitaLigada: false }),
     ).toBe('operacao-desligada');
-    expect(bloqueioRetiradaSenhaSecundaria({ login: 'GESTOR', colunas: ['SENHA_CAN_NF'] }, c)).toBe(
+    expect(bloqueioRetiradaSenhaSecundaria({ login: 'GESTOR', colunas: ['senha_cancelamento_nota'] }, c)).toBe(
       'a-si-mesmo',
     );
-    expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['SENHA_CAN_NF'] }, c)).toBeNull();
+    expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['senha_cancelamento_nota'] }, c)).toBeNull();
   });
   it('contingência: só "não" desliga (ausente é ligada); contagem protegida', () => {
     for (const v of [null, undefined, '', 'sim', 'S', 'qualquer'])

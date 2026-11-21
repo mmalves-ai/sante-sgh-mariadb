@@ -22,6 +22,7 @@ import {
   rotuloCanalNotificacaoAgravo,
   rotuloPeriodicidadeAgravo,
 } from './agravo.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const ok = (s: { safeParse(v: unknown): { success: boolean } }, v: unknown) => s.safeParse(v).success;
 
@@ -142,7 +143,7 @@ describe('permissões, eventos e liberação', () => {
       PERMISSOES_AGRAVO.ler,
       PERMISSOES_AGRAVO.notificar,
     ]);
-    const todas = PERMISSOES_QUALIDADE_AGRAVO_M48.flatMap((p) => p.opcoesLegado);
+    const todas = PERMISSOES_QUALIDADE_AGRAVO_M48.flatMap((p) => opcoesDoMapa(p.codigo));
     expect(new Set(todas).size).toBe(todas.length);
     expect(todas).toContain(5273);
     expect(todas).toContain(6856);

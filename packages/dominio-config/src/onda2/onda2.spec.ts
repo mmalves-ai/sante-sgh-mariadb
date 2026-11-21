@@ -16,7 +16,6 @@ import {
   setoresOnda2DaChave,
   setoresQueSeguramHospital,
   versaoPermitida,
-  violacoesRegra15,
 } from './onda2.js';
 
 const setor = (id: string) => {
@@ -221,22 +220,6 @@ describe('Serrano depois do ProntoCardio (regra 8)', () => {
     expect(setoresQueSeguramHospital('hs', { ...todos, sadt: 'treinamento' })).toEqual(['sadt']);
     expect(setoresQueSeguramHospital('hs', { ...todos, sadt: 'fora' })).toEqual([]);
     expect(setoresQueSeguramHospital('hs', {}).length).toBe(setores.length);
-  });
-});
-
-describe('regra 15', () => {
-  it('acusa gravação direta em tabela proibida e aceita as exceções justificadas', () => {
-    expect(
-      violacoesRegra15([
-        { nome: 'internacao.transferirLeito', tabelasGravadas: [{ tabela: 'RILEITOS', acao: 'UPDATE' }] },
-        { nome: 'internacao.internar', tabelasGravadas: [{ tabela: 'RICADINT', acao: 'INSERT' }] },
-        { nome: 'pep.prescrever', tabelasGravadas: [{ tabela: 'ATCONTA', acao: 'INSERT' }] },
-        { nome: 'internacao.darAlta', tabelasGravadas: [{ tabela: 'TBLEITO', acao: 'UPDATE' }] },
-      ]),
-    ).toEqual([
-      { operacao: 'pep.prescrever', tabela: 'ATCONTA', acao: 'INSERT' },
-      { operacao: 'internacao.darAlta', tabela: 'TBLEITO', acao: 'UPDATE' },
-    ]);
   });
 });
 

@@ -1,0 +1,12 @@
+# assunto: pessoas
+# cliente_teste: f24_03pessoas
+apps/api/src/modulos/pessoas/autoatendimento/porta-propria.ts
+apps/api/src/modulos/pessoas/avaliacao/porta-propria.ts
+apps/api/src/modulos/pessoas/banco-apoio.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado-propria.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-propria.ts
+apps/api/src/modulos/pessoas/folha/porta-calculo-propria.ts
+apps/api/src/modulos/pessoas/folha/porta-folha-propria.ts
+apps/api/src/modulos/pessoas/folha/porta-integracao-propria.ts
+apps/api/src/modulos/pessoas/folha/servico-integracao.ts
+apps/api/src/modulos/pessoas/sesmt/porta-sesmt-propria.ts

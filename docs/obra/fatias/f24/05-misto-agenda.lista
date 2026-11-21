@@ -1,0 +1,21 @@
+# assunto: agenda+cirurgia+enfermagem+patrimonio
+# cliente_teste: f24_05mistoagenda
+packages/dominio-agenda/dist/cobertura.d.ts
+packages/dominio-agenda/dist/encaixe.d.ts
+packages/dominio-agenda/dist/estado-horario.d.ts
+packages/dominio-agenda/dist/exame.d.ts
+packages/dominio-agenda/dist/grade.d.ts
+packages/dominio-agenda/dist/online/regras.d.ts
+packages/dominio-agenda/dist/sessoes/serie.d.ts
+packages/dominio-agenda/dist/tempo.d.ts
+apps/api/src/modulos/cirurgia/anestesia-porta-propria.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta-propria.ts
+apps/api/src/modulos/cirurgia/operacoes.ts
+apps/api/src/modulos/cirurgia/porta-propria.ts
+apps/api/src/modulos/enfermagem/escores-porta-propria.ts
+apps/api/src/modulos/enfermagem/porta-propria.ts
+apps/api/src/modulos/enfermagem/sae-porta-propria.ts
+packages/dominio-enfermagem/dist/tempo.d.ts
+apps/api/src/modulos/patrimonio/porta-propria.ts
+packages/dominio-patrimonio/dist/movimento.d.ts
+packages/dominio-patrimonio/dist/origem.d.ts

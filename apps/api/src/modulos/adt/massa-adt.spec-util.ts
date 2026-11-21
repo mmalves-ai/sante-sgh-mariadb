@@ -73,6 +73,10 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`UPDATE ocupacao_leito SET anterior_ocupacao_leito_id = NULL WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM ocupacao_leito WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM ocorrencia_arquivo_prontuario WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM movimento_prontuario WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM volume_prontuario WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM atributo_categoria_acomodacao WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM integracao_mensagem WHERE estabelecimento_id IN (${em})`, ests);
 }

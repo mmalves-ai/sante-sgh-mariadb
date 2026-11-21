@@ -52,7 +52,7 @@ const qualidade = (
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado: [],
+
   concessaoPorPerfil: 'por-perfil',
   perfis,
   categoria: 'administrativa',
@@ -65,7 +65,7 @@ export const PERMISSOES_QUALIDADE_GESTAO_M48: readonly DeclaracaoPermissao[] = [
     codigo: C.documentoLer,
     descricao:
       'Consultar os documentos da qualidade vigentes (POPs, protocolos, manuais, políticas) e registrar a ciência da revisão',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     categoria: 'administrativa',
     criticidade: 'normal',

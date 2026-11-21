@@ -24,56 +24,49 @@ export const PERMISSOES_ACESSO = {
 
 export type PermissaoAcesso = (typeof PERMISSOES_ACESSO)[keyof typeof PERMISSOES_ACESSO];
 
-/**
- * Opções do módulo de abertura (sghspd, módulo -1) que já administram usuários e permissões no legado:
- * 5429 "Cadastro de usuários", 5433 "Gerenciamento de usuários" e 5437 "Permissões" (ativas; as de
- * grupo e papel, 5425 e 3888, estão inativas e ficam fora do catálogo, regra 2).
- */
-export const OPCOES_SEGURANCA_LEGADO = { cadastroUsuarios: 5429, gerenciamento: 5433, permissoes: 5437 };
-
 export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_ACESSO.inicioLer,
     descricao: 'Ver a página inicial (fila de trabalho do perfil)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: PERMISSOES_ACESSO.preferenciaLer,
     descricao: 'Ver as próprias preferências (tema, densidade, atalhos)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: PERMISSOES_ACESSO.preferenciaEditar,
     descricao: 'Alterar as próprias preferências',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: PERMISSOES_ACESSO.sobreLer,
     descricao: 'Ver a tela Sobre o sistema (versões; SBIS-01)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: PERMISSOES_ACESSO.senhaTrocar,
     descricao: 'Trocar a própria senha (primeiro acesso, senha sem cifra ou expirada)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     criticidade: 'critica',
   },
   {
     codigo: PERMISSOES_ACESSO.segundoFatorGerir,
     descricao: 'Cadastrar ou remover o próprio segundo fator (TOTP)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     criticidade: 'critica',
   },
   {
     codigo: PERMISSOES_ACESSO.grupoLer,
     descricao: 'Consultar os grupos de usuários e o perfil proposto',
-    opcoesLegado: [OPCOES_SEGURANCA_LEGADO.cadastroUsuarios, OPCOES_SEGURANCA_LEGADO.gerenciamento],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'tecnica',
@@ -81,7 +74,7 @@ export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_ACESSO.permissaoLer,
     descricao: 'Consultar o mapa opção de menu → permissão',
-    opcoesLegado: [OPCOES_SEGURANCA_LEGADO.cadastroUsuarios, OPCOES_SEGURANCA_LEGADO.permissoes],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos', 'administrador-sistema'],
     categoria: 'tecnica',
@@ -89,7 +82,7 @@ export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_ACESSO.emergenciaSolicitar,
     descricao: 'Abrir o prontuário fora do vínculo por quebra de vidro (acesso de emergência)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['assistencial-com-conselho'],
     categoria: 'clinica',
@@ -99,7 +92,7 @@ export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_ACESSO.emergenciaRevisar,
     descricao: 'Revisar os acessos por quebra de vidro (justificado ou não)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor'],
     categoria: 'tecnica',
@@ -107,7 +100,7 @@ export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_ACESSO.trilhaLer,
     descricao: 'Ler e exportar as duas trilhas de auditoria (a consulta é do M10)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['auditor'],
     categoria: 'tecnica',
@@ -117,7 +110,7 @@ export const CATALOGO_ACESSO: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_ACESSO.perfilGerir,
     descricao:
       'Perfis e permissões: ver as efetivas de um usuário, conceder e revogar perfis, grupos e papéis (reautenticação)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'tecnica',

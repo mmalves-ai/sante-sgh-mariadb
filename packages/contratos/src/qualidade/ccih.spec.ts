@@ -19,6 +19,7 @@ import {
   rotuloMotivoVigilancia,
   tipoSugeridoDaPrecaucao,
 } from './ccih.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const ok = (s: { safeParse(v: unknown): { success: boolean } }, v: unknown) => s.safeParse(v).success;
 
@@ -167,8 +168,8 @@ describe('permissões, liberação e auditoria', () => {
       expect(p.categoria).toBe('clinica');
     }
     const por = (c: string) => PERMISSOES_QUALIDADE_CCIH_M48.find((p) => p.codigo === c);
-    expect(por(PERMISSOES_CCIH.antimicrobianoLiberar)?.opcoesLegado).toEqual([1935, 5228]);
-    expect(por(PERMISSOES_CCIH.ccihLer)?.opcoesLegado).toEqual([2299]);
+    expect(opcoesDoMapa(por(PERMISSOES_CCIH.antimicrobianoLiberar)?.codigo)).toEqual([1935, 5228]);
+    expect(opcoesDoMapa(por(PERMISSOES_CCIH.ccihLer)?.codigo)).toEqual([2299]);
   });
   it('a chave qualidade.ccih e os eventos da regra 11', () => {
     expect(recursoDesligado('qualidade.ccih')?.marco).toBe('M48');

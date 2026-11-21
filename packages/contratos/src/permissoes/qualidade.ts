@@ -1,18 +1,3 @@
-// Permissões do M48, etapa 1 (ficha, seção 7; convencoes.md §12; cap-05b §5.11, Perfis): notificação de incidentes,
-// triagem e distribuição pelo NSP, prazos e campos do Notivisa. O outro sistema não tem módulo de qualidade nem de
-// segurança do paciente: nenhuma opção da árvore (catalogo-legado.json, pc) trata de incidente; as opções "Notificar
-// intercorrência" do PEP (5166, 5184, 5205, 6830) e "Notificação compulsória" (5273...) são de outra coisa (o aviso de
-// intercorrência clínica e o agravo da etapa 4). Por isso as permissões são recursos só do novo (regra 3 do M06):
-//   - notificar: todo perfil de pessoa (SGH_ACESSO_MAPA_OPCAO; a ficha: "concedida a todo usuário autenticado");
-//   - ler, triar, distribuir, devolver e exportar ao Notivisa: o perfil complementar `nucleo-seguranca-paciente`
-//     (enfermeiro da qualidade e membros do NSP; concedido pelo gestor de acessos, ADR 0022), conteúdo clínico e
-//     sensível (regra 1: restrito ao NSP e aos envolvidos);
-//   - a análise e o plano de ação (etapa 2) também aos coordenadores assistenciais (o "gestor da área" que recebe a
-//     notificação distribuída, sem ver quem notificou). Coordenador de área administrativa (recepção, hotelaria) entra
-//     por concessão individual do perfil do NSP ou pela etapa 2 (D-PERM-48.1, a confirmar com o NSP).
-// Escopos: o módulo qualidade não tem escopo do outro sistema (o filtro por área é a distribuição, no serviço).
-import { OPCOES_ENFERMAGEM as OE } from './enfermagem.js';
-import { OPCOES_INTERNACAO as OI } from './internacao-adt.js';
 import { PERFIL_CCIH } from './qualidade-ccih.js';
 import type { DeclaracaoPermissao } from './tipos.js';
 
@@ -69,7 +54,7 @@ const nsp = (
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado: [],
+
   concessaoPorPerfil: 'por-perfil',
   perfis: [PERFIL_NSP],
   categoria: 'clinica',
@@ -82,7 +67,7 @@ export const PERMISSOES_QUALIDADE_M48: readonly DeclaracaoPermissao[] = [
     codigo: C.notificacaoCriar,
     descricao:
       'Notificar incidente de qualquer tela, com ou sem identificação, e acompanhar a devolutiva pelo número de acompanhamento',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     // Notificar não abre dado clínico: o diálogo mostra só o que a tela de origem já mostrava, e o servidor relê o
     // contexto pelo atendimento sem devolvê-lo.
@@ -142,7 +127,7 @@ export const PERMISSOES_QUALIDADE_M48: readonly DeclaracaoPermissao[] = [
     codigo: C.dispositivoInvasivoLer,
     descricao:
       'Ver os dispositivos invasivos do paciente internado, com os dias de uso, o bundle por turno e o alerta de permanência',
-    opcoesLegado: [OE.monitorizacao, OE.monitorizacaoConsultar, OE.monitorizacaoConsulta],
+
     concessaoPorPerfil: null,
     categoria: 'clinica',
     criticidade: 'sensivel',
@@ -151,7 +136,7 @@ export const PERMISSOES_QUALIDADE_M48: readonly DeclaracaoPermissao[] = [
     codigo: C.dispositivoInvasivoRegistrar,
     descricao:
       'Registrar a inserção, o checklist do bundle do turno e a retirada do dispositivo invasivo do paciente internado',
-    opcoesLegado: [OE.incluirSinal, OE.incluirHorarioSinal, OE.confirmarSinal],
+
     concessaoPorPerfil: null,
     categoria: 'clinica',
     criticidade: 'sensivel',
@@ -174,7 +159,7 @@ export const PERMISSOES_QUALIDADE_M48: readonly DeclaracaoPermissao[] = [
     codigo: C.revisaoPendenciaResponder,
     descricao:
       'Ver e responder as próprias pendências de prontuário apontadas pela comissão de revisão (só as do próprio profissional)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     categoria: 'clinica',
     criticidade: 'normal',
@@ -182,7 +167,7 @@ export const PERMISSOES_QUALIDADE_M48: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.revisaoAvalLer,
     descricao: 'Ver o aval da comissão de revisão de prontuários pelo número da internação (SAME)',
-    opcoesLegado: [OI.controleProntuarios, OI.prontuariosLocalizacao],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',

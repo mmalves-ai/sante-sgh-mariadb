@@ -1,8 +1,7 @@
 // Relógio civil do estabelecimento (data ISO e hora do dia), pelo fuso do cadastro do estabelecimento
 // (estabelecimento.fuso_horario). O processo roda em UTC; o banco guarda instantes.
 // A agenda de exames usa só a forma neutra "HH:MM" (relogioDoEstabelecimento, horaCivil, minutosDaHora,
-// horaDeMinutos). A leitura aceita também os quatro dígitos sem os dois-pontos, enquanto o contrato das entradas de
-// exame (`horaExame` de @sgh/contratos, lote 12-agenda) não volta ao `esquemaHora` estrito.
+// horaDeMinutos); o contrato das entradas de exame (`horaExame` de @sgh/contratos) é o `esquemaHora` estrito.
 // Este arquivo é compartilhado: cerca de 20 módulos (ADT, farmácia, portaria, TISS, pessoas…) ainda importam
 // relogioNoFuso/civil com a hora em quatro dígitos. Essas duas ficam com a forma antiga até a troca coordenada
 // (pedido do lote 20-misto-preco da F2.4); instanteCivil já aceita as duas formas.

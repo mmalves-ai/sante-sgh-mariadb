@@ -10,6 +10,7 @@ import {
   SEM_MODELO_INTEGRACAO_FOLHA,
 } from './porta-integracao-propria.js';
 import { ROTINAS_INTEGRACAO_FOLHA } from './apoio-folha.js';
+import { OPERACAO_TITULOS_FOLHA } from './servico-integracao.js';
 
 const c = { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), estabelecimento: 7, usuario: 3, correlacao: 'teste' };
 
@@ -80,11 +81,71 @@ describe('porta própria da integração da folha (dublê)', () => {
     await expect(porta.classificacoes({ ...c, estabelecimento: null })).rejects.toBeInstanceOf(ErroOperacao);
   });
 
-  it('operações sem modelo: liberação negada e recusa 503 com a operação na mensagem', async () => {
+  it('de-para: lê as vigências do estabelecimento com os destinos, a classificação e o mês do vencimento', async () => {
+    const { porta, chamadas } = dubleDe([
+      {
+        id: 4,
+        vigencia_inicio: '2099-01-01',
+        criado_em: '2099-01-02T10:00:00.000Z',
+        login: 'ana',
+        destino: 'liquido_mensal',
+        empresa_fornecedora_id: 9001,
+        dia_vencimento: 5,
+        mes_vencimento: 'seguinte',
+        grupo: '210',
+        subgrupo: '01',
+        item: '1',
+      },
+      {
+        id: 4,
+        vigencia_inicio: '2099-01-01',
+        criado_em: '2099-01-02T10:00:00.000Z',
+        login: 'ana',
+        destino: 'outro',
+        empresa_fornecedora_id: 9002,
+        dia_vencimento: 10,
+        mes_vencimento: 'mesmo',
+        grupo: '210',
+        subgrupo: '2',
+        item: '1',
+      },
+    ]);
+    expect(await porta.integracoes(c, 7)).toEqual([
+      {
+        id: 4,
+        empresa: 7,
+        inicio: '2099-01-01',
+        destinos: [
+          {
+            destino: 'liquido-mensal',
+            rotina: 4,
+            credor: 9001,
+            classificacao: { grupo: 210, subgrupo: 1, item: 1 },
+            diaVencimento: 5,
+            mesesDepois: 1,
+            contaContabil: '',
+          },
+        ],
+        criadoPor: 'ana',
+        criadoEm: '2099-01-02T10:00:00.000Z',
+      },
+    ]);
+    expect(chamadas[0]?.p).toEqual([7]);
+    expect(await porta.integracoes(c, 8)).toEqual([]);
+  });
+
+  it('liberação: o de-para grava; o lançamento dos títulos é negado com o motivo', async () => {
     const { porta } = dubleDe([]);
-    expect(await porta.podeGravar()).toMatchObject({ pode: false, codigo: 'modelo-pendente' });
+    expect(await porta.podeGravar(c, 'gravarIntegracao')).toMatchObject({ pode: true });
+    expect(await porta.podeGravar(c, OPERACAO_TITULOS_FOLHA)).toMatchObject({
+      pode: false,
+      codigo: 'modelo-pendente',
+    });
+  });
+
+  it('operações ainda não ligadas: recusa 503 com a operação na mensagem (nunca vazio)', async () => {
+    const { porta } = dubleDe([]);
     const chamadas: [keyof typeof SEM_MODELO_INTEGRACAO_FOLHA, () => Promise<unknown>][] = [
-      ['integracoes', () => porta.integracoes()],
       ['retorno', () => porta.retorno()],
       ['lancamentos', () => porta.lancamentos()],
       ['lancamento', () => porta.lancamento()],
@@ -93,7 +154,6 @@ describe('porta própria da integração da folha (dublê)', () => {
       ['chavesLancadas', () => porta.chavesLancadas()],
       ['custoPessoal', () => porta.custoPessoal()],
       ['executar', () => porta.executar()],
-      ['gravarSgh', () => porta.gravarSgh(c, {}, async () => 1)],
     ];
     for (const [op, fn] of chamadas) {
       const e = await fn().then(

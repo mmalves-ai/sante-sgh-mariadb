@@ -25,31 +25,19 @@ import type { DeclaracaoPermissao } from './tipos.js';
 
 /** Perfis da operadora que leem os catálogos da ANS na tela dos envios (M56; os mesmos de `operadora.ans.ler`). */
 const PERFIS_OPERADORA_ANS = ['operadora-gestor', 'operadora-ans'] as const;
-
-const IMPORTAR = [3766, 3768, 3777, 6460, 6921];
-const APROVAR_FATURAMENTO = [6921, 3183, 3777, 6460];
-const APROVAR_ADMINISTRACAO = [3766, 3768];
-const APROVAR_FISCAL = [4980, 4981, 4504];
-const APROVAR_FARMACIA = [2208, 2218];
-const APROVAR = [
-  ...new Set([...APROVAR_FATURAMENTO, ...APROVAR_ADMINISTRACAO, ...APROVAR_FISCAL, ...APROVAR_FARMACIA]),
-];
-const area = (codigo: string, descricao: string, opcoesLegado: number[]): DeclaracaoPermissao => ({
+const area = (codigo: string, descricao: string): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
 });
-const CONSULTAR = [
-  3653, 6343, 6347, 6693, 6697, 3649, 6341, 3980, 4884, 3722, 3589, 3615, 3617, 3631, 1721, 6920, 6986, 4980,
-];
 
 export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
   {
     codigo: 'catalogo.carga.ler',
     descricao: 'Consultar o painel de cargas dos catálogos oficiais e o detalhe de cada carga',
-    opcoesLegado: [...IMPORTAR, ...CONSULTAR],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
@@ -57,7 +45,7 @@ export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
     codigo: 'catalogo.carga.criar',
     descricao:
       'Enviar o arquivo oficial de um catálogo (preparação, validação e comparação; nada é publicado)',
-    opcoesLegado: IMPORTAR,
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
@@ -65,7 +53,7 @@ export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
     codigo: 'catalogo.carga.publicar',
     descricao:
       'Aprovar e publicar a carga de um catálogo oficial (com justificativa e a senha de novo; exige também a permissão da área do catálogo)',
-    opcoesLegado: APROVAR,
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'critica',
@@ -73,14 +61,14 @@ export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
   {
     codigo: 'catalogo.carga.rejeitar',
     descricao: 'Rejeitar ou cancelar a carga de um catálogo oficial (com motivo)',
-    opcoesLegado: IMPORTAR,
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
   {
     codigo: 'catalogo.item.ler',
     descricao: 'Consultar os catálogos oficiais (CID, CIAP, SIGTAP, TUSS, CEP, CBO, DCB e tabelas fiscais)',
-    opcoesLegado: [...CONSULTAR, ...IMPORTAR],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
   },
@@ -92,7 +80,7 @@ export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
     codigo: 'catalogo.ans.ler',
     descricao:
       'Consultar os catálogos da ANS (grupos e procedimentos do SIP, classificação de procedimentos)',
-    opcoesLegado: [...CONSULTAR, ...IMPORTAR],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: PERFIS_OPERADORA_ANS,
     categoria: 'administrativa',
@@ -100,20 +88,18 @@ export const PERMISSOES_M13: readonly DeclaracaoPermissao[] = [
   {
     codigo: 'catalogo.leiaute.ler',
     descricao: 'Consultar os leiautes de importação da base de CEP',
-    opcoesLegado: [3649, 6341, 3650],
+
     concessaoPorPerfil: null,
     categoria: 'tecnica',
   },
   area(
     'catalogo.faturamento.aprovar',
     'Aprovar as cargas da área de faturamento (SIGTAP, TUSS e terminologias TISS)',
-    APROVAR_FATURAMENTO,
   ),
   area(
     'catalogo.administracao.aprovar',
     'Aprovar as cargas da administração (CID, CIAP, CEP, CBO e listas oficiais)',
-    APROVAR_ADMINISTRACAO,
   ),
-  area('catalogo.fiscal.aprovar', 'Aprovar as cargas das tabelas fiscais e do SPED', APROVAR_FISCAL),
-  area('catalogo.farmacia.aprovar', 'Aprovar as cargas do Brasíndice e do Simpro', APROVAR_FARMACIA),
+  area('catalogo.fiscal.aprovar', 'Aprovar as cargas das tabelas fiscais e do SPED'),
+  area('catalogo.farmacia.aprovar', 'Aprovar as cargas do Brasíndice e do Simpro'),
 ];

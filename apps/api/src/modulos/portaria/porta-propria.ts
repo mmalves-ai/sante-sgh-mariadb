@@ -20,14 +20,18 @@
 // o limite de visitantes (abrangência "limite" é o bloqueio do paciente com limite_visitantes), a inclusão do
 // acompanhante e o documento da ordem judicial. A guarda do visitante vale por pessoa_portaria.guarda_ate (ou, sem ela,
 // pela última visita mais o prazo padrão); o expurgo anonimiza o cadastro (anonimizada_em) e devolve as fotos a apagar.
-// A passagem pela catraca grava evento_acesso_portaria, que se liga ao dispositivo de integração: o terminal da
-// portaria (terminal_acesso) ainda não tem essa ligação no modelo (pedido em docs/obra/fatias/f24/saida/
-// 24-misto-especialidades.json), e o registro da passagem recusa até lá, sem gravar nada.
-import { RETENCAO_PADRAO_DIAS, type MotivoBloqueioVisita, type SentidoTerminal } from '@sgh/contratos';
+// A passagem pela catraca grava evento_acesso_portaria ligado ao terminal da portaria (terminal_acesso), com a chave
+// do evento no terminal (o reenvio devolve o mesmo evento), o crachá lido, a visita e o resultado da avaliação.
+import {
+  RETENCAO_PADRAO_DIAS,
+  type MotivoBloqueioVisita,
+  type ResultadoCatraca,
+  type SentidoCatraca,
+  type SentidoTerminal,
+} from '@sgh/contratos';
 import { regraDaUnidade, REGRA_PADRAO, type RegraVisita, validadeDoCracha } from '@sgh/dominio-internacao';
 import {
   type ContextoNucleo,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -53,6 +57,7 @@ import {
   TETO_INTERNADOS_PORTARIA,
   TETO_VISITAS_ABERTAS,
   TETO_VISITAS_PERIODO,
+  type EventoCatracaRegistrado,
   type TerminalRegistrado,
   type VisitaRegistrada,
   type VisitanteRegistrado,
@@ -85,6 +90,16 @@ function local(v: unknown, fuso: string): string | null {
 /** "AAAA-MM-DDTHH:mm" no fuso do estabelecimento → instante. */
 const instante = (t: string, fuso: string): Date =>
   instanteCivil(t.slice(0, 10), `${t.slice(11, 13)}${t.slice(14, 16)}`, fuso);
+
+/** Resultado da catraca no contrato ↔ no modelo. */
+const RESULTADO_CATRACA_PARA_BANCO: Readonly<Record<ResultadoCatraca, string>> = {
+  liberado: 'permitido',
+  negado: 'recusado',
+};
+const RESULTADO_CATRACA_DO_BANCO: Readonly<Record<string, ResultadoCatraca>> = {
+  permitido: 'liberado',
+  recusado: 'negado',
+};
 
 const MOTIVOS: readonly MotivoBloqueioVisita[] = ['pedido', 'judicial', 'clinico', 'sigilo'];
 /** Fundamento do acompanhante (contrato) ↔ direito legal (modelo). */
@@ -127,16 +142,9 @@ const TABELAS_GRAVACAO = [
   'bloqueio_visitante',
   'acompanhante_internacao',
   'terminal_acesso',
+  'evento_acesso_portaria',
   'ponto_acesso',
 ] as const;
-
-const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a coluna ou tabela no modelo do banco (pedido registrado): nada foi gravado.`,
-  );
 
 const SQL_LOCAL_INTERNACAO = `
     LEFT JOIN ocupacao_leito o ON o.internacao_vigente_id = i.id AND o.excluido_em IS NULL
@@ -627,9 +635,34 @@ export class PortaPortariaPropria implements PortaPortaria {
     );
   }
 
-  /** Pendência de modelo: o evento da passagem ainda não se liga ao terminal da portaria (pedido do lote). */
-  async eventos(): Promise<[]> {
-    return [];
+  /** As passagens mais recentes pelos terminais da portaria do estabelecimento, da mais nova para a mais antiga. */
+  eventos(c: ContextoPortaria, teto = 50): Promise<EventoCatracaRegistrado[]> {
+    const limite = Math.max(1, Math.min(500, Math.trunc(teto)));
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `SELECT e.id, e.terminal_acesso_id, e.codigo_cracha, e.sentido, e.resultado, e.motivo_recusa, e.ocorrido_em,
+                  e.visita_id
+             FROM evento_acesso_portaria e
+             JOIN terminal_acesso t ON t.id = e.terminal_acesso_id
+             JOIN ponto_acesso p ON p.id = t.ponto_acesso_id
+            WHERE p.estabelecimento_id = ?
+            ORDER BY e.ocorrido_em DESC, e.id DESC
+            LIMIT ${limite}`,
+          [est],
+          { teto: limite },
+        )
+      ).map((r) => ({
+        id: n(r['id']),
+        terminal: n(r['terminal_acesso_id']),
+        cracha: texto(r['codigo_cracha']),
+        sentido: texto(r['sentido']) as SentidoCatraca,
+        resultado: RESULTADO_CATRACA_DO_BANCO[texto(r['resultado'])] ?? 'negado',
+        motivo: textoN(r['motivo_recusa']),
+        ocorridoEm: local(r['ocorrido_em'], fuso) ?? '',
+        visita: nn(r['visita_id']),
+      })),
+    );
   }
 
   foto(c: ContextoPortaria, visitante: number): Promise<string | null> {
@@ -1292,8 +1325,90 @@ function gravadorSobre(
       }
     },
 
-    async registrarEventoCatraca() {
-      throw modeloPendente('O registro da passagem pela catraca');
+    async registrarEventoCatraca(ev, avaliar) {
+      const chave = ev.chave.slice(0, 60);
+      const repetido = async () => {
+        const r = await tx.uma<Linha>(
+          `SELECT id, resultado, motivo_recusa, visita_id FROM evento_acesso_portaria
+            WHERE terminal_acesso_id = ? AND chave_evento = ?`,
+          [ev.terminal, chave],
+        );
+        return r
+          ? {
+              id: n(r['id']),
+              resultado: RESULTADO_CATRACA_DO_BANCO[texto(r['resultado'])] ?? 'negado',
+              motivo: textoN(r['motivo_recusa']),
+              visita: nn(r['visita_id']),
+              repetido: true,
+            }
+          : null;
+      };
+      const [t] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT t.id, t.modelo_terminal_acesso_id, m.fabricante_terminal_acesso_id, t.sentido, t.ativo
+           FROM terminal_acesso t
+           JOIN ponto_acesso p ON p.id = t.ponto_acesso_id
+           LEFT JOIN modelo_terminal_acesso m ON m.id = t.modelo_terminal_acesso_id
+          WHERE t.id = ? AND p.estabelecimento_id = ? AND t.excluido_em IS NULL`,
+        [ev.terminal, est],
+      );
+      if (!t) throw recusa('terminal-desconhecido', 'Terminal não cadastrado neste estabelecimento.');
+      const ja = await repetido();
+      if (ja) return ja;
+      // A visita do crachá lido: a mais recente (aberta ou já encerrada) com a etiqueta deste estabelecimento.
+      const [v] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT v.id, v.versao, v.cracha_visitante_id, v.pessoa_portaria_id, v.internacao_id, v.acompanhante_internacao_id,
+                v.entrada_em, v.saida_em, v.observacao, ui.codigo AS unidade
+           FROM visita v
+           JOIN cracha_visitante cr ON cr.id = v.cracha_visitante_id
+           LEFT JOIN internacao i ON i.id = v.internacao_id
+           ${SQL_LOCAL_INTERNACAO}
+          WHERE v.estabelecimento_id = ? AND cr.codigo_leitura = ? AND v.excluido_em IS NULL
+          ORDER BY v.entrada_em DESC, v.id DESC
+          LIMIT 1`,
+        [est, ev.cracha],
+      );
+      const regras = v ? await regrasDe(tx, est, fuso) : [];
+      const a = avaliar({
+        terminal: {
+          id: n(t['id']),
+          tipoTerminal: n(t['modelo_terminal_acesso_id']),
+          fabricante: n(t['fabricante_terminal_acesso_id']),
+          sentido: texto(t['sentido']) as SentidoTerminal,
+          ativo: verdadeiro(t['ativo']),
+        },
+        visita: v ? { id: n(v['id']), validoAte: validadeDaLinha(v, regras), saida: local(v['saida_em'], fuso) } : null,
+      });
+      const ocorrido = instante(ev.ocorridoEm, fuso);
+      let id: number;
+      try {
+        id = await tx.incluir('evento_acesso_portaria', {
+          terminal_acesso_id: n(t['id']),
+          chave_evento: chave,
+          operacao: 'inclusao',
+          ocorrido_em: ocorrido,
+          pessoa_portaria_id: v ? nn(v['pessoa_portaria_id']) : null,
+          visita_id: v ? n(v['id']) : null,
+          cracha_visitante_id: v ? nn(v['cracha_visitante_id']) : null,
+          codigo_cracha: ev.cracha.slice(0, 60),
+          sentido: ev.sentido,
+          resultado: RESULTADO_CATRACA_PARA_BANCO[a.resultado],
+          liberacao_manual: false,
+          motivo_recusa: a.motivo === null ? null : a.motivo.slice(0, 255),
+        });
+      } catch (x) {
+        // Reenvio concorrente do mesmo evento: devolve o que o outro gravou.
+        if (restricaoViolada(x)?.tipo === 'unica') {
+          const outro = await repetido();
+          if (outro) return outro;
+        }
+        throw x;
+      }
+      if (a.encerra && v && v['saida_em'] === null) {
+        const ent = v['entrada_em'] instanceof Date ? (v['entrada_em'] as Date) : new Date(String(v['entrada_em']));
+        await fecharVisita(v, ocorrido < ent ? ent : ocorrido);
+        extras.dados = { ...extras.dados, origemSaida: 'catraca' };
+      }
+      return { id, resultado: a.resultado, motivo: a.motivo, visita: v ? n(v['id']) : null, repetido: false };
     },
   };
   return gravador;

@@ -1,0 +1,32 @@
+# assunto: internacao+custos+contabil+preco+sadt+relatorio+documento+financeiro+repasse+adt
+# cliente_teste: f24_07mistointernacao
+packages/dominio-internacao/dist/massa.spec-util.d.ts
+packages/dominio-internacao/dist/painel.d.ts
+packages/dominio-internacao/dist/tempo.d.ts
+packages/dominio-custos/dist/absorcao.d.ts
+packages/dominio-custos/dist/apuracao.d.ts
+packages/dominio-custos/dist/custo-conta.d.ts
+packages/dominio-custos/dist/estatistica.d.ts
+packages/dominio-custos/dist/exportacao.d.ts
+packages/dominio-contabil/dist/depara.d.ts
+packages/dominio-contabil/dist/derivacao.d.ts
+packages/dominio-contabil/dist/registro.d.ts
+packages/dominio-contabil/dist/sped.d.ts
+packages/dominio-preco/dist/comparacao-importacao.d.ts
+packages/dominio-preco/dist/impacto.d.ts
+packages/dominio-preco/dist/modelo-valor.d.ts
+packages/dominio-preco/dist/proposta-reajuste.d.ts
+apps/api/src/modulos/sadt/porta-propria.ts
+packages/dominio-sadt/dist/transfusao/ato-transfusional.d.ts
+packages/dominio-relatorio/dist/agendamento.d.ts
+packages/dominio-relatorio/dist/triagem.d.ts
+packages/dominio-documento/dist/assinatura/selo.d.ts
+packages/dominio-documento/dist/zpl/modelos.d.ts
+packages/dominio-documento/dist/zpl/opme.d.ts
+packages/dominio-financeiro/dist/dre.d.ts
+packages/dominio-financeiro/dist/lote-contabil.d.ts
+packages/dominio-financeiro/dist/orcamento.d.ts
+packages/dominio-repasse/dist/calculo.d.ts
+packages/dominio-repasse/dist/credor.d.ts
+packages/dominio-repasse/dist/rpa.d.ts
+apps/api/src/modulos/adt/porta-propria.ts

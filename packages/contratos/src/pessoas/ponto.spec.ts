@@ -20,6 +20,7 @@ import {
   EVENTOS_FOLHA,
   PARAMETRO_BIOMETRIA_PONTO,
 } from './ponto-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const base = { vinculo: 1, dia: '2026-09-02', motivo: 'Relógio parado no plantão' };
 
@@ -95,9 +96,9 @@ describe('contratos do ponto (M52.4)', () => {
       'pessoas.ponto.exportar',
       'pessoas.ponto.ciencia',
     ]);
-    expect(por.get('pessoas.ponto.importar')?.opcoesLegado).toEqual([5067, 5068]);
+    expect(opcoesDoMapa(por.get('pessoas.ponto.importar')?.codigo)).toEqual([5067, 5068]);
+    expect(opcoesDoMapa('pessoas.ponto.ciencia')).toEqual([]);
     expect(por.get('pessoas.ponto.ciencia')).toMatchObject({
-      opcoesLegado: [],
       concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     });
     expect(PERMISSOES_PESSOAS_M52_F4.every((p) => p.categoria === 'administrativa')).toBe(true);

@@ -40,7 +40,6 @@ import {
 import {
   type ContextoOperacao,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -158,34 +157,22 @@ const TIPOS_POR_PRIORIDADE: readonly string[] = [...TIPOS_DOCUMENTO_ICP].sort(
   (a, b) => prioridadeIcp(a) - prioridadeIcp(b),
 );
 
-/** Estrutura que ainda falta no modelo (coluna pedida): 503 explícito, sem gravar nada. */
-export function modeloPendente(recurso: string): ErroOperacao {
-  return new ErroOperacao(
-    503,
-    'modelo-pendente',
-    'Recurso indisponível neste ambiente',
-    `${recurso}: o banco do cliente ainda não tem a tabela deste registro (atualização do modelo pendente).`,
-  );
-}
-
 /** Colunas pedidas ao modelo que a porta usa quando já existem. */
 interface ColunasOpcionais {
   readonly certificadoDer: boolean;
   readonly clienteProvedor: boolean;
   readonly autoridadesProvedor: boolean;
-  readonly versaoArquivo: boolean;
 }
 
 const SQL_COLUNAS_OPCIONAIS = `
   SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS
    WHERE TABLE_SCHEMA = DATABASE()
      AND ((TABLE_NAME = 'certificado_usuario' AND COLUMN_NAME = 'certificado_der')
-       OR (TABLE_NAME = 'provedor_assinatura_nuvem' AND COLUMN_NAME IN ('cliente_identificador', 'autoridades'))
-       OR (TABLE_NAME = 'arquivo' AND COLUMN_NAME = 'versao_objeto'))`;
+       OR (TABLE_NAME = 'provedor_assinatura_nuvem' AND COLUMN_NAME IN ('cliente_identificador', 'autoridades')))`;
 
-/** A versão do objeto: a da coluna pedida, ou a que a emissão do documento registrou para a mesma chave. */
-const versaoDoArquivo = (o: ColunasOpcionais, a: string) =>
-  `COALESCE(${o.versaoArquivo ? `${a}.versao_objeto, ` : ''}(SELECT e.versao_objeto FROM emissao_documento e
+/** A versão do objeto: a do arquivo, ou (linhas anteriores à coluna) a que a emissão do documento registrou para a chave. */
+const versaoDoArquivo = (_o: ColunasOpcionais, a: string) =>
+  `COALESCE(${a}.versao_objeto, (SELECT e.versao_objeto FROM emissao_documento e
      WHERE e.chave_objeto = ${a}.chave_armazenamento ORDER BY e.id DESC LIMIT 1))`;
 
 const SQL_ASSINATURA = `
@@ -293,7 +280,6 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           certificadoDer: tem('certificado_usuario', 'certificado_der'),
           clienteProvedor: tem('provedor_assinatura_nuvem', 'cliente_identificador'),
           autoridadesProvedor: tem('provedor_assinatura_nuvem', 'autoridades'),
-          versaoArquivo: tem('arquivo', 'versao_objeto'),
         };
       })
       .catch((e: unknown) => {
@@ -775,24 +761,12 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     return { id };
   }
 
-  /**
-   * O PDF no armazenamento vira uma linha de `arquivo` (imutável). A versão do objeto vai na coluna pedida
-   * (arquivo.versao_objeto) quando o banco já a tem; sem ela, só a versão que a emissão do documento registrou para a
-   * mesma chave (emissao_documento) é aceita, porque a leitura sai de lá. Outra versão: 503 explícito, sem gravar.
-   */
+  /** O PDF no armazenamento vira uma linha de `arquivo` (imutável), com a versão do objeto (a leitura é por ela). */
   private async gravarArquivoPdf(
     tx: TxOperacao,
     est: number,
     x: { entidade: string; entidadeId: number | null; finalidade: string; nome: string; chave: string; versao: string; hash: string },
   ): Promise<number> {
-    const col = await this.opcionais(tx);
-    if (!col.versaoArquivo && x.versao) {
-      const emitida = await tx.uma('SELECT id FROM emissao_documento WHERE chave_objeto = ? AND versao_objeto = ?', [
-        x.chave,
-        x.versao,
-      ]);
-      if (!emitida) throw modeloPendente('Versão do PDF no armazenamento (arquivo.versao_objeto)');
-    }
     return tx.incluir('arquivo', {
       estabelecimento_id: est,
       entidade: x.entidade,
@@ -806,7 +780,7 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       chave_armazenamento: x.chave,
       imutavel: true,
       origem: 'sistema',
-      ...(col.versaoArquivo ? { versao_objeto: x.versao.slice(0, 100) } : {}),
+      versao_objeto: x.versao ? x.versao.slice(0, 100) : null,
     });
   }
 

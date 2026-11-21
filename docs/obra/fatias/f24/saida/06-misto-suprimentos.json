@@ -1,0 +1,56 @@
+{
+  "lote": "06-misto-suprimentos",
+  "pedidos": [
+    {
+      "tipo": "rodada",
+      "assunto": "estoque (suprimentos): porta própria completa",
+      "arquivos": [
+        "apps/api/src/modulos/suprimentos/porta-propria.ts:20,884",
+        "apps/api/src/modulos/suprimentos/operacoes.ts:64,89"
+      ],
+      "motivo": "Sobram 30 leituras (LEITURAS_SUPRIMENTOS_PENDENTES), 14 gravações diretas (GRAVACOES_SUPRIMENTOS_PENDENTES) e 15 operações do executor (OPERACOES_SUPRIMENTOS_PENDENTES). O DDL já existe (nenhum pedido de DDL novo): o bloqueio é o contrato, que chama o documento pela chave antiga (ano, mês, número) e o item pelo código numérico (porta.ts: autorizarRequisicao({ano,mes,doc}), pedido(ano,doc), posicaoMensal(item:number), rastreio(item,lote)...). A troca para id é de ponta a ponta: @sgh/contratos (suprimentos), suprimentos.controller.ts, servico.ts, porta.ts, porta-memoria.ts (2464 linhas), telas da web e testes. Não cabe num lote misto; precisa de rodada própria, com o contrato trocado primeiro por um agente só e depois as leituras e gravações em fatias. O verificador só zera as 4 linhas quando as três listas ficarem vazias.",
+      "estimativa": "contrato e porta-memoria (1 agente) + 3 a 4 fatias da porta própria (leituras; gravações do documento de estoque e movimento; compras e cotação; fechamento, balanço, kit e lote)"
+    },
+    {
+      "tipo": "rodada",
+      "assunto": "OPME e manipulação: porta própria",
+      "arquivos": [
+        "apps/api/src/modulos/suprimentos/opme-porta-propria.ts:9",
+        "apps/api/src/modulos/suprimentos/manipulacao-porta-propria.ts:11"
+      ],
+      "motivo": "Usam modeloPendente de operacoes.ts e dependem da saída do estoque (documento_estoque e movimento_estoque) da rodada acima: a baixa do insumo da manipulação e o consumo em sala do OPME são saídas de estoque. Fazer depois da rodada do estoque."
+    },
+    {
+      "tipo": "rodada",
+      "assunto": "farmácia hospitalar: dispensação, controlado, livro, ambulatorial e envio nacional",
+      "arquivos": [
+        "apps/api/src/modulos/farmacia/porta-propria.ts:17,148,170,415,465",
+        "apps/api/src/modulos/farmacia/gravador-avaliacao.ts:45,51",
+        "apps/api/src/modulos/farmacia/operacoes.ts:2"
+      ],
+      "motivo": "Mesmo pedido do lote 21-misto-farmacia, ainda sem rodada: contrato neutro da dispensação por horário (tipos.ts ainda usa números de situação e documento por ano/mês), escrita da dispensação, entrega, devolução e cancelamento, conferência e perda do controlado (conferencia_controlado já existe), fechamento do livro com o armazém de arquivos (ADR 0004; livro_controlado já tem hash e arquivo), dispensação ambulatorial (dispensacao tipo ambulatorial já existe) e envio nacional. Depende da saída do estoque (rodada acima). pendenteFarmacia e leituraPendente só saem quando todas as operações gravarem."
+    },
+    {
+      "tipo": "codigo",
+      "assunto": "imutabilidade clínica no modelo próprio",
+      "arquivos": [
+        "packages/contratos/src/acesso/tabelas-clinicas.gerado.ts:5-56",
+        "packages/contratos/src/acesso/imutabilidade.ts",
+        "tools/verificadores/src/imutabilidade.ts",
+        "tools/verificadores/src/imutabilidade-gerar.ts",
+        "tools/verificadores/src/imutabilidade.spec.ts",
+        "packages/dominio-acesso/src/imutabilidade/imutabilidade.ts",
+        "packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts"
+      ],
+      "motivo": "TABELAS_CLINICAS_LEGADO é a lista de tabelas clínicas da origem, gerada da matriz de cobertura, que não veio para o sante-sgh (o gerador já avisa que não regenera). A guarda do repositório já decide pela lista do modelo (tabelasClinicasDoModelo, do DDL). O que falta é redesenho compartilhado: gerar o arquivo a partir de tabelasClinicasDoModelo (nomes do modelo próprio, minúsculos), ehTabelaClinica comparar em minúsculas e sem o critério por prefixo SGH_ (que é do banco anterior), e os specs do domínio trocarem os exemplos de origem (SIRES01, CCCADCIR...) por tabelas do modelo. Não fiz no lote porque mexe no contrato, no gerador e no domínio de acesso, fora da lista, e porque o plano por papéis do banco anterior (SGH_MOD_*) deixa de fazer sentido no MariaDB (ADR 0003: concessão por tabela à conta da aplicação)."
+    },
+    {
+      "tipo": "codigo",
+      "assunto": "licitação: porta própria",
+      "arquivos": [
+        "apps/api/src/modulos/suprimentos/licitacao-porta-*.ts"
+      ],
+      "motivo": "O DDL do 10-suprimentos (evento, processo, item, pesquisa e proposta da licitação) foi aplicado na 2ª volta, mas a licitação não tem porta própria nem está nos arquivos deste lote; continua fora de todo módulo da API (pedido f22 03-13)."
+    }
+  ]
+}

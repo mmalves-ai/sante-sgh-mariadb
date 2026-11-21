@@ -40,6 +40,7 @@ import {
   SLA_PADRAO,
   TETO_LISTA_OS,
 } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const equipamento = {
   codigo: 'eq-0001',
@@ -67,7 +68,7 @@ describe('permissões da F1 no catálogo', () => {
     for (const p of PERMISSOES_MANUTENCAO_M55_F1) {
       expect(doCatalogo.has(p.codigo)).toBe(true);
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length > 0 || p.concessaoPorPerfil !== null).toBe(true);
+      expect(opcoesDoMapa(p.codigo).length > 0 || p.concessaoPorPerfil !== null).toBe(true);
       expect(p.escopos).toEqual([]);
       expect(p.categoria).toBe('administrativa');
     }
@@ -76,8 +77,10 @@ describe('permissões da F1 no catálogo', () => {
   it('abrir OS é de todo perfil de pessoa; atender e editar vêm da "Manutenção de Bens" do patrimônio', () => {
     const por = new Map(PERMISSOES_MANUTENCAO_M55_F1.map((p) => [p.codigo, p]));
     expect(por.get('manutencao.os.abrir')?.concessaoPorPerfil).toBe('todos-os-perfis-de-pessoa');
-    expect(por.get('manutencao.os.atender')?.opcoesLegado).toContain(OPCOES_MANUTENCAO.manutencaoBens);
-    expect(por.get('manutencao.equipamento.editar')?.opcoesLegado).toEqual([
+    expect(opcoesDoMapa(por.get('manutencao.os.atender')?.codigo)).toContain(
+      OPCOES_MANUTENCAO.manutencaoBens,
+    );
+    expect(opcoesDoMapa(por.get('manutencao.equipamento.editar')?.codigo)).toEqual([
       OPCOES_MANUTENCAO.manutencaoBens,
     ]);
     expect(por.get('manutencao.os.encerrar')?.criticidade).toBe('sensivel');

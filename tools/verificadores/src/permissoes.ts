@@ -1,15 +1,16 @@
 // pnpm permissoes:verificar [-- --hospital=<cod|todos>] [--atualizar] (ficha do M06, regra 11 e critérios)
-// 1. catálogo: o gerado da árvore do legado (TBOPCOES) está em dia com o retrato, códigos no formato, sem
-//    repetição, e toda permissão tem `opcoesLegado`, `flagsLegado` ou concessão por perfil;
+// 1. catálogo: o catálogo-base do produto cobre o que a árvore do menu de origem gera (retrato), e o mapa do conector
+//    (conector/mapa/permissoes.tsv, ADR 0007 item 8) liga cada opção à permissão; códigos no formato, sem repetição,
+//    toda permissão tem linha no mapa ou concessão por perfil, e toda linha do mapa aponta permissão que existe;
 // 2. rotas: todo handler da API tem @Permissao (ou @Publica, comentada) e toda rota da tela tem
 //    meta.permissao (ou publica); toda permissão citada existe no catálogo; o menu só aponta permissão real;
 // 3. prova dos 42 grupos: para cada grupo com permissões, opções do legado × permissões do novo, 0 diferença
 //    não justificada (relatório só com nome do grupo e contagens), nos estabelecimentos configurados;
 // 4. mapa dos grupos: todo grupo do legado tem destino (perfil, legado, painel ou caso a caso).
 // Fonte: a cópia ao vivo quando há cópia em loopback (AMBIENTE=dev); senão (CI, clone), o retrato versionado
-// em tools/verificadores/dados. `--atualizar` refaz o retrato da cópia e o catálogo gerado; `--retrato` usa só
+// em tools/verificadores/dados. `--atualizar` refaz o retrato da cópia; `--retrato` usa só
 // o retrato (o `pnpm verificar` roda assim).
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import {
   CATALOGO_DECLARADO,
@@ -18,13 +19,15 @@ import {
   type DeclaracaoPermissao,
   FORMATO_CODIGO_PERMISSAO,
 } from '@sgh/contratos';
-import { CATALOGO_LEGADO, CATALOGO_LEGADO_ORIGEM } from '@sgh/contratos/catalogo-legado';
+import { CATALOGO_BASE } from '@sgh/contratos/catalogo-base';
 import {
   chaveGrupo,
   conceder,
   construirCatalogo,
+  type CorrespondenciaOrigem,
   indexarCatalogo,
   escoposDaPermissao,
+  lerMapaOrigem,
   MAPA_GRUPOS,
   provarGrupos,
   type CatalogoGerado,
@@ -35,8 +38,12 @@ import { gravarRetrato, lerRetrato, type RetratoAcessoLegado } from './permissoe
 
 const raiz = resolve(import.meta.dirname, '../../..');
 
-/** Arquivo de dados do catálogo gerado (uma permissão por linha; o teste confere a igualdade com o gerador). */
-export const ARQUIVO_DADOS_CATALOGO = resolve(raiz, 'packages/contratos/src/permissoes/catalogo-legado.json');
+/** Mapa do conector: opção do menu e marca de usuário de origem → permissão do produto (ADR 0007, item 8). */
+export const ARQUIVO_MAPA_ORIGEM = resolve(raiz, 'conector/mapa/permissoes.tsv');
+
+export function lerMapaDoConector(arquivo: string = ARQUIVO_MAPA_ORIGEM): CorrespondenciaOrigem[] {
+  return existsSync(arquivo) ? lerMapaOrigem(readFileSync(arquivo, 'utf8')) : [];
+}
 
 /**
  * Renomeações de código (F2.4, padrão de permissão em docs/obra/fatias/f24/saida/padroes.md): o código gerado do menu
@@ -58,33 +65,50 @@ export function lerRenomeacoes(
   return m;
 }
 
-export function textoCatalogo(
+/**
+ * O catálogo gerado da árvore do menu de origem (retrato) está coberto: cada código gerado (com a renomeação do mapa)
+ * existe no catálogo-base e cada opção dele tem a linha correspondente no mapa do conector.
+ */
+export function conferirOrigem(
   c: CatalogoGerado,
-  estabelecimento: string,
+  base: readonly DeclaracaoPermissao[],
+  mapa: readonly CorrespondenciaOrigem[],
   renomeacoes: ReturnType<typeof lerRenomeacoes> = lerRenomeacoes(),
-): string {
-  const linhas = c.permissoes.map((p) =>
-    JSON.stringify({
-      codigo: renomeacoes.get(p.codigo)?.codigo ?? p.codigo,
-      descricao: renomeacoes.get(p.codigo)?.descricao ?? p.descricao,
-      opcoesLegado: p.opcoesLegado,
-      concessaoPorPerfil: null,
-      categoria: p.categoria,
-      criticidade: p.criticidade,
-      escopos: p.escopos,
-    }),
+): Achado[] {
+  const achados: Achado[] = [];
+  const codigos = new Set(base.map((p) => p.codigo));
+  const linhas = new Set(
+    mapa.filter((m) => m.tipo === 'opcao_menu').map((m) => `${m.chave}\t${m.permissao}`),
   );
-  const origem = {
-    gerador: 'pnpm permissoes:verificar -- --atualizar (ficha do M06, regra 2); não editar à mão',
-    estabelecimento,
-    opcoes: c.contagens.opcoes,
-    ativas: c.contagens.ativas,
-    porNivel: c.contagens.porNivel,
-    modulos: c.contagens.modulos,
-    permissoes: c.permissoes.length,
-    exclusoes: c.exclusoes.length,
-  };
-  return `{\n"origem": ${JSON.stringify(origem)},\n"permissoes": [\n${linhas.join(',\n')}\n]\n}\n`;
+  for (const p of c.permissoes) {
+    const codigo = renomeacoes.get(p.codigo)?.codigo ?? p.codigo;
+    if (!codigos.has(codigo))
+      achados.push({
+        regra: 'catalogo-desatualizado',
+        detalhe: `${codigo}: gerado do menu de origem e fora do catálogo-base`,
+      });
+    const faltam = p.opcoesLegado.filter((o) => !linhas.has(`${o}\t${codigo}`));
+    if (faltam.length > 0)
+      achados.push({
+        regra: 'mapa-desatualizado',
+        detalhe: `${codigo}: ${faltam.length} opção(ões) do menu sem linha no mapa`,
+      });
+  }
+  return achados;
+}
+
+/** Mapa da prova: as opções do catálogo gerado (códigos antes da renomeação) mais as do mapa para as declaradas. */
+export function mapaDaProva(
+  c: CatalogoGerado,
+  mapa: readonly CorrespondenciaOrigem[] = lerMapaDoConector(),
+): CorrespondenciaOrigem[] {
+  const declaradas = new Set(CATALOGO_DECLARADO.map((p) => p.codigo));
+  return [
+    ...c.permissoes.flatMap((p) =>
+      p.opcoesLegado.map((o) => ({ tipo: 'opcao_menu' as const, chave: String(o), permissao: p.codigo })),
+    ),
+    ...mapa.filter((m) => declaradas.has(m.permissao)),
+  ];
 }
 
 export interface Achado {
@@ -92,25 +116,40 @@ export interface Achado {
   readonly detalhe: string;
 }
 
-/** Regra 11 (catálogo): formato, repetição e fonte de concessão de cada permissão. */
-export function conferirCatalogo(catalogo: readonly DeclaracaoPermissao[]): Achado[] {
+/**
+ * Regra 11 (catálogo): formato, repetição e fonte de concessão de cada permissão. A fonte é a linha do mapa do
+ * conector (opção do menu ou marca de usuário de origem) ou a concessão por perfil; linha do mapa que aponta
+ * permissão fora do catálogo também reprova.
+ */
+export function conferirCatalogo(
+  catalogo: readonly DeclaracaoPermissao[],
+  mapa: readonly CorrespondenciaOrigem[] = lerMapaDoConector(),
+): Achado[] {
   const achados: Achado[] = [];
   const vistos = new Set<string>();
+  const comOrigem = new Set(mapa.map((m) => m.permissao));
   for (const p of catalogo) {
     if (!FORMATO_CODIGO_PERMISSAO.test(p.codigo))
       achados.push({ regra: 'formato', detalhe: `${p.codigo}: fora de modulo.recurso.acao` });
     if (vistos.has(p.codigo)) achados.push({ regra: 'repetida', detalhe: p.codigo });
     vistos.add(p.codigo);
-    const temFonte =
-      p.opcoesLegado.length > 0 || (p.flagsLegado ?? []).length > 0 || p.concessaoPorPerfil !== null;
-    if (!temFonte)
-      achados.push({ regra: 'sem-mapeamento', detalhe: `${p.codigo}: sem opcoesLegado nem mapeamento` });
+    if (!comOrigem.has(p.codigo) && p.concessaoPorPerfil === null)
+      achados.push({
+        regra: 'sem-mapeamento',
+        detalhe: `${p.codigo}: sem linha no mapa do conector nem concessão por perfil`,
+      });
     if (p.concessaoPorPerfil === 'por-perfil' && (p.perfis ?? []).length === 0)
       achados.push({ regra: 'sem-mapeamento', detalhe: `${p.codigo}: por perfil sem perfil` });
     const esperados = [...escoposDaPermissao(p.codigo)].sort().join(',');
     if (p.escopos && [...p.escopos].sort().join(',') !== esperados)
       achados.push({ regra: 'escopos', detalhe: `${p.codigo}: escopos diferentes dos do módulo` });
   }
+  const orfas = [...comOrigem].filter((c) => !vistos.has(c)).sort();
+  for (const c of orfas)
+    achados.push({
+      regra: 'mapa-orfao',
+      detalhe: `${c}: linha do mapa do conector sem permissão no catálogo`,
+    });
   return achados;
 }
 
@@ -238,7 +277,7 @@ export function provaEMapa(retrato: RetratoAcessoLegado): RelatorioPermissoes {
   // A prova passa também pela concessão real (conceder: perfis e segregação), com cada papel SBIS: o que o
   // legado concede ao grupo não pode sumir no caminho (regra 4). Conflitos de segregação mantidos são
   // contados por motivo (vão à revisão do dono e das áreas; não reprovam).
-  const indice = indexarCatalogo([...c.permissoes, ...CATALOGO_DECLARADO]);
+  const indice = indexarCatalogo([...c.permissoes, ...CATALOGO_DECLARADO], [], mapaDaProva(c));
   const doGrupo = new Map<string, number[]>();
   for (const [g, o] of retrato.permissoesGrupos) doGrupo.set(g, [...(doGrupo.get(g) ?? []), o]);
   const conflitos: string[] = [];
@@ -373,33 +412,16 @@ async function principal(): Promise<number> {
     if (!copia?.codigos.includes(cod)) linhas.push(`[${cod}] fonte: retrato versionado`);
     retratos.push(r);
   }
-  // 1. catálogo gerado em dia com o retrato de referência (o do estabelecimento de origem).
-  const ref =
-    retratos.find((r) => r.estabelecimento === CATALOGO_LEGADO_ORIGEM.estabelecimento) ?? lerRetrato('pc');
-  if (ref) {
-    const gerado = construirCatalogo(ref.opcoes, ref.modulos);
-    const texto = textoCatalogo(gerado, ref.estabelecimento);
-    if (bandeiras.has('atualizar')) {
-      writeFileSync(ARQUIVO_DADOS_CATALOGO, texto, 'utf8');
-      linhas.push(
-        `  gravado ${relative(raiz, ARQUIVO_DADOS_CATALOGO)} (${gerado.permissoes.length} permissões)`,
-      );
-    } else if (
-      !existsSync(ARQUIVO_DADOS_CATALOGO) ||
-      readFileSync(ARQUIVO_DADOS_CATALOGO, 'utf8') !== texto
-    ) {
-      achados.push({
-        regra: 'catalogo-desatualizado',
-        detalhe: 'catalogo-legado.json difere do gerador: rode --atualizar',
-      });
-    }
-  }
-  const catalogo = [...CATALOGO_LEGADO, ...CATALOGO_DECLARADO];
+  // 1. o catálogo-base e o mapa do conector cobrem o que a árvore do menu de origem gera (retrato do pc).
+  const mapa = lerMapaDoConector();
+  const ref = retratos.find((r) => r.estabelecimento === 'pc') ?? lerRetrato('pc');
+  if (ref) achados.push(...conferirOrigem(construirCatalogo(ref.opcoes, ref.modulos), CATALOGO_BASE, mapa));
+  const catalogo = [...CATALOGO_BASE, ...CATALOGO_DECLARADO];
   const codigos = new Set(catalogo.map((p) => p.codigo));
-  const cat = conferirCatalogo(catalogo);
+  const cat = conferirCatalogo(catalogo, mapa);
   achados.push(...cat);
   linhas.push(
-    `catálogo: ${CATALOGO_LEGADO.length} geradas da árvore do legado + ${CATALOGO_DECLARADO.length} declaradas; ${cat.filter((a) => a.regra === 'sem-mapeamento').length} sem opcoesLegado nem mapeamento`,
+    `catálogo: ${CATALOGO_BASE.length} do catálogo-base + ${CATALOGO_DECLARADO.length} declaradas; mapa do conector com ${mapa.length} linhas; ${cat.filter((a) => a.regra === 'sem-mapeamento').length} sem mapeamento`,
   );
   // M08: as telas geradas do CRUD genérico — toda ação de todo domínio declarado com opções do legado.
   const dominios = DOMINIOS_DECLARADOS.map((d) => ({

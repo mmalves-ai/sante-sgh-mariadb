@@ -9,6 +9,7 @@ export * from './totp.js';
 export * from './catalogo.js';
 export * from './prova-grupos.js';
 export * from './mapa-grupos.js';
+export * from './mapa-origem.js';
 export * from './concessao.js';
 export * from './segregacao.js';
 export * from './ability.js';

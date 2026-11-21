@@ -7,7 +7,7 @@
 import { flagAceita } from '@sgh/contratos';
 import { z } from 'zod';
 import { ErroOperacao } from '@sgh/nucleo';
-import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
+import { CATALOGO_COMPLETO, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 import type { RegistradorTrilha, RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import {
   aceitouTermoSintetico,
@@ -535,7 +535,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
 
 /**
  * Árvore sintética de opções (dev/ci): do catálogo de permissões, cada código `modulo.recurso.acao` com opção do
- * legado vira módulo (nível 0) → recurso (nível 1) → opção (nível 2, o ID real da opção). Com o banco, a árvore é
+ * origem (mapa do conector) vira módulo (nível 0) → recurso (nível 1) → opção (nível 2, o ID real da opção). Com o banco, a árvore é
  * a do menu de origem.
  */
 function arvoreSintetica(): { opcoes: AcaoMenu[]; modulos: ModuloSistema[] } {
@@ -543,7 +543,7 @@ function arvoreSintetica(): { opcoes: AcaoMenu[]; modulos: ModuloSistema[] } {
   const vistas = new Set<number>();
   for (const p of CATALOGO_COMPLETO) {
     const [mod = '', rec = '', acao = ''] = p.codigo.split('.');
-    for (const id of p.opcoesLegado) {
+    for (const id of opcoesDasPermissoes(p.codigo)) {
       if (vistas.has(id)) continue;
       vistas.add(id);
       const r = porModulo.get(mod) ?? new Map<string, { id: number; titulo: string }[]>();

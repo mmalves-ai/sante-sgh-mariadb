@@ -135,10 +135,14 @@ describe.skipIf(SEM_BANCO_PAT)('porta própria do patrimônio (MariaDB, cliente 
         trilhaPat(M(), 'x', 'bem_patrimonial', null),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'plaqueta-repetida' } });
-    // Responsável por nome e doador do termo: pedem modelo (nada gravado).
+    // O responsável é um usuário (pelo login ou pelo nome exato): o desconhecido é recusado, nada gravado.
     await expect(
-      porta.cadastrar(contextoPat(M()), { bens: [{ ...bemNovo(null, M().centro1), responsavel: 'FULANO' }], item: null }, 'x', gerar, trilhaPat(M(), 'x', 'bem_patrimonial', null)),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+      porta.cadastrar(contextoPat(M()), { bens: [{ ...bemNovo(null, M().centro1), responsavel: 'USUARIO SINTETICO INEXISTENTE' }], item: null }, 'x', gerar, trilhaPat(M(), 'x', 'bem_patrimonial', null)),
+    ).rejects.toMatchObject({ problema: { codigo: 'responsavel-inexistente' } });
+    // Quem só tem vínculo com outra unidade da rede não responde por bem deste estabelecimento.
+    await expect(
+      porta.cadastrar(contextoPat(M()), { bens: [{ ...bemNovo(null, M().centro1), responsavel: 'l0211p.aceite' }], item: null }, 'x', gerar, trilhaPat(M(), 'x', 'bem_patrimonial', null)),
+    ).rejects.toMatchObject({ problema: { codigo: 'responsavel-inexistente' } });
 
     const alt = {
       id: b2!.id,
@@ -394,14 +398,58 @@ describe.skipIf(SEM_BANCO_PAT)('porta própria do patrimônio (MariaDB, cliente 
     ).rejects.toMatchObject({ problema: { codigo: 'com-dependentes' } });
   });
 
-  it('depreciação: os bens da competência são lidos; o cálculo e o estorno pedem modelo (nada gravado)', async () => {
+  it('depreciação: calcula a competência, recusa o segundo cálculo, estorna e recalcula numa rodada nova', async () => {
     const c = contextoPat(M());
     const r = await porta.bensParaDepreciar(c, 1, '2026-06');
     expect(r.bens.length).toBeGreaterThanOrEqual(2);
     expect(r.bens.every((b) => b.acumuladaCent === 0 && !b.temCotaNaCompetencia)).toBe(true);
-    await expect(porta.calcular()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(porta.estornar()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    expect(await porta.calculos()).toEqual({ daCompetencia: null, ultimo: null });
+    const trilha = trilhaPat(M(), 'patrimonio.depreciacao.calculada', 'calculo_depreciacao', null);
+    const montar = ({ bens }: { bens: typeof r.bens }) => {
+      const cotas = bens.slice(0, 2).map((b) => ({
+        bem: b.id,
+        plaqueta: b.plaqueta,
+        grupo: b.grupo,
+        centro: b.centro,
+        baseCent: b.valorCent,
+        residualCent: b.residualCent,
+        vidaUtilMeses: b.vidaUtilMeses,
+        coeficiente: 1,
+        acumuladaAntesCent: b.acumuladaCent,
+        valorCent: 100_00,
+      }));
+      return { impedimentos: [], cotas, ignorados: bens.length - cotas.length, totalCent: 200_00, resumo: '' };
+    };
+    const um = await porta.calcular(contextoPat(M()), { empresa: 1, competencia: '2026-06' }, 't', montar, trilha);
+    expect(um.calculo).toMatchObject({ competencia: '2026-06', bens: 2, totalCent: 200_00, rodada: 1 });
+    expect(um.calculo.calculadoEm).not.toBe('');
+    const cotas = await porta.cotas(c, um.calculo.id);
+    expect(cotas.map((k) => k.valorCent)).toEqual([100_00, 100_00]);
+    expect(cotas[0]?.vidaUtilMeses).toBe(r.bens[0]?.vidaUtilMeses);
+    await expect(porta.calcular(contextoPat(M()), { empresa: 1, competencia: '2026-06' }, 't', montar, trilha)).rejects.toMatchObject({
+      problema: { codigo: 'ja-calculado' },
+    });
+    expect((await porta.calculos(c, 1, '2026-06')).daCompetencia?.id).toBe(um.calculo.id);
+    const julho = await porta.bensParaDepreciar(c, 1, '2026-07');
+    expect(julho.bens.find((b) => b.id === cotas[0]?.bem)?.acumuladaCent).toBe(100_00);
+    await expect(
+      porta.estornar(contextoPat(M()), { empresa: 1, competencia: '2026-06', motivo: 'x', origem: 'tela' }, 't', () => ({
+        codigo: 'lote-exportado',
+        detalhe: 'Lote liberado.',
+      }), trilha),
+    ).rejects.toMatchObject({ problema: { codigo: 'lote-exportado' } });
+    const e = await porta.estornar(
+      contextoPat(M()),
+      { empresa: 1, competencia: '2026-06', motivo: 'Cálculo de teste', origem: 'tela' },
+      't',
+      (s) => (s.daCompetencia?.id === um.calculo.id && s.lotesExportados.length === 0 ? null : { codigo: 'x', detalhe: 'x' }),
+      trilha,
+    );
+    expect(e.estorno).toMatchObject({ calculo: um.calculo.id, competencia: '2026-06', totalCent: 200_00, motivo: 'Cálculo de teste' });
+    expect((await porta.calculos(c, 1, '2026-06')).daCompetencia).toBeNull();
+    expect((await porta.bensParaDepreciar(c, 1, '2026-07')).bens.every((b) => b.acumuladaCent === 0)).toBe(true);
+    const dois = await porta.calcular(contextoPat(M()), { empresa: 1, competencia: '2026-06' }, 't', montar, trilha);
+    expect(dois.calculo.rodada).toBe(2);
+    expect((await porta.estornos(c, 1, '2026-06')).map((x) => x.calculo)).toEqual([um.calculo.id]);
   });
 
   it('outro estabelecimento: não lê o bem nem grava nele', async () => {

@@ -23,6 +23,7 @@ import {
   SINAIS_FICHA,
   SINAIS_FICHA_OBRIGATORIOS,
 } from './anestesia-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const apa = {
   agendamento: 10,
@@ -161,7 +162,7 @@ describe('permissões, eventos e liberação', () => {
     );
     for (const p of PERMISSOES_ANESTESIA_M46) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
       expect(p.categoria).toBe('clinica');
       expect(CATALOGO_DECLARADO.filter((c) => c.codigo === p.codigo)).toHaveLength(1);
     }

@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { CATALOGO_DECLARADO, PERMISSOES_PESSOAS_M52_F5 } from '@sgh/contratos';
+import { opcoesDasPermissoes } from '../../../autorizacao/catalogo.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { NucleoProprio } from '@sgh/nucleo';
 
@@ -37,11 +38,11 @@ function arquivos(pasta: string): string[] {
 
 describe('segregação do prontuário ocupacional (regra 16)', () => {
   it('catálogo: as opções do SESMT não dão permissão do PEP, e as do PEP não dão permissão do SESMT', () => {
-    const sesmt = new Set(PERMISSOES_PESSOAS_M52_F5.flatMap((p) => p.opcoesLegado));
+    const sesmt = new Set(PERMISSOES_PESSOAS_M52_F5.flatMap((p) => opcoesDasPermissoes(p.codigo)));
     const doPep = CATALOGO_DECLARADO.filter((p) => p.codigo.startsWith('pep.'));
     expect(doPep.length).toBeGreaterThan(0);
     for (const p of doPep)
-      for (const o of p.opcoesLegado) expect(sesmt.has(o), `${p.codigo} ${o}`).toBe(false);
+      for (const o of opcoesDasPermissoes(p.codigo)) expect(sesmt.has(o), `${p.codigo} ${o}`).toBe(false);
     for (const p of PERMISSOES_PESSOAS_M52_F5) {
       expect(p.concessaoPorPerfil).toBeNull();
       expect(p.codigo.startsWith('pessoas.')).toBe(true);

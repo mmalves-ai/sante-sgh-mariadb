@@ -19,17 +19,15 @@ export const OPCOES_MANUTENCAO = {
   relatorioManutencao: 285,
 } as const;
 
-const O = OPCOES_MANUTENCAO;
-
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
   criticidade: 'normal',
@@ -41,34 +39,30 @@ export const PERMISSOES_MANUTENCAO_M55_F1: readonly DeclaracaoPermissao[] = [
   p(
     'manutencao.os.abrir',
     'Abrir ordem de serviço de manutenção para o seu setor e acompanhar as que abriu',
-    [],
+
     { concessaoPorPerfil: 'todos-os-perfis-de-pessoa' },
   ),
   p(
     'manutencao.os.atender',
     'Triar, assumir e dar andamento às ordens de serviço de manutenção de todos os setores',
-    [O.manutencaoBens, O.manutencaoBensSaida, O.manutencaoBensRetorno],
   ),
   p(
     'manutencao.os.encerrar',
     'Concluir, encerrar e cancelar ordem de serviço de manutenção, com causa, custo e laudo',
-    [O.manutencaoBensRetorno],
+
     { criticidade: 'sensivel' },
   ),
   p(
     'manutencao.equipamento.ler',
     'Consultar equipamentos, planos de manutenção, laudos, contratos de manutenção e indicadores',
-    [O.manutencaoBens, O.manutencaoBensSaida, O.manutencaoBensRetorno, O.relatorioManutencao],
   ),
   p(
     'manutencao.equipamento.editar',
     'Cadastrar e alterar equipamentos e as coberturas por contrato de manutenção',
-    [O.manutencaoBens],
   ),
   p(
     'manutencao.preventiva.planejar',
     'Planejar manutenção preventiva, calibração e segurança elétrica e registrar a execução com o laudo',
-    [O.manutencaoBens],
   ),
 ];
 

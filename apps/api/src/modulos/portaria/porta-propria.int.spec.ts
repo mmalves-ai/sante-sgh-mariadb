@@ -72,6 +72,10 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
 
   const limpar = (e: Escritor) =>
     (async () => {
+      await e.executar(
+        'DELETE ev FROM evento_acesso_portaria ev JOIN terminal_acesso t ON t.id = ev.terminal_acesso_id JOIN ponto_acesso p ON p.id = t.ponto_acesso_id WHERE p.estabelecimento_id IN (?, ?)',
+        [ids.est, ids.outroEst],
+      );
       await e.executar('DELETE FROM visita WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
       await e.executar('DELETE FROM cracha_visitante WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
       await e.executar('DELETE FROM bloqueio_visitante WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
@@ -663,7 +667,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(await porta.acompanhantes(ctx, `${P}-UI`)).toEqual([]);
   });
 
-  it('terminal pela versão, no ponto de acesso do estabelecimento; a catraca aguarda o modelo', async () => {
+  it('terminal pela versão, no ponto de acesso do estabelecimento; a catraca grava o evento uma vez por chave', async () => {
     const t = (id: number | null, versao: number | null, nome = 'CATRACA L0212') =>
       porta.gravarSgh(ctx, trilha('terminal_acesso'), (g) =>
         g.configurarTerminal({ id, versao, nome, tipoTerminal: ids.modelo, fabricante: 0, local: 'PORTARIA L0212', sentido: 'ambos', ativo: true, usuario: 'x' }),
@@ -676,15 +680,32 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     const lidos = await porta.terminais(ctx);
     expect(lidos.find((x) => x.id === r1.id)).toMatchObject({ nome: 'CATRACA L0212 B', local: 'PORTARIA L0212', tipoTerminal: ids.modelo, versao: 2 });
     expect((await porta.terminais(outro)).some((x) => x.id === r1.id)).toBe(false);
-    expect(
-      await recusada(
-        porta.gravarSgh(ctx, trilha('evento_acesso_portaria'), (g) =>
-          g.registrarEventoCatraca(
-            { terminal: r1.id, cracha: 'L0212CRACHA01', sentido: 'entrada', ocorridoEm: agoraLocal(), chave: 'ev-0212', usuario: 'x' },
-            () => ({ resultado: 'liberado', motivo: null, encerra: false }),
-          ),
+    const passar = (chave: string, terminal = r1.id) =>
+      porta.gravarSgh(ctx, trilha('evento_acesso_portaria'), (g) =>
+        g.registrarEventoCatraca(
+          { terminal, cracha: 'L0212SEMVISITA', sentido: 'entrada', ocorridoEm: agoraLocal(), chave, usuario: 'x' },
+          (x) => ({ resultado: x.visita ? 'liberado' : 'negado', motivo: x.visita ? null : 'Crachá sem visita.', encerra: false }),
         ),
-      ),
-    ).toBe('modelo-pendente');
+      );
+    const ev = await passar('ev-0212');
+    expect(ev).toMatchObject({ resultado: 'negado', motivo: 'Crachá sem visita.', visita: null, repetido: false });
+    expect(await passar('ev-0212')).toEqual({ ...ev, repetido: true });
+    const gravado = await ler<{ resultado: string; terminal_acesso_id: number; codigo_cracha: string }>(
+      'SELECT resultado, terminal_acesso_id, codigo_cracha FROM evento_acesso_portaria WHERE id = ?',
+      [ev.id],
+    );
+    expect(gravado).toMatchObject({ resultado: 'recusado', terminal_acesso_id: r1.id, codigo_cracha: 'L0212SEMVISITA' });
+    const lidos2 = await porta.eventos(ctx, 50);
+    expect(lidos2.find((x) => x.id === ev.id)).toMatchObject({
+      terminal: r1.id,
+      cracha: 'L0212SEMVISITA',
+      sentido: 'entrada',
+      resultado: 'negado',
+      motivo: 'Crachá sem visita.',
+      visita: null,
+    });
+    expect(lidos2.filter((x) => x.id === ev.id)).toHaveLength(1);
+    expect((await porta.eventos(outro, 50)).some((x) => x.id === ev.id)).toBe(false);
+    expect(await recusada(passar('ev-0213', 999_999_999))).toBe('terminal-desconhecido');
   });
 });

@@ -13,7 +13,6 @@ import type { PortaCalculoFolha } from './porta-calculo.js';
 import type { PortaFolha } from './porta-folha.js';
 import { PortaIntegracaoFolhaMemoria } from './porta-integracao-memoria.js';
 import { ServicoIntegracaoFolha } from './servico-integracao.js';
-import { erroSemModelo } from './porta-integracao-propria.js';
 import { type ChaveLiberacao, type PrerequisitoRecurso } from '../../config/public-api.js';
 import { type FechamentoDaFolha } from './tipos-folha.js';
 
@@ -198,17 +197,8 @@ const DE_PARA = [
 ];
 
 describe('ServicoIntegracaoFolha (M53.9)', () => {
-  it('apoio sem a tabela do de-para (503 modelo-pendente): segue sem de-para vigente; outro erro sobe', async () => {
+  it('apoio: a falha na leitura do de-para sobe (nunca vira "sem de-para vigente")', async () => {
     const { servico, porta } = montar();
-    porta.integracoes = async () => {
-      throw erroSemModelo('integracoes');
-    };
-    const a = await servico.apoioTela(sessao(), 1);
-    expect(a.vigente).toBeNull();
-    expect(a.classificacoes.length).toBeGreaterThan(0);
-    await expect(servico.integracoes(sessao(), 1)).rejects.toMatchObject({
-      problema: { status: 503, codigo: 'modelo-pendente' },
-    });
     porta.integracoes = async () => {
       throw new Error('falha de conexão');
     };

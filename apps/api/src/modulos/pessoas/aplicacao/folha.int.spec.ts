@@ -578,9 +578,9 @@ describe.skipIf(SEM_BANCO)('folha sobre o MariaDB (cliente f22_o3)', () => {
     ]);
     expect((await calculo.adiantamentosDecimo(c, ids.estA, 2026, ['ferias'])).size).toBe(0);
     expect((await calculo.adiantamentosDecimo(cOutro, ids.estB, 2026)).size).toBe(0);
-    expect(await calculo.podeGravar()).toMatchObject({ pode: false, codigo: 'modelo-pendente' });
+    // A gravação direta está ligada (salário, parâmetros e fechamento); o processamento segue recusando.
+    expect(await calculo.podeGravar()).toMatchObject({ pode: true });
     await expect(calculo.processos()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
     await expect(calculo.rescisoes()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(calculo.gravarSgh()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
   });
 });

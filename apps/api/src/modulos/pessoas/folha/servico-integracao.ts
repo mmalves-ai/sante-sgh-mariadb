@@ -71,12 +71,6 @@ import type {
 } from './porta-integracao.js';
 import { integracaoVigenteEm, type LancamentoTitulosFolha, mesDaData } from './apoio-folha.js';
 
-/** A recusa 503 `modelo-pendente` da porta (operação sem tabela no modelo). */
-const modeloPendente = (e: unknown): boolean =>
-  typeof e === 'object' &&
-  e !== null &&
-  (e as { problema?: { codigo?: unknown } }).problema?.codigo === 'modelo-pendente';
-
 export const PERMISSOES_INTEGRACAO_FOLHA = {
   ler: 'pessoas.integracao.ler',
   configurar: 'pessoas.integracao.configurar',
@@ -156,18 +150,7 @@ export class ServicoIntegracaoFolha {
     ]);
     const alvo = empresa ?? empresas[0]?.codigo ?? null;
     if (empresa !== null && !empresas.some((e) => e.codigo === empresa)) throw naoEncontrado('Empresa');
-    // Sem a tabela do de-para no modelo (503 modelo-pendente), o apoio segue como "sem de-para vigente": a tela consulta
-    // as classificações e os credores, e a gravação vem negada pela liberação com o motivo. Outro erro sobe.
-    const vigente =
-      alvo === null
-        ? null
-        : integracaoVigenteEm(
-            await this.porta.integracoes(c, alvo).catch((e: unknown) => {
-              if (modeloPendente(e)) return [];
-              throw e;
-            }),
-            hoje,
-          );
+    const vigente = alvo === null ? null : integracaoVigenteEm(await this.porta.integracoes(c, alvo), hoje);
     const [classificacoes, credores] = await Promise.all([
       this.porta.classificacoes(c),
       vigente ? this.porta.credores(c, { codigos: vigente.destinos.map((d) => d.credor) }) : [],

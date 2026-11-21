@@ -1,5 +1,5 @@
 // pnpm permissoes:verificar (ficha do M06, regra 11 e critério de aceite): rota sem permissão e permissão
-// sem opcoesLegado nem mapeamento reprovam; a prova dos 42 grupos sobre o retrato tem 0 diferença não
+// sem linha no mapa do conector nem concessão por perfil reprovam; a prova dos 42 grupos sobre o retrato tem 0 diferença não
 // justificada; o repositório inteiro passa.
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,11 +7,12 @@ import {
   conferirControlador,
   conferirRotas,
   conferirRotasTela,
+  mapaDaProva,
   provaEMapa,
 } from './permissoes.ts';
 import { lerRetrato } from './permissoes-dados.ts';
 import { CATALOGO_DECLARADO } from '@sgh/contratos';
-import { CATALOGO_LEGADO } from '@sgh/contratos/catalogo-legado';
+import { CATALOGO_BASE } from '@sgh/contratos/catalogo-base';
 import { conceder, construirCatalogo, indexarCatalogo } from '@sgh/dominio-acesso';
 
 describe('permissoes:verificar', () => {
@@ -32,31 +33,37 @@ describe('permissoes:verificar', () => {
     expect(r.achados).toHaveLength(1);
   });
 
-  it('permissão sem opcoesLegado nem mapeamento, código fora do formato ou repetido reprova', () => {
-    const a = conferirCatalogo([
-      { codigo: 'a.b.ler', descricao: 'x', opcoesLegado: [], concessaoPorPerfil: null },
-      { codigo: 'a.b.ler', descricao: 'x', opcoesLegado: [1], concessaoPorPerfil: null },
-      { codigo: 'ABC', descricao: 'x', opcoesLegado: [1], concessaoPorPerfil: null },
-      { codigo: 'c.d.ler', descricao: 'x', opcoesLegado: [], concessaoPorPerfil: 'por-perfil' },
-      {
-        codigo: 'pep.e.ler',
-        descricao: 'x',
-        opcoesLegado: [1],
-        concessaoPorPerfil: null,
-        escopos: ['convenio'],
-      },
-    ]);
+  it('permissão sem linha no mapa nem concessão por perfil, linha órfã, código fora do formato ou repetido reprova', () => {
+    const a = conferirCatalogo(
+      [
+        { codigo: 'a.b.ler', descricao: 'x', concessaoPorPerfil: null },
+        { codigo: 'a.b.ler', descricao: 'x', concessaoPorPerfil: null },
+        { codigo: 'ABC', descricao: 'x', concessaoPorPerfil: null },
+        // por perfil sem perfil também reprova
+        { codigo: 'c.d.ler', descricao: 'x', concessaoPorPerfil: 'por-perfil' },
+        { codigo: 'e.f.ler', descricao: 'x', concessaoPorPerfil: null },
+        { codigo: 'pep.e.ler', descricao: 'x', concessaoPorPerfil: null, escopos: ['convenio'] },
+      ],
+      [
+        { tipo: 'opcao_menu', chave: '1', permissao: 'ABC' },
+        { tipo: 'marca_usuario', chave: 'T.C', permissao: 'pep.e.ler' },
+        { tipo: 'opcao_menu', chave: '2', permissao: 'g.h.ler' },
+      ],
+    );
     expect(a.map((x) => x.regra).sort()).toEqual([
       'escopos',
       'formato',
+      'mapa-orfao',
       'repetida',
+      'sem-mapeamento',
+      'sem-mapeamento',
       'sem-mapeamento',
       'sem-mapeamento',
     ]);
   });
 
   it('repositório: 0 rota sem permissão, 0 permissão sem mapeamento, 0 diferença não justificada nos 42 grupos', () => {
-    const catalogo = [...CATALOGO_LEGADO, ...CATALOGO_DECLARADO];
+    const catalogo = [...CATALOGO_BASE, ...CATALOGO_DECLARADO];
     expect(conferirCatalogo(catalogo)).toEqual([]);
     expect(conferirRotas(new Set(catalogo.map((p) => p.codigo))).achados).toEqual([]);
     const p = provaEMapa(lerRetrato('pc')!);
@@ -68,7 +75,7 @@ describe('permissoes:verificar', () => {
   it('M44.2: o grupo dos médicos do retrato pede o leito, vê a fila e registra a alta prevista (só com as opções dele)', () => {
     const r = lerRetrato('pc')!;
     const c = construirCatalogo(r.opcoes, r.modulos);
-    const indice = indexarCatalogo([...c.permissoes, ...CATALOGO_DECLARADO]);
+    const indice = indexarCatalogo([...c.permissoes, ...CATALOGO_DECLARADO], [], mapaDaProva(c));
     for (const grupo of ['MEDICOS', 'MEDICOS_SUPERVISÃO']) {
       const opcoesGrupo = r.permissoesGrupos.filter(([g]) => g === grupo).map(([, o]) => o);
       expect(opcoesGrupo.length).toBeGreaterThan(0);

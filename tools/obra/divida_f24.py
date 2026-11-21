@@ -51,7 +51,7 @@ def main():
     linhas, por_tipo, por_mod = [], collections.Counter(), collections.Counter()
     for pasta in PASTAS:
         for arq in sorted((RAIZ / pasta).rglob("*")):
-            if arq.suffix not in EXT or "node_modules" in arq.parts or not arq.is_file():
+            if arq.suffix not in EXT or "node_modules" in arq.parts or "dist" in arq.parts or not arq.is_file():
                 continue
             rel = str(arq.relative_to(RAIZ))
             if TESTE.search(rel) or (filtro and not modulo(rel).startswith(filtro)):

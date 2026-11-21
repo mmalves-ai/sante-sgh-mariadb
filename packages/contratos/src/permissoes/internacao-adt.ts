@@ -19,72 +19,6 @@
 // na 6074 (1). Ato médico (alta médica: Lei 12.842/2013): `internacao.altaMedica.registrar` exige conselho ativo.
 import type { DeclaracaoPermissao } from './tipos.js';
 
-export const OPCOES_INTERNACAO = {
-  internacoes: 2342,
-  manutencao: 5740,
-  manutencaoAlterar: 6056,
-  manutencaoIncluir: 6057,
-  manutencaoExcluir: 6058,
-  manutencaoConsultar: 6059,
-  manutencaoCancelar: 6060,
-  pre: 5741,
-  preAlterar: 6062,
-  preIncluir: 6063,
-  preExcluir: 6064,
-  preConsultar: 6065,
-  transferencias: 5742,
-  transferenciaAlterar: 6066,
-  transferenciaIncluir: 6067,
-  transferenciaExcluir: 6068,
-  transferenciaConsultar: 6069,
-  altas: 5743,
-  altaAlterar: 6070,
-  altaIncluir: 6071,
-  altaExcluir: 6072,
-  altaConsultar: 6073,
-  altaCancelar: 6074,
-  alteracoes: 5744,
-  alteracaoAlterar: 6075,
-  alteracaoIncluir: 6076,
-  alteracaoExcluir: 6077,
-  alteracaoConsultar: 6078,
-  alteracaoCancelar: 6079,
-  contasGuias: 2360,
-  emissaoFichas: 2372,
-  emissaoEtiquetas: 2373,
-  fichasImprimir: 2315,
-  leitos: 2322,
-  leitosManutencao: 2323,
-  painelLeitos: 3990,
-  controleCentralLeitos: 2483,
-  controleProntuarios: 2361,
-  prontuariosManutencao: 2362,
-  prontuariosControleI: 2363,
-  prontuariosControleII: 2364,
-  prontuariosLote: 4569,
-  prontuariosSetor: 2365,
-  prontuariosMotivo: 2366,
-  prontuariosLocalizacao: 2367,
-  prontuariosComposicao: 2368,
-  relatorioSame: 2468,
-  relatorioControleProntuarios: 2488,
-  higParametros: 5003,
-  higAreas: 5004,
-  higOcorrencias: 5005,
-  higTiposLimpeza: 5006,
-  higChecklist: 5007,
-  higProfissionais: 5008,
-  higTerceirizadas: 5009,
-  higVinculoArea: 5010,
-  higPainel: 5012,
-  higSolicitar: 5013,
-  higGerenciar: 5014,
-  higIniciarFinalizar: 5015,
-  higChecklistLiberacao: 5016,
-} as const;
-
-const O = OPCOES_INTERNACAO;
-
 export const PERMISSOES_M21_CODIGOS = {
   internacaoLer: 'internacao.internacao.ler',
   internacaoCriar: 'internacao.internacao.criar',
@@ -113,135 +47,88 @@ export const PERMISSOES_M21_CODIGOS = {
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
   criticidade: 'normal',
   ...extra,
 });
 
-const LER_INTERNACAO = [
-  O.internacoes,
-  O.manutencaoConsultar,
-  O.preConsultar,
-  O.transferenciaConsultar,
-  O.altaConsultar,
-  O.alteracaoConsultar,
-];
-
 export const PERMISSOES_INTERNACAO_M21: readonly DeclaracaoPermissao[] = [
   p(
     'internacao.internacao.ler',
     'Consultar as internações, a trajetória do paciente, as guias, as trocas e os procedimentos extras',
-    LER_INTERNACAO,
   ),
   p(
     'internacao.internacao.criar',
     'Admitir o paciente (nova internação) no leito do mapa, com a pulseira de identificação',
-    [O.manutencaoIncluir],
   ),
   p(
     'internacao.internacao.excluir',
     'Excluir a internação aberta por engano (supervisor; apaga conta, guias e períodos: dupla confirmação)',
-    [O.manutencaoExcluir, O.manutencaoCancelar],
+
     { criticidade: 'critica' },
   ),
-  p('internacao.pre.ler', 'Ver as pré-internações pendentes e a lista de saneamento das datas', [
-    O.pre,
-    O.preConsultar,
-  ]),
-  p('internacao.pre.criar', 'Agendar a pré-internação e corrigir a data prevista (saneamento)', [
-    O.preIncluir,
-    O.preAlterar,
-  ]),
+  p('internacao.pre.ler', 'Ver as pré-internações pendentes e a lista de saneamento das datas'),
+  p('internacao.pre.criar', 'Agendar a pré-internação e corrigir a data prevista (saneamento)'),
   p(
     'internacao.guia.editar',
     'Registrar as guias e autorizações do convênio da internação (prorrogações)',
-    [O.contasGuias, O.manutencaoAlterar],
+
     { categoria: 'financeira' },
   ),
-  p('internacao.troca.criar', 'Trocar o convênio, a clínica, a especialidade ou o médico da internação', [
-    O.alteracaoIncluir,
-    O.alteracaoAlterar,
-  ]),
+  p('internacao.troca.criar', 'Trocar o convênio, a clínica, a especialidade ou o médico da internação'),
   p(
     'internacao.altaMedica.registrar',
     'Registrar a alta médica (decisão, motivo e destino; ligada ao sumário de alta): ato médico',
-    [O.altaIncluir, O.altaAlterar],
+
     { categoria: 'clinica', exigeConselho: true },
   ),
   p(
     'internacao.alta.registrar',
     'Dar a saída do paciente (alta administrativa): libera o leito e pede a limpeza',
-    [O.altaIncluir, O.altaAlterar],
   ),
   p(
     'internacao.alta.cancelar',
     'Cancelar a alta dada por engano (supervisor; o leito volta à internação)',
-    [O.altaCancelar, O.altaExcluir],
+
     { criticidade: 'critica' },
   ),
-  p('internacao.impresso.emitir', 'Emitir as fichas, etiquetas e a pulseira da internação', [
-    O.emissaoFichas,
-    O.emissaoEtiquetas,
-    O.fichasImprimir,
-    O.manutencaoIncluir,
-  ]),
-  p('leitos.mapa.ler', 'Ver o mapa de leitos operacional e o histórico de ocupação (períodos)', [
-    O.leitos,
-    O.painelLeitos,
-    O.controleCentralLeitos,
-    O.higPainel,
-  ]),
-  p('leitos.transferencia.criar', 'Transferir o paciente internado de leito ou de setor', [
-    O.transferenciaIncluir,
-    O.transferenciaAlterar,
-  ]),
+  p('internacao.impresso.emitir', 'Emitir as fichas, etiquetas e a pulseira da internação'),
+  p('leitos.mapa.ler', 'Ver o mapa de leitos operacional e o histórico de ocupação (períodos)'),
+  p('leitos.transferencia.criar', 'Transferir o paciente internado de leito ou de setor'),
   p(
     'leitos.bloqueio.criar',
     'Bloquear e liberar leito no mapa (manutenção, reserva, isolamento) e marcar a precaução',
-    [O.leitosManutencao, O.controleCentralLeitos],
   ),
-  p('hotelaria.limpeza.ler', 'Ver o painel de higienização em tempo real e as solicitações com o prazo', [
-    O.higPainel,
-    O.higGerenciar,
-  ]),
-  p('hotelaria.limpeza.solicitar', 'Solicitar a limpeza do leito (manual ou pelo QR code)', [O.higSolicitar]),
+  p('hotelaria.limpeza.ler', 'Ver o painel de higienização em tempo real e as solicitações com o prazo'),
+  p('hotelaria.limpeza.solicitar', 'Solicitar a limpeza do leito (manual ou pelo QR code)'),
   p(
     'hotelaria.limpeza.executar',
     'Executar a limpeza no aplicativo do profissional (iniciar, pausar, concluir, checklist e foto)',
-    [O.higIniciarFinalizar, O.higGerenciar],
   ),
   p(
     'hotelaria.limpeza.liberar',
     'Inspecionar e liberar o leito depois da limpeza (supervisor da higienização ou enfermagem)',
-    [O.higChecklistLiberacao, O.higGerenciar],
   ),
   p(
     'hotelaria.cadastro.editar',
     'Manter as áreas, os profissionais, os vínculos e os materiais da higienização',
-    [O.higAreas, O.higProfissionais, O.higVinculoArea, O.higTiposLimpeza, O.higChecklist, O.higParametros],
   ),
-  p('same.movimento.ler', 'Ver a localização e a linha do tempo de prontuários e contas em papel', [
-    O.controleProntuarios,
-    O.prontuariosLocalizacao,
-    O.relatorioSame,
-    O.relatorioControleProntuarios,
-  ]),
+  p('same.movimento.ler', 'Ver a localização e a linha do tempo de prontuários e contas em papel'),
   p(
     'same.movimento.criar',
     'Registrar a movimentação física de prontuários e contas (leitura do código de barras)',
-    [O.prontuariosManutencao, O.prontuariosControleI, O.prontuariosControleII, O.prontuariosLote],
   ),
   p(
     'same.movimento.excluir',
     'Desfazer (exclusão lógica) o último movimento lançado por engano, com o motivo',
-    [O.prontuariosManutencao],
+
     { criticidade: 'sensivel' },
   ),
 ];

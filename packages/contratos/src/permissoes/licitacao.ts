@@ -8,29 +8,18 @@
 //   - homologar (homologação, decisão do recurso, revogação e anulação: a autoridade): Homologação 2107.
 import type { DeclaracaoPermissao } from './tipos.js';
 
-/** As opções do menu de licitações do sistema anterior (módulo de compras). */
-export const OPCOES_LICITACAO = {
-  licitacoes: 2097,
-  emissao: 2102,
-  edital: 2103,
-  homologacao: 2107,
-  cotacao: 2110,
-} as const;
-
 export const PERMISSOES_LICITACAO_CODIGOS = {
   ler: 'suprimentos.licitacao.ler',
   conduzir: 'suprimentos.licitacao.conduzir',
   homologar: 'suprimentos.licitacao.homologar',
 } as const;
 
-const O = OPCOES_LICITACAO;
-
 export const PERMISSOES_LICITACAO_M55_F4: readonly DeclaracaoPermissao[] = [
   {
     codigo: PERMISSOES_LICITACAO_CODIGOS.ler,
     descricao:
       'Consultar os processos de compra (licitação, pregão e contratação direta): termo, pesquisa de preços, propostas, julgamento e atos',
-    opcoesLegado: [O.licitacoes, O.emissao],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'normal',
@@ -39,7 +28,7 @@ export const PERMISSOES_LICITACAO_M55_F4: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_LICITACAO_CODIGOS.conduzir,
     descricao:
       'Conduzir o processo de compra (agente de contratação ou pregoeiro): termo de referência, pesquisa de preços, edital, aviso, sessão, propostas, julgamento, recurso, ata e pedido',
-    opcoesLegado: [O.emissao, O.edital, O.cotacao],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',
@@ -48,7 +37,7 @@ export const PERMISSOES_LICITACAO_M55_F4: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_LICITACAO_CODIGOS.homologar,
     descricao:
       'Homologar o processo de compra, decidir o recurso e revogar ou anular (a autoridade competente; outra pessoa que não o agente)',
-    opcoesLegado: [O.homologacao],
+
     concessaoPorPerfil: null,
     categoria: 'administrativa',
     criticidade: 'sensivel',

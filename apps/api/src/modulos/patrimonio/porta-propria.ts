@@ -15,10 +15,14 @@
 // texto fica como a justificativa.
 // Melhoria: a semente dos grupos (IN RFB) entra no cadastro do cliente na primeira gravação, na mesma transação.
 // O laudo do bem grava em laudo_bem (o PDF fica no armazenamento, pela chave do SHA-256).
-// Pendente (pedido ao orquestrador, DDL em docs/obra/fatias/f22/saida/02-11.json): cálculo e estorno da depreciação
-// (cabeçalho do cálculo), ajuste de valor do bem, nome do responsável e doador do termo, referência da
-// devolução, centro lido e resumo do inventário. Até lá, a gravação recusa com o código
-// `modelo-pendente` (nada é gravado pela metade) e as leituras devolvem vazio.
+// O cálculo da depreciação grava o cabeçalho em calculo_depreciacao (uma rodada vigente por competência, pela chave
+// gerada `vigente_chave`) e as cotas em cota_depreciacao ligadas a ele; o estorno marca o cálculo como estornado (com
+// quem, quando, motivo e origem) e exclui as cotas dele, de modo que o acumulado e o recálculo leem só as vigentes. O
+// ajuste de valor do bem (revisão de estimativa, recuperabilidade, reavaliação) e o seu estorno gravam em
+// ajuste_valor_bem; o último ajuste vigente (fora a reavaliação) é o marco da depreciação seguinte. Os lotes contábeis
+// liberados do patrimônio (lote_contabil) travam o estorno da competência; a conta da perda por recuperabilidade vem do
+// grupo do bem. O responsável pelo bem é um usuário (responsavel_usuario_id), achado pelo login ou pelo nome exato; o
+// doador e a data do termo de doação ficam no próprio bem.
 import { GRUPOS_BEM, type VersaoGrupoBem } from '@sgh/contratos';
 import {
   type ContextoOperacao,
@@ -40,6 +44,13 @@ import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { ContextoPatrimonio, PortaPatrimonio } from './porta.js';
 import type {
   AjusteDoBem,
+  AjusteNovo,
+  MarcoDoAjuste,
+  PlanoDepreciacao,
+  SituacaoParaAjuste,
+  SituacaoParaEstorno,
+  SituacaoParaEstornoAjuste,
+  TipoAjusteBem,
   AlteracaoDoBem,
   BemDaCompetencia,
   BemEsperado,
@@ -139,13 +150,6 @@ const RESULTADO_DO_BANCO: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries(RESULTADO_PARA_BANCO).map(([k, v]) => [v, k]),
 );
 
-const modeloPendente = (oQue: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Ainda não disponível neste banco',
-    `${oQue} ainda não tem onde ficar no banco próprio (pedido de modelo em andamento): nada foi gravado.`,
-  );
 const desatualizado = (o = 'O bem') =>
   recusa('desatualizado', `${o} mudou depois que você abriu. Abra de novo.`);
 const naoEncontrado = (o: string) => new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
@@ -176,7 +180,7 @@ function laudoDe(x: Record<string, unknown>): LaudoDoBem {
 
 const COLUNAS_BEM = `b.id, b.plaqueta, b.descricao, g.codigo AS grupo, b.origem_bem_id, o.descricao AS onome,
   b.nota_entrada_id, b.nota_entrada_item_id, n.numero_documento AS nf, n.serie, n.data_entrada AS ndata,
-  f.razao_social AS fnome, ni.insumo_id AS item_cod, i.nome AS inome, b.termo_doacao_numero, b.data_aquisicao,
+  f.razao_social AS fnome, ni.insumo_id AS item_cod, i.nome AS inome, b.termo_doacao_numero, b.termo_doacao_data, b.termo_doacao_doador, b.data_aquisicao,
   b.valor_aquisicao, b.valor_residual, b.vida_util_meses, b.coeficiente_turno_id, k.descricao AS kdesc,
   k.coeficiente AS kperc, b.inicio_depreciacao, b.depreciavel, b.centro_custo_id, c.codigo AS ccod, c.nome AS cnome,
   b.local_detalhe, b.tipo_responsavel_bem_id, t.descricao AS tnome, ur.nome AS rnome, b.marca, b.modelo,
@@ -235,7 +239,11 @@ function bemDaLinha(x: Record<string, unknown>): BemRegistrado {
       : null,
     termo: temNota
       ? null
-      : { numero: texto(x['termo_doacao_numero']) ?? '', data: dataIso(x['data_aquisicao']) ?? '', doador: '' },
+      : {
+          numero: texto(x['termo_doacao_numero']) ?? '',
+          data: dataIso(x['termo_doacao_data']) ?? dataIso(x['data_aquisicao']) ?? '',
+          doador: texto(x['termo_doacao_doador']) ?? '',
+        },
     empresa: EMPRESA_UNICA,
     dataAquisicao: dataIso(x['data_aquisicao']) ?? '',
     valorCent: centavos(x['valor_aquisicao']),
@@ -386,6 +394,9 @@ const bemNovoZ = z.object({
   nota: z.number().int().positive().nullable(),
   itemNota: z.number().int().positive().nullable(),
   termoNumero: z.string().max(40).nullable(),
+  termoData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  termoDoador: z.string().max(120).nullable(),
+  responsavelUsuario: z.number().int().positive().nullable(),
   dataAquisicao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   valorCent: z.number().int().min(0),
   residualCent: z.number().int().min(0),
@@ -412,6 +423,7 @@ const alterarZ = z.object({
   grupo: z.string().min(1).max(30),
   localDetalhe: z.string().max(80).nullable(),
   tipoResponsavel: z.number().int().positive().nullable(),
+  responsavelUsuario: z.number().int().positive().nullable(),
   marca: z.string().max(50).nullable(),
   modelo: z.string().max(50).nullable(),
   numeroSerie: z.string().max(50).nullable(),
@@ -544,6 +556,377 @@ async function travarBem(tx: TxOperacao, id: number, versao: number): Promise<Re
 const situacaoNoBanco = (s: SituacaoBem, tipo: string): string =>
   s === 'emprestado' && tipo === 'comodato' ? 'comodato' : s;
 
+// ── Depreciação e ajuste de valor ─────────────────────────────────────────────────────────────────────────────────
+
+const LOGIN_DE = (col: string) => `(SELECT u.login FROM usuario u WHERE u.id = ${col})`;
+
+const SQL_CALCULO = `
+  SELECT k.id, k.competencia, k.rodada, k.bens_calculados, k.bens_ignorados, k.valor_total, k.criado_em,
+         k.estornado_em, k.motivo_estorno, k.origem_estorno, k.versao, ${LOGIN_DE('k.criado_por')} AS login,
+         ${LOGIN_DE('k.estorno_usuario_id')} AS estornado_login
+    FROM calculo_depreciacao k
+   WHERE k.estabelecimento_id = ? AND k.base = '${BASE_COTA}' AND k.excluido_em IS NULL`;
+
+function calculoDaLinha(x: Record<string, unknown>): CalculoRegistrado {
+  return {
+    id: inteiro(x['id']),
+    empresa: EMPRESA_UNICA,
+    competencia: (dataIso(x['competencia']) ?? '').slice(0, 7),
+    bens: inteiro(x['bens_calculados']),
+    ignorados: inteiro(x['bens_ignorados']),
+    totalCent: centavos(x['valor_total']),
+    calculadoPor: texto(x['login']) ?? '',
+    calculadoEm: instante(x['criado_em']) ?? '',
+    rodada: inteiro(x['rodada']) || 1,
+  };
+}
+
+/** Tipo do ajuste: contrato → banco (e o inverso na leitura). */
+const TIPO_AJUSTE_PARA_BANCO: Readonly<Record<TipoAjusteBem, string>> = {
+  'revisao-estimativa': 'revisao_estimativa',
+  impairment: 'impairment',
+  reavaliacao: 'reavaliacao',
+};
+const TIPO_AJUSTE_DO_BANCO: Readonly<Record<string, TipoAjusteBem>> = Object.fromEntries(
+  Object.entries(TIPO_AJUSTE_PARA_BANCO).map(([k, v]) => [v, k as TipoAjusteBem]),
+);
+
+const SQL_AJUSTE = `
+  SELECT a.id, a.bem_patrimonial_id, a.tipo, a.competencia_marco, a.data_ajuste, a.valor_contabil_antes,
+         a.valor_contabil_depois, a.depreciacao_acumulada_marco, a.valor_perda, a.valor_residual, a.vida_restante_meses,
+         a.valor_justo, a.laudo_bem_id, a.motivo, a.origem_ajuste, a.criado_em, a.estornado_em, a.data_estorno,
+         a.motivo_estorno, a.origem_estorno, a.versao, b.centro_custo_id, g.codigo AS grupo, b.plaqueta,
+         ${LOGIN_DE('a.criado_por')} AS login, ${LOGIN_DE('a.estorno_usuario_id')} AS estornado_login
+    FROM ajuste_valor_bem a JOIN bem_patrimonial b ON b.id = a.bem_patrimonial_id
+    JOIN grupo_bem g ON g.id = b.grupo_bem_id
+   WHERE b.estabelecimento_id = ? AND a.excluido_em IS NULL`;
+
+function ajusteDaLinha(x: Record<string, unknown>): AjusteDoBem {
+  return {
+    id: inteiro(x['id']),
+    bem: inteiro(x['bem_patrimonial_id']),
+    empresa: EMPRESA_UNICA,
+    tipo: TIPO_AJUSTE_DO_BANCO[String(x['tipo'])] ?? 'revisao-estimativa',
+    competenciaMarco: (dataIso(x['competencia_marco']) ?? '').slice(0, 7),
+    data: dataIso(x['data_ajuste']) ?? '',
+    centro: inteiro(x['centro_custo_id']),
+    grupo: texto(x['grupo']) ?? '',
+    plaqueta: texto(x['plaqueta']) ?? '',
+    valorContabilAntesCent: centavos(x['valor_contabil_antes']),
+    valorContabilDepoisCent: centavos(x['valor_contabil_depois']),
+    acumuladaMarcoCent: centavos(x['depreciacao_acumulada_marco']),
+    perdaCent: centavos(x['valor_perda']),
+    residualCent: centavos(x['valor_residual']),
+    vidaRestanteMeses: inteiro(x['vida_restante_meses']),
+    valorJustoCent: x['valor_justo'] == null ? null : centavos(x['valor_justo']),
+    laudo: inteiroOuNulo(x['laudo_bem_id']),
+    motivo: texto(x['motivo']) ?? '',
+    origem: texto(x['origem_ajuste']) ?? '',
+    registradoPor: texto(x['login']) ?? '',
+    registradoEm: instante(x['criado_em']) ?? '',
+    estorno: x['estornado_em']
+      ? {
+          data: dataIso(x['data_estorno']) ?? '',
+          motivo: texto(x['motivo_estorno']) ?? '',
+          origem: texto(x['origem_estorno']) ?? '',
+          estornadoPor: texto(x['estornado_login']) ?? '',
+          estornadoEm: instante(x['estornado_em']) ?? '',
+        }
+      : null,
+  };
+}
+
+const marcoDaLinha = (x: Record<string, unknown>): MarcoDoAjuste => ({
+  ajuste: inteiro(x['id']),
+  competencia: (dataIso(x['competencia_marco']) ?? '').slice(0, 7),
+  acumuladaCent: centavos(x['depreciacao_acumulada_marco']),
+  baseCent: centavos(x['valor_contabil_depois']),
+  residualCent: centavos(x['valor_residual']),
+  vidaRestanteMeses: inteiro(x['vida_restante_meses']),
+});
+
+const SQL_MARCO = `
+  SELECT a.id, a.bem_patrimonial_id, a.competencia_marco, a.depreciacao_acumulada_marco, a.valor_contabil_depois,
+         a.valor_residual, a.vida_restante_meses
+    FROM ajuste_valor_bem a JOIN bem_patrimonial b ON b.id = a.bem_patrimonial_id
+   WHERE b.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.estornado_em IS NULL AND a.tipo <> 'reavaliacao'`;
+
+/** O marco vigente de um bem (o ajuste mais novo não estornado, fora a reavaliação), antes da competência se dada. */
+async function marcoDoBem(l: Leitor, est: number, bem: number, antesDe: string | null): Promise<MarcoDoAjuste | null> {
+  const x = await l.uma(
+    `${SQL_MARCO} AND a.bem_patrimonial_id = ? ${antesDe ? 'AND a.competencia_marco < ?' : ''} ORDER BY a.id DESC LIMIT 1`,
+    antesDe ? [est, bem, primeiroDia(antesDe)] : [est, bem],
+  );
+  return x ? marcoDaLinha(x) : null;
+}
+
+/** Os marcos vigentes antes da competência, por bem (o mais novo de cada um). */
+async function marcosDaCompetencia(l: Leitor, est: number, dia: string): Promise<Map<number, MarcoDoAjuste>> {
+  const m = new Map<number, MarcoDoAjuste>();
+  for (const x of await l.consultar(`${SQL_MARCO} AND a.competencia_marco < ? ORDER BY a.id DESC`, [est, dia])) {
+    const bem = inteiro(x['bem_patrimonial_id']);
+    if (!m.has(bem)) m.set(bem, marcoDaLinha(x));
+  }
+  return m;
+}
+
+/** Lotes contábeis do patrimônio já liberados na competência (AAAA-MM) ou no exercício (AAAA) da data. */
+async function lotesLiberados(l: Leitor, est: number, data: string): Promise<{ periodo: string; exportadoEm: string }[]> {
+  const dia = primeiroDia(data);
+  return (
+    await l.consultar(
+      `SELECT competencia, liberado_em FROM lote_contabil
+        WHERE estabelecimento_id = ? AND modulo_origem = 'patrimonio' AND situacao = 'liberado' AND excluido_em IS NULL
+          AND YEAR(competencia) = YEAR(?) ORDER BY competencia`,
+      [est, dia],
+    )
+  )
+    .map((x) => ({ periodo: (dataIso(x['competencia']) ?? '').slice(0, 7), exportadoEm: instante(x['liberado_em']) ?? '' }))
+    .filter((x) => x.periodo === dia.slice(0, 7))
+    .concat([]);
+}
+
+const calcularZ = z.object({
+  competencia: z.string().regex(/^\d{4}-\d{2}$/),
+  ignorados: z.number().int().min(0),
+  totalCent: z.number().int().min(0),
+  cotas: z
+    .array(
+      z.object({
+        bem: z.number().int().positive(),
+        baseCent: z.number().int().min(0),
+        vidaUtilMeses: z.number().int().min(1).max(1200),
+        acumuladaAntesCent: z.number().int().min(0),
+        valorCent: z.number().int().min(0),
+      }),
+    )
+    .max(TETO_BENS_LEITURA),
+  dados: dadosZ,
+});
+
+const opCalcular = definirOperacao({
+  nome: 'patrimonio.depreciacao.calcular',
+  tabelas: ['calculo_depreciacao', 'cota_depreciacao'],
+  entrada: calcularZ,
+  async gravar(tx, x, ctx) {
+    const dia = primeiroDia(x.competencia);
+    const [ja] = await tx.consultarParaAtualizar(
+      `SELECT id FROM calculo_depreciacao WHERE estabelecimento_id = ? AND competencia = ? AND base = '${BASE_COTA}'
+          AND situacao = 'vigente' AND excluido_em IS NULL`,
+      [ctx.estabelecimento, dia],
+    );
+    if (ja) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
+    const bens = [...new Set(x.cotas.map((k) => k.bem))];
+    if (bens.length !== x.cotas.length) throw recusa('calculo-impedido', 'O cálculo traz o mesmo bem duas vezes.');
+    if (bens.length > 0) {
+      const achados = await tx.uma<{ n: unknown }>(
+        `SELECT COUNT(*) AS n FROM bem_patrimonial WHERE estabelecimento_id = ? AND excluido_em IS NULL
+            AND id IN (${bens.map(() => '?').join(',')})`,
+        [ctx.estabelecimento, ...bens],
+      );
+      if (inteiro(achados?.n) !== bens.length) throw naoEncontrado('Bem');
+    }
+    const r = await tx.uma<{ n: unknown }>(
+      `SELECT COALESCE(MAX(rodada), 0) + 1 AS n FROM calculo_depreciacao
+        WHERE estabelecimento_id = ? AND competencia = ? AND base = '${BASE_COTA}'`,
+      [ctx.estabelecimento, dia],
+    );
+    let id: number;
+    try {
+      id = await tx.incluir('calculo_depreciacao', {
+        estabelecimento_id: ctx.estabelecimento,
+        competencia: dia,
+        base: BASE_COTA,
+        rodada: inteiro(r?.n) || 1,
+        bens_calculados: x.cotas.length,
+        bens_ignorados: x.ignorados,
+        valor_total: decimal(x.totalCent),
+        situacao: 'vigente',
+      });
+    } catch (e) {
+      if (restricaoUnicaViolada(e)) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
+      throw e;
+    }
+    for (const k of x.cotas) {
+      await tx.incluir('cota_depreciacao', {
+        bem_patrimonial_id: k.bem,
+        calculo_depreciacao_id: id,
+        competencia: dia,
+        base: BASE_COTA,
+        metodo: 'linear',
+        valor_depreciavel: decimal(k.baseCent),
+        taxa_anual_percentual: Math.min(100, Math.round((120_000 / k.vidaUtilMeses) * 100) / 10_000),
+        valor_acumulado_anterior: decimal(k.acumuladaAntesCent),
+        valor_cota: decimal(k.valorCent),
+        valor_residual: decimal(Math.max(0, k.baseCent - k.acumuladaAntesCent - k.valorCent)),
+      });
+    }
+    return { id };
+  },
+  alvo: (_x, r) => ({ tabela: 'calculo_depreciacao', id: r.id }),
+  trilha: (x) => ({ acao: 'inclusao', dados: x.dados }),
+});
+
+const opEstornarCalculo = definirOperacao({
+  nome: 'patrimonio.depreciacao.estornar',
+  tabelas: ['calculo_depreciacao', 'cota_depreciacao', 'ajuste_valor_bem'],
+  entrada: z.object({
+    calculo: z.number().int().positive(),
+    motivo: z.string().trim().min(1).max(500),
+    origem: z.string().min(1).max(30),
+    dados: dadosZ,
+  }),
+  travar: (x) => ({
+    tabela: 'calculo_depreciacao',
+    id: x.calculo,
+    colunas: ['estabelecimento_id', 'competencia', 'situacao', 'excluido_em'],
+  }),
+  async conferir(_tx, _x, ctx, relido) {
+    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento || relido['excluido_em'] != null)
+      throw naoEncontrado('Cálculo');
+    if (relido['situacao'] !== 'vigente') throw desatualizado('O cálculo');
+  },
+  async gravar(tx, x, ctx) {
+    const relido = await tx.uma<Record<string, unknown>>('SELECT competencia, versao FROM calculo_depreciacao WHERE id = ?', [
+      x.calculo,
+    ]);
+    const competencia = dataIso(relido?.['competencia']) ?? '';
+    const posteriores = await tx.consultar(
+      `SELECT DISTINCT b.plaqueta FROM ajuste_valor_bem a JOIN bem_patrimonial b ON b.id = a.bem_patrimonial_id
+        WHERE b.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.estornado_em IS NULL
+          AND a.tipo <> 'reavaliacao' AND a.competencia_marco >= ? ORDER BY b.plaqueta`,
+      [ctx.estabelecimento, competencia],
+    );
+    if (posteriores.length > 0)
+      throw recusa(
+        'ajuste-posterior',
+        `Há ajuste de valor registrado depois desta depreciação (bens ${posteriores
+          .map((p: Record<string, unknown>) => texto(p['plaqueta']))
+          .join(', ')}): estorne o ajuste antes.`,
+      );
+    await tx.alterar('calculo_depreciacao', x.calculo, inteiro(relido?.['versao']), {
+      situacao: 'estornado',
+      estornado_em: new Date(),
+      estorno_usuario_id: ctx.usuario,
+      motivo_estorno: x.motivo,
+      origem_estorno: x.origem,
+    });
+    const cotas = await tx.consultarParaAtualizar(
+      'SELECT id, versao FROM cota_depreciacao WHERE calculo_depreciacao_id = ? AND excluido_em IS NULL',
+      [x.calculo],
+      { teto: TETO_BENS_LEITURA },
+    );
+    for (const k of cotas) await tx.excluir('cota_depreciacao', inteiro(k['id']), inteiro(k['versao']));
+    return { id: x.calculo };
+  },
+  alvo: (x) => ({ tabela: 'calculo_depreciacao', id: x.calculo }),
+  trilha: (x) => ({ acao: 'alteracao', dados: x.dados, motivo: x.motivo }),
+});
+
+const opRegistrarAjuste = definirOperacao({
+  nome: 'patrimonio.ajuste.registrar',
+  tabelas: ['ajuste_valor_bem', 'bem_patrimonial'],
+  entrada: z.object({
+    bem: z.number().int().positive(),
+    versao: z.number().int().min(0),
+    tipo: z.enum(['revisao_estimativa', 'impairment', 'reavaliacao']),
+    competenciaMarco: z.string().regex(/^\d{4}-\d{2}$/),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    antesCent: z.number().int().min(0),
+    depoisCent: z.number().int().min(0),
+    acumuladaCent: z.number().int().min(0),
+    perdaCent: z.number().int().min(0),
+    residualCent: z.number().int().min(0),
+    vidaRestanteMeses: z.number().int().min(0).max(1200),
+    valorJustoCent: z.number().int().min(0).nullable(),
+    laudo: z.number().int().positive().nullable(),
+    motivo: z.string().trim().min(1).max(500),
+    origem: z.string().min(1).max(30),
+    dados: dadosZ,
+  }),
+  async gravar(tx, x) {
+    await travarBem(tx, x.bem, x.versao);
+    if (x.laudo !== null) {
+      const l = await tx.uma(
+        'SELECT id FROM laudo_bem WHERE id = ? AND bem_patrimonial_id = ? AND excluido_em IS NULL',
+        [x.laudo, x.bem],
+      );
+      if (!l)
+        throw recusa(
+          'laudo-inexistente',
+          `O laudo ${x.laudo} não está anexado a este bem: anexe o PDF do laudo e escolha-o na lista.`,
+        );
+    }
+    const id = await tx.incluir('ajuste_valor_bem', {
+      bem_patrimonial_id: x.bem,
+      tipo: x.tipo,
+      competencia_marco: primeiroDia(x.competenciaMarco),
+      data_ajuste: x.data,
+      valor_contabil_antes: decimal(x.antesCent),
+      valor_contabil_depois: decimal(x.depoisCent),
+      depreciacao_acumulada_marco: decimal(x.acumuladaCent),
+      valor_perda: decimal(x.perdaCent),
+      valor_residual: decimal(x.residualCent),
+      vida_restante_meses: x.vidaRestanteMeses,
+      valor_justo: x.valorJustoCent === null ? null : decimal(x.valorJustoCent),
+      laudo_bem_id: x.laudo,
+      motivo: x.motivo,
+      origem_ajuste: x.origem,
+    });
+    // O ajuste muda o valor contábil do bem: a versão do bem sobe (a tela aberta antes fica desatualizada).
+    await tx.alterar('bem_patrimonial', x.bem, x.versao, {});
+    return { id };
+  },
+  alvo: (_x, r) => ({ tabela: 'ajuste_valor_bem', id: r.id }),
+  trilha: (x) => ({ acao: 'inclusao', dados: x.dados, motivo: x.motivo }),
+});
+
+const opEstornarAjuste = definirOperacao({
+  nome: 'patrimonio.ajuste.estornar',
+  tabelas: ['ajuste_valor_bem', 'bem_patrimonial'],
+  entrada: z.object({
+    ajuste: z.number().int().positive(),
+    versao: z.number().int().min(0),
+    hoje: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    motivo: z.string().trim().min(1).max(500),
+    origem: z.string().min(1).max(30),
+    dados: dadosZ,
+  }),
+  travar: (x) => ({
+    tabela: 'ajuste_valor_bem',
+    id: x.ajuste,
+    versaoEsperada: x.versao,
+    colunas: ['bem_patrimonial_id', 'estornado_em', 'excluido_em'],
+  }),
+  async conferir(tx, _x, ctx, relido) {
+    if (!relido || relido['excluido_em'] != null) throw naoEncontrado('Ajuste');
+    const b = await tx.uma('SELECT id FROM bem_patrimonial WHERE id = ? AND estabelecimento_id = ?', [
+      relido['bem_patrimonial_id'],
+      ctx.estabelecimento,
+    ]);
+    if (!b) throw naoEncontrado('Ajuste');
+    if (relido['estornado_em'] != null) throw recusa('ja-estornado', 'Este ajuste já foi estornado.');
+  },
+  async gravar(tx, x, ctx) {
+    const relido = await tx.uma<Record<string, unknown>>('SELECT bem_patrimonial_id FROM ajuste_valor_bem WHERE id = ?', [
+      x.ajuste,
+    ]);
+    await tx.alterar('ajuste_valor_bem', x.ajuste, x.versao, {
+      estornado_em: new Date(),
+      data_estorno: x.hoje,
+      estorno_usuario_id: ctx.usuario,
+      motivo_estorno: x.motivo,
+      origem_estorno: x.origem,
+    });
+    const bem = inteiro(relido?.['bem_patrimonial_id']);
+    const [b] = await tx.consultarParaAtualizar('SELECT versao FROM bem_patrimonial WHERE id = ?', [bem]);
+    await tx.alterar('bem_patrimonial', bem, inteiro(b?.versao), {});
+    return { id: x.ajuste };
+  },
+  alvo: (x) => ({ tabela: 'ajuste_valor_bem', id: x.ajuste }),
+  trilha: (x) => ({ acao: 'alteracao', dados: x.dados, motivo: x.motivo }),
+});
+
 // ── Operações ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -632,6 +1015,9 @@ const opCadastrar = (gerarPlaqueta: (n: number) => string) => definirOperacao({
             nota_entrada_id: b.documento === 'nota' ? b.nota : null,
             nota_entrada_item_id: b.documento === 'nota' ? b.itemNota : null,
             termo_doacao_numero: b.documento === 'termo' ? b.termoNumero : null,
+            termo_doacao_data: b.documento === 'termo' ? b.termoData : null,
+            termo_doacao_doador: b.documento === 'termo' ? b.termoDoador : null,
+            responsavel_usuario_id: b.responsavelUsuario,
             data_aquisicao: b.dataAquisicao,
             valor_aquisicao: decimal(b.valorCent),
             valor_residual: decimal(b.residualCent),
@@ -675,6 +1061,7 @@ const opAlterar = definirOperacao({
       grupo_bem_id: await idDoGrupo(tx, x.grupo, false),
       local_detalhe: x.localDetalhe,
       tipo_responsavel_bem_id: x.tipoResponsavel,
+      responsavel_usuario_id: x.responsavelUsuario,
       marca: x.marca,
       modelo: x.modelo,
       numero_serie: x.numeroSerie,
@@ -1336,6 +1723,7 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
         [dia, dia, est, dia],
         { teto: TETO_BENS_LEITURA + 1 },
       );
+      const marcos = await marcosDaCompetencia(l, est, dia);
       return {
         bens: ls.slice(0, TETO_BENS_LEITURA).map((x) => ({
           id: inteiro(x['id']),
@@ -1353,29 +1741,125 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
           baixadoEm: dataIso(x['data_baixa']),
           acumuladaCent: centavos(x['ac']),
           temCotaNaCompetencia: booleano(x['tem']),
-          // O marco do ajuste de valor depende do modelo do ajuste (pedido).
-          marco: null,
+          marco: marcos.get(inteiro(x['id'])) ?? null,
         })),
         truncado: ls.length > TETO_BENS_LEITURA,
       };
     });
   }
 
-  // O cálculo da depreciação, o estorno e o ajuste pedem modelo (pedido ao orquestrador): sem registro.
-  async calculos(): Promise<{ daCompetencia: CalculoRegistrado | null; ultimo: CalculoRegistrado | null }> {
-    return { daCompetencia: null, ultimo: null };
+  /** O cálculo vigente da competência e o vigente mais recente do estabelecimento. */
+  calculos(
+    c: ContextoPatrimonio,
+    _empresa: number,
+    competencia: string,
+  ): Promise<{ daCompetencia: CalculoRegistrado | null; ultimo: CalculoRegistrado | null }> {
+    return this.ler(c, async (l, est) => {
+      const da = await l.uma(`${SQL_CALCULO} AND k.situacao = 'vigente' AND k.competencia = ?`, [est, primeiroDia(competencia)]);
+      const ult = await l.uma(`${SQL_CALCULO} AND k.situacao = 'vigente' ORDER BY k.competencia DESC LIMIT 1`, [est]);
+      return { daCompetencia: da ? calculoDaLinha(da) : null, ultimo: ult ? calculoDaLinha(ult) : null };
+    });
   }
 
-  async cotas(): Promise<CotaRegistrada[]> {
-    return [];
+  cotas(c: ContextoPatrimonio, calculo: number): Promise<CotaRegistrada[]> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT d.bem_patrimonial_id, b.plaqueta, b.descricao, g.codigo AS grupo, b.centro_custo_id, d.valor_depreciavel,
+                  b.valor_residual, d.taxa_anual_percentual, kt.coeficiente, d.valor_acumulado_anterior, d.valor_cota,
+                  b.inicio_depreciacao
+             FROM cota_depreciacao d JOIN calculo_depreciacao k ON k.id = d.calculo_depreciacao_id
+             JOIN bem_patrimonial b ON b.id = d.bem_patrimonial_id JOIN grupo_bem g ON g.id = b.grupo_bem_id
+             LEFT JOIN coeficiente_turno kt ON kt.id = b.coeficiente_turno_id
+            WHERE d.calculo_depreciacao_id = ? AND k.estabelecimento_id = ?
+            ORDER BY b.plaqueta`,
+          [calculo, est],
+          { teto: TETO_BENS_LEITURA },
+        )
+      ).map((x) => {
+        const taxa = Number(x['taxa_anual_percentual']);
+        return {
+          bem: inteiro(x['bem_patrimonial_id']),
+          plaqueta: texto(x['plaqueta']) ?? '',
+          descricao: texto(x['descricao']) ?? '',
+          grupo: texto(x['grupo']) ?? '',
+          centro: inteiro(x['centro_custo_id']),
+          baseCent: centavos(x['valor_depreciavel']),
+          residualCent: centavos(x['valor_residual']),
+          vidaUtilMeses: taxa > 0 ? Math.round(1200 / taxa) : 0,
+          coeficiente: x['coeficiente'] == null ? 1 : Number(x['coeficiente']),
+          acumuladaAntesCent: centavos(x['valor_acumulado_anterior']),
+          valorCent: centavos(x['valor_cota']),
+          inicioDepreciacao: (dataIso(x['inicio_depreciacao']) ?? '').slice(0, 7),
+        };
+      }),
+    );
   }
 
-  async estornos(): Promise<EstornoDeCalculo[]> {
-    return [];
+  estornos(c: ContextoPatrimonio, _empresa: number, competencia: string): Promise<EstornoDeCalculo[]> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `${SQL_CALCULO} AND k.situacao = 'estornado' AND k.competencia = ? ORDER BY k.id DESC`,
+          [est, primeiroDia(competencia)],
+        )
+      ).map((x) => ({
+        id: inteiro(x['id']),
+        calculo: inteiro(x['id']),
+        empresa: EMPRESA_UNICA,
+        competencia: (dataIso(x['competencia']) ?? '').slice(0, 7),
+        bens: inteiro(x['bens_calculados']),
+        totalCent: centavos(x['valor_total']),
+        motivo: texto(x['motivo_estorno']) ?? '',
+        origem: texto(x['origem_estorno']) ?? '',
+        estornadoPor: texto(x['estornado_login']) ?? '',
+        estornadoEm: instante(x['estornado_em']) ?? '',
+      })),
+    );
   }
 
-  async ajustes(): Promise<AjusteDoBem[]> {
-    return [];
+  ajustes(c: ContextoPatrimonio, bem: number): Promise<AjusteDoBem[]> {
+    return this.ler(c, async (l, est) =>
+      (await l.consultar(`${SQL_AJUSTE} AND a.bem_patrimonial_id = ? ORDER BY a.id DESC`, [est, bem])).map(ajusteDaLinha),
+    );
+  }
+
+  /** O marco vigente do bem: o último ajuste não estornado (fora a reavaliação), antes da competência se dada. */
+  private marco(l: Leitor, est: number, bem: number, antesDe: string | null): Promise<MarcoDoAjuste | null> {
+    return marcoDoBem(l, est, bem, antesDe);
+  }
+
+  /** Os lotes contábeis liberados do patrimônio na competência ou no exercício da data (travam estorno e ajuste). */
+  private lotes(l: Leitor, est: number, data: string): Promise<{ periodo: string; exportadoEm: string }[]> {
+    return lotesLiberados(l, est, data);
+  }
+
+  /**
+   * O usuário responsável pelo bem, pelo login ou pelo nome exato (vazio: sem responsável). Só vale quem tem
+   * vínculo vigente com o estabelecimento da sessão: numa rede, o homônimo de outra unidade não conta nem empata.
+   */
+  private responsavelPeloNome(c: ContextoPatrimonio, nome: string | null): Promise<number | null> {
+    const n = nome?.trim() ?? '';
+    if (!n) return Promise.resolve(null);
+    return this.ler(c, async (l, est) => {
+      const us = await l.consultar(
+        `SELECT DISTINCT u.id FROM usuario u
+           JOIN usuario_estabelecimento ue
+             ON ue.usuario_id = u.id AND ue.estabelecimento_id = ? AND ue.excluido_em IS NULL
+            AND ue.vigencia_inicio <= UTC_DATE() AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= UTC_DATE())
+          WHERE (u.login = ? OR u.nome = ?) AND u.excluido_em IS NULL
+          ORDER BY u.id LIMIT 2`,
+        [est, n, n],
+      );
+      if (us.length === 0)
+        throw recusa(
+          'responsavel-inexistente',
+          `Não há usuário com o login ou o nome "${n}", com vínculo vigente neste estabelecimento, para responder pelo bem.`,
+        );
+      if (us.length > 1)
+        throw recusa('responsavel-ambiguo', `Há mais de um usuário com o nome "${n}": informe o login do responsável.`);
+      return inteiro(us[0]?.['id']);
+    });
   }
 
   laudos(c: ContextoPatrimonio, bem: number): Promise<LaudoDoBem[]> {
@@ -1616,14 +2100,13 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     gerarPlaqueta: (n: number) => string,
     trilha: RegistroTrilhaTela,
   ): Promise<BemRegistrado[]> {
-    if (x.bens.some((b) => b.responsavel !== null)) throw modeloPendente('O nome do responsável pelo bem');
-    if (x.bens.some((b) => b.documento === 'termo' && (b.termo?.doador ?? '') !== ''))
-      throw modeloPendente('O doador do termo de doação');
+    const responsaveis: (number | null)[] = [];
+    for (const b of x.bens) responsaveis.push(await this.responsavelPeloNome(c, b.responsavel));
     const r = await this.gravar(
       c,
       opCadastrar(gerarPlaqueta),
       {
-        bens: x.bens.map((b) => ({
+        bens: x.bens.map((b, i) => ({
           plaqueta: b.plaqueta,
           descricao: b.descricao,
           grupo: b.grupo,
@@ -1632,6 +2115,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
           nota: b.nota,
           itemNota: b.itemNota,
           termoNumero: b.termo?.numero ?? null,
+          termoData: b.documento === 'termo' ? (b.termo?.data || null) : null,
+          termoDoador: b.documento === 'termo' ? (b.termo?.doador.trim() || null) : null,
+          responsavelUsuario: responsaveis[i] ?? null,
           dataAquisicao: b.dataAquisicao,
           valorCent: b.valorCent,
           residualCent: b.residualCent,
@@ -1671,8 +2157,21 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     if (antes.versao !== x.versao) throw desatualizado();
     const problema = conferir(antes);
     if (problema) throw recusa('bem-alteracao', problema);
-    if (x.responsavel !== antes.responsavel && x.responsavel !== null) throw modeloPendente('O nome do responsável pelo bem');
+    const responsavelMudou = (x.responsavel?.trim() || null) !== antes.responsavel;
+    const responsavelUsuario = responsavelMudou
+      ? await this.responsavelPeloNome(c, x.responsavel)
+      : await this.ler(c, async (l, est) =>
+          inteiroOuNulo(
+            (
+              await l.uma<{ r: unknown }>(
+                'SELECT responsavel_usuario_id AS r FROM bem_patrimonial WHERE id = ? AND estabelecimento_id = ?',
+                [x.id, est],
+              )
+            )?.r,
+          ),
+        );
     const mudou =
+      responsavelMudou ||
       antes.descricao !== x.descricao ||
       antes.grupo !== x.grupo ||
       antes.localDetalhe !== x.localDetalhe ||
@@ -1696,6 +2195,7 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
         grupo: x.grupo,
         localDetalhe: x.localDetalhe,
         tipoResponsavel: x.tipoResponsavel,
+        responsavelUsuario,
         marca: x.marca,
         modelo: x.modelo,
         numeroSerie: x.numeroSerie,
@@ -1784,16 +2284,147 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return { antes, movimento };
   }
 
-  async calcular(): Promise<never> {
-    throw modeloPendente('O cálculo da depreciação (o cabeçalho do cálculo da competência)');
+  async calcular(
+    c: ContextoPatrimonio,
+    x: { empresa: number; competencia: string },
+    _por: string,
+    montar: (d: { bens: BemDaCompetencia[]; ultimo: CalculoRegistrado | null }) => PlanoDepreciacao,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ calculo: CalculoRegistrado; plano: PlanoDepreciacao }> {
+    const { bens, truncado } = await this.bensParaDepreciar(c, x.empresa, x.competencia);
+    if (truncado)
+      throw recusa('calculo-impedido', `O estabelecimento tem mais de ${TETO_BENS_LEITURA} bens: o cálculo precisa ser feito em lote.`);
+    const { ultimo, daCompetencia } = await this.calculos(c, x.empresa, x.competencia);
+    const plano = montar({ bens, ultimo });
+    if (plano.impedimentos.length > 0)
+      throw recusa('calculo-impedido', plano.impedimentos.join(' '));
+    if (daCompetencia) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
+    if (plano.cotas.reduce((s, k) => s + k.valorCent, 0) !== plano.totalCent)
+      throw new Error('O total do cálculo não é a soma das cotas.');
+    const { id } = await this.gravar(
+      c,
+      opCalcular,
+      {
+        competencia: x.competencia.slice(0, 7),
+        ignorados: plano.ignorados,
+        totalCent: plano.totalCent,
+        cotas: plano.cotas.map((k) => ({
+          bem: k.bem,
+          baseCent: k.baseCent,
+          vidaUtilMeses: k.vidaUtilMeses,
+          acumuladaAntesCent: k.acumuladaAntesCent,
+          valorCent: k.valorCent,
+        })),
+        dados: trilha.dadosDepois,
+      },
+      trilha,
+    );
+    const calculo = await this.ler(c, async (l, est) => l.uma(`${SQL_CALCULO} AND k.id = ?`, [est, id]));
+    if (!calculo) throw naoEncontrado('Cálculo');
+    return { calculo: calculoDaLinha(calculo), plano };
   }
 
-  async estornar(): Promise<never> {
-    throw modeloPendente('O estorno do cálculo da depreciação');
+  async estornar(
+    c: ContextoPatrimonio,
+    x: { empresa: number; competencia: string; motivo: string; origem: string },
+    _por: string,
+    conferir: (s: SituacaoParaEstorno) => { readonly codigo: string; readonly detalhe: string } | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<{ estorno: EstornoDeCalculo; calculo: CalculoRegistrado }> {
+    const { daCompetencia, ultimo } = await this.calculos(c, x.empresa, x.competencia);
+    const situacao = await this.ler(c, async (l, est) => ({
+      lotes: await this.lotes(l, est, `${x.competencia.slice(0, 7)}-01`),
+      baixados: daCompetencia
+        ? (
+            await l.consultar(
+              `SELECT b.plaqueta FROM cota_depreciacao d JOIN bem_patrimonial b ON b.id = d.bem_patrimonial_id
+                WHERE d.calculo_depreciacao_id = ? AND d.excluido_em IS NULL AND b.situacao = 'baixado' ORDER BY b.plaqueta`,
+              [daCompetencia.id],
+            )
+          ).map((b) => texto(b['plaqueta']) ?? '')
+        : [],
+    }));
+    const impedimento = conferir({
+      daCompetencia,
+      ultimo,
+      lotesExportados: situacao.lotes,
+      bensBaixados: situacao.baixados,
+    });
+    if (impedimento) throw recusa(impedimento.codigo, impedimento.detalhe);
+    if (!daCompetencia) throw recusa('sem-calculo', 'Sem cálculo vigente.');
+    await this.gravar(
+      c,
+      opEstornarCalculo,
+      {
+        calculo: daCompetencia.id,
+        motivo: x.motivo.trim().slice(0, 500),
+        origem: x.origem.slice(0, 30),
+        dados: trilha.dadosDepois,
+      },
+      trilha,
+    );
+    const [estorno] = (await this.estornos(c, x.empresa, x.competencia)).filter((e) => e.calculo === daCompetencia.id);
+    if (!estorno) throw naoEncontrado('Estorno');
+    return { estorno, calculo: daCompetencia };
   }
 
-  async registrarAjuste(): Promise<never> {
-    throw modeloPendente('O ajuste de valor do bem');
+  async registrarAjuste(
+    c: ContextoPatrimonio,
+    x: { bem: number; versao: number; motivo: string; hoje: string },
+    _por: string,
+    planejar: (
+      s: SituacaoParaAjuste,
+    ) => { ajuste: AjusteNovo } | { impedimento: { readonly codigo: string; readonly detalhe: string } },
+    trilha: RegistroTrilhaTela,
+  ): Promise<AjusteDoBem> {
+    const bem = await this.bem(c, x.bem);
+    if (!bem) throw naoEncontrado('Bem');
+    if (bem.versao !== x.versao) throw desatualizado();
+    const { ultimo } = await this.calculos(c, bem.empresa, x.hoje.slice(0, 7));
+    const situacao = await this.ler(c, async (l, est) => ({
+      marco: await this.marco(l, est, x.bem, null),
+      lotes: await this.lotes(l, est, x.hoje),
+      contas: !!(await l.uma(
+        `SELECT g.id FROM bem_patrimonial b JOIN grupo_bem g ON g.id = b.grupo_bem_id
+          WHERE b.id = ? AND g.reducao_recuperavel_conta_contabil_id IS NOT NULL`,
+        [x.bem],
+      )),
+    }));
+    const r = planejar({
+      bem,
+      marco: situacao.marco,
+      ultimaCalculada: ultimo?.competencia ?? null,
+      contasConfiguradas: situacao.contas,
+      lotesExportados: situacao.lotes.map((l) => ({ periodo: l.periodo })),
+    });
+    if ('impedimento' in r) throw recusa(r.impedimento.codigo, r.impedimento.detalhe);
+    const a = r.ajuste;
+    const { id } = await this.gravar(
+      c,
+      opRegistrarAjuste,
+      {
+        bem: x.bem,
+        versao: x.versao,
+        tipo: TIPO_AJUSTE_PARA_BANCO[a.tipo],
+        competenciaMarco: a.competenciaMarco.slice(0, 7),
+        data: a.data,
+        antesCent: a.valorContabilAntesCent,
+        depoisCent: a.valorContabilDepoisCent,
+        acumuladaCent: a.acumuladaMarcoCent,
+        perdaCent: a.perdaCent,
+        residualCent: a.residualCent,
+        vidaRestanteMeses: a.vidaRestanteMeses,
+        valorJustoCent: a.valorJustoCent,
+        laudo: a.laudo,
+        motivo: x.motivo.trim().slice(0, 500),
+        origem: a.origem.slice(0, 30),
+        dados: trilha.dadosDepois,
+      },
+      trilha,
+    );
+    const [ajuste] = (await this.ajustes(c, x.bem)).filter((y) => y.id === id);
+    if (!ajuste) throw naoEncontrado('Ajuste');
+    return ajuste;
   }
 
   async anexarLaudo(
@@ -1808,8 +2439,56 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return laudo;
   }
 
-  async estornarAjuste(): Promise<never> {
-    throw modeloPendente('O estorno do ajuste de valor do bem');
+  async estornarAjuste(
+    c: ContextoPatrimonio,
+    x: { ajuste: number; motivo: string; origem: string; hoje: string },
+    _por: string,
+    conferir: (s: SituacaoParaEstornoAjuste) => { readonly codigo: string; readonly detalhe: string } | null,
+    trilha: RegistroTrilhaTela,
+  ): Promise<AjusteDoBem> {
+    const situacao = await this.ler(c, async (l, est) => {
+      const linha = await l.uma(`${SQL_AJUSTE} AND a.id = ?`, [est, x.ajuste]);
+      if (!linha) return null;
+      const ajuste = ajusteDaLinha(linha);
+      const marco = await this.marco(l, est, ajuste.bem, null);
+      const posteriores = await l.consultar(
+        `SELECT DISTINCT d.competencia FROM cota_depreciacao d
+          WHERE d.bem_patrimonial_id = ? AND d.base = '${BASE_COTA}' AND d.excluido_em IS NULL AND d.competencia > ?
+          ORDER BY d.competencia`,
+        [ajuste.bem, primeiroDia(ajuste.competenciaMarco)],
+      );
+      return {
+        ajuste,
+        versao: inteiro(linha['versao']),
+        ultimoComMarco: marco ? { id: marco.ajuste } : null,
+        cotasPosteriores: posteriores.map((p) => (dataIso(p['competencia']) ?? '').slice(0, 7)),
+        lotes: (await this.lotes(l, est, ajuste.data)).map((p) => ({ periodo: p.periodo })),
+      };
+    });
+    if (!situacao) throw naoEncontrado('Ajuste');
+    const impedimento = conferir({
+      ajuste: situacao.ajuste,
+      ultimoComMarco: situacao.ultimoComMarco,
+      cotasPosteriores: situacao.cotasPosteriores,
+      lotesExportados: situacao.lotes,
+    });
+    if (impedimento) throw recusa(impedimento.codigo, impedimento.detalhe);
+    await this.gravar(
+      c,
+      opEstornarAjuste,
+      {
+        ajuste: x.ajuste,
+        versao: situacao.versao,
+        hoje: x.hoje,
+        motivo: x.motivo.trim().slice(0, 500),
+        origem: x.origem.slice(0, 30),
+        dados: trilha.dadosDepois,
+      },
+      trilha,
+    );
+    const [depois] = (await this.ajustes(c, situacao.ajuste.bem)).filter((y) => y.id === x.ajuste);
+    if (!depois) throw naoEncontrado('Ajuste');
+    return depois;
   }
 
   async abrirInventario(

@@ -39,7 +39,6 @@ export const OPCOES_PORTARIA = {
   enfermagemFecharParcial: 5318,
   enfermagemFecharTotal: 5319,
 } as const;
-const O = OPCOES_PORTARIA;
 
 export const PERMISSOES_PORTARIA = {
   ler: 'hotelaria.visita.ler',
@@ -57,12 +56,12 @@ const P = PERMISSOES_PORTARIA;
 const p = (
   codigo: string,
   descricao: string,
-  opcoesLegado: readonly number[],
+
   extra: Partial<DeclaracaoPermissao> = {},
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: null,
   categoria: 'administrativa',
   criticidade: 'sensivel',
@@ -70,60 +69,32 @@ const p = (
 });
 
 export const PERMISSOES_PORTARIA_M50: readonly DeclaracaoPermissao[] = [
-  p(P.ler, 'Ver a portaria: a busca do paciente para a visita, as visitas em curso e os crachás', [
-    O.controleAcesso,
-    O.movimentacoes,
-    O.visitantes,
-    O.visitantesManutencao,
-    O.registrarEntradas,
-  ]),
+  p(P.ler, 'Ver a portaria: a busca do paciente para a visita, as visitas em curso e os crachás'),
   p(
     P.registrar,
     'Cadastrar o visitante (cadastro mínimo com foto), registrar a visita com o crachá e a saída',
-    [O.visitantesManutencao, O.registrarEntradas, O.crachas, O.periodoAcesso],
   ),
   p(
     P.regrar,
     'Definir as regras de visita por unidade, bloquear e revogar a visita a um paciente e autorizar exceção na portaria',
-    [
-      O.parametros,
-      O.locais,
-      O.configuracaoLocais,
-      O.motivosBloqueio,
-      O.bloqueioLimitar,
-      O.bloqueio,
-      O.limitar,
-    ],
   ),
   p(
     P.bloquearClinico,
     'Bloquear a visita a um paciente por decisão clínica (enfermagem ou médico) e revogar o bloqueio clínico',
-    [O.enfermagemFechar, O.enfermagemFecharParcial, O.enfermagemFecharTotal],
+
     { categoria: 'clinica', exigeConselho: true },
   ),
   p(
     P.contatos,
     'Emitir o relatório de contatos de visita de um paciente ou de uma unidade (investigação de surto)',
-    [O.relatorios, O.relatorioVisitas],
   ),
-  p(P.acompanhante, 'Registrar o acompanhante com direito legal, a troca e o fim do acompanhamento', [
-    O.visitantesManutencao,
-    O.registrarEntradas,
-    O.acompanhantesRecepcao,
-  ]),
-  p(P.terminalLer, 'Ver os terminais e as catracas da portaria e os eventos de passagem', [
-    O.tabelas,
-    O.terminais,
-  ]),
-  p(P.terminalEditar, 'Cadastrar e alterar os terminais e as catracas da portaria', [
-    O.terminaisTecnibra,
-    O.terminaisTopdata,
-    O.terminaisManutencao,
-  ]),
+  p(P.acompanhante, 'Registrar o acompanhante com direito legal, a troca e o fim do acompanhamento'),
+  p(P.terminalLer, 'Ver os terminais e as catracas da portaria e os eventos de passagem'),
+  p(P.terminalEditar, 'Cadastrar e alterar os terminais e as catracas da portaria'),
   p(
     P.catraca,
     'Registrar a passagem do crachá na catraca (integrador local do terminal; só com a catraca liberada)',
-    [O.terminaisManutencao],
+
     { categoria: 'tecnica' },
   ),
 ];

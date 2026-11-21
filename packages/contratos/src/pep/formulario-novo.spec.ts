@@ -11,6 +11,7 @@ import {
   esquemaSalvarFormularioNovo,
   type PerguntaFormularioNovo,
 } from './formulario-novo.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const pergunta = (p: Partial<PerguntaFormularioNovo> & Pick<PerguntaFormularioNovo, 'linkId'>) => ({
   tipo: 'texto' as const,
@@ -126,7 +127,7 @@ describe('permissões e eventos do construtor', () => {
       const p = CATALOGO_DECLARADO.find((x) => x.codigo === c);
       expect(p, c).toBeDefined();
       expect(FORMATO_CODIGO_PERMISSAO.test(c)).toBe(true);
-      expect(p?.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p?.codigo).length).toBeGreaterThan(0);
     }
     expect(CATALOGO_DECLARADO.find((x) => x.codigo === 'pep.formularioNovo.publicar')?.criticidade).toBe(
       'critica',

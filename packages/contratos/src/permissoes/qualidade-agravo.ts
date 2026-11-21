@@ -18,10 +18,10 @@ export const PERMISSOES_AGRAVO = {
   notificar: 'qualidade.agravo.notificar',
 } as const;
 
-const agravo = (codigo: string, descricao: string, opcoesLegado: readonly number[]): DeclaracaoPermissao => ({
+const agravo = (codigo: string, descricao: string): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: 'por-perfil',
   perfis: [PERFIL_VIGILANCIA_EPIDEMIOLOGICA, PERFIL_CCIH],
   categoria: 'clinica',
@@ -32,11 +32,9 @@ export const PERMISSOES_QUALIDADE_AGRAVO_M48: readonly DeclaracaoPermissao[] = [
   agravo(
     PERMISSOES_AGRAVO.ler,
     'Consultar a fila de agravos de notificação compulsória (gatilhos por CID, resultado reagente e óbito), os casos, os prazos e a ficha SINAN pré-preenchida',
-    [5273, 5487, 5490, 5491, 5495],
   ),
   agravo(
     PERMISSOES_AGRAVO.notificar,
     'Abrir o caso de agravo, registrar a notificação à autoridade sanitária ou descartar o caso, e configurar os exames cujo resultado reagente sugere o agravo',
-    [5275, 5494, 5826, 5827, 5831, 5832, 5833, 6442, 6443, 6556, 6856],
   ),
 ];

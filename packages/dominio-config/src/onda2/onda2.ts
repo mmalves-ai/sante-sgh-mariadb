@@ -3,7 +3,6 @@
 // agregados do banco, e entrega aqui. As regras 1 a 8 valem para as ondas 2 a 5 (M40 a M43).
 import {
   ESTADOS_FORA_DA_ONDA,
-  EXCECOES_REGRA_15,
   HOSPITAL_INICIAL_ONDAS,
   ITENS_CRITERIO_GERAIS,
   ITENS_CRITERIO_POR_SETOR_ONDA_2,
@@ -15,7 +14,6 @@ import {
   ROTULOS_CRITERIO_LIBERACAO,
   operacoesDoSetor,
   SETORES_PRONTIDAO,
-  TABELAS_NUNCA_GRAVADAS,
   type DefinicaoSetor,
   type EstadoOperacao,
   type ItemCriterioLiberacao,
@@ -300,36 +298,6 @@ export function setoresQueSeguramHospital(
       return sit !== 'fora' && !SITUACOES_SETOR_PRONTO.includes(sit ?? '');
     })
     .map((s) => s.id);
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// Regra 15: tabelas que o novo nunca grava
-
-export interface TabelaGravada {
-  readonly tabela: string;
-  readonly acao: string;
-}
-
-export interface ViolacaoRegra15 {
-  readonly operacao: string;
-  readonly tabela: string;
-  readonly acao: string;
-}
-
-/** Gravações diretas (não de gatilho) em tabela proibida, fora das exceções justificadas. */
-export function violacoesRegra15(
-  operacoes: readonly { readonly nome: string; readonly tabelasGravadas: readonly TabelaGravada[] }[],
-): ViolacaoRegra15[] {
-  const v: ViolacaoRegra15[] = [];
-  for (const o of operacoes)
-    for (const t of o.tabelasGravadas) {
-      if (!TABELAS_NUNCA_GRAVADAS.includes(t.tabela)) continue;
-      const excecao = EXCECOES_REGRA_15.some(
-        (x) => x.operacao === o.nome && x.tabela === t.tabela && x.acao === t.acao,
-      );
-      if (!excecao) v.push({ operacao: o.nome, tabela: t.tabela, acao: t.acao });
-    }
-  return v;
 }
 
 // ---------------------------------------------------------------------------------------------------------------

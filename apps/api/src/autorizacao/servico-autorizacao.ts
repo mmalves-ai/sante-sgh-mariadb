@@ -2,16 +2,12 @@
 // perfil, flags), os escopos e o parâmetro de vínculo, lidos ao vivo pela fonte de acesso, com cache de 3 min no
 // armazém (Valkey) por cliente, rede, estabelecimento e login: quem perde a ação perde a permissão dentro do prazo do cache. As regras são de @sgh/dominio-acesso; o
 // adaptador só lê. Nenhum dado pessoal vai ao cache além do login (chave) e dos códigos.
-import {
-  ESCOPOS_SEM_RESTRICAO,
-  type EscoposSessao,
-  type FlagLegado,
-  type PerfilSessao,
-} from '@sgh/contratos';
+import { ESCOPOS_SEM_RESTRICAO, type EscoposSessao, type PerfilSessao } from '@sgh/contratos';
 import {
   conceder,
   concederAcessoTotal,
   type ConcessoesLegado,
+  type MarcaUsuarioOrigem,
   conselhoEfetivo,
   type ParametrosConselho,
   type RegistroConselhoAvaliar,
@@ -21,7 +17,7 @@ import {
 } from '@sgh/dominio-acesso';
 import type { ArmazemSessao } from '../sessao/armazem.js';
 import type { AtorPlataforma } from '../sessao/tipos-acesso.js';
-import { FLAGS_DECLARADAS, indiceDoCatalogo, indiceDoCliente } from './catalogo.js';
+import { indiceDoCatalogo, indiceDoCliente, marcasDeclaradas } from './catalogo.js';
 import { hojeNoEstabelecimento, type RegraConselho } from './conselho.js';
 
 /** Validade do cache das permissões efetivas (ficha do M06, seção 4: 3 min). */
@@ -78,7 +74,11 @@ export function comConselhoConferido(
 }
 
 export interface FonteAutorizacao {
-  dadosDeAutorizacao(codigo: string, login: string, flags: readonly FlagLegado[]): Promise<DadosAutorizacao>;
+  dadosDeAutorizacao(
+    codigo: string,
+    login: string,
+    flags: readonly MarcaUsuarioOrigem[],
+  ): Promise<DadosAutorizacao>;
 }
 
 export interface Autorizacao {
@@ -285,7 +285,7 @@ export class ServicoAutorizacao {
     const c = await this.conferido(
       rede,
       estabelecimento,
-      await this.fonte.dadosDeAutorizacao(estabelecimento, login, FLAGS_DECLARADAS),
+      await this.fonte.dadosDeAutorizacao(estabelecimento, login, marcasDeclaradas()),
     );
     const base = calcularAutorizacao(c.dados, this.agora());
     const a = c.motivo ? { ...base, conselhoBloqueio: c.motivo } : base;
@@ -305,7 +305,7 @@ export class ServicoAutorizacao {
   ): Promise<ResultadoConcessao & { calculadaEm: number }> {
     if (this.catalogoDe && !this.catalogoDe.has(estabelecimento))
       throw new ErroCatalogoDeOutroEstabelecimento(estabelecimento);
-    const lidos = await this.fonte.dadosDeAutorizacao(estabelecimento, login, FLAGS_DECLARADAS);
+    const lidos = await this.fonte.dadosDeAutorizacao(estabelecimento, login, marcasDeclaradas());
     const dados = rede ? (await this.conferido(rede, estabelecimento, lidos)).dados : lidos;
     const agora = this.agora();
     return { ...concessaoDe(dados, agora), calculadaEm: agora };

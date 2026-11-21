@@ -3641,3 +3641,14 @@ curso_publico_alvo	RH	vinculo	F7	Público do curso no estabelecimento: todo o es
 vinculo_responsavel_portal	INTG	principal	F3	Pedido e decisão do vínculo de um responsável (pais, tutor, curador, procurador) a um paciente no portal, com prova e escopos	F2.4: pedido do lote f22 03-12	08	0
 intencao_pagamento_portal	INTG	principal	F3	Pagamento iniciado pelo paciente no portal (pix ou cartão), com transação, situação e baixa no recebimento particular	F2.4: pedido do lote f22 03-12	08	0
 conciliacao_pagamento_portal	INTG	historico	F3	Conciliação do pagamento do portal pela tesouraria: conciliado, divergente ou estorno	F2.4: pedido do lote f22 03-12	08	0
+registro_assistencial_extensao	PEP	historico	F3	Resposta de extensão do formulário clínico: sinal vital, mapa corporal ou anexo ligado ao registro	F2.4 volta 2: pedido do lote 11-enfermagem-1	03	0
+acionamento_resposta_rapida_evento	PEP	historico	F7	Chegada e desfecho do time de resposta rápida, versionados com a retificação	F2.4 volta 2: pedido do lote 11-enfermagem-1	03	0
+gatilho_exame_agravo	PEP	configuracao	F3	Gatilho de agravo por resultado de exame: padrão do nome do exame e CID do caso aberto	F2.4 volta 2: pedido do lote 15-qualidade	03	0
+atributo_categoria_acomodacao	INT	configuracao	F3	Atributos padrão do tipo de acomodação no estabelecimento, herdados pelos leitos sem atributo próprio	F2.4 volta 2: pedido do lote 16-misto-financeiro	04	0
+ato_cirurgico_dispositivo	CC	item	F3	Dispositivos usados no ato cirúrgico (tubo, antimicrobiano, sonda, cateter, punção)	F2.4 volta 2: pedido do lote 08-cirurgia	04	0
+ocorrencia_arquivo_prontuario	HOT	historico	F3	Ocorrência do arquivo de prontuários que não é movimento físico: remessa, aceite, cobrança, exclusão e descarte	F2.4 volta 2: pedido do lote 16-misto-financeiro	04	0
+carga_tabela_preco	FAT	controle	F3	Carga de valores numa tabela de preço do cliente: arquivo, conferência e publicação	F2.4 volta 2: pedido do lote 23-misto-coexistencia	06	0
+carga_tabela_preco_linha	FAT	controle	F3	Linha da carga de tabela de preço: código, item reconhecido, valor e divergência	F2.4 volta 2: pedido do lote 23-misto-coexistencia	06	0
+integracao_folha_financeiro	RH	configuracao	F3	Vigência da integração da folha com o financeiro	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
+integracao_folha_financeiro_destino	RH	item	F3	Destino da folha com credor, classificação e vencimento do título	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
+lancamento_titulos_folha	RH	principal	F7	Lançamento dos títulos a pagar de uma competência da folha	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0

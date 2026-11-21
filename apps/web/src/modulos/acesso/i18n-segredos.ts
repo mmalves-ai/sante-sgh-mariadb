@@ -30,27 +30,30 @@ export const mensagensSegredos = {
     bloqueado: 'Aguardando',
   },
   colunas: {
-    TBCONVEN: { SENHA: 'Senha do portal' },
-    TBTISSWEBSERV: { SENHA_PRESTADOR: 'Senha do prestador' },
-    TBCODATI: { SENHA_PRESTADOR: 'Senha do prestador' },
-    TBHOSPIT: {
-      SENHAPROV: 'Senha do provedor',
-      SENHA_PROXY: 'Senha do proxy',
-      SENHA_ASSINATURA: 'Senha do certificado de assinatura',
+    convenio: { senha_portal: 'Senha do portal' },
+    servico_tiss_convenio: { senha_prestador: 'Senha do prestador' },
+    atividade_convenio: { senha_prestador: 'Senha do prestador' },
+    estabelecimento: {
+      senha_provedor: 'Senha do provedor',
+      senha_proxy: 'Senha do proxy',
+      senha_assinatura: 'Senha do certificado de assinatura',
     },
-    GEUSERS: { SENHA: 'Senha do almoxarifado' },
-    PREMAILCFG: { SENHA_AUTENTICACAO: 'Senha de autenticação' },
-    SITPEQV: { SENHA_FTP: 'Senha de transferência de arquivos', SENHA_EXPORTACAO: 'Senha de exportação' },
+    usuario_estoque: { senha: 'Senha do almoxarifado' },
+    servidor_email: { senha_autenticacao: 'Senha de autenticação' },
+    equipamento_laboratorio: {
+      senha_transferencia: 'Senha de transferência de arquivos',
+      senha_exportacao: 'Senha de exportação',
+    },
   },
   excecoes: {
-    TBINFBANCO: 'Dados de acesso ao banco externo do estabelecimento',
-    SP_MODULO_USUARIO: 'Contas de acesso dos módulos',
+    integracao_bancaria_externa: 'Dados de acesso ao banco externo do estabelecimento',
+    contas_acesso_modulos: 'Contas de acesso dos módulos',
   },
   /** Motivo de produto de cada exceção (o motivo técnico do contrato fica para o verificador e a trilha). */
   excecoesMotivo: {
-    TBINFBANCO:
+    integracao_bancaria_externa:
       'Mantida enquanto a integração bancária automática estiver ativa; a TI decide quando desligá-la.',
-    SP_MODULO_USUARIO:
+    contas_acesso_modulos:
       'Mantidas como estão até a TI confirmar que a troca não interrompe nenhum módulo; depois são trocadas.',
   },
   parceiros: {
@@ -115,8 +118,8 @@ export const mensagensSegredos = {
     total: 'Usuários com alguma senha secundária',
     porColuna: 'Por tipo',
     tipos: {
-      SENHA_SEC: 'Senha de liberação',
-      SENHA_CAN_NF: 'Senha de cancelamento de nota fiscal',
+      senha_liberacao: 'Senha de liberação',
+      senha_cancelamento_nota: 'Senha de cancelamento de nota fiscal',
     },
     busca: 'Buscar pelo login',
     legenda: 'Usuários com senha secundária guardada',

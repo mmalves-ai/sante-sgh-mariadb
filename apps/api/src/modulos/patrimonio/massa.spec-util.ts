@@ -37,6 +37,12 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
   );
   await e.executar(`DELETE FROM inventario_bem WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM movimento_bem WHERE estabelecimento_id IN (${em})`, ests);
+  for (const t of ['ajuste_valor_bem', 'laudo_bem', 'cota_depreciacao'])
+    await e.executar(
+      `DELETE x FROM ${t} x JOIN bem_patrimonial b ON b.id = x.bem_patrimonial_id WHERE b.estabelecimento_id IN (${em})`,
+      ests,
+    );
+  await e.executar(`DELETE FROM calculo_depreciacao WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM bem_patrimonial WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar("DELETE FROM grupo_bem WHERE codigo LIKE 'l0211%'", []);
 }
@@ -86,11 +92,24 @@ export async function prepararMassaPatrimonio(marca = 'A'): Promise<MassaPatrimo
         'INSERT INTO centro_custo (estabelecimento_id, codigo, nome, setor_funcional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
         [est, cod, `CENTRO SINTETICO ${cod}`, setorId, '2020-01-01', agora],
       );
+    // Vínculo vigente do usuário com o estabelecimento (o responsável pelo bem só vale na sua unidade).
+    const vincular = (u: number, estab: number) =>
+      garantir(
+        e,
+        'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [u, estab],
+        'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+        [u, estab, '2020-01-01', agora],
+      );
+    const usu = await usuario('l0211p.patrimonio');
+    const aceitante = await usuario('l0211p.aceite');
+    await vincular(usu, est);
+    await vincular(aceitante, outro);
     const r = {
       est,
       outro,
-      usuario: await usuario('l0211p.patrimonio'),
-      aceitante: await usuario('l0211p.aceite'),
+      usuario: usu,
+      aceitante,
       origem,
       centro1: await centro('921201', null),
       centro2: await centro('921202', setor),

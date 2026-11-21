@@ -28,14 +28,10 @@ export const PERMISSOES_CCIH = {
 
 const C = PERMISSOES_CCIH;
 
-const ccih = (
-  codigo: string,
-  descricao: string,
-  opcoesLegado: readonly number[] = [],
-): DeclaracaoPermissao => ({
+const ccih = (codigo: string, descricao: string): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado,
+
   concessaoPorPerfil: 'por-perfil',
   perfis: [PERFIL_CCIH],
   categoria: 'clinica',
@@ -46,7 +42,6 @@ export const PERMISSOES_QUALIDADE_CCIH_M48: readonly DeclaracaoPermissao[] = [
   ccih(
     C.ccihLer,
     'Consultar a vigilância ativa dos internados (dispositivos, antimicrobianos, culturas, febre), a higiene das mãos e os surtos',
-    [2299],
   ),
   ccih(
     C.ccihRegistrar,
@@ -57,12 +52,10 @@ export const PERMISSOES_QUALIDADE_CCIH_M48: readonly DeclaracaoPermissao[] = [
   ccih(
     C.antimicrobianoLer,
     'Consultar a fila de antimicrobianos restritos, as liberações e o consumo (DDD e DOT)',
-    [1933, 5459],
   ),
   ccih(
     C.antimicrobianoLiberar,
     'Liberar ou não o antimicrobiano restrito, registrar as revisões do 3º e do 7º dia e configurar a política e a DDD dos itens',
-    [1935, 5228],
   ),
   ccih(C.precaucaoLer, 'Consultar as precauções e os isolamentos dos internados'),
   ccih(

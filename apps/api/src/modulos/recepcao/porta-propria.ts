@@ -12,8 +12,8 @@
 // com validade, revogação, último uso e a conferência do login substituído; os termos de consentimento da recepção
 // são versões de termo_consentimento_modelo (tipos de atendimento preenchidos) e as assinaturas, imutáveis, ficam em
 // termo_consentimento_recepcao (a revogação é fato novo com motivo).
-// Pendência do modelo (pedido em docs/obra/fatias/f24/saida/13-recepcao.json): o vínculo do painel de TV de setor com o
-// painel que ele substitui (portalOrdem) não tem coluna; só esse caso é recusado, nada é descartado em silêncio.
+// O dispositivo do tipo painel de TV de setor liga-se ao painel_tv que exibe (painel_tv_id), escolhido pela ordem do
+// painel (portalOrdem) entre os painéis ativos do estabelecimento.
 import { createHash, randomBytes } from 'node:crypto';
 import {
   type AssinaturaTermo,
@@ -81,14 +81,6 @@ export interface NucleoRecepcao {
     fn: (e: Escritor) => Promise<T>,
     confirmar?: boolean,
   ): Promise<T>;
-}
-
-/** Recusa da gravação que espera coluna do modelo (pedido registrado ao integrador). */
-function aguardaModelo(recurso: string): never {
-  throw recusa(
-    'modelo-pendente',
-    `${recurso} ainda não tem coluna no banco do produto: a gravação fica indisponível até a migração do modelo.`,
-  );
 }
 
 /** Intervalo mínimo entre duas marcas de último uso do mesmo dispositivo. */
@@ -684,9 +676,10 @@ async function dispositivosOnde(
 ): Promise<DispositivoRecepcao[]> {
   const ls = await l.consultar(
     `SELECT d.id, d.tipo, d.nome, d.ponto_recepcao_id, d.conteudo, d.voz, d.prefixo_token, d.valido_ate, d.revogado_em,
-            d.ultimo_uso_em, d.login_substituido, d.conferido_em, d.criado_em, es.codigo AS hospital,
+            d.ultimo_uso_em, d.login_substituido, d.conferido_em, d.criado_em, es.codigo AS hospital, pt.ordem AS painel_ordem,
             es.fuso_horario, ut.login AS tecnico, uc.login AS criador, uf.login AS conferidor
        FROM dispositivo_recepcao d JOIN estabelecimento es ON es.id = d.estabelecimento_id
+       LEFT JOIN painel_tv pt ON pt.id = d.painel_tv_id
        LEFT JOIN usuario ut ON ut.id = d.tecnico_usuario_id LEFT JOIN usuario uc ON uc.id = d.criado_por
        LEFT JOIN usuario uf ON uf.id = d.conferido_por
       WHERE ${onde} AND d.excluido_em IS NULL ORDER BY d.id`,
@@ -719,7 +712,7 @@ async function dispositivosOnde(
       locais: de(locais, id),
       geradores: de(geradores, id),
       conteudo: txtOuNull(x['conteudo']),
-      portalOrdem: null,
+      portalOrdem: numOuNull(x['painel_ordem']),
       usuarioTecnico: txtOuNull(x['tecnico']),
       voz: bool(x['voz']),
       criadoEm: horaCivil(x['criado_em'] as Date, fuso),
@@ -964,7 +957,27 @@ function gravadorProprio(
     },
 
     criarDispositivo: async (x) => {
-      if (x.portalOrdem !== null) aguardaModelo('O vínculo do painel de TV com o painel que ele substitui');
+      let painelTv: number | null = null;
+      if (x.portalOrdem !== null) {
+        if (x.tipo !== 'paineltv')
+          throw recusa('painel-tv-so-no-tipo', 'Só o dispositivo do tipo painel de TV de setor exibe um painel de TV.', {
+            campos: ['portalOrdem'],
+          });
+        const paineis = await e.consultar(
+          `SELECT id FROM painel_tv
+            WHERE estabelecimento_id = ? AND ordem = ? AND situacao = 'ativo' AND excluido_em IS NULL ORDER BY id`,
+          [est.id, x.portalOrdem],
+        );
+        if (paineis.length !== 1)
+          throw recusa(
+            paineis.length === 0 ? 'painel-tv-inexistente' : 'painel-tv-ambiguo',
+            paineis.length === 0
+              ? 'Não há painel de TV ativo com esta ordem no estabelecimento.'
+              : 'Há mais de um painel de TV ativo com esta ordem: ajuste a ordem dos painéis.',
+            { campos: ['portalOrdem'] },
+          );
+        painelTv = num(paineis[0]!['id']);
+      }
       await conferirRecepcao(x.recepcao);
       const locais = await conferirDoEstabelecimento('local_atendimento', x.locais, 'locais');
       const geradores = await conferirDoEstabelecimento('gerador_senha', x.geradores, 'geradores');
@@ -973,8 +986,8 @@ function gravadorProprio(
       const t = novoToken();
       const id = await e.inserir(
         `INSERT INTO dispositivo_recepcao (estabelecimento_id, tipo, nome, ponto_recepcao_id, conteudo,
-           tecnico_usuario_id, voz, resumo_token, prefixo_token, valido_ate, criado_em, criado_por, versao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+           tecnico_usuario_id, voz, resumo_token, prefixo_token, valido_ate, painel_tv_id, criado_em, criado_por, versao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           est.id,
           x.tipo,
@@ -986,6 +999,7 @@ function gravadorProprio(
           t.resumo,
           t.prefixo,
           validade(x.validadeDias),
+          painelTv,
           instante,
           usuario,
         ],

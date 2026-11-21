@@ -17,6 +17,7 @@ import {
   esquemaSorologia,
 } from './sesmt-entradas.js';
 import { naturezaAso, VACINAS_SESMT } from './sesmt-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 describe('SESMT: permissões, liberação e eventos', () => {
   it('as permissões das telas do SESMT, todas com opção do outro sistema e no catálogo', () => {
@@ -32,10 +33,10 @@ describe('SESMT: permissões, liberação e eventos', () => {
       'pessoas.vacinacao.registrar',
     ]);
     for (const p of PERMISSOES_PESSOAS_M52_F5) {
-      expect(p.opcoesLegado.length).toBeGreaterThan(0);
+      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
       expect(CATALOGO_DECLARADO).toContain(p);
       // Regra 16: nenhuma opção do SESMT fora do módulo de segurança do trabalho (554 a 582).
-      for (const o of p.opcoesLegado) expect(o >= 554 && o <= 582).toBe(true);
+      for (const o of opcoesDoMapa(p.codigo)) expect(o >= 554 && o <= 582).toBe(true);
     }
   });
   it('a chave pessoas.sesmt nasce desligada com a conferência do SESMT; os eventos existem', () => {

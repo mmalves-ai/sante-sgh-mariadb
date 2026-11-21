@@ -15,9 +15,9 @@
 // vista pela tela quando ela a envia.
 // Melhoria: horas no fuso do estabelecimento; a alta médica é a alta médica do prontuário (alta_medica), com o
 // destino codificado e o cancelamento com motivo; os atributos do leito são as colunas do próprio leito.
-// Pendências (pedidos do lote 03-01 e da F2.4, lote 16): atributos por tipo de acomodação, foto da etapa da limpeza e
-// os registros do SAME sem movimento (ocorrência, aceite e cobrança) aguardam DDL; as fichas da internação
-// leem a configuração de documentos quando houver (por ora nenhuma ficha extra).
+// Os registros do SAME sem movimento (remessa, aceite, cobrança, exclusão, ocorrência e descarte) ficam em
+// ocorrencia_arquivo_prontuario, gravados e lidos aqui. Pendências (pedidos do lote 03-01 e da F2.4, lote 16): foto da
+// etapa da limpeza; as fichas da internação leem a configuração de documentos quando houver (por ora nenhuma ficha extra).
 import { randomUUID } from 'node:crypto';
 import {
   type ApoioInternacaoTela,
@@ -48,7 +48,7 @@ import {
 import { z } from 'zod';
 import type { ProfissionalDaSessao } from '../atendimento/porta.js';
 import type { DestinoPorta, LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
-import { civil, FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
+import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { FonteInternacaoPropria } from '../internacao/fonte-propria.js';
 import {
   apoio,
@@ -123,6 +123,8 @@ const TABELAS_DIRETAS = [
   'solicitacao_limpeza',
   'solicitacao_limpeza_local',
   'inspecao_limpeza',
+  'atributo_categoria_acomodacao',
+  'ocorrencia_arquivo_prontuario',
 ];
 
 const SQL_RESUMO = `
@@ -866,35 +868,61 @@ export class PortaAdtPropria implements PortaAdt {
         [conta, est],
       );
       if (!a) return null;
+      // Os movimentos da conta (os do atendimento e os do volume sem atendimento), com os registros do arquivo
+      // ligados a cada um: exclusão, remessa (protocolo e prazo), aceite e cobrança.
+      const oc = (tipo: string, col: string) =>
+        `(SELECT o.${col} FROM ocorrencia_arquivo_prontuario o WHERE o.movimento_prontuario_id = m.id AND o.tipo = '${tipo}' AND o.excluido_em IS NULL ORDER BY o.id DESC LIMIT 1)`;
       const movs = await l.consultar(
         `SELECT m.id, m.movimentado_em, m.saida_setor_funcional_id, so.nome AS so_nome, m.destino_setor_funcional_id,
                 sd.nome AS sd_nome, op.codigo AS operacao, op.descricao AS operacao_nome, m.responsavel_nome,
-                m.previsao_retorno, m.devolvido_em, m.observacao, u.login
+                m.previsao_retorno, m.excluido_em, u.login,
+                ${oc('exclusao', 'id')} AS exclusao_id, ${oc('exclusao', 'motivo')} AS motivo_exclusao,
+                ${oc('remessa', 'protocolo')} AS protocolo, ${oc('remessa', 'prazo_devolucao')} AS prazo_devolucao,
+                ${oc('aceite', 'id')} AS aceite_id, ${oc('cobranca', 'id')} AS cobranca_id
            FROM movimento_prontuario m
            JOIN operacao_movimento_prontuario op ON op.id = m.operacao_movimento_prontuario_id
            LEFT JOIN setor_funcional so ON so.id = m.saida_setor_funcional_id
            LEFT JOIN setor_funcional sd ON sd.id = m.destino_setor_funcional_id
            LEFT JOIN usuario u ON u.id = m.movimentado_por_usuario_id
-          WHERE m.estabelecimento_id = ? AND m.paciente_id = ? AND m.excluido_em IS NULL
+          WHERE m.estabelecimento_id = ? AND m.paciente_id = ? AND (m.atendimento_id = ? OR m.atendimento_id IS NULL)
           ORDER BY m.movimentado_em DESC, m.id DESC LIMIT 201`,
-        [est, n(a['paciente_id'])],
+        [est, n(a['paciente_id']), n(a['id'])],
       );
-      const ultimo = movs[0];
+      const ocorrencias = await l.consultar(
+        `SELECT o.motivo, o.registrado_em, u.login
+           FROM ocorrencia_arquivo_prontuario o LEFT JOIN usuario u ON u.id = o.usuario_id
+          WHERE o.estabelecimento_id = ? AND o.atendimento_id = ? AND o.tipo = 'ocorrencia' AND o.excluido_em IS NULL
+          ORDER BY o.registrado_em DESC, o.id DESC LIMIT 200`,
+        [est, n(a['id'])],
+      );
+      const instante = (d: Date) => {
+        const x = civil(d, fuso);
+        return `${x.data}T${x.hora}:00`;
+      };
+      const dataCivil = (v: unknown) => (v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : texto(v).slice(0, 10));
+      const excluido = (m: Linha) => m['excluido_em'] !== null || m['exclusao_id'] !== null;
+      const ultimo = movs.find((m) => !excluido(m));
       const ondeEsta = ultimo
         ? {
             setor: {
               codigo: n(ultimo['destino_setor_funcional_id'] ?? ultimo['saida_setor_funcional_id']),
               nome: texto(ultimo['sd_nome'] ?? ultimo['so_nome']),
             },
-            desde: (ultimo['movimentado_em'] as Date).toISOString(),
+            desde: instante(ultimo['movimentado_em'] as Date),
             operacao: texto(ultimo['operacao_nome']),
           }
         : null;
-      const prazoMs = o.prazoDias * 86_400_000;
+      // O prazo é o da remessa (até o fim do dia), senão a previsão de retorno, senão o prazo padrão do arquivo.
+      const prazoDe = (m: Linha) => {
+        const rem = dataCivil(m['prazo_devolucao']);
+        if (rem) return instanteCivil(rem, '23:59', fuso).getTime();
+        const prev = m['previsao_retorno'] as Date | null;
+        return prev ? prev.getTime() : (m['movimentado_em'] as Date).getTime() + o.prazoDias * 86_400_000;
+      };
       const atrasada =
         !!ultimo &&
         n(ultimo['destino_setor_funcional_id'] ?? o.setorSame) !== o.setorSame &&
-        Date.now() - (ultimo['movimentado_em'] as Date).getTime() > prazoMs;
+        Date.now() > prazoDe(ultimo);
       return {
         conta: n(a['id']),
         numero: Number(texto(a['numero']).replace(/\D/g, '')) || n(a['id']),
@@ -904,20 +932,22 @@ export class PortaAdtPropria implements PortaAdt {
         prontuario: n(a['numero_prontuario']),
         local: ondeEsta,
         devolucaoAtrasada: atrasada,
-        linhaDoTempo: movs.slice(0, 200).map((m) => {
-          const d = civil(m['movimentado_em'] as Date, fuso);
-          return {
-            movimento: n(m['id']),
-            data: d.data,
-            hora: d.hhmm,
-            operacao: { codigo: Number(texto(m['operacao'])) || 0, nome: texto(m['operacao_nome']) },
-            origem: { codigo: n(m['saida_setor_funcional_id']), nome: texto(m['so_nome']) },
-            destino: { codigo: n(m['destino_setor_funcional_id']), nome: texto(m['sd_nome']) },
-            responsavel: texto(m['responsavel_nome']),
-            usuario: texto(m['login']),
-            observacao: m['observacao'] === null ? null : texto(m['observacao']),
-          };
-        }) as unknown as LocalizacaoConta['linhaDoTempo'],
+        linhaDoTempo: movs.slice(0, 200).map((m) => ({
+          id: n(m['id']),
+          operacao: { codigo: Number(texto(m['operacao'])) || 0, nome: texto(m['operacao_nome']) },
+          origem: { codigo: n(m['saida_setor_funcional_id']), nome: texto(m['so_nome']) },
+          destino: { codigo: n(m['destino_setor_funcional_id']), nome: texto(m['sd_nome']) },
+          em: instante(m['movimentado_em'] as Date),
+          usuario: texto(m['login']),
+          responsavel: texto(m['responsavel_nome']),
+          excluido: excluido(m),
+          motivoExclusao: m['motivo_exclusao'] === null ? null : texto(m['motivo_exclusao']),
+          protocolo: m['protocolo'] === null ? null : texto(m['protocolo']),
+          prazoDevolucao: dataCivil(m['prazo_devolucao']),
+          aceito: m['aceite_id'] !== null,
+          cobrada: m['cobranca_id'] !== null,
+        })),
+        ocorrencias: ocorrencias.map((r) => ({ motivo: texto(r['motivo']), em: instante(r['registrado_em'] as Date), por: texto(r['login']) })),
         cortada: movs.length > 200,
       };
     });
@@ -926,20 +956,37 @@ export class PortaAdtPropria implements PortaAdt {
   devolucoesAtrasadas(c: ContextoAdt, o: { setorSame: number; prazoDias: number }) {
     return this.ler(c, async (l, est, fuso) => {
       const linhas = await l.consultar(
-        `SELECT m.id, m.atendimento_id, m.destino_setor_funcional_id, s.nome, m.movimentado_em, m.previsao_retorno
+        `SELECT m.id, m.atendimento_id, m.destino_setor_funcional_id, s.nome, m.movimentado_em, m.previsao_retorno,
+                (SELECT o.prazo_devolucao FROM ocorrencia_arquivo_prontuario o
+                  WHERE o.movimento_prontuario_id = m.id AND o.tipo = 'remessa' AND o.excluido_em IS NULL ORDER BY o.id DESC LIMIT 1) AS prazo_devolucao,
+                EXISTS (SELECT 1 FROM ocorrencia_arquivo_prontuario o
+                  WHERE o.movimento_prontuario_id = m.id AND o.tipo = 'cobranca' AND o.excluido_em IS NULL) AS cobrada
            FROM movimento_prontuario m
            JOIN setor_funcional s ON s.id = m.destino_setor_funcional_id
           WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND m.devolvido_em IS NULL
             AND m.destino_setor_funcional_id <> ?
-            AND m.id = (SELECT MAX(m2.id) FROM movimento_prontuario m2 WHERE m2.volume_prontuario_id = m.volume_prontuario_id AND m2.excluido_em IS NULL)
-            AND COALESCE(m.previsao_retorno, DATE_ADD(m.movimentado_em, INTERVAL ? DAY)) < NOW(3)
+            AND m.id = (SELECT MAX(m2.id) FROM movimento_prontuario m2
+                         WHERE m2.volume_prontuario_id = m.volume_prontuario_id AND m2.excluido_em IS NULL
+                           AND NOT EXISTS (SELECT 1 FROM ocorrencia_arquivo_prontuario x
+                                            WHERE x.movimento_prontuario_id = m2.id AND x.tipo = 'exclusao' AND x.excluido_em IS NULL))
+          HAVING COALESCE(DATE_ADD(prazo_devolucao, INTERVAL 10 HOUR), m.previsao_retorno, DATE_ADD(m.movimentado_em, INTERVAL ? DAY)) < NOW(3)
           ORDER BY m.movimentado_em LIMIT ${TETO_LISTA + 1}`,
         [est, o.setorSame, o.prazoDias],
       );
       const hoje = Date.now();
+      // O banco filtra com folga de fuso (o fim do dia do prazo da remessa cai entre 10h do dia e 14h do dia seguinte
+      // em UTC); o corte exato é aqui, no fuso do estabelecimento. O prazo é o da remessa (até o fim do dia), senão a
+      // previsão de retorno, senão o prazo padrão do arquivo.
+      const prazoDe = (r: Linha) => {
+        const v = r['prazo_devolucao'];
+        const rem = v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : texto(v).slice(0, 10);
+        if (rem) return instanteCivil(rem, '23:59', fuso);
+        return (r['previsao_retorno'] as Date | null) ?? new Date((r['movimentado_em'] as Date).getTime() + o.prazoDias * 86_400_000);
+      };
+      const atrasadas = linhas.filter((r) => prazoDe(r).getTime() < hoje);
       return {
-        itens: linhas.slice(0, TETO_LISTA).map((r) => {
-          const prazo = (r['previsao_retorno'] as Date | null) ?? new Date((r['movimentado_em'] as Date).getTime() + o.prazoDias * 86_400_000);
+        itens: atrasadas.slice(0, TETO_LISTA).map((r) => {
+          const prazo = prazoDe(r);
           return {
             conta: n(r['atendimento_id']),
             movimento: n(r['id']),
@@ -947,11 +994,10 @@ export class PortaAdtPropria implements PortaAdt {
             desde: civil(r['movimentado_em'] as Date, fuso).data,
             prazo: civil(prazo, fuso).data,
             diasAtraso: Math.max(0, Math.floor((hoje - prazo.getTime()) / 86_400_000)),
-            // A cobrança da devolução é registro do SAME sem movimento (modelo pendente, pedido do lote 03-01).
-            cobrada: false,
+            cobrada: verdadeiro(r['cobrada']),
           };
         }),
-        cortada: linhas.length > TETO_LISTA,
+        cortada: atrasadas.length > TETO_LISTA || linhas.length > TETO_LISTA,
       };
     });
   }
@@ -1169,8 +1215,18 @@ export class PortaAdtPropria implements PortaAdt {
 
 // ── Gravações diretas (na transação da operação "internacao.gravacao-direta") ──────────────────────
 
-const modeloPendente = (o: string) =>
-  new ErroOperacao(409, 'modelo-pendente', 'Recurso aguardando o modelo', `${o} aguarda a estrutura no modelo do banco.`);
+/** Idade da tela (anos, 0 a 130) → dias do atributo do tipo de acomodação (o banco guarda a faixa etária em dias). */
+const DIAS_POR_ANO = 365;
+const anosParaDias = (anos: number | null | undefined): number | null => (anos === null || anos === undefined ? null : anos * DIAS_POR_ANO);
+
+/** Tipo de acomodação (categoria) da chave do atributo por tipo: o id do cadastro, como a tela o recebe em `apoio`. */
+async function categoriaDaChave(tx: TxOperacao, chave: string): Promise<number> {
+  const id = Number(chave);
+  if (!Number.isSafeInteger(id) || id <= 0) throw recusa('tipo-acomodacao-inexistente', 'Informe o tipo de acomodação.', { campos: ['chave'] });
+  const r = await tx.uma('SELECT id FROM categoria_acomodacao WHERE id = ?', [id]);
+  if (!r) throw recusa('tipo-acomodacao-inexistente', 'O tipo de acomodação não existe.', { campos: ['chave'] });
+  return id;
+}
 
 function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
   const usuario = () => {
@@ -1332,7 +1388,25 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
       return n(p['id']);
     },
     async limparAtributos(r) {
-      if (r.escopo === 'tipo') throw modeloPendente('O atributo por tipo de acomodação');
+      if (r.escopo === 'tipo') {
+        // O tipo volta ao padrão: os atributos ficam nulos (a linha e a versão guardam o histórico na trilha).
+        const cat = await categoriaDaChave(tx, r.chave);
+        const [a] = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM atributo_categoria_acomodacao WHERE estabelecimento_id = ? AND categoria_acomodacao_id = ?',
+          [est, cat],
+        );
+        if (!a) throw recusa('atributos-inexistentes', 'O tipo de acomodação não tem atributos próprios: já vale o padrão.');
+        await tx.alterar('atributo_categoria_acomodacao', n(a['id']), n(a['versao']), {
+          sexo_permitido: null,
+          criticidade: null,
+          idade_minima_dias: null,
+          idade_maxima_dias: null,
+          andar: null,
+          ramal: null,
+          terapia_intensiva: null,
+        });
+        return n(a['id']);
+      }
       const chave = r.chave.split('|');
       const leito = await leitoDaChave(tx, est, { bloco: chave[0] ?? '', acomodacao: chave[1] ?? '', leito: chave[2] ?? '' });
       const v = await tx.uma('SELECT versao FROM leito_hospitalar WHERE id = ?', [n(leito['id'])]);
@@ -1340,7 +1414,33 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
       return n(leito['id']);
     },
     async gravarAtributo(r) {
-      if (r.escopo === 'tipo') throw modeloPendente('O atributo por tipo de acomodação');
+      if (r.escopo === 'tipo') {
+        const cat = await categoriaDaChave(tx, r.chave);
+        const campos: Record<string, unknown> = {
+          ...(r.andar !== undefined ? { andar: r.andar } : {}),
+          ...(r.sexo !== undefined ? { sexo_permitido: r.sexo === null ? null : (SEXO_DO_LEITO[r.sexo] ?? null) } : {}),
+          ...(r.criticidade !== undefined ? { criticidade: r.criticidade ? (CRITICIDADES[r.criticidade - 1] ?? null) : null } : {}),
+          ...(r.ramal !== undefined ? { ramal: r.ramal === null ? null : String(r.ramal) } : {}),
+          ...(r.idadeMinima !== undefined ? { idade_minima_dias: anosParaDias(r.idadeMinima) } : {}),
+          ...(r.idadeMaxima !== undefined ? { idade_maxima_dias: anosParaDias(r.idadeMaxima) } : {}),
+          ...(r.intensiva !== undefined ? { terapia_intensiva: r.intensiva } : {}),
+        };
+        const [a] = await tx.consultarParaAtualizar(
+          `SELECT id, versao, sexo_permitido, criticidade, idade_minima_dias, idade_maxima_dias, andar, ramal, terapia_intensiva
+             FROM atributo_categoria_acomodacao WHERE estabelecimento_id = ? AND categoria_acomodacao_id = ?`,
+          [est, cat],
+        );
+        if (!a) {
+          await tx.incluir('atributo_categoria_acomodacao', { estabelecimento_id: est, categoria_acomodacao_id: cat, ...campos });
+          return;
+        }
+        const proprios = ['sexo_permitido', 'criticidade', 'idade_minima_dias', 'idade_maxima_dias', 'andar', 'ramal', 'terapia_intensiva'].some(
+          (c) => a[c] !== null,
+        );
+        if (proprios && !r.motivo) throw recusa('motivo-obrigatorio', 'Informe o motivo da mudança dos atributos do tipo de acomodação.', { campos: ['motivo'] });
+        await tx.alterar('atributo_categoria_acomodacao', n(a['id']), n(a['versao']), campos);
+        return;
+      }
       const chave = r.chave.split('|');
       const leito = await leitoDaChave(tx, est, { bloco: chave[0] ?? '', acomodacao: chave[1] ?? '', leito: chave[2] ?? '' });
       const atual = await tx.uma('SELECT versao, sexo_permitido, criticidade FROM leito_hospitalar WHERE id = ?', [n(leito['id'])]);
@@ -1407,8 +1507,42 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         });
       return r.solicitacao;
     },
-    async gravarSameExt() {
-      throw modeloPendente('O registro do SAME sem movimento (ocorrência, aceite e cobrança)');
+    async gravarSameExt(r) {
+      // Ocorrência do arquivo de prontuários que não é movimento físico do volume (remessa, aceite, cobrança,
+      // exclusão, ocorrência e descarte). A conta é o atendimento; o movimento, quando vier, é desta conta (do
+      // atendimento ou, sem atendimento, do volume do mesmo paciente).
+      const a = await tx.uma('SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [r.conta, est]);
+      if (!a) throw new ErroOperacao(404, 'registro-inexistente', 'Conta não encontrada', 'O atendimento não existe neste estabelecimento.');
+      if (r.movimento !== null) {
+        const m = await tx.uma(
+          `SELECT id FROM movimento_prontuario
+            WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND (atendimento_id = ? OR atendimento_id IS NULL)
+              AND excluido_em IS NULL`,
+          [r.movimento, est, n(a['paciente_id']), r.conta],
+        );
+        if (!m) throw recusa('movimento-inexistente', 'O movimento não é desta conta ou foi desfeito.', { campos: ['movimento'] });
+      }
+      const motivo = r.motivo?.trim() || null;
+      if (['exclusao', 'descarte', 'ocorrencia'].includes(r.tipo) && !motivo)
+        throw recusa('motivo-obrigatorio', 'Informe o motivo do registro.', { campos: ['motivo'] });
+      const aval = r.avalComissao?.trim() || null;
+      if (r.tipo === 'descarte' && !aval)
+        throw recusa('aval-obrigatorio', 'O descarte exige o aval da comissão de revisão de prontuários.', { campos: ['avalComissao'] });
+      const prazo = r.prazoDevolucao ?? null;
+      if (prazo !== null && !/^\d{4}-\d{2}-\d{2}$/.test(prazo))
+        throw recusa('data.formato', 'O prazo de devolução é uma data AAAA-MM-DD.', { campos: ['prazoDevolucao'] });
+      return tx.incluir('ocorrencia_arquivo_prontuario', {
+        estabelecimento_id: est,
+        atendimento_id: r.conta,
+        movimento_prontuario_id: r.movimento,
+        tipo: r.tipo,
+        motivo,
+        protocolo: r.protocolo?.trim() || null,
+        prazo_devolucao: prazo,
+        aval_comissao: aval,
+        registrado_em: new Date(),
+        usuario_id: usuario(),
+      });
     },
   };
 }

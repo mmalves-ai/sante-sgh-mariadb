@@ -16,7 +16,6 @@ import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -36,7 +35,6 @@ import {
   type EscritaDireta,
   gravadorCirurgia,
   OPERACOES_CIRURGIA,
-  OPERACOES_CIRURGIA_PENDENTES,
   TABELAS_GRAVACAO_DIRETA,
 } from './operacoes.js';
 import {
@@ -139,8 +137,6 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
   }
 
   async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
-    const pendente = OPERACOES_CIRURGIA_PENDENTES[op];
-    if (pendente) return { pode: false, codigo: 'modelo-pendente', motivo: pendente };
     const operacao = OPERACOES_CIRURGIA[op];
     if (!operacao) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return this.executor.liberacao(operacao, {
@@ -152,8 +148,6 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
   }
 
   async executar(c: ContextoPortaM18, op: string, entrada: unknown, ctx: ContextoOperacao) {
-    const pendente = OPERACOES_CIRURGIA_PENDENTES[op];
-    if (pendente) throw new ErroOperacao(409, 'modelo-pendente', 'Operação aguardando o modelo', pendente);
     const operacao = OPERACOES_CIRURGIA[op];
     if (!operacao) throw recusa('operacao-desconhecida', 'Operação desconhecida no centro cirúrgico.');
     const r = await this.executor.executar(operacao, c.cliente, entrada, ctx);

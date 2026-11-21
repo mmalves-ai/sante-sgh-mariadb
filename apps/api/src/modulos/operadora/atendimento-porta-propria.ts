@@ -12,9 +12,13 @@
 // (a conta do portal, pela operadora que atua nele).
 // Melhoria: o protocolo encerrado ou cancelado guarda quando (CHECK); a resposta por e-mail exige o destinatário
 // (CHECK); o login do portal é único por operadora (UNIQUE).
-// Pendente (pedido ao orquestrador): registro do protocolo (instância, natureza, classe, canal, assunto, NIP, escrita e
-// reanálise ainda sem coluna), interação, prorrogação, resposta por escrito, reanálise, credenciais e tentativas do
-// portal (identidade no módulo de administração) e anexos da resposta do prestador respondem 501 `modelo-pendente`.
+// Melhoria: o protocolo guarda a instância, a natureza, a classe (assistencial ou não), o canal, o assunto, o número da
+// NIP, a prorrogação do prazo (com motivo, por CHECK), o pedido e o envio da resposta por escrito, e a reanálise é um
+// protocolo novo que aponta o anterior (reanalise_de_protocolo_beneficiario_id). O motivo de contato do cadastro é o
+// primeiro ativo do tipo que corresponde à natureza; sem nenhum, a gravação recusa com o tipo a cadastrar.
+// Melhoria: o tipo de prazo guarda imediato, complexo ou padrão (CHECK); o padrão volta pela instância e pela classe.
+// Ainda indisponível (pedido em saida/09-operadora.json): credenciais e tentativas do portal, que ficam na identidade do
+// módulo de administração, e os anexos da resposta do prestador, que esperam o armazenamento de arquivos (ADR 0004).
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
@@ -23,6 +27,7 @@ import {
   inexistente,
   instante,
   type NucleoOperadora,
+  bool,
   num,
   numOuNulo,
   pendente,
@@ -84,6 +89,35 @@ const SITUACAO_CONTA: Readonly<Record<string, DadosAcessoPortalPrestador['situac
   bloqueada: 'ativo',
   encerrada: 'encerrado',
 };
+/** Valor do contrato (com hífen) ↔ valor do banco (snake_case). */
+const paraBanco = (v: string): string => v.replace(/-/g, '_');
+const doBanco = (v: unknown): string => txt(v).replace(/_/g, '-');
+/** Tipo do motivo de contato do cadastro que corresponde à natureza da demanda. */
+const tipoContato = (natureza: string): string =>
+  natureza === 'informacao' ? 'informacao' : natureza.startsWith('reclamacao') ? 'reclamacao' : 'solicitacao';
+/** Só imediato e complexo são guardados; o prazo padrão volta pela instância e pela classe. */
+const prazoDoBanco = (p: Linha): string => {
+  const t = txt(p['prazo_tipo']);
+  if (t === 'imediato' || t === 'complexo') return t;
+  const assistencial = txt(p['classe']) !== 'nao_assistencial';
+  const instancia = txt(p['instancia']);
+  if (instancia === 'ouvidoria') return 'ouvidoria';
+  if (instancia === 'nip') return assistencial ? 'nip-assistencial' : 'nip-nao-assistencial';
+  return assistencial ? 'assistencial' : 'nao-assistencial';
+};
+
+/** Quem fez o contato ↔ grau do vínculo do solicitante no cadastro. */
+const GRAU_SOLICITANTE: Readonly<Record<string, string>> = {
+  beneficiario: 'proprio',
+  representante: 'representante_legal',
+  prestador: 'prestador',
+  ans: 'orgao_publico',
+  outro: 'terceiro',
+};
+const SOLICITANTE_DO_GRAU: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(GRAU_SOLICITANTE).map(([k, v]) => [v, k]),
+);
+
 const MEIOS = ['email', 'carta', 'portal', 'aplicativo', 'mensagem', 'telefone', 'presencial'] as const;
 
 const SELECT_PROTOCOLO = `
@@ -97,7 +131,10 @@ const SELECT_PROTOCOLO = `
          (SELECT r.criado_em FROM protocolo_beneficiario_resposta r WHERE r.protocolo_beneficiario_id = p.id
            ORDER BY r.sequencia DESC LIMIT 1) AS respondido_em,
          (SELECT u.login FROM protocolo_beneficiario_resposta r JOIN usuario u ON u.id = r.respondido_por_usuario_id
-           WHERE r.protocolo_beneficiario_id = p.id ORDER BY r.sequencia DESC LIMIT 1) AS respondido_por
+           WHERE r.protocolo_beneficiario_id = p.id ORDER BY r.sequencia DESC LIMIT 1) AS respondido_por,
+         (SELECT a.mensagem FROM protocolo_beneficiario_andamento a WHERE a.protocolo_beneficiario_id = p.id
+             AND a.acao = 'resposta' AND a.excluido_em IS NULL ORDER BY a.sequencia DESC LIMIT 1) AS conclusao,
+         ra.numero_protocolo AS reanalise_de_numero, vs.grau AS solicitante_grau
     FROM protocolo_beneficiario p
     JOIN origem_protocolo op ON op.id = p.origem_protocolo_id
     JOIN motivo_contato_beneficiario mc ON mc.id = p.motivo_contato_beneficiario_id
@@ -106,33 +143,41 @@ const SELECT_PROTOCOLO = `
     LEFT JOIN contrato_plano k ON k.id = b.contrato_plano_id
     LEFT JOIN operadora_saude_estabelecimento oe ON oe.estabelecimento_id = p.estabelecimento_id AND oe.principal = TRUE
          AND oe.excluido_em IS NULL
-    LEFT JOIN pedido_autorizacao_plano pa ON pa.id = p.pedido_autorizacao_plano_id`;
+    LEFT JOIN pedido_autorizacao_plano pa ON pa.id = p.pedido_autorizacao_plano_id
+    LEFT JOIN protocolo_beneficiario ra ON ra.id = p.reanalise_de_protocolo_beneficiario_id
+    LEFT JOIN vinculo_solicitante_protocolo vs ON vs.id = p.vinculo_solicitante_protocolo_id`;
 
 function resumoDe(p: Linha, agora: string): DadosProtocoloResumo {
   const situacao = SITUACAO_DO_BANCO[txt(p['situacao'])] ?? 'aberto';
   const prazo = instante(p['prazo_em']) ?? '';
+  const prorrogadoAte = instante(p['prorrogado_ate']);
+  const limite = prorrogadoAte ?? prazo;
+  const escritaPedida = p['escrita_pedida_em'] !== null && p['escrita_pedida_em'] !== undefined;
+  const escritaEnviadaEm = instante(p['escrita_enviada_em']);
+  const escritaPrazoEm = instante(p['escrita_prazo_em']);
   return {
     id: num(p['id']),
     operadora: num(p['operadora_saude_id'] ?? p['operadora_vinculada']),
     protocolo: txt(p['numero_protocolo']),
-    instancia: '',
-    natureza: txt(p['tipo_contato']),
-    classe: txt(p['motivo_codigo']),
-    canal: txt(p['origem_codigo']),
+    instancia: p['instancia'] ? txt(p['instancia']) : 'atendimento',
+    natureza: p['natureza'] ? doBanco(p['natureza']) : txt(p['tipo_contato']),
+    classe: p['classe'] ? doBanco(p['classe']) : txt(p['motivo_codigo']),
+    canal: p['canal'] ? doBanco(p['canal']) : txt(p['origem_codigo']),
     beneficiario: numOuNulo(p['beneficiario_plano_id']),
     beneficiarioNome: txtOuNulo(p['beneficiario_nome']),
     carteirinha: txtOuNulo(p['matricula']),
     prestador: numOuNulo(p['prestador_rede_id']),
-    assunto: txt(p['motivo_descricao']),
+    assunto: p['assunto'] ? txt(p['assunto']) : txt(p['motivo_descricao']),
     situacao,
     abertoEm: instante(p['aberto_em']) ?? '',
     prazoEm: prazo,
-    prorrogadoAte: null,
-    vencido: (situacao === 'aberto' || situacao === 'em-analise') && prazo !== '' && prazo < agora,
-    escritaPedida: false,
-    escritaEnviadaEm: null,
-    escritaVencida: false,
-    conclusao: null,
+    prorrogadoAte,
+    vencido: (situacao === 'aberto' || situacao === 'em-analise') && limite !== '' && limite < agora,
+    escritaPedida,
+    escritaEnviadaEm,
+    escritaVencida:
+      escritaPedida && escritaEnviadaEm === null && escritaPrazoEm !== null && escritaPrazoEm < agora,
+    conclusao: txtOuNulo(p['conclusao']),
     versao: num(p['versao']),
   };
 }
@@ -221,11 +266,20 @@ export class PortaAtendimentoOperadoraPropria
       cond.push(`p.situacao IN (${s.map(() => '?').join(', ')})`);
       p.push(...s);
     }
-    if (f.natureza) {
-      cond.push('mc.tipo_contato = ?');
-      p.push(f.natureza);
+    if (f.instancia) {
+      cond.push("COALESCE(p.instancia, 'atendimento') = ?");
+      p.push(f.instancia);
     }
-    if (f.vencidos) cond.push("p.situacao IN ('aberto','em_andamento','aguardando_solicitante') AND p.prazo_em < NOW()");
+    if (f.natureza) {
+      cond.push('p.natureza = ?');
+      p.push(paraBanco(f.natureza));
+    }
+    if (f.vencidos)
+      cond.push(
+        `((p.situacao IN ('aberto','em_andamento','aguardando_solicitante') AND COALESCE(p.prorrogado_ate, p.prazo_em) < NOW())
+          OR (p.situacao = 'respondido' AND p.escrita_pedida_em IS NOT NULL AND p.escrita_enviada_em IS NULL
+              AND p.escrita_prazo_em < NOW()))`,
+      );
     if (f.busca) {
       cond.push('(p.numero_protocolo = ? OR b.matricula = ?)');
       p.push(f.busca, f.busca);
@@ -236,7 +290,10 @@ export class PortaAtendimentoOperadoraPropria
     }
     return this.ler(c, async (l) => {
       const agora = await this.agoraDo(l);
-      const linhas = await l.consultar(`${SELECT_PROTOCOLO} WHERE ${cond.join(' AND ')} ORDER BY p.id DESC LIMIT ${limite + 1}`, p);
+      const linhas = await l.consultar(
+        `${SELECT_PROTOCOLO} WHERE ${cond.join(' AND ')} ORDER BY p.id DESC LIMIT ${limite + 1}`,
+        p,
+      );
       const itens = linhas.slice(0, limite).map((x) => resumoDe(x, agora));
       return { itens, proxima: linhas.length > limite ? (itens.at(-1)?.id ?? null) : null };
     });
@@ -247,7 +304,9 @@ export class PortaAtendimentoOperadoraPropria
       const t = await l.uma(
         `SELECT SUM(situacao = 'aberto') AS abertos,
                 SUM(situacao IN ('em_andamento','aguardando_solicitante')) AS em_analise,
-                SUM(situacao IN ('aberto','em_andamento','aguardando_solicitante') AND prazo_em < NOW()) AS vencidos,
+                SUM(situacao IN ('aberto','em_andamento','aguardando_solicitante')
+                    AND COALESCE(prorrogado_ate, prazo_em) < NOW()) AS vencidos,
+                SUM(situacao = 'respondido' AND escrita_pedida_em IS NOT NULL AND escrita_enviada_em IS NULL) AS escrita,
                 (SELECT COUNT(*) FROM protocolo_beneficiario_resposta r JOIN protocolo_beneficiario x
                     ON x.id = r.protocolo_beneficiario_id
                   WHERE x.estabelecimento_id = ? AND DATE(r.criado_em) = CURRENT_DATE) AS hoje
@@ -258,7 +317,7 @@ export class PortaAtendimentoOperadoraPropria
         abertos: num(t?.['abertos']),
         emAnalise: num(t?.['em_analise']),
         vencidos: num(t?.['vencidos']),
-        escritaPendente: 0,
+        escritaPendente: num(t?.['escrita']),
         respondidosHoje: num(t?.['hoje']),
       };
     });
@@ -266,15 +325,17 @@ export class PortaAtendimentoOperadoraPropria
 
   protocolo(c: ContextoAtendimento, id: number): Promise<DadosProtocolo | null> {
     return this.ler(c, async (l) => {
-      const p = await l.uma(`${SELECT_PROTOCOLO} WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const p = await l.uma(
+        `${SELECT_PROTOCOLO} WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       if (!p) return null;
       return {
         ...resumoDe(p, await this.agoraDo(l)),
         origem: num(p['origem_protocolo_id']),
-        solicitante: p['beneficiario_plano_id'] ? 'beneficiario' : p['prestador_rede_id'] ? 'prestador' : 'terceiro',
+        solicitante:
+          SOLICITANTE_DO_GRAU[txt(p['solicitante_grau'])] ??
+          (p['beneficiario_plano_id'] ? 'beneficiario' : p['prestador_rede_id'] ? 'prestador' : 'outro'),
         solicitanteNome: txtOuNulo(p['solicitante_nome']),
         autorizacao: p['pedido_autorizacao_plano_id']
           ? {
@@ -283,29 +344,44 @@ export class PortaAtendimentoOperadoraPropria
               situacao: txt(p['autorizacao_situacao']).replace('_', '-'),
             }
           : null,
-        origemProtocolo: null,
-        numeroNip: null,
-        urgente: false,
-        altaComplexidade: false,
+        origemProtocolo: p['reanalise_de_protocolo_beneficiario_id']
+          ? { id: num(p['reanalise_de_protocolo_beneficiario_id']), protocolo: txt(p['reanalise_de_numero']) }
+          : null,
+        numeroNip: txtOuNulo(p['numero_nip']),
+        urgente: bool(p['urgente']),
+        altaComplexidade: bool(p['alta_complexidade']),
         relato: txt(p['detalhe']),
-        prazoTipo: 'padrao',
-        prorrogacaoMotivo: null,
+        prazoTipo: prazoDoBanco(p),
+        prorrogacaoMotivo: txtOuNulo(p['motivo_prorrogacao']),
         resposta: txtOuNulo(p['resposta']),
         fundamento: txtOuNulo(p['consideracao_operadora']),
         meio: txtOuNulo(p['resposta_meio']),
         respondidoEm: instante(p['respondido_em']),
         respondidoPor: txtOuNulo(p['respondido_por']),
-        escritaPedidaEm: null,
-        escritaPrazoEm: null,
-        escritaMeio: null,
+        escritaPedidaEm: instante(p['escrita_pedida_em']),
+        escritaPrazoEm: instante(p['escrita_prazo_em']),
+        escritaMeio: txtOuNulo(p['escrita_meio']),
         encerradoEm: instante(p['encerrado_em']),
-        motivoCancelamento: txt(p['situacao']) === 'cancelado' ? txtOuNulo(p['consideracao_operadora']) : null,
+        motivoCancelamento:
+          txt(p['situacao']) === 'cancelado' ? txtOuNulo(p['consideracao_operadora']) : null,
       };
     });
   }
 
-  async reanalises(): Promise<DadosReanalise[]> {
-    return [];
+  reanalises(c: ContextoAtendimento, id: number): Promise<DadosReanalise[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT id, numero_protocolo, situacao FROM protocolo_beneficiario
+            WHERE reanalise_de_protocolo_beneficiario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL ORDER BY id`,
+          [id, c.estabelecimento ?? 0],
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        protocolo: txt(x['numero_protocolo']),
+        situacao: SITUACAO_DO_BANCO[txt(x['situacao'])] ?? 'aberto',
+      })),
+    );
   }
 
   eventos(c: ContextoAtendimento, id: number): Promise<DadosEventoProtocolo[]> {
@@ -331,14 +407,20 @@ export class PortaAtendimentoOperadoraPropria
     );
   }
 
-  consulta(c: ContextoAtendimento, numero: string, prestador?: number): Promise<DadosConsultaProtocolo | null> {
+  consulta(
+    c: ContextoAtendimento,
+    numero: string,
+    prestador?: number,
+  ): Promise<DadosConsultaProtocolo | null> {
     return this.ler(c, async (l) => {
       const agora = await this.agoraDo(l);
       const p = await l.uma(
         `SELECT id, numero_protocolo, situacao, aberto_em, prazo_em, prestador_rede_id FROM protocolo_beneficiario
           WHERE estabelecimento_id = ? AND numero_protocolo = ? AND excluido_em IS NULL
             ${prestador !== undefined ? 'AND prestador_rede_id = ?' : ''}`,
-        prestador !== undefined ? [c.estabelecimento ?? 0, numero, prestador] : [c.estabelecimento ?? 0, numero],
+        prestador !== undefined
+          ? [c.estabelecimento ?? 0, numero, prestador]
+          : [c.estabelecimento ?? 0, numero],
       );
       if (p) {
         const r = resumoDe(p, agora);
@@ -358,7 +440,9 @@ export class PortaAtendimentoOperadoraPropria
            FROM pedido_autorizacao_plano
           WHERE estabelecimento_id = ? AND protocolo = ? AND excluido_em IS NULL
             ${prestador !== undefined ? 'AND solicitante_prestador_rede_id = ?' : ''}`,
-        prestador !== undefined ? [c.estabelecimento ?? 0, numero, prestador] : [c.estabelecimento ?? 0, numero],
+        prestador !== undefined
+          ? [c.estabelecimento ?? 0, numero, prestador]
+          : [c.estabelecimento ?? 0, numero],
       );
       if (!a) return null;
       const prazo = instante(a['prazo_em']) ?? '';
@@ -384,13 +468,24 @@ export class PortaAtendimentoOperadoraPropria
     return [];
   }
 
-  async anexoDaResposta(): Promise<{ protocolo: number; nome: string; tipo: string; sha256: string; bytes: Buffer } | null> {
+  async anexoDaResposta(): Promise<{
+    protocolo: number;
+    nome: string;
+    tipo: string;
+    sha256: string;
+    bytes: Buffer;
+  } | null> {
     return pendente('Anexo da resposta do prestador (armazenamento de arquivos)');
   }
 
   // ---- contas do portal do prestador ----
 
-  private contasDoPortal(l: Leitor, est: number, filtro: string, p: unknown[]): Promise<DadosAcessoPortalPrestador[]> {
+  private contasDoPortal(
+    l: Leitor,
+    est: number,
+    filtro: string,
+    p: unknown[],
+  ): Promise<DadosAcessoPortalPrestador[]> {
     return l
       .consultar(
         `SELECT cp.*, pr.nome AS prestador_nome, pf.nome AS operador_nome, fp.codigo AS funcao_codigo
@@ -432,7 +527,10 @@ export class PortaAtendimentoOperadoraPropria
   }
 
   async acesso(c: ContextoAtendimento, id: number): Promise<DadosAcessoPortalPrestador | null> {
-    return (await this.ler(c, (l) => this.contasDoPortal(l, c.estabelecimento ?? 0, 'AND cp.id = ?', [id])))[0] ?? null;
+    return (
+      (await this.ler(c, (l) => this.contasDoPortal(l, c.estabelecimento ?? 0, 'AND cp.id = ?', [id])))[0] ??
+      null
+    );
   }
 
   async acessoParaEntrada(): Promise<DadosAcessoPortalParaEntrada | null> {
@@ -449,7 +547,15 @@ export class PortaAtendimentoOperadoraPropria
       return p;
     };
     const andamento = async (id: number, tipo: string, acao: string, mensagem: string | null) => {
-      const seq = num((await tx.uma('SELECT MAX(sequencia) AS s FROM protocolo_beneficiario_andamento WHERE protocolo_beneficiario_id = ?', [id]))?.['s']) + 1;
+      const seq =
+        num(
+          (
+            await tx.uma(
+              'SELECT MAX(sequencia) AS s FROM protocolo_beneficiario_andamento WHERE protocolo_beneficiario_id = ?',
+              [id],
+            )
+          )?.['s'],
+        ) + 1;
       await tx.incluir('protocolo_beneficiario_andamento', {
         protocolo_beneficiario_id: id,
         sequencia: seq,
@@ -464,12 +570,76 @@ export class PortaAtendimentoOperadoraPropria
       if (['encerrado', 'cancelado'].includes(txt(p['situacao'])))
         throw recusa('protocolo-encerrado', 'O protocolo já foi encerrado.');
     };
+    /** A situação vista na tela ainda é a do banco (senão, conflito de versão, como a trava otimista). */
+    const naSituacao = async (id: number, situacao: string) => {
+      const p = await protocolo(id);
+      if ((SITUACAO_DO_BANCO[txt(p['situacao'])] ?? '') !== situacao)
+        throw recusa('conflito-versao', 'O protocolo mudou de situação; recarregue a tela.');
+      return p;
+    };
+    const registrar = async (r: Parameters<GravadorAtendimento['registrar']>[0]) => {
+      await exigirOperadora(tx, est, r.operadora);
+      if (!(await tx.uma('SELECT id FROM origem_protocolo WHERE id = ? AND ativo = TRUE', [r.origem])))
+        throw recusa('origem-inexistente', 'A origem do atendimento não está no cadastro.', {
+          campos: ['origem'],
+        });
+      const tipo = tipoContato(r.natureza);
+      const motivo = await tx.uma(
+        'SELECT id FROM motivo_contato_beneficiario WHERE tipo_contato = ? AND ativo = TRUE ORDER BY id LIMIT 1',
+        [tipo],
+      );
+      if (!motivo)
+        throw recusa(
+          'motivo-contato-ausente',
+          `Cadastre um motivo de contato do beneficiário do tipo "${tipo}" antes de registrar este protocolo.`,
+          { campos: ['natureza'] },
+        );
+      if (r.origemProtocolo !== null) await protocolo(r.origemProtocolo);
+      // O vínculo do solicitante é o primeiro ativo do grau; sem cadastro, fica vazio (a coluna é opcional).
+      const vinculo = await tx.uma(
+        'SELECT id FROM vinculo_solicitante_protocolo WHERE grau = ? AND ativo = TRUE ORDER BY id LIMIT 1',
+        [GRAU_SOLICITANTE[r.solicitante] ?? 'terceiro'],
+      );
+      const id = await tx.incluir('protocolo_beneficiario', {
+        estabelecimento_id: est,
+        operadora_saude_id: r.operadora,
+        numero_protocolo: r.protocolo,
+        origem_protocolo_id: r.origem,
+        beneficiario_plano_id: r.beneficiario,
+        prestador_rede_id: r.prestador,
+        vinculo_solicitante_protocolo_id: vinculo ? num(vinculo['id']) : null,
+        solicitante_nome:
+          r.solicitanteNome ??
+          (r.beneficiario === null && r.prestador === null && r.solicitante === 'ans' ? 'ANS' : null),
+        motivo_contato_beneficiario_id: num(motivo['id']),
+        pedido_autorizacao_plano_id: r.autorizacao,
+        atendente_usuario_id: tx.contexto.usuario,
+        aberto_em: new Date(r.abertoEm),
+        prazo_em: new Date(r.prazoEm),
+        detalhe: r.relato,
+        instancia: r.instancia,
+        natureza: paraBanco(r.natureza),
+        classe: paraBanco(r.classe),
+        canal: paraBanco(r.canal),
+        assunto: r.assunto,
+        numero_nip: r.numeroNip,
+        urgente: r.urgente,
+        alta_complexidade: r.altaComplexidade,
+        prazo_tipo: r.prazoTipo === 'imediato' || r.prazoTipo === 'complexo' ? r.prazoTipo : 'padrao',
+        escrita_pedida_em: r.escritaPedida ? new Date(r.abertoEm) : null,
+        reanalise_de_protocolo_beneficiario_id: r.origemProtocolo,
+        situacao: 'aberto',
+      });
+      await andamento(id, 'mudanca_fase', 'registro', `Protocolo ${r.protocolo}`);
+      return { id, versao: 1 };
+    };
     return {
       proximoProtocolo: async () => (await tx.proximoNumero('protocolo_atendimento')).valor,
-      registrar: () => pendente('Registro do protocolo de atendimento (instância, natureza, canal e assunto)'),
+      registrar,
       async analisar(a) {
         const p = await protocolo(a.id);
-        if (txt(p['situacao']) !== 'aberto') throw recusa('protocolo-em-analise', 'O protocolo já está em análise.');
+        if (txt(p['situacao']) !== 'aberto')
+          throw recusa('protocolo-em-analise', 'O protocolo já está em análise.');
         const versao = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {
           situacao: 'em_andamento',
           atendente_usuario_id: tx.contexto.usuario,
@@ -477,13 +647,34 @@ export class PortaAtendimentoOperadoraPropria
         await andamento(a.id, 'mudanca_fase', 'analise', null);
         return { id: a.id, versao };
       },
-      interagir: () => pendente('Interação no protocolo'),
-      prorrogar: () => pendente('Prorrogação do prazo do protocolo'),
+      async interagir(a) {
+        emAberto(await naSituacao(a.id, a.situacao));
+        const versao = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {});
+        await andamento(a.id, 'mensagem', 'interacao', a.texto);
+        return { id: a.id, versao };
+      },
+      async prorrogar(a) {
+        emAberto(await naSituacao(a.id, a.situacao));
+        const versao = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {
+          prorrogado_ate: new Date(a.ate),
+          motivo_prorrogacao: a.motivo,
+        });
+        await andamento(a.id, 'ocorrencia', 'prorrogacao', `Prazo até ${a.ate.slice(0, 10)}: ${a.motivo}`);
+        return { id: a.id, versao };
+      },
       async responder(a) {
         const p = await protocolo(a.id);
         emAberto(p);
         const meio = (MEIOS as readonly string[]).includes(a.meio) ? a.meio : 'portal';
-        const seq = num((await tx.uma('SELECT MAX(sequencia) AS s FROM protocolo_beneficiario_resposta WHERE protocolo_beneficiario_id = ?', [a.id]))?.['s']) + 1;
+        const seq =
+          num(
+            (
+              await tx.uma(
+                'SELECT MAX(sequencia) AS s FROM protocolo_beneficiario_resposta WHERE protocolo_beneficiario_id = ?',
+                [a.id],
+              )
+            )?.['s'],
+          ) + 1;
         await tx.incluir('protocolo_beneficiario_resposta', {
           protocolo_beneficiario_id: a.id,
           sequencia: seq,
@@ -501,8 +692,27 @@ export class PortaAtendimentoOperadoraPropria
         await andamento(a.id, 'mudanca_fase', 'resposta', a.conclusao);
         return { id: a.id, versao };
       },
-      pedirEscrita: () => pendente('Pedido de resposta por escrito'),
-      enviarEscrita: () => pendente('Envio da resposta por escrito'),
+      async pedirEscrita(a) {
+        emAberto(await naSituacao(a.id, a.situacao));
+        const versao = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {
+          escrita_pedida_em: new Date(a.pedidaEm),
+          escrita_prazo_em: a.escritaPrazoEm === null ? null : new Date(a.escritaPrazoEm),
+        });
+        await andamento(a.id, 'ocorrencia', 'escrita-pedida', null);
+        return { id: a.id, versao };
+      },
+      async enviarEscrita(a) {
+        const p = await naSituacao(a.id, 'respondido');
+        if (p['escrita_pedida_em'] === null || p['escrita_pedida_em'] === undefined)
+          throw recusa('escrita-nao-pedida', 'A resposta por escrito não foi pedida neste protocolo.');
+        const meio = (MEIOS as readonly string[]).includes(a.meio) ? a.meio : 'carta';
+        const versao = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {
+          escrita_enviada_em: new Date(),
+          escrita_meio: meio,
+        });
+        await andamento(a.id, 'ocorrencia', 'escrita-enviada', `Meio: ${meio}`);
+        return { id: a.id, versao };
+      },
       async encerrar(a) {
         const p = await protocolo(a.id);
         emAberto(p);
@@ -524,14 +734,26 @@ export class PortaAtendimentoOperadoraPropria
         await andamento(a.id, 'mudanca_fase', 'cancelamento', a.motivo);
         return { id: a.id, versao };
       },
-      reanalise: () => pendente('Reanálise do protocolo'),
+      async reanalise(a) {
+        await naSituacao(a.id, a.situacao);
+        const versaoOrigem = await tx.alterar('protocolo_beneficiario', a.id, a.versao, {});
+        const novo = await registrar({ ...a.novo, origemProtocolo: a.id });
+        await andamento(
+          a.id,
+          'ocorrencia',
+          'reanalise',
+          `Reanálise na ouvidoria: protocolo ${a.novo.protocolo}`,
+        );
+        return { ...novo, origem: { id: a.id, versao: versaoOrigem } };
+      },
       criarAcesso: () => pendente('Criação da conta do portal (ativação no módulo de administração)'),
       alterarAcesso: () => pendente('Alteração da conta do portal (funções múltiplas)'),
       reemitirAcesso: () => pendente('Reemissão da ativação do portal'),
       async encerrarAcesso(a) {
         const cp = await versaoDe(tx, 'conta_portal_prestador', a.id, 'A conta do portal');
         await exigirOperadora(tx, est, num(cp['operadora_saude_id']));
-        if (txt(cp['situacao']) === 'encerrada') throw recusa('acesso-encerrado', 'A conta do portal já foi encerrada.');
+        if (txt(cp['situacao']) === 'encerrada')
+          throw recusa('acesso-encerrado', 'A conta do portal já foi encerrada.');
         const versao = await tx.alterar('conta_portal_prestador', a.id, a.versao, {
           situacao: 'encerrada',
           encerrada_em: new Date(),

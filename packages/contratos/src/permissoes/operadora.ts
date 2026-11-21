@@ -30,7 +30,7 @@ const p = (
 ): DeclaracaoPermissao => ({
   codigo,
   descricao,
-  opcoesLegado: [],
+
   concessaoPorPerfil: 'por-perfil',
   perfis,
   categoria: 'administrativa',

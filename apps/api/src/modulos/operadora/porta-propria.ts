@@ -28,8 +28,9 @@
 // Melhoria: a regravação do produto só mexe no que mudou: a segmentação sai por exclusão lógica (com versão e trilha),
 // e um preço novo encerra a tabela vigente e abre outra (o histórico de preços fica para o reajuste e as mensalidades
 // já calculadas); nada é apagado.
-// Enquanto o produto não tem a operadora dona (pedido de DDL), só a operadora principal do estabelecimento grava
-// produto (as outras: 501 modelo-pendente), para a leitura e a gravação dos preços não divergirem.
+// Melhoria: o produto guarda a operadora dona (produto_plano.operadora_saude_id) e a natureza (plano ou cartão de
+// desconto). A linha antiga sem operadora é lida como da operadora principal do estabelecimento e passa a gravá-la na
+// primeira alteração; a operadora dona não muda depois (os preços e a coparticipação são dela).
 import { FAIXAS_ETARIAS_ANS } from '@sgh/contratos';
 import {
   definirOperacao,
@@ -55,7 +56,6 @@ import {
   inteiro,
   type MapaRestricoes,
   marcadores,
-  modeloPendente,
   type NucleoOperadora,
   numero,
   semEstabelecimento,
@@ -127,11 +127,31 @@ export const TABELAS_OPERADORA = [
 ] as const;
 
 const RESTRICOES: MapaRestricoes = {
-  uq_operadora_saude_registro_ans: ['registro-ans-em-uso', 'Já existe operadora com este registro na ANS.', 'registroAns'],
-  uq_produto_plano_codigo: ['codigo-em-uso', 'Já existe produto com este código no estabelecimento.', 'codigo'],
-  uq_plano_comercializado_codigo: ['codigo-em-uso', 'Já existe plano com este código no estabelecimento.', 'codigo'],
-  uq_produto_plano_registro: ['registro-ans-em-uso', 'Já existe produto com este registro na ANS.', 'registroAns'],
-  uq_contrato_plano_numero: ['numero-em-uso', 'Já existe contrato com este número no estabelecimento.', 'numero'],
+  uq_operadora_saude_registro_ans: [
+    'registro-ans-em-uso',
+    'Já existe operadora com este registro na ANS.',
+    'registroAns',
+  ],
+  uq_produto_plano_codigo: [
+    'codigo-em-uso',
+    'Já existe produto com este código no estabelecimento.',
+    'codigo',
+  ],
+  uq_plano_comercializado_codigo: [
+    'codigo-em-uso',
+    'Já existe plano com este código no estabelecimento.',
+    'codigo',
+  ],
+  uq_produto_plano_registro: [
+    'registro-ans-em-uso',
+    'Já existe produto com este registro na ANS.',
+    'registroAns',
+  ],
+  uq_contrato_plano_numero: [
+    'numero-em-uso',
+    'Já existe contrato com este número no estabelecimento.',
+    'numero',
+  ],
   uq_beneficiario_plano_matricula: [
     'carteirinha-em-uso',
     'O número de carteirinha gerado já existe: tente de novo.',
@@ -155,7 +175,11 @@ const RESTRICOES: MapaRestricoes = {
   uq_pessoa_fisica_cpf: ['cpf-em-uso', 'Este CPF já pertence a outra pessoa do cadastro.', 'cpf'],
   uq_pessoa_fisica_cns: ['cns-em-uso', 'Este CNS já pertence a outra pessoa do cadastro.', 'cns'],
   ck_beneficiario_plano_adesao: ['inclusao-invalida', 'A data de inclusão é inválida.', 'inclusao'],
-  ck_contrato_plano_vigencia: ['fim-antes-do-inicio', 'O fim do contrato não pode ser antes do início.', 'fim'],
+  ck_contrato_plano_vigencia: [
+    'fim-antes-do-inicio',
+    'O fim do contrato não pode ser antes do início.',
+    'fim',
+  ],
 };
 
 const desatualizado = () =>
@@ -198,7 +222,7 @@ const SQL_OPERADORA_PRINCIPAL = `(SELECT oe.operadora_saude_id FROM operadora_sa
             oe.id DESC LIMIT 1)`;
 
 const SELECT_PRODUTO = `
-  SELECT pr.id, ${SQL_OPERADORA_PRINCIPAL} AS operadora, pr.codigo, pr.nome, pr.numero_registro_ans, pr.tipo_contratacao,
+  SELECT pr.id, COALESCE(pr.operadora_saude_id, ${SQL_OPERADORA_PRINCIPAL}) AS operadora, pr.natureza, pr.codigo, pr.nome, pr.numero_registro_ans, pr.tipo_contratacao,
          pr.abrangencia_geografica, ta.codigo AS acomodacao, pr.situacao_ans, pr.versao,
          COALESCE(pr.alterado_em, pr.criado_em) AS alterado_em, pc.id AS plano
     FROM produto_plano pr
@@ -300,7 +324,13 @@ function segmentacaoDosIndicadores(x: Linha): string | null {
     referencia: booleano(x['plano_referencia']),
   };
   for (const [k, s] of Object.entries(SEGMENTACOES))
-    if (s.amb === v.amb && s.hosp === v.hosp && s.obst === v.obst && s.odonto === v.odonto && s.referencia === v.referencia)
+    if (
+      s.amb === v.amb &&
+      s.hosp === v.hosp &&
+      s.obst === v.obst &&
+      s.odonto === v.odonto &&
+      s.referencia === v.referencia
+    )
       return k;
   return null;
 }
@@ -349,7 +379,8 @@ async function produtosCompletos(l: Leitor, linhas: readonly Linha[]): Promise<P
     const id = Number(x['id']);
     const plano = inteiro(x['plano']);
     const s = seg.find((r) => Number(r['produto_plano_id']) === id);
-    const cp = plano === null ? undefined : copart.find((r) => Number(r['plano_comercializado_id']) === plano);
+    const cp =
+      plano === null ? undefined : copart.find((r) => Number(r['plano_comercializado_id']) === plano);
     const carencias: CarenciasProduto = { urgencia: 0, partos: 0, demais: 0, cpt: 0 };
     for (const [k, tipo] of Object.entries(CARENCIAS) as [keyof CarenciasProduto, string][]) {
       const r = caren.find((c) => Number(c['produto_plano_id']) === id && texto(c['tipo_carencia']) === tipo);
@@ -362,7 +393,7 @@ async function produtosCompletos(l: Leitor, linhas: readonly Linha[]): Promise<P
       operadora: inteiro(x['operadora']) ?? 0,
       codigo: textoObrigatorio(x['codigo']),
       nome: textoObrigatorio(x['nome']),
-      natureza: 'plano',
+      natureza: texto(x['natureza']) === 'cartao_desconto' ? 'cartaoDesconto' : 'plano',
       registroAns: texto(x['numero_registro_ans']),
       tipoContratacao: TIPO_CONTRATACAO.codigo(x['tipo_contratacao']) ?? 1,
       segmentacao: s ? segmentacaoDosIndicadores(s) : null,
@@ -370,10 +401,14 @@ async function produtosCompletos(l: Leitor, linhas: readonly Linha[]): Promise<P
       acomodacao: inteiro(texto(x['acomodacao'])),
       coparticipacao: {
         tipo: tipoCopart,
-        valor: tipoCopart === 2 ? numero(cp?.['percentual']) : tipoCopart === 3 ? numero(cp?.['valor']) : null,
+        valor:
+          tipoCopart === 2 ? numero(cp?.['percentual']) : tipoCopart === 3 ? numero(cp?.['valor']) : null,
       },
       carencias,
-      precos: faixas.length === FAIXAS_ETARIAS_ANS.length ? faixas.map((f) => numero(f['valor_mensalidade']) ?? 0) : null,
+      precos:
+        faixas.length === FAIXAS_ETARIAS_ANS.length
+          ? faixas.map((f) => numero(f['valor_mensalidade']) ?? 0)
+          : null,
       situacao: SITUACAO_PRODUTO.codigo(x['situacao_ans']) ?? 'ativo',
       versao: Number(x['versao']),
       alteradoEm: instanteIso(x['alterado_em']) ?? '',
@@ -409,13 +444,16 @@ export class PortaOperadoraPropria implements PortaOperadora {
 
   gruposSip(c: ContextoOperadora): Promise<GrupoSip[]> {
     return this.lerCatalogo(c, async (l) =>
-      (await l.consultar('SELECT id, descricao FROM item_assistencial_ans ORDER BY id', [], { teto: 1_000 })).map(
-        (x) => ({ id: Number(x['id']), nome: textoObrigatorio(x['descricao']) }),
-      ),
+      (
+        await l.consultar('SELECT id, descricao FROM item_assistencial_ans ORDER BY id', [], { teto: 1_000 })
+      ).map((x) => ({ id: Number(x['id']), nome: textoObrigatorio(x['descricao']) })),
     );
   }
 
-  procedimentosSip(c: ContextoOperadora, f: FiltroSip): Promise<{ itens: ProcedimentoSip[]; proxima: ChaveSip | null }> {
+  procedimentosSip(
+    c: ContextoOperadora,
+    f: FiltroSip,
+  ): Promise<{ itens: ProcedimentoSip[]; proxima: ChaveSip | null }> {
     return this.lerCatalogo(c, async (l) => {
       const limite = LIMITE_PAGINA_SIP;
       const onde = [
@@ -500,7 +538,9 @@ export class PortaOperadoraPropria implements PortaOperadora {
         ps,
         { teto: limite + 1 },
       );
-      const itens = r.slice(0, limite).map((x) => ({ codigo: Number(x['codigo']), nome: textoObrigatorio(x['descricao']) }));
+      const itens = r
+        .slice(0, limite)
+        .map((x) => ({ codigo: Number(x['codigo']), nome: textoObrigatorio(x['descricao']) }));
       return { itens, proxima: r.length > limite ? (itens[itens.length - 1]?.codigo ?? null) : null };
     });
   }
@@ -512,9 +552,13 @@ export class PortaOperadoraPropria implements PortaOperadora {
       c,
       async (l, est) =>
         (
-          await l.consultar(`${SELECT_OPERADORA} ORDER BY o.nome, o.id LIMIT ${LIMITE_PAGINA_OPERADORA}`, [est], {
-            teto: LIMITE_PAGINA_OPERADORA,
-          })
+          await l.consultar(
+            `${SELECT_OPERADORA} ORDER BY o.nome, o.id LIMIT ${LIMITE_PAGINA_OPERADORA}`,
+            [est],
+            {
+              teto: LIMITE_PAGINA_OPERADORA,
+            },
+          )
         ).map(operadoraDaLinha),
       [],
     );
@@ -535,9 +579,13 @@ export class PortaOperadoraPropria implements PortaOperadora {
     return this.ler(
       c,
       async (l, est) => {
-        const linhas = await l.consultar(`${SELECT_PRODUTO} ORDER BY pr.nome, pr.id LIMIT ${LIMITE_PAGINA_OPERADORA}`, [est, est], {
-          teto: LIMITE_PAGINA_OPERADORA,
-        });
+        const linhas = await l.consultar(
+          `${SELECT_PRODUTO} ORDER BY pr.nome, pr.id LIMIT ${LIMITE_PAGINA_OPERADORA}`,
+          [est, est],
+          {
+            teto: LIMITE_PAGINA_OPERADORA,
+          },
+        );
         const todos = await produtosCompletos(l, linhas);
         return operadora === undefined ? todos : todos.filter((p) => p.operadora === operadora);
       },
@@ -556,7 +604,10 @@ export class PortaOperadoraPropria implements PortaOperadora {
     );
   }
 
-  contratos(c: ContextoOperadora, f: FiltroContratos): Promise<{ itens: Contrato[]; proxima: number | null }> {
+  contratos(
+    c: ContextoOperadora,
+    f: FiltroContratos,
+  ): Promise<{ itens: Contrato[]; proxima: number | null }> {
     return this.ler(
       c,
       async (l, est) => {
@@ -584,7 +635,10 @@ export class PortaOperadoraPropria implements PortaOperadora {
           { teto: LIMITE_PAGINA_OPERADORA + 1 },
         );
         const itens = r.slice(0, LIMITE_PAGINA_OPERADORA).map(contratoDaLinha);
-        return { itens, proxima: r.length > LIMITE_PAGINA_OPERADORA ? (itens[itens.length - 1]?.id ?? null) : null };
+        return {
+          itens,
+          proxima: r.length > LIMITE_PAGINA_OPERADORA ? (itens[itens.length - 1]?.id ?? null) : null,
+        };
       },
       { itens: [], proxima: null },
     );
@@ -633,7 +687,10 @@ export class PortaOperadoraPropria implements PortaOperadora {
           { teto: LIMITE_PAGINA_OPERADORA + 1 },
         );
         const itens = r.slice(0, LIMITE_PAGINA_OPERADORA).map(beneficiarioDaLinha);
-        return { itens, proxima: r.length > LIMITE_PAGINA_OPERADORA ? (itens[itens.length - 1]?.id ?? null) : null };
+        return {
+          itens,
+          proxima: r.length > LIMITE_PAGINA_OPERADORA ? (itens[itens.length - 1]?.id ?? null) : null,
+        };
       },
       { itens: [], proxima: null },
     );
@@ -655,9 +712,13 @@ export class PortaOperadoraPropria implements PortaOperadora {
       c,
       async (l, est) =>
         (
-          await l.consultar(`${SELECT_BENEFICIARIO} AND b.titular_beneficiario_plano_id = ? ORDER BY b.id`, [est, titular], {
-            teto: 500,
-          })
+          await l.consultar(
+            `${SELECT_BENEFICIARIO} AND b.titular_beneficiario_plano_id = ? ORDER BY b.id`,
+            [est, titular],
+            {
+              teto: 500,
+            },
+          )
         ).map(beneficiarioDaLinha),
       [],
     );
@@ -705,7 +766,8 @@ export class PortaOperadoraPropria implements PortaOperadora {
           [beneficiario.id],
         );
         const idProduto = inteiro(ct?.['produto_plano_id']);
-        const pr = idProduto === null ? null : await l.uma(`${SELECT_PRODUTO} AND pr.id = ?`, [est, est, idProduto]);
+        const pr =
+          idProduto === null ? null : await l.uma(`${SELECT_PRODUTO} AND pr.id = ?`, [est, est, idProduto]);
         const produto = pr ? (await produtosCompletos(l, [pr]))[0] : undefined;
         if (!ct || !produto) return null;
         return {
@@ -737,7 +799,10 @@ export class PortaOperadoraPropria implements PortaOperadora {
             WHERE b.contrato_plano_id = ? AND cp.estabelecimento_id = ? AND b.excluido_em IS NULL AND b.id <> ?`,
           [x.cpf, x.contrato, est, x.exceto ?? 0],
         );
-        return { titularesAtivos: inteiro(r?.['titulares']) ?? 0, cpfNoContrato: x.cpf ? (inteiro(r?.['cpf']) ?? 0) : 0 };
+        return {
+          titularesAtivos: inteiro(r?.['titulares']) ?? 0,
+          cpfNoContrato: x.cpf ? (inteiro(r?.['cpf']) ?? 0) : 0,
+        };
       },
       { titularesAtivos: 0, cpfNoContrato: 0 },
     );
@@ -793,7 +858,11 @@ export class PortaOperadoraPropria implements PortaOperadora {
 
   pacienteExiste(c: ContextoOperadora, id: number): Promise<boolean> {
     // O paciente é do cliente inteiro (prontuário único): sem filtro de estabelecimento.
-    return this.lerCatalogo(c, async (l) => (await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [id])) !== null);
+    return this.lerCatalogo(
+      c,
+      async (l) =>
+        (await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [id])) !== null,
+    );
   }
 
   // ---- F1: gravações ----
@@ -847,7 +916,11 @@ function resultadoSimples(r: unknown): ResultadoOperacao {
   if (!r || typeof r !== 'object') return {};
   return Object.fromEntries(
     Object.entries(r).filter(
-      ([, v]) => v === null || typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 200),
+      ([, v]) =>
+        v === null ||
+        typeof v === 'number' ||
+        typeof v === 'boolean' ||
+        (typeof v === 'string' && v.length <= 200),
     ),
   ) as ResultadoOperacao;
 }
@@ -878,7 +951,12 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     return r ? Number(r['id']) : null;
   }
 
-  private async exigirId(sql: string, ps: readonly unknown[], dominio: string, campo: string): Promise<number> {
+  private async exigirId(
+    sql: string,
+    ps: readonly unknown[],
+    dominio: string,
+    campo: string,
+  ): Promise<number> {
     const id = await this.idDe(sql, ps);
     if (id === null) throw dominioAusente(dominio, campo);
     return id;
@@ -893,8 +971,14 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     if (ok === null) throw naoEncontrado('A operadora');
   }
 
-  private async pessoaJuridica(cnpj: string, razaoSocial: string, nomeFantasia: string | null): Promise<number> {
-    const pj = await this.idDe('SELECT id FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL', [cnpj]);
+  private async pessoaJuridica(
+    cnpj: string,
+    razaoSocial: string,
+    nomeFantasia: string | null,
+  ): Promise<number> {
+    const pj = await this.idDe('SELECT id FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL', [
+      cnpj,
+    ]);
     if (pj !== null) return pj;
     return this.tx.incluir('pessoa_juridica', {
       cnpj,
@@ -907,7 +991,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
   async gravarOperadora(x: { id: number | null; versao: number | null; dados: DadosOperadora; por: string }) {
     const d = x.dados;
     const modalidade = MODALIDADE.banco(d.modalidade);
-    if (!modalidade) throw recusa('dominio-invalido', 'Modalidade fora do domínio aceito.', { campos: ['modalidade'] });
+    if (!modalidade)
+      throw recusa('dominio-invalido', 'Modalidade fora do domínio aceito.', { campos: ['modalidade'] });
     const segmentacao = modalidade.includes('odontolog') ? 'odontologico' : 'medico_hospitalar';
     const hoje = await this.hoje();
     const pj = await this.pessoaJuridica(d.cnpj, d.razaoSocial, d.nomeFantasia);
@@ -915,7 +1000,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       'SELECT id FROM operadora_saude WHERE pessoa_juridica_id = ? AND excluido_em IS NULL AND id <> ?',
       [pj, x.id ?? 0],
     );
-    if (outra !== null) throw recusa('cnpj-em-uso', 'Já existe operadora com este CNPJ.', { campos: ['cnpj'] });
+    if (outra !== null)
+      throw recusa('cnpj-em-uso', 'Já existe operadora com este CNPJ.', { campos: ['cnpj'] });
     const valores = {
       pessoa_juridica_id: pj,
       nome: (d.nomeFantasia ?? d.razaoSocial).slice(0, 150),
@@ -943,8 +1029,14 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       await this.tx.alterar('operadora_saude', id, x.versao, valores);
     }
     // O nome da pessoa jurídica acompanha o cadastro da operadora (é a própria empresa).
-    const pjLinha = await this.tx.uma('SELECT versao, razao_social, nome_fantasia FROM pessoa_juridica WHERE id = ?', [pj]);
-    if (pjLinha && (texto(pjLinha['razao_social']) !== d.razaoSocial || texto(pjLinha['nome_fantasia']) !== d.nomeFantasia))
+    const pjLinha = await this.tx.uma(
+      'SELECT versao, razao_social, nome_fantasia FROM pessoa_juridica WHERE id = ?',
+      [pj],
+    );
+    if (
+      pjLinha &&
+      (texto(pjLinha['razao_social']) !== d.razaoSocial || texto(pjLinha['nome_fantasia']) !== d.nomeFantasia)
+    )
       await this.tx.alterar('pessoa_juridica', pj, Number(pjLinha['versao']), {
         razao_social: d.razaoSocial,
         nome_fantasia: d.nomeFantasia,
@@ -964,20 +1056,21 @@ class GravadorOperadoraBanco implements GravadorOperadora {
 
   async gravarProduto(x: { id: number | null; versao: number | null; dados: DadosProduto; por: string }) {
     const d = x.dados;
-    if (d.natureza === 'cartaoDesconto') throw modeloPendente('Cartão de desconto (produto sem registro de plano)');
     await this.operadoraDoEstabelecimento(d.operadora);
-    // O produto ainda não guarda a operadora dona (pedido de DDL): a leitura o atribui à principal do estabelecimento,
-    // então só ela grava (senão os preços iriam para a tabela de outra operadora e a tela leria outra).
-    const principal = await this.idDe(`SELECT ${SQL_OPERADORA_PRINCIPAL} AS id`, [this.est]);
-    if (principal !== d.operadora) throw modeloPendente('Produto de operadora que não é a principal do estabelecimento');
     const tipoContratacao = TIPO_CONTRATACAO.banco(d.tipoContratacao);
     if (!tipoContratacao)
-      throw recusa('dominio-invalido', 'Tipo de contratação fora do domínio.', { campos: ['tipoContratacao'] });
+      throw recusa('dominio-invalido', 'Tipo de contratação fora do domínio.', {
+        campos: ['tipoContratacao'],
+      });
     const abrangencia = d.abrangencia === null ? null : ABRANGENCIA.banco(d.abrangencia);
     if (!abrangencia)
-      throw recusa('abrangencia-obrigatoria', 'Informe a abrangência geográfica do plano (exigida pela ANS).', {
-        campos: ['abrangencia'],
-      });
+      throw recusa(
+        'abrangencia-obrigatoria',
+        'Informe a abrangência geográfica do plano (exigida pela ANS).',
+        {
+          campos: ['abrangencia'],
+        },
+      );
     const situacao = SITUACAO_PRODUTO.banco(d.situacao);
     if (!situacao) throw recusa('dominio-invalido', 'Situação fora do domínio.', { campos: ['situacao'] });
     const acomodacao =
@@ -1000,8 +1093,11 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       tipo_acomodacao_plano_id: acomodacao,
       odontologico,
       situacao_ans: situacao,
+      natureza: d.natureza === 'cartaoDesconto' ? 'cartao_desconto' : 'plano',
+      operadora_saude_id: d.operadora,
     };
-    const situacaoPlano = d.situacao === 'ativo' ? 'ativo' : d.situacao === 'suspenso' ? 'suspenso' : 'inativo';
+    const situacaoPlano =
+      d.situacao === 'ativo' ? 'ativo' : d.situacao === 'suspenso' ? 'suspenso' : 'inativo';
     let id: number;
     let plano: number;
     if (x.id === null) {
@@ -1023,11 +1119,21 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       });
     } else {
       const atual = await this.tx.uma(
-        'SELECT id, versao, codigo, situacao_ans FROM produto_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [x.id, this.est],
+        `SELECT id, versao, codigo, situacao_ans, COALESCE(operadora_saude_id, ${SQL_OPERADORA_PRINCIPAL}) AS operadora
+           FROM produto_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [this.est, x.id, this.est],
       );
       if (!atual) throw naoEncontrado('O produto');
       if (x.versao === null || Number(atual['versao']) !== x.versao) throw desatualizado();
+      // A operadora dona não muda: os preços, a coparticipação e os contratos do produto são dela.
+      if (inteiro(atual['operadora']) !== d.operadora)
+        throw recusa(
+          'operadora-do-produto',
+          'O produto pertence a outra operadora; cadastre um produto novo.',
+          {
+            campos: ['operadora'],
+          },
+        );
       id = x.id;
       await this.tx.alterar('produto_plano', id, x.versao, {
         ...valores,
@@ -1106,7 +1212,10 @@ class GravadorOperadoraBanco implements GravadorOperadora {
         });
     }
     if (alvo !== null && !presente)
-      await this.tx.incluir('produto_plano_segmentacao', { produto_plano_id: produto, segmentacao_assistencial_id: alvo });
+      await this.tx.incluir('produto_plano_segmentacao', {
+        produto_plano_id: produto,
+        segmentacao_assistencial_id: alvo,
+      });
   }
 
   private async coparticipacao(
@@ -1116,7 +1225,10 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     hoje: string,
   ): Promise<void> {
     const tipo = TIPO_COPARTICIPACAO.banco(cp.tipo);
-    if (!tipo) throw recusa('dominio-invalido', 'Tipo de coparticipação fora do domínio.', { campos: ['coparticipacao.tipo'] });
+    if (!tipo)
+      throw recusa('dominio-invalido', 'Tipo de coparticipação fora do domínio.', {
+        campos: ['coparticipacao.tipo'],
+      });
     const valores = {
       tipo_coparticipacao: tipo,
       percentual: tipo === 'percentual' ? cp.valor : null,
@@ -1134,9 +1246,9 @@ class GravadorOperadoraBanco implements GravadorOperadora {
         texto(atual['tipo_coparticipacao']) === tipo &&
         numero(atual['percentual']) === valores.percentual &&
         numero(atual['valor']) === valores.valor;
-      if (!igual) await this.tx.alterar('regra_coparticipacao', Number(atual['id']), Number(atual['versao']), valores);
-    }
-    else
+      if (!igual)
+        await this.tx.alterar('regra_coparticipacao', Number(atual['id']), Number(atual['versao']), valores);
+    } else
       await this.tx.incluir('regra_coparticipacao', {
         ...valores,
         operadora_saude_id: operadora,
@@ -1151,7 +1263,7 @@ class GravadorOperadoraBanco implements GravadorOperadora {
   private async carencias(produto: number, c: CarenciasProduto, hoje: string): Promise<void> {
     for (const [k, tipo] of Object.entries(CARENCIAS) as [keyof CarenciasProduto, string][]) {
       const grupo = await this.exigirId(
-        "SELECT id FROM grupo_prazo_carencia WHERE tipo_carencia = ? AND ativo = TRUE ORDER BY id LIMIT 1",
+        'SELECT id FROM grupo_prazo_carencia WHERE tipo_carencia = ? AND ativo = TRUE ORDER BY id LIMIT 1',
         [tipo],
         'grupos de prazo de carência',
         `carencias.${k}`,
@@ -1163,8 +1275,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       );
       if (atual) {
         if (inteiro(atual['dias_carencia']) !== c[k])
-        await this.tx.alterar('carencia_produto_contrato', Number(atual['id']), Number(atual['versao']), {
-          dias_carencia: c[k],
+          await this.tx.alterar('carencia_produto_contrato', Number(atual['id']), Number(atual['versao']), {
+            dias_carencia: c[k],
           });
       } else
         await this.tx.incluir('carencia_produto_contrato', {
@@ -1226,7 +1338,10 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       );
       const iguais =
         faixas.length === precos.length &&
-        faixas.every((f, i) => Math.round((numero(f['valor_mensalidade']) ?? -1) * 100) === Math.round((precos[i] ?? -2) * 100));
+        faixas.every(
+          (f, i) =>
+            Math.round((numero(f['valor_mensalidade']) ?? -1) * 100) === Math.round((precos[i] ?? -2) * 100),
+        );
       if (iguais) return;
     }
     const modelo = await this.exigirId(
@@ -1260,7 +1375,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
         tabela_preco_plano_id: idTabela,
         sequencia: i + 1,
         produto_plano_id: produto,
-        faixa_etaria_modelo_item_id: itens.length === FAIXAS_ETARIAS_ANS.length ? Number(itens[i]?.['id']) : null,
+        faixa_etaria_modelo_item_id:
+          itens.length === FAIXAS_ETARIAS_ANS.length ? Number(itens[i]?.['id']) : null,
         idade_inicial: faixa.de,
         idade_final: faixa.ate ?? null,
         valor_mensalidade: precos[i],
@@ -1284,16 +1400,19 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     const fisica = d.tipo === 1;
     // Documento já cadastrado: só é a mesma pessoa (física ou jurídica) com o mesmo nome; o cadastro não é regravado.
     const existente = fisica
-      ? await this.tx.uma('SELECT id, nome, NULL AS fantasia FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL', [
-          d.contratanteDocumento,
-        ])
+      ? await this.tx.uma(
+          'SELECT id, nome, NULL AS fantasia FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL',
+          [d.contratanteDocumento],
+        )
       : await this.tx.uma(
           'SELECT id, razao_social AS nome, nome_fantasia AS fantasia FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL',
           [d.contratanteDocumento],
         );
     if (
       existente &&
-      ![existente['nome'], existente['fantasia']].some((n) => n && nomeComparavel(texto(n)) === nomeComparavel(d.contratanteNome))
+      ![existente['nome'], existente['fantasia']].some(
+        (n) => n && nomeComparavel(texto(n)) === nomeComparavel(d.contratanteNome),
+      )
     )
       throw recusa(
         'documento-de-outra-pessoa',
@@ -1328,13 +1447,21 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     });
   }
 
-  async gravarContrato(x: { operadora: number; id: number | null; versao: number | null; dados: DadosContrato; por: string }) {
+  async gravarContrato(x: {
+    operadora: number;
+    id: number | null;
+    versao: number | null;
+    dados: DadosContrato;
+    por: string;
+  }) {
     const d = x.dados;
     await this.operadoraDoEstabelecimento(x.operadora);
     await this.planoDoProduto(d.produto);
     const tipoContratacao = TIPO_CONTRATACAO.banco(d.tipoContratacao);
     if (!tipoContratacao)
-      throw recusa('dominio-invalido', 'Tipo de contratação fora do domínio.', { campos: ['tipoContratacao'] });
+      throw recusa('dominio-invalido', 'Tipo de contratação fora do domínio.', {
+        campos: ['tipoContratacao'],
+      });
     const classificacao = await this.exigirId(
       'SELECT id FROM classificacao_plano WHERE tipo_contratacao = ? AND ativo = TRUE ORDER BY id LIMIT 1',
       [tipoContratacao],
@@ -1344,8 +1471,10 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     const forma = FORMA_REAJUSTE.banco(d.formaReajuste);
     const vigencia = TIPO_VIGENCIA.banco(d.tipoVigencia);
     const situacao = SITUACAO_CONTRATO.banco(d.situacao);
-    if (!forma) throw recusa('dominio-invalido', 'Forma de reajuste fora do domínio.', { campos: ['formaReajuste'] });
-    if (!vigencia) throw recusa('dominio-invalido', 'Tipo de vigência fora do domínio.', { campos: ['tipoVigencia'] });
+    if (!forma)
+      throw recusa('dominio-invalido', 'Forma de reajuste fora do domínio.', { campos: ['formaReajuste'] });
+    if (!vigencia)
+      throw recusa('dominio-invalido', 'Tipo de vigência fora do domínio.', { campos: ['tipoVigencia'] });
     if (!situacao) throw recusa('dominio-invalido', 'Situação fora do domínio.', { campos: ['situacao'] });
     const valores = {
       operadora_saude_id: x.operadora,
@@ -1362,7 +1491,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       situacao,
       motivo_situacao: d.motivoSituacao,
     };
-    if (x.id === null) return { id: await this.tx.incluir('contrato_plano', { ...valores, estabelecimento_id: this.est }) };
+    if (x.id === null)
+      return { id: await this.tx.incluir('contrato_plano', { ...valores, estabelecimento_id: this.est }) };
     const atual = await this.idDe(
       'SELECT id FROM contrato_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [x.id, this.est],
@@ -1390,12 +1520,20 @@ class GravadorOperadoraBanco implements GravadorOperadora {
         WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [contrato, this.est],
     );
-    if (!r || (operadora !== undefined && Number(r['operadora_saude_id']) !== operadora)) throw naoEncontrado('O contrato');
+    if (!r || (operadora !== undefined && Number(r['operadora_saude_id']) !== operadora))
+      throw naoEncontrado('O contrato');
     return r;
   }
 
   private async sexo(sigla: string): Promise<number | null> {
-    return sigla === 'I' ? null : this.exigirId('SELECT id FROM sexo WHERE sigla = ? AND ativo = TRUE ORDER BY id LIMIT 1', [sigla], 'sexos', 'sexo');
+    return sigla === 'I'
+      ? null
+      : this.exigirId(
+          'SELECT id FROM sexo WHERE sigla = ? AND ativo = TRUE ORDER BY id LIMIT 1',
+          [sigla],
+          'sexos',
+          'sexo',
+        );
   }
 
   private async grau(d: DadosBeneficiario): Promise<number | null> {
@@ -1414,7 +1552,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       `SELECT id FROM beneficiario_plano WHERE id = ? AND contrato_plano_id = ? AND tipo = 'titular' AND excluido_em IS NULL`,
       [d.titular, d.contrato],
     );
-    if (t === null) throw recusa('titular-invalido', 'O titular não é titular deste contrato.', { campos: ['titular'] });
+    if (t === null)
+      throw recusa('titular-invalido', 'O titular não é titular deste contrato.', { campos: ['titular'] });
   }
 
   private async movimento(
@@ -1440,16 +1579,26 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     });
   }
 
-  async incluirBeneficiario(x: { operadora: number; dados: DadosBeneficiario; carteirinha: string; validade: string; por: string }) {
+  async incluirBeneficiario(x: {
+    operadora: number;
+    dados: DadosBeneficiario;
+    carteirinha: string;
+    validade: string;
+    por: string;
+  }) {
     const d = x.dados;
     const contrato = await this.contratoDoEstabelecimento(d.contrato, x.operadora);
     const produto = inteiro(contrato['produto_plano_id']);
-    if (produto === null) throw recusa('contrato-sem-produto', 'O contrato não tem produto.', { campos: ['contrato'] });
+    if (produto === null)
+      throw recusa('contrato-sem-produto', 'O contrato não tem produto.', { campos: ['contrato'] });
     const plano = await this.planoDoProduto(produto);
     await this.titularDoContrato(d);
     const sexo = await this.sexo(d.sexo);
     const existente = d.cpf
-      ? await this.tx.uma('SELECT id, nome, data_nascimento FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL', [d.cpf])
+      ? await this.tx.uma(
+          'SELECT id, nome, data_nascimento FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL',
+          [d.cpf],
+        )
       : null;
     if (
       existente &&

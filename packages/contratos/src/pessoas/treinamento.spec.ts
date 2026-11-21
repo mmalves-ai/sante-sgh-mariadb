@@ -28,6 +28,7 @@ import {
   PARAMETRO_ALERTA_TREINAMENTO,
   PARAMETRO_EVENTO_REPASSE_PLANTAO,
 } from './treinamento-vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 const curso = {
   codigo: 'NR32-BIO',
@@ -155,14 +156,15 @@ describe('contratos do plantão realizado e do repasse (M52.6)', () => {
       'pessoas.realizado.aprovar',
       'pessoas.realizado.lancar',
     ]);
+    for (const c of ['pessoas.pop.ciencia', 'pessoas.autoatendimento.ler', 'pessoas.realizado.aprovar'])
+      expect(opcoesDoMapa(c)).toEqual([]);
     for (const c of ['pessoas.pop.ciencia', 'pessoas.autoatendimento.ler'])
-      expect(por.get(c)).toMatchObject({ opcoesLegado: [], concessaoPorPerfil: 'todos-os-perfis-de-pessoa' });
+      expect(por.get(c)).toMatchObject({ concessaoPorPerfil: 'todos-os-perfis-de-pessoa' });
     expect(por.get('pessoas.realizado.aprovar')).toMatchObject({
-      opcoesLegado: [],
       concessaoPorPerfil: 'por-perfil',
       perfis: ['gestor-escala'],
     });
-    expect(por.get('pessoas.realizado.lancar')?.opcoesLegado).toEqual([3033]);
+    expect(opcoesDoMapa(por.get('pessoas.realizado.lancar')?.codigo)).toEqual([3033]);
     expect(PERMISSOES_PESSOAS_M52_F6.every((p) => p.categoria === 'administrativa')).toBe(true);
   });
 

@@ -1036,6 +1036,28 @@ describe.skipIf(SEM_BANCO)('portas próprias da enfermagem do lote 02-04 (MariaD
       expect(await enf.eventosInfusao(c, [m!.horarios[1]])).toMatchObject([
         { id: ev, evento: 'inicio', velocidadeMlH: 42, usuario: m!.login },
       ]);
+      // A pausa, a retomada e a troca de bolsa também vão ao evento do horário; evento desconhecido é recusado.
+      await infusao('pausa');
+      const retomada = await infusao('retomada');
+      const troca = await infusao('trocaBolsa');
+      const eventos = await enf.eventosInfusao(c, [m!.horarios[1]]);
+      expect(eventos.find((x) => x.id === retomada)).toMatchObject({ evento: 'retomada' });
+      expect(eventos.find((x) => x.id === troca)).toMatchObject({ evento: 'trocaBolsa' });
+      await expect(infusao('desconhecido')).rejects.toMatchObject({ problema: { codigo: 'evento-infusao-invalido' } });
+      // A resposta de extensão do formulário exige um registro assistencial deste paciente e estabelecimento.
+      await expect(
+        enf.gravarSgh(c, trilha('registro_assistencial_extensao'), (g) =>
+          g.gravarRespostaExt({
+            registro: 0,
+            paciente: m!.paciente,
+            componente: 'anexo',
+            chave: 'anotacao:teste',
+            valor: '{"texto":"sintético"}',
+            referencia: null,
+            usuario: m!.login,
+          }),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'registro-inexistente' } });
     });
   });
 

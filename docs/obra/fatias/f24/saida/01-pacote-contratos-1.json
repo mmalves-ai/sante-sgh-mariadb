@@ -1,0 +1,15 @@
+[
+  {
+    "tipo": "rebuild",
+    "alvo": "packages/contratos/dist",
+    "comando": "./pnpm exec tsc -p packages/contratos/tsconfig.lib.json (em pasta temporária, depois rsync --delete para dist/)",
+    "quando": "depois que o lote 08-misto-assinatura trocar packages/contratos/src/formatacao/hora-legada.ts",
+    "motivo": "dist/formatacao/hora-legada.d.ts é saída gerada: a dívida (HHMM nas linhas 3,7,9,25) só some quando a fonte mudar"
+  },
+  {
+    "tipo": "ferramenta",
+    "alvo": "tools/obra/divida_f24.py",
+    "pedido": "ignorar packages/*/dist/ (saída de build, fora do git pelo .gitignore e não consumida: os paths do tsconfig.base apontam para src/)",
+    "motivo": "dist velho reabre dívida já corrigida na fonte; a dívida real é a de src/. Também vale para packages/dominio-*/dist (49 linhas hoje)"
+  }
+]

@@ -23,6 +23,7 @@ import {
   TIPOS_VINCULO,
   VINCULOS_PRESTADOR,
 } from './vocabulario.js';
+import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
 
 // CPF sintético com os verificadores válidos (base 123456789 → 12345678909).
 const CPF = '123.456.789-09';
@@ -58,7 +59,7 @@ describe('permissões da F1', () => {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
       // A ciência da própria avaliação é recurso de toda pessoa (sem opção no outro sistema).
       if (p.concessaoPorPerfil !== 'todos-os-perfis-de-pessoa')
-        expect(p.opcoesLegado.length).toBeGreaterThan(0);
+        expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
       expect(p.categoria).toBe('administrativa');
       expect(CATALOGO_DECLARADO).toContain(p);
     }
@@ -72,20 +73,20 @@ describe('permissões da F1', () => {
     expect(por.get('pessoas.colaborador.admitir')?.criticidade).toBe('sensivel');
     expect(por.get('pessoas.colaborador.ler')?.criticidade).toBe('normal');
     expect(por.get('pessoas.cargos.gerir')?.criticidade).toBe('sensivel');
-    expect(por.get('pessoas.cargos.ler')?.opcoesLegado).toEqual([362]);
+    expect(opcoesDoMapa(por.get('pessoas.cargos.ler')?.codigo)).toEqual([362]);
     expect(por.get('pessoas.avaliacao.gerir')?.criticidade).toBe('sensivel');
-    expect(por.get('pessoas.avaliacao.ler')?.opcoesLegado).toEqual([358]);
+    expect(opcoesDoMapa(por.get('pessoas.avaliacao.ler')?.codigo)).toEqual([358]);
     expect(por.get('pessoas.avaliacao.ciencia')?.concessaoPorPerfil).toBe('todos-os-perfis-de-pessoa');
     // W0-06, M3: pedir é de toda pessoa; aprovar é do gestor; o CID é restrito a quem lê o ASO.
     expect(por.get('pessoas.autoatendimento.solicitar')?.concessaoPorPerfil).toBe(
       'todos-os-perfis-de-pessoa',
     );
-    expect(por.get('pessoas.autoatendimento.aprovar')?.opcoesLegado).toEqual([5069, 5074]);
+    expect(opcoesDoMapa(por.get('pessoas.autoatendimento.aprovar')?.codigo)).toEqual([5069, 5074]);
     expect(por.get('pessoas.autoatendimento.aprovar')?.perfis).toEqual(['gestor-escala']);
-    expect(por.get('pessoas.atestado.verCid')?.opcoesLegado).toEqual([572]);
+    expect(opcoesDoMapa(por.get('pessoas.atestado.verCid')?.codigo)).toEqual([572]);
     expect(por.get('pessoas.atestado.verCid')?.criticidade).toBe('sensivel');
     // W0-06, M4: o painel de indicadores é de quem tem o cadastro de funcionários.
-    expect(por.get('pessoas.indicadores.ler')?.opcoesLegado).toEqual([358]);
+    expect(opcoesDoMapa(por.get('pessoas.indicadores.ler')?.codigo)).toEqual([358]);
   });
 });
 

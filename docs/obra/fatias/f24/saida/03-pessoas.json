@@ -1,0 +1,87 @@
+{
+ "lote": "03-pessoas",
+ "volta": 3,
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "lote_folha_intercambio",
+   "colunas": "CHECK ck_lote_folha_intercambio_situacao passa a aceitar 'substituido'; coluna numero INT UNSIGNED NOT NULL com UNIQUE (estabelecimento_id, numero), pela sequencia_negocio 'lote_folha_intercambio'",
+   "motivo": "folha/porta-folha-propria.ts:8,112 (lotes da folha externa). O serviço (servico-folha.ts:440,584) marca o exportado anterior como 'substituido', valor que o CHECK recusa; e reserva o número do lote antes de montar o conteúdo (proximoIdLote), o que hoje só daria por MAX+1. Com o número de negócio, o contrato troca id por numero no conteúdo do arquivo (contrato tipos-folha.ts e servico-folha.ts, fora do lote)."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "avaliacao_desempenho",
+   "colunas": "uq_avaliacao_desempenho_versao passa a (ciclo_avaliacao_id, colaborador_id, avaliador_colaborador_id, tipo, marco_experiencia_dias, numero_versao), ou sai em favor de uq_avaliacao_desempenho_anterior",
+   "motivo": "O ciclo de experiência tem as avaliações de 45 e 90 dias do mesmo avaliador: com a chave atual elas colidem. A porta contorna gravando numero_versao como o próximo livre do grupo, e o número mostrado à tela vem da profundidade da cadeia de correções. Prioridade baixa."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "cadastro_empregador_motivo_afastamento (nova)",
+   "colunas": "cadastro_empregador_id FK, motivo_afastamento_id FK, codigo_esocial CHAR(2) NOT NULL; UNIQUE (cadastro_empregador_id, motivo_afastamento_id); auditoria padrão",
+   "motivo": "esocial/porta-esocial-propria.ts:22-27,93-109 (parâmetros do empregador). O esquemaEmpregadorEsocial traz o de-para do motivo de afastamento para a tabela 18 por vigência, e cadastro_empregador não tem lugar para ele. O resto dos parâmetros cabe em cadastro_empregador (classTrib por codigo_esocial, fpas por fpas, sindicato por pessoa_juridica, transmissor sante→sistema). Com a tabela, a porta do empregador é a próxima volta do lote."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "pessoa_fisica / vinculo_trabalho (ficha do eSocial do vínculo)",
+   "motivo": "O pedido f22 03-05 (decisao+ddl da ficha: sexo, raça e cor, estado civil, grau de instrução, nome social, países, endereço, regime e tipo de jornada, contrato) não aparece em ddl-aplicado nem em ddl-aplicado-v2. ficha() e gravarFicha seguem 'modelo-pendente'. Pedido: lista de colunas decidida pelo dono do cadastro de pessoas e o DDL."
+  },
+  {
+   "tipo": "integracao",
+   "arquivo": "apps/api/src/modulos/pessoas/escala/porta-realizado-propria.ts:18,53,385-424",
+   "motivo": "O lançamento do plantão realizado no repasse e o estorno gravam em evento_repasse/estorno_repasse (12_FAT), que são do faturamento. Pedido: o lote do faturamento expõe um gravador do repasse sobre a mesma transação (TxOperacao), e a composição do módulo de pessoas o liga à porta do realizado."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "apps/api/src/modulos/pessoas/sesmt/porta-sesmt-propria.ts:236-239,1400",
+   "motivo": "Segue o pedido do 02-pessoas-2 (registro de proteção endereçado por tipo + id no contrato, no serviço e na web), que é compartilhado e não está nesta .lista."
+  },
+  {
+   "tipo": "composicao",
+   "arquivo": "apps/api/src/modulos/pessoas/modulo.ts (PortaAutoatendimentoPropria sem efeitos)",
+   "motivo": "Segue o pedido do 01-pessoas-1: o efeito da aprovação no ponto, nas férias e no cadastro precisa dos gravadores dessas portas sobre a transação recebida. Mudança compartilhada, fora da .lista. autoatendimento/porta-propria.ts:17,73 sai quando a composição ligar os efeitos."
+  },
+  {
+   "tipo": "compartilhado",
+   "arquivo": "apps/api/src/modulos/pessoas/banco-apoio.ts:94-95 (modeloPendente)",
+   "motivo": "O auxiliar sai quando o último uso (pessoas/porta-propria.ts, de outro lote) for ligado ao modelo."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/pessoas/avaliacao/massa.spec-util.ts (primeiro)",
+   "motivo": "O cliente de teste novo nasce sem tipo_vinculo_trabalho e categoria_trabalhador (catálogos sem carregador). Incluí uma linha sintética de cada no banco cliente_f24_03pessoas para rodar os testes. Pedido: a massa garantir a linha sintética quando o catálogo estiver vazio, como já faz com o CBO."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "conferencia_eventos_esocial_item",
+   "colunas": "CHECK ck_conferencia_eventos_esocial_item_situacao passa a aceitar as 6 situações da linha do contrato, no padrão do banco: ('conciliado','dois_transmissores','repasse_no_periodico','repasse_no_externo','so_contagem','sem_transmissor'); migração das linhas existentes: conciliada→conciliado, sem_transmissor fica, divergente fica sem tradução segura (recusar na leitura ou marcar pela situação da conferência). Nenhuma coluna de rótulo: o rótulo é o nome do tipo de evento no catálogo (tipo_evento_esocial.descricao).",
+   "motivo": "esocial/porta-esocial-propria.ts (situacaoLinhaDoBanco/situacaoLinhaDaTela, ultimaConciliacao). O CHECK só aceita o resumo (conciliada, divergente, sem_transmissor) e 4 situações do contrato viram 'divergente'; a situação não se recalcula das contagens guardadas (depende da decisão do transmissor e da mesma raiz). Até o DDL, a releitura de conferência com linha divergente recusa com modelo-pendente. Com o DDL, a porta grava e lê a situação exata (trocar hífen por sublinhado, como na situação da conferência)."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "processamento_folha + processamento_folha_linha (correção do DDL aplicado)",
+   "colunas": "processamento_folha: CHECK ck_processamento_folha_situacao passa a ('calculada','substituida','descartada'); fora_da_folha BOOLEAN vira quantidade_fora_da_folha SMALLINT UNSIGNED NOT NULL DEFAULT 0 (vínculos que o cálculo deixou de fora); tabela_legal e parametros (LONGTEXT JSON) viram tabela_legal_inicio DATE NULL e parametros_inicio DATE NULL (a vigência da tabela legal e dos parâmetros usados). processamento_folha_linha: unidade VARCHAR(12) NOT NULL com CHECK IN ('dias','minutos','dependentes','percentual','valor') e memoria_calculo VARCHAR(400) NOT NULL DEFAULT ''. As tabelas estão vazias (nenhuma gravação ligada), então a troca é direta.",
+   "motivo": "folha/porta-calculo-propria.ts:13,101,248. O DDL aplicado (f22 03-06) não cabe no contrato do cálculo (tipos-folha.ts ProcessoDaFolha e LinhaCalculoDoVinculo; o domínio em packages/dominio-pessoas/src/folha): o serviço troca o vigente para 'substituida' (servico-calculo.ts:659), foraDaFolha é contagem (decimo-terceiro.ts:119), tabelaLegal é a data de início da tabela (ferias.ts:372), e a linha tem unidade e memória do cálculo (calculo.ts:309). Gravar com o DDL atual perderia dado. Com a correção, a próxima volta liga as 11 leituras do processamento, o gravador do processamento e, por ele, férias e rescisão (recibo_ferias e rescisao já têm processamento_folha_id)."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "integracao_folha_financeiro_destino",
+   "colunas": "conta_contabil_id BIGINT UNSIGNED NULL (FK para a conta do plano contábil) ou conta_contabil_sugerida VARCHAR(20) NULL",
+   "motivo": "folha/porta-integracao-propria.ts (contaContabil). O contrato do de-para leva a conta contábil sugerida ao contábil; o destino não tem a coluna. Hoje a sugestão vazia grava e a preenchida recusa com modelo-pendente (nunca descartada calada)."
+  },
+  {
+   "tipo": "composicao",
+   "arquivo": "apps/api/src/modulos/pessoas/folha/porta-integracao-propria.ts (executar, lancamentos, lancamento, lancamentoDaOrigem, titulosDoLancamento, chavesLancadas, custoPessoal)",
+   "motivo": "As tabelas do lançamento (lancamento_titulos_folha, titulo_folha com lancamento_titulos_folha_id e empresa_fornecedora_id) existem, mas o lançamento cria o título a pagar, que é do financeiro. Pedido: o lote do financeiro expõe um gravador do título a pagar sobre a TxOperacao recebida (como o pedido do repasse para o plantão realizado), e a composição do módulo de pessoas o liga à porta da integração. As leituras ficam com a gravação, para não devolver uma lista que nunca se enche."
+  },
+  {
+   "tipo": "verificacao",
+   "arquivo": "apps/api/src/modulos/pessoas/folha/porta-calculo-propria.ts (obrigações)",
+   "motivo": "As colunas da obrigação (leiaute, totais, acréscimos, nome do arquivo) existem. Falta conferir na próxima volta onde fica o conteúdo cifrado do arquivo (arquivo_obrigacao só tem arquivo_id e hash), os parâmetros das obrigações por vigência e os códigos SEFIP, CAGED e RAIS dos catálogos oficiais. Se faltar tabela, vira pedido de DDL."
+  },
+  {
+   "tipo": "teste",
+   "arquivo": "apps/api/src/modulos/pessoas/aplicacao/folha.int.spec.ts:581-584 (fora de lote)",
+   "motivo": "Ajustei só as linhas que conferiam a gravação desligada: podeGravar agora é true, e a chamada sem argumentos de gravarSgh saiu (o processamento segue recusando em processos e rescisoes). A massa desse arquivo falha no cliente f24_03pessoas antes dos testes (Duplicate entry 'I' for key 'uq_sexo_sigla'), um problema que já existia e não vem desta volta."
+  }
+ ]
+}

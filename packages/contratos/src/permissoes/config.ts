@@ -14,7 +14,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.schema.ler',
     descricao: 'Ver a verificação de schema dos bancos',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -22,7 +22,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.schema.verificar',
     descricao: 'Rodar a verificação de schema sob demanda',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -30,7 +30,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.estabelecimento.ler',
     descricao: 'Ver os estabelecimentos da rede',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -39,7 +39,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.assinatura.ler',
     descricao: 'Ver os testes de assinatura de dados por operação e estabelecimento',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -48,7 +48,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.gravacao.ler',
     descricao: 'Ver a conferência de gravação (receitas, triggers, estados e provas pós-escrita)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -56,7 +56,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.conexao.ler',
     descricao: 'Ver a saúde das conexões e os avisos de colisão',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -68,7 +68,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
     codigo: 'config.coexistencia.ler',
     descricao:
       'Ver a prontidão por setor e hospital, a consolidação da semana e o painel de migração gradual (setores, indicadores)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
@@ -81,7 +81,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
     codigo: 'config.coexistenciaSetor.editar',
     descricao:
       'Mudar a situação e a composição do setor e aplicar ou recolher o lote de liberação (reautenticação)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -91,7 +91,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
     codigo: 'config.coexistenciaPessoas.ler',
     descricao:
       'Ver a migração por pessoa (login, nome de usuário, trilha, último uso); a leitura vai à trilha',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -100,7 +100,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.coexistenciaTreino.ler',
     descricao: 'Ver as trilhas por papel, as turmas e as conclusões do treinamento',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -109,7 +109,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
     codigo: 'config.coexistenciaTreino.registrar',
     descricao:
       'Publicar a versão da trilha e registrar a conclusão do treinamento (instrutor e chave-usuário)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -117,7 +117,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.chamado.ler',
     descricao: 'Ver os chamados por severidade e prazo',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -125,7 +125,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.chamado.triar',
     descricao: 'Triar o chamado: severidade, nível, situação, comandante (S1) e contorno (N1 e N2)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: COMITE,
     categoria: 'tecnica',
@@ -133,7 +133,7 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
   {
     codigo: 'config.chamado.abrir',
     descricao: 'Abrir um chamado de dentro do sistema (em que sistema aconteceu, severidade, descrição)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     categoria: 'tecnica',
   },

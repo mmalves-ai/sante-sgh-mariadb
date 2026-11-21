@@ -14,7 +14,7 @@ export const PERMISSOES_M59_F2: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F2_CODIGOS.politica2faLer,
     descricao:
       'Consultar a política do segundo fator por perfil, por grupo e por estabelecimento (ondas e prazos)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos', 'administrador-sistema', 'auditor'],
     categoria: 'tecnica',
@@ -24,7 +24,7 @@ export const PERMISSOES_M59_F2: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F2_CODIGOS.politica2faEditar,
     descricao:
       'Tornar o segundo fator obrigatório (ou voltar a opcional) por perfil, por grupo ou para todos',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'tecnica',
@@ -34,7 +34,7 @@ export const PERMISSOES_M59_F2: readonly DeclaracaoPermissao[] = [
     codigo: PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar,
     descricao:
       'Retirar a senha antiga de um usuário que já entra com a credencial forte (só depois do fim da contingência)',
-    opcoesLegado: [],
+
     concessaoPorPerfil: 'por-perfil',
     perfis: ['gestor-acessos'],
     categoria: 'tecnica',

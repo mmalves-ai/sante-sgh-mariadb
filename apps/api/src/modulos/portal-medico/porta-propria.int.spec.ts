@@ -57,6 +57,11 @@ async function limpar(e: Escritor): Promise<void> {
     LOGINS,
   );
   await e.executar(
+    `DELETE a FROM ato_conta_portal_profissional_externo a JOIN conta_portal_profissional_externo cp
+        ON cp.id = a.conta_portal_profissional_externo_id WHERE cp.login IN (${LOGINS.map(() => '?').join(', ')})`,
+    LOGINS,
+  );
+  await e.executar(
     `DELETE FROM conta_portal_profissional_externo WHERE login IN (${LOGINS.map(() => '?').join(', ')})`,
     LOGINS,
   );
@@ -352,8 +357,10 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
       ctx.correlacao,
     ]);
     expect(tr.map((x) => x.acao)).toContain('consulta');
-    const pend = { problema: { codigo: 'modelo-pendente' } };
-    await expect(porta.atosConta()).rejects.toMatchObject(pend);
+    // Os atos do hospital sobre a conta ficam no histórico próprio (ato_conta_portal_profissional_externo).
+    const atos = await porta.atosConta(ctx, m.contas[1]!);
+    expect(atos.map((a) => a.ato)).toEqual(expect.arrayContaining(['bloqueio', 'desbloqueio']));
+    expect(atos.find((a) => a.ato === 'bloqueio')).toMatchObject({ situacaoAnterior: 'ativo', motivo: expect.any(String) });
     await expect(
       porta.gravar(c(), (g) => g.trocarSenha({ acesso: m.contas[0]!, senhaResumo: 'x', por: 'l0402' }), null),
     ).rejects.toMatchObject({ problema: { status: 409, codigo: 'modelo-pendente' } });

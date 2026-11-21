@@ -222,4 +222,115 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria da internação (MariaDB, cliente
     expect(await conta('SELECT COUNT(*) AS n FROM cancelamento_internacao WHERE internacao_id = ? AND motivo_cancelamento_internacao_id = ?', [id, M().motivoExclusao])).toBe(1);
     expect(await baseDoLeito('02')).toBe('livre');
   });
+
+  it('atributo por tipo de acomodação: inclui, altera com motivo, limpa; tipo inexistente recusa', async () => {
+    const c = contextoAdt(M());
+    const cat = Number((await lerAdt<{ id: number }>(M(), "SELECT ac.categoria_acomodacao_id AS id FROM acomodacao ac WHERE ac.estabelecimento_id = ? AND ac.codigo = 'Q1'", [M().est]))?.id);
+    const gravar = (extra: Record<string, unknown>) =>
+      porta.gravarSgh(c, trilhaAdt(M(), 'atributo_categoria_acomodacao'), (g) =>
+        g.gravarAtributo({ escopo: 'tipo', chave: String(cat), usuario: M().login, ...extra } as never),
+      );
+    await gravar({ sexo: 'F', criticidade: 3, idadeMinima: 0, idadeMaxima: 12, intensiva: false });
+    const linha = () =>
+      lerAdt<Record<string, unknown>>(M(), 'SELECT sexo_permitido, criticidade, idade_maxima_dias, versao FROM atributo_categoria_acomodacao WHERE estabelecimento_id = ? AND categoria_acomodacao_id = ?', [M().est, cat]);
+    expect(await linha()).toMatchObject({ sexo_permitido: 'feminino', criticidade: 'alta', idade_maxima_dias: 12 * 365, versao: 1 });
+    await expect(gravar({ sexo: 'M' })).rejects.toSatisfy((e) => codigoDe(e) === 'motivo-obrigatorio');
+    await gravar({ sexo: 'M', motivo: 'Ala masculina' });
+    expect(await linha()).toMatchObject({ sexo_permitido: 'masculino', criticidade: 'alta', versao: 2 });
+    await porta.gravarSgh(c, trilhaAdt(M(), 'atributo_categoria_acomodacao'), (g) =>
+      g.limparAtributos({ escopo: 'tipo', chave: String(cat), justificativa: 'Volta ao padrão', usuario: M().login }),
+    );
+    expect(await linha()).toMatchObject({ sexo_permitido: null, criticidade: null, idade_maxima_dias: null, versao: 3 });
+    await expect(gravar({ chave: '999999999', sexo: 'F' })).rejects.toSatisfy((e) => codigoDe(e) === 'tipo-acomodacao-inexistente');
+  });
+
+  it('registro do arquivo de prontuários sem movimento: ocorrência gravada; motivo, aval do descarte e outra conta recusam', async () => {
+    const c = contextoAdt(M());
+    const atend = Number((await lerAdt<{ id: number }>(M(), 'SELECT atendimento_id AS id FROM internacao WHERE estabelecimento_id = ? ORDER BY id LIMIT 1', [M().est]))?.id);
+    const registrar = (x: Record<string, unknown>) =>
+      porta.gravarSgh(c, (id: number) => trilhaAdt(M(), 'ocorrencia_arquivo_prontuario', id), (g) =>
+        g.gravarSameExt({ movimento: null, conta: atend, usuario: M().login, ...x } as never),
+      );
+    const id = await registrar({ tipo: 'ocorrencia', motivo: 'Volume com folhas soltas' });
+    expect(await lerAdt(M(), 'SELECT tipo, atendimento_id, usuario_id IS NOT NULL AS com_usuario FROM ocorrencia_arquivo_prontuario WHERE id = ?', [id])).toMatchObject({
+      tipo: 'ocorrencia',
+      atendimento_id: atend,
+      com_usuario: 1,
+    });
+    expect(await trilhas('ocorrencia_arquivo_prontuario', id)).toBe(1);
+    await expect(registrar({ tipo: 'ocorrencia' })).rejects.toSatisfy((e) => codigoDe(e) === 'motivo-obrigatorio');
+    await expect(registrar({ tipo: 'descarte', motivo: 'Prazo de guarda vencido' })).rejects.toSatisfy((e) => codigoDe(e) === 'aval-obrigatorio');
+    await expect(registrar({ tipo: 'cobranca', movimento: 999999999 })).rejects.toSatisfy((e) => codigoDe(e) === 'movimento-inexistente');
+    await expect(registrar({ tipo: 'cobranca', conta: 999999999 })).rejects.toSatisfy((e) => codigoDe(e) === 'registro-inexistente');
+  });
+
+  it('arquivo de prontuários: a localização e a cobrança leem aceite, cobrança, remessa e ocorrências; movimento de outra conta recusa', async () => {
+    const c = contextoAdt(M());
+    const paciente = M().pacientes[0];
+    const atend = Number(
+      (await lerAdt<{ id: number }>(M(), 'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL ORDER BY id LIMIT 1', [M().est, paciente]))?.id,
+    );
+    // Volume e movimentos sintéticos: o volume saiu do arquivo há 30 dias para o setor da massa e não voltou; outro
+    // atendimento do mesmo paciente tem o seu próprio movimento.
+    const [mov, movOutra] = await M().nucleo.escrever({ cliente: CLIENTE_ADT, correlacao: 'int-0301-same-massa' }, async (e) => {
+      const agora = new Date();
+      const outraConta = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id, fonte_pagadora_id,
+           profissional_id, entrada_em, criado_em)
+         SELECT estabelecimento_id, CONCAT('S', id), paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id, fonte_pagadora_id,
+           profissional_id, entrada_em, criado_em FROM atendimento WHERE id = ?`,
+        [atend],
+      );
+      const doc =
+        Number((await e.uma<{ id: number }>("SELECT id FROM tipo_documento_arquivo WHERE codigo = 'T0301'", []))?.id) ||
+        (await e.inserir("INSERT INTO tipo_documento_arquivo (codigo, descricao, criado_em) VALUES ('T0301', 'PRONTUARIO SINTETICO', ?)", [agora]));
+      const op =
+        Number((await e.uma<{ id: number }>("SELECT id FROM operacao_movimento_prontuario WHERE codigo = '2'", []))?.id) ||
+        (await e.inserir("INSERT INTO operacao_movimento_prontuario (codigo, descricao, tipo, sentido, criado_em) VALUES ('2', 'SAIDA', 'saida', 'saida', ?)", [agora]));
+      const vol = await e.inserir(
+        'INSERT INTO volume_prontuario (estabelecimento_id, paciente_id, tipo_documento_arquivo_id, numero_volume, aberto_em, abertura_usuario_id, criado_em) VALUES (?, ?, ?, 1, ?, ?, ?)',
+        [M().est, paciente, doc, agora, M().usuario, agora],
+      );
+      const movimento = (conta: number | null, dias: number) =>
+        e.inserir(
+          `INSERT INTO movimento_prontuario (estabelecimento_id, volume_prontuario_id, paciente_id, atendimento_id, operacao_movimento_prontuario_id,
+             movimentado_em, movimentado_por_usuario_id, destino_setor_funcional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [M().est, vol, paciente, conta, op, new Date(agora.getTime() - dias * 86_400_000), M().usuario, M().setor, agora],
+        );
+      const anterior = await movimento(outraConta, 40);
+      return [await movimento(atend, 30), anterior];
+    });
+    const registrar = (x: Record<string, unknown>) =>
+      porta.gravarSgh(c, (id: number) => trilhaAdt(M(), 'ocorrencia_arquivo_prontuario', id), (g) =>
+        g.gravarSameExt({ conta: atend, usuario: M().login, ...x } as never),
+      );
+    const o = { setorSame: 999999999, prazoDias: 10 };
+    let l = await porta.localizacao(c, atend, o);
+    expect(l?.linhaDoTempo.find((m) => m.id === mov)).toMatchObject({ excluido: false, aceito: false, cobrada: false, protocolo: null });
+    expect(l?.devolucaoAtrasada).toBe(true);
+    expect((await porta.devolucoesAtrasadas(c, o)).itens.find((i) => i.movimento === mov)).toMatchObject({ conta: atend, cobrada: false });
+
+    await registrar({ tipo: 'remessa', movimento: mov, protocolo: 'P-0301', prazoDevolucao: '2099-12-31' });
+    await registrar({ tipo: 'aceite', movimento: mov });
+    await registrar({ tipo: 'ocorrencia', movimento: null, motivo: 'Recebido sem a folha de rosto' });
+    l = await porta.localizacao(c, atend, o);
+    expect(l?.linhaDoTempo.find((m) => m.id === mov)).toMatchObject({ aceito: true, cobrada: false, protocolo: 'P-0301', prazoDevolucao: '2099-12-31' });
+    expect(l?.ocorrencias?.[0]).toMatchObject({ motivo: 'Recebido sem a folha de rosto', por: M().login });
+    // O prazo da remessa ainda não venceu: o volume sai da lista de cobrança.
+    expect(l?.devolucaoAtrasada).toBe(false);
+    expect((await porta.devolucoesAtrasadas(c, o)).itens.some((i) => i.movimento === mov)).toBe(false);
+
+    await registrar({ tipo: 'remessa', movimento: mov, protocolo: 'P-0302', prazoDevolucao: '2000-01-31' });
+    await registrar({ tipo: 'cobranca', movimento: mov });
+    l = await porta.localizacao(c, atend, o);
+    expect(l?.linhaDoTempo.find((m) => m.id === mov)).toMatchObject({ cobrada: true, protocolo: 'P-0302' });
+    expect((await porta.devolucoesAtrasadas(c, o)).itens.find((i) => i.movimento === mov)).toMatchObject({ cobrada: true, prazo: '2000-01-31' });
+
+    expect(l?.linhaDoTempo.some((m) => m.id === movOutra)).toBe(false);
+    await expect(registrar({ tipo: 'cobranca', movimento: movOutra })).rejects.toSatisfy((e) => codigoDe(e) === 'movimento-inexistente');
+    await registrar({ tipo: 'exclusao', movimento: mov, motivo: 'Lançado no volume errado' });
+    l = await porta.localizacao(c, atend, o);
+    expect(l?.linhaDoTempo.find((m) => m.id === mov)).toMatchObject({ excluido: true, motivoExclusao: 'Lançado no volume errado' });
+    expect(l?.local).toBeNull();
+  });
 });

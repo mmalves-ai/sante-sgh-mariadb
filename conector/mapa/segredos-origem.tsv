@@ -1,0 +1,15 @@
+tipo	chave_produto	chave_origem	tabela_origem	coluna_produto	coluna_origem
+convenio	id	COD	TBCONVEN	senha_portal	SENHA
+servico_tiss_convenio	convenio_id;versao_tiss_id	ID_TBCONVEN;ID_TBTISSSCHEMA	TBTISSWEBSERV	senha_prestador	SENHA_PRESTADOR
+atividade_convenio	id	ID	TBCODATI	senha_prestador	SENHA_PRESTADOR
+estabelecimento	id	COD	TBHOSPIT	senha_provedor	SENHAPROV
+estabelecimento	id	COD	TBHOSPIT	senha_proxy	SENHA_PROXY
+estabelecimento	id	COD	TBHOSPIT	senha_assinatura	SENHA_ASSINATURA
+usuario_estoque	login	USUARIO	GEUSERS	senha	SENHA
+servidor_email	id	ID	PREMAILCFG	senha_autenticacao	SENHA_AUTENTICACAO
+equipamento_laboratorio	id	CODIGO	SITPEQV	senha_transferencia	SENHA_FTP
+equipamento_laboratorio	id	CODIGO	SITPEQV	senha_exportacao	SENHA_EXPORTACAO
+senha_secundaria_usuario	login	USUARIO	(complemento do usuário)	senha_liberacao	SENHA_SEC
+senha_secundaria_usuario	login	USUARIO	(complemento do usuário)	senha_cancelamento_nota	SENHA_CAN_NF
+excecao	integracao_bancaria_externa	-	TBINFBANCO	-	-
+excecao	contas_acesso_modulos	-	SP_MODULO_USUARIO	-	-

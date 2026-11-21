@@ -1,0 +1,48 @@
+{
+  "lote": "08-misto-assinatura",
+  "volta": 2,
+  "pedidos": [
+    {
+      "tipo": "coordenada",
+      "alvo": "packages/ui/src/componentes/SanteHora.vue e as telas que o usam",
+      "motivo": "O componente importa classificarHora, formatarHoraLegada e paraHhmm de hora-legada.ts e grava a hora em quatro dígitos. Deve passar para lerHoraDigitada/esquemaHora de packages/contratos/src/formatacao/hora.ts (entrada e saída em \"HH:MM\", com a classificação válida, vazia ou inválida feita sobre FORMATO_HORA), junto com as telas e os contratos das APIs que recebem o valor dele. Depois disso, hora-legada.ts, o spec dele e o export no index.ts saem (arquivo deste lote, mantido até lá para não quebrar o vue-tsc e o build da web).",
+      "consumidores": "grep -rl SanteHora apps/web/src packages/ui"
+    },
+    {
+      "tipo": "coordenada",
+      "alvo": "apps/api/src/modulos/exames/relogio.ts (relogioNoFuso, civil().hhmm, RelogioQuatroDigitos)",
+      "motivo": "A forma de quatro dígitos do relógio é usada em ~195 pontos de 30 arquivos de outros lotes (adt, cirurgia, farmácia, faturamento, nutrição, portaria, preços, relatório, sadt, tiss, pessoas...). A troca para \"HH:MM\"/instante exige mudar os consumidores juntos; depois disso relogioNoFuso e o campo hhmm saem e as linhas 19 e 74 do relogio.ts zeram.",
+      "consumidores": "grep -rlE 'relogioNoFuso|\\bcivil\\(|RelogioQuatroDigitos' apps/api/src apps/worker/src"
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/especialidades/porta-propria.ts",
+      "motivo": "Sem DDL pendente: as 17 operações recusadas já têm estrutura (registro_nascimento.reanimacao_neonatal/observacao; protocolo_quimioterapia versionado; ciclo_quimioterapia, ciclo_quimioterapia_prescricao, evento_tratamento_oncologico; exame_oftalmologico(_valor), acuidade_visual, graduacao_oftalmologica; preparo_lactario + preparo_lactario_evento). Falta escrever a porta; não coube nesta volta."
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/nutricao/porta-propria.ts",
+      "motivo": "Sem DDL pendente aparente: plano_refeicao_acompanhante(_refeicao), direito_refeicao_acompanhante, refeicao_acompanhante, registro_social, correcao_registro_nutricao e avaliacao_nutricao_parenteral existem. A conferir: o acompanhamento diário da meta nutricional e o registro de alteração da hotelaria (não achei tabela com esse nome; se faltar, vira pedido de DDL na próxima volta)."
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/manutencao/porta-propria.ts",
+      "motivo": "Sem DDL pendente: ordem de serviço com laudo_arquivo_id, plano com modelo_plano_codigo, equipamento com desativado_em, alerta_sanitario(_equipamento, _verificacao), queixa_tecnica_produto(_evento), modelo_equipamento_curso e evento_ciclo_equipamento existem. Falta ligar as 9 recusas e as leituras que devolvem vazio."
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/sus/porta-propria.ts",
+      "motivo": "Resposta ao pedido do ddl-aplicado-v2 (23-misto-coexistencia): a estrutura das 18 operações JÁ EXISTE no 13_SUS. critica_sus tem conta_hospitalar_id, conta_hospitalar_item_id, atendimento_id, codigo_regra, chave_critica, detalhe e justificativa (crítica prévia por conta e justificativa); remessa_bpa/apac/ciha/sisaih têm chave_objeto e versao_objeto (arquivo gerado); producao_ambulatorial_sus_item e registro_ciha são as linhas do BPA e da CIHA; apac/laudo_apac/autorizacao_apac (APAC pela tela); faixa_numeracao_aih tem orgao_emissor, data_liberacao e motivo_situacao (faixa e cancelamento); laudo_internacao_sus/autorizacao_internacao_sus/conta_aih (ciclo da AIH); retorno_sus_item tem tratamento, justificativa, tratado_em (retorno por linha). Não há DDL a pedir; falta escrever a porta."
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/precos/fonte-propria.ts",
+      "motivo": "carga_tabela_preco e carga_tabela_preco_linha existem (23-misto-coexistencia): faltam cargas, carga, linhasDaCarga, gravarCarga e mudarSituacaoCarga. Mesmo com elas, a recusa de convenio.alterar-contrato (campos do contrato sem coluna em COLUNA_FONTE, linha 909) mantém o modeloPendente: é preciso listar esses campos e pedir as colunas de fonte_pagadora."
+    },
+    {
+      "tipo": "implementacao",
+      "alvo": "apps/api/src/modulos/portal-medico/porta-propria.ts (trocarSenha)",
+      "motivo": "Única recusa restante do portal do médico. credencial_usuario (resumo_senha argon2id, uq por usuário) existe e o serviço já cifra a senha (cifrarSenha): falta decidir se a conta do portal (conta_portal_profissional_externo.usuario_id) usa credencial_usuario como a senha do portal; o comentário do modelo diz 'a senha fica no provedor de identidade'. Decisão do dono ou do lote do acesso."
+    }
+  ]
+}
