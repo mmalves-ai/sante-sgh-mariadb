@@ -1,112 +1,73 @@
-// Fonte da tela "Perfis e permissões" (ADR 0022): onde as leituras e as gravações acontecem.
-//   - `legado`: o núcleo do legado. Leituras READ ONLY; perfis e mapa pela transação SGH_ (gravarSgh, com a
-//     SGH_TRILHA na mesma transação); permissões do PRÓPRIO legado só pelas receitas do EXECUTOR do M04 (com a
-//     trilha dupla e, no "como" e no acesso total, a imagem antes/depois para o Corrigir). Em dev sobre a cópia
-//     compartilhada (ACESSO_FONTE_DEV=copia), as receitas do legado ficam desligadas (POL-3, motivo visível): o
-//     COMMIT no SPDATA da cópia só acontece sob a trava, pelos testes (ADR 0021, decisão 20).
-//   - `memoria`: a sessão sintética (dev/ci; E2E): o estado sintético do acesso, com as mesmas regras e recusas
-//     das receitas; a trilha vai ao registrador da API. Nada vai à cópia.
+// Fonte da gestão de acessos (tela "Perfis e permissões", contas dormentes, recertificação, RH e pedidos de acesso):
+// onde as leituras e as gravações acontecem.
+//   - `banco`: o banco próprio do cliente pelo @sgh/nucleo (gestao-fonte-propria.ts), com o Executor (trilha, outbox e
+//     idempotência na mesma transação).
+//   - `memoria`: a sessão sintética (dev/ci; E2E): o estado sintético do acesso, com as mesmas regras e recusas da
+//     porta própria; a trilha vai ao registrador da API.
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo (nunca cai calada na memória).
+// Melhoria: as operações da conta (bloquear, papéis de segurança) são as mesmas na memória e no banco; as de grupo do
+// sistema de origem não existem no modelo próprio (o perfil concede) e são recusadas com o motivo, nas duas fontes.
 import type { EstadoOperacao } from '@sgh/contratos';
-import {
-  type AlteracaoPerfilConcedido,
-  type AlteracaoPerfilLida,
-  alterarConcessaoPerfil,
-  buscarUsuariosGestao,
-  type ConsultaCandidatosMapa,
-  type ContextoOperacao,
-  type DecisaoMapaLida,
-  decidirMapaOpcao,
-  type DecisaoMapa,
-  cancelarPoliticaSenha,
-  type DescricaoGrupoLida,
-  gravarDescricaoGrupo,
-  lerVersoesPoliticaSenha,
-  definirLimiteSessao,
-  lerHistoricoLimitesSessao,
-  type ContaDormenciaLegado,
-  type ConferenciaConselhoLida,
-  lerConferenciasConselho,
-  lerRegistrosConselhoDoUsuario,
-  type NovaConferenciaConselho,
-  type RegistroConselhoUsuario,
-  registrarConferenciaConselho,
-  type ExcecaoDormenciaLida,
-  lerContasParaDormencia,
-  lerHistoricoExcecoesDormencia,
-  type NovaExcecaoDormencia,
-  registrarExcecaoDormencia,
-  abrirCampanhaRecert,
-  type CampanhaRecertLida,
-  type ContaRecertLegado,
-  type DecisaoRecertGravar,
-  type FechamentoRecertGravar,
-  fecharCampanhaRecert,
-  type ItemRecertLido,
-  lerCampanhaRecert,
-  lerCampanhasRecert,
-  lerContasParaRecert,
-  type NovaCampanhaRecertGravar,
-  registrarDecisaoRecert,
-  type ValidarDecisaoRecert,
-  cancelarPedidoAcesso,
-  type DadosRhLidos,
-  definirPerfilCargoRh,
-  lerDadosRh,
-  type NovaResolucaoRh,
-  type NovoPerfilCargoRh,
-  registrarResolucaoRh,
-  decidirEConcederPedidoAcesso,
-  concederPedidoAprovado,
-  type DecisaoPedidoAcessoGravar,
-  type FiltroPedidosAcesso,
-  lerPedidoAcesso,
-  lerPedidosAcesso,
-  type NovoPedidoAcessoGravar,
-  type PedidoAcessoGravado,
-  registrarConcessaoPedido,
-  registrarPedidoAcesso,
-  type SituacaoPedidoAcesso,
-  type ValidarPedidoAcesso,
-  type NovoLimiteSessao,
-  type RegistroLimiteSessaoLido,
-  type NovaPoliticaSenha,
-  publicarPoliticaSenha,
-  type VersaoPoliticaSenhaLida,
-  ErroOperacao,
-  type Executor,
-  type FonteCatalogo,
-  gravarConcessaoPerfil,
-  type ConcessaoPerfilNova,
-  type GestorAcessoLido,
-  lerGestoresAcesso,
-  lerGruposLegado,
-  lerAlteracoesPerfil,
-  lerCandidatosMapa,
-  lerDecisoesMapa,
-  lerHistoricoPerfis,
-  lerMapaOpcao,
-  lerPapeisDoUsuario,
-  lerPapeisLegado,
-  lerPermissoesGrupos,
-  lerUsuarioGestao,
-  lerVersoesDescricaoGrupo,
-  type LinhaMapaLida,
-  type NovaDescricaoGrupo,
-  type NucleoLegado,
-  operacao,
-  type PapelLegado,
-  type PapelUsuarioLegado,
-  type PerfilConcedidoLido,
-  type ResultadoAlteracaoPerfil,
-  revogarConcessaoPerfil,
-  type TrilhaGestao,
-  type UsuarioGestaoLegado,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { CONTAS_SINTETICAS, estadoAcessoSintetico } from './fonte-sintetica.js';
 import type { ValidarResolucaoRhMemoria } from './rh-memoria.js';
+import {
+  type AlteracaoPerfilConcedido,
+  type CatalogoOperacoes,
+  type ConcessaoPerfilNova,
+  type ConsultaCandidatosMapa,
+  type ContaDormencia,
+  type ContaRecert,
+  type ContextoGestao,
+  type DecisaoMapa,
+  type DescricaoGrupoLida,
+  type DestinoGestao,
+  ehOperacaoConta,
+  type GestorAcessoLido,
+  type LinhaMapaLida,
+  NOMES_PAPEL,
+  type NovaDescricaoGrupo,
+  OPERACOES_CONTA,
+  type PapelGestao,
+  type PapelUsuario,
+  type PerfilConcedidoLido,
+  type ResultadoAlteracaoPerfil,
+  SEM_GRUPOS,
+  type TrilhaGestao,
+  type UsuarioGestao,
+} from './gestao-tipos.js';
+import type {
+  AlteracaoPerfilLida,
+  CampanhaRecertLida,
+  ConferenciaConselhoLida,
+  DadosRhLidos,
+  DecisaoMapaLida,
+  DecisaoPedidoAcessoGravar,
+  DecisaoRecertGravar,
+  ExcecaoDormenciaLida,
+  FechamentoRecertGravar,
+  FiltroPedidosAcesso,
+  ItemRecertLido,
+  NovaCampanhaRecertGravar,
+  NovaConferenciaConselho,
+  NovaExcecaoDormencia,
+  NovaPoliticaSenha,
+  NovaResolucaoRh,
+  NovoLimiteSessao,
+  NovoPedidoAcessoGravar,
+  NovoPerfilCargoRh,
+  PedidoAcessoGravado,
+  RegistroConselhoUsuario,
+  RegistroLimiteSessaoLido,
+  SituacaoPedidoAcesso,
+  ValidarDecisaoRecert,
+  ValidarPedidoAcesso,
+  VersaoPoliticaSenhaLida,
+} from './tipos-gestao-acesso.js';
+
+export * from './gestao-tipos.js';
 
 export const FONTE_GESTAO = Symbol('FONTE_GESTAO');
 
@@ -116,7 +77,7 @@ export interface GrupoGestaoLido {
   readonly opcoes: readonly number[];
 }
 
-/** POL-3: a receita do legado desligada neste estabelecimento, com o motivo para a pessoa. */
+/** A operação desligada neste estabelecimento, com o motivo para a pessoa. */
 export interface EstadoReceita {
   readonly estado: EstadoOperacao | null;
   readonly ligada: boolean;
@@ -131,16 +92,16 @@ export interface ConcessaoDoPedidoGravar {
 }
 
 export interface FonteGestao {
-  readonly destino: 'legado' | 'memoria';
-  buscarUsuarios(rede: string, hospital: string, termo: string): Promise<UsuarioGestaoLegado[]>;
-  usuario(rede: string, hospital: string, login: string): Promise<UsuarioGestaoLegado | null>;
-  papeisDoUsuario(rede: string, hospital: string, login: string): Promise<PapelUsuarioLegado[]>;
+  readonly destino: DestinoGestao;
+  buscarUsuarios(rede: string, hospital: string, termo: string): Promise<UsuarioGestao[]>;
+  usuario(rede: string, hospital: string, login: string): Promise<UsuarioGestao | null>;
+  papeisDoUsuario(rede: string, hospital: string, login: string): Promise<PapelUsuario[]>;
   historicoPerfis(rede: string, hospital: string, login: string): Promise<PerfilConcedidoLido[]>;
   mapa(rede: string, hospital: string): Promise<LinhaMapaLida[]>;
   grupos(rede: string, hospital: string): Promise<GrupoGestaoLido[]>;
   /** Só a memória (dev/ci): os grupos incluídos pela gestão neste processo (revisão W1-01, achado 6). */
   gruposCriadosNaMemoria?(): readonly string[];
-  papeis(rede: string, hospital: string): Promise<PapelLegado[]>;
+  papeis(rede: string, hospital: string): Promise<PapelGestao[]>;
   concederPerfil(
     rede: string,
     hospital: string,
@@ -201,7 +162,7 @@ export interface FonteGestao {
     t: TrilhaGestao,
   ): Promise<{ id: string; anterior: number | null; limite: number | null }>;
   /** W1-01 (parte 9b): contas ativas e livres com a última conexão (rotina das contas dormentes). */
-  contasDormencia(rede: string, hospital: string): Promise<ContaDormenciaLegado[]>;
+  contasDormencia(rede: string, hospital: string): Promise<ContaDormencia[]>;
   /** W1-01 (parte 9b): histórico das exceções das contas dormentes (SGH_ACESSO_DORMENCIA_EXCECAO), mais novo primeiro. */
   historicoExcecoesDormencia(rede: string, hospital: string): Promise<ExcecaoDormenciaLida[]>;
   /** W1-01 (parte 9b): inclui, troca o prazo ou retira a exceção (linha nova), com a trilha na transação SGH_. */
@@ -223,7 +184,7 @@ export interface FonteGestao {
     t: TrilhaGestao,
   ): Promise<{ id: string; anterior: string | null; atual: string }>;
   /** W1-01 (parte 9c2): contas ativas e livres com grupo, setores e perfis vigentes (retrato da recertificação). */
-  contasRecert(rede: string, hospital: string): Promise<ContaRecertLegado[]>;
+  contasRecert(rede: string, hospital: string): Promise<ContaRecert[]>;
   /** W1-01 (parte 9c2): campanhas de recertificação, a mais nova primeiro. */
   campanhasRecert(rede: string, hospital: string): Promise<CampanhaRecertLida[]>;
   campanhaRecert(
@@ -322,18 +283,19 @@ export interface FonteGestao {
   ): Promise<{ logins: string[]; limitado: boolean }>;
   /** W0-09: histórico das decisões de uma linha do mapa. */
   decisoesMapa(rede: string, hospital: string, idMapa: string): Promise<DecisaoMapaLida[]>;
-  /** Receita do legado pelo executor (ou, em memória, as mesmas regras sobre o estado sintético). */
-  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoOperacao): Promise<void>;
+  /** Operação da conta (bloquear, papéis de segurança); as de grupo são recusadas (SEM_GRUPOS). */
+  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoGestao): Promise<void>;
   /** W1-01 (parte 3c): gestores de acessos ativos, ao vivo, para a regra do último gestor (ultimo-gestor.ts). */
   gestoresAcesso(rede: string, hospital: string): Promise<GestorAcessoLido[]>;
   receita(nome: string, hospital: string): EstadoReceita;
 }
 
+/** Motivo da operação desligada fora de produção (mantido para quem ainda o importa; sai com as receitas). */
 export const DESLIGADA_DEV_COPIA =
-  'Desligada em dev sobre a cópia compartilhada: a gravação na cópia do banco só acontece sob a trava, nos testes (ADR 0021, decisão 20). Em homologação e treino, liga pelo catálogo; em dev, só com ACESSO_GESTAO_LEGADO_DEV=sim (decisão do dono).';
+  'Operação desligada neste ambiente: a gravação só acontece com a operação liberada no catálogo deste estabelecimento.';
 
 export function estadoDaReceita(
-  catalogo: FonteCatalogo,
+  catalogo: CatalogoOperacoes,
   nome: string,
   hospital: string,
   ambiente: string,
@@ -362,126 +324,16 @@ export function estadoDaReceita(
   return { estado, ligada: true, motivo: null };
 }
 
-export function fonteGestaoLegado(
-  nucleo: NucleoLegado,
-  executor: Executor,
-  catalogo: FonteCatalogo,
-  ambiente: string,
-  opcoes: { receitasDesligadas?: boolean } = {},
-): FonteGestao {
-  const ctx = (rede: string, hospital: string, traceId = 'acesso-gestao') => ({ rede, hospital, traceId });
-  const ler = <T>(rede: string, hospital: string, fn: Parameters<NucleoLegado['lerSomente']>[1]) =>
-    nucleo.lerSomente(ctx(rede, hospital), fn) as Promise<T>;
-  const receita = (nome: string, hospital: string): EstadoReceita =>
-    opcoes.receitasDesligadas
-      ? { estado: catalogo.estado(nome, hospital), ligada: false, motivo: DESLIGADA_DEV_COPIA }
-      : estadoDaReceita(catalogo, nome, hospital, ambiente);
-  return {
-    destino: 'legado',
-    buscarUsuarios: (rede, h, termo) => ler(rede, h, (l) => buscarUsuariosGestao(l, termo)),
-    usuario: (rede, h, login) => ler(rede, h, (l) => lerUsuarioGestao(l, login)),
-    papeisDoUsuario: (rede, h, login) => ler(rede, h, (l) => lerPapeisDoUsuario(l, login)),
-    historicoPerfis: (rede, h, login) => ler(rede, h, (l) => lerHistoricoPerfis(l, login)),
-    mapa: (rede, h) => ler(rede, h, (l) => lerMapaOpcao(l)),
-    grupos: (rede, h) =>
-      ler(rede, h, async (l) => {
-        const [grupos, perm] = [await lerGruposLegado(l), await lerPermissoesGrupos(l)];
-        return grupos.map((g) => ({
-          nome: g.nome,
-          ativo: g.ativo,
-          opcoes: perm.filter((p) => p.grupo === g.nome).map((p) => p.opcao),
-        }));
-      }),
-    papeis: (rede, h) => ler(rede, h, (l) => lerPapeisLegado(l)),
-    concederPerfil: (rede, h, c, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => gravarConcessaoPerfil(e, c, t)),
-    revogarPerfil: (rede, h, id, por, t, motivo) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => revogarConcessaoPerfil(e, id, por, t, motivo)),
-    alterarPerfil: (rede, h, a, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => alterarConcessaoPerfil(e, a, t)),
-    alteracoesPerfil: (rede, h, id) => ler(rede, h, (l) => lerAlteracoesPerfil(l, id)),
-    decidirMapa: (rede, h, d, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => decidirMapaOpcao(e, d, t)),
-    versoesDescricaoGrupo: (rede, h, grupo) => ler(rede, h, (l) => lerVersoesDescricaoGrupo(l, grupo)),
-    descreverGrupo: (rede, h, d, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => gravarDescricaoGrupo(e, d, t)),
-    versoesPoliticaSenha: (rede, h) => ler(rede, h, (l) => lerVersoesPoliticaSenha(l, h)),
-    publicarPoliticaSenha: (rede, h, p, agora, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => publicarPoliticaSenha(e, p, agora, t)),
-    cancelarPoliticaSenha: (rede, h, c, agora, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) =>
-        cancelarPoliticaSenha(e, { ...c, hospital: h }, agora, t),
-      ),
-    historicoLimitesSessao: (rede, h) => ler(rede, h, (l) => lerHistoricoLimitesSessao(l, h)),
-    definirLimiteSessao: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => definirLimiteSessao(e, p, t)),
-    contasDormencia: (rede, h) => ler(rede, h, (l) => lerContasParaDormencia(l)),
-    historicoExcecoesDormencia: (rede, h) => ler(rede, h, (l) => lerHistoricoExcecoesDormencia(l, h)),
-    registrarExcecaoDormencia: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => registrarExcecaoDormencia(e, p, t)),
-    registrosConselho: (rede, h, login) => ler(rede, h, (l) => lerRegistrosConselhoDoUsuario(l, login)),
-    conferenciasConselho: (rede, h, login) => ler(rede, h, (l) => lerConferenciasConselho(l, h, login)),
-    registrarConferenciaConselho: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => registrarConferenciaConselho(e, p, t)),
-    contasRecert: (rede, h) => ler(rede, h, (l) => lerContasParaRecert(l, h)),
-    campanhasRecert: (rede, h) => ler(rede, h, (l) => lerCampanhasRecert(l, h)),
-    campanhaRecert: (rede, h, id) => ler(rede, h, (l) => lerCampanhaRecert(l, h, id)),
-    abrirCampanhaRecert: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => abrirCampanhaRecert(e, p, t)),
-    decidirRecert: (rede, h, p, t, validar) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => registrarDecisaoRecert(e, p, t, validar)),
-    fecharCampanhaRecert: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => fecharCampanhaRecert(e, p, t)),
-    pedidosAcesso: (rede, h, filtro) => ler(rede, h, (l) => lerPedidosAcesso(l, h, filtro)),
-    pedidoAcesso: (rede, h, id) => ler(rede, h, (l) => lerPedidoAcesso(l, h, id)),
-    pedirAcesso: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => registrarPedidoAcesso(e, p, t)),
-    decidirPedidoAcesso: (rede, h, p, t, validar, conceder) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) =>
-        decidirEConcederPedidoAcesso(e, p, t, validar, conceder),
-      ),
-    concederPedidoAprovado: (rede, h, pedido, conceder) =>
-      nucleo.gravarSgh(ctx(rede, h, conceder.trilhaAnotacao.correlacao), (e) =>
-        concederPedidoAprovado(e, { hospital: h, pedido }, conceder),
-      ),
-    concessaoPedidoAcesso: (rede, h, pedido, concessao, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) =>
-        registrarConcessaoPedido(e, { hospital: h, pedido, concessao }, t),
-      ),
-    cancelarPedidoAcesso: (rede, h, pedido, motivo, por, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) =>
-        cancelarPedidoAcesso(e, { hospital: h, pedido, motivo, por }, t),
-      ),
-    dadosRh: (rede, h) => ler(rede, h, (l) => lerDadosRh(l, h)),
-    definirPerfilCargoRh: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => definirPerfilCargoRh(e, p, t)),
-    resolverTarefaRh: (rede, h, p, t, validar) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) =>
-        registrarResolucaoRh(e, p, async (tx) => validar(await lerDadosRh(tx, h)), t),
-      ),
-    candidatosMapa: (rede, h, c) => ler(rede, h, (l) => lerCandidatosMapa(l, c)),
-    decisoesMapa: (rede, h, id) => ler(rede, h, (l) => lerDecisoesMapa(l, id)),
-    async executar(nome, hospital, entrada, c) {
-      const r = receita(nome, hospital);
-      if (!r.ligada)
-        throw new ErroProblema('operacao-bloqueada', 409, 'Operação desligada', r.motivo ?? undefined, {
-          codigo: 'operacao-desligada',
-        });
-      await executor.executar(operacao(nome), hospital, entrada, c);
-    },
-    gestoresAcesso: (rede, h) => ler(rede, h, (l) => lerGestoresAcesso(l)),
-    receita,
-  };
-}
-
 /** Memória (dev/ci, sessão sintética): o estado sintético com as regras das receitas; trilha no registrador. */
 export function fonteGestaoMemoria(
   trilha: RegistradorTrilha,
-  catalogo: FonteCatalogo,
-  ambiente: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _catalogo?: CatalogoOperacoes,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _ambiente?: string,
 ): FonteGestao {
   const e = () => estadoAcessoSintetico();
-  const usuarioDe = (login: string): UsuarioGestaoLegado | null => {
+  const usuarioDe = (login: string): UsuarioGestao | null => {
     const c = e().contas.get(login);
     return c
       ? {
@@ -796,24 +648,19 @@ export function fonteGestaoMemoria(
           .reverse(),
       ),
     async executar(nome, hospital, entrada, c) {
-      const est = estadoDaReceita(catalogo, nome, hospital, ambiente);
-      if (!est.ligada)
-        throw new ErroProblema('operacao-bloqueada', 409, 'Operação desligada', est.motivo ?? undefined, {
-          codigo: 'operacao-desligada',
-        });
-      const op = operacao(nome);
-      const p = op.entrada.safeParse(entrada);
+      if (!ehOperacaoConta(nome)) throw new ErroOperacao(409, 'sem-grupos', 'Operação recusada', SEM_GRUPOS);
+      const p = OPERACOES_CONTA[nome].safeParse(entrada);
       if (!p.success)
         throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos.');
-      e().aplicar(nome, p.data as Record<string, unknown>, c.usuarioLegado);
+      e().aplicar(nome, p.data as Record<string, unknown>, c.usuario);
       await trilha.registrar({
-        evento: op.receita.evento,
+        evento: 'acesso.usuario.gravado',
         rede: c.rede,
         hospital,
-        usuario: c.usuarioLegado,
+        usuario: c.usuario,
         estacao: c.estacao ?? '',
-        correlacao: c.traceId,
-        recurso: op.receita.recurso,
+        correlacao: c.correlacao,
+        recurso: 'acesso.usuario',
         resultado: 'sucesso',
         tabelaAlvo: 'MEMORIA',
         idAlvo: nome,
@@ -849,7 +696,10 @@ export function fonteGestaoMemoria(
           .sort((a, b) => a.login.localeCompare(b.login)),
       );
     },
-    receita: (nome, hospital) => estadoDaReceita(catalogo, nome, hospital, ambiente),
+    receita: (nome) =>
+      ehOperacaoConta(nome)
+        ? { estado: null, ligada: true, motivo: null }
+        : { estado: null, ligada: false, motivo: SEM_GRUPOS },
   };
 }
 
@@ -863,7 +713,7 @@ export function fonteGestaoIndisponivel(): FonteGestao {
     );
   };
   return {
-    destino: 'legado',
+    destino: 'banco',
     buscarUsuarios: recusar,
     usuario: recusar,
     papeisDoUsuario: recusar,
@@ -912,12 +762,3 @@ export function fonteGestaoIndisponivel(): FonteGestao {
     receita: () => ({ estado: null, ligada: false, motivo: 'Banco do estabelecimento não configurado.' }),
   };
 }
-
-/** TBPAPEL.NOME do pc (os cinco papéis SBIS), para a fonte sintética. */
-export const NOMES_PAPEL: Readonly<Record<number, string>> = {
-  0: 'Gestor de acessos',
-  1: 'Administrador do sistema',
-  2: 'Auditor',
-  3: 'Operador de backup',
-  4: 'Operador de sistema',
-};

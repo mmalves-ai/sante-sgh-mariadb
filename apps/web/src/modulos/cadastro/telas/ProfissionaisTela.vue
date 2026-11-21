@@ -8,14 +8,11 @@
 import type { ProfissionalResumo } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteIcone } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import FaixaOnda0 from '../../onda0/componentes/FaixaOnda0.vue';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
-import { CHAVE_TELAS_ONDA0, usarSessao } from '../../../casca/sessao/sessao.js';
-import { lerTelasOnda0 } from '../../onda0/api-onda0.js';
 import { buscarProfissionais } from '../api-cadastro.js';
 import NovoProfissional from '../componentes/NovoProfissional.vue';
 import { iniciais } from '../profissional-tela.js';
@@ -38,18 +35,6 @@ const consulta = useQuery({
 const r = computed(() => consulta.data.value);
 
 const excluido = computed(() => rota.query['excluido'] === '1');
-// Revisão da D-PROF-39: "Novo profissional" segue a mesma regra da faixa (a consulta da sessão, mesma chave do cache):
-// com as gravações da tela recusadas pelo executor, a faixa aparece e o botão não.
-const { sessao } = usarSessao();
-const telasOnda0 = useQuery({
-  queryKey: computed(() => [CHAVE_TELAS_ONDA0, sessao.value?.estabelecimentoAtivo ?? '']),
-  queryFn: () => lerTelasOnda0(),
-  staleTime: 60_000,
-  retry: 1,
-});
-const escritaRecusada = computed(
-  () => telasOnda0.data.value?.telas.find((x) => x.id === 'profissionais')?.escritaLiberada === false,
-);
 const incluindo = ref(false);
 function incluido(id: number): void {
   incluindo.value = false;
@@ -123,7 +108,7 @@ const registro = (x: ProfissionalResumo['registros'][number]) =>
           t('cadastro.profissionais.prestadores')
         }}</RouterLink>
         <SanteBotao
-          v-if="pode('cadastro.profissional.criar') && !escritaRecusada && !incluindo"
+          v-if="pode('cadastro.profissional.criar') && !incluindo"
           :rotulo="t('cadastro.profissionais.edicao.novo')"
           variante="primario"
           data-testid="novo-profissional-abrir"
@@ -131,7 +116,6 @@ const registro = (x: ProfissionalResumo['registros'][number]) =>
         />
       </div>
     </header>
-    <FaixaOnda0 tela="profissionais" />
     <SanteAlerta
       v-if="excluido"
       :texto="t('cadastro.profissionais.tela.excluido')"

@@ -1,5 +1,5 @@
 // M59-F1: porta de memória do painel de contas do banco (dev e CI sem banco). Só contas técnicas do catálogo do
-// cap-08 §8.10 e números sintéticos; nenhuma conta de pessoa (o agregado das não catalogadas sai só contado).
+// inventário M59 e números sintéticos; nenhuma conta de pessoa (o agregado das não catalogadas sai só contado).
 import type { ContaBancoLida, PrivilegioReal } from '@sgh/contratos';
 import type { PortaContasBanco } from './porta.js';
 
@@ -21,7 +21,7 @@ const conta = (
   privilegios: { ...zero, ...p.privilegios },
 });
 
-/** O inventário sintético (números de ordem de grandeza do cap-08 §8.10, não do banco). */
+/** O inventário sintético (números de ordem de grandeza do inventário M59, não do banco). */
 export const INVENTARIO_SINTETICO: readonly ContaBancoLida[] = [
   conta('AUTORIZADOR', {
     privilegios: { S: 2600, I: 2600, U: 2600, D: 2600, X: 130 },
@@ -55,6 +55,8 @@ export const INVENTARIO_SINTETICO: readonly ContaBancoLida[] = [
 
 export class PortaContasBancoMemoria implements PortaContasBanco {
   readonly destino = 'memoria' as const;
+  /** Tabelas sintéticas do banco (ordem de grandeza do modelo próprio). */
+  tabelas = 3500;
   constructor(
     private readonly privilegios: readonly PrivilegioReal[] = [],
     private readonly inventario: readonly ContaBancoLida[] = INVENTARIO_SINTETICO,
@@ -71,9 +73,12 @@ export class PortaContasBancoMemoria implements PortaContasBanco {
   async lerPrivilegiosSgh() {
     return this.privilegios;
   }
-  /** Sintético (M59-F3): a conta ampla da aplicação ainda apaga registro clínico; contas do outro sistema agregadas. */
+  /** Sintético (M59-F3): a conta ampla da aplicação ainda apaga linha; as contas fora da lista legível agregadas. */
   async lerDeleteClinico() {
     return this.deleteClinico;
+  }
+  async contarTabelas() {
+    return this.tabelas;
   }
   deleteClinico: readonly { titular: string | null; tabelas: number }[] = [
     { titular: 'SGH_SINTETICO', tabelas: 55 },

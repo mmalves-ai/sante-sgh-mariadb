@@ -1,7 +1,9 @@
 // Rotas do M59-F5: permissões (certificação com auditoria.sbis.ler|avaliar, ciclos pelo escritório da qualidade; termo com config.coexistencia.ler e
 // auditoria.concessao.encerrar; backup com auditoria.backup.ler|registrar; exportação com auditoria.trilha.exportar),
-// auditoria das leituras, validação da entrada e a senha nas ações críticas. App com a fonte sintética e a porta em
-// memória (dados sintéticos).
+// auditoria das leituras, validação da entrada e a senha nas ações críticas. App da base com o módulo da administração
+// (registro) sobre a porta em memória (dados sintéticos). A rota de exportação da trilha é do controlador da trilha
+// (auditoria.controller.ts, lote 02-05); aqui, a identificação e a prova pelo serviço que o módulo exporta.
+import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { EVENTOS_AUDITAVEIS, REQUISITOS_SBIS } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -10,21 +12,26 @@ import { CHAVE_AUDITAR } from '../../../autorizacao/decoradores.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { modulo } from '../modulo.js';
 import { PortaSbisMemoria } from './porta-memoria.js';
 import { SbisController } from './sbis.controller.js';
+import { SERVICO_SBIS, type ServicoSbis } from './servico.js';
 
 const SBIS = '/api/administracao/auditoria/sbis';
 const CONCESSOES = '/api/administracao/coexistencia/concessoes';
 const BACKUP = '/api/administracao/auditoria/backup';
 
 describe('rotas do M59-F5', () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'administracao' };
   let app: NestFastifyApplication;
   const trilha = new RegistradorTrilhaMemoria();
   const porta = new PortaSbisMemoria();
   const csrf = new Map<string, string>();
   beforeAll(async () => {
-    app = await criarApp(lerConfiguracao(env), null, env, { trilha, sbis: porta });
+    app = await criarApp(lerConfiguracao(env), null, env, {
+      trilha,
+      registro: { administracao: async () => ({ modulo: (ctx) => modulo(ctx, { sbis: porta }) }) },
+    });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
@@ -50,8 +57,24 @@ describe('rotas do M59-F5', () => {
     return cookie;
   };
   const com = (cookie: string) => ({ cookie, 'x-csrf': csrf.get(cookie) ?? '' });
-  const post = (cookie: string, url: string, payload: unknown) =>
-    app.inject({ method: 'POST', url, headers: com(cookie), payload: payload as object });
+  const post = (cookie: string, url: string, payload: unknown, chave: string = randomUUID()) =>
+    app.inject({
+      method: 'POST',
+      url,
+      headers: { ...com(cookie), 'idempotency-key': chave },
+      payload: payload as object,
+    });
+
+  it('gravação sem Idempotency-Key: 400 (o reenvio só é reconhecido pela chave do pedido)', async () => {
+    const auditor = await entrar('SINT.SBIS.CONFORMIDADE');
+    const r = await app.inject({
+      method: 'POST',
+      url: `${SBIS}/ciclos`,
+      headers: com(auditor),
+      payload: { tipo: 'autoavaliacao', versao: '1.0.0' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
 
   it('painel da certificação: auditor lê (auditado); sem a permissão, 403', async () => {
     const auditor = await entrar('SINT.AUDITOR');
@@ -188,29 +211,15 @@ describe('rotas do M59-F5', () => {
     expect((await post(auditor, `${BACKUP}/restauracoes`, {})).statusCode).toBe(403);
   });
 
-  it('exportação da trilha para a auditoria: identificação e prova da cadeia no arquivo', async () => {
-    const auditor = await entrar('SINT.AUDITOR');
+  it('exportação para a auditoria: o serviço exportado pelo módulo monta a identificação e a prova da cadeia', async () => {
+    const servico = app.get<ServicoSbis>(SERVICO_SBIS);
     const hoje = new Date().toISOString().slice(0, 10);
-    const r = await app.inject({
-      method: 'GET',
-      url: `/api/administracao/auditoria/trilha/exportar-sbis?formato=csv&inicio=${hoje}&fim=${hoje}`,
-      headers: { cookie: auditor },
-    });
-    expect(r.statusCode).toBe(200);
-    expect(r.headers['x-cadeia-integra']).toBe('sim');
-    expect(r.body.split('\r\n')[0]).toContain('# software');
-    expect(r.body).toContain('# cnes');
-    const xml = await app.inject({
-      method: 'GET',
-      url: `/api/administracao/auditoria/trilha/exportar-sbis?formato=xml&inicio=${hoje}&fim=${hoje}`,
-      headers: { cookie: auditor },
-    });
-    expect(xml.body).toContain('<provaCadeia');
-    const html = await app.inject({
-      method: 'GET',
-      url: `/api/administracao/auditoria/trilha/exportar-sbis?formato=html&inicio=${hoje}&fim=${hoje}`,
-      headers: { cookie: auditor },
-    });
-    expect(html.statusCode).toBe(400);
+    const r = await servico.identificacaoEProva(
+      { rede: '', hospital: 'aa', login: 'SINT.AUDITOR', estacao: null, correlacao: 'teste-exportacao' },
+      hoje,
+      hoje,
+    );
+    expect(r.identificacao).toMatchObject({ cnes: '0000000', inicio: hoje, fim: hoje, geradoPor: 'SINT.AUDITOR' });
+    expect(r.prova.integra).toBe(true);
   });
 });

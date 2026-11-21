@@ -1,5 +1,5 @@
 # lote 02-08 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: coexistencia
+# registrar: -
 # pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
 apps/api/src/modulos/coexistencia/porta-legado.ts
 apps/api/src/modulos/coexistencia/porta-memoria.ts
@@ -13,3 +13,5 @@ apps/api/src/modulos/coexistencia/retrocompatibilidade.controller.ts
 apps/api/src/modulos/coexistencia/retrocompatibilidade.int.spec.ts
 apps/api/src/modulos/coexistencia/retrocompatibilidade.spec.ts
 apps/api/src/modulos/coexistencia/aplicacao/servico.ts
+# entregue no lugar dos 12 arquivos apagados (remoção, ADR 0003 item 9): o verificador da limpeza
+tools/obra/sem-coexistencia.sh

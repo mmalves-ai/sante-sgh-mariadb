@@ -1,29 +1,31 @@
 // Tela "Perfis e permissões" (ADR 0022; permissão acesso.perfil.gerir: perfil gestor-acessos e acesso total da
-// plataforma). Leituras ao vivo:
-//   GET  /api/acesso/gestao/usuarios?busca=           busca no TBUSERS (login ou nome)
+// plataforma). Leituras ao vivo, pela FonteGestao (banco próprio do cliente ou memória sintética):
+//   GET  /api/acesso/gestao/usuarios?busca=           contas com vínculo no estabelecimento (login ou nome)
 //   GET  /api/acesso/gestao/usuarios/:login           permissões efetivas com a origem e o que a segregação retirou
-//   GET  /api/acesso/gestao/mapa                       mapa grupo → perfil e perfil → permissão (com as propostas)
-//   GET  /api/acesso/gestao/grupos | papeis            opções do legado por grupo e por papel SBIS
-//   GET  /api/acesso/gestao/operacoes                  estado de cada receita do legado (POL-3: motivo visível)
-// Gravações (reautenticação pela senha: SBIS-07; Idempotency-Key nas receitas do legado):
-//   POST /api/acesso/gestao/perfis | perfis/:id/revogar     SGH_ACESSO_PERFIL_USUARIO
-//   POST /api/acesso/gestao/perfis/:id/alteracao           vigência e motivo (W0-09; anterior na alteração)
+//   GET  /api/acesso/gestao/mapa                       mapa perfil → permissão (com as propostas)
+//   GET  /api/acesso/gestao/grupos | papeis            grupos (vazio no banco próprio) e papéis de segurança
+//   GET  /api/acesso/gestao/operacoes                  estado de cada operação da conta (motivo visível)
+// Gravações (reautenticação pela senha: SBIS-07; Idempotency-Key nas operações da conta):
+//   POST /api/acesso/gestao/perfis | perfis/:id/revogar     concessão de perfil com vigência (usuario_perfil)
+//   POST /api/acesso/gestao/perfis/:id/alteracao           vigência e motivo (W0-09)
 //   GET  /api/acesso/gestao/perfis/:id/alteracoes          o anterior e o novo de cada alteração
-//   POST /api/acesso/gestao/mapa/decidir                    SGH_ACESSO_MAPA_OPCAO (proposta → aprovada|recusada)
-//   POST /api/acesso/gestao/grupos/descricao                SGH_ACESSO_GRUPO_DESCR (W1-01: versão nova da descrição)
+//   POST /api/acesso/gestao/mapa/decidir                    decisão do mapa (proposta → aprovada|recusada)
+//   POST /api/acesso/gestao/grupos/descricao                versão nova da descrição do grupo
 //   GET  /api/acesso/gestao/grupos/:grupo/descricoes        as versões da descrição (a anterior visível)
-//   GET  /api/acesso/gestao/politica-senha                  TBCFGLOGIN, a efetiva e as versões do Sante (W1-01)
-//   POST /api/acesso/gestao/politica-senha                  SGH_ACESSO_POLITICA_SENHA (versão nova com vigência)
+//   GET  /api/acesso/gestao/politica-senha                  a política do estabelecimento, a efetiva e as versões
+//   POST /api/acesso/gestao/politica-senha                  versão nova com vigência
 //   POST /api/acesso/gestao/politica-senha/:versao/cancelar a versão agendada, antes de entrar em vigor
-//   GET  /api/acesso/gestao/limites-sessao                  limites de sessões por perfil e o histórico (W1-01)
-//   POST /api/acesso/gestao/limites-sessao                  SGH_ACESSO_LIMITE_SESSAO (incluir/alterar/retirar)
+//   GET  /api/acesso/gestao/limites-sessao                  limites de sessões por perfil e o histórico
+//   POST /api/acesso/gestao/limites-sessao                  incluir/alterar/retirar o limite
 //   POST /api/acesso/gestao/mapa/previa                     quantos perdem antes de confirmar (W0-09; nada grava)
-//   GET  /api/acesso/gestao/mapa/:id/decisoes               SGH_ACESSO_MAPA_DECISAO (anterior, motivo, afetados)
-//   POST /api/acesso/gestao/legado/:operacao                receitas do executor do M04 (o próprio legado)
+//   GET  /api/acesso/gestao/mapa/:id/decisoes               decisões da linha do mapa (anterior, motivo, afetados)
+//   POST /api/acesso/gestao/operacoes/:operacao             operações da conta (bloquear, papéis de segurança)
 //   POST /api/acesso/gestao/cache/invalidar                 a mudança vale na hora
 // Toda gravação invalida o cache das permissões (3 min) do afetado (ou do estabelecimento inteiro, quando a
 // mudança vale para um grupo, um papel ou o mapa) e vai à trilha com o ator real (no "como" e no acesso total,
-// a ORIGEM da SGH_TRILHA e a imagem antes/depois para o Corrigir).
+// a origem da trilha). O que a fonte própria ainda não grava responde "modelo-pendente" ou "adaptador-pendente".
+// Melhoria: a rota das operações da conta deixa de ser a das receitas do sistema de origem; as de grupo são recusadas
+// com o motivo (o modelo próprio não tem grupos).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AlteracaoPerfilTela,
@@ -72,15 +74,7 @@ import {
   PERFIL_DO_PAPEL,
   politicaEfetiva,
 } from '@sgh/dominio-acesso';
-import {
-  type ContextoOperacao,
-  ErroMotivoMapa,
-  ErroOperacao,
-  limitesVigentes,
-  mapaMudaDecisao,
-  type TrilhaGestao,
-  type VersaoPoliticaSenhaLida,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -92,7 +86,17 @@ import { ErroProblema, type ExtrasProblema, tipoPorStatus } from '../../problema
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from './acesso.controller.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
+import type { ContextoGestao, DestinoGestao, TrilhaGestao } from './gestao-tipos.js';
+import {
+  ErroMotivoMapa,
+  limitesVigentes,
+  mapaMudaDecisao,
+  type VersaoPoliticaSenhaLida,
+} from './tipos-gestao-acesso.js';
 import { exigirGestorRestante } from './ultimo-gestor.js';
+
+/** O resultado da gravação com o destino da fonte (o banco próprio ou a memória). */
+type ResultadoGestao = Omit<ResultadoGestaoTela, 'destino'> & { readonly destino: DestinoGestao };
 
 const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 const DESCRICAO = new Map(CATALOGO_COMPLETO.map((p) => [p.codigo, p.descricao]));
@@ -107,7 +111,7 @@ export const PERFIS_DA_TELA: readonly string[] = [
   ]),
 ].sort();
 
-/** Permissões que o mapa perfil → permissão pode conceder (recurso por perfil; o resto vem do legado). */
+/** Permissões que o mapa perfil → permissão pode conceder (recurso por perfil). */
 const POR_PERFIL = new Set(
   CATALOGO_COMPLETO.filter((p) => p.concessaoPorPerfil !== null).map((p) => p.codigo),
 );
@@ -231,7 +235,7 @@ export class GestaoAcessoController {
 
   /**
    * Segregação pelo mapa (ADR 0022, decisão 17): o mapa vale para todo o grupo ou todo o perfil, então o
-   * operador não decide a linha do PRÓPRIO grupo (TBUSERS.GRUPO dele) nem a de um perfil que ele tem (as
+   * operador não decide a linha do PRÓPRIO grupo (o grupo da conta, quando a fonte o tem) nem a de um perfil que ele tem (as
    * origens ao vivo, sem cache). Vale em toda decisão (aprovar dá, recusar ou voltar a proposta tira).
    */
   private async naoNoProprioAcesso(
@@ -461,9 +465,7 @@ export class GestaoAcessoController {
   @Post('perfis')
   @HttpCode(201)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_PERFIL_USUARIO e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async concederPerfil(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -513,14 +515,12 @@ export class GestaoAcessoController {
   @Post('perfis/:id/revogar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_PERFIL_USUARIO e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async revogarPerfil(
     @Param('id') id: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<ResultadoGestaoTela> {
+  ): Promise<ResultadoGestao> {
     if (!/^\d{1,18}$/.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Concessão não encontrada');
     const p = this.analisar(esquemaRevogarPerfil, corpo);
     const { rede, hospital, login: operador } = this.sessao(req);
@@ -548,9 +548,7 @@ export class GestaoAcessoController {
   @Post('perfis/:id/alteracao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_PERFIL_USUARIO, SGH_ACESSO_PERFIL_ALTERACAO e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async alterarPerfil(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -729,9 +727,7 @@ export class GestaoAcessoController {
   @Post('mapa/decidir')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_MAPA_OPCAO e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async decidirMapa(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -794,7 +790,7 @@ export class GestaoAcessoController {
     };
   }
 
-  // ── W1-01 (parte 5): política de senha do Sante (por versão com vigência; só aperta TBCFGLOGIN) ──────────
+  // ── W1-01 (parte 5): política de senha (por versão com vigência; só aperta a do estabelecimento) ──────────
 
   /** A versão em vigor no instante: a publicada de maior vigência já alcançada (empate: a de maior versão). */
   private static emVigor(
@@ -880,9 +876,7 @@ export class GestaoAcessoController {
   @Post('politica-senha')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_POLITICA_SENHA e SGH_TRILHA (valor anterior de cada campo) na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async publicarPoliticaSenha(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -892,7 +886,7 @@ export class GestaoAcessoController {
     anterior: number | null;
     diferenca: string[];
     operacao: string;
-    destino: 'legado' | 'memoria';
+    destino: DestinoGestao;
   }> {
     const p = this.analisar(esquemaPublicarPoliticaSenha, corpo);
     const { rede, hospital, login: operador } = this.sessao(req);
@@ -928,14 +922,12 @@ export class GestaoAcessoController {
   @Post('politica-senha/:versao/cancelar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_POLITICA_SENHA e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async cancelarPoliticaSenha(
     @Param('versao') bruto: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; versao: number; operacao: string; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; versao: number; operacao: string; destino: DestinoGestao }> {
     const versao = Number(bruto);
     if (!/^\d{1,6}$/.test(bruto) || !Number.isInteger(versao) || versao < 1)
       throw new ErroProblema('entrada-invalida', 400, 'Versão inválida');
@@ -955,7 +947,7 @@ export class GestaoAcessoController {
     return { ...r, operacao: 'acesso.cancelarPoliticaSenha', destino: this.fonte.destino };
   }
 
-  // ── W1-01 (parte 8): limite de sessões simultâneas por perfil (SGH_ACESSO_LIMITE_SESSAO) ──
+  // ── W1-01 (parte 8): limite de sessões simultâneas por perfil  ──
 
   @Get('limites-sessao')
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
@@ -982,9 +974,7 @@ export class GestaoAcessoController {
   @Post('limites-sessao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_LIMITE_SESSAO e SGH_TRILHA (valor anterior) na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async definirLimiteSessao(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -993,7 +983,7 @@ export class GestaoAcessoController {
     anterior: number | null;
     limite: number | null;
     operacao: string;
-    destino: 'legado' | 'memoria';
+    destino: DestinoGestao;
   }> {
     const p = this.analisar(esquemaDefinirLimiteSessao, corpo);
     const { rede, hospital, login: operador } = this.sessao(req);
@@ -1038,9 +1028,7 @@ export class GestaoAcessoController {
   @Post('grupos/descricao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'SGH_ACESSO_GRUPO_DESCR e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
   async descreverGrupo(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1049,7 +1037,7 @@ export class GestaoAcessoController {
     versao: number;
     anterior: number | null;
     operacao: string;
-    destino: 'legado' | 'memoria';
+    destino: DestinoGestao;
   }> {
     const p = this.analisar(esquemaDescreverGrupo, corpo);
     const { rede, hospital, login: operador } = this.sessao(req);
@@ -1074,19 +1062,17 @@ export class GestaoAcessoController {
     };
   }
 
-  // ── Permissões do próprio legado (receitas do executor do M04) ──────────────────────────────────
+  // ── Operações da conta (bloquear, papéis de segurança); as de grupo são recusadas pela fonte ───────────
 
-  @Post('legado/:operacao')
+  @Post('operacoes/:operacao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler(
-    'executor: TBCABTRILHA como o Delphi e SGH_TRILHA na mesma transação da receita (memória: registrador da API)',
-  )
-  async legado(
+  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  async executarOperacao(
     @Param('operacao') nome: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<ResultadoGestaoTela> {
+  ): Promise<ResultadoGestao> {
     if (!(NOMES_OPERACOES_GESTAO as readonly string[]).includes(nome))
       throw new ErroProblema('nao-encontrado', 404, 'Operação não encontrada');
     const op = nome as OperacaoGestaoLegado;
@@ -1108,12 +1094,12 @@ export class GestaoAcessoController {
       });
     await this.ultimoGestor(op, rede, hospital, p.entrada);
     const reautenticadoEm = await this.reautenticado(req, p.senha);
-    const ctx: ContextoOperacao = {
+    const ctx: ContextoGestao = {
       rede,
       hospital,
-      traceId: correlacaoDaRequisicao(req, 'acesso-gestao'),
-      usuarioLegado: login,
-      idempotencyKey: chave,
+      usuario: login,
+      correlacao: correlacaoDaRequisicao(req, 'acesso-gestao').slice(0, 64),
+      chaveIdempotencia: chave,
       estacao: estacaoDaRequisicao(req).slice(0, 80),
       reautenticadoEm,
     };
@@ -1132,7 +1118,7 @@ export class GestaoAcessoController {
   async invalidarCache(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<ResultadoGestaoTela> {
+  ): Promise<ResultadoGestao> {
     const p = this.analisar(esquemaInvalidarCache, corpo);
     return {
       operacao: 'acesso.invalidarCache',

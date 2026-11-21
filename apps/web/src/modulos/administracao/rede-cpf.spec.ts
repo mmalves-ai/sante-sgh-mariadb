@@ -102,7 +102,7 @@ const PAINEL = {
   ],
   totalContas: 2,
   aBloquear: 1,
-  destino: 'legado',
+  destino: 'banco',
 };
 
 describe('A pessoa na rede (W1-01, parte 11c)', () => {
@@ -141,7 +141,7 @@ describe('A pessoa na rede (W1-01, parte 11c)', () => {
                 { estabelecimento: 'hc', login: null, resultado: 'indisponivel', detalhe: 'Repita depois.' },
               ],
               bloqueados: 1,
-              destino: 'legado',
+              destino: 'banco',
             },
           }
         : p.url.endsWith('/rede-cpf')

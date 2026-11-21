@@ -1,6 +1,8 @@
 // M43 (regra 4; cap-08 §8.3), compartilhado pela tela de usuários (M10) e pelo desligamento do colaborador (M52.1): o
 // login do grupo de painéis só é bloqueado depois que a TV ou o totem passou ao aparelho com token do novo, válido e
-// conferido no setor (no banco, pela tela do aparelho, ou no registro versionado do fim, a mesma fonte da revisão).
+// conferido no setor (no banco, pela tela do aparelho).
+// Melhoria (ADR 0003): a conferência vem só do banco (dispositivos do setor); o registro versionado do fim da
+// convivência com o sistema de origem saiu.
 // Falha fechada: o grupo, os aparelhos ou o relógio do banco que não se leram recusam o bloqueio (503).
 import {
   CODIGO_CONFERENCIA_PAINEL_INDISPONIVEL,
@@ -9,13 +11,12 @@ import {
 } from '@sgh/contratos';
 import { motivoBloqueioLoginPainel } from '@sgh/dominio-config';
 import { ErroProblema } from '../../problema.filter.js';
-import { lerRegistroFim } from '../coexistencia/public-api.js';
 import type { PortaRecepcao } from '../recepcao/public-api.js';
 
 export interface FontesLoginPainel {
   readonly recepcao: PortaRecepcao | null;
-  /** O registro versionado do fim (as substituições de painel conferidas fora da tela). */
-  readonly raizFim: string | null;
+  /** Sem uso (era o registro do fim da convivência); fica opcional até os chamadores deixarem de passar. */
+  readonly raizFim?: string | null;
 }
 
 const indisponivel = (): never => {
@@ -50,8 +51,7 @@ export async function conferirLoginDePainel(
     fontes.recepcao.relogio(alvo).catch(() => null),
   ]);
   if (!dispositivos || !relogio) return indisponivel();
-  const doRegistro = fontes.raizFim ? lerRegistroFim(fontes.raizFim, alvo.hospital).registro.paineis : [];
-  const motivo = motivoBloqueioLoginPainel(login, dispositivos, alvo.hospital, relogio.agora, doRegistro);
+  const motivo = motivoBloqueioLoginPainel(login, dispositivos, alvo.hospital, relogio.agora, []);
   if (motivo)
     throw new ErroProblema('recusa-de-negocio', 409, 'Bloqueio recusado', motivo, {
       codigo: CODIGO_LOGIN_PAINEL_EM_USO,

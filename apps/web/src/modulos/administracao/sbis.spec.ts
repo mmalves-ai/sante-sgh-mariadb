@@ -7,9 +7,7 @@
 import {
   type BackupVerificado,
   type CicloSbisDetalhe,
-  type Concessao,
   type ItemCicloSbis,
-  type PainelConcessoes,
   type PainelSbis,
   RECUSAS_SBIS,
   type Sessao,
@@ -24,7 +22,6 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { definirSessaoDaTela } from '../../casca/sessao/pode.js';
 import { mensagensWeb } from '../../i18n/pt-BR.js';
 import { criarRoteador } from '../../roteador.js';
-import ConcessoesTela from '../coexistencia/telas/ConcessoesTela.vue';
 import { urlExportacaoSbis } from './api-sbis.js';
 import {
   acoesDoItem,
@@ -238,7 +235,6 @@ const painelSbis = (sobre: Partial<PainelSbis> = {}): PainelSbis => {
 
 const BASE_SBIS = '/api/administracao/auditoria/sbis';
 const BASE_BACKUP = '/api/administracao/auditoria/backup';
-const BASE_CONCESSOES = '/api/administracao/coexistencia/concessoes';
 
 // ── regras de tela ───────────────────────────────────────────────────────────────────────────────
 
@@ -386,7 +382,6 @@ describe('rotas', () => {
   const casos: [string, string, string][] = [
     ['/administracao/auditoria/sbis', 'auditoria.sbis.ler', 'adm.sbis'],
     ['/administracao/auditoria/backup', 'auditoria.backup.ler', 'adm.backupVerificado'],
-    ['/administracao/coexistencia/concessoes', 'config.coexistencia.ler', 'coexistencia.concessoes'],
   ];
   it.each(casos)('%s abre com %s; sem ela, sem permissão', async (caminho, permissao, nome) => {
     const sem = criarRoteador(sessao(['acesso.inicio.ler']), {
@@ -618,94 +613,3 @@ describe('backup verificado', () => {
   });
 });
 
-// ── concessões ───────────────────────────────────────────────────────────────────────────────────
-
-const concessao = (sobre: Partial<Concessao> = {}): Concessao => ({
-  codigo: 'senha-formato-antigo',
-  titulo: 'Senha no formato antigo, lida pelos dois sistemas',
-  requisitos: ['SBIS-03', 'SBIS-04'],
-  situacao: 'vigente',
-  indicador: 'pendente',
-  medida: '12 usuário(s) ainda com a senha no formato antigo.',
-  fimPrevisto: '2026-12-31',
-  evidencia: null,
-  encerradaPor: null,
-  encerradaEm: null,
-  reabertaPor: null,
-  reabertaEm: null,
-  motivoReabertura: null,
-  recusa: null,
-  ...sobre,
-});
-
-const painelConcessoes = (): PainelConcessoes => ({
-  hospital: 'pc',
-  desligado: true,
-  contingenciaAtiva: false,
-  vigentes: 1,
-  encerradas: 1,
-  concessoes: [
-    concessao(),
-    concessao({
-      codigo: 'segredos-em-tabela',
-      titulo: 'Credenciais de parceiros guardadas em tabela',
-      requisitos: ['ICP-06'],
-      situacao: 'encerrada',
-      indicador: 'atendido',
-      medida: 'Todas as credenciais em envelope.',
-      fimPrevisto: null,
-      evidencia: 'rotação concluída',
-      encerradaPor: 'SINT.ADMIN',
-      encerradaEm: '2026-10-20T12:00:00.000Z',
-    }),
-  ],
-});
-
-describe('concessões da coexistência', () => {
-  it('quem só lê vê o termo com a medida, sem ações', async () => {
-    comPermissoes(['config.coexistencia.ler']);
-    simular((p) => (p.url === BASE_CONCESSOES ? { status: 200, corpo: painelConcessoes() } : undefined));
-    const w = await montar(ConcessoesTela, '/administracao/coexistencia/concessoes');
-    await flushPromises();
-    expect(w.find('[data-testid="concessoes-situacao"]').text()).toContain('1 vigente(s) e 1 encerrada(s)');
-    expect(w.find('[data-testid="concessao-medida-senha-formato-antigo"]').text()).toContain('Pendente');
-    expect(w.find('[data-testid="concessao-senha-formato-antigo"]').text()).toContain('31/12/2026');
-    expect(w.find('[data-testid="concessao-segredos-em-tabela"]').text()).toContain(
-      'Encerrada por SINT.ADMIN',
-    );
-    expect(w.find('[data-testid="concessoes-sem-edicao"]').exists()).toBe(true);
-    expect(w.find('[data-testid="concessao-encerrar-senha-formato-antigo"]').exists()).toBe(false);
-  });
-
-  it('o administrador encerra com a evidência e a senha; a recusa aparece; reabre a encerrada', async () => {
-    comPermissoes(['config.coexistencia.ler', 'auditoria.concessao.encerrar']);
-    const pedidos = simular((p) => {
-      if (p.metodo === 'GET' && p.url === BASE_CONCESSOES) return { status: 200, corpo: painelConcessoes() };
-      if (p.url === `${BASE_CONCESSOES}/senha-formato-antigo/encerrar`)
-        return recusaHttp('indicador-pendente');
-      if (p.url === `${BASE_CONCESSOES}/segredos-em-tabela/reabrir`)
-        return { status: 200, corpo: { reaberta: true } };
-      return undefined;
-    });
-    const w = await montar(ConcessoesTela, '/administracao/coexistencia/concessoes');
-    await flushPromises();
-    expect(w.find('[data-testid="concessao-reabrir-senha-formato-antigo"]').exists()).toBe(false);
-    await w.find('[data-testid="concessao-encerrar-senha-formato-antigo"]').trigger('click');
-    await w.find('[data-testid="concessao-texto"]').setValue('senhas regravadas no esquema forte');
-    await w.find('[data-testid="concessao-senha"]').setValue('senha-sintetica');
-    await submeter('form-concessao');
-    const enc = pedidos.find((p) => p.url.endsWith('/encerrar'))!;
-    expect(enc.corpo).toEqual({ evidencia: 'senhas regravadas no esquema forte', senha: 'senha-sintetica' });
-    expect(w.find('[data-testid="concessoes-recusa"]').text()).toBe(TEXTO_RECUSA_SBIS['indicador-pendente']);
-    await w.find('[data-testid="concessao-reabrir-segredos-em-tabela"]').trigger('click');
-    await w.find('[data-testid="concessao-texto"]').setValue('parceiro novo');
-    await w.find('[data-testid="concessao-senha"]').setValue('senha-sintetica');
-    await submeter('form-concessao');
-    expect(pedidos.find((p) => p.url.endsWith('/reabrir'))!.corpo).toEqual({
-      motivo: 'parceiro novo',
-      senha: 'senha-sintetica',
-    });
-    expect(w.find('[data-testid="concessoes-aviso"]').text()).toContain('Termo atualizado');
-    expect(w.find('[data-testid="form-concessao"]').exists()).toBe(false);
-  });
-});

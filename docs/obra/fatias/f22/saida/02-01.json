@@ -1,0 +1,101 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/acesso/aplicacao/aviso-tempo-real.int.spec.ts",
+    "src/modulos/acesso/aplicacao/comunicacao.ts",
+    "src/modulos/acesso/comunicacao-porta-memoria.ts",
+    "src/modulos/acesso/comunicacao-porta.ts",
+    "src/modulos/acesso/comunicacao.controller.ts",
+    "src/modulos/acesso/comunicacao.spec.ts",
+    "src/modulos/acesso/aplicacao/comunicado-ciclo.int.spec.ts",
+    "src/modulos/acesso/comunicado-ciclo.spec.ts",
+    "src/modulos/acesso/conselho-gestao.controller.spec.ts",
+    "src/modulos/acesso/conselho-gestao.controller.ts",
+    "src/modulos/acesso/consulta.controller.ts",
+    "src/modulos/acesso/contas-dormentes-porta.spec.ts",
+    "src/modulos/acesso/contas-dormentes-porta.ts",
+    "src/modulos/acesso/contas-dormentes.controller.spec.ts",
+    "src/modulos/acesso/contas-dormentes.controller.ts",
+    "src/modulos/acesso/contas-dormentes.spec.ts",
+    "src/modulos/acesso/contas-dormentes.ts",
+    "src/modulos/acesso/comunicacao-porta-propria.ts",
+    "src/modulos/acesso/comunicacao-operacoes.ts",
+    "src/modulos/acesso/historico-vigente.ts",
+    "src/modulos/acesso/comunicacao-modulo.ts",
+    "src/modulos/acesso/registro-teste.spec-util.ts",
+    "src/modulos/acesso/comunicacao-porta-propria.int.spec.ts",
+    "src/modulos/acesso/aplicacao/massa-comunicacao.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/acesso/modulo.ts",
+      "pedido": "Juntar a parte do lote 02-01: const p = parteComunicacaoDoAcesso(ctx, gestao) (acesso/comunicacao-modulo.ts) -> controllers [ComunicacaoController, ContasDormentesController, ConselhoGestaoController], providers (PORTA_COMUNICACAO, AVISOS_INICIO, SERVICO_CONTAS_DORMENTES, DESPERTAR_CONTAS_DORMENTES) e exports. Liga também a regra do conselho na autorização. Os specs HTTP do lote usam REGISTRO_TESTE_ACESSO (acesso/registro-teste.spec-util.ts) até lá; depois podem usar o registro real."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "modulos que emitem na central de avisos (sadt, qualidade, farmácia)",
+      "pedido": "Usar ServicoComunicacao sobre PORTA_COMUNICACAO exportada pelo módulo acesso (CENTRAL_AVISOS_SADT/QUALIDADE apontavam para o serviço montado no app.module)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "mensagem_interna_destinatario",
+      "pedido": "ADD via VARCHAR(40) NULL COMMENT 'Por onde chegou: usuario, grupo <codigo>, setor <id>, unidade <id>'. Sem ela a caixa mostra a via vazia na mensagem direta. Idem comunicado_destinatario.via VARCHAR(40) NULL para o público expandido na publicação."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "mensagem_interna / mensagem_interna_destinatario",
+      "pedido": "ADD mensagem_interna.exige_ciencia BOOLEAN NOT NULL DEFAULT FALSE e mensagem_interna_destinatario.ciente_em DATETIME(3) NULL, CONSTRAINT ck_mensagem_interna_destinatario_ciencia CHECK (ciente_em IS NULL OR lida). Hoje a ciência da mensagem direta usa solicita_resposta/respondida_em (semântica de resposta)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "notificacao_usuario",
+      "pedido": "ADD tipo VARCHAR(30) NULL e evento VARCHAR(80) NULL (o tipo e o evento do aviso estão em detalhes JSON até lá; a busca por tipo não usa índice)."
+    },
+    {
+      "tipo": "carga",
+      "tabela": "modulo_sistema",
+      "pedido": "Códigos dos módulos que emitem avisos (pep, sadt, acesso, farmacia, qualidade...) no 'criar cliente'; sem a linha, o aviso grava modulo_sistema_id nulo e o módulo vai em detalhes."
+    },
+    {
+      "tipo": "carga",
+      "tabela": "tipo_escopo_acesso",
+      "pedido": "Linha codigo 'setor' (entidade do setor) no 'criar cliente', para o destino 'setor' das mensagens (usuario_escopo.entidade_id = id do setor)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/acesso/gestao.ts",
+      "pedido": "destino: 'legado' | 'memoria' -> 'banco' | 'memoria' (5 tipos). Os controladores de contas dormentes e conselho já respondem 'banco'."
+    },
+    {
+      "tipo": "contrato-web",
+      "alvo": "packages/contratos/src/inicio/comunicacao.ts e apps/web (caixa de mensagens)",
+      "pedido": "Mensagens diretas e comunicados têm ids de tabelas diferentes: a web deve abrir e dar ciência com ?tipo=<item.tipo> (GET /acesso/mensagens/:id?tipo=comunicado). Sem o tipo, a API prefere a mensagem direta. Trocar o comentário 'TBMENSAG' de MensagemAnterior por 'mensagens trazidas pelo conector'."
+    },
+    {
+      "tipo": "dominio",
+      "alvo": "packages/dominio-acesso",
+      "pedido": "Levar acesso/historico-vigente.ts (excecoesDormenciaVigentes, conferenciasConselhoVigentes) ao @sgh/dominio-acesso."
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "02-03 (acesso/aplicacao/mensagem.int.spec.ts)",
+      "pedido": "portaComunicacaoNaTransacao foi removida (era a porta sobre a cópia). Reescrever sobre PortaComunicacaoPropria + aplicacao/massa-comunicacao.spec-util.ts, ou apagar: comunicacao-porta-propria.int.spec.ts já cobre regra 7, grupo, leitura, ciência, dicionário e anteriores."
+    },
+    {
+      "tipo": "desmontagem",
+      "alvo": "apps/api/src/app.module.ts",
+      "pedido": "Remover portaComunicacaoLegado/executorSoLeitura da comunicação (a fábrica não existe mais) e a montagem antiga das contas dormentes; a parte nova está em acesso/comunicacao-modulo.ts."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "comunicado_versao",
+      "pedido": "CREATE TABLE comunicado_versao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, comunicado_id BIGINT UNSIGNED NOT NULL, versao INT UNSIGNED NOT NULL, titulo VARCHAR(200) NOT NULL, texto TEXT NOT NULL, motivo VARCHAR(500) NOT NULL, colunas de auditoria e excluido_em DATETIME(3) NULL (retenção), CONSTRAINT fk_comunicado_versao_comunicado FOREIGN KEY (comunicado_id) REFERENCES comunicado(id), CONSTRAINT uq_comunicado_versao UNIQUE (comunicado_id, versao), CONSTRAINT ck_comunicado_versao_motivo CHECK (CHAR_LENGTH(TRIM(motivo)) >= 3)). Guarda a versão anterior do comunicado corrigido fora da trilha imutável (que agora leva só o tamanho e um resumo sha256). Até lá, o detalhe do comunicado mostra no evento 'correcao' só 'versão anterior: assunto com N caracteres, texto com M caracteres (resumo ...)', não o texto anterior."
+    },
+    {
+      "tipo": "catalogo-operacoes",
+      "alvo": "catálogo de operações / liberação",
+      "pedido": "As gravações da comunicação passaram de um nome único ('acesso.gravacao-comunicacao') a um nome por ação, no formato do núcleo: acesso.enviar-mensagem, acesso.publicar-comunicado, acesso.emitir-aviso, acesso.ler-mensagem, acesso.dar-ciencia, acesso.marcar-aviso-lido, acesso.marcar-aviso-resolvido e os de corrigir/encurtar/encerrar comunicado (nomeDaOperacao em comunicacao-porta-propria.ts). Se houver receita ou liberação cadastrada com o nome antigo, trocar pelos novos."
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "lote": "02-05",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/administracao/administracao.spec.ts",
+    "src/modulos/administracao/auditoria.controller.ts",
+    "src/modulos/administracao/comum.ts",
+    "src/modulos/administracao/estrutura.controller.spec.ts",
+    "src/modulos/administracao/estrutura.controller.ts",
+    "src/modulos/administracao/fonte-memoria.ts",
+    "src/modulos/administracao/fonte.ts",
+    "src/modulos/administracao/login-painel.ts",
+    "src/modulos/administracao/permissoes.controller.ts",
+    "src/modulos/administracao/rede-cpf.controller.spec.ts",
+    "src/modulos/administracao/rede-cpf.controller.ts",
+    "src/modulos/administracao/tipos.ts",
+    "src/modulos/administracao/fonte-propria.ts",
+    "src/modulos/administracao/fonte-propria.int.spec.ts",
+    "src/modulos/administracao/app-administracao.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_titular",
+      "pedido": "ALTER TABLE pedido_titular DROP CONSTRAINT ck_pedido_titular_canal, ADD CONSTRAINT ck_pedido_titular_canal CHECK (canal_recebimento IN ('presencial','email','portal','telefone','carta','outro'))",
+      "motivo": "o contrato da tela (CANAIS_PEDIDO) aceita 'outro'; hoje a fonte própria recusa com 409 canal-indisponivel"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_titular",
+      "pedido": "ADD COLUMN fundamento_decisao VARCHAR(40) NULL COMMENT 'Fundamento legal da decisão (guarda-legal-prontuario, obrigacao-legal, exercicio-de-direito, identidade-nao-confirmada, outro)' + CHECK na lista",
+      "motivo": "hoje o fundamento da negativa vai em motivo_indeferimento e o do atendimento só no histórico"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "permissao_complementar_usuario",
+      "pedido": "nenhuma tabela nova: as 'permissões complementares' por coluna-letra da origem viram exceções de ação (usuario_acao_excecao, já no modelo); falta a tela/operação",
+      "motivo": "FichaUsuario.flags volta vazio no banco; acesso.alterarFlagsUsuario sem implementação própria"
+    },
+    {
+      "tipo": "carga",
+      "pedido": "'criar cliente' deve semear tipo_escopo_acesso com entidade 'bloco_internacao' (codigo 'setor_internacao')",
+      "motivo": "setor()/setores() da ficha usam usuario_escopo por bloco; sem o tipo, conceder setor recusa 409 escopo-nao-configurado"
+    },
+    {
+      "tipo": "implementacao",
+      "pedido": "operações próprias de gestão ainda sem definirOperacao (receita() devolve ligada=false com o motivo; executar recusa 409 operacao-pendente): acesso.criarUsuario, alterarUsuario, alterarFlagsUsuario, concederPapelUsuario, revogarPapelUsuario, reativarPapelUsuario, trocarGrupoUsuario, concederOpcoesGrupo, revogarOpcoesGrupo, conceder/retirar<Escopo>Usuario; organizacao.incluirAcomodacao, alterarAcomodacao, incluirLeito, alterarLeito, inativarLeito, reativarLeito",
+      "motivo": "modelo existe (usuario, usuario_perfil, perfil_acao, usuario_papel_seguranca, usuario_unidade/local/fonte_pagadora/tipo_agenda/tipo_prontuario, acomodacao, leito_hospitalar); trabalho do lote seguinte da unidade"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/auditoria.ts: ORIGENS_TRILHA ['todas','legado','novo'] e LinhaTrilha.origem → uma trilha só (tirar o campo ou trocar por 'produto'); PaginaTrilha.tipos (tipos numerados da trilha antiga) e esquemaConsultaTrilha.tipo saem; IndiceParametrosBanco/TabelaParametrosBanco/ConferenciaLeitos sem rota (removidas)",
+      "motivo": "ADR 0003; a API já devolve origem 'novo' fixa e tipos []"
+    },
+    {
+      "tipo": "chamadores",
+      "pedido": "modulo.ts (lote 02-06): FONTE_ADMINISTRACAO = new FonteAdministracaoPropria(ctx.nucleo, CLIENTE_PADRAO, { rede }) com núcleo; fonteAdministracaoMemoria(ctx.trilha, null, 'dev', quebras, profissionalDoLogin) só em dev/ci sem núcleo; fonteAdministracaoIndisponivel() fora disso. contextoOperacao (comum.ts) agora devolve ContextoGestao {rede, hospital, correlacao, login, usuario, chaveIdempotencia, estacao, reautenticadoEm?}: ajustar coexistencia/migracao.controller e acesso/pedido-acesso.controller; FontesLoginPainel.raizFim ficou opcional e sem uso (pessoas)",
+      "motivo": "integração dos lotes"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/auditoria.ts: TIPOS_PEDIDO_TITULAR + 'oposicao','revisao-decisao-automatizada'; SITUACOES_PEDIDO_TITULAR + 'aguardando-titular','atendido-parcial'; esquemaPedidoTitular.idPaciente nullable (titular sem cadastro de paciente); ListaPedidos.foraDaLista: z.number().int() (a API já devolve)",
+      "motivo": "o modelo aceita esses tipos/situações (ck_pedido_titular_tipo/situacao) e titular sem paciente; até o contrato mudar, GET privacidade/pedidos deixa esses pedidos FORA da lista e devolve a contagem em foraDaLista (não quebra a lista); aguardando_titular e atendido_parcial aparecem como identidade-verificada e atendido"
+    },
+    {
+      "tipo": "contrato",
+      "pedido": "packages/contratos/src/administracao/consultas.ts: DadosFiscais.empresa.optanteSimples → z.boolean().nullable()",
+      "motivo": "o dado é da mantenedora (mantenedora.optante_simples); estabelecimento sem mantenedora sai false só porque o contrato exige booleano"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "(a definir)",
+      "pedido": "LocaisComplementos.horarios e .pesquisados não têm tabela no modelo próprio: definir o que medem (horários de funcionamento do local de atendimento? locais pesquisados na recepção?) e, se a tela precisar, criar a tabela pelas convenções do ADR 0002",
+      "motivo": "a API devolve null nos dois (antes 0 fixo)"
+    },
+    {
+      "tipo": "implementacao",
+      "pedido": "operação própria para publicar o termo GERAL da rede (termo_uso_versao.estabelecimento_id NULL), com permissão de rede própria (ex.: acesso.termo.publicarRede) e conferência de que quem publica gere todos os estabelecimentos",
+      "motivo": "acesso.publicarTermo agora publica sempre no estabelecimento de quem publica; trocar o termo geral fica indisponível até essa operação existir"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "acomodacao",
+      "pedido": "Leitos.opcoes.locaisConta / acomodacao.localConta e opcoes.tiposTiss: sem coluna de local de conta na acomodacao; tipo TISS vem de categoria_acomodacao.codigo_tiss_acomodacao (texto) e o contrato pede número — alinhar contrato (valor: string) ou criar o domínio",
+      "motivo": "leitos() devolve localConta null e listas vazias nesses dois campos; tipo/tipos já vêm de categoria_acomodacao"
+    },
+    {
+      "tipo": "chamadores",
+      "pedido": "usuarios.controller (lote da ficha): o bloqueio do banco próprio vale para a CONTA; a operação recusa 'exige-gestao-da-rede' (sem permissão de bloquear em todos os estabelecimentos do vínculo) e 'ultimo-gestor-acessos' (conferido em todos, na transação); a tela deve mostrar essas recusas (409 com o detalhe) e o exigirGestorRestante do controller pode ficar só para a fonte em memória",
+      "motivo": "decisão de semântica do bloqueio registrada no cabeçalho de fonte-propria.ts"
+    },
+    {
+      "tipo": "carga",
+      "pedido": "permissão 'acesso.usuario.bloquear' tem de existir como acao_sistema.codigo (permissionavel) no catálogo do cliente semeado por 'criar cliente'",
+      "motivo": "a conferência do alcance do bloqueio lê perfil_acao por acao_sistema.codigo; sem a ação, só o perfil administrador bloqueia conta com vínculo em vários estabelecimentos"
+    }
+  ]
+}

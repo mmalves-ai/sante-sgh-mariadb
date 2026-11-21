@@ -1,8 +1,8 @@
 // Partes comuns dos controladores do M10: a sessão (rede, estabelecimento, login, perfis), a análise da entrada
 // pelo Zod dos contratos, o Problem Details dos erros do executor e das regras (sem nome de tabela nem valor), a
-// Idempotency-Key das receitas, a reautenticação (SBIS-07) e a linha da trilha das gravações SGH_.
+// Idempotency-Key das gravações, a reautenticação (SBIS-07) e a linha da trilha das gravações.
 import { segredosNaResposta } from '@sgh/contratos';
-import { type ContextoOperacao, ErroOperacao, ErroPedido, ErroSetor, type TrilhaGestao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -10,7 +10,8 @@ import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
 import { ErroProblema, tipoPorStatus } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
-import type { Ctx } from './fonte.js';
+import { idUsuarioDaSessao } from '../cadastro/contexto-nucleo.js';
+import { type ContextoGestao, type Ctx, ErroPedido, ErroSetor, type TrilhaGestao } from './tipos.js';
 
 const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 
@@ -20,6 +21,8 @@ export interface SessaoM10 {
   readonly login: string;
   readonly perfis: readonly string[];
   readonly permissoes: ReadonlySet<string>;
+  /** usuario.id da conta da sessão (null: conta sintética ou administrador da plataforma). */
+  readonly usuario: number | null;
 }
 
 export function sessaoDe(req: RequisicaoAutorizada): SessaoM10 {
@@ -33,6 +36,7 @@ export function sessaoDe(req: RequisicaoAutorizada): SessaoM10 {
     login: s.usuario.login,
     perfis: [...(perfil?.perfil ? [perfil.perfil] : []), ...(perfil?.complementares ?? [])],
     permissoes: new Set(s.permissoes ?? []),
+    usuario: idUsuarioDaSessao((s.usuario as { id?: string | null }).id ?? null),
   };
 }
 
@@ -99,20 +103,21 @@ export function reautenticado(
   return reautenticar(servico, resolvedor, req, senha);
 }
 
-/** Contexto da receita do executor (o operador é o login da sessão; no "como", o alvo ou o "em nome de"). */
+/** Contexto da gravação (o operador é o usuário da sessão; no "como", o alvo ou o "em nome de"). */
 export function contextoOperacao(
   req: RequisicaoAutorizada,
   origem: string,
   reautenticadoEm?: number,
   chave?: string,
-): ContextoOperacao {
+): ContextoGestao {
   const s = sessaoDe(req);
   return {
     rede: s.rede,
     hospital: s.hospital,
-    traceId: correlacaoDaRequisicao(req, origem),
-    usuarioLegado: s.login,
-    idempotencyKey: chave ?? idempotencia(req),
+    correlacao: correlacaoDaRequisicao(req, origem).slice(0, 64),
+    login: s.login,
+    usuario: s.usuario,
+    chaveIdempotencia: chave ?? idempotencia(req),
     estacao: estacaoDaRequisicao(req).slice(0, 80),
     ...(reautenticadoEm !== undefined ? { reautenticadoEm } : {}),
   };

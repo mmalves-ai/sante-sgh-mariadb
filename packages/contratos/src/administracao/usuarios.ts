@@ -39,7 +39,7 @@ export const esquemaListaUsuarios = z.object({
   total: z.number().int(),
   pagina: z.number().int(),
   porPagina: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ListaUsuarios = z.infer<typeof esquemaListaUsuarios>;
 
@@ -62,7 +62,7 @@ export const esquemaPainelCpf = z.object({
   dispensadasSemCpf: z.number().int(),
   gruposDispensados: z.array(z.string()),
   duplicados: z.array(z.object({ chave: z.string(), contas: z.array(esquemaContaCpf) })),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PainelCpf = z.infer<typeof esquemaPainelCpf>;
 
@@ -99,7 +99,7 @@ export const esquemaPainelRedeCpf = z.object({
   totalContas: z.number().int(),
   /** Contas que o "bloquear em todos" alcançaria (ativas e ainda não bloqueadas). */
   aBloquear: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PainelRedeCpf = z.infer<typeof esquemaPainelRedeCpf>;
 
@@ -122,7 +122,7 @@ export const esquemaResultadoBloqueioRedeCpf = z.object({
     }),
   ),
   bloqueados: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ResultadoBloqueioRedeCpf = z.infer<typeof esquemaResultadoBloqueioRedeCpf>;
 
@@ -212,7 +212,7 @@ export const esquemaFichaUsuario = z.object({
   /** O profissional ligado ao login pelo papel Operador de sistema ativo (TBUSERS_TBPAPEL.ID_TBCBOPRO); null sem vínculo. */
   profissionalVinculado: z.object({ id: z.number().int(), nome: z.string() }).nullable(),
   operacoes: z.array(esquemaEstadoOperacaoTela),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type FichaUsuario = z.infer<typeof esquemaFichaUsuario>;
 
@@ -335,7 +335,7 @@ export function operacaoDeEscopo(tipo: TipoEscopo, acao: 'conceder' | 'retirar')
 
 export const esquemaResultadoUsuario = z.object({
   operacao: z.string(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
   /** Sessões do usuário encerradas no sistema novo (bloqueio). */
   sessoesEncerradas: z.number().int().optional(),
   id: z.number().int().optional(),

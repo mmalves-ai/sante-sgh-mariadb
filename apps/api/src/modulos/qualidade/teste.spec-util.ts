@@ -13,8 +13,6 @@ import {
   CacheConfig,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
-  PORTA_ONDA0,
-  portaOnda0Memoria,
 } from '../config/public-api.js';
 import { criarFonteDocumento, FONTE_DOCUMENTO } from '../documento/public-api.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
@@ -34,10 +32,9 @@ function configuracaoCom(fonte: FonteConfiguracao) {
     providers: [
       { provide: FONTE_CONFIGURACAO, useValue: fonte },
       { provide: CACHE_CONFIG, useValue: new CacheConfig(new ArmazemMemoria()) },
-      { provide: PORTA_ONDA0, useValue: portaOnda0Memoria(fonte, ['aa', 'bb']) },
       { provide: FONTE_DOCUMENTO, useValue: criarFonteDocumento(ctx.configuracao, ctx.env) },
     ],
-    exports: [FONTE_CONFIGURACAO, CACHE_CONFIG, PORTA_ONDA0, FONTE_DOCUMENTO],
+    exports: [FONTE_CONFIGURACAO, CACHE_CONFIG, FONTE_DOCUMENTO],
   });
 }
 

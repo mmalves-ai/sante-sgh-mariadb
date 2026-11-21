@@ -1,8 +1,9 @@
 // Rotas do M59-F2 (ficha do M59, seção 7): a situação das senhas e do segundo fator dos usuários, a política do segundo
-// fator por onda, a retirada da senha antiga (executor do M04, desligada até a assinatura) e o segundo fator do próprio
-// usuário (/preferencias/seguranca). Toda gravação vai à SGH_TRILHA na mesma transação (o repositório grava); as
+// fator por onda e o segundo fator do próprio usuário (/preferencias/seguranca). Toda gravação vai à SGH_TRILHA na mesma transação (o repositório grava); as
 // críticas exigem a reautenticação recente (SBIS-07). Nenhuma resposta leva senha, hash ou segredo, exceto o segredo
 // TOTP novo, uma única vez, no início do cadastro (o aplicativo autenticador precisa dele).
+// Removido (ADR 0003): a retirada da senha antiga (POST acesso/identidade/usuarios/:login/retirar-senha-antiga) e o
+//   executor dela; a credencial é uma só, e a não Argon2id volta pela redefinição do gestor.
 import {
   Body,
   Controller,
@@ -10,7 +11,6 @@ import {
   Get,
   HttpCode,
   Inject,
-  Optional,
   Param,
   Post,
   Query,
@@ -34,7 +34,7 @@ import {
   type SegundoFatorInicio,
 } from '@sgh/contratos';
 import type { Alcance2fa } from '@sgh/dominio-acesso';
-import { type ContextoOperacao, ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../../autorizacao/estacao.js';
@@ -47,15 +47,6 @@ import { SERVICO_SESSAO } from '../acesso.controller.js';
 import { type AtorIdentidade, ErroIdentidade, type ServicoIdentidade } from './servico-identidade.js';
 
 export const SERVICO_IDENTIDADE = Symbol('SERVICO_IDENTIDADE');
-/** A execução da receita do legado (o executor do M04, com o estado do catálogo por estabelecimento). */
-export const EXECUTOR_IDENTIDADE = Symbol('EXECUTOR_IDENTIDADE');
-
-export interface ExecutorIdentidade {
-  receita(nome: string, hospital: string): { readonly ligada: boolean; readonly motivo: string | null };
-  executar(nome: string, hospital: string, entrada: unknown, ctx: ContextoOperacao): Promise<void>;
-}
-
-const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 const esquemaComSenha = <T extends z.ZodType>(e: T) =>
   z.object({ dados: e, senha: z.string().min(1).max(64) });
 const esquemaAbrirOnda1 = z
@@ -65,7 +56,7 @@ const esquemaAbrirOnda1 = z
     motivo: z.string().trim().min(5, 'Explique o motivo (5 caracteres ou mais).').max(200),
   })
   .strict();
-const esquemaRetirada = z.object({ senha: z.string().min(1).max(64) }).strict();
+const esquemaSenhaConfirmada = z.object({ senha: z.string().min(1).max(64) }).strict();
 
 @Controller()
 export class IdentidadeController {
@@ -73,7 +64,6 @@ export class IdentidadeController {
     @Inject(SERVICO_IDENTIDADE) private readonly identidade: ServicoIdentidade | null,
     @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null,
     @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao,
-    @Optional() @Inject(EXECUTOR_IDENTIDADE) private readonly executor: ExecutorIdentidade | null = null,
   ) {}
 
   private servico(): ServicoIdentidade {
@@ -255,65 +245,12 @@ export class IdentidadeController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ revogado: true }> {
     const login = this.analisar(esquemaLogin, bruto);
-    const p = this.analisar(esquemaRetirada, corpo);
+    const p = this.analisar(esquemaSenhaConfirmada, corpo);
     await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     await this.servico()
       .revogarDeOutro(this.ator(req), login)
       .catch((e: unknown) => this.problema(e));
     return { revogado: true };
-  }
-
-  // ── retirada da senha antiga (acesso.retirarSenhaLegado) ─────────────────────────────────────
-
-  @Post('acesso/identidade/usuarios/:login/retirar-senha-antiga')
-  @HttpCode(200)
-  @Permissao(PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar)
-  @AuditadoNoHandler('executor: TBCABTRILHA como o Delphi e SGH_TRILHA na mesma transação da receita')
-  async retirarSenha(
-    @Param('login') bruto: string,
-    @Body() corpo: unknown,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<{ retirada: true }> {
-    const login = this.analisar(esquemaLogin, bruto);
-    const p = this.analisar(esquemaRetirada, corpo);
-    const chaveBruta = req.headers['idempotency-key'];
-    const chave = Array.isArray(chaveBruta) ? chaveBruta[0] : chaveBruta;
-    if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave))
-      throw new ErroProblema(
-        'entrada-invalida',
-        400,
-        'Pedido incompleto',
-        'Falta a Idempotency-Key do pedido.',
-      );
-    const a = this.ator(req);
-    // Regra 1: a contingência e a credencial forte antes de tudo (o executor confere de novo na transação).
-    await this.servico()
-      .conferirRetirada(a, login)
-      .catch((e: unknown) => this.problema(e));
-    if (!this.executor) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
-    const receita = this.executor.receita('acesso.retirarSenhaLegado', a.hospital);
-    if (!receita.ligada)
-      throw new ErroProblema('operacao-bloqueada', 409, 'Operação desligada', receita.motivo ?? undefined, {
-        codigo: 'operacao-desligada',
-      });
-    const reautenticadoEm = await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
-    await this.executor
-      .executar(
-        'acesso.retirarSenhaLegado',
-        a.hospital,
-        { login },
-        {
-          rede: a.rede,
-          hospital: a.hospital,
-          traceId: a.correlacao,
-          usuarioLegado: a.login,
-          idempotencyKey: chave,
-          ...(a.estacao ? { estacao: a.estacao } : {}),
-          reautenticadoEm,
-        },
-      )
-      .catch((e: unknown) => this.problema(e));
-    return { retirada: true };
   }
 
   // ── o próprio segundo fator (/preferencias/seguranca) ───────────────────────────────────────
@@ -359,7 +296,7 @@ export class IdentidadeController {
     'SGH_TRILHA na mesma transação da SGH_ACESSO_SEGUNDO_FATOR (acesso.segundofator.removido)',
   )
   async remover(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<{ removido: true }> {
-    const p = this.analisar(esquemaRetirada, corpo);
+    const p = this.analisar(esquemaSenhaConfirmada, corpo);
     await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     const a = this.ator(req);
     await this.servico()

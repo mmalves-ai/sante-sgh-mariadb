@@ -1,144 +1,129 @@
-// W0-09 sobre a cópia (transação desfeita): o ciclo de vida do comunicado nas tabelas SGH_ (1120): a correção do texto
-// ainda não lido (o anterior no SGH_ADM_MENSAGEM_EVENTO), a recusa 409 depois da leitura, a vigência que só encurta e o
-// encerramento com motivo que mantém o comunicado e a ciência visíveis. A SGH_TRILHA leva o evento, nunca o texto. Só
-// contagens e códigos na saída.
+// W0-09 contra o MariaDB (cliente de teste f22_o2): o ciclo de vida do comunicado na porta própria. Contrato de efeito:
+// publicação (comunicado, público por usuário, trilha sem o texto, idempotência do pedido), correção antes da leitura
+// (motivo, tamanho e resumo do anterior no evento da trilha, nunca o texto), recusa da correção depois da primeira leitura, vigência só encurtada,
+// encerramento com motivo (some de quem não leu, continua para quem leu, sem ciência nova). Massa sintética.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { portaComunicacaoNaTransacao } from '../comunicacao-porta.js';
+import { PortaComunicacaoPropria } from '../comunicacao-porta-propria.js';
 import { ServicoComunicacao } from './comunicacao.js';
-import { type AmbienteM27, ambienteM27, PODE_ESCREVER, usuariosAtivos } from './copia.spec-util.js';
+import { type MassaComunicacao, montarMassaComunicacao, SEM_BANCO } from './massa-comunicacao.spec-util.js';
 
-const TEXTO_NOVO = 'Texto corrigido sintetico do W0-09 que nao vai a trilha';
-
-describe.skipIf(!PODE_ESCREVER)('comunicado: ciclo de vida na cópia (W0-09; transação desfeita)', () => {
-  let a: AmbienteM27;
+describe.skipIf(SEM_BANCO)('ciclo do comunicado sobre o banco próprio (f22_o2)', () => {
+  let m: MassaComunicacao;
+  let s: ServicoComunicacao;
   beforeAll(async () => {
-    a = await ambienteM27();
+    m = await montarMassaComunicacao('c');
+    await m.limpar();
+    s = new ServicoComunicacao(new PortaComunicacaoPropria(m.nucleo), null);
   });
   afterAll(async () => {
-    await a?.nucleo.encerrar();
+    await m?.limpar();
+    await m?.nucleo.encerrar();
   });
 
-  it('corrige o não lido, recusa o lido (409), encurta a vigência e encerra mantendo a ciência visível', async () => {
-    await a.nucleo.desfazendoNaCopia({ ...a.c, traceId: 'int-w009-comunicado' }, async (e) => {
-      const u = await usuariosAtivos(e);
-      const porta = portaComunicacaoNaTransacao(e, a.executor);
-      const s = new ServicoComunicacao(porta, null);
-      const gestor = { login: u.a, estacao: 'INT-W009', correlacao: 'int-w009-comunicado-1' };
-      const dest = { login: u.b, estacao: 'INT-W009', correlacao: 'int-w009-comunicado-2' };
-      const publicar = (chave: string) =>
-        s.publicar(
-          a.c,
-          gestor,
-          {
-            assunto: 'Comunicado W0-09',
-            texto: 'Texto original sintetico.',
-            destinos: [{ tipo: 'usuario', valor: u.b }],
-            cienciaObrigatoria: true,
-            vigenciaInicio: '2026-01-01T00:00',
-            vigenciaFim: '2099-12-31T23:59',
-          },
-          chave,
-        );
-      const { id } = await publicar('int-w009-com-0001');
+  it('publica, corrige antes da leitura, recusa depois, encurta a vigência e encerra com motivo', async () => {
+    const autor = { login: m.login.rem, estacao: 'INT-W009', correlacao: 'int-w009' };
+    const agora = Date.now();
+    const pedido = `int-w009-${agora}`;
+    const e = {
+      assunto: 'Comunicado de teste',
+      texto: 'Texto sintético do comunicado que não vai à trilha.',
+      destinos: [{ tipo: 'grupo' as const, valor: m.grupo }],
+      cienciaObrigatoria: true,
+      vigenciaInicio: new Date(agora - 3_600_000).toISOString(),
+      vigenciaFim: new Date(agora + 10 * 86_400_000).toISOString(),
+    };
+    const r = await s.publicar(m.ctx('rem'), autor, e, pedido);
+    expect(r).toMatchObject({ destinatarios: 2, repetida: false });
+    expect(await s.publicar(m.ctx('rem'), autor, e, pedido)).toMatchObject({ id: r.id, repetida: true });
+    const [k] = await m.ler('SELECT situacao, exige_ciencia, versao FROM comunicado WHERE id = ?', [r.id]);
+    expect(k).toMatchObject({ situacao: 'publicado', versao: 1 });
+    const pub = await m.ler('SELECT COUNT(*) AS n FROM comunicado_destinatario WHERE comunicado_id = ?', [r.id]);
+    expect(Number(pub[0]?.['n'])).toBe(2);
+    const tr = await m.ler(
+      "SELECT dados_depois FROM trilha_auditoria WHERE entidade = 'comunicado' AND entidade_id = ? ORDER BY id",
+      [r.id],
+    );
+    expect(tr.length).toBe(1);
+    expect(String(tr[0]?.['dados_depois'])).not.toContain('Texto sintético');
 
-      // Correção do texto não lido: o anterior vai ao evento; o texto novo não vai à trilha.
-      const c1 = await s.corrigirComunicado(a.c, gestor, id, {
-        assunto: 'Comunicado W0-09 (corrigido)',
-        texto: TEXTO_NOVO,
-        motivo: 'Data errada',
-      });
-      expect(c1.texto).toBe(TEXTO_NOVO);
-      expect(c1.eventos.map((x) => x.evento)).toEqual(['correcao']);
-      expect(JSON.parse(c1.eventos[0]?.antes ?? '{}')).toMatchObject({ texto: 'Texto original sintetico.' });
+    // Corrige antes de qualquer leitura: o texto anterior e o motivo vão ao evento.
+    let d = await s.corrigirComunicado(m.ctx('rem'), autor, r.id, {
+      assunto: 'Comunicado de teste (corrigido)',
+      texto: 'Texto sintético corrigido.',
+      motivo: 'Erro de digitação',
+    });
+    expect(d).toMatchObject({ assunto: 'Comunicado de teste (corrigido)', podeCorrigir: true });
+    expect(d.eventos.map((x) => x.evento)).toEqual(['correcao']);
+    expect(d.eventos[0]).toMatchObject({ motivo: 'Erro de digitação', por: m.login.rem });
+    // A trilha é imutável: da versão anterior ficam só o tamanho e o resumo, nunca o assunto nem o texto.
+    expect(d.eventos[0]?.antes).toMatch(/^versão anterior: assunto com 19 caracteres, texto com 51 caracteres/);
+    const trCorrecao = await m.ler(
+      "SELECT dados_depois FROM trilha_auditoria WHERE entidade = 'comunicado' AND entidade_id = ? ORDER BY id",
+      [r.id],
+    );
+    expect(trCorrecao.length).toBe(2);
+    for (const x of trCorrecao) {
+      expect(String(x['dados_depois'])).not.toContain('Texto sintético');
+      expect(String(x['dados_depois'])).not.toContain('Comunicado de teste');
+    }
 
-      // Vigência: estender e o passado são recusados; encurtar guarda o fim anterior.
-      await expect(
-        s.encurtarVigencia(a.c, gestor, id, { vigenciaFim: '2100-01-01T00:00', motivo: 'Estender' }),
-      ).rejects.toMatchObject({ problema: { status: 409, codigo: 'vigencia-invalida' } });
-      await expect(
-        s.encurtarVigencia(a.c, gestor, id, { vigenciaFim: '2026-01-02T00:00', motivo: 'Passado' }),
-      ).rejects.toMatchObject({ problema: { status: 409, codigo: 'vigencia-invalida' } });
-      const c2 = await s.encurtarVigencia(a.c, gestor, id, {
-        vigenciaFim: '2098-06-30T18:00',
-        motivo: 'Encurtar',
-      });
-      expect(c2.vigenciaFim.slice(0, 16)).toBe('2098-06-30T18:00');
-      expect(c2.eventos.at(-1)).toMatchObject({ evento: 'vigencia', antes: '2099-12-31T23:59:00' });
+    // A primeira leitura de d1 trava a correção.
+    const lida = await s.abrir(m.ctx('d1'), { ...autor, login: m.login.d1 }, r.id, 'comunicado');
+    expect(lida.lidaEm).not.toBeNull();
+    await expect(
+      s.corrigirComunicado(m.ctx('rem'), autor, r.id, { assunto: 'x', texto: 'y', motivo: 'outra' }),
+    ).rejects.toMatchObject({ problema: { codigo: 'comunicado-ja-lido' } });
 
-      // Lido e com ciência: o texto não se edita mais (409, com a contagem).
-      await s.abrir(a.c, dest, id);
-      await s.ciencia(a.c, dest, id);
-      await expect(
-        s.corrigirComunicado(a.c, gestor, id, { assunto: 'x', texto: 'y', motivo: 'Tentar corrigir' }),
-      ).rejects.toMatchObject({ problema: { status: 409, codigo: 'comunicado-ja-lido' } });
+    // Vigência: estender é recusado; encurtar grava a versão nova e o evento.
+    await expect(
+      s.encurtarVigencia(m.ctx('rem'), autor, r.id, {
+        vigenciaFim: new Date(agora + 20 * 86_400_000).toISOString(),
+        motivo: 'estender',
+      }),
+    ).rejects.toMatchObject({ problema: { codigo: 'vigencia-invalida' } });
+    await s.encurtarVigencia(m.ctx('rem'), autor, r.id, {
+      vigenciaFim: new Date(agora + 5 * 86_400_000).toISOString(),
+      motivo: 'Prazo menor',
+    });
+    const [k2] = await m.ler('SELECT versao FROM comunicado WHERE id = ?', [r.id]);
+    expect(Number(k2?.['versao'])).toBe(3);
 
-      // Encerramento: com motivo; o comunicado e a ciência continuam visíveis; nada mais muda.
-      const c3 = await s.encerrarComunicado(a.c, gestor, id, { motivo: 'Substituido por outro' });
-      expect(c3.encerradoEm).not.toBeNull();
-      expect(c3.motivoEncerramento).toBe('Substituido por outro');
-      expect(c3.destinatarios[0]?.cienciaEm).not.toBeNull();
-      expect(c3.podeCorrigir).toBe(false);
-      await expect(s.encerrarComunicado(a.c, gestor, id, { motivo: 'De novo' })).rejects.toMatchObject({
-        problema: { status: 409, codigo: 'comunicado-encerrado' },
-      });
-      const caixa = await s.caixa(a.c, u.b);
-      expect(caixa.recebidas.find((x) => x.id === id)?.motivoEncerramento).toBe('Substituido por outro');
-
-      // O encerrado e não lido some da caixa e não pede ciência.
-      const { id: id2 } = await publicar('int-w009-com-0002');
-      await s.encerrarComunicado(a.c, gestor, id2, { motivo: 'Publicado por engano' });
-      expect((await s.caixa(a.c, u.b)).recebidas.some((x) => x.id === id2)).toBe(false);
-
-      const ev = await e.consultar(
-        'SELECT EVENTO FROM SGH_ADM_MENSAGEM_EVENTO WHERE ID_MENSAGEM = CAST(CAST(? AS VARCHAR(20)) AS BIGINT) ORDER BY ID',
-        [String(id)],
-        { teto: 10 },
-      );
-      expect(ev.map((x) => String(x['EVENTO']).trim())).toEqual(['correcao', 'vigencia', 'encerramento']);
-      const trilha = await e.consultar(
-        "SELECT * FROM SGH_TRILHA WHERE HOSPITAL = ? AND CORRELACAO STARTING WITH 'int-w009-comunicado'",
-        [a.c.hospital],
-        { teto: 50 },
-      );
-      const eventos = trilha.map((t) => String(t['EVENTO']).trim());
-      for (const x of [
-        'acesso.comunicado.corrigido',
-        'acesso.comunicado.vigenciaEncurtada',
-        'acesso.comunicado.encerrado',
-      ])
-        expect(eventos).toContain(x);
-      expect(JSON.stringify(trilha)).not.toContain(TEXTO_NOVO);
+    // Encerra: some de d2 (não leu), continua para d1 (leu), sem ciência nova.
+    d = await s.encerrarComunicado(m.ctx('rem'), autor, r.id, { motivo: 'Substituído' });
+    expect(d).toMatchObject({ encerradoPor: m.login.rem, motivoEncerramento: 'Substituído', podeCorrigir: false });
+    expect(d.eventos.map((x) => x.evento)).toEqual(['correcao', 'vigencia', 'encerramento']);
+    expect((await s.caixa(m.ctx('d2'), m.login.d2)).recebidas.some((x) => x.id === r.id && x.tipo === 'comunicado')).toBe(
+      false,
+    );
+    const visto = (await s.caixa(m.ctx('d1'), m.login.d1)).recebidas.find((x) => x.id === r.id && x.tipo === 'comunicado');
+    expect(visto?.motivoEncerramento).toBe('Substituído');
+    await expect(s.ciencia(m.ctx('d1'), { ...autor, login: m.login.d1 }, r.id, 'comunicado')).rejects.toMatchObject({
+      problema: { codigo: 'comunicado-encerrado' },
+    });
+    await expect(s.encerrarComunicado(m.ctx('rem'), autor, r.id, { motivo: 'de novo' })).rejects.toMatchObject({
+      problema: { codigo: 'comunicado-encerrado' },
     });
   });
 
-  it('revisão: o texto de 2000 caracteres com quebras de linha e aspas, corrigido, fica inteiro no evento (1128)', async () => {
-    await a.nucleo.desfazendoNaCopia({ ...a.c, traceId: 'int-w009-comunicado-longo' }, async (e) => {
-      const u = await usuariosAtivos(e);
-      const s = new ServicoComunicacao(portaComunicacaoNaTransacao(e, a.executor), null);
-      const gestor = { login: u.a, estacao: 'INT-W009', correlacao: 'int-w009-comunicado-longo' };
-      const assunto = `${'Assunto longo '.repeat(8)}"x"`.slice(0, 120);
-      const texto = Array.from({ length: 400 }, () => 'li"a\n').join('');
-      const { id } = await s.publicar(
-        a.c,
-        gestor,
-        {
-          assunto,
-          texto,
-          destinos: [{ tipo: 'usuario', valor: u.b }],
-          cienciaObrigatoria: false,
-          vigenciaInicio: '2026-01-01T00:00',
-          vigenciaFim: '2099-12-31T23:59',
-        },
-        'int-w009-com-longo',
-      );
-      const c = await s.corrigirComunicado(a.c, gestor, id, {
-        assunto: 'Curto',
-        texto: 'Texto curto.',
-        motivo: 'Texto longo demais',
-      });
-      const antes = c.eventos[0]?.antes ?? '';
-      expect(antes.length).toBeGreaterThan(2200);
-      expect(JSON.parse(antes)).toEqual({ assunto, texto });
-    });
+  it('outro estabelecimento não vê nem muda o comunicado', async () => {
+    const autor = { login: m.login.rem, estacao: 'INT-W009', correlacao: 'int-w009-b' };
+    const agora = Date.now();
+    const r = await s.publicar(
+      m.ctx('rem'),
+      autor,
+      {
+        assunto: 'Só do estabelecimento A',
+        texto: 'Texto sintético.',
+        destinos: [{ tipo: 'usuario', valor: m.login.d1 }],
+        cienciaObrigatoria: false,
+        vigenciaInicio: new Date(agora - 60_000).toISOString(),
+        vigenciaFim: new Date(agora + 86_400_000).toISOString(),
+      },
+      `int-w009-b-${agora}`,
+    );
+    await expect(s.comunicado(m.ctx('rem', 'B'), r.id)).rejects.toMatchObject({ status: 404 });
+    await expect(
+      s.encerrarComunicado(m.ctx('rem', 'B'), autor, r.id, { motivo: 'invasão' }),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

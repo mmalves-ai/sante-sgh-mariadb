@@ -1,18 +1,20 @@
 // W1-01 (parte 9b): a PORTA da rotina das contas dormentes sobre a fonte da gestão de acessos (gestao-fonte.ts):
-// contas e exceções pela leitura (legado: READ ONLY na cópia/banco; memória: o estado sintético), gestores de acessos
+// contas e exceções pela leitura (banco: a fonte própria da gestão; memória: o estado sintético), gestores de acessos
 // ativos, bloqueio pelo executor (fonte.executar, com o estado da receita do catálogo) e trilha pelo registrador da API
 // (só o login, dias e limite na chave natural; nunca senha nem dado de pessoa). Os parâmetros
 // acesso.contasDormentes.{ligada,diasPessoal,diasDispositivo} vêm da fonte de configuração com a resolução por nível;
 // sem ela, ou com erro de leitura, os padrões das definições (D-W101-29). O responsável da rotina é o gestor de acessos
 // ativo que entrou mais recentemente (nunca uma conta que a própria rodada bloquearia: a receita recusa bloquear a si).
+// Melhoria: o contexto da rotina é traduzido para o da gestão sem conversão de tipo (o responsável é o operador).
 import { definicaoParametro } from '@sgh/contratos';
 import { PADRAO_DORMENCIA, type ParametrosDormencia } from '@sgh/dominio-acesso';
-import { excecoesDormenciaVigentes } from '@sgh/legado';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { FonteConfiguracao } from '../config/configuracao-fonte.js';
-import type { PortaDormencia } from './contas-dormentes.js';
+import type { ContextoRotinaDormencia, PortaDormencia } from './contas-dormentes.js';
 import type { FonteGestao } from './gestao-fonte.js';
+import type { ContextoGestao } from './gestao-tipos.js';
+import { excecoesDormenciaVigentes } from './historico-vigente.js';
 
 export const PARAMETROS_DORMENCIA = {
   ligada: 'acesso.contasDormentes.ligada',
@@ -79,7 +81,10 @@ export function portaDormenciaDaFonte(o: OpcoesPortaDormencia): PortaDormencia {
     gestoresAtivos: async (rede, h) => (await o.fonte().gestoresAcesso(rede, h)).map((g) => g.login),
     parametros: (rede, h) => o.parametros(rede, h),
     receita: (nome, h) => o.fonte().receita(nome, h),
-    executar: (nome, h, entrada, ctx) => o.fonte().executar(nome, h, entrada, ctx),
+    // A fonte da gestão executa o bloqueio pela operação do Executor. O contexto da rotina (responsável pelo login)
+    // vira o da gestão campo a campo: o responsável é o operador (`usuario`), resolvido para usuario.id na transação.
+    executar: (nome, h, entrada, ctx: ContextoRotinaDormencia) =>
+      o.fonte().executar(nome, h, entrada, contextoGestaoDaRotina(ctx)),
     async trilha(rede, hospital, l, correlacao) {
       await o.trilha.registrar({
         evento: l.evento,
@@ -90,11 +95,23 @@ export function portaDormenciaDaFonte(o: OpcoesPortaDormencia): PortaDormencia {
         correlacao,
         recurso: 'acesso.usuario',
         resultado: l.resultado,
-        tabelaAlvo: l.login ? 'TBUSERS' : 'SGH_ACESSO_DORMENCIA_EXCECAO',
+        tabelaAlvo: l.login ? 'usuario' : 'excecao_dormencia',
         ...(l.login ? { idAlvo: l.login } : {}),
         chaveNaturalAlvo: l.diferenca,
       });
     },
+  };
+}
+
+/** O contexto da gestão a partir do contexto da rotina: o responsável da rotina é o operador da gravação. */
+export function contextoGestaoDaRotina(ctx: ContextoRotinaDormencia): ContextoGestao {
+  return {
+    rede: ctx.rede,
+    hospital: ctx.hospital,
+    usuario: ctx.responsavel,
+    correlacao: ctx.correlacao,
+    chaveIdempotencia: ctx.chaveIdempotencia,
+    estacao: ctx.estacao,
   };
 }
 

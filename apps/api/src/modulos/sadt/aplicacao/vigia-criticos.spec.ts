@@ -55,3 +55,62 @@ describe('VigiaCriticos: escalonamento pelo relógio do banco', () => {
     expect(subidas).toEqual([{ aviso: 7, nivel: 1 }]);
   });
 });
+
+describe('VigiaCriticos: falha de um aviso não trava o ciclo', () => {
+  it('o exame sem aviso fica contado, o escalonamento segue e o cursor não avança', async () => {
+    const subidas: { aviso: number; nivel: number }[] = [];
+    const desdes: Date[] = [];
+    const recusa = Object.assign(new Error('pendente'), { problema: { codigo: 'modelo-pendente' } });
+    const p = {
+      destino: 'propria',
+      relogio: async () => ({ hoje: AGORA_BANCO.slice(0, 10), agora: AGORA_BANCO }),
+      liberadosComCritico: async (_c: unknown, o: { desde: Date }) => {
+        desdes.push(o.desde);
+        return [
+          { exame: 11, chave: 'R1:1', liberacao: 21, liberadoEm: new Date(), paciente: 31, atendimento: 41 },
+        ];
+      },
+      avisos: async () => [
+        {
+          id: 7,
+          emitidoEm: '2026-11-19T09:00:00',
+          prazoEm: '2026-11-19T09:30:00',
+          nivel: 0,
+          ciencia: null,
+          paciente: { id: 1 },
+        },
+      ],
+      gravarSgh: async (_c: unknown, _t: unknown, f: (g: unknown) => Promise<unknown>) =>
+        f({
+          avisarCriticos: async () => Promise.reject(recusa),
+          escalonarAviso: async (r: { aviso: number; nivel: number }) => {
+            subidas.push(r);
+            return true;
+          },
+        }),
+    } as unknown as PortaSadt;
+    const avisos: string[] = [];
+    const log = { warn: (m: string) => void avisos.push(m) };
+    const v = new VigiaCriticos(
+      p,
+      'rede',
+      ['H'],
+      null,
+      null,
+      undefined,
+      null,
+      () => ({ cliente: 'c', estabelecimento: 1 }),
+      log,
+    );
+    // Sem configuração a vigia só vale em memória: o teste força a funcionalidade ligada.
+    v.ligada = async () => true;
+    const r = await v.ciclo('H');
+    expect(r).toMatchObject({ avisos: 0, escalonados: 1, semAviso: 1, codigos: ['modelo-pendente'] });
+    expect(subidas).toEqual([{ aviso: 7, nivel: 2 }]);
+    expect(avisos[0]).toMatch(/1 exame\(s\) sem aviso.*modelo-pendente/);
+    expect(avisos[0]).not.toMatch(/31|41/);
+    await v.ciclo('H');
+    // O cursor não andou: a segunda leitura começa no mesmo ponto (início da véspera).
+    expect(desdes[1]!.getTime()).toBe(desdes[0]!.getTime());
+  });
+});

@@ -11,8 +11,9 @@ import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { estadoAcessoSintetico, reiniciarEstadoAcessoSintetico } from './fonte-sintetica.js';
 import { RhAcessoController } from './rh.controller.js';
+import { moduloAcesso } from './modulo.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'acesso' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
@@ -34,7 +35,11 @@ const get = async <T>(url: string) => (await app.inject({ method: 'GET', url, he
 
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria() });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem: new ArmazemMemoria(),
+    registro: { acesso: async () => ({ modulo: (ctx) => moduloAcesso(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   const r = await app.inject({

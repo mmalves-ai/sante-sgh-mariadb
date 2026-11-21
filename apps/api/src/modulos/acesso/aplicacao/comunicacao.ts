@@ -8,6 +8,8 @@
 //     avisa); o canal só diz "mudou" e o cliente relê o estado gravado, então a reconexão não perde aviso;
 //   - mensagens com até 200 destinatários geram um aviso para cada um; os comunicados e as listas maiores aparecem só na
 //     caixa (o selo da barra soma os avisos novos e as mensagens não lidas; D-AVISO-27).
+// Melhoria: a trilha leva ids (estabelecimento, usuário, registro) e o evento nos dados, nunca o texto; o envio e a
+// publicação usam a Idempotency-Key do pedido no Executor (o reenvio devolve a mesma mensagem, sem gravar de novo).
 import {
   type Aviso,
   type CaixaMensagens,
@@ -27,9 +29,18 @@ import {
   TETO_DICIONARIO,
   type VigenciaComunicado,
 } from '@sgh/contratos';
-import type { ContextoOperacao, LinhaTrilha } from '@sgh/legado';
+import { createHash } from 'node:crypto';
 import { ErroProblema } from '../../../problema.filter.js';
-import type { ContextoComunicacao, PortaComunicacao } from '../comunicacao-porta.js';
+import type {
+  ContextoComunicacao,
+  ContextoOperacaoComunicacao,
+  PortaComunicacao,
+  TipoItemCaixa,
+  TrilhaComunicacao,
+} from '../comunicacao-porta.js';
+import { OPERACOES_DICIONARIO } from '../comunicacao-operacoes.js';
+
+export { OPERACOES_DICIONARIO };
 
 /** Quem é avisado a cada mudança (o canal de eventos da central; a chave é o estabelecimento e o login). */
 export interface NotificadorAvisos {
@@ -41,11 +52,6 @@ export const chaveDoCanal = (hospital: string, login: string) => `${hospital}|${
 /** Mensagens com até este número de destinatários geram um aviso para cada um (D-AVISO-27). */
 export const TETO_AVISOS_POR_MENSAGEM = 200;
 
-export const OPERACOES_DICIONARIO = {
-  incluir: 'acesso.incluirPalavraDicionario',
-  excluir: 'acesso.excluirPalavraDicionario',
-} as const;
-
 /** O autor da ação, com a estação e a correlação da requisição (a trilha leva só identificadores). */
 export interface AutorComunicacao {
   readonly login: string;
@@ -53,28 +59,41 @@ export interface AutorComunicacao {
   readonly correlacao: string;
 }
 
+/** Tabela de cada tipo de item da caixa (mensagem direta ou comunicado). */
+const TABELA_DO_TIPO = { mensagem: 'mensagem_interna', comunicado: 'comunicado' } as const;
+
+/**
+ * Linha da trilha da gravação: o evento auditável, a operação, a chave e a estação vão nos dados; nunca o texto nem o
+ * assunto (regra 7). Quem e onde vêm do contexto (ids).
+ */
 function linha(
   c: ContextoComunicacao,
   a: AutorComunicacao,
   evento: string,
   operacao: string,
-  alvo: { tabela: string; id: string | null; chave: string | null; atendimento?: number | null },
-): LinhaTrilha {
+  alvo: { tabela: string; id: number | null; chave: string | null; atendimento?: number | null },
+): TrilhaComunicacao {
   return {
-    rede: c.rede,
-    hospital: c.hospital,
-    usuario: a.login,
-    evento,
-    recurso: evento.split('.').slice(0, 2).join('.'),
-    operacao,
-    tabelaAlvo: alvo.tabela,
-    idAlvo: alvo.id,
-    chaveNaturalAlvo: alvo.chave,
-    resultado: 'sucesso',
-    estacao: a.estacao.slice(0, 80),
+    estabelecimento: c.estabelecimento,
+    usuario: c.usuario,
+    acao: 'operacao',
+    entidade: alvo.tabela,
+    entidadeId: alvo.id,
+    dadosDepois: {
+      evento,
+      recurso: evento.split('.').slice(0, 2).join('.'),
+      operacao,
+      chave: alvo.chave,
+      estacao: a.estacao.slice(0, 80),
+      atendimento: alvo.atendimento ?? null,
+    },
     correlacao: a.correlacao.slice(0, 64),
-    atendimento: alvo.atendimento ?? null,
   };
+}
+
+/** Resumo do conteúdo do pedido (sha256): entra no hash de idempotência sem levar o texto à trilha. */
+export function resumoDoPedido(conteudo: Record<string, unknown>): string {
+  return createHash('sha256').update(JSON.stringify(conteudo)).digest('hex');
 }
 
 export class ServicoComunicacao {
@@ -96,7 +115,7 @@ export class ServicoComunicacao {
       this.porta.enviadas(c, login),
     ]);
     return {
-      recebidas: recebidas as MensagemRecebida[],
+      recebidas,
       enviadas,
       naoLidas: recebidas.filter((m) => m.lidaEm === null).length,
       cienciasPendentes: recebidas.filter((m) => m.cienciaObrigatoria && m.cienciaEm === null).length,
@@ -104,48 +123,56 @@ export class ServicoComunicacao {
     };
   }
 
-  /** Abre a mensagem: a primeira abertura marca a leitura (transação SGH_ com a trilha) e a central relê. */
-  async abrir(c: ContextoComunicacao, a: AutorComunicacao, id: number): Promise<MensagemRecebida> {
-    const m = await this.porta.recebida(c, a.login, id);
+  /** Abre a mensagem: a primeira abertura marca a leitura (transação com a trilha) e a central relê. */
+  async abrir(
+    c: ContextoComunicacao,
+    a: AutorComunicacao,
+    id: number,
+    tipo?: TipoItemCaixa,
+  ): Promise<MensagemRecebida> {
+    const m = await this.porta.recebida(c, a.login, id, tipo);
     if (!m) throw new ErroProblema('nao-encontrado', 404, 'Mensagem não encontrada');
     if (m.lidaEm === null) {
       await this.porta.gravarSgh(
         c,
         linha(c, a, EVENTOS_AUDITAVEIS.mensagemLida.codigo, 'acesso.lerMensagem', {
-          tabela: 'SGH_ADM_MENSAGEM_DEST',
-          id: String(id),
-          chave: null,
+          tabela: TABELA_DO_TIPO[m.tipo],
+          id,
+          chave: 'leitura',
         }),
-        (g) => g.marcarLida({ login: a.login, id }),
+        (g) => g.marcarLida({ login: a.login, id, tipo: m.tipo }),
       );
       this.avisar(c, [a.login]);
-      return (await this.porta.recebida(c, a.login, id)) ?? m;
+      return (await this.porta.recebida(c, a.login, id, m.tipo)) ?? m;
     }
     return m;
   }
 
-  async ciencia(c: ContextoComunicacao, a: AutorComunicacao, id: number): Promise<MensagemRecebida> {
-    const m = await this.porta.recebida(c, a.login, id);
+  async ciencia(
+    c: ContextoComunicacao,
+    a: AutorComunicacao,
+    id: number,
+    tipo?: TipoItemCaixa,
+  ): Promise<MensagemRecebida> {
+    const m = await this.porta.recebida(c, a.login, id, tipo);
     if (!m) throw new ErroProblema('nao-encontrado', 404, 'Mensagem não encontrada');
     await this.porta.gravarSgh(
       c,
       linha(c, a, EVENTOS_AUDITAVEIS.mensagemCiencia.codigo, 'acesso.darCiencia', {
-        tabela: 'SGH_ADM_MENSAGEM_DEST',
-        id: String(id),
-        chave: null,
+        tabela: TABELA_DO_TIPO[m.tipo],
+        id,
+        chave: 'ciencia',
       }),
       async (g) => {
-        const mudou = await g.registrarCiencia({ login: a.login, id });
-        // O aviso da mensagem (se houver) fica resolvido com a ciência.
-        const avisos = await this.porta.avisos(c, a.login);
-        for (const x of avisos)
-          if (x.link === `/mensagens?id=${id}` && x.estado !== 'resolvido')
-            await g.mudarEstadoAviso({ login: a.login, id: x.id, estado: 'resolvido' });
+        const mudou = await g.registrarCiencia({ login: a.login, id, tipo: m.tipo });
+        // Os avisos deste objeto (tabela do tipo e id) ficam resolvidos com a ciência, na mesma transação. Mensagens e
+        // comunicados têm ids de tabelas diferentes: o objeto (e não o link) evita resolver o aviso do outro.
+        await g.resolverAvisosDoObjeto({ login: a.login, tabela: TABELA_DO_TIPO[m.tipo], id });
         return mudou;
       },
     );
     this.avisar(c, [a.login]);
-    return (await this.porta.recebida(c, a.login, id)) ?? m;
+    return (await this.porta.recebida(c, a.login, id, m.tipo)) ?? m;
   }
 
   private recusarDadoPessoal(assunto: string, texto: string): void {
@@ -224,9 +251,9 @@ export class ServicoComunicacao {
       c,
       (x: { id: number }) =>
         linha(c, a, EVENTOS_AUDITAVEIS.mensagemEnviada.codigo, 'acesso.enviarMensagem', {
-          tabela: 'SGH_ADM_MENSAGEM',
-          id: String(x.id),
-          chave: `destinatarios:${dest.length};ciencia:${e.cienciaObrigatoria ? 'T' : 'F'}`,
+          tabela: 'mensagem_interna',
+          id: x.id,
+          chave: `destinatarios:${dest.length};ciencia:${e.cienciaObrigatoria}`,
           atendimento: e.contextoAtendimento,
         }),
       async (g) => {
@@ -255,10 +282,21 @@ export class ServicoComunicacao {
                 ? `Mensagem de ${a.login} pede a sua ciência`
                 : `Nova mensagem de ${a.login}`,
               link: `/mensagens?id=${m.id}`,
-              objetoTabela: 'SGH_ADM_MENSAGEM',
+              objetoTabela: 'mensagem_interna',
               objetoChave: String(m.id),
             });
         return m;
+      },
+      {
+        operacao: 'acesso.enviarMensagem',
+        chave: `mensagem:${idempotencia}`,
+        resumo: resumoDoPedido({
+          assunto: e.assunto,
+          texto: e.texto,
+          destinos: e.destinos,
+          ciencia: e.cienciaObrigatoria,
+          atendimento: e.contextoAtendimento,
+        }),
       },
     );
     // Depois do COMMIT (gravarSgh resolvido): o canal avisa; o cliente relê.
@@ -282,9 +320,9 @@ export class ServicoComunicacao {
       c,
       (x: { id: number }) =>
         linha(c, a, EVENTOS_AUDITAVEIS.comunicadoPublicado.codigo, 'acesso.publicarComunicado', {
-          tabela: 'SGH_ADM_MENSAGEM',
-          id: String(x.id),
-          chave: `destinatarios:${dest.length};ciencia:${e.cienciaObrigatoria ? 'T' : 'F'}`,
+          tabela: 'comunicado',
+          id: x.id,
+          chave: `destinatarios:${dest.length};ciencia:${e.cienciaObrigatoria}`,
         }),
       (g) =>
         g.gravarMensagem({
@@ -300,6 +338,18 @@ export class ServicoComunicacao {
           idempotencia,
           destinatarios: dest,
         }),
+      {
+        operacao: 'acesso.publicarComunicado',
+        chave: `comunicado:${idempotencia}`,
+        resumo: resumoDoPedido({
+          assunto: e.assunto,
+          texto: e.texto,
+          destinos: e.destinos,
+          ciencia: e.cienciaObrigatoria,
+          vigenciaInicio: e.vigenciaInicio,
+          vigenciaFim: e.vigenciaFim,
+        }),
+      },
     );
     if (!r.repetida)
       this.avisar(
@@ -329,7 +379,7 @@ export class ServicoComunicacao {
     const antes = await this.comunicado(c, id);
     await this.porta.gravarSgh(
       c,
-      linha(c, a, ev.evento, ev.operacao, { tabela: 'SGH_ADM_MENSAGEM', id: String(id), chave: ev.chave }),
+      linha(c, a, ev.evento, ev.operacao, { tabela: 'comunicado', id, chave: ev.chave }),
       fn,
     );
     // Os destinatários releem a caixa (o encerrado some de quem não leu; o corrigido aparece com o texto novo).
@@ -431,8 +481,8 @@ export class ServicoComunicacao {
     const mudou = await this.porta.gravarSgh(
       c,
       linha(c, a, EVENTOS_AUDITAVEIS.avisoResolvido.codigo, `acesso.marcarAviso:${estado}`, {
-        tabela: 'SGH_ADM_AVISO',
-        id: String(id),
+        tabela: 'notificacao_usuario',
+        id,
         chave: `estado:${estado}`,
       }),
       (g) => g.mudarEstadoAviso({ login: a.login, id, estado }),
@@ -450,11 +500,12 @@ export class ServicoComunicacao {
       c,
       (x: number | null) =>
         linha(c, a, EVENTOS_AUDITAVEIS.avisoEmitido.codigo, 'acesso.emitirAviso', {
-          tabela: 'SGH_ADM_AVISO',
-          id: x === null ? null : String(x),
+          tabela: 'notificacao_usuario',
+          id: x,
           chave: `${novo.modulo}:${novo.evento}`.slice(0, 80),
         }),
       (g) => g.gravarAviso(novo),
+      { operacao: 'acesso.emitirAviso' },
     );
     if (id !== null) this.avisar(c, [novo.login]);
     return id;
@@ -479,10 +530,10 @@ export class ServicoComunicacao {
     c: ContextoComunicacao,
     acao: 'incluir' | 'excluir',
     palavra: string,
-    octx: ContextoOperacao,
+    octx: ContextoOperacaoComunicacao,
   ): Promise<{ repetida: boolean }> {
     const op = OPERACOES_DICIONARIO[acao];
-    const l = await this.porta.podeGravar(c, op, octx.usuarioLegado);
+    const l = await this.porta.podeGravar(c, op, octx.login);
     if (!l.pode)
       throw new ErroProblema(
         'operacao-bloqueada',

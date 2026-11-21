@@ -1,15 +1,22 @@
 // Porta da lista de trabalho DICOM em MEMÓRIA (M47, etapa 3): a sessão sintética de dev/ci e o E2E. Os exames de imagem
 // vêm da porta em memória do SADT (exames sintéticos: os pedidos do prontuário e os lançados no setor); o item, o
-// reenvio e o status ficam aqui, com as mesmas regras da gravação do legado (um item por exame, o mesmo número de acesso
+// reenvio e o status ficam aqui, com as mesmas regras da gravação no banco (um item por exame, o mesmo número de acesso
 // no reenvio, a conferência do envio visto, a mensagem repetida devolvendo a primeira). O PACS é o simulador de
 // modalidade: a entrega é imediata e o item chega ao simulador pelo mesmo conteúdo DICOM que o worker monta. Nada vai
-// à cópia; todo dado é SINTÉTICO.
-import { recusa } from '@sgh/legado';
-import type { ExameImagemPendente, ItemMwlBanco, ModalidadeLida, StatusEstudoBanco } from '@sgh/legado';
+// ao banco; todo dado é SINTÉTICO.
+import { recusa } from '@sgh/nucleo';
 import { itemMwlDicom, SimuladorModalidade } from '@sgh/dominio-sadt';
 import { SETORES_SADT } from '@sgh/contratos';
 import type { PortaSadt } from './porta.js';
-import type { ContextoPacs, GravadorPacs, PortaPacs } from './pacs-porta.js';
+import type {
+  ContextoPacs,
+  ExameImagemPendente,
+  GravadorPacs,
+  ItemMwlBanco,
+  ModalidadeLida,
+  PortaPacs,
+  StatusEstudoBanco,
+} from './pacs-porta.js';
 
 /** O cadastro de modalidades sintético (as siglas do padrão DICOM usadas pelo parâmetro). */
 export const MODALIDADES_SINTETICAS: readonly ModalidadeLida[] = [
@@ -63,14 +70,17 @@ export class PortaPacsMemoria implements PortaPacs {
 
   /** O simulador do estabelecimento (os testes conferem o que chegou). */
   simulador(hospital: string): SimuladorModalidade {
-    return this.e({ rede: '', hospital }).simulador;
+    return this.e({ cliente: '', estabelecimento: null, usuario: null, correlacao: 'simulador', rede: '', hospital })
+      .simulador;
   }
 
   async podeGravar() {
     return { pode: true, codigo: null, motivo: null };
   }
-  executar(): never {
-    throw new Error('A lista de trabalho DICOM não usa receita do legado (operações só SGH_).');
+  executar(): Promise<never> {
+    return Promise.reject(
+      recusa('operacao-desconhecida', 'A lista de trabalho DICOM grava pelas ações próprias (enviar, reenviar e status).'),
+    );
   }
 
   relogio(c: ContextoPacs) {

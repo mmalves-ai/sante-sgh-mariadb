@@ -25,6 +25,7 @@ export {
   type CatalogoOperacoesLiberacao,
   catalogoOperacoesProprio,
 } from './catalogo-operacoes.js';
+export { operacaoLiberada, type QuemPergunta, sujeitoDe } from './liberacao-operacao.js';
 export {
   type AvaliadorLigarSetor,
   CRITERIO_LIGAR_SETOR,
@@ -54,8 +55,6 @@ export {
   TTL_CONVENIOS_S,
 } from './cache-config.js';
 // M38: onda 0 (situação das telas e sondas da implantação).
-export { Onda0Controller } from './onda0.controller.js';
-export { PORTA_ONDA0, type PortaOnda0, portaOnda0Memoria, portaOnda0Propria } from './onda0.js';
 // M36: painel da homologação sobre a cópia (gerado por `pnpm homologacao:roteiro`).
 export { HomologacaoController } from './homologacao.controller.js';
 export {

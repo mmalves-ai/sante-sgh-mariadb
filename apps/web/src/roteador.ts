@@ -46,7 +46,6 @@ import { rotasFarmacia } from './modulos/farmacia/rotas.js';
 import { rotasFaturamento } from './modulos/faturamento/rotas.js';
 import { rotasTiss } from './modulos/tiss/rotas.js';
 import { rotasFinanceiro } from './modulos/financeiro/rotas.js';
-import { rotasCoexistencia } from './modulos/coexistencia/rotas.js';
 import { rotasRepasse } from './modulos/repasse/rotas.js';
 import { rotasAssinatura } from './modulos/assinatura/rotas.js';
 import { rotasOperadora } from './modulos/operadora/rotas.js';
@@ -173,7 +172,6 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasFaturamento,
     ...rotasTiss,
     ...rotasFinanceiro,
-    ...rotasCoexistencia,
     ...rotasRepasse,
     // M49 (etapa 1): Meu certificado, política de assinatura e provedores em nuvem.
     ...rotasAssinatura,

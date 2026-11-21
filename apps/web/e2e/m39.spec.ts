@@ -253,43 +253,4 @@ test.describe('Onda 1: recepção ambulatorial com o outro sistema ao lado @M39 
     await semViolacaoAxe(tv, 'painel de TV depois da reconexão');
     rmSync(RECEPCAO_POR_FORA, { force: true });
   });
-
-  test('painel de migração: lista para ligar o setor (o item das operações calculado) e a disputa do dia; axe', async ({
-    page,
-  }) => {
-    await entrar(page, 'SINT.ADMIN');
-    await page.goto('/administracao/coexistencia/migracao/onda1');
-    await expect(page.getByTestId('tela-migracao-onda1')).toBeVisible();
-    const ag = page.getByTestId('onda1-setor-agendamento');
-    await expect(ag.getByTestId('veredito')).toHaveText('Falta completar a lista');
-    await expect(ag.getByTestId('item-operacoes-conferidas').getByTestId('situacao')).toHaveText('Pendente');
-    await expect(ag.getByTestId('item-tvs')).toHaveCount(0);
-    await semViolacaoAxe(page, '/administracao/coexistencia/migracao/onda1');
-    // Registrar o aceite da jornada (evidência sem dado pessoal e a data).
-    await page.getByTestId('onda1-abrir-agendamento').click();
-    const form = page.getByTestId('form-onda1');
-    await escolher(form.getByTestId('onda1-item'), { rotulo: 'Aceite da jornada pelo chave-usuário' });
-    await escolher(form.getByTestId('onda1-situacao'), 'cumprido');
-    await form.getByLabel(/^Evidência/).fill('docs/homologacao/pc/ata-agenda.md');
-    await form.getByLabel('Data do cumprimento').fill('09/11/2026');
-    await form.getByLabel('Data do cumprimento').blur();
-    await form.getByLabel('Justificativa').fill('Aceite registrado pelo comitê (sintético)');
-    await semViolacaoAxe(page, 'registro de item da lista');
-    await form.getByTestId('onda1-gravar').click();
-    await expect(page.getByTestId('mensagem-onda1')).toContainText('1 item(ns) gravado(s)');
-    await expect(ag.getByTestId('item-aceite-jornada').getByTestId('situacao')).toHaveText('Cumprido');
-    await expect(ag.getByTestId('veredito')).toHaveText('Falta completar a lista');
-    // A disputa do dia: a recusa por horário ocupado da jornada, com a conta.
-    const recusas = page.getByTestId('disputa-agendamento-recusas-horario-ocupado');
-    await expect(recusas).toContainText('agendarConsulta');
-    await expect(page.getByTestId('disputa-recepcao-ambulatorial-senhas-por-sistema')).toContainText(
-      'no novo +',
-    );
-    await expect(page.locator('main')).not.toContainText(/spdata|legado/i);
-    // Os indicadores da migração também mostram a disputa por dia.
-    await page.getByTestId('aba-migracao-indicadores').click();
-    await expect(page.getByTestId('ind-disputa')).toBeVisible();
-    await expect(page.getByTestId('ind-disputa')).toContainText('agendarConsulta');
-    await semViolacaoAxe(page, 'indicadores com a disputa');
-  });
 });

@@ -4,9 +4,11 @@ import type { RouteRecordRaw } from 'vue-router';
 
 export const rotasSuporte: RouteRecordRaw[] = [
   {
+    // Uma entrada só: a conta da plataforma (e-mail, com o segundo fator) e o administrador da plataforma
+    // (POST /api/sessao/plataforma) entram pela tela principal; o endereço antigo leva a ela.
     path: '/plataforma/entrar',
     name: 'plataforma.entrar',
-    component: () => import('./telas/PlataformaEntrarTela.vue'),
+    redirect: '/entrar',
     meta: { publica: true },
   },
   {

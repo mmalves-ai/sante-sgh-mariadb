@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
-import AvisoIndisponivel from '../../onda0/componentes/AvisoIndisponivel.vue';
 import { lerIndice } from '../api-internacao.js';
 import {
   formatarData,
@@ -42,7 +41,6 @@ const hoje = hojeNoEstabelecimento();
       <input id="ind-ate" v-model="ate" type="month" min="2020-01" />
       <SanteBotao :rotulo="t('internacao.comum.aplicar')" tipo="submit" />
     </form>
-    <AvisoIndisponivel v-if="indice.isError.value" :erro="indice.error.value" />
     <MensagemErro v-if="indice.isError.value" :erro="indice.error.value" />
     <p v-else-if="indice.isPending.value">{{ t('internacao.comum.carregando') }}</p>
     <template v-else-if="indice.data.value">

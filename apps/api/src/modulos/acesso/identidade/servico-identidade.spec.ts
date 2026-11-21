@@ -1,5 +1,5 @@
 // Serviço da identidade (M59-F2): credencial forte no login (regra 2), segundo fator e política (regra 3), situação em
-// faixa e a retirada da senha antiga (regra 1). Porta em memória, usuários e senhas sintéticos, Argon2id barato.
+// faixa, a exigência do cadastro do perfil (adesão sem prazo) e a credencial a redefinir. Porta em memória, usuários e senhas sintéticos, Argon2id barato.
 import { codigoTotp, decifrarSegredo } from '@sgh/dominio-acesso';
 import { describe, expect, it } from 'vitest';
 import { PortaIdentidadeMemoria } from './porta-identidade-memoria.js';
@@ -9,7 +9,7 @@ const CHAVE = Buffer.alloc(32, 7);
 const BARATO = { memoria: 8_192, passes: 1, paralelismo: 1 };
 const INICIO = Date.parse('2026-11-03T13:00:00Z'); // 10h em São Paulo
 
-function montar(o: { contingencia?: boolean; chave?: Buffer | null } = {}) {
+function montar(o: { chave?: Buffer | null } = {}) {
   let agora = INICIO;
   const porta = new PortaIdentidadeMemoria(() => agora);
   porta.usuario({ login: 'SINT.FAT', id: 70, grupo: 'FATURAMENTO' });
@@ -18,7 +18,6 @@ function montar(o: { contingencia?: boolean; chave?: Buffer | null } = {}) {
   const avisos: string[] = [];
   const s = new ServicoIdentidade({
     porta,
-    contingencia: async () => o.contingencia ?? true,
     chave: o.chave === undefined ? CHAVE : o.chave,
     emissor: 'Produto sintético',
     argon2: BARATO,
@@ -298,13 +297,13 @@ describe('política do segundo fator: onda 1 de uma vez', () => {
   });
 });
 
-describe('situação e retirada da senha antiga', () => {
+describe('situação da senha e exigência do perfil', () => {
   it('resumo em faixa e lista com a classe', async () => {
     const m = montar();
     for (let i = 0; i < 6; i++) m.porta.usuario({ login: `SINT.X${i}`, id: 80 + i });
     await m.s.regravar(ator('SINT.FAT', 70), 'Sintetica#1');
     const r = await m.s.resumo('rede-teste', 'pc');
-    expect(r).toMatchObject({ ativos: 9, contingencia: true, tabelasProntas: true });
+    expect(r).toMatchObject({ ativos: 9, contingencia: false, tabelasProntas: true });
     expect(r.porSenha).toEqual({
       forte: '<5',
       'legado-cifrada': 7,
@@ -337,24 +336,64 @@ describe('situação e retirada da senha antiga', () => {
     expect(p2.temMais).toBe(false);
   });
 
-  it('retirada: recusa com a contingência ligada; sem forte; integração; pode com tudo certo', async () => {
-    const ligada = montar();
-    await expect(ligada.s.conferirRetirada(ator('SINT.GESTOR', 72), 'SINT.FAT')).rejects.toMatchObject({
-      codigo: 'retirada-recusada',
-      detalhe: expect.stringMatching(/contingência/),
+  it('exigência do cadastro do perfil: adesão sem prazo (entra e cadastra), nunca recusa', async () => {
+    const m = montar();
+    m.porta.linhas.push({
+      id: 'perfil-9',
+      hospital: 'pc',
+      alvo: 'perfil',
+      valor: 'faturista',
+      onda: 1,
+      inicio: '2020-01-01',
+      prazoAdesaoDias: 0,
+      motivo: 'Exigência do cadastro do perfil de acesso: adesão, sem prazo',
+      criadaPor: '',
+      criadaEm: null,
+      encerradaEm: null,
+      origem: 'cadastro-perfil',
     });
-    const m = montar({ contingencia: false });
-    await expect(m.s.conferirRetirada(ator('SINT.GESTOR', 72), 'SINT.FAT')).rejects.toMatchObject({
-      detalhe: expect.stringMatching(/credencial forte/),
+    const conta = { login: 'SINT.FAT', id: 70 };
+    expect(await m.s.segundoFatorNoLogin('pc', conta, fat, undefined)).toEqual({
+      tipo: 'entrar',
+      info: { cadastrado: false, disponivel: true, exigencia: 'adesao', prazoAdesaoAte: null },
     });
-    await expect(m.s.conferirRetirada(ator('SINT.GESTOR', 72), 'SINT.NINGUEM')).rejects.toMatchObject({
-      codigo: 'usuario-inexistente',
+    // Sem a chave mestra (ninguém consegue cadastrar), continua entrando.
+    const sem = montar({ chave: null });
+    sem.porta.linhas.push({ ...m.porta.linhas[0]! });
+    expect(await sem.s.segundoFatorNoLogin('pc', conta, fat, undefined)).toMatchObject({ tipo: 'entrar' });
+    // Outro perfil não é alcançado.
+    expect(await m.s.segundoFatorNoLogin('pc', { login: 'SINT.MED', id: 71 }, med, undefined)).toMatchObject({
+      tipo: 'entrar',
+      info: { exigencia: 'opcional' },
     });
-    m.porta.usuario({ login: 'hal-ai', id: 5, senhaPresente: false, criptografada: false });
-    await expect(m.s.conferirRetirada(ator('SINT.GESTOR', 72), 'hal-ai')).rejects.toMatchObject({
-      detalhe: expect.stringMatching(/integração/),
-    });
-    await m.s.regravar(ator('SINT.FAT', 70), 'Sintetica#1');
-    await expect(m.s.conferirRetirada(ator('SINT.GESTOR', 72), 'SINT.FAT')).resolves.toBeUndefined();
+    // A linha do cadastro do perfil não impede a política por onda para o mesmo perfil.
+    await expect(
+      m.s.incluirPolitica(ator('SINT.GESTOR', 72), {
+        alvo: 'perfil',
+        valor: 'faturista',
+        onda: 1,
+        inicio: '2026-11-10',
+        prazoAdesaoDias: 14,
+        motivo: 'onda do faturamento',
+      }),
+    ).resolves.toMatchObject({ valor: 'faturista', prazoAdesaoDias: 14 });
+  });
+
+  it('credencial que o sistema não confere: recusa sem tentar e avisa sem dado pessoal', async () => {
+    const m = montar();
+    const u = m.porta.usuariosPorLogin.get('SINT.FAT');
+    if (!u) throw new Error('sem usuário');
+    m.porta.usuariosPorLogin.set('SINT.FAT', { ...u, redefinicaoObrigatoria: true });
+    expect(await m.s.autenticar('pc', 'SINT.FAT', 'Sintetica#1')).toEqual({ tipo: 'forte-invalida' });
+    expect(m.avisos).toEqual(['credencial a redefinir pelo gestor']);
+  });
+
+  it('regravação pelo gestor: a trilha leva o autor, a credencial é da conta alvo', async () => {
+    const m = montar();
+    expect(await m.s.regravar(ator('SINT.FAT', 70), 'Provisoria#1x', 'senha-provisoria', ator('SINT.GESTOR', 72))).toBe(
+      true,
+    );
+    expect(m.porta.trilha.at(-1)).toMatchObject({ usuario: 'SINT.GESTOR', idUsuario: 72 });
+    expect(m.porta.usuariosPorLogin.get('SINT.FAT')?.forte?.origem).toBe('senha-provisoria');
   });
 });

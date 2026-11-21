@@ -22,13 +22,6 @@ export const rotasConfig: RouteRecordRaw[] = [
       menu: 'Administração > Coexistência com o legado > Testes de assinatura de dados (Sante SGH × legado)',
     },
   },
-  // M38: "Vigilância diária em produção", aba da tela de testes de assinatura (o mesmo item da árvore).
-  {
-    path: '/administracao/coexistencia/assinaturas/vigia',
-    name: 'config.assinaturas.vigia',
-    component: () => import('../onda0/telas/VigiaAssinaturasTela.vue'),
-    meta: { permissao: 'config.assinatura.ler' },
-  },
   // M35: "Prontidão por setor", aba da tela de testes de assinatura (o mesmo item da árvore; sem item próprio).
   {
     path: '/administracao/coexistencia/prontidao',

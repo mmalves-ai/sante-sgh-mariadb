@@ -126,7 +126,7 @@ export const esquemaPainelSaneamento = z.object({
 });
 export type PainelSaneamento = z.infer<typeof esquemaPainelSaneamento>;
 
-/** Item do plano de saneamento (SGH_ACESSO_SANEAMENTO). */
+/** Item do plano de saneamento (tabela saneamento_acesso_item). */
 export const esquemaItemSaneamento = z.object({
   id: z.string(),
   grupoOrigem: z.string(),

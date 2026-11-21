@@ -9,7 +9,7 @@
 //   POST /api/sadt/imagem/status/:hospital            sadt.receberStatusExame: a entrada do PACS (credencial do parceiro
 //                                                      de integração com o escopo estudo.status), idempotente pela chave
 //                                                      da mensagem
-// Tudo grava só SGH_ (SGH_SADT_PACS_*, a SGH_OUTBOX e a SGH_TRILHA na mesma transação); a chave `imagem.worklist` vale
+// Tudo grava no banco do cliente (o item, a fila de integração e a trilha na mesma transação); a chave `imagem.worklist` vale
 // para gravar; a lista lê também desligada (consulta). Nenhuma tabela legada é escrita.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -33,6 +33,7 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { idDaRota, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
 import { corpo } from '../exames/public-api.js';
 import {
   ESTABELECIMENTOS_ENTRADA,
@@ -71,7 +72,7 @@ export class PacsController {
   @Post('worklist/enviar')
   @HttpCode(201)
   @Permissao(P.reenviar)
-  @AuditadoNoHandler('sadt.enviarWorklist: SGH_SADT_PACS_MWL, a SGH_OUTBOX e a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('sadt.enviarWorklist: item_lista_trabalho_imagem, a fila de integração e a trilha na mesma transação')
   enviar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoWorklist> {
     const e = corpo(esquemaEnviarWorklist, b);
     return this.servico.enviar(sessaoDe(req), e.exames, 'manual');
@@ -80,7 +81,7 @@ export class PacsController {
   @Post('worklist/:id/reenviar')
   @HttpCode(201)
   @Permissao(P.reenviar)
-  @AuditadoNoHandler('sadt.enviarWorklist (reenvio): SGH_SADT_PACS_MWL, a SGH_OUTBOX e a SGH_TRILHA juntos')
+  @AuditadoNoHandler('sadt.enviarWorklist (reenvio): item_lista_trabalho_imagem, a fila de integração e a trilha juntos')
   reenviar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -94,7 +95,7 @@ export class PacsController {
   @HttpCode(201)
   @Permissao(P.reenviar)
   @AuditadoNoHandler(
-    'sadt.receberStatusExame (simulador): SGH_SADT_PACS_ESTUDO e a SGH_TRILHA na mesma transação',
+    'sadt.receberStatusExame (simulador): a mensagem de entrada, o estudo e a trilha na mesma transação',
   )
   simular(
     @Param('id') id: string,
@@ -123,7 +124,14 @@ export class PacsController {
     )
       throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento não encontrado');
     const rede = this.configuracao.rede ?? 'rede-sintetica';
-    const c = { rede, hospital };
+    // O parceiro não tem sessão: o contexto do núcleo é o do estabelecimento da rota, sem usuário.
+    const c = {
+      ...contextoDoEstabelecimento(hospital),
+      usuario: null,
+      correlacao: 'sadt.pacs.status',
+      rede,
+      hospital,
+    };
     const negar = () =>
       new ErroProblema(
         'nao-autenticado',
@@ -175,19 +183,21 @@ export class PacsController {
             (x: Parameters<typeof alvo>[0]) => {
               const a = alvo(x);
               return {
-                rede,
-                hospital,
-                usuario,
-                evento: EVENTOS_AUDITAVEIS.estudoStatusRecebido.codigo,
-                recurso: 'sadt.pacs',
-                operacao: a.operacao,
-                tabelaAlvo: 'SGH_SADT_PACS_ESTUDO',
-                idAlvo: a.id,
-                chaveNaturalAlvo: a.chave,
-                resultado: 'sucesso',
-                estacao,
+                estabelecimento: c.estabelecimento,
+                usuario: null,
+                acao: 'operacao' as const,
+                entidade: 'integracao_mensagem',
+                entidadeId: /^\d{1,15}$/.test(a.id) ? Number(a.id) : null,
+                dadosDepois: {
+                  evento: EVENTOS_AUDITAVEIS.estudoStatusRecebido.codigo,
+                  recurso: 'sadt.pacs',
+                  operacao: a.operacao,
+                  chave: a.chave,
+                  paciente: a.paciente,
+                  parceiro: usuario,
+                  estacao,
+                },
                 correlacao: e.mensagem.slice(0, 64),
-                idPaciente: a.paciente,
               };
             },
             fn,

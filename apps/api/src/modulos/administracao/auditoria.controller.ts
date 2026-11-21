@@ -8,7 +8,7 @@
 //   GET  /api/administracao/auditoria/exclusoes           exclusões e históricos (contagens) e conexões
 //   GET  /api/administracao/auditoria/exclusoes/:chave    as linhas de um tipo (período, usuário, 500 por página)
 //   GET  /api/administracao/auditoria/conexoes            conexões ao banco por módulo (período, usuário, 500)
-//   GET  /api/administracao/privacidade/pedidos           pedidos do titular (SGH_AUD_PEDIDO_TITULAR)
+//   GET  /api/administracao/privacidade/pedidos           pedidos do titular (pedido_titular)
 //   POST /api/administracao/privacidade/pedidos           registrar
 //   POST /api/administracao/privacidade/pedidos/:id       confirmar identidade, atender ou negar (com fundamento)
 // Toda abertura da trilha é evento auditado; o período é obrigatório e vai até 31 dias (mais que isso, a cópia
@@ -39,7 +39,10 @@ import {
   type Exclusoes,
   FORMATOS_EXPORTACAO_TRILHA,
   type LinhaTrilha,
+  CANAIS_PEDIDO_LIDOS,
   type ListaPedidos,
+  SITUACOES_PEDIDO_TITULAR,
+  TIPOS_PEDIDO_TITULAR,
   PAGINAS_MAXIMAS_TRILHA,
   type PaginaAcessosProntuario,
   type PaginaConexoes,
@@ -60,12 +63,12 @@ import {
   PRAZO_DIAS,
   type TransicaoPedido,
 } from '@sgh/dominio-acesso';
-import { type LinhaTrilhaLida, type PedidoTitularLido, REGISTROS_AUDITORIA } from '@sgh/legado';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { analisar, ctxDe, problema, sessaoDe, trilhaDe } from './comum.js';
-import { type Ctx, FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
+import { analisar, ctxDe, idempotencia, problema, sessaoDe, trilhaDe } from './comum.js';
+import { FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
+import { type Ctx, type LinhaTrilhaLida, type PedidoTitularLido, registroDaChave } from './tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { exportarTrilhaSbis } from './sbis/exportacao.js';
 import { SERVICO_SBIS, type ServicoSbis } from './sbis/servico.js';
@@ -92,8 +95,9 @@ export function celulaCsv(v: string): string {
   return `"${seguro.replace(/"/g, '""')}"`;
 }
 
+/** A trilha é uma só (a do produto); o campo `origem` do contrato da tela fica sempre "novo". */
 function linhaTela(x: LinhaTrilhaLida): LinhaTrilha {
-  return { ...x };
+  return { origem: 'novo', ...x };
 }
 
 const escapar = (s: string) =>
@@ -212,17 +216,17 @@ export class AuditoriaController {
       fimExclusivo: fimExclusivo(periodo.fim),
       limite,
       ...(f.usuario ? { usuario: f.usuario } : {}),
-      ...(f.tipo !== undefined ? { tipo: f.tipo } : {}),
       ...(f.evento ? { evento: f.evento } : {}),
       ...(paciente !== undefined ? { paciente } : {}),
     };
     const origem = f.origem ?? 'todas';
     const inicio = performance.now();
-    const [legado, novo] = await Promise.all([
-      origem !== 'novo' && !f.evento ? this.fonte.trilhaLegado(c, filtro) : Promise.resolve([]),
-      origem !== 'legado' && f.tipo === undefined ? this.fonte.trilhaPropria(c, filtro) : Promise.resolve([]),
-    ]).catch((e: unknown) => problema(e));
-    const todas = [...legado, ...novo].sort(
+    // Uma trilha só: o filtro pelo tipo de ação da trilha antiga não tem correspondente (nenhuma linha).
+    const todas = (
+      origem !== 'legado' && f.tipo === undefined
+        ? await this.fonte.trilha(c, filtro).catch((e: unknown) => problema(e))
+        : []
+    ).sort(
       (a, b) => b.dataHora.localeCompare(a.dataHora) || b.id.localeCompare(a.id),
     );
     const ini = (pagina - 1) * porPagina;
@@ -246,7 +250,8 @@ export class AuditoriaController {
   @Auditar(EVENTOS_AUDITAVEIS.trilhaConsultada.codigo)
   async trilha(@Req() req: RequisicaoAutorizada, @Query() q: Record<string, string>): Promise<PaginaTrilha> {
     const r = await this.consultar(req, q, TETO_PAGINA_TRILHA);
-    const tipos = await this.fonte.tiposAcao(r.c).catch(() => []);
+    // Os tipos de ação numerados da trilha antiga não existem na trilha do produto (filtro por evento).
+    const tipos: PaginaTrilha['tipos'] = [];
     return {
       itens: r.itens,
       pagina: r.pagina,
@@ -389,7 +394,7 @@ export class AuditoriaController {
     @Req() req: RequisicaoAutorizada,
     @Query() q: Record<string, string>,
   ): Promise<PaginaExclusoes> {
-    const tipo = REGISTROS_AUDITORIA.find((x) => x.chave === chave);
+    const tipo = registroDaChave(chave);
     if (!tipo) throw new ErroProblema('nao-encontrado', 404, 'Tipo de registro não encontrado');
     const f = analisar(esquemaConsultaRegistros, q);
     const c = ctxDe(req, 'auditoria-exclusoes');
@@ -408,7 +413,7 @@ export class AuditoriaController {
     return {
       chave: tipo.chave,
       rotulo: tipo.rotulo,
-      comUsuario: tipo.usuario !== null,
+      comUsuario: tipo.comUsuario,
       itens: linhas.slice(0, TETO_PAGINA_TRILHA),
       pagina,
       temMais: haMais && pagina < PAGINAS_MAXIMAS,
@@ -454,9 +459,19 @@ export class AuditoriaController {
   @Get('privacidade/pedidos')
   @Permissao(C.lgpdLer)
   @Auditar(EVENTOS_AUDITAVEIS.privacidadeConsultada.codigo)
-  async pedidos(@Req() req: RequisicaoAutorizada): Promise<ListaPedidos> {
-    const ps = await this.fonte.pedidos(ctxDe(req, 'privacidade')).catch((e: unknown) => problema(e));
+  async pedidos(@Req() req: RequisicaoAutorizada): Promise<ListaPedidos & { readonly foraDaLista: number }> {
+    const lidos = await this.fonte.pedidos(ctxDe(req, 'privacidade')).catch((e: unknown) => problema(e));
     const agora = new Date();
+    // O modelo aceita pedidos que o contrato da tela ainda não conhece (oposição, revisão de decisão automatizada,
+    // titular sem cadastro de paciente; pedido de contrato em saida/02-05.json). Um só deles não pode invalidar a lista
+    // inteira: ficam de fora e a contagem vai em `foraDaLista`.
+    const ps = lidos.filter(
+      (p): p is typeof p & { idPaciente: number } =>
+        p.idPaciente !== null &&
+        (TIPOS_PEDIDO_TITULAR as readonly string[]).includes(p.tipo) &&
+        (SITUACOES_PEDIDO_TITULAR as readonly string[]).includes(p.situacao) &&
+        (CANAIS_PEDIDO_LIDOS as readonly string[]).includes(p.canal),
+    );
     const itens = ps.map((p) => ({
       id: p.id,
       protocolo: p.protocolo,
@@ -478,6 +493,7 @@ export class AuditoriaController {
       itens,
       abertos: itens.filter((x) => x.situacao === 'aberto' || x.situacao === 'identidade-verificada').length,
       atrasados: itens.filter((x) => x.atrasado).length,
+      foraDaLista: lidos.length - ps.length,
       destino: this.fonte.destino,
     };
   }
@@ -486,7 +502,7 @@ export class AuditoriaController {
   @HttpCode(201)
   @Permissao(C.pedidoTitularTratar)
   @AuditadoNoHandler(
-    'SGH_AUD_PEDIDO_TITULAR e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
+    'executor: pedido_titular, pedido_titular_historico e a trilha na mesma transação (memória: registrador da API)',
   )
   async registrar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = analisar(esquemaRegistrarPedido, corpo);
@@ -504,6 +520,8 @@ export class AuditoriaController {
           descricao: p.descricao ?? null,
           por: s.login,
           prazoDias: PRAZO_DIAS,
+          usuario: s.usuario,
+          chave: idempotencia(req),
         },
         trilhaDe(
           req,
@@ -520,7 +538,7 @@ export class AuditoriaController {
   @HttpCode(200)
   @Permissao(C.pedidoTitularTratar)
   @AuditadoNoHandler(
-    'SGH_AUD_PEDIDO_TITULAR e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
+    'executor: pedido_titular, pedido_titular_historico e a trilha na mesma transação (memória: registrador da API)',
   )
   async tratar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     if (!/^\d{1,20}$/.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Pedido não encontrado');
@@ -541,6 +559,8 @@ export class AuditoriaController {
           fundamento: p.fundamento ?? null,
           resposta: p.resposta ?? null,
           por: s.login,
+          usuario: s.usuario,
+          chave: idempotencia(req),
           conferir: (x: PedidoTitularLido) => {
             const rec = conferirTransicao(
               {

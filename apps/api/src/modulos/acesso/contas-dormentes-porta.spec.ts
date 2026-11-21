@@ -23,7 +23,7 @@ const trilhaGestao = {
   evento: 'acesso.conta-dormente.excecao',
   recurso: 'acesso.usuario',
   operacao: 'acesso.excecaoContaDormente',
-  resultado: 'sucesso',
+  resultado: 'sucesso' as const,
   estacao: 'teste',
   correlacao: 'w101-9b',
 };
@@ -131,6 +131,12 @@ describe('contas dormentes sobre a fonte da gestão em memória (W1-01 parte 9b)
     expect(r.bloqueadas.map((c) => c.login)).toEqual([comuns[0]]);
     expect(r.falhas).toEqual([]);
     expect(estadoAcessoSintetico().bloqueio.get(comuns[0]!)).toBe(true);
+    // O bloqueio foi gravado em nome do responsável da rotina (o gestor ativo que entrou por último).
+    const responsavel = await responsavelDaFonte(() => fonte)('rede', 'pc');
+    const gravado = trilha.eventos.filter((e) => e.evento === 'acesso.usuario.gravado');
+    expect(gravado.length).toBe(1);
+    expect(gravado[0]?.usuario).toBe(responsavel);
+    expect(gravado[0]?.correlacao).toBe(`dormentes-pc-${r.hoje}`);
     expect((await fonte.contasDormencia('rede', 'pc')).some((c) => c.login === comuns[0])).toBe(false);
 
     const eventos = trilha.eventos.map((e) => [e.evento, e.idAlvo ?? null, e.resultado]);
@@ -144,6 +150,44 @@ describe('contas dormentes sobre a fonte da gestão em memória (W1-01 parte 9b)
     // Segunda rodada no mesmo dia: nada mais a bloquear.
     const outra = await servico.rodada('rede', 'pc');
     expect(outra.bloqueadas).toEqual([]);
+  });
+
+  it('a porta passa à fonte o contexto da gestão: o responsável da rotina é o usuário operador', async () => {
+    const vistos: unknown[] = [];
+    const falsa = {
+      executar: (_n: string, _h: string, _e: unknown, c: unknown) => {
+        vistos.push(c);
+        return Promise.resolve();
+      },
+    } as unknown as FonteGestao;
+    const porta = portaDormenciaDaFonte({
+      fonte: () => falsa,
+      parametros: () => Promise.resolve(PADRAO_DORMENCIA),
+      trilha,
+    });
+    await porta.executar(
+      'acesso.bloquearUsuario',
+      'pc',
+      { login: 'SINT.X' },
+      {
+        rede: 'rede',
+        hospital: 'pc',
+        responsavel: 'SINT.GESTOR',
+        chaveIdempotencia: 'dormentes-pc-2026-11-18-SINT.X',
+        correlacao: 'dormentes-pc-2026-11-18',
+        estacao: 'rotina-contas-dormentes',
+      },
+    );
+    expect(vistos).toEqual([
+      {
+        rede: 'rede',
+        hospital: 'pc',
+        usuario: 'SINT.GESTOR',
+        chaveIdempotencia: 'dormentes-pc-2026-11-18-SINT.X',
+        correlacao: 'dormentes-pc-2026-11-18',
+        estacao: 'rotina-contas-dormentes',
+      },
+    ]);
   });
 
   it('parâmetros pela configuração: valor do estabelecimento, padrão sem fonte e fora da faixa', async () => {

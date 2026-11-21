@@ -124,7 +124,7 @@ describe('termo das concessões', () => {
       versao: () => VERSAO,
     });
     expect((await s2.painelConcessoes(A)).desligado).toBe(false);
-    porta.falta = ['SGH_AUDIT_CONCESSAO'];
+    porta.falta = { concessoes: ['concessao_certificacao'] };
     expect(await codigo(s2.painelConcessoes(A))).toBe('tabelas-ausentes');
   });
 });

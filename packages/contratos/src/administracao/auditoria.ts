@@ -62,7 +62,7 @@ export const esquemaPaginaTrilha = z.object({
   periodo: z.object({ inicio: z.string(), fim: z.string(), dias: z.number().int() }),
   tipos: z.array(z.object({ id: z.number().int(), nome: z.string() })),
   tempoMs: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PaginaTrilha = z.infer<typeof esquemaPaginaTrilha>;
 
@@ -87,7 +87,7 @@ export const esquemaPaginaAcessosProntuario = z.object({
   temMais: z.boolean(),
   cortado: z.boolean(),
   periodo: z.object({ inicio: z.string(), fim: z.string(), dias: z.number().int() }),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PaginaAcessosProntuario = z.infer<typeof esquemaPaginaAcessosProntuario>;
 
@@ -96,7 +96,7 @@ export const esquemaExclusoes = z.object({
   /** Contagem por tipo de registro no período (nunca o conteúdo). */
   tipos: z.array(z.object({ chave: z.string(), rotulo: z.string(), quantidade: z.number().int() })),
   conexoes: z.array(z.object({ modulo: z.number().int(), nome: z.string(), usuarios: z.number().int() })),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type Exclusoes = z.infer<typeof esquemaExclusoes>;
 
@@ -126,7 +126,7 @@ export const esquemaPaginaExclusoes = z.object({
   temMais: z.boolean(),
   cortado: z.boolean(),
   periodo: z.object({ inicio: z.string(), fim: z.string(), dias: z.number().int() }),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PaginaExclusoes = z.infer<typeof esquemaPaginaExclusoes>;
 
@@ -138,7 +138,7 @@ export const esquemaPaginaConexoes = z.object({
   temMais: z.boolean(),
   cortado: z.boolean(),
   periodo: z.object({ inicio: z.string(), fim: z.string(), dias: z.number().int() }),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type PaginaConexoes = z.infer<typeof esquemaPaginaConexoes>;
 
@@ -200,7 +200,7 @@ export const esquemaListaPedidos = z.object({
   itens: z.array(esquemaPedidoTitular),
   abertos: z.number().int(),
   atrasados: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ListaPedidos = z.infer<typeof esquemaListaPedidos>;
 
@@ -237,6 +237,6 @@ export type TratarPedido = z.infer<typeof esquemaTratarPedido>;
 export const esquemaBackup = z.object({
   situacoes: z.array(z.object({ id: z.number().int(), descricao: z.string() })),
   procedimentos: z.array(z.object({ id: z.number().int(), descricao: z.string() })),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type Backup = z.infer<typeof esquemaBackup>;

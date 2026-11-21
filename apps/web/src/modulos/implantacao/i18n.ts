@@ -121,8 +121,6 @@ export const mensagensImplantacao = {
       resumo: 'Resumo atual',
       resumoHomologado: 'Resumo homologado',
       verificadaEm: 'Conferida em',
-      bloqueio: 'Gravação suspensa em {n} tabela(s) por segurança.',
-      bloqueioTotal: 'Gravação suspensa em todas as tabelas por segurança.',
     },
     chaves: {
       titulo: 'Funções liberadas',

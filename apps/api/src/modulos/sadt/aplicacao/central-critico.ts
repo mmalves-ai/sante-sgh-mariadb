@@ -1,7 +1,8 @@
 // O aviso do valor crítico na central de avisos do Início (M27; ficha do M26, regra 7: "aviso ativo ao médico
-// responsável"; ficha do M27, regra 6: o que não interrompe vai para a central). Depois do COMMIT da liberação (pelo
-// novo) ou do ciclo da vigia (liberação feita no outro sistema), o médico do atendimento recebe um item no sino, com
-// o link para os resultados do paciente (que abre pela autorização normal do PEP). O título não leva dado do paciente.
+// responsável"; ficha do M27, regra 6: o que não interrompe vai para a central). Depois do COMMIT da liberação, o
+// médico que pediu o exame (o solicitante da requisição, não o executante) recebe um item no sino, com o link para os
+// resultados do paciente (que abre pela autorização normal do PEP). O título não leva dado do paciente.
+// Melhoria: o destinatário sai do exame pedido (requisição), e o objeto do aviso é o exame_item do modelo próprio.
 // Um aviso por exame e liberação (a central não repete o mesmo evento e objeto). Falha aqui não desfaz a liberação:
 // o aviso continua no painel do setor e na fila do médico.
 import { EVENTOS_AUDITAVEIS, type NovoAviso } from '@sgh/contratos';
@@ -38,12 +39,12 @@ export function avisoDoCritico(o: {
     evento: EVENTOS_AUDITAVEIS.sadtAvisoCriticoEmitido.codigo,
     titulo: TITULO_AVISO_CRITICO,
     link: `/pep/paciente/${o.paciente}/resultados`,
-    objetoTabela: 'SILANEXA',
+    objetoTabela: 'exame_item',
     objetoChave: (o.liberacao ? `${o.exame}:${o.liberacao}` : String(o.exame)).slice(0, 80),
   };
 }
 
-/** Emite (sem lançar) o aviso do crítico ao médico do atendimento; devolve se um aviso novo foi gravado. */
+/** Emite (sem lançar) o aviso do crítico ao solicitante do exame; devolve se um aviso novo foi gravado. */
 export async function avisarCriticoNaCentral(
   central: CentralDeAvisos | null,
   porta: PortaSadt,
@@ -51,12 +52,12 @@ export async function avisarCriticoNaCentral(
   autor: { login: string; estacao: string; correlacao: string },
   x: { exame: number; liberacao: number | null; paciente: number | null; atendimento: number | null },
 ): Promise<boolean> {
-  if (!central || !x.paciente || !x.atendimento) return false;
+  if (!central || !x.paciente) return false;
   try {
-    const login = await porta.responsavelDoAtendimento(c, x.atendimento);
+    const login = await porta.destinatarioDoCritico(c, x.exame);
     if (!login) return false;
     const id = await central.emitir(
-      { rede: c.rede, hospital: c.hospital },
+      { rede: c.rede ?? '', hospital: c.hospital ?? String(c.estabelecimento ?? '') },
       autor,
       avisoDoCritico({ login, exame: x.exame, liberacao: x.liberacao, paciente: x.paciente }),
     );

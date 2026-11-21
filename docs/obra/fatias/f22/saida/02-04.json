@@ -1,0 +1,92 @@
+{
+  "registrar": [
+    "acesso: () => import('./acesso/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/acesso/modulo.ts",
+    "src/modulos/acesso/perfil-cargo.ts",
+    "src/modulos/acesso/rh.controller.spec.ts",
+    "src/modulos/acesso/rh.controller.ts",
+    "src/modulos/acesso/saneamento/parametro.ts",
+    "src/modulos/acesso/saneamento/porta-memoria.ts",
+    "src/modulos/acesso/saneamento/porta-propria.ts",
+    "src/modulos/acesso/saneamento/porta-propria.int.spec.ts",
+    "src/modulos/acesso/saneamento/porta-sintetica.spec.ts",
+    "src/modulos/acesso/saneamento/porta-sintetica.ts",
+    "src/modulos/acesso/saneamento/porta.ts",
+    "src/modulos/acesso/saneamento/saneamento.controller.spec.ts",
+    "src/modulos/acesso/saneamento/saneamento.controller.ts",
+    "src/modulos/acesso/saneamento/servico.spec.ts",
+    "src/modulos/acesso/saneamento/servico.ts",
+    "src/modulos/acesso/troca-rapida.controller.spec.ts",
+    "src/modulos/acesso/ultimo-gestor.spec.ts",
+    "src/modulos/acesso/ultimo-gestor.ts",
+    "src/modulos/acesso/usuario-modelo.controller.spec.ts",
+    "src/modulos/acesso/usuario-modelo.controller.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "pasta": "db/migracoes/02_ADM",
+      "motivo": "Plano do saneamento dos perfis de acesso amplo (M59-F4). Sem a tabela, PortaSaneamentoPropria.pronto() = false e as rotas /api/administracao/acesso/grupos/saneamento respondem 503 'ainda não está instalado' (painel, usuários, simulação, plano, decidir, aprovar, descartar, aplicar e dissolver ficam indisponíveis). O SQL da porta e o teste de integração já usam exatamente estas colunas; o teste do plano roda sozinho quando a tabela existir. O CHECK ck_saneamento_acesso_item_aplicado impede aplicar item que exige aprovação sem aprovador (a porta também exige 'aprovado' na reserva e na conclusão). O teste de integração cria esta tabela no cliente f22_o2 a partir DESTE DDL (campo 'tabela') quando ela ainda não existe, marca-a no COMMENT e a apaga no afterAll; com a migração aplicada, usa a do banco.",
+      "ddl": "CREATE TABLE saneamento_acesso_item (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  perfil_origem_id  BIGINT UNSIGNED NOT NULL COMMENT 'Perfil de acesso amplo em saneamento',\n  usuario_id        BIGINT UNSIGNED NULL COMMENT 'Conta decidida; nulo na dissolução do perfil',\n  decisao           VARCHAR(30) NOT NULL,\n  perfil_destino_id BIGINT UNSIGNED NULL COMMENT 'Perfil de trabalho de destino (decisão trocar_perfil)',\n  perdas_total      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Ações que a conta perde',\n  perdas_usadas     INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Dessas, as usadas na janela do uso',\n  exige_aprovacao   BOOLEAN NOT NULL DEFAULT FALSE,\n  situacao          VARCHAR(20) NOT NULL DEFAULT 'proposto',\n  motivo            VARCHAR(200) NOT NULL,\n  area              VARCHAR(60) NULL COMMENT 'Área que aprovou a perda de ação usada',\n  aprovador_usuario_id BIGINT UNSIGNED NULL,\n  aprovado_em       DATETIME(3) NULL,\n  motivo_aprovacao  VARCHAR(200) NULL,\n  reservado_por     BIGINT UNSIGNED NULL COMMENT 'Reserva da aplicação (vence em minutos)',\n  reservado_em      DATETIME(3) NULL,\n  aplicado_por      BIGINT UNSIGNED NULL,\n  aplicado_em       DATETIME(3) NULL,\n  descartado_por    BIGINT UNSIGNED NULL,\n  descartado_em     DATETIME(3) NULL,\n  erro              VARCHAR(200) NULL COMMENT 'Código curto da falha da aplicação, sem dado de pessoa',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL COMMENT 'Quem propôs a decisão',\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em       DATETIME(3) NULL,\n  excluido_por      BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_saneamento_acesso_item_decisao CHECK (decisao IN ('trocar_perfil','bloquear','manter_administrador','dissolver_perfil')),\n  CONSTRAINT ck_saneamento_acesso_item_situacao CHECK (situacao IN ('proposto','aprovado','aplicado','descartado','falhou')),\n  CONSTRAINT ck_saneamento_acesso_item_destino CHECK ((decisao = 'trocar_perfil') = (perfil_destino_id IS NOT NULL)),\n  CONSTRAINT ck_saneamento_acesso_item_alvo CHECK ((decisao = 'dissolver_perfil') = (usuario_id IS NULL)),\n  CONSTRAINT ck_saneamento_acesso_item_a_si CHECK (usuario_id IS NULL OR criado_por IS NULL OR usuario_id <> criado_por),\n  CONSTRAINT ck_saneamento_acesso_item_aprovador CHECK (aprovador_usuario_id IS NULL OR ((criado_por IS NULL OR aprovador_usuario_id <> criado_por) AND (usuario_id IS NULL OR aprovador_usuario_id <> usuario_id))),\n  CONSTRAINT ck_saneamento_acesso_item_aprovacao CHECK (situacao <> 'aprovado' OR (exige_aprovacao AND aprovador_usuario_id IS NOT NULL AND aprovado_em IS NOT NULL)),\n  CONSTRAINT ck_saneamento_acesso_item_perdas CHECK (perdas_usadas <= perdas_total),\n  CONSTRAINT ck_saneamento_acesso_item_aplicado CHECK (situacao <> 'aplicado' OR NOT exige_aprovacao OR aprovador_usuario_id IS NOT NULL),\n  KEY ix_saneamento_acesso_item_estabelecimento (estabelecimento_id, situacao),\n  KEY ix_saneamento_acesso_item_perfil_origem (perfil_origem_id),\n  KEY ix_saneamento_acesso_item_usuario (usuario_id),\n  KEY ix_saneamento_acesso_item_perfil_destino (perfil_destino_id),\n  KEY ix_saneamento_acesso_item_aprovador (aprovador_usuario_id)\n) COMMENT='Plano do saneamento dos perfis de acesso amplo: a decisão por conta (trocar de perfil, bloquear, manter administrador) ou a dissolução do perfil, com aprovação da área e a aplicação';\nALTER TABLE saneamento_acesso_item\n  ADD CONSTRAINT fk_saneamento_acesso_item_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_saneamento_acesso_item_perfil_origem_id FOREIGN KEY (perfil_origem_id) REFERENCES perfil_acesso (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_saneamento_acesso_item_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_saneamento_acesso_item_perfil_destino_id FOREIGN KEY (perfil_destino_id) REFERENCES perfil_acesso (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_saneamento_acesso_item_aprovador_usuario_id FOREIGN KEY (aprovador_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;",
+      "tabela": "saneamento_acesso_item"
+    },
+    {
+      "tipo": "ddl",
+      "pasta": "db/migracoes/02_ADM",
+      "tabela": "uso_acao_usuario",
+      "motivo": "Uso das ações por conta, estabelecimento e dia: a base da regra 'perder ação usada nos últimos 180 dias exige a aprovação da área' do saneamento (e da recertificação). A trilha_auditoria NÃO registra o código da ação usada (o Executor grava {operacao,resultado,escritas,dados} e o recurso é do módulo), então não serve de fonte. Sem esta tabela, PortaSaneamentoPropria.uso() lança 'uso-indisponivel': o simulador mostra 'uso não lido', nenhuma sugestão de destino sai, e TODA troca de perfil que tire alguma ação exige a aprovação da área (falha fechada). O teste de integração cria a tabela a partir deste DDL, como o do plano.",
+      "ddl": "CREATE TABLE uso_acao_usuario (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  usuario_id        BIGINT UNSIGNED NOT NULL,\n  acao_sistema_id   BIGINT UNSIGNED NOT NULL,\n  dia               DATE NOT NULL COMMENT 'Dia do uso (UTC)',\n  quantidade        INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Usos da ação pela conta no dia',\n  primeiro_uso_em   DATETIME(3) NOT NULL,\n  ultimo_uso_em     DATETIME(3) NOT NULL,\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  UNIQUE KEY uq_uso_acao_usuario_dia (estabelecimento_id, usuario_id, acao_sistema_id, dia),\n  KEY ix_uso_acao_usuario_estabelecimento_dia (estabelecimento_id, dia),\n  KEY ix_uso_acao_usuario_usuario (usuario_id),\n  KEY ix_uso_acao_usuario_acao (acao_sistema_id),\n  CONSTRAINT ck_uso_acao_usuario_quantidade CHECK (quantidade > 0),\n  CONSTRAINT ck_uso_acao_usuario_periodo CHECK (ultimo_uso_em >= primeiro_uso_em)\n) COMMENT='Uso das ações do sistema por conta, estabelecimento e dia, contado pela guarda de permissão (base do saneamento e da recertificação dos perfis)';\nALTER TABLE uso_acao_usuario\n  ADD CONSTRAINT fk_uso_acao_usuario_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_uso_acao_usuario_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_uso_acao_usuario_acao_sistema_id FOREIGN KEY (acao_sistema_id) REFERENCES acao_sistema (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/acesso/gestao.ts",
+      "motivo": "Já aplicado por este lote (instrução da tarefa: 'legado' no enum de destino vira 'banco'): as 5 ocorrências de destino 'legado' | 'memoria' passaram a 'banco' | 'memoria'. Conferir com o lote 02-02, que usa o mesmo contrato."
+    },
+    {
+      "tipo": "web",
+      "arquivo": "apps/web/src/modulos/acesso/api-gestao.ts",
+      "motivo": "Linhas 220, 240, 252, 264 e 272 ainda tipam destino 'legado' | 'memoria': trocar por 'banco' | 'memoria' (a API agora devolve 'banco')."
+    },
+    {
+      "tipo": "remocao",
+      "arquivos": [
+        "packages/contratos/src/integracao/segredos-legado.ts",
+        "apps/web (tela dos segredos de parceiros e das senhas secundárias: /api/administracao/integracao/segredos-legado e /api/administracao/acesso/senhas-secundarias)",
+        "apps/api/src/app.module.ts (imports de acesso/segredos/*, porta-senha-legado e saneamento/porta-legado; desmontado na última onda)"
+      ],
+      "motivo": "O módulo acesso/segredos era convivência pura (ADR 0003): inventariava e esvaziava colunas de senha das tabelas do sistema de origem e as senhas secundárias por usuário. No banco próprio essas colunas não existem e o segredo nunca fica no banco (credencial_integracao.referencia_cofre). Apagado neste lote; a ida dos segredos de parceiro para o cofre na virada é trabalho do conector (registrar em credencial_integracao/credencial_fonte_pagadora)."
+    },
+    {
+      "tipo": "integracao-modulo",
+      "arquivo": "apps/api/src/modulos/acesso/modulo.ts",
+      "motivo": "Criado com o SaneamentoController, o RhAcessoController e o UsuarioModeloController (FONTE_GESTAO = fonteGestaoPropria do 02-02 com o núcleo; fonteGestaoMemoria em dev/ci). Os controladores e provedores dos lotes 02-01, 02-02 e 02-03 (gestão, identidade, recertificação, pedidos, PIN etc.) entram aqui na integração; um só provedor de FONTE_GESTAO."
+    },
+    {
+      "tipo": "base",
+      "arquivo": "apps/api/src/app-base.module.ts",
+      "motivo": "A troca rápida (PIN) segue em NAO_MIGRADOS_F2L (501). troca-rapida.controller.spec.ts ficou com describe.skipIf(NAO_MIGRADOS_F2L.has('trocaRapida')): volta a rodar sozinho quando a base montar a troca rápida sobre a porta do PIN própria."
+    },
+    {
+      "tipo": "teste",
+      "motivo": "aplicacao/rehash-primeiro-login.int.spec.ts (rehash da senha SHA-1 do sistema de origem na cópia Firebird) foi apagado: não há senha antiga no banco próprio. A parte do segundo fator (perfil crítico sem 2FA recusado; código errado recusado; mesmo passo não vale duas vezes) precisa de teste de integração na porta própria da identidade (lote 02-01)."
+    },
+    {
+      "tipo": "produtor",
+      "arquivo": "guarda de permissão da API (apps/api/src/autorizacao) — fora deste lote",
+      "motivo": "Gravar o uso: a cada ação permitida pela guarda, upsert em uso_acao_usuario (INSERT ... ON DUPLICATE KEY UPDATE quantidade = quantidade + 1, ultimo_uso_em = ?) por (estabelecimento, conta, ação, dia), sem falhar a requisição. Enquanto o produtor não existir, a tabela fica vazia e a porta continua segura: uso() só lê quando a contagem do estabelecimento começou ANTES do início da janela (MIN(dia) <= início); senão lança 'uso-indisponivel' e toda troca que tira ação exige a aprovação da área. Ou seja, o uso real só passa a valer 180 dias depois de a guarda começar a contar."
+    },
+    {
+      "tipo": "ddl+dominio",
+      "pasta": "db/migracoes/02_ADM",
+      "arquivos": [
+        "packages/contratos/src/acesso/saneamento.ts (GRUPOS_GENERICOS, GRUPO_ADMINISTRADORES)",
+        "packages/dominio-acesso/src/saneamento.ts (ehGrupoGenerico, validarDecisao, validarDissolucao)",
+        "apps/web (tela do saneamento: lista fixa de grupos)"
+      ],
+      "ddl": "ALTER TABLE perfil_acesso ADD COLUMN acesso_amplo BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Perfil de acesso amplo, alvo do saneamento (dissolvido em perfis de trabalho)' AFTER privilegiado;",
+      "motivo": "ADR 0002: o saneamento ainda reconhece o perfil amplo por uma LISTA FIXA de códigos da Rede Santé ('MASTER', 'MASTER_SEM_FINANCEIRO', 'MASTER_CONSULTA_FINANCEIRO', 'SEM GRUPO'), no contrato e no domínio (arquivos fora deste lote). Pedido: marcar o perfil amplo pelo atributo perfil_acesso.acesso_amplo e o de administradores por perfil_acesso.administrador; a porta passa a listar os amplos do estabelecimento e o domínio recebe o conjunto (sem nomes fixos). Este lote já tirou o sentinela: a conta sem perfil no estabelecimento não vira 'SEM GRUPO' e fica fora do alcance."
+    }
+  ]
+}

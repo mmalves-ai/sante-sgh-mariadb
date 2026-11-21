@@ -85,8 +85,8 @@ async function enviar(): Promise<void> {
   entrando.value = true;
   erro.value = '';
   try {
-    // Conta da plataforma ou do suporte (e-mail) também entra por aqui: a mesma porta, sem o usuário
-    // precisar saber do endereço /plataforma/entrar. Com segundo fator pendente, segue na tela própria.
+    // Conta da plataforma ou do suporte (e-mail) também entra por aqui: a mesma porta (o endereço antigo
+    // /plataforma/entrar leva a esta tela). Com segundo fator pendente, o código é pedido no próprio formulário.
     if (comoPlataforma.value) {
       const sessao = await entrarAdministradorPlataforma({
         estabelecimento: escolhido.value,
@@ -104,8 +104,13 @@ async function enviar(): Promise<void> {
         senha: senha.value,
         ...(segundoFator.value ? { codigo: segundoFator.value } : {}),
       });
+      if ('segundoFator' in r) {
+        // O segundo fator da conta da plataforma é pedido aqui mesmo, no campo do código.
+        pedeCodigo.value = true;
+        return;
+      }
       senha.value = '';
-      await roteador.replace('segundoFator' in r ? '/plataforma/entrar' : '/plataforma');
+      await roteador.replace('/plataforma');
       return;
     }
     const sessao = await entrar({

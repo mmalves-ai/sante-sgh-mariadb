@@ -3,9 +3,13 @@
 //   POST /api/acesso/gestao/usuarios/:login/modelo/aplicar  grava o plano que a prévia mostrou (motivo e senha)
 // A regra é a do domínio (planoDoModelo, conferirAplicarModelo; D-W101-47): privilégio de gestão só nominal, perfil do
 // conselho não se copia, pares segregados não se acumulam, ninguém no próprio acesso. Cada passo grava pela via de
-// sempre: grupo e papel SBIS pela receita do executor do legado (TBUSERS.GRUPO, TBUSERS_TBPAPEL, com a trilha do
-// legado), perfil do Sante em SGH_ACESSO_PERFIL_USUARIO com a SGH_TRILHA. Os passos não formam uma transação só
-// (legado e SGH_ são gravações distintas): o resultado diz, passo a passo, o que foi feito e o que foi recusado.
+// sempre, pela fonte da gestão: perfil amplo e papel de segurança pelas operações do executor do núcleo (com a trilha na
+// mesma transação), perfis concedidos pela gravação da fonte. Cada passo é uma transação: o resultado diz, passo a
+// passo, o que foi feito e o que foi recusado.
+// Melhoria: sem o grupo de usuários do sistema de origem, o modelo copia só papéis de segurança e perfis concedidos
+// (a prévia não promete uma troca de grupo que a fonte recusaria).
+// Melhoria: o contexto de gravação é o neutro da fonte da gestão (chave de idempotência e correlação nomeadas), sem o
+// formato do sistema de origem.
 import { createHash, randomUUID } from 'node:crypto';
 import { Body, Controller, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 import {
@@ -27,7 +31,7 @@ import {
   planoDoModelo,
   textoCanonicoDoPlano,
 } from '@sgh/dominio-acesso';
-import { type ContextoOperacao, ErroOperacao, type TrilhaGestao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -45,6 +49,11 @@ interface Lido {
   readonly conta: ContaModelo;
   readonly id: number;
 }
+
+/** A linha de trilha que a fonte da gestão grava com a concessão (o formato é o da fonte). */
+type TrilhaGestao = Parameters<FonteGestao['revogarPerfil']>[4];
+/** O contexto das operações da conta pela fonte da gestão. */
+type ContextoGestao = Parameters<FonteGestao['executar']>[3];
 
 @Controller('acesso/gestao/usuarios/:login/modelo')
 export class UsuarioModeloController {
@@ -93,7 +102,8 @@ export class UsuarioModeloController {
         login: u.login,
         ativo: u.ativo,
         bloqueado: u.bloqueado,
-        grupo: u.grupo,
+        // O produto não tem grupo de usuários (as permissões vêm dos perfis concedidos): o modelo não copia grupo.
+        grupo: null,
         papeis: papeis.map((p) => ({ papel: p.papel, nome: p.nome, ativo: p.ativo })),
         perfis: historico
           .filter((h) => !h.revogadoEm && (!h.fim || h.fim.getTime() > agora))
@@ -197,12 +207,12 @@ export class UsuarioModeloController {
     const motivo = `Acessos de ${p.modelo}: ${p.motivo}`.slice(0, 200);
     const estacao = estacaoDaRequisicao(req).slice(0, 80);
     const correlacao = correlacaoDaRequisicao(req, 'acesso-modelo').slice(0, 64);
-    const ctx = (): ContextoOperacao => ({
+    const ctx = (): ContextoGestao => ({
       rede,
       hospital,
-      traceId: correlacao,
-      usuarioLegado: operador,
-      idempotencyKey: `modelo:${randomUUID()}`,
+      usuario: operador,
+      correlacao,
+      chaveIdempotencia: `modelo:${randomUUID()}`,
       estacao,
       reautenticadoEm,
     });

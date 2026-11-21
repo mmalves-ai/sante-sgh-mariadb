@@ -20,13 +20,10 @@ const emit = defineEmits<{
   abrirPaleta: [];
   alternarMenu: [];
   trocar: [codigo: string];
-  abrirChamado: [];
   notificarIncidente: [];
 }>();
 const { t } = useI18n();
 const { sessao, estabelecimentoAtivo, permissoes } = usarSessao();
-// M37: "Abrir chamado" (todos os perfis de pessoa; config.chamado.abrir).
-const podeAbrirChamado = computed(() => permissoes.value.has('config.chamado.abrir'));
 // M48 (etapa 1): o botão global "Notificar incidente" (a permissão e a funcionalidade liberada).
 const podeNotificar = usarBotaoNotificar();
 // M52.4 (D-CIENCIA-524): o próprio espelho de ponto com a ciência, para quem tem a permissão (toda pessoa com vínculo).
@@ -192,19 +189,6 @@ function bloquear(): void {
         </li>
         <li>
           <RouterLink to="/sobre" @click="menuUsuario = false">{{ t('casca.sobre') }}</RouterLink>
-        </li>
-        <li v-if="podeAbrirChamado">
-          <button
-            type="button"
-            class="barra__item"
-            data-testid="abrir-chamado"
-            @click="
-              menuUsuario = false;
-              emit('abrirChamado');
-            "
-          >
-            {{ t('casca.chamado.abrir') }}
-          </button>
         </li>
         <li>
           <button type="button" class="barra__item" data-testid="bloquear" @click="bloquear">

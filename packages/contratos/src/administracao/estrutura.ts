@@ -30,7 +30,7 @@ export const esquemaEstrutura = z.object({
       sentinela: z.boolean(),
     }),
   ),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type Estrutura = z.infer<typeof esquemaEstrutura>;
 
@@ -93,7 +93,7 @@ export const esquemaLeitos = z.object({
       motivo: z.string().nullable(),
     }),
   ),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type Leitos = z.infer<typeof esquemaLeitos>;
 

@@ -1,11 +1,13 @@
 // Porta do SADT (M26): o que as telas do diagnóstico e o portal de resultados leem e gravam, independente de onde (a
 // API não escreve SQL; fronteira Nx):
-//   - `legado`: leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04 (receitas sadt.*,
-//     com a trilha na mesma transação); as só do novo (amostra, faixa e aviso crítico, leitura do resultado, acesso ao
-//     portal, orçamento, laudo emitido) em transação SGH_ com a SGH_TRILHA junto;
+//   - `banco`: o banco do cliente (MariaDB) pelo @sgh/nucleo (porta-propria.ts): leituras somente leitura nas tabelas
+//     do diagnóstico (requisicao_exame, exame_item, resultado_exame, amostra_biologica, aviso_valor_critico,
+//     emissao_laudo, acesso ao portal) e gravações pelo Executor, com a trilha, a fila de integração e a idempotência
+//     na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): exames, resultados, amostras e laudos SINTÉTICOS em memória, com as
-//     mesmas validações (Zod dos contratos) e as mesmas recusas das receitas; nada vai à cópia;
+//     mesmas validações (Zod dos contratos) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+// Melhoria: tipos de negócio próprios (sem tipos da porta antiga), contexto do núcleo por id.
 import type {
   AmostraDetalhe,
   AvisoCritico,
@@ -19,25 +21,150 @@ import type {
   RequisicaoLida,
   SetorSadt,
   ValorCriticoLido,
+  ElementoDigitacao,
+  PacienteSadt,
+  ValorConferencia,
+  LaudoPortal as LaudoPortalContrato,
 } from '@sgh/contratos';
-import type {
-  AcessoPortalLido,
-  ApoioSadtLido,
-  AtendimentoParaLancamento,
-  AutocadastroPortalLido,
-  FiltroExamesSetor,
-  LaudoParaEmitir,
-  LaudoPortalLido,
-  LiberacaoVista,
-  ResultadoParaDigitacaoLido,
-} from '@sgh/legado';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+
+// ── Tipos de negócio da porta (as telas e o portal; ids numéricos, datas ISO, sem marca S/N) ────────────────────
+
+export type SituacaoFiltroSadt =
+  'aReceber' | 'recebidos' | 'aDigitar' | 'aLiberar' | 'liberados' | 'aEmitir' | 'todos';
+
+export interface FiltroExamesSetor {
+  readonly setor?: SetorSadt | undefined;
+  readonly inicio: string;
+  readonly fim: string;
+  readonly situacao?: SituacaoFiltroSadt;
+  readonly urgentes?: boolean;
+  readonly unidade?: number;
+  readonly termo?: string;
+  /** Um ato só dentro do setor (a lista de trabalho DICOM filtra pelo setor de imagem na consulta). */
+  readonly ato?: number;
+}
+
+export interface AtendimentoParaLancamento {
+  readonly atendimento: number;
+  readonly paciente: PacienteSadt;
+  readonly atend: 'I' | 'E';
+  readonly reg: number;
+  readonly convenio: { codigo: number; nome: string };
+  /** A requisição do setor já aberta para o atendimento (null: a recepção do diagnóstico abre antes de lançar). */
+  readonly conta: { id: number; numero: number } | null;
+  /** Versões do atendimento e do paciente lidas pela tela (controle otimista na gravação). */
+  readonly retratos: { htAtendimento: number; htPaciente: number } | null;
+}
+
+export interface LaudoParaEmitir {
+  readonly paciente: PacienteSadt;
+  readonly atendimento: string;
+  readonly convenio: string;
+  readonly exames: {
+    readonly id: number;
+    readonly nome: string;
+    readonly setor: string;
+    readonly data: string;
+    readonly liberadoEm: string | null;
+    readonly liberadoPor: string;
+    readonly valores: ValorConferencia[];
+    readonly texto: string[];
+    readonly emissor: string;
+  }[];
+}
+
+export interface LaudoPortalLido {
+  readonly laudo: LaudoPortalContrato;
+  readonly ato: number;
+  readonly paciente: number;
+  readonly reg: number;
+  readonly solicitante: number | null;
+  readonly valores: ValorConferencia[];
+  readonly texto: string[];
+}
+
+/** Uma liberação com valor crítico (o aviso da central parte dela). */
+export interface LiberacaoVista {
+  readonly exame: number;
+  readonly chave: string;
+  readonly liberacao: number;
+  readonly liberadoEm: Date;
+  readonly paciente: number;
+  readonly atendimento: number;
+  readonly usuario: string;
+}
+
+export interface ResultadoParaDigitacaoLido {
+  readonly exame: ExameSadt;
+  readonly elementos: ElementoDigitacao[];
+  readonly variaveis: { codigo: number; identificacao: string; descricao: string; valor: number | null }[];
+  readonly observacoes: string[];
+  readonly modelos: { codigo: number; nome: string; texto: string }[];
+  readonly laudo: { texto: string; html: string; emissor: string } | null;
+  readonly alertaDataInvalida: boolean;
+  readonly bloqueado: boolean;
+  readonly grandezas: { codigo: number; nome: string; sigla: string }[];
+}
+
+export interface ApoioSadtLido {
+  readonly prestadores: { id: number; ato: number; codigo: number; nome: string }[];
+  readonly exames: {
+    id: number;
+    ato: number;
+    codigo: string;
+    nome: string;
+    material: string | null;
+    recipiente: string | null;
+  }[];
+  readonly kits: { codigo: number; nome: string }[];
+  readonly recipientes: { codigo: number; nome: string }[];
+  readonly convenios: { codigo: number; nome: string }[];
+}
+
+/** Acesso ao portal de resultados (paciente pelo protocolo; médico externo pela conta). */
+export interface AcessoPortalLido {
+  readonly id: number;
+  readonly perfil: 'paciente' | 'medicoExterno';
+  readonly paciente: number | null;
+  readonly reg: number | null;
+  readonly conselho: string | null;
+  readonly uf: string | null;
+  readonly numero: string | null;
+  readonly solicitante: number | null;
+  readonly nome: string | null;
+  readonly senhaResumo: string | null;
+  readonly segundoFator: string | null;
+  readonly situacao: string;
+  readonly tentativas: number;
+  readonly bloqueadoAte: Date | null;
+}
+
+export interface AutocadastroPortalLido {
+  readonly id: number;
+  readonly nome: string;
+  readonly conselho: string;
+  readonly uf: string;
+  readonly numero: string;
+  readonly situacao: 'pendente' | 'aprovado' | 'recusado';
+  /** A situação da conta aprovada (ativo, bloqueado ou encerrado). */
+  readonly situacaoConta?: string;
+  readonly pedidoEm: string;
+  readonly origem: 'novo' | 'outroSistema';
+  readonly candidatos: { id: number; nome: string }[];
+}
 
 export const PORTA_SADT = Symbol('PORTA_SADT');
 
-export type ContextoSadt = ContextoPortaM18;
+/** O contexto do núcleo; o código do estabelecimento e da rede acompanham quando a sessão os tem (parâmetros, avisos). */
+export type ContextoSadt = ContextoPortaM18 & {
+  readonly rede?: string;
+  readonly hospital?: string;
+  /** A chave de idempotência da requisição (a tela a manda); sem ela, cada gravação é nova. */
+  readonly chaveIdempotencia?: string;
+};
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto (o estabelecimento vem do contexto). */
+/** Gravações pelo Executor do núcleo, com a trilha na mesma transação (o estabelecimento vem do contexto). */
 export interface GravadorSghSadt {
   registrarColeta(a: {
     codigo: (id: number) => string;
@@ -72,13 +199,13 @@ export interface GravadorSghSadt {
     ativo: boolean;
     usuario: string;
   }): Promise<number>;
-  /** Avisos dos elementos críticos de uma liberação (feita no outro sistema: a vigia). */
+  /** Avisos dos elementos críticos de uma liberação (no banco, nasce na própria operação de liberação). */
   avisarCriticos(a: {
-    idSilanexa: number;
+    /** O exame pedido (exame_item). */
+    exameItem: number;
     chave: string;
     idLiberacao: number;
     liberadoEm: Date;
-    origem: 'novo' | 'outroSistema';
     paciente: number;
     atendimento: number;
   }): Promise<number>;
@@ -90,7 +217,8 @@ export interface GravadorSghSadt {
     usuario: string;
   }): Promise<void>;
   escalonarAviso(r: { aviso: number; nivel: number }): Promise<boolean>;
-  registrarLeitura(r: { idSilanexa: number; origem: 'pep' | 'portal'; usuario: string }): Promise<void>;
+  /** A primeira abertura do resultado do exame pedido (exame_item) pelo usuário; a repetida não grava de novo. */
+  registrarLeitura(r: { exameItem: number; origem: 'pep' | 'portal'; usuario: string }): Promise<void>;
   registrarOrcamento(o: {
     nome: string;
     ato: number;
@@ -235,11 +363,12 @@ export interface PortaSadt extends PortaGravacaoM18<GravadorSghSadt> {
     c: ContextoSadt,
     id: number,
     o: { hoje: string; validadeDias: number },
-  ): Promise<(OrcamentoLido & { readonly nomeLegado: string }) | null>;
+  ): Promise<(OrcamentoLido & { readonly nomeRegistrado: string }) | null>;
   apoio(c: ContextoSadt, setor?: SetorSadt): Promise<ApoioSadtLido>;
   vinculos(c: ContextoSadt, login: string): Promise<VinculoDaSessao[]>;
   /** O login do médico do atendimento (destinatário do aviso de valor crítico na central de avisos). */
-  responsavelDoAtendimento(c: ContextoSadt, atendimento: number): Promise<string | null>;
+  /** O login de quem recebe o aviso do valor crítico do exame pedido: o solicitante da requisição (usuário ativo). */
+  destinatarioDoCritico(c: ContextoSadt, exameItem: number): Promise<string | null>;
   profissionais(
     c: ContextoSadt,
     termo: string,
@@ -316,7 +445,7 @@ export const METODOS_PORTA_SADT: ReadonlySet<string> = new Set([
   'orcamento',
   'apoio',
   'vinculos',
-  'responsavelDoAtendimento',
+  'destinatarioDoCritico',
   'profissionais',
   'solicitantes',
   'parametros',

@@ -1,0 +1,73 @@
+{
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/acesso/identidade/identidade.controller.ts",
+  "src/modulos/acesso/identidade/politica-2fa-alteracao.spec.ts",
+  "src/modulos/acesso/identidade/porta-identidade-memoria.ts",
+  "src/modulos/acesso/identidade/porta-identidade-sintetica.spec.ts",
+  "src/modulos/acesso/identidade/porta-identidade-sintetica.ts",
+  "src/modulos/acesso/identidade/servico-identidade.spec.ts",
+  "src/modulos/acesso/identidade/servico-identidade.ts",
+  "src/modulos/acesso/legado-acesso.ts",
+  "src/modulos/acesso/mapa-ciclo.spec.ts",
+  "src/modulos/acesso/pedido-acesso.controller.spec.ts",
+  "src/modulos/acesso/pedido-acesso.controller.ts",
+  "src/modulos/acesso/perfil-parametro-ciclo.spec.ts",
+  "src/modulos/acesso/pin-gestao.controller.ts",
+  "src/modulos/acesso/recertificacao.controller.spec.ts",
+  "src/modulos/acesso/recertificacao.controller.ts",
+  "src/modulos/acesso/identidade/tipos-identidade.ts",
+  "src/modulos/acesso/identidade/porta-identidade-propria.ts",
+  "src/modulos/acesso/identidade/porta-identidade-propria.int.spec.ts",
+  "src/modulos/acesso/leitura-acesso.int.spec.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "politica_segundo_fator",
+   "motivo": "Política do segundo fator por onda (alvo perfil/todos, início, prazo de adesão, encerramento com motivo e anterior visível). Sem ela, incluir/alterar/encerrar a política (POST acesso/identidade/politica-2fa, /onda-1, /:id/alteracao, /:id/encerrar) respondem 409 modelo-pendente. DECISÃO registrada (lote 02-03, achado de revisão): até a tabela existir, a exigência do cadastro do perfil (perfil_acesso.exige_segundo_fator OU privilegiado) vale como ADESÃO SEM PRAZO (origem 'cadastro-perfil': o login entra e leva ao cadastro; o próprio segundo fator não pode ser removido), nunca como obrigatório imediato, porque não há registro de quando a exigência começou nem prazo dado pelo gestor (migrar um perfil marcado trancaria todos os membros sem 2FA). O obrigatório só nasce de uma linha desta tabela, com início e prazo explícitos. Coberto em porta-identidade-propria.int.spec.ts e servico-identidade.spec.ts.",
+   "ddl": "CREATE TABLE politica_segundo_fator (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  alvo VARCHAR(20) NOT NULL,\n  perfil_acesso_id BIGINT UNSIGNED NULL,\n  onda TINYINT UNSIGNED NOT NULL,\n  inicio DATE NOT NULL,\n  prazo_adesao_dias SMALLINT UNSIGNED NOT NULL DEFAULT 0,\n  motivo VARCHAR(500) NOT NULL,\n  encerrada_em DATETIME(3) NULL,\n  encerrada_por BIGINT UNSIGNED NULL,\n  motivo_encerramento VARCHAR(500) NULL,\n  substituida_por_id BIGINT UNSIGNED NULL COMMENT 'Linha nova quando a política foi alterada',\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_politica_segundo_fator_alvo CHECK (alvo IN ('perfil','todos')),\n  CONSTRAINT ck_politica_segundo_fator_alvo_perfil CHECK ((alvo = 'perfil') = (perfil_acesso_id IS NOT NULL)),\n  CONSTRAINT ck_politica_segundo_fator_onda CHECK (onda IN (1,2)),\n  CONSTRAINT ck_politica_segundo_fator_prazo CHECK (prazo_adesao_dias <= 365),\n  CONSTRAINT ck_politica_segundo_fator_encerramento CHECK (encerrada_em IS NULL OR (encerrada_por IS NOT NULL AND motivo_encerramento IS NOT NULL)),\n  CONSTRAINT ck_politica_segundo_fator_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  KEY ix_politica_segundo_fator_estabelecimento (estabelecimento_id, encerrada_em),\n  KEY ix_politica_segundo_fator_perfil (perfil_acesso_id),\n  KEY ix_politica_segundo_fator_substituida (substituida_por_id),\n  KEY ix_politica_segundo_fator_encerrada_por (encerrada_por)\n) COMMENT='Exigência do segundo fator por estabelecimento, em ondas, com início, prazo de adesão e histórico de alteração';\n-- chaves: estabelecimento_id -> estabelecimento(id); perfil_acesso_id -> perfil_acesso(id); encerrada_por -> usuario(id); substituida_por_id -> politica_segundo_fator(id); todas ON DELETE RESTRICT"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "segundo_fator_usuario",
+   "motivo": "O segredo do autenticador (TOTP) é guardado cifrado em envelope AES-256-GCM pela chave mestra do ambiente; o modelo só tem referencia_cofre ('nunca o segredo'). Hoje a porta guarda o envelope em referencia_cofre com o prefixo 'envelope:' (cifrado, nunca em claro) e descarta-o na revogação. Pedido: coluna própria, ou decisão do dono de usar o cofre de segredos.",
+   "ddl": "ALTER TABLE segundo_fator_usuario ADD COLUMN segredo_cifrado VARCHAR(255) NULL COMMENT 'Segredo do autenticador cifrado em envelope (chave mestra do ambiente); nunca em claro' AFTER referencia_cofre, DROP CONSTRAINT ck_segundo_fator_usuario_autenticador, ADD CONSTRAINT ck_segundo_fator_usuario_autenticador CHECK (tipo <> 'aplicativo_autenticador' OR situacao = 'revogado' OR referencia_cofre IS NOT NULL OR segredo_cifrado IS NOT NULL);"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "motivo": "destino 'legado' | 'memoria' (linhas ~503, 746, 846, 942, 1015) -> 'banco' | 'memoria' (e apps/web/src/modulos/acesso/api-gestao.ts). Até lá, pedido-acesso.controller.ts e recertificacao.controller.ts convertem na fronteira (destinoTela); gestao.controller.ts (02-02) tem o mesmo erro de tsc."
+  },
+  {
+   "tipo": "renomear",
+   "motivo": "Nomes herdados fora da lista do lote: dominio-acesso (SenhaLegadoLida, legadoMudouDepoisDaForte, recusaRetiradaSenha({legado}), situação 'legado-*' de SITUACOES_CREDENCIAL), contrato UsuarioIdentidade.senhaLegadoPresente, permissão PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar, sessão grupoLegado e o desfecho { tipo: 'legado' } de GanchoIdentidade (sessao/servico-sessao.ts) -> 'senha anterior'/'fonte'. O arquivo legado-acesso.ts -> leitura-acesso.ts com o import de consulta.controller.ts (02-01) e os campos opcoesLegado/permissoesNovo da GrupoTela."
+  },
+  {
+   "tipo": "testes",
+   "motivo": "Apagados por testarem a cópia do sistema de origem: aplicacao/mensagem.int.spec.ts (mensagem interna: cobrir na int spec da porta própria da comunicação, lote 02-01), mapa-2fa-ciclo.int.spec.ts (mapa de opções do sistema de origem: removido pelo ADR 0003; política 2FA coberta em identidade/porta-identidade-propria.int.spec.ts) e perfil-parametro-ciclo.int.spec.ts (concessão de perfil e parâmetro hierárquico: cobrir na int spec da fonte própria da gestão, lote 02-02). mapa-ciclo, perfil-parametro-ciclo, recertificacao.controller e pedido-acesso.controller (.spec) ficam pulados até 'acesso' entrar em REGISTRO_MODULOS (voltam sozinhos)."
+  },
+  {
+   "tipo": "fiacao",
+   "motivo": "app.module.ts (desmontagem) e aplicacao/rehash-primeiro-login.int.spec.ts (02-04) importam identidade/porta-identidade-legado.ts (apagado) e identidade/contingencia.ts (apagado neste lote): usar new PortaIdentidadePropria(nucleo, cliente) e montar ServicoIdentidade SEM 'contingencia' (a dependência saiu). O provider EXECUTOR_IDENTIDADE e a interface ExecutorIdentidade/ContextoRetiradaSenha deixaram de existir: retirar do app.module/modulo.ts."
+  },
+  {
+   "tipo": "remocao",
+   "motivo": "ADR 0003: a retirada da senha antiga foi removida (rota POST acesso/identidade/usuarios/:login/retirar-senha-antiga, conferirRetirada, contingencia.ts). Fora da lista do lote, remover também: PARAMETRO_CONTINGENCIA_LEGADO e sua definição (packages/contratos/src/coexistencia/desligamento.ts e parametros/definicoes.ts), PERMISSOES_M59_F2_CODIGOS.senhaLegadoRetirar (packages/contratos/src/permissoes/endurecimento-identidade.ts), recusaRetiradaSenha/MENSAGENS_RECUSA_RETIRADA (dominio-acesso), o campo ResumoIdentidade.contingencia (hoje sempre false) e a chamada/botão em apps/web/src/modulos/acesso/api-identidade.ts e identidade.spec.ts. A credencial não Argon2id volta pela redefinição do gestor (operação já existente na sessão)."
+  },
+  {
+   "tipo": "sessao",
+   "arquivo": "apps/api/src/sessao/servico-sessao.ts",
+   "motivo": "(1) Redefinição pelo gestor (~l.1506, origem 'senha-provisoria'): passar o gestor como 4º argumento de identidade.regravar(alvo, senha, 'senha-provisoria', autorGestor) e acrescentar 'autor?: AtorIdentidadeSessao' em GanchoIdentidade.regravar; a trilha da conversão leva o gestor. (2) Troca de senha (~l.1291) e redefinição: depois de porta.gravar a credencial já é Argon2id e regravar virou no-op (só converte credencial não Argon2id; prova na int spec: versão e trilha intactas); a chamada pode sair (na redefinição, o retorno só serve para trocaObrigatoria: usar true). (3) A conversão no primeiro login (~l.696) só tem efeito na fonte sintética; no banco a credencial não Argon2id recusa no autenticar. Pedido: um desfecho próprio 'redefinicao-obrigatoria' em DesfechoIdentidade com a mensagem 'Sua senha precisa ser redefinida pelo gestor de acessos' (hoje sai 'forte-invalida' = usuário ou senha inválidos, com aviso 'credencial a redefinir pelo gestor' no log, sem dado pessoal)."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/identidade.ts",
+   "motivo": "SITUACOES_CREDENCIAL: as classes 'legado-cifrada/legado-sem-salt/legado-texto-puro' viram uma só 'redefinicao-obrigatoria' (rótulo 'Senha a redefinir pelo gestor'); no banco a porta própria classifica toda credencial não Argon2id como 'legado-cifrada' até lá. Texto da tela da gestão (apps/web i18n-identidade) que diz 'converte no primeiro login' deve dizer 'redefinir'. Politica2fa ganha 'origem' ('politica' | 'cadastro-perfil') para a tela distinguir a exigência do perfil (adesão sem prazo, não editável) das linhas da política por onda (hoje a linha do perfil aparece com prazoAdesaoDias 0)."
+  },
+  {
+   "tipo": "testes",
+   "motivo": "gestao-fonte-propria.int.spec.ts (02-02, aparece na conferência por estar nas pastas do lote) falha: 'expected perfil-ja-concedido to be registro-duplicado' — não é deste lote."
+  }
+ ]
+}

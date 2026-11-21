@@ -1,23 +1,29 @@
 // Porta da comunicação interna em MEMÓRIA (sessão sintética de dev/ci; E2E): mensagens, comunicados, avisos e o
 // dicionário dos usuários SINTÉTICOS, com as mesmas validações (Zod dos contratos e das receitas) e as mesmas recusas
-// das gravações do banco. As mensagens do sistema anterior são duas linhas sintéticas do SINT.MEDICO. Nada vai à cópia.
+// das gravações do banco. As mensagens anteriores são duas linhas sintéticas do SINT.MEDICO. Nada vai a banco.
+// Melhoria: os tipos são os do contrato das telas e a trilha tem a forma da do núcleo (ids, evento nos dados).
 import { foneticaDoDicionario, palavraDoDicionario, TETO_DICIONARIO } from '@sgh/contratos';
-import {
-  type AvisoLido,
-  type ComunicadoLido,
-  type ContextoOperacao,
-  ErroOperacao,
-  type FonteCatalogo,
-  type LiberacaoConsultada,
-  type LinhaTrilha,
-  type MensagemAnteriorLida,
-  type MensagemEnviadaLida,
-  type MensagemRecebidaLida,
-  operacao,
-  recusa,
-} from '@sgh/legado';
+import type { MensagemAnterior, MensagemEnviada, MensagemRecebida } from '@sgh/contratos';
+import { ErroOperacao, erroIdempotenciaDivergente, recusa } from '@sgh/nucleo';
+import { ENTRADA_DICIONARIO, OPERACOES_DICIONARIO, operacaoDoDicionario } from './comunicacao-operacoes.js';
 import { CONTAS_SINTETICAS } from './fonte-sintetica.js';
-import type { ContextoComunicacao, GravadorComunicacao, PortaComunicacao } from './comunicacao-porta.js';
+import type {
+  AvisoRegistrado,
+  ComunicadoRegistrado,
+  ContextoComunicacao,
+  ContextoOperacaoComunicacao,
+  GravadorComunicacao,
+  LiberacaoComunicacao,
+  PedidoGravacao,
+  PortaComunicacao,
+  TrilhaComunicacao,
+} from './comunicacao-porta.js';
+import { descricaoVersaoAnterior } from './comunicacao-porta.js';
+
+/** O estado de cada operação no catálogo do estabelecimento (memória de dev/ci). */
+export interface CatalogoComunicacao {
+  estado(operacao: string, hospital: string): string | null;
+}
 
 interface MensagemMem {
   id: number;
@@ -35,7 +41,7 @@ interface MensagemMem {
   encerradoEm: string | null;
   encerradoPor: string | null;
   motivoEncerramento: string | null;
-  eventos: ComunicadoLido['eventos'][number][];
+  eventos: ComunicadoRegistrado['eventos'][number][];
 }
 interface DestMem {
   mensagem: number;
@@ -44,8 +50,9 @@ interface DestMem {
   lidaEm: string | null;
   cienciaEm: string | null;
 }
-interface AvisoMem extends AvisoLido {
+interface AvisoMem extends AvisoRegistrado {
   login: string;
+  objetoTabela?: string | null;
   objetoChave: string;
 }
 interface Estado {
@@ -54,12 +61,14 @@ interface Estado {
   avisos: AvisoMem[];
   dicionario: Map<string, Map<string, string>>;
   idem: Map<string, { hash: string; resultado: Record<string, unknown> }>;
-  trilha: LinhaTrilha[];
+  /** Resumo do conteúdo por operação e Idempotency-Key das gravações da comunicação (o reenvio diferente é recusado). */
+  pedidos: Map<string, string>;
+  trilha: TrilhaComunicacao[];
   seq: number;
 }
 
 /** Duas mensagens antigas sintéticas (o sistema anterior) do médico sintético. */
-const ANTERIORES: Readonly<Record<string, readonly MensagemAnteriorLida[]>> = {
+const ANTERIORES: Readonly<Record<string, readonly MensagemAnterior[]>> = {
   'SINT.MEDICO': [
     {
       sequencia: 2,
@@ -115,7 +124,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
 
-  constructor(private readonly catalogo: FonteCatalogo | null = null) {}
+  constructor(private readonly catalogo: CatalogoComunicacao | null = null) {}
 
   private e(c: ContextoComunicacao): Estado {
     let s = this.estados.get(c.hospital);
@@ -126,6 +135,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
         avisos: [],
         dicionario: new Map(),
         idem: new Map(),
+        pedidos: new Map(),
         trilha: [],
         seq: 0,
       };
@@ -136,11 +146,11 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
   }
 
   /** Trilha gravada em memória (os testes conferem que o texto não vai à trilha). */
-  trilhaDe(hospital: string): readonly LinhaTrilha[] {
+  trilhaDe(hospital: string): readonly TrilhaComunicacao[] {
     return this.estados.get(hospital)?.trilha ?? [];
   }
 
-  private recebidaDe(m: MensagemMem, d: DestMem): MensagemRecebidaLida {
+  private recebidaDe(m: MensagemMem, d: DestMem): MensagemRecebida {
     return {
       id: m.id,
       tipo: m.tipo,
@@ -162,7 +172,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
     };
   }
 
-  async recebidas(c: ContextoComunicacao, login: string): Promise<MensagemRecebidaLida[]> {
+  async recebidas(c: ContextoComunicacao, login: string): Promise<MensagemRecebida[]> {
     const s = this.e(c);
     const agora = agoraLocal();
     return s.dests
@@ -189,14 +199,14 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
     return atendimento >= 10 && atendimento % 10 <= 1 ? { paciente: Math.floor(atendimento / 10) } : null;
   }
 
-  async recebida(c: ContextoComunicacao, login: string, id: number): Promise<MensagemRecebidaLida | null> {
+  async recebida(c: ContextoComunicacao, login: string, id: number): Promise<MensagemRecebida | null> {
     const s = this.e(c);
     const d = s.dests.find((x) => x.login === login && x.mensagem === id);
     const m = s.mensagens.find((x) => x.id === id);
     return d && m ? this.recebidaDe(m, d) : null;
   }
 
-  async enviadas(c: ContextoComunicacao, login: string): Promise<MensagemEnviadaLida[]> {
+  async enviadas(c: ContextoComunicacao, login: string): Promise<MensagemEnviada[]> {
     const s = this.e(c);
     return s.mensagens
       .filter((m) => m.remetente === login)
@@ -219,7 +229,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
       });
   }
 
-  async comunicado(c: ContextoComunicacao, id: number): Promise<ComunicadoLido | null> {
+  async comunicado(c: ContextoComunicacao, id: number): Promise<ComunicadoRegistrado | null> {
     const s = this.e(c);
     const m = s.mensagens.find((x) => x.id === id && x.tipo === 'comunicado');
     if (!m) return null;
@@ -243,7 +253,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
     };
   }
 
-  async anteriores(_c: ContextoComunicacao, login: string): Promise<MensagemAnteriorLida[]> {
+  async anteriores(_c: ContextoComunicacao, login: string): Promise<MensagemAnterior[]> {
     return [...(ANTERIORES[login] ?? [])];
   }
 
@@ -253,7 +263,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
       .sort((a, b) => a.palavra.localeCompare(b.palavra));
   }
 
-  async avisos(c: ContextoComunicacao, login: string): Promise<AvisoLido[]> {
+  async avisos(c: ContextoComunicacao, login: string): Promise<AvisoRegistrado[]> {
     const ordem = { novo: 0, lido: 1, resolvido: 2 } as const;
     return this.e(c)
       .avisos.filter((a) => a.login === login)
@@ -304,22 +314,23 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
     };
   }
 
-  async podeGravar(c: ContextoComunicacao, op: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoComunicacao, op: string): Promise<LiberacaoComunicacao> {
     const est = this.catalogo?.estado(op, c.hospital) ?? 'verde';
     if (est === null || est === 'bloqueada')
       return { pode: false, codigo: 'operacao-bloqueada', motivo: 'Operação bloqueada no catálogo.' };
     return { pode: true, codigo: null, motivo: null };
   }
 
-  async executar(c: ContextoComunicacao, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+  async executar(c: ContextoComunicacao, op: string, entradaBruta: unknown, ctx: ContextoOperacaoComunicacao) {
+    const nome = operacaoDoDicionario(op);
+    if (!nome) throw new Error(`Operação ${op} fora da comunicação.`);
+    const analise = ENTRADA_DICIONARIO.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -333,8 +344,8 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
       return { resultado: anterior.resultado, repetida: true };
     }
     const palavra = palavraDoDicionario((analise.data as { palavra: string }).palavra);
-    const meu = s.dicionario.get(ctx.usuarioLegado) ?? new Map<string, string>();
-    if (op === 'acesso.incluirPalavraDicionario') {
+    const meu = s.dicionario.get(ctx.login) ?? new Map<string, string>();
+    if (nome === OPERACOES_DICIONARIO.incluir) {
       if (meu.has(palavra))
         throw recusa('palavra-existente', 'A palavra já está no seu dicionário.', { campos: ['palavra'] });
       if (meu.size >= TETO_DICIONARIO)
@@ -343,36 +354,39 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
           `O dicionário chegou a ${TETO_DICIONARIO} palavras: exclua alguma antes de incluir outra.`,
         );
       meu.set(palavra, foneticaDoDicionario(palavra));
-      s.dicionario.set(ctx.usuarioLegado, meu);
-    } else if (op === 'acesso.excluirPalavraDicionario') {
+      s.dicionario.set(ctx.login, meu);
+    } else {
       if (!meu.delete(palavra))
         throw recusa('palavra-inexistente', 'A palavra não está no seu dicionário.', { campos: ['palavra'] });
-    } else throw new Error(`Operação ${op} fora da comunicação.`);
+    }
     const resultado = { palavras: 1 };
     s.idem.set(chave, { hash, resultado });
     s.trilha.push({
-      rede: c.rede,
-      hospital: c.hospital,
-      usuario: ctx.usuarioLegado,
-      evento: o.receita.evento,
-      recurso: o.receita.recurso,
-      operacao: op,
-      tabelaAlvo: 'TBDICIONARIO_TBUSERS',
-      idAlvo: null,
-      chaveNaturalAlvo: null,
-      resultado: 'sucesso',
-      estacao: ctx.estacao ?? null,
-      correlacao: ctx.traceId,
+      estabelecimento: c.estabelecimento,
+      usuario: c.usuario,
+      acao: nome === OPERACOES_DICIONARIO.incluir ? 'inclusao' : 'exclusao',
+      entidade: 'dicionario_usuario',
+      entidadeId: null,
+      dadosDepois: { operacao: op },
+      correlacao: ctx.correlacao,
     });
     return { resultado, repetida: false };
   }
 
   async gravarSgh<T>(
     c: ContextoComunicacao,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaComunicacao | ((r: T) => TrilhaComunicacao),
     fn: (g: GravadorComunicacao) => Promise<T>,
+    pedido?: PedidoGravacao,
   ): Promise<T> {
     const s = this.e(c);
+    if (pedido?.chave) {
+      const k = `${pedido.operacao}:${pedido.chave}`;
+      const resumo = pedido.resumo ?? '';
+      const anterior = s.pedidos.get(k);
+      if (anterior !== undefined && anterior !== resumo) throw erroIdempotenciaDivergente();
+      s.pedidos.set(k, resumo);
+    }
     // Transação em memória: o que a função mudou só fica se ela terminar (o erro desfaz).
     const copia = structuredClone({ mensagens: s.mensagens, dests: s.dests, avisos: s.avisos, seq: s.seq });
     try {
@@ -449,9 +463,19 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
           link: a.link,
           estado: 'novo',
           criadoEm: agoraLocal(),
+          objetoTabela: a.objetoTabela,
           objetoChave: a.objetoChave,
         });
         return id;
+      },
+      resolverAvisosDoObjeto: async ({ login, tabela, id }) => {
+        let n = 0;
+        for (const a of s.avisos)
+          if (a.login === login && a.objetoTabela === tabela && a.objetoChave === String(id) && a.estado !== 'resolvido') {
+            Object.assign(a, { estado: 'resolvido' });
+            n++;
+          }
+        return n;
       },
       mudarEstadoAviso: async ({ login, id, estado }) => {
         const a = s.avisos.find((x) => x.login === login && x.id === id);
@@ -472,7 +496,7 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
             `O texto já foi lido por ${lidas} destinatário(s), ${ciencias} com ciência, e não se edita. ` +
               'Para corrigir, encerre o comunicado com o motivo e publique outro.',
           );
-        m.eventos.push(evento('correcao', JSON.stringify({ assunto: m.assunto, texto: m.texto }), r));
+        m.eventos.push(evento('correcao', descricaoVersaoAnterior(m.assunto, m.texto), r));
         m.assunto = r.assunto;
         m.texto = r.texto;
       },

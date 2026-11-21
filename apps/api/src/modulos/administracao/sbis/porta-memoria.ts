@@ -1,13 +1,20 @@
-// A porta do M59-F5 em memória: unitários e a fonte sintética do dev/ci (nada na cópia). Repete as condições das
-// gravações do adaptador (situação anterior, um ciclo aberto por tipo, verificação por outra pessoa).
+// A porta do M59-F5 em memória: unitários e a fonte sintética do dev/ci (nada no banco). Repete as condições das
+// gravações da porta própria (situação anterior, um ciclo aberto por tipo, verificação por outra pessoa).
 import type { ItemCicloSbis, Restauracao } from '@sgh/contratos';
-import type { CicloLido, ConcessaoLida, VerificacaoDiaLida } from '@sgh/legado';
-import type { ConfigSeguranca, IdentificacaoEstabelecimento, PortaSbis } from './porta.js';
+import type {
+  CicloCertificacao,
+  ConcessaoRegistrada,
+  ConfigSeguranca,
+  IdentificacaoEstabelecimento,
+  PortaSbis,
+  RecursoSbis,
+  VerificacaoDiaTrilha,
+} from './porta.js';
 
 export class PortaSbisMemoria implements PortaSbis {
   readonly destino = 'memoria' as const;
-  readonly concessoesPorHospital = new Map<string, ConcessaoLida[]>();
-  readonly ciclosLidos: (CicloLido & { hospital: string })[] = [];
+  readonly concessoesPorHospital = new Map<string, ConcessaoRegistrada[]>();
+  readonly ciclosLidos: (CicloCertificacao & { hospital: string })[] = [];
   readonly itensPorCiclo = new Map<string, ItemCicloSbis[]>();
   readonly restauracoesLidas: (Restauracao & { hospital: string })[] = [];
   readonly trilhas: string[] = [];
@@ -17,20 +24,21 @@ export class PortaSbisMemoria implements PortaSbis {
     cnpj: '00000000000000',
   };
   config: ConfigSeguranca = { limiteTentativas: 5, inatividadeSegundos: 900 };
-  dias = new Map<string, VerificacaoDiaLida>();
-  falta: string[] = [];
+  dias = new Map<string, VerificacaoDiaTrilha>();
+  /** Tabelas que faltam, por recurso (testes da recusa "recurso ainda não instalado"). */
+  falta: Partial<Record<RecursoSbis, string[]>> = {};
   private seq = 0;
   private agora = () => new Date().toISOString();
 
-  async faltando() {
-    return [...this.falta];
+  async faltando(_h: string, recurso: RecursoSbis) {
+    return [...(this.falta[recurso] ?? [])];
   }
 
   async concessoes(h: string) {
     return [...(this.concessoesPorHospital.get(h) ?? [])];
   }
 
-  private concessao(h: string, codigo: ConcessaoLida['codigo']): ConcessaoLida {
+  private concessao(h: string, codigo: ConcessaoRegistrada['codigo']): ConcessaoRegistrada {
     const lista = this.concessoesPorHospital.get(h) ?? [];
     this.concessoesPorHospital.set(h, lista);
     let c = lista.find((x) => x.codigo === codigo);
@@ -51,7 +59,7 @@ export class PortaSbisMemoria implements PortaSbis {
     return c;
   }
 
-  private trocar(h: string, novo: ConcessaoLida) {
+  private trocar(h: string, novo: ConcessaoRegistrada) {
     const lista = this.concessoesPorHospital.get(h) ?? [];
     this.concessoesPorHospital.set(
       h,
@@ -59,7 +67,7 @@ export class PortaSbisMemoria implements PortaSbis {
     );
   }
 
-  async encerrar(h: string, c: { codigo: ConcessaoLida['codigo']; evidencia: string; por: string }) {
+  async encerrar(h: string, c: { codigo: ConcessaoRegistrada['codigo']; evidencia: string; por: string }) {
     const atual = this.concessao(h, c.codigo);
     if (atual.situacao !== 'vigente') return false;
     this.trocar(h, {
@@ -73,7 +81,7 @@ export class PortaSbisMemoria implements PortaSbis {
     return true;
   }
 
-  async reabrir(h: string, c: { codigo: ConcessaoLida['codigo']; motivo: string; por: string }) {
+  async reabrir(h: string, c: { codigo: ConcessaoRegistrada['codigo']; motivo: string; por: string }) {
     const atual = this.concessao(h, c.codigo);
     if (atual.situacao !== 'encerrada') return false;
     this.trocar(h, {
@@ -87,7 +95,7 @@ export class PortaSbisMemoria implements PortaSbis {
     return true;
   }
 
-  async prever(h: string, c: { codigo: ConcessaoLida['codigo']; fimPrevisto: string | null }) {
+  async prever(h: string, c: { codigo: ConcessaoRegistrada['codigo']; fimPrevisto: string | null }) {
     this.trocar(h, { ...this.concessao(h, c.codigo), fimPrevisto: c.fimPrevisto });
     this.trilhas.push(`concessao:${c.codigo}:fim-previsto`);
     return true;
@@ -112,7 +120,7 @@ export class PortaSbisMemoria implements PortaSbis {
     this.ciclosLidos.push({
       hospital: h,
       id,
-      tipo: n.tipo as CicloLido['tipo'],
+      tipo: n.tipo as CicloCertificacao['tipo'],
       competencia: n.competencia,
       versao: n.versao,
       referencia: n.referencia,

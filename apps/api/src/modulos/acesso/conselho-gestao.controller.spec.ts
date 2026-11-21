@@ -12,9 +12,10 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { REGISTRO_TESTE_ACESSO } from './registro-teste.spec-util.js';
 import { reiniciarEstadoAcessoSintetico } from './fonte-sintetica.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'acesso' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
@@ -60,7 +61,7 @@ async function complementares(login: string): Promise<string[]> {
 
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria() });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria(), registro: REGISTRO_TESTE_ACESSO });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   for (const l of ['SINT.GESTOR', 'SINT.MEDICO']) await entrar(l);

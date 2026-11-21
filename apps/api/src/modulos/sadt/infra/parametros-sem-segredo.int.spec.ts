@@ -1,45 +1,35 @@
-// Parâmetros do diagnóstico sem segredo sobre a cópia (ficha do M26, regra 10), READ ONLY: os parâmetros do setor de um
-// usuário do laboratório e de cada setor saem só com os campos sem segredo; a senha gerencial, a senha de alterar
-// resultado, o token, o cabeçalho e os caminhos e portas nunca são lidos nem devolvidos (só a natureza do oculto), e a
-// guarda das respostas não acha credencial. Só contagens.
+// Parâmetros do setor na porta própria do SADT (MariaDB, cliente f22_o2): a leitura ainda não tem tabela no modelo
+// (pedido do lote 02-09) e responde 409 "modelo-pendente" com o motivo, sem devolver nada (nenhuma credencial vaza por
+// um retorno vazio ou parcial); a memória (dev/ci) devolve só campos sem segredo.
 import { credenciaisNaResposta, SETORES_SADT } from '@sgh/contratos';
-import { colunaSecretaDoParametro } from '@sgh/legado';
+import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AmbienteSadt, ambienteSadt, codigos } from '../aplicacao/copia.spec-util.js';
-import { portaSadtLegado } from '../porta-legado.js';
-import { fonteCatalogoArquivo } from '@sgh/legado';
-import { resolve } from 'node:path';
+import { PortaSadtMemoria } from '../porta-memoria.js';
+import type { PortaSadt } from '../porta.js';
+import { PortaSadtPropria } from '../porta-propria.js';
+import { contexto, limparMassaSadt, type MassaSadt, montarMassaSadt, SEM_BANCO } from '../aplicacao/copia.spec-util.js';
 
-describe.skipIf(codigos.length === 0)('parâmetros sem segredo na cópia (READ ONLY)', () => {
-  let a: AmbienteSadt;
+describe.skipIf(SEM_BANCO)('parâmetros do setor sem segredo', () => {
+  let nucleo: NucleoProprio;
+  let m: MassaSadt | null = null;
   beforeAll(async () => {
-    a = await ambienteSadt();
-  });
+    nucleo = new NucleoProprio();
+    m = await montarMassaSadt(nucleo, 'S9Q');
+  }, 60_000);
   afterAll(async () => {
-    await a?.nucleo.encerrar();
+    await limparMassaSadt(nucleo, m);
+    await nucleo.encerrar();
   });
 
-  it('só os campos sem segredo; os ocultos pela natureza; nenhuma credencial na resposta', async () => {
-    const porta = portaSadtLegado(
-      a.nucleo,
-      fonteCatalogoArquivo(resolve(import.meta.dirname, '../../../../../../docs/operacoes/catalogo')),
-    );
-    const c = { rede: a.nucleo.rede, hospital: a.cod };
-    const usuario = await a.nucleo.lerSomente({ ...c, traceId: 'int-m26-param' }, async (l) => {
-      const [x] = await l.consultar('SELECT FIRST 1 USUARIO U FROM SIPARLAB ORDER BY 1', [], { teto: 1 });
-      return String(x?.['U'] ?? '');
-    });
-    let campos = 0;
+  it('banco: 409 com o motivo; memória: nenhuma credencial na resposta', async () => {
+    const c = contexto(m!);
+    const banco: PortaSadt = new PortaSadtPropria(nucleo);
+    const memoria: PortaSadt = new PortaSadtMemoria({ estado: () => 'verde' });
     for (const s of SETORES_SADT) {
-      const p = await porta.parametros(c, s.codigo, usuario);
-      campos += p.campos.length;
-      for (const x of p.campos) expect(colunaSecretaDoParametro(x.campo)).toBe(false);
-      expect(credenciaisNaResposta(p)).toEqual([]);
-      // Nenhum campo é a coluna secreta (a marca "pede a senha", CHECK_…, é só uma escolha e pode aparecer).
-      expect(JSON.stringify(p)).not.toMatch(/"(SENHAGERENCIAL|SENHAALTRES|HEADER_WS|TOKEN|CAMINHO_[A-Z_]*)"/);
-      if (s.codigo === 'laboratorio') expect(p.ocultos).toContain('senha guardada');
+      const e = await banco.parametros(c, s.codigo, m!.base.login).catch((x: unknown) => x);
+      expect((e as ErroOperacao).problema).toMatchObject({ status: 409, codigo: 'modelo-pendente' });
+      const r = await memoria.parametros(c, s.codigo, m!.base.login);
+      expect(credenciaisNaResposta(r)).toEqual([]);
     }
-    expect(campos).toBeGreaterThan(0);
-    console.log(`[${a.cod}] parâmetros do diagnóstico: ${campos} campos sem segredo nos 4 setores`);
   });
 });

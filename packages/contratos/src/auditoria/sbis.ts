@@ -782,7 +782,7 @@ export const esquemaBackupVerificado = z.object({
   mensal: esquemaSituacaoRestauracao,
   alertas: z.array(z.string()),
   restauracoes: z.array(esquemaRestauracao),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type BackupVerificado = z.infer<typeof esquemaBackupVerificado>;
 

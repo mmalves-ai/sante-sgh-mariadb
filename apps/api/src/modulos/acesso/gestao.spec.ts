@@ -1,10 +1,10 @@
-// ADR 0022 pela HTTP, sobre a fonte SINTÉTICA e o banco da plataforma EM MEMÓRIA (nenhuma conexão real, nenhum
-// dado de pessoa): acesso total da plataforma (todas as permissões, sem segregação, faixa, auditoria com o ator
-// real; o suporte não tem), e a tela "Perfis e permissões" (efetivas com a origem, perfil concedido e revogado,
-// mapa aprovado muda as efetivas, receitas do legado sobre o estado sintético, cache invalidado na hora).
+// ADR 0022 pela HTTP, sobre a fonte SINTÉTICA (nenhuma conexão real, nenhum dado de pessoa), com a tela num módulo
+// de teste: "Perfis e permissões" (efetivas com a origem, perfil concedido e revogado, mapa aprovado muda as
+// efetivas, operações da conta e recusa das de grupo, política de senha e limites, cache invalidado na hora).
+// O acesso total da plataforma é provado no módulo suporte (a partida antiga que o montava sai na desmontagem).
+import { Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { esquemaSessao, faixaAcessoTotal } from '@sgh/contratos';
-import { cifrarSenha } from '@sgh/dominio-acesso';
+import { esquemaSessao } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
@@ -14,35 +14,42 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, REDE, SENHA } from '../../sessao/teste.spec-util.js';
 import {
-  CONTAS_PLATAFORMA_SINTETICAS as C,
-  RepositorioPlataformaMemoria,
-  SENHA_PLATAFORMA_SINTETICA,
-} from '../suporte/repositorio.js';
-import { emNomeDePadrao } from '../../app.module.js';
-import {
   estadoAcessoSintetico,
   FonteAcessoSintetica,
   reiniciarEstadoAcessoSintetico,
 } from './fonte-sintetica.js';
+import { FONTE_GESTAO, fonteGestaoMemoria } from './gestao-fonte.js';
+import { GestaoAcessoController } from './gestao.controller.js';
 
 const env: Record<string, string> = {
   ...envTeste,
   AMBIENTE: 'dev',
-  SUPORTE_SESSAO_MINUTOS: '60',
-  PLATAFORMA_EM_NOME_DE: 'aa=SINT.ADMIN;bb=fora do formato ',
+  API_MODULOS: 'gestao_teste',
 };
 const trilha = new RegistradorTrilhaMemoria();
 const armazem = new ArmazemMemoria();
-let repo: RepositorioPlataformaMemoria;
 let app: NestFastifyApplication;
 let chave = 0;
 
+/** O módulo do teste: a tela de gestão sobre a fonte de memória (estado sintético). */
+@Module({})
+class GestaoTeste {}
+
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  repo = RepositorioPlataformaMemoria.sintetico(REDE, ['aa', 'bb'], (s) =>
-    cifrarSenha(s, { memoria: 8_192, passes: 1, paralelismo: 1 }),
-  );
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem, plataforma: repo });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem,
+    registro: {
+      gestao_teste: async () => ({
+        modulo: (ctx) => ({
+          module: GestaoTeste,
+          controllers: [GestaoAcessoController],
+          providers: [{ provide: FONTE_GESTAO, useValue: fonteGestaoMemoria(ctx.trilha) }],
+        }),
+      }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -64,26 +71,13 @@ function guardar(n: Navegador, set: string | string[] | undefined): void {
   }
 }
 const cookie = (n: Navegador) => [...n.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
-const plat = (n: Navegador) => ({ cookie: cookie(n), 'x-csrf-plataforma': n.cookies.get('sgh_pcsrf') ?? '' });
-const spdata = (n: Navegador) => ({
+const cabecalhos = (n: Navegador) => ({
   cookie: cookie(n),
   'x-csrf': n.cookies.get('sgh_csrf') ?? '',
   'idempotency-key': `teste-gestao-${++chave}-${Date.now()}`,
 });
 
-async function entrarPlataforma(email: string): Promise<Navegador> {
-  const n: Navegador = { cookies: new Map() };
-  const r = await app.inject({
-    method: 'POST',
-    url: '/api/plataforma/sessao',
-    payload: { email, senha: SENHA_PLATAFORMA_SINTETICA },
-  });
-  expect(r.statusCode).toBe(200);
-  guardar(n, r.headers['set-cookie']);
-  return n;
-}
-
-async function entrarSpdata(login: string): Promise<Navegador> {
+async function entrarConta(login: string): Promise<Navegador> {
   const n: Navegador = { cookies: new Map() };
   const r = await app.inject({
     method: 'POST',
@@ -96,101 +90,19 @@ async function entrarSpdata(login: string): Promise<Navegador> {
   return n;
 }
 
-async function acessoTotal(n: Navegador, estabelecimento: string, login: string) {
-  const r = await app.inject({
-    method: 'POST',
-    url: '/api/plataforma/como',
-    headers: plat(n),
-    payload: { estabelecimento, login, modo: 'acesso-total', motivo: 'CHAMADO-1' },
-  });
-  guardar(n, r.headers['set-cookie']);
-  return r;
-}
-
-describe('acesso total da plataforma (ADR 0022)', () => {
-  it('concede TODAS as permissões do catálogo (inclusive as do legado), com a faixa e o modo na sessão', async () => {
-    const n = await entrarPlataforma(C.plataforma);
-    const eu = await app.inject({ method: 'GET', url: '/api/plataforma/eu', headers: plat(n) });
-    expect(eu.json().podeAcessoTotal).toBe(true);
-    const padrao = await app.inject({
-      method: 'GET',
-      url: '/api/plataforma/como/em-nome-de?estabelecimento=aa',
-      headers: plat(n),
-    });
-    expect(padrao.json()).toEqual({ estabelecimento: 'aa', login: 'SINT.ADMIN' });
-    const r = await acessoTotal(n, 'aa', 'SINT.RECEPCAO');
-    expect(r.statusCode).toBe(201);
-    const s = esquemaSessao.parse(r.json());
-    expect(s.como?.modo).toBe('acesso-total');
-    expect(faixaAcessoTotal(s.como?.estabelecimentoNome ?? '')).toBe(
-      'Você está com acesso total da plataforma em Estabelecimento A (teste)',
-    );
-    const todas = new Set(CATALOGO_COMPLETO.map((p) => p.codigo));
-    expect(new Set(s.permissoes)).toEqual(todas);
-    // As telas da Fase 0 que o diretor não via: todas abrem.
-    const tela = await app.inject({ method: 'GET', url: '/api/acesso/gestao/mapa', headers: spdata(n) });
-    expect(tela.statusCode).toBe(200);
-    const sessoes = await app.inject({
-      method: 'GET',
-      url: '/api/plataforma/auditoria/sessoes',
-      headers: plat(n),
-    });
-    expect(sessoes.json()[0]).toMatchObject({
-      modo: 'acesso-total',
-      alvoLogin: 'SINT.RECEPCAO',
-      estabelecimento: 'aa',
-    });
-    // O ator real vai à auditoria da conta.
-    const eventos = await app.inject({
-      method: 'GET',
-      url: '/api/plataforma/auditoria/contas',
-      headers: plat(n),
-    });
-    expect(eventos.json().some((e: { evento: string }) => e.evento === 'suporte.acessoTotal.aberto')).toBe(
-      true,
-    );
-    await app.inject({ method: 'DELETE', url: '/api/plataforma/como', headers: plat(n) });
-  });
-
-  it('o suporte técnico NÃO obtém acesso total (403, sem sessão de suporte aberta)', async () => {
-    const n = await entrarPlataforma(C.suporte);
-    const eu = await app.inject({ method: 'GET', url: '/api/plataforma/eu', headers: plat(n) });
-    expect(eu.json().podeAcessoTotal).toBe(false);
-    const antes = repo.sessoes.size;
-    const r = await acessoTotal(n, 'aa', 'SINT.RECEPCAO');
-    expect(r.statusCode).toBe(403);
-    expect(repo.sessoes.size).toBe(antes);
-    const padrao = await app.inject({
-      method: 'GET',
-      url: '/api/plataforma/como/em-nome-de?estabelecimento=aa',
-      headers: plat(n),
-    });
-    expect(padrao.statusCode).toBe(403);
-  });
-
-  it('PLATAFORMA_EM_NOME_DE: entrada fora do formato é ignorada', () => {
-    const f = emNomeDePadrao('aa=SINT.X; bb = Y;cc=;=Z;dd= espaco');
-    expect(f('aa')).toBe('SINT.X');
-    expect(f('bb')).toBeNull();
-    expect(f('cc')).toBeNull();
-    expect(f('dd')).toBeNull();
-    expect(emNomeDePadrao(undefined)('aa')).toBeNull();
-  });
-});
-
 describe('Perfis e permissões (ADR 0022)', () => {
   it('sem acesso.perfil.gerir: 403 (a recepção não administra acessos)', async () => {
-    const n = await entrarSpdata('SINT.RECEPCAO');
-    const r = await app.inject({ method: 'GET', url: '/api/acesso/gestao/mapa', headers: spdata(n) });
+    const n = await entrarConta('SINT.RECEPCAO');
+    const r = await app.inject({ method: 'GET', url: '/api/acesso/gestao/mapa', headers: cabecalhos(n) });
     expect(r.statusCode).toBe(403);
   });
 
   it('efetivas com a origem; aprovar o mapa grupo → perfil muda as permissões efetivas de todo o grupo', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
+    const n = await entrarConta('SINT.GESTOR');
     const antes = await app.inject({
       method: 'GET',
       url: '/api/acesso/gestao/usuarios/SINT.MEDICO',
-      headers: spdata(n),
+      headers: cabecalhos(n),
     });
     expect(antes.statusCode).toBe(200);
     const a = antes.json();
@@ -200,7 +112,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     );
     expect(doGrupo.origens[0]).toMatchObject({ tipo: 'grupo', grupo: 'MEDICOS' });
     const mapa = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/mapa', headers: spdata(n) })
+      await app.inject({ method: 'GET', url: '/api/acesso/gestao/mapa', headers: cabecalhos(n) })
     ).json();
     expect(
       mapa.grupoPerfil.some(
@@ -210,7 +122,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     const decidir = await app.inject({
       method: 'POST',
       url: '/api/acesso/gestao/mapa/decidir',
-      headers: spdata(n),
+      headers: cabecalhos(n),
       payload: {
         chave: { tipo: 'grupo-perfil', grupo: 'MEDICOS', perfil: 'administrador-sistema' },
         situacao: 'aprovada',
@@ -220,7 +132,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     expect(decidir.statusCode).toBe(200);
     expect(decidir.json()).toMatchObject({ invalidado: 'estabelecimento', destino: 'memoria' });
     const depois = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: spdata(n) })
+      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: cabecalhos(n) })
     ).json();
     const schema = depois.permissoes.find((p: { codigo: string }) => p.codigo === 'config.schema.ler');
     expect(schema.origens).toEqual([{ tipo: 'perfil', perfil: 'administrador-sistema', via: 'grupo' }]);
@@ -229,7 +141,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     await app.inject({
       method: 'POST',
       url: '/api/acesso/gestao/mapa/decidir',
-      headers: spdata(n),
+      headers: cabecalhos(n),
       payload: {
         chave: { tipo: 'grupo-perfil', grupo: 'MEDICOS', perfil: 'administrador-sistema' },
         situacao: 'recusada',
@@ -238,36 +150,36 @@ describe('Perfis e permissões (ADR 0022)', () => {
       },
     });
     const recusado = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: spdata(n) })
+      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: cabecalhos(n) })
     ).json();
     expect(recusado.permissoes.some((p: { codigo: string }) => p.codigo === 'config.schema.ler')).toBe(false);
   });
 
   it('concede e revoga perfil (início, fim, motivo); a si mesmo e sem a senha, recusados; a sessão do afetado vê na hora', async () => {
-    const gestor = await entrarSpdata('SINT.GESTOR');
-    const alvo = await entrarSpdata('SINT.RECEPCAO');
+    const gestor = await entrarConta('SINT.GESTOR');
+    const alvo = await entrarConta('SINT.RECEPCAO');
     const s0 = esquemaSessao.parse(
-      (await app.inject({ method: 'GET', url: '/api/sessao', headers: spdata(alvo) })).json(),
+      (await app.inject({ method: 'GET', url: '/api/sessao', headers: cabecalhos(alvo) })).json(),
     );
     expect(s0.permissoes).not.toContain('config.parametro.ler');
     const semSenha = await app.inject({
       method: 'POST',
       url: '/api/acesso/gestao/perfis',
-      headers: spdata(gestor),
+      headers: cabecalhos(gestor),
       payload: { login: 'SINT.RECEPCAO', perfil: 'administrador-sistema', motivo: 'teste', senha: 'errada' },
     });
     expect(semSenha.statusCode).toBe(401);
     const aSi = await app.inject({
       method: 'POST',
       url: '/api/acesso/gestao/perfis',
-      headers: spdata(gestor),
+      headers: cabecalhos(gestor),
       payload: { login: 'SINT.GESTOR', perfil: 'auditor', motivo: 'teste', senha: SENHA },
     });
     expect(aSi.statusCode).toBe(409);
     const r = await app.inject({
       method: 'POST',
       url: '/api/acesso/gestao/perfis',
-      headers: spdata(gestor),
+      headers: cabecalhos(gestor),
       payload: {
         login: 'SINT.RECEPCAO',
         perfil: 'administrador-sistema',
@@ -280,14 +192,14 @@ describe('Perfis e permissões (ADR 0022)', () => {
     expect(r.json()).toMatchObject({ invalidado: 'usuario' });
     // Cache invalidado: a sessão aberta do afetado já tem a permissão (sem esperar os 3 min).
     const s1 = esquemaSessao.parse(
-      (await app.inject({ method: 'GET', url: '/api/sessao', headers: spdata(alvo) })).json(),
+      (await app.inject({ method: 'GET', url: '/api/sessao', headers: cabecalhos(alvo) })).json(),
     );
     expect(s1.permissoes).toContain('config.parametro.ler');
     const ef = (
       await app.inject({
         method: 'GET',
         url: '/api/acesso/gestao/usuarios/SINT.RECEPCAO',
-        headers: spdata(gestor),
+        headers: cabecalhos(gestor),
       })
     ).json();
     expect(ef.concessoes[0]).toMatchObject({
@@ -299,14 +211,14 @@ describe('Perfis e permissões (ADR 0022)', () => {
     const semMotivo = await app.inject({
       method: 'POST',
       url: `/api/acesso/gestao/perfis/${r.json().id}/revogar`,
-      headers: spdata(gestor),
+      headers: cabecalhos(gestor),
       payload: { senha: SENHA },
     });
     expect(semMotivo.statusCode).toBe(400);
     const rev = await app.inject({
       method: 'POST',
       url: `/api/acesso/gestao/perfis/${r.json().id}/revogar`,
-      headers: spdata(gestor),
+      headers: cabecalhos(gestor),
       payload: { motivo: 'fim do chamado 42', senha: SENHA },
     });
     expect(rev.statusCode).toBe(200);
@@ -314,13 +226,13 @@ describe('Perfis e permissões (ADR 0022)', () => {
       await app.inject({
         method: 'GET',
         url: '/api/acesso/gestao/usuarios/SINT.RECEPCAO',
-        headers: spdata(gestor),
+        headers: cabecalhos(gestor),
       })
     ).json().concessoes[0];
     expect(revogada).toMatchObject({ vigente: false, revogadoMotivo: 'fim do chamado 42' });
     expect(revogada.revogadoPor).toBeTruthy();
     const s2 = esquemaSessao.parse(
-      (await app.inject({ method: 'GET', url: '/api/sessao', headers: spdata(alvo) })).json(),
+      (await app.inject({ method: 'GET', url: '/api/sessao', headers: cabecalhos(alvo) })).json(),
     );
     expect(s2.permissoes).not.toContain('config.parametro.ler');
     expect(
@@ -328,169 +240,41 @@ describe('Perfis e permissões (ADR 0022)', () => {
     ).toBe(true);
   });
 
-  it('permissões do próprio legado (estado sintético): opções do grupo, papel, troca de grupo, grupo; recusas da receita', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
+  it('operações da conta (estado sintético): papel de segurança pela rota nova; as de grupo recusadas com o motivo', async () => {
+    const n = await entrarConta('SINT.GESTOR');
     const ops = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/operacoes', headers: spdata(n) })
-    ).json();
-    expect(ops).toHaveLength(13); // W1-01 4b: + renomearGrupo e excluirGrupo.
-    expect(ops.every((o: { ligada: boolean }) => o.ligada)).toBe(true);
-    const leg = (operacao: string, entrada: unknown, senha = SENHA) =>
+      await app.inject({ method: 'GET', url: '/api/acesso/gestao/operacoes', headers: cabecalhos(n) })
+    ).json() as { operacao: string; ligada: boolean; motivo: string | null }[];
+    const ligadas = ops.filter((o) => o.ligada).map((o) => o.operacao).sort();
+    expect(ligadas).toEqual([
+      'acesso.concederPapelUsuario',
+      'acesso.reativarPapelUsuario',
+      'acesso.revogarPapelUsuario',
+    ]);
+    expect(ops.find((o) => o.operacao === 'acesso.criarGrupo')?.motivo).toMatch(/não tem grupos/);
+    const op = (operacao: string, entrada: unknown, senha = SENHA) =>
       app.inject({
         method: 'POST',
-        url: `/api/acesso/gestao/legado/${operacao}`,
-        headers: spdata(n),
+        url: `/api/acesso/gestao/operacoes/${operacao}`,
+        headers: cabecalhos(n),
         payload: { entrada, senha },
       });
-    expect((await leg('acesso.criarGrupo', { nome: 'SINT_NOVO' })).statusCode).toBe(200);
-    const dup = await leg('acesso.criarGrupo', { nome: 'sint_novo' });
-    expect(dup.statusCode).toBe(409);
-    expect(dup.json().codigo).toBe('grupo-existente');
-    expect((await leg('acesso.concederOpcoesGrupo', { grupo: 'SINT_NOVO', opcoes: [5429] })).statusCode).toBe(
-      200,
-    );
-    expect(estadoAcessoSintetico().opcoesGrupo.get('SINT_NOVO')?.has(5429)).toBe(true);
-    const troca = await leg('acesso.trocarGrupoUsuario', { login: 'SINT.AUDITOR', grupo: 'SINT_NOVO' });
-    expect(troca.json()).toMatchObject({ invalidado: 'usuario' });
-    const ef = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.AUDITOR', headers: spdata(n) })
-    ).json();
-    expect(ef.usuario.grupo).toBe('SINT_NOVO');
-    expect(
-      ef.permissoes.find((p: { codigo: string }) => p.codigo === 'acesso.grupo.ler')?.origens,
-    ).toContainEqual({
-      tipo: 'grupo',
-      grupo: 'SINT_NOVO',
-      opcao: 5429,
-    });
-    expect((await leg('acesso.desativarGrupo', { nome: 'SINT_NOVO' })).json().codigo).toBe(
-      'grupo-com-usuarios',
-    );
-    expect((await leg('acesso.concederPapelUsuario', { login: 'SINT.GESTOR', papel: 3 })).json().codigo).toBe(
-      'a-si-mesmo',
-    );
-    expect((await leg('acesso.concederPapelUsuario', { login: 'SINT.AUDITOR', papel: 3 })).statusCode).toBe(
-      200,
-    );
-    expect((await leg('acesso.revogarPapelUsuario', { login: 'SINT.AUDITOR', papel: 3 })).statusCode).toBe(
-      200,
-    );
-    // W1-01 (parte 4b): o grupo usado não se renomeia nem se exclui (quantos e quais; oferece inativar); o nunca
-    // usado se renomeia (sem colisão) e se exclui com motivo.
-    for (const [op, entrada] of [
-      ['acesso.renomearGrupo', { nome: 'SINT_NOVO', novoNome: 'SINT_NOVO2' }],
-      ['acesso.excluirGrupo', { nome: 'SINT_NOVO', motivo: 'engano' }],
-    ] as const) {
-      const r = await leg(op, entrada);
-      expect(r.statusCode).toBe(409);
-      expect(r.json().codigo).toBe('com-dependentes');
-    }
-    expect((await leg('acesso.criarGrupo', { nome: 'SINT_VAZIO' })).statusCode).toBe(200);
-    expect(
-      (await leg('acesso.renomearGrupo', { nome: 'SINT_VAZIO', novoNome: 'sint_novo' })).json().codigo,
-    ).toBe('grupo-existente');
-    expect(
-      (await leg('acesso.renomearGrupo', { nome: 'SINT_VAZIO', novoNome: 'SINT_VAZIO2' })).statusCode,
-    ).toBe(200);
-    expect(estadoAcessoSintetico().grupos.has('SINT_VAZIO')).toBe(false);
-    expect((await leg('acesso.excluirGrupo', { nome: 'SINT_VAZIO2' })).statusCode).toBe(400);
-    expect(
-      (await leg('acesso.excluirGrupo', { nome: 'SINT_VAZIO2', motivo: 'criado por engano' })).statusCode,
-    ).toBe(200);
-    expect(estadoAcessoSintetico().grupos.has('SINT_VAZIO2')).toBe(false);
-    // Revisão (achado 3): a campanha de recertificação por grupo é dependente (nome no ALVO).
-    expect((await leg('acesso.criarGrupo', { nome: 'SINT_CAMP' })).statusCode).toBe(200);
-    estadoAcessoSintetico().recert.abrir({
-      hospital: 'aa',
-      escopo: 'grupo',
-      alvo: 'SINT_CAMP',
-      prazo: '2999-12-31',
-      motivo: 'recertificação do grupo de teste',
-      por: 'SINT.GESTOR',
-      hoje: '2026-11-19',
-      itens: [{ login: 'SINT.USUARIO', grupo: 'SINT_CAMP', perfis: [] }],
-    });
-    const comCampanha = await leg('acesso.excluirGrupo', { nome: 'SINT_CAMP', motivo: 'criado por engano' });
-    expect(comCampanha.statusCode).toBe(409);
-    expect(comCampanha.json().codigo).toBe('com-dependentes');
-    expect(
-      (await leg('acesso.renomearGrupo', { nome: 'SINT_CAMP', novoNome: 'SINT_CAMP2' })).json().codigo,
-    ).toBe('com-dependentes');
-    expect(estadoAcessoSintetico().grupos.has('SINT_CAMP')).toBe(true);
-    expect((await leg('acesso.criarGrupo', { nome: 'X' }, 'errada')).statusCode).toBe(401);
-    const sem = await app.inject({
-      method: 'POST',
-      url: '/api/acesso/gestao/legado/acesso.criarGrupo',
-      headers: { ...spdata(n), 'idempotency-key': '' },
-      payload: { entrada: { nome: 'Y' }, senha: SENHA },
-    });
-    expect(sem.statusCode).toBe(400);
-    expect((await leg('acesso.naoExiste', {})).statusCode).toBe(404);
-  });
-
-  it('W1-01 (parte 4c): descrição do grupo por versão, com senha e motivo; acompanha o renomear e sai com a exclusão', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
-    const leg = (operacao: string, entrada: unknown) =>
-      app.inject({
-        method: 'POST',
-        url: `/api/acesso/gestao/legado/${operacao}`,
-        headers: spdata(n),
-        payload: { entrada, senha: SENHA },
-      });
-    const descrever = (grupo: string, descricao: string, motivo = 'organização', senha = SENHA) =>
-      app.inject({
-        method: 'POST',
-        url: '/api/acesso/gestao/grupos/descricao',
-        headers: spdata(n),
-        payload: { grupo, descricao, motivo, senha },
-      });
-    const versoes = async (grupo: string) =>
-      (
-        await app.inject({
-          method: 'GET',
-          url: `/api/acesso/gestao/grupos/${grupo}/descricoes`,
-          headers: spdata(n),
-        })
-      ).json() as {
-        versao: number;
-        descricao: string;
-        situacao: string;
-        motivo: string;
-        criadoPor: string;
-      }[];
-    expect((await leg('acesso.criarGrupo', { nome: 'SINT_DESCR' })).statusCode).toBe(200);
-    const v1 = await descrever('SINT_DESCR', 'Recepção do pronto-socorro');
-    expect(v1.statusCode).toBe(200);
-    expect(v1.json()).toMatchObject({ versao: 1, anterior: null, operacao: 'acesso.descreverGrupo' });
-    expect((await descrever('SINT_DESCR', 'Recepção do pronto-socorro')).json().codigo).toBe('sem-mudanca');
-    expect((await descrever('SINT_DESCR', 'Recepção e triagem')).json()).toMatchObject({
-      versao: 2,
-      anterior: 1,
-    });
-    expect((await descrever('SINT_DESCR', 'Outra', ' ')).statusCode).toBe(400);
-    expect((await descrever('SINT_DESCR', 'Outra coisa', 'motivo', 'errada')).statusCode).toBe(401);
-    expect((await descrever('SINT_NAO_EXISTE', 'Qualquer')).statusCode).toBe(404);
-    // A versão anterior continua visível, com quem e o motivo.
-    expect(
-      (await versoes('SINT_DESCR')).map((v) => [v.versao, v.descricao, v.situacao, v.criadoPor]),
-    ).toEqual([
-      [2, 'Recepção e triagem', 'vigente', 'SINT.GESTOR'],
-      [1, 'Recepção do pronto-socorro', 'substituida', 'SINT.GESTOR'],
-    ]);
-    // Renomear leva as versões ao nome novo; excluir retira a vigente (nada se apaga).
-    expect(
-      (await leg('acesso.renomearGrupo', { nome: 'SINT_DESCR', novoNome: 'SINT_DESCR2' })).statusCode,
-    ).toBe(200);
-    expect(await versoes('SINT_DESCR')).toEqual([]);
-    expect((await versoes('SINT_DESCR2')).map((v) => v.versao)).toEqual([2, 1]);
-    expect(
-      (await leg('acesso.excluirGrupo', { nome: 'SINT_DESCR2', motivo: 'criado por engano' })).statusCode,
-    ).toBe(200);
-    expect((await versoes('SINT_DESCR2')).map((v) => v.situacao)).toEqual(['retirada', 'substituida']);
+    const g = await op('acesso.criarGrupo', { nome: 'SINT_NOVO' });
+    expect(g.statusCode).toBe(409);
+    expect(g.json().codigo).toBe('operacao-desligada');
+    expect((await op('acesso.concederPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 }, 'errada')).statusCode).toBe(401);
+    const c = await op('acesso.concederPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 });
+    expect(c.statusCode).toBe(200);
+    expect(c.json()).toMatchObject({ operacao: 'acesso.concederPapelUsuario', invalidado: 'usuario', destino: 'memoria' });
+    expect(estadoAcessoSintetico().contas.get('SINT.RECEPCAO')?.papeis.get(2)).toBe(true);
+    const r = await op('acesso.revogarPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 });
+    expect(r.statusCode).toBe(200);
+    expect(estadoAcessoSintetico().contas.get('SINT.RECEPCAO')?.papeis.get(2)).toBe(false);
+    expect((await op('acesso.revogarPapelUsuario', { login: 1, papel: 2 })).statusCode).toBe(400);
   });
 
   it('W1-01 (parte 5): política de senha por versão com vigência (senha e motivo), agendar e cancelar; trilha sem senha; a efetiva aperta a da sessão', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
+    const n = await entrarConta('SINT.GESTOR');
     const regras = {
       minimoCaracteres: 12,
       exigeEspecial: true,
@@ -507,7 +291,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
       app.inject({
         method: 'POST',
         url: '/api/acesso/gestao/politica-senha',
-        headers: spdata(n),
+        headers: cabecalhos(n),
         payload: {
           ...regras,
           vigenteDesde: new Date().toISOString(),
@@ -518,7 +302,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
       });
     const tela = async () =>
       (
-        await app.inject({ method: 'GET', url: '/api/acesso/gestao/politica-senha', headers: spdata(n) })
+        await app.inject({ method: 'GET', url: '/api/acesso/gestao/politica-senha', headers: cabecalhos(n) })
       ).json() as {
         efetiva: { minimoCaracteres: number; recusaComuns: boolean; trocaDias: number };
         legado: { minimoCaracteres: number | null };
@@ -561,7 +345,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
       app.inject({
         method: 'POST',
         url: `/api/acesso/gestao/politica-senha/${versao}/cancelar`,
-        headers: spdata(n),
+        headers: cabecalhos(n),
         payload: { motivo: 'agendada por engano', senha },
       });
     expect((await cancelar(2, 'errada')).statusCode).toBe(401);
@@ -573,7 +357,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
         await app.inject({
           method: 'POST',
           url: '/api/acesso/gestao/politica-senha/abc/cancelar',
-          headers: spdata(n),
+          headers: cabecalhos(n),
           payload: { motivo: 'x', senha: SENHA },
         })
       ).statusCode,
@@ -599,17 +383,17 @@ describe('Perfis e permissões (ADR 0022)', () => {
   });
 
   it('W1-01 (parte 8): limite de sessões por perfil: incluir, alterar e retirar (senha e motivo), cada mudança é linha nova; a sessão lê o limite', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
+    const n = await entrarConta('SINT.GESTOR');
     const definir = (extra: Record<string, unknown>, senha = SENHA) =>
       app.inject({
         method: 'POST',
         url: '/api/acesso/gestao/limites-sessao',
-        headers: spdata(n),
+        headers: cabecalhos(n),
         payload: { perfil: '*', limite: 3, motivo: 'estações compartilhadas', senha, ...extra },
       });
     const tela = async () =>
       (
-        await app.inject({ method: 'GET', url: '/api/acesso/gestao/limites-sessao', headers: spdata(n) })
+        await app.inject({ method: 'GET', url: '/api/acesso/gestao/limites-sessao', headers: cabecalhos(n) })
       ).json() as {
         vigentes: { perfil: string; limite: number }[];
         historico: { perfil: string; limite: number | null; situacao: string; criadoPor: string }[];
@@ -655,34 +439,20 @@ describe('Perfis e permissões (ADR 0022)', () => {
     expect((await definir({ limite: null, motivo: 'fim do teste' })).statusCode).toBe(200);
   });
 
-  it('decisão 17 pelo caminho indireto: nem o próprio grupo, nem o próprio papel, nem o mapa do próprio grupo ou perfil', async () => {
-    const n = await entrarSpdata('SINT.GESTOR');
+  it('decisão 17 pelo caminho indireto: nem o mapa do próprio grupo nem o do próprio perfil', async () => {
+    const n = await entrarConta('SINT.GESTOR');
     const conta = estadoAcessoSintetico().contas.get('SINT.GESTOR');
     if (!conta) throw new Error('conta sintética ausente');
     const grupoAntes = conta.grupo;
     conta.grupo = 'MEDICOS';
     try {
-      const leg = (operacao: string, entrada: unknown) =>
-        app.inject({
-          method: 'POST',
-          url: `/api/acesso/gestao/legado/${operacao}`,
-          headers: spdata(n),
-          payload: { entrada, senha: SENHA },
-        });
       const decidir = (chave: unknown) =>
         app.inject({
           method: 'POST',
           url: '/api/acesso/gestao/mapa/decidir',
-          headers: spdata(n),
+          headers: cabecalhos(n),
           payload: { chave, situacao: 'aprovada', senha: SENHA },
         });
-      const g = await leg('acesso.concederOpcoesGrupo', { grupo: 'MEDICOS', opcoes: [5429] });
-      expect(g.statusCode).toBe(409);
-      expect(g.json().codigo).toBe('a-si-mesmo');
-      // Papel 0 (gestor-acessos): ativo no operador.
-      const pa = await leg('acesso.concederOpcoesPapel', { papel: 0, opcoes: [5435] });
-      expect(pa.json().codigo).toBe('a-si-mesmo');
-      expect(estadoAcessoSintetico().opcoesPapel.get(0)?.has(5435)).toBe(false);
       const m = await decidir({ tipo: 'grupo-perfil', grupo: 'MEDICOS', perfil: 'administrador-sistema' });
       expect(m.statusCode).toBe(409);
       expect(m.json().codigo).toBe('a-si-mesmo');
@@ -719,7 +489,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     };
     const a = new ServicoAutorizacao(fonte, new ArmazemMemoria(() => agora), () => agora);
     estadoAcessoSintetico().opcoesGrupo.get('ATENDIMENTO')?.add(5429);
-    // A leitura do legado acontece com a opção ainda concedida…
+    // A leitura da fonte acontece com a opção ainda concedida…
     const emCurso = a.obter(REDE, 'aa', 'SINT.RECEPCAO');
     await lendo;
     // …a revogação grava e invalida o usuário antes de o cálculo gravar o cache.
@@ -743,7 +513,7 @@ describe('Perfis e permissões (ADR 0022)', () => {
     // Dentro dos 3 min, o cache vale…
     agora += 1_000;
     expect((await a.obter(REDE, 'aa', 'SINT.RECEPCAO')).permissoes).toEqual(p1.permissoes);
-    // …até a invalidação do estabelecimento (nova geração): a próxima leitura vai ao legado.
+    // …até a invalidação do estabelecimento (nova geração): a próxima leitura vai à fonte.
     await a.invalidarEstabelecimento(REDE, 'aa');
     expect((await a.obter(REDE, 'aa', 'SINT.RECEPCAO')).permissoes).toContain('acesso.grupo.ler');
     estadoAcessoSintetico().opcoesGrupo.get('ATENDIMENTO')?.delete(5429);

@@ -500,7 +500,7 @@ export interface ResultadoGestaoTela {
   readonly operacao: string;
   /** Logins cujo cache de permissões foi invalidado (ou "todos" do estabelecimento). */
   readonly invalidado: 'usuario' | 'estabelecimento';
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }
 
 // ── W1-01 (parte 9b): contas dormentes ──────────────────────────────────────────────────────────
@@ -743,7 +743,7 @@ export interface DecisaoRecertTela {
   readonly decisao: 'manter' | 'retirar';
   readonly acao: 'bloqueio' | 'revogacao' | null;
   readonly perfil: string | null;
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }
 
 // ── W1-01 (parte 10b): pedido de acesso (tela 403 → dois níveis → concessão com fim) ───────────
@@ -843,7 +843,7 @@ export interface DecisaoPedidoAcessoTela {
   readonly id: string;
   readonly situacao: SituacaoPedidoAcessoTela;
   readonly concessao: string | null;
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }
 
 // ── W1-01 (parte 11a): provisionamento pelo RH (tarefas derivadas dos vínculos; D-W101-35) ───────────
@@ -939,7 +939,7 @@ export interface PerfisCargoRhGestaoTela {
 export interface ResolucaoTarefaRhResultado {
   readonly id: string;
   readonly bloqueado: boolean;
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }
 
 // ── W1-01 (parte 12a): "Aplicar acessos de…" (usuário-modelo) ───────────────────────────────────
@@ -1012,5 +1012,5 @@ export interface ResultadoModeloTela {
   readonly passos: readonly PassoModeloTela[];
   readonly feitos: number;
   readonly falhas: number;
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
 }

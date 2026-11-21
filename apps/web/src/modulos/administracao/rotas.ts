@@ -19,13 +19,6 @@ export const rotasAdministracao: RouteRecordRaw[] = [
     meta: { permissao: C.usuarioLer },
   },
   {
-    // M43 (regras 4 e 5): a revisão dos ativos sem grupo e dos logins de painel (antes de `usuarios/:login`).
-    path: '/administracao/acesso/usuarios/revisao',
-    name: 'adm.usuarios.revisao',
-    component: () => import('./telas/RevisaoUsuariosTela.vue'),
-    meta: { permissao: C.usuarioLer },
-  },
-  {
     // M59-F1: contas do banco de dados e privilégio mínimo por módulo (só consulta; abre de Permissões).
     path: '/administracao/acesso/contas-banco',
     name: 'adm.contasBanco',

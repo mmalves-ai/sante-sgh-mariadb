@@ -1,0 +1,42 @@
+{
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/sadt/aplicacao/apoios.ts",
+  "src/modulos/sadt/aplicacao/aviso-critico.int.spec.ts",
+  "src/modulos/sadt/aplicacao/central-critico.spec.ts",
+  "src/modulos/sadt/aplicacao/central-critico.ts",
+  "src/modulos/sadt/aplicacao/coletar.int.spec.ts",
+  "src/modulos/sadt/aplicacao/copia.spec-util.ts",
+  "src/modulos/sadt/aplicacao/liberar.autorizacao.int.spec.ts",
+  "src/modulos/sadt/aplicacao/pacs.ts",
+  "src/modulos/sadt/infra/etiqueta-amostra.ts",
+  "src/modulos/sadt/infra/etiqueta-amostra.zpl.spec.ts",
+  "src/modulos/sadt/infra/parametros-sem-segredo.int.spec.ts",
+  "src/modulos/sadt/operacoes.ts",
+  "src/modulos/sadt/pacs-porta-memoria.ts",
+  "src/modulos/sadt/pacs-porta-propria.int.spec.ts",
+  "src/modulos/sadt/pacs-porta-propria.ts",
+  "src/modulos/sadt/pacs-porta.ts",
+  "src/modulos/sadt/pacs.controller.ts",
+  "src/modulos/sadt/pacs.spec.ts",
+  "src/modulos/sadt/porta-memoria.ts",
+  "src/modulos/sadt/porta-propria.int.spec.ts",
+  "src/modulos/sadt/porta-propria.ts",
+  "src/modulos/sadt/porta.ts",
+  "src/modulos/sadt/vocabulario-banco.ts"
+ ],
+ "pedidos": [
+  "CONTRATO (packages/contratos/src/sadt/entradas.ts): exame lido = { id: exame_item.id, versao: número } no lugar da chave de 7 colunas e do carimbo de data; setor executante (setor_diagnostico_id) no lugar de prestador/local; sem retratos do atendimento. Até lá as 10 operações de OPERACOES_SADT_PENDENTES (receber, lançar, registrar resultado/laudo, liberar, retificar, emitir laudo, orçamento, visualização no portal, abrir requisição) ficam desligadas no banco com motivo (podeGravar) e executar responde 409 modelo-pendente.",
+  "OPERAÇÕES NO BANCO (lote seguinte, depois do contrato): definirOperacao para sadt.receberSolicitacao (exame_item.situacao), sadt.registrarResultado/registrarLaudo (resultado_exame + resultado_analito), sadt.liberarExame (resultado_exame liberado + liberacao_exame + aviso_valor_critico na mesma transação: substitui a vigia de reconciliação), sadt.retificarResultado (resultado_exame_versao), sadt.emitirLaudo, sadt.criarOrcamento (orcamento_particular), sadt.abrirRequisicao (requisicao_exame + sequencia).",
+  "LEITURAS a escrever na porta própria (tabelas existem): digitacao (modelo_resultado, resultado_variavel_formula, grandeza_laudo), conferencia/filaLiberacao (resultado_analito com faixa + resultado_exame_versao), laudoParaEmitir, requisicoes, atendimento/atendimentosPorNumero, orcamentos/orcamento (orcamento_particular), apoio, indicadores, laudos do portal (liberacao_resultado_portal, acesso_resultado_portal), acessos e autocadastros do portal (conta_portal_paciente, conta_portal_profissional_externo).",
+  "DDL/configuração: parametros do setor (configuracao_setor_diagnostico) - confirmar se cobre os campos da tela de parâmetros; sem isso parametros() responde 409.",
+  "criar_cliente: semear a sequencia_negocio 'laudo_exame' por estabelecimento (o laudo emitido usa proximoNumero) e os canais de notificação (canal_notificacao) usados na comunicação do aviso crítico.",
+  "pacs.spec.ts e infra/laudo-pdf.int.spec.ts (HTTP): dependem do registro dos módulos pep/documento/integracao no criarApp (rotas de sessão/prontuário/documento 404 e PORTA_INTEGRACAO) e do S3 de teste (500); migrar quando esses módulos estiverem em REGISTRO_MODULOS.",
+  "Limpeza: execuções anteriores com falha deixaram massa SINTÉTICA da enfermagem (estabelecimentos S09*A/B, pacientes e atendimentos) no cliente f22_o2; a massa do SADT foi apagada. A massa agora usa marca por execução e limpa a base se falhar.",
+  "02-10 (servico/public-api/portal/vigia): PortaSadt.podeGravar tem 2 argumentos (o 3º login sai); orcamento() devolve nomeRegistrado (era nomeLegado); public-api exporta portaSadtIndisponivel de porta-propria.js e portaPacsIndisponivel de pacs-porta-propria.js; ContextoSadt = ContextoNucleo + rede/hospital/chaveIdempotencia opcionais; o aviso crítico passa a nascer na liberação (avisarCriticos fica 409 no banco).",
+  "02-10 (quebra de tipo a aplicar, nomes do sistema de origem removidos da porta): aplicacao/portal.ts:461 'idSilanexa: l.laudo.exame' -> 'exameItem: l.laudo.exame' e o .catch(() => undefined) da linha ~466 deve contar/registrar a recusa 'modelo-pendente' (a leitura no portal vai pela operação sadt.registrarVisualizacaoPortal, ainda pendente), não engolir; aplicacao/vigia-criticos.ts:171 'idSilanexa: x.exame' -> 'exameItem: x.exame' e remover 'origem: 'outroSistema'' (linha 175: o campo saiu de avisarCriticos). PortaSadt.responsavelDoAtendimento(c, atendimento) virou destinatarioDoCritico(c, exameItem) (solicitante da requisição); avisarCriticoNaCentral não exige mais atendimento.",
+  "NÚCLEO/integrador (padrão repetido em outros lotes): gravarSgh de porta própria usa uma operação genérica com entrada {chave}; no 02-09 o nome vem do evento da trilha fixa (dadosDepois.evento, ex.: sadt.aviso_critico.comunicado) e a chave de idempotência vem de ContextoSadt/ContextoPacs.chaveIdempotencia quando a tela a manda (senão randomUUID). Falta: (a) a trilha calculada (função) ainda leva 'sadt.gravacao'/'sadt.pacs.gravacao'; (b) a entrada real de cada método do gravador sem Zod. Proposta: definirOperacao por método do gravador, com o esquema da entrada, e os controllers passarem a chave da requisição.",
+  "DDL/leitura: comunica_plantonista (regra_valor_critico) precisa do plantonista do setor; não há leitura de escala ligada ao setor de diagnóstico (plantao em 15_RH). Até lá, sem solicitante com usuário ativo, destinatarioDoCritico devolve null e o aviso fica no painel do setor (registrado no comentário).",
+  "infra/laudo-pdf.int.spec.ts fica FORA do fecho_tsconfig: usa criarApp com a opção 'documentos' que o OpcoesAppBase novo não tem (TS2353) e depende do S3 de teste; reescrever quando o módulo documento entrar em REGISTRO_MODULOS (opção 'registro')."
+ ]
+}

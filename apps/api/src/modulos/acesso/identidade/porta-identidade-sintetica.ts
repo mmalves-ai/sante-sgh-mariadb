@@ -1,6 +1,6 @@
 // M59.2: a identidade (credencial forte, segundo fator e política) sobre a fonte SINTÉTICA do dev/ci (E2E @M59.2):
-// a porta em memória semeada só com as contas sintéticas da identidade (CONTAS_IDENTIDADE_SINTETICAS). Nada vai à
-// cópia: com a fonte sintética, o login de SINT.* nunca procura a conta no TBUSERS nem grava SGH_ACESSO_CREDENCIAL.
+// a porta em memória semeada só com as contas sintéticas da identidade (CONTAS_IDENTIDADE_SINTETICAS). Nada vai ao
+// banco: com a fonte sintética, o login de SINT.* nunca procura a conta no banco nem grava a credencial.
 // As demais contas sintéticas seguem pela senha antiga (a porta não as conhece: nem regravação nem segundo fator).
 import { CONTAS_IDENTIDADE_SINTETICAS, CONTAS_SINTETICAS, idUsuarioSintetico } from '../fonte-sintetica.js';
 import { PortaIdentidadeMemoria } from './porta-identidade-memoria.js';

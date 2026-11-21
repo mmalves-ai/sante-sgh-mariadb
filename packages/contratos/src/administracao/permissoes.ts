@@ -176,7 +176,7 @@ export const esquemaVersoesTermo = z.object({
   /** POL-3: publicar pelo sistema novo pode estar desligado neste estabelecimento; o motivo aparece. */
   publicarPossivel: z.boolean(),
   motivo: z.string().nullable(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type VersoesTermo = z.infer<typeof esquemaVersoesTermo>;
 
@@ -216,7 +216,7 @@ export type QuebraVidro = z.infer<typeof esquemaQuebraVidro>;
 export const esquemaListaQuebrasVidro = z.object({
   itens: z.array(esquemaQuebraVidro),
   pendentes: z.number().int(),
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ListaQuebrasVidro = z.infer<typeof esquemaListaQuebrasVidro>;
 

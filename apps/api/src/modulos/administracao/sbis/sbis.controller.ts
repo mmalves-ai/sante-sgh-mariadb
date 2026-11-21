@@ -12,7 +12,7 @@
 //   POST /api/administracao/auditoria/sbis/ciclos/:id/cancelar
 //   GET  /api/administracao/auditoria/backup                             backup verificado (restaurações)
 //   POST /api/administracao/auditoria/backup/restauracoes                registrar o relatório de uma restauração
-// As leituras entram na trilha própria (@Auditar); as gravações, na mesma transação SGH_ (porta). Encerrar ou reabrir
+// As leituras entram na trilha própria (@Auditar); as gravações, na trilha da mesma transação (porta). Encerrar ou reabrir
 // concessão e concluir ciclo são críticos: reautenticação recente (SBIS-07). A exportação da trilha para a auditoria
 // fica com as demais da trilha (auditoria.controller.ts, /auditoria/trilha/exportar-sbis).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
@@ -44,6 +44,7 @@ import type { RequisicaoAutorizada } from '../../../autorizacao/guarda.js';
 import { reautenticar } from '../../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../../autorizacao/resolvedor-sessao.js';
 import { ErroProblema } from '../../../problema.filter.js';
+import { idempotencia } from '../comum.js';
 import type { ServicoSessao } from '../../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../../acesso/acesso.controller.js';
 import { type AtorSbis, SERVICO_SBIS, type ServicoSbis } from './servico.js';
@@ -76,16 +77,19 @@ export class SbisController {
     @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao,
   ) {}
 
-  private ator(req: RequisicaoAutorizada): AtorSbis {
+  /** O ator do pedido; nas gravações, com a Idempotency-Key obrigatória (o reenvio não grava de novo). */
+  private ator(req: RequisicaoAutorizada, gravacao = false): AtorSbis {
     const s = req.sgh?.sessao;
-    if (!s?.rede || !s.estabelecimentoAtivo || !s.usuario.login)
+    if (!s?.estabelecimentoAtivo || !s.usuario.login)
       throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
     return {
-      rede: s.rede,
+      // A rede é opcional no banco próprio (um banco por cliente): o estabelecimento da sessão basta.
+      rede: s.rede ?? '',
       hospital: s.estabelecimentoAtivo,
       login: s.usuario.login,
       estacao: estacaoDaRequisicao(req).slice(0, 80) || null,
       correlacao: correlacaoDaRequisicao(req, 'sbis'),
+      ...(gravacao ? { idempotencia: idempotencia(req) } : {}),
     };
   }
 
@@ -101,11 +105,11 @@ export class SbisController {
   @Post(`${BASE_CONCESSOES}/:codigo/encerrar`)
   @HttpCode(200)
   @Permissao(P.concessaoEncerrar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_CONCESSAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: sem convivência, recusa com o motivo (sem gravação)')
   async encerrar(@Param('codigo') bruto: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const codigo = analisar(esquemaCodigoConcessao, bruto);
     const p = analisar(esquemaEncerrarConcessao, corpo);
-    const a = this.ator(req);
+    const a = this.ator(req, true);
     await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     return this.servico.encerrarConcessao(a, codigo, p);
   }
@@ -113,11 +117,11 @@ export class SbisController {
   @Post(`${BASE_CONCESSOES}/:codigo/reabrir`)
   @HttpCode(200)
   @Permissao(P.concessaoEncerrar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_CONCESSAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: sem convivência, recusa com o motivo (sem gravação)')
   async reabrir(@Param('codigo') bruto: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const codigo = analisar(esquemaCodigoConcessao, bruto);
     const p = analisar(esquemaReabrirConcessao, corpo);
-    const a = this.ator(req);
+    const a = this.ator(req, true);
     await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     return this.servico.reabrirConcessao(a, codigo, p.motivo);
   }
@@ -125,11 +129,11 @@ export class SbisController {
   @Post(`${BASE_CONCESSOES}/:codigo/previsao`)
   @HttpCode(200)
   @Permissao(P.concessaoEncerrar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_CONCESSAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: sem convivência, recusa com o motivo (sem gravação)')
   previsao(@Param('codigo') bruto: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const codigo = analisar(esquemaCodigoConcessao, bruto);
     const p = analisar(esquemaPrevisaoConcessao, corpo);
-    return this.servico.preverConcessao(this.ator(req), codigo, p.fimPrevisto);
+    return this.servico.preverConcessao(this.ator(req, true), codigo, p.fimPrevisto);
   }
 
   // ── certificação ───────────────────────────────────────────────────────────────────────────────
@@ -151,15 +155,15 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos`)
   @HttpCode(201)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_CICLO, SGH_AUDIT_SBIS_ITEM e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao, ciclo_certificacao_item e trilha_auditoria na mesma transação')
   abrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CicloSbisDetalhe> {
-    return this.servico.abrirCiclo(this.ator(req), analisar(esquemaAbrirCiclo, corpo));
+    return this.servico.abrirCiclo(this.ator(req, true), analisar(esquemaAbrirCiclo, corpo));
   }
 
   @Post(`${BASE_SBIS}/ciclos/:id/itens/:requisito`)
   @HttpCode(200)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_ITEM e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao_item e trilha_auditoria na mesma transação')
   avaliar(
     @Param('id') id: string,
     @Param('requisito') requisito: string,
@@ -167,7 +171,7 @@ export class SbisController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ItemCicloSbis> {
     return this.servico.avaliar(
-      this.ator(req),
+      this.ator(req, true),
       analisar(esquemaIdCiclo, id),
       analisar(esquemaRequisito, requisito),
       analisar(esquemaAvaliarItem, corpo),
@@ -177,7 +181,7 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos/:id/itens/:requisito/corrigir`)
   @HttpCode(200)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_ITEM e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao_item e trilha_auditoria na mesma transação')
   corrigir(
     @Param('id') id: string,
     @Param('requisito') requisito: string,
@@ -185,7 +189,7 @@ export class SbisController {
     @Req() req: RequisicaoAutorizada,
   ) {
     return this.servico.corrigir(
-      this.ator(req),
+      this.ator(req, true),
       analisar(esquemaIdCiclo, id),
       analisar(esquemaRequisito, requisito),
       analisar(esquemaCorrigirItem, corpo).descricao,
@@ -195,14 +199,14 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos/:id/itens/:requisito/verificar`)
   @HttpCode(200)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_ITEM e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao_item e trilha_auditoria na mesma transação')
   verificar(
     @Param('id') id: string,
     @Param('requisito') requisito: string,
     @Req() req: RequisicaoAutorizada,
   ) {
     return this.servico.verificar(
-      this.ator(req),
+      this.ator(req, true),
       analisar(esquemaIdCiclo, id),
       analisar(esquemaRequisito, requisito),
     );
@@ -211,7 +215,7 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos/:id/concluir`)
   @HttpCode(200)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_CICLO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao e trilha_auditoria na mesma transação')
   async concluir(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -219,7 +223,7 @@ export class SbisController {
   ): Promise<CicloSbisDetalhe> {
     const idCiclo = analisar(esquemaIdCiclo, id);
     const { senha, ...p } = analisar(esquemaConcluirCiclo, corpo);
-    const a = this.ator(req);
+    const a = this.ator(req, true);
     await reautenticar(this.sessoes, this.resolvedor, req, senha);
     return this.servico.concluir(a, idCiclo, p);
   }
@@ -227,10 +231,10 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos/:id/cancelar`)
   @HttpCode(200)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_SBIS_CICLO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: ciclo_certificacao e trilha_auditoria na mesma transação')
   cancelar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.cancelar(
-      this.ator(req),
+      this.ator(req, true),
       analisar(esquemaIdCiclo, id),
       analisar(esquemaCancelarCiclo, corpo).motivo,
     );
@@ -248,8 +252,8 @@ export class SbisController {
   @Post(`${BASE_BACKUP}/restauracoes`)
   @HttpCode(201)
   @Permissao(P.backupRegistrar)
-  @AuditadoNoHandler('porta SGH_: SGH_AUDIT_RESTAURACAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('porta: verificacao_backup e trilha_auditoria na mesma transação')
   registrar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<{ id: string }> {
-    return this.servico.registrarRestauracao(this.ator(req), analisar(esquemaRegistrarRestauracao, corpo));
+    return this.servico.registrarRestauracao(this.ator(req, true), analisar(esquemaRegistrarRestauracao, corpo));
   }
 }

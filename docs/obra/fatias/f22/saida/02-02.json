@@ -1,0 +1,143 @@
+{
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/acesso/gestao-tipos.ts",
+  "src/modulos/acesso/gestao-fonte.ts",
+  "src/modulos/acesso/gestao-fonte-propria.ts",
+  "src/modulos/acesso/gestao-fonte-propria.int.spec.ts",
+  "src/modulos/acesso/gestao.controller.ts",
+  "src/modulos/acesso/gestao.spec.ts",
+  "src/modulos/acesso/emergencia.spec.ts",
+  "src/modulos/acesso/emergencia-propria.int.spec.ts",
+  "src/modulos/acesso/aplicacao/copia.spec-util.ts",
+  "src/modulos/acesso/contas-banco/porta.ts",
+  "src/modulos/acesso/contas-banco/porta-memoria.ts",
+  "src/modulos/acesso/contas-banco/porta-propria.ts",
+  "src/modulos/acesso/contas-banco/porta-propria.int.spec.ts",
+  "src/modulos/acesso/contas-banco/servico.ts",
+  "src/modulos/acesso/contas-banco/contas-banco.controller.ts",
+  "src/modulos/acesso/contas-banco/contas-banco.spec.ts",
+  "src/modulos/acesso/contas-banco/partida.ts",
+  "src/modulos/acesso/contas-banco/partida.spec.ts",
+  "src/modulos/acesso/tipos-gestao-acesso.ts",
+  "src/modulos/acesso/estado-sintetico.ts",
+  "src/modulos/acesso/fonte-sintetica.ts",
+  "src/modulos/acesso/rh-memoria.ts",
+  "src/modulos/acesso/pedido-acesso-memoria.ts",
+  "src/modulos/acesso/recertificacao-memoria.ts",
+  "src/modulos/acesso/ultimo-gestor.ts",
+  "src/modulos/acesso/alerta.ts",
+  "src/modulos/acesso/emergencia.controller.ts",
+  "src/modulos/acesso/acesso.controller.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "usuario_perfil",
+   "alteracao": "ADD revogado_motivo VARCHAR(500) NULL COMMENT 'Motivo da revogação da concessão'",
+   "motivo": "o motivo da revogação hoje só vai à trilha; historicoPerfis devolve revogadoMotivo null"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "usuario_perfil_alteracao",
+   "colunas": "id, usuario_perfil_id FK usuario_perfil, vigencia_inicio_antes DATE NOT NULL, vigencia_fim_antes DATE NULL, motivo_antes VARCHAR(500) NULL, vigencia_inicio DATE NOT NULL, vigencia_fim DATE NULL, motivo VARCHAR(500) NOT NULL, justificativa VARCHAR(500) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); CHECK vigencia_fim >= vigencia_inicio; KEY (usuario_perfil_id)",
+   "indisponivel": "GET /api/acesso/gestao/perfis/:id/alteracoes (alteracoesPerfil responde modelo-pendente); o anterior de cada alteração vai só à trilha"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "politica_senha_versao",
+   "colunas": "id, estabelecimento_id FK, versao INT NOT NULL, tamanho_minimo, exige_maiuscula/minuscula/numero/especial BOOLEAN, validade_dias, reuso_dias SMALLINT NULL, recusa_nome BOOLEAN, recusa_nascimento BOOLEAN, recusa_comuns BOOLEAN, senhas_proibidas JSON NULL, vigente_desde DATETIME(3) NOT NULL, motivo VARCHAR(500) NOT NULL, situacao VARCHAR(20) CHECK IN ('publicada','cancelada'), cancelada_em, cancelada_por, motivo_cancelamento, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); UNIQUE (estabelecimento_id, versao)",
+   "indisponivel": "POST /api/acesso/gestao/politica-senha e /politica-senha/:versao/cancelar (modelo-pendente); a política em vigor segue a de politica_senha, lida pela sessão; a lista de versões vem vazia"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "limite_sessao_perfil",
+   "colunas": "id, estabelecimento_id FK, perfil_acesso_id FK NULL (nulo: todos os perfis), limite SMALLINT UNSIGNED NULL (nulo: retirado), motivo VARCHAR(500) NOT NULL, vigente_desde DATETIME(3) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); CHECK limite IS NULL OR limite BETWEEN 1 AND 50",
+   "indisponivel": "GET/POST /api/acesso/gestao/limites-sessao (modelo-pendente)"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "excecao_conta_dormente",
+   "colunas": "id, usuario_id FK, estabelecimento_id FK, valida_ate DATE NULL (nulo: retirada), motivo VARCHAR(500) NOT NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "registrar exceção das contas dormentes (modelo-pendente); a rotina segue sem exceções"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "conferencia_registro_conselho",
+   "colunas": "id, usuario_id FK, estabelecimento_id FK, registro_profissional_id FK (registro no conselho do cadastro de profissionais), situacao VARCHAR(20) CHECK IN ('ativo','inativo','suspenso','cancelado','nao-localizado'), fonte VARCHAR(20) CHECK IN ('portal-conselho','documento','declaracao','outra'), conferido_em DATETIME(3), valida_ate DATE NULL, observacao VARCHAR(500) NULL, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "registros e conferências do conselho na gestão (modelo-pendente)"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "perfil_cargo_rh e resolucao_tarefa_rh",
+   "colunas": "perfil_cargo_rh: id, estabelecimento_id FK, cargo_id FK (cargo do RH), perfil_acesso_id FK NULL, motivo, vigência, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica); resolucao_tarefa_rh: id, estabelecimento_id FK, usuario_id FK, tipo CHECK IN ('criar-acesso','revisar-acesso','suspender-acesso'), referencia (vínculo/mudança/afastamento), decisao, motivo, resolvido_em, resolvido_por, colunas de auditoria do ADR 0002 (criado_em, criado_por, alterado_em, alterado_por, versao; excluido_em/excluido_por quando houver exclusão lógica)",
+   "indisponivel": "painel do RH na gestão de acessos: dadosRh, definirPerfilCargoRh, resolverTarefaRh (modelo-pendente)"
+  },
+  {
+   "tipo": "codigo",
+   "alvo": "pedidos de acesso (pedido_acesso, pedido_acesso_item) e campanhas de recertificação (recertificacao_acesso, recertificacao_acesso_item)",
+   "motivo": "as tabelas existem; o adaptador próprio não coube no lote (situações em dois níveis do pedido e itens da campanha). Respondem 'adaptador-pendente' sem gravar",
+   "indisponivel": "telas de pedido de acesso e de recertificação sobre o banco (na memória seguem)"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "pedido": "ResultadoGestaoTela.destino e o retorno das gravações: 'legado'|'memoria' -> 'banco'|'memoria'; renomear OPERACOES_GESTAO_LEGADO, OperacaoGestaoLegado, esquemaPedidoGestaoLegado para nomes neutros (ex.: OPERACOES_CONTA_GESTAO) e tirar as de grupo; PoliticaSenhaGestaoTela.legado -> base"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/imutabilidade.ts e contas-banco.ts",
+   "pedido": "tabelasClinicas.legado (sempre 0 no banco próprio), TABELAS_CLINICAS_LEGADO e PREFIXOS_SGH_CLINICOS (sem uso), destinos 'servico-legado'/'papel-legado' e o catálogo de contas técnicas do sistema de origem: rever para o MariaDB"
+  },
+  {
+   "tipo": "web",
+   "pedido": "a tela de gestão chama POST /api/acesso/gestao/operacoes/:operacao (antes /legado/:operacao); as de grupo voltam 409 operacao-desligada com o motivo"
+  },
+  {
+   "tipo": "dominio",
+   "arquivo": "packages/dominio-acesso/src/contas/privilegio-minimo.ts e inventario.ts",
+   "pedido": "IDENT do plano aceita só maiúsculas (nomes do banco antigo): aceitar os nomes do banco próprio (minúsculas); conferirContaAplicacao confere SYSDBA: a regra do MariaDB (root) ficou em contas-banco/partida.ts até o domínio absorver"
+  },
+  {
+   "tipo": "plano",
+   "pedido": "plano de privilégio mínimo por módulo sobre o MariaDB (contas por módulo e alcance), injetado em ServicoContasBanco({ plano }); sem ele os desvios respondem 404 'plano ausente'"
+  },
+  {
+   "tipo": "fiacao",
+   "pedido": "no modulo.ts do acesso (lote que registra): FONTE_GESTAO = fonteGestaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao) com núcleo, fonteGestaoMemoria(ctx.trilha) em dev/ci sem núcleo, fonteGestaoIndisponivel() fora; PORTA_CONTAS_BANCO = new PortaContasBancoPropria(ctx.nucleo, cliente, contasSghDoAmbiente(ctx.env)), PortaContasBancoMemoria em dev/ci, portaContasBancoIndisponivel() fora; recusaDasContasDoBanco(env) na partida (main.ts)"
+  },
+  {
+   "tipo": "outros-lotes",
+   "pedido": "FonteGestao.executar recebe ContextoGestao {rede, hospital, usuario (login), correlacao, chaveIdempotencia, estacao?, reautenticadoEm?} no lugar do contexto antigo (traceId, usuarioLegado, idempotencyKey): ajustar rh.controller, recertificacao.controller, usuario-modelo.controller, contas-dormentes-porta e administracao/rede-cpf; tipos renomeados exportados por gestao-fonte.js: UsuarioGestao, PapelUsuario, PapelGestao, ContaDormencia, ContaRecert, CatalogoOperacoes; fonteGestaoLegado saiu; fonteGestaoMemoria(trilha) aceita os dois parâmetros antigos como opcionais; estadoDaReceita/DESLIGADA_DEV_COPIA/NOMES_PAPEL seguem exportados para administracao (02-05) e saem quando ninguém usar"
+  },
+  {
+   "tipo": "desmontagem",
+   "pedido": "app.module.ts importa contas-banco/porta-legado.js (apagado), fonteGestaoLegado (saiu), FONTE_CONFIGURACAO/RAIZES_DESLIGAMENTO no ContasBancoController (saíram) e emNomeDePadrao (o gestao.spec deixou de usar)"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "usuario_perfil",
+   "alteracao": "trocar uq_usuario_perfil_par (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio) por unicidade só entre as não excluídas: coluna gerada ativo_chave TINYINT AS (IF(excluido_em IS NULL, 1, NULL)) STORED e UNIQUE (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, ativo_chave)",
+   "motivo": "hoje a reconcessão no mesmo início de uma concessão revogada reabre a mesma linha (o histórico da revogação fica só na trilha, dados.antes); com a unicidade parcial, a revogada fica como linha própria no histórico"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/gestao.ts",
+   "pedido": "esquemaAlterarPerfil ganha versao (int positivo, opcional) e a tela da concessão (historicoPerfis) devolve versao: a fonte já confere (409 conflito-versao) quando a versão vem"
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/acesso/imutabilidade.ts e contas-banco.ts",
+   "pedido": "identBanco aceita só maiúsculas (/^[A-Z].../): aceitar os nomes do banco próprio (minúsculas); o serviço hoje põe a tabela em maiúsculas na resposta. EXCECOES_DELETE_CLINICO lista tabelas SGH_PEP_* do sistema de origem: substituir pelas exceções do modelo próprio (servem ao catálogo das exclusões)"
+  },
+  {
+   "tipo": "nucleo",
+   "pedido": "catálogo das operações com exclusão física: definirOperacao declarar as tabelas que apaga (ex.: exclui: ['horario_agenda']) ou o registro das operações expor quem usa tx.excluir; hoje usam: agenda/porta-propria (horario_agenda), administracao/fonte-propria (usuario_escopo), acesso/comunicacao-porta-propria (dicionario_usuario), patrimonio e relatorio",
+   "indisponivel": "GET /api/administracao/acesso/contas-banco/imutabilidade responde 409 catalogo-pendente enquanto o CATALOGO_EXCLUSOES não for provido no módulo"
+  },
+  {
+   "tipo": "fiacao",
+   "pedido": "no modulo.ts do acesso: provider { provide: CATALOGO_EXCLUSOES (contas-banco/servico.js), useValue: () => CatalogoExclusoes } montado do catálogo acima; sem ele a imutabilidade fica 409 catalogo-pendente"
+  }
+ ]
+}

@@ -13,7 +13,6 @@ import {
   verificarSchemaAgora,
 } from '../api.js';
 import ImpressoesHomologacao from '../componentes/ImpressoesHomologacao.vue';
-import PlataformaBanco from '../componentes/PlataformaBanco.vue';
 
 const { t } = useI18n();
 const dados = ref<VerificacaoSchemaApi | null>(null);
@@ -99,7 +98,5 @@ onMounted(async () => {
       </li>
     </ul>
     <ImpressoesHomologacao v-if="homologacao" :painel="homologacao" />
-    <!-- M58 (etapa 1): a plataforma do banco do estabelecimento ativo (versão, codificação, funções externas). -->
-    <PlataformaBanco />
   </section>
 </template>

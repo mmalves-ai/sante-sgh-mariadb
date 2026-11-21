@@ -101,9 +101,16 @@ import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/reso
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
-import { PORTA_ONDA0, type PortaOnda0 } from '../config/public-api.js';
 import { contextoOperacao, exigir, idDaRota, pagina, problemaDoCadastro, sessaoDe } from './comum.js';
 import { PORTA_CADASTRO, type PortaCadastro } from './porta.js';
+import {
+  CATALOGO_OPERACOES,
+  type CatalogoOperacoesLiberacao,
+  catalogoOperacoesProprio,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+  operacaoLiberada,
+} from '../config/public-api.js';
 import {
   OPERACOES_PROFISSIONAL_CRITICAS,
   OPERACOES_PROFISSIONAL_TELA,
@@ -192,7 +199,8 @@ export class ProfissionaisController {
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
-    @Optional() @Inject(PORTA_ONDA0) private readonly onda0: PortaOnda0 | null = null,
+    @Optional() @Inject(FONTE_CONFIGURACAO) private readonly configuracao: FonteConfiguracao | null = null,
+    @Optional() @Inject(CATALOGO_OPERACOES) private readonly catalogo: CatalogoOperacoesLiberacao | null = null,
   ) {}
 
   @Get('profissionais')
@@ -307,12 +315,15 @@ export class ProfissionaisController {
       editar || s.pode(PERMISSAO_VINCULO_LOGIN)
         ? (await this.porta.loginsDosRegistros(s.porta, n)).map((x) => ({ ...x }))
         : null;
-    // Revisão da D-PROF-39: o que o executor aceitaria para quem pergunta (a mesma regra da faixa da onda 0).
-    const operacoes = this.onda0
+    // Revisão da D-PROF-39: o que a liberação das operações aceita para quem pergunta (chaves de operação da pessoa, do
+    // grupo e do setor; lote 02-07: sem a porta herdada das telas "só consulta"). Sem a configuração, nulo.
+    const fonte = this.configuracao;
+    const catalogo = this.catalogo ?? catalogoOperacoesProprio();
+    const operacoes = fonte
       ? await Promise.all(
           OPERACOES_PROFISSIONAL_TELA.map(async (operacao) => ({
             operacao,
-            ligada: await this.onda0!.podeEscrever(s.rede, s.hospital, s.login, operacao).catch(() => false),
+            ligada: await operacaoLiberada(fonte, catalogo, s.rede, s.hospital, s.login, operacao).catch(() => false),
           })),
         )
       : null;

@@ -21,15 +21,10 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-/** Abre a tela e espera a situação das telas (a faixa só aparece depois dela: conferir antes passaria sempre). */
+/** Abre a tela de profissionais. */
 async function abrirLista(page: Page): Promise<void> {
-  const telas = page.waitForResponse((r) => r.url().includes('/api/onda0/telas') && r.ok());
   await page.goto('/cadastros/profissionais');
-  const r = await telas;
-  const corpo = (await r.json()) as { telas: { id: string; escritaLiberada: boolean | null }[] };
-  expect(corpo.telas.find((t) => t.id === 'profissionais')?.escritaLiberada).toBe(true);
   await expect(page.getByTestId('tela-profissionais')).toBeVisible();
-  await expect(page.getByTestId('faixa-onda0')).toHaveCount(0);
 }
 
 /** PUT direto pela sessão da página (a "outra aba"): o mesmo cookie, o CSRF e a chave de idempotência. */

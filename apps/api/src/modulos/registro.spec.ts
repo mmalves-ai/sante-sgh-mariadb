@@ -39,19 +39,22 @@ describe('API_MODULOS', () => {
   });
 
   it('nome desconhecido ou ainda não migrado: recusa a partida, com a mensagem', () => {
-    const r = recusaDosModulos({ API_MODULOS: 'sessao,sadt' });
-    expect(r).toMatch(/sadt/);
+    const r = recusaDosModulos({ API_MODULOS: 'sessao,cirurgia' });
+    expect(r).toMatch(/cirurgia/);
     expect(r).toMatch(/ainda não migrado/);
     expect(recusaDosModulos({ API_MODULOS: 'todos,sessao' })).toMatch(/todos/);
   });
 
-  it('"todos": a base e todos os registrados (ondas 1 a 4 da F2.2)', () => {
+  it('"todos": a base e todos os registrados (F2.2, até a onda 2 das ondas finais)', () => {
     expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual([
+      'acesso',
+      'administracao',
       'adt',
       'agenda',
       'assinatura',
       'atendimento',
       'cadastro',
+      'carga',
       'catalogos',
       'config',
       'consultas',
@@ -83,6 +86,7 @@ describe('API_MODULOS', () => {
       'relatorio',
       'repasse',
       'rouparia',
+      'sadt',
       'sessoes',
       'suporte',
       'sus',

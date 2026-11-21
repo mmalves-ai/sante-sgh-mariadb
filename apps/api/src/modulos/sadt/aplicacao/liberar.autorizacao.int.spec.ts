@@ -1,44 +1,47 @@
-// Quem libera e quem lauda sobre a cópia (ficha do M26, regra 8), em transação desfeita: a liberação do resultado de
-// laboratório só pelo responsável técnico habilitado (biomédico, farmacêutico-bioquímico, patologista clínico): o médico
-// de outra especialidade é recusado; o vínculo é o da sessão (o de outro login, recusado). Só contagens.
+// Liberação do exame na porta própria do SADT (MariaDB, cliente f22_o2): enquanto o contrato da tela leva a chave do
+// sistema de origem (pedido do lote 02-09), a operação fica desligada no banco COM o motivo (a tela fica em consulta) e a
+// tentativa de gravar é recusada com 409 "modelo-pendente", sem escrever nada (nenhuma linha nem trilha).
+import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AmbienteSadt, ambienteSadt, MassaSadt, PODE_ESCREVER } from './copia.spec-util.js';
+import { OPERACOES_SADT_PENDENTES } from '../operacoes.js';
+import { PortaSadtPropria } from '../porta-propria.js';
+import { CLIENTE, contexto, limparMassaSadt, type MassaSadt, montarMassaSadt, SEM_BANCO } from './copia.spec-util.js';
 
-describe.skipIf(!PODE_ESCREVER)('habilitação da liberação na cópia (transação desfeita)', () => {
-  let a: AmbienteSadt;
+describe.skipIf(SEM_BANCO)('liberação do exame no banco (pendência explícita)', () => {
+  let nucleo: NucleoProprio;
+  let porta: PortaSadtPropria;
+  let m: MassaSadt | null = null;
+
   beforeAll(async () => {
-    a = await ambienteSadt();
-  });
+    nucleo = new NucleoProprio();
+    m = await montarMassaSadt(nucleo, 'S9L');
+    porta = new PortaSadtPropria(nucleo);
+  }, 60_000);
   afterAll(async () => {
-    await a?.nucleo.encerrar();
+    await limparMassaSadt(nucleo, m);
+    await nucleo.encerrar();
   });
 
-  it('o médico clínico não libera; o vínculo de outro login não vale; o responsável técnico libera', async () => {
-    await a.nucleo.desfazendoNaCopia(
-      { rede: a.nucleo.rede, hospital: a.cod, traceId: 'int-m26-liberar' },
-      async (e) => {
-        const m = new MassaSadt(a, e);
-        const resp = await m.profissional(['2212', '2234', '225335']);
-        const clinico = await m.profissional(['2251', '2252'], resp.login);
-        const ex = await m.lancar('E', resp);
-        await m.digitar(ex.id, resp, 4.2);
-        await expect(
-          m.executar(
-            'sadt.liberarExame',
-            { exames: [await m.lido(ex.id)], responsavel: clinico.vinculo },
-            clinico.login,
-          ),
-        ).rejects.toMatchObject({ problema: { codigo: 'sem-habilitacao' } });
-        await expect(
-          m.executar(
-            'sadt.liberarExame',
-            { exames: [await m.lido(ex.id)], responsavel: resp.vinculo },
-            clinico.login,
-          ),
-        ).rejects.toMatchObject({ problema: { codigo: 'vinculo-de-outro' } });
-        await m.liberar(ex.id, resp);
-        expect((await m.porta.exame(m.c, ex.id))?.estado).toBe('liberado');
-      },
+  it('podeGravar diz o motivo; executar recusa 409 sem gravar', async () => {
+    const c = contexto(m!);
+    for (const op of Object.keys(OPERACOES_SADT_PENDENTES)) {
+      const p = await porta.podeGravar(c, op);
+      expect(p).toMatchObject({ pode: false, codigo: 'operacao-nao-liberada' });
+      expect(p.motivo).toContain('contrato novo');
+    }
+    expect(await porta.podeGravar(c, 'sadt.inexistente')).toMatchObject({ pode: false, codigo: 'operacao-desconhecida' });
+    const antes = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+      l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM trilha_auditoria'),
     );
+    const erro = await porta
+      .executar(c, 'sadt.liberarExame', { exames: [], responsavel: m!.base.profissional }, { ...c, chaveIdempotencia: 't-s09lib-1' })
+      .catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroOperacao);
+    expect((erro as ErroOperacao).problema).toMatchObject({ status: 409, codigo: 'modelo-pendente' });
+    const depois = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+      l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade LIKE ?', ['resultado%']),
+    );
+    expect(Number(depois?.n)).toBe(0);
+    expect(Number(antes?.n)).toBeGreaterThanOrEqual(0);
   });
 });

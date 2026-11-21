@@ -1,7 +1,7 @@
 // Serviço da lista de trabalho DICOM (M47, etapa 3; ficha, seções 4 a 8, regras 8, 9 e 11): monta a tela (os exames de
-// imagem do dia com a modalidade, o item da MWL, a entrega e o status vigente), envia e reenvia pela outbox (só SGH_),
+// imagem do dia com a modalidade, o item da MWL, a entrega e o status vigente), envia e reenvia pela fila de integração,
 // recebe o status do PACS ou do simulador de forma idempotente e entrega ao prontuário e ao portal o link do
-// visualizador. As gravações passam pelo apoio comum (a chave `imagem.worklist` e a SGH_TRILHA na mesma transação); a
+// visualizador. As gravações passam pelo apoio comum (a chave `imagem.worklist` e a trilha na mesma transação); a
 // entrada do PACS, sem sessão, grava a trilha com o usuário do parceiro.
 import {
   CHAVE_LIBERACAO_WORKLIST,
@@ -36,14 +36,13 @@ import {
   uidDoEstudo,
 } from '@sgh/dominio-sadt';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import type { ItemMwlBanco, StatusEstudoBanco } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
 import { ATOS_IMAGEM } from '../pacs-porta-memoria.js';
-import type { ContextoPacs, GravadorPacs, PortaPacs } from '../pacs-porta.js';
+import type { ContextoPacs, GravadorPacs, ItemMwlBanco, PortaPacs, StatusEstudoBanco } from '../pacs-porta.js';
 
 const E = EVENTOS_AUDITAVEIS;
 
@@ -228,7 +227,7 @@ export class ServicoPacs {
       visualizadores.find((v) => v.nome.toUpperCase() === prm.visualizador.toUpperCase())?.nome ??
       prm.visualizador;
     s.req.sghAlvo = {
-      tabelaAlvo: 'SGH_SADT_PACS_MWL',
+      tabelaAlvo: 'item_lista_trabalho_imagem',
       chaveNaturalAlvo: `parte:worklist;n:${filtradas.length}`,
     };
     return {
@@ -325,7 +324,7 @@ export class ServicoPacs {
           E.mwlEnviada.codigo,
           RECURSO,
           (r: { id: number; accession: string }) => ({
-            tabela: 'SGH_SADT_PACS_MWL',
+            tabela: 'item_lista_trabalho_imagem',
             id: String(r.id),
             paciente: x.paciente.id,
             chave: `${r.accession}:${mod.sigla}:1`,
@@ -390,7 +389,7 @@ export class ServicoPacs {
       E.mwlEnviada.codigo,
       RECURSO,
       (r: { id: number; envios: number }) => ({
-        tabela: 'SGH_SADT_PACS_MWL',
+        tabela: 'item_lista_trabalho_imagem',
         id: String(r.id),
         paciente: i.paciente,
         chave: `${i.accession}:${i.modalidade}:${r.envios}`,
@@ -515,7 +514,7 @@ export class ServicoPacs {
           RECURSO,
           (r: GravadoStatus) => {
             const a = alvo(r);
-            return { tabela: 'SGH_SADT_PACS_ESTUDO', id: a.id, paciente: a.paciente, chave: a.chave };
+            return { tabela: 'integracao_mensagem', id: a.id, paciente: a.paciente, chave: a.chave };
           },
           fn,
         ),

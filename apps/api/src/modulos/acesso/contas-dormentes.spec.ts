@@ -3,7 +3,7 @@
 // (sem senha, hash nem token) e avisa o gestor. Porta em memória; dados sintéticos.
 import type { ContaDormenciaLida, ExcecaoDormenciaVigente, ParametrosDormencia } from '@sgh/dominio-acesso';
 import { PADRAO_DORMENCIA } from '@sgh/dominio-acesso';
-import { ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import {
   type AvisoDormencia,
@@ -48,7 +48,7 @@ function montar(o: {
     executar(nome, _h, entrada, ctx) {
       const login = (entrada as { login: string }).login;
       if (login === o.falhar) return Promise.reject(new ErroOperacao(409, 'alterado', 'x', 'y'));
-      executadas.push({ nome, entrada, usuario: ctx.usuarioLegado });
+      executadas.push({ nome, entrada, usuario: ctx.responsavel });
       const c = contas.find((x) => x.login === login);
       if (c) Object.assign(c, { bloqueado: true });
       return Promise.resolve();

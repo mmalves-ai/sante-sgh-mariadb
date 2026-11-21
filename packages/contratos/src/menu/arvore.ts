@@ -3,7 +3,9 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":408,"M":189,"P":57,"N":162};
+// Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
+// estão neste repositório); a contagem do cabeçalho acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":407,"M":189,"P":57,"N":161};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -412,6 +414,5 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.coexistencia-com-o-legado.conferencia-de-gravacao-triggers-generators-sentinelas","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Conferência de gravação"],"titulo":"Conferência de gravação","selo":"N","fase":0,"rota":"/administracao/coexistencia/gravacao","permissao":"config.gravacao.ler"},
   {"id":"administracao.coexistencia-com-o-legado.saude-das-conexoes-e-avisos-de-colisao","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Conexões e avisos de colisão"],"titulo":"Conexões e avisos de colisão","selo":"N","fase":0,"rota":"/administracao/coexistencia/conexoes","permissao":"config.conexao.ler"},
   {"id":"administracao.coexistencia-com-o-legado.painel-da-matriz-de-cobertura","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Painel da matriz de cobertura"],"titulo":"Painel da matriz de cobertura","selo":"N","fase":1,"rota":"/administracao/coexistencia/matriz","permissao":"config.matriz.ler"},
-  {"id":"administracao.coexistencia-com-o-legado.migracao-gradual-dos-usuarios-setores-pessoas-treinamento","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Migração gradual dos usuários"],"titulo":"Migração gradual dos usuários","selo":"N","fase":4,"rota":"/administracao/coexistencia/migracao","permissao":"config.coexistencia.ler"},
   {"id":"administracao.saude-do-sistema-observabilidade","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Saúde do sistema"],"titulo":"Saúde do sistema","selo":"N","fase":1,"rota":"/administracao/saude","permissao":"sistema.saude.ler"},
 ];

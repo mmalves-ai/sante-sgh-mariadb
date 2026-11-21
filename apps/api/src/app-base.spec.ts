@@ -57,7 +57,7 @@ describe('boot mínimo', () => {
   });
 
   it('API_MODULOS com módulo não migrado: a montagem é recusada com a mensagem', async () => {
-    const ruim = { ...env, API_MODULOS: 'sessao,sadt' };
+    const ruim = { ...env, API_MODULOS: 'sessao,cirurgia' };
     await expect(criarApp(lerConfiguracao(ruim), null, ruim)).rejects.toThrow(/faturamento/);
   });
 });

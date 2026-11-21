@@ -3,7 +3,7 @@
 //   POST /api/acesso/gestao/rh/tarefas/resolver   {tipo, vinculo, ref, situacao, login|null, motivo, senha}
 //   GET  /api/acesso/gestao/rh/perfis-cargo       mapa cargo -> perfil sugerido (vigente e histórico)
 //   POST /api/acesso/gestao/rh/perfis-cargo       {cargo, perfil|null, motivo, senha} (linha nova; null retira)
-// As tarefas são da regra do domínio (tarefas-rh.ts) sobre o que a fonte lê; a resolução grava a SGH_ 1208 com a
+// As tarefas são da regra do domínio (tarefas-rh.ts) sobre o que a fonte lê; a resolução grava pela fonte da gestão com a
 // trilha na mesma transação, revalidando a regra sobre os dados relidos NESSA transação. "Suspender acesso" feita tem
 // efeito na mesma requisição: bloqueio pelo executor (acesso.bloquearUsuario; as sessões do usuário caem), conferido
 // antes de gravar (receita ligada, último gestor de acessos); se o efeito ainda falhar, a resposta diz que a resolução
@@ -30,13 +30,7 @@ import {
   validarResolucaoRh,
 } from '@sgh/dominio-acesso';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import {
-  type ContextoOperacao,
-  type DadosRhLidos,
-  ErroOperacao,
-  perfilPorCargoVigente,
-  type TrilhaGestao,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -49,6 +43,8 @@ import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/configurac
 import { SERVICO_SESSAO } from './acesso.controller.js';
 import { FONTE_GESTAO, type FonteGestao } from './gestao-fonte.js';
 import { PERFIS_DA_TELA } from './gestao.controller.js';
+import { perfilPorCargoVigente } from './perfil-cargo.js';
+import type { DadosRhLidos } from './tipos-gestao-acesso.js';
 import { exigirGestorRestante } from './ultimo-gestor.js';
 
 export const OPERACAO_BLOQUEIO_RH = 'acesso.bloquearUsuario';
@@ -58,6 +54,11 @@ export const PARAMETROS_RH = {
 } as const;
 /** Resoluções mais novas devolvidas com a lista (as demais ficam consultáveis no banco). */
 export const RESOLVIDAS_NA_LISTA = 100;
+
+/** A linha de trilha que a fonte da gestão grava com a resolução (o formato é o da fonte). */
+type TrilhaGestao = Parameters<FonteGestao['resolverTarefaRh']>[3];
+/** O contexto das operações da conta pela fonte da gestão. */
+type ContextoGestao = Parameters<FonteGestao['executar']>[3];
 const FUSO = 'America/Sao_Paulo';
 
 const iso = (d: Date | null) => d?.toISOString() ?? null;
@@ -252,7 +253,7 @@ export class RhAcessoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @AuditadoNoHandler(
-    'SGH_ACESSO_RH_TAREFA e SGH_TRILHA na transação SGH_; suspender feita: executor acesso.bloquearUsuario (TBCABTRILHA)',
+    'a resolução e a trilha na mesma transação da fonte da gestão; suspender feita: bloqueio pelo executor do núcleo',
   )
   async resolver(
     @Body() corpo: unknown,
@@ -284,7 +285,7 @@ export class RhAcessoController {
           'Este usuário não existe: crie o acesso na ficha nova e informe o login criado.',
           ['login'],
         );
-      // O login gravado na resolução é o do cadastro (a leitura dos vínculos o liga ao TBUSERS por igualdade).
+      // O login gravado na resolução é o do cadastro (a leitura dos vínculos o liga à conta por igualdade).
       pedido = { ...pedido, login: u.login.trim() };
       const outro = loginDeOutroVinculo(dados, pedido);
       if (outro) this.recusa(outro.codigo, outro.mensagem, outro.campos);
@@ -321,12 +322,12 @@ export class RhAcessoController {
     let bloqueado = false;
     if (suspender && alvo && !jaBloqueado) {
       try {
-        const ctx: ContextoOperacao = {
+        const ctx: ContextoGestao = {
           rede,
           hospital,
-          traceId: correlacaoDaRequisicao(req, 'acesso-rh'),
-          usuarioLegado: operador,
-          idempotencyKey: `rh-${pedido.vinculo}-${pedido.ref}`.slice(0, 64),
+          usuario: operador,
+          correlacao: correlacaoDaRequisicao(req, 'acesso-rh').slice(0, 64),
+          chaveIdempotencia: `rh-${pedido.vinculo}-${pedido.ref}`.slice(0, 80),
           estacao: estacaoDaRequisicao(req).slice(0, 80),
           reautenticadoEm,
         };
@@ -384,12 +385,12 @@ export class RhAcessoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @AuditadoNoHandler(
-    'SGH_ACESSO_RH_PERFIL_CARGO e SGH_TRILHA na mesma transação SGH_ (memória: registrador da API)',
+    'o perfil do cargo e a trilha na mesma transação da fonte da gestão (memória: registrador da API)',
   )
   async definirPerfilCargo(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ id: string; anterior: string | null; perfil: string | null; destino: 'legado' | 'memoria' }> {
+  ): Promise<{ id: string; anterior: string | null; perfil: string | null; destino: 'banco' | 'memoria' }> {
     const p = this.analisar(esquemaDefinirPerfilCargoRh, corpo);
     const { rede, hospital, login } = this.sessao(req);
     const cargo = chaveCargoRh(p.cargo);

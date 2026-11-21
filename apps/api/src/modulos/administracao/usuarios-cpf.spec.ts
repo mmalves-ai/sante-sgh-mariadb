@@ -3,12 +3,14 @@
 // ficha, e a trilha da consulta diz qual usuário foi lido e se o CPF foi mostrado (sem o valor). O controlador direto,
 // com uma fonte falsa (nada conecta a banco); o CPF é sintético, montado em tempo de execução.
 import { HEADERS_METADATA } from '@nestjs/common/constants.js';
-import type { FichaUsuarioLegado } from '@sgh/legado';
 import { describe, expect, it, vi } from 'vitest';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ComoResolvido, ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { FonteAdministracao } from './fonte.js';
+
+/** A ficha que a fonte da administração devolve (o tipo é o da fonte, qualquer que seja o nome dele). */
+type FichaDaFonte = NonNullable<Awaited<ReturnType<FonteAdministracao['fichaUsuario']>>>;
 import { UsuariosController } from './usuarios.controller.js';
 
 const CPF = `9${'0'.repeat(8)}17`;
@@ -54,7 +56,7 @@ function montar(cpfNoBanco: string | null = CPF) {
       login: string,
       _auditor: boolean,
       opcoes?: { cpf?: boolean },
-    ): Promise<FichaUsuarioLegado> => ({
+    ): Promise<FichaDaFonte> => ({
       login,
       id: 77,
       nome: 'Usuario Sintetico',
@@ -82,7 +84,7 @@ function montar(cpfNoBanco: string | null = CPF) {
     setores: vi.fn(async () => []),
     receita: vi.fn(() => ({ ligada: true, motivo: null })),
   } as unknown as FonteAdministracao;
-  const ctl = new UsuariosController(fonte, null, {} as ResolvedorSessao, null, null);
+  const ctl = new UsuariosController(fonte, null, {} as ResolvedorSessao, null);
   return { ctl, fichaUsuario };
 }
 

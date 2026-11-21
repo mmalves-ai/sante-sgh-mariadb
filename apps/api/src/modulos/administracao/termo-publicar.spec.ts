@@ -7,14 +7,18 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { modulo } from './modulo.js';
 
 const A = '/api/administracao/acesso';
 let chave = 0;
 
 async function subir(extra: Record<string, string>) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', ...extra };
+  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'administracao', ...extra };
   const trilha = new RegistradorTrilhaMemoria();
-  const app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  const app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { administracao: async () => ({ modulo: (ctx) => modulo(ctx) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return { app, trilha };

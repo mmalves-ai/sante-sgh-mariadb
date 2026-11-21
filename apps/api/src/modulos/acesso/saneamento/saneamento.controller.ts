@@ -1,9 +1,9 @@
 // Rotas do M59-F4 (ficha do M59, seção 7: "Saneamento dos grupos", /administracao/acesso/grupos/saneamento): o painel
 // dos grupos de acesso amplo, os usuários de cada um (com a sugestão do destino pelo uso), o simulador do antes e do
-// depois, o plano (decidir, aprovar pela área, descartar) e a aplicação pelas operações do M10 no executor do M04
-// (acesso.trocarGrupoUsuario, acesso.bloquearUsuario e, na dissolução do grupo vazio, acesso.revogarOpcoesGrupo em
-// lotes). Leitura com acesso.grupo.ler (M10); as ações com acesso.grupo.sanear. Toda gravação do plano vai à
-// SGH_TRILHA na mesma transação; aplicar e dissolver exigem a senha (reautenticação, SBIS-07) e a Idempotency-Key.
+// depois, o plano (decidir, aprovar pela área, descartar) e a aplicação pelas operações do executor do núcleo (troca de
+// perfil, bloqueio e, na dissolução do perfil vazio, a retirada das ações em lotes). Leitura com acesso.grupo.ler; as
+// ações com acesso.grupo.sanear. Toda gravação do plano vai à trilha_auditoria na mesma transação; aplicar e dissolver
+// exigem a senha (reautenticação, SBIS-07) e a Idempotency-Key.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   esquemaAprovarItemSaneamento,
@@ -20,7 +20,7 @@ import {
   type SimulacaoSaneamento,
   type UsuariosSaneamento,
 } from '@sgh/contratos';
-import { ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../../autorizacao/estacao.js';
@@ -166,7 +166,7 @@ export class SaneamentoController {
   @Post('plano')
   @HttpCode(201)
   @Permissao(PERMISSOES_M59_F4_CODIGOS.grupoSanear)
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação da SGH_ACESSO_SANEAMENTO (acesso.saneamento.incluido)')
+  @AuditadoNoHandler('trilha_auditoria na mesma transação do plano (acesso.saneamento.incluido)')
   incluir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ItemSaneamento> {
     const n = this.analisar(esquemaNovoItemSaneamento, corpo);
     return this.servico()
@@ -177,7 +177,7 @@ export class SaneamentoController {
   @Post('plano/:id/aprovar')
   @HttpCode(200)
   @Permissao(PERMISSOES_M59_F4_CODIGOS.grupoSanear)
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação da SGH_ACESSO_SANEAMENTO (acesso.saneamento.aprovado)')
+  @AuditadoNoHandler('trilha_auditoria na mesma transação do plano (acesso.saneamento.aprovado)')
   async aprovar(
     @Param('id') bruto: string,
     @Body() corpo: unknown,
@@ -195,7 +195,7 @@ export class SaneamentoController {
   @Post('plano/:id/descartar')
   @HttpCode(200)
   @Permissao(PERMISSOES_M59_F4_CODIGOS.grupoSanear)
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação da SGH_ACESSO_SANEAMENTO (acesso.saneamento.descartado)')
+  @AuditadoNoHandler('trilha_auditoria na mesma transação do plano (acesso.saneamento.descartado)')
   descartar(
     @Param('id') bruto: string,
     @Body() corpo: unknown,
@@ -212,7 +212,7 @@ export class SaneamentoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_M59_F4_CODIGOS.grupoSanear)
   @AuditadoNoHandler(
-    'executor: TBCABTRILHA como o Delphi e SGH_TRILHA na mesma transação da receita; o plano na SGH_TRILHA (acesso.saneamento.aplicado)',
+    'executor: trilha_auditoria na mesma transação da operação; o plano também (acesso.saneamento.aplicado)',
   )
   async aplicar(
     @Param('id') bruto: string,
@@ -224,7 +224,7 @@ export class SaneamentoController {
     const chave = this.chave(req);
     const reautenticadoEm = await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     return this.servico()
-      .aplicar(this.ator(req), id, { idempotencyKey: chave, reautenticadoEm })
+      .aplicar(this.ator(req), id, { chaveIdempotencia: chave, reautenticadoEm })
       .catch((e: unknown) => this.problema(e));
   }
 
@@ -232,7 +232,7 @@ export class SaneamentoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_M59_F4_CODIGOS.grupoSanear)
   @AuditadoNoHandler(
-    'executor: TBCABTRILHA (tipo 25) e SGH_TRILHA na mesma transação de cada lote; o plano na SGH_TRILHA (acesso.saneamento.aplicado)',
+    'executor: trilha_auditoria na mesma transação de cada lote; o plano também (acesso.saneamento.aplicado)',
   )
   async dissolver(
     @Param('grupo') bruto: string,
@@ -244,7 +244,7 @@ export class SaneamentoController {
     const chave = this.chave(req);
     const reautenticadoEm = await reautenticar(this.sessoes, this.resolvedor, req, p.senha);
     return this.servico()
-      .dissolver(this.ator(req), grupo, p.dados.motivo, { idempotencyKey: chave, reautenticadoEm })
+      .dissolver(this.ator(req), grupo, p.dados.motivo, { chaveIdempotencia: chave, reautenticadoEm })
       .catch((e: unknown) => this.problema(e));
   }
 }

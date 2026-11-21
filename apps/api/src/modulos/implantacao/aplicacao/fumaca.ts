@@ -2,9 +2,9 @@
 // pós-implantação. Lê o relógio do banco, o Valkey e as filas, a impressão da estrutura do banco do cliente contra a
 // homologada e as chaves de liberação do estabelecimento, e devolve os itens com a situação (regras puras em
 // @sgh/dominio-config). Só leitura; só códigos e contagens.
-// Melhoria: a impressão da estrutura é lida do próprio banco do cliente a cada fumaça (tabelas e colunas), e não da
-// verificação de convivência com o sistema antigo; a divergência não bloqueia escrita (o modelo próprio não tem
-// tabelas espelho), só falha a fumaça.
+// Melhoria: a impressão da estrutura é lida do próprio banco do cliente a cada fumaça (tabelas e colunas); a
+// divergência só falha a fumaça e pede as atualizações do banco que faltam (lote 02-07: sem bloqueio de escrita por
+// tabela, que era herança de convivência e saiu do contrato).
 import {
   definicaoParametro,
   esquemaFumacaServidor,
@@ -100,8 +100,6 @@ export function impressaoDaEstrutura(
       resumo: null,
       resumoHomologado: curto(homologada),
       verificadaEm: null,
-      tabelasBloqueadas: 0,
-      bloqueiaTudo: false,
     };
   const h = homologada?.trim().toLowerCase() || null;
   return {
@@ -109,8 +107,6 @@ export function impressaoDaEstrutura(
     resumo: curto(atual.resumo),
     resumoHomologado: curto(h),
     verificadaEm,
-    tabelasBloqueadas: 0,
-    bloqueiaTudo: false,
   };
 }
 

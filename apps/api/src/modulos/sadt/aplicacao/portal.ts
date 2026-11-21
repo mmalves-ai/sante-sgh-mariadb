@@ -4,7 +4,10 @@
 // com limite de tentativas por credencial (bloqueio temporário, parâmetros do estabelecimento) e de taxa por origem. A
 // sessão do portal é própria (cookie HttpOnly e CSRF por token duplo, como a da plataforma), expira sozinha e nunca vale
 // nas telas internas. Só aparecem exames liberados de setores publicados; o médico vê só os pedidos em que é o
-// solicitante (DP-43). Toda visualização e todo download gravam data e IP como o portal do outro sistema grava.
+// solicitante (DP-43). Toda visualização e todo download gravam data e IP.
+// Melhoria: o portal opera no banco do cliente pelo contexto do núcleo (cliente e estabelecimento pelo código do
+// endereço, sem usuário interno: o acesso é o do portal), e cada tentativa, entrada e leitura vai à trilha_auditoria
+// do cliente com a tabela do modelo (acesso_resultado_portal ou conta_portal_profissional_externo), o IP e o paciente.
 import { createHash, randomBytes } from 'node:crypto';
 import {
   type AutocadastroMedicoEntrada,
@@ -28,16 +31,24 @@ import {
   verificarTotp,
 } from '@sgh/dominio-acesso';
 import { bloqueada, dentroDaTaxa, depoisDaTentativa, ipParaGravar } from '@sgh/dominio-sadt';
-import { type AcessoPortalLido, ErroOperacao, type LinhaTrilha } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../../problema.filter.js';
+import { contextoDoEstabelecimento } from '../../cadastro/contexto-nucleo.js';
 import type { FonteConfiguracao } from '../../config/public-api.js';
-import type { PortaSadt } from '../porta.js';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
+import type { ContextoSadt, PortaSadt } from '../porta.js';
 import { ligadaNoEstabelecimento, parametroDoEstabelecimento } from './liberacao.js';
-import { TABELA_PORTAL } from './servico.js';
+import { TABELA_CONTA_MEDICO_PORTAL, TABELA_PORTAL } from './servico.js';
 
 export const USUARIO_PORTAL = 'SGH.PORTAL';
 const TAXA_POR_MINUTO = 10;
 const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
+
+/** Contexto do portal: o do núcleo, com o código da rede e do estabelecimento (parâmetros e imagens do laudo). */
+export type ContextoPortal = ContextoSadt & { readonly rede: string; readonly hospital: string };
+
+/** O acesso ao portal como a porta o lê (protocolo do paciente ou conta do médico externo). */
+export type AcessoPortal = NonNullable<Awaited<ReturnType<PortaSadt['acessoPorId']>>>;
 
 interface SessaoInterna {
   readonly id: string;
@@ -83,13 +94,13 @@ export class ServicoPortal {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  private c(hospital: string) {
-    return { rede: this.rede, hospital };
+  /** Contexto do núcleo do portal: o estabelecimento do endereço, sem usuário interno (o acesso é o do portal). */
+  private c(hospital: string, correlacao = `portal-${randomBytes(6).toString('hex')}`): ContextoPortal {
+    return { ...contextoDoEstabelecimento(hospital), usuario: null, correlacao, rede: this.rede, hospital };
   }
 
   /** M47 (etapa 3): quem dá o link das imagens do laudo aberto (a lista de trabalho DICOM); sem ele, sem link. */
-  imagens: ((c: { rede: string; hospital: string }, exame: number) => Promise<ImagemDoLaudo | null>) | null =
-    null;
+  imagens: ((c: ContextoPortal, exame: number) => Promise<ImagemDoLaudo | null>) | null = null;
 
   private async exigirLigado(hospital: string): Promise<void> {
     const memoria = this.porta.destino === 'memoria' && !this.configuracao;
@@ -134,28 +145,31 @@ export class ServicoPortal {
     resultado: 'sucesso' | 'falha',
     ip: string,
     paciente: number | null,
-  ): LinhaTrilha {
+    perfil: 'paciente' | 'medicoExterno' = paciente !== null ? 'paciente' : 'medicoExterno',
+  ): TrilhaDaGravacao {
+    const c = this.c(hospital);
     return {
-      rede: this.rede,
-      hospital,
-      usuario: USUARIO_PORTAL,
-      evento: EVENTOS_AUDITAVEIS.sadtPortalAcesso.codigo,
-      recurso: CHAVES_SADT.portal,
-      operacao: 'acesso ao portal de resultados',
-      tabelaAlvo: TABELA_PORTAL,
-      idAlvo: String(acesso),
-      chaveNaturalAlvo: null,
-      resultado,
-      estacao: ipParaGravar(ip).slice(0, 80),
-      correlacao: `portal-${randomBytes(6).toString('hex')}`,
-      idPaciente: paciente,
+      estabelecimento: c.estabelecimento,
+      usuario: null,
+      acao: 'operacao',
+      entidade: perfil === 'paciente' ? TABELA_PORTAL : TABELA_CONTA_MEDICO_PORTAL,
+      entidadeId: acesso > 0 ? acesso : null,
+      dadosDepois: {
+        evento: EVENTOS_AUDITAVEIS.sadtPortalAcesso.codigo,
+        recurso: CHAVES_SADT.portal,
+        operacao: 'acesso ao portal de resultados',
+        resultado,
+        ...(paciente ? { paciente } : {}),
+      },
+      enderecoIp: ipParaGravar(ip).slice(0, 45),
+      correlacao: c.correlacao,
     };
   }
 
   /** O resultado da tentativa: as erradas e o bloqueio (os parâmetros do estabelecimento) e a trilha. */
   private async tentativa(
     hospital: string,
-    a: AcessoPortalLido,
+    a: AcessoPortal,
     acertou: boolean,
     ip: string,
   ): Promise<void> {
@@ -179,7 +193,7 @@ export class ServicoPortal {
     );
     await this.porta.gravarSgh(
       this.c(hospital),
-      this.trilha(hospital, a.id, acertou ? 'sucesso' : 'falha', ip, a.paciente),
+      this.trilha(hospital, a.id, acertou ? 'sucesso' : 'falha', ip, a.paciente, a.perfil),
       (g) =>
         g.registrarTentativaPortal({
           id: a.id,
@@ -190,7 +204,7 @@ export class ServicoPortal {
     );
   }
 
-  private exigirNaoBloqueada(a: AcessoPortalLido): void {
+  private exigirNaoBloqueada(a: AcessoPortal): void {
     const agora = this.agora().toISOString();
     if (
       bloqueada(
@@ -298,7 +312,7 @@ export class ServicoPortal {
   }
 
   /** W0-10: a senha e o código atuais da conta conferidos de novo (quem troca a senha ou o e-mail é o titular). */
-  async credenciaisConferem(a: AcessoPortalLido, senha: string, codigo: string): Promise<boolean> {
+  async credenciaisConferem(a: AcessoPortal, senha: string, codigo: string): Promise<boolean> {
     const senhaOk = await conferirSenha(senha, a.senhaResumo);
     return senhaOk && this.segundoFatorConfere(a.segundoFator, codigo);
   }
@@ -430,22 +444,21 @@ export class ServicoPortal {
           'sadt.registrarVisualizacaoPortal',
           { liberacao, ip: ipParaGravar(ip), acao },
           {
-            rede: this.rede,
-            hospital: s.hospital,
-            traceId: `portal-${liberacao}`,
-            usuarioLegado: USUARIO_PORTAL,
-            idempotencyKey: `portal-${s.acesso}-${liberacao}-${acao}`,
+            ...contextoDoEstabelecimento(s.hospital),
+            usuario: null,
+            correlacao: `portal-${liberacao}`,
+            chaveIdempotencia: `portal-${s.acesso}-${liberacao}-${acao}`,
           },
         )
         .catch((e: unknown) => {
-          // Já registrada por outra aba (ou pelo portal do outro sistema): a leitura segue.
+          // Já registrada por outra aba: a leitura segue.
           if (e instanceof ErroOperacao && e.problema.codigo === 'ja-visto') return null;
           throw e;
         });
     await this.porta
       .gravarSgh(c, this.trilha(s.hospital, s.acesso, 'sucesso', ip, l.paciente), (g) =>
         g.registrarLeitura({
-          idSilanexa: l.laudo.exame,
+          exameItem: l.laudo.exame,
           origem: 'portal',
           usuario: `${USUARIO_PORTAL}.${s.acesso}`.slice(0, 31),
         }),
@@ -461,7 +474,7 @@ export class ServicoPortal {
       texto: l.texto,
       // M47 (etapa 3): o link das imagens do exame (estudo concluído no PACS; o laudo aberto já está liberado).
       imagem: this.imagens
-        ? await this.imagens({ rede: this.rede, hospital: s.hospital }, l.laudo.exame)
+        ? await this.imagens(c, l.laudo.exame)
         : null,
     };
   }

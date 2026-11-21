@@ -1,0 +1,89 @@
+{
+  "lote": "02-07",
+  "onda": 2,
+  "tipo": "remocao (ADR 0003, itens 5 e 9)",
+  "registrar": [],
+  "tirar_do_registro": [
+    "nenhuma entrada 'coexistencia' existe em REGISTRO_MODULOS; NÃO registrar 'coexistencia' (o 02-08 marca 'registrar: coexistencia', mas o módulo foi apagado inteiro)"
+  ],
+  "fecho_tsconfig": {
+    "remover_de_apps/api/tsconfig.migrado.json": [
+      "src/modulos/config/onda0.controller.ts",
+      "src/modulos/config/onda0.ts",
+      "src/modulos/config/onda0.spec.ts",
+      "src/modulos/config/guarda-chave-de-tela.ts"
+    ],
+    "acrescentar_em_apps/api/tsconfig.migrado.json": [
+      "src/modulos/config/liberacao-operacao.ts",
+      "src/modulos/config/liberacao-operacao.spec.ts",
+      "src/modulos/implantacao/sonda.ts",
+      "src/modulos/implantacao/sonda.controller.ts",
+      "src/modulos/implantacao/sonda.spec.ts",
+      "src/modulos/implantacao/sonda.int.spec.ts"
+    ]
+  },
+  "pedidos": [
+    "LOTE 02-08 (resto do módulo coexistencia): os 12 arquivos da lista do 02-08 (porta*, public-api, aplicacao/registro|retrocompatibilidade|servico, specs) foram APAGADOS junto com a pasta apps/api/src/modulos/coexistencia (a tarefa do 02-07 mandou apagar o módulo inteiro). O 02-08 não deve recriá-los; o conferidor dele dirá 'nenhum arquivo do lote existe', como o deste.",
+    "conferir-lote-f22.sh: para lote de remoção, 'nenhum arquivo do lote existe' é o estado certo. Pedido: tratar a lista toda apagada como ok quando a fatia (ou um marcador '# remocao: sim' na .lista) disser remoção. Provas equivalentes do 02-07 estão em saidas/02-07.md.",
+    "app.module.ts (desmontado na última onda): tirar os imports de ./modulos/coexistencia/public-api.js, GuardaChaveDeTela (./modulos/config/guarda-chave-de-tela.js), Onda0Controller/PORTA_ONDA0/portaOnda0Legado/portaOnda0Memoria e as opções onda0/coexistencia (linhas ~18, 158-162, 465, 1124, 1221, 1513-1521, 2094, 3068, 3287, 3305, 3331, 3825).",
+    "LOTES 02-06 (administracao/usuarios.controller.ts) e 02-05 (administracao/login-painel.ts): importam RAIZ_FIM_COEXISTENCIA e lerRegistroFim de ../coexistencia/public-api.js (apagado). Tirar a injeção raizFim e a leitura do registro de fim (os logins de painel vêm só do banco). administracao/sbis/porta-propria.int.spec.ts (novo, pasta do 02-06) usa CONCESSOES_COEXISTENCIA (texto novo na catraca sem-coexistencia): as concessões da coexistência saem do produto; a tela delas já foi apagada no web.",
+    "LOTE 03-08 (pessoas): pessoas.controller.ts injeta RAIZ_FIM_COEXISTENCIA de ../coexistencia/public-api.js (apagado): tirar.",
+    "LOTE 02-02 (acesso/contas-banco): contas-banco.controller.ts e servico.ts usam RAIZES_DESLIGAMENTO e lerRegistroDesligamento de ../../coexistencia/public-api.js (apagado): tirar o registro de desligamento (era o desligamento do sistema de origem).",
+    "Specs de outras unidades que usavam o módulo apagado: suprimentos/onda3.spec.ts (lote 03-14) e tiss/onda4.spec.ts (lote 03-16) (ServicoMigracao, PortaCoexistenciaMemoria): são specs das ondas de convivência; apagar.",
+    "LOTES 02-10 (sadt/aplicacao/servico.ts) e 02-09 (sadt/porta-propria.ts, novo): aplicacao/servico.ts (comentário 'gravação no outro sistema') e porta-propria.ts ganharam texto de convivência durante a onda; a catraca tools/obra/sem-coexistencia.sh acusa porta-propria.ts. Reescrever o comentário sem citar o outro sistema.",
+    "Onda 5 (ADR 0003 item 9; linha de base em tools/obra/sem-coexistencia.pendentes, 443 arquivos/1366 ocorrências): apagar packages/contratos/src/{coexistencia,onda0,onda1,onda2,config/coexistencia.ts,parametros/coexistencia-registro.ts,permissoes/desligamento.ts}, packages/dominio-config/src/{coexistencia,fim-coexistencia,onda0,onda1,onda2,onda3,desligamento}, apps/worker/src/coexistencia-retrato*, packages/testes/src/massa/coexistencia-outro-sistema.ts, CHAVES_TELA_ONDA_0/PERMISSOES_SOB_CHAVE_DE_TELA (contratos) e a semente delas em apps/api/src/modulos/config/configuracao-fonte.ts, o critério de ligar setor (config/criterio-ligar.ts, CRITERIO_LIGAR_SETOR), a proposta 'onda0' da prontidão (contratos/prontidao, web ProntidaoTela, e2e m35), as rotas /administracao/coexistencia/* do módulo config (renomear para /administracao/banco/*: estabelecimentos, schema, assinaturas, gravacao, conexoes, matriz, prontidao, saude) e o menu correspondente, e os textos 'no outro sistema'/'sistema antigo' dos demais módulos. Fechar a F2.2 com tools/obra/sem-coexistencia.sh --estrito.",
+    "Menu: packages/contratos/src/menu/arvore.ts é gerado, mas o gerador (tools/matriz) e a fonte (planejamento/) não estão no repositório; o item 'Migração gradual dos usuários' saiu à mão (contagem 407/N 161). Quando o gerador vier, tirar o item na fonte.",
+    "Esteira: tools/verificadores/src/verificar.ts ganhou o portão 'sem-coexistencia' (bash tools/obra/sem-coexistencia.sh).",
+    "SONDA azul/verde (achado alto, corrigido): GET /api/sistema/sonda refeito fora da convivência em apps/api/src/modulos/implantacao/sonda.ts (PortaSonda: própria com SELECT 1 e os códigos de estabelecimento ativo do banco do cliente; memória só em dev/ci; indisponível = falha fechada) e sonda.controller.ts (saude, versao, login-sonda com o usuário técnico sem permissão de paciente, painel-leitos, recusa-negocio por operacaoLiberada(fonte, catalogo, rede, hospital, {pessoa}, 'cadastro.cadastrarPaciente')). Testes: sonda.spec.ts (6) e sonda.int.spec.ts (3, cliente f22_o2) verdes; tsc do fecho + estes arquivos sem erro novo.",
+    "ANTES da onda 5 apagar contratos/onda0 e dominio-config/onda0: mover SONDAS_IMPLANTACAO, SondaImplantacao, esquemaResultadoSonda, ResultadoSonda, esquemaSondasImplantacao e SondasImplantacao de packages/contratos/src/onda0/onda0.ts para packages/contratos/src/implantacao/sondas.ts (exportado no index), e implantacaoPronta de packages/dominio-config/src/onda0/onda0.ts para packages/dominio-config/src/implantacao/. Os imports por '@sgh/contratos'/'@sgh/dominio-config' do sonda.controller.ts não mudam.",
+    "E2E (achado médio, reavaliado): apagar m40/m41/m42/m43/m58 inteiros tiraria testes do produto (contingência do posto, estoque, chaves da dispensação, mês fechado, faturamento/TISS, painel e totem por token, fachada da API de integração). Feito o corte cirúrgico só do que abre rota apagada: apps/web/e2e/m40.spec.ts (painel da onda 2 e coexistência livre), m41.spec.ts (aba Onda 3), m42.spec.ts (aba Onda 4), m43.spec.ts (aba do fim da coexistência e revisão dos sem grupo), m58.spec.ts (@M58.1, @M58.2, @M58.3 e @M58.5; fica o @M58.4 da fachada), m60-1.spec.ts (só o cartão 'Plataforma do banco'; a rota /administracao/coexistencia/schema segue até a renomeação da onda 5), m39.spec.ts (painel de migração), w0-09.spec.ts (teste de coexistência e helpers do ciclo); apagado m59-6.spec.ts (retrocompatibilidade, rota apagada). eslint e tsc do apps/web sem erro nesses arquivos. Na onda 5, junto com os textos 'outro sistema': os testes que sobram de m39/m41/m42 ainda conferem textos de convivência ('pelo outro sistema', 'feita por fora') e devem ser reescritos com a renomeação.",
+    "CHAMADO DE SUPORTE (achado médio, corrigido no pedido): o contrato do chamado está em packages/contratos/src/coexistencia/migracao.ts (SEVERIDADES_CHAMADO, SITUACOES_CHAMADO, NIVEIS_SUPORTE, AVISO_TEXTO_CHAMADO, esquemaAbrirChamado, esquemaTriarChamado, esquemaChamadoLido), não em suporte/suporte.ts. A onda 5 NÃO pode apagá-lo com a pasta coexistencia: mover para packages/contratos/src/suporte/chamado.ts tirando SISTEMAS_CHAMADO/'sistema' e o textoCp1252 (o banco é utf8mb4). packages/dominio-config/src/chamado/prazos.ts (prazosDoChamado, somarDiasUteis, chamadoVencido, proximaAtualizacaoS1, conferirTriagem) fica no produto, à espera da porta própria do chamado (módulo suporte), e não deve ser apagado; trocar o comentário 'contorno imediato pelo outro sistema' e 'SGH_CFG_PARAMETRO/SGH_CK_CHAMADO_S1' pelos nomes do DDL novo."
+  ],
+  "ddl": [
+    {
+      "tabelas": "chamado_suporte e chamado_suporte_triagem (área ADM; convenções do ADR 0002: snake_case, PK BIGINT, FK nomeadas, CHECK, utf8mb4, criado_em/atualizado_em/versao/excluido_em)",
+      "chamado_suporte": [
+        "id BIGINT UNSIGNED PK AUTO_INCREMENT",
+        "estabelecimento_id BIGINT UNSIGNED NOT NULL FK estabelecimento",
+        "numero BIGINT NOT NULL (proximoNumero por estabelecimento), UNIQUE (estabelecimento_id, numero)",
+        "aberto_por_usuario_id BIGINT UNSIGNED NOT NULL FK usuario",
+        "severidade VARCHAR(2) NOT NULL CHECK IN ('S1','S2','S3','S4')",
+        "situacao VARCHAR(20) NOT NULL DEFAULT 'aberto' CHECK IN ('aberto','em-atendimento','contornado','resolvido','cancelado')",
+        "nivel VARCHAR(2) NOT NULL DEFAULT 'N0' CHECK IN ('N0','N1','N2','N3')",
+        "tela VARCHAR(200) NULL, versao_aplicacao VARCHAR(40) NULL, correlacao VARCHAR(64) NULL (traceId), setor_id BIGINT UNSIGNED NULL FK setor",
+        "descricao TEXT NOT NULL CHECK (CHAR_LENGTH(descricao) BETWEEN 10 AND 2000)",
+        "envolve_dado_pessoal BOOLEAN NOT NULL DEFAULT FALSE, encarregado_avisado_em DATETIME(3) NULL",
+        "ocorrido_em DATETIME(3) NOT NULL, aberto_em DATETIME(3) NOT NULL",
+        "prazo_resposta_em DATETIME(3) NOT NULL e prazo_solucao_em DATETIME(3) NOT NULL (calculados no domínio por prazosDoChamado, com dia útil, feriados e fuso do estabelecimento; gravados na abertura e recalculados na troca de severidade)",
+        "respondido_em DATETIME(3) NULL (primeira triagem; chamadoVencido usa resposta antes dela e solução depois)",
+        "responsavel_usuario_id BIGINT UNSIGNED NULL FK usuario (quem atende)",
+        "comandante_usuario_id BIGINT UNSIGNED NULL FK usuario; CHECK (severidade <> 'S1' OR situacao = 'aberto' OR comandante_usuario_id IS NOT NULL) — a regra fica em conferirTriagem; o CHECK é a restrição de integridade",
+        "contorno VARCHAR(400) NULL",
+        "ultima_atualizacao_em DATETIME(3) NULL (base da próxima atualização do S1, a cada INTERVALO_ATUALIZACAO_S1_MIN = 30 min; proximaAtualizacaoS1 é calculada no domínio, não gravada)",
+        "triado_em DATETIME(3) NULL, encerrado_em DATETIME(3) NULL (resolvido/cancelado); CHECK (situacao NOT IN ('resolvido','cancelado') OR encerrado_em IS NOT NULL)",
+        "criado_em, atualizado_em, versao INT NOT NULL DEFAULT 1, excluido_em NULL",
+        "índices: (estabelecimento_id, situacao, severidade, prazo_resposta_em) para a fila por severidade e prazo"
+      ],
+      "chamado_suporte_triagem (histórico, só inserção)": [
+        "id BIGINT UNSIGNED PK AUTO_INCREMENT",
+        "chamado_suporte_id BIGINT UNSIGNED NOT NULL FK chamado_suporte",
+        "triado_por_usuario_id BIGINT UNSIGNED NOT NULL FK usuario",
+        "triado_em DATETIME(3) NOT NULL",
+        "severidade_anterior/severidade, situacao_anterior/situacao, nivel_anterior/nivel (mesmos CHECK do pai; anteriores NULL na primeira)",
+        "responsavel_usuario_id NULL FK usuario, comandante_usuario_id NULL FK usuario, contorno VARCHAR(400) NULL",
+        "prazo_resposta_em e prazo_solucao_em vigentes depois da triagem",
+        "atualizacao_s1 BOOLEAN NOT NULL DEFAULT FALSE (a linha é a atualização de 30 min do S1)",
+        "criado_em; índice (chamado_suporte_id, triado_em)"
+      ],
+      "feriados": "prazosDoChamado pede os feriados do estabelecimento: usar a tabela de feriados do calendário se já existir no modelo; se não, pedir feriado (estabelecimento_id NULL = rede, data DATE, descricao) junto"
+    }
+  ],
+  "indisponiveis": [
+    "Abrir, triar (N1/N2, comandante do S1, atualização a cada 30 min) e listar por severidade e prazo os chamados de suporte (POST /api/chamados e a fila de triagem; menu do usuário na casca): sem tabela no modelo; DDL pedido em 'ddl' (chamado_suporte + chamado_suporte_triagem). O contrato e a regra de prazos ficam no produto à espera da porta própria (ver pedidos).",
+    "Revisão de usuários sem grupo e logins de painel (tela /administracao/acesso/usuarios/revisao): lia GET /api/administracao/coexistencia/migracao/fim/revisao (fim da coexistência, apagado). A troca de grupo e o bloqueio continuam pela tela de usuários.",
+    "Cartão 'Plataforma do banco' e ensaios do motor/UTF-8 na tela de estrutura do banco (config/SchemaTela): liam o desligamento da coexistência (apagado)."
+  ],
+  "registrar_controller": [
+    "apps/api/src/modulos/implantacao/modulo.ts (lote 05-09, não editado aqui): acrescentar SondaImplantacaoController (./sonda.controller.js) a controllers e ...provedoresSonda(ctx) (./sonda.js) a providers. Sem isso GET /api/sistema/sonda continua 404 e a verificação azul/verde da instalação (tools/instalacao/src/verificacao.ts ROTA_SONDAS_M38, dominio-config/implantacao/verificacao.ts itemConsultas) não fica verde. Exportar SondaImplantacaoController, PORTA_SONDA, PortaSondaPropria e provedoresSonda em implantacao/public-api.ts."
+  ]
+}

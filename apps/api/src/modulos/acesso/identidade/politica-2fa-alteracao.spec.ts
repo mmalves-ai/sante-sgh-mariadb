@@ -13,7 +13,6 @@ function montar() {
   porta.usuario({ login: 'SINT.GESTOR', id: 72 });
   const s = new ServicoIdentidade({
     porta,
-    contingencia: async () => true,
     chave: Buffer.alloc(32, 7),
     emissor: 'Produto sintético',
     argon2: { memoria: 8_192, passes: 1, paralelismo: 1 },

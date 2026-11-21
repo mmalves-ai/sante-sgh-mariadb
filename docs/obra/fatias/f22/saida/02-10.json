@@ -1,0 +1,97 @@
+{
+  "lote": "02-10",
+  "registrar": [
+    "carga: () => import('./carga/modulo.js'),",
+    "sadt: () => import('./sadt/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/carga/carga.controller.ts",
+    "src/modulos/carga/leituras.ts",
+    "src/modulos/carga/fonte-propria.ts",
+    "src/modulos/carga/modulo.ts",
+    "src/modulos/carga/leituras.int.spec.ts",
+    "src/modulos/sadt/aplicacao/portal.ts",
+    "src/modulos/sadt/aplicacao/portal.autorizacao.int.spec.ts",
+    "src/modulos/sadt/aplicacao/portal.contexto.spec.ts",
+    "src/modulos/sadt/portal.controller.ts",
+    "src/modulos/sadt/public-api.ts",
+    "src/modulos/sadt/sadt.controller.ts",
+    "src/modulos/sadt/sadt.spec.ts",
+    "src/modulos/sadt/aplicacao/servico.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.spec.ts",
+    "src/modulos/sadt/modulo.ts",
+    "src/modulos/sadt/aplicacao/vigia-criticos.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "a": "02-09",
+      "o_que": "porta-memoria.ts: o executor em memória passou a usar String(ctx.usuario) como login (usuarioDe); vinculoSintetico(login) não acha o vínculo e sadt.spec.ts falha em 2 casos (liberar e laudar: 409 sem-habilitacao). Usar o login da sessão (ContextoGravacao.login) quando presente."
+    },
+    {
+      "a": "02-09",
+      "o_que": "porta-propria.ts: o portal inteiro está pendente (acessoPorProtocolo, acessoDoMedico, acessoPorId, autocadastros, laudosPortal*, laudoPortal, criarProtocoloPortal, registrarAutocadastro, decidirAutocadastro, registrarTentativaPortal: 409 modelo-pendente). Tabelas existentes: acesso_resultado_portal, conta_portal_profissional_externo, liberacao_exame (publicado_portal, visualizado_portal_em, visualizado_endereco_ip), exame_restricao_portal. O ServicoPortal (02-10) já opera no contexto do núcleo e grava a trilha com essas tabelas."
+    },
+    {
+      "a": "02-09",
+      "o_que": "central-critico.ts: objetoTabela 'SILANEXA' -> 'exame_item' (TABELA_EXAME de servico.ts)."
+    },
+    {
+      "a": "integrador",
+      "o_que": "documento/public-api: o campo origem.idLegado de FonteDocumento.emissao (usado em servico.ts emitirLaudo) deve virar origem.id (nome neutro)."
+    },
+    {
+      "a": "integrador",
+      "o_que": "sadt/modulo.ts entrega CENTRAL_AVISOS_SADT = null: o aviso do crítico ao médico no sino fica indisponível até o módulo de comunicação (ServicoComunicacao) ser registrado e exportar a central; o painel do SADT segue avisando."
+    },
+    {
+      "a": "integrador",
+      "o_que": "ESTUDOS_IMAGEM_PEP (o ServicoPacs para o PEP) não é provido pelo módulo sadt: ligar no módulo pep quando os dois estiverem registrados."
+    },
+    {
+      "a": "integrador",
+      "o_que": "carga: as jornadas worklist/medico, prescricao/verificar, prescricao/busca, leitos/assinar e leitos/vigia respondem 404 com o motivo (JORNADAS_FORA em carga.controller.ts): medir pelas rotas reais do PEP e da internação com sessão sintética; ajustar infra/k6 (troca-plantao, carga-nominal, prescricao, painel-leitos) para essas rotas."
+    },
+    {
+      "a": "integrador",
+      "o_que": "app.module.ts ainda monta CargaController/FONTE_CARGA com a fonte antiga (FonteCarga mudou: cliente, estabelecimento(), lerSomente sobre o núcleo); some na desmontagem."
+    },
+    {
+      "a": "integrador",
+      "o_que": "tsconfig.migrado.json referencia 4 arquivos apagados do config (onda0.ts, onda0.controller.ts, onda0.spec.ts, guarda-chave-de-tela.ts): TS6053 no tsc do migrado."
+    },
+    {
+      "a": "02-09",
+      "o_que": "porta-propria.ts: implementar avisarCriticos (INSERT em aviso_valor_critico pelo Executor, com resultado_exame_id, resultado_analito_id, paciente_id, gerado_em, prazo_em pela regra do setor, situacao 'pendente'; devolver o número de avisos criados). Hoje responde 409 modelo-pendente (GRAVACOES_PENDENTES): o resultado crítico liberado pela interface do equipamento ou pela autoliberação não ganha aviso no banco. A vigia (02-10) já isola a falha por exame e o vigia-criticos.int.spec.ts passa a exigir a linha do aviso sozinho quando a pendência sair do GRAVACOES_PENDENTES."
+    },
+    {
+      "a": "02-09",
+      "o_que": "porta-propria.ts relogio()/hoje(): devolve a hora local do fuso do estabelecimento, mas os instantes lidos (gerado_em, prazo_em, liberado_em: TIMESTAMP) saem em UTC por instante(). A vigia compara os dois e o escalonamento do valor crítico atrasa o deslocamento do fuso (3 horas em -03:00); a janela de liberadosComCritico também desloca. Medido no f22_o2: aviso gerado às 05:26 UTC, relogio.agora 04:26. Pôr os dois na mesma referência (agora em UTC, ou os instantes no fuso). O vigia-criticos.int.spec.ts usa folga de 8 horas até a correção; com ela, reduzir para 2 horas."
+    },
+    {
+      "a": "02-09",
+      "o_que": "operacoes.ts: tirar 'sadt.emitirLaudo' de OPERACOES_SADT_PENDENTES. O servico.ts (02-10) passou a respeitar podeGravar('sadt.emitirLaudo') antes de gerar o PDF (a tela e a gravação coerentes); como registrarLaudoEmitido já grava a 1ª e a 2ª via (motivo pelo cadastro motivo_reimpressao), a emissão no banco fica desligada só por essa entrada."
+    },
+    {
+      "a": "02-09",
+      "o_que": "porta.ts (GravadorSghSadt) e porta-memoria.ts: renomear idSilanexa -> exame (avisarCriticos e registrarLeitura) e origem 'outroSistema' -> 'vigia'. O 02-10 troca nos mesmos commits as 2 chamadas (vigia-criticos.ts avisarCriticos, portal.ts registrarLeitura): o tipo é do 02-09 e o 02-10 não pode trocar antes."
+    }
+  ],
+  "ddl": [],
+  "apagados": [
+    "src/modulos/sadt/aplicacao/retificar.int.spec.ts (provava a gravação do sistema de origem: SIRES01, gatilho de liberação, SGH_SADT_RESULT_LEITURA); o contrato de efeito da retificação no banco é da porta própria (02-09)"
+  ],
+  "indisponiveis": [
+    "aviso do valor crítico criado no banco: o resultado crítico liberado sem aviso (interface do equipamento, autoliberação) não ganha aviso em aviso_valor_critico enquanto avisarCriticos da porta própria responder 409 modelo-pendente (02-09); a vigia conta o exame e repete no ciclo seguinte, o escalonamento dos avisos existentes segue",
+    "escalonamento do valor crítico no banco atrasa o deslocamento do fuso (3 h em -03:00) até o 02-09 alinhar relogio() com os instantes em UTC",
+    "emissão do laudo (1ª e 2ª via) no banco: desligada por podeGravar até o 02-09 tirar 'sadt.emitirLaudo' de OPERACOES_SADT_PENDENTES (409 operacao-nao-liberada com o motivo)",
+    "portal de resultados no banco (entrada do paciente e do médico, laudos, autocadastro): 409 modelo-pendente da porta própria do 02-09",
+    "carga: worklist/medico, prescricao/verificar, prescricao/busca, leitos/assinar, leitos/vigia (404 com motivo)",
+    "aviso do crítico no sino do médico (central de avisos null até o módulo de comunicação ser registrado)"
+  ],
+  "melhorias": [
+    "vigia do valor crítico: falha isolada por exame (escalonamento e ciclo seguinte não travam), cursor parado quando há exame sem aviso, log só com contagens e códigos",
+    "trilha da emissão do aviso aponta para exame_item (o id do aviso só existe depois da gravação); a do escalonamento, para aviso_valor_critico",
+    "emitirLaudo respeita a mesma trava (podeGravar) que a tela lê em /sadt/gravacao"
+  ]
+}

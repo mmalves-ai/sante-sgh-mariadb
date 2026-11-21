@@ -1,10 +1,11 @@
 // M26 (SADT, laudos e portal de resultados) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA
-// (nada conecta a banco): permissões pelas opções do legado, liberação (POL-3), pedidos do prontuário a receber,
+// (nada conecta a banco), com o módulo registrado (API_MODULOS=sadt): permissões pelas opções do perfil, liberação (POL-3), pedidos do prontuário a receber,
 // lançamento no setor com o alerta de repetição, coleta com a pulseira e o código único da amostra, rastreio com a
 // rejeição, digitação com a referência, liberação pelo responsável habilitado (o crítico pede a confirmação e o aviso
 // sai na gravação), retificação com o motivo e as versões, laudo de imagem privativo de médico, parâmetros sem segredo,
 // orçamento convertido e o portal (protocolo do paciente com limite de tentativas; médico externo com o segundo fator e
 // só os pedidos dele). Dados sintéticos.
+import { REGISTRO_MODULOS } from '../registro.js';
 import { codigoTotp } from '@sgh/dominio-acesso';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -13,9 +14,10 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaDocumentosMemoria } from '../pep/documentos-porta-memoria.js';
+import { moduloSadt } from './modulo.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'sadt,acesso,config' };
 const trilha = new RegistradorTrilhaMemoria();
 const documentos = new PortaDocumentosMemoria(trilha, null);
 const sadt = new PortaSadtMemoria({ estado: () => 'verde' }, documentos);
@@ -23,7 +25,15 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, documentos, sadt, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      sadt: async () => ({ modulo: (ctx) => moduloSadt(ctx, { porta: sadt, estabelecimentos: ['aa'] }) }),
+      // A central de avisos (o sino do médico) é a comunicação do módulo acesso.
+      acesso: REGISTRO_MODULOS['acesso']!,
+      config: REGISTRO_MODULOS['config']!,
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -83,8 +93,8 @@ describe('permissões, gravação e textos de produto', () => {
     expect(g.habilitacao.liberarLaboratorio).toBe(true);
     expect(g.habilitacao.laudarImagem).toBe(false);
     expect(g.operacoes['laboratorio:sadt.liberarExame'].ligada).toBe(true);
-    // A emissão nas impressões do outro sistema aguarda a conferência da numeração (D-LAUDO-26): desligada, com o motivo.
-    expect(g.operacoes['laboratorio:sadt.emitirLaudo'].ligada).toBe(false);
+    // A emissão do laudo grava no banco próprio (código, via, hash e exames): ligada como as demais do setor.
+    expect(g.operacoes['laboratorio:sadt.emitirLaudo'].ligada).toBe(true);
     const lista = await get(s, '/sadt/exames?setor=laboratorio');
     expect(lista.statusCode).toBe(200);
     expect(JSON.stringify([g, lista.json()])).not.toMatch(/SPDATA|legado|sistema atual/i);
@@ -196,7 +206,9 @@ describe('fluxo do laboratório', () => {
     expect(lib.json().avisos).toHaveLength(1);
     // M27 (revisão): o aviso do crítico vai também à central de avisos do médico do atendimento, depois do COMMIT.
     const sino = await entrar('SINT.MEDICO');
-    const doCritico = (await get(sino, '/acesso/avisos'))
+    const central = await get(sino, '/acesso/avisos');
+    expect(central.statusCode, central.body).toBe(200);
+    const doCritico = central
       .json()
       .avisos.filter((a: { tipo: string }) => a.tipo === 'resultado-critico');
     expect(doCritico).toHaveLength(1);
@@ -291,7 +303,7 @@ describe('laudo de imagem, parâmetros, orçamento e autocadastro', () => {
     const o = lista.itens[0];
     expect(o.total).toBe(72);
     // A lista traz nomes e exames de pacientes: deixa a trilha de leitura.
-    expect(trilha.eventos.at(-1)?.tabelaAlvo).toBe('SGH_SADT_ORCAMENTO');
+    expect(trilha.eventos.at(-1)?.tabelaAlvo).toBe('orcamento_particular');
     const novo = await post(s, '/sadt/orcamentos', {
       nome: 'Paciente particular dois',
       convenio: 1,

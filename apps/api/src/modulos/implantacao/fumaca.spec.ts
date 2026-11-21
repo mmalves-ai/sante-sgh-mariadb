@@ -199,7 +199,7 @@ describe('M60.3: fumaça do servidor (serviço)', () => {
       chaves: 'falha',
     });
     expect(f.situacao).toBe('falha');
-    expect(f.impressao).toMatchObject({ estado: 'divergente', resumo: 'f'.repeat(16), tabelasBloqueadas: 0 });
+    expect(f.impressao).toMatchObject({ estado: 'divergente', resumo: 'f'.repeat(16) });
     expect(f.chaves.ligadas).toEqual([
       { tipo: 'recurso', chave: 'pep.prontuario.consulta', hospital: 0, setor: 0, grupo: 0, pessoa: 1 },
     ]);

@@ -5,38 +5,33 @@
 // bloqueio vivem no estado sintético do acesso (o que a sessão sintética lê): bloquear aqui impede o login e
 // derruba as sessões. A trilha vai ao registrador da API. Nada vai à cópia; nenhum dado real.
 import { flagAceita } from '@sgh/contratos';
-import type {
-  ConfigLogin,
-  ContextoOperacao,
-  FichaUsuarioLegado,
-  FiltroTrilha,
-  FonteCatalogo,
-  ItemEscopoLegado,
-  LinhaTrilhaLida,
-  ModuloLegado,
-  OpcaoLegado,
-  PedidoTitularLido,
-  QuebraVidroLida,
-  TrilhaGestao,
-} from '@sgh/legado';
-import {
-  DESCRICAO_A_CONFIRMAR,
-  DESCRICOES,
-  ErroOperacao,
-  TABELAS_PARAMETROS_BANCO,
-  colunasVisiveis,
-} from '@sgh/legado';
+import { z } from 'zod';
+import { ErroOperacao } from '@sgh/nucleo';
 import { CATALOGO_COMPLETO } from '../../autorizacao/catalogo.js';
 import type { RegistradorTrilha, RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { ErroProblema } from '../../problema.filter.js';
 import {
   aceitouTermoSintetico,
   CONFIG_SINTETICA,
   CONTAS_SINTETICAS,
   estadoAcessoSintetico,
 } from '../acesso/fonte-sintetica.js';
-import { estadoDaReceita, NOMES_PAPEL } from '../acesso/gestao-fonte.js';
-import type { Ctx, FonteAdministracao } from './fonte.js';
+import { NOMES_PAPEL } from '../acesso/gestao-fonte.js';
+import type { FonteAdministracao } from './fonte.js';
+import {
+  type AcaoMenu,
+  type ContextoGestao,
+  type Ctx,
+  type FichaUsuario,
+  type FiltroTrilha,
+  type ItemEscopo,
+  type LinhaTrilhaLida,
+  type ModuloSistema,
+  OPERACOES_GESTAO,
+  type PedidoTitularLido,
+  type PoliticaLogin,
+  type QuebraVidro,
+  type TrilhaGestao,
+} from './tipos.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
@@ -223,7 +218,7 @@ export function reiniciarEstadoM10Sintetico(): void {
   estado = null;
 }
 
-const OPCOES_ESCOPO: Record<string, ItemEscopoLegado[]> = {
+const OPCOES_ESCOPO: Record<string, ItemEscopo[]> = {
   unidade: [
     { valor: '1', rotulo: 'Unidade sintética 1' },
     { valor: '2', rotulo: 'Unidade sintética 2' },
@@ -254,6 +249,12 @@ const versaoUsuario = (u: UsuarioMem, grupo: string | null, bloqueado: boolean) 
   JSON.stringify([u.nome, grupo ?? '', u.ativo ? 'T' : 'F', bloqueado ? 'T' : 'F']);
 const versaoLeito = (l: LeitoMem) =>
   JSON.stringify([l.status, String(l.ramal ?? ''), String(l.andar ?? ''), String(l.reg)]);
+/** A versão da linha sintética como número (resumo estável das colunas da trava). */
+const versaoNumerica = (texto: string): number => {
+  let h = 0;
+  for (const ch of texto) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+};
 const versaoAcomodacao = (a: AcomodacaoMem) =>
   JSON.stringify([a.nome, String(a.andar ?? ''), String(a.leitos), a.sexo, String(a.tipo), a.convenio]);
 
@@ -459,7 +460,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
     case 'organizacao.alterarAcomodacao': {
       const a = m.acomodacoes.get(`${String(e['bloco'])}|${String(e['acomodacao'])}`);
       if (!a) throw recusa('acomodacao-inexistente', 'Acomodação inexistente.');
-      if (versaoAcomodacao(a) !== e['versao'])
+      if (String(versaoNumerica(versaoAcomodacao(a))) !== String(e['versao']))
         throw new ErroOperacao(
           409,
           'conflito-versao',
@@ -501,7 +502,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
     case 'organizacao.reativarLeito': {
       const l = m.leitos.get(Number(e['id']));
       if (!l) throw recusa('leito-inexistente', 'Leito inexistente.');
-      if (versaoLeito(l) !== e['versao'])
+      if (String(versaoNumerica(versaoLeito(l))) !== String(e['versao']))
         throw new ErroOperacao(
           409,
           'conflito-versao',
@@ -537,7 +538,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
  * legado vira módulo (nível 0) → recurso (nível 1) → opção (nível 2, o ID real da opção). Com o banco, a árvore é
  * a de TBOPCOES (fonte do legado).
  */
-function arvoreSintetica(): { opcoes: OpcaoLegado[]; modulos: ModuloLegado[] } {
+function arvoreSintetica(): { opcoes: AcaoMenu[]; modulos: ModuloSistema[] } {
   const porModulo = new Map<string, Map<string, { id: number; titulo: string }[]>>();
   const vistas = new Set<number>();
   for (const p of CATALOGO_COMPLETO) {
@@ -550,8 +551,8 @@ function arvoreSintetica(): { opcoes: OpcaoLegado[]; modulos: ModuloLegado[] } {
       porModulo.set(mod, r);
     }
   }
-  const opcoes: OpcaoLegado[] = [];
-  const modulos: ModuloLegado[] = [];
+  const opcoes: AcaoMenu[] = [];
+  const modulos: ModuloSistema[] = [];
   let idModulo = 0;
   let idSintetico = -1;
   for (const [mod, recursos] of [...porModulo].sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -606,8 +607,11 @@ function pedidoDoPortal(p: PedidoPortalParaPrivacidade): PedidoTitularLido {
 
 export function fonteAdministracaoMemoria(
   trilha: RegistradorTrilha,
-  catalogo: FonteCatalogo,
-  ambiente: string,
+  /** Reservado (as chamadas antigas passam o catálogo de operações e o ambiente; a memória não os usa mais). */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _reservado: unknown = null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _ambiente = 'dev',
   quebrasMemoria: () => readonly {
     id: string;
     hospital: string;
@@ -639,7 +643,7 @@ export function fonteAdministracaoMemoria(
       idAlvo: id,
     });
   };
-  const ficha = (c: Ctx, login: string, auditor: boolean, comCpf: boolean): FichaUsuarioLegado | null => {
+  const ficha = (c: Ctx, login: string, auditor: boolean, comCpf: boolean): FichaUsuario | null => {
     const u = m().usuarios.get(login);
     if (!u) return null;
     const conta = acesso().contas.get(login);
@@ -691,7 +695,6 @@ export function fonteAdministracaoMemoria(
       .slice(-f.limite)
       .reverse()
       .map((x) => ({
-        origem: 'novo' as const,
         id: `N${x.id}`,
         dataHora: ((x as { em?: string }).em ?? new Date().toISOString()).slice(0, 19),
         usuario: x.usuario,
@@ -800,33 +803,32 @@ export function fonteAdministracaoMemoria(
           usuariosAtivos: [...acesso().contas.values()].filter((c) => c.grupo === nome).length,
         })),
       ),
-    async executar(nome, entrada, ctx: ContextoOperacao) {
-      const est = estadoDaReceita(catalogo, nome, ctx.hospital, ambiente);
-      if (!est.ligada)
-        throw new ErroProblema('operacao-bloqueada', 409, 'Operação desligada', est.motivo ?? undefined, {
-          codigo: 'operacao-desligada',
-        });
-      const { operacao } = await import('@sgh/legado');
-      const op = operacao(nome);
+    async executar(nome, entrada, ctx: ContextoGestao) {
+      const escopo =
+        /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(nome);
+      const op =
+        OPERACOES_GESTAO[nome] ??
+        (escopo ? { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: z.record(z.string(), z.unknown()) } : null);
+      if (!op) throw new ErroOperacao(404, 'operacao-inexistente', 'Operação inexistente', 'Operação desconhecida.');
       const p = op.entrada.safeParse(entrada);
       if (!p.success)
         throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos.');
-      const r = aplicarM10(nome, p.data as Record<string, unknown>, ctx.usuarioLegado);
+      const r = aplicarM10(nome, p.data as Record<string, unknown>, ctx.login);
       await trilha.registrar({
-        evento: op.receita.evento,
+        evento: op.evento,
         rede: ctx.rede,
         hospital: ctx.hospital,
-        usuario: ctx.usuarioLegado,
+        usuario: ctx.login,
         estacao: ctx.estacao ?? '',
-        correlacao: ctx.traceId,
-        recurso: op.receita.recurso,
+        correlacao: ctx.correlacao,
+        recurso: op.recurso,
         resultado: 'sucesso',
         tabelaAlvo: 'MEMORIA',
         idAlvo: nome,
       });
       return r;
     },
-    receita: (nome, hospital) => estadoDaReceita(catalogo, nome, hospital, ambiente),
+    receita: () => ({ estado: 'ligada' as const, ligada: true, motivo: null }),
     async setor(_c, p, acao, t) {
       if (p.por === p.login)
         throw recusa('a-si-mesmo', 'Ninguém altera o próprio escopo (segregação de funções).');
@@ -856,7 +858,15 @@ export function fonteAdministracaoMemoria(
           usuariosAtivos: [...acesso().contas.values()].filter((c) => c.papeis.get(papel)).length,
         })),
       ),
-    politica: (): Promise<ConfigLogin> => Promise.resolve(CONFIG_SINTETICA),
+    politica: (): Promise<PoliticaLogin> =>
+      Promise.resolve({
+        senha: CONFIG_SINTETICA.senha,
+        tempo: CONFIG_SINTETICA.tempo,
+        limiteTentativas: CONFIG_SINTETICA.limiteTentativas,
+        termoPeriodico: CONFIG_SINTETICA.termoPeriodico,
+        quantidadePeriodoTermo: CONFIG_SINTETICA.quantidadePeriodoTermo,
+        tipoPeriodoTermo: CONFIG_SINTETICA.quantidadePeriodoTermo !== null ? 'dias' : null,
+      }),
     tiposAcessoProntuario: () =>
       Promise.resolve([
         { id: 1, descricao: 'Consultar' },
@@ -907,7 +917,7 @@ export function fonteAdministracaoMemoria(
       Promise.resolve(
         quebrasMemoria()
           .filter((q) => q.hospital === c.hospital)
-          .map((q): QuebraVidroLida => ({
+          .map((q): QuebraVidro => ({
             id: q.id,
             login: q.login,
             idPaciente: q.idPaciente,
@@ -959,27 +969,28 @@ export function fonteAdministracaoMemoria(
       return Promise.resolve({
         blocos: [...s.blocos].map(([bloco, b]) => ({ bloco, nome: b.nome, andares: b.andares })),
         acomodacoes: [...s.acomodacoes.values()].map((a) => ({
-          BLOCO: a.bloco,
-          ACOMOD: a.acomodacao,
-          NOME: a.nome,
-          ANDAR: a.andar,
-          LEITOS: a.leitos,
-          SEXO: a.sexo,
-          TIPO: a.tipo,
-          TCONV: a.convenio,
-          CDC: a.centroCusto,
-          LCONS: a.localConta,
+          bloco: a.bloco,
+          acomodacao: a.acomodacao,
+          nome: a.nome,
+          andar: a.andar,
+          leitosPrevistos: a.leitos,
+          sexo: a.sexo || null,
+          tipo: a.tipo,
+          convenio: a.convenio || null,
+          centroCusto: a.centroCusto,
+          localConta: a.localConta,
+          versao: versaoNumerica(versaoAcomodacao(a)),
         })),
         leitos: [...s.leitos.values()].map((l) => ({
           id: l.id,
           bloco: l.bloco,
           acomodacao: l.acomodacao,
           leito: l.leito,
-          status: l.status,
-          reg: l.reg,
+          ativo: l.status !== 'I',
           ocupado: l.reg > 0,
           ramal: l.ramal,
           andar: l.andar,
+          versao: versaoNumerica(versaoLeito(l)),
         })),
         opcoes: {
           tipos: [
@@ -991,29 +1002,6 @@ export function fonteAdministracaoMemoria(
           locaisConta: [{ valor: 11, rotulo: 'Posto de enfermagem (sintético)' }],
           tiposTiss: [{ valor: 3, rotulo: 'Enfermaria (sintético)' }],
         },
-      });
-    },
-    espelho: () => {
-      const s = m();
-      return Promise.resolve({
-        acomodacoes: [...s.acomodacoes.values()].map((a) => ({
-          bloco: a.bloco,
-          acomodacao: a.acomodacao,
-          tipoAtendimento: 'I' as const,
-          nome: a.nome,
-        })),
-        leitos: [
-          ...[...s.leitos.values()].map((l) => ({
-            bloco: l.bloco,
-            acomodacao: l.acomodacao,
-            leito: l.leito,
-            tipoAtendimento: 'I' as const,
-            ativo: l.status !== 'I',
-            ramal: l.ramal,
-          })),
-          ...s.espelhoExtra.map((x) => ({ ...x, tipoAtendimento: 'I' as const, ramal: 0 })),
-        ],
-        retratos: s.leitos.size,
       });
     },
     locaisComplementos: () =>
@@ -1080,31 +1068,7 @@ export function fonteAdministracaoMemoria(
         ],
         procedimentos: [{ id: 1, descricao: 'Cópia completa' }],
       }),
-    parametrosBanco: (_c, chave) => {
-      const t = TABELAS_PARAMETROS_BANCO.find((x) => x.chave === chave);
-      if (!t) return Promise.resolve(null);
-      const parametros = colunasVisiveis(t.tabela)
-        .slice(0, 25)
-        .map((c) => ({
-          campo: c,
-          origem: `${t.tabela}.${c}`,
-          tipo: 'letra',
-          descricao: DESCRICOES[`${t.tabela}.${c}`] ?? DESCRICAO_A_CONFIRMAR,
-          valor: 'F',
-          situacao: 'valor' as const,
-        }));
-      const lista = t.linhas?.modo === 'todas';
-      return Promise.resolve({
-        linhas: lista ? 2 : 1,
-        parametros,
-        criterio: t.linhas?.modo ?? null,
-        registros: lista
-          ? [1, 2].map((n) => ({ chave: String(n), valores: parametros.map(() => (n === 1 ? 'F' : 'T')) }))
-          : [],
-      });
-    },
-    trilhaLegado: () => Promise.resolve([]),
-    trilhaPropria: (c, f) => Promise.resolve(trilhaMem(c, f)),
+    trilha: (c, f) => Promise.resolve(trilhaMem(c, f)),
     acessosProntuario: (c, f) =>
       Promise.resolve(
         trilhaMem(c, f)
@@ -1117,11 +1081,6 @@ export function fonteAdministracaoMemoria(
       ),
     pacientesDoProntuario: (_c, prontuario) =>
       Promise.resolve(prontuario === PACIENTE_SINTETICO.prontuario ? [PACIENTE_SINTETICO.id] : []),
-    tiposAcao: () =>
-      Promise.resolve([
-        { id: 6, nome: 'Autenticação de usuário' },
-        { id: 17, nome: 'Gerenciamento de usuários' },
-      ]),
     exclusoes: () =>
       Promise.resolve({
         tipos: [

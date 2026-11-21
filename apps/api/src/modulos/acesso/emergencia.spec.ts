@@ -2,17 +2,25 @@
 // médico recebe a oferta; a abertura exige a senha de novo (reautenticação) e CSRF, grava na trilha
 // (memória) e manda o alerta (dublê da fila); depois, o prontuário sintético abre "por emergência" e a
 // leitura é auditada. A recepção (sem conselho, sem a permissão) só recebe a negativa.
+import { Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { EVENTOS_AUDITAVEIS, tipoDoProblema } from '@sgh/contratos';
+import { VinculoSintetico } from '@sgh/dominio-acesso';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste } from '../../sessao/teste.spec-util.js';
-import type { AlertaAuditor, AlertaEmergencia } from './alerta.js';
-import { PACIENTE_DEMONSTRACAO } from './emergencia.controller.js';
+import { ALERTA_AUDITOR, type AlertaAuditor, type AlertaEmergencia } from './alerta.js';
+import {
+  EmergenciaController,
+  PACIENTE_DEMONSTRACAO,
+  REGISTRO_EMERGENCIA,
+  RegistroEmergenciaMemoria,
+  VINCULO_ASSISTENCIAL,
+} from './emergencia.controller.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'emergencia_teste' };
 const trilha = new RegistradorTrilhaMemoria();
 const alertas: AlertaEmergencia[] = [];
 const alerta: AlertaAuditor = {
@@ -23,8 +31,27 @@ const alerta: AlertaAuditor = {
 };
 let app: NestFastifyApplication;
 
+/** O módulo do teste: o controlador da quebra de vidro com o registro em memória, o alerta dublê e o vínculo sintético. */
+@Module({})
+class EmergenciaTeste {}
+
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, alerta });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      emergencia_teste: async () => ({
+        modulo: () => ({
+          module: EmergenciaTeste,
+          controllers: [EmergenciaController],
+          providers: [
+            { provide: REGISTRO_EMERGENCIA, useValue: new RegistroEmergenciaMemoria(trilha) },
+            { provide: ALERTA_AUDITOR, useValue: alerta },
+            { provide: VINCULO_ASSISTENCIAL, useValue: new VinculoSintetico() },
+          ],
+        }),
+      }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

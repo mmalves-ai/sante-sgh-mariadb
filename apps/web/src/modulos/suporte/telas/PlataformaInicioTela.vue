@@ -19,13 +19,13 @@ onMounted(async () => {
   try {
     eu.value = await buscarEu();
   } catch {
-    await roteador.replace('/plataforma/entrar');
+    await roteador.replace('/entrar');
   }
 });
 
 async function sair(): Promise<void> {
   await sairPlataforma().catch(() => undefined);
-  window.location.assign('/plataforma/entrar');
+  window.location.assign('/entrar');
 }
 </script>
 

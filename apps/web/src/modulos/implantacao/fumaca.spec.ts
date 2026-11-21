@@ -74,8 +74,6 @@ function fumaca(sobre: Partial<FumacaServidor> = {}): FumacaServidor {
       resumo: 'abcdef0123456789',
       resumoHomologado: 'abcdef0123456789',
       verificadaEm: '2026-10-27T11:59:00.000Z',
-      tabelasBloqueadas: 0,
-      bloqueiaTudo: false,
     },
     chaves: { lidas: true, ligadas: [], esperadas: [], inesperadas: [] },
     itens: [...ITENS_FUMACA_SERVIDOR].reverse().map((codigo) => ({
@@ -234,8 +232,6 @@ describe('tela da fumaça', () => {
         resumo: '1111111111111111',
         resumoHomologado: '2222222222222222',
         verificadaEm: null,
-        tabelasBloqueadas: 3,
-        bloqueiaTudo: false,
       },
       chaves: {
         lidas: true,
@@ -258,7 +254,7 @@ describe('tela da fumaça', () => {
     expect(w.get('[data-testid="fila-email"]').text()).toContain('nenhum trabalhador');
     expect(w.get('[data-testid="fila-relatorio"]').text()).toContain('—');
     expect(w.get('[data-testid="fumaca-impressao"]').attributes('data-estado')).toBe('divergente');
-    expect(w.get('[data-testid="impressao-bloqueio"]').text()).toContain('3 tabela');
+    expect(w.find('[data-testid="impressao-bloqueio"]').exists()).toBe(false);
     expect(w.get('[data-testid="chaves-esperadas"]').text()).toContain('agenda.*');
     expect(w.get('[data-testid="chave-portal.ativo"]').attributes('data-inesperada')).toBe('sim');
     expect(w.get('[data-testid="chave-agenda.marcar"]').attributes('data-inesperada')).toBe('nao');
@@ -276,8 +272,6 @@ describe('tela da fumaça', () => {
         resumo: null,
         resumoHomologado: null,
         verificadaEm: null,
-        tabelasBloqueadas: 0,
-        bloqueiaTudo: true,
       },
       chaves: { lidas: false, ligadas: [], esperadas: [], inesperadas: [] },
       filas: [],
@@ -285,7 +279,6 @@ describe('tela da fumaça', () => {
     const w = montar();
     await flushPromises();
     expect(w.get('[data-testid="fumaca-impressao"]').attributes('data-estado')).toBe('nulo');
-    expect(w.get('[data-testid="impressao-bloqueio"]').text()).toContain('todas as tabelas');
     expect(w.find('[data-testid="chaves-nao-lidas"]').exists()).toBe(true);
     expect(w.find('[data-testid="chaves-esperadas"]').exists()).toBe(false);
     expect(w.find('[data-testid="filas-nenhuma"]').exists()).toBe(true);

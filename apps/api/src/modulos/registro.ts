@@ -40,11 +40,14 @@ export type CarregadorModulo = () => Promise<ModuloApi>;
  * `cadastro: () => import('./cadastro/modulo.js')`.
  */
 export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({
+  acesso: () => import('./acesso/modulo.js'),
+  administracao: () => import('./administracao/modulo.js'),
   adt: () => import('./adt/modulo.js'),
   agenda: () => import('./agenda/modulo.js'),
   assinatura: () => import('./assinatura/modulo.js'),
   atendimento: () => import('./atendimento/modulo.js'),
   cadastro: () => import('./cadastro/modulo.js'),
+  carga: () => import('./carga/modulo.js'),
   catalogos: () => import('./catalogos/modulo.js'),
   config: () => import('./config/modulo.js'),
   consultas: () => import('./consultas/modulo.js'),
@@ -76,6 +79,7 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   relatorio: () => import('./relatorio/modulo.js'),
   repasse: () => import('./repasse/modulo.js'),
   rouparia: () => import('./rouparia/modulo.js'),
+  sadt: () => import('./sadt/modulo.js'),
   sessoes: () => import('./sessoes/modulo.js'),
   suporte: () => import('./suporte/modulo.js'),
   sus: () => import('./sus/modulo.js'),

@@ -1,7 +1,10 @@
 // M59-F5 (ficha do M59, seções 4, 7, 8 regras 1, 9 e 10, e 13; cap-13 §13.2.1, §13.6): o serviço da certificação. As
 // regras são as puras de @sgh/dominio-acesso; aqui ficam a leitura pela porta, a situação do estabelecimento (o
 // desligamento do M58 e a contingência, a mesma das contas do banco), as medidas das concessões (as telas das fatias
-// F1 a F4) e a montagem das respostas. Toda gravação vai pela porta, com a SGH_TRILHA na mesma transação.
+// F1 a F4) e a montagem das respostas. Toda gravação vai pela porta, com a trilha de auditoria na mesma transação.
+// Melhoria: a recusa de negócio da porta (ErroProblema, ou ErroOperacao do núcleo: conflito de versão, restrição) chega
+// ao usuário com o código dela; só a falha de infraestrutura vira 503. O recurso sem tabela no banco do cliente é
+// recusado por recurso (o backup não depende das tabelas dos ciclos).
 import {
   type AbrirCicloPedido,
   type AvaliarItemPedido,
@@ -51,10 +54,10 @@ import {
   situacaoBackup,
   type SituacaoEstabelecimento,
 } from '@sgh/dominio-acesso';
-import type { CicloLido, TrilhaSbis } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../../problema.filter.js';
 import { type FontesMedidas, medirConcessoes, segundoFatorCriticos } from './medidas.js';
-import type { PortaSbis } from './porta.js';
+import type { CicloCertificacao, PortaSbis, RecursoSbis, TrilhaSbis } from './porta.js';
 
 export const SERVICO_SBIS = Symbol('SERVICO_SBIS');
 
@@ -64,6 +67,8 @@ export interface AtorSbis {
   readonly login: string;
   readonly estacao: string | null;
   readonly correlacao: string;
+  /** A Idempotency-Key do pedido de gravação (rotas POST); ausente nas leituras. */
+  readonly idempotencia?: string | null;
 }
 
 export interface DependenciasSbis {
@@ -91,7 +96,9 @@ export function evidenciaComMedida(evidencia: string, medida: string): string {
 const recusa = (codigo: RecusaSbis): never => {
   throw new ErroProblema('recusa-de-negocio', 409, 'Ação recusada', TEXTO_RECUSA_SBIS[codigo], { codigo });
 };
-const indisponivel = (): never => {
+const indisponivel = (e?: unknown): never => {
+  // A recusa de negócio da porta passa com o código dela (o filtro traduz a do núcleo em Problem Details).
+  if (e instanceof ErroProblema || e instanceof ErroOperacao) throw e;
   throw new ErroProblema(
     'indisponivel',
     503,
@@ -126,18 +133,21 @@ export class ServicoSbis {
       resultado: 'sucesso',
       estacao: a.estacao,
       correlacao: a.correlacao,
+      chaveIdempotencia: a.idempotencia ?? null,
     };
   }
 
-  private async pronto(h: string) {
-    const falta = await this.d.porta.faltando(h).catch(indisponivel);
+  private async pronto(h: string, ...recursos: RecursoSbis[]) {
+    const falta = (
+      await Promise.all(recursos.map((r) => this.d.porta.faltando(h, r))).catch(indisponivel)
+    ).flat();
     if (falta.length)
       throw new ErroProblema(
         'indisponivel',
         503,
         'Recurso ainda não instalado',
-        'As tabelas da certificação ainda não foram criadas neste estabelecimento.',
-        { codigo: 'tabelas-ausentes' },
+        'As tabelas deste recurso da certificação ainda não foram criadas no banco do cliente.',
+        { codigo: 'tabelas-ausentes', campos: falta },
       );
   }
 
@@ -151,7 +161,7 @@ export class ServicoSbis {
   // ── concessões ─────────────────────────────────────────────────────────────────────────────────
 
   async painelConcessoes(a: AtorSbis): Promise<PainelConcessoes> {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'concessoes');
     const sit = await this.situacao(a);
     const [registros, medidas] = await Promise.all([
       this.d.porta.concessoes(a.hospital).catch(indisponivel),
@@ -178,7 +188,7 @@ export class ServicoSbis {
   }
 
   async reabrirConcessao(a: AtorSbis, codigo: CodigoConcessao, motivo: string) {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'concessoes');
     const registro = (await this.d.porta.concessoes(a.hospital).catch(indisponivel)).find(
       (x) => x.codigo === codigo,
     );
@@ -196,7 +206,7 @@ export class ServicoSbis {
   }
 
   async preverConcessao(a: AtorSbis, codigo: CodigoConcessao, fimPrevisto: string | null) {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'concessoes');
     await this.d.porta
       .prever(
         a.hospital,
@@ -209,7 +219,7 @@ export class ServicoSbis {
 
   // ── ciclos ─────────────────────────────────────────────────────────────────────────────────────
 
-  private async ciclosComItens(h: string): Promise<{ ciclo: CicloLido; itens: ItemCicloSbis[] }[]> {
+  private async ciclosComItens(h: string): Promise<{ ciclo: CicloCertificacao; itens: ItemCicloSbis[] }[]> {
     const ciclos = (await this.d.porta.ciclos(h).catch(indisponivel)).slice(0, CICLOS_PAINEL);
     return Promise.all(
       ciclos.map(async (ciclo) => ({
@@ -219,11 +229,11 @@ export class ServicoSbis {
     );
   }
 
-  private resposta(ciclo: CicloLido, itens: readonly ItemCicloSbis[]): CicloSbis {
+  private resposta(ciclo: CicloCertificacao, itens: readonly ItemCicloSbis[]): CicloSbis {
     return { ...ciclo, resumo: resumirItens(itens) };
   }
 
-  private async contextoAbertura(a: AtorSbis, todos: { ciclo: CicloLido; itens: ItemCicloSbis[] }[]) {
+  private async contextoAbertura(a: AtorSbis, todos: { ciclo: CicloCertificacao; itens: ItemCicloSbis[] }[]) {
     const [sit, registros] = await Promise.all([
       this.situacao(a),
       this.d.porta.concessoes(a.hospital).catch(indisponivel),
@@ -243,7 +253,7 @@ export class ServicoSbis {
   }
 
   async painel(a: AtorSbis): Promise<PainelSbis> {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'ciclos', 'concessoes');
     const todos = await this.ciclosComItens(a.hospital);
     const ctx = await this.contextoAbertura(a, todos);
     const hoje = this.hoje();
@@ -286,7 +296,7 @@ export class ServicoSbis {
   }
 
   private async cicloAberto(a: AtorSbis, id: string) {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'ciclos', 'concessoes');
     const ciclo = await this.d.porta.ciclo(a.hospital, id).catch(indisponivel);
     if (!ciclo) return naoEncontrado();
     const itens = await this.d.porta.itens(a.hospital, id).catch(indisponivel);
@@ -299,7 +309,7 @@ export class ServicoSbis {
   }
 
   async abrirCiclo(a: AtorSbis, p: AbrirCicloPedido): Promise<CicloSbisDetalhe> {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'ciclos', 'concessoes');
     const ctx = await this.contextoAbertura(a, await this.ciclosComItens(a.hospital));
     const r = recusaAbrirCiclo(p, ctx);
     if (r) recusa(r);
@@ -413,14 +423,14 @@ export class ServicoSbis {
   // ── backup verificado ──────────────────────────────────────────────────────────────────────────
 
   async backup(a: AtorSbis): Promise<BackupVerificado> {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'backup');
     const restauracoes = await this.d.porta.restauracoes(a.hospital).catch(indisponivel);
     const s = situacaoBackup(restauracoes, this.agora());
     return { hospital: a.hospital, ...s, restauracoes, destino: this.d.porta.destino };
   }
 
   async registrarRestauracao(a: AtorSbis, p: RegistrarRestauracaoPedido) {
-    await this.pronto(a.hospital);
+    await this.pronto(a.hospital, 'backup');
     if (Date.parse(p.fim) > this.agora().getTime() + 5 * 60_000)
       throw new ErroProblema(
         'entrada-invalida',

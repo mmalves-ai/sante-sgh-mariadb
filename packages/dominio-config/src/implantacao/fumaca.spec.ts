@@ -28,8 +28,6 @@ const base = (): EntradaFumacaServidor => ({
     resumo: 'abcdef0123456789',
     resumoHomologado: 'abcdef0123456789',
     verificadaEm: new Date(T).toISOString(),
-    tabelasBloqueadas: 0,
-    bloqueiaTudo: false,
   },
   chaves: conferirChaves([], []),
 });
@@ -189,15 +187,15 @@ describe('M60.3: Valkey, worker, filas e impressão digital', () => {
   it('impressão: divergente e indisponível falham; sem homologação é grave; não verificada é alerta', () => {
     const e = base();
     const com = (estado: EntradaFumacaServidor['impressao']['estado']) =>
-      sit({ ...e, impressao: { ...e.impressao, estado, tabelasBloqueadas: 2 } })['impressao-digital'];
+      sit({ ...e, impressao: { ...e.impressao, estado } })['impressao-digital'];
     expect(com('divergente')).toBe('falha');
     expect(com('indisponivel')).toBe('falha');
     expect(com('sem-homologacao')).toBe('falha');
     expect(com(null)).toBe('alerta');
     const d = itensDaFumaca({
       ...e,
-      impressao: { ...e.impressao, estado: 'divergente', tabelasBloqueadas: 2 },
+      impressao: { ...e.impressao, estado: 'divergente' },
     });
-    expect(d.find((i) => i.codigo === 'impressao-digital')?.detalhe).toContain('2 tabela(s)');
+    expect(d.find((i) => i.codigo === 'impressao-digital')?.detalhe).toContain('atualizações do banco');
   });
 });
