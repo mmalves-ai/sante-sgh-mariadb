@@ -6,7 +6,6 @@
 // com o motivo. Certificados, CPF e documentos SINTÉTICOS; nenhum dado de pessoa.
 import { PORTAL_MEDICO_ROTA_RETORNO_ASSINATURA } from '@sgh/contratos';
 import { CPF_SINTETICO_SESSAO } from '@sgh/dominio-documento';
-import type { DocumentoSghLido } from '@sgh/legado';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RequisicaoAutorizada } from '../../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -19,6 +18,7 @@ import { ServicoAssinaturaIcp } from '../../assinatura/aplicacao/servico.js';
 import { configAssinaturaDoAmbiente } from '../../assinatura/infra/ambiente.js';
 import { ROTA_NAVEGADOR_SIMULADOR, type SimuladorIcp } from '../../assinatura/infra/simulador.js';
 import { PortaAssinaturaMemoria } from '../../assinatura/porta-memoria.js';
+import type { DocumentoEmitidoIcp } from '../../assinatura/tipos.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { PortaCirurgia } from '../../cirurgia/public-api.js';
 import type { ServicoRepasse } from '../../repasse/public-api.js';
@@ -104,8 +104,8 @@ const fonte: FonteConteudoIcp = {
 
 const documento = (
   id: number,
-  o: Partial<DocumentoSghLido> = {},
-): DocumentoSghLido & { eventos: string[] } => ({
+  o: Partial<DocumentoEmitidoIcp> = {},
+): DocumentoEmitidoIcp & { eventos: string[] } => ({
   id,
   tipo: 'atestado',
   origemTabela: 'PRATESTREQIMP',
@@ -123,20 +123,30 @@ const documento = (
   ...o,
 });
 
+/** Contexto do núcleo de teste (memória: o estabelecimento pelo código). */
+const ctxT = (rede: string, hospital: string) => ({
+  cliente: '',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede,
+  hospital,
+});
+
 /** A sessão interna do próprio profissional (no hospital), para vincular o certificado em nuvem. */
 const interna = (login = LOGIN): SessaoCadastro => ({
   req: { headers: {}, ip: '127.0.0.1' } as unknown as RequisicaoAutorizada,
   hospital: H,
   rede: REDE,
   login,
-  porta: { rede: REDE, hospital: H },
+  porta: ctxT(REDE, H) as SessaoCadastro['porta'],
   pode: () => false,
 });
 
 const sessao = (acesso = ACESSO) =>
   ({ hospital: H, perfil: 'medicoExterno', acesso, nome: 'M' }) as unknown as SessaoPortalM26;
 
-let docs: (DocumentoSghLido & { eventos: string[] })[];
+let docs: (DocumentoEmitidoIcp & { eventos: string[] })[];
 let assinaturaPorta: PortaAssinaturaMemoria;
 let sim: SimuladorIcp;
 let icp: ServicoAssinaturaIcp;
@@ -203,11 +213,7 @@ beforeEach(async () => {
 });
 
 async function ligar(acesso: number, profissional: number) {
-  await portaPortal.gravar(
-    { rede: REDE, hospital: H },
-    (g) => g.vincular({ acesso, profissional, por: 'T' }),
-    null,
-  );
+  await portaPortal.gravar(ctxT(REDE, H), (g) => g.vincular({ acesso, profissional, por: 'T' }), null);
 }
 
 /** A página do provedor simulado confirma: devolve o que a tela do portal recebe na URL de volta. */
@@ -297,12 +303,10 @@ describe('W0-10 (M6): fila de assinatura remota no portal do médico externo', (
       evento: 'portal.medico.assinaturaConcluida',
       resultado: 'sucesso',
     });
-    // A trilha do M49 leva o login do profissional e a correlação da conta do portal.
-    const doM49 = assinaturaPorta.trilhas.filter(
-      (t) => t.correlacao === `portal-medico-M${ACESSO}-assinatura`,
-    );
+    // A trilha do M49 registra a assinatura (a sessão do portal não tem usuário interno: nenhum id de usuário).
+    const doM49 = assinaturaPorta.trilhas.filter((t) => t.operacao !== null);
     expect(doM49.length).toBeGreaterThan(0);
-    expect(doM49.every((t) => t.usuario === LOGIN)).toBe(true);
+    expect(doM49.every((t) => t.usuario === null)).toBe(true);
     // A mesma volta de novo: o pedido já foi consumido.
     expect(await portal.concluirAssinatura(sessao(), null, volta)).toMatchObject({
       ok: false,

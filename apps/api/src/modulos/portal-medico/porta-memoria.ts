@@ -2,39 +2,49 @@
 // cirurgião com três registros: o de cirurgião da agenda sintética do M18, o de prestador do repasse sintético do M33 e
 // o do número do conselho de um solicitante sintético do M26) e o vínculo das contas, com as mesmas recusas do banco.
 // A situação da conta vem da porta do M26 (a mesma memória do portal de resultados). Nada vai à cópia.
-import type {
-  AtoContaMedicoLido,
-  LinhaTrilha,
-  NotificacaoCriticoMedicoLida,
-  ProfissionalCorpoClinicoLido,
-  TrocaEmailMedicoLida,
-  VinculoMedicoExternoLido,
-} from '@sgh/legado';
-import { conferirAtoContaMedico, recusa } from '@sgh/legado';
+import { recusa } from '@sgh/nucleo';
 import { cboDe } from '../pep/registro-porta-memoria.js';
-import type { ContextoPortalMedico, GravadorPortalMedico, PortaPortalMedico } from './porta.js';
+import type {
+  AtoContaMedicoRegistrado,
+  ContextoPortalMedico,
+  GravadorPortalMedico,
+  NotificacaoCriticoMedico,
+  PortaPortalMedico,
+  ProfissionalCorpoClinico,
+  TrilhaPortalMedico,
+  TrocaEmailMedico,
+  VinculoMedicoExterno,
+} from './porta.js';
+import { conferirAtoContaMedico } from './regras-conta.js';
 
-/** O corpo clínico sintético (TBPROFIS e os registros TBCBOPRO). */
-export const CORPO_CLINICO_SINTETICO: readonly ProfissionalCorpoClinicoLido[] = [
+/** O corpo clínico sintético (o profissional e as inscrições no conselho). */
+export const CORPO_CLINICO_SINTETICO: readonly ProfissionalCorpoClinico[] = [
   {
     id: 6801,
     nome: 'CIRURGIAO SINTETICO A',
     registros: [
       // O cirurgião da agenda sintética do bloco (M18: ID_CRM 5001, CRM 9001).
-      { id: 5001, codigo: 9001, uf: 'SP' },
+      { id: 5001, codigo: 9001, uf: 'SP', numero: '9001' },
       // O prestador do repasse sintético (M33: código 7001).
-      { id: 5101, codigo: 7001, uf: 'SP' },
+      { id: 5101, codigo: 7001, uf: 'SP', numero: '7001' },
       // O número do conselho do solicitante sintético 54321/SP (M26): o registro que vai no pedido de cirurgia.
-      { id: 5102, codigo: 54321, uf: 'SP' },
+      { id: 5102, codigo: 54321, uf: 'SP', numero: '54321' },
     ],
+    vinculoAssistencial: [5001, 5101, 5102],
   },
-  { id: 6802, nome: 'OUTRA MEDICA SINTETICA B', registros: [{ id: 5106, codigo: 88888, uf: 'SP' }] },
+  {
+    id: 6802,
+    nome: 'OUTRA MEDICA SINTETICA B',
+    registros: [{ id: 5106, codigo: 88888, uf: 'SP', numero: '88888' }],
+    vinculoAssistencial: [5106],
+  },
   // W0-10 (E2E de "meus pacientes", do crítico e da assinatura remota): o clínico cujo registro é o do médico sintético
   // interno SINT.MEDICO na memória do PEP (cboDe): o que esse login registra no episódio vira vínculo assistencial dele.
   {
     id: 6803,
     nome: 'CLINICO SINTETICO C',
-    registros: [{ id: cboDe('SINT.MEDICO')!, codigo: 66013, uf: 'SP' }],
+    registros: [{ id: cboDe('SINT.MEDICO')!, codigo: 66013, uf: 'SP', numero: '66013' }],
+    vinculoAssistencial: [cboDe('SINT.MEDICO')!],
   },
 ];
 
@@ -51,13 +61,13 @@ type DefinirCredencial = (
 export class PortaPortalMedicoMemoria implements PortaPortalMedico {
   readonly destino = 'memoria' as const;
   /** Linhas da trilha "gravadas" (os testes conferem o evento e o alvo). */
-  readonly trilhas: LinhaTrilha[] = [];
-  private readonly vinculosPorHospital = new Map<string, Map<number, VinculoMedicoExternoLido>>();
-  private readonly atos: (AtoContaMedicoLido & { hospital: string; acesso: number })[] = [];
+  readonly trilhas: TrilhaPortalMedico[] = [];
+  private readonly vinculosPorHospital = new Map<string, Map<number, VinculoMedicoExterno>>();
+  private readonly atos: (AtoContaMedicoRegistrado & { hospital: string; acesso: number })[] = [];
   private proximoAto = 1;
-  private readonly trocas: (TrocaEmailMedicoLida & { hospital: string; tokenResumo: string })[] = [];
+  private readonly trocas: (TrocaEmailMedico & { hospital: string; tokenResumo: string })[] = [];
   /** W0-10 (M5): as notificações de crítico (uma por aviso e conta). */
-  private readonly notificacoes: (NotificacaoCriticoMedicoLida & { hospital: string; acesso: number })[] = [];
+  private readonly notificacoes: (NotificacaoCriticoMedico & { hospital: string; acesso: number })[] = [];
 
   constructor(
     private readonly situacao: SituacaoDaConta,
@@ -94,7 +104,7 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
     this.definirCredencial(c, acesso, x);
   }
 
-  private v(c: ContextoPortalMedico): Map<number, VinculoMedicoExternoLido> {
+  private v(c: ContextoPortalMedico): Map<number, VinculoMedicoExterno> {
     let m = this.vinculosPorHospital.get(c.hospital);
     if (!m) {
       m = new Map();
@@ -106,7 +116,7 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
   async gravar<T>(
     c: ContextoPortalMedico,
     fn: (g: GravadorPortalMedico) => Promise<T>,
-    trilha: LinhaTrilha | null,
+    trilha: TrilhaPortalMedico | null,
   ): Promise<T> {
     const m = this.v(c);
     const r = await fn({
@@ -116,7 +126,12 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
           throw recusa('profissional-sem-registro', 'O profissional não tem registro no corpo clínico.', {
             campos: ['profissional'],
           });
-        if ([...m.values()].some((y) => y.profissional === x.profissional && y.acesso !== x.acesso))
+        // Só a conta vigente prende o profissional (a desligada tem profissional null; a encerrada não conta).
+        const outras = [...m.values()].filter((y) => y.profissional === x.profissional && y.acesso !== x.acesso);
+        const vigentes = await Promise.all(
+          outras.map(async (y) => (await this.situacao(c, y.acesso)) !== 'encerrado'),
+        );
+        if (vigentes.some(Boolean))
           throw recusa(
             'profissional-em-outra-conta',
             'O profissional já está ligado a outra conta do portal.',
@@ -235,33 +250,30 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
     return r;
   }
 
-  async registrarLeitura(_c: ContextoPortalMedico, trilha: LinhaTrilha): Promise<void> {
+  async registrarLeitura(_c: ContextoPortalMedico, trilha: TrilhaPortalMedico): Promise<void> {
     this.trilhas.push(trilha);
   }
 
   async vinculos(c: ContextoPortalMedico, acessos: readonly number[]) {
     const m = this.v(c);
     return new Map(
-      acessos.filter((a) => m.has(a)).map((a) => [a, { ...(m.get(a) as VinculoMedicoExternoLido) }]),
+      acessos.filter((a) => m.has(a)).map((a) => [a, { ...(m.get(a) as VinculoMedicoExterno) }]),
     );
   }
 
-  async trocaEmailPendente(c: ContextoPortalMedico, acesso: number): Promise<TrocaEmailMedicoLida | null> {
+  async trocaEmailPendente(c: ContextoPortalMedico, acesso: number): Promise<TrocaEmailMedico | null> {
     const t = this.trocas.findLast(
       (y) => y.hospital === c.hospital && y.acesso === acesso && y.situacao === 'pendente',
     );
     return t ? this.semToken(t) : null;
   }
 
-  async trocaEmailPorToken(
-    c: ContextoPortalMedico,
-    tokenResumo: string,
-  ): Promise<TrocaEmailMedicoLida | null> {
+  async trocaEmailPorToken(c: ContextoPortalMedico, tokenResumo: string): Promise<TrocaEmailMedico | null> {
     const t = this.trocas.find((y) => y.hospital === c.hospital && y.tokenResumo === tokenResumo);
     return t ? this.semToken(t) : null;
   }
 
-  private semToken(t: TrocaEmailMedicoLida): TrocaEmailMedicoLida {
+  private semToken(t: TrocaEmailMedico): TrocaEmailMedico {
     return {
       id: t.id,
       acesso: t.acesso,
@@ -272,17 +284,14 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
     };
   }
 
-  async notificacoesCritico(
-    c: ContextoPortalMedico,
-    acesso: number,
-  ): Promise<NotificacaoCriticoMedicoLida[]> {
+  async notificacoesCritico(c: ContextoPortalMedico, acesso: number): Promise<NotificacaoCriticoMedico[]> {
     return this.notificacoes
       .filter((y) => y.hospital === c.hospital && y.acesso === acesso)
       .reverse()
       .map((y) => ({ aviso: y.aviso, envio: y.envio, motivo: y.motivo, em: y.em }));
   }
 
-  async atosConta(c: ContextoPortalMedico, acesso: number): Promise<AtoContaMedicoLido[]> {
+  async atosConta(c: ContextoPortalMedico, acesso: number): Promise<AtoContaMedicoRegistrado[]> {
     return this.atos
       .filter((a) => a.hospital === c.hospital && a.acesso === acesso)
       .reverse()
@@ -319,13 +328,13 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
   async donosDosCodigos(_c: ContextoPortalMedico, codigos: readonly number[]) {
     const m = new Map<number, Set<number>>();
     for (const p of [...CORPO_CLINICO_SINTETICO, ...this.registrosAvulsos])
-      for (const r of p.registros)
+      for (const r of p.registros as readonly { codigo: number }[])
         if (codigos.includes(r.codigo)) m.set(r.codigo, (m.get(r.codigo) ?? new Set()).add(p.id));
     return m;
   }
 
   /** Registros de outros profissionais (os testes simulam o código do conselho repetido). */
-  readonly registrosAvulsos: ProfissionalCorpoClinicoLido[] = [];
+  readonly registrosAvulsos: ProfissionalCorpoClinico[] = [];
 
   async sugestoesEmLote(c: ContextoPortalMedico, pares: readonly { uf: string; numero: number }[]) {
     const m = new Map<string, { id: number; nome: string }[]>();

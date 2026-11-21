@@ -11,11 +11,20 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { pastaTemporaria, verapdf } from '../documento/integracao.spec-util.js';
+import { type ContextoModulo, REGISTRO_MODULOS } from '../registro.js';
+import { moduloContabil } from './modulo.js';
+import type { PortaContabil } from './porta.js';
 import { PortaContabilMemoria } from './porta-memoria.js';
+
+/** O módulo da contabilidade registrado com a porta do teste (o registro real é o do integrador da onda). */
+const registroContabil = (p: PortaContabil) => ({
+  ...REGISTRO_MODULOS,
+  contabil: async () => ({ modulo: (ctx: ContextoModulo) => moduloContabil(ctx, { porta: p }) }),
+});
 
 const GOTENBERG = process.env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318';
 const disponivel = await gotenbergDisponivel(GOTENBERG);
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', GOTENBERG_URL: GOTENBERG };
+const env: Record<string, string> = { ...envTeste, API_MODULOS: 'config,contabil', AMBIENTE: 'dev', GOTENBERG_URL: GOTENBERG };
 
 describe.skipIf(!disponivel)('demonstrações contábeis em PDF/A (veraPDF)', () => {
   let app: NestFastifyApplication;
@@ -25,7 +34,7 @@ describe.skipIf(!disponivel)('demonstrações contábeis em PDF/A (veraPDF)', ()
   beforeAll(async () => {
     app = await criarApp(lerConfiguracao(env), null, env, {
       trilha: new RegistradorTrilhaMemoria(),
-      contabil: porta,
+      registro: registroContabil(porta),
     });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

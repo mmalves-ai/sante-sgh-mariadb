@@ -6,7 +6,7 @@
 // 5): a conferência sai no rodapé do PDF e nas últimas linhas da planilha.
 import type { Balancete, Balanco, ColunaRelatorio, Diario, Dre, TipoDemonstracao } from '@sgh/contratos';
 import { TIPOS_DEMONSTRACAO } from '@sgh/contratos';
-import type { LinhaRelatorio } from '@sgh/legado';
+import type { LinhaRelatorio } from './tipos.js';
 import { reaisBr } from '@sgh/dominio-contabil';
 import { gerarXlsx } from '../relatorio/public-api.js';
 

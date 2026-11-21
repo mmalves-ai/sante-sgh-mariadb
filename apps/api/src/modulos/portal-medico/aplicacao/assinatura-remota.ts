@@ -13,6 +13,7 @@ import {
   type PrepararLoteIcp,
   type ResultadoFluxoAssinatura,
 } from '@sgh/contratos';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 
 /** O serviço da assinatura dos documentos (M49) que o portal reaproveita (o app.module liga; os testes, um falso). */
@@ -51,6 +52,8 @@ export function sessaoDaAssinaturaRemota(x: {
   readonly acesso: number;
   /** O IP de quem está no portal (a estação da trilha). */
   readonly ip: string | null;
+  /** O contexto do núcleo do portal (cliente e estabelecimento; sem usuário interno). */
+  readonly contexto: ContextoNucleo;
 }): SessaoCadastro {
   return {
     req: {
@@ -60,7 +63,7 @@ export function sessaoDaAssinaturaRemota(x: {
     hospital: x.hospital,
     rede: x.rede,
     login: x.login,
-    porta: { rede: x.rede, hospital: x.hospital } as never,
+    porta: { ...x.contexto, rede: x.rede, hospital: x.hospital } as SessaoCadastro['porta'],
     pode: () => false,
   };
 }

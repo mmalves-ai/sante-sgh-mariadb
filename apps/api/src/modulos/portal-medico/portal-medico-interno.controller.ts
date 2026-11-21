@@ -51,6 +51,17 @@ const id = (v: string): number => {
   return Number(v);
 };
 
+/** A Idempotency-Key do pedido (opcional: sem ela, cada gravação é nova); a chave fora do formato é recusada. */
+const FORMATO_CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
+function chaveDoPedido(req: RequisicaoAutorizada): string | null {
+  const bruto = req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (chave === undefined || chave === '') return null;
+  if (!FORMATO_CHAVE.test(chave))
+    throw new ErroProblema('entrada-invalida', 400, 'Pedido inválido', 'A Idempotency-Key está fora do formato.');
+  return chave;
+}
+
 @Controller('portal-medico')
 export class PortalMedicoInternoController {
   constructor(
@@ -67,6 +78,8 @@ export class PortalMedicoInternoController {
       login: s.login,
       estacao: estacaoDaRequisicao(req),
       correlacao: correlacaoDaRequisicao(req, 'portal-medico'),
+      contexto: s.porta,
+      idempotencia: chaveDoPedido(req),
     };
   }
 
@@ -76,7 +89,7 @@ export class PortalMedicoInternoController {
   @Auditar(EVENTOS_AUDITAVEIS.portalMedicoContasLidas.codigo)
   contas(@Query() filtro: unknown, @Req() req: RequisicaoAutorizada): Promise<ContasMedicoExterno> {
     const f = corpo(esquemaFiltroContasMedicoExterno, filtro ?? {});
-    req.sghAlvo = { tabelaAlvo: 'SGH_SADT_PORTAL_ACESSO', idAlvo: 'contas' };
+    req.sghAlvo = { tabelaAlvo: 'conta_portal_profissional_externo', idAlvo: 'contas' };
     return this.portal.contas(this.quem(req), f);
   }
 
@@ -89,7 +102,9 @@ export class PortalMedicoInternoController {
   @Post('contas/:acesso/vinculo')
   @HttpCode(200)
   @Permissao(P.vincular)
-  @AuditadoNoHandler('o vínculo (SGH_SADT_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'o vínculo (conta_portal_profissional_externo) com a trilha de auditoria na mesma transação',
+  )
   vincular(
     @Param('acesso') acesso: string,
     @Body() b: unknown,
@@ -102,7 +117,9 @@ export class PortalMedicoInternoController {
   @Post('contas/:acesso/desvinculo')
   @HttpCode(200)
   @Permissao(P.vincular)
-  @AuditadoNoHandler('o desvínculo (SGH_SADT_PORTAL_ACESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'o desvínculo (conta_portal_profissional_externo) com a trilha de auditoria na mesma transação',
+  )
   desvincular(
     @Param('acesso') acesso: string,
     @Req() req: RequisicaoAutorizada,
@@ -116,7 +133,7 @@ export class PortalMedicoInternoController {
   @HttpCode(200)
   @Permissao(P.contaGerir)
   @AuditadoNoHandler(
-    'o ato (SGH_SADT_PORTAL_CONTA_ATO) e a situação da conta com a SGH_TRILHA na mesma transação',
+    'o ato (conta_portal_profissional_externo) e a situação da conta com a trilha de auditoria na mesma transação',
   )
   async atoConta(
     @Param('acesso') acesso: string,

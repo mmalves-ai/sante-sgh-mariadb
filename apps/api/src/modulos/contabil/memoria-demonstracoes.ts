@@ -1,34 +1,34 @@
 // Demonstrações, apuração e SPED da porta em MEMÓRIA (M54-F3): a sessão sintética de dev/ci (E2E). As somas, o diário
 // e os lançamentos do exercício saem dos lançamentos sintéticos da etapa 2 (`LancamentosMemoria`), como as leituras
-// SGH_ os somam; o arquivo do SPED tem as mesmas recusas (número seguinte, substituição do gerado, recibo e
+// as somas do banco; o arquivo do SPED tem as mesmas recusas (número seguinte, substituição do gerado, recibo e
 // cancelamento só do gerado). A empresa é SINTÉTICA; nada vai à cópia.
 import type {
-  ArquivoSpedLido,
-  DiarioLido,
-  EmpresaSpedLida,
-  FiltroSomasSgh,
-  LancamentoDiarioLido,
-  NovoArquivoSpedSgh,
-  SituacaoArquivoSpedSgh,
-  SomaContaLida,
-} from '@sgh/legado';
+  ArquivoSpedRegistrado,
+  DiarioPorta,
+  EmpresaSped,
+  FiltroSomasPorta,
+  LancamentoDoDiario,
+  NovoArquivoSped,
+  PedidoSituacaoArquivoSped,
+  SomaConta,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { LancamentosMemoria } from './memoria-lancamentos.js';
 
 type SemHospital<T> = Omit<T, 'hospital'>;
-type ArquivoMem = ArquivoSpedLido & { conteudoCifrado: string };
+type ArquivoMem = ArquivoSpedRegistrado & { conteudoCifrado: string };
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não foi possível gravar', detalhe, { codigo });
 const agora = () => new Date().toISOString().slice(0, 19);
-const semConteudo = (a: ArquivoMem): ArquivoSpedLido => {
+const semConteudo = (a: ArquivoMem): ArquivoSpedRegistrado => {
   const r: Partial<ArquivoMem> = { ...a };
   delete r.conteudoCifrado;
-  return r as ArquivoSpedLido;
+  return r as ArquivoSpedRegistrado;
 };
 
 /** A empresa sintética da sessão de dev/ci (CNPJ de teste). */
-export const EMPRESA_SINTETICA: EmpresaSpedLida = {
+export const EMPRESA_SINTETICA: EmpresaSped = {
   codigo: 1,
   nome: 'Hospital Sintético',
   cnpj: '00000000000191',
@@ -77,7 +77,7 @@ export class DemonstracoesMemoria {
     return l.tipo === 'apuracao' || (l.tipo === 'estorno' && this.tipoDe(l.estornaId) === 'apuracao');
   }
 
-  somas(f: FiltroSomasSgh, teto: number): { itens: SomaContaLida[]; parcial: boolean } {
+  somas(f: FiltroSomasPorta, teto: number): { itens: SomaConta[]; parcial: boolean } {
     const m = new Map<
       string,
       { conta: string; centroCusto: number | null; debitos: number; creditos: number }
@@ -112,7 +112,7 @@ export class DemonstracoesMemoria {
     };
   }
 
-  private doIntervalo(empresa: number, de: string, ate: string): LancamentoDiarioLido[] {
+  private doIntervalo(empresa: number, de: string, ate: string): LancamentoDoDiario[] {
     return this.f2()
       .lancs.filter((l) => l.empresa === empresa && l.data >= de && l.data <= ate)
       .sort((a, b) => a.data.localeCompare(b.data) || a.id - b.id)
@@ -138,12 +138,12 @@ export class DemonstracoesMemoria {
       }));
   }
 
-  diario(empresa: number, de: string, ate: string, teto: number, pagina: number): DiarioLido {
+  diario(empresa: number, de: string, ate: string, teto: number, pagina: number): DiarioPorta {
     const todos = this.doIntervalo(empresa, de, ate);
     const pular = (Math.max(1, pagina) - 1) * teto;
     const porTipo = new Map<
       string,
-      { tipo: LancamentoDiarioLido['tipo']; lancamentos: number; debitos: number; creditos: number }
+      { tipo: LancamentoDoDiario['tipo']; lancamentos: number; debitos: number; creditos: number }
     >();
     for (const l of todos) {
       const x = porTipo.get(l.tipo) ?? { tipo: l.tipo, lancamentos: 0, debitos: 0, creditos: 0 };
@@ -165,7 +165,7 @@ export class DemonstracoesMemoria {
     return { lancamentos: partidas > teto ? [] : todos, parcial: partidas > teto };
   }
 
-  lista(empresa: number, teto: number): ArquivoSpedLido[] {
+  lista(empresa: number, teto: number): ArquivoSpedRegistrado[] {
     return this.arquivos
       .filter((a) => a.empresa === empresa)
       .sort((a, b) => b.exercicio - a.exercicio || a.tipo.localeCompare(b.tipo) || b.numero - a.numero)
@@ -178,7 +178,7 @@ export class DemonstracoesMemoria {
     return a ? { ...a } : null;
   }
 
-  gravar(x: SemHospital<NovoArquivoSpedSgh>): { id: number; numero: number; substituidos: number } {
+  gravar(x: SemHospital<NovoArquivoSped>): { id: number; numero: number; substituidos: number } {
     if (x.parametros.length > 400)
       throw recusa('parametros-longos', 'Os parâmetros da geração não cabem no registro.');
     const mesmo = this.arquivos.filter(
@@ -217,7 +217,7 @@ export class DemonstracoesMemoria {
     return { id: this.seq, numero, substituidos };
   }
 
-  situacao(x: SemHospital<SituacaoArquivoSpedSgh>): ArquivoSpedLido {
+  situacao(x: SemHospital<PedidoSituacaoArquivoSped>): ArquivoSpedRegistrado {
     const a = this.arquivos.find((y) => y.empresa === x.empresa && y.id === x.id);
     if (!a) throw recusa('sped-inexistente', 'O arquivo não existe nesta empresa.');
     if (a.situacao !== 'gerado')

@@ -1,29 +1,29 @@
 // Lançamentos, períodos e conciliações da porta em MEMÓRIA (M54-F2): a sessão sintética de dev/ci (E2E). As mesmas
-// recusas das SGH_ (período encerrado, chave repetida devolve o mesmo lançamento, segundo estorno, partida já
+// recusas do banco (período encerrado, chave repetida devolve o mesmo lançamento, segundo estorno, partida já
 // conciliada, conciliação desfeita) e as conferências do domínio chamadas como a gravação real as chama. Dados
 // SINTÉTICOS; nada vai à cópia.
 import type { SituacaoFato, TipoLancamento } from '@sgh/contratos';
 import type {
-  ConciliacaoLida,
-  ConciliacaoSgh,
+  ConciliacaoRegistrada,
+  PedidoConciliacao,
   DadosDoEncerramento,
-  DesfazerConciliacaoSgh,
-  EncerramentoSgh,
-  FatoRegistradoLido,
-  FiltroLancamentosSgh,
-  FiltroRazaoSgh,
-  LancamentoLido,
-  LancamentoSgh,
-  PartidaLida,
-  PartidaPendenteLida,
-  PeriodoLido,
-  ReaberturaSgh,
-} from '@sgh/legado';
+  PedidoDesfazerConciliacao,
+  PedidoEncerramento,
+  FatoRegistrado,
+  FiltroLancamentosPorta,
+  FiltroRazaoPorta,
+  LancamentoRegistrado,
+  LancamentoParaGravar,
+  PartidaRegistrada,
+  PartidaPendente,
+  PeriodoRegistrado,
+  PedidoReabertura,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { RazaoLido } from './porta.js';
 
 type SemHospital<T> = Omit<T, 'hospital'>;
-type LancamentoMem = LancamentoLido & { partidas: PartidaLida[] };
+type LancamentoMem = LancamentoRegistrado & { partidas: PartidaRegistrada[] };
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não foi possível gravar', detalhe, { codigo });
@@ -38,8 +38,8 @@ const anterior = (c: string) => {
 export class LancamentosMemoria {
   constructor(
     readonly lancs: LancamentoMem[] = [],
-    readonly periodosMem: PeriodoLido[] = [],
-    readonly conciliacoesMem: ConciliacaoLida[] = [],
+    readonly periodosMem: PeriodoRegistrado[] = [],
+    readonly conciliacoesMem: ConciliacaoRegistrada[] = [],
     readonly itensConciliacao: { conciliacao: number; partida: number; ativa: boolean }[] = [],
     private seq = 0,
   ) {}
@@ -77,7 +77,7 @@ export class LancamentosMemoria {
     };
   }
 
-  periodos(empresa: number): PeriodoLido[] {
+  periodos(empresa: number): PeriodoRegistrado[] {
     return this.periodosMem
       .filter((p) => p.empresa === empresa)
       .sort((a, b) => a.competencia.localeCompare(b.competencia))
@@ -119,7 +119,7 @@ export class LancamentosMemoria {
     return [...por.values()].sort((a, b) => a.tipo.localeCompare(b.tipo));
   }
 
-  lancamentos(f: FiltroLancamentosSgh, pagina: number, tamanho: number) {
+  lancamentos(f: FiltroLancamentosPorta, pagina: number, tamanho: number) {
     const todos = this.lancs
       .filter(
         (l) =>
@@ -148,7 +148,7 @@ export class LancamentosMemoria {
   lancamentosDosFatos(ids: readonly number[]) {
     const r = new Map<
       number,
-      { id: number; idFato: number; partidas: PartidaLida[]; estornadoPor: number | null }
+      { id: number; idFato: number; partidas: PartidaRegistrada[]; estornadoPor: number | null }
     >();
     for (const l of this.lancs)
       if (l.fatoId !== null && ids.includes(l.fatoId)) {
@@ -164,7 +164,7 @@ export class LancamentosMemoria {
       .flatMap((l) => l.partidas.filter((p) => p.conta === conta).map((p) => ({ l, p })));
   }
 
-  razao(f: FiltroRazaoSgh, teto: number, pagina = 1): RazaoLido {
+  razao(f: FiltroRazaoPorta, teto: number, pagina = 1): RazaoLido {
     const todas = this.partidasDa(f.empresa, f.conta).filter(
       ({ p }) => f.centroCusto === undefined || p.centroCusto === f.centroCusto,
     );
@@ -199,7 +199,7 @@ export class LancamentosMemoria {
     conta: string,
     ate: string | null,
     teto: number,
-  ): PartidaPendenteLida[] {
+  ): PartidaPendente[] {
     return this.partidasDa(empresa, conta)
       .filter(({ l, p }) => (!ate || l.data <= ate) && this.conciliacaoDa(p.id) === null)
       .sort((a, b) => a.l.data.localeCompare(b.l.data) || a.p.id - b.p.id)
@@ -215,7 +215,7 @@ export class LancamentosMemoria {
       }));
   }
 
-  conciliacoes(empresa: number, conta: string, teto: number): ConciliacaoLida[] {
+  conciliacoes(empresa: number, conta: string, teto: number): ConciliacaoRegistrada[] {
     return this.conciliacoesMem
       .filter((c) => c.empresa === empresa && c.conta === conta)
       .sort((a, b) => b.id - a.id)
@@ -225,7 +225,7 @@ export class LancamentosMemoria {
 
   // ── gravações (dentro da "transação": o chamador clona antes e substitui no fim) ──
 
-  private periodo(empresa: number, competencia: string): PeriodoLido {
+  private periodo(empresa: number, competencia: string): PeriodoRegistrado {
     let p = this.periodosMem.find((x) => x.empresa === empresa && x.competencia === competencia);
     if (!p) {
       p = {
@@ -247,12 +247,12 @@ export class LancamentosMemoria {
     return p;
   }
 
-  private trocarPeriodo(p: PeriodoLido, novo: Partial<PeriodoLido>): void {
+  private trocarPeriodo(p: PeriodoRegistrado, novo: Partial<PeriodoRegistrado>): void {
     const i = this.periodosMem.indexOf(p);
     this.periodosMem[i] = { ...p, ...novo, versao: p.versao + 1 };
   }
 
-  gravarLancamento(l: LancamentoSgh, usuario: string): { id: number; repetido: boolean } {
+  gravarLancamento(l: LancamentoParaGravar, usuario: string): { id: number; repetido: boolean } {
     const d = l.partidas.filter((p) => p.lado === 'D').reduce((s, p) => s + p.valorCentavos, 0);
     const c = l.partidas.filter((p) => p.lado === 'C').reduce((s, p) => s + p.valorCentavos, 0);
     if (d !== c || d <= 0)
@@ -301,8 +301,8 @@ export class LancamentosMemoria {
   }
 
   encerrarPeriodo(
-    x: SemHospital<EncerramentoSgh>,
-    fatos: readonly FatoRegistradoLido[],
+    x: SemHospital<PedidoEncerramento>,
+    fatos: readonly FatoRegistrado[],
   ): DadosDoEncerramento {
     const periodo = this.periodo(x.empresa, x.competencia);
     const porSituacao: Partial<Record<SituacaoFato, number>> = {};
@@ -337,7 +337,7 @@ export class LancamentosMemoria {
     return dados;
   }
 
-  reabrirPeriodo(x: SemHospital<ReaberturaSgh>): PeriodoLido {
+  reabrirPeriodo(x: SemHospital<PedidoReabertura>): PeriodoRegistrado {
     const periodo = this.periodo(x.empresa, x.competencia);
     const motivo = x.conferir(this.periodos(x.empresa));
     if (motivo) throw recusa('reabertura-recusada', motivo);
@@ -345,7 +345,7 @@ export class LancamentosMemoria {
     return { ...periodo };
   }
 
-  conciliar(x: SemHospital<ConciliacaoSgh>): { id: number; valor: number } {
+  conciliar(x: SemHospital<PedidoConciliacao>): { id: number; valor: number } {
     const todas = this.lancs.flatMap((l) => l.partidas.map((p) => ({ l, p })));
     const achadas = [...new Set(x.partidas)]
       .map((id) => todas.find(({ p }) => p.id === id))
@@ -379,7 +379,7 @@ export class LancamentosMemoria {
     return { id, valor };
   }
 
-  desfazerConciliacao(x: SemHospital<DesfazerConciliacaoSgh>): ConciliacaoLida {
+  desfazerConciliacao(x: SemHospital<PedidoDesfazerConciliacao>): ConciliacaoRegistrada {
     const i = this.conciliacoesMem.findIndex((c) => c.id === x.id && c.empresa === x.empresa);
     if (i < 0) throw recusa('conciliacao-inexistente', 'Conciliação não encontrada.');
     const c = this.conciliacoesMem[i]!;

@@ -113,6 +113,8 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
   const configuracaoDe = (f: FonteConfiguracao | null | undefined) => configuracaoMemoria ?? f ?? null;
   return {
     module: ModuloSadt,
+    // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
+    global: true,
     controllers: [SadtController, PortalController, PacsController],
     providers: [
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),

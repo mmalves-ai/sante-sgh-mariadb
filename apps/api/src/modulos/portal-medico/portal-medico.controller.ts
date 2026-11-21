@@ -1,5 +1,5 @@
 // Portal do médico externo (M50, etapa 3; ficha, seção 7 e regras 1, 6 e 13). As rotas são @Publica para a guarda das
-// sessões internas: é o portal de resultados do M26 (outro domínio de identidade, a conta em SGH_SADT_PORTAL_ACESSO), e
+// sessões internas: é o portal de resultados do M26 (outro domínio de identidade, a conta em conta_portal_profissional_externo), e
 // cada handler confere a SESSÃO DO PORTAL (o cookie do M26, HttpOnly) com o perfil de médico externo e, nas que mudam
 // estado, o CSRF por token duplo do portal (cookie sgh_portal_csrf + cabeçalho x-csrf-portal). Nada vem da tela sobre
 // quem é o médico: o profissional e os códigos saem do vínculo da conta, no servidor.
@@ -146,7 +146,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Get('extrato')
   @Header('cache-control', 'no-store')
   @Publica('o extrato do médico externo (sessão do portal e o vínculo da conta conferidos no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.extratoLido) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.extratoLido) sem dado pessoal')
   extrato(@Query() q: Record<string, string>, @Req() req: Req): Promise<ExtratoPortalMedico> {
     return this.portal.extrato(this.sessao(req), this.idSessao(req), {
       competencia: competenciaOuNula(q['competencia']),
@@ -156,7 +156,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Get('extrato/conta')
   @Header('cache-control', 'no-store')
   @Publica('a conta de cada valor do extrato do médico externo (sessão do portal conferida no handler)')
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.extratoLido) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.extratoLido) sem dado pessoal')
   conta(@Query() q: Record<string, string>, @Req() req: Req): Promise<ContaDoMedicoResposta> {
     const c = competenciaOuNula(q['competencia']);
     if (!c) throw new ErroProblema('entrada-invalida', 400, 'Competência inválida', 'Use AAAA-MM.');
@@ -168,7 +168,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'meus pacientes do médico externo (vínculo assistencial pelos registros do profissional; sessão no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.pacientesLidos) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.pacientesLidos) sem dado pessoal')
   pacientes(@Req() req: Req): Promise<MeusPacientesPortalMedico> {
     return this.portal.meusPacientes(this.sessao(req), this.idSessao(req));
   }
@@ -179,7 +179,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
     'o resumo do prontuário de um paciente com vínculo assistencial do médico externo (sessão no handler)',
   )
   @AuditadoNoHandler(
-    'o acesso remoto vai à SGH_TRILHA (portal.medico.prontuarioAcessado) com o paciente; o negado também',
+    'o acesso remoto vai à trilha de auditoria (portal.medico.prontuarioAcessado) com o paciente; o negado também',
   )
   prontuario(@Param('paciente') paciente: string, @Req() req: Req): Promise<ProntuarioPortalMedico> {
     if (!/^[1-9]\d{0,17}$/.test(paciente))
@@ -192,7 +192,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'a fila de assinatura remota do profissional ligado à conta (sessão do portal conferida no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.assinaturasLidas) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.assinaturasLidas) sem dado pessoal')
   assinaturas(@Req() req: Req): Promise<AssinaturasPortalMedico> {
     return this.portal.assinaturas(this.sessao(req), this.idSessao(req), req.ip ?? null);
   }
@@ -203,7 +203,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
     'o médico pede a assinatura remota do lote (sessão e CSRF do portal; o login e o certificado saem do vínculo)',
   )
   @AuditadoNoHandler(
-    'as prévias e o pedido em SGH_ (M49) com a SGH_TRILHA; o pedido do portal vai à trilha (portal.medico.assinaturaPedida)',
+    'as prévias e o pedido na assinatura de documentos (M49) com a trilha de auditoria; o pedido do portal vai à trilha (portal.medico.assinaturaPedida)',
   )
   assinar(@Body() b: unknown, @Req() req: Req): Promise<InicioAssinaturaPortalMedico> {
     const s = this.sessao(req, true);
@@ -214,7 +214,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(200)
   @Publica('a volta do provedor da assinatura em nuvem (sessão e CSRF do portal; o state amarra ao pedido)')
   @AuditadoNoHandler(
-    'a conclusão do lote em SGH_ (M49) com a SGH_TRILHA; o resultado vai à trilha (portal.medico.assinaturaConcluida)',
+    'a conclusão do lote na assinatura de documentos (M49) com a trilha de auditoria; o resultado vai à trilha (portal.medico.assinaturaConcluida)',
   )
   concluirAssinatura(@Body() b: unknown, @Req() req: Req): Promise<ResultadoAssinaturaPortalMedico> {
     const s = this.sessao(req, true);
@@ -231,7 +231,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'os avisos de resultado crítico dos pacientes com vínculo assistencial do médico externo (sessão no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.criticosLidos) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.criticosLidos) sem dado pessoal')
   criticos(@Req() req: Req): Promise<CriticosPortalMedico> {
     return this.portal.criticos(this.sessao(req), this.idSessao(req));
   }
@@ -242,7 +242,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
     'a ciência do resultado crítico pelo médico externo, com a conduta (sessão e CSRF do portal no handler)',
   )
   @AuditadoNoHandler(
-    'a ciência (SGH_PEP_RESULT_CIENCIA) com a SGH_TRILHA do prontuário e portal.medico.criticoCiente com o paciente',
+    'a ciência (registro de ciência do prontuário) com a trilha de auditoria do prontuário e portal.medico.criticoCiente com o paciente',
   )
   ciencia(
     @Param('aviso') aviso: string,
@@ -263,7 +263,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'a agenda cirúrgica do médico externo (só as cirurgias dele e os pedidos da conta; sessão no handler)',
   )
-  @AuditadoNoHandler('a leitura vai à SGH_TRILHA (portal.medico.agendaLida) sem dado pessoal')
+  @AuditadoNoHandler('a leitura vai à trilha de auditoria (portal.medico.agendaLida) sem dado pessoal')
   agenda(@Query() q: Record<string, string>, @Req() req: Req): Promise<AgendaPortalMedico> {
     return this.portal.agenda(this.sessao(req), this.idSessao(req), {
       de: diaOuNulo(q['de']),
@@ -290,7 +290,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'pedido de cirurgia do médico externo (sessão e CSRF do portal conferidos no handler; limite por conta)',
   )
-  @AuditadoNoHandler('a solicitação (SGH_CC_AGENDA_ESTADO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a solicitação (agendamento_cirurgico) com a trilha de auditoria na mesma transação')
   pedir(@Body() b: unknown, @Req() req: Req): Promise<ResultadoPortalMedico> {
     const s = this.sessao(req, true);
     return this.portal.pedir(s, this.idSessao(req), corpo(esquemaPedidoCirurgiaPortal, b));
@@ -300,7 +300,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @HttpCode(200)
   @Publica('o médico externo retira o próprio pedido não confirmado (sessão e CSRF do portal no handler)')
   @AuditadoNoHandler(
-    'o cancelamento da solicitação (SGH_CC_AGENDA_ESTADO) com a SGH_TRILHA na mesma transação',
+    'o cancelamento da solicitação (agendamento_cirurgico) com a trilha de auditoria na mesma transação',
   )
   retirar(@Param('id') id: string, @Body() b: unknown, @Req() req: Req): Promise<ResultadoPortalMedico> {
     const s = this.sessao(req, true);
@@ -314,7 +314,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
     'o médico externo altera o próprio pedido não confirmado, com a versão vista e o motivo (sessão e CSRF do portal no handler)',
   )
   @AuditadoNoHandler(
-    'a versão anterior (SGH_CC_PEDIDO_VERSAO) e a alteração da solicitação com a SGH_TRILHA na mesma transação',
+    'a versão anterior (versão do pedido) e a alteração da solicitação com a trilha de auditoria na mesma transação',
   )
   alterar(@Param('id') id: string, @Body() b: unknown, @Req() req: Req): Promise<ResultadoPortalMedico> {
     const s = this.sessao(req, true);
@@ -329,7 +329,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
     'o médico troca a senha da própria conta (sessão e CSRF do portal, senha e código atuais no handler)',
   )
   @AuditadoNoHandler(
-    'a senha nova e o ato troca-senha (SGH_SADT_PORTAL_CONTA_ATO) com a SGH_TRILHA na mesma transação',
+    'a senha nova e o ato troca-senha (conta_portal_profissional_externo) com a trilha de auditoria na mesma transação',
   )
   trocarSenha(@Body() b: unknown, @Req() req: Req): Promise<ResultadoPortalMedico> {
     const s = this.sessao(req, true);
@@ -346,7 +346,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Post('conta/email')
   @HttpCode(201)
   @Publica('o médico pede a troca do e-mail (sessão e CSRF do portal, senha e código atuais no handler)')
-  @AuditadoNoHandler('o pedido (SGH_SADT_PORTAL_TROCA_EMAIL) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o pedido (pedido de troca do e-mail) com a trilha de auditoria na mesma transação')
   pedirTrocaEmail(@Body() b: unknown, @Req() req: Req): Promise<TrocaEmailMedicoPedida> {
     const s = this.sessao(req, true);
     return this.portal.pedirTrocaEmail(s, this.idSessao(req), corpo(esquemaPedirTrocaEmailMedico, b));
@@ -355,7 +355,9 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Post('conta/email/cancelar')
   @HttpCode(200)
   @Publica('o médico desiste da troca do e-mail pendente (sessão e CSRF do portal conferidos no handler)')
-  @AuditadoNoHandler('o pedido cancelado (SGH_SADT_PORTAL_TROCA_EMAIL) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'o pedido cancelado (pedido de troca do e-mail) com a trilha de auditoria na mesma transação',
+  )
   cancelarTrocaEmail(@Req() req: Req): Promise<ResultadoPortalMedico> {
     const s = this.sessao(req, true);
     return this.portal.cancelarTrocaEmail(s, this.idSessao(req));
@@ -366,7 +368,7 @@ export class PortalMedicoController implements OnModuleInit, OnModuleDestroy {
   @Publica(
     'o link enviado ao e-mail novo (sem sessão: o token de 256 bits, só em resumo no banco, é a prova)',
   )
-  @AuditadoNoHandler('o e-mail novo e o ato troca-email com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o e-mail novo e o ato troca-email com a trilha de auditoria na mesma transação')
   confirmarTrocaEmail(
     @Query('h') h: string | undefined,
     @Body() b: unknown,

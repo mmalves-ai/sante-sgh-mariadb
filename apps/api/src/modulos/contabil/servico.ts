@@ -46,7 +46,7 @@ import {
   problemasDoPlano,
   simularRegra,
 } from '@sgh/dominio-contabil';
-import type { ContaPlanoLida, FatoRegistradoLido, FiltroFatosSgh, RegraPublicadaLida } from '@sgh/legado';
+import type { ContaPlanoVersionada, FatoRegistrado, FiltroFatosPorta, RegraPublicada } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContabil, PortaContabil } from './porta.js';
 
@@ -59,7 +59,7 @@ const recusa = (codigo: string, detalhe: string, campos: readonly string[] = [])
     ...(campos.length ? { campos: [...campos] } : {}),
   });
 
-const semCampos = (c: ContaPlanoLida): ContaPlano => ({
+const semCampos = (c: ContaPlanoVersionada): ContaPlano => ({
   empresa: c.empresa,
   codigo: c.codigo,
   nome: c.nome,
@@ -92,7 +92,7 @@ export function camposAlterados(antes: ContaPlano, depois: ContaPlano): string[]
   return k.filter((c) => antes[c] !== depois[c]);
 }
 
-function fatoListado(f: FatoRegistradoLido): FatoListado {
+function fatoListado(f: FatoRegistrado): FatoListado {
   return {
     id: f.idFato,
     fonte: rotuloDaFonte(f.tabela),
@@ -255,7 +255,7 @@ export class ServicoContabil {
     const ultima = new Map<string, number>();
     for (const r of lidas)
       ultima.set(chaveRegra(r.regra), Math.max(ultima.get(chaveRegra(r.regra)) ?? 0, r.regra.versao));
-    const itens: VersaoRegra[] = lidas.map((r: RegraPublicadaLida) => ({
+    const itens: VersaoRegra[] = lidas.map((r: RegraPublicada) => ({
       ...r,
       situacao: ultima.get(chaveRegra(r.regra)) === r.regra.versao ? 'publicada' : 'substituida',
     }));
@@ -313,7 +313,7 @@ export class ServicoContabil {
 
   async fatos(
     c: ContextoContabil,
-    f: FiltroFatosSgh,
+    f: FiltroFatosPorta,
     pagina: number,
     tamanho: number,
   ): Promise<FatosContabeis> {
