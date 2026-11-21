@@ -77,7 +77,24 @@ REGRAS_PARAMETRO = {
     "texto_resumo": "texto_resumo:<n>: texto (pontas aparadas) maior que n é cortado na última fronteira de palavra até "
                     "n (sem fronteira: corte em n) com a pendência informativa texto_resumido (baixa); use quando o "
                     "texto integral vai para outra coluna",
+    # recorrência de datas (rodada 3): a origem marca a data que se repete todo ano com um ANO convencional (ex.: 9999)
+    "ano_recorrente": "ano_recorrente:<ano>: DATE cujo ano é o ano-marca vira TRUE (a data se repete todo ano: só dia "
+                      "e mês valem), outro ano FALSE (data única); com depara=valores, 1/0 viram o domínio do destino "
+                      "(ex.: anual/data_unica); data sentinela: NULL com data_sentinela",
+    "data_nao_recorrente": "data_nao_recorrente:<ano>: a DATE quando o ano não é o ano-marca (data única); no ano-marca, "
+                           "NULL sem pendência (a data recorrente não tem ano); data sentinela: NULL com data_sentinela",
+    "dia_recorrente": "dia_recorrente:<ano>: dia do mês (1..31) da DATE no ano-marca; outro ano: NULL sem pendência",
+    "mes_recorrente": "mes_recorrente:<ano>: mês (1..12) da DATE no ano-marca; outro ano: NULL sem pendência",
 }
+REGRAS_RECORRENCIA = ("ano_recorrente", "data_nao_recorrente", "dia_recorrente", "mes_recorrente")
+
+# período com a unidade em outra coluna (`#dias:<VALOR>,<UNIDADE>` na carga dirigida pelo mapa): dias por unidade.
+# mês e ano são convenção (30 e 365 dias): o resultado leva a pendência baixa periodo_aproximado
+DIAS_POR_UNIDADE = {"minuto": (1, 1440), "hora": (1, 24), "dia": (1, 1), "semana": (7, 1), "mes": (30, 1),
+                    "ano": (365, 1)}  # (multiplicador, divisor): conta exata em Decimal
+_UNIDADE_SINONIMO = {"minutos": "minuto", "min": "minuto", "horas": "hora", "h": "hora", "dias": "dia", "d": "dia",
+                     "semanas": "semana", "s": "semana", "meses": "mes", "mês": "mes", "m": "mes", "anos": "ano",
+                     "a": "ano"}
 
 
 def _parametro(regra):
@@ -98,6 +115,41 @@ def _parametro(regra):
         return (nome, (n,)) if n > 0 else None
     except (ValueError, decimal.InvalidOperation):
         return None
+
+
+def unidade_periodo(u):
+    """Unidade de período canônica (minuto, hora, dia, semana, mes, ano) de um texto da origem (nome, plural ou letra
+    D/S/M/A/H, sem caixa); None se desconhecida."""
+    if u is None:
+        return None
+    s = _str(u).strip().lower()
+    s = _UNIDADE_SINONIMO.get(s, s)
+    return s if s in DIAS_POR_UNIDADE else None
+
+
+def periodo_em_dias(valor, unidade):
+    """(dias inteiros, pendência) de uma quantidade e da unidade CANÔNICA (`unidade_periodo`). Vazio: (None, None);
+    negativo ou não numérico: NULL com valor_fora_do_dominio; unidade desconhecida: NULL com valor_fora_do_dominio;
+    sem unidade: NULL com unidade_ausente. Mês e ano (30 e 365 dias) ou fração de dia truncada: periodo_aproximado."""
+    if valor is None or (isinstance(valor, (str, bytes, bytearray)) and not _str(valor).strip()):
+        return None, None
+    try:
+        x = valor if isinstance(valor, decimal.Decimal) else decimal.Decimal(
+            repr(valor) if isinstance(valor, float) else _str(valor).strip() if isinstance(
+                valor, (str, bytes, bytearray)) else str(valor))
+    except decimal.InvalidOperation:
+        return None, "valor_fora_do_dominio"
+    if isinstance(valor, bool) or not x.is_finite() or x < 0:
+        return None, "valor_fora_do_dominio"
+    if unidade is None:
+        return None, "unidade_ausente"
+    u = unidade_periodo(unidade)
+    if u is None:
+        return None, "valor_fora_do_dominio"
+    mult, div = DIAS_POR_UNIDADE[u]
+    bruto = x * mult / div
+    dias = int(bruto.to_integral_value(rounding=decimal.ROUND_FLOOR))
+    return dias, ("periodo_aproximado" if u in ("mes", "ano") or bruto != dias else None)
 
 
 def regra_conhecida(regra):
@@ -294,6 +346,18 @@ def aplicar(regra, v):
             return None, "valor_fora_do_dominio"
         m = h.hour * 60 + h.minute
         return (m or None), (pend if m else None)
+    if par and par[0] in REGRAS_RECORRENCIA:
+        if not isinstance(v, (datetime.date, datetime.datetime)):
+            return None, "valor_fora_do_dominio"
+        if _data(v):
+            return None, "data_sentinela"
+        d = v.date() if isinstance(v, datetime.datetime) else v
+        marca = d.year == par[1][0]
+        if par[0] == "ano_recorrente":
+            return marca, None
+        if par[0] == "data_nao_recorrente":
+            return (None if marca else d), None
+        return ((d.day if par[0] == "dia_recorrente" else d.month) if marca else None), None
     if par and par[0] == "inteiro_faixa":
         a, b = par[1]
         try:

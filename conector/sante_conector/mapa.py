@@ -129,8 +129,21 @@ def ref_simples(spec):
 
 
 # colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
-_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item|#rotulo|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
-                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?")
+_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item[2-9]?|#rotulo[2-9]?|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
+                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?"
+                        r"|#dias:[A-Z0-9_$]+,(?:[A-Z0-9_$]+|=[a-z]+)")
+_ITEM = re.compile(r"#item([2-9]?)")
+_ROTULO = re.compile(r"#rotulo([2-9]?)")
+
+
+def posicao_item(nome):
+    """Posição (0..8) de `#item`/`#item2`.. ou de `#rotulo`/`#rotulo2`..; None se não for marca de item."""
+    m = _ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or "")
+    return (int(m.group(1) or 1) - 1) if m else None
+
+
+def eh_item(nome):
+    return bool(_ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or ""))
 OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes")
 
 
@@ -154,6 +167,8 @@ def opcoes_destino(colunas):
             elif x.startswith("adotar:"):
                 o["adotar"] = [y for y in x[7:].split(",") if y]
             elif x.startswith("desdobrar:"):
+                # item: COLUNA ou COL1+COL2 (par: #item e #item2); rótulo com partes separadas por '|' (#rotulo,
+                # #rotulo2; parte vazia = NULL)
                 o["desdobrar"] = [tuple(y.split("=", 1)) if "=" in y else (y, y) for y in x[10:].split(",") if y]
     return saida
 
@@ -199,18 +214,45 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                 if alvo not in dts or not ops.get(alvo, {}).get("antes") or alvo == c["destino"].split(".")[0]:
                     erros.append("@id:%s sem destino secundário gravado antes (via antes) em %s" % (alvo, t))
         for dt, o in opcoes_destino(cols).items():
-            if dts and dt == dts[0] and (o["opcional"] or o["desdobrar"] or o["antes"]):
-                erros.append("destino principal não pode ser opcional, desdobrado nem antes: %s -> %s" % (t, dt))
+            if dts and dt == dts[0] and (o["opcional"] or o["antes"]):
+                erros.append("destino principal não pode ser opcional nem antes: %s -> %s" % (t, dt))
+            if o["desdobrar"] and o["complementa"]:
+                erros.append("destino desdobrado não pode ser complementa: %s -> %s" % (t, dt))
             for a in o["adotar"]:
                 if dt in ddl and a not in ddl[dt]["colunas"]:
                     erros.append("coluna de adoção inexistente no DDL: %s -> %s.%s" % (t, dt, a))
             if o["complementa"] and not any(c["destino"] == dt + ".id" and referencia_declarada(c) for c in cols):
                 erros.append("destino complementado sem coluna de referência ao pai em %s.id: %s" % (dt, t))
-            itens = [c for c in cols if c["destino"].startswith(dt + ".") and c["coluna"] in ("#item", "#rotulo")]
+            itens = [c for c in cols if c["destino"].startswith(dt + ".") and eh_item(c["coluna"])]
             if itens and not o["desdobrar"]:
                 erros.append("#item/#rotulo em destino não desdobrado: %s -> %s" % (t, dt))
             if o["desdobrar"] and not any(c["coluna"] == "#item" for c in itens):
                 erros.append("destino desdobrado sem #item: %s -> %s" % (t, dt))
+            if o["desdobrar"]:
+                n_item = {posicao_item(c["coluna"]) for c in itens if c["coluna"].startswith("#item")}
+                rots = [r for _, r in o["desdobrar"]]
+                if len(set(rots)) != len(rots):
+                    erros.append("desdobrar com rótulo repetido: %s -> %s" % (t, dt))
+                for spec, _ in o["desdobrar"]:
+                    if not set(range(len(spec.split("+")))) <= n_item or not all(
+                            _COL_ORIGEM.fullmatch(x) for x in spec.split("+")):
+                        erros.append("desdobrar com colunas sem #item correspondente (#item, #item2..): %s -> %s (%s)"
+                                     % (t, dt, spec))
+        for c in cols:
+            if c["coluna"].startswith("#dias:"):
+                u = c["coluna"].split(",", 1)[1]
+                rd = referencia_declarada(c)
+                ps = passos_ref(rd) if rd else None
+                if u.startswith("="):
+                    if sentinela.unidade_periodo(u[1:]) is None:
+                        erros.append("#dias com unidade literal desconhecida: %s.%s" % (t, c["coluna"]))
+                    if rd:
+                        erros.append("#dias com unidade literal não leva ref: %s.%s" % (t, c["coluna"]))
+                elif rd and (not ps or "coluna" not in ps[-1]):
+                    erros.append("#dias: a ref: da unidade tem de terminar em coluna (ref:T>COL): %s.%s"
+                                 % (t, c["coluna"]))
+            if c["coluna"].startswith("#data_hora:") and referencia_declarada(c):
+                erros.append("#data_hora não leva ref: %s.%s" % (t, c["coluna"]))
     return sorted(set(erros))
 
 

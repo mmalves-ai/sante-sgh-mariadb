@@ -99,3 +99,30 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
 - `PREPARO_DOS_REQUERIDOS = True` na sintética da fatia: o `PREPARO_DESTINO` das fatias de `REQUER` roda antes do dela.
 - A autoconferência acusa cada tabela BLOQUEADA da fatia (passo 6); `complementa` não exige as NOT NULL do destino;
   coluna obrigatória por referência a pai BLOQUEADO ou DESCARTADO deixa a tabela BLOQUEADA (`pai_nao_carregado`).
+
+## Mecanismos da rodada 3, grupo 1: data e hora (integrador; prova em `sintetica_d/exemplo_r3.py`, `testes/test_carga_mapa_r3.py`)
+- Data + hora HHMM em outra coluna: `#data_hora:<DATA>,<HORA>` (já existia; hora em inteiro, texto 'HHMM'/'HH:MM'
+  ou texto cru, TIME ou TIMESTAMP de só hora). NOVO: `#data_hora:<DATA>,<HORA>,<HORA_REF>`: a hora menor que a hora
+  de referência válida da mesma data (ex.: fim antes do início) passa para o dia seguinte, com a pendência baixa
+  `virada_de_dia` (ato cirúrgico que atravessa a meia-noite). Data DATE em DATETIME e o contrário: `tipar` (rodada 2).
+- Quantidade com a unidade em outra coluna: `#dias:<VALOR>,<UNIDADE>` (ou `#dias:<VALOR>,=ano` para unidade fixa)
+  grava dias inteiros: minuto, hora, dia, semana (7), mes (30), ano (365). A unidade aceita nome, plural ou letra
+  (D, S, M = mês, A, H), sem caixa; pode vir do pai por `ref:T>COLUNA` na via (encadeada TERMINADA EM COLUNA, ex.:
+  `ref:TBUNID_IDADE>UNIDADE_CALCULO`) e passar pelo de-para de valores da linha (`depara=valores`, pares em
+  `valores.d/<fatia>.tsv` com a coluna `#dias:V,U`: valor da origem -> unidade canônica). A regra declarada na linha
+  vale para o VALOR antes da conta (ex.: `inteiro_zero_nulo`, 0 = sem limite). Mês, ano e fração de dia truncada:
+  pendência baixa `periodo_aproximado`; sem unidade: NULL com `unidade_ausente`; unidade desconhecida, sem par ou
+  valor negativo: NULL com `valor_fora_do_dominio`; pai da unidade ausente: `pai_inexistente`.
+- Recorrência de datas (ex.: feriado com ano-marca 9999 = todo ano): regras `ano_recorrente:<ano>` (TRUE/FALSE; com
+  `depara=valores` 1 -> anual, 0 -> data_unica), `data_nao_recorrente:<ano>` (a data; NULL no ano-marca),
+  `dia_recorrente:<ano>` e `mes_recorrente:<ano>` (dia e mês só no ano-marca). Declare a MESMA coluna de data uma vez
+  por destino (recorrencia, dia, mes, data). Data sentinela: `data_sentinela`.
+- Pares de colunas que viram linhas, também no destino PRINCIPAL: `desdobrar:SEG_I+SEG_F=2|0,...,FER_I+FER_F=|1`
+  na via de `#item`; `#item` recebe a 1ª coluna do par, `#item2` a 2ª (cada uma pela regra declarada na própria
+  linha `#itemN`, ex. `hora` ou `hora_hhmm`); `#rotulo`, `#rotulo2` recebem as partes do rótulo separadas por '|'
+  (parte vazia = NULL; literal convertido ao tipo do destino). Item sem valor em nenhuma das colunas não gera linha.
+  No principal: cada item é `<chave>/<destino>/<rótulo>` no conector_origem, a conciliação confere linhas e itens
+  ("gravados" = itens), linha sem item é recusada com a pendência baixa `sem_item_a_gravar`, e uma restrição do
+  destino num item (ex.: fim <= início) recusa a linha inteira. Desdobrado não combina com `complementa`; rótulo
+  repetido ou par sem `#item2` declarado é erro do verificador. Ex.: TBLOCALHORA, FCHORATE (sem `complementa` nem
+  destino extra: o próprio horário é o principal).

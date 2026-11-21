@@ -86,6 +86,23 @@ Mecanismos da rodada 2 de cobertura (prova em `sintetica_d/exemplo_r2.py`):
   o literal em coluna TIME/DATE/DATETIME vira hora/data antes de gravar e da soma de controle (`tipar`; inválido: NULL
   com valor_fora_do_dominio); regras `minutos_hhmm` e `email`; `hora_hhmm` aceita o texto cru da origem.
 
+Mecanismos da rodada 3 de cobertura, regras de data e hora (prova em `sintetica_d/exemplo_r3.py`):
+- `#data_hora:<DATA>,<HORA>,<HORA_REF>`: com a terceira coluna (a hora de início da mesma data), a hora menor que a
+  de referência passa para o dia seguinte (virada da meia-noite, pendência baixa `virada_de_dia`);
+- `#dias:<VALOR>,<UNIDADE>` (ou `#dias:<VALOR>,=<unidade>`): quantidade com a unidade em outra coluna vira dias
+  inteiros (`sentinela.periodo_em_dias`: minuto, hora, dia, semana, mes = 30, ano = 365; mês, ano e fração truncada
+  com `periodo_aproximado`, baixa). A unidade pode vir do pai (`ref:T>COLUNA` na via, terminada em coluna) e passar
+  pelo de-para de valores da linha (`depara=valores`: valor da origem -> unidade canônica); a regra declarada na
+  linha vale para o VALOR antes da conta (ex.: `inteiro_zero_nulo`). Sem unidade: NULL com `unidade_ausente`;
+- regras de recorrência `ano_recorrente:<ano>`, `data_nao_recorrente:<ano>`, `dia_recorrente:<ano>` e
+  `mes_recorrente:<ano>` (a mesma coluna de data declarada para vários destinos: data repetida todo ano pelo ano-marca);
+- `desdobrar` em PARES e no destino PRINCIPAL: `desdobrar:A_INI+A_FIM=2|0,...` gera uma linha por item com `#item`
+  (1ª coluna), `#item2` (2ª)... e `#rotulo`, `#rotulo2`... (partes do rótulo separadas por '|'; parte vazia = NULL);
+  item sem valor em nenhuma das colunas não gera linha. No principal, cada item fica no conector_origem como
+  `<chave>/<destino>/<rótulo>` e a linha como `<chave>` (id do primeiro item); a conciliação confere as linhas
+  (lidas = com item + recusadas) e os itens (soma de controle por item); linha sem nenhum item é recusada com a
+  pendência baixa `sem_item_a_gravar`. Uma restrição do destino num item recusa a linha inteira (SAVEPOINT da linha).
+
 O hash da linha cobre as colunas lidas (chave + declaradas): declarar uma coluna nova numa tabela já carregada faz as
 linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em silêncio.
 """
@@ -111,6 +128,8 @@ GRAVIDADE_REGRA.update({"valor_elevado_ao_minimo": "baixa", "texto_resumido": "b
                         "segredo_aguarda_cofre": "media", "adotado_existente": "baixa", "vigencia_sem_fonte": "baixa",
                         "pai_ambiguo": "media", "documento_invalido": "media"})
 GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_indefinido": "alta"})
+GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
+                        "sem_item_a_gravar": "baixa"})
 TIPOS_INT = (7, 8, 16)
 INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
 DEC_DESTINO = {"decimal"}
@@ -180,8 +199,24 @@ def data_composta(ano, mes, dia=1):
         return None, "valor_fora_do_dominio"
 
 
-def data_hora_composta(data, hora):
-    """(data e hora, pendência) de uma coluna de data e outra de hora (`#data_hora:D,H`)."""
+def data_hora_composta(data, hora, hora_ref=None, com_ref=False):
+    """(data e hora, pendência) de uma coluna de data e outra de hora (`#data_hora:D,H`). Com `com_ref` (`#data_hora:
+    D,H,R`), a hora MENOR que a hora de referência R válida (início na mesma data) cai no dia seguinte, com a
+    pendência baixa virada_de_dia."""
+    x, pr = _data_hora(data, hora)
+    if x is None or not com_ref or not _tem_hora(hora):
+        return x, pr
+    r, prr = _data_hora(data, hora_ref)
+    if r is None or prr or not _tem_hora(hora_ref) or x >= r:
+        return x, pr
+    return x + datetime.timedelta(days=1), "virada_de_dia"
+
+
+def _tem_hora(h):
+    return h is not None and not (isinstance(h, (str, bytes, bytearray)) and not sentinela.aplicar("texto", h)[0])
+
+
+def _data_hora(data, hora):
     d, pr = sentinela.aplicar("data", data)
     if d is None:
         return None, pr
@@ -196,6 +231,10 @@ def data_hora_composta(data, hora):
     else:
         h, pr = sentinela.aplicar("hora_hhmm", hora)
     return (None, pr) if h is None else (datetime.datetime.combine(d, h), None)
+
+
+class _Marca(str):
+    """Marca de item desdobrado no modelo da linha (`#item`, `#item2`.., `#rotulo`, `#rotulo2`..)."""
 
 
 def codigo_derivado(texto, n, prefixo=""):
@@ -246,6 +285,8 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                    "valores": valores.get((t, c["coluna"], c["destino"]), {}) if dp == "valores" else None}
             if passos:  # só a referência composta, alternativa ou encadeada leva os passos
                 col["passos"] = passos
+            if c["coluna"].startswith("#dias:"):  # a regra declarada vale para o VALOR (nunca a gerada/da referência)
+                col["regra"] = c.get("regra") or ""
             cod = [x[4:] for x in (c.get("via") or "").split(";") if x.startswith("cod:")]
             if cod:
                 col["cod"] = tuple(cod[0].split(".", 1))
@@ -259,15 +300,16 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
         for dt in dts:
             for c in cols[dt]:
                 n = c["coluna"]
-                if n.startswith("#data:") or n.startswith("#data_hora:"):
+                if n.startswith("#data:") or n.startswith("#data_hora:") or n.startswith("#dias:"):
                     for x in n.split(":", 1)[1].split(","):
-                        ler(x)
+                        ler(None if x.startswith("=") else x)
                 ler(fonte_especial(n) if _especial(n) else n)
                 if c.get("passos") and c["passos"][0]["modo"] in ("composta", "alt_composta"):
                     for x in c["passos"][0].get("cols") or c["passos"][0]["arg"]:
                         ler(x)
-            for col, _ in opcoes.get(dt, {}).get("desdobrar", []):
-                ler(col)
+            for spec, _ in opcoes.get(dt, {}).get("desdobrar", []):
+                for col in spec.split("+"):
+                    ler(col)
         regras = {n: (geradas.get(t, {}).get(n, {}).get("regra") or "texto") for n in lidas}
         for c in decl[t]:
             if c.get("regra") and not _especial(c["coluna"]) and c["coluna"] in regras \
@@ -609,6 +651,39 @@ class CargaMapa(carga.Carga):
             d[n] = x
         return json.dumps(d, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
+    def _em_dias(self, linha, c, pend):
+        """`#dias:<VALOR>,<UNIDADE>`: quantidade (pela regra declarada na linha) e unidade (coluna, pai por `ref:T>COL`
+        e de-para de valores; ou literal `=ano`) em dias inteiros (`sentinela.periodo_em_dias`)."""
+        cv, cu = c["coluna"][6:].split(",", 1)
+        v = linha[cv]
+        if c.get("regra"):
+            v, pr = sentinela.aplicar(sentinela.regra_efetiva(c["regra"], self.subtipo.get(cv, 0)), v)
+            if pr:
+                pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+                return None
+        if v is None or (isinstance(v, (str, bytes, bytearray)) and not sentinela.aplicar("texto", v)[0]):
+            return None
+        if cu.startswith("="):
+            u = cu[1:]
+        else:
+            u = linha[cu]
+            if c.get("passos"):
+                u, _, pr = self._seguir(linha, cu, c["passos"])
+                if pr:
+                    pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+                    return None
+            u = sentinela.aplicar("texto", u)[0] if isinstance(u, (str, bytes, bytearray)) else u
+            if u is not None and c.get("valores") is not None:
+                k = str(u)
+                if not c["valores"].get(k):
+                    pend.append(("valor_fora_do_dominio", "media"))
+                    return None
+                u = c["valores"][k]
+        x, pr = sentinela.periodo_em_dias(v, u)
+        if pr:
+            pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+        return x
+
     def _valores(self, p, linha, chave):
         """{dt: [(sufixo, {coluna destino: valor})]}, {dt: [(colunas, resumo)]}, pendências [(regra, grav)], recusa
         (regra, grav) ou None, adiadas [(dt, coluna, ref, chave_pai)]. Sufixo '' é a linha única do destino; o
@@ -623,8 +698,8 @@ class CargaMapa(carga.Carga):
                 nome, dc = c["coluna"], c["destino"]
                 if nome == "@id" or nome.startswith("@id:"):
                     continue  # preenchido na gravação (id do principal ou do secundário `antes`); fora do resumo
-                if nome in ("#item", "#rotulo"):
-                    modelo.append((dc, nome))
+                if mapa.eh_item(nome):
+                    modelo.append((dc, _Marca(nome)))
                     continue
                 if nome.startswith("=~"):
                     x = nome[2:]
@@ -662,9 +737,13 @@ class CargaMapa(carga.Carga):
                         pend.append((pr, "media"))
                     algum = algum or x is not None
                 elif nome.startswith("#data_hora:"):
-                    x, pr = data_hora_composta(*[linha[y] for y in nome[11:].split(",")])
+                    xs = [linha[y] for y in nome[11:].split(",")]
+                    x, pr = data_hora_composta(*xs, com_ref=len(xs) == 3)
                     if pr:
                         pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+                    algum = algum or x is not None
+                elif nome.startswith("#dias:"):
+                    x = self._em_dias(linha, c, pend)
                     algum = algum or x is not None
                 elif nome == "#retrato":
                     x = self._retrato(p, linha)
@@ -695,24 +774,31 @@ class CargaMapa(carga.Carga):
             itens = [("", None)]
             if op.get("desdobrar"):
                 itens = []
-                ci = next(c for c in p["colunas"][dt] if c["coluna"] == "#item")
-                for col, rot in op["desdobrar"]:
-                    x, recusa, _ = self._converter(t, chave, p, linha, dict(ci, coluna=col, passos=None), linha[col],
-                                                   pend)
-                    if recusa:
-                        return None, None, pend, recusa, []
-                    if x is not None and x is not False:
-                        itens.append((rot, x))
+                cis = {mapa.posicao_item(c["coluna"]): c for c in p["colunas"][dt]
+                       if c["coluna"].startswith("#item")}
+                for spec, rot in op["desdobrar"]:
+                    xs = []
+                    for j, col in enumerate(spec.split("+")):
+                        x, recusa, _ = self._converter(t, chave, p, linha, dict(cis[j], coluna=col, passos=None),
+                                                       linha[col], pend)
+                        if recusa:
+                            return None, None, pend, recusa, []
+                        xs.append(x)
+                    if any(x is not None and x is not False for x in xs):
+                        itens.append((rot, xs))
             elif op.get("opcional") and not algum:
                 itens = []
             vals[dt], campos[dt] = [], []
             for rot, item in itens:
                 v, cs, nomes = {}, [], []
                 for dc, x in modelo:
-                    if x == "#item":
-                        x = item
-                    elif x == "#rotulo":
-                        x = rot
+                    if isinstance(x, _Marca):
+                        k = mapa.posicao_item(x)
+                        if x.startswith("#item"):
+                            x = item[k] if k < len(item) else None
+                        else:
+                            partes = rot.split("|")
+                            x = (partes[k] if k < len(partes) else "") or None
                     ic = info.get(dc) or (True, None, None, False)
                     x = tipar(x, ic[1])
                     if x is NAO_NUMERICO:
@@ -793,6 +879,8 @@ class CargaMapa(carga.Carga):
                 vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
             else:
                 vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
+                if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:
+                    recusa = ("sem_item_a_gravar", "baixa")  # nada a gravar: visível, conta como recusada
             if recusa:
                 if completar is not None:  # o provisório fica como estava, com a regra da linha real
                     self.existente[t][chave] = prov
@@ -815,7 +903,7 @@ class CargaMapa(carga.Carga):
                 ordem += [i for i in range(len(dts)) if i not in ordem]
                 for i in ordem:
                     dt = dts[i]
-                    primeiro = None
+                    primeiro, itens_principal = None, i == 0 and self._desdobrado(p, dt)
                     for (suf, v), (nomes, cs) in zip(vals[dt], campos[dt]):
                         for c in p["colunas"][dt]:
                             if c["coluna"] == "@id":
@@ -841,10 +929,14 @@ class CargaMapa(carga.Carga):
                                 ", ".join("`%s`" % c for c in pad), dt), (rid,))[0]))
                             cs = [lido[x] if isinstance(x, _PADRAO) else x for x in cs]
                         hd = hashlib.sha256("|".join(canon(x) for x in cs).encode()).digest()
-                        k = chave if i == 0 else "%s/%s%s" % (chave, dt, "/" + suf if suf else "")
+                        k = chave if i == 0 and not itens_principal else "%s/%s%s" % (
+                            chave, dt, "/" + suf if suf else "")
                         self._registrar(t, k, dts[i] if i else ents[0], rid, h, hd)
                         hds.append((ents[i], chave + ("/" + suf if suf else ""), hd))
                         primeiro = primeiro or rid
+                    if itens_principal:  # a linha: id do primeiro item, resumo dos itens (fora da soma)
+                        self._registrar(t, chave, ents[0], primeiro, h, hashlib.sha256(
+                            b"".join(x[2] for x in hds if x[0] == ents[0])).digest())
                     ids[dt] = primeiro
                 return [ids.get(dt) for dt in dts]
             ids = self._linha_nova(t, chave, ents[0], h, gravar)
@@ -867,12 +959,16 @@ class CargaMapa(carga.Carga):
         self.por_tabela[t] = {"linhas": n, "segundos": round(seg, 3),
                               "linhas_por_segundo": round(n / seg, 1) if seg > 0 else None}
 
+    @staticmethod
+    def _desdobrado(p, dt):
+        return bool(((p.get("opcoes") or {}).get(dt) or {}).get("desdobrar"))
+
     def _secundarias_ja_carregadas(self, p, ents, chave, sit, ant):
         """Linha já carregada: principal e secundárias entram na soma da origem pelo que foi gravado. Opcional sem
-        linha não entra; desdobrada entra um item por rótulo gravado."""
+        linha não entra; desdobrada (também no principal) entra um item por rótulo gravado."""
         t, ex = p["tabela"], self.existente.get(p["tabela"], {})
         for i, (ent, dt) in enumerate(zip(ents, p["destinos"])):
-            if i == 0:
+            if i == 0 and not self._desdobrado(p, dt):
                 self._ja_carregada(ent, chave, sit, ant)
                 continue
             base, op = "%s/%s" % (chave, dt), (p.get("opcoes") or {}).get(dt) or {}
@@ -930,16 +1026,20 @@ class CargaMapa(carga.Carga):
                          " co.tabela_origem=%%s AND co.entidade_destino=%%s" % (sel, self.ctl, dt),
                          (p["tabela"], ent if principal else dt))
         marca = "/" + dt
+        desd = principal and self._desdobrado(p, dt)
         saida = {}
         for r in rs:
             k = base = r[0]
-            if not principal:
-                if k.endswith(marca):
+            item = False
+            if not principal or desd:
+                if not principal and k.endswith(marca):
                     k = base = k[:-len(marca)]
                 elif k.rfind(marca + "/") >= 0:  # item de destino desdobrado: <chave>/<dt>/<rótulo>
                     j = k.rfind(marca + "/")
-                    base, k = k[:j], k[:j] + k[j + len(marca):]
-            saida[k] = ("|".join(canon(x) for x in r[1:-1]), bool(r[-1]), base)
+                    base, k, item = k[:j], k[:j] + k[j + len(marca):], True
+            # principal desdobrado: a linha (sem rótulo) só conta as linhas; os itens entram na soma
+            saida[k if item or not desd else (k, "linha")] = ("|".join(canon(x) for x in r[1:-1]), bool(r[-1]),
+                                                               base)
         return saida
 
     def conciliar(self, contagens):
@@ -950,10 +1050,18 @@ class CargaMapa(carga.Carga):
             for i, dt in enumerate(p["destinos"]):
                 ent = self._nome_ent(t, dt)
                 bruto = self._destino(p, dt, ent, i == 0)
-                destino, apagadas = {}, 0
+                desd = i == 0 and self._desdobrado(p, dt)
+                destino, apagadas, linhas = {}, 0, 0
                 for k, (txt, ed, base) in bruto.items():
+                    if desd and isinstance(k, tuple):  # linha do principal desdobrado
+                        if base in vistas:
+                            linhas += 1
+                        else:
+                            apagadas += 1
+                            self._pendencia(t, base, "apagada_aguarda_sincronizar", "media")
+                        continue
                     if base not in vistas:
-                        if i == 0:
+                        if i == 0 and not desd:
                             apagadas += 1
                             self._pendencia(t, k, "apagada_aguarda_sincronizar", "media")
                         continue
@@ -962,7 +1070,10 @@ class CargaMapa(carga.Carga):
                 so, sd, editados = self._conferir(ent, t, destino, vistas, aguardam)
                 recusadas = sum(1 for k in vistas if self.existente.get(t, {}).get(k, (None,))[0] is None)
                 lidos = int(contagens.get(t, 0))
-                if i == 0:
+                if desd:
+                    ok = lidos == len(vistas) == linhas + recusadas and so == sd and \
+                        set(self.origem.get(ent, {})) | set(aguardam) == set(destino)
+                elif i == 0:
                     ok = lidos == len(vistas) == len(destino) + recusadas and so == sd
                 else:
                     ok = set(self.origem.get(ent, {})) | set(aguardam) == set(destino) and so == sd
