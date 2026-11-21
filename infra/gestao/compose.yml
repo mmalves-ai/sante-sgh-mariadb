@@ -1,0 +1,29 @@
+# Gestão do MariaDB pelo browser (pedido do dono, 2026-11-21). O MariaDB continua só no loopback do host;
+# o Adminer fala com ele pela rede interna do Docker, e só o Caddy (HTTPS) é publicado na rede local.
+name: sgh-gestao
+services:
+  adminer:
+    image: adminer:4.8.1
+    container_name: sgh-gestao-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: sante-sgh-mariadb
+      ADMINER_DESIGN: pepa-linha
+    networks: [banco, borda]
+  caddy:
+    image: caddy:2.8.4
+    container_name: sgh-gestao-caddy
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:5320:5320"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-dados:/data
+    networks: [borda]
+networks:
+  banco:
+    external: true
+    name: sante-sgh-oracle_default
+  borda: {}
+volumes:
+  caddy-dados: {}

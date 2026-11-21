@@ -1,0 +1,7 @@
+# Acesso de gestão do banco pelo browser (dono, 2026-11-21): HTTPS com certificado interno na frente do Adminer.
+:5320 {
+	tls internal {
+		on_demand
+	}
+	reverse_proxy sgh-gestao-adminer:8080
+}
