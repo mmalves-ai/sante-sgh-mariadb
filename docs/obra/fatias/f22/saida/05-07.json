@@ -1,0 +1,170 @@
+{
+  "lote": "05-07",
+  "acao": "remocao (reproducao da captura de assinatura sobre o sistema de origem; nao se aplica ao banco proprio)",
+  "apagados": [
+    "packages/testes/src/massa/reproducao-agenda.ts",
+    "packages/testes/src/massa/reproducao-atendimento.ts",
+    "packages/testes/src/massa/reproducao-catalogos.ts",
+    "packages/testes/src/massa/reproducao-cirurgia.ts",
+    "packages/testes/src/massa/reproducao-dicionario.ts",
+    "packages/testes/src/massa/reproducao-dominios.ts",
+    "packages/testes/src/massa/reproducao-enfermagem.ts",
+    "packages/testes/src/massa/reproducao-exame.ts",
+    "packages/testes/src/massa/reproducao-farmacia.ts",
+    "packages/testes/src/massa/reproducao-faturamento.ts",
+    "packages/testes/src/massa/reproducao-financeiro.ts",
+    "packages/testes/src/massa/reproducao-internacao.ts",
+    "packages/testes/src/massa/reproducao-m10.ts",
+    "packages/testes/src/massa/reproducao-m59-f3.ts",
+    "packages/testes/src/massa/reproducao-m59.ts",
+    "packages/testes/src/massa/reproducao-pep-m23.ts",
+    "packages/testes/src/massa/reproducao-pep.ts",
+    "packages/testes/src/massa/reproducao-permissoes.ts",
+    "packages/testes/src/massa/reproducao-prescricao.ts",
+    "packages/testes/src/massa/reproducao-recepcao.ts"
+  ],
+  "criados": [
+    "packages/testes/src/massa/textos-sinteticos.ts",
+    "packages/testes/src/massa/textos-sinteticos.spec.ts",
+    "packages/testes/src/massa/textos-sinteticos.int.spec.ts"
+  ],
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    "REMOCAO (ADR 0003; AGENTS.md: 'teste de assinatura nao vale aqui'; precedente 02-08): os 20 arquivos eram roteiros de reproducao da captura de assinatura, com SQL do sistema de origem (FIRST, RDB$DATABASE, tabelas TB*/SGH_GEN_*, HHMM, sentinela 1900-01-01) gravando nele por um Escritor em transacao desfeita. Nao ha o que portar para o MariaDB: sao apagados, nao migrados.",
+    "Partes puras preservadas em packages/testes/src/massa/textos-sinteticos.ts (novo, com spec): palavraSintetica (reproducao-dicionario) -> palavraSintetica; CORPUS_CP1252 (reproducao-pep-m23) -> CORPUS_ACENTUADO; textoLongoCp1252 (reproducao-dominios) -> textoLongoAcentuado; MARCA_CC_M18 (reproducao-cirurgia) -> MARCA_CENTRO_CIRURGICO.",
+    "LOTE 05-09 (testes-raiz): packages/testes/src/reproducao.ts importa cenario*/OPERACOES_REPRODUCAO_* dos 20 arquivos apagados (e dos do 05-08). E o motor da reproducao da captura: deve ser apagado junto (nao ha equivalente), e quem o usa (tools/ ou specs) tambem.",
+    "LOTE 05-08: packages/testes/src/massa/reproducao-sadt.ts (horarioClinico de ./reproducao-pep.js) e packages/testes/src/massa/reproducao-w108.ts (enfermagemDaCopia, entradaDaChecagem, horariosDaPrescricao de ./reproducao-enfermagem.js; atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia de ./reproducao-prescricao.js) dependem dos arquivos apagados aqui: apagar os dois junto (conferido em 2026-11-21: ja estao apagados no diretorio de trabalho pelo 05-08) ou, se portar, reescrever a massa deles no MariaDB sem esses imports. INTEGRADOR: confirmar a remocao dos dois antes de fechar a onda.",
+    "LOTES DE testes-integracao (05-02, 05-05 e seguintes): cada consumidor abaixo perde os helpers de massa que liam/gravavam o sistema de origem; precisa de massa sintetica propria no MariaDB do cliente f22_o5 (beforeAll/afterAll) ou ser apagado se testava convivencia. Lista em 'consumidores'.",
+    "INTEGRADOR: tsc packages/testes continua com erros ate os lotes 05-08, 05-09 e testes-integracao fecharem (imports para os arquivos apagados); fechar a onda com --estrito so depois deles.",
+    "PROVA utf8mb4: packages/testes/src/massa/textos-sinteticos.int.spec.ts grava CORPUS_ACENTUADO e textoLongoAcentuado (ambos com caracteres de 4 bytes) em integracao_mensagem.conteudo (LONGTEXT) no cliente f22_o5, em transacao desfeita, e rele byte a byte; confere tambem CHARACTER_SET_NAME = utf8mb4 da coluna."
+  ],
+  "ddl": [],
+  "consumidores": {
+    "packages/testes/src/integracao/agenda.int.spec.ts": [
+      "reproducao-agenda: agendaLivre, convenioAceito, diaUtil, entradaGrade, legadoOcupaHorario, MARCA_M17, relogio, senhaDeAtendimento"
+    ],
+    "packages/testes/src/integracao/catalogos.int.spec.ts": [
+      "reproducao-catalogos: cargaAprovadaSintetica, MARCA_M13"
+    ],
+    "packages/testes/src/integracao/colisao-portal.int.spec.ts": [
+      "reproducao-agenda: agendaLivre, convenioAceito, diaUtil, entradaGrade, legadoOcupaHorario, relogio"
+    ],
+    "packages/testes/src/integracao/crud-motor-w002.int.spec.ts": [
+      "reproducao-dominios: textoLongoCp1252"
+    ],
+    "packages/testes/src/integracao/enfermagem.int.spec.ts": [
+      "reproducao-enfermagem: enfermagemDaCopia, entradaDaChecagem, estadoEnfermagem, horariosDaPrescricao",
+      "reproducao-prescricao: atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia"
+    ],
+    "packages/testes/src/integracao/m18.int.spec.ts": [
+      "reproducao-exame: agendaExameLivre, diaUtilLivreExame, entradaGradeExame, legadoOcupaHorarioExame, MARCA_M18, senhaDoExame",
+      "reproducao-cirurgia: diaLivreDaSala, legadoOcupaSala, MARCA_CC_M18, profissionais"
+    ],
+    "packages/testes/src/integracao/m20.int.spec.ts": [
+      "reproducao-atendimento: apoioDaFicha"
+    ],
+    "packages/testes/src/integracao/m21.int.spec.ts": [
+      "reproducao-internacao: apoioDaInternacao, ApoioInternacao, leitoLivre, LeitoLivre"
+    ],
+    "packages/testes/src/integracao/m27-jornada.int.spec.ts": [
+      "reproducao-agenda: agendaLivre, convenioAceito, diaUtil, entradaGrade, relogio",
+      "reproducao-atendimento: apoioDaFicha, marcacaoDeHojeDoPaciente",
+      "reproducao-internacao: apoioDaInternacao, leitoLivre",
+      "reproducao-pep: atendimento, gravacaoEvolucao, modeloPronto, profissional",
+      "reproducao-pep-m23: entradaAtestado, entradaReceita, profissionalDaCategoria",
+      "reproducao-prescricao: atendimentoAberto, atendimentoParaPrescrever, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia",
+      "reproducao-recepcao: geradorLivre, legadoChamaSenha, legadoEmiteSenha"
+    ],
+    "packages/testes/src/integracao/m29.int.spec.ts": [
+      "reproducao-farmacia: horarioDispensavel, suspenderHorarioPorFora"
+    ],
+    "packages/testes/src/integracao/m35-prontidao.int.spec.ts": [
+      "reproducao-dicionario: palavraSintetica"
+    ],
+    "packages/testes/src/integracao/m39-onda1.int.spec.ts": [
+      "reproducao-agenda: agendaLivre, convenioAceito, diaUtil, entradaGrade, legadoOcupaHorario, relogio",
+      "reproducao-recepcao: geradorLivre, guicheLivre, legadoChamaSenha"
+    ],
+    "packages/testes/src/integracao/m40-onda2.int.spec.ts": [
+      "reproducao-internacao: leitoLivre"
+    ],
+    "packages/testes/src/integracao/m41-onda3.int.spec.ts": [
+      "reproducao-farmacia: editarHorarioPorFora, horarioDispensavel"
+    ],
+    "packages/testes/src/integracao/m44-nir.int.spec.ts": [
+      "reproducao-internacao: apoioDaInternacao, ApoioInternacao, leitoLivre, LeitoLivre"
+    ],
+    "packages/testes/src/integracao/m45-e5.int.spec.ts": [
+      "reproducao-prescricao: atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia"
+    ],
+    "packages/testes/src/integracao/m46-e1.int.spec.ts": [
+      "reproducao-cirurgia: diaLivreDaSala, MARCA_CC_M18, profissionais"
+    ],
+    "packages/testes/src/integracao/m46-e2.int.spec.ts": [
+      "reproducao-cirurgia: diaLivreDaSala, MARCA_CC_M18, profissionais"
+    ],
+    "packages/testes/src/integracao/m46-e3.int.spec.ts": [
+      "reproducao-cirurgia: diaLivreDaSala, MARCA_CC_M18, profissionais"
+    ],
+    "packages/testes/src/integracao/m47-e1.int.spec.ts": [
+      "reproducao-enfermagem: enfermagemDaCopia, entradaDaChecagem, estadoEnfermagem, horariosDaPrescricao",
+      "reproducao-prescricao: atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia"
+    ],
+    "packages/testes/src/integracao/m50-3.int.spec.ts": [
+      "reproducao-cirurgia: diaLivreDaSala, MARCA_CC_M18"
+    ],
+    "packages/testes/src/integracao/m50-4.int.spec.ts": [
+      "reproducao-atendimento: apoioDaFicha, marcacaoDeHojeDoPaciente"
+    ],
+    "packages/testes/src/integracao/prescricao.int.spec.ts": [
+      "reproducao-prescricao: atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, estadoPrescricao, prescritorDaCopia",
+      "reproducao-pep-m23: CORPUS_CP1252"
+    ],
+    "packages/testes/src/integracao/prontuario-diario.int.spec.ts": [
+      "reproducao-pep-m23: CORPUS_CP1252, cenarioPepM23, MARCA_M23"
+    ],
+    "packages/testes/src/integracao/recepcao.int.spec.ts": [
+      "reproducao-recepcao: geradorLivre, guicheLivre, guicheSemCadastro, legadoAbreAtendimento, legadoAbreGuiche, legadoChamaSenha, legadoEmiteSenha, recepcaoComDoisLocais"
+    ],
+    "packages/testes/src/integracao/registro-clinico-desempenho.int.spec.ts": [
+      "reproducao-pep: atendimento, gravacaoEvolucao, modeloPronto, profissional"
+    ],
+    "packages/testes/src/integracao/registro-clinico.int.spec.ts": [
+      "reproducao-pep: atendimento, gravacaoEvolucao, gravacaoRascunho, modeloPronto, profissional, rascunhoDoOutroSistema, suspensaoDe"
+    ],
+    "packages/testes/src/integracao/uso-dia.int.spec.ts": [
+      "reproducao-agenda: agendaLivre, convenioAceito, diaUtil, entradaGrade, relogio as relogioAgenda",
+      "reproducao-recepcao: geradorLivre"
+    ],
+    "packages/testes/src/massa/reproducao-sadt.ts": [
+      "reproducao-pep: horarioClinico (lote 05-08; dependencia dentro do ciclo)"
+    ],
+    "packages/testes/src/massa/reproducao-w108.ts": [
+      "reproducao-enfermagem: enfermagemDaCopia, entradaDaChecagem, horariosDaPrescricao (lote 05-08)",
+      "reproducao-prescricao: atendimentoAberto, cadastrosDoCenario, gravacaoDe, itemDaForma, prescritorDaCopia (lote 05-08)"
+    ],
+    "packages/testes/src/reproducao.ts": [
+      "reproducao-catalogos: cenarioDeCatalogo, OPERACOES_REPRODUCAO_CATALOGOS",
+      "reproducao-dominios: cenarioDeDominio",
+      "reproducao-permissoes: cenarioDePermissao, OPERACOES_REPRODUCAO_PERMISSOES",
+      "reproducao-m10: cenarioM10, OPERACOES_REPRODUCAO_M10",
+      "reproducao-m59: cenarioM59, OPERACOES_REPRODUCAO_M59",
+      "reproducao-m59-f3: cenarioM59F3, OPERACOES_REPRODUCAO_M59_F3",
+      "reproducao-pep: cenarioPep, OPERACOES_REPRODUCAO_PEP",
+      "reproducao-prescricao: cenarioPrescricao, OPERACOES_REPRODUCAO_PRESCRICAO",
+      "reproducao-agenda: cenarioAgenda, OPERACOES_REPRODUCAO_AGENDA",
+      "reproducao-pep-m23: cenarioPepM23, OPERACOES_REPRODUCAO_PEP_M23",
+      "reproducao-recepcao: cenarioRecepcao, OPERACOES_REPRODUCAO_RECEPCAO",
+      "reproducao-exame: cenarioExame, OPERACOES_REPRODUCAO_EXAME",
+      "reproducao-cirurgia: cenarioCirurgia, OPERACOES_REPRODUCAO_CIRURGIA",
+      "reproducao-atendimento: cenarioAtendimento, OPERACOES_REPRODUCAO_ATENDIMENTO",
+      "reproducao-dicionario: cenarioDicionario, OPERACOES_REPRODUCAO_DICIONARIO",
+      "reproducao-internacao: cenarioInternacao, OPERACOES_REPRODUCAO_INTERNACAO",
+      "reproducao-enfermagem: cenarioEnfermagem, OPERACOES_REPRODUCAO_ENFERMAGEM",
+      "reproducao-farmacia: cenarioFarmacia, OPERACOES_REPRODUCAO_FARMACIA",
+      "reproducao-faturamento: cenarioFaturamento, OPERACOES_REPRODUCAO_FATURAMENTO",
+      "reproducao-financeiro: cenarioFinanceiro, OPERACOES_REPRODUCAO_FINANCEIRO"
+    ]
+  }
+}

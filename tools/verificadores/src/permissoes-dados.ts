@@ -1,24 +1,46 @@
-// Retrato versionado do acesso do legado (M06): árvore de opções (TBOPCOES, TBMODULO), os 42 grupos
-// (TBGRUUSU; usuários ativos só em faixa: 0, "<5" ou o número a partir de 5), permissões grupo × opção
-// (TBPERUSU) e papel × opção (TBPAPEL_TBOPCOES). É metadado e configuração do menu, sem pessoa: serve ao
-// CI (sem cópia) e ao teste do catálogo. Na VM, `permissoes:verificar -- --atualizar` refaz da cópia.
+// Retrato versionado do acesso do sistema de origem (M06): árvore de opções e módulos, os grupos (usuários ativos só
+// em faixa: 0, "<5" ou o número a partir de 5), permissões grupo × opção e papel × opção. É metadado e configuração do
+// menu, sem pessoa: serve ao CI e ao teste do catálogo de permissões.
+// Melhoria: os tipos do retrato são próprios (sem tipo do núcleo antigo).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { ModuloLegado, OpcaoLegado } from '@sgh/legado';
 
 export type FaixaContagem = number | '<5';
 
-export interface RetratoAcessoLegado {
+/** Módulo do menu de origem. */
+export interface ModuloMenuOrigem {
+  readonly id: number;
+  readonly sistema: string;
+  readonly executavel: string;
+  readonly nome: string;
+}
+
+/** Opção do menu de origem. */
+export interface OpcaoMenuOrigem {
+  readonly id: number;
+  readonly modulo: number;
+  readonly indice: number;
+  readonly nivel: number;
+  readonly ativo: boolean;
+  readonly avulsa: boolean;
+  readonly nome: string;
+  readonly titulo: string;
+}
+
+export interface RetratoAcessoOrigem {
   readonly formato: 1;
   readonly estabelecimento: string;
-  readonly modulos: readonly ModuloLegado[];
-  readonly opcoes: readonly OpcaoLegado[];
+  readonly modulos: readonly ModuloMenuOrigem[];
+  readonly opcoes: readonly OpcaoMenuOrigem[];
   readonly grupos: readonly { nome: string; ativo: boolean; usuariosAtivos: FaixaContagem }[];
   /** [grupo, opção] */
   readonly permissoesGrupos: readonly (readonly [string, number])[];
   /** [código do papel, opção] */
   readonly permissoesPapeis: readonly (readonly [number, number])[];
 }
+
+/** Nome antigo, mantido para quem ainda o importa. */
+export type RetratoAcessoLegado = RetratoAcessoOrigem;
 
 export const pastaDados = resolve(import.meta.dirname, '../dados');
 
@@ -31,14 +53,14 @@ export function faixaContagem(n: number): FaixaContagem {
   return n === 0 ? 0 : n < 5 ? '<5' : n;
 }
 
-export function lerRetrato(codigo: string): RetratoAcessoLegado | null {
+export function lerRetrato(codigo: string): RetratoAcessoOrigem | null {
   const p = caminhoRetrato(codigo);
   if (!existsSync(p)) return null;
-  return JSON.parse(readFileSync(p, 'utf8')) as RetratoAcessoLegado;
+  return JSON.parse(readFileSync(p, 'utf8')) as RetratoAcessoOrigem;
 }
 
 /** Uma linha por item (diff legível e estável). */
-export function gravarRetrato(r: RetratoAcessoLegado): string {
+export function gravarRetrato(r: RetratoAcessoOrigem): string {
   const p = caminhoRetrato(r.estabelecimento);
   const linhas = (xs: readonly unknown[]) => xs.map((x) => `    ${JSON.stringify(x)}`).join(',\n');
   const texto =

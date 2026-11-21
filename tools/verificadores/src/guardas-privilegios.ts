@@ -1,62 +1,38 @@
-// pnpm guardas:legado -- --privilegios [--hospital=pc] [--estrito]
-// M59-F1 (ficha do M59, regra 4: "relatório de RDB$USER_PRIVILEGES comparado com a matriz de módulos (pnpm
-// guardas:legado estendido, Desvio)"): lê da cópia, em transação de leitura, os privilégios dos titulares SGH_ e os
-// compara com o plano versionado por módulo. Excesso (privilégio do banco fora do plano, inclusive privilégio direto
-// numa conta por módulo) é Desvio e deixa o portão vermelho; a falta só é vermelha com --estrito (antes de a TI
-// aplicar o passo 0001, a falta é o plano inteiro e é esperada). Sem cópia configurada: só confere que o plano existe.
-import { resolve } from 'node:path';
-import { alcanceVersionado, lerConfiguracaoNucleo, lerPrivilegiosReais, NucleoLegado } from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
-import { montarDesvios } from '@sgh/dominio-acesso';
+// pnpm guardas:legado -- --privilegios [--cliente=<código>] [--estrito]
+// Regra 4 do M59 no banco próprio: lê do MariaDB de dev, em transação de leitura, os privilégios da conta da aplicação
+// (information_schema) e aponta o desvio: privilégio global, de administração, de estrutura ou com repasse é
+// VERMELHO; DELETE no banco inteiro é alerta (vermelho só com --estrito: a imutabilidade clínica pede concessão por
+// tabela). Sem banco de dev configurado ou sem cliente: a comparação não é feita (verde, com o motivo).
+// Melhoria: confere o banco real do produto, sem plano versionado do sistema de origem.
+import { lerConfiguracaoNucleo } from '@sgh/nucleo';
 import { lerArgumentos } from './argumentos.ts';
-import { codigosDaCopia } from './permissoes-copia.ts';
+import { abrirBancoDev, ambienteDoRepositorio, clienteDaLeitura, motivoRecusaBancoDev } from './copia-leitura.ts';
+import { desviosDaConta, lerPrivilegiosDaConta } from './privilegios-banco.ts';
 
 export async function principalPrivilegios(argv: readonly string[]): Promise<number> {
-  const raiz = resolve(import.meta.dirname, '../../..');
-  const { opcoes, bandeiras } = lerArgumentos(argv);
-  const h = opcoes['hospital'] ?? 'pc';
-  const alcance = alcanceVersionado(h);
-  if (!alcance) {
-    console.error(
-      `[guardas:legado --privilegios] sem plano versionado para "${h}" (pnpm privilegios:gerar).`,
-    );
-    return 1;
-  }
-  const copia = codigosDaCopia();
-  if (!copia || !copia.codigos.includes(h)) {
+  const { bandeiras } = lerArgumentos(argv);
+  const env = ambienteDoRepositorio();
+  const motivo = motivoRecusaBancoDev(env);
+  const cliente = clienteDaLeitura(argv, { ...process.env, ...env });
+  if (motivo || !cliente) {
     console.log(
-      `[guardas:legado --privilegios] ${h}: plano ${alcance.versao} (${alcance.alcances.length} módulo(s)); ` +
-        'sem cópia configurada, comparação com o banco não feita → verde',
+      `[guardas --privilegios] comparação com o banco não feita (${motivo ?? 'cliente não informado: --cliente= ou SGH_CLIENTE_LEITURA'}) → verde`,
     );
     return 0;
   }
-  const nucleo = new NucleoLegado({
-    env: copia.env,
-    driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(copia.env).bibliotecaCliente }),
-    pastaHomologada: resolve(raiz, 'tools/schema-check/homologado'),
-    aviso: () => undefined,
-  });
+  const { nucleo } = abrirBancoDev(cliente, env);
   try {
-    const reais = await nucleo.lerSomente(
-      { rede: nucleo.rede, hospital: h, traceId: 'guardas-privilegios' },
-      (l) => lerPrivilegiosReais(l, { prefixo: 'SGH_' }),
+    const conta = lerConfiguracaoNucleo(env).usuario.trim();
+    const privilegios = await nucleo.lerSomente({ cliente, correlacao: 'guardas-privilegios' }, (l) =>
+      lerPrivilegiosDaConta(l),
     );
-    const d = montarDesvios({
-      hospital: h,
-      em: new Date().toISOString(),
-      alcances: alcance.alcances,
-      reais,
-      contasConfiguradas: new Set(),
-    });
-    for (const x of d.excesso.slice(0, 40))
-      console.error(
-        `[guardas:legado --privilegios] Desvio: ${x.titular} tem ${x.acao} em ${x.objeto} fora do plano`,
-      );
-    const vermelho = d.excessoTotal > 0 || (bandeiras.has('estrito') && d.faltaTotal > 0);
+    const d = desviosDaConta(privilegios, conta);
+    for (const x of d.excesso.slice(0, 40)) console.error(`[guardas --privilegios] Desvio: conta da aplicação com ${x}`);
+    for (const x of d.alertas.slice(0, 40)) console.log(`[guardas --privilegios] Alerta: ${x}`);
+    const vermelho = d.excesso.length > 0 || (bandeiras.has('estrito') && d.alertas.length > 0);
     console.log(
-      `[guardas:legado --privilegios] ${h}: plano ${d.versaoPlano} (${d.modulos.length} módulo(s)), ` +
-        `${d.planoAplicado ? 'aplicado' : 'ainda não aplicado'}; iguais ${d.iguais}, excesso ${d.excessoTotal}, ` +
-        `falta ${d.faltaTotal} → ${vermelho ? 'VERMELHO' : 'verde'}`,
+      `[guardas --privilegios] ${cliente}: ${privilegios.length} privilégio(s) lidos; excesso ${d.excesso.length}, ` +
+        `alertas ${d.alertas.length} → ${vermelho ? 'VERMELHO' : 'verde'}`,
     );
     return vermelho ? 1 : 0;
   } finally {

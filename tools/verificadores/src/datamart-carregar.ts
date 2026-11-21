@@ -1,4 +1,4 @@
-// pnpm datamart:carregar -- --hospital=<cod>|todos [--sem-rede] (ficha do M16, regra 17; ficha do M57, etapa 3,
+// pnpm datamart:carregar -- --cliente=<código> --hospital=<cod>|todos [--sem-rede] (ficha do M16, regra 17; ficha do M57, etapa 3,
 // regra 9; ADR 0025 e 0030): carga do data mart pseudonimizado a partir da CÓPIA (em dev, a cópia local faz o papel
 // da cópia diária; DP-15), nunca do banco em uso. Grava um arquivo SQLite por estabelecimento em DATA_MART_DIR (padrão
 // .tmp/data-mart, fora do repositório versionado e de qualquer banco do legado) e, no fim, o arquivo da Rede
@@ -12,22 +12,31 @@
 // pede `--hospital=todos`. Só contagens no console.
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
+// Melhoria: lê o banco próprio do cliente (--cliente=) pelo núcleo, e recusa com o pedido enquanto faltar a leitura.
 import { colunasIdentificadoras, ESQUEMA_DATAMART, modoDoPseudonimo } from '@sgh/dominio-relatorio/datamart';
-import { ambienteEfetivo, caminhoArquivoAmbiente } from '@sgh/legado';
-import { abrirNucleoCopia } from './copia-leitura.ts';
+import {
+  abrirBancoDev,
+  ambienteDoRepositorio,
+  clienteDaLeitura,
+  codigosDosEstabelecimentos,
+  nucleoDaCarga,
+} from './copia-leitura.ts';
 import {
   biRedeLiberado,
   carregarEstabelecimento,
   consolidarRede,
+  type LeiturasDaCarga,
+  leiturasDoBanco,
   pseudonimoComumLiberado,
 } from './datamart-carga.ts';
 
 const raiz = resolve(import.meta.dirname, '../../..');
-const { env } = ambienteEfetivo(caminhoArquivoAmbiente(process.env, raiz));
+const env = ambienteDoRepositorio();
 const args = process.argv.slice(2);
 const hospital = args.find((a) => a.startsWith('--hospital='))?.slice(11);
-if (!hospital) {
-  console.error('Uso: pnpm datamart:carregar -- --hospital=<cod>|todos [--sem-rede]');
+const cliente = clienteDaLeitura(args, { ...process.env, ...env });
+if (!hospital || !cliente) {
+  console.error('Uso: pnpm datamart:carregar -- --cliente=<código> --hospital=<estabelecimento>|todos [--sem-rede]');
   process.exit(2);
 }
 const problemas = colunasIdentificadoras(ESQUEMA_DATAMART);
@@ -48,16 +57,25 @@ if (!chave) {
 }
 const pasta = resolve(raiz, env['DATA_MART_DIR']?.trim() || '.tmp/data-mart');
 
-const { nucleo, codigos } = abrirNucleoCopia();
+let leituras: LeiturasDaCarga;
 try {
+  leituras = leiturasDoBanco();
+} catch (e) {
+  console.error(e instanceof Error ? e.message : String(e));
+  process.exit(1);
+}
+const { nucleo: proprio } = abrirBancoDev(cliente, env);
+try {
+  const codigos = await codigosDosEstabelecimentos(proprio, cliente);
+  const nucleo = nucleoDaCarga(proprio, cliente);
   const alvo = hospital === 'todos' ? codigos : [hospital];
   for (const h of alvo)
     if (!codigos.includes(h))
-      throw new Error(`${h}: não é um estabelecimento desta rede (ESTABELECIMENTOS).`);
+      throw new Error(`${h}: não é um estabelecimento deste cliente.`);
   // O modo do pseudônimo vale para a rede inteira: comum só com a liberação em TODOS os estabelecimentos.
   const modo = modoDoPseudonimo(await pseudonimoComumLiberado(nucleo, codigos));
   for (const h of alvo) {
-    const r = await carregarEstabelecimento(nucleo, { hospital: h, chave, modo, pasta });
+    const r = await carregarEstabelecimento(nucleo, { hospital: h, chave, modo, pasta }, leituras);
     console.log(
       `[${h}] data mart (pseudônimo ${r.modo}): ${r.internacoes} internações, ${r.pacientesDia} pacientes-dia, ${r.atendimentos} grupos de atendimento, ${r.itens} grupos de itens de conta, ${r.dispensacoes} meses de dispensação em ${r.segundos} s → ${r.arquivo.slice(raiz.length + 1)}`,
     );
@@ -86,5 +104,5 @@ try {
     }
   }
 } finally {
-  await nucleo.encerrar();
+  await proprio.encerrar();
 }

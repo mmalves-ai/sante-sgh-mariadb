@@ -3,6 +3,11 @@
 // integração (o ACK AA aceita; AE/AR é falha com o motivo), FHIR R4 ao simulador ou à homologação da RNDS, e a API do
 // parceiro (JSON por HTTP). Fora de produção, só destino em loopback (simuladores e o motor local): nenhuma mensagem a
 // paciente, convênio, laboratório ou banco externo real (regra 15). O conteúdo nunca vai ao log.
+// Leituras pela porta própria (o exame pedido, o item da lista de trabalho e a vacina com as retificações).
+// Melhoria: o pedido ao apoio sai com o exame no código do laboratório (de-para) ou é recusado com o motivo; o exame
+// cancelado ou recusado não vai à modalidade nem ao laboratório de apoio; a vacina vai na versão do evento a partir do
+// próprio registro; as horas locais saem no fuso do estabelecimento; o parceiro HL7 só recebe a mensagem de teste no
+// evento de teste (um evento sem mensagem HL7 definida é recusado com o motivo, nunca vira uma ADT de teste).
 import { connect } from 'node:net';
 import { EVENTO_OUTBOX_MWL } from '@sgh/contratos';
 import {
@@ -20,18 +25,18 @@ import {
   reciboDaRnds,
 } from '@sgh/dominio-integracao';
 import { itemMwlDicom } from '@sgh/dominio-sadt';
-import {
-  type EnvioLidoBanco,
-  examesSadtPorId,
-  itensMwlDosExames,
-  type Leitor,
-  type ParceiroLidoBanco,
-  pedidoApoioDoExame,
-  vacinaNaVersao,
-  vacinaParaRia,
-} from '@sgh/legado';
+import type { Leitor } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
 import { worklistLigadaNoEstabelecimento } from './liberacao-worklist.js';
+import {
+  type EnvioEntrega,
+  examePedido,
+  horaLocal,
+  itemListaTrabalho,
+  type ParceiroEntrega,
+  vacinaNaVersao,
+  vacinaParaRia,
+} from './porta-propria.js';
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -97,13 +102,13 @@ export interface ConfiguracaoEnviadores {
 }
 
 /** MSH-10 curto e único do envio (até 20 caracteres). */
-const controle = (e: EnvioLidoBanco) => `SGH${e.id}`.slice(0, 20);
+const controle = (e: EnvioEntrega) => `SGH${e.id}`.slice(0, 20);
 
 /** O conteúdo HL7 do evento (o pedido ao apoio com o exame no código do laboratório; o teste sem paciente). */
 export async function conteudoHl7(
   c: ConfiguracaoEnviadores,
-  p: ParceiroLidoBanco,
-  e: EnvioLidoBanco,
+  p: ParceiroEntrega,
+  e: EnvioEntrega,
   hospital: string,
 ): Promise<string> {
   const cab = {
@@ -115,25 +120,30 @@ export async function conteudoHl7(
     controle: controle(e),
     processamento: (c.ambiente === 'producao' ? 'P' : 'T') as 'P' | 'T',
   };
-  if (e.tipoEvento === 'fato.exame.apoio' && e.idFato) {
-    const x = await c.ler(hospital, (l) => pedidoApoioDoExame(l, Number(e.idFato)));
+  if (e.tipoEvento === 'fato.exame.apoio' && e.objeto) {
+    const x = await c.ler(hospital, (l) => examePedido(l, hospital, Number(e.objeto)));
     if (!x) throw new ErroEntrega('exame do evento não encontrado');
+    // O exame cancelado ou recusado depois de entrar na remessa não vai ao laboratório (que executaria e cobraria).
+    if (x.cancelado) throw new ErroEntrega('exame cancelado no prontuário: nada enviado ao laboratório de apoio');
+    if (!x.apoio) throw new ErroEntrega('exame sem o código do laboratório de apoio (de-para): nada enviado');
     return montarPedidoApoio({
       cabecalho: cab,
       paciente: {
         id: x.paciente.id,
         prontuario: x.paciente.prontuario,
         nome: x.paciente.nome,
-        nascimento: x.paciente.nascimento,
-        sexo: x.paciente.sexo === 'M' || x.paciente.sexo === 'F' ? x.paciente.sexo : 'U',
+        nascimento: x.paciente.nascimento ? new Date(`${x.paciente.nascimento}T00:00:00Z`) : null,
+        sexo: x.paciente.sexo,
       },
       atendimento: { numero: x.atendimento, classe: 'O' },
-      pedido: x.pedido,
-      exame: x.exame,
+      pedido: x.id,
+      exame: { codigo: x.apoio.codigo, nome: x.apoio.nome ?? x.exame.nome, material: x.apoio.material },
       solicitadoEm: x.solicitadoEm ?? c.agora(),
       urgente: x.urgente,
     });
   }
+  if (e.tipoEvento !== 'integracao.teste')
+    throw new ErroEntrega(`evento ${e.tipoEvento.slice(0, 60)} sem mensagem HL7 definida para o parceiro: nada enviado`);
   // A mensagem de teste (sem paciente): só o cabeçalho e o evento.
   return [
     `MSH|^~\\&|${cab.aplicacaoOrigem}|${cab.instituicaoOrigem}|${cab.aplicacaoDestino}|${cab.instituicaoDestino}|${dataHl7(cab.dataHora)}||ADT^A08^ADT_A01|${cab.controle}|T|2.5`,
@@ -148,28 +158,30 @@ export async function conteudoHl7(
  */
 export async function conteudoMwl(
   c: ConfiguracaoEnviadores,
-  e: EnvioLidoBanco,
+  e: EnvioEntrega,
   hospital: string,
 ): Promise<{ conteudo: string; accession: string }> {
-  const exame = Number(e.idFato);
+  const exame = Number(e.objeto);
   if (!Number.isInteger(exame) || exame <= 0)
     throw new ErroEntrega('evento da lista de trabalho sem o exame');
   const lido = await c.ler(hospital, async (l) => ({
     ligada: await worklistLigadaNoEstabelecimento(l, hospital, c.agora()),
-    item: (await itensMwlDosExames(l, hospital, [exame]))[0] ?? null,
-    exame: (await examesSadtPorId(l, hospital, [exame]))[0] ?? null,
+    item: await itemListaTrabalho(l, hospital, exame),
+    exame: await examePedido(l, hospital, exame),
   }));
   // Recolhida a chave, o pendente e o reprocessado não vão ao PACS (o motivo fica no monitor; religada, reprocessa).
   if (!lido.ligada) throw new ErroEntrega('lista de trabalho desligada no estabelecimento: nada enviado');
   if (!lido.item || !lido.exame) throw new ErroEntrega('item da lista de trabalho não encontrado');
-  // O exame suspenso depois de virar item não volta à modalidade como procedimento agendado.
-  if (lido.exame.estado === 'suspenso') throw new ErroEntrega('exame suspenso no prontuário: nada enviado');
+  // O exame cancelado ou recusado depois de virar item não volta à modalidade como procedimento agendado.
+  if (lido.exame.cancelado) throw new ErroEntrega('exame cancelado no prontuário: nada enviado');
   const x = lido.exame;
+  const modalidade = lido.item.modalidade ?? x.modalidade;
+  if (!modalidade) throw new ErroEntrega('item da lista de trabalho sem modalidade: nada enviado');
   const item = itemMwlDicom({
     accession: lido.item.accession,
     hospital,
-    modalidade: lido.item.modalidade,
-    estacao: lido.item.modalidade,
+    modalidade,
+    estacao: modalidade,
     paciente: {
       id: x.paciente.prontuario,
       nome: x.paciente.nome,
@@ -177,9 +189,9 @@ export async function conteudoMwl(
       sexo: x.paciente.sexo,
     },
     exame: { codigo: x.exame.codigo, nome: x.exame.nome },
-    agendadoPara: x.pedidoEm ?? `${x.chave.data.slice(0, 10)}T00:00`,
+    agendadoPara: horaLocal(x.agendadoPara ?? c.agora(), x.fuso),
     urgente: x.urgente,
-    solicitante: x.solicitante || null,
+    solicitante: x.solicitante,
   });
   return { conteudo: JSON.stringify(item), accession: lido.item.accession };
 }
@@ -192,10 +204,10 @@ export async function conteudoMwl(
  */
 export async function enviarRia(
   c: ConfiguracaoEnviadores,
-  e: EnvioLidoBanco,
+  e: EnvioEntrega,
   hospital: string,
 ): Promise<{ recibo: string | null; resposta: string; conteudo: string }> {
-  const [idVacina, idVersao] = (e.idFato ?? '').split('.');
+  const [idVacina, idVersao] = (e.objeto ?? '').split('.');
   const vacina = Number(idVacina);
   const versao = Number(idVersao ?? 0);
   if (!Number.isInteger(vacina) || vacina <= 0 || !Number.isInteger(versao) || versao < 0)
@@ -215,11 +227,11 @@ export async function enviarRia(
   const lido = await c.ler(hospital, (l) => vacinaParaRia(l, hospital, vacina));
   if (!lido) throw new ErroEntrega('vacina do evento não encontrada');
   // O cancelamento leva a versão que valia antes do estorno; a substituição, a versão retificada.
-  const v = vacinaNaVersao(lido.vacina, e.tipoEvento === 'fato.vacina.cancelada' ? versao - 1 : versao);
+  const v = vacinaNaVersao(lido, e.tipoEvento === 'fato.vacina.cancelada' ? versao - 1 : versao);
   const imunizacao = imunizacaoDoRegistro(v, {
     hospital,
     paciente: lido.paciente,
-    vacinador: lido.vacina.usuario,
+    vacinador: v.vacinador,
   });
   const conteudo = JSON.stringify(
     documentoRia({
@@ -299,7 +311,7 @@ export function criarEnviador(c: ConfiguracaoEnviadores): Enviador {
         evento: e.tipoEvento,
         chave: e.chaveEvento,
         estabelecimento: hospital,
-        objeto: e.idFato,
+        objeto: e.objeto,
         ordem: e.chaveOrdem,
       });
     const r = await fetch(destino, {

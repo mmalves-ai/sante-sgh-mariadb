@@ -1,7 +1,7 @@
 // Permissões do M59 (endurecimento depois da coexistência; ficha do M59, seções 7 e 8). Fatia F1 (contas e
 // privilégios): o inventário das contas do banco e os desvios do privilégio mínimo por módulo, só consulta.
 // Recurso novo (sem opção correspondente no menu antigo), concedido por perfil. A revogação em si não é tela:
-// são scripts de GRANT e REVOKE em infra/firebird/fase7/privilegios/, aplicados pela TI com autorização do
+// são scripts de GRANT e REVOKE em infra/mariadb/privilegios/, aplicados pela TI com autorização do
 // dono por passo (ficha, seções 6 e 12).
 import type { DeclaracaoPermissao } from './tipos.js';
 

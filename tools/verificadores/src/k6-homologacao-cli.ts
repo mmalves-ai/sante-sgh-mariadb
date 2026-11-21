@@ -2,16 +2,35 @@
 // (tag e digest) contra a API da homologação (K6_BASE) com as contas de carga (K6_LOGINS e a senha do cofre em
 // K6_SENHA, que só passam pelo ambiente do processo, nunca pela linha de comando) e grava o resumo agregado (só
 // contagens e tempos) em docs/marcos/M39/carga-pico-recepcao-gravacao.json. A decisão de rodar é a de
-// k6-homologacao.ts (recusa dev, ci, ACESSO_FONTE_DEV=copia e as portas das cópias de dev).
+// k6-homologacao.ts (recusa dev, ci e o banco de dev).
 import { spawn } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ambienteEfetivo, caminhoArquivoAmbiente, lerEstabelecimentos } from '@sgh/legado';
-import { argumentosAmbienteDocker, decidirPicoGravacao, resumoJornada } from './k6-homologacao.ts';
+import { ambienteEfetivo, caminhoArquivoAmbiente, lerConfiguracaoNucleo } from '@sgh/nucleo';
+import {
+  argumentosAmbienteDocker,
+  decidirPicoGravacao,
+  type EstabelecimentoK6,
+  resumoJornada,
+} from './k6-homologacao.ts';
+
+/**
+ * O destino do banco configurado, para a decisão recusar o banco de dev (loopback e portas da VM). O código é o do
+ * estabelecimento da carga (K6_ESTABELECIMENTO). Configuração inválida: nenhum destino, e a decisão recusa.
+ * Melhoria: o destino é o MariaDB do núcleo próprio, não a lista de bancos por estabelecimento antiga.
+ */
+function destinosDoBanco(env: Readonly<Record<string, string | undefined>>): EstabelecimentoK6[] {
+  try {
+    const c = lerConfiguracaoNucleo(env);
+    return [{ codigo: env['K6_ESTABELECIMENTO']?.trim() ?? '', host: c.host, porta: c.porta }];
+  } catch {
+    return [];
+  }
+}
 
 export async function rodarPicoGravacao(raiz: string, IMAGEM_K6: string): Promise<number> {
-  const { env } = ambienteEfetivo(caminhoArquivoAmbiente(process.env, raiz));
-  const d = decidirPicoGravacao(env, process.env, lerEstabelecimentos(env));
+  const { env } = ambienteEfetivo(process.env, caminhoArquivoAmbiente(process.env, raiz));
+  const d = decidirPicoGravacao(env, process.env, destinosDoBanco(env));
   if (!d.ok) {
     console.error(d.motivo);
     return 2;

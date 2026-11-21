@@ -1,8 +1,21 @@
-// Critério MON$ do `pnpm k6` (cap-10 §10.11; fichas dos marcos de carga): só as conexões do PROCESSO MEDIDO contam.
-// A API e o worker que o runner sobe marcam as conexões com o processo `api-k6` e `worker-k6` (SGH_PROCESSO); as
-// demais conexões marcadas como sistema novo (o `pnpm dev` de outra pessoa, os testes dos outros ramos na cópia
-// compartilhada) ficam registradas à parte, como informação, e não reprovam a carga.
-import type { Coleta } from '@sgh/legado';
+// Critério de transações do `pnpm k6` (cap-10 §10.11; fichas dos marcos de carga): só as conexões do PROCESSO MEDIDO
+// contam. A API e o worker que o runner sobe marcam as conexões com o processo `api-k6` e `worker-k6`
+// (SGH_PROCESSO); as demais conexões do mesmo banco (o `pnpm dev` de outra pessoa, testes de outros ramos) ficam
+// registradas à parte, como informação, e não reprovam a carga. A coleta é a do k6-coletor.ts (MariaDB).
+// Melhoria: o tipo da coleta é próprio (sem o coletor do banco antigo).
+
+/** Uma conexão vista pelo coletor: a marca termina em `:<processo>`. */
+export interface ConexaoColetada {
+  readonly marca: string;
+  readonly transacaoMaisLongaMs: number;
+  readonly transacoesEscrita: number;
+}
+
+/** O que o critério usa de uma amostra do coletor. */
+export interface Coleta {
+  readonly conexoesDoNovo: readonly ConexaoColetada[];
+  readonly alertas: readonly string[];
+}
 
 /** Processos que o runner sobe (o valor de SGH_PROCESSO de cada um). */
 export const PROCESSOS_DO_K6 = { api: 'api-k6', worker: 'worker-k6' } as const;
@@ -22,7 +35,7 @@ export interface MonDoK6 {
   escritaMax: number;
   acimaDoLimite: number;
   conexoesMax: number;
-  /** Outros processos marcados como sistema novo na mesma cópia (informação; não reprovam). */
+  /** Outros processos no mesmo banco (informação; não reprovam). */
   outrosMaisLongaMs: number;
   outrosEscritaMax: number;
   outrosAcimaDoLimite: number;
@@ -44,17 +57,13 @@ export function monVazio(): MonDoK6 {
   };
 }
 
-/** Soma uma amostra do coletor, separando o processo medido dos outros processos do novo. */
-export function somarAmostra(
-  m: MonDoK6,
-  c: Pick<Coleta, 'conexoesDoNovo' | 'alertas'>,
-  limiteMs: number,
-): void {
+/** Soma uma amostra do coletor, separando o processo medido dos outros processos. */
+export function somarAmostra(m: MonDoK6, c: Pick<Coleta, 'conexoesDoNovo' | 'alertas'>, limiteMs: number): void {
   m.amostras++;
   const proprias = c.conexoesDoNovo.filter((x) => conexaoDoK6(x.marca));
   const outras = c.conexoesDoNovo.filter((x) => !conexaoDoK6(x.marca));
-  const longa = (xs: typeof proprias) => Math.max(0, ...xs.map((x) => x.transacaoMaisLongaMs));
-  const escrita = (xs: typeof proprias) => xs.reduce((s, x) => s + x.transacoesEscrita, 0);
+  const longa = (xs: readonly ConexaoColetada[]) => Math.max(0, ...xs.map((x) => x.transacaoMaisLongaMs));
+  const escrita = (xs: readonly ConexaoColetada[]) => xs.reduce((s, x) => s + x.transacoesEscrita, 0);
   const daAmostra = longa(proprias);
   if (daAmostra > m.maisLongaMs) {
     const x = proprias.find((y) => y.transacaoMaisLongaMs === daAmostra);
@@ -70,7 +79,7 @@ export function somarAmostra(
   m.outrosConexoesMax = Math.max(m.outrosConexoesMax, outras.length);
 }
 
-/** Reprovas do critério MON$: só o processo medido. */
+/** Reprovas do critério: só o processo medido. */
 export function reprovasMon(m: MonDoK6, limiteMs: number): string[] {
   const r: string[] = [];
   if (m.amostras === 0) r.push('coletor MON$ sem amostra durante o k6');

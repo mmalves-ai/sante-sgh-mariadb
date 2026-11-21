@@ -1,0 +1,58 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": {
+    "apps/worker/tsconfig.migrado.json": [
+      "src/integracao/acesso.ts",
+      "src/integracao/alerta-mortos.spec.ts",
+      "src/integracao/consumidor-idempotente.spec.ts",
+      "src/integracao/consumidor-idempotente.ts",
+      "src/integracao/entrega.ts",
+      "src/integracao/enviadores.ts",
+      "src/integracao/hl7/oie.int.spec.ts",
+      "src/integracao/integracao.service.ts",
+      "src/integracao/liberacao-worklist.ts",
+      "src/integracao/mwl-enviador.spec.ts",
+      "src/integracao/ria-enviador.spec.ts",
+      "src/integracao/vigia-fatos.spec.ts",
+      "src/integracao/vigia-fatos.ts",
+      "src/integracao/porta-propria.ts",
+      "src/integracao/porta-propria.spec.ts",
+      "src/integracao/porta-propria.int.spec.ts"
+    ],
+    "nota": "apps/worker/tsconfig.migrado.json nao existia: criado pelo lote 05-14 (extends ./tsconfig.json, include [], files) e ja contem os 16 arquivos."
+  },
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "mensagem_integracao_saida",
+      "convencao": "ADR 0002",
+      "sql": "ALTER TABLE mensagem_integracao_saida ADD COLUMN recibo VARCHAR(120) NULL COMMENT 'Recibo devolvido pelo destino (ACK, protocolo ou identificador)' AFTER codigo_resposta;",
+      "motivo": "O recibo do parceiro tem até 120 caracteres; hoje vai truncado a 30 em codigo_resposta e inteiro no texto de resposta. Nenhuma operação fica indisponível."
+    },
+    {
+      "tipo": "coordenacao",
+      "lote": "05-16 (relay-outbox.service.ts, pacs-worklist.service.ts)",
+      "pedido": "acessoDoNucleo agora é acessoDoNucleo(nucleo: NucleoProprio, cliente, rotulo): o relay deve criar um acesso por cliente. worklistLigada(chaves, prerequisitos, agora) mantém a assinatura, com os tipos ChaveRecursoLida/PrerequisitoLido de ./integracao/porta-propria.js (lerChavesLiberacao(l, cod, chave) e lerPrerequisitos(l, cod, recurso))."
+    },
+    {
+      "tipo": "coordenacao",
+      "lote": "05-13 (financeiro/consumidor-financeiro.ts)",
+      "pedido": "AcessoIntegracao.gravar(hospital, fn, opcoes?) agora roda uma operação do Executor: fn recebe TxOperacao (@sgh/nucleo) e opcoes.tabelas deve declarar as tabelas que o consumidor financeiro grava (padrão: as da integração)."
+    },
+    {
+      "tipo": "coordenacao",
+      "lote": "integrador (packages/dominio-integracao)",
+      "pedido": "Arquivo novo packages/dominio-integracao/src/entrega-fatos.ts (+ .spec.ts) e UMA linha acrescentada em packages/dominio-integracao/src/index.ts (export * from './entrega-fatos.js'). Nenhum lote da onda 5 lista o pacote; conferir no fecho. Regras: fatoDaLiberacao, estadoDaLiberacao, assinaturaDoEvento, exameVaiAoApoio, SITUACOES_REMESSA_COM_PEDIDO, SITUACOES_EXAME_SEM_PEDIDO, reservaVencida."
+    },
+    {
+      "tipo": "coordenacao",
+      "lote": "05-16 e quem chama marcarEnviado/marcarFalhaEnvio/horaLocal",
+      "pedido": "Assinaturas novas da porta do worker: marcarEnviado(tx, id, versaoDaReserva, recibo), marcarFalhaEnvio(tx, id, versaoDaReserva, falha), reservarEnvio(tx, id, versaoLida, agora) -> versao|null; horaLocal(d, fuso); EnvioEntrega ganhou versao e reservadaEm; ExamePedido ganhou fuso; ResultadoEntrega ganhou conflitos; ResultadoVigiaFatos ganhou ignorados; fatoJaPublicado ganhou o 5o parâmetro (entidade da vigia)."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/integracao/novas.ts",
+      "pedido": "Opcional: registrar 'fato.resultado.revogado' em EVENTOS_INTEGRACAO só se a tela de parceiros precisar mostrá-lo. Hoje a assinatura é derivada no domínio (assinaturaDoEvento: quem assina fato.resultado.liberado recebe a revogação), e o consumidor já a entrega sem mudar o contrato."
+    }
+  ]
+}

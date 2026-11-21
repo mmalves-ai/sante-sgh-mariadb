@@ -12,10 +12,10 @@ import { Agent as AgenteHttps, request as requisitarHttps } from 'node:https';
 import { createServer, type Server } from 'node:net';
 import { resolve } from 'node:path';
 import { deMllp, emMllp, lerMensagem, montarAck } from '@sgh/dominio-integracao';
-import type { EnvioLidoBanco, ParceiroLidoBanco } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroEntrega } from '../entrega.js';
 import { criarEnviador } from '../enviadores.js';
+import type { EnvioEntrega, ParceiroEntrega } from '../porta-propria.js';
 
 const raiz = resolve(import.meta.dirname, '../../../../..');
 const IMAGEM =
@@ -172,32 +172,27 @@ afterAll(async () => {
   await new Promise<void>((ok) => (lab ? lab.close(() => ok()) : ok()));
 });
 
-const parceiro: ParceiroLidoBanco = {
+const parceiro: ParceiroEntrega = {
   id: '1',
   codigo: 'lab-simulador',
   nome: 'Laboratório simulado',
   tipo: 'apoio',
   canal: 'oie-apoio-orm',
-  clienteId: null,
-  temSegredo: false,
-  escopos: [],
   eventos: ['integracao.teste'],
   limiteTentativas: 3,
-  finalidade: 'teste',
-  baseLegal: 'tutela-da-saude',
   ativo: true,
-  criadoPor: 'T',
-  alteradoEm: null,
 };
-const envio = (id: string): EnvioLidoBanco => ({
+const envio = (id: string): EnvioEntrega => ({
   id,
+  versao: 1,
+  reservadaEm: null,
   idOutbox: '1',
   chaveEvento: 'c'.repeat(64),
   tipoEvento: 'integracao.teste',
   parceiro: 'lab-simulador',
   chaveOrdem: 'estabelecimento:pc',
-  tabelaFato: null,
-  idFato: null,
+  entidade: null,
+  objeto: null,
   situacao: 'pendente',
   tentativas: 0,
   proximaTentativaEm: null,
@@ -207,8 +202,6 @@ const envio = (id: string): EnvioLidoBanco => ({
   hashConteudo: null,
   mortoEm: null,
   tratamento: null,
-  tratadoPor: null,
-  motivoTratamento: null,
   criadoEm: new Date(),
 });
 

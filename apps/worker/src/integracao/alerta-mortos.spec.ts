@@ -3,13 +3,13 @@
 // linha que o worker escreve; a tratada e a recente não alertam.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { EnvioLidoBanco } from '@sgh/legado';
 import { describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
+import type { EnvioEntrega } from './porta-propria.js';
 
-const mortos = vi.hoisted(() => ({ lista: [] as Partial<EnvioLidoBanco>[] }));
-vi.mock('@sgh/legado', async (o) => ({
-  ...(await o<typeof import('@sgh/legado')>()),
+const mortos = vi.hoisted(() => ({ lista: [] as Partial<EnvioEntrega>[] }));
+vi.mock('./porta-propria.js', async (o) => ({
+  ...(await o<typeof import('./porta-propria.js')>()),
   lerMortos: async () => mortos.lista,
 }));
 const { verificarAlertasMortos } = await import('./integracao.service.js');
@@ -38,7 +38,7 @@ describe('alerta da fila de mortos (regra 10)', () => {
     mortos.lista = [
       { id: '1', parceiro: 'lab-a', mortoEm: new Date('2026-10-22T07:00:00Z'), tratamento: null },
       { id: '2', parceiro: 'lab-a', mortoEm: new Date('2026-10-22T10:00:00Z'), tratamento: null },
-      { id: '3', parceiro: 'lab-b', mortoEm: new Date('2026-10-22T06:00:00Z'), tratamento: 'reprocessar' },
+      { id: '3', parceiro: 'lab-b', mortoEm: new Date('2026-10-22T06:00:00Z'), tratamento: 'reprocessar' as const },
     ];
     const alertas: unknown[] = [];
     const acesso = {

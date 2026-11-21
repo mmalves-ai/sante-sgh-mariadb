@@ -9,8 +9,10 @@
 //     sem nenhuma consulta cruzando os bancos (a junção é entre os arquivos já pseudonimizados), recusado se as
 //     cargas não forem do mesmo esquema, do mesmo modo, da mesma chave do pseudônimo (a impressão dela) e do mesmo
 //     ciclo de carga;
-//   - `pseudonimoComumLiberado` e `biRedeLiberado`: a liberação lida no banco de cada estabelecimento
-//     (SGH_CFG_LIBERACAO e os pré-requisitos), falha fechada (banco fora = desligado).
+//   - `pseudonimoComumLiberado` e `biRedeLiberado`: a liberação lida no banco do cliente, por estabelecimento
+//     (liberacao_chave e recurso_prerequisito), falha fechada (banco fora ou estabelecimento desconhecido = desligado).
+// Melhoria: a liberação é lida só da chave e dos pré-requisitos do recurso pedido, filtrada no banco.
+// Melhoria: sem leituras padrão do sistema de origem; a carga recebe as leituras, e as do banco recusam com o pedido.
 // Antes de publicar, cada arquivo passa pelo verificador (nenhuma coluna identificadora). Nada de pessoa sai daqui.
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -40,24 +42,20 @@ import {
   TABELAS_FATO_DATAMART,
   VERSAO_ESQUEMA_DATAMART,
 } from '@sgh/dominio-relatorio/datamart';
-import {
-  extrairAtendimentos,
-  extrairDispensacoes,
-  extrairItensConta,
-  type Leitor,
-  lerChavesLiberacao,
-  lerDemografiaDasInternacoes,
-  lerMovimentoInternacao,
-  lerPessoasPorProntuarioRede,
-  lerPrerequisitos,
-} from '@sgh/legado';
+import type { MovimentoInternacao } from '@sgh/contratos';
+import type { Leitor } from '@sgh/nucleo';
+import { ErroIndisponivel } from './indisponivel.ts';
 
-/** O que a carga precisa do núcleo: uma leitura READ ONLY no banco de um estabelecimento. */
+/**
+ * O que a carga precisa do núcleo: uma leitura READ ONLY no banco do cliente, por estabelecimento (código). Um banco
+ * guarda todos os estabelecimentos do cliente: o núcleo resolve o código no id do estabelecimento (recusa o código
+ * desconhecido) e o entrega à leitura, que filtra por ele (`WHERE estabelecimento_id = ?`).
+ */
 export interface NucleoDaCarga {
   readonly rede: string;
   lerSomente<T>(
     c: { rede: string; hospital: string; traceId: string },
-    fn: (l: Leitor) => Promise<T>,
+    fn: (l: Leitor, estabelecimentoId: number) => Promise<T>,
   ): Promise<T>;
 }
 
@@ -75,24 +73,104 @@ export interface ResumoCarga {
   readonly segundos: number;
 }
 
-/** As leituras da carga (as do legado; o teste do verificador LGPD passa as sintéticas). */
-export interface LeiturasDaCarga {
-  readonly movimento: typeof lerMovimentoInternacao;
-  readonly demografia: typeof lerDemografiaDasInternacoes;
-  readonly atendimentos: typeof extrairAtendimentos;
-  readonly itens: typeof extrairItensConta;
-  readonly dispensacoes: typeof extrairDispensacoes;
-  readonly pessoas: typeof lerPessoasPorProntuarioRede;
+/** Demografia da internação (nascimento vira faixa etária na carga; nada sai como dado de pessoa). */
+export interface DemografiaInternacao {
+  readonly nascimento: Parameters<typeof idadeEm>[0];
+  readonly sexo: Parameters<typeof sexoDoDataMart>[0];
+  readonly convenio: number | string | null;
 }
 
-export const LEITURAS_DO_LEGADO: LeiturasDaCarga = {
-  movimento: lerMovimentoInternacao,
-  demografia: lerDemografiaDasInternacoes,
-  atendimentos: extrairAtendimentos,
-  itens: extrairItensConta,
-  dispensacoes: extrairDispensacoes,
-  pessoas: lerPessoasPorProntuarioRede,
-};
+/** Atendimentos agregados por mês, tipo, convênio e especialidade. */
+export interface AtendimentosDoMes {
+  readonly mes: string;
+  readonly tipo: string;
+  readonly convenio: string | number | null;
+  readonly especialidade: string | number | null;
+  readonly quantidade: number;
+}
+
+/** Itens de conta agregados (valores somados, nunca por paciente). */
+export interface ItensDaConta {
+  readonly mesItem: string | null;
+  readonly mesCompetencia: string | null;
+  readonly tipoConta: string | null;
+  readonly natureza: string | null;
+  readonly convenio: string | number | null;
+  readonly itens: number;
+  readonly cobrado: number;
+  readonly pago: number;
+  readonly cobradoBaixado: number;
+  readonly pagoBaixado: number;
+}
+
+/** Dispensações agregadas por mês. */
+export interface DispensacoesDoMes {
+  readonly mes: string;
+  readonly registros: number;
+  readonly quantidade: number;
+}
+
+/**
+ * As leituras da carga (as do banco próprio; o teste do verificador LGPD passa as sintéticas). Cada uma recebe o id do
+ * estabelecimento carregado e filtra por ele: toda leitura do banco próprio tem `WHERE estabelecimento_id = ?` (o
+ * banco é do cliente inteiro; sem o filtro, o arquivo de um estabelecimento levaria os dados dos outros).
+ */
+export interface LeiturasDaCarga {
+  movimento(l: Leitor, estabelecimentoId: number): Promise<MovimentoInternacao>;
+  demografia(l: Leitor, estabelecimentoId: number): Promise<ReadonlyMap<number, DemografiaInternacao>>;
+  atendimentos(l: Leitor, estabelecimentoId: number): Promise<readonly AtendimentosDoMes[]>;
+  itens(l: Leitor, estabelecimentoId: number): Promise<readonly ItensDaConta[]>;
+  dispensacoes(l: Leitor, estabelecimentoId: number): Promise<readonly DispensacoesDoMes[]>;
+  /** Pessoa da rede (MPI) por paciente do estabelecimento; só lida no modo comum. */
+  pessoas(l: Leitor, estabelecimentoId: number): Promise<ReadonlyMap<number, string>>;
+}
+
+/**
+ * As leituras da carga no banco próprio: indisponíveis enquanto o contrato do movimento de internação e o motor da
+ * internação usarem o formato do sistema de origem (hora HHMM, códigos de caráter e clínica). Recusa explícita.
+ */
+export function leiturasDoBanco(): LeiturasDaCarga {
+  throw new ErroIndisponivel(
+    'datamart:carregar (leituras do banco próprio)',
+    'contrato MovimentoInternacao e motor da internação em vocabulário neutro (data e hora ISO, caráter, clínica e ' +
+      'motivo de saída pelas tabelas de domínio) e as leituras agregadas de atendimentos, itens de conta e ' +
+      'dispensações por mês, todas filtradas por estabelecimento_id',
+  );
+}
+
+type LinhaChave = { escopo: string; valor: string; ligada: number | boolean | null };
+type LinhaPrerequisito = { tipo: string; situacao: string; validade: string | null };
+type Registrado = Parameters<typeof recursoLigadoNoEstabelecimento>[2][number];
+type ChaveDoRecurso = Parameters<typeof recursoLigadoNoEstabelecimento>[0][number];
+
+/** As chaves de liberação do recurso no estabelecimento (código), que decidem (ligada não nula). */
+async function lerChavesDoRecurso(l: Leitor, estabelecimento: string, chave: string): Promise<ChaveDoRecurso[]> {
+  const r = await l.consultar<LinhaChave>(
+    `SELECT c.escopo, c.valor, c.ligada FROM liberacao_chave c JOIN estabelecimento e ON e.id = c.estabelecimento_id
+      WHERE e.codigo = ? AND c.tipo = 'recurso' AND c.chave = ? AND c.ligada IS NOT NULL`,
+    [estabelecimento, chave],
+  );
+  return r.map((x) => ({
+    escopo: x.escopo as ChaveDoRecurso['escopo'],
+    valor: String(x.valor),
+    ligada: x.ligada === null ? null : Boolean(Number(x.ligada)),
+  }));
+}
+
+/** Os pré-requisitos registrados do recurso no estabelecimento (código). */
+async function lerPrerequisitosDoRecurso(l: Leitor, estabelecimento: string, chave: string): Promise<Registrado[]> {
+  const r = await l.consultar<LinhaPrerequisito>(
+    `SELECT p.tipo, p.situacao, DATE_FORMAT(p.validade, '%Y-%m-%d') AS validade
+       FROM recurso_prerequisito p JOIN estabelecimento e ON e.id = p.estabelecimento_id
+      WHERE e.codigo = ? AND p.recurso = ?`,
+    [estabelecimento, chave],
+  );
+  return r.map((x) => ({
+    tipo: x.tipo as Registrado['tipo'],
+    situacao: x.situacao as Registrado['situacao'],
+    validade: x.validade === null ? null : String(x.validade),
+  }));
+}
 
 /** O arquivo de um estabelecimento na pasta do data mart. */
 export const arquivoDoEstabelecimento = (pasta: string, cod: string) => resolve(pasta, `${cod}.sqlite`);
@@ -143,10 +221,8 @@ export async function recursoLiberadoNosEstabelecimentos(
     r.push(
       await nucleo
         .lerSomente({ rede: nucleo.rede, hospital: est, traceId: 'datamart-liberacao' }, async (l) => {
-          const chaves = (await lerChavesLiberacao(l, est))
-            .filter((c) => c.chave === chave && c.tipo === 'recurso' && c.ligada !== null)
-            .map((c) => ({ escopo: c.escopo, valor: c.valor, ligada: c.ligada === true }));
-          const registrados = (await lerPrerequisitos(l, est)).filter((p) => p.recurso === chave);
+          const chaves = await lerChavesDoRecurso(l, est, chave);
+          const registrados = await lerPrerequisitosDoRecurso(l, est, chave);
           return recursoLigadoNoEstabelecimento(chaves, declarados, registrados, agora);
         })
         .catch(() => false),
@@ -183,7 +259,7 @@ export async function carregarEstabelecimento(
     /** Relógio (ms, UTC real); o padrão é agora. */
     readonly agora?: number;
   },
-  leituras: LeiturasDaCarga = LEITURAS_DO_LEGADO,
+  leituras: LeiturasDaCarga,
 ): Promise<ResumoCarga> {
   const { hospital, chave, modo, pasta } = opcoes;
   mkdirSync(pasta, { recursive: true });
@@ -192,14 +268,14 @@ export async function carregarEstabelecimento(
   rmSync(temporario, { force: true });
   const ctx = { rede: nucleo.rede, hospital, traceId: 'datamart' };
   const t0 = performance.now();
-  const mov = await nucleo.lerSomente(ctx, (l) => leituras.movimento(l));
-  const demografia = await nucleo.lerSomente(ctx, (l) => leituras.demografia(l));
-  const atendimentos = await nucleo.lerSomente(ctx, (l) => leituras.atendimentos(l));
-  const itens = await nucleo.lerSomente(ctx, (l) => leituras.itens(l));
-  const dispensacoes = await nucleo.lerSomente(ctx, (l) => leituras.dispensacoes(l));
+  const mov = await nucleo.lerSomente(ctx, (l, est) => leituras.movimento(l, est));
+  const demografia = await nucleo.lerSomente(ctx, (l, est) => leituras.demografia(l, est));
+  const atendimentos = await nucleo.lerSomente(ctx, (l, est) => leituras.atendimentos(l, est));
+  const itens = await nucleo.lerSomente(ctx, (l, est) => leituras.itens(l, est));
+  const dispensacoes = await nucleo.lerSomente(ctx, (l, est) => leituras.dispensacoes(l, est));
   // A pessoa da Rede de cada prontuário só é lida no modo comum (DP-42); fica em memória (o arquivo recebe o HMAC).
-  const pessoas =
-    modo === 'comum' ? await nucleo.lerSomente(ctx, (l) => leituras.pessoas(l)) : new Map<number, string>();
+  const pessoas: ReadonlyMap<number, string> =
+    modo === 'comum' ? await nucleo.lerSomente(ctx, (l, est) => leituras.pessoas(l, est)) : new Map<number, string>();
   const agora = relogioDeParede(opcoes.agora ?? Date.now());
   const t = normalizarTrajetorias(mov, agora);
   const unidades = new Map(mov.unidades.map((u) => [`${u.bloco}\u0000${u.acomodacao}`, u.nome]));

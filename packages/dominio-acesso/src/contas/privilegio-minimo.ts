@@ -2,7 +2,7 @@
 // cada módulo (o que o catálogo de operações e as consultas dele tocam) sai o plano de privilégios, um papel
 // do banco por módulo e uma conta por módulo com esse papel; a comparação com o que o catálogo de segurança
 // mostra dá os desvios (o "Desvio" do guardas:legado estendido); e o plano vira o par de scripts aplicar e
-// recolher de infra/firebird/fase7/privilegios/, que a TI executa com autorização (regra 4 da Fase 7).
+// recolher de infra/mariadb/privilegios/, que a TI executa com autorização (regra 4 da Fase 7).
 // Nunca: privilégio ao administrador do servidor; UPDATE ou DELETE na trilha própria; DDL; GRANT OPTION.
 import {
   contaModuloBanco,

@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [],
+  "files": [
+    "src/integracao/acesso.ts",
+    "src/integracao/alerta-mortos.spec.ts",
+    "src/integracao/consumidor-idempotente.spec.ts",
+    "src/integracao/consumidor-idempotente.ts",
+    "src/integracao/entrega.ts",
+    "src/integracao/enviadores.ts",
+    "src/integracao/hl7/oie.int.spec.ts",
+    "src/integracao/integracao.service.ts",
+    "src/integracao/liberacao-worklist.ts",
+    "src/integracao/mwl-enviador.spec.ts",
+    "src/integracao/ria-enviador.spec.ts",
+    "src/integracao/vigia-fatos.spec.ts",
+    "src/integracao/vigia-fatos.ts",
+    "src/integracao/porta-propria.ts",
+    "src/integracao/porta-propria.spec.ts",
+    "src/integracao/porta-propria.int.spec.ts"
+  ]
+}

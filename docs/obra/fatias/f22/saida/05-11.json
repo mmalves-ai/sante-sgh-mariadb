@@ -1,0 +1,29 @@
+{
+  "lote": "05-11",
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "novos": [
+    "infra/mariadb/privilegios/0001_papeis_por_modulo.aplicar.sql",
+    "infra/mariadb/privilegios/0001_papeis_por_modulo.recolher.sql",
+    "infra/mariadb/privilegios/alcance.json",
+    "tools/verificadores/src/relatorios-triagem-banco.int.spec.ts",
+    "tools/verificadores/src/relatorios-triagem-banco.spec.ts",
+    "tools/verificadores/src/relatorios-triagem-banco.ts",
+    "tools/verificadores/src/treino-turma.int.spec.ts",
+    "tools/verificadores/src/treino-turma.ts"
+  ],
+  "pedidos": [
+    "package.json: 'privilegios:gerar' -> 'node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/privilegios-gerar.ts' (sem SGH_DEV_PERMITIR_SYSDBA e sem --hospital; aceita --conferir); 'relatorios:triagem' sem SGH_DEV_PERMITIR_SYSDBA, uso novo: -- --cliente=<c> --estabelecimento=<codigo> --inventario=<arquivo.json> [--so-ler].",
+    "Integrador, ao fechar a onda 5: rodar 'pnpm privilegios:gerar' e versionar infra/mariadb/privilegios (o alcance sai do codigo de apps/api/src/modulos; lotes paralelos que mudam SQL deixam o privilegios.spec.ts desatualizado ate regenerar).",
+    "Conector (trilha F4): exportar o inventario dos relatorios do editor de origem, so metadado, no formato {formato:1, estabelecimento, relatorios:[{id,nome,modulo,tipo,quantidadeParametros,acessoRestrito}]} (esquemaInventario em tools/verificadores/src/relatorios-triagem-banco.ts). Ate la a operacao 'pnpm relatorios:triagem' fica sem entrada (indisponivel).",
+    "Lote dono de tools/verificadores/src/imutabilidade-gerar.ts (05-10): privilegios.ts mudou para o banco proprio; caminhoScripts(h) e gerarArtefatos('pc') seguem aceitos por compatibilidade, mas os scripts agora ficam em infra/mariadb/privilegios e o alcance e unico para todos os clientes.",
+    "Apagar artefatos obsoletos do sistema de origem (fora da lista do lote): infra/firebird/fase7/privilegios/ e tools/verificadores/dados/dependencias-gatilhos.*.json.",
+    "Modulo relatorio: apps/api/src/modulos/relatorio usa DELETE em agendamento_relatorio_destinatario, que tem exclusao logica (excluido_em); com papeis por modulo aplicados o DELETE e negado. Trocar por exclusao logica (tx.excluir) ou registrar a excecao.",
+    "DDL (19_REL, ADR 0002) triagem_relatorio_legado: a area dona agora e gravada pela chave de negocio do dominio na coluna `area` (PAPEIS_TRIAGEM: folha, faturamento, financeiro, contabilidade, repasse, estoque, pep, leitos, recepcao, sadt, bloco, diretoria, cadastros, curador). Pedido: COMMENT 'Area dona (chave do dominio)' + CONSTRAINT ck_triagem_relatorio_legado_area CHECK (area IS NULL OR area IN (...chaves...)) + CHECK (situacao = 'pendente' OR area IS NOT NULL). dono_papel_seguranca_id fica NULL: papel_seguranca e o papel da certificacao, nao a area; decidir se a coluna sai do modelo ou se ganha uma tabela area_responsavel -> papel.",
+    "Dominio @sgh/dominio-acesso (dono do pacote): generalizar planejarPrivilegios, exigirPlanoImutavel, SO_INCLUSAO e ehTabelaClinica para o banco proprio (identificador minusculo, trilha_auditoria, tabelas clinicas do DDL 06_PEP/08_CC/10_SADT). Hoje validam identificador do Firebird, SGH_TRILHA e a lista de tabelas do sistema de origem; tools/verificadores/src/privilegios.ts replica as regras (modulo repetido, identificador, trilha so inclusao, DELETE clinico) ate la.",
+    "Nucleo (packages/nucleo) e passo da TI: ligar o papel sgh_mod_<m> a conta que a API usa: conta por modulo (sgh_app_<m>) com GRANT sgh_mod_<m> TO conta + SET DEFAULT ROLE, e pool por modulo no NucleoProprio; ou SET ROLE sgh_mod_<m> por operacao no Executor. Sem isso o 0001_papeis_por_modulo.aplicar.sql nao reduz privilegio nenhum (o script ja diz isso no cabecalho).",
+    "Modulos plataforma-onboarding e suporte: nenhum uso de tabela encontrado pelo gerador (aviso; ficam sem papel). Confirmar se gravam pelo nucleo; se sim, declarar as tabelas (tabelas: [...] ou SQL literal).",
+    "14 modulos com nome de tabela dinamico (acesso, administracao, agenda, cadastro, catalogos, cirurgia, config, consultas, enfermagem, operadora, pessoas, qualidade, recepcao, rouparia, suprimentos): o gerador aplica a acao dinamica a todo o catalogo `tabela: 'x'` do modulo (pode conceder a mais). Pedido aos donos: exportar a lista explicita (const TABELAS_<M> = [...]) e usar `tabelas: TABELAS_<M>`; ou registrar em CATALOGOS_EXTERNOS de privilegios.ts.",
+    "Treino (decisao/redesenho): package.json/.env de treino ganham TREINO_ESTABELECIMENTO (codigo do estabelecimento de treino) e TREINO_SENHA_INICIAL (cofre, 12+ caracteres). Conector: a carga do cliente treino_<cod> a partir da imagem mascarada registra lote_carga_legado.imagem_origem = nome do container de treino (redesante-fb-treino-<cod>); ate existir, `pnpm treino:reiniciar` sai 3. O mascaramento (copia:mascarar, isql no container de treino em treino.ts) e acesso ao Firebird fora do conector (regra 3): mover para o conector no redesenho."
+  ]
+}

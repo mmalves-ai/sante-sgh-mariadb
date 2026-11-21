@@ -1,0 +1,146 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "apagados": [
+    "packages/testes/src/massa/atendimento-outro-sistema.ts",
+    "packages/testes/src/massa/bloco.ts",
+    "packages/testes/src/massa/checagem-outro-sistema.ts",
+    "packages/testes/src/massa/coexistencia-outro-sistema.ts",
+    "packages/testes/src/massa/conta-outro-sistema.ts",
+    "packages/testes/src/massa/contrato-sintetico.ts",
+    "packages/testes/src/massa/crud-motor-w002.ts",
+    "packages/testes/src/massa/estoque-outro-sistema.ts",
+    "packages/testes/src/massa/internacao-outro-sistema.ts",
+    "packages/testes/src/massa/jornada-outro-sistema.ts",
+    "packages/testes/src/massa/leitos.ts",
+    "packages/testes/src/massa/onda1-outro-sistema.ts",
+    "packages/testes/src/massa/profissional.ts",
+    "packages/testes/src/massa/prontuario.ts",
+    "packages/testes/src/massa/registro-clinico.ts"
+  ],
+  "novos": [
+    "packages/testes/src/massa/geradores.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "remover-trechos-de-convivencia",
+      "motivo": "ADR 0003: massa de convivência pura (gravação 'por fora' nas tabelas do sistema de origem, vigia de reconciliação, coexistência, recusa por gatilho). Não há equivalente no banco próprio e não deve haver: o importador remove o cenário de convivência; o cenário de negócio que restar no spec usa a porta própria do seu módulo. Valor: lote dono do importador.",
+      "arquivos": {
+        "packages/testes/src/massa/atendimento-outro-sistema.ts": {
+          "packages/testes/src/integracao/m20.int.spec.ts": "05-02"
+        },
+        "packages/testes/src/massa/bloco.ts": {
+          "packages/testes/src/integracao/vigia.int.spec.ts": "05-05"
+        },
+        "packages/testes/src/massa/checagem-outro-sistema.ts": {
+          "packages/testes/src/integracao/m48-e2-sugestao.int.spec.ts": "05-03"
+        },
+        "packages/testes/src/massa/coexistencia-outro-sistema.ts": {
+          "packages/testes/src/integracao/m37-conducao.int.spec.ts": "05-02",
+          "packages/testes/src/integracao/uso-dia.int.spec.ts": "05-05"
+        },
+        "packages/testes/src/massa/conta-outro-sistema.ts": {
+          "packages/testes/src/integracao/m30.int.spec.ts": "05-02"
+        },
+        "packages/testes/src/massa/crud-motor-w002.ts": {
+          "packages/testes/src/integracao/crud-motor-w002.int.spec.ts": "05-01"
+        },
+        "packages/testes/src/massa/estoque-outro-sistema.ts": {
+          "packages/testes/src/integracao/m28.int.spec.ts": "05-02"
+        },
+        "packages/testes/src/massa/internacao-outro-sistema.ts": {
+          "packages/testes/src/integracao/m21.int.spec.ts": "05-02",
+          "packages/testes/src/integracao/m44-nir.int.spec.ts": "05-03"
+        },
+        "packages/testes/src/massa/jornada-outro-sistema.ts": {
+          "packages/testes/src/integracao/m27-jornada.int.spec.ts": "05-02"
+        },
+        "packages/testes/src/massa/leitos.ts": {
+          "packages/testes/src/integracao/vigia.int.spec.ts": "05-05"
+        },
+        "packages/testes/src/massa/onda1-outro-sistema.ts": {
+          "packages/testes/src/integracao/m39-onda1.int.spec.ts": "05-02",
+          "packages/testes/src/integracao/m40-onda2.int.spec.ts": "05-02"
+        },
+        "packages/testes/src/massa/prontuario.ts": {
+          "packages/testes/src/integracao/prontuario.int.spec.ts": "05-05"
+        }
+      }
+    },
+    {
+      "tipo": "reescrever-massa-sobre-o-mariadb",
+      "motivo": "Massa de CENÁRIO DE NEGÓCIO que existe no modelo próprio. O arquivo antigo foi apagado porque o SQL era só de tabelas antigas, mas os cenários precisam continuar provados: o lote dono monta a massa sintética no cliente f22_o5 pela porta própria (ou SQL parametrizado no beforeAll, com limpeza no afterAll). Não é remoção.",
+      "arquivos": {
+        "packages/testes/src/massa/contrato-sintetico.ts": {
+          "importadores": {
+            "packages/testes/src/integracao/m55-e3.int.spec.ts": "05-04"
+          },
+          "tabelas": [
+            "contrato_fornecedor",
+            "contrato_fornecedor_item",
+            "contrato_fornecedor_grupo_insumo"
+          ],
+          "cenarios": [
+            "contrato de fornecedor vigente aceito por suprimentos.criarPedido e financeiro.criarTituloPagar",
+            "contrato vencido recusado",
+            "aditivo de prazo que estende a vigência"
+          ]
+        },
+        "packages/testes/src/massa/profissional.ts": {
+          "importadores": {
+            "packages/testes/src/integracao/profissionais.int.spec.ts": "05-05"
+          },
+          "tabelas": [
+            "profissional"
+          ],
+          "cenarios": [
+            "CPF sintético livre e válido pelo dígito (usar cpfDaBase/documentoSintetico de massa/dominios.ts com os CPFs lidos)",
+            "número de conselho livre por UF",
+            "inclusão, alteração e encerramento do registro pela porta própria"
+          ]
+        },
+        "packages/testes/src/massa/registro-clinico.ts": {
+          "importadores": {
+            "packages/testes/src/integracao/registro-clinico.int.spec.ts": "05-05"
+          },
+          "tabelas": [
+            "as do registro clínico no modelo próprio (porta própria do PEP)"
+          ],
+          "cenarios": [
+            "situação do rascunho (encadeado, arquivado, finalizado) e documento da trilha conferidos pela porta própria",
+            "contrato de efeito: linhas, versao, trilha e outbox, em vez do retrato de maiores chaves das tabelas antigas"
+          ]
+        }
+      }
+    },
+    {
+      "tipo": "adaptar-importadores",
+      "motivo": "dominios.ts tem de novo valoresDeInclusao, valoresDeAlteracao, codigoLivre, itemAtivo, itemAtivoOuNulo, itemAtivoSemUso e SemOpcaoLivre, agora sobre a declaração do modelo próprio (DominioDeclarado de apps/api/src/modulos/config/dominios-catalogo.ts) e a leitura da FonteDominiosPropria (dominios-fonte.ts, onda 1). O primeiro argumento deixa de ser o Leitor do sistema de origem e passa a ser leitorDaFonte(fonte, hospital) (LeitorDaMassa). Mudanças de forma: código é texto; referência é o id da opção ativa; booleano 'sim'/'nao'; SemOpcaoLivre(tabela, tabelaOpcoes) sem dominioOpcoes; valoresDeAlteracao recebe o id do item (não o código) para evitar autorreferência. Nenhuma operação fica indisponível.",
+      "arquivos": {
+        "packages/testes/src/integracao/dominios.int.spec.ts": "05-01",
+        "packages/testes/src/integracao/inativar.int.spec.ts": "05-01",
+        "packages/testes/src/integracao/liberacao.int.spec.ts": "05-01",
+        "packages/testes/src/integracao/m14.int.spec.ts": "05-02"
+      }
+    },
+    {
+      "tipo": "reescrever-importadores",
+      "motivo": "precos.ts ficou só com MARCA_M12, loteSintetico, ItemSintetico (vigencia agora string|null) e entradaReajuste; as consultas às tabelas de preço do sistema de origem saíram. A escolha de itens e a prova do efeito vão para a integração do módulo precos pela porta própria.",
+      "arquivos": {
+        "packages/testes/src/integracao/precos.int.spec.ts": "05-05",
+        "packages/testes/src/reproducao.ts": "05-09"
+      }
+    },
+    {
+      "tipo": "conferidor",
+      "motivo": "tools/obra/conferir-lote-f22.sh passo 4 roda tsc no pacote packages/testes inteiro e não separa erro de outro lote (hoje 1896 erros, 0 nos arquivos do lote 05-06). Pedido: filtrar a saída do tsc pelos arquivos da lista do lote (como em apps/api) e deixar o pacote inteiro para --estrito no fecho da onda."
+    }
+  ],
+  "lotes_donos_dos_importadores": [
+    "05-01",
+    "05-02",
+    "05-03",
+    "05-04",
+    "05-05"
+  ]
+}

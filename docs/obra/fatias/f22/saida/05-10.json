@@ -1,0 +1,50 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    {
+      "alvo": "package.json",
+      "pedido": "Remover os scripts copia:restaurar e copia:neutralizar (tools/verificadores/src/copia.ts apagado: restauração da cópia do sistema de origem é do conector, F0.5). Tirar SGH_DEV_PERMITIR_SYSDBA=sim de contas:inventario, imutabilidade:gerar, permissoes:verificar, indicadores:controle, datamart:carregar, faturamento:reproduzir e k6 (variável do banco antigo). Essas ferramentas agora pedem --cliente=<código> ou SGH_CLIENTE_LEITURA."
+    },
+    {
+      "alvo": "packages/nucleo",
+      "pedido": "Trocar as propriedades de parâmetro do construtor em src/executor.ts:291 e src/pool.ts:78-79 por campos explícitos: com erasableSyntaxOnly (tools/verificadores) o tsc acusa TS1294, e o node com remoção de tipos (scripts do package.json) recusa esse trecho ao importar @sgh/nucleo."
+    },
+    {
+      "alvo": "packages/nucleo",
+      "pedido": "No pool (opcoesDoPool), enviar connectAttributes { program_name: SGH_PROCESSO } para o coletor de transações do k6 (tools/verificadores/src/k6-coletor.ts) identificar api-k6 e worker-k6; sem isso, a conexão aparece 'sem-marca' e o critério reprova explicitamente."
+    },
+    {
+      "alvo": "packages/contratos + packages/dominio-internacao",
+      "pedido": "MovimentoInternacao e o motor da internação em vocabulário neutro (data e hora ISO no lugar de HHMM; caráter, clínica e motivo de saída pelas tabelas de domínio), e as leituras agregadas de atendimentos, itens de conta e dispensações por mês sobre internacao, atendimento, conta_hospitalar e dispensacao. Depois disso, implementar leiturasDoBanco() em tools/verificadores/src/datamart-carga.ts. Toda leitura de leiturasDoBanco() tem WHERE estabelecimento_id = ? com o id que a carga entrega (LeiturasDaCarga recebe (l, estabelecimentoId); nucleoDaCarga resolve o código no id dentro da transação e recusa código desconhecido; teste de isolamento com dois estabelecimentos em indicadores-controle-leitura.int.spec.ts)."
+    },
+    {
+      "alvo": "faturamento (dominio-faturamento + DDL 12_FAT)",
+      "pedido": "Leitura dos itens de conta com o preço gravado na origem (colunas de preço de origem preservadas pelo conector nos itens de conta_hospitalar) e o explicador de preço do domínio sobre o modelo próprio, para reativar faturamento:reproduzir."
+    },
+    {
+      "alvo": "indicadores (07_INT + conector)",
+      "pedido": "Mapa do conector para a saída para internação domiciliar (o motivo_saida_hospitalar não tem tipo próprio: hoje vira 'alta' ou 'transferencia' conforme o mapa) e a leitura dos itens de conta com preço gravado para a receita 2025. indicadores:controle já mede, sobre o DDL atual e por estabelecimento: internações por ano e censo do fim (sem canceladas), caráter (carater_admissao.urgencia), clínica (modalidade_internacao.classificacao), motivo de saída (motivo_saida_hospitalar.tipo_saida, só encerradas), leitos e leitos ativos (leito_hospitalar), transferências efetivadas (transferencia_leito) e trechos não cancelados (ocupacao_leito). Em naoMedidos ficam só motivo.internacaoDomiciliar e as 4 chaves receita2025.*."
+    },
+    {
+      "alvo": "packages/contratos/src/acesso + DDL de concessões",
+      "pedido": "A guarda já decide pela lista clínica do modelo derivada do DDL (tools/verificadores/src/imutabilidade.ts: tabelasClinicasDoModelo = tabelas de 06_PEP, 07_INT, 08_CC e 10_SADT com paciente_id, atendimento_id ou internacao_id, mais trilha_auditoria; hoje 158) e recusa com '0 tabelas clínicas reconhecidas no modelo' se vier vazia. Pedido: (1) levar a lista do modelo e EXCECOES_DELETE_CLINICO_MODELO para packages/contratos/src/acesso/imutabilidade.ts e aposentar TABELAS_CLINICAS_LEGADO/PREFIXOS_SGH_CLINICOS (nomes do sistema de origem); (2) imutabilidade.spec.ts (fora das listas) falha por ENOENT da matriz planejamento/referencias/matriz-cobertura-1503-tabelas.tsv, ausente no repositório: trocar o 1º caso pela conferência da lista do modelo (imutabilidade-modelo.spec.ts já cobre); (3) script de concessões por tabela à conta da aplicação no MariaDB (DELETE só fora da lista clínica) para reativar imutabilidade:gerar --conta."
+    },
+    {
+      "alvo": "conector",
+      "pedido": "Exportar o retrato do menu, dos grupos e das permissões do sistema de origem (formato RetratoAcessoOrigem de tools/verificadores/src/permissoes-dados.ts) para reativar permissoes:verificar --atualizar; hoje codigosDaCopia() devolve null e o verificador usa o retrato versionado."
+    },
+    {
+      "alvo": "apps/worker (outro lote)",
+      "pedido": "nir-reserva.int.spec.ts:30 e classificacao-estouro.int.spec.ts:23 chamam ambienteEfetivo(caminhoArquivoAmbiente(...)) passando o caminho como 1º argumento; a assinatura do núcleo é ambienteEfetivo(processo, caminho)."
+    },
+    {
+      "alvo": "db/migracoes (contas) + .env.exemplo",
+      "pedido": "Conta de monitoramento do MariaDB para o coletor do k6, separada da conta da aplicação: GRANT PROCESS ON *.* e GRANT SELECT ON performance_schema.session_connect_attrs, sem acesso a dados; variáveis SGH_MONITOR_USUARIO e SGH_MONITOR_SENHA (só os nomes no .env.exemplo). Sem ela, k6.ts usa a conta da aplicação com alerta explícito; numa conta correta (sem PROCESS, que guardas-privilegios trata como VERMELHO) a coleta falha com ErroPrivilegioDeColeta, contada em coletasPerdidas e com o motivo impresso."
+    },
+    {
+      "alvo": "tools/verificadores/src/lgpd/datamart-sem-dado-pessoal.spec.ts (fora das listas)",
+      "pedido": "O dublê de NucleoDaCarga chama fn({} as never) com um argumento; a assinatura agora é fn(l, estabelecimentoId). Roda verde (as leituras sintéticas ignoram o id), mas o tsc das ferramentas acusa TS2554: passar um id sintético por estabelecimento (ex.: fn({} as never, c.hospital === 'pc' ? 1 : 2))."
+    }
+  ]
+}

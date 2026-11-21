@@ -1,48 +1,43 @@
 // M47 (etapa 3), regras 8 e 9: o envio do item da lista de trabalho DICOM ao destino em loopback (o simulador de
 // modalidade atrás de um HTTP local): o JSON do DICOM com o número de acesso, a chave de idempotência que não muda no
 // reenvio (o simulador atualiza, não duplica), o destino fora do loopback recusado fora de produção e a falha do destino
-// como erro de entrega (a retentativa e a fila de mortos são as do M34). Leituras do núcleo dubladas; dados sintéticos.
+// como erro de entrega (a retentativa e a fila de mortos são as do M34). Leituras da porta própria dubladas; dados
+// sintéticos.
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SimuladorModalidade } from '@sgh/dominio-sadt';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const estado = { ligada: true, suspenso: false };
+const estado = { ligada: true, suspenso: false, fuso: 'America/Sao_Paulo' };
 
-vi.mock('@sgh/legado', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  lerChavesLiberacao: async () =>
-    estado.ligada
-      ? [{ chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: true }]
-      : [{ chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: false }],
+vi.mock('./porta-propria.js', async (original) => ({
+  ...(await original<typeof import('./porta-propria.js')>()),
+  lerChavesLiberacao: async () => [
+    { chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: estado.ligada },
+  ],
   lerPrerequisitos: async () => [
     { recurso: 'imagem.worklist', tipo: 'contrato', situacao: 'cumprido', validade: '2099-12-31' },
     { recurso: 'imagem.worklist', tipo: 'aprovacao', situacao: 'cumprido', validade: '2099-12-31' },
   ],
-  itensMwlDosExames: async (_l: unknown, _h: string, ids: number[]) =>
-    ids.includes(501) ? [{ id: 7, exame: 501, accession: 'PC000000007', modalidade: 'CT' }] : [],
-  examesSadtPorId: async (_l: unknown, _h: string, ids: number[]) =>
-    ids.includes(501)
-      ? [
-          {
-            id: 501,
-            ato: 25,
-            paciente: {
-              id: 900001,
-              prontuario: 1001,
-              nome: 'Paciente Sintético Um',
-              nascimento: '1980-01-02',
-              sexo: 'M',
-            },
-            exame: { id: 1, codigo: 'TC', nome: 'TOMOGRAFIA SINTÉTICA' },
-            chave: { data: '2026-10-25', reg: 1, conta: 1, atend: 'E', ato: 25, exame: 'TC', sequencia: 0 },
-            pedidoEm: '2026-10-25T09:30',
-            urgente: false,
-            solicitante: 'Médico Sintético',
-            estado: estado.suspenso ? 'suspenso' : 'a-receber',
-          },
-        ]
-      : [],
+  itemListaTrabalho: async (_l: unknown, _h: string, id: number) =>
+    id === 501 ? { accession: 'PC000000007', modalidade: 'CT' } : null,
+  examePedido: async (_l: unknown, _h: string, id: number) =>
+    id === 501
+      ? {
+          id: 501,
+          cancelado: estado.suspenso,
+          urgente: false,
+          paciente: { id: 900001, prontuario: 1001, nome: 'Paciente Sintético Um', nascimento: '1980-01-02', sexo: 'M' },
+          atendimento: 25,
+          exame: { codigo: 'TC', nome: 'TOMOGRAFIA SINTÉTICA' },
+          apoio: null,
+          modalidade: 'CT',
+          solicitadoEm: new Date('2026-10-25T12:00:00Z'),
+          agendadoPara: new Date('2026-10-25T12:30:00Z'),
+          solicitante: 'Médico Sintético',
+          fuso: estado.fuso,
+        }
+      : null,
 }));
 
 const { criarEnviador } = await import('./enviadores.js');
@@ -82,7 +77,7 @@ const envio = (idFato: string | null) =>
     id: '1',
     tipoEvento: 'imagem.mwl',
     chaveEvento: 'h'.repeat(64),
-    idFato,
+    objeto: idFato,
     chaveOrdem: 'exame:501',
   }) as never;
 const enviador = (destino: string | null, ambiente = 'dev') =>
@@ -112,6 +107,20 @@ describe('envio do item da lista de trabalho DICOM (M47.3)', () => {
     ]);
   });
 
+  it('a hora agendada sai no fuso do estabelecimento (Manaus: UTC-4)', async () => {
+    const horas = async () => {
+      const r = await enviador(base)(parceiro, envio('501'), 'pc');
+      return JSON.stringify(JSON.parse(r.conteudo));
+    };
+    const sp = await horas();
+    estado.fuso = 'America/Manaus';
+    const manaus = await horas();
+    estado.fuso = 'America/Sao_Paulo';
+    expect(sp).toContain('"0930');
+    expect(manaus).toContain('"0830');
+    expect(manaus).not.toContain('"0930');
+  });
+
   it('sem o item, sem o exame ou com destino fora do loopback fora de produção: erro de entrega (nada enviado)', async () => {
     await expect(enviador(base)(parceiro, envio('999'), 'pc')).rejects.toBeInstanceOf(ErroEntrega);
     await expect(enviador(base)(parceiro, envio(null), 'pc')).rejects.toThrow('sem o exame');
@@ -127,13 +136,13 @@ describe('envio do item da lista de trabalho DICOM (M47.3)', () => {
     falhar = false;
   });
 
-  it('recolhida a chave imagem.worklist ou suspenso o exame: erro de entrega com o motivo, nada chega ao PACS', async () => {
+  it('recolhida a chave imagem.worklist ou cancelado o exame: erro de entrega com o motivo, nada chega ao PACS', async () => {
     const antes = recebidos.length;
     estado.ligada = false;
     await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('lista de trabalho desligada');
     estado.ligada = true;
     estado.suspenso = true;
-    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('exame suspenso');
+    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('exame cancelado');
     estado.suspenso = false;
     expect(recebidos).toHaveLength(antes);
   });

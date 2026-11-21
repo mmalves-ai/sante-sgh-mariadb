@@ -7,7 +7,7 @@ export default defineConfig({
   envDir: false,
   resolve: { tsconfigPaths: true },
   test: {
-    include: ['src/integracao/**/*.spec.ts'],
+    include: ['src/integracao/**/*.spec.ts', 'src/massa/**/*.int.spec.ts'],
     environment: 'node',
     env: { TZ: 'UTC' },
     testTimeout: 300_000,

@@ -7,8 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ARVORE_MENU, type ItemMenu } from '@sgh/contratos';
-import { CONSULTAS_LEGADO, DECLARACOES } from '@sgh/legado';
+import { ARVORE_MENU, CONSULTAS_DECLARADAS, DOMINIOS_DECLARADOS, type ItemMenu } from '@sgh/contratos';
 
 /** Termos proibidos em texto de produto (sem diferenciar maiúsculas; "SP Data" e "SP-DATA" também). */
 export const TERMO_PROIBIDO =
@@ -144,20 +143,18 @@ export function nomeDoBanco(texto: string): string | null {
 }
 
 export function textosDasDeclaracoes(): TextoDeclarado[] {
+  // Os textos públicos das declarações vêm do contrato (@sgh/contratos): domínios e consultas declarados.
   const r: TextoDeclarado[] = [];
-  for (const d of DECLARACOES) {
-    const id = `dominio:${d.publico.modulo}.${d.publico.recurso}`;
-    r.push({ id, texto: d.publico.rotulo.plural, motivo: false });
-    r.push({ id, texto: d.publico.rotulo.singular, motivo: false });
-    if (d.publico.motivoSomenteLeitura) r.push({ id, texto: d.publico.motivoSomenteLeitura, motivo: true });
-    if (d.publico.semInclusao) r.push({ id, texto: d.publico.semInclusao, motivo: true });
-    for (const c of d.colunas) r.push({ id, texto: c.rotulo, motivo: false });
-    for (const c of d.textosLongos ?? []) r.push({ id, texto: c.rotulo, motivo: false });
+  for (const d of DOMINIOS_DECLARADOS) {
+    const id = `dominio:${d.modulo}.${d.recurso}`;
+    r.push({ id, texto: d.rotulo.plural, motivo: false });
+    r.push({ id, texto: d.rotulo.singular, motivo: false });
+    if (d.motivoSomenteLeitura) r.push({ id, texto: d.motivoSomenteLeitura, motivo: true });
+    if (d.semInclusao) r.push({ id, texto: d.semInclusao, motivo: true });
   }
-  for (const c of CONSULTAS_LEGADO) {
-    const id = `consulta:${c.publico.modulo}.${c.publico.recurso}`;
-    r.push({ id, texto: c.publico.rotulo, motivo: false });
-    for (const x of c.colunas) r.push({ id, texto: x.rotulo, motivo: false });
+  for (const c of CONSULTAS_DECLARADAS) {
+    const id = `consulta:${c.modulo}.${c.recurso}`;
+    r.push({ id, texto: c.rotulo, motivo: false });
   }
   return r;
 }

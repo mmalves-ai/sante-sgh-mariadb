@@ -421,14 +421,6 @@ packages/testes/src/integracao/m58-ensaio-utf8.int.spec.ts 1
 packages/testes/src/integracao/recepcao.int.spec.ts 2
 packages/testes/src/integracao/registro-clinico.int.spec.ts 1
 packages/testes/src/integracao/uso-dia.int.spec.ts 8
-packages/testes/src/massa/coexistencia-outro-sistema.ts 1
-packages/testes/src/massa/jornada-outro-sistema.ts 1
-packages/testes/src/massa/reproducao-enfermagem.ts 1
-packages/testes/src/massa/reproducao-financeiro.ts 2
-packages/testes/src/massa/reproducao-pep.ts 2
-packages/testes/src/massa/reproducao-suprimentos.ts 1
-packages/testes/src/massa/simulacao-legado-m24.ts 1
-packages/testes/src/massa/simulacao-legado-m25.ts 1
 packages/ui/catalogo/historias.ts 1
 packages/ui/src/componentes/SanteAvisoColisao.spec.ts 1
 packages/ui/src/i18n/pt-BR.ts 1

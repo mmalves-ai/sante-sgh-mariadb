@@ -7,53 +7,24 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@sgh/legado', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
+const versao = (lote: string) => ({
+  id: 7,
+  imunobiologico: '33',
+  nome: 'Vacina sintetica',
+  lote,
+  fabricante: null,
+  dose: 'D1',
+  via: 'IM',
+  local: 'DD',
+  aplicadaEm: '2031-01-06T09:00',
+  vacinador: '41',
+});
+
+vi.mock('./porta-propria.js', async (original) => ({
+  ...(await original<typeof import('./porta-propria.js')>()),
+  // A aplicação (versão 0) e a retificação do lote (versão 1); o estorno não cria versão nova do conteúdo.
   vacinaParaRia: async (_l: unknown, _h: string, id: number) =>
-    id === 7
-      ? {
-          paciente: 5,
-          vacina: {
-            id: 7,
-            imunobiologico: '33',
-            nome: 'Vacina sintetica',
-            lote: 'LOTE-1',
-            fabricante: null,
-            validadeLote: '2032-01-01',
-            dose: 'D1',
-            via: 'IM',
-            local: 'DD',
-            aplicadaEm: '2031-01-06T09:00',
-            prazoEnvio: '2031-01-07T09:00',
-            evento: 'publicado',
-            entrega: 'pendente',
-            usuario: 'SINT.ENF',
-            em: '2031-01-06T09:01:00',
-            correcoes: [
-              {
-                versao: 1,
-                tipo: 'retificacao',
-                motivo: 'lote digitado errado',
-                dados: { lote: 'LOTE-2' },
-                usuario: 'SINT.ENF',
-                em: '2031-01-06T10:00',
-                evento: 'publicado',
-                entrega: null,
-              },
-              {
-                versao: 2,
-                tipo: 'estorno',
-                motivo: 'registrada por engano',
-                dados: null,
-                usuario: 'SINT.ENF',
-                em: '2031-01-06T11:00',
-                evento: 'publicado',
-                entrega: null,
-              },
-            ],
-          },
-        }
-      : null,
+    id === 7 ? { paciente: 5, versoes: [versao('LOTE-1'), versao('LOTE-2')] } : null,
 }));
 
 const { criarEnviador } = await import('./enviadores.js');
@@ -99,7 +70,7 @@ afterAll(() => new Promise<void>((ok) => servidor.close(() => ok())));
 
 const fhir = { codigo: 'rnds', tipo: 'fhir', canal: null } as never;
 const envio = (tipoEvento: string, idFato: string | null) =>
-  ({ id: '1', tipoEvento, chaveEvento: 'h'.repeat(64), idFato, chaveOrdem: 'paciente:5' }) as never;
+  ({ id: '1', tipoEvento, chaveEvento: 'h'.repeat(64), objeto: idFato, chaveOrdem: 'paciente:5' }) as never;
 const enviador = (o: {
   ambiente?: string;
   simulador?: string | null;
@@ -238,15 +209,9 @@ describe('W0-03 M6: homologação e produção atrás do parâmetro de credencia
 describe('W0-03 M6: o objeto do evento no envio', () => {
   it('a vacina com a versão (0 na aplicação); o exame como antes; sem objeto, nulo', async () => {
     const { fatoDoEvento } = await import('./consumidor-idempotente.js');
-    expect(fatoDoEvento({ vacina: 7, paciente: 5 })).toEqual({
-      tabelaFato: 'SGH_PEP_VACINA_APLICADA',
-      idFato: '7.0',
-    });
-    expect(fatoDoEvento({ vacina: 7, versao: 2 })).toEqual({
-      tabelaFato: 'SGH_PEP_VACINA_APLICADA',
-      idFato: '7.2',
-    });
-    expect(fatoDoEvento({ exame: 501 })).toEqual({ tabelaFato: 'SILANEXA', idFato: '501' });
-    expect(fatoDoEvento({ paciente: 5 })).toEqual({ tabelaFato: null, idFato: null });
+    expect(fatoDoEvento({ vacina: 7, paciente: 5 })).toEqual({ entidade: 'vacina_aplicada', objeto: '7.0' });
+    expect(fatoDoEvento({ vacina: 7, versao: 2 })).toEqual({ entidade: 'vacina_aplicada', objeto: '7.2' });
+    expect(fatoDoEvento({ exame: 501 })).toEqual({ entidade: 'exame_item', objeto: '501' });
+    expect(fatoDoEvento({ paciente: 5 })).toEqual({ entidade: null, objeto: null });
   });
 });

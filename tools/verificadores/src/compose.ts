@@ -1,7 +1,8 @@
 // Conferência do infra/compose/dev.yml antes de subir (M01; convencoes.md §10; POL-4): portas só em
 // 127.0.0.1 e fora das ocupadas, nomes com prefixo sgh-, imagem por tag exata e digest, healthcheck em
-// todos e nenhum Firebird (a cópia fica em ../banco-dev). Entrada: `docker compose config --format json`.
-import { ENDERECOS_OCUPADOS, PORTAS_OCUPADAS } from '@sgh/legado';
+// todos e nenhum Firebird (o sistema de origem é lido só pelo conector). Entrada: `docker compose config --format json`.
+// Melhoria: as portas ocupadas da VM vêm da lista das ferramentas (portas-ocupadas.ts), sem o núcleo antigo.
+import { ENDERECOS_OCUPADOS, PORTAS_OCUPADAS } from './portas-ocupadas.ts';
 
 /** Portas que o Compose do projeto publica (convencoes.md §10, sem as do Firebird). */
 /** M09: 3331 = OTLP/HTTP do coletor OpenTelemetry (sgh-otel). */

@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { listarContainers } from '@sgh/legado';
+import { listarContainers } from './containers.ts';
 import { type ConfigCompose, conferirCompose, portasEmUsoPorOutros, portasPublicadas } from './compose.ts';
 
 const raiz = resolve(import.meta.dirname, '../../..');

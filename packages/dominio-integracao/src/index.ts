@@ -12,6 +12,8 @@ export * from './fhir/validador.js';
 export * from './rnds.js';
 export * from './ria.js';
 export * from './apoio.js';
+// F2.2 lote 05-14: o estado da liberação para o parceiro, o pedido ao apoio e a reserva do envio.
+export * from './entrega-fatos.js';
 export * from './fhir/perfis.js';
 // W0-10 (M3): o pacote do titular em FHIR R4/IPS (portabilidade) e o validador do recorte IPS 2.0.0.
 export * from './fhir/ips.js';

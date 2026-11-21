@@ -43,6 +43,8 @@ export function opcoesDoPool(config: ConfiguracaoNucleo, banco: string): mariadb
     checkNumberRange: true,
     multipleStatements: false,
     charset: 'utf8mb4',
+    // O processo (api, worker, api-k6...) marca a conexão: o coletor de transações do k6 separa a carga por ele.
+    connectAttributes: { program_name: process.env['SGH_PROCESSO'] ?? 'sgh' },
     initSql: [
       "SET time_zone = '+00:00'",
       `SET SESSION innodb_lock_wait_timeout = ${config.esperaTravaSegundos}`,
@@ -74,10 +76,15 @@ export class PoolsPorCliente {
   private readonly clientes = new Map<string, Promise<InfoCliente>>();
   private encerrado = false;
 
-  constructor(
-    private readonly config: ConfiguracaoNucleo,
-    private readonly criarPool: CriarPool = mariadb.createPool,
-  ) {}
+  private readonly config: ConfiguracaoNucleo;
+  private readonly criarPool: CriarPool;
+
+  // Campos explícitos (sem propriedade de parâmetro): o node com remoção de tipos e o erasableSyntaxOnly das
+  // ferramentas recusam a forma abreviada.
+  constructor(config: ConfiguracaoNucleo, criarPool: CriarPool = mariadb.createPool) {
+    this.config = config;
+    this.criarPool = criarPool;
+  }
 
   private poolDo(banco: string): mariadb.Pool {
     if (this.encerrado) throw new ErroConfiguracao('Pools encerrados.');

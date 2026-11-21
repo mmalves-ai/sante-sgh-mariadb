@@ -13,7 +13,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
-import { CONTAINERS_ALHEIOS } from '@sgh/legado';
+
+/**
+ * Containers de outros projetos nesta VM: nunca são tocados (AGENTS.md, regra 4). A cópia de dev do projeto
+ * (`redesante-fb-<código>`) não está aqui: ela é recusada por não ser container de treino.
+ */
+export const CONTAINERS_ALHEIOS: readonly string[] = ['sante-firebird'];
 
 /** Container de treino do projeto: `redesante-fb-treino-<código>` (nunca o de dev `redesante-fb-<código>`). */
 export const CONTAINER_TREINO = /^redesante-fb-treino-([a-z][a-z0-9]{1,9})$/;
@@ -163,9 +168,9 @@ export interface PedidoReinicio {
   readonly lista: ListaPessoais;
   readonly docker: ExecutorTreino;
   readonly agora?: () => number;
-  /** Recria os usuários da turma pelo executor (acesso.criarUsuarioIntegracao) no banco de treino. */
+  /** Recria os usuários da turma pelo executor no banco próprio do cliente de treino (treino-turma.ts). */
   readonly recriarTurma: (logins: readonly string[]) => Promise<number>;
-  /** Extrai as colunas pessoais para o verificador `treino-sem-dado-real` e devolve os achados. */
+  /** Lê CPF e telefone do banco próprio de treino para o verificador `treino-sem-dado-real` e devolve os achados. */
   readonly verificar: () => Promise<number>;
 }
 

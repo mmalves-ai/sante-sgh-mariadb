@@ -1,29 +1,16 @@
-// pnpm k6 -- <cenario> (M09, regra 15; cap-14 §14.2.7; convencoes.md §13): linha de base de carga somada no
-// dev (DP-15: indicação, não meta). Sobe a API e o worker locais com telemetria, reproduz a carga do legado na
-// cópia (leituras das operações-chave do SPDATA, marcadas como `legado-simulado` no MON$) antes e durante o
-// k6, roda o k6 por imagem Docker (tag e digest) contra 127.0.0.1:3300, acompanha pelo coletor MON$ a
-// transação mais longa do novo e grava o resumo agregado em docs/marcos/M09/carga-resultado.json.
-// Só leitura (nenhuma gravação na cópia); nunca o sante-firebird nem nada externo. Rodar com a trava do E2E.
+// pnpm k6 -- <cenario> --cliente=<código> (M09, regra 15; cap-14 §14.2.7; convencoes.md §13): linha de base de carga
+// no dev (DP-15: indicação, não meta). Sobe a API e o worker locais com telemetria, roda o k6 por imagem Docker (tag e
+// digest) contra 127.0.0.1:<K6_API_PORTA>, acompanha pelo coletor de transações do MariaDB (k6-coletor.ts) a transação
+// mais longa do processo medido e grava o resumo agregado em docs/marcos/<Mnn>/. Só leitura no banco pelo coletor;
+// nada externo. O cliente vem de --cliente= ou SGH_CLIENTE_LEITURA.
+// Melhoria (ADR 0003): sem a simulação de carga do sistema de origem; o critério é o das transações do banco próprio.
+// Melhoria: a trava confere o MariaDB configurado (dev, loopback, fora dos endereços ocupados da VM).
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import {
-  type AncoraCarga,
-  ancoraCarga,
-  ambienteEfetivo,
-  caminhoArquivoAmbiente,
-  cargaAbrirFicha,
-  cargaListas,
-  cargaPainel,
-  coletar,
-  faixaPacientes,
-  lerConfiguracaoNucleo,
-  lerConfiguracaoVigia,
-  lerEstabelecimentos,
-  NucleoLegado,
-  PORTAS_OCUPADAS,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+import { NucleoProprio, lerConfiguracaoNucleo } from '@sgh/nucleo';
+import { ambienteDoRepositorio, clienteDaLeitura, motivoRecusaBancoDev } from './copia-leitura.ts';
+import { ambienteDoVigia, coletarTransacoes } from './k6-coletor.ts';
 import { conexaoDoK6, monVazio, PROCESSOS_DO_K6, reprovasMon, somarAmostra } from './k6-mon.ts';
 
 const raiz = resolve(import.meta.dirname, '../../..');
@@ -36,7 +23,8 @@ if (!Number.isInteger(PORTA_API) || PORTA_API < 1024 || PORTA_API > 65535) {
 }
 const API = `http://127.0.0.1:${PORTA_API}`;
 const OTLP = 'http://127.0.0.1:3331';
-const cenario = process.argv.slice(2).find((a) => !a.startsWith('-')) ?? '';
+const argv = process.argv.slice(2);
+const cenario = argv.find((a) => !a.startsWith('-')) ?? '';
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Jornadas (nome no resumo → tag do k6) e arquivo do resultado, por cenário. */
@@ -187,39 +175,30 @@ function sair(msg: string, codigo = 1): never {
   process.exit(codigo);
 }
 
-/** Falha dentro da rodada: lançada (nunca process.exit) para o finally encerrar a API, o worker e a cópia. */
+/** Falha dentro da rodada: lançada (nunca process.exit) para o finally encerrar a API, o worker e o núcleo. */
 class FalhaK6 extends Error {}
 
 if (!/^[a-z0-9-]+$/.test(cenario) || !existsSync(resolve(raiz, 'infra/k6', `${cenario}.js`))) {
-  sair(`Uso: pnpm k6 -- <cenario> (infra/k6/<cenario>.js). Cenário "${cenario}" não existe.`, 2);
+  sair(`Uso: pnpm k6 -- <cenario> --cliente=<código> (infra/k6/<cenario>.js). Cenário "${cenario}" não existe.`, 2);
 }
 
 // M39: o pico da recepção COM GRAVAÇÃO grava pelas rotas reais (COMMIT): só em AMBIENTE=homolog, pela TI (DP-15),
-// contra a API da homologação (K6_BASE), sem subir API nem simular o outro sistema; recusado no dev, no ci e sobre a
-// cópia compartilhada (k6-homologacao.ts). O resto deste arquivo é a linha de base do dev (AMBIENTE=dev).
+// contra a API da homologação (K6_BASE), sem subir API; recusado no dev e no ci (k6-homologacao.ts).
 if (cenario === 'pico-recepcao-gravacao') {
   const { rodarPicoGravacao } = await import('./k6-homologacao-cli.ts');
   process.exit(await rodarPicoGravacao(raiz, IMAGEM_K6));
 }
 
-const { env } = ambienteEfetivo(caminhoArquivoAmbiente(process.env, raiz));
-if ((env['AMBIENTE']?.trim() || 'dev') !== 'dev') sair('k6 só em AMBIENTE=dev (DP-15).');
-const estabs = lerEstabelecimentos(env);
-for (const e of estabs) {
-  if (!['127.0.0.1', 'localhost', '::1'].includes(e.host))
-    sair(`${e.codigo}: host fora do loopback; recusado.`);
-  if (PORTAS_OCUPADAS.includes(e.porta))
-    sair(`${e.codigo}: porta ${e.porta} é de outro projeto (nunca o sante-firebird).`);
-}
-const cod = estabs[0]?.codigo ?? sair('Nenhum estabelecimento configurado.');
+const env = ambienteDoRepositorio();
+const recusa = motivoRecusaBancoDev(env);
+if (recusa) sair(`k6 recusado: ${recusa} (DP-15).`);
+const cliente = clienteDaLeitura(argv, { ...process.env, ...env }) ?? sair('Informe o cliente: --cliente=<código>.', 2);
 
-function nucleo(extra: Record<string, string>): NucleoLegado {
-  const e = { ...env, ...extra };
-  return new NucleoLegado({
-    env: e,
-    driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(e).bibliotecaCliente }),
-    pastaHomologada: resolve(raiz, 'tools/schema-check/homologado'),
-  });
+/** Limite da transação do processo medido (VIGIA_LIMITE_TRANSACAO_MS; padrão 5 s; faixa validada). */
+function limiteTransacao(): number {
+  const v = Number(env['VIGIA_LIMITE_TRANSACAO_MS'] ?? 5_000);
+  if (!Number.isInteger(v) || v < 100 || v > 600_000) sair('VIGIA_LIMITE_TRANSACAO_MS: de 100 a 600000.');
+  return v;
 }
 
 async function respondendo(url: string): Promise<boolean> {
@@ -243,99 +222,66 @@ function subir(nome: string, arquivo: string, extra: Record<string, string>): Ch
   return p;
 }
 
-// ---- operações-chave do legado reproduzidas na cópia (até o trace do Delphi pela TI) ----
-type Op = 'abrir-paciente' | 'lista-do-dia' | 'painel-ocupacao';
-const tempos: Record<'antes' | 'durante', Record<Op, number[]>> = {
-  antes: { 'abrir-paciente': [], 'lista-do-dia': [], 'painel-ocupacao': [] },
-  durante: { 'abrir-paciente': [], 'lista-do-dia': [], 'painel-ocupacao': [] },
-};
-/** Linhas devolvidas por operação do legado simulado (0 numa operação = busca vazia: reprova). */
-const linhasLegado: Record<Op, number> = { 'abrir-paciente': 0, 'lista-do-dia': 0, 'painel-ocupacao': 0 };
-// Revisão do M35: um aquecimento (caches do servidor e páginas do banco) antes da janela "antes", sem registrar
-// tempo: a 1ª abertura de paciente a frio puxava o p95 "antes" (191 ms) muito acima do "durante" (12 ms).
-let fase: 'aquecimento' | 'antes' | 'durante' | 'fim' = 'aquecimento';
-const terminou = (): boolean => fase === 'fim';
-const AQUECIMENTO_MS = Number(process.env['K6_AQUECIMENTO_MS'] ?? 20_000);
+let fase: 'antes' | 'durante' | 'fim' = 'antes';
 
-async function simularLegado(n: NucleoLegado, sessoes: number, ancora: AncoraCarga): Promise<void> {
-  const ctx = { rede: n.rede, hospital: cod, traceId: 'legado-simulado' };
-  const { min, max } = await n.lerSomente(ctx, (l) => faixaPacientes(l));
-  const sessao = async () => {
-    while (!terminou()) {
-      for (const op of ['abrir-paciente', 'lista-do-dia', 'painel-ocupacao'] as const) {
-        if (terminou()) return;
-        const t0 = performance.now();
-        const achou = await n.lerSomente(ctx, async (l): Promise<number> =>
-          op === 'abrir-paciente'
-            ? (await cargaAbrirFicha(l, min + Math.floor(Math.random() * (max - min + 1)))).itens
-            : op === 'lista-do-dia'
-              ? cargaListas(l, ancora)
-              : cargaPainel(l, ancora),
-        );
-        linhasLegado[op] += achou;
-        const agora = fase;
-        if (agora === 'antes' || agora === 'durante') tempos[agora][op].push(performance.now() - t0);
-        await espera(1_000 + Math.random() * 2_000);
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: sessoes }, sessao));
-}
-
-// ---- coletor MON$ durante a carga ----
-// Só as conexões do processo medido (marcas api-k6 e worker-k6) entram no critério; as dos outros processos do
-// novo na cópia compartilhada ficam à parte (k6-mon.ts).
+// ---- coletor de transações durante a carga ----
+// Só as conexões do processo medido (marcas api-k6 e worker-k6) entram no critério; as dos outros processos no mesmo
+// banco ficam à parte (k6-mon.ts).
 const medido = monVazio();
 const mon = {
   coletaMaxMs: 0,
+  alertas: new Set<string>(),
   conexoesMax: {} as Record<string, number>,
-  /** Maior valor por sistema de travas, esperas por trava, conflitos e comandos parados (MON$). */
-  travasMax: {} as Record<string, { travas: number; esperas: number; conflitos: number; parados: number }>,
+  /** Maior valor por processo de travas, esperas por trava e comandos acima do limite. */
+  travasMax: {} as Record<string, { travas: number; esperas: number; comandosLongos: number }>,
+  /** Coletas perdidas durante a carga e o primeiro motivo (nome do erro e mensagem curta, sem valores). */
+  perdidas: 0,
+  motivoPerda: '',
 };
-async function vigiar(n: NucleoLegado, limiteMs: number): Promise<void> {
-  const ctx = { rede: n.rede, hospital: cod, traceId: 'k6-vigia' };
+
+async function vigiar(n: NucleoProprio, banco: string, limiteMs: number): Promise<void> {
   while (fase !== 'fim') {
     try {
-      const c = await n.lerSomente(ctx, (l) =>
-        coletar(l, { estabelecimento: cod, limiteTransacaoMs: limiteMs }),
+      const c = await n.lerSomente({ cliente, correlacao: 'k6-vigia' }, (l) =>
+        coletarTransacoes(l, { banco, limiteTransacaoMs: limiteMs }),
       );
       if (fase === 'durante') {
         somarAmostra(medido, c, limiteMs);
         mon.coletaMaxMs = Math.max(mon.coletaMaxMs, c.duracaoMs);
-        for (const s of c.porSistema) {
-          mon.conexoesMax[s.sistema] = Math.max(mon.conexoesMax[s.sistema] ?? 0, s.conexoes);
-          const t = (mon.travasMax[s.sistema] ??= { travas: 0, esperas: 0, conflitos: 0, parados: 0 });
+        for (const a of c.alertas) mon.alertas.add(a);
+        for (const s of c.porProcesso) {
+          mon.conexoesMax[s.processo] = Math.max(mon.conexoesMax[s.processo] ?? 0, s.conexoes);
+          const t = (mon.travasMax[s.processo] ??= { travas: 0, esperas: 0, comandosLongos: 0 });
           t.travas = Math.max(t.travas, s.travas);
           t.esperas = Math.max(t.esperas, s.esperasPorTrava);
-          t.conflitos = Math.max(t.conflitos, s.conflitos);
-          t.parados = Math.max(t.parados, s.comandosParados);
+          t.comandosLongos = Math.max(t.comandosLongos, s.comandosLongos);
         }
       }
-    } catch {
-      // coleta perdida: segue
+    } catch (e) {
+      // coleta perdida: segue, mas contada e com o primeiro motivo impresso (nunca silêncio)
+      if (fase === 'durante') mon.perdidas++;
+      if (!mon.motivoPerda) {
+        mon.motivoPerda = e instanceof Error ? `${e.name}: ${e.message.slice(0, 200)}` : 'erro';
+        console.error(`▶ coleta de transações perdida: ${mon.motivoPerda}`);
+      }
     }
     await espera(2_000);
   }
 }
 
-/** Espera (até 3 min) nenhuma transação do processo medido aberta acima do limite; registra o que esperou. */
-async function aguardarPartida(n: NucleoLegado, limiteMs: number): Promise<void> {
-  const ctx = { rede: n.rede, hospital: cod, traceId: 'k6-partida' };
+/** Espera (até 3 min) nenhuma transação do processo medido aberta acima do limite. */
+async function aguardarPartida(n: NucleoProprio, banco: string, limiteMs: number): Promise<void> {
   const inicio = Date.now();
   let ultima = '';
   while (Date.now() - inicio < 180_000) {
     try {
-      const c = await n.lerSomente(ctx, (l) =>
-        coletar(l, { estabelecimento: cod, limiteTransacaoMs: limiteMs }),
+      const c = await n.lerSomente({ cliente, correlacao: 'k6-partida' }, (l) =>
+        coletarTransacoes(l, { banco, limiteTransacaoMs: limiteMs }),
       );
-      const longas = c.conexoesDoNovo.filter(
-        (x) => conexaoDoK6(x.marca) && x.transacaoMaisLongaMs > limiteMs,
-      );
+      const longas = c.conexoesDoNovo.filter((x) => conexaoDoK6(x.marca) && x.transacaoMaisLongaMs > limiteMs);
       if (longas.length === 0) {
         if (ultima)
-          console.log(
-            `▶ partida do processo medido concluída (${Math.round((Date.now() - inicio) / 1000)} s de espera)`,
-          );
+          console.log(`▶ partida do processo medido concluída (${Math.round((Date.now() - inicio) / 1000)} s de espera)`);
         return;
       }
       const agora = longas
@@ -351,13 +297,6 @@ async function aguardarPartida(n: NucleoLegado, limiteMs: number): Promise<void>
   console.log('▶ a partida do processo medido não terminou em 3 min: o k6 começa assim mesmo');
 }
 
-function resumoTempos(xs: number[]) {
-  const s = [...xs].sort((a, b) => a - b);
-  const q = (p: number) =>
-    s.length ? Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))]!) : null;
-  return { n: s.length, p50: q(0.5), p95: q(0.95), max: s.length ? Math.round(s[s.length - 1]!) : null };
-}
-
 async function principal(): Promise<number> {
   if (await respondendo(`${API}/api/versao`))
     sair(`Já há uma API em ${API}: encerre-a ou use K6_API_PORTA (o k6 sobe a sua).`);
@@ -369,65 +308,29 @@ async function principal(): Promise<number> {
   });
   if (b.status !== 0) sair('Build da API/worker falhou.');
   const filhos: ChildProcess[] = [];
-  const sessoes = Number(process.env['LEGADO_SESSOES'] ?? 8);
-  if (!Number.isInteger(sessoes) || sessoes < 1 || sessoes > 32) sair('LEGADO_SESSOES: de 1 a 32.');
-  const limiteMs = lerConfiguracaoVigia(env).limiteTransacaoMs; // faixa validada (NaN é recusado)
-  const legado = nucleo({ SGH_MARCA_CONEXAO: 'legado-simulado:k6', FB_POOL_TETO: String(sessoes) });
-  const vigia = nucleo({ SGH_PROCESSO: 'k6-vigia', FB_POOL_TETO: '1' });
+  const limiteMs = limiteTransacao();
+  const doVigia = ambienteDoVigia(env);
+  for (const a of doVigia.alertas) {
+    console.warn(`▶ aviso: ${a}`);
+    mon.alertas.add(a);
+  }
+  const vigia = new NucleoProprio({ env: doVigia.env });
   let saida: string | null = null;
   try {
-    // M11/M15: o cadastro e o prontuário leem a cópia pelas portas deles (ACESSO_FONTE_DEV=copia: só leitura).
+    const banco = (await vigia.cliente(cliente)).banco;
+    filhos.push(subir('api', 'apps/api/dist/main.js', { SGH_PROCESSO: PROCESSOS_DO_K6.api, API_PORTA: String(PORTA_API) }));
     filhos.push(
-      subir('api', 'apps/api/dist/main.js', {
-        SGH_PROCESSO: PROCESSOS_DO_K6.api,
-        API_PORTA: String(PORTA_API),
-        ...(cenario === 'cadastro-busca' ||
-        cenario === 'prontuario' ||
-        cenario === 'painel-leitos' ||
-        cenario === 'prescricao' ||
-        cenario === 'sadt' ||
-        // M27: as filas da página inicial e os prontuários e prescrições delas leem a cópia (só leitura).
-        cenario === 'carga-nominal' ||
-        cenario === 'pico-recepcao' ||
-        cenario === 'troca-plantao' ||
-        cenario === 'estoque-saida' ||
-        cenario === 'dispensar'
-          ? { ACESSO_FONTE_DEV: 'copia' }
-          : {}),
-      }),
-    );
-    filhos.push(
-      subir('worker', 'apps/worker/dist/main.js', {
-        SGH_PROCESSO: PROCESSOS_DO_K6.worker,
-        VIGIA_INTERVALO_MS: '5000',
-      }),
+      subir('worker', 'apps/worker/dist/main.js', { SGH_PROCESSO: PROCESSOS_DO_K6.worker, VIGIA_INTERVALO_MS: '5000' }),
     );
     for (let i = 0; i < 90 && !(await respondendo(`${API}/api/carga/login/0`)); i++) await espera(1_000);
-    if (!(await respondendo(`${API}/api/carga/login/0`)))
-      throw new FalhaK6('A API não respondeu em /api/carga/login.');
-    const ancora = await legado.lerSomente({ rede: legado.rede, hospital: cod, traceId: 'k6-ancora' }, (l) =>
-      ancoraCarga(l),
-    );
-    const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-    console.log(
-      `▶ âncora das janelas: entrada ${dia(ancora.entrada)}, atendimento ${dia(ancora.atendimento)}`,
-    );
+    if (!(await respondendo(`${API}/api/carga/login/0`))) throw new FalhaK6('A API não respondeu em /api/carga/login.');
     const pool = lerConfiguracaoNucleo(env);
-    console.log(
-      `▶ API no ar (pool ${pool.tetoPorEstabelecimento} conexões por estabelecimento, espera ${pool.esperaConexaoMs} ms)`,
-    );
-    console.log(
-      `▶ carga do legado simulada (${sessoes} sessões) — ${AQUECIMENTO_MS / 1000} s de aquecimento e 45 s antes do k6`,
-    );
-    const sim = simularLegado(legado, sessoes, ancora);
-    const vig = vigiar(vigia, limiteMs);
-    await espera(AQUECIMENTO_MS);
-    fase = 'antes';
-    await espera(45_000);
-    // M34: a partida do processo medido (a conferência do schema do worker e os primeiros ciclos dos serviços, cada um
-    // na sua transação de leitura) termina antes de o k6 começar: o critério mede o regime, não a partida.
-    await aguardarPartida(vigia, limiteMs);
+    console.log(`▶ API no ar (pool ${pool.tetoPorBanco} conexões por banco, espera ${pool.esperaConexaoMs} ms)`);
+    const vig = vigiar(vigia, banco, limiteMs);
+    // M34: a partida do processo medido termina antes de o k6 começar: o critério mede o regime, não a partida.
+    await aguardarPartida(vigia, banco, limiteMs);
     fase = 'durante';
+    mkdirSync(resolve(raiz, '.tmp'), { recursive: true });
     saida = mkdtempSync(join(resolve(raiz, '.tmp'), 'k6-'));
     chmodSync(saida, 0o777);
     console.log(`▶ k6 ${cenario} (imagem ${IMAGEM_K6.split('@')[0]})`);
@@ -438,31 +341,16 @@ async function principal(): Promise<number> {
       const p = spawn(
         'docker',
         [
-          'run',
-          '--rm',
-          '--name',
-          `sgh-k6-${process.pid}`,
-          '--network',
-          'host',
-          '-v',
-          `${resolve(raiz, 'infra/k6')}:/scripts:ro`,
-          '-v',
-          `${saida}:/saida`,
-          IMAGEM_K6,
-          'run',
-          '--quiet',
-          '--no-usage-report',
-          '-e',
-          `BASE=${API}`,
-          ...vars,
-          `/scripts/${cenario}.js`,
+          'run', '--rm', '--name', `sgh-k6-${process.pid}`, '--network', 'host',
+          '-v', `${resolve(raiz, 'infra/k6')}:/scripts:ro`, '-v', `${saida}:/saida`,
+          IMAGEM_K6, 'run', '--quiet', '--no-usage-report', '-e', `BASE=${API}`, ...vars, `/scripts/${cenario}.js`,
         ],
         { cwd: raiz, stdio: ['ignore', 'inherit', 'inherit'] },
       );
       p.on('exit', (c) => ok(c ?? 1));
     });
     fase = 'fim';
-    await Promise.allSettled([sim, vig]);
+    await Promise.allSettled([vig]);
     const resumo = JSON.parse(readFileSync(join(saida, 'resumo.json'), 'utf8')) as {
       metrics: Record<string, { values: Record<string, number> }>;
     };
@@ -483,35 +371,23 @@ async function principal(): Promise<number> {
       cenario,
       data: new Date().toISOString(),
       ambiente: 'dev (indicação; DP-15)',
-      estabelecimento: cod,
-      ancora: { entrada: dia(ancora.entrada), atendimento: dia(ancora.atendimento) },
+      cliente,
       usuarios: Number(
         process.env['USUARIOS'] ??
-          (cenario === 'cadastro-busca' ||
-          cenario === 'prontuario' ||
-          cenario === 'painel-leitos' ||
-          cenario === 'agenda' ||
-          cenario === 'portal-agenda' ||
-          cenario === 'prescricao'
+          (['cadastro-busca', 'prontuario', 'painel-leitos', 'agenda', 'portal-agenda', 'prescricao'].includes(cenario)
             ? 60
             : cenario === 'dispensar'
               ? 8
-              : cenario === 'sadt' || cenario === 'checagem' || cenario === 'estoque-saida'
+              : ['sadt', 'checagem', 'estoque-saida'].includes(cenario)
                 ? 20
                 : 400),
       ),
-      pool: {
-        porEstabelecimento: pool.tetoPorEstabelecimento,
-        esperaMs: pool.esperaConexaoMs,
-        consultaMs: pool.tempoConsultaMs,
-      },
+      pool: { porBanco: pool.tetoPorBanco, esperaMs: pool.esperaConexaoMs, consultaMs: pool.tempoConsultaMs },
       k6: {
         saida: k6,
         iteracoes: Math.round(resumo.metrics['iterations']?.values['count'] ?? 0),
         requisicoes: Math.round(resumo.metrics['http_reqs']?.values['count'] ?? 0),
-        vusMax: Math.round(
-          resumo.metrics['vus_max']?.values['max'] ?? resumo.metrics['vus_max']?.values['value'] ?? 0,
-        ),
+        vusMax: Math.round(resumo.metrics['vus_max']?.values['max'] ?? resumo.metrics['vus_max']?.values['value'] ?? 0),
         falhasPct: Number(((resumo.metrics['http_req_failed']?.values['rate'] ?? 0) * 100).toFixed(2)),
         jornadas: Object.fromEntries(
           Object.entries(JORNADAS_DO_CENARIO[cenario] ?? {}).map(([nome, tag]) => [nome, jornada(tag)]),
@@ -524,45 +400,37 @@ async function principal(): Promise<number> {
               const v = resumo.metrics[m]!.values;
               return [
                 m === 'sgh_executor_ms' ? 'executor' : 'esperaPool',
-                {
-                  p50_ms: Math.round(v['p(50)'] ?? 0),
-                  p95_ms: Math.round(v['p(95)'] ?? 0),
-                  max_ms: Math.round(v['max'] ?? 0),
-                },
+                { p50_ms: Math.round(v['p(50)'] ?? 0), p95_ms: Math.round(v['p(95)'] ?? 0), max_ms: Math.round(v['max'] ?? 0) },
               ];
             }),
         ),
       },
-      legadoSimulado: {
-        sessoes,
-        linhasDevolvidas: linhasLegado,
-        antes: Object.fromEntries(Object.entries(tempos.antes).map(([k, v]) => [k, resumoTempos(v)])),
-        durante: Object.fromEntries(Object.entries(tempos.durante).map(([k, v]) => [k, resumoTempos(v)])),
-      },
-      mon: {
+      transacoes: {
         amostras: medido.amostras,
         limiteTransacaoMs: limiteMs,
-        // Processo medido: a API e o worker que o runner subiu (marcas api-k6 e worker-k6).
         conexoesDoProcessoMedidoMax: medido.conexoesMax,
-        transacaoNovoMaisLongaMs: medido.maisLongaMs,
-        transacaoNovoMaisLongaProcesso: medido.maisLongaProcesso,
-        transacoesNovoAcimaDoLimite: medido.acimaDoLimite,
-        transacoesEscritaDoNovoMax: medido.escritaMax,
-        // Outros processos marcados como sistema novo na cópia compartilhada (informação; não reprovam).
-        outrosProcessosDoNovo: {
+        transacaoMaisLongaMs: medido.maisLongaMs,
+        transacaoMaisLongaProcesso: medido.maisLongaProcesso,
+        transacoesAcimaDoLimite: medido.acimaDoLimite,
+        transacoesEscritaMax: medido.escritaMax,
+        // Outros processos no mesmo banco (informação; não reprovam).
+        outrosProcessos: {
           conexoesMax: medido.outrosConexoesMax,
           transacaoMaisLongaMs: medido.outrosMaisLongaMs,
           transacoesAcimaDoLimite: medido.outrosAcimaDoLimite,
           transacoesEscritaMax: medido.outrosEscritaMax,
         },
         coletaMaxMs: mon.coletaMaxMs,
-        conexoesMaxPorSistema: mon.conexoesMax,
-        travasMaxPorSistema: mon.travasMax,
+        conexoesMaxPorProcesso: mon.conexoesMax,
+        travasMaxPorProcesso: mon.travasMax,
+        coletasPerdidas: mon.perdidas,
+        motivoDaPerda: mon.motivoPerda || null,
+        alertas: [...mon.alertas],
       },
     };
     const [pastaPadrao, arquivoPadrao] = RESULTADO_DO_CENARIO[cenario] ?? ['M09', `carga-${cenario}.json`];
-    // M35: K6_RESULTADO_MARCO=<Mnn> grava o resumo na pasta do marco que reexecuta o cenário (a consolidação da
-    // semana), como `carga-<cenario>.json`, sem sobrescrever a linha de base do marco dono.
+    // M35: K6_RESULTADO_MARCO=<Mnn> grava o resumo na pasta do marco que reexecuta o cenário, como
+    // `carga-<cenario>.json`, sem sobrescrever a linha de base do marco dono.
     const outroMarco = process.env['K6_RESULTADO_MARCO']?.trim();
     if (outroMarco && !/^M\d{2}$/.test(outroMarco)) throw new FalhaK6('K6_RESULTADO_MARCO: Mnn.');
     const pastaMarco = outroMarco || pastaPadrao;
@@ -572,15 +440,13 @@ async function principal(): Promise<number> {
     writeFileSync(destino, JSON.stringify(resultado, null, 2) + '\n');
     console.log(JSON.stringify(resultado, null, 2));
     console.log(`Resumo gravado em ${destino}`);
-    // Critério de aceite (ficha do M09, seção 11): k6 sem limiar reprovado, nenhuma transação de escrita
-    // do processo medido (API e worker do k6), nenhuma transação dele acima do limite e nenhuma jornada só com busca vazia.
+    // Critério de aceite (ficha do M09, seção 11): k6 sem limiar reprovado, nenhuma transação de escrita do processo
+    // medido no coletor, nenhuma transação dele acima do limite e nenhuma jornada só com busca vazia.
     const reprovas: string[] = [];
     if (k6 !== 0) reprovas.push(`k6 saiu com ${k6} (limiar reprovado ou erro)`);
     reprovas.push(...reprovasMon(medido, limiteMs));
     for (const [j, v] of Object.entries(resultado.k6.jornadas))
       if (v.linhasDevolvidas === 0) reprovas.push(`jornada ${j} sem linhas`);
-    for (const [op, v] of Object.entries(linhasLegado))
-      if (v === 0) reprovas.push(`legado simulado ${op} sem linhas`);
     for (const r of reprovas) console.error(`✗ ${r}`);
     return reprovas.length === 0 ? 0 : 1;
   } finally {
@@ -588,7 +454,7 @@ async function principal(): Promise<number> {
     for (const f of filhos) f.kill('SIGTERM');
     await espera(1_500);
     for (const f of filhos) if (f.exitCode === null) f.kill('SIGKILL');
-    await Promise.allSettled([legado.encerrar(), vigia.encerrar()]);
+    await vigia.encerrar();
     if (saida) rmSync(saida, { recursive: true, force: true });
   }
 }

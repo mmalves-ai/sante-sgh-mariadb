@@ -288,7 +288,11 @@ function desfechoDe(e: ErroOperacao): Desfecho {
 }
 
 export class Executor {
-  constructor(private readonly deps: DependenciasExecutor) {}
+  private readonly deps: DependenciasExecutor;
+
+  constructor(deps: DependenciasExecutor) {
+    this.deps = deps;
+  }
 
   private agora(): number {
     return this.deps.agora?.() ?? Date.now();

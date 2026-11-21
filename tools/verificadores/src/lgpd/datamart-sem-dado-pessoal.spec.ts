@@ -29,7 +29,7 @@ const PESSOA = 'pessoa-da-rede-sintetica-0001';
 
 const nucleo: NucleoDaCarga = {
   rede: 'rede-sintetica',
-  lerSomente: async (_c, fn) => fn({} as never),
+  lerSomente: async (c, fn) => fn({} as never, c.hospital === 'pc' ? 1 : 2),
 };
 
 function movimento(cod: 'pc' | 'hs'): MovimentoInternacao {
