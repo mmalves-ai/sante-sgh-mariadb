@@ -53,7 +53,15 @@ const preco = useQuery({
   queryFn: () => calcularPrecoAtendimento(reg.value, escolhido.value?.codigo ?? 0),
   enabled: computed(() => escolhido.value !== null),
 });
-const bloqueado = computed(() => preco.data.value?.credenciamento?.efeito === 'bloqueio');
+// Falha fechada: sem a prévia lida com sucesso (carregando, com erro ou desatualizada), o botão fica desabilitado; com
+// a prévia, só o efeito 'bloqueio' (convênio com bloqueio sem credenciamento) desabilita. A trava de verdade é do
+// servidor (lançamento), esta é a da tela.
+const previaConferida = computed(
+  () => preco.isSuccess.value && !preco.isFetching.value && preco.data.value !== undefined,
+);
+const bloqueado = computed(
+  () => !previaConferida.value || preco.data.value?.credenciamento?.efeito === 'bloqueio',
+);
 async function procurar(): Promise<void> {
   erro.value = null;
   try {
@@ -276,6 +284,9 @@ const real = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curre
             <input id="extras-qtd" v-model.number="quantidade" type="number" min="1" max="999" />
           </div>
           <p v-if="preco.isFetching.value" role="status">{{ t('estruturada.lancamento.calculando') }}</p>
+          <p v-else-if="preco.isError.value" role="alert" data-testid="preco-indisponivel">
+            {{ t('estruturada.lancamento.previaIndisponivel') }}
+          </p>
           <OrigemPrecoAviso v-else-if="preco.data.value" :resultado="preco.data.value" />
           <SanteBotao
             :rotulo="t('atendimento.procedimentos.lancar')"

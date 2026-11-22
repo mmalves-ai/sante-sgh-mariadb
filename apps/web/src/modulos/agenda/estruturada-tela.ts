@@ -8,6 +8,7 @@ import type {
   TextoOrigemAgenda,
   TrechoTexto,
 } from '@sgh/contratos';
+import { compararEspecificidade } from '@sgh/dominio-preco';
 
 export interface PedacoTexto {
   texto: string;
@@ -18,38 +19,38 @@ export interface PedacoTexto {
 }
 
 /**
- * Fatia o texto pelos trechos. Trechos fora do texto são cortados; sobrepostos valem na ordem de início (o que
- * começa dentro de outro já fatiado começa onde o anterior acabou). Concatenar os pedaços devolve o texto inteiro.
+ * Fatia o texto pelos trechos. Trechos fora do texto são cortados. Na sobreposição, o trecho NÃO interpretado tem
+ * precedência (decisão 27: o que não se interpretou continua valendo pelo texto e fica marcado): cada caractere fica
+ * com o trecho não interpretado que o cobre, senão com o interpretado; entre os do mesmo tipo, o que começa antes.
+ * Um interpretado com um não interpretado dentro sai em três pedaços. Concatenar os pedaços devolve o texto inteiro.
  */
 export function fatiarTexto(texto: string, trechos: readonly TrechoTexto[]): PedacoTexto[] {
   const chars = Array.from(texto);
   const total = chars.length;
   const ordenados = [...trechos].sort((a, b) => a.inicio - b.inicio || a.fim - b.fim);
-  const pedacos: PedacoTexto[] = [];
-  let pos = 0;
-  const livre = (ate: number) => {
-    if (ate > pos)
-      pedacos.push({
-        texto: chars.slice(pos, ate).join(''),
-        interpretado: null,
-        tipoRegra: null,
-        motivo: null,
-      });
-  };
+  const dono: (TrechoTexto | null)[] = new Array<TrechoTexto | null>(total).fill(null);
   for (const t of ordenados) {
-    const inicio = Math.max(Math.min(t.inicio, total), pos);
+    const inicio = Math.max(0, Math.min(t.inicio, total));
     const fim = Math.min(t.fim, total);
-    if (fim <= inicio) continue;
-    livre(inicio);
-    pedacos.push({
-      texto: chars.slice(inicio, fim).join(''),
-      interpretado: t.interpretado,
-      tipoRegra: t.tipoRegra,
-      motivo: t.motivo,
-    });
-    pos = fim;
+    for (let k = inicio; k < fim; k++) {
+      const atual = dono[k] ?? null;
+      if (atual === null || (atual.interpretado && !t.interpretado)) dono[k] = t;
+    }
   }
-  livre(total);
+  const pedacos: PedacoTexto[] = [];
+  let k = 0;
+  while (k < total) {
+    const t = dono[k] ?? null;
+    let fim = k + 1;
+    while (fim < total && (dono[fim] ?? null) === t) fim++;
+    pedacos.push({
+      texto: chars.slice(k, fim).join(''),
+      interpretado: t === null ? null : t.interpretado,
+      tipoRegra: t === null ? null : t.tipoRegra,
+      motivo: t === null ? null : t.motivo,
+    });
+    k = fim;
+  }
   return pedacos;
 }
 
@@ -88,11 +89,24 @@ export function agruparCobertura(coberturas: readonly CoberturaAgenda[]): GrupoC
   return [...porConvenio.values()].sort((a, b) => a.fontePagadoraId - b.fontePagadoraId);
 }
 
-/** As regras de preço que valem (a recusada não vale; a estimada já vale, decisão 27), em ordem de prioridade. */
-export const regrasVigentes = (regras: readonly RegraPrecoParticular[]): RegraPrecoParticular[] =>
+/**
+ * As regras de preço que valem na data (a recusada não vale; a estimada já vale, decisão 27), na ordem em que o
+ * cálculo as escolhe: a mesma especificidade do domínio (alvo item > grupo > consulta; agenda > profissional;
+ * estabelecimento > rede; prioridade, menor vence; confirmada > estimada). A primeira é a que vence para o alvo dela.
+ */
+export const regrasVigentes = (
+  regras: readonly RegraPrecoParticular[],
+  data: string,
+): RegraPrecoParticular[] =>
   regras
-    .filter((r) => r.ativo && r.situacaoRevisao !== 'recusada')
-    .sort((a, b) => a.prioridade - b.prioridade || a.id - b.id);
+    .filter(
+      (r) =>
+        r.ativo &&
+        r.situacaoRevisao !== 'recusada' &&
+        r.vigenciaInicio <= data &&
+        (r.vigenciaFim === null || r.vigenciaFim >= data),
+    )
+    .sort(compararEspecificidade);
 
 /** O texto de onde a regra foi extraída, para mostrar ao lado. */
 export const textoDaRegra = (

@@ -144,6 +144,8 @@ export const mensagensEstruturada = {
   lancamento: {
     titulo: 'Preço e credenciamento',
     calculando: 'Conferindo o preço e o credenciamento…',
+    previaIndisponivel:
+      'Não foi possível conferir o preço e o credenciamento deste procedimento; o lançamento fica bloqueado até a conferência.',
     valor: 'Valor: {valor}',
     semPreco: 'Sem preço para o procedimento: o lançamento pede preço manual justificado.',
     origem: 'Origem do preço',

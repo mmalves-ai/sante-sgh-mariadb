@@ -25,11 +25,31 @@ import { tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
 
 const JSON_ACEITO = { accept: 'application/json' };
-const AGENDAS = '/api/agenda/consultas/agendas';
-const REGRAS = '/api/agenda/consultas/precos-particulares';
-const CREDENCIAMENTOS = '/api/cadastros/credenciamentos';
-const CONVENIOS = '/api/cadastros/convenios';
+// Rotas do AgendaPrecoController (apps/api/src/modulos/precos/agenda-preco.controller.ts, prefixo global 'api').
+// O spec confere cada URL chamada aqui contra os decoradores do controller; as que a API ainda não tem ficam na lista
+// ROTAS_PENDENTES_API (lote API), e o teste falha quando uma delas passa a existir ou quando surge outra fora da lista.
+const AGENDAS = '/api/agendas';
+const REGRAS = '/api/precos-particulares';
+const CREDENCIAMENTOS = '/api/credenciamentos';
+const CONVENIOS = '/api/convenios';
 const ATENDIMENTO = '/api/atendimento';
+
+/** Rotas que as telas usam e a API ainda não publica (pedidas ao lote API). Formato "MÉTODO /api/caminho/:id". */
+export const ROTAS_PENDENTES_API: readonly string[] = [
+  // revisão da regra estimada (confirmar, recusar, editar) com a versão lida
+  'PUT /api/precos-particulares/:id',
+  // prévia do preço e do credenciamento do procedimento no atendimento (o servidor resolve profissional, convênio,
+  // plano e item a partir do registro; a tela não tem esses ids)
+  'GET /api/atendimento/:id/preco',
+];
+
+/** Mensagem da gravação quando a API devolve só o resultado da operação (sem a mensagem). */
+const MENSAGEM_GRAVADO = 'Gravado.';
+
+const hojeIso = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 async function lerJson<T>(r: Response, esquema: z.ZodType<T>): Promise<T> {
   if (!r.ok) throw await erroDaResposta(r);
@@ -54,7 +74,17 @@ async function gravar(
     },
     body: JSON.stringify(corpo ?? {}),
   });
-  return lerJson(r, esquemaResultadoAgenda);
+  // O controller devolve o resultado da operação (ex.: { id }); aceita também o envelope da agenda.
+  const devolvido = await lerJson(r, z.unknown());
+  const envelope = esquemaResultadoAgenda.safeParse(devolvido);
+  if (envelope.success) return envelope.data;
+  const resultado = esquemaResultadoAgenda.shape.resultado.safeParse(devolvido);
+  return {
+    ok: true,
+    resultado: resultado.success ? resultado.data : {},
+    repetida: false,
+    mensagem: MENSAGEM_GRAVADO,
+  };
 }
 
 const qs = (o: Record<string, string | number | null | undefined>) => {
@@ -64,7 +94,7 @@ const qs = (o: Record<string, string | number | null | undefined>) => {
   return s ? `?${s}` : '';
 };
 
-const esquemaListaCredenciamentos = z.object({ itens: z.array(esquemaCredenciamento) });
+const esquemaListaCredenciamentos = z.array(esquemaCredenciamento);
 
 /** Revisão de uma regra de preço particular: controle de colisão pela versão lida. */
 export const esquemaRevisaoRegraPreco = z.object({
@@ -88,12 +118,18 @@ export type RevisaoRegraPreco = z.infer<typeof esquemaRevisaoRegraPreco>;
 // ── Leituras ──
 export const lerAgendaEstruturada = (agendaId: number, data?: string): Promise<AgendaEstruturada> =>
   ler(`${AGENDAS}/${agendaId}/estruturada${qs({ data })}`, esquemaAgendaEstruturada);
-export const listarCredenciamentos = async (f: {
+/** Credenciamentos vigentes na data (hoje, por padrão). A API devolve a lista pura. */
+export const listarCredenciamentos = (f: {
   profissionalId?: number;
   fontePagadoraId?: number;
-}): Promise<Credenciamento[]> => (await ler(`${CREDENCIAMENTOS}${qs(f)}`, esquemaListaCredenciamentos)).itens;
+  data?: string;
+}): Promise<Credenciamento[]> =>
+  ler(
+    `${CREDENCIAMENTOS}${qs({ profissional: f.profissionalId, convenio: f.fontePagadoraId, data: f.data ?? hojeIso() })}`,
+    esquemaListaCredenciamentos,
+  );
 export const lerOpcoesCredenciamento = (convenioCodigo: number): Promise<OpcoesCredenciamentoConvenio> =>
-  ler(`${CONVENIOS}/${convenioCodigo}/credenciamento`, esquemaOpcoesCredenciamentoConvenio);
+  ler(`${CONVENIOS}/${convenioCodigo}/opcoes-credenciamento`, esquemaOpcoesCredenciamentoConvenio);
 /** Prévia do preço e do credenciamento de um procedimento no atendimento (antes de lançar). */
 export const calcularPrecoAtendimento = (reg: number, procedimento: number): Promise<ResultadoCalculoPreco> =>
   ler(`${ATENDIMENTO}/${reg}/preco${qs({ procedimento })}`, esquemaResultadoCalculoPreco);
@@ -109,4 +145,4 @@ export const definirOpcoesCredenciamento = (
   convenioCodigo: number,
   opcoes: Pick<OpcoesCredenciamentoConvenio, 'bloqueiaSemCredenciamento' | 'credenciaTodosAoCriar'>,
   chave: string,
-) => gravar(`${CONVENIOS}/${convenioCodigo}/credenciamento`, opcoes, chave, 'PUT');
+) => gravar(`${CONVENIOS}/${convenioCodigo}/opcoes-credenciamento`, opcoes, chave, 'PUT');

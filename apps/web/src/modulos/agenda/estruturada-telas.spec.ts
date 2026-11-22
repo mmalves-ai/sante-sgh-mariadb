@@ -6,7 +6,13 @@
 // - a edição da regra de preço vai com a versão lida; a estimada pode ser confirmada;
 // - credenciamento na ficha do profissional e no convênio (bloqueia e credencia todos);
 // - no lançamento do atendimento, o alerta de não credenciado, o bloqueio e a origem do preço.
-import type { AgendaEstruturada, ResultadoCalculoPreco, TextoOrigemAgenda } from '@sgh/contratos';
+import { existsSync, readFileSync } from 'node:fs';
+import type {
+  AgendaEstruturada,
+  RegraPrecoParticular,
+  ResultadoCalculoPreco,
+  TextoOrigemAgenda,
+} from '@sgh/contratos';
 import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
@@ -18,7 +24,8 @@ import OrigemPrecoAviso from '../atendimento/componentes/OrigemPrecoAviso.vue';
 import CredenciamentoConvenios from '../cadastro/componentes/CredenciamentoConvenios.vue';
 import OpcoesCredenciamentoConvenio from '../precos/componentes/OpcoesCredenciamentoConvenio.vue';
 import AgendaEstruturadaPainel from './componentes/AgendaEstruturadaPainel.vue';
-import { agruparCobertura, fatiarTexto, lerValorDigitado } from './estruturada-tela.js';
+import * as api from './api-estruturada.js';
+import { agruparCobertura, fatiarTexto, lerValorDigitado, regrasVigentes } from './estruturada-tela.js';
 
 if (!window.matchMedia) {
   window.matchMedia = (consulta: string) =>
@@ -198,7 +205,121 @@ describe('regras puras da agenda estruturada', () => {
       { inicio: 1, fim: 4, interpretado: true, tipoRegra: 'preco', motivo: null },
       { inicio: 2, fim: 99, interpretado: false, tipoRegra: null, motivo: null },
     ]);
-    expect(p.map((x) => x.texto)).toEqual(['a', 'bcd', 'ef']);
+    expect(p.map((x) => x.texto)).toEqual(['a', 'b', 'cdef']);
+    expect(p.map((x) => x.interpretado)).toEqual([null, true, false]);
+  });
+  it('trecho não interpretado DENTRO de um interpretado continua marcado (decisão 27)', () => {
+    const p = fatiarTexto('abcdefghij', [
+      { inicio: 0, fim: 10, interpretado: true, tipoRegra: 'preco', motivo: null },
+      { inicio: 3, fim: 5, interpretado: false, tipoRegra: null, motivo: 'forma de pagamento' },
+    ]);
+    expect(p.map((x) => x.texto)).toEqual(['abc', 'de', 'fghij']);
+    expect(p.map((x) => x.interpretado)).toEqual([true, false, true]);
+    expect(p[1]?.motivo).toBe('forma de pagamento');
+  });
+  it('regras vigentes: filtra pela data e ordena pela especificidade do domínio, não só pela prioridade', () => {
+    const regra = (o: Partial<RegraPrecoParticular> & Pick<RegraPrecoParticular, 'id'>) =>
+      ({
+        dono: { tipo: 'profissional', profissionalId: 9, agendaId: null },
+        alvo: { tipo: 'consulta', itemFaturavelId: null, grupoFaturamentoId: null },
+        fontePagadoraId: 1,
+        estabelecimentoId: null,
+        valor: 100,
+        prioridade: 100,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+        situacaoRevisao: 'confirmada',
+        ativo: true,
+        textoOrigemId: null,
+        observacao: null,
+        versao: 1,
+        ...o,
+      }) as RegraPrecoParticular;
+    const doProfissional = regra({ id: 1, prioridade: 10 });
+    const daAgendaNoItem = regra({
+      id: 2,
+      prioridade: 100,
+      dono: { tipo: 'agenda', agendaId: 5, profissionalId: null },
+      alvo: { tipo: 'item', itemFaturavelId: 7, grupoFaturamentoId: null },
+    } as never);
+    const vencida = regra({ id: 3, vigenciaFim: '2026-03-31' });
+    const futura = regra({ id: 4, vigenciaInicio: '2027-01-01' });
+    const recusada = regra({ id: 5, situacaoRevisao: 'recusada' });
+    expect(
+      regrasVigentes([doProfissional, vencida, futura, recusada, daAgendaNoItem], '2026-06-01').map(
+        (r) => r.id,
+      ),
+    ).toEqual([2, 1]);
+  });
+});
+
+describe('contrato das URLs do cliente com a API (agenda-preco.controller.ts)', () => {
+  /** Rotas do controller pelos decoradores, no formato "MÉTODO /api/caminho/:id". */
+  const rotasDoController = (): Set<string> => {
+    // jsdom: import.meta.url não é file://; o caminho sai da raiz do repositório ou de apps/web (cwd do vitest)
+    const rel = 'apps/api/src/modulos/precos/agenda-preco.controller.ts';
+    const caminho = [rel, `../../${rel}`].find((c) => existsSync(c));
+    if (!caminho) throw new Error(`controller não encontrado a partir de ${process.cwd()}`);
+    const fonte = readFileSync(caminho, 'utf8');
+    const rotas = new Set<string>();
+    for (const m of fonte.matchAll(/@(Get|Post|Put|Delete|Patch)\('([^']*)'\)/g))
+      rotas.add(`${m[1]!.toUpperCase()} /api/${m[2]!.replace(/:[A-Za-z]+/g, ':id')}`);
+    return rotas;
+  };
+  const normalizar = (url: string, metodo: string) =>
+    `${metodo} ${url.split('?')[0]!.replace(/\/\d+(?=\/|$)/g, '/:id')}`;
+
+  it('toda URL chamada pelo cliente existe no controller ou está declarada como pendente da API', async () => {
+    const chamadas: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        chamadas.push(normalizar(String(url), init?.method ?? 'GET'));
+        return json({});
+      }),
+    );
+    const tentar = async (f: () => Promise<unknown>) => {
+      try {
+        await f();
+      } catch {
+        // a resposta simulada não passa no esquema; só a URL interessa aqui
+      }
+    };
+    await tentar(() => api.lerAgendaEstruturada(5, '2026-06-01'));
+    await tentar(() => api.listarCredenciamentos({ profissionalId: 9, fontePagadoraId: 2 }));
+    await tentar(() => api.lerOpcoesCredenciamento(2));
+    await tentar(() => api.calcularPrecoAtendimento(12, 34));
+    await tentar(() => api.incluirRegraPreco({} as never, 'k'));
+    await tentar(() => api.revisarRegraPreco(51, { versao: 1, valores: {} }, 'k'));
+    await tentar(() => api.incluirCredenciamento({} as never, 'k'));
+    await tentar(() =>
+      api.definirOpcoesCredenciamento(
+        2,
+        { bloqueiaSemCredenciamento: true, credenciaTodosAoCriar: false },
+        'k',
+      ),
+    );
+    // as entradas vazias são recusadas pelo esquema antes do fetch: confira as rotas de inclusão à parte
+    chamadas.push('POST /api/precos-particulares', 'POST /api/credenciamentos');
+    const controller = rotasDoController();
+    const pendentes = new Set(api.ROTAS_PENDENTES_API);
+    const fora = [...new Set(chamadas)].filter((c) => !controller.has(c) && !pendentes.has(c));
+    expect(fora).toEqual([]);
+    // uma pendente que a API já publica sai da lista
+    expect([...pendentes].filter((c) => controller.has(c))).toEqual([]);
+    expect(chamadas).toEqual(
+      expect.arrayContaining([
+        'GET /api/agendas/:id/estruturada',
+        'GET /api/credenciamentos',
+        'GET /api/convenios/:id/opcoes-credenciamento',
+        'PUT /api/convenios/:id/opcoes-credenciamento',
+      ]),
+    );
+  });
+  it('as rotas de inclusão existem no controller', () => {
+    const controller = rotasDoController();
+    expect(controller.has('POST /api/precos-particulares')).toBe(true);
+    expect(controller.has('POST /api/credenciamentos')).toBe(true);
   });
   it('cobertura agrupada por convênio e plano superior; valor digitado com vírgula', () => {
     const g = agruparCobertura(AGENDA.coberturas);
@@ -284,7 +405,7 @@ describe('AgendaEstruturadaPainel (teste de aceite da seção 6)', () => {
     await w.get('[data-testid="regra-confirmar"]').trigger('click');
     await flushPromises();
     const put = buscar.mock.calls.find((c) => c[1]?.method === 'PUT');
-    expect(put?.[0]).toBe('/api/agenda/consultas/precos-particulares/51');
+    expect(put?.[0]).toBe('/api/precos-particulares/51');
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({
       versao: 3,
       valores: {
@@ -311,7 +432,7 @@ describe('AgendaEstruturadaPainel (teste de aceite da seção 6)', () => {
     await w.get('[data-testid="form-regra-preco"]').trigger('submit');
     await flushPromises();
     const post = buscar.mock.calls.find((c) => c[1]?.method === 'POST');
-    expect(post?.[0]).toBe('/api/agenda/consultas/precos-particulares');
+    expect(post?.[0]).toBe('/api/precos-particulares');
     const corpo = JSON.parse(String(post?.[1]?.body));
     expect(corpo).toMatchObject({
       fontePagadoraId: 1,
@@ -324,21 +445,19 @@ describe('AgendaEstruturadaPainel (teste de aceite da seção 6)', () => {
 });
 
 describe('credenciamento', () => {
-  const CRED = {
-    itens: [
-      {
-        id: 81,
-        profissionalId: 9,
-        fontePagadoraId: 2,
-        estabelecimentoId: null,
-        planoId: null,
-        credenciado: true,
-        vigenciaInicio: '2026-01-01',
-        vigenciaFim: null,
-        versao: 1,
-      },
-    ],
-  };
+  const CRED = [
+    {
+      id: 81,
+      profissionalId: 9,
+      fontePagadoraId: 2,
+      estabelecimentoId: null,
+      planoId: null,
+      credenciado: true,
+      vigenciaInicio: '2026-01-01',
+      vigenciaFim: null,
+      versao: 1,
+    },
+  ];
   it('na ficha do profissional: lista por convênio e inclui com o profissional fixo', async () => {
     const buscar = vi.fn(async (_url: string, init?: RequestInit) => (init?.method ? json(OK) : json(CRED)));
     vi.stubGlobal('fetch', buscar);
@@ -347,7 +466,9 @@ describe('credenciamento', () => {
       global: { plugins: plugins() },
     });
     await flushPromises();
-    expect(buscar.mock.calls[0]?.[0]).toBe('/api/cadastros/credenciamentos?profissionalId=9');
+    expect(String(buscar.mock.calls[0]?.[0])).toMatch(
+      /^\/api\/credenciamentos\?profissional=9&data=\d{4}-\d{2}-\d{2}$/,
+    );
     expect(w.get('[data-testid="credenciamento-81"]').text()).toContain('CONVENIO SINTETICO');
     await w.get('[data-testid="cred-outro"]').setValue('2');
     await w.get('[data-testid="cred-plano"]').setValue('21');
@@ -366,11 +487,7 @@ describe('credenciamento', () => {
     definirSessaoDaTela({ permissoes: ['convenio.contrato.editar', 'convenio.credenciamento.ler'] } as never);
     const opcoes = { fontePagadoraId: 2, bloqueiaSemCredenciamento: false, credenciaTodosAoCriar: true };
     const buscar = vi.fn(async (url: string, init?: RequestInit) =>
-      init?.method
-        ? json(OK)
-        : String(url).includes('/credenciamento') && !String(url).includes('?')
-          ? json(opcoes)
-          : json(CRED),
+      init?.method ? json(OK) : String(url).includes('/opcoes-credenciamento') ? json(opcoes) : json(CRED),
     );
     vi.stubGlobal('fetch', buscar);
     const w = mount(OpcoesCredenciamentoConvenio as never, {
@@ -384,7 +501,7 @@ describe('credenciamento', () => {
     await w.get('form').trigger('submit');
     await flushPromises();
     const put = buscar.mock.calls.find((c) => c[1]?.method === 'PUT');
-    expect(put?.[0]).toBe('/api/cadastros/convenios/2/credenciamento');
+    expect(put?.[0]).toBe('/api/convenios/2/opcoes-credenciamento');
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({
       bloqueiaSemCredenciamento: true,
       credenciaTodosAoCriar: true,

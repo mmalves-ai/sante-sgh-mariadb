@@ -33,7 +33,6 @@ const consulta = useQuery({
   queryFn: () => lerAgendaEstruturada(props.agendaId),
 });
 const a = computed(() => consulta.data.value ?? null);
-const precos = computed(() => (a.value ? regrasVigentes(a.value.precosParticulares) : []));
 const recusadas = computed(() =>
   (a.value?.precosParticulares ?? []).filter((r) => r.situacaoRevisao === 'recusada'),
 );
@@ -43,6 +42,8 @@ const editando = ref<RegraPrecoParticular | 'nova' | null>(null);
 const mensagem = ref<string | null>(null);
 const d = new Date();
 const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// As regras que valem hoje, na ordem de especificidade do cálculo (a primeira vence para o alvo dela).
+const precos = computed(() => (a.value ? regrasVigentes(a.value.precosParticulares, hoje) : []));
 
 const convenio = (id: number | null) => (id === null ? '' : (props.nomesConvenio[id] ?? `#${id}`));
 const plano = (id: number | null) => (id === null ? '' : (props.nomesPlano[id] ?? `#${id}`));

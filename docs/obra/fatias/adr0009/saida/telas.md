@@ -19,7 +19,34 @@
 - Textos em `agenda/i18n-estruturada.ts` (chave `estruturada` no `pt-BR.ts`); cliente em `agenda/api-estruturada.ts`;
   regras puras em `agenda/estruturada-tela.ts`.
 
-## Rotas da API que as telas esperam (lote API)
+## Correção da revisão (2026-11-22)
+- **URLs alinhadas ao `AgendaPrecoController`** (prefixo `api`): `/api/agendas/:id/estruturada`,
+  `/api/precos-particulares`, `/api/credenciamentos?profissional&convenio&data` (lista pura, data de hoje por padrão),
+  `/api/convenios/:id/opcoes-credenciamento` (GET/PUT). A gravação aceita o `{ id }` que o controller devolve (e o
+  envelope da agenda). **Teste de contrato** no spec: cada URL chamada pelo cliente tem de existir nos decoradores do
+  controller ou estar em `ROTAS_PENDENTES_API`; o teste falha quando uma pendente passa a existir.
+- **Lançamento falha fechado:** o botão Lançar fica desabilitado enquanto a prévia carrega, quando ela dá erro (aviso
+  `preco-indisponivel`) e com efeito `bloqueio`.
+- **Regras vigentes** filtradas pela data e ordenadas por `compararEspecificidade` do `@sgh/dominio-preco` (teste com
+  regra da agenda no item, prioridade 100, acima da do profissional na consulta, prioridade 10; vencida, futura e
+  recusada fora).
+- **Trecho não interpretado tem precedência** na sobreposição: aninhado num interpretado, sai em três pedaços e continua
+  marcado (teste novo).
+- Prova: `vitest` de agenda, cadastro, atendimento e precos: 7 arquivos, 58/58; `vue-tsc` do `apps/web`: 0 erros;
+  `eslint` dos arquivos tocados: ok.
+
+## Pendências para o lote API (fora dos arquivos deste lote)
+- `PUT /api/precos-particulares/:id` (revisão com a versão: confirmar, recusar, editar a estimada).
+- `GET /api/atendimento/:reg/preco?procedimento=`: a ficha do atendimento só tem `convenio.codigo` e `profissional.crm`,
+  então a prévia tem de ser resolvida no servidor (ids de profissional, plano, agenda e item). Até existir, o Lançar
+  fica desabilitado com o aviso (falha fechada).
+- **Credenciamento no servidor:** `atendimento.lancarProcedimentoExtra` tem de aplicar `verificarCredenciamento` e
+  recusar com efeito `bloqueio`. Hoje a trava é só da tela.
+- `GET /api/credenciamentos` exige profissional **e** convênio; as telas listam só por um deles (ficha do profissional
+  ou do convênio). Tornar os dois opcionais (ao menos um).
+- `:id` de convênio nas opções: a tela passa o `codigo` do cadastro; a API espera o id da fonte pagadora.
+
+## Rotas que as telas esperavam na 1ª versão (substituídas acima)
 | Método | Caminho | Corpo / resposta |
 |---|---|---|
 | GET | `/api/agenda/consultas/agendas/:id/estruturada[?data=]` | `esquemaAgendaEstruturada` |
