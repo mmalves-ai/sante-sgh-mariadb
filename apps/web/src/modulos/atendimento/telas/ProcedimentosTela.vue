@@ -18,8 +18,10 @@ import {
   lerAtendimento,
   novaChave,
 } from '../api-atendimento.js';
+import { calcularPrecoAtendimento } from '../../agenda/api-estruturada.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import OrigemPrecoAviso from '../componentes/OrigemPrecoAviso.vue';
 import ResumoAtendimento from '../componentes/ResumoAtendimento.vue';
 import { hojeIso } from '../regras-tela.js';
 import { usarAtendimento } from '../usar-atendimento.js';
@@ -45,6 +47,13 @@ const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
 const chave = ref(novaChave('extra'));
 const podeLancar = computed(() => pode('atendimento.lancarProcedimentoExtra').value && aviso.value === null);
+// ADR 0009: antes de lançar, o preço (com a origem) e o credenciamento do profissional no convênio do atendimento.
+const preco = useQuery({
+  queryKey: computed(() => ['atendimento', 'preco', reg.value, escolhido.value?.codigo ?? 0]),
+  queryFn: () => calcularPrecoAtendimento(reg.value, escolhido.value?.codigo ?? 0),
+  enabled: computed(() => escolhido.value !== null),
+});
+const bloqueado = computed(() => preco.data.value?.credenciamento?.efeito === 'bloqueio');
 async function procurar(): Promise<void> {
   erro.value = null;
   try {
@@ -266,9 +275,11 @@ const real = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curre
             <label for="extras-qtd">{{ t('atendimento.procedimentos.quantidade') }}</label>
             <input id="extras-qtd" v-model.number="quantidade" type="number" min="1" max="999" />
           </div>
+          <p v-if="preco.isFetching.value" role="status">{{ t('estruturada.lancamento.calculando') }}</p>
+          <OrigemPrecoAviso v-else-if="preco.data.value" :resultado="preco.data.value" />
           <SanteBotao
             :rotulo="t('atendimento.procedimentos.lancar')"
-            :desabilitado="ocupado || quantidade < 1"
+            :desabilitado="ocupado || quantidade < 1 || bloqueado"
             data-testid="botao-lancar-extra"
             @acionar="lancar"
           />

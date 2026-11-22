@@ -13,6 +13,7 @@ import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import ConfirmacaoCritica from '../componentes/ConfirmacaoCritica.vue';
+import OpcoesCredenciamentoConvenio from '../componentes/OpcoesCredenciamentoConvenio.vue';
 import {
   alterarContrato,
   alterarSituacao,
@@ -650,6 +651,8 @@ const opcoesTipoMod = computed(() =>
           </ul>
         </template>
       </div>
+      <!-- ADR 0009: bloqueia sem credenciamento e credencia todos ao criar; profissionais credenciados. -->
+      <OpcoesCredenciamentoConvenio :codigo="codigo" />
     </template>
   </section>
 </template>

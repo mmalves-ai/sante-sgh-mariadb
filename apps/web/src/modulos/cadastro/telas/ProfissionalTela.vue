@@ -33,6 +33,7 @@ import {
   lerVinculosProfissional,
   situacaoProfissional,
 } from '../api-cadastro.js';
+import CredenciamentoConvenios from '../componentes/CredenciamentoConvenios.vue';
 import EdicaoProfissional from '../componentes/EdicaoProfissional.vue';
 import VinculoLoginProfissional from '../componentes/VinculoLoginProfissional.vue';
 import {
@@ -558,6 +559,8 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
             secao="convenios"
             @gravado="recarregar"
           />
+          <!-- ADR 0009: credenciamento por convênio, com plano e vigência (alerta ou bloqueio no atendimento). -->
+          <CredenciamentoConvenios :profissional-id="p.id" :pode-editar="editar" />
         </section>
 
         <!-- Login do sistema -->

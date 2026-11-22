@@ -20,6 +20,7 @@ import {
   novaChave,
   revisarLigacao,
 } from '../api-agenda.js';
+import AgendaEstruturadaPainel from '../componentes/AgendaEstruturadaPainel.vue';
 import AvisoGravacao from '../componentes/AvisoGravacao.vue';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr } from '../formato.js';
@@ -47,6 +48,11 @@ watch(
   { immediate: true },
 );
 const podeAlterar = pode('agenda.alterarAgenda');
+// ADR 0009: nomes dos convênios para as regras estruturadas e o particular da agenda (dono da regra de preço).
+const nomesConvenio = computed<Record<number, string>>(() =>
+  Object.fromEntries((opcoes.data.value?.convenios ?? []).map((c) => [c.codigo, c.nome])),
+);
+const particularDaAgenda = computed(() => d.value?.convenios.find((c) => c.particular)?.codigo ?? null);
 const podeCobertura = pode('agenda.definirCobertura');
 const podeEspecialidade = pode('agenda.definirEspecialidade');
 const mensagem = ref<string | null>(null);
@@ -417,6 +423,13 @@ function removerEspecialidade(codigo: number): Promise<boolean> {
           />
         </form>
       </section>
+
+      <AgendaEstruturadaPainel
+        :agenda-id="d.agenda.id"
+        :nomes-convenio="nomesConvenio"
+        :particular-id="particularDaAgenda"
+        :pode-editar="podeAlterar"
+      />
     </template>
     <p v-if="mensagem" role="status" data-testid="agenda-mensagem">{{ mensagem }}</p>
     <ErroAgenda v-if="erro" :erro="erro" />
