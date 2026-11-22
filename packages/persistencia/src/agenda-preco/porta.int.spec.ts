@@ -8,6 +8,7 @@ import { esquemaAgendaEstruturada } from '@sgh/contratos';
 import { type Escritor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  aplicarPrecosConsultaOrigem,
   candidatasPrecoParticular,
   credenciamentosVigentes,
   credenciarTodosAtivos,
@@ -57,6 +58,9 @@ describe.skipIf(SEM_BANCO)('porta do ADR 0009 (preço particular, credenciamento
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-adr9-modelo' }, fn);
 
   const limpar = async (e: Escritor) => {
+    await e.executar(
+      "DELETE FROM preco_consulta_origem WHERE fonte_pagadora_id IN (SELECT id FROM fonte_pagadora WHERE codigo LIKE 'a9m%')",
+    );
     const ag = "(SELECT id FROM agenda_servico WHERE nome LIKE 'a9m%')";
     for (const t of ['regra_preco_particular', 'agenda_cobertura', 'agenda_restricao', 'agenda_preparo'])
       await e.executar(
@@ -162,6 +166,12 @@ describe.skipIf(SEM_BANCO)('porta do ADR 0009 (preço particular, credenciamento
     await expect(tenta(cols, [ids.particular, null, null, 'consulta', null, 1, DIA])).rejects.toThrow();
     await expect(tenta(cols, [ids.particular, ids.prof, null, 'item', null, 1, DIA])).rejects.toThrow();
     await expect(tenta(cols, [ids.particular, ids.prof, null, 'consulta', null, -1, DIA])).rejects.toThrow();
+    // alvo exame (exame padrão da agenda, sem item): só com dono agenda e sem item
+    await expect(tenta(cols, [ids.particular, ids.prof, null, 'exame', null, 1, DIA])).rejects.toThrow();
+    const exame = await tenta(cols, [ids.particular, null, ids.agenda, 'exame', null, 180, DIA]);
+    const lida = await ler((l) => listarRegrasPrecoParticular(l, { agendaId: ids.agenda }));
+    expect(lida.find((r) => r.id === exame)?.alvo).toEqual({ tipo: 'exame' });
+    await escrever((e) => e.executar('DELETE FROM regra_preco_particular WHERE id = ?', [exame]));
   });
 
   it('preço particular: regra do médico e da agenda, candidatas vigentes, revisão (recusada sai)', async () => {
@@ -444,5 +454,73 @@ describe.skipIf(SEM_BANCO)('porta do ADR 0009 (preço particular, credenciamento
     // o texto original vem ao lado, íntegro, e a agenda tem o código de origem
     expect(a.textos[0]?.texto).toBe(TEXTO);
     expect(a.codigoOrigem).toBe('9001');
+  });
+
+  it('nomes: credenciamento e agenda estruturada trazem profissional, convênio, plano e estabelecimento', async () => {
+    const [c] = await ler((l) =>
+      credenciamentosVigentes(l, {
+        profissionalId: ids.prof2,
+        fontePagadoraId: ids.convenio,
+        estabelecimentoId: ids.est,
+        data: DIA,
+      }),
+    );
+    expect(c).toMatchObject({ profissionalNome: 'a9m Medico Y', fontePagadoraNome: 'a9mconv' });
+    expect(c?.estabelecimentoNome ?? null).toBe(c?.estabelecimentoId === null ? null : 'a9m Hospital');
+    const a = esquemaAgendaEstruturada.parse(await ler((l) => lerAgendaEstruturada(l, ids.agenda, DIA)));
+    expect([a.profissionalNome, a.estabelecimentoId, a.estabelecimentoNome]).toEqual([
+      'a9m Medico X',
+      ids.est,
+      'a9m Hospital',
+    ]);
+    expect(a.conveniosAceitos.map((v) => v.nome).sort()).toEqual(['a9mconv', 'a9mpart']);
+    const ouro = a.coberturas.find((x) => x.planoId === ids.ouro);
+    expect([ouro?.fontePagadoraNome, ouro?.planoNome, ouro?.planoSuperiorNome]).toEqual([
+      'a9mconv',
+      'a9mouro',
+      'a9mraiz',
+    ]);
+    expect(a.restricoes[0]).toMatchObject({ fontePagadoraNome: null, planoNome: null });
+  });
+
+  it('valor de consulta da origem: espera a classificação; particular vira regra, convênio é descartado', async () => {
+    const r = await escrever(async (e) => {
+      const outra = await e.inserir(
+        `INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES ('a9moutro', 'a9moutro', 'outro', CURRENT_TIMESTAMP(3))`,
+      );
+      const origem = (fonte: number, valor: number) =>
+        e.inserir(
+          `INSERT INTO preco_consulta_origem (fonte_pagadora_id, profissional_id, valor, vigencia_inicio) VALUES (?, ?, ?, ?)`,
+          [fonte, ids.prof2, valor, '2026-01-01'],
+        );
+      await origem(ids.particular, 220);
+      await origem(outra, 90);
+      // CHECK: aplicada sem regra recusa
+      await expect(
+        e.executar("UPDATE preco_consulta_origem SET situacao = 'aplicada' WHERE fonte_pagadora_id = ?", [
+          outra,
+        ]),
+      ).rejects.toThrow();
+      const semTipo = await aplicarPrecosConsultaOrigem(e, outra, null);
+      await e.executar("UPDATE fonte_pagadora SET tipo = 'operadora' WHERE id = ?", [outra]);
+      const convenio = await aplicarPrecosConsultaOrigem(e, outra, null);
+      const particular = await aplicarPrecosConsultaOrigem(e, ids.particular, null);
+      const denovo = await aplicarPrecosConsultaOrigem(e, ids.particular, null);
+      const linhas = await e.consultar(
+        `SELECT o.situacao, o.regra_preco_particular_id IS NOT NULL AS com_regra FROM preco_consulta_origem o
+          JOIN fonte_pagadora f ON f.id = o.fonte_pagadora_id WHERE f.codigo LIKE 'a9m%' ORDER BY o.valor`,
+      );
+      return { semTipo, convenio, particular, denovo, linhas };
+    });
+    expect(r.semTipo).toEqual({ aplicadas: 0, descartadas: 0 });
+    expect(r.convenio).toEqual({ aplicadas: 0, descartadas: 1 });
+    expect(r.particular).toEqual({ aplicadas: 1, descartadas: 0 });
+    expect(r.denovo).toEqual({ aplicadas: 0, descartadas: 0 });
+    expect(r.linhas.map((x) => [x['situacao'], Number(x['com_regra'])])).toEqual([
+      ['descartada', 0],
+      ['aplicada', 1],
+    ]);
+    const regras = await ler((l) => listarRegrasPrecoParticular(l, { profissionalId: ids.prof2 }));
+    expect(regras.map((x) => [x.alvo.tipo, x.valor, x.origem])).toEqual([['consulta', 220, 'migracao']]);
   });
 });

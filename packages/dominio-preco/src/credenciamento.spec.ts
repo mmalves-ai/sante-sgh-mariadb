@@ -5,9 +5,13 @@ import { deveCredenciarTodosAoCriar, verificarCredenciamento } from './index.js'
 const cred = (p: Partial<Credenciamento>): Credenciamento => ({
   id: 1,
   profissionalId: 101,
+  profissionalNome: 'MEDICO SINTETICO',
   fontePagadoraId: 2,
+  fontePagadoraNome: 'CONVENIO SINTETICO',
   estabelecimentoId: null,
+  estabelecimentoNome: null,
   planoId: null,
+  planoNome: null,
   credenciado: true,
   vigenciaInicio: '2026-01-01',
   vigenciaFim: null,

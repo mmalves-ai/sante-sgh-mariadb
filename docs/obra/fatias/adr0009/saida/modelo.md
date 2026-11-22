@@ -81,6 +81,39 @@ escolha da mais específica é do domínio), `fonteParticularPadrao`, `opcoesCre
 `incluirPreparoAgenda`, `lerAgendaEstruturada(l, agendaId, data?)`. Conversões puras em `linhas.ts`
 (`hashTextoAgenda` etc.). Integração: `vitest.integracao.config.ts` com `SGH_BANCO_PLATAFORMA` e `SGH_CLIENTE_TESTE`.
 
+## Volta 2 (mudança compartilhada, rótulo `adr9b_modelo`)
+
+Prova: `validar_migracoes` ok (3683 tabelas, 0 erros, 14117 FKs); `tsc` de `contratos`, `persistencia`,
+`dominio-preco`, `dominio-agenda` e `apps/api` ok; `vue-tsc` da web ok; unidade: contratos 829/829, persistência 3/3,
+`dominio-preco` 54/54, `dominio-agenda` 129/129, web (agenda) 22/22; integração da persistência 8/8, duas rodadas
+seguidas, no cliente `adr9b_modelo` (plataforma `plataforma_teste_adr9b_modelo`, os dois bancos apagados no fim).
+
+- **Pendência 3 (exame sem item):** `db/migracoes/12_FAT/32_tabelas.sql` troca o CHECK `ck_regra_preco_particular_alvo`:
+  alvo novo `exame` = o exame padrão da agenda, sem item e sem grupo, **só com dono agenda**. Contrato:
+  `ALVOS_REGRA_PRECO` + `exame`, alvo `{ tipo: 'exame' }`, a entrada recusa `exame` com dono profissional. Domínio
+  (`dominio-preco`): `AlvoPreco.exame?` (opcional), peso igual ao da consulta (item e grupo vencem), explicação "do
+  exame da agenda". Tela: rótulo `estruturada.preco.alvoExame`.
+- **Pendência 8 (nomes):** `esquemaCredenciamento` + `profissionalNome`, `fontePagadoraNome`, `estabelecimentoNome`
+  (nulo = rede), `planoNome` (nulo = todos). `esquemaAgendaEstruturada` + `estabelecimentoId`/`estabelecimentoNome`,
+  `profissionalNome`, `conveniosAceitos` [{ `fontePagadoraId`, `nome` }] (o `convenios` de ids continua);
+  cobertura + `fontePagadoraNome`, `planoNome`, `planoSuperiorNome`; restrição + `fontePagadoraNome`, `planoNome`. A
+  persistência lê os nomes por junção (profissional = nome de exibição ou nome civil; estabelecimento = nome
+  fantasia; plano = descrição).
+- **Pendência 1 (preço particular da origem por fonte):** tabela provisória `preco_consulta_origem` (12_FAT/32;
+  catálogo + 1 linha): valor de consulta do profissional por fonte, `situacao` pendente|aplicada|descartada, CHECK
+  aplicada ⇔ regra ligada, pendente ⇔ sem `decidido_em`; UNIQUE (fonte, profissional, vigência, estabelecimento).
+  Porta `aplicarPrecosConsultaOrigem(e, fonteId, usuario)`: fonte `outro` não decide; `particular` cria
+  `regra_preco_particular` (alvo consulta, dono profissional, origem migracao) e marca aplicada; outro tipo marca
+  descartada (decisão 24), com o valor guardado para a conciliação. Idempotente.
+
+### Pendências da volta 2 para os outros lotes
+- Conector: gravar `FCCODCON.VLR_CONSULTA` em `preco_consulta_origem` (fonte, profissional, código do prestador,
+  vigência da carga) e chamar a aplicação depois da classificação do tipo da fonte (tela ou Sincronizar).
+- API: passar `alvo.exame` ao domínio quando o item lançado é o exame padrão da agenda (hoje só `consulta`); o
+  extrator do texto pode gerar a regra `exame` para "valor do exame particular" sem item.
+- Telas: usar os nomes novos (credenciamento, coberturas, restrições, convênios da agenda) no lugar da busca por id;
+  `RegraPrecoForm` ainda não oferece o alvo `exame`.
+
 ## Pendências para os lotes seguintes
 
 1. Domínio (`dominio-preco`): escolher a regra (item > grupo > consulta; estabelecimento > rede; prioridade; vigência

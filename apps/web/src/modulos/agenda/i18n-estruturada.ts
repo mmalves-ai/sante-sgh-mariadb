@@ -28,6 +28,7 @@ export const mensagensEstruturada = {
     donoAgenda: 'Agenda',
     alvo: 'Vale para',
     alvoConsulta: 'Qualquer consulta',
+    alvoExame: 'Exame padrão da agenda',
     alvoItem: 'Procedimento {id}',
     alvoGrupo: 'Grupo de faturamento {id}',
     valor: 'Valor (R$)',

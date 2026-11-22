@@ -44,7 +44,9 @@ export function regraPrecoParticularDe(l: Linha): RegraPrecoParticular {
         ? { tipo: 'item', itemFaturavelId: num(l['item_faturavel_id']) }
         : alvo === 'grupo'
           ? { tipo: 'grupo', grupoFaturamentoId: num(l['grupo_faturamento_id']) }
-          : { tipo: 'consulta' },
+          : alvo === 'exame'
+            ? { tipo: 'exame' }
+            : { tipo: 'consulta' },
     valor: reais(l['valor']),
     prioridade: num(l['prioridade']),
     vigenciaInicio: txt(l['vigencia_inicio']),
@@ -62,9 +64,13 @@ export function credenciamentoDe(l: Linha): Credenciamento {
   return {
     id: num(l['id']),
     profissionalId: num(l['profissional_id']),
+    profissionalNome: txt(l['profissional_nome']),
     fontePagadoraId: num(l['fonte_pagadora_id']),
+    fontePagadoraNome: txt(l['fonte_pagadora_nome']),
     estabelecimentoId: numOuNulo(l['estabelecimento_id']),
+    estabelecimentoNome: txtOuNulo(l['estabelecimento_nome']),
     planoId: numOuNulo(l['plano_fonte_pagadora_id']),
+    planoNome: txtOuNulo(l['plano_nome']),
     credenciado: bool(l['credenciado']),
     vigenciaInicio: txt(l['vigencia_inicio']),
     vigenciaFim: txtOuNulo(l['vigencia_fim']),
@@ -77,8 +83,11 @@ export function coberturaDe(l: Linha): CoberturaAgenda {
     id: num(l['id']),
     versao: num(l['versao']),
     fontePagadoraId: num(l['fonte_pagadora_id']),
+    fontePagadoraNome: txt(l['fonte_pagadora_nome']),
     planoId: numOuNulo(l['plano_fonte_pagadora_id']),
+    planoNome: txtOuNulo(l['plano_nome']),
     planoSuperiorId: numOuNulo(l['plano_superior_id']),
+    planoSuperiorNome: txtOuNulo(l['plano_superior_nome']),
     aceita: bool(l['aceita']),
     vigenciaInicio: txt(l['vigencia_inicio']),
     vigenciaFim: txtOuNulo(l['vigencia_fim']),
@@ -92,7 +101,9 @@ export function restricaoDe(l: Linha): RestricaoAgenda {
     id: num(l['id']),
     versao: num(l['versao']),
     fontePagadoraId: numOuNulo(l['fonte_pagadora_id']),
+    fontePagadoraNome: txtOuNulo(l['fonte_pagadora_nome']),
     planoId: numOuNulo(l['plano_fonte_pagadora_id']),
+    planoNome: txtOuNulo(l['plano_nome']),
     itemAgendavelId: numOuNulo(l['item_agendavel_id']),
     sexoAtendido: txtOuNulo(l['sexo_atendido']) as SexoAtendido | null,
     idadeMinimaAnos: numOuNulo(l['idade_minima_anos']),

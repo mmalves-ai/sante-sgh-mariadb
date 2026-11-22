@@ -15,6 +15,8 @@ export interface AlvoPreco {
   readonly grupoFaturamentoId: number | null;
   /** O item é a consulta do profissional ou da agenda (a regra de alvo "consulta" vale para ele). */
   readonly consulta: boolean;
+  /** O item é o exame padrão da agenda (a regra de alvo "exame", só da agenda, vale para ele). */
+  readonly exame?: boolean;
 }
 
 export interface PedidoRegraParticular {
@@ -27,7 +29,7 @@ export interface PedidoRegraParticular {
   readonly alvo: AlvoPreco;
 }
 
-const PESO_ALVO = { item: 3, grupo: 2, consulta: 1 } as const;
+const PESO_ALVO = { item: 3, grupo: 2, consulta: 1, exame: 1 } as const;
 
 function vigente(r: RegraPrecoParticular, data: string): boolean {
   return r.vigenciaInicio <= data && (r.vigenciaFim === null || r.vigenciaFim >= data);
@@ -38,6 +40,7 @@ function alvoCasa(r: RegraPrecoParticular, a: AlvoPreco): boolean {
     return a.itemFaturavelId !== null && r.alvo.itemFaturavelId === a.itemFaturavelId;
   if (r.alvo.tipo === 'grupo')
     return a.grupoFaturamentoId !== null && r.alvo.grupoFaturamentoId === a.grupoFaturamentoId;
+  if (r.alvo.tipo === 'exame') return a.exame === true && r.dono.tipo === 'agenda';
   return a.consulta;
 }
 
@@ -65,7 +68,7 @@ export function regrasAplicaveis(
 }
 
 /**
- * Ordem de especificidade (a primeira diferença decide): alvo (item > grupo > consulta); dono (agenda > profissional,
+ * Ordem de especificidade (a primeira diferença decide): alvo (item > grupo > consulta ou exame da agenda); dono (agenda > profissional,
  * pois a agenda é um recorte do profissional); estabelecimento > rede; prioridade (menor vence); confirmada >
  * estimada; vigência que começou mais tarde; maior id (a mais recente).
  */
@@ -140,7 +143,13 @@ export function resolverPreco(e: EntradaResolverPreco): ResultadoCalculoPreco {
     if (r) {
       const dono = r.dono.tipo === 'agenda' ? 'da agenda' : 'do profissional';
       const alvo =
-        r.alvo.tipo === 'item' ? 'do procedimento' : r.alvo.tipo === 'grupo' ? 'do grupo' : 'da consulta';
+        r.alvo.tipo === 'item'
+          ? 'do procedimento'
+          : r.alvo.tipo === 'grupo'
+            ? 'do grupo'
+            : r.alvo.tipo === 'exame'
+              ? 'do exame da agenda'
+              : 'da consulta';
       return {
         ...vazio,
         valor: r.valor,

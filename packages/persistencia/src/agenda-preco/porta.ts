@@ -194,7 +194,15 @@ export async function definirOpcoesCredenciamentoConvenio(
 }
 
 const COLUNAS_CRED = `c.id, c.profissional_id, c.fonte_pagadora_id, c.estabelecimento_id, c.plano_fonte_pagadora_id,
-  c.credenciado, ${D('c.vigencia_inicio')}, ${D('c.vigencia_fim')}, c.versao`;
+  c.credenciado, ${D('c.vigencia_inicio')}, ${D('c.vigencia_fim')}, c.versao,
+  COALESCE(cpr.nome_exibicao, cpf.nome) AS profissional_nome, cfp.nome AS fonte_pagadora_nome,
+  ces.nome_fantasia AS estabelecimento_nome, cpl.descricao AS plano_nome`;
+/** Os nomes do credenciamento (profissional, convênio, estabelecimento e plano), para a tela. */
+const NOMES_CRED = `JOIN profissional cpr ON cpr.id = c.profissional_id
+  JOIN pessoa_fisica cpf ON cpf.id = cpr.pessoa_fisica_id
+  JOIN fonte_pagadora cfp ON cfp.id = c.fonte_pagadora_id
+  LEFT JOIN estabelecimento ces ON ces.id = c.estabelecimento_id
+  LEFT JOIN plano_fonte_pagadora cpl ON cpl.id = c.plano_fonte_pagadora_id`;
 
 /** Credenciamentos vigentes do par profissional × convênio na data e no estabelecimento (ou na rede). */
 export async function credenciamentosVigentes(
@@ -207,7 +215,7 @@ export async function credenciamentosVigentes(
   },
 ): Promise<Credenciamento[]> {
   const ls = await l.consultar(
-    `SELECT ${COLUNAS_CRED} FROM profissional_fonte_pagadora c
+    `SELECT ${COLUNAS_CRED} FROM profissional_fonte_pagadora c ${NOMES_CRED}
       WHERE c.profissional_id = ? AND c.fonte_pagadora_id = ? AND c.excluido_em IS NULL
         AND (c.estabelecimento_id IS NULL OR c.estabelecimento_id = ?) AND ${VIGENTE('c')}
       ORDER BY c.id`,
@@ -443,8 +451,12 @@ export async function lerAgendaEstruturada(
   const a = await l.uma(
     `SELECT a.id, a.nome, a.codigo_origem, a.profissional_id, ${D('a.vigencia_inicio')}, ${D('a.vigencia_fim')},
             a.sexo_atendido, a.idade_minima_anos, a.idade_maxima_anos, a.aceita_retorno, a.dias_retorno,
-            a.permite_encaixe, a.preparo
-       FROM agenda_servico a WHERE a.id = ? AND a.excluido_em IS NULL`,
+            a.permite_encaixe, a.preparo, a.estabelecimento_id, es.nome_fantasia AS estabelecimento_nome,
+            COALESCE(pr.nome_exibicao, pf.nome) AS profissional_nome
+       FROM agenda_servico a JOIN estabelecimento es ON es.id = a.estabelecimento_id
+       LEFT JOIN profissional pr ON pr.id = a.profissional_id
+       LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+      WHERE a.id = ? AND a.excluido_em IS NULL`,
     [agendaId],
   );
   if (!a) return null;
@@ -453,21 +465,27 @@ export async function lerAgendaEstruturada(
   const regras = (al: string) => `${al}.excluido_em IS NULL AND ${al}.situacao_revisao <> 'recusada'`;
   const [convenios, coberturas, restricoes, preparos, textos, trechos, precos] = await Promise.all([
     l.consultar(
-      'SELECT fonte_pagadora_id FROM agenda_fonte_pagadora WHERE agenda_servico_id = ? AND excluido_em IS NULL ORDER BY fonte_pagadora_id',
+      `SELECT af.fonte_pagadora_id, f.nome FROM agenda_fonte_pagadora af JOIN fonte_pagadora f ON f.id = af.fonte_pagadora_id
+        WHERE af.agenda_servico_id = ? AND af.excluido_em IS NULL ORDER BY af.fonte_pagadora_id`,
       [agendaId],
     ),
     l.consultar(
       `SELECT c.id, c.versao, c.fonte_pagadora_id, c.plano_fonte_pagadora_id, pl.plano_superior_id, c.aceita,
-              ${D('c.vigencia_inicio')}, ${D('c.vigencia_fim')}, c.situacao_revisao, c.texto_origem_agenda_id
-         FROM agenda_cobertura c LEFT JOIN plano_fonte_pagadora pl ON pl.id = c.plano_fonte_pagadora_id
+              ${D('c.vigencia_inicio')}, ${D('c.vigencia_fim')}, c.situacao_revisao, c.texto_origem_agenda_id,
+              f.nome AS fonte_pagadora_nome, pl.descricao AS plano_nome, ps.descricao AS plano_superior_nome
+         FROM agenda_cobertura c JOIN fonte_pagadora f ON f.id = c.fonte_pagadora_id
+         LEFT JOIN plano_fonte_pagadora pl ON pl.id = c.plano_fonte_pagadora_id
+         LEFT JOIN plano_fonte_pagadora ps ON ps.id = pl.plano_superior_id
         WHERE c.agenda_servico_id = ? AND ${regras('c')}${vig('c')} ORDER BY c.id`,
       [agendaId, ...pv],
     ),
     l.consultar(
       `SELECT r.id, r.versao, r.fonte_pagadora_id, r.plano_fonte_pagadora_id, r.item_agendavel_id, r.sexo_atendido,
               r.idade_minima_anos, r.idade_maxima_anos, r.aceita_retorno, r.dias_retorno, r.permite_encaixe,
-              ${D('r.vigencia_inicio')}, ${D('r.vigencia_fim')}, r.situacao_revisao, r.texto_origem_agenda_id
-         FROM agenda_restricao r WHERE r.agenda_servico_id = ? AND ${regras('r')}${vig('r')}
+              ${D('r.vigencia_inicio')}, ${D('r.vigencia_fim')}, r.situacao_revisao, r.texto_origem_agenda_id,
+              f.nome AS fonte_pagadora_nome, pl.descricao AS plano_nome
+         FROM agenda_restricao r LEFT JOIN fonte_pagadora f ON f.id = r.fonte_pagadora_id
+         LEFT JOIN plano_fonte_pagadora pl ON pl.id = r.plano_fonte_pagadora_id WHERE r.agenda_servico_id = ? AND ${regras('r')}${vig('r')}
         ORDER BY r.id`,
       [agendaId, ...pv],
     ),
@@ -518,7 +536,10 @@ export async function lerAgendaEstruturada(
     agendaId: Number(a['id']),
     nome: String(a['nome']),
     codigoOrigem: a['codigo_origem'] === null ? null : String(a['codigo_origem']),
+    estabelecimentoId: Number(a['estabelecimento_id']),
+    estabelecimentoNome: String(a['estabelecimento_nome']),
     profissionalId: n(a['profissional_id']),
+    profissionalNome: a['profissional_nome'] === null ? null : String(a['profissional_nome']),
     vigenciaInicio: a['vigencia_inicio'] === null ? null : String(a['vigencia_inicio']),
     vigenciaFim: a['vigencia_fim'] === null ? null : String(a['vigencia_fim']),
     padrao: {
@@ -531,6 +552,10 @@ export async function lerAgendaEstruturada(
       preparo: a['preparo'] === null ? null : String(a['preparo']),
     },
     convenios: convenios.map((c) => Number(c['fonte_pagadora_id'])),
+    conveniosAceitos: convenios.map((c) => ({
+      fontePagadoraId: Number(c['fonte_pagadora_id']),
+      nome: String(c['nome']),
+    })),
     coberturas: coberturas.map(coberturaDe),
     restricoes: restricoes.map(restricaoDe),
     preparos: preparos.map(preparoDe),
@@ -606,7 +631,7 @@ export async function listarCredenciamentosVigentes(
     params.push(q.fontePagadoraId);
   }
   const ls = await l.consultar(
-    `SELECT ${COLUNAS_CRED} FROM profissional_fonte_pagadora c
+    `SELECT ${COLUNAS_CRED} FROM profissional_fonte_pagadora c ${NOMES_CRED}
       WHERE ${filtros.join(' AND ')} AND c.excluido_em IS NULL
         AND (c.estabelecimento_id IS NULL OR c.estabelecimento_id = ?) AND ${VIGENTE('c')}
       ORDER BY c.id`,
@@ -614,4 +639,66 @@ export async function listarCredenciamentosVigentes(
     { teto: 5000 },
   );
   return ls.map(credenciamentoDe);
+}
+
+/** Resultado de aplicar os valores de consulta da origem de uma fonte já classificada. */
+export interface ResultadoPrecoConsultaOrigem {
+  readonly aplicadas: number;
+  readonly descartadas: number;
+}
+
+/**
+ * Pendência 1 do ADR 0009: o valor de consulta da origem (preco_consulta_origem) espera a classificação da fonte. Com a
+ * fonte de tipo particular, cada linha pendente vira regra_preco_particular (alvo consulta, dono o profissional,
+ * origem migracao) e fica "aplicada" com a regra ligada; com outro tipo fica "descartada" (decisão 24: não existe
+ * preço por médico em convênio). Idempotente: só toca as pendentes. Fonte ainda de tipo "outro" não decide nada.
+ */
+export async function aplicarPrecosConsultaOrigem(
+  e: Escritor,
+  fontePagadoraId: number,
+  usuario: number | null,
+): Promise<ResultadoPrecoConsultaOrigem> {
+  const f = await e.uma('SELECT tipo FROM fonte_pagadora WHERE id = ?', [fontePagadoraId]);
+  if (!f || String(f['tipo']) === 'outro') return { aplicadas: 0, descartadas: 0 };
+  const pendentes = await e.consultarParaAtualizar(
+    `SELECT id, estabelecimento_id, profissional_id, valor, ${D('vigencia_inicio')}, ${D('vigencia_fim')}
+       FROM preco_consulta_origem WHERE fonte_pagadora_id = ? AND situacao = 'pendente' ORDER BY id`,
+    [fontePagadoraId],
+  );
+  if (String(f['tipo']) !== 'particular') {
+    if (pendentes.length > 0)
+      await e.executar(
+        `UPDATE preco_consulta_origem SET situacao = 'descartada', decidido_em = CURRENT_TIMESTAMP(3),
+                motivo_situacao = 'Fonte não particular: não existe preço por médico em convênio (ADR 0009, decisão 24)',
+                alterado_em = CURRENT_TIMESTAMP(3), alterado_por = ?, versao = versao + 1
+          WHERE fonte_pagadora_id = ? AND situacao = 'pendente'`,
+        [usuario, fontePagadoraId],
+      );
+    return { aplicadas: 0, descartadas: pendentes.length };
+  }
+  for (const p of pendentes) {
+    const regra = await e.inserir(
+      `INSERT INTO regra_preco_particular (estabelecimento_id, fonte_pagadora_id, profissional_id, alvo, valor,
+         vigencia_inicio, vigencia_fim, origem, observacao, criado_em, criado_por)
+       VALUES (?, ?, ?, 'consulta', ?, ?, ?, 'migracao', 'Valor de consulta do profissional na origem (ADR 0009)',
+               CURRENT_TIMESTAMP(3), ?)`,
+      [
+        p['estabelecimento_id'] ?? null,
+        fontePagadoraId,
+        p['profissional_id'],
+        p['valor'],
+        p['vigencia_inicio'],
+        p['vigencia_fim'] ?? null,
+        usuario,
+      ],
+    );
+    await e.executar(
+      `UPDATE preco_consulta_origem SET situacao = 'aplicada', regra_preco_particular_id = ?,
+              decidido_em = CURRENT_TIMESTAMP(3), alterado_em = CURRENT_TIMESTAMP(3), alterado_por = ?,
+              versao = versao + 1
+        WHERE id = ?`,
+      [regra, usuario, p['id']],
+    );
+  }
+  return { aplicadas: pendentes.length, descartadas: 0 };
 }

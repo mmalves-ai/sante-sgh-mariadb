@@ -59,9 +59,11 @@ const donoRegra = (r: RegraPrecoParticular) =>
 const alvoRegra = (r: RegraPrecoParticular) =>
   r.alvo.tipo === 'consulta'
     ? t('estruturada.preco.alvoConsulta')
-    : r.alvo.tipo === 'item'
-      ? t('estruturada.preco.alvoItem', { id: r.alvo.itemFaturavelId })
-      : t('estruturada.preco.alvoGrupo', { id: r.alvo.grupoFaturamentoId });
+    : r.alvo.tipo === 'exame'
+      ? t('estruturada.preco.alvoExame')
+      : r.alvo.tipo === 'item'
+        ? t('estruturada.preco.alvoItem', { id: r.alvo.itemFaturavelId })
+        : t('estruturada.preco.alvoGrupo', { id: r.alvo.grupoFaturamentoId });
 
 function idade(min: number | null, max: number | null): string {
   if (min !== null && max !== null) return t('estruturada.restricao.idadeEntre', { min, max });

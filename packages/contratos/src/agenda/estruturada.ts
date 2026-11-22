@@ -122,9 +122,12 @@ const lido = { id, versao: z.number().int().positive() };
 export const esquemaCoberturaAgenda = z.object({
   ...lido,
   fontePagadoraId: id,
+  fontePagadoraNome: z.string(),
   planoId: id.nullable(),
+  planoNome: z.string().nullable(),
   /** Plano superior do plano (subplano), para a tela agrupar. */
   planoSuperiorId: id.nullable(),
+  planoSuperiorNome: z.string().nullable(),
   aceita: z.boolean(),
   vigenciaInicio: data,
   vigenciaFim: data.nullable(),
@@ -134,7 +137,9 @@ export const esquemaCoberturaAgenda = z.object({
 export const esquemaRestricaoAgenda = z.object({
   ...lido,
   fontePagadoraId: id.nullable(),
+  fontePagadoraNome: z.string().nullable(),
   planoId: id.nullable(),
+  planoNome: z.string().nullable(),
   itemAgendavelId: id.nullable(),
   sexoAtendido: z.enum(SEXOS_ATENDIDOS).nullable(),
   idadeMinimaAnos: z.number().int().nullable(),
@@ -167,7 +172,10 @@ export const esquemaAgendaEstruturada = z.object({
   agendaId: id,
   nome: z.string(),
   codigoOrigem: z.string().nullable(),
+  estabelecimentoId: id,
+  estabelecimentoNome: z.string(),
   profissionalId: id.nullable(),
+  profissionalNome: z.string().nullable(),
   vigenciaInicio: data.nullable(),
   vigenciaFim: data.nullable(),
   padrao: z.object({
@@ -181,6 +189,8 @@ export const esquemaAgendaEstruturada = z.object({
   }),
   /** Convênios aceitos pela agenda (vínculo agenda × convênio). */
   convenios: z.array(id),
+  /** Os mesmos convênios com o nome (fonte pagadora), na mesma ordem. */
+  conveniosAceitos: z.array(z.object({ fontePagadoraId: id, nome: z.string() })),
   coberturas: z.array(esquemaCoberturaAgenda),
   restricoes: z.array(esquemaRestricaoAgenda),
   preparos: z.array(esquemaPreparoAgenda),

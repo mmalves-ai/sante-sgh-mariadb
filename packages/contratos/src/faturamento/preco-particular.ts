@@ -11,8 +11,11 @@ const valor = z.number().nonnegative().multipleOf(0.01);
 /** Quem é dono da regra: o profissional ou a agenda (um só). */
 export const DONOS_REGRA_PRECO = ['profissional', 'agenda'] as const;
 export type DonoRegraPreco = (typeof DONOS_REGRA_PRECO)[number];
-/** O que a regra precifica: um procedimento, um grupo ou qualquer consulta do dono. */
-export const ALVOS_REGRA_PRECO = ['item', 'grupo', 'consulta'] as const;
+/**
+ * O que a regra precifica: um procedimento, um grupo, qualquer consulta do dono ou o exame padrão da agenda (exame sem
+ * item, só com dono agenda: o "valor do exame particular" do texto da agenda).
+ */
+export const ALVOS_REGRA_PRECO = ['item', 'grupo', 'consulta', 'exame'] as const;
 export type AlvoRegraPreco = (typeof ALVOS_REGRA_PRECO)[number];
 /** estimada: extraída do texto da agenda, já vale (decisão 27); recusada: não vale. */
 export const SITUACOES_REVISAO_REGRA = ['estimada', 'confirmada', 'recusada'] as const;
@@ -30,6 +33,7 @@ const baseRegra = z.object({
     z.object({ tipo: z.literal('item'), itemFaturavelId: id }),
     z.object({ tipo: z.literal('grupo'), grupoFaturamentoId: id }),
     z.object({ tipo: z.literal('consulta') }),
+    z.object({ tipo: z.literal('exame') }),
   ]),
   valor,
   prioridade: z.number().int().min(0).max(65_535).default(100),
@@ -43,10 +47,19 @@ const baseRegra = z.object({
 const vigenciaCoerente = (r: { vigenciaInicio: string; vigenciaFim: string | null }) =>
   r.vigenciaFim === null || r.vigenciaFim >= r.vigenciaInicio;
 
-export const esquemaEntradaRegraPrecoParticular = baseRegra.refine(vigenciaCoerente, {
-  message: 'O fim da vigência não pode ser antes do início.',
-  path: ['vigenciaFim'],
-});
+/** O alvo "exame" (exame padrão, sem item) só existe na agenda. */
+const exameSoDaAgenda = (r: { dono: { tipo: DonoRegraPreco }; alvo: { tipo: AlvoRegraPreco } }) =>
+  r.alvo.tipo !== 'exame' || r.dono.tipo === 'agenda';
+
+export const esquemaEntradaRegraPrecoParticular = baseRegra
+  .refine(vigenciaCoerente, {
+    message: 'O fim da vigência não pode ser antes do início.',
+    path: ['vigenciaFim'],
+  })
+  .refine(exameSoDaAgenda, {
+    message: 'O exame padrão (sem procedimento) só pode ter a agenda como dona.',
+    path: ['alvo'],
+  });
 export type EntradaRegraPrecoParticular = z.infer<typeof esquemaEntradaRegraPrecoParticular>;
 
 export const esquemaRegraPrecoParticular = baseRegra.extend({
@@ -66,13 +79,19 @@ export const esquemaFiltroRegrasPrecoParticular = z.object({
 });
 export type FiltroRegrasPrecoParticular = z.infer<typeof esquemaFiltroRegrasPrecoParticular>;
 
-/** Credenciamento profissional × convênio (profissional_fonte_pagadora), com vigência e plano. */
+/** Credenciamento profissional × convênio (profissional_fonte_pagadora), com vigência e plano, e os nomes para a tela. */
 export const esquemaCredenciamento = z.object({
   id,
   profissionalId: id,
+  profissionalNome: z.string(),
   fontePagadoraId: id,
+  fontePagadoraNome: z.string(),
   estabelecimentoId: id.nullable(),
+  /** Nulo quando o credenciamento vale na rede inteira. */
+  estabelecimentoNome: z.string().nullable(),
   planoId: id.nullable(),
+  /** Nulo quando vale para todos os planos do convênio. */
+  planoNome: z.string().nullable(),
   credenciado: z.boolean(),
   vigenciaInicio: data,
   vigenciaFim: data.nullable(),
