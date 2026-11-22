@@ -54,7 +54,14 @@ function sessao(o: { login?: string; como?: boolean; pode?: (c: string) => boole
     hospital: 'pc',
     rede: 'rede-sintetica',
     login: o.login ?? LOGIN,
-    porta: { rede: 'rede-sintetica', hospital: 'pc', cliente: 'teste', estabelecimento: 1, usuario: 1, correlacao: 'teste' },
+    porta: {
+      rede: 'rede-sintetica',
+      hospital: 'pc',
+      cliente: 'teste',
+      estabelecimento: 1,
+      usuario: 1,
+      correlacao: 'teste',
+    },
     pode: o.pode ?? (() => false),
   };
 }
@@ -135,7 +142,10 @@ let ligadas: Set<string>;
 let sncr: SimuladorSncr;
 const s = sessao();
 
-function documento(id: number, o: Partial<DocumentoEmitidoIcp> = {}): DocumentoEmitidoIcp & { eventos: string[] } {
+function documento(
+  id: number,
+  o: Partial<DocumentoEmitidoIcp> = {},
+): DocumentoEmitidoIcp & { eventos: string[] } {
   return {
     id,
     tipo: 'atestado',

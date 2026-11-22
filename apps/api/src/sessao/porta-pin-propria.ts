@@ -96,7 +96,11 @@ export class PortaPinPropria implements PortaPin {
     return { cliente: r.cliente, estabelecimento: r.estabelecimento };
   }
 
-  private async ler<T>(rede: string, hospital: string, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
+  private async ler<T>(
+    rede: string,
+    hospital: string,
+    fn: (l: Leitor, est: number) => Promise<T>,
+  ): Promise<T> {
     const o = this.onde(rede, hospital);
     return this.nucleo.lerSomente(
       { cliente: o.cliente, estabelecimento: o.estabelecimento, correlacao: 'acesso-pin' },
@@ -111,7 +115,9 @@ export class PortaPinPropria implements PortaPin {
   async vivo(rede: string, hospital: string, login: string): Promise<PinVivoLido | null> {
     return this.ler(rede, hospital, async (l, est) => {
       const r = await l.uma(SQL_VIVO, [est, login]);
-      return r?.['resumo_pin'] ? { ...situacaoDe(r), id: String(r['id']), hashPhc: String(r['resumo_pin']) } : null;
+      return r?.['resumo_pin']
+        ? { ...situacaoDe(r), id: String(r['id']), hashPhc: String(r['resumo_pin']) }
+        : null;
     });
   }
 
@@ -183,36 +189,43 @@ export class PortaPinPropria implements PortaPin {
     t: TrilhaPin,
   ): Promise<{ id: string; anterior: 'nenhum' | 'definido' | 'bloqueado' }> {
     if (!RESUMO_ARGON2ID.test(p.hashPhc)) throw recusa('pin-sem-cifra', 'O PIN só é guardado cifrado.');
-    return this.gravar(rede, hospital, 'acesso.pin.definir', t, { usuario: p.idUsuario, login: p.login }, async (tx, est) => {
-      const u = await tx.uma('SELECT id FROM usuario WHERE id = ? AND login = ? AND excluido_em IS NULL', [
-        p.idUsuario,
-        p.login,
-      ]);
-      if (!u) throw recusa('usuario-inexistente', 'A conta não existe neste cliente.');
-      const atual = await this.travarVivo(tx, est, p.login);
-      const anterior = !atual ? 'nenhum' : atual['bloqueado_em'] ? 'bloqueado' : 'definido';
-      if (atual) await this.encerrar(tx, atual, 'substituido', p.motivo);
-      let id: number;
-      try {
-        id = await tx.incluir(TABELA_PIN, {
-          estabelecimento_id: est,
-          usuario_id: p.idUsuario,
-          algoritmo: 'argon2id',
-          resumo_pin: p.hashPhc,
-          situacao: 'vivo',
-          tentativas_invalidas: 0,
-        });
-      } catch (e) {
-        if (restricaoViolada(e)?.tipo === 'unica')
-          throw recusa('pin-em-uso', 'Outro pedido definiu o PIN agora: tente de novo.');
-        throw e;
-      }
-      return {
-        resultado: { id: String(id), anterior },
-        alvo: id,
-        diferenca: `PIN: ${anterior} -> definido; motivo: ${p.motivo}`,
-      };
-    });
+    return this.gravar(
+      rede,
+      hospital,
+      'acesso.pin.definir',
+      t,
+      { usuario: p.idUsuario, login: p.login },
+      async (tx, est) => {
+        const u = await tx.uma('SELECT id FROM usuario WHERE id = ? AND login = ? AND excluido_em IS NULL', [
+          p.idUsuario,
+          p.login,
+        ]);
+        if (!u) throw recusa('usuario-inexistente', 'A conta não existe neste cliente.');
+        const atual = await this.travarVivo(tx, est, p.login);
+        const anterior = !atual ? 'nenhum' : atual['bloqueado_em'] ? 'bloqueado' : 'definido';
+        if (atual) await this.encerrar(tx, atual, 'substituido', p.motivo);
+        let id: number;
+        try {
+          id = await tx.incluir(TABELA_PIN, {
+            estabelecimento_id: est,
+            usuario_id: p.idUsuario,
+            algoritmo: 'argon2id',
+            resumo_pin: p.hashPhc,
+            situacao: 'vivo',
+            tentativas_invalidas: 0,
+          });
+        } catch (e) {
+          if (restricaoViolada(e)?.tipo === 'unica')
+            throw recusa('pin-em-uso', 'Outro pedido definiu o PIN agora: tente de novo.');
+          throw e;
+        }
+        return {
+          resultado: { id: String(id), anterior },
+          alvo: id,
+          diferenca: `PIN: ${anterior} -> definido; motivo: ${p.motivo}`,
+        };
+      },
+    );
   }
 
   async retirar(
@@ -234,7 +247,12 @@ export class PortaPinPropria implements PortaPin {
     });
   }
 
-  async conferencia(rede: string, hospital: string, p: ConferenciaPin, t: TrilhaPin): Promise<ResultadoConferenciaPin> {
+  async conferencia(
+    rede: string,
+    hospital: string,
+    p: ConferenciaPin,
+    t: TrilhaPin,
+  ): Promise<ResultadoConferenciaPin> {
     const id = Number(p.id);
     if (!Number.isSafeInteger(id) || id <= 0) return { aceito: false, falhas: null, bloqueouAgora: false };
     const teto = Math.min(Math.max(Math.trunc(p.teto ?? 5), 1), TETO_ERROS);
@@ -255,7 +273,8 @@ export class PortaPinPropria implements PortaPin {
         );
         const falhasAntes = Number(x?.['tentativas_invalidas'] ?? 0);
         if (p.certo) {
-          if (x && falhasAntes > 0) await tx.alterar(TABELA_PIN, id, Number(x['versao']), { tentativas_invalidas: 0 });
+          if (x && falhasAntes > 0)
+            await tx.alterar(TABELA_PIN, id, Number(x['versao']), { tentativas_invalidas: 0 });
           return {
             resultado: { aceito: Boolean(x), falhas: x ? 0 : null, bloqueouAgora: false },
             alvo: x ? id : null,
@@ -263,7 +282,11 @@ export class PortaPinPropria implements PortaPin {
           };
         }
         if (!x || falhasAntes >= TETO_ERROS)
-          return { resultado: { aceito: false, falhas: null, bloqueouAgora: false }, alvo: null, diferenca: null };
+          return {
+            resultado: { aceito: false, falhas: null, bloqueouAgora: false },
+            alvo: null,
+            diferenca: null,
+          };
         const falhas = falhasAntes + 1;
         const bloqueouAgora = falhas >= teto;
         await tx.alterar(TABELA_PIN, id, Number(x['versao']), {
@@ -278,6 +301,10 @@ export class PortaPinPropria implements PortaPin {
         };
       },
     );
-    return { aceito: r.aceito === true, falhas: r.falhas === null ? null : Number(r.falhas), bloqueouAgora: r.bloqueouAgora === true };
+    return {
+      aceito: r.aceito === true,
+      falhas: r.falhas === null ? null : Number(r.falhas),
+      bloqueouAgora: r.bloqueouAgora === true,
+    };
   }
 }

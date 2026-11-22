@@ -172,7 +172,11 @@ describe('"bloquear em todos" (W1-01, parte 11c)', () => {
   });
 
   it('banco próprio: o mesmo login é a mesma conta, bloqueada uma vez só, com o último gestor conferido em cada estabelecimento', async () => {
-    const { fonte, executadas } = fonteRede({ pc: [conta('ANA')], hb: [conta('ANA')], hc: [conta('ANA.HC')] });
+    const { fonte, executadas } = fonteRede({
+      pc: [conta('ANA')],
+      hb: [conta('ANA')],
+      hc: [conta('ANA.HC')],
+    });
     const { s, revogadas } = servico();
     const conferidos: string[] = [];
     const gestores: LeitorGestores = {

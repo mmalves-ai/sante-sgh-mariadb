@@ -7,7 +7,13 @@
 import { randomUUID } from 'node:crypto';
 import { normalizarTrajetorias } from '@sgh/dominio-internacao';
 import { conferirLeitos } from '@sgh/dominio-organizacao';
-import { type ContextoNucleo, definirOperacao, type Escritor, gravarTrilha, NucleoProprio } from '@sgh/nucleo';
+import {
+  type ContextoNucleo,
+  definirOperacao,
+  type Escritor,
+  gravarTrilha,
+  NucleoProprio,
+} from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
@@ -187,7 +193,13 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
         [`${P}-INT`, agora],
       );
       const pessoa = (nome: string) =>
-        garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [nome], 'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [nome, agora]);
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
       const pp = await pessoa(`PACIENTE SINTETICO ${P} INT`);
       const pm = await pessoa(`MEDICO SINTETICO ${P} INT`);
       ids.pessoas = [pp, pm];
@@ -219,15 +231,35 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
            medico_assistente_profissional_id, fonte_pagadora_id, situacao, data_hora_alta, motivo_saida_hospitalar_id,
            criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'alta', ?, ?, ?)`,
-        [ids.est, `${P}-IN1`, ids.atendimento, ids.paciente, entrada, carater, modal, ui, ids.acomodacao, esp,
-          ids.profissional, fonte, alta, motivo, agora],
+        [
+          ids.est,
+          `${P}-IN1`,
+          ids.atendimento,
+          ids.paciente,
+          entrada,
+          carater,
+          modal,
+          ui,
+          ids.acomodacao,
+          esp,
+          ids.profissional,
+          fonte,
+          alta,
+          motivo,
+          agora,
+        ],
       );
     });
     c = {
       rede: 'teste',
       hospital: `${P}I`,
       traceId: 'teste-01-05-m16',
-      porta: { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 'teste-01-05-m16' },
+      porta: {
+        cliente: CLIENTE,
+        estabelecimento: ids.est,
+        usuario: ids.usuario,
+        correlacao: 'teste-01-05-m16',
+      },
     };
     alvo = { cliente: CLIENTE, estabelecimento: ids.est, usuario: null, correlacao: 'teste-01-05-vigia' };
     fonte = new FonteInternacaoPropria(nucleo);
@@ -258,7 +290,9 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
   it('painel: blocos, acomodação com o tipo, leitos com situação e ramal; nenhuma internação aberta', async () => {
     const p = await fonte.leiturasPainel(c);
     expect(p.blocos).toEqual([{ bloco: 'B1', nome: 'BLOCO SINTETICO' }]);
-    expect(p.acomodacoes).toEqual([expect.objectContaining({ bloco: 'B1', acomodacao: 'ENF1', nome: 'ENFERMARIA 1' })]);
+    expect(p.acomodacoes).toEqual([
+      expect.objectContaining({ bloco: 'B1', acomodacao: 'ENF1', nome: 'ENFERMARIA 1' }),
+    ]);
     expect(p.leitos.map((l) => [l.leito, l.status, l.reg, l.ramal])).toEqual([
       ['01', 'A', 0, 2101],
       ['02', 'I', 0, 2101],
@@ -270,7 +304,9 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
 
   it('movimento: a unidade com 2 leitos e 1 ativo; o óbito pelo tipo de saída e a clínica pela especialidade', async () => {
     const m = await fonte.movimento(c);
-    expect(m.unidades).toEqual([expect.objectContaining({ bloco: 'B1', acomodacao: 'ENF1', leitos: 2, leitosAtivos: 1 })]);
+    expect(m.unidades).toEqual([
+      expect.objectContaining({ bloco: 'B1', acomodacao: 'ENF1', leitos: 2, leitosAtivos: 1 }),
+    ]);
     expect(m.dadosAte.getTime()).toBeLessThanOrEqual(Date.now());
     expect(m.internacoes).toEqual([
       expect.objectContaining({
@@ -284,7 +320,12 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
     // O motor conta o óbito institucional (mais de 24 horas) e recorta pela clínica da internação.
     const t = normalizarTrajetorias(m, Date.now());
     expect(t.internacoes).toEqual([
-      expect.objectContaining({ reg: ids.internacao, grupo: 'obito', obitoInstitucional: true, clinica: 'CARDIOLOGIA L0105' }),
+      expect.objectContaining({
+        reg: ids.internacao,
+        grupo: 'obito',
+        obitoInstitucional: true,
+        clinica: 'CARDIOLOGIA L0105',
+      }),
     ]);
   });
 
@@ -347,7 +388,9 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
       tabelas: ['bloco_internacao'],
       entrada: z.object({ bloco: z.number().int().positive() }).strict(),
       async gravar(tx, e) {
-        const b = await tx.uma<{ versao: number }>('SELECT versao FROM bloco_internacao WHERE id = ?', [e.bloco]);
+        const b = await tx.uma<{ versao: number }>('SELECT versao FROM bloco_internacao WHERE id = ?', [
+          e.bloco,
+        ]);
         await tx.alterar('bloco_internacao', e.bloco, Number(b?.versao), { nome: 'BLOCO SINTETICO' });
         return { bloco: e.bloco };
       },

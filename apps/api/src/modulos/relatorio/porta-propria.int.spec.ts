@@ -95,7 +95,10 @@ describe('consultas do catálogo (sem banco)', () => {
 });
 
 /** Os valores padrão de cada parâmetro do relatório (o dia de hoje para data e mês). */
-function valoresPadrao(r: (typeof RELATORIOS_CATALOGO)[number], hoje: string): Record<string, string | number> {
+function valoresPadrao(
+  r: (typeof RELATORIOS_CATALOGO)[number],
+  hoje: string,
+): Record<string, string | number> {
   const v: Record<string, string | number> = {};
   for (const p of r.parametros) {
     if (p.tipo === 'data') v[p.campo] = hoje;
@@ -279,7 +282,14 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
         `INSERT INTO triagem_relatorio_legado (estabelecimento_id, codigo, nome, acesso_restrito, destino, marco, artefato,
            relatorio_id, situacao, area, motivo, decidido_em, criado_em)
          VALUES (?, ?, ?, TRUE, 'catalogo', 'M34', 'internadosNaData', ?, 'proposta', 'leitos', 'Sintetico', ?, ?)`,
-        [ids.est, String(ORIGEM.restrita), `Relatorio de origem ${P} dois`, relatorios['internadosNaData'], agora, agora],
+        [
+          ids.est,
+          String(ORIGEM.restrita),
+          `Relatorio de origem ${P} dois`,
+          relatorios['internadosNaData'],
+          agora,
+          agora,
+        ],
       );
       temPedido = !!(await e.uma(
         "SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'pedido_relatorio'",
@@ -322,13 +332,16 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
       const base = valoresPadrao(r, hoje);
       const conjuntos = [
         base,
-        ...r.parametros.filter((p) => p.campo in VARIANTES).map((p) => ({ ...base, [p.campo]: VARIANTES[p.campo]! })),
+        ...r.parametros
+          .filter((p) => p.campo in VARIANTES)
+          .map((p) => ({ ...base, [p.campo]: VARIANTES[p.campo]! })),
       ];
       for (const v of conjuntos) {
         execucoes++;
         await porta.executar(ctx, r.codigo, v, o).then(
           (x) => expect(Array.isArray(x.linhas)).toBe(true),
-          (e: unknown) => falhas.push(`${r.codigo} ${JSON.stringify(v)}: ${String((e as Error).message).slice(0, 200)}`),
+          (e: unknown) =>
+            falhas.push(`${r.codigo} ${JSON.stringify(v)}: ${String((e as Error).message).slice(0, 200)}`),
         );
       }
     }
@@ -581,11 +594,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
     // Mudar o destino é decidir: a decisão nova também é da área.
     expect(
       await porta.gravarSgh(ctx, trilha('triagem_relatorio_legado'), (g) =>
-        g.decidirTriagem(
-          ids.triPendente,
-          { ...decisao, marco: 'M35', papelDono: `${P}-FAT` },
-          'r0404.teste',
-        ),
+        g.decidirTriagem(ids.triPendente, { ...decisao, marco: 'M35', papelDono: `${P}-FAT` }, 'r0404.teste'),
       ),
     ).toBe(1);
     expect(await porta.umaTriagem(ctx, ids.triPendente)).toMatchObject({
@@ -671,9 +680,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
     expect(
       await porta.gravarSgh(ctx, trilha('pedido_relatorio', id), (g) => g.alterarPedido(id, dados, '')),
     ).toBe(0);
-    expect(
-      await porta.gravarSgh(ctx, trilha('pedido_relatorio', id), (g) => g.excluirPedido(id)),
-    ).toBe(0);
+    expect(await porta.gravarSgh(ctx, trilha('pedido_relatorio', id), (g) => g.excluirPedido(id))).toBe(0);
     expect((await porta.eventos(ctx, 'pedido', id)).map((e) => e.evento)).toEqual(['cancelamento']);
     // Resposta do curador e exclusão só do nunca atendido.
     const outroPedido = await porta.gravarSgh(
@@ -696,7 +703,9 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
       respondidoPor: 'r0404.teste',
     });
     expect(
-      await porta.gravarSgh(ctx, trilha('pedido_relatorio', outroPedido), (g) => g.excluirPedido(outroPedido)),
+      await porta.gravarSgh(ctx, trilha('pedido_relatorio', outroPedido), (g) =>
+        g.excluirPedido(outroPedido),
+      ),
     ).toBe(0);
     const terceiro = await porta.gravarSgh(
       ctx,
@@ -774,7 +783,13 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
         );
         const alterar = (versao: number) =>
           p.gravarSgh(c, trilha('agendamento_relatorio', id), (g) =>
-            g.alterarAgendamento(id, { ...envio({ hora: '09:00' }), ativo: true }, 'r0404.teste', null, versao),
+            g.alterarAgendamento(
+              id,
+              { ...envio({ hora: '09:00' }), ativo: true },
+              'r0404.teste',
+              null,
+              versao,
+            ),
           );
         expect(await erroDe(alterar(99))).toBe('conflito-versao');
         expect(await alterar(1)).toBe(1);

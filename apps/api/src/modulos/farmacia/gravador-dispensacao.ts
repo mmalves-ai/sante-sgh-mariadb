@@ -85,8 +85,16 @@ export const TABELAS_DISPENSACAO = [
 ] as const;
 
 /** Situação da entrega ao setor (modelo) ↔ número do contrato das telas (7 dispensada, 8 entregue, 9 estornada). */
-export const NUMERO_DA_ENTREGA: Readonly<Record<string, number>> = { em_transito: 7, entregue: 8, estornada: 9 };
-export const ENTREGA_DO_NUMERO: Readonly<Record<number, string>> = { 7: 'em_transito', 8: 'entregue', 9: 'estornada' };
+export const NUMERO_DA_ENTREGA: Readonly<Record<string, number>> = {
+  em_transito: 7,
+  entregue: 8,
+  estornada: 9,
+};
+export const ENTREGA_DO_NUMERO: Readonly<Record<number, string>> = {
+  7: 'em_transito',
+  8: 'entregue',
+  9: 'estornada',
+};
 
 /** Tipo do documento conferido (tela) → tipo do documento de estoque (modelo). */
 const DOCUMENTO_CONFERIDO: Readonly<Record<'saida' | 'devolucao' | 'perda', string>> = {
@@ -155,7 +163,12 @@ interface Movimento {
 }
 
 /** A gravação da farmácia hospitalar numa transação do Executor (estabelecimento e usuário da sessão). */
-export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number, extras: ExtrasGravacaoFarmacia) {
+export function gravadorDispensacao(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  extras: ExtrasGravacaoFarmacia,
+) {
   const agora = new Date();
   let fusoLido: string | null = null;
   const fuso = async () => {
@@ -218,7 +231,8 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         WHERE i.id = ? AND i.excluido_em IS NULL`,
       [id],
     );
-    if (!r) throw recusa('item-inexistente', 'O item não existe no cadastro de insumos.', { campos: [campo] });
+    if (!r)
+      throw recusa('item-inexistente', 'O item não existe no cadastro de insumos.', { campos: [campo] });
     return {
       id: n(r['id']),
       nome: texto(r['nome']),
@@ -238,7 +252,12 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       [est, insumo, numero.trim()],
     );
     if (!r) throw recusa('lote-inexistente', `O lote ${numero} não existe para o item.`, { campos: [campo] });
-    return { id: n(r['id']), numero: texto(r['numero_lote']), validade: dataIso(r['validade']) ?? '', situacao: texto(r['situacao']) };
+    return {
+      id: n(r['id']),
+      numero: texto(r['numero_lote']),
+      validade: dataIso(r['validade']) ?? '',
+      situacao: texto(r['situacao']),
+    };
   };
 
   const conferirLocal = async (local: number, campo = 'local'): Promise<void> => {
@@ -246,11 +265,17 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       'SELECT id FROM local_estoque WHERE id = ? AND estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
       [local, est],
     );
-    if (!r) throw recusa('local-inexistente', 'O local de estoque não existe neste estabelecimento.', { campos: [campo] });
+    if (!r)
+      throw recusa('local-inexistente', 'O local de estoque não existe neste estabelecimento.', {
+        campos: [campo],
+      });
   };
 
   const centroDoEstabelecimento = (id: number) =>
-    tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [id, est]);
+    tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [
+      id,
+      est,
+    ]);
 
   const tipoMovimento = async (natureza: string, sentido: string): Promise<number> => {
     const r = await tx.uma<Linha>(
@@ -285,10 +310,16 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
           { campos: ['quantidade'] },
         );
       saldoApos = q4(n(s['quantidade']) - q);
-      await tx.alterar('saldo_estoque', n(s['id']), n(s['versao']), { quantidade: saldoApos, ultima_movimentacao_em: agora });
+      await tx.alterar('saldo_estoque', n(s['id']), n(s['versao']), {
+        quantidade: saldoApos,
+        ultima_movimentacao_em: agora,
+      });
     } else if (s) {
       saldoApos = q4(n(s['quantidade']) + q);
-      await tx.alterar('saldo_estoque', n(s['id']), n(s['versao']), { quantidade: saldoApos, ultima_movimentacao_em: agora });
+      await tx.alterar('saldo_estoque', n(s['id']), n(s['versao']), {
+        quantidade: saldoApos,
+        ultima_movimentacao_em: agora,
+      });
     } else {
       saldoApos = q;
       await tx.incluir('saldo_estoque', {
@@ -391,7 +422,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         WHERE dd.id = ? AND d.estabelecimento_id = ? AND dd.excluido_em IS NULL`,
       [dose, est],
     );
-    if (!r) throw recusa('dose-inexistente', 'A dose dispensada não existe neste estabelecimento.', { campos: ['dose'] });
+    if (!r)
+      throw recusa('dose-inexistente', 'A dose dispensada não existe neste estabelecimento.', {
+        campos: ['dose'],
+      });
     return r;
   };
 
@@ -415,7 +449,8 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       [dispensacao, est],
     )) ?? null;
 
-  const evento = (tipo: string, carga: Record<string, number | string | null>) => extras.eventos.push({ tipo, carga });
+  const evento = (tipo: string, carga: Record<string, number | string | null>) =>
+    extras.eventos.push({ tipo, carga });
 
   // ── Dispensação por horário ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -432,7 +467,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
       [e.atendimento, est],
     );
-    if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.', { campos: ['atendimento'] });
+    if (!at)
+      throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.', {
+        campos: ['atendimento'],
+      });
     const setor = idOuNulo(at['setor_unidade']) ?? idOuNulo(at['setor_funcional_id']);
     if (setor === null)
       throw recusa(
@@ -458,11 +496,14 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     const porId = new Map(linhas.map((l) => [n(l['id']), l]));
     let ja = 0;
     let susp = 0;
-    const livres: { h: Linha; q: number; lotes: { lote: string; validade: string; quantidade: number }[] }[] = [];
+    const livres: { h: Linha; q: number; lotes: { lote: string; validade: string; quantidade: number }[] }[] =
+      [];
     for (const id of ids) {
       const h = porId.get(id);
       if (!h || n(h['atendimento_id']) !== e.atendimento)
-        throw recusa('horario-de-outro-paciente', 'Um dos horários não é deste atendimento.', { campos: ['doses'] });
+        throw recusa('horario-de-outro-paciente', 'Um dos horários não é deste atendimento.', {
+          campos: ['doses'],
+        });
       if (
         verdadeiro(h['suspenso']) ||
         ['suspenso', 'suspenso_correcao', 'cancelado'].includes(texto(h['item_situacao'])) ||
@@ -476,17 +517,27 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         continue;
       }
       if (h['insumo_id'] === null)
-        throw recusa('item-sem-produto', 'O item prescrito não tem produto de estoque para dispensar.', { campos: ['doses'] });
+        throw recusa('item-sem-produto', 'O item prescrito não tem produto de estoque para dispensar.', {
+          campos: ['doses'],
+        });
       const d = pedidos.get(id)!;
-      const q = d.quantidade ?? (h['quantidade_prevista'] !== null ? n(h['quantidade_prevista']) : n(h['item_quantidade']));
+      const q =
+        d.quantidade ??
+        (h['quantidade_prevista'] !== null ? n(h['quantidade_prevista']) : n(h['item_quantidade']));
       if (!(q > 0))
-        throw recusa('quantidade-indefinida', 'A dose não tem quantidade prescrita: informe a quantidade.', { campos: ['doses'] });
+        throw recusa('quantidade-indefinida', 'A dose não tem quantidade prescrita: informe a quantidade.', {
+          campos: ['doses'],
+        });
       livres.push({ h, q: q4(q), lotes: d.lotes });
     }
     if (livres.length === 0) {
       if (susp > 0 && ja === 0)
-        throw recusa('item-suspenso', 'O item foi suspenso na prescrição: não há dose a dispensar.', { campos: ['doses'] });
-      throw recusa('dose-ja-dispensada', 'As doses já foram dispensadas (por outro terminal).', { campos: ['doses'] });
+        throw recusa('item-suspenso', 'O item foi suspenso na prescrição: não há dose a dispensar.', {
+          campos: ['doses'],
+        });
+      throw recusa('dose-ja-dispensada', 'As doses já foram dispensadas (por outro terminal).', {
+        campos: ['doses'],
+      });
     }
     // Conferências de cada dose antes de gravar: lotes do item rastreável e o prescritor do controlado.
     const hojeIso = await hoje();
@@ -494,17 +545,23 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     for (const x of livres) {
       const insumo = await insumoDe(n(x.h['insumo_id']), 'doses');
       if (insumo.rastreavel && x.lotes.length === 0)
-        throw recusa('lote-obrigatorio', `${insumo.nome} é rastreável: informe o lote da dose.`, { campos: ['lotes'] });
+        throw recusa('lote-obrigatorio', `${insumo.nome} é rastreável: informe o lote da dose.`, {
+          campos: ['lotes'],
+        });
       let partes: { lote: LoteLido | null; q: number }[] = [{ lote: null, q: x.q }];
       if (x.lotes.length > 0) {
         const soma = q4(x.lotes.reduce((t, l) => t + l.quantidade, 0));
         if (Math.abs(soma - x.q) > 1e-6)
-          throw recusa('lotes-soma', 'A soma dos lotes tem de ser igual à quantidade da dose.', { campos: ['lotes'] });
+          throw recusa('lotes-soma', 'A soma dos lotes tem de ser igual à quantidade da dose.', {
+            campos: ['lotes'],
+          });
         partes = [];
         for (const l of x.lotes) {
           const lote = await loteDe(insumo.id, l.lote);
           if (lote.situacao !== 'liberado' || lote.validade < hojeIso)
-            throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, { campos: ['lotes'] });
+            throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, {
+              campos: ['lotes'],
+            });
           partes.push({ lote, q: q4(l.quantidade) });
         }
       }
@@ -520,7 +577,9 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       preparadas.push({ h: x.h, insumo, partes });
     }
     const numero = await tx.proximoNumero('dispensacao');
-    const previstos = preparadas.map((x) => new Date(String(x.h['previsto_em']))).sort((a, b) => a.getTime() - b.getTime());
+    const previstos = preparadas
+      .map((x) => new Date(String(x.h['previsto_em'])))
+      .sort((a, b) => a.getTime() - b.getTime());
     const dispensacao = await tx.incluir('dispensacao', {
       estabelecimento_id: est,
       numero: numero.valor,
@@ -627,9 +686,12 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         });
         doses.push(dose);
       }
-      await tx.alterar('horario_administracao', n(x.h['id']), n(x.h['versao']), { dispensacao_id: dispensacao });
+      await tx.alterar('horario_administracao', n(x.h['id']), n(x.h['versao']), {
+        dispensacao_id: dispensacao,
+      });
     }
-    if (valor > 0) await tx.alterar('documento_estoque', documento, 1, { valor_total: Math.round(valor * 100) / 100 });
+    if (valor > 0)
+      await tx.alterar('documento_estoque', documento, 1, { valor_total: Math.round(valor * 100) / 100 });
     const { ano, mes } = await anoMes(agora);
     extras.alvo = { tabela: 'dispensacao', id: dispensacao };
     evento('farmacia.dispensacao.registrada', { dispensacao, documento, entrega, doses: doses.length });
@@ -705,7 +767,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     for (const x of itens) {
       await tx.alterar('entrega_setor_item', n(x['esi_id']), n(x['esi_versao']), {
         conferido_em: agora,
-        leitura: e.modo === 'leitura' && (e.dose === undefined || n(x['dose']) === e.dose) ? (e.leitura ?? null) : null,
+        leitura:
+          e.modo === 'leitura' && (e.dose === undefined || n(x['dose']) === e.dose)
+            ? (e.leitura ?? null)
+            : null,
       });
       if (texto(x['situacao']) === 'dispensada') {
         await tx.alterar('dose_dispensada', n(x['dose']), n(x['dose_versao']), { situacao: 'entregue' });
@@ -733,11 +798,17 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
   async function devolverDose(e: DevolverDoseEntrada): Promise<ResultadoOperacao> {
     const d = await doseTravada(e.dose);
     if (['cancelada', 'devolvida'].includes(texto(d['situacao'])))
-      throw recusa('dose-sem-saldo', 'A dose foi cancelada ou já devolvida por inteiro.', { campos: ['dose'] });
-    if (d['setor_funcional_id'] === null)
-      throw recusa('dose-sem-setor', 'A dose não saiu para um setor: registre a devolução pela farmácia ambulatorial.', {
+      throw recusa('dose-sem-saldo', 'A dose foi cancelada ou já devolvida por inteiro.', {
         campos: ['dose'],
       });
+    if (d['setor_funcional_id'] === null)
+      throw recusa(
+        'dose-sem-setor',
+        'A dose não saiu para um setor: registre a devolução pela farmácia ambulatorial.',
+        {
+          campos: ['dose'],
+        },
+      );
     recusar(
       conferirDevolucaoDose({
         quantidade: e.quantidade,
@@ -748,14 +819,18 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       }),
     );
     await conferirLocal(e.local);
-    const motivo = await tx.uma<Linha>(
-      'SELECT id FROM motivo_devolucao_estoque WHERE codigo = ? AND ativo',
-      [e.motivo],
-    );
+    const motivo = await tx.uma<Linha>('SELECT id FROM motivo_devolucao_estoque WHERE codigo = ? AND ativo', [
+      e.motivo,
+    ]);
     if (!motivo)
-      throw recusa('dominio-nao-configurado', `O motivo de devolução "${e.motivo}" não está cadastrado.`, { campos: ['motivo'] });
+      throw recusa('dominio-nao-configurado', `O motivo de devolução "${e.motivo}" não está cadastrado.`, {
+        campos: ['motivo'],
+      });
     const insumo = await insumoDe(n(d['insumo_id']));
-    const lote = d['lote_insumo_id'] === null ? null : { id: n(d['lote_insumo_id']), validade: dataIso(d['data_validade']) ?? '' };
+    const lote =
+      d['lote_insumo_id'] === null
+        ? null
+        : { id: n(d['lote_insumo_id']), validade: dataIso(d['data_validade']) ?? '' };
     const q = q4(e.quantidade);
     const refs = {
       atendimento_id: idOuNulo(d['atendimento_id']),
@@ -836,7 +911,9 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     });
     if (inteira) await tx.alterar('dose_dispensada', e.dose, n(d['versao']), { situacao: 'devolvida' });
     if (['dispensada', 'entregue'].includes(texto(d['dispensacao_situacao'])))
-      await tx.alterar('dispensacao', n(d['dispensacao_id']), n(d['dispensacao_versao']), { situacao: 'devolvida_parcial' });
+      await tx.alterar('dispensacao', n(d['dispensacao_id']), n(d['dispensacao_versao']), {
+        situacao: 'devolvida_parcial',
+      });
     const { ano, mes } = await anoMes(agora);
     extras.alvo = { tabela: 'devolucao_dispensacao', id: devolucao };
     evento('farmacia.dose.devolvida', { devolucao, documento, dose: e.dose });
@@ -847,9 +924,13 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     const d = await doseTravada(e.dose);
     const es = await entregaDaDose(e.dose);
     if (es && texto(es['situacao']) === 'entregue')
-      throw recusa('ja-entregue', 'A dose já foi entregue ao setor: registre a devolução.', { campos: ['dose'] });
+      throw recusa('ja-entregue', 'A dose já foi entregue ao setor: registre a devolução.', {
+        campos: ['dose'],
+      });
     if (texto(d['situacao']) !== 'dispensada' || (es && texto(es['situacao']) === 'estornada'))
-      throw recusa('nao-dispensada', 'A dose não está dispensada (ou já foi estornada).', { campos: ['dose'] });
+      throw recusa('nao-dispensada', 'A dose não está dispensada (ou já foi estornada).', {
+        campos: ['dose'],
+      });
     const resto = q4(n(d['quantidade']) - n(d['quantidade_devolvida']));
     const insumo = await insumoDe(n(d['insumo_id']));
     const doc = await documentoSaidaDa(n(d['dispensacao_id']));
@@ -899,7 +980,12 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       [n(d['dispensacao_id'])],
     );
     if (n(ativas?.['n']) === 0) {
-      if (es) await tx.alterar('entrega_setor', n(es['id']), n(es['versao']), { situacao: 'estornada', estornado_em: agora, motivo_estorno: e.motivo });
+      if (es)
+        await tx.alterar('entrega_setor', n(es['id']), n(es['versao']), {
+          situacao: 'estornada',
+          estornado_em: agora,
+          motivo_estorno: e.motivo,
+        });
       await tx.alterar('dispensacao', n(d['dispensacao_id']), n(d['dispensacao_versao']), {
         situacao: 'cancelada',
         cancelado_em: agora,
@@ -930,13 +1016,17 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
   ): Promise<ResultadoOperacao> {
     const insumo = await insumoDe(p.item);
     if (!insumo.lista)
-      throw recusa('nao-controlado', 'O item não é controlado: registre a saída comum.', { campos: ['item'] });
+      throw recusa('nao-controlado', 'O item não é controlado: registre a saída comum.', {
+        campos: ['item'],
+      });
     await conferirLocal(p.local);
     if (!(await centroDoEstabelecimento(p.centroCusto)))
       throw recusa('centro-custo-inexistente', 'O centro de custo não existe.', { campos: ['centroCusto'] });
     const lote = await loteDe(p.item, p.lote, 'lote');
     if (lote.validade !== p.validade)
-      throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, { campos: ['validade'] });
+      throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, {
+        campos: ['validade'],
+      });
     const saldo = await tx.uma<Linha>(
       'SELECT quantidade FROM saldo_lote WHERE local_estoque_id = ? AND lote_insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [p.local, lote.id, est],
@@ -1004,14 +1094,18 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         WHERE id = ? AND tipo = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [cc.documento.id, DOCUMENTO_CONFERIDO[cc.documento.tipo], est],
     );
-    if (!doc) throw recusa('documento-inexistente', 'O documento conferido não existe.', { campos: ['documento'] });
+    if (!doc)
+      throw recusa('documento-inexistente', 'O documento conferido não existe.', { campos: ['documento'] });
     const lote = cc.lote ? await loteDe(cc.item, cc.lote, 'lote') : null;
     const doItem = await tx.uma(
       `SELECT id FROM documento_estoque_item WHERE documento_estoque_id = ? AND insumo_id = ? AND excluido_em IS NULL
           ${lote ? 'AND lote_insumo_id = ?' : ''} LIMIT 1`,
       lote ? [cc.documento.id, cc.item, lote.id] : [cc.documento.id, cc.item],
     );
-    if (!doItem) throw recusa('item-fora-do-documento', 'O item (e o lote) não está neste documento.', { campos: ['item'] });
+    if (!doItem)
+      throw recusa('item-fora-do-documento', 'O item (e o lote) não está neste documento.', {
+        campos: ['item'],
+      });
     recusar(
       conferirDuplaConferencia({
         responsavel: (await loginDe(doc['criado_por'])) ?? '',
@@ -1029,7 +1123,9 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         [cc.documento.id, lote?.id ?? 0],
       )
     )
-      throw recusa('ja-conferido', 'Este controlado já tem a segunda conferência registrada.', { campos: ['item'] });
+      throw recusa('ja-conferido', 'Este controlado já tem a segunda conferência registrada.', {
+        campos: ['item'],
+      });
     const id = await tx.incluir('conferencia_controlado', {
       estabelecimento_id: est,
       documento_tipo: cc.documento.tipo,
@@ -1050,7 +1146,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
   const fecharLivro: GravadorSghFarmacia['fecharLivro'] = async (f) => {
     const oficial = f.livro.modo === 'oficial';
     const numero = `L${f.livro.livro}-${f.livro.inicio}-${oficial ? 'O' : 'C'}`;
-    const ja = await tx.uma('SELECT id FROM livro_controlado WHERE estabelecimento_id = ? AND numero = ?', [est, numero]);
+    const ja = await tx.uma('SELECT id FROM livro_controlado WHERE estabelecimento_id = ? AND numero = ?', [
+      est,
+      numero,
+    ]);
     recusar(
       conferirFechamentoLivro({
         responsavelTecnico: f.responsavelTecnico,
@@ -1102,7 +1201,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         quantidade: d.quantidade,
       }),
     );
-    const tipo = tipoReceita(insumo.lista ? listaDoItem(insumo.lista) ?? insumo.lista : null, insumo.antimicrobiano);
+    const tipo = tipoReceita(
+      insumo.lista ? (listaDoItem(insumo.lista) ?? insumo.lista) : null,
+      insumo.antimicrobiano,
+    );
     if (!tipo)
       throw recusa(
         'fora-da-escrituracao',
@@ -1125,12 +1227,18 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
     else if (d.prescritor === null)
       throw recusa('sem-prescritor', 'Informe o prescritor da receita.', { campos: ['prescritor'] });
     if (!(await tx.uma('SELECT id FROM profissional WHERE id = ?', [d.prescritor])))
-      throw recusa('prescritor-inexistente', 'O prescritor não existe no cadastro de profissionais.', { campos: ['prescritor'] });
+      throw recusa('prescritor-inexistente', 'O prescritor não existe no cadastro de profissionais.', {
+        campos: ['prescritor'],
+      });
     const lote = await loteDe(d.item, d.lote, 'lote');
     if (lote.validade !== d.validade)
-      throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, { campos: ['validade'] });
+      throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, {
+        campos: ['validade'],
+      });
     if (lote.situacao !== 'liberado' || lote.validade < d.hoje)
-      throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, { campos: ['lote'] });
+      throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, {
+        campos: ['lote'],
+      });
     // A farmácia que dispensa é a que tem o lote com saldo (a central primeiro).
     const local = await tx.uma<Linha>(
       `SELECT sl.local_estoque_id FROM saldo_lote sl JOIN local_estoque le ON le.id = sl.local_estoque_id
@@ -1141,12 +1249,19 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
       [lote.id, est, est, d.quantidade],
     );
     if (!local)
-      throw recusa('saldo-insuficiente', `Nenhuma farmácia tem saldo do lote ${lote.numero} para a quantidade.`, {
-        campos: ['quantidade'],
-      });
+      throw recusa(
+        'saldo-insuficiente',
+        `Nenhuma farmácia tem saldo do lote ${lote.numero} para a quantidade.`,
+        {
+          campos: ['quantidade'],
+        },
+      );
     const emissao = d.receitaData;
     const validade = new Date(`${emissao}T12:00:00Z`);
-    validade.setUTCDate(validade.getUTCDate() + (insumo.lista ? VALIDADE_RECEITA_DIAS.controlado : VALIDADE_RECEITA_DIAS.antimicrobiano));
+    validade.setUTCDate(
+      validade.getUTCDate() +
+        (insumo.lista ? VALIDADE_RECEITA_DIAS.controlado : VALIDADE_RECEITA_DIAS.antimicrobiano),
+    );
     const receita = await tx.incluir('receita_controlada', {
       estabelecimento_id: est,
       paciente_id: d.paciente,
@@ -1258,9 +1373,10 @@ export function gravadorDispensacao(tx: TxOperacao, est: number, usuario: number
         situacao: 'enviado',
       });
       if (x['receita_controlada_id'] !== null) {
-        const [r] = await tx.consultarParaAtualizar<Linha>('SELECT id, versao, situacao FROM receita_controlada WHERE id = ?', [
-          n(x['receita_controlada_id']),
-        ]);
+        const [r] = await tx.consultarParaAtualizar<Linha>(
+          'SELECT id, versao, situacao FROM receita_controlada WHERE id = ?',
+          [n(x['receita_controlada_id'])],
+        );
         if (r && texto(r['situacao']) === 'retida')
           await tx.alterar('receita_controlada', n(r['id']), n(r['versao']), { situacao: 'escriturada' });
       }

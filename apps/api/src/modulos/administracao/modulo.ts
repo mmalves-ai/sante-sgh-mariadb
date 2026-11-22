@@ -73,7 +73,10 @@ export function portaDaCertificacao(ctx: ContextoModulo): PortaSbis {
 @Module({})
 export class ModuloAdministracao {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdministracao = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloAdministracao = {},
+): Promise<DynamicModule> {
   const fonte = opcoes.fonte ?? (await fonteDaAdministracao(ctx));
   const porta = opcoes.sbis ?? portaDaCertificacao(ctx);
   const servico = new ServicoSbis({

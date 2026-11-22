@@ -42,7 +42,13 @@ import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
 import { ATOS_IMAGEM } from '../pacs-porta-memoria.js';
-import type { ContextoPacs, GravadorPacs, ItemMwlBanco, PortaPacs, StatusEstudoBanco } from '../pacs-porta.js';
+import type {
+  ContextoPacs,
+  GravadorPacs,
+  ItemMwlBanco,
+  PortaPacs,
+  StatusEstudoBanco,
+} from '../pacs-porta.js';
 
 const E = EVENTOS_AUDITAVEIS;
 

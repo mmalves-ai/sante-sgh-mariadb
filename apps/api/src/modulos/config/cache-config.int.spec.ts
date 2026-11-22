@@ -15,7 +15,12 @@ import { registroComConfig } from './modulo-teste.spec-util.js';
 
 const URL_VALKEY = process.env['VALKEY_URL']?.trim() || 'redis://127.0.0.1:63718';
 const REDE = `rede-int-${randomUUID().slice(0, 8)}`;
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', REDE_PADRAO: REDE, API_MODULOS: 'config' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  REDE_PADRAO: REDE,
+  API_MODULOS: 'config',
+};
 
 describe('cache de configuração no Valkey (regra 10)', () => {
   let armazem: ArmazemValkey;

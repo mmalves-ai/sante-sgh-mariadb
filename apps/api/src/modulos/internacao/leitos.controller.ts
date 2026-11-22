@@ -230,7 +230,12 @@ export class LeitosController implements OnModuleDestroy {
     await this.cfg.exigir(sujeitoDe(s), 'painel');
     if (!this.vigia) throw new ErroProblema('indisponivel', 503, 'Avisos de mudança indisponíveis');
     if (s.porta.estabelecimento === null)
-      throw new ErroProblema('nao-autenticado', 401, 'Escolha o estabelecimento', 'A sessão não tem estabelecimento.');
+      throw new ErroProblema(
+        'nao-autenticado',
+        401,
+        'Escolha o estabelecimento',
+        'A sessão não tem estabelecimento.',
+      );
     res.hijack();
     res.raw.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',

@@ -52,7 +52,8 @@ export class ErroSus extends Error {
   }
 }
 
-export type CodigoErroAih = 'versao-alterada' | 'nao-encontrado' | 'numero-em-uso' | 'faixa-sobreposta' | 'aih-ja-registrada';
+export type CodigoErroAih =
+  'versao-alterada' | 'nao-encontrado' | 'numero-em-uso' | 'faixa-sobreposta' | 'aih-ja-registrada';
 
 export class ErroAih extends Error {
   override readonly name = 'ErroAih';
@@ -258,7 +259,11 @@ export interface ItemBpa {
   readonly sigtap: number | null;
   readonly quantidade: number;
   readonly procedimento: number | null;
-  readonly executante: { readonly cbo: string | null; readonly cns: string | null; readonly cpf: string | null } | null;
+  readonly executante: {
+    readonly cbo: string | null;
+    readonly cns: string | null;
+    readonly cpf: string | null;
+  } | null;
 }
 
 export interface CompatibilidadeSigtap {
@@ -372,7 +377,11 @@ export interface ArquivoSus {
 
 export interface NovoArquivoSus {
   readonly id: number;
-  readonly competencia: { readonly id: number; readonly instrumento: InstrumentoSusPorta; readonly competencia: string };
+  readonly competencia: {
+    readonly id: number;
+    readonly instrumento: InstrumentoSusPorta;
+    readonly competencia: string;
+  };
   readonly leiaute: string;
   readonly versaoLeiaute: string;
   readonly conferidoOficial: boolean;

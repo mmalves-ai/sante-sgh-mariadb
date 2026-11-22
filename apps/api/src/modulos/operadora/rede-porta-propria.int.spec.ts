@@ -19,7 +19,13 @@ import {
   PODE,
   prepararBase,
 } from './infra/copia.spec-util.js';
-import type { CamposPrestador, ContextoRede, GravacaoRede, GravadorRede, PortaRedeOperadora } from './rede-porta.js';
+import type {
+  CamposPrestador,
+  ContextoRede,
+  GravacaoRede,
+  GravadorRede,
+  PortaRedeOperadora,
+} from './rede-porta.js';
 import { PortaRedeOperadoraMemoria } from './rede-porta-memoria.js';
 import { PortaRedeOperadoraPropria } from './rede-porta-propria.js';
 import { ServicoRedeOperadora } from './rede-servico.js';
@@ -40,7 +46,13 @@ const campos = (nome: string, extra: Partial<CamposPrestador> = {}): CamposPrest
   urgencia: true,
   regime: 2,
   remuneracao: 1,
-  contrato: { numero: `L0210-${nome.slice(-2)}`, inicio: '2026-01-01', fim: null, formaReajuste: 1, mesReajuste: 6 },
+  contrato: {
+    numero: `L0210-${nome.slice(-2)}`,
+    inicio: '2026-01-01',
+    fim: null,
+    formaReajuste: 1,
+    mesReajuste: 6,
+  },
   ehOHospital: false,
   estabelecimento: null,
   convenio: null,
@@ -81,11 +93,10 @@ beforeAll(async () => {
   // A operadora do estabelecimento de teste (o contrato com o prestador é dela).
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-10' }, async (e) => {
     const agora = new Date();
-    const pj = await e.inserir('INSERT INTO pessoa_juridica (cnpj, razao_social, criado_em) VALUES (?, ?, ?)', [
-      cnpjSintetico('902100000201'),
-      'OPERADORA SINTETICA DA REDE L0210',
-      agora,
-    ]);
+    const pj = await e.inserir(
+      'INSERT INTO pessoa_juridica (cnpj, razao_social, criado_em) VALUES (?, ?, ?)',
+      [cnpjSintetico('902100000201'), 'OPERADORA SINTETICA DA REDE L0210', agora],
+    );
     const ope = await e.inserir(
       `INSERT INTO operadora_saude (pessoa_juridica_id, nome, registro_ans, modalidade, segmentacao, criado_em)
        VALUES (?, 'OPERADORA REDE L0210', '902102', 'medicina_grupo', 'medico_hospitalar', ?)`,
@@ -101,7 +112,12 @@ beforeAll(async () => {
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, registro_ans, criado_em) VALUES ('L0210-OPE', 'OPERADORA PROPRIA L0210', 'operadora', 'ativa', '902102', ?)",
         [agora],
       ));
-    if (!(await e.uma('SELECT id FROM fonte_pagadora_estabelecimento WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?', [fonte, massa?.est])))
+    if (
+      !(await e.uma(
+        'SELECT id FROM fonte_pagadora_estabelecimento WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?',
+        [fonte, massa?.est],
+      ))
+    )
       await e.inserir(
         'INSERT INTO fonte_pagadora_estabelecimento (fonte_pagadora_id, estabelecimento_id, criado_em) VALUES (?, ?, ?)',
         [fonte, massa?.est, agora],
@@ -133,9 +149,12 @@ const fabricas: [string, () => { porta: PortaRedeOperadora; c: ContextoRede }][]
 describe.each(fabricas)('rede credenciada, bateria comum (%s)', (destino, fabrica) => {
   it('credencia, lê, altera com o movimento, recusa versão velha e documento repetido, agenda a saída e reinclui', async () => {
     const { porta, c } = fabrica();
-    const gravar = <T extends GravacaoRede>(fn: (g: GravadorRede) => Promise<T>) => porta.gravar(c, linha(c), fn);
+    const gravar = <T extends GravacaoRede>(fn: (g: GravadorRede) => Promise<T>) =>
+      porta.gravar(c, linha(c), fn);
     const doc = cnpjSintetico(destino === 'banco' ? '902100000301' : '902100000401');
-    const cred = await gravar((g) => g.credenciar({ ...campos('HOSPITAL SINTETICO L0210 A1'), pessoa: 'J', documento: doc, usuario: 'x' }));
+    const cred = await gravar((g) =>
+      g.credenciar({ ...campos('HOSPITAL SINTETICO L0210 A1'), pessoa: 'J', documento: doc, usuario: 'x' }),
+    );
     expect(cred.versao).toBe(1);
     const p = await porta.prestador(c, cred.id);
     expect(p).toMatchObject({
@@ -151,11 +170,21 @@ describe.each(fabricas)('rede credenciada, bateria comum (%s)', (destino, fabric
       versao: 1,
     });
     expect(
-      await codigoDe(gravar((g) => g.credenciar({ ...campos('OUTRO NOME L0210 A2'), pessoa: 'J', documento: doc, usuario: 'x' }))),
+      await codigoDe(
+        gravar((g) =>
+          g.credenciar({ ...campos('OUTRO NOME L0210 A2'), pessoa: 'J', documento: doc, usuario: 'x' }),
+        ),
+      ),
     ).toBe('documento-ja-credenciado');
 
     const alt = await gravar((g) =>
-      g.alterar({ ...campos('HOSPITAL SINTETICO L0210 B1'), id: cred.id, versao: 1, camposRps: ['nome'], usuario: 'x' }),
+      g.alterar({
+        ...campos('HOSPITAL SINTETICO L0210 B1'),
+        id: cred.id,
+        versao: 1,
+        camposRps: ['nome'],
+        usuario: 'x',
+      }),
     );
     expect(alt.versao).toBe(2);
     expect(alt.movimento).not.toBeNull();
@@ -165,7 +194,11 @@ describe.each(fabricas)('rede credenciada, bateria comum (%s)', (destino, fabric
       [1, [], expect.any(String)],
     ]);
     expect(
-      await codigoDe(gravar((g) => g.alterar({ ...campos('X L0210 C1'), id: cred.id, versao: 1, camposRps: [], usuario: 'x' }))),
+      await codigoDe(
+        gravar((g) =>
+          g.alterar({ ...campos('X L0210 C1'), id: cred.id, versao: 1, camposRps: [], usuario: 'x' }),
+        ),
+      ),
     ).toBe('prestador-desatualizado');
 
     const efetivo = daqui(40);
@@ -232,7 +265,9 @@ describe.each(fabricas)('rede credenciada, bateria comum (%s)', (destino, fabric
       contrato: { numero: 'L0210-A1', formaReajuste: 2, mesReajuste: 4 },
       versao: 6,
     });
-    expect((await porta.movimentos(c, { prestador: cred.id })).itens.map((x) => x.movimento)).toEqual([4, 3, 4, 3, 2, 1]);
+    expect((await porta.movimentos(c, { prestador: cred.id })).itens.map((x) => x.movimento)).toEqual([
+      4, 3, 4, 3, 2, 1,
+    ]);
     if (destino === 'banco' && nucleo) {
       // No banco: um contrato só (a mesma linha reaberta), vigente, e o histórico de cada passo.
       const k = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-10' }, (l) =>
@@ -258,11 +293,18 @@ describe.skipIf(!PODE)('rede credenciada no banco: contrato de efeito, escopo, l
     const porta = new PortaRedeOperadoraPropria(n, CLIENTE);
     const c = contexto(m);
     const outro = contexto(m, true);
-    const gravar = <T extends GravacaoRede>(fn: (g: GravadorRede) => Promise<T>) => porta.gravar(c, linha(c), fn);
+    const gravar = <T extends GravacaoRede>(fn: (g: GravadorRede) => Promise<T>) =>
+      porta.gravar(c, linha(c), fn);
     const cpf = cpfSintetico('902100003');
     const pf = await gravar((g) =>
       g.credenciar({
-        ...campos('CONSULTORIO SINTETICO L0210 F1', { tipo: 1, classificacao: 3, cnes: null, urgencia: false, regime: 1 }),
+        ...campos('CONSULTORIO SINTETICO L0210 F1', {
+          tipo: 1,
+          classificacao: 3,
+          cnes: null,
+          urgencia: false,
+          regime: 1,
+        }),
         pessoa: 'F',
         documento: cpf,
         usuario: 'x',
@@ -300,9 +342,16 @@ describe.skipIf(!PODE)('rede credenciada no banco: contrato de efeito, escopo, l
         [m.est, m.usuario, pf.id],
       ),
     );
-    expect(linhaBanco).toMatchObject({ pessoa: 'fisica', cpf, cnpj: null, situacao: 'credenciado', forma_remuneracao: 'procedimento' });
+    expect(linhaBanco).toMatchObject({
+      pessoa: 'fisica',
+      cpf,
+      cnpj: null,
+      situacao: 'credenciado',
+      forma_remuneracao: 'procedimento',
+    });
     expect(Number(linhaBanco?.['estabelecimento_id'])).toBe(m.est);
-    for (const k of ['contratos', 'historicos', 'inclusoes', 'trilhas']) expect(Number(linhaBanco?.[k]), k).toBe(1);
+    for (const k of ['contratos', 'historicos', 'inclusoes', 'trilhas'])
+      expect(Number(linhaBanco?.[k]), k).toBe(1);
     expect(await porta.prestador(c, hosp.id)).toMatchObject({ ehOHospital: true, estabelecimento: COD });
 
     // Escopo: o outro estabelecimento não vê nem grava.
@@ -318,8 +367,12 @@ describe.skipIf(!PODE)('rede credenciada no banco: contrato de efeito, escopo, l
 
     // Lista: busca por trecho do nome (sem acento nem caixa), por documento, por tipo e a página pela chave.
     const todos = await porta.prestadores(c, {});
-    expect(todos.itens.map((p) => p.nome)).toEqual([...todos.itens.map((p) => p.nome)].sort((a, b) => a.localeCompare(b)));
-    expect((await porta.prestadores(c, { busca: 'consultório sintético' })).itens.map((p) => p.id)).toEqual([pf.id]);
+    expect(todos.itens.map((p) => p.nome)).toEqual(
+      [...todos.itens.map((p) => p.nome)].sort((a, b) => a.localeCompare(b)),
+    );
+    expect((await porta.prestadores(c, { busca: 'consultório sintético' })).itens.map((p) => p.id)).toEqual([
+      pf.id,
+    ]);
     expect((await porta.prestadores(c, { busca: cpf })).itens.map((p) => p.id)).toEqual([pf.id]);
     expect((await porta.prestadores(c, { tipo: 1 })).itens.map((p) => p.id)).toEqual([pf.id]);
     const p1 = await porta.prestadores(c, { limite: 1 });
@@ -342,13 +395,22 @@ describe.skipIf(!PODE)('rede credenciada no banco: contrato de efeito, escopo, l
     });
     expect(apoio.dominios.tipo.map((x) => x.codigo)).toEqual(expect.arrayContaining([1, 3]));
     expect(apoio.dominios.remuneracao.map((x) => x.codigo)).toEqual([1, 2, 4]);
-    expect(apoio.convenios).toEqual(expect.arrayContaining([expect.objectContaining({ nome: 'OPERADORA PROPRIA L0210', registroAns: 902102 })]));
+    expect(apoio.convenios).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nome: 'OPERADORA PROPRIA L0210', registroAns: 902102 }),
+      ]),
+    );
     expect(apoio.hoje).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // Município de outra UF: recusa pelo campo.
     expect(
       await codigoDe(
         gravar((g) =>
-          g.credenciar({ ...campos('X L0210 U1', { uf: 'RJ' }), pessoa: 'J', documento: cnpjSintetico('902100000601'), usuario: 'x' }),
+          g.credenciar({
+            ...campos('X L0210 U1', { uf: 'RJ' }),
+            pessoa: 'J',
+            documento: cnpjSintetico('902100000601'),
+            usuario: 'x',
+          }),
         ),
       ),
     ).toBe('municipio-fora-da-uf');

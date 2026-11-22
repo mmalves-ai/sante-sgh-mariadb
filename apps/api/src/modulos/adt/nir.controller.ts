@@ -613,7 +613,9 @@ export class NirController {
   @Post('reservas/:id/cancelar')
   @HttpCode(200)
   @Permissao(P.reservaCancelar)
-  @AuditadoNoHandler('internacao.cancelarReserva (reserva_leito) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'internacao.cancelarReserva (reserva_leito) com a trilha de auditoria na mesma transação',
+  )
   async cancelarReserva(
     @Param('id') id: string,
     @Body() b: unknown,

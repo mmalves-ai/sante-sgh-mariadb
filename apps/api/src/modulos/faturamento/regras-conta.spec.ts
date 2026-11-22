@@ -34,7 +34,12 @@ describe('regras da conta (modelo próprio)', () => {
     expect(situacaoNaTela('fechada', true)).toBe('em-lote');
     expect(situacaoNaTela('enviada', false)).toBe('apresentada');
     expect(situacaoNaTela('qualquer', false)).toBe('erro-de-dado');
-    expect(['aberta', 'fechada', 'enviada', 'cancelada'].map(marcaDeFechamento)).toEqual(['N', 'S', 'A', 'C']);
+    expect(['aberta', 'fechada', 'enviada', 'cancelada'].map(marcaDeFechamento)).toEqual([
+      'N',
+      'S',
+      'A',
+      'C',
+    ]);
   });
 
   it('filtro da lista: em lote exige o lote; emitida e erro de dado não existem no modelo', () => {
@@ -48,8 +53,12 @@ describe('regras da conta (modelo próprio)', () => {
     const base = { situacao: 'aberta', itens: 1, pendenciasBloqueantes: 0, auditoriaBloqueante: false };
     expect(conferirFechamentoConta(base)).toBeNull();
     expect(conferirFechamentoConta({ ...base, itens: 0 })?.codigo).toBe('conta-sem-itens');
-    expect(conferirFechamentoConta({ ...base, pendenciasBloqueantes: 2 })?.codigo).toBe('pendencia-bloqueante');
-    expect(conferirFechamentoConta({ ...base, auditoriaBloqueante: true })?.codigo).toBe('auditoria-em-andamento');
+    expect(conferirFechamentoConta({ ...base, pendenciasBloqueantes: 2 })?.codigo).toBe(
+      'pendencia-bloqueante',
+    );
+    expect(conferirFechamentoConta({ ...base, auditoriaBloqueante: true })?.codigo).toBe(
+      'auditoria-em-andamento',
+    );
     expect(conferirFechamentoConta({ ...base, situacao: 'fechada' })?.codigo).toBe('conta-ja-fechada');
     expect(conferirFechamentoConta({ ...base, situacao: 'paga' })?.codigo).toBe('conta-apresentada');
   });
@@ -67,8 +76,12 @@ describe('regras da conta (modelo próprio)', () => {
   it('etapas, lançamento e conferência valem só na conta em produção', () => {
     expect(transicaoDaEtapa('aberta', 'auditoria', 'iniciar')).toEqual({ nova: 'em_auditoria' });
     expect(transicaoDaEtapa('em_auditoria', 'auditoria', 'concluir')).toEqual({ nova: 'aberta' });
-    expect(transicaoDaEtapa('em_conferencia', 'auditoria', 'iniciar')).toMatchObject({ codigo: 'conta-nao-aberta' });
-    expect(transicaoDaEtapa('aberta', 'conferencia', 'concluir')).toMatchObject({ codigo: 'etapa-nao-iniciada' });
+    expect(transicaoDaEtapa('em_conferencia', 'auditoria', 'iniciar')).toMatchObject({
+      codigo: 'conta-nao-aberta',
+    });
+    expect(transicaoDaEtapa('aberta', 'conferencia', 'concluir')).toMatchObject({
+      codigo: 'etapa-nao-iniciada',
+    });
     expect(conferirLancamento('em_conferencia')).toBeNull();
     expect(conferirLancamento('fechada')?.codigo).toBe('conta-fechada');
     expect(conferirConferenciaItens('enviada')?.codigo).toBe('conta-fechada');
@@ -110,7 +123,8 @@ describe('regras da conta (modelo próprio)', () => {
     expect(conferirRecebimentoDaConta(true)).toBeNull();
     expect(conferirRecebimentoDaConta(false)?.codigo).toBe('conta-nao-particular');
     expect(ESPECIE_DA_FORMA['cartao-credito']).toBe('cartao_credito');
-    for (const [forma, especie] of Object.entries(ESPECIE_DA_FORMA)) expect(formaDaEspecie(especie)).toBe(forma);
+    for (const [forma, especie] of Object.entries(ESPECIE_DA_FORMA))
+      expect(formaDaEspecie(especie)).toBe(forma);
     expect(formaDaEspecie('cheque')).toBe('outras');
   });
 });

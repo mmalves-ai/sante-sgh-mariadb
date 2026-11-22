@@ -60,7 +60,9 @@ describe.skipIf(SEM_BANCO)('rastro e log sem dado pessoal (MariaDB, cliente f22_
     log.warn({ paciente: { CPF: CPF, prontuario: 1 } }, 'aviso');
     log.error(new Error(`falha com ${CPF}`));
     const spans = exportador.getFinishedSpans();
-    const consulta = spans.find((s) => String(s.attributes['db.query.text']).includes('FROM estabelecimento'));
+    const consulta = spans.find((s) =>
+      String(s.attributes['db.query.text']).includes('FROM estabelecimento'),
+    );
     expect(consulta?.attributes).toMatchObject({
       'db.system.name': 'mariadb',
       'db.namespace': CLIENTE,

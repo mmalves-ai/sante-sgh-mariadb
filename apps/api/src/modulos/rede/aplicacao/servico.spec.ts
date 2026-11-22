@@ -42,7 +42,14 @@ function sessao(
       acao: 'operacao',
       entidade: 'suspeita_duplicidade',
       entidadeId: null,
-      dadosDepois: { evento, recurso: 'rede.mpi', operacao, chave: alvo.chave, login, estabelecimento: hospital },
+      dadosDepois: {
+        evento,
+        recurso: 'rede.mpi',
+        operacao,
+        chave: alvo.chave,
+        login,
+        estabelecimento: hospital,
+      },
       correlacao: 'teste',
     }),
   };
@@ -76,8 +83,14 @@ describe('MPI da Rede: ciclo de pareamento', () => {
     // O inativo não pareia (regra 2: só cadastros ativos e não absorvidos).
     expect([...pc.candidatos.keys()].some((k) => k.includes('pc:7'))).toBe(false);
     // Trilha em cada banco, só contagens.
-    expect(pc.trilha.at(-1)).toMatchObject({ dadosDepois: { evento: 'rede.fila.atualizada' }, estabelecimentoDoBanco: 'pc' });
-    expect(sx.trilha.at(-1)).toMatchObject({ dadosDepois: { evento: 'rede.fila.atualizada' }, estabelecimentoDoBanco: 'sx' });
+    expect(pc.trilha.at(-1)).toMatchObject({
+      dadosDepois: { evento: 'rede.fila.atualizada' },
+      estabelecimentoDoBanco: 'pc',
+    });
+    expect(sx.trilha.at(-1)).toMatchObject({
+      dadosDepois: { evento: 'rede.fila.atualizada' },
+      estabelecimentoDoBanco: 'sx',
+    });
     // Repetir: nada é duplicado (a mesma chave nos dois lados) e o par já vinculado não é refeito.
     const de = await servico.ciclo(sessao());
     expect(de.automaticos).toBe(0);

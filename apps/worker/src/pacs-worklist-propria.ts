@@ -67,7 +67,12 @@ export interface PortaWorklist {
    * Os exames de imagem da janela sem item vigente, e os que têm item 'sem_modalidade' e já ganharam modalidade ativa
    * (para promover). O exame com item 'sem_modalidade' ainda sem modalidade não volta (já está registrado).
    */
-  examesSemItem(cod: string, desde: Date, ate: Date, teto: number): Promise<{ itens: ExameSemItem[]; cortada: boolean }>;
+  examesSemItem(
+    cod: string,
+    desde: Date,
+    ate: Date,
+    teto: number,
+  ): Promise<{ itens: ExameSemItem[]; cortada: boolean }>;
   /**
    * Cria o item (modalidade null: item 'sem_modalidade', sem evento) ou promove o item pendente; null quando o exame já
    * tem item vigente (outro consumidor).
@@ -80,7 +85,10 @@ export interface PortaWorklist {
 }
 
 export interface NucleoWorklist {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
   criarExecutor(): Executor;
 }
 
@@ -102,7 +110,10 @@ const SITUACOES_A_FAZER = ['solicitado', 'autorizado', 'agendado'] as const;
 const FORMATO_ACESSO = /^[A-Z0-9]{4,16}$/;
 
 /** A chave de idempotência da gravação: a do exame no domínio mais a geração do pedido (ou o item promovido). */
-export function chaveDoPedido(cod: string, x: Pick<ExameSemItem, 'exame' | 'geracao' | 'itemPendente'>): string {
+export function chaveDoPedido(
+  cod: string,
+  x: Pick<ExameSemItem, 'exame' | 'geracao' | 'itemPendente'>,
+): string {
   const sufixo = x.itemPendente !== null ? `p${x.itemPendente}` : `g${x.geracao}`;
   return `${chaveIdempotenciaMwl(cod, x.exame)}:${sufixo}`;
 }
@@ -116,14 +127,20 @@ async function numeroDoItem(
 ): Promise<string> {
   if (doExame !== null) {
     if (!FORMATO_ACESSO.test(doExame))
-      throw recusa('numero-acesso-invalido', 'O número de acesso do exame não segue o formato da modalidade.');
+      throw recusa(
+        'numero-acesso-invalido',
+        'O número de acesso do exame não segue o formato da modalidade.',
+      );
     const usado = await tx.uma(
       'SELECT exame_item_id FROM item_lista_trabalho_imagem WHERE estabelecimento_id = ? AND numero_acesso = ? AND id <> ?',
       [e.estabelecimento, doExame, id],
     );
     if (!usado) return doExame;
     if (Number(usado['exame_item_id']) !== e.exame)
-      throw recusa('numero-acesso-divergente', 'O número de acesso do exame já é de outro exame na lista de trabalho.');
+      throw recusa(
+        'numero-acesso-divergente',
+        'O número de acesso do exame já é de outro exame na lista de trabalho.',
+      );
     // O número ficou num item cancelado deste exame: o item novo ganha número novo e o exame passa a ele.
   }
   const novo = accessionDoItem(e.hospital, id);
@@ -132,7 +149,8 @@ async function numeroDoItem(
       WHERE id = ? AND ${doExame === null ? 'numero_acesso IS NULL' : 'numero_acesso = ?'}`,
     doExame === null ? [novo, new Date(), e.exame] : [novo, new Date(), e.exame, doExame],
   );
-  if (linhas !== 1) throw recusa('numero-acesso-concorrente', 'O número de acesso do exame mudou durante a gravação.');
+  if (linhas !== 1)
+    throw recusa('numero-acesso-concorrente', 'O número de acesso do exame mudou durante a gravação.');
   return novo;
 }
 
@@ -149,7 +167,8 @@ export const OPERACAO_ITEM_WORKLIST = definirOperacao<EntradaItem, ItemCriado>({
     );
     if (!exame) throw recusa('exame-inexistente', 'O exame não existe ou foi excluído.');
     if (e.itemPendente !== null) {
-      if (e.modalidade === null) throw recusa('sem-modalidade', 'A promoção do item exige a modalidade do exame.');
+      if (e.modalidade === null)
+        throw recusa('sem-modalidade', 'A promoção do item exige a modalidade do exame.');
       const [item] = await tx.consultarParaAtualizar(
         `SELECT id, numero_acesso FROM item_lista_trabalho_imagem
           WHERE id = ? AND exame_item_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao = 'sem_modalidade'`,
@@ -186,18 +205,27 @@ export const OPERACAO_ITEM_WORKLIST = definirOperacao<EntradaItem, ItemCriado>({
       urgente: e.urgente,
       origem: 'sistema',
     });
-    const doExame = exame['numero_acesso'] === null || exame['numero_acesso'] === undefined ? null : String(exame['numero_acesso']);
+    const doExame =
+      exame['numero_acesso'] === null || exame['numero_acesso'] === undefined
+        ? null
+        : String(exame['numero_acesso']);
     const accession = await numeroDoItem(tx, e, doExame, id);
-    await tx.executar('UPDATE item_lista_trabalho_imagem SET numero_acesso = ? WHERE id = ?', [accession, id]);
+    await tx.executar('UPDATE item_lista_trabalho_imagem SET numero_acesso = ? WHERE id = ?', [
+      accession,
+      id,
+    ]);
     return { id, accession, situacao };
   },
   // O item 'sem_modalidade' não vai à modalidade: o evento só sai com a modalidade (na criação ou na promoção).
   eventos: (e, r) =>
-    r.situacao === 'a_enviar' ? [{ tipo: EVENTO_OUTBOX_MWL, carga: { hospital: e.hospital, exame: e.exame, item: r.id } }] : [],
+    r.situacao === 'a_enviar'
+      ? [{ tipo: EVENTO_OUTBOX_MWL, carga: { hospital: e.hospital, exame: e.exame, item: r.id } }]
+      : [],
   alvo: (_e, r) => ({ tabela: 'item_lista_trabalho_imagem', id: r.id }),
 });
 
-const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || (typeof v === 'bigint' && v === 1n);
+const bool = (v: unknown): boolean =>
+  v === true || v === 1 || v === '1' || (typeof v === 'bigint' && v === 1n);
 const idOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 
 export class PortaWorklistPropria implements PortaWorklist {
@@ -232,7 +260,12 @@ export class PortaWorklistPropria implements PortaWorklist {
   async janelaDias(cod: string, agora: Date): Promise<number | null> {
     const id = await this.estabelecimento(cod);
     const v = await this.ler((l) =>
-      valorDoParametro(l, 'pacs.janelaDias', { cliente: this.cliente, estabelecimento: { id, codigo: cod } }, agora),
+      valorDoParametro(
+        l,
+        'pacs.janelaDias',
+        { cliente: this.cliente, estabelecimento: { id, codigo: cod } },
+        agora,
+      ),
     );
     return typeof v === 'number' && Number.isFinite(v) ? v : null;
   }
@@ -278,7 +311,11 @@ export class PortaWorklistPropria implements PortaWorklist {
       modalidade:
         x['modalidade_id'] === null || x['modalidade_id'] === undefined
           ? null
-          : { id: Number(x['modalidade_id']), sigla: String(x['sigla_padrao']), ativa: bool(x['modalidade_ativa']) },
+          : {
+              id: Number(x['modalidade_id']),
+              sigla: String(x['sigla_padrao']),
+              ativa: bool(x['modalidade_ativa']),
+            },
       geracao: Number(x['geracao'] ?? 0),
       itemPendente: idOuNulo(x['item_pendente']),
     }));

@@ -79,9 +79,13 @@ const SITUACAO_RECURSO: Readonly<Record<string, 'pendente' | 'acatado' | 'parcia
 const LIMITE_TEXTO_RECURSO = 500;
 function textoDoRecurso(t: string, campo: string): string {
   if (t.length > LIMITE_TEXTO_RECURSO)
-    throw recusa('texto-longo', `O texto passa de ${LIMITE_TEXTO_RECURSO} caracteres: resuma e grave de novo.`, {
-      campos: [campo],
-    });
+    throw recusa(
+      'texto-longo',
+      `O texto passa de ${LIMITE_TEXTO_RECURSO} caracteres: resuma e grave de novo.`,
+      {
+        campos: [campo],
+      },
+    );
   return t;
 }
 
@@ -141,7 +145,10 @@ const DECISAO_RECURSO_ITEM: Readonly<Record<string, DecisaoRecursoItem>> = {
   negado: 'mantido',
 };
 
-export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<GravadorContas> implements PortaContasOperadora {
+export class PortaContasOperadoraPropria
+  extends BasePortaOperadoraPropria<GravadorContas>
+  implements PortaContasOperadora
+{
   constructor(
     nucleo: NucleoOperadora,
     cliente: string,
@@ -190,7 +197,11 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
     return this.autorizacao.designacoes(c, login);
   }
 
-  async guiasJaApresentadas(c: ContextoContas, prestador: number, numeros: readonly string[]): Promise<Set<string>> {
+  async guiasJaApresentadas(
+    c: ContextoContas,
+    prestador: number,
+    numeros: readonly string[],
+  ): Promise<Set<string>> {
     if (numeros.length === 0) return new Set();
     const linhas = await this.ler(c, (l) =>
       l.consultar(
@@ -239,7 +250,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
 
   // ---- contas ----
 
-  contas(c: ContextoContas, f: FiltroContasPorta): Promise<{ itens: DadosContaResumo[]; proxima: number | null }> {
+  contas(
+    c: ContextoContas,
+    f: FiltroContasPorta,
+  ): Promise<{ itens: DadosContaResumo[]; proxima: number | null }> {
     const limite = Math.min(f.limite ?? LIMITE_PAGINA_CONTAS, LIMITE_PAGINA_CONTAS);
     const cond = ['l.estabelecimento_id = ?', 'l.excluido_em IS NULL'];
     const p: unknown[] = [c.estabelecimento ?? 0];
@@ -261,20 +275,28 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
     }
     if (f.vencidas) cond.push("l.situacao IN ('recebida','analisada') AND l.prazo_pagamento < CURRENT_DATE");
     if (f.recursos)
-      cond.push(`EXISTS (SELECT 1 FROM recurso_glosa_recebido r WHERE r.lote_conta_recebida_id = l.id AND ${RECURSO_PENDENTE})`);
+      cond.push(
+        `EXISTS (SELECT 1 FROM recurso_glosa_recebido r WHERE r.lote_conta_recebida_id = l.id AND ${RECURSO_PENDENTE})`,
+      );
     if (f.apos) {
       cond.push('l.id < ?');
       p.push(f.apos);
     }
     return this.ler(c, async (l) => {
       const hoje = await this.hojeDo(l);
-      const linhas = await l.consultar(`${SELECT_LOTE} WHERE ${cond.join(' AND ')} ORDER BY l.id DESC LIMIT ${limite + 1}`, p);
+      const linhas = await l.consultar(
+        `${SELECT_LOTE} WHERE ${cond.join(' AND ')} ORDER BY l.id DESC LIMIT ${limite + 1}`,
+        p,
+      );
       const itens = linhas.slice(0, limite).map((x) => resumoDe(x, hoje));
       return { itens, proxima: linhas.length > limite ? (itens.at(-1)?.id ?? null) : null };
     });
   }
 
-  pagamentos(c: ContextoContas, f: FiltroPagamentosPorta): Promise<{ itens: DadosContaResumo[]; proxima: number | null }> {
+  pagamentos(
+    c: ContextoContas,
+    f: FiltroPagamentosPorta,
+  ): Promise<{ itens: DadosContaResumo[]; proxima: number | null }> {
     const limite = Math.min(f.limite ?? LIMITE_PAGINA_CONTAS, LIMITE_PAGINA_CONTAS);
     const cond = ['l.estabelecimento_id = ?', 'l.excluido_em IS NULL'];
     const p: unknown[] = [c.estabelecimento ?? 0];
@@ -299,7 +321,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
     }
     return this.ler(c, async (l) => {
       const hoje = await this.hojeDo(l);
-      const linhas = await l.consultar(`${SELECT_LOTE} WHERE ${cond.join(' AND ')} ORDER BY l.id DESC LIMIT ${limite + 1}`, p);
+      const linhas = await l.consultar(
+        `${SELECT_LOTE} WHERE ${cond.join(' AND ')} ORDER BY l.id DESC LIMIT ${limite + 1}`,
+        p,
+      );
       const itens = linhas.slice(0, limite).map((x) => resumoDe(x, hoje));
       return { itens, proxima: linhas.length > limite ? (itens.at(-1)?.id ?? null) : null };
     });
@@ -332,10 +357,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
 
   conta(c: ContextoContas, id: number): Promise<DadosConta | null> {
     return this.ler(c, async (l) => {
-      const x = await l.uma(`${SELECT_LOTE} WHERE l.id = ? AND l.estabelecimento_id = ? AND l.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const x = await l.uma(
+        `${SELECT_LOTE} WHERE l.id = ? AND l.estabelecimento_id = ? AND l.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       if (!x) return null;
       const documento = txt(x['prestador_documento']);
       return {
@@ -472,11 +497,38 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         },
       ];
       if (x['analisado_em'])
-        r.push({ ...base, id: 2, evento: 'analise', situacao: 'analisada', valor: null, texto: null, em: instante(x['analisado_em']) ?? '', por: txt(x['alterado_login']) });
+        r.push({
+          ...base,
+          id: 2,
+          evento: 'analise',
+          situacao: 'analisada',
+          valor: null,
+          texto: null,
+          em: instante(x['analisado_em']) ?? '',
+          por: txt(x['alterado_login']),
+        });
       if (x['devolvido_em'])
-        r.push({ ...base, id: 3, evento: 'devolucao', situacao: 'devolvida', valor: null, texto: txtOuNulo(x['motivo_devolucao']), em: instante(x['devolvido_em']) ?? '', por: txt(x['alterado_login']) });
+        r.push({
+          ...base,
+          id: 3,
+          evento: 'devolucao',
+          situacao: 'devolvida',
+          valor: null,
+          texto: txtOuNulo(x['motivo_devolucao']),
+          em: instante(x['devolvido_em']) ?? '',
+          por: txt(x['alterado_login']),
+        });
       if (txt(x['situacao']) === 'paga')
-        r.push({ ...base, id: 4, evento: 'pagamento', situacao: 'paga', valor: num(x['valor_pago']), texto: null, em: instante(x['alterado_em']) ?? '', por: txt(x['alterado_login']) });
+        r.push({
+          ...base,
+          id: 4,
+          evento: 'pagamento',
+          situacao: 'paga',
+          valor: num(x['valor_pago']),
+          texto: null,
+          em: instante(x['alterado_em']) ?? '',
+          por: txt(x['alterado_login']),
+        });
       return r;
     });
   }
@@ -589,7 +641,14 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
     // Fecha o recurso (situação, valor, quem e quando), grava o acatado na guia e a situação da conta. As regras
     // (parecer obrigatório, decisão pelo valor, rateio) são do domínio; aqui fica a gravação com as travas.
     const decidir = async (
-      a: { id: number; versao: number; guia: number; valorAcatado: number; parecer: string; situacao: string },
+      a: {
+        id: number;
+        versao: number;
+        guia: number;
+        valorAcatado: number;
+        parecer: string;
+        situacao: string;
+      },
       r: Linha,
       decisaoTela: DecisaoRecursoItem,
     ): Promise<number> => {
@@ -605,7 +664,9 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         justificativa_operadora: textoDoRecurso(a.parecer, 'parecer') || null,
       });
       const g = await versaoDe(tx, 'guia_conta_recebida', a.guia, 'A guia');
-      await tx.alterar('guia_conta_recebida', a.guia, num(g['versao']), { valor_acatado_recurso: a.valorAcatado });
+      await tx.alterar('guia_conta_recebida', a.guia, num(g['versao']), {
+        valor_acatado_recurso: a.valorAcatado,
+      });
       return tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao });
     };
     return {
@@ -613,7 +674,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       receber: (r) => receberLote(tx, est, r),
       async glosar(a) {
         const x = await lote(a.id);
-        if (txt(x['situacao']) !== 'recebida') throw recusa('conta-analisada', 'Só a conta em análise pode ser glosada.');
+        if (txt(x['situacao']) !== 'recebida')
+          throw recusa('conta-analisada', 'Só a conta em análise pode ser glosada.');
         for (const g of a.itens) {
           const it = await tx.uma(
             `SELECT i.id, i.versao, i.valor_apresentado, i.guia_conta_recebida_id
@@ -623,13 +685,20 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           );
           if (!it) throw inexistente('O item da conta');
           if (g.valorGlosado > num(it['valor_apresentado']))
-            throw recusa('glosa-maior', 'A glosa não pode passar do valor apresentado.', { campos: ['valorGlosado'] });
+            throw recusa('glosa-maior', 'A glosa não pode passar do valor apresentado.', {
+              campos: ['valorGlosado'],
+            });
           if (g.valorGlosado > 0 && g.motivo === null)
             throw recusa('motivo-obrigatorio', 'Informe o motivo da glosa.', { campos: ['motivo'] });
           await tx.alterar('guia_conta_recebida_item', g.item, num(it['versao']), {
             valor_glosado: g.valorGlosado,
             valor_liberado: num(it['valor_apresentado']) - g.valorGlosado,
-            situacao: g.valorGlosado === 0 ? 'liberado' : g.valorGlosado < num(it['valor_apresentado']) ? 'glosado_parcial' : 'glosado',
+            situacao:
+              g.valorGlosado === 0
+                ? 'liberado'
+                : g.valorGlosado < num(it['valor_apresentado'])
+                  ? 'glosado_parcial'
+                  : 'glosado',
             justificativa: g.justificativa,
           });
           // A glosa anterior do item sai pela exclusão auditada (versão, trilha), linha a linha.
@@ -637,10 +706,19 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
             'SELECT id, versao FROM glosa_conta_recebida WHERE guia_conta_recebida_item_id = ? AND excluido_em IS NULL',
             [g.item],
           );
-          for (const ant of anteriores) await tx.excluir('glosa_conta_recebida', num(ant['id']), num(ant['versao']));
+          for (const ant of anteriores)
+            await tx.excluir('glosa_conta_recebida', num(ant['id']), num(ant['versao']));
           if (g.valorGlosado > 0) {
             const guia = num(it['guia_conta_recebida_id']);
-            const seq = num((await tx.uma('SELECT MAX(sequencia) AS s FROM glosa_conta_recebida WHERE guia_conta_recebida_id = ?', [guia]))?.['s']) + 1;
+            const seq =
+              num(
+                (
+                  await tx.uma(
+                    'SELECT MAX(sequencia) AS s FROM glosa_conta_recebida WHERE guia_conta_recebida_id = ?',
+                    [guia],
+                  )
+                )?.['s'],
+              ) + 1;
             await tx.incluir('glosa_conta_recebida', {
               guia_conta_recebida_id: guia,
               sequencia: seq,
@@ -659,7 +737,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       },
       async concluir(a) {
         const x = await lote(a.id);
-        if (txt(x['situacao']) !== 'recebida') throw recusa('conta-analisada', 'A análise desta conta já foi concluída.');
+        if (txt(x['situacao']) !== 'recebida')
+          throw recusa('conta-analisada', 'A análise desta conta já foi concluída.');
         const versao = await tx.alterar('lote_conta_recebida', a.id, a.versao, {
           situacao: a.situacao,
           auditor_usuario_id: tx.contexto.usuario,
@@ -670,7 +749,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       },
       async devolver(a) {
         const x = await lote(a.id);
-        if (txt(x['situacao']) !== 'recebida') throw recusa('conta-analisada', 'Só a conta em análise pode ser devolvida.');
+        if (txt(x['situacao']) !== 'recebida')
+          throw recusa('conta-analisada', 'Só a conta em análise pode ser devolvida.');
         const versao = await tx.alterar('lote_conta_recebida', a.id, a.versao, {
           situacao: 'devolvida',
           devolvido_em: new Date(),
@@ -680,7 +760,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
       },
       async pagar(a) {
         const x = await lote(a.id);
-        if (txt(x['situacao']) !== 'analisada') throw recusa('conta-nao-analisada', 'Só a conta analisada pode ser paga.');
+        if (txt(x['situacao']) !== 'analisada')
+          throw recusa('conta-nao-analisada', 'Só a conta analisada pode ser paga.');
         const versao = await tx.alterar('lote_conta_recebida', a.id, a.versao, {
           situacao: a.situacao,
           valor_pago: a.valor,
@@ -688,7 +769,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           documento_pagamento: a.documento.slice(0, 60),
           // Transitório: a data e o documento do pagamento vão para a observação até as colunas pago_em e
           // documento_pagamento existirem (pedido de DDL na saída do lote 02-09); a ficha passa a ler a data da coluna.
-          observacao: [txtOuNulo(x['observacao']), `Pagamento ${a.data}: ${a.documento}`].filter(Boolean).join('\n').slice(0, 2000),
+          observacao: [txtOuNulo(x['observacao']), `Pagamento ${a.data}: ${a.documento}`]
+            .filter(Boolean)
+            .join('\n')
+            .slice(0, 2000),
         });
         return { id: a.id, versao };
       },
@@ -696,9 +780,13 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         const x = await loteDoRecurso(a.id);
         const guia = await guiaDoLote(a.id, a.guia);
         if (!(a.valor > 0) || a.valor > num(guia['valor_glosado']))
-          throw recusa('recurso-incoerente', 'O valor recorrido vai de um centavo até o valor glosado da guia.', {
-            campos: ['valor'],
-          });
+          throw recusa(
+            'recurso-incoerente',
+            'O valor recorrido vai de um centavo até o valor glosado da guia.',
+            {
+              campos: ['valor'],
+            },
+          );
         const recurso = await incluirRecurso(x, 'guia', a.valor, a.justificativa);
         await tx.incluir('recurso_glosa_recebido_item', {
           recurso_glosa_recebido_id: recurso,
@@ -709,7 +797,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           valor_recursado: a.valor,
           justificativa_prestador: textoDoRecurso(a.justificativa, 'justificativa'),
         });
-        return { id: a.id, versao: await tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao }) };
+        return {
+          id: a.id,
+          versao: await tx.alterar('lote_conta_recebida', a.id, a.versao, { situacao: a.situacao }),
+        };
       },
       decidirRecurso: async (a) => {
         await loteDoRecurso(a.id);
@@ -755,7 +846,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           );
           if (!it) throw recusa('item-nao-encontrado', 'O item não é desta guia.');
           if (num(it['valor_glosado']) <= 0 || !(i.valor > 0) || i.valor > num(it['valor_glosado']))
-            throw recusa('recurso-item-incoerente', 'O valor recorrido do item vai de um centavo até o valor glosado.');
+            throw recusa(
+              'recurso-item-incoerente',
+              'O valor recorrido do item vai de um centavo até o valor glosado.',
+            );
           itens.push({ i, it });
         }
         const soma = Math.round(a.itens.reduce((t, i) => t + Math.round(i.valor * 100), 0)) / 100;
@@ -784,7 +878,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
         await loteDoRecurso(a.id);
         const r = await recursoPendente(a.id, a.guia);
         if (txt(r['objeto']) !== 'item')
-          throw recusa('sem-recurso-por-item', 'O recurso desta guia não foi feito por item: decida pela guia.');
+          throw recusa(
+            'sem-recurso-por-item',
+            'O recurso desta guia não foi feito por item: decida pela guia.',
+          );
         const pendentes = await tx.consultarParaAtualizar(
           `SELECT id, versao, guia_conta_recebida_item_id AS item, valor_recursado FROM recurso_glosa_recebido_item
             WHERE recurso_glosa_recebido_id = ? AND decisao = 'pendente' AND excluido_em IS NULL`,
@@ -797,7 +894,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
           const d = porItem.get(num(p['item']));
           const recorrido = num(p['valor_recursado']);
           if (!d || d.valorAcatado < 0 || d.valorAcatado > recorrido)
-            throw recusa('recurso-item-incoerente', 'O valor acatado do item vai de zero até o valor recorrido.');
+            throw recusa(
+              'recurso-item-incoerente',
+              'O valor acatado do item vai de zero até o valor recorrido.',
+            );
           const decisao = situacaoDoRecurso(recorrido, d.valorAcatado) as DecisaoRecursoItem;
           if (problemasDoParecerDoRecurso(decisao, d.parecer).length > 0)
             throw recusa('parecer-obrigatorio', 'Informe o parecer do item mantido ou acatado em parte.', {
@@ -811,7 +911,8 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
             valor_acatado: d.valorAcatado,
             justificativa_operadora: textoDoRecurso(d.parecer, 'parecer') || null,
           });
-        const valorAcatado = Math.round(linhas.reduce((t, l) => t + Math.round(l.d.valorAcatado * 100), 0)) / 100;
+        const valorAcatado =
+          Math.round(linhas.reduce((t, l) => t + Math.round(l.d.valorAcatado * 100), 0)) / 100;
         const decisao: DecisaoRecursoItem = linhas.every((l) => l.decisao === 'acatado')
           ? 'acatado'
           : linhas.every((l) => l.decisao === 'mantido')
@@ -825,7 +926,10 @@ export class PortaContasOperadoraPropria extends BasePortaOperadoraPropria<Grava
 }
 
 /** O recurso de cada guia do lote (um por guia; o cancelado não conta), com quem registrou e quem decidiu. */
-async function recursosDasGuias(l: Leitor, lote: number): Promise<Map<number, NonNullable<DadosGuiaConta['recurso']>>> {
+async function recursosDasGuias(
+  l: Leitor,
+  lote: number,
+): Promise<Map<number, NonNullable<DadosGuiaConta['recurso']>>> {
   const linhas = await l.consultar(
     `SELECT r.id, r.situacao, r.valor_recursado, r.justificativa_prestador, r.recebido_em, r.justificativa_operadora,
             r.decidido_em, uc.login AS registrado_login, ua.login AS analista_login,
@@ -885,12 +989,14 @@ async function receberLote(
   r: Omit<EntradaRecebimentoConta, 'hospital'>,
 ): Promise<{ id: number; versao: number }> {
   await exigirOperadora(tx, est, r.operadora);
-  const tipoGuia = await tx.uma(
-    'SELECT id FROM tipo_guia_plano WHERE codigo = ? AND ativo = TRUE',
-    [TIPO_GUIA(r.tipoGuia)],
-  );
+  const tipoGuia = await tx.uma('SELECT id FROM tipo_guia_plano WHERE codigo = ? AND ativo = TRUE', [
+    TIPO_GUIA(r.tipoGuia),
+  ]);
   if (!tipoGuia)
-    throw recusa('tipo-guia-nao-cadastrado', `O tipo de guia "${r.tipoGuia}" não está cadastrado na operadora.`);
+    throw recusa(
+      'tipo-guia-nao-cadastrado',
+      `O tipo de guia "${r.tipoGuia}" não está cadastrado na operadora.`,
+    );
   const id = await tx.incluir('lote_conta_recebida', {
     estabelecimento_id: est,
     operadora_saude_id: r.operadora,
@@ -945,7 +1051,10 @@ async function receberLote(
         [i.codigo],
       );
       if (!termo)
-        throw recusa('item-nao-cadastrado', `O código ${i.codigo} da guia ${g.numeroGuiaPrestador} não está na terminologia.`);
+        throw recusa(
+          'item-nao-cadastrado',
+          `O código ${i.codigo} da guia ${g.numeroGuiaPrestador} não está na terminologia.`,
+        );
       await tx.incluir('guia_conta_recebida_item', {
         guia_conta_recebida_id: guia,
         sequencia: i.sequencial,

@@ -40,7 +40,11 @@ export interface PortaExame extends PortaGravacaoM18<GravadorCoberturaExame> {
   agenda(c: ContextoPortaM18, id: number): Promise<AgendaExame | null>;
   convenios(c: ContextoPortaM18, id: number): Promise<{ codigo: number; nome: string }[]>;
   /** Escala da agenda: as faixas vigentes hoje ou, com o período, as que valem em algum dia dele. */
-  escala(c: ContextoPortaM18, agenda: number, periodo?: { de: string; ate: string }): Promise<LinhaEscalaExame[]>;
+  escala(
+    c: ContextoPortaM18,
+    agenda: number,
+    periodo?: { de: string; ate: string },
+  ): Promise<LinhaEscalaExame[]>;
   geracoes(c: ContextoPortaM18, agenda: number): Promise<GeracaoGrade[]>;
   /** Feriados do período; null = o calendário de feriados não está disponível (a prévia avisa). */
   feriados(c: ContextoPortaM18, de: string, ate: string): Promise<{ data: string; nome: string }[] | null>;

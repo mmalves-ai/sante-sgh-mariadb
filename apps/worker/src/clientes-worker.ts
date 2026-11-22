@@ -45,7 +45,9 @@ export async function clientesDoWorker(
 /** Os códigos dos estabelecimentos ativos do cliente. */
 export async function codigosDosEstabelecimentos(l: Leitor): Promise<string[]> {
   return (
-    await l.consultar('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], { teto: 1000 })
+    await l.consultar('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], {
+      teto: 1000,
+    })
   ).map((x) => String(x['codigo']));
 }
 
@@ -63,9 +65,12 @@ export async function idDaSede(l: Leitor): Promise<number | null> {
 
 /** O dia civil (AAAA-MM-DD) no fuso dado. */
 export function diaCivil(agora: Date, fuso = 'America/Sao_Paulo'): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    agora,
-  );
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: fuso,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(agora);
 }
 
 const iso = (v: unknown): string | null => {
@@ -81,7 +86,10 @@ const iso = (v: unknown): string | null => {
 export async function valorDoParametro(
   l: Leitor,
   chave: string,
-  alvo: { readonly cliente: string; readonly estabelecimento: { readonly id: number; readonly codigo: string } | null },
+  alvo: {
+    readonly cliente: string;
+    readonly estabelecimento: { readonly id: number; readonly codigo: string } | null;
+  },
   agora: Date,
 ): Promise<number | boolean | string | null> {
   const def = definicaoParametro(chave);

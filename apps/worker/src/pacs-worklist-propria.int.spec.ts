@@ -26,13 +26,30 @@ const H2 = 'fo516b';
 describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (f22_o5)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaWorklistPropria;
-  const m = { est: 0, est2: 0, mod: 0, modInativa: 0, setor: 0, exame: 0, exameSem: 0, req: 0, req2: 0, item: 0, item2: 0, itemSem: 0, itemNum: 0 };
+  const m = {
+    est: 0,
+    est2: 0,
+    mod: 0,
+    modInativa: 0,
+    setor: 0,
+    exame: 0,
+    exameSem: 0,
+    req: 0,
+    req2: 0,
+    item: 0,
+    item2: 0,
+    itemSem: 0,
+    itemNum: 0,
+  };
 
   async function limpar(): Promise<void> {
     await escrever(nucleo, async (e) => {
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       const ests = [m.est, m.est2];
-      await e.executar("DELETE FROM integracao_mensagem WHERE estabelecimento_id IN (?, ?) AND ponto = 'imagem.mwl'", ests);
+      await e.executar(
+        "DELETE FROM integracao_mensagem WHERE estabelecimento_id IN (?, ?) AND ponto = 'imagem.mwl'",
+        ests,
+      );
       await e.executar('DELETE FROM item_lista_trabalho_imagem WHERE estabelecimento_id IN (?, ?)', ests);
       await e.executar(
         'DELETE ei FROM exame_item ei JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id WHERE q.estabelecimento_id IN (?, ?)',
@@ -145,7 +162,11 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     const r = await porta.examesSemItem(H, desde, ate, 500);
     expect(r.cortada).toBe(false);
     const x = r.itens.find((i) => i.exame === m.item);
-    expect(x).toMatchObject({ exame: m.item, urgente: true, modalidade: { id: m.mod, sigla: 'Z516', ativa: true } });
+    expect(x).toMatchObject({
+      exame: m.item,
+      urgente: true,
+      modalidade: { id: m.mod, sigla: 'Z516', ativa: true },
+    });
     expect(r.itens.some((i) => i.exame === m.item2)).toBe(false);
   });
 
@@ -177,7 +198,11 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     });
     expect(efeito.exame).toMatchObject({ numero_acesso: r!.accession, versao: 2 });
     expect(efeito.eventos).toHaveLength(1);
-    expect(JSON.parse(String(efeito.eventos[0]!['conteudo']))).toMatchObject({ hospital: H, exame: m.item, item: r!.id });
+    expect(JSON.parse(String(efeito.eventos[0]!['conteudo']))).toMatchObject({
+      hospital: H,
+      exame: m.item,
+      item: r!.id,
+    });
     expect(await porta.registrarItem(H, x, { id: m.mod, sigla: 'Z516' })).toBeNull();
     const n = await escrever(nucleo, (e) =>
       e.uma('SELECT COUNT(*) AS n FROM item_lista_trabalho_imagem WHERE exame_item_id = ?', [m.item]),
@@ -188,7 +213,10 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
 
   const efeitoItem = (id: number) =>
     escrever(nucleo, async (e) => ({
-      item: await e.uma('SELECT modalidade_imagem_id, numero_acesso, situacao, versao FROM item_lista_trabalho_imagem WHERE id = ?', [id]),
+      item: await e.uma(
+        'SELECT modalidade_imagem_id, numero_acesso, situacao, versao FROM item_lista_trabalho_imagem WHERE id = ?',
+        [id],
+      ),
       eventos: await e.consultar(
         "SELECT conteudo FROM integracao_mensagem WHERE estabelecimento_id = ? AND ponto = 'imagem.mwl' AND conteudo LIKE ?",
         [m.est, `%"item":${id}%`],
@@ -198,14 +226,26 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
   it('exame sem modalidade ativa: item sem_modalidade sem evento, fora da releitura; com a modalidade no cadastro, promovido', async () => {
     const { desde, ate } = janela();
     const x = (await porta.examesSemItem(H, desde, ate, 500)).itens.find((i) => i.exame === m.itemSem)!;
-    expect(x).toMatchObject({ modalidade: { id: m.modInativa, ativa: false }, geracao: 0, itemPendente: null });
+    expect(x).toMatchObject({
+      modalidade: { id: m.modInativa, ativa: false },
+      geracao: 0,
+      itemPendente: null,
+    });
     const r = await porta.registrarItem(H, x, null);
     expect(r).toMatchObject({ situacao: 'sem_modalidade' });
     let ef = await efeitoItem(r!.id);
-    expect(ef.item).toMatchObject({ modalidade_imagem_id: null, situacao: 'sem_modalidade', numero_acesso: r!.accession });
+    expect(ef.item).toMatchObject({
+      modalidade_imagem_id: null,
+      situacao: 'sem_modalidade',
+      numero_acesso: r!.accession,
+    });
     expect(ef.eventos).toHaveLength(0);
-    expect((await porta.examesSemItem(H, desde, ate, 500)).itens.some((i) => i.exame === m.itemSem)).toBe(false);
-    await escrever(nucleo, (e) => e.executar('UPDATE exame SET modalidade_imagem_id = ? WHERE id = ?', [m.mod, m.exameSem]));
+    expect((await porta.examesSemItem(H, desde, ate, 500)).itens.some((i) => i.exame === m.itemSem)).toBe(
+      false,
+    );
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE exame SET modalidade_imagem_id = ? WHERE id = ?', [m.mod, m.exameSem]),
+    );
     const y = (await porta.examesSemItem(H, desde, ate, 500)).itens.find((i) => i.exame === m.itemSem)!;
     expect(y).toMatchObject({ itemPendente: r!.id, modalidade: { id: m.mod } });
     const p = await porta.registrarItem(H, y, { id: m.mod, sigla: 'Z516' });
@@ -213,20 +253,26 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     ef = await efeitoItem(r!.id);
     expect(ef.item).toMatchObject({ modalidade_imagem_id: m.mod, situacao: 'a_enviar', versao: 2 });
     expect(ef.eventos).toHaveLength(1);
-    expect((await porta.examesSemItem(H, desde, ate, 500)).itens.some((i) => i.exame === m.itemSem)).toBe(false);
+    expect((await porta.examesSemItem(H, desde, ate, 500)).itens.some((i) => i.exame === m.itemSem)).toBe(
+      false,
+    );
   });
 
   it('item cancelado: o exame volta, ganha item novo (nova geração) e o número do exame acompanha o item vigente', async () => {
     const { desde, ate } = janela();
     await escrever(nucleo, (e) =>
-      e.executar("UPDATE item_lista_trabalho_imagem SET situacao = 'cancelado' WHERE exame_item_id = ?", [m.item]),
+      e.executar("UPDATE item_lista_trabalho_imagem SET situacao = 'cancelado' WHERE exame_item_id = ?", [
+        m.item,
+      ]),
     );
     const x = (await porta.examesSemItem(H, desde, ate, 500)).itens.find((i) => i.exame === m.item)!;
     expect(x).toMatchObject({ geracao: 1, itemPendente: null });
     const r = await porta.registrarItem(H, x, { id: m.mod, sigla: 'Z516' });
     expect(r).toMatchObject({ situacao: 'a_enviar' });
     expect(r!.accession).toBe(accessionDoItem(H, r!.id));
-    const exame = await escrever(nucleo, (e) => e.uma('SELECT numero_acesso FROM exame_item WHERE id = ?', [m.item]));
+    const exame = await escrever(nucleo, (e) =>
+      e.uma('SELECT numero_acesso FROM exame_item WHERE id = ?', [m.item]),
+    );
     expect(exame!['numero_acesso']).toBe(r!.accession);
     expect((await efeitoItem(r!.id)).eventos).toHaveLength(1);
     expect(await porta.registrarItem(H, x, { id: m.mod, sigla: 'Z516' })).toBeNull();
@@ -237,7 +283,9 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     const x = (await porta.examesSemItem(H, desde, ate, 500)).itens.find((i) => i.exame === m.itemNum)!;
     const r = await porta.registrarItem(H, x, { id: m.mod, sigla: 'Z516' });
     expect(r).toMatchObject({ accession: 'F516MIG0001', situacao: 'a_enviar' });
-    const exame = await escrever(nucleo, (e) => e.uma('SELECT numero_acesso, versao FROM exame_item WHERE id = ?', [m.itemNum]));
+    const exame = await escrever(nucleo, (e) =>
+      e.uma('SELECT numero_acesso, versao FROM exame_item WHERE id = ?', [m.itemNum]),
+    );
     expect(exame).toMatchObject({ numero_acesso: 'F516MIG0001', versao: 1 });
   });
 

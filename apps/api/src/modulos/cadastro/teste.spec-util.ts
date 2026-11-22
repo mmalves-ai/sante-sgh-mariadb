@@ -45,8 +45,11 @@ class ConfiguracaoDeTeste {}
  * A configuração sintética de dev/ci (chaves de liberação, parâmetros e a fila de impressão em memória), como a
  * sessão sintética tinha: os controladores do cadastro e do atendimento a injetam como opcional. Global, para os módulos do teste.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function moduloConfiguracaoDeTeste(ctx: ContextoModulo, _hospitais: readonly string[] = ['aa', 'bb']): DynamicModule {
+export function moduloConfiguracaoDeTeste(
+  ctx: ContextoModulo,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _hospitais: readonly string[] = ['aa', 'bb'],
+): DynamicModule {
   const fonte = fonteConfiguracaoMemoria(ctx.trilha, {
     chavesIniciais: chavesIniciaisSinteticas,
     prerequisitosIniciais: prerequisitosIniciaisSinteticos,

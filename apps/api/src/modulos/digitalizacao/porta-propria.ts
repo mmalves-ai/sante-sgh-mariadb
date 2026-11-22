@@ -132,7 +132,9 @@ const tipoDoc = (v: unknown): TipoDocumentoDigitalizado =>
     ? (texto(v) as TipoDocumentoDigitalizado)
     : 'outro';
 const corDoc = (v: unknown): CorDigitalizacao =>
-  (CORES_DIGITALIZACAO as readonly string[]).includes(texto(v)) ? (texto(v) as CorDigitalizacao) : 'monocromatico';
+  (CORES_DIGITALIZACAO as readonly string[]).includes(texto(v))
+    ? (texto(v) as CorDigitalizacao)
+    : 'monocromatico';
 const marcas = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const NOME_PACIENTE = `CASE WHEN p.usa_nome_social = TRUE AND p.nome_social IS NOT NULL AND p.nome_social <> ''
   THEN p.nome_social ELSE pf.nome END`;
@@ -185,7 +187,10 @@ function documentoDe(r: Linha, fuso: string): DocumentoDigitalizado {
 }
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -200,7 +205,10 @@ function contextoDe(c: ContextoPortaM18): ContextoNucleo {
 
 /** A entrada da operação: os dados efetivos do pedido (com a ação), que entram no hash da idempotência. */
 const ENTRADA_GRAVACAO = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]));
-const entradaDoPedido = (p: NonNullable<ContextoGravacaoDigitalizacao['pedido']>) => ({ ...p.entrada, acao: p.acao });
+const entradaDoPedido = (p: NonNullable<ContextoGravacaoDigitalizacao['pedido']>) => ({
+  ...p.entrada,
+  acao: p.acao,
+});
 
 const semEstabelecimento = () => recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
 
@@ -209,7 +217,12 @@ const SQL_HASH_EXISTE = `SELECT d.id FROM documento_digitalizado d JOIN arquivo 
   WHERE d.estabelecimento_id = ? AND a.hash_sha256 = ? AND d.excluido_em IS NULL LIMIT 1`;
 
 /** Gravador sobre a transação da operação: o estabelecimento e o usuário vêm da sessão, por id. */
-function gravadorSobre(tx: TxOperacao, est: number, usuario: number, agora: () => Date): GravadorDigitalizacao {
+function gravadorSobre(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  agora: () => Date,
+): GravadorDigitalizacao {
   const jaDigitalizado = () =>
     recusa('ja-digitalizado', 'Este mesmo arquivo já foi digitalizado neste estabelecimento.');
 
@@ -239,11 +252,13 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number, agora: () =
     if (!l) throw recusa('lote-inexistente', 'O lote informado não existe neste estabelecimento.');
     if (!LOTE_ABERTO.includes(texto(l['situacao'])))
       throw recusa('lote-fechado', 'O lote informado já foi encerrado: abra um lote novo.');
-    const m = await tx.uma('SELECT COALESCE(MAX(ordem_lote), 0) AS m FROM documento_digitalizado WHERE lote_digitalizacao_id = ?', [
-      x.lote,
-    ]);
+    const m = await tx.uma(
+      'SELECT COALESCE(MAX(ordem_lote), 0) AS m FROM documento_digitalizado WHERE lote_digitalizacao_id = ?',
+      [x.lote],
+    );
     const ordem = n(m?.['m']) + 1;
-    if (ordem > TETO_ORDEM_LOTE) throw recusa('lote-cheio', 'O lote chegou ao limite de documentos: abra um lote novo.');
+    if (ordem > TETO_ORDEM_LOTE)
+      throw recusa('lote-cheio', 'O lote chegou ao limite de documentos: abra um lote novo.');
     return { id: x.lote, ordem };
   }
 
@@ -252,7 +267,9 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number, agora: () =
     v: Omit<ValidacaoParaGravar, 'assinatura'>,
   ): Promise<number> {
     const provedor = a.provedor
-      ? await tx.uma('SELECT id FROM provedor_assinatura_nuvem WHERE codigo = ? AND excluido_em IS NULL', [a.provedor])
+      ? await tx.uma('SELECT id FROM provedor_assinatura_nuvem WHERE codigo = ? AND excluido_em IS NULL', [
+          a.provedor,
+        ])
       : null;
     const id = await tx.incluir('assinatura_icp', {
       estabelecimento_id: est,
@@ -295,7 +312,13 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number, agora: () =
     const d = await travarEConferir(tx, {
       tabela: 'documento_digitalizado',
       id,
-      colunas: ['estabelecimento_id', 'situacao', 'digitalizador_usuario_id', 'conferente_usuario_id', 'excluido_em'],
+      colunas: [
+        'estabelecimento_id',
+        'situacao',
+        'digitalizador_usuario_id',
+        'conferente_usuario_id',
+        'excluido_em',
+      ],
       ...(versao !== undefined ? { versaoEsperada: versao } : {}),
     });
     if (n(d['estabelecimento_id']) !== est || d['excluido_em'] !== null)
@@ -371,7 +394,10 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number, agora: () =
       if (texto(d['situacao']) !== PARA_O_BANCO.capturado)
         throw recusa('ja-conferido', 'O documento já foi conferido: atualize a fila.');
       if (n(d['digitalizador_usuario_id']) === usuario)
-        throw recusa('conferente-capturou', 'Quem capturou o documento não confere a fidelidade: outra pessoa confere.');
+        throw recusa(
+          'conferente-capturou',
+          'Quem capturou o documento não confere a fidelidade: outra pessoa confere.',
+        );
       const fiel = x.situacao === 'conferido';
       await tx.alterar('documento_digitalizado', x.id, x.versao, {
         situacao: PARA_O_BANCO[x.situacao],
@@ -412,7 +438,10 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
     this.executor = executorPronto ?? nucleo.criarExecutor();
   }
 
-  private ler<T>(c: ContextoDigitalizacao, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
+  private ler<T>(
+    c: ContextoDigitalizacao,
+    fn: (l: Leitor, est: number, fuso: string) => Promise<T>,
+  ): Promise<T> {
     const est = c.estabelecimento;
     if (est === null) return Promise.reject(semEstabelecimento());
     return this.nucleo.lerSomente(contextoDe(c), async (l) => fn(l, est, await fusoDe(l, est)));
@@ -436,7 +465,8 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
   ): Promise<T> {
     const est = c.estabelecimento;
     if (est === null) throw semEstabelecimento();
-    if (c.usuario === null) throw recusa('sem-usuario', 'A gravação da digitalização exige o usuário da sessão.');
+    if (c.usuario === null)
+      throw recusa('sem-usuario', 'A gravação da digitalização exige o usuário da sessão.');
     const usuario = c.usuario;
     const pedido = (c as ContextoGravacaoDigitalizacao).pedido;
     let saida: { valor: T } | null = null;
@@ -459,7 +489,10 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
     // gravação é uma operação própria (a assinatura em lote grava um documento por vez).
     const chave = pedido ? chaveDoPedido(pedido) : `digitalizacao:${randomUUID()}`;
     const entrada = pedido ? entradaDoPedido(pedido) : { chave };
-    const r = await this.executor.executar(op, c.cliente, entrada, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(op, c.cliente, entrada, {
+      ...contextoDe(c),
+      chaveIdempotencia: chave,
+    });
     if (r.repetida) return JSON.parse(String(r.resultado['valor'] ?? 'null')) as T;
     if (!saida) throw new Error('Gravação da digitalização sem resultado.');
     return (saida as { valor: T }).valor;
@@ -469,7 +502,9 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
     const pedido = c.pedido;
     if (!pedido) return null;
     const nome = operacaoDoPedido(pedido);
-    const anterior = await this.nucleo.lerSomente(contextoDe(c), (l) => lerIdempotencia(l, nome, chaveDoPedido(pedido)));
+    const anterior = await this.nucleo.lerSomente(contextoDe(c), (l) =>
+      lerIdempotencia(l, nome, chaveDoPedido(pedido)),
+    );
     if (!anterior) return null;
     // A mesma chave com outros dados, ou de outra pessoa, não devolve o resultado de quem gravou.
     if (anterior.hashEntrada !== hashEntrada(nome, entradaDoPedido(pedido)) || anterior.usuario !== c.usuario)
@@ -494,7 +529,12 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
         situacao ? [est, PARA_O_BANCO[situacao]] : [est],
         { teto: TETO_FILA_DIGITALIZACAO + 1 },
       );
-      const contagens: Record<SituacaoDigitalizacao, number> = { capturado: 0, conferido: 0, recusado: 0, assinado: 0 };
+      const contagens: Record<SituacaoDigitalizacao, number> = {
+        capturado: 0,
+        conferido: 0,
+        recusado: 0,
+        assinado: 0,
+      };
       const grupos = await l.consultar(
         `SELECT situacao, COUNT(*) AS total FROM documento_digitalizado
           WHERE estabelecimento_id = ? AND excluido_em IS NULL GROUP BY situacao`,
@@ -521,13 +561,19 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
   }
 
   porIds(c: ContextoDigitalizacao, ids: readonly number[]) {
-    const lista = [...new Set(ids)].filter((x) => Number.isSafeInteger(x) && x > 0).slice(0, TETO_FILA_DIGITALIZACAO);
+    const lista = [...new Set(ids)]
+      .filter((x) => Number.isSafeInteger(x) && x > 0)
+      .slice(0, TETO_FILA_DIGITALIZACAO);
     if (lista.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l, est, fuso) =>
       (
-        await l.consultar(`${SELECAO_DOCUMENTO} AND d.id IN (${marcas(lista.length)}) ORDER BY d.id`, [est, ...lista], {
-          teto: lista.length,
-        })
+        await l.consultar(
+          `${SELECAO_DOCUMENTO} AND d.id IN (${marcas(lista.length)}) ORDER BY d.id`,
+          [est, ...lista],
+          {
+            teto: lista.length,
+          },
+        )
       ).map((r) => documentoDe(r, fuso)),
     );
   }

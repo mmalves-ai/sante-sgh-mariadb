@@ -105,7 +105,12 @@ export class FonteInternacaoPropria implements FonteInternacao {
     const p = c.porta;
     if (!p || p.estabelecimento === null)
       return Promise.reject(
-        new ErroProblema('nao-autenticado', 401, 'Escolha o estabelecimento', 'A sessão não tem estabelecimento.'),
+        new ErroProblema(
+          'nao-autenticado',
+          401,
+          'Escolha o estabelecimento',
+          'A sessão não tem estabelecimento.',
+        ),
       );
     const est = p.estabelecimento;
     const ctx: ContextoNucleo = {
@@ -118,9 +123,10 @@ export class FonteInternacaoPropria implements FonteInternacao {
   }
 
   private async fuso(l: Leitor, est: number): Promise<string> {
-    const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-      est,
-    ]);
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
     return r?.fuso_horario || FUSO_PADRAO;
   }
 
@@ -304,7 +310,9 @@ export class FonteInternacaoPropria implements FonteInternacao {
       };
       // A posição da internação é a do primeiro trecho (a admissão); sem trecho, o leito atual.
       const primeiroLeito = new Map<number, unknown>();
-      for (const o of ocup) if (!primeiroLeito.has(n(o['internacao_id']))) primeiroLeito.set(n(o['internacao_id']), o['leito_hospitalar_id']);
+      for (const o of ocup)
+        if (!primeiroLeito.has(n(o['internacao_id'])))
+          primeiroLeito.set(n(o['internacao_id']), o['leito_hospitalar_id']);
       const internacoes: InternacaoMovimento[] = intern.map((r) => {
         const e = diaEHora(r['data_hora_entrada'], fuso);
         const a = r['data_hora_alta'] instanceof Date ? diaEHora(r['data_hora_alta'], fuso) : null;
@@ -358,7 +366,9 @@ export class FonteInternacaoPropria implements FonteInternacao {
       const unidades = acomodacoes
         .filter((a) => a['tipo_atendimento'] !== 'observacao')
         .map((a) => {
-          const daqui = leitos.filter((x) => x['bloco'] === a['bloco'] && x['acomodacao'] === a['acomodacao']);
+          const daqui = leitos.filter(
+            (x) => x['bloco'] === a['bloco'] && x['acomodacao'] === a['acomodacao'],
+          );
           return {
             bloco: texto(a['bloco']),
             acomodacao: texto(a['acomodacao']),
@@ -369,7 +379,14 @@ export class FonteInternacaoPropria implements FonteInternacao {
           };
         });
       const hoje = civil(new Date(), fuso).data;
-      return { internacoes, trechos, transferencias, unidades, tipos, dadosAte: new Date(`${hoje}T00:00:00Z`) };
+      return {
+        internacoes,
+        trechos,
+        transferencias,
+        unidades,
+        tipos,
+        dadosAte: new Date(`${hoje}T00:00:00Z`),
+      };
     });
   }
 
@@ -466,7 +483,14 @@ export class FonteInternacaoPropria implements FonteInternacao {
   canal(alvo: ContextoNucleo, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal> {
     const est = alvo.estabelecimento;
     if (est === null)
-      return Promise.reject(new ErroProblema('nao-autenticado', 401, 'Escolha o estabelecimento', 'O vigia não tem estabelecimento.'));
+      return Promise.reject(
+        new ErroProblema(
+          'nao-autenticado',
+          401,
+          'Escolha o estabelecimento',
+          'O vigia não tem estabelecimento.',
+        ),
+      );
     return this.nucleo.lerSomente(alvo, async (l) => {
       const tabelas = TABELAS_DO_CANAL[canal];
       if (marca.maiorId === 0) {
@@ -485,7 +509,11 @@ export class FonteInternacaoPropria implements FonteInternacao {
       );
       const topo = Math.max(marca.maiorId, n(r?.['topo']));
       const ultimo = Math.max(marca.maiorId2, n(r?.['ultimo']));
-      return { selo: `${canal}:${ultimo}`, marca: { maiorId: topo, maiorId2: ultimo, janela: 0 }, consultas: 1 };
+      return {
+        selo: `${canal}:${ultimo}`,
+        marca: { maiorId: topo, maiorId2: ultimo, janela: 0 },
+        consultas: 1,
+      };
     });
   }
 }

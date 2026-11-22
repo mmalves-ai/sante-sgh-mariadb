@@ -74,7 +74,8 @@ function versaoDoCarimbo(c: string): number {
 }
 
 export function estabelecimentoDe(ctx: ContextoOperacao): number {
-  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
 export function usuarioDe(ctx: ContextoOperacao): number {
@@ -105,7 +106,9 @@ export async function informadoOuUnico(
 ): Promise<number> {
   if (informado !== undefined && informado !== null) {
     if (!(await tx.uma(`${sqlTodos} AND id = ?`, [...p, informado])))
-      throw recusa(`${campo}-inexistente`, `${nome} escolhido não existe, está inativo ou não serve aqui.`, { campos: [campo] });
+      throw recusa(`${campo}-inexistente`, `${nome} escolhido não existe, está inativo ou não serve aqui.`, {
+        campos: [campo],
+      });
     return informado;
   }
   const ids = await tx.consultar(`${sqlTodos} ORDER BY id LIMIT 2`, p);
@@ -128,7 +131,10 @@ export const situacaoDoLeitoPorBase = (tx: Pick<TxOperacao, 'uma'>, base: string
  * ocupado ou livre pela ocupação aberta. Quem chama declara `leito_hospitalar` nas tabelas da operação.
  */
 export async function situarLeito(tx: TxOperacao, leito: number): Promise<void> {
-  const p = await tx.uma('SELECT situacao_leito_id FROM periodo_situacao_leito WHERE leito_hospitalar_id = ? AND data_hora_fim IS NULL', [leito]);
+  const p = await tx.uma(
+    'SELECT situacao_leito_id FROM periodo_situacao_leito WHERE leito_hospitalar_id = ? AND data_hora_fim IS NULL',
+    [leito],
+  );
   let situacao: number;
   if (p) situacao = n(p['situacao_leito_id']);
   else {
@@ -139,7 +145,8 @@ export async function situarLeito(tx: TxOperacao, leito: number): Promise<void> 
     situacao = await situacaoDoLeitoPorBase(tx, ocupado ? 'ocupado' : 'livre');
   }
   const l = await tx.uma('SELECT versao, situacao_leito_id FROM leito_hospitalar WHERE id = ?', [leito]);
-  if (l && n(l['situacao_leito_id']) !== situacao) await tx.alterar('leito_hospitalar', leito, n(l['versao']), { situacao_leito_id: situacao });
+  if (l && n(l['situacao_leito_id']) !== situacao)
+    await tx.alterar('leito_hospitalar', leito, n(l['versao']), { situacao_leito_id: situacao });
 }
 
 /** A precaução guardada no retrato do período (dados), quando houver. */
@@ -154,9 +161,10 @@ export function precaucaoDosDados(dados: unknown): string | null {
 }
 
 export async function fusoDe(tx: Pick<TxOperacao, 'uma'>, est: number): Promise<string> {
-  const l = await tx.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-    est,
-  ]);
+  const l = await tx.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return l?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -176,7 +184,11 @@ export async function leitoDaChave(tx: TxOperacao, est: number, l: ChaveLeito): 
 }
 
 /** Confere que o leito aceita uma ocupação nova (ativo, sem ocupação aberta, sem bloqueio vigente, sem reserva alheia). */
-async function exigirLeitoLivre(tx: TxOperacao, leito: Linha, pedidoNir: number | null): Promise<number | null> {
+async function exigirLeitoLivre(
+  tx: TxOperacao,
+  leito: Linha,
+  pedidoNir: number | null,
+): Promise<number | null> {
   if (!(leito['ativo'] === true || leito['ativo'] === 1))
     throw recusa('leito-inativo', 'O leito está inativo no mapa.', { campos: ['leito'] });
   const id = n(leito['id']);
@@ -196,16 +208,22 @@ async function exigirLeitoLivre(tx: TxOperacao, leito: Linha, pedidoNir: number 
     [id],
   );
   if (estado)
-    throw recusa('leito-bloqueado', 'O leito está bloqueado, em higienização ou interditado: escolha outro leito.', {
-      campos: ['leito'],
-    });
+    throw recusa(
+      'leito-bloqueado',
+      'O leito está bloqueado, em higienização ou interditado: escolha outro leito.',
+      {
+        campos: ['leito'],
+      },
+    );
   const reserva = await tx.uma(
     "SELECT id, pedido_leito_id FROM reserva_leito WHERE leito_hospitalar_id = ? AND situacao IN ('ativa','confirmada') AND excluido_em IS NULL",
     [id],
   );
   if (!reserva) return null;
   if (pedidoNir === null || nn(reserva['pedido_leito_id']) !== pedidoNir)
-    throw recusa('leito-reservado', 'O leito está reservado pelo NIR para outro paciente.', { campos: ['leito'] });
+    throw recusa('leito-reservado', 'O leito está reservado pelo NIR para outro paciente.', {
+      campos: ['leito'],
+    });
   return n(reserva['id']);
 }
 
@@ -231,7 +249,8 @@ async function internacaoTravada(tx: TxOperacao, est: number, id: number, carimb
 }
 
 const exigirAberta = (i: Linha) => {
-  if (i['situacao'] === 'alta') throw recusa('internacao-com-alta', 'A internação já tem alta: nada a mudar no leito.');
+  if (i['situacao'] === 'alta')
+    throw recusa('internacao-com-alta', 'A internação já tem alta: nada a mudar no leito.');
   if (i['situacao'] === 'cancelada') throw recusa('internacao-cancelada', 'A internação foi excluída.');
 };
 
@@ -245,7 +264,11 @@ async function ocupacaoAberta(tx: TxOperacao, internacao: number): Promise<Linha
 }
 
 /** Clínica da tela (M, C, N) → classificação da modalidade de internação, e de volta. */
-export const CLASSIFICACAO_DA_CLINICA: Readonly<Record<string, string>> = { M: 'clinica', C: 'cirurgica', N: 'pediatrica' };
+export const CLASSIFICACAO_DA_CLINICA: Readonly<Record<string, string>> = {
+  M: 'clinica',
+  C: 'cirurgica',
+  N: 'pediatrica',
+};
 export const clinicaDaClassificacao = (c: unknown) =>
   c === 'cirurgica' ? 'C' : c === 'pediatrica' ? 'N' : 'M';
 
@@ -259,13 +282,21 @@ const modalidadeDaClinica = (tx: TxOperacao, clinica: string, informada?: number
     `a modalidade de internação "${CLASSIFICACAO_DA_CLINICA[clinica] ?? 'clinica'}"`,
   );
 
-async function exigirExiste(tx: TxOperacao, tabela: 'fonte_pagadora' | 'especialidade_medica' | 'profissional', id: number, campo: string, nome: string) {
+async function exigirExiste(
+  tx: TxOperacao,
+  tabela: 'fonte_pagadora' | 'especialidade_medica' | 'profissional',
+  id: number,
+  campo: string,
+  nome: string,
+) {
   const sql = {
-    fonte_pagadora: "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
+    fonte_pagadora:
+      "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
     especialidade_medica: 'SELECT id FROM especialidade_medica WHERE id = ? AND ativo = TRUE',
     profissional: "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
   }[tabela];
-  if (!(await tx.uma(sql, [id]))) throw recusa(`${campo}-inexistente`, `${nome} não existe ou está inativo.`, { campos: [campo] });
+  if (!(await tx.uma(sql, [id])))
+    throw recusa(`${campo}-inexistente`, `${nome} não existe ou está inativo.`, { campos: [campo] });
 }
 
 /**
@@ -277,15 +308,25 @@ async function procedimentoDe(
   id: number,
   origem: 'sigtap' | 'item' | undefined,
 ): Promise<{ sigtap: number | null; item: number | null }> {
-  const sigtap = origem !== 'item' && !!(await tx.uma('SELECT id FROM procedimento_sigtap WHERE id = ? AND ativo = TRUE', [id]));
-  const item = origem !== 'sigtap' && !!(await tx.uma('SELECT id FROM item_faturavel WHERE id = ? AND excluido_em IS NULL', [id]));
+  const sigtap =
+    origem !== 'item' &&
+    !!(await tx.uma('SELECT id FROM procedimento_sigtap WHERE id = ? AND ativo = TRUE', [id]));
+  const item =
+    origem !== 'sigtap' &&
+    !!(await tx.uma('SELECT id FROM item_faturavel WHERE id = ? AND excluido_em IS NULL', [id]));
   if (sigtap && item)
-    throw recusa('procedimento-ambiguo', 'O código existe no SIGTAP e nos itens do hospital: informe a origem do procedimento.', {
-      campos: ['procedimentoOrigem'],
-    });
+    throw recusa(
+      'procedimento-ambiguo',
+      'O código existe no SIGTAP e nos itens do hospital: informe a origem do procedimento.',
+      {
+        campos: ['procedimentoOrigem'],
+      },
+    );
   if (sigtap) return { sigtap: id, item: null };
   if (item) return { sigtap: null, item: id };
-  throw recusa('procedimento-inexistente', 'O procedimento solicitado não existe no catálogo.', { campos: ['procedimento'] });
+  throw recusa('procedimento-inexistente', 'O procedimento solicitado não existe no catálogo.', {
+    campos: ['procedimento'],
+  });
 }
 
 /** A internação nova; a unicidade da internação aberta por paciente (pedido de DDL do lote 03-01) vira mensagem. */
@@ -295,12 +336,21 @@ async function incluirInternacao(tx: TxOperacao, linha: Record<string, unknown>)
   } catch (x) {
     const r = restricaoViolada(x);
     if (r?.tipo === 'unica' && r.nome === 'uq_internacao_paciente_vigente')
-      throw recusa('paciente-internado', 'O paciente já tem uma internação aberta.', { campos: ['paciente'] });
+      throw recusa('paciente-internado', 'O paciente já tem uma internação aberta.', {
+        campos: ['paciente'],
+      });
     throw x;
   }
 }
 
-const TABELAS_INTERNAR = ['atendimento', 'internacao', 'ocupacao_leito', 'reserva_leito', 'pedido_leito', 'leito_hospitalar'];
+const TABELAS_INTERNAR = [
+  'atendimento',
+  'internacao',
+  'ocupacao_leito',
+  'reserva_leito',
+  'pedido_leito',
+  'leito_hospitalar',
+];
 
 const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
   nome: 'internacao.internar',
@@ -311,7 +361,10 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     // A trava do paciente serializa duas admissões simultâneas da mesma pessoa (a conferência abaixo vale sob ela).
-    const [pac] = await tx.consultarParaAtualizar('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
+    const [pac] = await tx.consultarParaAtualizar(
+      'SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [e.paciente],
+    );
     if (!pac) throw naoEncontrado('Paciente não encontrado', 'O paciente não existe no cadastro.');
     if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
       throw recusa('paciente-inativo', 'O cadastro do paciente não está ativo.');
@@ -319,7 +372,10 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       "SELECT id FROM internacao WHERE paciente_id = ? AND situacao IN ('ativa','alta_medica') AND excluido_em IS NULL",
       [e.paciente],
     );
-    if (jaInternado) throw recusa('paciente-internado', 'O paciente já tem uma internação aberta.', { campos: ['paciente'] });
+    if (jaInternado)
+      throw recusa('paciente-internado', 'O paciente já tem uma internação aberta.', {
+        campos: ['paciente'],
+      });
     await exigirExiste(tx, 'fonte_pagadora', e.convenio, 'convenio', 'O convênio');
     await exigirExiste(tx, 'especialidade_medica', e.especialidade, 'especialidade', 'A especialidade');
     await exigirExiste(tx, 'profissional', e.medicoAssistente, 'medicoAssistente', 'O médico assistente');
@@ -419,9 +475,13 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     });
     if (reserva !== null) {
       const r = await tx.uma('SELECT versao FROM reserva_leito WHERE id = ?', [reserva]);
-      await tx.alterar('reserva_leito', reserva, n(r?.['versao']), { situacao: 'consumida', internacao_id: id });
+      await tx.alterar('reserva_leito', reserva, n(r?.['versao']), {
+        situacao: 'consumida',
+        internacao_id: id,
+      });
     }
-    if (e.solicitacaoNir !== undefined) await concluirPedido(tx, est, e.solicitacaoNir, id, n(leito['id']), agora);
+    if (e.solicitacaoNir !== undefined)
+      await concluirPedido(tx, est, e.solicitacaoNir, id, n(leito['id']), agora);
     await situarLeito(tx, n(leito['id']));
     return { internacao: id, numero: numero.formatado };
   },
@@ -430,13 +490,21 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
 });
 
 /** A solicitação de leito do NIR atendida pela internação ou transferência (estado "internado"). */
-async function concluirPedido(tx: TxOperacao, est: number, pedido: number, internacao: number, leito: number, agora: Date) {
+async function concluirPedido(
+  tx: TxOperacao,
+  est: number,
+  pedido: number,
+  internacao: number,
+  leito: number,
+  agora: Date,
+) {
   const [p] = await tx.consultarParaAtualizar(
     'SELECT id, versao, data_hora_atendido FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [pedido, est],
   );
   if (!p) throw naoEncontrado('Solicitação não encontrada', 'A solicitação de leito do NIR não existe.');
-  if (p['data_hora_atendido'] !== null) throw recusa('solicitacao-concluida', 'A solicitação de leito já foi atendida.');
+  if (p['data_hora_atendido'] !== null)
+    throw recusa('solicitacao-concluida', 'A solicitação de leito já foi atendida.');
   const situacao = await apoio(
     tx,
     "SELECT id FROM situacao_pedido_leito WHERE estado = 'internado' AND ativo = TRUE ORDER BY ordem_exibicao, id LIMIT 1",
@@ -453,7 +521,14 @@ async function concluirPedido(tx: TxOperacao, est: number, pedido: number, inter
 
 const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOperacao>({
   nome: 'internacao.transferir-leito',
-  tabelas: ['internacao', 'ocupacao_leito', 'transferencia_leito', 'reserva_leito', 'pedido_leito', 'leito_hospitalar'],
+  tabelas: [
+    'internacao',
+    'ocupacao_leito',
+    'transferencia_leito',
+    'reserva_leito',
+    'pedido_leito',
+    'leito_hospitalar',
+  ],
   entrada: esquemaTransferirLeitoBanco,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -515,9 +590,13 @@ const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOp
     });
     if (reserva !== null) {
       const r = await tx.uma('SELECT versao FROM reserva_leito WHERE id = ?', [reserva]);
-      await tx.alterar('reserva_leito', reserva, n(r?.['versao']), { situacao: 'consumida', internacao_id: e.internacao });
+      await tx.alterar('reserva_leito', reserva, n(r?.['versao']), {
+        situacao: 'consumida',
+        internacao_id: e.internacao,
+      });
     }
-    if (e.solicitacaoNir !== undefined) await concluirPedido(tx, est, e.solicitacaoNir, e.internacao, n(destino['id']), agora);
+    if (e.solicitacaoNir !== undefined)
+      await concluirPedido(tx, est, e.solicitacaoNir, e.internacao, n(destino['id']), agora);
     if (nn(i['leito_hospitalar_id']) !== null) await situarLeito(tx, n(i['leito_hospitalar_id']));
     await situarLeito(tx, n(destino['id']));
     return { internacao: e.internacao, versao: carimboVersao(versao) };
@@ -634,11 +713,20 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
       'SELECT id, tipo_saida, desfecho_internacao_id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE',
       [e.motivo],
     );
-    if (!m) throw recusa('motivo-inexistente', 'O motivo da alta não existe ou está inativo.', { campos: ['motivo'] });
+    if (!m)
+      throw recusa('motivo-inexistente', 'O motivo da alta não existe ou está inativo.', {
+        campos: ['motivo'],
+      });
     if (m['desfecho_internacao_id'] === null)
-      throw recusa('configuracao-incompleta', 'O motivo da alta não tem o desfecho da internação cadastrado.');
+      throw recusa(
+        'configuracao-incompleta',
+        'O motivo da alta não tem o desfecho da internação cadastrado.',
+      );
     if (m['tipo_saida'] === 'obito')
-      throw recusa('obito-exige-declaracao', 'A alta por óbito exige a declaração de óbito: registre-a pela tela do óbito.');
+      throw recusa(
+        'obito-exige-declaracao',
+        'A alta por óbito exige a declaração de óbito: registre-a pela tela do óbito.',
+      );
     await exigirExiste(tx, 'profissional', e.medicoAlta, 'medicoAlta', 'O médico da alta');
     const agora = new Date();
     let altaEm = agora;
@@ -648,7 +736,9 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
       if (altaEm.getTime() > agora.getTime())
         throw recusa('hora-futura', 'A hora de saída ainda não chegou.', { campos: ['horaSaida'] });
       if (altaEm.getTime() < new Date(i['data_hora_entrada'] as Date).getTime())
-        throw recusa('hora-antes-da-entrada', 'A hora de saída é anterior à entrada.', { campos: ['horaSaida'] });
+        throw recusa('hora-antes-da-entrada', 'A hora de saída é anterior à entrada.', {
+          campos: ['horaSaida'],
+        });
     }
     const medica = await tx.uma(
       "SELECT id, versao FROM alta_medica WHERE internacao_id = ? AND situacao IN ('prevista','programada') AND excluido_em IS NULL ORDER BY id DESC LIMIT 1",
@@ -676,7 +766,10 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
       });
     const o = await ocupacaoAberta(tx, e.internacao);
     if (o)
-      await tx.alterar('ocupacao_leito', n(o['id']), n(o['versao']), { data_hora_fim: altaEm, situacao: 'encerrada' });
+      await tx.alterar('ocupacao_leito', n(o['id']), n(o['versao']), {
+        data_hora_fim: altaEm,
+        situacao: 'encerrada',
+      });
     const versao = await tx.alterar('internacao', e.internacao, n(i['versao']), {
       situacao: 'alta',
       data_hora_alta: altaEm,
@@ -696,12 +789,19 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
     const solicitacao =
       leito === null
         ? null
-        : await pedirLimpezaDaAlta(tx, est, usuario, { leito, internacao: e.internacao, atendimento: n(i['atendimento_id']), alta });
+        : await pedirLimpezaDaAlta(tx, est, usuario, {
+            leito,
+            internacao: e.internacao,
+            atendimento: n(i['atendimento_id']),
+            alta,
+          });
     return { internacao: e.internacao, alta, solicitacao, versao: carimboVersao(versao) };
   },
   eventos: (e, r) => [
     { tipo: 'internacao.alta', carga: { internacao: e.internacao } },
-    ...(r['solicitacao'] ? [{ tipo: 'hotelaria.limpeza_solicitada', carga: { solicitacao: n(r['solicitacao']) } }] : []),
+    ...(r['solicitacao']
+      ? [{ tipo: 'hotelaria.limpeza_solicitada', carga: { solicitacao: n(r['solicitacao']) } }]
+      : []),
   ],
   alvo: (e) => ({ tabela: 'internacao', id: e.internacao }),
 });
@@ -745,7 +845,10 @@ const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao
       [leito],
     );
     if (ocupado)
-      throw recusa('leito-ocupado', 'O leito da alta já foi ocupado: transfira depois de cancelar por outro leito livre.');
+      throw recusa(
+        'leito-ocupado',
+        'O leito da alta já foi ocupado: transfira depois de cancelar por outro leito livre.',
+      );
     const agora = new Date();
     await tx.incluir('cancelamento_alta', {
       alta_hospitalar_id: n(alta['id']),
@@ -858,7 +961,8 @@ const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOpe
       motivo_cancelamento_internacao_id: motivo,
     });
     const at = await tx.uma('SELECT versao FROM atendimento WHERE id = ?', [n(i['atendimento_id'])]);
-    if (at) await tx.alterar('atendimento', n(i['atendimento_id']), n(at['versao']), { situacao: 'cancelado' });
+    if (at)
+      await tx.alterar('atendimento', n(i['atendimento_id']), n(at['versao']), { situacao: 'cancelado' });
     if (nn(i['leito_hospitalar_id']) !== null) await situarLeito(tx, n(i['leito_hospitalar_id']));
     return { internacao: e.internacao };
   },
@@ -874,7 +978,13 @@ async function previsaoDe(tx: TxOperacao, est: number, data: string | undefined,
   return { previsto: new Date(dataHoraParaInstante(data, hora ?? '07:00', fuso)), situacao: 'solicitado' };
 }
 
-const SITUACOES_PRE_PENDENTES = ['solicitado', 'aguardando_autorizacao', 'autorizado', 'confirmado', 'em_espera'];
+const SITUACOES_PRE_PENDENTES = [
+  'solicitado',
+  'aguardando_autorizacao',
+  'autorizado',
+  'confirmado',
+  'em_espera',
+];
 
 const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
   nome: 'internacao.pre-internar',
@@ -891,7 +1001,10 @@ const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
       [est, e.paciente, ...SITUACOES_PRE_PENDENTES],
     );
     if (pendente)
-      throw recusa('pre-internacao-pendente', 'O paciente já tem uma pré-internação pendente: corrija a data dela.');
+      throw recusa(
+        'pre-internacao-pendente',
+        'O paciente já tem uma pré-internação pendente: corrija a data dela.',
+      );
     await exigirExiste(tx, 'fonte_pagadora', e.convenio, 'convenio', 'O convênio');
     await exigirExiste(tx, 'especialidade_medica', e.especialidade, 'especialidade', 'A especialidade');
     await exigirExiste(tx, 'profissional', e.medicoSolicitante, 'medicoSolicitante', 'O médico solicitante');
@@ -921,7 +1034,10 @@ const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
           WHERE ac.estabelecimento_id = ? AND COALESCE(b.codigo, '') = ? AND ac.codigo = ? AND ac.excluido_em IS NULL`,
         [est, e.acomodacao.bloco, e.acomodacao.acomodacao],
       );
-      if (!a) throw recusa('acomodacao-inexistente', 'A acomodação não existe neste estabelecimento.', { campos: ['acomodacao'] });
+      if (!a)
+        throw recusa('acomodacao-inexistente', 'A acomodação não existe neste estabelecimento.', {
+          campos: ['acomodacao'],
+        });
       unidade = n(a['unidade_internacao_id']);
       categoria = n(a['categoria_acomodacao_id']);
     }
@@ -967,18 +1083,32 @@ const corrigirPreInternacao = definirOperacao<CorrigirPreInternacaoEntrada, Resu
         ORDER BY id DESC LIMIT 1`,
       [est, e.paciente, ...SITUACOES_PRE_PENDENTES],
     );
-    if (!a) throw naoEncontrado('Pré-internação não encontrada', 'O paciente não tem pré-internação pendente.');
+    if (!a)
+      throw naoEncontrado('Pré-internação não encontrada', 'O paciente não tem pré-internação pendente.');
     const fuso = await fusoDe(tx, est);
     const lidaAgora =
-      a['situacao'] === 'em_espera' ? '2099-12-31' : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hoje;
+      a['situacao'] === 'em_espera'
+        ? '2099-12-31'
+        : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hoje;
     if (lidaAgora !== e.lida)
-      throw new ErroOperacao(409, 'conflito-versao', 'Registro alterado', 'A pré-internação mudou desde a leitura.', {
-        colunas: ['previsto_para'],
-      });
+      throw new ErroOperacao(
+        409,
+        'conflito-versao',
+        'Registro alterado',
+        'A pré-internação mudou desde a leitura.',
+        {
+          colunas: ['previsto_para'],
+        },
+      );
     const p = await previsaoDe(tx, est, e.dataPrevista, undefined);
     await tx.alterar('agendamento_internacao', n(a['id']), n(a['versao']), {
       previsto_para: p.previsto,
-      situacao: p.situacao === 'em_espera' ? 'em_espera' : a['situacao'] === 'em_espera' ? 'solicitado' : a['situacao'],
+      situacao:
+        p.situacao === 'em_espera'
+          ? 'em_espera'
+          : a['situacao'] === 'em_espera'
+            ? 'solicitado'
+            : a['situacao'],
     });
     return { preInternacao: n(a['id']) };
   },
@@ -1025,15 +1155,20 @@ function troca(
   });
 }
 
-const trocarConvenio = troca('internacao.trocar-convenio', esquemaTrocarConvenio as never, 'fonte_pagadora', async (tx, i, e) => {
-  const novo = n(e['convenio']);
-  await exigirExiste(tx, 'fonte_pagadora', novo, 'convenio', 'O convênio');
-  if (novo === n(i['fonte_pagadora_id'])) throw recusa('mesmo-valor', 'O convênio novo é o atual.');
-  return {
-    internacao: { fonte_pagadora_id: novo, plano_fonte_pagadora_id: null },
-    troca: { anterior_fonte_pagadora_id: nn(i['fonte_pagadora_id']), nova_fonte_pagadora_id: novo },
-  };
-});
+const trocarConvenio = troca(
+  'internacao.trocar-convenio',
+  esquemaTrocarConvenio as never,
+  'fonte_pagadora',
+  async (tx, i, e) => {
+    const novo = n(e['convenio']);
+    await exigirExiste(tx, 'fonte_pagadora', novo, 'convenio', 'O convênio');
+    if (novo === n(i['fonte_pagadora_id'])) throw recusa('mesmo-valor', 'O convênio novo é o atual.');
+    return {
+      internacao: { fonte_pagadora_id: novo, plano_fonte_pagadora_id: null },
+      troca: { anterior_fonte_pagadora_id: nn(i['fonte_pagadora_id']), nova_fonte_pagadora_id: novo },
+    };
+  },
+);
 const trocarEspecialidade = troca(
   'internacao.trocar-especialidade',
   esquemaTrocarEspecialidade as never,
@@ -1041,36 +1176,66 @@ const trocarEspecialidade = troca(
   async (tx, i, e) => {
     const nova = n(e['especialidade']);
     await exigirExiste(tx, 'especialidade_medica', nova, 'especialidade', 'A especialidade');
-    if (nova === n(i['especialidade_medica_id'])) throw recusa('mesmo-valor', 'A especialidade nova é a atual.');
+    if (nova === n(i['especialidade_medica_id']))
+      throw recusa('mesmo-valor', 'A especialidade nova é a atual.');
     return {
       internacao: { especialidade_medica_id: nova },
-      troca: { anterior_especialidade_medica_id: nn(i['especialidade_medica_id']), nova_especialidade_medica_id: nova },
+      troca: {
+        anterior_especialidade_medica_id: nn(i['especialidade_medica_id']),
+        nova_especialidade_medica_id: nova,
+      },
     };
   },
 );
-const trocarClinica = troca('internacao.trocar-clinica', esquemaTrocarClinica as never, 'modalidade', async (tx, i, e) => {
-  const nova = await modalidadeDaClinica(tx, texto(e['clinica']));
-  if (nova === n(i['modalidade_internacao_id'])) throw recusa('mesmo-valor', 'A clínica nova é a atual.');
-  return {
-    internacao: { modalidade_internacao_id: nova },
-    troca: { dados: JSON.stringify({ modalidadeAnterior: nn(i['modalidade_internacao_id']), modalidadeNova: nova }) },
-  };
-});
-const trocarMedico = troca('internacao.trocar-medico', esquemaTrocarMedico as never, 'profissional_responsavel', async (tx, i, e) => {
-  const novo = n(e['medico']);
-  await exigirExiste(tx, 'profissional', novo, 'medico', 'O médico');
-  const coluna = e['tipo'] === 'A' ? 'medico_assistente_profissional_id' : 'medico_solicitante_profissional_id';
-  if (novo === n(i[coluna])) throw recusa('mesmo-valor', 'O médico novo é o atual.');
-  return {
-    internacao: { [coluna]: novo },
-    troca:
-      e['tipo'] === 'A'
-        ? { anterior_profissional_id: nn(i[coluna]), novo_profissional_id: novo }
-        : { dados: JSON.stringify({ solicitanteAnterior: nn(i[coluna]), solicitanteNovo: novo }) },
-  };
-});
+const trocarClinica = troca(
+  'internacao.trocar-clinica',
+  esquemaTrocarClinica as never,
+  'modalidade',
+  async (tx, i, e) => {
+    const nova = await modalidadeDaClinica(tx, texto(e['clinica']));
+    if (nova === n(i['modalidade_internacao_id'])) throw recusa('mesmo-valor', 'A clínica nova é a atual.');
+    return {
+      internacao: { modalidade_internacao_id: nova },
+      troca: {
+        dados: JSON.stringify({
+          modalidadeAnterior: nn(i['modalidade_internacao_id']),
+          modalidadeNova: nova,
+        }),
+      },
+    };
+  },
+);
+const trocarMedico = troca(
+  'internacao.trocar-medico',
+  esquemaTrocarMedico as never,
+  'profissional_responsavel',
+  async (tx, i, e) => {
+    const novo = n(e['medico']);
+    await exigirExiste(tx, 'profissional', novo, 'medico', 'O médico');
+    const coluna =
+      e['tipo'] === 'A' ? 'medico_assistente_profissional_id' : 'medico_solicitante_profissional_id';
+    if (novo === n(i[coluna])) throw recusa('mesmo-valor', 'O médico novo é o atual.');
+    return {
+      internacao: { [coluna]: novo },
+      troca:
+        e['tipo'] === 'A'
+          ? { anterior_profissional_id: nn(i[coluna]), novo_profissional_id: novo }
+          : { dados: JSON.stringify({ solicitanteAnterior: nn(i[coluna]), solicitanteNovo: novo }) },
+    };
+  },
+);
 
-const registrarGuia = definirOperacao<{ internacao: number; conta: number; guia: string; senha?: string | undefined; validadeDias: number; observacao?: string | undefined }, ResultadoOperacao>({
+const registrarGuia = definirOperacao<
+  {
+    internacao: number;
+    conta: number;
+    guia: string;
+    senha?: string | undefined;
+    validadeDias: number;
+    observacao?: string | undefined;
+  },
+  ResultadoOperacao
+>({
   nome: 'internacao.registrar-guia',
   tabelas: ['internacao'],
   entrada: esquemaRegistrarGuia as never,
@@ -1110,7 +1275,16 @@ export const situacaoLimpeza = (tx: Pick<TxOperacao, 'uma'>, etapa: string) =>
     `a situação de limpeza "${etapa}"`,
   );
 
-const solicitarLimpeza = definirOperacao<{ leito: ChaveLeito; tipoLimpeza: number; origem: 'alta' | 'manual' | 'qrcode'; precaucao?: string | undefined; observacao?: string | undefined }, ResultadoOperacao>({
+const solicitarLimpeza = definirOperacao<
+  {
+    leito: ChaveLeito;
+    tipoLimpeza: number;
+    origem: 'alta' | 'manual' | 'qrcode';
+    precaucao?: string | undefined;
+    observacao?: string | undefined;
+  },
+  ResultadoOperacao
+>({
   nome: 'hotelaria.solicitar-limpeza',
   tabelas: ['solicitacao_limpeza', 'solicitacao_limpeza_local', 'periodo_situacao_leito', 'leito_hospitalar'],
   entrada: esquemaSolicitarLimpeza as never,
@@ -1124,9 +1298,14 @@ const solicitarLimpeza = definirOperacao<{ leito: ChaveLeito; tipoLimpeza: numbe
         WHERE l.leito_hospitalar_id = ? AND s.concluida_em IS NULL AND s.cancelada_em IS NULL AND s.excluido_em IS NULL`,
       [n(leito['id'])],
     );
-    if (aberta) throw recusa('limpeza-aberta', 'O leito já tem uma limpeza pedida e não liberada.', { campos: ['leito'] });
+    if (aberta)
+      throw recusa('limpeza-aberta', 'O leito já tem uma limpeza pedida e não liberada.', {
+        campos: ['leito'],
+      });
     if (!(await tx.uma('SELECT id FROM modalidade_limpeza WHERE id = ? AND ativo = TRUE', [e.tipoLimpeza])))
-      throw recusa('tipo-limpeza-inexistente', 'O tipo de limpeza não existe ou está inativo.', { campos: ['tipoLimpeza'] });
+      throw recusa('tipo-limpeza-inexistente', 'O tipo de limpeza não existe ou está inativo.', {
+        campos: ['tipoLimpeza'],
+      });
     const situacao = await situacaoLimpeza(tx, 'solicitada');
     const numero = await tx.proximoNumero('solicitacao_limpeza');
     const id = await tx.incluir('solicitacao_limpeza', {
@@ -1153,7 +1332,10 @@ const solicitarLimpeza = definirOperacao<{ leito: ChaveLeito; tipoLimpeza: numbe
       "SELECT id FROM ocupacao_leito WHERE leito_hospitalar_id = ? AND situacao = 'ativa' AND data_hora_fim IS NULL AND excluido_em IS NULL",
       [leitoId],
     );
-    const periodo = await tx.uma('SELECT id FROM periodo_situacao_leito WHERE leito_hospitalar_id = ? AND data_hora_fim IS NULL', [leitoId]);
+    const periodo = await tx.uma(
+      'SELECT id FROM periodo_situacao_leito WHERE leito_hospitalar_id = ? AND data_hora_fim IS NULL',
+      [leitoId],
+    );
     if (!ocupado && !periodo) {
       const agora = new Date();
       await tx.incluir('periodo_situacao_leito', {
@@ -1186,7 +1368,12 @@ export async function limpezaTravada(tx: TxOperacao, est: number, id: number): P
 }
 
 /** Encerra o período de situação do leito ligado à solicitação de limpeza, se houver (sem recusa quando não há). */
-async function encerrarPeriodoDaLimpeza(tx: TxOperacao, solicitacao: number, usuario: number, agora: Date): Promise<number[]> {
+async function encerrarPeriodoDaLimpeza(
+  tx: TxOperacao,
+  solicitacao: number,
+  usuario: number,
+  agora: Date,
+): Promise<number[]> {
   const periodos = await tx.consultarParaAtualizar(
     'SELECT id, versao, leito_hospitalar_id FROM periodo_situacao_leito WHERE solicitacao_limpeza_id = ? AND data_hora_fim IS NULL',
     [solicitacao],
@@ -1219,7 +1406,9 @@ export async function liberarSolicitacao(
     ...extras,
     situacao_limpeza_id: liberada,
     concluida_em: agora,
-    ...(s['inicio_higienizacao_em'] !== null && s['fim_higienizacao_em'] === null && extras['fim_higienizacao_em'] === undefined
+    ...(s['inicio_higienizacao_em'] !== null &&
+    s['fim_higienizacao_em'] === null &&
+    extras['fim_higienizacao_em'] === undefined
       ? { fim_higienizacao_em: agora }
       : {}),
   });
@@ -1229,7 +1418,9 @@ export async function liberarSolicitacao(
   );
   const leitos = new Set<number>();
   for (const l of locais) {
-    await tx.alterar('solicitacao_limpeza_local', n(l['id']), n(l['versao']), { situacao_limpeza_id: liberada });
+    await tx.alterar('solicitacao_limpeza_local', n(l['id']), n(l['versao']), {
+      situacao_limpeza_id: liberada,
+    });
     if (l['leito_hospitalar_id'] !== null) leitos.add(n(l['leito_hospitalar_id']));
   }
   for (const leito of await encerrarPeriodoDaLimpeza(tx, solicitacao, usuario, agora)) leitos.add(leito);
@@ -1254,7 +1445,11 @@ const liberarLeito = definirOperacao<{ solicitacao: number }, ResultadoOperacao>
 // ── SAME ─────────────────────────────────────────────────────────────────────────────────────────
 
 /** Volume do prontuário do paciente do atendimento ("conta") no estabelecimento (o mais recente aberto). */
-export async function volumeDaConta(tx: Pick<TxOperacao, 'uma'>, est: number, conta: number): Promise<Linha | null> {
+export async function volumeDaConta(
+  tx: Pick<TxOperacao, 'uma'>,
+  est: number,
+  conta: number,
+): Promise<Linha | null> {
   return tx.uma(
     `SELECT v.id, v.paciente_id, a.id AS atendimento FROM atendimento a
        JOIN volume_prontuario v ON v.paciente_id = a.paciente_id AND v.estabelecimento_id = a.estabelecimento_id
@@ -1274,7 +1469,11 @@ const movimentarProntuario = definirOperacao<MovimentarProntuarioEntrada, Result
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     const v = await volumeDaConta(tx, est, e.conta);
-    if (!v) throw recusa('sem-volume', 'O paciente do atendimento não tem volume de prontuário neste estabelecimento.');
+    if (!v)
+      throw recusa(
+        'sem-volume',
+        'O paciente do atendimento não tem volume de prontuário neste estabelecimento.',
+      );
     const op = await apoio(
       tx,
       'SELECT id FROM operacao_movimento_prontuario WHERE codigo = ? AND ativo = TRUE',
@@ -1282,8 +1481,15 @@ const movimentarProntuario = definirOperacao<MovimentarProntuarioEntrada, Result
       `a operação de movimento de prontuário ${e.operacao}`,
     );
     for (const s of [e.setorOrigem, e.setorDestino])
-      if (!(await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [s, est])))
-        throw recusa('setor-inexistente', 'O setor não existe neste estabelecimento.', { campos: ['setorDestino'] });
+      if (
+        !(await tx.uma(
+          'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [s, est],
+        ))
+      )
+        throw recusa('setor-inexistente', 'O setor não existe neste estabelecimento.', {
+          campos: ['setorDestino'],
+        });
     const fuso = await fusoDe(tx, est);
     const id = await tx.incluir('movimento_prontuario', {
       estabelecimento_id: est,
@@ -1298,7 +1504,11 @@ const movimentarProntuario = definirOperacao<MovimentarProntuarioEntrada, Result
       responsavel_nome: e.responsavel,
       previsao_retorno: e.prazoDevolucao ? instanteCivil(e.prazoDevolucao, '2359', fuso) : null,
       observacao:
-        [e.observacao, e.protocolo ? `Protocolo ${e.protocolo}` : null, e.avalComissao ? `Aval ${e.avalComissao}` : null]
+        [
+          e.observacao,
+          e.protocolo ? `Protocolo ${e.protocolo}` : null,
+          e.avalComissao ? `Aval ${e.avalComissao}` : null,
+        ]
           .filter(Boolean)
           .join(' · ') || null,
     });

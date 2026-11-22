@@ -52,17 +52,24 @@ async function limparApoio(e: Escritor): Promise<void> {
     await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN (${itens})`);
     await e.executar(`DELETE FROM exame_item WHERE id IN (SELECT id FROM (${itens}) x)`);
     await e.executar("DELETE FROM requisicao_exame WHERE numero LIKE 'f2241-ap-%'");
-    const eas = "SELECT ea.id FROM exame_analito ea JOIN exame x ON x.id = ea.exame_id WHERE x.codigo LIKE 'f2241-ap%'";
+    const eas =
+      "SELECT ea.id FROM exame_analito ea JOIN exame x ON x.id = ea.exame_id WHERE x.codigo LIKE 'f2241-ap%'";
     await e.executar(`DELETE FROM faixa_referencia WHERE exame_analito_id IN (${eas})`);
-    await e.executar("DELETE FROM regra_valor_critico WHERE analito_id IN (SELECT id FROM analito WHERE codigo LIKE 'f2241-ap%')");
+    await e.executar(
+      "DELETE FROM regra_valor_critico WHERE analito_id IN (SELECT id FROM analito WHERE codigo LIKE 'f2241-ap%')",
+    );
     await e.executar(`DELETE FROM exame_analito WHERE id IN (SELECT id FROM (${eas}) x)`);
-    await e.executar("DELETE FROM exame_setor_executante WHERE exame_id IN (SELECT id FROM exame WHERE codigo LIKE 'f2241-ap%')");
+    await e.executar(
+      "DELETE FROM exame_setor_executante WHERE exame_id IN (SELECT id FROM exame WHERE codigo LIKE 'f2241-ap%')",
+    );
     await e.executar("DELETE FROM exame WHERE codigo LIKE 'f2241-ap%'");
     await e.executar("DELETE FROM analito WHERE codigo LIKE 'f2241-ap%'");
     await e.executar('DELETE FROM laboratorio_apoio WHERE codigo = ?', [AP]);
     await e.executar('DELETE FROM setor_diagnostico WHERE codigo = ?', [AP]);
-    await e.executar("DELETE FROM paciente WHERE numero_prontuario = 922410001");
-    await e.executar("DELETE FROM profissional WHERE pessoa_fisica_id IN (SELECT id FROM pessoa_fisica WHERE nome LIKE '% SINTETICO F2241')");
+    await e.executar('DELETE FROM paciente WHERE numero_prontuario = 922410001');
+    await e.executar(
+      "DELETE FROM profissional WHERE pessoa_fisica_id IN (SELECT id FROM pessoa_fisica WHERE nome LIKE '% SINTETICO F2241')",
+    );
     await e.executar("DELETE FROM pessoa_fisica WHERE nome LIKE '% SINTETICO F2241'");
     await e.executar(
       "DELETE FROM integracao_mensagem WHERE ponto = 'fato.resultado.liberado' AND estabelecimento_id = (SELECT id FROM estabelecimento WHERE codigo = 'f2241a')",
@@ -88,13 +95,27 @@ interface MassaApoio {
 async function montarApoio(e: Escritor): Promise<MassaApoio> {
   await limparApoio(e);
   const agora = new Date();
-  const est = Number((await e.uma<{ id: unknown }>("SELECT id FROM estabelecimento WHERE codigo = 'f2241a'"))!.id);
+  const est = Number(
+    (await e.uma<{ id: unknown }>("SELECT id FROM estabelecimento WHERE codigo = 'f2241a'"))!.id,
+  );
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
-    const pf = await e.inserir("INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PACIENTE SINTETICO F2241', ?)", [agora]);
-    const pac = await e.inserir('INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, 922410001, ?)', [pf, agora]);
-    const pfp = await e.inserir("INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PROFISSIONAL SINTETICO F2241', ?)", [agora]);
-    const conferente = await e.inserir("INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'assistencial', ?)", [pfp, agora]);
+    const pf = await e.inserir(
+      "INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PACIENTE SINTETICO F2241', ?)",
+      [agora],
+    );
+    const pac = await e.inserir(
+      'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, 922410001, ?)',
+      [pf, agora],
+    );
+    const pfp = await e.inserir(
+      "INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PROFISSIONAL SINTETICO F2241', ?)",
+      [agora],
+    );
+    const conferente = await e.inserir(
+      "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'assistencial', ?)",
+      [pfp, agora],
+    );
     const setor = await e.inserir(
       "INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SETOR SINTETICO', 'laboratorio', ?)",
       [est, AP, agora],
@@ -104,24 +125,30 @@ async function montarApoio(e: Escritor): Promise<MassaApoio> {
       [est, AP, agora],
     );
     const exame = (codigo: string, sigla: string) =>
-      e.inserir("INSERT INTO exame (codigo, sigla, nome, tipo_servico, criado_em) VALUES (?, ?, 'EXAME SINTETICO', 'laboratorio', ?)", [
-        codigo,
-        sigla,
-        agora,
-      ]);
+      e.inserir(
+        "INSERT INTO exame (codigo, sigla, nome, tipo_servico, criado_em) VALUES (?, ?, 'EXAME SINTETICO', 'laboratorio', ?)",
+        [codigo, sigla, agora],
+      );
     const ex1 = await exame(`${AP}-1`, 'F2241AP1');
     const ex2 = await exame(`${AP}-2`, 'F2241AP2');
-    await e.inserir('INSERT INTO exame_setor_executante (exame_id, setor_diagnostico_id, padrao, criado_em) VALUES (?, ?, TRUE, ?)', [
-      ex1,
-      setor,
-      agora,
-    ]);
+    await e.inserir(
+      'INSERT INTO exame_setor_executante (exame_id, setor_diagnostico_id, padrao, criado_em) VALUES (?, ?, TRUE, ?)',
+      [ex1, setor, agora],
+    );
     const analito = (codigo: string) =>
-      e.inserir("INSERT INTO analito (codigo, nome, criado_em) VALUES (?, 'ANALITO SINTETICO', ?)", [codigo, agora]);
+      e.inserir("INSERT INTO analito (codigo, nome, criado_em) VALUES (?, 'ANALITO SINTETICO', ?)", [
+        codigo,
+        agora,
+      ]);
     const glicose = await analito(`${AP}-gli`);
     const potassio = await analito(`${AP}-pot`);
     const ea = (ex: number, an: number, ordem: number) =>
-      e.inserir('INSERT INTO exame_analito (exame_id, analito_id, ordem, criado_em) VALUES (?, ?, ?, ?)', [ex, an, ordem, agora]);
+      e.inserir('INSERT INTO exame_analito (exame_id, analito_id, ordem, criado_em) VALUES (?, ?, ?, ?)', [
+        ex,
+        an,
+        ordem,
+        agora,
+      ]);
     const eaGli = await ea(ex1, glicose, 1);
     await ea(ex1, potassio, 2);
     await ea(ex2, glicose, 1);
@@ -147,7 +174,17 @@ async function montarApoio(e: Escritor): Promise<MassaApoio> {
         [req, ex, lab, agora],
       );
     };
-    return { est, setor, lab, conferente, glicose, potassio, regra, item: await item(1, ex1), semSetor: await item(2, ex2) };
+    return {
+      est,
+      setor,
+      lab,
+      conferente,
+      glicose,
+      potassio,
+      regra,
+      item: await item(1, ex1),
+      semSetor: await item(2, ex2),
+    };
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
@@ -187,19 +224,31 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       await g.gravarCredencial(PARCEIRO, 'f2241-lab.cliente1', 'a'.repeat(64), 'teste');
     });
     const p = await porta.parceiro(A, PARCEIRO);
-    expect(p).toMatchObject({ codigo: PARCEIRO, ativo: false, temSegredo: true, clienteId: 'f2241-lab.cliente1' });
+    expect(p).toMatchObject({
+      codigo: PARCEIRO,
+      ativo: false,
+      temSegredo: true,
+      clienteId: 'f2241-lab.cliente1',
+    });
     expect(p?.escopos).toEqual(['resultado.enviar']);
-    const [linha] = await sql('SELECT versao, sistema_externo_id, cliente_api_id FROM parceiro_dados WHERE codigo = ?', [PARCEIRO]);
+    const [linha] = await sql(
+      'SELECT versao, sistema_externo_id, cliente_api_id FROM parceiro_dados WHERE codigo = ?',
+      [PARCEIRO],
+    );
     expect(linha?.['sistema_externo_id']).not.toBeNull();
     expect(Number(linha?.['versao'])).toBeGreaterThanOrEqual(2);
-    const chaves = await sql('SELECT sequencia, situacao FROM chave_api WHERE cliente_api_id = ?', [linha?.['cliente_api_id']]);
+    const chaves = await sql('SELECT sequencia, situacao FROM chave_api WHERE cliente_api_id = ?', [
+      linha?.['cliente_api_id'],
+    ]);
     expect(chaves).toEqual([{ sequencia: 1, situacao: 'ativa' }]);
     const t = await sql(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'parceiro_dados' AND correlacao = 'teste-f2241-porta'",
     );
     expect(Number(t[0]?.['n'])).toBeGreaterThan(0);
     // Código repetido: recusa, nada novo.
-    await expect(porta.gravar(A, trilha('parceiro_dados', 'x'), (g) => g.criarParceiro(DADOS, 'teste'))).rejects.toBeInstanceOf(ErroOperacao);
+    await expect(
+      porta.gravar(A, trilha('parceiro_dados', 'x'), (g) => g.criarParceiro(DADOS, 'teste')),
+    ).rejects.toBeInstanceOf(ErroOperacao);
   });
 
   it('a credencial só vale com o parceiro ativo; a troca revoga a chave anterior e guarda o histórico', async () => {
@@ -224,10 +273,14 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
     expect(ca?.['codigo']).toBe('f2241a');
     // A troca da credencial pela sessão de B é recusada (a credencial é de A).
     await expect(
-      porta.gravar(B, trilha('parceiro_dados', 'x'), (g) => g.gravarCredencial(PARCEIRO, 'f2241-lab.clienteb', 'z'.repeat(64), 'teste')),
+      porta.gravar(B, trilha('parceiro_dados', 'x'), (g) =>
+        g.gravarCredencial(PARCEIRO, 'f2241-lab.clienteb', 'z'.repeat(64), 'teste'),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'outro-estabelecimento' } });
     // Estabelecimento desconhecido: falha fechada.
-    expect((await porta.credencial({ rede: 'x', hospital: 'f2241zz' }, 'f2241-lab.cliente1'))?.ativo).toBe(false);
+    expect((await porta.credencial({ rede: 'x', hospital: 'f2241zz' }, 'f2241-lab.cliente1'))?.ativo).toBe(
+      false,
+    );
     await porta.gravar(A, trilha('parceiro_dados', 'integracao.parceiro.alterado'), (g) =>
       g.gravarCredencial(PARCEIRO, 'f2241-lab.cliente2', 'b'.repeat(64), 'teste'),
     );
@@ -257,26 +310,61 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       tabelaObjeto: 'exame_item',
       idObjeto: '777',
     };
-    const r1 = await porta.gravar(A, trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'), (g) => g.registrarRecebida(nova));
-    const r2 = await porta.gravar(A, trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'), (g) => g.registrarRecebida(nova));
+    const r1 = await porta.gravar(
+      A,
+      trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'),
+      (g) => g.registrarRecebida(nova),
+    );
+    const r2 = await porta.gravar(
+      A,
+      trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'),
+      (g) => g.registrarRecebida(nova),
+    );
     expect(r1.repetida).toBe(false);
     expect(r2).toMatchObject({ repetida: true, recebida: { id: r1.recebida.id } });
-    expect(r1.recebida).toMatchObject({ situacao: 'conferir', parceiro: PARCEIRO, chaveS3: nova.chaveS3, tamanho: 120 });
+    expect(r1.recebida).toMatchObject({
+      situacao: 'conferir',
+      parceiro: PARCEIRO,
+      chaveS3: nova.chaveS3,
+      tamanho: 120,
+    });
     const linhas = await sql(
       `SELECT m.situacao, a.hash_sha256, m.versao FROM mensagem_integracao_entrada m JOIN arquivo a ON a.id = m.arquivo_id
         WHERE m.id = ?`,
       [Number(r1.recebida.id)],
     );
     expect(linhas).toEqual([{ situacao: 'validada', hash_sha256: 'c'.repeat(64), versao: 1 }]);
-    expect((await porta.recebidas(A, { situacao: 'conferir', limite: 10 })).map((x) => x.id)).toContain(r1.recebida.id);
+    expect((await porta.recebidas(A, { situacao: 'conferir', limite: 10 })).map((x) => x.id)).toContain(
+      r1.recebida.id,
+    );
     expect(await porta.recebida(B, r1.recebida.id)).toBeNull();
-    const fim = { situacao: 'recusada' as const, detalhe: 'teste', tabelaObjeto: null, idObjeto: null, usuario: 'teste' };
-    expect(await porta.gravar(B, trilha('mensagem_integracao_entrada', 'x'), (g) => g.concluirRecebida(r1.recebida.id, fim))).toBe(0);
-    expect(await porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) => g.concluirRecebida(r1.recebida.id, fim))).toBe(1);
-    expect(await porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) => g.concluirRecebida(r1.recebida.id, fim))).toBe(0);
+    const fim = {
+      situacao: 'recusada' as const,
+      detalhe: 'teste',
+      tabelaObjeto: null,
+      idObjeto: null,
+      usuario: 'teste',
+    };
+    expect(
+      await porta.gravar(B, trilha('mensagem_integracao_entrada', 'x'), (g) =>
+        g.concluirRecebida(r1.recebida.id, fim),
+      ),
+    ).toBe(0);
+    expect(
+      await porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) =>
+        g.concluirRecebida(r1.recebida.id, fim),
+      ),
+    ).toBe(1);
+    expect(
+      await porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) =>
+        g.concluirRecebida(r1.recebida.id, fim),
+      ),
+    ).toBe(0);
     expect((await porta.recebida(A, r1.recebida.id))?.situacao).toBe('recusada');
     await expect(
-      porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) => g.registrarRecebida({ ...nova, parceiro: 'f2241-nenhum' })),
+      porta.gravar(A, trilha('mensagem_integracao_entrada', 'x'), (g) =>
+        g.registrarRecebida({ ...nova, parceiro: 'f2241-nenhum' }),
+      ),
     ).rejects.toBeInstanceOf(ErroOperacao);
   });
 
@@ -288,9 +376,18 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
         throw new Error('falha de propósito');
       }),
     ).rejects.toThrow(/Nada foi gravado/);
-    expect(await sql("SELECT id FROM integracao_mensagem WHERE referencia_externa = 'f2241-desfeita'")).toEqual([]);
-    const idOutbox = await porta.gravar(A, trilha('integracao_mensagem', 'integracao.configuracao.alterada'), (g) =>
-      g.outbox({ tipo: PONTO_TESTE, chave: 'f2241-evento-1', carga: { parceiro: PARCEIRO, origem: 'teste' } }),
+    expect(
+      await sql("SELECT id FROM integracao_mensagem WHERE referencia_externa = 'f2241-desfeita'"),
+    ).toEqual([]);
+    const idOutbox = await porta.gravar(
+      A,
+      trilha('integracao_mensagem', 'integracao.configuracao.alterada'),
+      (g) =>
+        g.outbox({
+          tipo: PONTO_TESTE,
+          chave: 'f2241-evento-1',
+          carga: { parceiro: PARCEIRO, origem: 'teste' },
+        }),
     );
     const envio = {
       idOutbox,
@@ -301,14 +398,25 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       tabelaFato: 'exame_item',
       idFato: '777',
     };
-    expect(await porta.gravar(A, trilha('mensagem_integracao_saida', 'x'), (g) => g.registrarEnvio(envio))).toBe(true);
-    expect(await porta.gravar(A, trilha('mensagem_integracao_saida', 'x'), (g) => g.registrarEnvio(envio))).toBe(false);
+    expect(
+      await porta.gravar(A, trilha('mensagem_integracao_saida', 'x'), (g) => g.registrarEnvio(envio)),
+    ).toBe(true);
+    expect(
+      await porta.gravar(A, trilha('mensagem_integracao_saida', 'x'), (g) => g.registrarEnvio(envio)),
+    ).toBe(false);
     const [e] = await porta.envios(A, { parceiro: PARCEIRO, limite: 10 });
-    expect(e).toMatchObject({ situacao: 'pendente', idOutbox, chaveEvento: 'f2241-evento-1', tabelaFato: 'exame_item' });
+    expect(e).toMatchObject({
+      situacao: 'pendente',
+      idOutbox,
+      chaveEvento: 'f2241-evento-1',
+      tabelaFato: 'exame_item',
+    });
     expect(await porta.envios(B, { parceiro: PARCEIRO, limite: 10 })).toEqual([]);
     // O worker esgota as tentativas (a fila de mortos).
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f2241' }, (w) =>
-      w.executar("UPDATE mensagem_integracao_saida SET situacao = 'erro', tentativas = 3 WHERE id = ?", [Number(e!.id)]),
+      w.executar("UPDATE mensagem_integracao_saida SET situacao = 'erro', tentativas = 3 WHERE id = ?", [
+        Number(e!.id),
+      ]),
     );
     expect((await porta.mortos(A)).map((m) => m.id)).toContain(e!.id);
     const n = await porta.gravar(A, trilha('mensagem_integracao_saida', 'integracao.morto.tratado'), (g) =>
@@ -316,8 +424,16 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
     );
     expect(n).toBe(1);
     const depois = await porta.envio(A, e!.id);
-    expect(depois).toMatchObject({ situacao: 'pendente', tentativas: 0, tratamento: 'reprocessar', motivoTratamento: 'parceiro voltou' });
-    const falhas = await sql('SELECT situacao, reprocessamentos FROM falha_integracao WHERE mensagem_integracao_saida_id = ?', [Number(e!.id)]);
+    expect(depois).toMatchObject({
+      situacao: 'pendente',
+      tentativas: 0,
+      tratamento: 'reprocessar',
+      motivoTratamento: 'parceiro voltou',
+    });
+    const falhas = await sql(
+      'SELECT situacao, reprocessamentos FROM falha_integracao WHERE mensagem_integracao_saida_id = ?',
+      [Number(e!.id)],
+    );
     expect(falhas).toEqual([{ situacao: 'reprocessada', reprocessamentos: 1 }]);
     expect(
       await porta.gravar(A, trilha('mensagem_integracao_saida', 'x'), (g) =>
@@ -333,19 +449,22 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
 
   it('resultado do apoio pelas regras do SADT: referência, anormal, crítico com aviso, liberação e mensagem concluída juntos', async () => {
     const m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, (e) => montarApoio(e));
-    const { recebida } = await porta.gravar(A, trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'), (g) =>
-      g.registrarRecebida({
-        parceiro: PARCEIRO,
-        tipo: 'ORU^R01',
-        chaveParceiro: 'F2241-MSG-AP01',
-        hash: 'd'.repeat(64),
-        chaveS3: 'f2241a/f2241-lab/entrada/apoio.txt',
-        tamanho: 90,
-        situacao: 'conferir',
-        detalhe: '2 valor(es)',
-        tabelaObjeto: 'exame_item',
-        idObjeto: String(m.item),
-      }),
+    const { recebida } = await porta.gravar(
+      A,
+      trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'),
+      (g) =>
+        g.registrarRecebida({
+          parceiro: PARCEIRO,
+          tipo: 'ORU^R01',
+          chaveParceiro: 'F2241-MSG-AP01',
+          hash: 'd'.repeat(64),
+          chaveS3: 'f2241a/f2241-lab/entrada/apoio.txt',
+          tamanho: 90,
+          situacao: 'conferir',
+          detalhe: '2 valor(es)',
+          tabelaObjeto: 'exame_item',
+          idObjeto: String(m.item),
+        }),
     );
     expect(await porta.exameDoRetorno(A, m.item)).toMatchObject({ laboratorio: m.lab, digitado: false });
     const octx = (chave: string) => ({
@@ -413,12 +532,17 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
          FROM aviso_valor_critico WHERE resultado_exame_id = ?`,
       [r.resultado],
     );
-    expect(avisos.map((a) => [a['regra_valor_critico_id'], a['situacao'], a['origem'], Number(a['prazo'])])).toEqual([
-      [m.regra, 'pendente', 'integracao', 15],
+    expect(
+      avisos.map((a) => [a['regra_valor_critico_id'], a['situacao'], a['origem'], Number(a['prazo'])]),
+    ).toEqual([[m.regra, 'pendente', 'integracao', 15]]);
+    expect(await sql('SELECT situacao, versao FROM exame_item WHERE id = ?', [m.item])).toEqual([
+      { situacao: 'liberado', versao: 2 },
     ]);
-    expect(await sql('SELECT situacao, versao FROM exame_item WHERE id = ?', [m.item])).toEqual([{ situacao: 'liberado', versao: 2 }]);
     expect((await porta.recebida(A, recebida.id))?.situacao).toBe('processada');
-    const t = await sql("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'resultado_exame' AND entidade_id = ?", [r.resultado]);
+    const t = await sql(
+      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'resultado_exame' AND entidade_id = ?",
+      [r.resultado],
+    );
     expect(Number(t[0]?.['n'])).toBe(1);
     const fato = await sql(
       "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.resultado.liberado' AND estabelecimento_id = ?",
@@ -426,23 +550,42 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
     );
     expect(Number(fato[0]?.['n'])).toBe(1);
     // A mesma aprovação de novo: o resultado da primeira, sem gravar outra vez.
-    expect(await porta.registrarResultadoApoio(A, entrada, octx(chave))).toEqual({ resultado: r.resultado, repetida: true });
+    expect(await porta.registrarResultadoApoio(A, entrada, octx(chave))).toEqual({
+      resultado: r.resultado,
+      repetida: true,
+    });
     // Recusas: analito que não é do exame; exame sem setor executante no estabelecimento (nunca o setor 0).
     await expect(
       porta.registrarResultadoApoio(
         A,
-        { ...entrada, exame: m.semSetor, elementos: [{ elemento: m.potassio, numerico: 4, alfa: null }], recebida: null },
+        {
+          ...entrada,
+          exame: m.semSetor,
+          elementos: [{ elemento: m.potassio, numerico: 4, alfa: null }],
+          recebida: null,
+        },
         octx(`${chave}-a`),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'elemento-inexistente' } });
     await expect(
       porta.registrarResultadoApoio(
         A,
-        { ...entrada, exame: m.semSetor, elementos: [{ elemento: m.glicose, numerico: 90, alfa: null }], recebida: null },
+        {
+          ...entrada,
+          exame: m.semSetor,
+          elementos: [{ elemento: m.glicose, numerico: 90, alfa: null }],
+          recebida: null,
+        },
         octx(`${chave}-b`),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'sem-setor-executante' } });
-    expect(Number((await sql('SELECT COUNT(*) AS n FROM resultado_exame WHERE exame_item_id = ?', [m.semSetor]))[0]?.['n'])).toBe(0);
+    expect(
+      Number(
+        (await sql('SELECT COUNT(*) AS n FROM resultado_exame WHERE exame_item_id = ?', [m.semSetor]))[0]?.[
+          'n'
+        ],
+      ),
+    ).toBe(0);
   });
 
   it('recusas: estabelecimento desconhecido, exame inexistente no resultado do apoio; leituras vazias fora do estabelecimento', async () => {

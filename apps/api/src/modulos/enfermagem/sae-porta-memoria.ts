@@ -71,7 +71,11 @@ interface Estado {
   itens: Item[];
   checagens: Checagem[];
   termos: (TermoTerminologiaSae & { id: number })[];
-  receitas: (Mutavel<ReceitaDoEnfermeiro> & { atendimento: number; paciente: number; chave: string | null })[];
+  receitas: (Mutavel<ReceitaDoEnfermeiro> & {
+    atendimento: number;
+    paciente: number;
+    chave: string | null;
+  })[];
   vacinas: (Omit<VacinaAplicada, 'correcoes'> & {
     correcoes: CorrecaoVacina[];
     paciente: number;
@@ -128,7 +132,8 @@ export class PortaSaeMemoria implements PortaSae {
   async gravarSgh<T>(c: ContextoSae, _trilha: unknown, fn: (g: GravadorSae) => Promise<T>): Promise<T> {
     const s = this.e(c);
     const agora = await this.agora(c);
-    const k = (chave: string | null, sufixo = '') => (chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null);
+    const k = (chave: string | null, sufixo = '') =>
+      chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null;
     const vigente = (atendimento: number) =>
       s.saes.filter((x) => x.atendimento === atendimento).sort((a, b) => b.versao - a.versao)[0] ?? null;
     const SAE_MUDOU = () =>

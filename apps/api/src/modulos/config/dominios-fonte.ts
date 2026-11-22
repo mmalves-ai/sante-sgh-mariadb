@@ -84,7 +84,11 @@ export interface FonteDominios {
   item(hospital: string, d: DominioDeclarado, codigo: string): Promise<ItemDominio | null>;
   uso(hospital: string, d: DominioDeclarado, codigo: string): Promise<ReferenciaUso[]>;
   opcoes(hospital: string, d: DominioDeclarado, campo: CampoDominio): Promise<OpcaoCampo[]>;
-  incluir(c: ContextoDominio, d: DominioDeclarado, valores: Record<string, unknown>): Promise<{ codigo: string }>;
+  incluir(
+    c: ContextoDominio,
+    d: DominioDeclarado,
+    valores: Record<string, unknown>,
+  ): Promise<{ codigo: string }>;
   alterar(
     c: ContextoDominio,
     d: DominioDeclarado,
@@ -243,7 +247,12 @@ export class FonteDominiosPropria implements FonteDominios {
       }
       return tabelas
         .map((t) =>
-          declararDominio(t.tabela, areas.get(t.tabela) ?? '', String(t.comentario ?? ''), porTabela.get(t.tabela) ?? []),
+          declararDominio(
+            t.tabela,
+            areas.get(t.tabela) ?? '',
+            String(t.comentario ?? ''),
+            porTabela.get(t.tabela) ?? [],
+          ),
         )
         .filter((d): d is DominioDeclarado => d !== null)
         .sort((a, b) => a.rotulo.plural.localeCompare(b.rotulo.plural, 'pt-BR'));
@@ -299,7 +308,10 @@ export class FonteDominiosPropria implements FonteDominios {
 
   private async linha(l: Leitor, d: DominioDeclarado, est: number, codigo: string): Promise<Linha | null> {
     const f = this.filtro(d, est);
-    return l.uma(`SELECT ${this.colunas(d)} FROM ${d.tabela} WHERE codigo = ? AND ${f.sql}`, [codigo, ...f.params]);
+    return l.uma(`SELECT ${this.colunas(d)} FROM ${d.tabela} WHERE codigo = ? AND ${f.sql}`, [
+      codigo,
+      ...f.params,
+    ]);
   }
 
   async item(hospital: string, d: DominioDeclarado, codigo: string) {
@@ -380,7 +392,9 @@ export class FonteDominiosPropria implements FonteDominios {
         estabelecimento,
         usuario,
         correlacao: (c.correlacao || 'crud-generico').slice(0, 64),
-        chaveIdempotencia: FORMATO_CHAVE_IDEMPOTENCIA.test(c.chaveIdempotencia) ? c.chaveIdempotencia : randomUUID(),
+        chaveIdempotencia: FORMATO_CHAVE_IDEMPOTENCIA.test(c.chaveIdempotencia)
+          ? c.chaveIdempotencia
+          : randomUUID(),
         ...(c.enderecoIp ? { enderecoIp: c.enderecoIp } : {}),
       };
     }, c.correlacao);
@@ -431,10 +445,22 @@ export class FonteDominiosPropria implements FonteDominios {
   }
 
   incluir(c: ContextoDominio, d: DominioDeclarado, valores: Record<string, unknown>) {
-    return this.gravar(c, d, 'incluir', { tabela: d.tabela, codigo: null, versao: null, valores, motivo: null });
+    return this.gravar(c, d, 'incluir', {
+      tabela: d.tabela,
+      codigo: null,
+      versao: null,
+      valores,
+      motivo: null,
+    });
   }
 
-  alterar(c: ContextoDominio, d: DominioDeclarado, codigo: string, versao: number, valores: Record<string, unknown>) {
+  alterar(
+    c: ContextoDominio,
+    d: DominioDeclarado,
+    codigo: string,
+    versao: number,
+    valores: Record<string, unknown>,
+  ) {
     return this.gravar(c, d, 'alterar', { tabela: d.tabela, codigo, versao, valores, motivo: null });
   }
 
@@ -537,10 +563,12 @@ export function fonteDominiosMemoria(): FonteDominios {
   const dominios = dominiosSinteticos();
   const linhas = new Map<string, LinhaMemoria[]>(dominios.map((d) => [d.tabela, []]));
   let proximo = 1;
-  linhas.get('dimensao_priorizacao_gut')!.push(
-    { id: proximo++, codigo: 'G', ativo: true, versao: 1, valores: { descricao: 'Gravidade (sintética)' } },
-    { id: proximo++, codigo: 'U', ativo: true, versao: 1, valores: { descricao: 'Urgência (sintética)' } },
-  );
+  linhas
+    .get('dimensao_priorizacao_gut')!
+    .push(
+      { id: proximo++, codigo: 'G', ativo: true, versao: 1, valores: { descricao: 'Gravidade (sintética)' } },
+      { id: proximo++, codigo: 'U', ativo: true, versao: 1, valores: { descricao: 'Urgência (sintética)' } },
+    );
   const deTabela = (d: DominioDeclarado) => linhas.get(d.tabela) ?? [];
   const paraLinha = (l: LinhaMemoria): Linha => ({
     id: l.id,
@@ -555,7 +583,9 @@ export function fonteDominiosMemoria(): FonteDominios {
       const v = valores[c.coluna];
       if (!c.tabelaReferencia || v === undefined || v === null) continue;
       if (!(linhas.get(c.tabelaReferencia) ?? []).some((l) => l.id === v))
-        throw recusa('referencia-inexistente', `${c.rotulo}: a referência não existe.`, { campos: [c.campo] });
+        throw recusa('referencia-inexistente', `${c.rotulo}: a referência não existe.`, {
+          campos: [c.campo],
+        });
     }
   };
   return {

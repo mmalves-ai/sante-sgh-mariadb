@@ -245,19 +245,36 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
         ),
       ),
     ).toBe('conflito-versao');
-    const kit = { ...peca, nome: `KIT ${P}`, categoria: 'kit' as const, composicao: [{ peca: r.id, quantidade: 2 }] };
+    const kit = {
+      ...peca,
+      nome: `KIT ${P}`,
+      categoria: 'kit' as const,
+      composicao: [{ peca: r.id, quantidade: 2 }],
+    };
     const k = await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) => g.incluirPeca(kit));
-    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([{ peca: r.id, quantidade: 2 }]);
+    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([
+      { peca: r.id, quantidade: 2 },
+    ]);
     // A mudança altera a linha da composição (sem duplicar); a peça que sai é excluída e volta reativada.
     const k2 = await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
       g.alterarPeca({ ...kit, composicao: [], id: k.id, versaoVista: 1 }),
     );
     expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([]);
     await porta.gravarSgh(ctx, trilha('peca_enxoval'), (g) =>
-      g.alterarPeca({ ...kit, composicao: [{ peca: r.id, quantidade: 3 }], id: k.id, versaoVista: k2.versao }),
+      g.alterarPeca({
+        ...kit,
+        composicao: [{ peca: r.id, quantidade: 3 }],
+        id: k.id,
+        versaoVista: k2.versao,
+      }),
     );
-    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([{ peca: r.id, quantidade: 3 }]);
-    const linhasKit = await linha('SELECT COUNT(*) AS n FROM peca_enxoval_composicao WHERE kit_peca_enxoval_id = ?', [k.id]);
+    expect((await porta.pecas(ctx)).find((x) => x.id === k.id)?.composicao).toEqual([
+      { peca: r.id, quantidade: 3 },
+    ]);
+    const linhasKit = await linha(
+      'SELECT COUNT(*) AS n FROM peca_enxoval_composicao WHERE kit_peca_enxoval_id = ?',
+      [k.id],
+    );
     expect(Number(linhasKit?.['n'])).toBe(1);
     expect(
       await erroDe(
@@ -529,7 +546,12 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
       await erroDe(
         porta.gravarSgh(ctx, trilha('inventario_enxoval'), (g) =>
           g.registrarMovimento(
-            movimento({ tipo: 'inventario', data: hoje, pesoKg: 3, itens: [{ peca: ids.peca, quantidade: 1 }] }),
+            movimento({
+              tipo: 'inventario',
+              data: hoje,
+              pesoKg: 3,
+              itens: [{ peca: ids.peca, quantidade: 1 }],
+            }),
           ),
         ),
       ),

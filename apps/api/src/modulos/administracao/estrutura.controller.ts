@@ -59,9 +59,9 @@ export class EstruturaController {
   @Auditar(EVENTOS_AUDITAVEIS.estruturaConsultada.codigo)
   async estrutura(@Req() req: RequisicaoAutorizada): Promise<Estrutura> {
     const c = ctxDe(req, 'estrutura');
-    const e = await this.emCache(`${c.rede}|${c.hospital}|estrutura`, () =>
-      this.fonte.estrutura(c),
-    ).catch((x: unknown) => problema(x));
+    const e = await this.emCache(`${c.rede}|${c.hospital}|estrutura`, () => this.fonte.estrutura(c)).catch(
+      (x: unknown) => problema(x),
+    );
     return semSegredos({
       empresa: e.empresa,
       hospital: e.hospital,

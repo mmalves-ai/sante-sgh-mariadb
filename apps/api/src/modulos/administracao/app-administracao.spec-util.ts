@@ -18,18 +18,32 @@ import { UsuariosController } from './usuarios.controller.js';
 
 class ModuloAdministracaoTeste {}
 
-function moduloTeste(ctx: ContextoModulo, cadastro: PortaCadastroMemoria, fonte?: FonteAdministracao): DynamicModule {
+function moduloTeste(
+  ctx: ContextoModulo,
+  cadastro: PortaCadastroMemoria,
+  fonte?: FonteAdministracao,
+): DynamicModule {
   return {
     module: ModuloAdministracaoTeste,
-    controllers: [UsuariosController, RedeCpfController, PermissoesController, EstruturaController, AuditoriaController],
+    controllers: [
+      UsuariosController,
+      RedeCpfController,
+      PermissoesController,
+      EstruturaController,
+      AuditoriaController,
+    ],
     providers: [
       {
         provide: FONTE_ADMINISTRACAO,
         useValue:
           fonte ??
           // X-01: o vínculo login → profissional vem da memória do cadastro (a mesma da aba Login do sistema).
-          fonteAdministracaoMemoria(ctx.trilha, null, 'dev', () => [], (c, login) =>
-            cadastro.profissionalDoLogin(c as never, login),
+          fonteAdministracaoMemoria(
+            ctx.trilha,
+            null,
+            'dev',
+            () => [],
+            (c, login) => cadastro.profissionalDoLogin(c as never, login),
           ),
       },
     ],

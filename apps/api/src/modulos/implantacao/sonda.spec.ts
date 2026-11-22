@@ -53,7 +53,13 @@ describe('sonda da implantação', () => {
     await expect(montar({}).sonda(TOKEN, 'H9')).rejects.toMatchObject({ status: 400 });
     const r = await montar({}).sonda(TOKEN);
     expect(r.hospital).toBe('H1');
-    expect(r.sondas.map((s) => s.sonda)).toEqual(['saude', 'versao', 'login-sonda', 'painel-leitos', 'recusa-negocio']);
+    expect(r.sondas.map((s) => s.sonda)).toEqual([
+      'saude',
+      'versao',
+      'login-sonda',
+      'painel-leitos',
+      'recusa-negocio',
+    ]);
     expect(r.sondas.find((s) => s.sonda === 'saude')?.ok).toBe(true);
     // Sem usuário de sonda nem painel: a implantação não fica pronta (falha fechada).
     expect(r.sondas.find((s) => s.sonda === 'login-sonda')?.ok).toBe(false);
@@ -61,13 +67,18 @@ describe('sonda da implantação', () => {
   });
 
   it('porta indisponível: nenhum estabelecimento vale (400, falha fechada)', async () => {
-    await expect(montar({ porta: portaSondaIndisponivel }).sonda(TOKEN, 'H1')).rejects.toMatchObject({ status: 400 });
+    await expect(montar({ porta: portaSondaIndisponivel }).sonda(TOKEN, 'H1')).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('banco que não responde: saude falha', async () => {
     const porta: PortaSonda = { bancoResponde: async () => false, estabelecimentos: async () => ['H1'] };
     const r = await montar({ porta }).sonda(TOKEN);
-    expect(r.sondas.find((s) => s.sonda === 'saude')).toMatchObject({ ok: false, detalhe: 'banco não responde' });
+    expect(r.sondas.find((s) => s.sonda === 'saude')).toMatchObject({
+      ok: false,
+      detalhe: 'banco não responde',
+    });
   });
 
   it('recusa-negocio: em produção, a operação liberada ao usuário de sonda reprova; a desligada aprova', async () => {
@@ -76,7 +87,9 @@ describe('sonda da implantação', () => {
     expect(liberada.sondas.find((s) => s.sonda === 'recusa-negocio')?.ok).toBe(false);
     const desligada = await montar({
       ambiente: 'producao',
-      chaves: [{ tipo: 'operacao', chave: OPERACAO_SONDA_NEGOCIO, escopo: 'pessoa', valor: 'sonda', ligada: false }],
+      chaves: [
+        { tipo: 'operacao', chave: OPERACAO_SONDA_NEGOCIO, escopo: 'pessoa', valor: 'sonda', ligada: false },
+      ],
     }).sonda(TOKEN);
     expect(desligada.sondas.find((s) => s.sonda === 'recusa-negocio')).toMatchObject({
       ok: true,

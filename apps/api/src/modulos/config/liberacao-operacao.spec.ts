@@ -11,7 +11,12 @@ const OP = 'cadastro.cadastrarPaciente';
 const catalogo = catalogoOperacoesProprio();
 const trilha = () => ({ correlacao: 'c', usuario: 'admin', estabelecimento: H, ip: '127.0.0.1' });
 const nova = () => fonteConfiguracaoMemoria(new RegistradorTrilhaMemoria(), { chavesIniciais: () => [] });
-const lote = (fonte: FonteConfiguracao, escopo: 'hospital' | 'setor' | 'grupo' | 'pessoa', valor: string, ligada: boolean) =>
+const lote = (
+  fonte: FonteConfiguracao,
+  escopo: 'hospital' | 'setor' | 'grupo' | 'pessoa',
+  valor: string,
+  ligada: boolean,
+) =>
   fonte.aplicarLote(
     'r',
     {
@@ -39,15 +44,24 @@ describe('liberação da gravação por operação', () => {
   });
 
   it('operação fora do catálogo de operações é recusada', async () => {
-    expect(await operacaoLiberada(nova(), catalogo, 'r', H, 'pessoa.a', 'cadastro.operacaoInexistente')).toBe(false);
+    expect(await operacaoLiberada(nova(), catalogo, 'r', H, 'pessoa.a', 'cadastro.operacaoInexistente')).toBe(
+      false,
+    );
   });
 
-  it.each(['setor', 'grupo'] as const)('chave ligada só para o %s: libera o membro e recusa quem não é', async (escopo) => {
-    const fonte = nova();
-    await lote(fonte, escopo, 'X1', true);
-    expect(await operacaoLiberada(fonte, catalogo, 'r', H, { pessoa: 'pessoa.a', [escopo]: 'X1' }, OP)).toBe(true);
-    expect(await operacaoLiberada(fonte, catalogo, 'r', H, { pessoa: 'pessoa.b', [escopo]: 'Y2' }, OP)).toBe(false);
-  });
+  it.each(['setor', 'grupo'] as const)(
+    'chave ligada só para o %s: libera o membro e recusa quem não é',
+    async (escopo) => {
+      const fonte = nova();
+      await lote(fonte, escopo, 'X1', true);
+      expect(
+        await operacaoLiberada(fonte, catalogo, 'r', H, { pessoa: 'pessoa.a', [escopo]: 'X1' }, OP),
+      ).toBe(true);
+      expect(
+        await operacaoLiberada(fonte, catalogo, 'r', H, { pessoa: 'pessoa.b', [escopo]: 'Y2' }, OP),
+      ).toBe(false);
+    },
+  );
 
   it('a falha ao ler as chaves rejeita (não vira "não liberada")', async () => {
     const fonte = nova();

@@ -14,7 +14,22 @@ import {
 import { acessoBloqueado } from '@sgh/dominio-operadora';
 import { ErroOperacao } from '@sgh/nucleo';
 import { conferirAnexoResposta } from './aplicacao/regras-portas.js';
-import { type DadosAcessoPortalParaEntrada, type DadosAcessoPortalPrestador, type DadosConsultaElegibilidade, type DadosConsultaProtocolo, type DadosEventoProtocolo, type DadosItemDominio, type DadosProtocolo, type DadosProtocoloResumo, type DadosRespostaPrestador, type EntradaRegistroProtocolo, type FiltroProtocolosPorta, LIMITE_PAGINA_PROTOCOLOS, SITUACOES_RESPOSTA_PRESTADOR, type SituacaoProtocoloPorta } from './dados-portas.js';
+import {
+  type DadosAcessoPortalParaEntrada,
+  type DadosAcessoPortalPrestador,
+  type DadosConsultaElegibilidade,
+  type DadosConsultaProtocolo,
+  type DadosEventoProtocolo,
+  type DadosItemDominio,
+  type DadosProtocolo,
+  type DadosProtocoloResumo,
+  type DadosRespostaPrestador,
+  type EntradaRegistroProtocolo,
+  type FiltroProtocolosPorta,
+  LIMITE_PAGINA_PROTOCOLOS,
+  SITUACOES_RESPOSTA_PRESTADOR,
+  type SituacaoProtocoloPorta,
+} from './dados-portas.js';
 import type {
   ContextoAtendimento,
   DominiosAtendimento,
@@ -55,10 +70,7 @@ const acessoDesatualizado = () =>
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
 type Protocolo = { hospital: string } & Mutavel<
-  Omit<
-    DadosProtocolo,
-    'vencido' | 'escritaVencida' | 'beneficiarioNome' | 'autorizacao' | 'origemProtocolo'
-  >
+  Omit<DadosProtocolo, 'vencido' | 'escritaVencida' | 'beneficiarioNome' | 'autorizacao' | 'origemProtocolo'>
 > & { autorizacaoId: number | null; origemId: number | null; beneficiarioNome: string | null };
 type Evento = DadosEventoProtocolo & { hospital: string; protocolo: number };
 type Acesso = Mutavel<DadosAcessoPortalParaEntrada> & { hospital: string; ativacaoResumo: string | null };

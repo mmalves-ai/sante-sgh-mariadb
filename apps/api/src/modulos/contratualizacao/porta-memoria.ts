@@ -17,11 +17,7 @@ import {
 } from '@sgh/contratos';
 import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
-import type {
-  DominiosContratualizacao,
-  GravadorContratualizacao,
-  PortaContratualizacao,
-} from './porta.js';
+import type { DominiosContratualizacao, GravadorContratualizacao, PortaContratualizacao } from './porta.js';
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 function hojeLocal(): { hoje: string; competencia: string } {

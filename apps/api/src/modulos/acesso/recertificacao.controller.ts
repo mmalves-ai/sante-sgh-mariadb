@@ -51,7 +51,6 @@ import { exigirGestorRestante } from './ultimo-gestor.js';
  */
 const destinoTela = (d: DestinoGestao) => d as unknown as DecisaoRecertTela['destino'];
 
-
 export const OPERACAO_BLOQUEIO_RECERT = 'acesso.bloquearUsuario';
 const FUSO = 'America/Sao_Paulo';
 /** Campanhas com o relatório na lista (as mais novas); as demais abrem pelo id. */

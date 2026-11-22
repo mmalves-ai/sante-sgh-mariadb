@@ -295,11 +295,7 @@ export class FonteCatalogosMemoria implements FonteCatalogos {
     await this.registrar?.({ ...trilha, tabelaAlvo: 'MEMORIA', idAlvo: String(id) });
     return { id };
   }
-  async mudarSituacao(
-    c: CtxCatalogos,
-    m: MudancaSituacaoCarga,
-    trilha: Trilha,
-  ) {
+  async mudarSituacao(c: CtxCatalogos, m: MudancaSituacaoCarga, trilha: Trilha) {
     const lista = this.lista(c.hospital);
     const i = lista.findIndex((x) => x.id === m.id);
     const atual = lista[i];

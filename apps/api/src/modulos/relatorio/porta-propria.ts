@@ -130,7 +130,8 @@ async function fusoDe(l: Leitor, est: number): Promise<string> {
 
 /** Hora do dia "HH:MM" → TIME do banco (recusa hora inválida). */
 export function horaNoBanco(hora: string): string {
-  if (!FORMATO_HORA.test(hora)) throw recusa('hora-invalida', 'Hora do envio inválida: use de 00:00 a 23:59.');
+  if (!FORMATO_HORA.test(hora))
+    throw recusa('hora-invalida', 'Hora do envio inválida: use de 00:00 a 23:59.');
   return `${hora}:00`;
 }
 
@@ -318,10 +319,7 @@ export class PortaRelatorioPropria implements PortaRelatorio {
   }
 
   /** Leitura do estabelecimento da sessão, com o fuso dele (a hora lida do banco, em UTC, volta à hora local). */
-  private ler<T>(
-    c: ContextoRelatorio,
-    fn: (l: Leitor, est: number, fuso: string) => Promise<T>,
-  ): Promise<T> {
+  private ler<T>(c: ContextoRelatorio, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
     if (est === null || est === undefined)
       return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
@@ -345,7 +343,13 @@ export class PortaRelatorioPropria implements PortaRelatorio {
     },
   ) {
     return this.ler(c, (l, est, fuso) =>
-      executarConsultaCatalogo(l, { estabelecimento: est, hoje: relogioNoFuso(fuso).hoje, fuso }, codigo, valores, o),
+      executarConsultaCatalogo(
+        l,
+        { estabelecimento: est, hoje: relogioNoFuso(fuso).hoje, fuso },
+        codigo,
+        valores,
+        o,
+      ),
     );
   }
 
@@ -597,14 +601,12 @@ export class PortaRelatorioPropria implements PortaRelatorio {
 
   pedidos(c: ContextoRelatorio, f: { readonly solicitante?: string }): Promise<PedidoRelatorio[]> {
     return this.ler(c, async (l, est, fuso) =>
-      (
-        await exigirPedido(l),
-        await l.consultar(
-          `${SQL_PEDIDO} ${f.solicitante ? 'AND s.login = ?' : ''} ORDER BY p.criado_em DESC, p.id DESC`,
-          f.solicitante ? [est, f.solicitante] : [est],
-          { teto: 2_000 },
-        )
-      ).map((x) => pedidoDe(x, fuso)),
+      (await exigirPedido(l),
+      await l.consultar(
+        `${SQL_PEDIDO} ${f.solicitante ? 'AND s.login = ?' : ''} ORDER BY p.criado_em DESC, p.id DESC`,
+        f.solicitante ? [est, f.solicitante] : [est],
+        { teto: 2_000 },
+      )).map((x) => pedidoDe(x, fuso)),
     );
   }
 
@@ -621,20 +623,18 @@ export class PortaRelatorioPropria implements PortaRelatorio {
   eventos(c: ContextoRelatorio, alvo: AlvoEventoRelatorio, id: string): Promise<RegistroEventoRelatorio[]> {
     if (!ID.test(id)) return Promise.resolve([]);
     return this.ler(c, async (l, est, fuso) =>
-      (
-        alvo === 'pedido' ? await exigirPedido(l) : undefined,
-        await l.consultar(
-          `SELECT JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.dados.eventoRelatorio.evento')) AS evento,
+      (alvo === 'pedido' ? await exigirPedido(l) : undefined,
+      await l.consultar(
+        `SELECT JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.dados.eventoRelatorio.evento')) AS evento,
                   JSON_EXTRACT(t.dados_depois, '$.dados.eventoRelatorio.antes') AS antes, t.motivo, u.login AS por,
                   ${ISO('t.ocorrido_em')} AS em
              FROM trilha_auditoria t LEFT JOIN usuario u ON u.id = t.usuario_id
             WHERE t.estabelecimento_id = ? AND t.entidade = ? AND t.entidade_id = ?
               AND JSON_EXTRACT(t.dados_depois, '$.dados.eventoRelatorio.evento') IS NOT NULL
             ORDER BY t.ocorrido_em, t.id`,
-          [est, alvo === 'pedido' ? 'pedido_relatorio' : 'agendamento_relatorio', Number(id)],
-          { teto: 1_000 },
-        )
-      ).map((x) => ({
+        [est, alvo === 'pedido' ? 'pedido_relatorio' : 'agendamento_relatorio', Number(id)],
+        { teto: 1_000 },
+      )).map((x) => ({
         evento: texto(x['evento']) as EventoRelatorio,
         motivo: texto(x['motivo']),
         por: texto(x['por']),
@@ -783,7 +783,9 @@ function gravador(
     }
     for (const c of candidatos) {
       const k = c.trim().toLowerCase();
-      const achada = Object.entries(PAPEIS_TRIAGEM).find(([chave, v]) => chave === k || v.toLowerCase() === k);
+      const achada = Object.entries(PAPEIS_TRIAGEM).find(
+        ([chave, v]) => chave === k || v.toLowerCase() === k,
+      );
       if (achada) return achada[0];
     }
     if (atual) return atual;
@@ -985,7 +987,8 @@ function gravador(
         textoN(x['destino']) !== d.destino ||
         textoN(x['marco']) !== d.marco ||
         texto(x['artefato']) !== d.artefato.slice(0, 120);
-      const dono = d.destino === 'descartado' ? await papelId(d.papelDono, false) : await papelId(d.papelDono, true);
+      const dono =
+        d.destino === 'descartado' ? await papelId(d.papelDono, false) : await papelId(d.papelDono, true);
       await tx.alterar('triagem_relatorio_legado', n(x['id']), n(x['versao']), {
         destino: d.destino,
         marco: d.marco,

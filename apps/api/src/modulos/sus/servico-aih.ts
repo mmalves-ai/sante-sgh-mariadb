@@ -64,7 +64,14 @@ import {
 } from './montagem-aih.js';
 import type { ContextoSus, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
 import type { ArmazemArquivoSus, MontadorCriticaSus, ServicoSus, SessaoSus } from './servico.js';
-import { type AihRegistro, ErroAih, ErroSus, type FaixaAih, type ItemAihParaGravar, type RetornoSus } from './tipos.js';
+import {
+  type AihRegistro,
+  ErroAih,
+  ErroSus,
+  type FaixaAih,
+  type ItemAihParaGravar,
+  type RetornoSus,
+} from './tipos.js';
 
 export const MENSAGENS_RECUSA_AIH = {
   'instrumento-desligado': 'Este instrumento está desligado neste estabelecimento.',

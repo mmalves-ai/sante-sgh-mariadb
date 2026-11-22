@@ -646,9 +646,7 @@ export class PortariaController {
     const v = await this.porta.visita(s.porta, idDaRota(id));
     if (!v) throw naoEncontrado('Visita');
     req.sghAlvo =
-      v.paciente !== null
-        ? { paciente: v.paciente, tabelaAlvo: 'visita' }
-        : { tabelaAlvo: 'visita' };
+      v.paciente !== null ? { paciente: v.paciente, tabelaAlvo: 'visita' } : { tabelaAlvo: 'visita' };
     const internados = await this.mapaInternados(s);
     const i = v.internacao !== null ? internados.get(v.internacao) : undefined;
     const destino = i ? `${i.unidadeNome} · ${i.leito}` : (v.local ?? '');
@@ -758,9 +756,7 @@ export class PortariaController {
   @Post('regras')
   @HttpCode(201)
   @Permissao(P.regrar)
-  @AuditadoNoHandler(
-    'internacao.definirRegraVisita: regra_visita_unidade com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('internacao.definirRegraVisita: regra_visita_unidade com a trilha na mesma transação')
   async definirRegra(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegraVisita, b);
@@ -926,9 +922,7 @@ export class PortariaController {
   @Post('bloqueios-clinicos/:id/revogacao')
   @HttpCode(201)
   @Permissao(P.bloquearClinico)
-  @AuditadoNoHandler(
-    'internacao.bloquearVisita (revogação clínica): bloqueio_visitante com a trilha junto',
-  )
+  @AuditadoNoHandler('internacao.bloquearVisita (revogação clínica): bloqueio_visitante com a trilha junto')
   revogarClinico(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.revogar(sessaoDe(req), id, b, true);
   }

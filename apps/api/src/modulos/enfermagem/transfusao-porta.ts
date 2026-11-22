@@ -44,9 +44,7 @@ export interface GravadorTransfusao {
   }): Promise<{
     id: number;
   }>;
-  amostra(
-    a: AmostraTransfusionalNova,
-  ): Promise<{ id: number; codigo: string; repetida: boolean }>;
+  amostra(a: AmostraTransfusionalNova): Promise<{ id: number; codigo: string; repetida: boolean }>;
   iniciar(t: InicioTransfusaoNovo): Promise<{ id: number; repetida: boolean }>;
   sinais(s: {
     readonly ato: number;
@@ -60,9 +58,7 @@ export interface GravadorTransfusao {
   concluir(
     c: ConclusaoTransfusaoNova,
   ): Promise<{ id: number; estadoRequisicao: string; ganho: number | null }>;
-  reacao(
-    r: ReacaoTransfusionalNova,
-  ): Promise<{ id: number; repetida: boolean; interrompeu: boolean }>;
+  reacao(r: ReacaoTransfusionalNova): Promise<{ id: number; repetida: boolean; interrompeu: boolean }>;
   notificada(m: {
     readonly reacao: number;
     readonly enviadaEm: string;

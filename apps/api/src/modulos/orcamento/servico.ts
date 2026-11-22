@@ -265,7 +265,9 @@ export class ServicoOrcamento {
     );
     // O consumo por centro só entra quando o banco o guarda (porta.gravaConsumoPorCentro): senão fica de fora, contado
     // nas descartadas, e a versão do realizado sai com a despesa e a receita (nunca recusada por inteiro).
-    const gravaveis = this.porta.gravaConsumoPorCentro ? validas : validas.filter((l) => l.natureza !== 'consumo');
+    const gravaveis = this.porta.gravaConsumoPorCentro
+      ? validas
+      : validas.filter((l) => l.natureza !== 'consumo');
     const consumoDeFora = validas.length - gravaveis.length;
     const descartadas = linhas.length - gravaveis.length;
     if (gravaveis.length > TETO_LINHAS_ORCAMENTO)
@@ -276,7 +278,13 @@ export class ServicoOrcamento {
         { empresa: x.empresa, ano: x.ano, descricao: x.descricao, base, linhas: gravaveis },
         gravacao(
           s,
-          s.trilha(eventos.criado, 'incluir', 'versao_orcamento', null, `${x.ano}:${rotulo}:${gravaveis.length} linhas`),
+          s.trilha(
+            eventos.criado,
+            'incluir',
+            'versao_orcamento',
+            null,
+            `${x.ano}:${rotulo}:${gravaveis.length} linhas`,
+          ),
         ),
       ),
     );

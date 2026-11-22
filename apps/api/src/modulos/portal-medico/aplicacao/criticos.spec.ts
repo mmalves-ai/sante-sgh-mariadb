@@ -181,7 +181,12 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
     const { s, porta } = montar({ canal: simulador });
     await ligar(porta, ACESSO, 6801);
     porta.gravar = () =>
-      Promise.reject(recusa('canal-inexistente', 'O canal da notificação do portal do médico externo não está cadastrado.'));
+      Promise.reject(
+        recusa(
+          'canal-inexistente',
+          'O canal da notificação do portal do médico externo não está cadastrado.',
+        ),
+      );
     expect(await s.notificarCriticos(H)).toEqual({
       contas: 1,
       notificados: 0,

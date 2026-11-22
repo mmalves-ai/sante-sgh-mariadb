@@ -258,5 +258,8 @@ export function portaAtendimentoIndisponivel(): PortaAtendimento {
     }),
   };
   const metodos = [...METODOS_PORTA_ATENDIMENTO].filter((m) => m !== 'podeGravar');
-  return Object.assign(base, Object.fromEntries(metodos.map((m) => [m, recusa]))) as unknown as PortaAtendimento;
+  return Object.assign(
+    base,
+    Object.fromEntries(metodos.map((m) => [m, recusa])),
+  ) as unknown as PortaAtendimento;
 }

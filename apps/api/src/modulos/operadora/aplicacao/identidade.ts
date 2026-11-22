@@ -20,12 +20,7 @@ export interface DadosPessoais {
 
 /** Nome comparável: sem acento, sem caixa e com um espaço só entre as palavras. */
 export function nomeComparavel(n: string | null | undefined): string {
-  return (n ?? '')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toUpperCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (n ?? '').normalize('NFD').replace(/\p{M}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
 }
 
 /** O CPF encontrado é da pessoa digitada? Nome (comparável) e nascimento iguais; sem nascimento gravado, só o nome. */
@@ -34,7 +29,9 @@ export function mesmaPessoa(
   digitada: { readonly nome: string; readonly nascimento: string | null },
 ): boolean {
   if (nomeComparavel(gravada.nome) !== nomeComparavel(digitada.nome)) return false;
-  return gravada.nascimento === null || digitada.nascimento === null || gravada.nascimento === digitada.nascimento;
+  return (
+    gravada.nascimento === null || digitada.nascimento === null || gravada.nascimento === digitada.nascimento
+  );
 }
 
 /** Os campos pessoais digitados que diferem dos gravados (vazio: nada mudou). */

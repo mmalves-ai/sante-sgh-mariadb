@@ -39,9 +39,19 @@ import {
 import { GravacaoController } from './gravacao.controller.js';
 import { criarFonteGravacao, FONTE_GRAVACAO, type FonteGravacao, METRICAS_EXECUTOR } from './gravacao.js';
 import { HomologacaoController } from './homologacao.controller.js';
-import { caminhoHomologacao, FONTE_HOMOLOGACAO, fonteArquivoHomologacao, type FonteHomologacao } from './homologacao.js';
+import {
+  caminhoHomologacao,
+  FONTE_HOMOLOGACAO,
+  fonteArquivoHomologacao,
+  type FonteHomologacao,
+} from './homologacao.js';
 import { ProntidaoController } from './prontidao.controller.js';
-import { caminhoProntidao, FONTE_PRONTIDAO, fonteArquivoProntidao, type FonteProntidao } from './prontidao.js';
+import {
+  caminhoProntidao,
+  FONTE_PRONTIDAO,
+  fonteArquivoProntidao,
+  type FonteProntidao,
+} from './prontidao.js';
 import { LiberacaoController } from './liberacao.controller.js';
 import { ParametrosController } from './parametros.controller.js';
 
@@ -56,7 +66,6 @@ export interface OpcoesModuloConfig {
   readonly gravacao?: FonteGravacao;
   readonly metricas?: MetricasExecutor;
 }
-
 
 /** A fonte da configuração pela regra do módulo. */
 export async function fonteDaConfiguracao(ctx: ContextoModulo): Promise<FonteConfiguracao | null> {
@@ -100,7 +109,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloConfig = {
       nucleo: ctx.nucleo,
     });
   const prontidao = opcoes.prontidao ?? fonteArquivoProntidao(caminhoProntidao(process.cwd(), ctx.env));
-  const homologacao = opcoes.homologacao ?? fonteArquivoHomologacao(caminhoHomologacao(process.cwd(), ctx.env));
+  const homologacao =
+    opcoes.homologacao ?? fonteArquivoHomologacao(caminhoHomologacao(process.cwd(), ctx.env));
   return {
     module: ModuloConfig,
     global: true,

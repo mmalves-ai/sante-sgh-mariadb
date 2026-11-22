@@ -11,9 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { htmlPmoc } from './documentos.js';
 import { conferirInstalacaoModelo, conferirPeriodoPmoc, montarPmoc, type EquipamentoDoPmoc } from './pmoc.js';
 
-const plano = (
-  x: Partial<PlanoManutencao> & { id: number; equipamento: number },
-): PlanoManutencao => ({
+const plano = (x: Partial<PlanoManutencao> & { id: number; equipamento: number }): PlanoManutencao => ({
   versao: 1,
   atividade: 'preventiva',
   periodicidade: { quantidade: 1, unidade: 'meses' },
@@ -28,7 +26,12 @@ const plano = (
   ultimoResultado: null,
   ...x,
 });
-const exec = (id: number, planoId: number, data: string, x: Partial<ExecucaoDoPlano> = {}): ExecucaoDoPlano => ({
+const exec = (
+  id: number,
+  planoId: number,
+  data: string,
+  x: Partial<ExecucaoDoPlano> = {},
+): ExecucaoDoPlano => ({
   id,
   plano: planoId,
   data,

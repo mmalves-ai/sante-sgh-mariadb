@@ -38,11 +38,13 @@ describe.skipIf(!PODE)('M56 regra 3: escopo da operadora e do estabelecimento (M
     const s = sessao(m);
     const outro = sessao(m, 'todas', true);
     const k = await montarCarteira(servico, s, { registro: '902104', base: '90211' });
-    expect((await porta.contratos(s.porta, { operadora: k.operadora })).itens.map((x) => x.id)).toEqual([k.contrato]);
+    expect((await porta.contratos(s.porta, { operadora: k.operadora })).itens.map((x) => x.id)).toEqual([
+      k.contrato,
+    ]);
     expect((await porta.contratos(s.porta, { operadora: k.operadora + 1_000_000 })).itens).toEqual([]);
-    expect((await porta.beneficiarios(s.porta, { operadora: k.operadora })).itens.map((x) => x.id).sort()).toEqual(
-      [k.titular.id, k.dependente].sort(),
-    );
+    expect(
+      (await porta.beneficiarios(s.porta, { operadora: k.operadora })).itens.map((x) => x.id).sort(),
+    ).toEqual([k.titular.id, k.dependente].sort());
     // O outro estabelecimento não lê nem grava nada desta carteira.
     expect(await porta.operadora(outro.porta, k.operadora)).toBeNull();
     expect(await porta.contrato(outro.porta, k.contrato)).toBeNull();

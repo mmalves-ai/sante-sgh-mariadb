@@ -43,7 +43,12 @@ describe('declaração do domínio pelos metadados', () => {
   const d = declararDominio('exemplo_dominio', 'CAD', 'Exemplos de domínio', COLUNAS)!;
 
   it('módulo pela área, recurso em camelCase, subitem e ações; colunas do núcleo e geradas fora', () => {
-    expect(d).toMatchObject({ modulo: 'cadastro', recurso: 'exemploDominio', subitem: 'demograficos', natureza: 'editavel' });
+    expect(d).toMatchObject({
+      modulo: 'cadastro',
+      recurso: 'exemploDominio',
+      subitem: 'demograficos',
+      natureza: 'editavel',
+    });
     expect(d.acoes).toEqual(['ler', 'criar', 'editar', 'inativar', 'exportar']);
     expect(d.campos.map((c) => c.campo)).toEqual([
       'codigo',
@@ -68,7 +73,14 @@ describe('declaração do domínio pelos metadados', () => {
   });
 
   it('tabela sem a forma de domínio, ou de área sem módulo, não é declarada', () => {
-    expect(declararDominio('x', 'CAD', '', COLUNAS.filter((c) => c.coluna !== 'ativo'))).toBeNull();
+    expect(
+      declararDominio(
+        'x',
+        'CAD',
+        '',
+        COLUNAS.filter((c) => c.coluna !== 'ativo'),
+      ),
+    ).toBeNull();
     expect(declararDominio('x', 'ZZZ', '', COLUNAS)).toBeNull();
   });
 
@@ -83,23 +95,50 @@ describe('declaração do domínio pelos metadados', () => {
     expect(
       valoresParaBanco(
         d,
-        { codigo: 'A1', descricao: ' Um ', exigeHorario: 'sim', valor: '10,5', inicio: '2026-01-31', tipoId: 3 },
+        {
+          codigo: 'A1',
+          descricao: ' Um ',
+          exigeHorario: 'sim',
+          valor: '10,5',
+          inicio: '2026-01-31',
+          tipoId: 3,
+        },
         'incluir',
       ),
-    ).toEqual({ codigo: 'A1', descricao: 'Um', exige_horario: true, valor: 10.5, inicio: '2026-01-31', tipo_id: 3 });
+    ).toEqual({
+      codigo: 'A1',
+      descricao: 'Um',
+      exige_horario: true,
+      valor: 10.5,
+      inicio: '2026-01-31',
+      tipo_id: 3,
+    });
     const erro = (() => {
       try {
-        valoresParaBanco(d, { codigo: 'A1', descricao: 'x'.repeat(21), valor: '1.234', hora: '25:00', outro: 1 }, 'incluir');
+        valoresParaBanco(
+          d,
+          { codigo: 'A1', descricao: 'x'.repeat(21), valor: '1.234', hora: '25:00', outro: 1 },
+          'incluir',
+        );
       } catch (e) {
         return e;
       }
       return null;
     })();
     expect(erro).toBeInstanceOf(ErroValorCampo);
-    expect([...(erro as ErroValorCampo).campos].sort()).toEqual(['descricao', 'hora', 'outro', 'tipoId', 'valor']);
+    expect([...(erro as ErroValorCampo).campos].sort()).toEqual([
+      'descricao',
+      'hora',
+      'outro',
+      'tipoId',
+      'valor',
+    ]);
     // Na alteração, o código não muda e só o enviado vai ao banco.
     expect(() => valoresParaBanco(d, { codigo: 'B2' }, 'alterar')).toThrow(ErroValorCampo);
-    expect(valoresParaBanco(d, { descricao: 'Dois', inicio: '' }, 'alterar')).toEqual({ descricao: 'Dois', inicio: null });
+    expect(valoresParaBanco(d, { descricao: 'Dois', inicio: '' }, 'alterar')).toEqual({
+      descricao: 'Dois',
+      inicio: null,
+    });
   });
 
   it('valor do banco → tela', () => {

@@ -13,7 +13,11 @@ import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloFarmacia } from './modulo.js';
 import { PortaFarmaciaMemoria, UNIDADE_SINTETICA } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,farmacia' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'config,documento,farmacia',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const farmacia = new PortaFarmaciaMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;

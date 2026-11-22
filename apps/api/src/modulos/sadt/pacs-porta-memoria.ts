@@ -70,8 +70,14 @@ export class PortaPacsMemoria implements PortaPacs {
 
   /** O simulador do estabelecimento (os testes conferem o que chegou). */
   simulador(hospital: string): SimuladorModalidade {
-    return this.e({ cliente: '', estabelecimento: null, usuario: null, correlacao: 'simulador', rede: '', hospital })
-      .simulador;
+    return this.e({
+      cliente: '',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 'simulador',
+      rede: '',
+      hospital,
+    }).simulador;
   }
 
   async podeGravar() {
@@ -79,7 +85,10 @@ export class PortaPacsMemoria implements PortaPacs {
   }
   executar(): Promise<never> {
     return Promise.reject(
-      recusa('operacao-desconhecida', 'A lista de trabalho DICOM grava pelas ações próprias (enviar, reenviar e status).'),
+      recusa(
+        'operacao-desconhecida',
+        'A lista de trabalho DICOM grava pelas ações próprias (enviar, reenviar e status).',
+      ),
     );
   }
 

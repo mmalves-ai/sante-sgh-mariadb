@@ -46,11 +46,7 @@ export const afetados = (
  */
 export const planejarAcaoDoAlerta =
   (versaoVista: number, pedidos: readonly number[]) =>
-  (
-    alerta: AlertaEquipamento,
-    parque: readonly EquipamentoDoParque[],
-    acoes: readonly AcaoDeCampo[],
-  ) => {
+  (alerta: AlertaEquipamento, parque: readonly EquipamentoDoParque[], acoes: readonly AcaoDeCampo[]) => {
     const p = planejarAcaoDeCampo(alerta, versaoVista, afetados(alerta, parque, acoes), pedidos);
     if (!p.ok) return p;
     return {

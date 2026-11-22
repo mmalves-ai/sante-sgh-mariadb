@@ -259,7 +259,12 @@ export const CAMPOS_HISTORICO_PACIENTE: readonly CampoHistorico[] = [
   { coluna: 'racaCor', campo: 'racaCor', rotulo: 'Raça/cor', restricao: 'sensivel' },
   { coluna: 'religiao', campo: 'religiao', rotulo: 'Religião', restricao: 'sensivel' },
   { coluna: 'etnia', campo: 'etnia', rotulo: 'Etnia', restricao: 'sensivel' },
-  { coluna: 'responsavelLegal', campo: 'responsavelLegal', rotulo: 'Responsável legal', restricao: 'sensivel' },
+  {
+    coluna: 'responsavelLegal',
+    campo: 'responsavelLegal',
+    rotulo: 'Responsável legal',
+    restricao: 'sensivel',
+  },
   { coluna: 'obito', campo: 'obito', rotulo: 'Óbito' },
 ];
 

@@ -64,7 +64,9 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
         .escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-senha' }, async (w) => {
           const doGerador = 'SELECT id FROM senha_emitida WHERE gerador_senha_id = ?';
           for (const t of ['atendimento_senha', 'chamada_painel'])
-            await w.executar(`DELETE FROM ${t} WHERE senha_emitida_id IN (SELECT id FROM (${doGerador}) x)`, [gerador]);
+            await w.executar(`DELETE FROM ${t} WHERE senha_emitida_id IN (SELECT id FROM (${doGerador}) x)`, [
+              gerador,
+            ]);
           await w.executar('DELETE FROM senha_emitida WHERE gerador_senha_id = ?', [gerador]);
           await w.executar('DELETE FROM gerador_senha WHERE id = ?', [gerador]);
         })
@@ -92,20 +94,52 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
 
   it('abre o atendimento: número da sequência, histórico, cobertura, procedimento principal, trilha e saída', async () => {
     const mm = m!;
-    const r = await porta.executar(contextoPorta(mm), 'atendimento.abrirAtendimento', abertura(mm), contextoGravacao(mm));
+    const r = await porta.executar(
+      contextoPorta(mm),
+      'atendimento.abrirAtendimento',
+      abertura(mm),
+      contextoGravacao(mm),
+    );
     reg = Number(r.resultado['reg']);
     expect(reg).toBeGreaterThan(0);
     expect(String(r.resultado['cabecalho'])).toMatch(/^AT-\d+$/);
     expect(r.repetida).toBe(false);
-    expect(await ler('SELECT situacao, estabelecimento_id, versao FROM atendimento WHERE id = ?', [reg])).toMatchObject({
+    expect(
+      await ler('SELECT situacao, estabelecimento_id, versao FROM atendimento WHERE id = ?', [reg]),
+    ).toMatchObject({
       situacao: 'aberto',
       versao: 1,
     });
-    expect(await contar("SELECT COUNT(*) AS n FROM atendimento_situacao_historico WHERE atendimento_id = ? AND situacao_nova = 'aberto'", [reg])).toBe(1);
-    expect(await contar("SELECT COUNT(*) AS n FROM cobertura_atendimento WHERE atendimento_id = ? AND numero_carteira = '123456'", [reg])).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND principal', [reg])).toBe(1);
-    expect(await contar("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE id = ? AND entidade = 'atendimento' AND entidade_id = ?", [r.trilha, reg])).toBe(1);
-    expect(await contar("SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'atendimento.aberto' AND entidade_id = ?", [reg])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM atendimento_situacao_historico WHERE atendimento_id = ? AND situacao_nova = 'aberto'",
+        [reg],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM cobertura_atendimento WHERE atendimento_id = ? AND numero_carteira = '123456'",
+        [reg],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND principal',
+        [reg],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE id = ? AND entidade = 'atendimento' AND entidade_id = ?",
+        [r.trilha, reg],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'atendimento.aberto' AND entidade_id = ?",
+        [reg],
+      ),
+    ).toBe(1);
   });
 
   it('o dia, o detalhe e o histórico do paciente leem o atendimento; outro estabelecimento não o vê', async () => {
@@ -136,25 +170,62 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     const mm = m!;
     const c = contextoPorta(mm);
     await expect(
-      porta.executar(c, 'atendimento.conduzirNoConsultorio', { atendimento: reg, local: mm.local, evento: 'atender' }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.conduzirNoConsultorio',
+        { atendimento: reg, local: mm.local, evento: 'atender' },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'paciente-nao-chamado' } });
     await expect(
-      porta.executar(c, 'atendimento.conduzirNoConsultorio', { atendimento: reg, local: mm.localOutro, evento: 'chamar' }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.conduzirNoConsultorio',
+        { atendimento: reg, local: mm.localOutro, evento: 'chamar' },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'local-inexistente' } });
-    await porta.executar(c, 'atendimento.conduzirNoConsultorio', { atendimento: reg, local: mm.local, evento: 'chamar' }, contextoGravacao(mm));
-    expect(await contar('SELECT COUNT(*) AS n FROM chamada_painel WHERE atendimento_id = ? AND local_atendimento_id = ? AND repeticao = 0', [reg, mm.local])).toBe(1);
+    await porta.executar(
+      c,
+      'atendimento.conduzirNoConsultorio',
+      { atendimento: reg, local: mm.local, evento: 'chamar' },
+      contextoGravacao(mm),
+    );
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM chamada_painel WHERE atendimento_id = ? AND local_atendimento_id = ? AND repeticao = 0',
+        [reg, mm.local],
+      ),
+    ).toBe(1);
     const { hoje } = await porta.relogio(c);
     const fila = await porta.fila(c, { local: mm.local, hoje });
-    expect(fila.itens.find((x) => x.reg === reg)).toMatchObject({ situacaoNovo: 'chamado', chamadas: 1, prioridade: '2' });
-    await porta.executar(c, 'atendimento.conduzirNoConsultorio', { atendimento: reg, local: mm.local, evento: 'atender' }, contextoGravacao(mm));
-    expect((await ler('SELECT situacao, versao FROM atendimento WHERE id = ?', [reg]))).toMatchObject({ situacao: 'em_atendimento', versao: 2 });
+    expect(fila.itens.find((x) => x.reg === reg)).toMatchObject({
+      situacaoNovo: 'chamado',
+      chamadas: 1,
+      prioridade: '2',
+    });
+    await porta.executar(
+      c,
+      'atendimento.conduzirNoConsultorio',
+      { atendimento: reg, local: mm.local, evento: 'atender' },
+      contextoGravacao(mm),
+    );
+    expect(await ler('SELECT situacao, versao FROM atendimento WHERE id = ?', [reg])).toMatchObject({
+      situacao: 'em_atendimento',
+      versao: 2,
+    });
   });
 
   it('desfecho clínico só por médico (CBO 225 ou CRM ativo): a enfermagem é recusada; o encerrado recusa novo desfecho e a exclusão', async () => {
     const mm = m!;
     const c = contextoPorta(mm);
     await expect(
-      porta.executar(c, 'atendimento.encerrarAtendimento', { atendimento: reg, desfecho: 'alta', profissional: mm.enfermeira }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.encerrarAtendimento',
+        { atendimento: reg, desfecho: 'alta', profissional: mm.enfermeira },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'categoria-nao-permitida' } });
     const fim = await porta.executar(
       c,
@@ -166,9 +237,18 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     const a = await ler('SELECT situacao, desfecho, saida_em, versao FROM atendimento WHERE id = ?', [reg]);
     expect(a).toMatchObject({ situacao: 'encerrado', desfecho: 'alta', versao: 3 });
     expect(a?.['saida_em']).toBeTruthy();
-    expect(await contar('SELECT COUNT(*) AS n FROM atendimento_situacao_historico WHERE atendimento_id = ?', [reg])).toBe(3);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM atendimento_situacao_historico WHERE atendimento_id = ?', [
+        reg,
+      ]),
+    ).toBe(3);
     await expect(
-      porta.executar(c, 'atendimento.encerrarAtendimento', { atendimento: reg, desfecho: 'evasao' }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.encerrarAtendimento',
+        { atendimento: reg, desfecho: 'evasao' },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'atendimento-encerrado' } });
     expect(await porta.previaCancelamento(c, reg)).toMatchObject({ pode: false });
     await expect(
@@ -188,58 +268,123 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     const ontem = new Date(Date.parse(`${hoje}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
     senhas = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-senha' }, async (w) => {
       const agora = new Date();
-      const ponto = await w.uma<{ id: unknown }>('SELECT id FROM ponto_recepcao WHERE estabelecimento_id = ? AND codigo = ?', [mm.estabelecimento, MARCA]);
-      gerador = await w.inserir('INSERT INTO gerador_senha (ponto_recepcao_id, descricao, prefixo, criado_em) VALUES (?, ?, ?, ?)', [
-        Number(ponto?.id), `GERADOR ${MARCA}`, 'T', agora,
-      ]);
-      const sql = "INSERT INTO senha_emitida (estabelecimento_id, gerador_senha_id, data_referencia, numero, codigo_exibicao, emitida_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)";
+      const ponto = await w.uma<{ id: unknown }>(
+        'SELECT id FROM ponto_recepcao WHERE estabelecimento_id = ? AND codigo = ?',
+        [mm.estabelecimento, MARCA],
+      );
+      gerador = await w.inserir(
+        'INSERT INTO gerador_senha (ponto_recepcao_id, descricao, prefixo, criado_em) VALUES (?, ?, ?, ?)',
+        [Number(ponto?.id), `GERADOR ${MARCA}`, 'T', agora],
+      );
+      const sql =
+        'INSERT INTO senha_emitida (estabelecimento_id, gerador_senha_id, data_referencia, numero, codigo_exibicao, emitida_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)';
       return {
         hoje: await w.inserir(sql, [mm.estabelecimento, gerador, hoje, 1, 'T001', agora, agora]),
-        ontem: await w.inserir(sql, [mm.estabelecimento, gerador, ontem, 1, 'T001', new Date(agora.getTime() - 86_400_000), agora]),
+        ontem: await w.inserir(sql, [
+          mm.estabelecimento,
+          gerador,
+          ontem,
+          1,
+          'T001',
+          new Date(agora.getTime() - 86_400_000),
+          agora,
+        ]),
       };
     });
     await expect(
-      porta.executar(c, 'atendimento.abrirAtendimento', { ...abertura(mm), senha: senhas.ontem }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), senha: senhas.ontem },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'senha-de-outro-dia' } });
     await expect(
-      porta.executar(c, 'atendimento.abrirAtendimento', { ...abertura(mm), marcacao: 999_999_999 }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), marcacao: 999_999_999 },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'marcacao-inexistente' } });
     await expect(
-      porta.executar(c, 'atendimento.abrirAtendimento', { ...abertura(mm), local: mm.localOutro }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), local: mm.localOutro },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'local-inexistente' } });
     const r = await porta.executar(
       c,
       'atendimento.abrirAtendimento',
-      { ...abertura(mm), senha: senhas.hoje, local: mm.local, responsavel: { nome: `RESPONSAVEL ${MARCA}`, parentesco: 1, telefone: '31988887777' } },
+      {
+        ...abertura(mm),
+        senha: senhas.hoje,
+        local: mm.local,
+        responsavel: { nome: `RESPONSAVEL ${MARCA}`, parentesco: 1, telefone: '31988887777' },
+      },
       contextoGravacao(mm),
     );
     comSenha = Number(r.resultado['reg']);
-    expect(await ler('SELECT responsavel_nome, responsavel_telefone, local_atendimento_id FROM atendimento WHERE id = ?', [comSenha])).toMatchObject({
+    expect(
+      await ler(
+        'SELECT responsavel_nome, responsavel_telefone, local_atendimento_id FROM atendimento WHERE id = ?',
+        [comSenha],
+      ),
+    ).toMatchObject({
       responsavel_nome: `RESPONSAVEL ${MARCA}`,
       responsavel_telefone: '31988887777',
       local_atendimento_id: mm.local,
     });
-    expect(await ler('SELECT situacao, paciente_id, versao FROM senha_emitida WHERE id = ?', [senhas.hoje])).toMatchObject({
+    expect(
+      await ler('SELECT situacao, paciente_id, versao FROM senha_emitida WHERE id = ?', [senhas.hoje]),
+    ).toMatchObject({
       situacao: 'em_atendimento',
       paciente_id: paciente,
       versao: 2,
     });
     await expect(
-      porta.executar(c, 'atendimento.abrirAtendimento', { ...abertura(mm), senha: senhas.hoje }, contextoGravacao(mm)),
+      porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), senha: senhas.hoje },
+        contextoGravacao(mm),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'senha-ja-atendida' } });
   });
 
   it('exclui com motivo e reautenticação: registro do cancelamento, a senha do dia volta à fila; sem reautenticação, recusa', async () => {
     const mm = m!;
     const c = contextoPorta(mm);
-    const entrada = { atendimento: comSenha, motivo: mm.motivoCancelamento, justificativa: 'Aberto por engano no teste' };
-    await expect(porta.executar(c, 'atendimento.cancelarAtendimento', entrada, contextoGravacao(mm))).rejects.toMatchObject({
+    const entrada = {
+      atendimento: comSenha,
+      motivo: mm.motivoCancelamento,
+      justificativa: 'Aberto por engano no teste',
+    };
+    await expect(
+      porta.executar(c, 'atendimento.cancelarAtendimento', entrada, contextoGravacao(mm)),
+    ).rejects.toMatchObject({
       problema: { codigo: 'reautenticacao-necessaria' },
     });
-    await porta.executar(c, 'atendimento.cancelarAtendimento', entrada, contextoGravacao(mm, { reautenticadoEm: Date.now() }));
-    expect((await ler('SELECT situacao, excluido_em FROM atendimento WHERE id = ?', [comSenha]))).toMatchObject({ situacao: 'cancelado', excluido_em: null });
-    expect(await contar('SELECT COUNT(*) AS n FROM cancelamento_atendimento WHERE atendimento_id = ? AND motivo_cancelamento_operacao_id = ?', [comSenha, mm.motivoCancelamento])).toBe(1);
-    expect(await ler('SELECT situacao FROM senha_emitida WHERE id = ?', [senhas.hoje])).toMatchObject({ situacao: 'aguardando' });
+    await porta.executar(
+      c,
+      'atendimento.cancelarAtendimento',
+      entrada,
+      contextoGravacao(mm, { reautenticadoEm: Date.now() }),
+    );
+    expect(await ler('SELECT situacao, excluido_em FROM atendimento WHERE id = ?', [comSenha])).toMatchObject(
+      { situacao: 'cancelado', excluido_em: null },
+    );
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM cancelamento_atendimento WHERE atendimento_id = ? AND motivo_cancelamento_operacao_id = ?',
+        [comSenha, mm.motivoCancelamento],
+      ),
+    ).toBe(1);
+    expect(await ler('SELECT situacao FROM senha_emitida WHERE id = ?', [senhas.hoje])).toMatchObject({
+      situacao: 'aguardando',
+    });
     expect(await porta.previaCancelamento(c, comSenha)).toMatchObject({ pode: false });
   });
 
@@ -251,40 +396,88 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     const [l1, l2] = [mm.leitos[0]!, mm.leitos[1]!];
     const cab1 = String(a1.resultado['cabecalho']);
     const reg1 = Number(a1.resultado['reg']);
-    const trilha = { estabelecimento: mm.estabelecimento, usuario: mm.usuario, acao: 'operacao' as const, entidade: 'atendimento', entidadeId: reg1, correlacao: 'f22-0102-obs' };
+    const trilha = {
+      estabelecimento: mm.estabelecimento,
+      usuario: mm.usuario,
+      acao: 'operacao' as const,
+      entidade: 'atendimento',
+      entidadeId: reg1,
+      correlacao: 'f22-0102-obs',
+    };
     const id = await porta.gravarSgh(c, trilha, async (g) => {
       const n = await g.alocarObservacao({ cabecalho: cab1, reg: reg1, leito: l1, usuario: mm.login });
-      expect(await g.registrarEtapa({ cabecalho: cab1, reg: reg1, senha: null, etapa: 'observacao', usuario: mm.login })).toBe(n);
+      expect(
+        await g.registrarEtapa({
+          cabecalho: cab1,
+          reg: reg1,
+          senha: null,
+          etapa: 'observacao',
+          usuario: mm.login,
+        }),
+      ).toBe(n);
       return n;
     });
     expect(id).toBeGreaterThan(0);
-    expect((await ler('SELECT situacao FROM atendimento WHERE id = ?', [reg1]))?.['situacao']).toBe('em_observacao');
+    expect((await ler('SELECT situacao FROM atendimento WHERE id = ?', [reg1]))?.['situacao']).toBe(
+      'em_observacao',
+    );
     await expect(
-      porta.gravarSgh(c, trilha, (g) => g.alocarObservacao({ cabecalho: cab1, reg: reg1, leito: l2, usuario: mm.login })),
+      porta.gravarSgh(c, trilha, (g) =>
+        g.alocarObservacao({ cabecalho: cab1, reg: reg1, leito: l2, usuario: mm.login }),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'ja-em-observacao' } });
     await expect(
       porta.gravarSgh(c, trilha, (g) =>
-        g.alocarObservacao({ cabecalho: String(a2.resultado['cabecalho']), reg: Number(a2.resultado['reg']), leito: l1, usuario: mm.login }),
+        g.alocarObservacao({
+          cabecalho: String(a2.resultado['cabecalho']),
+          reg: Number(a2.resultado['reg']),
+          leito: l1,
+          usuario: mm.login,
+        }),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'leito-ocupado' } });
-    const entrada1 = (await ler('SELECT data_hora_entrada AS e FROM ocupacao_leito_observacao WHERE id = ?', [id]))?.['e'];
+    const entrada1 = (
+      await ler('SELECT data_hora_entrada AS e FROM ocupacao_leito_observacao WHERE id = ?', [id])
+    )?.['e'];
     const novo = await porta.gravarSgh(c, trilha, async (g) => {
-      const saida = await g.liberarObservacao({ cabecalho: cab1, usuario: mm.login, justificativa: 'Transferência de leito: teste', limiteHoras: 24, transferencia: true });
-      return g.alocarObservacao({ cabecalho: cab1, reg: reg1, leito: l2, usuario: mm.login, anterior: saida.id, motivoTransferencia: 'teste' });
+      const saida = await g.liberarObservacao({
+        cabecalho: cab1,
+        usuario: mm.login,
+        justificativa: 'Transferência de leito: teste',
+        limiteHoras: 24,
+        transferencia: true,
+      });
+      return g.alocarObservacao({
+        cabecalho: cab1,
+        reg: reg1,
+        leito: l2,
+        usuario: mm.login,
+        anterior: saida.id,
+        motivoTransferencia: 'teste',
+      });
     });
-    expect((await ler('SELECT data_hora_entrada AS e FROM ocupacao_leito_observacao WHERE id = ?', [novo]))?.['e']).toEqual(entrada1);
+    expect(
+      (await ler('SELECT data_hora_entrada AS e FROM ocupacao_leito_observacao WHERE id = ?', [novo]))?.['e'],
+    ).toEqual(entrada1);
     const mapa = await porta.observacao(c);
     expect(mapa.leitos.find((x) => x.id === l2)?.ocupacao?.reg).toBe(reg1);
     const lib = await porta.gravarSgh(c, trilha, (g) =>
       g.liberarObservacao({ cabecalho: cab1, usuario: mm.login, justificativa: null, limiteHoras: 24 }),
     );
     expect(lib).toEqual({ horas: 0, id: novo });
-    expect((await ler('SELECT situacao FROM atendimento WHERE id = ?', [reg1]))?.['situacao']).toBe('em_atendimento');
+    expect((await ler('SELECT situacao FROM atendimento WHERE id = ?', [reg1]))?.['situacao']).toBe(
+      'em_atendimento',
+    );
     expect((await porta.observacao(c)).leitos.find((x) => x.id === l2)?.ocupacao).toBeNull();
     // A exclusão do atendimento em observação fecha a ocupação (o leito não fica preso).
     const reg2 = Number(a2.resultado['reg']);
     await porta.gravarSgh(c, { ...trilha, entidadeId: reg2 }, (g) =>
-      g.alocarObservacao({ cabecalho: String(a2.resultado['cabecalho']), reg: reg2, leito: l1, usuario: mm.login }),
+      g.alocarObservacao({
+        cabecalho: String(a2.resultado['cabecalho']),
+        reg: reg2,
+        leito: l1,
+        usuario: mm.login,
+      }),
     );
     await porta.executar(
       c,
@@ -292,7 +485,12 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
       { atendimento: reg2, motivo: mm.motivoCancelamento, justificativa: 'Aberto por engano no teste' },
       contextoGravacao(mm, { reautenticadoEm: Date.now() }),
     );
-    expect(await contar("SELECT COUNT(*) AS n FROM ocupacao_leito_observacao WHERE atendimento_id = ? AND situacao = 'cancelada' AND data_hora_saida IS NOT NULL", [reg2])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM ocupacao_leito_observacao WHERE atendimento_id = ? AND situacao = 'cancelada' AND data_hora_saida IS NOT NULL",
+        [reg2],
+      ),
+    ).toBe(1);
     expect((await porta.observacao(c)).leitos.find((x) => x.id === l1)?.ocupacao).toBeNull();
   });
 

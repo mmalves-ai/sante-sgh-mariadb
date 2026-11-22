@@ -57,7 +57,10 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
   );
   await e.executar(`DELETE FROM notificacao_usuario WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM execucao_preventiva WHERE estabelecimento_id IN (${em})`, ests);
-  await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id IN (${em}) AND chave_armazenamento LIKE 'teste-l0303m/%'`, ests);
+  await e.executar(
+    `DELETE FROM arquivo WHERE estabelecimento_id IN (${em}) AND chave_armazenamento LIKE 'teste-l0303m/%'`,
+    ests,
+  );
   await e.executar(
     `DELETE i FROM ordem_servico_manutencao_item i JOIN ordem_servico_manutencao o ON o.id = i.ordem_servico_manutencao_id WHERE o.estabelecimento_id IN (${em})`,
     ests,
@@ -86,123 +89,133 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
 /** `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). */
 export async function prepararMassaManutencao(marca: string): Promise<MassaManutencao> {
   const nucleo = new NucleoProprio();
-  const ids = await nucleo.escrever({ cliente: CLIENTE_MAN, correlacao: `preparo-teste-03-03-${marca}` }, async (e) => {
-    const agora = new Date();
-    const estab = (cod: string) =>
-      garantir(
+  const ids = await nucleo.escrever(
+    { cliente: CLIENTE_MAN, correlacao: `preparo-teste-03-03-${marca}` },
+    async (e) => {
+      const agora = new Date();
+      const estab = (cod: string) =>
+        garantir(
+          e,
+          'SELECT id FROM estabelecimento WHERE codigo = ?',
+          [cod],
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [cod, 'ESTAB SINTETICO MANUTENCAO', 'ESTAB SINTETICO MANUTENCAO', agora],
+        );
+      const est = await estab(`${P_MAN}${marca}`);
+      const outro = await estab(`${P_MAN}${marca}X`);
+      const usuario = (login: string) =>
+        garantir(
+          e,
+          'SELECT id FROM usuario WHERE login = ?',
+          [login],
+          "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+          [login, `USUARIO SINTETICO ${login.toUpperCase()}`, agora],
+        );
+      const loginUsuario = `l0303m${marca.toLowerCase()}.tecnico`;
+      const loginAvisado = `l0303m${marca.toLowerCase()}.setor`;
+      const u = await usuario(loginUsuario);
+      const avisado = await usuario(loginAvisado);
+      const unidade = await garantir(
         e,
-        'SELECT id FROM estabelecimento WHERE codigo = ?',
-        [cod],
-        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
-        [cod, 'ESTAB SINTETICO MANUTENCAO', 'ESTAB SINTETICO MANUTENCAO', agora],
+        'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, 'U1'],
+        "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, 'U1', 'UNIDADE SINTETICA', 'internacao', ?)",
+        [est, agora],
       );
-    const est = await estab(`${P_MAN}${marca}`);
-    const outro = await estab(`${P_MAN}${marca}X`);
-    const usuario = (login: string) =>
-      garantir(
+      await garantir(
         e,
-        'SELECT id FROM usuario WHERE login = ?',
-        [login],
-        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
-        [login, `USUARIO SINTETICO ${login.toUpperCase()}`, agora],
+        'SELECT id FROM usuario_unidade WHERE usuario_id = ? AND unidade_assistencial_id = ?',
+        [avisado, unidade],
+        'INSERT INTO usuario_unidade (usuario_id, unidade_assistencial_id, criado_em) VALUES (?, ?, ?)',
+        [avisado, unidade, agora],
       );
-    const loginUsuario = `l0303m${marca.toLowerCase()}.tecnico`;
-    const loginAvisado = `l0303m${marca.toLowerCase()}.setor`;
-    const u = await usuario(loginUsuario);
-    const avisado = await usuario(loginAvisado);
-    const unidade = await garantir(
-      e,
-      'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
-      [est, 'U1'],
-      "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, 'U1', 'UNIDADE SINTETICA', 'internacao', ?)",
-      [est, agora],
-    );
-    await garantir(
-      e,
-      'SELECT id FROM usuario_unidade WHERE usuario_id = ? AND unidade_assistencial_id = ?',
-      [avisado, unidade],
-      'INSERT INTO usuario_unidade (usuario_id, unidade_assistencial_id, criado_em) VALUES (?, ?, ?)',
-      [avisado, unidade, agora],
-    );
-    const desligado = await usuario(`l0303m${marca.toLowerCase()}.desligado`);
-    await garantir(
-      e,
-      'SELECT id FROM usuario_unidade WHERE usuario_id = ? AND unidade_assistencial_id = ?',
-      [desligado, unidade],
-      'INSERT INTO usuario_unidade (usuario_id, unidade_assistencial_id, criado_em, excluido_em) VALUES (?, ?, ?, ?)',
-      [desligado, unidade, agora, agora],
-    );
-    const setor = await garantir(
-      e,
-      'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
-      [est, 'S1'],
-      "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, unidade_assistencial_id, criado_em) VALUES (?, 'S1', 'UTI SINTETICA', 'assistencial', ?, ?)",
-      [est, unidade, agora],
-    );
-    const centro = (cod: string, setorId: number | null) =>
-      garantir(
+      const desligado = await usuario(`l0303m${marca.toLowerCase()}.desligado`);
+      await garantir(
         e,
-        'SELECT id FROM centro_custo WHERE estabelecimento_id = ? AND codigo = ?',
-        [est, cod],
-        'INSERT INTO centro_custo (estabelecimento_id, codigo, nome, setor_funcional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
-        [est, cod, `CENTRO SINTETICO ${cod}`, setorId, '2020-01-01', agora],
+        'SELECT id FROM usuario_unidade WHERE usuario_id = ? AND unidade_assistencial_id = ?',
+        [desligado, unidade],
+        'INSERT INTO usuario_unidade (usuario_id, unidade_assistencial_id, criado_em, excluido_em) VALUES (?, ?, ?, ?)',
+        [desligado, unidade, agora, agora],
       );
-    const c1 = await centro('930301', setor);
-    await e.executar('UPDATE setor_funcional SET centro_custo_id = ? WHERE id = ?', [c1, setor]);
-    const recurso = await garantir(
-      e,
-      'SELECT id FROM recurso_agendavel WHERE estabelecimento_id = ? AND codigo = ?',
-      [est, 'R1'],
-      "INSERT INTO recurso_agendavel (estabelecimento_id, codigo, descricao, tipo, setor_funcional_id, criado_em) VALUES (?, 'R1', 'TOMOGRAFO SINTETICO', 'equipamento', ?, ?)",
-      [est, setor, agora],
-    );
-    const fornecedor = await garantir(
-      e,
-      'SELECT id FROM empresa_fornecedora WHERE cnpj = ?',
-      ['99030300000100'],
-      "INSERT INTO empresa_fornecedora (tipo_pessoa, cnpj, razao_social, nome_fantasia, criado_em) VALUES ('juridica', ?, 'ENGENHARIA CLINICA SINTETICA L0303', 'ENG SINT L0303', ?)",
-      ['99030300000100', agora],
-    );
-    const curso = await garantir(
-      e,
-      'SELECT id FROM curso WHERE codigo = ?',
-      ['L0303M-OPER'],
-      "INSERT INTO curso (codigo, nome, tipo, carga_minutos, validade_meses, criado_em) VALUES ('L0303M-OPER', 'OPERACAO SINTETICA DO MONITOR', 'capacitacao', 120, 24, ?)",
-      [agora],
-    );
-    const r = {
-      est,
-      outro,
-      usuario: u,
-      loginUsuario,
-      avisado,
-      loginAvisado,
-      desligado,
-      unidade,
-      setor,
-      centro: c1,
-      centroSemSetor: await centro('930302', null),
-      recurso,
-      fornecedor,
-      curso,
-    };
-    await limparGravacoes(e, [est, outro]);
-    return r;
-  });
+      const setor = await garantir(
+        e,
+        'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, 'S1'],
+        "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, unidade_assistencial_id, criado_em) VALUES (?, 'S1', 'UTI SINTETICA', 'assistencial', ?, ?)",
+        [est, unidade, agora],
+      );
+      const centro = (cod: string, setorId: number | null) =>
+        garantir(
+          e,
+          'SELECT id FROM centro_custo WHERE estabelecimento_id = ? AND codigo = ?',
+          [est, cod],
+          'INSERT INTO centro_custo (estabelecimento_id, codigo, nome, setor_funcional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
+          [est, cod, `CENTRO SINTETICO ${cod}`, setorId, '2020-01-01', agora],
+        );
+      const c1 = await centro('930301', setor);
+      await e.executar('UPDATE setor_funcional SET centro_custo_id = ? WHERE id = ?', [c1, setor]);
+      const recurso = await garantir(
+        e,
+        'SELECT id FROM recurso_agendavel WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, 'R1'],
+        "INSERT INTO recurso_agendavel (estabelecimento_id, codigo, descricao, tipo, setor_funcional_id, criado_em) VALUES (?, 'R1', 'TOMOGRAFO SINTETICO', 'equipamento', ?, ?)",
+        [est, setor, agora],
+      );
+      const fornecedor = await garantir(
+        e,
+        'SELECT id FROM empresa_fornecedora WHERE cnpj = ?',
+        ['99030300000100'],
+        "INSERT INTO empresa_fornecedora (tipo_pessoa, cnpj, razao_social, nome_fantasia, criado_em) VALUES ('juridica', ?, 'ENGENHARIA CLINICA SINTETICA L0303', 'ENG SINT L0303', ?)",
+        ['99030300000100', agora],
+      );
+      const curso = await garantir(
+        e,
+        'SELECT id FROM curso WHERE codigo = ?',
+        ['L0303M-OPER'],
+        "INSERT INTO curso (codigo, nome, tipo, carga_minutos, validade_meses, criado_em) VALUES ('L0303M-OPER', 'OPERACAO SINTETICA DO MONITOR', 'capacitacao', 120, 24, ?)",
+        [agora],
+      );
+      const r = {
+        est,
+        outro,
+        usuario: u,
+        loginUsuario,
+        avisado,
+        loginAvisado,
+        desligado,
+        unidade,
+        setor,
+        centro: c1,
+        centroSemSetor: await centro('930302', null),
+        recurso,
+        fornecedor,
+        curso,
+      };
+      await limparGravacoes(e, [est, outro]);
+      return r;
+    },
+  );
   return { nucleo, marca, ...ids };
 }
 
 export async function encerrarMassaManutencao(m: MassaManutencao | null): Promise<void> {
   if (!m) return;
   await m.nucleo
-    .escrever({ cliente: CLIENTE_MAN, correlacao: `limpeza-teste-03-03-${m.marca}` }, (e) => limparGravacoes(e, [m.est, m.outro]))
+    .escrever({ cliente: CLIENTE_MAN, correlacao: `limpeza-teste-03-03-${m.marca}` }, (e) =>
+      limparGravacoes(e, [m.est, m.outro]),
+    )
     .catch(() => undefined);
   await m.nucleo.encerrar();
 }
 
 /** O contexto da sessão no estabelecimento da massa (ou no outro). */
 export function contextoMan(m: MassaManutencao, est = m.est): ContextoNucleo {
-  return { cliente: CLIENTE_MAN, estabelecimento: est, usuario: m.usuario, correlacao: `int-0303-${randomUUID().slice(0, 8)}` };
+  return {
+    cliente: CLIENTE_MAN,
+    estabelecimento: est,
+    usuario: m.usuario,
+    correlacao: `int-0303-${randomUUID().slice(0, 8)}`,
+  };
 }
 
 /** A linha da trilha da tela (o Executor a leva para a trilha de auditoria). */
@@ -234,6 +247,12 @@ export function criarArquivoSintetico(m: MassaManutencao, est: number): Promise<
 }
 
 /** Leitura de conferência no banco do cliente de teste. */
-export function lerBanco<T extends Record<string, unknown>>(m: MassaManutencao, sql: string, p: unknown[]): Promise<T | null> {
-  return m.nucleo.lerSomente({ cliente: CLIENTE_MAN, correlacao: 'int-0303-conferir' }, (l) => l.uma<T>(sql, p));
+export function lerBanco<T extends Record<string, unknown>>(
+  m: MassaManutencao,
+  sql: string,
+  p: unknown[],
+): Promise<T | null> {
+  return m.nucleo.lerSomente({ cliente: CLIENTE_MAN, correlacao: 'int-0303-conferir' }, (l) =>
+    l.uma<T>(sql, p),
+  );
 }

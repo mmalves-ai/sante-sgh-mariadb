@@ -292,9 +292,7 @@ export class ServicoPrecos {
     if (i.contasAbertas > 0)
       alertas.push(`${i.contasAbertas} conta(s) aberta(s) com este convênio: a mudança não as fecha.`);
     if (operacaoPedida === 'reativar')
-      alertas.push(
-        `Reativar não refaz os vínculos de profissionais (hoje: ${i.profissionais}).`,
-      );
+      alertas.push(`Reativar não refaz os vínculos de profissionais (hoje: ${i.profissionais}).`);
     alertas.push('Quem mudou a situação fica registrado na trilha e no histórico do convênio.');
     const dthOk =
       i.diariaAcompanhante === null ||

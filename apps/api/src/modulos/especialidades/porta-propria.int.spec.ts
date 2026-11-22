@@ -85,7 +85,10 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
           `DELETE x FROM ${t} x JOIN exame_oftalmologico o ON o.id = x.exame_oftalmologico_id WHERE o.estabelecimento_id IN (?, ?)`,
           [ids.est, ids.outroEst],
         );
-      await e.executar('DELETE FROM exame_oftalmologico WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM exame_oftalmologico WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
       await e.executar(
         'DELETE r FROM partograma_registro r JOIN partograma p ON p.id = r.partograma_id WHERE p.estabelecimento_id = ?',
         [ids.est],
@@ -96,7 +99,10 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
           `DELETE x FROM ${t} x JOIN preparo_lactario p ON p.id = x.preparo_lactario_id WHERE p.estabelecimento_id IN (?, ?)`,
           [ids.est, ids.outroEst],
         );
-      await e.executar('DELETE FROM preparo_lactario WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM preparo_lactario WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
       await e.executar('DELETE FROM prescricao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
@@ -277,23 +283,50 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
            carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, leito_hospitalar_id, acomodacao_id,
            especialidade_medica_id, medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)`,
-        [ids.est, `${P}-IN1`, ids.atendimento, ids.paciente, entrada, carater, modal, ui, leito, acomodacao, esp,
-          ids.profissional, fonte, agora],
+        [
+          ids.est,
+          `${P}-IN1`,
+          ids.atendimento,
+          ids.paciente,
+          entrada,
+          carater,
+          modal,
+          ui,
+          leito,
+          acomodacao,
+          esp,
+          ids.profissional,
+          fonte,
+          agora,
+        ],
       );
       const prescricao = (numero: number, situacao: string, suspensa: Date | null) =>
         e.inserir(
           `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id,
              situacao, prescrito_em, vigencia_inicio_em, vigencia_fim_em, suspensa_em, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [ids.est, numero, ids.paciente, ids.atendimento, ids.profissional, situacao, entrada,
-            new Date('2026-11-20T13:00:00Z'), new Date('2026-11-21T13:00:00Z'), suspensa, agora],
+          [
+            ids.est,
+            numero,
+            ids.paciente,
+            ids.atendimento,
+            ids.profissional,
+            situacao,
+            entrada,
+            new Date('2026-11-20T13:00:00Z'),
+            new Date('2026-11-21T13:00:00Z'),
+            suspensa,
+            agora,
+          ],
         );
       ids.prescricao = await prescricao(920_206_001, 'vigente', null);
       await prescricao(920_206_002, 'cancelada', null);
       ids.tipoParto = await cat('tipo_parto', `${P}-NORMAL`);
       ids.tipoProtocolo = await cat('tipo_protocolo_oncologico', `${P}-QT`);
       ids.grupoOft = await cat('grupo_exame_oftalmologico', `${P}-G`);
-      ids.exameOft = await cat('tipo_exame_oftalmologico', `${P}-TON`, 'grupo_exame_oftalmologico_id', [ids.grupoOft]);
+      ids.exameOft = await cat('tipo_exame_oftalmologico', `${P}-TON`, 'grupo_exame_oftalmologico_id', [
+        ids.grupoOft,
+      ]);
       // Lactário: a fórmula do cadastro, o manipulador (colaborador do usuário) e outra pessoa para a conferência.
       await garantir(
         e,
@@ -350,24 +383,35 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
       nascimento: '1996-04-12',
     });
     expect(i?.admissao).toBe('2026-11-20T06:00');
-    expect((await porta.internacoes(ctx, 'PARTURIENTE SINTETICA')).itens.map((x) => x.internacao)).toEqual([ids.internacao]);
+    expect((await porta.internacoes(ctx, 'PARTURIENTE SINTETICA')).itens.map((x) => x.internacao)).toEqual([
+      ids.internacao,
+    ]);
     expect((await porta.internacoes(ctx, '920206101')).itens).toHaveLength(1);
     // Outro estabelecimento não vê a internação.
     expect(await porta.internacao({ ...ctx, estabelecimento: ids.outroEst }, ids.internacao)).toBeNull();
-    expect(await porta.vinculos(ctx, 'ignorado')).toEqual([{ vinculo: ids.profissional, cbo: '225250', ativo: true }]);
+    expect(await porta.vinculos(ctx, 'ignorado')).toEqual([
+      { vinculo: ids.profissional, cbo: '225250', ativo: true },
+    ]);
     expect((await porta.relogio(ctx)).agora).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
     const cad = await porta.cadastrosOftalmologia(ctx);
     expect(cad.exames.find((x) => x.codigo === ids.exameOft)?.grupo).toBe(ids.grupoOft);
     expect((await porta.tiposParto(ctx)).some((t) => t.codigo === ids.tipoParto)).toBe(true);
     expect((await porta.tiposProtocolo(ctx)).some((t) => t.codigo === ids.tipoProtocolo)).toBe(true);
     const ps = await porta.prescricoesDoDia(ctx, ids.internacao, ids.paciente, '2026-11-20');
-    expect(ps).toEqual([{ id: ids.prescricao, inicio: '2026-11-20T10:00', fim: '2026-11-21T10:00', suspensa: false, itens: 0 }]);
+    expect(ps).toEqual([
+      { id: ids.prescricao, inicio: '2026-11-20T10:00', fim: '2026-11-21T10:00', suspensa: false, itens: 0 },
+    ]);
   });
 
   it('partograma: contrato de efeito (abre o partograma, numera, trilha) e as recusas', async () => {
     const id1 = await porta.gravarSgh(ctx, trilha, (g) => g.registrarPartograma(ponto()));
-    const id2 = await porta.gravarSgh(ctx, (r: number) => ({ ...trilha, entidadeId: r }), (g) =>
-      g.registrarPartograma(ponto({ em: '2026-11-20T09:00', dilatacaoCm: 6, bcf: 100, liquido: 'meconial' })),
+    const id2 = await porta.gravarSgh(
+      ctx,
+      (r: number) => ({ ...trilha, entidadeId: r }),
+      (g) =>
+        g.registrarPartograma(
+          ponto({ em: '2026-11-20T09:00', dilatacaoCm: 6, bcf: 100, liquido: 'meconial' }),
+        ),
     );
     const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-06-esp' }, (l) =>
       l.consultar(
@@ -432,13 +476,33 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
       },
     ]);
     expect(await porta.exames({ ...ctx, estabelecimento: ids.outroEst }, ids.internacao)).toEqual([]);
-    expect(codigoDe(await porta.gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarExame(exame)).catch((e: unknown) => e))).toBe('registro-inexistente');
-    expect(codigoDe(await porta.gravarSgh(ctx, trilha, (g) => g.registrarExame({ ...exame, itens: [{ exame: ids.exameOft + 999_999, lado: 'od', resultado: 'x' }] })).catch((e: unknown) => e))).toBe('tipo-exame-inexistente');
+    expect(
+      codigoDe(
+        await porta
+          .gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarExame(exame))
+          .catch((e: unknown) => e),
+      ),
+    ).toBe('registro-inexistente');
+    expect(
+      codigoDe(
+        await porta
+          .gravarSgh(ctx, trilha, (g) =>
+            g.registrarExame({
+              ...exame,
+              itens: [{ exame: ids.exameOft + 999_999, lado: 'od', resultado: 'x' }],
+            }),
+          )
+          .catch((e: unknown) => e),
+      ),
+    ).toBe('tipo-exame-inexistente');
     expect((await porta.partograma(ctx, ids.internacao)).length).toBe(2);
   });
 
   it.each([
-    ['memória', () => new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0)) as PortaEspecialidades],
+    [
+      'memória',
+      () => new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0)) as PortaEspecialidades,
+    ],
     ['banco', () => porta as PortaEspecialidades],
   ])('%s: o registro do partograma volta na leitura com o mesmo formato', async (_nome, fabrica) => {
     const p = fabrica();
@@ -454,8 +518,22 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     expect(depois.length).toBe(antes + 1);
     expect(Object.keys(depois.at(-1)!).sort()).toEqual(
       [
-        'id', 'em', 'dilatacaoCm', 'alturaApresentacao', 'bcf', 'contracoes10min', 'duracaoContracaoS', 'bolsa',
-        'liquido', 'paSistolica', 'paDiastolica', 'temperatura', 'ocitocina', 'observacao', 'alertas', 'por',
+        'id',
+        'em',
+        'dilatacaoCm',
+        'alturaApresentacao',
+        'bcf',
+        'contracoes10min',
+        'duracaoContracaoS',
+        'bolsa',
+        'liquido',
+        'paSistolica',
+        'paDiastolica',
+        'temperatura',
+        'ocitocina',
+        'observacao',
+        'alertas',
+        'por',
         'registradoEm',
       ].sort(),
     );
@@ -467,8 +545,16 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
         `INSERT INTO registro_nascimento (estabelecimento_id, mae_paciente_id, mae_atendimento_id, nascido_em,
            tipo_parto_id, sexo_id, responsavel_profissional_id, origem, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'migracao', ?)`,
-        [ids.est, ids.paciente, ids.atendimento, new Date('2026-11-20T15:00:00Z'), ids.tipoParto, ids.sexoF,
-          ids.profissional, new Date()],
+        [
+          ids.est,
+          ids.paciente,
+          ids.atendimento,
+          new Date('2026-11-20T15:00:00Z'),
+          ids.tipoParto,
+          ids.sexoF,
+          ids.profissional,
+          new Date(),
+        ],
       ),
     );
     const [rn] = await porta.recemNascidos(ctx, ids.internacao);
@@ -487,7 +573,10 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
   });
 
   it.each([
-    ['memória', () => new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0)) as PortaEspecialidades],
+    [
+      'memória',
+      () => new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0)) as PortaEspecialidades,
+    ],
     ['banco', () => porta as PortaEspecialidades],
   ])('%s: o ponto à direita da linha de alerta volta com o alerta da gravação', async (_nome, fabrica) => {
     const p = fabrica();
@@ -500,12 +589,15 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     const gravar = async (x: Partial<NovoPontoPartograma>) => {
       const anteriores = await p.partograma(c, internacao, faseAtivaCm);
       const e = ponto({ internacao, paciente, ...x });
-      const { alertas } = conferirPartograma({ ...e, observacao: e.observacao ?? undefined }, {
-        admissao: '2026-11-20T00:00',
-        agora: '2026-11-21T00:00',
-        anteriores,
-        faseAtivaCm,
-      });
+      const { alertas } = conferirPartograma(
+        { ...e, observacao: e.observacao ?? undefined },
+        {
+          admissao: '2026-11-20T00:00',
+          agora: '2026-11-21T00:00',
+          anteriores,
+          faseAtivaCm,
+        },
+      );
       await p.gravarSgh(c, trilha, (g) => g.registrarPartograma({ ...e, alertas }));
       return alertas;
     };
@@ -520,75 +612,192 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
 
   it('recém-nascido: grava pela internação da mãe, numera o nascimento e lê a reanimação e a observação', async () => {
     const rn = {
-      internacao: ids.internacao, prontuario: 920_206_101, paciente: ids.paciente, vinculo: ids.profissional, usuario: 'l0206.teste',
-      nascimentoEm: '2026-11-20T18:30', sexo: 'F' as const, pesoG: 3200, comprimentoCm: 49, perimetroCefalicoCm: 34, apgar1: 8,
-      apgar5: 9, apgar10: null, igSemanas: 39, igDias: 2, tipoParto: ids.tipoParto, reanimacao: true,
-      classificacaoIg: 'a termo', classificacaoPeso: 'adequado', classificacaoApgar: 'boa vitalidade', observacao: 'Observação sintética.',
+      internacao: ids.internacao,
+      prontuario: 920_206_101,
+      paciente: ids.paciente,
+      vinculo: ids.profissional,
+      usuario: 'l0206.teste',
+      nascimentoEm: '2026-11-20T18:30',
+      sexo: 'F' as const,
+      pesoG: 3200,
+      comprimentoCm: 49,
+      perimetroCefalicoCm: 34,
+      apgar1: 8,
+      apgar5: 9,
+      apgar10: null,
+      igSemanas: 39,
+      igDias: 2,
+      tipoParto: ids.tipoParto,
+      reanimacao: true,
+      classificacaoIg: 'a termo',
+      classificacaoPeso: 'adequado',
+      classificacaoApgar: 'boa vitalidade',
+      observacao: 'Observação sintética.',
     };
-    const id = await porta.gravarSgh(ctx, { ...trilha, entidade: 'registro_nascimento' }, (g) => g.registrarRecemNascido(rn));
+    const id = await porta.gravarSgh(ctx, { ...trilha, entidade: 'registro_nascimento' }, (g) =>
+      g.registrarRecemNascido(rn),
+    );
     const lido = (await porta.recemNascidos(ctx, ids.internacao)).find((x) => x.id === id);
-    expect(lido).toMatchObject({ nascimentoEm: '2026-11-20T18:30', pesoG: 3200, apgar5: 9, reanimacao: true, observacao: 'Observação sintética.', por: 'l0206.teste' });
+    expect(lido).toMatchObject({
+      nascimentoEm: '2026-11-20T18:30',
+      pesoG: 3200,
+      apgar5: 9,
+      reanimacao: true,
+      observacao: 'Observação sintética.',
+      por: 'l0206.teste',
+    });
     const linha = await nucleo.lerSomente(ctx, (l) =>
-      l.uma('SELECT ordem_nascimento, mae_paciente_id, partograma_id FROM registro_nascimento WHERE id = ?', [id]));
+      l.uma('SELECT ordem_nascimento, mae_paciente_id, partograma_id FROM registro_nascimento WHERE id = ?', [
+        id,
+      ]),
+    );
     expect(Number(linha?.['ordem_nascimento'])).toBeGreaterThanOrEqual(1);
     expect(Number(linha?.['mae_paciente_id'])).toBe(ids.paciente);
     expect(linha?.['partograma_id']).not.toBeNull();
-    expect(codigoDe(await porta.gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarRecemNascido(rn)).catch((e: unknown) => e))).toBe('registro-inexistente');
+    expect(
+      codigoDe(
+        await porta
+          .gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarRecemNascido(rn))
+          .catch((e: unknown) => e),
+      ),
+    ).toBe('registro-inexistente');
   });
 
   it('lactário: ordem por paciente com uma porção por horário, conferência por outra pessoa, alteração, etiqueta e cancelamento', async () => {
     const t = { ...trilha, entidade: 'preparo_lactario' };
     const ordem = {
-      internacao: ids.internacao, prontuario: 920_206_101, paciente: ids.paciente, usuario: 'l0206.teste',
-      formula: `formula sintetica ${P}`, volumeMl: 60, horarios: ['09:00', '12:00', '03:00'], preparoEm: '2026-11-20T08:00',
-      validadeEm: '2026-11-21T08:00', lote: null, observacao: null,
+      internacao: ids.internacao,
+      prontuario: 920_206_101,
+      paciente: ids.paciente,
+      usuario: 'l0206.teste',
+      formula: `formula sintetica ${P}`,
+      volumeMl: 60,
+      horarios: ['09:00', '12:00', '03:00'],
+      preparoEm: '2026-11-20T08:00',
+      validadeEm: '2026-11-21T08:00',
+      lote: null,
+      observacao: null,
     };
     const erro = (p: Promise<unknown>) => p.then(() => '').catch((e: unknown) => codigoDe(e));
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, formula: 'INEXISTENTE' })))).toBe('formula-nao-cadastrada');
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, validadeEm: '2026-11-20T10:00' })))).toBe('porcao-fora-da-validade');
-    expect(await erro(porta.gravarSgh({ ...ctx, usuario: ids.conferente }, t, (g) => g.registrarOrdem(ordem)))).toBe('sem-cadastro-colaborador');
+    expect(
+      await erro(porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, formula: 'INEXISTENTE' }))),
+    ).toBe('formula-nao-cadastrada');
+    expect(
+      await erro(
+        porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, validadeEm: '2026-11-20T10:00' })),
+      ),
+    ).toBe('porcao-fora-da-validade');
+    expect(
+      await erro(porta.gravarSgh({ ...ctx, usuario: ids.conferente }, t, (g) => g.registrarOrdem(ordem))),
+    ).toBe('sem-cadastro-colaborador');
     const id = await porta.gravarSgh(ctx, t, (g) => g.registrarOrdem(ordem));
     expect(await porta.ordem(ctx, id)).toMatchObject({
-      internacao: ids.internacao, paciente: ids.paciente, formula: `FORMULA SINTETICA ${P}`, volumeMl: 60,
-      horarios: ['09:00', '12:00', '03:00'], preparoEm: '2026-11-20T08:00', validadeEm: '2026-11-21T08:00',
-      situacao: 'preparada', por: 'l0206.teste', conferidoPor: null, canceladaEm: null, etiquetaEm: null,
+      internacao: ids.internacao,
+      paciente: ids.paciente,
+      formula: `FORMULA SINTETICA ${P}`,
+      volumeMl: 60,
+      horarios: ['09:00', '12:00', '03:00'],
+      preparoEm: '2026-11-20T08:00',
+      validadeEm: '2026-11-21T08:00',
+      situacao: 'preparada',
+      por: 'l0206.teste',
+      conferidoPor: null,
+      canceladaEm: null,
+      etiquetaEm: null,
     });
     expect((await porta.ordensDoDia(ctx, '2026-11-20')).map((o) => o.id)).toContain(id);
     expect(await porta.ordem({ ...ctx, estabelecimento: ids.outroEst }, id)).toBeNull();
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe('ordem-nao-conferivel');
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe(
+      'ordem-nao-conferivel',
+    );
     const antes = await porta.gravarSgh(ctx, t, (g) =>
-      g.alterarOrdem({ id, formula: ordem.formula, volumeMl: 90, horarios: ['10:00'], preparoEm: '2026-11-20T09:00', validadeEm: '2026-11-21T09:00', lote: 'LT-9', observacao: 'ajuste' }));
+      g.alterarOrdem({
+        id,
+        formula: ordem.formula,
+        volumeMl: 90,
+        horarios: ['10:00'],
+        preparoEm: '2026-11-20T09:00',
+        validadeEm: '2026-11-21T09:00',
+        lote: 'LT-9',
+        observacao: 'ajuste',
+      }),
+    );
     expect(antes).toMatchObject({ volumeMl: 60, horarios: ['09:00', '12:00', '03:00'], lote: 'L1' });
-    expect(await porta.ordem(ctx, id)).toMatchObject({ volumeMl: 90, horarios: ['10:00'], lote: 'LT-9', observacao: 'ajuste' });
+    expect(await porta.ordem(ctx, id)).toMatchObject({
+      volumeMl: 90,
+      horarios: ['10:00'],
+      lote: 'LT-9',
+      observacao: 'ajuste',
+    });
     // Dupla checagem: quem alterou o conteúdo da ordem também não confere; a conferência fica com um terceiro.
     const ctx2 = { ...ctx, usuario: ids.conferente };
     await porta.gravarSgh(ctx2, t, (g) =>
-      g.alterarOrdem({ id, formula: ordem.formula, volumeMl: 90, horarios: ['10:00'], preparoEm: '2026-11-20T09:00', validadeEm: '2026-11-21T09:00', lote: 'LT-9', observacao: 'ajuste' }));
-    expect(await erro(porta.gravarSgh(ctx2, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.confere' })))).toBe('ordem-nao-conferivel');
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe('ordem-nao-conferivel');
+      g.alterarOrdem({
+        id,
+        formula: ordem.formula,
+        volumeMl: 90,
+        horarios: ['10:00'],
+        preparoEm: '2026-11-20T09:00',
+        validadeEm: '2026-11-21T09:00',
+        lote: 'LT-9',
+        observacao: 'ajuste',
+      }),
+    );
+    expect(
+      await erro(porta.gravarSgh(ctx2, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.confere' }))),
+    ).toBe('ordem-nao-conferivel');
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe(
+      'ordem-nao-conferivel',
+    );
     const ctx3 = { ...ctx, usuario: ids.terceiro };
     await porta.gravarSgh(ctx3, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.terceiro' }));
-    expect(await porta.ordem(ctx, id)).toMatchObject({ situacao: 'conferida', conferidoPor: 'l0206.terceiro' });
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.alterarOrdem({ id, ...ordem })))).toBe('ordem-conferida');
+    expect(await porta.ordem(ctx, id)).toMatchObject({
+      situacao: 'conferida',
+      conferidoPor: 'l0206.terceiro',
+    });
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.alterarOrdem({ id, ...ordem })))).toBe(
+      'ordem-conferida',
+    );
     const ev = await porta.gravarSgh(ctx, t, async (g) => {
       expect(await g.marcarEtiqueta({ id })).toBe(1);
-      return g.registrarAlteracao({ id, evento: 'etiqueta-emitida', antes: null, depois: '1', motivo: null, usuario: 'l0206.teste' });
+      return g.registrarAlteracao({
+        id,
+        evento: 'etiqueta-emitida',
+        antes: null,
+        depois: '1',
+        motivo: null,
+        usuario: 'l0206.teste',
+      });
     });
     expect(await porta.gravarSgh(ctx, t, (g) => g.marcarEtiqueta({ id }))).toBe(0);
     await porta.gravarSgh(ctx, t, async (g) => {
       await g.cancelarOrdem({ id, motivo: 'troca de fórmula', usuario: 'l0206.teste' });
-      return g.registrarAlteracao({ id, evento: 'cancelada', antes: '{"volumeMl":90}', depois: null, motivo: 'troca de fórmula', usuario: 'l0206.teste' });
+      return g.registrarAlteracao({
+        id,
+        evento: 'cancelada',
+        antes: '{"volumeMl":90}',
+        depois: null,
+        motivo: 'troca de fórmula',
+        usuario: 'l0206.teste',
+      });
     });
-    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.cancelarOrdem({ id, motivo: 'de novo', usuario: 'x' })))).toBe('ordem-cancelada');
+    expect(
+      await erro(porta.gravarSgh(ctx, t, (g) => g.cancelarOrdem({ id, motivo: 'de novo', usuario: 'x' }))),
+    ).toBe('ordem-cancelada');
     // Fórmula cancelada não ganha etiqueta, e mexer na ordem depois não troca quem cancelou.
     expect(await erro(porta.gravarSgh(ctx2, t, (g) => g.marcarEtiqueta({ id })))).toBe('ordem-cancelada');
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-02-06-esp' }, async (e) => { await e.executar('UPDATE preparo_lactario SET alterado_por = ? WHERE id = ?', [ids.terceiro, id]); });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-02-06-esp' }, async (e) => {
+      await e.executar('UPDATE preparo_lactario SET alterado_por = ? WHERE id = ?', [ids.terceiro, id]);
+    });
     const o = await porta.ordem(ctx, id);
     expect(o?.canceladaEm).not.toBeNull();
     expect(o).toMatchObject({ motivoCancelamento: 'troca de fórmula', canceladaPor: 'l0206.teste' });
     expect(o?.etiquetaEm).not.toBeNull();
     const hist = await porta.alteracoesOrdens(ctx, [id]);
-    expect(hist.map((h) => [h.evento, h.antes, h.depois])).toEqual([['cancelada', '{"volumeMl":90}', null], ['etiqueta-emitida', null, '1']]);
+    expect(hist.map((h) => [h.evento, h.antes, h.depois])).toEqual([
+      ['cancelada', '{"volumeMl":90}', null],
+      ['etiqueta-emitida', null, '1'],
+    ]);
     expect(hist[1]!.id).toBe(ev);
     expect(await porta.alteracoesOrdens({ ...ctx, estabelecimento: ids.outroEst }, [id])).toEqual([]);
   });

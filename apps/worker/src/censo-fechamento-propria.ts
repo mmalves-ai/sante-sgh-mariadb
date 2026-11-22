@@ -120,7 +120,9 @@ const ENTRADA = z.object({
   corte: z.string().min(20),
   horaFechamento: z.number().int().min(1).max(24),
   versaoCalculo: z.number().int(),
-  unidades: z.array(z.object({ unidade: z.number().int().positive(), linhas: z.array(esquemaLinhaCenso) })).min(1),
+  unidades: z
+    .array(z.object({ unidade: z.number().int().positive(), linhas: z.array(esquemaLinhaCenso) }))
+    .min(1),
 });
 
 function somar(linhas: readonly LinhaCenso[]) {
@@ -148,7 +150,10 @@ export class PortaCensoPropria implements PortaCenso {
   }
 
   private ler<T>(est: number | null, fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, estabelecimento: est, correlacao: 'censo-fechamento' }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, estabelecimento: est, correlacao: 'censo-fechamento' },
+      fn,
+    );
   }
 
   estabelecimentos(): Promise<AlvoEstabelecimento[]> {
@@ -187,17 +192,22 @@ export class PortaCensoPropria implements PortaCenso {
       const fuso = est.fuso;
       const posLinhas = await l.consultar(SQL_POSICAO, [est.id], { teto: 50_000 });
       const posicoes = new Map<number, PosicaoLeito>(
-        posLinhas.map((r) => [n(r['id']), { bloco: texto(r['unidade']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) }]),
+        posLinhas.map((r) => [
+          n(r['id']),
+          { bloco: texto(r['unidade']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) },
+        ]),
       );
       const categoriaDoLeito = new Map<number, number>();
       const codigoUnidade = new Map(
-        (await l.consultar(SQL_UNIDADES, [est.id], { teto: 5000 })).map((r) => [n(r['id']), texto(r['codigo'])]),
+        (await l.consultar(SQL_UNIDADES, [est.id], { teto: 5000 })).map((r) => [
+          n(r['id']),
+          texto(r['codigo']),
+        ]),
       );
       const tipos = new Map(
-        (await l.consultar('SELECT id, descricao FROM categoria_acomodacao ORDER BY id', [], { teto: 1000 })).map((r) => [
-          n(r['id']),
-          texto(r['descricao']),
-        ]),
+        (
+          await l.consultar('SELECT id, descricao FROM categoria_acomodacao ORDER BY id', [], { teto: 1000 })
+        ).map((r) => [n(r['id']), texto(r['descricao'])]),
       );
       const acomodacoes = await l.consultar(
         `SELECT ac.id, ui.codigo AS unidade, ac.codigo AS acomodacao, ac.nome, ac.categoria_acomodacao_id,
@@ -208,7 +218,9 @@ export class PortaCensoPropria implements PortaCenso {
         [est.id],
         { teto: 20_000 },
       );
-      const categoriaAcomodacao = new Map(acomodacoes.map((a) => [n(a['id']), nn(a['categoria_acomodacao_id'])]));
+      const categoriaAcomodacao = new Map(
+        acomodacoes.map((a) => [n(a['id']), nn(a['categoria_acomodacao_id'])]),
+      );
       for (const r of posLinhas) {
         const c = categoriaAcomodacao.get(n(r['acomodacao_id']));
         if (c !== null && c !== undefined) categoriaDoLeito.set(n(r['id']), c);
@@ -243,7 +255,8 @@ export class PortaCensoPropria implements PortaCenso {
           : { bloco: codigoUnidade.get(n(r['unidade_internacao_id'])) ?? '', acomodacao: '', leito: '' };
       const primeiroLeito = new Map<number, unknown>();
       for (const o of ocup)
-        if (!primeiroLeito.has(n(o['internacao_id']))) primeiroLeito.set(n(o['internacao_id']), o['leito_hospitalar_id']);
+        if (!primeiroLeito.has(n(o['internacao_id'])))
+          primeiroLeito.set(n(o['internacao_id']), o['leito_hospitalar_id']);
       const internacoes: InternacaoMovimento[] = intern.map((r) => {
         const e = diaEHoraLocal(r['data_hora_entrada'] as Date, fuso);
         const a = r['data_hora_alta'] instanceof Date ? diaEHoraLocal(r['data_hora_alta'], fuso) : null;
@@ -293,7 +306,8 @@ export class PortaCensoPropria implements PortaCenso {
       });
       const leitosDa = new Map<number, Record<string, unknown>[]>();
       for (const x of posLinhas)
-        if (!verdadeiro(x['excluido'])) leitosDa.set(n(x['acomodacao_id']), [...(leitosDa.get(n(x['acomodacao_id'])) ?? []), x]);
+        if (!verdadeiro(x['excluido']))
+          leitosDa.set(n(x['acomodacao_id']), [...(leitosDa.get(n(x['acomodacao_id'])) ?? []), x]);
       const unidades = acomodacoes
         .filter((a) => a['tipo_atendimento'] !== 'observacao' && !verdadeiro(a['excluida']))
         .map((a) => {
@@ -308,7 +322,14 @@ export class PortaCensoPropria implements PortaCenso {
           };
         });
       const hoje = diaEHoraLocal(new Date(), fuso).data;
-      return { internacoes, trechos, transferencias, unidades, tipos, dadosAte: new Date(`${hoje}T00:00:00Z`) };
+      return {
+        internacoes,
+        trechos,
+        transferencias,
+        unidades,
+        tipos,
+        dadosAte: new Date(`${hoje}T00:00:00Z`),
+      };
     });
   }
 
@@ -323,7 +344,8 @@ export class PortaCensoPropria implements PortaCenso {
     for (const linha of d.linhas) {
       const u = mapa.get(linha.bloco);
       // O modelo garante a unidade (leito, acomodação e internação têm unidade NOT NULL): faltar é quebra de integridade.
-      if (u === undefined) throw new ErroCensoSemUnidade(`censo: linha sem unidade de internação (${est.codigo}, ${d.data})`);
+      if (u === undefined)
+        throw new ErroCensoSemUnidade(`censo: linha sem unidade de internação (${est.codigo}, ${d.data})`);
       grupos.set(u, [...(grupos.get(u) ?? []), linha]);
     }
     const base = {
@@ -360,7 +382,11 @@ export class PortaCensoPropria implements PortaCenso {
             obitos: s.obitos,
             transferencias_entrada: s.entrada,
             transferencias_saida: s.saida,
-            resumo: JSON.stringify({ horaFechamento: e.horaFechamento, versaoCalculo: e.versaoCalculo, linhas: u.linhas }),
+            resumo: JSON.stringify({
+              horaFechamento: e.horaFechamento,
+              versaoCalculo: e.versaoCalculo,
+              linhas: u.linhas,
+            }),
           });
           await tx.incluir('fechamento_censo_unidade', {
             fechamento_censo_id: id,

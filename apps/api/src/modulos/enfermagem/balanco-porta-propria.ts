@@ -250,7 +250,7 @@ export class PortaBalancoPropria implements PortaBalanco {
       return {
         itens: rs.slice(0, TETO_LANCAMENTOS).map((r) => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars -- descarta o atendimento do lançamento
-    const { atendimento: _a, ...x } = lancamentoDe(r, fuso);
+          const { atendimento: _a, ...x } = lancamentoDe(r, fuso);
           return x;
         }),
         cortada: rs.length > TETO_LANCAMENTOS,
@@ -492,7 +492,10 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
             LIMIT 1`,
           [est, chave],
         );
-        if (ja && (num(ja['atendimento_id']) !== x.atendimento || num(ja['profissional_id']) !== profissional))
+        if (
+          ja &&
+          (num(ja['atendimento_id']) !== x.atendimento || num(ja['profissional_id']) !== profissional)
+        )
           throw recusa(
             'chave-reutilizada',
             'A chave deste pedido já foi usada em outro lançamento: refaça o lançamento na tela.',
@@ -537,7 +540,8 @@ function gravadorBalanco(tx: TxOperacao, est: number): GravadorBalanco {
       );
       if (!o || num(o['atendimento_id']) !== x.atendimento)
         throw recusa('nao-encontrado', 'O lançamento não foi encontrado neste atendimento.');
-      if (o['fonte_lancamento'] === 'estorno') throw recusa('estorno-de-estorno', 'Um estorno não se estorna.');
+      if (o['fonte_lancamento'] === 'estorno')
+        throw recusa('estorno-de-estorno', 'Um estorno não se estorna.');
       if (num(o['estornos']) > 0) throw recusa('ja-estornado', 'O lançamento já foi estornado.');
       if ((await fechamentoTotal(num(o['balanco_hidrico_paciente_id']))) !== null)
         throw recusa(

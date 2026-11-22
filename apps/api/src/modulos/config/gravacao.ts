@@ -47,7 +47,11 @@ export async function coletarConexoes(l: Leitor, limiteTransacaoMs: number, agor
   );
   const porSistema = porConta.map((c) => {
     const t = trx.find((x) => x.sistema === c.sistema);
-    return { sistema: String(c.sistema), conexoes: Number(c.conexoes), transacoes: Number(t?.transacoes ?? 0) };
+    return {
+      sistema: String(c.sistema),
+      conexoes: Number(c.conexoes),
+      transacoes: Number(t?.transacoes ?? 0),
+    };
   });
   const longas = trx.reduce((a, t) => a + Number(t.longas ?? 0), 0);
   const esperas = trx.reduce((a, t) => a + Number(t.esperas ?? 0), 0);
@@ -99,7 +103,11 @@ export function criarFonteGravacao(opcoes: {
         colisoes: Object.entries(resumo)
           .map(([operacao, d]) => ({ operacao, total: (d['conflito-versao'] ?? 0) + (d.trava ?? 0) }))
           .filter((c) => c.total > 0)
-          .map((c) => ({ operacao: c.operacao, estabelecimento: opcoes.cliente, porHora: { total: c.total } })),
+          .map((c) => ({
+            operacao: c.operacao,
+            estabelecimento: opcoes.cliente,
+            porHora: { total: c.total },
+          })),
         limitacao:
           'Colisões: as do Executor deste processo da API desde a partida (sem divisão por hora). ' +
           'As conexões de outras contas do banco só aparecem quando a conta da API tem o privilégio PROCESS.',

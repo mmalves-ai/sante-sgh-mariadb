@@ -19,7 +19,11 @@ describe('limpeza pedida pela alta', () => {
     });
   });
   it('o isolamento ativo da internação vale quando o leito não tem precaução; tipo desconhecido vira contato', () => {
-    expect(limpezaDaAlta({ precaucaoAberta: null, isolamento: { codigo: 'goticulas' } }).precaucao).toBe('goticulas');
-    expect(limpezaDaAlta({ precaucaoAberta: 'qualquer', isolamento: { codigo: 'CCIH-X' } }).precaucao).toBe('contato');
+    expect(limpezaDaAlta({ precaucaoAberta: null, isolamento: { codigo: 'goticulas' } }).precaucao).toBe(
+      'goticulas',
+    );
+    expect(limpezaDaAlta({ precaucaoAberta: 'qualquer', isolamento: { codigo: 'CCIH-X' } }).precaucao).toBe(
+      'contato',
+    );
   });
 });

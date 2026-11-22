@@ -67,7 +67,11 @@ describe('M60.2: conferência da instalação pela HTTP', { timeout: 60_000 }, (
     expect(c.itens.map((i) => i.codigo)).toEqual([...ITENS_CONFERENCIA_INSTALACAO]);
     expect(c.situacao).toBe('ok');
     expect(c.scripts).toMatchObject({ noPacote: 2, aplicados: 2, ultimoNoPacote: '0600', pendentesTotal: 0 });
-    expect(c.conexao).toMatchObject({ autenticacao: 'ed25519', canalCifrado: true, charsetConexao: 'utf8mb4' });
+    expect(c.conexao).toMatchObject({
+      autenticacao: 'ed25519',
+      canalCifrado: true,
+      charsetConexao: 'utf8mb4',
+    });
     expect(c.itens.find((i) => i.codigo === 'motor')?.detalhe).toMatch(/^MariaDB 12\./);
     // Nada de senha nem endereço na resposta.
     expect(r.body).not.toMatch(/senha|password|127\.0\.0\.1/i);
@@ -187,7 +191,10 @@ describe('M60.2: o serviço da conferência', () => {
 
   it('a conta sem o direito de ler o registro das migrações: a conferência segue (item das migrações em falha)', async () => {
     const s = new ServicoConferenciaInstalacao({
-      porta: portaCom({ papel: null }, { migracoesRegistradas: () => Promise.reject(new Error('SELECT command denied')) }),
+      porta: portaCom(
+        { papel: null },
+        { migracoesRegistradas: () => Promise.reject(new Error('SELECT command denied')) },
+      ),
       ambiente: 'producao',
       scriptsDoPacote: () => PACOTE,
       versao,

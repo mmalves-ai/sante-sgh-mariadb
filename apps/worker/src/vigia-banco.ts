@@ -43,8 +43,12 @@ export interface AlertaVigiaBanco {
 export function semPermissao(e: unknown): boolean {
   const o = (e ?? {}) as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
   const c = (o.cause ?? {}) as { code?: unknown; errno?: unknown; message?: unknown };
-  const texto = [o.code, o.errno, o.message, c.code, c.errno, c.message].map((x) => String(x ?? '')).join(' ');
-  return /ER_SPECIFIC_ACCESS_DENIED|ER_DBACCESS_DENIED|ER_TABLEACCESS_DENIED|\b1227\b|\b1044\b|\b1142\b|access denied/i.test(texto);
+  const texto = [o.code, o.errno, o.message, c.code, c.errno, c.message]
+    .map((x) => String(x ?? ''))
+    .join(' ');
+  return /ER_SPECIFIC_ACCESS_DENIED|ER_DBACCESS_DENIED|ER_TABLEACCESS_DENIED|\b1227\b|\b1044\b|\b1142\b|access denied/i.test(
+    texto,
+  );
 }
 
 const n = (v: unknown): number => {
@@ -84,7 +88,8 @@ export function alertasDaColeta(
   limiteMs: number,
 ): AlertaVigiaBanco[] {
   const a: AlertaVigiaBanco[] = [];
-  if (!saude.plataforma) a.push({ tipo: 'plataforma-fora', detalhe: 'banco plataforma sem resposta', quantidade: 1 });
+  if (!saude.plataforma)
+    a.push({ tipo: 'plataforma-fora', detalhe: 'banco plataforma sem resposta', quantidade: 1 });
   if (!saude.neutralizacao)
     a.push({ tipo: 'neutralizacao-falhou', detalhe: 'neutralização de saídas reprovada', quantidade: 1 });
   if (coleta && coleta.acimaDoLimite > 0)

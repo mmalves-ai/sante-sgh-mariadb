@@ -10,7 +10,26 @@ import type { MotivoGlosaLido } from '@sgh/contratos';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { Prestador } from './rede-porta.js';
-import { type DadosAuditor, type DadosAutorizacaoDaSenha, type DadosConta, type DadosContaResumo, type DadosElegibilidadeBeneficiario, type DadosEventoConta, type DadosGuiaConta, type DadosItemConta, type DadosOperadora, type DadosRecursoItem, type DecisaoRecursoItem, type EntradaDecisaoItem, type EntradaGlosaItem, type EntradaItemRecorrido, type EntradaRecebimentoConta, type FiltroContasPorta, type FiltroPagamentosPorta, type TotaisContas } from './dados-portas.js';
+import {
+  type DadosAuditor,
+  type DadosAutorizacaoDaSenha,
+  type DadosConta,
+  type DadosContaResumo,
+  type DadosElegibilidadeBeneficiario,
+  type DadosEventoConta,
+  type DadosGuiaConta,
+  type DadosItemConta,
+  type DadosOperadora,
+  type DadosRecursoItem,
+  type DecisaoRecursoItem,
+  type EntradaDecisaoItem,
+  type EntradaGlosaItem,
+  type EntradaItemRecorrido,
+  type EntradaRecebimentoConta,
+  type FiltroContasPorta,
+  type FiltroPagamentosPorta,
+  type TotaisContas,
+} from './dados-portas.js';
 
 export const PORTA_CONTAS_OPERADORA = Symbol('PORTA_CONTAS_OPERADORA');
 

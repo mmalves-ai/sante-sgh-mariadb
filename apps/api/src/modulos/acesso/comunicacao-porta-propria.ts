@@ -229,9 +229,13 @@ export class PortaComunicacaoPropria implements PortaComunicacao {
       if (u === null) return [];
       const agora = this.agora();
       const [ms, ks] = await Promise.all([
-        l.consultar(`${SQL_MENSAGENS_RECEBIDAS} ORDER BY m.enviada_em DESC, m.id DESC LIMIT ${TETO_MENSAGENS}`, [u, est], {
-          teto: TETO_MENSAGENS,
-        }),
+        l.consultar(
+          `${SQL_MENSAGENS_RECEBIDAS} ORDER BY m.enviada_em DESC, m.id DESC LIMIT ${TETO_MENSAGENS}`,
+          [u, est],
+          {
+            teto: TETO_MENSAGENS,
+          },
+        ),
         l.consultar(
           `${SQL_COMUNICADOS_RECEBIDOS} GROUP BY k.id ORDER BY k.publicado_em DESC, k.id DESC LIMIT ${TETO_MENSAGENS}`,
           [u, est, ...this.paramsPublico(est, u, hojeDe(agora)), agora, agora],
@@ -244,7 +248,12 @@ export class PortaComunicacaoPropria implements PortaComunicacao {
     });
   }
 
-  recebida(c: ContextoComunicacao, login: string, id: number, tipo?: TipoItem): Promise<MensagemRecebida | null> {
+  recebida(
+    c: ContextoComunicacao,
+    login: string,
+    id: number,
+    tipo?: TipoItem,
+  ): Promise<MensagemRecebida | null> {
     return this.ler(c, (l, est) => this.recebidaNa(l, est, login, id, tipo));
   }
 
@@ -419,9 +428,13 @@ export class PortaComunicacaoPropria implements PortaComunicacao {
         let ls: Linha[] = [];
         const numero = /^\d{1,15}$/.test(d.valor) ? Number(d.valor) : null;
         if (d.tipo === 'usuario')
-          ls = await l.consultar(`SELECT u.login FROM usuario u WHERE u.login = ? AND ${CONTA_ATIVA}`, [d.valor, ...ativa], {
-            teto: 1,
-          });
+          ls = await l.consultar(
+            `SELECT u.login FROM usuario u WHERE u.login = ? AND ${CONTA_ATIVA}`,
+            [d.valor, ...ativa],
+            {
+              teto: 1,
+            },
+          );
         else if (d.tipo === 'grupo')
           ls = await l.consultar(
             `SELECT DISTINCT u.login FROM usuario u
@@ -546,7 +559,10 @@ export class PortaComunicacaoPropria implements PortaComunicacao {
   async podeGravar(c: ContextoComunicacao, operacao: string): Promise<LiberacaoComunicacao> {
     const op = OPERACOES_PROPRIAS.get(operacao);
     if (!op) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação fora da comunicação.' };
-    return this.executor.liberacao(op, { ...contextoDe(c, 'comunicacao'), chaveIdempotencia: 'consulta-liberacao' });
+    return this.executor.liberacao(op, {
+      ...contextoDe(c, 'comunicacao'),
+      chaveIdempotencia: 'consulta-liberacao',
+    });
   }
 
   async executar(
@@ -599,7 +615,9 @@ export class PortaComunicacaoPropria implements PortaComunicacao {
       trilha: () => {
         const depois = linha()?.dadosDepois;
         const dados =
-          depois && typeof depois === 'object' ? { ...(depois as object), ...extras.dados } : (depois ?? extras.dados);
+          depois && typeof depois === 'object'
+            ? { ...(depois as object), ...extras.dados }
+            : (depois ?? extras.dados);
         return { acao: linha()?.acao ?? 'operacao', dados, motivo: extras.motivo ?? linha()?.motivo ?? null };
       },
     });
@@ -662,10 +680,12 @@ const incluirPalavra = definirOperacao({
       ctx.usuario,
       palavra,
     ]);
-    if (ja) throw recusa('palavra-existente', 'A palavra já está no seu dicionário.', { campos: ['palavra'] });
-    const conta = await tx.uma('SELECT COUNT(*) AS n FROM dicionario_usuario WHERE usuario_id = ? AND excluido_em IS NULL', [
-      ctx.usuario,
-    ]);
+    if (ja)
+      throw recusa('palavra-existente', 'A palavra já está no seu dicionário.', { campos: ['palavra'] });
+    const conta = await tx.uma(
+      'SELECT COUNT(*) AS n FROM dicionario_usuario WHERE usuario_id = ? AND excluido_em IS NULL',
+      [ctx.usuario],
+    );
     if (n(conta?.['n']) >= TETO_DICIONARIO)
       throw recusa(
         'dicionario-cheio',
@@ -694,7 +714,8 @@ const excluirPalavra = definirOperacao({
       ctx.usuario,
       palavra,
     ]);
-    if (!r) throw recusa('palavra-inexistente', 'A palavra não está no seu dicionário.', { campos: ['palavra'] });
+    if (!r)
+      throw recusa('palavra-inexistente', 'A palavra não está no seu dicionário.', { campos: ['palavra'] });
     await tx.excluir('dicionario_usuario', n(r['id']), n(r['versao']));
     return { id: n(r['id']), palavras: 1 };
   },
@@ -740,7 +761,12 @@ function gravador(
       { teto: 1 },
     );
     if (!k)
-      throw new ErroOperacao(404, 'nao-encontrado', 'Não encontrado', 'Comunicado não encontrado neste estabelecimento.');
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Não encontrado',
+        'Comunicado não encontrado neste estabelecimento.',
+      );
     if (t(k['situacao']) === 'encerrado')
       throw recusa('comunicado-encerrado', 'Este comunicado já foi encerrado: publique outro.');
     return k;
@@ -759,7 +785,10 @@ function gravador(
     return d ? { u, d } : null;
   }
 
-  async function cienciaDoComunicado(login: string, id: number): Promise<{ u: number; k: Linha; ci: Linha | null }> {
+  async function cienciaDoComunicado(
+    login: string,
+    id: number,
+  ): Promise<{ u: number; k: Linha; ci: Linha | null }> {
     const u = await exigirUsuario(tx, login);
     const hoje = hojeDe(agora());
     const k = await tx.uma(
@@ -784,7 +813,8 @@ function gravador(
       const remetente = await exigirUsuario(tx, m.remetente);
       const ids = await idsDosLogins(m.destinatarios.map((d) => d.login));
       const dest = m.destinatarios.filter((d) => ids.has(d.login));
-      if (dest.length === 0) throw recusa('sem-destinatario', 'Nenhum destinatário ativo nos destinos escolhidos.');
+      if (dest.length === 0)
+        throw recusa('sem-destinatario', 'Nenhum destinatário ativo nos destinos escolhidos.');
       const instante = agora();
       extras.dados = { destinatarios: dest.length, cienciaObrigatoria: m.cienciaObrigatoria };
       if (m.tipo === 'mensagem') {
@@ -813,7 +843,8 @@ function gravador(
           });
         return { id, repetida: false };
       }
-      if (!m.vigenciaInicio) throw recusa('vigencia-invalida', 'Informe o início da vigência.', { campos: ['vigenciaInicio'] });
+      if (!m.vigenciaInicio)
+        throw recusa('vigencia-invalida', 'Informe o início da vigência.', { campos: ['vigenciaInicio'] });
       const id = await tx.incluir('comunicado', {
         estabelecimento_id: est,
         titulo: m.assunto,
@@ -1016,9 +1047,13 @@ function gravador(
       const atual = k['exibir_ate'] ? new Date(String(iso(k['exibir_ate']))) : null;
       const inicio = new Date(String(iso(k['exibir_de'])));
       if (Number.isNaN(fim.getTime()) || (atual !== null && fim >= atual))
-        throw recusa('vigencia-invalida', 'A vigência só pode ser encurtada: o fim novo tem de ser antes do fim atual.', {
-          campos: ['vigenciaFim'],
-        });
+        throw recusa(
+          'vigencia-invalida',
+          'A vigência só pode ser encurtada: o fim novo tem de ser antes do fim atual.',
+          {
+            campos: ['vigenciaFim'],
+          },
+        );
       if (fim <= inicio)
         throw recusa('vigencia-invalida', 'O fim novo tem de ser depois do início da vigência.', {
           campos: ['vigenciaFim'],

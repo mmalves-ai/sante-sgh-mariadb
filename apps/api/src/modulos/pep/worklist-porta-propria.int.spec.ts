@@ -4,7 +4,12 @@
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { dataHora } from './registro-porta-propria.js';
-import { CLIENTE_F22_O4, limparMassaWorklist, type MassaWorklist, montarMassaWorklist } from './worklist-massa.spec-util.js';
+import {
+  CLIENTE_F22_O4,
+  limparMassaWorklist,
+  type MassaWorklist,
+  montarMassaWorklist,
+} from './worklist-massa.spec-util.js';
 import { PortaWorklistPropria } from './worklist-porta-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -31,11 +36,15 @@ describe.skipIf(SEM_BANCO)('PortaWorklistPropria contra o MariaDB (cliente f22_o
     expect((await nucleo.cliente(CLIENTE_F22_O4)).banco).toBe(`cliente_${CLIENTE_F22_O4}`);
     m = await montarMassaWorklist(nucleo, P, 904_020_000);
     porta = new PortaWorklistPropria(nucleo, CLIENTE_F22_O4);
-    desde = new Date(`${dataHora(new Date(m.agora.getTime() - 2 * 24 * HORA), FUSO)!.slice(0, 10)}T00:00:00Z`);
+    desde = new Date(
+      `${dataHora(new Date(m.agora.getTime() - 2 * 24 * HORA), FUSO)!.slice(0, 10)}T00:00:00Z`,
+    );
   }, 120_000);
   afterAll(async () => {
     if (nucleo) {
-      await nucleo.escrever({ cliente: CLIENTE_F22_O4, correlacao: `limpeza-${P}` }, (e) => limparMassaWorklist(e, P));
+      await nucleo.escrever({ cliente: CLIENTE_F22_O4, correlacao: `limpeza-${P}` }, (e) =>
+        limparMassaWorklist(e, P),
+      );
       await nucleo.encerrar();
     }
   });
@@ -68,7 +77,12 @@ describe.skipIf(SEM_BANCO)('PortaWorklistPropria contra o MariaDB (cliente f22_o
       vistoPeloMedico: false,
     });
     // O outro estabelecimento só vê o resultado dele.
-    const b = await porta.leituras(ctx(`${P}b`), { login: 'medico', pacientes: [m.pac1], internacoes: [], desde });
+    const b = await porta.leituras(ctx(`${P}b`), {
+      login: 'medico',
+      pacientes: [m.pac1],
+      internacoes: [],
+      desde,
+    });
     expect(b.resultados.map((x) => x.exame)).toEqual([m.res.outroEst]);
   });
 

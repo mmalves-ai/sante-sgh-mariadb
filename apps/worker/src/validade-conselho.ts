@@ -52,7 +52,10 @@ export function conferenciaVigente(cs: readonly ConferenciaConselho[]): Conferen
 }
 
 /** A validade vigente da inscrição e se ela entra na conta (regra única do worker e da API). */
-export function validadeVigente(i: InscricaoParaValidade, cs: readonly ConferenciaConselho[]): ValidadeVigente {
+export function validadeVigente(
+  i: InscricaoParaValidade,
+  cs: readonly ConferenciaConselho[],
+): ValidadeVigente {
   const c = conferenciaVigente(cs);
   return {
     ativo: i.ativa && !(c && SITUACOES_FORA.has(c.situacaoRegistro)),

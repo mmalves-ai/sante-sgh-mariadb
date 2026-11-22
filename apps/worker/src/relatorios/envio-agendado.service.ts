@@ -43,10 +43,13 @@ export function dependenciasDoEnvio(
     smtpUrl: env['SMTP_URL']?.trim() || null,
     remetente: env['EMAIL_REMETENTE']?.trim() || 'relatorios@sgh.invalid',
     produto: env['PRODUTO_NOME']?.trim() || 'SGH',
-    nomeEstabelecimento: async (h) => (porta ? await porta.nomeEstabelecimento(h).catch(() => null) : null) ?? h,
+    nomeEstabelecimento: async (h) =>
+      (porta ? await porta.nomeEstabelecimento(h).catch(() => null) : null) ?? h,
     enviar: (m) => enviarSmtp(env['SMTP_URL']!.trim(), m),
     emails: (h, agendamento) =>
-      porta ? porta.destinatarios(h, Number(agendamento)) : Promise.resolve({ destinatarios: [], dono: null }),
+      porta
+        ? porta.destinatarios(h, Number(agendamento))
+        : Promise.resolve({ destinatarios: [], dono: null }),
     alertaPadrao: env['ALERTA_RELATORIO_EMAIL']?.trim() || null,
     ...(porta
       ? {
@@ -89,7 +92,11 @@ export async function enviarVencidos(
       if (!r || !/^[a-z0-9]{1,10}$/.test(h)) {
         ignorados++;
         logger.warn(
-          { cliente, agendamento: a.id, motivo: r ? 'estabelecimento-fora-do-formato' : 'relatorio-fora-do-catalogo' },
+          {
+            cliente,
+            agendamento: a.id,
+            motivo: r ? 'estabelecimento-fora-do-formato' : 'relatorio-fora-do-catalogo',
+          },
           'envio agendado ignorado',
         );
         continue;
@@ -114,7 +121,10 @@ export async function enviarVencidos(
         if (x.repetido) repetidos++;
         else processados++;
       } catch (e) {
-        logger.warn({ cliente, agendamento: a.id, erro: e instanceof Error ? e.name : 'erro' }, 'envio agendado falhou');
+        logger.warn(
+          { cliente, agendamento: a.id, erro: e instanceof Error ? e.name : 'erro' },
+          'envio agendado falhou',
+        );
       }
     }
   }
@@ -149,7 +159,13 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
     void this.ligarFilas();
     if (process.env['RELATORIO_ENVIO_VENCIDOS'] === 'desligado' || !this.nucleo) return;
     try {
-      const intervalo = lerInteiroAmbiente(process.env, 'RELATORIO_ENVIO_INTERVALO_MS', 60_000, 5_000, 3_600_000);
+      const intervalo = lerInteiroAmbiente(
+        process.env,
+        'RELATORIO_ENVIO_INTERVALO_MS',
+        60_000,
+        5_000,
+        3_600_000,
+      );
       this.temporizador = setInterval(() => void this.vencidos(), intervalo);
       this.temporizador.unref();
     } catch (e) {
@@ -177,7 +193,14 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
             job: `${filaEnvioRelatorio(redeDaFila(cliente))}:${job.id ?? randomUUID()}`,
           });
           logger.info(
-            { cliente, repetido: r.repetido, destinatarios: r.destinatarios, enviados: r.enviados, situacao: r.situacao, alertouDono: r.alertouDono },
+            {
+              cliente,
+              repetido: r.repetido,
+              destinatarios: r.destinatarios,
+              enviados: r.enviados,
+              situacao: r.situacao,
+              alertouDono: r.alertouDono,
+            },
             'envio de relatório',
           );
         },
@@ -199,11 +222,17 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
       for (const cliente of await clientesDoWorker(nucleo, process.env, 'relatorio-envio')) {
         try {
           const porta = fabrica(cliente);
-          const x = await enviarVencidos(porta, cliente, dependenciasDoEnvio(porta), { agora, baseWeb: base });
+          const x = await enviarVencidos(porta, cliente, dependenciasDoEnvio(porta), {
+            agora,
+            baseWeb: base,
+          });
           r.push(x);
           if (x.agendamentos > 0) logger.info({ cliente, ...x }, 'envio agendado: vencidos');
         } catch (e) {
-          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'envio agendado: cliente falhou');
+          logger.warn(
+            { cliente, erro: e instanceof Error ? e.name : 'erro' },
+            'envio agendado: cliente falhou',
+          );
         }
       }
     } catch (e) {

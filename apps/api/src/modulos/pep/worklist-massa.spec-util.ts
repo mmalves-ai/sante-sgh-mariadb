@@ -54,7 +54,11 @@ export async function limparMassaWorklist(e: Escritor, p: string): Promise<void>
 }
 
 /** Monta a massa do prefixo `p` (estabelecimentos `<p>` e `<p>b`); `base` separa os ids fictícios entre os arquivos. */
-export async function montarMassaWorklist(nucleo: NucleoProprio, p: string, base: number): Promise<MassaWorklist> {
+export async function montarMassaWorklist(
+  nucleo: NucleoProprio,
+  p: string,
+  base: number,
+): Promise<MassaWorklist> {
   return nucleo.escrever({ cliente: CLIENTE_F22_O4, correlacao: `preparo-${p}` }, async (e) => {
     await limparMassaWorklist(e, p);
     const agora = new Date();
@@ -79,7 +83,16 @@ export async function montarMassaWorklist(nucleo: NucleoProprio, p: string, base
              medico_assistente_profissional_id, fonte_pagadora_id, data_prevista_alta, situacao, excluido_em, criado_em)
            VALUES (?, ?, ?, ?, ?, 1, 1, 1, 1, 1, 1, 1, ?, 'ativa', ?, ?)`,
           // Uma internação vigente por paciente (chave do modelo): pacientes fictícios distintos; a porta lê pelo id.
-          [estab, `${p}-${++n}`, base + 100 + n, base + 200 + n, em(-2 * DIA), previsao, excluida ? agora : null, agora],
+          [
+            estab,
+            `${p}-${++n}`,
+            base + 100 + n,
+            base + 200 + n,
+            em(-2 * DIA),
+            previsao,
+            excluida ? agora : null,
+            agora,
+          ],
         );
       const int = {
         a: await internacao(estA, '2026-12-01'),

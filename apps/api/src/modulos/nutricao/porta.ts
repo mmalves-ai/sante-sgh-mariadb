@@ -115,24 +115,14 @@ export interface PortaNutricao extends PortaGravacaoM18<GravadorNutricao> {
   ): Promise<ItemDietaMapa[]>;
   alergiasAlimentares(c: ContextoNutricao, pacientes: readonly number[]): Promise<Map<number, string[]>>;
   cirurgias(c: ContextoNutricao, de: string, ate: string): Promise<CirurgiaDaJanela[]>;
-  exames(
-    c: ContextoNutricao,
-    pronts: readonly number[],
-    de: string,
-    ate: string,
-  ): Promise<ExameDaJanela[]>;
+  exames(c: ContextoNutricao, pronts: readonly number[], de: string, ate: string): Promise<ExameDaJanela[]>;
   acompanhantesVigentes(
     c: ContextoNutricao,
     regs: readonly number[],
   ): Promise<Map<number, RefeicaoAcompanhanteRegistrada>>;
   acompanhantes(c: ContextoNutricao, reg: number): Promise<RefeicaoAcompanhanteRegistrada[]>;
   acompanhante(c: ContextoNutricao, id: number): Promise<RefeicaoAcompanhanteRegistrada | null>;
-  retrato(
-    c: ContextoNutricao,
-    unidade: string,
-    refeicao: number,
-    data: string,
-  ): Promise<RetratoMapa | null>;
+  retrato(c: ContextoNutricao, unidade: string, refeicao: number, data: string): Promise<RetratoMapa | null>;
   // ── W0-05 ──
   /** As correções que inativam os registros e a versão que cada um substitui. */
   correcoes(
@@ -146,7 +136,10 @@ export interface PortaNutricao extends PortaGravacaoM18<GravadorNutricao> {
   /** O volume da parenteral por dia lido do balanço hídrico do atendimento desde o instante. */
   balancoParenteral(c: ContextoNutricao, atendimento: number, desde: string): Promise<VolumeBalanco[]>;
   /** O log das alterações da refeição do acompanhante. */
-  alteracoesAcompanhante(c: ContextoNutricao, ids: readonly number[]): Promise<AlteracaoHotelariaRegistrada[]>;
+  alteracoesAcompanhante(
+    c: ContextoNutricao,
+    ids: readonly number[],
+  ): Promise<AlteracaoHotelariaRegistrada[]>;
 }
 
 export const METODOS_PORTA_NUTRICAO: ReadonlySet<string> = new Set([

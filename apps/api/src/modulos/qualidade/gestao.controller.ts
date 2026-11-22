@@ -396,7 +396,9 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/documentos/:id/retirada')
   @Permissao(P.documentoPublicar)
-  @AuditadoNoHandler('qualidade.retirarDocumento: documento_qualidade com a versão conferida e a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.retirarDocumento: documento_qualidade com a versão conferida e a trilha_auditoria',
+  )
   async retirar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRetirarDocumento, { ...(b as object), documento: idDaRota(id) });
@@ -416,7 +418,9 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/documentos/:id/ciencia')
   @Permissao(P.documentoLer)
-  @AuditadoNoHandler('qualidade.registrarCiencia: documento_qualidade_ciencia (uma por usuário) e a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.registrarCiencia: documento_qualidade_ciencia (uma por usuário) e a trilha_auditoria',
+  )
   async ciencia(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarCiencia, { documento: idDaRota(id) });

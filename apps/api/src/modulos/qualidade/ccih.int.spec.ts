@@ -1035,7 +1035,10 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
     const c1 = (await g((x) => x.configurarAntimicrobiano(cfg))) as { id: number; criado: boolean };
     expect(c1).toMatchObject({ criado: true });
     expect(c1.id).toBeGreaterThan(0);
-    expect(await g((x) => x.configurarAntimicrobiano({ ...cfg, dddGramas: 4 }))).toEqual({ id: c1.id, criado: false });
+    expect(await g((x) => x.configurarAntimicrobiano({ ...cfg, dddGramas: 4 }))).toEqual({
+      id: c1.id,
+      criado: false,
+    });
     expect(await porta.itensConfigurados(c)).toEqual([
       expect.objectContaining({
         item: cad.ins,

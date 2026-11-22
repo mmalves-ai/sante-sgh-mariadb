@@ -161,7 +161,11 @@ export class ConsultasController {
     return pode(this.sessao(req).a.ability, permissaoDaConsulta(p, acao));
   }
 
-  private async exigir(req: RequisicaoAutorizada, p: ConsultaPublica, acao: 'ler' | 'exportar'): Promise<void> {
+  private async exigir(
+    req: RequisicaoAutorizada,
+    p: ConsultaPublica,
+    acao: 'ler' | 'exportar',
+  ): Promise<void> {
     if (this.podeConsultar(req, p, acao)) return;
     const { hospital, rede, login } = this.sessao(req);
     await this.trilha
@@ -242,7 +246,8 @@ export class ConsultasController {
   indice(@Query('item') item: string | undefined, @Req() req: RequisicaoAutorizada): IndiceConsultas {
     return {
       consultas: CONSULTAS_DECLARADAS.filter(
-        (p) => tabelaDaConsulta(p) !== null && (!item || p.item === item) && this.podeConsultar(req, p, 'ler'),
+        (p) =>
+          tabelaDaConsulta(p) !== null && (!item || p.item === item) && this.podeConsultar(req, p, 'ler'),
       ).map((p) => ({
         modulo: p.modulo,
         recurso: p.recurso,

@@ -28,7 +28,13 @@ import {
 } from '@sgh/dominio-faturamento';
 import type { ParametrosAih } from './montagem-aih.js';
 import type { DadosBpaLidos, DadosCihaLidos } from './porta.js';
-import { type ApacRegistro, type EquivalenciaSus, type NovaCriticaSus, type RegistroCihaParaGravar, type SolicitanteApacCadastro } from './tipos.js';
+import {
+  type ApacRegistro,
+  type EquivalenciaSus,
+  type NovaCriticaSus,
+  type RegistroCihaParaGravar,
+  type SolicitanteApacCadastro,
+} from './tipos.js';
 
 export interface ParametrosSus {
   /** CNES do parâmetro (vazio: o do cadastro do estabelecimento). */

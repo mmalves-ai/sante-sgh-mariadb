@@ -47,7 +47,21 @@ import {
   TEXTO_SIGILO,
 } from '@sgh/dominio-pep';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import { type CabecalhoDocumentoLido, type DescarteRascunho, type GravacaoEvolucao, type GravacaoRascunho, type LinhaGravacao, MARCADOR_REGISTRO, type ModeloDoRegistro, modeloPermitido, type ProfissionalDoRegistro, type RascunhoLido, SITUACAO_LANCADO, SITUACAO_SUSPENSO, type SuspensaoEvolucao } from './tipos-pep.js';
+import {
+  type CabecalhoDocumentoLido,
+  type DescarteRascunho,
+  type GravacaoEvolucao,
+  type GravacaoRascunho,
+  type LinhaGravacao,
+  MARCADOR_REGISTRO,
+  type ModeloDoRegistro,
+  modeloPermitido,
+  type ProfissionalDoRegistro,
+  type RascunhoLido,
+  SITUACAO_LANCADO,
+  SITUACAO_SUSPENSO,
+  type SuspensaoEvolucao,
+} from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoRegistro, PortaRegistro } from './registro-porta.js';
 

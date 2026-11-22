@@ -46,11 +46,13 @@ export class PortaSondaPropria implements PortaSonda {
 
   async estabelecimentos(): Promise<readonly string[]> {
     // Dado da rede inteira (sem filtro de estabelecimento): a sonda escolhe o hospital entre todos os do cliente.
-    const linhas = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'sonda-estabelecimentos' }, (l) =>
-      l.consultar<{ codigo: string }>(
-        'SELECT codigo FROM estabelecimento WHERE ativo AND excluido_em IS NULL ORDER BY codigo',
-        [],
-      ),
+    const linhas = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'sonda-estabelecimentos' },
+      (l) =>
+        l.consultar<{ codigo: string }>(
+          'SELECT codigo FROM estabelecimento WHERE ativo AND excluido_em IS NULL ORDER BY codigo',
+          [],
+        ),
     );
     return linhas.map((x) => String(x.codigo));
   }

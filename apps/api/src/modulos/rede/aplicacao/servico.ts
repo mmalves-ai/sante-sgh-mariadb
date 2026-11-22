@@ -62,7 +62,13 @@ import {
   type VinculoIndice,
 } from '@sgh/dominio-rede';
 import { ErroProblema } from '../../../problema.filter.js';
-import type { AtendimentosNaRede, ContextoRede, EstabelecimentoRede, GravadorRede, PortaRede } from '../porta.js';
+import type {
+  AtendimentosNaRede,
+  ContextoRede,
+  EstabelecimentoRede,
+  GravadorRede,
+  PortaRede,
+} from '../porta.js';
 import type { CadastroRedeLido, CandidatoRedeLido, EscritaIndiceRede, TrilhaRede } from '../tipos-indice.js';
 
 /** Usuário técnico do pareamento automático (a trilha mostra que não foi uma pessoa). */
@@ -800,7 +806,9 @@ export class ServicoMpiRede {
     const estabelecimentos = lidos.map((x) => x.item);
     const pode = estabelecimentos.some((e) => e.podeAbrir);
     return {
-      situacao: estabelecimentos.some((e) => e.atendimentos + e.internacoes > 0) ? 'com-atendimentos' : 'sem-atendimentos',
+      situacao: estabelecimentos.some((e) => e.atendimentos + e.internacoes > 0)
+        ? 'com-atendimentos'
+        : 'sem-atendimentos',
       estabelecimentos,
       acessoCruzado: { pode, motivo: pode ? null : (lidos.find((x) => x.motivo)?.motivo ?? null) },
     };

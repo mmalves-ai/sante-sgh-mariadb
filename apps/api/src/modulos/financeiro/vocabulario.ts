@@ -16,7 +16,10 @@ export function versaoDoTexto(t: string | null | undefined): number | null {
 
 /** Tipo de credor da tela ↔ código do cadastro tipo_credor e coluna do credor no título. */
 export const CREDOR_DO_TIPO: Readonly<
-  Record<TipoCredor, { codigo: string; coluna: 'empresa_fornecedora_id' | 'profissional_id' | 'colaborador_id' }>
+  Record<
+    TipoCredor,
+    { codigo: string; coluna: 'empresa_fornecedora_id' | 'profissional_id' | 'colaborador_id' }
+  >
 > = {
   F: { codigo: 'fornecedor', coluna: 'empresa_fornecedora_id' },
   M: { codigo: 'medico', coluna: 'profissional_id' },
@@ -68,7 +71,10 @@ export const MEIO_RECEBIMENTO: Readonly<Record<FormaPagamento, string>> = {
 
 /** Tipo de movimento da tela ↔ código do tipo_lancamento_bancario e origem do movimento_bancario. */
 export const MOVIMENTO_DO_TIPO: Readonly<
-  Record<'O' | 'F' | 'T' | 'C' | 'D', { codigo: string; origem: 'tarifa' | 'fechamento_caixa' | 'transferencia' | 'manual' }>
+  Record<
+    'O' | 'F' | 'T' | 'C' | 'D',
+    { codigo: string; origem: 'tarifa' | 'fechamento_caixa' | 'transferencia' | 'manual' }
+  >
 > = {
   O: { codigo: 'tarifa', origem: 'tarifa' },
   F: { codigo: 'fechamento_caixa', origem: 'fechamento_caixa' },
@@ -99,7 +105,9 @@ export function tipoDoMovimento(origem: unknown, natureza: unknown): string {
 /** Classificação gerencial da tela ↔ código da natureza financeira ("grupo.subgrupo.item"). */
 export const codigoClassificacao = (c: { grupo: number; subgrupo: number; item: number }): string =>
   `${c.grupo}.${c.subgrupo}.${c.item}`;
-export function classificacaoDoCodigo(codigo: unknown): { grupo: number; subgrupo: number; item: number } | null {
+export function classificacaoDoCodigo(
+  codigo: unknown,
+): { grupo: number; subgrupo: number; item: number } | null {
   const m = /^(\d{1,5})\.(\d{1,5})\.(\d{1,5})$/.exec(String(codigo ?? ''));
   return m ? { grupo: Number(m[1]), subgrupo: Number(m[2]), item: Number(m[3]) } : null;
 }
@@ -120,12 +128,15 @@ export const dataIso = (v: unknown): string | null =>
 export const instanteIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString() : v ? String(v) : null;
 export const numero = (v: unknown): number => Number(v ?? 0) || 0;
-export const numeroOuNulo = (v: unknown): number | null =>
-  v === null || v === undefined ? null : Number(v);
+export const numeroOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 export const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 /** Número de documento do contrato (inteiro) a partir do texto do banco; o que não é número vira 0. */
 export const documentoNumerico = (v: unknown): number => {
-  const n = Number(String(v ?? '').replace(/\D/g, '').slice(-9));
+  const n = Number(
+    String(v ?? '')
+      .replace(/\D/g, '')
+      .slice(-9),
+  );
   return Number.isSafeInteger(n) ? n : 0;
 };
 /** AAAA-MM → primeiro dia do mês. */

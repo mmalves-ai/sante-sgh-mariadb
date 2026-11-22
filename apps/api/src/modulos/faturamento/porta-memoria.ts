@@ -402,7 +402,7 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-        // O login de quem grava, para mostrar na conta sintética (o contexto da gravação da API o leva).
+    // O login de quem grava, para mostrar na conta sintética (o contexto da gravação da API o leva).
     const login = (ctx as ContextoOperacao & { readonly login?: string }).login ?? '';
     const resultado = this.aplicar(s, op, analise.data as never, login, c.hospital);
     s.idem.set(chave, { hash, resultado });

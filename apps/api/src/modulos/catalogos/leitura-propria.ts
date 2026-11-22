@@ -19,7 +19,12 @@ import {
   type EntidadeCatalogo,
   type TabelaReferenciaCatalogo,
 } from '@sgh/contratos';
-import { type AtuaisDaEntidade, camposDaChave, type LeituraDoBanco, type ValorItem } from '@sgh/dominio-catalogo';
+import {
+  type AtuaisDaEntidade,
+  camposDaChave,
+  type LeituraDoBanco,
+  type ValorItem,
+} from '@sgh/dominio-catalogo';
 import type { Leitor, Linha } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 
@@ -115,7 +120,9 @@ export function semMapa(catalogo: CodigoCatalogo, entidade?: string): never {
 
 /** Entidades do catálogo com mapa ao modelo próprio. */
 export function entidadesMapeadas(catalogo: CodigoCatalogo): string[] {
-  return (definicaoCatalogo(catalogo)?.entidades ?? []).map((e) => e.codigo).filter((e) => Object.hasOwn(MAPAS, e));
+  return (definicaoCatalogo(catalogo)?.entidades ?? [])
+    .map((e) => e.codigo)
+    .filter((e) => Object.hasOwn(MAPAS, e));
 }
 
 function valorDe(v: unknown): ValorItem {

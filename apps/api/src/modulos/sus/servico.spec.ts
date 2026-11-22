@@ -307,7 +307,10 @@ describe('faturamento SUS: competência, crítica e CIHA', () => {
     const { pode, ...semPode } = sessao();
     void pode;
     await expect(
-      sv.registrarEquivalencia(semRede, { procedimento: PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO, sigtap: '0211020036' }),
+      sv.registrarEquivalencia(semRede, {
+        procedimento: PROCEDIMENTO_SEM_EQUIVALENTE_SINTETICO,
+        sigtap: '0211020036',
+      }),
     ).rejects.toEqual(recusa('equivalencia-sem-acesso-rede'));
     await expect(
       sv.desativarEquivalencia(semPode, {

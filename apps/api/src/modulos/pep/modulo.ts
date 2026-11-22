@@ -44,7 +44,12 @@ import { ServicoRegistro } from './registro-servico.js';
 import { ServicoProntuario } from './servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import { WorklistMedicoController } from './worklist.controller.js';
-import { PORTA_WORKLIST, type PortaWorklist, portaWorklistIndisponivel, PortaWorklistMemoria } from './worklist-porta.js';
+import {
+  PORTA_WORKLIST,
+  type PortaWorklist,
+  portaWorklistIndisponivel,
+  PortaWorklistMemoria,
+} from './worklist-porta.js';
 import { PortaWorklistPropria } from './worklist-porta-propria.js';
 
 export interface OpcoesModuloPep {

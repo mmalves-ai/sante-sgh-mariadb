@@ -106,8 +106,10 @@ export interface CertificadoParaGravar {
   readonly certificadoDer: string;
 }
 
-export interface CertificadoVinculado
-  extends Omit<CertificadoParaGravar, 'validoDe' | 'validoAte' | 'certificadoDer'> {
+export interface CertificadoVinculado extends Omit<
+  CertificadoParaGravar,
+  'validoDe' | 'validoAte' | 'certificadoDer'
+> {
   readonly id: number;
   readonly validoDe: string;
   readonly validoAte: string;

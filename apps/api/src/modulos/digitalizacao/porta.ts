@@ -31,7 +31,9 @@ export interface PedidoGravacaoDigitalizacao {
 }
 
 /** Contexto de uma gravação da tela: o da sessão mais o pedido repetível (sem ele, a gravação não é repetível). */
-export type ContextoGravacaoDigitalizacao = ContextoDigitalizacao & { readonly pedido?: PedidoGravacaoDigitalizacao };
+export type ContextoGravacaoDigitalizacao = ContextoDigitalizacao & {
+  readonly pedido?: PedidoGravacaoDigitalizacao;
+};
 
 /** Chave da operação no núcleo: a Idempotency-Key do pedido com a ação (até 80 caracteres). */
 export const chaveDoPedido = (p: PedidoGravacaoDigitalizacao) => `${p.chave}:${p.acao}`.slice(0, 80);

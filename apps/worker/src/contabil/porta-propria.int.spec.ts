@@ -34,12 +34,15 @@ describe.skipIf(SEM_BANCO)('porta da contabilidade do worker sobre o banco próp
     await escrever(nucleo, async (e) => {
       await e.executar('DELETE FROM fato_contabil WHERE entidade_origem = ?', [ORIGEM]);
       await e.executar('DELETE FROM evento_contabil WHERE id = ?', [EVENTO]);
-      await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id IN (?, ?) AND chave = ?', [estA, estB, CHAVE_CONTABIL]);
-      await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id IN (?, ?) AND recurso = ?', [
+      await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id IN (?, ?) AND chave = ?', [
         estA,
         estB,
         CHAVE_CONTABIL,
       ]);
+      await e.executar(
+        'DELETE FROM recurso_prerequisito WHERE estabelecimento_id IN (?, ?) AND recurso = ?',
+        [estA, estB, CHAVE_CONTABIL],
+      );
     });
   }
 
@@ -164,6 +167,8 @@ describe.skipIf(SEM_BANCO)('porta da contabilidade do worker sobre o banco próp
     const r = (await cicloDoCliente(porta, CLIENTE, new Date(), {})).filter((x) =>
       ['fo512c', 'fo512d'].includes(x.estabelecimento),
     );
-    expect(r).toEqual([{ cliente: CLIENTE, estabelecimento: 'fo512c', pendentes: 0, lancamentos: 0, falha: null }]);
+    expect(r).toEqual([
+      { cliente: CLIENTE, estabelecimento: 'fo512c', pendentes: 0, lancamentos: 0, falha: null },
+    ]);
   });
 });

@@ -127,7 +127,9 @@ export class PortaPortalMedicoMemoria implements PortaPortalMedico {
             campos: ['profissional'],
           });
         // Só a conta vigente prende o profissional (a desligada tem profissional null; a encerrada não conta).
-        const outras = [...m.values()].filter((y) => y.profissional === x.profissional && y.acesso !== x.acesso);
+        const outras = [...m.values()].filter(
+          (y) => y.profissional === x.profissional && y.acesso !== x.acesso,
+        );
         const vigentes = await Promise.all(
           outras.map(async (y) => (await this.situacao(c, y.acesso)) !== 'encerrado'),
         );

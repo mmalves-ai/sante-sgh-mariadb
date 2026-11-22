@@ -15,7 +15,9 @@ describe('interpretação do valor do laboratório de apoio', () => {
       anormal: false,
       critico: false,
     });
-    expect(interpretarValorApoio({ elemento: 1, valor: 60, faixa, regra: null, paciente }).interpretacao).toBe('baixo');
+    expect(
+      interpretarValorApoio({ elemento: 1, valor: 60, faixa, regra: null, paciente }).interpretacao,
+    ).toBe('baixo');
     expect(interpretarValorApoio({ elemento: 1, valor: 120, faixa, regra: null, paciente })).toMatchObject({
       interpretacao: 'alto',
       anormal: true,
@@ -24,8 +26,19 @@ describe('interpretação do valor do laboratório de apoio', () => {
 
   it('a faixa só em texto vale pela linha do sexo do paciente', () => {
     const t = { ...faixa, minimo: null, maximo: null, texto: 'Homens: 13 a 17 / Mulheres: 12 a 16' };
-    const r = interpretarValorApoio({ elemento: 1, valor: 16.5, faixa: t, regra: null, paciente: { sexo: 'F', idadeAnos: 30 } });
-    expect(r).toMatchObject({ referenciaMinimo: 12, referenciaMaximo: 16, interpretacao: 'alto', anormal: true });
+    const r = interpretarValorApoio({
+      elemento: 1,
+      valor: 16.5,
+      faixa: t,
+      regra: null,
+      paciente: { sexo: 'F', idadeAnos: 30 },
+    });
+    expect(r).toMatchObject({
+      referenciaMinimo: 12,
+      referenciaMaximo: 16,
+      interpretacao: 'alto',
+      anormal: true,
+    });
   });
 
   it('a regra de crítico vale sobre a faixa e dá o prazo; sem regra, o crítico da faixa com o prazo padrão', () => {
@@ -54,13 +67,17 @@ describe('interpretação do valor do laboratório de apoio', () => {
       critico: false,
     });
     const ilegivel = { ...faixa, minimo: null, maximo: null, texto: 'ver laudo' };
-    expect(interpretarValorApoio({ elemento: 1, valor: 5, faixa: ilegivel, regra: null, paciente })).toMatchObject({
+    expect(
+      interpretarValorApoio({ elemento: 1, valor: 5, faixa: ilegivel, regra: null, paciente }),
+    ).toMatchObject({
       referenciaMinimo: null,
       referenciaMaximo: null,
       referenciaTexto: 'ver laudo',
       interpretacao: null,
     });
-    expect(interpretarValorApoio({ elemento: 1, valor: 5, faixa: null, regra: null, paciente }).anormal).toBe(false);
+    expect(interpretarValorApoio({ elemento: 1, valor: 5, faixa: null, regra: null, paciente }).anormal).toBe(
+      false,
+    );
   });
 
   it('idade em dias', () => {

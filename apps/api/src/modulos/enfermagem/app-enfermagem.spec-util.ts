@@ -64,7 +64,9 @@ export async function criarAppComEnfermagem(
   const envModulos = { ...env, API_MODULOS: o.recepcao ? 'config,recepcao,enfermagem' : 'config,enfermagem' };
   const registro: Record<string, CarregadorModulo> = {
     config: async () => ({ modulo: (ctx) => moduloConfig(ctx, { fonte: fonteDoTeste(ctx, o) }) }),
-    ...(o.recepcao ? { recepcao: async () => ({ modulo: (ctx: ContextoModulo) => moduloRecepcao(ctx, o.recepcao) }) } : {}),
+    ...(o.recepcao
+      ? { recepcao: async () => ({ modulo: (ctx: ContextoModulo) => moduloRecepcao(ctx, o.recepcao) }) }
+      : {}),
     enfermagem: async () => ({
       modulo: async (ctx) => {
         const m = await moduloEnfermagem(ctx, o);

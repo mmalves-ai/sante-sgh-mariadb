@@ -3,7 +3,20 @@
 // a chave resumida única, a versão no UPDATE (o que passou ao mesmo tempo é recusado), a anônima sem notificador e a
 // linha do tempo só de inclusão. A transação desfaz tudo se a função falhar (como o ROLLBACK).
 import type { ContextoNotificacaoLido, ExpostoAoLote, UnidadeNotificacao } from '@sgh/contratos';
-import { type AcaoPlanoRegistrada, type AnaliseRegistrada, type ContagemNotificacoes, type EventoQueixaRegistrado, type ProtocoloDoPaciente, type QueixaTecnicaRegistrada, type VersaoProtocoloGerenciado, type EventoNotificacaoNovo, type EventoNotificacaoRegistrado, type FiltroNotificacoes, type NotificacaoRegistrada, recusaVersaoNotificacao } from './tipos.js';
+import {
+  type AcaoPlanoRegistrada,
+  type AnaliseRegistrada,
+  type ContagemNotificacoes,
+  type EventoQueixaRegistrado,
+  type ProtocoloDoPaciente,
+  type QueixaTecnicaRegistrada,
+  type VersaoProtocoloGerenciado,
+  type EventoNotificacaoNovo,
+  type EventoNotificacaoRegistrado,
+  type FiltroNotificacoes,
+  type NotificacaoRegistrada,
+  recusaVersaoNotificacao,
+} from './tipos.js';
 import { marcaComoAtual, recusa } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -291,7 +304,9 @@ export class PortaQualidadeMemoria implements PortaQualidade {
   }
 
   resolvidas(c: ContextoQualidade, resumos: readonly string[]): Promise<Set<string>> {
-    return Promise.resolve(new Set(resumos.filter((r) => this.estado.resolvidas.has(`${hospitalDe(c)}:${r}`))));
+    return Promise.resolve(
+      new Set(resumos.filter((r) => this.estado.resolvidas.has(`${hospitalDe(c)}:${r}`))),
+    );
   }
 
   candidatos(_c: ContextoQualidade, login: string): Promise<CandidatosSugestao> {
@@ -377,7 +392,10 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     ]);
   }
 
-  protocolosGerenciados(): Promise<{ versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] }> {
+  protocolosGerenciados(): Promise<{
+    versoes: VersaoProtocoloGerenciado[];
+    protocolos: ProtocoloDoPaciente[];
+  }> {
     return Promise.resolve(this.protocolosSinteticos);
   }
 

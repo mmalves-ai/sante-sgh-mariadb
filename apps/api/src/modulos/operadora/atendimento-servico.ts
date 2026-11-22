@@ -31,7 +31,13 @@ import {
   recusaDaAcao,
   textoDaRespostaEscrita,
 } from '@sgh/dominio-operadora';
-import { type DadosAcessoPortalPrestador, type DadosOperadora, type DadosProtocolo, type DadosProtocoloResumo, type EntradaRegistroProtocolo } from './dados-portas.js';
+import {
+  type DadosAcessoPortalPrestador,
+  type DadosOperadora,
+  type DadosProtocolo,
+  type DadosProtocoloResumo,
+  type EntradaRegistroProtocolo,
+} from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAtendimento, PortaAtendimentoOperadora } from './atendimento-porta.js';
 import type { PortaAutorizacaoOperadora } from './autorizacao-porta.js';

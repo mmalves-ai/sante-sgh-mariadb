@@ -152,7 +152,8 @@ export async function publicarCarga(d: DependenciasPublicador, c: CargaAPublicar
       });
       return { carga: c.id, lotes: feitos, situacao: 'falhou', motivo };
     }
-    if (lote === atual.lotes.total) return { carga: c.id, lotes: feitos, situacao: 'publicada', motivo: null };
+    if (lote === atual.lotes.total)
+      return { carga: c.id, lotes: feitos, situacao: 'publicada', motivo: null };
   }
   return { carga: c.id, lotes: feitos, situacao: 'publicando', motivo: null };
 }

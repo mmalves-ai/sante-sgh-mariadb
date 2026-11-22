@@ -11,7 +11,11 @@
 //   código e conferido no banco; código desconhecido é recusado pelo acesso.
 import type { AcessoIntegracao } from '../integracao/acesso.js';
 import type { EventoRecebido } from '../integracao/consumidor-idempotente.js';
-import { OPERACAO_GLOSA_EVENTO, registrarGlosaAceitaDoEvento, TABELAS_GLOSA_EVENTO } from './glosa-propria.js';
+import {
+  OPERACAO_GLOSA_EVENTO,
+  registrarGlosaAceitaDoEvento,
+  TABELAS_GLOSA_EVENTO,
+} from './glosa-propria.js';
 
 export const EVENTOS_FINANCEIRO: ReadonlySet<string> = new Set([
   'faturamento.glosa.aceita',

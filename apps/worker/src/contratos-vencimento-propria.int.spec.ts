@@ -33,14 +33,23 @@ describe.skipIf(SEM_BANCO)('alerta de vencimento dos contratos sobre o banco pr√
   async function limpar(): Promise<void> {
     await escrever(nucleo, async (e) => {
       for (const id of [est?.id, outro].filter(Boolean)) {
-        await e.executar("DELETE FROM notificacao_usuario WHERE estabelecimento_id = ? AND entidade = 'contrato_fornecedor'", [id]);
+        await e.executar(
+          "DELETE FROM notificacao_usuario WHERE estabelecimento_id = ? AND entidade = 'contrato_fornecedor'",
+          [id],
+        );
         await e.executar(
           'DELETE g FROM gestor_contrato g JOIN contrato_fornecedor c ON c.id = g.contrato_fornecedor_id WHERE c.estabelecimento_id = ?',
           [id],
         );
         await e.executar('DELETE FROM contrato_fornecedor WHERE estabelecimento_id = ?', [id]);
-        await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [id, CHAVE_LIBERACAO_CONTRATOS]);
-        await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [id, CHAVE_LIBERACAO_CONTRATOS]);
+        await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [
+          id,
+          CHAVE_LIBERACAO_CONTRATOS,
+        ]);
+        await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [
+          id,
+          CHAVE_LIBERACAO_CONTRATOS,
+        ]);
       }
     });
   }
@@ -98,7 +107,9 @@ describe.skipIf(SEM_BANCO)('alerta de vencimento dos contratos sobre o banco pr√
         ligada: 1,
         criado_em: agora,
       });
-      for (const tipo of new Set((recursoDesligado(CHAVE_LIBERACAO_CONTRATOS)?.prerequisitos ?? []).map((p) => p.tipo)))
+      for (const tipo of new Set(
+        (recursoDesligado(CHAVE_LIBERACAO_CONTRATOS)?.prerequisitos ?? []).map((p) => p.tipo),
+      ))
         await inserirSintetico(e, 'recurso_prerequisito', {
           estabelecimento_id: a,
           recurso: CHAVE_LIBERACAO_CONTRATOS,
@@ -147,23 +158,40 @@ describe.skipIf(SEM_BANCO)('alerta de vencimento dos contratos sobre o banco pr√
 
   it('avisa uma vez na central (vers√£o 1 e trilha); o ciclo seguinte n√£o grava nem abre trilha', async () => {
     const porta = new PortaContratosPropria(nucleo, CLIENTE);
-    expect(await cicloContratos(porta, est, AGORA)).toEqual({ ligada: true, emAlerta: 3, avisos: 3, semDestinatario: 0 });
+    expect(await cicloContratos(porta, est, AGORA)).toEqual({
+      ligada: true,
+      emAlerta: 3,
+      avisos: 3,
+      semDestinatario: 0,
+    });
     const n = await escrever(nucleo, (e) =>
       e.uma(
         "SELECT versao, usuario_id, chave_agrupamento, gravidade FROM notificacao_usuario WHERE estabelecimento_id = ? AND entidade = 'contrato_fornecedor' AND entidade_id = ?",
         [est.id, contrato],
       ),
     );
-    expect(n).toMatchObject({ versao: 1, chave_agrupamento: `contrato-vencimento:${contrato}:2026-11-10:vence-30`, gravidade: 'atencao' });
+    expect(n).toMatchObject({
+      versao: 1,
+      chave_agrupamento: `contrato-vencimento:${contrato}:2026-11-10:vence-30`,
+      gravidade: 'atencao',
+    });
     expect(Number(n!['usuario_id'])).toBe(usuario);
     const trilha = async () =>
       Number(
         (await escrever(nucleo, (e) =>
-          e.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'contrato_fornecedor' AND entidade_id = ?", [contrato]),
+          e.uma(
+            "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'contrato_fornecedor' AND entidade_id = ?",
+            [contrato],
+          ),
         ))!['n'],
       );
     expect(await trilha()).toBe(1);
-    expect(await cicloContratos(porta, est, AGORA)).toEqual({ ligada: true, emAlerta: 3, avisos: 0, semDestinatario: 0 });
+    expect(await cicloContratos(porta, est, AGORA)).toEqual({
+      ligada: true,
+      emAlerta: 3,
+      avisos: 0,
+      semDestinatario: 0,
+    });
     const doPrincipal = await escrever(nucleo, (e) =>
       e.consultar(
         "SELECT usuario_id, titulo, texto, chave_agrupamento FROM notificacao_usuario WHERE entidade = 'contrato_fornecedor' AND entidade_id = ? ORDER BY chave_agrupamento",
@@ -174,7 +202,9 @@ describe.skipIf(SEM_BANCO)('alerta de vencimento dos contratos sobre o banco pr√
       [principal, `contrato-vencimento:${proprio}:2026-11-15:antecedencia-20`],
       [principal, `contrato-vencimento:${proprio}:2026-11-15:vence-30`],
     ]);
-    expect(doPrincipal.every((x) => x['titulo'] === 'Renovar contrato sint√©tico (vence em 15/11/2026)')).toBe(true);
+    expect(doPrincipal.every((x) => x['titulo'] === 'Renovar contrato sint√©tico (vence em 15/11/2026)')).toBe(
+      true,
+    );
     expect(doPrincipal.every((x) => x['texto'] === 'Mensagem sint√©tica do contrato.')).toBe(true);
     expect(await trilha()).toBe(1);
   });

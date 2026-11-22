@@ -19,7 +19,8 @@ export type L = Pick<Leitor, 'consultar' | 'uma'>;
 export const n = (v: unknown): number => Number(v ?? 0);
 export const nn = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 export const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
-export const textoN = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v));
+export const textoN = (v: unknown): string | null =>
+  v === null || v === undefined || v === '' ? null : String(v);
 export const verdadeiro = (v: unknown): boolean => v === true || v === 1 || v === '1';
 const doisDigitos = (x: number) => String(x).padStart(2, '0');
 
@@ -44,7 +45,8 @@ export const paraBanco = (v: string): string => v.replace('T', ' ').slice(0, 19)
 /** "emAnalise" → "em_analise" (o vocabulário do contrato para o do banco). */
 export const cobra = (v: string): string => v.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 /** "em_analise" → "emAnalise" (o vocabulário do banco para o do contrato). */
-export const camelo = (v: unknown): string => texto(v).replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
+export const camelo = (v: unknown): string =>
+  texto(v).replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
 
 export const marcas = (k: number): string => Array.from({ length: k }, () => '?').join(', ');
 
@@ -76,14 +78,17 @@ export function lerNoEstabelecimento<T>(
   } catch (e) {
     return Promise.reject(e);
   }
-  return nucleo.lerSomente({ cliente: c.cliente, correlacao: c.correlacao || 'qualidade' }, (l) => fn(l, est));
+  return nucleo.lerSomente({ cliente: c.cliente, correlacao: c.correlacao || 'qualidade' }, (l) =>
+    fn(l, est),
+  );
 }
 
 /** O instante local do estabelecimento (`AAAA-MM-DDTHH:mm:ss`), pelo fuso do cadastro. */
 export async function relogioDoEstabelecimento(l: L, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-    est,
-  ]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   const fuso = r?.fuso_horario || FUSO_PADRAO;
   const rel = relogioNoFuso(fuso);
   const segundos = doisDigitos(new Date().getSeconds());
@@ -91,7 +96,10 @@ export async function relogioDoEstabelecimento(l: L, est: number): Promise<strin
 }
 
 /** Os setores funcionais ativos do estabelecimento (a unidade onde o incidente ou a observação aconteceu). */
-export async function setoresDoEstabelecimento(l: L, est: number): Promise<{ codigo: number; nome: string }[]> {
+export async function setoresDoEstabelecimento(
+  l: L,
+  est: number,
+): Promise<{ codigo: number; nome: string }[]> {
   const linhas = await l.consultar(
     `SELECT id, nome FROM setor_funcional
       WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL

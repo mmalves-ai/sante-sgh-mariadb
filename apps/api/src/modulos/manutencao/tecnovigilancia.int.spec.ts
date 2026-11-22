@@ -50,50 +50,122 @@ describe.skipIf(SEM_BANCO_MAN)(`tecnovigilância na porta própria (cliente ${CL
     const agora = (await porta.relogio(c)).agora;
     const eq = await porta.gravarSgh(c, trilhaMan(M, 'equipamento_saude'), (g) =>
       g.incluirEquipamento({
-        codigo: 'L0303-TV1', nome: 'MONITOR SINTETICO', tipo: 'medico', criticidade: 'alta', classeRisco: 'II',
-        fabricante: campos.fabricante, modelo: 'MX-1', numeroSerie: 'A150', registroAnvisa: null, unidade: null,
-        centroCusto: M.centro, localizacao: null, recurso: null, bemPatrimonial: null, instalacao: '2020-01-01',
-        garantiaAte: null, situacao: 'ativo', motivo: null, usuario: M.loginUsuario,
+        codigo: 'L0303-TV1',
+        nome: 'MONITOR SINTETICO',
+        tipo: 'medico',
+        criticidade: 'alta',
+        classeRisco: 'II',
+        fabricante: campos.fabricante,
+        modelo: 'MX-1',
+        numeroSerie: 'A150',
+        registroAnvisa: null,
+        unidade: null,
+        centroCusto: M.centro,
+        localizacao: null,
+        recurso: null,
+        bemPatrimonial: null,
+        instalacao: '2020-01-01',
+        garantiaAte: null,
+        situacao: 'ativo',
+        motivo: null,
+        usuario: M.loginUsuario,
       }),
     );
     const al = await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario'), (g) =>
       g.incluirAlerta({ ...campos, usuario: M.loginUsuario, conferir: conferirFaixaDoAlerta(campos) }),
     );
     const lido = await porta.alerta(c, al.id);
-    expect(lido).toMatchObject({ numero: 'L0303-AL1', tipo: 'recall', origem: 'manual', fabricante: campos.fabricante, modelo: 'MX-1', serieInicio: 'A100', serieFim: 'A200', situacao: 'aberto', acoes: 0, versao: 1 });
+    expect(lido).toMatchObject({
+      numero: 'L0303-AL1',
+      tipo: 'recall',
+      origem: 'manual',
+      fabricante: campos.fabricante,
+      modelo: 'MX-1',
+      serieInicio: 'A100',
+      serieFim: 'A200',
+      situacao: 'aberto',
+      acoes: 0,
+      versao: 1,
+    });
     expect((await porta.alertas(c, { situacao: 'aberto' })).map((x) => x.id)).toContain(al.id);
     expect((await porta.alertas(c, { situacao: 'encerrado' })).map((x) => x.id)).not.toContain(al.id);
     await expect(
-      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario'), (g) => g.incluirAlerta({ ...campos, usuario: M.loginUsuario, conferir: () => null })),
+      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario'), (g) =>
+        g.incluirAlerta({ ...campos, usuario: M.loginUsuario, conferir: () => null }),
+      ),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'numero-repetido');
 
     // Alteração com motivo (o critério ainda pode mudar: nenhuma OS gerada).
     const novo = { ...campos, titulo: 'Recall sintético revisto' };
     const alt = await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
-      g.alterarAlerta({ ...novo, id: al.id, versaoVista: 1, motivo: 'Correção do título (teste)', usuario: M.loginUsuario, conferir: conferirAlteracaoDoAlerta(1, novo) }),
+      g.alterarAlerta({
+        ...novo,
+        id: al.id,
+        versaoVista: 1,
+        motivo: 'Correção do título (teste)',
+        usuario: M.loginUsuario,
+        conferir: conferirAlteracaoDoAlerta(1, novo),
+      }),
     );
     expect(alt).toMatchObject({ id: al.id, versao: 2, antes: { titulo: 'Recall sintético' } });
 
     expect((await porta.parqueDoAlerta(c, al.id)).map((x) => x.id)).toContain(eq.id);
     const acao = await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
-      g.gerarAcaoDeCampo({ id: al.id, versaoVista: 2, prioridade: 'alta', usuario: M.loginUsuario, registro: agora, planejar: planejarAcaoDoAlerta(2, [eq.id]) }),
+      g.gerarAcaoDeCampo({
+        id: al.id,
+        versaoVista: 2,
+        prioridade: 'alta',
+        usuario: M.loginUsuario,
+        registro: agora,
+        planejar: planejarAcaoDoAlerta(2, [eq.id]),
+      }),
     );
     expect(acao.geradas).toHaveLength(1);
     const os = acao.geradas[0]!.os;
-    expect(await porta.acoesDoAlerta(c, al.id)).toMatchObject([{ equipamento: eq.id, os: { id: os }, queixa: null }]);
-    expect(await porta.vinculosTecnovigDaOs(c, os)).toEqual({ queixa: null, alerta: { id: al.id, numero: 'L0303-AL1' } });
+    expect(await porta.acoesDoAlerta(c, al.id)).toMatchObject([
+      { equipamento: eq.id, os: { id: os }, queixa: null },
+    ]);
+    expect(await porta.vinculosTecnovigDaOs(c, os)).toEqual({
+      queixa: null,
+      alerta: { id: al.id, numero: 'L0303-AL1' },
+    });
 
     // A OS da ação de campo abre a queixa como alerta sanitário, ligada ao alerta que a gerou.
     const q = await porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-      g.abrirQueixaDaOs({ os, tipo: 'alertaSanitario', descricao: 'Cabo com defeito (teste)', conduta: 'segregado', usuario: M.loginUsuario, agora }),
+      g.abrirQueixaDaOs({
+        os,
+        tipo: 'alertaSanitario',
+        descricao: 'Cabo com defeito (teste)',
+        conduta: 'segregado',
+        usuario: M.loginUsuario,
+        agora,
+      }),
     );
     expect(q).toMatchObject({ versao: 1, os });
-    expect(await lerBanco(M, 'SELECT situacao, lote_segregado, equipamento_saude_id, natureza, alerta_sanitario_id FROM queixa_tecnica_produto WHERE id = ?', [q.id])).toMatchObject({ situacao: 'lote_segregado', equipamento_saude_id: eq.id, natureza: 'alerta_sanitario', alerta_sanitario_id: al.id });
+    expect(
+      await lerBanco(
+        M,
+        'SELECT situacao, lote_segregado, equipamento_saude_id, natureza, alerta_sanitario_id FROM queixa_tecnica_produto WHERE id = ?',
+        [q.id],
+      ),
+    ).toMatchObject({
+      situacao: 'lote_segregado',
+      equipamento_saude_id: eq.id,
+      natureza: 'alerta_sanitario',
+      alerta_sanitario_id: al.id,
+    });
     expect((await porta.vinculosTecnovigDaOs(c, os)).queixa).toBe(q.id);
     for (const tipo of ['queixaTecnica', 'eventoAdverso'] as const)
       await expect(
         porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-          g.abrirQueixaDaOs({ os, tipo, descricao: 'de novo', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+          g.abrirQueixaDaOs({
+            os,
+            tipo,
+            descricao: 'de novo',
+            conduta: 'nenhuma',
+            usuario: M.loginUsuario,
+            agora,
+          }),
         ),
       ).rejects.toSatisfy((e) => codigoDe(e) === 'queixa-ja-aberta');
 
@@ -102,34 +174,89 @@ describe.skipIf(SEM_BANCO_MAN)(`tecnovigilância na porta própria (cliente ${CL
     const os2 = (
       await porta.gravarSgh(c, trilhaMan(M, 'ordem_servico_manutencao'), (g) =>
         g.abrirOs({
-          natureza: 'corretiva', equipamento: eq.id, centroCusto: M.centro, local: null, descricao: 'Falha (teste)', contato: null,
-          prioridadeSugerida: 'media', prioridade: 'media', solicitante: M.loginUsuario, registro: agora, parado: false, plano: null, nota: null,
+          natureza: 'corretiva',
+          equipamento: eq.id,
+          centroCusto: M.centro,
+          local: null,
+          descricao: 'Falha (teste)',
+          contato: null,
+          prioridadeSugerida: 'media',
+          prioridade: 'media',
+          solicitante: M.loginUsuario,
+          registro: agora,
+          parado: false,
+          plano: null,
+          nota: null,
         }),
       )
     ).id;
     expect(await porta.vinculosTecnovigDaOs(c, os2)).toEqual({ queixa: null, alerta: null });
-    for (const [tipo, codigo] of [['alertaSanitario', 'os-sem-alerta'], ['eventoAdverso', 'evento-adverso-pela-notificacao']] as const)
+    for (const [tipo, codigo] of [
+      ['alertaSanitario', 'os-sem-alerta'],
+      ['eventoAdverso', 'evento-adverso-pela-notificacao'],
+    ] as const)
       await expect(
         porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-          g.abrirQueixaDaOs({ os: os2, tipo, descricao: 'Falha (teste)', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+          g.abrirQueixaDaOs({
+            os: os2,
+            tipo,
+            descricao: 'Falha (teste)',
+            conduta: 'nenhuma',
+            usuario: M.loginUsuario,
+            agora,
+          }),
         ),
       ).rejects.toSatisfy((e) => codigoDe(e) === codigo);
-    expect(await lerBanco(M, 'SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [os2])).toBeNull();
+    expect(
+      await lerBanco(M, 'SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [os2]),
+    ).toBeNull();
     const q2 = await porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-      g.abrirQueixaDaOs({ os: os2, tipo: 'queixaTecnica', descricao: 'Falha (teste)', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+      g.abrirQueixaDaOs({
+        os: os2,
+        tipo: 'queixaTecnica',
+        descricao: 'Falha (teste)',
+        conduta: 'nenhuma',
+        usuario: M.loginUsuario,
+        agora,
+      }),
     );
-    expect(await lerBanco(M, 'SELECT situacao, natureza, alerta_sanitario_id, notificacao_incidente_id FROM queixa_tecnica_produto WHERE id = ?', [q2.id])).toMatchObject({ situacao: 'aberta', natureza: 'queixa_tecnica', alerta_sanitario_id: null, notificacao_incidente_id: null });
+    expect(
+      await lerBanco(
+        M,
+        'SELECT situacao, natureza, alerta_sanitario_id, notificacao_incidente_id FROM queixa_tecnica_produto WHERE id = ?',
+        [q2.id],
+      ),
+    ).toMatchObject({
+      situacao: 'aberta',
+      natureza: 'queixa_tecnica',
+      alerta_sanitario_id: null,
+      notificacao_incidente_id: null,
+    });
     expect(await porta.vinculosTecnovigDaOs(c, os2)).toEqual({ queixa: q2.id, alerta: null });
 
     await expect(
-      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) => g.excluirAlerta({ id: al.id, versaoVista: 3, motivo: 'Lançado por engano', usuario: M.loginUsuario })),
+      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
+        g.excluirAlerta({ id: al.id, versaoVista: 3, motivo: 'Lançado por engano', usuario: M.loginUsuario }),
+      ),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'com-dependentes');
     await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
-      g.encerrarAlerta({ id: al.id, versaoVista: 3, motivo: 'Ação de campo concluída (teste)', usuario: M.loginUsuario }),
+      g.encerrarAlerta({
+        id: al.id,
+        versaoVista: 3,
+        motivo: 'Ação de campo concluída (teste)',
+        usuario: M.loginUsuario,
+      }),
     );
-    expect(await porta.alerta(c, al.id)).toMatchObject({ situacao: 'encerrado', motivo: 'Ação de campo concluída (teste)', encerradoPor: M.loginUsuario, acoes: 1 });
+    expect(await porta.alerta(c, al.id)).toMatchObject({
+      situacao: 'encerrado',
+      motivo: 'Ação de campo concluída (teste)',
+      encerradoPor: M.loginUsuario,
+      acoes: 1,
+    });
     await expect(
-      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) => g.encerrarAlerta({ id: al.id, versaoVista: 4, motivo: 'de novo, teste', usuario: M.loginUsuario })),
+      porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
+        g.encerrarAlerta({ id: al.id, versaoVista: 4, motivo: 'de novo, teste', usuario: M.loginUsuario }),
+      ),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'alerta-encerrado');
   });
 
@@ -140,17 +267,43 @@ describe.skipIf(SEM_BANCO_MAN)(`tecnovigilância na porta própria (cliente ${CL
     const al = await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario'), (g) =>
       g.incluirAlerta({ ...outro, usuario: M.loginUsuario, conferir: conferirFaixaDoAlerta(outro) }),
     );
-    await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) => g.excluirAlerta({ id: al.id, versaoVista: 1, motivo: 'Lançado por engano', usuario: M.loginUsuario }));
+    await porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) =>
+      g.excluirAlerta({ id: al.id, versaoVista: 1, motivo: 'Lançado por engano', usuario: M.loginUsuario }),
+    );
     expect(await porta.alerta(c, al.id)).toBeNull();
-    expect(await lerBanco(M, 'SELECT excluido_em IS NOT NULL AS excluido FROM alerta_sanitario WHERE id = ?', [al.id])).toMatchObject({ excluido: 1 });
+    expect(
+      await lerBanco(M, 'SELECT excluido_em IS NOT NULL AS excluido FROM alerta_sanitario WHERE id = ?', [
+        al.id,
+      ]),
+    ).toMatchObject({ excluido: 1 });
 
     const invertida = { ...campos, numero: 'L0303-AL3', serieInicio: 'Z900', serieFim: 'A100' };
     await expect(
       porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario'), async (g) => {
-        await g.avisar({ login: M.loginAvisado, tipo: 't', gravidade: 'atencao', modulo: 'manutencao', evento: 'manutencao.alerta', titulo: 'Alerta', link: null, objetoTabela: null, objetoChave: 'x' });
-        return g.incluirAlerta({ ...invertida, usuario: M.loginUsuario, conferir: conferirFaixaDoAlerta(invertida) });
+        await g.avisar({
+          login: M.loginAvisado,
+          tipo: 't',
+          gravidade: 'atencao',
+          modulo: 'manutencao',
+          evento: 'manutencao.alerta',
+          titulo: 'Alerta',
+          link: null,
+          objetoTabela: null,
+          objetoChave: 'x',
+        });
+        return g.incluirAlerta({
+          ...invertida,
+          usuario: M.loginUsuario,
+          conferir: conferirFaixaDoAlerta(invertida),
+        });
       }),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'faixa-invertida');
-    expect(await lerBanco(M, "SELECT COUNT(*) AS n FROM notificacao_usuario WHERE estabelecimento_id = ? AND chave_agrupamento = 'manutencao.alerta:x'", [M.est])).toMatchObject({ n: 0 });
+    expect(
+      await lerBanco(
+        M,
+        "SELECT COUNT(*) AS n FROM notificacao_usuario WHERE estabelecimento_id = ? AND chave_agrupamento = 'manutencao.alerta:x'",
+        [M.est],
+      ),
+    ).toMatchObject({ n: 0 });
   });
 });

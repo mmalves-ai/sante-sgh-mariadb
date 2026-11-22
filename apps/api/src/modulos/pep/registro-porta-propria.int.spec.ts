@@ -8,7 +8,14 @@ import { MOTIVO_GRAVACAO_PENDENTE, PortaRegistroPropria } from './registro-porta
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l0106';
-const C = { rede: CLIENTE, hospital: P, cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: P };
+const C = {
+  rede: CLIENTE,
+  hospital: P,
+  cliente: CLIENTE,
+  estabelecimento: null,
+  usuario: null,
+  correlacao: P,
+};
 /** Número de prontuário sintético do lote (fora da faixa de qualquer carga). */
 const PRONTUARIO = 901_060_101;
 
@@ -156,12 +163,10 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
         [pessoaProf, `massa ${P}`, agora],
       );
       const categoria = (codigo: string, base: string) =>
-        ins('INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, ?, ?)', [
-          codigo,
-          `Categoria sintética ${codigo}`,
-          base,
-          agora,
-        ]);
+        ins(
+          'INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, ?, ?)',
+          [codigo, `Categoria sintética ${codigo}`, base, agora],
+        );
       const categoriaInternacao = await categoria(`${P}int`, 'internacao');
       const categoriaAmbulatorio = await categoria(`${P}amb`, 'ambulatorio');
       const categoriaPronto = await categoria(`${P}pa`, 'pronto_atendimento');
@@ -206,19 +211,36 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
             extra.saida ? 'alta' : null,
           ],
         );
-      const atendimentoInternacao = await atendimento(estabelecimento, '1001', categoriaInternacao, '2026-11-10T08:00:00Z', {
-        unidade,
-      });
-      const atendimentoAmbulatorio = await atendimento(estabelecimento, 'A-7', categoriaAmbulatorio, '2026-11-01T10:30:00Z');
+      const atendimentoInternacao = await atendimento(
+        estabelecimento,
+        '1001',
+        categoriaInternacao,
+        '2026-11-10T08:00:00Z',
+        {
+          unidade,
+        },
+      );
+      const atendimentoAmbulatorio = await atendimento(
+        estabelecimento,
+        'A-7',
+        categoriaAmbulatorio,
+        '2026-11-01T10:30:00Z',
+      );
       const atendimentoOutroEstabelecimento = await atendimento(
         outroEstabelecimento,
         '2001',
         categoriaAmbulatorio,
         '2026-11-12T09:00:00Z',
       );
-      const atendimentoExcluido = await atendimento(estabelecimento, '1002', categoriaAmbulatorio, '2026-11-15T09:00:00Z', {
-        excluido: true,
-      });
+      const atendimentoExcluido = await atendimento(
+        estabelecimento,
+        '1002',
+        categoriaAmbulatorio,
+        '2026-11-15T09:00:00Z',
+        {
+          excluido: true,
+        },
+      );
       // Ambulatório encerrado no mesmo dia e pronto atendimento aberto há mais de 2 dias (dias antes de "agora").
       const atendimentoAmbulatorioEncerrado = await atendimento(
         estabelecimento,
@@ -227,7 +249,12 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
         '2026-10-20T11:00:00Z',
         { saida: '2026-10-20T11:40:00Z' },
       );
-      const atendimentoProntoAberto = await atendimento(estabelecimento, '1004', categoriaPronto, '2026-10-15T23:30:00Z');
+      const atendimentoProntoAberto = await atendimento(
+        estabelecimento,
+        '1004',
+        categoriaPronto,
+        '2026-10-15T23:30:00Z',
+      );
       return {
         estabelecimento,
         aposentado,
@@ -319,7 +346,11 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
     expect(lista[1]).toMatchObject({ numero: null, tipo: 'ambulatorio', aberto: true });
     // Ambulatório encerrado no mesmo dia: fechado. Pronto atendimento aberto há mais de 2 dias: em curso.
     expect(lista[2]).toMatchObject({ tipo: 'ambulatorio', aberto: false, saida: '2026-10-20T08:40:00' });
-    expect(lista[3]).toMatchObject({ tipo: 'pronto_atendimento', aberto: true, entrada: '2026-10-15T20:30:00' });
+    expect(lista[3]).toMatchObject({
+      tipo: 'pronto_atendimento',
+      aberto: true,
+      entrada: '2026-10-15T20:30:00',
+    });
     // Outro estabelecimento: só o atendimento de lá.
     const outro = await porta.atendimentos({ ...C, hospital: `${P}b` }, m.paciente);
     expect(outro.map((a) => a.id)).toEqual([m.atendimentoOutroEstabelecimento]);
@@ -363,6 +394,8 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
       motivo: MOTIVO_GRAVACAO_PENDENTE,
     });
     await expect(porta.registrar()).rejects.toMatchObject({ problema: { status: 501 } });
-    await expect(porta.profissional()).rejects.toMatchObject({ problema: { codigo: 'pendente-modelo-proprio' } });
+    await expect(porta.profissional()).rejects.toMatchObject({
+      problema: { codigo: 'pendente-modelo-proprio' },
+    });
   });
 });

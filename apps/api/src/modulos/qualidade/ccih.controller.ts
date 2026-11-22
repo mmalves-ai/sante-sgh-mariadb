@@ -783,7 +783,11 @@ export class CcihController {
       s,
       E.qualidadeDispositivoRegistrado.codigo,
       recurso,
-      (x: { id: number }) => ({ tabela: 'dispositivo_invasivo_paciente', id: String(x.id), paciente: i.paciente }),
+      (x: { id: number }) => ({
+        tabela: 'dispositivo_invasivo_paciente',
+        id: String(x.id),
+        paciente: i.paciente,
+      }),
       (g) =>
         g.registrarDispositivo({
           reg: i.reg,
@@ -803,7 +807,9 @@ export class CcihController {
 
   @Post('dispositivos/:id/retirar')
   @Permissao(P.ccihRegistrar)
-  @AuditadoNoHandler('qualidade.retirarDispositivo: dispositivo_invasivo_paciente (versão conferida) com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.retirarDispositivo: dispositivo_invasivo_paciente (versão conferida) com a trilha_auditoria',
+  )
   async retirarDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.retirarDispositivoPor(sessaoDe(req), id, b, P.ccihRegistrar);
   }
@@ -910,7 +916,9 @@ export class CcihController {
 
   @Post('iras/:id/descartar')
   @Permissao(P.irasRegistrar)
-  @AuditadoNoHandler('qualidade.registrarIras (descarte): caso_infeccao com a versão conferida e a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.registrarIras (descarte): caso_infeccao com a versão conferida e a trilha_auditoria',
+  )
   async descartarIras(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaDescartarIras, { ...(b as object), iras: idDaRota(id) });
@@ -1232,7 +1240,9 @@ export class CcihController {
 
   @Post('maos/consumo')
   @Permissao(P.ccihRegistrar)
-  @AuditadoNoHandler('qualidade.registrarObservacaoMaos (consumo): observacao_higiene_maos com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.registrarObservacaoMaos (consumo): observacao_higiene_maos com a trilha_auditoria',
+  )
   async consumoAlcool(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarConsumoAlcool, b);
@@ -1423,7 +1433,9 @@ export class CcihController {
 
   @Post('competencias')
   @Permissao(PQ.competenciaFechar)
-  @AuditadoNoHandler('qualidade.fecharCompetencia: fechamento_vigilancia_iras com a trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'qualidade.fecharCompetencia: fechamento_vigilancia_iras com a trilha_auditoria na mesma transação',
+  )
   async fecharCompetencia(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaFecharCompetenciaCcih, b);

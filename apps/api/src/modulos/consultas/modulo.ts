@@ -7,7 +7,12 @@ import type { DynamicModule } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { ConsultasController } from './consultas.controller.js';
-import { FONTE_CONSULTAS, type FonteConsultas, fonteConsultasIndisponivel, fonteConsultasMemoria } from './fonte.js';
+import {
+  FONTE_CONSULTAS,
+  type FonteConsultas,
+  fonteConsultasIndisponivel,
+  fonteConsultasMemoria,
+} from './fonte.js';
 import { FonteConsultasPropria } from './fonte-propria.js';
 
 export interface OpcoesModuloConsultas {

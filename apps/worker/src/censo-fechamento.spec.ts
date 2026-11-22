@@ -66,14 +66,22 @@ function porta(opcoes: {
   const gravados: DiaCensoParaGravar[] = [];
   const p: PortaCenso = {
     estabelecimentos: async () => [EST],
-    configuracao: async () => ({ ligada: opcoes.ligada, horaFechamento: null, categoriasIntensivas: opcoes.intensivas ?? [] }),
+    configuracao: async () => ({
+      ligada: opcoes.ligada,
+      horaFechamento: null,
+      categoriasIntensivas: opcoes.intensivas ?? [],
+    }),
     diasFechados: async () => [...(opcoes.fechados ?? [])],
     movimento: async () => MOV,
     gravarDia: async (_e, d) => {
       if (opcoes.jaNaGravacao) return null;
       if (opcoes.semAcomodacao) return { unidades: 0, linhas: 0, internados: 0 };
       gravados.push(d);
-      return { unidades: 1, linhas: d.linhas.length, internados: d.linhas.reduce((a, l) => a + l.internados, 0) };
+      return {
+        unidades: 1,
+        linhas: d.linhas.length,
+        internados: d.linhas.reduce((a, l) => a + l.internados, 0),
+      };
     },
   };
   return { p, gravados };
@@ -81,7 +89,15 @@ function porta(opcoes: {
 
 // 2026-10-20 13:00 UTC = 10:00 em São Paulo: o último dia fechado (meia-noite) é 2026-10-19.
 const AGORA = Date.UTC(2026, 9, 20, 13, 0);
-const SEMANA = ['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'];
+const SEMANA = [
+  '2026-10-13',
+  '2026-10-14',
+  '2026-10-15',
+  '2026-10-16',
+  '2026-10-17',
+  '2026-10-18',
+  '2026-10-19',
+];
 
 describe('fechamento do censo no worker', () => {
   it('chave desligada: nada é gravado', async () => {
@@ -100,16 +116,22 @@ describe('fechamento do censo no worker', () => {
   });
 
   it('já fechado (antes ou por outro processo durante a gravação): desiste', async () => {
-    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, fechados: SEMANA }).p, EST, AGORA)).toEqual({
+    expect(
+      await fecharCensoDoEstabelecimento(porta({ ligada: true, fechados: SEMANA }).p, EST, AGORA),
+    ).toEqual({
       situacao: 'ja-fechado',
     });
-    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, jaNaGravacao: true }).p, EST, AGORA)).toEqual({
+    expect(
+      await fecharCensoDoEstabelecimento(porta({ ligada: true, jaNaGravacao: true }).p, EST, AGORA),
+    ).toEqual({
       situacao: 'ja-fechado',
     });
   });
 
   it('sem acomodação de internação no cadastro: nada é gravado e o resultado diz por quê', async () => {
-    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, semAcomodacao: true }).p, EST, AGORA)).toEqual({
+    expect(
+      await fecharCensoDoEstabelecimento(porta({ ligada: true, semAcomodacao: true }).p, EST, AGORA),
+    ).toEqual({
       situacao: 'sem-acomodacao',
     });
   });
@@ -147,7 +169,9 @@ describe('fechamento do censo no worker', () => {
     const antes = process.env['WORKER_CLIENTES'];
     process.env['WORKER_CLIENTES'] = 'cli_teste';
     try {
-      expect(await s.ciclo(AGORA)).toEqual([{ situacao: 'desligado', cliente: 'cli_teste', estabelecimento: 'pc' }]);
+      expect(await s.ciclo(AGORA)).toEqual([
+        { situacao: 'desligado', cliente: 'cli_teste', estabelecimento: 'pc' },
+      ]);
     } finally {
       if (antes === undefined) delete process.env['WORKER_CLIENTES'];
       else process.env['WORKER_CLIENTES'] = antes;

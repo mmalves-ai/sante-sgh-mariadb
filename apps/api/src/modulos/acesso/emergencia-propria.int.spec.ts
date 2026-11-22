@@ -8,7 +8,11 @@ import { randomUUID } from 'node:crypto';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PONTO_ALERTA_EMERGENCIA, RegistroEmergenciaPropria, RELAY_ENTREGA_ALERTA_EMERGENCIA } from './emergencia.controller.js';
+import {
+  PONTO_ALERTA_EMERGENCIA,
+  RegistroEmergenciaPropria,
+  RELAY_ENTREGA_ALERTA_EMERGENCIA,
+} from './emergencia.controller.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -22,15 +26,22 @@ describe.skipIf(SEM_BANCO)('registro próprio da quebra de vidro contra o MariaD
   let registro: RegistroEmergenciaPropria;
   const ids = { est: 0, paciente: 0, estacao: 0 };
 
-  async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
+  async function garantir(
+    e: Escritor,
+    sel: string,
+    p: unknown[],
+    ins: string,
+    pi: unknown[],
+  ): Promise<number> {
     const l = await e.uma<{ id: number }>(sel, p);
     return l ? Number(l.id) : e.inserir(ins, pi);
   }
   async function limpar(e: Escritor) {
     if (!ids.est) return;
-    await e.executar("DELETE FROM integracao_mensagem WHERE estabelecimento_id = ? AND entidade = 'acesso_emergencial'", [
-      ids.est,
-    ]);
+    await e.executar(
+      "DELETE FROM integracao_mensagem WHERE estabelecimento_id = ? AND entidade = 'acesso_emergencial'",
+      [ids.est],
+    );
     await e.executar('DELETE FROM acesso_emergencial WHERE estabelecimento_id = ?', [ids.est]);
   }
   const linha = (sql: string, p: unknown[]) =>
@@ -114,10 +125,16 @@ describe.skipIf(SEM_BANCO)('registro próprio da quebra de vidro contra o MariaD
     expect(r.alertaNaOutbox).toBe(RELAY_ENTREGA_ALERTA_EMERGENCIA);
     const id = Number(r.id);
     expect(
-      await linha('SELECT situacao, endereco_ip, estacao_trabalho_id, estabelecimento_id FROM acesso_emergencial WHERE id = ?', [
-        id,
-      ]),
-    ).toMatchObject({ situacao: 'ativo', endereco_ip: IP, estacao_trabalho_id: ids.estacao, estabelecimento_id: ids.est });
+      await linha(
+        'SELECT situacao, endereco_ip, estacao_trabalho_id, estabelecimento_id FROM acesso_emergencial WHERE id = ?',
+        [id],
+      ),
+    ).toMatchObject({
+      situacao: 'ativo',
+      endereco_ip: IP,
+      estacao_trabalho_id: ids.estacao,
+      estabelecimento_id: ids.est,
+    });
     const t = await linha(
       `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) AS operacao, endereco_ip
        FROM trilha_auditoria WHERE entidade = 'acesso_emergencial' AND entidade_id = ? ORDER BY id DESC LIMIT 1`,
@@ -129,20 +146,34 @@ describe.skipIf(SEM_BANCO)('registro próprio da quebra de vidro contra o MariaD
       [id],
     );
     expect(m?.['ponto']).toBe(PONTO_ALERTA_EMERGENCIA);
-    const carga = (typeof m?.['conteudo'] === 'string' ? JSON.parse(m['conteudo']) : m?.['conteudo']) as Record<string, unknown>;
+    const carga = (
+      typeof m?.['conteudo'] === 'string' ? JSON.parse(m['conteudo']) : m?.['conteudo']
+    ) as Record<string, unknown>;
     // As chaves que o EmailService confere (todas texto no formato de código), mais o cliente que o executor junta.
-    expect(Object.keys(carga).sort()).toEqual(['cliente', 'fim', 'hospital', 'idEmergencia', 'idUsuario', 'inicio', 'motivo', 'rede'].sort());
-    expect(carga).toMatchObject({ rede: 'teste', hospital: EST, idEmergencia: String(id), motivo: MOTIVO, inicio: r.inicio.toISOString() });
+    expect(Object.keys(carga).sort()).toEqual(
+      ['cliente', 'fim', 'hospital', 'idEmergencia', 'idUsuario', 'inicio', 'motivo', 'rede'].sort(),
+    );
+    expect(carga).toMatchObject({
+      rede: 'teste',
+      hospital: EST,
+      idEmergencia: String(id),
+      motivo: MOTIVO,
+      inicio: r.inicio.toISOString(),
+    });
     for (const k of ['rede', 'hospital', 'idEmergencia', 'idUsuario', 'motivo', 'inicio', 'fim'])
       expect(carga[k]).toMatch(/^[A-Za-z0-9._:-]{1,64}$/);
     expect(await registro.vigente(EST, LOGIN, ids.paciente)).toMatchObject({ id: r.id });
   });
 
   it('motivo fora do domínio do cliente é recusa de negócio (409), sem linha nem alerta', async () => {
-    const antes = await linha('SELECT COUNT(*) AS n FROM acesso_emergencial WHERE estabelecimento_id = ?', [ids.est]);
+    const antes = await linha('SELECT COUNT(*) AS n FROM acesso_emergencial WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
     await expect(registro.abrir(pedido('L0104-NAO-EXISTE'))).rejects.toMatchObject({
       problema: expect.objectContaining({ codigo: 'motivo-inexistente', status: 409 }),
     });
-    expect(await linha('SELECT COUNT(*) AS n FROM acesso_emergencial WHERE estabelecimento_id = ?', [ids.est])).toEqual(antes);
+    expect(
+      await linha('SELECT COUNT(*) AS n FROM acesso_emergencial WHERE estabelecimento_id = ?', [ids.est]),
+    ).toEqual(antes);
   });
 });

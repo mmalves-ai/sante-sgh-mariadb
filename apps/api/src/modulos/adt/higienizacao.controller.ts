@@ -208,7 +208,9 @@ export class HigienizacaoController {
   @Post('solicitacoes/:id/etapas')
   @HttpCode(200)
   @Permissao('hotelaria.limpeza.ler')
-  @AuditadoNoHandler('etapa da higienização (solicitacao_limpeza) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'etapa da higienização (solicitacao_limpeza) com a trilha de auditoria na mesma transação',
+  )
   async etapa(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -279,7 +281,8 @@ export class HigienizacaoController {
       permissao,
       (x: number) => ({
         // A inspeção grava a linha da inspeção; as demais etapas, a própria solicitação.
-        tabela: e.etapa === 'inspecionado' || e.etapa === 'reprovado' ? 'inspecao_limpeza' : 'solicitacao_limpeza',
+        tabela:
+          e.etapa === 'inspecionado' || e.etapa === 'reprovado' ? 'inspecao_limpeza' : 'solicitacao_limpeza',
         id: String(x),
         chave: chaveTextoLeito(sol.leito),
       }),

@@ -100,9 +100,9 @@ const competenciaOuNula = (v: string | undefined) => {
   return c;
 };
 
-
 /** A sessão com a Idempotency-Key do pedido no contexto da porta: o reenvio do mesmo pedido não grava de novo. */
-const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro => comPedido(sessaoCadastroDe(req));
+const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro =>
+  comPedido(sessaoCadastroDe(req));
 
 @Controller('repasse')
 export class RepasseController {

@@ -1160,11 +1160,7 @@ export class ServicoAssinaturaDocumentos {
           em: agora,
         });
         if (t.situacao.estado === 'assinada')
-          await g.gravarEventoAssinadoIcp(
-            { hospital: a.hospital, usuario: a.usuario },
-            a.documento,
-            false,
-          );
+          await g.gravarEventoAssinadoIcp({ hospital: a.hospital, usuario: a.usuario }, a.documento, false);
         for (const dest of t.avisar)
           await g.gravarAviso({
             hospital: a.hospital,

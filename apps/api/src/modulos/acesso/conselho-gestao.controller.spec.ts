@@ -61,7 +61,11 @@ async function complementares(login: string): Promise<string[]> {
 
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria(), registro: REGISTRO_TESTE_ACESSO });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem: new ArmazemMemoria(),
+    registro: REGISTRO_TESTE_ACESSO,
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   for (const l of ['SINT.GESTOR', 'SINT.MEDICO']) await entrar(l);

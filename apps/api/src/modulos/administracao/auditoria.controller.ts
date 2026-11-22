@@ -226,9 +226,7 @@ export class AuditoriaController {
       origem !== 'legado' && f.tipo === undefined
         ? await this.fonte.trilha(c, filtro).catch((e: unknown) => problema(e))
         : []
-    ).sort(
-      (a, b) => b.dataHora.localeCompare(a.dataHora) || b.id.localeCompare(a.id),
-    );
+    ).sort((a, b) => b.dataHora.localeCompare(a.dataHora) || b.id.localeCompare(a.id));
     const ini = (pagina - 1) * porPagina;
     const haMais = todas.length > ini + quantas;
     // Na última página permitida, "próxima" some e o corte é avisado (a página 21 seria recusada).

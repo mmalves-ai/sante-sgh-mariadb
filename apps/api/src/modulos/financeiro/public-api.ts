@@ -4,7 +4,11 @@
 export { FinanceiroController } from './financeiro.controller.js';
 export { ARMAZEM_FINANCEIRO } from './simbolos.js';
 export { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
-export { type NucleoFinanceiro, portaFinanceiroIndisponivel, PortaFinanceiroPropria } from './porta-propria.js';
+export {
+  type NucleoFinanceiro,
+  portaFinanceiroIndisponivel,
+  PortaFinanceiroPropria,
+} from './porta-propria.js';
 export {
   type CatalogoOperacoesFinanceiro,
   contasBancariasSinteticasDoEscopo,

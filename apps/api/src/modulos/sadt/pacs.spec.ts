@@ -21,7 +21,11 @@ import { SERVICO_PACS } from './pacs.controller.js';
 import { PortaPacsMemoria } from './pacs-porta-memoria.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'sadt,pep,acesso,config,integracao_teste' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'sadt,pep,acesso,config,integracao_teste',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const documentos = new PortaDocumentosMemoria(trilha, null);
 const sadt = new PortaSadtMemoria({ estado: () => 'verde' }, documentos);
@@ -49,7 +53,9 @@ beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
     registro: {
-      sadt: async () => ({ modulo: (ctx) => moduloSadt(ctx, { porta: sadt, pacs, estabelecimentos: ['aa'] }) }),
+      sadt: async () => ({
+        modulo: (ctx) => moduloSadt(ctx, { porta: sadt, pacs, estabelecimentos: ['aa'] }),
+      }),
       // O pedido do exame nasce no prontuário (PEP) sobre os mesmos documentos em memória do SADT.
       pep: async () => ({ modulo: (ctx) => moduloPep(ctx, { documentos }) }),
       acesso: REGISTRO_MODULOS['acesso']!,

@@ -182,7 +182,9 @@ describe('plano e aplicação', () => {
       motivo: 'Trabalha no faturamento',
     });
     expect(i).toMatchObject({ situacao: 'proposto', exigeAprovacao: true, perdasUsadas: 1, perdasTotal: 7 });
-    expect(await recusa(s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0001' }))).toBe('exige-aprovacao');
+    expect(await recusa(s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0001' }))).toBe(
+      'exige-aprovacao',
+    );
     expect(await recusa(s.aprovar(gestor, i.id, { area: 'Faturamento', motivo: 'Sem uso' }))).toBe(
       'aprovacao-pelo-proponente',
     );
@@ -227,7 +229,9 @@ describe('plano e aplicação', () => {
     expect(await recusa(s.aprovar(area, i.id, { area: 'Faturamento', motivo: 'Desnecessária' }))).toBe(
       'aprovacao-desnecessaria',
     );
-    expect((await s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0003' })).item.situacao).toBe('aplicado');
+    expect((await s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0003' })).item.situacao).toBe(
+      'aplicado',
+    );
   });
 
   it('uso sem resposta na decisão: exige a aprovação (falha fechada)', async () => {
@@ -255,7 +259,9 @@ describe('plano e aplicação', () => {
     await s.aprovar(area, i.id, { area: 'Faturamento', motivo: 'Opção sem uso na função' });
     porta.gruposMem.set('FATURAMENTO', { ativo: true, opcoes: new Set([1]) });
     // O cache do uso não muda; a simulação refeita com o destino novo perde a opção 2 (usada).
-    expect(await recusa(s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0004' }))).toBe('perdas-aumentaram');
+    expect(await recusa(s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-0004' }))).toBe(
+      'perdas-aumentaram',
+    );
   });
 
   it('usuário que saiu do grupo antes da aplicação: recusa sem gravar', async () => {
@@ -339,7 +345,12 @@ describe('plano e aplicação', () => {
     porta.comUsuario(u('SINT.H', 'MASTER', '2025-01-10', { emOutroEstabelecimento: true }));
     expect(
       await recusa(
-        s.incluir(gestor, { login: 'SINT.H', decisao: 'bloquear', grupoDestino: null, motivo: 'Sem entrar há meses' }),
+        s.incluir(gestor, {
+          login: 'SINT.H',
+          decisao: 'bloquear',
+          grupoDestino: null,
+          motivo: 'Sem entrar há meses',
+        }),
       ),
     ).toBe('conta-em-outro-estabelecimento');
   });
@@ -366,7 +377,9 @@ describe('plano e aplicação', () => {
         }),
       ),
     ).toBe('usuario-inexistente');
-    expect(await recusa(s.aplicar(gestor, '999', { chaveIdempotencia: 'chave-0008' }))).toBe('item-inexistente');
+    expect(await recusa(s.aplicar(gestor, '999', { chaveIdempotencia: 'chave-0008' }))).toBe(
+      'item-inexistente',
+    );
     expect(await recusa(s.descartar(gestor, '999'))).toBe('item-inexistente');
   });
 
@@ -447,7 +460,14 @@ describe('dissolução', () => {
     });
     // A chave de cada lote deriva das ações dele: repetir o pedido depois de uma falha retira só o resto.
     const chaves = chamadas.map((c) => c.chave);
-    expect(chaves).toEqual([1, 201, 401].map((i) => chaveDoLote('chave-dis-01', Array.from({ length: i === 401 ? 50 : 200 }, (_, k) => i + k))));
+    expect(chaves).toEqual(
+      [1, 201, 401].map((i) =>
+        chaveDoLote(
+          'chave-dis-01',
+          Array.from({ length: i === 401 ? 50 : 200 }, (_, k) => i + k),
+        ),
+      ),
+    );
     expect(new Set(chaves).size).toBe(3);
     expect(chaves.every((c) => /^chave-dis-01\.[0-9a-f]{16}$/.test(c))).toBe(true);
     expect((chamadas[2]?.entrada as { opcoes: number[] }).opcoes).toHaveLength(50);
@@ -461,7 +481,9 @@ describe('dissolução', () => {
       'master-nao-dissolve',
     );
     porta.comUsuario(u('SINT.F', 'MASTER_SEM_FINANCEIRO'));
-    expect(await recusa(s.dissolver(gestor, 'MASTER_SEM_FINANCEIRO', 'Ainda tem ativo', ctx))).toBe('grupo-com-ativos');
+    expect(await recusa(s.dissolver(gestor, 'MASTER_SEM_FINANCEIRO', 'Ainda tem ativo', ctx))).toBe(
+      'grupo-com-ativos',
+    );
     expect(await recusa(s.dissolver(gestor, 'FATURAMENTO', 'Não genérico', ctx))).toBe('grupo-nao-generico');
     expect(await recusa(s.dissolver(gestor, 'MASTER_CONSULTA_FINANCEIRO', 'Não existe', ctx))).toBe(
       'grupo-sem-opcoes',
@@ -539,7 +561,9 @@ describe('revisão do M59.4', () => {
       grupoDestino: 'FATURAMENTO',
       motivo: 'Sai do acesso total',
     });
-    expect((await s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-r2-1' })).item.situacao).toBe('aplicado');
+    expect((await s.aplicar(gestor, i.id, { chaveIdempotencia: 'chave-r2-1' })).item.situacao).toBe(
+      'aplicado',
+    );
     expect(chamadas.at(-1)).toMatchObject({
       nome: OPERACOES_SANEAMENTO.trocarGrupo,
       entrada: { login: 'SINT.E', grupo: 'FATURAMENTO' },

@@ -36,12 +36,20 @@ describe('vigia do índice de busca (M11)', () => {
   });
 
   it('a regra pura do escore decide o par (nome + nascimento + mãe entra; só o nome não)', () => {
-    expect(avaliarPar(paciente(1), paciente(2))).toMatchObject({ criterios: expect.arrayContaining(['fonetica']) });
-    expect(avaliarPar(paciente(1), paciente(2, { nascimento: '1999-09-09', mae: 'OUTRA PESSOA' }))).toBeNull();
+    expect(avaliarPar(paciente(1), paciente(2))).toMatchObject({
+      criterios: expect.arrayContaining(['fonetica']),
+    });
+    expect(
+      avaliarPar(paciente(1), paciente(2, { nascimento: '1999-09-09', mae: 'OUTRA PESSOA' })),
+    ).toBeNull();
   });
 
   it('as palavras do índice: sem repetir, com a fonética; o excluído não tem palavras', () => {
-    const p = palavrasDoIndice({ ...lido(1, '2026-01-01T00:00:00.000Z'), nome: 'ANA ANA SILVA', mae: 'JOANA' });
+    const p = palavrasDoIndice({
+      ...lido(1, '2026-01-01T00:00:00.000Z'),
+      nome: 'ANA ANA SILVA',
+      mae: 'JOANA',
+    });
     expect(p.map((x) => `${x.campo}:${x.palavra}`)).toEqual(['nome:ANA', 'nome:SILVA', 'mae:JOANA']);
     expect(p.every((x) => x.fonetica.length > 0)).toBe(true);
     expect(palavrasDoIndice(lido(1, '2026-01-01T00:00:00.000Z', true))).toEqual([]);
@@ -55,7 +63,11 @@ describe('vigia do índice de busca (M11)', () => {
       mudados: async (entidade, desde) => {
         marcas.push(desde);
         if (entidade !== 'paciente' || desde.id > 0) return [];
-        return [lido(7, '2026-11-01T10:00:00.000Z'), lido(8, '2026-11-01T10:00:00.000Z'), lido(9, '2026-11-01T10:00:01.000Z', true)];
+        return [
+          lido(7, '2026-11-01T10:00:00.000Z'),
+          lido(8, '2026-11-01T10:00:00.000Z'),
+          lido(9, '2026-11-01T10:00:01.000Z', true),
+        ];
       },
       lerCadastros: async () => [],
       indexar: async (_e, cs) => {
@@ -77,7 +89,11 @@ describe('vigia do índice de busca (M11)', () => {
     try {
       const s = new IndiceBuscaService();
       expect(await s.ciclo()).toEqual([]);
-      s.usar({ lerPlataforma: async () => [] as never, encerrar: async () => undefined }, () => porta, 60_000);
+      s.usar(
+        { lerPlataforma: async () => [] as never, encerrar: async () => undefined },
+        () => porta,
+        60_000,
+      );
       const r1 = await s.ciclo();
       expect(r1.find((x) => x.entidade === 'paciente')).toEqual({
         cliente: 'cli_teste',

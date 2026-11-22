@@ -12,7 +12,24 @@ import {
 } from '@sgh/contratos';
 import { ErroOperacao } from '@sgh/nucleo';
 import { conferirAnexoResposta, recusaAuditorComPedidos } from './aplicacao/regras-portas.js';
-import { ANEXOS_COMPLEMENTO_MAX, type DadosAnexoComplemento, type DadosAuditor, type DadosAutorizacao, type DadosAutorizacaoDaSenha, type DadosAutorizacaoResumo, type DadosEventoAutorizacao, type DadosItemAutorizacao, type DadosItemDominioAutorizacao, type DadosPrestadorParaAutorizacao, type DadosProcedimentoTuss, type DominioAutorizacao, type FiltroAutorizacoesPorta, LIMITE_BUSCA_TUSS, LIMITE_PAGINA_AUTORIZACOES, type SituacaoAutorizacaoPorta } from './dados-portas.js';
+import {
+  ANEXOS_COMPLEMENTO_MAX,
+  type DadosAnexoComplemento,
+  type DadosAuditor,
+  type DadosAutorizacao,
+  type DadosAutorizacaoDaSenha,
+  type DadosAutorizacaoResumo,
+  type DadosEventoAutorizacao,
+  type DadosItemAutorizacao,
+  type DadosItemDominioAutorizacao,
+  type DadosPrestadorParaAutorizacao,
+  type DadosProcedimentoTuss,
+  type DominioAutorizacao,
+  type FiltroAutorizacoesPorta,
+  LIMITE_BUSCA_TUSS,
+  LIMITE_PAGINA_AUTORIZACOES,
+  type SituacaoAutorizacaoPorta,
+} from './dados-portas.js';
 import type {
   ContextoAutorizacao,
   GravadorAutorizacao,

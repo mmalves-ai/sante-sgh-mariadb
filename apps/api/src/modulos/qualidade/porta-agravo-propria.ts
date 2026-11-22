@@ -128,7 +128,11 @@ function casoDe(r: Linha): CasoAgravoRegistrado {
 }
 
 /** Os CIDs (sem ponto) registrados em cada atendimento: os diagnósticos não inativados e os CIDs principal e secundário. */
-async function cidsDosAtendimentos(l: L, est: number, ids: readonly number[]): Promise<Map<number, string[]>> {
+async function cidsDosAtendimentos(
+  l: L,
+  est: number,
+  ids: readonly number[],
+): Promise<Map<number, string[]>> {
   const r = new Map<number, string[]>();
   const unicos = [...new Set(ids)];
   if (!unicos.length) return r;
@@ -157,7 +161,10 @@ async function cidsDosAtendimentos(l: L, est: number, ids: readonly number[]): P
 }
 
 /** Os textos de cada resultado liberado (o texto livre, a conclusão e o valor de cada analito), por item de exame. */
-async function textosDosResultados(l: L, itens: readonly number[]): Promise<Map<number, { textos: string[]; em: string; id: number }[]>> {
+async function textosDosResultados(
+  l: L,
+  itens: readonly number[],
+): Promise<Map<number, { textos: string[]; em: string; id: number }[]>> {
   const r = new Map<number, { textos: string[]; em: string; id: number }[]>();
   if (!itens.length) return r;
   const linhas = await l.consultar(
@@ -171,11 +178,7 @@ async function textosDosResultados(l: L, itens: readonly number[]): Promise<Map<
     { teto: 10_000 },
   );
   for (const x of linhas) {
-    const textos = [
-      ...texto(x['analitos']).split('\n'),
-      texto(x['texto_resultado']),
-      texto(x['conclusao']),
-    ]
+    const textos = [...texto(x['analitos']).split('\n'), texto(x['texto_resultado']), texto(x['conclusao'])]
       .map((t) => t.trim().slice(0, 500))
       .filter((t) => t !== '');
     const item = n(x['exame_item_id']);
@@ -219,7 +222,9 @@ export class PortaAgravoPropria implements PortaAgravo {
   }
 
   executar(_c: ContextoAgravo, op: string): Promise<GravacaoFeita> {
-    return Promise.reject(recusa('operacao-desconhecida', `Operação ${op} sem receita do executor na notificação compulsória.`));
+    return Promise.reject(
+      recusa('operacao-desconhecida', `Operação ${op} sem receita do executor na notificação compulsória.`),
+    );
   }
 
   gravarSgh<T>(
@@ -243,7 +248,13 @@ export class PortaAgravoPropria implements PortaAgravo {
       [id, est],
       { teto: 1 },
     );
-    if (!r) throw new ErroOperacao(404, 'nao-encontrado', 'Caso não encontrado', 'O caso não existe neste estabelecimento.');
+    if (!r)
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Caso não encontrado',
+        'O caso não existe neste estabelecimento.',
+      );
     if (n(r['versao']) !== versao || texto(r['situacao']) !== 'rascunho') throw recusaVersaoAgravo();
   }
 
@@ -251,15 +262,28 @@ export class PortaAgravoPropria implements PortaAgravo {
     return {
       abrirCaso: async (x) => {
         if (x.chaveGatilho) {
-          const ja = await tx.uma('SELECT id FROM notificacao_agravo WHERE estabelecimento_id = ? AND chave_gatilho = ?', [est, x.chaveGatilho]);
-          if (ja) throw recusa('caso-ja-aberto', 'Este gatilho já virou caso (outra pessoa da vigilância abriu): recarregue a fila.');
+          const ja = await tx.uma(
+            'SELECT id FROM notificacao_agravo WHERE estabelecimento_id = ? AND chave_gatilho = ?',
+            [est, x.chaveGatilho],
+          );
+          if (ja)
+            throw recusa(
+              'caso-ja-aberto',
+              'Este gatilho já virou caso (outra pessoa da vigilância abriu): recarregue a fila.',
+            );
         }
-        const paciente = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [x.paciente]);
+        const paciente = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [
+          x.paciente,
+        ]);
         if (!paciente) throw recusa('paciente-inexistente', 'O paciente informado não existe neste cliente.');
         if (x.atendimento !== null) {
-          const a = await tx.uma('SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [x.atendimento, est]);
+          const a = await tx.uma(
+            'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [x.atendimento, est],
+          );
           if (!a) throw recusa('atendimento-inexistente', 'O atendimento não é deste estabelecimento.');
-          if (n(a['paciente_id']) !== x.paciente) throw recusa('atendimento-de-outro-paciente', 'O atendimento é de outro paciente.');
+          if (n(a['paciente_id']) !== x.paciente)
+            throw recusa('atendimento-de-outro-paciente', 'O atendimento é de outro paciente.');
         }
         let exameCatalogo: number | null = null;
         if (x.exame !== null) {
@@ -268,7 +292,8 @@ export class PortaAgravoPropria implements PortaAgravo {
               WHERE ei.id = ? AND rq.estabelecimento_id = ? AND ei.excluido_em IS NULL`,
             [x.exame, est],
           );
-          if (!e || n(e['paciente_id']) !== x.paciente) throw recusa('exame-de-outro-paciente', 'O exame não é deste paciente neste estabelecimento.');
+          if (!e || n(e['paciente_id']) !== x.paciente)
+            throw recusa('exame-de-outro-paciente', 'O exame não é deste paciente neste estabelecimento.');
           exameCatalogo = n(e['exame_id']);
         }
         const termo = await termoDoCid(tx, x.cid);
@@ -295,7 +320,10 @@ export class PortaAgravoPropria implements PortaAgravo {
           return { id };
         } catch (e) {
           if ((e as { errno?: unknown } | null)?.errno === ERRNO_DUPLICADO)
-            throw recusa('caso-ja-aberto', 'Este gatilho já virou caso (outra pessoa da vigilância abriu): recarregue a fila.');
+            throw recusa(
+              'caso-ja-aberto',
+              'Este gatilho já virou caso (outra pessoa da vigilância abriu): recarregue a fila.',
+            );
           throw e;
         }
       },
@@ -303,8 +331,15 @@ export class PortaAgravoPropria implements PortaAgravo {
         await this.travarAberto(tx, est, r.id, r.versao);
         const usuario = await exigirUsuario(tx, r.usuario);
         if (r.numero) {
-          const dup = await tx.uma('SELECT id FROM notificacao_agravo WHERE estabelecimento_id = ? AND numero_notificacao = ? AND id <> ?', [est, r.numero, r.id]);
-          if (dup) throw recusa('numero-duplicado', 'Este número de notificação já foi registrado em outro caso deste estabelecimento.');
+          const dup = await tx.uma(
+            'SELECT id FROM notificacao_agravo WHERE estabelecimento_id = ? AND numero_notificacao = ? AND id <> ?',
+            [est, r.numero, r.id],
+          );
+          if (dup)
+            throw recusa(
+              'numero-duplicado',
+              'Este número de notificação já foi registrado em outro caso deste estabelecimento.',
+            );
         }
         const versao = await tx.alterar('notificacao_agravo', r.id, r.versao, {
           situacao: 'notificada',
@@ -339,7 +374,8 @@ export class PortaAgravoPropria implements PortaAgravo {
             WHERE estabelecimento_id = ? AND padrao = ? AND codigo_cid10 = ? AND excluido_em IS NULL AND id <> ?`,
           [est, g.padrao, g.cid, g.id ?? 0],
         );
-        if (dup) throw recusa('gatilho-duplicado', 'Já existe gatilho com este padrão de exame para o mesmo CID.');
+        if (dup)
+          throw recusa('gatilho-duplicado', 'Já existe gatilho com este padrão de exame para o mesmo CID.');
         const valores = { padrao: g.padrao, exceto: g.exceto, codigo_cid10: g.cid, ativo: g.ativo };
         if (g.id === null) {
           const id = await tx.incluir('gatilho_exame_agravo', { estabelecimento_id: est, ...valores });
@@ -362,10 +398,17 @@ export class PortaAgravoPropria implements PortaAgravo {
   }
 
   /** O agravo do caso: o da ficha escolhida ou, sem ela, o do cadastro cujo CID casa (o mais específico). */
-  private async agravoDoCaso(tx: TxOperacao, ficha: number | null, cid: string): Promise<{ id: number; tipo: number | null }> {
+  private async agravoDoCaso(
+    tx: TxOperacao,
+    ficha: number | null,
+    cid: string,
+  ): Promise<{ id: number; tipo: number | null }> {
     const r =
       ficha !== null
-        ? await tx.uma('SELECT id, tipo_notificacao_agravo_id FROM agravo_notificavel WHERE id = ? AND ativo = TRUE', [ficha])
+        ? await tx.uma(
+            'SELECT id, tipo_notificacao_agravo_id FROM agravo_notificavel WHERE id = ? AND ativo = TRUE',
+            [ficha],
+          )
         : await tx.uma(
             `SELECT a.id, a.tipo_notificacao_agravo_id FROM agravo_notificavel a
                JOIN agravo_notificavel_cid c ON c.agravo_notificavel_id = a.id AND c.excluido_em IS NULL
@@ -373,7 +416,11 @@ export class PortaAgravoPropria implements PortaAgravo {
               ORDER BY LENGTH(c.codigo_cid10) DESC, a.id LIMIT 1`,
             [cid],
           );
-    if (!r) throw recusa('agravo-nao-cadastrado', 'O CID não tem agravo notificável ativo no cadastro deste cliente.');
+    if (!r)
+      throw recusa(
+        'agravo-nao-cadastrado',
+        'O CID não tem agravo notificável ativo no cadastro deste cliente.',
+      );
     return { id: n(r['id']), tipo: nn(r['tipo_notificacao_agravo_id']) };
   }
 
@@ -406,7 +453,11 @@ export class PortaAgravoPropria implements PortaAgravo {
         const cid = texto(r['cid']);
         const atual = porCid.get(cid);
         if (atual && atual.codigoCadastro === 2) continue;
-        porCid.set(cid, { cid, nome: textoN(r['nome_cid']) ?? texto(r['descricao']), codigoCadastro: imediata ? 2 : 1 });
+        porCid.set(cid, {
+          cid,
+          nome: textoN(r['nome_cid']) ?? texto(r['descricao']),
+          codigoCadastro: imediata ? 2 : 1,
+        });
       }
       return [...porCid.values()];
     });
@@ -458,7 +509,11 @@ export class PortaAgravoPropria implements PortaAgravo {
         [est, paraBanco(desde)],
         { teto: TETO_FILA },
       );
-      const cids = await cidsDosAtendimentos(l, est, linhas.map((r) => n(r['atendimento_id'])));
+      const cids = await cidsDosAtendimentos(
+        l,
+        est,
+        linhas.map((r) => n(r['atendimento_id'])),
+      );
       return linhas.map((r) => ({
         atendimento: n(r['atendimento_id']),
         paciente: n(r['paciente_id']),
@@ -486,7 +541,10 @@ export class PortaAgravoPropria implements PortaAgravo {
       );
       const cortado = linhas.length > TETO_FILA;
       const base = linhas.slice(0, TETO_FILA);
-      const textos = await textosDosResultados(l, base.map((r) => n(r['id'])));
+      const textos = await textosDosResultados(
+        l,
+        base.map((r) => n(r['id'])),
+      );
       const alvo = termos.map(maiusculo);
       const itens = base.flatMap((r) =>
         (textos.get(n(r['id'])) ?? [])
@@ -633,7 +691,10 @@ export class PortaAgravoPropria implements PortaAgravo {
     });
   }
 
-  perguntasFicha(c: ContextoAgravo, modelo: number): Promise<{ codigo: number; subcodigo: number; texto: string }[]> {
+  perguntasFicha(
+    c: ContextoAgravo,
+    modelo: number,
+  ): Promise<{ codigo: number; subcodigo: number; texto: string }[]> {
     return this.ler(c, async (l) => {
       const linhas = await l.consultar(
         `SELECT sequencia, codigo_campo, subcodigo, enunciado FROM agravo_pergunta
@@ -643,7 +704,11 @@ export class PortaAgravoPropria implements PortaAgravo {
       );
       return linhas.map((r) => {
         const campo = texto(r['codigo_campo']);
-        return { codigo: /^\d+$/.test(campo) ? Number(campo) : n(r['sequencia']), subcodigo: n(r['subcodigo']), texto: texto(r['enunciado']) };
+        return {
+          codigo: /^\d+$/.test(campo) ? Number(campo) : n(r['sequencia']),
+          subcodigo: n(r['subcodigo']),
+          texto: texto(r['enunciado']),
+        };
       });
     });
   }
@@ -677,7 +742,10 @@ export class PortaAgravoPropria implements PortaAgravo {
         p.push(paraBanco(f.ate));
       }
       const filtro = onde.map((x) => ` AND ${x}`).join('');
-      const total = await l.uma(`SELECT COUNT(*) AS q FROM notificacao_agravo na WHERE na.estabelecimento_id = ? AND na.excluido_em IS NULL${filtro}`, p);
+      const total = await l.uma(
+        `SELECT COUNT(*) AS q FROM notificacao_agravo na WHERE na.estabelecimento_id = ? AND na.excluido_em IS NULL${filtro}`,
+        p,
+      );
       const linhas = await l.consultar(
         `${SQL_CASO}${filtro}
           ORDER BY na.situacao <> 'rascunho', CASE WHEN na.situacao = 'rascunho' THEN na.prazo_envio_em END,
@@ -692,9 +760,13 @@ export class PortaAgravoPropria implements PortaAgravo {
 
   casosDesde(c: ContextoAgravo, desde: string) {
     return this.ler(c, async (l, est) => {
-      const linhas = await l.consultar(`${SQL_CASO} AND COALESCE(na.gatilho_em, na.criado_em) >= ? ORDER BY na.id`, [est, paraBanco(desde)], {
-        teto: 20_000,
-      });
+      const linhas = await l.consultar(
+        `${SQL_CASO} AND COALESCE(na.gatilho_em, na.criado_em) >= ? ORDER BY na.id`,
+        [est, paraBanco(desde)],
+        {
+          teto: 20_000,
+        },
+      );
       return linhas.map(casoDe).map((x) => ({
         origem: x.origem,
         atendimento: x.atendimento,

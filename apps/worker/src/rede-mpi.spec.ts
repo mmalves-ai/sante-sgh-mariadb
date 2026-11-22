@@ -59,7 +59,10 @@ function porta(totalPorBanco: number): PortaIndiceRede & { gravacoes: string[] }
 }
 
 /** Núcleo falso: os estabelecimentos do cliente e a chave e os pré-requisitos de cada um. */
-function nucleoComChaves(ligadas: Record<string, { chave: boolean; prereq: boolean }>, ests = Object.keys(ligadas)) {
+function nucleoComChaves(
+  ligadas: Record<string, { chave: boolean; prereq: boolean }>,
+  ests = Object.keys(ligadas),
+) {
   return {
     lerPlataforma: async () => [],
     lerSomente: async (_c: unknown, fn: (l: unknown) => Promise<unknown>) =>
@@ -70,9 +73,18 @@ function nucleoComChaves(ligadas: Record<string, { chave: boolean; prereq: boole
           const x = ligadas[String(p[0])];
           if (!x) throw new Error('estabelecimento fora (simulado)');
           if (/liberacao_chave/.test(sql))
-            return [{ chave: 'rede.mpi', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: x.chave ? 1 : 0 }];
+            return [
+              { chave: 'rede.mpi', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: x.chave ? 1 : 0 },
+            ];
           if (/recurso_prerequisito/.test(sql))
-            return [{ recurso: 'rede.mpi', tipo: 'aprovacao', situacao: x.prereq ? 'cumprido' : 'pendente', validade: null }];
+            return [
+              {
+                recurso: 'rede.mpi',
+                tipo: 'aprovacao',
+                situacao: x.prereq ? 'cumprido' : 'pendente',
+                validade: null,
+              },
+            ];
           return [];
         },
       }),
@@ -125,17 +137,23 @@ describe('MPI da Rede noturno', () => {
       hs: { chave: true, prereq: false },
       ab: { chave: true, prereq: true },
     });
-    expect(await estabelecimentosLiberadosMpi(nucleo, 'f22_teste', ['pc', 'sx', 'hs', 'ab', 'zz'])).toEqual(['pc', 'ab']);
+    expect(await estabelecimentosLiberadosMpi(nucleo, 'f22_teste', ['pc', 'sx', 'hs', 'ab', 'zz'])).toEqual([
+      'pc',
+      'ab',
+    ]);
   });
 
   it('a chave desligada num dos dois: a porta do índice nem é pedida; com os dois, a noite roda', async () => {
     process.env['WORKER_CLIENTES'] = 'f22_teste';
     const s = new RedeMpiService();
     const pedidas: string[] = [];
-    s.usar(nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: false, prereq: true } }), (c) => {
-      pedidas.push(c);
-      return porta(1);
-    });
+    s.usar(
+      nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: false, prereq: true } }),
+      (c) => {
+        pedidas.push(c);
+        return porta(1);
+      },
+    );
     expect(await s.noite()).toEqual([]);
     expect(pedidas).toEqual([]);
     s.usar(nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: true, prereq: true } }), (c) => {

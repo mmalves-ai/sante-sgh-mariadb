@@ -101,10 +101,18 @@ describe.skipIf(SEM_BANCO_MAN)(`aviso do crítico parado na porta própria (clie
       ),
     ).toMatchObject({ n: 1, os: r.os, g: 'alta' });
     expect(
-      await lerBanco(M, 'SELECT COUNT(*) AS n FROM notificacao_usuario WHERE estabelecimento_id = ? AND usuario_id = ?', [M.est, M.desligado]),
+      await lerBanco(
+        M,
+        'SELECT COUNT(*) AS n FROM notificacao_usuario WHERE estabelecimento_id = ? AND usuario_id = ?',
+        [M.est, M.desligado],
+      ),
     ).toMatchObject({ n: 0 });
     expect(
-      await lerBanco(M, "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'ordem_servico_manutencao' AND entidade_id = ?", [r.os]),
+      await lerBanco(
+        M,
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'ordem_servico_manutencao' AND entidade_id = ?",
+        [r.os],
+      ),
     ).toMatchObject({ n: 1 });
     expect((await porta.eventos(c, r.os)).map((e) => e.para)).toEqual(['aberta']);
   });

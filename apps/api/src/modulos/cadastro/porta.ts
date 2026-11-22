@@ -258,14 +258,49 @@ export interface PortaCadastro {
 
 /** Os métodos da porta (a indisponível recusa todos). */
 const METODOS_PORTA_CADASTRO = [
-  'buscarDireto', 'idsPorPalavra', 'idsPorFonetica', 'idsPorPalavras', 'indiceTemLinhas', 'lerPacientes',
-  'extrasDaFicha', 'historico', 'unificacoes', 'homonimos', 'candidatosPorCpf', 'cepExiste', 'lerCep', 'cadastrar',
-  'alterar', 'unificar', 'gruposCandidatos', 'lerFila', 'lerPar', 'gravarPares', 'decidirOutraPessoa',
-  'opcoesConsentimento', 'consentimentos', 'registrarConsentimento', 'revogarConsentimento', 'listarProfissionais',
-  'fichaProfissional', 'historicoProfissional', 'listarSolicitantes', 'solicitantesPorRegistro',
-  'chavesRepetidasSolicitante', 'buscarPessoas', 'siglasDosConselhos', 'conselhoPorSigla', 'cadastrarSolicitante',
-  'dadosProfissional', 'opcoesProfissional', 'gravarProfissional', 'loginsProfissional', 'loginsDosRegistros',
-  'eventosProfissional', 'vinculosProfissional', 'procedimentosDaEspecialidade',
+  'buscarDireto',
+  'idsPorPalavra',
+  'idsPorFonetica',
+  'idsPorPalavras',
+  'indiceTemLinhas',
+  'lerPacientes',
+  'extrasDaFicha',
+  'historico',
+  'unificacoes',
+  'homonimos',
+  'candidatosPorCpf',
+  'cepExiste',
+  'lerCep',
+  'cadastrar',
+  'alterar',
+  'unificar',
+  'gruposCandidatos',
+  'lerFila',
+  'lerPar',
+  'gravarPares',
+  'decidirOutraPessoa',
+  'opcoesConsentimento',
+  'consentimentos',
+  'registrarConsentimento',
+  'revogarConsentimento',
+  'listarProfissionais',
+  'fichaProfissional',
+  'historicoProfissional',
+  'listarSolicitantes',
+  'solicitantesPorRegistro',
+  'chavesRepetidasSolicitante',
+  'buscarPessoas',
+  'siglasDosConselhos',
+  'conselhoPorSigla',
+  'cadastrarSolicitante',
+  'dadosProfissional',
+  'opcoesProfissional',
+  'gravarProfissional',
+  'loginsProfissional',
+  'loginsDosRegistros',
+  'eventosProfissional',
+  'vinculosProfissional',
+  'procedimentosDaEspecialidade',
 ] as const;
 
 /** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
@@ -289,5 +324,8 @@ export function portaCadastroIndisponivel(): PortaCadastro {
       motivo: 'O banco do estabelecimento não está configurado: nada é gravado.',
     }),
   };
-  return Object.assign(base, Object.fromEntries(METODOS_PORTA_CADASTRO.map((m) => [m, recusa]))) as unknown as PortaCadastro;
+  return Object.assign(
+    base,
+    Object.fromEntries(METODOS_PORTA_CADASTRO.map((m) => [m, recusa])),
+  ) as unknown as PortaCadastro;
 }

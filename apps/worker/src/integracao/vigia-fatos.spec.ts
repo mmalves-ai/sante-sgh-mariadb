@@ -39,7 +39,10 @@ vi.mock('./porta-propria.js', async (original) => {
       .filter((f) => !desde || f.carimbo >= desde)
       .filter(
         (f) =>
-          op.depoisDoId === undefined || !desde || f.carimbo.getTime() > desde.getTime() || f.id > op.depoisDoId,
+          op.depoisDoId === undefined ||
+          !desde ||
+          f.carimbo.getTime() > desde.getTime() ||
+          f.id > op.depoisDoId,
       )
       .filter((f) => !op.ate || f.carimbo <= op.ate)
       .sort((x, y) => x.carimbo.getTime() - y.carimbo.getTime() || x.id - y.id)
@@ -54,7 +57,8 @@ vi.mock('./porta-propria.js', async (original) => {
     outboxTemChave: async (_t: unknown, k: string) => b.outbox.has(k),
     fatoJaPublicado: async (_t: unknown, _tipo: string, exame: number) => b.publicados.has(exame),
     liberacaoPublicada: async (_t: unknown, exame: number) =>
-      b.liberacoes.has(exame) || [...b.outbox.values()].some((x) => x.tipo === 'fato.resultado.liberado' && x.carga['exame'] === exame),
+      b.liberacoes.has(exame) ||
+      [...b.outbox.values()].some((x) => x.tipo === 'fato.resultado.liberado' && x.carga['exame'] === exame),
     publicarFato: async (
       _t: unknown,
       ev: { tipo: string; chave: string; entidade: string; carga: Record<string, unknown> },
@@ -121,9 +125,15 @@ describe('vigia dos fatos (regra 11)', () => {
 
   it('o fato que a operação de origem já publicou não vira outro evento', async () => {
     b.parceiros = [{ codigo: 'lab', ativo: true, eventos: ['fato.resultado.liberado'] }];
-    b.fatos = [{ id: 20, exame: 77, carimbo: new Date('2026-10-22T10:00:00Z'), atendimento: null, paciente: 1 }];
+    b.fatos = [
+      { id: 20, exame: 77, carimbo: new Date('2026-10-22T10:00:00Z'), atendimento: null, paciente: 1 },
+    ];
     b.publicados.add(77);
-    expect((await cicloVigiaFatos(acesso, 'pc', 10))[0]).toMatchObject({ lidos: 1, eventos: 0, repetidos: 1 });
+    expect((await cicloVigiaFatos(acesso, 'pc', 10))[0]).toMatchObject({
+      lidos: 1,
+      eventos: 0,
+      repetidos: 1,
+    });
     expect(b.outbox.size).toBe(0);
   });
 
@@ -132,7 +142,13 @@ describe('vigia dos fatos (regra 11)', () => {
     const t1 = new Date('2026-10-22T11:00:00Z');
     // 25 exames liberados no mesmo segundo (o analisador em massa), lote de 10, e 3 logo depois.
     b.fatos = [
-      ...Array.from({ length: 25 }, (_, i) => ({ id: 100 + i, exame: 100 + i, carimbo: t1, atendimento: 1, paciente: 2 })),
+      ...Array.from({ length: 25 }, (_, i) => ({
+        id: 100 + i,
+        exame: 100 + i,
+        carimbo: t1,
+        atendimento: 1,
+        paciente: 2,
+      })),
       ...Array.from({ length: 3 }, (_, i) => ({
         id: 50 + i,
         exame: 50 + i,
@@ -171,13 +187,35 @@ describe('vigia dos fatos (regra 11)', () => {
     const t1 = new Date('2026-10-22T13:00:00Z');
     b.fatos = [
       { id: 30, exame: 30, carimbo: t1, atendimento: 1, paciente: 2, evento: null },
-      { id: 31, exame: 30, carimbo: new Date(t1.getTime() + 1_000), atendimento: 1, paciente: 2, evento: 'fato.resultado.revogado' },
-      { id: 32, exame: 33, carimbo: new Date(t1.getTime() + 2_000), atendimento: 1, paciente: 2, evento: 'fato.resultado.revogado' },
+      {
+        id: 31,
+        exame: 30,
+        carimbo: new Date(t1.getTime() + 1_000),
+        atendimento: 1,
+        paciente: 2,
+        evento: 'fato.resultado.revogado',
+      },
+      {
+        id: 32,
+        exame: 33,
+        carimbo: new Date(t1.getTime() + 2_000),
+        atendimento: 1,
+        paciente: 2,
+        evento: 'fato.resultado.revogado',
+      },
     ];
     b.liberacoes.add(33);
-    expect((await cicloVigiaFatos(acesso, 'pc', 10))[0]).toMatchObject({ lidos: 3, eventos: 1, ignorados: 2 });
+    expect((await cicloVigiaFatos(acesso, 'pc', 10))[0]).toMatchObject({
+      lidos: 3,
+      eventos: 1,
+      ignorados: 2,
+    });
     expect([...b.outbox.values()]).toEqual([
-      { tipo: 'fato.resultado.revogado', entidade: 'liberacao_exame', carga: { exame: 33, paciente: 2, atendimento: 1 } },
+      {
+        tipo: 'fato.resultado.revogado',
+        entidade: 'liberacao_exame',
+        carga: { exame: 33, paciente: 2, atendimento: 1 },
+      },
     ]);
     expect(b.marca).toMatchObject({ ultimoId: '32' });
   });
@@ -190,6 +228,9 @@ describe('vigia dos fatos (regra 11)', () => {
     expect(proximaMarca(m, f(9, t))).toEqual(m);
     expect(proximaMarca(m, f(11, t))).toEqual({ ultimoId: '11', ultimoCarimbo: t });
     expect(proximaMarca(m, undefined)).toEqual(m);
-    expect(proximaMarca({ ultimoId: '0', ultimoCarimbo: null }, f(3, t))).toEqual({ ultimoId: '3', ultimoCarimbo: t });
+    expect(proximaMarca({ ultimoId: '0', ultimoCarimbo: null }, f(3, t))).toEqual({
+      ultimoId: '3',
+      ultimoCarimbo: t,
+    });
   });
 });

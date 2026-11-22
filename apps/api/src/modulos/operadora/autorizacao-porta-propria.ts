@@ -36,7 +36,11 @@ import {
   versaoDe,
 } from './apoio-porta-propria.js';
 import { recusaAuditorComPedidos } from './aplicacao/regras-portas.js';
-import type { ContextoAutorizacao, GravadorAutorizacao, PortaAutorizacaoOperadora } from './autorizacao-porta.js';
+import type {
+  ContextoAutorizacao,
+  GravadorAutorizacao,
+  PortaAutorizacaoOperadora,
+} from './autorizacao-porta.js';
 import {
   type DadosAnexoComplemento,
   type DadosAuditor,
@@ -68,7 +72,8 @@ export const TABELAS_AUTORIZACAO = [
   'auditor_plano',
 ] as const;
 
-const SITUACAO_DO_BANCO = (s: string): SituacaoAutorizacaoPorta => s.replace('_', '-') as SituacaoAutorizacaoPorta;
+const SITUACAO_DO_BANCO = (s: string): SituacaoAutorizacaoPorta =>
+  s.replace('_', '-') as SituacaoAutorizacaoPorta;
 const SITUACAO = (s: SituacaoAutorizacaoPorta): string => s.replace('-', '_');
 /** Tipo de internação na tela (código TISS) ↔ no banco. */
 const TIPO_INTERNACAO: Readonly<Record<number, string>> = {
@@ -283,7 +288,10 @@ export class PortaAutorizacaoOperadoraPropria
     }
     return this.ler(c, async (l) => {
       const agora = await this.agoraDoBanco(l);
-      const linhas = await l.consultar(`${SELECT_PEDIDO} WHERE ${cond.join(' AND ')} ORDER BY pa.id DESC LIMIT ${limite + 1}`, p);
+      const linhas = await l.consultar(
+        `${SELECT_PEDIDO} WHERE ${cond.join(' AND ')} ORDER BY pa.id DESC LIMIT ${limite + 1}`,
+        p,
+      );
       const itens = linhas.slice(0, limite).map((x) => resumoDe(x, agora));
       return { itens, proxima: linhas.length > limite ? (itens.at(-1)?.id ?? null) : null };
     });
@@ -316,10 +324,10 @@ export class PortaAutorizacaoOperadoraPropria
 
   autorizacao(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao | null> {
     return this.ler(c, async (l) => {
-      const p = await l.uma(`${SELECT_PEDIDO} WHERE pa.id = ? AND pa.estabelecimento_id = ? AND pa.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const p = await l.uma(
+        `${SELECT_PEDIDO} WHERE pa.id = ? AND pa.estabelecimento_id = ? AND pa.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       if (!p) return null;
       const hist = await l.consultar(
         `SELECT evento, texto, dados FROM pedido_autorizacao_plano_historico
@@ -442,7 +450,10 @@ export class PortaAutorizacaoOperadoraPropria
   }
 
   /** As autorizações pela senha (as contas médicas conferem a guia apresentada). */
-  autorizacoesPorSenha(c: ContextoAutorizacao, senhas: readonly string[]): Promise<DadosAutorizacaoDaSenha[]> {
+  autorizacoesPorSenha(
+    c: ContextoAutorizacao,
+    senhas: readonly string[],
+  ): Promise<DadosAutorizacaoDaSenha[]> {
     if (senhas.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l) => {
       const pedidos = await l.consultar(
@@ -470,7 +481,11 @@ export class PortaAutorizacaoOperadoraPropria
             .filter((x) => x !== null && x !== undefined)
             .map(Number),
           validade: data(p['senha_validade']),
-          itens: itens.map((i) => ({ tabela: 22, codigo: txt(i['codigo']), autorizada: numOuNulo(i['quantidade_autorizada']) })),
+          itens: itens.map((i) => ({
+            tabela: 22,
+            codigo: txt(i['codigo']),
+            autorizada: numOuNulo(i['quantidade_autorizada']),
+          })),
         });
       }
       return r;
@@ -485,7 +500,13 @@ export class PortaAutorizacaoOperadoraPropria
     return [];
   }
 
-  async anexoDoComplemento(): Promise<{ autorizacao: number; nome: string; tipo: string; sha256: string; bytes: Buffer } | null> {
+  async anexoDoComplemento(): Promise<{
+    autorizacao: number;
+    nome: string;
+    tipo: string;
+    sha256: string;
+    bytes: Buffer;
+  } | null> {
     return pendente('Anexos da resposta do prestador (armazenamento de arquivos)');
   }
 
@@ -541,7 +562,9 @@ export class PortaAutorizacaoOperadoraPropria
   }
 
   async auditor(c: ContextoAutorizacao, id: number): Promise<DadosAuditor | null> {
-    return (await this.ler(c, (l) => this.auditoresDe(l, c.estabelecimento ?? 0, 'AND a.id = ?', [id])))[0] ?? null;
+    return (
+      (await this.ler(c, (l) => this.auditoresDe(l, c.estabelecimento ?? 0, 'AND a.id = ?', [id])))[0] ?? null
+    );
   }
 
   designacoes(c: ContextoAutorizacao, login: string): Promise<DadosAuditor[]> {
@@ -583,9 +606,13 @@ export class PortaAutorizacaoOperadoraPropria
         [d.conselho, d.numero, d.uf],
       );
       if (!prof)
-        throw recusa('profissional-nao-cadastrado', 'Cadastre o profissional (conselho, número e UF) antes de designá-lo.', {
-          campos: ['numero'],
-        });
+        throw recusa(
+          'profissional-nao-cadastrado',
+          'Cadastre o profissional (conselho, número e UF) antes de designá-lo.',
+          {
+            campos: ['numero'],
+          },
+        );
       return prof;
     };
     return {
@@ -594,7 +621,12 @@ export class PortaAutorizacaoOperadoraPropria
       registrar: (r) => registrarPedido(tx, est, r, historico),
       async pedirComplemento(a) {
         const p = await pedido(a.id);
-        emAberto(p, ['em_analise'], 'pedido-nao-em-analise', 'Só o pedido em análise pode pedir complemento.');
+        emAberto(
+          p,
+          ['em_analise'],
+          'pedido-nao-em-analise',
+          'Só o pedido em análise pode pedir complemento.',
+        );
         const versao = await tx.alterar('pedido_autorizacao_plano', a.id, a.versao, { situacao: 'pendente' });
         await historico(a.id, 'complemento_pedido', 'pendente', a.pedido);
         return { id: a.id, versao };
@@ -602,7 +634,9 @@ export class PortaAutorizacaoOperadoraPropria
       async responderComplemento(a) {
         const p = await pedido(a.id);
         emAberto(p, ['pendente'], 'pedido-sem-complemento', 'O pedido não aguarda complemento.');
-        const versao = await tx.alterar('pedido_autorizacao_plano', a.id, a.versao, { situacao: 'em_analise' });
+        const versao = await tx.alterar('pedido_autorizacao_plano', a.id, a.versao, {
+          situacao: 'em_analise',
+        });
         await historico(a.id, 'complemento_resposta', 'em_analise', a.resposta);
         return { id: a.id, versao };
       },
@@ -611,7 +645,8 @@ export class PortaAutorizacaoOperadoraPropria
         const p = await pedido(a.id);
         emAberto(p, ['em_analise', 'pendente'], 'pedido-decidido', 'O pedido já foi decidido.');
         const auditor = numOuNulo(p['auditor_plano_id']);
-        if (!auditor) throw recusa('pedido-sem-auditor', 'Designe o auditor do pedido antes de abrir a junta.');
+        if (!auditor)
+          throw recusa('pedido-sem-auditor', 'Designe o auditor do pedido antes de abrir a junta.');
         const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [a.desempatador.uf]);
         const numero = await tx.proximoNumero('junta');
         await tx.incluir('junta_divergencia_tecnica', {
@@ -637,7 +672,12 @@ export class PortaAutorizacaoOperadoraPropria
       },
       async decidir(d) {
         const p = await pedido(d.id);
-        emAberto(p, ['em_analise', 'em_junta'], 'pedido-nao-em-analise', 'Só o pedido em análise pode ser decidido.');
+        emAberto(
+          p,
+          ['em_analise', 'em_junta'],
+          'pedido-nao-em-analise',
+          'Só o pedido em análise pode ser decidido.',
+        );
         if ((d.situacao === 'autorizada' || d.situacao === 'parcial') && !d.senha)
           throw recusa('senha-obrigatoria', 'A autorização precisa da senha.', { campos: ['senha'] });
         for (const i of d.itens) {
@@ -647,7 +687,9 @@ export class PortaAutorizacaoOperadoraPropria
           );
           if (!item) throw inexistente('O item do pedido');
           if (i.situacao === 'negado' && d.critica === null)
-            throw recusa('motivo-obrigatorio', 'O item negado precisa do motivo (crítica).', { campos: ['critica'] });
+            throw recusa('motivo-obrigatorio', 'O item negado precisa do motivo (crítica).', {
+              campos: ['critica'],
+            });
           await tx.alterar('pedido_autorizacao_plano_item', i.id, num(item['versao']), {
             quantidade_autorizada: i.situacao === 'negado' ? 0 : i.quantidade,
             situacao: i.situacao,
@@ -674,7 +716,12 @@ export class PortaAutorizacaoOperadoraPropria
           if (j) {
             await tx.alterar('junta_divergencia_tecnica', num(j['id']), num(j['versao']), {
               situacao: 'concluida',
-              conclusao: d.situacao === 'autorizada' ? 'favoravel_assistente' : d.situacao === 'parcial' ? 'parcial' : 'favoravel_operadora',
+              conclusao:
+                d.situacao === 'autorizada'
+                  ? 'favoravel_assistente'
+                  : d.situacao === 'parcial'
+                    ? 'parcial'
+                    : 'favoravel_operadora',
               parecer: d.parecerJunta ?? d.parecer,
               concluida_em: new Date(),
               realizada_em: new Date(),
@@ -687,7 +734,12 @@ export class PortaAutorizacaoOperadoraPropria
       },
       async cancelar(a) {
         const p = await pedido(a.id);
-        emAberto(p, ['em_analise', 'pendente', 'em_junta', 'autorizada', 'parcial'], 'pedido-cancelado', 'O pedido já foi encerrado.');
+        emAberto(
+          p,
+          ['em_analise', 'pendente', 'em_junta', 'autorizada', 'parcial'],
+          'pedido-cancelado',
+          'O pedido já foi encerrado.',
+        );
         const motivo = await tx.uma(
           `SELECT id FROM motivo_cancelamento_guia_plano
             WHERE codigo = 'outros' AND ativo = TRUE LIMIT 1`,
@@ -709,8 +761,11 @@ export class PortaAutorizacaoOperadoraPropria
       async designar(d) {
         await exigirOperadora(tx, est, d.operadora);
         const prof = await profissionalDoConselho(d);
-        const usuario = await tx.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [d.login]);
-        if (!usuario) throw recusa('usuario-inexistente', 'O usuário informado não existe.', { campos: ['login'] });
+        const usuario = await tx.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [
+          d.login,
+        ]);
+        if (!usuario)
+          throw recusa('usuario-inexistente', 'O usuário informado não existe.', { campos: ['login'] });
         const id = await tx.incluir('auditor_plano', {
           operadora_saude_id: d.operadora,
           profissional_id: num(prof['profissional_id']),
@@ -725,7 +780,8 @@ export class PortaAutorizacaoOperadoraPropria
       async encerrar(a) {
         const aud = await versaoDe(tx, 'auditor_plano', a.id, 'O auditor');
         await exigirOperadora(tx, est, num(aud['operadora_saude_id']));
-        if (txt(aud['situacao']) !== 'ativo') throw recusa('auditor-encerrado', 'A designação já foi encerrada.');
+        if (txt(aud['situacao']) !== 'ativo')
+          throw recusa('auditor-encerrado', 'A designação já foi encerrada.');
         // Decisão: a designação do auditor é da operadora (rede inteira), e o encerramento vale para todos os
         // estabelecimentos em que ela atua; os pedidos em análise dele em qualquer estabelecimento passam ao
         // auditor que assume (senão ficariam com um auditor inativo, sem ninguém para decidir). A recusa mostra só os
@@ -739,20 +795,31 @@ export class PortaAutorizacaoOperadoraPropria
         const para = a.redistribuirPara ?? null;
         if (pedidos.length > 0 && para === null)
           throw recusaAuditorComPedidos(
-            pedidos.map((p) => ({ protocolo: num(p['estabelecimento_id']) === est ? txt(p['protocolo']) : null })),
+            pedidos.map((p) => ({
+              protocolo: num(p['estabelecimento_id']) === est ? txt(p['protocolo']) : null,
+            })),
           );
         if (para !== null && pedidos.length > 0) {
           const destino = await tx.uma(
             "SELECT operadora_saude_id FROM auditor_plano WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
             [para],
           );
-          if (!destino || num(destino['operadora_saude_id']) !== num(aud['operadora_saude_id']) || para === a.id)
+          if (
+            !destino ||
+            num(destino['operadora_saude_id']) !== num(aud['operadora_saude_id']) ||
+            para === a.id
+          )
             throw recusa('auditor-destino-invalido', 'Escolha outro auditor ativo da mesma operadora.', {
               campos: ['redistribuirPara'],
             });
           for (const p of pedidos) {
-            await tx.alterar('pedido_autorizacao_plano', num(p['id']), num(p['versao']), { auditor_plano_id: para });
-            await historico(num(p['id']), 'troca_responsavel', txt(p['situacao']), a.motivo, { de: a.id, para });
+            await tx.alterar('pedido_autorizacao_plano', num(p['id']), num(p['versao']), {
+              auditor_plano_id: para,
+            });
+            await historico(num(p['id']), 'troca_responsavel', txt(p['situacao']), a.motivo, {
+              de: a.id,
+              para,
+            });
           }
         }
         await tx.alterar('auditor_plano', a.id, a.versao, {
@@ -801,7 +868,13 @@ async function registrarPedido(
   tx: TxOperacao,
   est: number,
   r: Omit<EntradaRegistroAutorizacao, 'hospital'>,
-  historico: (id: number, evento: string, situacao: string, texto: string | null, dados?: unknown) => Promise<number>,
+  historico: (
+    id: number,
+    evento: string,
+    situacao: string,
+    texto: string | null,
+    dados?: unknown,
+  ) => Promise<number>,
 ): Promise<{ id: number; versao: number }> {
   await exigirOperadora(tx, est, r.operadora);
   const b = await tx.uma(
@@ -816,13 +889,19 @@ async function registrarPedido(
   if (!carater) throw recusa('carater-nao-cadastrado', 'O caráter do atendimento não está no catálogo TISS.');
   const itens: { id: number; e: (typeof r.itens)[number] }[] = [];
   for (const i of r.itens) {
-    const f = await tx.uma('SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL', [i.codigo]);
+    const f = await tx.uma('SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL', [
+      i.codigo,
+    ]);
     if (!f)
-      throw recusa('item-nao-cadastrado', `O procedimento ${i.codigo} não está no cadastro de itens.`, { campos: ['itens'] });
+      throw recusa('item-nao-cadastrado', `O procedimento ${i.codigo} não está no cadastro de itens.`, {
+        campos: ['itens'],
+      });
     itens.push({ id: num(f['id']), e: i });
   }
   const conselho = await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ?', [r.profissional.conselho]);
-  const ufSolicitante = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [r.profissional.uf]);
+  const ufSolicitante = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [
+    r.profissional.uf,
+  ]);
   const numero = await tx.proximoNumero('guia_autorizacao');
   const id = await tx.incluir('pedido_autorizacao_plano', {
     estabelecimento_id: est,

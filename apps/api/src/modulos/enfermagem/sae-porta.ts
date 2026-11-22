@@ -97,9 +97,7 @@ export interface GravadorSae {
     readonly usuario: string;
   }): Promise<{ termos: number }>;
   prescreverMedicamento(r: ReceitaEnfermeiroNova): Promise<{ id: number; repetida: boolean }>;
-  registrarVacina(
-    v: VacinaNova,
-  ): Promise<{ id: number; evento: string; repetida: boolean }>;
+  registrarVacina(v: VacinaNova): Promise<{ id: number; evento: string; repetida: boolean }>;
   /** W0-03: suspender ou cancelar a receita (fato novo; a original fica legível e inativa). */
   inativarReceita(r: {
     readonly id: number;
@@ -131,9 +129,7 @@ export interface PortaSae extends PortaGravacaoM18<GravadorSae> {
   atividade(
     c: ContextoSae,
     id: number,
-  ): Promise<
-    (AtividadeVigente & { readonly paciente: number; readonly revisadoEm: string | null }) | null
-  >;
+  ): Promise<(AtividadeVigente & { readonly paciente: number; readonly revisadoEm: string | null }) | null>;
   checagens(
     c: ContextoSae,
     o: { readonly atividades: readonly number[]; readonly de: string; readonly ate: string },

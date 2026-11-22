@@ -2,9 +2,33 @@
 // real): três respostas da pesquisa do portal e dois incidentes no mês anterior ao do relógio, um paciente do cadastro e
 // os feriados nacionais fixos. As gravações seguem as travas do banco (versão, chaves únicas, a revisão vigente
 // substituída, a geração que substitui a anterior, a transmissão só com o mesmo resumo).
-import type { AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, ManifestacaoRegistrada, NaoConformidadeRegistrada, PesquisaSatisfacaoRespondida, ProtocoloDoPaciente, ReuniaoComissaoRegistrada, RiscoRegistrado, VersaoProtocoloGerenciado, AltaParaRevisao, ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado, SorteioRevisaoRegistrado } from './tipos.js';
+import type {
+  AnaliseIndicadorRegistrada,
+  AuditoriaRegistrada,
+  ComissaoRegistrada,
+  DocumentoQualidadeRegistrado,
+  EnvioRegulatorioRegistrado,
+  ManifestacaoRegistrada,
+  NaoConformidadeRegistrada,
+  PesquisaSatisfacaoRespondida,
+  ProtocoloDoPaciente,
+  ReuniaoComissaoRegistrada,
+  RiscoRegistrado,
+  VersaoProtocoloGerenciado,
+  AltaParaRevisao,
+  ChecklistRevisaoRegistrado,
+  PendenciaRevisaoRegistrada,
+  ProntuarioRevisaoRegistrado,
+  SorteioRevisaoRegistrado,
+} from './tipos.js';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
-import { type DependentesRegistro, PROTOCOLO_OUVIDORIA, recusaVersaoGestao, type TabelaCorrigivel, type VersaoRegistro } from './tipos.js';
+import {
+  type DependentesRegistro,
+  PROTOCOLO_OUVIDORIA,
+  recusaVersaoGestao,
+  type TabelaCorrigivel,
+  type VersaoRegistro,
+} from './tipos.js';
 import { recusa } from '@sgh/nucleo';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type {
@@ -415,7 +439,8 @@ export class PortaGestaoMemoria implements PortaGestao {
       return Promise.resolve(porOrigem('auditoria', 'Não conformidades da auditoria'));
     if (tabela === 'manifestacao_ouvidoria')
       return Promise.resolve(porOrigem('ouvidoria', 'Não conformidades da manifestação'));
-    if (tabela === 'risco_institucional') return Promise.resolve(porOrigem('risco', 'Não conformidades do risco'));
+    if (tabela === 'risco_institucional')
+      return Promise.resolve(porOrigem('risco', 'Não conformidades do risco'));
     if (tabela === 'nao_conformidade_qualidade')
       return Promise.resolve(
         grupo(

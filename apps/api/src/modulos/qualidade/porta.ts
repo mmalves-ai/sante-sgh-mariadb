@@ -3,7 +3,23 @@
 // técnicas e sugestões, com as gravações numa transação com a trilha junto. Três implementações: a própria sobre o
 // MariaDB do cliente (porta-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
 import type { ContextoNotificacaoLido, EstagioLpp, ExpostoAoLote, UnidadeNotificacao } from '@sgh/contratos';
-import type { Acao5w2h, AcaoPlanoRegistrada, AnaliseNova, AnaliseRegistrada, ContagemNotificacoes, EventoQueixaRegistrado, ProtocoloDoPaciente, QueixaTecnicaNova, QueixaTecnicaRegistrada, VersaoProtocoloGerenciado, EventoNotificacaoNovo, EventoNotificacaoRegistrado, FiltroNotificacoes, NotificacaoIncidenteNova, NotificacaoRegistrada } from './tipos.js';
+import type {
+  Acao5w2h,
+  AcaoPlanoRegistrada,
+  AnaliseNova,
+  AnaliseRegistrada,
+  ContagemNotificacoes,
+  EventoQueixaRegistrado,
+  ProtocoloDoPaciente,
+  QueixaTecnicaNova,
+  QueixaTecnicaRegistrada,
+  VersaoProtocoloGerenciado,
+  EventoNotificacaoNovo,
+  EventoNotificacaoRegistrado,
+  FiltroNotificacoes,
+  NotificacaoIncidenteNova,
+  NotificacaoRegistrada,
+} from './tipos.js';
 import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_QUALIDADE = Symbol('PORTA_QUALIDADE');
@@ -183,11 +199,7 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
   /** Dos resumos, os de sugestões já resolvidas. */
   resolvidas(c: ContextoQualidade, resumos: readonly string[]): Promise<Set<string>>;
   candidatos(c: ContextoQualidade, login: string, desde: string): Promise<CandidatosSugestao>;
-  painelNotificacoes(
-    c: ContextoQualidade,
-    de: string,
-    fimExclusivo: string,
-  ): Promise<ContagemNotificacoes[]>;
+  painelNotificacoes(c: ContextoQualidade, de: string, fimExclusivo: string): Promise<ContagemNotificacoes[]>;
   painelAnalises(
     c: ContextoQualidade,
     de: string,

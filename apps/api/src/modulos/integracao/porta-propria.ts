@@ -287,7 +287,10 @@ function recebidaDaLinha(x: Linha): RecebidaIntegracao {
 }
 
 function semEstabelecimento(): Error {
-  return recusa('estabelecimento-desconhecido', 'O estabelecimento da gravação não está cadastrado neste cliente.');
+  return recusa(
+    'estabelecimento-desconhecido',
+    'O estabelecimento da gravação não está cadastrado neste cliente.',
+  );
 }
 
 /** Os campos simples do resultado (o que vai ao resultado da operação no núcleo). */
@@ -296,7 +299,11 @@ function resultadoSimples(r: unknown): ResultadoOperacao {
   if (typeof r !== 'object') return typeof r === 'string' && r.length > 200 ? {} : { valor: r as number };
   return Object.fromEntries(
     Object.entries(r).filter(
-      ([, v]) => v === null || typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 200),
+      ([, v]) =>
+        v === null ||
+        typeof v === 'number' ||
+        typeof v === 'boolean' ||
+        (typeof v === 'string' && v.length <= 200),
     ),
   ) as ResultadoOperacao;
 }
@@ -328,7 +335,11 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
   }
 
   /** Leitura de dado do estabelecimento: sem estabelecimento conhecido, o valor vazio. */
-  private doEstabelecimento<T>(c: ContextoIntegracao, vazio: T, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
+  private doEstabelecimento<T>(
+    c: ContextoIntegracao,
+    vazio: T,
+    fn: (l: Leitor, est: number) => Promise<T>,
+  ): Promise<T> {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       return est === null ? vazio : fn(l, est);
@@ -375,7 +386,10 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
         resumo: String(x['hash_chave']),
         // O cliente da API restrito a um estabelecimento não vale nos outros (falha fechada).
         ativo:
-          booleano(x['ativo']) && x['situacao'] === 'ativo' && est !== null && (restrito === null || restrito === est),
+          booleano(x['ativo']) &&
+          x['situacao'] === 'ativo' &&
+          est !== null &&
+          (restrito === null || restrito === est),
         escopos: lista(x['escopos']),
       };
     });
@@ -383,7 +397,10 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
 
   // ---- mensagens de saída e a fila de mortos ----
 
-  envios(c: ContextoIntegracao, f: { readonly situacao?: string; readonly parceiro?: string; readonly limite: number }) {
+  envios(
+    c: ContextoIntegracao,
+    f: { readonly situacao?: string; readonly parceiro?: string; readonly limite: number },
+  ) {
     return this.doEstabelecimento(c, [] as EnvioIntegracao[], async (l, est) => {
       const situacoes = f.situacao ? SITUACOES_SAIDA[f.situacao as SituacaoEnvio] : undefined;
       if (f.situacao && !situacoes) return [];
@@ -477,7 +494,10 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
 
   // ---- mensagens de entrada ----
 
-  recebidas(c: ContextoIntegracao, f: { readonly situacao?: string; readonly parceiro?: string; readonly limite: number }) {
+  recebidas(
+    c: ContextoIntegracao,
+    f: { readonly situacao?: string; readonly parceiro?: string; readonly limite: number },
+  ) {
     return this.doEstabelecimento(c, [] as RecebidaIntegracao[], async (l, est) => {
       const situacoes = f.situacao ? SITUACOES_ENTRADA[f.situacao as SituacaoRecebida] : undefined;
       if (f.situacao && !situacoes) return [];
@@ -556,8 +576,18 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
       );
       return {
         filas: [
-          ...saida.map((x) => ({ fila: String(x['codigo']), direcao: 'saida' as const, quantidade: inteiro(x['n']), maisAntiga: iso(x['d']) })),
-          ...entrada.map((x) => ({ fila: String(x['codigo']), direcao: 'entrada' as const, quantidade: inteiro(x['n']), maisAntiga: iso(x['d']) })),
+          ...saida.map((x) => ({
+            fila: String(x['codigo']),
+            direcao: 'saida' as const,
+            quantidade: inteiro(x['n']),
+            maisAntiga: iso(x['d']),
+          })),
+          ...entrada.map((x) => ({
+            fila: String(x['codigo']),
+            direcao: 'entrada' as const,
+            quantidade: inteiro(x['n']),
+            maisAntiga: iso(x['d']),
+          })),
         ],
         bi: { pendentes: inteiro(pendentes?.['n']), maisAntiga: iso(pendentes?.['d']) },
         examesApoio: {
@@ -587,7 +617,9 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
       const h =
         est === null
           ? null
-          : await l.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ? AND excluido_em IS NULL', [est]);
+          : await l.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ? AND excluido_em IS NULL', [
+              est,
+            ]);
       return {
         pacientesComCpf: inteiro(p?.['cpf']),
         pacientesComCns: inteiro(p?.['cns']),
@@ -618,7 +650,10 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
   }
 
   deParaExame(c: ContextoIntegracao, laboratorio: number, codigoExame: string) {
-    const vazio = { exame: null as number | null, elementos: [] as { codigoLaboratorio: string; nome: string | null }[] };
+    const vazio = {
+      exame: null as number | null,
+      elementos: [] as { codigoLaboratorio: string; nome: string | null }[],
+    };
     return this.doEstabelecimento(c, vazio, async (l, est) => {
       const x = await l.uma(
         `SELECT ela.id, ela.exame_id FROM exame_laboratorio_apoio ela
@@ -644,35 +679,39 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
   }
 
   exameDoRetorno(c: ContextoIntegracao, id: number) {
-    return this.doEstabelecimento(c, null as Awaited<ReturnType<PortaIntegracao['exameDoRetorno']>>, async (l, est) => {
-      const x = await l.uma(
-        `SELECT ei.id, ei.exame_id, ei.situacao, ei.laboratorio_apoio_id, r.paciente_id, r.atendimento_id, e.codigo, e.nome,
+    return this.doEstabelecimento(
+      c,
+      null as Awaited<ReturnType<PortaIntegracao['exameDoRetorno']>>,
+      async (l, est) => {
+        const x = await l.uma(
+          `SELECT ei.id, ei.exame_id, ei.situacao, ei.laboratorio_apoio_id, r.paciente_id, r.atendimento_id, e.codigo, e.nome,
                 EXISTS (SELECT 1 FROM resultado_exame re WHERE re.exame_item_id = ei.id AND re.excluido_em IS NULL)
                   AS digitado
            FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
            JOIN exame e ON e.id = ei.exame_id
           WHERE ei.id = ? AND r.estabelecimento_id = ? AND ei.excluido_em IS NULL AND r.excluido_em IS NULL`,
-        [id, est],
-      );
-      if (!x) return null;
-      const elementos = await l.consultar(
-        `SELECT a.id, a.nome FROM exame_analito ea JOIN analito a ON a.id = ea.analito_id
+          [id, est],
+        );
+        if (!x) return null;
+        const elementos = await l.consultar(
+          `SELECT a.id, a.nome FROM exame_analito ea JOIN analito a ON a.id = ea.analito_id
           WHERE ea.exame_id = ? AND ea.ativo AND ea.excluido_em IS NULL AND NOT ea.titulo ORDER BY ea.ordem, ea.id`,
-        [Number(x['exame_id'])],
-        { teto: 500 },
-      );
-      return {
-        id,
-        paciente: Number(x['paciente_id']),
-        atendimento: x['atendimento_id'] === null ? null : Number(x['atendimento_id']),
-        exame: String(x['codigo']),
-        exameNome: texto(x['nome']),
-        liberado: ['liberado', 'entregue'].includes(String(x['situacao'])),
-        digitado: booleano(x['digitado']),
-        elementos: elementos.map((e) => ({ elemento: Number(e['id']), nome: String(e['nome']) })),
-        laboratorio: x['laboratorio_apoio_id'] === null ? null : Number(x['laboratorio_apoio_id']),
-      };
-    });
+          [Number(x['exame_id'])],
+          { teto: 500 },
+        );
+        return {
+          id,
+          paciente: Number(x['paciente_id']),
+          atendimento: x['atendimento_id'] === null ? null : Number(x['atendimento_id']),
+          exame: String(x['codigo']),
+          exameNome: texto(x['nome']),
+          liberado: ['liberado', 'entregue'].includes(String(x['situacao'])),
+          digitado: booleano(x['digitado']),
+          elementos: elementos.map((e) => ({ elemento: Number(e['id']), nome: String(e['nome']) })),
+          laboratorio: x['laboratorio_apoio_id'] === null ? null : Number(x['laboratorio_apoio_id']),
+        };
+      },
+    );
   }
 
   exameLido(c: ContextoIntegracao, id: number) {
@@ -719,7 +758,9 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
     r: ResultadoApoio,
     octx: ContextoGravacao,
   ): Promise<{ resultado: number; repetida: boolean }> {
-    const est = await this.ler(c, (l) => this.estabelecimento({ ...c, estabelecimento: octx.estabelecimento ?? c.estabelecimento ?? null }, l));
+    const est = await this.ler(c, (l) =>
+      this.estabelecimento({ ...c, estabelecimento: octx.estabelecimento ?? c.estabelecimento ?? null }, l),
+    );
     if (est === null) throw semEstabelecimento();
     const operacao = definirOperacao<ResultadoApoio, { resultado: number; exame: number; critico: boolean }>({
       nome: 'integracao.apoio.registrar-resultado',
@@ -731,10 +772,18 @@ export class PortaIntegracaoPropria implements PortaIntegracao {
       alvo: (_e, s) => ({ tabela: 'resultado_exame', id: s.resultado }),
       // O fato do resultado liberado, na mesma transação (regra 7): só ids e o sinal de crítico.
       eventos: (_e, s) => [
-        { tipo: 'fato.resultado.liberado', carga: { exame: s.exame, resultado: s.resultado, critico: s.critico } },
+        {
+          tipo: 'fato.resultado.liberado',
+          carga: { exame: s.exame, resultado: s.resultado, critico: s.critico },
+        },
       ],
       trilha: (e) => ({
-        dados: { exame: e.exame, elementos: e.elementos.length, conferente: e.conferente, recebida: e.recebida },
+        dados: {
+          exame: e.exame,
+          elementos: e.elementos.length,
+          conferente: e.conferente,
+          recebida: e.recebida,
+        },
       }),
     });
     const ctx: ContextoOperacao = {
@@ -810,7 +859,10 @@ const esquemaResultadoApoio = z.object({
     .max(200),
   observacao: z.string().max(1000),
   conferente: z.number().int().positive(),
-  recebida: z.string().regex(/^\d{1,15}$/).nullable(),
+  recebida: z
+    .string()
+    .regex(/^\d{1,15}$/)
+    .nullable(),
 });
 
 const SEXO_DA_SIGLA: Readonly<Record<string, 'M' | 'F'>> = { M: 'M', F: 'F' };
@@ -839,12 +891,15 @@ async function gravarResultadoApoio(
   if (!x) throw recusa('exame-inexistente', 'O exame do pedido não está neste estabelecimento.');
   if (['liberado', 'entregue', 'cancelado', 'recusado'].includes(String(x['situacao'])))
     throw recusa('exame-encerrado', 'O exame do pedido já foi liberado, entregue ou cancelado.');
-  const ja = await tx.uma('SELECT id FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL', [e.exame]);
+  const ja = await tx.uma('SELECT id FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL', [
+    e.exame,
+  ]);
   if (ja) throw recusa('resultado-ja-digitado', 'O exame já tem resultado.');
   const exameId = Number(x['exame_id']);
   // O laboratório: o do pedido; senão o da mensagem, conferido no estabelecimento.
   const laboratorio = x['laboratorio_apoio_id'] === null ? e.laboratorio : Number(x['laboratorio_apoio_id']);
-  if (laboratorio === null) throw recusa('sem-laboratorio-apoio', 'O laboratório de apoio do resultado não foi identificado.');
+  if (laboratorio === null)
+    throw recusa('sem-laboratorio-apoio', 'O laboratório de apoio do resultado não foi identificado.');
   const lab = await tx.uma(
     'SELECT id FROM laboratorio_apoio WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [laboratorio, est],
@@ -858,10 +913,13 @@ async function gravarResultadoApoio(
           WHERE ea.exame_id = ? AND ea.ativo AND ea.excluido_em IS NULL AND NOT ea.titulo`,
         [exameId],
       )
-    ).map((a) => [Number(a['analito_id']), { exameAnalito: Number(a['id']), ordem: Number(a['ordem']) }] as const),
+    ).map(
+      (a) => [Number(a['analito_id']), { exameAnalito: Number(a['id']), ordem: Number(a['ordem']) }] as const,
+    ),
   );
   for (const v of e.elementos)
-    if (!analitos.has(v.elemento)) throw recusa('elemento-inexistente', `O analito ${v.elemento} não é do exame pedido.`);
+    if (!analitos.has(v.elemento))
+      throw recusa('elemento-inexistente', `O analito ${v.elemento} não é do exame pedido.`);
   // O setor executante: o do pedido; senão o padrão do exame no estabelecimento; sem setor, recusa.
   let setor = numeroOuNulo(x['setor_diagnostico_id']);
   if (setor === null) {
@@ -875,7 +933,10 @@ async function gravarResultadoApoio(
     setor = s ? Number(s.setor_diagnostico_id) : null;
   }
   if (setor === null)
-    throw recusa('sem-setor-executante', 'O exame não tem setor executante neste estabelecimento: cadastre o setor do exame.');
+    throw recusa(
+      'sem-setor-executante',
+      'O exame não tem setor executante neste estabelecimento: cadastre o setor do exame.',
+    );
   const agora = new Date();
   const sexo = SEXO_DA_SIGLA[String(x['sexo'] ?? '')] ?? null;
   const dias = idadeEmDias(data(x['data_nascimento']), agora);
@@ -1019,7 +1080,9 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
   private async parceiroPorCodigo(codigo: string, travar = false): Promise<Linha | null> {
     const sql = `SELECT id, versao, codigo, nome, tipo, finalidade, limite_tentativas, sistema_externo_id, cliente_api_id, ativo
                    FROM parceiro_dados WHERE codigo = ? AND excluido_em IS NULL`;
-    const l = travar ? await this.tx.consultarParaAtualizar(sql, [codigo]) : await this.tx.consultar(sql, [codigo]);
+    const l = travar
+      ? await this.tx.consultarParaAtualizar(sql, [codigo])
+      : await this.tx.consultar(sql, [codigo]);
     return l[0] ?? null;
   }
 
@@ -1054,7 +1117,8 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
       [this.est, codigo],
     );
     if (ja) {
-      if (!booleano(ja.ativo)) throw recusa('ponto-desativado', 'O ponto de integração do parceiro está desativado.');
+      if (!booleano(ja.ativo))
+        throw recusa('ponto-desativado', 'O ponto de integração do parceiro está desativado.');
       return { ponto: Number(ja.id), sistema };
     }
     const tipo = String(p['tipo']);
@@ -1064,7 +1128,10 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
       [familia],
     );
     if (!padrao)
-      throw recusa('padrao-troca-nao-cadastrado', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
+      throw recusa(
+        'padrao-troca-nao-cadastrado',
+        `O padrão de troca "${familia}" não está cadastrado neste cliente.`,
+      );
     const ponto = await this.tx.incluir('ponto_integracao', {
       estabelecimento_id: this.est,
       codigo,
@@ -1145,9 +1212,10 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
     } else {
       cliente = Number(p['cliente_api_id']);
       const ca = (
-        await this.tx.consultarParaAtualizar('SELECT id, versao, estabelecimento_id FROM cliente_api WHERE id = ?', [
-          cliente,
-        ])
+        await this.tx.consultarParaAtualizar(
+          'SELECT id, versao, estabelecimento_id FROM cliente_api WHERE id = ?',
+          [cliente],
+        )
       )[0];
       if (!ca) return 0;
       if (ca['estabelecimento_id'] !== null && Number(ca['estabelecimento_id']) !== this.est)
@@ -1303,7 +1371,12 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
 
   async concluirRecebida(
     id: string,
-    c: { situacao: 'processada' | 'recusada'; detalhe: string | null; tabelaObjeto: string | null; idObjeto: string | null },
+    c: {
+      situacao: 'processada' | 'recusada';
+      detalhe: string | null;
+      tabelaObjeto: string | null;
+      idObjeto: string | null;
+    },
   ): Promise<number> {
     if (!/^\d{1,15}$/.test(id)) return 0;
     const x = (
@@ -1361,7 +1434,11 @@ class GravadorIntegracaoBanco implements GravadorIntegracao {
     return true;
   }
 
-  async outbox(ev: { tipo: string; chave: string; carga: Readonly<Record<string, string | number | boolean | null>> }) {
+  async outbox(ev: {
+    tipo: string;
+    chave: string;
+    carga: Readonly<Record<string, string | number | boolean | null>>;
+  }) {
     const id = await gravarOutbox(this.tx, {
       estabelecimento: this.est,
       ponto: ev.tipo,

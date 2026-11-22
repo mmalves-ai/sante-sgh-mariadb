@@ -26,7 +26,11 @@ const P = 'l0402';
 const AQUI = `${P}r`;
 const LA = `${P}s`;
 const PRONT = 904_022_000;
-const PEDIDO: PedidoProntuarioRede = { motivo: 'assistencia', justificativa: 'Integração sintética do M57.2', pagina: 1 };
+const PEDIDO: PedidoProntuarioRede = {
+  motivo: 'assistencia',
+  justificativa: 'Integração sintética do M57.2',
+  pagina: 1,
+};
 
 interface Massa {
   estAqui: number;
@@ -66,14 +70,25 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
   const sessao = (): SessaoAcessoRede => ({
     rede: REDE,
     hospital: AQUI,
-    porta: { cliente: CLIENTE, estabelecimento: m.estAqui, usuario: null, correlacao: `c-${P}`, rede: REDE, hospital: AQUI },
+    porta: {
+      cliente: CLIENTE,
+      estabelecimento: m.estAqui,
+      usuario: null,
+      correlacao: `c-${P}`,
+      rede: REDE,
+      hospital: AQUI,
+    },
     login: `${P}.medico`,
     estacao: 'estacao-sintetica',
     correlacao: `c-${P}`,
   });
   const trilhasLa = async (): Promise<number> =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `conta-${P}` }, async (l) =>
-      Number((await l.uma('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.estLa]))?.['n']),
+      Number(
+        (await l.uma('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.estLa]))?.[
+          'n'
+        ],
+      ),
     );
 
   beforeAll(async () => {
@@ -83,20 +98,16 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
       await limpar(e);
       const agora = new Date();
       const est = (codigo: string) =>
-        e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-          codigo,
-          `Hospital sintético ${codigo}`,
-          `Hospital sintético ${codigo} (fictício)`,
-          agora,
-        ]);
+        e.inserir(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [codigo, `Hospital sintético ${codigo}`, `Hospital sintético ${codigo} (fictício)`, agora],
+        );
       const estAqui = await est(AQUI);
       const estLa = await est(LA);
-      const usuario = await e.inserir('INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)', [
-        `${P}.unificador`,
-        'Conta de serviço sintética',
-        'servico',
-        agora,
-      ]);
+      const usuario = await e.inserir(
+        'INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}.unificador`, 'Conta de serviço sintética', 'servico', agora],
+      );
       let n = 0;
       const paciente = async (estab: number) => {
         const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
@@ -125,7 +136,17 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
         `INSERT INTO unificacao_cadastro (mantido_paciente_id, absorvido_paciente_id, unificado_em, unificado_por_usuario_id,
            justificativa, situacao, revertido_em, revertido_por_usuario_id, motivo_reversao, criado_em)
          VALUES (?, ?, ?, ?, ?, 'revertida', ?, ?, ?, ?)`,
-        [pd, pe, agora, usuario, 'Mesma pessoa sintética', agora, usuario, 'Pessoas diferentes (sintético)', agora],
+        [
+          pd,
+          pe,
+          agora,
+          usuario,
+          'Mesma pessoa sintética',
+          agora,
+          usuario,
+          'Pessoas diferentes (sintético)',
+          agora,
+        ],
       );
       return { estAqui, estLa, usuario, pa, pb, pc, pd, pe };
     });
@@ -181,7 +202,10 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
   const recusa = (p: Promise<unknown>) =>
     p.then(
       () => null,
-      (e: { getStatus(): number; extras?: { codigo?: string } }) => ({ status: e.getStatus(), codigo: e.extras?.codigo }),
+      (e: { getStatus(): number; extras?: { codigo?: string } }) => ({
+        status: e.getStatus(),
+        codigo: e.extras?.codigo,
+      }),
     );
 
   it('regra 6: desligado no outro estabelecimento, recusa antes de ler e de gravar a trilha', async () => {
@@ -200,7 +224,10 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
   it('fora da rede (o próprio estabelecimento ou código inexistente): 403 antes de qualquer leitura', async () => {
     ordem = [];
     ligadas = new Set([AQUI, LA]);
-    expect(await recusa(acesso.abrir(sessao(), m.pa, AQUI, PEDIDO, null))).toEqual({ status: 403, codigo: 'fora-da-rede' });
+    expect(await recusa(acesso.abrir(sessao(), m.pa, AQUI, PEDIDO, null))).toEqual({
+      status: 403,
+      codigo: 'fora-da-rede',
+    });
     expect(await recusa(acesso.abrir(sessao(), m.pa, `${P}zz`, PEDIDO, null))).toEqual({
       status: 403,
       codigo: 'fora-da-rede',

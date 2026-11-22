@@ -29,7 +29,11 @@ export interface OperacaoAgenda {
 const E = EVENTOS_AUDITAVEIS;
 
 export const OPERACOES_AGENDA: Readonly<Record<string, OperacaoAgenda>> = Object.freeze({
-  'agenda.gerarGrade': { entrada: esquemaGerarGrade, evento: E.agendaGradeGerada.codigo, recurso: 'agenda.grade' },
+  'agenda.gerarGrade': {
+    entrada: esquemaGerarGrade,
+    evento: E.agendaGradeGerada.codigo,
+    recurso: 'agenda.grade',
+  },
   'agenda.reverterGrade': {
     entrada: esquemaReverterGrade,
     evento: E.agendaGradeRevertida.codigo,
@@ -40,7 +44,11 @@ export const OPERACOES_AGENDA: Readonly<Record<string, OperacaoAgenda>> = Object
     evento: E.agendaConsultaMarcada.codigo,
     recurso: 'agenda.consulta',
   },
-  'agenda.encaixar': { entrada: esquemaEncaixar, evento: E.agendaEncaixeCriado.codigo, recurso: 'agenda.consulta' },
+  'agenda.encaixar': {
+    entrada: esquemaEncaixar,
+    evento: E.agendaEncaixeCriado.codigo,
+    recurso: 'agenda.consulta',
+  },
   'agenda.desfazerEncaixe': {
     entrada: esquemaDesfazerEncaixe,
     evento: E.agendaEncaixeDesfeito.codigo,

@@ -114,14 +114,19 @@ export class PessoasConselhoService implements OnApplicationBootstrap, OnApplica
               semValidade: x.semValidade,
               gravado: x.gravado,
             },
-            x.gravado ? 'retrato do conselho' : 'retrato do conselho calculado sem gravar (tabela do retrato ausente)',
+            x.gravado
+              ? 'retrato do conselho'
+              : 'retrato do conselho calculado sem gravar (tabela do retrato ausente)',
           );
         } catch (e) {
           logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'retrato do conselho falhou');
         }
       }
     } catch (e) {
-      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'retrato do conselho: clientes indisponíveis');
+      logger.warn(
+        { erro: e instanceof Error ? e.name : 'erro' },
+        'retrato do conselho: clientes indisponíveis',
+      );
     } finally {
       this.rodando = false;
     }

@@ -11,11 +11,23 @@ import { MotorInternacao, relogioDeParede } from '@sgh/dominio-internacao';
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CHAVE_FECHAMENTO, ErroCensoSemUnidade, PortaCensoPropria } from './censo-fechamento-propria.js';
-import { CLIENTE, escrever, garantirCliente, garantirEstabelecimento, inserirSintetico, SEM_BANCO } from './importadores/integracao.spec-util.js';
+import {
+  CLIENTE,
+  escrever,
+  garantirCliente,
+  garantirEstabelecimento,
+  inserirSintetico,
+  SEM_BANCO,
+} from './importadores/integracao.spec-util.js';
 import type { AlvoEstabelecimento } from './servico-worker.js';
 
 const DIA = '2026-10-10';
-const CODIGOS_GLOBAIS = { categoria: ['F515ENF', 'F515UTI'], carater: 'F515CA', especialidade: 'F515ESP', motivo: 'F515OB' };
+const CODIGOS_GLOBAIS = {
+  categoria: ['F515ENF', 'F515UTI'],
+  carater: 'F515CA',
+  especialidade: 'F515ESP',
+  motivo: 'F515OB',
+};
 
 const LINHA = {
   acomodacao: 'ENF',
@@ -47,11 +59,24 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
         'DELETE u FROM fechamento_censo_unidade u JOIN fechamento_censo f ON f.id = u.fechamento_censo_id WHERE f.estabelecimento_id = ?',
         [id],
       );
-      for (const t of ['fechamento_censo', 'ocupacao_leito', 'internacao', 'leito_hospitalar', 'acomodacao', 'bloco_internacao'])
+      for (const t of [
+        'fechamento_censo',
+        'ocupacao_leito',
+        'internacao',
+        'leito_hospitalar',
+        'acomodacao',
+        'bloco_internacao',
+      ])
         await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id = ?`, [id]);
       await e.executar('DELETE FROM unidade_internacao WHERE estabelecimento_id = ?', [id]);
-      await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [id, CHAVE_FECHAMENTO]);
-      await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [id, CHAVE_FECHAMENTO]);
+      await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [
+        id,
+        CHAVE_FECHAMENTO,
+      ]);
+      await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [
+        id,
+        CHAVE_FECHAMENTO,
+      ]);
       await e.executar('DELETE FROM categoria_acomodacao WHERE codigo IN (?, ?)', CODIGOS_GLOBAIS.categoria);
       await e.executar('DELETE FROM carater_admissao WHERE codigo = ?', [CODIGOS_GLOBAIS.carater]);
       await e.executar('DELETE FROM especialidade_medica WHERE codigo = ?', [CODIGOS_GLOBAIS.especialidade]);
@@ -69,16 +94,24 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
     inativos = await escrever(nucleo, async (e) => {
       const desativado = await garantirEstabelecimento(e, 'f515d');
       const encerrado = await garantirEstabelecimento(e, 'f515e');
-      await e.executar('UPDATE estabelecimento SET ativo = FALSE, fim_atividade = NULL WHERE id = ?', [desativado]);
-      await e.executar("UPDATE estabelecimento SET ativo = TRUE, inicio_atividade = NULL, fim_atividade = '2020-01-01' WHERE id = ?", [
-        encerrado,
+      await e.executar('UPDATE estabelecimento SET ativo = FALSE, fim_atividade = NULL WHERE id = ?', [
+        desativado,
       ]);
+      await e.executar(
+        "UPDATE estabelecimento SET ativo = TRUE, inicio_atividade = NULL, fim_atividade = '2020-01-01' WHERE id = ?",
+        [encerrado],
+      );
       return [desativado, encerrado];
     });
     await escrever(nucleo, async (e) => {
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       const agora = new Date();
-      const bloco = await inserirSintetico(e, 'bloco_internacao', { estabelecimento_id: id, codigo: 'B515', nome: 'Bloco sintético', criado_em: agora });
+      const bloco = await inserirSintetico(e, 'bloco_internacao', {
+        estabelecimento_id: id,
+        codigo: 'B515',
+        nome: 'Bloco sintético',
+        criado_em: agora,
+      });
       u.enf = await inserirSintetico(e, 'unidade_internacao', {
         estabelecimento_id: id,
         unidade_assistencial_id: 9_905_151,
@@ -100,7 +133,12 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
       });
       // O bloco aponta a enfermaria (a de menor id): o retrato da terapia intensiva não pode cair nela.
       await e.executar('UPDATE bloco_internacao SET unidade_internacao_id = ? WHERE id = ?', [u.enf, bloco]);
-      const catEnf = await inserirSintetico(e, 'categoria_acomodacao', { codigo: 'F515ENF', descricao: 'Enfermaria sintética', tipo: 'enfermaria', criado_em: agora });
+      const catEnf = await inserirSintetico(e, 'categoria_acomodacao', {
+        codigo: 'F515ENF',
+        descricao: 'Enfermaria sintética',
+        tipo: 'enfermaria',
+        criado_em: agora,
+      });
       catUti = await inserirSintetico(e, 'categoria_acomodacao', {
         codigo: 'F515UTI',
         descricao: 'Terapia intensiva sintética',
@@ -138,7 +176,11 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
       await leito(u.enf, a1, '101B');
       const l2 = await leito(u.uti, a2, '101A');
       const l3 = await leito(u.uti, a3, '201A');
-      const carater = await inserirSintetico(e, 'carater_admissao', { codigo: 'F515CA', descricao: 'Eletiva sintética', criado_em: agora });
+      const carater = await inserirSintetico(e, 'carater_admissao', {
+        codigo: 'F515CA',
+        descricao: 'Eletiva sintética',
+        criado_em: agora,
+      });
       const esp = await inserirSintetico(e, 'especialidade_medica', {
         codigo: 'F515ESP',
         descricao: 'Clínica sintética',
@@ -184,7 +226,12 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
         situacao: 'alta',
       });
       const ocupacao = (v: Record<string, unknown>) =>
-        inserirSintetico(e, 'ocupacao_leito', { estabelecimento_id: id, origem: 'sistema', criado_em: agora, ...v });
+        inserirSintetico(e, 'ocupacao_leito', {
+          estabelecimento_id: id,
+          origem: 'sistema',
+          criado_em: agora,
+          ...v,
+        });
       const o1 = await ocupacao({
         internacao_id: i1,
         leito_hospitalar_id: l1,
@@ -224,7 +271,9 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
         ligada: 1,
         criado_em: agora,
       });
-      for (const tipo of new Set((recursoDesligado(CHAVE_FECHAMENTO)?.prerequisitos ?? []).map((p) => p.tipo)))
+      for (const tipo of new Set(
+        (recursoDesligado(CHAVE_FECHAMENTO)?.prerequisitos ?? []).map((p) => p.tipo),
+      ))
         await inserirSintetico(e, 'recurso_prerequisito', {
           estabelecimento_id: id,
           recurso: CHAVE_FECHAMENTO,
@@ -259,8 +308,14 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
     const mov = await porta.movimento(est);
     expect(mov.internacoes.map((i) => i.bloco).sort()).toEqual(['F515UI', 'F515UTI']);
     expect(mov.transferencias).toHaveLength(1);
-    expect(mov.transferencias[0]).toMatchObject({ origem: { bloco: 'F515UI', acomodacao: '101' }, destino: { bloco: 'F515UTI', acomodacao: '101' } });
-    expect(mov.trechos.find((t) => t.horaEntrada === '08:00')).toMatchObject({ bloco: 'F515UTI', tipo: catUti });
+    expect(mov.transferencias[0]).toMatchObject({
+      origem: { bloco: 'F515UI', acomodacao: '101' },
+      destino: { bloco: 'F515UTI', acomodacao: '101' },
+    });
+    expect(mov.trechos.find((t) => t.horaEntrada === '08:00')).toMatchObject({
+      bloco: 'F515UTI',
+      tipo: catUti,
+    });
     expect(mov.unidades.map((x) => [x.bloco, x.acomodacao, x.leitos]).sort()).toEqual([
       ['F515UI', '101', 2],
       ['F515UTI', '101', 1],
@@ -288,25 +343,55 @@ describe.skipIf(SEM_BANCO)('fechamento do censo sobre o banco próprio (f22_o5)'
     );
     const por = new Map(retrato.map((r) => [Number(r['u']), r]));
     expect(por.size).toBe(2);
-    expect(por.get(u.enf)).toMatchObject({ situacao: 'fechado', versao: 1, transferencias_entrada: 0, transferencias_saida: 1, obitos: 0, pacientes_dia: 0 });
+    expect(por.get(u.enf)).toMatchObject({
+      situacao: 'fechado',
+      versao: 1,
+      transferencias_entrada: 0,
+      transferencias_saida: 1,
+      obitos: 0,
+      pacientes_dia: 0,
+    });
     expect(por.get(u.enf)).toMatchObject({ ts_unidade: 1, pacientes_fim_dia: 0, leitos_unidade: 2 });
-    expect(por.get(u.uti)).toMatchObject({ situacao: 'fechado', transferencias_entrada: 1, transferencias_saida: 0, obitos: 1, pacientes_dia: 1 });
-    expect(por.get(u.uti)).toMatchObject({ te_unidade: 1, obitos_unidade: 1, pacientes_fim_dia: 1, leitos_unidade: 2 });
+    expect(por.get(u.uti)).toMatchObject({
+      situacao: 'fechado',
+      transferencias_entrada: 1,
+      transferencias_saida: 0,
+      obitos: 1,
+      pacientes_dia: 1,
+    });
+    expect(por.get(u.uti)).toMatchObject({
+      te_unidade: 1,
+      obitos_unidade: 1,
+      pacientes_fim_dia: 1,
+      leitos_unidade: 2,
+    });
     const trilha = await escrever(nucleo, (e) =>
-      e.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = 'fechamento_censo'", [est.id]),
+      e.uma(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = 'fechamento_censo'",
+        [est.id],
+      ),
     );
     expect(Number(trilha!['n'])).toBeGreaterThanOrEqual(1);
-    expect(await porta.gravarDia(est, { data: DIA, horaFechamento: 24, versaoCalculo: 1, linhas })).toBeNull();
+    expect(
+      await porta.gravarDia(est, { data: DIA, horaFechamento: 24, versaoCalculo: 1, linhas }),
+    ).toBeNull();
     expect(await porta.diasFechados(est, '2026-10-04', DIA)).toEqual([DIA]);
   });
 
   it('linha sem unidade de internação no cadastro: erro de integridade, nada gravado', async () => {
     const porta = new PortaCensoPropria(nucleo, CLIENTE);
     await expect(
-      porta.gravarDia(est, { data: '2026-10-09', horaFechamento: 24, versaoCalculo: 1, linhas: [{ ...LINHA, bloco: 'NAO-EXISTE' }] }),
+      porta.gravarDia(est, {
+        data: '2026-10-09',
+        horaFechamento: 24,
+        versaoCalculo: 1,
+        linhas: [{ ...LINHA, bloco: 'NAO-EXISTE' }],
+      }),
     ).rejects.toBeInstanceOf(ErroCensoSemUnidade);
     expect(await porta.diasFechados(est, '2026-10-09', '2026-10-09')).toEqual([]);
-    expect(await porta.gravarDia(est, { data: '2026-10-08', horaFechamento: 24, versaoCalculo: 1, linhas: [] })).toEqual({
+    expect(
+      await porta.gravarDia(est, { data: '2026-10-08', horaFechamento: 24, versaoCalculo: 1, linhas: [] }),
+    ).toEqual({
       unidades: 0,
       linhas: 0,
       internados: 0,

@@ -2,7 +2,20 @@
 // resultados reagentes, o paciente, a unidade, os modelos e perguntas da ficha, os casos e os gatilhos de exame, com as
 // gravações numa transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente
 // (porta-agravo-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
-import type { AtendimentoComCid, AtendimentoParaAgravo, CasoAgravoNovo, CasoAgravoRegistrado, CidNotificavelCadastro, ExameParaAgravo, FiltroCasosAgravo, GatilhoExameRegistrado, ObitoComCid, PacienteDoAgravo, ResultadoCandidato, UnidadeDoAgravo } from './tipos.js';
+import type {
+  AtendimentoComCid,
+  AtendimentoParaAgravo,
+  CasoAgravoNovo,
+  CasoAgravoRegistrado,
+  CidNotificavelCadastro,
+  ExameParaAgravo,
+  FiltroCasosAgravo,
+  GatilhoExameRegistrado,
+  ObitoComCid,
+  PacienteDoAgravo,
+  ResultadoCandidato,
+  UnidadeDoAgravo,
+} from './tipos.js';
 import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_AGRAVO = Symbol('PORTA_AGRAVO');

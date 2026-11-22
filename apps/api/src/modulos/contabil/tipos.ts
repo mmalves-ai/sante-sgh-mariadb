@@ -334,4 +334,3 @@ export interface PedidoPublicacaoRegra {
   readonly justificativa: string;
   readonly usuario: string;
 }
-

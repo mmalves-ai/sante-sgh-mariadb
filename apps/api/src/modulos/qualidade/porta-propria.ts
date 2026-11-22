@@ -30,7 +30,14 @@
 // que dependem de dado de OUTRO módulo ainda sem mapeamento (candidatos à sugestão, adesão aos protocolos, histórico de
 // riscos, tecnovigilância por item) falham fechadas (503 `modelo-pendente`).
 import type { ContextoNotificacaoLido } from '@sgh/contratos';
-import { ehTravaOcupada, type Executor, ErroOperacao, marcaComoAtual, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  ehTravaOcupada,
+  type Executor,
+  ErroOperacao,
+  marcaComoAtual,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, TrilhaDaGravacao } from '../exames/public-api.js';
 import {
@@ -60,7 +67,14 @@ import {
   verdadeiro,
 } from './apoio-propria.js';
 import type { ContextoQualidade, GravadorQualidade, PortaQualidade } from './porta.js';
-import type { AcaoPlanoRegistrada, AnaliseRegistrada, EventoNotificacaoNovo, EventoNotificacaoRegistrado, FiltroNotificacoes, NotificacaoRegistrada } from './tipos.js';
+import type {
+  AcaoPlanoRegistrada,
+  AnaliseRegistrada,
+  EventoNotificacaoNovo,
+  EventoNotificacaoRegistrado,
+  FiltroNotificacoes,
+  NotificacaoRegistrada,
+} from './tipos.js';
 import { recusaVersaoNotificacao } from './tipos.js';
 
 /** As tabelas que a gravação da notificação escreve (a transação recusa as outras). */
@@ -81,10 +95,14 @@ function concorrencia(e: unknown): boolean {
   return (e as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU || ehTravaOcupada(e);
 }
 const ETAPA_2 = 'A análise, o plano de ação, a queixa técnica e a sugestão resolvida';
-const QUEIXA = 'A queixa técnica de produto (área de vigilância, conduta, alerta, série e registro do produto)';
+const QUEIXA =
+  'A queixa técnica de produto (área de vigilância, conduta, alerta, série e registro do produto)';
 const SUGESTAO = 'A sugestão de notificação resolvida (o resumo da sugestão)';
 
-const FATOR_DO_BANCO: Readonly<Record<string, string>> = { profissional: 'individuo', externo: 'institucional' };
+const FATOR_DO_BANCO: Readonly<Record<string, string>> = {
+  profissional: 'individuo',
+  externo: 'institucional',
+};
 
 const SQL_ACAO = `
   SELECT ap.id, COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) AS notificacao, ap.sequencia, ap.o_que,
@@ -124,7 +142,8 @@ function acaoPlano(r: Linha): AcaoPlanoRegistrada {
   };
 }
 
-const DE_OUTROS = 'A leitura de outro módulo (checagens, reações, checklists, protocolos gerenciados, riscos e itens da tecnovigilância)';
+const DE_OUTROS =
+  'A leitura de outro módulo (checagens, reações, checklists, protocolos gerenciados, riscos e itens da tecnovigilância)';
 
 const SQL_NOTIFICACAO = `
   SELECT n.id, n.numero, n.hash_codigo_acompanhamento, n.registrada_em, n.ocorrido_em, n.atendimento_id, n.paciente_id,
@@ -217,7 +236,9 @@ async function idDoCadastro(
   codigo: string,
   nome: string,
 ): Promise<number> {
-  const r = await l.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`, [cobra(codigo)]);
+  const r = await l.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`, [
+    cobra(codigo),
+  ]);
   if (!r)
     throw recusa(
       'cadastro-pendente',
@@ -275,7 +296,9 @@ export class PortaQualidadePropria implements PortaQualidade {
   }
 
   executar(_c: ContextoQualidade, op: string): Promise<GravacaoFeita> {
-    return Promise.reject(recusa('operacao-desconhecida', `Operação ${op} sem receita do executor na qualidade.`));
+    return Promise.reject(
+      recusa('operacao-desconhecida', `Operação ${op} sem receita do executor na qualidade.`),
+    );
   }
 
   gravarSgh<T>(
@@ -295,13 +318,19 @@ export class PortaQualidadePropria implements PortaQualidade {
               return await fn(g);
             } catch (e) {
               if (!concorrencia(e)) throw e;
-              throw new ErroOperacao(409, GRAVACAO_CONCORRENTE, 'Gravação simultânea', 'Outra gravação mexeu no mesmo registro ao mesmo tempo: tente de novo.');
+              throw new ErroOperacao(
+                409,
+                GRAVACAO_CONCORRENTE,
+                'Gravação simultânea',
+                'Outra gravação mexeu no mesmo registro ao mesmo tempo: tente de novo.',
+              );
             }
           },
         });
       } catch (e) {
         // A transação foi desfeita inteira: refazer é seguro (a idempotência do pedido vale igual).
-        if (tentativa < TENTATIVAS && e instanceof ErroOperacao && e.problema.codigo === GRAVACAO_CONCORRENTE) return tentar(tentativa + 1);
+        if (tentativa < TENTATIVAS && e instanceof ErroOperacao && e.problema.codigo === GRAVACAO_CONCORRENTE)
+          return tentar(tentativa + 1);
         throw e;
       }
     };
@@ -314,9 +343,21 @@ export class PortaQualidadePropria implements PortaQualidade {
       [id, est],
       { teto: 1 },
     );
-    if (!t) throw new ErroOperacao(404, 'nao-encontrado', 'Notificação não encontrada', 'A notificação não existe neste estabelecimento.');
+    if (!t)
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Notificação não encontrada',
+        'A notificação não existe neste estabelecimento.',
+      );
     const r = await tx.uma(`${SQL_NOTIFICACAO} AND n.id = ?`, [est, id]);
-    if (!r) throw new ErroOperacao(404, 'nao-encontrado', 'Notificação não encontrada', 'A notificação não existe neste estabelecimento.');
+    if (!r)
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Notificação não encontrada',
+        'A notificação não existe neste estabelecimento.',
+      );
     return notificacaoDe(r);
   }
 
@@ -353,7 +394,12 @@ export class PortaQualidadePropria implements PortaQualidade {
         }
         const tipo = await idDoCadastro(tx, 'tipo_incidente', x.tipo, 'tipos de incidente');
         const percebido = await idDoCadastro(tx, 'grau_dano', x.danoPercebido, 'graus de dano');
-        const classificacao = await idDoCadastro(tx, 'classificacao_incidente', x.classificacao, 'classificações de incidente');
+        const classificacao = await idDoCadastro(
+          tx,
+          'classificacao_incidente',
+          x.classificacao,
+          'classificações de incidente',
+        );
         if (x.unidade !== null) {
           const s = await tx.uma(
             'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -362,10 +408,10 @@ export class PortaQualidadePropria implements PortaQualidade {
           if (!s) throw recusa('unidade-invalida', 'A unidade informada não é deste estabelecimento.');
         }
         if (x.atendimento !== null) {
-          const a = await tx.uma('SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [
-            x.atendimento,
-            est,
-          ]);
+          const a = await tx.uma(
+            'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [x.atendimento, est],
+          );
           if (!a) throw recusa('atendimento-inexistente', 'O atendimento não é deste estabelecimento.');
         }
         const notificador = x.anonima ? null : await quem(x.notificador);
@@ -404,17 +450,31 @@ export class PortaQualidadePropria implements PortaQualidade {
           descricao: x.descricao,
           situacao: 'recebida',
         });
-        await evento(tx, id, x.agora, null, 'recebida', notificador, { tipo: 'recebida', por: '' }, {
-          chave: x.chaveResumo,
-          origemTela: x.origemTela,
-          origemSugestao: x.origemSugestao,
-        });
+        await evento(
+          tx,
+          id,
+          x.agora,
+          null,
+          'recebida',
+          notificador,
+          { tipo: 'recebida', por: '' },
+          {
+            chave: x.chaveResumo,
+            origemTela: x.origemTela,
+            origemSugestao: x.origemSugestao,
+          },
+        );
         return { id, protocolo, repetida: false };
       },
       travar: (id) => this.travarLinha(tx, est, id),
       triar: async (t) => {
         const tipo = await idDoCadastro(tx, 'tipo_incidente', t.tipo, 'tipos de incidente');
-        const classificacao = await idDoCadastro(tx, 'classificacao_incidente', t.classificacao, 'classificações de incidente');
+        const classificacao = await idDoCadastro(
+          tx,
+          'classificacao_incidente',
+          t.classificacao,
+          'classificações de incidente',
+        );
         const dano = await idDoCadastro(tx, 'grau_dano', t.dano, 'graus de dano');
         const antes = await this.travarLinha(tx, est, t.id);
         const situacao = antes.situacao === 'recebida' ? 'triada' : cobra(antes.situacao);
@@ -437,7 +497,10 @@ export class PortaQualidadePropria implements PortaQualidade {
         return { versao: r.versao };
       },
       descartar: async (d) => {
-        const r = await this.mudar(tx, est, d.id, d.versao, { situacao: 'descartada', motivo_descarte: cobra(d.motivo) });
+        const r = await this.mudar(tx, est, d.id, d.versao, {
+          situacao: 'descartada',
+          motivo_descarte: cobra(d.motivo),
+        });
         await evento(tx, d.id, d.agora, cobra(r.antes.situacao), 'descartada', await quem(d.usuario), {
           tipo: 'descartada',
           por: d.usuario,
@@ -646,7 +709,15 @@ export class PortaQualidadePropria implements PortaQualidade {
       );
       return linhas.map((r) => {
         const d = json<Record<string, unknown>>(r['dados'], {});
-        const { tipo, chave: _chave, registro: _registro, leito: _leito, origemTela: _o, origemSugestao: _s, ...resto } = d;
+        const {
+          tipo,
+          chave: _chave,
+          registro: _registro,
+          leito: _leito,
+          origemTela: _o,
+          origemSugestao: _s,
+          ...resto
+        } = d;
         void [_chave, _registro, _leito, _o, _s];
         return {
           tipo: texto(tipo),
@@ -740,7 +811,11 @@ export class PortaQualidadePropria implements PortaQualidade {
            LEFT JOIN grau_dano gd ON gd.id = n.grau_dano_id
           WHERE n.estabelecimento_id = ? AND n.excluido_em IS NULL AND n.registrada_em >= ? AND n.registrada_em < ?
           GROUP BY ti.codigo, ci.codigo, COALESCE(gd.codigo, gp.codigo), n.evento_nunca, n.situacao, n.anonima`,
-        [est, paraBanco(de.length === 10 ? `${de}T00:00:00` : de), paraBanco(fimExclusivo.length === 10 ? `${fimExclusivo}T00:00:00` : fimExclusivo)],
+        [
+          est,
+          paraBanco(de.length === 10 ? `${de}T00:00:00` : de),
+          paraBanco(fimExclusivo.length === 10 ? `${fimExclusivo}T00:00:00` : fimExclusivo),
+        ],
         { teto: 5000 },
       );
       return linhas.map((r) => ({
@@ -758,7 +833,9 @@ export class PortaQualidadePropria implements PortaQualidade {
   /** O login do usuário da sessão (para a conferência de quem notificou). */
   async loginDaSessao(c: ContextoQualidade): Promise<string | null> {
     if (c.usuario === null) return null;
-    return this.ler(c, async (l) => textoN((await l.uma('SELECT login FROM usuario WHERE id = ?', [c.usuario]))?.['login']));
+    return this.ler(c, async (l) =>
+      textoN((await l.uma('SELECT login FROM usuario WHERE id = ?', [c.usuario]))?.['login']),
+    );
   }
 
   /** O id da conta pelo login (para os testes e as telas que só têm o login). */
@@ -799,7 +876,12 @@ export class PortaQualidadePropria implements PortaQualidade {
         id: n(a['id']),
         notificacao: n(a['notificacao_incidente_id']),
         metodo: camelo(a['metodo']),
-        conteudo: bruto === null || bruto === undefined ? '' : typeof bruto === 'string' ? bruto : JSON.stringify(bruto),
+        conteudo:
+          bruto === null || bruto === undefined
+            ? ''
+            : typeof bruto === 'string'
+              ? bruto
+              : JSON.stringify(bruto),
         causaRaiz: textoN(a['causa_raiz']),
         // O fator do contrato é a categoria do fator contribuinte (o profissional é o indivíduo; o externo, o institucional).
         fatores: fatores.map((f) => FATOR_DO_BANCO[texto(f['categoria'])] ?? texto(f['categoria'])),
@@ -821,9 +903,13 @@ export class PortaQualidadePropria implements PortaQualidade {
   acoes(c: ContextoQualidade, notificacao: number) {
     return this.ler(c, async (l, est) =>
       (
-        await l.consultar(`${SQL_ACAO} AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) = ? ORDER BY ap.sequencia, ap.id`, [est, notificacao], {
-          teto: 500,
-        })
+        await l.consultar(
+          `${SQL_ACAO} AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) = ? ORDER BY ap.sequencia, ap.id`,
+          [est, notificacao],
+          {
+            teto: 500,
+          },
+        )
       ).map(acaoPlano),
     );
   }

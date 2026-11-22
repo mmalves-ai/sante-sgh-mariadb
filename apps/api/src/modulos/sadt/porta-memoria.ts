@@ -740,7 +740,8 @@ export class PortaSadtMemoria implements PortaSadt {
         codigo: 'operacao-bloqueada',
         motivo: 'A gravação está bloqueada neste estabelecimento (catálogo de operações).',
       };
-    if (!ENTRADAS_SADT[op]) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
+    if (!ENTRADAS_SADT[op])
+      return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return { pode: true, codigo: null, motivo: null };
   }
 

@@ -5,12 +5,7 @@
 // escrita que grava só a trilha.
 // Melhoria: o evento auditável e o paciente nunca se perdem (antes, a linha montada por função era descartada).
 import { randomUUID } from 'node:crypto';
-import {
-  type ContextoNucleo,
-  definirOperacao,
-  type Executor,
-  type ResultadoOperacao,
-} from '@sgh/nucleo';
+import { type ContextoNucleo, definirOperacao, type Executor, type ResultadoOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 

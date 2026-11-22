@@ -38,7 +38,12 @@ describe('alerta da fila de mortos (regra 10)', () => {
     mortos.lista = [
       { id: '1', parceiro: 'lab-a', mortoEm: new Date('2026-10-22T07:00:00Z'), tratamento: null },
       { id: '2', parceiro: 'lab-a', mortoEm: new Date('2026-10-22T10:00:00Z'), tratamento: null },
-      { id: '3', parceiro: 'lab-b', mortoEm: new Date('2026-10-22T06:00:00Z'), tratamento: 'reprocessar' as const },
+      {
+        id: '3',
+        parceiro: 'lab-b',
+        mortoEm: new Date('2026-10-22T06:00:00Z'),
+        tratamento: 'reprocessar' as const,
+      },
     ];
     const alertas: unknown[] = [];
     const acesso = {

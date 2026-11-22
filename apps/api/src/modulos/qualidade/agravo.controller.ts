@@ -354,7 +354,9 @@ export class AgravoController {
   @Post('casos')
   @HttpCode(201)
   @Permissao(P.notificar)
-  @AuditadoNoHandler('qualidade.abrirCasoAgravo: notificacao_agravo com a trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'qualidade.abrirCasoAgravo: notificacao_agravo com a trilha_auditoria na mesma transação',
+  )
   async abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirCasoAgravo, b);

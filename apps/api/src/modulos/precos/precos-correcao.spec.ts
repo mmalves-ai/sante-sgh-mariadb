@@ -18,7 +18,15 @@ const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS:
 const trilha = new RegistradorTrilhaMemoria();
 const fonte = new FontePrecosMemoria('dev');
 let app: NestFastifyApplication;
-const ctxTeste = { cliente: '', estabelecimento: null, usuario: null, correlacao: 't', rede: '', hospital: 'aa', traceId: 't' };
+const ctxTeste = {
+  cliente: '',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 't',
+  rede: '',
+  hospital: 'aa',
+  traceId: 't',
+};
 let chave = 0;
 const respostas: { url: string; corpo: unknown }[] = [];
 

@@ -120,7 +120,11 @@ const SQL_VINCULOS = `
 export type NucleoCalculoFolha = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 /** As tabelas que a gravação do cálculo escreve hoje (a transação recusa as outras). */
-export const TABELAS_CALCULO_FOLHA = ['historico_salarial', 'parametro_folha', 'fechamento_periodo_folha'] as const;
+export const TABELAS_CALCULO_FOLHA = [
+  'historico_salarial',
+  'parametro_folha',
+  'fechamento_periodo_folha',
+] as const;
 
 const FALTA = {
   processo:
@@ -145,7 +149,8 @@ const json = <T>(v: unknown, padrao: T): T => {
 };
 
 /** O período do contrato (AAAA-MM ou AAAA) no primeiro dia do banco, e de volta. */
-const periodoNoBanco = (periodo: string): string => (periodo.length === 4 ? `${periodo}-01-01` : `${periodo}-01`);
+const periodoNoBanco = (periodo: string): string =>
+  periodo.length === 4 ? `${periodo}-01-01` : `${periodo}-01`;
 const periodoDoBanco = (apuracao: unknown, v: unknown): string =>
   apuracao === 'anual' ? diaObrigatorio(v).slice(0, 4) : diaObrigatorio(v).slice(0, 7);
 const SITUACAO_FECHAMENTO: Readonly<Record<string, SituacaoFechamentoFolha>> = {
@@ -196,7 +201,8 @@ function fechamentoDe(r: Record<string, unknown>): FechamentoDaFolha {
     fechadoPor: texto(r['fechado_login']),
     fechadoEm: instante(r['fechado_em']),
     reabertoPor: textoOuNulo(r['reaberto_login']),
-    reabertoEm: r['reaberto_em'] === null || r['reaberto_em'] === undefined ? null : instante(r['reaberto_em']),
+    reabertoEm:
+      r['reaberto_em'] === null || r['reaberto_em'] === undefined ? null : instante(r['reaberto_em']),
     motivo: textoOuNulo(r['motivo_reabertura']),
     versao: n(r['versao']),
   };
@@ -249,7 +255,8 @@ export function adicionalDaVigencia(
 function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPropria): GravadorCalculoFolha {
   const agora = async () => paraBanco(await relogioDoEstabelecimento(tx, est));
   const daSessao = (empresa: number) => {
-    if (empresa !== est) throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
+    if (empresa !== est)
+      throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
   };
   const sem = (operacao: string, falta: string) => () => Promise.reject(erroModeloPendente(operacao, falta));
   return {
@@ -261,7 +268,10 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
       );
       if (!v) throw recusa('vinculo-inexistente', 'O vínculo não existe neste estabelecimento.');
       if ((await lerSalarios(tx, est, [x.vinculo])).some((y) => y.inicio === x.inicio))
-        throw recusa('vigencia-repetida', 'Já existe uma vigência do salário com este início: escolha outra data.');
+        throw recusa(
+          'vigencia-repetida',
+          'Já existe uma vigência do salário com este início: escolha outra data.',
+        );
       const escolhido = adicionalDaVigencia(x, await riscoDaFuncao(tx, x.vinculo, x.inicio));
       const usuario = await exigirUsuario(tx, x.por);
       return tx.incluir('historico_salarial', {
@@ -334,7 +344,10 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
         [est, x.apuracao, periodoNoBanco(x.periodo), x.numero],
       );
       if (ja)
-        throw recusa('periodo-ja-fechado', 'Outra pessoa fechou este período ao mesmo tempo: abra de novo e confira.');
+        throw recusa(
+          'periodo-ja-fechado',
+          'Outra pessoa fechou este período ao mesmo tempo: abra de novo e confira.',
+        );
       return tx.incluir('fechamento_periodo_folha', {
         estabelecimento_id: est,
         apuracao: x.apuracao,
@@ -473,7 +486,11 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
   }
 
   /** O fechamento relido na transação da gravação. */
-  async fechamentoNaTransacao(l: Pick<Leitor, 'uma'>, est: number, id: number): Promise<FechamentoDaFolha | null> {
+  async fechamentoNaTransacao(
+    l: Pick<Leitor, 'uma'>,
+    est: number,
+    id: number,
+  ): Promise<FechamentoDaFolha | null> {
     const r = await l.uma(`${SQL_FECHAMENTOS} AND f.id = ?`, [est, id]);
     return r ? fechamentoDe(r) : null;
   }

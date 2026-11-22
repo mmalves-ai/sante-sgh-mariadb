@@ -38,7 +38,10 @@ export async function portaDoRepasse(ctx: ContextoModulo): Promise<PortaRepasse>
   return portaRepasseIndisponivel();
 }
 
-export async function moduloRepasse(ctx: ContextoModulo, opcoes: OpcoesModuloRepasse = {}): Promise<DynamicModule> {
+export async function moduloRepasse(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloRepasse = {},
+): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDoRepasse(ctx));
   const configuracao =
     opcoes.configuracao ??

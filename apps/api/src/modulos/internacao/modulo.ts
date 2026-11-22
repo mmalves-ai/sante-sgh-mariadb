@@ -8,7 +8,12 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
-import { CACHE_CONFIG, type CacheConfig, FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
+import {
+  CACHE_CONFIG,
+  type CacheConfig,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+} from '../config/public-api.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
 import { ConfiguracaoM16 } from './configuracao.js';
@@ -18,7 +23,12 @@ import { FonteInternacaoPropria } from './fonte-propria.js';
 import { LeitosController } from './leitos.controller.js';
 import { RelatorioController } from './relatorio.controller.js';
 import { ServicoInternacao } from './servico.js';
-import { BATIDA_EVENTOS_MS, BATIDA_EVENTOS_PADRAO_MS, CONFIGURACAO_M16, SERVICO_INTERNACAO } from './simbolos.js';
+import {
+  BATIDA_EVENTOS_MS,
+  BATIDA_EVENTOS_PADRAO_MS,
+  CONFIGURACAO_M16,
+  SERVICO_INTERNACAO,
+} from './simbolos.js';
 import { intervaloDoAmbiente, MOTOR_VIGIA, MotorVigia } from './vigia.js';
 
 export interface OpcoesModuloInternacao {
@@ -48,7 +58,10 @@ export async function fonteDaInternacao(ctx: ContextoModulo): Promise<FonteInter
 @Module({})
 export class ModuloInternacao {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloInternacao = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloInternacao = {},
+): Promise<DynamicModule> {
   const fonte = opcoes.fonte ?? (await fonteDaInternacao(ctx));
   const armazemCompartilhado = !(ctx.armazem instanceof ArmazemMemoria);
   const vigia =
@@ -79,7 +92,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloInternacao
       },
       {
         provide: CONFIGURACAO_M16,
-        useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) => new ConfiguracaoM16(cfg, cache),
+        useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) =>
+          new ConfiguracaoM16(cfg, cache),
         inject: [
           { token: FONTE_CONFIGURACAO, optional: true },
           { token: CACHE_CONFIG, optional: true },

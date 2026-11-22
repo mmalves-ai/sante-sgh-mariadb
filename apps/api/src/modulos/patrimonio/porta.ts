@@ -158,8 +158,7 @@ export interface PortaPatrimonio {
     por: string,
     planejar: (
       s: SituacaoParaAjuste,
-    ) =>
-      { ajuste: AjusteNovo } | { impedimento: { readonly codigo: string; readonly detalhe: string } },
+    ) => { ajuste: AjusteNovo } | { impedimento: { readonly codigo: string; readonly detalhe: string } },
     trilha: RegistroTrilhaTela,
   ): Promise<AjusteDoBem>;
   /** Achado 6 da revisão: os laudos anexados ao bem, do mais novo ao mais antigo. */

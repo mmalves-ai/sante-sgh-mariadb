@@ -3,7 +3,13 @@
 // nunca repetido, versão vista, rascunho só no lugar, publicado imutável, quatro olhos, aposentar só o publicado). O
 // modelo do prontuário não é criado aqui (a ponte é do executor, desligada): `executar` recusa.
 import { randomUUID } from 'node:crypto';
-import type { EspecialidadeLida, EventoFormularioNovoLido, EstadoFormularioNovo, FormularioNovoLido, PerguntaDoBancoLida } from './tipos-pep.js';
+import type {
+  EspecialidadeLida,
+  EventoFormularioNovoLido,
+  EstadoFormularioNovo,
+  FormularioNovoLido,
+  PerguntaDoBancoLida,
+} from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
   ContextoFormularioNovo,

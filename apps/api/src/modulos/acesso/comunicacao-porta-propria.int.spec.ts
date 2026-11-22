@@ -6,7 +6,11 @@
 // sem conta ativa no estabelecimento, outro estabelecimento. Massa sintética, limpa no fim.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoComunicacao } from './aplicacao/comunicacao.js';
-import { type MassaComunicacao, montarMassaComunicacao, SEM_BANCO } from './aplicacao/massa-comunicacao.spec-util.js';
+import {
+  type MassaComunicacao,
+  montarMassaComunicacao,
+  SEM_BANCO,
+} from './aplicacao/massa-comunicacao.spec-util.js';
 import { PortaComunicacaoPropria } from './comunicacao-porta-propria.js';
 
 describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cliente f22_o2)', () => {
@@ -39,7 +43,9 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
     expect(r.destinatarios.map((d) => d.login).sort()).toEqual([m.login.d1, m.login.d2].sort());
     expect(r.destinatarios.find((d) => d.login === m.login.d2)?.via).toBe(`grupo ${m.grupo}`);
     expect(r.desconhecidos).toEqual([`usuario ${m.login.outro}`, `usuario ${m.login.inativo}`]);
-    expect((await porta.destinatarios(m.ctx('rem'), [{ tipo: 'grupo', valor: m.grupo }], 1)).passou).toBe(true);
+    expect((await porta.destinatarios(m.ctx('rem'), [{ tipo: 'grupo', valor: m.grupo }], 1)).passou).toBe(
+      true,
+    );
   });
 
   it('envia: linhas, avisos, trilha sem o texto e idempotência do pedido; leitura e ciência', async () => {
@@ -61,18 +67,24 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
     await expect(
       s.enviar(m.ctx('rem'), autor(), { ...e, texto: 'Outro texto sintético' }, pedido),
     ).rejects.toMatchObject({ problema: { codigo: 'idempotencia-divergente' } });
-    const quantas = await m.ler('SELECT COUNT(*) AS n FROM mensagem_interna WHERE estabelecimento_id = ? AND id >= ?', [
-      m.estA,
-      r.id,
-    ]);
+    const quantas = await m.ler(
+      'SELECT COUNT(*) AS n FROM mensagem_interna WHERE estabelecimento_id = ? AND id >= ?',
+      [m.estA, r.id],
+    );
     expect(Number(quantas[0]?.['n'])).toBe(1);
-    const [msg] = await m.ler('SELECT situacao, solicita_resposta, versao, estabelecimento_id FROM mensagem_interna WHERE id = ?', [r.id]);
+    const [msg] = await m.ler(
+      'SELECT situacao, solicita_resposta, versao, estabelecimento_id FROM mensagem_interna WHERE id = ?',
+      [r.id],
+    );
     expect(msg).toMatchObject({ situacao: 'enviada', versao: 1 });
     expect(Number(msg?.['estabelecimento_id'])).toBe(m.estA);
-    const ds = await m.ler('SELECT lida, versao FROM mensagem_interna_destinatario WHERE mensagem_interna_id = ?', [r.id]);
+    const ds = await m.ler(
+      'SELECT lida, versao FROM mensagem_interna_destinatario WHERE mensagem_interna_id = ?',
+      [r.id],
+    );
     expect(ds.length).toBe(2);
     const av = await m.ler(
-      "SELECT usuario_id, gravidade, lida FROM notificacao_usuario WHERE link = ? AND estabelecimento_id = ?",
+      'SELECT usuario_id, gravidade, lida FROM notificacao_usuario WHERE link = ? AND estabelecimento_id = ?',
       [`/mensagens?id=${r.id}`, m.estA],
     );
     expect(av.length).toBe(2);
@@ -129,10 +141,15 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
     expect(await s.mudarAviso(m.ctx('d2'), d2, id!, 'lido')).toBe(true);
     expect(await s.mudarAviso(m.ctx('d2'), d2, id!, 'lido')).toBe(false);
     expect(await s.mudarAviso(m.ctx('d2'), d2, id!, 'resolvido')).toBe(true);
-    const [a] = await m.ler('SELECT lida, resolvida, versao, detalhes FROM notificacao_usuario WHERE id = ?', [id]);
+    const [a] = await m.ler(
+      'SELECT lida, resolvida, versao, detalhes FROM notificacao_usuario WHERE id = ?',
+      [id],
+    );
     expect(Number(a?.['versao'])).toBe(3);
     expect(String(a?.['detalhes'])).toContain('resultado-liberado');
-    await expect(s.mudarAviso(m.ctx('d1'), { ...autor(), login: m.login.d1 }, id!, 'lido')).rejects.toMatchObject({
+    await expect(
+      s.mudarAviso(m.ctx('d1'), { ...autor(), login: m.login.d1 }, id!, 'lido'),
+    ).rejects.toMatchObject({
       problema: { codigo: 'aviso-inexistente' },
     });
   });
@@ -168,10 +185,10 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
     const daMensagem = await aviso('mensagem_interna', 'acesso.mensagem.enviada');
     const doComunicado = await aviso('comunicado', 'acesso.comunicado.publicado');
     await s.ciencia(m.ctx('d1'), { ...autor(), login: m.login.d1 }, r.id, 'comunicado');
-    const linhas = await m.ler('SELECT id, resolvida, resolvida_por_usuario_id FROM notificacao_usuario WHERE id IN (?, ?)', [
-      daMensagem,
-      doComunicado,
-    ]);
+    const linhas = await m.ler(
+      'SELECT id, resolvida, resolvida_por_usuario_id FROM notificacao_usuario WHERE id IN (?, ?)',
+      [daMensagem, doComunicado],
+    );
     const de = (id: number | null) => linhas.find((x) => Number(x['id']) === id);
     expect(Number(de(doComunicado)?.['resolvida'])).toBe(1);
     expect(Number(de(doComunicado)?.['resolvida_por_usuario_id'])).toBe(m.id.d1);
@@ -207,23 +224,26 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
 
   it('mensagens anteriores: só as trazidas pelo conector, fora da caixa', async () => {
     const agora = new Date();
-    const id = await m.nucleo.escrever({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'f2201-anterior' }, async (e) => {
-      const mid = await e.inserir(
-        `INSERT INTO mensagem_interna (estabelecimento_id, remetente_usuario_id, assunto, texto, situacao, enviada_em,
+    const id = await m.nucleo.escrever(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2', correlacao: 'f2201-anterior' },
+      async (e) => {
+        const mid = await e.inserir(
+          `INSERT INTO mensagem_interna (estabelecimento_id, remetente_usuario_id, assunto, texto, situacao, enviada_em,
            origem, criado_em) VALUES (?, ?, 'Anterior', 'Mensagem sintética anterior', 'enviada', ?, 'migracao', ?)`,
-        [m.estA, m.id.rem, agora, agora],
-      );
-      await e.inserir(
-        `INSERT INTO mensagem_interna_destinatario (mensagem_interna_id, sequencia, destinatario_usuario_id, origem,
+          [m.estA, m.id.rem, agora, agora],
+        );
+        await e.inserir(
+          `INSERT INTO mensagem_interna_destinatario (mensagem_interna_id, sequencia, destinatario_usuario_id, origem,
            criado_em) VALUES (?, 1, ?, 'migracao', ?)`,
-        [mid, m.id.d2, agora],
-      );
-      return mid;
-    });
+          [mid, m.id.d2, agora],
+        );
+        return mid;
+      },
+    );
     const anteriores = await s.anteriores(m.ctx('d2'), m.login.d2);
     expect(anteriores.find((x) => x.sequencia === id)).toMatchObject({ origem: m.login.rem, lidaEm: null });
-    expect((await s.caixa(m.ctx('d2'), m.login.d2)).recebidas.some((x) => x.id === id && x.tipo === 'mensagem')).toBe(
-      false,
-    );
+    expect(
+      (await s.caixa(m.ctx('d2'), m.login.d2)).recebidas.some((x) => x.id === id && x.tipo === 'mensagem'),
+    ).toBe(false);
   });
 });

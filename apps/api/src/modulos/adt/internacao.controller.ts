@@ -69,7 +69,11 @@ import { ApoiosAdt, ctxAdt, janelaOutroSistema } from './apoios.js';
 import { AVISOS_ADT } from './simbolos.js';
 import { type DadosImpressoInternacao, PORTA_ADT, type PortaAdt } from './porta.js';
 import { ServicoAdt } from './servico.js';
-import { esquemaCancelarAltaBanco, esquemaCancelarAltaMedicaBanco, esquemaInternarBanco } from './esquemas.js';
+import {
+  esquemaCancelarAltaBanco,
+  esquemaCancelarAltaMedicaBanco,
+  esquemaInternarBanco,
+} from './esquemas.js';
 
 const TROCAS = {
   convenio: { op: 'internacao.trocarConvenio', esquema: esquemaTrocarConvenio, msg: 'Convênio trocado.' },

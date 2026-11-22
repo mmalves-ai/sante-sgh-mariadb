@@ -15,7 +15,12 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { CHAVE_LIBERACAO_MPI_REDE, EVENTOS_AUDITAVEIS, recursoDesligado } from '@sgh/contratos';
 import { recursoLigadoNoEstabelecimento } from '@sgh/dominio-config';
-import { cicloPareamentoRede, divergenciasRede, type PortaIndiceRede, repararIndiceRede } from '@sgh/dominio-rede';
+import {
+  cicloPareamentoRede,
+  divergenciasRede,
+  type PortaIndiceRede,
+  repararIndiceRede,
+} from '@sgh/dominio-rede';
 import { type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker, codigosDosEstabelecimentos } from './clientes-worker.js';
 import { lerChavesLiberacao, lerPrerequisitos } from './integracao/porta-propria.js';
@@ -56,7 +61,7 @@ export async function noiteDaRede(
   let naFila = 0;
   const antes = new Map<string, number>();
   for (const e of ests) antes.set(e, (await porta.marca(e))?.ultimoId ?? 0);
-  for (; ciclos < (o.ciclos ?? CICLOS_POR_NOITE_REDE); ) {
+  for (; ciclos < (o.ciclos ?? CICLOS_POR_NOITE_REDE);) {
     const r = await cicloPareamentoRede(porta, ests, {
       lote: o.lote ?? LOTE_NOTURNO_REDE,
       por: USUARIO_REDE,
@@ -78,7 +83,9 @@ export async function noiteDaRede(
   const divergencias = (await divergenciasRede(porta, ests)).length;
   const reparo =
     divergencias > 0
-      ? await repararIndiceRede(porta, ests, EVENTOS_AUDITAVEIS.redeIndiceReparado.codigo, (m) => logger.warn({}, m))
+      ? await repararIndiceRede(porta, ests, EVENTOS_AUDITAVEIS.redeIndiceReparado.codigo, (m) =>
+          logger.warn({}, m),
+        )
       : { reparados: 0, pendentes: 0, manuais: [] };
   return {
     ciclos,
@@ -101,7 +108,10 @@ export function estabelecimentosDoMpi(env: NodeJS.ProcessEnv, doCliente: readonl
 }
 
 export interface NucleoLeituraRede {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
 }
 
 /**
@@ -169,7 +179,8 @@ export class RedeMpiService implements OnApplicationBootstrap, OnApplicationShut
   /** Roda uma vez por noite, na janela noturna (a primeira verificação depois das 2 h). */
   async talvez(agora: Date): Promise<ResumoNoite[] | null> {
     const dia = `${agora.getFullYear()}-${agora.getMonth() + 1}-${agora.getDate()}`;
-    if (agora.getHours() < HORA_NOTURNA_REDE || agora.getHours() >= 6 || this.ultimaNoite === dia) return null;
+    if (agora.getHours() < HORA_NOTURNA_REDE || agora.getHours() >= 6 || this.ultimaNoite === dia)
+      return null;
     this.ultimaNoite = dia;
     return this.noite();
   }
@@ -186,7 +197,11 @@ export class RedeMpiService implements OnApplicationBootstrap, OnApplicationShut
             { cliente, correlacao: 'rede-mpi-noturno' },
             codigosDosEstabelecimentos,
           );
-          const ests = await estabelecimentosLiberadosMpi(nucleo, cliente, estabelecimentosDoMpi(process.env, doCliente));
+          const ests = await estabelecimentosLiberadosMpi(
+            nucleo,
+            cliente,
+            estabelecimentosDoMpi(process.env, doCliente),
+          );
           if (ests.length < 2) {
             logger.info(
               { cliente, estabelecimentos: ests.length },
@@ -195,7 +210,10 @@ export class RedeMpiService implements OnApplicationBootstrap, OnApplicationShut
             continue;
           }
           if (!this.fabrica) {
-            logger.error({ cliente, pendencia: 'f22-05-16-indice-rede' }, 'MPI da Rede: porta do índice indisponível no worker');
+            logger.error(
+              { cliente, pendencia: 'f22-05-16-indice-rede' },
+              'MPI da Rede: porta do índice indisponível no worker',
+            );
             continue;
           }
           const x = await noiteDaRede(this.fabrica(cliente), ests);

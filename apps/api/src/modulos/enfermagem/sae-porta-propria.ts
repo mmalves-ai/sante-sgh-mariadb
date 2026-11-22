@@ -91,7 +91,10 @@ const modeloPendente = (o: string) =>
   );
 
 const SAE_MUDOU = () =>
-  recusa('sae-mudou', 'O processo de enfermagem mudou depois da sua leitura: recarregue e confira antes de gravar.');
+  recusa(
+    'sae-mudou',
+    'O processo de enfermagem mudou depois da sua leitura: recarregue e confira antes de gravar.',
+  );
 
 /** O sistema de classificação pela terminologia do catálogo (o código da terminologia no banco). */
 const SISTEMA_DA_TERMINOLOGIA: Readonly<Record<string, SistemaTerminologiaSae>> = {
@@ -101,7 +104,8 @@ const SISTEMA_DA_TERMINOLOGIA: Readonly<Record<string, SistemaTerminologiaSae>> 
 };
 
 /** A direção da meta pelas notas: 1 aumentar, 2 manter, 3 diminuir. */
-export const direcaoDaMeta = (inicial: number, meta: number): number => (meta > inicial ? 1 : meta === inicial ? 2 : 3);
+export const direcaoDaMeta = (inicial: number, meta: number): number =>
+  meta > inicial ? 1 : meta === inicial ? 2 : 3;
 
 /** A situação da evolução pelas notas: atingida (chegou à meta), melhorou, mantida ou piorou (frente à anterior). */
 export function situacaoDaEvolucao(meta: number, anterior: number, obtida: number): string {
@@ -222,7 +226,10 @@ export class PortaSaePropria implements PortaSae {
         this.executor,
         { ...contexto(c), estabelecimento: estabelecimentoDe(c) },
         OPERACOES_SAE.trilha,
-        { tabela: (l?.entidade && TABELA_DA_ENTIDADE[l.entidade]) || 'processo_enfermagem', id: l?.entidadeId ?? null },
+        {
+          tabela: (l?.entidade && TABELA_DA_ENTIDADE[l.entidade]) || 'processo_enfermagem',
+          id: l?.entidadeId ?? null,
+        },
         l,
       );
     }
@@ -321,7 +328,12 @@ export class PortaSaePropria implements PortaSae {
                 await tx.incluir('plano_intervencao_enfermagem', {
                   diagnostico_enfermagem_paciente_id: dep,
                   sequencia: k + 1,
-                  intervencao_enfermagem_id: await catalogo(tx, 'intervencao_enfermagem', iv.codigo, 'intervenção'),
+                  intervencao_enfermagem_id: await catalogo(
+                    tx,
+                    'intervencao_enfermagem',
+                    iv.codigo,
+                    'intervenção',
+                  ),
                   situacao: 'planejada',
                   responsavel_profissional_id: prof,
                 });
@@ -346,7 +358,12 @@ export class PortaSaePropria implements PortaSae {
           chave: x.chave,
           entrada: { ...x },
           alvo: () => ({ tabela: 'processo_enfermagem', id: x.sae }),
-          saida: (r) => ({ ids: String(r['ids'] ?? '').split(',').filter(Boolean).map(Number) }),
+          saida: (r) => ({
+            ids: String(r['ids'] ?? '')
+              .split(',')
+              .filter(Boolean)
+              .map(Number),
+          }),
           gravar: async (tx, est) => {
             const prof = await exigirProfissional(tx, c, est);
             const proc = await tx.uma<{ id: number }>(
@@ -366,7 +383,8 @@ export class PortaSaePropria implements PortaSae {
                     AND a.excluido_em IS NULL AND d.excluido_em IS NULL`,
                 [r.resultado, x.atendimento, est],
               );
-              if (!base) throw recusa('resultado-de-outro-processo', 'O resultado não é do processo vigente.');
+              if (!base)
+                throw recusa('resultado-de-outro-processo', 'O resultado não é do processo vigente.');
               const seq = await tx.uma<{ s: number }>(
                 'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM avaliacao_resultado_enfermagem WHERE diagnostico_enfermagem_paciente_id = ?',
                 [base['diagnostico_enfermagem_paciente_id']],
@@ -425,7 +443,10 @@ export class PortaSaePropria implements PortaSae {
                 [v.paciente, imuno, v.dose],
               );
               if (ja.length > 0)
-                throw recusa('dose-ja-registrada', `A dose ${v.dose} deste imunobiológico já foi registrada para o paciente.`);
+                throw recusa(
+                  'dose-ja-registrada',
+                  `A dose ${v.dose} deste imunobiológico já foi registrada para o paciente.`,
+                );
             }
             const id = await tx.incluir('vacina_aplicada', {
               estabelecimento_id: est,
@@ -522,7 +543,9 @@ export class PortaSaePropria implements PortaSae {
               lote: d.lote ?? atual['lote'],
               fabricante: d.fabricante !== undefined ? d.fabricante : atual['fabricante'],
               validade_lote: d.validadeLote ? d.validadeLote.slice(0, 10) : atual['validade_lote'],
-              via_de_uso_id: d.via ? await catalogo(tx, 'via_de_uso', d.via, 'via de aplicação') : atual['via_de_uso_id'],
+              via_de_uso_id: d.via
+                ? await catalogo(tx, 'via_de_uso', d.via, 'via de aplicação')
+                : atual['via_de_uso_id'],
               regiao_corporal_id: d.local
                 ? await catalogo(tx, 'regiao_corporal', d.local, 'local de aplicação')
                 : atual['regiao_corporal_id'],
@@ -682,8 +705,12 @@ export class PortaSaePropria implements PortaSae {
             pai: null,
             codigo: texto(d['codigo']),
             descricao: texto(d['descricao']),
-            caracteristicas: cs.filter((x) => x['tipo'] === 'caracteristica_definidora').map((x) => texto(x['codigo'])),
-            fatores: cs.filter((x) => x['tipo'] !== 'caracteristica_definidora').map((x) => texto(x['codigo'])),
+            caracteristicas: cs
+              .filter((x) => x['tipo'] === 'caracteristica_definidora')
+              .map((x) => texto(x['codigo'])),
+            fatores: cs
+              .filter((x) => x['tipo'] !== 'caracteristica_definidora')
+              .map((x) => texto(x['codigo'])),
             usuario: texto(d['login']),
             em: em(d['criado_em']),
           });
@@ -798,7 +825,10 @@ export class PortaSaePropria implements PortaSae {
     return { itens: [], cortada: false };
   }
 
-  async checagem(c: ContextoSae, id: number): Promise<(ChecagemCuidadoLida & { atendimento: number }) | null> {
+  async checagem(
+    c: ContextoSae,
+    id: number,
+  ): Promise<(ChecagemCuidadoLida & { atendimento: number }) | null> {
     void [c, id];
     return null;
   }
@@ -842,9 +872,14 @@ export class PortaSaePropria implements PortaSae {
     });
   }
 
-  cabecalhoReceita(c: ContextoSae, o: { readonly paciente: number; readonly vinculo: number }): Promise<CabecalhoReceita> {
+  cabecalhoReceita(
+    c: ContextoSae,
+    o: { readonly paciente: number; readonly vinculo: number },
+  ): Promise<CabecalhoReceita> {
     return this.ler(c, async (l, est) => {
-      const e = await l.uma('SELECT razao_social, nome_fantasia, cnpj FROM estabelecimento WHERE id = ?', [est]);
+      const e = await l.uma('SELECT razao_social, nome_fantasia, cnpj FROM estabelecimento WHERE id = ?', [
+        est,
+      ]);
       const p = await l.uma(
         `SELECT COALESCE(NULLIF(pa.nome_social, ''), pf.nome) AS nome, pf.data_nascimento, pf.cpf
            FROM paciente pa JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id WHERE pa.id = ? AND pa.excluido_em IS NULL`,
@@ -897,7 +932,9 @@ export class PortaSaePropria implements PortaSae {
       const originais = linhas.filter((v) => v['original'] === null);
       return originais.map((o): VacinaAplicada => {
         const id = num(o['id']);
-        const rets = linhas.filter((v) => num(v['original']) === id).sort((a, b) => num(a['id']) - num(b['id']));
+        const rets = linhas
+          .filter((v) => num(v['original']) === id)
+          .sort((a, b) => num(a['id']) - num(b['id']));
         const correcoes: CorrecaoVacina[] = [];
         let anterior = o;
         for (const r of rets) {
@@ -1000,13 +1037,20 @@ const CATALOGOS = new Set([
 
 async function catalogo(tx: TxOperacao, tabela: string, codigo: string, nome: string): Promise<number> {
   if (!CATALOGOS.has(tabela)) throw new Error('Catálogo fora da lista.');
-  const r = await tx.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`, [codigo]);
+  const r = await tx.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`, [
+    codigo,
+  ]);
   if (!r) throw recusa('termo-nao-cadastrado', `O código ${codigo} (${nome}) não está no catálogo ativo.`);
   return Number(r.id);
 }
 
 /** Encerra os diagnósticos ativos do atendimento (a nova versão do processo os substitui). */
-async function encerrarDiagnosticos(tx: TxOperacao, atendimento: number, est: number, agora: Date): Promise<void> {
+async function encerrarDiagnosticos(
+  tx: TxOperacao,
+  atendimento: number,
+  est: number,
+  agora: Date,
+): Promise<void> {
   for (const d of await tx.consultarParaAtualizar<{ id: number; versao: number }>(
     `SELECT id, versao FROM diagnostico_enfermagem_paciente
       WHERE atendimento_id = ? AND estabelecimento_id = ? AND situacao = 'ativo' AND excluido_em IS NULL`,
@@ -1039,7 +1083,11 @@ function diferencas(a: Linha, b: Linha, fuso: string): Record<string, string | n
   par('validadeLote', dataDe(a['validade_lote']), dataDe(b['validade_lote']));
   par('via', a['via'], b['via']);
   par('local', a['local'], b['local']);
-  par('aplicadaEm', civilDe(a['aplicada_em'], fuso)?.slice(0, 16), civilDe(b['aplicada_em'], fuso)?.slice(0, 16));
+  par(
+    'aplicadaEm',
+    civilDe(a['aplicada_em'], fuso)?.slice(0, 16),
+    civilDe(b['aplicada_em'], fuso)?.slice(0, 16),
+  );
   return d;
 }
 

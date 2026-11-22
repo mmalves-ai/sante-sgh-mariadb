@@ -7,6 +7,7 @@ import { moduloAcesso } from './modulo.js';
 
 export const REGISTRO_TESTE_ACESSO: Readonly<Record<string, CarregadorModulo>> = {
   acesso: async () => ({
-    modulo: (ctx: ContextoModulo): Promise<DynamicModule> => moduloAcesso(ctx, { fonteGestao: fonteGestaoMemoria(ctx.trilha) }),
+    modulo: (ctx: ContextoModulo): Promise<DynamicModule> =>
+      moduloAcesso(ctx, { fonteGestao: fonteGestaoMemoria(ctx.trilha) }),
   }),
 };

@@ -13,7 +13,12 @@ import { randomUUID } from 'node:crypto';
 import { CHAVE_LIBERACAO_CONTRATOS, EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { definirOperacao, type Executor, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
-import { type AlvoEstabelecimento, estabelecimentosAtivos, type NucleoWorker, recursoLigadoAqui } from './servico-worker.js';
+import {
+  type AlvoEstabelecimento,
+  estabelecimentosAtivos,
+  type NucleoWorker,
+  recursoLigadoAqui,
+} from './servico-worker.js';
 
 export const TIPO_AVISO_CONTRATO = 'contrato-vencimento';
 
@@ -51,8 +56,10 @@ export interface PortaContratos {
 }
 
 const n = (v: unknown) => Number(v ?? 0);
-const dia = (v: unknown): string => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10));
-const textoOuNulo = (v: unknown) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim());
+const dia = (v: unknown): string =>
+  v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
+const textoOuNulo = (v: unknown) =>
+  v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim();
 const em = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const agrupamento = (chave: string) => `${TIPO_AVISO_CONTRATO}:${chave}`.slice(0, 100);
 
@@ -77,7 +84,10 @@ export class PortaContratosPropria implements PortaContratos {
   }
 
   private ler<T>(est: number | null, fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, estabelecimento: est, correlacao: 'contratos-vencimento' }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, estabelecimento: est, correlacao: 'contratos-vencimento' },
+      fn,
+    );
   }
 
   estabelecimentos(): Promise<AlvoEstabelecimento[]> {
@@ -125,7 +135,10 @@ export class PortaContratosPropria implements PortaContratos {
         inicio: dia(c['vigencia_inicio']),
         fim: dia(c['vigencia_fim']),
         destinatarios: [...(dest.get(n(c['id'])) ?? [])],
-        diasAlerta: c['dias_alerta_vencimento'] === null || c['dias_alerta_vencimento'] === undefined ? null : n(c['dias_alerta_vencimento']),
+        diasAlerta:
+          c['dias_alerta_vencimento'] === null || c['dias_alerta_vencimento'] === undefined
+            ? null
+            : n(c['dias_alerta_vencimento']),
         assunto: textoOuNulo(c['assunto_alerta']),
         mensagem: textoOuNulo(c['mensagem_alerta']),
       }));

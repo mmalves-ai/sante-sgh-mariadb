@@ -79,7 +79,12 @@ describe('cache de permissões por cliente', () => {
 });
 
 describe('ator da plataforma (decisão do dono 2026-11-20, b)', () => {
-  const ator: AtorPlataforma = { tipo: 'plataforma', idAdministrador: 1, nomeExibicao: 'Admin', cliente: 'cliente_a' };
+  const ator: AtorPlataforma = {
+    tipo: 'plataforma',
+    idAdministrador: 1,
+    nomeExibicao: 'Admin',
+    cliente: 'cliente_a',
+  };
 
   it('recebe o acesso total no cliente escolhido no login', () => {
     expect(autorizacaoDoAtorPlataforma(ator, 'cliente_a', 5).permissoes).toEqual(

@@ -216,10 +216,7 @@ export class ErroRecusaConfiguracao extends Error {
   override readonly name = 'ErroRecusaConfiguracao';
   constructor(
     readonly codigo:
-      | 'conflito-concorrente'
-      | 'chave-de-outro-tipo'
-      | 'parametro-nao-carregado'
-      | 'alvo-inexistente',
+      'conflito-concorrente' | 'chave-de-outro-tipo' | 'parametro-nao-carregado' | 'alvo-inexistente',
     mensagem: string,
   ) {
     super(mensagem);

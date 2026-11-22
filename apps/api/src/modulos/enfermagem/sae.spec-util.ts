@@ -27,9 +27,7 @@ export interface Sessao {
 
 export async function montarAppSae(o: { semChave?: string } = {}) {
   const trilha = new RegistradorTrilhaMemoria();
-  const enfermagem = new PortaEnfermagemMemoria(
-    { agora },
-  );
+  const enfermagem = new PortaEnfermagemMemoria({ agora });
   const configuracao = o.semChave
     ? fonteConfiguracaoMemoria(trilha, {
         chavesIniciais: () => chavesIniciaisSinteticas().filter((c) => c.chave !== o.semChave),

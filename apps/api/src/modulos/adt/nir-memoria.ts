@@ -16,7 +16,20 @@ import {
   type Precaucao,
   type SituacaoReserva,
 } from '@sgh/contratos';
-import { type AltaPrevistaRegistrada, type BarreiraDaAlta, EVENTOS_SEM_DESDOBRAMENTO, type EventoSolicitacaoNir, frasesDependenciasNir, type NovaAltaPrevista, type NovaBarreira, type NovaReserva, type NovaSolicitacaoLeito, type ReservaLeitoNir, type SolicitacaoLeitoNir, type TransicaoSolicitacao } from './tipos.js';
+import {
+  type AltaPrevistaRegistrada,
+  type BarreiraDaAlta,
+  EVENTOS_SEM_DESDOBRAMENTO,
+  type EventoSolicitacaoNir,
+  frasesDependenciasNir,
+  type NovaAltaPrevista,
+  type NovaBarreira,
+  type NovaReserva,
+  type NovaSolicitacaoLeito,
+  type ReservaLeitoNir,
+  type SolicitacaoLeitoNir,
+  type TransicaoSolicitacao,
+} from './tipos.js';
 import { ErroOperacao } from '@sgh/nucleo';
 import { transicao } from '@sgh/dominio-internacao';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';

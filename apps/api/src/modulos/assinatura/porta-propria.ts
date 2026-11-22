@@ -95,7 +95,11 @@ const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const textoOuNulo = (v: unknown) => (v === null || v === undefined ? null : String(v));
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 const iso = (v: unknown): string | null =>
-  v instanceof Date ? v.toISOString() : v === null || v === undefined ? null : new Date(String(v)).toISOString();
+  v instanceof Date
+    ? v.toISOString()
+    : v === null || v === undefined
+      ? null
+      : new Date(String(v)).toISOString();
 const sha256Hex = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const simNao = (v: unknown) => (v === null || v === undefined ? null : verdadeiro(v));
@@ -228,7 +232,6 @@ const SQL_DOCUMENTO = `
     LEFT JOIN documento_assinado da ON da.id = dp.documento_assinado_id AND da.excluido_em IS NULL
    WHERE dp.id = ? AND dp.estabelecimento_id = ? AND dp.excluido_em IS NULL`;
 
-
 export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
   readonly destino = 'proprio' as const;
   private readonly executor: Executor;
@@ -244,8 +247,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
 
   /** Os códigos dos estabelecimentos ativos do cliente (onde o verificador público procura o código). */
   async estabelecimentosAtivos(): Promise<string[]> {
-    const ls = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'assinatura-estabelecimentos' }, (l) =>
-      l.consultar('SELECT codigo FROM estabelecimento WHERE ativo AND excluido_em IS NULL ORDER BY id', []),
+    const ls = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'assinatura-estabelecimentos' },
+      (l) =>
+        l.consultar('SELECT codigo FROM estabelecimento WHERE ativo AND excluido_em IS NULL ORDER BY id', []),
     );
     return ls.map((r) => texto(r['codigo']));
   }
@@ -332,7 +337,9 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         return {
           ...(l ? { acao: l.acao } : {}),
           motivo: l?.motivo ?? null,
-          dados: l ? { ...(l.dadosDepois as object), resultado: l.resultado ?? 'sucesso' } : { semAlteracao: true },
+          dados: l
+            ? { ...(l.dadosDepois as object), resultado: l.resultado ?? 'sucesso' }
+            : { semAlteracao: true },
         };
       },
     });
@@ -371,8 +378,13 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     };
   }
 
-  private async usuarioDoLogin(e: Leitor, login: string): Promise<{ id: number; nome: string; cpf: string | null }> {
-    const u = await e.uma('SELECT id, nome, cpf FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]);
+  private async usuarioDoLogin(
+    e: Leitor,
+    login: string,
+  ): Promise<{ id: number; nome: string; cpf: string | null }> {
+    const u = await e.uma('SELECT id, nome, cpf FROM usuario WHERE login = ? AND excluido_em IS NULL', [
+      login,
+    ]);
     if (!u) throw recusa('usuario-desconhecido', 'A conta da sessão não existe mais.');
     return { id: n(u['id']), nome: texto(u['nome']), cpf: textoOuNulo(u['cpf']) };
   }
@@ -386,11 +398,12 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     if (!u.cpf) throw recusa('cpf-ausente', 'A conta não tem CPF: o certificado não pode ser vinculado.');
     const der = Buffer.from(x.certificadoDer, 'base64');
     const impressao = sha256Hex(der);
-    const ja = await tx.uma('SELECT id FROM certificado_usuario WHERE usuario_id = ? AND impressao_digital = ?', [
-      u.id,
-      impressao,
-    ]);
-    if (ja) throw new ErroAssinatura('certificado-ja-vinculado', 'Este certificado já está vinculado à sua conta.');
+    const ja = await tx.uma(
+      'SELECT id FROM certificado_usuario WHERE usuario_id = ? AND impressao_digital = ?',
+      [u.id, impressao],
+    );
+    if (ja)
+      throw new ErroAssinatura('certificado-ja-vinculado', 'Este certificado já está vinculado à sua conta.');
     const provedor = x.provedor
       ? await tx.uma(
           `SELECT id FROM provedor_assinatura_nuvem
@@ -399,7 +412,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           [x.provedor, tx.contexto.estabelecimento],
         )
       : null;
-    if (x.provedor && !provedor) throw recusa('provedor-desconhecido', 'O provedor do certificado não existe.');
+    if (x.provedor && !provedor)
+      throw recusa('provedor-desconhecido', 'O provedor do certificado não existe.');
     const outroAtivo = await tx.uma(
       "SELECT id FROM certificado_usuario WHERE usuario_id = ? AND situacao = 'ativo' AND excluido_em IS NULL LIMIT 1",
       [u.id],
@@ -425,7 +439,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       })
       .catch((e: unknown) => {
         if (restricaoUnicaViolada(e))
-          throw new ErroAssinatura('certificado-ja-vinculado', 'Este certificado já está vinculado à sua conta.');
+          throw new ErroAssinatura(
+            'certificado-ja-vinculado',
+            'Este certificado já está vinculado à sua conta.',
+          );
         throw e;
       });
     return { id };
@@ -503,7 +520,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       return { id, versao: 1 };
     }
     if (!atual || n(atual['versao']) !== versaoEsperada)
-      throw new ErroAssinatura('versao-desatualizada', 'O provedor foi alterado por outra pessoa. Abra de novo.');
+      throw new ErroAssinatura(
+        'versao-desatualizada',
+        'O provedor foi alterado por outra pessoa. Abra de novo.',
+      );
     const versao = await tx.alterar('provedor_assinatura_nuvem', n(atual['id']), versaoEsperada, {
       nome: p.nome.slice(0, 150),
       url_servico: p.uriBase,
@@ -552,7 +572,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         ORDER BY (estabelecimento_id IS NULL) LIMIT 1`,
       [codigo, est],
     );
-    if (!r) throw recusa('provedor-desconhecido', 'O provedor de assinatura não existe neste estabelecimento.');
+    if (!r)
+      throw recusa('provedor-desconhecido', 'O provedor de assinatura não existe neste estabelecimento.');
     return n(r['id']);
   }
 
@@ -652,7 +673,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         expira_em: p.expiraEm,
       })
       .catch((e: unknown) => {
-        if (restricaoUnicaViolada(e)) throw new ErroAssinatura('pedido-repetido', 'Pedido de assinatura repetido.');
+        if (restricaoUnicaViolada(e))
+          throw new ErroAssinatura('pedido-repetido', 'Pedido de assinatura repetido.');
         throw e;
       });
     return { id };
@@ -695,7 +717,11 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     };
   }
 
-  private async documentoDoEstabelecimento(tx: TxOperacao, est: number, documento: number | null): Promise<void> {
+  private async documentoDoEstabelecimento(
+    tx: TxOperacao,
+    est: number,
+    documento: number | null,
+  ): Promise<void> {
     if (documento === null) return;
     const d = await tx.uma('SELECT id FROM documento_prontuario WHERE id = ? AND estabelecimento_id = ?', [
       documento,
@@ -765,7 +791,15 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
   private async gravarArquivoPdf(
     tx: TxOperacao,
     est: number,
-    x: { entidade: string; entidadeId: number | null; finalidade: string; nome: string; chave: string; versao: string; hash: string },
+    x: {
+      entidade: string;
+      entidadeId: number | null;
+      finalidade: string;
+      nome: string;
+      chave: string;
+      versao: string;
+      hash: string;
+    },
   ): Promise<number> {
     return tx.incluir('arquivo', {
       estabelecimento_id: est,
@@ -816,7 +850,12 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     return { id };
   }
 
-  private async assinaturaTravada(tx: TxOperacao, est: number, id: number, extra = ''): Promise<Linha | null> {
+  private async assinaturaTravada(
+    tx: TxOperacao,
+    est: number,
+    id: number,
+    extra = '',
+  ): Promise<Linha | null> {
     const [r] = await tx.consultarParaAtualizar(
       `SELECT id, versao, situacao, tentativas, documento_prontuario_id, previa_assinatura_id, arquivo_assinado_id,
               assinatura_documento_id
@@ -826,10 +865,17 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     return r ?? null;
   }
 
-  private async gravarAssinaturaPdf(tx: TxOperacao, est: number, a: { assinatura: number; previa: number }): Promise<void> {
+  private async gravarAssinaturaPdf(
+    tx: TxOperacao,
+    est: number,
+    a: { assinatura: number; previa: number },
+  ): Promise<void> {
     const r = await this.assinaturaTravada(tx, est, a.assinatura);
     if (!r) throw new ErroAssinatura('nao-encontrado', 'A assinatura não existe neste estabelecimento.');
-    const pv = await tx.uma('SELECT id FROM previa_assinatura WHERE id = ? AND estabelecimento_id = ?', [a.previa, est]);
+    const pv = await tx.uma('SELECT id FROM previa_assinatura WHERE id = ? AND estabelecimento_id = ?', [
+      a.previa,
+      est,
+    ]);
     if (!pv) throw new ErroAssinatura('nao-encontrado', 'A prévia não existe neste estabelecimento.');
     await tx.alterar('assinatura_icp', a.assinatura, n(r['versao']), { previa_assinatura_id: a.previa });
   }
@@ -858,7 +904,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           WHERE ad.id = ? AND da.arquivo_assinado_id IS NULL`,
         [n(r['assinatura_documento_id'])],
       );
-      if (env) await tx.alterar('documento_assinado', n(env['id']), n(env['versao']), { arquivo_assinado_id: arquivo });
+      if (env)
+        await tx.alterar('documento_assinado', n(env['id']), n(env['versao']), {
+          arquivo_assinado_id: arquivo,
+        });
     }
     return true;
   }
@@ -976,7 +1025,11 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         signatario_usuario_id: u.id,
         profissional_id: comoSuporte ? null : nn(d['profissional_id']),
         papel: 'autor',
-        nome_signatario: (textoOuNulo(pv['profissional_exibido']) ?? texto(cert?.['nome_titular']) ?? u.nome).slice(0, 150) || u.nome.slice(0, 150),
+        nome_signatario:
+          (textoOuNulo(pv['profissional_exibido']) ?? texto(cert?.['nome_titular']) ?? u.nome).slice(
+            0,
+            150,
+          ) || u.nome.slice(0, 150),
         cpf_signatario: cpf && /^\d{11}$/.test(cpf) ? cpf : null,
         certificado_usuario_id: n(a['certificado_usuario_id']),
         nivel: 'icp-brasil',
@@ -993,7 +1046,9 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         origem: 'sistema',
       });
       await tx.alterar('assinatura_icp', n(a['id']), n(a['versao']), { assinatura_documento_id: assinatura });
-      await tx.alterar('documento_prontuario', documento, n(d['versao']), { documento_assinado_id: envelope });
+      await tx.alterar('documento_prontuario', documento, n(d['versao']), {
+        documento_assinado_id: envelope,
+      });
     }
     await tx.incluir('documento_prontuario_evento', {
       documento_prontuario_id: documento,
@@ -1008,7 +1063,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     });
   }
 
-  private async gravarAviso(tx: TxOperacao, a: Parameters<GravadorAssinatura['gravarAviso']>[0]): Promise<{ id: number }> {
+  private async gravarAviso(
+    tx: TxOperacao,
+    a: Parameters<GravadorAssinatura['gravarAviso']>[0],
+  ): Promise<{ id: number }> {
     const est = await this.estDaGravacao(tx, a.hospital);
     const id = await tx.incluir('aviso_assinatura', {
       estabelecimento_id: est,
@@ -1037,7 +1095,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       [est, ...avisos, por.login, por.diretorTecnico],
     );
     const leitor = await this.idDoLogin(tx, por.login);
-    for (const r of ls) await tx.alterar('aviso_assinatura', n(r['id']), n(r['versao']), { lido_em: agora, lido_por: leitor });
+    for (const r of ls)
+      await tx.alterar('aviso_assinatura', n(r['id']), n(r['versao']), { lido_em: agora, lido_por: leitor });
     return ls.length;
   }
 
@@ -1084,7 +1143,12 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
    * O número da receita fica no próprio pedido numerado (pedido_numeracao_receita.numero). O documento aceita um número
    * só: outro pedido do mesmo documento já numerado com número diferente recusa (false).
    */
-  private async gravarNumeroSncr(tx: TxOperacao, hospital: string, documento: number, numero: string): Promise<boolean> {
+  private async gravarNumeroSncr(
+    tx: TxOperacao,
+    hospital: string,
+    documento: number,
+    numero: string,
+  ): Promise<boolean> {
     const est = await this.estDaGravacao(tx, hospital);
     const outro = await tx.uma(
       `SELECT id FROM pedido_numeracao_receita
@@ -1205,7 +1269,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       validoDe: iso(r['valido_de']) ?? '',
       validoAte: iso(r['valido_ate']) ?? '',
       cpfMascarado: cpf ? mascararCpf(cpf) : '',
-      ativo: texto(r['situacao']) === 'ativo' && (r['excluido_em'] === null || r['excluido_em'] === undefined),
+      ativo:
+        texto(r['situacao']) === 'ativo' && (r['excluido_em'] === null || r['excluido_em'] === undefined),
       criadoEm: iso(r['criado_em']) ?? '',
       certificadoDer: comDer && bytes ? Buffer.from(bytes).toString('base64') : null,
     };
@@ -1330,7 +1395,11 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     return new Map(ls.map((v) => [n(v['assinatura_icp_id']), v]));
   }
 
-  async assinaturas(c: ContextoAssinatura, login: string, origem: 'teste' | 'documento'): Promise<AssinaturaRealizada[]> {
+  async assinaturas(
+    c: ContextoAssinatura,
+    login: string,
+    origem: 'teste' | 'documento',
+  ): Promise<AssinaturaRealizada[]> {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       if (!est) return [];
@@ -1339,7 +1408,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           ORDER BY a.id DESC LIMIT 20`,
         [est, login, origem],
       );
-      const vs = await this.ultimasValidacoes(l, ls.map((r) => n(r['id'])));
+      const vs = await this.ultimasValidacoes(
+        l,
+        ls.map((r) => n(r['id'])),
+      );
       return ls.map((a) => {
         const v = vs.get(n(a['id']));
         return {
@@ -1510,7 +1582,11 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     };
   }
 
-  async previaMaisRecente(c: ContextoAssinatura, documento: number, login: string): Promise<PreviaDoDocumento | null> {
+  async previaMaisRecente(
+    c: ContextoAssinatura,
+    documento: number,
+    login: string,
+  ): Promise<PreviaDoDocumento | null> {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       if (!est) return null;
@@ -1579,7 +1655,11 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     });
   }
 
-  async pendentesVencidas(c: ContextoAssinatura, agora: Date, teto: number): Promise<{ id: number; usuario: string }[]> {
+  async pendentesVencidas(
+    c: ContextoAssinatura,
+    agora: Date,
+    teto: number,
+  ): Promise<{ id: number; usuario: string }[]> {
     const ls = await this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       if (!est || teto < 1) return [];
@@ -1612,7 +1692,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
           ORDER BY a.id DESC LIMIT 20`,
         [est, login],
       );
-      const vs = await this.ultimasValidacoes(l, ls.map((r) => n(r['id'])));
+      const vs = await this.ultimasValidacoes(
+        l,
+        ls.map((r) => n(r['id'])),
+      );
       return ls.map((a) => ({
         assinatura: n(a['id']),
         documento: n(a['documento_prontuario_id']),
@@ -1623,7 +1706,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
         carimboEm: iso(a['carimbo_tempo_em']),
         codigo: textoOuNulo(a['codigo_verificacao']),
         temPdf: a['arquivo_assinado_id'] !== null && a['arquivo_assinado_id'] !== undefined,
-        resultado: (textoOuNulo(vs.get(n(a['id']))?.['resultado'] ?? null) as ResultadoValidacao | null) ?? null,
+        resultado:
+          (textoOuNulo(vs.get(n(a['id']))?.['resultado'] ?? null) as ResultadoValidacao | null) ?? null,
       }));
     });
   }
@@ -1646,7 +1730,10 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     return { pendentes: q('pendente'), falhas: q('falha') };
   }
 
-  async avisos(c: ContextoAssinatura, para: { autor: string } | 'diretor-tecnico'): Promise<AvisoAssinatura[]> {
+  async avisos(
+    c: ContextoAssinatura,
+    para: { autor: string } | 'diretor-tecnico',
+  ): Promise<AvisoAssinatura[]> {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       if (!est) return [];
@@ -1764,15 +1851,14 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
                 hashPdf: textoOuNulo(ultima['hash_assinado']),
               }
             : null,
-        validacao:
-          estado?.resultado
-            ? {
-                resultado: estado.resultado,
-                momento: 'assinar',
-                // A validação do conjunto vale a partir da conferência mais recente.
-                em: verificadas.sort().pop() ?? null,
-              }
-            : null,
+        validacao: estado?.resultado
+          ? {
+              resultado: estado.resultado,
+              momento: 'assinar',
+              // A validação do conjunto vale a partir da conferência mais recente.
+              em: verificadas.sort().pop() ?? null,
+            }
+          : null,
       };
     });
   }

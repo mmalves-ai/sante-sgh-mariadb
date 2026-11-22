@@ -96,7 +96,10 @@ async function limparMassa(e: Escritor): Promise<void> {
       await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ?', [x]);
       await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ?', [x]);
       await e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [x]);
-      await e.executar("DELETE FROM marca_sincronismo WHERE estabelecimento_id = ? AND sistema_origem = 'integracao'", [x]);
+      await e.executar(
+        "DELETE FROM marca_sincronismo WHERE estabelecimento_id = ? AND sistema_origem = 'integracao'",
+        [x],
+      );
     }
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -123,8 +126,14 @@ async function montarMassa(e: Escritor): Promise<Massa> {
       'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, 905140001, ?)',
       [pf, agora],
     );
-    const pfp = await e.inserir("INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PROFISSIONAL SINTETICO F220514', ?)", [agora]);
-    const prof = await e.inserir("INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'assistencial', ?)", [pfp, agora]);
+    const pfp = await e.inserir(
+      "INSERT INTO pessoa_fisica (nome, criado_em) VALUES ('PROFISSIONAL SINTETICO F220514', ?)",
+      [agora],
+    );
+    const prof = await e.inserir(
+      "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'assistencial', ?)",
+      [pfp, agora],
+    );
     const setor = await e.inserir(
       "INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, 'f22-0514', 'SETOR SINTETICO', 'laboratorio', ?)",
       [est, agora],
@@ -151,7 +160,15 @@ async function montarMassa(e: Escritor): Promise<Massa> {
       return e.inserir(
         `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, laboratorio_apoio_id, situacao, cancelado_em,
            motivo_cancelamento_item_exame_id, criado_em) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
-        [q, exame, lab, situacao, situacao === 'cancelado' ? t0 : null, situacao === 'cancelado' ? 1 : null, agora],
+        [
+          q,
+          exame,
+          lab,
+          situacao,
+          situacao === 'cancelado' ? t0 : null,
+          situacao === 'cancelado' ? 1 : null,
+          agora,
+        ],
       );
     };
     const itens = {
@@ -213,7 +230,10 @@ async function montarMassa(e: Escritor): Promise<Massa> {
       "INSERT INTO imunobiologico (codigo, descricao, codigo_rnds, criado_em) VALUES ('f22-0514', 'VACINA SINTETICA', 'F220514RNDS', ?)",
       [agora],
     );
-    const via = await e.inserir("INSERT INTO via_de_uso (codigo, descricao, criado_em) VALUES ('f22-0514', 'VIA SINTETICA', ?)", [agora]);
+    const via = await e.inserir(
+      "INSERT INTO via_de_uso (codigo, descricao, criado_em) VALUES ('f22-0514', 'VIA SINTETICA', ?)",
+      [agora],
+    );
     const regiao = await e.inserir(
       "INSERT INTO regiao_corporal (codigo, descricao, nivel, criado_em) VALUES ('f22-0514', 'REGIAO SINTETICA', 'parte', ?)",
       [agora],
@@ -258,13 +278,18 @@ async function publicarPelaOrigem(exame: number): Promise<void> {
     alvo: () => ({ tabela: 'resultado_exame', id: 1 }),
     eventos: (x) => [{ tipo: 'fato.resultado.liberado', carga: { exame: x.exame, resultado: 1 } }],
   });
-  await nucleo.criarExecutor().executar(op, CLIENTE, { exame }, {
-    cliente: CLIENTE,
-    estabelecimento: est,
-    usuario: null,
-    correlacao: 'teste-f22-0514',
-    chaveIdempotencia: `teste.${randomUUID()}`,
-  });
+  await nucleo.criarExecutor().executar(
+    op,
+    CLIENTE,
+    { exame },
+    {
+      cliente: CLIENTE,
+      estabelecimento: est,
+      usuario: null,
+      correlacao: 'teste-f22-0514',
+      chaveIdempotencia: `teste.${randomUUID()}`,
+    },
+  );
 }
 
 const escrever = <T>(fn: (e: Escritor) => Promise<T>): Promise<T> =>
@@ -296,7 +321,10 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('DELETE FROM sistema_externo WHERE codigo = ?', [PARCEIRO]);
   if (est) {
     await e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [est]);
-    await e.executar("DELETE FROM marca_sincronismo WHERE estabelecimento_id = ? AND sistema_origem = 'integracao'", [est]);
+    await e.executar(
+      "DELETE FROM marca_sincronismo WHERE estabelecimento_id = ? AND sistema_origem = 'integracao'",
+      [est],
+    );
   }
 }
 
@@ -451,7 +479,12 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
     );
     expect(r).toEqual({ prontas: 1, enviadas: 1, falhas: 0, mortas: 0, conflitos: 0 });
     const x = (await saida(c2))!;
-    expect(x).toMatchObject({ situacao: 'enviada', codigo_resposta: 'AA-1', recibo: 'AA-1', correlacao: 'paciente:42' });
+    expect(x).toMatchObject({
+      situacao: 'enviada',
+      codigo_resposta: 'AA-1',
+      recibo: 'AA-1',
+      correlacao: 'paciente:42',
+    });
     expect(x['hash_sha256']).toBe(sha('MSH|teste'));
     expect(Number(x['versao'])).toBe(3);
     // A trilha das operações da integração (processo automático: sem usuário, com a correlação do rótulo).
@@ -483,7 +516,8 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
           WHERE estabelecimento_id = ? AND ponto LIKE 'fato.%' ORDER BY id`,
         [est],
       );
-    const exameDe = (x: Record<string, unknown>) => (JSON.parse(String(x['conteudo'])) as { exame: number }).exame;
+    const exameDe = (x: Record<string, unknown>) =>
+      (JSON.parse(String(x['conteudo'])) as { exame: number }).exame;
     const v1 = await evs();
     // A origem (Executor, alvo resultado_exame) já publicou o H: a vigia não repete; A e B saem; C (desfeita) não.
     expect(v1.map((x) => [x['ponto'], x['entidade'], exameDe(x)])).toEqual([
@@ -495,7 +529,11 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
     expect(v1[1]!['referencia_externa']).toBe(
       porta.chaveEvento(chaveEventoFato('resultado.liberado', EST, m.liberacoes.a, m.t0)),
     );
-    expect(JSON.parse(String(v1[1]!['conteudo']))).toEqual({ exame: m.itens.a, paciente: m.paciente, atendimento: 1 });
+    expect(JSON.parse(String(v1[1]!['conteudo']))).toEqual({
+      exame: m.itens.a,
+      paciente: m.paciente,
+      atendimento: 1,
+    });
     // O hospital revoga o A: a retirada sai como evento próprio; a releitura não repete nada.
     const revogacao = await escrever((e) =>
       e.inserir(
@@ -528,7 +566,10 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
       ultimoId: String(revogacao),
     });
     expect(
-      await ler('SELECT 1 AS x FROM integracao_mensagem WHERE estabelecimento_id = ? AND ponto LIKE ?', [est2, 'fato.%']),
+      await ler('SELECT 1 AS x FROM integracao_mensagem WHERE estabelecimento_id = ? AND ponto LIKE ?', [
+        est2,
+        'fato.%',
+      ]),
     ).toHaveLength(0);
   });
 
@@ -546,13 +587,22 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
     expect(await reservar()).toBeNull();
     expect((await saida(c3))!['situacao']).toBe('enviando');
     const recibo = { recibo: 'AA-3', resposta: 'AA', hash: sha('x') };
-    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 1, recibo))).rejects.toThrow(/conflito-versao/);
+    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 1, recibo))).rejects.toThrow(
+      /conflito-versao/,
+    );
     // A tela descarta a mensagem no meio do envio: a marca não sobrescreve.
     await escrever((e) =>
-      e.executar("UPDATE mensagem_integracao_saida SET situacao = 'cancelada', versao = versao + 1 WHERE id = ?", [Number(id)]),
+      e.executar(
+        "UPDATE mensagem_integracao_saida SET situacao = 'cancelada', versao = versao + 1 WHERE id = ?",
+        [Number(id)],
+      ),
     );
-    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 2, recibo))).rejects.toThrow(/conflito-versao/);
-    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 3, recibo))).rejects.toThrow(/conflito-versao/);
+    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 2, recibo))).rejects.toThrow(
+      /conflito-versao/,
+    );
+    await expect(acesso.gravar(EST, (tx) => porta.marcarEnviado(tx, id, 3, recibo))).rejects.toThrow(
+      /conflito-versao/,
+    );
     expect((await saida(c3))!['situacao']).toBe('cancelada');
   });
 
@@ -577,27 +627,44 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
       id: m.itens.d,
       cancelado: false,
       urgente: false,
-      paciente: { id: m.paciente, prontuario: 905140001, nome: 'PACIENTE SINTETICO F220514', nascimento: '1980-01-02' },
+      paciente: {
+        id: m.paciente,
+        prontuario: 905140001,
+        nome: 'PACIENTE SINTETICO F220514',
+        nascimento: '1980-01-02',
+      },
       exame: { codigo: 'f22-0514-ex', nome: 'EXAME SINTETICO F220514' },
       apoio: { codigo: 'F220514AP', nome: 'GLICOSE APOIO SINTETICA', material: null },
       solicitante: 'PROFISSIONAL SINTETICO F220514',
       fuso: 'America/Sao_Paulo',
     });
     expect(r.e?.cancelado).toBe(true);
-    expect([r.outraUnidade, r.itemOutra, r.vacinaOutra, r.outbox, r.inexistente]).toEqual([null, null, null, null, null]);
+    expect([r.outraUnidade, r.itemOutra, r.vacinaOutra, r.outbox, r.inexistente]).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
     expect(r.item).toEqual({ accession: 'F220514A', modalidade: null });
     expect(r.vacina?.paciente).toBe(m.paciente);
     expect(r.vacina?.versoes.map((v) => [v.lote, v.dose, v.aplicadaEm, v.imunobiologico])).toEqual([
       ['F220514L1', 'D1', '2026-11-10T11:00', 'F220514RNDS'],
       ['F220514L2', 'D1', '2026-11-10T11:00', 'F220514RNDS'],
     ]);
-    expect(r.chaves).toEqual([{ chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: true }]);
+    expect(r.chaves).toEqual([
+      { chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: true },
+    ]);
     expect(r.chavesOutra).toEqual([]);
     expect(r.prerequisitos).toEqual([
       { recurso: 'imagem.worklist', tipo: 'contrato', situacao: 'cumprido', validade: '2099-12-31' },
     ]);
     expect(r.estabelecimentos).toEqual(expect.arrayContaining([EST, EST2]));
-    expect(r.parceiros.find((p) => p.codigo === PARCEIRO)).toMatchObject({ ativo: true, limiteTentativas: 2, tipo: 'api' });
+    expect(r.parceiros.find((p) => p.codigo === PARCEIRO)).toMatchObject({
+      ativo: true,
+      limiteTentativas: 2,
+      tipo: 'api',
+    });
 
     // O pedido HL7 ao apoio sai com o código do laboratório; o exame cancelado depois da remessa é recusado.
     const cfg: ConfiguracaoEnviadores = {
@@ -620,7 +687,9 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações no worker (MariaDB,
       ativo: true,
     };
     expect(await conteudoHl7(cfg, apoio, envioDe('fato.exame.apoio', m.itens.d), EST)).toContain('F220514AP');
-    await expect(conteudoHl7(cfg, apoio, envioDe('fato.exame.apoio', m.itens.e), EST)).rejects.toThrow(/cancelado/);
+    await expect(conteudoHl7(cfg, apoio, envioDe('fato.exame.apoio', m.itens.e), EST)).rejects.toThrow(
+      /cancelado/,
+    );
     await expect(conteudoHl7(cfg, apoio, envioDe('fato.resultado.liberado', m.itens.b), EST)).rejects.toThrow(
       /sem mensagem HL7/,
     );

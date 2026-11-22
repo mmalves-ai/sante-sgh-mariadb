@@ -67,7 +67,8 @@ type Linha = Record<string, unknown>;
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 
 export function estabelecimentoDe(ctx: { estabelecimento: number | null }): number {
-  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
 function usuarioDe(ctx: ContextoOperacao): number {
@@ -88,12 +89,20 @@ export interface ItemGlosavel {
 export const itemGlosavelDe = (r: Record<string, unknown>): ItemGlosavel => ({
   cobrado: numero(r['valor_total']),
   pago: numero(r['valor_pago']),
-  comRetorno: numero(r['valor_pago']) > 0 || numero(r['valor_glosado']) > 0 || String(r['situacao'] ?? '') === 'glosado',
+  comRetorno:
+    numero(r['valor_pago']) > 0 ||
+    numero(r['valor_glosado']) > 0 ||
+    String(r['situacao'] ?? '') === 'glosado',
 });
 
 /** A glosa de um item: o item é de uma conta do título, já tem retorno e a glosa cabe no cobrado menos o pago. */
 export function conferirItemGlosado(item: ItemGlosavel | null, valor: number): RecusaFinanceiro | null {
-  if (!item) return { codigo: 'item-fora-do-titulo', mensagem: 'O item glosado não é de uma conta deste título.', campos: ['item'] };
+  if (!item)
+    return {
+      codigo: 'item-fora-do-titulo',
+      mensagem: 'O item glosado não é de uma conta deste título.',
+      campos: ['item'],
+    };
   if (!item.comRetorno)
     return {
       codigo: 'item-sem-retorno',
@@ -129,7 +138,10 @@ export function conferirLinhaContraMovimento(
       mensagem: `A linha do extrato é um ${natureza === 'credito' ? 'crédito' : 'débito'} e o movimento escolhido não.`,
     };
   if (Math.abs(Math.abs(valorLinha) - Math.abs(mov.valor)) > 0.005)
-    return { codigo: 'valor-divergente', mensagem: 'O valor da linha do extrato difere do valor do movimento escolhido.' };
+    return {
+      codigo: 'valor-divergente',
+      mensagem: 'O valor da linha do extrato difere do valor do movimento escolhido.',
+    };
   return null;
 }
 
@@ -137,8 +149,12 @@ export function recusar(r: RecusaFinanceiro | null): void {
   if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 }
 const cadastroIncompleto = (oQue: string) =>
-  recusa('cadastro-incompleto', `Falta no cadastro do financeiro: ${oQue}. Peça ao administrador para cadastrar.`);
-const naoEncontrado = (detalhe: string) => new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', detalhe);
+  recusa(
+    'cadastro-incompleto',
+    `Falta no cadastro do financeiro: ${oQue}. Peça ao administrador para cadastrar.`,
+  );
+const naoEncontrado = (detalhe: string) =>
+  new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', detalhe);
 const hojeIso = () => new Date().toISOString().slice(0, 10);
 const conferirVersao = (lida: string | null | undefined, atual: unknown) => {
   const v = versaoDoTexto(lida ?? null);
@@ -216,14 +232,19 @@ export function faixaDe(r: Linha): FaixaAlcada {
   } catch {
     cond = {};
   }
-  const tipo = typeof cond.tipoCredor === 'string' && cond.tipoCredor ? (cond.tipoCredor as TipoCredor) : null;
+  const tipo =
+    typeof cond.tipoCredor === 'string' && cond.tipoCredor ? (cond.tipoCredor as TipoCredor) : null;
   return {
     id: numero(r['id']),
     empresa: 1,
-    centroCusto: r['centro_custo_id'] === null || r['centro_custo_id'] === undefined ? null : numero(r['centro_custo_id']),
+    centroCusto:
+      r['centro_custo_id'] === null || r['centro_custo_id'] === undefined
+        ? null
+        : numero(r['centro_custo_id']),
     tipoCredor: tipo,
     valorDe: numero(r['valor_minimo']),
-    valorAte: r['valor_maximo'] === null || r['valor_maximo'] === undefined ? null : numero(r['valor_maximo']),
+    valorAte:
+      r['valor_maximo'] === null || r['valor_maximo'] === undefined ? null : numero(r['valor_maximo']),
     aprovacoes: numero(r['quantidade_minima_aprovadores']) === 2 ? 2 : 1,
     permissao: typeof cond.permissao === 'string' ? cond.permissao : 'financeiro.tituloPagar.aprovar',
     vigenciaInicio: dataIso(r['vigencia_inicio']) ?? '2000-01-01',
@@ -273,7 +294,11 @@ export async function aprovacoesPorTitulo(
 }
 
 /** Centro de custo da alçada do título: o do maior rateio ou o do documento. */
-export async function centroDaAlcada(l: Leitor, titulo: number, doDocumento: unknown): Promise<number | null> {
+export async function centroDaAlcada(
+  l: Leitor,
+  titulo: number,
+  doDocumento: unknown,
+): Promise<number | null> {
   const r = await l.uma(
     'SELECT centro_custo_id FROM rateio_lancamento WHERE titulo_pagar_id = ? AND excluido_em IS NULL ORDER BY percentual DESC, sequencia LIMIT 1',
     [titulo],
@@ -320,7 +345,9 @@ async function exigirContaDoEscopo(
 ): Promise<Linha> {
   const escopo = await contasDoEscopo(tx, est, usuario, 'movimentar');
   if (!escopo.includes(conta))
-    throw recusa('fora-do-escopo', 'A conta bancária não está no seu escopo de contas.', { campos: ['conta'] });
+    throw recusa('fora-do-escopo', 'A conta bancária não está no seu escopo de contas.', {
+      campos: ['conta'],
+    });
   const c = await tx.uma(
     'SELECT id, permite_pagamento, permite_recebimento FROM conta_bancaria WHERE id = ? AND estabelecimento_id = ?',
     [conta, est],
@@ -329,7 +356,9 @@ async function exigirContaDoEscopo(
   if (uso === 'pagamento' && !Number(c['permite_pagamento']))
     throw recusa('conta-nao-paga', 'Esta conta bancária não é usada para pagamentos.', { campos: ['conta'] });
   if (uso === 'recebimento' && !Number(c['permite_recebimento']))
-    throw recusa('conta-nao-recebe', 'Esta conta bancária não é usada para recebimentos.', { campos: ['conta'] });
+    throw recusa('conta-nao-recebe', 'Esta conta bancária não é usada para recebimentos.', {
+      campos: ['conta'],
+    });
   return c;
 }
 
@@ -366,9 +395,10 @@ async function incluirTituloPagar(
           [credor],
         ));
       default:
-        return !!(await tx.uma('SELECT id FROM colaborador WHERE id = ? AND excluido_em IS NULL AND ativo = TRUE', [
-          credor,
-        ]));
+        return !!(await tx.uma(
+          'SELECT id FROM colaborador WHERE id = ? AND excluido_em IS NULL AND ativo = TRUE',
+          [credor],
+        ));
     }
   };
   const credorExiste = await existe();
@@ -404,23 +434,36 @@ async function incluirTituloPagar(
     [est, tipoCredor, credor, documento, serie ?? ''],
   );
   if (duplicado)
-    throw recusa('duplicado', 'Já existe título com este credor, documento, tipo e série: abra o título existente.', {
-      campos: ['documento'],
-    });
+    throw recusa(
+      'duplicado',
+      'Já existe título com este credor, documento, tipo e série: abra o título existente.',
+      {
+        campos: ['documento'],
+      },
+    );
   const tributos = e.retencoes.length
-    ? await tx.consultar(`SELECT id FROM tributo WHERE ativo = TRUE AND id IN (${lista(e.retencoes.length)})`, [
-        ...e.retencoes.map((r) => r.codigo),
-      ])
+    ? await tx.consultar(
+        `SELECT id FROM tributo WHERE ativo = TRUE AND id IN (${lista(e.retencoes.length)})`,
+        [...e.retencoes.map((r) => r.codigo)],
+      )
     : [];
   const conhecidos = new Set(tributos.map((t) => numero(t['id'])));
   if (e.retencoes.some((r) => !conhecidos.has(r.codigo)))
-    throw recusa('retencao-inexistente', 'A conta de retenção não existe no cadastro.', { campos: ['retencoes'] });
+    throw recusa('retencao-inexistente', 'A conta de retenção não existe no cadastro.', {
+      campos: ['retencoes'],
+    });
   const retido = centavos(e.retencoes.reduce((x, r) => x + r.valor, 0));
   if (retido > e.valorDocumento)
     throw recusa('retencao-acima-do-documento', 'As retenções passam do valor do documento.', {
       campos: ['retencoes'],
     });
-  if (e.centroCusto !== null && !(await tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ?', [e.centroCusto, est])))
+  if (
+    e.centroCusto !== null &&
+    !(await tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ?', [
+      e.centroCusto,
+      est,
+    ]))
+  )
     throw recusa('centro-custo-inexistente', 'O centro de custo não existe neste estabelecimento.', {
       campos: ['centroCusto'],
     });
@@ -433,9 +476,13 @@ async function incluirTituloPagar(
       [est, ...linhasRateio.map((r) => r.centroCusto)],
     );
     if (ccs.length !== linhasRateio.length)
-      throw recusa('centro-custo-inexistente', 'Um centro de custo do rateio não existe neste estabelecimento.', {
-        campos: ['rateio'],
-      });
+      throw recusa(
+        'centro-custo-inexistente',
+        'Um centro de custo do rateio não existe neste estabelecimento.',
+        {
+          campos: ['rateio'],
+        },
+      );
   }
   await garantirSequencia(
     tx,
@@ -558,7 +605,10 @@ async function excluirTituloPagar(
       excluido_em: agora,
       excluido_por: usuario,
     });
-  await tx.alterar('titulo_pagar', titulo, numero(p['versao_titulo']), { excluido_em: agora, excluido_por: usuario });
+  await tx.alterar('titulo_pagar', titulo, numero(p['versao_titulo']), {
+    excluido_em: agora,
+    excluido_por: usuario,
+  });
   const credor = numero(p['empresa_fornecedora_id'] ?? p['profissional_id'] ?? p['colaborador_id']);
   return {
     titulo: e.titulo,
@@ -580,11 +630,17 @@ export interface TituloPagarGravado {
   /** As parcelas, na ordem. */
   readonly parcelas: readonly number[];
   /** O evento que a operação que compõe publica (o mesmo de financeiro.criarTituloPagar). */
-  readonly evento: { readonly tipo: 'financeiro.titulo_pagar.lancado'; readonly carga: { titulo: number; parcelas: number } };
+  readonly evento: {
+    readonly tipo: 'financeiro.titulo_pagar.lancado';
+    readonly carga: { titulo: number; parcelas: number };
+  };
 }
 
 /** A entrada do título composto: a de financeiro.criarTituloPagar (acao incluir), antes dos padrões do contrato. */
-export type EntradaTituloComposto = Omit<Extract<z.input<typeof esquemaCriarTituloPagar>, { acao: 'incluir' }>, 'acao'>;
+export type EntradaTituloComposto = Omit<
+  Extract<z.input<typeof esquemaCriarTituloPagar>, { acao: 'incluir' }>,
+  'acao'
+>;
 
 /** Gravador do título a pagar sobre a transação de outra operação do Executor (integração folha → financeiro). */
 export interface GravadorTituloPagar {
@@ -613,7 +669,10 @@ export function gravadorTituloPagar(tx: TxOperacao): GravadorTituloPagar {
         tituloPagar,
         numero: String(r['numero']),
         parcelas,
-        evento: { tipo: 'financeiro.titulo_pagar.lancado', carga: { titulo: tituloPagar, parcelas: parcelas.length } },
+        evento: {
+          tipo: 'financeiro.titulo_pagar.lancado',
+          carga: { titulo: tituloPagar, parcelas: parcelas.length },
+        },
       };
     },
   };
@@ -648,7 +707,9 @@ async function pagar(
   const usuario = usuarioDe(ctx);
   const forma = formaDoCodigo(e.formaPagamento);
   if (!forma)
-    throw recusa('forma-pagamento-invalida', 'Escolha uma forma de pagamento da lista.', { campos: ['formaPagamento'] });
+    throw recusa('forma-pagamento-invalida', 'Escolha uma forma de pagamento da lista.', {
+      campos: ['formaPagamento'],
+    });
   await exigirContaDoEscopo(tx, est, usuario, e.conta, 'pagamento');
   const pagador = (await loginDe(tx, usuario)) ?? '';
   const faixas = await faixasLidas(tx, est);
@@ -670,7 +731,11 @@ async function pagar(
       "SELECT id FROM baixa_titulo WHERE parcela_pagar_id = ? AND situacao = 'efetivada' AND excluido_em IS NULL LIMIT 1",
       [it.titulo],
     );
-    if (baixa || ['paga', 'parcial', 'cancelada', 'renegociada'].includes(String(p['situacao'])) || !(numero(p['saldo']) > 0))
+    if (
+      baixa ||
+      ['paga', 'parcial', 'cancelada', 'renegociada'].includes(String(p['situacao'])) ||
+      !(numero(p['saldo']) > 0)
+    )
       throw recusa('titulo-ja-baixado', 'O título já foi baixado por outra via: releia.');
     const titulo = numero(p['titulo_pagar_id']);
     const faixa = alcadaAplicavel(
@@ -684,9 +749,7 @@ async function pagar(
       e.dataPagamento,
     );
     const aprovacoes = (await aprovacoesPorTitulo(tx, est, [titulo])).get(titulo) ?? [];
-    recusar(
-      conferirPagamento({ faixa, aprovacoes, pagador, lancador: await loginDe(tx, p['criado_por']) }),
-    );
+    recusar(conferirPagamento({ faixa, aprovacoes, pagador, lancador: await loginDe(tx, p['criado_por']) }));
     lidos.push(p);
   }
   const total = centavos(lidos.reduce((x, p) => x + numero(p['saldo']), 0));
@@ -780,7 +843,9 @@ async function receber(
   const usuario = usuarioDe(ctx);
   const forma = formaDoCodigo(e.formaPagamento);
   if (!forma)
-    throw recusa('forma-pagamento-invalida', 'Escolha uma forma de recebimento da lista.', { campos: ['formaPagamento'] });
+    throw recusa('forma-pagamento-invalida', 'Escolha uma forma de recebimento da lista.', {
+      campos: ['formaPagamento'],
+    });
   await exigirContaDoEscopo(tx, est, usuario, e.conta, 'recebimento');
   const [t] = await tx.consultarParaAtualizar(
     `SELECT id, versao, situacao, valor_recebido, numero_documento, natureza_financeira_id FROM titulo_receber
@@ -918,7 +983,8 @@ const criarTituloReceber = definirOperacao<CriarTituloReceberEntrada, ResultadoO
         ORDER BY c.id`,
       [est, ...ids],
     );
-    if (contas.length !== ids.length) throw recusa('conta-inexistente', 'A conta não existe.', { campos: ['contas'] });
+    if (contas.length !== ids.length)
+      throw recusa('conta-inexistente', 'A conta não existe.', { campos: ['contas'] });
     const porId = new Map(contas.map((c) => [numero(c['id']), c]));
     for (const x of e.contas) conferirVersao(x.versao, porId.get(x.conta)?.['versao']);
     const tituladas = await tx.consultar(
@@ -928,10 +994,14 @@ const criarTituloReceber = definirOperacao<CriarTituloReceberEntrada, ResultadoO
       ids,
     );
     if (tituladas.length)
-      throw recusa('conta-titulada', 'A conta já tem título a receber: abra o título existente.', { campos: ['contas'] });
+      throw recusa('conta-titulada', 'A conta já tem título a receber: abra o título existente.', {
+        campos: ['contas'],
+      });
     for (const c of contas) {
       if (!(SITUACOES_CONTA_TITULAVEL as readonly string[]).includes(String(c['situacao'])))
-        throw recusa('conta-aberta', 'Só a conta fechada ou apresentada gera título a receber.', { campos: ['contas'] });
+        throw recusa('conta-aberta', 'Só a conta fechada ou apresentada gera título a receber.', {
+          campos: ['contas'],
+        });
       if (!(numero(c['valor_total']) > 0))
         throw recusa('conta-sem-valor', 'A conta não tem valor a receber.', { campos: ['contas'] });
     }
@@ -952,7 +1022,9 @@ const criarTituloReceber = definirOperacao<CriarTituloReceberEntrada, ResultadoO
     if (particular && contas.length > 1)
       throw recusa('contas-misturadas', 'O título do particular é de uma conta só.', { campos: ['contas'] });
     if (!particular && !(e.documento > 0))
-      throw recusa('documento-obrigatorio', 'Informe o número da fatura do convênio.', { campos: ['documento'] });
+      throw recusa('documento-obrigatorio', 'Informe o número da fatura do convênio.', {
+        campos: ['documento'],
+      });
     const natureza = await idObrigatorio(
       tx,
       `SELECT n.id FROM natureza_financeira n WHERE n.tipo = 'receita' AND n.ativo = TRUE AND n.excluido_em IS NULL
@@ -1025,7 +1097,10 @@ const criarTituloReceber = definirOperacao<CriarTituloReceberEntrada, ResultadoO
   },
   alvo: (_e, r) => ({ tabela: 'titulo_receber', id: numero(r['titulo']) || null }),
   eventos: (_e, r) => [
-    { tipo: 'financeiro.titulo_receber.criado', carga: { titulo: numero(r['titulo']), contas: numero(r['contas']) } },
+    {
+      tipo: 'financeiro.titulo_receber.criado',
+      carga: { titulo: numero(r['titulo']), contas: numero(r['contas']) },
+    },
   ],
 });
 
@@ -1039,7 +1114,8 @@ const lancarMovimento = definirOperacao<LancarMovimentoEntrada, ResultadoOperaca
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     recusar(conferirMovimento(e));
-    for (const c of [e.contaCredito, e.contaDebito]) if (c) await exigirContaDoEscopo(tx, est, usuario, c, 'movimento');
+    for (const c of [e.contaCredito, e.contaDebito])
+      if (c) await exigirContaDoEscopo(tx, est, usuario, c, 'movimento');
     const natureza = await naturezaDaClassificacao(tx, e.classificacao);
     const mapa = MOVIMENTO_DO_TIPO[e.tipo];
     const tipoMov = await tipoLancamento(tx, mapa.codigo);

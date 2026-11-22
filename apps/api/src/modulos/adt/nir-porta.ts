@@ -8,7 +8,23 @@
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // O mapa de leitos, o paciente (sexo e nascimento) e o profissional da sessão vêm da porta da internação (M21); a
 // admissão e a transferência vindas do NIR são as operações do M21 (executor), com a solicitação na mesma transação.
-import { type AltaPrevistaRegistrada, type BarreiraDaAlta, type ConfiguracaoRegulacaoNir, type EventoSolicitacaoNir, type HistogramasPermanencia, type InternadoDoQuadro, type NovaAltaPrevista, type NovaBarreira, type NovaRegulacao, type NovaReserva, type NovaSolicitacaoLeito, type RegistroRegulacaoNir, type ReservaLeitoNir, type SolicitacaoLeitoNir, type TransicaoSolicitacao } from './tipos.js';
+import {
+  type AltaPrevistaRegistrada,
+  type BarreiraDaAlta,
+  type ConfiguracaoRegulacaoNir,
+  type EventoSolicitacaoNir,
+  type HistogramasPermanencia,
+  type InternadoDoQuadro,
+  type NovaAltaPrevista,
+  type NovaBarreira,
+  type NovaRegulacao,
+  type NovaReserva,
+  type NovaSolicitacaoLeito,
+  type RegistroRegulacaoNir,
+  type ReservaLeitoNir,
+  type SolicitacaoLeitoNir,
+  type TransicaoSolicitacao,
+} from './tipos.js';
 import { type LinhaTrilha } from '@sgh/nucleo';
 import type { ChaveLeito, EscopoLimitePermanencia, EstadoSolicitacaoNir, PerfilLeito } from '@sgh/contratos';
 import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';

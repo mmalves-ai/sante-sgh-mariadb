@@ -246,7 +246,11 @@ export class ServicoFaturamento {
       s,
       'lancamentoTardio',
       EVENTOS_AUDITAVEIS.faturamentoLancamentoTardioDecidido.codigo,
-      (x: number) => ({ tabela: 'decisao_lancamento_tardio', id: String(x), chave: `atendimento ${e.registro}` }),
+      (x: number) => ({
+        tabela: 'decisao_lancamento_tardio',
+        id: String(x),
+        chave: `atendimento ${e.registro}`,
+      }),
       (g) => g.decidirLancamentoTardio({ ...e, usuario: s.login, conta: contaVersao?.conta ?? null }),
     );
     if (e.decisao === 'reabrir' && contaVersao) {

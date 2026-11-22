@@ -6,7 +6,22 @@
 // retorno, substituído que mudou, sequencial e aviso repetidos, versão vista e situação de partida, CCO em uso) e a
 // transação desfeita por inteiro quando a função falha. Nada vai ao banco. A trilha da memória é registrada pela API.
 import { ErroOperacao } from '@sgh/nucleo';
-import { type DadosAtivos, type DadosBeneficiarioSib, type DadosComplementoSib, type DadosEnvioAns, type DadosEnvioExistente, type DadosEventoEnvioAns, type DadosGuiaMonitoramento, type DadosItemEnvioAns, type DadosItemSip, type DadosObrigacao, type FiltroEnviosPorta, LIMITE_PAGINA_ENVIOS, LIMITE_PAGINA_SIB, type SituacaoEnvioPorta, CAMPOS_SIB
+import {
+  type DadosAtivos,
+  type DadosBeneficiarioSib,
+  type DadosComplementoSib,
+  type DadosEnvioAns,
+  type DadosEnvioExistente,
+  type DadosEventoEnvioAns,
+  type DadosGuiaMonitoramento,
+  type DadosItemEnvioAns,
+  type DadosItemSip,
+  type DadosObrigacao,
+  type FiltroEnviosPorta,
+  LIMITE_PAGINA_ENVIOS,
+  LIMITE_PAGINA_SIB,
+  type SituacaoEnvioPorta,
+  CAMPOS_SIB,
 } from './dados-portas.js';
 import type { ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
 import type { PortaCobrancaOperadora } from './cobranca-porta.js';
@@ -32,7 +47,6 @@ export const MOTIVOS_SIB_MEMORIA = [
   { codigo: 11, nome: 'Reativação', grupo: 4 },
   { codigo: 12, nome: 'Reativação por renegociação do contrato', grupo: 4 },
 ] as const;
-
 
 /** Valores da TPS por beneficiário (Lei 9.961/2000, art. 20, I, e a atualização de 2015). */
 export const VALORES_TPS_MEMORIA = [

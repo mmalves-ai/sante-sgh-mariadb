@@ -107,10 +107,10 @@ describe.skipIf(SEM_BANCO)('linha de base de carga sobre o banco próprio (clien
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-02-10-carga' }, async (e: Escritor) => {
         const agora = new Date();
         // Pessoa e paciente FICTÍCIOS (o nome é a marca do teste); só as colunas obrigatórias.
-        ids.pessoa = await e.inserir(
-          "INSERT INTO pessoa_fisica (nome, criado_em, versao) VALUES (?, ?, 1)",
-          [`Pessoa ${marca}`, agora],
-        );
+        ids.pessoa = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em, versao) VALUES (?, ?, 1)', [
+          `Pessoa ${marca}`,
+          agora,
+        ]);
         ids.paciente = await e.inserir(
           "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em, versao) VALUES (?, ?, 'ativo', ?, 1)",
           [ids.pessoa, 900_000_000 + Math.floor(Math.random() * 99_999_999), agora],

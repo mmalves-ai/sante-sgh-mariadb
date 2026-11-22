@@ -9,7 +9,14 @@ import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaEstouroPropria } from './classificacao-estouro-propria.js';
 import { estourosPendentes } from './classificacao-estouro.service.js';
-import { CLIENTE, escrever, garantirCliente, garantirEstabelecimento, inserirSintetico, SEM_BANCO } from './importadores/integracao.spec-util.js';
+import {
+  CLIENTE,
+  escrever,
+  garantirCliente,
+  garantirEstabelecimento,
+  inserirSintetico,
+  SEM_BANCO,
+} from './importadores/integracao.spec-util.js';
 import type { AlvoEstabelecimento } from './servico-worker.js';
 
 describe.skipIf(SEM_BANCO)('aviso de estouro sobre o banco próprio (f22_o5)', () => {
@@ -32,8 +39,14 @@ describe.skipIf(SEM_BANCO)('aviso de estouro sobre o banco próprio (f22_o5)', (
           [x.id],
         );
         await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [x.id]);
-        await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [x.id, CHAVE_LIBERACAO_CLASSIFICACAO]);
-        await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [x.id, CHAVE_LIBERACAO_CLASSIFICACAO]);
+        await e.executar('DELETE FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ?', [
+          x.id,
+          CHAVE_LIBERACAO_CLASSIFICACAO,
+        ]);
+        await e.executar('DELETE FROM recurso_prerequisito WHERE estabelecimento_id = ? AND recurso = ?', [
+          x.id,
+          CHAVE_LIBERACAO_CLASSIFICACAO,
+        ]);
       }
       await e.executar("DELETE FROM nivel_prioridade WHERE codigo = 'F515AMARELO'");
     });
@@ -106,7 +119,9 @@ describe.skipIf(SEM_BANCO)('aviso de estouro sobre o banco próprio (f22_o5)', (
         ligada: 1,
         criado_em: agora,
       });
-      for (const tipo of new Set((recursoDesligado(CHAVE_LIBERACAO_CLASSIFICACAO)?.prerequisitos ?? []).map((p) => p.tipo)))
+      for (const tipo of new Set(
+        (recursoDesligado(CHAVE_LIBERACAO_CLASSIFICACAO)?.prerequisitos ?? []).map((p) => p.tipo),
+      ))
         await inserirSintetico(e, 'recurso_prerequisito', {
           estabelecimento_id: a,
           recurso: CHAVE_LIBERACAO_CLASSIFICACAO,
@@ -139,7 +154,7 @@ describe.skipIf(SEM_BANCO)('aviso de estouro sobre o banco próprio (f22_o5)', (
         cor: 'amarelo',
       },
     ]);
-    expect((await porta.ligada(outro, new Date())) ).toBe(false);
+    expect(await porta.ligada(outro, new Date())).toBe(false);
   });
 
   it('dois consumidores, o mesmo aviso: um grava (versão 1 e trilha), o outro desiste; o ciclo seguinte não repete', async () => {
@@ -151,11 +166,16 @@ describe.skipIf(SEM_BANCO)('aviso de estouro sobre o banco próprio (f22_o5)', (
     ]);
     expect(rs.filter(Boolean)).toHaveLength(1);
     const linha = await escrever(nucleo, (e) =>
-      e.uma('SELECT versao, classificacao_risco_id FROM aviso_estouro_classificacao WHERE chave = ?', [p!.chave]),
+      e.uma('SELECT versao, classificacao_risco_id FROM aviso_estouro_classificacao WHERE chave = ?', [
+        p!.chave,
+      ]),
     );
     expect(Number(linha!['versao'])).toBe(1);
     const t = await escrever(nucleo, (e) =>
-      e.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'classificacao_risco' AND entidade_id = ?", [ids.classificacao]),
+      e.uma(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'classificacao_risco' AND entidade_id = ?",
+        [ids.classificacao],
+      ),
     );
     expect(Number(t!['n'])).toBe(1);
     expect((await estourosPendentes(porta, est, new Date('2026-10-24T10:00:00.000Z'))).pendentes).toEqual([]);

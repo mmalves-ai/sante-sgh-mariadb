@@ -58,10 +58,17 @@ describe.skipIf(SEM_BANCO)('escopo de conta bancária (MariaDB, cliente f22_o2)'
     });
     const n = () =>
       m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conta-02-07' }, async (l) =>
-        Number((await l.uma('SELECT COUNT(*) AS n FROM movimento_bancario WHERE estabelecimento_id = ?', [m.est]))?.['n']),
+        Number(
+          (
+            await l.uma('SELECT COUNT(*) AS n FROM movimento_bancario WHERE estabelecimento_id = ?', [m.est])
+          )?.['n'],
+        ),
       );
     const exec = (conta: number) =>
-      porta.executar(c, 'financeiro.lancarMovimento', movimento(conta), { ...c, chaveIdempotencia: `t0207-${randomUUID()}` });
+      porta.executar(c, 'financeiro.lancarMovimento', movimento(conta), {
+        ...c,
+        chaveIdempotencia: `t0207-${randomUUID()}`,
+      });
     const n0 = await n();
     // A conta B está no escopo de consulta, mas sem pode_movimentar: o movimento é recusado.
     expect(await codigoDaGravacao(exec(m.contaB))).toBe('fora-do-escopo');
@@ -69,6 +76,8 @@ describe.skipIf(SEM_BANCO)('escopo de conta bancária (MariaDB, cliente f22_o2)'
     expect(await codigoDaGravacao(exec(m.contaOutroEst))).toBe('fora-do-escopo');
     expect(await codigoDaGravacao(exec(m.contaA))).toBe('gravou');
     expect(await n()).toBe(n0 + 1);
-    console.info(`[02-07] escopo de conta: ${todas.length} conta(s) do estabelecimento; 2 no escopo de consulta e 1 no de movimentação do restrito`);
+    console.info(
+      `[02-07] escopo de conta: ${todas.length} conta(s) do estabelecimento; 2 no escopo de consulta e 1 no de movimentação do restrito`,
+    );
   });
 });

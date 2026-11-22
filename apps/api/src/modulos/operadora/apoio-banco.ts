@@ -78,7 +78,9 @@ export const dominioAusente = (dominio: string, campo: string): ErroOperacao =>
   });
 
 /** Restrição do banco → recusa de negócio pelo nome da restrição (nunca o valor). */
-export type MapaRestricoes = Readonly<Record<string, readonly [codigo: string, detalhe: string, campo: string]>>;
+export type MapaRestricoes = Readonly<
+  Record<string, readonly [codigo: string, detalhe: string, campo: string]>
+>;
 
 export function traduzirRestricao(e: unknown, mapa: MapaRestricoes): unknown {
   const r = restricaoViolada(e);
@@ -117,4 +119,7 @@ export function contextoDireto(
 
 /** Sem o estabelecimento da sessão no banco do cliente: a gravação é recusada (falha fechada). */
 export const semEstabelecimento = (): ErroOperacao =>
-  recusa('estabelecimento-desconhecido', 'O estabelecimento da sessão não está cadastrado no banco do cliente.');
+  recusa(
+    'estabelecimento-desconhecido',
+    'O estabelecimento da sessão não está cadastrado no banco do cliente.',
+  );

@@ -86,7 +86,10 @@ export function inexistente(o: string): ErroOperacao {
 
 /** A versão relida da linha (trava otimista): diferente da vista na tela, 409 conflito-versao pelo alterar do núcleo. */
 export async function versaoDe(tx: TxOperacao, tabela: string, id: number, o: string): Promise<Linha> {
-  const [l] = await tx.consultarParaAtualizar(`SELECT * FROM ${tabela} WHERE id = ? AND excluido_em IS NULL`, [id]);
+  const [l] = await tx.consultarParaAtualizar(
+    `SELECT * FROM ${tabela} WHERE id = ? AND excluido_em IS NULL`,
+    [id],
+  );
   if (!l) throw inexistente(o);
   return l;
 }
@@ -103,7 +106,10 @@ const MODALIDADE: Readonly<Record<string, string>> = {
 };
 
 /** As operadoras que atuam no estabelecimento da sessão (vínculo vigente), com a pessoa jurídica. */
-export async function operadorasDoEstabelecimento(l: Leitor, estabelecimento: number | null): Promise<DadosOperadora[]> {
+export async function operadorasDoEstabelecimento(
+  l: Leitor,
+  estabelecimento: number | null,
+): Promise<DadosOperadora[]> {
   const linhas = await l.consultar(
     `SELECT o.id, o.versao, o.registro_ans, o.modalidade, o.ativo, COALESCE(o.alterado_em, o.criado_em) AS alterado_em,
             pj.cnpj, pj.razao_social, pj.nome_fantasia
@@ -131,7 +137,11 @@ export async function operadorasDoEstabelecimento(l: Leitor, estabelecimento: nu
 }
 
 /** A operadora atua no estabelecimento da sessão? (toda gravação confere antes; recusa 404, sem revelar outra.) */
-export async function exigirOperadora(l: Leitor, estabelecimento: number | null, operadora: number): Promise<void> {
+export async function exigirOperadora(
+  l: Leitor,
+  estabelecimento: number | null,
+  operadora: number,
+): Promise<void> {
   const r = await l.uma(
     `SELECT 1 AS ok FROM operadora_saude_estabelecimento
       WHERE operadora_saude_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
@@ -192,7 +202,12 @@ export abstract class BasePortaOperadoraPropria<G> {
     fn: (g: G) => Promise<T>,
   ): Promise<T> {
     if (!c.chaveIdempotencia)
-      throw new ErroOperacao(400, 'entrada-invalida', 'Pedido incompleto', 'Falta a Idempotency-Key do pedido de gravação.');
+      throw new ErroOperacao(
+        400,
+        'entrada-invalida',
+        'Pedido incompleto',
+        'Falta a Idempotency-Key do pedido de gravação.',
+      );
     const linha = (r: T) => (typeof trilha === 'function' ? trilha(r) : trilha);
     let resultado: T | undefined;
     const op = definirOperacao({
@@ -213,7 +228,11 @@ export abstract class BasePortaOperadoraPropria<G> {
         return [
           {
             tipo: `${this.prefixo}.gravacao`,
-            carga: { entidade: l.entidade, id: l.entidadeId, evento: typeof d['evento'] === 'string' ? d['evento'] : null },
+            carga: {
+              entidade: l.entidade,
+              id: l.entidadeId,
+              evento: typeof d['evento'] === 'string' ? d['evento'] : null,
+            },
           },
         ];
       },

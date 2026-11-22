@@ -288,7 +288,9 @@ export class ComunicacaoController implements OnModuleDestroy {
     await this.liberacao.exigir(s, CHAVES_INICIO.mensagens);
     return semPacienteSemAcesso(
       s,
-      await this.servico.abrir(s.porta, this.autor(s, 'mensagem-lida'), idDaRota(id), tipoDaRota(tipo)).catch(traduzir),
+      await this.servico
+        .abrir(s.porta, this.autor(s, 'mensagem-lida'), idDaRota(id), tipoDaRota(tipo))
+        .catch(traduzir),
     );
   }
 
@@ -323,7 +325,9 @@ export class ComunicacaoController implements OnModuleDestroy {
     await this.liberacao.exigir(s, CHAVES_INICIO.mensagens);
     return semPacienteSemAcesso(
       s,
-      await this.servico.ciencia(s.porta, this.autor(s, 'ciencia'), idDaRota(id), tipoDaRota(tipo)).catch(traduzir),
+      await this.servico
+        .ciencia(s.porta, this.autor(s, 'ciencia'), idDaRota(id), tipoDaRota(tipo))
+        .catch(traduzir),
     );
   }
 

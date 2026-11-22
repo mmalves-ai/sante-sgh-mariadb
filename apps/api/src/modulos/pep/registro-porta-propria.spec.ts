@@ -2,7 +2,12 @@
 // filtra o estabelecimento da sessão e a exclusão lógica, o SQL é parametrizado e o mapeamento não cria sentinela.
 import type { Leitor, Linha } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { type NucleoLeituraPep, PortaRegistroPropria, dataHora, fusoValido } from './registro-porta-propria.js';
+import {
+  type NucleoLeituraPep,
+  PortaRegistroPropria,
+  dataHora,
+  fusoValido,
+} from './registro-porta-propria.js';
 import type { PortaRegistro } from './registro-porta.js';
 import { ServicoRegistro, situacaoAdmin } from './registro-servico.js';
 import { type AtendimentoLido, type ModeloDoRegistro, atendimentoEmCurso } from './tipos-pep.js';
@@ -35,7 +40,14 @@ function duble(respostas: (sql: string) => Linha[]) {
   return { nucleo, chamadas, contextos };
 }
 
-const C = { rede: 'rede-a', hospital: 'h1', cliente: 'c', estabelecimento: 7, usuario: null, correlacao: 't' };
+const C = {
+  rede: 'rede-a',
+  hospital: 'h1',
+  cliente: 'c',
+  estabelecimento: 7,
+  usuario: null,
+  correlacao: 't',
+};
 
 describe('PortaRegistroPropria (dublê)', () => {
   it('usa o cliente da sessão (ou o da configuração) e resolve o estabelecimento pelo código, sem excluídos', async () => {
@@ -63,7 +75,13 @@ describe('PortaRegistroPropria (dublê)', () => {
               entrada_em: new Date('2026-11-01T12:00:00Z'),
             },
             // Pronto atendimento aberto há mais de 2 dias: continua em curso (sem janela de dias).
-            { id: 6, numero: 'PA-9', tipo_base: 'pronto_atendimento', situacao: 'em_observacao', entrada_em: null },
+            {
+              id: 6,
+              numero: 'PA-9',
+              tipo_base: 'pronto_atendimento',
+              situacao: 'em_observacao',
+              entrada_em: null,
+            },
             // Ambulatório encerrado no mesmo dia: fechado.
             {
               id: 7,
@@ -109,9 +127,13 @@ describe('PortaRegistroPropria (dublê)', () => {
 
   it('em curso: só situação em curso sem saída nem alta', () => {
     expect(atendimentoEmCurso({ situacao: 'aberto', altaMedica: null, saida: null })).toBe(true);
-    expect(atendimentoEmCurso({ situacao: 'em_atendimento', altaMedica: '2026-11-20T10:00:00', saida: null })).toBe(false);
+    expect(
+      atendimentoEmCurso({ situacao: 'em_atendimento', altaMedica: '2026-11-20T10:00:00', saida: null }),
+    ).toBe(false);
     expect(atendimentoEmCurso({ situacao: 'cancelado', altaMedica: null, saida: null })).toBe(false);
-    expect(atendimentoEmCurso({ situacao: 'encerrado', altaMedica: null, saida: '2026-11-20T10:00:00' })).toBe(false);
+    expect(
+      atendimentoEmCurso({ situacao: 'encerrado', altaMedica: null, saida: '2026-11-20T10:00:00' }),
+    ).toBe(false);
   });
 
   it('modelos: especialidades da lista agregada e uso recente do estabelecimento', async () => {
@@ -119,9 +141,36 @@ describe('PortaRegistroPropria (dublê)', () => {
       sql.includes('FROM estabelecimento')
         ? [{ id: 3 }]
         : [
-            { id: 1, codigo: 'EVO', titulo: 'Evolução', situacao: 'publicado', tipo_id: 2, tipo_nome: 'Evolução', especialidades: '4,9', uso: 5 },
-            { id: 2, codigo: 'NOVO', titulo: 'Novo', situacao: 'publicado', tipo_id: 2, tipo_nome: 'Evolução', especialidades: null, uso: 0 },
-            { id: 3, codigo: 'VELHO', titulo: 'Velho', situacao: 'aposentado', tipo_id: 2, tipo_nome: 'Evolução', especialidades: null, uso: 9 },
+            {
+              id: 1,
+              codigo: 'EVO',
+              titulo: 'Evolução',
+              situacao: 'publicado',
+              tipo_id: 2,
+              tipo_nome: 'Evolução',
+              especialidades: '4,9',
+              uso: 5,
+            },
+            {
+              id: 2,
+              codigo: 'NOVO',
+              titulo: 'Novo',
+              situacao: 'publicado',
+              tipo_id: 2,
+              tipo_nome: 'Evolução',
+              especialidades: null,
+              uso: 0,
+            },
+            {
+              id: 3,
+              codigo: 'VELHO',
+              titulo: 'Velho',
+              situacao: 'aposentado',
+              tipo_id: 2,
+              tipo_nome: 'Evolução',
+              especialidades: null,
+              uso: 9,
+            },
           ],
     );
     const [mod, novo, velho] = await new PortaRegistroPropria(d.nucleo, 'c').modelos(C);
@@ -170,14 +219,46 @@ describe('PortaRegistroPropria (dublê)', () => {
       usoRecente: 0,
     };
     expect(situacaoAdmin(base, [], 0).situacao).not.toBe('descontinuado');
-    expect(situacaoAdmin({ ...base, aposentado: true, usoRecente: 40 }, [], 0).situacao).toBe('descontinuado');
+    expect(situacaoAdmin({ ...base, aposentado: true, usoRecente: 40 }, [], 0).situacao).toBe(
+      'descontinuado',
+    );
   });
 
   it('serviço: "aberto" vem da porta (sem janela de 2 dias) e o tipo vai ao contrato da tela', async () => {
     const lidos: AtendimentoLido[] = [
-      { id: 1, numero: 1, tipo: 'ambulatorio', aberto: false, entrada: '2026-11-20T08:00:00', unidade: null, leito: null, altaMedica: null, saida: '2026-11-20T09:00:00' },
-      { id: 2, numero: 2, tipo: 'pronto_atendimento', aberto: true, entrada: '2026-11-01T08:00:00', unidade: null, leito: null, altaMedica: null, saida: null },
-      { id: 3, numero: 3, tipo: 'internacao', aberto: true, entrada: '2026-10-01T08:00:00', unidade: null, leito: '1A', altaMedica: null, saida: null },
+      {
+        id: 1,
+        numero: 1,
+        tipo: 'ambulatorio',
+        aberto: false,
+        entrada: '2026-11-20T08:00:00',
+        unidade: null,
+        leito: null,
+        altaMedica: null,
+        saida: '2026-11-20T09:00:00',
+      },
+      {
+        id: 2,
+        numero: 2,
+        tipo: 'pronto_atendimento',
+        aberto: true,
+        entrada: '2026-11-01T08:00:00',
+        unidade: null,
+        leito: null,
+        altaMedica: null,
+        saida: null,
+      },
+      {
+        id: 3,
+        numero: 3,
+        tipo: 'internacao',
+        aberto: true,
+        entrada: '2026-10-01T08:00:00',
+        unidade: null,
+        leito: '1A',
+        altaMedica: null,
+        saida: null,
+      },
     ];
     const porta = { destino: 'memoria', atendimentos: async () => lidos } as unknown as PortaRegistro;
     const r = await new ServicoRegistro(porta).atendimentos(C, 1);

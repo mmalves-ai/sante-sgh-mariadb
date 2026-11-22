@@ -201,11 +201,13 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
   }
 
   async podeGravar(): Promise<LiberacaoGravacao> {
-    return { pode: true, codigo: null, motivo: null } ;
+    return { pode: true, codigo: null, motivo: null };
   }
 
   async executar(): Promise<never> {
-    throw new Error('As especialidades gravam pela gravação direta da porta (com a trilha na mesma transação).');
+    throw new Error(
+      'As especialidades gravam pela gravação direta da porta (com a trilha na mesma transação).',
+    );
   }
 
   async gravarSgh<T>(
@@ -337,7 +339,9 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
             'A data prevista do ciclo mudou (outra pessoa o ajustou): abra de novo e escolha a prescrição da data nova.',
           );
         if (c0.prescricoes.includes(x.prescricao))
-          throw new Error('violation of PRIMARY or UNIQUE KEY constraint "uq_ciclo_quimioterapia_prescricao_par"');
+          throw new Error(
+            'violation of PRIMARY or UNIQUE KEY constraint "uq_ciclo_quimioterapia_prescricao_par"',
+          );
         this.ciclosGravados[i] = {
           ...c0,
           prescricoes: [...c0.prescricoes, x.prescricao].sort((a, b) => a - b),
@@ -470,9 +474,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           )
         )
           throw recusa('versao-ja-revogada', 'A versão do protocolo já foi revogada.');
-        const daVersao = this.ciclosGravados.filter(
-          (c0) => c0.estab === h && c0.protocolo === x.protocolo,
-        );
+        const daVersao = this.ciclosGravados.filter((c0) => c0.estab === h && c0.protocolo === x.protocolo);
         const emAndamento = daVersao.filter((c0) => c0.andamento !== 'cancelado').length;
         if (emAndamento > x.emAndamentoCiente)
           throw recusa(
@@ -507,8 +509,7 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
       },
       ajustarCiclo: async (x) => {
         const i = this.ciclosGravados.findIndex(
-          (c0) =>
-            c0.estab === h && c0.id === x.id && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
+          (c0) => c0.estab === h && c0.id === x.id && c0.situacao === 'prescrito' && c0.andamento === 'ativo',
         );
         if (i < 0)
           throw recusa(
@@ -607,7 +608,10 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
           (o) => o.estab === h && o.id === x.id && o.etiquetaEm === null,
         );
         if (i >= 0 && this.ordensGravadas[i]!.canceladaEm !== null)
-          throw recusa('ordem-cancelada', 'A ordem foi cancelada: não se emite etiqueta de fórmula cancelada.');
+          throw recusa(
+            'ordem-cancelada',
+            'A ordem foi cancelada: não se emite etiqueta de fórmula cancelada.',
+          );
         if (i < 0) return 0;
         this.ordensGravadas[i] = { ...this.ordensGravadas[i]!, etiquetaEm: em };
         return 1;

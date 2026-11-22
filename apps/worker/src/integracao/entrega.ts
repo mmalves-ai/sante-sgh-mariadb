@@ -60,7 +60,12 @@ export async function cicloEntrega(
     readonly agora: () => Date;
     readonly tempoPorParceiroMs: number;
     /** Guarda o conteúdo no armazém de objetos pelo estabelecimento, o parceiro e o resumo. */
-    readonly guardar?: (hospital: string, parceiro: string, resumo: string, conteudo: string) => Promise<unknown>;
+    readonly guardar?: (
+      hospital: string,
+      parceiro: string,
+      resumo: string,
+      conteudo: string,
+    ) => Promise<unknown>;
   },
 ): Promise<ResultadoEntrega> {
   const [fila, parceiros] = await acesso.ler(
@@ -137,11 +142,17 @@ export async function cicloEntrega(
             const d = depoisDaFalha(e.tentativas, parceiro.limiteTentativas, opcoes.agora());
             const conteudo = erro instanceof ErroEntrega ? erro.conteudo : null;
             const texto =
-              erro instanceof Error ? `${erro.name === 'ErroEntrega' ? '' : `${erro.name}: `}${erro.message}` : 'falha';
+              erro instanceof Error
+                ? `${erro.name === 'ErroEntrega' ? '' : `${erro.name}: `}${erro.message}`
+                : 'falha';
             await acesso.gravar(
               hospital,
               (tx) =>
-                marcarFalhaEnvio(tx, e.id, reserva, { ...d, resposta: texto, hash: conteudo ? resumo(conteudo) : null }),
+                marcarFalhaEnvio(tx, e.id, reserva, {
+                  ...d,
+                  resposta: texto,
+                  hash: conteudo ? resumo(conteudo) : null,
+                }),
               { operacao: 'integracao.entrega-falha' },
             );
             falhas++;

@@ -72,7 +72,13 @@ export function interpretarValorApoio(e: {
     maximo = null;
   }
   const critica: FaixaCritica | null = e.regra
-    ? { elemento: e.elemento, abaixoDe: e.regra.abaixoDe, acimaDe: e.regra.acimaDe, prazoMinutos: e.regra.prazoMinutos, ativo: true }
+    ? {
+        elemento: e.elemento,
+        abaixoDe: e.regra.abaixoDe,
+        acimaDe: e.regra.acimaDe,
+        prazoMinutos: e.regra.prazoMinutos,
+        ativo: true,
+      }
     : f && (f.criticoMinimo !== null || f.criticoMaximo !== null)
       ? {
           elemento: e.elemento,
@@ -87,7 +93,8 @@ export function interpretarValorApoio(e: {
   let interpretacao: InterpretacaoValor | null = null;
   if (e.valor !== null) {
     if (critico && critica)
-      interpretacao = critica.abaixoDe !== null && e.valor < critica.abaixoDe ? 'critico_baixo' : 'critico_alto';
+      interpretacao =
+        critica.abaixoDe !== null && e.valor < critica.abaixoDe ? 'critico_baixo' : 'critico_alto';
     else if (fora) interpretacao = fora === 'abaixo' ? 'baixo' : 'alto';
     else if (minimo !== null || maximo !== null) interpretacao = 'normal';
   }

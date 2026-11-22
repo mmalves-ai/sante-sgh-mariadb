@@ -45,7 +45,14 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
   });
   const lerCarga = (id: number) =>
     escrever(nucleo, (e) =>
-      e.uma<{ situacao: string; lotes_publicados: unknown; versao: unknown; publicada_em: unknown; motivo: unknown; encerrada_em: unknown }>(
+      e.uma<{
+        situacao: string;
+        lotes_publicados: unknown;
+        versao: unknown;
+        publicada_em: unknown;
+        motivo: unknown;
+        encerrada_em: unknown;
+      }>(
         'SELECT situacao, lotes_publicados, versao, publicada_em, motivo, encerrada_em FROM carga_catalogo WHERE id = ?',
         [id],
       ),
@@ -60,13 +67,17 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
   const limpar = async () =>
     escrever(nucleo, async (e) => {
       await limparCargas(e, [est, est2].filter(Boolean));
-      await e.executar(`DELETE FROM ocupacao_cbo WHERE codigo_cbo IN (${CBO.map(() => '?').join(', ')})`, CBO);
+      await e.executar(
+        `DELETE FROM ocupacao_cbo WHERE codigo_cbo IN (${CBO.map(() => '?').join(', ')})`,
+        CBO,
+      );
       await e.executar('DELETE FROM logradouro_cep WHERE codigo_cep = ?', [CEP]);
       await e.executar('DELETE FROM municipio_ibge WHERE codigo_ibge IN (?, ?)', MUN);
       await e.executar('DELETE FROM procedimento_sigtap WHERE codigo_sigtap = ?', [PROC]);
       await e.executar('DELETE FROM unidade_federativa WHERE sigla = ?', [UF]);
     });
-  const ler = (sql: string, params: unknown[]) => escrever(nucleo, (e) => e.uma<Record<string, unknown>>(sql, params));
+  const ler = (sql: string, params: unknown[]) =>
+    escrever(nucleo, (e) => e.uma<Record<string, unknown>>(sql, params));
   let ufId = 0;
 
   beforeAll(async () => {
@@ -81,8 +92,18 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
     await escrever(nucleo, async (e) => {
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
-        ufId = await inserirSintetico(e, 'unidade_federativa', { codigo_ibge: '98', sigla: UF, descricao: 'UF SINTETICA', criado_em: new Date() });
-        await inserirSintetico(e, 'municipio_ibge', { codigo_ibge: MUN[0], nome: 'CIDADE SINTETICA', unidade_federativa_id: ufId, criado_em: new Date() });
+        ufId = await inserirSintetico(e, 'unidade_federativa', {
+          codigo_ibge: '98',
+          sigla: UF,
+          descricao: 'UF SINTETICA',
+          criado_em: new Date(),
+        });
+        await inserirSintetico(e, 'municipio_ibge', {
+          codigo_ibge: MUN[0],
+          nome: 'CIDADE SINTETICA',
+          unidade_federativa_id: ufId,
+          criado_em: new Date(),
+        });
         await inserirSintetico(e, 'procedimento_sigtap', {
           codigo_sigtap: PROC,
           descricao: 'PROCEDIMENTO SINTETICO',
@@ -111,22 +132,48 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         catalogo: 'cbo',
         edicao: '2026',
         linhas: [
-          { entidade: 'cbo', chave: 'codigo=999513', comparacao: 'novo', depois: { codigo: '999513', nome: 'OCUPACAO SINTETICA A' }, lote: 1 },
-          { entidade: 'cbo', chave: 'codigo=999514', comparacao: 'novo', depois: { codigo: '999514', nome: 'OCUPACAO SINTETICA B' }, lote: 2 },
+          {
+            entidade: 'cbo',
+            chave: 'codigo=999513',
+            comparacao: 'novo',
+            depois: { codigo: '999513', nome: 'OCUPACAO SINTETICA A' },
+            lote: 1,
+          },
+          {
+            entidade: 'cbo',
+            chave: 'codigo=999514',
+            comparacao: 'novo',
+            depois: { codigo: '999514', nome: 'OCUPACAO SINTETICA B' },
+            lote: 2,
+          },
         ],
       }),
     );
     // Fora da janela, nada.
     const d = deps();
     const [c] = await d.porta.cargasAPublicar();
-    expect(c).toMatchObject({ id, situacao: 'aprovada', aprovadorId: aprovador, lotes: { total: 2, publicados: 0 } });
+    expect(c).toMatchObject({
+      id,
+      situacao: 'aprovada',
+      aprovadorId: aprovador,
+      lotes: { total: 2, publicados: 0 },
+    });
     expect(await publicarCarga(deps(H, 1, 12 * 60), c!)).toMatchObject({ situacao: 'aguardando-janela' });
     expect(await lerCbo('999513')).toBeNull();
     // Primeiro lote.
     expect(await publicarCarga(d, c!)).toMatchObject({ situacao: 'publicando', lotes: 1 });
-    expect(await lerCbo('999513')).toMatchObject({ descricao: 'OCUPACAO SINTETICA A', versao: 1, versao_fonte: '2026' });
+    expect(await lerCbo('999513')).toMatchObject({
+      descricao: 'OCUPACAO SINTETICA A',
+      versao: 1,
+      versao_fonte: '2026',
+    });
     expect(await lerCbo('999514')).toBeNull();
-    expect(await lerCarga(id)).toMatchObject({ situacao: 'publicando', lotes_publicados: 1, versao: 2, publicada_em: null });
+    expect(await lerCarga(id)).toMatchObject({
+      situacao: 'publicando',
+      lotes_publicados: 1,
+      versao: 2,
+      publicada_em: null,
+    });
     // O ciclo seguinte retoma pelo lote 2.
     expect(await cicloPublicacao(d)).toEqual([{ carga: id, lotes: 1, situacao: 'publicada', motivo: null }]);
     expect(await lerCbo('999514')).toMatchObject({ descricao: 'OCUPACAO SINTETICA B' });
@@ -199,7 +246,13 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         aprovador,
         catalogo: 'cbo',
         linhas: [
-          { entidade: 'ocupacao', chave: 'codigo=99513', comparacao: 'novo', depois: { codigo: '99513', nome: 'X' }, lote: 1 },
+          {
+            entidade: 'ocupacao',
+            chave: 'codigo=99513',
+            comparacao: 'novo',
+            depois: { codigo: '99513', nome: 'X' },
+            lote: 1,
+          },
         ],
       }),
     );
@@ -216,18 +269,35 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         estabelecimento: est,
         aprovador,
         catalogo: 'cbo',
-        linhas: [{ entidade: 'cbo', chave: 'codigo=999514', comparacao: 'alterado', depois: { nome: 'Z' }, lote: 1 }],
+        linhas: [
+          { entidade: 'cbo', chave: 'codigo=999514', comparacao: 'alterado', depois: { nome: 'Z' }, lote: 1 },
+        ],
       }),
     );
     const outro = new PortaPublicacaoPropria(nucleo, CLIENTE, H2);
     expect((await outro.cargasAPublicar()).map((c) => c.id)).not.toContain(id);
     expect(await outro.carga(id)).toBeNull();
     const c = (await deps().porta.carga(id))!;
-    const entrada = { carga: id, lote: 1, lotes: 1, edicao: null, sha256: c.sha256, itens: [{ entidade: 'cbo', acao: 'alterar' as const, chave: { codigo: '999514' }, valores: { nome: 'Z' } }] };
-    await expect(outro.publicarLote(c, entrada)).rejects.toMatchObject({ problema: { codigo: 'carga-inexistente' } });
-    await expect(deps().porta.publicarLote({ ...c, versao: c.versao + 5 }, entrada)).rejects.toBeInstanceOf(ErroOperacao);
+    const entrada = {
+      carga: id,
+      lote: 1,
+      lotes: 1,
+      edicao: null,
+      sha256: c.sha256,
+      itens: [
+        { entidade: 'cbo', acao: 'alterar' as const, chave: { codigo: '999514' }, valores: { nome: 'Z' } },
+      ],
+    };
+    await expect(outro.publicarLote(c, entrada)).rejects.toMatchObject({
+      problema: { codigo: 'carga-inexistente' },
+    });
+    await expect(deps().porta.publicarLote({ ...c, versao: c.versao + 5 }, entrada)).rejects.toBeInstanceOf(
+      ErroOperacao,
+    );
     expect(await lerCbo('999514')).toMatchObject({ descricao: 'OCUPACAO SINTETICA B' });
-    await expect(new PortaPublicacaoPropria(nucleo, CLIENTE, 'fo513x').cargasAPublicar()).rejects.toMatchObject({
+    await expect(
+      new PortaPublicacaoPropria(nucleo, CLIENTE, 'fo513x').cargasAPublicar(),
+    ).rejects.toMatchObject({
       problema: { codigo: 'estabelecimento-desconhecido' },
     });
   });
@@ -239,18 +309,37 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         aprovador,
         catalogo: 'cep',
         linhas: [
-          { entidade: 'municipio', chave: `ibge=${MUN[1]}`, comparacao: 'novo', depois: { ibge: MUN[1]!, nome: 'NOVA SINTETICA', uf: UF }, lote: 1 },
-          { entidade: 'municipio', chave: `ibge=${MUN[0]}`, comparacao: 'alterado', antes: { nome: 'CIDADE SINTETICA', uf: UF }, depois: { nome: 'CIDADE SINTETICA 2' }, lote: 1 },
+          {
+            entidade: 'municipio',
+            chave: `ibge=${MUN[1]}`,
+            comparacao: 'novo',
+            depois: { ibge: MUN[1]!, nome: 'NOVA SINTETICA', uf: UF },
+            lote: 1,
+          },
+          {
+            entidade: 'municipio',
+            chave: `ibge=${MUN[0]}`,
+            comparacao: 'alterado',
+            antes: { nome: 'CIDADE SINTETICA', uf: UF },
+            depois: { nome: 'CIDADE SINTETICA 2' },
+            lote: 1,
+          },
         ],
       }),
     );
     const d = deps();
     expect((await publicarCarga(d, (await d.porta.carga(id))!)).situacao).toBe('publicada');
-    expect(await ler('SELECT nome, unidade_federativa_id, ativo FROM municipio_ibge WHERE codigo_ibge = ?', [MUN[1]])).toMatchObject({
+    expect(
+      await ler('SELECT nome, unidade_federativa_id, ativo FROM municipio_ibge WHERE codigo_ibge = ?', [
+        MUN[1],
+      ]),
+    ).toMatchObject({
       nome: 'NOVA SINTETICA',
       unidade_federativa_id: ufId,
     });
-    expect(await ler('SELECT nome, versao FROM municipio_ibge WHERE codigo_ibge = ?', [MUN[0]])).toMatchObject({
+    expect(
+      await ler('SELECT nome, versao FROM municipio_ibge WHERE codigo_ibge = ?', [MUN[0]]),
+    ).toMatchObject({
       nome: 'CIDADE SINTETICA 2',
       versao: 2,
     });
@@ -259,7 +348,15 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         estabelecimento: est,
         aprovador,
         catalogo: 'cep',
-        linhas: [{ entidade: 'municipio', chave: 'ibge=9905139', comparacao: 'novo', depois: { ibge: '9905139', nome: 'X', uf: 'ZX' }, lote: 1 }],
+        linhas: [
+          {
+            entidade: 'municipio',
+            chave: 'ibge=9905139',
+            comparacao: 'novo',
+            depois: { ibge: '9905139', nome: 'X', uf: 'ZX' },
+            lote: 1,
+          },
+        ],
       }),
     );
     const r = await publicarCarga(d, (await d.porta.carga(id2))!);
@@ -275,14 +372,25 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         aprovador,
         catalogo: 'cep',
         linhas: [
-          { entidade: 'cep', chave: `cep=${CEP}`, comparacao: 'novo', depois: { cep: CEP, uf: UF, cidade: 'cidade sintetica 2', logradouro: 'RUA SINTETICA' }, lote: 1 },
+          {
+            entidade: 'cep',
+            chave: `cep=${CEP}`,
+            comparacao: 'novo',
+            depois: { cep: CEP, uf: UF, cidade: 'cidade sintetica 2', logradouro: 'RUA SINTETICA' },
+            lote: 1,
+          },
         ],
       }),
     );
     const d = deps();
     expect((await publicarCarga(d, (await d.porta.carga(id))!)).situacao).toBe('publicada');
     const mun0 = Number((await ler('SELECT id FROM municipio_ibge WHERE codigo_ibge = ?', [MUN[0]]))?.['id']);
-    expect(await ler('SELECT logradouro, unidade_federativa_id, municipio_ibge_id FROM logradouro_cep WHERE codigo_cep = ?', [CEP])).toMatchObject({
+    expect(
+      await ler(
+        'SELECT logradouro, unidade_federativa_id, municipio_ibge_id FROM logradouro_cep WHERE codigo_cep = ?',
+        [CEP],
+      ),
+    ).toMatchObject({
       logradouro: 'RUA SINTETICA',
       unidade_federativa_id: ufId,
       municipio_ibge_id: mun0,
@@ -306,7 +414,11 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
     );
     expect((await publicarCarga(d, (await d.porta.carga(id2))!)).situacao).toBe('publicada');
     const mun1 = Number((await ler('SELECT id FROM municipio_ibge WHERE codigo_ibge = ?', [MUN[1]]))?.['id']);
-    expect(await ler('SELECT logradouro, municipio_ibge_id, versao FROM logradouro_cep WHERE codigo_cep = ?', [CEP])).toMatchObject({
+    expect(
+      await ler('SELECT logradouro, municipio_ibge_id, versao FROM logradouro_cep WHERE codigo_cep = ?', [
+        CEP,
+      ]),
+    ).toMatchObject({
       logradouro: 'AVENIDA SINTETICA',
       municipio_ibge_id: mun1,
       versao: 2,
@@ -321,13 +433,25 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         catalogo: 'sigtap',
         edicao: '202611',
         linhas: [
-          { entidade: 'procedimento', chave: `codigo=${PROC}`, comparacao: 'alterado', antes: { nome: 'PROCEDIMENTO SINTETICO', pontos: 1 }, depois: { nome: 'PROCEDIMENTO SINTETICO 2', pontos: 3 }, lote: 1 },
+          {
+            entidade: 'procedimento',
+            chave: `codigo=${PROC}`,
+            comparacao: 'alterado',
+            antes: { nome: 'PROCEDIMENTO SINTETICO', pontos: 1 },
+            depois: { nome: 'PROCEDIMENTO SINTETICO 2', pontos: 3 },
+            lote: 1,
+          },
         ],
       }),
     );
     const d = deps();
     expect((await publicarCarga(d, (await d.porta.carga(id))!)).situacao).toBe('publicada');
-    expect(await ler('SELECT descricao, pontos, versao_fonte, versao FROM procedimento_sigtap WHERE codigo_sigtap = ?', [PROC])).toMatchObject({
+    expect(
+      await ler(
+        'SELECT descricao, pontos, versao_fonte, versao FROM procedimento_sigtap WHERE codigo_sigtap = ?',
+        [PROC],
+      ),
+    ).toMatchObject({
       descricao: 'PROCEDIMENTO SINTETICO 2',
       pontos: 3,
       versao_fonte: '202611',
@@ -339,7 +463,15 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
         aprovador,
         catalogo: 'sigtap',
         edicao: '202611',
-        linhas: [{ entidade: 'procedimento', chave: 'codigo=9990513002', comparacao: 'novo', depois: { codigo: '9990513002', nome: 'NOVO' }, lote: 1 }],
+        linhas: [
+          {
+            entidade: 'procedimento',
+            chave: 'codigo=9990513002',
+            comparacao: 'novo',
+            depois: { codigo: '9990513002', nome: 'NOVO' },
+            lote: 1,
+          },
+        ],
       }),
     );
     const r = await publicarCarga(d, (await d.porta.carga(id2))!);

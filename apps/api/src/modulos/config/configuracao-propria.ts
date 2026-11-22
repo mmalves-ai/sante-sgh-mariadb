@@ -268,10 +268,9 @@ async function travarVigentes(
 }
 
 async function definicaoDoParametro(tx: TxOperacao, chave: string): Promise<number> {
-  const d = await tx.uma<{ id: number }>(
-    'SELECT id FROM parametro_definicao WHERE chave = ? AND ativo',
-    [chave],
-  );
+  const d = await tx.uma<{ id: number }>('SELECT id FROM parametro_definicao WHERE chave = ? AND ativo', [
+    chave,
+  ]);
   if (!d)
     throw recusa(
       'parametro-nao-carregado',
@@ -318,7 +317,10 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
    * não pode ser registrada: as chaves de liberação falhariam a cada chamada (e a tela mostraria "só consulta"). Recusa
    * com a lista das tabelas que faltam (só nomes).
    */
-  static async conferirModelo(nucleo: Pick<NucleoConfiguracao, 'lerSomente'>, cliente: string): Promise<void> {
+  static async conferirModelo(
+    nucleo: Pick<NucleoConfiguracao, 'lerSomente'>,
+    cliente: string,
+  ): Promise<void> {
     const presentes = await nucleo.lerSomente({ cliente, correlacao: 'config-modelo' }, (l) =>
       l.consultar<{ t: string }>(
         `SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()
@@ -399,21 +401,19 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
         [est],
         { teto: TETO_PARAMETROS },
       );
-      return linhas.map(
-        (r): ValorParametro => ({
-          id: String(r['id']),
-          chave: String(r['chave']),
-          nivel: String(r['nivel']) as NivelParametro,
-          alvo: alvoDoValor(r, rede),
-          valor: String(r['valor'] ?? ''),
-          vigenteDesde: iso(r['vigencia_inicio']) ?? '',
-          vigenteAte: iso(r['vigencia_fim']),
-          justificativa: txt(r['motivo']) ?? '',
-          autor: txt(r['autor']) ?? '',
-          retiradaPor: txt(r['retirada_por']),
-          retiradaMotivo: txt(r['retirada_motivo']),
-        }),
-      );
+      return linhas.map((r): ValorParametro => ({
+        id: String(r['id']),
+        chave: String(r['chave']),
+        nivel: String(r['nivel']) as NivelParametro,
+        alvo: alvoDoValor(r, rede),
+        valor: String(r['valor'] ?? ''),
+        vigenteDesde: iso(r['vigencia_inicio']) ?? '',
+        vigenteAte: iso(r['vigencia_fim']),
+        justificativa: txt(r['motivo']) ?? '',
+        autor: txt(r['autor']) ?? '',
+        retiradaPor: txt(r['retirada_por']),
+        retiradaMotivo: txt(r['retirada_motivo']),
+      }));
     });
   }
 
@@ -429,7 +429,8 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
         const escopo = await escopoDoAlvo(tx, e.nivel, e.alvo, c.estabelecimento!, hospital);
         const vigentes = await travarVigentes(tx, definicao, escopoChave(e.nivel, escopo), e.fechar, false);
         const agora = await agoraDoBanco(tx);
-        for (const v of vigentes) await tx.alterar('parametro_valor', v.id, v.versao, { vigencia_fim: agora });
+        for (const v of vigentes)
+          await tx.alterar('parametro_valor', v.id, v.versao, { vigencia_fim: agora });
         const id = await tx.incluir('parametro_valor', {
           parametro_definicao_id: definicao,
           nivel: e.nivel,
@@ -457,15 +458,20 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
       alvo: (_e, r) => ({ tabela: 'parametro_valor', id: Number(r.id) }),
       trilha: (e) => ({ motivo: e.justificativa, dados: { chave: e.chave, nivel: e.nivel } }),
     });
-    const r = await this.executor.executar(op, this.cliente, {
-      chave: d.nova.chave,
-      nivel: nivelDoModelo(d.nova.nivel),
-      alvo: d.nova.alvo,
-      fechar: [...d.fechar],
-      valor: d.nova.valor,
-      justificativa: d.nova.justificativa,
-      reautenticado: d.reautenticado === true,
-    }, ctx);
+    const r = await this.executor.executar(
+      op,
+      this.cliente,
+      {
+        chave: d.nova.chave,
+        nivel: nivelDoModelo(d.nova.nivel),
+        alvo: d.nova.alvo,
+        fechar: [...d.fechar],
+        valor: d.nova.valor,
+        justificativa: d.nova.justificativa,
+        reautenticado: d.reautenticado === true,
+      },
+      ctx,
+    );
     return { id: r.resultado.id };
   }
 
@@ -499,13 +505,18 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
       alvo: (_e, r) => ({ tabela: 'parametro_valor', id: Number(r.fechadas.split(',')[0]) || null }),
       trilha: (e) => ({ acao: 'alteracao', motivo: e.motivo, dados: { chave: e.chave, nivel: e.nivel } }),
     });
-    const r = await this.executor.executar(op, this.cliente, {
-      chave: d.chave,
-      nivel: nivelDoModelo(d.nivel),
-      alvo: d.alvo,
-      fechar: [...d.fechar],
-      motivo: d.motivo,
-    }, ctx);
+    const r = await this.executor.executar(
+      op,
+      this.cliente,
+      {
+        chave: d.chave,
+        nivel: nivelDoModelo(d.nivel),
+        alvo: d.alvo,
+        fechar: [...d.fechar],
+        motivo: d.motivo,
+      },
+      ctx,
+    );
     return { fechadas: r.resultado.fechadas.split(',').filter(Boolean) };
   }
 
@@ -603,10 +614,14 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
             r.push({ lote: '', alteradas: 0 });
             continue;
           }
-          await garantirSequencia(tx, { tipo: 'liberacao_lote', estabelecimento: est }, {
-            usuario: c.usuario,
-            agora: new Date(),
-          });
+          await garantirSequencia(
+            tx,
+            { tipo: 'liberacao_lote', estabelecimento: est },
+            {
+              usuario: c.usuario,
+              agora: new Date(),
+            },
+          );
           const numero = await tx.proximoNumero('liberacao_lote');
           const loteId = await tx.incluir('liberacao_lote', {
             estabelecimento_id: est,
@@ -646,14 +661,19 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
       }),
     });
     try {
-      const s = await this.executor.executar(op, this.cliente, {
-        pedidos: pedidos.map((p) => ({
-          tipo: p.tipo,
-          chave: p.chave,
-          justificativa: p.justificativa,
-          referenciaAutorizacao: p.referenciaAutorizacao ?? null,
-        })),
-      }, ctx);
+      const s = await this.executor.executar(
+        op,
+        this.cliente,
+        {
+          pedidos: pedidos.map((p) => ({
+            tipo: p.tipo,
+            chave: p.chave,
+            justificativa: p.justificativa,
+            referenciaAutorizacao: p.referenciaAutorizacao ?? null,
+          })),
+        },
+        ctx,
+      );
       return s.resultado.lotes.split(',').map((x) => {
         const [lote = '', alteradas = '0'] = x.split(':');
         return { lote, alteradas: Number(alteradas) };
@@ -692,12 +712,17 @@ export class FonteConfiguracaoPropria implements FonteConfiguracao {
       alvo: (_e, r) => ({ tabela: 'recurso_prerequisito', id: r.id }),
       trilha: (e) => ({ dados: { recurso: e.recurso, tipo: e.tipo, situacao: e.situacao } }),
     });
-    await this.executor.executar(op, this.cliente, {
-      recurso: p.recurso,
-      tipo: p.tipo,
-      situacao: p.situacao,
-      validade: p.validade,
-      evidencia: p.evidencia,
-    }, ctx);
+    await this.executor.executar(
+      op,
+      this.cliente,
+      {
+        recurso: p.recurso,
+        tipo: p.tipo,
+        situacao: p.situacao,
+        validade: p.validade,
+        evidencia: p.evidencia,
+      },
+      ctx,
+    );
   }
 }

@@ -83,11 +83,15 @@ export class ModuloSadt {}
 export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt = {}): Promise<DynamicModule> {
   const portas = opcoes.porta ? null : await portasDoSadt(ctx);
   const sadt = opcoes.porta ?? portas!.sadt;
-  const pacs = opcoes.pacs ?? portas?.pacs ?? (sadt.destino === 'memoria' ? new PortaPacsMemoria(sadt) : portaPacsIndisponivel());
+  const pacs =
+    opcoes.pacs ??
+    portas?.pacs ??
+    (sadt.destino === 'memoria' ? new PortaPacsMemoria(sadt) : portaPacsIndisponivel());
   const memoria = sadt.destino === 'memoria';
   const marca = ctx.env['SADT_VIGIA_CRITICOS'];
   const comVigia = memoria ? marca === 'sintetica' : marca !== 'nao' && !!ctx.nucleo;
-  const estabelecimentos = opcoes.estabelecimentos ?? (comVigia || !memoria ? await estabelecimentosAtivos(ctx) : []);
+  const estabelecimentos =
+    opcoes.estabelecimentos ?? (comVigia || !memoria ? await estabelecimentosAtivos(ctx) : []);
   const rede = ctx.configuracao.rede ?? '';
   const chavePortal =
     chaveMestra(ctx.env['PORTAL_CHAVE_MESTRA'] ?? ctx.env['PLATAFORMA_CHAVE_MESTRA']) ??
@@ -103,13 +107,14 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       return false;
     }
   })();
-  const configuracaoMemoria = memoria && !comConfiguracao
-    ? fonteConfiguracaoMemoria(ctx.trilha, {
-        chavesIniciais: chavesIniciaisSinteticas,
-        prerequisitosIniciais: prerequisitosIniciaisSinteticos,
-        parametrosIniciais: parametrosIniciaisSinteticos,
-      })
-    : null;
+  const configuracaoMemoria =
+    memoria && !comConfiguracao
+      ? fonteConfiguracaoMemoria(ctx.trilha, {
+          chavesIniciais: chavesIniciaisSinteticas,
+          prerequisitosIniciais: prerequisitosIniciaisSinteticos,
+          parametrosIniciais: parametrosIniciaisSinteticos,
+        })
+      : null;
   const configuracaoDe = (f: FonteConfiguracao | null | undefined) => configuracaoMemoria ?? f ?? null;
   return {
     module: ModuloSadt,

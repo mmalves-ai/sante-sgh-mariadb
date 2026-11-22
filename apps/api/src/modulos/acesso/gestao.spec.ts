@@ -132,7 +132,11 @@ describe('Perfis e permissões (ADR 0022)', () => {
     expect(decidir.statusCode).toBe(200);
     expect(decidir.json()).toMatchObject({ invalidado: 'estabelecimento', destino: 'memoria' });
     const depois = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: cabecalhos(n) })
+      await app.inject({
+        method: 'GET',
+        url: '/api/acesso/gestao/usuarios/SINT.MEDICO',
+        headers: cabecalhos(n),
+      })
     ).json();
     const schema = depois.permissoes.find((p: { codigo: string }) => p.codigo === 'config.schema.ler');
     expect(schema.origens).toEqual([{ tipo: 'perfil', perfil: 'administrador-sistema', via: 'grupo' }]);
@@ -150,7 +154,11 @@ describe('Perfis e permissões (ADR 0022)', () => {
       },
     });
     const recusado = (
-      await app.inject({ method: 'GET', url: '/api/acesso/gestao/usuarios/SINT.MEDICO', headers: cabecalhos(n) })
+      await app.inject({
+        method: 'GET',
+        url: '/api/acesso/gestao/usuarios/SINT.MEDICO',
+        headers: cabecalhos(n),
+      })
     ).json();
     expect(recusado.permissoes.some((p: { codigo: string }) => p.codigo === 'config.schema.ler')).toBe(false);
   });
@@ -245,7 +253,10 @@ describe('Perfis e permissões (ADR 0022)', () => {
     const ops = (
       await app.inject({ method: 'GET', url: '/api/acesso/gestao/operacoes', headers: cabecalhos(n) })
     ).json() as { operacao: string; ligada: boolean; motivo: string | null }[];
-    const ligadas = ops.filter((o) => o.ligada).map((o) => o.operacao).sort();
+    const ligadas = ops
+      .filter((o) => o.ligada)
+      .map((o) => o.operacao)
+      .sort();
     expect(ligadas).toEqual([
       'acesso.concederPapelUsuario',
       'acesso.reativarPapelUsuario',
@@ -262,10 +273,16 @@ describe('Perfis e permissões (ADR 0022)', () => {
     const g = await op('acesso.criarGrupo', { nome: 'SINT_NOVO' });
     expect(g.statusCode).toBe(409);
     expect(g.json().codigo).toBe('operacao-desligada');
-    expect((await op('acesso.concederPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 }, 'errada')).statusCode).toBe(401);
+    expect(
+      (await op('acesso.concederPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 }, 'errada')).statusCode,
+    ).toBe(401);
     const c = await op('acesso.concederPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 });
     expect(c.statusCode).toBe(200);
-    expect(c.json()).toMatchObject({ operacao: 'acesso.concederPapelUsuario', invalidado: 'usuario', destino: 'memoria' });
+    expect(c.json()).toMatchObject({
+      operacao: 'acesso.concederPapelUsuario',
+      invalidado: 'usuario',
+      destino: 'memoria',
+    });
     expect(estadoAcessoSintetico().contas.get('SINT.RECEPCAO')?.papeis.get(2)).toBe(true);
     const r = await op('acesso.revogarPapelUsuario', { login: 'SINT.RECEPCAO', papel: 2 });
     expect(r.statusCode).toBe(200);

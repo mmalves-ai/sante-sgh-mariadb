@@ -40,7 +40,13 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import { type ContextoPortaM18, type GravacaoFeita, type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
+import {
+  type ContextoPortaM18,
+  type GravacaoFeita,
+  type LiberacaoGravacao,
+  portaIndisponivel,
+  type TrilhaDaGravacao,
+} from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import {
   type ContextoEspecialidades,
@@ -95,7 +101,11 @@ const TABELAS_GRAVACAO = [
 ] as const;
 
 /** Evento do histórico do lactário (tela) ↔ evento do modelo. */
-const EVENTO_LACTARIO = { alterada: 'alterado', cancelada: 'cancelado', 'etiqueta-emitida': 'etiqueta_emitida' } as const;
+const EVENTO_LACTARIO = {
+  alterada: 'alterado',
+  cancelada: 'cancelado',
+  'etiqueta-emitida': 'etiqueta_emitida',
+} as const;
 const EVENTO_LACTARIO_LIDO: Readonly<Record<string, AlteracaoLactarioRegistrada['evento']>> = {
   alterado: 'alterada',
   cancelado: 'cancelada',
@@ -206,9 +216,10 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   }
 
   private async fuso(l: Leitor, est: number): Promise<string> {
-    const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-      est,
-    ]);
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
     return r?.fuso_horario || FUSO_PADRAO;
   }
 
@@ -219,8 +230,14 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
     return { pode: true, codigo: null, motivo: null };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async executar(_c: ContextoPortaM18, op: string, _entrada: unknown, _ctx: ContextoOperacao): Promise<GravacaoFeita> {
+  async executar(
+    _c: ContextoPortaM18,
+    op: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
+    _entrada: unknown,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
+    _ctx: ContextoOperacao,
+  ): Promise<GravacaoFeita> {
     throw new ErroOperacao(
       400,
       'operacao-desconhecida',
@@ -287,11 +304,18 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
             ORDER BY po.principal DESC, pr.id, oc.codigo_cbo LIMIT 20`,
           [usuario, est],
         )
-      ).map((r) => ({ vinculo: n(r['vinculo']), cbo: texto(r['cbo']).trim(), ativo: r['ativo'] === 1 || r['ativo'] === true })),
+      ).map((r) => ({
+        vinculo: n(r['vinculo']),
+        cbo: texto(r['cbo']).trim(),
+        ativo: r['ativo'] === 1 || r['ativo'] === true,
+      })),
     );
   }
 
-  internacoes(c: ContextoEspecialidades, termo: string): Promise<{ itens: InternacaoDaBusca[]; cortada: boolean }> {
+  internacoes(
+    c: ContextoEspecialidades,
+    termo: string,
+  ): Promise<{ itens: InternacaoDaBusca[]; cortada: boolean }> {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       let sql = `${SQL_INTERNACAO} AND i.situacao IN ${SITUACOES_ABERTAS}`;
@@ -359,10 +383,14 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
           nome: texto(e['descricao']),
         })),
         acuidades: (
-          await l.consultar('SELECT id, rotulo, tipo FROM acuidade_visual WHERE ativo ORDER BY ordem, id LIMIT 200')
+          await l.consultar(
+            'SELECT id, rotulo, tipo FROM acuidade_visual WHERE ativo ORDER BY ordem, id LIMIT 200',
+          )
         ).map((a) => ({ codigo: n(a['id']), nome: texto(a['rotulo']), tipo: textoOuNulo(a['tipo']) })),
         graduacoes: (
-          await l.consultar('SELECT id, sigla, descricao FROM graduacao_oftalmologica WHERE ativo ORDER BY sigla LIMIT 200')
+          await l.consultar(
+            'SELECT id, sigla, descricao FROM graduacao_oftalmologica WHERE ativo ORDER BY sigla LIMIT 200',
+          )
         ).map((g) => ({ codigo: n(g['id']), sigla: texto(g['sigla']), nome: texto(g['descricao']) })),
         // Os tipos de anexo do exame acompanham o exame consolidado (pendência de modelo).
         tiposArquivo: [],
@@ -456,7 +484,13 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
           ocitocina: nn(r['ocitocina_dose']),
           observacao: textoOuNulo(r['observacao']),
         };
-        return { id: n(r['id']), em, medidas, por: texto(r['login']), registradoEm: minutoCivil(r['criado_em'], fuso) };
+        return {
+          id: n(r['id']),
+          em,
+          medidas,
+          por: texto(r['login']),
+          registradoEm: minutoCivil(r['criado_em'], fuso),
+        };
       });
       return pontos.map((p) => ({
         id: p.id,
@@ -530,7 +564,10 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   }
 
   ordem(c: ContextoEspecialidades, id: number): Promise<OrdemLactarioRegistrada | null> {
-    return this.ler(c, async (l, est) => (await this.ordens(l, est, await this.fuso(l, est), 'p.id = ?', [id]))[0] ?? null);
+    return this.ler(
+      c,
+      async (l, est) => (await this.ordens(l, est, await this.fuso(l, est), 'p.id = ?', [id]))[0] ?? null,
+    );
   }
 
   private async ordens(
@@ -600,7 +637,10 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   }
 
   /** O histórico das ordens (alteração, cancelamento e etiqueta), o mais recente primeiro. */
-  alteracoesOrdens(c: ContextoEspecialidades, ids: readonly number[]): Promise<AlteracaoLactarioRegistrada[]> {
+  alteracoesOrdens(
+    c: ContextoEspecialidades,
+    ids: readonly number[],
+  ): Promise<AlteracaoLactarioRegistrada[]> {
     if (ids.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
@@ -702,7 +742,11 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
           conduta: textoOuNulo(r['conclusao']),
           itens: itens
             .filter((x) => n(x['exame_oftalmologico_id']) === id)
-            .map((x) => ({ exame: n(x['tipo_exame_oftalmologico_id']), lado: LADO_DO_OLHO[texto(x['olho'])] ?? 'ao', resultado: texto(x['resultado']) })),
+            .map((x) => ({
+              exame: n(x['tipo_exame_oftalmologico_id']),
+              lado: LADO_DO_OLHO[texto(x['olho'])] ?? 'ao',
+              resultado: texto(x['resultado']),
+            })),
           por: texto(r['login']),
           em: minutoCivil(r['realizado_em'], fuso),
         };
@@ -730,7 +774,12 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   async eventosCiclos() {
     return [];
   }
-  async ciclosDaVersao(): Promise<{ total: number; emAndamento: number; cortada: boolean; itens: CicloDependente[] }> {
+  async ciclosDaVersao(): Promise<{
+    total: number;
+    emAndamento: number;
+    cortada: boolean;
+    itens: CicloDependente[];
+  }> {
     return { total: 0, emAndamento: 0, cortada: false, itens: [] };
   }
 }
@@ -767,7 +816,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
  * o vínculo de quem registra) e numera os registros. A internação tem de estar aberta, no estabelecimento da sessão e
  * ser do paciente informado.
  */
-async function registrarPontoPartograma(tx: TxOperacao, est: number, x: NovoPontoPartograma): Promise<number> {
+async function registrarPontoPartograma(
+  tx: TxOperacao,
+  est: number,
+  x: NovoPontoPartograma,
+): Promise<number> {
   const atendimento = await internacaoAberta(tx, est, x, 'o partograma não recebe registros');
   const instante = deMinutoCivil(x.em, await fusoTx(tx, est));
   const [aberto] = await tx.consultarParaAtualizar(
@@ -822,7 +875,13 @@ async function internacaoAberta(
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [x.internacao, est],
   );
-  if (!i) throw new ErroOperacao(404, 'registro-inexistente', 'Internação não encontrada', 'A internação não existe neste estabelecimento.');
+  if (!i)
+    throw new ErroOperacao(
+      404,
+      'registro-inexistente',
+      'Internação não encontrada',
+      'A internação não existe neste estabelecimento.',
+    );
   if (n(i['paciente_id']) !== x.paciente)
     throw recusa('paciente-divergente', 'A internação é de outro paciente: recarregue a tela.');
   if (!['ativa', 'alta_medica'].includes(texto(i['situacao'])))
@@ -839,7 +898,11 @@ const LADO_DO_OLHO: Readonly<Record<string, LadoExame>> = { direito: 'od', esque
  * a conduta na conclusão e os alertas calculados), as medidas por olho em exame_oftalmologico_valor (acuidade sem e
  * com correção, pressão intraocular com o método e o grau da gonioscopia) e um item por tipo de exame e lado.
  */
-async function registrarExameOftalmologico(tx: TxOperacao, est: number, x: NovoExameOftalmologico): Promise<number> {
+async function registrarExameOftalmologico(
+  tx: TxOperacao,
+  est: number,
+  x: NovoExameOftalmologico,
+): Promise<number> {
   const atendimento = await internacaoAberta(tx, est, x, 'o exame não é registrado');
   const tipos = [...new Set(x.itens.map((i) => i.exame))];
   if (tipos.length) {
@@ -847,7 +910,8 @@ async function registrarExameOftalmologico(tx: TxOperacao, est: number, x: NovoE
       `SELECT id FROM tipo_exame_oftalmologico WHERE id IN (${tipos.map(() => '?').join(', ')})`,
       tipos,
     );
-    if (achados.length !== tipos.length) throw recusa('tipo-exame-inexistente', 'Um dos tipos de exame não existe no cadastro.');
+    if (achados.length !== tipos.length)
+      throw recusa('tipo-exame-inexistente', 'Um dos tipos de exame não existe no cadastro.');
   }
   const id = await tx.incluir('exame_oftalmologico', {
     estabelecimento_id: est,
@@ -864,7 +928,10 @@ async function registrarExameOftalmologico(tx: TxOperacao, est: number, x: NovoE
     origem: 'sistema',
   });
   let seq = 0;
-  for (const [olho, m] of [['direito', x.od], ['esquerdo', x.oe]] as const) {
+  for (const [olho, m] of [
+    ['direito', x.od],
+    ['esquerdo', x.oe],
+  ] as const) {
     const medidas: [string, string, number | null, string | null, string | null][] = [
       ['acuidade_visual', 'sem_correcao', m.avSc, null, null],
       ['acuidade_visual', 'com_correcao', m.avCc, null, null],
@@ -899,7 +966,10 @@ async function registrarExameOftalmologico(tx: TxOperacao, est: number, x: NovoE
 }
 
 async function fusoTx(tx: TxOperacao, est: number): Promise<string> {
-  const f = await tx.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const f = await tx.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return f?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -950,16 +1020,21 @@ async function formulaDoCadastro(tx: TxOperacao, est: number, formula: string): 
       ORDER BY id LIMIT 1`,
     [est, formula.trim(), formula.trim()],
   );
-  if (!f) throw recusa('formula-nao-cadastrada', 'A fórmula não está no cadastro de fórmulas lácteas do estabelecimento.');
+  if (!f)
+    throw recusa(
+      'formula-nao-cadastrada',
+      'A fórmula não está no cadastro de fórmulas lácteas do estabelecimento.',
+    );
   return n(f['id']);
 }
 
 /** O colaborador ligado ao usuário da sessão (o manipulador ou o conferente do preparo). */
 async function colaboradorDoUsuario(tx: TxOperacao): Promise<number | null> {
   if (tx.contexto.usuario === null) return null;
-  const r = await tx.uma('SELECT id FROM colaborador WHERE usuario_id = ? AND ativo AND excluido_em IS NULL ORDER BY id LIMIT 1', [
-    tx.contexto.usuario,
-  ]);
+  const r = await tx.uma(
+    'SELECT id FROM colaborador WHERE usuario_id = ? AND ativo AND excluido_em IS NULL ORDER BY id LIMIT 1',
+    [tx.contexto.usuario],
+  );
   return r ? n(r['id']) : null;
 }
 
@@ -972,7 +1047,10 @@ function porcoes(c: ConteudoOrdemLactario, fuso: string): Date[] {
   return c.horarios.map((h) => {
     const em = deMinutoCivil(`${h >= hora ? dia : amanha}T${h}`, fuso);
     if (em.getTime() > validade.getTime())
-      throw recusa('porcao-fora-da-validade', `A porção das ${h} fica depois da validade do preparo: ajuste os horários.`);
+      throw recusa(
+        'porcao-fora-da-validade',
+        `A porção das ${h} fica depois da validade do preparo: ajuste os horários.`,
+      );
     return em;
   });
 }
@@ -1094,7 +1172,10 @@ async function alterarOrdemLactario(
 ): Promise<OrdemLactarioAnterior> {
   const o = await travarOrdem(tx, est, x.id);
   if (!o || o['conferido_em'] || o['cancelado_em'] || texto(o['situacao']) !== 'preparado')
-    throw recusa('ordem-conferida', 'A ordem já foi conferida ou foi cancelada: não se altera; cancele com o motivo.');
+    throw recusa(
+      'ordem-conferida',
+      'A ordem já foi conferida ou foi cancelada: não se altera; cancele com o motivo.',
+    );
   const fuso = await fusoTx(tx, est);
   const itens = await tx.consultarParaAtualizar(
     `SELECT it.id, it.versao, it.atendimento_id, it.volume_ml, it.administrar_em, f.nome AS formula
@@ -1126,7 +1207,11 @@ async function alterarOrdemLactario(
   return antes;
 }
 
-async function cancelarOrdemLactario(tx: TxOperacao, est: number, x: { id: number; motivo: string }): Promise<number> {
+async function cancelarOrdemLactario(
+  tx: TxOperacao,
+  est: number,
+  x: { id: number; motivo: string },
+): Promise<number> {
   const o = await travarOrdem(tx, est, x.id);
   if (!o || o['cancelado_em']) throw recusa('ordem-cancelada', 'A ordem já foi cancelada (ou não existe).');
   await tx.alterar('preparo_lactario', x.id, n(o['versao']), {
@@ -1138,7 +1223,8 @@ async function cancelarOrdemLactario(tx: TxOperacao, est: number, x: { id: numbe
     "SELECT id, versao FROM preparo_lactario_item WHERE preparo_lactario_id = ? AND excluido_em IS NULL AND situacao = 'preparado'",
     [x.id],
   );
-  for (const i of itens) await tx.alterar('preparo_lactario_item', n(i['id']), n(i['versao']), { situacao: 'cancelado' });
+  for (const i of itens)
+    await tx.alterar('preparo_lactario_item', n(i['id']), n(i['versao']), { situacao: 'cancelado' });
   return x.id;
 }
 
@@ -1147,14 +1233,25 @@ async function marcarEtiquetaLactario(tx: TxOperacao, est: number, id: number): 
   if (o?.['cancelado_em'])
     throw recusa('ordem-cancelada', 'A ordem foi cancelada: não se emite etiqueta de fórmula cancelada.');
   if (!o || o['etiqueta_emitida_em']) return 0;
-  await tx.alterar('preparo_lactario', id, n(o['versao']), { etiqueta_emitida_em: new Date(), etiquetas_impressas: true });
+  await tx.alterar('preparo_lactario', id, n(o['versao']), {
+    etiqueta_emitida_em: new Date(),
+    etiquetas_impressas: true,
+  });
   return 1;
 }
 
-async function registrarAlteracaoLactario(tx: TxOperacao, est: number, x: NovaAlteracaoLactario): Promise<number> {
-  const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [x.id, est]);
+async function registrarAlteracaoLactario(
+  tx: TxOperacao,
+  est: number,
+  x: NovaAlteracaoLactario,
+): Promise<number> {
+  const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [
+    x.id,
+    est,
+  ]);
   if (!o) throw recusa('ordem-inexistente', 'A ordem do lactário não existe neste estabelecimento.');
-  if (tx.contexto.usuario === null) throw recusa('sem-usuario', 'O histórico do lactário exige o usuário da sessão.');
+  if (tx.contexto.usuario === null)
+    throw recusa('sem-usuario', 'O histórico do lactário exige o usuário da sessão.');
   return tx.incluir('preparo_lactario_evento', {
     preparo_lactario_id: x.id,
     evento: EVENTO_LACTARIO[x.evento],

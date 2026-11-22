@@ -18,7 +18,9 @@ let porta: PortaAssinaturaMemoria;
 beforeAll(async () => {
   porta = new PortaAssinaturaMemoria();
   app = await criarApp(lerConfiguracao(env), null, env, {
-    registro: { assinatura: async () => ({ modulo: (ctx) => modulo(ctx, { porta, estabelecimentos: ['pc'] }) }) },
+    registro: {
+      assinatura: async () => ({ modulo: (ctx) => modulo(ctx, { porta, estabelecimentos: ['pc'] }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

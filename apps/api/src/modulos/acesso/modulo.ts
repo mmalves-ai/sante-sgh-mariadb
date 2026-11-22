@@ -74,7 +74,10 @@ export async function saneamentoDoModulo(
   return { porta: null, executor: null };
 }
 
-export async function moduloAcesso(ctx: ContextoModulo, opcoes: OpcoesModuloAcesso = {}): Promise<DynamicModule> {
+export async function moduloAcesso(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloAcesso = {},
+): Promise<DynamicModule> {
   const { porta, executor } = await saneamentoDoModulo(ctx, opcoes);
   const servico: Provider = {
     provide: SERVICO_SANEAMENTO,
@@ -139,14 +142,20 @@ export async function moduloAcesso(ctx: ContextoModulo, opcoes: OpcoesModuloAces
           ]
         : []),
     ],
-    exports: [SERVICO_SANEAMENTO, PORTA_CONTAS_BANCO, ...comunicacao.exports, ...(gestao ? [FONTE_GESTAO] : [])],
+    exports: [
+      SERVICO_SANEAMENTO,
+      PORTA_CONTAS_BANCO,
+      ...comunicacao.exports,
+      ...(gestao ? [FONTE_GESTAO] : []),
+    ],
   };
 }
 
 /** A porta das contas do banco pela regra do F2-L: própria com o núcleo, memória só em dev/ci sintético. */
 function contasBancoDoModulo(ctx: ContextoModulo): PortaContasBanco {
   const cliente = ctx.configuracao.clientePadrao;
-  if (ctx.nucleo && cliente) return new PortaContasBancoPropria(ctx.nucleo, cliente, contasSghDoAmbiente(ctx.env));
+  if (ctx.nucleo && cliente)
+    return new PortaContasBancoPropria(ctx.nucleo, cliente, contasSghDoAmbiente(ctx.env));
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaContasBancoMemoria();
   return portaContasBancoIndisponivel();
 }
@@ -156,7 +165,11 @@ function identidadeDoModulo(ctx: ContextoModulo): ServicoIdentidade | null {
   const cliente = ctx.configuracao.clientePadrao;
   const sintetica = !ctx.nucleo && fontesSinteticas(ctx.env);
   const porta: PortaIdentidade | null =
-    ctx.nucleo && cliente ? new PortaIdentidadePropria(ctx.nucleo, cliente) : sintetica ? portaIdentidadeSintetica() : null;
+    ctx.nucleo && cliente
+      ? new PortaIdentidadePropria(ctx.nucleo, cliente)
+      : sintetica
+        ? portaIdentidadeSintetica()
+        : null;
   if (!porta) return null;
   return new ServicoIdentidade({
     porta,

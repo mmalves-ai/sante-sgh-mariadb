@@ -12,7 +12,9 @@ interface Chamada {
   readonly params: readonly unknown[];
 }
 
-function duble(o: { est?: Linha | null; internacao?: Linha[]; resultado?: Linha[]; prescricao?: Linha[] } = {}) {
+function duble(
+  o: { est?: Linha | null; internacao?: Linha[]; resultado?: Linha[]; prescricao?: Linha[] } = {},
+) {
   const chamadas: Chamada[] = [];
   const contextos: unknown[] = [];
   const leitor = {
@@ -38,7 +40,14 @@ function duble(o: { est?: Linha | null; internacao?: Linha[]; resultado?: Linha[
   return { porta: new PortaWorklistPropria(nucleo, 'cliente-config'), chamadas, contextos };
 }
 
-const C = { cliente: '', estabelecimento: null, usuario: null, correlacao: 'cor-1', rede: 'rede-teste', hospital: 'aa' };
+const C = {
+  cliente: '',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'cor-1',
+  rede: 'rede-teste',
+  hospital: 'aa',
+};
 const DESDE = new Date('2026-11-20T00:00:00Z');
 
 describe('PortaWorklistPropria (dublê do núcleo)', () => {
@@ -53,7 +62,10 @@ describe('PortaWorklistPropria (dublê do núcleo)', () => {
     // Listas vazias: só a leitura do estabelecimento.
     expect(d.chamadas).toHaveLength(1);
     const d2 = duble();
-    await d2.porta.leituras({ ...C, cliente: 'outro', estabelecimento: 9 }, { login: 'm', pacientes: [], internacoes: [], desde: DESDE });
+    await d2.porta.leituras(
+      { ...C, cliente: 'outro', estabelecimento: 9 },
+      { login: 'm', pacientes: [], internacoes: [], desde: DESDE },
+    );
     expect(d2.chamadas[0]?.sql).toContain('WHERE id = ?');
     expect(d2.chamadas[0]?.params).toEqual([9]);
     expect(d2.contextos[0]).toEqual({ cliente: 'outro', correlacao: 'cor-1' });
@@ -91,10 +103,34 @@ describe('PortaWorklistPropria (dublê do núcleo)', () => {
   it('a renovar: janela da hora civil convertida para o instante; a seguinte tira da lista; fim na hora civil', async () => {
     const d = duble({
       prescricao: [
-        { id: 1, atendimento_id: 10, situacao: 'vigente', vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'), vigencia_fim_em: new Date('2026-11-21T15:00:00Z') },
-        { id: 2, atendimento_id: 20, situacao: 'vigente', vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'), vigencia_fim_em: new Date('2026-11-21T14:00:00Z') },
-        { id: 3, atendimento_id: 20, situacao: 'futura', vigencia_inicio_em: new Date('2026-11-21T14:00:00Z'), vigencia_fim_em: new Date('2026-11-22T14:00:00Z') },
-        { id: 4, atendimento_id: 30, situacao: 'suspensa', vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'), vigencia_fim_em: new Date('2026-11-21T15:00:00Z') },
+        {
+          id: 1,
+          atendimento_id: 10,
+          situacao: 'vigente',
+          vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'),
+          vigencia_fim_em: new Date('2026-11-21T15:00:00Z'),
+        },
+        {
+          id: 2,
+          atendimento_id: 20,
+          situacao: 'vigente',
+          vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'),
+          vigencia_fim_em: new Date('2026-11-21T14:00:00Z'),
+        },
+        {
+          id: 3,
+          atendimento_id: 20,
+          situacao: 'futura',
+          vigencia_inicio_em: new Date('2026-11-21T14:00:00Z'),
+          vigencia_fim_em: new Date('2026-11-22T14:00:00Z'),
+        },
+        {
+          id: 4,
+          atendimento_id: 30,
+          situacao: 'suspensa',
+          vigencia_inicio_em: new Date('2026-11-20T16:00:00Z'),
+          vigencia_fim_em: new Date('2026-11-21T15:00:00Z'),
+        },
       ],
     });
     const r = await d.porta.aRenovar(C, [10, 20, 30, 10], '2026-11-21T10:00:00', '2026-11-21T16:00:00');
@@ -102,7 +138,9 @@ describe('PortaWorklistPropria (dublê do núcleo)', () => {
     const q = d.chamadas[1]!;
     expect(q.sql).toMatch(/estabelecimento_id = \?.*excluido_em IS NULL AND tipo = 'medica'/s);
     expect(q.params).toEqual([7, 10, 20, 30, new Date('2026-11-21T13:00:00Z')]);
-    expect(await duble().porta.aRenovar(C, [0, -1], '2026-11-21T10:00:00', '2026-11-21T16:00:00')).toEqual([]);
+    expect(await duble().porta.aRenovar(C, [0, -1], '2026-11-21T10:00:00', '2026-11-21T16:00:00')).toEqual(
+      [],
+    );
   });
 
   it('recusas: estabelecimento inexistente (404) e hora fora do formato (422)', async () => {
@@ -117,8 +155,12 @@ describe('PortaWorklistPropria (dublê do núcleo)', () => {
 
 describe('regras de apoio', () => {
   it('instanteDoLocal: hora civil → instante (com e sem segundos), no fuso dado', () => {
-    expect(instanteDoLocal('2026-11-21T10:00:00', 'America/Sao_Paulo').toISOString()).toBe('2026-11-21T13:00:00.000Z');
-    expect(instanteDoLocal('2026-07-01T00:30', 'America/Manaus').toISOString()).toBe('2026-07-01T04:30:00.000Z');
+    expect(instanteDoLocal('2026-11-21T10:00:00', 'America/Sao_Paulo').toISOString()).toBe(
+      '2026-11-21T13:00:00.000Z',
+    );
+    expect(instanteDoLocal('2026-07-01T00:30', 'America/Manaus').toISOString()).toBe(
+      '2026-07-01T04:30:00.000Z',
+    );
     expect(instanteDoLocal('2026-11-21T10:00:00', 'UTC').toISOString()).toBe('2026-11-21T10:00:00.000Z');
   });
 
@@ -152,7 +194,12 @@ describe('regras de apoio', () => {
       linha(10, 7, 'vigente', ontem, z('15:00:30.500')),
       linha(11, 7, 'futura', z('15:00:30.500'), amanha), // início igual ao fim fora do minuto cheio: cobre
     ];
-    const r = await duble({ prescricao }).porta.aRenovar(C, [1, 2, 3, 4, 5, 6, 7], '2026-11-21T10:00:00', '2026-11-21T16:00:00');
+    const r = await duble({ prescricao }).porta.aRenovar(
+      C,
+      [1, 2, 3, 4, 5, 6, 7],
+      '2026-11-21T10:00:00',
+      '2026-11-21T16:00:00',
+    );
     expect(r).toEqual([{ atendimento: 1, fim: '2026-11-21T12:00:00' }]);
     // O mesmo cenário no formato do domínio (minuto inclusivo, hora civil), como a prescrição o usa.
     const d = (id: number, atendimento: number, inicio: string, fim: string) => ({

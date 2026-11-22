@@ -4,7 +4,12 @@
 // histograma SINTÉTICO fixo (sem banco); as cirurgias que pedem UTI são UMA sintética, amanhã às 8h, do paciente
 // sintético 1006 do cadastro em memória (para o atalho "Pedir o leito" da fila).
 import { DEPARA_SITUACAO_REGULACAO, EVENTOS_AUDITAVEIS } from '@sgh/contratos';
-import { type ConfiguracaoRegulacaoNir, type HistogramasPermanencia, type InternadoDoQuadro, type RegistroRegulacaoNir } from './tipos.js';
+import {
+  type ConfiguracaoRegulacaoNir,
+  type HistogramasPermanencia,
+  type InternadoDoQuadro,
+  type RegistroRegulacaoNir,
+} from './tipos.js';
 import { type LiberacaoGravacao } from '../exames/public-api.js';
 import { type PacienteFicha } from '../cadastro/tipos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';

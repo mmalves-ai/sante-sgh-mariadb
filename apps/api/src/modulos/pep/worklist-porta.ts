@@ -75,9 +75,17 @@ export class PortaWorklistMemoria implements PortaWorklist {
     for (const p of f.pacientes)
       for (const r of (await this.documentos?.resultados(c, p)) ?? [])
         if (r.liberadoEm && r.liberadoEm.slice(0, 10) >= desde)
-          resultados.push({ paciente: p, exame: r.exame, liberadoEm: r.liberadoEm.slice(0, 10), vistoPeloMedico: false });
+          resultados.push({
+            paciente: p,
+            exame: r.exame,
+            liberadoEm: r.liberadoEm.slice(0, 10),
+            vistoPeloMedico: false,
+          });
     const em2dias = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
-    return { previsoesAlta: f.internacoes.map((internacao) => ({ internacao, previsao: em2dias })), resultados };
+    return {
+      previsoesAlta: f.internacoes.map((internacao) => ({ internacao, previsao: em2dias })),
+      resultados,
+    };
   }
 }
 

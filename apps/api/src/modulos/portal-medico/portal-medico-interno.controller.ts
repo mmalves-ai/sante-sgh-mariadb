@@ -58,7 +58,12 @@ function chaveDoPedido(req: RequisicaoAutorizada): string | null {
   const chave = Array.isArray(bruto) ? bruto[0] : bruto;
   if (chave === undefined || chave === '') return null;
   if (!FORMATO_CHAVE.test(chave))
-    throw new ErroProblema('entrada-invalida', 400, 'Pedido inválido', 'A Idempotency-Key está fora do formato.');
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Pedido inválido',
+      'A Idempotency-Key está fora do formato.',
+    );
   return chave;
 }
 

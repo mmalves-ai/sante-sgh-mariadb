@@ -4,7 +4,12 @@
 // porta própria é um dublê (nada conecta a banco); a prova sobre o MariaDB é a classificacao-estouro.int.spec.ts.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PortaEstouro } from './classificacao-estouro-propria.js';
-import { cicloEstouro, ClassificacaoEstouroService, estourosPendentes, estouroLigado } from './classificacao-estouro.service.js';
+import {
+  cicloEstouro,
+  ClassificacaoEstouroService,
+  estourosPendentes,
+  estouroLigado,
+} from './classificacao-estouro.service.js';
 import type { AlvoEstabelecimento } from './servico-worker.js';
 
 const EST: AlvoEstabelecimento = { cliente: 'cli_teste', id: 7, codigo: 'pc', fuso: 'America/Sao_Paulo' };
@@ -55,18 +60,28 @@ describe('aviso de estouro da classificação (worker)', () => {
 
   it('relógio injetado: antes do prazo, nada; depois, o verde também', async () => {
     expect((await estourosPendentes(porta, EST, T('08:59'))).pendentes).toEqual([]);
-    expect((await estourosPendentes(porta, EST, T('11:31'))).pendentes.map((x) => x.atendimento)).toEqual([1, 4]);
+    expect((await estourosPendentes(porta, EST, T('11:31'))).pendentes.map((x) => x.atendimento)).toEqual([
+      1, 4,
+    ]);
   });
 
   it('um aviso por classificação: dois consumidores no mesmo ciclo não duplicam', async () => {
-    const [a, b] = await Promise.all([cicloEstouro(porta, EST, T('10:00')), cicloEstouro(porta, EST, T('10:00'))]);
+    const [a, b] = await Promise.all([
+      cicloEstouro(porta, EST, T('10:00')),
+      cicloEstouro(porta, EST, T('10:00')),
+    ]);
     expect(a.avisados + b.avisados).toBe(1);
     expect((await cicloEstouro(porta, EST, T('10:00'))).avisados).toBe(0);
   });
 
   it('com a chave desligada, nada é lido além da chave', async () => {
     estado.ligada = false;
-    expect(await cicloEstouro(porta, EST, T('10:00'))).toEqual({ ligada: false, pendentes: 0, avisados: 0, semCor: 0 });
+    expect(await cicloEstouro(porta, EST, T('10:00'))).toEqual({
+      ligada: false,
+      pendentes: 0,
+      avisados: 0,
+      semCor: 0,
+    });
   });
 
   it('ligado fora de dev/ci; em dev/ci só pedido; o serviço roda o ciclo com a porta de teste', async () => {
@@ -80,7 +95,9 @@ describe('aviso de estouro da classificação (worker)', () => {
     const antes = process.env['WORKER_CLIENTES'];
     process.env['WORKER_CLIENTES'] = 'cli_teste';
     try {
-      expect(await s.ciclo(T('10:00'))).toEqual([{ cliente: 'cli_teste', estabelecimento: 'pc', avisados: 1 }]);
+      expect(await s.ciclo(T('10:00'))).toEqual([
+        { cliente: 'cli_teste', estabelecimento: 'pc', avisados: 1 },
+      ]);
     } finally {
       if (antes === undefined) delete process.env['WORKER_CLIENTES'];
       else process.env['WORKER_CLIENTES'] = antes;

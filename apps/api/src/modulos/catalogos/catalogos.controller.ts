@@ -400,7 +400,9 @@ export class CatalogosController {
   @Post('cargas/:id/rejeitar')
   @HttpCode(200)
   @Permissao('catalogo.carga.rejeitar')
-  @AuditadoNoHandler('Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)',
+  )
   rejeitar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.encerrar(id, corpo, req, 'rejeitada');
   }
@@ -408,7 +410,9 @@ export class CatalogosController {
   @Post('cargas/:id/cancelar')
   @HttpCode(200)
   @Permissao('catalogo.carga.rejeitar')
-  @AuditadoNoHandler('Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'Executor: carga_catalogo e trilha_auditoria na mesma transação (memória: registrador da API)',
+  )
   cancelar(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.encerrar(id, corpo, req, 'cancelada');
   }

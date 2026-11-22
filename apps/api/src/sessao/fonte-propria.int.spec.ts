@@ -86,9 +86,12 @@ describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login
       // Perfil com uma ação de consulta e uma de operação (para o recorte só de consulta).
       const porPerfil = new Set(POR_PERFIL);
       const escolher = async (sql: string) =>
-        (await e.consultar<{ codigo: string }>(sql, [], { teto: 100_000 })).find((a) => porPerfil.has(a.codigo))
-          ?.codigo ?? '';
-      acaoVer = await escolher("SELECT codigo FROM acao_sistema WHERE ativo AND tipo_acao = 'ver' ORDER BY codigo");
+        (await e.consultar<{ codigo: string }>(sql, [], { teto: 100_000 })).find((a) =>
+          porPerfil.has(a.codigo),
+        )?.codigo ?? '';
+      acaoVer = await escolher(
+        "SELECT codigo FROM acao_sistema WHERE ativo AND tipo_acao = 'ver' ORDER BY codigo",
+      );
       acaoOperar = await escolher(
         "SELECT codigo FROM acao_sistema WHERE ativo AND tipo_acao <> 'ver' ORDER BY codigo",
       );
@@ -372,8 +375,12 @@ describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login
       nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-bloqueio' }, (e) => e.executar(sql, [login]));
     try {
       const antes = await fonte.dadosDeAutorizacao('tlogin', login);
-      expect(antes.acoesDoPerfil).toEqual(expect.arrayContaining([{ perfil: 'TESTE_LOGIN', permissao: ACAO_A }]));
-      await mudar("UPDATE usuario SET situacao = 'bloqueado', bloqueado_em = UTC_TIMESTAMP(3) WHERE login = ?");
+      expect(antes.acoesDoPerfil).toEqual(
+        expect.arrayContaining([{ perfil: 'TESTE_LOGIN', permissao: ACAO_A }]),
+      );
+      await mudar(
+        "UPDATE usuario SET situacao = 'bloqueado', bloqueado_em = UTC_TIMESTAMP(3) WHERE login = ?",
+      );
       const bloqueada = await fonte.dadosDeAutorizacao('tlogin', login);
       expect(bloqueada.acoesDoPerfil).toEqual([]);
       expect(bloqueada.perfisConcedidos).toEqual([]);
@@ -387,14 +394,16 @@ describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login
       const desvinculada = await fonte.dadosDeAutorizacao('tlogin', login);
       expect(desvinculada.acoesDoPerfil).toEqual([]);
       expect(desvinculada.perfisConcedidos).toEqual([]);
-      await mudar("UPDATE usuario SET expira_em = UTC_TIMESTAMP(3) - INTERVAL 1 DAY WHERE login = ?");
+      await mudar('UPDATE usuario SET expira_em = UTC_TIMESTAMP(3) - INTERVAL 1 DAY WHERE login = ?');
       await mudar(
         `UPDATE usuario_estabelecimento ue JOIN usuario u ON u.id = ue.usuario_id
             SET ue.vigencia_fim = NULL WHERE u.login = ?`,
       );
       expect((await fonte.dadosDeAutorizacao('tlogin', login)).acoesDoPerfil).toEqual([]);
     } finally {
-      await mudar("UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL, expira_em = NULL WHERE login = ?");
+      await mudar(
+        "UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL, expira_em = NULL WHERE login = ?",
+      );
       await mudar(
         `UPDATE usuario_estabelecimento ue JOIN usuario u ON u.id = ue.usuario_id
             SET ue.vigencia_fim = NULL WHERE u.login = ?`,

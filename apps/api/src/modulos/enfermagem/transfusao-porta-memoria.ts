@@ -202,7 +202,8 @@ export class PortaTransfusaoMemoria implements PortaTransfusao {
   ): Promise<T> {
     const s = this.e(c);
     const agora = await this.agora(c);
-    const k = (chave: string | null, sufixo = '') => (chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null);
+    const k = (chave: string | null, sufixo = '') =>
+      chave ? `${chaveDoEstabelecimento(c)}:${chave}${sufixo}` : null;
     const mesma = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
     const req = (id: number) => {
       const q = s.requisicoes.find((x) => x.id === id);

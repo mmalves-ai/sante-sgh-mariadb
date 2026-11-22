@@ -29,7 +29,10 @@ describe.skipIf(!PODE)('M56 regra 8: beneficiário e paciente separados (MariaDB
     await limparMassa(nucleo, m);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-10' }, async (e) => {
       const agora = new Date();
-      pessoa = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', ['PACIENTE SINTETICO L0210', agora]);
+      pessoa = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        'PACIENTE SINTETICO L0210',
+        agora,
+      ]);
       paciente = await e.inserir(
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, cadastro_estabelecimento_id, criado_em) VALUES (?, ?, ?, ?)',
         [pessoa, 902_100_000 + (Date.now() % 100_000), m.est, agora],
@@ -55,7 +58,11 @@ describe.skipIf(!PODE)('M56 regra 8: beneficiário e paciente separados (MariaDB
     const antes = await versaoPaciente();
     const { servico, porta } = servicoNoBanco(nucleo);
     const s = sessao(m);
-    const k = await montarCarteira(servico, s, { registro: '902103', base: '90210', pacienteHospital: paciente });
+    const k = await montarCarteira(servico, s, {
+      registro: '902103',
+      base: '90210',
+      pacienteHospital: paciente,
+    });
     const ficha = await servico.ficha(s, k.titular.id);
     const lido = await porta.beneficiario(s.porta, k.titular.id);
     expect(lido?.pacienteHospital).toBe(paciente);

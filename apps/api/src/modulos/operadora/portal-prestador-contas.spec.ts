@@ -19,7 +19,11 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import { type ChaveLiberacao, fonteConfiguracaoMemoria, type PrerequisitoRecurso } from '../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso,
+} from '../config/public-api.js';
 import { PortaAtendimentoOperadoraMemoria } from './atendimento-porta-memoria.js';
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
 import { PortaContasOperadoraMemoria } from './contas-porta-memoria.js';
@@ -81,7 +85,8 @@ const novaApp = async (contasLigadas: boolean) => {
     trilha,
     registro: {
       operadora: async () => ({
-        modulo: (ctx) => moduloOperadora(ctx, { operadora, rede, autorizacao, atendimento, contas, configuracao }),
+        modulo: (ctx) =>
+          moduloOperadora(ctx, { operadora, rede, autorizacao, atendimento, contas, configuracao }),
       }),
     },
   });

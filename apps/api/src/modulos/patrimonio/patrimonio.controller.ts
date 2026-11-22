@@ -647,9 +647,7 @@ export class PatrimonioController {
   @Post('bens/:id/laudos')
   @HttpCode(201)
   @Permissao(P.depreciacaoCalcular)
-  @AuditadoNoHandler(
-    'Trilha na transação do laudo (o PDF no armazenamento com retenção, pelo SHA-256)',
-  )
+  @AuditadoNoHandler('Trilha na transação do laudo (o PDF no armazenamento com retenção, pelo SHA-256)')
   async anexarLaudo(
     @Param('id') id: string,
     @Body() corpo: unknown,

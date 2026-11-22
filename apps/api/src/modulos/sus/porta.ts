@@ -4,7 +4,44 @@
 //   - `banco`: a porta própria sobre o banco do cliente, pelo @sgh/nucleo (porta-propria.ts);
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com massa sintética (nenhum dado de pessoa);
 //   - indisponível: fora de dev/ci sem o núcleo: 503 (falha fechada).
-import { type ApacRegistro, type ArquivoSus, type AtendimentoLaudoApacDados, type CompatibilidadeSigtap, type CompetenciaSusRegistro, type ContaBpa, type ContaCiha, type CriticaSus, type DominiosApacDados, type EquivalenciaSus, type EquivalenciaSusNomeada, type FiltroApacsPorta, type FiltroCriticasPorta, type FiltroEquivalenciasPorta, type FiltroLinhasBpaPorta, type HistoricoSigtap, type InstrumentoSusPorta, type ItemBpa, type ItemContaSigtap, type LinhaApac, type LinhaApacParaGravar, type LinhaBpa, type LinhaBpaParaGravar, type LinhaTrilhaSus, type MedicoSolicitante, type MudancaApac, type NovaApac, type NovaCriticaSus, type NovoArquivoSus, type ParametrosSusCadastro, type ProcedimentoHospital, type ProcedimentoSigtapRegra, type RegistroCihaParaGravar, type RegistroSigtap, type ResultadoGravacaoCriticas, type SolicitanteApacCadastro } from './tipos.js';
+import {
+  type ApacRegistro,
+  type ArquivoSus,
+  type AtendimentoLaudoApacDados,
+  type CompatibilidadeSigtap,
+  type CompetenciaSusRegistro,
+  type ContaBpa,
+  type ContaCiha,
+  type CriticaSus,
+  type DominiosApacDados,
+  type EquivalenciaSus,
+  type EquivalenciaSusNomeada,
+  type FiltroApacsPorta,
+  type FiltroCriticasPorta,
+  type FiltroEquivalenciasPorta,
+  type FiltroLinhasBpaPorta,
+  type HistoricoSigtap,
+  type InstrumentoSusPorta,
+  type ItemBpa,
+  type ItemContaSigtap,
+  type LinhaApac,
+  type LinhaApacParaGravar,
+  type LinhaBpa,
+  type LinhaBpaParaGravar,
+  type LinhaTrilhaSus,
+  type MedicoSolicitante,
+  type MudancaApac,
+  type NovaApac,
+  type NovaCriticaSus,
+  type NovoArquivoSus,
+  type ParametrosSusCadastro,
+  type ProcedimentoHospital,
+  type ProcedimentoSigtapRegra,
+  type RegistroCihaParaGravar,
+  type RegistroSigtap,
+  type ResultadoGravacaoCriticas,
+  type SolicitanteApacCadastro,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { GravacaoSusAih, LeituraSusAih } from './porta-aih.js';
 

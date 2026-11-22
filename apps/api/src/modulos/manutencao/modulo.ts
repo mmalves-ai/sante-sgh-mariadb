@@ -40,7 +40,10 @@ export async function portaDaManutencao(ctx: ContextoModulo): Promise<PortaManut
 @Module({})
 export class ModuloManutencao {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloManutencao = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloManutencao = {},
+): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDaManutencao(ctx));
   const patrimonio = opcoes.patrimonio !== undefined ? opcoes.patrimonio : await portaDoPatrimonio(ctx);
   const gotenberg = ctx.env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318';

@@ -32,7 +32,6 @@ const FAIXA_SEM_EXTRAS = {
   vigenciaFim: null,
 } as const;
 
-
 /** Estado de cada operação no catálogo de operações do estabelecimento (null = operação desconhecida). */
 export interface CatalogoOperacoesExame {
   estado(operacao: string, estabelecimento: string): EstadoOperacao | null;
@@ -697,7 +696,9 @@ export class PortaExameMemoria implements PortaExame {
   async escala(c: ContextoPortaM18, agenda: number, periodo?: { de: string; ate: string }) {
     const linhas = this.e(c).escala.get(agenda) ?? [];
     return periodo
-      ? linhas.filter((l) => l.vigenciaInicio <= periodo.ate && (l.vigenciaFim === null || l.vigenciaFim >= periodo.de))
+      ? linhas.filter(
+          (l) => l.vigenciaInicio <= periodo.ate && (l.vigenciaFim === null || l.vigenciaFim >= periodo.de),
+        )
       : linhas;
   }
 
@@ -722,7 +723,8 @@ export class PortaExameMemoria implements PortaExame {
       .sort((x, y) => (x.data + x.hora).localeCompare(y.data + y.hora))
       .map((h) => {
         const marcacao =
-          s.marcacoes.find((m) => m.agenda === h.agenda && m.data === h.data && m.hora === h.hora)?.id ?? null;
+          s.marcacoes.find((m) => m.agenda === h.agenda && m.data === h.data && m.hora === h.hora)?.id ??
+          null;
         return {
           data: h.data,
           hora: h.hora,

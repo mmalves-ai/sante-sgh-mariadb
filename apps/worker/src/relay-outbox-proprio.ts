@@ -16,8 +16,14 @@ export const TETO_RELAY = 100;
 export const MAX_TENTATIVAS_RELAY = 8;
 
 export interface NucleoRelay {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
-  escrever<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (e: Escritor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
+  escrever<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (e: Escritor) => Promise<T>,
+  ): Promise<T>;
 }
 
 /** Espera antes da tentativa seguinte (ms): 2^n segundos, até 10 minutos. */
@@ -32,7 +38,8 @@ function cargaDoConteudo(conteudo: unknown): Record<string, string | number | bo
     if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
     const r: Record<string, string | number | boolean | null> = {};
     for (const [k, x] of Object.entries(v as Record<string, unknown>))
-      if (x === null || ['string', 'number', 'boolean'].includes(typeof x)) r[k] = x as string | number | boolean | null;
+      if (x === null || ['string', 'number', 'boolean'].includes(typeof x))
+        r[k] = x as string | number | boolean | null;
     return r;
   } catch {
     return {};
@@ -60,7 +67,10 @@ export async function pendentesOutbox(
   return linhas.map((x) => ({
     id: String(x['id']),
     cliente,
-    hospital: x['estabelecimento'] === null || x['estabelecimento'] === undefined ? null : String(x['estabelecimento']),
+    hospital:
+      x['estabelecimento'] === null || x['estabelecimento'] === undefined
+        ? null
+        : String(x['estabelecimento']),
     tipo: String(x['ponto']),
     chave: String(x['referencia_externa'] ?? `mensagem-${String(x['id'])}`),
     carga: cargaDoConteudo(x['conteudo']),

@@ -86,29 +86,52 @@ describe('alerta de vencimento dos contratos (M55.3)', () => {
   it('grava uma vez por faixa; o segundo ciclo do dia não repete; a renovação reabre; sem destinatário é contado', async () => {
     const estado = { ligada: true, contratos: [contrato(2, '2027-01-20'), contrato(1, '2027-06-30')] };
     const { p } = porta(estado);
-    expect(await cicloContratos(p, EST, HOJE)).toEqual({ ligada: true, emAlerta: 1, avisos: 2, semDestinatario: 0 });
-    expect(await cicloContratos(p, EST, HOJE)).toEqual({ ligada: true, emAlerta: 1, avisos: 0, semDestinatario: 0 });
+    expect(await cicloContratos(p, EST, HOJE)).toEqual({
+      ligada: true,
+      emAlerta: 1,
+      avisos: 2,
+      semDestinatario: 0,
+    });
+    expect(await cicloContratos(p, EST, HOJE)).toEqual({
+      ligada: true,
+      emAlerta: 1,
+      avisos: 0,
+      semDestinatario: 0,
+    });
     estado.contratos = [contrato(2, '2026-12-01'), contrato(8, '2026-11-01', { destinatarios: [] })];
-    expect(await cicloContratos(p, EST, HOJE)).toEqual({ ligada: true, emAlerta: 2, avisos: 2, semDestinatario: 1 });
+    expect(await cicloContratos(p, EST, HOJE)).toEqual({
+      ligada: true,
+      emAlerta: 2,
+      avisos: 2,
+      semDestinatario: 1,
+    });
     expect(TIPO_AVISO_CONTRATO).toBe('contrato-vencimento');
   });
 
   it('com a funcionalidade desligada não lê contratos nem avisa', async () => {
     const x = porta({ ligada: false, contratos: [contrato(4, '2026-11-10')] });
-    expect(await cicloContratos(x.p, EST, HOJE)).toEqual({ ligada: false, emAlerta: 0, avisos: 0, semDestinatario: 0 });
+    expect(await cicloContratos(x.p, EST, HOJE)).toEqual({
+      ligada: false,
+      emAlerta: 0,
+      avisos: 0,
+      semDestinatario: 0,
+    });
     expect(x.lidos()).toBe(0);
   });
 
   it('o serviço: o ciclo por cliente e estabelecimento e a chave fora de dev/ci', async () => {
     const s = new ContratosVencimentoService();
     expect(await s.ciclo()).toEqual([]);
-    s.usar({ lerPlataforma: async () => [] as never, encerrar: async () => undefined }, () =>
-      porta({ ligada: true, contratos: [contrato(7, '2026-11-20')] }).p,
+    s.usar(
+      { lerPlataforma: async () => [] as never, encerrar: async () => undefined },
+      () => porta({ ligada: true, contratos: [contrato(7, '2026-11-20')] }).p,
     );
     const antes = process.env['WORKER_CLIENTES'];
     process.env['WORKER_CLIENTES'] = 'cli_teste';
     try {
-      expect(await s.ciclo(HOJE)).toEqual([{ cliente: 'cli_teste', estabelecimento: 'pc', emAlerta: 1, avisos: 2 }]);
+      expect(await s.ciclo(HOJE)).toEqual([
+        { cliente: 'cli_teste', estabelecimento: 'pc', emAlerta: 1, avisos: 2 },
+      ]);
     } finally {
       if (antes === undefined) delete process.env['WORKER_CLIENTES'];
       else process.env['WORKER_CLIENTES'] = antes;
@@ -123,7 +146,11 @@ describe('alerta de vencimento dos contratos (M55.3)', () => {
   it('antecedência própria do contrato: faixa a mais, uma vez por fim; assunto e mensagem próprios no aviso', () => {
     const xs = alertasDoDia(
       [
-        contrato(21, '2026-11-15', { diasAlerta: 20, assunto: 'Renovar limpeza', mensagem: 'Pedir três orçamentos.' }),
+        contrato(21, '2026-11-15', {
+          diasAlerta: 20,
+          assunto: 'Renovar limpeza',
+          mensagem: 'Pedir três orçamentos.',
+        }),
         contrato(22, '2026-12-27', { diasAlerta: 60 }),
         contrato(23, '2027-03-01', { diasAlerta: 130 }),
       ],
@@ -132,7 +159,11 @@ describe('alerta de vencimento dos contratos (M55.3)', () => {
     const de21 = xs.filter((x) => x.contrato === 21);
     expect(de21.map((x) => x.faixa)).toEqual(['vence-30', 'antecedencia-contrato']);
     expect(de21[1]!.chave).toBe('21:2026-11-15:antecedencia-20');
-    expect(de21.every((x) => x.titulo === 'Renovar limpeza (vence em 15/11/2026)' && x.texto === 'Pedir três orçamentos.')).toBe(true);
+    expect(
+      de21.every(
+        (x) => x.titulo === 'Renovar limpeza (vence em 15/11/2026)' && x.texto === 'Pedir três orçamentos.',
+      ),
+    ).toBe(true);
     // 60 dias coincide com a faixa padrão: não duplica.
     expect(xs.filter((x) => x.contrato === 22).map((x) => x.faixa)).toEqual(['vence-60']);
     expect(xs.filter((x) => x.contrato === 23).map((x) => x.faixa)).toEqual(['antecedencia-contrato']);

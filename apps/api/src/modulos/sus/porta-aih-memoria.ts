@@ -4,7 +4,16 @@
 // seguem as regras das tabelas do faturamento SUS (versão e situação de origem em cada mudança; número único; o retorno não duplica);
 // a transação é a da porta em memória (desfeita se a função falhar).
 import type { DadosAihLidos, GravacaoSusAih, LeituraSusAih, SolicitanteAihLido } from './porta-aih.js';
-import { type AihRegistro, ErroAih, type FaixaAih, type InternacaoAih, type ItemAih, type ItemContaAih, type PassagemLeito, type RetornoSus } from './tipos.js';
+import {
+  type AihRegistro,
+  ErroAih,
+  type FaixaAih,
+  type InternacaoAih,
+  type ItemAih,
+  type ItemContaAih,
+  type PassagemLeito,
+  type RetornoSus,
+} from './tipos.js';
 
 export interface EstadoSusAih {
   faixas: FaixaAih[];

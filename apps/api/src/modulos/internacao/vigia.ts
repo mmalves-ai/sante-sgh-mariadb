@@ -198,7 +198,12 @@ export class MotorVigia {
         marca = MARCA_ZERO;
       }
       const r = await this.d.lerCanal(
-        { cliente: e.cliente, estabelecimento: e.estabelecimento, usuario: null, correlacao: `vigia-${e.canal}` },
+        {
+          cliente: e.cliente,
+          estabelecimento: e.estabelecimento,
+          usuario: null,
+          correlacao: `vigia-${e.canal}`,
+        },
         e.canal,
         marca,
       );

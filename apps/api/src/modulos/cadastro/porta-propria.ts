@@ -129,7 +129,10 @@ const booleano = (v: unknown): boolean => v === true || v === 1 || v === '1' || 
 const versaoTela = (v: unknown): string => `v${inteiro(v) ?? 0}`;
 function versaoDaTela(versao: string): number {
   const m = /^v(\d{1,9})$/.exec(versao);
-  if (!m) throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.', { campos: ['versao'] });
+  if (!m)
+    throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.', {
+      campos: ['versao'],
+    });
   return Number(m[1]);
 }
 /** Nome da operação no núcleo (minúsculas e hífen): "cadastro.alterarPaciente" → "cadastro.alterar-paciente". */
@@ -244,7 +247,8 @@ export function pacienteDaLinha(l: Linha): PacienteFicha {
     religiao: inteiro(l['crenca_religiosa_id']),
     responsavelLegal: null,
     ativo: situacao === 'ativo' || situacao === 'provisorio',
-    unificadoEm: situacao === 'unificado' && sobrevivente !== null && sobrevivente !== id ? sobrevivente : null,
+    unificadoEm:
+      situacao === 'unificado' && sobrevivente !== null && sobrevivente !== id ? sobrevivente : null,
     obito: dataIso(l['data_obito']),
     cadastradoEm: dataIso(l['criado_em']),
     alteradoEm: dataIso(l['alterado_em']),
@@ -291,10 +295,11 @@ export function retratoDoPaciente(p: PacienteFicha): Record<string, unknown> {
 async function lerPacientesPorIds(l: Leitor, ids: readonly number[]): Promise<PacienteFicha[]> {
   const unicos = [...new Set(ids.filter((i) => Number.isSafeInteger(i) && i > 0))].slice(0, TETO_IDS);
   if (unicos.length === 0) return [];
-  const linhas = await l.consultar(`${SELECT_PACIENTE} AND p.id IN (${marcadores(unicos.length)}) ORDER BY pf.nome, p.id`, [
-    ...PARAMETROS_PACIENTE,
-    ...unicos,
-  ], { teto: TETO_IDS });
+  const linhas = await l.consultar(
+    `${SELECT_PACIENTE} AND p.id IN (${marcadores(unicos.length)}) ORDER BY pf.nome, p.id`,
+    [...PARAMETROS_PACIENTE, ...unicos],
+    { teto: TETO_IDS },
+  );
   return linhas.map(pacienteDaLinha);
 }
 
@@ -358,7 +363,9 @@ export class PortaCadastroPropria implements PortaCadastro {
     const codigo = 'hospital' in c ? c.hospital : '';
     if (!codigo) return null;
     const buscar = (x: Leitor) =>
-      x.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [codigo]);
+      x.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        codigo,
+      ]);
     const r = l ? await buscar(l) : await this.ler(c as ContextoPorta, buscar);
     return r ? Number(r.id) : null;
   }
@@ -427,12 +434,16 @@ export class PortaCadastroPropria implements PortaCadastro {
             : ['pf.data_nascimento = ?', criterio.data];
     const ativos = inativos ? '' : " AND p.situacao IN ('ativo', 'provisorio')";
     const linhas = await this.ler(c, (l) =>
-      l.consultar(`${SELECT_PACIENTE} AND ${cond}${ativos} ORDER BY pf.nome, p.id LIMIT ${TETO_LISTA + 1}`, [
-        ...PARAMETROS_PACIENTE,
-        valor,
-      ], { teto: TETO_LISTA + 1 }),
+      l.consultar(
+        `${SELECT_PACIENTE} AND ${cond}${ativos} ORDER BY pf.nome, p.id LIMIT ${TETO_LISTA + 1}`,
+        [...PARAMETROS_PACIENTE, valor],
+        { teto: TETO_LISTA + 1 },
+      ),
     );
-    return { pacientes: linhas.slice(0, TETO_LISTA).map(pacienteDaLinha), truncado: linhas.length > TETO_LISTA };
+    return {
+      pacientes: linhas.slice(0, TETO_LISTA).map(pacienteDaLinha),
+      truncado: linhas.length > TETO_LISTA,
+    };
   }
 
   private async idsDasPalavras(
@@ -463,7 +474,8 @@ export class PortaCadastroPropria implements PortaCadastro {
     if (colunas.length === 0) return { ids: [], truncado: false };
     // Cada palavra no começo de uma palavra de algum dos campos (a colação ignora acento e maiúscula).
     const porPalavra = limpas.map(
-      () => `(${colunas.map((col) => `CONCAT(' ', COALESCE(${col}, ''), ' ') LIKE CONCAT('% ', ?, '%')`).join(' OR ')})`,
+      () =>
+        `(${colunas.map((col) => `CONCAT(' ', COALESCE(${col}, ''), ' ') LIKE CONCAT('% ', ?, '%')`).join(' OR ')})`,
     );
     const params = limpas.flatMap((p) => colunas.map(() => p));
     const sql =
@@ -519,7 +531,9 @@ export class PortaCadastroPropria implements PortaCadastro {
         { teto: 50 },
       );
       const rotulo = async (chave: string, v: number | null) =>
-        v === null ? null : texto((await l.uma<{ descricao: unknown }>(DOMINIOS_TELA[chave] ?? '', [v]))?.descricao);
+        v === null
+          ? null
+          : texto((await l.uma<{ descricao: unknown }>(DOMINIOS_TELA[chave] ?? '', [v]))?.descricao);
       return {
         carteirinhas: conv.map((x) => ({ convenio: Number(x.id), nome: texto(x.nome) ?? '' })),
         estadoCivil: await rotulo('estadoCivil', p.estadoCivil),
@@ -532,7 +546,8 @@ export class PortaCadastroPropria implements PortaCadastro {
   historico(c: ContextoPorta, id: number, pagina: number, porPagina: number) {
     return this.ler(c, async (l) => {
       const total = Number(
-        (await l.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ?', [id]))?.n ?? 0,
+        (await l.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ?', [id]))
+          ?.n ?? 0,
       );
       const por = Math.max(1, Math.min(porPagina, 200));
       const inicio = (Math.max(1, pagina) - 1) * por;
@@ -586,10 +601,11 @@ export class PortaCadastroPropria implements PortaCadastro {
   candidatosPorCpf(c: ContextoPorta, cpf: number): Promise<PacienteFicha[]> {
     return this.ler(c, async (l) =>
       (
-        await l.consultar(`${SELECT_PACIENTE} AND pf.cpf = ? ORDER BY p.id LIMIT 20`, [
-          ...PARAMETROS_PACIENTE,
-          String(cpf).padStart(11, '0'),
-        ], { teto: 20 })
+        await l.consultar(
+          `${SELECT_PACIENTE} AND pf.cpf = ? ORDER BY p.id LIMIT 20`,
+          [...PARAMETROS_PACIENTE, String(cpf).padStart(11, '0')],
+          { teto: 20 },
+        )
       ).map(pacienteDaLinha),
     );
   }
@@ -614,7 +630,13 @@ export class PortaCadastroPropria implements PortaCadastro {
         [d],
       );
       return x
-        ? { cep: d, logradouro: texto(x['logradouro']), bairro: texto(x['bairro']), cidade: texto(x['cidade']), uf: texto(x['uf']) }
+        ? {
+            cep: d,
+            logradouro: texto(x['logradouro']),
+            bairro: texto(x['bairro']),
+            cidade: texto(x['cidade']),
+            uf: texto(x['uf']),
+          }
         : null;
     });
   }
@@ -626,8 +648,16 @@ export class PortaCadastroPropria implements PortaCadastro {
     entrada: CadastrarPacienteEntrada,
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idPaciente: number; prontuario: number }>> {
-    const r = await this.executor.executar(OPERACAO_CADASTRAR_PACIENTE, this.cliente, entrada, await this.contextoNucleo(ctx));
-    return { resultado: { idPaciente: Number(r.resultado.idPaciente), prontuario: Number(r.resultado.prontuario) }, trilha: r.trilha };
+    const r = await this.executor.executar(
+      OPERACAO_CADASTRAR_PACIENTE,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(ctx),
+    );
+    return {
+      resultado: { idPaciente: Number(r.resultado.idPaciente), prontuario: Number(r.resultado.prontuario) },
+      trilha: r.trilha,
+    };
   }
 
   async alterar(
@@ -635,7 +665,12 @@ export class PortaCadastroPropria implements PortaCadastro {
     entrada: AlterarPacienteEntrada,
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idPaciente: number }>> {
-    const r = await this.executor.executar(OPERACAO_ALTERAR_PACIENTE, this.cliente, entrada, await this.contextoNucleo(ctx));
+    const r = await this.executor.executar(
+      OPERACAO_ALTERAR_PACIENTE,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(ctx),
+    );
     return { resultado: { idPaciente: Number(r.resultado.idPaciente) }, trilha: r.trilha };
   }
 
@@ -644,9 +679,17 @@ export class PortaCadastroPropria implements PortaCadastro {
     entrada: UnificarPacienteEntrada,
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idAbsorvido: number; idSobrevivente: number }>> {
-    const r = await this.executor.executar(OPERACAO_UNIFICAR_PACIENTE, this.cliente, entrada, await this.contextoNucleo(ctx));
+    const r = await this.executor.executar(
+      OPERACAO_UNIFICAR_PACIENTE,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(ctx),
+    );
     return {
-      resultado: { idAbsorvido: Number(r.resultado.idAbsorvido), idSobrevivente: Number(r.resultado.idSobrevivente) },
+      resultado: {
+        idAbsorvido: Number(r.resultado.idAbsorvido),
+        idSobrevivente: Number(r.resultado.idSobrevivente),
+      },
       trilha: r.trilha,
     };
   }
@@ -675,10 +718,12 @@ export class PortaCadastroPropria implements PortaCadastro {
     const por = Math.max(1, Math.min(porPagina, 200));
     return this.ler(c, async (l) => {
       const total = Number(
-        (await l.uma<{ n: unknown }>(
-          'SELECT COUNT(*) AS n FROM suspeita_duplicidade WHERE situacao = ? AND excluido_em IS NULL',
-          [sit],
-        ))?.n ?? 0,
+        (
+          await l.uma<{ n: unknown }>(
+            'SELECT COUNT(*) AS n FROM suspeita_duplicidade WHERE situacao = ? AND excluido_em IS NULL',
+            [sit],
+          )
+        )?.n ?? 0,
       );
       const linhas = await l.consultar(
         `${SELECT_PAR} WHERE s.situacao = ? AND s.excluido_em IS NULL ORDER BY s.escore DESC, s.id
@@ -739,7 +784,11 @@ export class PortaCadastroPropria implements PortaCadastro {
 
   // ---- consentimentos (pendente: termo, base legal e numeração no modelo de LGPD) ----
 
-  opcoesConsentimento(): Promise<{ situacoes: OpcaoDominio[]; signatarios: OpcaoDominio[]; revogacoes: OpcaoDominio[] }> {
+  opcoesConsentimento(): Promise<{
+    situacoes: OpcaoDominio[];
+    signatarios: OpcaoDominio[];
+    revogacoes: OpcaoDominio[];
+  }> {
     return pendente('Consentimentos do paciente');
   }
   consentimentos(): Promise<ConsentimentoPaciente[]> {
@@ -795,7 +844,10 @@ export class PortaCadastroPropria implements PortaCadastro {
       filtro ?? [],
       { teto: TETO_IDS },
     );
-    const registros = await this.registrosDe(l, linhas.map((x) => Number(x['id'])));
+    const registros = await this.registrosDe(
+      l,
+      linhas.map((x) => Number(x['id'])),
+    );
     return linhas.map((x) => ({
       id: Number(x['id']),
       nome: texto(x['nome']) ?? '',
@@ -847,14 +899,20 @@ export class PortaCadastroPropria implements PortaCadastro {
   historicoProfissional(c: ContextoPorta, id: number, pagina: number, porPagina: number) {
     return this.ler(c, async (l) => {
       const nome = texto(
-        (await l.uma(
-          'SELECT pf.nome FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE pr.id = ?',
-          [id],
-        ))?.['nome'],
+        (
+          await l.uma(
+            'SELECT pf.nome FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE pr.id = ?',
+            [id],
+          )
+        )?.['nome'],
       );
       const total = Number(
-        (await l.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM profissional_versao WHERE profissional_id = ?', [id]))
-          ?.n ?? 0,
+        (
+          await l.uma<{ n: unknown }>(
+            'SELECT COUNT(*) AS n FROM profissional_versao WHERE profissional_id = ?',
+            [id],
+          )
+        )?.n ?? 0,
       );
       const por = Math.max(1, Math.min(porPagina, 200));
       const linhas = await l.consultar(
@@ -904,7 +962,10 @@ export class PortaCadastroPropria implements PortaCadastro {
     );
   }
 
-  solicitantesPorRegistro(c: ContextoPorta, r: { numero: number; conselho?: string | null; uf?: string | null }) {
+  solicitantesPorRegistro(
+    c: ContextoPorta,
+    r: { numero: number; conselho?: string | null; uf?: string | null },
+  ) {
     let where = ' AND s.numero_conselho = ?';
     const params: unknown[] = [String(r.numero)];
     if (r.conselho) {
@@ -928,8 +989,18 @@ export class PortaCadastroPropria implements PortaCadastro {
     if (d.length !== 11 && d.length !== 14) return Promise.resolve([]);
     return this.ler(c, async (l) => {
       if (d.length === 14) {
-        const pj = await l.consultar('SELECT id FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL', [d], { teto: 5 });
-        return pj.map((x) => ({ id: Number(x['id']), tipo: 'J' as const, documento: d, profissionais: 0, pacientes: 0 }));
+        const pj = await l.consultar(
+          'SELECT id FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL',
+          [d],
+          { teto: 5 },
+        );
+        return pj.map((x) => ({
+          id: Number(x['id']),
+          tipo: 'J' as const,
+          documento: d,
+          profissionais: 0,
+          pacientes: 0,
+        }));
       }
       const pf = await l.consultar(
         `SELECT pf.id,
@@ -952,14 +1023,18 @@ export class PortaCadastroPropria implements PortaCadastro {
   siglasDosConselhos(c: ContextoPorta) {
     return this.ler(c, async (l) =>
       (
-        await l.consultar('SELECT id, sigla, descricao FROM conselho_classe WHERE ativo ORDER BY sigla', [], { teto: 200 })
+        await l.consultar('SELECT id, sigla, descricao FROM conselho_classe WHERE ativo ORDER BY sigla', [], {
+          teto: 200,
+        })
       ).map((x) => ({ conselho: Number(x['id']), sigla: String(x['sigla']), nome: texto(x['descricao']) })),
     );
   }
 
   conselhoPorSigla(c: ContextoPorta, sigla: string): Promise<number | null> {
     return this.ler(c, async (l) => {
-      const x = await l.uma('SELECT id FROM conselho_classe WHERE sigla = ? AND ativo', [sigla.trim().toUpperCase()]);
+      const x = await l.uma('SELECT id FROM conselho_classe WHERE sigla = ? AND ativo', [
+        sigla.trim().toUpperCase(),
+      ]);
       return x ? Number(x['id']) : null;
     });
   }
@@ -969,7 +1044,12 @@ export class PortaCadastroPropria implements PortaCadastro {
     entrada: CadastrarSolicitanteEntrada,
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ solicitante: number }>> {
-    const r = await this.executor.executar(OPERACAO_CADASTRAR_SOLICITANTE, this.cliente, entrada, await this.contextoNucleo(ctx));
+    const r = await this.executor.executar(
+      OPERACAO_CADASTRAR_SOLICITANTE,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(ctx),
+    );
     return { resultado: { solicitante: Number(r.resultado.solicitante) }, trilha: r.trilha };
   }
 
@@ -999,18 +1079,22 @@ export class PortaCadastroPropria implements PortaCadastro {
       const est = await this.estabelecimentoDe(c, l);
       const lista = async (sql: string, p: readonly unknown[] = []) => l.consultar(sql, p, { teto: 10_000 });
       return {
-        conselhos: (await lista('SELECT sigla, descricao FROM conselho_classe WHERE ativo ORDER BY sigla')).map((x) => ({
+        conselhos: (
+          await lista('SELECT sigla, descricao FROM conselho_classe WHERE ativo ORDER BY sigla')
+        ).map((x) => ({
           valor: String(x['sigla']),
           rotulo: `${String(x['sigla'])} - ${texto(x['descricao']) ?? ''}`,
         })),
         siglas: [],
-        cbos: (await lista('SELECT id, codigo_cbo, descricao FROM ocupacao_cbo WHERE ativo ORDER BY descricao')).map((x) => ({
+        cbos: (
+          await lista('SELECT id, codigo_cbo, descricao FROM ocupacao_cbo WHERE ativo ORDER BY descricao')
+        ).map((x) => ({
           valor: Number(x['id']),
           rotulo: `${String(x['codigo_cbo'])} - ${texto(x['descricao']) ?? ''}`,
         })),
-        especialidades: (await lista('SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao')).map(
-          (x) => ({ valor: Number(x['id']), rotulo: texto(x['descricao']) ?? '' }),
-        ),
+        especialidades: (
+          await lista('SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao')
+        ).map((x) => ({ valor: Number(x['id']), rotulo: texto(x['descricao']) ?? '' })),
         unidades: (
           await lista(
             'SELECT id, nome FROM unidade_assistencial WHERE estabelecimento_id <=> ? AND ativo AND excluido_em IS NULL ORDER BY nome',
@@ -1018,9 +1102,13 @@ export class PortaCadastroPropria implements PortaCadastro {
           )
         ).map((x) => ({ valor: Number(x['id']), rotulo: texto(x['nome']) ?? '' })),
         convenios: (
-          await lista("SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome")
+          await lista(
+            "SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
+          )
         ).map((x) => ({ valor: Number(x['id']), rotulo: texto(x['nome']) ?? '' })),
-        ufs: (await lista('SELECT sigla FROM unidade_federativa WHERE ativo ORDER BY sigla')).map((x) => String(x['sigla'])),
+        ufs: (await lista('SELECT sigla FROM unidade_federativa WHERE ativo ORDER BY sigla')).map((x) =>
+          String(x['sigla']),
+        ),
       };
     });
   }
@@ -1044,7 +1132,11 @@ export class PortaCadastroPropria implements PortaCadastro {
         [est],
         { teto: TETO_IDS },
       );
-      return linhas.map((x) => ({ login: String(x['login']), nome: texto(x['nome']), profissional: inteiro(x['profissional']) }));
+      return linhas.map((x) => ({
+        login: String(x['login']),
+        nome: texto(x['nome']),
+        profissional: inteiro(x['profissional']),
+      }));
     });
   }
 
@@ -1089,7 +1181,18 @@ export class PortaCadastroPropria implements PortaCadastro {
         };
         const fim = dataIso(x['vigencia_fim']);
         return fim
-          ? [{ evento: 'desvinculo', registro: null, loginAntes: login, loginDepois: null, motivo: null, usuario: por, em: fim }, inicio]
+          ? [
+              {
+                evento: 'desvinculo',
+                registro: null,
+                loginAntes: login,
+                loginDepois: null,
+                motivo: null,
+                usuario: por,
+                em: fim,
+              },
+              inicio,
+            ]
           : [inicio];
       });
     });
@@ -1099,14 +1202,21 @@ export class PortaCadastroPropria implements PortaCadastro {
   vinculosProfissional(c: ContextoPorta, id: number) {
     return this.ler(c, async (l) => {
       const n = Number(
-        (await l.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM atendimento WHERE profissional_id = ? AND excluido_em IS NULL', [id]))
-          ?.n ?? 0,
+        (
+          await l.uma<{ n: unknown }>(
+            'SELECT COUNT(*) AS n FROM atendimento WHERE profissional_id = ? AND excluido_em IS NULL',
+            [id],
+          )
+        )?.n ?? 0,
       );
       return n > 0 ? [{ grupo: 'Atendimentos', quantidade: n }] : [];
     });
   }
 
-  procedimentosDaEspecialidade(): Promise<{ itens: { procedimento: number; descricao: string | null }[]; total: number }> {
+  procedimentosDaEspecialidade(): Promise<{
+    itens: { procedimento: number; descricao: string | null }[];
+    total: number;
+  }> {
     return pendente('Procedimentos da especialidade');
   }
 }
@@ -1151,7 +1261,8 @@ function parDaLinha(x: Linha): ParFila {
     b: Number(x['segundo_paciente_id']),
     escore: Number(x['escore'] ?? 0),
     criterios,
-    situacao: sit === 'outra_pessoa' ? 'outra_pessoa' : sit === 'unificado' ? 'unificado_no_legado' : 'aberto',
+    situacao:
+      sit === 'outra_pessoa' ? 'outra_pessoa' : sit === 'unificado' ? 'unificado_no_legado' : 'aberto',
     decididoPor: texto(x['decidido_por']),
     decididoEm: instanteIso(x['decidido_em']),
   };
@@ -1160,7 +1271,11 @@ function parDaLinha(x: Linha): ParFila {
 // ---- operações (Executor) ----
 
 /** Ids dos domínios por código (a operação recusa o código que falta, com o campo). */
-async function idDoDominio(tx: TxOperacao, tabela: 'tipo_telefone' | 'tipo_endereco' | 'tipo_documento_identificacao', codigo: string): Promise<number> {
+async function idDoDominio(
+  tx: TxOperacao,
+  tabela: 'tipo_telefone' | 'tipo_endereco' | 'tipo_documento_identificacao',
+  codigo: string,
+): Promise<number> {
   const x = await tx.uma<{ id: unknown }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo`, [codigo]);
   if (!x)
     throw new ErroOperacao(
@@ -1185,7 +1300,10 @@ async function enderecoDoCep(tx: TxOperacao, cep: string) {
        FROM logradouro_cep lc LEFT JOIN bairro b ON b.id = lc.bairro_id WHERE lc.codigo_cep = ? AND lc.ativo`,
     [cep],
   );
-  if (!x) throw recusa('cep-inexistente', 'CEP não encontrado no cadastro de CEPs. Confira o CEP.', { campos: ['cep'] });
+  if (!x)
+    throw recusa('cep-inexistente', 'CEP não encontrado no cadastro de CEPs. Confira o CEP.', {
+      campos: ['cep'],
+    });
   return {
     id: Number(x['id']),
     logradouro: texto(x['logradouro']),
@@ -1196,7 +1314,11 @@ async function enderecoDoCep(tx: TxOperacao, cep: string) {
 }
 
 /** Naturalidade: o município do IBGE pelo nome (e a UF, quando informada). */
-async function municipioDaNaturalidade(tx: TxOperacao, nome: string, uf: string | null | undefined): Promise<number> {
+async function municipioDaNaturalidade(
+  tx: TxOperacao,
+  nome: string,
+  uf: string | null | undefined,
+): Promise<number> {
   const linhas = await tx.consultar<{ id: unknown }>(
     `SELECT m.id FROM municipio_ibge m JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
       WHERE m.nome = ? AND (? IS NULL OR u.sigla = ?) AND m.ativo LIMIT 2`,
@@ -1215,30 +1337,47 @@ async function municipioDaNaturalidade(tx: TxOperacao, nome: string, uf: string 
 }
 
 /** Lê e trava uma linha (SELECT ... FOR UPDATE pelo Escritor); null se não houver. */
-async function travarUma<T extends Linha = Linha>(tx: TxOperacao, sql: string, p: readonly unknown[]): Promise<T | null> {
+async function travarUma<T extends Linha = Linha>(
+  tx: TxOperacao,
+  sql: string,
+  p: readonly unknown[],
+): Promise<T | null> {
   const [x] = await tx.consultarParaAtualizar<T>(sql, p, { teto: 1 });
   return x ?? null;
 }
 
 async function proximaSequencia(tx: TxOperacao, tabela: string, pessoa: number): Promise<number> {
-  const x = await tx.uma<{ n: unknown }>(`SELECT COALESCE(MAX(sequencia), 0) + 1 AS n FROM ${tabela} WHERE pessoa_fisica_id = ?`, [pessoa]);
+  const x = await tx.uma<{ n: unknown }>(
+    `SELECT COALESCE(MAX(sequencia), 0) + 1 AS n FROM ${tabela} WHERE pessoa_fisica_id = ?`,
+    [pessoa],
+  );
   return Number(x?.n ?? 1);
 }
 
 /** Nome para comparar a mesma pessoa: sem acento, maiúsculo, espaços simples. */
 function normalizarNome(n: string): string {
-  return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  return n
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Grava o e-mail da pessoa: o mesmo endereço já usado (mesmo excluído) é reativado, nunca incluído de novo (UNIQUE). */
 async function gravarEmail(tx: TxOperacao, pessoa: number, email: string): Promise<void> {
-  const ja = await travarUma<{ id: unknown; versao: unknown; excluido_em: unknown }>(tx,
+  const ja = await travarUma<{ id: unknown; versao: unknown; excluido_em: unknown }>(
+    tx,
     'SELECT id, versao, excluido_em FROM email_pessoa WHERE pessoa_fisica_id = ? AND email = ?',
     [pessoa, email],
   );
   if (ja) {
     if (ja.excluido_em !== null && ja.excluido_em !== undefined)
-      await tx.alterar('email_pessoa', Number(ja.id), Number(ja.versao), { excluido_em: null, excluido_por: null, principal: true });
+      await tx.alterar('email_pessoa', Number(ja.id), Number(ja.versao), {
+        excluido_em: null,
+        excluido_por: null,
+        principal: true,
+      });
     return;
   }
   await tx
@@ -1252,7 +1391,13 @@ async function gravarEmail(tx: TxOperacao, pessoa: number, email: string): Promi
     .catch(recusaDeUnicidade);
 }
 
-async function incluirTelefone(tx: TxOperacao, pessoa: number, codigoTipo: string, numero: string, contato: string | null) {
+async function incluirTelefone(
+  tx: TxOperacao,
+  pessoa: number,
+  codigoTipo: string,
+  numero: string,
+  contato: string | null,
+) {
   const { ddd, numero: n } = partesTelefone(numero);
   await tx.incluir('telefone_pessoa', {
     pessoa_fisica_id: pessoa,
@@ -1267,7 +1412,12 @@ async function incluirTelefone(tx: TxOperacao, pessoa: number, codigoTipo: strin
 }
 
 /** Retrato da linha do tempo na mesma transação (dedup pelo hash dos dados). */
-async function gravarRetrato(tx: TxOperacao, paciente: number, operacao: 'inclusao' | 'alteracao', motivo: string) {
+async function gravarRetrato(
+  tx: TxOperacao,
+  paciente: number,
+  operacao: 'inclusao' | 'alteracao',
+  motivo: string,
+) {
   const [p] = await lerPacientesPorIds(tx, [paciente]);
   if (!p) return;
   const dados = JSON.stringify(retratoDoPaciente(p));
@@ -1300,11 +1450,17 @@ const TABELAS_PACIENTE = [
 function recusaDeUnicidade(e: unknown): never {
   const r = restricaoUnicaViolada(e);
   if (r === 'uq_pessoa_fisica_cpf')
-    throw recusa('cpf-existente', 'Já existe outra pessoa com este CPF. O sistema não unifica cadastros sozinho.', {
-      campos: ['cpf'],
-    });
-  if (r === 'uq_pessoa_fisica_cns') throw recusa('cns-existente', 'Já existe outra pessoa com este cartão nacional.', { campos: ['cns'] });
-  if (r === 'uq_email_pessoa_fisica_email') throw recusa('email-repetido', 'Este e-mail já está no cadastro da pessoa.', { campos: ['email'] });
+    throw recusa(
+      'cpf-existente',
+      'Já existe outra pessoa com este CPF. O sistema não unifica cadastros sozinho.',
+      {
+        campos: ['cpf'],
+      },
+    );
+  if (r === 'uq_pessoa_fisica_cns')
+    throw recusa('cns-existente', 'Já existe outra pessoa com este cartão nacional.', { campos: ['cns'] });
+  if (r === 'uq_email_pessoa_fisica_email')
+    throw recusa('email-repetido', 'Este e-mail já está no cadastro da pessoa.', { campos: ['email'] });
   throw e;
 }
 
@@ -1314,32 +1470,47 @@ export const OPERACAO_CADASTRAR_PACIENTE = definirOperacao({
   entrada: esquemaCadastrarPaciente,
   acao: 'inclusao',
   async gravar(tx, e) {
-    const existente = await travarUma<{ id: unknown; nome: unknown; nasc: unknown; paciente: unknown }>(tx, 
+    const existente = await travarUma<{ id: unknown; nome: unknown; nasc: unknown; paciente: unknown }>(
+      tx,
       `SELECT pf.id, pf.nome, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nasc,
               (SELECT p.id FROM paciente p WHERE p.pessoa_fisica_id = pf.id AND p.excluido_em IS NULL LIMIT 1) AS paciente
          FROM pessoa_fisica pf WHERE pf.cpf = ?`,
       [e.cpf],
     );
     if (existente && existente.paciente !== null && existente.paciente !== undefined)
-      throw recusa('cpf-existente', 'Já existe outro paciente com este CPF. O sistema não unifica cadastros.', { campos: ['cpf'] });
+      throw recusa(
+        'cpf-existente',
+        'Já existe outro paciente com este CPF. O sistema não unifica cadastros.',
+        { campos: ['cpf'] },
+      );
     // A pessoa já existe sem o papel de paciente (profissional da casa, carga): só o papel é criado, se for a mesma pessoa.
-    if (existente && (normalizarNome(String(existente.nome)) !== normalizarNome(e.nome) || (existente.nasc !== null && existente.nasc !== e.nascimento)))
-      throw recusa('cpf-de-outra-pessoa', 'O CPF é de uma pessoa já cadastrada com outro nome ou nascimento: confira os dados.', {
-        campos: ['cpf', 'nome', 'nascimento'],
-      });
+    if (
+      existente &&
+      (normalizarNome(String(existente.nome)) !== normalizarNome(e.nome) ||
+        (existente.nasc !== null && existente.nasc !== e.nascimento))
+    )
+      throw recusa(
+        'cpf-de-outra-pessoa',
+        'O CPF é de uma pessoa já cadastrada com outro nome ou nascimento: confira os dados.',
+        {
+          campos: ['cpf', 'nome', 'nascimento'],
+        },
+      );
     const endereco = await enderecoDoCep(tx, e.cep);
     const naturalidade = await municipioDaNaturalidade(tx, e.naturalidade, e.ufNaturalidade);
-    const pessoa = existente ? Number(existente.id) : await tx
-      .incluir('pessoa_fisica', {
-        nome: e.nome,
-        cpf: e.cpf,
-        data_nascimento: e.nascimento,
-        sexo_id: await idDoSexo(tx, e.sexo),
-        nome_mae: e.nomeMae ?? null,
-        mae_desconhecida: !e.nomeMae,
-        naturalidade_municipio_ibge_id: naturalidade,
-      })
-      .catch(recusaDeUnicidade);
+    const pessoa = existente
+      ? Number(existente.id)
+      : await tx
+          .incluir('pessoa_fisica', {
+            nome: e.nome,
+            cpf: e.cpf,
+            data_nascimento: e.nascimento,
+            sexo_id: await idDoSexo(tx, e.sexo),
+            nome_mae: e.nomeMae ?? null,
+            mae_desconhecida: !e.nomeMae,
+            naturalidade_municipio_ibge_id: naturalidade,
+          })
+          .catch(recusaDeUnicidade);
     const numero = await tx.proximoNumero('prontuario', { porCliente: true });
     const paciente = await tx.incluir('paciente', {
       pessoa_fisica_id: pessoa,
@@ -1366,10 +1537,18 @@ export const OPERACAO_CADASTRAR_PACIENTE = definirOperacao({
       municipio_ibge_id: endereco.municipio,
       principal: true,
     });
-    if (e.telefone) await incluirTelefone(tx, pessoa, CODIGOS_DOMINIO_CADASTRO.telefoneFixo, e.telefone, null);
-    if (e.celular) await incluirTelefone(tx, pessoa, CODIGOS_DOMINIO_CADASTRO.telefoneCelular, e.celular, null);
+    if (e.telefone)
+      await incluirTelefone(tx, pessoa, CODIGOS_DOMINIO_CADASTRO.telefoneFixo, e.telefone, null);
+    if (e.celular)
+      await incluirTelefone(tx, pessoa, CODIGOS_DOMINIO_CADASTRO.telefoneCelular, e.celular, null);
     if (e.contatoTelefone)
-      await incluirTelefone(tx, pessoa, CODIGOS_DOMINIO_CADASTRO.telefoneRecado, e.contatoTelefone, e.contatoNome ?? null);
+      await incluirTelefone(
+        tx,
+        pessoa,
+        CODIGOS_DOMINIO_CADASTRO.telefoneRecado,
+        e.contatoTelefone,
+        e.contatoNome ?? null,
+      );
     if (e.email) await gravarEmail(tx, pessoa, e.email);
     await gravarRetrato(tx, paciente, 'inclusao', 'alteracao_cadastro');
     return { idPaciente: paciente, prontuario: numero.valor };
@@ -1383,17 +1562,29 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
   tabelas: TABELAS_PACIENTE,
   entrada: esquemaAlterarPaciente,
   acao: 'alteracao',
-  travar: (e) => ({ tabela: 'paciente', id: e.idPaciente, colunas: ['situacao', 'pessoa_fisica_id'], versaoEsperada: versaoDaTela(e.versao) }),
+  travar: (e) => ({
+    tabela: 'paciente',
+    id: e.idPaciente,
+    colunas: ['situacao', 'pessoa_fisica_id'],
+    versaoEsperada: versaoDaTela(e.versao),
+  }),
   async conferir(_tx, _e, _ctx, relido) {
     const sit = texto(relido?.['situacao']);
     if (sit === 'unificado' || sit === 'inativo')
-      throw recusa('cadastro-inativo', 'Cadastro inativo (absorvido numa unificação): altere o cadastro que ficou ativo.');
+      throw recusa(
+        'cadastro-inativo',
+        'Cadastro inativo (absorvido numa unificação): altere o cadastro que ficou ativo.',
+      );
   },
   async gravar(tx, e) {
     const [atual] = await lerPacientesPorIds(tx, [e.idPaciente]);
     if (!atual) throw recusa('registro-inexistente', 'O registro não existe mais.');
     const pessoa = Number(
-      (await tx.uma<{ p: unknown }>('SELECT pessoa_fisica_id AS p FROM paciente WHERE id = ?', [e.idPaciente]))?.p,
+      (
+        await tx.uma<{ p: unknown }>('SELECT pessoa_fisica_id AS p FROM paciente WHERE id = ?', [
+          e.idPaciente,
+        ])
+      )?.p,
     );
     const a = e.alteracoes;
     const pf: Record<string, unknown> = {};
@@ -1414,7 +1605,9 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
       );
     let mudou = false;
     if (Object.keys(pf).length > 0) {
-      const v = Number((await tx.uma<{ v: unknown }>('SELECT versao AS v FROM pessoa_fisica WHERE id = ?', [pessoa]))?.v);
+      const v = Number(
+        (await tx.uma<{ v: unknown }>('SELECT versao AS v FROM pessoa_fisica WHERE id = ?', [pessoa]))?.v,
+      );
       await tx.alterar('pessoa_fisica', pessoa, v, pf).catch(recusaDeUnicidade);
       mudou = true;
     }
@@ -1450,20 +1643,25 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
         'SELECT id, versao FROM endereco_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL ORDER BY principal DESC, sequencia LIMIT 1',
         [pessoa],
       );
-      if (!linha) throw recusa('endereco-inexistente', 'O paciente não tem endereço: informe o CEP.', { campos: ['cep'] });
+      if (!linha)
+        throw recusa('endereco-inexistente', 'O paciente não tem endereço: informe o CEP.', {
+          campos: ['cep'],
+        });
       await tx.alterar('endereco_pessoa', Number(linha['id']), Number(linha['versao']), end);
       mudou = true;
     }
     // Telefones e e-mail: o informado substitui o do tipo; null apaga.
-    const trocarTelefone = async (codigo: string, valor: string | null | undefined, contato: string | null) => {
+    const trocarTelefone = async (
+      codigo: string,
+      valor: string | null | undefined,
+      contato: string | null,
+    ) => {
       if (valor === undefined) return;
       const tipo = await idDoDominio(tx, 'tipo_telefone', codigo);
-      await tx.executar('UPDATE telefone_pessoa SET excluido_em = ?, excluido_por = ? WHERE pessoa_fisica_id = ? AND tipo_telefone_id = ? AND excluido_em IS NULL', [
-        new Date(),
-        tx.contexto.usuario,
-        pessoa,
-        tipo,
-      ]);
+      await tx.executar(
+        'UPDATE telefone_pessoa SET excluido_em = ?, excluido_por = ? WHERE pessoa_fisica_id = ? AND tipo_telefone_id = ? AND excluido_em IS NULL',
+        [new Date(), tx.contexto.usuario, pessoa, tipo],
+      );
       if (valor !== null) await incluirTelefone(tx, pessoa, codigo, valor, contato);
       mudou = true;
     };
@@ -1471,7 +1669,9 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
     await trocarTelefone(CODIGOS_DOMINIO_CADASTRO.telefoneCelular, a.celular, null);
     await trocarTelefone(
       CODIGOS_DOMINIO_CADASTRO.telefoneRecado,
-      a.contatoTelefone === undefined && a.contatoNome !== undefined ? atual.contatoTelefone : a.contatoTelefone,
+      a.contatoTelefone === undefined && a.contatoNome !== undefined
+        ? atual.contatoTelefone
+        : a.contatoTelefone,
       a.contatoNome === undefined ? atual.contatoNome : a.contatoNome,
     );
     if (a.email !== undefined && (a.email ?? null) !== (atual.email ?? null)) {
@@ -1484,13 +1684,15 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
       mudou = true;
     }
     if (a.identidade !== undefined) {
-      const tipo = await idDoDominio(tx, 'tipo_documento_identificacao', CODIGOS_DOMINIO_CADASTRO.documentoIdentidade);
-      await tx.executar('UPDATE documento_pessoa SET excluido_em = ?, excluido_por = ? WHERE pessoa_fisica_id = ? AND tipo_documento_identificacao_id = ? AND excluido_em IS NULL', [
-        new Date(),
-        tx.contexto.usuario,
-        pessoa,
-        tipo,
-      ]);
+      const tipo = await idDoDominio(
+        tx,
+        'tipo_documento_identificacao',
+        CODIGOS_DOMINIO_CADASTRO.documentoIdentidade,
+      );
+      await tx.executar(
+        'UPDATE documento_pessoa SET excluido_em = ?, excluido_por = ? WHERE pessoa_fisica_id = ? AND tipo_documento_identificacao_id = ? AND excluido_em IS NULL',
+        [new Date(), tx.contexto.usuario, pessoa, tipo],
+      );
       if (a.identidade !== null)
         await tx.incluir('documento_pessoa', {
           pessoa_fisica_id: pessoa,
@@ -1502,7 +1704,8 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
       mudou = true;
     }
     const [depois] = await lerPacientesPorIds(tx, [e.idPaciente]);
-    const igual = depois && JSON.stringify(retratoDoPaciente(depois)) === JSON.stringify(retratoDoPaciente(atual));
+    const igual =
+      depois && JSON.stringify(retratoDoPaciente(depois)) === JSON.stringify(retratoDoPaciente(atual));
     if (!mudou || igual) throw recusa('sem-alteracao', 'Nenhum campo mudou em relação ao cadastro.');
     // A versão do paciente sobe em toda alteração do cadastro (a tela relê pela coluna versao).
     await tx.alterar('paciente', e.idPaciente, versaoDaTela(e.versao), doPaciente);
@@ -1527,14 +1730,25 @@ async function referenciasDoBanco(tx: TxOperacao): Promise<{ tabela: string; col
 export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
   nome: 'cadastro.unificar-paciente',
   tabelas: [
-    ...new Set(['paciente', 'unificacao_cadastro', 'unificacao_cadastro_item', 'suspeita_duplicidade', 'paciente_versao', ...tabelasDaUnificacao()]),
+    ...new Set([
+      'paciente',
+      'unificacao_cadastro',
+      'unificacao_cadastro_item',
+      'suspeita_duplicidade',
+      'paciente_versao',
+      ...tabelasDaUnificacao(),
+    ]),
   ],
   entrada: esquemaUnificarPaciente,
   acao: 'alteracao',
   async gravar(tx, e) {
     if (tx.contexto.usuario === null)
-      throw recusa('usuario-obrigatorio', 'A unificação exige o usuário do cliente (quem unifica fica registrado).');
-    if (e.idAbsorvido === e.idSobrevivente) throw recusa('mesmo-cadastro', 'Escolha dois cadastros diferentes.');
+      throw recusa(
+        'usuario-obrigatorio',
+        'A unificação exige o usuário do cliente (quem unifica fica registrado).',
+      );
+    if (e.idAbsorvido === e.idSobrevivente)
+      throw recusa('mesmo-cadastro', 'Escolha dois cadastros diferentes.');
     const linhas = await tx.consultarParaAtualizar<{ id: unknown; situacao: unknown; versao: unknown }>(
       'SELECT id, situacao, versao FROM paciente WHERE id IN (?, ?) AND excluido_em IS NULL ORDER BY id',
       [e.idAbsorvido, e.idSobrevivente],
@@ -1542,10 +1756,12 @@ export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
     );
     const absorvido = linhas.find((x) => Number(x.id) === e.idAbsorvido);
     const sobrevivente = linhas.find((x) => Number(x.id) === e.idSobrevivente);
-    if (!absorvido || !sobrevivente) throw recusa('registro-inexistente', 'Um dos cadastros não existe mais.');
+    if (!absorvido || !sobrevivente)
+      throw recusa('registro-inexistente', 'Um dos cadastros não existe mais.');
     if (!['ativo', 'provisorio'].includes(String(sobrevivente.situacao)))
       throw recusa('destino-inativo', 'O cadastro que fica está inativo ou já foi unificado.');
-    if (String(absorvido.situacao) === 'unificado') throw recusa('ja-unificado', 'O cadastro absorvido já foi unificado.');
+    if (String(absorvido.situacao) === 'unificado')
+      throw recusa('ja-unificado', 'O cadastro absorvido já foi unificado.');
     // A lista do domínio tem de cobrir toda chave do banco para paciente: a que faltar recusa (nada fica escondido).
     const plano = planoDeUnificacao(await referenciasDoBanco(tx));
     if (plano.naoCobertas.length > 0)
@@ -1573,14 +1789,16 @@ export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
         { teto: 100_000 },
       );
       for (const r of regs) {
-        await tx.alterar(tabela, Number(r.id), Number(r.versao), { [coluna]: e.idSobrevivente }).catch((x: unknown) => {
-          if (restricaoUnicaViolada(x))
-            throw recusa(
-              'unificacao-conflito',
-              `O cadastro que fica já tem um registro igual em ${tabela}: resolva a repetição antes de unificar. Nada foi unificado.`,
-            );
-          throw x;
-        });
+        await tx
+          .alterar(tabela, Number(r.id), Number(r.versao), { [coluna]: e.idSobrevivente })
+          .catch((x: unknown) => {
+            if (restricaoUnicaViolada(x))
+              throw recusa(
+                'unificacao-conflito',
+                `O cadastro que fica já tem um registro igual em ${tabela}: resolva a repetição antes de unificar. Nada foi unificado.`,
+              );
+            throw x;
+          });
         await tx.incluir('unificacao_cadastro_item', {
           unificacao_cadastro_id: unificacao,
           sequencia: ++seq,
@@ -1592,8 +1810,12 @@ export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
       }
     }
     if (seq > 0) {
-      const u = await tx.uma<{ versao: unknown }>('SELECT versao FROM unificacao_cadastro WHERE id = ?', [unificacao]);
-      await tx.alterar('unificacao_cadastro', unificacao, Number(u?.versao ?? 1), { quantidade_registros: seq });
+      const u = await tx.uma<{ versao: unknown }>('SELECT versao FROM unificacao_cadastro WHERE id = ?', [
+        unificacao,
+      ]);
+      await tx.alterar('unificacao_cadastro', unificacao, Number(u?.versao ?? 1), {
+        quantidade_registros: seq,
+      });
     }
     await tx.alterar('paciente', e.idAbsorvido, Number(absorvido.versao), {
       situacao: 'unificado',
@@ -1608,7 +1830,12 @@ export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
     await gravarRetrato(tx, e.idAbsorvido, 'alteracao', 'unificacao');
     return { idAbsorvido: e.idAbsorvido, idSobrevivente: e.idSobrevivente, unificacao };
   },
-  eventos: (e) => [{ tipo: 'cadastro.paciente.unificado', carga: { absorvido: e.idAbsorvido, sobrevivente: e.idSobrevivente } }],
+  eventos: (e) => [
+    {
+      tipo: 'cadastro.paciente.unificado',
+      carga: { absorvido: e.idAbsorvido, sobrevivente: e.idSobrevivente },
+    },
+  ],
   alvo: (e) => ({ tabela: 'paciente', id: e.idAbsorvido }),
 });
 
@@ -1619,7 +1846,10 @@ export const OPERACAO_CADASTRAR_SOLICITANTE = definirOperacao({
   acao: 'inclusao',
   async gravar(tx, e) {
     const conselho = await tx.uma('SELECT id FROM conselho_classe WHERE id = ? AND ativo', [e.conselho]);
-    if (!conselho) throw recusa('conselho-inexistente', 'Conselho não encontrado no cadastro de conselhos.', { campos: ['conselho'] });
+    if (!conselho)
+      throw recusa('conselho-inexistente', 'Conselho não encontrado no cadastro de conselhos.', {
+        campos: ['conselho'],
+      });
     const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [e.uf]);
     if (!uf) throw recusa('uf-inexistente', 'UF não encontrada.', { campos: ['uf'] });
     if (e.cbo !== undefined && !(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.cbo])))
@@ -1657,7 +1887,10 @@ function operacaoParesDuplicidade(trilha: RegistroTrilhaTela) {
       let incluidos = 0;
       for (const p of e.pares) {
         if (inativos.has(p.a) || inativos.has(p.b)) continue;
-        const ja = await tx.uma('SELECT id FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?', [p.a, p.b]);
+        const ja = await tx.uma(
+          'SELECT id FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?',
+          [p.a, p.b],
+        );
         if (ja) continue;
         await tx.incluir('suspeita_duplicidade', {
           primeiro_paciente_id: p.a,
@@ -1686,12 +1919,19 @@ function operacaoOutraPessoa(trilha: RegistroTrilhaTela) {
     tabelas: ['suspeita_duplicidade'],
     entrada: esquemaDecisaoOutraPessoa,
     acao: 'alteracao',
-    travar: (e) => ({ tabela: 'suspeita_duplicidade', id: e.par, colunas: ['situacao', 'primeiro_paciente_id', 'segundo_paciente_id'] }),
+    travar: (e) => ({
+      tabela: 'suspeita_duplicidade',
+      id: e.par,
+      colunas: ['situacao', 'primeiro_paciente_id', 'segundo_paciente_id'],
+    }),
     async conferir(_tx, _e, _ctx, relido) {
       if (texto(relido?.['situacao']) !== 'aberto') throw recusa('par-decidido', 'Este par já foi decidido.');
     },
     async gravar(tx, e) {
-      const x = await tx.uma('SELECT primeiro_paciente_id, segundo_paciente_id, versao FROM suspeita_duplicidade WHERE id = ?', [e.par]);
+      const x = await tx.uma(
+        'SELECT primeiro_paciente_id, segundo_paciente_id, versao FROM suspeita_duplicidade WHERE id = ?',
+        [e.par],
+      );
       if (!x) throw recusa('registro-inexistente', 'O par não existe mais.');
       await tx.alterar('suspeita_duplicidade', e.par, Number(x['versao']), {
         situacao: 'outra_pessoa',

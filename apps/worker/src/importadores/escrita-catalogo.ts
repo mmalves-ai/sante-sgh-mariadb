@@ -34,15 +34,20 @@ interface MapaEscrita {
    * Campos do contrato que viram chave estrangeira: recebe os campos presentes e o contexto (antes + valores) e
    * devolve as colunas resolvidas. Na alteração, roda também sobre o "antes" para conferir a linha relida.
    */
-  readonly derivados?: (tx: TxOperacao, presentes: Readonly<Record<string, ValorItem>>, ctx: Readonly<Record<string, ValorItem>>) => Promise<Record<string, number>>;
+  readonly derivados?: (
+    tx: TxOperacao,
+    presentes: Readonly<Record<string, ValorItem>>,
+    ctx: Readonly<Record<string, ValorItem>>,
+  ) => Promise<Record<string, number>>;
   /** Colunas que a inclusão exige preenchidas (as NOT NULL que vêm dos derivados). */
   readonly exigeNaInclusao?: readonly string[];
 }
 
 async function terminologia(tx: TxOperacao, codigo: string): Promise<{ coluna: string; valor: number }> {
-  const t = await tx.uma<{ id: unknown }>('SELECT id FROM terminologia WHERE codigo = ? AND excluido_em IS NULL', [
-    codigo,
-  ]);
+  const t = await tx.uma<{ id: unknown }>(
+    'SELECT id FROM terminologia WHERE codigo = ? AND excluido_em IS NULL',
+    [codigo],
+  );
   if (!t)
     throw recusa(
       'catalogo-sem-terminologia',
@@ -66,14 +71,21 @@ async function idDa(tx: TxOperacao, sql: string, params: unknown[], oQue: string
 }
 
 const ufPorSigla = (tx: TxOperacao, sigla: string) =>
-  idDa(tx, 'SELECT id FROM unidade_federativa WHERE sigla = ? AND ativo = TRUE', [sigla.toUpperCase()], `A UF ${sigla}`);
+  idDa(
+    tx,
+    'SELECT id FROM unidade_federativa WHERE sigla = ? AND ativo = TRUE',
+    [sigla.toUpperCase()],
+    `A UF ${sigla}`,
+  );
 
 async function municipio(tx: TxOperacao, ctx: Readonly<Record<string, ValorItem>>): Promise<number> {
   const ibge = texto(ctx['ibge']);
-  if (ibge) return idDa(tx, 'SELECT id FROM municipio_ibge WHERE codigo_ibge = ?', [ibge], `O município ${ibge}`);
+  if (ibge)
+    return idDa(tx, 'SELECT id FROM municipio_ibge WHERE codigo_ibge = ?', [ibge], `O município ${ibge}`);
   const cidade = texto(ctx['cidade']);
   const uf = texto(ctx['uf']);
-  if (!cidade || !uf) throw recusa('item-incompleto', 'Item de CEP sem o município (código IBGE, ou cidade e UF).');
+  if (!cidade || !uf)
+    throw recusa('item-incompleto', 'Item de CEP sem o município (código IBGE, ou cidade e UF).');
   return idDa(
     tx,
     `SELECT m.id FROM municipio_ibge m JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
@@ -123,7 +135,9 @@ export const ESCRITAS: Readonly<Record<string, MapaEscrita>> = Object.freeze({
     chave: { campo: 'ibge', coluna: 'codigo_ibge' },
     campos: { nome: 'nome' },
     derivados: async (tx, presentes) =>
-      Object.hasOwn(presentes, 'uf') ? { unidade_federativa_id: await ufPorSigla(tx, texto(presentes['uf'])) } : {},
+      Object.hasOwn(presentes, 'uf')
+        ? { unidade_federativa_id: await ufPorSigla(tx, texto(presentes['uf'])) }
+        : {},
     exigeNaInclusao: ['unidade_federativa_id'],
     naInclusao: () => ({ ativo: true }),
   },
@@ -135,7 +149,8 @@ export const ESCRITAS: Readonly<Record<string, MapaEscrita>> = Object.freeze({
     campos: { logradouro: 'logradouro' },
     derivados: async (tx, presentes, ctx) => {
       const r: Record<string, number> = {};
-      if (Object.hasOwn(presentes, 'uf')) r['unidade_federativa_id'] = await ufPorSigla(tx, texto(presentes['uf']));
+      if (Object.hasOwn(presentes, 'uf'))
+        r['unidade_federativa_id'] = await ufPorSigla(tx, texto(presentes['uf']));
       if (Object.hasOwn(presentes, 'ibge') || Object.hasOwn(presentes, 'cidade'))
         r['municipio_ibge_id'] = await municipio(tx, ctx);
       return r;
@@ -159,7 +174,11 @@ const comparavel = (v: unknown): string =>
   v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).trimEnd();
 
 /** Grava um item do lote (inclusão ou alteração) e devolve o id da linha. */
-export async function escreverItem(tx: TxOperacao, item: ItemLoteCatalogo, edicao: string | null): Promise<number> {
+export async function escreverItem(
+  tx: TxOperacao,
+  item: ItemLoteCatalogo,
+  edicao: string | null,
+): Promise<number> {
   const m = Object.hasOwn(ESCRITAS, item.entidade) ? ESCRITAS[item.entidade] : undefined;
   if (!m)
     throw recusa(
@@ -167,7 +186,8 @@ export async function escreverItem(tx: TxOperacao, item: ItemLoteCatalogo, edica
       `A publicação da entidade ${item.entidade} ainda não tem o mapa ao modelo próprio: nada do lote foi gravado.`,
     );
   const chave = item.chave[m.chave.campo];
-  if (!chave) throw recusa('item-sem-chave', `Item de ${item.entidade} sem o campo da chave (${m.chave.campo}).`);
+  if (!chave)
+    throw recusa('item-sem-chave', `Item de ${item.entidade} sem o campo da chave (${m.chave.campo}).`);
   const tabela = conferirNome(m.tabela);
   const colChave = conferirNome(m.chave.coluna);
   const esc = m.escopo ? await m.escopo(tx) : null;
@@ -197,7 +217,10 @@ export async function escreverItem(tx: TxOperacao, item: ItemLoteCatalogo, edica
     const extras = m.naInclusao?.(chave, edicao) ?? {};
     for (const col of m.exigeNaInclusao ?? [])
       if (valores[col] === undefined || valores[col] === null)
-        throw recusa('item-incompleto', `O item ${chave} de ${item.entidade} não traz ${col.replace(/_id$/, '')}.`);
+        throw recusa(
+          'item-incompleto',
+          `O item ${chave} de ${item.entidade} não traz ${col.replace(/_id$/, '')}.`,
+        );
     return tx.incluir(tabela, {
       [colChave]: chave,
       ...(esc ? { [esc.coluna]: esc.valor } : {}),
@@ -206,21 +229,32 @@ export async function escreverItem(tx: TxOperacao, item: ItemLoteCatalogo, edica
       ...fonte,
     });
   }
-  if (!atual) throw recusa('item-inexistente', `O item ${chave} de ${item.entidade} não existe mais no banco.`);
+  if (!atual)
+    throw recusa('item-inexistente', `O item ${chave} de ${item.entidade} não existe mais no banco.`);
   for (const [campo, coluna] of colunas)
-    if (item.antes && Object.hasOwn(item.antes, campo) && comparavel(atual[coluna]) !== comparavel(item.antes[campo]))
+    if (
+      item.antes &&
+      Object.hasOwn(item.antes, campo) &&
+      comparavel(atual[coluna]) !== comparavel(item.antes[campo])
+    )
       throw recusa(
         'item-alterado',
         `O item ${chave} de ${item.entidade} mudou depois da comparação: compare a carga de novo.`,
       );
   if (m.derivados && item.antes) {
-    const antesPresentes = Object.fromEntries(Object.entries(item.antes).filter(([k]) => Object.hasOwn(item.valores, k)));
+    const antesPresentes = Object.fromEntries(
+      Object.entries(item.antes).filter(([k]) => Object.hasOwn(item.valores, k)),
+    );
     const antes = await m.derivados(tx, antesPresentes, item.antes).catch(() => null);
     for (const [col, v] of Object.entries(antes ?? {}))
       if (Object.hasOwn(atual, col) && Number(atual[col]) !== v)
-        throw recusa('item-alterado', `O item ${chave} de ${item.entidade} mudou depois da comparação: compare a carga de novo.`);
+        throw recusa(
+          'item-alterado',
+          `O item ${chave} de ${item.entidade} mudou depois da comparação: compare a carga de novo.`,
+        );
   }
   const id = Number(atual['id']);
-  if (Object.keys(valores).length > 0) await tx.alterar(tabela, id, Number(atual['versao']), { ...valores, ...fonte });
+  if (Object.keys(valores).length > 0)
+    await tx.alterar(tabela, id, Number(atual['versao']), { ...valores, ...fonte });
   return id;
 }

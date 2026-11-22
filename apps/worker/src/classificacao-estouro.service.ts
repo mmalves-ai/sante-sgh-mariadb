@@ -10,9 +10,18 @@
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { chaveAvisoEstouro, classificacaoVigente, reclassificacaoObrigatoria } from '@sgh/dominio-recepcao';
 import { NucleoProprio } from '@sgh/nucleo';
-import { type EstouroPendente, type PortaEstouro, PortaEstouroPropria } from './classificacao-estouro-propria.js';
+import {
+  type EstouroPendente,
+  type PortaEstouro,
+  PortaEstouroPropria,
+} from './classificacao-estouro-propria.js';
 import { logger } from './logger.js';
-import { type AlvoEstabelecimento, type NucleoServico, servicoLigado, voltaPorEstabelecimento } from './servico-worker.js';
+import {
+  type AlvoEstabelecimento,
+  type NucleoServico,
+  servicoLigado,
+  voltaPorEstabelecimento,
+} from './servico-worker.js';
 
 export type { EstouroPendente };
 
@@ -93,11 +102,16 @@ export class ClassificacaoEstouroService implements OnApplicationBootstrap, OnAp
       this.temporizador = setInterval(() => void this.ciclo(), 60_000);
       this.temporizador.unref();
     } catch (e) {
-      logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'aviso de estouro da classificação não subiu');
+      logger.error(
+        { erro: e instanceof Error ? e.message : 'erro' },
+        'aviso de estouro da classificação não subiu',
+      );
     }
   }
 
-  async ciclo(agora: Date = new Date()): Promise<{ cliente: string; estabelecimento: string; avisados: number }[]> {
+  async ciclo(
+    agora: Date = new Date(),
+  ): Promise<{ cliente: string; estabelecimento: string; avisados: number }[]> {
     const nucleo = this.nucleo;
     const fabrica = this.fabrica;
     if (this.rodando || !nucleo || !fabrica) return [];
@@ -110,18 +124,28 @@ export class ClassificacaoEstouroService implements OnApplicationBootstrap, OnAp
         fabrica,
         (porta, est) => cicloEstouro(porta, est, agora),
         (cliente, estabelecimento, e) =>
-          logger.warn({ cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' }, 'aviso de estouro falhou'),
+          logger.warn(
+            { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
+            'aviso de estouro falhou',
+          ),
       );
       for (const v of voltas) {
         if (v.resultado.avisados > 0)
-          logger.info({ cliente: v.cliente, estabelecimento: v.estabelecimento, avisados: v.resultado.avisados }, 'estouros avisados');
+          logger.info(
+            { cliente: v.cliente, estabelecimento: v.estabelecimento, avisados: v.resultado.avisados },
+            'estouros avisados',
+          );
         if (v.resultado.semCor > 0)
           logger.warn(
             { cliente: v.cliente, estabelecimento: v.estabelecimento, semCor: v.resultado.semCor },
             'classificação estourada sem cor do protocolo no nível de prioridade (sem aviso)',
           );
       }
-      return voltas.map((v) => ({ cliente: v.cliente, estabelecimento: v.estabelecimento, avisados: v.resultado.avisados }));
+      return voltas.map((v) => ({
+        cliente: v.cliente,
+        estabelecimento: v.estabelecimento,
+        avisados: v.resultado.avisados,
+      }));
     } finally {
       this.rodando = false;
     }

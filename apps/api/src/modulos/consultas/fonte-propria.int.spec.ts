@@ -120,7 +120,9 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
     expect(d?.porEstabelecimento).toBe('obrigatorio');
     expect(d?.exclusaoLogica).toBe(true);
     const campos = d?.colunas.map((c) => c.campo) ?? [];
-    expect(campos).toEqual(expect.arrayContaining(['id', 'codigo', 'nome', 'ultimaCertificacao', 'criadoEm']));
+    expect(campos).toEqual(
+      expect.arrayContaining(['id', 'codigo', 'nome', 'ultimaCertificacao', 'criadoEm']),
+    );
     expect(campos).not.toContain('estabelecimentoId');
     expect(campos).not.toContain('versao');
     expect(d?.colunas.find((c) => c.campo === 'setorFuncionalId')?.filtro).toBe('igual');
@@ -154,14 +156,16 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
 
   it('filtro fora do índice é recusado; o escopo restrito filtra pela coluna (e sem coluna falha fechado)', async () => {
     const d = (await fonte.declaracao(ctxA, PUBLICO))!;
-    await expect(fonte.pagina(ctxA, d, [{ campo: 'nome', modo: 'igual', igual: 'x' }], null, 10)).rejects.toBeInstanceOf(
-      ErroConsulta,
-    );
+    await expect(
+      fonte.pagina(ctxA, d, [{ campo: 'nome', modo: 'igual', igual: 'x' }], null, 10),
+    ).rejects.toBeInstanceOf(ErroConsulta);
     expect((await fonte.pagina({ ...ctxA, escopo: { unidade: [] } }, d, [], null, 10)).linhas).toEqual([]);
-    expect((await fonte.pagina({ ...ctxA, escopo: { unidade: null } }, d, [], null, 10)).linhas).toHaveLength(2);
-    await expect(fonte.pagina({ ...ctxA, escopo: { convenio: ['1'] } }, d, [], null, 10)).rejects.toBeInstanceOf(
-      ErroEscopo,
+    expect((await fonte.pagina({ ...ctxA, escopo: { unidade: null } }, d, [], null, 10)).linhas).toHaveLength(
+      2,
     );
+    await expect(
+      fonte.pagina({ ...ctxA, escopo: { convenio: ['1'] } }, d, [], null, 10),
+    ).rejects.toBeInstanceOf(ErroEscopo);
   });
 
   it('as justificativas de exportação vêm do domínio do cliente; consulta sem tabela no modelo não tem declaração', async () => {
@@ -173,7 +177,9 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
   it('sem estabelecimento_id, o estabelecimento vem da tabela-pai: o de outro estabelecimento não sai', async () => {
     const d = (await fonte.declaracao(ctxA, consultaPublica('suprimentos', 'capelaGrupos')!))!;
     expect(d.porEstabelecimento).toBeNull();
-    expect(d.estabelecimentoPorPai?.map((p) => [p.coluna, p.tabela])).toEqual([['capela_manipulacao_id', 'capela_manipulacao']]);
+    expect(d.estabelecimentoPorPai?.map((p) => [p.coluna, p.tabela])).toEqual([
+      ['capela_manipulacao_id', 'capela_manipulacao'],
+    ]);
     const capelas = (x: { linhas: readonly Record<string, unknown>[] }) =>
       x.linhas.map((l) => l['capelaManipulacaoId']).filter((v) => v === ids[0] || v === ids[3]);
     expect(capelas(await fonte.pagina(ctxA, d, [], null, 100))).toEqual([ids[0]]);
@@ -194,16 +200,18 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
 
   it('tabela sem caminho conhecido para o estabelecimento é recusada (falha fechada)', async () => {
     const d = (await fonte.declaracao(ctxA, consultaPublica('suprimentos', 'capelaGrupos')!))!;
-    await expect(fonte.pagina(ctxA, { ...d, estabelecimentoPorPai: [], semCaminhoEstabelecimento: true }, [], null, 10)).rejects.toBeInstanceOf(
-      ErroEscopo,
-    );
+    await expect(
+      fonte.pagina(ctxA, { ...d, estabelecimentoPorPai: [], semCaminhoEstabelecimento: true }, [], null, 10),
+    ).rejects.toBeInstanceOf(ErroEscopo);
   });
 
   it('tabela compartilhada: cada consulta só mostra a sua lista (filtro fixo)', async () => {
     const codigos = async (r: string) => {
       const d = (await fonte.declaracao(ctxA, consultaPublica('faturamento', r)!))!;
       expect(d.fixo).toBeDefined();
-      return (await fonte.exportar(ctxA, d, [])).map((l) => String(l['codigo'])).filter((c) => c.startsWith('F2203-'));
+      return (await fonte.exportar(ctxA, d, []))
+        .map((l) => String(l['codigo']))
+        .filter((c) => c.startsWith('F2203-'));
     };
     expect(await codigos('periodicidade')).toEqual(['F2203-P']);
     expect(await codigos('escor')).toEqual(['F2203-E']);
@@ -214,6 +222,8 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
 
   it('consulta de tabela compartilhada sem discriminador fica fora do índice', async () => {
     expect(await fonte.declaracao(ctxA, consultaPublica('pessoas', 'tipoAdmissao')!)).toBeNull();
-    expect(await fonte.declaracao(ctxA, consultaPublica('auditoria', 'obrigatoriedadeCnsCadastroPaciente')!)).toBeNull();
+    expect(
+      await fonte.declaracao(ctxA, consultaPublica('auditoria', 'obrigatoriedadeCnsCadastroPaciente')!),
+    ).toBeNull();
   });
 });

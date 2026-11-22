@@ -90,7 +90,10 @@ export class PortaEstouroPropria implements PortaEstouro {
   }
 
   private ler<T>(est: number | null, fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, estabelecimento: est, correlacao: 'classificacao-estouro' }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, estabelecimento: est, correlacao: 'classificacao-estouro' },
+      fn,
+    );
   }
 
   estabelecimentos(): Promise<AlvoEstabelecimento[]> {
@@ -186,10 +189,18 @@ export class PortaEstouroPropria implements PortaEstouro {
           'SELECT id FROM classificacao_risco WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [e.classificacao, e.estabelecimento],
         );
-        if (!c) throw recusa('classificacao-outro-estabelecimento', 'A classificação não existe neste estabelecimento.');
-        const ja = await tx.consultarParaAtualizar('SELECT id FROM aviso_estouro_classificacao WHERE chave = ?', [e.chave], {
-          teto: 1,
-        });
+        if (!c)
+          throw recusa(
+            'classificacao-outro-estabelecimento',
+            'A classificação não existe neste estabelecimento.',
+          );
+        const ja = await tx.consultarParaAtualizar(
+          'SELECT id FROM aviso_estouro_classificacao WHERE chave = ?',
+          [e.chave],
+          {
+            teto: 1,
+          },
+        );
         if (ja.length > 0) return { gravado: false };
         await tx.incluir('aviso_estouro_classificacao', {
           classificacao_risco_id: e.classificacao,
@@ -205,7 +216,12 @@ export class PortaEstouroPropria implements PortaEstouro {
       const r = await this.executor.executar(
         op,
         this.cliente,
-        { estabelecimento: est.id, classificacao: aviso.classificacao, chave: aviso.chave, prazoEm: aviso.prazoEm },
+        {
+          estabelecimento: est.id,
+          classificacao: aviso.classificacao,
+          chave: aviso.chave,
+          prazoEm: aviso.prazoEm,
+        },
         {
           cliente: this.cliente,
           estabelecimento: est.id,

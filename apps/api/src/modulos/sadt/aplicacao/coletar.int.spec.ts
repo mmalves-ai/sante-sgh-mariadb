@@ -22,7 +22,8 @@ describe.skipIf(SEM_BANCO)('coleta e rastreio da amostra (MariaDB, cliente f22_o
   let nucleo: NucleoProprio;
   let porta: PortaSadtPropria;
   let m: MassaSadt | null = null;
-  const um = (sql: string, p: unknown[]) => nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s09col' }, (l) => l.uma(sql, p));
+  const um = (sql: string, p: unknown[]) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s09col' }, (l) => l.uma(sql, p));
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -74,20 +75,33 @@ describe.skipIf(SEM_BANCO)('coleta e rastreio da amostra (MariaDB, cliente f22_o
     });
     expect(
       Number(
-        (await um("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'amostra_biologica' AND entidade_id = ?", [r.id]))?.[
-          'n'
-        ],
+        (
+          await um(
+            "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'amostra_biologica' AND entidade_id = ?",
+            [r.id],
+          )
+        )?.['n'],
       ),
     ).toBe(1);
     expect(codigoDe(await coletar().catch((e: unknown) => e))).toBe('amostra-coletada');
 
     const mudar = (de: 'coletada' | 'recebida', para: 'recebida' | 'emTransporte' | 'emAnalise') =>
       porta.gravarSgh(c, linhaTela(m!, 'sadt.amostra.estado', 'amostra_biologica', r.id), (g) =>
-        g.mudarEstadoAmostra({ amostra: r.id, de, para, motivo: null, detalhe: null, usuario: m!.base.login, estacao: 'teste' }),
+        g.mudarEstadoAmostra({
+          amostra: r.id,
+          de,
+          para,
+          motivo: null,
+          detalhe: null,
+          usuario: m!.base.login,
+          estacao: 'teste',
+        }),
       );
     await mudar('coletada', 'recebida');
     // A passagem lida antes da outra estação (de "coletada"): recusada pelo estado relido.
-    expect(codigoDe(await mudar('coletada', 'emTransporte').catch((e: unknown) => e))).toBe('conflito-versao');
+    expect(codigoDe(await mudar('coletada', 'emTransporte').catch((e: unknown) => e))).toBe(
+      'conflito-versao',
+    );
     await mudar('recebida', 'emAnalise');
     const fim = await porta.amostraPorId(c, r.id);
     expect(fim?.estado).toBe('emAnalise');
@@ -102,7 +116,15 @@ describe.skipIf(SEM_BANCO)('coleta e rastreio da amostra (MariaDB, cliente f22_o
       codigoDe(
         await porta
           .gravarSgh(c, linhaTela(m!, 'sadt.amostra.estado', 'amostra_biologica', r.id), (g) =>
-            g.mudarEstadoAmostra({ amostra: r.id, de: 'emAnalise', para: 'rejeitada', motivo: null, detalhe: null, usuario: m!.base.login, estacao: 'teste' }),
+            g.mudarEstadoAmostra({
+              amostra: r.id,
+              de: 'emAnalise',
+              para: 'rejeitada',
+              motivo: null,
+              detalhe: null,
+              usuario: m!.base.login,
+              estacao: 'teste',
+            }),
           )
           .catch((e: unknown) => e),
       ),
@@ -119,9 +141,13 @@ describe.skipIf(SEM_BANCO)('coleta e rastreio da amostra (MariaDB, cliente f22_o
       }),
     );
     expect((await porta.exame(c, m!.itemLab))?.estado).toBe('solicitado');
-    expect(await um('SELECT situacao FROM exame_item WHERE id = ?', [m!.itemLab])).toMatchObject({ situacao: 'solicitado' });
+    expect(await um('SELECT situacao FROM exame_item WHERE id = ?', [m!.itemLab])).toMatchObject({
+      situacao: 'solicitado',
+    });
     const lista = await porta.coleta(c, { inicio: hoje, fim: hoje });
-    const itens = lista.grupos.flatMap((g) => g.exames).filter((x) => x.id === m!.itemLab || x.id === m!.itemLab2);
+    const itens = lista.grupos
+      .flatMap((g) => g.exames)
+      .filter((x) => x.id === m!.itemLab || x.id === m!.itemLab2);
     expect(itens.map((x) => x.coletado)).toEqual([false, false]);
     // A recoleta é aceita: a amostra rejeitada não bloqueia a nova.
     const nova = await coletar();

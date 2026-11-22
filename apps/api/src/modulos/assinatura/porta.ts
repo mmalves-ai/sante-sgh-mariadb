@@ -45,7 +45,10 @@ export const PORTA_ASSINATURA_ICP = Symbol('PORTA_ASSINATURA_ICP');
  * e usuário por id, correlação) quando a chamada vem de uma sessão. Sem ele (agendador, verificador público), a porta
  * própria usa o cliente dela e resolve o estabelecimento pelo código.
  */
-export type ContextoAssinatura = { readonly rede: string; readonly hospital: string } & Partial<ContextoNucleo>;
+export type ContextoAssinatura = {
+  readonly rede: string;
+  readonly hospital: string;
+} & Partial<ContextoNucleo>;
 
 export interface GravadorAssinatura {
   gravarCertificado(c: CertificadoParaGravar): Promise<{ id: number }>;
@@ -139,7 +142,11 @@ export interface PortaAssinaturaIcp {
   politicas(c: ContextoAssinatura): Promise<PoliticaVigente[]>;
   provedores(c: ContextoAssinatura): Promise<ProvedorNuvem[]>;
   provedor(c: ContextoAssinatura, codigo: string): Promise<ProvedorNuvem | null>;
-  assinaturas(c: ContextoAssinatura, login: string, origem: 'teste' | 'documento'): Promise<AssinaturaRealizada[]>;
+  assinaturas(
+    c: ContextoAssinatura,
+    login: string,
+    origem: 'teste' | 'documento',
+  ): Promise<AssinaturaRealizada[]>;
   // ── Etapa 2: documentos emitidos ──
   /** O documento do prontuário (documento_prontuario) por id; null: não existe ou é de outro estabelecimento. */
   documentoEmitido(c: ContextoAssinatura, id: number): Promise<DocumentoEmitidoIcp | null>;
@@ -157,7 +164,11 @@ export interface PortaAssinaturaIcp {
     c: ContextoAssinatura,
     documentos: readonly number[],
   ): Promise<Map<number, { id: number; estado: 'pendente' | 'assinada' | 'falha' }>>;
-  previaMaisRecente(c: ContextoAssinatura, documento: number, login: string): Promise<PreviaDoDocumento | null>;
+  previaMaisRecente(
+    c: ContextoAssinatura,
+    documento: number,
+    login: string,
+  ): Promise<PreviaDoDocumento | null>;
   previa(c: ContextoAssinatura, id: number): Promise<PreviaDoDocumento | null>;
   assinaturaDocumento(c: ContextoAssinatura, id: number): Promise<AssinaturaDoDocumento | null>;
   pendentesVencidas(

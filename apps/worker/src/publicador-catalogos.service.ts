@@ -57,7 +57,10 @@ export class PublicadorCatalogosService implements OnApplicationBootstrap, OnApp
             codigosDosEstabelecimentos,
           );
         } catch (e) {
-          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'publicador: cliente indisponível');
+          logger.warn(
+            { cliente, erro: e instanceof Error ? e.name : 'erro' },
+            'publicador: cliente indisponível',
+          );
         }
         for (const cod of estabelecimentos) {
           try {
@@ -84,7 +87,10 @@ export class PublicadorCatalogosService implements OnApplicationBootstrap, OnApp
         }
       }
     } catch (e) {
-      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'publicador de catálogos: clientes indisponíveis');
+      logger.warn(
+        { erro: e instanceof Error ? e.name : 'erro' },
+        'publicador de catálogos: clientes indisponíveis',
+      );
     } finally {
       this.rodando = false;
     }

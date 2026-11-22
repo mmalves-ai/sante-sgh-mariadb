@@ -9,7 +9,25 @@
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { Prestador } from './rede-porta.js';
-import { type DadosAcessoPortalParaEntrada, type DadosAcessoPortalPrestador, type DadosConsultaElegibilidade, type DadosConsultaProtocolo, type DadosElegibilidadeBeneficiario, type DadosEventoProtocolo, type DadosItemDominio, type DadosOperadora, type DadosProtocolo, type DadosProtocoloResumo, type DadosReanalise, type DadosRespostaPrestador, type EntradaConsultaElegibilidade, type EntradaCriacaoAcessoPortal, type EntradaRegistroProtocolo, type FiltroProtocolosPorta, type TotaisProtocolos } from './dados-portas.js';
+import {
+  type DadosAcessoPortalParaEntrada,
+  type DadosAcessoPortalPrestador,
+  type DadosConsultaElegibilidade,
+  type DadosConsultaProtocolo,
+  type DadosElegibilidadeBeneficiario,
+  type DadosEventoProtocolo,
+  type DadosItemDominio,
+  type DadosOperadora,
+  type DadosProtocolo,
+  type DadosProtocoloResumo,
+  type DadosReanalise,
+  type DadosRespostaPrestador,
+  type EntradaConsultaElegibilidade,
+  type EntradaCriacaoAcessoPortal,
+  type EntradaRegistroProtocolo,
+  type FiltroProtocolosPorta,
+  type TotaisProtocolos,
+} from './dados-portas.js';
 
 export const PORTA_ATENDIMENTO_OPERADORA = Symbol('PORTA_ATENDIMENTO_OPERADORA');
 
@@ -110,7 +128,11 @@ export interface PortaAtendimentoOperadora {
   protocolo(c: ContextoAtendimento, id: number): Promise<DadosProtocolo | null>;
   reanalises(c: ContextoAtendimento, id: number): Promise<DadosReanalise[]>;
   eventos(c: ContextoAtendimento, id: number): Promise<DadosEventoProtocolo[]>;
-  consulta(c: ContextoAtendimento, numero: string, prestador?: number): Promise<DadosConsultaProtocolo | null>;
+  consulta(
+    c: ContextoAtendimento,
+    numero: string,
+    prestador?: number,
+  ): Promise<DadosConsultaProtocolo | null>;
   /** W0-10: as respostas do prestador no protocolo (sem conteúdo) e um anexo com o conteúdo (do prestador, se dado). */
   respostasPrestador(c: ContextoAtendimento, id: number): Promise<DadosRespostaPrestador[]>;
   anexoDaResposta(

@@ -21,16 +21,29 @@ import { gravadorTituloPagar, TABELAS_TITULO_PAGAR } from './operacoes.js';
 import { PortaFinanceiroPropria } from './porta-propria.js';
 import { formaDoCodigo, versaoTexto } from './vocabulario.js';
 
-const op = (c: ContextoNucleo, chave = `t0207-${randomUUID()}`): ContextoOperacao => ({ ...c, chaveIdempotencia: chave });
+const op = (c: ContextoNucleo, chave = `t0207-${randomUUID()}`): ContextoOperacao => ({
+  ...c,
+  chaveIdempotencia: chave,
+});
 /** O contexto com a Idempotency-Key do pedido (uma por pedido, como a tela manda). */
 const comChave = (c: ContextoNucleo, chave = `t0207-${randomUUID()}`) => ({ ...c, chaveIdempotencia: chave });
-const trilha = { estabelecimento: null, usuario: null, acao: 'operacao' as const, entidade: 'teste', entidadeId: null, correlacao: null };
+const trilha = {
+  estabelecimento: null,
+  usuario: null,
+  acao: 'operacao' as const,
+  entidade: 'teste',
+  entidadeId: null,
+  correlacao: null,
+};
 
 describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o2)', () => {
   let m: MassaFinanceiro;
   let porta: PortaFinanceiroPropria;
   const contar = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'conta-02-07' }, async (l) => Number((await l.uma(sql, p))?.['n'] ?? 0));
+    m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2', correlacao: 'conta-02-07' },
+      async (l) => Number((await l.uma(sql, p))?.['n'] ?? 0),
+    );
 
   beforeAll(async () => {
     m = await montarMassa();
@@ -60,11 +73,16 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         alvo: () => ({ tabela: 'titulo_pagar', id: null }),
       });
     const contarDoc = (d: number) =>
-      contar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE estabelecimento_id = ? AND numero_documento = ?', [m.est, String(d)]);
+      contar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE estabelecimento_id = ? AND numero_documento = ?', [
+        m.est,
+        String(d),
+      ]);
     const r = await executor.executar(operacao('teste.compor_titulo', [7301]), c.cliente, {}, op(c));
     const ids = String(r.resultado['titulos']).split(',').map(Number);
     expect(ids).toHaveLength(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM parcela_pagar WHERE titulo_pagar_id = ?', [ids[0]])).toBe(1);
+    expect(await contar('SELECT COUNT(*) AS n FROM parcela_pagar WHERE titulo_pagar_id = ?', [ids[0]])).toBe(
+      1,
+    );
     // O segundo título repete o documento do primeiro: a recusa do gravador desfaz a transação inteira.
     await expect(
       executor.executar(operacao('teste.compor_titulo_repetido', [7302, 7302]), c.cliente, {}, op(c)),
@@ -74,30 +92,48 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
 
   it('lança o título com parcelas e retenção: linhas, número, versão, trilha e outbox; o duplicado é recusado', async () => {
     const c = m.ctx(m.lanca);
-    const trilhas0 = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.est]);
-    const saida0 = await contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE estabelecimento_id = ?', [m.est]);
+    const trilhas0 = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [
+      m.est,
+    ]);
+    const saida0 = await contar(
+      'SELECT COUNT(*) AS n FROM integracao_mensagem WHERE estabelecimento_id = ?',
+      [m.est],
+    );
     const e = { ...tituloDaMassa(m, 7001, 1000, 2), retencoes: [{ codigo: m.tributo, valor: 15 }] };
     const r = await porta.executar(c, 'financeiro.criarTituloPagar', e, op(c));
     expect(r.repetida).toBe(false);
     const titulo = Number(r.resultado['tituloPagar']);
-    const linha = await m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'x' }, (l) =>
-      l.uma('SELECT numero, valor_bruto, valor_retencoes, valor_liquido, versao, situacao FROM titulo_pagar WHERE id = ?', [titulo]),
+    const linha = await m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2', correlacao: 'x' },
+      (l) =>
+        l.uma(
+          'SELECT numero, valor_bruto, valor_retencoes, valor_liquido, versao, situacao FROM titulo_pagar WHERE id = ?',
+          [titulo],
+        ),
     );
     expect(String(linha?.['numero'])).toMatch(/^TP-\d+$/);
     // Parcelas impressas: 1000,00 bruto − 15,00 retido = 985,00 líquido.
-    expect([Number(linha?.['valor_bruto']), Number(linha?.['valor_retencoes']), Number(linha?.['valor_liquido'])]).toEqual([
-      1000, 15, 985,
-    ]);
+    expect([
+      Number(linha?.['valor_bruto']),
+      Number(linha?.['valor_retencoes']),
+      Number(linha?.['valor_liquido']),
+    ]).toEqual([1000, 15, 985]);
     expect(Number(linha?.['versao'])).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM parcela_pagar WHERE titulo_pagar_id = ?', [titulo])).toBe(2);
+    expect(await contar('SELECT COUNT(*) AS n FROM parcela_pagar WHERE titulo_pagar_id = ?', [titulo])).toBe(
+      2,
+    );
     expect(
       await contar(
         'SELECT COUNT(*) AS n FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id WHERE p.titulo_pagar_id = ?',
         [titulo],
       ),
     ).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.est])).toBe(trilhas0 + 1);
-    expect(await contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE estabelecimento_id = ?', [m.est])).toBe(saida0 + 1);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.est]),
+    ).toBe(trilhas0 + 1);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE estabelecimento_id = ?', [m.est]),
+    ).toBe(saida0 + 1);
     const lista = await porta.titulosPagar(c, {
       situacao: null,
       vencimentoDe: null,
@@ -107,8 +143,15 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       pagina: 0,
       hoje: '2026-01-01',
     });
-    expect(lista.itens.filter((t) => t.documento === 7001).map((t) => t.parcela).sort()).toEqual([1, 2]);
-    expect(await codigoDaGravacao(porta.executar(c, 'financeiro.criarTituloPagar', e, op(c)))).toBe('duplicado');
+    expect(
+      lista.itens
+        .filter((t) => t.documento === 7001)
+        .map((t) => t.parcela)
+        .sort(),
+    ).toEqual([1, 2]);
+    expect(await codigoDaGravacao(porta.executar(c, 'financeiro.criarTituloPagar', e, op(c)))).toBe(
+      'duplicado',
+    );
     // A mesma chave com a mesma entrada devolve o resultado anterior, sem gravar de novo.
     const chave = `t0207-${randomUUID()}`;
     const e2 = tituloDaMassa(m, 7002, 50);
@@ -161,23 +204,25 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const ap = await aprovar(m.aprova);
     expect(ap.aprovado).toBe(true);
     expect(
-      await contar("SELECT COUNT(*) AS n FROM pedido_aprovacao WHERE entidade = 'titulo_pagar' AND entidade_id = ? AND situacao = 'aprovado'", [
-        Number(r.resultado['tituloPagar']),
-      ]),
+      await contar(
+        "SELECT COUNT(*) AS n FROM pedido_aprovacao WHERE entidade = 'titulo_pagar' AND entidade_id = ? AND situacao = 'aprovado'",
+        [Number(r.resultado['tituloPagar'])],
+      ),
     ).toBe(1);
     expect(await codigoDaGravacao(pagar(m.aprova))).toBe('segregacao-aprovou-paga');
     expect(await codigoDaGravacao(pagar(m.paga, versaoTexto(9)))).toBe('conflito-versao');
     const pago = await pagar(m.paga, versaoTexto(1));
     expect(pago.resultado['titulos']).toBe(1);
-    const p = await m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'x' }, (l) =>
-      l.uma('SELECT situacao, saldo, valor_pago, versao FROM parcela_pagar WHERE id = ?', [parcela]),
+    const p = await m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2', correlacao: 'x' },
+      (l) => l.uma('SELECT situacao, saldo, valor_pago, versao FROM parcela_pagar WHERE id = ?', [parcela]),
     );
-    expect([String(p?.['situacao']), Number(p?.['saldo']), Number(p?.['valor_pago']), Number(p?.['versao'])]).toEqual([
-      'paga',
-      0,
-      321.45,
-      2,
-    ]);
+    expect([
+      String(p?.['situacao']),
+      Number(p?.['saldo']),
+      Number(p?.['valor_pago']),
+      Number(p?.['versao']),
+    ]).toEqual(['paga', 0, 321.45, 2]);
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM baixa_titulo b JOIN movimento_bancario mv ON mv.id = b.movimento_bancario_id
@@ -197,15 +242,21 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const r = await porta.executar(c, 'financeiro.criarTituloPagar', tituloDaMassa(m, 7201, 10), op(c));
     const parcela = Number(r.resultado['titulo']);
     const excluir = (ctx: ContextoNucleo, versao: string | null) =>
-      porta.executar(ctx, 'financeiro.criarTituloPagar', { acao: 'excluir', titulo: parcela, versao }, op(ctx));
+      porta.executar(
+        ctx,
+        'financeiro.criarTituloPagar',
+        { acao: 'excluir', titulo: parcela, versao },
+        op(ctx),
+      );
     expect(await codigoDaGravacao(excluir(m.ctx(m.lanca, m.outroEst), null))).toBe('titulo-inexistente');
     expect(await porta.tituloPagar(m.ctx(m.lanca, m.outroEst), parcela, '2026-01-01')).toBeNull();
     expect(await codigoDaGravacao(excluir(c, versaoTexto(5)))).toBe('conflito-versao');
     expect(await codigoDaGravacao(excluir(c, versaoTexto(1)))).toBe('gravou');
     expect(
-      await contar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE id = ? AND excluido_em IS NOT NULL AND versao = 2', [
-        Number(r.resultado['tituloPagar']),
-      ]),
+      await contar(
+        'SELECT COUNT(*) AS n FROM titulo_pagar WHERE id = ? AND excluido_em IS NOT NULL AND versao = 2',
+        [Number(r.resultado['tituloPagar'])],
+      ),
     ).toBe(1);
     expect(await porta.tituloPagar(c, parcela, '2026-01-01')).toBeNull();
   });
@@ -232,7 +283,13 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const movB = await porta.movimento(c, m.contaB, hoje, hoje);
     const credito = movB.find((x) => ids.includes(x.id));
     expect([credito?.tipo, credito?.contaCredito, credito?.contaDebito]).toEqual(['T', m.contaB, m.contaA]);
-    const extrato = { conta: m.contaB, origem: 'csv' as const, hashArquivo: 'a'.repeat(64), arquivo: null, usuario: 'x' };
+    const extrato = {
+      conta: m.contaB,
+      origem: 'csv' as const,
+      hashArquivo: 'a'.repeat(64),
+      arquivo: null,
+      usuario: 'x',
+    };
     const linhas = [{ data: hoje, valor: 77.7, historico: 'TED RECEBIDA', documento: '' }];
     const i1 = await porta.gravarSgh(comChave(c), trilha, (g) => g.importarExtrato({ ...extrato, linhas }));
     const i2 = await porta.gravarSgh(comChave(c), trilha, (g) => g.importarExtrato({ ...extrato, linhas }));
@@ -256,13 +313,23 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       );
     expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA]))).toBe('fora-do-escopo');
     // Quem lançou a transferência não concilia o próprio movimento (segregação).
-    expect(await codigoDaGravacao(conciliar(m.lanca, [m.contaA, m.contaB]))).toBe('segregacao-pagou-concilia');
+    expect(await codigoDaGravacao(conciliar(m.lanca, [m.contaA, m.contaB]))).toBe(
+      'segregacao-pagou-concilia',
+    );
     // A linha de 50,00 não casa com o movimento de 77,70; o débito da conta A não é movimento da conta B.
-    expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA, m.contaB], outra!.id))).toBe('valor-divergente');
+    expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA, m.contaB], outra!.id))).toBe(
+      'valor-divergente',
+    );
     const debito = ids.find((x) => x !== credito!.id)!;
-    expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA, m.contaB], linha!.id, debito))).toBe('alvo-sem-movimento');
+    expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA, m.contaB], linha!.id, debito))).toBe(
+      'alvo-sem-movimento',
+    );
     expect(await codigoDaGravacao(conciliar(m.paga, [m.contaA, m.contaB]))).toBe('gravou');
-    expect(await contar('SELECT COUNT(*) AS n FROM movimento_bancario WHERE id = ? AND conciliado = TRUE', [credito!.id])).toBe(1);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM movimento_bancario WHERE id = ? AND conciliado = TRUE', [
+        credito!.id,
+      ]),
+    ).toBe(1);
     expect((await porta.linhasExtrato(c, m.contaB, 'conciliada')).map((x) => x.id)).toEqual([linha!.id]);
   });
 
@@ -297,7 +364,11 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     );
     expect(lote2.id).toBe(lote.id);
     const lotes = await porta.registrosFiscais(c, 'lote');
-    expect(lotes.find((x) => x['ID'] === lote.id)).toMatchObject({ PERIODO: '2026-10', REGUA: 'caixa', LANCAMENTOS: 3 });
+    expect(lotes.find((x) => x['ID'] === lote.id)).toMatchObject({
+      PERIODO: '2026-10',
+      REGUA: 'caixa',
+      LANCAMENTOS: 3,
+    });
     // ADR 0004: o arquivo guardado vai ao registro `arquivo` na mesma transação (hash, tamanho, tipo, imutável e guarda
     // legal de 5 anos), ligado à tabela dona pelos dois lados.
     const hashGuardado = randomUUID().replace(/-/g, '').repeat(2);
@@ -362,37 +433,46 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const r1 = await remessa('f'.repeat(64));
     const r2 = await remessa('f'.repeat(64));
     expect([r2.id, r2.sequencial]).toEqual([r1.id, r1.sequencial]);
-    expect(await contar('SELECT COUNT(*) AS n FROM remessa_bancaria WHERE estabelecimento_id = ? AND hash_arquivo = ?', [m.est, 'f'.repeat(64)])).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM remessa_bancaria WHERE estabelecimento_id = ? AND hash_arquivo = ?',
+        [m.est, 'f'.repeat(64)],
+      ),
+    ).toBe(1);
     expect((await porta.registrosFiscais(c, 'remessa')).map((x) => x['CONTA'])).toContain(m.contaA);
     const nfse = () =>
-        porta.gravarSgh(comChave(c), trilha, (g) =>
-          g.registrarNfse({
-            usuario: 'x',
-            tituloReceber: null,
-            conta: null,
-            momento: 'apresentacao',
-            classificacao: 'x',
-            itemServico: '4.03',
-            valorServicos: 1,
-            aliquotaIss: 2,
-            valorIss: 0.02,
-            issRetido: false,
-            valorIbs: 0,
-            valorCbs: 0,
-            retencoes: 0,
-            valorLiquido: 0.98,
-            destino: 'simulador',
-            situacao: 'simulada',
-            numero: null,
-            hashXml: 'd'.repeat(64),
-            arquivo: null,
-          }),
-        );
+      porta.gravarSgh(comChave(c), trilha, (g) =>
+        g.registrarNfse({
+          usuario: 'x',
+          tituloReceber: null,
+          conta: null,
+          momento: 'apresentacao',
+          classificacao: 'x',
+          itemServico: '4.03',
+          valorServicos: 1,
+          aliquotaIss: 2,
+          valorIss: 0.02,
+          issRetido: false,
+          valorIbs: 0,
+          valorCbs: 0,
+          retencoes: 0,
+          valorLiquido: 0.98,
+          destino: 'simulador',
+          situacao: 'simulada',
+          numero: null,
+          hashXml: 'd'.repeat(64),
+          arquivo: null,
+        }),
+      );
     // A NFS-e simulada fica registrada (com o hash); o mesmo arquivo de novo devolve o mesmo registro.
     const n1 = await nfse();
     expect((await nfse()).id).toBe(n1.id);
     const nota = (await porta.registrosFiscais(c, 'nfse')).find((x) => x['ID'] === n1.id);
-    expect([nota?.['SITUACAO'], nota?.['DESTINO'], nota?.['VALOR_LIQUIDO']]).toEqual(['simulada', 'simulador', 0.98]);
+    expect([nota?.['SITUACAO'], nota?.['DESTINO'], nota?.['VALOR_LIQUIDO']]).toEqual([
+      'simulada',
+      'simulador',
+      0.98,
+    ]);
     const dec = await porta.gravarSgh(comChave(c), trilha, (g) =>
       g.registrarDeclaracao({
         usuario: 'x',
@@ -405,8 +485,14 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         arquivo: null,
       }),
     );
-    const declaracao = (await porta.registrosFiscais(c, 'declaracao')).find((x) => x['ID'] === dec.id && x['TIPO'] === 'reinf-r4000');
-    expect([declaracao?.['PERIODO'], declaracao?.['REGISTROS'], declaracao?.['VALOR_TOTAL']]).toEqual(['2026-10', 3, 12.5]);
+    const declaracao = (await porta.registrosFiscais(c, 'declaracao')).find(
+      (x) => x['ID'] === dec.id && x['TIPO'] === 'reinf-r4000',
+    );
+    expect([declaracao?.['PERIODO'], declaracao?.['REGISTROS'], declaracao?.['VALOR_TOTAL']]).toEqual([
+      '2026-10',
+      3,
+      12.5,
+    ]);
   });
 
   it('glosa no título: item de outra conta, sem retorno ou acima do item é recusado; só a aceita reduz o saldo; o recurso deferido vira recebível', async () => {
@@ -414,35 +500,58 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const r = await porta.executar(
       c,
       'financeiro.criarTituloReceber',
-      { contas: [{ conta: m.contasHospitalares[2]!, versao: null }], vencimento: '2026-12-15', documento: 90_217, referente: '' },
+      {
+        contas: [{ conta: m.contasHospitalares[2]!, versao: null }],
+        vencimento: '2026-12-15',
+        documento: 90_217,
+        referente: '',
+      },
       op(c),
     );
     const titulo = Number(r.resultado['titulo']);
     // Itens sintéticos: A (cobrado 500, pago 400, com retorno) e B (sem retorno) na conta do título; C em outra conta.
-    const [itemA, itemB, itemC] = await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-glosa-02-07' }, async (e) => {
-      const agora = new Date();
-      const porCodigo = async (tabela: string, codigo: string, colunas: string, valores: unknown[]) => {
-        const ja = await e.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ?`, [codigo]);
-        if (ja) return Number(ja.id);
-        return e.inserir(
-          `INSERT INTO ${tabela} (codigo, ${colunas}, criado_em) VALUES (?, ${valores.map(() => '?').join(', ')}, ?)`,
-          [codigo, ...valores, agora],
+    const [itemA, itemB, itemC] = await m.nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-glosa-02-07' },
+      async (e) => {
+        const agora = new Date();
+        const porCodigo = async (tabela: string, codigo: string, colunas: string, valores: unknown[]) => {
+          const ja = await e.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ?`, [codigo]);
+          if (ja) return Number(ja.id);
+          return e.inserir(
+            `INSERT INTO ${tabela} (codigo, ${colunas}, criado_em) VALUES (?, ${valores.map(() => '?').join(', ')}, ?)`,
+            [codigo, ...valores, agora],
+          );
+        };
+        const grupo = await porCodigo('grupo_faturamento', 'L0207-GF', 'descricao, tipo_grupo', [
+          'GRUPO FAT L0207',
+          'servico_hospitalar',
+        ]);
+        const fat = await porCodigo(
+          'item_faturavel',
+          'L0207-IF',
+          'descricao, tipo_item, grupo_faturamento_id',
+          ['ITEM L0207', 'taxa', grupo],
         );
-      };
-      const grupo = await porCodigo('grupo_faturamento', 'L0207-GF', 'descricao, tipo_grupo', ['GRUPO FAT L0207', 'servico_hospitalar']);
-      const fat = await porCodigo('item_faturavel', 'L0207-IF', 'descricao, tipo_item, grupo_faturamento_id', ['ITEM L0207', 'taxa', grupo]);
-      const item = (conta: number, seq: number, total: number, pago: number, glosado: number, situacao: string) =>
-        e.inserir(
-          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+        const item = (
+          conta: number,
+          seq: number,
+          total: number,
+          pago: number,
+          glosado: number,
+          situacao: string,
+        ) =>
+          e.inserir(
+            `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
              valor_unitario, valor_total, valor_pago, valor_glosado, situacao, criado_em) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-          [conta, seq, fat, agora, total, total, pago, glosado, situacao, agora],
-        );
-      return [
-        await item(m.contasHospitalares[2]!, 1, 500, 400, 100, 'conferido'),
-        await item(m.contasHospitalares[2]!, 2, 100, 0, 0, 'lancado'),
-        await item(m.contasHospitalares[0]!, 1, 100, 50, 50, 'conferido'),
-      ];
-    });
+            [conta, seq, fat, agora, total, total, pago, glosado, situacao, agora],
+          );
+        return [
+          await item(m.contasHospitalares[2]!, 1, 500, 400, 100, 'conferido'),
+          await item(m.contasHospitalares[2]!, 2, 100, 0, 0, 'lancado'),
+          await item(m.contasHospitalares[0]!, 1, 100, 50, 50, 'conferido'),
+        ];
+      },
+    );
     const glosa = (
       item: number | null,
       valor: number,
@@ -464,8 +573,13 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       );
     const valores = () =>
       m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conta-02-07' }, async (l) => {
-        const t = await l.uma('SELECT valor_glosa, valor_glosa_aceita FROM titulo_receber WHERE id = ?', [titulo]);
-        const p = await l.uma('SELECT SUM(valor_recurso) AS recurso FROM parcela_receber WHERE titulo_receber_id = ?', [titulo]);
+        const t = await l.uma('SELECT valor_glosa, valor_glosa_aceita FROM titulo_receber WHERE id = ?', [
+          titulo,
+        ]);
+        const p = await l.uma(
+          'SELECT SUM(valor_recurso) AS recurso FROM parcela_receber WHERE titulo_receber_id = ?',
+          [titulo],
+        );
         return [Number(t?.['valor_glosa']), Number(t?.['valor_glosa_aceita']), Number(p?.['recurso'])];
       });
     expect(await codigoDaGravacao(glosa(itemC, 10, 'aceita'))).toBe('item-fora-do-titulo');
@@ -486,7 +600,15 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     expect(
       await codigoDaGravacao(
         porta.gravarSgh(c, trilha, (g) =>
-          g.registrarGlosaTitulo({ tituloReceber: titulo, item: null, situacao: 'aceita', valor: 1, motivo: 'SEM CHAVE L0207', usuario: 'x', origem: 'tela' }),
+          g.registrarGlosaTitulo({
+            tituloReceber: titulo,
+            item: null,
+            situacao: 'aceita',
+            valor: 1,
+            motivo: 'SEM CHAVE L0207',
+            usuario: 'x',
+            origem: 'tela',
+          }),
         ),
       ),
     ).toBe('entrada-invalida');
@@ -502,7 +624,12 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const r = await porta.executar(
       c,
       'financeiro.criarTituloReceber',
-      { contas: [{ conta: m.contasHospitalares[1]!, versao: null }], vencimento: '2026-12-15', documento: 90_218, referente: '' },
+      {
+        contas: [{ conta: m.contasHospitalares[1]!, versao: null }],
+        vencimento: '2026-12-15',
+        documento: 90_218,
+        referente: '',
+      },
       op(c),
     );
     const base = Number(r.resultado['titulo']);
@@ -519,7 +646,14 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
           [`L0207-PG${i}`, base],
         );
     });
-    const filtro = { devedor: null, convenio: m.convenio, aberto: null, vencimentoDe: null, vencimentoAte: null, hoje: '2026-11-01' };
+    const filtro = {
+      devedor: null,
+      convenio: m.convenio,
+      aberto: null,
+      vencimentoDe: null,
+      vencimentoAte: null,
+      hoje: '2026-11-01',
+    };
     const p0 = await porta.titulosReceber(c, { ...filtro, pagina: 0 });
     const p1 = await porta.titulosReceber(c, { ...filtro, pagina: 1 });
     expect([p0.itens.length, p0.mais, p1.pagina, p1.mais]).toEqual([200, true, 1, false]);
@@ -529,7 +663,10 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
 });
 
 // A mesma bateria de recusas na memória e no banco.
-const fabricas: [string, () => Promise<{ porta: PortaFinanceiro; c: ContextoNucleo; fim: () => Promise<void> }>][] = [
+const fabricas: [
+  string,
+  () => Promise<{ porta: PortaFinanceiro; c: ContextoNucleo; fim: () => Promise<void> }>,
+][] = [
   [
     'memória',
     async () => ({
@@ -555,7 +692,10 @@ const fabricas: [string, () => Promise<{ porta: PortaFinanceiro; c: ContextoNucl
             };
           },
         ],
-      ] as [string, () => Promise<{ porta: PortaFinanceiro; c: ContextoNucleo; fim: () => Promise<void> }>][])),
+      ] as [
+        string,
+        () => Promise<{ porta: PortaFinanceiro; c: ContextoNucleo; fim: () => Promise<void> }>,
+      ][])),
 ];
 
 describe.each(fabricas)('recusas comuns do financeiro (%s)', (_nome, fabrica) => {
@@ -576,7 +716,12 @@ describe.each(fabricas)('recusas comuns do financeiro (%s)', (_nome, fabrica) =>
   it('excluir título inexistente é recusado', async () => {
     expect(
       await codigoDaGravacao(
-        f.porta.executar(f.c, 'financeiro.criarTituloPagar', { acao: 'excluir', titulo: 987_654_321, versao: null }, op(f.c)),
+        f.porta.executar(
+          f.c,
+          'financeiro.criarTituloPagar',
+          { acao: 'excluir', titulo: 987_654_321, versao: null },
+          op(f.c),
+        ),
       ),
     ).toBe('titulo-inexistente');
   });

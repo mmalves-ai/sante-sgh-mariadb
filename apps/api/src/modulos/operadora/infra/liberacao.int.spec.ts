@@ -7,7 +7,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FonteConfiguracaoPropria } from '../../config/public-api.js';
 import { ServicoSituacaoOperadora } from '../aplicacao/situacao.js';
 import { PortaOperadoraPropria } from '../porta-propria.js';
-import { CLIENTE, COD_OUTRO, contexto, criarNucleo, type MassaBase, PODE, prepararBase, USUARIO } from './copia.spec-util.js';
+import {
+  CLIENTE,
+  COD_OUTRO,
+  contexto,
+  criarNucleo,
+  type MassaBase,
+  PODE,
+  prepararBase,
+  USUARIO,
+} from './copia.spec-util.js';
 
 describe.skipIf(!PODE)('M56 regra 1 e catálogos da ANS (MariaDB, f22_o2)', () => {
   let nucleo: NucleoProprio;

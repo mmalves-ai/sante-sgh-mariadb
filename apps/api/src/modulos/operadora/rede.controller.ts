@@ -51,7 +51,12 @@ import {
 import { corpo } from '../exames/public-api.js';
 import { ServicoSituacaoOperadora, type SujeitoOperadora } from './aplicacao/situacao.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
-import { type GravacaoRede, type GravadorRede, PORTA_REDE_OPERADORA, type PortaRedeOperadora } from './rede-porta.js';
+import {
+  type GravacaoRede,
+  type GravadorRede,
+  PORTA_REDE_OPERADORA,
+  type PortaRedeOperadora,
+} from './rede-porta.js';
 import { type EstabelecimentoDaRede, resumoDe, ServicoRedeOperadora } from './rede-servico.js';
 
 const E = EVENTOS_AUDITAVEIS;

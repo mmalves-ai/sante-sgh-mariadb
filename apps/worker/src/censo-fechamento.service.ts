@@ -10,11 +10,22 @@
 // (categoria_acomodacao.tipo), não uma lista de códigos; a linha sem unidade é erro de integridade (vai ao log de falha).
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { HORA_FECHAMENTO_PADRAO } from '@sgh/contratos';
-import { dataDoDia, diaDoCenso, MotorInternacao, relogioDeParede, VERSAO_CALCULO_CENSO } from '@sgh/dominio-internacao';
+import {
+  dataDoDia,
+  diaDoCenso,
+  MotorInternacao,
+  relogioDeParede,
+  VERSAO_CALCULO_CENSO,
+} from '@sgh/dominio-internacao';
 import { NucleoProprio } from '@sgh/nucleo';
 import { CHAVE_FECHAMENTO, type PortaCenso, PortaCensoPropria } from './censo-fechamento-propria.js';
 import { logger } from './logger.js';
-import { type AlvoEstabelecimento, type NucleoServico, servicoLigado, voltaPorEstabelecimento } from './servico-worker.js';
+import {
+  type AlvoEstabelecimento,
+  type NucleoServico,
+  servicoLigado,
+  voltaPorEstabelecimento,
+} from './servico-worker.js';
 
 export { CHAVE_FECHAMENTO };
 /** Dias para trás que cada ciclo confere (o último fechado e os que ficaram sem retrato). */
@@ -126,13 +137,22 @@ export class CensoFechamentoService implements OnApplicationBootstrap, OnApplica
         fabrica,
         (porta, est) => fecharCensoDoEstabelecimento(porta, est, agoraReal),
         (cliente, estabelecimento, e) =>
-          logger.warn({ cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' }, 'fechamento do censo falhou'),
+          logger.warn(
+            { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
+            'fechamento do censo falhou',
+          ),
       );
       for (const v of voltas) {
         const x = v.resultado;
         if (x.situacao === 'fechado')
           logger.info(
-            { cliente: v.cliente, estabelecimento: v.estabelecimento, data: x.data, linhas: x.linhas, internados: x.internados },
+            {
+              cliente: v.cliente,
+              estabelecimento: v.estabelecimento,
+              data: x.data,
+              linhas: x.linhas,
+              internados: x.internados,
+            },
             'censo fechado',
           );
         if (x.situacao === 'sem-acomodacao')

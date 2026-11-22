@@ -158,7 +158,8 @@ export class PortaExamePropria implements PortaExame {
 
   async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
     const desligada = OPERACOES_EXAME_DESLIGADAS[op];
-    if (desligada) return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Operação desligada: ${desligada}.` };
+    if (desligada)
+      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Operação desligada: ${desligada}.` };
     const operacao = OPERACOES_EXAME[op];
     if (!operacao) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return this.executor.liberacao(operacao, { ...contextoDe(c), chaveIdempotencia: 'consulta.liberacao' });
@@ -291,11 +292,9 @@ export class PortaExamePropria implements PortaExame {
           fim: dataIso(r['periodo_fim']) ?? '',
           em: em.data,
           hora: em.hora,
-          duracao: r['duracao_horario_minutos'] === null ? '' : horaDeMinutos(n(r['duracao_horario_minutos'])),
-          dias: texto(r['dias'])
-            .split(',')
-            .filter(Boolean)
-            .map(Number),
+          duracao:
+            r['duracao_horario_minutos'] === null ? '' : horaDeMinutos(n(r['duracao_horario_minutos'])),
+          dias: texto(r['dias']).split(',').filter(Boolean).map(Number),
           usuario: texto(r['usuario']),
         };
       });
@@ -341,7 +340,9 @@ export class PortaExamePropria implements PortaExame {
         [agenda, est, de, ate],
         { teto: 200_000 },
       );
-      return linhas.map((r) => `${dataIso(r['data_referencia']) ?? ''} ${horaCivil(r['inicio_em'] as Date, fuso).hora}`);
+      return linhas.map(
+        (r) => `${dataIso(r['data_referencia']) ?? ''} ${horaCivil(r['inicio_em'] as Date, fuso).hora}`,
+      );
     });
   }
 
@@ -379,7 +380,10 @@ export class PortaExamePropria implements PortaExame {
     });
   }
 
-  vagas(c: ContextoPortaM18, f: { agendas: readonly number[] | null; de: string; ate: string; limite?: number }) {
+  vagas(
+    c: ContextoPortaM18,
+    f: { agendas: readonly number[] | null; de: string; ate: string; limite?: number },
+  ) {
     return this.ler(c, async (l, est) => {
       if (f.agendas && f.agendas.length === 0) return { itens: [] as VagaExame[], truncado: false };
       const teto = Math.min(f.limite ?? TETO_VAGAS_EXAME, TETO_VAGAS_EXAME);
@@ -552,15 +556,25 @@ export class PortaExamePropria implements PortaExame {
   opcoes(c: ContextoPortaM18) {
     return this.ler(c, async (l) => {
       const [fontes, exames] = await Promise.all([
-        l.consultar('SELECT id, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome, id'),
+        l.consultar(
+          'SELECT id, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome, id',
+        ),
         l.consultar(
           `SELECT id, nome, especialidade_diagnostica_id FROM exame
             WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id LIMIT 5000`,
         ),
       ]);
       return {
-        convenios: fontes.map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']), ativo: r['situacao'] === 'ativa' })),
-        exames: exames.map((r) => ({ id: n(r['id']), nome: texto(r['nome']), categoria: n(r['especialidade_diagnostica_id']) })),
+        convenios: fontes.map((r) => ({
+          codigo: n(r['id']),
+          nome: texto(r['nome']),
+          ativo: r['situacao'] === 'ativa',
+        })),
+        exames: exames.map((r) => ({
+          id: n(r['id']),
+          nome: texto(r['nome']),
+          categoria: n(r['especialidade_diagnostica_id']),
+        })),
       };
     });
   }
@@ -618,14 +632,19 @@ export class PortaExamePropria implements PortaExame {
         exame: n(r['exame_id']),
         exameNome: texto(r['exame_nome']),
         convenio: nn(r['fonte_pagadora_id']),
-        convenioNome: r['fonte_nome'] === null || r['fonte_nome'] === undefined ? null : texto(r['fonte_nome']),
+        convenioNome:
+          r['fonte_nome'] === null || r['fonte_nome'] === undefined ? null : texto(r['fonte_nome']),
       })),
     );
   }
 }
 
 /** O gravador da cobertura por exame dentro da transação do Executor (só agenda de exame do estabelecimento). */
-function gravadorCobertura(tx: TxOperacao, est: number, escrita: { id: number | null }): GravadorCoberturaExame {
+function gravadorCobertura(
+  tx: TxOperacao,
+  est: number,
+  escrita: { id: number | null },
+): GravadorCoberturaExame {
   const exigirAgenda = async (agenda: number) => {
     const a = await tx.uma(
       `SELECT a.id FROM agenda_servico a JOIN categoria_agenda ca ON ca.id = a.categoria_agenda_id
@@ -644,7 +663,8 @@ function gravadorCobertura(tx: TxOperacao, est: number, escrita: { id: number | 
     async incluirCobertura(r) {
       await exigirAgenda(r.agenda);
       const [atual] = await linhaDa(r);
-      if (atual && atual['excluido_em'] === null) throw recusa('ja-coberto', 'Esta cobertura já está na agenda.');
+      if (atual && atual['excluido_em'] === null)
+        throw recusa('ja-coberto', 'Esta cobertura já está na agenda.');
       if (atual) {
         await tx.alterar('agenda_servico_exame', n(atual['id']), n(atual['versao']), {
           excluido_em: null,
@@ -729,7 +749,10 @@ async function contatoDe(l: Leitor, r: Linha): Promise<ContatoMarcacaoExame> {
   const pessoa = nn(r['pessoa_fisica_id']);
   if (pessoa === null) {
     const pc = nn(r['pre_cadastro_id']);
-    const x = pc === null ? null : await l.uma('SELECT telefone, celular, email FROM pre_cadastro WHERE id = ?', [pc]);
+    const x =
+      pc === null
+        ? null
+        : await l.uma('SELECT telefone, celular, email FROM pre_cadastro WHERE id = ?', [pc]);
     return {
       telefone: texto(x?.['telefone']),
       celular: texto(x?.['celular']),

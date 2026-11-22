@@ -139,7 +139,10 @@ function linhaDaCarga(r: Linha): LinhaDaCarga {
     chave: txt(r['chave']) ?? '',
     resultado: r['resultado'] === 'erro' ? 'erro' : 'valida',
     comparacao:
-      comparacao === 'novo' || comparacao === 'removido' || comparacao === 'alterado' || comparacao === 'igual'
+      comparacao === 'novo' ||
+      comparacao === 'removido' ||
+      comparacao === 'alterado' ||
+      comparacao === 'igual'
         ? comparacao
         : null,
     antes: objeto(r['valores_antes']),
@@ -244,77 +247,79 @@ const dadosTrilha = (t: Trilha): DadosTrilha => ({
   chaveNaturalAlvo: t.chaveNaturalAlvo,
 });
 
-const opPreparar = (t: DadosTrilha) => definirOperacao({
-  nome: 'catalogo.carga.preparar',
-  tabelas: [...TABELAS_CARGA],
-  entrada: esquemaPreparo,
-  acao: 'inclusao',
-  async gravar(tx, e: EntradaPreparo, ctx) {
-    const agora = new Date();
-    const id = await tx.incluir('carga_catalogo', {
-      estabelecimento_id: ctx.estabelecimento,
-      catalogo: e.catalogo,
-      arquivo_nome: e.arquivo,
-      arquivo_sha256: e.sha256,
-      arquivo_bytes: e.bytes,
-      arquivo_guardado: e.arquivoGuardado,
-      situacao: e.situacao,
-      edicao: e.edicao,
-      total_linhas: e.totais.linhas,
-      linhas_validas: e.totais.validas,
-      linhas_erro: e.totais.erros,
-      itens_novos: e.totais.novos,
-      itens_removidos: e.totais.removidos,
-      itens_alterados: e.totais.alterados,
-      itens_iguais: e.totais.iguais,
-      lotes_total: e.lotes.total,
-      tamanho_lote: e.lotes.tamanho,
+const opPreparar = (t: DadosTrilha) =>
+  definirOperacao({
+    nome: 'catalogo.carga.preparar',
+    tabelas: [...TABELAS_CARGA],
+    entrada: esquemaPreparo,
+    acao: 'inclusao',
+    async gravar(tx, e: EntradaPreparo, ctx) {
+      const agora = new Date();
+      const id = await tx.incluir('carga_catalogo', {
+        estabelecimento_id: ctx.estabelecimento,
+        catalogo: e.catalogo,
+        arquivo_nome: e.arquivo,
+        arquivo_sha256: e.sha256,
+        arquivo_bytes: e.bytes,
+        arquivo_guardado: e.arquivoGuardado,
+        situacao: e.situacao,
+        edicao: e.edicao,
+        total_linhas: e.totais.linhas,
+        linhas_validas: e.totais.validas,
+        linhas_erro: e.totais.erros,
+        itens_novos: e.totais.novos,
+        itens_removidos: e.totais.removidos,
+        itens_alterados: e.totais.alterados,
+        itens_iguais: e.totais.iguais,
+        lotes_total: e.lotes.total,
+        tamanho_lote: e.lotes.tamanho,
+        motivo: e.motivo,
+        // A carga rejeitada na preparação (erro de arquivo) nasce encerrada, por quem enviou.
+        ...(e.situacao === 'rejeitada' ? { encerrada_em: agora, encerrada_por_usuario_id: ctx.usuario } : {}),
+      });
+      await inserirLinhas(tx, id, e.linhas);
+      return { id, linhas: e.linhas.length };
+    },
+    alvo: (_e, r) => ({ tabela: 'carga_catalogo', id: Number(r.id) }),
+    trilha: (e) => ({
       motivo: e.motivo,
-      // A carga rejeitada na preparação (erro de arquivo) nasce encerrada, por quem enviou.
-      ...(e.situacao === 'rejeitada' ? { encerrada_em: agora, encerrada_por_usuario_id: ctx.usuario } : {}),
-    });
-    await inserirLinhas(tx, id, e.linhas);
-    return { id, linhas: e.linhas.length };
-  },
-  alvo: (_e, r) => ({ tabela: 'carga_catalogo', id: Number(r.id) }),
-  trilha: (e) => ({
-    motivo: e.motivo,
-    dados: { evento: e.evento, catalogo: e.catalogo, situacao: e.situacao, linhas: e.linhas.length, ...t },
-  }),
-});
+      dados: { evento: e.evento, catalogo: e.catalogo, situacao: e.situacao, linhas: e.linhas.length, ...t },
+    }),
+  });
 
-const opMudarSituacao = (t: DadosTrilha) => definirOperacao({
-  nome: 'catalogo.carga.situacao',
-  tabelas: ['carga_catalogo'],
-  entrada: esquemaMudanca,
-  acao: 'alteracao',
-  travar: (e: EntradaMudanca) => ({
-    tabela: 'carga_catalogo',
-    id: e.id,
-    versaoEsperada: e.versao,
-    colunas: ['situacao', 'estabelecimento_id'],
-  }),
-  async conferir(_tx, e: EntradaMudanca, ctx, relido) {
-    // Carga de outro estabelecimento: a mesma resposta de "não existe" (nada se revela).
-    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento)
-      throw recusa('carga-inexistente', 'Carga não encontrada neste estabelecimento.');
-    if (!(e.de as readonly string[]).includes(String(relido['situacao'])))
-      throw recusa('situacao-invalida', 'A carga não está numa situação que permita esta ação.');
-  },
-  async gravar(tx, e: EntradaMudanca, ctx) {
-    const agora = new Date();
-    const versao = await tx.alterar('carga_catalogo', e.id, e.versao, {
-      situacao: e.para,
-      ...(e.motivo ? { motivo: e.motivo } : {}),
-      ...(e.para === 'aprovada'
-        ? { aprovada_em: agora, aprovada_por_usuario_id: ctx.usuario }
-        : { encerrada_em: agora, encerrada_por_usuario_id: ctx.usuario }),
-    });
-    return { id: e.id, versao, situacao: e.para };
-  },
-  alvo: (e) => ({ tabela: 'carga_catalogo', id: e.id }),
-  trilha: (e) => ({ motivo: e.motivo, dados: { evento: e.evento, para: e.para, ...t } }),
-});
+const opMudarSituacao = (t: DadosTrilha) =>
+  definirOperacao({
+    nome: 'catalogo.carga.situacao',
+    tabelas: ['carga_catalogo'],
+    entrada: esquemaMudanca,
+    acao: 'alteracao',
+    travar: (e: EntradaMudanca) => ({
+      tabela: 'carga_catalogo',
+      id: e.id,
+      versaoEsperada: e.versao,
+      colunas: ['situacao', 'estabelecimento_id'],
+    }),
+    async conferir(_tx, e: EntradaMudanca, ctx, relido) {
+      // Carga de outro estabelecimento: a mesma resposta de "não existe" (nada se revela).
+      if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento)
+        throw recusa('carga-inexistente', 'Carga não encontrada neste estabelecimento.');
+      if (!(e.de as readonly string[]).includes(String(relido['situacao'])))
+        throw recusa('situacao-invalida', 'A carga não está numa situação que permita esta ação.');
+    },
+    async gravar(tx, e: EntradaMudanca, ctx) {
+      const agora = new Date();
+      const versao = await tx.alterar('carga_catalogo', e.id, e.versao, {
+        situacao: e.para,
+        ...(e.motivo ? { motivo: e.motivo } : {}),
+        ...(e.para === 'aprovada'
+          ? { aprovada_em: agora, aprovada_por_usuario_id: ctx.usuario }
+          : { encerrada_em: agora, encerrada_por_usuario_id: ctx.usuario }),
+      });
+      return { id: e.id, versao, situacao: e.para };
+    },
+    alvo: (e) => ({ tabela: 'carga_catalogo', id: e.id }),
+    trilha: (e) => ({ motivo: e.motivo, dados: { evento: e.evento, para: e.para, ...t } }),
+  });
 
 export class FonteCatalogosPropria implements FonteCatalogos {
   readonly destino = 'banco' as const;
@@ -522,7 +527,8 @@ export class FonteCatalogosPropria implements FonteCatalogos {
         const codigo = e.problema.codigo;
         if (codigo === 'conflito-versao')
           throw new ErroCargaCatalogo('conflito-concorrente', 'A carga mudou desde a leitura. Releia.');
-        if (codigo === 'situacao-invalida') throw new ErroCargaCatalogo('situacao-invalida', e.problema.detail);
+        if (codigo === 'situacao-invalida')
+          throw new ErroCargaCatalogo('situacao-invalida', e.problema.detail);
         if (codigo === 'carga-inexistente' || codigo === 'registro-inexistente')
           throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
       }

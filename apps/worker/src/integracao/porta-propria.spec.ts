@@ -13,16 +13,11 @@ import {
 
 describe('porta própria das integrações (unidade)', () => {
   it('a situação da mensagem de saída no vocabulário da fila', () => {
-    expect(['pendente', 'enviando', 'enviada', 'confirmada', 'erro', 'rejeitada', 'expirada', 'cancelada'].map(situacaoDoEnvio)).toEqual([
-      'pendente',
-      'pendente',
-      'enviado',
-      'enviado',
-      'morto',
-      'morto',
-      'morto',
-      'descartado',
-    ]);
+    expect(
+      ['pendente', 'enviando', 'enviada', 'confirmada', 'erro', 'rejeitada', 'expirada', 'cancelada'].map(
+        situacaoDoEnvio,
+      ),
+    ).toEqual(['pendente', 'pendente', 'enviado', 'enviado', 'morto', 'morto', 'morto', 'descartado']);
   });
 
   it('a causa da falha pela resposta curta (sem conteúdo)', () => {

@@ -9,7 +9,12 @@ import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } f
 import { NucleoProprio } from '@sgh/nucleo';
 import { logger } from './logger.js';
 import { type PortaNir, PortaNirPropria, type ReservaVencida } from './nir-reserva-propria.js';
-import { type AlvoEstabelecimento, type NucleoServico, servicoLigado, voltaPorEstabelecimento } from './servico-worker.js';
+import {
+  type AlvoEstabelecimento,
+  type NucleoServico,
+  servicoLigado,
+  voltaPorEstabelecimento,
+} from './servico-worker.js';
 
 export function expiracaoLigada(env: NodeJS.ProcessEnv): boolean {
   return servicoLigado(env, 'NIR_EXPIRACAO');
@@ -64,7 +69,10 @@ export class NirReservaService implements OnApplicationBootstrap, OnApplicationS
       this.temporizador = setInterval(() => void this.ciclo(), 60_000);
       this.temporizador.unref();
     } catch (e) {
-      logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'expiração das reservas do NIR não subiu');
+      logger.error(
+        { erro: e instanceof Error ? e.message : 'erro' },
+        'expiração das reservas do NIR não subiu',
+      );
     }
   }
 
@@ -83,7 +91,10 @@ export class NirReservaService implements OnApplicationBootstrap, OnApplicationS
         fabrica,
         (porta, est) => cicloExpiracao(porta, est, agora),
         (cliente, estabelecimento, e) =>
-          logger.warn({ cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' }, 'expiração das reservas falhou'),
+          logger.warn(
+            { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
+            'expiração das reservas falhou',
+          ),
       );
       for (const v of voltas)
         if (v.resultado.expiradas > 0)
@@ -91,7 +102,11 @@ export class NirReservaService implements OnApplicationBootstrap, OnApplicationS
             { cliente: v.cliente, estabelecimento: v.estabelecimento, expiradas: v.resultado.expiradas },
             'reservas expiradas',
           );
-      return voltas.map((v) => ({ cliente: v.cliente, estabelecimento: v.estabelecimento, expiradas: v.resultado.expiradas }));
+      return voltas.map((v) => ({
+        cliente: v.cliente,
+        estabelecimento: v.estabelecimento,
+        expiradas: v.resultado.expiradas,
+      }));
     } finally {
       this.rodando = false;
     }

@@ -15,7 +15,12 @@ const A = '/api/administracao/acesso';
 let chave = 0;
 
 async function subir(extra: Record<string, string>) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'administracao', ...extra };
+  const env: Record<string, string> = {
+    ...envTeste,
+    AMBIENTE: 'dev',
+    API_MODULOS: 'administracao',
+    ...extra,
+  };
   const trilha = new RegistradorTrilhaMemoria();
   const app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,

@@ -262,9 +262,23 @@ function estadoInicial(): Estado {
     },
   ];
   const internados: InternadoM[] = [
-    { atendimento: 9001, paciente: 8001, cabecalho: 6001, leito: '201-A', iniciais: 'P.S.U.', alergia: false },
+    {
+      atendimento: 9001,
+      paciente: 8001,
+      cabecalho: 6001,
+      leito: '201-A',
+      iniciais: 'P.S.U.',
+      alergia: false,
+    },
     { atendimento: 9002, paciente: 8002, cabecalho: 6002, leito: '202-A', iniciais: 'P.S.D.', alergia: true },
-    { atendimento: 9003, paciente: 8003, cabecalho: 6003, leito: '203-B', iniciais: 'P.S.T.', alergia: false },
+    {
+      atendimento: 9003,
+      paciente: 8003,
+      cabecalho: 6003,
+      leito: '203-B',
+      iniciais: 'P.S.T.',
+      alergia: false,
+    },
   ];
   let id = 50_000;
   const horarios: HorarioM[] = [];
@@ -318,7 +332,9 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
   constructor(
-    private readonly catalogo: { estado(operacao: string, estabelecimento: string): EstadoOperacao | null } | null = null,
+    private readonly catalogo: {
+      estado(operacao: string, estabelecimento: string): EstadoOperacao | null;
+    } | null = null,
   ) {}
 
   e(c: ContextoFarmacia): Estado {
@@ -379,7 +395,12 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   async executar(c: ContextoFarmacia, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
     const entrada = ENTRADAS_FARMACIA[op];
     if (!entrada)
-      throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+      throw new ErroOperacao(
+        400,
+        'operacao-desconhecida',
+        'Operação desconhecida',
+        `A operação ${op} não existe.`,
+      );
     const a = entrada.safeParse(entradaBruta);
     if (!a.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
@@ -524,11 +545,9 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
           'doses',
         ]);
       if (ja > 0 && ocupadas === 0)
-        throw recusaOp(
-          'dose-ja-dispensada',
-          'As doses já foram dispensadas (por outro terminal).',
-          ['doses'],
-        );
+        throw recusaOp('dose-ja-dispensada', 'As doses já foram dispensadas (por outro terminal).', [
+          'doses',
+        ]);
       throw recusaOp(
         'doses-ocupadas',
         'As doses estão sendo dispensadas em outro terminal agora: atualize a fila.',

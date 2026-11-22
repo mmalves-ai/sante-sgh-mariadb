@@ -80,7 +80,10 @@ export function desligarMapaEstabelecimentos(): void {
 }
 
 /** Cliente e estabelecimento da sessão pelo mapa ativo (sem mapa: cliente vazio e estabelecimento null). */
-export function contextoDoEstabelecimento(codigo: string): { cliente: string; estabelecimento: number | null } {
+export function contextoDoEstabelecimento(codigo: string): {
+  cliente: string;
+  estabelecimento: number | null;
+} {
   return mapaAtivo
     ? { cliente: mapaAtivo.cliente, estabelecimento: mapaAtivo.idDe(codigo) }
     : { cliente: '', estabelecimento: null };

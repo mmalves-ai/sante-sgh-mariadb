@@ -14,14 +14,24 @@ import { PortaCadastroMemoria } from './porta-memoria.js';
 import { montarFicha } from './servico.js';
 import { contextoDeTeste, moduloConfiguracaoDeTeste, registroDeTeste } from './teste.spec-util.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaCadastroMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro: registroDeTeste({ cadastro: porta }, { configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx) }) });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: registroDeTeste(
+      { cadastro: porta },
+      { configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx) },
+    ),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

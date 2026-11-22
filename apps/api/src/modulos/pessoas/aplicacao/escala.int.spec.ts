@@ -942,7 +942,9 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
       await realizado.gravarSgh(ctx(), estornado, (g) => g.estornoLancado({ id: p1, original: lanc })),
     ).toBe(neg);
     // O negativo cancelado não liga o estorno.
-    const situacaoNeg = String((await um('SELECT situacao FROM lancamento_repasse WHERE id = ?', [neg]))!['situacao']);
+    const situacaoNeg = String(
+      (await um('SELECT situacao FROM lancamento_repasse WHERE id = ?', [neg]))!['situacao'],
+    );
     const situacaoDoNeg = (v: string) =>
       nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-cancela` }, (e) =>
         e.executar('UPDATE lancamento_repasse SET situacao = ? WHERE id = ?', [v, neg]),

@@ -124,7 +124,8 @@ export async function conteudoHl7(
     const x = await c.ler(hospital, (l) => examePedido(l, hospital, Number(e.objeto)));
     if (!x) throw new ErroEntrega('exame do evento não encontrado');
     // O exame cancelado ou recusado depois de entrar na remessa não vai ao laboratório (que executaria e cobraria).
-    if (x.cancelado) throw new ErroEntrega('exame cancelado no prontuário: nada enviado ao laboratório de apoio');
+    if (x.cancelado)
+      throw new ErroEntrega('exame cancelado no prontuário: nada enviado ao laboratório de apoio');
     if (!x.apoio) throw new ErroEntrega('exame sem o código do laboratório de apoio (de-para): nada enviado');
     return montarPedidoApoio({
       cabecalho: cab,
@@ -143,7 +144,9 @@ export async function conteudoHl7(
     });
   }
   if (e.tipoEvento !== 'integracao.teste')
-    throw new ErroEntrega(`evento ${e.tipoEvento.slice(0, 60)} sem mensagem HL7 definida para o parceiro: nada enviado`);
+    throw new ErroEntrega(
+      `evento ${e.tipoEvento.slice(0, 60)} sem mensagem HL7 definida para o parceiro: nada enviado`,
+    );
   // A mensagem de teste (sem paciente): só o cabeçalho e o evento.
   return [
     `MSH|^~\\&|${cab.aplicacaoOrigem}|${cab.instituicaoOrigem}|${cab.aplicacaoDestino}|${cab.instituicaoDestino}|${dataHl7(cab.dataHora)}||ADT^A08^ADT_A01|${cab.controle}|T|2.5`,

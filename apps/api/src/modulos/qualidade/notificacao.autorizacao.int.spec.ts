@@ -10,7 +10,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
-import { CLIENTE_QUA, contasDasSessoes, ctxBanco, encerrarMassaQualidade, type MassaQualidade, prepararMassaQualidade, SEM_BANCO_QUA } from './massa.spec-util.js';
+import {
+  CLIENTE_QUA,
+  contasDasSessoes,
+  ctxBanco,
+  encerrarMassaQualidade,
+  type MassaQualidade,
+  prepararMassaQualidade,
+  SEM_BANCO_QUA,
+} from './massa.spec-util.js';
 import type { ContextoQualidade, PortaQualidade } from './porta.js';
 import { PortaQualidadePropria } from './porta-propria.js';
 import { criarAppQualidade } from './teste.spec-util.js';
@@ -61,20 +69,38 @@ describe.skipIf(SEM_BANCO_QUA)('anonimato da notificação no MariaDB (f22_o4)',
       origemTela: 'prescricao',
       origemSugestao: null,
     };
-    return porta.gravarSgh(c, (r: { id: number }) => T(r.id), (g) => g.notificar(x));
+    return porta.gravarSgh(
+      c,
+      (r: { id: number }) => T(r.id),
+      (g) => g.notificar(x),
+    );
   };
 
   /** O texto de todas as linhas ligadas à notificação (a notificação, os eventos, os envios e a trilha). */
   const rastro = (id: number) =>
-    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 't' }, async (l) => {
-      const linhas = [
-        ...(await l.consultar('SELECT * FROM notificacao_incidente WHERE id = ?', [id])),
-        ...(await l.consultar('SELECT * FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ?', [id])),
-        ...(await l.consultar('SELECT * FROM notificacao_incidente_envio WHERE notificacao_incidente_id = ?', [id])),
-        ...(await l.consultar("SELECT * FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?", [id])),
-      ];
-      return linhas.map((r) => JSON.stringify(r, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)));
-    });
+    m.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4', correlacao: 't' },
+      async (l) => {
+        const linhas = [
+          ...(await l.consultar('SELECT * FROM notificacao_incidente WHERE id = ?', [id])),
+          ...(await l.consultar(
+            'SELECT * FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ?',
+            [id],
+          )),
+          ...(await l.consultar(
+            'SELECT * FROM notificacao_incidente_envio WHERE notificacao_incidente_id = ?',
+            [id],
+          )),
+          ...(await l.consultar(
+            "SELECT * FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?",
+            [id],
+          )),
+        ];
+        return linhas.map((r) =>
+          JSON.stringify(r, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)),
+        );
+      },
+    );
 
   it('a anônima não guarda a conta nem o login de quem notificou; a identificada guarda', async () => {
     const a = await notificar(true);
@@ -100,7 +126,11 @@ function portaNaMassa(p: PortaQualidadePropria, est: number): PortaQualidade {
       const v = Reflect.get(alvo, k, r) as unknown;
       if (typeof v !== 'function') return v;
       return (c: ContextoQualidade, ...resto: unknown[]) =>
-        (v as (...a: unknown[]) => unknown).call(alvo, { ...c, cliente: CLIENTE_QUA, estabelecimento: est, usuario: null }, ...resto);
+        (v as (...a: unknown[]) => unknown).call(
+          alvo,
+          { ...c, cliente: CLIENTE_QUA, estabelecimento: est, usuario: null },
+          ...resto,
+        );
     },
   }) as unknown as PortaQualidade;
 }
@@ -123,10 +153,13 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
   beforeAll(async () => {
     m = await prepararMassaQualidade('F');
     contas = await contasDasSessoes(m, [ANONIMO, IDENTIFICADO, 'SINT.NSP', GESTOR]);
-    app = await criarAppQualidade({ ...envTeste, AMBIENTE: 'dev' }, {
-      trilha: new RegistradorTrilhaMemoria(),
-      qualidade: portaNaMassa(new PortaQualidadePropria(m.nucleo), m.est),
-    });
+    app = await criarAppQualidade(
+      { ...envTeste, AMBIENTE: 'dev' },
+      {
+        trilha: new RegistradorTrilhaMemoria(),
+        qualidade: portaNaMassa(new PortaQualidadePropria(m.nucleo), m.est),
+      },
+    );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   }, 60_000);
@@ -136,25 +169,47 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
   });
 
   const entrar = async (login: string): Promise<Sessao> => {
-    const r = await app.inject({ method: 'POST', url: '/api/sessao', payload: { estabelecimento: 'aa', login, senha: SENHA } });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/sessao',
+      payload: { estabelecimento: 'aa', login, senha: SENHA },
+    });
     expect(r.statusCode, r.body).toBe(201);
     const set = r.headers['set-cookie'] as string[];
     return {
       cookie: set.map((c) => c.split(';')[0]).join('; '),
-      csrf: set.find((c) => c.startsWith('sgh_csrf='))?.split(';')[0]?.slice(9) ?? '',
+      csrf:
+        set
+          .find((c) => c.startsWith('sgh_csrf='))
+          ?.split(';')[0]
+          ?.slice(9) ?? '',
     };
   };
-  const get = (s: Sessao, url: string) => app.inject({ method: 'GET', url: `/api${url}`, headers: { cookie: s.cookie } });
-  const post = (s: Sessao, url: string, payload: unknown = {}, chave?: string, extra: Record<string, string> = {}) =>
+  const get = (s: Sessao, url: string) =>
+    app.inject({ method: 'GET', url: `/api${url}`, headers: { cookie: s.cookie } });
+  const post = (
+    s: Sessao,
+    url: string,
+    payload: unknown = {},
+    chave?: string,
+    extra: Record<string, string> = {},
+  ) =>
     app.inject({
       method: 'POST',
       url: `/api${url}`,
-      headers: { cookie: s.cookie, 'x-csrf': s.csrf, 'idempotency-key': chave ?? `int-0403-${String(++seq)}-${String(Date.now())}`, ...extra },
+      headers: {
+        cookie: s.cookie,
+        'x-csrf': s.csrf,
+        'idempotency-key': chave ?? `int-0403-${String(++seq)}-${String(Date.now())}`,
+        ...extra,
+      },
       payload: payload as object,
     });
   const ok = (r: { statusCode: number; body: string }) => expect(r.statusCode, r.body).toBeLessThan(300);
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: CLIENTE_QUA, correlacao: 't' }, (l) => l.consultar<Record<string, unknown>>(sql, p));
+    m.nucleo.lerSomente({ cliente: CLIENTE_QUA, correlacao: 't' }, (l) =>
+      l.consultar<Record<string, unknown>>(sql, p),
+    );
 
   it('anônima sem conta nem correlação; reenvio sem trilha nova; triagem, distribuição, devolutiva e o gestor da área', async () => {
     const anon = await entrar(ANONIMO);
@@ -163,7 +218,9 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
     const f = await get(anon, '/qualidade/notificacoes/formulario');
     expect(f.statusCode, f.body).toBe(200);
     const agora = String((f.json() as { agora: string }).agora);
-    const ocorrido = new Date(Date.parse(`${agora.slice(0, 19)}Z`) - 2 * 3_600_000).toISOString().slice(0, 16);
+    const ocorrido = new Date(Date.parse(`${agora.slice(0, 19)}Z`) - 2 * 3_600_000)
+      .toISOString()
+      .slice(0, 16);
     const corpo = (x: Record<string, unknown>) => ({
       atendimento: null,
       unidade: m.setor,
@@ -180,13 +237,21 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
     });
 
     // A anônima: nem a conta, nem o login, nem a correlação do cabeçalho da requisição ficam no rastro.
-    const rAnon = await post(anon, '/qualidade/notificacoes', corpo({ anonima: true }), undefined, { 'x-correlacao': CORRELACAO_DA_REQUISICAO });
+    const rAnon = await post(anon, '/qualidade/notificacoes', corpo({ anonima: true }), undefined, {
+      'x-correlacao': CORRELACAO_DA_REQUISICAO,
+    });
     ok(rAnon);
     const anonima = rAnon.json() as { protocolo: string; codigoAcompanhamento: string };
-    const [la] = await ler('SELECT id, notificador_usuario_id FROM notificacao_incidente WHERE estabelecimento_id = ? AND numero = ?', [m.est, anonima.protocolo]);
+    const [la] = await ler(
+      'SELECT id, notificador_usuario_id FROM notificacao_incidente WHERE estabelecimento_id = ? AND numero = ?',
+      [m.est, anonima.protocolo],
+    );
     const idAnon = Number(la?.['id']);
     expect(la?.['notificador_usuario_id']).toBeNull();
-    const trAnon = await ler("SELECT usuario_id, correlacao FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?", [idAnon]);
+    const trAnon = await ler(
+      "SELECT usuario_id, correlacao FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?",
+      [idAnon],
+    );
     expect(trAnon.length).toBeGreaterThanOrEqual(1);
     expect(trAnon.every((t) => t['usuario_id'] === null && t['correlacao'] === 'notificacao')).toBe(true);
     expect(JSON.stringify(trAnon)).not.toContain(CORRELACAO_DA_REQUISICAO);
@@ -196,22 +261,32 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
     const rIdent = await post(ident, '/qualidade/notificacoes', corpo({}), chave);
     ok(rIdent);
     const identificada = rIdent.json() as { protocolo: string };
-    const [li] = await ler('SELECT id, notificador_usuario_id FROM notificacao_incidente WHERE estabelecimento_id = ? AND numero = ?', [m.est, identificada.protocolo]);
+    const [li] = await ler(
+      'SELECT id, notificador_usuario_id FROM notificacao_incidente WHERE estabelecimento_id = ? AND numero = ?',
+      [m.est, identificada.protocolo],
+    );
     const idIdent = Number(li?.['id']);
     expect(Number(li?.['notificador_usuario_id'])).toBe(contas.get(IDENTIFICADO));
-    const trilhaDaIdent = () => ler("SELECT id FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?", [idIdent]);
+    const trilhaDaIdent = () =>
+      ler("SELECT id FROM trilha_auditoria WHERE entidade = 'notificacao_incidente' AND entidade_id = ?", [
+        idIdent,
+      ]);
     const linhasAntes = (await trilhaDaIdent()).length;
     expect(linhasAntes).toBeGreaterThanOrEqual(1);
     const rep = await post(ident, '/qualidade/notificacoes', corpo({}), chave);
     ok(rep);
     expect(rep.json()).toMatchObject({ protocolo: identificada.protocolo });
     expect(await trilhaDaIdent()).toHaveLength(linhasAntes);
-    expect(await ler('SELECT id FROM notificacao_incidente WHERE estabelecimento_id = ?', [m.est])).toHaveLength(2);
+    expect(
+      await ler('SELECT id FROM notificacao_incidente WHERE estabelecimento_id = ?', [m.est]),
+    ).toHaveLength(2);
 
     // O NSP: a lista, o detalhe sem o notificador da anônima, a triagem com reclassificação, a distribuição e a devolutiva.
     const l = await get(nsp, '/qualidade/nsp/notificacoes');
     expect(l.statusCode, l.body).toBe(200);
-    expect((l.json() as { itens: { id: number }[] }).itens.map((x) => x.id).sort()).toEqual([idAnon, idIdent].sort());
+    expect((l.json() as { itens: { id: number }[] }).itens.map((x) => x.id).sort()).toEqual(
+      [idAnon, idIdent].sort(),
+    );
     const d = await get(nsp, `/qualidade/nsp/notificacoes/${String(idAnon)}`);
     expect(d.statusCode, d.body).toBe(200);
     const det = (d.json() as { notificacao: { versao: number; notificador: string | null } }).notificacao;
@@ -239,12 +314,23 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
     });
     ok(dist);
     const v2 = (dist.json() as { versao: number }).versao;
-    const dev = await post(nsp, `/qualidade/nsp/notificacoes/${String(idAnon)}/devolutiva`, { versao: v2, texto: 'SINTETICO 04-03: revisamos a grade do leito.' });
+    const dev = await post(nsp, `/qualidade/nsp/notificacoes/${String(idAnon)}/devolutiva`, {
+      versao: v2,
+      texto: 'SINTETICO 04-03: revisamos a grade do leito.',
+    });
     ok(dev);
-    const tipos = (await ler('SELECT JSON_VALUE(dados, \'$.tipo\') AS tipo FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ? ORDER BY id', [idAnon])).map((x) => x['tipo']);
+    const tipos = (
+      await ler(
+        "SELECT JSON_VALUE(dados, '$.tipo') AS tipo FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ? ORDER BY id",
+        [idAnon],
+      )
+    ).map((x) => x['tipo']);
     expect(tipos[0]).toBe('recebida');
     expect(tipos).toEqual(expect.arrayContaining(['triada', 'distribuida', 'devolutiva']));
-    const acomp = await post(anon, '/qualidade/notificacoes/acompanhar', { protocolo: anonima.protocolo, codigo: anonima.codigoAcompanhamento });
+    const acomp = await post(anon, '/qualidade/notificacoes/acompanhar', {
+      protocolo: anonima.protocolo,
+      codigo: anonima.codigoAcompanhamento,
+    });
     expect(acomp.statusCode, acomp.body).toBe(200);
     expect((acomp.json() as { devolutivas: unknown[] }).devolutivas).toHaveLength(1);
 
@@ -255,7 +341,9 @@ describe.skipIf(SEM_BANCO_QUA)('o fluxo do NSP pela API sobre o MariaDB (f22_o4)
     expect((lg.json() as { itens: { id: number }[] }).itens.map((x) => x.id)).toEqual([idAnon]);
     const dg = await get(ges, `/qualidade/gestor/notificacoes/${String(idAnon)}`);
     expect(dg.statusCode, dg.body).toBe(200);
-    const detG = (dg.json() as { notificacao: { notificador: string | null; eventos: { por: string | null }[] } }).notificacao;
+    const detG = (
+      dg.json() as { notificacao: { notificador: string | null; eventos: { por: string | null }[] } }
+    ).notificacao;
     expect(detG.notificador).toBeNull();
     expect(detG.eventos.length).toBeGreaterThan(0);
     expect(detG.eventos.every((x) => x.por === null)).toBe(true);

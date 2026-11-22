@@ -402,7 +402,10 @@ export class PortaRoupariaPropria implements PortaRouparia {
     return this.ler(c, async (l, est) =>
       comItens(
         l,
-        await l.consultar(sqlMovimentos(["m.tipo = 'inventario'", 'm.data <= ?']), [...porDocumento(est), ate]),
+        await l.consultar(sqlMovimentos(["m.tipo = 'inventario'", 'm.data <= ?']), [
+          ...porDocumento(est),
+          ate,
+        ]),
       ),
     );
   }
@@ -531,7 +534,11 @@ async function comItens(l: Leitor, linhas: readonly Linha[]): Promise<MovimentoR
         WHERE inventario_enxoval_id IN (${lista(inv.length)}) AND excluido_em IS NULL ORDER BY sequencia`,
       inv,
     ))
-      juntar(numeroDoMovimento('inventario', n(x['doc'])), n(x['peca_enxoval_id']), n(x['quantidade_contada']));
+      juntar(
+        numeroDoMovimento('inventario', n(x['doc'])),
+        n(x['peca_enxoval_id']),
+        n(x['quantidade_contada']),
+      );
   const bx = ids('perda');
   if (bx.length)
     for (const x of await l.consultar(
@@ -745,7 +752,8 @@ function gravador(tx: TxOperacao, est: number): GravadorRouparia {
   }
 
   async function registrarInventario(m: MovimentoRoupaNovo, usuario: number, em: string): Promise<number> {
-    if (m.itens.length === 0) throw recusa('inventario-sem-peca', 'Informe as peças contadas e as quantidades.');
+    if (m.itens.length === 0)
+      throw recusa('inventario-sem-peca', 'Informe as peças contadas e as quantidades.');
     if (m.pesoKg !== null)
       throw recusa('inventario-sem-peso', 'O inventário conta peças: informe as quantidades, sem o peso.');
     const num = await numero(tx, 'inventario_enxoval', 'IN-');

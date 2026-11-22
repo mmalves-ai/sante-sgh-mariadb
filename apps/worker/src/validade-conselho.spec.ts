@@ -19,13 +19,18 @@ describe('validade vigente do conselho', () => {
   });
 
   it('a conferência retroativa (id maior, ocorrido antes) não passa à frente', () => {
-    const cs = [c(1, '2026-05-01T00:00:00.000Z', { dataValidade: '2031-01-01' }), c(2, '2026-01-01T00:00:00.000Z')];
+    const cs = [
+      c(1, '2026-05-01T00:00:00.000Z', { dataValidade: '2031-01-01' }),
+      c(2, '2026-01-01T00:00:00.000Z'),
+    ];
     expect(conferenciaVigente(cs)?.id).toBe(1);
     expect(validadeVigente(ins, cs).validade).toBe('2031-01-01');
   });
 
   it('no mesmo instante, o id maior', () => {
-    expect(conferenciaVigente([c(3, '2026-01-01T00:00:00.000Z'), c(4, '2026-01-01T00:00:00.000Z')])?.id).toBe(4);
+    expect(conferenciaVigente([c(3, '2026-01-01T00:00:00.000Z'), c(4, '2026-01-01T00:00:00.000Z')])?.id).toBe(
+      4,
+    );
   });
 
   it('a exclusão por último derruba a conferência: volta a validade da inscrição', () => {
@@ -35,12 +40,18 @@ describe('validade vigente do conselho', () => {
   });
 
   it('registro suspenso ou cancelado sai da conta; inscrição inativa também', () => {
-    expect(validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { situacaoRegistro: 'suspenso' })]).ativo).toBe(false);
-    expect(validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { situacaoRegistro: 'cancelado' })]).ativo).toBe(false);
+    expect(
+      validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { situacaoRegistro: 'suspenso' })]).ativo,
+    ).toBe(false);
+    expect(
+      validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { situacaoRegistro: 'cancelado' })]).ativo,
+    ).toBe(false);
     expect(validadeVigente({ ativa: false, validade: null }, []).ativo).toBe(false);
   });
 
   it('conferência sem data: a validade da inscrição', () => {
-    expect(validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { dataValidade: null })]).validade).toBe('2020-01-01');
+    expect(validadeVigente(ins, [c(1, '2026-01-01T00:00:00.000Z', { dataValidade: null })]).validade).toBe(
+      '2020-01-01',
+    );
   });
 });

@@ -8,7 +8,20 @@
 import { CRITICAS_CONTA, type MotivoGlosaLido } from '@sgh/contratos';
 import { problemasDoParecerDoRecurso, rateioDoAcatado, situacaoDoRecurso } from '@sgh/dominio-operadora';
 import { ErroOperacao } from '@sgh/nucleo';
-import { type DadosAuditor, type DadosAutorizacaoDaSenha, type DadosConta, type DadosContaResumo, type DadosEventoConta, type DadosGuiaConta, type DadosItemConta, type DadosRecursoItem, type FiltroContasPorta, type FiltroPagamentosPorta, LIMITE_PAGINA_CONTAS, type SituacaoContaPorta } from './dados-portas.js';
+import {
+  type DadosAuditor,
+  type DadosAutorizacaoDaSenha,
+  type DadosConta,
+  type DadosContaResumo,
+  type DadosEventoConta,
+  type DadosGuiaConta,
+  type DadosItemConta,
+  type DadosRecursoItem,
+  type FiltroContasPorta,
+  type FiltroPagamentosPorta,
+  LIMITE_PAGINA_CONTAS,
+  type SituacaoContaPorta,
+} from './dados-portas.js';
 import type { ContextoContas, GravadorContas, PortaContasOperadora } from './contas-porta.js';
 import type { PortaOperadora } from './porta.js';
 import type { PortaRedeOperadora } from './rede-porta.js';

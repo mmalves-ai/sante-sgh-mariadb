@@ -83,7 +83,12 @@ const PRIORIDADE_DO_BANCO: Readonly<Record<string, PrioridadeNir>> = {
   media: 'prioritario',
   baixa: 'eletivo' as PrioridadeNir,
 };
-const PRIORIDADE_DA_TELA: Readonly<Record<string, string>> = { emergencia: 'emergencia', urgente: 'alta', prioritario: 'media', eletivo: 'baixa' };
+const PRIORIDADE_DA_TELA: Readonly<Record<string, string>> = {
+  emergencia: 'emergencia',
+  urgente: 'alta',
+  prioritario: 'media',
+  eletivo: 'baixa',
+};
 
 const TABELAS_NIR = [
   'pedido_leito',
@@ -187,14 +192,23 @@ export class PortaNirPropria implements PortaNir {
   }
 
   private contexto(c: ContextoNir): ContextoNucleo {
-    return { cliente: c.cliente, estabelecimento: c.estabelecimento, usuario: c.usuario, correlacao: c.correlacao };
+    return {
+      cliente: c.cliente,
+      estabelecimento: c.estabelecimento,
+      usuario: c.usuario,
+      correlacao: c.correlacao,
+    };
   }
 
   private ler<T>(c: ContextoNir, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(this.contexto(c), async (l) => {
-      const f = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+      const f = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
       return fn(l, est, f?.fuso_horario || FUSO_PADRAO);
     });
   }
@@ -210,7 +224,11 @@ export class PortaNirPropria implements PortaNir {
     throw recusa('operacao-desconhecida', 'O NIR grava pelas ações próprias; a admissão é pela internação.');
   }
 
-  async gravarSgh<T>(c: ContextoNir, trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao), fn: (g: GravadorNir) => Promise<T>): Promise<T> {
+  async gravarSgh<T>(
+    c: ContextoNir,
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (g: GravadorNir) => Promise<T>,
+  ): Promise<T> {
     const est = c.estabelecimento;
     if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
     let saida: { valor: T } | null = null;
@@ -227,7 +245,11 @@ export class PortaNirPropria implements PortaNir {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = chaveDaGravacaoDireta(c as ComIdempotencia, 'nir', randomUUID);
-    const ctx: ContextoOperacao = { ...this.contexto(c), correlacao: c.correlacao || 'nir', chaveIdempotencia: chave };
+    const ctx: ContextoOperacao = {
+      ...this.contexto(c),
+      correlacao: c.correlacao || 'nir',
+      chaveIdempotencia: chave,
+    };
     const r = await this.executor.executar(op, c.cliente, { chave }, ctx);
     return (r.resultado as unknown as { valor: T }).valor;
   }
@@ -235,7 +257,13 @@ export class PortaNirPropria implements PortaNir {
   relogio(c: ContextoNir) {
     return this.ler(c, async (_l, _e, fuso) => {
       const r = relogioNoFuso(fuso);
-      const hms = new Intl.DateTimeFormat('en-GB', { timeZone: fuso, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+      const hms = new Intl.DateTimeFormat('en-GB', {
+        timeZone: fuso,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(new Date());
       return { hoje: r.hoje, agora: `${r.hoje}T${hms}` };
     });
   }
@@ -264,10 +292,37 @@ export class PortaNirPropria implements PortaNir {
       const ls = await l.consultar(`${SQL_PEDIDO} AND pl.id IN (${lista(ids.length)})`, [est, ...ids]);
       return ls.flatMap((r) => {
         const s = solicitacaoDe(r);
-        const ev: EventoSolicitacaoNir[] = [{ solicitacao: s.id, acao: 'solicitar', de: null, para: 'solicitado', motivo: null, por: s.solicitadoPor, em: s.solicitadoEm }];
-        if (r['data_hora_atendido']) ev.push({ solicitacao: s.id, acao: 'internar', de: null, para: 'internado', motivo: null, por: '', em: iso(r['data_hora_atendido']) ?? '' });
+        const ev: EventoSolicitacaoNir[] = [
+          {
+            solicitacao: s.id,
+            acao: 'solicitar',
+            de: null,
+            para: 'solicitado',
+            motivo: null,
+            por: s.solicitadoPor,
+            em: s.solicitadoEm,
+          },
+        ];
+        if (r['data_hora_atendido'])
+          ev.push({
+            solicitacao: s.id,
+            acao: 'internar',
+            de: null,
+            para: 'internado',
+            motivo: null,
+            por: '',
+            em: iso(r['data_hora_atendido']) ?? '',
+          });
         if (r['data_hora_cancelamento'])
-          ev.push({ solicitacao: s.id, acao: 'cancelar', de: null, para: s.estado, motivo: r['motivo_cancelamento'] === null ? null : texto(r['motivo_cancelamento']), por: '', em: iso(r['data_hora_cancelamento']) ?? '' });
+          ev.push({
+            solicitacao: s.id,
+            acao: 'cancelar',
+            de: null,
+            para: s.estado,
+            motivo: r['motivo_cancelamento'] === null ? null : texto(r['motivo_cancelamento']),
+            por: '',
+            em: iso(r['data_hora_cancelamento']) ?? '',
+          });
         return ev;
       });
     });
@@ -290,12 +345,23 @@ export class PortaNirPropria implements PortaNir {
   }
 
   reservasVigentes(c: ContextoNir) {
-    return this.ler(c, async (l, est) => (await l.consultar(`${SQL_RESERVA} AND r.situacao IN ('ativa','confirmada') ORDER BY r.reservado_em`, [est])).map(reservaDe));
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(`${SQL_RESERVA} AND r.situacao IN ('ativa','confirmada') ORDER BY r.reservado_em`, [
+          est,
+        ])
+      ).map(reservaDe),
+    );
   }
 
   reservasEncerradas(c: ContextoNir) {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_RESERVA} AND r.situacao NOT IN ('ativa','confirmada') ORDER BY r.encerrada_em DESC LIMIT ${TETO}`, [est])).map(reservaDe),
+      (
+        await l.consultar(
+          `${SQL_RESERVA} AND r.situacao NOT IN ('ativa','confirmada') ORDER BY r.encerrada_em DESC LIMIT ${TETO}`,
+          [est],
+        )
+      ).map(reservaDe),
     );
   }
 
@@ -348,7 +414,11 @@ export class PortaNirPropria implements PortaNir {
         cid: r['cid'] === null ? null : texto(r['cid']),
         trechos: trechos
           .filter((t) => n(t['internacao_id']) === n(r['id']))
-          .map((t) => ({ tipo: n(t['categoria_acomodacao_id']), entrada: iso(t['data_hora_inicio']) ?? '', saida: iso(t['data_hora_fim']) })),
+          .map((t) => ({
+            tipo: n(t['categoria_acomodacao_id']),
+            entrada: iso(t['data_hora_inicio']) ?? '',
+            saida: iso(t['data_hora_fim']),
+          })),
       }));
       return { itens, cortada: ls.length > TETO };
     });
@@ -360,7 +430,13 @@ export class PortaNirPropria implements PortaNir {
         'SELECT i.id, p.numero_prontuario, i.situacao FROM internacao i JOIN paciente p ON p.id = i.paciente_id WHERE i.id = ? AND i.estabelecimento_id = ? AND i.excluido_em IS NULL',
         [reg, est],
       );
-      return r ? { reg: n(r['id']), pront: n(r['numero_prontuario']), internado: ['ativa', 'alta_medica'].includes(texto(r['situacao'])) } : null;
+      return r
+        ? {
+            reg: n(r['id']),
+            pront: n(r['numero_prontuario']),
+            internado: ['ativa', 'alta_medica'].includes(texto(r['situacao'])),
+          }
+        : null;
     });
   }
 
@@ -377,7 +453,10 @@ export class PortaNirPropria implements PortaNir {
       ).map((r) => ({
         id: n(r['id']),
         reg: n(r['internacao_id']),
-        data: r['data_prevista'] instanceof Date ? r['data_prevista'].toISOString().slice(0, 10) : texto(r['data_prevista']),
+        data:
+          r['data_prevista'] instanceof Date
+            ? r['data_prevista'].toISOString().slice(0, 10)
+            : texto(r['data_prevista']),
         motivo: r['motivo_mudanca'] === null ? null : texto(r['motivo_mudanca']),
         por: texto(r['login']),
         em: iso(r['ocorrido_em']) ?? '',
@@ -407,7 +486,8 @@ export class PortaNirPropria implements PortaNir {
         descricao: texto(r['descricao']),
         responsavel: texto(r['responsavel']),
         prazo: iso(r['prazo_em']) ?? '',
-        situacao: r['situacao'] === 'em_tratamento' ? 'aberta' : (texto(r['situacao']) as BarreiraDaAlta['situacao']),
+        situacao:
+          r['situacao'] === 'em_tratamento' ? 'aberta' : (texto(r['situacao']) as BarreiraDaAlta['situacao']),
         criadaPor: texto(r['criada_por']),
         criadaEm: iso(r['identificada_em']) ?? '',
         resolvidaEm: iso(r['resolvida_em']),
@@ -453,13 +533,20 @@ export class PortaNirPropria implements PortaNir {
              FROM situacao_pedido_leito s LEFT JOIN usuario u ON u.id = COALESCE(s.alterado_por, s.criado_por)
             WHERE s.ativo = TRUE ORDER BY s.ordem_exibicao, s.id`,
         )
-      ).map((r) => ({ situacao: n(r['id']), estado: texto(r['estado']) as EstadoSolicitacaoNir, aprovadoPor: texto(r['login']), aprovadoEm: iso(r['em']) ?? '' })),
+      ).map((r) => ({
+        situacao: n(r['id']),
+        estado: texto(r['estado']) as EstadoSolicitacaoNir,
+        aprovadoPor: texto(r['login']),
+        aprovadoEm: iso(r['em']) ?? '',
+      })),
     );
   }
 
   situacoes(c: ContextoNir) {
     return this.ler(c, async (l) => {
-      const ls = await l.consultar('SELECT id, descricao FROM situacao_pedido_leito ORDER BY ordem_exibicao, id');
+      const ls = await l.consultar(
+        'SELECT id, descricao FROM situacao_pedido_leito ORDER BY ordem_exibicao, id',
+      );
       return new Map(ls.map((r) => [n(r['id']), texto(r['descricao'])]));
     });
   }
@@ -509,12 +596,23 @@ export class PortaNirPropria implements PortaNir {
         [est, est],
       );
       const servicos = await l.consultar(
-        "SELECT id, descricao, codigo_central FROM servico_regulacao WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY descricao",
+        'SELECT id, descricao, codigo_central FROM servico_regulacao WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY descricao',
         [est],
       );
       return {
-        sistemas: sistemas.map((r) => ({ id: n(r['id']), sigla: texto(r['sigla']), ativo: r['ativo'] === true || r['ativo'] === 1, servicos: n(r['servicos']), servicosAtivos: n(r['ativos']) })),
-        endpoints: servicos.map((r) => ({ id: n(r['id']), servico: n(r['id']), descricao: texto(r['descricao']), metodo: texto(r['codigo_central']) || null })),
+        sistemas: sistemas.map((r) => ({
+          id: n(r['id']),
+          sigla: texto(r['sigla']),
+          ativo: r['ativo'] === true || r['ativo'] === 1,
+          servicos: n(r['servicos']),
+          servicosAtivos: n(r['ativos']),
+        })),
+        endpoints: servicos.map((r) => ({
+          id: n(r['id']),
+          servico: n(r['id']),
+          descricao: texto(r['descricao']),
+          metodo: texto(r['codigo_central']) || null,
+        })),
         tabelas: [],
       };
     });
@@ -529,13 +627,24 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     return tx.contexto.usuario;
   };
   const situacaoDoEstado = (estado: string) =>
-    apoio(tx, 'SELECT id FROM situacao_pedido_leito WHERE estado = ? AND ativo = TRUE ORDER BY ordem_exibicao, id LIMIT 1', [estado], `a situação de pedido de leito "${estado}"`);
+    apoio(
+      tx,
+      'SELECT id FROM situacao_pedido_leito WHERE estado = ? AND ativo = TRUE ORDER BY ordem_exibicao, id LIMIT 1',
+      [estado],
+      `a situação de pedido de leito "${estado}"`,
+    );
   const pedido = async (id: number) => {
     const [p] = await tx.consultarParaAtualizar(
       'SELECT pl.id, pl.versao, pl.data_hora_pedido, sp.estado FROM pedido_leito pl JOIN situacao_pedido_leito sp ON sp.id = pl.situacao_pedido_leito_id WHERE pl.id = ? AND pl.estabelecimento_id = ? AND pl.excluido_em IS NULL',
       [id, est],
     );
-    if (!p) throw new ErroOperacao(404, 'registro-inexistente', 'Solicitação não encontrada', 'A solicitação de leito não existe.');
+    if (!p)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Solicitação não encontrada',
+        'A solicitação de leito não existe.',
+      );
     return p;
   };
   const reserva = async (id: number) => {
@@ -543,12 +652,27 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       'SELECT id, versao, situacao, pedido_leito_id, leito_hospitalar_id, internacao_id FROM reserva_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [id, est],
     );
-    if (!r) throw new ErroOperacao(404, 'registro-inexistente', 'Reserva não encontrada', 'A reserva de leito não existe.');
+    if (!r)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Reserva não encontrada',
+        'A reserva de leito não existe.',
+      );
     return r;
   };
   const internacaoDe = async (reg: number) => {
-    const i = await tx.uma('SELECT id, paciente_id FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [reg, est]);
-    if (!i) throw new ErroOperacao(404, 'registro-inexistente', 'Internação não encontrada', 'A internação não existe neste estabelecimento.');
+    const i = await tx.uma(
+      'SELECT id, paciente_id FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [reg, est],
+    );
+    if (!i)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Internação não encontrada',
+        'A internação não existe neste estabelecimento.',
+      );
     return i;
   };
   const precaucao = async (codigo: string | null | undefined) =>
@@ -561,20 +685,39 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         WHERE ba.id = ? AND i.estabelecimento_id = ? AND ba.excluido_em IS NULL`,
       [id, est],
     );
-    if (!x) throw new ErroOperacao(404, 'registro-inexistente', 'Barreira não encontrada', 'A barreira de alta não existe neste estabelecimento.');
+    if (!x)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Barreira não encontrada',
+        'A barreira de alta não existe neste estabelecimento.',
+      );
     return x;
   };
   /** O responsável da barreira: o login de um usuário ou o código (ou nome) de um setor do estabelecimento. */
   const responsavelDe = async (quem: string) => {
     const u = await tx.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [quem]);
     if (u) return { responsavel_usuario_id: n(u['id']), responsavel_setor_funcional_id: null };
-    const porCodigo = await tx.uma('SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ? AND ativo = TRUE AND excluido_em IS NULL', [est, quem]);
+    const porCodigo = await tx.uma(
+      'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ? AND ativo = TRUE AND excluido_em IS NULL',
+      [est, quem],
+    );
     const setores = porCodigo
       ? [porCodigo]
-      : await tx.consultar('SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND UPPER(nome) = UPPER(?) AND ativo = TRUE AND excluido_em IS NULL LIMIT 2', [est, quem]);
-    if (setores.length > 1) throw recusa('responsavel-ambiguo', 'Mais de um setor com esse nome: informe o código do setor.', { campos: ['responsavel'] });
+      : await tx.consultar(
+          'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND UPPER(nome) = UPPER(?) AND ativo = TRUE AND excluido_em IS NULL LIMIT 2',
+          [est, quem],
+        );
+    if (setores.length > 1)
+      throw recusa('responsavel-ambiguo', 'Mais de um setor com esse nome: informe o código do setor.', {
+        campos: ['responsavel'],
+      });
     if (setores.length === 0)
-      throw recusa('responsavel-inexistente', 'Informe o login de um usuário ou o código ou o nome de um setor do estabelecimento.', { campos: ['responsavel'] });
+      throw recusa(
+        'responsavel-inexistente',
+        'Informe o login de um usuário ou o código ou o nome de um setor do estabelecimento.',
+        { campos: ['responsavel'] },
+      );
     return { responsavel_usuario_id: null, responsavel_setor_funcional_id: n(setores[0]?.['id']) };
   };
   return {
@@ -604,19 +747,39 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async transicionar(t) {
       const p = await pedido(t.solicitacao);
-      if (texto(p['estado']) !== t.de) throw new ErroOperacao(409, 'conflito-versao', 'Solicitação alterada', 'A solicitação mudou de estado desde a leitura.', { colunas: ['situacao'] });
-      const muda: Record<string, unknown> = { situacao_pedido_leito_id: t.situacaoCodigo ?? (await situacaoDoEstado(t.para)) };
+      if (texto(p['estado']) !== t.de)
+        throw new ErroOperacao(
+          409,
+          'conflito-versao',
+          'Solicitação alterada',
+          'A solicitação mudou de estado desde a leitura.',
+          { colunas: ['situacao'] },
+        );
+      const muda: Record<string, unknown> = {
+        situacao_pedido_leito_id: t.situacaoCodigo ?? (await situacaoDoEstado(t.para)),
+      };
       if (t.prioridade) muda['prioridade'] = PRIORIDADE_DA_TELA[t.prioridade] ?? 'media';
-      if (t.prazoMinDesdeOPedido !== undefined && t.prazoMinDesdeOPedido !== null) muda['data_hora_prevista'] = minutos(p['data_hora_pedido'] as Date, t.prazoMinDesdeOPedido);
-      if (t.para === 'cancelado' || t.para === 'rejeitado') Object.assign(muda, { data_hora_cancelamento: new Date(), motivo_cancelamento: t.motivo ?? t.para });
+      if (t.prazoMinDesdeOPedido !== undefined && t.prazoMinDesdeOPedido !== null)
+        muda['data_hora_prevista'] = minutos(p['data_hora_pedido'] as Date, t.prazoMinDesdeOPedido);
+      if (t.para === 'cancelado' || t.para === 'rejeitado')
+        Object.assign(muda, { data_hora_cancelamento: new Date(), motivo_cancelamento: t.motivo ?? t.para });
       if (t.reserva) muda['reserva_leito_id'] = t.reserva;
       if (t.reg) muda['internacao_id'] = t.reg;
       await tx.alterar('pedido_leito', t.solicitacao, n(p['versao']), muda);
       return t.solicitacao;
     },
     async reservar(r) {
-      const p = await tx.uma('SELECT paciente_id, categoria_acomodacao_id FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [r.solicitacao, est]);
-      if (!p) throw new ErroOperacao(404, 'registro-inexistente', 'Solicitação não encontrada', 'A solicitação de leito não existe.');
+      const p = await tx.uma(
+        'SELECT paciente_id, categoria_acomodacao_id FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [r.solicitacao, est],
+      );
+      if (!p)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Solicitação não encontrada',
+          'A solicitação de leito não existe.',
+        );
       const leito = await leitoDaChave(tx, est, r.leito);
       const agora = new Date();
       return tx.incluir('reserva_leito', {
@@ -634,14 +797,22 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async confirmarReserva(r) {
       const x = await reserva(r.reserva);
-      if (x['situacao'] !== 'ativa') throw recusa('reserva-nao-ativa', 'A reserva não está aguardando confirmação.');
+      if (x['situacao'] !== 'ativa')
+        throw recusa('reserva-nao-ativa', 'A reserva não está aguardando confirmação.');
       const agora = new Date();
-      return tx.alterar('reserva_leito', r.reserva, n(x['versao']), { situacao: 'confirmada', confirmada_em: agora, confirmada_por_usuario_id: usuario(), valida_ate: minutos(agora, Math.max(1, r.validadeMin)) });
+      return tx.alterar('reserva_leito', r.reserva, n(x['versao']), {
+        situacao: 'confirmada',
+        confirmada_em: agora,
+        confirmada_por_usuario_id: usuario(),
+        valida_ate: minutos(agora, Math.max(1, r.validadeMin)),
+      });
     },
     async encerrarReserva(r) {
       const x = await reserva(r.reserva);
-      if (!['ativa', 'confirmada'].includes(texto(x['situacao']))) throw recusa('reserva-encerrada', 'A reserva já foi encerrada.');
-      if (r.situacao === 'consumida' && x['internacao_id'] === null) throw recusa('reserva-sem-internacao', 'A reserva só é consumida pela internação.');
+      if (!['ativa', 'confirmada'].includes(texto(x['situacao'])))
+        throw recusa('reserva-encerrada', 'A reserva já foi encerrada.');
+      if (r.situacao === 'consumida' && x['internacao_id'] === null)
+        throw recusa('reserva-sem-internacao', 'A reserva só é consumida pela internação.');
       return tx.alterar('reserva_leito', r.reserva, n(x['versao']), {
         situacao: r.situacao,
         encerrada_em: r.vencidaEm ? new Date(r.vencidaEm) : new Date(),
@@ -664,7 +835,12 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async registrarBarreira(b) {
       await internacaoDe(b.reg);
-      const tipo = await apoio(tx, 'SELECT id FROM tipo_barreira_alta WHERE codigo = ?', [b.tipo], `o tipo de barreira de alta "${b.tipo}"`);
+      const tipo = await apoio(
+        tx,
+        'SELECT id FROM tipo_barreira_alta WHERE codigo = ?',
+        [b.tipo],
+        `o tipo de barreira de alta "${b.tipo}"`,
+      );
       return tx.incluir('barreira_alta', {
         internacao_id: b.reg,
         tipo_barreira_alta_id: tipo,
@@ -677,7 +853,8 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async resolverBarreira(b) {
       const x = await barreiraTravada(b.barreira);
-      if (!['aberta', 'em_tratamento'].includes(texto(x['situacao']))) throw recusa('barreira-encerrada', 'A barreira já foi resolvida ou cancelada.');
+      if (!['aberta', 'em_tratamento'].includes(texto(x['situacao'])))
+        throw recusa('barreira-encerrada', 'A barreira já foi resolvida ou cancelada.');
       const agora = new Date();
       return tx.alterar('barreira_alta', b.barreira, n(x['versao']), {
         situacao: b.cancelar ? 'cancelada' : 'resolvida',
@@ -691,9 +868,20 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         'SELECT id, versao, amarelo_dias, vermelho_dias, forma, amostra, ativo FROM limite_permanencia WHERE estabelecimento_id = ? AND escopo = ? AND chave = ?',
         [est, lim.escopo, lim.chave],
       );
-      const novo = { amarelo_dias: lim.amareloDias, vermelho_dias: lim.vermelhoDias, forma: lim.origem, amostra: lim.amostra };
+      const novo = {
+        amarelo_dias: lim.amareloDias,
+        vermelho_dias: lim.vermelhoDias,
+        forma: lim.origem,
+        amostra: lim.amostra,
+      };
       if (!atual) {
-        await tx.incluir('limite_permanencia', { estabelecimento_id: est, escopo: lim.escopo, chave: lim.chave, ...novo, ativo: true });
+        await tx.incluir('limite_permanencia', {
+          estabelecimento_id: est,
+          escopo: lim.escopo,
+          chave: lim.chave,
+          ...novo,
+          ativo: true,
+        });
         return;
       }
       const muda =
@@ -705,12 +893,24 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       if (!muda) return;
       // A alteração leva o motivo; o valor anterior fica na trilha da operação.
       if (verdadeiro(atual['ativo']) && !lim.motivo?.trim())
-        throw recusa('motivo-obrigatorio', 'Informe o motivo da alteração: o valor anterior fica no histórico, com quem o definiu.');
+        throw recusa(
+          'motivo-obrigatorio',
+          'Informe o motivo da alteração: o valor anterior fica no histórico, com quem o definiu.',
+        );
       await tx.alterar('limite_permanencia', n(atual['id']), n(atual['versao']), { ...novo, ativo: true });
     },
     async aprovarDepara(d) {
-      const [s] = await tx.consultarParaAtualizar('SELECT id, versao FROM situacao_pedido_leito WHERE id = ?', [d.situacao]);
-      if (!s) throw new ErroOperacao(404, 'registro-inexistente', 'Situação não encontrada', 'A situação de pedido de leito não existe.');
+      const [s] = await tx.consultarParaAtualizar(
+        'SELECT id, versao FROM situacao_pedido_leito WHERE id = ?',
+        [d.situacao],
+      );
+      if (!s)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Situação não encontrada',
+          'A situação de pedido de leito não existe.',
+        );
       await tx.alterar('situacao_pedido_leito', d.situacao, n(s['versao']), { estado: d.estado });
     },
     async registrarEvento(linha) {
@@ -718,7 +918,14 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async corrigirSolicitacao(c) {
       const p = await pedido(c.solicitacao);
-      if (n(p['versao']) !== c.versaoVista) throw new ErroOperacao(409, 'conflito-versao', 'Solicitação alterada', 'A solicitação mudou desde a leitura.', { colunas: ['versao'] });
+      if (n(p['versao']) !== c.versaoVista)
+        throw new ErroOperacao(
+          409,
+          'conflito-versao',
+          'Solicitação alterada',
+          'A solicitação mudou desde a leitura.',
+          { colunas: ['versao'] },
+        );
       return tx.alterar('pedido_leito', c.solicitacao, c.versaoVista, {
         nivel_cuidado: c.perfil.intensiva ? 'intensivo' : 'intermediario',
         tipo_precaucao_id: await precaucao(c.perfil.precaucao),
@@ -728,22 +935,44 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async excluirSolicitacao(x) {
       const p = await pedido(x.solicitacao);
-      const deps = n((await tx.uma('SELECT COUNT(*) AS q FROM reserva_leito WHERE pedido_leito_id = ? AND excluido_em IS NULL', [x.solicitacao]))?.['q']);
-      const regs = n((await tx.uma('SELECT COUNT(*) AS q FROM solicitacao_regulacao WHERE pedido_leito_id = ? AND excluido_em IS NULL', [x.solicitacao]))?.['q']);
+      const deps = n(
+        (
+          await tx.uma(
+            'SELECT COUNT(*) AS q FROM reserva_leito WHERE pedido_leito_id = ? AND excluido_em IS NULL',
+            [x.solicitacao],
+          )
+        )?.['q'],
+      );
+      const regs = n(
+        (
+          await tx.uma(
+            'SELECT COUNT(*) AS q FROM solicitacao_regulacao WHERE pedido_leito_id = ? AND excluido_em IS NULL',
+            [x.solicitacao],
+          )
+        )?.['q'],
+      );
       if (deps + regs > 0 || texto(p['estado']) === 'internado')
-        throw recusa('solicitacao-com-vinculo', `A solicitação não pode ser excluída: ${deps} reserva(s) e ${regs} regulação(ões) ligadas. Cancele-a com o motivo.`);
+        throw recusa(
+          'solicitacao-com-vinculo',
+          `A solicitação não pode ser excluída: ${deps} reserva(s) e ${regs} regulação(ões) ligadas. Cancele-a com o motivo.`,
+        );
       await tx.excluir('pedido_leito', x.solicitacao, n(p['versao']));
       return x.solicitacao;
     },
     async alterarReserva(r) {
       const x = await reserva(r.reserva);
-      if (!['ativa', 'confirmada'].includes(texto(x['situacao']))) throw recusa('reserva-encerrada', 'A reserva já foi encerrada.');
+      if (!['ativa', 'confirmada'].includes(texto(x['situacao'])))
+        throw recusa('reserva-encerrada', 'A reserva já foi encerrada.');
       const atual = await tx.uma(
         `SELECT COALESCE(b.codigo, '') AS bloco, ac.codigo AS acomodacao, lh.codigo AS leito FROM leito_hospitalar lh JOIN acomodacao ac ON ac.id = lh.acomodacao_id
           LEFT JOIN bloco_internacao b ON b.id = COALESCE(lh.bloco_internacao_id, ac.bloco_internacao_id) WHERE lh.id = ?`,
         [n(x['leito_hospitalar_id'])],
       );
-      const anterior: ChaveLeito = { bloco: texto(atual?.['bloco']), acomodacao: texto(atual?.['acomodacao']), leito: texto(atual?.['leito']) };
+      const anterior: ChaveLeito = {
+        bloco: texto(atual?.['bloco']),
+        acomodacao: texto(atual?.['acomodacao']),
+        leito: texto(atual?.['leito']),
+      };
       const muda: Record<string, unknown> = {};
       let desfeita = false;
       if (r.leito) {
@@ -763,7 +992,8 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async excluirReserva(r) {
       const x = await reserva(r.reserva);
-      if (x['situacao'] === 'consumida') throw recusa('reserva-consumida', 'A reserva virou internação: não pode ser excluída.');
+      if (x['situacao'] === 'consumida')
+        throw recusa('reserva-consumida', 'A reserva virou internação: não pode ser excluída.');
       await tx.excluir('reserva_leito', r.reserva, n(x['versao']));
       return { solicitacao: n(x['pedido_leito_id']), retrato: r.reserva };
     },
@@ -782,7 +1012,8 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
     },
     async alterarBarreira(b) {
       const x = await barreiraTravada(b.barreira);
-      if (!['aberta', 'em_tratamento'].includes(texto(x['situacao']))) throw recusa('barreira-encerrada', 'A barreira já foi resolvida ou cancelada.');
+      if (!['aberta', 'em_tratamento'].includes(texto(x['situacao'])))
+        throw recusa('barreira-encerrada', 'A barreira já foi resolvida ou cancelada.');
       return tx.alterar('barreira_alta', b.barreira, n(x['versao']), {
         ...(b.descricao !== null ? { descricao: b.descricao } : {}),
         ...(b.responsavel !== null ? await responsavelDe(b.responsavel) : {}),
@@ -794,14 +1025,29 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         'SELECT id, versao FROM limite_permanencia WHERE estabelecimento_id = ? AND escopo = ? AND chave = ? AND ativo = TRUE',
         [est, lim.escopo, lim.chave],
       );
-      if (!atual) throw recusa('limite-inexistente', 'Não há limite próprio para esta chave: já vale o padrão.');
+      if (!atual)
+        throw recusa('limite-inexistente', 'Não há limite próprio para esta chave: já vale o padrão.');
       await tx.excluir('limite_permanencia', n(atual['id']), n(atual['versao']));
       return 1;
     },
     async registrarRegulacao(r) {
-      const p = await tx.uma('SELECT paciente_id, internacao_id FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [r.solicitacao, est]);
-      if (!p) throw new ErroOperacao(404, 'registro-inexistente', 'Solicitação não encontrada', 'A solicitação de leito não existe.');
-      const central = await apoio(tx, 'SELECT id FROM central_reguladora WHERE sigla = ? AND excluido_em IS NULL', [r.central], `a central reguladora "${r.central}"`);
+      const p = await tx.uma(
+        'SELECT paciente_id, internacao_id FROM pedido_leito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [r.solicitacao, est],
+      );
+      if (!p)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Solicitação não encontrada',
+          'A solicitação de leito não existe.',
+        );
+      const central = await apoio(
+        tx,
+        'SELECT id FROM central_reguladora WHERE sigla = ? AND excluido_em IS NULL',
+        [r.central],
+        `a central reguladora "${r.central}"`,
+      );
       const id = await tx.incluir('solicitacao_regulacao', {
         estabelecimento_id: est,
         central_reguladora_id: central,

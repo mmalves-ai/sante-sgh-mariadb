@@ -47,8 +47,14 @@ describe('ciclo do comunicado (memória)', () => {
     });
     expect(d).toMatchObject({ texto: 'Texto corrigido do comunicado.', podeCorrigir: true });
     expect(d.eventos).toHaveLength(1);
-    expect(d.eventos[0]).toMatchObject({ evento: 'correcao', motivo: 'Erro de digitação', por: 'SINT.GESTOR' });
-    expect(d.eventos[0]!.antes).toMatch(/^versão anterior: assunto com 20 caracteres, texto com 29 caracteres \(resumo [0-9a-f]{16}\)$/);
+    expect(d.eventos[0]).toMatchObject({
+      evento: 'correcao',
+      motivo: 'Erro de digitação',
+      por: 'SINT.GESTOR',
+    });
+    expect(d.eventos[0]!.antes).toMatch(
+      /^versão anterior: assunto com 20 caracteres, texto com 29 caracteres \(resumo [0-9a-f]{16}\)$/,
+    );
     expect(d.eventos[0]!.antes).not.toContain('Texto original');
     expect(JSON.stringify(porta.trilhaDe('aa'))).not.toContain('Texto corrigido');
   });
@@ -70,11 +76,17 @@ describe('ciclo do comunicado (memória)', () => {
       motivo: 'Prazo menor',
     });
     const d = await s.encerrarComunicado(c, autor('SINT.GESTOR'), id, { motivo: 'Substituído' });
-    expect(d).toMatchObject({ motivoEncerramento: 'Substituído', encerradoPor: 'SINT.GESTOR', podeCorrigir: false });
+    expect(d).toMatchObject({
+      motivoEncerramento: 'Substituído',
+      encerradoPor: 'SINT.GESTOR',
+      podeCorrigir: false,
+    });
     expect(d.eventos.map((e) => e.evento)).toEqual(['vigencia', 'encerramento']);
     const visto = (await s.caixa(c, 'SINT.MEDICO')).recebidas.find((m) => m.id === id);
     expect(visto?.motivoEncerramento).toBe('Substituído');
-    await expect(s.encerrarComunicado(c, autor('SINT.GESTOR'), id, { motivo: 'de novo' })).rejects.toMatchObject({
+    await expect(
+      s.encerrarComunicado(c, autor('SINT.GESTOR'), id, { motivo: 'de novo' }),
+    ).rejects.toMatchObject({
       problema: { codigo: 'comunicado-encerrado' },
     });
   });
@@ -92,7 +104,10 @@ describe('ciclo do comunicado (memória)', () => {
       vigenciaFim: new Date(agora + 86_400_000).toISOString(),
     };
     const r = await s.publicar(c, autor('SINT.GESTOR'), e, 'teste-divergente');
-    expect(await s.publicar(c, autor('SINT.GESTOR'), e, 'teste-divergente')).toMatchObject({ id: r.id, repetida: true });
+    expect(await s.publicar(c, autor('SINT.GESTOR'), e, 'teste-divergente')).toMatchObject({
+      id: r.id,
+      repetida: true,
+    });
     await expect(
       s.publicar(c, autor('SINT.GESTOR'), { ...e, texto: 'Outro texto.' }, 'teste-divergente'),
     ).rejects.toMatchObject({ problema: { codigo: 'idempotencia-divergente' } });

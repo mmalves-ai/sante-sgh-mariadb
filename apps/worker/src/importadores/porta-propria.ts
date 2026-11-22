@@ -30,7 +30,12 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { entidadesSemEscrita, escreverItem, tabelasDaEscrita } from './escrita-catalogo.js';
-import type { CargaAPublicar, LinhaDoLote, PortaPublicacaoCatalogo, ValorLinhaCatalogo } from './publicador.js';
+import type {
+  CargaAPublicar,
+  LinhaDoLote,
+  PortaPublicacaoCatalogo,
+  ValorLinhaCatalogo,
+} from './publicador.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoPublicacao {
@@ -122,12 +127,17 @@ function opPublicarLote(def: DefinicaoCatalogo) {
         throw recusa('situacao-invalida', 'Só a carga aprovada ou em publicação recebe lotes.');
       const total = Number(relido['lotes_total']);
       if (e.lote.lotes !== total || proximoLote(total, Number(relido['lotes_publicados'])) !== e.lote.lote)
-        throw recusa('lote-fora-de-ordem', 'O lote não é o seguinte ao último confirmado: a publicação retoma pelo certo.');
+        throw recusa(
+          'lote-fora-de-ordem',
+          'O lote não é o seguinte ao último confirmado: a publicação retoma pelo certo.',
+        );
       const decisao = decidirPublicacao({
         situacao: situacao as SituacaoCargaCatalogo,
         responsavel: 'novo',
         exigeContrato: def.exigeContrato,
-        contratoVigente: def.exigeContrato ? await contratoVigente(tx, Number(ctx.estabelecimento), def.codigo) : true,
+        contratoVigente: def.exigeContrato
+          ? await contratoVigente(tx, Number(ctx.estabelecimento), def.codigo)
+          : true,
         erros: 0,
         itensAPublicar: e.lote.itens.length,
         janela: JANELA_PADRAO,
@@ -156,7 +166,13 @@ function opPublicarLote(def: DefinicaoCatalogo) {
     },
     alvo: (e) => ({ tabela: 'carga_catalogo', id: e.lote.carga }),
     trilha: (e) => ({
-      dados: { catalogo: def.codigo, lote: e.lote.lote, lotes: e.lote.lotes, itens: e.lote.itens.length, edicao: e.lote.edicao },
+      dados: {
+        catalogo: def.codigo,
+        lote: e.lote.lote,
+        lotes: e.lote.lotes,
+        itens: e.lote.itens.length,
+        edicao: e.lote.edicao,
+      },
     }),
   });
 }
@@ -207,15 +223,21 @@ export class PortaPublicacaoPropria implements PortaPublicacaoCatalogo {
   }
 
   private ler<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: `publicador-catalogos-${this.hospital}`.slice(0, 64) }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: `publicador-catalogos-${this.hospital}`.slice(0, 64) },
+      fn,
+    );
   }
 
   private async estabelecimento(): Promise<number> {
     if (this.estabelecimentoId !== null) return this.estabelecimentoId;
     const r = await this.ler((l) =>
-      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [this.hospital]),
+      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        this.hospital,
+      ]),
     );
-    if (!r) throw recusa('estabelecimento-desconhecido', 'O estabelecimento do publicador não está cadastrado.');
+    if (!r)
+      throw recusa('estabelecimento-desconhecido', 'O estabelecimento do publicador não está cadastrado.');
     this.estabelecimentoId = Number(r.id);
     return this.estabelecimentoId;
   }
@@ -245,7 +267,9 @@ export class PortaPublicacaoPropria implements PortaPublicacaoCatalogo {
 
   async carga(id: number): Promise<CargaAPublicar | null> {
     const est = await this.estabelecimento();
-    const r = await this.ler((l) => l.uma(`SELECT ${COLUNAS_CARGA} WHERE c.id = ? AND c.estabelecimento_id = ?`, [id, est]));
+    const r = await this.ler((l) =>
+      l.uma(`SELECT ${COLUNAS_CARGA} WHERE c.id = ? AND c.estabelecimento_id = ?`, [id, est]),
+    );
     return r ? paraCarga(r) : null;
   }
 
@@ -286,6 +310,11 @@ export class PortaPublicacaoPropria implements PortaPublicacaoCatalogo {
   async marcarFalha(c: CargaAPublicar, motivo: string): Promise<void> {
     const est = await this.estabelecimento();
     const ctx = this.contexto(est, c, `catalogo-${c.id}-falha`, `catalogo-${c.id}-falha-v${c.versao}`);
-    await this.executor.executar(opFalha, this.cliente, { id: c.id, versao: c.versao, motivo: motivo.slice(0, 500) }, ctx);
+    await this.executor.executar(
+      opFalha,
+      this.cliente,
+      { id: c.id, versao: c.versao, motivo: motivo.slice(0, 500) },
+      ctx,
+    );
   }
 }

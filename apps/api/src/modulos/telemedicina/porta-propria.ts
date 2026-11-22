@@ -14,7 +14,12 @@
 // Melhoria: o início é reentrante: a teleconsulta com o atendimento já ligado e a sala aberta termina a vinculação.
 // Melhoria: violação de restrição do banco vira mensagem de negócio (traduzirErro), nunca erro cru.
 import { randomUUID } from 'node:crypto';
-import { esquemaHora, horaParaMinutos, type MotivoEncerramentoTeleconsulta, type SituacaoTeleconsulta } from '@sgh/contratos';
+import {
+  esquemaHora,
+  horaParaMinutos,
+  type MotivoEncerramentoTeleconsulta,
+  type SituacaoTeleconsulta,
+} from '@sgh/contratos';
 import {
   type ContextoOperacao,
   definirOperacao,

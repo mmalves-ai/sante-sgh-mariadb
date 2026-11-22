@@ -9,7 +9,25 @@
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { Prestador } from './rede-porta.js';
-import { type DadosAnexoComplemento, type DadosAuditor, type DadosAutorizacao, type DadosAutorizacaoResumo, type DadosElegibilidadeBeneficiario, type DadosEventoAutorizacao, type DadosItemAutorizacao, type DadosItemDominioAutorizacao, type DadosOperadora, type DadosPrestadorParaAutorizacao, type DadosProcedimentoTuss, type DominioAutorizacao, type EntradaDecisao, type EntradaDesignacao, type EntradaRegistroAutorizacao, type FiltroAutorizacoesPorta, type TotaisAutorizacoes } from './dados-portas.js';
+import {
+  type DadosAnexoComplemento,
+  type DadosAuditor,
+  type DadosAutorizacao,
+  type DadosAutorizacaoResumo,
+  type DadosElegibilidadeBeneficiario,
+  type DadosEventoAutorizacao,
+  type DadosItemAutorizacao,
+  type DadosItemDominioAutorizacao,
+  type DadosOperadora,
+  type DadosPrestadorParaAutorizacao,
+  type DadosProcedimentoTuss,
+  type DominioAutorizacao,
+  type EntradaDecisao,
+  type EntradaDesignacao,
+  type EntradaRegistroAutorizacao,
+  type FiltroAutorizacoesPorta,
+  type TotaisAutorizacoes,
+} from './dados-portas.js';
 
 export const PORTA_AUTORIZACAO_OPERADORA = Symbol('PORTA_AUTORIZACAO_OPERADORA');
 

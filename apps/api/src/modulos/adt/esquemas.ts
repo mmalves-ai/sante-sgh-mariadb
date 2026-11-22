@@ -38,10 +38,16 @@ export const esquemaInternarBanco = esquemaInternar.safeExtend({
   procedimentoOrigem: z.enum(['sigtap', 'item']).optional(),
 });
 export type InternarBancoEntrada = z.infer<typeof esquemaInternarBanco>;
-export const esquemaCancelarAltaBanco = esquemaCancelarAlta.safeExtend({ motivoCancelamento: idCadastro.optional() });
+export const esquemaCancelarAltaBanco = esquemaCancelarAlta.safeExtend({
+  motivoCancelamento: idCadastro.optional(),
+});
 export type CancelarAltaBancoEntrada = z.infer<typeof esquemaCancelarAltaBanco>;
-export const esquemaCancelarAltaMedicaBanco = esquemaCancelarAltaMedica.safeExtend({ motivoCancelamento: idCadastro.optional() });
-export const esquemaTransferirLeitoBanco = esquemaTransferirLeito.safeExtend({ motivoTroca: idCadastro.optional() });
+export const esquemaCancelarAltaMedicaBanco = esquemaCancelarAltaMedica.safeExtend({
+  motivoCancelamento: idCadastro.optional(),
+});
+export const esquemaTransferirLeitoBanco = esquemaTransferirLeito.safeExtend({
+  motivoTroca: idCadastro.optional(),
+});
 export type TransferirLeitoBancoEntrada = z.infer<typeof esquemaTransferirLeitoBanco>;
 
 export const ESQUEMAS_ADT: Readonly<Record<string, ZodType>> = {

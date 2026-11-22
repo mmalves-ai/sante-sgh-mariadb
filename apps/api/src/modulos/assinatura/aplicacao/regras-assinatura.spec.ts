@@ -29,15 +29,29 @@ describe('regras da assinatura', () => {
       resultado: null,
     });
     // Situação incoerente (assinado com menos que o exigido): pendente, nunca válido.
-    expect(estadoDoEnvelope({ situacao: 'assinado', assinaturasExigidas: 2, assinaturas: [v] })?.estado).toBe('pendente');
+    expect(estadoDoEnvelope({ situacao: 'assinado', assinaturasExigidas: 2, assinaturas: [v] })?.estado).toBe(
+      'pendente',
+    );
     expect(
-      estadoDoEnvelope({ situacao: 'assinado', assinaturasExigidas: 1, assinaturas: [{ situacao: 'revogada' }, v] }),
+      estadoDoEnvelope({
+        situacao: 'assinado',
+        assinaturasExigidas: 1,
+        assinaturas: [{ situacao: 'revogada' }, v],
+      }),
     ).toEqual({ estado: 'falha', resultado: 'invalida' });
     expect(
-      estadoDoEnvelope({ situacao: 'parcial', assinaturasExigidas: 2, assinaturas: [{ situacao: 'invalida' }] }),
+      estadoDoEnvelope({
+        situacao: 'parcial',
+        assinaturasExigidas: 2,
+        assinaturas: [{ situacao: 'invalida' }],
+      }),
     ).toEqual({ estado: 'falha', resultado: 'invalida' });
     expect(
-      estadoDoEnvelope({ situacao: 'assinado', assinaturasExigidas: 1, assinaturas: [{ situacao: 'expirada' }] }),
+      estadoDoEnvelope({
+        situacao: 'assinado',
+        assinaturasExigidas: 1,
+        assinaturas: [{ situacao: 'expirada' }],
+      }),
     ).toEqual({ estado: 'assinada', resultado: 'indeterminada' });
     expect(estadoDoEnvelope({ situacao: 'assinado', assinaturasExigidas: 2, assinaturas: [v, v] })).toEqual({
       estado: 'assinada',

@@ -55,8 +55,7 @@ interface Lido {
 }
 
 const alcancavel = (c: ContaRede) => c.ativo && !c.bloqueado;
-const deAparelho = (c: ContaRede) =>
-  GRUPOS_SEM_CPF.some((g) => chaveGrupo(g) === chaveGrupo(c.grupo ?? ''));
+const deAparelho = (c: ContaRede) => GRUPOS_SEM_CPF.some((g) => chaveGrupo(g) === chaveGrupo(c.grupo ?? ''));
 
 /** Chave de idempotência de cada receita do lote: a do pedido + estabelecimento + login (formato do executor). */
 export function chaveDoItem(chave: string, hospital: string, login: string): string {
@@ -200,8 +199,16 @@ export class RedeCpfController {
     const contaUnica = this.fonte.destino === 'banco';
     const ondeAparece = new Map<string, string[]>();
     for (const l of lidos)
-      for (const c of l.contas ?? []) ondeAparece.set(c.login, [...(ondeAparece.get(c.login) ?? []), l.codigo]);
-    const jaTratadas = new Map<string, { estabelecimento: string; resultado: ResultadoBloqueioRedeCpf['resultados'][number]['resultado']; detalhe: string | null }>();
+      for (const c of l.contas ?? [])
+        ondeAparece.set(c.login, [...(ondeAparece.get(c.login) ?? []), l.codigo]);
+    const jaTratadas = new Map<
+      string,
+      {
+        estabelecimento: string;
+        resultado: ResultadoBloqueioRedeCpf['resultados'][number]['resultado'];
+        detalhe: string | null;
+      }
+    >();
     for (const l of lidos) {
       if (!l.contas) {
         resultados.push({
@@ -218,7 +225,8 @@ export class RedeCpfController {
           detalhe: string | null = null,
         ) => {
           resultados.push({ estabelecimento: l.codigo, login: c.login, resultado, detalhe });
-          if (contaUnica && !jaTratadas.has(c.login)) jaTratadas.set(c.login, { estabelecimento: l.codigo, resultado, detalhe });
+          if (contaUnica && !jaTratadas.has(c.login))
+            jaTratadas.set(c.login, { estabelecimento: l.codigo, resultado, detalhe });
         };
         const anterior = contaUnica ? jaTratadas.get(c.login) : undefined;
         if (anterior) {

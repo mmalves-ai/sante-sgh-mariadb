@@ -225,7 +225,10 @@ describe('entrega (regras 9 e 10)', () => {
     banco.envios.set('1', { ...banco.envios.get('1')!, versao: 5 });
     const enviador = vi.fn(async () => ({ recibo: 'ok', resposta: 'AA', conteudo: 'x' }));
     const acessoAntigo = { ...acesso, ler: async () => [fila, banco.parceiros] as never };
-    const r = await cicloEntrega(acessoAntigo, 'pc', enviador, { agora: () => new Date(), tempoPorParceiroMs: 1_000 });
+    const r = await cicloEntrega(acessoAntigo, 'pc', enviador, {
+      agora: () => new Date(),
+      tempoPorParceiroMs: 1_000,
+    });
     expect(r).toMatchObject({ prontas: 1, enviadas: 0, conflitos: 1 });
     expect(enviador).not.toHaveBeenCalled();
     expect(banco.enviados).toEqual([]);

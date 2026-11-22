@@ -42,7 +42,10 @@ export async function portaDoPatrimonio(ctx: ContextoModulo): Promise<PortaPatri
 @Module({})
 export class ModuloPatrimonio {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloPatrimonio = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloPatrimonio = {},
+): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDoPatrimonio(ctx));
   const env = ctx.env;
   const armazemLaudo =

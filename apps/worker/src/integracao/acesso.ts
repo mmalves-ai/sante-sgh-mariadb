@@ -58,21 +58,29 @@ export function acessoDoNucleo(
 ): AcessoIntegracao {
   const correlacao = rotulo.slice(0, 64);
   const ids = new Map<string, number>();
-  const ler = <T>(fn: (l: Leitor) => Promise<T>): Promise<T> => nucleo.lerSomente({ cliente, correlacao }, fn);
+  const ler = <T>(fn: (l: Leitor) => Promise<T>): Promise<T> =>
+    nucleo.lerSomente({ cliente, correlacao }, fn);
   async function estabelecimento(hospital: string): Promise<number> {
     const ja = ids.get(hospital);
     if (ja !== undefined) return ja;
     const r = await ler((l) =>
-      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [hospital]),
+      l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        hospital,
+      ]),
     );
-    if (!r) throw recusa('estabelecimento-desconhecido', 'O estabelecimento da integração não está cadastrado.');
+    if (!r)
+      throw recusa('estabelecimento-desconhecido', 'O estabelecimento da integração não está cadastrado.');
     const id = Number(r.id);
     ids.set(hospital, id);
     return id;
   }
   return {
     ler: (_hospital, fn) => ler(fn),
-    async gravar<T>(hospital: string, fn: (tx: TxOperacao) => Promise<T>, o: OpcoesGravacao = {}): Promise<T> {
+    async gravar<T>(
+      hospital: string,
+      fn: (tx: TxOperacao) => Promise<T>,
+      o: OpcoesGravacao = {},
+    ): Promise<T> {
       const est = await estabelecimento(hospital);
       const tabelas = o.tabelas ?? TABELAS_INTEGRACAO;
       const caixa: { valor?: T } = {};
@@ -90,7 +98,13 @@ export function acessoDoNucleo(
         op,
         cliente,
         { estabelecimento: est },
-        { cliente, estabelecimento: est, usuario: null, correlacao, chaveIdempotencia: `worker.${randomUUID()}` },
+        {
+          cliente,
+          estabelecimento: est,
+          usuario: null,
+          correlacao,
+          chaveIdempotencia: `worker.${randomUUID()}`,
+        },
       );
       return caixa.valor as T;
     },

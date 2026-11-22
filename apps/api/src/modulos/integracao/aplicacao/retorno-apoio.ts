@@ -61,7 +61,8 @@ export class ServicoRetornoApoio {
         ? undefined
         : interfaces.find((i) => i.codigo === exame.laboratorio);
     const lab = doParceiro ?? doPedido ?? (interfaces.length === 1 ? interfaces[0] : undefined);
-    const divergente = doParceiro !== undefined && doPedido !== undefined && doParceiro.codigo !== doPedido.codigo;
+    const divergente =
+      doParceiro !== undefined && doPedido !== undefined && doParceiro.codigo !== doPedido.codigo;
     const dePara = lab
       ? await this.porta.deParaExame(s.porta, lab.codigo, lido.exameLaboratorio)
       : { exame: null, elementos: [] };

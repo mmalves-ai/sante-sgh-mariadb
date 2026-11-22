@@ -39,7 +39,8 @@ describe.skipIf(SEM_BANCO)('entrada idempotente do parceiro contra o MariaDB (cl
   let porta: PortaIntegracaoPropria;
   let servico: ServicoEntrada;
   const cred = novaCredencial(PARCEIRO);
-  const basica = (segredo = cred.segredo) => `Basic ${Buffer.from(`${cred.clienteId}:${segredo}`).toString('base64')}`;
+  const basica = (segredo = cred.segredo) =>
+    `Basic ${Buffer.from(`${cred.clienteId}:${segredo}`).toString('base64')}`;
   const pedido = (autorizacao: string, conteudo = ORU) => ({
     hospital: 'f2241a',
     rede: 'rede-teste',
@@ -81,13 +82,17 @@ describe.skipIf(SEM_BANCO)('entrada idempotente do parceiro contra o MariaDB (cl
   });
 
   afterAll(async () => {
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f2241' }, (e) => limparParceiro(e, PARCEIRO));
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f2241' }, (e) =>
+      limparParceiro(e, PARCEIRO),
+    );
     await nucleo.encerrar();
   });
 
   it('parceiro desativado não entra (403) e nada é gravado', async () => {
     await expect(servico.receber(pedido(basica()))).rejects.toMatchObject({ status: 403 });
-    expect(await sql("SELECT id FROM mensagem_integracao_entrada WHERE chave_idempotencia = 'F2241-ENT-0001'")).toEqual([]);
+    expect(
+      await sql("SELECT id FROM mensagem_integracao_entrada WHERE chave_idempotencia = 'F2241-ENT-0001'"),
+    ).toEqual([]);
   });
 
   it('a mensagem entra uma vez (conferir), com arquivo e trilha; a repetição devolve a primeira', async () => {
@@ -119,7 +124,10 @@ describe.skipIf(SEM_BANCO)('entrada idempotente do parceiro contra o MariaDB (cl
     await expect(servico.receber(pedido(basica(`${cred.segredo}x`)))).rejects.toMatchObject({ status: 401 });
     const adt = 'MSH|^~\\&|X|Y|SANTE|SINTETICO|20261022080000||ORM^O01|F2241-ENT-0002|T|2.5';
     await expect(
-      servico.receber({ ...pedido(basica(), adt), corpo: { parceiro: PARCEIRO, tipo: 'ORM^O01', conteudo: adt } }),
+      servico.receber({
+        ...pedido(basica(), adt),
+        corpo: { parceiro: PARCEIRO, tipo: 'ORM^O01', conteudo: adt },
+      }),
     ).rejects.toMatchObject({ status: 403 });
   });
 });

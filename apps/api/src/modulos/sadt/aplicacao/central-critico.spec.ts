@@ -5,7 +5,14 @@ import { describe, expect, it } from 'vitest';
 import type { PortaSadt } from '../porta.js';
 import { avisarCriticoNaCentral, avisoDoCritico, type CentralDeAvisos } from './central-critico.js';
 
-const c = { cliente: 'teste', estabelecimento: 1, usuario: null, correlacao: 't', rede: 'sintetica', hospital: 'aa' };
+const c = {
+  cliente: 'teste',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 't',
+  rede: 'sintetica',
+  hospital: 'aa',
+};
 const autor = { login: 'SINT.BIOMEDICO', estacao: 'teste', correlacao: 'c-1' };
 const porta = (login: string | null) =>
   ({ destinatarioDoCritico: async () => login }) as unknown as PortaSadt;

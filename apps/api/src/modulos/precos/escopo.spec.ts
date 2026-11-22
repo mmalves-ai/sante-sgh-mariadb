@@ -18,7 +18,6 @@ import { MotorController } from './motor.controller.js';
 import { PrecosController } from './precos.controller.js';
 import { ServicoPrecos } from './servico.js';
 
-
 const PERMISSOES = [
   'convenio.operadora.ler',
   'convenio.contrato.ler',
@@ -131,7 +130,15 @@ describe('lista de convênios no armazém compartilhado (Valkey)', () => {
     }) as unknown as FontePrecos;
     const cache = new CacheConfig(new ArmazemMemoria());
     const servico = new ServicoPrecos(fonte, cache);
-    const c = { cliente: '', estabelecimento: null, usuario: null, correlacao: 't', rede: 'rede-teste', hospital: 'aa', traceId: 't' };
+    const c = {
+      cliente: '',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 't',
+      rede: 'rede-teste',
+      hospital: 'aa',
+      traceId: 't',
+    };
     await servico.listarConvenios(c, { busca: 'alfa', situacao: 'todos' }, null);
     await servico.listarConvenios(c, { busca: 'beta', situacao: 'ativos' }, null);
     expect(leituras).toBe(1);

@@ -423,7 +423,9 @@ export class FaturamentoController {
   @Post('contas/:id/auditoria/versoes')
   @HttpCode(200)
   @Permissao('faturamento.auditoria.ajustar')
-  @AuditadoNoHandler('versão da auditoria em auditoria_conta_versao com a trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'versão da auditoria em auditoria_conta_versao com a trilha_auditoria na mesma transação',
+  )
   async versao(
     @Param('id') id: string,
     @Body() b: unknown,

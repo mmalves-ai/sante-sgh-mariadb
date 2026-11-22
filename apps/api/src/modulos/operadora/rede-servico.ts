@@ -251,11 +251,7 @@ export class ServicoRedeOperadora {
     return { atual, avisos: r.avisos.map((a) => MENSAGENS_REDE[a] ?? a) };
   }
 
-  async conferirReinclusao(
-    c: ContextoRede,
-    id: number,
-    e: ReincluirPrestadorEntrada,
-  ): Promise<Prestador> {
+  async conferirReinclusao(c: ContextoRede, id: number, e: ReincluirPrestadorEntrada): Promise<Prestador> {
     const atual = await this.porta.prestador(c, id);
     if (!atual) throw naoEncontrado();
     const problemas: { codigo: string; campo: string }[] = [];

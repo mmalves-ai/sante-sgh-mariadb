@@ -127,7 +127,12 @@ describe('fila email: alerta ao Auditor (regra 8)', () => {
       Object.entries(carga).filter(([k]) => !['idUsuario', 'inicio', 'fim'].includes(k)),
     );
     expect(() =>
-      mensagemDoAlertaSuporte(dadosDoJobOutbox({ ...ev, carga: antiga }), 'a@b.invalid', 'c@d.invalid', ev.cliente),
+      mensagemDoAlertaSuporte(
+        dadosDoJobOutbox({ ...ev, carga: antiga }),
+        'a@b.invalid',
+        'c@d.invalid',
+        ev.cliente,
+      ),
     ).toThrow(/fora do formato/);
   });
 
@@ -146,7 +151,11 @@ describe('fila email: alerta ao Auditor (regra 8)', () => {
 });
 
 describe('fila email: destinatário por cliente (nunca uma caixa comum a todos)', () => {
-  const PROD = { AMBIENTE: 'producao', AUDITORIA_EMAIL: 'caixa-comum@x.invalid', ENCARREGADO_EMAIL: 'dpo-comum@x.invalid' };
+  const PROD = {
+    AMBIENTE: 'producao',
+    AUDITORIA_EMAIL: 'caixa-comum@x.invalid',
+    ENCARREGADO_EMAIL: 'dpo-comum@x.invalid',
+  };
   const A = { auditoria: ['auditor@cliente-a.invalid'], encarregado: ['dpo@cliente-a.invalid'] };
   const B = { auditoria: ['auditor@cliente-b.invalid'] };
 
@@ -156,24 +165,35 @@ describe('fila email: destinatário por cliente (nunca uma caixa comum a todos)'
     expect(destinoAlertaChamado(A, PROD, 'cliente-a', 'dado-pessoal')).toEqual(['dpo@cliente-a.invalid']);
     // Sem encarregado configurado, cai na auditoria do próprio cliente, não na do ambiente.
     expect(destinoAlertaChamado(B, PROD, 'cliente-b', 'dado-pessoal')).toEqual(['auditor@cliente-b.invalid']);
-    expect(resolverDestino({ ...A, ti: ['ti@cliente-a.invalid'] }, PROD, 'cliente-a', ['ti', 'responsavelTecnico'])).toEqual([
-      'ti@cliente-a.invalid',
-      'auditor@cliente-a.invalid',
-    ]);
+    expect(
+      resolverDestino({ ...A, ti: ['ti@cliente-a.invalid'] }, PROD, 'cliente-a', [
+        'ti',
+        'responsavelTecnico',
+      ]),
+    ).toEqual(['ti@cliente-a.invalid', 'auditor@cliente-a.invalid']);
   });
 
   it('em produção, cliente sem destinatário: recusa visível (nunca um endereço comum)', () => {
-    expect(() => resolverDestino({}, PROD, 'cliente-c', ['auditoria'])).toThrow(ErroDestinatarioNaoConfigurado);
+    expect(() => resolverDestino({}, PROD, 'cliente-c', ['auditoria'])).toThrow(
+      ErroDestinatarioNaoConfigurado,
+    );
   });
 
   it('fora de produção, a variável desvia para a captura; sem nada, o endereço .invalid do cliente', () => {
-    expect(resolverDestino(A, { AMBIENTE: 'dev', AUDITORIA_EMAIL: 'captura@local.invalid' }, 'cliente-a', ['auditoria'])).toEqual([
-      'captura@local.invalid',
+    expect(
+      resolverDestino(A, { AMBIENTE: 'dev', AUDITORIA_EMAIL: 'captura@local.invalid' }, 'cliente-a', [
+        'auditoria',
+      ]),
+    ).toEqual(['captura@local.invalid']);
+    expect(resolverDestino({}, { AMBIENTE: 'homolog' }, 'cliente-c', ['plantao'])).toEqual([
+      'auditoria@cliente-c.invalid',
     ]);
-    expect(resolverDestino({}, { AMBIENTE: 'homolog' }, 'cliente-c', ['plantao'])).toEqual(['auditoria@cliente-c.invalid']);
   });
 
   it('o valor do parâmetro aceita vários endereços e descarta o malformado', () => {
-    expect(enderecosDoValor('a@b.invalid; c@d.invalid, sem-arroba ,a@b.invalid')).toEqual(['a@b.invalid', 'c@d.invalid']);
+    expect(enderecosDoValor('a@b.invalid; c@d.invalid, sem-arroba ,a@b.invalid')).toEqual([
+      'a@b.invalid',
+      'c@d.invalid',
+    ]);
   });
 });

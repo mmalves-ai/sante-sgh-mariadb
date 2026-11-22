@@ -71,7 +71,13 @@ describe.skipIf(SEM_BANCO)('retrato da validade do conselho sobre o banco própr
       ins.push(await inscricao(4, 'ativa', '2021-01-01'));
       ins.push(await inscricao(5, 'ativa', '2022-01-01'));
       ins.push(await inscricao(6, 'ativa', '2023-01-01'));
-      const conf = (inscricao: number, ocorrido: Date, operacao: string, validade: string | null, situacao = 'ativo') =>
+      const conf = (
+        inscricao: number,
+        ocorrido: Date,
+        operacao: string,
+        validade: string | null,
+        situacao = 'ativo',
+      ) =>
         inserirSintetico(e, 'validade_conselho', {
           inscricao_conselho_id: inscricao,
           colaborador_id: colab,

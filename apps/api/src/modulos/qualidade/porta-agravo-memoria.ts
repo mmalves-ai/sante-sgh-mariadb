@@ -1,7 +1,16 @@
 // A porta da notificação compulsória em memória (M48, etapa 4): dev/ci e os testes, com dados SINTÉTICOS (nenhum
 // paciente real): quatro atendimentos (dengue, raiva, pneumonia e um óbito com dengue), dois resultados (VDRL reagente e
 // IgG da dengue, que não é gatilho), o cadastro de CID notificável reduzido e três modelos de ficha com perguntas.
-import type { AtendimentoParaAgravo, CasoAgravoRegistrado, CidNotificavelCadastro, ExameParaAgravo, FiltroCasosAgravo, GatilhoExameRegistrado, PacienteDoAgravo, UnidadeDoAgravo } from './tipos.js';
+import type {
+  AtendimentoParaAgravo,
+  CasoAgravoRegistrado,
+  CidNotificavelCadastro,
+  ExameParaAgravo,
+  FiltroCasosAgravo,
+  GatilhoExameRegistrado,
+  PacienteDoAgravo,
+  UnidadeDoAgravo,
+} from './tipos.js';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { recusaVersaoAgravo } from './tipos.js';
 import { recusa } from '@sgh/nucleo';

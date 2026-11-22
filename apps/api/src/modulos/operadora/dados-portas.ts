@@ -475,7 +475,9 @@ export interface EntradaDesignacao {
 export type DominioAutorizacao = 'tipoGuia' | 'origem' | 'critica' | 'situacaoGuia';
 
 /** A elegibilidade do beneficiário é a da porta da F1 (beneficiários): a mesma forma que ela devolve. */
-export type DadosElegibilidadeBeneficiario = NonNullable<Awaited<ReturnType<PortaOperadora['elegibilidade']>>>;
+export type DadosElegibilidadeBeneficiario = NonNullable<
+  Awaited<ReturnType<PortaOperadora['elegibilidade']>>
+>;
 
 export interface DadosEnvioAns extends DadosEnvioAnsResumo {
   readonly quadros: string | null;

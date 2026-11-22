@@ -443,14 +443,26 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     const ja = s.idem.get(chave);
     if (ja) return { resultado: ja, repetida: true, trilha: null };
     const esquema = ENTRADAS_OPERACOES_ATENDIMENTO[op];
-    if (!esquema) throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+    if (!esquema)
+      throw new ErroOperacao(
+        400,
+        'operacao-desconhecida',
+        'Operação desconhecida',
+        `A operação ${op} não existe.`,
+      );
     const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a entrada já validada pelo Zod da receita
-    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.login ?? String(ctx.usuario ?? ''));
+    const resultado = await this.aplicar(
+      c,
+      s,
+      op,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a entrada já validada pelo Zod da receita
+      analise.data as Record<string, any>,
+      ctx.login ?? String(ctx.usuario ?? ''),
+    );
     s.idem.set(chave, resultado);
     return { resultado, repetida: false, trilha: null };
   }

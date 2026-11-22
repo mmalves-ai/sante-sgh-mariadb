@@ -5,7 +5,20 @@
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
 import type { ContextoPorta } from '../cadastro/porta.js';
-import type { AcessoLido, ConteudoLido, ContextoLido, DefinicaoFormularioLida, EventoDocumentoLido, ExcecaoAgregadaLida, FiltroAcessos, FiltroRegistros, FontesLidas, RegistroProntuarioLido, RepresentacaoGravada, RespostaLida } from './tipos-pep.js';
+import type {
+  AcessoLido,
+  ConteudoLido,
+  ContextoLido,
+  DefinicaoFormularioLida,
+  EventoDocumentoLido,
+  ExcecaoAgregadaLida,
+  FiltroAcessos,
+  FiltroRegistros,
+  FontesLidas,
+  RegistroProntuarioLido,
+  RepresentacaoGravada,
+  RespostaLida,
+} from './tipos-pep.js';
 
 export const PORTA_PRONTUARIO = Symbol('PORTA_PRONTUARIO');
 

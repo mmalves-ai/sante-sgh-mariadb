@@ -33,13 +33,23 @@ describe.skipIf(SEM_BANCO)('títulos da competência (MariaDB, cliente f22_o2)',
     const c = m.ctx(m.lanca);
     const filtro = { convenio: m.convenio, ano: 2026, mes: 10 };
     const contas = await porta.contasSemTitulo(c, filtro);
-    expect(contas.map((x) => x.id).sort((a, b) => a - b)).toEqual([...m.contasHospitalares].sort((a, b) => a - b));
+    expect(contas.map((x) => x.id).sort((a, b) => a - b)).toEqual(
+      [...m.contasHospitalares].sort((a, b) => a - b),
+    );
     expect(await porta.contasSemTitulo(m.ctx(m.lanca, m.outroEst), filtro)).toEqual([]);
-    const entradas = entradasDaCompetencia(contas, { ano: 2026, mes: 10, vencimento: '2026-12-15', documento: 90_207 });
+    const entradas = entradasDaCompetencia(contas, {
+      ano: 2026,
+      mes: 10,
+      vencimento: '2026-12-15',
+      documento: 90_207,
+    });
     expect(entradas).toHaveLength(2);
     const ids: number[] = [];
     for (const e of entradas) {
-      const r = await porta.executar(c, 'financeiro.criarTituloReceber', e, { ...c, chaveIdempotencia: `t0207-${randomUUID()}` });
+      const r = await porta.executar(c, 'financeiro.criarTituloReceber', e, {
+        ...c,
+        chaveIdempotencia: `t0207-${randomUUID()}`,
+      });
       ids.push(Number(r.resultado['titulo']));
     }
     expect(await porta.contasSemTitulo(c, filtro)).toEqual([]);
@@ -52,7 +62,9 @@ describe.skipIf(SEM_BANCO)('títulos da competência (MariaDB, cliente f22_o2)',
       ),
     );
     // Externas: 100,10 + 200,20 = 300,30 (2 contas); internação: 1.000,55 (1 conta).
-    expect(valores.map((v) => [Number(v['valor_bruto']), Number(v['contas']), Number(v['parcelas'])])).toEqual([
+    expect(
+      valores.map((v) => [Number(v['valor_bruto']), Number(v['contas']), Number(v['parcelas'])]),
+    ).toEqual([
       [300.3, 2, 300.3],
       [1000.55, 1, 1000.55],
     ]);
@@ -63,7 +75,12 @@ describe.skipIf(SEM_BANCO)('títulos da competência (MariaDB, cliente f22_o2)',
         porta.executar(
           c,
           'financeiro.criarTituloReceber',
-          { contas: [{ conta: m.contasHospitalares[0]!, versao: null }], vencimento: '2026-12-15', documento: 1, referente: '' },
+          {
+            contas: [{ conta: m.contasHospitalares[0]!, versao: null }],
+            vencimento: '2026-12-15',
+            documento: 1,
+            referente: '',
+          },
           { ...c, chaveIdempotencia: `t0207-${randomUUID()}` },
         ),
       ),

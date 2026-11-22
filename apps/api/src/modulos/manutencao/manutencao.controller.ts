@@ -584,7 +584,9 @@ export class ManutencaoController {
   @Post('os')
   @HttpCode(201)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('ordem_servico_manutencao, ordem_servico_manutencao_evento e o aviso da central com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao, ordem_servico_manutencao_evento e o aviso da central com a trilha de auditoria na mesma transação',
+  )
   async abrirOs(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirOs, b);
@@ -726,7 +728,9 @@ export class ManutencaoController {
   @Post('os/:id/assumir')
   @HttpCode(200)
   @Permissao(P.osAtender)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async assumir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAssumirOs, { ...(b as object), os: idDaRota(id) });
@@ -756,7 +760,9 @@ export class ManutencaoController {
   @Post('os/:id/andamento')
   @HttpCode(200)
   @Permissao(P.osAtender)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async andamento(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAndamentoOs, { ...(b as object), os: idDaRota(id) });
@@ -770,7 +776,9 @@ export class ManutencaoController {
   @Post('os/:id/concluir')
   @HttpCode(200)
   @Permissao(P.osEncerrar)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async concluir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaConcluirOs, { ...(b as object), os: idDaRota(id) });
@@ -810,7 +818,9 @@ export class ManutencaoController {
   @Post('os/:id/encerrar')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async encerrar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaEncerrarOs, { ...(b as object), os: idDaRota(id) });
@@ -845,7 +855,9 @@ export class ManutencaoController {
   @Post('os/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async cancelar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCancelarOs, { ...(b as object), os: idDaRota(id) });
@@ -878,7 +890,9 @@ export class ManutencaoController {
   @Post('os/:id/correcao')
   @HttpCode(200)
   @Permissao(P.osAbrir)
-  @AuditadoNoHandler('ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'ordem_servico_manutencao e ordem_servico_manutencao_evento com a trilha de auditoria na mesma transação',
+  )
   async corrigir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaCorrigirOs, { ...(b as object), os: idDaRota(id) });
@@ -1062,10 +1076,7 @@ export class ManutencaoController {
     const s = sessaoDe(req);
     const busca = (termo ?? '').trim().slice(0, 60);
     if (!this.patrimonio || this.patrimonio.destino === 'indisponivel' || busca.length < 2) return [];
-    const r = await this.patrimonio.bens(
-      s.porta,
-      { busca, pagina: 1, tamanho: 20 },
-    );
+    const r = await this.patrimonio.bens(s.porta, { busca, pagina: 1, tamanho: 20 });
     return r.bens
       .filter((b) => b.situacao !== 'baixado')
       .map((b) => ({ id: b.id, plaqueta: b.plaqueta, descricao: b.descricao }));
@@ -1688,7 +1699,9 @@ export class ManutencaoController {
   @Post('coberturas/:id/encerramento')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('contrato_servico_terceirizado e a versão na trilha com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'contrato_servico_terceirizado e a versão na trilha com a trilha de auditoria na mesma transação',
+  )
   async encerrarCobertura(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1737,7 +1750,9 @@ export class ManutencaoController {
   @Post('coberturas/:id/exclusao')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('contrato_servico_terceirizado* (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'contrato_servico_terceirizado* (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
+  )
   async excluirCobertura(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1763,7 +1778,9 @@ export class ManutencaoController {
   @Post('coberturas')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('contrato_servico_terceirizado e contrato_servico_terceirizado_item com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'contrato_servico_terceirizado e contrato_servico_terceirizado_item com a trilha de auditoria na mesma transação',
+  )
   async gravarCobertura(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManutencao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaCoberturaContrato, b);
@@ -1931,7 +1948,9 @@ export class ManutencaoController {
   @Delete('alertas/:id')
   @HttpCode(200)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('alerta_sanitario (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'alerta_sanitario (retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
+  )
   async excluirAlerta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1997,7 +2016,9 @@ export class ManutencaoController {
   @Post('os/:id/queixa-tecnica')
   @HttpCode(201)
   @Permissao(P.equipamentoEditar)
-  @AuditadoNoHandler('queixa_tecnica_produto e vínculo da queixa com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'queixa_tecnica_produto e vínculo da queixa com a trilha de auditoria na mesma transação',
+  )
   async queixaTecnica(
     @Param('id') id: string,
     @Body() b: unknown,

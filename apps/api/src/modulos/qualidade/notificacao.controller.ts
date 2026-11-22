@@ -272,7 +272,11 @@ export class NotificacaoController {
     const operacao = 'qualidade.notificarIncidente';
     // Regra de anonimato: a trilha da anônima vai sem a conta e sem a estação (só o evento, o alvo e o protocolo).
     const trilhaDe = (r: { id: number; protocolo: string }): TrilhaDaGravacao => {
-      const l = linhaTrilha(s, evento, P.notificacaoCriar, operacao, { tabela: TABELA, id: String(r.id), chave: r.protocolo });
+      const l = linhaTrilha(s, evento, P.notificacaoCriar, operacao, {
+        tabela: TABELA,
+        id: String(r.id),
+        chave: r.protocolo,
+      });
       return e.anonima
         ? {
             ...l,
@@ -527,7 +531,9 @@ export class NotificacaoController {
   @Post('nsp/notificacoes/:id/triar')
   @HttpCode(200)
   @Permissao(P.notificacaoTriar)
-  @AuditadoNoHandler('qualidade.triarNotificacao: notificacao_incidente e a linha do tempo com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.triarNotificacao: notificacao_incidente e a linha do tempo com a trilha_auditoria',
+  )
   async triar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaTriarNotificacao, { ...(b as object), notificacao: idDaRota(id) });

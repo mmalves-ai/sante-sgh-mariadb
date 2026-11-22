@@ -15,7 +15,14 @@ const PEDIDO = { motivo: 'assistencia' as const, justificativa: 'Paciente em ate
 const SA = {
   rede: REDE,
   hospital: 'pc',
-  porta: { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: REDE, hospital: 'pc' },
+  porta: {
+    cliente: 'teste',
+    estabelecimento: null,
+    usuario: null,
+    correlacao: 'teste',
+    rede: REDE,
+    hospital: 'pc',
+  },
   login: 'SINT.MEDICO',
   estacao: 'TESTE',
   correlacao: 'teste',
@@ -43,7 +50,14 @@ async function montar(
       acao: 'operacao',
       entidade: 'suspeita_duplicidade',
       entidadeId: null,
-      dadosDepois: { evento, recurso: 'rede.mpi', operacao, chave: alvo.chave, login: 'SINT.GESTOR', estabelecimento: 'pc' },
+      dadosDepois: {
+        evento,
+        recurso: 'rede.mpi',
+        operacao,
+        chave: alvo.chave,
+        login: 'SINT.GESTOR',
+        estabelecimento: 'pc',
+      },
       correlacao: 'teste',
     }),
   };

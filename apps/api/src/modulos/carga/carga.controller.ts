@@ -9,7 +9,15 @@
 // Jornadas que dependem de serviço de outro módulo montado em memória (a fila do médico, a verificação e a busca da
 // prescrição, a assinatura e as contagens do vigia de leitos) respondem 404 com o motivo, registrado como pendência do
 // lote (a rota real do módulo, com sessão sintética, mede essas jornadas).
-import { Controller, Get, Inject, NotFoundException, Optional, Param, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Optional,
+  Param,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { palavrasDoCadastro, type TipoBuscaPaciente } from '@sgh/contratos';
 import { ErroTempoEsgotado, type Leitor } from '@sgh/nucleo';
 import { Publica } from '../../autorizacao/decoradores.js';
@@ -32,7 +40,10 @@ export interface FonteCarga {
   readonly cliente: string;
   /** O estabelecimento da carga (o primeiro ativo do cliente); null sem estabelecimento. */
   estabelecimento(): Promise<EstabelecimentoCarga | null>;
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
 }
 
 export const FONTE_CARGA = Symbol('FONTE_CARGA');
@@ -133,7 +144,8 @@ export class CargaController {
   @Get('busca/:tipo/:id')
   async busca(@Param('tipo') tipo: string, @Param('id') id: string) {
     const c = await this.exigir();
-    if (!this.cadastro || !(TIPOS_CARGA_BUSCA as readonly string[]).includes(tipo)) throw new NotFoundException();
+    if (!this.cadastro || !(TIPOS_CARGA_BUSCA as readonly string[]).includes(tipo))
+      throw new NotFoundException();
     const alvo = alvoNaFaixa(await this.faixa(c), Number(id) || 0);
     const porta = {
       cliente: c.f.cliente,
@@ -193,7 +205,10 @@ export class CargaController {
     const c = await this.exigir();
     const pedido = performance.now();
     let inicio = pedido;
-    const tempos = () => ({ ms: Math.round(performance.now() - inicio), esperaMs: Math.round(inicio - pedido) });
+    const tempos = () => ({
+      ms: Math.round(performance.now() - inicio),
+      esperaMs: Math.round(inicio - pedido),
+    });
     try {
       const n = await c.ler((l) => {
         inicio = performance.now();
@@ -230,10 +245,12 @@ export class CargaController {
     const c = await this.exigir();
     const a = await this.ancoraAgenda(c);
     const sorteio = Number(id) || 0;
-    if (jornada === 'horarios') return { n: await c.ler((l) => L.cargaHorariosPortal(l, c.est.id, a, sorteio)) };
+    if (jornada === 'horarios')
+      return { n: await c.ler((l) => L.cargaHorariosPortal(l, c.est.id, a, sorteio)) };
     const alvo = L.sortear(await this.alvosMarcacao(c, a), sorteio);
     if (!alvo) return { n: 0 };
-    if (jornada === 'agendamentos') return { n: await c.ler((l) => L.cargaMeusAgendamentos(l, c.est.id, alvo)) };
+    if (jornada === 'agendamentos')
+      return { n: await c.ler((l) => L.cargaMeusAgendamentos(l, c.est.id, alvo)) };
     return { n: await c.ler((l) => L.cargaMarcacao(l, c.est.id, alvo)) };
   }
 
@@ -278,7 +295,9 @@ export class CargaController {
   @Get('contrato/:id')
   async contrato(@Param('id') id: string) {
     const c = await this.exigir();
-    const contratos = await this.memo('contratos', () => c.ler((l) => L.contratosDoEstabelecimento(l, c.est.id)));
+    const contratos = await this.memo('contratos', () =>
+      c.ler((l) => L.contratosDoEstabelecimento(l, c.est.id)),
+    );
     const alvo = L.sortear(contratos, Number(id) || 0);
     if (alvo === null) return { n: 0 };
     return { n: await c.ler((l) => L.cargaContrato(l, c.est.id, alvo)) };
@@ -324,7 +343,8 @@ export class CargaController {
         const insumo = L.sortear(a.insumos, Number(id) || 0);
         return { n: insumo === null ? 0 : await L.lotesDoLocal(l, local, insumo) };
       }
-      if (parte === 'saidas') return { n: a.mes ? await L.saidasDaCompetencia(l, c.est.id, local, a.mes) : 0 };
+      if (parte === 'saidas')
+        return { n: a.mes ? await L.saidasDaCompetencia(l, c.est.id, local, a.mes) : 0 };
       return { n: await L.requisicoesPendentes(l, c.est.id, local) };
     });
   }
@@ -339,7 +359,10 @@ export class CargaController {
     return c.ler(async (l) => {
       if (parte === 'fila')
         return {
-          n: a.unidade === null ? 0 : await L.filaDaUnidade(l, c.est.id, a.unidade, new Date(fim.getTime() - 12 * 3_600_000), fim),
+          n:
+            a.unidade === null
+              ? 0
+              : await L.filaDaUnidade(l, c.est.id, a.unidade, new Date(fim.getTime() - 12 * 3_600_000), fim),
         };
       if (parte === 'entregas') return { n: await L.entregasPendentes(l, c.est.id) };
       return { n: await L.movimentosControlados(l, c.est.id, new Date(fim.getTime() - 7 * 86_400_000), fim) };
@@ -361,7 +384,8 @@ export class CargaController {
       const t = ancora.previsto.getTime();
       const inicio = new Date(t - 6 * 3_600_000);
       const fim = new Date(t + 6 * 3_600_000);
-      if (parte === 'paciente') return { n: await L.horariosDoAtendimento(l, c.est.id, ancora.atendimento, inicio, fim) };
+      if (parte === 'paciente')
+        return { n: await L.horariosDoAtendimento(l, c.est.id, ancora.atendimento, inicio, fim) };
       return { n: await L.horariosDaUnidadeDoAtendimento(l, c.est.id, ancora.atendimento, inicio, fim) };
     });
   }
@@ -375,7 +399,8 @@ export class CargaController {
     const c = await this.exigir();
     const alvo = L.sortear(await this.prescricoes(c), Number(id) || 0);
     if (!alvo) return { n: 0 };
-    if (parte === 'lista') return { n: await c.ler((l) => L.prescricoesDoAtendimento(l, c.est.id, alvo.atendimento)) };
+    if (parte === 'lista')
+      return { n: await c.ler((l) => L.prescricoesDoAtendimento(l, c.est.id, alvo.atendimento)) };
     return { n: await c.ler((l) => L.leituraDaPrescricao(l, c.est.id, alvo.prescricao)) };
   }
 
@@ -384,7 +409,9 @@ export class CargaController {
   async prontuarioCarga(@Param('parte') parte: string, @Param('id') id: string) {
     if (!['lista', 'registro', 'cabecalho'].includes(parte)) throw new NotFoundException();
     const c = await this.exigir();
-    const pacientes = await this.memo('pacientes-pep', () => c.ler((l) => L.pacientesComRegistros(l, c.est.id, 500)));
+    const pacientes = await this.memo('pacientes-pep', () =>
+      c.ler((l) => L.pacientesComRegistros(l, c.est.id, 500)),
+    );
     const paciente = L.sortear(pacientes, Number(id) || 0);
     if (paciente === null) return { n: 0 };
     if (parte === 'cabecalho') return { n: await c.ler((l) => L.cabecalhoDoPaciente(l, c.est.id, paciente)) };

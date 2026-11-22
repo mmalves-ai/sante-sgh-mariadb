@@ -5,7 +5,14 @@
 // na montagem; apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CLIENTE, escrever, garantirCliente, garantirEstabelecimento, inserirSintetico, SEM_BANCO } from './importadores/integracao.spec-util.js';
+import {
+  CLIENTE,
+  escrever,
+  garantirCliente,
+  garantirEstabelecimento,
+  inserirSintetico,
+  SEM_BANCO,
+} from './importadores/integracao.spec-util.js';
 import { PortaIndiceBuscaPropria } from './indice-busca-propria.js';
 import { avaliarPar } from './indice-busca.service.js';
 
@@ -18,11 +25,16 @@ describe.skipIf(SEM_BANCO)('índice de busca e fila de duplicidades sobre o banc
 
   async function limpar(): Promise<void> {
     await escrever(nucleo, async (e) => {
-      const ps = (await e.consultar('SELECT id, pessoa_fisica_id FROM paciente WHERE numero_prontuario IN (9905150001, 9905150002)')).map(
-        (r) => [Number(r['id']), Number(r['pessoa_fisica_id'])] as const,
-      );
+      const ps = (
+        await e.consultar(
+          'SELECT id, pessoa_fisica_id FROM paciente WHERE numero_prontuario IN (9905150001, 9905150002)',
+        )
+      ).map((r) => [Number(r['id']), Number(r['pessoa_fisica_id'])] as const);
       for (const [p, pf] of ps) {
-        await e.executar('DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? OR segundo_paciente_id = ?', [p, p]);
+        await e.executar(
+          'DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? OR segundo_paciente_id = ?',
+          [p, p],
+        );
         await e.executar("DELETE FROM chave_busca_nome WHERE entidade = 'paciente' AND registro_id = ?", [p]);
         await e.executar('DELETE FROM telefone_pessoa WHERE pessoa_fisica_id = ?', [pf]);
         await e.executar('DELETE FROM paciente WHERE id = ?', [p]);
@@ -41,7 +53,13 @@ describe.skipIf(SEM_BANCO)('índice de busca e fila de duplicidades sobre o banc
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       const agora = new Date();
       const tipo = await e.uma("SELECT id FROM tipo_telefone WHERE codigo = 'celular'", []);
-      celular = tipo ? Number(tipo['id']) : await inserirSintetico(e, 'tipo_telefone', { codigo: 'celular', descricao: 'Celular', criado_em: agora });
+      celular = tipo
+        ? Number(tipo['id'])
+        : await inserirSintetico(e, 'tipo_telefone', {
+            codigo: 'celular',
+            descricao: 'Celular',
+            criado_em: agora,
+          });
       for (const [i, prontuario] of [9_905_150_001, 9_905_150_002].entries()) {
         const pf = await inserirSintetico(e, 'pessoa_fisica', {
           nome: i === 0 ? 'ANA MARIA SINTETICA QUINZE' : 'ANA MARYA SINTETICA QUINZE',
@@ -61,7 +79,13 @@ describe.skipIf(SEM_BANCO)('índice de busca e fila de duplicidades sobre o banc
           origem: 'sistema',
           criado_em: agora,
         });
-        pacientes.push(await inserirSintetico(e, 'paciente', { pessoa_fisica_id: pf, numero_prontuario: prontuario, criado_em: agora }));
+        pacientes.push(
+          await inserirSintetico(e, 'paciente', {
+            pessoa_fisica_id: pf,
+            numero_prontuario: prontuario,
+            criado_em: agora,
+          }),
+        );
       }
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
     });
@@ -107,10 +131,14 @@ describe.skipIf(SEM_BANCO)('índice de busca e fila de duplicidades sobre o banc
     expect(s).toMatchObject({ situacao: 'aberto', versao: 1 });
     expect(Boolean(Number(s!['criterio_fonetica']))).toBe(true);
     expect(Boolean(Number(s!['criterio_telefone']))).toBe(true);
-    await escrever(nucleo, (e) => e.executar('UPDATE paciente SET excluido_em = ? WHERE id = ?', [new Date(), pacientes[1]]));
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE paciente SET excluido_em = ? WHERE id = ?', [new Date(), pacientes[1]]),
+    );
     await porta.indexar('paciente', await porta.lerCadastros('paciente', [pacientes[1]!]));
     const n = await escrever(nucleo, (e) =>
-      e.uma("SELECT COUNT(*) AS n FROM chave_busca_nome WHERE entidade = 'paciente' AND registro_id = ?", [pacientes[1]]),
+      e.uma("SELECT COUNT(*) AS n FROM chave_busca_nome WHERE entidade = 'paciente' AND registro_id = ?", [
+        pacientes[1],
+      ]),
     );
     expect(Number(n!['n'])).toBe(0);
     expect(await porta.reparar('solicitante', 10)).toBeGreaterThanOrEqual(0);

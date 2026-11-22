@@ -110,7 +110,12 @@ const SITUACOES_ATENDIMENTO: readonly SituacaoAtendimento[] = [
 const deLista = <T extends string>(lista: readonly T[], v: unknown, campo: string): T => {
   if (lista.includes(v as T)) return v as T;
   // O CHECK do banco garante a lista; valor fora dela é defeito do modelo, não dado a adivinhar.
-  throw new ErroOperacao(500, 'valor-fora-do-dominio', 'Valor fora do domínio', `O campo ${campo} veio fora da lista.`);
+  throw new ErroOperacao(
+    500,
+    'valor-fora-do-dominio',
+    'Valor fora do domínio',
+    `O campo ${campo} veio fora da lista.`,
+  );
 };
 /** Número de negócio do atendimento: só dígitos vira número; outro formato fica de fora (null). */
 const numeroDoAtendimento = (v: unknown): number | null => {
@@ -142,9 +147,14 @@ export class PortaRegistroPropria implements PortaRegistro {
     private readonly cliente: string,
   ) {}
 
-  private ler<T>(c: ContextoRegistro, rotulo: string, fn: (l: Leitor, estabelecimento: Estabelecimento) => Promise<T>) {
-    return this.nucleo.lerSomente({ cliente: c.cliente || this.cliente, correlacao: `pep.registro.${rotulo}` }, async (l) =>
-      fn(l, await this.estabelecimento(l, c.hospital)),
+  private ler<T>(
+    c: ContextoRegistro,
+    rotulo: string,
+    fn: (l: Leitor, estabelecimento: Estabelecimento) => Promise<T>,
+  ) {
+    return this.nucleo.lerSomente(
+      { cliente: c.cliente || this.cliente, correlacao: `pep.registro.${rotulo}` },
+      async (l) => fn(l, await this.estabelecimento(l, c.hospital)),
     );
   }
 
@@ -204,7 +214,12 @@ export class PortaRegistroPropria implements PortaRegistro {
         [modelo],
       );
       if (!x)
-        throw new ErroOperacao(404, 'modelo-inexistente', 'Modelo não encontrado', 'O modelo não está publicado.');
+        throw new ErroOperacao(
+          404,
+          'modelo-inexistente',
+          'Modelo não encontrado',
+          'O modelo não está publicado.',
+        );
       // A versão publicada sempre tem hash; sem ele, o número da versão ainda distingue as publicações.
       return textoOuNull(x['hash_definicao']) ?? `versao-${num(x['numero_versao'])}`;
     });
@@ -253,7 +268,11 @@ export class PortaRegistroPropria implements PortaRegistro {
         [atendimento, est.id],
       );
       if (!x) return null;
-      return { htAtendimento: atendimento, htPaciente: paciente, doPaciente: num(x['paciente_id']) === paciente };
+      return {
+        htAtendimento: atendimento,
+        htPaciente: paciente,
+        doPaciente: num(x['paciente_id']) === paciente,
+      };
     });
   }
 

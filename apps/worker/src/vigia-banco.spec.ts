@@ -3,7 +3,12 @@
 import type { Leitor } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import { VigiaBancoService } from './vigia-banco.service.js';
-import { alertasDaColeta, coletarTransacoes, lerConfiguracaoVigiaBanco, semPermissao } from './vigia-banco.js';
+import {
+  alertasDaColeta,
+  coletarTransacoes,
+  lerConfiguracaoVigiaBanco,
+  semPermissao,
+} from './vigia-banco.js';
 
 const leitor = (linha: Record<string, unknown> | Error): Leitor =>
   ({
@@ -41,7 +46,12 @@ describe('vigia do banco próprio', () => {
       { abertas: 2, escrita: 2, maisLongaMs: 9_000, acimaDoLimite: 1, esperandoTrava: 2 },
       5_000,
     );
-    expect(a.map((x) => x.tipo)).toEqual(['plataforma-fora', 'neutralizacao-falhou', 'transacao-longa', 'espera-trava']);
+    expect(a.map((x) => x.tipo)).toEqual([
+      'plataforma-fora',
+      'neutralizacao-falhou',
+      'transacao-longa',
+      'espera-trava',
+    ]);
     expect(a[3]!.quantidade).toBe(2);
   });
 
@@ -56,7 +66,8 @@ describe('vigia do banco próprio', () => {
           neutralizacao: true,
           pools: [{ banco: 'cliente_x', ativas: 1, ociosas: 2, total: 3 }],
         }),
-        lerPlataforma: async (_c: string, fn: (l: Leitor) => Promise<unknown>) => fn(leitor({ abertas: 1, escrita: 0, mais_longa_us: 1000, acima: 0, esperando: 0 })),
+        lerPlataforma: async (_c: string, fn: (l: Leitor) => Promise<unknown>) =>
+          fn(leitor({ abertas: 1, escrita: 0, mais_longa_us: 1000, acima: 0, esperando: 0 })),
         encerrar: async () => undefined,
       } as never,
       async () => new Map([['gotenberg', 1]]),

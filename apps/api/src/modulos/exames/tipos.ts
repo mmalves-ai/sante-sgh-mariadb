@@ -170,7 +170,6 @@ export interface CoberturaExame {
   readonly convenioNome: string | null;
 }
 
-
 export const TETO_HORARIOS_EXAME = 3_000;
 export const TETO_VAGAS_EXAME = 500;
 export const TETO_MARCACOES_EXAME = 1_000;

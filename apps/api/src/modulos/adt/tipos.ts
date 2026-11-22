@@ -342,13 +342,30 @@ export interface TransicaoSolicitacao {
 }
 
 export interface ConfiguracaoRegulacaoNir {
-  readonly sistemas: { id: number; sigla: string; ativo: boolean; servicos: number; servicosAtivos: number }[];
+  readonly sistemas: {
+    id: number;
+    sigla: string;
+    ativo: boolean;
+    servicos: number;
+    servicosAtivos: number;
+  }[];
   readonly endpoints: { id: number; servico: number | null; descricao: string; metodo: string | null }[];
-  readonly tabelas: { id: number; descricao: string; ativo: boolean; referencia: string | null; valores: number }[];
+  readonly tabelas: {
+    id: number;
+    descricao: string;
+    ativo: boolean;
+    referencia: string | null;
+    valores: number;
+  }[];
 }
 
 /** Eventos da solicitação que não criam vínculo (a exclusão por engano continua possível depois deles). */
-export const EVENTOS_SEM_DESDOBRAMENTO: readonly string[] = ['solicitar', 'analisar', 'priorizar', 'corrigir'];
+export const EVENTOS_SEM_DESDOBRAMENTO: readonly string[] = [
+  'solicitar',
+  'analisar',
+  'priorizar',
+  'corrigir',
+];
 
 export interface DependenciasSolicitacaoNir {
   readonly reservas: number;

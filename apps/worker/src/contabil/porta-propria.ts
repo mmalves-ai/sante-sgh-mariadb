@@ -23,7 +23,11 @@ import {
   lerRegras,
 } from '@sgh/persistencia-contabil';
 import type { AcaoContabilizacao } from '@sgh/dominio-contabil';
-import type { AcessoContabilizacao, GravacaoContabilizacao, LeituraContabilizacao } from './contabilizacao.js';
+import type {
+  AcessoContabilizacao,
+  GravacaoContabilizacao,
+  LeituraContabilizacao,
+} from './contabilizacao.js';
 
 type ChaveLida = Parameters<typeof recursoLigadoNoEstabelecimento>[0][number];
 type PrerequisitoLido = Parameters<typeof recursoLigadoNoEstabelecimento>[2][number];
@@ -59,7 +63,10 @@ export interface PortaContabilWorker extends AcessoContabilizacao {
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoContabilWorker {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
   criarExecutor(): Pick<Executor, 'executar'>;
 }
 
@@ -93,9 +100,13 @@ export class PortaContabilWorkerPropria implements PortaContabilWorker {
   estabelecimentos(): Promise<Estabelecimento[]> {
     return this.lerBanco(async (l) =>
       (
-        await l.consultar('SELECT id, codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], {
-          teto: 1000,
-        })
+        await l.consultar(
+          'SELECT id, codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo',
+          [],
+          {
+            teto: 1000,
+          },
+        )
       ).map((x) => ({ id: Number(x['id']), codigo: String(x['codigo']) })),
     );
   }
@@ -130,7 +141,10 @@ export class PortaContabilWorkerPropria implements PortaContabilWorker {
               validade: dia(x['validade']),
               evidencia: txt(x['evidencia']),
               alteradoPor: '',
-              alteradoEm: x['alterado_em'] instanceof Date ? x['alterado_em'].toISOString() : String(x['alterado_em'] ?? ''),
+              alteradoEm:
+                x['alterado_em'] instanceof Date
+                  ? x['alterado_em'].toISOString()
+                  : String(x['alterado_em'] ?? ''),
             }) as unknown as PrerequisitoLido,
         ),
       };
@@ -196,7 +210,11 @@ export class PortaContabilWorkerPropria implements PortaContabilWorker {
         })),
         dePara,
         publicadas: publicadas.map((p) => ({ id: p.id, regra: p.regra })),
-        periodos: periodos.map((p) => ({ empresa: p.empresa, competencia: p.competencia, situacao: p.situacao })),
+        periodos: periodos.map((p) => ({
+          empresa: p.empresa,
+          competencia: p.competencia,
+          situacao: p.situacao,
+        })),
       };
     });
   }

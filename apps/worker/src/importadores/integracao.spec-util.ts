@@ -12,7 +12,10 @@ export const raiz = resolve(import.meta.dirname, '../../../..');
 
 /** Cria o cliente de teste se faltar (o criador recusa cliente existente: consulta antes). */
 export function garantirCliente(): void {
-  const lista = execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', '--listar'], { cwd: raiz, encoding: 'utf8' });
+  const lista = execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', '--listar'], {
+    cwd: raiz,
+    encoding: 'utf8',
+  });
   if (!new RegExp(`\\b${CLIENTE}\\b`).test(lista))
     execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste F2.2 onda 5'], { cwd: raiz });
 }
@@ -27,12 +30,10 @@ export const sha = (t: string): string => createHash('sha256').update(t, 'utf8')
 export async function garantirEstabelecimento(e: Escritor, codigo: string): Promise<number> {
   const r = await e.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ?', [codigo]);
   if (r) return Number(r.id);
-  return e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-    codigo,
-    'Teste F2.2 lote 05-13',
-    'Teste F2.2 lote 05-13',
-    new Date(),
-  ]);
+  return e.inserir(
+    'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+    [codigo, 'Teste F2.2 lote 05-13', 'Teste F2.2 lote 05-13', new Date()],
+  );
 }
 
 /** Id do usuário sintético de serviço (criado na primeira vez). */
@@ -60,7 +61,11 @@ function valorSintetico(tipo: string): unknown {
  * Linha de massa sintética: preenche as colunas obrigatórias sem padrão que o teste não deu (o chamador desliga as
  * chaves estrangeiras). Só para massa de teste; a tabela e as colunas são conferidas por conferirNome.
  */
-export async function inserirSintetico(e: Escritor, tabela: string, valores: Record<string, unknown>): Promise<number> {
+export async function inserirSintetico(
+  e: Escritor,
+  tabela: string,
+  valores: Record<string, unknown>,
+): Promise<number> {
   const obrigatorias = await e.consultar<{ c: string; t: string }>(
     `SELECT COLUMN_NAME AS c, DATA_TYPE AS t FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND IS_NULLABLE = 'NO' AND COLUMN_DEFAULT IS NULL
@@ -89,7 +94,13 @@ export interface LinhaSintetica {
 /** Carga aprovada (área de preparação) com as linhas dadas. */
 export async function cargaAprovada(
   e: Escritor,
-  p: { estabelecimento: number; aprovador: number; catalogo: string; edicao?: string | null; linhas: readonly LinhaSintetica[] },
+  p: {
+    estabelecimento: number;
+    aprovador: number;
+    catalogo: string;
+    edicao?: string | null;
+    linhas: readonly LinhaSintetica[];
+  },
 ): Promise<number> {
   const agora = new Date();
   const n = p.linhas.length;
@@ -120,7 +131,18 @@ export async function cargaAprovada(
     await e.executar(
       `INSERT INTO carga_catalogo_linha (carga_catalogo_id, linha, entidade, chave, resultado, comparacao, valores,
          valores_antes, lote, criado_em, criado_por, versao) VALUES (?, ?, ?, ?, 'valida', ?, ?, ?, ?, ?, ?, 1)`,
-      [id, i + 1, l.entidade, l.chave, l.comparacao, JSON.stringify(l.depois), l.antes ? JSON.stringify(l.antes) : null, l.lote, agora, p.aprovador],
+      [
+        id,
+        i + 1,
+        l.entidade,
+        l.chave,
+        l.comparacao,
+        JSON.stringify(l.depois),
+        l.antes ? JSON.stringify(l.antes) : null,
+        l.lote,
+        agora,
+        p.aprovador,
+      ],
     );
   return id;
 }

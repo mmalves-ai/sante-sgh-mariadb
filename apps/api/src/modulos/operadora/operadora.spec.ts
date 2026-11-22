@@ -228,14 +228,24 @@ describe('identidade da pessoa do cadastro único (regra pura)', () => {
     expect(mesmaPessoa(pessoa, { nome: 'MARIA DA CONCEICAO', nascimento: '1980-05-10' })).toBe(true);
     expect(mesmaPessoa(pessoa, { nome: 'MARIA DA CONCEICAO', nascimento: '1981-05-10' })).toBe(false);
     expect(mesmaPessoa(pessoa, { nome: 'OUTRA PESSOA', nascimento: '1980-05-10' })).toBe(false);
-    expect(mesmaPessoa({ nome: 'Maria da Conceição', nascimento: null }, { nome: 'maria da conceicao', nascimento: '1980-05-10' })).toBe(true);
+    expect(
+      mesmaPessoa(
+        { nome: 'Maria da Conceição', nascimento: null },
+        { nome: 'maria da conceicao', nascimento: '1980-05-10' },
+      ),
+    ).toBe(true);
   });
   it('a alteração aponta só os dados pessoais que mudaram', () => {
-    expect(camposPessoaisMudados(pessoa, { ...pessoa, nome: 'MARIA DA CONCEICAO', cpf: '12345678909', nomeMae: 'MAE SINTETICA' })).toEqual([]);
-    expect(camposPessoaisMudados(pessoa, { ...pessoa, nome: 'Outra', sexo: 'I', cns: '700000000000005' })).toEqual([
-      'nome',
-      'cns',
-      'sexo',
-    ]);
+    expect(
+      camposPessoaisMudados(pessoa, {
+        ...pessoa,
+        nome: 'MARIA DA CONCEICAO',
+        cpf: '12345678909',
+        nomeMae: 'MAE SINTETICA',
+      }),
+    ).toEqual([]);
+    expect(
+      camposPessoaisMudados(pessoa, { ...pessoa, nome: 'Outra', sexo: 'I', cns: '700000000000005' }),
+    ).toEqual(['nome', 'cns', 'sexo']);
   });
 });

@@ -167,12 +167,7 @@ export class ServicoPortal {
   }
 
   /** O resultado da tentativa: as erradas e o bloqueio (os parâmetros do estabelecimento) e a trilha. */
-  private async tentativa(
-    hospital: string,
-    a: AcessoPortal,
-    acertou: boolean,
-    ip: string,
-  ): Promise<void> {
+  private async tentativa(hospital: string, a: AcessoPortal, acertou: boolean, ip: string): Promise<void> {
     const limite =
       (await parametroDoEstabelecimento(this.configuracao, this.rede, hospital, 'sadt.portalTentativas')) ||
       5;
@@ -474,9 +469,7 @@ export class ServicoPortal {
       valores: l.valores,
       texto: l.texto,
       // M47 (etapa 3): o link das imagens do exame (estudo concluído no PACS; o laudo aberto já está liberado).
-      imagem: this.imagens
-        ? await this.imagens(c, l.laudo.exame)
-        : null,
+      imagem: this.imagens ? await this.imagens(c, l.laudo.exame) : null,
     };
   }
 
