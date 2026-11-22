@@ -17,10 +17,11 @@ Formatos reconhecidos (seção 2 da resposta do agente de marcação):
 - convênio aceito com condição ("NECESSÁRIO SOLICITAR AUTORIZAÇÃO PRÉVIA" no texto por convênio; "PARA O(S)
   CONVÊNIO(S) A, B E C, ..." no geral): cobertura aceita, com a condição na observação;
 - preparo: "NÃO É NECESSÁRIO PREPARO", documentos ("NO DIA DO EXAME É NECESSÁRIO TRAZER ..."), bloco que começa por
-  "PREPARO..."/"ORIENTAÇÕES" até a próxima linha reconhecida (jejum em horas quando o bloco cita um só jejum);
-- restrições: faixa etária ("TODAS AS IDADES", "A PARTIR DE N ANOS", "ATÉ N ANOS", "DE N A M ANOS"), sexo
-  ("SOMENTE MULHERES"/"APENAS HOMENS"), retorno ("NÃO ATENDE RETORNO", "RETORNO EM ATÉ N DIAS") e encaixe
-  ("NÃO FAZ ENCAIXE").
+  "PREPARO..."/"ORIENTAÇÕES" até a próxima linha que comece outra regra (lista, valor, restrição inteira) (jejum em horas quando o bloco cita um só jejum);
+- restrições: faixa etária ("TODAS AS IDADES", "A PARTIR DE/ACIMA DE N ANOS", "ATÉ N ANOS", "DE N A M ANOS", "NÃO
+  ATENDEMOS CRIANÇAS MENORES DE N ANOS"), sexo ("SOMENTE MULHERES"/"APENAS HOMENS"), retorno ("NÃO ATENDE RETORNO",
+  "RETORNO EM ATÉ N DIAS") e encaixe ("NÃO FAZ ENCAIXE"). Só a oração que os padrões cobrem inteira é interpretada; o
+  resto da linha fica não interpretado, e exceção no texto ("EXCETO ...") deixa a linha toda sem regra.
 Nunca registra valor de texto em log: o chamador só conta.
 """
 import hashlib
@@ -82,19 +83,29 @@ def resolver_convenio(nome, fontes):
     if marca:
         return [(i, None) for i in marca]
     sup = [(len(chave(f["nome"])), f["id"]) for f in fontes
-           if len(chave(f["nome"])) >= 3 and k.startswith(chave(f["nome"]))]
+           if len(chave(f["nome"])) >= 3 and chave(f["nome"]) not in _GENERICAS and k.startswith(chave(f["nome"]))]
     if sup:
         n = max(t for t, _ in sup)
         ids = [i for t, i in sup if t == n]
         if len(ids) == 1:
             return [(ids[0], " ".join(nome.split()))]
-    # a primeira palavra é a de uma única fonte (marca: "ALFA S10" no convênio "ALFA SAÚDE"): subplano dela
+    # a primeira palavra é a marca de uma única fonte ("ALFA S10" no convênio "ALFA SAÚDE"): subplano dela. Só com
+    # primeira palavra distintiva: "SAUDE CAIXA" não vira plano de "SAUDE BRADESCO" (fica não interpretado)
     p1 = normalizar(nome).split()
-    if len(p1) > 1 and len(p1[0]) >= 3:
+    if len(p1) > 1 and len(p1[0]) >= 3 and p1[0] not in _GENERICAS:
         ids = [f["id"] for f in fontes if normalizar(f["nome"]).split()[:1] == p1[:1]]
         if len(ids) == 1:
             return [(ids[0], " ".join(nome.split()))]
     return []
+
+
+# palavras que não identificam uma operadora sozinhas (não servem de marca para casar um subplano)
+_GENERICAS = frozenset(
+    "SAUDE PLANO PLANOS ASSOCIACAO ASSOCIACOES CAIXA CLUBE INSTITUTO FUNDACAO SINDICATO COOPERATIVA UNIAO SERVICO "
+    "SERVICOS ASSISTENCIA MEDICA MEDICO MEDICINA CONVENIO CONVENIOS PREFEITURA SECRETARIA GOVERNO POLICIA SISTEMA "
+    "HOSPITAL CENTRO GRUPO CLINICA PROGRAMA OPERADORA SEGURO SEGUROS SEGURADORA ODONTO CARTAO BANCO EMPRESA "
+    "EMPRESARIAL INDIVIDUAL FAMILIAR NACIONAL ESTADUAL MUNICIPAL FEDERAL REDE VIDA BEM ESTAR AMIGO MAIS NOVA NOVO "
+    "TOTAL GERAL SERVIDOR SERVIDORES FUNCIONARIOS PARTICULAR".split())
 
 
 def _linhas(texto):
@@ -144,6 +155,12 @@ _RECONHECIDA = re.compile(r"^ *(VALOR|VALORES|CONVENIOS? +(SEM|COM) +CREDENCIAME
                           r"(PACIENTES? +(DO|DOS) +)?CONVENIOS?)\b")
 
 
+def _reconhecida(linha):
+    """A linha começa outra regra: encerra o bloco de preparo (lista, valor, restrição inteira)."""
+    n = normalizar(linha)
+    return bool(_RECONHECIDA.match(n) or valores(linha) or _restricao_completa(linha))
+
+
 class Extracao:
     def __init__(self, texto):
         self.texto = texto
@@ -172,7 +189,7 @@ def extrair(texto, campo, fonte_id=None, fontes=(), fonte_particular_id=None):
         n = normalizar(t[a:b])
         if _PREPARO_INICIO.match(n):  # bloco de preparo até a próxima linha reconhecida
             j = i + 1
-            while j < len(linhas) and not _RECONHECIDA.match(normalizar(t[linhas[j][0]:linhas[j][1]])):
+            while j < len(linhas) and not _reconhecida(t[linhas[j][0]:linhas[j][1]]):
                 j += 1
             fim = linhas[j - 1][1]
             _preparo_bloco(ex, a, fim)
@@ -251,21 +268,31 @@ def _linha(ex, a, b, n, campo, fonte_id, nome_fonte, fontes, fonte_particular_id
                 ex.trecho(s, e, motivo="convênio citado sem cadastro correspondente")
         return
     # subplano não atendido
-    m = re.match(r"^ *NAO +ATENDEMOS +(O +)?(SUBPLANOS? +)?", n)
+    # subplano não atendido: com a palavra SUBPLANO, no texto por convênio, qualquer nome é plano desse convênio; sem
+    # ela, só nome que case com o cadastro ("NÃO ATENDEMOS CRIANÇAS..." e "NÃO ATENDEMOS RETORNO" seguem para as
+    # restrições, nunca viram plano)
+    m = re.match(r"^ *NAO +ATENDEMOS +(O +|OS +)?(SUBPLANOS? +)?", n)
     if m:
+        com_subplano = bool(m.group(2))
+        pedacos = []
         for s, e in _pedacos(t, a + m.end(), b, separar_e=True):
             nome = " ".join(t[s:e].split())
-            if fonte_id is not None:
+            if fonte_id is not None and chave(nome) == chave(nome_fonte):
+                alvos = [(fonte_id, None)]
+            elif fonte_id is not None and com_subplano:
                 alvos = [(fonte_id, nome)]
-                if chave(nome) == chave(nome_fonte):
-                    alvos = [(fonte_id, None)]
+            elif fonte_id is not None:
+                alvos = [(fid, sub) for fid, sub in resolver_convenio(nome, fontes) if fid == fonte_id]
             else:
                 alvos = resolver_convenio(nome, fontes)
-            if alvos:
-                _cobertura(ex, s, e, alvos, False, None)
-            else:
-                ex.trecho(s, e, motivo="subplano citado sem convênio correspondente no cadastro")
-        return
+            pedacos.append((s, e, alvos))
+        if com_subplano or any(al for _, _, al in pedacos):
+            for s, e, alvos in pedacos:
+                if alvos:
+                    _cobertura(ex, s, e, alvos, False, None)
+                else:
+                    ex.trecho(s, e, motivo="subplano citado sem convênio correspondente no cadastro")
+            return
     # convênio aceito com condição
     if fonte_id is not None and re.match(r"^ *NECESSARIO +SOLICITAR\b", n):
         _cobertura(ex, a, b, [(fonte_id, None)], True, " ".join(linha.split())[:MAX_OBSERVACAO])
@@ -298,15 +325,20 @@ def _linha(ex, a, b, n, campo, fonte_id, nome_fonte, fontes, fonte_particular_id
         ex.trecho(a, b, "preparo")
         return
     # restrições
-    r = _restricao(n)
+    r, feitos, resto, motivo = _restricao(linha)
     if r:
         if fonte_id is not None:
             r["fonte_pagadora_id"] = fonte_id
-        r["trecho"] = (a, b)
+        if not resto:
+            feitos = [(0, b - a)]
+        r["trecho"] = (a + feitos[0][0], a + feitos[-1][1])
         ex.restricoes.append(r)
-        ex.trecho(a, b, "restricao")
+        for x, y in feitos:
+            ex.trecho(a + x, a + y, "restricao")
+        for x, y in resto:
+            ex.trecho(a + x, a + y, motivo=motivo)
         return
-    ex.trecho(a, b)
+    ex.trecho(a, b, motivo=motivo)
 
 
 def _cobertura(ex, s, e, alvos, aceita, observacao):
@@ -316,39 +348,96 @@ def _cobertura(ex, s, e, alvos, aceita, observacao):
     ex.trecho(s, e, "cobertura")
 
 
-def _restricao(n):
-    r = {}
-    if re.match(r"^ *FAIXA +ETARIA\b", n):
-        if re.search(r"\bTODAS +AS +IDADES\b", n):
-            r["idade_minima_anos"] = 0
-        m = re.search(r"\bDE +(\d+) +(A|ATE) +(\d+) +ANOS\b", n)
-        if m:
-            r["idade_minima_anos"], r["idade_maxima_anos"] = int(m.group(1)), int(m.group(3))
+# padrões de restrição, em ordem de prioridade (o que se sobrepõe a um anterior é ignorado): (regex, função(m) -> dict)
+_PADROES_RESTRICAO = [
+    (r"\bNAO +ATENDE(MOS)? +(CRIANCAS? +|PACIENTES? +)?MENORES +DE +(\d+) +ANOS?\b",
+     lambda m: {"idade_minima_anos": int(m.group(3))}),
+    (r"\bDE +(\d+) +(A|ATE) +(\d+) +ANOS\b",
+     lambda m: {"idade_minima_anos": int(m.group(1)), "idade_maxima_anos": int(m.group(3))}),
+    (r"\b(ATENDE(MOS)? +)?TODAS +AS +IDADES\b", lambda m: {"idade_minima_anos": 0}),
+    (r"\b(A +PARTIR|ACIMA) +DE +(\d+) +ANOS?\b", lambda m: {"idade_minima_anos": int(m.group(2))}),
+    (r"\bATE +(\d+) +ANOS?\b", lambda m: {"idade_maxima_anos": int(m.group(1))}),
+    (r"\b(SOMENTE|APENAS|SO) +(ATENDE +)?(MULHERES|PACIENTES +DO +SEXO +FEMININO|SEXO +FEMININO)\b",
+     lambda m: {"sexo_atendido": "feminino"}),
+    (r"\b(SOMENTE|APENAS|SO) +(ATENDE +)?(HOMENS|PACIENTES +DO +SEXO +MASCULINO|SEXO +MASCULINO)\b",
+     lambda m: {"sexo_atendido": "masculino"}),
+    (r"\bNAO +(ATENDE|ATENDEMOS|FAZ|FAZEMOS|MARCA|MARCAMOS|REALIZA|REALIZAMOS) +RETORNOS?\b",
+     lambda m: {"aceita_retorno": False}),
+    (r"\bRETORNOS? +(EM +ATE|ATE|EM) +(\d+) +DIAS\b", lambda m: {"dias_retorno": int(m.group(2))}),
+    (r"\bNAO +(ATENDE|ATENDEMOS|FAZ|FAZEMOS|MARCA|MARCAMOS|REALIZA|REALIZAMOS|ACEITA|ACEITAMOS) +ENCAIXES?\b",
+     lambda m: {"permite_encaixe": False}),
+]
+# palavras que podem sobrar numa oração de restrição sem mudar o sentido ("FAIXA ETÁRIA: ATENDE CRIANÇAS A PARTIR ...")
+_SOBRA_NEUTRA = frozenset("E OU FAIXA ETARIA IDADE ATENDE ATENDEMOS ATENDIMENTO CRIANCAS CRIANCA PACIENTES PACIENTE"
+                          .split())
+_EXCECAO = re.compile(r"\b(EXCETO|SALVO|EXCETUANDO|EXCECAO|A +NAO +SER|MENOS +(EM|PARA|NO|NA|NOS|NAS))\b")
+MOTIVO_RESTO = "parte da linha sem regra estruturada: vale pelo texto"
+MOTIVO_EXCECAO = "restrição com exceção ou condição no texto: vale pelo texto, sem regra estimada"
+
+
+def _oracoes(linha):
+    """[(ini, fim)] das orações da linha, separadas por vírgula, ponto, ponto e vírgula ou travessão."""
+    out, ini = [], 0
+    for m in re.finditer(r"[.,;]|\s[-–]\s", linha):
+        out.append((ini, m.start()))
+        ini = m.end()
+    out.append((ini, len(linha)))
+    res = []
+    for x, y in out:
+        while x < y and linha[x].isspace():
+            x += 1
+        while y > x and linha[y - 1].isspace():
+            y -= 1
+        if re.search(r"\w", linha[x:y]):
+            res.append((x, y))
+    return res
+
+
+def _restricao(linha):
+    """Restrição de uma linha: (regra, [(ini, fim) interpretados], [(ini, fim) não interpretados], motivo dos não
+    interpretados). Só conta como interpretada a ORAÇÃO que os padrões cobrem inteira (sobram só palavras neutras);
+    o resto da linha fica não interpretado. Exceção no texto (EXCETO, SALVO...) ou valores em conflito: nenhuma regra.
+    Regra vazia ({}) quando nada se interpreta. Posições relativas à linha."""
+    n = normalizar(linha)
+    r, feitos, resto = {}, [], []
+    for x, y in _oracoes(linha):
+        o = n[x:y]
+        usados, achado = [], {}
+        for padrao, f in _PADROES_RESTRICAO:
+            for m in re.finditer(padrao, o):
+                if any(m.start() < b and a < m.end() for a, b in usados):
+                    continue
+                usados.append((m.start(), m.end()))
+                for k, v in f(m).items():
+                    if k in achado and achado[k] != v:
+                        return {}, [], [(0, len(linha))], "restrição com valores em conflito: vale pelo texto"
+                    achado[k] = v
+        sobra = list(o)
+        for a, b in usados:
+            sobra[a:b] = " " * (b - a)
+        if achado and set("".join(sobra).split()) <= _SOBRA_NEUTRA:
+            for k, v in achado.items():
+                if k in r and r[k] != v:
+                    return {}, [], [(0, len(linha))], "restrição com valores em conflito: vale pelo texto"
+                r[k] = v
+            feitos.append((x, y))
         else:
-            m = re.search(r"\bA +PARTIR +DE +(\d+) +ANOS?\b", n) or re.search(r"\bACIMA +DE +(\d+) +ANOS?\b", n)
-            if m:
-                r["idade_minima_anos"] = int(m.group(1))
-            m = re.search(r"\bATE +(\d+) +ANOS?\b", n)
-            if m:
-                r["idade_maxima_anos"] = int(m.group(1))
-    elif re.match(r"^ *ATENDE +(CRIANCAS +|PACIENTES +)?A +PARTIR +DE +(\d+) +ANOS?\b", n):
-        r["idade_minima_anos"] = int(re.match(r"^ *ATENDE +(CRIANCAS +|PACIENTES +)?A +PARTIR +DE +(\d+)", n).group(2))
-    if re.search(r"\b(SOMENTE|APENAS|SO) +(ATENDE +)?(MULHERES|PACIENTES +DO +SEXO +FEMININO|SEXO +FEMININO)\b", n):
-        r["sexo_atendido"] = "feminino"
-    elif re.search(r"\b(SOMENTE|APENAS|SO) +(ATENDE +)?(HOMENS|PACIENTES +DO +SEXO +MASCULINO|SEXO +MASCULINO)\b", n):
-        r["sexo_atendido"] = "masculino"
-    if re.search(r"\bNAO +(ATENDE|FAZ|MARCA|REALIZA) +RETORNOS?\b", n):
-        r["aceita_retorno"] = False
-    m = re.search(r"\bRETORNO +(EM +ATE|ATE|EM) +(\d+) +DIAS\b", n)
-    if m:
-        r["dias_retorno"] = int(m.group(2))
-    if re.search(r"\bNAO +(ATENDE|FAZ|MARCA|REALIZA|ACEITA) +ENCAIXES?\b", n):
-        r["permite_encaixe"] = False
+            resto.append((x, y))
+    if r and any(_EXCECAO.search(n[x:y]) for x, y in resto):
+        return {}, [], [(0, len(linha))], MOTIVO_EXCECAO
     for k in ("idade_minima_anos", "idade_maxima_anos"):
         if k in r and r[k] > 130:
-            return {}
+            r = {}
     if r.get("idade_maxima_anos") is not None and r.get("idade_minima_anos", 0) > r["idade_maxima_anos"]:
-        return {}
+        r = {}
     if r.get("dias_retorno") is not None and r["dias_retorno"] > 65535:
-        return {}
-    return r
+        r = {}
+    if not r:
+        return {}, [], [(0, len(linha))], None
+    return r, feitos, resto, MOTIVO_RESTO
+
+
+def _restricao_completa(linha):
+    """A linha inteira é restrição interpretada (serve de fim do bloco de preparo)."""
+    r, _, resto, _ = _restricao(linha)
+    return bool(r) and not resto

@@ -121,6 +121,57 @@ class Puro(unittest.TestCase):
         ex = ext("FAIXA ETÁRIA: A PARTIR DE 18 ANOS", "observacao_convenio", 2)
         self.assertEqual(ex.restricoes[0]["fonte_pagadora_id"], 2)
 
+    def test_nao_atendemos_sem_subplano_nao_cria_plano(self):
+        # revisão: "NÃO ATENDEMOS" sem a palavra SUBPLANO não vira plano dentro do convênio
+        ex = ext("NÃO ATENDEMOS CRIANÇAS MENORES DE 2 ANOS", "observacao_convenio", 3)
+        self.assertEqual(ex.coberturas, [])
+        self.assertEqual([{k: v for k, v in r.items() if k != "trecho"} for r in ex.restricoes],
+                         [{"idade_minima_anos": 2, "fonte_pagadora_id": 3}])
+        ex = ext("NÃO ATENDEMOS RETORNO", "observacao_convenio", 3)
+        self.assertEqual(ex.coberturas, [])
+        self.assertEqual(ex.restricoes[0]["aceita_retorno"], False)
+        ex = ext("NÃO ATENDEMOS PACIENTES ACAMADOS", "observacao_convenio", 3)
+        self.assertEqual((ex.coberturas, ex.restricoes, [i for _, i, _ in trechos(ex)]), ([], [], [False]))
+        # sem SUBPLANO, só o nome que casa com o próprio convênio vira plano dele
+        ex = ext("NÃO ATENDEMOS BETA SAUDE INDIVIDUAL PLUS", "observacao_convenio", 3)
+        self.assertEqual([(c["fonte_pagadora_id"], c["subplano"]) for c in ex.coberturas],
+                         [(3, "BETA SAUDE INDIVIDUAL PLUS")])
+
+    def test_restricao_parcial_marca_o_resto(self):
+        ex = ext("SOMENTE MULHERES ACIMA DE 40 ANOS")
+        self.assertEqual({k: v for k, v in ex.restricoes[0].items() if k != "trecho"},
+                         {"sexo_atendido": "feminino", "idade_minima_anos": 40})
+        self.assertEqual(trechos(ex), [("SOMENTE MULHERES ACIMA DE 40 ANOS", True, "restricao")])
+        ex = ext("NÃO FAZ ENCAIXE, EXCETO URGÊNCIAS AUTORIZADAS PELO MÉDICO")
+        self.assertEqual(ex.restricoes, [])
+        self.assertEqual([(i, t["motivo"]) for (_, i, _), t in zip(trechos(ex), ex.trechos)],
+                         [(False, ea.MOTIVO_EXCECAO)])
+        ex = ext("FAIXA ETÁRIA: A PARTIR DE 5 ANOS, CRIANÇAS SÓ COM ACOMPANHANTE")
+        self.assertEqual(ex.restricoes[0]["idade_minima_anos"], 5)
+        self.assertEqual(trechos(ex), [("FAIXA ETÁRIA: A PARTIR DE 5 ANOS", True, "restricao"),
+                                       ("CRIANÇAS SÓ COM ACOMPANHANTE", False, None)])
+        ex = ext("PACIENTES ACIMA DE 60 ANOS DEVEM TRAZER ACOMPANHANTE")
+        self.assertEqual((ex.restricoes, [i for _, i, _ in trechos(ex)]), ([], [False]))
+
+    def test_bloco_de_preparo_para_nas_restricoes(self):
+        ex = ext("PREPARO: JEJUM DE 8 HORAS\nSOMENTE MULHERES\nNÃO FAZ ENCAIXE")
+        self.assertEqual([(p["descricao"], p["jejum_horas"]) for p in ex.preparos], [("PREPARO: JEJUM DE 8 HORAS", 8)])
+        self.assertEqual([{k: v for k, v in r.items() if k != "trecho"} for r in ex.restricoes],
+                         [{"sexo_atendido": "feminino"}, {"permite_encaixe": False}])
+        # linha de valor também encerra o bloco
+        ex = ext("ORIENTAÇÕES: VIR COM ROUPA LEVE\nVALOR DA CONSULTA PARTICULAR: R$ 200,00")
+        self.assertEqual(([p["descricao"] for p in ex.preparos], [p["valor_centavos"] for p in ex.precos]),
+                         (["ORIENTAÇÕES: VIR COM ROUPA LEVE"], [20000]))
+
+    def test_primeira_palavra_generica_nao_vira_subplano(self):
+        fontes = [{"id": 7, "nome": "SAUDE BRADESCO"}, {"id": 8, "nome": "ALFA SAÚDE"}]
+        self.assertEqual(ea.resolver_convenio("SAUDE CAIXA", fontes), [])
+        self.assertEqual(ea.resolver_convenio("ALFA S10", fontes), [(8, "ALFA S10")])
+        ex = ea.extrair("CONVÊNIOS COM CREDENCIAMENTO: SAUDE CAIXA", "observacao", None, fontes, None)
+        self.assertEqual(ex.coberturas, [])
+        self.assertEqual([(t["interpretado"], t["motivo"]) for t in ex.trechos],
+                         [(False, "convênio citado sem cadastro correspondente")])
+
     def test_texto_sem_regra_fica_marcado_inteiro(self):
         txt = "ESPECIALIDADE: EXEMPLO, NÃO REALIZA PROCEDIMENTO X\nATENDE POR HORA MARCADA"
         ex = ext(txt)
